@@ -6,7 +6,7 @@ confidence: high
 summary: "the Pack signing rehearsal runs only on a push to main, never on a pull request: main's push runs prove a merge touching src/pack, src/merge, the lockfile or the signing scripts"
 reviewBy: 2027-04-08
 validatedAgainst: "push runs 37450946980 (red on 1fa55344) and 37459556084 (green on d85bb76e) of the Pack signing rehearsal, the check lists of PR #77 and PR #78, and the workflow's on: block, archive step and filter test with ci.yml's prove-pr comment at dbd54fc7 on 2026-10-08"
-integrity: sha256:caed4d810168cfadf871abdba7fd622daecf9f9f67e3fa6519241e88bb49bd10
+integrity: sha256:903d15aa447d7978bc1cc1f077d3825a54da6fed21ae6fc10701e413483c0c4f
 ---
 
 `.github/workflows/pack-signing-rehearsal.yml` runs only on a push to `main` that touches its `paths:` filter, or by
@@ -24,7 +24,7 @@ runs the real install API from a trimmed copy of the source: `src`, `content`, `
 the three scripts above, the list its archive step names. Its catch block prints only a generic line.
 
 `ci.yml`'s own push run on `main` can skip its test jobs: since the `prove-pr` job landed on 2026-10-08, a push whose
-tree equals a pull request head that passed `all-ci-checks` skips `check`, `apm-install`, `plugin-route` and `lanes`.
+tree equals a pull request head that passed `all-ci-checks` skips `check` and `lanes`.
 The comment block at the head of `ci.yml` says the push-only workflows, the rehearsal among them, are untouched by that
 skip and still run on the push. A green or skipped `ci.yml` push run therefore says nothing about the rehearsal.
 

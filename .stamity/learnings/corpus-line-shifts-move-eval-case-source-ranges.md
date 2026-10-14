@@ -6,10 +6,10 @@ confidence: high
 summary: "an eval case's source: range is typed; a corpus line insert shifts later ranges, and test/evals/locators.test.ts now fails red on every shifted range"
 reviewBy: 2027-04-09
 validatedAgainst: "test/evals/locators.test.ts anchor and contiguous-quote checks (51899655, 96ec2532), read at 46121954"
-integrity: sha256:3c8e319f6463c43a82c3b768718cc64775c4f03ca95f49952dbd33a42360139d
+integrity: sha256:17662b485678f9561d20872e54d144085a9698b76807f958cfa9bfe4f8fbd839
 ---
 
-An eval case's `source:` key (`content/commands/st-work.md:326-342`) is a hand-typed line
+An eval case's `source:` key (`content/commands/st-work.md:274-291`) is a hand-typed line
 range, not a derivation. Any corpus edit that adds or removes a line moves every range after it.
 Since run 2026-10-08_product-core, `test/evals/locators.test.ts` reads every range of every case:
 each range's first non-blank line has to be anchored in the case, and each quoted governing

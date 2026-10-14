@@ -6,7 +6,7 @@ confidence: high
 summary: a unicode escape typed into an Edit, Write or Bash call lands as the raw code point; the proof reads only via /usr/bin/grep or rg by path, after a false calibration
 reviewBy: 2027-04-19
 validatedAgainst: "od -c reads of escapes typed through Write and Bash on 2026-09-24; on 2026-10-09 a false calibration, then bare rg (no status) against /usr/bin/grep and /opt/homebrew/bin/rg (exit 1) on a no-match"
-integrity: sha256:49ef179c0e8f13c6646434df316ef24eb8aa541ed701ea6789233648dafacc17
+integrity: sha256:a87beb662564132bf5a6617e087044b5dc3c86e4706036886ead7a85e322d49b
 ---
 
 A `\uXXXX` escape that an agent types into a tool call does not reach the tool as text.
@@ -25,7 +25,7 @@ exit status on a no-match. Both read as passes when they are not. `/usr/bin/grep
 ## Why
 
 Observed on 2026-09-23 in run 2026-09-23_orchestrator-context, ledger row build/103: the fixer
-of `ctx-ledger-append` wrote `printableId`'s strip class in `src/runs/ledgerStore.ts:365` with
+of `ctx-ledger-append` wrote `printableId`'s strip class in `src/runs/ledgerStore.ts` (line 365 on that day) with
 escapes, and the file received U+200B-U+200F, U+202A-U+202E, U+2060, U+2066-U+2069 and U+FEFF
 as raw code points. Both review lenses caught it; 58312346 respelled the class as escape text.
 Reproduced on 2026-09-24 through a quoted Bash heredoc and through Write, read back with `od -c`.

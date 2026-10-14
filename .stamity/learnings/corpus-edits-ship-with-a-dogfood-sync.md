@@ -3,20 +3,20 @@ id: corpus-edits-ship-with-a-dogfood-sync
 title: corpus edits ship with a dogfood sync
 date: 2026-10-09
 confidence: high
-summary: a content/<class>/ edit needs npm run build && node dist/cli.js sync in the same change; the local tests miss a stale .claude/.apm copy, CI's Dogfood check (check) goes red
+summary: a content/<class>/ edit needs npm run build && node dist/cli.js sync in the same change; the local tests miss a stale .claude copy, CI's Dogfood check (check) goes red
 reviewBy: 2026-12-10
 validatedAgainst: "npm run build && node dist/cli.js sync, then node dist/cli.js check exit 0; CI Dogfood check red at 51667e43 on two stale copies (run 2026-10-08_product-core)"
-integrity: sha256:9a94ec1f3d6eb68ad6e36de3efa99939ff178f44362192dac09d56d6280c8a52
+integrity: sha256:a3f6859025f2fbeb6cf0507417a117b0f90e48957b729535056a411423564100
 ---
 
 Editing a corpus artifact under `content/agents|rules|skills|commands/` is only half the
 change: this repository dogfoods its own engine, so the emitted per-client copies of that
-artifact (`.claude/agents/…`, `.apm/agents/…`, the generated hooks, `AGENTS.md`, and the
+artifact (`.claude/agents/…`, the generated hooks, `AGENTS.md`, and the
 `crossClientGoldens` snapshot) are tracked files that go stale unless `npm run build && node
-dist/cli.js sync` (plus `node scripts/generate-apm-package.mjs` and a `vitest -u` on the goldens
-where those gates demand it) runs in the same change. No vitest suite reads the emitted
+dist/cli.js sync` (plus a `vitest -u` on the goldens where that gate demands it) runs in the
+same change. No vitest suite reads the emitted
 `.claude/` tree, so the local test gate stays green on a stale copy. CI's `Dogfood check` step
-(`node dist/cli.js check`, `.github/workflows/ci.yml:411-413`, on every push of a pull request)
+(`node dist/cli.js check`, `.github/workflows/ci.yml:388-390`, on every push of a pull request)
 does read them: a stale copy turns the `check` legs red, so a change that holds its sync back
 for a later commit leaves every push in between red.
 
@@ -44,5 +44,5 @@ commit right after it, before a push: `npm run build && node dist/cli.js sync`, 
 and `git diff` show the emitted copies and `.stamity/manifest.json` moving, each move explained by
 the corpus edit (an unexplained one is a finding). `node dist/cli.js check` exiting 0 is the local
 reading of what CI's Dogfood check will say. A red goldens snapshot
-(`test/emit/__snapshots__/crossClientGoldens.test.ts.snap`) or apm package test names its own
-regeneration command in its failure message.
+(`test/emit/__snapshots__/crossClientGoldens.test.ts.snap`) names its own regeneration command
+in its failure message.

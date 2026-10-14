@@ -6,7 +6,7 @@ confidence: high
 summary: an agent-written file under .stamity/ spelling the predecessor's reserved name turns the suite red — the leak gate lists untracked-not-ignored files and .stamity/ is neither skipped nor allowlisted
 reviewBy: 2026-12-20
 validatedAgainst: test/ci/leakGate.test.ts and test/docsPages.test.ts
-integrity: sha256:60f99ed63583c7376f2672ca1b0ea383b38eb00092453c30725f0718bb762b94
+integrity: sha256:9f64dfe9ebab707acd8811da39033e9fd82abb7870c5890be95ddb7129b84179
 ---
 
 The leak gate scans agent-written state files under `.stamity/`, and a reserved
@@ -14,10 +14,10 @@ predecessor-name literal in any of them turns the whole suite red. The gate
 (`scripts/leak-gate.mjs`) builds its file list from
 `git ls-files --cached --others --exclude-standard`, so untracked-but-not-ignored
 files are in scope; `.stamity/` appears in neither the skip prefixes
-(`leak-gate.mjs:84-92`) nor the predecessor allowlist (`leak-gate.mjs:344`, which
+(`leak-gate.mjs:101-109`) nor the predecessor allowlist (`leak-gate.mjs:457`, which
 covers only `src/migration/`, `test/migration/`, `docs/migration.md`, and the
-flat `dist/*.js` bundles). Two suites enforce it: `test/ci/leakGate.test.ts:44-53`
-and a second embedded run at `test/docsPages.test.ts:459-468`, so one hit fails
+flat `dist/*.js` bundles). Two suites enforce it: `test/ci/leakGate.test.ts:80-106`
+and a second embedded run at `test/docsPages.test.ts:1092-1103`, so one hit fails
 four tests across two files.
 
 ## Why

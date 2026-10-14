@@ -6,7 +6,7 @@ confidence: high
 summary: "vitest 5's -u is --update [type] and list's --json is [true/path]: a path after either is the flag's value; name files first, the flag last, a list's file as --json=<out>"
 reviewBy: 2027-04-08
 validatedAgainst: "npx vitest --help and npx vitest list --help on vitest 5.0.3, the update and list json declarations in node_modules/vitest/dist/chunks/cac.*.js, outputJsonFileList in cli-api.*.js, and npx vitest list <file> --filesOnly --json --outputFile <scratch> (no file) against --json=<scratch> (written) on 2026-10-08"
-integrity: sha256:5092a5aa5b37c214fcef47f83e3d96c9fb82e443f1d013d5367390837279d752
+integrity: sha256:c94b78d4d478e5234f934ee92ef1dc337234dd17213ae558d2f482f34c01b95a
 ---
 
 vitest 5 declares its snapshot flag as `-u, --update [type]` — an OPTIONAL value
@@ -44,7 +44,7 @@ files, the same as an unfiltered list, while `npx vitest list test/learnings/sto
 The `list --json` half: during plan 016 file 1's drafting on 2026-10-01 a drafter ran
 `npx vitest list --json test/merge/coverageGaps.test.ts` in the main checkout and the test
 file was overwritten with JSON (restored from HEAD the same hour; the plan's risk table,
-`docs/plans/016-fork-distribution-01.md:2155`). Re-read on 2026-10-08 against the
+`docs/plans/016-fork-distribution-01.md:2166` on the `records` branch). Re-read on 2026-10-08 against the
 installed vitest 5.0.3: `npx vitest list --help` prints `--json [true/path]` and
 `--outputFile <filename/-s>`; `collectCliOptionsConfig` in
 `node_modules/vitest/dist/chunks/cac.*.js` declares `json` with `argument: "[true/path]"`,

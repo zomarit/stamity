@@ -6,13 +6,13 @@ confidence: high
 summary: "reviewer and lens grants stay in the main checkout: no git -C on a lane, reports only under its .stamity/runs/*/reports/; review uncommitted lane work from a diff file (2026-10-03)"
 reviewBy: 2027-03-06
 validatedAgainst: "the refused git -C reads and lane report write of the u2 review and the spec-author BLOCKED_DEPENDENCY on 2026-10-03, run 2026-10-03_pack-engine-defects, and src/roster/agentPolicies.ts:135-139 at ee2fe9a5"
-integrity: sha256:872e8442c744da3e3fcdbdca19e6c84e8f74ae86e57831a6f8e3a5bc5d187769
+integrity: sha256:8bc734b8cc7d856aa7f13329d81853da9161e468ed36b7fd5302d5f16ca92ee9
 ---
 
 The grants of the reviewer, the lenses and the spec-author are scoped to the session's own
 checkout, not to a worktree lane.
 - **Git:** the reviewer may run read-only git, one plain invocation per read
-  (`content/agents/stamity-reviewer.md:194-199`). So `git -C <lane> diff` is refused, and work a
+  (`content/agents/stamity-reviewer.md:204-207`). So `git -C <lane> diff` is refused, and work a
   lane holds uncommitted is invisible to it.
 - **Reports:** a verdict role may write its report only where
   `.stamity/runs/*/reports/*-<role>-r*.md` matches (`src/roster/agentPolicies.ts:135-139`). That
@@ -33,7 +33,7 @@ Seen on 2026-10-03 in run `2026-10-03_pack-engine-defects` (its record, lines 12
 
 After the change of dispatch described below, every lane review of the run persisted its report.
 
-Validated against: those refusals, the cited grant lines at `ee2fe9a5`, and the reviews that
+Validated against: those refusals, the cited grant lines at `ee2fe9a5` (re-read at `114aa996` on 2026-10-14), and the reviews that
 followed. Review horizon: re-check when the roles' grants change, as they did on 2026-09-30.
 
 ## How to apply
