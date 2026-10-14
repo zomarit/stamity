@@ -8,13 +8,21 @@
 //   setup                                   write the exclude block, then restore
 //   restore [--ref <ref>] [--no-fetch] [--force]
 //                                           write the records of <ref> (origin/records) into the
-//                                           checkout; refuses where a local file differs
+//                                           checkout, three ways against the sync base: a record
+//                                           changed only on <ref> is written, one changed only here
+//                                           is kept, one changed on both refuses the run
 //   commit -m <message> [--dry-run] [--allow-deletions]
-//                                           build a commit on origin/records from the records on
-//                                           disk, gate that exact commit, then push it
+//                                           build a commit on the sync base from the records on
+//                                           disk, gate that exact commit, then push it; refuses
+//                                           when origin/records is not the sync base
 //   verify --base <sha> [--ref <ref>]       every record path at <sha> has the same blob at <ref>
 //   guard [--ref <ref>]                     refuse any record path tracked at <ref> (HEAD)
 //   init --base <sha>                       create the branch once, from the records at <sha>
+//
+// The sync base is the records commit this checkout last restored, published or imported, kept in
+// a per-worktree ref (refs/worktree/stamity/records-base) that no fetch moves. It is what lets
+// `restore` tell an unpublished local edit from a stale copy, and `commit` refuse to publish a
+// stale copy over another machine's change.
 //
 // What holds for every verb: `git` runs through execFileSync with argument arrays, never a shell;
 // a revision the caller supplies is resolved to an object id with `--end-of-options` before any
@@ -36,8 +44,13 @@ import { fileURLToPath } from 'node:url'
 import { isRecordPath, KEEP_ON_MAIN, RECORDS_PATHSPECS } from './records-paths.mjs'
 
 const SCRIPTS_DIR = dirname(fileURLToPath(import.meta.url))
+const VITEST_BIN = join(SCRIPTS_DIR, '..', 'node_modules', 'vitest', 'vitest.mjs')
 const BRANCH_REF = 'refs/heads/records'
 const REMOTE_REF = 'refs/remotes/origin/records'
+/** The records commit this checkout last synced to; per worktree, and outside every fetch refspec. */
+const SYNC_BASE = 'refs/worktree/stamity/records-base'
+/** Where `commit --dry-run` fetches, so the dry run moves no remote-tracking ref; deleted after. */
+const DRY_RUN_REF = 'refs/worktree/stamity/records-dry-run'
 const BLOCK_START = '# >>> stamity records (node scripts/records.mjs setup) — records live on the records branch'
 const BLOCK_END = '# <<< stamity records'
 /** Template under scripts/records/ → its path at the branch root. */
@@ -126,11 +139,30 @@ function requireCommit(ctx, rev, hint) {
   return ctx.commit(rev) ?? stop(1, [`cannot read ${rev} as a commit${hint ? `: ${hint}` : ''}`])
 }
 
-function fetchRecords(ctx) {
-  const fetched = ctx.tryGit(['fetch', '--no-tags', 'origin', `${BRANCH_REF}:${REMOTE_REF}`])
+/**
+ * Fetch origin's records branch into `into`. `--refmap=` keeps git's opportunistic update of the
+ * configured remote-tracking ref out, so a fetch into the dry-run ref moves nothing else.
+ */
+function fetchRecords(ctx, into = REMOTE_REF) {
+  const fetched = ctx.tryGit(['fetch', '--no-tags', '--refmap=', 'origin', `${BRANCH_REF}:${into}`])
   if (fetched.ok) return
   if (ctx.commit(REMOTE_REF) === null) stop(1, ['no records branch on origin: run `node scripts/records.mjs init --base <sha>` once'])
   stop(1, [`fetching the records branch failed: ${fetched.error}`])
+}
+
+/** Origin's records commit: fetched into origin/records, or for a dry run into a scratch ref removed again. */
+function fetchUpstream(ctx, dryRun) {
+  if (!dryRun) {
+    fetchRecords(ctx)
+    return requireCommit(ctx, REMOTE_REF)
+  }
+  ctx.tryGit(['update-ref', '-d', DRY_RUN_REF])
+  try {
+    fetchRecords(ctx, DRY_RUN_REF)
+    return requireCommit(ctx, DRY_RUN_REF)
+  } finally {
+    ctx.tryGit(['update-ref', '-d', DRY_RUN_REF])
+  }
 }
 
 const excludeEntry = (spec) => (spec.split('/').at(-1).includes('.') ? `/${spec}` : `/${spec}/`)
@@ -164,7 +196,10 @@ function restoreIn(ctx, { ref = 'origin/records', fetch = true, force = false })
   const rows = lsTree(ctx, oid)
   const unsupported = rows.filter((row) => !isRecordPath(row.path) || !MODES.has(row.mode)).map((row) => `${row.mode} ${row.path}`)
   if (unsupported.length > 0) stop(1, [`refused: ${ref} holds entries restore does not write (only regular files under the record paths):`, ...unsupported])
-  const symlinks = new Set(), blocked = new Set(), differs = [], writes = [], modes = []
+  // The last synced copy of each record: a local copy equal to it is stale, one that differs from it is an edit.
+  const synced = ctx.commit(SYNC_BASE)
+  const was = synced === null ? null : new Map(lsTree(ctx, synced).map((row) => [row.path, row.oid]))
+  const symlinks = new Set(), blocked = new Set(), differs = [], updates = [], pending = [], writes = [], modes = []
   let unchanged = 0
   for (const row of rows) {
     const parent = blockedParent(ctx, row.path)
@@ -174,28 +209,46 @@ function restoreIn(ctx, { ref = 'origin/records', fetch = true, force = false })
     if (stat.isSymbolicLink()) { symlinks.add(row.path); continue }
     if (!stat.isFile()) { blocked.add(row.path); continue }
     const local = ctx.git(['hash-object', `--path=${row.path}`, '--', row.path]).trim()
-    if (local !== row.oid) { differs.push({ row, stat }); continue }
+    if (local !== row.oid) {
+      if (was !== null && was.get(row.path) === local) updates.push({ row, stat }) // changed only on the ref
+      else if (was !== null && was.get(row.path) === row.oid) pending.push({ row, stat }) // changed only here
+      else differs.push({ row, stat }) // changed on both, or no sync base to tell
+      continue
+    }
     if (process.platform !== 'win32' && ((stat.mode & 0o100) !== 0) !== (row.mode === '100755')) modes.push({ row, stat })
     else unchanged++
   }
   if (symlinks.size > 0) stop(1, ['refused: a record or one of its folders is a symlink, and restore never writes through one:', ...[...symlinks].toSorted()])
   if (blocked.size > 0) stop(1, ['refused: something other than a file is in the way of a record, and restore never deletes:', ...[...blocked].toSorted()])
-  if (differs.length > 0 && !force)
+  if (differs.length > 0 && !force && was === null)
     stop(1, [`refused: ${differs.length} local record(s) differ from ${ref}; nothing was written (--force overwrites them):`, ...differs.map(({ row }) => row.path)])
+  if (differs.length > 0 && !force)
+    stop(1, [
+      `refused: ${differs.length} record(s) changed both here and on ${ref} since the last sync (${synced}); nothing was written.`,
+      `For each, save your copy, write ${ref}'s (git show ${ref}:<path>), run restore again, then re-apply your edit; --force takes ${ref}'s copy of every differing record:`,
+      ...differs.map(({ row }) => row.path),
+    ])
+  // --force takes the ref's copy of every differing record, a pending edit included.
+  const overwrite = [...updates, ...differs, ...(force ? pending.splice(0) : [])]
   for (const row of writes) {
     const target = ctx.abs(row.path)
     mkdirSync(dirname(target), { recursive: true })
     writeFileSync(target, ctx.git(['cat-file', 'blob', row.oid], { buffer: true }))
     if (row.mode === '100755' && process.platform !== 'win32') chmodSync(target, 0o755)
   }
-  for (const { row } of differs) writeFileSync(ctx.abs(row.path), ctx.git(['cat-file', 'blob', row.oid], { buffer: true }))
-  for (const { row, stat } of [...differs, ...modes]) {
+  for (const { row } of overwrite) writeFileSync(ctx.abs(row.path), ctx.git(['cat-file', 'blob', row.oid], { buffer: true }))
+  for (const { row, stat } of [...overwrite, ...modes]) {
     if (process.platform === 'win32') continue
     chmodSync(ctx.abs(row.path), row.mode === '100755' ? (stat.mode | 0o111) & 0o777 : stat.mode & 0o666)
   }
+  ctx.git(['update-ref', SYNC_BASE, oid])
   return {
     code: 0,
-    lines: [`restored ${writes.length} record(s) from ${ref}, overwrote ${differs.length}, fixed ${modes.length} mode(s), ${unchanged} unchanged`],
+    lines: [
+      `restored ${writes.length} record(s) from ${ref}, updated ${updates.length}, overwrote ${overwrite.length - updates.length}, ` +
+        `fixed ${modes.length} mode(s), ${unchanged} unchanged, kept ${pending.length} local edit(s)`,
+      ...pending.map(({ row }) => `kept ${row.path}: a local edit not yet published`),
+    ],
   }
 }
 
@@ -229,7 +282,8 @@ export async function defaultGates({ root, commit, base, env = process.env }) {
   const gates = [
     ['leak gate', process.execPath, [join(SCRIPTS_DIR, 'leak-gate.mjs'), '--root', tree]],
     ['hygiene check', process.execPath, [join(SCRIPTS_DIR, 'repo-hygiene.mjs'), '--repo', tree, '--base', base]],
-    ['records suite', 'npm', ['run', 'test:records']],
+    // `npm run test:records` without npm: vitest's own bin through node needs no shell, so Windows runs it too.
+    ['records suite', process.execPath, [VITEST_BIN, 'run', '--config', 'vitest.records.config.ts']],
   ]
   try {
     git(['worktree', 'add', '--detach', tree, commit])
@@ -282,8 +336,11 @@ export async function publish({ message, dryRun = false, allowDeletions = false,
 
 async function publishIn(ctx, { message, dryRun, allowDeletions, runGates, held }) {
   const isHeld = (path) => held.some((folder) => path.startsWith(`${folder}/`))
-  fetchRecords(ctx)
-  const base = requireCommit(ctx, REMOTE_REF)
+  const upstream = fetchUpstream(ctx, dryRun)
+  // The records on disk are a sync of `base` plus local edits; built on any other commit, a stale
+  // copy here would publish over a change another checkout made since.
+  const base = ctx.commit(SYNC_BASE) ?? stop(1, [`refused: this checkout has not synced to the records branch yet; ${RESTORE_HINT}`])
+  if (upstream !== base) stop(1, [`refused: origin/records is at ${upstream}, not at ${base}, the commit this checkout last synced to; ${RESTORE_HINT}`])
   const exclude = existsSync(join(ctx.root, '.gitignore')) ? ['--exclude-from=.gitignore'] : []
   const listed = new Set(splitZ(ctx.git(['ls-files', '-z', '--others', '--cached', ...exclude, '--', ...RECORDS_PATHSPECS]))
     .filter((path) => !KEEP_ON_MAIN.includes(path) && !isHeld(path)))
@@ -333,7 +390,20 @@ async function publishIn(ctx, { message, dryRun, allowDeletions, runGates, held 
   }
   // A push updates the remote-tracking ref itself when the fetch refspec covers it; this covers the rest.
   ctx.git(['update-ref', REMOTE_REF, commit])
-  return { code: 0, lines: [...changes, `published ${commit} to origin/records`] }
+  ctx.git(['update-ref', SYNC_BASE, commit])
+  return { code: 0, lines: [...changes, `published ${commit} to origin/records`, ...followLocalBranch(ctx, commit)] }
+}
+
+/** Move a local `records` branch to the pushed commit by fast-forward only; otherwise say why it stayed. */
+function followLocalBranch(ctx, commit) {
+  const local = ctx.commit(BRANCH_REF)
+  if (local === null || local === commit) return []
+  if (!ctx.tryGit(['merge-base', '--is-ancestor', local, commit]).ok)
+    return [`left the local records branch at ${local}: ${commit} does not fast-forward it`]
+  const checkedOut = ctx.git(['worktree', 'list', '--porcelain']).split('\n').includes(`branch ${BRANCH_REF}`)
+  if (checkedOut) return [`left the local records branch at ${local}: a worktree has it checked out`]
+  ctx.git(['update-ref', BRANCH_REF, commit, local])
+  return [`moved the local records branch to ${commit}`]
 }
 
 function verifyIn(ctx, base, ref) {
@@ -391,6 +461,7 @@ export async function init({ base, ...options } = {}) {
       stop(1, [`the push failed, and the local records branch was removed again: ${pushed.error}`])
     }
     ctx.git(['update-ref', REMOTE_REF, commit])
+    ctx.git(['update-ref', SYNC_BASE, commit])
     return { code: 0, lines: [`imported ${rows.length} record(s) and ${TEMPLATES.length} template(s) from ${source} as ${commit}`, ...verified.lines, 'pushed origin/records'] }
   })
 }

@@ -31,14 +31,16 @@ jobs:
         run: node scripts/records.mjs restore --ref "$RECORDS_SHA" --no-fetch --force
       - name: Records suite
         run: npm run test:records
-      - name: Leak gate (the restored records are untracked and not ignored here)
-        run: npm run gate
-      - name: Hygiene over the pushed commits
+      - name: Check out the pushed commit beside main
         env:
           RECORDS_SHA: ${{ github.sha }}
+        run: git worktree add --detach .records-tree "$RECORDS_SHA"
+      - name: Leak gate over the pushed commit (every file is tracked there, so no ignore rule hides one)
+        run: node scripts/leak-gate.mjs --root .records-tree
+      - name: Hygiene over the pushed commits
+        env:
           BEFORE_SHA: ${{ github.event.before }}
         run: |
-          git worktree add --detach .records-tree "$RECORDS_SHA"
           if [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then
             node scripts/repo-hygiene.mjs --repo .records-tree
           else

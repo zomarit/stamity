@@ -32,6 +32,10 @@ const PLAN = "docs/plans/001-alpha.md";
 // Built at run time so the test-input census does not read the name as this repository's README.md:
 // here it is the records branch's template and its place at that branch's root.
 const README = ["README", "md"].join(".");
+// The fixture's own records-suite config, built at run time for the same reason: it is not this repository's file.
+const SUITE_CONFIG = ["vitest", "records", "config", "ts"].join(".");
+/** The per-checkout ref naming the records commit the checkout last restored or published. */
+const SYNC_BASE = "refs/worktree/stamity/records-base";
 const dirs: string[] = [];
 afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }); });
 
@@ -64,7 +68,10 @@ function world(options: { init?: boolean } = {}) {
   const files: Record<string, string> = {
     // The canonical ignore rules, so `commit`'s publish filter is the one `main` applies.
     ".gitignore": readFileSync(join(ROOT, ".gitignore"), "utf8"),
-    "package.json": `${JSON.stringify({ name: "fixture", private: true, scripts: { "test:records": "node -e \"process.exit(Number(process.env.RECORDS_SUITE_EXIT || 0))\"" } })}\n`,
+    "package.json": `${JSON.stringify({ name: "fixture", private: true })}\n`,
+    // The records suite `commit` runs: vitest through node, never npm, so no shell is needed on Windows.
+    [SUITE_CONFIG]: "export default { cacheDir: \".records-suite-cache\", test: { include: [\"records-suite.test.ts\"], globals: true } };\n",
+    "records-suite.test.ts": "it(\"reads the records\", () => { if (process.env.RECORDS_SUITE_EXIT === \"1\") throw new Error(\"the records suite is red\"); });\n",
     "src/app.txt": "product\n",
     [GITKEEP]: "",
     [`${ALPHA}/record.md`]: "# alpha\n\nStatus: closed 2026-01-02\n",
@@ -92,7 +99,16 @@ function world(options: { init?: boolean } = {}) {
   }
   const refs = (cwd: string): string => git(cwd, "for-each-ref", "--format=%(refname) %(objectname)");
   const tree = (ref: string): string[] => git(origin, "ls-tree", "-r", "--name-only", ref).split("\n");
-  return { dir, env, git, write, origin, url, clone, base, opts, refs, tree };
+  const synced = (cwd: string): string => git(cwd, "rev-parse", "--verify", "--quiet", SYNC_BASE);
+  /** A second clone of the same origin, restored, as another machine would be. */
+  const machine = async (name: string): Promise<string> => {
+    const path = join(dir, name);
+    execFileSync("git", ["clone", "-q", url, path], { env });
+    const restored: Result = await records.restore({ root: path, env });
+    expect(restored.code, restored.lines.join("\n")).toBe(0);
+    return path;
+  };
+  return { dir, env, git, write, origin, url, clone, base, opts, refs, tree, synced, machine };
 }
 
 describe("the record paths", () => {
@@ -150,10 +166,12 @@ describe("restore", { timeout: 60_000 }, () => {
     expect(result.code, result.lines.join("\n")).toBe(0);
     expect(readFileSync(join(fresh, `${ALPHA}/ledger.jsonl`), "utf8")).toBe("{\"id\":\"alpha/1\"}\n");
     if (POSIX) expect(statSync(join(fresh, RUN, "tool.sh")).mode & 0o111).toBe(0o111);
+    expect(w.synced(fresh)).toBe(w.git(w.origin, "rev-parse", "records"));
   });
 
-  it("refuses a differing local record and writes nothing, overwrites with --force, and deletes no local file", async () => {
+  it("with no sync base yet, refuses a differing local record and writes nothing, overwrites with --force, and deletes no local file", async () => {
     const w = world();
+    w.git(w.clone, "update-ref", "-d", SYNC_BASE);
     w.write(w.clone, PLAN, "edited locally\n");
     rmSync(join(w.clone, `${RUN}/RESULTS.md`));
     w.write(w.clone, `${ALPHA}/local-only.md`, "mine\n");
@@ -162,11 +180,42 @@ describe("restore", { timeout: 60_000 }, () => {
     expect(refused.lines).toContain(PLAN);
     expect(readFileSync(join(w.clone, PLAN), "utf8")).toBe("edited locally\n");
     expect(existsSync(join(w.clone, `${RUN}/RESULTS.md`))).toBe(false);
+    expect(spawnSync("git", ["-C", w.clone, "rev-parse", "--verify", "--quiet", SYNC_BASE], { env: w.env }).status).toBe(1);
     const forced: Result = await records.restore({ ...w.opts, force: true });
     expect(forced.code, forced.lines.join("\n")).toBe(0);
     expect(readFileSync(join(w.clone, PLAN), "utf8")).toBe("# plan\n");
     expect(existsSync(join(w.clone, `${RUN}/RESULTS.md`))).toBe(true);
     expect(readFileSync(join(w.clone, `${ALPHA}/local-only.md`), "utf8")).toBe("mine\n");
+    expect(w.synced(w.clone)).toBe(w.git(w.origin, "rev-parse", "records"));
+  });
+
+  it("merges three ways against the sync base: writes an upstream change, keeps a pending edit, refuses a file both changed", async () => {
+    const w = world();
+    const b = await w.machine("b");
+    w.write(b, `${RUN}/RESULTS.md`, "# results, from b\n");
+    w.write(b, `${ALPHA}/ledger.jsonl`, "{\"id\":\"alpha/1\"}\n{\"id\":\"alpha/b\"}\n");
+    expect((await records.publish({ root: b, env: w.env, message: "b", runGates: passing().run }) as Result).code).toBe(0);
+    const before = w.synced(w.clone);
+    w.write(w.clone, PLAN, "# plan, a's unpublished edit\n");
+    w.write(w.clone, `${ALPHA}/ledger.jsonl`, "{\"id\":\"alpha/1\"}\n{\"id\":\"alpha/a\"}\n");
+    const refused: Result = await records.restore(w.opts);
+    expect(refused.code).toBe(1);
+    expect(refused.lines).toContain(`${ALPHA}/ledger.jsonl`);
+    expect(refused.lines).not.toContain(PLAN);
+    expect(readFileSync(join(w.clone, `${RUN}/RESULTS.md`), "utf8")).toBe("# results\n");
+    expect(readFileSync(join(w.clone, `${ALPHA}/ledger.jsonl`), "utf8")).toContain("alpha/a");
+    expect(w.synced(w.clone)).toBe(before);
+    w.write(w.clone, `${ALPHA}/ledger.jsonl`, "{\"id\":\"alpha/1\"}\n");
+    const merged: Result = await records.restore(w.opts);
+    expect(merged.code, merged.lines.join("\n")).toBe(0);
+    expect(merged.lines.join("\n")).toContain(PLAN);
+    expect(readFileSync(join(w.clone, `${RUN}/RESULTS.md`), "utf8")).toBe("# results, from b\n");
+    expect(readFileSync(join(w.clone, `${ALPHA}/ledger.jsonl`), "utf8")).toContain("alpha/b");
+    expect(readFileSync(join(w.clone, PLAN), "utf8")).toBe("# plan, a's unpublished edit\n");
+    expect(w.synced(w.clone)).toBe(w.git(w.origin, "rev-parse", "records"));
+    const forced: Result = await records.restore({ ...w.opts, force: true });
+    expect(forced.code, forced.lines.join("\n")).toBe(0);
+    expect(readFileSync(join(w.clone, PLAN), "utf8")).toBe("# plan\n");
   });
 
   it.skipIf(!POSIX)("never writes through a symlinked record folder", async () => {
@@ -205,8 +254,9 @@ describe("commit", { timeout: 60_000 }, () => {
     expect(cached).not.toBe("");
     expect(w.git(w.clone, "diff", "--cached")).toBe(cached);
     const moved = (a: string, b: string) => b.split("\n").filter((line) => !a.split("\n").includes(line)).map((line) => line.split(" ")[0]);
-    expect(moved(before.clone, w.refs(w.clone))).toEqual(["refs/remotes/origin/records"]);
+    expect(moved(before.clone, w.refs(w.clone))).toEqual(["refs/heads/records", "refs/remotes/origin/records", SYNC_BASE]);
     expect(moved(before.origin, w.refs(w.origin))).toEqual(["refs/heads/records"]);
+    for (const ref of ["refs/heads/records", SYNC_BASE]) expect(w.git(w.clone, "rev-parse", ref), ref).toBe(gates.calls[0]?.commit);
     const again: Result = await records.publish({ ...w.opts, message: "records: again", runGates: gates.run });
     expect(again.lines).toEqual([expect.stringContaining("nothing to publish")]);
   });
@@ -249,6 +299,52 @@ describe("commit", { timeout: 60_000 }, () => {
     expect({ clone: w.refs(w.clone), origin: w.refs(w.origin) }).toEqual(before);
   });
 
+  it("moves no ref on --dry-run when origin moved, and names restore", async () => {
+    const w = world();
+    const b = await w.machine("b");
+    w.write(b, PLAN, "# plan, from b\n");
+    expect((await records.publish({ root: b, env: w.env, message: "b", runGates: passing().run }) as Result).code).toBe(0);
+    w.write(w.clone, `${ALPHA}/added.md`, "new record\n");
+    const before = w.refs(w.clone);
+    const gates = passing();
+    const dry: Result = await records.publish({ ...w.opts, message: "m", dryRun: true, runGates: gates.run });
+    expect(dry.code).toBe(1);
+    expect(dry.lines.join("\n")).toContain("run `node scripts/records.mjs restore`");
+    expect(gates.calls).toHaveLength(0);
+    expect(w.refs(w.clone)).toBe(before);
+  });
+
+  it("refuses a publish from a checkout behind origin, then publishes its own edit after restore without reverting the other's", async () => {
+    const w = world();
+    const b = await w.machine("b");
+    w.write(b, `${RUN}/RESULTS.md`, "# results, from b\n");
+    expect((await records.publish({ root: b, env: w.env, message: "b", runGates: passing().run }) as Result).code).toBe(0);
+    const theirs = w.git(w.origin, "rev-parse", "records");
+    w.write(w.clone, PLAN, "# plan, from a\n");
+    const refused: Result = await records.publish({ ...w.opts, message: "a", runGates: passing().run });
+    expect(refused.code).toBe(1);
+    expect(refused.lines.join("\n")).toContain("run `node scripts/records.mjs restore`");
+    expect(w.git(w.origin, "rev-parse", "records")).toBe(theirs);
+    expect((await records.restore(w.opts) as Result).code).toBe(0);
+    const published: Result = await records.publish({ ...w.opts, message: "a", runGates: passing().run });
+    expect(published.code, published.lines.join("\n")).toBe(0);
+    expect(published.lines).toEqual(expect.arrayContaining([`M ${PLAN}`]));
+    expect(published.lines.some((line) => line.endsWith(`${RUN}/RESULTS.md`))).toBe(false);
+    expect(w.git(w.origin, "show", `records:${RUN}/RESULTS.md`)).toBe("# results, from b");
+    expect(w.git(w.origin, "show", `records:${PLAN}`)).toBe("# plan, from a");
+  });
+
+  it("moves a local records branch with the push only by fast-forward, and says so otherwise", async () => {
+    const w = world();
+    const stray = w.git(w.clone, "commit-tree", "-m", "stray", w.git(w.clone, "rev-parse", "records^{tree}"));
+    w.git(w.clone, "update-ref", "refs/heads/records", stray);
+    w.write(w.clone, PLAN, "# plan, revised\n");
+    const result: Result = await records.publish({ ...w.opts, message: "m", runGates: passing().run });
+    expect(result.code, result.lines.join("\n")).toBe(0);
+    expect(w.git(w.clone, "rev-parse", "refs/heads/records")).toBe(stray);
+    expect(result.lines.join("\n")).toContain("left the local records branch");
+  });
+
   it("names restore and forces nothing when the records branch moved since the fetch", async () => {
     const w = world();
     const other = join(w.dir, "other");
@@ -267,6 +363,14 @@ describe("commit", { timeout: 60_000 }, () => {
     expect(result.code).toBe(1);
     expect(result.lines.join("\n")).toContain("run `node scripts/records.mjs restore`");
     expect(w.git(w.origin, "rev-parse", "records")).toBe(theirs);
+    // The advised recovery keeps the edit the rejected push carried and takes the other machine's.
+    const restored: Result = await records.restore(w.opts);
+    expect(restored.code, restored.lines.join("\n")).toBe(0);
+    expect(readFileSync(join(w.clone, `${ALPHA}/record.md`), "utf8")).toContain("closed 2026-01-03");
+    expect(readFileSync(join(w.clone, PLAN), "utf8")).toBe("# plan, from another machine\n");
+    expect((await records.publish({ ...w.opts, message: "ours", runGates: passing().run }) as Result).code).toBe(0);
+    expect(w.git(w.origin, "show", `records:${ALPHA}/record.md`)).toContain("closed 2026-01-03");
+    expect(w.git(w.origin, "show", `records:${PLAN}`)).toBe("# plan, from another machine");
   });
 
   it("leaves a run still in progress out, without counting its published copy as deleted", async () => {
@@ -292,7 +396,8 @@ describe("commit", { timeout: 60_000 }, () => {
   });
 });
 
-describe.skipIf(!POSIX)("commit's default gates", { timeout: 120_000 }, () => {
+// Not POSIX-only: the records suite runs through node and vitest's own bin, with no shell, so Windows runs it too.
+describe("commit's default gates", { timeout: 180_000 }, () => {
   it("runs the leak gate, the hygiene check and the records suite on the built commit", async () => {
     const w = world();
     w.write(w.clone, PLAN, "# plan, revised\n");
@@ -401,8 +506,17 @@ describe("the branch templates", () => {
     const at = (text: string) => steps.findIndex((step) => step.run?.includes(text) === true);
     expect(at("records.mjs restore")).toBeGreaterThan(-1);
     expect(at("records.mjs restore")).toBeLessThan(at("npm run test:records"));
-    expect(at("npm run gate")).toBeGreaterThan(at("npm run test:records"));
-    expect(at("repo-hygiene.mjs")).toBeGreaterThan(-1);
+    // The leak gate reads the pushed commit itself, where every record is tracked, never main's
+    // checkout, whose listing drops a restored record that main's ignore rules match.
+    expect(at("npm run gate")).toBe(-1);
+    const tree = steps.findIndex((step) => /git worktree add --detach (\S+) "\$RECORDS_SHA"/.test(step.run ?? ""));
+    const dir = /git worktree add --detach (\S+) /.exec(steps[tree]?.run ?? "")?.[1] ?? "?";
+    expect(tree).toBeGreaterThan(-1);
+    const leak = at(`node scripts/leak-gate.mjs --root ${dir}`);
+    expect(leak).toBeGreaterThan(tree);
+    expect((steps[tree] as { env?: Record<string, string> }).env).toEqual({ RECORDS_SHA: "${{ github.sha }}" });
+    expect(at(`repo-hygiene.mjs --repo ${dir}`)).toBeGreaterThan(tree);
+    for (const step of steps) expect(step.run ?? "", step.name).not.toContain("${{");
   });
 
   it("tells a reader how to restore and publish, and that a run in progress is left out", () => {

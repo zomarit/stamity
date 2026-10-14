@@ -21,5 +21,7 @@ From a checkout of `main`:
 - A run whose `record.md` still reads `Status: in progress` in its first 15 lines is left out of a
   publish, and its copy here stays as it is, until the run closes.
 
-Pushes are never forced, and the branch cannot be deleted. When a push is refused because the
-branch moved, run `node scripts/records.mjs restore`, then `commit` again.
+Pushes are never forced, and the branch cannot be deleted. When `commit` refuses because the
+branch moved, run `node scripts/records.mjs restore`, then `commit` again. `restore` writes what
+changed only on the branch, keeps what you changed and have not published, and refuses, writing
+nothing, when a record changed on both sides.
