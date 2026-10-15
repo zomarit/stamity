@@ -56,10 +56,23 @@ import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts
  * identically on the command line, keeps the funnel, and still gives commander
  * ownership of the usage errors: no verb exits 2 on the missing argument, a
  * wrong verb exits 2 on the choice list.
+ *
+ * **`stamity learn read` is the read half, for a session no hook started.** A
+ * cloud run with no session-start banner reads learnings here rather than
+ * opening `.stamity/learnings/` with the file tools (REQ-FLOW-088): the store's
+ * loader screens every file with the write gate's whole catalog — the network
+ * rows the session-start hook cannot embed included — and the output is the
+ * engine's index, each injection skip naming its pattern ids and never a span,
+ * never a skip's `detail`. `--body <id>` prints one LOADED learning's body; a
+ * skipped or unknown id is exit 1, so a refused body is never printed. Flags
+ * belong to one verb each, checked before the action runs (`preAction`, as
+ * `gate.ts` checks its own): a flag on the wrong verb is a usage error, exit 2.
  */
 
-/** The only verb. A second one becomes another choice plus a dispatch in `run`. */
+/** The write verb. */
 const CAPTURE = "capture";
+/** The screened read verb. */
+const READ = "read";
 
 /**
  * The learnings subtree of the state directory. The store keeps its own copy of
@@ -421,26 +434,159 @@ async function dryRunCapture(
   };
 }
 
+/** The loader's result, typed off the engine function as `dryRunCapture` types its parse. */
+type LoadedSet = Awaited<ReturnType<CliContext["engine"]["learnings"]["store"]["loadValidatedLearnings"]>>;
+
+/** Each capture-only flag, by its commander attribute and its spelling. */
+const CAPTURE_ONLY_FLAGS: readonly (readonly [string, string])[] = [
+  ["title", "--title"],
+  ["summary", "--summary"],
+  ["confidence", "--confidence"],
+  ["bodyFile", "--body-file"],
+];
+
+/**
+ * The per-verb flag check, before the action and before any file is read: a
+ * usage error exits 2 through commander, as a missing `--title` always has.
+ * `--title` and `--summary` are capture's required flags, checked here rather
+ * than by `requiredOption`, which would demand them of `read` too.
+ */
+function checkVerbFlags(command: Command): void {
+  const verb = command.processedArgs[0];
+  const opts = command.opts<Record<string, unknown>>();
+  if (verb === CAPTURE) {
+    if (opts["title"] === undefined) {
+      command.error("error: required option '--title <text>' not specified", { exitCode: 2 });
+    }
+    if (opts["summary"] === undefined) {
+      command.error("error: required option '--summary <text>' not specified", { exitCode: 2 });
+    }
+    if (opts["body"] !== undefined) {
+      command.error("error: --body applies to read only; capture takes its body from --body-file or stdin", {
+        exitCode: 2,
+      });
+    }
+    return;
+  }
+  if (opts["dryRun"] === true) command.error("error: read writes nothing, so it takes no --dry-run", { exitCode: 2 });
+  const misplaced = CAPTURE_ONLY_FLAGS.filter(([key]) => command.getOptionValueSource(key) === "cli");
+  if (misplaced.length > 0) {
+    command.error(`error: ${misplaced.map(([, flag]) => flag).join(", ")} applies to capture only`, { exitCode: 2 });
+  }
+}
+
+/** A refused read: exit 1, the failure on stderr for a person and in the one JSON document for a machine. */
+function readRefusal(ctx: CliContext, doc: FailureDoc, extra: Record<string, unknown>): CommandResult {
+  if (!ctx.json) ctx.io.err(`${renderFailureHuman(doc, ctx.palette)}\n`);
+  return { exitCode: 1, json: { error: doc, ...extra } };
+}
+
+/**
+ * `learn read`: the screened index, or with `bodyId` one loaded body.
+ *
+ * Nothing here judges a file — the loader does, with the write gate's whole
+ * catalog. What this owns is the shape: the index with pattern ids on its skip
+ * lines, and a JSON document carrying the index's fields and no skip `detail`.
+ * A folder that exists and cannot be listed is the loader's typed `FS_ERROR`,
+ * which the funnel renders as exit 1; an absent folder is an empty index.
+ */
+async function runRead(ctx: CliContext, bodyId: string | undefined): Promise<CommandResult> {
+  const { store } = ctx.engine.learnings;
+  const now = ctx.app.runtime.clock.now();
+  const result = await store.loadValidatedLearnings({ rootDir: ctx.app.runtime.cwd, now });
+  if (bodyId !== undefined) return readBody(ctx, result, bodyId);
+
+  ctx.io.out(`${store.formatLearningsIndex(result, { now, patternIds: true })}\n`);
+  const entries = store.learningsIndexEntries(result);
+  return {
+    exitCode: 0,
+    json: { learnings: entries.learnings, skips: entries.skips, totalBytes: result.totalBytes },
+  };
+}
+
+/**
+ * One loaded learning's body. The id is matched against the file's stem first
+ * (unique on disk), then against the declared `id`; two learnings declaring
+ * the id the caller named, with neither stem matching, refuse rather than pick.
+ * A skipped file is named by its stem, with its reason and pattern ids only:
+ * its body is exactly what the screen refused, so it is never printed.
+ */
+function readBody(ctx: CliContext, result: LoadedSet, id: string): CommandResult {
+  const entries = ctx.engine.learnings.store.learningsIndexEntries(result);
+  const byStem = result.learnings.findIndex((learning) => learning.fileName === `${id}.md`);
+  const byId = entries.learnings.flatMap((entry, index) => (entry.id === id ? [index] : []));
+  const index = byStem >= 0 ? byStem : byId.length === 1 ? byId[0] : undefined;
+  const learning = index === undefined ? undefined : result.learnings[index];
+  const next = `run ${packageCommand("learn read")} for the index of loaded learnings`;
+
+  if (learning !== undefined) {
+    ctx.io.out(`${learning.body.trim()}\n`);
+    return { exitCode: 0, json: { id, fileName: learning.fileName, body: learning.body } };
+  }
+  if (byId.length > 1) {
+    const fileNames = byId.map((at) => entries.learnings[at]?.fileName);
+    const why = "two notes claim one name, and printing either would be a guess";
+    const message = `${byId.length} loaded learnings declare the id ${JSON.stringify(id)}: ${fileNames.join(", ")}`;
+    return readRefusal(ctx, { code: "VALIDATION_ERROR", message, why, next: "pass the file name without .md" }, {
+      id,
+      fileNames,
+    });
+  }
+  const skipAt = result.skips.findIndex((entry) => entry.fileName === `${id}.md`);
+  const skip = skipAt >= 0 ? entries.skips[skipAt] : undefined;
+  if (skip !== undefined) {
+    const ids = skip.patternIds.length > 0 ? ` (patterns: ${skip.patternIds.join(", ")})` : "";
+    return readRefusal(
+      ctx,
+      {
+        code: "VALIDATION_ERROR",
+        message: `learning ${JSON.stringify(id)} was skipped: ${skip.fileName}: ${skip.reason}${ids}`,
+        why: "a skipped file did not clear the read screen, so its body is not printed",
+        next: `fix or retire it through the write path, never by opening it; ${next}`,
+      },
+      { id, skip },
+    );
+  }
+  return readRefusal(
+    ctx,
+    {
+      code: "VALIDATION_ERROR",
+      message: `no loaded learning has the id ${JSON.stringify(id)}`,
+      why: "--body prints a learning the read screen loaded, named by its id or its file name without .md",
+      next,
+    },
+    { id },
+  );
+}
+
 export const learnCommand: CommandModule = {
   name: "learn",
-  summary: "capture a learning through the engine's write gates (plumbing)",
+  summary: "capture a learning through the engine's write gates, or read them through its screen (plumbing)",
   hidden: true,
   mutating: true,
 
   configure(cmd: Command): void {
     cmd
-      .addArgument(new Argument("<subcommand>", "the only verb").choices([CAPTURE]))
-      .requiredOption("--title <text>", "what the learning is about; also its file-name slug")
-      .requiredOption("--summary <text>", "one index line, under 200 characters")
+      .addArgument(
+        new Argument("<subcommand>", "capture a learning, or read the screened index").choices([CAPTURE, READ]),
+      )
+      .option("--title <text>", "capture (required): what the learning is about; also its file-name slug")
+      .option("--summary <text>", "capture (required): one index line, under 200 characters")
       .addOption(
-        new Option("--confidence <level>", "how much evidence backs the finding")
+        new Option("--confidence <level>", "capture: how much evidence backs the finding")
           .choices([...LEARNING_CONFIDENCE_LEVELS])
           .default("medium"),
       )
-      .option("--body-file <path>", "read the body from a file instead of stdin");
+      .option("--body-file <path>", "capture: read the body from a file instead of stdin")
+      .option("--body <id>", "read: print one loaded learning's body instead of the index")
+      .hook("preAction", checkVerbFlags);
   },
 
-  async run(ctx, opts): Promise<CommandResult> {
+  async run(ctx, opts, args): Promise<CommandResult> {
+    // Commander's `choices()` refused every other verb at parse time, and the
+    // preAction hook refused every flag on the wrong verb.
+    if (args[0] === READ) return await runRead(ctx, optionalText(opts, "body"));
+
     const rootDir = ctx.app.runtime.cwd;
     // Before the body is read: a capture pointed at the wrong directory should
     // not first consume the caller's pipe.

@@ -15,6 +15,7 @@ import {
   computeLearningIntegrity,
   LEARNINGS_SCREEN_PATTERNS,
   MAX_LEARNING_FILE_BYTES,
+  MAX_LEARNING_SUMMARY_LENGTH,
   orderingDay,
   resolveLearningsCaps,
   reviewDueSoon,
@@ -238,6 +239,13 @@ export interface LoaderSkip {
    * session-start banner would deliver exactly the payload the skip refused.
    */
   detail: string;
+  /**
+   * The block-severity pattern ids an `injection-detected` skip rests on, sorted
+   * and unique — the same ids `detail` names, as data, so a reader that must not
+   * see `detail` (`stamity learn read`) can still say which rows fired. Absent on
+   * every other reason: a review horizon or a digest is not a screen hit.
+   */
+  patternIds?: string[];
 }
 
 export interface LoaderResult {
@@ -401,11 +409,15 @@ async function examine(dir: string, candidate: Candidate, now: Date): Promise<Ex
   ).filter((hit) => hit.severity === "block");
   if (blocked.length > 0) {
     const ids = [...new Set(blocked.map((hit) => hit.patternId))].toSorted();
-    return skip(
-      fileName,
-      "injection-detected",
-      `matches injection ${ids.length === 1 ? "pattern" : "patterns"} ${ids.join(", ")}.`,
-    );
+    return {
+      ok: false,
+      skip: {
+        fileName,
+        reason: "injection-detected",
+        detail: `matches injection ${ids.length === 1 ? "pattern" : "patterns"} ${ids.join(", ")}.`,
+        patternIds: ids,
+      },
+    };
   }
 
   const source = `Learning "${fileName}"`;
@@ -486,6 +498,54 @@ function expiredReview(parsed: ParsedFrontmatter, now: Date): string | null {
 export interface FormatLearningsIndexOptions {
   /** Clock for the review-due mark. Defaults to now. */
   now?: Date;
+  /**
+   * Append each injection skip's pattern ids to its line, as
+   * ` (patterns: a, b)`. Off by default, so the session-start banner and this
+   * index stay line-for-line twins; `stamity learn read` turns it on, because a
+   * reader with no hook has no other way to learn which rows fired.
+   */
+  patternIds?: boolean;
+}
+
+/** One loaded learning as the index names it: no body, no other head field. */
+export interface LearningIndexEntry {
+  id: string;
+  fileName: string;
+  confidence: string;
+  summary: string;
+}
+
+/** One skip as the index names it: the reason and the pattern ids, never `detail`. */
+export interface LearningSkipEntry {
+  fileName: string;
+  reason: LoaderSkipReason;
+  patternIds: string[];
+}
+
+/**
+ * The index's fields as data — what {@link formatLearningsIndex} prints, before
+ * it is joined into lines. A skip's file name is flattened to one bounded line
+ * here, as the session-start hook flattens it: the name is attacker-chosen on
+ * any file that reached the directory, and no gate reads it. A skip's `detail`
+ * is left out, as the formatter leaves it out.
+ */
+export function learningsIndexEntries(result: LoaderResult): {
+  learnings: LearningIndexEntry[];
+  skips: LearningSkipEntry[];
+} {
+  return {
+    learnings: result.learnings.map((learning) => ({
+      id: indexId(learning),
+      fileName: learning.fileName,
+      confidence: fieldText(learning.frontmatter, "confidence") ?? "unrated",
+      summary: fieldText(learning.frontmatter, "summary") ?? "(no summary)",
+    })),
+    skips: result.skips.map((entry) => ({
+      fileName: lineSafe(entry.fileName),
+      reason: entry.reason,
+      patternIds: [...(entry.patternIds ?? [])],
+    })),
+  };
 }
 
 /**
@@ -514,20 +574,21 @@ export interface FormatLearningsIndexOptions {
 export function formatLearningsIndex(result: LoaderResult, opts: FormatLearningsIndexOptions = {}): string {
   const now = opts.now ?? new Date();
   const lines: string[] = [];
+  const entries = learningsIndexEntries(result);
 
   const duplicates = duplicateIds(result.learnings);
-  for (const learning of result.learnings) {
-    const id = indexId(learning);
-    const confidence = fieldText(learning.frontmatter, "confidence") ?? "unrated";
-    const summary = fieldText(learning.frontmatter, "summary") ?? "(no summary)";
+  for (const [index, learning] of result.learnings.entries()) {
+    const { id, confidence, summary } = entries.learnings[index]!;
     const flag = duplicates.has(id) ? " [duplicate id]" : "";
     const reviewBy = fieldText(learning.frontmatter, REVIEW_BY_FIELD);
     const due = reviewBy !== undefined && reviewDueSoon(reviewBy, now) ? ` [review due ${reviewBy}]` : "";
     lines.push(`- [${confidence}] ${id} — ${summary} (${learning.fileName})${flag}${due}`);
   }
 
-  for (const entry of result.skips) {
-    lines.push(`- skipped ${entry.fileName}: ${entry.reason}`);
+  for (const entry of entries.skips) {
+    const named = opts.patternIds === true && entry.patternIds.length > 0;
+    const ids = named ? ` (patterns: ${entry.patternIds.join(", ")})` : "";
+    lines.push(`- skipped ${entry.fileName}: ${entry.reason}${ids}`);
   }
 
   const header =
@@ -565,6 +626,18 @@ function fieldText(frontmatter: Record<string, unknown>, field: string): string 
   }
   if (typeof value === "number" || typeof value === "boolean") return String(value);
   return undefined;
+}
+
+/**
+ * A file name as one bounded, control-character-free line — the session-start
+ * hook's own `text()` rule (`../hooks/scripts.ts`), so the two twins print the
+ * same skip line for the same hostile name.
+ */
+function lineSafe(name: string): string {
+  // oxlint-disable-next-line no-control-regex -- the control range IS the subject: it is what a name must not carry.
+  const flat = name.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim();
+  if (flat === "") return "(unnamed file)";
+  return flat.length > MAX_LEARNING_SUMMARY_LENGTH ? `${flat.slice(0, MAX_LEARNING_SUMMARY_LENGTH - 1)}…` : flat;
 }
 
 // ── Shared ───────────────────────────────────────────────────────
