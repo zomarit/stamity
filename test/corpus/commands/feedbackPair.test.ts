@@ -1598,7 +1598,11 @@ describe("feedback pair — unattended (REQ-FLOW-097, REQ-FLOW-100, REQ-CTX-012)
   it("pr-resolve opens a record of its own with the six head lines and takes the skill before the first fetch (REQ-FLOW-097, REQ-CTX-012)", () => {
     const row = unattendedRow();
 
-    expect(row).toContain("Run unattended (`--unattended`, or `STAMITY_UNATTENDED=1` with no `--attended`), this command keeps a record.");
+    // build/36: REQ-FLOW-089's reading, any value but empty, `false` or `0`, as rework reads it.
+    expect(row).toContain(
+      "Run unattended (`--unattended`, or `STAMITY_UNATTENDED` set to any value but empty, `false` or `0`, with no `--attended`), this command keeps a record.",
+    );
+    expect(row).not.toContain("STAMITY_UNATTENDED=1");
     // `review/45`: the skill's `/st-pr-resolve` entry, with no ready check (the threads are the
     // input, by reference) and no `run start` (which would name a branch of its own).
     expect(row).toContain(

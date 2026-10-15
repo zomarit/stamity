@@ -59,8 +59,13 @@ is `stamity run start --run <run-id> --json`, before step 1, and the record open
 more head lines, bare like the others: `Mode: unattended`, and `Branch:` and `Base:` taken from
 that output's `branch` and `base`, never from the checkout. The run then invokes the
 `st-unattended` skill by name and follows it, so its pre-flight runs before any sub-agent is
-briefed. Its user-route stop closes the record rather than leaving it in progress (step 3). An
-attended run's head stays the three lines above.
+briefed. Its user-route stop closes the record rather than leaving it in progress (step 3). Every
+other unattended exit pushes its record through the run verbs too — the close after step 7's fix,
+the `--diagnose` report, `BLOCKED_FAILURE` at gate `root-cause-before-fix`, and the escape valve:
+once step 8 has run, it takes the skill's ending, `Status:` rewritten to the exit taken, then
+`stamity run end --run <run-id> --title <title> --paths <p...>`, `--paths` naming the record, which
+carries the ranked hypotheses, and gate 2's test when one was written. An attended run's head
+stays the three lines above.
 
 1. **Hypotheses.** From the symptom — expected, actual, reproduction path, frequency — write
    numbered hypotheses ranked by prior probability, each paired with the single observation

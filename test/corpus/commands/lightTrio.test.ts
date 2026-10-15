@@ -967,6 +967,16 @@ describe("debug — hard gates before any fix", () => {
     );
     expect(unattended).toContain("invokes the `st-unattended` skill by name and follows it");
     expect(unattended.indexOf("stamity run start")).toBeLessThan(unattended.indexOf("st-unattended"));
+    // review/13 (signed off): every unattended exit pushes its record through the run verbs, not
+    // only the user route — the fixed close, `--diagnose`, the root-cause gate's `BLOCKED_FAILURE`
+    // and the escape valve each take the skill's ending after the strip.
+    expect(unattended).toContain(
+      "Every other unattended exit pushes its record through the run verbs too — the close after step 7's fix, the `--diagnose` report, `BLOCKED_FAILURE` at gate `root-cause-before-fix`, and the escape valve",
+    );
+    expect(unattended).toContain("once step 8 has run, it takes the skill's ending, `Status:` rewritten to the exit taken");
+    expect(unattended).toContain("`stamity run end --run <run-id> --title <title> --paths <p...>`");
+    expect(unattended).toMatch(/`--paths` naming the record, which carries the ranked hypotheses, and gate 2's test when one was written/);
+    expect(unattended.indexOf("step 8 has run")).toBeLessThan(unattended.indexOf("`stamity run end"));
     // The attended head stays three lines; `Mode:` is named nowhere else in the body.
     expect(unattended).toMatch(/An attended run's head stays the three lines above\./);
     expect(body.split("`Mode: unattended`").length - 1).toBe(1);
@@ -999,6 +1009,13 @@ describe("quick — the guardrails are the command", () => {
     expect(notQuick).toContain(
       "An unattended run does not take /st-quick: run `/st-work --effort light` instead.",
     );
+    // review/11: quick's own text names what makes a run unattended, REQ-FLOW-089's reading, so the
+    // refusal is reachable under the variable alone; `--attended` beats it.
+    expect(notQuick).toContain(
+      "A run is unattended when invoked with `--unattended`, or under `STAMITY_UNATTENDED` set to any value but empty, `false` or `0`, with `--attended` beating it.",
+    );
+    expect(notQuick).not.toContain("STAMITY_UNATTENDED=1");
+    expect(notQuick.indexOf("A run is unattended when")).toBeLessThan(notQuick.indexOf("An unattended run does not take"));
     // The refusal sits in the contract paragraph, before any threshold or trivial signal is read.
     expect(file.parsed.body.indexOf("An unattended run does not take")).toBeLessThan(
       file.parsed.body.indexOf("## Trivial signals"),

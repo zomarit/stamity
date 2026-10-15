@@ -363,7 +363,7 @@ of the reference table. A phase with no mapped status emits no transition.
 Mapping is table-driven and one-way: an event never names a platform status, and platform state
 never rewrites the run. An unmapped event is dropped with a line in the report — an unknown event is
 not a failure, and it is not invented into a transition either. This session's handoff carries
-`run-mode: unattended` only under `--unattended`, or `STAMITY_UNATTENDED=1` without `--attended`.
+`run-mode: unattended` only under `--unattended`, or `STAMITY_UNATTENDED` set to any value but empty, `false` or `0`, without `--attended`.
 
 ## Deferral inbox
 

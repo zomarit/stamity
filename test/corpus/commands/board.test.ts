@@ -1707,9 +1707,11 @@ describe("st-board — durable state and authorization", () => {
     // 2026-10-15 cloud-runs u10: the payload names the mode beside move: and preview:.
     expect(step).toMatch(/`run-mode: attended \| unattended`, `move: on` or `move: off`/);
     // Fix round 1 (W-1): the mode is this invocation's declaration, `--attended` beating the variable.
+    // build/36: REQ-FLOW-089's reading, any value but empty, `false` or `0`.
     expect(progress).toMatch(
-      /This session's handoff carries `run-mode: unattended` only under `--unattended`, or `STAMITY_UNATTENDED=1` without `--attended`\./,
+      /This session's handoff carries `run-mode: unattended` only under `--unattended`, or `STAMITY_UNATTENDED` set to any value but empty, `false` or `0`, without `--attended`\./,
     );
+    expect(progress).not.toContain("STAMITY_UNATTENDED=1");
     // Edge case: the board's own return field keeps its name and meaning.
     expect(returned).toMatch(/`mode` — the mode and the one-line reason it was chosen/);
     expect(returned).not.toMatch(/run-mode/);
