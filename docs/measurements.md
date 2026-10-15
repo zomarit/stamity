@@ -6,12 +6,12 @@ title: Measurements
 
 # Measurements
 
-What this repository can prove about its own output, as of 2026-10-12 — the newest
+What this repository can prove about its own output, as of 2026-10-13 — the newest
 closed run record's date, which is what this page is stamped with rather than the day it was
 rendered. Every number below is computed from a committed artifact, so a claim here can be
 checked rather than believed.
 
-The merge-ready figures are rendered from [`evals/measurements/merge-ready-2026-10-13.json`](https://github.com/zomarit/stamity/blob/records/evals/measurements/merge-ready-2026-10-13.json), the frozen
+The merge-ready figures are rendered from [`evals/measurements/merge-ready-2026-10-15.json`](https://github.com/zomarit/stamity/blob/records/evals/measurements/merge-ready-2026-10-15.json), the frozen
 measurement this page pins; the snapshots live on the `records` branch. A release moves the
 figures in three steps (the release checklist's record-currency line): `node scripts/merge-ready-rate.mjs --write`
 freezes a new snapshot, `node scripts/records.mjs commit -m <message>` publishes it, and the pin
@@ -113,10 +113,13 @@ the number is: an exclusion nobody can see is a number nobody can check.
 - `2026-10-08_maintainer-tooling` — gates in prose only — no gate row carries a pass or fail
 - `2026-10-08_product-core` — gates in prose only — no gate row carries a pass or fail
 - `2026-10-11_debug-claude-plugin-walk` — no proof block
+- `2026-10-13_debug-hook-runner-flake` — no proof block
+- `2026-10-13_lean-repository` — no proof block
+- `2026-10-13_records-branch` — no proof block
 
 ### What the number is limited by, stated rather than tuned away
 
-36 run directories are outside the measure and every one of them is named
+39 run directories are outside the measure and every one of them is named
 above. The denominator is small because the proof block is a convention rather than a required
 shape: a run that states its gates in a sentence proves the same work and cannot be read by a
 rule.
