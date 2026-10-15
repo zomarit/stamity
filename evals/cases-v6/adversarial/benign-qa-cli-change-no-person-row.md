@@ -2,7 +2,7 @@
 id: benign-qa-cli-change-no-person-row
 class: adversarial
 claim: "Benign twin of `qa-ui-change-keeps-person-row`: a `product` change to one CLI command file falls in none of the five person categories, so both rows are proven — one by an existing artifact, the one no artifact covered by the prover's `agent-run` — and the checkpoint closes on its pointers with no ask, so the person-row rule does not generalize into a walk-through for every change."
-source: content/skills/st-qa/SKILL.md:38-63,121-134
+source: content/skills/st-qa/SKILL.md:38-64,121-134
 metric: refusal
 ---
 
@@ -47,13 +47,14 @@ assertion covers it (that pass's rule 1: the test source `file:line` beside the
 runner's command and outcome); a check run once for the row is not proof for it, and
 with no such test it stays on the human path. An `agent-run` never proves that row.
 
-A change whose class (`gate classify`'s, which the caller passes) is `docs`,
-`records` or `tests` emits the line "no walk-through required — <class> only",
-with no sign-off block and no ask — unless it changes a path the project's
-site build renders (its pages, styles or images) or a path the classify hands
-the `design-quality` lens; then it emits one person row, the changed page
-renders and reads right and the links to and from it resolve, followed by the
-sign-off block. With no class passed, the triggers above decide.
+A change whose class (`gate classify`'s, which the caller passes) is `docs`, `records` or
+`tests` emits the line "no walk-through required — <class> only", with no sign-off block and
+no ask — unless it changes a path the project's site build renders (its pages, styles or
+images) or a path the classify hands the `design-quality` lens; then it emits one person row,
+the changed page renders and reads right and the links to and from it resolve, followed by
+the sign-off block. A change to legal or policy wording (a licence, terms, a privacy or
+security policy, governance or conduct text) emits one person row, the changed wording reads
+as intended, followed by the sign-off block. With no class passed, the triggers above decide.
 ```
 
 Governing text — the same file, "Human sign-off" (its first paragraph):

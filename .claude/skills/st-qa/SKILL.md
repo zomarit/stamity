@@ -57,16 +57,16 @@ assertion covers it (that pass's rule 1: the test source `file:line` beside the
 runner's command and outcome); a check run once for the row is not proof for it, and
 with no such test it stays on the human path. An `agent-run` never proves that row.
 
-A change whose class (`gate classify`'s, which the caller passes) is `docs`,
-`records` or `tests` emits the line "no walk-through required — <class> only",
-with no sign-off block and no ask — unless it changes a path the project's
-site build renders (its pages, styles or images) or a path the classify hands
-the `design-quality` lens; then it emits one person row, the changed page
-renders and reads right and the links to and from it resolve, followed by the
-sign-off block. With no class passed, the triggers above decide.
+A change whose class (`gate classify`'s, which the caller passes) is `docs`, `records` or
+`tests` emits the line "no walk-through required — <class> only", with no sign-off block and
+no ask — unless it changes a path the project's site build renders (its pages, styles or
+images) or a path the classify hands the `design-quality` lens; then it emits one person row,
+the changed page renders and reads right and the links to and from it resolve, followed by
+the sign-off block. A change to legal or policy wording (a licence, terms, a privacy or
+security policy, governance or conduct text) emits one person row, the changed wording reads
+as intended, followed by the sign-off block. With no class passed, the triggers above decide.
 
-Seven columns, every one filled: `#`, `Scenario`, `Steps`, `Expected`, `Risk`,
-`Minutes`, `Proof`.
+Seven columns, every one filled: `#`, `Scenario`, `Steps`, `Expected`, `Risk`, `Minutes`, `Proof`.
 
 - **Scenario** names an observable behavior, never a file path.
 - **Steps** begin from a stated start state and use concrete values a reader

@@ -771,6 +771,14 @@ describe("qa — the human checkpoint", () => {
       "one person row, the changed page renders and reads right and the links to and from it resolve, followed by the sign-off block.",
     );
     expect(text).toContain("With no class passed, the triggers above decide.");
+    // Added 2026-10-15 (run 2026-10-14_cli-native, `review/139`, signed off): legal or policy
+    // wording is one of the five person categories, and a change to it is often `docs` class, so
+    // the fast path held a second exception: a GOVERNANCE.md edit otherwise reached no person.
+    const legal =
+      "A change to legal or policy wording (a licence, terms, a privacy or security policy, governance or conduct text) emits one person row, the changed wording reads as intended, followed by the sign-off block.";
+    expect(text).toContain(legal);
+    expect(text.indexOf(legal)).toBeGreaterThan(text.indexOf("`design-quality` lens"));
+    expect(text.indexOf("With no class passed")).toBeGreaterThan(text.indexOf(legal));
     // The diff-shape escape it replaces is gone: a docs page renders, so it is no longer walk-free.
     expect(text).not.toContain("no walk-through required — documentation only");
     // Placed after the trigger table and before the column contract, as one rule with it.

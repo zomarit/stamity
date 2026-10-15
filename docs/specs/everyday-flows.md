@@ -2580,6 +2580,12 @@ the row points at that result (`content/skills/st-qa/SKILL.md:38-43`).
   `design-quality` lens; then it emits one person row, the changed page renders and reads right and the links to and
   from it resolve, followed by the sign-off block. With no class passed, the trigger table decides (`:51-57`).
   `/st-work` hands the skill the class and the lenses at its QA step (REQ-FLOW-017, amended 2026-10-10).
+  **Amended 2026-10-15** (run `2026-10-14_cli-native`, the pull request's second review-bot pass; `review/139`). A
+  second exception stands beside the rendered-site one: a change to legal or policy wording (a licence, terms, a
+  privacy or security policy, governance or conduct text) emits one person row, the changed wording reads as intended,
+  followed by the sign-off block (`content/skills/st-qa/SKILL.md:57-64`). Legal or policy wording is one of the five
+  person categories below, and such a change is often `docs` class, so without it a policy page's new wording reached
+  no person.
 - **Amended 2026-10-10** (the whole-branch review's fix round; `review/94`, a security finding). One row is held to
   more: the negative row a security-adjacent path derives (`:35`) is auto-proven only where a committed test's assertion
   covers it, by the Auto-prove pass's rule 1, the test source `file:line` beside the runner's command and outcome. A
@@ -3994,12 +4000,16 @@ above.
 - GIVEN a change to a security-adjacent path whose negative row no committed test's assertion covers THEN that row is
   not recorded `auto-proven` on a check the test-runner ran once for it; it stays on the human path and is asked (added
   2026-10-10, the whole-branch review's fix round, `review/94`). `judgment: reviewer`
-- GIVEN a change of class `docs`, `records` or `tests` that changes no path the site build renders and none the
-  classify hands the `design-quality` lens THEN the checkpoint prints "no walk-through required — <class> only", with
-  no sign-off block and no ask.
+- GIVEN a change of class `docs`, `records` or `tests` that changes no path the site build renders, none the
+  classify hands the `design-quality` lens and no legal or policy wording THEN the checkpoint prints "no walk-through
+  required — <class> only", with no sign-off block and no ask (amended 2026-10-15, `review/139`: "and no legal or
+  policy wording" added).
 - GIVEN such a class and a changed stylesheet the classify hands the `design-quality` lens THEN one person row is
   emitted, the changed page renders and reads right and the links to and from it resolve, followed by the sign-off
   block, and "no walk-through required" is not printed. `judgment: reviewer`
+- GIVEN such a class and a change to a governance page's wording, which the site build does not render THEN one person
+  row is emitted, the changed wording reads as intended, followed by the sign-off block, and "no walk-through
+  required" is not printed (added 2026-10-15, `review/139`). `judgment: reviewer`
 - GIVEN a `product` change to one CLI source file, with no rendered surface, no third-party account and no step that
   cannot be undone, THEN none of the three kinds creates a person row, and where every row's check ran and passed no
   QA question is asked; a row whose check is missing, cannot run or fails stays on the human path, the person's, and
