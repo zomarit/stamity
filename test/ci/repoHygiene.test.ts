@@ -274,11 +274,19 @@ describe("repository hygiene over the Git index", () => {
   // same-directory neighbour is refused. Only the expected list, its message and the title moved;
   // the body already reads the exempt paths. The retirement proof is unchanged: every retired
   // summary and its neighbour is still staged over budget and must be refused like any other file.
-  it("exempts exactly the run 47 summary and refuses its neighbour and the retired run summaries", () => {
+  //
+  // TEST CHANGE, justified (2026-10-15, the 1.15.0 close): the case asserted the 1.15.0 window's
+  // one entry, run 47's summary; the 1.15.0 close archived it into evidence-archive-2026-10-15 and
+  // compacted it on the `records` branch, so the entry retired and the expected list is empty
+  // again, as after the 1.9.0, 1.10.0, 1.11.0, 1.12.0 and 1.14.0 closes. The retirement proof grows
+  // by one: run 47's summary joins the retired paths, staged over budget beside its same-directory
+  // neighbour, and both must be refused. exemptedPaths still throws if the declaration moves.
+  it("names no size exception and refuses the retired run summaries like any other file", () => {
     const exempt = exemptedPaths();
-    expect(exempt, "the size-exception map's paths are not the 1.15.0 window's run 47 summary").toEqual([
-      "evals/runs/2026-10-15-run-47/summary.json",
-    ]);
+    expect(
+      exempt,
+      "the size-exception map names a path; the 1.15.0 close retired the run 47 summary entry",
+    ).toEqual([]);
 
     const root = fixture();
     const retired = [
@@ -294,6 +302,7 @@ describe("repository hygiene over the Git index", () => {
       "evals/runs/2026-10-11-run-44/summary.json",
       "evals/runs/2026-10-11-run-45/summary.json",
       "evals/runs/2026-10-12-run-46/summary.json",
+      "evals/runs/2026-10-15-run-47/summary.json",
     ];
     const neighbours = [...exempt, ...retired].map((path) => path.replace(/[^/]+$/, "inputs.json"));
     const refused = [...retired, ...neighbours];
