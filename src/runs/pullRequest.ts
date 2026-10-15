@@ -266,29 +266,28 @@ function hostOf(value: string): string {
 
 /**
  * The GitHub repository `origin` names and the host it was matched on, or
- * `null` where it names none `gh` would reach. Accepted: Claude Code's proxy
- * shape, on `github.com`; else a remote on the host `gh` talks to — `GH_HOST`
- * when it is set, `github.com` when it is not, so a `github.com` origin under a
+ * `null` where it names none `gh` would reach. The host `gh` talks to is
+ * `GH_HOST` when it is set, `github.com` when it is not. Accepted: Claude
+ * Code's proxy shape, which is `github.com`, so only while that host is
+ * `github.com`; else a remote on that host, so a `github.com` origin under a
  * `GH_HOST` naming another host is `null`. Any other host is `null`, and so is
  * an owner or repository outside `[A-Za-z0-9._-]`. Every call made for the
  * repository names the returned `host` (`gh api --hostname`), so the
  * repository matched here is the one called, whatever `gh`'s default host is.
  */
 export function resolveRepo(env: NodeJS.ProcessEnv, originUrl: string): { host: string; owner: string; repo: string } | null {
+  const configured = env["GH_HOST"];
+  const host = configured === undefined || configured.trim() === "" ? "github.com" : hostOf(configured);
   const proxied = CLAUDE_PROXY_ORIGIN.exec(originUrl.trim());
-  let host: string;
   let owner: string;
   let repo: string;
   if (proxied !== null) {
-    host = "github.com";
+    if (host !== "github.com") return null;
     owner = proxied[1] ?? "";
     repo = proxied[2] ?? "";
   } else {
     const parsed = parseGitRemote(originUrl);
-    if (parsed === null) return null;
-    const configured = env["GH_HOST"];
-    host = configured === undefined || configured.trim() === "" ? "github.com" : hostOf(configured);
-    if (parsed.host !== host) return null;
+    if (parsed === null || parsed.host !== host) return null;
     ({ owner, repo } = parsed);
   }
   return HOST_NAME.test(host) && isNamePart(owner) && isNamePart(repo) ? { host, owner, repo } : null;

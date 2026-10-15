@@ -14,17 +14,17 @@ import { useTempDir } from "../../support/tempDir.ts";
  * and a local bare remote (no network).
  */
 
-const PINNED = ["-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", "-c", "push.followTags=false"];
+const PINNED = ["--literal-pathspecs", "-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", "-c", "push.followTags=false"];
 
 describe("gitWriteArgs", () => {
-  it("puts the three -c options ahead of the caller's arguments, unchanged", () => {
+  it("puts --literal-pathspecs and the three -c options ahead of the caller's arguments, unchanged", () => {
     expect(gitWriteArgs(["push", "origin", "HEAD:refs/heads/stamity/x"])).toEqual([...PINNED, "push", "origin", "HEAD:refs/heads/stamity/x"]);
-    expect(gitWriteArgs(["-c", "user.name=T", "commit", "-m", "x"]).slice(0, 6)).toEqual(PINNED);
+    expect(gitWriteArgs(["-c", "user.name=T", "commit", "-m", "x"]).slice(0, 7)).toEqual(PINNED);
   });
 });
 
 describe("gitWriteEnv", () => {
-  it("keeps credentials and identity, drops the repository-location variables, and turns the prompt off", () => {
+  it("keeps credentials and identity, drops the repository-location and pathspec variables, and turns the prompt off", () => {
     const env = gitWriteEnv({
       PATH: "/usr/bin",
       GH_TOKEN: "t",
@@ -37,6 +37,10 @@ describe("gitWriteEnv", () => {
       GIT_INDEX_FILE: "/elsewhere/index",
       GIT_OBJECT_DIRECTORY: "/elsewhere/objects",
       GIT_COMMON_DIR: "/elsewhere/.git",
+      GIT_LITERAL_PATHSPECS: "0",
+      GIT_GLOB_PATHSPECS: "1",
+      git_noglob_pathspecs: "1",
+      GIT_ICASE_PATHSPECS: "1",
     });
 
     expect(env).toEqual({
@@ -165,6 +169,24 @@ describe.skipIf(!gitAvailable)("gitWrite against real repositories", () => {
       git(repo, ["add", "--", "b.txt"]);
       expect(existsSync(marker)).toBe(true);
     }
+  });
+
+  it("stages a listed path as a name, not a pattern, whatever GIT_*_PATHSPECS the caller sets", async () => {
+    const repo = await repoWithCommit("repo");
+    // `[ab].txt` is a valid name on every host, and as a glob it also matches `a.txt`.
+    await writeFile(join(repo, "[ab].txt"), "x\n", "utf8");
+    await writeFile(join(repo, "a.txt"), "a\n", "utf8");
+    vi.stubEnv("GIT_GLOB_PATHSPECS", "1");
+
+    const result = await gitWrite(repo, ["add", "--", "[ab].txt"]);
+
+    expect(result.code).toBe(0);
+    expect(git(repo, ["diff", "--cached", "--name-only"]).trim()).toBe("[ab].txt");
+
+    // Control, non-degenerate: plain git reads the same path as a pattern and stages `a.txt` too.
+    vi.stubEnv("GIT_GLOB_PATHSPECS", undefined);
+    git(repo, ["add", "--", "[ab].txt"]);
+    expect(git(repo, ["diff", "--cached", "--name-only"]).trim().split("\n")).toEqual(["[ab].txt", "a.txt"]);
   });
 
   async function plantedBare(): Promise<{ root: string; marker: string }> {

@@ -12,14 +12,18 @@ import { gitProgramFor, programNotFound } from "../../shared/programPath.ts";
  * ahead of every command; and before any of it the look
  * (`gitDiscoveryMeetsBareShape`), so a folder a repository writer committed in
  * the shape of a bare repository starts no git at all. To those it adds
+ * `--literal-pathspecs`, so a path the caller lists stages that file and no
+ * other (a file named `*.md` is a name, not a pattern), as the setup root's
+ * read runner (`../../merge/safeWrite.ts`) reads paths;
  * `push.followTags=false`, so a push carries no tag whatever the repository's
- * config says, and `GIT_TERMINAL_PROMPT=0`, so a push that needs credentials
+ * config says; and `GIT_TERMINAL_PROMPT=0`, so a push that needs credentials
  * fails instead of waiting on a prompt nobody answers.
  *
  * Unlike the read runner it keeps the caller's environment, which is where a
  * push finds its credentials (`GIT_ASKPASS`, `GIT_SSH_COMMAND`, a credential
  * helper's own variables), and drops only the variables that would point git
- * at another repository ({@link gitWriteEnv}). Its stderr is kept, since a
+ * at another repository or read a path as other than a name
+ * ({@link gitWriteEnv}). Its stderr is kept, since a
  * refused push says why there.
  */
 
@@ -47,6 +51,7 @@ const GIT_WRITE_MAX_BUFFER = 32 * 1024 * 1024;
 
 /** The options ahead of every command, in this order. */
 const PINNED_OPTIONS: readonly string[] = [
+  "--literal-pathspecs",
   "-c",
   "safe.bareRepository=explicit",
   "-c",
@@ -64,6 +69,14 @@ const PINNED_OPTIONS: readonly string[] = [
 const LOCATION_VARIABLES =
   /^GIT_(?:DIR|WORK_TREE|INDEX_FILE|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|COMMON_DIR|NAMESPACE|PREFIX)$/i;
 
+/**
+ * The variables that set how git reads every pathspec. `--literal-pathspecs`
+ * sets the literal one itself, and git refuses to start when it meets the
+ * glob, noglob or icase one beside it, so a caller's value would turn every
+ * write into a refusal.
+ */
+const PATHSPEC_VARIABLES = /^GIT_(?:LITERAL|GLOB|NOGLOB|ICASE)_PATHSPECS$/i;
+
 /** The argument vector git is started with: {@link PINNED_OPTIONS}, then the caller's arguments unchanged. */
 export function gitWriteArgs(args: readonly string[]): string[] {
   return [...PINNED_OPTIONS, ...args];
@@ -71,13 +84,14 @@ export function gitWriteArgs(args: readonly string[]): string[] {
 
 /**
  * The environment a write runs under: `base` (the caller's) without the
- * repository-location variables ({@link LOCATION_VARIABLES}), credentials and
- * identity kept, and `GIT_TERMINAL_PROMPT=0` whatever `base` says.
+ * repository-location variables ({@link LOCATION_VARIABLES}) and the pathspec
+ * variables ({@link PATHSPEC_VARIABLES}), credentials and identity kept, and
+ * `GIT_TERMINAL_PROMPT=0` whatever `base` says.
  */
 export function gitWriteEnv(base: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {};
   for (const [key, value] of Object.entries(base)) {
-    if (!LOCATION_VARIABLES.test(key)) env[key] = value;
+    if (!LOCATION_VARIABLES.test(key) && !PATHSPEC_VARIABLES.test(key)) env[key] = value;
   }
   env["GIT_TERMINAL_PROMPT"] = "0";
   return env;

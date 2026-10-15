@@ -304,14 +304,17 @@ describe("resolveRepo", () => {
     }
   });
 
-  it("reads Claude Code's proxy shape, on github.com whatever GH_HOST names", () => {
-    expect(resolveRepo({}, "http://local_proxy@127.0.0.1:1234/git/o/r")).toEqual({ host: "github.com", owner: "o", repo: "r" });
+  it("reads Claude Code's proxy shape on github.com, only while GH_HOST is unset or names github.com", () => {
+    const proxy = "http://local_proxy@127.0.0.1:1234/git/o/r";
+    const onGithub = { host: "github.com", owner: "o", repo: "r" };
+    expect(resolveRepo({}, proxy)).toEqual(onGithub);
+    expect(resolveRepo({ GH_HOST: "" }, proxy)).toEqual(onGithub);
+    expect(resolveRepo({ GH_HOST: "github.com" }, proxy)).toEqual(onGithub);
+    expect(resolveRepo({ GH_HOST: "https://GitHub.com/" }, proxy)).toEqual(onGithub);
     expect(resolveRepo({}, "http://local_proxy@127.0.0.1:41000/git/acme/app.git")).toEqual({ host: "github.com", owner: "acme", repo: "app" });
-    expect(resolveRepo({ GH_HOST: "ghe.example.com" }, "http://local_proxy@127.0.0.1:1234/git/o/r")).toEqual({
-      host: "github.com",
-      owner: "o",
-      repo: "r",
-    });
+    // GH_HOST naming another host: the proxy origin is github.com, so it is null, as a github.com origin is.
+    expect(resolveRepo({ GH_HOST: "ghe.example.com" }, proxy)).toBeNull();
+    expect(resolveRepo({ GH_HOST: "ghe.example.com" }, "https://github.com/o/r.git")).toBeNull();
   });
 
   it("returns null for any other host", () => {
