@@ -918,7 +918,7 @@ describe("debug — hard gates before any fix", () => {
     );
   });
 
-  it("takes the unattended entry on the user route and keeps the attended head at three lines (REQ-FLOW-097, REQ-CTX-012)", async () => {
+  it("takes the unattended entry at the record's opening and closes it on the user route (REQ-FLOW-089, REQ-FLOW-097, REQ-CTX-012)", async () => {
     const file = await load("commands/st-debug.md");
     const body = file.parsed.body;
     const userRoute = body
@@ -927,29 +927,51 @@ describe("debug — hard gates before any fix", () => {
 
     // The attended user route is unchanged: it still stops and waits for the user's output.
     expect(userRoute).toMatch(/traffic or timing\. Stop and wait\. The user runs the scenario and returns the output\./);
-    // The pointer sentence, verbatim, on the user route — the one debug route that pushes.
+    // The unattended condition on the user route names `--attended` beating the variable, as step 7 does.
     expect(userRoute).toContain(
-      "When run unattended (`--unattended` or `STAMITY_UNATTENDED=1`), add `Mode:`, `Branch:` and `Base:` to this record's head, invoke the `st-unattended` skill by name and follow it.",
+      "When run unattended (`--unattended` or `STAMITY_UNATTENDED`, `--attended` beating the variable, as Unattended above reads them)",
     );
-    // Then nobody can reproduce: the strip, the push through the run verb, the blocked return.
-    // Edge case: no failing test written → the push carries the record and hypotheses, and the
-    // missing test is named on `Not done:` rather than silently absent.
+    // Then nobody can reproduce: the strip, the record closed before the push, the push through the
+    // run verb, the blocked return. Edge case: no failing test written → the push carries the record
+    // and hypotheses, and the missing test is named on `Not done:` rather than silently absent.
     expect(userRoute).toMatch(/strip the instrumentation \(step 8\)/);
+    expect(userRoute).toContain("rewrite `Status:` to `closed <date> (blocked: a person reproduces)`");
     expect(userRoute).toContain("`stamity run checkpoint --run <run-id> --pr --title <title>`");
+    expect(userRoute.indexOf("rewrite `Status:`")).toBeLessThan(userRoute.indexOf("`stamity run checkpoint"));
+    expect(userRoute).not.toMatch(/in progress/);
     expect(userRoute).toMatch(/the record with the ranked hypotheses/);
     expect(userRoute).toMatch(/`--paths` adding the failing test only if one was written, else `Not done: failing test not written`/);
     expect(userRoute).toMatch(/return `BLOCKED_DEPENDENCY`/);
-    // The pointer comes after the attended stop, so an attended reader meets "Stop and wait" first.
+    // A person reproducing later opens a record of their own, attended.
+    expect(userRoute).toMatch(/runs `\/st-debug` attended, which opens its own record/);
+    // The unattended branch comes after the attended stop, so an attended reader meets "Stop and wait" first.
     expect(userRoute.indexOf("Stop and wait")).toBeLessThan(userRoute.indexOf("When run unattended"));
 
-    // The attended head stays three lines: the Run record paragraph names no mode, branch or base
-    // line, and `Mode:` appears in the body only inside the unattended pointer.
-    const head = body.slice(body.indexOf("**Run record.**"), body.indexOf("1. **Hypotheses.**"));
+    // The head lines land when the record opens, never at the user route: `run start` first, and
+    // `Branch:` and `Base:` from its output, so they never name the default branch.
+    const head = body.slice(body.indexOf("**Run record.**"), body.indexOf("**Unattended.**"));
     expect(head).toContain("`Status: in progress`");
     expect(head).toContain("`Plan: none — debug round`");
     expect(head).toContain("`Invocation: <this command line, verbatim>`");
     expect(head).not.toMatch(/`Mode:|`Branch:|`Base:/);
-    expect(body.split("`Mode:`").length - 1).toBe(1);
+    const unattended = body
+      .slice(body.indexOf("**Unattended.**"), body.indexOf("1. **Hypotheses.**"))
+      .replace(/\s+/g, " ");
+    // REQ-FLOW-089's reading of the variable, `--attended` beating it.
+    expect(unattended).toContain(
+      "`--unattended` or under `STAMITY_UNATTENDED` set to anything but empty, `false` or `0`, `--attended` beating the variable",
+    );
+    expect(unattended).toContain("Its first mutation is `stamity run start --run <run-id> --json`, before step 1");
+    expect(unattended).toContain(
+      "`Mode: unattended`, and `Branch:` and `Base:` taken from that output's `branch` and `base`, never from the checkout",
+    );
+    expect(unattended).toContain("invokes the `st-unattended` skill by name and follows it");
+    expect(unattended.indexOf("stamity run start")).toBeLessThan(unattended.indexOf("st-unattended"));
+    // The attended head stays three lines; `Mode:` is named nowhere else in the body.
+    expect(unattended).toMatch(/An attended run's head stays the three lines above\./);
+    expect(body.split("`Mode: unattended`").length - 1).toBe(1);
+    expect(body.split("`Mode:`").length - 1).toBe(0);
+    expect(body.indexOf("**Unattended.**")).toBeLessThan(body.indexOf("1. **Hypotheses.**"));
   });
 
   it("hands the run's mode to /st-work at step 7 (REQ-FLOW-089)", async () => {
@@ -960,6 +982,9 @@ describe("debug — hard gates before any fix", () => {
 
     expect(step7).toContain("`run-mode: attended | unattended`");
     expect(step7).toMatch(/`--attended` beating the variable/);
+    // REQ-FLOW-089: any value but empty, `false` or `0` declares the run, as the hooks read it.
+    expect(step7).toContain("`STAMITY_UNATTENDED` set to anything but empty, `false` or `0`");
+    expect(step7).not.toContain("STAMITY_UNATTENDED=1");
     // The step's existing guarantees stay: debug owns no fix path, and the hand-off is not user-gated.
     expect(step7).toMatch(/Debug owns no fix path of its own/);
     expect(step7).toMatch(/the one in-run transition that is not user-gated/);

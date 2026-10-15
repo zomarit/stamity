@@ -53,6 +53,15 @@ head lines are written bare at column 0, with no list marker and no bold; the re
 the record by its `_debug-` segment. The close rewrites `Status:` to the exit taken and the
 residue count; a stop that waits on the user leaves it in progress.
 
+**Unattended.** A run is unattended when invoked with `--unattended` or under `STAMITY_UNATTENDED`
+set to anything but empty, `false` or `0`, `--attended` beating the variable. Its first mutation
+is `stamity run start --run <run-id> --json`, before step 1, and the record opens on it with three
+more head lines, bare like the others: `Mode: unattended`, and `Branch:` and `Base:` taken from
+that output's `branch` and `base`, never from the checkout. The run then invokes the
+`st-unattended` skill by name and follows it, so its pre-flight runs before any sub-agent is
+briefed. Its user-route stop closes the record rather than leaving it in progress (step 3). An
+attended run's head stays the three lines above.
+
 1. **Hypotheses.** From the symptom — expected, actual, reproduction path, frequency — write
    numbered hypotheses ranked by prior probability, each paired with the single observation
    that separates it from its neighbours. A hypothesis with no discriminating observation is
@@ -91,12 +100,14 @@ residue count; a stop that waits on the user leaves it in progress.
    - **User** — anything else, or a defect that needs the user's environment, data,
      device, account, network, traffic or timing. Stop and wait. The user runs the
      scenario and returns the output.
-     When run unattended (`--unattended` or `STAMITY_UNATTENDED=1`), add `Mode:`, `Branch:` and
-     `Base:` to this record's head, invoke the `st-unattended` skill by name and follow it. Nobody
-     is there to run the scenario, so strip the instrumentation (step 8), push the record with the
-     ranked hypotheses through `stamity run checkpoint --run <run-id> --pr --title <title>` —
-     `--paths` adding the failing test only if one was written, else `Not done: failing test not
-     written` — and return `BLOCKED_DEPENDENCY`.
+     When run unattended (`--unattended` or `STAMITY_UNATTENDED`, `--attended` beating the
+     variable, as Unattended above reads them), nobody is there to run the scenario: strip the
+     instrumentation (step 8), rewrite `Status:` to `closed <date> (blocked: a person reproduces)`,
+     push the record with the ranked hypotheses through
+     `stamity run checkpoint --run <run-id> --pr --title <title>` — `--paths` adding the failing
+     test only if one was written, else `Not done: failing test not written` — and return
+     `BLOCKED_DEPENDENCY`. The closed record is no live run for the guards; a person who then
+     reproduces runs `/st-debug` attended, which opens its own record.
    This step is not simulated, not inferred from reading the code, and not passed over
    because the cause looks obvious.
 4. **Log analysis.** Order the tagged lines; state which instrumentation points did *not*
@@ -113,7 +124,8 @@ residue count; a stop that waits on the user leaves it in progress.
    leave every run stopped at its own purpose. `--diagnose` is how a run opts out, and step 8
    still runs before the switch.
    The hand-off carries `run-mode: attended | unattended`: `unattended` when this run was
-   invoked with `--unattended` or under `STAMITY_UNATTENDED=1`, `--attended` beating the variable.
+   invoked with `--unattended` or under `STAMITY_UNATTENDED` set to anything but empty, `false` or
+   `0`, `--attended` beating the variable.
 8. **Instrumentation cleanup.** `implementer` strips what step 2 added; the orchestrator
    verifies the count itself. Zero residue (see Hard gates).
 9. **Regression clauses.** Write what the repository shall continue to do, one clause per
