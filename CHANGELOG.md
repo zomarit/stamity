@@ -240,11 +240,14 @@ an item that rests on either says it was not walked.
   treats the agent file's `model:` as a default rather than a hard limit, so a `preToolUse` hook
   on `Task` (`stamity-model-pins.mjs`) also fills the pinned model into a Stamity sub-agent call
   that names none. The hook changes nothing else in the call and always allows it; Cursor's own
-  automatic turns are out of its reach. Cursor accepts a sub-agent's model only from the models
-  it offers sub-agents, a list that follows the parent agent's model and that no command prints,
-  so a pin outside that list is refused and the touchpoint retries on the closest allowed model,
-  saying so in one line. Pin a model Cursor's model picker shows. `[effort=…]` is no longer
-  appended to a model whose id already carries the effort.
+  automatic turns are out of its reach. Cursor offers a sub-agent a narrower list of models than
+  `agent models` prints and refuses a call that names a model outside it, as a live run on
+  2026-10-15 showed; in one live run that day the list changed with the parent agent's model, and
+  with one parent model tried, that it follows the parent's model beyond that run is unverified.
+  A pin outside that list is refused, and the touchpoint retries on the closest allowed model,
+  saying so in one line. Pin a model Cursor's model picker shows; no run has checked that the
+  sub-agent list holds every model the picker shows. `[effort=…]` is no longer appended to a
+  model whose id already carries the effort.
 - **A `model-pins` row in `check`.** It warns, naming the client, the class and the model, for
   each pinned or emitted model the client's list does not hold. For Codex that list is the one
   the last `sync` saved whenever one exists, and `check` starts `codex` (with `--bundled`) only
