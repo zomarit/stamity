@@ -410,7 +410,7 @@ first 15: `Status:`, reading `in progress` until the close; `Mode: attended | un
 never the word `HEAD`); and `Invocation: <this command line, verbatim>`. A `reports/` folder beside the record holds a
 `.gitignore` whose one line is `*`. Unattended, Frame first runs `stamity run start --run <id> --json`, taking `Branch:`
 and `Base:` from it. When `Mode:` reads `unattended`, invoke the `st-unattended` skill by name and follow it. On
-`--resume <run-id>` of a closed run whose record reads `Mode: unattended`, and on `/st-work` run on such a run's branch,
+`--resume <run-id>` of any run whose record reads `Mode: unattended`, and on `/st-work` run on such a run's branch,
 invoke `st-unattended` by name and follow its `## The morning walk`.
 
 ### Side effects

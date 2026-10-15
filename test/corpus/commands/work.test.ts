@@ -750,9 +750,14 @@ describe("/st-work — Frame and Plan", () => {
     // Added 2026-10-16 (run 2026-10-15_cloud-runs, u15's fix round, ledger row build/52;
     // REQ-FLOW-095): a resumed run reads `Mode: attended`, so the pointer above never fires on the
     // morning after; the head names the walk's entry itself, and the section it names is the skill's.
+    // TEST CHANGE, justified (2026-10-16, run 2026-10-15_cloud-runs, u15's fix round 2, ledger row
+    // build/61; REQ-FLOW-095): the pin read "of a closed run whose record". What moved: the pointer
+    // fires on any unattended run, so a resume of one still in progress reaches the skill's walk,
+    // whose own refusal names the continuation; the command no longer screens on "closed".
     expect(proof).toContain(
-      "On `--resume <run-id>` of a closed run whose record reads `Mode: unattended`, and on `/st-work` run on such a run's branch, invoke `st-unattended` by name and follow its `## The morning walk`.",
+      "On `--resume <run-id>` of any run whose record reads `Mode: unattended`, and on `/st-work` run on such a run's branch, invoke `st-unattended` by name and follow its `## The morning walk`.",
     );
+    expect(proof).not.toContain("`--resume <run-id>` of a closed run");
     const unattended = (await corpusFile(UNATTENDED_SKILL_PATH)).parsed.body;
     expect(unattended.split("\n")).toContain("## The morning walk");
     // TEST CHANGE, justified (2026-10-09, plan 019 file 2, the p3 fix round 2, `review/133`): the
