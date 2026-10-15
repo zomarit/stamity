@@ -27,11 +27,15 @@ import {
   isDebugRunId,
   LEDGER_FILE,
   LEDGER_READ_MAX_BYTES,
+  RECORD_BASE_PATTERN,
+  RECORD_BRANCH_PATTERN,
   RECORD_FILE,
   RECORD_HEAD_LINES,
   RECORD_HEAD_READ_BYTES,
   RECORD_INVOCATION_PATTERN,
+  RECORD_MODE_PATTERN,
   RECORD_PLAN_PATTERN,
+  RECORD_RESUMES_PATTERN,
   RECORD_STATUS_PATTERN,
   REPORT_NAME_PATTERN,
   REPORT_READ_MAX_BYTES,
@@ -62,12 +66,19 @@ import {
  * It never prints a finding's text, and it writes nothing.
  */
 
-/** A run record's head, as the card reads it. */
+/**
+ * A run record's head, as the card reads it. The card prints none of the last
+ * four fields; a `null` mode reads as attended everywhere.
+ */
 export interface RecordHead {
   readonly status: string | null;
   readonly inProgress: boolean;
   readonly plan: string | null;
   readonly invocation: string | null;
+  readonly mode: "attended" | "unattended" | null;
+  readonly branch: string | null;
+  readonly base: string | null;
+  readonly resumes: string | null;
 }
 
 /** Ledger rows counted by the states the closed card names. */
@@ -209,19 +220,42 @@ function gitText(path: string): string | null {
 
 /**
  * A run record's head: its first RECORD_HEAD_LINES lines, BOM stripped; the
- * first status, plan and invocation line each win.
+ * first status, plan, invocation, mode, branch, base and resumes line each win.
  */
 export function readRecordHead(text: string): RecordHead {
   const body = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
   let status: string | null = null;
   let plan: string | null = null;
   let invocation: string | null = null;
+  let mode: RecordHead["mode"] = null;
+  let branch: string | null = null;
+  let base: string | null = null;
+  let resumes: string | null = null;
   for (const line of body.split(/\r?\n/).slice(0, RECORD_HEAD_LINES)) {
     status ??= RECORD_STATUS_PATTERN.exec(line)?.[1] ?? null;
     plan ??= RECORD_PLAN_PATTERN.exec(line)?.[1] ?? null;
     invocation ??= RECORD_INVOCATION_PATTERN.exec(line)?.[1] ?? null;
+    mode ??= recordMode(RECORD_MODE_PATTERN.exec(line)?.[1]);
+    branch ??= RECORD_BRANCH_PATTERN.exec(line)?.[1] ?? null;
+    base ??= RECORD_BASE_PATTERN.exec(line)?.[1] ?? null;
+    resumes ??= RECORD_RESUMES_PATTERN.exec(line)?.[1] ?? null;
   }
-  return { status, inProgress: status !== null && IN_PROGRESS_PATTERN.test(status), plan, invocation };
+  return {
+    status,
+    inProgress: status !== null && IN_PROGRESS_PATTERN.test(status),
+    plan,
+    invocation,
+    mode,
+    branch,
+    base,
+    resumes,
+  };
+}
+
+/** A mode line's value as the lower-case word, or null for anything else. */
+function recordMode(value: string | undefined): RecordHead["mode"] {
+  const word = value?.toLowerCase();
+  return word === "attended" || word === "unattended" ? word : null;
 }
 
 /** The record's head from at most RECORD_HEAD_READ_BYTES bytes; null when absent, a link, or unreadable. */
