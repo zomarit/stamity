@@ -17,7 +17,7 @@ spawns: [researcher, implementer, reviewer, fixer, test-runner, spec-author, sec
    artifacts, cost, or risk; else proceed.
 2. **Derive intensity.** The tier, by the Dials signals; `--effort` wins.
 3. **Model plan.** Emit role, class, count per phase, rough cost; pass each role's class model
-   from the client's map at `.stamity/generated/models/`.
+   from the client's map at `.stamity/generated/models/`, none where the map has none.
 4. **Deferral inbox.** Read and surface the deferral inbox rows whose paths overlap this change's
    files: the `ledger` verb's `inbox` query (`--paths`, `--plan`) returns them, the rows it always
    shows and its total and unmatched counts. From a bare intent, query again with the plan's files.

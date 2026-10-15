@@ -797,11 +797,14 @@ describe("st-board — platform reference table", () => {
   // Added 2026-10-14 (REQ-LADDER-007, plan 020 file 3 unit f4, review round 1, `review/15`): the
   // command spawns a researcher and named no model for it, so `fill` and `pickup` researchers ran
   // on the client's default whatever the class, and a refused call had no fallback.
+  // TEST CHANGE, justified (2026-10-15, ledger row 2026-10-14_cli-native/review/143): a class the
+  // map gives no `model` is dispatched with none, and the refusal fallback reads with an empty
+  // `fallbacks`; the sentence grew those two clauses.
   it("passes each spawn the class's model from the client's map, with the refusal fallback (REQ-LADDER-007)", async () => {
     const modes = flat(section((await board()).parsed.body, "Modes"));
 
     expect(modes).toContain(
-      "Every spawn passes `model` for the role's class from the client's map at `.stamity/generated/models/`; when a call is refused with a list, it takes the class's first `fallbacks` entry on that list, else the closest, and says so in one line.",
+      "Every spawn passes `model` for the role's class from the client's map at `.stamity/generated/models/`, and none where the class's entry there holds no `model`, so the sub-agent runs on the parent's model; when a call is refused with a list, it takes the class's first `fallbacks` entry on that list, else, with none there or `fallbacks` empty, the closest model the list names, and says so in one line.",
     );
   });
 

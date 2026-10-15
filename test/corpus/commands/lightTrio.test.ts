@@ -439,11 +439,19 @@ describe("light trio — the closing next step", () => {
 /** The pointer every touchpoint's walk carries, at the protocol section it names. */
 const CLOSE_WALK_POINTER = "by the `stamity-question-protocol` rule's Close walk";
 
-/** The touchpoints' model sentence (REQ-LADDER-007), in its two halves. */
+/**
+ * The touchpoints' model sentence (REQ-LADDER-007), in its two halves.
+ *
+ * TEST CHANGE, justified (2026-10-15, ledger row 2026-10-14_cli-native/review/143): a class the
+ * map gives no `model` is dispatched with none, and the refusal fallback reads with an empty
+ * `fallbacks`; the sentence grew those two clauses.
+ */
 const MODEL_PASS =
-  "Every sub-agent call passes `model` for the role's class from the client's map at `.stamity/generated/models/`;";
+  "Every sub-agent call passes `model` for the role's class from the client's map at `.stamity/generated/models/`, " +
+  "and none where the class's entry there holds no `model`, so the sub-agent runs on the parent's model;";
 const MODEL_FALLBACK =
-  "when a call is refused with a list, it takes the class's first `fallbacks` entry on that list, else the closest, and says so in one line.";
+  "when a call is refused with a list, it takes the class's first `fallbacks` entry on that list, else, with none " +
+  "there or `fallbacks` empty, the closest model the list names, and says so in one line.";
 
 /** The body's paragraphs, each whitespace-flattened, blank-line separated. */
 function paragraphsOf(file: CorpusFile): string[] {

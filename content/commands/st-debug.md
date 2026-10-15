@@ -33,8 +33,8 @@ Every repo gate named here — the probe above, and the failing-test gate at ste
 this command's own context. The runner returns a gate-by-gate result: the exact command, pass or fail, and the verbatim
 failing excerpt. Bare pass/fail is not a result, and a fresh spawn keeps a long gate's output out of the reasoning context that
 ranks the hypotheses. The runner reports and nothing else — it applies no edit and proposes no patch, so adding it opens no
-second fix path. Every sub-agent call passes `model` for the role's class from the client's map at `.stamity/generated/models/`;
-when a call is refused with a list, it takes the class's first `fallbacks` entry on that list, else the closest, and says so in one line.
+second fix path. Every sub-agent call passes `model` for the role's class from the client's map at `.stamity/generated/models/`,
+and none where the class's entry there holds no `model`, so the sub-agent runs on the parent's model; when a call is refused with a list, it takes the class's first `fallbacks` entry on that list, else, with none there or `fallbacks` empty, the closest model the list names, and says so in one line.
 
 When both targets are live (a product test fails *and* drift is reported), debug the install
 first. Generated context is an input to every other hypothesis, so a stale corpus makes the

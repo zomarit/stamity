@@ -276,7 +276,7 @@ Fan out researchers when the questions are independent — one per module or
 surface — and merge through a single writer: `spec-author` owns every file
 under `docs/specs/`. Two authors on one spec file is a protocol violation.
 Sub-agents do not question the operator: an ambiguity comes back as `BLOCKED_AMBIGUITY` naming the readings, and this command asks. Every sub-agent call
-passes `model` for the role's class from the client's map at `.stamity/generated/models/`; when a call is refused with a list, it takes the class's first `fallbacks` entry on that list, else the closest, and says so in one line.
+passes `model` for the role's class from the client's map at `.stamity/generated/models/`, and none where the class's entry there holds no `model`, so the sub-agent runs on the parent's model; when a call is refused with a list, it takes the class's first `fallbacks` entry on that list, else, with none there or `fallbacks` empty, the closest model the list names, and says so in one line.
 
 ## Return contract
 

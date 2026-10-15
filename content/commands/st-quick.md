@@ -22,7 +22,7 @@ are hard rather than advisory — the change that needs them has to go where the
 
 Charter invariant 7 names one carve-out from delegated implementation, and this lane is it: Tier-1 edits apply inline. Verification does not. Gates run
 in the `test-runner` sub-agent, which is what keeps "the gates ran" a claim from somewhere other than the writer. Every sub-agent call passes `model` for
-the role's class from the client's map at `.stamity/generated/models/`; when a call is refused with a list, it takes the class's first `fallbacks` entry on that list, else the closest, and says so in one line.
+the role's class from the client's map at `.stamity/generated/models/`, and none where the class's entry there holds no `model`, so the sub-agent runs on the parent's model; when a call is refused with a list, it takes the class's first `fallbacks` entry on that list, else, with none there or `fallbacks` empty, the closest model the list names, and says so in one line.
 
 ## Trivial signals
 

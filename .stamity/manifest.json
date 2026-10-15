@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "generatedBy": "1.15.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-15T09:45:40.527Z",
+  "updatedAt": "2026-10-15T10:57:52.794Z",
   "tools": [
     "claude"
   ],
@@ -134,63 +134,63 @@
       "adapter": "claude",
       "artifactId": "cmd-ask",
       "artifactType": "command",
-      "contentHash": "e3bdb3544b813ea7f59deb62ecbf329680d2fe119736ccbdbed4a8eb14e6f5a7",
+      "contentHash": "2b37498b17fec1f9ae9a80ee201b9804cadfa9303c3e0c38a8dae330d26d6292",
       "path": ".claude/commands/st-ask.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-board",
       "artifactType": "command",
-      "contentHash": "e14314f59817547f36d59d766a50d3b98f6cf231a4ea35163e4f48d4ed2820f5",
+      "contentHash": "d6b2c313564c39571f44bf6a92c9f242e8446c50318eb8deafc13e3c1f03ac6b",
       "path": ".claude/commands/st-board.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-debug",
       "artifactType": "command",
-      "contentHash": "f554bf2e5912f5e09c13b9407fb53a0422148ee0deed783e3cff35b17ae41894",
+      "contentHash": "7a9683c51b0649bfffbbd376675784ed7f9c6c828c2d727a16f78ebf71cf5cd4",
       "path": ".claude/commands/st-debug.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-plan",
       "artifactType": "command",
-      "contentHash": "80fc62d9c2fd19e5563de61dd1f3ccd366238ccbc3f0b22cd409ad77d2acfdc3",
+      "contentHash": "4759142ca18600d3f011cfd7b50e4951bcf5c41f5377079992b346d8f39572a2",
       "path": ".claude/commands/st-plan.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-pr-resolve",
       "artifactType": "command",
-      "contentHash": "a7492d259e00a13ed253786e6039aaee26cf33bcc987f661326011c84fcddb19",
+      "contentHash": "225e06e8095dec1d30ce8f31e6e0a9813d37722e905e7f2d123dcaae6c96b4d4",
       "path": ".claude/commands/st-pr-resolve.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-quick",
       "artifactType": "command",
-      "contentHash": "78f143fc1d51096938a081897c4aef14b9339f011ab73e74ec0185e915076839",
+      "contentHash": "42d9b32cb2e5c2bbe88fe3c2512d3a8593301c100e2643a5e4295f023ade4f12",
       "path": ".claude/commands/st-quick.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-rework",
       "artifactType": "command",
-      "contentHash": "1f3f532fb3ffcd1028f9d2b12a3190e2dfab0f4104a19d5fe8ebcf47b7d6a508",
+      "contentHash": "df6ebe146270ef2d06deb53c832e08437128cbf3dfcf69695e8851e85a7c4487",
       "path": ".claude/commands/st-rework.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-spec",
       "artifactType": "command",
-      "contentHash": "bec6dcb5822ec7fc5fb1bf7dfd95f4548b28f691701f1669458b47fda9983b81",
+      "contentHash": "022f0c5f7a9e7b802c2565f391b4db97e4c7f6ad473c7fd2168b08752d69ae94",
       "path": ".claude/commands/st-spec.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-work",
       "artifactType": "command",
-      "contentHash": "946560272a1012dd4fb79fa98c2bfb22af809088e632a737c63365e5b7f4b89c",
+      "contentHash": "c87e2d8a492ddbbf87d562bdf1836df4e730a79dfb92720301f9c0f14df0b377",
       "path": ".claude/commands/st-work.md"
     },
     {

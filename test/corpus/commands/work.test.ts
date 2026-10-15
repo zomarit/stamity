@@ -433,11 +433,14 @@ describe("/st-work — body skeleton", () => {
   // lines under the cap, and neither budget is ever raised. A unit that spends this room moves
   // these two numbers with a dated note naming what it bought; one that only crosses them by
   // accident meets this pin before it meets the cap.
-  it("leaves room under both budgets: 900 characters before the cut, 15 lines under the cap", async () => {
+  // Moved 2026-10-15 (ledger row 2026-10-14_cli-native/review/143), 900 to 870 characters: the
+  // Frame's model step bought ", none where the map has none" (29 characters), so a class whose
+  // map entry holds no `model` is dispatched with none. The line budget did not move.
+  it("leaves room under both budgets: 870 characters before the cut, 15 lines under the cap", async () => {
     const file = await workFile;
     const cut = file.raw.indexOf("\n### Specialist pass\n");
     expect(cut).toBeGreaterThan(-1);
-    expect(REATTACH_BUDGET_CHARS - cut).toBeGreaterThanOrEqual(900);
+    expect(REATTACH_BUDGET_CHARS - cut).toBeGreaterThanOrEqual(870);
     const bodyLines = file.parsed.body.replace(/\r?\n$/, "").split(/\r?\n/).length;
     expect(BODY_LINE_CAP - bodyLines).toBeGreaterThanOrEqual(15);
   });
@@ -451,7 +454,10 @@ describe("/st-work — Frame and Plan", () => {
   it("passes each role's class model from the client's map at Frame (REQ-LADDER-007)", async () => {
     const raw = (await workFile).raw;
     const frame = collapse(section(await body(), "## Phase 0 — Frame"));
-    const sentence = "pass each role's class model from the client's map at `.stamity/generated/models/`";
+    // TEST CHANGE, justified (2026-10-15, ledger row 2026-10-14_cli-native/review/143): a class
+    // the map gives no `model` is dispatched with none; the step names that case.
+    const sentence =
+      "pass each role's class model from the client's map at `.stamity/generated/models/`, none where the map has none";
     expect(frame).toContain(`3. **Model plan.** Emit role, class, count per phase, rough cost; ${sentence}.`);
     expect(raw.indexOf("pass each role's class model")).toBeLessThan(raw.indexOf("\n### Specialist pass\n"));
   });

@@ -64,7 +64,7 @@ edge, and a wide question is not a reason to collapse facets into one repo-wide 
 
 Each researcher brief carries: `objective` (the facet as one question), `scope` (globs that bound the read), `questions[]`, `output_sections[]` (the named
 tables synthesis needs), `depth`, `tool_tier` (`codebase` | `+docs` | `+web`), and `handoff_to: ask synthesis`. Every sub-agent call passes `model` for the
-role's class from the client's map at `.stamity/generated/models/`; when a call is refused with a list, it takes the class's first `fallbacks` entry on that list, else the closest, and says so in one line.
+role's class from the client's map at `.stamity/generated/models/`, and none where the class's entry there holds no `model`, so the sub-agent runs on the parent's model; when a call is refused with a list, it takes the class's first `fallbacks` entry on that list, else, with none there or `fallbacks` empty, the closest model the list names, and says so in one line.
 
 ### Context budget
 
