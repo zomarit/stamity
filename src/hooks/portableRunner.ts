@@ -97,7 +97,17 @@ const STARTER_ANCHORS: Readonly<Partial<Record<Tool, { segments: readonly string
  * own name, as does any name not listed, so the core guard sees it exactly as
  * before this table. The table is the plan's settled reading of the Copilot
  * hooks reference (docs/plans/020-cli-native-02.md, 2026-10-14), with
- * `powershell` added from review/95.
+ * `powershell` added from review/95, and `web_fetch`, `web_search` and
+ * `update_todo` from that page's preToolUse / PreToolUse mapping table
+ * (https://docs.github.com/en/copilot/reference/hooks-reference, read
+ * 2026-10-15; review/132).
+ *
+ * `powershell` keeps Claude Code's own `PowerShell`, where that page's table
+ * folds it into `Bash` (review/132, signed off): Claude Code names PowerShell
+ * as a tool of its own that hook matchers name
+ * (https://code.claude.com/docs/en/tools-reference, read 2026-10-15), so an
+ * authored hook keyed on `Bash` expects POSIX shell text, and folding the two
+ * would hand that hook PowerShell syntax.
  */
 export const COPILOT_RUNTIME_TOOL_NAMES: Readonly<Record<string, string>> = Object.freeze({
   bash: "Bash",
@@ -111,6 +121,9 @@ export const COPILOT_RUNTIME_TOOL_NAMES: Readonly<Record<string, string>> = Obje
   glob: "Glob",
   task: "Agent",
   ask_user: "AskUserQuestion",
+  web_fetch: "WebFetch",
+  web_search: "WebSearch",
+  update_todo: "TodoWrite",
 });
 
 /**
@@ -316,6 +329,12 @@ function main() {
   if (input.tool_name === undefined && typeof payload.toolName === "string") input.tool_name = payload.toolName;
   if (input.tool_input === undefined && payload.toolArgs !== undefined) input.tool_input = typeof payload.toolArgs === "string" ? parse(payload.toolArgs, "Invalid serialized tool input") : payload.toolArgs;
   if (object(input.tool_input) && input.tool_input.file_path === undefined && typeof input.tool_input.filePath === "string") input.tool_input = { ...input.tool_input, file_path: input.tool_input.filePath };${tool === "copilot" ? `
+  // Copilot's other camelCase payload fields, also given under the snake_case
+  // key its PascalCase ("VS Code compatible") form spells them with, so an
+  // authored hook reads one key on either form. A key already present is left
+  // alone, the camelCase key stays, and timestamp passes as sent.
+  // https://docs.github.com/en/copilot/reference/hooks-reference (read 2026-10-15)
+  for (const [camel, snake] of [["transcriptPath", "transcript_path"], ["stopReason", "stop_reason"], ["initialPrompt", "initial_prompt"], ["toolResult", "tool_result"]]) if (input[snake] === undefined && payload[camel] !== undefined) input[snake] = payload[camel];
   // Copilot's runtime tool names back to the Claude names authored hooks read
   // (src/hooks/portableRunner.ts COPILOT_RUNTIME_TOOL_NAMES in the engine that
   // wrote this file). An own-property read, so a name such as "constructor"

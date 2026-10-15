@@ -147,9 +147,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   are out of its reach. `[effort=…]` is no longer appended to a model whose id already carries
   the effort.
 - **A `model-pins` row in `check`.** It warns, naming the client, the class and the model, for
-  each pinned or emitted model the client's list does not hold: the live list where the client's
-  CLI answers, else the saved one. With nothing to compare it passes and says `unverified`. It
-  never fails.
+  each pinned or emitted model the client's list does not hold. For Codex that list is the one
+  the last `sync` saved whenever one exists, and `check` starts `codex` (with `--bundled`) only
+  when none was saved; for the other clients it is the live list where the client's CLI answers,
+  else the saved one. On Cursor and Copilot, whenever the live read answers, a list saved or not,
+  the row also warns, naming both models and `sync`, when `sync` would write a different model
+  than the files carry. With nothing to compare it passes and says `unverified`. It never fails.
 - **Every touchpoint ends on a walk of its leftovers, the summary last.** All nine commands ask
   each leftover through the client's own question tool, Critical, Warning and `decision-waiting`
   items first and the recommended option first, in as many rounds as the tool's limits need, and
@@ -272,11 +275,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `sessionStart`, `preToolUse`, `postToolUse` and the other camelCase names, with `bash` beside
   `command` in every entry, the form GitHub's cloud agent reads. The next `sync` rewrites a 1.14
   file and keeps a recoverable copy. On Copilot an authored hook now receives Claude's tool names
-  (`Bash`, `PowerShell`, `Read`, `Write`, `Edit`, `Grep`, `Glob`, `Agent`, `AskUserQuestion`) in
-  place of Copilot's own, and any other name unchanged; `apply_patch` keeps its own name, so a
-  path guard on Copilot names it too, which `init` and `sync` say once. An authored matcher is
-  translated into Copilot's names (`Bash|Edit` matches `bash`, `edit` and `str_replace_editor`),
-  and an alternative with no Copilot twin is kept as written and named once by `init` and `sync`.
+  (`Bash`, `PowerShell`, `Read`, `Write`, `Edit`, `Grep`, `Glob`, `Agent`, `AskUserQuestion`,
+  `WebFetch`, `WebSearch`, `TodoWrite`) in place of Copilot's own, and any other name unchanged;
+  `apply_patch` keeps its own name, so a path guard on Copilot names it too, which `init` and
+  `sync` say once. The hook also reads the camelCase payload's fields under snake_case keys,
+  `session_id`, `tool_name`, `tool_input`, `transcript_path`, `stop_reason`, `initial_prompt`
+  and `tool_result`, the spelling of Copilot's PascalCase form, with Copilot's own keys kept
+  beside them. An authored matcher is translated into Copilot's names (`Bash|Edit` matches
+  `bash`, `edit` and `str_replace_editor`), and an alternative with no Copilot twin is kept as
+  written and named once by `init` and `sync`.
 - **The Copilot setup workflow always installs Node.** `copilot-setup-steps.yml` always writes a
   `setup-node` step, with the project's Node version, else `lts/*`, because the generated hooks
   run on Node, and an install step only where the project shows Node. The default action refs move
@@ -302,9 +309,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **The `plugin-backed` install mode.** A manifest written by 1.14.0 that still holds a `plugin`
     block keeps working: the block is held, never read, through the 1.15 line. `check`'s
     `plugin-duplicates` row warns, never fails, naming each client the block or Claude Code's
-    `enabledPlugins` still records and that client's own uninstall command; `sync` and `clean`
-    print the same lines for the clients the block names. Uninstall the plugin, then delete the
-    `plugin` key.
+    `enabledPlugins` still records and that client's own uninstall command; `sync` prints the same
+    lines for the clients the block names, and `clean` for those and for a plugin Claude Code's
+    `enabledPlugins` records (`clean` reads `.claude/settings.json` before it removes `.stamity/`).
+    Uninstall the plugin, then delete the `plugin` key.
   - **`check --expect-mode`.** It is now an unknown option, exit 2; `--expect-version` and
     `--expect-tools` are unchanged.
   - **The `plugin-runtime` doctor row**, and the JSON keys `pluginOwned` (`sync --json`) and

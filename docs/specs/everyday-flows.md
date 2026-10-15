@@ -1050,7 +1050,7 @@ follow-up row removes it (`docs/plans/020-cli-native-01.md`, its Follow-ups).
 
 Amended 2026-10-15 (plan 020 file 2, unit `e5-hook-starter`; the delta's amended text from `review/83`; the inbox rows
 `2026-10-11_release-1-14-0/close/5` and `close/9`). Every launcher starts by an absolute path (`launcherPath` in
-`buildPortableHookRunner`, `src/hooks/portableRunner.ts:266-283`; the fault exits at `:253`, `:302-304`). `node` and `node.exe`, in any letter case on Windows, start as
+`buildPortableHookRunner`, `src/hooks/portableRunner.ts:279-296`; the fault exits at `:266`, `:315-317`). `node` and `node.exe`, in any letter case on Windows, start as
 `process.execPath`; a launcher spelled as a path is resolved against the child's folder; any other name is started by
 the absolute path of an inlined copy of the engine's own `PATH` walk (`src/shared/programPath.ts`), which takes only
 full-path entries, skips any entry whose real path is the folder the hook runs in, and tries `.com` then `.exe` on
@@ -3297,8 +3297,16 @@ Added 2026-10-15 (plan 020 file 2, unit `e6-copilot-adapter` and its fix round, 
 `src/adapters/copilot.ts`). The Copilot runner hands authored hooks the Claude tool name for each runtime name in
 `COPILOT_RUNTIME_TOOL_NAMES` — `bash` → `Bash`, `powershell` → `PowerShell`, `view` → `Read`, `create` → `Write`, `edit`
 and `str_replace_editor` → `Edit`, `grep` and `rg` → `Grep`, `glob` → `Glob`, `task` → `Agent`, `ask_user` →
-`AskUserQuestion` — by an own-property read, the tool input staying Copilot's own, and passes any other name unchanged
-(`src/hooks/portableRunner.ts`, the table and the runner's mapping at `:318-324`). `apply_patch` keeps its own name and
+`AskUserQuestion`, `web_fetch` → `WebFetch`, `web_search` → `WebSearch`, `update_todo` → `TodoWrite` — by an
+own-property read, the tool input staying Copilot's own, and passes any other name unchanged
+(`src/hooks/portableRunner.ts`, the table and the runner's mapping at `:331-343`). The last three rows are the hooks
+reference's preToolUse / PreToolUse mapping table (docs.github.com/en/copilot/reference/hooks-reference, read
+2026-10-15; `review/132`); `powershell` keeps Claude Code's own `PowerShell` where that table says `Bash`, because Claude
+Code names PowerShell as a tool hook matchers name (code.claude.com/docs/en/tools-reference, read 2026-10-15), and a hook
+keyed on `Bash` would otherwise be handed PowerShell syntax. The Copilot runner also gives `transcriptPath`,
+`stopReason`, `initialPrompt` and `toolResult` under the snake_case keys the PascalCase form spells them with,
+`transcript_path`, `stop_reason`, `initial_prompt` and `tool_result`, only where that key is absent, keeping the
+camelCase key; `timestamp` passes as sent (`review/133`). `apply_patch` keeps its own name and
 its patch input, with no `file_path`. An authored matcher is read as its top-level alternatives, an anchor at either end
 and one wrapping group kept; each plain-name alternative translates through the inverse table, Claude's legacy `Task`
 like `Agent`, and every other alternative is kept as written; a source that does not balance is kept whole. `init` and
@@ -4219,8 +4227,13 @@ above.
   kept. *(test: `test/adapters/copilot.test.ts`)*
 - GIVEN a camelCase payload with `toolName: "bash"` THEN the authored hook receives `tool_name: "Bash"`; GIVEN
   `apply_patch` THEN it arrives under its own name with no `file_path`; GIVEN `constructor` or an MCP name THEN it passes
-  unchanged; GIVEN each mapped name THEN the core guard places it as before. *(test: `test/hooks/portableRunner.test.ts`)*
-- GIVEN `^(Bash|Edit)$` THEN `^(bash|edit|str_replace_editor)$`; GIVEN `Bash|mcp__.*` THEN `bash|mcp__.*`; GIVEN
+  unchanged; GIVEN each mapped name THEN the core guard places it as before; GIVEN `web_fetch`, `web_search` or
+  `update_todo` with Copilot's own input THEN the hook reads `WebFetch`, `WebSearch` or `TodoWrite` and the shipped
+  Copilot hooks neither block nor fail; GIVEN `transcriptPath`, `stopReason`, `initialPrompt` or `toolResult` THEN the
+  hook reads it under its snake_case key too, a key already sent wins, and `timestamp` is unchanged.
+  *(test: `test/hooks/portableRunner.test.ts`)*
+- GIVEN `^(Bash|Edit)$` THEN `^(bash|edit|str_replace_editor)$`; GIVEN `WebFetch|WebSearch|TodoWrite` THEN
+  `web_fetch|web_search|update_todo` and no warning; GIVEN `Bash|mcp__.*` THEN `bash|mcp__.*`; GIVEN
   `NotebookEdit|Bash` THEN one warning naming the whole matcher; GIVEN a matcher naming `Edit` without `apply_patch`
   THEN one `apply_patch` warning. *(test: `test/adapters/copilot.test.ts`)*
 

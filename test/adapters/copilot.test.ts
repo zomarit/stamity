@@ -1627,6 +1627,24 @@ describe("hooks", () => {
     expect(copilotMatcherWarnings([{ event: "pre_tool_use", matcher: "Edit|mcp__.*", command: ["node", "a.mjs"] }])).toHaveLength(1);
   });
 
+  it("translates Claude's WebFetch, WebSearch and TodoWrite into Copilot's web_fetch, web_search and update_todo, with no warning (review/132)", () => {
+    expect(translateCopilotMatcher("^(WebFetch|WebSearch|TodoWrite)$")).toEqual({
+      matcher: "^(web_fetch|web_search|update_todo)$",
+      untranslated: [],
+      claudeNames: ["WebFetch", "WebSearch", "TodoWrite"],
+    });
+    // Copilot's own names, already written, pass unchanged and unreported.
+    expect(translateCopilotMatcher("web_fetch|update_todo")).toEqual({ matcher: "web_fetch|update_todo", untranslated: [], claudeNames: [] });
+    expect(copilotMatcherWarnings([
+      { event: "pre_tool_use", matcher: "WebFetch|WebSearch", command: ["node", "a.mjs"] },
+      { event: "post_tool_use", matcher: "TodoWrite", command: ["node", "b.mjs"] },
+      { event: "pre_tool_use", matcher: "web_search", command: ["node", "c.mjs"] },
+    ])).toEqual([]);
+    // review/132, rejected in part: PowerShell keeps its own twin and is not folded into Bash.
+    expect(translateCopilotMatcher("Bash").matcher).toBe("bash");
+    expect(translateCopilotMatcher("PowerShell").matcher).toBe("powershell");
+  });
+
   it("names each matcher holding an untranslated tool once, whole, however many rows carry it", () => {
     const warnings = copilotMatcherWarnings([
       { event: "pre_tool_use", matcher: "Bash|NotebookEdit", command: ["node", "a.mjs"] },

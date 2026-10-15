@@ -9,8 +9,10 @@ import {
   portableHookCommand,
   PORTABLE_RUNNER_FILE,
 } from "../../src/hooks/portableRunner.ts";
-import { unionToolCategoryMap } from "../../src/hooks/scripts.ts";
+import { planCoreHookScripts, unionToolCategoryMap } from "../../src/hooks/scripts.ts";
 import type { HookInterchange } from "../../src/hooks/model.ts";
+import { AGENT_POLICY_ROSTER } from "../../src/roster/agentPolicies.ts";
+import { AGENT_TOOL_POLICIES_FILE, buildAgentToolPoliciesJson } from "../../src/tools/allowlist.ts";
 import type { Tool } from "../../src/types/core.ts";
 
 /**
@@ -193,6 +195,8 @@ describe("portable native hook boundary", () => {
     const categoryOf = (name: string): string | undefined => (Object.hasOwn(categories, name) ? categories[name] : undefined);
     // TEST CHANGE, justified (e6-copilot-adapter fix round 1, review/94, review/95):
     // `apply_patch` left the table and `powershell` joined it.
+    // TEST CHANGE, justified (bot round 1, review/132): `web_fetch`, `web_search`
+    // and `update_todo` joined the table, so the guard places them too.
     const expected: Record<string, string> = {
       bash: "execute",
       powershell: "execute",
@@ -204,6 +208,9 @@ describe("portable native hook boundary", () => {
       rg: "read",
       glob: "read",
       task: "spawn",
+      web_fetch: "network",
+      web_search: "network",
+      update_todo: "planning",
     };
     for (const [runtime, category] of Object.entries(expected)) {
       expect(categoryOf(COPILOT_RUNTIME_TOOL_NAMES[runtime] ?? ""), runtime).toBe(category);
@@ -220,6 +227,82 @@ describe("portable native hook boundary", () => {
     // The question tool is in no category under either name, so the guard treats it as it did.
     expect(categoryOf("ask_user")).toBeUndefined();
     expect(categoryOf("AskUserQuestion")).toBeUndefined();
+  });
+
+  /**
+   * Copilot's web and to-do calls with an input of Copilot's own shape. The
+   * hooks reference types camelCase `toolArgs` as unknown, so these inputs are
+   * illustrative; what is pinned is that the runner hands them on unchanged.
+   */
+  const COPILOT_WEB_AND_TODO_CALLS = [
+    ["web_fetch", "WebFetch", { url: "https://example.com/page", prompt: "Summarize the page" }],
+    ["web_search", "WebSearch", { query: "copilot hooks reference" }],
+    ["update_todo", "TodoWrite", { todos: [{ content: "Write the test", status: "in_progress" }] }],
+  ] as const;
+
+  it("hands Copilot's web_fetch, web_search and update_todo to an authored hook as WebFetch, WebSearch and TodoWrite, its input unchanged (review/132)", async () => {
+    const ECHO_INPUT = 'import {readFileSync} from "node:fs"; const input = JSON.parse(readFileSync(0,"utf8")); process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:JSON.stringify({name:input.tool_name,input:input.tool_input})}}));';
+    const f = await fixture("copilot", ECHO_INPUT);
+    for (const [runtime, claude, args] of COPILOT_WEB_AND_TODO_CALLS) {
+      for (const toolArgs of [args, JSON.stringify(args)]) {
+        const result = execute(f, { sessionId: "s-1", timestamp: 1760500000000, cwd: f.root, toolName: runtime, toolArgs });
+        expect(result.status, `${runtime}: ${result.stderr}`).toBe(0);
+        expect(JSON.parse(JSON.parse(result.stdout).permissionDecisionReason), runtime).toEqual({ name: claude, input: args });
+      }
+    }
+  });
+
+  it("lets every pre-tool-use hook shipped for Copilot take its web_fetch, web_search and update_todo calls without a block or a crash (review/132)", async () => {
+    const f = await fixture("copilot", "");
+    const dir = join(f.root, ".stamity/generated/hooks/copilot");
+    const plan = planCoreHookScripts(`../../${AGENT_TOOL_POLICIES_FILE}`, "copilot", { packageName: "@zomarit/stamity", version: "1.0.0-golden" });
+    await writeFile(join(f.root, ".stamity/generated", AGENT_TOOL_POLICIES_FILE), buildAgentToolPoliciesJson(AGENT_POLICY_ROSTER));
+    await Promise.all(plan.map((script) => writeFile(join(dir, script.fileName), script.content)));
+    // Every row a tool call reaches: the core guard is the one the core plan has.
+    const toolRows = plan.filter((script) => script.event === "pre_tool_use" || script.event === "post_tool_use");
+    expect(toolRows.map((script) => script.fileName)).toEqual(["stamity-pre-tool-use-guard.mjs"]);
+    for (const script of toolRows) {
+      const shipped = { ...f, hook: { event: script.event, command: ["node", `.stamity/generated/hooks/copilot/${script.fileName}`] } satisfies HookInterchange };
+      for (const [runtime, , args] of COPILOT_WEB_AND_TODO_CALLS) {
+        for (const toolArgs of [args, JSON.stringify(args)]) {
+          const result = execute(shipped, { sessionId: "s-1", timestamp: 1760500000000, cwd: f.root, toolName: runtime, toolArgs });
+          // Exit 0, nothing on stdout (no decision written) and nothing on stderr (no refusal record, no fault).
+          expect({ status: result.status, stdout: result.stdout, stderr: result.stderr }, `${script.fileName} ${runtime}`).toEqual({ status: 0, stdout: "", stderr: "" });
+        }
+      }
+    }
+  });
+
+  /** A child that echoes the payload it received on stderr, which the runner passes through on every event. */
+  const ECHO_PAYLOAD = 'import {readFileSync} from "node:fs"; process.stderr.write(readFileSync(0,"utf8"));';
+
+  it("also gives Copilot's camelCase transcriptPath, stopReason, initialPrompt and toolResult under their snake_case keys, keeping the camelCase ones (review/133)", async () => {
+    const stop = await fixture("copilot", ECHO_PAYLOAD, { event: "stop" });
+    const stopPayload = { sessionId: "s-1", timestamp: 1760500000000, cwd: "/repo", transcriptPath: "/tmp/transcript.jsonl", stopReason: "end_turn", stop_hook_active: false };
+    const stopResult = execute(stop, stopPayload);
+    expect(stopResult.status, stopResult.stderr).toBe(0);
+    expect(JSON.parse(stopResult.stderr)).toEqual({
+      ...stopPayload,
+      hook_event_name: "Stop",
+      session_id: "s-1",
+      transcript_path: "/tmp/transcript.jsonl",
+      stop_reason: "end_turn",
+    });
+
+    const start = await fixture("copilot", ECHO_PAYLOAD, { event: "session_start" });
+    const startResult = execute(start, { sessionId: "s-1", timestamp: 1760500000000, initialPrompt: "Fix the failing test" });
+    expect(startResult.status, startResult.stderr).toBe(0);
+    expect(JSON.parse(startResult.stderr)).toMatchObject({ initialPrompt: "Fix the failing test", initial_prompt: "Fix the failing test", timestamp: 1760500000000 });
+
+    const post = await fixture("copilot", ECHO_PAYLOAD, { event: "post_tool_use" });
+    const toolResult = { resultType: "success", textResultForLlm: "a.txt\n" };
+    const postResult = execute(post, { sessionId: "s-1", toolName: "bash", toolArgs: { command: "ls" }, toolResult });
+    expect(postResult.status, postResult.stderr).toBe(0);
+    expect(JSON.parse(postResult.stderr)).toMatchObject({ tool_name: "Bash", toolResult, tool_result: toolResult });
+
+    // A snake_case key the payload already carries is the one the hook reads.
+    const both = execute(stop, { transcriptPath: "/camel.jsonl", transcript_path: "/snake.jsonl", stopReason: "end_turn", stop_reason: "user_stop" });
+    expect(JSON.parse(both.stderr)).toMatchObject({ transcriptPath: "/camel.jsonl", transcript_path: "/snake.jsonl", stopReason: "end_turn", stop_reason: "user_stop" });
   });
 
   it.each(["cursor", "copilot", "codex"] as const)("%s rejects malformed output and input without echoing payload fragments", async (tool) => {

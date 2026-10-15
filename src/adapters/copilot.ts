@@ -1247,7 +1247,9 @@ function yamlScalar(value: string): string {
  * The portable runner turns the camelCase payload back into the interchange's
  * keys before any script reads it: `session_id`, `tool_name`, `tool_input`
  * (with `filePath` also given as `file_path`), and `hook_event_name` in its
- * PascalCase spelling. The Claude tool name is restored only for the tools
+ * PascalCase spelling; `transcriptPath`, `stopReason`, `initialPrompt` and
+ * `toolResult` are also given as `transcript_path`, `stop_reason`,
+ * `initial_prompt` and `tool_result` (review/133). The Claude tool name is restored only for the tools
  * {@link COPILOT_RUNTIME_TOOL_NAMES} lists, and the input stays Copilot's own.
  * `apply_patch` keeps its name and its patch text (review/94), so a path guard
  * written for Claude's `Edit` and `Write` must also name it here
