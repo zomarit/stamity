@@ -1,8 +1,8 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
-import { ghApi } from "../../src/cli/engine/ghRunner.ts";
+import { afterEach, describe, expect, it } from "vitest";
+import { ghApi, ghApiArgs } from "../../src/cli/engine/ghRunner.ts";
 import {
   ensureDraftPr,
   resolveRepo,
@@ -29,6 +29,7 @@ const MARKER = runMarker(RUN);
 const BRANCH = "stamity/2026-10-16_cloud";
 
 const REQUEST: DraftPrRequest = {
+  host: "github.com",
   owner: "acme",
   repo: "app",
   head: BRANCH,
@@ -42,9 +43,13 @@ const LOOKUP = `repos/acme/app/pulls?head=${encodeURIComponent(`acme:${BRANCH}`)
 
 type Answer = RestResponse | Error;
 
+/** Every call each case's stand-in recorded, read by the person-only assertion after the case. */
+const recorded: RestRequest[][] = [];
+
 /** A recorded stand-in for `ghApi`: answers each call from `answers` in order and records it; an unscripted call fails the test. */
 function scriptedGh(answers: readonly Answer[]): { gh: GhApi; calls: RestRequest[] } {
   const calls: RestRequest[] = [];
+  recorded.push(calls);
   let next = 0;
   const gh: GhApi = (request) => {
     calls.push(request);
@@ -80,6 +85,11 @@ function expectNoPersonOnlyCall(calls: readonly RestRequest[]): void {
 }
 
 describe("ensureDraftPr", () => {
+  // The testCriteria row holds across every case, so it runs after each one.
+  afterEach(() => {
+    expectNoPersonOnlyCall(recorded.splice(0).flat());
+  });
+
   it("replaces only the body of an open pull request carrying this run's marker, and posts nothing", async () => {
     const { gh, calls } = scriptedGh([
       { status: 200, json: [openPr(7, `old list\n\n${MARKER}\n`)] },
@@ -90,10 +100,9 @@ describe("ensureDraftPr", () => {
 
     expect(outcome).toEqual({ number: 7, url: "https://github.com/acme/app/pull/7", how: "existing" });
     expect(calls).toEqual([
-      { method: "GET", path: LOOKUP },
-      { method: "PATCH", path: "repos/acme/app/pulls/7", body: { body: `# Morning list\n\nnone\n\n${MARKER}` } },
+      { method: "GET", path: LOOKUP, hostname: "github.com" },
+      { method: "PATCH", path: "repos/acme/app/pulls/7", body: { body: `# Morning list\n\nnone\n\n${MARKER}` }, hostname: "github.com" },
     ]);
-    expectNoPersonOnlyCall(calls);
   });
 
   it("comments on an open pull request without the marker and leaves its body untouched", async () => {
@@ -107,7 +116,6 @@ describe("ensureDraftPr", () => {
     expect(outcome).toEqual({ number: 9, url: "https://github.com/acme/app/pull/9", how: "commented" });
     expect(calls.map((call) => `${call.method} ${call.path}`)).toEqual([`GET ${LOOKUP}`, "POST repos/acme/app/issues/9/comments"]);
     expect(calls.some((call) => call.method === "PATCH")).toBe(false);
-    expectNoPersonOnlyCall(calls);
   });
 
   it("comments where the open pull request carries another run's marker", async () => {
@@ -130,9 +138,9 @@ describe("ensureDraftPr", () => {
     expect(calls[1]).toEqual({
       method: "POST",
       path: "repos/acme/app/pulls",
+      hostname: "github.com",
       body: { title: "Cloud runs", head: BRANCH, base: "main", body: `# Morning list\n\nnone\n\n${MARKER}`, draft: true },
     });
-    expectNoPersonOnlyCall(calls);
   });
 
   it("keeps a body that already ends with the marker as it is", async () => {
@@ -154,7 +162,6 @@ describe("ensureDraftPr", () => {
     expect(calls[2]?.path).toBe("repos/acme/app/pulls");
     expect(calls[2]?.body).toEqual({ title: "[DRAFT] Cloud runs", head: BRANCH, base: "main", body: `# Morning list\n\nnone\n\n${MARKER}` });
     expect(calls[2]?.body).not.toHaveProperty("draft");
-    expectNoPersonOnlyCall(calls);
   });
 
   it("looks again on a 422 saying one already exists, and never takes the fallback", async () => {
@@ -175,7 +182,29 @@ describe("ensureDraftPr", () => {
       "PATCH repos/acme/app/pulls/14",
     ]);
     expect(calls.filter((call) => call.method === "POST")).toHaveLength(1);
-    expectNoPersonOnlyCall(calls);
+  });
+
+  it("reports not done, and takes no fallback, on a 422 that only echoes a branch holding the word draft", async () => {
+    const head = "stamity/2026-10-16_draft-notes";
+    const { gh, calls } = scriptedGh([
+      { status: 200, json: [] },
+      { status: 422, json: { message: "Validation Failed", errors: [{ resource: "PullRequest", code: "custom", message: `No commits between main and ${head}` }] } },
+    ]);
+
+    expect(await ensureDraftPr(gh, { ...REQUEST, head })).toEqual({ notDone: `draft PR not opened (${head})` });
+    expect(calls).toHaveLength(2);
+  });
+
+  it("names the host the repository was matched on in every call, and the host reaches gh's argument vector", async () => {
+    const { gh, calls } = scriptedGh([{ status: 200, json: [openPr(9, "A person's description.")] }, { status: 201, json: { id: 1 } }]);
+
+    await ensureDraftPr(gh, { ...REQUEST, host: "ghe.example.com" });
+
+    expect(calls).toHaveLength(2);
+    for (const call of calls) {
+      expect(call.hostname, call.path).toBe("ghe.example.com");
+      expect(ghApiArgs(call).slice(0, 3), call.path).toEqual(["api", "--hostname", "ghe.example.com"]);
+    }
   });
 
   it("reports not done when the re-lookup after 'already exists' finds nothing", async () => {
@@ -235,23 +264,34 @@ describe("ensureDraftPr", () => {
     expect(calls[0]?.path).toBe("repos/acme/app/pulls?head=acme%3Afeat%2Fa%26state%3Dclosed&state=open");
   });
 
-  it("refuses crafted names before any call", async () => {
-    const crafted: Partial<DraftPrRequest>[] = [
-      { owner: "acme/app/pulls/1/merge" },
-      { repo: ".." },
-      { repo: "app?x=1" },
-      { head: "feat x" },
-      { head: "-delete" },
-      { head: "a..b" },
-      { base: "main:refs/tags/v1" },
-      { runId: "x --> <!-- y" },
+  it("encodes the ! ' ( ) a git branch name may hold, so the lookup passes the runner's path check", async () => {
+    const head = "fix(auth)!'s";
+    const { gh, calls } = scriptedGh([{ status: 200, json: [openPr(5, `x\n\n${MARKER}`, head)] }, { status: 200, json: openPr(5, "new") }]);
+
+    expect(await ensureDraftPr(gh, { ...REQUEST, head })).toMatchObject({ number: 5, how: "existing" });
+    expect(calls[0]?.path).toBe("repos/acme/app/pulls?head=acme%3Afix%28auth%29%21%27s&state=open");
+    for (const call of calls) expect(() => ghApiArgs(call), call.path).not.toThrow();
+  });
+
+  it("refuses crafted names before any call, naming the part that failed", async () => {
+    const crafted: [Partial<DraftPrRequest>, string][] = [
+      [{ host: "evil.example/x" }, "host"],
+      [{ host: "--hostname=evil.example" }, "host"],
+      [{ owner: "acme/app/pulls/1/merge" }, "owner"],
+      [{ repo: ".." }, "repository"],
+      [{ repo: "app?x=1" }, "repository"],
+      [{ head: "feat x" }, "head branch"],
+      [{ head: "-delete" }, "head branch"],
+      [{ head: "a..b" }, "head branch"],
+      [{ base: "main:refs/tags/v1" }, "base branch"],
+      [{ runId: "x --> <!-- y" }, "run id"],
     ];
-    const runs = crafted.map(async (change) => {
+    const runs = crafted.map(async ([change, part]) => {
       const { gh, calls } = scriptedGh([]);
-      return { change, outcome: await ensureDraftPr(gh, { ...REQUEST, ...change }), calls };
+      return { change, part, outcome: await ensureDraftPr(gh, { ...REQUEST, ...change }), calls };
     });
-    for (const { change, outcome, calls } of await Promise.all(runs)) {
-      expect(outcome, JSON.stringify(change)).toHaveProperty("notDone");
+    for (const { change, part, outcome, calls } of await Promise.all(runs)) {
+      expect(outcome, JSON.stringify(change)).toEqual({ notDone: `draft PR not opened (${part} failed validation)` });
       expect(calls, JSON.stringify(change)).toEqual([]);
     }
   });
@@ -260,13 +300,18 @@ describe("ensureDraftPr", () => {
 describe("resolveRepo", () => {
   it("reads a github.com origin in each transport spelling", () => {
     for (const url of ["https://github.com/acme/app.git", "git@github.com:acme/app.git", "ssh://git@github.com/acme/app", "https://x-access-token:t@github.com/acme/app"]) {
-      expect(resolveRepo({}, url), url).toEqual({ owner: "acme", repo: "app" });
+      expect(resolveRepo({}, url), url).toEqual({ host: "github.com", owner: "acme", repo: "app" });
     }
   });
 
-  it("reads Claude Code's proxy shape", () => {
-    expect(resolveRepo({}, "http://local_proxy@127.0.0.1:1234/git/o/r")).toEqual({ owner: "o", repo: "r" });
-    expect(resolveRepo({}, "http://local_proxy@127.0.0.1:41000/git/acme/app.git")).toEqual({ owner: "acme", repo: "app" });
+  it("reads Claude Code's proxy shape, on github.com whatever GH_HOST names", () => {
+    expect(resolveRepo({}, "http://local_proxy@127.0.0.1:1234/git/o/r")).toEqual({ host: "github.com", owner: "o", repo: "r" });
+    expect(resolveRepo({}, "http://local_proxy@127.0.0.1:41000/git/acme/app.git")).toEqual({ host: "github.com", owner: "acme", repo: "app" });
+    expect(resolveRepo({ GH_HOST: "ghe.example.com" }, "http://local_proxy@127.0.0.1:1234/git/o/r")).toEqual({
+      host: "github.com",
+      owner: "o",
+      repo: "r",
+    });
   });
 
   it("returns null for any other host", () => {
@@ -278,9 +323,14 @@ describe("resolveRepo", () => {
 
   it("reads the GH_HOST host, and no github.com origin while GH_HOST names another host", () => {
     const env = { GH_HOST: "ghe.example.com" };
-    expect(resolveRepo(env, "https://ghe.example.com/acme/app.git")).toEqual({ owner: "acme", repo: "app" });
+    expect(resolveRepo(env, "https://ghe.example.com/acme/app.git")).toEqual({ host: "ghe.example.com", owner: "acme", repo: "app" });
+    expect(resolveRepo({ GH_HOST: "https://GHE.example.com/" }, "git@ghe.example.com:acme/app.git")).toEqual({
+      host: "ghe.example.com",
+      owner: "acme",
+      repo: "app",
+    });
     expect(resolveRepo(env, "https://github.com/acme/app.git")).toBeNull();
-    expect(resolveRepo({ GH_HOST: "github.com" }, "https://github.com/acme/app.git")).toEqual({ owner: "acme", repo: "app" });
+    expect(resolveRepo({ GH_HOST: "github.com" }, "https://github.com/acme/app.git")).toEqual({ host: "github.com", owner: "acme", repo: "app" });
   });
 
   it("returns null for an owner or repository outside the validated alphabet", () => {

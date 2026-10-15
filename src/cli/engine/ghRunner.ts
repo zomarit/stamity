@@ -16,8 +16,11 @@ import {
  *
  * - the methods are `GET`, `POST` and `PATCH`; no `PUT` and no `DELETE`;
  * - the path is a REST path in a closed alphabet, never `graphql` (the only
- *   route to "ready for review", and refused in Claude Code's cloud) and never
- *   a word `gh` would read as a flag;
+ *   route to "ready for review", and refused in Claude Code's cloud), never a
+ *   word `gh` would read as a flag, and never a URL of its own (no scheme, no
+ *   `:`, no `//`), so every call goes to the API root of the named host;
+ * - the host is named on every call (`--hostname`), the one the caller
+ *   matched the repository on, never `gh`'s own default;
  * - a write reaches only a pull request, its body, or a comment on it
  *   ({@link WRITE_PATHS}); a merge, a ref, a file, a ruleset or a secret is no
  *   write this door makes, whatever the caller built.
@@ -36,6 +39,8 @@ export interface GhRequest {
   method: GhMethod;
   path: string;
   body?: unknown;
+  /** The GitHub host the call goes to (`gh api --hostname`): the host the repository was matched on. */
+  hostname: string;
 }
 
 /** What GitHub answered: the HTTP status and the body as JSON (`null` for an empty or non-JSON body). */
@@ -69,9 +74,13 @@ const METHODS: ReadonlySet<string> = new Set<GhMethod>(["GET", "POST", "PATCH"])
 /**
  * A REST path: it starts with a letter or digit, so `gh` never reads it as a
  * flag, and holds only the characters a path and an encoded query need. No
- * space, no quote, no `{` (`gh`'s own placeholders), no `#`.
+ * space, no quote, no `{` (`gh`'s own placeholders), no `#`, and no `:`, so no
+ * scheme: `gh api` sends an endpoint holding `://` to that URL as given.
  */
-const PATH_SHAPE = /^[A-Za-z0-9][A-Za-z0-9._~%/:?=&,+-]*$/;
+const PATH_SHAPE = /^[A-Za-z0-9][A-Za-z0-9._~%/?=&,+-]*$/;
+
+/** A bare lowercase host name, as `gh api --hostname` takes it: labels of letters, digits and `-`. */
+const HOST_SHAPE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$/;
 
 /** A repository name part, as `owner` and `repo` are validated everywhere a path is built. */
 const PART = "[A-Za-z0-9._-]+";
@@ -96,8 +105,11 @@ function refusal(message: string): GhRefusal {
 /** `path` without its leading `/`, or the reason it is refused. */
 function checkedPath(request: GhRequest): { path: string } | { refused: string } {
   if (!METHODS.has(request.method)) return { refused: `gh api: method ${String(request.method)} is not one this runner sends` };
+  if (typeof request.hostname !== "string" || !HOST_SHAPE.test(request.hostname)) {
+    return { refused: "gh api: the host is not a host name this runner sends to" };
+  }
   const path = request.path.replace(/^\//, "");
-  if (!PATH_SHAPE.test(path)) return { refused: "gh api: the path is not a REST path this runner sends" };
+  if (!PATH_SHAPE.test(path) || path.includes("//")) return { refused: "gh api: the path is not a REST path this runner sends" };
   const segments = path.split("?", 1)[0]?.split("/") ?? [];
   if (segments.some((segment) => segment === "." || segment === "..")) {
     return { refused: "gh api: the path holds a dot segment" };
@@ -111,14 +123,16 @@ function checkedPath(request: GhRequest): { path: string } | { refused: string }
 
 /**
  * The argument vector `gh` is started with for `request`, after the checks of
- * {@link ghApi}: `api --include --method <M>`, `--input -` when a body goes on
- * stdin, then the path.
+ * {@link ghApi}: `api --hostname <host> --include --method <M>`, `--input -`
+ * when a body goes on stdin, then the path.
  */
 export function ghApiArgs(request: GhRequest): string[] {
   const checked = checkedPath(request);
   if ("refused" in checked) throw refusal(checked.refused);
   return [
     "api",
+    "--hostname",
+    request.hostname,
     "--include",
     "--method",
     request.method,
@@ -148,12 +162,17 @@ export function parseGhInclude(stdout: string): GhResponse | null {
   return { status: Number(match[1]), json };
 }
 
+/** Variables that keep `gh`'s ANSI colours on a pipe, which would wrap the JSON body and break its parse. */
+const COLOUR_FORCING: ReadonlySet<string> = new Set(["CLICOLOR_FORCE", "GH_FORCE_TTY"]);
+
 /**
  * The environment `gh` runs under: the caller's, its token included, with
- * `gh`'s own prompts and update check off.
+ * `gh`'s own prompts and update check off and its colours off (`NO_COLOR`,
+ * the colour-forcing variables dropped, in any case Windows spells them).
  */
 function ghEnv(base: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  return { ...base, GH_PROMPT_DISABLED: "1", GH_NO_UPDATE_NOTIFIER: "1" };
+  const kept = Object.fromEntries(Object.entries(base).filter(([key]) => !COLOUR_FORCING.has(key.toUpperCase())));
+  return { ...kept, GH_PROMPT_DISABLED: "1", GH_NO_UPDATE_NOTIFIER: "1", NO_COLOR: "1" };
 }
 
 /** The absolute path of the `gh` to start in `cwd`, or `null` where no accepted `PATH` entry holds one. */
@@ -173,7 +192,8 @@ function ghProgram(cwd: string, env: NodeJS.ProcessEnv): string | null {
  * starts for a method or a path outside the closed sets; with Node's `ENOENT`
  * error, no program started, where no `PATH` entry holds `gh`; and with an
  * error naming `gh`'s first stderr line where `gh` printed no HTTP head (no
- * login, no network). Any answer GitHub gave, a 4xx included, resolves.
+ * login, no network). Any answer GitHub gave, a 4xx included, resolves. A
+ * body `gh` never read (it exited first) is no throw: the exit decides.
  */
 export function ghApi(request: GhRequest, opts: GhApiOptions = {}): Promise<GhResponse> {
   let args: string[];
@@ -188,7 +208,7 @@ export function ghApi(request: GhRequest, opts: GhApiOptions = {}): Promise<GhRe
   if (gh === null) return Promise.reject(programNotFound("gh", "spawn", args));
   const input = request.body === undefined ? "" : JSON.stringify(request.body);
   return new Promise((resolvePromise, rejectPromise) => {
-    execFile(
+    const child = execFile(
       gh,
       args,
       { cwd, env, encoding: "utf8", timeout: opts.timeoutMs ?? GH_TIMEOUT_MS, maxBuffer: GH_MAX_BUFFER, windowsHide: true },
@@ -205,6 +225,11 @@ export function ghApi(request: GhRequest, opts: GhApiOptions = {}): Promise<GhRe
         const first = stderr.split(/\r?\n/).find((line) => line.trim() !== "") ?? "no output";
         rejectPromise(new Error(`gh api answered no HTTP status: ${first.slice(0, 200)}`));
       },
-    ).stdin?.end(input);
+    );
+    // `gh` can exit before it reads a body larger than the pipe buffer (no
+    // login, say); the write then fails with EPIPE, which unheard would be an
+    // uncaught throw. The exit callback above decides the outcome instead.
+    child.stdin?.on("error", () => undefined);
+    child.stdin?.end(input);
   });
 }

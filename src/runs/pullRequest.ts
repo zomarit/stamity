@@ -20,6 +20,8 @@ export interface RestRequest {
   method: "GET" | "POST" | "PATCH";
   path: string;
   body?: unknown;
+  /** The GitHub host the call goes to, the one {@link resolveRepo} matched `origin` on. */
+  hostname: string;
 }
 
 /** GitHub's answer: the HTTP status and the JSON body (`null` when there was none). */
@@ -33,6 +35,8 @@ export type GhApi = (request: RestRequest) => Promise<RestResponse>;
 
 /** What the run asks for. */
 export interface DraftPrRequest {
+  /** The host {@link resolveRepo} matched the repository on; every call names it. */
+  host: string;
   owner: string;
   repo: string;
   /** The run's own branch, pushed already. */
@@ -58,6 +62,16 @@ export type PrOutcome =
 /** An owner, a repository or a run id: the characters GitHub and the run folder allow, never a path part of its own. */
 const NAME_PART = /^[A-Za-z0-9._-]+$/;
 
+/** A bare lowercase host name: labels of letters, digits and `-`. */
+const HOST_NAME = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$/;
+
+/**
+ * GitHub's own refusal of a draft where the repository takes none, matched
+ * from the start of one `errors[]` message, so a message that only echoes a
+ * branch holding the word (`No commits between main and x/draft-notes`) is not it.
+ */
+const DRAFTS_REFUSED = /^draft pull requests are not supported\b/;
+
 /** Characters git's `check-ref-format` forbids anywhere in a branch name. */
 const REF_FORBIDDEN = ["~", "^", ":", "?", "*", "[", "\\", "..", "@{"];
 
@@ -76,6 +90,14 @@ function isBranchName(value: string): boolean {
   if (value.startsWith("-") || value.startsWith("/") || value.endsWith("/") || value.endsWith(".")) return false;
   if (value.endsWith(".lock") || /[\s\p{Cc}]/u.test(value)) return false;
   return !REF_FORBIDDEN.some((token) => value.includes(token));
+}
+
+/**
+ * `encodeURIComponent`, plus the characters it leaves bare that a branch name
+ * may hold and the REST runner's path alphabet refuses (`!`, `'`, `(`, `)`, `*`).
+ */
+function encodeQueryValue(value: string): string {
+  return encodeURIComponent(value).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
 }
 
 /** `body` ending with `marker`, appended on its own line where it does not already end the text. */
@@ -124,9 +146,9 @@ function openPrOnBranch(json: unknown, owner: string, head: string): FoundPr | n
   return null;
 }
 
-/** Every message a 422 answer carries, its `errors[]` included, as one lowercased text. */
-function validationText(json: unknown): string {
-  if (!isRecord(json)) return "";
+/** Every message a 422 answer carries, its `errors[]` included, each lowercased. */
+function validationMessages(json: unknown): string[] {
+  if (!isRecord(json)) return [];
   const parts: string[] = [];
   if (typeof json["message"] === "string") parts.push(json["message"]);
   if (Array.isArray(json["errors"])) {
@@ -135,7 +157,18 @@ function validationText(json: unknown): string {
       else if (isRecord(entry) && typeof entry["message"] === "string") parts.push(entry["message"]);
     }
   }
-  return parts.join("\n").toLowerCase();
+  return parts.map((part) => part.trim().toLowerCase());
+}
+
+/** Which part of a request failed validation, or `null` when every part passes. */
+function invalidPart(request: DraftPrRequest): string | null {
+  if (!HOST_NAME.test(request.host)) return "host";
+  if (!isNamePart(request.owner)) return "owner";
+  if (!isNamePart(request.repo)) return "repository";
+  if (!isNamePart(request.runId)) return "run id";
+  if (!isBranchName(request.head)) return "head branch";
+  if (!isBranchName(request.base)) return "base branch";
+  return null;
 }
 
 /** True for the error Node raises where no program of the name could be started. */
@@ -152,15 +185,17 @@ function programMissing(error: unknown): boolean {
  *    (`POST …/issues/<n>/comments`), its own body untouched.
  * 2. Else `POST …/pulls` with `draft: true`.
  * 3. A 422 saying one already exists looks again (step 1) and never falls
- *    back; a 422 naming drafts posts a normal one titled `[DRAFT] <title>`.
+ *    back; GitHub's draft refusal ({@link DRAFTS_REFUSED}) posts a normal one
+ *    titled `[DRAFT] <title>`.
  * 4. Else `{ notDone: "draft PR not opened (<head>)" }`; with no `gh` at all,
- *    `{ notDone: "gh not found" }`. Never a throw.
+ *    `{ notDone: "gh not found" }`; a part failing validation, before any
+ *    call, `{ notDone: "draft PR not opened (<part> failed validation)" }`.
+ *    Never a throw.
  */
 export async function ensureDraftPr(gh: GhApi, request: DraftPrRequest): Promise<PrOutcome> {
-  const { owner, repo, head, base, title, runId } = request;
-  if (!isNamePart(owner) || !isNamePart(repo) || !isNamePart(runId) || !isBranchName(head) || !isBranchName(base)) {
-    return { notDone: "draft PR not opened (an owner, repository, branch or run id failed validation)" };
-  }
+  const { host, owner, repo, head, base, title, runId } = request;
+  const invalid = invalidPart(request);
+  if (invalid !== null) return { notDone: `draft PR not opened (${invalid} failed validation)` };
   const notOpened: PrOutcome = { notDone: `draft PR not opened (${head})` };
   const marker = runMarker(runId);
   const body = withMarker(request.body, marker);
@@ -169,27 +204,29 @@ export async function ensureDraftPr(gh: GhApi, request: DraftPrRequest): Promise
   /** Step 1 over an open pull request already found. */
   const update = async (found: FoundPr): Promise<PrOutcome> => {
     if (found.body.trimEnd().endsWith(marker)) {
-      const patched = await gh({ method: "PATCH", path: `${repoPath}/pulls/${found.number}`, body: { body } });
+      const patched = await gh({ method: "PATCH", path: `${repoPath}/pulls/${found.number}`, body: { body }, hostname: host });
       return isOk(patched.status) ? { number: found.number, url: found.url, how: "existing" } : notOpened;
     }
-    const commented = await gh({ method: "POST", path: `${repoPath}/issues/${found.number}/comments`, body: { body } });
+    const commented = await gh({ method: "POST", path: `${repoPath}/issues/${found.number}/comments`, body: { body }, hostname: host });
     return isOk(commented.status) ? { number: found.number, url: found.url, how: "commented" } : notOpened;
   };
 
   /** The lookup; `undefined` when GitHub did not answer it, so no step after it can be trusted. */
   const lookup = async (): Promise<FoundPr | null | undefined> => {
-    const query = `head=${encodeURIComponent(`${owner}:${head}`)}&state=open`;
-    const listed = await gh({ method: "GET", path: `${repoPath}/pulls?${query}` });
+    const query = `head=${encodeQueryValue(`${owner}:${head}`)}&state=open`;
+    const listed = await gh({ method: "GET", path: `${repoPath}/pulls?${query}`, hostname: host });
     return isOk(listed.status) ? openPrOnBranch(listed.json, owner, head) : undefined;
   };
 
-  /** One `POST …/pulls`: the outcome, or the 422's text for the caller to read. */
-  const create = async (payload: Record<string, unknown>, how: "created" | "created-fallback"): Promise<PrOutcome | { rejected: string }> => {
-    const created = await gh({ method: "POST", path: `${repoPath}/pulls`, body: payload });
-    if (created.status === 422) return { rejected: validationText(created.json) };
+  /** One `POST …/pulls`: the outcome, or the 422's messages for the caller to read. */
+  const create = async (payload: Record<string, unknown>, how: "created" | "created-fallback"): Promise<PrOutcome | { rejected: string[] }> => {
+    const created = await gh({ method: "POST", path: `${repoPath}/pulls`, body: payload, hostname: host });
+    if (created.status === 422) return { rejected: validationMessages(created.json) };
     const fields = isOk(created.status) ? prFields(created.json) : null;
     return fields === null ? notOpened : { number: fields.number, url: fields.url, how };
   };
+
+  const alreadyExists = (messages: string[]): boolean => messages.some((message) => message.includes("already exists"));
 
   /** A 422 saying the branch already has one: look again and update it, never the fallback. */
   const relook = async (): Promise<PrOutcome> => {
@@ -204,12 +241,12 @@ export async function ensureDraftPr(gh: GhApi, request: DraftPrRequest): Promise
 
     const first = await create({ title, head, base, body, draft: true }, "created");
     if (!("rejected" in first)) return first;
-    if (first.rejected.includes("already exists")) return await relook();
-    if (!first.rejected.includes("draft")) return notOpened;
+    if (alreadyExists(first.rejected)) return await relook();
+    if (!first.rejected.some((message) => DRAFTS_REFUSED.test(message))) return notOpened;
 
     const fallback = await create({ title: `[DRAFT] ${title}`, head, base, body }, "created-fallback");
     if (!("rejected" in fallback)) return fallback;
-    return fallback.rejected.includes("already exists") ? await relook() : notOpened;
+    return alreadyExists(fallback.rejected) ? await relook() : notOpened;
   } catch (error) {
     return programMissing(error) ? { notDone: "gh not found" } : notOpened;
   }
@@ -228,27 +265,31 @@ function hostOf(value: string): string {
 }
 
 /**
- * The GitHub repository `origin` names, or `null` where it names none `gh`
- * would reach. Accepted: Claude Code's proxy shape; else a remote on the host
- * `gh` talks to — `GH_HOST` when it is set, `github.com` when it is not, so a
- * `github.com` origin under a `GH_HOST` naming another host is `null`, since
- * every call would go to that other host. Any other host is `null`, and so is
- * an owner or repository outside `[A-Za-z0-9._-]`.
+ * The GitHub repository `origin` names and the host it was matched on, or
+ * `null` where it names none `gh` would reach. Accepted: Claude Code's proxy
+ * shape, on `github.com`; else a remote on the host `gh` talks to — `GH_HOST`
+ * when it is set, `github.com` when it is not, so a `github.com` origin under a
+ * `GH_HOST` naming another host is `null`. Any other host is `null`, and so is
+ * an owner or repository outside `[A-Za-z0-9._-]`. Every call made for the
+ * repository names the returned `host` (`gh api --hostname`), so the
+ * repository matched here is the one called, whatever `gh`'s default host is.
  */
-export function resolveRepo(env: NodeJS.ProcessEnv, originUrl: string): { owner: string; repo: string } | null {
+export function resolveRepo(env: NodeJS.ProcessEnv, originUrl: string): { host: string; owner: string; repo: string } | null {
   const proxied = CLAUDE_PROXY_ORIGIN.exec(originUrl.trim());
+  let host: string;
   let owner: string;
   let repo: string;
   if (proxied !== null) {
+    host = "github.com";
     owner = proxied[1] ?? "";
     repo = proxied[2] ?? "";
   } else {
     const parsed = parseGitRemote(originUrl);
     if (parsed === null) return null;
     const configured = env["GH_HOST"];
-    const host = configured === undefined || configured.trim() === "" ? "github.com" : hostOf(configured);
+    host = configured === undefined || configured.trim() === "" ? "github.com" : hostOf(configured);
     if (parsed.host !== host) return null;
     ({ owner, repo } = parsed);
   }
-  return isNamePart(owner) && isNamePart(repo) ? { owner, repo } : null;
+  return HOST_NAME.test(host) && isNamePart(owner) && isNamePart(repo) ? { host, owner, repo } : null;
 }
