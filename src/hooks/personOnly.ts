@@ -6,14 +6,15 @@
  * or not: a force push, a push of a tag or of the default branch (named, or
  * implied by a refspec-less push or `HEAD` while on it), a remote branch
  * deletion, a tag, a merge, `gh pr ready`, a release, a publish, a secret,
- * variable, protection or ruleset write, and a default-branch change, deletion
- * or archive of the repository. {@link personOnlyVerdict} reads a
+ * variable, protection or ruleset write, a write to the repository itself (its
+ * default branch, visibility or name, its deletion, archiving or transfer) and a branch
+ * rename. {@link personOnlyVerdict} reads a
  * command line for them; {@link CLAUDE_DENY_ROWS} is the part a Claude Code
  * prefix rule can say, so the settings layer and the guard agree.
  *
  * **While a run is unattended** the run verbs (`stamity run checkpoint`, `run
  * end`) are the only push path: {@link unattendedPushVerdict} refuses any raw
- * `git push`, `gh pr create` or `gh pr edit` and a REST write that moves a
+ * `git push` (`git subtree push` among them), `gh pr create` or `gh pr edit` and a REST write that moves a
  * branch or a pull request, so the held paths and the last secret scan cannot
  * be stepped around. A reply on a comments endpoint passes. Whether a run is
  * unattended is the guard's to read (u14), not this module's.
@@ -28,7 +29,8 @@
  * **What the text cannot show.** A command reaches the guard as text, so a
  * respelling the text hides — a git or shell alias, a computed `sh -c "$(…)"`,
  * a bare tag name the context's `tags` does not list, a repository's own push
- * configuration, a GraphQL mutation read from a file — passes. The tests assert
+ * configuration, a GraphQL mutation or a REST body read from a file where the
+ * API's default is not the default branch — passes. The tests assert
  * that residual as allowed so it stays written down; `SECURITY.md` names it, and the
  * pre-flight's REST check that the account cannot push to the default branch
  * (REQ-FLOW-101) is the wall behind this guard.
@@ -58,11 +60,17 @@ export interface PersonOnlyRule {
 
 /** Every person-only act, one row per rule id {@link personOnlyVerdict} returns. */
 export const PERSON_ONLY_RULES: readonly PersonOnlyRule[] = [
-  { id: "force-push", act: "a force push (`-f`, `--force`, `--force-with-lease`, `--force-if-includes`, a `+` refspec)" },
-  { id: "push-default", act: "a push to the default branch, named or implied by a refspec-less push or `HEAD` while on it" },
+  {
+    id: "force-push",
+    act: "a force push (`-f`, `--force`, `--force-with-lease`, `--force-if-includes`, a `+` refspec, a forced REST or GraphQL ref update)",
+  },
+  {
+    id: "push-default",
+    act: "a push to the default branch, named, matched by a pattern refspec or implied by a refspec-less push or `HEAD` while on it, or a REST or GraphQL commit or merge onto it",
+  },
   {
     id: "push-tags",
-    act: "a push of tags (`--tags`, `--follow-tags`, `--mirror`, `--all`, a refspec naming a tag: `refs/tags/…`, `tags/…` or a local tag's bare name)",
+    act: "a push of tags (`--tags`, `--follow-tags`, `--mirror`, `--all`, `tag <name>`, a refspec naming a tag: `refs/tags/…`, `tags/…` or a local tag's bare name)",
   },
   { id: "push-delete", act: "a remote branch deletion (`--delete`, `-d`, a `:ref` refspec)" },
   { id: "tag", act: "creating or deleting a tag (`git tag` beyond listing)" },
@@ -73,7 +81,7 @@ export const PERSON_ONLY_RULES: readonly PersonOnlyRule[] = [
   { id: "secrets", act: "writing a secret or a variable (`gh secret`, `gh variable` beyond list, their REST paths)" },
   {
     id: "protection",
-    act: "writing branch protection or a ruleset, or the repository itself (`gh repo edit --default-branch`, `gh repo delete`, `gh repo archive`)",
+    act: "writing branch protection or a ruleset, renaming a branch, or writing the repository itself (`gh repo edit --default-branch` or `--visibility`, `gh repo rename`, `gh repo delete`, `gh repo archive`, a transfer, a REST PATCH or DELETE on the repository)",
   },
 ];
 
@@ -151,18 +159,24 @@ export const CLAUDE_DENY_ROWS: readonly string[] = [
   "Bash(gh variable delete:*)",
   "Bash(gh variable remove:*)",
   "Bash(gh repo edit --default-branch:*)",
+  "Bash(gh repo edit --visibility:*)",
+  "Bash(gh repo rename:*)",
   "Bash(gh repo delete:*)",
   "Bash(gh repo archive:*)",
+  "Bash(gh repo transfer:*)",
 ];
 
 /**
  * Whether `command` holds a person-only act (REQ-FLOW-102). The line is read as
  * a shell would split it: quotes honoured, segments split on `&&`, `||`, `;`,
  * `|`, `&`, a newline, a subshell's parentheses and a command substitution
- * (inside double quotes too), redirections and comments dropped, leading
- * assignments, keywords and wrappers (`env`, `command`, `sudo`, …) skipped, a
- * literal `sh -c` or `eval` argument read as its own line, and git's global
- * options (`-c k=v` pairs among them) skipped before the subcommand.
+ * (inside double quotes too), ANSI-C `$'…'` escapes decoded, redirections and
+ * comments dropped, leading assignments, keywords, wrappers (`env`, `command`,
+ * `sudo`, …) and package runners (`npx`, `npm exec`, `pnpm dlx`, …) skipped with
+ * their options' values, a literal `sh -c`, `eval`, `env -S` or runner `-c`
+ * argument read as its own line, and git's global options (`-c k=v` pairs among
+ * them, a `remote.<name>.push` or `branch.<name>.merge` read as the refspec a
+ * bare push takes) skipped before the subcommand.
  *
  * Self-contained, so the emitted guard can carry it as source (see the module
  * comment).
@@ -170,8 +184,35 @@ export const CLAUDE_DENY_ROWS: readonly string[] = [
 export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): PersonOnlyVerdict {
   // <shell-reading>
   const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
-  const KEYWORDS = new Set(["!", "{", "}", "if", "then", "else", "elif", "fi", "do", "done", "while", "until", "time"]);
-  const WRAPPERS = new Set(["env", "command", "builtin", "exec", "nohup", "sudo", "doas", "nice", "timeout", "stdbuf", "time", "xargs"]);
+  const KEYWORDS = new Set(["!", "{", "}", "if", "then", "else", "elif", "fi", "do", "done", "while", "until"]);
+  const WRAPPERS = new Set(["env", "command", "builtin", "exec", "nohup", "sudo", "doas", "nice", "timeout", "stdbuf", "time", "xargs",
+    "npx", "bunx", "pnpx"]);
+  /** Package runners spelled as a program and a subcommand; each runs its first positional word as a program. */
+  const RUNNERS = new Set(["npm exec", "npm x", "pnpm dlx", "pnpm exec", "yarn dlx", "yarn exec", "bun x"]);
+  const RUNNER_OPTIONS: readonly [string, string[], string[]] = ["pw", ["--package", "--workspace", "--filter"], ["-c", "--call", "--shell-mode"]];
+  const NO_OPTIONS: readonly [string, string[], string[]] = ["", [], []];
+  /**
+   * Per wrapper: the short letters and the long options that take a value (the next word when nothing is attached),
+   * and the options whose value is a command line of its own (`env -S`, a runner's `-c`).
+   */
+  const WRAPPER_OPTIONS = new Map<string, readonly [string, string[], string[]]>([
+    ["env", ["uCP", ["--unset", "--chdir"], ["-S", "--split-string"]]],
+    ["sudo", ["ugpCrtUDRT", ["--user", "--group", "--prompt", "--close-from", "--role", "--type", "--other-user", "--chdir",
+      "--chroot", "--command-timeout", "--host"], []]],
+    ["doas", ["uC", [], []]],
+    ["exec", ["a", [], []]],
+    ["nice", ["n", ["--adjustment"], []]],
+    ["timeout", ["sk", ["--signal", "--kill-after"], []]],
+    ["stdbuf", ["ioe", ["--input", "--output", "--error"], []]],
+    ["time", ["fo", ["--format", "--output"], []]],
+    ["xargs", ["ILnPsdEa", ["--max-args", "--max-procs", "--max-chars", "--delimiter", "--arg-file", "--process-slot-var"], []]],
+    ["npx", RUNNER_OPTIONS],
+    ["bunx", RUNNER_OPTIONS],
+    ["pnpx", RUNNER_OPTIONS],
+  ]);
+  /** The one-letter escapes of ANSI-C quoting (`$'…'`). */
+  const ANSI_ESCAPES = new Map([["n", "\n"], ["t", "\t"], ["r", "\r"], ["a", "\x07"], ["b", "\b"], ["e", "\x1b"], ["E", "\x1b"],
+    ["f", "\f"], ["v", "\v"], ["\\", "\\"], ["'", "'"], ['"', '"'], ["?", "?"]]);
   const SHELLS = new Set(["sh", "bash", "zsh", "dash", "ksh"]);
 
   /** A program word as the shell finds it: its last path part, without case or a Windows suffix. */
@@ -243,6 +284,36 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
           }
         }
         i += 1;
+      } else if (ch === "$" && text[i + 1] === '"') {
+        // `$"…"` (locale quoting) is a double-quoted word.
+        i += 1;
+      } else if (ch === "$" && text[i + 1] === "'") {
+        // `$'…'` (ANSI-C quoting): the word is the quoted text with its escapes decoded, so `$'\x2df'` reads `-f`.
+        let j = i + 2;
+        while (j < text.length && text[j] !== "'") {
+          const c = text[j] ?? "";
+          const next = text[j + 1] ?? "";
+          const code = /^(?:x[0-9A-Fa-f]{1,2}|u[0-9A-Fa-f]{1,4}|U[0-9A-Fa-f]{1,8}|[0-7]{1,3})/.exec(text.slice(j + 1, j + 10))?.[0];
+          if (c !== "\\" || j + 1 >= text.length) {
+            word += c;
+            j += 1;
+          } else if (ANSI_ESCAPES.has(next)) {
+            word += ANSI_ESCAPES.get(next) ?? "";
+            j += 2;
+          } else if (code !== undefined) {
+            const point = /^[0-7]/.test(code) ? Number.parseInt(code, 8) : Number.parseInt(code.slice(1), 16);
+            word += point <= 0x10ffff ? String.fromCodePoint(point) : "�";
+            j += 1 + code.length;
+          } else if (next === "c" && j + 2 < text.length) {
+            word += String.fromCharCode(text.charCodeAt(j + 2) & 0x1f);
+            j += 3;
+          } else {
+            word += c + next;
+            j += 2;
+          }
+        }
+        inWord = true;
+        i = j + 1;
       } else if (ch === "\\") {
         const next = text[i + 1];
         if (next !== undefined && next !== "\n") {
@@ -282,15 +353,57 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     const commands: string[][] = [];
     for (const words of segments) {
       let k = 0;
-      while (k < words.length) {
+      let line: string | null = null;
+      while (k < words.length && line === null) {
         const word = words[k] ?? "";
+        const runner = `${programName(word)} ${words[k + 1] ?? ""}`;
         if (ASSIGNMENT.test(word) || KEYWORDS.has(word)) {
           k += 1;
-        } else if (WRAPPERS.has(programName(word))) {
-          k += 1;
-          while (k < words.length && /^(-|\d)/.test(words[k] ?? "")) k += 1;
-          while (k < words.length && ASSIGNMENT.test(words[k] ?? "")) k += 1;
+        } else if (WRAPPERS.has(programName(word)) || RUNNERS.has(runner)) {
+          // A wrapper's options are skipped with their values, so `sudo -u root git …` reads `git` as the program.
+          const [short, long, lineOptions] = RUNNERS.has(runner)
+            ? RUNNER_OPTIONS
+            : (WRAPPER_OPTIONS.get(programName(word)) ?? NO_OPTIONS);
+          k += RUNNERS.has(runner) ? 2 : 1;
+          while (k < words.length) {
+            const option = words[k] ?? "";
+            if (ASSIGNMENT.test(option)) {
+              k += 1;
+              continue;
+            }
+            if (!/^(-|\d)/.test(option)) break;
+            k += 1;
+            if (option === "--") break;
+            let value: string | undefined;
+            let isLine = false;
+            if (option.startsWith("--")) {
+              const name = option.split("=")[0] ?? "";
+              if (long.includes(name) || lineOptions.includes(name)) {
+                isLine = lineOptions.includes(name);
+                value = option.includes("=") ? option.slice(name.length + 1) : words[k];
+                if (!option.includes("=")) k += 1;
+              }
+            } else if (option.startsWith("-")) {
+              for (let c = 1; c < option.length; c += 1) {
+                const letter = option[c] ?? "";
+                if (!short.includes(letter) && !lineOptions.includes(`-${letter}`)) continue;
+                isLine = lineOptions.includes(`-${letter}`);
+                value = c === option.length - 1 ? words[k] : option.slice(c + 1);
+                if (c === option.length - 1) k += 1;
+                break;
+              }
+            }
+            // An option whose value is a command line (`env -S '…'`, `npx -c '…'`): that line is what runs.
+            if (isLine && value !== undefined) {
+              line = [value, ...words.slice(k)].join(" ");
+              break;
+            }
+          }
         } else break;
+      }
+      if (line !== null) {
+        if (depth < 4) commands.push(...commandsOf(line, depth + 1));
+        continue;
       }
       const cmd = words.slice(k);
       if (cmd.length === 0) continue;
@@ -339,7 +452,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
 
   /**
    * An HTTP call's method (the tool's default unless a flag or a body sets it), whether that is a write, and each
-   * target's path below its repository or organisation (`repos/<o>/<r>/` cut), without scheme, host or query.
+   * target's path below its repository or organisation (`repos/<o>/<r>/` cut), without scheme, host, query or a
+   * trailing slash; the repository's own path stays whole.
    */
   function httpCall(cmd: string[]): { write: boolean; method: string; paths: string[] } {
     const tool = cmd[0] ?? "";
@@ -403,6 +517,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         .replace(/^\/+/, "")
         .replace(/^api\/v3\//i, "")
         .split(/[?#]/)[0] ?? "")
+        // A trailing slash dropped first, so the bare repository path stays `repos/<o>/<r>` (or `repositories/<id>`).
+        .replace(/\/+$/, "")
         .replace(/^repos\/[^/]+\/[^/]+\//i, "")
         .replace(/^(orgs|enterprises|users|repositories)\/[^/]+\//i, ""),
     );
@@ -439,6 +555,9 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     let matching = false;
     let repoGiven = false;
     const positionals: string[] = [];
+    // Refspecs a `-c` pair on the line supplies when the line names none: `remote.<name>.push`, and the upstream
+    // a `branch.<name>.merge` names (where `push.default=upstream` sends a refspec-less push).
+    const configured: string[] = [];
     for (const pair of config) {
       const eq = pair.indexOf("=");
       const key = (eq === -1 ? pair : pair.slice(0, eq)).toLowerCase();
@@ -446,6 +565,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       const on = !["false", "no", "off", "0", ""].includes(value);
       if ((key === "push.followtags" || /^remote\..+\.mirror$/.test(key)) && on) tags = true;
       if (key === "push.default" && value === "matching") matching = true;
+      if (/^remote\..+\.push$/.test(key) && eq !== -1) configured.push(pair.slice(eq + 1));
+      if (/^branch\..+\.merge$/.test(key) && eq !== -1) configured.push(`HEAD:${pair.slice(eq + 1)}`);
     }
     for (let j = 0; j < args.length; j += 1) {
       const arg = args[j] ?? "";
@@ -474,7 +595,11 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         }
       } else positionals.push(arg);
     }
-    const refspecs = repoGiven ? positionals : positionals.slice(1);
+    const named = repoGiven ? positionals : positionals.slice(1);
+    // git reads `tag <name>` as `refs/tags/<name>:refs/tags/<name>`, whatever the context lists.
+    const tagWord = named.indexOf("tag");
+    if (tagWord !== -1 && tagWord < named.length - 1) return deny("push-tags", "A push of tags");
+    const refspecs = named.length > 0 ? named : configured;
     // A reason names the act and a branch at most, never the arguments: a remote URL can carry a credential.
     if (force || refspecs.some((spec) => spec.startsWith("+"))) return deny("force-push", "A force push");
     if (remove || refspecs.some((spec) => spec.length > 1 && spec.startsWith(":"))) {
@@ -496,6 +621,16 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       if (defaults.has(name)) return deny("push-default", `A push to the default branch \`${name}\``);
       if ((name === "head" || name === "@") && onDefault) {
         return deny("push-default", "A push of `HEAD` while on the default branch");
+      }
+      // A pattern refspec (`refs/heads/*:refs/heads/*`) pushes every branch it matches: denied when a default
+      // branch, by short name or full ref, is among them.
+      const pattern = destination(spec).toLowerCase();
+      if (pattern.includes("*")) {
+        const parts = pattern.split("*").map((part) => part.replace(/[.+?^$()|[\]{}\\]/g, "\\$&"));
+        const glob = new RegExp(`^${parts.join(".*")}$`);
+        if ([...defaults].some((ref) => [ref, `heads/${ref}`, `refs/heads/${ref}`].some((full) => glob.test(full)))) {
+          return deny("push-default", "A pattern push, the default branch among the branches it matches");
+        }
       }
     }
     if (refspecs.length === 0 && (onDefault || matching)) {
@@ -541,25 +676,49 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     if ((group === "secret" || group === "variable") && sub !== undefined && !["list", "ls"].includes(sub)) {
       return deny("secrets", `A ${group} write (\`gh ${group}\`)`);
     }
-    if (group === "repo" && (sub === "delete" || sub === "archive")) {
+    if (group === "repo" && (sub === "delete" || sub === "archive" || sub === "rename" || sub === "transfer")) {
       return deny("protection", `A repository ${sub} (\`gh repo ${sub}\`)`);
     }
     if (group === "repo" && sub === "edit" && cmd.some((word) => /^--default-branch(=|$)/.test(word))) {
       return deny("protection", "A default-branch change (`gh repo edit --default-branch`)");
     }
+    if (group === "repo" && sub === "edit" && cmd.some((word) => /^--visibility(=|$)/.test(word))) {
+      return deny("protection", "A visibility change (`gh repo edit --visibility`)");
+    }
     if (group === "api") return httpVerdict(cmd);
     return null;
   }
 
-  /** A REST or GraphQL person-only act; each path is read below its repository or organisation. */
+  /**
+   * A REST or GraphQL person-only act; each path is read below its repository or organisation. A body field the
+   * line does not show reads as the API's default: no `branch` on a contents write is the default branch, and a
+   * required `base` the line cannot show (a body file, a computed `$…` value) reads as the default branch too.
+   */
   function httpVerdict(cmd: string[]): PersonOnlyVerdict | null {
     const { write, method, paths } = httpCall(cmd);
     const text = cmd.join(" ");
+    /** A body field's values as the line shows them (`-f k=v`, `--field=k=v`, `"k": "v"`), a computed `$…` dropped. */
+    const fields = (key: string): string[] =>
+      [...text.matchAll(new RegExp(`(?:^|[\\s,{=]|-[fF])"?${key}"?\\s*[=:]\\s*"?([^\\s"',}]+)`, "g"))]
+        .map((match) => match[1] ?? "")
+        .filter((value) => !value.startsWith("$"));
+    const landsOnDefault = (key: string): boolean => {
+      const named = fields(key).map(branch);
+      return named.length === 0 || named.some((name) => defaults.has(name));
+    };
+    const forced = (): boolean => fields("force").some((value) => !["false", "0", "no", "off", ""].includes(value.toLowerCase()));
     for (const path of paths) {
       const shown = `${method} ${path}`;
       if (/^graphql$/i.test(path)) {
         if (/\b(mergePullRequest|enablePullRequestAutoMerge)\b/.test(text)) return deny("pr-merge", "A GraphQL merge");
         if (/\bmarkPullRequestReadyForReview\b/.test(text)) return deny("pr-ready", "A GraphQL ready-for-review");
+        if (/\bcreateCommitOnBranch\b/.test(text) && landsOnDefault("branchName")) {
+          return deny("push-default", "A GraphQL commit to the default branch");
+        }
+        if (/\bmergeBranch\b/.test(text) && landsOnDefault("base")) {
+          return deny("push-default", "A GraphQL merge into the default branch");
+        }
+        if (/\bupdateRefs?\b/.test(text) && forced()) return deny("force-push", "A forced GraphQL ref update");
         continue;
       }
       if (!write) continue;
@@ -568,6 +727,18 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       }
       if (/^branches\/.+\/protection(\/|$)/i.test(path) || /^rulesets(\/|$)/i.test(path)) {
         return deny("protection", `A protection or ruleset write (${shown})`);
+      }
+      // The repository's own path carries its default branch, visibility, name and archived state; DELETE removes it.
+      if (/^(repos\/[^/]+\/[^/]+|repositories\/[^/]+)$/i.test(path) && (method === "PATCH" || method === "DELETE")) {
+        return deny("protection", `A repository settings write or deletion (${shown})`);
+      }
+      if (/^branches\/.+\/rename$/i.test(path)) return deny("protection", `A branch rename (${shown})`);
+      if (/^transfer$/i.test(path)) return deny("protection", `A repository transfer (${shown})`);
+      if (/^contents(\/|$)/i.test(path) && landsOnDefault("branch")) {
+        return deny("push-default", `A REST commit to the default branch (${shown})`);
+      }
+      if ((/^merges$/i.test(path) && landsOnDefault("base")) || (/^merge-upstream$/i.test(path) && landsOnDefault("branch"))) {
+        return deny("push-default", `A REST merge into the default branch (${shown})`);
       }
       if (/^((actions|dependabot|codespaces|agents)|environments\/[^/]+)\/(secrets|variables)(\/|$)/i.test(path)) {
         return deny("secrets", `A secret or variable write (${shown})`);
@@ -578,6 +749,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         if (/^git\/refs\/tags(\/|$)/i.test(path) || /(^|[=\s])refs\/tags\//i.test(text)) {
           return deny("push-tags", `A REST tag ref write (${shown})`);
         }
+        if (forced()) return deny("force-push", `A forced REST ref update (${shown})`);
         const heads = [...text.matchAll(/(?:^|[=\s/])refs\/heads\/(\S+)/gi)].map((match) => (match[1] ?? "").toLowerCase());
         if (heads.some((name) => defaults.has(name))) return deny("push-default", `A REST write to the default branch (${shown})`);
       }
@@ -606,6 +778,12 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       const { sub, args, config } = gitParts(cmd);
       if (sub === "push") verdict = pushVerdict(args, config);
       else if (sub === "tag") verdict = tagVerdict(args);
+      else if (sub === "subtree") {
+        // `git subtree push <remote> <branch>` runs `git push <remote> <split>:refs/heads/<branch>`.
+        const valued = new Set(["-P", "--prefix", "-m", "--message", "-b", "--branch", "--onto"]);
+        const words = args.filter((word, index) => !word.startsWith("-") && !valued.has(args[index - 1] ?? ""));
+        if (words[0] === "push") verdict = pushVerdict(words.slice(1), config);
+      }
     } else if (program === "gh") verdict = ghVerdict(cmd);
     else if (program === "curl" || program === "wget") verdict = httpVerdict(cmd);
     else if (["npm", "pnpm", "yarn", "bun"].includes(program)) verdict = publishVerdict(cmd);
@@ -616,7 +794,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
 
 /**
  * Whether `command` steps around the run verbs while a run is unattended
- * (REQ-FLOW-120): any `git push`, `gh pr create` or `gh pr edit`, and a `gh
+ * (REQ-FLOW-120): any `git push` or `git subtree push`, `gh pr create` or `gh pr edit`, and a `gh
  * api`, `curl` or `wget` write (POST, PATCH, PUT, DELETE) on a repository's
  * `pulls` or `pulls/<n>`, on `contents/…`, on `git/` refs or objects, or on
  * `merges`, with their GraphQL twins. A reply on `pulls/<n>/comments` or
@@ -629,8 +807,35 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
 export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
   // <shell-reading>
   const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
-  const KEYWORDS = new Set(["!", "{", "}", "if", "then", "else", "elif", "fi", "do", "done", "while", "until", "time"]);
-  const WRAPPERS = new Set(["env", "command", "builtin", "exec", "nohup", "sudo", "doas", "nice", "timeout", "stdbuf", "time", "xargs"]);
+  const KEYWORDS = new Set(["!", "{", "}", "if", "then", "else", "elif", "fi", "do", "done", "while", "until"]);
+  const WRAPPERS = new Set(["env", "command", "builtin", "exec", "nohup", "sudo", "doas", "nice", "timeout", "stdbuf", "time", "xargs",
+    "npx", "bunx", "pnpx"]);
+  /** Package runners spelled as a program and a subcommand; each runs its first positional word as a program. */
+  const RUNNERS = new Set(["npm exec", "npm x", "pnpm dlx", "pnpm exec", "yarn dlx", "yarn exec", "bun x"]);
+  const RUNNER_OPTIONS: readonly [string, string[], string[]] = ["pw", ["--package", "--workspace", "--filter"], ["-c", "--call", "--shell-mode"]];
+  const NO_OPTIONS: readonly [string, string[], string[]] = ["", [], []];
+  /**
+   * Per wrapper: the short letters and the long options that take a value (the next word when nothing is attached),
+   * and the options whose value is a command line of its own (`env -S`, a runner's `-c`).
+   */
+  const WRAPPER_OPTIONS = new Map<string, readonly [string, string[], string[]]>([
+    ["env", ["uCP", ["--unset", "--chdir"], ["-S", "--split-string"]]],
+    ["sudo", ["ugpCrtUDRT", ["--user", "--group", "--prompt", "--close-from", "--role", "--type", "--other-user", "--chdir",
+      "--chroot", "--command-timeout", "--host"], []]],
+    ["doas", ["uC", [], []]],
+    ["exec", ["a", [], []]],
+    ["nice", ["n", ["--adjustment"], []]],
+    ["timeout", ["sk", ["--signal", "--kill-after"], []]],
+    ["stdbuf", ["ioe", ["--input", "--output", "--error"], []]],
+    ["time", ["fo", ["--format", "--output"], []]],
+    ["xargs", ["ILnPsdEa", ["--max-args", "--max-procs", "--max-chars", "--delimiter", "--arg-file", "--process-slot-var"], []]],
+    ["npx", RUNNER_OPTIONS],
+    ["bunx", RUNNER_OPTIONS],
+    ["pnpx", RUNNER_OPTIONS],
+  ]);
+  /** The one-letter escapes of ANSI-C quoting (`$'…'`). */
+  const ANSI_ESCAPES = new Map([["n", "\n"], ["t", "\t"], ["r", "\r"], ["a", "\x07"], ["b", "\b"], ["e", "\x1b"], ["E", "\x1b"],
+    ["f", "\f"], ["v", "\v"], ["\\", "\\"], ["'", "'"], ['"', '"'], ["?", "?"]]);
   const SHELLS = new Set(["sh", "bash", "zsh", "dash", "ksh"]);
 
   /** A program word as the shell finds it: its last path part, without case or a Windows suffix. */
@@ -702,6 +907,36 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
           }
         }
         i += 1;
+      } else if (ch === "$" && text[i + 1] === '"') {
+        // `$"…"` (locale quoting) is a double-quoted word.
+        i += 1;
+      } else if (ch === "$" && text[i + 1] === "'") {
+        // `$'…'` (ANSI-C quoting): the word is the quoted text with its escapes decoded, so `$'\x2df'` reads `-f`.
+        let j = i + 2;
+        while (j < text.length && text[j] !== "'") {
+          const c = text[j] ?? "";
+          const next = text[j + 1] ?? "";
+          const code = /^(?:x[0-9A-Fa-f]{1,2}|u[0-9A-Fa-f]{1,4}|U[0-9A-Fa-f]{1,8}|[0-7]{1,3})/.exec(text.slice(j + 1, j + 10))?.[0];
+          if (c !== "\\" || j + 1 >= text.length) {
+            word += c;
+            j += 1;
+          } else if (ANSI_ESCAPES.has(next)) {
+            word += ANSI_ESCAPES.get(next) ?? "";
+            j += 2;
+          } else if (code !== undefined) {
+            const point = /^[0-7]/.test(code) ? Number.parseInt(code, 8) : Number.parseInt(code.slice(1), 16);
+            word += point <= 0x10ffff ? String.fromCodePoint(point) : "�";
+            j += 1 + code.length;
+          } else if (next === "c" && j + 2 < text.length) {
+            word += String.fromCharCode(text.charCodeAt(j + 2) & 0x1f);
+            j += 3;
+          } else {
+            word += c + next;
+            j += 2;
+          }
+        }
+        inWord = true;
+        i = j + 1;
       } else if (ch === "\\") {
         const next = text[i + 1];
         if (next !== undefined && next !== "\n") {
@@ -741,15 +976,57 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
     const commands: string[][] = [];
     for (const words of segments) {
       let k = 0;
-      while (k < words.length) {
+      let line: string | null = null;
+      while (k < words.length && line === null) {
         const word = words[k] ?? "";
+        const runner = `${programName(word)} ${words[k + 1] ?? ""}`;
         if (ASSIGNMENT.test(word) || KEYWORDS.has(word)) {
           k += 1;
-        } else if (WRAPPERS.has(programName(word))) {
-          k += 1;
-          while (k < words.length && /^(-|\d)/.test(words[k] ?? "")) k += 1;
-          while (k < words.length && ASSIGNMENT.test(words[k] ?? "")) k += 1;
+        } else if (WRAPPERS.has(programName(word)) || RUNNERS.has(runner)) {
+          // A wrapper's options are skipped with their values, so `sudo -u root git …` reads `git` as the program.
+          const [short, long, lineOptions] = RUNNERS.has(runner)
+            ? RUNNER_OPTIONS
+            : (WRAPPER_OPTIONS.get(programName(word)) ?? NO_OPTIONS);
+          k += RUNNERS.has(runner) ? 2 : 1;
+          while (k < words.length) {
+            const option = words[k] ?? "";
+            if (ASSIGNMENT.test(option)) {
+              k += 1;
+              continue;
+            }
+            if (!/^(-|\d)/.test(option)) break;
+            k += 1;
+            if (option === "--") break;
+            let value: string | undefined;
+            let isLine = false;
+            if (option.startsWith("--")) {
+              const name = option.split("=")[0] ?? "";
+              if (long.includes(name) || lineOptions.includes(name)) {
+                isLine = lineOptions.includes(name);
+                value = option.includes("=") ? option.slice(name.length + 1) : words[k];
+                if (!option.includes("=")) k += 1;
+              }
+            } else if (option.startsWith("-")) {
+              for (let c = 1; c < option.length; c += 1) {
+                const letter = option[c] ?? "";
+                if (!short.includes(letter) && !lineOptions.includes(`-${letter}`)) continue;
+                isLine = lineOptions.includes(`-${letter}`);
+                value = c === option.length - 1 ? words[k] : option.slice(c + 1);
+                if (c === option.length - 1) k += 1;
+                break;
+              }
+            }
+            // An option whose value is a command line (`env -S '…'`, `npx -c '…'`): that line is what runs.
+            if (isLine && value !== undefined) {
+              line = [value, ...words.slice(k)].join(" ");
+              break;
+            }
+          }
         } else break;
+      }
+      if (line !== null) {
+        if (depth < 4) commands.push(...commandsOf(line, depth + 1));
+        continue;
       }
       const cmd = words.slice(k);
       if (cmd.length === 0) continue;
@@ -798,7 +1075,8 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
 
   /**
    * An HTTP call's method (the tool's default unless a flag or a body sets it), whether that is a write, and each
-   * target's path below its repository or organisation (`repos/<o>/<r>/` cut), without scheme, host or query.
+   * target's path below its repository or organisation (`repos/<o>/<r>/` cut), without scheme, host, query or a
+   * trailing slash; the repository's own path stays whole.
    */
   function httpCall(cmd: string[]): { write: boolean; method: string; paths: string[] } {
     const tool = cmd[0] ?? "";
@@ -862,6 +1140,8 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
         .replace(/^\/+/, "")
         .replace(/^api\/v3\//i, "")
         .split(/[?#]/)[0] ?? "")
+        // A trailing slash dropped first, so the bare repository path stays `repos/<o>/<r>` (or `repositories/<id>`).
+        .replace(/\/+$/, "")
         .replace(/^repos\/[^/]+\/[^/]+\//i, "")
         .replace(/^(orgs|enterprises|users|repositories)\/[^/]+\//i, ""),
     );
@@ -892,8 +1172,12 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
   for (const cmd of commandsOf(command, 0)) {
     const program = cmd[0] ?? "";
     if (program === "git") {
-      const { sub } = gitParts(cmd);
+      const { sub, args } = gitParts(cmd);
       if (sub === "push" || sub === "send-pack") return deny(`A raw \`git ${sub}\``);
+      // `git subtree push` runs `git push` itself.
+      const valued = new Set(["-P", "--prefix", "-m", "--message", "-b", "--branch", "--onto"]);
+      const first = args.find((word, index) => !word.startsWith("-") && !valued.has(args[index - 1] ?? ""));
+      if (sub === "subtree" && first === "push") return deny("A `git subtree push`");
       continue;
     }
     let http = program === "curl" || program === "wget";

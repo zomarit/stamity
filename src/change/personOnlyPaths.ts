@@ -1,11 +1,13 @@
 /**
  * The person-only paths (REQ-FLOW-102): what an unattended run never pushes.
  *
- * CI workflows and actions, hook and guard configuration (the emitted hooks,
- * the manifest), the class file, CODEOWNERS, the charter files with Codex's
- * override, and each client's rule and instruction files decide what every
- * later run is allowed to do, so a change to one of them is the person's to
- * push. In an unattended run `stamity run checkpoint` and `run end` (u18b) move
+ * CI definitions (GitHub Actions' workflows and actions, and the pipeline files
+ * of GitLab, CircleCI, Azure Pipelines, Jenkins, Buildkite, Travis and
+ * Bitbucket), hook and guard configuration (the emitted hooks, the manifest),
+ * the class file, CODEOWNERS, the charter files with Codex's override, each
+ * client's rule and instruction files, and the agent, command, skill and
+ * MCP-server definitions the four clients read decide what every later run is
+ * allowed to do, so a change to one of them is the person's to push. In an unattended run `stamity run checkpoint` and `run end` (u18b) move
  * such a change into an inert patch under the run folder, restore those paths
  * in the index only and list it; an attended push holds nothing.
  *
@@ -25,6 +27,19 @@ export const PERSON_ONLY_PATHS: readonly string[] = [
   ".github/actions/**",
   "**/action.yml",
   "**/action.yaml",
+  // The other common CI providers' pipeline definitions, held beside GitHub Actions'.
+  ".gitlab-ci.yml",
+  ".circleci/**",
+  "azure-pipelines.yml",
+  "azure-pipelines.yaml",
+  ".azure-pipelines/**",
+  "**/Jenkinsfile",
+  ".buildkite/**",
+  "buildkite.yml",
+  "buildkite.yaml",
+  "buildkite.json",
+  ".travis.yml",
+  "bitbucket-pipelines.yml",
   ".claude/settings*.json",
   ".cursor/hooks.json",
   ".github/hooks/**",
@@ -45,6 +60,27 @@ export const PERSON_ONLY_PATHS: readonly string[] = [
   ".cursorrules",
   ".github/copilot-instructions.md",
   ".github/instructions/**",
+  // MCP-server configuration: an approved server starts a process in every later session.
+  ".mcp.json",
+  ".cursor/mcp.json",
+  ".vscode/mcp.json",
+  // Agent, command and skill definitions are the instructions later runs follow: every tree the four clients read
+  // (Stamity's emitted content roots, `src/manifest/ownedPaths.ts`, and the trees the clients read beside them),
+  // and Cursor's guard scripts beside its held `hooks.json`.
+  ".claude/agents/**",
+  ".claude/commands/**",
+  ".claude/skills/**",
+  ".agents/skills/**",
+  ".cursor/agents/**",
+  ".cursor/commands/**",
+  ".cursor/skills/**",
+  ".cursor/hooks/**",
+  ".codex/agents/**",
+  ".codex/skills/**",
+  ".github/agents/**",
+  ".github/prompts/**",
+  ".github/skills/**",
+  ".github/chatmodes/**",
 ];
 
 /** The paths of `paths` a person-only glob matches, in input order. */
