@@ -2,7 +2,7 @@
 id: model-ladder
 # A design document, authored from docs/plans/008-plugin-lifecycle-02.md on 2026-09-17, extended from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
-status: shipped-with-1.14.0
+status: shipped-with-1.15.0
 obsolete_when: every supported client publishes one effort scale the ladder can name without a per-client table and resumes, waits out and reports a sub-agent's capacity stop on its own, or a decision row cuts the surface
 ---
 # Model ladder
@@ -34,8 +34,8 @@ REQ-LADDER-007, come from the spec deltas of `docs/plans/020-cli-native-02.md`, 
 to 4, run `2026-10-14_cli-native`), merged in file order at that run's Prove phase, each entry in its amended form, and
 from the deltas its units' reports declared. Every `path:line` in that text reads at the integration head `bd89c476`.
 Where a delta and the landed code differed, the text states what the code does, and a line headed "As built" says what
-moved. A ledger id in that text (`build/66`, `review/86`) is that run's own. They ship with 1.15.0; `status` names the
-release the requirements before them shipped with. File 2's delta also removed the "never invent a value" rule from
+moved. A ledger id in that text (`build/66`, `review/86`) is that run's own. They shipped with 1.15.0, which set
+`status` to `shipped-with-1.15.0`. File 2's delta also removed the "never invent a value" rule from
 this spec's Invariants; no bullet here states it (the rule stood in the code comment of `src/roster/modelLadder.ts`
 and in `docs/configuration.md`, both superseded by the pick of REQ-LADDER-006), so the Invariants are unchanged.
 
@@ -145,8 +145,12 @@ The capacity rule is carried in the bullet's prose, with no table. A second pipe
 row up to the next heading (`test/roster/modelLadder.test.ts:130-142`). A
 `test/corpus/commands/work.test.ts` case under "dispatch contract" pins the bullet's text and
 its position. The orchestrator's conduct during a live stop is `judgment: reviewer`, read from
-the run record's capacity lines. No engine surface changes. Codex receives no touchpoint
-bodies (`docs/capability-matrix.md:240`), so the bullet has no carrier there.
+the run record's capacity lines. No engine surface changes. Codex carries the bullet too: the
+`/st-work` body ships to it as the shared skill `.agents/skills/st-work/SKILL.md`, started as `$st-work`
+(`docs/capability-matrix.md:232`, read at `c7158dbf`; REQ-FLOW-026 in `docs/specs/everyday-flows.md`). (Amended
+2026-10-15, ledger row `review/142` of run `2026-10-14_cli-native`; it read "Codex receives no touchpoint bodies
+(`docs/capability-matrix.md:240`), so the bullet has no carrier there", untrue since the touchpoints shipped as shared
+skills in 1.11.0.)
 
 ### REQ-LADDER-003 — Verdict roles never fall back; a build role drops one class only under `limit-no-reset`
 

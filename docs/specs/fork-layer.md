@@ -2,7 +2,7 @@
 id: fork-layer
 # A design document, authored outside the spec command, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-14_cli-native on 2026-10-14, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
-status: shipped-with-1.5.0
+status: shipped-with-1.15.0
 obsolete_when: the enterprise-forks guide and the customization page stop carrying the fork layer's behaviour, or a decision cuts the surface
 ---
 # The fork layer
@@ -29,8 +29,8 @@ here from `docs/specs/plugin-lifecycle.md`, each keeping its id: REQ-PLUGIN-027 
 REQ-PLUGIN-028 (the identity script, joined by the publisher half of the retired REQ-APM-007) and REQ-PLUGIN-048 (a
 registry fork's pinned calls). Each is the text as it stood there at `c96c7146`, with every route clause dropped in
 place and marked "(route clause dropped 1.15.0)", then a paragraph headed "Amended 2026-10-14" that states what
-1.15.0 holds. That text cites the tree at `d590a266`, the integration head the deletion landed on, and ships with
-1.15.0. REQ-FORK-010 and REQ-FORK-011 lose their APM halves the same day.
+1.15.0 holds. That text cites the tree at `d590a266`, the integration head the deletion landed on, and shipped with
+1.15.0, which set `status: shipped-with-1.15.0`. REQ-FORK-010 and REQ-FORK-011 lose their APM halves the same day.
 
 ## Intent
 

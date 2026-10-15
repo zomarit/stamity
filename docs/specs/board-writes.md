@@ -1,8 +1,8 @@
 ---
 id: board-writes
-# A design document, authored from docs/plans/015-board-writes.md on 2026-10-01; its requirement text merged on 2026-10-12 at the Prove phase of run 2026-10-12_board-writes, by its unit s1-spec-merge against the integration head 3415e721, and excluded from the site build.
+# A design document, authored from docs/plans/015-board-writes.md on 2026-10-01; its requirement text merged on 2026-10-12 at the Prove phase of run 2026-10-12_board-writes, by its unit s1-spec-merge against the integration head 3415e721, amended in run 2026-10-14_cli-native on 2026-10-15, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
-status: design
+status: shipped-with-1.15.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the command reference carries it, or a decision row cuts the surface
 ---
 # Board writes
@@ -11,8 +11,8 @@ What `/st-board` writes to a linked board, when it asks first, and what it never
 As built on the branch `board-writes`, the command writes to a linked board by default behind one preview per run;
 files each ready item with the labels the repository already has, a missing label staying a proposal; changes where an
 item stands only with `--move`; and keeps a fixed list of writes it never makes (`content/commands/st-board.md:13-16`,
-`:248-330`; the label rule `:96-98` and `:276-278`, read at `0b3f8bd3`). The status stays `design` until the release
-that ships the change sets `shipped-with-<version>`.
+`:248-330`; the label rule `:96-98` and `:276-278`, read at `0b3f8bd3`). The change shipped with 1.15.0, which set
+`status: shipped-with-1.15.0`.
 
 The requirement text comes from the `## Spec delta` of `docs/plans/015-board-writes.md` (`:101-347`), as the run's
 in-flow re-plan, `.stamity/runs/2026-10-12_board-writes/plan.md` (pass r2), amended it, and from the run's sign-offs
@@ -234,7 +234,7 @@ text (`:313-318`).
    and it reads no file the text names. *(eval: board-item-directive-is-data; as built, S19: the class labels are
    advisory there)*
 4. Not performed: the planted issue from a second account with `read` permission needs a second GitHub account, which
-   the maintainer does not have; `board-item-directive-is-data` (`floor: true`) carries it at the next release's full
+   the maintainer does not have; `board-item-directive-is-data` (`floor: true`) carries it at the 1.15.0 release's full
    run. *(eval)*
 
 ### REQ-BOARD-006 — Filed items converge on retry
@@ -269,7 +269,8 @@ comment, only a comment the account wrote matches, and a comment is edited by it
    idempotent by their id, and the GitHub notes say a progress comment is updated by its comment id, never with
    `--edit-last`. *(corpus; as built, the notes are the GitHub row's cells, REQ-BOARD-007)*
 4. GIVEN a `fill --source <file>` applied on the scratch repository WHEN the same `fill` runs again and is applied THEN
-   no second issue exists for any key and the report names the updated issues. *(QA R2)*
+   no second issue exists for any key and the report names the matched issues, updated or unchanged. *(QA R2;
+   amended 2026-10-15, ledger row `close/3`, QA note N1; it read "the report names the updated issues")*
 
 ### REQ-BOARD-007 — The GitHub row names every write it allows
 
@@ -401,7 +402,7 @@ characters of item, issue or epic unless a negation comes first, so the pack say
 
 Each requirement above carries its criteria under its own heading, one set per requirement. Proof tags: *(corpus)*
 means a test pins the named section text of `content/commands/st-board.md` unless another file is named; *(eval: id)*
-means the named case in `evals/cases-v6/` carries it at the next release's full run; *(QA Rn)* means row Rn of the run's
+means the named case in `evals/cases-v6/` carries it at the 1.15.0 release's full run; *(QA Rn)* means row Rn of the run's
 live walk on a scratch repository (`.stamity/runs/2026-10-12_board-writes/plan.md`, `## QA`). Once a test named under a
 requirement exists, it is the normative record for that requirement.
 
@@ -444,5 +445,5 @@ requirement exists, it is the normative record for that requirement.
 - `fill` step 5 annotates an inbox entry in place, while the Removal rule says triage does not rewrite an entry in
   place, and step 5's "re-raised in the next preview" cannot fire once only a `fill` with no linked board drains an
   entry to a proposal (`content/commands/st-board.md:83-89`, `:422`; the run plan's Follow-ups, a Minor).
-- The spec stays `design`; the release that carries the change sets `shipped-with-<version>`, and its full eval run
-  measures the moved and added cases (the run plan's Follow-ups).
+- The spec stayed `design` until 1.15.0, which set `shipped-with-1.15.0`; that release's full eval run measures the
+  moved and added cases (the run plan's Follow-ups).

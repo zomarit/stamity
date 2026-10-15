@@ -2,7 +2,7 @@
 id: everyday-flows
 # A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-12_board-writes on 2026-10-12, one citation re-pointed in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
-status: shipped-with-1.14.0
+status: shipped-with-1.15.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the command reference carries it, or a decision row cuts the surface
 ---
 # Everyday flows
@@ -58,8 +58,8 @@ the texts; it is cited there by file and not by line.
 
 REQ-FLOW-078 and REQ-FLOW-079, REQ-FLOW-025's amendment and the other text dated 2026-10-12 come from the spec delta of
 run `2026-10-12_board-writes` (plan 015, re-planned in that run as `.stamity/runs/2026-10-12_board-writes/plan.md`),
-merged by its unit `s1-spec-merge` against the integration head `3415e721`. They ship with the next release; `status`
-names the release the requirements before them shipped with. Where a delta entry and the landed text differ, the text
+merged by its unit `s1-spec-merge` against the integration head `3415e721`. They shipped with 1.15.0, which set
+`status: shipped-with-1.15.0`. Where a delta entry and the landed text differ, the text
 states what that head holds, and a line headed "As built" says what moved. A ledger id in that text (`review/38`,
 `build/3`) is that run's own unless a run is named beside it. The same pass re-pointed to `3415e721` every citation in
 this file of `content/commands/st-board.md`, `content/commands/st-work.md`, `content/commands/st-plan.md`,
@@ -104,7 +104,7 @@ inside the moved text is dropped in place and marked "(route clause dropped 1.15
 2026-10-14" under each says what 1.15.0 holds, citing the tree at `d590a266`, the integration head the deletion landed
 on. The same pass dropped the route clauses of REQ-FLOW-002, REQ-FLOW-025, REQ-FLOW-026, REQ-FLOW-038 and REQ-FLOW-063,
 and, folding the inbox row `2026-10-11_release-1-14-0/review/5`, restated REQ-FLOW-071's sentence on the live run. It
-ships with 1.15.0.
+shipped with 1.15.0.
 
 REQ-FLOW-080 to REQ-FLOW-088, and the text dated 2026-10-15, come from the spec deltas of
 `docs/plans/020-cli-native-02.md`, `-03.md` and `-04.md` (plan 020 files 2 to 4, the same run), merged once, in file
@@ -114,7 +114,7 @@ this merge ran: `e10-cloud-docs-matrix`, read at its commit `fee88300`, and `e12
 `ecf11a74`; a citation of either names that commit. Where a delta and the landed code differed, the text states what
 the code does, and a line headed "As built" says what moved. A ledger id in that text (`review/61`, `build/66`) is that
 run's own. The charter's invariants moved to 1.3.0 in the same files (invariants 2 and 5; invariant 6 rewrapped, its
-words unchanged), with a row in `docs/doctrine.md`; the charter carries no ids. It ships with 1.15.0.
+words unchanged), with a row in `docs/doctrine.md`; the charter carries no ids. It shipped with 1.15.0.
 
 ## Intent
 

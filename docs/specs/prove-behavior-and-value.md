@@ -2,7 +2,7 @@
 id: prove-behavior-and-value
 # A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-11_release-1-14-0 on 2026-10-11 and 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023).
-status: shipped-with-1.14.0
+status: shipped-with-1.15.0
 obsolete_when: the measurement page, the security mapping and the QA evidence file are all generated from live data by the engine itself, or a decision row cuts the surface
 ---
 # Prove behavior and value
@@ -53,7 +53,7 @@ REQ-PROVE-023 to REQ-PROVE-025, and the text dated 2026-10-14 under REQ-PROVE-00
 REQ-PROVE-020, REQ-PROVE-021, REQ-PROVE-030, REQ-PROVE-031, REQ-PROVE-033 and REQ-PROVE-036, come from the spec delta
 of `docs/plans/014-lean-repository-02.md` (plan 014 file 2) as re-planned in run `2026-10-13_records-branch`, and from
 the deltas its units' reports declared, merged at that run's Prove phase. They cite the branch head `4d003d60`, where
-the records had left `main`; they ship with the next release. A sign-off named `S<n>` there is that night's, recorded
+the records had left `main`; they shipped with 1.15.0. A sign-off named `S<n>` there is that night's, recorded
 in the "Sign-offs" section of `.stamity/runs/2026-10-13_lean-repository/record.md`. The records moved to the `records`
 branch the same day: every path in this file that names one of this repository's own records reads on that branch
 (REQ-PROVE-023), and a citation of one keeps its text.
@@ -66,13 +66,13 @@ nightly guard and the records job) and REQ-PLUGIN-025 (the release eval artifact
 the amendments with a CI or release job, as they stood there at `c96c7146`; the plugin route's proofs retire in that
 spec's stub. It also amends REQ-PROVE-002, REQ-PROVE-003, REQ-PROVE-021, REQ-PROVE-025, REQ-PROVE-030, REQ-PROVE-031
 and REQ-PROVE-033 where they named the deleted routes, and cites the tree at `d590a266`, the integration head the
-deletion landed on. It ships with 1.15.0.
+deletion landed on. It shipped with 1.15.0.
 
 REQ-PROVE-037, and the text dated 2026-10-15 under REQ-PROVE-017, REQ-PROVE-023, REQ-PROVE-025 and REQ-PLUGIN-020, come
 from the spec deltas of `docs/plans/020-cli-native-02.md` and `-04.md` (plan 020 files 2 and 4, the same run), merged in
 file order at that run's Prove phase, each entry in its amended form, with the as-built corrections its units' reports
 declared. They cite the integration head `bd89c476`; a ledger id in that text (`review/47`, `build/39`) is that run's
-own. They ship with 1.15.0.
+own. They shipped with 1.15.0, which set `status: shipped-with-1.15.0`.
 
 ## Intent
 
