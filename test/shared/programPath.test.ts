@@ -329,6 +329,22 @@ describe("gitProgramFor", () => {
     }
   });
 
+  it("passes over a git in a node_modules/.bin folder, at any depth and however its end is spelled", async () => {
+    const vendored = getRoot().path("repo", "node_modules", ".bin");
+    const nested = getRoot().path("repo", "packs", "x", "node_modules", ".bin");
+    const bin = getRoot().path("bin");
+    const work = getRoot().path("work");
+    await Promise.all([seedGit(vendored), seedGit(nested), seedGit(bin), mkdir(work)]);
+
+    // Non-degenerate: the plain walk takes the first entry's git.
+    const path = [vendored, `${nested}${sep}`, bin].join(delimiter);
+    expect(resolveProgramOnPath("git", { platform: process.platform, path, cwd: work, probe: fileSystemProbe })).toBe(
+      join(vendored, GIT_FILE),
+    );
+    expect(gitProgramFor(work, { PATH: path })).toBe(join(bin, GIT_FILE));
+    expect(gitProgramFor(work, { PATH: [vendored, nested].join(delimiter) })).toBeNull();
+  });
+
   it("keeps no answer of nothing: a working folder made later, or a git installed later, is found", async () => {
     const bin = getRoot().path("bin");
     const work = getRoot().path("work");

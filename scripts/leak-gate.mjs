@@ -607,6 +607,11 @@ const EMAIL_FIXTURES = []
  * and `--include-build` over a packed runtime reads every one of them. This is an exemption by
  * PATH, printed with the files it dropped like every other; every other rule — credential shapes
  * included — still reads these files exactly as before, so a secret vendored in is still a hit.
+ *
+ * It covers an UNTRACKED file alone. An installed package is never a tracked file of this tree,
+ * while a committed one under a folder of that name (a run record's, say) is the tree's own text,
+ * so the rule reads it. Kept off the rule's `allow` list for the same reason: the hygiene check's
+ * scan of added lines reads `allow`, and every line it reads is tracked.
  */
 const VENDOR_EMAIL_PATHS = ['node_modules/', '**/node_modules/**']
 
@@ -686,7 +691,8 @@ const EMAIL_RULES = [
     id: 'email-address',
     source: EMAIL_SOURCE,
     flags: 'gi',
-    allow: [...VENDOR_EMAIL_PATHS, ...EMAIL_FIXTURES.map(([path]) => path)],
+    allow: EMAIL_FIXTURES.map(([path]) => path),
+    vendored: VENDOR_EMAIL_PATHS,
     drop: isNotAnAddress,
     redact: true,
   },
@@ -703,6 +709,8 @@ export const RULES = [...NAME_RULES, ...PRIVATE_RULES, ...SECRET_RULES, ...EMAIL
   // for none — their alphabets are the issuer's, and a shape invented by a fold is noise.
   normalizedViews: rule.flags.includes('i') ? ['folded'] : (rule.normalized ?? []),
   allow: rule.allow.map(toMatcher),
+  // Path exemptions that hold for an untracked file only (`VENDOR_EMAIL_PATHS`).
+  vendored: (rule.vendored ?? []).map(toMatcher),
   // A narrowing of the rule's own shape, `(hit) => boolean`, true to drop the hit; `null` for a
   // rule whose pattern is its whole shape. `hit` is `{ match, text, index, source }`, `source`
   // being `{ text, map }` on a normalizing fold (the view it folded, and the fold's index map)
@@ -745,6 +753,59 @@ function listFromGit() {
       { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] },
     )
     return stdout.split('\0').filter(Boolean)
+  } catch {
+    return null
+  }
+}
+
+/** The tracked files alone, or an empty set where git cannot list them (an extracted artifact). */
+function trackedFromGit() {
+  try {
+    const stdout = execFileSync('git', ['-C', ROOT, 'ls-files', '-z', '--cached'], {
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+    return new Set(stdout.split('\0').filter(Boolean))
+  } catch {
+    return new Set()
+  }
+}
+
+/**
+ * The listed paths a `working-tree-encoding` attribute applies to, each with the encoding it names.
+ * Git writes such a tracked file to disk in that encoding and stores it as UTF-8, so the bytes this
+ * gate reads off disk are not the bytes git publishes: the attribute comes from the tree's own
+ * `.gitattributes`, and an encoding none of the views reads (EBCDIC) hides every token. Empty where
+ * git cannot answer, which is also where nothing is re-encoded.
+ */
+function reencodedFromGit(paths) {
+  if (paths.length === 0) return new Map()
+  try {
+    const fields = execFileSync('git', ['-C', ROOT, 'check-attr', '-z', '--stdin', 'working-tree-encoding'], {
+      input: `${paths.join('\0')}\0`,
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+      stdio: ['pipe', 'pipe', 'ignore'],
+    }).split('\0')
+    const reencoded = new Map()
+    for (let at = 0; at + 2 < fields.length; at += 3) {
+      const value = fields[at + 2]
+      if (value !== 'unspecified' && value !== 'unset') reencoded.set(fields[at], value)
+    }
+    return reencoded
+  } catch {
+    return new Map()
+  }
+}
+
+/** A tracked file's bytes as git stores them in the index, or null when git cannot give them. */
+function indexBlob(file) {
+  try {
+    return execFileSync('git', ['-C', ROOT, 'cat-file', 'blob', `:./${file}`], {
+      maxBuffer: 256 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
   } catch {
     return null
   }
@@ -866,8 +927,8 @@ const NORMALIZED_PASSES = [
  * Findings are keyed by (rule, file, byte offset) so a plain ASCII hit found by the latin1 view
  * and again by its normalized twin is one finding, reported at the offset an operator can seek to.
  */
-function scanContent(file, bytes, rules, hits, seen) {
-  const shown = maskAddresses(file)
+function scanContent(file, bytes, rules, hits, seen, origin = '') {
+  const shown = `${maskAddresses(file)}${origin}`
   const views = decodeCandidates(bytes)
   const scannable = views.map((view) => ({ ...view, normalized: null, source: null }))
   // Which folds this file's SURVIVING rules read — the allowlists run first, so a file where the
@@ -910,7 +971,7 @@ function scanContent(file, bytes, rules, hits, seen) {
       if (view.normalized !== null && !rule.normalizedViews.includes(view.normalized)) continue
       for (const hit of collect(rule, view.text, view.source)) {
         const offset = view.byteAt(hit.index)
-        const key = `${rule.id}\0${file}\0${offset}`
+        const key = `${rule.id}\0${file}${origin}\0${offset}`
         if (seen.has(key)) continue
         seen.add(key)
         const where =
@@ -932,7 +993,10 @@ function scanContent(file, bytes, rules, hits, seen) {
 }
 
 function run() {
-  const listed = [...new Set(listFromGit() ?? listFromDisk(ROOT, []))].toSorted()
+  const fromGit = listFromGit()
+  const listed = [...new Set(fromGit ?? listFromDisk(ROOT, []))].toSorted()
+  const tracked = fromGit === null ? new Set() : trackedFromGit()
+  const reencoded = fromGit === null ? new Map() : reencodedFromGit(listed)
   const hits = []
   const seen = new Set()
   const census = { text: 0, binary: 0, symlink: 0 }
@@ -949,7 +1013,8 @@ function run() {
     // exempt, so the one exemption that exists — two directories, one rule — never printed a
     // line and the branch that would have printed it was unreachable.
     const rules = RULES.filter((rule) => {
-      if (!rule.allow.some((allowed) => allowed(file))) return true
+      const vendored = !tracked.has(file) && rule.vendored.some((matches) => matches(file))
+      if (!vendored && !rule.allow.some((allowed) => allowed(file))) return true
       ruleDrops.get(rule.id).push(file)
       return false
     })
@@ -1026,6 +1091,23 @@ function run() {
       throw error
     }
     census[scanContent(file, bytes, rules, hits, seen)] += 1
+
+    // A file git re-encodes on checkout is read again as git stores it. An untracked one has no
+    // stored form yet, and its bytes are in an encoding the views may not read, so it fails.
+    const encoding = reencoded.get(file)
+    if (encoding !== undefined) {
+      const stored = tracked.has(file) ? indexBlob(file) : null
+      if (stored === null) {
+        hits.push({
+          file,
+          rule: 'working-tree-encoding',
+          match: encoding,
+          where: `${maskAddresses(file)} (.gitattributes)`,
+        })
+      } else {
+        scanContent(file, stored, rules, hits, seen, ' (as git stores it)')
+      }
+    }
   }
 
   // Every path whose CONTENT was not read is named, not counted, and it is named on the FAILING
@@ -1072,6 +1154,8 @@ function run() {
     console.error('  may already be in history — then remove it and re-run.')
     console.error('  A private-layer hit: this tree refers to those rows and that checkout descriptively')
     console.error('  ("the intake decision", "the private layer"), so respell the reference.')
+    console.error('  A working-tree-encoding hit: git re-encodes this file on checkout, so its bytes on disk')
+    console.error('  are not what git stores. Stage it so the stored form is read, or drop the attribute.')
     console.error('  An email-address hit: the address is withheld here. Respell it at a reserved domain')
     console.error('  (a name under .invalid or example.com), or add an exact path with its reason to')
     console.error('  EMAIL_FIXTURES if the address has to be real.')

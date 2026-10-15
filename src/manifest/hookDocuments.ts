@@ -298,6 +298,17 @@ const STARTER_BESIDE_TRUST_HEAD =
   `if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run `;
 const STARTER_BESIDE_TRUST_TAIL = `');process.exitCode=1;break;}${STARTER_RUN}${STARTER_WALK}`;
 
+/**
+ * The same tail on an authored pre-tool-use row from 1.15.0 on, where the
+ * starter's own failures exit 2 as the runner does on that row
+ * (`../hooks/portableRunner.ts`'s `portableHookCommand`). Every other row, and
+ * every earlier release, keeps the exit-1 tail.
+ */
+const STARTER_BESIDE_TRUST_GATE_TAIL = STARTER_BESIDE_TRUST_TAIL.replaceAll("exitCode=1;", "exitCode=2;").replace("status??1;", "status??2;");
+
+/** The core pre-tool-use guard's script name (`../hooks/portableRunner.ts`'s `CORE_GUARD_FILE`), whose row keeps the exit-1 tail. */
+const CORE_GUARD_FILE = "stamity-pre-tool-use-guard.mjs";
+
 /** The characters a sync call in the starter may carry (`../hooks/portableRunner.ts`'s, `:` and `=` for a registry fork). */
 const STARTER_CALL = /^[A-Za-z0-9@/._~+ :=-]+$/;
 
@@ -368,8 +379,22 @@ function isEngineStarter(command: string): boolean {
   const body = starterBody(command);
   if (body === null) return false;
   if (body === STARTER_WALK_TO_RUNNER) return true;
-  if (!body.startsWith(STARTER_BESIDE_TRUST_HEAD) || !body.endsWith(STARTER_BESIDE_TRUST_TAIL)) return false;
-  return STARTER_CALL.test(body.slice(STARTER_BESIDE_TRUST_HEAD.length, body.length - STARTER_BESIDE_TRUST_TAIL.length));
+  if (!body.startsWith(STARTER_BESIDE_TRUST_HEAD)) return false;
+  const tail = body.endsWith(STARTER_BESIDE_TRUST_TAIL)
+    ? STARTER_BESIDE_TRUST_TAIL
+    : body.endsWith(STARTER_BESIDE_TRUST_GATE_TAIL) && isAuthoredGateRow(command)
+      ? STARTER_BESIDE_TRUST_GATE_TAIL
+      : null;
+  if (tail === null) return false;
+  return STARTER_CALL.test(body.slice(STARTER_BESIDE_TRUST_HEAD.length, body.length - tail.length));
+}
+
+/** True when a starter's encoded row is one the renderer gives the exit-2 tail: an authored pre-tool-use row, not the core guard's. */
+function isAuthoredGateRow(command: string): boolean {
+  const row = encodedRow(command);
+  if (row === null || row.event !== "pre_tool_use") return false;
+  const script = row.command[1] ?? "";
+  return script.slice(script.lastIndexOf("/") + 1) !== CORE_GUARD_FILE;
 }
 
 /**

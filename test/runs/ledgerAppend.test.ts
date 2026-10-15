@@ -24,6 +24,7 @@ import {
   requireRunDir,
   resolveReportPath,
 } from "../../src/runs/ledgerStore.ts";
+import { LEDGER_READ_MAX_BYTES } from "../../src/runs/layout.ts";
 import { useCliFixture } from "../support/cliHarness.ts";
 import { runInProcess } from "../support/inProcess.ts";
 import { parseLedger } from "../support/ledgerGrammar.ts";
@@ -798,6 +799,24 @@ describe("appendFindings", () => {
     await symlink(dir.path("elsewhere.jsonl"), dir.path(LEDGER));
     await expect(append(dir, [finding()])).rejects.toMatchObject({ code: "FS_ERROR" });
     expect(await readText(dir, "elsewhere.jsonl")).toBe("");
+  });
+
+  it("refuses a ledger over the read ceiling, naming it, and appends to one at the ceiling", async () => {
+    const dir = tempDir();
+    // One row, then padding lines that are not rows, to exactly the ceiling.
+    const head = `{"id":"${RUN}/review/1","phase":"review","source":"reviewer","severity":"Minor","evidence":"x","state":"open","rationale":""}\n`;
+    const atCeiling = head + `${"x".repeat(LEDGER_READ_MAX_BYTES - head.length - 1)}\n`;
+    await seedRun(dir, { [LEDGER]: `${atCeiling}y` });
+
+    await expect(append(dir, [finding()])).rejects.toMatchObject({
+      code: "FS_ERROR",
+      message: expect.stringContaining(`${LEDGER_READ_MAX_BYTES} byte read ceiling`),
+    });
+    expect((await stat(dir.path(LEDGER))).size).toBe(LEDGER_READ_MAX_BYTES + 1);
+
+    await writeFile(dir.path(LEDGER), atCeiling);
+    const result = await append(dir, [finding()]);
+    expect(result.rows.map((row) => row.ledgerId)).toEqual([`${RUN}/review/2`]);
   });
 });
 

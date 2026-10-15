@@ -369,7 +369,10 @@ describe("portable native hook boundary", () => {
     const result = spawnSync(process.execPath, ["-e", program![1]!, program![2]!], {
       cwd: orphan, shell: false, input: "{}", encoding: "utf8",
     });
-    expect(result.status).toBe(1);
+    // TEST CHANGE, justified: this row is an authored Codex pre-tool-use row, where a fault inside
+    // the runner exits 2; the starter's own failure now takes the same exit, since Codex lets a
+    // call through on any other non-zero one. The refusal and its message are unchanged.
+    expect(result.status).toBe(2);
     expect(result.stderr).toContain("Stamity hook project root not found");
     expect(result.stdout).toBe("");
   });
@@ -388,7 +391,10 @@ describe("portable native hook boundary", () => {
     const result = spawnSync(process.execPath, ["-e", program![1]!, program![2]!], {
       cwd: project, shell: false, input: "{}", encoding: "utf8",
     });
-    expect(result.status).toBe(1);
+    // TEST CHANGE, justified: an authored Codex pre-tool-use row; a missing runner now exits 2, the
+    // runner's own fault exit on that row, rather than the 1 Codex lets the call through on. The
+    // message naming the pinned call is unchanged.
+    expect(result.status).toBe(2);
     expect(result.stderr).toBe(
       "Stamity hook script missing beside .codex/hooks.json; run npx -y @zomarit/stamity@1.0.0-golden sync",
     );
@@ -407,9 +413,39 @@ describe("portable native hook boundary", () => {
     const result = spawnSync(process.execPath, ["-e", program![1]!, program![2]!], {
       cwd: project, shell: false, input: "{}", encoding: "utf8",
     });
-    expect(result.status).toBe(1);
+    // TEST CHANGE, justified: the same authored Codex pre-tool-use row as above, so the same exit 2.
+    expect(result.status).toBe(2);
     // The call reaches the reader whole: the registry argument and the spec it precedes.
     expect(result.stderr).toBe(`Stamity hook script missing beside .codex/hooks.json; run ${syncCall}`);
+  });
+
+  it("fails closed on Codex only where the runner does: an authored pre-tool-use row exits 2, every other row 1", async () => {
+    const project = await mkdtemp(join(tmpdir(), "stamity-hook-closed-"));
+    roots.push(project);
+    await mkdir(join(project, ".codex"), { recursive: true });
+    await writeFile(join(project, ".codex", "hooks.json"), "{}\n");
+    const orphan = await mkdtemp(join(tmpdir(), "stamity-hook-closed-orphan-"));
+    roots.push(orphan);
+    const rows: [HookInterchange, number][] = [
+      [{ event: "pre_tool_use", command: ["node", ".codex/hooks/check.mjs"] }, 2],
+      [{ event: "pre_tool_use", command: ["node", ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs"] }, 1],
+      [{ event: "post_tool_use", command: ["node", "check.mjs"] }, 1],
+      [{ event: "session_start", command: ["node", "check.mjs"] }, 1],
+    ];
+    for (const [hook, exit] of rows) {
+      const program = /^node -e "(.*)" ([A-Za-z0-9_-]+)$/s.exec(portableHookCommand("codex", hook, SYNC));
+      expect(program).not.toBeNull();
+      for (const cwd of [project, orphan]) {
+        const result = spawnSync(process.execPath, ["-e", program![1]!, program![2]!], {
+          cwd, shell: false, input: "{}", encoding: "utf8",
+        });
+        expect(result.status, `${hook.event} ${hook.command[1]} in ${cwd === project ? "the project" : "no project"}`).toBe(exit);
+      }
+    }
+    // Every row but the authored pre-tool-use one keeps its starter's bytes, and so the trust Codex recorded.
+    const guardRow = rows[1]![0];
+    expect(portableHookCommand("codex", guardRow, SYNC)).toContain("process.exitCode=1;break;");
+    expect(portableHookCommand("codex", guardRow, SYNC)).toContain("process.exitCode=r.status??1;");
   });
 
   it("refuses to render the Codex starter without a pinned sync call, or with one carrying shell syntax", () => {
@@ -431,6 +467,23 @@ describe("portable native hook boundary", () => {
     const result = execute(f);
     expect(result.status).toBe(tool === "codex" ? 2 : 1);
     expect(result.stderr).toContain("Hook process failed");
+  });
+
+  it("blocks with 2 on Codex when an authored pre-tool-use hook fails with any status, and passes the status on every other row", async () => {
+    await Promise.all(["process.exit(1);", "process.exit(3);", "throw new Error('authored hook crashed');"].map(async (body) => {
+      const result = execute(await fixture("codex", body));
+      expect(result.status, `codex authored pre-tool-use: ${body}`).toBe(2);
+    }));
+    // The core guard is telemetry on Codex, and the other events decide nothing: their status passes as it was.
+    const guard = ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs";
+    const core = await fixture("codex", "", { command: [process.execPath, guard] });
+    await writeFile(join(core.root, ...guard.split("/")), "process.exit(1);");
+    expect(execute(core).status).toBe(1);
+    expect(execute(await fixture("codex", "process.exit(3);", { event: "post_tool_use" })).status).toBe(3);
+    // Cursor and Copilot keep the child's own status on the same row.
+    await Promise.all((["cursor", "copilot"] as const).map(async (tool) => {
+      expect(execute(await fixture(tool, "process.exit(3);")).status, tool).toBe(3);
+    }));
   });
 
   it("keeps Copilot timeouts fail-open and Cursor timeouts visible to failClosed", async () => {
@@ -602,12 +655,14 @@ describe("portable native hook boundary", () => {
   });
 
   // The same unread input, with a hook that fails: the runner passes on the child's own status, 3, not its own 1.
+  // TEST CHANGE, justified: on Codex this authored pre-tool-use row now blocks with 2 on any failing status, as the
+  // case "blocks with 2 on Codex when an authored pre-tool-use hook fails…" holds; the unread input is still not a fault.
   it.each(["cursor", "copilot", "codex"] as const)("%s passes on the child's own failing status when the child exits without reading its whole input", async (tool) => {
     const f = await fixture(tool, 'process.stderr.write("child-ran-without-reading\\n"); process.exit(3);');
     const result = execute(f, { toolName: "bash", toolArgs: { command: "x".repeat(1024 * 1024) } });
     expect(result.stderr).toContain("child-ran-without-reading");
     expect(result.stderr).not.toContain("Hook process failed");
-    expect(result.status, result.stderr).toBe(3);
+    expect(result.status, result.stderr).toBe(tool === "codex" ? 2 : 3);
   });
 
   // The same unread input, with a hook that decides: its stdout still reaches the client as that client's own deny.

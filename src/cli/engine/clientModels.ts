@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import {
   fileSystemProbe,
   isFullPath,
+  isNodeModulesBin,
   resolveProgramOnPath,
   searchPathOf,
   type ProgramFileProbe,
@@ -204,12 +205,6 @@ export interface ListClientModelsOptions {
   readonly home?: string;
 }
 
-/** A `PATH` entry npm or `npx` adds for a project's installed binaries, at any level. */
-const NODE_MODULES_BIN = {
-  posix: /(?:^|\/)node_modules\/\.bin\/*$/,
-  win32: /(?:^|[\\/])node_modules[\\/]\.bin[\\/]*$/i,
-} as const;
-
 /** Whether real path `inner` is real path `root` or lies below it. */
 function isWithin(inner: string, root: string, windows: boolean): boolean {
   const key = (path: string): string => {
@@ -228,8 +223,16 @@ function isWithin(inner: string, root: string, windows: boolean): boolean {
  * every entry whose real path is the working folder or lies below it.
  * `undefined` stays `undefined`; a working folder with no real path is answered
  * by the walk itself, which then searches nothing.
+ *
+ * On Windows an entry is judged twice: as the walk reads it (a paired `"…"`
+ * stripped) and as the runtime's own lookup reads it (one leading and one
+ * trailing `"` or `'` stripped, each on its own), and it is kept only when both
+ * readings pass and both have a real path. The two readings differ only for an
+ * entry with an unpaired quote, which names no folder as the walk reads it but
+ * can name one in the tree as the child's lookup reads it; an entry with no
+ * real path holds nothing to start, so dropping it costs nothing.
  */
-function trustedSearchPath(
+export function trustedSearchPath(
   path: string | undefined,
   root: string | null,
   platform: NodeJS.Platform,
@@ -238,16 +241,17 @@ function trustedSearchPath(
   if (path === undefined) return undefined;
   const windows = platform === "win32";
   const delimiter = windows ? ";" : ":";
+  const passes = (entry: string): boolean => {
+    if (!isFullPath(entry, windows) || isNodeModulesBin(entry, windows)) return false;
+    const real = root === null ? null : probe.realPath(entry);
+    if (real === null) return !windows || root === null;
+    return !isWithin(real, root ?? "", windows);
+  };
   return path
     .split(delimiter)
-    .filter((raw) => {
-      // A quoted entry is legal on Windows, and the walk strips the pair before it judges one.
-      const entry = windows ? raw.replace(/^"(.*)"$/, "$1") : raw;
-      if (!isFullPath(entry, windows)) return false;
-      if (NODE_MODULES_BIN[windows ? "win32" : "posix"].test(entry)) return false;
-      const real = root === null ? null : probe.realPath(entry);
-      return real === null || !isWithin(real, root ?? "", windows);
-    })
+    .filter((raw) =>
+      windows ? passes(raw.replace(/^"(.*)"$/, "$1")) && passes(raw.replace(/^["']/, "").replace(/["']$/, "")) : passes(raw),
+    )
     .join(delimiter);
 }
 

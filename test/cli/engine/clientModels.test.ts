@@ -8,6 +8,7 @@ import {
   parseCodexModels,
   parseCopilotHelpConfig,
   parseCursorModels,
+  trustedSearchPath,
 } from "../../../src/cli/engine/clientModels.ts";
 import type { ProgramFileProbe } from "../../../src/shared/programPath.ts";
 import { useTempDir } from "../../support/tempDir.ts";
@@ -446,5 +447,32 @@ describe("listClientModels", () => {
     expect(
       await listClientModels("codex", { Path: `${env.Path};D:\\links` }, "C:\\repo", { platform: "win32", probe }),
     ).toEqual({ kind: "unreadable", message: "`codex` on PATH resolves inside the working tree, so it was not started" });
+  });
+
+  it("hands the child no Windows entry the runtime's own lookup reads differently from the walk", () => {
+    // Same probe stand-in as above: the folders that exist, each its own real path.
+    const folders = new Set(["C:\\out", "C:\\repo\\bin", "C:\\Program Files\\x"]);
+    const probe: ProgramFileProbe = {
+      isProgramFile: () => false,
+      realPath: (path) => (folders.has(path) ? path : null),
+    };
+    const entries = [
+      "C:\\out",
+      // An unpaired trailing quote, either kind: no folder as the walk reads it, the tree's `bin` as
+      // the runtime strips each quote on its own.
+      'C:\\repo\\bin"',
+      "C:\\repo\\bin'",
+      // Each half of a quoted segment the runtime keeps whole across its `;`.
+      '"C:\\out',
+      'C:\\repo\\bin"',
+      '"C:\\Program Files\\x"',
+      "C:\\gone",
+    ];
+
+    expect(trustedSearchPath(entries.join(";"), "C:\\repo", "win32", probe)).toBe('C:\\out;"C:\\Program Files\\x"');
+    // Non-degenerate: POSIX keeps an entry with no real path, as before, and drops the tree's.
+    expect(trustedSearchPath("/out:/gone:/repo/bin", "/repo", "linux", { ...probe, realPath: (path) => (path === "/gone" ? null : path) })).toBe(
+      "/out:/gone",
+    );
   });
 });

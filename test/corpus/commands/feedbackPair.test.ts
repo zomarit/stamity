@@ -1053,6 +1053,23 @@ describe("pr-resolve — collection and evaluation", () => {
     expect(preflight).toMatch(/refused run fetches no comment at all/i);
   });
 
+  it("takes a fork head this run can push to only from a checkout the operator made", () => {
+    const preflight = clause(artifact(PR_RESOLVE).parsed.body, "## Pre-flight");
+    // The clause is whitespace-folded, so the row runs from its label to the next row's.
+    const row = /\| Fork PR \|(.*?)\| Scope \|/.exec(preflight)?.[1] ?? "";
+
+    // A fork head this run can push to: the operator's own checkout, else a refusal before any checkout.
+    expect(row).toMatch(/a fork this run can push to[^|]*only from a checkout the operator made/i);
+    expect(row).toMatch(/`git rev-parse HEAD` already equal to the pull request's head sha/);
+    expect(row).toMatch(/otherwise \*\*refuse\*\* before any checkout/i);
+    expect(row).toMatch(/the gates would run its code on this machine/i);
+    // Taken, it says so before the gates run.
+    expect(row).toMatch(/when it is taken, print one notice before any gate runs/i);
+    expect(row).toMatch(/the gates will run its code on this machine/i);
+    // The refusal for a fork it cannot push to stands.
+    expect(row).toMatch(/a fork this run cannot push to: \*\*refuse\*\*/i);
+  });
+
   it("splits the guards that need the fetch from the guards that precede it", () => {
     const preflight = clause(artifact(PR_RESOLVE).parsed.body, "## Pre-flight");
 

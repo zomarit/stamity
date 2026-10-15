@@ -1183,8 +1183,8 @@ async function runGet(
 
   ctx.io.out(
     read.value === null
-      ? `${key}  ${ctx.palette.dim(`(default: ${read.resolved})`)}\n`
-      : `${key}  ${read.value}\n`,
+      ? `${key}  ${ctx.palette.dim(`(default: ${sanitizeLabel(read.resolved)})`)}\n`
+      : `${key}  ${sanitizeLabel(read.value)}\n`,
   );
   return { exitCode: 0, json: { key, ...read } };
 }
@@ -1249,11 +1249,11 @@ async function applyKeyValue(
   const after = getConfigValue(next, key);
 
   if (before.value === after.value) {
-    ctx.io.out(`${key} is already ${JSON.stringify(after.resolved)} — no change.\n`);
+    ctx.io.out(`${key} is already ${JSON.stringify(sanitizeLabel(after.resolved))} — no change.\n`);
     return { exitCode: 0, json: { key, changed: false, value: after.value } };
   }
 
-  const diff = `${key}: ${before.value ?? before.resolved} ${ctx.palette.cyan("->")} ${after.resolved}`;
+  const diff = `${key}: ${sanitizeLabel(before.value ?? before.resolved)} ${ctx.palette.cyan("->")} ${sanitizeLabel(after.resolved)}`;
   const notice = specFor(key).notice?.(next) ?? null;
   if (ctx.dryRun) {
     ctx.io.out(`would set ${diff}\n`);
@@ -1327,7 +1327,7 @@ async function runDetect(ctx: CliContext, rootDir: string): Promise<CommandResul
   const render = (): void => {
     for (const row of rows) {
       ctx.io.out(
-        `  ${row.field.padEnd(width)}  ${row.before} ${ctx.palette.cyan("->")} ${row.after}\n`,
+        `  ${row.field.padEnd(width)}  ${sanitizeLabel(row.before)} ${ctx.palette.cyan("->")} ${sanitizeLabel(row.after)}\n`,
       );
     }
   };

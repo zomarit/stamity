@@ -6110,7 +6110,10 @@ function main() {
     }
     throw safeError("Hook process failed (" + (child.error.code ?? "unknown") + ")");
   }
-  if (child.status !== 0) { process.exitCode = child.status ?? 1; return; }
+  // A failing child on a row whose fault exit is 2 (Codex, an authored
+  // pre-tool-use row) blocks with 2 whatever its own status was: Codex blocks
+  // on 2 alone, so any other failure would let the pending call through.
+  if (child.status !== 0) { process.exitCode = failureExit === 2 ? 2 : child.status ?? 1; return; }
   const output = (child.stdout ?? "").trim();
   // A child that wrote nothing decided nothing. On Cursor that is not a
   // pass-through: its failClosed clause counts "no output" as a hook failure,
@@ -6411,7 +6414,10 @@ function main() {
     }
     throw safeError("Hook process failed (" + (child.error.code ?? "unknown") + ")");
   }
-  if (child.status !== 0) { process.exitCode = child.status ?? 1; return; }
+  // A failing child on a row whose fault exit is 2 (Codex, an authored
+  // pre-tool-use row) blocks with 2 whatever its own status was: Codex blocks
+  // on 2 alone, so any other failure would let the pending call through.
+  if (child.status !== 0) { process.exitCode = failureExit === 2 ? 2 : child.status ?? 1; return; }
   const output = (child.stdout ?? "").trim();
   // A child that wrote nothing decided nothing. On Cursor that is not a
   // pass-through: its failClosed clause counts "no output" as a hook failure,
@@ -6700,7 +6706,10 @@ function main() {
     }
     throw safeError("Hook process failed (" + (child.error.code ?? "unknown") + ")");
   }
-  if (child.status !== 0) { process.exitCode = child.status ?? 1; return; }
+  // A failing child on a row whose fault exit is 2 (Codex, an authored
+  // pre-tool-use row) blocks with 2 whatever its own status was: Codex blocks
+  // on 2 alone, so any other failure would let the pending call through.
+  if (child.status !== 0) { process.exitCode = failureExit === 2 ? 2 : child.status ?? 1; return; }
   const output = (child.stdout ?? "").trim();
   // A child that wrote nothing decided nothing. On Cursor that is not a
   // pass-through: its failClosed clause counts "no output" as a hook failure,

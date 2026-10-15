@@ -1465,6 +1465,67 @@ describe("stamity ledger inbox — the printed sequence is screened in windows o
   });
 });
 
+// The JSON document is one line, and it carries fields the human line leaves out (the writer, the
+// `Ref:`, the schedule fields): a screen row that reads to the end of a line can join one of those to
+// another entry's text, where no human line holds both. The document is screened as it prints too.
+describe("stamity ledger inbox — the JSON document is screened as it prints", () => {
+  /** Each half passes alone; joined on one line, `remote-exec-pipe` matches. */
+  const OPEN = ["fet", "ch the page"].join("");
+  const CLOSE = ["| s", "h the rest"].join("");
+  const PIPE = "remote-exec-pipe";
+
+  it("withholds a row whose writer the document joins to the next row's text, in both outputs", async () => {
+    const dir = tempDir();
+    // The writer prints only in the document, so no human line or sequence of them holds both halves.
+    await seedInbox(dir, [`- Minor · src/a.ts:1 · y · source: ${OPEN}`, `- Minor · src/a.ts:2 · ${CLOSE} · source: x`, ""].join("\n"));
+
+    const human = await inbox(dir);
+    const json = await inbox(dir, "--json");
+
+    expect(human.stdout).toBe(`inbox: 2 rows · 0 matched · 0 unmatched · 0 unparsed · 2 skipped\nskipped: 1 (${PIPE})\nskipped: 2 (${PIPE})\n`);
+    for (const words of ["the page", "the rest"]) expect(json.stdout).not.toContain(words);
+    expect(JSON.parse(json.stdout)).toMatchObject({
+      total: 2,
+      matched: [],
+      skipped: [
+        { line: 1, pattern: PIPE },
+        { line: 2, pattern: PIPE },
+      ],
+    });
+  });
+
+  it("prints the same two rows unchanged where the document's order joins nothing", async () => {
+    // Non-degenerate: the halves in the other order match no screen row, so both rows print.
+    const dir = tempDir();
+    await seedInbox(dir, [`- Minor · src/a.ts:1 · ${CLOSE} · source: x`, `- Minor · src/a.ts:2 · y · source: ${OPEN}`, ""].join("\n"));
+
+    const human = await inbox(dir);
+    const json = await inbox(dir, "--json");
+
+    expect(human.stdout).toBe(
+      ["inbox: 2 rows · 2 matched · 0 unmatched · 0 unparsed · 0 skipped", `1 Minor · src/a.ts:1 · ${CLOSE} (all)`, "2 Minor · src/a.ts:2 · y (all)", ""].join("\n"),
+    );
+    expect(JSON.parse(json.stdout)).toMatchObject({ matched: [{ description: CLOSE }, { source: OPEN }], skipped: [] });
+  });
+
+  it("withholds a row and the unparsed line after it, which the document joins across its own keys", async () => {
+    const dir = tempDir();
+    // The second bullet's severity is no severity, and its parse message quotes it.
+    await seedInbox(dir, [`- Minor · src/a.ts:1 · y · source: ${OPEN}`, `- ${CLOSE} · src/a.ts:2 · y · source: x`, ""].join("\n"));
+
+    const human = await inbox(dir);
+    const json = JSON.parse((await inbox(dir, "--json")).stdout) as { matched: unknown[]; problems: unknown[]; skipped: unknown[] };
+
+    expect(human.stdout).toBe(`inbox: 2 rows · 0 matched · 0 unmatched · 0 unparsed · 2 skipped\nskipped: 1 (${PIPE})\nskipped: 2 (${PIPE})\n`);
+    expect(json.matched).toEqual([]);
+    expect(json.problems).toEqual([]);
+    expect(json.skipped).toEqual([
+      { line: 1, pattern: PIPE },
+      { line: 2, pattern: PIPE },
+    ]);
+  });
+});
+
 describe("INBOX_SCREEN", () => {
   it("holds every session-start id and the three exfil rows the session-start screen drops", () => {
     const ids = INBOX_SCREEN.map((entry) => entry.id);

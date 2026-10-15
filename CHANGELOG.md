@@ -104,8 +104,9 @@ an item that rests on either says it was not walked.
   `command`, and Cursor's `preToolUse` gains a second entry, on `Task`, for the model-fill hook.
   Codex's commands keep their form, but each names the release in its remedy text
   (`npx -y @zomarit/stamity@1.15.0 sync`), as the file's description does, so every entry's bytes
-  change. Codex trusts a hooks file by its hash, so expect it to ask for a fresh review in
-  `/hooks`; that is expected, not verified in a Codex session.
+  change. Codex trusts a hooks file by its hash, so expect it to ask once, as at every upgrade,
+  for a fresh review in `/hooks`, and to run none of the file's hooks, the engine's guards
+  included, until you give it; that is expected, not verified in a Codex session.
 - **A plugin-backed setup becomes a full repository setup, and its `plugin` block warns until you
   delete the key.** The `sync` writes every class into the repository's own files and keeps the
   `plugin` block 1.14.0 wrote, unread. While the key stands, `sync`, `check` and `clean` print "a
@@ -396,6 +397,12 @@ an item that rests on either says it was not walked.
   beside them. An authored matcher is translated into Copilot's names (`Bash|Edit` matches
   `bash`, `edit` and `str_replace_editor`), and an alternative with no Copilot twin is kept as
   written and named once by `init` and `sync`.
+- **On Codex a pre-tool-use hook of your own blocks the call whenever it fails.** Codex blocks a
+  call on exit 2 alone. The hook runner now reports any failing exit of such a hook as 2, and the
+  command that starts it fails with 2 as well when it cannot start the hook. A hook that means to
+  let the call through exits 0. The engine's own guard rows and every other event behave as
+  before. Codex's hooks file changes at the upgrade in any case ("Upgrading from 1.14.0" says what
+  follows).
 - **The Copilot setup workflow always installs Node.** `copilot-setup-steps.yml` always writes a
   `setup-node` step, with the project's Node version, else `lts/*`, because the generated hooks
   run on Node, and an install step only where the project shows Node. The default action refs move

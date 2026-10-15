@@ -1124,20 +1124,43 @@ interface PrintedLine {
   readonly printed: string;
   readonly bare: string;
   readonly own: string;
+  /** Which of the JSON document's lists carries it: a matched row's, or an unparsed line's. */
+  readonly list: "matched" | "problems";
+}
+
+/** How a run of printed lines is joined as it prints: `form` reads each line's form to join. */
+type PrintedJoin = (lines: readonly PrintedLine[], form: (entry: PrintedLine) => string) => string;
+
+/** The human output's join: the line break the lines print with. */
+const HUMAN_JOIN: PrintedJoin = (lines, form) => lines.map(form).join("\n");
+
+/**
+ * The screen of printed lines joined as they print (`join`, the line break of
+ * the human output by default), "" when they pass: first with every withheld
+ * row's pattern id left out, against every screen row, so an author's two
+ * halves meet whatever pattern withheld a row between them; then, where a
+ * withheld line is among them, as they print, leaving out the rows those
+ * lines' own words hit alone, as {@link screenInboxPrinted} does for one line.
+ */
+function screenPrintedLines(lines: readonly PrintedLine[], joined: PrintedJoin = HUMAN_JOIN): string {
+  const bare = screenInboxLine(joined(lines, (entry) => entry.bare));
+  const own = lines.flatMap((entry) => (entry.own === "" ? [] : [entry.own])).join("\n");
+  return bare !== "" || own === "" ? bare : screenInboxPrinted(joined(lines, (entry) => entry.printed), own);
 }
 
 /**
- * The screen of printed lines joined by the line break they print with, ""
- * when they pass: first with every withheld row's pattern id left out, against
- * every screen row, so an author's two halves meet whatever pattern withheld a
- * row between them; then, where a withheld line is among them, as they print,
- * leaving out the rows those lines' own words hit alone, as
- * {@link screenInboxPrinted} does for one line.
+ * The JSON document's join: each entry as the document prints it, one after
+ * another on the one line the document is, with the comma between two entries
+ * of one list and, between the two lists, `seam`, the document's own keys
+ * there. No line break stands between them, so a screen row that reads to the
+ * end of a line can match across two fields of one entry, or across two
+ * entries, where the human output's line break stops it.
  */
-function screenPrintedLines(lines: readonly PrintedLine[]): string {
-  const bare = screenInboxLine(lines.map((entry) => entry.bare).join("\n"));
-  const own = lines.flatMap((entry) => (entry.own === "" ? [] : [entry.own])).join("\n");
-  return bare !== "" || own === "" ? bare : screenInboxPrinted(lines.map((entry) => entry.printed).join("\n"), own);
+function documentJoin(seam: string): PrintedJoin {
+  return (lines, form) =>
+    lines
+      .map((entry, index) => `${index === 0 ? "" : lines[index - 1]?.list === entry.list ? "," : seam}${form(entry)}`)
+      .join("");
 }
 
 /**
@@ -1206,6 +1229,14 @@ function listedLines(label: string, lines: readonly string[]): string[] {
  * both outputs: a row is not matched, and an unparsed line not listed, and
  * each prints its skip line instead, a clean one by the pattern the window
  * hit, a withheld row by the pattern that withheld it.
+ *
+ * The JSON document prints the same rows and lines as entries on its one line,
+ * with fields the human line leaves out (the writer, the `Ref:`, the schedule
+ * fields) and no line break between them. So each entry, and the entries in
+ * the same bounded windows, are screened as the document prints them
+ * ({@link documentJoin}), and a hit withholds them in both outputs the same
+ * way. Either screen's withholding brings two lines together that were apart,
+ * so the two are read again in turn until one withholds nothing.
  *
  * Every printed field is sanitised. Each bullet counts once under matched,
  * unmatched, unparsed or skipped, but for a matched withheld row, which counts
@@ -1305,32 +1336,68 @@ async function runInbox(ctx: CliContext, opts: Record<string, unknown>): Promise
   // The lines print one after another, across headings and past the rows the filters left out, so
   // they are screened as they print, in windows of adjacent lines (S24): a hit withholds every line
   // it spans, a row as a skip line by the pattern that hit it or, withheld already, by its own.
-  const emitted: PrintedLine[] = [
+  const humanLines = (): PrintedLine[] => [
     ...matched.map(({ row, matchedBy, line }): PrintedLine => {
       const by = withheld.get(row.line) ?? null;
       const printed = sanitizeLabel(line);
       return by === null
-        ? { line: row.line, printed, bare: printed, own: "" }
-        : { line: row.line, printed, bare: sanitizeLabel(inboxRowLine(row, matchedBy, "")), own: withheldBody(by) };
+        ? { line: row.line, printed, bare: printed, own: "", list: "matched" }
+        : { line: row.line, printed, bare: sanitizeLabel(inboxRowLine(row, matchedBy, "")), own: withheldBody(by), list: "matched" };
     }),
     ...problems.map((problem): PrintedLine => {
       const printed = sanitizeLabel(`unparsed: ${problem.line}: ${problem.message}`);
-      return { line: problem.line, printed, bare: printed, own: "" };
+      return { line: problem.line, printed, bare: printed, own: "", list: "problems" };
     }),
   ];
-  const sequenceHits = inboxSequenceHits(
-    emitted.map((entry) => entry.printed.length),
-    (indices) => screenPrintedLines(indices.map((index) => emitted[index] ?? { line: 0, printed: "", bare: "", own: "" })),
-  );
-  const heldLines = new Set<number>();
-  for (const [index, pattern] of sequenceHits) {
-    const line = emitted[index]?.line ?? 0;
-    heldLines.add(line);
-    if (!withheld.has(line)) skipped.push({ line, pattern });
-  }
-  if (heldLines.size > 0) {
-    matched.splice(0, matched.length, ...matched.filter(({ row }) => !heldLines.has(row.line)));
-    problems.splice(0, problems.length, ...problems.filter((problem) => !heldLines.has(problem.line)));
+  // The same lines as the JSON document prints them: each entry as its own JSON, a withheld row's
+  // pattern id left out of its bare form and standing as its own words, as its human line's body does.
+  const documentLines = (): PrintedLine[] => [
+    ...matched.map(({ row, matchedBy }): PrintedLine => {
+      const by = withheld.get(row.line) ?? null;
+      const printed = JSON.stringify(inboxRowJson(row, matchedBy, by));
+      return by === null
+        ? { line: row.line, printed, bare: printed, own: "", list: "matched" }
+        : { line: row.line, printed, bare: JSON.stringify(inboxRowJson(row, matchedBy, "")), own: by, list: "matched" };
+    }),
+    ...problems.map((problem): PrintedLine => {
+      const printed = JSON.stringify({ line: problem.line, message: sanitizeLabel(problem.message) });
+      return { line: problem.line, printed, bare: printed, own: "", list: "problems" };
+    }),
+  ];
+  /** The lines one form's screen withholds, each by its inbox line with the pattern that hit. */
+  const sequenceHolds = (lines: readonly PrintedLine[], joined: PrintedJoin, alone: boolean): Map<number, string> => {
+    const held = new Map<number, string>();
+    // The document's entries are screened one by one too: an entry joins fields the human line keeps
+    // apart or leaves out. A human line alone was screened as it was composed, above.
+    if (alone) {
+      for (const entry of lines) {
+        const pattern = screenPrintedLines([entry], joined);
+        if (pattern !== "") held.set(entry.line, pattern);
+      }
+    }
+    const kept = lines.filter((entry) => !held.has(entry.line));
+    const hits = inboxSequenceHits(
+      kept.map((entry) => entry.printed.length),
+      (indices) => screenPrintedLines(indices.flatMap((index) => kept[index] ?? []), joined),
+    );
+    for (const [index, pattern] of hits) held.set(kept[index]?.line ?? 0, pattern);
+    return held;
+  };
+  const withhold = (held: ReadonlyMap<number, string>): boolean => {
+    for (const [line, pattern] of held) if (!withheld.has(line)) skipped.push({ line, pattern });
+    if (held.size > 0) {
+      matched.splice(0, matched.length, ...matched.filter(({ row }) => !held.has(row.line)));
+      problems.splice(0, problems.length, ...problems.filter((problem) => !held.has(problem.line)));
+    }
+    return held.size > 0;
+  };
+  // The human lines first, then the document's entries; a withholding in either opens seams in both,
+  // so each is read again after the other withholds, until one withholds nothing.
+  // Between its two lists the document prints its own keys; the counts are words to the screen, so zeros stand in.
+  const joinDocument = documentJoin(`],"counts":${JSON.stringify(counts)},"unmatched":0,"problems":[`);
+  withhold(sequenceHolds(humanLines(), HUMAN_JOIN, false));
+  while (withhold(sequenceHolds(documentLines(), joinDocument, true))) {
+    if (!withhold(sequenceHolds(humanLines(), HUMAN_JOIN, false))) break;
   }
   skipped.sort((a, b) => a.line - b.line);
   for (const { row } of matched) counts[row.severity] = (counts[row.severity] ?? 0) + 1;

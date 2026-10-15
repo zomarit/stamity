@@ -11,6 +11,7 @@ import {
   CLOSURE_TARGET,
   retireRow,
 } from "../../src/runs/ledgerStore.ts";
+import { LEDGER_READ_MAX_BYTES } from "../../src/runs/layout.ts";
 import { runInProcess } from "../support/inProcess.ts";
 import { useTempDir, type TempDirHandle } from "../support/tempDir.ts";
 
@@ -612,6 +613,19 @@ describe("applyClosures", () => {
       code: "FS_ERROR",
     });
     expect(await readText(dir, "elsewhere.jsonl")).toBe(`${row(1)}\n`);
+  });
+
+  it("refuses a ledger over the read ceiling, naming it, and leaves it as it was", async () => {
+    const dir = tempDir();
+    const head = `${row(1)}\n`;
+    const over = head + `${"x".repeat(LEDGER_READ_MAX_BYTES - head.length)}\n`;
+    await seedRun(dir, { [LEDGER]: over });
+
+    await expect(apply(dir, [closure(1, "fixed")], [rid(1)])).rejects.toMatchObject({
+      code: "FS_ERROR",
+      message: expect.stringContaining(`${LEDGER_READ_MAX_BYTES} byte read ceiling`),
+    });
+    expect(await readText(dir, LEDGER)).toBe(over);
   });
 });
 

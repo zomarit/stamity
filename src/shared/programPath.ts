@@ -16,7 +16,9 @@ import { accessSync, constants, realpathSync, statSync } from "node:fs";
  * That folder is all the walk keeps out. It takes `PATH` as given: an entry
  * that is a full path to another folder is searched as it stands, a folder
  * elsewhere in the same checkout included, so whatever sets the `PATH` the
- * engine is started with chooses the program.
+ * engine is started with chooses the program. {@link gitProgramFor} walks it
+ * without the `node_modules/.bin` entries ({@link isNodeModulesBin}), which npm
+ * and `npx` put ahead of the user's own and a repository can fill.
  *
  * The walk is pure over its parameters: the platform whose rules apply, the
  * `PATH` value, the working folder and the probe that reads the disk are all
@@ -81,6 +83,23 @@ export function isFullPath(entry: string, windows: boolean): boolean {
   // `C:\tools` and `\\server\share`. Not `C:tools` (the drive's current
   // folder) and not `\tools` (the current drive): both follow the child.
   return /^[A-Za-z]:[\\/]/.test(entry) || /^[\\/]{2}[^\\/]/.test(entry);
+}
+
+/** A `PATH` entry npm or `npx` adds for a project's installed binaries, at any level. */
+const NODE_MODULES_BIN = {
+  posix: /(?:^|\/)node_modules\/\.bin\/*$/,
+  win32: /(?:^|[\\/])node_modules[\\/]\.bin[\\/]*$/i,
+} as const;
+
+/**
+ * Whether a `PATH` entry names a `node_modules/.bin` folder, at any level and
+ * with any trailing separators; on Windows in any letter case, either
+ * separator, and quoted or not. npm and `npx` put a project's own such folders
+ * ahead of the user's `PATH`, and a repository can commit one or have a
+ * dependency install a program there.
+ */
+export function isNodeModulesBin(entry: string, windows: boolean): boolean {
+  return windows ? NODE_MODULES_BIN.win32.test(entry.replace(/^"(.*)"$/, "$1")) : NODE_MODULES_BIN.posix.test(entry);
 }
 
 /** One spelling for a real path, so two of them compare: no trailing separator, and no letter case on Windows. */
@@ -173,7 +192,9 @@ const gitPrograms = new Map<string, string>();
  * The absolute path of the git to start in `cwd`, under the environment the
  * child is given, or `null` when no `PATH` entry {@link resolveProgramOnPath}
  * accepts holds one — which every caller answers as it answers a machine with
- * no git installed.
+ * no git installed. The walk is taken without the `node_modules/.bin` entries
+ * ({@link isNodeModulesBin}): git is no package's binary, and one found there
+ * is a file the repository placed.
  *
  * Resolved once per working folder and `PATH` value, then remembered: a verb
  * that makes twenty git calls in one folder walks `PATH` once. An answer of
@@ -185,7 +206,12 @@ export function gitProgramFor(cwd: string, env: NodeJS.ProcessEnv): string | nul
   const key = `${cwd}\0${path ?? ""}`;
   const known = gitPrograms.get(key);
   if (known !== undefined) return known;
-  const program = resolveProgramOnPath("git", { platform: HOST_PLATFORM, path, cwd, probe: fileSystemProbe });
+  const windows = HOST_PLATFORM === "win32";
+  const walked = path
+    ?.split(windows ? ";" : ":")
+    .filter((entry) => !isNodeModulesBin(entry, windows))
+    .join(windows ? ";" : ":");
+  const program = resolveProgramOnPath("git", { platform: HOST_PLATFORM, path: walked, cwd, probe: fileSystemProbe });
   if (program !== null) gitPrograms.set(key, program);
   return program;
 }

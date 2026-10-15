@@ -587,6 +587,67 @@ describe("config get", () => {
     expect(result.stdout).toContain("maturityTier  team");
   });
 
+  it("prints a stored value without its terminal control bytes, as list does, and so does set's before-value", async () => {
+    const handle = tempDir();
+    // Built from char codes: an escape typed into a source literal lands as the raw byte.
+    const esc = String.fromCharCode(0x1b);
+    const bell = String.fromCharCode(0x07);
+    const stored = `vendor-x${esc}]0;title${bell}-9`;
+    await seedManifest(handle, { tools: ["claude", "cursor"], models: { pins: { standard: { cursor: stored } } } });
+
+    const get = await run(handle, ["get", "model.standard.cursor"]);
+    expect(get.code).toBe(0);
+    expect(get.stdout).toContain("model.standard.cursor  vendor-x");
+    expect(get.stdout).not.toContain(esc);
+    expect(get.stdout).not.toContain(bell);
+
+    const set = await run(handle, ["set", "model.standard.cursor", "claude-sonnet-5-5-high"]);
+    expect(set.code).toBe(0);
+    expect(set.stdout).toContain("-> claude-sonnet-5-5-high");
+    expect(set.stdout).not.toContain(esc);
+    expect(set.stdout).not.toContain(bell);
+  });
+
+  it("prints a default resolved from another key's stored pin without its terminal control bytes", async () => {
+    const handle = tempDir();
+    // Built from char codes: an escape typed into a source literal lands as the raw byte.
+    const esc = String.fromCharCode(0x1b);
+    const bell = String.fromCharCode(0x07);
+    const stored = `vendor-x${esc}]0;title${bell}-9`;
+
+    // The client key has no pin of its own, so its default is the class's every-client pin.
+    await seedManifest(handle, { tools: ["claude", "cursor"], models: { pins: { standard: { all: stored } } } });
+    const client = await run(handle, ["get", "model.standard.cursor"]);
+    expect(client.code).toBe(0);
+    expect(client.stdout).toContain("(default: vendor-x");
+    expect(client.stdout).not.toContain(esc);
+    expect(client.stdout).not.toContain(bell);
+
+    // The class key has no every-client pin, so its default is the clients' own pins.
+    await seedManifest(handle, { tools: ["claude", "cursor"], models: { pins: { standard: { cursor: stored } } } });
+    const forClass = await run(handle, ["get", "model.standard"]);
+    expect(forClass.code).toBe(0);
+    expect(forClass.stdout).toContain("cursor=vendor-x");
+    expect(forClass.stdout).not.toContain(esc);
+    expect(forClass.stdout).not.toContain(bell);
+  });
+
+  it("prints set's no-change line, a default resolved from another key's stored pin, without its terminal control bytes", async () => {
+    const handle = tempDir();
+    // Built from char codes: an escape typed into a source literal lands as the raw byte. U+009B is a C1 control,
+    // which JSON.stringify leaves as it is.
+    const csi = String.fromCharCode(0x9b);
+    const stored = `vendor-x${csi}2J-9`;
+    // The client key has no pin of its own, so clearing it changes nothing and the line names its default.
+    await seedManifest(handle, { tools: ["claude", "cursor"], models: { pins: { standard: { all: stored } } } });
+
+    const set = await run(handle, ["set", "model.standard.cursor", "none"]);
+    expect(set.code).toBe(0);
+    expect(set.stdout).toContain("model.standard.cursor is already \"vendor-x");
+    expect(set.stdout).toContain("no change");
+    expect(set.stdout).not.toContain(csi);
+  });
+
   it("prints (default: none) for mcp.servers on a manifest without mcp", async () => {
     const handle = tempDir();
     await seedManifest(handle);
@@ -1302,6 +1363,25 @@ describe("config detect", () => {
     expect(result.stdout).toContain("none -> typescript");
     expect(result.stdout).toContain("next: run stamity sync to apply");
     expect((await readManifest(handle.dir))?.detected?.languages).toContain("typescript");
+  });
+
+  it("prints a stored before-value without its terminal control bytes", async () => {
+    const handle = tempDir();
+    await handle.seedFiles(tsRepo);
+    // Built from char codes: an escape typed into a source literal lands as the raw byte.
+    const esc = String.fromCharCode(0x1b);
+    const bell = String.fromCharCode(0x07);
+    await seedManifest(handle, {
+      detected: { languages: [`lang-x${esc}]0;title${bell}-9`], linters: [], testFrameworks: [], ciProviders: [] },
+    });
+
+    const result = await run(handle, ["detect"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("lang-x");
+    expect(result.stdout).toContain("-> typescript");
+    expect(result.stdout).not.toContain(esc);
+    expect(result.stdout).not.toContain(bell);
   });
 
   it("reports nothing to refresh once the manifest matches the repo", async () => {

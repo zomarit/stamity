@@ -6,6 +6,9 @@ import { EngineError } from "../types/errors.ts";
 /** Repository-owned launcher; the interchange remains exec-form argv. */
 export const PORTABLE_RUNNER_FILE = "stamity-portable-hook.mjs";
 
+/** The core pre-tool-use guard's script name, which the runner and the Codex starter both key on. */
+const CORE_GUARD_FILE = "stamity-pre-tool-use-guard.mjs";
+
 /**
  * A script addressed through a client's plugin root variable — the ONE token
  * shape that is admitted past single-quoting, and the one that selects the
@@ -213,7 +216,14 @@ export function portableHookCommand(
   }
   const segments = anchor.segments.map((segment) => `'${segment}'`).join(",");
   const shown = anchor.segments.join("/");
-  const starter = `const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();${anchor.seed}for(;;){if(fs.existsSync(p.join(d,${segments}))){const f=p.join(d,'${path}');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside ${shown}; run ${syncCall}');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:${anchor.stdio}});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}`;
+  // The starter fails as the runner does on the same row. Codex blocks on exit 2
+  // alone, and the runner exits 2 on an authored pre-tool-use row (the core
+  // guard is telemetry there), so the starter's own failures on such a row (no
+  // script, no root, a runner that never exited) are 2 too. Every other row
+  // keeps 1, and with it the bytes Codex recorded its trust against.
+  const authoredGate = tool === "codex" && row.event === "pre_tool_use" && script.slice(lastSlash + 1) !== CORE_GUARD_FILE;
+  const fail = authoredGate ? 2 : 1;
+  const starter = `const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();${anchor.seed}for(;;){if(fs.existsSync(p.join(d,${segments}))){const f=p.join(d,'${path}');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside ${shown}; run ${syncCall}');process.exitCode=${fail};break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:${anchor.stdio}});process.exitCode=r.status??${fail};break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=${fail};break;}d=up;}`;
   return `node -e "${starter}" ${data}`;
 }
 
@@ -250,7 +260,7 @@ const ROOT = resolve(HERE, "../../../..");
 // base64url row below — so the literal reaches this runner and this is where
 // it is resolved.
 const PLUGIN_ROOT_REF = /^\\$\\{([A-Za-z_][A-Za-z0-9_]*)\\}\\/(.+)$/;
-const CORE_GUARD_FILE = "stamity-pre-tool-use-guard.mjs";
+const CORE_GUARD_FILE = ${JSON.stringify(CORE_GUARD_FILE)};
 // The interchange's PascalCase event names, which every authored hook reads in
 // hook_event_name. Codex reads this set natively; the Cursor and Copilot
 // adapters key their hooks files camelCase at their own boundary.
@@ -385,7 +395,10 @@ function main() {
     }
     throw safeError("Hook process failed (" + (child.error.code ?? "unknown") + ")");
   }
-  if (child.status !== 0) { process.exitCode = child.status ?? 1; return; }
+  // A failing child on a row whose fault exit is 2 (Codex, an authored
+  // pre-tool-use row) blocks with 2 whatever its own status was: Codex blocks
+  // on 2 alone, so any other failure would let the pending call through.
+  if (child.status !== 0) { process.exitCode = failureExit === 2 ? 2 : child.status ?? 1; return; }
   const output = (child.stdout ?? "").trim();
   // A child that wrote nothing decided nothing. On Cursor that is not a
   // pass-through: its failClosed clause counts "no output" as a hook failure,

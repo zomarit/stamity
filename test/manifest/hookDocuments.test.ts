@@ -374,6 +374,28 @@ describe("codexHooksSpec", () => {
     }
   });
 
+  it("bounds the renderer's exit-2 starter on an authored pre-tool-use row, and that tail on no other row", () => {
+    const authored = row("pre_tool_use", "scripts/team-gate.mjs");
+    const gate = portableHookCommand("codex", authored, { syncCall: SYNC_CALL });
+    expect(gate).toContain("process.exitCode=r.status??2;");
+    expect(codexElement.recognise(group(starterHook(gate)))).toBe(true);
+    expect(codexElement.inBound(group(starterHook(gate)))).toBe(true);
+    // The exit-1 tail an earlier release wrote on the same row stays the engine's.
+    const earlier = gate.replaceAll("exitCode=2;", "exitCode=1;").replace("status??2;", "status??1;");
+    expect(codexElement.inBound(group(starterHook(earlier)))).toBe(true);
+    // The exit-2 tail is the renderer's on that row alone: not the core guard's row, not another event's.
+    for (const other of [
+      row("pre_tool_use", `${HOOKS_GENERATED_DIR}/codex/stamity-pre-tool-use-guard.mjs`),
+      row("session_start", "scripts/team-gate.mjs"),
+    ]) {
+      const rendered = portableHookCommand("codex", other, { syncCall: SYNC_CALL });
+      expect(rendered).toContain("process.exitCode=r.status??1;");
+      const swapped = rendered.replaceAll("exitCode=1;", "exitCode=2;").replace("status??1;", "status??2;");
+      expect(codexElement.inBound(group(starterHook(rendered)))).toBe(true);
+      expect(codexElement.inBound(group(starterHook(swapped)))).toBe(false);
+    }
+  });
+
   it("bounds the argv rows 1.0.0–1.6.0 wrote", () => {
     const argv = { type: "command", command: ["node", `${HOOKS_GENERATED_DIR}/codex/stamity-session-start.mjs`], sha256: "a".repeat(64) };
     expect(codexElement.recognise(group(argv))).toBe(true);

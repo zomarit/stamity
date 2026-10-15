@@ -32,6 +32,14 @@ revert path.
 
 Nothing is installed globally.
 
+In a checkout of work you have not read, read the `.npmrc` files in the folder you run `npx` in
+and in the checkout's folders above it first. `npx` applies the project's `.npmrc` before
+stamity starts: a `node-options` or `script-shell` line in it runs the checkout's own code ahead
+of every check stamity makes, and a `registry` or `@zomarit:registry` line chooses where the
+package itself is fetched from. Adding `--node-options=` clears a `node-options` line for one
+run, as in `npx --node-options= @zomarit/stamity init`. It clears none of the others, so read
+the file (all checked with npm 10.9.8).
+
 ## Set stamity up
 
 ```sh

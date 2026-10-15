@@ -1,5 +1,5 @@
 import { constants as FS, type Stats } from "node:fs";
-import { lstat, mkdir, open, readFile, realpath, writeFile } from "node:fs/promises";
+import { lstat, mkdir, open, realpath, writeFile } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { acquireWriteLock, atomicWriteFileUnlocked, isSharedRegularFile } from "../merge/atomicWrite.ts";
 import { EngineError } from "../types/errors.ts";
@@ -379,20 +379,52 @@ export function committedText(text: string): { readonly text: string; readonly t
   return { text: stripped, tagged: stripped !== printable };
 }
 
-/** The ledger text, or `""` when the ledger does not exist yet. A link is refused. */
+/**
+ * The ledger text, or `""` when the ledger does not exist yet. A link is
+ * refused, and so is a ledger over {@link LEDGER_READ_MAX_BYTES}, the bound the
+ * resume card and the inbox write read the same file under. The open is
+ * no-follow where the platform has it, the type and size are asked again of the
+ * open descriptor, and the read takes at most the bound plus one byte, so a
+ * ledger swapped or grown after the `lstat` is refused too.
+ */
 async function readLedger(path: string, relPath: string): Promise<string> {
-  const stats = await lstatOrNull(path);
-  if (stats === null) return "";
-  if (!stats.isFile()) {
-    throw new EngineError(`${relPath} is not a regular file`, {
+  const notFile = (stats: Stats): EngineError =>
+    new EngineError(`${relPath} is not a regular file`, {
       code: "FS_ERROR",
       why: stats.isSymbolicLink()
         ? "it is a symbolic link, and the ledger is written in place, never through a link"
         : "the ledger is one JSON row per line in a regular file",
       next: `replace ${relPath} with the ledger file itself, then re-run`,
     });
+  const tooLarge = (): EngineError =>
+    new EngineError(`${relPath} is over the ${LEDGER_READ_MAX_BYTES} byte read ceiling`, {
+      code: "FS_ERROR",
+      why: "the ledger is read whole before every append and close, so its size is bounded",
+      next: `move the closed rows of ${relPath} out by hand until it is under the ceiling, then re-run`,
+    });
+  const stats = await lstatOrNull(path);
+  if (stats === null) return "";
+  if (!stats.isFile()) throw notFile(stats);
+  if (stats.size > LEDGER_READ_MAX_BYTES) throw tooLarge();
+
+  const handle = await open(path, FS.O_RDONLY | (FS.O_NOFOLLOW ?? 0));
+  try {
+    const opened = await handle.stat();
+    if (!opened.isFile()) throw notFile(opened);
+    if (opened.size > LEDGER_READ_MAX_BYTES) throw tooLarge();
+    const bytes = Buffer.alloc(LEDGER_READ_MAX_BYTES + 1);
+    let filled = 0;
+    while (filled < bytes.length) {
+      // eslint-disable-next-line no-await-in-loop -- one descriptor read in order: each read starts where the last one ended
+      const { bytesRead } = await handle.read(bytes, filled, bytes.length - filled, null);
+      if (bytesRead === 0) break;
+      filled += bytesRead;
+    }
+    if (filled > LEDGER_READ_MAX_BYTES) throw tooLarge();
+    return bytes.toString("utf8", 0, filled);
+  } finally {
+    await handle.close();
   }
-  return await readFile(path, "utf8");
 }
 
 /** A row an `already-filed` line describes: its id and its own flags, never the incoming finding's. */

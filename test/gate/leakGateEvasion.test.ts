@@ -3,6 +3,7 @@ import {
   copyFileSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   realpathSync,
   rmSync,
   symlinkSync,
@@ -489,6 +490,47 @@ describe("leak-gate — encodings", () => {
     expect(hitCount(scratch.run(), file)).toBe(1);
   });
 
+  it("reads a tracked file as git stores it when the tree's own attributes re-encode it on checkout", (ctx) => {
+    // The gate reads the bytes on disk, and a checkout writes a tracked file in the encoding the
+    // tree's `.gitattributes` names. EBCDIC keeps no ASCII letter where latin1, UTF-8 or UTF-16
+    // would find it, so only the blob git stores (UTF-8 by git's own rule) shows the name.
+    const scratch = new Scratch();
+    const file = scratch.write("docs/note.txt", `the name is ${RESERVED} here\n`);
+    const clean = scratch.write("docs/clean.txt", "nothing reserved in this sentence\n");
+    scratch.git("add", file, clean);
+    scratch.write(".gitattributes", "*.txt working-tree-encoding=IBM037\n");
+    rmSync(join(scratch.root, file));
+    rmSync(join(scratch.root, clean));
+    try {
+      execFileSync("git", ["-C", scratch.root, "checkout", "--", file, clean], { stdio: "ignore" });
+    } catch {
+      // This host's git has no EBCDIC converter, so no checkout can re-encode the file here.
+      ctx.skip();
+    }
+    // Non-degenerate: the bytes on disk no longer carry the name in any reading.
+    expect(readFileSync(join(scratch.root, file)).includes(Buffer.from(RESERVED))).toBe(false);
+
+    const result = scratch.run();
+
+    expect(result.status).toBe(1);
+    expect(hitCount(result, `${file} (as git stores it)`)).toBe(1);
+    expect(result.stderr).not.toContain(clean);
+  });
+
+  it("refuses an untracked file the tree's attributes re-encode, which it cannot read as git will store it", () => {
+    const scratch = new Scratch();
+    scratch.write(".gitattributes", "*.txt working-tree-encoding=IBM037\n");
+    const file = scratch.write("docs/new.txt", "plain words\n");
+    const control = scratch.write("docs/new.md", "plain words\n");
+
+    const result = scratch.run();
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("[working-tree-encoding]");
+    expect(hitCount(result, file)).toBe(1);
+    expect(result.stderr).not.toContain(control);
+  });
+
   it("reads a clean UTF-16 file without inventing a hit", () => {
     // The control: the decoders must not turn arbitrary wide text into matches.
     const scratch = new Scratch();
@@ -817,6 +859,26 @@ describe("leak-gate — email addresses", () => {
     const outside = scratch.run("--include-build");
     expect(outside.stderr).toContain("[email-address]");
     expect(hitCount(outside, own)).toBe(1);
+  });
+
+  it("exempts only an untracked vendored tree: a tracked file under a node_modules folder, a record's included, is read", () => {
+    // A packed runtime's vendored metadata is never a tracked file of this tree; a committed one
+    // under such a folder, a run record's for one, is the tree's own text.
+    const scratch = new Scratch();
+    const record = scratch.write(".stamity/runs/2026-10-14_demo/node_modules/a.md", `author: ${PERSON}\n`);
+    const nested = scratch.write("packs/ops/node_modules/x/package.json", `{"author":"${PERSON}"}\n`);
+
+    const untracked = scratch.run();
+    expect(untracked.status, untracked.stderr).toBe(0);
+    expect(untracked.stdout).toContain("not scanned (rule email-address allowlisted)");
+
+    scratch.git("add", "-f", record, nested);
+    const tracked = scratch.run();
+    expect(tracked.status).toBe(1);
+    expect(tracked.stderr).toContain("[email-address]");
+    expect(hitCount(tracked, record)).toBe(1);
+    expect(hitCount(tracked, nested)).toBe(1);
+    expect(`${tracked.stdout}${tracked.stderr}`).not.toContain(PROBE_LOCAL);
   });
 
   it("scans the near misses of a vendored tree: a prefixed or suffixed folder name and a root file so named", () => {
