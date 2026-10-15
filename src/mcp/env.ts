@@ -207,12 +207,12 @@ export const REQUIRED_GITIGNORE_ENTRIES: readonly string[] = [
 ];
 
 /**
- * Rules that ignore every review-gate entry at once: the state directory in
- * each spelling git reads as covering its contents, and the state file's own
- * name as a prefix pattern. Rooted and unrooted forms both count, because the
- * `.gitignore` this lane edits is the one at the repository root.
+ * Rules that ignore every file in the state directory at once: the directory
+ * in each spelling git reads as covering its contents. Rooted and unrooted
+ * forms both count, because the `.gitignore` this lane edits is the one at the
+ * repository root.
  */
-const REVIEW_GATE_DOMINATORS: readonly string[] = [
+const STATE_DIR_DOMINATORS: readonly string[] = [
   STATE_DIR,
   `**/${STATE_DIR}/`,
   `${STATE_DIR}/`,
@@ -221,6 +221,14 @@ const REVIEW_GATE_DOMINATORS: readonly string[] = [
   `/${STATE_DIR}/*`,
   `${STATE_DIR}/**`,
   `/${STATE_DIR}/**`,
+];
+
+/**
+ * Rules that ignore every review-gate entry at once: the state directory's
+ * spellings, and the state file's own name as a prefix pattern.
+ */
+const REVIEW_GATE_DOMINATORS: readonly string[] = [
+  ...STATE_DIR_DOMINATORS,
   `${REVIEW_GATE_STATE_FILE}*`,
   `/${REVIEW_GATE_STATE_FILE}*`,
 ];
@@ -228,16 +236,18 @@ const REVIEW_GATE_DOMINATORS: readonly string[] = [
 /**
  * Existing patterns that already ignore an entry. Appending our literal beside
  * one of these would add a redundant rule to a file the operator maintains.
- * Each review-gate entry is also dominated by its own root-anchored twin
- * (`/.stamity/review-gate.json` — the spelling a hand-written rule usually
- * takes).
+ * Each review-gate entry and the canary is also dominated by its own
+ * root-anchored twin (`/.stamity/review-gate.json` — the spelling a
+ * hand-written rule usually takes). The canary takes the state directory's
+ * spellings only: a `review-gate.json*` prefix does not cover it, and a canary
+ * git does not ignore could be committed.
  */
 const DOMINATING_PATTERNS: Record<string, readonly string[]> = {
   [ENV_MCP_FILE]: [".env.*", ".env*", "*.mcp"],
   ...Object.fromEntries(
     REQUIRED_GITIGNORE_ENTRIES.filter((entry) => entry !== ENV_MCP_FILE).map((entry) => [
       entry,
-      [`/${entry}`, ...REVIEW_GATE_DOMINATORS],
+      [`/${entry}`, ...(entry === PREFLIGHT_CANARY_FILE ? STATE_DIR_DOMINATORS : REVIEW_GATE_DOMINATORS)],
     ]),
   ),
 };

@@ -50,10 +50,10 @@ async function placeGuard(tool: Tool, files: Record<string, string> = {}): Promi
  * and Copilot through the portable runner, which restores `tool_name` and
  * `tool_input` (Copilot's `bash` mapped to `Bash`); Cursor's `beforeShellExecution`.
  */
-function payload(tool: Tool, command: string): string {
-  if (tool === "cursor") return JSON.stringify({ hook_event_name: "beforeShellExecution", command, cwd: "." });
+function payload(tool: Tool, command: string, cwd?: string): string {
+  if (tool === "cursor") return JSON.stringify({ hook_event_name: "beforeShellExecution", command, cwd: cwd ?? "." });
   const extra = tool === "copilot" ? { toolName: "bash" } : { hook_event_name: "PreToolUse" };
-  return JSON.stringify({ ...extra, tool_name: "Bash", tool_input: { command } });
+  return JSON.stringify({ ...extra, tool_name: "Bash", tool_input: { command }, ...(cwd === undefined ? {} : { cwd }) });
 }
 
 /** Runs the guard as a client does, with the two variables it reads under the test's control. */
@@ -65,8 +65,8 @@ function run(guard: string, input: string, env: Record<string, string> = {}): Re
 }
 
 /** The decision each client's output carries: exit 2 and stderr, or the client's own JSON. */
-function decide(tool: Tool, guard: string, command: string, env?: Record<string, string>): Decision {
-  const result = run(guard, payload(tool, command), env);
+function decide(tool: Tool, guard: string, command: string, env?: Record<string, string>, cwd?: string): Decision {
+  const result = run(guard, payload(tool, command, cwd), env);
   const stdout = String(result.stdout).trim();
   if (tool === "claude" || tool === "codex") {
     expect(stdout, command).toBe("");
@@ -170,10 +170,90 @@ describe("the branch context read from .git", () => {
     expect(decide("claude", guard, "git push origin lane/v2").deny).toBe(false);
   });
 
-  it("counts main and master alone when .git cannot be read", async () => {
+  it("counts an implied destination as the default branch when .git cannot be read, and main and master always", async () => {
     const guard = await placeGuard("claude", { ".git": "not a pointer\n" });
     expect(decide("claude", guard, "git push origin master").deny).toBe(true);
-    expect(decide("claude", guard, "git push").deny).toBe(false);
+    expect(decide("claude", guard, "git push")).toMatchObject({ deny: true, reason: expect.stringContaining("push-default") });
+    expect(decide("claude", guard, "git push origin HEAD").deny).toBe(true);
+    expect(decide("claude", guard, "git push origin feat/x").deny).toBe(false);
+  });
+});
+
+/** A root checkout on `feat/x` with two linked worktrees beside it: `wt-main` on main, `wt-feat` on `feat/y`. */
+const LINKED: Record<string, string> = {
+  ".git/HEAD": "ref: refs/heads/feat/x\n",
+  "wt-main/.git": "gitdir: ../.git/worktrees/wt-main\n",
+  "wt-main/src/index.ts": "",
+  ".git/worktrees/wt-main/HEAD": "ref: refs/heads/main\n",
+  ".git/worktrees/wt-main/commondir": "../..\n",
+  "wt-feat/.git": "gitdir: ../.git/worktrees/wt-feat\n",
+  ".git/worktrees/wt-feat/HEAD": "ref: refs/heads/feat/y\n",
+  ".git/worktrees/wt-feat/commondir": "../..\n",
+};
+
+describe("the branch read where the command runs", () => {
+  it.each(TOOLS)("%s: reads the payload's working directory, a subdirectory's nearest .git included", async (tool) => {
+    const guard = await placeGuard(tool, LINKED);
+    expect(decide(tool, guard, "git push").deny).toBe(false);
+    for (const cwd of [getRepo().path("wt-main"), getRepo().path("wt-main", "src"), "wt-main"]) {
+      expect(decide(tool, guard, "git push", undefined, cwd), cwd).toMatchObject({ deny: true, reason: expect.stringContaining("push-default") });
+    }
+    expect(decide(tool, guard, "git push", undefined, getRepo().path("wt-feat")).deny).toBe(false);
+  });
+
+  it("refuses no feature worktree's push because the root is on the default branch", async () => {
+    const guard = await placeGuard("claude", { ...LINKED, ".git/HEAD": "ref: refs/heads/main\n" });
+    expect(decide("claude", guard, "git push").deny).toBe(true);
+    expect(decide("claude", guard, "git push", undefined, getRepo().path("wt-feat")).deny).toBe(false);
+    expect(decide("claude", guard, "git push origin HEAD", undefined, getRepo().path("wt-feat")).deny).toBe(false);
+  });
+
+  it("reads git's -C and --git-dir options, GIT_DIR, and a cd or pushd on the line", async () => {
+    const guard = await placeGuard("claude", LINKED);
+    const denied = [
+      "git -C wt-main push",
+      "git -C wt-main/src push origin HEAD",
+      "git -C wt-feat -C ../wt-main push",
+      "git --git-dir=.git/worktrees/wt-main push",
+      "git --git-dir .git/worktrees/wt-main push",
+      "GIT_DIR=.git/worktrees/wt-main git push",
+      "cd wt-main && git push",
+      "cd 'wt-main' ; git push",
+      "pushd wt-main && git push",
+      "env -C wt-main git push",
+      "env -u X --chdir=wt-main git push",
+      "sh -c 'cd wt-main && git push'",
+      "bash -lc \"git -C wt-main push\"",
+    ];
+    for (const command of denied) expect(decide("claude", guard, command), command).toMatchObject({ deny: true, reason: expect.stringContaining("push-default") });
+    for (const command of ["git -C wt-feat push", "cd wt-feat && git push", "git -C wt-main log && git push origin feat/x"]) {
+      expect(decide("claude", guard, command).deny, command).toBe(false);
+    }
+  });
+
+  it("reads a path after a cd against the cd's directory as well as the working directory", async () => {
+    // `a/wt` is a worktree on main; a plain `wt/` at the root sits in the root checkout, on `feat/x`.
+    const guard = await placeGuard("claude", {
+      ...LINKED,
+      "a/wt/.git": "gitdir: ../../.git/worktrees/nested\n",
+      ".git/worktrees/nested/HEAD": "ref: refs/heads/main\n",
+      ".git/worktrees/nested/commondir": "../..\n",
+      "wt/readme.md": "",
+    });
+    expect(decide("claude", guard, "git -C wt push").deny).toBe(false);
+    for (const command of ["cd a && git -C wt push", "cd a && cd wt && git push", "cd a; GIT_DIR=../.git/worktrees/nested git push", "env -C a git -C wt push"]) {
+      expect(decide("claude", guard, command), command).toMatchObject({ deny: true, reason: expect.stringContaining("push-default") });
+    }
+  });
+
+  it("counts an implied destination as the default branch where the place cannot be read", async () => {
+    const guard = await placeGuard("claude", LINKED);
+    const outside = getRepo().path("wt-main", "src", "index.ts");
+    for (const command of ['git -C "$WT" push', "cd && git push", "cd - && git push", "git -C missing push", `git -C ${outside} push`]) {
+      expect(decide("claude", guard, command), command).toMatchObject({ deny: true, reason: expect.stringContaining("push-default") });
+    }
+    expect(decide("claude", guard, 'git -C "$WT" push origin feat/x').deny).toBe(false);
+    expect(decide("claude", guard, "git push", undefined, getRepo().path("missing")).deny).toBe(true);
   });
 });
 
@@ -196,6 +276,11 @@ describe("the unattended push rule, the mode read from the run records", () => {
       expect(source.deny, command).toBe(true);
       if (source.deny) expect(decide("claude", guard, command)).toEqual({ deny: true, reason: expect.stringContaining(source.reason) });
     }
+    // The refusal names the record that made the session unattended, so the person knows which run to close.
+    expect(decide("claude", guard, RAW_PUSH)).toEqual({
+      deny: true,
+      reason: expect.stringContaining("unattended because .stamity/runs/2026-10-16_x/record.md reads `Status: in progress` and `Mode: unattended`."),
+    });
     expect(decide("claude", guard, RUN_END).deny).toBe(false);
   });
 
@@ -229,7 +314,10 @@ describe("the unattended push rule, the mode read from the run records", () => {
 
   it("lets STAMITY_UNATTENDED govern a run with no Mode: line, and never an attended one", async () => {
     const guard = await placeGuard("claude");
-    expect(decide("claude", guard, RAW_PUSH, { STAMITY_UNATTENDED: "1" }).deny).toBe(true);
+    expect(decide("claude", guard, RAW_PUSH, { STAMITY_UNATTENDED: "1" })).toEqual({
+      deny: true,
+      reason: expect.stringContaining("unattended because STAMITY_UNATTENDED is set and no in-progress run record reads `Mode: attended`."),
+    });
     for (const off of ["", "0", "false"]) expect(decide("claude", guard, RAW_PUSH, { STAMITY_UNATTENDED: off }).deny, off).toBe(false);
     await getRepo().seedFiles({ ".stamity/runs/2026-10-16_old/record.md": record("in progress") });
     expect(decide("claude", guard, RAW_PUSH, { STAMITY_UNATTENDED: "1" }).deny).toBe(true);
@@ -241,13 +329,22 @@ describe("the unattended push rule, the mode read from the run records", () => {
 describe("the mode read when a record cannot be", () => {
   // A permission bit is the real failure here; Windows and root ignore it, so the case runs where it holds.
   it.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
-    "refuses a raw push, naming the code and the record, when a run record cannot be read",
+    "refuses a raw push, naming the code and the record, when a run record cannot be read, and no other call",
     async () => {
       const guard = await placeGuard("claude", { ".stamity/runs/2026-10-16_x/record.md": record("in progress", "attended") });
       expect(decide("claude", guard, RAW_PUSH).deny).toBe(false);
       chmodSync(getRepo().path(".stamity", "runs", "2026-10-16_x", "record.md"), 0o000);
-      expect(decide("claude", guard, RAW_PUSH)).toEqual({ deny: true, reason: expect.stringMatching(/EACCES on .*record\.md/) });
-      chmodSync(getRepo().path(".stamity", "runs", "2026-10-16_x", "record.md"), 0o644);
+      try {
+        for (const command of [RAW_PUSH, "gh pr create --draft --fill"]) {
+          expect(decide("claude", guard, command), command).toEqual({ deny: true, reason: expect.stringMatching(/EACCES on .*record\.md/) });
+        }
+        // The mode matters only to a call the unattended rule would refuse, so these never read it.
+        for (const command of ["ls", "npm test", `chmod 644 .stamity/runs/2026-10-16_x/record.md`, RUN_END]) {
+          expect(decide("claude", guard, command).deny, command).toBe(false);
+        }
+      } finally {
+        chmodSync(getRepo().path(".stamity", "runs", "2026-10-16_x", "record.md"), 0o644);
+      }
     },
   );
 });

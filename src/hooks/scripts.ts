@@ -202,8 +202,13 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // Measured 2026-10-15 on the u14 lane (base 6cd93d17): 39,671 bytes / 1,245
   // lines (cursor, generated layout, as the suite's transform renders u6's two
   // verdicts; the bundle's copy is smaller). × 1.25 = 49,588.75 / 1,556.25,
-  // rounded up to 50,176 / 1,560.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 50_176, lines: 1_560 },
+  // rounded up to 50,176 / 1,560. Measured 2026-10-15 on base 00ff4f60, the same
+  // way: 54,060 / 1,722, past the row, because u6's round 2 (2fc0824b) grew the
+  // two verdicts the script embeds as source (thirteen rows, transfer and branch
+  // rename among them); then 60,501 / 1,863 (cursor's bytes, claude's and codex's
+  // lines) with u14's round 2, which reads the branch where the call runs
+  // (review/94). × 1.25 = 75,626.25 / 2,328.75, rounded up to 75,776 / 2,330.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 75_776, lines: 2_330 },
 };
 
 /** One generated script, ready for an adapter to place and register. */
@@ -3060,6 +3065,9 @@ const GUARD_RUNS_READ_MAX = 50;
 const GUARD_TAG_NAMES_MAX = 10_000;
 const GUARD_PACKED_REFS_MAX_BYTES = 8_388_608;
 
+/** Places a shell call's git can run in that the guard reads; past this one more counts as unreadable. */
+const GUARD_PLACES_MAX = 32;
+
 /**
  * How a client hears the guard's decision, rendered for that client alone:
  * Claude Code and Codex (through the portable runner) block on exit 2 with the
@@ -3089,15 +3097,19 @@ function guardDecisionOutput(tool: Tool): string {
  * source text the way {@link NORMALIZE_FOR_SCREEN} carries the fold, so a row
  * added there reaches this script on the next sync without an edit here.
  *
- * The branch context comes off the git metadata with `node:fs` — `HEAD` from the
- * git dir (a linked worktree's `gitdir:` pointer followed), the default branch
- * from `refs/remotes/origin/HEAD` and the local tags from `refs/tags/` and
- * `packed-refs` in the common dir — and an unreadable `.git` leaves `main` and
- * `master`, which the verdict always counts. The mode comes off the run records:
+ * The branch context comes off the git metadata with `node:fs`, read where the
+ * call runs: the payload's working directory, each `cd` or `pushd` target and
+ * each `git -C`, `--git-dir` or `GIT_DIR=` value, the nearest `.git` above each
+ * (a linked worktree's `gitdir:` pointer followed). Each place gives `HEAD` from
+ * its git dir, the default branch from `refs/remotes/origin/HEAD` and the local
+ * tags from `refs/tags/` and `packed-refs` in its common dir, and the verdict
+ * runs once per place. Where `HEAD` cannot be read, an implied destination
+ * counts as the default branch; `main` and `master` always count. The mode comes
+ * off the run records, read only for a call the unattended rule would refuse:
  * unattended when any of the {@link GUARD_RUNS_READ_MAX} newest run folders,
  * debug rounds included, holds an in-progress record reading `Mode:
  * unattended`, or when `STAMITY_UNATTENDED` is set (not "", "false", "0") and
- * none reads `Mode: attended`.
+ * none reads `Mode: attended`; the refusal names which.
  *
  * A command naming `gate preflight` that the guard allows writes
  * `{ "at": <ISO> }` to {@link PREFLIGHT_CANARY_FILE}, the pre-flight's proof
@@ -3140,6 +3152,7 @@ const RUNS_READ_MAX = ${GUARD_RUNS_READ_MAX};
 const GIT_MAX_BYTES = ${GIT_METADATA_MAX_BYTES};
 const TAG_NAMES_MAX = ${GUARD_TAG_NAMES_MAX};
 const PACKED_REFS_MAX_BYTES = ${GUARD_PACKED_REFS_MAX_BYTES};
+const PLACES_MAX = ${GUARD_PLACES_MAX};
 const CANARY_SEGMENTS = ${json(PREFLIGHT_CANARY_FILE.split("/"))};
 const SHELL_TOOLS = new Set(["Bash", "PowerShell", "Shell", "bash", "powershell", "shell"]);
 
@@ -3164,20 +3177,152 @@ function gitText(path) {
   }
 }
 
-/** The git dir HEAD lives in and the common dir the refs live in; null when .git is neither. */
-function gitDirs(root) {
-  const dotGit = join(root, ".git");
+/** The git dir HEAD lives in and the common dir the refs live in, from a git dir or a gitdir: file; null when neither. */
+function gitDirsOf(path) {
+  let gitDir = path;
   try {
-    if (lstatSync(dotGit).isDirectory()) return { gitDir: dotGit, commonDir: dotGit };
+    if (!lstatSync(path).isDirectory()) {
+      const pointer = /^gitdir:[ \t]*(.+)$/.exec((gitText(path) ?? "").split(/\r?\n/)[0]);
+      if (pointer === null) return null;
+      const target = pointer[1].trim();
+      gitDir = isAbsolute(target) ? target : resolve(dirname(path), target);
+    }
   } catch {
     return null;
   }
-  const pointer = /^gitdir:[ \t]*(.+)$/.exec((gitText(dotGit) ?? "").split(/\r?\n/)[0]);
-  if (pointer === null) return null;
-  const target = pointer[1].trim();
-  const gitDir = isAbsolute(target) ? target : resolve(root, target);
   const common = gitText(join(gitDir, "commondir"));
   return { gitDir, commonDir: common === null ? gitDir : resolve(gitDir, common) };
+}
+
+/** The git dirs of the repository a directory sits in, the nearest .git upward; null when none can be placed. */
+function gitDirsFrom(start) {
+  try {
+    if (!statSync(start).isDirectory()) return null;
+  } catch {
+    return null;
+  }
+  for (let dir = start; ; dir = dirname(dir)) {
+    try {
+      lstatSync(join(dir, ".git"));
+      return gitDirsOf(join(dir, ".git"));
+    } catch (error) {
+      if (!error || (error.code !== "ENOENT" && error.code !== "ENOTDIR")) return null;
+    }
+    if (dirname(dir) === dir) return null;
+  }
+}
+
+/** A command's words, quotes honoured, split on blanks and the shell's operators (each a null); a leading ~ read as HOME. */
+function shellWords(command) {
+  const words = [];
+  let word = null;
+  for (let k = 0; k < command.length; k += 1) {
+    const c = command[k];
+    if (c === "'") {
+      const end = command.indexOf("'", k + 1);
+      word = (word ?? "") + command.slice(k + 1, end === -1 ? command.length : end);
+      k = end === -1 ? command.length : end;
+    } else if (c === '"') {
+      word ??= "";
+      for (k += 1; k < command.length && command[k] !== '"'; k += 1) {
+        if (command[k] === "\\" && '$\`"\\\n'.includes(command[k + 1] ?? "")) k += 1;
+        word += command[k] ?? "";
+      }
+    } else if (c === "\\" && process.platform !== "win32") {
+      // A backslash escapes the next character, except on Windows, where it separates a path's parts.
+      word = (word ?? "") + (command[k + 1] ?? "");
+      k += 1;
+    } else if (/[\s;&|()<>\`]/.test(c)) {
+      if (word !== null) words.push(word);
+      if (c === "\n" || !/\s/.test(c)) words.push(null);
+      word = null;
+    } else word = (word ?? "") + c;
+  }
+  if (word !== null) words.push(word);
+  const home = process.env.HOME ?? process.env.USERPROFILE;
+  return words.map((w) => (w !== null && home && /^~(?=[\\/]|$)/.test(w) ? home + w.slice(1) : w));
+}
+
+/**
+ * Where a shell call's git runs: its working directory, each cd, pushd or env -C target, and each git -C,
+ * --git-dir or GIT_DIR= value. A cd moves where the words after it run, so every path is read against each
+ * directory the line can be in by then, and a quoted line (sh -c's, eval's) is read as a line too. null is a
+ * place that cannot be read, such as a cd with no target, or one past PLACES_MAX.
+ */
+function placesOf(command, cwd) {
+  const places = [{ work: cwd }];
+  const bases = [cwd];
+  const full = () => places.length > PLACES_MAX || bases.length > PLACES_MAX;
+  const move = (path) => {
+    for (const dir of bases.map((base) => resolve(base, path))) {
+      places.push({ work: dir });
+      if (!bases.includes(dir)) bases.push(dir);
+    }
+  };
+  const scan = (line, depth) => {
+    const words = shellWords(line);
+    for (let k = 0; k < words.length && !full(); k += 1) {
+      const word = words[k];
+      if (word === null) continue;
+      if (depth < 4 && /[\s;&|()\`]/.test(word)) scan(word, depth + 1);
+      if (word === "cd" || word === "pushd") {
+        let j = k + 1;
+        while (/^-[LPe@]+$/.test(words[j] ?? "")) j += 1;
+        const target = words[j] ?? null;
+        if (target === null || target === "-") places.push(null);
+        else move(target);
+      } else if (word === "env") {
+        for (let j = k + 1; typeof words[j] === "string" && words[j].startsWith("-"); j += 1) {
+          const option = words[j];
+          if (option === "-C" || option === "--chdir") move(words[(j += 1)] ?? "");
+          else if (option.startsWith("--chdir=")) move(option.slice(8));
+          else if (/^-C./.test(option)) move(option.slice(2));
+          else if (option === "-u" || option === "--unset") j += 1;
+        }
+      } else if (word.startsWith("GIT_DIR=")) {
+        for (const base of bases) places.push({ git: resolve(base, word.slice(8)) });
+      } else if (/(?:^|[\\/])git(?:\.exe)?$/i.test(word)) {
+        let from = [...bases];
+        for (let j = k + 1; j < words.length; j += 1) {
+          const option = words[j];
+          if (option === null) break;
+          const value = option === "-C" || option === "--git-dir" ? (words[(j += 1)] ?? "") : option.slice(10);
+          if (option === "-C") {
+            from = from.map((base) => resolve(base, value));
+            for (const dir of from) places.push({ work: dir });
+          } else if (option === "--git-dir" || option.startsWith("--git-dir=")) {
+            for (const base of from) places.push({ git: resolve(base, value) });
+          } else if (["-c", "--work-tree", "--namespace", "--config-env", "--super-prefix"].includes(option)) j += 1;
+          else if (!option.startsWith("-")) break;
+        }
+      }
+    }
+  };
+  scan(command, 0);
+  if (full()) places.push(null);
+  return places;
+}
+
+/**
+ * The branch context of each place a shell call's git runs in, one per git dir. Where HEAD cannot be read, an
+ * implied destination counts as the default branch, so a refspec-less push there is refused.
+ */
+function contextsOf(command, cwd) {
+  const contexts = new Map();
+  for (const place of placesOf(command, cwd)) {
+    const dirs = place === null ? null : place.git !== undefined ? gitDirsOf(place.git) : gitDirsFrom(place.work);
+    const key = dirs === null ? "" : dirs.gitDir;
+    if (contexts.has(key)) continue;
+    const head = dirs === null ? null : gitText(join(dirs.gitDir, "HEAD"));
+    const origin = dirs === null ? null : gitText(join(dirs.commonDir, "refs", "remotes", "origin", "HEAD"));
+    const defaultBranches = origin !== null && origin.startsWith("ref: refs/remotes/origin/") ? [origin.slice(25)] : [];
+    contexts.set(key, {
+      currentBranch: head === null ? (defaultBranches[0] ?? "main") : head.startsWith("ref: refs/heads/") ? head.slice(16) : null,
+      defaultBranches,
+      tags: dirs === null ? [] : localTags(dirs.commonDir),
+    });
+  }
+  return [...contexts.values()];
 }
 
 /** The local tag names, loose and packed, up to TAG_NAMES_MAX. */
@@ -3239,9 +3384,13 @@ function recordHead(path) {
   return { inProgress: status !== null && IN_PROGRESS.test(status), mode };
 }
 
-/** Whether a run is unattended: a record says so, or the variable does and no record says attended. */
-function unattended(root) {
+/**
+ * What makes the session unattended, as a refusal names it: the in-progress records reading Mode: unattended,
+ * or the variable when it is set and no in-progress record reads attended; null when nothing does.
+ */
+function unattendedBy(root) {
   const modes = { attended: false, unattended: false };
+  const runs = [];
   const runsDir = join(root, ...RUNS_SEGMENTS);
   let entries = [];
   try {
@@ -3258,9 +3407,15 @@ function unattended(root) {
   for (const name of names) {
     const head = recordHead(join(runsDir, name, RECORD_FILE));
     if (head !== null && head.inProgress && head.mode !== null) modes[head.mode] = true;
+    if (head !== null && head.inProgress && head.mode === "unattended") runs.push([...RUNS_SEGMENTS, name, RECORD_FILE].join("/"));
+  }
+  if (runs.length > 0) {
+    const named = runs.slice(0, 3).join(", ") + (runs.length > 3 ? " and " + (runs.length - 3) + " more" : "");
+    return "This session is unattended because " + named + " read" + (runs.length === 1 ? "s" : "") + " \`Status: in progress\` and \`Mode: unattended\`.";
   }
   const flag = (process.env.STAMITY_UNATTENDED ?? "").trim().toLowerCase();
-  return modes.unattended || (!["", "false", "0"].includes(flag) && !modes.attended);
+  if (["", "false", "0"].includes(flag) || modes.attended) return null;
+  return "This session is unattended because STAMITY_UNATTENDED is set and no in-progress run record reads \`Mode: attended\`.";
 }
 
 /** The shell command a payload carries; null when the call is not a shell call. */
@@ -3301,19 +3456,17 @@ function decide() {
   const command = shellCommand(payload);
   if (command === null) return null;
   const root = repoRoot();
-  const dirs = gitDirs(root);
-  const head = dirs === null ? null : gitText(join(dirs.gitDir, "HEAD"));
-  const origin = dirs === null ? null : gitText(join(dirs.commonDir, "refs", "remotes", "origin", "HEAD"));
-  const ctx = {
-    currentBranch: head !== null && head.startsWith("ref: refs/heads/") ? head.slice(16) : null,
-    defaultBranches: origin !== null && origin.startsWith("ref: refs/remotes/origin/") ? [origin.slice(25)] : [],
-    tags: dirs === null ? [] : localTags(dirs.commonDir),
-  };
-  const always = personOnlyVerdict(command, ctx);
-  if (always.deny) return always.reason;
-  if (unattended(root)) {
-    const run = unattendedPushVerdict(command);
-    if (run.deny) return run.reason;
+  // Where the call runs: the payload's working directory (relative to the root), else the root.
+  const cwd = typeof payload.cwd === "string" && payload.cwd !== "" ? resolve(root, payload.cwd) : root;
+  for (const ctx of contextsOf(command, cwd)) {
+    const always = personOnlyVerdict(command, ctx);
+    if (always.deny) return always.reason;
+  }
+  // The mode is read only for a call the unattended rule would refuse, so an unreadable record refuses no other call.
+  const run = unattendedPushVerdict(command);
+  if (run.deny) {
+    const why = unattendedBy(root);
+    if (why !== null) return run.reason + " " + why;
   }
   if (/(?:^|[^\w-])gate\s+preflight(?![\w-])/.test(command)) writeCanary(root);
   return null;

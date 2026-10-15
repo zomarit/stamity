@@ -522,9 +522,7 @@ describe("ensureGitignoreEntry", () => {
     "/.stamity/*",
     [".stamity", "**"].join("/"),
     "/.stamity/**",
-    ".stamity/review-gate.json*",
-    "/.stamity/review-gate.json*",
-  ])("adds no review-gate line when %s already ignores it", async (rule) => {
+  ])("adds no review-gate or canary line when %s already ignores them", async (rule) => {
     const dir = repo();
     const existing = `.env.mcp\n${rule}\n`;
     await dir.seedFiles({ ".gitignore": existing });
@@ -533,6 +531,20 @@ describe("ensureGitignoreEntry", () => {
 
     expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(existing);
   });
+
+  // The prefix rule covers the review gate's files and not the canary, which git would then let a commit carry.
+  it.each([".stamity/review-gate.json*", "/.stamity/review-gate.json*"])(
+    "adds no review-gate line when %s already ignores it, and still adds the canary",
+    async (rule) => {
+      const dir = repo();
+      const existing = `.env.mcp\n${rule}\n`;
+      await dir.seedFiles({ ".gitignore": existing });
+
+      await ensureGitignoreEntry(dir.dir);
+
+      expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(`${existing}${CANARY_ENTRY}\n`);
+    },
+  );
 
   it("leaves a negated review-gate file alone and adds only the entries it does not name", async () => {
     const dir = repo();
