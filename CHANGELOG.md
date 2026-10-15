@@ -489,11 +489,16 @@ an item that rests on either says it was not walked.
   exited with a status of its own, the runner now takes that status and the hook's output as the
   result, as for any other hook. A hook killed by a signal is still a failed hook, and a hook that
   could not start, or that timed out, is reported as before.
-- **Cursor and Copilot hooks run wherever the session starts.** Their hook commands found the
-  hook runner from the folder the session was started in, so a session started in a subfolder
-  could not find it and its hooks failed there. Each command now walks up to the project root
-  (Cursor's `CURSOR_PROJECT_DIR` first) before it runs, and a runner missing at the root exits 1
-  naming the `sync` call that restores it. The next `sync` rewrites a 1.14 hooks file in place.
+- **Cursor and Copilot hook commands no longer rest on the folder they run in.** Their 1.14 hook
+  commands named the hook runner by a path relative to the folder the client runs them in, so
+  they found it only while that folder was the project root. Both clients keep it there for the
+  project hooks this engine writes: the Cursor agent CLI ran every hook from the project root on
+  2026-09-20, after a `cd` into a subfolder too, and Copilot runs each entry from its `cwd`,
+  written as `"."` and documented as relative to the repository root
+  (`.github/client-contracts.md`, which records no 1.14 hook failing in a subfolder). Each command
+  now walks up to the project root (Cursor's `CURSOR_PROJECT_DIR` first) before it runs, and a
+  runner missing at the root exits 1 naming the `sync` call that restores it. The next `sync`
+  rewrites a 1.14 hooks file in place.
   Codex's commands already walked up and keep their form, but its hooks file still changes at the
   upgrade, since every command names the release ("Upgrading from 1.14.0" says what follows).
 - **`/st-rework` says what its deferred rows do on `stop`.** The rows it appended at routing
