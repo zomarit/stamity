@@ -284,10 +284,13 @@ on an effort word, that word optionally followed by Cursor's `-fast` modifier (`
 takes the suffix, since `fast` is no effort word (`EFFORT_VARIANT` and `EFFORT_SUFFIX`, `src/roster/modelLadder.ts:507-510`).
 Cursor reaches the rule through its adapter, which passes the saved list to the resolver (REQ-LADDER-007).
 
-- GIVEN Cursor's saved list holding `claude-opus-5-5-high` and the class `advanced` at effort `high` THEN the agent file
-  names `claude-opus-5-5-high` with no `[effort=…]`; GIVEN a pin `grok-4.7-low-fast` and no list THEN no bracket
-  follows it, and GIVEN `model-fast` THEN `[effort=<level>]` does (`test/roster/modelLadder.test.ts`, the effort-suffix
-  case; `test/adapters/cursor.test.ts`; added 2026-10-15).
+- GIVEN a Cursor pin `claude-opus-5-5-high` that the saved list holds, and the class `advanced` at effort `high`, THEN
+  the agent file names `claude-opus-5-5-high` with no `[effort=…]`; GIVEN a pin `grok-4.7-low-fast` and no list THEN no
+  bracket follows it, and GIVEN `model-fast` THEN `[effort=<level>]` does (`test/roster/modelLadder.test.ts`, the
+  effort-suffix case; `test/adapters/cursor.test.ts`; added 2026-10-15). (Amended 2026-10-15, ledger row `qa/1` of run
+  `2026-10-14_cli-native` and its fix `f575afb1`: Cursor writes no model but a pin (REQ-LADDER-006), so the listed
+  variant reaches an agent file only as a pin; it read "GIVEN Cursor's saved list holding `claude-opus-5-5-high` and the
+  class `advanced` at effort `high`".)
 
 ### REQ-LADDER-005 — Pins per client
 
@@ -337,15 +340,26 @@ Added 2026-10-15 (plan 020 file 2, units `e2-model-defaults-lister`, `e3-config-
 with their fix rounds; the delta's amended text of 2026-10-15 from `build/66`).
 
 Given a Cursor, Codex or Copilot CLI on `PATH`, When `init`, `sync` or `workspace sync` runs, Then the client's model list
-is read once, within 10 s, persisted under `models.listed.<client>` as `{ ids, source }`, and each class takes the first
-candidate of the shipped priority list (`MODEL_PRIORITY`, `src/roster/modelDefaults.ts`, its citations dated) the saved
-list holds; Given a saved list holding none of a class's candidates, Then that class writes no model key. Given no CLI
-and no saved list, Then Copilot and Codex take the shipped list's first entry and Cursor writes no model. Claude Code
-keeps its family aliases. Emission and `check`'s drift gate never start a client.
+is read once, within 10 s, persisted under `models.listed.<client>` as `{ ids, source }`, and on Codex and Copilot each
+class takes the first candidate of the shipped priority list (`MODEL_PRIORITY`, `src/roster/modelDefaults.ts`, its
+citations dated) the saved list holds; Given a saved list holding none of a class's candidates, Then that class writes no
+model key. Given no CLI and no saved list, Then Copilot and Codex take the shipped list's first entry. On Cursor no class
+takes a pick, list or no list: an unpinned class writes no model, so its sub-agent runs on the parent agent's model,
+and Cursor's saved list serves only the `[effort=…]` rule of REQ-LADDER-004 and the `model-pins` row. Claude Code
+keeps its family aliases. Emission and `check`'s drift gate never start a client. (Amended 2026-10-15, ledger row `qa/1`
+of run `2026-10-14_cli-native` and its fix `f575afb1`: Cursor checks a sub-agent call's model against a list of its
+own, which follows the parent agent's model and which no command prints, so it refused the class model picked from the
+account's list and no sub-agent ran on the default dispatch path. It read "and each class takes the first candidate of
+the shipped priority list (…) the saved list holds" and "Given no CLI and no saved list, Then Copilot and Codex take the
+shipped list's first entry and Cursor writes no model".)
 
 - **The resolver's order** (`baseModelValue`, `src/roster/modelLadder.ts:555-578`): the pin, kept while the saved list
   holds it and re-picked from that list when it does not, keeping the operator's value where the re-pick finds
   nothing; the client's alias; the pick over the saved list; the shipped list's entry 0 only when no list was read.
+  On Cursor the pick gives nothing, list or no list (`pickModel`, `src/roster/modelDefaults.ts`), so a Cursor pin is
+  kept as typed, also when the saved list lacks it, and an unpinned Cursor class resolves to no model. (Amended
+  2026-10-15, ledger row `qa/1` and `f575afb1`; the order is unchanged in code, and without that sentence it read, for
+  Cursor too, "re-picked from that list when it does not" and "the pick over the saved list".)
   A list holds a pin when it holds it exactly or holds `<pin>-<effort word>`, optionally `-fast`, never a longer id
   that merely starts with it, and a bracketed pin is judged by its base id before `[` (`listHoldsPin`, `:541-544`;
   `review/78`, `review/79`). The pick is a pure function of the pins, the saved list and the priority order; no pick is
@@ -370,9 +384,13 @@ keeps its family aliases. Emission and `check`'s drift gate never start a client
 - GIVEN each captured client output under `test/fixtures/client-models/` THEN its parser returns the ids in order; GIVEN
   an `agent` whose output does not open with `Available models` THEN `unreadable`; GIVEN a binary that sleeps 20 s THEN
   `timeout` within 11 s (`test/cli/engine/clientModels.test.ts`).
-- GIVEN no list THEN Copilot and Codex take entry 0 and Cursor nothing; GIVEN a saved Codex list holding no candidate of
-  a class THEN that class's agent file carries no `model` and keeps `model_reasoning_effort`
-  (`test/roster/modelDefaults.test.ts`, `test/roster/modelLadder.test.ts`, `test/adapters/codex.test.ts`).
+- GIVEN no list THEN Copilot and Codex take entry 0 and Cursor nothing; GIVEN a saved Cursor list holding every
+  candidate's exact effort variant and no pin THEN Cursor nothing too, and GIVEN a Cursor pin the list lacks THEN the pin
+  as typed; GIVEN a saved Codex list holding no candidate of a class THEN that class's agent file carries no `model` and
+  keeps `model_reasoning_effort` (`test/roster/modelDefaults.test.ts`, `test/roster/modelLadder.test.ts`,
+  `test/adapters/codex.test.ts`). (The two Cursor GIVENs after the first added 2026-10-15, ledger row `qa/1` and
+  `f575afb1`; the line read "GIVEN no list THEN Copilot and Codex take entry 0 and Cursor nothing; GIVEN a saved Codex
+  list", with no case for a saved Cursor list.)
 - GIVEN a fake lister answering for Cursor WHEN `sync` runs THEN `models.listed.cursor` is persisted and a second `sync`
   moves no byte but the `updatedAt` stamp; GIVEN the lister timing out THEN the saved list is kept; GIVEN
   `STAMITY_NO_CLIENT_PROBE=1` THEN no probe runs; GIVEN 500 ids and hostile entries THEN 200 are kept and every bad id
@@ -401,19 +419,37 @@ the corpus names no client in model-facing text (`content/commands/st-work.md:46
   no `outranks` in the paragraph, and checks each rung of the order on the resolver; GIVEN `work.test.ts` THEN the
   body and its reserve are unchanged (added 2026-10-15).
 
+Amended 2026-10-15 (ledger row `qa/1` of run `2026-10-14_cli-native`, its fix `f575afb1`). The two sentences quoted
+above no longer stand next to each other: the shipped paragraph carries one more sentence between them, "A client that
+checks a sub-agent's model against a list it never prints gets a pin alone, as typed, so an unpinned class's sub-agent
+there runs on the parent agent's model." (`content/commands/st-work.md:466-467`, read at `6bc07bb8`). It names no client,
+as the paragraph does not; Cursor is that client (REQ-LADDER-006). The paragraph kept its line count, so the citation
+`content/commands/st-work.md:462-469` stands. The quote above is the paragraph as it read before, with "Where an agent
+file's model" following "the key is left out." directly.
+
+- GIVEN the wording case THEN it reads the new sentence too, and checks it on the resolver: a Cursor list gives an
+  unpinned class no model, and a pin the list lacks resolves to `<pin>[effort=<level>]`
+  (`test/roster/modelLadder.test.ts`; added 2026-10-15).
+
 ### REQ-LADDER-007 — Each client carries the pick
 
 Added 2026-10-15 (plan 020 file 2, units `e7-cursor-pins` and `e8-copilot-codex-claude-pins` with their fix rounds; the
 delta's amended text from `build/65`, `build/66` and `review/113`).
 
 - **Claude Code** keeps its family aliases, `frontier` mapped to the documented `fable`.
-- **Cursor.** The agent file's `model:` is the class's resolved value, with no doubled effort (REQ-LADDER-004). A
+- **Cursor.** The agent file's `model:` is the operator's pin for the class, as typed, also when the saved list lacks
+  it, with no doubled effort (REQ-LADDER-004); with no pin, list or no list, the key is absent. A
   `preToolUse` hook on `Task`, `.stamity/generated/hooks/cursor/stamity-model-pins.mjs` with the map built in, is wired
   through the walk-up starter (REQ-FLOW-084) and never `failClosed`; it copies `tool_input` and sets `model` only when
   `tool_name` is `Task`, `model` is absent and `subagent_type` is an emitted `stamity-*` id whose class has a model, and
   every other payload, a malformed one included, answers `{"permission":"allow"}` with exit 0. The map's `model` is
-  what a `Task` call can pass: a listed id or the operator's pin as typed, never an engine-added `[effort=…]` group, which
-  stays in the agent file (`buildCursorModelMap` and `callableModel`, `src/adapters/cursor.ts`; `review/100`).
+  the operator's pin as typed, never an engine-added `[effort=…]` group, which stays in the agent file, and is absent
+  with no pin (`buildCursorModelMap` and `callableModel`, `src/adapters/cursor.ts`; `review/100`). Cursor accepts a
+  sub-agent call's model only from the models it offers sub-agents, a list that follows the parent agent's model and that
+  no command prints, so a pin outside that list is refused and the touchpoint retries on the closest allowed model, as
+  the touchpoint amendment below says. (Amended 2026-10-15, ledger row `qa/1` of run `2026-10-14_cli-native` and its
+  fix `f575afb1`, with `cut/10` of the same run for the refused pin; it read "The agent file's `model:` is the class's
+  resolved value" and "The map's `model` is what a `Task` call can pass: a listed id or the operator's pin as typed".)
 - **Copilot.** Agent files carry `models: [<CLI ids>]`, the class's model first, then its other shipped candidates the
   saved list holds, and, where the shipped list gives the model a display name, a `model: "<Display Name> (copilot)"`
   line whose reader on these agents is unverified, since every agent sets `target: github-copilot`. No `modelPolicy`. A
@@ -429,18 +465,24 @@ delta's amended text from `build/65`, `build/66` and `review/113`).
 - **The map.** Every client gets `.stamity/generated/models/<client>.json`,
   `{ "classes": { "<class>": { "model"?, "fallbacks": [...] } }, "roles": { "stamity-<id>": "<class>" } }`, every ladder
   class in ladder order and every emitted role; `fallbacks` lists the class's other shipped candidates on the list,
-  Claude's is empty. Each is an `infra` row of its client.
+  Claude's and Cursor's are empty. Each is an `infra` row of its client. (Amended 2026-10-15, ledger row `qa/1` and
+  `f575afb1`; it read "Claude's is empty".)
 - **The capability facts** say the agent-file `model` on Cursor is a default, not a hard limit, and that Stamity carries
   it on the dispatch and by a hook; Copilot's `model-pick` row marks its `models` claim as the CLI reference's alone and
   its `cloud-model` row says the cloud agent's picker decides; Codex's `model-escalation` row says a file's `model` takes
   precedence over a per-call escalation where one is written (`build/38`, `build/62`, `review/109`, `review/113`).
 
-- GIVEN a Task payload without `model` for `stamity-reviewer` THEN the hook answers the map's class model; GIVEN one with
+- GIVEN a Task payload without `model` for `stamity-reviewer`, its class pinned, THEN the hook answers the map's class
+  model; GIVEN a saved list and no pin THEN it fills nothing; GIVEN one with
   `model`, an unmapped id, `__proto__` or extra fields THEN `{"permission":"allow"}` and no other field moves; GIVEN a
   malformed payload THEN valid JSON `allow` and exit 0; GIVEN the command run from `repo/sub/deeper` THEN the same
-  answer (`test/adapters/cursorModelHook.test.ts`).
-- GIVEN a Cursor pin and no list THEN the agent file carries `<pin>[effort=<level>]` and the map `<pin>`; GIVEN no list
-  and no pin THEN no `model:` line and an empty map class (`test/adapters/cursor.test.ts`).
+  answer (`test/adapters/cursorModelHook.test.ts`). (Amended 2026-10-15, ledger row `qa/1` and `f575afb1`; it read
+  "GIVEN a Task payload without `model` for `stamity-reviewer` THEN the hook answers the map's class model", with no
+  case for a saved list and no pin.)
+- GIVEN a Cursor pin and no list THEN the agent file carries `<pin>[effort=<level>]` and the map `<pin>`; GIVEN a Cursor
+  pin the saved list lacks THEN it is written as typed; GIVEN no pin, list or no list, THEN no `model:` line and an empty
+  map class, its `fallbacks` `[]` (`test/adapters/cursor.test.ts`). (Amended 2026-10-15, ledger row `qa/1` and
+  `f575afb1`; it read "GIVEN no list and no pin THEN no `model:` line and an empty map class".)
 - GIVEN no pin and no list THEN Copilot's agent files carry `models` and Codex's `model` from the shipped list; GIVEN a
   Codex pin THEN it wins; GIVEN a display-form Copilot pin THEN it is in neither `models`, `model:`, the map nor a
   prompt file that declares its class, and one sanitised warning names the class; GIVEN a Copilot id pin the saved list
@@ -476,10 +518,12 @@ normally, and `check` starts `codex` only when no list was saved, then with `--b
 row's note says which list it compared with (`review/136`). It judges a model by the resolver's own predicate, `listHoldsPin`, so the report and the
 emission agree (`review/86`). A pinned model the list lacks warns naming the client, the class and the model, with
 `config set model.<class>.<client> <id>`; an emitted model the list lacks warns naming `sync`. Where the live list is
-the catalogue `sync` reads (Cursor, Copilot) and the live read answers, a class whose model `sync` would resolve from
+the catalogue `sync` picks from (Copilot) and the live read answers, a class whose model `sync` would resolve from
 the live list differently from the one the files carry, resolved from the saved list or, where none was saved, with no
 list, warns naming the client, the class, both models and `sync`, unless the row already warns for that class
-(`review/135`). With nothing to compare
+(`review/135`). On Cursor only a pin is written, as typed, so the row compares pins alone there and `sync` never
+resolves a different model from a list. (Amended 2026-10-15, ledger row `qa/1` of run `2026-10-14_cli-native` and its
+fix `f575afb1`; it read "Where the live list is the catalogue `sync` reads (Cursor, Copilot)".) With nothing to compare
 the row passes with `unverified` and its reason in the detail; under `STAMITY_NO_CLIENT_PROBE=1` it starts no client and
 reads the saved list only. Every printed value passes `sanitizeLabel`, and the row never fails.
 
@@ -488,13 +532,17 @@ reads the saved list only. Every printed value passes `sanitizeLabel`, and the r
   `pack-reach`'s index plus one; GIVEN a fake `codex` on `PATH` and the switch set THEN it is not started; GIVEN a saved
   Codex list THEN no `codex` is started; GIVEN a saved Copilot list lacking the pin and a live one holding the pin and the
   re-pick THEN `warn` naming both models and `sync`; GIVEN no saved Cursor list and a live one holding an unpinned
-  class's variant THEN `warn` naming `none`, that model and `sync` (`test/cli/commands/check.test.ts`, the describe
-  "check — model-pins").
+  class's variant THEN `pass` with "cursor: no model pinned or emitted to compare (read live)", GIVEN that list saved
+  and the probe off THEN `pass` with "… (saved by the last sync)", and GIVEN a Cursor pin the list lacks THEN one `warn`
+  naming the pin (`test/cli/commands/check.test.ts`, the describe "check — model-pins"). (Amended 2026-10-15, ledger
+  row `qa/1` and `f575afb1`; the Cursor case read "THEN `warn` naming `none`, that model and `sync`".)
 
 As built, where the delta differed: `checkModelPins` takes the working folder as a fourth parameter, which the lister
 needs. Open, as Minors of the run: a pin live-listed but missing from the saved list passed with no nudge to `sync`
-(`review/88`), which `review/135`'s warning now gives on Cursor and Copilot, with or without a saved list, and no test reaches the `unreadable`
-reason (`review/89`).
+(`review/88`), which `review/135`'s warning now gives on Copilot, with or without a saved list, and no test reached the
+`unreadable` reason (`review/89`), which `856c71a5` now tests. (Amended 2026-10-15, the first clause for ledger row
+`qa/1` and `f575afb1`, the second for `856c71a5`; it read "now gives on Cursor and Copilot" and "no test reaches the
+`unreadable` reason".)
 
 ## References
 
@@ -515,8 +563,11 @@ reason (`review/89`).
   `content/commands/st-work.md:260-262` for "the fresh fixer spawned on a stronger class": that
   text is gone, and the 2026-10-09 paragraph cites what replaced it. Every other citation in
   those two requirements stays at `d227ca57`: `test/corpus/commands/work.test.ts:1000-1003`,
-  `test/roster/modelLadder.test.ts:130-142`, `docs/capability-matrix.md:240` and
-  `src/roster/modelLadder.ts:36`, `:48-56`, which the run also moved. A follow-up pass on that
+  `test/roster/modelLadder.test.ts:130-142` and
+  `src/roster/modelLadder.ts:36`, `:48-56`, which the run also moved. (Amended 2026-10-15, ledger row `cut/5` of run
+  `2026-10-14_cli-native`: REQ-LADDER-002's amendment of that day, `review/142`, cites `docs/capability-matrix.md:232`
+  read at `c7158dbf`, and `:240` now stands only in the text that amendment quotes; this list read
+  "`test/roster/modelLadder.test.ts:130-142`, `docs/capability-matrix.md:240` and".) A follow-up pass on that
   unit the same day re-pointed this file's three citations of `src/cli/commands/config.ts` to
   `9a0ba4cf`, after the run's QA fix round put the effort hint's legacy clause above them
   (`501d4997`, 24 lines): `:441-458` became `:465-482`, `:470-481` became `:494-505` and

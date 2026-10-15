@@ -1666,9 +1666,15 @@ As built, where the delta differed: the delta named `node`-less exits only for C
 `preToolUse` and Cursor's `subagentStart`; the suite holds every command, and names the Windows code: the delta's
 9009 is the `%ERRORLEVEL%` inside a `cmd` session, while the `cmd /c` process exits 1, as the first Windows run showed
 (`review/130`), so the suite asserts 1 and that none of the starter's own messages ran. The container run and the
-Windows `cmd` path had not run before the pull request's CI (`build/69`, open until that CI shows them green). Nothing
-refreshes the pinned digest, so the job keeps the 2026-10-14 image's toolchain until someone re-reads it
-(`review/115`, open). This is ordinary testing, not a run in any vendor's cloud.
+Windows `cmd` path had not run before the pull request's CI (`build/69`, open until that CI shows them green). The
+release checklist's per-release section re-reads the pinned digest at each cut, a patch included: a line before the tag
+reads the digest `node:24-bookworm` resolves to through the registry's HTTP API, with the command the job's comment
+prints, and when the tag resolves to a newer build, bumps the digest and the comment's read date in a `main` commit
+before the tag, the release record stating the digest read and whether it moved
+(`.github/release-controls-checklist.md`, the line that opens "A further line rides the cut"; `21532a5f`, `review/115`).
+Between cuts the job keeps the image the last cut read. This is ordinary testing, not a run in any vendor's cloud.
+(Amended 2026-10-15, ledger row `cut/6` of run `2026-10-14_cli-native`; it read "Nothing refreshes the pinned digest,
+so the job keeps the 2026-10-14 image's toolchain until someone re-reads it (`review/115`, open).")
 
 **Expand/contract:** an added required job; the ruleset requires `all-ci-checks` alone, so no required context goes
 missing. Rollback is a revert of the job with its aggregator assertions.
