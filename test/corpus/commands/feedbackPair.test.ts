@@ -1589,30 +1589,46 @@ describe("feedback pair — unattended (REQ-FLOW-097, REQ-FLOW-100, REQ-CTX-012)
     const handoff = clause(artifact(REWORK).parsed.body, "## 6. Plan handoff");
 
     expect(handoff).toContain(
-      "On `execute now`, continue into `/st-work` in this session with the persisted plan as its input, passing `--unattended` when this run is unattended (`--unattended`, or `STAMITY_UNATTENDED=1` with no `--attended`), else `--attended`.",
+      "On `execute now`, continue into `/st-work` in this session with the persisted plan as its input, the hand-off carrying `run-mode: unattended` when this run is unattended (`--unattended`, or `STAMITY_UNATTENDED` set to any value but empty, `false` or `0`, with no `--attended`), else `run-mode: attended`.",
     );
+    // REQ-FLOW-089's hand-off field, as `/st-debug` writes it; no flag form beside it.
+    expect(handoff).not.toMatch(/passing `--(?:un)?attended`/);
   });
 
   it("pr-resolve opens a record of its own with the six head lines and takes the skill before the first fetch (REQ-FLOW-097, REQ-CTX-012)", () => {
     const row = unattendedRow();
 
     expect(row).toContain("Run unattended (`--unattended`, or `STAMITY_UNATTENDED=1` with no `--attended`), this command keeps a record.");
+    // `review/45`: the skill's `/st-pr-resolve` entry, with no ready check (the threads are the
+    // input, by reference) and no `run start` (which would name a branch of its own).
     expect(row).toContain(
-      "Before any read it opens `.stamity/runs/<UTC date>_pr-resolve-<n>/record.md` (`-r<round>` appended to the folder from round 2) with `Status: in progress`, `Mode: unattended`, `Plan: none — pr-resolve #<n>` and `Invocation: <this command line, verbatim>` bare at column 0 among its first 15 lines;",
+      "It invokes the `st-unattended` skill by name and follows its `/st-pr-resolve` entry, which runs no `stamity plan check` and no `stamity run start`: the pre-flight names this pull request as `--item <owner>/<repo>#<n>` before the first fetch, and `Branch:` and `Base:` come only from the pull request's first metadata read, `Branch:` its head ref and `Base:` its head sha.",
     );
-    // `Branch:` is the push target the run verbs read, so the author-chosen ref passes the
-    // allowlist first; `Base:` is the head, so only this run's own change is held or scanned.
+    // `review/50`, `review/52`: an author-chosen ref outside the allowlist, the default branch, or
+    // a local branch holding commits the head lacks is refused, never reset.
     expect(row).toContain(
-      "the pull request's first metadata read adds `Branch:`, its head ref, once that ref passes the allowlist below and is not the base repository's default branch, and `Base:`, its head sha.",
+      "A head ref that fails the allowlist below or is the base repository's default branch is refused, and so is a local branch of that name whose tip is neither `<sha>` nor an ancestor of it (`git merge-base --is-ancestor`), never reset.",
     );
     expect(row).toContain(
-      "It then invokes the `st-unattended` skill by name and follows it, the pre-flight naming this pull request as `--item <owner>/<repo>#<n>`, before the first fetch.",
+      "A refusal before the head is checked out pushes nothing and ends as one scanned comment on this pull request; before the record opens, it writes no record.",
     );
+    // `review/46`: the round is known only from the fetch, so the folder opens after it.
+    expect(row).toContain(
+      "The record, `.stamity/runs/<UTC date>_pr-resolve-<n>-r<round>/record.md`, opens only once the fetch-result guards below have fixed the round, so a second round the same day never reuses the first's folder, with `Status: in progress`, `Mode: unattended`, `Plan: none — pr-resolve #<n>`, `Invocation: <this command line, verbatim>`, `Branch:` and `Base:` bare at column 0 among its first 15 lines.",
+    );
+    expect(row).not.toMatch(/Before any read it opens/);
+    // The refusals come before the checkout they guard, and the record before it too.
+    expect(row.indexOf("is refused, and so is a local branch")).toBeLessThan(row.indexOf("The head is then checked out"));
+    expect(row.indexOf("The record, ")).toBeLessThan(row.indexOf("The head is then checked out"));
     // The run verbs push to `origin` only, so a fork's head cannot be the push target.
     expect(row).toContain("The Fork PR row below refuses every fork, since the run verbs push only to `origin`.");
     expect(row).toContain(
-      'The head is checked out locally under the `Branch:` name and must land on `Base:` — in a REST-only session `git checkout -B "<ref>" "<sha>"`, in place of `pr-resolve-<n>`.',
+      'The head is then checked out locally under the `Branch:` name and must land on `Base:` — in a REST-only session `git checkout -B "<ref>" "<sha>"`, in place of `pr-resolve-<n>`.',
     );
+    // `review/44`: the Fork PR row itself refuses every fork unattended, maintainer edits included.
+    const preflight = clause(artifact(PR_RESOLVE).parsed.body, "## Pre-flight");
+    const fork = /\| Fork PR \|(.*?)\| Scope \|/.exec(preflight)?.[1] ?? "";
+    expect(fork).toContain("Unattended, every fork is **refused** before any checkout, maintainer edits or not.");
     // The REST-only paragraph names the one checkout the author's ref may enter.
     expect(clause(artifact(PR_RESOLVE).parsed.body, "## Pre-flight")).toContain(
       "The author's branch name enters no fetch, and no checkout but the Unattended row's.",
@@ -1626,7 +1642,12 @@ describe("feedback pair — unattended (REQ-FLOW-097, REQ-FLOW-100, REQ-CTX-012)
     expect(row).toContain(
       "Every push is `stamity run checkpoint --run <its id>` to that branch, never a new one and never a raw `git push`;",
     );
-    expect(row).toContain("findings routed to `/st-work` carry `--unattended`;");
+    expect(row).toContain("only the mechanical class is fixed, and no finding goes to `/st-work` (section 4);");
+    expect(row).not.toContain("carry `--unattended`");
+    // `review/48`: an in-session hand-off is no persisted plan, so the ready check would refuse it.
+    expect(fix).toContain(
+      "Unattended, this command fixes only the mechanical class, through its own `fixer`, and sends nothing to `/st-work`: every other finding a FIX route reached is DEFER instead, rationale `needs a planned run`, a morning-list row, its reply DEFER's.",
+    );
     expect(row).toContain(
       'after the Close writes its rows, `stamity run end --run <its id> --title "pr-resolve #<n>"` finds this open pull request and, its body carrying no run marker, posts the morning list as one comment.',
     );
@@ -1641,8 +1662,10 @@ describe("feedback pair — unattended (REQ-FLOW-097, REQ-FLOW-100, REQ-CTX-012)
     const replies = clause(artifact(PR_RESOLVE).parsed.body, "## 5. Replies");
 
     expect(replies).toContain(
-      "**Unattended, a reply posts only from a scanned file.** The body, with the hygiene guards below applied, is written to a file under this run's folder and posted from it, `-F body=@<file>` (the `@` reads the file as the string), only after `stamity gate scan --text <file> --label reply` exits 0.",
+      "**Unattended, a reply posts only from a scanned file.** The body, with the hygiene guards below applied, is written to a file under this run's folder and posted from it as the raw string the field-typing rule asks for, `-f body=\"$(cat <file>)\"`, never `-F body=@<file>`, only after `stamity gate scan --text <file> --label reply` exits 0.",
     );
+    // The field-typing rule stands without an exception: `body` is always `-f`.
+    expect(replies).toContain("string fields (`body`) need `-f`");
     // Edge case: a held reply is not posted, and it is not lost either.
     expect(replies).toContain(
       "A reply the scan holds is not posted: its line and rule go on the morning list and on the run's `not done` line with its finding id.",
@@ -1656,20 +1679,28 @@ describe("feedback pair — unattended (REQ-FLOW-097, REQ-FLOW-100, REQ-CTX-012)
     const collect = clause(body, "## 1. Collect");
 
     expect(collect).toContain(
-      "Unattended, each comment author's permission is read once per author through `gh api repos/{owner}/{repo}/collaborators/<login>/permission --jq .permission`: `admin`, `write`, `read` or `none`, and `unknown` when the read fails or names no role, as for a review bot with no repository role. `unknown` counts as `none`; section 3 routes on it.",
+      "Unattended, each comment author's permission is read once per author through `gh api repos/{owner}/{repo}/collaborators/<login>/permission --jq .permission`: `admin`, `write`, `read` or `none`, and `unknown` when the read fails or names no role, as for a review bot with no repository role. `unknown` counts as `none`; it is recorded per comment, and section 3 routes on it.",
     );
-    expect(collect).toContain("author_permission: admin | write | read | none | unknown");
+    expect(collect).toContain("author_permission: {<comment id>: admin | write | read | none | unknown} # unattended only, per comment");
+    // `review/47`: a non-write comment in a write author's thread never supplies a fix's content.
+    expect(collect).toContain(
+      "Unattended, a finding's `quoted:`, its `researcher` brief and any fix it gets carry only `admin` and `write` authors' comments: a comment by any other author never merges into a finding that holds one and stands as its own finding, and a finding with none keeps no `quoted:` text, enters no brief, and goes to section 3.",
+    );
     // The field sits in the finding shape beside the bot flag it must not be confused with.
     expect(collect.indexOf("author_is_bot:")).toBeLessThan(collect.indexOf("author_permission:"));
   });
 
-  it("pr-resolve routes a finding no write author asked for to DEFER, first in the table (REQ-FLOW-100)", () => {
+  it("pr-resolve routes a finding no write author asked for to DEFER, right after SCREENED (REQ-FLOW-100)", () => {
     const body = artifact(PR_RESOLVE).parsed.body;
     const rows = tableRows(section(body, "## 3. Triage ask"));
-    const first = rows[0] ?? [];
+    // `review/49`: SCREENED comes first, so a comment the screen dropped gets SCREENED's reply and
+    // writes no inbox row; the write-author row is next, above every FIX row.
+    expect(rows[0]?.[1]).toBe("`screened.action: dropped`");
+    expect(routeToken(rows[0]?.[2] ?? "")).toBe("SCREENED");
+    const first = rows[1] ?? [];
 
-    // First match wins, so the row is first: below `Critical | any | FIX`, an outside commenter's
-    // "Critical" would be fixed and pushed on the `accept` default with nobody watching.
+    // First match wins, so the row sits above every FIX row: below `Critical | any | FIX`, an outside
+    // commenter's "Critical" would be fixed and pushed on the `accept` default with nobody watching.
     expect(first[0]).toBe("any");
     expect(first[1]).toBe(
       "unattended, and no comment in the finding by an `admin` or `write` author carries its ask — a merged finding included, `unknown` counting as `none`",
@@ -1680,7 +1711,7 @@ describe("feedback pair — unattended (REQ-FLOW-097, REQ-FLOW-100, REQ-CTX-012)
     const defer = tableRows(section(body, "## 5. Replies")).find(([decision]) => decision === "DEFER");
     expect(defer?.[1]).toBe(`\`Tracked in ${INBOX} for board triage.\``);
     // Attended runs keep their table: no other row reads the permission.
-    expect(rows.slice(1).some((cells) => /permission|non-write/.test(cells.join(" ")))).toBe(false);
+    expect([rows[0], ...rows.slice(2)].some((cells) => /permission|non-write/.test((cells ?? []).join(" ")))).toBe(false);
   });
 
   it("pr-resolve carries the shared CLI sentence byte-identically, with its own fallback (REQ-FLOW-002, REQ-FLOW-003)", () => {

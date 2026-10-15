@@ -265,11 +265,11 @@ detects and consumes it under its freshness guard. Then ask once, execute-now de
 routing table, in its one batched correction: its row carries `/st-board`'s schedule fields
 (`by:` or `when:`, and `files:` when the location is `—`), and this handoff asks no leftovers
 question. That ask is the one round of the question-protocol rule's Close walk. On `execute now`,
-continue into `/st-work` in this session with the persisted plan as its input, passing
-`--unattended` when this run is unattended (`--unattended`, or `STAMITY_UNATTENDED=1` with no
-`--attended`), else `--attended`. On `stop`, the plan and the inbox rows are the run's output. The
-DEFER rows phase 4 appended stand either way: the walk offers none of them `fix now`, and none is
-appended twice.
+continue into `/st-work` in this session with the persisted plan as its input, the hand-off
+carrying `run-mode: unattended` when this run is unattended (`--unattended`, or `STAMITY_UNATTENDED`
+set to any value but empty, `false` or `0`, with no `--attended`), else `run-mode: attended`. On
+`stop`, the plan and the inbox rows are the run's output. The DEFER rows phase 4 appended stand
+either way: the walk offers none of them `fix now`, and none is appended twice.
 
 A plan carrying a `[NEEDS CLARIFICATION]` marker has no execute-now default. The ask becomes
 `show the plan first (default) / resolve marker n / stop`, and the handoff stays blocked until
