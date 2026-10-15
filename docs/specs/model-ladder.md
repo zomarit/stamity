@@ -500,8 +500,10 @@ Amended 2026-10-15 (plan 020 file 3, units `f3-work-close`, `f4-board-close`, `f
 the role's class model from the client's map on each sub-agent call, and on a refusal with a list takes the class's
 first listed fallback, else the closest, and says so in one line: `/st-work`'s Frame ("pass each role's class model
 from the client's map at `.stamity/generated/models/`", `content/commands/st-work.md:19-20`) with the fallback in its
-Model ladder section (`:467-468`), and one sentence each in `/st-board`, `/st-plan`, `/st-rework`, `/st-pr-resolve`,
-`/st-debug`, `/st-quick`, `/st-ask` and `/st-spec`.
+Model ladder section (`:468-469`, read at `41aab6cf`; amended 2026-10-15, ledger row `cut/18` of run
+`2026-10-14_cli-native`: it read "`:467-468`", the lines before `f575afb1` added a sentence above them), and one
+sentence each in `/st-board`, `/st-plan`, `/st-rework`, `/st-pr-resolve`, `/st-debug`, `/st-quick`, `/st-ask` and
+`/st-spec`.
 
 - GIVEN each of those bodies THEN it carries the model sentence (`test/corpus/commands/work.test.ts`, `board.test.ts`,
   `plan.test.ts`, `feedbackPair.test.ts`, `lightTrio.test.ts`, `spec.test.ts`; added 2026-10-15).
