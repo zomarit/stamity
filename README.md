@@ -130,11 +130,12 @@ Each entry below is the one home for its subject. This page links; it does not r
 | [`docs/enterprise-forks.md`](docs/enterprise-forks.md) | Taking the next upstream release into a customized fork — the lane's config and verbs, conflicts, landing, the fork layer, and releasing the fork through its own workflow. |
 | [`docs/security-mapping.md`](docs/security-mapping.md) | The version-pinned crosswalk from this repository's controls to the OWASP, joint-guidance and NIST AI RMF catalogues — seven surfaces, their residuals, and the gaps. |
 
-Hook scripts are not in that corpus row, because they are not corpus content. The three portable bodies are
-generated from `src/hooks/scripts.ts` for every selected client, and Claude Code takes a fourth, the review gate,
-from its own adapter. Six rows above are marked Generated, written by two generators, and
-[CONTRIBUTING.md](CONTRIBUTING.md) maps each generated path to the command that rewrites it. Every link on this
-page is repo-relative, except the links into the `records` branch, which holds the run records and the eval evidence.
+Hook scripts are not in that corpus row, because they are not corpus content. The three portable bodies are generated
+from `src/hooks/scripts.ts` for every selected client, and Claude Code takes a fourth, the review gate, from its own
+adapter. Cursor's adapter adds three: its sub-agent and MCP guards, and the model-fill hook `stamity-model-pins.mjs`,
+run before each sub-agent call. Six rows above are marked Generated, written by two generators, and
+[CONTRIBUTING.md](CONTRIBUTING.md) maps each generated path to the command that rewrites it. Every link on this page is
+repo-relative, except the links into the `records` branch, which holds the run records and the eval evidence.
 
 ## What the tests cover
 
