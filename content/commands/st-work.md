@@ -295,15 +295,15 @@ The checkpoint covers what automation cannot.
 **Row states.** The qa skill closes each row in its own row states, under
 its `## Human sign-off` rules.
 
-**The close walk.** What is left for the person is asked by the question protocol's Close walk,
-in rounds of numbered options: the rows the qa skill leaves for the person (at most three), the spec delta merge and
-the commit. `Default if no response: leave uncommitted`, with those rows not signed and the delta unmerged.
-The leftovers join it as a fourth part, by `/st-board`'s Leftovers at a close: before asking, the
-close runs `stamity ledger inbox --due --paths <the changed paths> --json` and takes every
-`decision-waiting` row first, then the due and touched rows and each ledger row neither fixed nor
-rejected; with no response, its unattended rule applies.
-A part with nothing to decide drops out; with none left, there is no ask. The answers take effect
-together after the last round: fixes and schedules first, the commit or hand-off choice last.
+**The close walk.** What is left for the person is asked by the question protocol's Close walk, in rounds of numbered options:
+the rows the qa skill leaves for the person (at most three), the spec delta merge and the commit, as 1 commit, push, draft PR
+(`stamity run checkpoint --pr`, recommended) · 2 commit only · 3 leave uncommitted, option 1 after `stamity run start` on the
+default branch. `Default if no response: leave uncommitted`, with those rows not signed and the delta unmerged.
+The leftovers join it as a fourth part, by `/st-board`'s Leftovers at a close: before asking, the close runs
+`stamity ledger inbox --due --paths <the changed paths> --json` and takes every `decision-waiting` row first, then the
+due and touched rows and each ledger row neither fixed nor rejected; with no response, its unattended rule applies.
+A part with nothing to decide drops out; with none left, there is no ask. The answers take effect together after the
+last round: fixes and schedules first, the commit or hand-off choice last.
 
 ### Proof block
 
@@ -402,14 +402,16 @@ Beside `retired`, two more optional fields ride a row appended from a report: `r
 repo-relative path of the report it came from, and `decision_needed`, present only as `true` when
 the fix changes a shared contract or needs a product choice.
 
-Both persist under the state directory, in `.stamity/runs/` — one record per run carrying the
-fields above, with that run's ledger rows beside it. That is the baseline `/st-rework` reads and
-the directory `/st-pr-resolve` appends its own record to; a record already written is read-only to
-every later run. Frame opens the record with four lines among its first 15: `Status:`, reading
-`in progress` until the close; `Plan: <path>`, the `/st-plan` artifact or this run's own `plan.md`
-once Phase 2 writes it; `Base: <commit>`, the run's branch point (`git rev-parse HEAD` at Frame,
-never the word `HEAD`); and `Invocation: <this command line, verbatim>`. It also creates the run's
-`reports/` folder beside the record, holding a `.gitignore` whose one line is `*`.
+Both persist under the state directory, in `.stamity/runs/` — one record per run carrying the fields above, with that
+run's ledger rows beside it. That is the baseline `/st-rework` reads and the directory `/st-pr-resolve` appends its own
+record to; a record already written is read-only to every later run. Frame opens the record with six lines among its
+first 15: `Status:`, reading `in progress` until the close; `Mode: attended | unattended`, `unattended` under
+`--unattended` or `STAMITY_UNATTENDED` set to any value but empty, `false` or `0`, `--attended` and a hand-off's
+`run-mode:` beating the variable and `--resume` always attended; `Branch:`, the run's branch; `Plan: <path>`, the
+`/st-plan` artifact or Phase 2's `plan.md`; `Base: <commit>`, the run's branch point (`git rev-parse HEAD` at Frame,
+never the word `HEAD`); and `Invocation: <this command line, verbatim>`. A `reports/` folder beside the record holds a
+`.gitignore` whose one line is `*`. Unattended, Frame first runs `stamity run start --run <id> --json`, taking `Branch:`
+and `Base:` from it. When `Mode:` reads `unattended`, invoke the `st-unattended` skill by name and follow it.
 
 ### Side effects
 
@@ -484,11 +486,9 @@ one-class drop for a build role (Dispatch contract) and the escalation fixer's e
 
 ## Testing philosophy
 
-> No green, no done. Real-deal-first — mocks justified inline. Tests ship with
-> the change that motivates them. Verification runs in a dedicated runner
-> sub-agent, never in the orchestrator's context. The QA phase covers what
-> automation can't. Green counts only against tests the implementer did not
-> weaken: gating tests are not edited, deleted, or special-cased in the change
-> that makes them pass — any test modification in that change requires the
-> same inline justification as a mock, and review treats changed tests as part
-> of the diff under scrutiny.
+> No green, no done. Real-deal-first — mocks justified inline. Tests ship with the change that
+> motivates them. Verification runs in a dedicated runner sub-agent, never in the orchestrator's
+> context. The QA phase covers what automation can't. Green counts only against tests the
+> implementer did not weaken: gating tests are not edited, deleted, or special-cased in the change
+> that makes them pass — any test modification in that change requires the same inline justification
+> as a mock, and review treats changed tests as part of the diff under scrutiny.

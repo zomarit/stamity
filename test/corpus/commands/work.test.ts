@@ -714,7 +714,36 @@ describe("/st-work — Frame and Plan", () => {
     expect(proof).toContain("among its first 15");
     // Added 2026-10-09 (plan 019 file 2, the p3 fix round, `review/115`): the head records the
     // run's base, which the Gates read for the scan and the class (sign-off: the run's branch point).
-    expect(proof).toContain("with four lines among its first 15");
+    // TEST CHANGE, justified (2026-10-16, plan 021 file 1, unit u15-work-text; REQ-CTX-012,
+    // REQ-FLOW-089): the pin read "with four lines among its first 15". What moved: the head gains
+    // `Mode:` and `Branch:`, so it reads six lines; the four it held are pinned unchanged below.
+    expect(proof).toContain("with six lines among its first 15");
+    expect(proof).not.toContain("with four lines among its first 15");
+    expect(proof).toContain("`Status:`, reading `in progress` until the close");
+    expect(proof).toContain("`Mode: attended | unattended`");
+    expect(proof).toContain("`Branch:`, the run's branch");
+    // The six names, each in the head sentence, in the order the record writes them.
+    const head = proof.slice(proof.indexOf("with six lines among its first 15"));
+    const order = ["`Status:`", "`Mode:", "`Branch:`", "`Plan: <path>`", "`Base: <commit>`", "`Invocation:"].map(
+      (name) => head.indexOf(name),
+    );
+    expect(order.every((at) => at > -1)).toBe(true);
+    expect(order.toSorted((a, b) => a - b)).toEqual(order);
+    // REQ-FLOW-089's reading of the declaration: the variable is unattended for any value but
+    // empty, `false` or `0`, never only `=1`; `--attended` and a hand-off's `run-mode:` beat it;
+    // `--resume` is always attended.
+    expect(proof).toContain(
+      "`unattended` under `--unattended` or `STAMITY_UNATTENDED` set to any value but empty, `false` or `0`, `--attended` and a hand-off's `run-mode:` beating the variable and `--resume` always attended",
+    );
+    expect(proof).not.toContain("STAMITY_UNATTENDED=1");
+    // An unattended run takes its branch and base from `run start`, run before the head is written.
+    expect(proof).toContain(
+      "Unattended, Frame first runs `stamity run start --run <id> --json`, taking `Branch:` and `Base:` from it.",
+    );
+    // The skill is called by name, and only on the unattended reading.
+    expect(proof).toContain(
+      "When `Mode:` reads `unattended`, invoke the `st-unattended` skill by name and follow it.",
+    );
     // TEST CHANGE, justified (2026-10-09, plan 019 file 2, the p3 fix round 2, `review/133`): the
     // line holds the commit id `HEAD` resolves to at Frame, never the word, which `gate` would
     // resolve at Prove time, after the units commit (sign-off: `git rev-parse HEAD`).
@@ -1414,6 +1443,14 @@ describe("/st-work — Prove", () => {
     // The declared default is the lowest-blast-radius one: nothing committed, merged or signed.
     expect(qa).toContain("`Default if no response: leave uncommitted`");
     expect(qa).toContain("those rows not signed and the delta unmerged");
+    // Added 2026-10-16 (plan 021 file 1, unit u15-work-text; REQ-FLOW-019): the commit part's three
+    // options, in order, the recommended one first, before the default sentence that stays verbatim.
+    const options =
+      "the commit, as 1 commit, push, draft PR (`stamity run checkpoint --pr`, recommended) · 2 commit only · 3 leave uncommitted";
+    expect(qa).toContain(options);
+    expect(qa.indexOf(options)).toBeLessThan(qa.indexOf("`Default if no response: leave uncommitted`"));
+    // Option 1 never pushes the default branch: `run start` puts the run on a branch of its own first.
+    expect(qa).toContain("option 1 after `stamity run start` on the default branch.");
     expect(qa).toContain("with none left, there is no ask");
     // Added 2026-10-14 (run 2026-10-14_cli-native, corpus fix batch round 1, review/44): the walk
     // asks in rounds and the protocol puts Critical, Warning and `decision-waiting` rows first, so a
