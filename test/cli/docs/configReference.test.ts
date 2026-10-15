@@ -385,6 +385,14 @@ describe("key coverage", () => {
     // writes no model at all", a claim made for Cursor with no list read. Cursor now writes no
     // model unless one is pinned, list or no list, and a pin as typed, so the page says both.
     expect(page).toContain("Cursor writes no model unless you pin one, list or no list");
+    // Ledger row 2026-10-14_cli-native/cut/14: the Cursor claims are dated to what showed
+    // them, as the capability matrix's Cursor agent-format row is, and the two no run proved
+    // are marked unverified rather than stated as vendor fact.
+    expect(page).not.toContain("which no command prints");
+    expect(page).toContain("in a live run on 2026-10-15");
+    expect(page).toContain("cursor.com/docs/subagents, read 2026-10-15");
+    expect(page).toContain("beyond that run is unverified");
+    expect(page).toContain("so that it runs is\nunverified");
     expect(page).toContain("Cursor writes a pin as typed");
     expect(page).not.toContain("Copilot, Codex and Cursor take the first model");
     expect(page).toContain("`model.<class>.<client>` pins one client");

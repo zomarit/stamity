@@ -93,9 +93,17 @@ account's own model list holds: `init` and `sync` read that list from the client
 save it under `models.listed` in the manifest, and a client that does not answer keeps the list
 it saved last; `STAMITY_NO_CLIENT_PROBE=1` in the environment skips every read. With no list
 read, Copilot and Codex take the first model of the shipped list, which is what their cells
-above show. Cursor writes no model unless you pin one, list or no list, so an unpinned sub-agent
-runs on the parent agent's model: Cursor checks a sub-agent's model against a list of its own,
-which follows the parent's model and which no command prints.
+above show. Cursor writes no model unless you pin one, list or no list. Cursor offers a
+sub-agent a narrower list of models than `agent models` prints, and refuses a sub-agent call
+that names a model outside it: in a live run on 2026-10-15 it refused the class model picked
+from the account's saved list, so Stamity picks none from that list. In one live run the same
+day that sub-agent list changed with the parent agent's model; one parent model was tried, so
+that the list follows the parent's model beyond that run is unverified. An unpinned sub-agent
+is left to Cursor's default: Cursor documents the parent agent's model as a sub-agent's default
+(cursor.com/docs/subagents, read 2026-10-15), and its refusal text says the same of an omitted
+model. No live run has dispatched an unpinned Stamity sub-agent, so that it runs is
+unverified. The Cursor agent-format row of the [capability matrix](capability-matrix.md) names
+the record of those runs.
 
 `model.<class>` pins one id for every selected client; `model.<class>.<client>` pins one client
 and wins over the class key there; `none` clears either one. On Copilot and Codex a pin the
