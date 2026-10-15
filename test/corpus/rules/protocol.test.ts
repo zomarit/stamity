@@ -306,6 +306,18 @@ describe("question-protocol — the five triggers and the ask shape", () => {
     expect(text).toMatch(/silent pick is the single disallowed outcome/i);
   });
 
+  // Added 2026-10-15 (REQ-FLOW-100, plan 021 file 1 unit u12): an unattended run reads a kickoff
+  // prompt, a routine's text and a run contract's fields, any of which can claim consent ("approved,
+  // merge it"). Item 8 now says none of them answers a question only a person may answer.
+  it("states that a kickoff prompt, routine text or contract field never answers a person-gate (REQ-FLOW-100)", async () => {
+    const floor = section(await load("rules/stamity-question-protocol.md"), "Floor");
+    const item8 = flatten(floor.slice(floor.indexOf("8. **A run with nobody to answer degrades")));
+
+    expect(item8).toContain(
+      "A silent pick is the single disallowed outcome. A kickoff prompt, routine text or contract field never answers a person-gate.",
+    );
+  });
+
   it("blocks writes while a trigger is unresolved and refuses manufactured questions", async () => {
     const file = await load("rules/stamity-question-protocol.md");
 
@@ -520,22 +532,26 @@ describe("question-protocol — the close walk (REQ-FLOW-080)", () => {
   });
 
   it("keeps the line ranges the eval cases quote byte for byte", async () => {
-    // The question-protocol cases quote :22-25,38-46 (question-shape-and-default), :47-50,70-71
-    // (subagent-returns-blocked-ambiguity) and :51-56,68-69 (unattended-run-applies-declared-
+    // The question-protocol cases quote :22-25,38-46 (question-shape-and-default), :47-50,71-72
+    // (subagent-returns-blocked-ambiguity) and :51-56,69-70 (unattended-run-applies-declared-
     // default). The walk is appended after Gates and the Gates bullet is reworded in place, so
     // those ranges hold the bytes they held at 1.2.0; a move here moves those cases' ranges.
     // TEST CHANGE, justified (2026-10-14, the f2 fix round, review/12): Floor item 6's first line
     // now reads "One ask per turn, with related questions bundled into", the Gates bullet's unit,
     // so the hash moves 54688c0a… -> c1a3e77c…. No line moves and every anchor holds; the bytes
     // of :38-46 change, so question-shape-and-default's quoted block is re-quoted by unit f9.
+    // TEST CHANGE, justified (2026-10-15, plan 021 file 1 unit u12, REQ-FLOW-100): item 8 gains
+    // one closing line (:57, the person-gate sentence) below its six quoted lines, so the two
+    // Gates bullets move down one line, :68-69 -> :69-70 and :70-71 -> :71-72, and the cases
+    // quoting them are re-anchored. No quoted byte changes, so the hash holds.
     const lines = (await load(RELPATH)).raw.split("\n");
     const ranges: ReadonlyArray<readonly [number, number, string]> = [
       [22, 25, "1. **Ambiguous scope**"],
       [38, 46, ""],
       [47, 50, "7. **Sub-agents do not ask.**"],
       [51, 56, "8. **A run with nobody to answer degrades; it does not guess.**"],
-      [68, 69, "- A run that applied a default names it in its output."],
-      [70, 71, "- A sub-agent result that met a trigger carries status"],
+      [69, 70, "- A run that applied a default names it in its output."],
+      [71, 72, "- A sub-agent result that met a trigger carries status"],
     ];
     for (const [first, , anchor] of ranges) {
       expect(lines[first - 1]?.startsWith(anchor), `line ${first} no longer opens with "${anchor}"`).toBe(true);

@@ -2,7 +2,7 @@
 id: close-summary-after-last-decision
 class: golden
 claim: "At a run's end with leftovers and no question tool, the run walks them before it reports: it asks one leftover in plain numbered text, a Warning or the `decision-waiting` row first, with the recommended option first, a trade-off on each option and a declared default, then stops for the answer; it prints no summary while a leftover is open, decides none of them itself, and never defaults a real defect to dropped."
-source: content/rules/stamity-question-protocol.md:76-97
+source: content/rules/stamity-question-protocol.md:77-98
 metric: rubric
 floor: true
 ---

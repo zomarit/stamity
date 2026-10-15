@@ -746,17 +746,22 @@ describe("/st-plan — plan artifact shape", () => {
     // The numbered list is the artifact's section order. `/st-board`'s Removal rule schedules a
     // row to `plan docs/plans/<file>.md#<unit-id or follow-ups>`, a section this shape did not
     // define; and a follow-up with no day and no trigger needs a place that is not the inbox.
+    // TEST CHANGE, justified (2026-10-15, plan 021 file 1 unit u12, REQ-FLOW-077 amended): an
+    // optional Prerequisites section now follows Open questions, so Follow-ups and Drop list
+    // renumber 6 -> 7 and 7 -> 8. Their words are pinned unchanged; only the numbers move, and
+    // the Open-questions adjacency below now names Prerequisites as the next section.
     expect([...shape.matchAll(/^(\d)\. \*\*([^*]+)\*\*/gm)].map((match) => `${match[1]} ${match[2]}`)).toEqual([
       "1 Context",
       "2 Spec delta",
       "3 Units",
       "4 Risks",
       "5 Open questions",
-      "6 Follow-ups",
-      "7 Drop list",
+      "6 Prerequisites",
+      "7 Follow-ups",
+      "8 Drop list",
     ]);
     expect(read).toContain(
-      "6. **Follow-ups** (optional) — items this plan deliberately leaves out, one per line, each with `by: <YYYY-MM-DD>` or `when: <trigger>`, and `files:` when it names no location; they append as the Side effects say.",
+      "7. **Follow-ups** (optional) — items this plan deliberately leaves out, one per line, each with `by: <YYYY-MM-DD>` or `when: <trigger>`, and `files:` when it names no location; they append as the Side effects say.",
     );
     // TEST CHANGE, justified (2026-10-10, q11a-plan-writer fix round 1; ledger rows review/53 and
     // build/32, signed off): the pinned sentence moves. "items with only a revisit trigger" also
@@ -764,14 +769,40 @@ describe("/st-plan — plan artifact shape", () => {
     // holds what has no date and no trigger a run can check. The old words are asserted gone;
     // nothing is loosened.
     expect(read).toContain(
-      "7. **Drop list** (optional) — a table, `Item | Revisit when`, of items with no date and no trigger a run can check; they append nowhere.",
+      "8. **Drop list** (optional) — a table, `Item | Revisit when`, of items with no date and no trigger a run can check; they append nowhere.",
     );
     expect(read).not.toContain("items with only a revisit trigger");
     // Both are optional and close the list: a plan with neither is a valid plan, and the criteria
     // paragraph still follows the last section.
     expect(read).toMatch(/they append nowhere\. \*\*Fresh-context criteria\.\*\*/);
     // The five sections before them keep their words, the blocking marker among them.
-    expect(read).toContain("5. **Open questions** — a `[NEEDS CLARIFICATION]` marker blocks handoff to `/st-work` until it is resolved. 6. **Follow-ups**");
+    expect(read).toContain("5. **Open questions** — a `[NEEDS CLARIFICATION]` marker blocks handoff to `/st-work` until it is resolved. 6. **Prerequisites**");
+  });
+
+  // Added 2026-10-15 (REQ-FLOW-077 amended, plan 021 file 1 unit u12): an unattended run's morning
+  // list carries each declared prerequisite, and `stamity plan check` refuses one neither verified
+  // nor owned, so the plan shape needs a place to declare them that never holds their values.
+  it("names an optional Prerequisites section after Open questions, one valueless row per need (REQ-FLOW-077)", () => {
+    const shape = sectionOf(plan.parsed.body, "## Plan artifact shape");
+    const read = flat(shape);
+    const entry = read.slice(read.indexOf("6. **Prerequisites**"), read.indexOf("7. **Follow-ups**"));
+
+    expect(entry).toMatch(/^6\. \*\*Prerequisites\*\* \(optional\) — /);
+    expect(entry).toContain("`kind · name · read where · set by · blocks merge|deploy|run · verified yes|no`");
+    // `set by` is the owner L2 and the readiness check read; the value of the need never appears.
+    expect(entry).toMatch(phrase("`set by` names its owner"));
+    expect(entry).toMatch(phrase("never its value"));
+    // Edge case: a plan that waits on nothing outside its diff carries no section and stays valid.
+    expect(entry).toMatch(phrase("a plan that waits on nothing omits the section"));
+  });
+
+  it("lets L2 resolve a dependency through a Prerequisites row that names its owner (REQ-FLOW-077)", () => {
+    const gate = sectionOf(plan.parsed.body, "## Plan-lint gate");
+    const l2 = gate.split("\n").find((line) => line.startsWith("| L2 |")) ?? "";
+
+    expect(l2).toContain(
+      "or an external prerequisite with a named owner — a **Prerequisites** row whose `set by` names one counts. Zero dangling references.",
+    );
   });
 });
 

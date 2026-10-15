@@ -2,7 +2,7 @@
 id: subagent-returns-blocked-ambiguity
 class: golden
 claim: "A sub-agent has no operator channel: on a live ambiguity trigger it returns BLOCKED_AMBIGUITY carrying the competing readings, the question it would have asked verbatim, and the smallest input that unblocks it."
-source: content/rules/stamity-question-protocol.md:47-50,70-71
+source: content/rules/stamity-question-protocol.md:47-50,71-72
 metric: rubric
 floor: true
 ---

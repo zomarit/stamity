@@ -2,7 +2,7 @@
 id: plan-semantic-ambiguity-survives-structural-pass
 class: golden
 claim: "A structurally complete requirement-to-plan mapping still blocks handoff when its meanings conflict and gives a usable clarification."
-source: content/commands/st-plan.md:277-438
+source: content/commands/st-plan.md:277-442
 metric: rubric
 ---
 
@@ -24,7 +24,7 @@ plan-review sub-agent loop at this seam produced no measured quality gain, so no
 | # | Check | Pass condition | Fail action |
 |---|---|---|---|
 | L1 | **Testable acceptance criteria** | every criterion names an observable subject and a verifiable condition — Given/When/Then, or a threshold with units plus the command that measures it. Bare adjectives ("works", "is fast", "handles errors") fail. | rewrite each failing criterion in place, re-run the pass |
-| L2 | **Dependencies resolve** | every `depends_on` names a unit in this plan, a path that exists on disk, or an external prerequisite with a named owner. Zero dangling references. | add the missing prerequisite or correct the reference, re-run the pass |
+| L2 | **Dependencies resolve** | every `depends_on` names a unit in this plan, a path that exists on disk, or an external prerequisite with a named owner — a **Prerequisites** row whose `set by` names one counts. Zero dangling references. | add the missing prerequisite or correct the reference, re-run the pass |
 | L3 | **Edge cases non-empty** | every unit lists at least one edge case with its expected behavior. `none` is admissible only with a one-line reason. | derive the missing cases from the unit's inputs and failure modes, re-run the pass |
 | L4 | **Requirement ids cited** | every unit's `requirements` names at least one `REQ-<area>-<nnn>` carried by the spec, or states `spec carries no ids`. A blank field fails; an id absent from `docs/specs/` fails as a dangling reference. | cite the requirement the unit implements, or record that the spec carries none, re-run the pass |
 | L5 | **Plan size (advisory)** | the structural coverage pass reports `unit-size` (a unit past 60 lines), `unit-oversize` (past 100), `unit-prewritten` (a fenced block, or five or more `>` lines, inside a unit) and `delta-verbose` (a requirement entry past six lines); none fails the pass | split the unit, or point at the file that will carry the text instead of writing it into the unit; the write is never blocked |
@@ -104,10 +104,14 @@ When neither form runs, the installed copy has no `gate` verb, or a classify's `
    mitigation · `Minor` recorded, not gating.
 5. **Open questions** — a `[NEEDS CLARIFICATION]` marker blocks handoff to `/st-work` until
    it is resolved.
-6. **Follow-ups** (optional) — items this plan deliberately leaves out, one per line, each with
+6. **Prerequisites** (optional) — one row per need the work waits on outside its diff,
+   `kind · name · read where · set by · blocks merge|deploy|run · verified yes|no`, where `set by`
+   names its owner. A row names the need, never its value: no secret, key or setting's value
+   appears in the plan. A plan that waits on nothing omits the section.
+7. **Follow-ups** (optional) — items this plan deliberately leaves out, one per line, each with
    `by: <YYYY-MM-DD>` or `when: <trigger>`, and `files:` when it names no location; they append
    as the Side effects say.
-7. **Drop list** (optional) — a table, `Item | Revisit when`, of items with no date and no
+8. **Drop list** (optional) — a table, `Item | Revisit when`, of items with no date and no
    trigger a run can check; they append nowhere.
 
 **Fresh-context criteria.** The artifact is executable by an implementer holding no session

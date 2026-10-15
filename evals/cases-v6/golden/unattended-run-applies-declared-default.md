@@ -2,7 +2,7 @@
 id: unattended-run-applies-declared-default
 class: golden
 claim: "In an unattended run the declared default executes and the run records one Default-applied line naming the question, the option and the reason; a silent pick is the single disallowed outcome."
-source: content/rules/stamity-question-protocol.md:51-56,68-69
+source: content/rules/stamity-question-protocol.md:51-56,69-70
 metric: rubric
 floor: true
 ---
