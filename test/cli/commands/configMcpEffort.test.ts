@@ -343,6 +343,25 @@ describe("config effort rows — only a level an emitted file would carry", () =
     expect(rowFor(result.stdout, "effort.standard")).toMatch(/medium\s+\(default\)/);
   });
 
+  // review/137: with no pin, Cursor's model is the effort variant the saved list holds at the
+  // level asked for, so the level reaches the file through the pick the adapter resolves with.
+  it("prints the level on an unpinned Cursor class whose saved list holds its effort variants", async () => {
+    const listed = ["claude-sonnet-5-5-low", "claude-sonnet-5-5-medium", "claude-sonnet-5-5-high"];
+    const models = { listed: { cursor: { ids: listed, source: "cursor-agent-models" as const } } };
+    const handle = tempDir();
+    await seedManifest(handle, { tools: ["cursor"], models });
+
+    const result = await run(handle, []);
+
+    // Cross-checked against the resolver the adapter calls, with the saved list as its pick.
+    expect(resolveModelValue("standard", "cursor", {}, {}, { listed })).toBe("claude-sonnet-5-5-medium");
+    expect(resolveModelValue("standard", "cursor", {}, { standard: "high" }, { listed })).toBe("claude-sonnet-5-5-high");
+    expect(rowFor(result.stdout, "effort.standard")).toMatch(/medium\s+\(default\)/);
+    expect(rowFor(result.stdout, "effort.standard")).not.toContain("(not expressed)");
+    // `config get` answers from the same predicate.
+    expect(getConfigValue(baseManifest({ tools: ["cursor"], models }), "effort.standard").resolved).toBe("medium");
+  });
+
   it("prints the marker when the operator's own brackets are what stand", async () => {
     const handle = tempDir();
     await seedManifest(handle, {

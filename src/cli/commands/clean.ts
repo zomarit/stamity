@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import { readFile, readdir, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
+import { CLAUDE_SETTINGS_PATH } from "../../adapters/claude.ts";
+import { isPlainObject } from "../../config/parse.ts";
 import { readManifest, writeManifest } from "../../manifest/manifest.ts";
 import {
   filterMcpJsonOnDisk,
@@ -365,13 +367,38 @@ async function exists(dir: string): Promise<boolean> {
 const REINIT_OFFER = `start fresh: ${packageCommand("init")}`;
 
 /**
- * The leftover-plugin warning `check` and `sync` print
- * (`../kit/packageName.ts::leftoverPluginLines`), read off the held block
- * alone: this verb deletes that block, and the vendor uninstall is a step it
- * cannot take. Nothing prints when the block names no client.
+ * Claude's `.claude/settings.json` `enabledPlugins` value, read raw as `check`'s
+ * `plugin-duplicates` row reads it (review/134): a 1.14 plugin install the
+ * client recorded there and the manifest never named is still a leftover.
+ * `undefined` for a document that is absent, unreadable or not JSON — this read
+ * only feeds a warning, so it never stops the uninstall.
  */
-function printLeftoverPlugin(ctx: CliContext, manifest: SetupManifest): void {
-  const [first, ...rest] = leftoverPluginLines(manifest.plugin, undefined);
+async function readEnabledPlugins(rootDir: string): Promise<unknown> {
+  let text: string;
+  try {
+    text = await readFile(join(rootDir, ...CLAUDE_SETTINGS_PATH.split("/")), "utf8");
+  } catch {
+    return undefined;
+  }
+  // A leading byte-order mark is an editor's, not the document's.
+  const body = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+  try {
+    const document = JSON.parse(body) as unknown;
+    return isPlainObject(document) ? document["enabledPlugins"] : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The leftover-plugin warning `check` and `sync` print
+ * (`../kit/packageName.ts::leftoverPluginLines`), read off the held block and
+ * Claude's `enabledPlugins` value, as `check` reads them: this verb deletes the
+ * block, and the vendor uninstall is a step it cannot take. Nothing prints when
+ * neither names a client.
+ */
+function printLeftoverPlugin(ctx: CliContext, manifest: SetupManifest, enabledPlugins: unknown): void {
+  const [first, ...rest] = leftoverPluginLines(manifest.plugin, enabledPlugins);
   if (first === undefined) return;
   ctx.io.out(`${ctx.palette.yellow(`warning: ${first}`)}\n`);
   for (const line of rest) ctx.io.out(`  ${line}\n`);
@@ -968,6 +995,9 @@ export const cleanCommand: CommandModule = {
     if (packId !== undefined) return await runScopedClean(ctx, rootDir, manifest, packId);
 
     const candidates = planCleanCandidates(manifest);
+    // Read before the sweep rewrites the settings document, for the
+    // leftover-plugin warning printed below.
+    const enabledPlugins = await readEnabledPlugins(rootDir);
 
     // Read-only, so it runs ahead of the confirmation: the preview sweep below
     // needs it, and so does the live one.
@@ -1027,7 +1057,7 @@ export const cleanCommand: CommandModule = {
     // Before the state directory goes: the manifest's held `plugin` block is the
     // last record of a 1.14 plugin install, and once it is deleted neither
     // `check` nor `sync` can warn about it again. Text only, preview included.
-    printLeftoverPlugin(ctx, manifest);
+    printLeftoverPlugin(ctx, manifest, enabledPlugins);
     const stateDirRemoved = ctx.dryRun || stateDirKept.length > 0 ? false : await removeStateDir(rootDir);
 
     const formatted = formatReclaimReport(report);

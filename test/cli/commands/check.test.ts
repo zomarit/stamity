@@ -3904,9 +3904,15 @@ describe("evaluateExpectations (REQ-PLUGIN-047)", () => {
 /**
  * `model-pins` (REQ-LADDER-008, plan 020 file 2, unit e4-check-model-row): each selected
  * client's pinned and emitted models, compared with the account's own list — read live where
- * the client's CLI answers (Codex with `--bundled`, so no network refresh), else the list the
- * last `sync` saved under `models.listed`. A model the list lacks warns, naming the client, the
+ * the client's CLI answers, else the list the last `sync` saved under `models.listed`; Codex
+ * compares with its saved list whenever one exists and is read live (with `--bundled`, so no
+ * network refresh) only without one. A model the list lacks warns, naming the client, the
  * class and the model; with nothing to compare the row passes as unverified; it never fails.
+ *
+ * TEST CHANGE, justified (2026-10-15, review/135 and review/136, both signed off): the cases
+ * that read Codex live beside a saved list now read Copilot or Cursor, whose live list is the
+ * catalogue `sync` reads; Codex with a saved list starts no client, and its bundled read is
+ * labelled as such. The claims each case makes are unchanged.
  */
 describe("check — model-pins", () => {
   const CODEX_SAVED = { ids: ["gpt-6-astra", "gpt-6-sol", "gpt-6-luna"], source: "codex-debug-models" } as const;
@@ -3978,52 +3984,124 @@ describe("check — model-pins", () => {
     );
   });
 
-  it("reads the live list before the saved one, Codex with --bundled", async () => {
-    const manifest = pinnedManifest(["codex"], {
+  it("reads the live list before the saved one", async () => {
+    const manifest = pinnedManifest(["copilot"], {
       pins: { standard: { all: "gpt-5.5" } },
-      listed: { codex: { ids: ["gpt-5.5", ...CODEX_SAVED.ids], source: "codex-debug-models" } },
+      listed: { copilot: { ids: ["gpt-5.5", ...CODEX_SAVED.ids], source: "copilot-help-config" } },
     });
-    const { lister, calls } = fakeLister({ codex: { kind: "listed", ids: [...CODEX_SAVED.ids], source: "codex-debug-models" } });
+    const { lister, calls } = fakeLister({ copilot: { kind: "listed", ids: [...CODEX_SAVED.ids], source: "copilot-help-config" } });
 
     const verdict = await checkModelPins(manifest, {}, lister, "/repo");
 
-    expect(calls).toEqual([{ tool: "codex", codexBundled: true }]);
+    expect(calls.map((call) => call.tool)).toEqual(["copilot"]);
     expect(verdict.status).toBe("warn");
     expect(verdict.detail).toBe(
-      `codex standard: the pinned model "gpt-5.5" is not on codex's list (read live); pin a listed one with ` +
-        npxCommand("config set model.standard.codex <id>"),
+      `copilot standard: the pinned model "gpt-5.5" is not on copilot's list (read live); pin a listed one with ` +
+        npxCommand("config set model.standard.copilot <id>"),
+    );
+  });
+
+  // review/136: `sync` saves the list Codex resolves normally, and the bundled catalogue check
+  // could read offline can lag it, so a model `sync` picked legitimately would read as unlisted.
+  it("compares Codex with its saved list whenever one exists, and reads --bundled only without one", async () => {
+    // The live answer lacks the pin: read, it would warn.
+    const answers: Partial<Record<Tool, ModelListOutcome>> = {
+      codex: { kind: "listed", ids: [...CODEX_SAVED.ids], source: "codex-debug-models" },
+    };
+    const saved = pinnedManifest(["codex"], {
+      pins: { standard: { all: "gpt-5.5" } },
+      listed: { codex: { ids: ["gpt-5.5", ...CODEX_SAVED.ids], source: "codex-debug-models" } },
+    });
+    const withSaved = fakeLister(answers);
+
+    expect(await checkModelPins(saved, {}, withSaved.lister, "/repo")).toEqual({
+      id: "model-pins",
+      status: "pass",
+      detail: "codex: 4 class(es), each pinned or emitted model on the list (saved by the last sync)",
+    });
+    expect(withSaved.calls).toEqual([]);
+
+    const unsaved = pinnedManifest(["codex"], { pins: { standard: { all: "gpt-5.5" } } });
+    const without = fakeLister(answers);
+
+    const verdict = await checkModelPins(unsaved, {}, without.lister, "/repo");
+
+    expect(without.calls).toEqual([{ tool: "codex", codexBundled: true }]);
+    expect(verdict.detail).toBe(
+      `codex standard: the pinned model "gpt-5.5" is not on codex's list (read live from its bundled catalogue; ` +
+        `no list saved); pin a listed one with ${npxCommand("config set model.standard.codex <id>")}`,
     );
   });
 
   it("warns on an emitted model the live list no longer holds, and names sync", async () => {
     // No pin: emission picks from the saved list, which still holds gpt-6-luna for economy.
-    const manifest = pinnedManifest(["codex"], {
-      listed: { codex: { ids: ["gpt-6-sol", "gpt-6-luna"], source: "codex-debug-models" } },
+    const manifest = pinnedManifest(["copilot"], {
+      listed: { copilot: { ids: ["gpt-6-sol", "gpt-6-luna"], source: "copilot-help-config" } },
     });
-    const { lister } = fakeLister({ codex: { kind: "listed", ids: ["gpt-6-sol"], source: "codex-debug-models" } });
+    const { lister } = fakeLister({ copilot: { kind: "listed", ids: ["gpt-6-sol"], source: "copilot-help-config" } });
+
+    const verdict = await checkModelPins(manifest, {}, lister, "/repo");
+
+    expect(verdict.status).toBe("warn");
+    // One line for the class: the change a sync would make is not said a second time.
+    expect(verdict.detail).toBe(
+      `copilot economy: the emitted model "gpt-6-luna" is not on copilot's list (read live); ` +
+        `${npxCommand("sync")} reads the list again and re-picks`,
+    );
+  });
+
+  // review/135: the saved list lacked the pin, so emission re-picked; the live list holds both
+  // the pin and the re-pick, so neither is unlisted, yet a sync would write the pin back.
+  it("warns when a sync would change the emitted model, naming both models, and says it once per class", async () => {
+    const manifest = pinnedManifest(["copilot"], {
+      pins: { standard: { copilot: "claude-sonnet-5" } },
+      listed: { copilot: { ids: ["gpt-6-sol"], source: "copilot-help-config" } },
+    });
+    const { lister } = fakeLister({
+      copilot: { kind: "listed", ids: ["claude-sonnet-5", "gpt-6-sol"], source: "copilot-help-config" },
+    });
 
     const verdict = await checkModelPins(manifest, {}, lister, "/repo");
 
     expect(verdict.status).toBe("warn");
     expect(verdict.detail).toBe(
-      `codex economy: the emitted model "gpt-6-luna" is not on codex's list (read live); ` +
-        `${npxCommand("sync")} reads the list again and re-picks`,
+      `copilot standard: ${npxCommand("sync")} would change the emitted model from "gpt-6-sol" to "claude-sonnet-5"; ` +
+        `the files carry the pick from the list the last sync saved, and copilot's list (read live) resolves another`,
     );
+
+    // A class that already warns is not warned about twice: here the live list lacks both the
+    // pin and the re-pick, and a sync would also pick a third model.
+    const listedElsewhere = await checkModelPins(
+      pinnedManifest(["copilot"], {
+        pins: { standard: { copilot: "claude-opus-9" } },
+        listed: { copilot: { ids: ["gpt-6-sol"], source: "copilot-help-config" } },
+      }),
+      {},
+      fakeLister({ copilot: { kind: "listed", ids: ["gpt-5.6-terra"], source: "copilot-help-config" } }).lister,
+      "/repo",
+    );
+    expect(listedElsewhere.detail.split("\n")).toEqual([
+      `copilot standard: the pinned model "claude-opus-9" is not on copilot's list (read live); pin a listed one with ` +
+        npxCommand("config set model.standard.copilot <id>"),
+      `copilot standard: the emitted model "gpt-6-sol" is not on copilot's list (read live); ` +
+        `${npxCommand("sync")} reads the list again and re-picks`,
+    ]);
   });
 
   it("passes when every pinned and emitted model is on the list, counting them", async () => {
-    const manifest = pinnedManifest(["claude", "codex"], {
-      pins: { advanced: { codex: "gpt-6-sol" } },
-      listed: { codex: { ids: ["gpt-6-sol", "gpt-6-luna"], source: "codex-debug-models" } },
+    const manifest = pinnedManifest(["claude", "copilot"], {
+      pins: { advanced: { copilot: "gpt-6-sol" } },
+      listed: { copilot: { ids: ["gpt-6-sol", "gpt-6-luna"], source: "copilot-help-config" } },
     });
-    const { lister } = fakeLister({ codex: { kind: "listed", ids: ["gpt-6-sol", "gpt-6-luna"], source: "codex-debug-models" } });
+    const { lister } = fakeLister({ copilot: { kind: "listed", ids: ["gpt-6-sol", "gpt-6-luna"], source: "copilot-help-config" } });
 
     const verdict = await checkModelPins(manifest, {}, lister, "/repo");
 
+    // Frontier resolves no model from either list, so three classes are compared.
     expect(verdict).toEqual({
       id: "model-pins",
       status: "pass",
-      detail: "codex: 4 class(es), each pinned or emitted model on the list (read live)",
+      detail: "copilot: 3 class(es), each pinned or emitted model on the list (read live)",
     });
   });
 
@@ -4088,18 +4166,18 @@ describe("check — model-pins", () => {
   });
 
   it("falls back to the saved list when the live read times out, and is unverified with neither", async () => {
-    const manifest = pinnedManifest(["codex", "copilot"], {
+    const manifest = pinnedManifest(["cursor", "copilot"], {
       pins: { standard: { all: "gpt-5.5" } },
-      listed: { codex: { ...CODEX_SAVED, ids: [...CODEX_SAVED.ids] } },
+      listed: { cursor: { ids: [...CODEX_SAVED.ids], source: "cursor-agent-models" } },
     });
-    const { lister } = fakeLister({ codex: { kind: "timeout" }, copilot: { kind: "timeout" } });
+    const { lister } = fakeLister({ cursor: { kind: "timeout" }, copilot: { kind: "timeout" } });
 
     const verdict = await checkModelPins(manifest, {}, lister, "/repo");
 
     expect(verdict.status).toBe("warn");
     expect(verdict.detail.split("\n")).toEqual([
-      `codex standard: the pinned model "gpt-5.5" is not on codex's list (saved by the last sync); pin a listed one with ` +
-        npxCommand("config set model.standard.codex <id>"),
+      `cursor standard: the pinned model "gpt-5.5" is not on cursor's list (saved by the last sync); pin a listed one with ` +
+        npxCommand("config set model.standard.cursor <id>"),
       "copilot: unverified — the copilot CLI did not answer within 10 s and no saved list",
     ]);
   });
@@ -4180,7 +4258,9 @@ describe("check — model-pins", () => {
     expect(ids.indexOf("model-pins")).toBe(ids.indexOf("pack-reach") + 1);
     const verdict = row(doc, "model-pins");
     expect(verdict.status).toBe("warn");
-    expect(verdict.detail).toContain(`codex standard: the pinned model "gpt-5.5" is not on codex's list (read live)`);
+    expect(verdict.detail).toContain(
+      `codex standard: the pinned model "gpt-5.5" is not on codex's list (read live from its bundled catalogue; no list saved)`,
+    );
     expect(existsSync(marker)).toBe(true);
   });
 
@@ -4198,7 +4278,7 @@ describe("check — model-pins", () => {
     const env = { PATH: [inWorkspace, "/usr/bin", "/bin"].join(delimiter) };
 
     // Control: with no workspace around the member, the folder lies outside its tree and the program starts.
-    expect((await doctorRow(member, "model-pins", env)).detail).toContain("(read live)");
+    expect((await doctorRow(member, "model-pins", env)).detail).toContain("(read live from its bundled catalogue");
     expect(existsSync(marker)).toBe(true);
 
     await rm(marker);
@@ -4208,7 +4288,7 @@ describe("check — model-pins", () => {
 
     const verdict = await doctorRow(member, "model-pins", env);
 
-    expect(verdict.detail).not.toContain("(read live)");
+    expect(verdict.detail).not.toContain("(read live");
     expect(existsSync(marker)).toBe(false);
   });
 

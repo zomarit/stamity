@@ -457,12 +457,18 @@ function readEffort(manifest: SetupManifest, modelClass: ModelClass): string | n
  * drift `../../roster/modelLadder.ts` exists to prevent, which is why its
  * header sends this question to the call site instead of publishing a
  * predicate for it.
+ *
+ * `pick` is the saved list the adapters resolve with ({@link pickSourceFor}):
+ * on Cursor an unpinned class's model is the listed effort variant at the
+ * level asked for, so without the list the level would look carried nowhere
+ * (review/137).
  */
 function expressesEffort(
   tool: Tool,
   modelClass: ModelClass,
   pins: ModelPinMap,
   efforts: EffortMap,
+  pick: ModelPickSource,
 ): boolean {
   const emissions = new Set(
     EFFORT_LEVELS.map((level) => {
@@ -473,7 +479,7 @@ function expressesEffort(
       // concatenated, so an absent field stays distinguishable from an empty
       // one and two different emissions can never compare equal.
       return JSON.stringify([
-        resolveModelValue(modelClass, tool, pins, probe),
+        resolveModelValue(modelClass, tool, pins, probe, pick),
         resolveEffortValue(modelClass, tool, probe),
       ]);
     }),
@@ -513,7 +519,7 @@ function resolveEffort(manifest: SetupManifest, modelClass: ModelClass): string 
     ? (level as EffortLevel)
     : undefined;
   const perTool = manifest.tools.map((tool) => {
-    if (!expressesEffort(tool, modelClass, pinsFor(manifest.models, tool), efforts)) {
+    if (!expressesEffort(tool, modelClass, pinsFor(manifest.models, tool), efforts, pickSourceFor(manifest, tool))) {
       return { tool, value: NOT_EXPRESSED };
     }
     const emitted = requested === undefined ? undefined : nearestExpressibleEffort(requested, tool);

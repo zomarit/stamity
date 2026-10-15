@@ -144,8 +144,8 @@ none, runs no package manager, and fetches no pack content over it.
 **Reading a client's model list starts that client's own CLI.** `init`, `sync` (`--dry-run`
 included) and `workspace sync` read the model list of each selected client but Claude Code, and
 `check`'s `model-pins` row reads it again, by starting the client's own CLI once per client:
-`cursor-agent models` (or `agent models`), `codex debug models`, which `check` runs with
-`--bundled`, or `copilot help config` (`src/cli/engine/clientModels.ts::listClientModels`). The
+`cursor-agent models` (or `agent models`), `codex debug models`, which `check` runs, with
+`--bundled`, only when no Codex list was saved, or `copilot help config` (`src/cli/engine/clientModels.ts::listClientModels`). The
 program is found by the engine's `PATH` walk over the entries left once every relative entry,
 every entry inside the project tree and every `node_modules/.bin` entry are dropped, and one whose
 real path lies inside the tree is refused, never started. For every verb, the tree is the enclosing

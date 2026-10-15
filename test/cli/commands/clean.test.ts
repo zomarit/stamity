@@ -1428,6 +1428,23 @@ describe("a held plugin block under clean", () => {
     expect(Object.keys(after)).toContain("README.md");
   });
 
+  it("warns for a plugin Claude's settings record when the manifest names none, as check does (review/134)", async () => {
+    const temp = tempDir();
+    const root = await seedInitialisedRepo(temp);
+    await temp.seedFiles({
+      "repo/.claude/settings.json": `${JSON.stringify({ enabledPlugins: { "stamity@acme-market": true } }, null, 2)}\n`,
+    });
+
+    const result = await runClean(root, ["-y"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("warning: a plugin install from before 1.15.0 is still recorded");
+    expect(result.stdout).toContain("claude: claude plugin uninstall stamity@<your marketplace>");
+    // The settings key alone named it, so no line sends the operator to a manifest key.
+    expect(result.stdout).not.toContain("then delete the `plugin` key");
+    expect(existsSync(join(root, STATE_DIR))).toBe(false);
+  });
+
   it("says nothing at all on a repository that records no plugin", async () => {
     const root = await seedInitialisedRepo(tempDir());
 

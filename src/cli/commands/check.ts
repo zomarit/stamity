@@ -1474,6 +1474,11 @@ function modelIdOf(value: string): string {
   return bracket === -1 ? trimmed : trimmed.slice(0, bracket);
 }
 
+/** A model id as the row prints it, or `none` where the class resolves no model. */
+function quotedModel(id: string): string {
+  return id === "" ? "none" : `"${sanitizeLabel(id)}"`;
+}
+
 /** Why one client has nothing to compare with, after its live read came to `outcome`. */
 function unverifiedReason(tool: Tool, outcome: ModelListOutcome | null): string {
   if (outcome === null) return "client probe off (STAMITY_NO_CLIENT_PROBE=1)";
@@ -1501,6 +1506,14 @@ interface ClientModelVerdict {
  * emission resolves from the saved list (`resolveModelValue` with the pick),
  * so a saved list the account has since moved past shows as an emitted model
  * the live list lacks.
+ *
+ * Codex is read live only when no list was saved, and then from its bundled
+ * catalogue (review/136): `sync` saves the list Codex resolves normally, which
+ * the bundled one can lag, so a saved list is always the reference there. A
+ * live list is the catalogue `sync` reads only for Cursor and Copilot; there,
+ * a class whose model `sync` would resolve differently from that live list
+ * than the files carry from the saved one warns too (review/135), unless the
+ * class already warned.
  */
 function verifyClientModels(
   tool: Tool,
@@ -1510,7 +1523,7 @@ function verifyClientModels(
   const saved = models?.listed?.[tool]?.ids;
   const reference =
     live?.kind === "listed"
-      ? { ids: live.ids, label: "read live" }
+      ? { ids: live.ids, label: tool === "codex" ? "read live from its bundled catalogue; no list saved" : "read live" }
       : saved === undefined
         ? null
         : { ids: saved, label: "saved by the last sync" };
@@ -1521,6 +1534,9 @@ function verifyClientModels(
   const pins = pinsFor(models, tool);
   const efforts = models?.effort ?? {};
   const pick = saved === undefined ? {} : { listed: saved };
+  // The list a `sync` now would read, where the live read is that list: never
+  // Codex's bundled read, and only beside a saved list the files resolved from.
+  const syncReads = live?.kind === "listed" && tool !== "codex" && saved !== undefined ? live.ids : undefined;
   const warnings: string[] = [];
   let compared = 0;
   for (const { modelClass } of MODEL_LADDER) {
@@ -1531,6 +1547,7 @@ function verifyClientModels(
     if (pinned === "" && emitted === "") continue;
     compared += 1;
     const where = `${tool}'s list (${reference.label})`;
+    const before = warnings.length;
     // The resolver's own test (`listHoldsPin`), so the row warns exactly where emission re-picks.
     if (pinned !== "" && !listHoldsPin(reference.ids, pinValue)) {
       warnings.push(
@@ -1543,6 +1560,17 @@ function verifyClientModels(
         `${tool} ${modelClass}: the emitted model "${sanitizeLabel(emitted)}" is not on ${where}; ` +
           `${packageCommand("sync")} reads the list again and re-picks`,
       );
+    }
+    if (syncReads !== undefined && warnings.length === before) {
+      const resyncedValue = resolveModelValue(modelClass, tool, pins, efforts, { listed: syncReads });
+      const resynced = resyncedValue === undefined ? "" : modelIdOf(resyncedValue);
+      if (resynced !== emitted) {
+        warnings.push(
+          `${tool} ${modelClass}: ${packageCommand("sync")} would change the emitted model from ${quotedModel(emitted)} ` +
+            `to ${quotedModel(resynced)}; the files carry the pick from the list the last sync saved, and ${tool}'s ` +
+            `list (read live) resolves another`,
+        );
+      }
     }
   }
   const note =
@@ -1558,12 +1586,15 @@ function verifyClientModels(
  * For each selected client whose CLI can list models (Cursor, Copilot, Codex;
  * Claude Code runs on its family aliases), every class's pinned model and the
  * model emission writes are compared with the list the client's CLI prints now
- * — Codex asked for its bundled catalogue, so the read makes no network call —
  * or, where the CLI is absent, slow or unreadable, with the list the last
- * `sync` saved under `models.listed`. `STAMITY_NO_CLIENT_PROBE=1` starts no
- * client and reads the saved list only. A model the list lacks warns, naming
- * the client, the class and the model, with the remedy: pin a listed id, or
- * `sync` to re-read the list and re-pick.
+ * `sync` saved under `models.listed`. Codex is the exception: its saved list,
+ * whenever one exists, is the reference, and only without one is Codex asked
+ * for its bundled catalogue, so the read makes no network call.
+ * `STAMITY_NO_CLIENT_PROBE=1` starts no client and reads the saved list only.
+ * A model the list lacks warns, naming the client, the class and the model,
+ * with the remedy: pin a listed id, or `sync` to re-read the list and re-pick.
+ * A Cursor or Copilot class whose model `sync` would change, read live beside
+ * a saved list, warns naming both models.
  *
  * Never `fail`: the list is the account's, outside anything this repository
  * can change, and a CI gate on it would fail on a vendor's model retirement.
@@ -1588,8 +1619,15 @@ export async function checkModelPins(
     return { id, status: "pass", detail: "no selected client lists its models (claude runs on its family aliases)" };
   }
   const probeOff = env["STAMITY_NO_CLIENT_PROBE"] === "1";
+  // Codex with a saved list is never started: that list came from the catalogue
+  // `sync` reads, and the bundled one check may read offline can lag it (review/136).
+  const savedCodexList = manifest.models?.listed?.codex !== undefined;
   const live = await Promise.all(
-    clients.map((tool) => (probeOff ? Promise.resolve(null) : lister(tool, env, cwd, { codexBundled: true }))),
+    clients.map((tool) =>
+      probeOff || (tool === "codex" && savedCodexList)
+        ? Promise.resolve(null)
+        : lister(tool, env, cwd, { codexBundled: true }),
+    ),
   );
   const verdicts = clients.map((tool, index) => verifyClientModels(tool, manifest.models, live[index] ?? null));
   const warnings = verdicts.flatMap((verdict) => verdict.warnings);
