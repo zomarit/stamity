@@ -421,8 +421,9 @@ an item that rests on either says it was not walked.
   passed 0 of 3, each sample failing B1, B2 and B3. Neither is a floor case, and both stay on
   record as scored. Five calls were redone after an invalid attempt, two scenario calls the
   client's classifier stopped and three judge calls, and no admitted grade was re-rolled. Run 47
-  is the run of record. No threshold, floor tag or roster count moved, and no exception is
-  recorded for this release. At the cut, after the publish, the `records` branch stood at
+  is the run of record. No threshold, floor tag or roster count moved after run 47's scores were
+  known, and no exception is recorded for this release. At the cut, after the publish, the
+  `records` branch stood at
   `eb3135d2659b6574358e206f853a1b905b38859d`, and the evidence is linked at that commit: the run's
   results at
   [`evals/runs/2026-10-15-run-47/RESULTS.md`](https://github.com/zomarit/stamity/blob/eb3135d2659b6574358e206f853a1b905b38859d/evals/runs/2026-10-15-run-47/RESULTS.md),
