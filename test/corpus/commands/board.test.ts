@@ -1702,9 +1702,14 @@ describe("st-board — durable state and authorization", () => {
     const pickup = flat(section(section(body, "Modes"), "pickup — select, gate, hand off", "###"));
     const step = /5\. \*\*Hand off to `\/st-work`\.\*\*(.*)$/.exec(pickup)?.[1] ?? "";
     const returned = flat(section(body, "Return contract"));
+    const progress = flat(section(body, "Progress contract"));
 
     // 2026-10-15 cloud-runs u10: the payload names the mode beside move: and preview:.
     expect(step).toMatch(/`run-mode: attended \| unattended`, `move: on` or `move: off`/);
+    // Fix round 1 (W-1): the mode is this invocation's declaration, `--attended` beating the variable.
+    expect(progress).toMatch(
+      /This session's handoff carries `run-mode: unattended` only under `--unattended`, or `STAMITY_UNATTENDED=1` without `--attended`\./,
+    );
     // Edge case: the board's own return field keeps its name and meaning.
     expect(returned).toMatch(/`mode` — the mode and the one-line reason it was chosen/);
     expect(returned).not.toMatch(/run-mode/);

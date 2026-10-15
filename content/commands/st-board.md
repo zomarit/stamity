@@ -360,10 +360,10 @@ The left column is this flow's vocabulary and the right column is the board's;
 the platform's own spelling for each right-hand value is the Status field column
 of the reference table. A phase with no mapped status emits no transition.
 
-Mapping is table-driven and one-way: an event never names a platform status,
-and platform state never rewrites the run. An unmapped event is dropped with a
-line in the report — an unknown event is not a failure, and it is not invented
-into a transition either.
+Mapping is table-driven and one-way: an event never names a platform status, and platform state
+never rewrites the run. An unmapped event is dropped with a line in the report — an unknown event is
+not a failure, and it is not invented into a transition either. This session's handoff carries
+`run-mode: unattended` only under `--unattended`, or `STAMITY_UNATTENDED=1` without `--attended`.
 
 ## Deferral inbox
 
