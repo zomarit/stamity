@@ -326,6 +326,25 @@ describe("checkPlans", () => {
     expect(second.plans[0]?.freshness).toBeNull();
   });
 
+  it("refuses a freshness git failed to measure as freshness-error naming the reason, never stamp-unresolved", async (ctx) => {
+    const { cwd, stamp } = await seeded(() => ctx.skip());
+    await touchAndCommit(cwd, "src/b.ts", "after the stamp");
+    // A shallow clone whose history stops after the stamp: git cannot tell whether the stamp is there.
+    const shallow = join(cwd, "shallow");
+    writeGit(cwd, ["clone", "--quiet", "--depth", "1", `file://${cwd}`, shallow]);
+    const text = cleanPlan(stamp);
+
+    const result = await check(shallow, text);
+    expect(result.ready).toBe(false);
+    expect(blockersOf(result, "freshness-error")).toEqual([{ code: "freshness-error", line: lineOf(text, "stamp:") }]);
+    expect(blockersOf(result, "stamp-unresolved")).toEqual([]);
+    expect(result.plans[0]?.blockers.find((blocker) => blocker.code === "freshness-error")?.message).toMatch(/shallow clone/);
+    expect(result.plans[0]?.freshness).toMatchObject({ verdict: "stale", unresolved: false, error: expect.stringMatching(/shallow clone/) });
+    // Non-degenerate: the full repository measures the same stamp, and only the moved path refuses.
+    const full = await check(cwd, text);
+    expect(full.plans[0]?.blockers.map((blocker) => blocker.code)).toEqual(["stale"]);
+  });
+
   it("with a chain, refuses a file whose head depends_on names an unknown predecessor", async (ctx) => {
     const { cwd, stamp } = await seeded(() => ctx.skip());
     const first = { path: PLAN_PATH, text: cleanPlan(stamp) };
@@ -421,6 +440,37 @@ describe("checkPlans", () => {
     const open = await checkPlans(plans, { specs: SPECS, git, cwd, contract: withPrerequisite("pending") });
     expect(open.ready).toBe(false);
     expect(open.plans[0]?.blockers.map((blocker) => blocker.code)).toEqual(["prerequisite-open"]);
+  });
+
+  it("refuses a contract whose plan or item names none of the plans checked as contract-mismatch", async (ctx) => {
+    const { cwd, stamp } = await seeded(() => ctx.skip());
+    const contract = (reference: string): PlanCheckDoc => ({
+      path: "runs/contract.yaml",
+      text: `run-contract: 1\n${reference}\nbase: ${stamp.slice(0, 12)}\nacceptance: every unit green\nscope: { in: [src] }\nanswerer: "@maintainer"\n`,
+    });
+    const plans = [
+      { path: PLAN_PATH, text: cleanPlan(stamp) },
+      { path: NEXT_PATH, text: cleanPlan(stamp, { id: "demo-02" }) },
+    ];
+
+    for (const reference of ["plan: docs/plans/009-elsewhere.md", 'item: "#412"', 'plan: docs/plans/009-elsewhere.md\nitem: "#412"']) {
+      // oxlint-disable-next-line no-await-in-loop -- three contracts over one repository, read in turn
+      const refused = await checkPlans(plans, { specs: SPECS, git, cwd, contract: contract(reference) });
+      expect(refused.ready).toBe(false);
+      expect(refused.contract).toEqual({ ok: true, problems: [] });
+      for (const report of refused.plans) {
+        expect(report.ready).toBe(false);
+        expect(report.blockers.map((blocker) => ({ code: blocker.code, line: blocker.line }))).toEqual([{ code: "contract-mismatch", line: undefined }]);
+      }
+      // The message names the keys, never the values the contract holds.
+      expect(JSON.stringify(refused.plans)).not.toMatch(/009-elsewhere|#412/);
+    }
+
+    // A contract naming one checked plan — by path, however it is spelled, or by head id — governs them.
+    for (const reference of [`plan: ${NEXT_PATH}`, `plan: ./${PLAN_PATH}`, "item: demo-02", `plan: docs/plans/009-elsewhere.md\nitem: demo-01`]) {
+      // oxlint-disable-next-line no-await-in-loop -- four contracts over one repository, read in turn
+      expect((await checkPlans(plans, { specs: SPECS, git, cwd, contract: contract(reference) })).ready).toBe(true);
+    }
   });
 
   it("reads provisional definitions and plan size as advisories: ready, L5 counted", async (ctx) => {

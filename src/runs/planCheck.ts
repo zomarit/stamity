@@ -17,14 +17,16 @@ import { PREREQUISITE_OPEN, parseRunContract } from "./runContract.ts";
  * moved since the stamp, a stamp that resolves to no commit HEAD descends
  * from, an open Prerequisites row, and — for a chain — a file whose head
  * `depends_on` does not name the file before it. A run contract, when given,
- * is parsed strictly and its problems refuse every plan it governs.
+ * is parsed strictly and its problems refuse every plan it governs; a contract
+ * whose `plan` or `item` names none of the plans checked refuses them all.
  *
  * Every blocker is collected in one pass, so the person fixing a refused plan
  * needs one round. L1 (testable criteria) is a judgment, never checked here:
  * it reads `not-checked` and is never a blocker. Size findings (plan-lint L5)
  * and a provisional definition are advisories. Readiness fails closed: a
  * coverage code this module does not know is a blocker, a freshness the git
- * runner could not measure is `stale`, and an empty plan list is not ready.
+ * runner could not measure is `freshness-error` with its reason, and an empty
+ * plan list is not ready.
  *
  * Read-only: the one write-free side effect is git reads through the caller's
  * runner and the dependency look of the coverage check, both against `cwd`.
@@ -60,9 +62,11 @@ export const PLAN_BLOCKER_CODES = [
   "head-key-missing",
   "stale",
   "stamp-unresolved",
+  "freshness-error",
   "chain-order",
   "prerequisite-open",
   "contract",
+  "contract-mismatch",
 ] as const;
 
 export type PlanBlockerCode = (typeof PLAN_BLOCKER_CODES)[number];
@@ -185,10 +189,13 @@ export async function checkPlans(
       const previous = plans[index - 1];
       if (previous !== undefined) checkChainLink(plan, report, previous, deps.cwd);
     }
-    if (contract !== undefined) report.blockers.push(...contract.blockers.map((blocker) => ({ ...blocker })));
-    report.ready = report.blockers.length === 0;
     reports.push(report);
   }
+  if (contract !== undefined) {
+    const blockers = [...contract.blockers, ...contractMismatch(contract, reports, deps.cwd)];
+    for (const report of reports) report.blockers.push(...structuredClone(blockers));
+  }
+  for (const report of reports) report.ready = report.blockers.length === 0;
   const ready =
     reports.length > 0 && reports.every((report) => report.ready) && (contract?.result.ok ?? true);
   return {
@@ -435,8 +442,11 @@ async function measureFreshness(
     );
   } catch (cause) {
     const reason = cause instanceof Error ? cause.message : String(cause);
-    blockers.push({ code: "stale", line: readsLine, message: `${plan.path}: freshness could not be measured, so it reads stale: ${reason}` });
+    blockers.push({ code: "freshness-error", line: stampLine, message: `${plan.path}: freshness could not be measured: ${reason}` });
     return null;
+  }
+  if (result.error !== undefined) {
+    blockers.push({ code: "freshness-error", line: stampLine, message: `Freshness could not be measured from the stamp ${head.stamp.sha}: ${result.error}. Nothing was measured, so the plan is not ready.` });
   }
   if (result.unresolved) {
     blockers.push({ code: "stamp-unresolved", line: stampLine, message: `The stamp ${head.stamp.sha} names no commit HEAD descends from; re-stamp the plan after re-reading what it reads.` });
@@ -457,13 +467,40 @@ function checkChainLink(plan: PlanCheckDoc, report: PlanReport, previous: PlanCh
   report.blockers.push({ code: "chain-order", line, message: `In the chain, ${plan.path} follows ${previous.path}, but its head \`depends_on\` ${named}.` });
 }
 
+interface ReadContract {
+  path: string;
+  result: { ok: boolean; problems: string[] };
+  blockers: PlanBlocker[];
+  /** The contract's `plan` and `item`, trimmed; empty when it did not parse. */
+  references: string[];
+}
+
 /** The contract parsed once; its problems become blockers on every plan it governs. */
-function readContract(doc: PlanCheckDoc): { result: { ok: boolean; problems: string[] }; blockers: PlanBlocker[] } {
+function readContract(doc: PlanCheckDoc): ReadContract {
   const parsed = parseRunContract(doc.text, doc.path);
   const problems = parsed.ok ? [] : parsed.problems;
   const blockers = problems.map((problem): PlanBlocker => ({
     code: problem.includes(`: ${PREREQUISITE_OPEN}:`) ? "prerequisite-open" : "contract",
     message: problem,
   }));
-  return { result: { ok: parsed.ok, problems }, blockers };
+  const references = parsed.ok
+    ? [parsed.contract.plan, parsed.contract.item].flatMap((value) => (value === undefined || value.trim() === "" ? [] : [value.trim()]))
+    : [];
+  return { path: doc.path, result: { ok: parsed.ok, problems }, blockers, references };
+}
+
+/**
+ * A parsed contract whose `plan` and `item` name none of the plans checked — by path, resolved
+ * against `cwd`, or by head `id` — governs another run: one `contract-mismatch` blocker. The
+ * message names the keys, never the values the contract holds.
+ */
+function contractMismatch(contract: ReadContract, reports: readonly PlanReport[], cwd: string): PlanBlocker[] {
+  if (!contract.result.ok || reports.length === 0) return [];
+  const names = (reference: string, report: PlanReport): boolean =>
+    resolve(cwd, reference) === resolve(cwd, report.path) || (report.head.id !== "" && reference === report.head.id);
+  if (contract.references.some((reference) => reports.some((report) => names(reference, report)))) return [];
+  return [{
+    code: "contract-mismatch",
+    message: `The run contract ${contract.path} names none of the plans checked in its \`plan\` or \`item\`; it governs another run, so it cannot vouch for these plans.`,
+  }];
 }
