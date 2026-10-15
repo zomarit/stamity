@@ -91,7 +91,7 @@ jobs:
           tar -czf signing-input.tgz -C source src content node_modules package.json package-lock.json scripts/sign-pack.mjs scripts/native-typescript.mjs scripts/pack-signing-rehearsal.mjs rehearsal
           echo "input_sha256=$(sha256sum signing-input.tgz | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
       - name: Retain prepared input
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: signing-input
           path: signing-input.tgz
@@ -182,7 +182,7 @@ jobs:
           echo "signed_sha256=$(sha256sum signed-packs.tgz | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
       - name: Preserve signed packs including incomplete attempts
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: signed-packs
           path: signed-packs.tgz
@@ -273,7 +273,7 @@ jobs:
         run: node source/scripts/pack-signing-rehearsal.mjs verify
       - name: Preserve verification evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: signing-verification
           path: |
