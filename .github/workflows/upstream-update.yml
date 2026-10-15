@@ -370,7 +370,7 @@ jobs:
       # job re-run after a maintainer fixes a repository setting — or a person pushing the bundle
       # by hand because it touches workflow files — has to find the artifact still there.
       - name: Upload the prepared update
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: upstream-update
           path: ${{ runner.temp }}/upstream-update
@@ -1162,7 +1162,7 @@ jobs:
       # ownership refusals and the exact retained remote SHA used by a recovered PR.
       - name: Retain publication and recovery evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: upstream-publication
           path: ${{ runner.temp }}/upstream-update
