@@ -5,8 +5,9 @@
  * **Person-only acts** are refused to the main thread on every client, attended
  * or not: a force push, a push of a tag or of the default branch (named, or
  * implied by a refspec-less push or `HEAD` while on it), a remote branch
- * deletion, a tag, a merge, `gh pr ready`, a release, a publish, and a secret,
- * variable, protection or ruleset write. {@link personOnlyVerdict} reads a
+ * deletion, a tag, a merge, `gh pr ready`, a release, a publish, a secret,
+ * variable, protection or ruleset write, and a default-branch change, deletion
+ * or archive of the repository. {@link personOnlyVerdict} reads a
  * command line for them; {@link CLAUDE_DENY_ROWS} is the part a Claude Code
  * prefix rule can say, so the settings layer and the guard agree.
  *
@@ -26,9 +27,9 @@
  *
  * **What the text cannot show.** A command reaches the guard as text, so a
  * respelling the text hides — a git or shell alias, a computed `sh -c "$(…)"`,
- * a tag pushed by its bare name, a repository's own push configuration, a
- * GraphQL mutation read from a file — passes. The tests assert that residual as
- * allowed so it stays written down; `SECURITY.md` names it, and the
+ * a bare tag name the context's `tags` does not list, a repository's own push
+ * configuration, a GraphQL mutation read from a file — passes. The tests assert
+ * that residual as allowed so it stays written down; `SECURITY.md` names it, and the
  * pre-flight's REST check that the account cannot push to the default branch
  * (REQ-FLOW-101) is the wall behind this guard.
  *
@@ -59,15 +60,21 @@ export interface PersonOnlyRule {
 export const PERSON_ONLY_RULES: readonly PersonOnlyRule[] = [
   { id: "force-push", act: "a force push (`-f`, `--force`, `--force-with-lease`, `--force-if-includes`, a `+` refspec)" },
   { id: "push-default", act: "a push to the default branch, named or implied by a refspec-less push or `HEAD` while on it" },
-  { id: "push-tags", act: "a push of tags (`--tags`, `--follow-tags`, `--mirror`, `--all`, a `refs/tags/` destination)" },
+  {
+    id: "push-tags",
+    act: "a push of tags (`--tags`, `--follow-tags`, `--mirror`, `--all`, a refspec naming a tag: `refs/tags/…`, `tags/…` or a local tag's bare name)",
+  },
   { id: "push-delete", act: "a remote branch deletion (`--delete`, `-d`, a `:ref` refspec)" },
   { id: "tag", act: "creating or deleting a tag (`git tag` beyond listing)" },
   { id: "pr-merge", act: "merging a pull request (`gh pr merge`, the REST or GraphQL merge)" },
   { id: "pr-ready", act: "marking a pull request ready for review (`gh pr ready`)" },
   { id: "release", act: "creating, editing or deleting a release (`gh release` beyond list, view, download)" },
-  { id: "publish", act: "publishing a package (`npm`, `pnpm`, `yarn` publish)" },
+  { id: "publish", act: "publishing a package (`npm`, `pnpm`, `yarn`, `bun` publish)" },
   { id: "secrets", act: "writing a secret or a variable (`gh secret`, `gh variable` beyond list, their REST paths)" },
-  { id: "protection", act: "writing branch protection or a ruleset" },
+  {
+    id: "protection",
+    act: "writing branch protection or a ruleset, or the repository itself (`gh repo edit --default-branch`, `gh repo delete`, `gh repo archive`)",
+  },
 ];
 
 /** A command's person-only verdict: allowed, or denied naming its rule. */
@@ -82,12 +89,20 @@ export interface PersonOnlyContext {
   readonly defaultBranches: readonly string[];
   /** The checked-out branch, or `null` when detached or unread. */
   readonly currentBranch: string | null;
+  /**
+   * The repository's local tag names (`v1.0.0`, or `refs/tags/v1.0.0`), so a
+   * refspec naming a tag by its bare name reads as a tag push; `[]` when unread.
+   */
+  readonly tags: readonly string[];
 }
 
 /**
  * The person-only rows a Claude Code prefix rule expresses, for the settings'
  * `permissions.deny` (u20). A form the prefix cannot say (a bare `git tag
- * <name>`, an implied destination, a REST write) is the shell guard's alone;
+ * <name>`, an implied destination, a REST write) is the shell guard's alone,
+ * and so is a push naming the default branch: a row ending in a branch name
+ * (`git push origin main`) would also refuse a longer one (`main-feature`) if
+ * the prefix matches as a raw string, so no row ends in a name;
  * every row's prefix is one {@link personOnlyVerdict} denies, so the two layers
  * never disagree on what is the person's.
  */
@@ -99,14 +114,6 @@ export const CLAUDE_DENY_ROWS: readonly string[] = [
   "Bash(git push origin --force:*)",
   "Bash(git push origin -f:*)",
   "Bash(git push origin --force-with-lease:*)",
-  "Bash(git push origin main:*)",
-  "Bash(git push origin master:*)",
-  "Bash(git push origin HEAD:main:*)",
-  "Bash(git push origin HEAD:master:*)",
-  "Bash(git push origin HEAD:refs/heads/main:*)",
-  "Bash(git push origin HEAD:refs/heads/master:*)",
-  "Bash(git push -u origin main:*)",
-  "Bash(git push -u origin master:*)",
   "Bash(git push --tags:*)",
   "Bash(git push origin --tags:*)",
   "Bash(git push --follow-tags:*)",
@@ -136,12 +143,16 @@ export const CLAUDE_DENY_ROWS: readonly string[] = [
   "Bash(pnpm publish:*)",
   "Bash(yarn publish:*)",
   "Bash(yarn npm publish:*)",
+  "Bash(bun publish:*)",
   "Bash(gh secret set:*)",
   "Bash(gh secret delete:*)",
   "Bash(gh secret remove:*)",
   "Bash(gh variable set:*)",
   "Bash(gh variable delete:*)",
   "Bash(gh variable remove:*)",
+  "Bash(gh repo edit --default-branch:*)",
+  "Bash(gh repo delete:*)",
+  "Bash(gh repo archive:*)",
 ];
 
 /**
@@ -403,6 +414,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     ref.replace(/^refs\/heads\//i, "").replace(/^refs\/remotes\/[^/]+\//i, "").toLowerCase();
   const defaults = new Set(["main", "master", ...ctx.defaultBranches.map(branch)]);
   const onDefault = ctx.currentBranch !== null && defaults.has(branch(ctx.currentBranch));
+  const tagNames = new Set(ctx.tags.map((tag) => tag.replace(/^refs\/tags\//i, "").toLowerCase()));
   const deny = (rule: PersonOnlyRuleId, what: string): PersonOnlyVerdict => ({
     deny: true,
     rule,
@@ -468,7 +480,16 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     if (remove || refspecs.some((spec) => spec.length > 1 && spec.startsWith(":"))) {
       return deny("push-delete", "A remote branch deletion");
     }
-    if (tags || refspecs.some((spec) => /^refs\/tags\//i.test(destination(spec)))) return deny("push-tags", "A push of tags");
+    // A side naming a tag (`refs/tags/…`, `tags/…`, or a bare local tag name) pushes one: git gives a bare
+    // destination the source's `refs/tags/` namespace, so `v1:x` and `refs/tags/v1:x` create the remote tag `x`.
+    const namesTag = (side: string): boolean =>
+      side !== "" && (/^(refs\/)?tags\//i.test(side) || tagNames.has(side.toLowerCase()));
+    const sides = (spec: string): string[] => {
+      const bare = spec.replace(/^\+/, "");
+      const colon = bare.indexOf(":");
+      return colon === -1 ? [bare] : [bare.slice(0, colon), bare.slice(colon + 1)];
+    };
+    if (tags || refspecs.some((spec) => sides(spec).some(namesTag))) return deny("push-tags", "A push of tags");
     for (const spec of refspecs) {
       const name = destination(spec).replace(/^(refs\/)?heads\//i, "").toLowerCase();
       if (spec === ":" || spec === "+:") return deny("push-default", "A matching push, the default branch among them");
@@ -519,6 +540,12 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     }
     if ((group === "secret" || group === "variable") && sub !== undefined && !["list", "ls"].includes(sub)) {
       return deny("secrets", `A ${group} write (\`gh ${group}\`)`);
+    }
+    if (group === "repo" && (sub === "delete" || sub === "archive")) {
+      return deny("protection", `A repository ${sub} (\`gh repo ${sub}\`)`);
+    }
+    if (group === "repo" && sub === "edit" && cmd.some((word) => /^--default-branch(=|$)/.test(word))) {
+      return deny("protection", "A default-branch change (`gh repo edit --default-branch`)");
     }
     if (group === "api") return httpVerdict(cmd);
     return null;
@@ -581,7 +608,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       else if (sub === "tag") verdict = tagVerdict(args);
     } else if (program === "gh") verdict = ghVerdict(cmd);
     else if (program === "curl" || program === "wget") verdict = httpVerdict(cmd);
-    else if (["npm", "pnpm", "yarn"].includes(program)) verdict = publishVerdict(cmd);
+    else if (["npm", "pnpm", "yarn", "bun"].includes(program)) verdict = publishVerdict(cmd);
     if (verdict !== null) return verdict;
   }
   return { deny: false };

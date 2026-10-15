@@ -26,11 +26,13 @@ import {
  * check of the default branch is the wall behind this guard.
  */
 
-const ON_FEATURE = { defaultBranches: [], currentBranch: "feat/x" } as const;
-const ON_MAIN = { defaultBranches: [], currentBranch: "main" } as const;
-const ON_TRUNK = { defaultBranches: ["trunk"], currentBranch: "trunk" } as const;
+const ON_FEATURE = { defaultBranches: [], currentBranch: "feat/x", tags: [] } as const;
+const ON_MAIN = { defaultBranches: [], currentBranch: "main", tags: [] } as const;
+const ON_TRUNK = { defaultBranches: ["trunk"], currentBranch: "trunk", tags: [] } as const;
+/** A repository whose local tags include `v1.0.0` (u14 reads them from `refs/tags/` and `packed-refs`). */
+const TAGGED = { defaultBranches: [], currentBranch: "feat/x", tags: ["v1.0.0"] } as const;
 
-type Ctx = { defaultBranches: readonly string[]; currentBranch: string | null };
+type Ctx = { defaultBranches: readonly string[]; currentBranch: string | null; tags: readonly string[] };
 
 const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   // force-push
@@ -70,8 +72,8 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["git push origin 'HEAD:main'", "push-default"],
   ["git push origin \"HEAD\":\"main\"", "push-default"],
   ["git push origin Main", "push-default"],
-  ["git push origin trunk", "push-default", { defaultBranches: ["trunk"], currentBranch: "feat/x" }],
-  ["git push origin trunk", "push-default", { defaultBranches: ["refs/heads/trunk"], currentBranch: "feat/x" }],
+  ["git push origin trunk", "push-default", { defaultBranches: ["trunk"], currentBranch: "feat/x", tags: [] }],
+  ["git push origin trunk", "push-default", { defaultBranches: ["refs/heads/trunk"], currentBranch: "feat/x", tags: [] }],
   ["git push --repo=origin main", "push-default"],
   ["git push origin :", "push-default"],
   ["git -c push.default=matching push", "push-default"],
@@ -94,6 +96,16 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["git push origin refs/tags/v1.0.0", "push-tags"],
   ["git push origin HEAD:refs/tags/v1.0.0", "push-tags"],
   ["git -c push.followTags=true push origin feat/x", "push-tags"],
+  // push-tags by name: a local tag's bare name on either side, `tags/…`, or a tag source with a bare destination
+  // (git gives the destination the source's `refs/tags/` namespace, so these create or update a remote tag).
+  ["git push origin v1.0.0", "push-tags", TAGGED],
+  ["git push origin V1.0.0", "push-tags", TAGGED],
+  ["git push origin v1.0.0:x", "push-tags", TAGGED],
+  ["git push origin HEAD:v1.0.0", "push-tags", TAGGED],
+  ["git push -u origin v1.0.0", "push-tags", TAGGED],
+  ["git push origin v1.0.0", "push-tags", { defaultBranches: [], currentBranch: "feat/x", tags: ["refs/tags/v1.0.0"] }],
+  ["git push origin tags/v1.0.0", "push-tags"],
+  ["git push origin refs/tags/v1.0.0:x", "push-tags"],
   // push-delete
   ["git push origin --delete feat/x", "push-delete"],
   ["git push -d origin feat/x", "push-delete"],
@@ -135,6 +147,8 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["pnpm publish", "publish"],
   ["yarn publish", "publish"],
   ["yarn npm publish", "publish"],
+  ["bun publish", "publish"],
+  ["bun publish --access public", "publish"],
   // secrets
   ["gh secret set TOKEN --body x", "secrets"],
   ["gh secret delete TOKEN", "secrets"],
@@ -150,6 +164,11 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["gh api -X POST repos/o/r/rulesets --input r.json", "protection"],
   ["gh api -X DELETE repos/o/r/rulesets/7", "protection"],
   ["curl -X PUT https://api.github.com/repos/o/r/branches/release/v2/protection", "protection"],
+  // the repository itself: its default branch, deleting or archiving it
+  ["gh repo edit --default-branch trunk", "protection"],
+  ["gh repo edit o/r --default-branch=trunk", "protection"],
+  ["gh repo delete o/r --yes", "protection"],
+  ["gh repo archive o/r --yes", "protection"],
   // REST respellings of a push
   ["gh api -X PATCH repos/o/r/git/refs/heads/main -f sha=abc", "push-default"],
   ["gh api repos/o/r/git/refs -f ref=refs/tags/v1 -f sha=abc", "push-tags"],
@@ -164,6 +183,9 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
   ["git push origin main-feature"],
   ["git push origin feat/main"],
   ["git push origin main:feat/x"],
+  // A branch shaped like a tag, when no local tag has its name.
+  ["git push origin v2.0.0", TAGGED],
+  ["git push origin feat/x", TAGGED],
   ["git push"],
   ["git push origin"],
   ["git push origin HEAD"],
@@ -172,7 +194,7 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
   ["git push --no-follow-tags origin feat/x"],
   ["git push -o ci.skip origin feat/x"],
   ["git -c push.followTags=false push origin feat/x"],
-  ["git push", { defaultBranches: [], currentBranch: null }],
+  ["git push", { defaultBranches: [], currentBranch: null, tags: [] }],
   ["git tag"],
   ["git tag -l"],
   ["git tag --list 'v1.*'"],
@@ -192,6 +214,11 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
   ["npm test"],
   ["npm run publish-docs"],
   ["npm pack"],
+  ["bun run publish"],
+  ["bun test"],
+  ["gh repo view o/r"],
+  ["gh repo edit --description 'x'"],
+  ["gh repo clone o/r"],
   ["gh api repos/o/r/pulls/3"],
   ["gh api repos/o/r/branches/main/protection"],
   ["gh api repos/o/r/rulesets"],
@@ -206,7 +233,7 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
   // The run verb's push argv (u4's gitWrite hardening + u18b's push), joined as u18b checks it.
   [
     "git -c safe.bareRepository=explicit -c core.fsmonitor=false -c push.followTags=false push origin HEAD:refs/heads/stamity/2026-10-16_x",
-    { defaultBranches: ["main"], currentBranch: "stamity/2026-10-16_x" },
+    { defaultBranches: ["main"], currentBranch: "stamity/2026-10-16_x", tags: ["v1.0.0"] },
   ],
 ];
 
@@ -250,13 +277,13 @@ describe("personOnlyVerdict — the branch context decides an implied destinatio
   }
 
   it("counts main and master as default whatever the context names", () => {
-    const ctx = { defaultBranches: ["trunk"], currentBranch: "master" };
+    const ctx = { defaultBranches: ["trunk"], currentBranch: "master", tags: [] };
     expect(personOnlyVerdict("git push", ctx)).toMatchObject({ deny: true, rule: "push-default" });
     expect(personOnlyVerdict("git push origin main", ctx)).toMatchObject({ deny: true, rule: "push-default" });
   });
 
   it("reads a current branch given as a full ref", () => {
-    const ctx = { defaultBranches: [], currentBranch: "refs/heads/main" };
+    const ctx = { defaultBranches: [], currentBranch: "refs/heads/main", tags: [] };
     expect(personOnlyVerdict("git push", ctx)).toMatchObject({ deny: true, rule: "push-default" });
   });
 });
@@ -271,7 +298,8 @@ describe("personOnlyVerdict — the respelling residual (named in SECURITY.md by
     ["alias gp='git push -f'; gp origin feat/x"],
     ["sh -c \"$(printf '%s' 'git pu' 'sh -f')\""],
     ["sh -c \"$(echo Z2l0IHB1c2ggLWY= | base64 -d)\""],
-    // A tag pushed by its bare name reads as a branch name; only `refs/tags/` shows it.
+    // A tag pushed by its bare name reads as a branch name when the context lists no such tag (u14 unable to read
+    // `refs/tags/`); with the tag listed it is denied, in the matrix above.
     ["git push origin v1.0.0"],
   ])("allows %j", (command) => {
     expect(personOnlyVerdict(command, ON_MAIN)).toEqual({ deny: false });
@@ -354,12 +382,29 @@ describe("CLAUDE_DENY_ROWS", () => {
         return verdict.deny ? verdict.rule : "none";
       }),
     );
-    // `protection` has no CLI verb a prefix names: it is reached through `gh api` alone.
+    // `push-default` has no row: a prefix ending in a branch name over-matches a longer one (see below).
     expect([...rules].toSorted()).toEqual(
       PERSON_ONLY_RULES.map((rule) => rule.id)
-        .filter((id) => id !== "protection")
+        .filter((id) => id !== "push-default")
         .toSorted(),
     );
+  });
+
+  it("holds no row whose prefix, read as a raw string, also refuses an allowed command", () => {
+    // If Claude Code's `:*` matched a raw string prefix rather than at a word boundary, `Bash(git push origin
+    // main:*)` would refuse `git push origin main-feature` in an attended session; no row may prefix an allowed line.
+    const allowed = [
+      ...ALLOW.map(([command]) => command),
+      "git push origin main-feature",
+      "git push origin master-x",
+      "git push origin HEAD:main-feature",
+      "git push origin HEAD:refs/heads/master-x",
+      "git push -u origin main-feature",
+    ];
+    for (const row of CLAUDE_DENY_ROWS) {
+      const prefix = row.slice("Bash(".length, -":*)".length);
+      for (const command of allowed) expect(command.startsWith(prefix), `${row} over ${command}`).toBe(false);
+    }
   });
 });
 

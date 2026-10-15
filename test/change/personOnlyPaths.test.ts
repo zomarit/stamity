@@ -46,6 +46,8 @@ describe("heldPaths", () => {
     "a/b/CLAUDE.md",
     "a/AGENTS.override.md",
     ".cursor/rules/stamity.mdc",
+    // Cursor's legacy rules file, read from the root.
+    ".cursorrules",
     ".github/copilot-instructions.md",
     ".github/instructions/review.instructions.md",
     // A case-insensitive checkout opens these as the canonical names.
@@ -68,6 +70,7 @@ describe("heldPaths", () => {
     ".claude/agents/reviewer.md",
     ".stamity/runs/2026-10-16_x/record.md",
     ".stamity/inbox.md",
+    "src/.cursorrules",
     "README.md",
   ])("does not hold %s", (path) => {
     expect(heldPaths([path, "CODEOWNERS"])).toEqual(["CODEOWNERS"]);
@@ -100,6 +103,7 @@ describe("heldPaths", () => {
       "**/CLAUDE.md",
       ".claude/rules/**",
       ".cursor/rules/**",
+      ".cursorrules",
       ".github/copilot-instructions.md",
       ".github/instructions/**",
     ]);

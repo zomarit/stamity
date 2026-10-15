@@ -42,6 +42,7 @@ export const PERSON_ONLY_PATHS: readonly string[] = [
   "**/CLAUDE.md",
   ".claude/rules/**",
   ".cursor/rules/**",
+  ".cursorrules",
   ".github/copilot-instructions.md",
   ".github/instructions/**",
 ];
