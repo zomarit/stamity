@@ -374,7 +374,7 @@ so where it says which edition each id belongs to.
 ## What is still open
 
 Two advisories, in three Dependabot alerts, are open and watched rather than fixed. Each alert is
-rated high, and none names a patched version (read live on 2026-10-11). They are known residuals
+rated high, and none names a patched version (read live on 2026-10-15). They are known residuals
 in 1.15.0, tracked in `.stamity/inbox.md` (on the `records` branch) as the row
 `2026-10-08_product-core/close/1`:
 
