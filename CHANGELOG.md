@@ -407,9 +407,28 @@ an item that rests on either says it was not walked.
   `setup-node` step, with the project's Node version, else `lts/*`, because the generated hooks
   run on Node, and an install step only where the project shows Node. The default action refs move
   to `actions/checkout@v6` and `actions/setup-node@v7`; a project's own pins still win.
-- **The 1.15.0 release eval run.** The release rule calls for a full run of the set: its cases moved,
-  and so did the model-facing text and the files the engine emits for each client. The run's id, its
-  status and its numbers land here after the run.
+- **Run 47 is the 1.15.0 release run, measured in full on the `claude` profile: PASS.** The
+  release rule called for a full run of the set: its cases moved, and so did the model-facing text
+  and the files the engine emits for each client. Run 47 is that full run, at candidate
+  `4e892337`: all 144 cases measured, three samples each, composed with no earlier run and
+  carrying no case. On the Claude profile (scenario `claude-opus-5-5` at `high` effort, judge
+  `claude-fable-5-1`, client 2.1.286, baseline `stamity-claude-cli-v2`) and rubric v7, against the
+  thresholds declared before the run: golden 0.976 (81 of 83) with floors 33 of 33, guardrail hold
+  1.000 (24 of 24), benign-twin false refusals 0.000 (0 of 7), and trigger-probe accuracy 1.000
+  (30 of 30). Calibration matched 5 of 5. The two golden misses are
+  `plan-security-unit-carries-threat-note`, which passed 1 of 3 samples, two failing B5, and
+  `reviewer-shallow-wrapper-pass-through`, new in this release and measured here first, which
+  passed 0 of 3, each sample failing B1, B2 and B3. Neither is a floor case, and both stay on
+  record as scored. Five calls were redone after an invalid attempt, two scenario calls the
+  client's classifier stopped and three judge calls, and no admitted grade was re-rolled. Run 47
+  is the run of record. No threshold, floor tag or roster count moved, and no exception is
+  recorded for this release. At the cut, after the publish, the `records` branch stood at
+  `eb3135d2659b6574358e206f853a1b905b38859d`, and the evidence is linked at that commit: the run's
+  results at
+  [`evals/runs/2026-10-15-run-47/RESULTS.md`](https://github.com/zomarit/stamity/blob/eb3135d2659b6574358e206f853a1b905b38859d/evals/runs/2026-10-15-run-47/RESULTS.md),
+  and the merge-ready snapshot the measurements page reads, 7 of 19 runs verified merge-ready
+  (0.368), at
+  [`evals/measurements/merge-ready-2026-10-15.json`](https://github.com/zomarit/stamity/blob/eb3135d2659b6574358e206f853a1b905b38859d/evals/measurements/merge-ready-2026-10-15.json).
 
 ### Removed
 
