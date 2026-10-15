@@ -500,6 +500,8 @@ describe("init — fresh repo", () => {
         ".stamity/review-gate.json",
         ".stamity/review-gate.json.lock",
         ".stamity/review-gate.json.tmp-*",
+        // REQ-FLOW-101: the shell guard's hooks canary is ignored too.
+        ".stamity/preflight-canary.json",
       ]),
     );
     // The edit is DISCLOSED too. This repo has no predecessor and no
@@ -510,8 +512,10 @@ describe("init — fresh repo", () => {
     // entries init guarantees, not the credential file alone.
     // TEST CHANGE (sw10-first-run-output, REQ-FLOW-022): each entry named carries a
     // neutral reason now; the four entries and the tense are what this still pins.
+    // TEST CHANGE (REQ-FLOW-101): the hooks canary is the fifth entry, named last.
     expect(result.stdout).toContain(
-      ".stamity/review-gate.json.tmp-* (the review gate's temporary writes) — were added to your .gitignore",
+      ".stamity/review-gate.json.tmp-* (the review gate's temporary writes), " +
+        ".stamity/preflight-canary.json (the shell guard's hooks canary) — were added to your .gitignore",
     );
     expect(result.stdout).toContain("security: these lines — .env.mcp (MCP server credentials), ");
     // No MCP server, so no credential file this setup uses.
@@ -1901,8 +1905,10 @@ describe("init --dry-run", () => {
     // nothing written.
     // TEST CHANGE (sw10-first-run-output): the neutral reason per entry, as on the
     // panel; still the four entries, still the future tense.
+    // TEST CHANGE (REQ-FLOW-101): the hooks canary is the fifth entry, named last.
     expect(result.stdout).toContain(
-      ".stamity/review-gate.json.tmp-* (the review gate's temporary writes) — would be added to your .gitignore",
+      ".stamity/review-gate.json.tmp-* (the review gate's temporary writes), " +
+        ".stamity/preflight-canary.json (the shell guard's hooks canary) — would be added to your .gitignore",
     );
     expect(result.stdout).toContain("security: these lines — .env.mcp (MCP server credentials), ");
     // REQ-FLOW-022: the preview names a defaulted client set as the default too.

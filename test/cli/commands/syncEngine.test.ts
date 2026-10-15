@@ -1023,6 +1023,7 @@ describe("the review gate's state is ignored on sync", () => {
       ".stamity/review-gate.json",
       ".stamity/review-gate.json.lock",
       ".stamity/review-gate.json.tmp-*",
+      ".stamity/preflight-canary.json",
     ];
 
     const firstPlan = await planSync(root, ENGINE_VERSION);
