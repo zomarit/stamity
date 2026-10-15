@@ -11,14 +11,17 @@ import { PREREQUISITE_OPEN, parseRunContract } from "./runContract.ts";
  *
  * Each plan is read for what would make a run with nobody watching stop or
  * guess: a `[NEEDS CLARIFICATION]` marker anywhere (fenced or not), an Open
- * questions body other than `None.`, a `- **Critical**` risk, a failed
+ * questions section absent or with a body other than `None.`, a Risks bullet
+ * or table row led by `Critical` (bold or plain, colon or none), a failed
  * mechanical lint (L2 to L4 through the structural coverage check, L3 over
  * each unit's `edgeCases`), a head missing a required key, a `reads` path
  * moved since the stamp, a stamp that resolves to no commit HEAD descends
  * from, an open Prerequisites row, and — for a chain — a file whose head
  * `depends_on` does not name the file before it. A run contract, when given,
  * is parsed strictly and its problems refuse every plan it governs; a contract
- * whose `plan` or `item` names none of the plans checked refuses them all.
+ * whose `plan` names none of the plans checked refuses them all, whatever its
+ * `item` says. An item-only contract is not matched here: a board item names no
+ * plan, and the pickup's own ready read ties the item to its plan.
  *
  * Every blocker is collected in one pass, so the person fixing a refused plan
  * needs one round. L1 (testable criteria) is a judgment, never checked here:
@@ -164,7 +167,10 @@ const REQUIRED_HEAD_KEYS = ["id", "intent", "stamp", "reads"] as const;
 const STAMP = /^([0-9a-f]{7,64})(?:\s+(\S+).*)?$/i;
 
 const CLARIFICATION = /\[NEEDS CLARIFICATION\b/i;
-const CRITICAL_RISK = /^\s*[-*]\s+\*\*Critical\*\*/;
+/** A Risks entry's text led by `Critical` as a word, past any emphasis or code markup. */
+const CRITICAL_LEAD = /^[\s*_`[(]*critical\b/i;
+/** A bullet, `-`, `*`, `+` or numbered, and the text after its marker. */
+const BULLET = /^\s*(?:[-*+]|\d+[.)])\s+(.*)$/;
 const OPEN_QUESTIONS_NONE = /^none\.?$/i;
 /** `none` as a whole edge-case field: admissible only with a reason after it. */
 const BARE_NONE = /^none[.!]?$/i;
@@ -368,7 +374,12 @@ function sectionRows(lines: readonly string[]): SectionRow[] {
 function checkSections(lines: readonly string[], blockers: PlanBlocker[]): void {
   const rows = sectionRows(lines);
   const questions = rows.find((row) => row.heading && row.section.startsWith("open questions"));
-  if (questions !== undefined) {
+  if (questions === undefined) {
+    blockers.push({
+      code: "open-questions",
+      message: "The plan has no `## Open questions` section; add it, reading `None.` once every question is answered.",
+    });
+  } else {
     const body = rows.filter((row) => !row.heading && row.section.startsWith("open questions") && row.text.trim() !== "");
     const text = body.map((row) => row.text.trim()).join(" ");
     if (!OPEN_QUESTIONS_NONE.test(text)) {
@@ -383,11 +394,21 @@ function checkSections(lines: readonly string[], blockers: PlanBlocker[]): void 
   }
   for (const row of rows) {
     if (row.heading) continue;
-    if (row.section.startsWith("risks") && CRITICAL_RISK.test(row.text)) {
+    if (row.section.startsWith("risks") && isCriticalRisk(row.text)) {
       blockers.push({ code: "critical-risk", line: row.line, message: "A Critical risk blocks handoff; mitigate it to Warning or resolve it before an unattended start." });
     }
     if (row.section.startsWith("prerequisites")) checkPrerequisiteRow(row.text, row.line, blockers);
   }
+}
+
+/** A Risks bullet led by `Critical`, or a Risks table row with a cell led by it. */
+function isCriticalRisk(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.startsWith("|")) {
+    return trimmed.replace(/^\|/, "").replace(/\|$/, "").split("|").some((cell) => CRITICAL_LEAD.test(cell));
+  }
+  const item = BULLET.exec(trimmed)?.[1];
+  return item !== undefined && CRITICAL_LEAD.test(item);
 }
 
 /**
@@ -471,8 +492,8 @@ interface ReadContract {
   path: string;
   result: { ok: boolean; problems: string[] };
   blockers: PlanBlocker[];
-  /** The contract's `plan` and `item`, trimmed; empty when it did not parse. */
-  references: string[];
+  /** The contract's `plan`, trimmed; undefined when unset, blank, or the contract did not parse. */
+  plan: string | undefined;
 }
 
 /** The contract parsed once; its problems become blockers on every plan it governs. */
@@ -483,24 +504,24 @@ function readContract(doc: PlanCheckDoc): ReadContract {
     code: problem.includes(`: ${PREREQUISITE_OPEN}:`) ? "prerequisite-open" : "contract",
     message: problem,
   }));
-  const references = parsed.ok
-    ? [parsed.contract.plan, parsed.contract.item].flatMap((value) => (value === undefined || value.trim() === "" ? [] : [value.trim()]))
-    : [];
-  return { path: doc.path, result: { ok: parsed.ok, problems }, blockers, references };
+  const plan = parsed.ok ? parsed.contract.plan?.trim() : undefined;
+  return { path: doc.path, result: { ok: parsed.ok, problems }, blockers, plan: plan === "" ? undefined : plan };
 }
 
 /**
- * A parsed contract whose `plan` and `item` name none of the plans checked — by path, resolved
- * against `cwd`, or by head `id` — governs another run: one `contract-mismatch` blocker. The
- * message names the keys, never the values the contract holds.
+ * A parsed contract whose `plan` names none of the plans checked — by path, resolved against
+ * `cwd`, or by head `id` — governs another run: one `contract-mismatch` blocker, whatever `item`
+ * says. A contract with no `plan` (item-only) gets none: a board item names no plan. The message
+ * names the key, never the value the contract holds.
  */
 function contractMismatch(contract: ReadContract, reports: readonly PlanReport[], cwd: string): PlanBlocker[] {
-  if (!contract.result.ok || reports.length === 0) return [];
-  const names = (reference: string, report: PlanReport): boolean =>
-    resolve(cwd, reference) === resolve(cwd, report.path) || (report.head.id !== "" && reference === report.head.id);
-  if (contract.references.some((reference) => reports.some((report) => names(reference, report)))) return [];
+  const { plan } = contract;
+  if (!contract.result.ok || reports.length === 0 || plan === undefined) return [];
+  const names = (report: PlanReport): boolean =>
+    resolve(cwd, plan) === resolve(cwd, report.path) || (report.head.id !== "" && plan === report.head.id);
+  if (reports.some(names)) return [];
   return [{
     code: "contract-mismatch",
-    message: `The run contract ${contract.path} names none of the plans checked in its \`plan\` or \`item\`; it governs another run, so it cannot vouch for these plans.`,
+    message: `The run contract ${contract.path} names none of the plans checked in its \`plan\`; it governs another run, so it cannot vouch for these plans.`,
   }];
 }

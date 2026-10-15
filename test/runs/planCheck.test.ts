@@ -197,10 +197,11 @@ describe("checkPlans", () => {
     ]);
   });
 
-  it("refuses an Open questions body other than None., and an empty one", async (ctx) => {
+  it("refuses an Open questions body other than None., an empty one, and a plan with no such section", async (ctx) => {
     const { cwd, stamp } = await seeded(() => ctx.skip());
     const carried = cleanPlan(stamp).replace("None.\n", "- Which store keeps the retry state?\n");
     const empty = cleanPlan(stamp).replace("None.\n", "");
+    const renamed = cleanPlan(stamp).replace("## Open questions\n\nNone.\n", "## Questions\n\n- Which store keeps the retry state?\n");
 
     const first = await check(cwd, carried);
     expect(first.ready).toBe(false);
@@ -208,9 +209,16 @@ describe("checkPlans", () => {
 
     const second = await check(cwd, empty);
     expect(blockersOf(second, "open-questions")).toEqual([{ code: "open-questions", line: lineOf(empty, "## Open questions") }]);
+
+    // Absent is not `None.`: a renamed or missing section refuses, with no line to point at.
+    const third = await check(cwd, renamed);
+    expect(third.ready).toBe(false);
+    expect(third.plans[0]?.blockers.map((blocker) => ({ code: blocker.code, line: blocker.line }))).toEqual([
+      { code: "open-questions", line: undefined },
+    ]);
   });
 
-  it("refuses a Critical risk line, and reads a Critical line outside Risks as prose", async (ctx) => {
+  it("refuses a Critical risk in any spelling, and reads a Critical line outside Risks as prose", async (ctx) => {
     const { cwd, stamp } = await seeded(() => ctx.skip());
     const text = cleanPlan(stamp)
       .replace("- **Warning** — a retry storm.", "- **Critical** — retries can double-charge.\n- **Warning** — a retry storm.")
@@ -219,6 +227,30 @@ describe("checkPlans", () => {
 
     expect(result.ready).toBe(false);
     expect(blockersOf(result, "critical-risk")).toEqual([{ code: "critical-risk", line: lineOf(text, "double-charge") }]);
+
+    // Bold or plain, with or without a colon, a bullet or a table row: each refuses at its line.
+    for (const entry of [
+      "- **Critical:** retries can double-charge.",
+      "- Critical — retries can double-charge.",
+      "* critical: retries can double-charge.",
+      "1. `Critical` retries can double-charge.",
+      "| retries can double-charge | **Critical** | none yet |",
+    ]) {
+      const spelled = cleanPlan(stamp).replace("- **Warning** — a retry storm.", `${entry}\n- **Warning** — a retry storm.`);
+      // oxlint-disable-next-line no-await-in-loop -- five fixtures over one repository, read in turn
+      const refused = await check(cwd, spelled);
+      expect({ entry, blockers: blockersOf(refused, "critical-risk") }).toEqual({
+        entry,
+        blockers: [{ code: "critical-risk", line: lineOf(spelled, "double-charge") }],
+      });
+    }
+
+    // Non-degenerate: a Warning table row and prose naming the severity stay ready.
+    const calm = cleanPlan(stamp).replace(
+      "- **Warning** — a retry storm.",
+      "No risk here is Critical.\n\n| Risk | Severity |\n|---|---|\n| a retry storm | Warning |",
+    );
+    expect((await check(cwd, calm)).ready).toBe(true);
   });
 
   it("refuses lint-L2 on a dangling dependency and on a cycle, L2 failing", async (ctx) => {
@@ -345,6 +377,23 @@ describe("checkPlans", () => {
     expect(full.plans[0]?.blockers.map((blocker) => blocker.code)).toEqual(["stale"]);
   });
 
+  it("refuses a freshness that throws as freshness-error at the stamp line, never stale or ready", async (ctx) => {
+    const { cwd, stamp } = await seeded(() => ctx.skip());
+    // A runner that answers nothing: the guard's own read of its output throws, past its GitFailure catch.
+    const broken = ((): string => undefined as unknown as string) as GitRunner;
+    const text = cleanPlan(stamp);
+
+    const result = await check(cwd, text, { git: broken });
+    expect(result.ready).toBe(false);
+    expect(result.plans[0]?.blockers.map((blocker) => ({ code: blocker.code, line: blocker.line }))).toEqual([
+      { code: "freshness-error", line: lineOf(text, "stamp:") },
+    ]);
+    expect(result.plans[0]?.blockers[0]?.message).toMatch(/freshness could not be measured: /);
+    expect(result.plans[0]?.freshness).toBeNull();
+    // Non-degenerate: the real runner reads the same plan ready.
+    expect((await check(cwd, text)).ready).toBe(true);
+  });
+
   it("with a chain, refuses a file whose head depends_on names an unknown predecessor", async (ctx) => {
     const { cwd, stamp } = await seeded(() => ctx.skip());
     const first = { path: PLAN_PATH, text: cleanPlan(stamp) };
@@ -442,7 +491,7 @@ describe("checkPlans", () => {
     expect(open.plans[0]?.blockers.map((blocker) => blocker.code)).toEqual(["prerequisite-open"]);
   });
 
-  it("refuses a contract whose plan or item names none of the plans checked as contract-mismatch", async (ctx) => {
+  it("refuses a contract whose plan names none of the plans checked as contract-mismatch, whatever item says", async (ctx) => {
     const { cwd, stamp } = await seeded(() => ctx.skip());
     const contract = (reference: string): PlanCheckDoc => ({
       path: "runs/contract.yaml",
@@ -453,7 +502,7 @@ describe("checkPlans", () => {
       { path: NEXT_PATH, text: cleanPlan(stamp, { id: "demo-02" }) },
     ];
 
-    for (const reference of ["plan: docs/plans/009-elsewhere.md", 'item: "#412"', 'plan: docs/plans/009-elsewhere.md\nitem: "#412"']) {
+    for (const reference of ["plan: docs/plans/009-elsewhere.md", 'plan: docs/plans/009-elsewhere.md\nitem: "#412"', "plan: docs/plans/009-elsewhere.md\nitem: demo-01"]) {
       // oxlint-disable-next-line no-await-in-loop -- three contracts over one repository, read in turn
       const refused = await checkPlans(plans, { specs: SPECS, git, cwd, contract: contract(reference) });
       expect(refused.ready).toBe(false);
@@ -466,9 +515,10 @@ describe("checkPlans", () => {
       expect(JSON.stringify(refused.plans)).not.toMatch(/009-elsewhere|#412/);
     }
 
-    // A contract naming one checked plan — by path, however it is spelled, or by head id — governs them.
-    for (const reference of [`plan: ${NEXT_PATH}`, `plan: ./${PLAN_PATH}`, "item: demo-02", `plan: docs/plans/009-elsewhere.md\nitem: demo-01`]) {
-      // oxlint-disable-next-line no-await-in-loop -- four contracts over one repository, read in turn
+    // A `plan` naming one checked plan — by path, however it is spelled, or by head id — governs them;
+    // an item-only contract gets no mismatch, since a board item names no plan.
+    for (const reference of [`plan: ${NEXT_PATH}`, `plan: ./${PLAN_PATH}`, "plan: demo-02", 'item: "#412"', "item: demo-02"]) {
+      // oxlint-disable-next-line no-await-in-loop -- five contracts over one repository, read in turn
       expect((await checkPlans(plans, { specs: SPECS, git, cwd, contract: contract(reference) })).ready).toBe(true);
     }
   });
