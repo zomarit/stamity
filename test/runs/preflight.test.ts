@@ -53,15 +53,18 @@ function repoReply(permissions: Record<string, boolean> | undefined): Reply {
 const WRITER = { admin: false, maintain: false, push: true, triage: true, pull: true };
 const ADMIN = { admin: true, maintain: true, push: true, triage: true, pull: true };
 
-function pullRequestRule(rulesetId: number, reviews = 1): Record<string, unknown> {
+function pullRequestRule(rulesetId: number, reviews = 1, source: "Repository" | "Organization" = "Repository"): Record<string, unknown> {
   return {
     type: "pull_request",
     parameters: { required_approving_review_count: reviews, dismiss_stale_reviews_on_push: false },
-    ruleset_source_type: "Repository",
-    ruleset_source: "o/r",
+    ruleset_source_type: source,
+    ruleset_source: source === "Repository" ? "o/r" : "o",
     ruleset_id: rulesetId,
   };
 }
+
+/** The credential helper `gh auth setup-git` writes. */
+const GH_HELPER = "!/opt/homebrew/bin/gh auth git-credential";
 
 function ruleset(id: number, enforcement: string, bypass: string | undefined): Reply {
   return {
@@ -102,6 +105,8 @@ function greenDeps(overrides: Partial<PreflightDeps> = {}): PreflightDeps {
       { id: "question-protocol", path: "x/rules/question.md", exists: true },
       { id: "injection-screening", path: "x/rules/screening.md", exists: true },
     ],
+    pushIdentity: { originScheme: "https", credentialHelper: GH_HELPER },
+    reviewState: { counter: true, usageReviewLines: 0 },
     ...overrides,
   };
 }
@@ -149,8 +154,9 @@ describe("directPushVerdict — rulesets", () => {
   });
 
   it("the same ruleset with classic protection unreadable is unknown, and still refuses", async () => {
+    // A writer, not an administrator: since review/37 an administrator settles before classic protection is read.
     const { rest } = restTable({
-      "/repos/o/r": repoReply(ADMIN),
+      "/repos/o/r": repoReply(WRITER),
       "/repos/o/r/rules/branches/main": { status: 200, json: [pullRequestRule(3)] },
       "/repos/o/r/rulesets/3": ruleset(3, "active", "always"),
       "/repos/o/r/branches/main/protection": NOT_FOUND,
@@ -173,8 +179,9 @@ describe("directPushVerdict — rulesets", () => {
   });
 
   it.each(["pull_requests_only", "never"])("a bypass of %s blocks a direct push", async (bypass) => {
+    // A writer: since review/37 a repository ruleset no longer binds an administrator (see the administrator cases).
     const { rest, calls } = restTable({
-      "/repos/o/r": repoReply(ADMIN),
+      "/repos/o/r": repoReply(WRITER),
       "/repos/o/r/rules/branches/main": { status: 200, json: [pullRequestRule(9)] },
       "/repos/o/r/rulesets/9": ruleset(9, "active", bypass),
     });
@@ -233,6 +240,46 @@ describe("directPushVerdict — rulesets", () => {
     expect(await directPushVerdict(rest, REPO)).toBe("blocked");
   });
 
+  it("an administrator under a repository ruleset with no bypass is open and refuses with the admin fix (review/37)", async () => {
+    const { rest, calls } = restTable({
+      "/repos/o/r": repoReply(ADMIN),
+      "/repos/o/r/rules/branches/main": { status: 200, json: [pullRequestRule(9)] },
+      "/repos/o/r/rulesets/9": ruleset(9, "active", "never"),
+    });
+    expect(await directPushVerdict(rest, REPO)).toBe("open");
+    // An administrator can switch classic protection off too, so it is never read.
+    expect(calls).not.toContain("/repos/o/r/branches/main/protection");
+    const verdict = await runPreflight(greenDeps({ rest }));
+    expect(check(verdict, "direct-push").state).toBe("refuse");
+    expect(refusal(verdict, "direct-push")?.fix).toBe("run as an account or token without admin on this repository");
+  });
+
+  it("an administrator under an organization ruleset with no bypass is blocked, since it cannot lift that rule", async () => {
+    const { rest } = restTable({
+      "/repos/o/r": repoReply(ADMIN),
+      "/repos/o/r/rules/branches/main": { status: 200, json: [pullRequestRule(9, 1, "Organization")] },
+      "/repos/o/r/rulesets/9": ruleset(9, "active", "never"),
+    });
+    expect(await directPushVerdict(rest, REPO)).toBe("blocked");
+    const verdict = await runPreflight(greenDeps({ rest }));
+    expect(check(verdict, "direct-push").state).toBe("pass");
+  });
+
+  it("a reply with no rights block is taken as an administrator, and an unread ruleset beside it is unknown", async () => {
+    const noRights = restTable({
+      "/repos/o/r": repoReply(undefined),
+      "/repos/o/r/rules/branches/main": { status: 200, json: [pullRequestRule(9)] },
+      "/repos/o/r/rulesets/9": ruleset(9, "active", "never"),
+    }).rest;
+    expect(await directPushVerdict(noRights, REPO)).toBe("open");
+    const unread = restTable({
+      "/repos/o/r": repoReply(ADMIN),
+      "/repos/o/r/rules/branches/main": { status: 200, json: [pullRequestRule(9)] },
+      "/repos/o/r/rulesets/9": { status: 404, json: { message: "Not Found" } },
+    }).rest;
+    expect(await directPushVerdict(unread, REPO)).toBe("unknown");
+  });
+
   it("an account with no push right is blocked without reading the rules", async () => {
     const { rest, calls } = restTable({
       "/repos/o/r": repoReply({ admin: false, push: false, pull: true }),
@@ -263,9 +310,12 @@ describe("directPushVerdict — classic protection", () => {
     expect(await directPushVerdict(classic(WRITER, protection), REPO)).toBe("blocked");
   });
 
-  it("an administrator with enforce_admins on is blocked", async () => {
+  it("an administrator with enforce_admins on is open, since it can turn enforce_admins off (review/37)", async () => {
+    // This pinned `blocked` before review/37: the same administrator can lift enforce_admins with one REST call and push.
     const protection = { required_pull_request_reviews: reviews(), enforce_admins: { enabled: true } };
-    expect(await directPushVerdict(classic(ADMIN, protection), REPO)).toBe("blocked");
+    expect(await directPushVerdict(classic(ADMIN, protection), REPO)).toBe("open");
+    const verdict = await runPreflight(greenDeps({ rest: classic(ADMIN, protection) }));
+    expect(refusal(verdict, "direct-push")?.fix).toBe("run as an account or token without admin on this repository");
   });
 
   it("protection without required_pull_request_reviews is open", async () => {
@@ -376,11 +426,72 @@ describe("runPreflight — direct-push inputs", () => {
     expect(check(url, "direct-push").state).toBe("refuse");
   });
 
+  it("GH_REPO on github.com beside an origin on the GH_HOST enterprise host refuses (review/21)", async () => {
+    const env = { GH_HOST: "ghe.example.com" };
+    const crossHost = await runPreflight(greenDeps({ env, ghRepoEnv: "github.com/o/r" }));
+    expect(check(crossHost, "direct-push").state).toBe("refuse");
+    expect(check(crossHost, "direct-push").evidence).toContain("another host");
+    const bare = await runPreflight(greenDeps({ env: { GH_HOST: "https://GHE.example.com:443/" }, ghRepoEnv: "o/r" }));
+    expect(check(bare, "direct-push").state).toBe("pass");
+  });
+
+  it("a proxy origin reads as github.com, so a GH_HOST naming another host refuses (review/39)", async () => {
+    const proxy = { originScheme: "proxy", credentialHelper: null } as const;
+    const { rest, calls } = restTable({});
+    const elsewhere = await runPreflight(greenDeps({ rest, pushIdentity: proxy, env: { GH_HOST: "ghe.example.com" } }));
+    expect(check(elsewhere, "direct-push").state).toBe("refuse");
+    expect(refusal(elsewhere, "direct-push")?.fix).toBe("unset GH_HOST, or set it to the origin's host");
+    expect(calls).toEqual([]);
+    const home = await runPreflight(greenDeps({ pushIdentity: proxy, env: { GH_HOST: "github.com" } }));
+    expect(check(home, "direct-push").state).toBe("pass");
+  });
+
   it("an origin name carrying path characters is unknown and builds no path", async () => {
     const { rest, calls } = restTable({});
     const verdict = await runPreflight(greenDeps({ rest, repo: { owner: "..", repo: "r/../x" } }));
     expect(check(verdict, "direct-push").state).toBe("unknown");
     expect(calls).toEqual([]);
+  });
+});
+
+describe("runPreflight — the push identity (review/36)", () => {
+  const fix = "use an https origin with `gh auth setup-git`";
+
+  it.each([
+    ["gh's helper at a plain path", GH_HELPER],
+    ["gh's helper at a quoted Windows path", "!'C:\\Program Files\\GitHub CLI\\gh.exe' auth git-credential"],
+    ["gh's helper on PATH", "!gh auth git-credential"],
+  ])("an https origin with %s passes", async (_label, helper) => {
+    const verdict = await runPreflight(greenDeps({ pushIdentity: { originScheme: "https", credentialHelper: helper } }));
+    expect(check(verdict, "direct-push").state).toBe("pass");
+    expect(check(verdict, "direct-push").evidence).toContain("gh's credential");
+  });
+
+  it("the cloud proxy origin passes and names its residual", async () => {
+    const verdict = await runPreflight(greenDeps({ pushIdentity: { originScheme: "proxy", credentialHelper: null } }));
+    expect(check(verdict, "direct-push").state).toBe("pass");
+    expect(check(verdict, "direct-push").evidence).toContain("residual");
+  });
+
+  it.each([
+    ["ssh", null],
+    ["other", GH_HELPER],
+    ["https", null],
+    ["https", "osxkeychain"],
+    ["https", "!evil && /usr/bin/gh auth git-credential"],
+    ["https", "!/tmp/not-gh auth git-credential"],
+    ["https", "!/usr/bin/gh auth status"],
+  ] as const)("a %s origin with helper %s is unknown, refused with the gh fix, and reads nothing", async (scheme, helper) => {
+    const { rest, calls } = restTable({});
+    const verdict = await runPreflight(
+      greenDeps({ rest, pushIdentity: { originScheme: scheme, credentialHelper: helper } }),
+    );
+    expect(check(verdict, "direct-push").state).toBe("unknown");
+    expect(refusal(verdict, "direct-push")?.fix).toBe(fix);
+    expect(verdict.ok).toBe(false);
+    expect(calls).toEqual([]);
+    // The helper text is never echoed.
+    if (helper !== null) expect(JSON.stringify(verdict)).not.toContain(helper);
   });
 });
 
@@ -526,6 +637,20 @@ describe("runPreflight — input-author", () => {
     expect(calls).not.toContain("/repos/t/board/collaborators/alice/permission");
   });
 
+  it("an Enterprise Managed Users author and owner (a `_` in the name) are read, not refused (review/19)", async () => {
+    const emu = { owner: "acme_corp", repo: "r" };
+    const { rest } = restTable({
+      "/repos/acme_corp/r": repoReply(WRITER),
+      "/repos/acme_corp/r/rules/branches/main": { status: 200, json: [pullRequestRule(7)] },
+      "/repos/acme_corp/r/rulesets/7": ruleset(7, "active", "never"),
+      "/repos/acme_corp/r/issues/12": { status: 200, json: { number: 12, user: { login: "jdoe_acme", type: "User" } } },
+      "/repos/acme_corp/r/collaborators/jdoe_acme/permission": { status: 200, json: { permission: "write" } },
+    });
+    const verdict = await runPreflight(greenDeps({ rest, repo: emu, item: { ...emu, number: 12 } }));
+    expect(check(verdict, "direct-push").state).toBe("pass");
+    expect(check(verdict, "input-author").state).toBe("pass");
+  });
+
   it("an item with no rest or no origin is unknown", async () => {
     const noRest = await runPreflight(greenDeps({ rest: null, item: { owner: "o", repo: "r", number: 12 } }));
     expect(check(noRest, "input-author").state).toBe("unknown");
@@ -549,6 +674,19 @@ describe("runPreflight — warnings", () => {
     expect(verdict.ok).toBe(true);
   });
 
+  it("a long checkout path in PWD, OLDPWD, HOME or PATH is never named (review/20)", async () => {
+    // 46 letters and slashes: secretScan's high-entropy row matches it, and `PWD` is credential context to it.
+    const checkout = "/Users/denismasatovic/Projects/zomarit/stamity";
+    const verdict = await runPreflight(
+      greenDeps({ env: { PWD: checkout, OLDPWD: checkout, HOME: checkout, PATH: checkout, NODE_PATH: checkout } }),
+    );
+    expect(verdict.warnings.find((warning) => warning.id === "token-env")).toBeUndefined();
+    // A recognised token inside a path holder is still named.
+    const tokenValue = ["ghp", "_", "Zq8".repeat(12)].join("");
+    const leaked = await runPreflight(greenDeps({ env: { PATH: `/bin:${tokenValue}` } }));
+    expect(leaked.warnings.find((warning) => warning.id === "token-env")?.names).toEqual(["PATH"]);
+  });
+
   it("no credential-shaped variable gives no token-env warning", async () => {
     const verdict = await runPreflight(greenDeps({ env: { HOME: "/home/u", PATH: "/bin", PWD: "/w", EMPTY_TOKEN: "" } }));
     expect(verdict.warnings.find((warning) => warning.id === "token-env")).toBeUndefined();
@@ -562,17 +700,39 @@ describe("runPreflight — warnings", () => {
     expect(local.warnings.map((warning) => warning.id)).not.toContain("cursor-egress");
   });
 
-  it("a blocking rule that requires no approving review warns review-state; one requiring a review does not", async () => {
+  it("review-state warns when the review gate holds no counter and the record has no usage: review line (review/18)", async () => {
+    // This test pinned the rule's approving-review count before review/18; the signed-off reading is the run's own
+    // review state, so a zero-review rule with a review recorded no longer warns, and an unreviewed run always does.
     const routes = (reviews: number): RestRead =>
       restTable({
         "/repos/o/r": repoReply(WRITER),
         "/repos/o/r/rules/branches/main": { status: 200, json: [pullRequestRule(7, reviews)] },
         "/repos/o/r/rulesets/7": ruleset(7, "active", "never"),
       }).rest;
-    const unreviewed = await runPreflight(greenDeps({ rest: routes(0) }));
-    expect(unreviewed.warnings.map((warning) => warning.id)).toContain("review-state");
+    const unreviewed = await runPreflight(
+      greenDeps({ rest: routes(1), reviewState: { counter: false, usageReviewLines: 0 } }),
+    );
+    const warning = unreviewed.warnings.find((entry) => entry.id === "review-state");
+    expect(warning?.reason).toContain("usage: review");
     expect(unreviewed.ok).toBe(true);
-    const reviewed = await runPreflight(greenDeps({ rest: routes(1) }));
-    expect(reviewed.warnings.map((warning) => warning.id)).not.toContain("review-state");
+    const counted = await runPreflight(greenDeps({ rest: routes(0), reviewState: { counter: true, usageReviewLines: 0 } }));
+    expect(counted.warnings.map((entry) => entry.id)).not.toContain("review-state");
+    const recorded = await runPreflight(greenDeps({ rest: routes(0), reviewState: { counter: false, usageReviewLines: 2 } }));
+    expect(recorded.warnings.map((entry) => entry.id)).not.toContain("review-state");
+  });
+
+  it("a pull_requests_only bypass warns review-state that the account can merge without the review (review/38)", async () => {
+    const routes = (bypass: string): RestRead =>
+      restTable({
+        "/repos/o/r": repoReply(WRITER),
+        "/repos/o/r/rules/branches/main": { status: 200, json: [pullRequestRule(7)] },
+        "/repos/o/r/rulesets/7": ruleset(7, "active", bypass),
+      }).rest;
+    const bypassing = await runPreflight(greenDeps({ rest: routes("pull_requests_only") }));
+    expect(check(bypassing, "direct-push").state).toBe("pass");
+    const warning = bypassing.warnings.find((entry) => entry.id === "review-state");
+    expect(warning?.reason).toContain("merge a pull request without the required review");
+    const bound = await runPreflight(greenDeps({ rest: routes("never") }));
+    expect(bound.warnings.map((entry) => entry.id)).not.toContain("review-state");
   });
 });

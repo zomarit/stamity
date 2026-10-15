@@ -12,8 +12,13 @@
  * whose pull-request or update rule the account cannot bypass for a direct
  * push, or classic protection requiring a pull request that binds this
  * account. No protection, a direct-push bypass, a 403, a 404, a non-GitHub
- * origin, or `GH_REPO` naming another repository all refuse. `hooks-loaded`
- * is a canary, not a wall: the shell guard writes it, and a steered run could
+ * origin, or `GH_REPO` or `GH_HOST` naming another repository or host all
+ * refuse. The proof holds only where `git` pushes as the identity the REST
+ * reads describe (`gh`'s credential over https, or the cloud proxy, whose
+ * platform app is both — a named residual), and for an account without admin
+ * on the repository unless an organization ruleset blocks, since a repository
+ * admin can lift a repository rule or classic protection. `hooks-loaded` is a
+ * canary, not a wall: the shell guard writes it, and a steered run could
  * write it too.
  *
  * No value is ever echoed: `token-env` names variables only, and no evidence
@@ -36,7 +41,8 @@ export interface PreflightVerdict {
   ok: boolean;
   checks: { id: CheckId; state: CheckState; evidence: string }[];
   refusals: { id: CheckId; reason: string; fix: string }[];
-  warnings: { id: WarningId; names?: string[] }[];
+  /** `names` lists `token-env`'s variables; `reason` says why `review-state` fired. */
+  warnings: { id: WarningId; names?: string[]; reason?: string }[];
 }
 
 interface RepoRef {
@@ -68,6 +74,15 @@ export interface PreflightDeps {
   item?: { owner: string; repo: string; number: number } | undefined;
   /** The emitted copies of the floor rules, one entry per client copy. */
   floors: readonly { id: string; path: string; exists: boolean }[];
+  /**
+   * How `git` pushes to origin: the scheme of the URL it pushes to (`proxy` for
+   * Claude Code's cloud origin; `other` for anything else, an https URL carrying
+   * its own credentials included) and the credential helper git resolves for it,
+   * or `null` when none is set.
+   */
+  pushIdentity: { originScheme: "https" | "ssh" | "proxy" | "other"; credentialHelper: string | null };
+  /** Whether the review gate holds a counter, and the in-progress record's `usage: review` line count. */
+  reviewState: { counter: boolean; usageReviewLines: number };
 }
 
 /** The canary's oldest accepted age. */
@@ -81,12 +96,19 @@ const OPEN_FIX =
   "add a ruleset that requires a pull request on the default branch with no direct-push bypass for this account " +
   "(a pull-request-only bypass is fine), or run as an account without that bypass";
 const GH_REPO_FIX = "unset GH_REPO, or point it at the origin repository";
+const GH_HOST_FIX = "unset GH_HOST, or set it to the origin's host";
+const PUSH_IDENTITY_FIX = "use an https origin with `gh auth setup-git`";
+const ADMIN_FIX = "run as an account or token without admin on this repository";
 
-/** GitHub's owner and repository name alphabets; anything else never reaches a REST path. */
-const OWNER_SHAPE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
+/**
+ * GitHub's owner and repository name alphabets; anything else never reaches a
+ * REST path. `_` is in: every Enterprise Managed Users login carries one, and
+ * u4's `NAME_PART` accepts it.
+ */
+const OWNER_SHAPE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/;
 const REPO_SHAPE = /^[A-Za-z0-9._-]{1,100}$/;
 /** A user or bot login as the issue read returns it. */
-const LOGIN_SHAPE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})(?:\[bot\])?$/;
+const LOGIN_SHAPE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}(?:\[bot\])?$/;
 
 function safeRepo(owner: string, repo: string): boolean {
   return OWNER_SHAPE.test(owner) && REPO_SHAPE.test(repo) && repo !== "." && repo !== "..";
@@ -111,29 +133,21 @@ function statusText(reply: { status: number } | null): string {
 interface DirectPushDetail {
   verdict: "blocked" | "open" | "unknown";
   evidence: string;
-  /** Whether the blocking control requires an approving review; `null` when it says nothing or nothing blocks. */
-  reviewRequired: boolean | null;
+  /** True when every blocking ruleset reads `pull_requests_only`: the account can merge past their required review. */
+  mergeBypass: boolean;
+  /** The fix when it differs from the verdict's usual one. */
+  fix?: string;
 }
 
-function reviewCount(value: unknown): boolean | null {
-  return typeof value === "number" ? value >= 1 : null;
-}
-
-/** The blocking classic protection's verdict, given the repository read's rights. */
-async function classicVerdict(
-  rest: RestRead,
-  base: string,
-  branchPath: string,
-  isAdmin: boolean,
-  rulesetNote: string,
-): Promise<DirectPushDetail> {
+/** The classic protection's verdict for an account without admin on the repository. */
+async function classicVerdict(rest: RestRead, base: string, branchPath: string, rulesetNote: string): Promise<DirectPushDetail> {
   const lead = rulesetNote === "" ? "" : `${rulesetNote}; `;
   const reply = await read(rest, `${base}/branches/${branchPath}/protection`);
   if (reply === null || reply.status !== 200 || !isRecord(reply.json)) {
     return {
       verdict: "unknown",
       evidence: `${lead}classic protection unreadable (${statusText(reply)}), so no direct-push block is proven`,
-      reviewRequired: null,
+      mergeBypass: false,
     };
   }
   const reviews = reply.json["required_pull_request_reviews"];
@@ -141,15 +155,7 @@ async function classicVerdict(
     return {
       verdict: "open",
       evidence: `${lead}classic protection requires no pull request`,
-      reviewRequired: null,
-    };
-  }
-  const enforceAdmins = reply.json["enforce_admins"];
-  if (isAdmin && !(isRecord(enforceAdmins) && enforceAdmins["enabled"] === true)) {
-    return {
-      verdict: "open",
-      evidence: `${lead}the account administers the repository and enforce_admins is off`,
-      reviewRequired: null,
+      mergeBypass: false,
     };
   }
   const allowances = reviews["bypass_pull_request_allowances"];
@@ -163,7 +169,7 @@ async function classicVerdict(
       evidence:
         `${lead}the pull-request bypass lists teams or apps, ` +
         "which cannot be proven to exclude the account",
-      reviewRequired: null,
+      mergeBypass: false,
     };
   }
   const users = listed("users")
@@ -176,27 +182,27 @@ async function classicVerdict(
       return {
         verdict: "unknown",
         evidence: `${lead}the account's login is unreadable (${statusText(me)}) against the pull-request bypass`,
-        reviewRequired: null,
+        mergeBypass: false,
       };
     }
     if (users.includes(login.toLowerCase())) {
       return {
         verdict: "open",
         evidence: `${lead}the account is in the pull-request bypass allowances`,
-        reviewRequired: null,
+        mergeBypass: false,
       };
     }
   }
   return {
     verdict: "blocked",
     evidence: "classic protection requires a pull request and binds this account",
-    reviewRequired: reviewCount(reviews["required_approving_review_count"]),
+    mergeBypass: false,
   };
 }
 
 async function inspectDirectPush(rest: RestRead, repo: RepoRef): Promise<DirectPushDetail> {
   if (!safeRepo(repo.owner, repo.repo)) {
-    return { verdict: "unknown", evidence: "the origin repository's name is not a GitHub name", reviewRequired: null };
+    return { verdict: "unknown", evidence: "the origin repository's name is not a GitHub name", mergeBypass: false };
   }
   const base = `/repos/${repo.owner}/${repo.repo}`;
   const repoReply = await read(rest, base);
@@ -204,23 +210,24 @@ async function inspectDirectPush(rest: RestRead, repo: RepoRef): Promise<DirectP
     return {
       verdict: "unknown",
       evidence: `the repository read answered ${statusText(repoReply)}`,
-      reviewRequired: null,
+      mergeBypass: false,
     };
   }
   const branch = repoReply.json["default_branch"];
   if (typeof branch !== "string" || branch === "") {
-    return { verdict: "unknown", evidence: "the repository read names no default branch", reviewRequired: null };
+    return { verdict: "unknown", evidence: "the repository read names no default branch", mergeBypass: false };
   }
   const permissions = repoReply.json["permissions"];
   if (isRecord(permissions) && permissions["push"] === false) {
     return {
       verdict: "blocked",
       evidence: "the account has no push right on the repository (the run's own branch pushes will fail too)",
-      reviewRequired: null,
+      mergeBypass: false,
     };
   }
-  // With no rights block in the reply the account may be an administrator: the
-  // classic rule then asks for enforce_admins, the stricter reading.
+  // With no rights block in the reply the account may be an administrator, the
+  // stricter reading. An administrator can lift a repository ruleset or classic
+  // protection with one REST call, so only an organization ruleset binds it.
   const isAdmin = !isRecord(permissions) || permissions["admin"] !== false;
   const branchPath = encodeURIComponent(branch);
 
@@ -231,7 +238,8 @@ async function inspectDirectPush(rest: RestRead, repo: RepoRef): Promise<DirectP
     anyUnreadable = true;
     notes.push(`branch rules unreadable (${statusText(rulesReply)})`);
   } else {
-    const reviewsByRuleset = new Map<number, boolean | null>();
+    /** Each pull_request or update rule's ruleset id, and whether it is set at organization level. */
+    const organizationByRuleset = new Map<number, boolean>();
     const unreadableIds: string[] = [];
     for (const rule of rulesReply.json) {
       if (!isRecord(rule) || (rule["type"] !== "pull_request" && rule["type"] !== "update")) continue;
@@ -240,17 +248,12 @@ async function inspectDirectPush(rest: RestRead, repo: RepoRef): Promise<DirectP
         unreadableIds.push("a rule with no ruleset id");
         continue;
       }
-      const parameters = rule["parameters"];
-      const required =
-        rule["type"] === "pull_request" && isRecord(parameters)
-          ? reviewCount(parameters["required_approving_review_count"])
-          : null;
-      const known = reviewsByRuleset.get(id);
-      reviewsByRuleset.set(id, known === true || required === true ? true : (known ?? required));
+      organizationByRuleset.set(id, rule["ruleset_source_type"] === "Organization");
     }
-    const rulesets = [...reviewsByRuleset];
+    const rulesets = [...organizationByRuleset];
     const replies = await Promise.all(rulesets.map(([id]) => read(rest, `${base}/rulesets/${id}`)));
-    for (const [index, [id, reviewRequired]] of rulesets.entries()) {
+    const blocking: { id: number; bypass: string }[] = [];
+    for (const [index, [id, organization]] of rulesets.entries()) {
       const reply = replies[index] ?? null;
       if (reply === null || reply.status !== 200 || !isRecord(reply.json)) {
         unreadableIds.push(`ruleset ${id} (${statusText(reply)})`);
@@ -262,22 +265,45 @@ async function inspectDirectPush(rest: RestRead, repo: RepoRef): Promise<DirectP
       }
       const bypass = reply.json["current_user_can_bypass"];
       if (bypass === "never" || bypass === "pull_requests_only") {
-        return {
-          verdict: "blocked",
-          evidence: `active ruleset ${id} requires a pull request and the account's bypass is ${bypass}`,
-          reviewRequired,
-        };
+        if (isAdmin && !organization) {
+          notes.push(`the account administers the repository and can lift repository ruleset ${id}`);
+          continue;
+        }
+        blocking.push({ id, bypass });
+        continue;
       }
       const how = bypass === "always" ? "always" : "no bypass value read, counted as a bypass";
       notes.push(`the account bypasses ruleset ${id} (${how})`);
+    }
+    if (blocking.length > 0) {
+      const named = blocking.map(({ id, bypass }) => `${id} (bypass ${bypass})`).join(", ");
+      const level = isAdmin ? "organization ruleset" : "ruleset";
+      return {
+        verdict: "blocked",
+        evidence: `active ${level} ${named} requires a pull request and the account cannot bypass it for a direct push`,
+        mergeBypass: blocking.every(({ bypass }) => bypass === "pull_requests_only"),
+      };
     }
     if (unreadableIds.length > 0) {
       anyUnreadable = true;
       notes.push(`unreadable: ${unreadableIds.join(", ")}`);
     }
-    if (reviewsByRuleset.size === 0 && unreadableIds.length === 0) notes.push("no pull_request or update rule");
+    if (organizationByRuleset.size === 0 && unreadableIds.length === 0) notes.push("no pull_request or update rule");
   }
-  const classic = await classicVerdict(rest, base, branchPath, isAdmin, notes.join("; "));
+  if (isAdmin) {
+    const lead = notes.length === 0 ? "" : `${notes.join("; ")}; `;
+    const rights = isRecord(permissions) ? "administers" : "may administer (the reply carries no rights)";
+    // An unread ruleset may be an organization one that binds the account, so that stays unknown.
+    return {
+      verdict: anyUnreadable ? "unknown" : "open",
+      evidence:
+        `${lead}the account ${rights} the repository and can lift a repository ruleset or classic protection; ` +
+        "no organization ruleset blocks it",
+      mergeBypass: false,
+      fix: ADMIN_FIX,
+    };
+  }
+  const classic = await classicVerdict(rest, base, branchPath, notes.join("; "));
   // An unread ruleset may have been the one that blocks; an open classic
   // verdict beside it proves neither way, so it stays unknown.
   if (classic.verdict === "open" && anyUnreadable) {
@@ -384,27 +410,87 @@ function parseGhRepo(value: string): { host: string | null; owner: string; repo:
   return null;
 }
 
+/** A host as a bare lowercase name: no scheme, no port, no trailing `/` (u4's `hostOf`). */
+function hostOf(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//, "")
+    .replace(/[/:].*$/, "");
+}
+
+/** Characters that would make a `!` helper run more than one program. */
+const SHELL_META = /[\s'"`$;&|<>()*?]/;
+
+/** Whether a credential helper is `gh`'s own, `!<path to gh> auth git-credential` as `gh auth setup-git` writes it. */
+function isGhCredentialHelper(helper: string | null): boolean {
+  const match = /^!\s*(.+?)\s+auth\s+git-credential\s*$/.exec(helper?.trim() ?? "");
+  const program = match?.[1];
+  if (program === undefined) return false;
+  let path: string;
+  if (/^'[^']+'$/.test(program)) path = program.slice(1, -1);
+  else if (/^"[^"$`\\]+"$/.test(program)) path = program.slice(1, -1);
+  else if (!SHELL_META.test(program)) path = program;
+  else return false;
+  const name = path.split(/[\\/]/).at(-1)?.toLowerCase();
+  return name === "gh" || name === "gh.exe";
+}
+
+/** Whether `git` pushes as the identity the REST reads describe; the evidence never echoes the helper. */
+function pushIdentityCheck(identity: PreflightDeps["pushIdentity"]): { bound: boolean; evidence: string } {
+  switch (identity.originScheme) {
+    case "proxy":
+      return {
+        bound: true,
+        evidence:
+          "git pushes through the cloud proxy, whose platform app is both the push and the REST identity " +
+          "(a named residual)",
+      };
+    case "https":
+      if (isGhCredentialHelper(identity.credentialHelper)) {
+        return { bound: true, evidence: "git pushes over https with gh's credential, the REST reads' identity" };
+      }
+      return {
+        bound: false,
+        evidence:
+          identity.credentialHelper === null
+            ? "git pushes over https with no credential helper, so its identity is not gh's"
+            : "git pushes over https through a credential helper other than gh's, so its identity is not proven gh's",
+      };
+    case "ssh":
+      return { bound: false, evidence: "git pushes over ssh, whose key may be another identity than gh's" };
+    default:
+      return { bound: false, evidence: "git pushes through a transport the pre-flight cannot tie to gh's identity" };
+  }
+}
+
 interface DirectPushCheck {
   result: CheckResult;
-  reviewRequired: boolean | null;
-  blocked: boolean;
+  /** The account can merge past a blocking ruleset's required review. */
+  mergeBypass: boolean;
 }
 
 async function directPush(deps: PreflightDeps): Promise<DirectPushCheck> {
   const settle = (state: CheckState, evidence: string, fix: string) => ({
     result: { state, evidence, fix },
-    reviewRequired: null,
-    blocked: false,
+    mergeBypass: false,
   });
+  // `gh` talks to GH_HOST when it is set, else github.com; u4's `resolveRepo`
+  // takes a non-proxy origin only on that host, and the proxy origin is github.com.
+  const configuredHost = deps.env["GH_HOST"]?.trim() ?? "";
+  const ghHost = configuredHost === "" ? "github.com" : hostOf(configuredHost);
+  const originHost = deps.pushIdentity.originScheme === "proxy" ? "github.com" : ghHost;
+  if (ghHost !== originHost) {
+    return settle("refuse", `GH_HOST names another host than the origin's (${originHost})`, GH_HOST_FIX);
+  }
   const ghRepo = deps.ghRepoEnv?.trim() ?? "";
   if (ghRepo !== "") {
     const parsed = parseGhRepo(ghRepo);
     if (parsed === null || !safeRepo(parsed.owner, parsed.repo)) {
       return settle("refuse", "GH_REPO is set in a shape the pre-flight cannot read", GH_REPO_FIX);
     }
-    const ghHost = deps.env["GH_HOST"]?.trim().toLowerCase();
-    if (parsed.host !== null && parsed.host.toLowerCase() !== "github.com" && parsed.host.toLowerCase() !== ghHost) {
-      return settle("refuse", "GH_REPO names a repository on another host", GH_REPO_FIX);
+    if ((parsed.host === null ? ghHost : hostOf(parsed.host)) !== originHost) {
+      return settle("refuse", "GH_REPO names a repository on another host than the origin's", GH_REPO_FIX);
     }
     const sameAsOrigin =
       deps.repo !== null &&
@@ -421,19 +507,22 @@ async function directPush(deps: PreflightDeps): Promise<DirectPushCheck> {
   if (deps.rest === null) {
     return settle("unknown", "no REST access (gh is unavailable), so no direct-push block is proven", NO_REST_FIX);
   }
-  const detail = await inspectDirectPush(deps.rest, deps.repo);
   const name = `${deps.repo.owner}/${deps.repo.repo}`;
+  const identity = pushIdentityCheck(deps.pushIdentity);
+  if (!identity.bound) {
+    return settle("unknown", `${name}: ${identity.evidence}, so the REST reads prove nothing about it`, PUSH_IDENTITY_FIX);
+  }
+  const detail = await inspectDirectPush(deps.rest, deps.repo);
   if (detail.verdict === "blocked") {
     return {
-      result: { state: "pass", evidence: `${name}: ${detail.evidence}`, fix: "" },
-      reviewRequired: detail.reviewRequired,
-      blocked: true,
+      result: { state: "pass", evidence: `${name}: ${detail.evidence}; ${identity.evidence}`, fix: "" },
+      mergeBypass: detail.mergeBypass,
     };
   }
   return settle(
     detail.verdict === "open" ? "refuse" : "unknown",
     `${name}: ${detail.evidence}`,
-    detail.verdict === "open" ? OPEN_FIX : NO_REST_FIX,
+    detail.fix ?? (detail.verdict === "open" ? OPEN_FIX : NO_REST_FIX),
   );
 }
 
@@ -486,19 +575,53 @@ const CREDENTIAL_SEGMENTS = new Set([
   "PAT",
 ]);
 
+function nameSegments(name: string): string[] {
+  return name.toUpperCase().split(/[^A-Z0-9]+/).filter((segment) => segment !== "");
+}
+
 function credentialName(name: string): boolean {
-  const segments = name.toUpperCase().split(/[^A-Z0-9]+/).filter((segment) => segment !== "");
+  const segments = nameSegments(name);
   return segments.some((segment) => CREDENTIAL_SEGMENTS.has(segment)) || segments.at(-1) === "KEY";
 }
+
+/**
+ * Last name segments of plain path-holding variables (`PWD`, `OLDPWD`, `HOME`,
+ * `PATH`, `TMPDIR`, `NODE_PATH`, `XDG_CONFIG_HOME`). Their values are paths: a
+ * long checkout path of letters, digits and slashes matches the scanner's
+ * high-entropy row, and `PWD` reads as credential context to it.
+ */
+const PATH_SEGMENTS = new Set(["PWD", "OLDPWD", "HOME", "PATH", "TMPDIR", "DIR", "CWD"]);
 
 /** Variables whose name or value is credential-shaped, by name only, sorted. */
 function tokenEnvNames(env: PreflightDeps["env"]): string[] {
   const names: string[] = [];
   for (const [name, value] of Object.entries(env)) {
     if (value === undefined || value.trim() === "") continue;
-    if (credentialName(name) || scanValueForSecrets(name, value).length > 0) names.push(name);
+    if (credentialName(name)) {
+      names.push(name);
+      continue;
+    }
+    const pathHolder = PATH_SEGMENTS.has(nameSegments(name).at(-1) ?? "");
+    // A path holder is named only on a recognised token inside it, never on the high-entropy row.
+    const hits = scanValueForSecrets(name, value).filter(
+      (hit) => !pathHolder || hit.patternId !== "high-entropy-string",
+    );
+    if (hits.length > 0) names.push(name);
   }
   return names.toSorted();
+}
+
+/** Why `review-state` warns, or `null` when it does not. */
+function reviewStateReason(state: PreflightDeps["reviewState"], mergeBypass: boolean): string | null {
+  const reasons = [
+    ...(!state.counter && state.usageReviewLines === 0
+      ? ["the review gate holds no counter and the in-progress record has no `usage: review` line"]
+      : []),
+    ...(mergeBypass
+      ? ["the account's pull_requests_only bypass lets it merge a pull request without the required review"]
+      : []),
+  ];
+  return reasons.length === 0 ? null : reasons.join("; ");
 }
 
 /** Run every check and fold them into one verdict. */
@@ -523,7 +646,8 @@ export async function runPreflight(deps: PreflightDeps): Promise<PreflightVerdic
   if (cursorSocket !== undefined && cursorSocket !== "") warnings.push({ id: "cursor-egress" });
   const names = tokenEnvNames(deps.env);
   if (names.length > 0) warnings.push({ id: "token-env", names });
-  if (push.blocked && push.reviewRequired !== true) warnings.push({ id: "review-state" });
+  const reviewReason = reviewStateReason(deps.reviewState, push.mergeBypass);
+  if (reviewReason !== null) warnings.push({ id: "review-state", reason: reviewReason });
 
   return { ok: refusals.length === 0, checks, refusals, warnings };
 }
