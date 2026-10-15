@@ -79,7 +79,8 @@ import { personOnlyVerdict, unattendedPushVerdict } from "./personOnly.ts";
  * it gates a work run's completion on that run's review loop, rides events one
  * client fires, and is planned by the adapter that wires those events rather
  * than by {@link planCoreHookScripts}. Every other client carries work's review
- * ladder as prose.
+ * ladder as prose. {@link buildUnattendedAskGate} is placed the same way: it
+ * refuses Claude Code's question tool while a run is unattended.
  *
  * Trust posture, held by every body here and asserted by the suite: exec form
  * (a hook is `node <script>`, never a shell line), repo-committed and
@@ -123,6 +124,13 @@ const GUARD_FILE = "stamity-pre-tool-use-guard.mjs";
 
 /** Configuration-change notice. Portable carrier: `session_start` — see {@link planCoreHookScripts}. */
 const TAMPER_NOTICE_FILE = "stamity-config-tamper-notice.mjs";
+
+/**
+ * The unattended ask gate (REQ-FLOW-090). NON-portable carrier: Claude Code's
+ * `PreToolUse` on `AskUserQuestion`, one client only. Exported because, like
+ * {@link REVIEW_GATE_FILE}, no plan function returns it: the wiring adapter names it.
+ */
+export const UNATTENDED_ASK_GATE_FILE = "stamity-unattended-ask-gate.mjs";
 
 /**
  * Work-scoped review gate. NON-portable carriers, one client only — the
@@ -176,6 +184,11 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // 2 bytes; a plugin root renders 40,021 / 870). × 1.25 = 50,925 / 1,113.75,
   // rounded up to 51,200 / 1,120.
   [REVIEW_GATE_FILE]: { bytes: 51_200, lines: 1_120 },
+  // Measured 2026-10-16 on the u14b lane (base 2a1c5226): 5,711 bytes / 150
+  // lines (claude, generated layout; a plugin root renders 4,983 / 129). Its
+  // measured size × 1.25, rounded as the review gate's is: 7,138.75 / 187.5,
+  // rounded up to 7,168 / 190.
+  [UNATTENDED_ASK_GATE_FILE]: { bytes: 7_168, lines: 190 },
   // Measured 2026-09-24 and again 2026-09-26 at 8c08660e: 2,383 bytes / 67
   // lines, the same in both layouts. × 1.25 = 2,978.75 / 83.75, rounded up to
   // 3,072 / 90.
@@ -3405,4 +3418,165 @@ export function planCoreHookScripts(
  */
 function layoutFor(policiesJsonPath: string): HookScriptLayout {
   return policiesJsonPath.startsWith("../") ? "generated" : "container";
+}
+
+// ── 6. Unattended ask gate (non-core, Claude Code only) ──────────
+
+/**
+ * What the ask gate tells the agent it refused (REQ-FLOW-090): the rule, the
+ * record line the default leaves, and the stop when there is no default.
+ */
+export const UNATTENDED_ASK_GATE_REASON =
+  "This run is unattended: take the declared default and record `Default applied: <question> → option <N> (unattended)`; " +
+  "with no declared default, stop at BLOCKED_AMBIGUITY.";
+
+/** The one tool the gate governs: Claude Code's question tool. */
+const ASK_TOOL_NAME = "AskUserQuestion";
+
+/**
+ * The unattended ask gate (REQ-FLOW-090, REQ-FLOW-095): refuses Claude Code's
+ * question tool while nobody is there to answer, so an unattended run takes its
+ * declared defaults instead of waiting forever.
+ *
+ * Like {@link buildReviewGateScript} it is NOT core: it rides one client's
+ * `PreToolUse` on `AskUserQuestion`, and the Claude adapter places and wires it.
+ * Until that adapter asks for it, nothing renders it.
+ *
+ * The mode comes off the run records the way {@link buildPersonOnlyGuardScript}
+ * reads them — the {@link GUARD_RUNS_READ_MAX} newest run folders by name, debug
+ * rounds included, each record's head only — but the question differs: the gate
+ * reads the NEWEST in-progress record, so a person on a morning walk (`Mode:
+ * attended`) opened beside a still-running unattended record can ask. It refuses
+ * when that record reads `Mode: unattended`, or when `STAMITY_UNATTENDED` is set
+ * (not "", "false", "0") and that record does not read `Mode: attended` (no run
+ * in progress, or a head with no `Mode:` line) — except when no run is in
+ * progress and the newest record is a closed unattended run, which is Claude
+ * Code's final question round after the run handed off.
+ *
+ * Fail-open by design: a question is the safe failure, so a payload it cannot
+ * read, a records folder or record it cannot read, or any fault while deciding
+ * lets the question through. Every other tool passes at once.
+ */
+export function buildUnattendedAskGate(opts: { layout?: HookScriptLayout } = {}): string {
+  const layout = opts.layout ?? "generated";
+  const extra = repoRootImports(layout);
+  const regex = (pattern: RegExp): string => `new RegExp(${json(pattern.source)}, ${json(pattern.flags)})`;
+  return `${header(
+    [
+      "stamity — unattended ask gate (Claude Code).",
+      "",
+      `Refuses ${ASK_TOOL_NAME} while a run is unattended, so the run takes its`,
+      "declared default and records it instead of waiting on nobody. A question",
+      "is the safe failure: anything this script cannot read lets the question through.",
+      `Blocking client: a refusal exits ${BLOCKING_EXIT_CODE} with the rule on stderr.`,
+    ],
+    [
+      "Reads outside repo state: the pending call's payload on stdin and the",
+      "STAMITY_UNATTENDED and STAMITY_REPO_ROOT variables. Reads the run records'",
+      "heads; writes nothing.",
+    ],
+  )}
+
+${namedImport(["closeSync", "lstatSync", "openSync", "readFileSync", "readSync", "readdirSync", "statSync"], "node:fs")}
+${namedImport(["join", "resolve", "sep", ...extra.path], "node:path")}
+${extra.url}
+const STATE_SEGMENTS = ${json([RUNS_SEGMENTS[0]])};
+const RUNS_SEGMENTS = ${json(RUNS_SEGMENTS)};
+const RECORD_FILE = ${json(RECORD_FILE)};
+const RUN_ID = ${regex(RUN_ID_PATTERN)};
+const STATUS = ${regex(RECORD_STATUS_PATTERN)};
+const MODE = ${regex(RECORD_MODE_PATTERN)};
+const IN_PROGRESS = ${regex(IN_PROGRESS_PATTERN)};
+const HEAD_LINES = ${RECORD_HEAD_LINES};
+const HEAD_READ_BYTES = ${RECORD_HEAD_READ_BYTES};
+const RUNS_READ_MAX = ${GUARD_RUNS_READ_MAX};
+const ASK_TOOL = ${json(ASK_TOOL_NAME)};
+const REASON = ${json(UNATTENDED_ASK_GATE_REASON)};
+const BLOCK_EXIT = ${BLOCKING_EXIT_CODE};
+
+${resolveRepoRoot(layout)}
+${String.raw`
+/** A record's status and mode from its first HEAD_LINES lines; null when absent or not a regular file. */
+function recordHead(path) {
+  let stats;
+  try {
+    stats = lstatSync(path);
+  } catch (error) {
+    if (error && error.code === "ENOENT") return null;
+    throw error;
+  }
+  if (!stats.isFile()) return null;
+  const fd = openSync(path, "r");
+  let text = "";
+  try {
+    const buffer = Buffer.alloc(Math.min(HEAD_READ_BYTES, stats.size));
+    text = buffer.toString("utf8", 0, readSync(fd, buffer, 0, buffer.length, 0));
+  } finally {
+    closeSync(fd);
+  }
+  let status = null;
+  let mode = null;
+  for (const line of text.replace(/^﻿/, "").split(/\r?\n/).slice(0, HEAD_LINES)) {
+    status ??= STATUS.exec(line)?.[1] ?? null;
+    mode ??= MODE.exec(line)?.[1].toLowerCase() ?? null;
+  }
+  return { inProgress: status !== null && IN_PROGRESS.test(status), mode };
+}
+
+/** The newest record by run id, and the newest in progress; a missing records folder holds neither. */
+function newestRecords(root) {
+  const runsDir = join(root, ...RUNS_SEGMENTS);
+  let entries = [];
+  try {
+    if (lstatSync(runsDir).isDirectory()) entries = readdirSync(runsDir, { withFileTypes: true });
+  } catch (error) {
+    if (!error || (error.code !== "ENOENT" && error.code !== "ENOTDIR")) throw error;
+  }
+  const names = entries
+    .filter((entry) => entry.isDirectory() && RUN_ID.test(entry.name))
+    .map((entry) => entry.name)
+    .sort()
+    .reverse()
+    .slice(0, RUNS_READ_MAX);
+  let newest = null;
+  for (const name of names) {
+    const head = recordHead(join(runsDir, name, RECORD_FILE));
+    if (head === null) continue;
+    newest ??= head;
+    if (head.inProgress) return { newest, current: head };
+  }
+  return { newest, current: null };
+}
+
+/** Whether nobody is there to answer a question. */
+function unattended(root) {
+  const { newest, current } = newestRecords(root);
+  if (current !== null && current.mode === "unattended") return true;
+  if (current !== null && current.mode === "attended") return false;
+  const flag = (process.env.STAMITY_UNATTENDED ?? "").trim().toLowerCase();
+  if (["", "false", "0"].includes(flag)) return false;
+  // Claude Code's final round: the unattended run closed its record before asking.
+  return !(current === null && newest !== null && newest.mode === "unattended");
+}
+
+/** Whether this call is a question the gate refuses. */
+function decide() {
+  const raw = readFileSync(0, "utf8");
+  const payload = raw.trim() === "" ? null : JSON.parse(raw);
+  if (payload === null || typeof payload !== "object" || payload.tool_name !== ASK_TOOL) return false;
+  return unattended(repoRoot());
+}
+
+let refused = false;
+try {
+  refused = decide();
+} catch {
+  // Fail open: a question this gate could not decide is one it lets through.
+  refused = false;
+}
+if (refused) {
+  process.stderr.write(REASON + "\n");
+  process.exitCode = BLOCK_EXIT;
+}
+`}`;
 }

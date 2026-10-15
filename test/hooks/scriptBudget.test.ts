@@ -18,11 +18,13 @@ import { describe, expect, it } from "vitest";
 import { CLIENT_EXTENSION_EVENTS, CLIENT_HOOK_GUARANTEES } from "../../src/hooks/model.ts";
 import {
   buildReviewGateScript,
+  buildUnattendedAskGate,
   HOOK_SCRIPT_BUDGETS,
   type HookScriptLayout,
   planCoreHookScripts,
   REVIEW_GATE_FILE,
   REVIEW_GATE_STATE_FILE,
+  UNATTENDED_ASK_GATE_FILE,
 } from "../../src/hooks/scripts.ts";
 import { HARD_MAX_REVIEW_ITERATIONS } from "../../src/roster/reviewCaps.ts";
 import { AGENT_TOOL_POLICIES_FILE } from "../../src/tools/allowlist.ts";
@@ -58,6 +60,13 @@ const REVIEW_GATE_TOOLS: ReadonlySet<Tool> = new Set(
   CLIENT_EXTENSION_EVENTS.filter((row) => row.event !== "ConfigChange").map((row) => row.tool),
 );
 
+/**
+ * The clients whose adapter places the unattended ask gate: Claude Code alone,
+ * the one client with a question tool a PreToolUse hook can refuse
+ * (REQ-FLOW-090). Like the review gate, `planCoreHookScripts` does not return it.
+ */
+const ASK_GATE_TOOLS: ReadonlySet<Tool> = new Set<Tool>(["claude"]);
+
 /** Lines as the budget counts them: `\n` only, so CRLF and LF count alike. */
 function lineCount(content: string): number {
   return content.split("\n").length - 1;
@@ -75,7 +84,10 @@ function renderAll(tool: Tool, layout: HookScriptLayout): Rendered[] {
     fileName: script.fileName,
     content: script.content,
   }));
-  if (!REVIEW_GATE_TOOLS.has(tool)) return core;
+  const askGate: Rendered[] = ASK_GATE_TOOLS.has(tool)
+    ? [{ tool, fileName: UNATTENDED_ASK_GATE_FILE, content: buildUnattendedAskGate({ layout }) }]
+    : [];
+  if (!REVIEW_GATE_TOOLS.has(tool)) return [...core, ...askGate];
   const failMode =
     CLIENT_HOOK_GUARANTEES.find((guarantee) => guarantee.tool === tool)?.failMode ?? "fail-closed";
   return [
@@ -90,6 +102,7 @@ function renderAll(tool: Tool, layout: HookScriptLayout): Rendered[] {
         layout,
       }),
     },
+    ...askGate,
   ];
 }
 
@@ -139,7 +152,8 @@ describe("hook script budgets (REQ-CTX-016)", () => {
     expect([...rendered].toSorted()).toEqual(Object.keys(HOOK_SCRIPT_BUDGETS).toSorted());
     // Four clients × four core scripts (the person-only guard among them), plus the review gate where it is wired.
     // Moved from × 3 by u14-shell-guard: the guard is a core script with a budget row of its own.
-    expect(renders).toHaveLength(TOOLS.length * 4 + REVIEW_GATE_TOOLS.size);
+    // Moved by u14b-ask-gate: the ask gate is a fifth script with a budget row, rendered where its adapter places it.
+    expect(renders).toHaveLength(TOOLS.length * 4 + REVIEW_GATE_TOOLS.size + ASK_GATE_TOOLS.size);
   });
 
   it.each(renders.map((script) => [`${script.tool}/${script.fileName}`, script] as const))(
@@ -198,5 +212,11 @@ describe("hook script budgets (REQ-CTX-016)", () => {
     const gated = renders.filter((script) => script.fileName === REVIEW_GATE_FILE).map((script) => script.tool);
     expect(gated).toEqual(TOOLS.filter((tool) => REVIEW_GATE_TOOLS.has(tool)));
     expect(gated.length).toBeGreaterThan(0);
+  });
+
+  it("renders the unattended ask gate on Claude Code only, within its ceilings", () => {
+    const gated = renders.filter((script) => script.fileName === UNATTENDED_ASK_GATE_FILE);
+    expect(gated.map((script) => script.tool)).toEqual(["claude"]);
+    for (const script of gated) expect(budgetViolation(script)).toBeUndefined();
   });
 });
