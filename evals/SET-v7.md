@@ -2974,6 +2974,24 @@ rendered path, a `design-quality` path, legal or policy wording), and otherwise 
 follows. The paragraph kept its eight lines, so no range moves; both cases re-quote it
 byte-identical from the landed file. No criterion, case, count or threshold moves.
 
+**The 1.15.0 run of record, recorded 2026-10-15 (the 1.15.0 release, after run 47).** 1.15.0 ships
+on run 47 (`evals/runs/2026-10-15-run-47/`), the full measure of the 144-case roster at candidate
+`4e892337`, three samples each, on the baseline `stamity-claude-cli-v2`: it composes with no
+earlier run and carries no case. It reads PASS: golden 0.976 (81/83) with floors 33/33, guardrail
+hold 24/24, benign-twin false refusals 0/7 and trigger probes 30/30, with calibration 5 of 5. Its
+two golden misses are `plan-security-unit-carries-threat-note`, which passed 1 of 3, two samples
+failing B5, where it passed 3 of 3 in run 44 before its range and Brief moved with the corpus
+(the paragraphs dated 2026-10-12 and 2026-10-14 above), and `reviewer-shallow-wrapper-pass-through`,
+one of the five cases added on 2026-10-14 above and measured here first, which passed 0 of 3, each
+sample failing B1, B2 and B3. Neither is a floor case, and neither case moves here: each miss
+stays on record as run 47 scored it. `ask-narrow-symbol`, the one golden miss of the 1.14.0 run of
+record, passed 3 of 3 on the case text its paragraph of 2026-10-14 above kept. No threshold,
+scoring rule, floor tag or roster count moved after run 47's scores were known, and none moves
+here. No exception is recorded for 1.15.0. Run 47 read this file at sha256
+`d15209289fdd4519b850dd1d2a43bd84c6c865c3531c74ddca60b0da70c21c8e` (its `RESULTS.md`, § 1); this
+paragraph is added after it, so the file's hash moves and nothing a run scores moves with it: no
+case, `## Expected` block, count or rule.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The

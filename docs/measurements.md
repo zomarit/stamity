@@ -168,32 +168,23 @@ Three consequences worth stating, because they are what make the number worth re
 ## Corpus behaviour: run of record
 
 The corpus is measured by an eval set, not by inspection. The run of record is
-[run 45](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-10-11-run-45/RESULTS.md) — the 1.14.0 release run —
-PASS as composed, three samples per case.
+[run 47](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-10-15-run-47/RESULTS.md) — the 1.15.0 release run —
+PASS, three samples per case.
 
-That run is composed rather than measured end to end, under SET-v7's incremental rule: one
-full baseline run per release, and a later run on another candidate re-measures only the cases
-whose inputs moved and carries the rest with provenance.
-Run 44 measured every case in full.
-[Run 44](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-10-11-run-44/RESULTS.md) alone was FAIL on two floor cases, `unattended-run-applies-declared-default`, `work-frame-reads-matching-inbox-rows`, and the benign-twin false-refusal rate not met; run 45 re-measured five cases, composed with run 44, and carried the other 136 from it.
-The re-measured cases are `benign-state-note-not-screened` (case file bytes moved), `ask-narrow-symbol` (case file bytes moved), `unattended-run-applies-declared-default` (case file bytes moved), `work-frame-reads-matching-inbox-rows` (case file bytes moved) and `work-lockfile-only-bump-audit-before-lens` (case file bytes moved).
-Each carried case is named in the composed artifact with its case-file hash and the source
-ranges found identical at both candidates. The set is SET-v7.
+That run is a full baseline: its results file names no prior complete run, so no case is
+carried from an earlier run.
+Run 47 measured every case in full on its own candidate. The set is SET-v7.
 
-Run 45's results file states why the run happened, in its § 3, quoted as it stands:
+Run 47's results file states why the run happened, in its § 3, quoted as it stands:
 
-> The 1.14.0 release run's increment. Run 44, the full baseline at ecd0c494, is FAIL on five cases. Each was diagnosed as a defect of the case and fixed: one Brief re-quoted, four Expected rows amended, no threshold, floor tag or roster count moved. This run re-measures those five cases, whose bytes moved, and carries the other 136 from run 44.
+> The 1.15.0 release run (plan 020 file 4, D23; SET-v7 'Which releases run the set'): since run 45's candidate d8a76416 the release changes content/**, the case set (three removed, seven added, forty moved; 141 -> 144 cases), the set file, evals/README.md, both eval-run skill copies, scripts/eval/run.mjs and the emitted client files. A full baseline of the 144-case roster.
 
-A case file that moved between run 44 and run 45 was changed after run 44's scores were known,
-and the dated paragraphs of [`evals/SET-v7.md`](../evals/SET-v7.md) say what each change is and what it admits.
-Run 45 carries a note beside its results file, [`NOTE.md`](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-10-11-run-45/NOTE.md), to be read with it.
-
-The scoring rule is SET-v6, which is what run 45's own score table is headed with.
+The scoring rule is SET-v6, which is what run 47's own score table is headed with.
 The figures below score that whole set:
 
-- Golden rubric pass rate **0.988** (80/81); every floor case passed, 31/31.
+- Golden rubric pass rate **0.976** (81/83); every floor case passed, 33/33.
 - Adversarial guardrail hold rate **1.000** (24/24).
-- Benign-twin false-refusal rate **0.000** (0/6).
+- Benign-twin false-refusal rate **0.000** (0/7).
 - Trigger-probe accuracy **1.000** (30/30).
 
 Each figure is the retained artifact's own, and the suite holds these lines to that file. The

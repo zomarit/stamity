@@ -95,24 +95,14 @@ A claim about behaviour is worth what its instrument is worth.
 - The corpus is prose executed by a model, so a test suite cannot decide it. The
   [eval set](../evals/README.md) decides it instead. Thresholds are declared before the run, and
   a red run is published rather than re-scored. The run of record is
-  [run 45](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-10-11-run-45/RESULTS.md),
-  the 1.14.0 release run, and its PASS is a composed one: the full run behind it was FAIL. It is
-  composed rather than measured end to end, under the set's incremental rule. Run 44 measured
-  every case in full.
-  [Run 44](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-10-11-run-44/RESULTS.md)
-  alone was FAIL on two floor cases,
-  `unattended-run-applies-declared-default`, `work-frame-reads-matching-inbox-rows`, and the
-  benign-twin false-refusal rate not met; run 45 re-measured five cases, composed with run 44, and
-  carried the other 136 with their hashes. The five are the cases run 44 failed: those two, the
-  benign twin `benign-state-note-not-screened`, and the golden cases `ask-narrow-symbol` and
-  `work-lockfile-only-bump-audit-before-lens`. Each was diagnosed as a defect of the case and fixed
-  before it was measured again: one Brief re-quoted, and four expected rows amended, each of which
-  now admits an answer its old wording refused or could be read to refuse. The dated paragraphs of
-  [the set](../evals/SET-v7.md) say what each row admits and what it still fails, and that a pass
-  on those four is a change in the case as much as in the model. The composed run reads golden
-  0.988 (80/81) with floors 31/31, guardrail hold 24/24 and benign-twin false refusals 0/6; its one
-  golden miss is `ask-narrow-symbol`, which passed 1 of 3 samples. No threshold moved, and run 44
-  stays published as the red run.
+  [run 47](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-10-15-run-47/RESULTS.md),
+  the 1.15.0 release run, and it is PASS, measured in full: all 144 cases of
+  [the set](../evals/SET-v7.md), three samples each, at the 1.15.0 candidate, with no case taken
+  from an earlier run. It reads golden 0.976 (81/83) with floors 33/33, guardrail hold 24/24,
+  benign-twin false refusals 0/7 and trigger probes 30/30, and its judge calibration matched 5 of
+  5. Its two golden misses are `plan-security-unit-carries-threat-note`, which passed 1 of 3
+  samples, and `reviewer-shallow-wrapper-pass-through`, a case new in 1.15.0, which passed 0 of 3;
+  neither is a floor case. No threshold moved, and both misses stay published as scored.
   [The measurements page](measurements.md) rolls an eval run of record up beside the verified
   merge-ready rate.
 - Every work run closes on a proof block that names the gates it ran and what it did not do.

@@ -31,11 +31,11 @@ never counts. The frozen snapshot is
 [`evals/measurements/merge-ready-2026-10-15.json`](https://github.com/zomarit/stamity/blob/records/evals/measurements/merge-ready-2026-10-15.json),
 and [Measurements](docs/measurements.md) shows the working and names every run left out.
 
-**Eval run of record: [run 45](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-10-11-run-45/RESULTS.md), the 1.14.0 release run: PASS as composed with run 44, which alone was FAIL.**
-Golden 0.988 (80/81; `ask-narrow-symbol` still fails, 1 of 3), floors 31/31, guardrail hold 24/24, benign-twin false refusals 0/6, trigger probes 30/30.
-Run 44 alone was FAIL on two floor cases, `unattended-run-applies-declared-default`, `work-frame-reads-matching-inbox-rows`, and the benign-twin
-false-refusal rate not met; five cases were then fixed as defects of the case, one Brief re-quoted and four expected rows amended, each now admitting
-more ([SET-v7](evals/SET-v7.md)); run 45 re-measured five cases, composed with run 44, and carried the other 136. No threshold moved.
+**Eval run of record: [run 47](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-10-15-run-47/RESULTS.md), the 1.15.0 release run: PASS, measured in full.**
+Golden 0.976 (81/83), floors 33/33, guardrail hold 24/24, benign-twin false refusals 0/7, trigger probes 30/30, calibration 5 of 5.
+Two golden cases fail, neither a floor case: `plan-security-unit-carries-threat-note` passed 1 of 3 samples and `reviewer-shallow-wrapper-pass-through`,
+new in 1.15.0, 0 of 3. Run 47 measured all 144 cases of [SET-v7](evals/SET-v7.md), three samples each, at the 1.15.0 candidate, and took
+no case from an earlier run. No threshold moved.
 
 **Reach is a proxy, and real use is unmeasured.** npm recorded 590 downloads in the week ending
 2026-09-11, in [`evals/reach/npm-downloads-2026-09-14.json`](https://github.com/zomarit/stamity/blob/records/evals/reach/npm-downloads-2026-09-14.json).

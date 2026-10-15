@@ -73,6 +73,10 @@ from the spec deltas of `docs/plans/020-cli-native-02.md` and `-04.md` (plan 020
 file order at that run's Prove phase, each entry in its amended form, with the as-built corrections its units' reports
 declared. They cite the integration head `bd89c476`; a ledger id in that text (`review/47`, `build/39`) is that run's
 own. They shipped with 1.15.0, which set `status: shipped-with-1.15.0`.
+The amendment dated 2026-10-15 to REQ-PROVE-020 was written at the 1.15.0 cut in the same run, unit
+`c67-measurements-and-run-of-record`; it cites run 47's results file as exported (sha256
+`69a28f57e4069cf832cb293aa1d945ac5fef709ea7201dfd4471a191394ed190`), a record on the `records` branch, and ships
+with 1.15.0.
 
 ## Intent
 
@@ -990,6 +994,33 @@ snapshot on `records` changes nothing until `main` moves the pin.
   `scripts/records-paths.mjs`); in `test/records/docsPages.test.ts`, "resolves every records-branch link to a record
   file the branch holds".
 - GIVEN the pinned inputs WHEN the page regenerates twice THEN the outputs are byte-identical.
+
+Amended 2026-10-15 (the 1.15.0 cut, run `2026-10-14_cli-native`, unit `c67-measurements-and-run-of-record`; run 47's
+results file cited as exported, sha256 `69a28f57e4069cf832cb293aa1d945ac5fef709ea7201dfd4471a191394ed190`). The 1.15.0
+run of record is run 47, a full run: it measured all 144 cases at candidate `4e892337`, three samples each, names no
+prior complete run and carries no case (`evals/runs/2026-10-15-run-47/RESULTS.md:5`, `:38`). It reads
+`Status: **PASS**` (`:3`): golden 81/83 with floors 33/33 (`:48`), guardrail hold 24/24 (`:49`), benign-twin false
+refusals 0/7 (`:50`) and trigger probes 30/30 (`:51`), with calibration 5 of 5 (`:297`) and no threshold moved
+(`:313`). Its two golden misses are `plan-security-unit-carries-threat-note`, 1 of 3 (`:121`), and
+`reviewer-shallow-wrapper-pass-through`, 0 of 3 (`:142`); neither is a floor case. For 1.15.0 this supersedes the
+2026-10-11 criterion that README, the doctrine and the page name run 45 as the 1.14.0 release run, composed with run
+44: they name run 47 as the 1.15.0 release run, measured in full, and since the run of record is a full run none of
+the three carries a composition disclosure. The verdict is read, not typed: a full run's PASS keeps the bare word, so
+the page prints "PASS, three samples per case.", the full-baseline paragraph in place of the composed one, run 47's
+§ 3 quoted as it stands, no `NOTE.md` link and no exception paragraph, and `evals/run-of-record.json` carries
+`"exception": null`. The merge-ready snapshot moves at the same cut: `MEASUREMENT_SNAPSHOT_PATH` names
+`evals/measurements/merge-ready-2026-10-15.json`, which reads 7 of 19 as the 2026-10-13 snapshot did, with three more
+runs excluded and named. No requirement's normative sentence changes.
+
+- GIVEN `evals/run-of-record.json` naming run 47's results file, release 1.15.0 and `"exception": null` THEN README
+  and the doctrine name run 47 as the 1.15.0 release run and say nowhere that a prior run "alone was FAIL", and the
+  page renders from run 47's results file alone and byte-matches the committed file. Test evidence by name, each case
+  reading the run off the file and none typing it: in `test/docsPages.test.ts`, "%s names the generator's run and
+  release" (red on README and the doctrine between the file's move and the pages'); in
+  `test/records/docsPages.test.ts`, the full-run branch of "%s discloses a FAIL baseline behind the composed run of
+  record" (red on README, the doctrine and the page the same way); in `test/records/measurements.test.ts`,
+  "byte-matches the committed page" (red the same way) and the `null` branch of "holds the tree's recorded exception
+  to the run of record and to every miss it excuses".
 
 ### REQ-PROVE-021 — QA automation and binding
 
