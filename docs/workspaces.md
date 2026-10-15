@@ -257,8 +257,9 @@ stops the others, and it never quietly passes either. Per member, in order:
 3. **Write it back** into the manifest read in step 1, validated before it persists and written
    atomically. Patching the document from disk rather than composing a fresh one is what keeps the
    member's ledger, import choice and creation stamp intact.
-4. **Plan and apply** that member's own sync. That is the same path plain `stamity sync` runs inside
-   it.
+4. **Plan and apply** that member's own sync, after reading that member's clients' model lists as
+   plain `stamity sync` does ([`SECURITY.md`'s "Network and data handling"](../SECURITY.md)). That is
+   the same path plain `stamity sync` runs inside it.
 5. A member whose apply refused a path fails its row naming the refusals and, for each refusal
    class, the remedy that clears it: `--force` is offered only for content the engine cannot prove
    it wrote, never for a row refused at its source, an instruction file an import decision
@@ -298,7 +299,9 @@ only when a lock refused one of its removals.
 - `stamity workspace status --dry-run` is `status`. The flag is inert on a read.
 - `stamity workspace sync --dry-run` names the patch it would apply per member. It writes no member
   manifest and no emitted file, and it disables the journal for that run. A preview appending a
-  `started` line would manufacture the crash signal the journal exists to carry.
+  `started` line would manufacture the crash signal the journal exists to carry. It still starts each
+  member's client CLIs to read their model lists, as `sync --dry-run` does, unless
+  `STAMITY_NO_CLIENT_PROBE=1` is set.
 
 A sync preview reports the plan computed from the unpatched manifest, the one each member has today.
 It does not invent a plan for a manifest that does not exist yet.
@@ -329,19 +332,23 @@ number. See the [CLI reference](cli-reference.md) for what each status and code 
 |---|---|
 | `workspace.json` at the root | the policy. Yours to edit by hand. Only `workspace init` and an accepted offer inside `stamity init` write it |
 | `<root>/.stamity/workspace-sync-journal.jsonl` | the crash trail, two lines appended per attempted member per run. Nothing reads it back to decide anything, so deleting it is always safe. Nothing rotates it either |
-| `<member>/.stamity/manifest.json` | the member's own record, and the propagated policy once a cascade has run. The cascade patches three fields there, plus the `updatedAt` stamp every manifest write sets. It keeps the ledger, import choice and creation stamp. The member's own sync, step 4 of the cascade, then refreshes selection, detection and version stamps exactly as plain `stamity sync` does |
+| `<member>/.stamity/manifest.json` | the member's own record, and the propagated policy once a cascade has run. The cascade patches three fields there, plus the `updatedAt` stamp every manifest write sets. It keeps the ledger, import choice and creation stamp. The member's own sync, step 4 of the cascade, then refreshes selection, detection, the saved client model lists (`models.listed`) and version stamps exactly as plain `stamity sync` does |
 
 ## What do the other verbs know about a workspace?
 
-Almost nothing, and that is deliberate. `stamity sync` reads nothing workspace-related at all.
-`stamity init` inside a member differs only in that its workspace offer never arms there. What
-either one emits is exactly what it emits anywhere else.
+Almost nothing, and that is deliberate. `stamity sync`, `stamity init` and `stamity check` read
+nothing from `workspace.json`. Each looks only for whether one is there, by the walk the workspace
+verbs use to find the nearest `workspace.json` at or above the repository: inside a member, the
+model lister then refuses client programs from anywhere under the workspace root, sibling members
+included, not only from under the member. `stamity init` inside a member also differs in that its
+workspace offer never arms there. What `sync` or `init` emits is exactly what it emits anywhere
+else.
 
 Nothing is lost by that. The member's manifest already **is** the propagated policy, so a plain sync
 inside it emits what the workspace decided.
 
-`stamity validate` is the one exception. It reads `workspace.json` in the directory you run it in
-and reports its field defects.
+`stamity validate` is the one of them that reads `workspace.json` itself. It reads the one in
+the directory you run it in and reports its field defects.
 
 ## Where to go next
 
