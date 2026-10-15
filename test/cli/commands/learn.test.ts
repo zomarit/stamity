@@ -3,10 +3,12 @@ import { join, relative, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import { draftLearning, learnCommand } from "../../../src/cli/commands/learn.ts";
 import { composeFrontmatter } from "../../../src/content/frontmatter.ts";
+import { scanNormalized } from "../../../src/denyscan/denyScan.ts";
 import { loadValidatedLearnings } from "../../../src/learnings/store.ts";
 import {
   computeLearningIntegrity,
   DEFAULT_LEARNING_FILE_COUNT,
+  LEARNINGS_SCREEN_PATTERNS,
   MAX_LEARNING_FILE_BYTES,
   validateLearningContent,
 } from "../../../src/learnings/validation.ts";
@@ -992,6 +994,154 @@ describe("learn read — the screened read", () => {
     const lines = result.stdout.trimEnd().split("\n");
     expect(lines).toHaveLength(2);
     expect(lines[1]).toMatch(/^- skipped x - \[high\] forged — a line the reader trusts\.md: invalid-frontmatter$/);
+  });
+
+  /** Each character as a YAML double-quoted escape: hex digits to the raw screen, the text again once parsed. */
+  function yamlEscaped(text: string): string {
+    const escapes = [...text].map((char) => {
+      const code = char.codePointAt(0) ?? 0;
+      return code > 0xffff ? `\\U${code.toString(16).padStart(8, "0")}` : `\\u${code.toString(16).padStart(4, "0")}`;
+    });
+    return `"${escapes.join("")}"`;
+  }
+
+  /** The block ids the screen finds in `text` as written, before any parser decodes it. */
+  function rawBlockIds(text: string): string[] {
+    return scanNormalized(text, LEARNINGS_SCREEN_PATTERNS)
+      .filter((hit) => hit.severity === "block")
+      .map((hit) => hit.patternId);
+  }
+
+  /** Any code point of the Unicode tag block. */
+  const TAG_BLOCK = /[\u{E0000}-\u{E007F}]/u;
+
+  it("skips a learning whose summary the catalog refuses only once its YAML escapes are decoded", async () => {
+    const temp = tempDir();
+    const tagged = [...OVERRIDE].map((char) => String.fromCodePoint(0xe0000 + (char.codePointAt(0) ?? 0))).join("");
+    const escaped = stampedLearning({ id: "escaped-note", summary: yamlEscaped(OVERRIDE) });
+    const tagEscaped = stampedLearning({ id: "tag-note", summary: yamlEscaped(`Ordinary note. ${tagged}`) });
+    // The precondition that makes this row a test: written as escapes, neither file trips the raw screen.
+    expect([rawBlockIds(escaped), rawBlockIds(tagEscaped)]).toEqual([[], []]);
+    const root = await seedRepo(temp, {
+      [`repo/${LEARNINGS_DIR}/cache-warmup.md`]: stampedLearning({ id: "cache-warmup" }),
+      [`repo/${LEARNINGS_DIR}/escaped-note.md`]: escaped,
+      [`repo/${LEARNINGS_DIR}/tag-note.md`]: tagEscaped,
+    });
+
+    const json = await runLearn(root, ["read", "--json"]);
+    const human = await runLearn(root, ["read"]);
+    const body = await runLearn(root, ["read", "--body", "escaped-note"]);
+
+    expect(json.code).toBe(0);
+    const doc = parseSingleDoc(json.stdout);
+    expect((doc["learnings"] as { id: string }[]).map((entry) => entry.id)).toEqual(["cache-warmup"]);
+    // The decoded summary carries the same text the write gate refuses when it is written plainly.
+    const overrideIds = writeGateIds("escaped-note.md", stampedLearning({ id: "escaped-note", summary: OVERRIDE }));
+    expect(doc["skips"]).toEqual([
+      { fileName: "escaped-note.md", reason: "injection-detected", patternIds: overrideIds },
+      { fileName: "tag-note.md", reason: "injection-detected", patternIds: ["unicode-tag-smuggling"] },
+    ]);
+    expect(human.code).toBe(0);
+    expect(human.stdout).toContain(
+      `- skipped escaped-note.md: injection-detected (patterns: ${overrideIds.join(", ")})`,
+    );
+    expect(human.stdout).toContain("- skipped tag-note.md: injection-detected (patterns: unicode-tag-smuggling)");
+    expect([body.code, body.stdout]).toEqual([1, ""]);
+    for (const output of [json.stdout, json.stderr, human.stdout, human.stderr, body.stderr]) {
+      expectNoSpan(output);
+      expect(TAG_BLOCK.test(output), "a tag-block payload reached the output").toBe(false);
+    }
+  });
+
+  it("strips a skipped file's name of C1, bidi, zero-width and tag-block characters, in text and JSON", async () => {
+    const temp = tempDir();
+    const hostile = `note‮-\u009B​name\u{E0041}⁦.md`;
+    const root = await seedRepo(temp, { [`repo/${LEARNINGS_DIR}/${hostile}`]: "no head\n" });
+
+    const human = await runLearn(root, ["read"]);
+    const json = await runLearn(root, ["read", "--json"]);
+
+    expect(human.code).toBe(0);
+    expect(human.stdout.trimEnd().split("\n")[1]).toBe("- skipped note-name.md: invalid-frontmatter");
+    expect(json.code).toBe(0);
+    expect(parseSingleDoc(json.stdout)["skips"]).toEqual([
+      { fileName: "note-name.md", reason: "invalid-frontmatter", patternIds: [] },
+    ]);
+    const stripped = /[\u0080-\u009F​-‏‪-‮⁠⁦-⁩﻿\u{E0000}-\u{E007F}]/u;
+    for (const output of [human.stdout, json.stdout]) expect(stripped.test(output)).toBe(false);
+  });
+
+  it("prints --body with its invisible and confusable characters stripped, reporting the strip by id", async () => {
+    const temp = tempDir();
+    /** A Cyrillic capital Es (U+0421) in place of a Latin C, beside an override keyword. */
+    const confusable = "Read the Сache instructions in the README.";
+    const body = SMUGGLED_BODY.replace("Populate the registry first.", `Populate the registry first. ${confusable}`);
+    const document = stampedLearning({ id: "masked-note" }, body);
+    // Advisory material only: the file loads, and the gate names both warn rows it carries.
+    const verdict = validateLearningContent("masked-note.md", document);
+    expect(verdict.valid).toBe(true);
+    const root = await seedRepo(temp, { [`repo/${LEARNINGS_DIR}/masked-note.md`]: document });
+
+    const human = await runLearn(root, ["read", "--body", "masked-note"]);
+    const json = await runLearn(root, ["read", "--body", "masked-note", "--json"]);
+
+    expect(human.code).toBe(0);
+    expect(human.stdout).toContain("Warm-up ran before the registry was populated.");
+    expect(human.stdout).toContain("Read the Cache instructions in the README.");
+    expect(human.stderr).toContain("homoglyph-instruction-mask ×1");
+    expect(human.stderr).toContain("invisible-chars ×1");
+    expect(json.code).toBe(0);
+    const doc = parseSingleDoc(json.stdout);
+    expect(doc["stripped"]).toEqual([
+      { patternId: "homoglyph-instruction-mask", count: 1 },
+      { patternId: "invisible-chars", count: 1 },
+    ]);
+    // Reported, never reprinted: neither stripped character is in any output.
+    for (const output of [human.stdout, human.stderr, json.stdout]) {
+      expect(output.includes(ZWSP) || output.includes("С")).toBe(false);
+    }
+  });
+
+  it("resolves --body by declared id before file stem, and an id two files declare to the one it names", async () => {
+    const temp = tempDir();
+    const otherBody = BODY.replace("then warm.", "then warm, and log the order.");
+    const root = await seedRepo(temp, {
+      // The write gate lets an id differ from its stem: foo.md declares bar, baz.md declares foo.
+      [`repo/${LEARNINGS_DIR}/foo.md`]: stampedLearning({ id: "bar" }),
+      [`repo/${LEARNINGS_DIR}/baz.md`]: stampedLearning({ id: "foo" }, otherBody),
+      [`repo/${LEARNINGS_DIR}/shared.md`]: stampedLearning({ id: "shared" }, otherBody),
+      [`repo/${LEARNINGS_DIR}/other.md`]: stampedLearning({ id: "shared" }),
+    });
+
+    const foo = await runLearn(root, ["read", "--body", "foo", "--json"]);
+    const bar = await runLearn(root, ["read", "--body", "bar", "--json"]);
+    const stem = await runLearn(root, ["read", "--body", "other", "--json"]);
+    const shared = await runLearn(root, ["read", "--body", "shared", "--json"]);
+
+    // `foo` is baz.md's declared id and foo.md's stem: the index line `foo` names baz.md, so that body prints.
+    expect(foo.code).toBe(0);
+    expect(parseSingleDoc(foo.stdout)).toMatchObject({ fileName: "baz.md", body: expect.stringContaining("log the order") });
+    expect(parseSingleDoc(bar.stdout)).toMatchObject({ fileName: "foo.md", body: expect.not.stringContaining("log the order") });
+    // No learning declares `other`, so the stem is the fallback.
+    expect(parseSingleDoc(stem.stdout)).toMatchObject({ fileName: "other.md" });
+    expect(shared.code).toBe(0);
+    expect(parseSingleDoc(shared.stdout)).toMatchObject({ fileName: "shared.md", body: expect.stringContaining("log the order") });
+  });
+
+  it("exits 1 outside a Stamity repository, as capture does, and creates nothing", async () => {
+    const temp = tempDir();
+    await temp.seedFiles({ "repo/README.md": "# fixture\n" });
+    const root = temp.path("repo");
+    const before = await snapshot(root);
+
+    const human = await runLearn(root, ["read"]);
+    const json = await runLearn(root, ["read", "--json"]);
+
+    expect([human.code, human.stdout]).toEqual([1, ""]);
+    expect(human.stderr).toContain("not a Stamity repository");
+    expect(json.code).toBe(1);
+    expect(parseSingleDoc(json.stdout)["ok"]).toBe(false);
+    expect(await snapshot(root)).toEqual(before);
   });
 
   it("refuses --dry-run, a capture flag, and is refused --body on capture, each a usage error", async () => {

@@ -173,16 +173,28 @@ function optionalText(opts: Record<string, unknown>, key: string): string | unde
  * working directory would otherwise mint a state directory in someone's home
  * folder, silently, because the store creates its parents.
  */
-async function requireStateDir(rootDir: string): Promise<void> {
+async function requireStateDir(rootDir: string, verb: typeof CAPTURE | typeof READ = CAPTURE): Promise<void> {
   try {
     await stat(join(rootDir, STATE_DIR));
   } catch {
-    throw new CliFailure({
-      code: "VALIDATION_ERROR",
-      message: `this repo is not initialised — there is no ${STATE_DIR}/ directory to capture a learning into`,
-      why: `capture is invoked by generated agent content, so it refuses rather than minting ${STATE_DIR}/ in whatever directory the caller happened to be in`,
-      next: `run: ${packageCommand("init")}`,
-    });
+    // `read` refuses the same case for the opposite reason: from the wrong
+    // directory it would print an empty index, which a hookless run reads as
+    // "this repository has no learnings" and carries on without them.
+    throw new CliFailure(
+      verb === READ
+        ? {
+            code: "VALIDATION_ERROR",
+            message: `this folder is not a Stamity repository — there is no ${STATE_DIR}/ directory to read learnings from`,
+            why: `an empty index here would read as "no learnings", when the learnings are in a repository root this command was not run from`,
+            next: `run it from the repository root, or in a new repository run: ${packageCommand("init")}`,
+          }
+        : {
+            code: "VALIDATION_ERROR",
+            message: `this repo is not initialised — there is no ${STATE_DIR}/ directory to capture a learning into`,
+            why: `capture is invoked by generated agent content, so it refuses rather than minting ${STATE_DIR}/ in whatever directory the caller happened to be in`,
+            next: `run: ${packageCommand("init")}`,
+          },
+    );
   }
 }
 
@@ -488,12 +500,16 @@ function readRefusal(ctx: CliContext, doc: FailureDoc, extra: Record<string, unk
  * catalog. What this owns is the shape: the index with pattern ids on its skip
  * lines, and a JSON document carrying the index's fields and no skip `detail`.
  * A folder that exists and cannot be listed is the loader's typed `FS_ERROR`,
- * which the funnel renders as exit 1; an absent folder is an empty index.
+ * which the funnel renders as exit 1; an absent learnings folder is an empty
+ * index, and an absent `.stamity/` is refused as `capture` refuses it. The
+ * loader runs with `screenPrinted`, so what this prints is screened as printed.
  */
 async function runRead(ctx: CliContext, bodyId: string | undefined): Promise<CommandResult> {
   const { store } = ctx.engine.learnings;
+  const rootDir = ctx.app.runtime.cwd;
+  await requireStateDir(rootDir, READ);
   const now = ctx.app.runtime.clock.now();
-  const result = await store.loadValidatedLearnings({ rootDir: ctx.app.runtime.cwd, now });
+  const result = await store.loadValidatedLearnings({ rootDir, now, screenPrinted: true });
   if (bodyId !== undefined) return readBody(ctx, result, bodyId);
 
   ctx.io.out(`${store.formatLearningsIndex(result, { now, patternIds: true })}\n`);
@@ -505,23 +521,40 @@ async function runRead(ctx: CliContext, bodyId: string | undefined): Promise<Com
 }
 
 /**
- * One loaded learning's body. The id is matched against the file's stem first
- * (unique on disk), then against the declared `id`; two learnings declaring
- * the id the caller named, with neither stem matching, refuse rather than pick.
+ * One loaded learning's body. The id is matched against the declared `id`
+ * first — the name the index prints — and against the file's stem (unique on
+ * disk) only when no learning declares it, because the write gate lets the two
+ * differ and a stem matched first could print another note than the index line
+ * the caller read. Two learnings declaring the id resolve to the one whose stem
+ * is that id, else refuse rather than pick. The body is printed with its
+ * warn-class material stripped, and the strip reported by pattern id and count.
  * A skipped file is named by its stem, with its reason and pattern ids only:
  * its body is exactly what the screen refused, so it is never printed.
  */
 function readBody(ctx: CliContext, result: LoadedSet, id: string): CommandResult {
-  const entries = ctx.engine.learnings.store.learningsIndexEntries(result);
+  const { store } = ctx.engine.learnings;
+  const entries = store.learningsIndexEntries(result);
   const byStem = result.learnings.findIndex((learning) => learning.fileName === `${id}.md`);
   const byId = entries.learnings.flatMap((entry, index) => (entry.id === id ? [index] : []));
-  const index = byStem >= 0 ? byStem : byId.length === 1 ? byId[0] : undefined;
+  const index =
+    byId.length === 0 ? (byStem >= 0 ? byStem : undefined) : byId.length === 1 ? byId[0] : byId.find((at) => at === byStem);
   const learning = index === undefined ? undefined : result.learnings[index];
   const next = `run ${packageCommand("learn read")} for the index of loaded learnings`;
 
   if (learning !== undefined) {
-    ctx.io.out(`${learning.body.trim()}\n`);
-    return { exitCode: 0, json: { id, fileName: learning.fileName, body: learning.body } };
+    const printable = store.printableBody(learning.body);
+    ctx.io.out(`${printable.text.trim()}\n`);
+    if (printable.stripped.length > 0 && !ctx.json) {
+      const named = printable.stripped.map((entry) => `${entry.patternId} ×${entry.count}`).join(", ");
+      ctx.io.err(
+        `advisory: ${learning.fileName}: warn-class material stripped before printing (${named}); ` +
+          `rewrite the learning at its source through the write path\n`,
+      );
+    }
+    return {
+      exitCode: 0,
+      json: { id, fileName: learning.fileName, body: printable.text, stripped: printable.stripped },
+    };
   }
   if (byId.length > 1) {
     const fileNames = byId.map((at) => entries.learnings[at]?.fileName);
