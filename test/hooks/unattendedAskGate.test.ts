@@ -16,8 +16,11 @@ import {
   buildUnattendedAskGate,
   type HookScriptLayout,
   planCoreHookScripts,
+  UNATTENDED_ASK_GATE_FAULT_NOTE,
   UNATTENDED_ASK_GATE_FILE,
   UNATTENDED_ASK_GATE_REASON,
+  UNATTENDED_ASK_GATE_RECORD_SOURCE,
+  UNATTENDED_ASK_GATE_VARIABLE_SOURCE,
 } from "../../src/hooks/scripts.ts";
 import { TOOLS } from "../../src/types/core.ts";
 import { useTempDir } from "../support/tempDir.ts";
@@ -57,22 +60,47 @@ function run(gate: string, input: string, env: Record<string, string> = {}, cwd?
   return { status: result.status, stdout: String(result.stdout), stderr: String(result.stderr) };
 }
 
-/** Whether the gate denies a question: exit 2 with the rule on stderr, or exit 0 in silence. */
-function denies(gate: string, env?: Record<string, string>, input = payload()): boolean {
+/** The refusal's stderr when a record decided: the rule, then the record it read. */
+function byRecord(runId: string): string {
+  return `${UNATTENDED_ASK_GATE_REASON}${UNATTENDED_ASK_GATE_RECORD_SOURCE.replace("<record>", `.stamity/runs/${runId}/record.md`)}\n`;
+}
+
+/** The refusal's stderr when the variable decided. */
+const BY_VARIABLE = `${UNATTENDED_ASK_GATE_REASON}${UNATTENDED_ASK_GATE_VARIABLE_SOURCE}\n`;
+
+/** The fail-open note for one read that failed. */
+function faultNote(read: string, cause: string): string {
+  return `${UNATTENDED_ASK_GATE_FAULT_NOTE.replace("<read>", read).replace("<cause>", cause)}\n`;
+}
+
+/** The gate's stderr on a refusal (exit 2), or null when it allows a question in silence (exit 0). */
+function refusal(gate: string, env?: Record<string, string>, input = payload()): string | null {
   const outcome = run(gate, input, env);
   expect(outcome.stdout).toBe("");
   if (outcome.status === 0) {
     expect(outcome.stderr).toBe("");
-    return false;
+    return null;
   }
   expect(outcome.status).toBe(2);
-  expect(outcome.stderr).toBe(`${UNATTENDED_ASK_GATE_REASON}\n`);
-  return true;
+  expect(outcome.stderr.startsWith(UNATTENDED_ASK_GATE_REASON)).toBe(true);
+  return outcome.stderr;
 }
 
-/** A run record's head, as `/st-work` and `/st-debug` open one. */
-function record(status: string, mode?: "attended" | "unattended"): string {
-  return `# Run\n\nStatus: ${status}\nPlan: docs/plans/x.md\n${mode === undefined ? "" : `Mode: ${mode}\n`}Invocation: /st-work x\n`;
+/** Whether the gate denies a question: exit 2 with the rule and its source on stderr, or exit 0 in silence. */
+function denies(gate: string, env?: Record<string, string>, input = payload()): boolean {
+  return refusal(gate, env, input) !== null;
+}
+
+/** A run record's head, as `/st-work` and `/st-debug` open one; an unattended run's head carries its branch. */
+function record(status: string, mode?: "attended" | "unattended", branch?: string): string {
+  const modeLine = mode === undefined ? "" : `Mode: ${mode}\n`;
+  const branchLine = branch === undefined ? "" : `Branch: ${branch}\n`;
+  return `# Run\n\nStatus: ${status}\nPlan: docs/plans/x.md\n${modeLine}${branchLine}Invocation: /st-work x\n`;
+}
+
+/** `.git/HEAD` on a branch, as a checkout writes it. */
+function onBranch(branch: string): Record<string, string> {
+  return { ".git/HEAD": `ref: refs/heads/${branch}\n` };
 }
 
 const ON = { STAMITY_UNATTENDED: "1" };
@@ -80,7 +108,7 @@ const ON = { STAMITY_UNATTENDED: "1" };
 describe("the ask gate's five cases (REQ-FLOW-090)", () => {
   it("denies a question while the newest in-progress record reads Mode: unattended, and allows it once the run closes", async () => {
     const gate = await placeGate({ ".stamity/runs/2026-10-16_night/record.md": record("in progress", "unattended") });
-    expect(denies(gate)).toBe(true);
+    expect(refusal(gate)).toBe(byRecord("2026-10-16_night"));
     // One fact away: the same run closed (handed off) and no variable → the question goes through.
     await getRepo().seedFiles({ ".stamity/runs/2026-10-16_night/record.md": record("done", "unattended") });
     expect(denies(gate)).toBe(false);
@@ -93,7 +121,7 @@ describe("the ask gate's five cases (REQ-FLOW-090)", () => {
 
   it("denies a question when the variable is set and no run is in progress", async () => {
     const gate = await placeGate();
-    expect(denies(gate, ON)).toBe(true);
+    expect(refusal(gate, ON)).toBe(BY_VARIABLE);
     // One fact away: the variable unset, or set to a value that reads as off.
     expect(denies(gate)).toBe(false);
     for (const off of ["", "0", "false", " FALSE "]) expect(denies(gate, { STAMITY_UNATTENDED: off }), JSON.stringify(off)).toBe(false);
@@ -103,12 +131,13 @@ describe("the ask gate's five cases (REQ-FLOW-090)", () => {
   it("allows Claude Code's final round: the variable set, the newest record a closed unattended run", async () => {
     const gate = await placeGate({
       ".stamity/runs/2026-10-15_older/record.md": record("done", "attended"),
-      ".stamity/runs/2026-10-16_night/record.md": record("handed off", "unattended"),
+      ".stamity/runs/2026-10-16_night/record.md": record("handed off", "unattended", "stamity/night"),
+      ...onBranch("stamity/night"),
     });
     expect(denies(gate, ON)).toBe(false);
-    // One fact away: the newest closed record an attended run → the variable governs again.
-    await getRepo().seedFiles({ ".stamity/runs/2026-10-17_later/record.md": record("done", "attended") });
-    expect(denies(gate, ON)).toBe(true);
+    // One fact away: the checkout on another branch than the record's → the variable governs again (review/100).
+    await getRepo().seedFiles(onBranch("main"));
+    expect(refusal(gate, ON)).toBe(BY_VARIABLE);
   });
 
   it("allows a morning walk: the variable set, the newest in-progress record reading Mode: attended", async () => {
@@ -121,15 +150,73 @@ describe("the ask gate's five cases (REQ-FLOW-090)", () => {
 });
 
 describe("which record the gate reads", () => {
-  it("reads the newest in-progress record by run id, so an attended walk opened after an unattended run may ask", async () => {
+  it("reads no order among records: any in-progress unattended record denies, on an earlier day or a later one", async () => {
     const gate = await placeGate({
       ".stamity/runs/2026-10-15_night/record.md": record("in progress", "unattended"),
       ".stamity/runs/2026-10-16_walk/record.md": record("in progress", "attended"),
     });
+    expect(refusal(gate, ON)).toBe(byRecord("2026-10-15_night"));
+    expect(refusal(gate)).toBe(byRecord("2026-10-15_night"));
+    // One fact away: the unattended run closed → the attended walk in progress allows, the variable set or not.
+    await getRepo().seedFiles({ ".stamity/runs/2026-10-15_night/record.md": record("done", "unattended") });
     expect(denies(gate, ON)).toBe(false);
-    // The order reversed: the unattended run is the newer one in progress.
-    await getRepo().seedFiles({ ".stamity/runs/2026-10-17_night/record.md": record("in progress", "unattended") });
-    expect(denies(gate)).toBe(true);
+    expect(denies(gate)).toBe(false);
+  });
+
+  // review/101: a run id carries only the UTC date, so two runs of one day rank by slug; the verdict must not.
+  for (const [label, unattendedId, otherId] of [
+    ["the unattended run's slug sorting first", "2026-10-16_a-night", "2026-10-16_walk"],
+    ["the unattended run's slug sorting last", "2026-10-16_night", "2026-10-16_api-fix"],
+  ] as const) {
+    it(`denies beside a same-day attended or no-Mode record in progress, ${label}`, async () => {
+      const gate = await placeGate({
+        [`.stamity/runs/${unattendedId}/record.md`]: record("in progress", "unattended"),
+        [`.stamity/runs/${otherId}/record.md`]: record("in progress", "attended"),
+      });
+      expect(refusal(gate)).toBe(byRecord(unattendedId));
+      expect(refusal(gate, ON)).toBe(byRecord(unattendedId));
+      await getRepo().seedFiles({ [`.stamity/runs/${otherId}/record.md`]: record("in progress") });
+      expect(refusal(gate)).toBe(byRecord(unattendedId));
+      // One fact away: the unattended run closed → the same-day attended record decides, whichever slug sorts first.
+      await getRepo().seedFiles({
+        [`.stamity/runs/${unattendedId}/record.md`]: record("done", "unattended"),
+        [`.stamity/runs/${otherId}/record.md`]: record("in progress", "attended"),
+      });
+      expect(denies(gate, ON)).toBe(false);
+    });
+  }
+
+  it("holds the final round only on the closed unattended record's own branch (review/100)", async () => {
+    // A record carried into a later clone: committed on its run's branch, merged, read from main.
+    const gate = await placeGate({
+      ".stamity/runs/2026-10-16_night/record.md": record("handed off", "unattended", "stamity/night"),
+      ...onBranch("main"),
+    });
+    expect(refusal(gate, ON)).toBe(BY_VARIABLE);
+    // Same-day: a later run's branch, the closed record still the newest by name.
+    await getRepo().seedFiles(onBranch("stamity/next"));
+    expect(refusal(gate, ON)).toBe(BY_VARIABLE);
+    // A detached HEAD names no branch, and no .git at all names none either.
+    await getRepo().seedFiles({ ".git/HEAD": "0123456789abcdef0123456789abcdef01234567\n" });
+    expect(refusal(gate, ON)).toBe(BY_VARIABLE);
+    // One fact away: the checkout back on the run's own branch → the final round may ask.
+    await getRepo().seedFiles(onBranch("stamity/night"));
+    expect(denies(gate, ON)).toBe(false);
+    // A record with no Branch: line exempts nothing.
+    await getRepo().seedFiles({ ".stamity/runs/2026-10-16_night/record.md": record("handed off", "unattended") });
+    expect(refusal(gate, ON)).toBe(BY_VARIABLE);
+  });
+
+  it("follows a linked worktree's gitdir: pointer to the HEAD it reads", async () => {
+    const gate = await placeGate({
+      ".stamity/runs/2026-10-16_night/record.md": record("handed off", "unattended", "stamity/night"),
+      ".git": "gitdir: common/.git/worktrees/night\n",
+      "common/.git/worktrees/night/HEAD": "ref: refs/heads/stamity/night\n",
+    });
+    expect(denies(gate, ON)).toBe(false);
+    // One fact away: the worktree's own HEAD on another branch.
+    await getRepo().seedFiles({ "common/.git/worktrees/night/HEAD": "ref: refs/heads/main\n" });
+    expect(refusal(gate, ON)).toBe(BY_VARIABLE);
   });
 
   it("reads a debug round's record too", async () => {
@@ -167,28 +254,29 @@ describe("what the gate leaves alone", () => {
     for (const tool of ["Bash", "Read", "Task", "askuserquestion"]) expect(denies(gate, ON, payload(tool)), tool).toBe(false);
   });
 
-  it("fails open on a payload it cannot read: asking is the safe failure", async () => {
+  it("fails open on a payload it cannot read: asking is the safe failure, and a payload that is no JSON says so", async () => {
     const gate = await placeGate({ ".stamity/runs/2026-10-16_night/record.md": record("in progress", "unattended") });
-    for (const input of ["{not json", "", "null", "[]"]) expect(denies(gate, ON, input), JSON.stringify(input)).toBe(false);
+    for (const input of ["", "null", "[]"]) expect(denies(gate, ON, input), JSON.stringify(input)).toBe(false);
+    expect(run(gate, "{not json", ON)).toEqual({ status: 0, stdout: "", stderr: faultNote("the hook payload", "not JSON") });
   });
 
   // A permission bit is the real failure here; Windows and root ignore it, so the case runs where it holds.
   it.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
-    "fails open when the records folder or a record cannot be read",
+    "fails open when the records folder or a record cannot be read, naming the read that failed",
     async () => {
       const gate = await placeGate({ ".stamity/runs/2026-10-16_night/record.md": record("in progress", "unattended") });
       expect(denies(gate, ON)).toBe(true);
       const recordPath = getRepo().path(".stamity", "runs", "2026-10-16_night", "record.md");
       chmodSync(recordPath, 0o000);
       try {
-        expect(denies(gate, ON)).toBe(false);
+        expect(run(gate, payload(), ON)).toEqual({ status: 0, stdout: "", stderr: faultNote(recordPath, "EACCES") });
       } finally {
         chmodSync(recordPath, 0o644);
       }
       const runsDir = getRepo().path(".stamity", "runs");
       chmodSync(runsDir, 0o000);
       try {
-        expect(denies(gate, ON)).toBe(false);
+        expect(run(gate, payload(), ON)).toEqual({ status: 0, stdout: "", stderr: faultNote(runsDir, "EACCES") });
       } finally {
         chmodSync(runsDir, 0o755);
       }

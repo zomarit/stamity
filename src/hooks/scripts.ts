@@ -35,6 +35,7 @@ import { buildResumeCardSource, RESUME_CARD_HOST_NAMES } from "../runs/cardSourc
 import {
   GIT_METADATA_MAX_BYTES,
   IN_PROGRESS_PATTERN,
+  RECORD_BRANCH_PATTERN,
   RECORD_FILE,
   RECORD_HEAD_LINES,
   RECORD_HEAD_READ_BYTES,
@@ -187,8 +188,13 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // Measured 2026-10-16 on the u14b lane (base 2a1c5226): 5,711 bytes / 150
   // lines (claude, generated layout; a plugin root renders 4,983 / 129). Its
   // measured size × 1.25, rounded as the review gate's is: 7,138.75 / 187.5,
-  // rounded up to 7,168 / 190.
-  [UNATTENDED_ASK_GATE_FILE]: { bytes: 7_168, lines: 190 },
+  // rounded up to 7,168 / 190. Moved 2026-10-16 by u14b's first fix round
+  // (base 37c8d6cc): the gate reads the record's `Branch:` and `.git/HEAD` for
+  // the final round (review/100), names what it read in a refusal (review/104)
+  // and writes one note on a fail-open (review/105): 8,501 bytes / 201 lines
+  // (a plugin root renders 7,773 / 180). × 1.25 = 10,626.25 / 251.25, rounded
+  // up to 10,752 / 260.
+  [UNATTENDED_ASK_GATE_FILE]: { bytes: 10_752, lines: 260 },
   // Measured 2026-09-24 and again 2026-09-26 at 8c08660e: 2,383 bytes / 67
   // lines, the same in both layouts. × 1.25 = 2,978.75 / 83.75, rounded up to
   // 3,072 / 90.
@@ -3430,6 +3436,23 @@ export const UNATTENDED_ASK_GATE_REASON =
   "This run is unattended: take the declared default and record `Default applied: <question> → option <N> (unattended)`; " +
   "with no declared default, stop at BLOCKED_AMBIGUITY.";
 
+/**
+ * What a refusal adds after {@link UNATTENDED_ASK_GATE_REASON}, naming what it
+ * read: the record's repo-relative path stands in for `<record>`.
+ */
+export const UNATTENDED_ASK_GATE_RECORD_SOURCE = " (<record> is in progress and reads `Mode: unattended`.)";
+
+/** The same, when the variable decided. */
+export const UNATTENDED_ASK_GATE_VARIABLE_SOURCE =
+  " (STAMITY_UNATTENDED is set, and no in-progress record reads `Mode: attended`.)";
+
+/**
+ * The one stderr line a fail-open allow writes: `<read>` names what could not
+ * be read, `<cause>` the error code (or `not JSON`, or the fault's own name).
+ */
+export const UNATTENDED_ASK_GATE_FAULT_NOTE =
+  "stamity unattended ask gate: <read> could not be read (<cause>), so the question goes through.";
+
 /** The one tool the gate governs: Claude Code's question tool. */
 const ASK_TOOL_NAME = "AskUserQuestion";
 
@@ -3444,18 +3467,22 @@ const ASK_TOOL_NAME = "AskUserQuestion";
  *
  * The mode comes off the run records the way {@link buildPersonOnlyGuardScript}
  * reads them — the {@link GUARD_RUNS_READ_MAX} newest run folders by name, debug
- * rounds included, each record's head only — but the question differs: the gate
- * reads the NEWEST in-progress record, so a person on a morning walk (`Mode:
- * attended`) opened beside a still-running unattended record can ask. It refuses
- * when that record reads `Mode: unattended`, or when `STAMITY_UNATTENDED` is set
- * (not "", "false", "0") and that record does not read `Mode: attended` (no run
- * in progress, or a head with no `Mode:` line) — except when no run is in
- * progress and the newest record is a closed unattended run, which is Claude
- * Code's final question round after the run handed off.
+ * rounds included, each record's head only — and, like the guard, it reads no
+ * order among them: a run id carries only the UTC date, so two runs of one day
+ * would rank by slug (review/101). Any in-progress record reading `Mode:
+ * unattended` refuses. Otherwise an in-progress record reading `Mode: attended`
+ * allows, whatever the variable says. Otherwise `STAMITY_UNATTENDED` decides:
+ * set (not "", "false", "0") it refuses — except when no run is in progress and
+ * a closed record reading `Mode: unattended` names the current branch (read off
+ * `.git/HEAD` as the guard reads it) on its `Branch:` line, which is Claude
+ * Code's final question round after that run handed off. A closed record carried
+ * into a later clone on another branch exempts nothing (review/100). A refusal
+ * names the record or the variable it read (review/104).
  *
  * Fail-open by design: a question is the safe failure, so a payload it cannot
- * read, a records folder or record it cannot read, or any fault while deciding
- * lets the question through. Every other tool passes at once.
+ * read, a records folder, record or git file it cannot read, or any fault while
+ * deciding lets the question through, with one stderr line naming the read
+ * that failed (review/105). Every other tool passes at once.
  */
 export function buildUnattendedAskGate(opts: { layout?: HookScriptLayout } = {}): string {
   const layout = opts.layout ?? "generated";
@@ -3478,7 +3505,7 @@ export function buildUnattendedAskGate(opts: { layout?: HookScriptLayout } = {})
   )}
 
 ${namedImport(["closeSync", "lstatSync", "openSync", "readFileSync", "readSync", "readdirSync", "statSync"], "node:fs")}
-${namedImport(["join", "resolve", "sep", ...extra.path], "node:path")}
+${namedImport(["isAbsolute", "join", "resolve", "sep", ...extra.path], "node:path")}
 ${extra.url}
 const STATE_SEGMENTS = ${json([RUNS_SEGMENTS[0]])};
 const RUNS_SEGMENTS = ${json(RUNS_SEGMENTS)};
@@ -3486,17 +3513,22 @@ const RECORD_FILE = ${json(RECORD_FILE)};
 const RUN_ID = ${regex(RUN_ID_PATTERN)};
 const STATUS = ${regex(RECORD_STATUS_PATTERN)};
 const MODE = ${regex(RECORD_MODE_PATTERN)};
+const BRANCH = ${regex(RECORD_BRANCH_PATTERN)};
 const IN_PROGRESS = ${regex(IN_PROGRESS_PATTERN)};
 const HEAD_LINES = ${RECORD_HEAD_LINES};
 const HEAD_READ_BYTES = ${RECORD_HEAD_READ_BYTES};
 const RUNS_READ_MAX = ${GUARD_RUNS_READ_MAX};
+const GIT_MAX_BYTES = ${GIT_METADATA_MAX_BYTES};
 const ASK_TOOL = ${json(ASK_TOOL_NAME)};
 const REASON = ${json(UNATTENDED_ASK_GATE_REASON)};
+const RECORD_SOURCE = ${json(UNATTENDED_ASK_GATE_RECORD_SOURCE)};
+const VARIABLE_SOURCE = ${json(UNATTENDED_ASK_GATE_VARIABLE_SOURCE)};
+const FAULT_NOTE = ${json(UNATTENDED_ASK_GATE_FAULT_NOTE)};
 const BLOCK_EXIT = ${BLOCKING_EXIT_CODE};
 
 ${resolveRepoRoot(layout)}
 ${String.raw`
-/** A record's status and mode from its first HEAD_LINES lines; null when absent or not a regular file. */
+/** A record's status, mode and branch from its first HEAD_LINES lines; null when absent or not a regular file. */
 function recordHead(path) {
   let stats;
   try {
@@ -3516,15 +3548,17 @@ function recordHead(path) {
   }
   let status = null;
   let mode = null;
+  let branch = null;
   for (const line of text.replace(/^﻿/, "").split(/\r?\n/).slice(0, HEAD_LINES)) {
     status ??= STATUS.exec(line)?.[1] ?? null;
     mode ??= MODE.exec(line)?.[1].toLowerCase() ?? null;
+    branch ??= BRANCH.exec(line)?.[1] ?? null;
   }
-  return { inProgress: status !== null && IN_PROGRESS.test(status), mode };
+  return { inProgress: status !== null && IN_PROGRESS.test(status), mode, branch };
 }
 
-/** The newest record by run id, and the newest in progress; a missing records folder holds neither. */
-function newestRecords(root) {
+/** The heads of the RUNS_READ_MAX newest run folders' records, each with its repo-relative path; no records folder holds none. */
+function recordHeads(root) {
   const runsDir = join(root, ...RUNS_SEGMENTS);
   let entries = [];
   try {
@@ -3538,44 +3572,88 @@ function newestRecords(root) {
     .sort()
     .reverse()
     .slice(0, RUNS_READ_MAX);
-  let newest = null;
+  const heads = [];
   for (const name of names) {
     const head = recordHead(join(runsDir, name, RECORD_FILE));
-    if (head === null) continue;
-    newest ??= head;
-    if (head.inProgress) return { newest, current: head };
+    if (head !== null) heads.push({ ...head, path: [...RUNS_SEGMENTS, name, RECORD_FILE].join("/") });
   }
-  return { newest, current: null };
+  return heads;
 }
 
-/** Whether nobody is there to answer a question. */
-function unattended(root) {
-  const { newest, current } = newestRecords(root);
-  if (current !== null && current.mode === "unattended") return true;
-  if (current !== null && current.mode === "attended") return false;
+/** A git metadata file's text, trimmed; null when absent, a link, not a file or past GIT_MAX_BYTES. */
+function gitText(path) {
+  let stats;
+  try {
+    stats = lstatSync(path);
+  } catch (error) {
+    if (error && (error.code === "ENOENT" || error.code === "ENOTDIR")) return null;
+    throw error;
+  }
+  return stats.isFile() && stats.size <= GIT_MAX_BYTES ? readFileSync(path, "utf8").trim() : null;
+}
+
+/** The current branch off .git/HEAD, a linked worktree's gitdir: pointer followed; null when detached or there is no .git. */
+function currentBranch(root) {
+  const dotGit = join(root, ".git");
+  let gitDir = dotGit;
+  let stats;
+  try {
+    stats = lstatSync(dotGit);
+  } catch (error) {
+    if (error && (error.code === "ENOENT" || error.code === "ENOTDIR")) return null;
+    throw error;
+  }
+  if (!stats.isDirectory()) {
+    const pointer = /^gitdir:[ \t]*(.+)$/.exec((gitText(dotGit) ?? "").split(/\r?\n/)[0]);
+    if (pointer === null) return null;
+    const target = pointer[1].trim();
+    gitDir = isAbsolute(target) ? target : resolve(root, target);
+  }
+  const head = gitText(join(gitDir, "HEAD"));
+  return head !== null && head.startsWith("ref: refs/heads/") ? head.slice(16) : null;
+}
+
+/** What says nobody is there to answer, as the refusal names it; null when a question may be put. */
+function unattendedSource(root) {
+  const heads = recordHeads(root);
+  const running = heads.filter((head) => head.inProgress);
+  // No order among records: a run id carries only the date, so two runs of one day would rank by slug.
+  const unattendedRun = running.find((head) => head.mode === "unattended");
+  if (unattendedRun !== undefined) return RECORD_SOURCE.replace("<record>", () => unattendedRun.path);
+  if (running.some((head) => head.mode === "attended")) return null;
   const flag = (process.env.STAMITY_UNATTENDED ?? "").trim().toLowerCase();
-  if (["", "false", "0"].includes(flag)) return false;
-  // Claude Code's final round: the unattended run closed its record before asking.
-  return !(current === null && newest !== null && newest.mode === "unattended");
+  if (["", "false", "0"].includes(flag)) return null;
+  // Claude Code's final round: no run in progress, and this branch's unattended run closed its record before asking.
+  const closed = running.length === 0 ? heads.filter((head) => head.mode === "unattended" && head.branch !== null) : [];
+  if (closed.length > 0) {
+    const branch = currentBranch(root);
+    if (branch !== null && closed.some((head) => head.branch === branch)) return null;
+  }
+  return VARIABLE_SOURCE;
 }
 
-/** Whether this call is a question the gate refuses. */
+/** The source of the refusal this call earns, or null when the call goes through. */
 function decide() {
   const raw = readFileSync(0, "utf8");
   const payload = raw.trim() === "" ? null : JSON.parse(raw);
-  if (payload === null || typeof payload !== "object" || payload.tool_name !== ASK_TOOL) return false;
-  return unattended(repoRoot());
+  if (payload === null || typeof payload !== "object" || payload.tool_name !== ASK_TOOL) return null;
+  return unattendedSource(repoRoot());
 }
 
-let refused = false;
+let refusal = null;
 try {
-  refused = decide();
-} catch {
-  // Fail open: a question this gate could not decide is one it lets through.
-  refused = false;
+  refusal = decide();
+} catch (error) {
+  // Fail open: a question this gate could not decide is one it lets through, and one line says which read failed.
+  const syntax = error instanceof SyntaxError;
+  const read = syntax ? "the hook payload" : error && typeof error.path === "string" ? error.path : "an input";
+  const cause = syntax ? "not JSON" : error && error.code ? String(error.code) : (error && error.name) || "a fault";
+  const note = FAULT_NOTE.replace("<read>", () => read).replace("<cause>", () => cause);
+  process.stderr.write(note.replace(/[\u0000-\u001f\u007f]/g, "?") + "\n");
+  refusal = null;
 }
-if (refused) {
-  process.stderr.write(REASON + "\n");
+if (refusal !== null) {
+  process.stderr.write(REASON + refusal + "\n");
   process.exitCode = BLOCK_EXIT;
 }
 `}`;
