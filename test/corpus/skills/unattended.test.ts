@@ -26,6 +26,9 @@ import {
 
 const REL_PATH = "skills/st-unattended/SKILL.md";
 
+/** The chain runs, moved out of the body under its cap; the body's `## Chains` line points here. */
+const CHAINS_REL_PATH = "skills/st-unattended/references/chains.md";
+
 /** The plan's ceiling for this body. */
 const BODY_CAP = 160;
 
@@ -77,6 +80,7 @@ const BLOCKERS: readonly string[] = [
   "critical-risk",
   "lint-L2",
   "lint-L4",
+  "lint-structure",
   "head-key-missing",
   "stale",
   "stamp-unresolved",
@@ -122,15 +126,15 @@ function sectionHeadings(body: string): string[] {
 
 const corpus = walkAllMarkdown();
 
-async function load(): Promise<CorpusFile> {
-  const file = (await corpus).find((candidate) => candidate.relPath === REL_PATH);
-  if (file === undefined) throw new Error(`${REL_PATH}: not present under the corpus root`);
+async function load(relPath: string = REL_PATH): Promise<CorpusFile> {
+  const file = (await corpus).find((candidate) => candidate.relPath === relPath);
+  if (file === undefined) throw new Error(`${relPath}: not present under the corpus root`);
   return file;
 }
 
 /** The body with every whitespace run collapsed, so a wrapped sentence still reads as one. */
-async function flat(): Promise<string> {
-  return (await load()).parsed.body.replace(/\s+/g, " ");
+async function flat(relPath: string = REL_PATH): Promise<string> {
+  return (await load(relPath)).parsed.body.replace(/\s+/g, " ");
 }
 
 describe("st-unattended — the head and the anatomy", () => {
@@ -228,7 +232,7 @@ describe("st-unattended — before Frame (REQ-FLOW-091, REQ-FLOW-098 to REQ-FLOW
     expect(text).toContain(
       "**The pre-flight is the run's first act**, before any fetch or push: `stamity gate preflight --unattended --json`",
     );
-    expect(text).toContain("goes first on the morning list under `## Refused`");
+    expect(text).toContain("go first on the morning list under `## Refused`");
     expect(text).toContain("The run never computes a verdict of its own");
   });
 
@@ -389,9 +393,11 @@ describe("st-unattended — the build's signed-off decisions", () => {
     expect(text).toContain("Every exit pushes its record through the run verbs");
   });
 
-  it("ends a refusal before the branch is checked out as the reply on the start surface, never a push", async () => {
+  // review/87: the reply is scanned and posted from its file wherever it posts, an issue or a session as
+  // much as a pull request (REQ-FLOW-103).
+  it("ends a refusal before the branch is checked out as one scanned reply on the start surface, never a push", async () => {
     expect(await flat()).toContain(
-      "A refusal before the run's branch is checked out (`/st-pr-resolve` before its pull request's head is), or where no branch can be pushed, is never pushed: it ends as the reply on the start surface, on a pull request one comment that `stamity gate scan --text <file> --label comment` passed.",
+      "A refusal before the run's branch is checked out (`/st-pr-resolve` before its pull request's head is), or where no branch can be pushed, is never pushed: it ends as one reply on the start surface (issue, pull request or session), written to a file and posted from it only after `stamity gate scan --text <file> --label comment` exits 0.",
     );
   });
 
@@ -401,9 +407,11 @@ describe("st-unattended — the build's signed-off decisions", () => {
     );
   });
 
-  it("refuses every raw push or pull request write while the run is unattended", async () => {
+  // review/85: the text names the REST writes REQ-FLOW-120 bars, since a respelling the guard misses
+  // meets only this sentence.
+  it("refuses every raw push, pull request write and REST write REQ-FLOW-120 bars while the run is unattended", async () => {
     expect(await flat()).toContain(
-      "While the mode is unattended no raw push or pull request write runs at all.",
+      "While the mode is unattended no raw push, pull request write, or REST write on `contents/`, `git/` refs or objects or `merges` runs at all, however it is spelled.",
     );
   });
 
@@ -418,14 +426,15 @@ describe("st-unattended — the build's signed-off decisions", () => {
   });
 
   // review/45: `/st-pr-resolve` runs neither the ready check nor `run start` (its input is the pull
-  // request's threads; its branch is the pull request's head), and debug's user route takes no ready
-  // check, as `content/commands/st-pr-resolve.md`'s Unattended row and `st-debug.md`'s entry say.
-  it("carves /st-pr-resolve out of run start and both it and debug's user route out of the ready check", async () => {
+  // request's threads; its branch is the pull request's head). review/80: every `/st-debug` route skips
+  // the ready check, since `st-debug.md` takes the entry at `run start`, before any route is chosen.
+  it("carves /st-pr-resolve out of run start and both it and every /st-debug route out of the ready check", async () => {
     const text = await flat();
     expect(text).toContain(
       "Every touchpoint that pushes, `/st-pr-resolve` aside, first runs `stamity run start --run <id> --json`",
     );
-    expect(text).toContain("`/st-debug`'s user route and `/st-pr-resolve` skip it.");
+    expect(text).toContain("`/st-debug`, on every route, and `/st-pr-resolve` skip it: neither runs from a plan.");
+    expect(text).not.toContain("`/st-debug`'s user route");
     expect(text).toContain(
       "`/st-pr-resolve` runs no `stamity plan check` and no `stamity run start`: its record, `<UTC date>_pr-resolve-<n>-r<round>`, opens after the fetch, `Branch:` its pull request's head.",
     );
@@ -436,6 +445,39 @@ describe("st-unattended — the build's signed-off decisions", () => {
   it("has unattended /st-pr-resolve fix only the mechanical class and defer the rest as needs a planned run", async () => {
     expect(await flat()).toContain(
       "It fixes only the mechanical class and sends nothing to `/st-work`: any other finding is deferred as `needs a planned run`",
+    );
+  });
+
+  // review/83: an unattended debug run diagnoses only; an in-session hand-off carries no persisted plan, so
+  // the fix waits for a planned run, as review/48 reads it for `/st-pr-resolve`.
+  it("has unattended /st-debug stop at the root cause, hand nothing to /st-work and defer the fix", async () => {
+    const text = await flat();
+    expect(text).toContain("Debug goes no further than the root cause and hands nothing to `/st-work`");
+    expect(text).toContain(
+      "pushes its record, the ranked hypotheses and any failing test written, and defers the fix as `needs a planned run`, a morning-list row",
+    );
+  });
+
+  // review/86: a usage error or a crash is no pass; REQ-FLOW-101 passes a run only on exit 0.
+  it("reads any exit but 0 from the pre-flight or the ready check as a refusal", async () => {
+    const text = await flat();
+    expect(text).toContain("`stamity gate preflight --unattended --json`, with `--item <owner/repo#n>` when the input is a board item or an issue. Any exit but 0 is a refusal");
+    expect(text).toContain("else `pre-flight exited <code>`, go first on the morning list under `## Refused`");
+    expect(text).toContain("[--contract <path>] --json`. Any exit but 0 is a refusal; exit 1 names each blocker");
+    expect(text).not.toMatch(/\bExit 1 is a refusal\b/);
+  });
+
+  // review/81: the shapes `parseMorning` enforces, so a block that would not parse is not written.
+  it("names the stamity-morning block's value shapes", async () => {
+    expect(await flat()).toContain(
+      "`options` (2 to 9 strings), `default` (an option's number, from 1, never its text)",
+    );
+  });
+
+  // review/88: an answer comment counts only from a write or admin author (REQ-BOARD-005, REQ-FLOW-100).
+  it("applies a comment's answers only from a write or admin author", async () => {
+    expect(await flat()).toContain(
+      "Only a `write` or `admin` author's comment answers (unreadable counts as none); another's answers are not applied, and the next morning list lists them.",
     );
   });
 
@@ -457,15 +499,29 @@ describe("st-unattended — the other touchpoints and chains (REQ-FLOW-096, REQ-
     const text = await flat();
     // The refusal sentence `u10b` writes into `/st-quick`, quoted word for word.
     expect(text).toContain("An unattended run does not take /st-quick: run `/st-work --effort light` instead.");
-    expect(text).toContain("`/st-debug`'s user route and `/st-pr-resolve` take this same entry");
+    expect(text).toContain("`/st-debug`, on every route, and `/st-pr-resolve` take this same entry");
     expect(text).toContain("posted from it only after `stamity gate scan --text <file> --label reply` exits 0");
     expect(text).toContain("returns `BLOCKED_DEPENDENCY`");
     expect(text).toContain("`non-write author`");
     expect(text).toContain("`/st-board pickup` carries `run-mode:`, keeps `preview: stop` and `move: off`");
   });
 
+  it("points the body's Chains line at the reference, which states the chain run", async () => {
+    expect(await flat()).toContain(
+      "A chain, `stamity plan check a b c --chain --since <Base> --json`, runs only as `references/chains.md` states.",
+    );
+    const reference = await load(CHAINS_REL_PATH);
+    expect(frontmatterField(reference.parsed, "id")).toBe("chains");
+    requireLoadClass(reference, ["reference"]);
+    requireObsoleteWhen(reference);
+    expect(() => assertDenyClean(reference)).not.toThrow();
+    expect(actsTold(await flat(CHAINS_REL_PATH))).toEqual([]);
+    expect(reference.parsed.body).not.toMatch(/^\s*(?:```|~~~)/m);
+  });
+
   it("runs a chain on one branch from the run's base, never the plans' stamp", async () => {
-    const text = await flat();
+    const text = await flat(CHAINS_REL_PATH);
+    expect(text).toContain("admits a chain when each file's head `depends_on` names the file before it; otherwise the blocker `chain-order` refuses");
     expect(text).toContain("stopping at the first `BLOCKED_*`, with one draft pull request");
     expect(text).toContain("never the plans' stamp");
     expect(text).toContain("a path a commit between the stamp and the base moved stays stale");
