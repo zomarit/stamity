@@ -272,7 +272,11 @@ It fails the build on four families:
   are not a person's, so write example addresses that way. An address that has to be real needs an
   exact path and its reason in `EMAIL_FIXTURES`.
 
-Every exemption is by path, and every run prints the paths it skipped: up to 25 per reason, then a
+It also fails on a file a `working-tree-encoding` attribute re-encodes on checkout until it is
+staged, and reads a staged one as git stores it.
+
+Every exemption is by path; the `node_modules/` exemption from the email rule holds for an untracked
+file only. Every run prints the paths it skipped: up to 25 per reason, then a
 count of the rest. That printing happens on a pass as well as on a failure.
 
 The reserved-name allowlist covers three things. The migration-detection module and its tests need
