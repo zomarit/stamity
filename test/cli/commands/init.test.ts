@@ -1342,7 +1342,13 @@ describe("init — the no-git note", () => {
     expect(note).toContain("worktree refuses without it");
     expect(note).toContain("gate reads every change from it");
     expect(note).toContain("so here gate scan exits 1");
-    expect(note).toContain("/st-quick and /st-work list `secret scan: not run` under `Not done:`");
+    // TEST CHANGE, justified (run 2026-10-14_cli-native, cut/26): the note said the flows list
+    // `secret scan: not run` here and that neither flow stops at this cause. Since 1.15.0 both
+    // stop on the scan's reason (`content/commands/st-work.md`, BLOCKED_DEPENDENCY;
+    // `content/commands/st-quick.md`, step 1, the batch), as `check`'s row now says (reattest/9).
+    expect(note).toContain("/st-work stops the run as BLOCKED_DEPENDENCY and /st-quick stops the batch");
+    expect(note).not.toContain("secret scan: not run");
+    expect(note).not.toContain("Neither flow stops");
   });
 
   it("refuses a declined question there with that cause, and names no git command", async () => {
@@ -1594,6 +1600,9 @@ describe("init — the no-git note", () => {
     "included. A client's own tools, a flow's session and its sub-agents start git of their own, " +
     "and only the git the engine itself starts is set to refuse such a folder. The steps after " +
     "this one are for when that is done";
+  // TEST CHANGE, justified (run 2026-10-14_cli-native, cut/26): the whole-note comparison moves
+  // with the sentence on the flows; the stop comes at the gate call, so git started before it
+  // still runs there, and the note still says to start no flow until the folder is moved.
   const REFUSED_NOTE =
     "git was not started here, so the files that were written have no revert path the engine could " +
     "check: this folder, or a folder above it, has the layout of a bare repository (HEAD beside " +
@@ -1601,10 +1610,11 @@ describe("init — the no-git note", () => {
     "did not hand it to git. Look at the entries of this folder and of each folder above it by " +
     "name to find that folder, and do not run git in it or in any folder under it, this one " +
     "included. Two verbs need git: worktree refuses without it, and gate reads every change from " +
-    "it, so here gate scan exits 1 and /st-quick and /st-work list `secret scan: not run` under " +
-    "`Not done:`. Neither flow stops at this cause, and the git a flow's session and its sub-agents " +
-    "start is not set to refuse such a folder as the engine's is, so start no flow here until that " +
-    "folder is moved off this path.";
+    "it, so here gate scan exits 1 saying git was not started, and on that reason /st-work stops " +
+    "the run as BLOCKED_DEPENDENCY and /st-quick stops the batch. That stop comes at the gate " +
+    "call, and the git a flow's session and its sub-agents start before it is not set to refuse " +
+    "such a folder as the engine's is, so start no flow here until that folder is moved off this " +
+    "path.";
   // TEST CHANGE, justified: this text ended its first sentence on "— `git init` here first if you
   // want one" and worded the loss on "no git or no repository". It is the note for a folder with no
   // repository on a host whose git the engine found, as "init — the no-git note" holds above: it

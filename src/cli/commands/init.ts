@@ -353,9 +353,10 @@ async function askProceedWithoutGit(
  * and no other git command (fix/20). Inside a real checkout `git init` nests a
  * repository in the folder the engine had just kept from git, and any git that
  * looks for a repository there opens the folder with the layout. A flow's
- * session and its sub-agents start such a git, and neither flow stops at this
- * cause, so beside what the flows list the note says to start none there until
- * the folder is moved, as that row does (review/72).
+ * session and its sub-agents start such a git, and both flows stop on the
+ * scan's reason only at the gate call, so beside that stop the note says to
+ * start none there until the folder is moved, as that row does (review/72; the
+ * stop since 1.15.0, reattest/9 and cut/26).
  */
 function noGitNote(dryRun: boolean, reason: WorkingTreeStatus["reason"], gitFound: boolean): string {
   const tense = dryRun ? "would be written" : "were written";
@@ -367,10 +368,11 @@ function noGitNote(dryRun: boolean, reason: WorkingTreeStatus["reason"], gitFoun
       `did not hand it to git. Look at the entries of this folder and of each folder above it by ` +
       `name to find that folder, and do not run git in it or in any folder under it, this one ` +
       `included. Two verbs need git: worktree refuses without it, and gate reads every change from ` +
-      `it, so here gate scan exits 1 and /st-quick and /st-work list \`secret scan: not run\` under ` +
-      `\`Not done:\`. Neither flow stops at this cause, and the git a flow's session and its ` +
-      `sub-agents start is not set to refuse such a folder as the engine's is, so start no flow ` +
-      `here until that folder is moved off this path.`
+      `it, so here gate scan exits 1 saying git was not started, and on that reason /st-work ` +
+      `stops the run as BLOCKED_DEPENDENCY and /st-quick stops the batch. That stop comes at the ` +
+      `gate call, and the git a flow's session and its sub-agents start before it is not set to ` +
+      `refuse such a folder as the engine's is, so start no flow here until that folder is moved ` +
+      `off this path.`
     );
   }
   if (!gitFound) {
