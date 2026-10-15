@@ -212,8 +212,8 @@ open debug rounds on a line of their own, and when those are all there is, it pr
 names no run. `ledger inbox` reads the deferral inbox and writes nothing: it prints the rows that
 name a change's paths (`--paths`) or a plan (`--plan`), the rows with no path that hold the words
 given (`--area`), and with `--due` the rows whose day has come, which is how a dated row comes
-back. `ledger inbox-write` appends and removes inbox rows in one screened, all-or-nothing write,
-the one way `/st-work`'s close writes the inbox. `gate` does two things and writes nothing. `gate classify` names a change's class, the
+back. `ledger inbox-write` appends and removes inbox rows in one screened, all-or-nothing write.
+`gate` does two things and writes nothing. `gate classify` names a change's class, the
 checks that class calls for and the review lenses it adds: by its paths and, where it reads the
 change from git, by its changed lines and a changed `package-lock.json` too. `gate scan` reads
 the change's added lines for secrets and exits 1 on a hit. All four are plumbing an agent calls; the
