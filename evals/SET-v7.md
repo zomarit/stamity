@@ -2968,6 +2968,12 @@ paragraph byte-identical from the landed file. Neither scenario touches legal or
 so no criterion moves, and neither is a carried case, so the carried tallies hold. Under hard
 trigger 1 both re-run. No case, count or threshold moves.
 
+**The same two cases re-quoted the class clause again, 2026-10-15 (the same pass, `review/141`).**
+The clause now states one rule: the line is emitted only when none of three conditions holds (a
+rendered path, a `design-quality` path, legal or policy wording), and otherwise one person row
+follows. The paragraph kept its eight lines, so no range moves; both cases re-quote it
+byte-identical from the landed file. No criterion, case, count or threshold moves.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The

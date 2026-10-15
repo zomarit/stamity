@@ -2585,7 +2585,11 @@ the row points at that result (`content/skills/st-qa/SKILL.md:38-43`).
   privacy or security policy, governance or conduct text) emits one person row, the changed wording reads as intended,
   followed by the sign-off block (`content/skills/st-qa/SKILL.md:57-64`). Legal or policy wording is one of the five
   person categories below, and such a change is often `docs` class, so without it a policy page's new wording reached
-  no person.
+  no person. **Amended 2026-10-15** (the same pass, `review/141`). The two exceptions read as one rule, so a `docs`
+  change to policy wording no longer meets a closed "unless" list beside a separate sentence: the line is emitted only
+  when none of three conditions holds, a path the site build renders, a path the classify hands the `design-quality`
+  lens, or legal or policy wording; otherwise one person row, for a rendered page that it renders and reads right and
+  its links resolve, for wording that it reads as intended, followed by the sign-off block (`:57-64`).
 - **Amended 2026-10-10** (the whole-branch review's fix round; `review/94`, a security finding). One row is held to
   more: the negative row a security-adjacent path derives (`:35`) is auto-proven only where a committed test's assertion
   covers it, by the Auto-prove pass's rule 1, the test source `file:line` beside the runner's command and outcome. A

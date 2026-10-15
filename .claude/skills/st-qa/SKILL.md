@@ -59,12 +59,12 @@ with no such test it stays on the human path. An `agent-run` never proves that r
 
 A change whose class (`gate classify`'s, which the caller passes) is `docs`, `records` or
 `tests` emits the line "no walk-through required — <class> only", with no sign-off block and
-no ask — unless it changes a path the project's site build renders (its pages, styles or
-images) or a path the classify hands the `design-quality` lens; then it emits one person row,
-the changed page renders and reads right and the links to and from it resolve, followed by
-the sign-off block. A change to legal or policy wording (a licence, terms, a privacy or
-security policy, governance or conduct text) emits one person row, the changed wording reads
-as intended, followed by the sign-off block. With no class passed, the triggers above decide.
+no ask, only when none of three conditions holds: it changes a path the project's site build
+renders (its pages, styles or images), a path the classify hands the `design-quality` lens, or
+legal or policy wording (a licence, terms, a privacy or security policy, governance or conduct
+text). Otherwise it emits one person row (for a rendered page: the changed page renders and
+reads right and the links to and from it resolve; for wording: the changed wording reads as
+intended), followed by the sign-off block. With no class passed, the triggers above decide.
 
 Seven columns, every one filled: `#`, `Scenario`, `Steps`, `Expected`, `Risk`, `Minutes`, `Proof`.
 

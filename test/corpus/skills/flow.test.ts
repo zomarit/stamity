@@ -767,18 +767,20 @@ describe("qa — the human checkpoint", () => {
     expect(text).toContain('"no walk-through required — <class> only", with no sign-off block and no ask');
     expect(text).toContain("site build renders");
     expect(text).toContain("`design-quality` lens");
-    expect(text).toContain(
-      "one person row, the changed page renders and reads right and the links to and from it resolve, followed by the sign-off block.",
-    );
     expect(text).toContain("With no class passed, the triggers above decide.");
     // Added 2026-10-15 (run 2026-10-14_cli-native, `review/139`, signed off): legal or policy
     // wording is one of the five person categories, and a change to it is often `docs` class, so
     // the fast path held a second exception: a GOVERNANCE.md edit otherwise reached no person.
-    const legal =
-      "A change to legal or policy wording (a licence, terms, a privacy or security policy, governance or conduct text) emits one person row, the changed wording reads as intended, followed by the sign-off block.";
-    expect(text).toContain(legal);
-    expect(text.indexOf(legal)).toBeGreaterThan(text.indexOf("`design-quality` lens"));
-    expect(text.indexOf("With no class passed")).toBeGreaterThan(text.indexOf(legal));
+    // Amended the same day (`review/141`, signed off): the exception sat as a separate sentence
+    // after a closed "unless" list, so a docs-only policy edit met two conflicting instructions.
+    // One rule now names all three conditions the no-walk-through line is emitted without.
+    const rule =
+      "only when none of three conditions holds: it changes a path the project's site build renders (its pages, styles or images), a path the classify hands the `design-quality` lens, or legal or policy wording (a licence, terms, a privacy or security policy, governance or conduct text). Otherwise it emits one person row (for a rendered page: the changed page renders and reads right and the links to and from it resolve; for wording: the changed wording reads as intended), followed by the sign-off block.";
+    expect(text).toContain(rule);
+    expect(text.indexOf(rule)).toBeGreaterThan(text.indexOf('"no walk-through required — <class> only"'));
+    expect(text.indexOf("With no class passed")).toBeGreaterThan(text.indexOf(rule));
+    expect(text).not.toContain("— unless it changes a path");
+    expect(text).not.toContain("A change to legal or policy wording");
     // The diff-shape escape it replaces is gone: a docs page renders, so it is no longer walk-free.
     expect(text).not.toContain("no walk-through required — documentation only");
     // Placed after the trigger table and before the column contract, as one rule with it.
