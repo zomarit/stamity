@@ -1380,10 +1380,8 @@ into units, 50 left with their reasons. The re-dates and placements are written 
   worktree with run 47's files and the snapshot on disk: build, lint, typecheck, knip, the leak gate, `check`, the
   records restore and suite exit 0, and the full suite alone under the machine lock exit 0 (275 files, 13,723 passed,
   17 skipped). The final tree, with the changelog's eval line after the publish, gets its own run.
-- 14:22Z — the first push's head `0c38cd7c`, proven by a full CI run before it goes to `main` (run 38747355842, CI success; the
-  earlier run on `fc88e3b5` was cancelled by the newer push): every job passes (13) or is skipped (3: lanes, prove-pr and
-  records, which run only in this repository), the four check legs, both Windows legs among them, the cloud-container
-  job and both aggregators included. Everything before the tag is ready but the maintainer's QA rows 1 and 3.
+- 14:22Z — the first push's head is `0c38cd7c`; its CI is read on `main`'s push run once it lands (the 16:46Z
+  entry). Everything before the tag is ready but the maintainer's QA rows 1 and 3. (Reworded at the close review.)
 - 15:07Z — the maintainer's walk of everything remaining (attended, through the question tool; every answer the recommended
   option): QA rows 1 and 3 run now by the maintainer, and the push sequence starts only after both pass; the release
   run stops at the npm-publish approval for the maintainer's go. The close's leftovers, decided now and applied:
@@ -1462,9 +1460,10 @@ into units, 50 left with their reasons. The re-dates and placements are written 
 - 17:52Z — the inbox at the close. Retired through the ledger verb (`ledger close --retired`, then
   `ledger inbox-write --remove`), each with how it left: Package 18's two rows placed in this cut's preparation
   (`2026-10-13_records-branch/review/40` and `close/1`, both fixed in 1.15.0), and 27 rows a read-only researcher matched
-  against the plans' "Inbox rows this file matched" tables and `main`: 19 `fixed in 1.15.0` (among them
-  `2026-10-11_release-1-14-0/close/13`, proven at 09:34Z) and 8 `cut` (their subject deleted with the APM and plugin
-  routes). Appended by file edit, as `/st-plan` appends a plan's follow-ups: the five follow-ups plan 020's files name
+  against the plans' "Inbox rows this file matched" tables and `main`: 18 `fixed in 1.15.0` (among them
+  `2026-10-11_release-1-14-0/close/13`, proven at 09:34Z) and 9 `cut` (seven with their subject deleted with the APM and
+  plugin routes; two, `2026-10-10_next-tier/review/21` and `review/23`, made moot by plan 020 file 1's rewrite of the
+  text they cite; the counts corrected at the close review). Appended by file edit, as `/st-plan` appends a plan's follow-ups: the five follow-ups plan 020's files name
   (`Ref: docs/plans/020-cli-native-0N.md`), which #109's landing left unappended. Removed by hand on the maintainer's
   answer below: one row with no ledger row (`src/emit/ownership.ts`, a file 1.15.0 deleted; its `Ref:` shared with a row
   that stays open, so the verb cannot remove it). The inbox reads 147 rows, 0 unparsed, 0 skipped.
@@ -1472,6 +1471,12 @@ into units, 50 left with their reasons. The re-dates and placements are written 
   inbox row about `src/emit/ownership.ts`, "Remove it by hand (Recommended)"; the seven Dependabot pull requests
   (#102–#107, #111), "Now, in this session (Recommended)". Dropped, counted: four reviewer notes with no consequence
   (`c67-reviewer-r2.md` two, `c67-reviewer-r3.md` one, `c7r-reviewer-r1.md` one).
+- 18:24Z — the close review (a fresh reviewer, Opus 5.5) of the publish `0683ca66`: request-changes, confidence high.
+  Its findings on these records, each fixed for a follow-up records commit: one Warning, the `close/1` row's evidence,
+  reworded by hand to drop one stray label (`ledger: by hand` for that one field, since no ledger verb edits a row's
+  evidence); three Minors: the retired rows' counts (18 fixed, 9 cut), the 14:22Z entry's
+  wording, and the proof block's artifacts line (the three drafts the orchestrator committed). The review ran after
+  the publish rather than before it; the next close runs it first.
 
 ## Proof block
 
@@ -1491,7 +1496,8 @@ security lens wherever a unit touched a trust boundary; the whole-branch review 
 round; the review bot's passes on #109 answered, its third a thumbs-up; #110's two bot findings fixed. The cut: the
 re-attestation (four read-only reviewers, `reattest/1`–`reattest/21`, all fixed), `cut-pages` r1 request-changes then
 r2 approve high, `c67` part 1 approve high, part 2 r2 request-changes (`cut/31`) then r3 approve high, `c7r` approve
-high. No approval below the confidence gate (medium); every escalation and its effort step is its Build entry.
+high; the close review request-changes, its findings on these records fixed (18:24Z). No approval below the confidence
+gate (medium); every escalation and its effort step is its Build entry.
 
 **QA rows** — the prover (the test-runner's row-proving mode) ran first: row 3 `contradicted` (`qa/1`, Critical: Cursor
 refused the mapped sub-agent model; `reports/qa-cursor-test-runner-r1.md`, `-r2.md`), fixed (Cursor writes a model only
@@ -1505,14 +1511,17 @@ afternoon walk), 16:33Z, 17:14Z and 17:55Z; every deferral on its ledger row wit
 
 **Artifacts touched** — the commits of #109 and #110 and the cut's commits on `main` (`e2953415..72a31424`), each made by
 the sub-agent of the unit its entry names (implementers and fixers on Opus 5.5), but for the cherry-picks and rebases
-that carried lane commits and the records publishes, made by the orchestrator. The orchestrator edited no product
+that carried lane commits, the records publishes, and the three drafts `pretag-b`'s spec-author wrote and could not
+commit (`c2142871`, `fffe1d44`, `6ae1f2d5` in its lane, the 09:24Z entry; on `main` after #110's rebase as `18aadc98`,
+`738a261f` and `7c2ff192`), committed by path by the orchestrator after its verify list exited 0. The orchestrator edited no product
 file; it wrote this record, the cut's run plan (`plan-cut.md`), the ledger through its verb, and the inbox (through
 `ledger inbox-write`, and by file edit for the plans' five follow-ups and the one row removed by hand).
 
 **Per-action attribution** — 243 sub-agents over the session: 92 reviewers (Opus 5.5, high; the two whole-branch
 passes on Fable 5.1), 47 implementers and 46 fixers (Opus 5.5, high), 28 security lenses (Opus 5.5, high), 15
 researchers (Opus 5.5, mostly medium), 6 test-runners, 6 spec-authors and 3 general agents; the eval run's scenario
-calls on the release's configuration folder, its judges on Fable 5.1. Each outcome is its entry.
+calls on Opus 5.5 at effort high, in the run's own configuration folder, its judges on Fable 5.1. Each outcome is its
+entry.
 
 - 2026-10-15T17:56Z usage: frame, understand and plan minutes=132 tokens=unreported (Claude Code)
 - 2026-10-15T17:56Z usage: build with its review rounds minutes=439 tokens=unreported (Claude Code)
