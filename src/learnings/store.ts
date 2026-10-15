@@ -275,9 +275,13 @@ export interface LoadValidatedLearningsOptions {
    * field the index prints is screened again as its YAML-decoded value — the
    * raw screen reads `\u…` escapes as literal ASCII, and the parser decodes
    * them after it — and a hit skips the file `injection-detected` under its
-   * pattern ids, before the budget is charged. Every skip's file name is also
-   * stripped of the characters the resume card drops, plus the Unicode tag
-   * block: no screen reads a name, so nothing invisible in one may be printed.
+   * pattern ids, before the budget is charged. What the verb prints is then
+   * stripped of the unprintable set ({@link printableText}) and screened again
+   * in that printed form, since a strip can join or space a row's words: each
+   * printed field, which the loaded learning carries stripped, and the body as
+   * {@link printableBody} gives it. Every skip's file name passes the same
+   * screen, raw and stripped; a name that hits prints as a withheld placeholder
+   * naming the pattern ids.
    */
   screenPrinted?: boolean;
 }
@@ -351,7 +355,7 @@ export async function loadValidatedLearnings(
   }
 
   if (opts.screenPrinted === true) {
-    const printable = skips.map((entry) => ({ ...entry, fileName: printableName(entry.fileName) }));
+    const printable = skips.map((entry) => ({ ...entry, fileName: printedName(entry.fileName) }));
     return { learnings, skips: printable, totalBytes };
   }
   return { learnings, skips, totalBytes };
@@ -442,15 +446,25 @@ async function examine(dir: string, candidate: Candidate, now: Date, screenPrint
     // stamp, it is a markdown file that landed in the directory.
     return skip(fileName, "invalid-frontmatter", `${source} has no \`---\` frontmatter block.`);
   }
+  let frontmatter = parsed.frontmatter;
   if (screenPrinted) {
     // The values as printed, after the parser decoded every escape the raw
-    // screen above read as literal ASCII. Each field alone, so no hit is made of
-    // two fields the index prints apart.
-    const decoded = PRINTED_FIELDS.flatMap((field) => {
-      const value = fieldText(parsed.frontmatter, field);
-      return value === undefined ? [] : blockedPatternIds(value);
-    });
+    // screen above read as literal ASCII, then stripped of what a terminal
+    // would run: each screened decoded and again stripped. Each field alone, so
+    // no hit is made of two fields the index prints apart.
+    const shown: Record<string, unknown> = { ...frontmatter };
+    const decoded: string[] = [];
+    for (const field of PRINTED_FIELDS) {
+      const value = fieldText(frontmatter, field);
+      if (value === undefined) continue;
+      const printed = printableText(value);
+      if (typeof frontmatter[field] === "string") shown[field] = printed;
+      decoded.push(...blockedPatternIds(value), ...blockedPatternIds(printed));
+    }
     if (decoded.length > 0) return injectionSkip(fileName, [...new Set(decoded)].toSorted(), "decoded head field ");
+    const body = blockedPatternIds(printableBody(parsed.body).text);
+    if (body.length > 0) return injectionSkip(fileName, body, "printed body ");
+    frontmatter = shown;
   }
 
   // Integrity before schema: the digest answers whether these are the bytes that
@@ -493,7 +507,7 @@ async function examine(dir: string, candidate: Candidate, now: Date, screenPrint
     bytes: candidate.size,
     learning: {
       fileName,
-      frontmatter: parsed.frontmatter,
+      frontmatter,
       body: parsed.body,
       integrityOk: true,
     },
@@ -682,21 +696,35 @@ function lineSafe(name: string): string {
 }
 
 /**
- * A skip's file name with nothing invisible left in it, for the read verb: C0
- * controls and DEL to spaces, then the resume card's strip set
- * (`UNPRINTABLE_CHARS`: the C1 controls, bidi controls, zero-width marks) and
- * the Unicode tag block dropped. The tag block is safe to drop here, unlike in
- * a screened field, because no screen ever reads a name. {@link lineSafe} then
- * flattens and caps it as it does every name.
+ * Text as the read verb prints it, with nothing a terminal would run or hide:
+ * C0 controls and DEL to spaces, as the resume card turns them, and the rest of
+ * its strip set (`UNPRINTABLE_CHARS`: the C1 controls, bidi controls,
+ * zero-width marks, line separators), the Unicode tag block and the
+ * default-ignorable class dropped. `keep` names the controls a body's layout is
+ * made of; a carriage return is kept only before a line feed, so it cannot
+ * rewrite a printed line. A strip can complete a row the unstripped text did
+ * not, so every caller screens what this returns.
  */
-function printableName(name: string): string {
-  return (
-    name
-      // oxlint-disable-next-line no-control-regex -- the control range IS the subject: it becomes a space, as the resume card turns it.
-      .replace(/[\u0000-\u001f\u007f]+/g, " ")
-      .replace(UNPRINTABLE_CHARS, "")
-      .replace(UNICODE_TAG_CHARS, "")
-  );
+function printableText(text: string, keep = ""): string {
+  return text
+    .replace(UNPRINTABLE_CHARS, (char, at: number, whole: string) =>
+      keep.includes(char) && (char !== "\r" || whole[at + 1] === "\n") ? char : char < " " || char === "\u007f" ? " " : "",
+    )
+    .replace(UNICODE_TAG_CHARS, "")
+    .replace(INVISIBLE_SMUGGLING_CHARS, "");
+}
+
+/**
+ * A skip's file name for the read verb: screened as a summary is, raw and as
+ * {@link printableText} prints it, and printed stripped; a name that hits is
+ * withheld behind a placeholder naming the pattern ids, never the name.
+ * {@link lineSafe} then flattens and caps it as it does every name.
+ */
+function printedName(name: string): string {
+  const shown = printableText(name);
+  const ids = [...new Set([...blockedPatternIds(name), ...blockedPatternIds(shown)])].toSorted();
+  if (ids.length === 0) return shown;
+  return `(name withheld: ${ids.length === 1 ? "pattern" : "patterns"} ${ids.join(", ")})`;
 }
 
 /** The warn rows whose window holds a confusable letter or a nonspacing mark beside an override keyword. */
@@ -718,14 +746,16 @@ export interface PrintableBody {
  * a confusable letter or a nonspacing mark beside an override keyword —
  * rewritten as the screens' own normalized copy, which maps the lookalike to
  * its ASCII letter and drops the mask touching the word. Only those windows
- * change, so accented prose elsewhere prints as written. Block rows never reach
- * here: the loader skipped any file carrying one.
+ * change, so accented prose elsewhere prints as written. The rest of the
+ * unprintable set goes too ({@link printableText}; tabs and line breaks stay).
+ * Block rows never reach here: the loader skipped any file carrying one, in
+ * this printed form as well.
  */
 export function printableBody(body: string): PrintableBody {
   const counts = new Map<string, number>();
   const invisible = body.match(INVISIBLE_SMUGGLING_CHARS)?.length ?? 0;
   if (invisible > 0) counts.set(INVISIBLE_ROW, invisible);
-  let text = body.replace(INVISIBLE_SMUGGLING_CHARS, "");
+  let text = printableText(body.replace(INVISIBLE_SMUGGLING_CHARS, ""), "\t\n\r");
 
   for (let pass = 0; pass < MAX_MASK_PASSES; pass += 1) {
     const hits = scanForDeniedPatterns(text, LEARNINGS_SCREEN_PATTERNS)

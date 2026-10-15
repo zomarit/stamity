@@ -1053,9 +1053,9 @@ describe("learn read — the screened read", () => {
     }
   });
 
-  it("strips a skipped file's name of C1, bidi, zero-width and tag-block characters, in text and JSON", async () => {
+  it("strips a skipped file's name of C1, bidi and zero-width characters, in text and JSON", async () => {
     const temp = tempDir();
-    const hostile = `note‮-\u009B​name\u{E0041}⁦.md`;
+    const hostile = `note\u202E-\u009B\u200Bname\u2066.md`;
     const root = await seedRepo(temp, { [`repo/${LEARNINGS_DIR}/${hostile}`]: "no head\n" });
 
     const human = await runLearn(root, ["read"]);
@@ -1067,7 +1067,7 @@ describe("learn read — the screened read", () => {
     expect(parseSingleDoc(json.stdout)["skips"]).toEqual([
       { fileName: "note-name.md", reason: "invalid-frontmatter", patternIds: [] },
     ]);
-    const stripped = /[\u0080-\u009F​-‏‪-‮⁠⁦-⁩﻿\u{E0000}-\u{E007F}]/u;
+    const stripped = /[\u0080-\u009F\u200B-\u200F\u202A-\u202E\u2060\u2066-\u2069\uFEFF\u{E0000}-\u{E007F}]/u;
     for (const output of [human.stdout, json.stdout]) expect(stripped.test(output)).toBe(false);
   });
 
@@ -1101,6 +1101,100 @@ describe("learn read — the screened read", () => {
       expect(output.includes(ZWSP) || output.includes("С")).toBe(false);
     }
   });
+
+  /** C0 and C1 controls and DEL less tab and line feed: nothing a terminal would run may reach a printed line. */
+  // oxlint-disable-next-line no-control-regex -- the control range IS the subject: no printed line may carry one.
+  const TERMINAL_CONTROLS = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F]/u;
+
+  it("prints a summary's decoded controls and bidi marks stripped, on learn read only", async () => {
+    const temp = tempDir();
+    // YAML escapes the parser decodes: an OSC title sequence ended by BEL, an 8-bit CSI, a right-to-left override.
+    const summary = String.raw`"Ordinary note \e]0;x\a, \u009b2J and \u202E end."`;
+    const root = await seedRepo(temp, {
+      [`repo/${LEARNINGS_DIR}/osc-note.md`]: stampedLearning({ id: "osc-note", summary }),
+    });
+
+    const human = await runLearn(root, ["read"]);
+    const json = await runLearn(root, ["read", "--json"]);
+    const shared = await loadValidatedLearnings({ rootDir: root });
+
+    expect(human.code).toBe(0);
+    expect(human.stdout).toContain("- [high] osc-note — Ordinary note ]0;x , 2J and end. (osc-note.md)");
+    expect(json.code).toBe(0);
+    expect((parseSingleDoc(json.stdout)["learnings"] as { summary: string }[])[0]?.summary).toBe(
+      "Ordinary note ]0;x , 2J and end.",
+    );
+    for (const output of [human.stdout, json.stdout]) {
+      expect(TERMINAL_CONTROLS.test(output) || output.includes("\u202E"), "a control reached the output").toBe(false);
+    }
+    // The shared loader, which the session-start twin mirrors, still hands the decoded value over untouched.
+    expect(String(shared.learnings[0]?.frontmatter["summary"])).toContain("\u001B]0;x\u0007");
+  });
+
+  it("skips a summary whose control completes a refused row once the strip spaces it", async () => {
+    const temp = tempDir();
+    // A unit separator where the override sentence has a space: no row reads it, and the strip prints a space.
+    const spaced = stampedLearning({ id: "spaced-note", summary: yamlEscaped(OVERRIDE.replace("all ", "all\u001F")) });
+    const root = await seedRepo(temp, { [`repo/${LEARNINGS_DIR}/spaced-note.md`]: spaced });
+
+    const json = await runLearn(root, ["read", "--json"]);
+
+    expect(json.code).toBe(0);
+    const doc = parseSingleDoc(json.stdout);
+    // Counted, never compared whole: a failing comparison would print the loaded summary.
+    expect((doc["learnings"] as unknown[]).length, "the spaced summary loaded").toBe(0);
+    const skips = doc["skips"] as { fileName: string; reason: string; patternIds: string[] }[];
+    expect(skips.map((entry) => [entry.fileName, entry.reason])).toEqual([["spaced-note.md", "injection-detected"]]);
+    expect(skips[0]?.patternIds.length).toBeGreaterThan(0);
+    expectNoSpan(json.stdout);
+  });
+
+  it("prints --body with its literal controls stripped, keeping tabs and line breaks", async () => {
+    const temp = tempDir();
+    const tail = "Title \u001B]0;x\u0007 set,\t\u009B2J cleared, line\rover.\r\nNext line.";
+    const root = await seedRepo(temp, {
+      [`repo/${LEARNINGS_DIR}/control-note.md`]: stampedLearning({ id: "control-note" }, `${BODY}\n${tail}\n`),
+    });
+
+    const human = await runLearn(root, ["read", "--body", "control-note"]);
+    const json = await runLearn(root, ["read", "--body", "control-note", "--json"]);
+
+    expect(human.code).toBe(0);
+    expect(human.stdout).toContain("Title  ]0;x  set,\t2J cleared, line over.\r\nNext line.");
+    expect(json.code).toBe(0);
+    expect(String(parseSingleDoc(json.stdout)["body"])).toContain("Title  ]0;x  set,\t2J cleared, line over.");
+    for (const output of [human.stdout, json.stdout]) {
+      expect(TERMINAL_CONTROLS.test(output.replaceAll("\r\n", "\n")), "a control reached the output").toBe(false);
+    }
+  });
+
+  // POSIX-ONLY: one fixture name carries ESC, which Win32 forbids in a file name.
+  it.skipIf(process.platform === "win32")(
+    "withholds a skipped file's name that the summary screen refuses, naming the pattern id",
+    async () => {
+      const temp = tempDir();
+      const root = await seedRepo(temp, {
+        [`repo/${LEARNINGS_DIR}/note-\u001B[1m.md`]: "no head\n",
+        [`repo/${LEARNINGS_DIR}/note\u{E0041}.md`]: "no head\n",
+      });
+
+      const human = await runLearn(root, ["read"]);
+      const json = await runLearn(root, ["read", "--json"]);
+
+      expect(human.code).toBe(0);
+      expect(human.stdout).toContain("- skipped (name withheld: pattern control-char-injection): invalid-frontmatter");
+      expect(human.stdout).toContain("- skipped (name withheld: pattern unicode-tag-smuggling): invalid-frontmatter");
+      expect(json.code).toBe(0);
+      const names = (parseSingleDoc(json.stdout)["skips"] as { fileName: string }[]).map((entry) => entry.fileName);
+      expect(names.toSorted()).toEqual([
+        "(name withheld: pattern control-char-injection)",
+        "(name withheld: pattern unicode-tag-smuggling)",
+      ]);
+      for (const output of [human.stdout, json.stdout]) {
+        expect(output.includes("\u001B") || output.includes("[1m") || TAG_BLOCK.test(output)).toBe(false);
+      }
+    },
+  );
 
   it("resolves --body by declared id before file stem, and an id two files declare to the one it names", async () => {
     const temp = tempDir();
