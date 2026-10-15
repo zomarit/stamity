@@ -4088,6 +4088,33 @@ describe("check — model-pins", () => {
     ]);
   });
 
+  // review/135, round 1b (signed off): with no saved list Cursor's files carry no model for an
+  // unpinned class, and a sync now would save the live list and pick from it.
+  it("warns when a sync would change the emitted model where no list was saved, once per class", async () => {
+    const live = { kind: "listed", ids: ["claude-sonnet-5-5-medium"], source: "cursor-agent-models" } as const;
+    const answers: Partial<Record<Tool, ModelListOutcome>> = { cursor: { ...live, ids: [...live.ids] } };
+
+    const verdict = await checkModelPins(pinnedManifest(["cursor"], undefined), {}, fakeLister(answers).lister, "/repo");
+
+    expect(verdict.status).toBe("warn");
+    expect(verdict.detail).toBe(
+      `cursor standard: ${npxCommand("sync")} would change the emitted model from none to "claude-sonnet-5-5-medium"; ` +
+        `the files carry the pick made with no saved list, and cursor's list (read live) resolves another`,
+    );
+
+    // Beside a warning the class already has, the change is not said again.
+    const pinned = await checkModelPins(
+      pinnedManifest(["cursor"], { pins: { standard: { all: "vendor-x-1" } } }),
+      {},
+      fakeLister(answers).lister,
+      "/repo",
+    );
+    expect(pinned.detail).toBe(
+      `cursor standard: the pinned model "vendor-x-1" is not on cursor's list (read live); pin a listed one with ` +
+        npxCommand("config set model.standard.cursor <id>"),
+    );
+  });
+
   it("passes when every pinned and emitted model is on the list, counting them", async () => {
     const manifest = pinnedManifest(["claude", "copilot"], {
       pins: { advanced: { copilot: "gpt-6-sol" } },

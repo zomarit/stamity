@@ -465,10 +465,11 @@ For Codex the saved list is the reference whenever one exists, since `sync` read
 normally, and `check` starts `codex` only when no list was saved, then with `--bundled`, so the read stays offline; the
 row's note says which list it compared with (`review/136`). It judges a model by the resolver's own predicate, `listHoldsPin`, so the report and the
 emission agree (`review/86`). A pinned model the list lacks warns naming the client, the class and the model, with
-`config set model.<class>.<client> <id>`; an emitted model the list lacks warns naming `sync`. Where a saved list
-exists and the live list is the catalogue `sync` reads (Cursor, Copilot), a class whose model `sync` would resolve from
-the live list differently from the one the files carry, resolved from the saved list, warns naming the client, the class,
-both models and `sync`, unless the row already warns for that class (`review/135`). With nothing to compare
+`config set model.<class>.<client> <id>`; an emitted model the list lacks warns naming `sync`. Where the live list is
+the catalogue `sync` reads (Cursor, Copilot) and the live read answers, a class whose model `sync` would resolve from
+the live list differently from the one the files carry, resolved from the saved list or, where none was saved, with no
+list, warns naming the client, the class, both models and `sync`, unless the row already warns for that class
+(`review/135`). With nothing to compare
 the row passes with `unverified` and its reason in the detail; under `STAMITY_NO_CLIENT_PROBE=1` it starts no client and
 reads the saved list only. Every printed value passes `sanitizeLabel`, and the row never fails.
 
@@ -476,12 +477,13 @@ reads the saved list only. Every printed value passes `sanitizeLabel`, and the r
   GIVEN no CLI and no list THEN `pass` with "unverified"; GIVEN `check --json` THEN the row id is `model-pins` at
   `pack-reach`'s index plus one; GIVEN a fake `codex` on `PATH` and the switch set THEN it is not started; GIVEN a saved
   Codex list THEN no `codex` is started; GIVEN a saved Copilot list lacking the pin and a live one holding the pin and the
-  re-pick THEN `warn` naming both models and `sync` (`test/cli/commands/check.test.ts`, the describe "check —
-  model-pins").
+  re-pick THEN `warn` naming both models and `sync`; GIVEN no saved Cursor list and a live one holding an unpinned
+  class's variant THEN `warn` naming `none`, that model and `sync` (`test/cli/commands/check.test.ts`, the describe
+  "check — model-pins").
 
 As built, where the delta differed: `checkModelPins` takes the working folder as a fourth parameter, which the lister
 needs. Open, as Minors of the run: a pin live-listed but missing from the saved list passed with no nudge to `sync`
-(`review/88`), which `review/135`'s warning now gives on Cursor and Copilot, and no test reaches the `unreadable`
+(`review/88`), which `review/135`'s warning now gives on Cursor and Copilot, with or without a saved list, and no test reaches the `unreadable`
 reason (`review/89`).
 
 ## References

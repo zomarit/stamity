@@ -1512,8 +1512,8 @@ interface ClientModelVerdict {
  * the bundled one can lag, so a saved list is always the reference there. A
  * live list is the catalogue `sync` reads only for Cursor and Copilot; there,
  * a class whose model `sync` would resolve differently from that live list
- * than the files carry from the saved one warns too (review/135), unless the
- * class already warned.
+ * than the files carry — resolved from the saved list, or with none where no
+ * list was saved — warns too (review/135), unless the class already warned.
  */
 function verifyClientModels(
   tool: Tool,
@@ -1535,8 +1535,9 @@ function verifyClientModels(
   const efforts = models?.effort ?? {};
   const pick = saved === undefined ? {} : { listed: saved };
   // The list a `sync` now would read, where the live read is that list: never
-  // Codex's bundled read, and only beside a saved list the files resolved from.
-  const syncReads = live?.kind === "listed" && tool !== "codex" && saved !== undefined ? live.ids : undefined;
+  // Codex's bundled read. The files resolved from the saved list, or from none.
+  const syncReads = live?.kind === "listed" && tool !== "codex" ? live.ids : undefined;
+  const filesFrom = saved === undefined ? "the pick made with no saved list" : "the pick from the list the last sync saved";
   const warnings: string[] = [];
   let compared = 0;
   for (const { modelClass } of MODEL_LADDER) {
@@ -1544,7 +1545,11 @@ function verifyClientModels(
     const pinned = modelIdOf(pinValue);
     const emittedValue = resolveModelValue(modelClass, tool, pins, efforts, pick);
     const emitted = emittedValue === undefined ? "" : modelIdOf(emittedValue);
-    if (pinned === "" && emitted === "") continue;
+    const resyncedValue =
+      syncReads === undefined ? emittedValue : resolveModelValue(modelClass, tool, pins, efforts, { listed: syncReads });
+    const resynced = resyncedValue === undefined ? "" : modelIdOf(resyncedValue);
+    // A class with no model now and none after a sync has nothing to compare.
+    if (pinned === "" && emitted === "" && resynced === "") continue;
     compared += 1;
     const where = `${tool}'s list (${reference.label})`;
     const before = warnings.length;
@@ -1561,16 +1566,11 @@ function verifyClientModels(
           `${packageCommand("sync")} reads the list again and re-picks`,
       );
     }
-    if (syncReads !== undefined && warnings.length === before) {
-      const resyncedValue = resolveModelValue(modelClass, tool, pins, efforts, { listed: syncReads });
-      const resynced = resyncedValue === undefined ? "" : modelIdOf(resyncedValue);
-      if (resynced !== emitted) {
-        warnings.push(
-          `${tool} ${modelClass}: ${packageCommand("sync")} would change the emitted model from ${quotedModel(emitted)} ` +
-            `to ${quotedModel(resynced)}; the files carry the pick from the list the last sync saved, and ${tool}'s ` +
-            `list (read live) resolves another`,
-        );
-      }
+    if (warnings.length === before && resynced !== emitted) {
+      warnings.push(
+        `${tool} ${modelClass}: ${packageCommand("sync")} would change the emitted model from ${quotedModel(emitted)} ` +
+          `to ${quotedModel(resynced)}; the files carry ${filesFrom}, and ${tool}'s list (read live) resolves another`,
+      );
     }
   }
   const note =
@@ -1593,8 +1593,8 @@ function verifyClientModels(
  * `STAMITY_NO_CLIENT_PROBE=1` starts no client and reads the saved list only.
  * A model the list lacks warns, naming the client, the class and the model,
  * with the remedy: pin a listed id, or `sync` to re-read the list and re-pick.
- * A Cursor or Copilot class whose model `sync` would change, read live beside
- * a saved list, warns naming both models.
+ * A Cursor or Copilot class whose model `sync` would change, read live,
+ * warns naming both models.
  *
  * Never `fail`: the list is the account's, outside anything this repository
  * can change, and a CI gate on it would fail on a vendor's model retirement.
