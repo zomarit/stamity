@@ -70,9 +70,10 @@
  * here is invented: the priority list is dated, cited and read off each
  * client's CLI, and the account's list is what `init` and `sync` read from the
  * client and persisted — emission never starts a client. The one client that
- * still resolves nothing by default is Cursor with no list read, where an
- * unlisted id fails the spawn and an absent one inherits the session's model,
- * so silence stays the safe answer there.
+ * resolves nothing but a pin is Cursor, list or no list: it checks a sub-agent
+ * call's model against a list that follows the parent agent's model and that
+ * no command prints, and it refused the pick there, while an absent model
+ * inherits the parent's (ledger row 2026-10-14_cli-native/qa/1).
  *
  * The pick is opt-in per call: a caller passes {@link ModelPickSource} (the
  * persisted list, or none) to {@link resolveModelValue}, and a call without it
@@ -85,7 +86,8 @@
  * class is re-picked from that list, because an id the account lacks fails the
  * call and outranks nothing. A pin with a bracket group is judged by its base
  * id (before `[`): kept with its options while that id is listed, re-picked
- * like any other pin when it is not. Whether an EFFORT setting reaches a
+ * like any other pin when it is not. On Cursor, which picks nothing, the
+ * re-pick finds nothing and the pin is written as typed. Whether an EFFORT setting reaches a
  * given client is read off {@link ClientModelProjection.effortCarrier} at the
  * call site that needs it; this module publishes no predicate for it. The one
  * surface that would ask — the config command's per-class effort rows —
@@ -546,11 +548,13 @@ export function listHoldsPin(listed: readonly string[], pin: string): boolean {
 /**
  * The model value before any effort parameter rides on it, in the order the
  * module header gives: the pin (re-picked only when the account's list is
- * known and lacks it), the client's alias, then — for a caller carrying the
- * pick — the shipped list's first entry the account's list holds, else its
- * entry 0 where no list was read; a list that holds no candidate gives nothing. Nothing at all when the client has no model
- * key: a value in a field the client does not read is a restriction the
- * operator can see in the file and the client never applies.
+ * known and lacks it, and kept as typed on Cursor, which picks nothing), the
+ * client's alias, then — for a caller carrying the pick — the shipped list's
+ * first entry the account's list holds, else its entry 0 where no list was
+ * read; a list that holds no candidate gives nothing, and Cursor gives nothing
+ * at all. Nothing at all when the client has no model key: a value in a field
+ * the client does not read is a restriction the operator can see in the file
+ * and the client never applies.
  */
 function baseModelValue(
   projection: ClientModelProjection,

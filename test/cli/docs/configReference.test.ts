@@ -381,7 +381,12 @@ describe("key coverage", () => {
     expect(page).toContain("classes, not model ids");
     expect(page).toContain("the top rung onto\n`fable`");
     expect(page).toContain("save it under `models.listed`");
-    expect(page).toContain("Cursor writes no model at all");
+    // TEST CHANGE, justified (ledger row 2026-10-14_cli-native/qa/1): this line read "Cursor
+    // writes no model at all", a claim made for Cursor with no list read. Cursor now writes no
+    // model unless one is pinned, list or no list, and a pin as typed, so the page says both.
+    expect(page).toContain("Cursor writes no model unless you pin one, list or no list");
+    expect(page).toContain("Cursor writes a pin as typed");
+    expect(page).not.toContain("Copilot, Codex and Cursor take the first model");
     expect(page).toContain("`model.<class>.<client>` pins one client");
     expect(page).toContain("stamity config set model.advanced.codex gpt-6-astra");
 
@@ -391,6 +396,13 @@ describe("key coverage", () => {
     expect(getConfigValue({ ...UNSET_PROBE, tools: ["cursor"] }, "model.frontier").resolved).toBe(
       "(client default)",
     );
+    // And with the account's list saved, which used to give Cursor a pick.
+    const cursorListed = {
+      ...UNSET_PROBE,
+      tools: ["cursor" as const],
+      models: { listed: { cursor: { ids: ["claude-opus-5-5-high"], source: "cursor-agent-models" as const } } },
+    };
+    expect(getConfigValue(cursorListed, "model.frontier").resolved).toBe("(client default)");
     for (const tool of ["copilot", "codex"] as const) {
       expect(getConfigValue({ ...UNSET_PROBE, tools: [tool] }, "model.frontier").resolved).toBe(
         MODEL_PRIORITY[tool].frontier[0]?.id,

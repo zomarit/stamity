@@ -243,8 +243,10 @@ function renderList(values: readonly string[]): string {
  * What a model row prints when nothing resolves for it. Not a value: the
  * adapter omits the key entirely and the client applies its own default, so
  * printing a plausible id here would name a model the emitted files do not
- * contain. Since the pick (REQ-LADDER-006) that is Cursor with no list read and
- * no pin; every other client resolves an alias or a shipped candidate.
+ * contain. Since the pick (REQ-LADDER-006) that is Cursor with no pin, list or
+ * no list (ledger row 2026-10-14_cli-native/qa/1), or a client whose saved list
+ * holds none of the class's candidates; every other case resolves an alias or a
+ * shipped candidate.
  */
 const CLIENT_DEFAULT = "(client default)";
 
@@ -271,8 +273,8 @@ function clampedMarker(emitted: string, requested: string): string {
 
 const MODEL_HINT =
   "a model id your client accepts, or `none` to clear, for every selected client without a pin " +
-  "of its own (`model.<class>.<client>`) — shape-checked only (non-empty, one line), and " +
-  "re-picked on a client whose saved model list lacks it";
+  "of its own (`model.<class>.<client>`) — shape-checked only (non-empty, one line), " +
+  "re-picked on Copilot or Codex when its saved model list lacks it, and written as typed on Cursor";
 
 /** What a per-client pin row accepts; the client and class are named so the page's row reads alone. */
 function modelClientHint(modelClass: ModelClass, tool: Tool): string {
@@ -458,10 +460,11 @@ function readEffort(manifest: SetupManifest, modelClass: ModelClass): string | n
  * header sends this question to the call site instead of publishing a
  * predicate for it.
  *
- * `pick` is the saved list the adapters resolve with ({@link pickSourceFor}):
- * on Cursor an unpinned class's model is the listed effort variant at the
- * level asked for, so without the list the level would look carried nowhere
- * (review/137).
+ * `pick` is the saved list the adapters resolve with ({@link pickSourceFor}),
+ * so the answer is the emission's own. On Cursor an unpinned class writes no
+ * model, list or no list (ledger row 2026-10-14_cli-native/qa/1), so its level
+ * is carried nowhere there; a pin that is a listed effort variant carries its
+ * own level, and the list is what says so.
  */
 function expressesEffort(
   tool: Tool,

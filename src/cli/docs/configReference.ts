@@ -240,24 +240,28 @@ export function renderConfigReferenceFrom(specs: readonly ConfigKeySpec[]): stri
     "",
     // The model rows are the only ones whose KEY NAMES carry a concept the page
     // never defined: `frontier`, `advanced`, `standard` and `economy` are rungs,
-    // not model ids. Since the pick (REQ-LADDER-006) every client but an unlisted
-    // Cursor resolves each rung to an id, and the unset cells show which; this
-    // paragraph says where those ids come from, which no cell can. The per-client
-    // keys (REQ-LADDER-005) exist because no single id is valid on every client.
+    // not model ids. Since the pick (REQ-LADDER-006) every client but Cursor
+    // resolves each rung to an id, and the unset cells show which; this
+    // paragraph says where those ids come from, which no cell can, and why
+    // Cursor takes only a pin (ledger row 2026-10-14_cli-native/qa/1). The
+    // per-client keys (REQ-LADDER-005) exist because no single id is valid on
+    // every client.
     "The `model.*` rows are classes, not model ids. Each names a rung, and each selected client",
     "maps that rung to an id it accepts, so one setting travels across clients instead of being",
     "restated per client. Claude Code maps every rung onto its own family aliases, the top rung onto",
-    "`fable`. Copilot, Codex and Cursor take the first model of a priority list Stamity ships that",
-    "the account's own model list holds: `init` and `sync` read that list from the client's CLI and",
+    "`fable`. Copilot and Codex take the first model of a priority list Stamity ships that the",
+    "account's own model list holds: `init` and `sync` read that list from the client's CLI and",
     "save it under `models.listed` in the manifest, and a client that does not answer keeps the list",
     "it saved last; `STAMITY_NO_CLIENT_PROBE=1` in the environment skips every read. With no list",
     "read, Copilot and Codex take the first model of the shipped list, which is what their cells",
-    "above show, and Cursor writes no model at all, so the sub-agent runs on the session's model,",
-    "because a model the account does not offer fails the call there.",
+    "above show. Cursor writes no model unless you pin one, list or no list, so an unpinned sub-agent",
+    "runs on the parent agent's model: Cursor checks a sub-agent's model against a list of its own,",
+    "which follows the parent's model and which no command prints.",
     "",
     "`model.<class>` pins one id for every selected client; `model.<class>.<client>` pins one client",
-    "and wins over the class key there; `none` clears either one. A pin the account's saved list does",
-    "not hold is replaced by the class's first listed model, since the client would refuse it.",
+    "and wins over the class key there; `none` clears either one. On Copilot and Codex a pin the",
+    "account's saved list does not hold is replaced by the class's first listed model, since the",
+    "client would refuse it; Cursor writes a pin as typed.",
     "For a Codex setup with access to GPT-6 Astra, pin its exact id on Codex alone:",
     "",
     "```sh",

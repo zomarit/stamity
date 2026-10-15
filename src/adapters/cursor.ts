@@ -43,7 +43,7 @@ import {
   type ResolvedAgentGrant,
 } from "../roster/agentGrants.ts";
 import { RUNTIME_AGENT_IDS } from "../roster/agentPolicies.ts";
-import { modelMapPath, pickModel } from "../roster/modelDefaults.ts";
+import { modelMapPath } from "../roster/modelDefaults.ts";
 import {
   CLIENT_MODEL_PROJECTION,
   EFFORT_PLACEHOLDER,
@@ -320,7 +320,7 @@ const EFFORT_SCALE_CAP =
   "value, so nothing is narrowed here: a level the chosen model does not offer is the " +
   "model's to reject. No group follows an id that already names its effort variant (one " +
   "on the account's list, or one ending on an effort word), and no key is emitted at all " +
-  "until a model id is pinned or picked from the account's list";
+  "until a model id is pinned";
 
 /** What this client can and cannot do, as the generated capability matrix reads it. */
 export const cursorDialectFacts: AdapterDialectFacts = {
@@ -330,7 +330,7 @@ export const cursorDialectFacts: AdapterDialectFacts = {
   hooksConfigPath: CURSOR_HOOKS_CONFIG_PATH,
   readsAgentsSkillsDir: true,
   agentsFormat:
-    "`.cursor/agents/<id>.md` — `description`, `model` (the role's class model: the operator's pin, else the first shipped candidate the account's saved model list holds, at the class's effort variant; a pin that is not a listed variant carries this client's `[effort=…]` parameter. It is a default, not a hard limit; Stamity carries it on the dispatch and by a hook — the touchpoints pass the class model from `.stamity/generated/models/cursor.json` (the same model id, without an engine-added `[effort=…]` group) on each sub-agent call, and a `preToolUse` hook on `Task` fills it into a Stamity call that names none (`updated_input`; cursor.com/docs/agent/subagents and cursor.com/docs/hooks, accessed 2026-10-14). With no pin and no saved list the key is omitted entirely, so the client applies its own default rather than the engine guessing an id the account may not offer), `readonly`",
+    "`.cursor/agents/<id>.md` — `description`, `model` (the operator's pin for the role's class, as typed; a pin that is not a listed variant carries this client's `[effort=…]` parameter. Only a pin is written: Cursor checks a sub-agent call's model against a list that follows the parent agent's model and that no command prints, so no model is picked from the account's saved list, and an unpinned role's key is omitted, so its sub-agent runs on the parent agent's model, which the client always accepts. A pinned model is a default, not a hard limit; Stamity carries it on the dispatch and by a hook — the touchpoints pass the class model from `.stamity/generated/models/cursor.json` (the same model id, without an engine-added `[effort=…]` group) on each sub-agent call, and a `preToolUse` hook on `Task` fills it into a Stamity call that names none (`updated_input`; cursor.com/docs/agent/subagents and cursor.com/docs/hooks, accessed 2026-10-14)), `readonly`",
   mcpDialect: "cursor-json",
   entryFile: null,
   caps: [
@@ -453,9 +453,11 @@ export const cursorResiduePlanner: ResiduePlanner = {
     // over an operator setting `stamity config` already displays as binding.
     const pins = pinsFor(ctx.manifest.models, "cursor");
     const efforts = ctx.manifest.models?.effort ?? {};
-    // The account's own list, as `init` and `sync` persisted it: the resolver
-    // re-picks a pin the list lacks and picks a class with no pin from it, so
-    // emission reads the saved copy and never starts the client (REQ-LADDER-006).
+    // The account's own list, as `init` and `sync` persisted it. The resolver
+    // picks nothing from it on this client (ledger row qa/1): it only tells a
+    // pin that is a listed effort variant, which takes no `[effort=…]` group,
+    // from one that is not. Emission reads the saved copy and never starts the
+    // client (REQ-LADDER-006).
     const listed = ctx.manifest.models?.listed?.cursor?.ids;
     const pick: ModelPickSource = listed === undefined ? {} : { listed };
     const spawnable: string[] = [...RUNTIME_AGENT_IDS];
@@ -780,9 +782,9 @@ export function buildCursorAgent(
   const lines = [`description: ${frontmatterScalar(item.description)}`];
 
   const declaredClass = item.frontmatter["model_class"];
-  // A class off the ladder, or one with neither a pin nor a saved list, is left
-  // unwritten rather than guessed: an unlisted model value fails at spawn time,
-  // whereas an absent key takes the client's own default and works.
+  // A class off the ladder, or one with no pin, is left unwritten rather than
+  // picked: a model outside the client's sub-agent list fails the call, whereas
+  // an absent key runs the sub-agent on the parent agent's model and works (ledger row qa/1).
   const model =
     typeof declaredClass === "string"
       ? resolveModelValue(declaredClass, "cursor", pins, efforts, pick)
@@ -800,7 +802,7 @@ export function buildCursorAgent(
   return `---\n${lines.join("\n")}\n---\n${rendered}`;
 }
 
-/** One class in the model map: the model the agent files carry, absent when none resolves, and the class's other listed candidates. */
+/** One class in the model map: the pinned model the agent files carry, absent with no pin, and `fallbacks`, always empty here. */
 export interface CursorModelMapClass {
   model?: string;
   fallbacks: string[];
@@ -825,11 +827,14 @@ export interface CursorModelMap {
  * disagree on the model; the file may add `[effort=…]` to a pin that is not a
  * listed variant, a form Cursor documents for agent files only
  * (cursor.com/docs/agent/subagents, read 2026-10-14), so the map leaves it
- * out (review/100). With no pin and no saved list `model` is absent and the
- * class reads `{ "fallbacks": [] }`. `fallbacks` are the
- * class's other shipped candidates the list holds, in priority order, for a
- * call the client refuses. `roles` maps each emitted agent's runtime id to the
- * class its frontmatter declares, sorted by id so the bytes are stable.
+ * out (review/100). With no pin `model` is absent, list or no list, and the
+ * class reads `{ "fallbacks": [] }`: Cursor checks a call's model against a
+ * sub-agent list no command prints, and an absent one takes the parent's
+ * (ledger row 2026-10-14_cli-native/qa/1). `fallbacks` stays in the shape the
+ * other clients' maps share, and is always empty here, since every entry would
+ * be a model the operator did not pin. `roles` maps each emitted agent's
+ * runtime id to the class its frontmatter declares, sorted by id so the bytes
+ * are stable.
  */
 export function buildCursorModelMap(
   roles: Readonly<Partial<Record<string, ModelClass>>>,
@@ -839,16 +844,11 @@ export function buildCursorModelMap(
 ): CursorModelMap {
   const classes = {} as Record<ModelClass, CursorModelMapClass>;
   for (const { modelClass, defaultEffort } of MODEL_LADDER) {
-    // The level the resolver looked for the variant at: the operator's, else
-    // the ladder's, on this client's scale.
+    // The level the resolver appended as `[effort=…]`, if it appended one: the
+    // operator's, else the ladder's, on this client's scale.
     const effort = nearestExpressibleEffort(efforts[modelClass] ?? defaultEffort, "cursor");
     const model = callableModel(resolveModelValue(modelClass, "cursor", pins, efforts, pick), pins[modelClass], effort);
-    const picked = pickModel("cursor", modelClass, effort, pick.listed);
-    const candidates = picked === undefined ? [] : [picked.id, ...picked.fallbacks];
-    classes[modelClass] = {
-      ...(model === undefined ? {} : { model }),
-      fallbacks: candidates.filter((id) => id !== model),
-    };
+    classes[modelClass] = { ...(model === undefined ? {} : { model }), fallbacks: [] };
   }
   const sorted: Record<string, ModelClass> = {};
   for (const id of Object.keys(roles).toSorted()) {
@@ -1409,7 +1409,10 @@ if (allowed.size === 0 && faults.length > 0) {
  * on the `Task` call is the one that decides the sub-agent's (see
  * {@link buildCursorAgent}). So a call to an emitted Stamity agent that names
  * no model gets the class's model from `map`, built in, and nothing else of it
- * changes: the input is copied whole and `model` set on the copy.
+ * changes: the input is copied whole and `model` set on the copy. The map holds
+ * a model only for a class the operator pinned, so an unpinned class's call is
+ * left as it is and runs on the parent agent's model: Cursor refused a model
+ * this hook filled from the account's list (ledger row 2026-10-14_cli-native/qa/1).
  *
  * It narrows its own reach rather than trusting the matcher's: the payload's
  * `tool_name` must be `Task` exactly (the matcher is a pattern, and an MCP
@@ -1430,8 +1433,9 @@ export function buildModelPinsHookScript(map: CursorModelMap): string {
     "",
     "Wired on preToolUse for Task. When a call spawns one of this setup's agents",
     "and names no model, it answers with the call's input plus the model the",
-    "class-to-model map below gives that agent's class; every other call is",
-    "allowed unchanged. It always allows, as valid JSON, and never blocks.",
+    "class-to-model map below gives that agent's class, which only an operator's",
+    "pin puts there; every other call is allowed unchanged. It always allows, as",
+    "valid JSON, and never blocks.",
   ])}
 
 import { readFileSync } from "node:fs";

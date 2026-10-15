@@ -120,20 +120,28 @@ describe("pickModel with no account list", () => {
   });
 });
 
-describe("pickModel over an account's list", () => {
-  it("takes the exact effort variant on Cursor and names its effort in the id", () => {
-    const listed = ["auto", "claude-opus-5-5-medium", "claude-opus-5-5-high", "gpt-5.6-sol-high"];
-    expect(pickModel("cursor", "advanced", "high", listed)).toEqual({
-      id: "claude-opus-5-5-high",
-      fallbacks: ["gpt-5.6-sol-high"],
-    });
+// The maintainer's ruling on ledger row 2026-10-14_cli-native/qa/1: write no model unless the
+// operator pinned one. Cursor checks a sub-agent call's model against a list that follows the
+// parent's model, which `agent models` does not print, so a pick from the account's list was
+// refused on the dispatch path (qa-cursor-test-runner-r1.md, -r2.md).
+describe("pickModel on Cursor, with the account's list", () => {
+  it("gives Cursor nothing even when the list holds every candidate's exact effort variant", () => {
+    const listed = captured("cursor");
+    const efforts = { frontier: "high", advanced: "high", standard: "medium", economy: "low" } as const;
+    for (const modelClass of MODEL_CLASSES) {
+      // Non-degenerate: the captured list holds the variant the old pick would have taken.
+      const variant = MODEL_PRIORITY.cursor[modelClass][0]?.id.replace(EFFORT_TOKEN, efforts[modelClass]);
+      expect(listed, `${modelClass}: ${variant}`).toContain(variant);
+      expect(pickModel("cursor", modelClass, efforts[modelClass], listed), modelClass).toBeUndefined();
+    }
   });
+});
 
-  it("takes the nearest listed variant when the exact one is missing, the lower of two at one distance", () => {
-    const listed = ["claude-opus-5-5-medium", "claude-opus-5-5-xhigh"];
-    expect(pickModel("cursor", "advanced", "high", listed)?.id).toBe("claude-opus-5-5-medium");
-    expect(pickModel("cursor", "advanced", "max", listed)?.id).toBe("claude-opus-5-5-xhigh");
-  });
+describe("pickModel over an account's list", () => {
+  // TEST CHANGE, justified (ledger row 2026-10-14_cli-native/qa/1): two cases here asserted that
+  // Cursor took the exact effort variant the list held, else the nearest one. By the maintainer's
+  // ruling Cursor picks nothing from any list, so the case above asserts that instead, against the
+  // captured list that holds every exact variant.
 
   it("skips a candidate the account lacks and takes the next one it holds", () => {
     expect(pickModel("codex", "advanced", "high", ["gpt-6-sol", "gpt-6-luna"])).toEqual({
@@ -154,11 +162,11 @@ describe("pickModel over an account's list", () => {
     }
   });
 
-  it("leaves a templated candidate unresolved when no effort level is known", () => {
-    expect(pickModel("cursor", "advanced", undefined, ["claude-opus-5-5-high"])).toBeUndefined();
-  });
+  // TEST CHANGE, justified (ledger row 2026-10-14_cli-native/qa/1): a case here asserted a
+  // templated Cursor candidate stayed unresolved with no effort level; Cursor now resolves none at
+  // any level, which the Cursor case above covers.
 
-  it("picks a listed id for every class on every client from the captured lists", () => {
+  it("picks a listed id for every class on Copilot and Codex from the captured lists, and none on Cursor", () => {
     const efforts = { frontier: "high", advanced: "high", standard: "medium", economy: "low" } as const;
     const picks = Object.fromEntries(
       LISTING_CLIENTS.map((client) => [
@@ -171,12 +179,15 @@ describe("pickModel over an account's list", () => {
         ),
       ]),
     );
+    // TEST CHANGE, justified (ledger row 2026-10-14_cli-native/qa/1): Cursor's row named the
+    // listed variant per class; by the maintainer's ruling Cursor picks none, so every class reads
+    // undefined there while Copilot and Codex are unchanged.
     expect(picks).toEqual({
       cursor: {
-        frontier: "claude-opus-5-5-high",
-        advanced: "claude-opus-5-5-high",
-        standard: "claude-sonnet-5-5-medium",
-        economy: "claude-haiku-5-5-low",
+        frontier: undefined,
+        advanced: undefined,
+        standard: undefined,
+        economy: undefined,
       },
       copilot: {
         frontier: "claude-fable-5.1",

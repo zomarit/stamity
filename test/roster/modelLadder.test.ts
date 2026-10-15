@@ -8,6 +8,7 @@ import {
   MODEL_LADDER,
   effortDisclosures,
   isModelClass,
+  listHoldsPin,
   nearestExpressibleEffort,
   pinsFor,
   resolveEffortValue,
@@ -303,6 +304,11 @@ describe("the ladder table shipped in the work command", () => {
     expect(prose).toContain(
       "A class resolves through its pin (re-picked when the account's saved list lacks it), then the client's alias, then the account's own model list, then, only when no list was read, the shipped list; with none of these the key is left out.",
     );
+    // The one client the order above stops at the pin on, Cursor, named without its name: shipped
+    // content is model-independent (ledger row 2026-10-14_cli-native/qa/1).
+    expect(prose).toContain(
+      "A client that checks a sub-agent's model against a list it never prints gets a pin alone, as typed, so an unpinned class's sub-agent there runs on the parent agent's model.",
+    );
     expect(prose).not.toMatch(/leaves selection to the client's own default/);
     expect(prose).toContain(
       "Where an agent file's model takes precedence over the call's, a per-call escalation leaves it unchanged.",
@@ -342,7 +348,13 @@ describe("the ladder table shipped in the work command", () => {
     // list and no pin, on every class.
     for (const modelClass of MODEL_CLASSES) {
       expect(resolveModelValue(modelClass, "cursor", {}, {}, {}), modelClass).toBeUndefined();
+      // The Cursor sentence, measured: a saved list holding the class's candidate picks nothing.
+      expect(resolveModelValue(modelClass, "cursor", {}, {}, { listed: [second, "claude-opus-5-5-high"] }), modelClass).toBeUndefined();
     }
+    // And a pin the list lacks is written as typed rather than re-picked.
+    expect(resolveModelValue("standard", "cursor", { standard: "pinned-id" }, {}, { listed: ["claude-sonnet-5-5-medium"] })).toBe(
+      "pinned-id[effort=medium]",
+    );
   });
 
   it("fixture: a dropped role and a borrowed one are both flagged", () => {
@@ -650,15 +662,23 @@ describe("resolveModelValue with the pick (REQ-LADDER-006)", () => {
   // pin is never re-picked; by the sign-off a bracketed pin is judged by its base id like any pin,
   // so it is kept while the base is listed and re-picked when it is not. The family rule now counts
   // only an exact effort variant of the pin, so a longer id that merely starts with it does not.
+  // TEST CHANGE, justified (ledger row 2026-10-14_cli-native/qa/1): the judgement was read off
+  // Cursor's re-pick, and Cursor now writes a pin as typed whatever its list holds. So the
+  // judgement is read off `listHoldsPin`, which `check`'s model-pins row still warns by, and the
+  // resolver is asserted to keep every pin, listed or not.
   it("judges a bracketed Cursor pin by its base id, and a family pin by its exact effort variants", () => {
     const listed = ["claude-opus-4-8-high", "claude-opus-5-5-high"];
+    expect(listHoldsPin(listed, "claude-opus-4-8[context=1m,effort=high]")).toBe(true);
+    expect(listHoldsPin(listed, "claude-opus-4-7[context=1m]")).toBe(false);
+    expect(listHoldsPin(listed, "claude-opus-4-8")).toBe(true);
+    expect(listHoldsPin(listed, "vendor-x-1")).toBe(false);
     expect(
       resolveModelValue("advanced", "cursor", { advanced: "claude-opus-4-8[context=1m,effort=high]" }, {}, { listed }),
     ).toBe("claude-opus-4-8[context=1m,effort=high]");
+    // An unlisted bracketed pin keeps the operator's whole expression, list or no list.
     expect(
       resolveModelValue("advanced", "cursor", { advanced: "claude-opus-4-7[context=1m]" }, {}, { listed }),
-    ).toBe("claude-opus-5-5-high");
-    // A bracketed pin with nothing to re-pick to keeps the operator's whole expression.
+    ).toBe("claude-opus-4-7[context=1m]");
     expect(
       resolveModelValue("advanced", "cursor", { advanced: "claude-opus-4-7[context=1m]" }, {}, { listed: ["other"] }),
     ).toBe("claude-opus-4-7[context=1m]");
@@ -666,16 +686,20 @@ describe("resolveModelValue with the pick (REQ-LADDER-006)", () => {
       "claude-opus-4-8[effort=high]",
     );
     expect(resolveModelValue("advanced", "cursor", { advanced: "vendor-x-1" }, {}, { listed })).toBe(
-      "claude-opus-5-5-high",
+      "vendor-x-1[effort=high]",
     );
   });
 
+  // TEST CHANGE, justified (ledger row 2026-10-14_cli-native/qa/1): as above, the family rule was
+  // read off Cursor's re-pick; it is read off `listHoldsPin` now, and the pin is written as typed.
   it("does not count a pin as listed through a longer id that merely starts with it", () => {
     // `claude-opus-5-5-high` is the next generation, not an effort variant of `claude-opus-5`.
+    expect(listHoldsPin(["claude-opus-5-5-high"], "claude-opus-5")).toBe(false);
     expect(
       resolveModelValue("advanced", "cursor", { advanced: "claude-opus-5" }, {}, { listed: ["claude-opus-5-5-high"] }),
-    ).toBe("claude-opus-5-5-high");
+    ).toBe("claude-opus-5[effort=high]");
     // An exact variant, `-fast` included, still counts.
+    expect(listHoldsPin(["grok-4.7-high-fast", "claude-opus-5-5-high"], "grok-4.7")).toBe(true);
     expect(
       resolveModelValue("advanced", "cursor", { advanced: "grok-4.7" }, {}, { listed: ["grok-4.7-high-fast", "claude-opus-5-5-high"] }),
     ).toBe("grok-4.7[effort=high]");
@@ -686,12 +710,18 @@ describe("resolveModelValue with the pick (REQ-LADDER-006)", () => {
     expect(resolveModelValue("standard", "claude", { standard: "pinned" }, {}, { listed: ["x"] })).toBe("pinned");
   });
 
-  it("gives Cursor the listed effort variant with no effort parameter appended", () => {
-    expect(resolveModelValue("advanced", "cursor", {}, {}, { listed: CURSOR_LIST })).toBe("claude-opus-5-5-high");
-    expect(resolveModelValue("economy", "cursor", {}, {}, { listed: CURSOR_LIST })).toBe("claude-haiku-5-5-low");
-    // An operator effort moves the variant looked for; the nearest listed one answers.
-    expect(resolveModelValue("standard", "cursor", {}, { standard: "high" }, { listed: CURSOR_LIST })).toBe(
-      "claude-sonnet-5-5-medium",
+  // TEST CHANGE, justified (ledger row 2026-10-14_cli-native/qa/1): this case read "gives Cursor
+  // the listed effort variant with no effort parameter appended". Cursor refused that variant on
+  // a sub-agent call (qa-cursor-test-runner-r1.md, -r2.md), and by the maintainer's ruling it
+  // writes no model unless one is pinned, so the same inputs now resolve to nothing.
+  it("gives an unpinned Cursor class no model, whatever variant its saved list holds", () => {
+    // Non-degenerate: the list holds each class's exact variant at its default effort.
+    expect(resolveModelValue("advanced", "cursor", {}, {}, { listed: CURSOR_LIST })).toBeUndefined();
+    expect(resolveModelValue("economy", "cursor", {}, {}, { listed: CURSOR_LIST })).toBeUndefined();
+    expect(resolveModelValue("standard", "cursor", {}, { standard: "high" }, { listed: CURSOR_LIST })).toBeUndefined();
+    // A pin still answers, as typed; the effort word on a listed id is not doubled.
+    expect(resolveModelValue("advanced", "cursor", { advanced: "claude-opus-5-5-high" }, {}, { listed: CURSOR_LIST })).toBe(
+      "claude-opus-5-5-high",
     );
   });
 
@@ -908,7 +938,7 @@ describe("the ladder's own exposure disclosures", () => {
   // the case now measures the pick's order (Copilot and Codex resolve from the shipped list with
   // no account list, Cursor only from one) and pins the sentences that say so; a call that does
   // not carry the pick still resolves nothing there, as before.
-  it("says which clients resolve through the pick, and the one that stays silent without a list", () => {
+  it("says which clients resolve through the pick, and the one that stays silent without a pin", () => {
     const aliasless = TOOLS.filter((tool) => Object.keys(projection(tool).aliases).length === 0);
     expect(aliasless.toSorted()).toEqual(["codex", "copilot", "cursor"]);
 
@@ -929,7 +959,10 @@ describe("the ladder's own exposure disclosures", () => {
 
     const prose = ladderProse();
     expect(prose).toMatch(/That rule is superseded \(REQ-LADDER-006\)/);
-    expect(prose).toMatch(/The one client that still resolves nothing by default is Cursor with no list read/);
+    // TEST CHANGE, justified (ledger row 2026-10-14_cli-native/qa/1): the sentence read "The one
+    // client that still resolves nothing by default is Cursor with no list read"; Cursor now
+    // resolves nothing but a pin, list or no list.
+    expect(prose).toMatch(/The one client that resolves nothing but a pin is Cursor/);
     expect(prose).toMatch(/emission never starts a client/);
   });
 

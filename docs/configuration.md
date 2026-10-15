@@ -51,10 +51,10 @@ clients your own manifest selects.
 | `hooks.userHooksDir` | a repo-relative directory path | `none` |
 | `mcp.servers` | a comma-separated list of server ids this repo can resolve — curated, or supplied by an installed pack | `none` |
 | `mcp.protocolVersion` | an MCP protocol revision string | `none` |
-| `model.frontier` | a model id your client accepts, or `none` to clear, for every selected client without a pin of its own (`model.<class>.<client>`) — shape-checked only (non-empty, one line), and re-picked on a client whose saved model list lacks it | `claude=fable, cursor=(client default), copilot=claude-fable-5.1, codex=gpt-6-astra` |
-| `model.advanced` | a model id your client accepts, or `none` to clear, for every selected client without a pin of its own (`model.<class>.<client>`) — shape-checked only (non-empty, one line), and re-picked on a client whose saved model list lacks it | `claude=opus, cursor=(client default), copilot=claude-opus-5.5, codex=gpt-6-astra` |
-| `model.standard` | a model id your client accepts, or `none` to clear, for every selected client without a pin of its own (`model.<class>.<client>`) — shape-checked only (non-empty, one line), and re-picked on a client whose saved model list lacks it | `claude=sonnet, cursor=(client default), copilot=claude-sonnet-5, codex=gpt-6-sol` |
-| `model.economy` | a model id your client accepts, or `none` to clear, for every selected client without a pin of its own (`model.<class>.<client>`) — shape-checked only (non-empty, one line), and re-picked on a client whose saved model list lacks it | `claude=haiku, cursor=(client default), copilot=claude-haiku-4.5, codex=gpt-6-luna` |
+| `model.frontier` | a model id your client accepts, or `none` to clear, for every selected client without a pin of its own (`model.<class>.<client>`) — shape-checked only (non-empty, one line), re-picked on Copilot or Codex when its saved model list lacks it, and written as typed on Cursor | `claude=fable, cursor=(client default), copilot=claude-fable-5.1, codex=gpt-6-astra` |
+| `model.advanced` | a model id your client accepts, or `none` to clear, for every selected client without a pin of its own (`model.<class>.<client>`) — shape-checked only (non-empty, one line), re-picked on Copilot or Codex when its saved model list lacks it, and written as typed on Cursor | `claude=opus, cursor=(client default), copilot=claude-opus-5.5, codex=gpt-6-astra` |
+| `model.standard` | a model id your client accepts, or `none` to clear, for every selected client without a pin of its own (`model.<class>.<client>`) — shape-checked only (non-empty, one line), re-picked on Copilot or Codex when its saved model list lacks it, and written as typed on Cursor | `claude=sonnet, cursor=(client default), copilot=claude-sonnet-5, codex=gpt-6-sol` |
+| `model.economy` | a model id your client accepts, or `none` to clear, for every selected client without a pin of its own (`model.<class>.<client>`) — shape-checked only (non-empty, one line), re-picked on Copilot or Codex when its saved model list lacks it, and written as typed on Cursor | `claude=haiku, cursor=(client default), copilot=claude-haiku-4.5, codex=gpt-6-luna` |
 | `model.frontier.claude` | a model id claude accepts, or `none` to clear — wins over `model.frontier` on claude; shape-checked only (non-empty, one line) | `fable` |
 | `model.frontier.cursor` | a model id cursor accepts, or `none` to clear — wins over `model.frontier` on cursor; shape-checked only (non-empty, one line) | `(client default)` |
 | `model.frontier.copilot` | a model id copilot accepts, or `none` to clear — wins over `model.frontier` on copilot; shape-checked only (non-empty, one line) | `claude-fable-5.1` |
@@ -88,17 +88,19 @@ manifest records rather than how any emitted file asks an agent to write.
 The `model.*` rows are classes, not model ids. Each names a rung, and each selected client
 maps that rung to an id it accepts, so one setting travels across clients instead of being
 restated per client. Claude Code maps every rung onto its own family aliases, the top rung onto
-`fable`. Copilot, Codex and Cursor take the first model of a priority list Stamity ships that
-the account's own model list holds: `init` and `sync` read that list from the client's CLI and
+`fable`. Copilot and Codex take the first model of a priority list Stamity ships that the
+account's own model list holds: `init` and `sync` read that list from the client's CLI and
 save it under `models.listed` in the manifest, and a client that does not answer keeps the list
 it saved last; `STAMITY_NO_CLIENT_PROBE=1` in the environment skips every read. With no list
 read, Copilot and Codex take the first model of the shipped list, which is what their cells
-above show, and Cursor writes no model at all, so the sub-agent runs on the session's model,
-because a model the account does not offer fails the call there.
+above show. Cursor writes no model unless you pin one, list or no list, so an unpinned sub-agent
+runs on the parent agent's model: Cursor checks a sub-agent's model against a list of its own,
+which follows the parent's model and which no command prints.
 
 `model.<class>` pins one id for every selected client; `model.<class>.<client>` pins one client
-and wins over the class key there; `none` clears either one. A pin the account's saved list does
-not hold is replaced by the class's first listed model, since the client would refuse it.
+and wins over the class key there; `none` clears either one. On Copilot and Codex a pin the
+account's saved list does not hold is replaced by the class's first listed model, since the
+client would refuse it; Cursor writes a pin as typed.
 For a Codex setup with access to GPT-6 Astra, pin its exact id on Codex alone:
 
 ```sh

@@ -57,6 +57,16 @@ async function residue(models: ModelConfig | undefined): Promise<AdapterOutput[]
 
 const LISTED_MODELS: ModelConfig = { listed: { cursor: { ids: LISTED, source: "cursor-agent-models" } } };
 
+/**
+ * The list saved and two classes pinned by the operator, each to an id the list holds. Only a
+ * pin is filled (ledger row 2026-10-14_cli-native/qa/1): Cursor refused the hook's fill of a class
+ * model picked from the list, so an unpinned class is left to inherit the parent's model.
+ */
+const PINNED_MODELS: ModelConfig = {
+  ...LISTED_MODELS,
+  pins: { advanced: { cursor: "claude-opus-5-5-high" }, economy: { all: "claude-haiku-5-5-low" } },
+};
+
 function contentAt(rows: readonly AdapterOutput[], path: string): string {
   const row = rows.find((candidate) => candidate.path === path);
   expect(row, path).toBeDefined();
@@ -102,13 +112,15 @@ const taskPayload = (toolInput: unknown, toolName: unknown = "Task"): string =>
   });
 
 describe("the model-fill hook on Cursor's Task calls", () => {
+  // TEST CHANGE, justified (qa/1): this case and the folder case below read the class model off
+  // the saved list alone; a list no longer gives a model, so both now seed the operator's pins.
   it("fills the map's class model on a Stamity call that carries none, changing no other field", async () => {
-    const rows = await residue(LISTED_MODELS);
+    const rows = await residue(PINNED_MODELS);
     const map = JSON.parse(contentAt(rows, modelMapPath("cursor"))) as {
       classes: Record<string, { model?: string }>;
       roles: Record<string, string>;
     };
-    // Non-degenerate: the reviewer's class resolves to a listed effort variant, and economy to another model.
+    // Non-degenerate: two pinned classes, each with its own model.
     expect(map.roles["stamity-reviewer"]).toBe("advanced");
     expect(map.classes["advanced"]?.model).toBe("claude-opus-5-5-high");
     expect(map.classes["economy"]?.model).toBe("claude-haiku-5-5-low");
@@ -175,7 +187,7 @@ describe("the model-fill hook on Cursor's Task calls", () => {
   });
 
   it("gives the same answer from a folder below the root as from the root", async () => {
-    const rows = await residue(LISTED_MODELS);
+    const rows = await residue(PINNED_MODELS);
     const root = await seedRepo(rows);
     const { command } = modelPinsEntry(rows);
     const input = taskPayload({ subagent_type: "stamity-implementer", prompt: "Build the unit." });
@@ -203,6 +215,29 @@ describe("the model-fill hook on Cursor's Task calls", () => {
     const entry = modelPinsEntry(await residue(LISTED_MODELS));
     expect(entry.matcher).toBe("Task");
     expect(entry.failClosed).toBeUndefined();
+  });
+
+  // The defect of ledger row qa/1: with the account's list saved and no pin, the hook filled the
+  // class's listed variant into the Task call, and Cursor refused it against its sub-agent list.
+  it("fills no model, and the files name none, when the list is saved and nothing is pinned", async () => {
+    const rows = await residue(LISTED_MODELS);
+    const map = JSON.parse(contentAt(rows, modelMapPath("cursor"))) as { classes: Record<string, unknown> };
+    expect(map.classes).toEqual({
+      frontier: { fallbacks: [] },
+      advanced: { fallbacks: [] },
+      standard: { fallbacks: [] },
+      economy: { fallbacks: [] },
+    });
+    const agents = rows.filter((row) => row.path.startsWith(".cursor/agents/"));
+    expect(agents.length).toBeGreaterThan(1);
+    for (const row of agents) expect(row.content, row.path).not.toMatch(/^model:/m);
+
+    const root = await seedRepo(rows);
+    const { command } = modelPinsEntry(rows);
+    for (const agentId of ["stamity-reviewer", "stamity-implementer", "stamity-test-runner"]) {
+      const answer = run(command, root, taskPayload({ subagent_type: agentId, prompt: "x" }));
+      expect({ status: answer.status, stdout: answer.stdout }, agentId).toEqual({ status: 0, stdout: '{"permission":"allow"}' });
+    }
   });
 
   it("passes every call through when no list was read and no pin names a model", async () => {

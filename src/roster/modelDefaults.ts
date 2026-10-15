@@ -7,18 +7,23 @@
  * vocabulary a class could map onto, so with no operator pin the ladder used to
  * resolve nothing for them and the client's own router sized every role. A
  * working pin needs a concrete id, and a concrete id is only safe when the
- * account offers it: an unlisted id fails the spawn on Cursor. So the engine
- * ships an ORDER per class, not a value, and the value is the first entry the
- * account's own list holds. `init` and `sync` read that list from the client's
- * CLI (`src/cli/engine/clientModels.ts`) and persist it under
- * `models.listed.<client>`; emission reads the persisted copy and never starts
- * a client.
+ * account offers it. So the engine ships an ORDER per class, not a value, and
+ * the value is the first entry the account's own list holds. `init` and `sync`
+ * read that list from the client's CLI (`src/cli/engine/clientModels.ts`) and
+ * persist it under `models.listed.<client>`; emission reads the persisted copy
+ * and never starts a client.
  *
  * WHEN THERE IS NO LIST. Copilot and Codex take entry 0, which every row below
- * puts on a model the client's CLI accepted when the row was read. Cursor takes
- * nothing: an id the account does not offer fails the call there, while an
- * absent model inherits the session's, so silence is the safe answer on that
- * one client.
+ * puts on a model the client's CLI accepted when the row was read.
+ *
+ * CURSOR PICKS NOTHING, LIST OR NO LIST. Cursor checks a sub-agent call's
+ * model against a list of its own, which follows the parent agent's model,
+ * is narrower than `agent models` and is printed by no command; it refused a
+ * class's pick from the account's list on the dispatch path, while an absent
+ * model inherits the parent's, which it always accepts (ledger row
+ * 2026-10-14_cli-native/qa/1). So {@link pickModel} answers `undefined` there
+ * and only an operator's pin names a Cursor model. The Cursor rows below stay
+ * the dated record of that client's listed ids; no emission reads them.
  *
  * Every id below was read from the client's own CLI on the access date its
  * citation carries (the captures live in `test/fixtures/client-models/`), and
@@ -35,9 +40,9 @@ export type ListingClient = "cursor" | "copilot" | "codex";
 /** One entry of a class's priority list. */
 export interface ModelCandidate {
   /**
-   * The id the client's CLI and agent files take. On Cursor it may carry
-   * {@link EFFORT_TOKEN}, which {@link pickModel} replaces with the class's
-   * effort, because that client lists one id per effort variant.
+   * The id the client's CLI and agent files take. On Cursor it carries
+   * {@link EFFORT_TOKEN} where the effort variant goes, because that client
+   * lists one id per effort variant.
    */
   readonly id: string;
   /** The name Copilot's editor surfaces show (`<display> (copilot)`), where the vendor page gives one. */
@@ -110,7 +115,7 @@ export const MODEL_PRIORITY_CITATION: Readonly<Record<ListingClient, { url: stri
 
 /** What {@link pickModel} chose for one class on one client. */
 export interface ModelPick {
-  /** The concrete id: on Cursor the listed effort variant, never the template. */
+  /** The concrete id, never a template. */
   readonly id: string;
   readonly display?: string;
   /** The class's other candidates in priority order, concrete and, with a list, only those it holds. */
@@ -164,10 +169,10 @@ function concreteId(
  * `undefined` when there is none to give. Pure.
  *
  * With `listed` (the ids the client's CLI printed for this account), the first
- * candidate the list holds wins; on Cursor a candidate tries its exact effort
- * variant, then the nearest one listed. With no list, Copilot and Codex take
- * entry 0 and Cursor answers `undefined` (see the module header). Claude Code
- * has no list here: its family aliases live in the ladder's projection.
+ * candidate the list holds wins. With no list, Copilot and Codex take entry 0.
+ * Cursor always answers `undefined`, with or without a list (see the module
+ * header). Claude Code has no list here: its family aliases live in the
+ * ladder's projection.
  */
 export function pickModel(
   tool: Tool,
@@ -176,7 +181,7 @@ export function pickModel(
   listed?: readonly string[],
 ): ModelPick | undefined {
   if (!isListingClient(tool)) return undefined;
-  if (tool === "cursor" && listed === undefined) return undefined;
+  if (tool === "cursor") return undefined;
   const onList = listed === undefined ? undefined : new Set(listed);
   const resolved: { id: string; display?: string }[] = [];
   for (const candidate of MODEL_PRIORITY[tool][modelClass]) {

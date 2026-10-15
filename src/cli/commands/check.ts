@@ -1514,6 +1514,8 @@ interface ClientModelVerdict {
  * a class whose model `sync` would resolve differently from that live list
  * than the files carry — resolved from the saved list, or with none where no
  * list was saved — warns too (review/135), unless the class already warned.
+ * On Cursor no list moves a model, since only a pin is written there (ledger
+ * row 2026-10-14_cli-native/qa/1), so its rows compare pins alone.
  */
 function verifyClientModels(
   tool: Tool,
@@ -1593,8 +1595,8 @@ function verifyClientModels(
  * `STAMITY_NO_CLIENT_PROBE=1` starts no client and reads the saved list only.
  * A model the list lacks warns, naming the client, the class and the model,
  * with the remedy: pin a listed id, or `sync` to re-read the list and re-pick.
- * A Cursor or Copilot class whose model `sync` would change, read live,
- * warns naming both models.
+ * A Copilot class whose model `sync` would change, read live, warns naming
+ * both models; Cursor writes only pins, which no list changes.
  *
  * Never `fail`: the list is the account's, outside anything this repository
  * can change, and a CI gate on it would fail on a vendor's model retirement.

@@ -463,10 +463,10 @@ Four classes; `stamity config` pins a model. A role's class is declared once, in
 definition, and projected into the client's `model` and `effort` fields; the capability disclosure names
 any missing control. A class resolves through its pin (re-picked when the account's saved list lacks it),
 then the client's alias, then the account's own model list, then, only when no list was read, the shipped
-list; with none of these the key is left out. Where an agent file's model takes precedence over the call's,
-a per-call escalation leaves it unchanged. When a sub-agent call is refused with a list of models, take the
-class's first listed fallback, else the closest, and say so in one line. A class is intent: check effective
-dispatch identity before asserting the role ran at its class, and report an unresolved assignment.
+list; with none of these the key is left out. A client that checks a sub-agent's model against a list it never prints gets a
+pin alone, as typed, so an unpinned class's sub-agent there runs on the parent agent's model. Where an agent file's model takes
+precedence over the call's, a per-call escalation leaves it unchanged. When a sub-agent call is refused with a list of models, take the
+class's first listed fallback, else the closest, and say so in one line. A class is intent: check effective dispatch identity before asserting the role ran at its class, and report an unresolved assignment.
 
 The table below restates those declarations; it does not decide them. When a row and an agent file
 disagree, the agent file is the truth and the row is the stale side — report the row rather than

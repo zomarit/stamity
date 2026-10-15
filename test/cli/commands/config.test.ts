@@ -2058,6 +2058,27 @@ describe("config — per-client model pins (REQ-LADDER-005)", () => {
     // The operator's pin is what stays stored; the pick is recomputed from it.
     expect(getConfigValue(other, "model.advanced.codex").value).toBe("gpt-6-astra");
   });
+
+  // Ledger row 2026-10-14_cli-native/qa/1: Cursor writes no model unless one is pinned, so the
+  // row shows what the files carry: the client default with the list saved, and a pin as typed.
+  it("shows Cursor's client default though its saved list holds the class's variant, and a pin as typed", () => {
+    const ids = ["claude-opus-5-5-high", "claude-sonnet-5-5-medium"];
+    const onCursor = (pins?: NonNullable<SetupManifest["models"]>["pins"]): SetupManifest =>
+      baseManifest({
+        tools: ["cursor"],
+        models: { ...(pins === undefined ? {} : { pins }), listed: { cursor: { ids, source: "cursor-agent-models" } } },
+      });
+
+    expect(getConfigValue(onCursor(), "model.advanced").resolved).toBe("(client default)");
+    expect(getConfigValue(onCursor(), "model.advanced.cursor").resolved).toBe("(client default)");
+    // A pin the list lacks is not swapped for a listed id; one it holds is kept the same way.
+    expect(getConfigValue(onCursor({ advanced: { cursor: "composer-2" } }), "model.advanced.cursor").resolved).toBe(
+      "composer-2[effort=high]",
+    );
+    expect(getConfigValue(onCursor({ advanced: { all: "claude-opus-5-5-high" } }), "model.advanced").resolved).toBe(
+      "claude-opus-5-5-high",
+    );
+  });
 });
 
 describe("config — `none` clears a model pin, never stores the word (build/49)", () => {

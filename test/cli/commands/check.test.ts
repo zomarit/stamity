@@ -4090,19 +4090,33 @@ describe("check — model-pins", () => {
 
   // review/135, round 1b (signed off): with no saved list Cursor's files carry no model for an
   // unpinned class, and a sync now would save the live list and pick from it.
-  it("warns when a sync would change the emitted model where no list was saved, once per class", async () => {
+  // TEST CHANGE, justified (ledger row 2026-10-14_cli-native/qa/1): this case read "warns when a
+  // sync would change the emitted model where no list was saved" and expected Cursor's live list
+  // to give an unpinned class a model. Cursor now writes no model unless one is pinned, so a sync
+  // changes nothing there and the row passes; Copilot's case above still covers the warning.
+  it("passes an unpinned Cursor class whatever its live list holds, and warns only on a pin", async () => {
     const live = { kind: "listed", ids: ["claude-sonnet-5-5-medium"], source: "cursor-agent-models" } as const;
     const answers: Partial<Record<Tool, ModelListOutcome>> = { cursor: { ...live, ids: [...live.ids] } };
 
+    // Non-degenerate: the live list holds the variant the old pick took for `standard`.
     const verdict = await checkModelPins(pinnedManifest(["cursor"], undefined), {}, fakeLister(answers).lister, "/repo");
 
-    expect(verdict.status).toBe("warn");
-    expect(verdict.detail).toBe(
-      `cursor standard: ${npxCommand("sync")} would change the emitted model from none to "claude-sonnet-5-5-medium"; ` +
-        `the files carry the pick made with no saved list, and cursor's list (read live) resolves another`,
-    );
+    expect(verdict).toEqual({
+      id: "model-pins",
+      status: "pass",
+      detail: "cursor: no model pinned or emitted to compare (read live)",
+    });
 
-    // Beside a warning the class already has, the change is not said again.
+    // A saved list changes nothing either: no class is picked from it.
+    const saved = await checkModelPins(
+      pinnedManifest(["cursor"], { listed: { cursor: { ids: [...live.ids], source: "cursor-agent-models" } } }),
+      { STAMITY_NO_CLIENT_PROBE: "1" },
+      fakeLister({}).lister,
+      "/repo",
+    );
+    expect(saved.detail).toBe("cursor: no model pinned or emitted to compare (saved by the last sync)");
+
+    // A pin the list lacks warns once: the files carry it as typed, and a sync keeps it.
     const pinned = await checkModelPins(
       pinnedManifest(["cursor"], { pins: { standard: { all: "vendor-x-1" } } }),
       {},

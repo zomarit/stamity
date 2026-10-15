@@ -731,10 +731,16 @@ describe("`.cursor/agents` definitions", () => {
     expect(modelLines(P.drifter)).toEqual(["model: every-client-z[effort=medium]"]);
   });
 
-  // REQ-LADDER-007 and REQ-LADDER-004: with the account's list persisted, every
-  // class takes the first shipped candidate the list holds, at the class's
-  // effort variant, and that id already names its effort.
-  describe("the pick from the account's list", () => {
+  // REQ-LADDER-007 and REQ-LADDER-004, as the maintainer ruled on ledger row
+  // 2026-10-14_cli-native/qa/1: write no model unless the operator pinned one.
+  // Cursor checks a sub-agent call's model against a list that follows the
+  // parent's model and that no command prints, and it refused the class's pick
+  // from the account's list there (qa-cursor-test-runner-r1.md, -r2.md); an
+  // absent model inherits the parent's, which Cursor always accepts.
+  // TEST CHANGE, justified (qa/1): this block was "the pick from the account's
+  // list" and asserted each class took the listed effort variant. Its cases now
+  // assert the same inputs write no model, and a pin as typed.
+  describe("the account's list, with and without a pin", () => {
     const LISTED = ["claude-opus-5-5-high", "claude-opus-5-5-low", "claude-sonnet-5-5-medium", "gpt-5.6-sol-high", "claude-haiku-5-5-low"];
     const listed: ModelConfig["listed"] = { cursor: { ids: LISTED, source: "cursor-agent-models" } };
     const modelLines = (plan: readonly AdapterOutput[], path: string): string[] =>
@@ -742,28 +748,34 @@ describe("`.cursor/agents` definitions", () => {
         .split("\n")
         .filter((line) => line.startsWith("model:"));
 
-    it("writes the listed effort variant into each agent file, with no [effort=…] after it", async () => {
+    it("writes no model into any agent file for an unpinned class, though the list holds its variant", async () => {
+      // Non-degenerate: the list holds the exact variant each class asks for at its effort.
       const plan = await planFor(await seedCorpus(), { agents: ["reviewer", "implementer", "drifter"], listed });
 
-      expect(modelLines(plan, P.reviewer)).toEqual(["model: claude-opus-5-5-high"]);
-      expect(modelLines(plan, P.implementer)).toEqual(["model: claude-opus-5-5-high"]);
-      expect(modelLines(plan, P.drifter)).toEqual(["model: claude-sonnet-5-5-medium"]);
-      // The operator's effort moves the variant, still with no bracket group.
+      expect(modelLines(plan, P.reviewer)).toEqual([]);
+      expect(modelLines(plan, P.implementer)).toEqual([]);
+      expect(modelLines(plan, P.drifter)).toEqual([]);
+      // An operator effort with no pin has no model to ride on either.
       const low = await planFor(await seedCorpus(), { listed, efforts: { advanced: "low" } });
-      expect(modelLines(low, P.reviewer)).toEqual(["model: claude-opus-5-5-low"]);
+      expect(modelLines(low, P.reviewer)).toEqual([]);
     });
 
-    it("re-picks a pin the account does not list, and keeps one it does", async () => {
-      // `composer-2` is not on the list: the resolver only knows that if the adapter passes the list.
+    it("writes a pin as typed, whether the account lists it or not", async () => {
+      // `composer-2` is not on the list: it is written anyway, never swapped for a listed id.
       const unlisted = await planFor(await seedCorpus(), { listed, pins: { advanced: { cursor: "composer-2" } } });
-      expect(modelLines(unlisted, P.reviewer)).toEqual(["model: claude-opus-5-5-high"]);
+      expect(modelLines(unlisted, P.reviewer)).toEqual(["model: composer-2[effort=high]"]);
 
       const kept = await planFor(await seedCorpus(), { listed, pins: { advanced: { cursor: "gpt-5.6-sol-high" } } });
       expect(modelLines(kept, P.reviewer)).toEqual(["model: gpt-5.6-sol-high"]);
     });
 
     it("writes the class-to-model map whose model id every agent file names, each emitted role mapped to its class", async () => {
-      const plan = await planFor(await seedCorpus(), { agents: ["reviewer", "implementer", "drifter"], listed });
+      // Two pins on two classes, the list saved: only the pinned classes carry a model.
+      const plan = await planFor(await seedCorpus(), {
+        agents: ["reviewer", "implementer", "drifter"],
+        listed,
+        pins: { advanced: { cursor: "gpt-5.6-sol-high" }, economy: { all: "claude-haiku-5-5-low" } },
+      });
       const mapRow = byPath(plan).get(".stamity/generated/models/cursor.json");
       expect(mapRow?.owner).toEqual({ adapter: "cursor", artifactId: "cursor-model-map", artifactType: "infra" });
       const map = JSON.parse(mapRow!.content) as {
@@ -772,19 +784,35 @@ describe("`.cursor/agents` definitions", () => {
       };
 
       expect(map.classes).toEqual({
-        frontier: { model: "claude-opus-5-5-high", fallbacks: ["gpt-5.6-sol-high"] },
-        advanced: { model: "claude-opus-5-5-high", fallbacks: ["gpt-5.6-sol-high"] },
-        standard: { model: "claude-sonnet-5-5-medium", fallbacks: [] },
+        frontier: { fallbacks: [] },
+        advanced: { model: "gpt-5.6-sol-high", fallbacks: [] },
+        standard: { fallbacks: [] },
         economy: { model: "claude-haiku-5-5-low", fallbacks: [] },
       });
       expect(map.roles).toEqual({ "stamity-drifter": "standard", "stamity-implementer": "advanced", "stamity-reviewer": "advanced" });
+      // The unpinned class's agent file carries no model, as its map entry carries none.
+      expect(modelLines(plan, P.drifter)).toEqual([]);
       // TEST CHANGE, justified (review/100, plan 020 file 2, unit e7-cursor-pins): what a file
       // and a call share is the model id; an agent file may add the engine's `[effort=…]` group,
       // which the map leaves out (the case below). A listed id carries none, so here the
       // two lines are still equal.
       for (const [role, modelClass] of Object.entries(map.roles)) {
-        expect(modelLines(plan, `${CURSOR_AGENTS_DIR}/${role}.md`), role).toEqual([`model: ${map.classes[modelClass]?.model}`]);
+        const model = map.classes[modelClass]?.model;
+        expect(modelLines(plan, `${CURSOR_AGENTS_DIR}/${role}.md`), role).toEqual(model === undefined ? [] : [`model: ${model}`]);
       }
+    });
+
+    it("writes every class of the map without a model or a fallback when nothing is pinned, the list saved", async () => {
+      const plan = await planFor(await seedCorpus(), { listed });
+      const map = JSON.parse(contentAt(plan, ".stamity/generated/models/cursor.json")) as {
+        classes: Record<string, { model?: string; fallbacks: string[] }>;
+      };
+      expect(map.classes).toEqual({
+        frontier: { fallbacks: [] },
+        advanced: { fallbacks: [] },
+        standard: { fallbacks: [] },
+        economy: { fallbacks: [] },
+      });
     });
 
     // review/100: a Task call takes a model the account lists, or the operator's
@@ -814,12 +842,15 @@ describe("`.cursor/agents` definitions", () => {
       expect(familyMap.classes["advanced"]?.model).toBe("claude-opus-5-5");
     });
 
-    it("drops the chosen model from its own fallbacks when a pin wins", async () => {
+    // TEST CHANGE, justified (qa/1): this case read "drops the chosen model from its own
+    // fallbacks when a pin wins" and expected the class's listed candidate as a fallback. A
+    // fallback is a model the operator did not pin, so a pinned class now carries none either.
+    it("names no fallback beside a pin, though the list holds the class's candidates", async () => {
       const plan = await planFor(await seedCorpus(), { listed, pins: { advanced: { cursor: "gpt-5.6-sol-high" } } });
       const map = JSON.parse(contentAt(plan, ".stamity/generated/models/cursor.json")) as {
         classes: Record<string, { model?: string; fallbacks: string[] }>;
       };
-      expect(map.classes["advanced"]).toEqual({ model: "gpt-5.6-sol-high", fallbacks: ["claude-opus-5-5-high"] });
+      expect(map.classes["advanced"]).toEqual({ model: "gpt-5.6-sol-high", fallbacks: [] });
     });
 
     it("tells the capability matrix the agent file's model is a default the dispatch and a hook carry, re-dated", () => {
@@ -832,10 +863,15 @@ describe("`.cursor/agents` definitions", () => {
       // Re-dated inline: a citation's own date moves only when every claim it covers was
       // re-verified that day (`test/emit/capabilityMatrix.test.ts`, the currency pass).
       expect(cursorDialectFacts.agentsFormat).toContain("cursor.com/docs/hooks, accessed 2026-10-14");
-      // The effort row no longer says a model is emitted only once pinned: a pick from the list writes one too.
+      // TEST CHANGE, justified (qa/1): the effort row said a pick from the account's list writes a
+      // model too; it says again that a model, and so the level, is emitted only once pinned.
       const effortRow = cursorDialectFacts.caps.find((cap) => cap.name === "effort-scale")?.value ?? "";
-      expect(effortRow).toContain("picked from the account's list");
+      expect(effortRow).not.toContain("picked from the account's list");
+      expect(effortRow).toContain("until a model id is pinned");
       expect(effortRow).toContain("names its effort variant");
+      // The agent-file row says the same, and names what an unpinned sub-agent runs on.
+      expect(cursorDialectFacts.agentsFormat).toContain("Only a pin is written");
+      expect(cursorDialectFacts.agentsFormat).toContain("runs on the parent agent's model");
     });
   });
 

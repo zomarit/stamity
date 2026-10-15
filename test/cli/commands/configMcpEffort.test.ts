@@ -345,7 +345,11 @@ describe("config effort rows — only a level an emitted file would carry", () =
 
   // review/137: with no pin, Cursor's model is the effort variant the saved list holds at the
   // level asked for, so the level reaches the file through the pick the adapter resolves with.
-  it("prints the level on an unpinned Cursor class whose saved list holds its effort variants", async () => {
+  // TEST CHANGE, justified (ledger row 2026-10-14_cli-native/qa/1): this case read "prints the
+  // level on an unpinned Cursor class whose saved list holds its effort variants". Cursor no
+  // longer picks a model from the list, so the level has nothing to ride on there and the row
+  // prints the marker, as it does with no list; the pinned case above still prints the level.
+  it("prints the marker on an unpinned Cursor class though its saved list holds its effort variants", async () => {
     const listed = ["claude-sonnet-5-5-low", "claude-sonnet-5-5-medium", "claude-sonnet-5-5-high"];
     const models = { listed: { cursor: { ids: listed, source: "cursor-agent-models" as const } } };
     const handle = tempDir();
@@ -354,12 +358,11 @@ describe("config effort rows — only a level an emitted file would carry", () =
     const result = await run(handle, []);
 
     // Cross-checked against the resolver the adapter calls, with the saved list as its pick.
-    expect(resolveModelValue("standard", "cursor", {}, {}, { listed })).toBe("claude-sonnet-5-5-medium");
-    expect(resolveModelValue("standard", "cursor", {}, { standard: "high" }, { listed })).toBe("claude-sonnet-5-5-high");
-    expect(rowFor(result.stdout, "effort.standard")).toMatch(/medium\s+\(default\)/);
-    expect(rowFor(result.stdout, "effort.standard")).not.toContain("(not expressed)");
+    expect(resolveModelValue("standard", "cursor", {}, {}, { listed })).toBeUndefined();
+    expect(resolveModelValue("standard", "cursor", {}, { standard: "high" }, { listed })).toBeUndefined();
+    expect(rowFor(result.stdout, "effort.standard")).toContain("(not expressed)");
     // `config get` answers from the same predicate.
-    expect(getConfigValue(baseManifest({ tools: ["cursor"], models }), "effort.standard").resolved).toBe("medium");
+    expect(getConfigValue(baseManifest({ tools: ["cursor"], models }), "effort.standard").resolved).toBe("(not expressed)");
   });
 
   it("prints the marker when the operator's own brackets are what stand", async () => {
