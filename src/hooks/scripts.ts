@@ -30,8 +30,20 @@ import {
 import type { Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
 import { CONTENT_PREFIX, GENERATED_SCRIPT_LINT_DIRECTIVE, STATE_DIR } from "../types/markers.ts";
+import { PREFLIGHT_CANARY_FILE } from "../mcp/env.ts";
 import { buildResumeCardSource, RESUME_CARD_HOST_NAMES } from "../runs/cardSource.ts";
-import { UNPRINTABLE_CHARS } from "../runs/layout.ts";
+import {
+  GIT_METADATA_MAX_BYTES,
+  IN_PROGRESS_PATTERN,
+  RECORD_FILE,
+  RECORD_HEAD_LINES,
+  RECORD_HEAD_READ_BYTES,
+  RECORD_MODE_PATTERN,
+  RECORD_STATUS_PATTERN,
+  RUN_ID_PATTERN,
+  RUNS_SEGMENTS,
+  UNPRINTABLE_CHARS,
+} from "../runs/layout.ts";
 import { cliCallHint } from "../shared/cliCall.ts";
 import {
   CLIENT_CLOUD_FACTS,
@@ -39,6 +51,7 @@ import {
   type CanonicalHookEvent,
   type HookFailMode,
 } from "./model.ts";
+import { personOnlyVerdict, unattendedPushVerdict } from "./personOnly.ts";
 
 /**
  * The three core hook scripts plus one work-scoped extension, as generated text.
@@ -119,6 +132,13 @@ const TAMPER_NOTICE_FILE = "stamity-config-tamper-notice.mjs";
 export const REVIEW_GATE_FILE = "stamity-review-gate.mjs";
 
 /**
+ * The person-only shell guard (REQ-FLOW-102, REQ-FLOW-120). Portable carrier:
+ * `pre_tool_use` on each client's shell tools, Cursor's `beforeShellExecution`.
+ * Rendered only when {@link planCoreHookScripts} is asked for it; emission wires it.
+ */
+export const PERSON_ONLY_GUARD_FILE = "stamity-person-only-guard.mjs";
+
+/**
  * Byte and line ceilings on each emitted core script, keyed by file name
  * (REQ-CTX-016). A client parses the whole script on every session start or
  * every tool call, so growth here is paid per call; the ceiling turns that
@@ -135,8 +155,9 @@ export const REVIEW_GATE_FILE = "stamity-review-gate.mjs";
  * because a script grew into it is how the ceiling stops meaning anything.
  *
  * The guard and session-start rows are the plan's fixed ceilings. The review
- * gate and the tamper notice are their measured size times 1.25, bytes rounded
- * up to a multiple of 1,024 and lines to a multiple of 10.
+ * gate, the tamper notice and the person-only guard are their measured size
+ * times 1.25, bytes rounded up to a multiple of 1,024 and lines to a multiple
+ * of 10.
  */
 export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: number; readonly lines: number }>> = {
   // Fixed ceiling. Measured 2026-09-26 at 8c08660e: 19,125 bytes / 475 lines
@@ -159,6 +180,11 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // lines, the same in both layouts. × 1.25 = 2,978.75 / 83.75, rounded up to
   // 3,072 / 90.
   [TAMPER_NOTICE_FILE]: { bytes: 3_072, lines: 90 },
+  // Measured 2026-10-15 on the u14 lane (base 6cd93d17): 39,671 bytes / 1,245
+  // lines (cursor, generated layout, as the suite's transform renders u6's two
+  // verdicts; the bundle's copy is smaller). × 1.25 = 49,588.75 / 1,556.25,
+  // rounded up to 50,176 / 1,560.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 50_176, lines: 1_560 },
 };
 
 /** One generated script, ready for an adapter to place and register. */
@@ -3006,6 +3032,286 @@ if (outcome !== null) {
 `;
 }
 
+// ── 5. Person-only shell guard ───────────────────────────────────
+
+/** Run folders whose record heads the guard reads, newest by name first. */
+const GUARD_RUNS_READ_MAX = 50;
+
+/** Ceilings on the tag names the guard collects and the `packed-refs` file it reads. */
+const GUARD_TAG_NAMES_MAX = 10_000;
+const GUARD_PACKED_REFS_MAX_BYTES = 8_388_608;
+
+/**
+ * How a client hears the guard's decision, rendered for that client alone:
+ * Claude Code and Codex (through the portable runner) block on exit 2 with the
+ * reason on stderr; Copilot reads `permissionDecision` on stdout, through the
+ * runner or not; Cursor's `beforeShellExecution` reads `permission`, and its
+ * `failClosed` counts silence as a failure, so it is told to allow out loud.
+ */
+function guardDecisionOutput(tool: Tool): string {
+  if (tool === "cursor") {
+    return String.raw`process.stdout.write(JSON.stringify(reason === null ? { permission: "allow" } : { permission: "deny", user_message: reason, agent_message: reason }) + "\n");`;
+  }
+  if (tool === "copilot") {
+    return String.raw`if (reason !== null) process.stdout.write(JSON.stringify({ permissionDecision: "deny", permissionDecisionReason: reason }) + "\n");`;
+  }
+  return String.raw`if (reason !== null) {
+  process.stderr.write("stamity person-only guard: " + reason + "\n");
+  process.exitCode = ${BLOCKING_EXIT_CODE};
+}`;
+}
+
+/**
+ * The person-only shell guard (REQ-FLOW-102, REQ-FLOW-120): refuses the main
+ * thread's person-only acts on every client, attended or not, and while a run
+ * is unattended any push that steps around the run verbs.
+ *
+ * The two verdicts are `./personOnly.ts`'s own functions, carried as their
+ * source text the way {@link NORMALIZE_FOR_SCREEN} carries the fold, so a row
+ * added there reaches this script on the next sync without an edit here.
+ *
+ * The branch context comes off the git metadata with `node:fs` — `HEAD` from the
+ * git dir (a linked worktree's `gitdir:` pointer followed), the default branch
+ * from `refs/remotes/origin/HEAD` and the local tags from `refs/tags/` and
+ * `packed-refs` in the common dir — and an unreadable `.git` leaves `main` and
+ * `master`, which the verdict always counts. The mode comes off the run records:
+ * unattended when any of the {@link GUARD_RUNS_READ_MAX} newest run folders,
+ * debug rounds included, holds an in-progress record reading `Mode:
+ * unattended`, or when `STAMITY_UNATTENDED` is set (not "", "false", "0") and
+ * none reads `Mode: attended`.
+ *
+ * A command naming `gate preflight` that the guard allows writes
+ * `{ "at": <ISO> }` to {@link PREFLIGHT_CANARY_FILE}, the pre-flight's proof
+ * that hooks loaded. A call that is not a shell call is allowed at once; a
+ * shell call the guard cannot read, or a fault while deciding one, is refused.
+ */
+export function buildPersonOnlyGuardScript(opts: { tool: Tool; layout: HookScriptLayout }): string {
+  const extra = repoRootImports(opts.layout);
+  const regex = (pattern: RegExp): string => `new RegExp(${json(pattern.source)}, ${json(pattern.flags)})`;
+  return `${header(
+    [
+      "stamity — person-only shell guard.",
+      "",
+      "Refuses the person-only acts (a force push, a push of a tag or of the default",
+      "branch, a tag, a merge, a release, a publish, a secret or protection write) on",
+      "every shell call, and while a run is unattended any push that steps around",
+      "`stamity run checkpoint` and `stamity run end`. `curl` and `wget` appear below",
+      "only as command words it reads; it runs none.",
+    ],
+    [
+      "Reads outside repo state: the pending call's payload on stdin and the",
+      "STAMITY_UNATTENDED and STAMITY_REPO_ROOT variables. Reads the git metadata and",
+      "the run records' heads; writes only the pre-flight canary.",
+    ],
+  )}
+
+${namedImport(["closeSync", "lstatSync", "mkdirSync", "openSync", "readFileSync", "readSync", "readdirSync", "statSync", "writeFileSync"], "node:fs")}
+${namedImport(["dirname", "isAbsolute", "join", "resolve", "sep", ...extra.path], "node:path")}
+${extra.url}
+const STATE_SEGMENTS = ${json([RUNS_SEGMENTS[0]])};
+const RUNS_SEGMENTS = ${json(RUNS_SEGMENTS)};
+const RECORD_FILE = ${json(RECORD_FILE)};
+const RUN_ID = ${regex(RUN_ID_PATTERN)};
+const STATUS = ${regex(RECORD_STATUS_PATTERN)};
+const MODE = ${regex(RECORD_MODE_PATTERN)};
+const IN_PROGRESS = ${regex(IN_PROGRESS_PATTERN)};
+const HEAD_LINES = ${RECORD_HEAD_LINES};
+const HEAD_READ_BYTES = ${RECORD_HEAD_READ_BYTES};
+const RUNS_READ_MAX = ${GUARD_RUNS_READ_MAX};
+const GIT_MAX_BYTES = ${GIT_METADATA_MAX_BYTES};
+const TAG_NAMES_MAX = ${GUARD_TAG_NAMES_MAX};
+const PACKED_REFS_MAX_BYTES = ${GUARD_PACKED_REFS_MAX_BYTES};
+const CANARY_SEGMENTS = ${json(PREFLIGHT_CANARY_FILE.split("/"))};
+const SHELL_TOOLS = new Set(["Bash", "PowerShell", "Shell", "bash", "powershell", "shell"]);
+
+${resolveRepoRoot(opts.layout)}
+
+// The person-only verdict and the unattended push rule, as their own source
+// (src/hooks/personOnly.ts in the engine that wrote this file). An engine loaded
+// through a name-keeping transformer (tsx) wraps their inner functions in
+// __name(fn, "name"), a helper it defines outside them: a no-op one stands in.
+const __name = (target) => target;
+const personOnlyVerdict = ${personOnlyVerdict.toString()};
+
+const unattendedPushVerdict = ${unattendedPushVerdict.toString()};
+${String.raw`
+/** A git metadata file's text, trimmed: a regular file of at most GIT_MAX_BYTES, never through a link. */
+function gitText(path) {
+  try {
+    const stats = lstatSync(path);
+    return stats.isFile() && stats.size <= GIT_MAX_BYTES ? readFileSync(path, "utf8").trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The git dir HEAD lives in and the common dir the refs live in; null when .git is neither. */
+function gitDirs(root) {
+  const dotGit = join(root, ".git");
+  try {
+    if (lstatSync(dotGit).isDirectory()) return { gitDir: dotGit, commonDir: dotGit };
+  } catch {
+    return null;
+  }
+  const pointer = /^gitdir:[ \t]*(.+)$/.exec((gitText(dotGit) ?? "").split(/\r?\n/)[0]);
+  if (pointer === null) return null;
+  const target = pointer[1].trim();
+  const gitDir = isAbsolute(target) ? target : resolve(root, target);
+  const common = gitText(join(gitDir, "commondir"));
+  return { gitDir, commonDir: common === null ? gitDir : resolve(gitDir, common) };
+}
+
+/** The local tag names, loose and packed, up to TAG_NAMES_MAX. */
+function localTags(commonDir) {
+  const tags = [];
+  const walk = (dir, prefix) => {
+    let entries = [];
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (tags.length >= TAG_NAMES_MAX) return;
+      if (entry.isDirectory()) walk(join(dir, entry.name), prefix + entry.name + "/");
+      else if (entry.isFile()) tags.push(prefix + entry.name);
+    }
+  };
+  walk(join(commonDir, "refs", "tags"), "");
+  try {
+    const packed = join(commonDir, "packed-refs");
+    const stats = lstatSync(packed);
+    if (stats.isFile() && stats.size <= PACKED_REFS_MAX_BYTES) {
+      for (const line of readFileSync(packed, "utf8").split(/\r?\n/)) {
+        const hit = /^[0-9a-f]{40,64} refs\/tags\/(.+)$/i.exec(line);
+        if (hit !== null && tags.length < TAG_NAMES_MAX) tags.push(hit[1]);
+      }
+    }
+  } catch {
+    // No packed refs: the loose tags are all there are.
+  }
+  return tags;
+}
+
+/** A record's status and mode from its first HEAD_LINES lines; null when absent or not a regular file. */
+function recordHead(path) {
+  let stats;
+  try {
+    stats = lstatSync(path);
+  } catch (error) {
+    if (error && error.code === "ENOENT") return null;
+    throw error;
+  }
+  if (!stats.isFile()) return null;
+  const fd = openSync(path, "r");
+  let text = "";
+  try {
+    const buffer = Buffer.alloc(Math.min(HEAD_READ_BYTES, stats.size));
+    text = buffer.toString("utf8", 0, readSync(fd, buffer, 0, buffer.length, 0));
+  } finally {
+    closeSync(fd);
+  }
+  let status = null;
+  let mode = null;
+  for (const line of text.replace(/^﻿/, "").split(/\r?\n/).slice(0, HEAD_LINES)) {
+    status ??= STATUS.exec(line)?.[1] ?? null;
+    mode ??= MODE.exec(line)?.[1].toLowerCase() ?? null;
+  }
+  return { inProgress: status !== null && IN_PROGRESS.test(status), mode };
+}
+
+/** Whether a run is unattended: a record says so, or the variable does and no record says attended. */
+function unattended(root) {
+  const modes = { attended: false, unattended: false };
+  const runsDir = join(root, ...RUNS_SEGMENTS);
+  let entries = [];
+  try {
+    if (lstatSync(runsDir).isDirectory()) entries = readdirSync(runsDir, { withFileTypes: true });
+  } catch (error) {
+    if (!error || (error.code !== "ENOENT" && error.code !== "ENOTDIR")) throw error;
+  }
+  const names = entries
+    .filter((entry) => entry.isDirectory() && RUN_ID.test(entry.name))
+    .map((entry) => entry.name)
+    .sort()
+    .reverse()
+    .slice(0, RUNS_READ_MAX);
+  for (const name of names) {
+    const head = recordHead(join(runsDir, name, RECORD_FILE));
+    if (head !== null && head.inProgress && head.mode !== null) modes[head.mode] = true;
+  }
+  const flag = (process.env.STAMITY_UNATTENDED ?? "").trim().toLowerCase();
+  return modes.unattended || (!["", "false", "0"].includes(flag) && !modes.attended);
+}
+
+/** The shell command a payload carries; null when the call is not a shell call. */
+function shellCommand(payload) {
+  // Cursor's beforeShellExecution names the command at the top level.
+  if (typeof payload.command === "string" && payload.tool_name === undefined) return payload.command;
+  if (!SHELL_TOOLS.has(payload.tool_name)) return null;
+  const input = payload.tool_input;
+  const command = input !== null && typeof input === "object" ? input.command : undefined;
+  if (typeof command === "string") return command;
+  if (Array.isArray(command) && command.every((word) => typeof word === "string")) {
+    return command.map((word) => "'" + word.replaceAll("'", "'\\''") + "'").join(" ");
+  }
+  throw Object.assign(new Error("no command"), { code: "NO_COMMAND" });
+}
+
+/** The pre-flight's canary; a link at its path is not followed, and a failed write leaves the pre-flight to refuse. */
+function writeCanary(root) {
+  const path = join(root, ...CANARY_SEGMENTS);
+  try {
+    try {
+      if (!lstatSync(path).isFile()) return;
+    } catch {
+      // Absent: written below.
+    }
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, JSON.stringify({ at: new Date().toISOString() }) + "\n");
+  } catch {
+    // Not written: the pre-flight then finds no fresh canary and refuses.
+  }
+}
+
+/** The refusal this call earns, or null. */
+function decide() {
+  const raw = readFileSync(0, "utf8");
+  const payload = raw.trim() === "" ? {} : JSON.parse(raw);
+  if (payload === null || typeof payload !== "object") throw new Error("payload");
+  const command = shellCommand(payload);
+  if (command === null) return null;
+  const root = repoRoot();
+  const dirs = gitDirs(root);
+  const head = dirs === null ? null : gitText(join(dirs.gitDir, "HEAD"));
+  const origin = dirs === null ? null : gitText(join(dirs.commonDir, "refs", "remotes", "origin", "HEAD"));
+  const ctx = {
+    currentBranch: head !== null && head.startsWith("ref: refs/heads/") ? head.slice(16) : null,
+    defaultBranches: origin !== null && origin.startsWith("ref: refs/remotes/origin/") ? [origin.slice(25)] : [],
+    tags: dirs === null ? [] : localTags(dirs.commonDir),
+  };
+  const always = personOnlyVerdict(command, ctx);
+  if (always.deny) return always.reason;
+  if (unattended(root)) {
+    const run = unattendedPushVerdict(command);
+    if (run.deny) return run.reason;
+  }
+  if (/(?:^|[^\w-])gate\s+preflight(?![\w-])/.test(command)) writeCanary(root);
+  return null;
+}
+
+let reason = null;
+try {
+  reason = decide();
+} catch (error) {
+  // Fail closed: a shell call this guard could not read is not one it allows.
+  const what = error instanceof SyntaxError ? "an unreadable payload" : error && error.code ? error.code + (typeof error.path === "string" ? " on " + error.path : "") : "an internal fault";
+  reason = "The person-only guard could not decide this shell call (" + what + "), so it is refused (REQ-FLOW-102).";
+}
+`}${guardDecisionOutput(opts.tool)}
+`;
+}
+
 // ── Plan ─────────────────────────────────────────────────────────
 
 /**
@@ -3039,10 +3345,22 @@ if (outcome !== null) {
 export function planCoreHookScripts(
   policiesJsonPath: string,
   tool: Tool,
-  opts: { packageName: string; version: string; npmChannel?: boolean; registry?: string },
+  opts: { packageName: string; version: string; npmChannel?: boolean; registry?: string; personOnlyGuard?: boolean },
 ): GeneratedHookScript[] {
   const failMode =
     CLIENT_HOOK_GUARANTEES.find((guarantee) => guarantee.tool === tool)?.failMode ?? "fail-closed";
+  // Asked for by emission once it wires the guard on the client's shell tools;
+  // until then the core set stays the three scripts every caller expects.
+  const guard: GeneratedHookScript[] =
+    opts.personOnlyGuard === true
+      ? [
+          {
+            fileName: PERSON_ONLY_GUARD_FILE,
+            content: buildPersonOnlyGuardScript({ tool, layout: layoutFor(policiesJsonPath) }),
+            event: "pre_tool_use",
+          },
+        ]
+      : [];
   return [
     {
       fileName: SESSION_START_FILE,
@@ -3066,6 +3384,7 @@ export function planCoreHookScripts(
       }),
       event: "session_start",
     },
+    ...guard,
   ];
 }
 

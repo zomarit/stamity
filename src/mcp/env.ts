@@ -179,6 +179,14 @@ const TOOL_ENV_NOTES: Record<Tool, string> = {
 };
 
 /**
+ * The hooks canary (REQ-FLOW-101): the person-only shell guard writes
+ * `{ "at": <ISO time> }` here when the command it guards is the pre-flight, and
+ * the pre-flight refuses unless the file is fresh. Machine-local: a committed or
+ * copied canary would vouch for hooks that never ran in that checkout.
+ */
+export const PREFLIGHT_CANARY_FILE = `${STATE_DIR}/preflight-canary.json`;
+
+/**
  * Paths this engine writes that must never reach a commit: the credential
  * file, and the review gate's runtime state — its counter, the lock directory
  * beside it, and the temp files its publish renames over the counter. The gate
@@ -195,6 +203,7 @@ export const REQUIRED_GITIGNORE_ENTRIES: readonly string[] = [
   REVIEW_GATE_STATE_FILE,
   REVIEW_GATE_STATE_FILE + REVIEW_GATE_LOCK_SUFFIX,
   `${REVIEW_GATE_STATE_FILE}${REVIEW_GATE_TEMP_INFIX}*`,
+  PREFLIGHT_CANARY_FILE,
 ];
 
 /**

@@ -10,7 +10,7 @@ import { CURSOR_COMMANDS_DIR } from "../../../adapters/cursor.ts";
 import type { StackSuggestion } from "../../../detect/stackSupport.ts";
 import { NATIVE_SKILL_DIRS, SKILLS_PROJECTION_DIR } from "../../../emit/skillsProjection.ts";
 import { PLATFORM_MCP_SERVER } from "../../../mcp/catalog.ts";
-import { ENV_MCP_FILE, getSourceEnvMcpCommand } from "../../../mcp/env.ts";
+import { ENV_MCP_FILE, getSourceEnvMcpCommand, PREFLIGHT_CANARY_FILE } from "../../../mcp/env.ts";
 import type { CarryReport } from "../../../migration/carry.ts";
 import { TOOLS, type Tool } from "../../../types/core.ts";
 import { MANIFEST_FILE } from "../../../types/manifest.ts";
@@ -746,6 +746,7 @@ const GITIGNORE_REASONS: ReadonlyMap<string, string> = new Map([
   [REVIEW_GATE_STATE_FILE, "the review gate's per-run state"],
   [REVIEW_GATE_STATE_FILE + REVIEW_GATE_LOCK_SUFFIX, "the review gate's lock"],
   [`${REVIEW_GATE_STATE_FILE}${REVIEW_GATE_TEMP_INFIX}*`, "the review gate's temporary writes"],
+  [PREFLIGHT_CANARY_FILE, "the shell guard's hooks canary"],
 ]);
 
 /** Why one entry is ignored, in words that assume nothing about the run. */

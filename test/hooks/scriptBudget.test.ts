@@ -69,7 +69,8 @@ function lineCount(content: string): number {
  * (the cap is the only number in the body that varies with configuration).
  */
 function renderAll(tool: Tool, layout: HookScriptLayout): Rendered[] {
-  const core = planCoreHookScripts(POLICY_PATH_BY_LAYOUT[layout], tool, CLI_PIN).map((script) => ({
+  // The person-only shell guard is rendered on request (emission asks for it), so it is asked for here.
+  const core = planCoreHookScripts(POLICY_PATH_BY_LAYOUT[layout], tool, { ...CLI_PIN, personOnlyGuard: true }).map((script) => ({
     tool,
     fileName: script.fileName,
     content: script.content,
@@ -136,8 +137,9 @@ describe("hook script budgets (REQ-CTX-016)", () => {
     // is a ceiling on nothing, and a new script with no row would be unbounded.
     const rendered = new Set(renders.map((script) => script.fileName));
     expect([...rendered].toSorted()).toEqual(Object.keys(HOOK_SCRIPT_BUDGETS).toSorted());
-    // Four clients × three core scripts, plus the review gate where it is wired.
-    expect(renders).toHaveLength(TOOLS.length * 3 + REVIEW_GATE_TOOLS.size);
+    // Four clients × four core scripts (the person-only guard among them), plus the review gate where it is wired.
+    // Moved from × 3 by u14-shell-guard: the guard is a core script with a budget row of its own.
+    expect(renders).toHaveLength(TOOLS.length * 4 + REVIEW_GATE_TOOLS.size);
   });
 
   it.each(renders.map((script) => [`${script.tool}/${script.fileName}`, script] as const))(

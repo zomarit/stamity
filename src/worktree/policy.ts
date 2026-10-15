@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
-import { ENV_MCP_FILE } from "../mcp/env.ts";
+import { ENV_MCP_FILE, PREFLIGHT_CANARY_FILE } from "../mcp/env.ts";
 import { EngineError } from "../types/errors.ts";
 import {
   REVIEW_GATE_LOCK_SUFFIX,
@@ -212,6 +212,15 @@ function isReviewGateStatePath(relPath: string): boolean {
     path.startsWith(`${lock}/`) ||
     path.startsWith(state + REVIEW_GATE_TEMP_INFIX)
   );
+}
+
+/**
+ * True when `relPath` is the pre-flight's hooks canary, refused by name as the
+ * review gate's state is: a canary carried into another worktree would vouch
+ * for hooks that never ran there.
+ */
+function isPreflightCanaryPath(relPath: string): boolean {
+  return foldPathSpelling(relPath) === foldPathSpelling(PREFLIGHT_CANARY_FILE);
 }
 
 const TOP_LEVEL_KEYS: ReadonlySet<string> = new Set(["version", "farmDir", "entries", "overrides"]);
@@ -514,7 +523,7 @@ export function matchPolicyRule(policy: WorktreePolicy, relPath: string): Worktr
  * be carved this way: the link shares the directory live.
  */
 export function resolveStrategy(policy: WorktreePolicy, relPath: string): WorktreeStrategy {
-  if (isReviewGateStatePath(relPath)) return "skip";
+  if (isReviewGateStatePath(relPath) || isPreflightCanaryPath(relPath)) return "skip";
   return matchPolicyRule(policy, relPath)?.strategy ?? "skip";
 }
 
@@ -557,6 +566,13 @@ export function assertRulesAdmissible(
         `${policy.source}: ${rule.list} row ${JSON.stringify(rule.path)} names review-gate runtime ` +
           `state, which is never copied between worktrees: a review round counted in one worktree must ` +
           `not gate another, and the gate reads a missing counter as open.`,
+        `Remove the row from ${policy.source}.`,
+      );
+    }
+    if (isPreflightCanaryPath(rule.path)) {
+      refuse(
+        `${policy.source}: ${rule.list} row ${JSON.stringify(rule.path)} names the pre-flight's hooks ` +
+          `canary, which is never copied between worktrees: it would vouch for hooks that never ran there.`,
         `Remove the row from ${policy.source}.`,
       );
     }
