@@ -138,6 +138,9 @@ const DEP_AUDIT_SKILL_PATH = "skills/st-dep-audit/SKILL.md";
 /** The census rule the Phase 2 → Phase 3 step runs. */
 const CENSUS_RULE_PATH = "rules/stamity-contract-census.md";
 
+/** The unattended skill: owner of the morning walk the record head points a resumed run at. */
+const UNATTENDED_SKILL_PATH = "skills/st-unattended/SKILL.md";
+
 /** One corpus walk shared by every case; a missing artifact fails each with the same message. */
 const corpus: Promise<CorpusFile[]> = walkAllMarkdown();
 
@@ -744,6 +747,14 @@ describe("/st-work — Frame and Plan", () => {
     expect(proof).toContain(
       "When `Mode:` reads `unattended`, invoke the `st-unattended` skill by name and follow it.",
     );
+    // Added 2026-10-16 (run 2026-10-15_cloud-runs, u15's fix round, ledger row build/52;
+    // REQ-FLOW-095): a resumed run reads `Mode: attended`, so the pointer above never fires on the
+    // morning after; the head names the walk's entry itself, and the section it names is the skill's.
+    expect(proof).toContain(
+      "On `--resume <run-id>` of a closed run whose record reads `Mode: unattended`, and on `/st-work` run on such a run's branch, invoke `st-unattended` by name and follow its `## The morning walk`.",
+    );
+    const unattended = (await corpusFile(UNATTENDED_SKILL_PATH)).parsed.body;
+    expect(unattended.split("\n")).toContain("## The morning walk");
     // TEST CHANGE, justified (2026-10-09, plan 019 file 2, the p3 fix round 2, `review/133`): the
     // line holds the commit id `HEAD` resolves to at Frame, never the word, which `gate` would
     // resolve at Prove time, after the units commit (sign-off: `git rev-parse HEAD`).
@@ -1451,6 +1462,12 @@ describe("/st-work — Prove", () => {
     expect(qa.indexOf(options)).toBeLessThan(qa.indexOf("`Default if no response: leave uncommitted`"));
     // Option 1 never pushes the default branch: `run start` puts the run on a branch of its own first.
     expect(qa).toContain("option 1 after `stamity run start` on the default branch.");
+    // Added 2026-10-16 (run 2026-10-15_cloud-runs, u15's fix round, ledger row build/53;
+    // REQ-FLOW-019): option 1 with no PR opened is not done, so what `run checkpoint` reports
+    // undone reaches the proof block, ahead of the default sentence.
+    const notDone = "Option 1 copies each `notDone` entry `run checkpoint` returns into the proof block's `Not done:`.";
+    expect(qa).toContain(notDone);
+    expect(qa.indexOf(notDone)).toBeLessThan(qa.indexOf("`Default if no response: leave uncommitted`"));
     expect(qa).toContain("with none left, there is no ask");
     // Added 2026-10-14 (run 2026-10-14_cli-native, corpus fix batch round 1, review/44): the walk
     // asks in rounds and the protocol puts Critical, Warning and `decision-waiting` rows first, so a

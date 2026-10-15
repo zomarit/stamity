@@ -2,7 +2,7 @@
 id: work-persisted-plan-asks-once
 class: golden
 claim: "At standard intensity on a fresh persisted plan, a work run asks nothing at Frame — an inbox row the plan settles is listed with its disposition — and nothing at the plan gate, where it logs the default it applied, then walks four parts at the close, in numbered options — the QA row left for the person, the spec delta merge, the commit and the leftovers, here the two inbox rows the change touched and did not fix — with leave uncommitted as the declared default."
-source: content/commands/st-work.md:21-30,65-69,295-306
+source: content/commands/st-work.md:21-30,65-69,295-307
 metric: rubric
 ---
 
@@ -42,10 +42,11 @@ Governing text — the same file, "QA checkpoint" (row states and the close):
 **Row states.** The qa skill closes each row in its own row states, under
 its `## Human sign-off` rules.
 
-**The close walk.** What is left for the person is asked by the question protocol's Close walk, in rounds of numbered options:
-the rows the qa skill leaves for the person (at most three), the spec delta merge and the commit, as 1 commit, push, draft PR
-(`stamity run checkpoint --pr`, recommended) · 2 commit only · 3 leave uncommitted, option 1 after `stamity run start` on the
-default branch. `Default if no response: leave uncommitted`, with those rows not signed and the delta unmerged.
+**The close walk.** What is left for the person is asked by the question protocol's Close walk, in rounds of numbered
+options: the rows the qa skill leaves for the person (at most three), the spec delta merge and the commit, as 1 commit,
+push, draft PR (`stamity run checkpoint --pr`, recommended) · 2 commit only · 3 leave uncommitted, option 1 after
+`stamity run start` on the default branch. Option 1 copies each `notDone` entry `run checkpoint` returns into the proof
+block's `Not done:`. `Default if no response: leave uncommitted`, with those rows not signed and the delta unmerged.
 The leftovers join it as a fourth part, by `/st-board`'s Leftovers at a close: before asking, the close runs
 `stamity ledger inbox --due --paths <the changed paths> --json` and takes every `decision-waiting` row first, then the
 due and touched rows and each ledger row neither fixed nor rejected; with no response, its unattended rule applies.
