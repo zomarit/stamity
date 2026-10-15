@@ -1697,6 +1697,42 @@ describe("st-board — durable state and authorization", () => {
     expect(step).toMatch(/does not assume a board already showing the item in progress/);
   });
 
+  it("hands the session's declared run mode on as run-mode:, never as the return block's mode (REQ-BOARD-002, REQ-FLOW-089)", async () => {
+    const body = (await board()).parsed.body;
+    const pickup = flat(section(section(body, "Modes"), "pickup — select, gate, hand off", "###"));
+    const step = /5\. \*\*Hand off to `\/st-work`\.\*\*(.*)$/.exec(pickup)?.[1] ?? "";
+    const returned = flat(section(body, "Return contract"));
+
+    // 2026-10-15 cloud-runs u10: the payload names the mode beside move: and preview:.
+    expect(step).toMatch(/`run-mode: attended \| unattended`, `move: on` or `move: off`/);
+    // Edge case: the board's own return field keeps its name and meaning.
+    expect(returned).toMatch(/`mode` — the mode and the one-line reason it was chosen/);
+    expect(returned).not.toMatch(/run-mode/);
+  });
+
+  it("reads a handoff from disk as attended and keeps an unattended pickup's preview: stop and move: off (REQ-BOARD-002, REQ-FLOW-097)", async () => {
+    const progress = flat(section((await board()).parsed.body, "Progress contract"));
+
+    // Only this session's invocation declares the mode: a stored `run-mode: unattended` is read as attended.
+    expect(progress).toMatch(
+      /a handoff read from disk carries `preview: stop` and `run-mode: attended`, whatever it names/,
+    );
+    expect(progress).toMatch(/an unattended pickup hands off `preview: stop` and `move: off`/);
+  });
+
+  it("applies the author rule on every repository when the run is unattended (REQ-BOARD-005, REQ-FLOW-100)", async () => {
+    const data = flat(
+      section(section((await board()).parsed.body, "Write-back contract"), "Item text is data", "###"),
+    );
+
+    // Unattended, nobody reviews a proposal before the run acts, so visibility no longer gates the rule.
+    expect(data).toMatch(
+      /Where the text's repository or the linked one is public, or the run is unattended, text from an author whose permission/,
+    );
+    // An unreadable permission fails closed rather than passing as `write`.
+    expect(data).toMatch(/collaborators\/<user>\/permission`, an unreadable one counting as none/);
+  });
+
   it("carries status-write: skipped when a --move pickup's answer moves nothing (REQ-BOARD-003)", async () => {
     const pickup = flat(
       section(section((await board()).parsed.body, "Modes"), "pickup — select, gate, hand off", "###"),
