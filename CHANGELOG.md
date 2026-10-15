@@ -33,6 +33,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.15.0] - 2026-10-15
 
+### Upgrading from 1.14.0
+
+Take the update with the new release's `sync`, then `check`; add `--dry-run` to the `sync` first to
+read what it will write. Commit the setup before that `sync`: the upgrade is one-way, and git is
+where the previous files stay. Each item below was read from this release's `sync` and `check` run
+over a committed 1.14.0 setup for all four clients, plain and plugin-backed, with
+`STAMITY_NO_CLIENT_PROBE=1` set.
+
+- **The manifest moves to schema 2.0.0, and 1.14.0 then refuses it.** The first `sync` migrates
+  `.stamity/manifest.json`, each `models.pins.<class>` value becoming `{ "all": "<id>" }`, and
+  prints `manifest schema migrated to 2.0.0`. From then on 1.14.0's `check` exits 1, its
+  `manifest` row failing with "declares schema version 2.0.0, newer than the 1.0.0 this build
+  reads. Upgrade to a release that understands schema 2.x, then re-run.", and its `next:` step
+  offers `init`, which you do not need. The move is one-way: going back to 1.14.0 means restoring
+  `.stamity/manifest.json` from git, and with it every file the `sync` wrote, by restoring the
+  commit taken before it. Restored alone, the manifest reads again under 1.14.0, but 1.14.0's
+  `sync` then keeps a `.bak` beside each file this release rewrote and leaves the files it added
+  under `.stamity/generated/`.
+- **`sync` overwrites git-tracked generated files with no `.bak`; git holds the old content.** In
+  a committed setup the upgrade's `sync` takes no backup of any file, and names four of them in a
+  notice: `AGENTS.md`, `AGENTS.override.md` (with Codex selected), Copilot's
+  `.github/hooks/stamity.json` and `.github/workflows/copilot-setup-steps.yml`, each as "Overwrote
+  AGENTS.md: git tracks the file with no uncommitted change, so its previous content is in git
+  history and the change shows in git status; no .bak was taken."
+- **The charter moves to invariants 1.3.0.** `AGENTS.md`, and with Codex selected
+  `AGENTS.override.md`, now read
+  `Invariants version 1.3.0 · ratified 2026-08-31 · last amended 2026-10-14`: invariant 2 asks
+  once a turn, in rounds until nothing is undecided, and invariant 5 reads learnings only through
+  the session-start screen (under Added).
+- **Agent files gain a model line on Codex and Copilot, and on Cursor only for a pin.** Each
+  `.codex/agents/stamity-*.toml` gains `model = "<id>"` beside `model_reasoning_effort`, and each
+  `.github/agents/stamity-*.agent.md` gains a `model:` line in display form and a `models` list,
+  the class's model first: with no list read, the creator gets `model = "gpt-6-sol"` on Codex and
+  `model: "Claude Sonnet 5 (copilot)"` with
+  `models: ["claude-sonnet-5", "gpt-6-sol", "gpt-5.6-terra"]` on Copilot, and where the client's
+  CLI answers, the account's list decides. Claude Code's agent files keep their `model:` aliases.
+  Cursor's agent files gain no model line unless you pin one, and an unpinned class's sub-agent
+  runs on the parent agent's model; a pin is written as typed, so pin a model Cursor's model
+  picker shows (under Added). Every client also gets its class-to-model map,
+  `.stamity/generated/models/<client>.json`, and Cursor the model-fill hook
+  `.stamity/generated/hooks/cursor/stamity-model-pins.mjs`.
+- **Every Cursor and Copilot hook entry changes, and Codex's hooks file changes too.** Each Cursor
+  and Copilot hook command becomes a `node -e` starter that walks up to the project root before it
+  runs (under Fixed), Copilot's event keys move to camelCase with a `bash` key beside each
+  `command`, and Cursor's `preToolUse` gains a second entry, on `Task`, for the model-fill hook.
+  Codex's commands keep their form, but each names the release in its remedy text
+  (`npx -y @zomarit/stamity@1.15.0 sync`), as the file's description does, so every entry's bytes
+  change. Codex trusts a hooks file by its hash, so expect it to ask for a fresh review in
+  `/hooks`; that is expected, not verified in a Codex session.
+- **A plugin-backed setup becomes a full repository setup, and its `plugin` block warns until you
+  delete the key.** The `sync` writes every class into the repository's own files and keeps the
+  `plugin` block 1.14.0 wrote, unread. While the key stands, `sync`, `check` and `clean` print "a
+  plugin install from before 1.15.0 is still recorded; …" with each client's own uninstall
+  command, and `check`'s `plugin-duplicates` row warns. Uninstall the plugin, then delete the
+  `plugin` key from `.stamity/manifest.json` by hand; no command removes it, and the row then reads
+  `no leftover plugin install`.
+- **What `check` prints after the upgrade.** It ends on
+  `drift: clean — every generated file matches what a sync would write` and
+  `setup green — gates not run: lint, typecheck, test (check runs no gate)`, or
+  `ok — 1 advisory warning(s) above; …` while a `plugin` key stands. Its
+  `manifest` row reads `… is valid — schema 2.0.0, …`, its `invariants` row
+  `invariants 1.3.0 · ratified 2026-08-31 · last amended 2026-10-14`. The `plugin-runtime` row is
+  gone and the new `model-pins` row takes its place in the count: it warns, never fails, for a
+  pinned or emitted model the client's list lacks, and with no list to compare, as under
+  `STAMITY_NO_CLIENT_PROBE=1` with none saved, it passes, reading
+  `cursor: unverified — client probe off (STAMITY_NO_CLIENT_PROBE=1) and no saved list` and the
+  same for Copilot and Codex.
+
 ### Security
 
 - **Board writes go to one linked repository, and board text never drives them.** Every `gh issue`
@@ -122,39 +190,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   again under them so a concurrent `ledger close` cannot move it before the write lands, by atomic
   rename inside `.stamity/`; a ledger lock it cannot take refuses the call. It creates an absent
   inbox with its schedule heading, and prints lines and `Ref:` values, never a row's text.
-- **Every client gets a model each class can run on, picked from the account's own list.** A pin
-  can now be set per client: `stamity config set model.<class>.<client> <id>` pins one client and
-  wins there over `model.<class>`, which pins every client, and `none` clears either. `init`,
-  `sync` and `workspace sync` read the installed client's own model list (Cursor's
-  `agent models`, Codex's `codex debug models`, the Copilot CLI's allowed values), save it in the
-  manifest under `models.listed`, and give each class the first model of a priority list Stamity
+- **Copilot and Codex get a model each class can run on, picked from the account's own list;
+  Cursor gets your pin.** A pin can now be set per client:
+  `stamity config set model.<class>.<client> <id>` pins one client and wins there over
+  `model.<class>`, which pins every client, and `none` clears either. `init`, `sync` and
+  `workspace sync` read the installed client's own model list (Cursor's `agent models`, Codex's
+  `codex debug models`, the Copilot CLI's allowed values) and save it in the manifest under
+  `models.listed`. Copilot and Codex give each class the first model of a priority list Stamity
   ships that the account lists. A list that holds none of a class's candidates gives that class
   no model key, so its sub-agent runs on the session's model, and a client that does not answer
   keeps the list it saved last. Only where no list was ever read do Copilot and Codex take the
-  shipped list's first model; Cursor then writes none. Claude Code keeps its family aliases, and
-  its `frontier` class now carries `fable`. Copilot's agent files carry a `models` list of the
+  shipped list's first model. Cursor takes a model from neither list: an unpinned class writes no
+  model there, list or no list, and its sub-agent runs on the parent agent's model; Cursor's saved
+  list serves only the `[effort=…]` rule below and `check`. Claude Code keeps its family aliases,
+  and its `frontier` class now carries `fable`. Copilot's agent files carry a `models` list of the
   class's model ids in priority order and, where the shipped list gives one, a `model` line in
   display form, whose reading by any client is unverified; Codex's carry `model` whenever the
   class resolves, beside `model_reasoning_effort`. Every client gets a class-to-model map at
-  `.stamity/generated/models/<client>.json`, and the touchpoints pass the role's class model from
-  it on each sub-agent call; a call refused with a list of models takes the class's first listed
-  fallback, else the closest, and says so in one line. Emission and `check`'s drift comparison
-  read only the saved list and never start a client; `check`'s `model-pins` row is the one part
-  of `check` that does. `STAMITY_NO_CLIENT_PROBE=1` skips every list read, and `SECURITY.md` says
+  `.stamity/generated/models/<client>.json` (on Cursor only a pinned class has a model in it), and
+  the touchpoints pass the role's class model from it on each sub-agent call; a call refused with
+  a list of models takes the class's first listed fallback, else the closest, and says so in one
+  line. Emission and `check`'s drift comparison read only the saved list and never start a
+  client; `check`'s `model-pins` row is the one part of `check` that does. `STAMITY_NO_CLIENT_PROBE=1` skips every list read, and `SECURITY.md` says
   how the client's CLI is started.
-- **Cursor's sub-agents run on the mapped model.** Cursor's agent files now carry `model:`, which
-  Cursor treats as a default rather than a hard limit, so a `preToolUse` hook on `Task`
-  (`stamity-model-pins.mjs`) also fills the class's model into a Stamity sub-agent call that names
-  none. It changes nothing else in the call and always allows it; Cursor's own automatic turns
-  are out of its reach. `[effort=…]` is no longer appended to a model whose id already carries
-  the effort.
+- **On Cursor, a pin is the only model written.** An unpinned class gets no `model:` in its agent
+  file and no model in Cursor's map, so its sub-agent runs on the parent agent's model. A pin is
+  written as typed, also where the saved list lacks it, into the agent file and the map; Cursor
+  treats the agent file's `model:` as a default rather than a hard limit, so a `preToolUse` hook
+  on `Task` (`stamity-model-pins.mjs`) also fills the pinned model into a Stamity sub-agent call
+  that names none. The hook changes nothing else in the call and always allows it; Cursor's own
+  automatic turns are out of its reach. Cursor accepts a sub-agent's model only from the models
+  it offers sub-agents, a list that follows the parent agent's model and that no command prints,
+  so a pin outside that list is refused and the touchpoint retries on the closest allowed model,
+  saying so in one line. Pin a model Cursor's model picker shows. `[effort=…]` is no longer
+  appended to a model whose id already carries the effort.
 - **A `model-pins` row in `check`.** It warns, naming the client, the class and the model, for
   each pinned or emitted model the client's list does not hold. For Codex that list is the one
   the last `sync` saved whenever one exists, and `check` starts `codex` (with `--bundled`) only
   when none was saved; for the other clients it is the live list where the client's CLI answers,
-  else the saved one. On Cursor and Copilot, whenever the live read answers, a list saved or not,
-  the row also warns, naming both models and `sync`, when `sync` would write a different model
-  than the files carry. With nothing to compare it passes and says `unverified`. It never fails.
+  else the saved one. On Copilot, whenever the live read answers, a list saved or not, the row
+  also warns, naming both models and `sync`, when `sync` would write a different model than the
+  files carry; on Cursor, where only a pin is written, it compares pins alone. With nothing to
+  compare it passes and says `unverified`. It never fails.
 - **Every touchpoint ends on a walk of its leftovers, the summary last.** All nine commands ask
   each leftover through the client's own question tool, Critical, Warning and `decision-waiting`
   items first and the recommended option first, in as many rounds as the tool's limits need, and
@@ -265,11 +342,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ModelConfig.pins` value is now a `ClassPins` map (`all` and one optional key per client), not a
   string, and `ModelConfig` gains `listed`, the saved model lists; `ClassPins` and `ListedModels`
   are exported.
-- **A pin the account cannot use is no longer written as it stands.** On Cursor, Codex and
-  Copilot a pin that the account's saved model list does not hold is replaced by the class's pick
-  from that list, since the client would refuse it, and kept only when the list holds none of the
-  class's candidates either; with no saved list the pin is written as before. A Copilot pin typed
-  in display form, such as `Name (copilot)`, which 1.14 wrote into the agent file's `model:` line,
+- **On Codex and Copilot, a pin the account cannot use is no longer written as it stands.** There
+  a pin that the account's saved model list does not hold is replaced by the class's pick from
+  that list, since the client would refuse it, and kept only when the list holds none of the
+  class's candidates either; with no saved list the pin is written as before. On Cursor a pin is
+  written as typed, list or no list (under Added). A Copilot pin typed in display form, such as
+  `Name (copilot)`, which 1.14 wrote into the agent file's `model:` line,
   is no longer written at all: `init` and `sync` warn once naming the class, and the class takes
   the pick from the account's list. Set the model id instead, with
   `stamity config set model.<class>.copilot <id>`.
@@ -376,8 +454,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hook runner from the folder the session was started in, so a session started in a subfolder
   could not find it and its hooks failed there. Each command now walks up to the project root
   (Cursor's `CURSOR_PROJECT_DIR` first) before it runs, and a runner missing at the root exits 1
-  naming the `sync` call that restores it. The next `sync` rewrites a 1.14 hooks file in place;
-  Codex's hooks file is unchanged, so its recorded trust holds.
+  naming the `sync` call that restores it. The next `sync` rewrites a 1.14 hooks file in place.
+  Codex's commands already walked up and keep their form, but its hooks file still changes at the
+  upgrade, since every command names the release ("Upgrading from 1.14.0" says what follows).
 - **`/st-rework` says what its deferred rows do on `stop`.** The rows it appended at routing
   stand whichever way the handoff is answered: none is offered `fix now`, and none is appended
   twice (inbox rows `2026-10-10_next-tier/build/31` and `review/52`).
