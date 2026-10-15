@@ -360,6 +360,62 @@ describe("st-unattended — the morning list and the walk (REQ-FLOW-094, REQ-FLO
   });
 });
 
+/**
+ * The decisions signed off during the build of run 2026-10-15_cloud-runs (its record's Build section), each
+ * pinned in the words the skill states it, so a later edit cannot drop one without this suite naming it.
+ */
+describe("st-unattended — the build's signed-off decisions", () => {
+  it("runs run start before the head and takes Branch: and Base: from its output", async () => {
+    const text = await flat();
+    expect(text).toContain(
+      "first runs `stamity run start --run <id> --json`, then writes three head lines",
+    );
+    expect(text).toContain(
+      "`Mode: unattended`, `Branch: <the run's branch>` and `Base: <commit>`, the last two from its `branch` and `base`",
+    );
+  });
+
+  it("lets an in-session hand-off's run-mode: carry the caller's resolved mode", async () => {
+    expect(await flat()).toContain(
+      "An in-session hand-off to `/st-work` carries `run-mode: attended | unattended`, the caller's resolved mode, which wins over `/st-work`'s own reading of the variable",
+    );
+  });
+
+  it("closes the record of an exit that waits on a person, and pushes every exit's record through the verbs", async () => {
+    const text = await flat();
+    expect(text).toContain("(`Status: closed <date> (blocked: <reason>)` for an exit that waits on a person)");
+    expect(text).toContain("Every exit pushes its record through the run verbs");
+  });
+
+  it("ends a refusal before the branch is checked out as the reply on the start surface, never a push", async () => {
+    expect(await flat()).toContain(
+      "A refusal before the run's branch is checked out (`/st-pr-resolve` before its pull request's head is), or where no branch can be pushed, is never pushed: it ends as the reply on the start surface, on a pull request one comment that `stamity gate scan --text <file> --label comment` passed.",
+    );
+  });
+
+  it("scans the pull request's title as well as its body", async () => {
+    expect(await flat()).toContain(
+      "The pull request's title is scanned like its body, a hit replaced with `Run <run-id>`.",
+    );
+  });
+
+  it("refuses every raw push or pull request write while the run is unattended", async () => {
+    expect(await flat()).toContain(
+      "While the mode is unattended no raw push or pull request write runs at all.",
+    );
+  });
+
+  it("names the literal mention of the client the run is on, in client-neutral words", async () => {
+    expect(await flat()).toContain(
+      "`@<agent>` written as the literal mention of the client the run is on",
+    );
+  });
+
+  it("lands an unattended pickup's board writes as morning-list rows", async () => {
+    expect(await flat()).toContain("lands each board write it would make as a morning-list row");
+  });
+});
+
 describe("st-unattended — the other touchpoints and chains (REQ-FLOW-096, REQ-FLOW-097)", () => {
   it("names each touchpoint's unattended path", async () => {
     const text = await flat();

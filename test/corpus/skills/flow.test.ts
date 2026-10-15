@@ -151,7 +151,7 @@ const SKILLS: readonly FlowSkill[] = [
 ];
 
 /**
- * The trigger domain each of the EIGHT shipped skills owns exclusively — one
+ * The trigger domain each of the NINE shipped skills owns exclusively — one
  * phrase per skill that appears in its own description and in no other's.
  *
  * The four-skill cases below hold the flow lane apart; this table is the wider
@@ -178,6 +178,9 @@ const TRIGGER_DOMAINS: readonly { id: string; relPath: string; phrase: RegExp }[
   },
   { id: "dep-audit", relPath: "skills/st-dep-audit/SKILL.md", phrase: /dependency audit/i },
   { id: "learn", relPath: "skills/st-learn/SKILL.md", phrase: /learnings/i },
+  // Added 2026-10-15 (u9-unattended-skill): the ninth skill, called by name from a run whose
+  // record reads `Mode: unattended`; no other description may name an unattended run.
+  { id: "unattended", relPath: "skills/st-unattended/SKILL.md", phrase: /unattended/i },
 ];
 
 /**
@@ -277,7 +280,9 @@ describe("flow skills — frontmatter contract", () => {
   });
 });
 
-describe("skill roster — anti-shadowing across all eight descriptions", () => {
+// TEST CHANGE, justified (u9-unattended-skill, 2026-10-15): the roster holds nine skills now;
+// the titles' count word follows TRIGGER_DOMAINS, whose rows are what the cases read.
+describe("skill roster — anti-shadowing across all nine descriptions", () => {
   it("gives every skill an exclusive trigger domain", async () => {
     const files = await Promise.all(TRIGGER_DOMAINS.map((row) => load(row.relPath)));
     const descriptions = files.map(description);
@@ -296,7 +301,7 @@ describe("skill roster — anti-shadowing across all eight descriptions", () => 
     }
   });
 
-  it("opens all eight on different verbs", async () => {
+  it("opens all nine on different verbs", async () => {
     const files = await Promise.all(TRIGGER_DOMAINS.map((row) => load(row.relPath)));
     const leading = files.map((file) => description(file).split(/\s+/)[0]!.toLowerCase());
 

@@ -99,6 +99,14 @@ const CALL_SITES: readonly CallSite[] = [
     fallback:
       "When neither form runs, or the installed copy has no `ledger inbox` query, `fill` reads the inbox file whole and says so in its report; any other failure of the query is a finding, never a whole-file read.",
   },
+  {
+    // Added 2026-10-15 (u9-unattended-skill, REQ-FLOW-091): every floor of an unattended run is a
+    // verb; with neither form the run does not start, and nothing stands in for a verb by hand.
+    relPath: "skills/st-unattended/SKILL.md",
+    label: RUNNING_CLI_LABEL,
+    fallback:
+      "When neither form runs, the run does not start: it replies on its start surface `Refused: the stamity CLI is not reachable`, and it never stands in for a verb with raw git, `gh` or a file write.",
+  },
 ];
 
 /** The one column whose cells may keep the defined `stamity <verb>` shorthand. */

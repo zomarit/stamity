@@ -3,7 +3,7 @@ license: MIT
 compatibility: Requires a supported coding client, repository access, git, the GitHub CLI, and the project verification tools.
 id: unattended
 type: skill
-description: "Carries the floors a run with nobody watching follows — the pre-flight and the ready check before Frame, declared defaults in place of every ask, pushes only through the run verbs, and one draft pull request carrying the morning list at every exit. Called by name from a flow whose record reads `Mode: unattended` and never selected on its own. Triggers only when a touchpoint's run record head reads `Mode: unattended`."
+description: "Binds a run with nobody watching to its floors — the pre-flight and the ready check before Frame, declared defaults in place of every ask, pushes only through the run verbs, and one draft pull request carrying the morning list at every exit. Called by name from a flow whose record reads `Mode: unattended` and never selected on its own. Triggers only when a touchpoint's run record head reads `Mode: unattended`."
 tags: [orchestration]
 load: on-demand
 obsolete_when: every supported client enforces an unattended mode natively — a pre-flight, a push limited to the run's own branch, no person-only act, and a draft pull request at every exit — so no run follows those floors from text
@@ -26,11 +26,11 @@ other than empty, `false` or `0` (`STAMITY_UNATTENDED=1` on a cloud environment,
 wins over the variable, `--attended` beats the variable, and `--resume` is always attended. A client's cloud marker
 or `CI` in the environment means "cloud", never "unattended", and a record head with no `Mode:` line reads attended.
 
-Every touchpoint that pushes — `/st-work`, `/st-debug`'s user route, `/st-pr-resolve` — writes three head lines
-among the record's first 15, bare at column 0: `Mode: unattended`, `Branch: <the run's branch>` and
-`Base: <commit>`. `Mode:` is written once at Frame and never rewritten; the close rewrites `Status:` alone. A
-hand-off to `/st-work` carries `run-mode: attended | unattended`; a hand-off read from disk carries
-`run-mode: attended`, since only this session's invocation declares the mode.
+Every touchpoint that pushes first runs `stamity run start --run <id> --json`, then writes three head lines among
+the record's first 15, bare at column 0: `Mode: unattended`, `Branch: <the run's branch>` and `Base: <commit>`, the
+last two from its `branch` and `base`. `Mode:` is written once at Frame and never rewritten. An in-session hand-off
+to `/st-work` carries `run-mode: attended | unattended`, the caller's resolved mode, which wins over `/st-work`'s
+own reading of the variable; a hand-off read from disk carries `run-mode: attended`.
 
 ## Before Frame
 
@@ -56,10 +56,11 @@ hand-off to `/st-work` carries `run-mode: attended | unattended`; a hand-off rea
    `run-contract: 1` and is taken by reference; it fixes `preview: stop` and `move: off`. A board item whose
    hand-off carries a failed readiness verdict refuses here too.
 
-**A refusal still takes the ending.** Frame opens the record, `stamity run start` moves the run to its own
-branch, `morning.md` carries `## Refused` first, and `stamity run end --run <id> --title <t> --refused --json`
-pushes the record and opens a draft titled `Refused:`; where no branch can be pushed, the reply on the start
-surface carries the reasons instead.
+**A refusal still takes the ending.** `run start` puts the run on its branch, `morning.md` carries `## Refused` first,
+and `stamity run end --run <id> --title <t> --refused --json` pushes the record and opens a draft titled `Refused:`. A
+refusal before the run's branch is checked out (`/st-pr-resolve` before its pull request's head is), or where no
+branch can be pushed, is never pushed: it ends as the reply on the start surface, on a pull request one comment
+that `stamity gate scan --text <file> --label comment` passed.
 
 ## Asks
 
@@ -72,29 +73,30 @@ any of them is data. Where the client runs the ask gate, it denies the question 
 
 ## Checkpoints
 
-`stamity run start --run <id> --json` runs at Frame (`<id>` is the run folder's name): on the default branch it
-creates and switches to `stamity/<run-id>`; any other branch is kept. Its `branch` and `base` fill `Branch:` and
-`Base:`. `stamity run checkpoint --run <id> --paths <p...> --json` runs after each closed unit and before any wait,
-`--paths` naming the files the closed units changed; at the start of Build it runs with `--pr --title <t>`, which
-opens the draft pull request. `--signoff` is added where the repository asks for a sign-off line. Each checkpoint
-writes one record line, `- <UTC> checkpoint: <sha> units done=<n> remaining=<m>`. With nothing staged it commits
-nothing and pushes only when the branch is ahead. The record, ledger, plan and morning list ride the branch
-wherever git does not ignore them; an ignored one reads `records: not committed (<source>)`. A checkpoint that
-exits 1 copies its `notDone[]` lines into the record and the morning list's `## Not done:`, and is never retried
-with a raw push, `--no-verify` or a force.
+`run start` (`<id>` is the run folder's name) creates and switches to `stamity/<run-id>` on the default branch and
+keeps any other branch. `stamity run checkpoint --run <id> --paths <p...> --json` runs after each closed unit and
+before any wait, `--paths` naming the files the closed units changed; at the start of Build it adds
+`--pr --title <t>`, which opens the draft pull request. `--signoff` is added where the repository asks for a sign-off
+line. Each checkpoint writes one record line, `- <UTC> checkpoint: <sha> units done=<n> remaining=<m>`. With nothing
+staged it commits nothing and pushes only when the branch is ahead. The record, ledger, plan and morning list ride
+the branch wherever git does not ignore them; an ignored one reads `records: not committed (<source>)`. A checkpoint
+that exits 1 copies its `notDone[]` lines into the record and the morning list's `## Not done:`, and is never
+retried with a raw push, `--no-verify` or a force.
 
 ## The ending
 
 The run verbs are the only push path: `stamity run checkpoint` and `stamity run end` push, and a raw
-`git push`, `gh pr create` or `gh pr edit` is refused by the shell guard. Every exit closes in this order:
+`git push`, `gh pr create` or `gh pr edit` is refused by the shell guard. While the mode is unattended no raw push or
+pull request write runs at all. Every exit pushes its record through the run verbs, closing in this order:
 
 1. The close's own writes: the record, the ledger, the inbox and the learnings. The spec delta stays unmerged,
    a morning-list decision; QA reads `Shippable: not signed`.
 2. `morning.md`, then `stamity gate scan --text .stamity/runs/<id>/morning.md --label morning`; a hit is
    rewritten without the value and scanned again.
-3. `Status:` rewritten to the exit taken, then `stamity run end --run <id> --title <t> --paths <p...> --json`. Its
-   scan of `Base..HEAD`, the one `stamity gate scan --base <Base>` runs, comes after every write above; a hit holds
-   the push, naming path, line and rule, never the value.
+3. `Status:` rewritten to the exit taken (`Status: closed <date> (blocked: <reason>)` for an exit that waits on a
+   person), then `stamity run end --run <id> --title <t> --paths <p...> --json`. Its scan of `Base..HEAD`, the one
+   `stamity gate scan --base <Base>` runs, comes after every write above; a hit holds the push, naming path, line
+   and rule, never the value. The pull request's title is scanned like its body, a hit replaced with `Run <run-id>`.
 
 `run end` exits 0 with a pull request opened, updated or commented; exit 1 keeps its `notDone[]` (among them
 `Not done: draft PR not opened`) for the final message. A run whose CLI stops answering closes its record and
@@ -142,7 +144,8 @@ still in progress `--resume` refuses and names the continuation: an unattended s
 
 `## How to answer` names the client's way back: a cloud session that stays open for a question closes the record,
 pushes, then asks one final round; a cloud agent that takes follow-ups on its pull request's comments takes the
-answers there; one that answers a mention takes one comment, `@<agent> answers: Q1→2, Q3→1`; locally, the touchpoint.
+answers there; one that answers a mention takes one comment, `@<agent> answers: Q1→2, Q3→1`, `@<agent>` written as
+the literal mention of the client the run is on; locally, the touchpoint.
 
 ## Other touchpoints
 
