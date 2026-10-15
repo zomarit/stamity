@@ -17,11 +17,14 @@
  * puts on a model the client's CLI accepted when the row was read.
  *
  * CURSOR PICKS NOTHING, LIST OR NO LIST. Cursor checks a sub-agent call's
- * model against a list of its own, which follows the parent agent's model,
- * is narrower than `agent models` and is printed by no command; it refused a
- * class's pick from the account's list on the dispatch path, while an absent
- * model inherits the parent's, which it always accepts (ledger row
- * 2026-10-14_cli-native/qa/1). So {@link pickModel} answers `undefined` there
+ * model against a list of its own, narrower than `agent models` prints; it
+ * refused a class's pick from the account's list on the dispatch path (ledger
+ * row 2026-10-14_cli-native/qa/1, observed 2026-10-15). In one live run that
+ * list changed with the parent agent's model, one named parent tried; beyond
+ * that run it is unverified. An absent model is the parent's by Cursor's
+ * subagents docs (`inherit` is the default, read 2026-10-15) and by its refusal
+ * text; no live run has dispatched one on this setup, so that it runs is
+ * unverified. So {@link pickModel} answers `undefined` there
  * and only an operator's pin names a Cursor model. The Cursor rows below stay
  * the dated record of that client's listed ids; no emission reads them.
  *

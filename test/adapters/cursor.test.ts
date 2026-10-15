@@ -872,6 +872,12 @@ describe("`.cursor/agents` definitions", () => {
       // The agent-file row says the same, and names what an unpinned sub-agent runs on.
       expect(cursorDialectFacts.agentsFormat).toContain("Only a pin is written");
       expect(cursorDialectFacts.agentsFormat).toContain("runs on the parent agent's model");
+      // cut/12: what the QA runs observed is dated to them, the inheritance to the page that
+      // states it, and what no run has shown is marked unverified rather than stated as a guarantee.
+      expect(cursorDialectFacts.agentsFormat).not.toContain("always accepts");
+      expect(cursorDialectFacts.agentsFormat).toContain("in a live run on 2026-10-15");
+      expect(cursorDialectFacts.agentsFormat).toContain("cursor.com/docs/subagents, read 2026-10-15");
+      expect(cursorDialectFacts.agentsFormat).toContain("so that it runs is unverified");
     });
   });
 
