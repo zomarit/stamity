@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit c3d81529. Re-attested 2026-10-14 against the records branch, for the records job and the record set its CI section names, and against `.github/workflows/ci.yml`, for the APM and plugin route lanes it no longer runs and the `cloud-container` job a full run now needs. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.15.0 release cut (2026-10-15). -->
 <!-- Re-open when: a check named below is added, renamed or removed in `.github/workflows/`, the
      required-approval count changes, the MAJOR/MINOR/PATCH bump rules change, what the private
      layer holds changes, or a trigger in the EU AI Act section fires. `test/docsPages.test.ts`
@@ -8,7 +8,7 @@
 
 # Governance
 
-> Last updated: 2026-10-14
+> Last updated: 2026-10-15
 
 This page is for a contributor or a reviewer who wants to know who runs stamity and how a change
 gets in. It answers four questions: who decides, the two required checks a change passes to land,
