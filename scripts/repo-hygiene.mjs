@@ -13,8 +13,22 @@ const MAX_FILE_BYTES = 1024 * 1024
 // Exact repository-relative paths only. An exception needs its reviewable reason here,
 // never a broad extension exemption or an automatically raised size ceiling.
 const LARGE_FILE_EXCEPTIONS = new Map([
-  // Empty, and an empty list is the expected steady state: an entry buys one retention window and
-  // retires at the release close that ends it. The last window's three entries — run 44's, run 45's
+  // An empty list is the expected steady state: an entry buys one retention window and retires at
+  // the release close that ends it.
+  //
+  // The 1.15.0 window holds one entry. Run 47 is the full 1.15.0 measure on the claude profile
+  // (scenario claude-opus-5-5 at high effort, judge claude-fable-5-1) at candidate 4e892337, a full
+  // baseline of stamity-claude-cli-v2's 144-case roster: every case measured, nothing carried. It
+  // reads PASS, floors 33/33, with two golden misses (plan-security-unit-carries-threat-note at 1 of
+  // 3, reviewer-shallow-wrapper-pass-through at 0 of 3). Its summary is 5569796 bytes as exported.
+  // It is published to the `records` branch, not to `main`, but that branch's workflow and
+  // `scripts/records.mjs commit` both run this script from `main` over the records tree, so the
+  // entry lands on `main` before the publish. A later increment in the same configuration may
+  // compose with it and read its summary from that records commit. The 1.15.0 close's
+  // evidence-archive step compacts run 47's summary beside an ARCHIVE.json pointer and retires this
+  // entry.
+  //
+  // The 1.14.0 window's three entries — run 44's, run 45's
   // and run 46's public summaries, run 44 the full 1.14.0 measure that read FAIL on two floor cases
   // and one benign twin, run 45 the increment that re-measured run 44's five failed cases and
   // composed with it (composition.priorSummaryCommit d8a76416), run 46 the 1.14.0 increment that
@@ -37,6 +51,7 @@ const LARGE_FILE_EXCEPTIONS = new Map([
   // An entry may precede its artifact: the map is consulted only for paths Git reports as changed
   // (the `has` below), is never iterated and never stat'd, so an entry for a path not yet in the
   // tree is inert rather than a false pass.
+  ['evals/runs/2026-10-15-run-47/summary.json', 'run 47, the full 1.15.0 measure on the claude profile, PASS with two golden misses (plan-security-unit-carries-threat-note, reviewer-shallow-wrapper-pass-through), published to the records branch, whose summary a later increment in the same configuration may read from the records commit; retained for the 1.15.0 release window until the 1.15.0 close evidence-archive step compacts it beside an ARCHIVE.json pointer'],
 ])
 const FIXTURE = /^(?:test|tests)\/fixtures\//
 const RAW_NAME = /^(?:calls|samples|requests|responses|receipts|transcripts|provider[-_](?:requests|responses))\.(?:json|jsonl)$/
