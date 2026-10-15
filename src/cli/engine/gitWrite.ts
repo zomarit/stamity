@@ -12,9 +12,14 @@ import { gitProgramFor, programNotFound } from "../../shared/programPath.ts";
  * ahead of every command; and before any of it the look
  * (`gitDiscoveryMeetsBareShape`), so a folder a repository writer committed in
  * the shape of a bare repository starts no git at all. To those it adds
- * `--literal-pathspecs`, so a path the caller lists stages that file and no
- * other (a file named `*.md` is a name, not a pattern), as the setup root's
- * read runner (`../../merge/safeWrite.ts`) reads paths;
+ * `:(literal)` magic on every path the caller lists after `--`
+ * ({@link gitWriteArgs}), so a listed path stages that file and no other (a
+ * file named `*.md` is a name, not a pattern). The magic sits on each path
+ * rather than in a global `--literal-pathspecs`, because git exports that
+ * flag to every hook it runs as `GIT_LITERAL_PATHSPECS=1`, and a repository's
+ * pre-commit or pre-push hook that selects files by glob would then match
+ * none and pass; per-path magic leaves the hooks in the repository's own
+ * pathspec mode;
  * `push.followTags=false`, so a push carries no tag whatever the repository's
  * config says; and `GIT_TERMINAL_PROMPT=0`, so a push that needs credentials
  * fails instead of waiting on a prompt nobody answers.
@@ -22,7 +27,7 @@ import { gitProgramFor, programNotFound } from "../../shared/programPath.ts";
  * Unlike the read runner it keeps the caller's environment, which is where a
  * push finds its credentials (`GIT_ASKPASS`, `GIT_SSH_COMMAND`, a credential
  * helper's own variables), and drops only the variables that would point git
- * at another repository or read a path as other than a name
+ * at another repository or change how a pathspec is read
  * ({@link gitWriteEnv}). Its stderr is kept, since a
  * refused push says why there.
  */
@@ -51,7 +56,6 @@ const GIT_WRITE_MAX_BUFFER = 32 * 1024 * 1024;
 
 /** The options ahead of every command, in this order. */
 const PINNED_OPTIONS: readonly string[] = [
-  "--literal-pathspecs",
   "-c",
   "safe.bareRepository=explicit",
   "-c",
@@ -70,16 +74,33 @@ const LOCATION_VARIABLES =
   /^GIT_(?:DIR|WORK_TREE|INDEX_FILE|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|COMMON_DIR|NAMESPACE|PREFIX)$/i;
 
 /**
- * The variables that set how git reads every pathspec. `--literal-pathspecs`
- * sets the literal one itself, and git refuses to start when it meets the
- * glob, noglob or icase one beside it, so a caller's value would turn every
- * write into a refusal.
+ * The variables that set how git reads every pathspec. Under the literal one
+ * git reads `:(literal)` as part of the name, so every listed path is refused
+ * as matching no file; under the icase one a listed path also stages a file
+ * whose name differs only in case. Either one would also reach the
+ * repository's hooks and change what they check.
  */
 const PATHSPEC_VARIABLES = /^GIT_(?:LITERAL|GLOB|NOGLOB|ICASE)_PATHSPECS$/i;
 
-/** The argument vector git is started with: {@link PINNED_OPTIONS}, then the caller's arguments unchanged. */
+/** The pathspec magic that makes git read the rest of the argument as a name. */
+const LITERAL_MAGIC = ":(literal)";
+
+/**
+ * The argument vector git is started with: {@link PINNED_OPTIONS}, then the
+ * caller's arguments, each one after the first `--` given {@link LITERAL_MAGIC}.
+ *
+ * As git reads it, every argument after `--` is a path, so callers pass plain
+ * paths there and pass `--` only to commands that take paths after it (not
+ * `push`). An option value that is itself `--` goes attached
+ * (`--message=--`), or it would be read as the separator. An empty argument
+ * stays empty, so git refuses it as it would: with the magic it would match
+ * every path.
+ */
 export function gitWriteArgs(args: readonly string[]): string[] {
-  return [...PINNED_OPTIONS, ...args];
+  const separator = args.indexOf("--");
+  if (separator === -1) return [...PINNED_OPTIONS, ...args];
+  const paths = args.slice(separator + 1).map((path) => (path === "" ? path : `${LITERAL_MAGIC}${path}`));
+  return [...PINNED_OPTIONS, ...args.slice(0, separator + 1), ...paths];
 }
 
 /**

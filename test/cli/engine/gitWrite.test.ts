@@ -14,12 +14,26 @@ import { useTempDir } from "../../support/tempDir.ts";
  * and a local bare remote (no network).
  */
 
-const PINNED = ["--literal-pathspecs", "-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", "-c", "push.followTags=false"];
+const PINNED = ["-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", "-c", "push.followTags=false"];
 
 describe("gitWriteArgs", () => {
-  it("puts --literal-pathspecs and the three -c options ahead of the caller's arguments, unchanged", () => {
+  it("puts the three -c options, and no global pathspec flag, ahead of arguments that carry no `--`, unchanged", () => {
     expect(gitWriteArgs(["push", "origin", "HEAD:refs/heads/stamity/x"])).toEqual([...PINNED, "push", "origin", "HEAD:refs/heads/stamity/x"]);
-    expect(gitWriteArgs(["-c", "user.name=T", "commit", "-m", "x"]).slice(0, 7)).toEqual(PINNED);
+    expect(gitWriteArgs(["-c", "user.name=T", "commit", "-m", "x"])).toEqual([...PINNED, "-c", "user.name=T", "commit", "-m", "x"]);
+  });
+
+  it("gives every argument after the first `--` the :(literal) magic, a later `--` and a leading colon included, and leaves an empty one empty", () => {
+    expect(gitWriteArgs(["add", "--", "[ab].txt", "*.md", ":(glob)x", "--", ""])).toEqual([
+      ...PINNED,
+      "add",
+      "--",
+      ":(literal)[ab].txt",
+      ":(literal)*.md",
+      ":(literal):(glob)x",
+      ":(literal)--",
+      "",
+    ]);
+    expect(gitWriteArgs(["commit", "-q", "--message=--", "--"])).toEqual([...PINNED, "commit", "-q", "--message=--", "--"]);
   });
 });
 
@@ -187,6 +201,35 @@ describe.skipIf(!gitAvailable)("gitWrite against real repositories", () => {
     vi.stubEnv("GIT_GLOB_PATHSPECS", undefined);
     git(repo, ["add", "--", "[ab].txt"]);
     expect(git(repo, ["diff", "--cached", "--name-only"]).trim().split("\n")).toEqual(["[ab].txt", "a.txt"]);
+  });
+
+  it("leaves the repository's pre-commit hook in its own pathspec mode: no GIT_LITERAL_PATHSPECS, its glob matches, while a glob-shaped name stages alone", async () => {
+    const repo = await repoWithCommit("repo");
+    const log = getRoot().path("hook.log").replaceAll("\\", "/");
+    // What a hand-written hook does: select the staged files by a glob pathspec.
+    const hook = `#!/bin/sh\nprintf '%s|%s\\n' "\${GIT_LITERAL_PATHSPECS-unset}" "$(git diff --cached --name-only -- '*.py')" >> '${log}'\nexit 0\n`;
+    await writeFile(join(repo, ".git", "hooks", "pre-commit"), hook, "utf8");
+    await chmod(join(repo, ".git", "hooks", "pre-commit"), 0o755);
+    await writeFile(join(repo, "[ab].txt"), "x\n", "utf8");
+    await writeFile(join(repo, "a.txt"), "a\n", "utf8");
+    await writeFile(join(repo, "x.py"), "print(1)\n", "utf8");
+    // A caller's literal variable is dropped too: it would reach the hook, and it would refuse the magic.
+    vi.stubEnv("GIT_LITERAL_PATHSPECS", "1");
+
+    const added = await gitWrite(repo, ["add", "--", "[ab].txt", "x.py"]);
+    const committed = gitWrite(repo, ["commit", "-q", "-m", "fixed"]);
+    vi.stubEnv("GIT_LITERAL_PATHSPECS", undefined);
+
+    expect(added.code).toBe(0);
+    expect((await committed).code).toBe(0);
+    expect(git(repo, ["show", "--name-only", "--format=", "HEAD"]).trim().split("\n")).toEqual(["[ab].txt", "x.py"]);
+    expect(readFileSync(log, "utf8")).toBe("unset|x.py\n");
+
+    // Control, non-degenerate: the global flag the runner used to pin reaches the hook, and its glob then matches nothing.
+    await writeFile(join(repo, "x.py"), "print(2)\n", "utf8");
+    git(repo, ["add", "--", "x.py"]);
+    git(repo, ["--literal-pathspecs", "commit", "-q", "-m", "control"]);
+    expect(readFileSync(log, "utf8")).toBe("unset|x.py\n1|\n");
   });
 
   async function plantedBare(): Promise<{ root: string; marker: string }> {
