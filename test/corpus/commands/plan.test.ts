@@ -5,6 +5,8 @@ import { typeIdKey } from "../../../src/content/catalog.ts";
 import { frontmatterField } from "../../../src/content/frontmatter.ts";
 import { scanAntiSlop } from "../../../src/denyscan/denyScan.ts";
 import { matchInbox, parseInbox, SCHEDULE_RULE_HEADING } from "../../../src/runs/inboxStore.ts";
+// @ts-expect-error — the skill's standalone native ESM copy, shipped as content with no declaration file.
+import { checkCoverage } from "../../../content/skills/st-verify/scripts/spec-plan-coverage.mjs";
 import {
   CORPUS_ROOT,
   assertDenyClean,
@@ -796,13 +798,31 @@ describe("/st-plan — plan artifact shape", () => {
     expect(entry).toMatch(phrase("a plan that waits on nothing omits the section"));
   });
 
-  it("lets L2 resolve a dependency through a Prerequisites row that names its owner (REQ-FLOW-077)", () => {
+  // Amended 2026-10-16 (run 2026-10-15_cloud-runs, u12 fix round 1, review/1 W-1): the first wording let
+  // a Prerequisites row's `set by` resolve a bare `depends_on` name, which the structural pass refuses as
+  // `dangling-dependency`; L2 now names the inline form the checker accepts, and the form is run through it.
+  it("lets L2 resolve a dependency on a Prerequisites row in the inline owner form the structural pass accepts (REQ-FLOW-077)", () => {
     const gate = sectionOf(plan.parsed.body, "## Plan-lint gate");
     const l2 = gate.split("\n").find((line) => line.startsWith("| L2 |")) ?? "";
 
     expect(l2).toContain(
-      "or an external prerequisite with a named owner — a **Prerequisites** row whose `set by` names one counts. Zero dangling references.",
+      "or an external prerequisite whose entry carries its owner inline as `owner: <who>`; a **Prerequisites** row is cited as `<name> owner: <set by>`. Zero dangling references.",
     );
+    expect(l2).not.toContain("whose `set by` names one counts");
+
+    // The cited form, filled from a Prerequisites row, passes the structural pass; the bare name the
+    // first wording allowed does not. No path is reported present, so only the owner form can resolve.
+    const cited = /`(<name> owner: <set by>)`/.exec(l2)?.[1] ?? "";
+    expect(cited).not.toBe("");
+    const unit = (dependsOn: string) =>
+      "## Spec delta\n\nADDED REQ-DEMO-001.\n\n## Units\n\n### U1 — webhook\n- **requirements**: REQ-DEMO-001.\n" +
+      `- **depends_on**: ${dependsOn}.\n`;
+    const codes = (dependsOn: string) =>
+      checkCoverage({ path: "plan.md", text: unit(dependsOn) }, [{ path: "spec.md", text: "## Requirements\n\n### REQ-DEMO-001\nVerify the signature.\n" }], { exists: () => false })
+        .findings.map((row: { code: string }) => row.code);
+    const filled = cited.replace("<name>", "STRIPE_WEBHOOK_SECRET").replace("<set by>", "ops");
+    expect(codes(filled)).not.toContain("dangling-dependency");
+    expect(codes("STRIPE_WEBHOOK_SECRET")).toContain("dangling-dependency");
   });
 });
 
