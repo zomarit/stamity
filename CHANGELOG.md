@@ -56,9 +56,15 @@ an item that rests on either says it was not walked.
   `next:` step offers `init`, which you do not need; 1.14.0's `sync` exits 1 with the same message
   and writes nothing.
 - **The way back to 1.14.0 is the commit taken before the upgrade, the whole tree.** With the
-  upgrade committed, `git reset --hard` to that commit also removes the files it added; with the
-  upgrade not committed, the reset leaves the files it added under `.stamity/generated/`
-  untracked, and you delete them. Restoring `.stamity/manifest.json` alone works on a plain setup,
+  upgrade committed, `git reset --hard` to that commit also removes the files it added. With the
+  upgrade not committed, the reset removes no file the upgrade created, since git does not track
+  them: on a plain setup that is the 5 under `.stamity/generated/`, and 1.14.0's `check` passes
+  with them left; on a plugin-backed setup the upgrade creates 151 files, 130 of them outside
+  `.stamity/generated/`, in `.agents/`, `.claude/`, `.codex/`, `.cursor/` and `.github/`, the
+  1.15.0 hook wiring for Cursor, Copilot and Codex among them. List the untracked files with
+  `git status --untracked-files=all` and delete the ones the upgrade created; `git clean` would
+  delete untracked files of yours too. That reset was walked on the plain setup only, and the
+  deletion on neither. Restoring `.stamity/manifest.json` alone works on a plain setup,
   with leftovers: 1.14.0 reads it again, its `sync` rewrites the files back and its `check`
   passes, but the added files stay, and the `sync` writes a `.bak` beside every file it rewrites
   except `CLAUDE.md`, with a warning that calls each file edited by hand, while the `.bak` holds

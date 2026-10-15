@@ -445,11 +445,15 @@ delta's amended text from `build/65`, `build/66` and `review/113`).
   every other payload, a malformed one included, answers `{"permission":"allow"}` with exit 0. The map's `model` is
   the operator's pin as typed, never an engine-added `[effort=…]` group, which stays in the agent file, and is absent
   with no pin (`buildCursorModelMap` and `callableModel`, `src/adapters/cursor.ts`; `review/100`). Cursor accepts a
-  sub-agent call's model only from the models it offers sub-agents, a list that follows the parent agent's model and that
+  sub-agent call's model only from the models it offers sub-agents, a list narrower than `agent models` prints and that
   no command prints, so a pin outside that list is refused and the touchpoint retries on the closest allowed model, as
-  the touchpoint amendment below says. (Amended 2026-10-15, ledger row `qa/1` of run `2026-10-14_cli-native` and its
-  fix `f575afb1`, with `cut/10` of the same run for the refused pin; it read "The agent file's `model:` is the class's
-  resolved value" and "The map's `model` is what a `Task` call can pass: a listed id or the operator's pin as typed".)
+  the touchpoint amendment below says. In one live run that list changed with the parent agent's model; one named
+  parent model was tried, so that it follows the parent's model beyond that run is unverified (the agents row of
+  `cursorDialectFacts`, `src/adapters/cursor.ts`). (Amended 2026-10-15, ledger row `qa/1` of run `2026-10-14_cli-native`
+  and its fix `f575afb1`, with `cut/10` of the same run for the refused pin; it read "The agent file's `model:` is the
+  class's resolved value" and "The map's `model` is what a `Task` call can pass: a listed id or the operator's pin as
+  typed".) (Amended 2026-10-15, ledger row `cut/23` of run `2026-10-14_cli-native`: it read "a list that follows the
+  parent agent's model and that no command prints", stated as fact.)
 - **Copilot.** Agent files carry `models: [<CLI ids>]`, the class's model first, then its other shipped candidates the
   saved list holds, and, where the shipped list gives the model a display name, a `model: "<Display Name> (copilot)"`
   line whose reader on these agents is unverified, since every agent sets `target: github-copilot`. No `modelPolicy`. A
