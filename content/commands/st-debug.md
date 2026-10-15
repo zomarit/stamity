@@ -91,6 +91,12 @@ residue count; a stop that waits on the user leaves it in progress.
    - **User** — anything else, or a defect that needs the user's environment, data,
      device, account, network, traffic or timing. Stop and wait. The user runs the
      scenario and returns the output.
+     When run unattended (`--unattended` or `STAMITY_UNATTENDED=1`), add `Mode:`, `Branch:` and
+     `Base:` to this record's head, invoke the `st-unattended` skill by name and follow it. Nobody
+     is there to run the scenario, so strip the instrumentation (step 8), push the record with the
+     ranked hypotheses through `stamity run checkpoint --run <run-id> --pr --title <title>` —
+     `--paths` adding the failing test only if one was written, else `Not done: failing test not
+     written` — and return `BLOCKED_DEPENDENCY`.
    This step is not simulated, not inferred from reading the code, and not passed over
    because the cause looks obvious.
 4. **Log analysis.** Order the tagged lines; state which instrumentation points did *not*
@@ -106,6 +112,8 @@ residue count; a stop that waits on the user leaves it in progress.
    user-gated: the command fixes by default, and gating the step that performs the fix would
    leave every run stopped at its own purpose. `--diagnose` is how a run opts out, and step 8
    still runs before the switch.
+   The hand-off carries `run-mode: attended | unattended`: `unattended` when this run was
+   invoked with `--unattended` or under `STAMITY_UNATTENDED=1`, `--attended` beating the variable.
 8. **Instrumentation cleanup.** `implementer` strips what step 2 added; the orchestrator
    verifies the count itself. Zero residue (see Hard gates).
 9. **Regression clauses.** Write what the repository shall continue to do, one clause per

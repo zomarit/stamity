@@ -15,10 +15,10 @@ anything larger leaves before the first edit, not after it.
 
 ## What quick is not
 
-Quick differs from `/st-work` by contract, not by effort setting. It has no board source,
-no issue or PR state, no phase state, and no persisted plan artifact; no research phase, no
-review loop, no QA checkpoint. Those are absent by design, which is why the thresholds below
-are hard rather than advisory — the change that needs them has to go where they exist.
+Quick differs from `/st-work` by contract, not by effort setting. It has no board source, no issue or PR state,
+no phase state, and no persisted plan artifact; no research phase, no review loop, no QA checkpoint. Those are
+absent by design, which is why the thresholds below are hard rather than advisory — the change that needs them
+has to go where they exist. An unattended run does not take /st-quick: run `/st-work --effort light` instead.
 
 Charter invariant 7 names one carve-out from delegated implementation, and this lane is it: Tier-1 edits apply inline. Verification does not. Gates run
 in the `test-runner` sub-agent, which is what keeps "the gates ran" a claim from somewhere other than the writer. Every sub-agent call passes `model` for

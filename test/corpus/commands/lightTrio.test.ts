@@ -917,9 +917,69 @@ describe("debug — hard gates before any fix", () => {
       file.parsed.body.indexOf("## Hard gates"),
     );
   });
+
+  it("takes the unattended entry on the user route and keeps the attended head at three lines (REQ-FLOW-097, REQ-CTX-012)", async () => {
+    const file = await load("commands/st-debug.md");
+    const body = file.parsed.body;
+    const userRoute = body
+      .slice(body.indexOf("   - **User** —"), body.indexOf("This step is not simulated"))
+      .replace(/\s+/g, " ");
+
+    // The attended user route is unchanged: it still stops and waits for the user's output.
+    expect(userRoute).toMatch(/traffic or timing\. Stop and wait\. The user runs the scenario and returns the output\./);
+    // The pointer sentence, verbatim, on the user route — the one debug route that pushes.
+    expect(userRoute).toContain(
+      "When run unattended (`--unattended` or `STAMITY_UNATTENDED=1`), add `Mode:`, `Branch:` and `Base:` to this record's head, invoke the `st-unattended` skill by name and follow it.",
+    );
+    // Then nobody can reproduce: the strip, the push through the run verb, the blocked return.
+    // Edge case: no failing test written → the push carries the record and hypotheses, and the
+    // missing test is named on `Not done:` rather than silently absent.
+    expect(userRoute).toMatch(/strip the instrumentation \(step 8\)/);
+    expect(userRoute).toContain("`stamity run checkpoint --run <run-id> --pr --title <title>`");
+    expect(userRoute).toMatch(/the record with the ranked hypotheses/);
+    expect(userRoute).toMatch(/`--paths` adding the failing test only if one was written, else `Not done: failing test not written`/);
+    expect(userRoute).toMatch(/return `BLOCKED_DEPENDENCY`/);
+    // The pointer comes after the attended stop, so an attended reader meets "Stop and wait" first.
+    expect(userRoute.indexOf("Stop and wait")).toBeLessThan(userRoute.indexOf("When run unattended"));
+
+    // The attended head stays three lines: the Run record paragraph names no mode, branch or base
+    // line, and `Mode:` appears in the body only inside the unattended pointer.
+    const head = body.slice(body.indexOf("**Run record.**"), body.indexOf("1. **Hypotheses.**"));
+    expect(head).toContain("`Status: in progress`");
+    expect(head).toContain("`Plan: none — debug round`");
+    expect(head).toContain("`Invocation: <this command line, verbatim>`");
+    expect(head).not.toMatch(/`Mode:|`Branch:|`Base:/);
+    expect(body.split("`Mode:`").length - 1).toBe(1);
+  });
+
+  it("hands the run's mode to /st-work at step 7 (REQ-FLOW-089)", async () => {
+    const body = (await load("commands/st-debug.md")).parsed.body;
+    const step7 = body
+      .slice(body.indexOf("7. **Fix through the work pipeline.**"), body.indexOf("8. **Instrumentation cleanup.**"))
+      .replace(/\s+/g, " ");
+
+    expect(step7).toContain("`run-mode: attended | unattended`");
+    expect(step7).toMatch(/`--attended` beating the variable/);
+    // The step's existing guarantees stay: debug owns no fix path, and the hand-off is not user-gated.
+    expect(step7).toMatch(/Debug owns no fix path of its own/);
+    expect(step7).toMatch(/the one in-run transition that is not user-gated/);
+  });
 });
 
 describe("quick — the guardrails are the command", () => {
+  it("refuses an unattended run and names the lane that takes it (REQ-FLOW-097)", async () => {
+    const file = await load("commands/st-quick.md");
+    const notQuick = section(file, "What quick is not").replace(/\s+/g, " ");
+
+    expect(notQuick).toContain(
+      "An unattended run does not take /st-quick: run `/st-work --effort light` instead.",
+    );
+    // The refusal sits in the contract paragraph, before any threshold or trivial signal is read.
+    expect(file.parsed.body.indexOf("An unattended run does not take")).toBeLessThan(
+      file.parsed.body.indexOf("## Trivial signals"),
+    );
+  });
+
   it("states the literal thresholds and refuses hard above them", async () => {
     const text = flow(await load("commands/st-quick.md"));
 
