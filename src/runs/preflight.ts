@@ -13,11 +13,14 @@
  * push, or classic protection requiring a pull request that binds this
  * account. No protection, a direct-push bypass, a 403, a 404, a non-GitHub
  * origin, or `GH_REPO` or `GH_HOST` naming another repository or host all
- * refuse. The proof holds only where `git` pushes as the identity the REST
- * reads describe (`gh`'s credential over https, or the cloud proxy, whose
- * platform app is both — a named residual), and for an account without admin
- * on the repository unless an organization ruleset blocks, since a repository
- * admin can lift a repository rule or classic protection. `hooks-loaded` is a
+ * refuse. The proof holds only where every URL `git` pushes origin to goes
+ * out as the identity the REST reads describe (`gh`'s credential alone over
+ * https with no Authorization header, or the cloud proxy, whose platform app is
+ * both — a named residual), and for an account without admin on the repository
+ * unless an organization ruleset blocks that no repository-level act can take
+ * the default branch out of, the account not an organization owner, since a
+ * repository admin can lift a repository rule or classic protection, repoint
+ * the default branch, or rename the repository. `hooks-loaded` is a
  * canary, not a wall: the shell guard writes it, and a steered run could
  * write it too.
  *
@@ -29,6 +32,7 @@
 
 import semver from "semver";
 import { scanValueForSecrets } from "../mcp/secretScan.ts";
+import { resolveRepo } from "./pullRequest.ts";
 
 /** One GitHub REST read: the path (`/repos/...`), answered with its HTTP status and parsed body. */
 export type RestRead = (path: string) => Promise<{ status: number; json: unknown }>;
@@ -48,6 +52,20 @@ export interface PreflightVerdict {
 interface RepoRef {
   owner: string;
   repo: string;
+}
+
+/** One URL `git push origin` pushes to, with what git applies to it; the URL is never echoed. */
+export interface PushUrlFacts {
+  /** As `git remote get-url --push --all origin` prints it (`pushInsteadOf` applied). */
+  url: string;
+  /**
+   * The `credential.helper` list git builds for this URL: every entry that
+   * applies, generic and URL-scoped, in config order, an empty value resetting
+   * it; `null` when an entry cannot be placed.
+   */
+  helpers: readonly string[] | null;
+  /** Whether an `http.extraHeader` naming `Authorization`, generic or URL-scoped, applies to this URL. */
+  authorizationHeader: boolean;
 }
 
 export interface PreflightDeps {
@@ -75,12 +93,11 @@ export interface PreflightDeps {
   /** The emitted copies of the floor rules, one entry per client copy. */
   floors: readonly { id: string; path: string; exists: boolean }[];
   /**
-   * How `git` pushes to origin: the scheme of the URL it pushes to (`proxy` for
-   * Claude Code's cloud origin; `other` for anything else, an https URL carrying
-   * its own credentials included) and the credential helper git resolves for it,
-   * or `null` when none is set.
+   * How `git` pushes to origin, as raw facts this module decides on: origin's
+   * fetch URL (`null` when it has none) and every URL `git push origin`
+   * pushes to, each with its helper list and Authorization-header fact.
    */
-  pushIdentity: { originScheme: "https" | "ssh" | "proxy" | "other"; credentialHelper: string | null };
+  pushIdentity: { fetchUrl: string | null; pushUrls: readonly PushUrlFacts[] };
   /** Whether the review gate holds a counter, and the in-progress record's `usage: review` line count. */
   reviewState: { counter: boolean; usageReviewLines: number };
 }
@@ -98,6 +115,11 @@ const OPEN_FIX =
 const GH_REPO_FIX = "unset GH_REPO, or point it at the origin repository";
 const GH_HOST_FIX = "unset GH_HOST, or set it to the origin's host";
 const PUSH_IDENTITY_FIX = "use an https origin with `gh auth setup-git`";
+const HEADER_FIX =
+  "remove the Authorization http.extraHeader that applies to origin (actions/checkout's persist-credentials: false), " +
+  "and use an https origin with `gh auth setup-git`";
+const PUSH_URL_FIX = "point every push URL of origin at the repository its fetch URL names";
+const ORIGIN_FIX = "point origin at the GitHub repository the run pushes to";
 const ADMIN_FIX = "run as an account or token without admin on this repository";
 
 /**
@@ -200,6 +222,70 @@ async function classicVerdict(rest: RestRead, base: string, branchPath: string, 
   };
 }
 
+/** A list of strings, or `null` for any other shape. */
+function stringList(value: unknown): string[] | null {
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string") ? value : null;
+}
+
+/**
+ * Whether a ruleset's ref `exclude` entry may match `branch`. Over-matching is
+ * the safe side: `*` and `?` cross `/`, and a class, brace or escape counts as
+ * a match, since an exclude that matches takes the branch out of scope.
+ */
+function excludeMayMatch(pattern: string, branch: string): boolean {
+  if (pattern === "~ALL" || pattern === "~DEFAULT_BRANCH") return true;
+  if (/[[\]{}\\]/.test(pattern)) return true;
+  const source = pattern.replace(/[.+^$|()]/g, "\\$&").replace(/\*+/g, ".*").replace(/\?/g, ".");
+  const glob = new RegExp(`^${source}$`);
+  return glob.test(`refs/heads/${branch}`) || glob.test(branch);
+}
+
+/**
+ * Whether an organization ruleset's conditions keep `branch` of the repository
+ * `repoId` in scope whatever a repository admin does: the ref condition
+ * includes `~ALL` or the explicit branch with no exclude matching it, and every
+ * repository condition present is by id (naming this repository) or a name
+ * `~ALL` with no exclude. `~DEFAULT_BRANCH` follows a repoint, a name pattern a
+ * rename, a property an edit; absent or unreadable conditions do not count.
+ */
+function pinsDefaultBranch(conditions: unknown, branch: string, repoId: unknown): boolean {
+  if (!isRecord(conditions)) return false;
+  const refName = conditions["ref_name"];
+  if (!isRecord(refName)) return false;
+  const include = stringList(refName["include"]);
+  const exclude = stringList(refName["exclude"] ?? []);
+  if (include === null || exclude === null) return false;
+  if (!include.some((entry) => entry === "~ALL" || entry === `refs/heads/${branch}`)) return false;
+  if (exclude.some((entry) => excludeMayMatch(entry, branch))) return false;
+
+  if (conditions["repository_property"] !== undefined && conditions["repository_property"] !== null) return false;
+  const byId = conditions["repository_id"];
+  const byName = conditions["repository_name"];
+  const hasId = byId !== undefined && byId !== null;
+  const hasName = byName !== undefined && byName !== null;
+  if (!hasId && !hasName) return false;
+  if (hasId) {
+    const ids = isRecord(byId) ? byId["repository_ids"] : undefined;
+    if (typeof repoId !== "number" || !Array.isArray(ids) || !ids.includes(repoId)) return false;
+  }
+  if (hasName) {
+    const names = isRecord(byName) ? stringList(byName["include"]) : null;
+    const excluded = isRecord(byName) ? stringList(byName["exclude"] ?? []) : null;
+    if (names === null || excluded === null || !names.includes("~ALL") || excluded.length > 0) return false;
+  }
+  return true;
+}
+
+/** The account's role in `org`: `member` takes an organization ruleset's exception; an owner or an unread role does not. */
+async function organizationMember(rest: RestRead, org: string): Promise<{ member: boolean; evidence: string }> {
+  const reply = await read(rest, `/user/memberships/orgs/${org}`);
+  const role = reply !== null && reply.status === 200 && isRecord(reply.json) ? reply.json["role"] : undefined;
+  if (role === "member") return { member: true, evidence: "" };
+  if (role === "admin") return { member: false, evidence: "the account is an owner of the organization and can edit its rulesets" };
+  if (typeof role === "string") return { member: false, evidence: "the account's organization role is not plain membership" };
+  return { member: false, evidence: `the account's organization role is unreadable (${statusText(reply)})` };
+}
+
 async function inspectDirectPush(rest: RestRead, repo: RepoRef): Promise<DirectPushDetail> {
   if (!safeRepo(repo.owner, repo.repo)) {
     return { verdict: "unknown", evidence: "the origin repository's name is not a GitHub name", mergeBypass: false };
@@ -227,8 +313,11 @@ async function inspectDirectPush(rest: RestRead, repo: RepoRef): Promise<DirectP
   }
   // With no rights block in the reply the account may be an administrator, the
   // stricter reading. An administrator can lift a repository ruleset or classic
-  // protection with one REST call, so only an organization ruleset binds it.
+  // protection with one REST call, so only an organization ruleset binds it, and
+  // only one whose conditions no repository-level act can move off the branch
+  // (`pinsDefaultBranch`), for an account that is no organization owner.
   const isAdmin = !isRecord(permissions) || permissions["admin"] !== false;
+  const repoId = repoReply.json["id"];
   const branchPath = encodeURIComponent(branch);
 
   const rulesReply = await read(rest, `${base}/rules/branches/${branchPath}`);
@@ -253,6 +342,8 @@ async function inspectDirectPush(rest: RestRead, repo: RepoRef): Promise<DirectP
     const rulesets = [...organizationByRuleset];
     const replies = await Promise.all(rulesets.map(([id]) => read(rest, `${base}/rulesets/${id}`)));
     const blocking: { id: number; bypass: string }[] = [];
+    /** Organization rulesets that pin the branch, binding an administrator once its role reads plain membership. */
+    const adminBlocking: { id: number; bypass: string }[] = [];
     for (const [index, [id, organization]] of rulesets.entries()) {
       const reply = replies[index] ?? null;
       if (reply === null || reply.status !== 200 || !isRecord(reply.json)) {
@@ -269,11 +360,27 @@ async function inspectDirectPush(rest: RestRead, repo: RepoRef): Promise<DirectP
           notes.push(`the account administers the repository and can lift repository ruleset ${id}`);
           continue;
         }
+        if (isAdmin) {
+          if (pinsDefaultBranch(reply.json["conditions"], branch, repoId)) {
+            adminBlocking.push({ id, bypass });
+          } else {
+            notes.push(
+              `organization ruleset ${id}'s conditions do not keep the default branch in scope against a repository ` +
+                "admin's acts (a ~DEFAULT_BRANCH, name or property target, an exclude, or conditions unread)",
+            );
+          }
+          continue;
+        }
         blocking.push({ id, bypass });
         continue;
       }
       const how = bypass === "always" ? "always" : "no bypass value read, counted as a bypass";
       notes.push(`the account bypasses ruleset ${id} (${how})`);
+    }
+    if (adminBlocking.length > 0) {
+      const role = await organizationMember(rest, repo.owner);
+      if (role.member) blocking.push(...adminBlocking);
+      else notes.push(`${role.evidence}, so no organization ruleset binds it`);
     }
     if (blocking.length > 0) {
       const named = blocking.map(({ id, bypass }) => `${id} (bypass ${bypass})`).join(", ");
@@ -436,32 +543,89 @@ function isGhCredentialHelper(helper: string | null): boolean {
   return name === "gh" || name === "gh.exe";
 }
 
-/** Whether `git` pushes as the identity the REST reads describe; the evidence never echoes the helper. */
-function pushIdentityCheck(identity: PreflightDeps["pushIdentity"]): { bound: boolean; evidence: string } {
-  switch (identity.originScheme) {
-    case "proxy":
-      return {
-        bound: true,
-        evidence:
-          "git pushes through the cloud proxy, whose platform app is both the push and the REST identity " +
-          "(a named residual)",
-      };
-    case "https":
-      if (isGhCredentialHelper(identity.credentialHelper)) {
-        return { bound: true, evidence: "git pushes over https with gh's credential, the REST reads' identity" };
-      }
-      return {
-        bound: false,
-        evidence:
-          identity.credentialHelper === null
-            ? "git pushes over https with no credential helper, so its identity is not gh's"
-            : "git pushes over https through a credential helper other than gh's, so its identity is not proven gh's",
-      };
-    case "ssh":
-      return { bound: false, evidence: "git pushes over ssh, whose key may be another identity than gh's" };
-    default:
-      return { bound: false, evidence: "git pushes through a transport the pre-flight cannot tie to gh's identity" };
+/** u4's `CLAUDE_PROXY_ORIGIN`: the proxy origin Claude Code's cloud gives a checkout. */
+const CLAUDE_PROXY_URL = /^http:\/\/[^/@\s]+@127\.0\.0\.1:[0-9]{1,5}\/git\/[^/\s]+\/[^/\s]+?(?:\.git)?\/?$/;
+
+/** A push URL's transport: `https` only with no userinfo; `other` for anything not tied to a known identity. */
+function pushKind(url: string): "proxy" | "https" | "ssh" | "other" {
+  const trimmed = url.trim();
+  if (CLAUDE_PROXY_URL.test(trimmed)) return "proxy";
+  if (/^https:\/\//i.test(trimmed)) {
+    try {
+      const parsed = new URL(trimmed);
+      return parsed.username === "" && parsed.password === "" ? "https" : "other";
+    } catch {
+      return "other";
+    }
   }
+  if (/^(?:ssh|git\+ssh|ssh\+git):\/\//i.test(trimmed)) return "ssh";
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) && /^(?:[^@/\s:]+@)?[^/\s:]+:/.test(trimmed)) return "ssh";
+  return "other";
+}
+
+/**
+ * Whether every URL `git push origin` pushes to goes out as the identity the
+ * REST reads describe, on the repository the fetch URL names; the evidence
+ * never echoes a URL or a helper.
+ */
+function pushIdentityCheck(deps: PreflightDeps, repo: RepoRef): { bound: boolean; evidence: string; fix: string } {
+  const unbound = (evidence: string, fix: string) => ({ bound: false, evidence, fix });
+  const { fetchUrl, pushUrls } = deps.pushIdentity;
+  const origin = fetchUrl === null ? null : resolveRepo(deps.env, fetchUrl);
+  if (
+    origin === null ||
+    origin.owner.toLowerCase() !== repo.owner.toLowerCase() ||
+    origin.repo.toLowerCase() !== repo.repo.toLowerCase()
+  ) {
+    return unbound("origin's fetch URL does not name the repository checked", ORIGIN_FIX);
+  }
+  if (pushUrls.length === 0) return unbound("git names no push URL for origin", PUSH_IDENTITY_FIX);
+  const kinds = new Set<string>();
+  for (const [index, facts] of pushUrls.entries()) {
+    const which = pushUrls.length === 1 ? "the push URL" : `push URL ${index + 1} of ${pushUrls.length}`;
+    if (facts.authorizationHeader) {
+      return unbound(`an Authorization http.extraHeader applies to ${which}, so git pushes as that header's credential`, HEADER_FIX);
+    }
+    const kind = pushKind(facts.url);
+    if (kind === "ssh") return unbound(`${which} is ssh, whose key may be another identity than gh's`, PUSH_IDENTITY_FIX);
+    if (kind === "other") {
+      return unbound(
+        `${which} carries its own credentials or uses a transport the pre-flight cannot tie to gh's identity`,
+        PUSH_IDENTITY_FIX,
+      );
+    }
+    const target = resolveRepo(deps.env, facts.url);
+    const same =
+      target !== null &&
+      target.host === origin.host &&
+      target.owner.toLowerCase() === origin.owner.toLowerCase() &&
+      target.repo.toLowerCase() === origin.repo.toLowerCase();
+    if (!same) return unbound(`${which} names another repository than the fetch URL's`, PUSH_URL_FIX);
+    if (kind === "https") {
+      const helpers = facts.helpers;
+      if (helpers === null) {
+        return unbound(`the credential helpers for ${which} cannot be placed, so its identity is not proven gh's`, PUSH_IDENTITY_FIX);
+      }
+      if (helpers.length === 0) {
+        return unbound(`git pushes ${which} over https with no credential helper, so its identity is not gh's`, PUSH_IDENTITY_FIX);
+      }
+      if (helpers.length !== 1 || !isGhCredentialHelper(helpers[0] ?? null)) {
+        return unbound(
+          `git pushes ${which} over https through a credential helper other than gh's alone, so its identity is not proven gh's`,
+          PUSH_IDENTITY_FIX,
+        );
+      }
+    }
+    kinds.add(kind);
+  }
+  const count = pushUrls.length === 1 ? "one push URL" : `${pushUrls.length} push URLs`;
+  const ways = [
+    ...(kinds.has("https") ? ["over https with gh's credential, the REST reads' identity"] : []),
+    ...(kinds.has("proxy")
+      ? ["through the cloud proxy, whose platform app is both the push and the REST identity (a named residual)"]
+      : []),
+  ];
+  return { bound: true, evidence: `git pushes to ${count} on origin's repository ${ways.join(", or ")}`, fix: "" };
 }
 
 interface DirectPushCheck {
@@ -479,7 +643,8 @@ async function directPush(deps: PreflightDeps): Promise<DirectPushCheck> {
   // takes a non-proxy origin only on that host, and the proxy origin is github.com.
   const configuredHost = deps.env["GH_HOST"]?.trim() ?? "";
   const ghHost = configuredHost === "" ? "github.com" : hostOf(configuredHost);
-  const originHost = deps.pushIdentity.originScheme === "proxy" ? "github.com" : ghHost;
+  const fetchUrl = deps.pushIdentity.fetchUrl?.trim() ?? "";
+  const originHost = CLAUDE_PROXY_URL.test(fetchUrl) ? "github.com" : ghHost;
   if (ghHost !== originHost) {
     return settle("refuse", `GH_HOST names another host than the origin's (${originHost})`, GH_HOST_FIX);
   }
@@ -501,16 +666,15 @@ async function directPush(deps: PreflightDeps): Promise<DirectPushCheck> {
     }
   }
   if (deps.repo === null) {
-    const fix = "point origin at the GitHub repository the run pushes to";
-    return settle("unknown", "no GitHub origin repository to check", fix);
+    return settle("unknown", "no GitHub origin repository to check", ORIGIN_FIX);
   }
   if (deps.rest === null) {
     return settle("unknown", "no REST access (gh is unavailable), so no direct-push block is proven", NO_REST_FIX);
   }
   const name = `${deps.repo.owner}/${deps.repo.repo}`;
-  const identity = pushIdentityCheck(deps.pushIdentity);
+  const identity = pushIdentityCheck(deps, deps.repo);
   if (!identity.bound) {
-    return settle("unknown", `${name}: ${identity.evidence}, so the REST reads prove nothing about it`, PUSH_IDENTITY_FIX);
+    return settle("unknown", `${name}: ${identity.evidence}, so the REST reads prove nothing about it`, identity.fix);
   }
   const detail = await inspectDirectPush(deps.rest, deps.repo);
   if (detail.verdict === "blocked") {
@@ -585,12 +749,12 @@ function credentialName(name: string): boolean {
 }
 
 /**
- * Last name segments of plain path-holding variables (`PWD`, `OLDPWD`, `HOME`,
- * `PATH`, `TMPDIR`, `NODE_PATH`, `XDG_CONFIG_HOME`). Their values are paths: a
- * long checkout path of letters, digits and slashes matches the scanner's
- * high-entropy row, and `PWD` reads as credential context to it.
+ * Plain path-holding variables, matched by whole name only. Their values are
+ * paths: a long checkout path of letters, digits and slashes matches the
+ * scanner's high-entropy row, and `PWD` reads as credential context to it. A
+ * name that only ends in one (`MYSQL_PWD`) is not a path holder.
  */
-const PATH_SEGMENTS = new Set(["PWD", "OLDPWD", "HOME", "PATH", "TMPDIR", "DIR", "CWD"]);
+const PATH_NAMES = new Set(["PWD", "OLDPWD", "HOME", "PATH", "TMPDIR", "NODE_PATH", "XDG_CONFIG_HOME"]);
 
 /** Variables whose name or value is credential-shaped, by name only, sorted. */
 function tokenEnvNames(env: PreflightDeps["env"]): string[] {
@@ -601,7 +765,7 @@ function tokenEnvNames(env: PreflightDeps["env"]): string[] {
       names.push(name);
       continue;
     }
-    const pathHolder = PATH_SEGMENTS.has(nameSegments(name).at(-1) ?? "");
+    const pathHolder = PATH_NAMES.has(name.toUpperCase());
     // A path holder is named only on a recognised token inside it, never on the high-entropy row.
     const hits = scanValueForSecrets(name, value).filter(
       (hit) => !pathHolder || hit.patternId !== "high-entropy-string",

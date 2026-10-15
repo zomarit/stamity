@@ -6,6 +6,7 @@ import {
   runPreflight,
   type PreflightDeps,
   type PreflightVerdict,
+  type PushUrlFacts,
   type RestRead,
 } from "../../src/runs/preflight.ts";
 
@@ -45,9 +46,9 @@ function secondsBefore(seconds: number): string {
   return new Date(NOW.getTime() - seconds * 1000).toISOString();
 }
 
-/** The repository read: default branch `main`, the account's rights as given. */
+/** The repository read: id 42, default branch `main`, the account's rights as given. */
 function repoReply(permissions: Record<string, boolean> | undefined): Reply {
-  return { status: 200, json: { default_branch: "main", ...(permissions === undefined ? {} : { permissions }) } };
+  return { status: 200, json: { id: 42, default_branch: "main", ...(permissions === undefined ? {} : { permissions }) } };
 }
 
 const WRITER = { admin: false, maintain: false, push: true, triage: true, pull: true };
@@ -66,7 +67,15 @@ function pullRequestRule(rulesetId: number, reviews = 1, source: "Repository" | 
 /** The credential helper `gh auth setup-git` writes. */
 const GH_HELPER = "!/opt/homebrew/bin/gh auth git-credential";
 
-function ruleset(id: number, enforcement: string, bypass: string | undefined): Reply {
+const FETCH_URL = "https://github.com/o/r.git";
+const PROXY_URL = "http://proxy@127.0.0.1:43123/git/o/r";
+
+/** One push URL's facts: by default origin's own https URL, gh's helper alone, no Authorization header. */
+function pushTo(url = FETCH_URL, helpers: readonly string[] | null = [GH_HELPER], authorizationHeader = false): PushUrlFacts {
+  return { url, helpers, authorizationHeader };
+}
+
+function ruleset(id: number, enforcement: string, bypass: string | undefined, conditions?: unknown): Reply {
   return {
     status: 200,
     json: {
@@ -75,10 +84,21 @@ function ruleset(id: number, enforcement: string, bypass: string | undefined): R
       target: "branch",
       enforcement,
       ...(bypass === undefined ? {} : { current_user_can_bypass: bypass }),
+      ...(conditions === undefined ? {} : { conditions }),
       rules: [{ type: "pull_request" }],
     },
   };
 }
+
+/** An organization ruleset's conditions: every repository by name, the given ref include and exclude. */
+function orgConditions(include: string[], exclude: string[] = [], repository?: Record<string, unknown>): unknown {
+  return {
+    ref_name: { include, exclude },
+    ...(repository ?? { repository_name: { include: ["~ALL"], exclude: [], protected: false } }),
+  };
+}
+
+const MEMBER: Reply = { status: 200, json: { state: "active", role: "member", organization: { login: "o" } } };
 
 const NOT_FOUND: Reply = { status: 404, json: { message: "Branch not protected" } };
 
@@ -105,7 +125,7 @@ function greenDeps(overrides: Partial<PreflightDeps> = {}): PreflightDeps {
       { id: "question-protocol", path: "x/rules/question.md", exists: true },
       { id: "injection-screening", path: "x/rules/screening.md", exists: true },
     ],
-    pushIdentity: { originScheme: "https", credentialHelper: GH_HELPER },
+    pushIdentity: { fetchUrl: FETCH_URL, pushUrls: [pushTo()] },
     reviewState: { counter: true, usageReviewLines: 0 },
     ...overrides,
   };
@@ -255,14 +275,79 @@ describe("directPushVerdict — rulesets", () => {
   });
 
   it("an administrator under an organization ruleset with no bypass is blocked, since it cannot lift that rule", async () => {
-    const { rest } = restTable({
+    // Since review/60 and review/65 the ruleset's conditions must pin the branch and the account must be a plain
+    // organization member; this case carries both, and the cases below take each away.
+    const { rest, calls } = restTable({
       "/repos/o/r": repoReply(ADMIN),
       "/repos/o/r/rules/branches/main": { status: 200, json: [pullRequestRule(9, 1, "Organization")] },
-      "/repos/o/r/rulesets/9": ruleset(9, "active", "never"),
+      "/repos/o/r/rulesets/9": ruleset(9, "active", "never", orgConditions(["~ALL"])),
+      "/user/memberships/orgs/o": MEMBER,
     });
     expect(await directPushVerdict(rest, REPO)).toBe("blocked");
+    expect(calls).toContain("/user/memberships/orgs/o");
     const verdict = await runPreflight(greenDeps({ rest }));
     expect(check(verdict, "direct-push").state).toBe("pass");
+  });
+
+  describe("an administrator and an organization ruleset's conditions (review/60, review/65)", () => {
+    const adminUnder = (conditions: unknown, membership: Reply = MEMBER): RestRead =>
+      restTable({
+        "/repos/o/r": repoReply(ADMIN),
+        "/repos/o/r/rules/branches/main": { status: 200, json: [pullRequestRule(9, 1, "Organization")] },
+        "/repos/o/r/rulesets/9": ruleset(9, "active", "never", conditions),
+        "/user/memberships/orgs/o": membership,
+      }).rest;
+
+    it.each([
+      ["~ALL", orgConditions(["~ALL"])],
+      ["the explicit default branch", orgConditions(["refs/heads/main"])],
+      ["an exclude that cannot match the branch", orgConditions(["~ALL"], ["refs/heads/release/v1"])],
+      ["the repository by id", orgConditions(["refs/heads/main"], [], { repository_id: { repository_ids: [7, 42] } })],
+    ])("a ref target of %s blocks", async (_label, conditions) => {
+      expect(await directPushVerdict(adminUnder(conditions), REPO)).toBe("blocked");
+    });
+
+    it.each([
+      ["~DEFAULT_BRANCH, which follows a repoint", orgConditions(["~DEFAULT_BRANCH"])],
+      ["another branch only", orgConditions(["refs/heads/trunk"])],
+      ["an exclude of ~DEFAULT_BRANCH", orgConditions(["~ALL"], ["~DEFAULT_BRANCH"])],
+      ["an exclude pattern matching the branch", orgConditions(["~ALL"], ["refs/heads/ma*"])],
+      ["an exclude with a character class", orgConditions(["~ALL"], ["refs/heads/[xyz]"])],
+      ["a repository name pattern, which follows a rename", orgConditions(["~ALL"], [], { repository_name: { include: ["r*"], exclude: [] } })],
+      ["a repository name ~ALL with an exclude", orgConditions(["~ALL"], [], { repository_name: { include: ["~ALL"], exclude: ["x"] } })],
+      ["a repository property", orgConditions(["~ALL"], [], { repository_property: { include: [], exclude: [] } })],
+      ["a repository id list without this repository", orgConditions(["~ALL"], [], { repository_id: { repository_ids: [7] } })],
+      ["no repository condition", { ref_name: { include: ["~ALL"], exclude: [] } }],
+      ["no conditions", undefined],
+      ["an unreadable ref condition", { ref_name: { include: "~ALL" }, repository_name: { include: ["~ALL"], exclude: [] } }],
+    ])("a target of %s does not bind the administrator: open, refused with the admin fix", async (_label, conditions) => {
+      const rest = adminUnder(conditions);
+      expect(await directPushVerdict(rest, REPO)).toBe("open");
+      const verdict = await runPreflight(greenDeps({ rest }));
+      expect(check(verdict, "direct-push").state).toBe("refuse");
+      expect(refusal(verdict, "direct-push")?.fix).toBe("run as an account or token without admin on this repository");
+    });
+
+    it.each([
+      ["an organization owner", { status: 200, json: { state: "active", role: "admin" } }],
+      ["a role the read does not return (404, an outside collaborator)", { status: 404, json: { message: "Not Found" } }],
+      ["a role the token cannot read (403)", { status: 403, json: { message: "Forbidden" } }],
+    ] as const)("%s gets no organization-ruleset exception", async (_label, membership) => {
+      const rest = adminUnder(orgConditions(["~ALL"]), membership);
+      expect(await directPushVerdict(rest, REPO)).toBe("open");
+      const verdict = await runPreflight(greenDeps({ rest }));
+      expect(check(verdict, "direct-push").state).toBe("refuse");
+    });
+
+    it("a writer under the same ~DEFAULT_BRANCH organization ruleset is still blocked, reading no role", async () => {
+      const { rest, calls } = restTable({
+        "/repos/o/r": repoReply(WRITER),
+        "/repos/o/r/rules/branches/main": { status: 200, json: [pullRequestRule(9, 1, "Organization")] },
+        "/repos/o/r/rulesets/9": ruleset(9, "active", "never", orgConditions(["~DEFAULT_BRANCH"])),
+      });
+      expect(await directPushVerdict(rest, REPO)).toBe("blocked");
+      expect(calls).not.toContain("/user/memberships/orgs/o");
+    });
   });
 
   it("a reply with no rights block is taken as an administrator, and an unread ruleset beside it is unknown", async () => {
@@ -418,8 +503,14 @@ describe("runPreflight — direct-push inputs", () => {
   it("GH_REPO on another host, or in a shape that cannot be read, refuses", async () => {
     const elsewhere = await runPreflight(greenDeps({ ghRepoEnv: "git.example.com/o/r" }));
     expect(check(elsewhere, "direct-push").state).toBe("refuse");
+    // Since review/63 and review/64 the push identity is read from origin's URLs, so the enterprise case names its own.
+    const enterpriseUrl = "https://git.example.com/o/r.git";
     const enterprise = await runPreflight(
-      greenDeps({ ghRepoEnv: "git.example.com/o/r", env: { GH_HOST: "git.example.com" } }),
+      greenDeps({
+        ghRepoEnv: "git.example.com/o/r",
+        env: { GH_HOST: "git.example.com" },
+        pushIdentity: { fetchUrl: enterpriseUrl, pushUrls: [pushTo(enterpriseUrl)] },
+      }),
     );
     expect(check(enterprise, "direct-push").state).toBe("pass");
     const url = await runPreflight(greenDeps({ ghRepoEnv: "https://github.com/o/r" }));
@@ -431,12 +522,20 @@ describe("runPreflight — direct-push inputs", () => {
     const crossHost = await runPreflight(greenDeps({ env, ghRepoEnv: "github.com/o/r" }));
     expect(check(crossHost, "direct-push").state).toBe("refuse");
     expect(check(crossHost, "direct-push").evidence).toContain("another host");
-    const bare = await runPreflight(greenDeps({ env: { GH_HOST: "https://GHE.example.com:443/" }, ghRepoEnv: "o/r" }));
+    // The origin's URLs sit on the GH_HOST host, as they must for the push identity to resolve (review/63, review/64).
+    const gheUrl = "https://ghe.example.com/o/r.git";
+    const bare = await runPreflight(
+      greenDeps({
+        env: { GH_HOST: "https://GHE.example.com:443/" },
+        ghRepoEnv: "o/r",
+        pushIdentity: { fetchUrl: gheUrl, pushUrls: [pushTo(gheUrl)] },
+      }),
+    );
     expect(check(bare, "direct-push").state).toBe("pass");
   });
 
   it("a proxy origin reads as github.com, so a GH_HOST naming another host refuses (review/39)", async () => {
-    const proxy = { originScheme: "proxy", credentialHelper: null } as const;
+    const proxy = { fetchUrl: PROXY_URL, pushUrls: [pushTo(PROXY_URL, null)] };
     const { rest, calls } = restTable({});
     const elsewhere = await runPreflight(greenDeps({ rest, pushIdentity: proxy, env: { GH_HOST: "ghe.example.com" } }));
     expect(check(elsewhere, "direct-push").state).toBe("refuse");
@@ -462,36 +561,95 @@ describe("runPreflight — the push identity (review/36)", () => {
     ["gh's helper at a quoted Windows path", "!'C:\\Program Files\\GitHub CLI\\gh.exe' auth git-credential"],
     ["gh's helper on PATH", "!gh auth git-credential"],
   ])("an https origin with %s passes", async (_label, helper) => {
-    const verdict = await runPreflight(greenDeps({ pushIdentity: { originScheme: "https", credentialHelper: helper } }));
+    const verdict = await runPreflight(greenDeps({ pushIdentity: { fetchUrl: FETCH_URL, pushUrls: [pushTo(FETCH_URL, [helper])] } }));
     expect(check(verdict, "direct-push").state).toBe("pass");
     expect(check(verdict, "direct-push").evidence).toContain("gh's credential");
   });
 
   it("the cloud proxy origin passes and names its residual", async () => {
-    const verdict = await runPreflight(greenDeps({ pushIdentity: { originScheme: "proxy", credentialHelper: null } }));
+    const verdict = await runPreflight(greenDeps({ pushIdentity: { fetchUrl: PROXY_URL, pushUrls: [pushTo(PROXY_URL, null)] } }));
     expect(check(verdict, "direct-push").state).toBe("pass");
     expect(check(verdict, "direct-push").evidence).toContain("residual");
   });
 
   it.each([
-    ["ssh", null],
-    ["other", GH_HELPER],
-    ["https", null],
-    ["https", "osxkeychain"],
-    ["https", "!evil && /usr/bin/gh auth git-credential"],
-    ["https", "!/tmp/not-gh auth git-credential"],
-    ["https", "!/usr/bin/gh auth status"],
-  ] as const)("a %s origin with helper %s is unknown, refused with the gh fix, and reads nothing", async (scheme, helper) => {
+    ["an ssh push URL", pushTo("git@github.com:o/r.git", [])],
+    ["an ssh:// push URL", pushTo("ssh://git@github.com/o/r.git", [GH_HELPER])],
+    ["an https push URL carrying credentials", pushTo("https://x-access-token:s3cr3tvalue@github.com/o/r", [GH_HELPER])],
+    ["a plain http push URL", pushTo("http://github.com/o/r", [GH_HELPER])],
+    ["no credential helper", pushTo(FETCH_URL, [])],
+    ["a helper list that cannot be placed", pushTo(FETCH_URL, null)],
+    ["osxkeychain", pushTo(FETCH_URL, ["osxkeychain"])],
+    ["gh's helper beside another", pushTo(FETCH_URL, [GH_HELPER, "osxkeychain"])],
+    ["a helper chaining a command", pushTo(FETCH_URL, ["!evil && /usr/bin/gh auth git-credential"])],
+    ["a helper that is not gh", pushTo(FETCH_URL, ["!/tmp/not-gh auth git-credential"])],
+    ["gh's binary on another verb", pushTo(FETCH_URL, ["!/usr/bin/gh auth status"])],
+  ])("%s is unknown, refused with the gh fix, and reads nothing", async (_label, facts) => {
     const { rest, calls } = restTable({});
-    const verdict = await runPreflight(
-      greenDeps({ rest, pushIdentity: { originScheme: scheme, credentialHelper: helper } }),
-    );
+    const verdict = await runPreflight(greenDeps({ rest, pushIdentity: { fetchUrl: FETCH_URL, pushUrls: [facts] } }));
     expect(check(verdict, "direct-push").state).toBe("unknown");
     expect(refusal(verdict, "direct-push")?.fix).toBe(fix);
     expect(verdict.ok).toBe(false);
     expect(calls).toEqual([]);
-    // The helper text is never echoed.
-    if (helper !== null) expect(JSON.stringify(verdict)).not.toContain(helper);
+    // Neither the URL nor a helper is ever echoed.
+    const text = JSON.stringify(verdict);
+    expect(text).not.toContain(facts.url);
+    for (const helper of facts.helpers ?? []) expect(text).not.toContain(helper);
+  });
+
+  it("an Authorization http.extraHeader on the push URL is unknown and reads nothing, the same URL without it passes (review/63)", async () => {
+    const { rest, calls } = restTable({});
+    const headed = await runPreflight(
+      greenDeps({ rest, pushIdentity: { fetchUrl: FETCH_URL, pushUrls: [pushTo(FETCH_URL, [GH_HELPER], true)] } }),
+    );
+    expect(check(headed, "direct-push").state).toBe("unknown");
+    expect(check(headed, "direct-push").evidence).toContain("Authorization http.extraHeader");
+    expect(refusal(headed, "direct-push")?.fix).toContain("persist-credentials: false");
+    expect(calls).toEqual([]);
+    // The cloud proxy is no exception: a header that applies to it sends that header's credential too.
+    const proxied = await runPreflight(
+      greenDeps({ pushIdentity: { fetchUrl: PROXY_URL, pushUrls: [pushTo(PROXY_URL, null, true)] } }),
+    );
+    expect(check(proxied, "direct-push").state).toBe("unknown");
+    const clean = await runPreflight(greenDeps({ pushIdentity: { fetchUrl: FETCH_URL, pushUrls: [pushTo()] } }));
+    expect(check(clean, "direct-push").state).toBe("pass");
+  });
+
+  const twice = (second: PushUrlFacts): PreflightDeps["pushIdentity"] => ({ fetchUrl: FETCH_URL, pushUrls: [pushTo(), second] });
+
+  it.each([
+    ["ssh", pushTo("git@github.com:o/r.git", []), "push URL 2 of 2 is ssh"],
+    ["on another repository", pushTo("https://github.com/someone/else.git"), "push URL 2 of 2 names another repository"],
+    ["under an Authorization header", pushTo(FETCH_URL, [GH_HELPER], true), "applies to push URL 2 of 2"],
+    ["through another helper", pushTo(FETCH_URL, ["osxkeychain"]), "push URL 2 of 2"],
+  ] as const)("every push URL is read: a second one %s is unknown and reads nothing (review/64)", async (_label, second, evidence) => {
+    const { rest, calls } = restTable({});
+    const verdict = await runPreflight(greenDeps({ rest, pushIdentity: twice(second) }));
+    expect(check(verdict, "direct-push").state).toBe("unknown");
+    expect(check(verdict, "direct-push").evidence).toContain(evidence);
+    expect(calls).toEqual([]);
+  });
+
+  it("two push URLs that both bind pass (review/64)", async () => {
+    const both = await runPreflight(greenDeps({ pushIdentity: twice(pushTo("https://GitHub.com/O/R")) }));
+    expect(check(both, "direct-push").state).toBe("pass");
+    expect(check(both, "direct-push").evidence).toContain("2 push URLs");
+  });
+
+  it("a push URL on another repository, no push URL, or a fetch URL off the checked repository is unknown", async () => {
+    const elsewhere = await runPreflight(
+      greenDeps({ pushIdentity: { fetchUrl: FETCH_URL, pushUrls: [pushTo("https://github.com/o/other")] } }),
+    );
+    expect(check(elsewhere, "direct-push").state).toBe("unknown");
+    expect(refusal(elsewhere, "direct-push")?.fix).toBe("point every push URL of origin at the repository its fetch URL names");
+    const none = await runPreflight(greenDeps({ pushIdentity: { fetchUrl: FETCH_URL, pushUrls: [] } }));
+    expect(check(none, "direct-push").state).toBe("unknown");
+    const noFetch = await runPreflight(greenDeps({ pushIdentity: { fetchUrl: null, pushUrls: [pushTo()] } }));
+    expect(check(noFetch, "direct-push").state).toBe("unknown");
+    const offRepo = await runPreflight(
+      greenDeps({ pushIdentity: { fetchUrl: "https://github.com/o/other.git", pushUrls: [pushTo("https://github.com/o/other.git")] } }),
+    );
+    expect(check(offRepo, "direct-push").state).toBe("unknown");
   });
 });
 
@@ -646,7 +804,16 @@ describe("runPreflight — input-author", () => {
       "/repos/acme_corp/r/issues/12": { status: 200, json: { number: 12, user: { login: "jdoe_acme", type: "User" } } },
       "/repos/acme_corp/r/collaborators/jdoe_acme/permission": { status: 200, json: { permission: "write" } },
     });
-    const verdict = await runPreflight(greenDeps({ rest, repo: emu, item: { ...emu, number: 12 } }));
+    // The origin's URLs name the same repository, as the push identity requires since review/63 and review/64.
+    const emuUrl = "https://github.com/acme_corp/r.git";
+    const verdict = await runPreflight(
+      greenDeps({
+        rest,
+        repo: emu,
+        item: { ...emu, number: 12 },
+        pushIdentity: { fetchUrl: emuUrl, pushUrls: [pushTo(emuUrl)] },
+      }),
+    );
     expect(check(verdict, "direct-push").state).toBe("pass");
     expect(check(verdict, "input-author").state).toBe("pass");
   });
@@ -685,6 +852,14 @@ describe("runPreflight — warnings", () => {
     const tokenValue = ["ghp", "_", "Zq8".repeat(12)].join("");
     const leaked = await runPreflight(greenDeps({ env: { PATH: `/bin:${tokenValue}` } }));
     expect(leaked.warnings.find((warning) => warning.id === "token-env")?.names).toEqual(["PATH"]);
+  });
+
+  it("a long password in a name only ending in PWD is named: path holders match whole names (review/66)", async () => {
+    // 48 base64-shaped characters, built at run time: the high-entropy row with PWD as credential context.
+    const password = ["Kq7", "Zp2", "Wm9", "Xr4"].join("").repeat(4);
+    const verdict = await runPreflight(greenDeps({ env: { MYSQL_PWD: password, DB_PWD: password, PWD: password } }));
+    expect(verdict.warnings.find((warning) => warning.id === "token-env")?.names).toEqual(["DB_PWD", "MYSQL_PWD"]);
+    expect(JSON.stringify(verdict)).not.toContain(password);
   });
 
   it("no credential-shaped variable gives no token-env warning", async () => {
