@@ -26,11 +26,11 @@ other than empty, `false` or `0` (`STAMITY_UNATTENDED=1` on a cloud environment,
 wins over the variable, `--attended` beats the variable, and `--resume` is always attended. A client's cloud marker
 or `CI` in the environment means "cloud", never "unattended", and a record head with no `Mode:` line reads attended.
 
-Every touchpoint that pushes first runs `stamity run start --run <id> --json`, then writes three head lines among
-the record's first 15, bare at column 0: `Mode: unattended`, `Branch: <the run's branch>` and `Base: <commit>`, the
-last two from its `branch` and `base`. `Mode:` is written once at Frame and never rewritten. An in-session hand-off
-to `/st-work` carries `run-mode: attended | unattended`, the caller's resolved mode, which wins over `/st-work`'s
-own reading of the variable; a hand-off read from disk carries `run-mode: attended`.
+Every touchpoint that pushes, `/st-pr-resolve` aside, first runs `stamity run start --run <id> --json`, then writes
+three head lines among the record's first 15, bare at column 0: `Mode: unattended`, `Branch: <the run's branch>` and
+`Base: <commit>`, the last two from its `branch` and `base`. `Mode:` is written once at Frame and never rewritten. An
+in-session hand-off to `/st-work` carries `run-mode: attended | unattended`, the caller's resolved mode, which wins
+over `/st-work`'s own reading of the variable; a hand-off read from disk carries `run-mode: attended`.
 
 ## Before Frame
 
@@ -38,9 +38,8 @@ own reading of the variable; a hand-off read from disk carries `run-mode: attend
    with `--item <owner/repo#n>` when the input is a board item or an issue. Exit 1 is a refusal: each of its
    `refusals[]` reasons goes first on the morning list under `## Refused`, with its `fix`. The run never computes a
    verdict of its own, and never retries the check against another repository.
-2. **The two floors load by name.** The question protocol and the injection-screening rule are read from the
-   paths in the verdict's `floors[]`, and the record holds `floors loaded: question-protocol, injection-screening`.
-   A floor whose file is absent is a refusal, never a run without it.
+2. **The two floors load by name**, from the paths in the verdict's `floors[]`, and the record holds
+   `floors loaded: question-protocol, injection-screening`; an absent floor file is a refusal, never a run without it.
 3. **Learnings are read through the screen.** From the session-start banner when one printed; else
    `stamity learn read` (`--body <id>` for one body) beside `stamity handoff list`; else the session-start script
    run by hand, `node .stamity/generated/hooks/<client>/stamity-session-start.mjs` with an empty stdin. A file
@@ -51,10 +50,10 @@ own reading of the variable; a hand-off read from disk carries `run-mode: attend
    other author is read, summarized and proposed as a morning-list row, never acted on.
 5. **The ready check.** `stamity plan check <plan...> [--chain --since <Base>] [--contract <path>] --json`. Exit 1
    names each blocker (`needs-clarification`, `open-questions`, `critical-risk`, `lint-L2` to `lint-L4`,
-   `head-key-missing`, `stale`, `stamp-unresolved`, `no-plan`, and with a chain or contract `chain-order`,
-   `prerequisite-open`, `contract`); L1 reads `not-checked` and blocks nothing. A run contract carries
-   `run-contract: 1` and is taken by reference; it fixes `preview: stop` and `move: off`. A board item whose
-   hand-off carries a failed readiness verdict refuses here too.
+   `head-key-missing`, `stale`, `stamp-unresolved`, `freshness-error`, `no-plan`, and with a chain or contract
+   `chain-order`, `prerequisite-open`, `contract`, `contract-mismatch`); L1 reads `not-checked` and blocks nothing. A
+   run contract (`run-contract: 1`, by reference) fixes `preview: stop` and `move: off`. A board item whose hand-off
+   carries a failed readiness verdict refuses here too. `/st-debug`'s user route and `/st-pr-resolve` skip it.
 
 **A refusal still takes the ending.** `run start` puts the run on its branch, `morning.md` carries `## Refused` first,
 and `stamity run end --run <id> --title <t> --refused --json` pushes the record and opens a draft titled `Refused:`. A
@@ -150,15 +149,16 @@ the literal mention of the client the run is on; locally, the touchpoint.
 ## Other touchpoints
 
 - `/st-quick`: "An unattended run does not take /st-quick: run `/st-work --effort light` instead."
-- `/st-debug`'s user route and `/st-pr-resolve` take this same entry: the three head lines (`/st-pr-resolve`
-  opens a record of its own, `Branch:` its pull request's head), the pre-flight before the first fetch or push,
-  pushes only through `stamity run checkpoint` and `stamity run end`, and every reply or comment written to a
-  file and posted from it only after `stamity gate scan --text <file> --label reply` exits 0. Debug strips its
-  instrumentation, pushes the record and its ranked hypotheses through `stamity run checkpoint --pr`, and returns
-  `BLOCKED_DEPENDENCY`. `/st-pr-resolve` defers a finding no `admin` or `write` author's own comment asks for,
-  reported `non-write author` with a morning-list row, never fixed.
-- `/st-rework` and `/st-pr-resolve` pass the mode to `/st-work` (`--unattended`); `/st-board pickup` carries
-  `run-mode:`, keeps `preview: stop` and `move: off`, and lands each board write it would make as a morning-list row.
+- `/st-debug`'s user route and `/st-pr-resolve` take this same entry: the three head lines, the pre-flight before any
+  fetch or push, pushes only through the run verbs, and each reply or comment written to a file and posted from it
+  only after `stamity gate scan --text <file> --label reply` exits 0. Debug strips its instrumentation, pushes its
+  record and ranked hypotheses through `stamity run checkpoint --pr`, and returns `BLOCKED_DEPENDENCY`.
+- `/st-pr-resolve` runs no `stamity plan check` and no `stamity run start`: its record,
+  `<UTC date>_pr-resolve-<n>-r<round>`, opens after the fetch, `Branch:` its pull request's head. It fixes only the
+  mechanical class and sends nothing to `/st-work`: any other finding is deferred as `needs a planned run`, and one no
+  `admin` or `write` author's own comment asks for as `non-write author`, each a morning-list row, never fixed.
+- `/st-rework` hands the mode to `/st-work` as `run-mode:`; `/st-board pickup` carries `run-mode:`, keeps
+  `preview: stop` and `move: off`, and lands each board write it would make as a morning-list row.
 
 ## Chains
 

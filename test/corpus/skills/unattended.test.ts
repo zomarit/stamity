@@ -80,9 +80,11 @@ const BLOCKERS: readonly string[] = [
   "head-key-missing",
   "stale",
   "stamp-unresolved",
+  "freshness-error",
   "no-plan",
   "chain-order",
   "prerequisite-open",
+  "contract-mismatch",
 ];
 
 /** A person-only act named in a sentence: a merge, a tag, ready-for-review. */
@@ -413,6 +415,40 @@ describe("st-unattended — the build's signed-off decisions", () => {
 
   it("lands an unattended pickup's board writes as morning-list rows", async () => {
     expect(await flat()).toContain("lands each board write it would make as a morning-list row");
+  });
+
+  // review/45: `/st-pr-resolve` runs neither the ready check nor `run start` (its input is the pull
+  // request's threads; its branch is the pull request's head), and debug's user route takes no ready
+  // check, as `content/commands/st-pr-resolve.md`'s Unattended row and `st-debug.md`'s entry say.
+  it("carves /st-pr-resolve out of run start and both it and debug's user route out of the ready check", async () => {
+    const text = await flat();
+    expect(text).toContain(
+      "Every touchpoint that pushes, `/st-pr-resolve` aside, first runs `stamity run start --run <id> --json`",
+    );
+    expect(text).toContain("`/st-debug`'s user route and `/st-pr-resolve` skip it.");
+    expect(text).toContain(
+      "`/st-pr-resolve` runs no `stamity plan check` and no `stamity run start`: its record, `<UTC date>_pr-resolve-<n>-r<round>`, opens after the fetch, `Branch:` its pull request's head.",
+    );
+  });
+
+  // review/48: an in-session hand-off carries no persisted plan, so unattended `/st-pr-resolve`
+  // fixes the mechanical class itself and defers the rest (`st-pr-resolve.md`, section 4).
+  it("has unattended /st-pr-resolve fix only the mechanical class and defer the rest as needs a planned run", async () => {
+    expect(await flat()).toContain(
+      "It fixes only the mechanical class and sends nothing to `/st-work`: any other finding is deferred as `needs a planned run`",
+    );
+  });
+
+  // review/53: `/st-rework` hands the mode on in the requirement's form.
+  it("has /st-rework hand the mode to /st-work as run-mode:", async () => {
+    expect(await flat()).toContain("`/st-rework` hands the mode to `/st-work` as `run-mode:`");
+  });
+
+  it("names no hand-off that passes --unattended to /st-work", async () => {
+    const text = await flat();
+    expect(text).not.toContain("(`--unattended`)");
+    const handOffs = sentences(text).filter((sentence) => sentence.includes("`/st-work`") && sentence.includes("`--unattended`"));
+    expect(handOffs).toEqual([]);
   });
 });
 
