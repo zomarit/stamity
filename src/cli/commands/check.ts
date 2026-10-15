@@ -1492,6 +1492,17 @@ function unverifiedReason(tool: Tool, outcome: ModelListOutcome | null): string 
   }
 }
 
+/**
+ * Clients whose CLI prints a broader list than the one a sub-agent call is
+ * checked against (ledger row 2026-10-14_cli-native/review/144). Cursor's
+ * `agent models` prints every model the account offers, while a `Task` call's
+ * model is checked against a narrower list, seen in one live run to change
+ * with the parent agent's model, that no command prints, so a pin the printed
+ * list holds can still be refused: the row calls such a pin unverified, never
+ * "on the list". The value is the client's name as the row's reason prints it.
+ */
+const NARROWER_SUBAGENT_LIST: ReadonlyMap<Tool, string> = new Map<Tool, string>([["cursor", "Cursor"]]);
+
 /** One client's part of the row: the models its list lacks, or the line that says how it went. */
 interface ClientModelVerdict {
   readonly warnings: readonly string[];
@@ -1515,7 +1526,8 @@ interface ClientModelVerdict {
  * than the files carry — resolved from the saved list, or with none where no
  * list was saved — warns too (review/135), unless the class already warned.
  * On Cursor no list moves a model, since only a pin is written there (ledger
- * row 2026-10-14_cli-native/qa/1), so its rows compare pins alone.
+ * row 2026-10-14_cli-native/qa/1), so its rows compare pins alone, and a pin
+ * the printed list holds is reported unverified (`NARROWER_SUBAGENT_LIST`).
  */
 function verifyClientModels(
   tool: Tool,
@@ -1541,6 +1553,9 @@ function verifyClientModels(
   const syncReads = live?.kind === "listed" && tool !== "codex" ? live.ids : undefined;
   const filesFrom = saved === undefined ? "the pick made with no saved list" : "the pick from the list the last sync saved";
   const warnings: string[] = [];
+  // Pins the printed list holds on a client whose sub-agents take a narrower one.
+  const narrower = NARROWER_SUBAGENT_LIST.get(tool);
+  const held: string[] = [];
   let compared = 0;
   for (const { modelClass } of MODEL_LADDER) {
     const pinValue = pins[modelClass] ?? "";
@@ -1561,6 +1576,8 @@ function verifyClientModels(
         `${tool} ${modelClass}: the pinned model "${sanitizeLabel(pinned)}" is not on ${where}; pin a listed one with ` +
           packageCommand(`config set model.${modelClass}.${tool} <id>`),
       );
+    } else if (pinned !== "" && narrower !== undefined) {
+      held.push(`${modelClass} "${sanitizeLabel(pinned)}"`);
     }
     if (emittedValue !== undefined && emitted !== "" && emitted !== pinned && !listHoldsPin(reference.ids, emittedValue)) {
       warnings.push(
@@ -1574,6 +1591,15 @@ function verifyClientModels(
           `to ${quotedModel(resynced)}; the files carry ${filesFrom}, and ${tool}'s list (read live) resolves another`,
       );
     }
+  }
+  if (narrower !== undefined && held.length > 0) {
+    return {
+      warnings,
+      note:
+        `${tool}: unverified — the pinned model(s) ${held.join(", ")} are on ${tool}'s list (${reference.label}), ` +
+        `but ${narrower} checks a sub-agent's model against a narrower list that no command prints`,
+      unverified: true,
+    };
   }
   const note =
     compared === 0
@@ -1596,7 +1622,9 @@ function verifyClientModels(
  * A model the list lacks warns, naming the client, the class and the model,
  * with the remedy: pin a listed id, or `sync` to re-read the list and re-pick.
  * A Copilot class whose model `sync` would change, read live, warns naming
- * both models; Cursor writes only pins, which no list changes.
+ * both models; Cursor writes only pins, which no list changes, and a Cursor
+ * pin its printed list holds is unverified, since Cursor checks a sub-agent's
+ * model against a narrower list that no command prints.
  *
  * Never `fail`: the list is the account's, outside anything this repository
  * can change, and a CI gate on it would fail on a vendor's model retirement.

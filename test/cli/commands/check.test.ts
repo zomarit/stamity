@@ -4146,6 +4146,9 @@ describe("check — model-pins", () => {
     });
   });
 
+  // TEST CHANGE, justified (2026-10-15, ledger row 2026-10-14_cli-native/review/144): a Cursor pin
+  // the broad list holds now reads unverified rather than "on the list", since Cursor checks a
+  // sub-agent's model against a narrower list; the family rule this case pins is unchanged.
   it("counts a Cursor family pin the list carries per effort variant as listed", async () => {
     const manifest = pinnedManifest(["cursor"], { pins: { advanced: { all: "claude-opus-4-8" } } });
     const { lister } = fakeLister({
@@ -4158,7 +4161,9 @@ describe("check — model-pins", () => {
     expect(verdict).toEqual({
       id: "model-pins",
       status: "pass",
-      detail: "cursor: 1 class(es), each pinned or emitted model on the list (read live)",
+      detail:
+        `cursor: unverified — the pinned model(s) advanced "claude-opus-4-8" are on cursor's list (read live), ` +
+        "but Cursor checks a sub-agent's model against a narrower list that no command prints",
     });
     // The other side of the family rule: only an exact effort variant counts, so a pin that a
     // listed id merely starts with (`claude-opus-4` before `claude-opus-4-8-high`) still warns.
@@ -4170,6 +4175,55 @@ describe("check — model-pins", () => {
     );
     expect(off.status).toBe("warn");
     expect(off.detail).toContain(`cursor advanced: the pinned model "claude-opus-4" is not on cursor's list`);
+  });
+
+  // review/144: `agent models` prints the broad list, and Cursor checks a sub-agent call's model
+  // against a narrower one that no command prints, so a pin the broad list holds can still be
+  // refused. The row says so rather than reporting it as on the list.
+  it("reports a Cursor pin the broad list holds as unverified, and keeps the warning for one it lacks", async () => {
+    const live = { kind: "listed", ids: ["claude-sonnet-5-5", "gpt-6-sol"], source: "cursor-agent-models" } as const;
+    const answers: Partial<Record<Tool, ModelListOutcome>> = { cursor: { ...live, ids: [...live.ids] } };
+    const reason = "but Cursor checks a sub-agent's model against a narrower list that no command prints";
+
+    const held = await checkModelPins(
+      pinnedManifest(["cursor"], { pins: { standard: { all: "claude-sonnet-5-5" }, economy: { cursor: "gpt-6-sol" } } }),
+      {},
+      fakeLister(answers).lister,
+      "/repo",
+    );
+    expect(held).toEqual({
+      id: "model-pins",
+      status: "pass",
+      detail: `cursor: unverified — the pinned model(s) standard "claude-sonnet-5-5", economy "gpt-6-sol" are on cursor's list (read live), ${reason}`,
+    });
+    expect(held.detail).not.toContain("each pinned or emitted model on the list");
+
+    // The same from the saved list, and beside a pin the list lacks, which still warns: the
+    // unverified line is kept under the warning rather than dropped.
+    const mixed = await checkModelPins(
+      pinnedManifest(["cursor"], {
+        pins: { standard: { all: "claude-sonnet-5-5" }, advanced: { cursor: "vendor-x-1" } },
+        listed: { cursor: { ids: [...live.ids], source: "cursor-agent-models" } },
+      }),
+      { STAMITY_NO_CLIENT_PROBE: "1" },
+      fakeLister({}).lister,
+      "/repo",
+    );
+    expect(mixed.status).toBe("warn");
+    expect(mixed.detail.split("\n")).toEqual([
+      `cursor advanced: the pinned model "vendor-x-1" is not on cursor's list (saved by the last sync); pin a listed one with ` +
+        npxCommand("config set model.advanced.cursor <id>"),
+      `cursor: unverified — the pinned model(s) standard "claude-sonnet-5-5" are on cursor's list (saved by the last sync), ${reason}`,
+    ]);
+
+    // Control: Copilot's list is the one its sub-agents take, so a held pin there still passes as listed.
+    const copilot = await checkModelPins(
+      pinnedManifest(["copilot"], { pins: { standard: { copilot: "gpt-6-sol" } } }),
+      {},
+      fakeLister({ copilot: { kind: "listed", ids: ["gpt-6-sol"], source: "copilot-help-config" } }).lister,
+      "/repo",
+    );
+    expect(copilot.detail).not.toContain("unverified");
   });
 
   it("reads a pin with bracket options the way emission does", async () => {

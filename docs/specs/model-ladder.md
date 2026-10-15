@@ -533,7 +533,10 @@ the live list differently from the one the files carry, resolved from the saved 
 list, warns naming the client, the class, both models and `sync`, unless the row already warns for that class
 (`review/135`). On Cursor only a pin is written, as typed, so the row compares pins alone there and `sync` never
 resolves a different model from a list. (Amended 2026-10-15, ledger row `qa/1` of run `2026-10-14_cli-native` and its
-fix `f575afb1`; it read "Where the live list is the catalogue `sync` reads (Cursor, Copilot)".) With nothing to compare
+fix `f575afb1`; it read "Where the live list is the catalogue `sync` reads (Cursor, Copilot)".) A Cursor pin the list
+holds is reported `unverified`, with the reason that Cursor checks a sub-agent's model against a narrower list that no
+command prints, and kept beside any warning (`NARROWER_SUBAGENT_LIST`; amended 2026-10-15, ledger row `review/144` of
+run `2026-10-14_cli-native`: such a pin counted as on the list). With nothing to compare
 the row passes with `unverified` and its reason in the detail; under `STAMITY_NO_CLIENT_PROBE=1` it starts no client and
 reads the saved list only. Every printed value passes `sanitizeLabel`, and the row never fails.
 
@@ -544,7 +547,10 @@ reads the saved list only. Every printed value passes `sanitizeLabel`, and the r
   re-pick THEN `warn` naming both models and `sync`; GIVEN no saved Cursor list and a live one holding an unpinned
   class's variant THEN `pass` with "cursor: no model pinned or emitted to compare (read live)", GIVEN that list saved
   and the probe off THEN `pass` with "… (saved by the last sync)", and GIVEN a Cursor pin the list lacks THEN one `warn`
-  naming the pin (`test/cli/commands/check.test.ts`, the describe "check — model-pins"). (Amended 2026-10-15, ledger
+  naming the pin; GIVEN Cursor pins the list holds THEN `pass` with "cursor: unverified — the pinned model(s) …" and
+  the narrower-list reason, kept under a `warn` for another class's unlisted pin, while a Copilot pin its list holds
+  stays listed (`test/cli/commands/check.test.ts`, the describe "check — model-pins"; the last case added 2026-10-15,
+  `review/144`). (Amended 2026-10-15, ledger
   row `qa/1` and `f575afb1`; the Cursor case read "THEN `warn` naming `none`, that model and `sync`".)
 
 As built, where the delta differed: `checkModelPins` takes the working folder as a fourth parameter, which the lister

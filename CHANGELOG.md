@@ -260,8 +260,10 @@ an item that rests on either says it was not walked.
   when none was saved; for the other clients it is the live list where the client's CLI answers,
   else the saved one. On Copilot, whenever the live read answers, a list saved or not, the row
   also warns, naming both models and `sync`, when `sync` would write a different model than the
-  files carry; on Cursor, where only a pin is written, it compares pins alone. With nothing to
-  compare it passes and says `unverified`. It never fails.
+  files carry; on Cursor, where only a pin is written, it compares pins alone, and a pin the
+  list holds is `unverified`, since Cursor checks a sub-agent's model against a narrower list
+  that no command prints. With nothing to compare it passes and says `unverified`. It never
+  fails.
 - **Every touchpoint ends on a walk of its leftovers, the summary last.** All nine commands ask
   each leftover through the client's own question tool, Critical, Warning and `decision-waiting`
   items first and the recommended option first, in as many rounds as the tool's limits need, and
