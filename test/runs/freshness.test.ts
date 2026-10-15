@@ -192,6 +192,98 @@ describe("freshness", () => {
     ).toMatchObject({ verdict: "stale", exempt: [] });
   });
 
+  it("grants no exemption from a base on a side branch, though it descends from the stamp", async (ctx) => {
+    const stamp = await seededRepo(() => ctx.skip());
+    const cwd = tempDir().dir;
+    const line = writeGit(cwd, ["rev-parse", "--abbrev-ref", "HEAD"]).trim();
+    writeGit(cwd, ["checkout", "--quiet", "-b", "side"]);
+    const sideBase = await touchAndCommit(cwd, "history.md", "a base off HEAD's line");
+    writeGit(cwd, ["checkout", "--quiet", line]);
+    const lineBase = await touchAndCommit(cwd, "history.md", "a base on HEAD's line");
+    await touchAndCommit(cwd, "src/b.ts", "moved on HEAD's own line");
+
+    // stamp..sideBase never touched src/b.ts, so the range alone would exempt it.
+    expect(await freshness(git, cwd, stamp, ["src/b.ts"], { exemptSince: sideBase })).toEqual({
+      verdict: "stale",
+      stale: [{ path: "src/b.ts", reason: "moved" }],
+      exempt: [],
+      unresolved: false,
+    });
+    // Non-degenerate: a base on HEAD's line exempts the same move.
+    expect(await freshness(git, cwd, stamp, ["src/b.ts"], { exemptSince: lineBase })).toEqual({
+      verdict: "fresh",
+      stale: [],
+      exempt: ["src/b.ts"],
+      unresolved: false,
+    });
+  });
+
+  it("exempts a path the chain deleted after its base, and keeps one deleted before it missing", async (ctx) => {
+    const stamp = await seededRepo(() => ctx.skip());
+    const cwd = tempDir().dir;
+    writeGit(cwd, ["rm", "--quiet", "--", "docs/a.md"]);
+    writeGit(cwd, ["-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "drop a before the base"]);
+    const base = await touchAndCommit(cwd, "history.md", "the chain's run base");
+    writeGit(cwd, ["rm", "--quiet", "--", "src/b.ts"]);
+    writeGit(cwd, ["-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "the chain's first file drops b"]);
+    // Deleted in the working tree only: no commit since the stamp touched it.
+    await rm(join(cwd, SPACED));
+
+    expect(
+      await freshness(git, cwd, stamp, ["docs/a.md", "src/b.ts", SPACED], { exemptSince: base }),
+    ).toEqual({
+      verdict: "stale",
+      stale: [
+        { path: "docs/a.md", reason: "missing" },
+        { path: SPACED, reason: "missing" },
+      ],
+      exempt: ["src/b.ts"],
+      unresolved: false,
+    });
+  });
+
+  it("reports a folder git is kept from as an error, not as an unresolved stamp", async (ctx) => {
+    const stamp = await seededRepo(() => ctx.skip());
+    const cwd = tempDir().dir;
+    // A folder inside the repository shaped like a bare repository: the runner refuses it before git starts.
+    const shaped = join(cwd, "planted");
+    await mkdir(join(shaped, "objects"), { recursive: true });
+    await mkdir(join(shaped, "refs"), { recursive: true });
+    await writeFile(join(shaped, "HEAD"), "ref: refs/heads/main\n", "utf8");
+
+    const result = await freshness(git, shaped, stamp, ["absent.md"]);
+    expect(result).toMatchObject({
+      verdict: "stale",
+      stale: [{ path: "absent.md", reason: "missing" }],
+      exempt: [],
+      unresolved: false,
+    });
+    expect(result.error).toMatch(/bare repository/);
+    // Non-degenerate: the repository around it resolves the same stamp.
+    expect(await freshness(git, cwd, stamp, ["docs/a.md"])).toEqual({
+      verdict: "fresh",
+      stale: [],
+      exempt: [],
+      unresolved: false,
+    });
+  });
+
+  it("reports a stamp past a shallow clone's history as an error, not as an unresolved stamp", async (ctx) => {
+    const stamp = await seededRepo(() => ctx.skip());
+    const cwd = tempDir().dir;
+    await touchAndCommit(cwd, "src/b.ts", "after the stamp");
+    const shallow = join(cwd, "shallow");
+    writeGit(cwd, ["clone", "--quiet", "--depth", "1", `file://${cwd}`, shallow]);
+    expect(writeGit(shallow, ["rev-parse", "--is-shallow-repository"]).trim()).toBe("true");
+
+    const result = await freshness(git, shallow, stamp, ["docs/a.md"]);
+    expect(result).toMatchObject({ verdict: "stale", stale: [], exempt: [], unresolved: false });
+    expect(result.error).toMatch(/shallow clone/);
+    // Non-degenerate: the clone's own tip resolves, and a full repository reads the same stamp.
+    expect((await freshness(git, shallow, head(shallow), ["docs/a.md"])).error).toBeUndefined();
+    expect((await freshness(git, cwd, stamp, ["docs/a.md"])).error).toBeUndefined();
+  });
+
   it("passes a path holding a space as one argv entry and reads it literally", async (ctx) => {
     const stamp = await seededRepo(() => ctx.skip());
     const cwd = tempDir().dir;
