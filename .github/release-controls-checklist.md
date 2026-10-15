@@ -321,6 +321,8 @@ records left `main`, and the cut's `records` commit named the same day.) Runs wh
 
 A sixth line rides the cut, before the tag: `node scripts/hook-latency.mjs` exits 0 on a quiet machine, and its table goes into the release record (REQ-CTX-016; local only, never in CI; added 2026-09-26). Runs when: the generated guard the script times (`.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs`, built from `src/hooks/scripts.ts` and every module it imports) or `scripts/hook-latency.mjs` moved since the last release, or the Node version the release is cut on moved.
 
+A further line rides the cut, before the tag, and takes no ordinal so the tag stays the seventh: re-read the digest of the `cloud-container` job's image (`node:24-bookworm` in `.github/workflows/ci.yml`) through the registry's HTTP API, with the command that job's comment prints (no Docker needed), and when the tag now resolves to a newer build than the pinned digest, bump the digest and rewrite the comment's read date in a `main` commit before the tag; the release record states the digest read and whether it moved (added 2026-10-15, review/115, when the pin was found to have no update route). Runs when: every release, a patch included — a newer build of the same tag is registry state no diff shows.
+
 A seventh line is the tag itself, cut last, after every line above has landed: an annotated tag
 whose message names the records commit the release is gated on, as one line `records: <sha>`,
 `<sha>` being the records branch's tip after the cut's last records publish, read by its full ref
