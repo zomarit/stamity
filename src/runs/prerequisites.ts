@@ -57,10 +57,12 @@ const DOTENV_EXAMPLE = /(?:^|\/)\.env\.example$/;
 const MIGRATION_PATH = /(?:^|\/)(?:migrations|db\/migrate)\//;
 
 /**
- * A test path: a `test`, `tests`, `__tests__` or `spec` folder, a
- * `*.test.*` or `*.spec.*` file, or a Python `test_*.py` or `*_test.py`.
+ * A test path: a `test`, `tests`, `__tests__`, `spec`, `e2e` or `cypress`
+ * folder, a `*.test.*`, `*.spec.*` or `*.e2e-spec.*` file, or a Python
+ * `test_*.py`, `*_test.py` or `conftest.py`.
  */
-const TEST_PATH = /(?:^|\/)(?:test|tests|__tests__|spec)\/|\.(?:test|spec)\.[^/]+$|(?:^|\/)test_[^/]*\.py$|_test\.py$/;
+const TEST_PATH =
+  /(?:^|\/)(?:test|tests|__tests__|spec|e2e|cypress)\/|\.(?:test|spec|e2e-spec)\.[^/]+$|(?:^|\/)(?:test_[^/]*|conftest)\.py$|_test\.py$/;
 
 /** Every prerequisite the added lines of `files` imply, one row per kind and name, at the first place it is read. */
 export function inferPrerequisites(files: readonly PrereqFile[]): PrereqRow[] {

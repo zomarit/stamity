@@ -1,8 +1,9 @@
 import { linesPastCap, scanAddedLines } from "../change/scan.ts";
 import { EngineError } from "../types/errors.ts";
 import { printableText, quoteReportText } from "./blocks.ts";
-import { FENCE_CLOSE_PATTERN, fenceOpenPattern, isRunId, runRelPath } from "./layout.ts";
+import { FENCE_CLOSE_PATTERN, fenceOpenPattern, isRunId, runRelPath, UNICODE_TAG_CHARS } from "./layout.ts";
 import type { PrereqRow } from "./prerequisites.ts";
+import { runMarker } from "./pullRequest.ts";
 
 /**
  * The morning list (REQ-FLOW-094): what an unattended run leaves for the
@@ -102,10 +103,18 @@ const NOT_DONE: string = MORNING_SECTIONS[4];
 
 const sectionName = (name: string): string => `\`## ${name}\``;
 
-/** The marker a run's own pull request body ends with; the marker form of `content/commands/st-board.md`. */
-export function runMarker(runId: string): string {
-  runRelPath(runId); // throws on a value that is not a run id, so no text can close the comment early
-  return `<!-- stamity:run ${runId} -->`;
+/** Whether `line` closes a fence opened by the marker run `open` (three or more of one character). */
+function closesFence(open: string, line: string): boolean {
+  return new RegExp(`^ {0,3}${open.charAt(0) === "`" ? "`" : "~"}{${open.length},}[ \\t]*$`).test(line);
+}
+
+/**
+ * One line as the pull request body prints it: {@link printableText}, then the
+ * Unicode tag block stripped, which `printableText` keeps for the screens and
+ * no injection screen reads before the body posts.
+ */
+function bodyText(line: string): string {
+  return printableText(line).replace(UNICODE_TAG_CHARS, "");
 }
 
 /** Read a morning list strictly: every problem is named, and any problem refuses the whole list. */
@@ -139,7 +148,7 @@ export function parseMorning(text: string): MorningParse {
       continue;
     }
     if (otherFence !== null) {
-      if (new RegExp(`^ {0,3}${otherFence.charAt(0) === "`" ? "`" : "~"}{${otherFence.length},}[ \\t]*$`).test(line)) otherFence = null;
+      if (closesFence(otherFence, line)) otherFence = null;
       if (current !== null && current !== "") bodies.get(current)?.push(line);
       continue;
     }
@@ -315,12 +324,14 @@ function names(text: string, name: string): boolean {
  * section with no rows reading `none`), the inferred prerequisite rows the
  * section does not already name, the questions with their option numbers, and
  * `<!-- stamity:run <run-id> -->` as the last line, so a later run recognises
- * its own body (u4's marker rule). Control and bidi characters are dropped.
+ * its own body (u4's marker rule, u4's {@link runMarker}). Control and bidi
+ * characters and the Unicode tag block are dropped.
  *
  * Past `maxChars` ({@link PR_BODY_MAX_CHARS} by default) the body keeps the
  * title, every heading, `## Refused` and `## Not done:` first, then the other
  * sections' first rows, one row of each a round, and names `morning.md` for
- * the rest; a cut section ends on `…`, and the marker stays
+ * the rest; a cut section closes any fence its kept rows left open, then ends
+ * on `…`, and the marker stays
  * last. A list that does not parse, or that names another run, becomes a
  * `## Not done:` body naming its problems, so a run still hands off. The body
  * is not screened here: the caller runs {@link screenOutbound} on it.
@@ -328,8 +339,8 @@ function names(text: string, name: string): boolean {
  * Throws when `runId` is not a run id or `maxChars` is under {@link PR_BODY_MIN_CHARS}.
  */
 export function prBodyFrom(text: string, runId: string, opts: { inferred?: readonly PrereqRow[]; maxChars?: number } = {}): string {
+  const path = runRelPath(runId, MORNING_FILE); // throws on a value that is not a run id, so no text can close the marker early
   const marker = runMarker(runId);
-  const path = runRelPath(runId, MORNING_FILE);
   const maxChars = opts.maxChars ?? PR_BODY_MAX_CHARS;
   if (!Number.isInteger(maxChars) || maxChars < PR_BODY_MIN_CHARS) {
     throw new EngineError(`maxChars ${maxChars} is under ${PR_BODY_MIN_CHARS}`, {
@@ -348,7 +359,7 @@ export function prBodyFrom(text: string, runId: string, opts: { inferred?: reado
   const sections: { readonly name: string; readonly lines: readonly string[] }[] = [];
   if (!parsed.ok || problems.length > 0) {
     const lines = [`- \`${path}\` does not parse, so this body carries none of it:`, ...problems.map((problem) => `  - ${problem}`)];
-    sections.push({ name: NOT_DONE, lines: lines.map(printableText) });
+    sections.push({ name: NOT_DONE, lines: lines.map(bodyText) });
   } else {
     for (const [name, body] of Object.entries(parsed.sections)) {
       let lines = body === MORNING_EMPTY ? [] : body.split("\n");
@@ -360,7 +371,7 @@ export function prBodyFrom(text: string, runId: string, opts: { inferred?: reado
         const asked = parsed.questions.map(questionLine);
         lines = lines.length === 0 ? asked : [...lines, "", ...asked];
       }
-      sections.push({ name, lines: (lines.length === 0 ? [MORNING_EMPTY] : lines).map(printableText) });
+      sections.push({ name, lines: (lines.length === 0 ? [MORNING_EMPTY] : lines).map(bodyText) });
     }
   }
   return fitBody(title, sections, marker, `_Cut to fit ${maxChars} characters: the whole list is \`${path}\`._`, maxChars);
@@ -400,11 +411,25 @@ function fitBody(
 
   const kept: string[][] = sections.map(() => []);
   const cut: boolean[] = sections.map(() => false);
+  // The marker run of a fence a section's kept rows left open: its closing line is held in reserve
+  // from the moment the fence opens, so a cut can always close it before the `…`, the pointer and the marker.
+  const fences: (string | null)[] = sections.map(() => null);
   const take = (at: number, line: string): boolean => {
-    if (line.length + 1 > budget) return false;
+    const open = fences[at] ?? null;
+    const next = open === null ? (OTHER_FENCE_OPEN.exec(line)?.[1] ?? null) : closesFence(open, line) ? null : open;
+    const reserve = (fence: string | null): number => (fence === null ? 0 : fence.length + 1);
+    const cost = line.length + 1 + reserve(next) - reserve(open);
+    if (cost > budget) return false;
     kept[at]?.push(line);
-    budget -= line.length + 1;
+    budget -= cost;
+    fences[at] = next;
     return true;
+  };
+  const cutAt = (at: number): void => {
+    const open = fences[at] ?? null;
+    if (open !== null) kept[at]?.push(open);
+    fences[at] = null;
+    cut[at] = true;
   };
   // `## Refused` and `## Not done:` first, whole while they fit; the line that does not is cut to what is left.
   const first = sections.flatMap((section, at) => (section.name === MORNING_REFUSED || section.name === NOT_DONE ? [at] : []));
@@ -417,7 +442,7 @@ function fitBody(
         if (/[\uD800-\uDBFF]$/.test(head)) head = head.slice(0, -1);
         take(at, `${head}…`);
       }
-      cut[at] = true;
+      cutAt(at);
     }
   }
   // Then the other sections' first rows, one row of each section a round, so every section keeps its head.
@@ -426,7 +451,7 @@ function fitBody(
     for (const at of rest) {
       const line = sections[at]?.lines[row];
       if (line === undefined || cut[at] === true) continue;
-      if (!take(at, line)) cut[at] = true;
+      if (!take(at, line)) cutAt(at);
     }
   }
   return render(kept, cut, true);
@@ -446,6 +471,7 @@ export function parseAnswers(
   const byId = new Map(questions.map((question) => [question.id, question]));
   const answers = new Map<string, number>();
   const refused: { id: string; reason: string }[] = [];
+  const named = new Set<string>(); // ids a well-formed piece answered, in range or not
   const twice = new Set<string>();
   const body = text.trim().replace(/^(?:@[\w-]+\s+)?answers\s*:\s*/i, "");
   for (const raw of body.split(/[,;\r\n]+/)) {
@@ -461,16 +487,20 @@ export function parseAnswers(
     const question = byId.get(id);
     if (question === undefined) {
       refused.push({ id, reason: "no such question" });
-    } else if (option > question.options.length) {
-      refused.push({ id, reason: `option ${match[2] ?? ""} is not one of 1 to ${question.options.length}` });
     } else if (twice.has(id)) {
       continue;
-    } else if (answers.has(id)) {
+    } else if (named.has(id)) {
+      // The repeat is checked before the range, so an out-of-range answer still voids the other one.
       answers.delete(id);
       twice.add(id);
       refused.push({ id, reason: "answered more than once" });
     } else {
-      answers.set(id, option);
+      named.add(id);
+      if (option > question.options.length) {
+        refused.push({ id, reason: `option ${match[2] ?? ""} is not one of 1 to ${question.options.length}` });
+      } else {
+        answers.set(id, option);
+      }
     }
   }
   return { answers, refused };

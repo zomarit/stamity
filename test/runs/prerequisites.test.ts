@@ -98,6 +98,11 @@ describe("inferPrerequisites", () => {
       file("pkg/x_test.py", ['os.getenv("C_NAME")']),
       file("test/fixtures/migrations/0001.sql", ["CREATE TABLE t ();"]),
       file("test\\win\\a.ts", ["process.env.D_NAME"]),
+      file("conftest.py", ['os.environ["E_NAME"]']),
+      file("pkg/tests_x/conftest.py", ['os.getenv("F_NAME")']),
+      file("apps/api/src/users.e2e-spec.ts", ["process.env.G_NAME"]),
+      file("e2e/login.ts", ["process.env.H_NAME"]),
+      file("web/cypress/support/commands.ts", ["process.env.I_NAME"]),
     ]);
 
     expect(rows).toEqual([]);

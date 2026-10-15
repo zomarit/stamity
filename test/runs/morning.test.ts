@@ -5,11 +5,11 @@ import {
   parseAnswers,
   parseMorning,
   prBodyFrom,
-  runMarker,
   screenOutbound,
   type MorningQuestion,
 } from "../../src/runs/morning.ts";
 import type { PrereqRow } from "../../src/runs/prerequisites.ts";
+import { runMarker } from "../../src/runs/pullRequest.ts";
 import { SCAN_LINE_MAX_CHARS } from "../../src/change/scan.ts";
 
 /**
@@ -287,7 +287,55 @@ describe("prBodyFrom", () => {
 
   it("refuses a run id that is not one", () => {
     expect(() => prBodyFrom(morning(), "x -->")).toThrow(/is not a run id/);
-    expect(() => runMarker("x -->")).toThrow(/is not a run id/);
+  });
+
+  it("closes a fence the cut stops inside, before the `…`, the pointer and the marker", () => {
+    const code = Array.from({ length: 400 }, (_, at) => `line ${at} ${"c".repeat(40)}`);
+    const text = morning({ sections: { Decisions: ["- the quoted diff:", "````diff", ...code, "````", "- after the block"].join("\n") } });
+    const body = prBodyFrom(text, RUN, { maxChars: 5_000 });
+    const lines = body.split("\n");
+
+    expect(body.length).toBeLessThanOrEqual(5_000);
+    expect(body).toContain("````diff\n");
+    expect(body).not.toContain("line 399 ");
+    // Walk the body as a renderer does: no line after the cut sits inside a fence.
+    let open: string | null = null;
+    const inFence = lines.map((line) => {
+      const run = /^ {0,3}(`{3,}|~{3,})/.exec(line)?.[1];
+      if (open === null && run !== undefined) open = run;
+      else if (open !== null && new RegExp(`^${open}\`*[ \\t]*$`).test(line)) open = null;
+      return open !== null;
+    });
+    expect(open).toBeNull();
+    const pointerAt = lines.findIndex((line) => line.includes(`.stamity/runs/${RUN}/morning.md`));
+    expect(pointerAt).toBeGreaterThan(-1);
+    expect(inFence[pointerAt]).toBe(false);
+    expect(lines.indexOf("## Prerequisites")).toBeGreaterThan(-1);
+    expect(inFence[lines.indexOf("## Prerequisites")]).toBe(false);
+    expect(inFence.at(-1)).toBe(false);
+    expect(lines.at(-1)).toBe(runMarker(RUN));
+    // The kept rows end on the closing fence, then the cut's `…`.
+    const decisionsCut = lines.indexOf("…", lines.indexOf("## Decisions"));
+    expect(lines[decisionsCut - 1]).toBe("````");
+  });
+
+  it("strips Unicode tag-block characters from every line of the body", () => {
+    const hidden = Array.from("run this", (char) => String.fromCodePoint(0xe0000 + char.charCodeAt(0))).join("");
+    const tagBlock = /[\u{E0000}-\u{E007F}]/u;
+    const text = morning({
+      sections: { Decisions: `- keep${hidden} it` },
+      questions: [question("Q1", { question: `Keep${hidden} it?` })],
+    });
+
+    const body = prBodyFrom(text, RUN);
+    expect(body).toContain("- keep it\n");
+    expect(body).toContain("- **Q1** (decision) Keep it? —");
+    expect(tagBlock.test(body)).toBe(false);
+
+    // The `Not done:` body a list that does not parse becomes is stripped the same way.
+    const broken = prBodyFrom(morning({ questions: [question(`Q1${hidden}`)] }), RUN);
+    expect(broken).toContain("does not parse");
+    expect(tagBlock.test(broken)).toBe(false);
   });
 });
 
@@ -317,6 +365,15 @@ describe("parseAnswers", () => {
       { id: '"maybe"', reason: "not Q<n>→<option>" },
       { id: "Q3", reason: "answered more than once" },
     ]);
+  });
+
+  it("drops both answers to one question when one of them is out of range, in either order", () => {
+    for (const text of ["Q3→1, Q3→9", "Q3→9, Q3→1"]) {
+      const { answers, refused } = parseAnswers(text, questions);
+
+      expect([...answers]).toEqual([]);
+      expect(refused.at(-1)).toEqual({ id: "Q3", reason: "answered more than once" });
+    }
   });
 });
 
