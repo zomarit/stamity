@@ -287,10 +287,10 @@ export function checkNodeVersion(nodeVersion: string, range: string | null): Doc
  * in any folder under it, the one the operator stands in included: git started
  * anywhere under it finds it as the look did (review/57). Both verbs take the
  * same look, so what they lose is stated outright. A flow is not kept from
- * that folder by it: neither flow stops at this cause, and the git a flow's
- * session and its sub-agents start is not the engine's, so beside what the
- * flows list the row says to start none there until the folder is moved
- * (review/72). The folder is named as "this folder", since no row prints a
+ * that folder by it: both flows stop on the scan's reason, but only at the
+ * gate call, and the git a flow's session and its sub-agents start before it
+ * is not the engine's, so beside that stop the row says to start none there
+ * until the folder is moved (review/72; the stop since 1.15.0, reattest/9). The folder is named as "this folder", since no row prints a
  * machine's layout.
  */
 function checkGit(rootDir: string): DoctorCheck {
@@ -307,11 +307,11 @@ function checkGit(rootDir: string): DoctorCheck {
         "and of each folder above it by name to find that folder, and do not run git in it or in " +
         "any folder under it, this one included. " +
         "Two verbs need git: worktree refuses without it, and gate reads every change from it, " +
-        "so here gate scan exits 1 and /st-quick and /st-work list " +
-        "`secret scan: not run` under `Not done:`. " +
-        "Neither flow stops at this cause, and the git a flow's session and its sub-agents start " +
-        "is not set to refuse such a folder as the engine's is, so start no flow here until that " +
-        "folder is moved off this path. " +
+        "so here gate scan exits 1 saying git was not started, and on that reason " +
+        "/st-work stops the run as BLOCKED_DEPENDENCY and /st-quick stops the batch. " +
+        "That stop comes at the gate call, and the git a flow's session and its sub-agents start " +
+        "before it is not set to refuse such a folder as the engine's is, so start no flow here " +
+        "until that folder is moved off this path. " +
         "sync's dirty-tree warning simply stays silent while git does not answer.",
     };
   }

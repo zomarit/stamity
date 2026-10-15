@@ -1358,12 +1358,20 @@ describe("check — advisory warnings", () => {
     expect(git.detail).toContain("Two verbs need git");
     expect(git.detail).toContain("worktree refuses without it");
     expect(git.detail).toContain("gate scan exits 1");
-    expect(git.detail).toContain("/st-quick and /st-work list `secret scan: not run` under `Not done:`");
+    // TEST CHANGE, justified (run 2026-10-14_cli-native, reattest/9): the row said the flows list
+    // `secret scan: not run` here and that neither flow stops at this cause. Since 1.15.0 both
+    // stop on the scan's reason (`content/commands/st-work.md`, BLOCKED_DEPENDENCY;
+    // `content/commands/st-quick.md`, step 1, the batch), so the row now says they stop.
+    expect(git.detail).toContain("/st-work stops the run as BLOCKED_DEPENDENCY and /st-quick stops the batch");
+    expect(git.detail).not.toContain("secret scan: not run");
+    expect(git.detail).not.toContain("Neither flow stops");
     expect(git.detail).toContain("sync's dirty-tree warning simply stays silent while git does not answer");
     // review/72: the row said what the flows list there, and not that a flow started there runs
     // git of its own: a flow's session and its sub-agents start git the engine does not, with no
     // look and neither option. The pages said to start no flow there; the row now says it too,
     // beside what it says of the scan. The row is compared whole.
+    // TEST CHANGE, justified (reattest/9): the whole-row comparison moves with the sentence on
+    // the flows above; the stop comes at the gate call, so git started before it still runs there.
     expect(git.detail).toBe(
       "git was not started here — this folder, or a folder above it, has the layout of a bare " +
         "repository (HEAD beside objects and refs, or beside commondir), met before any .git that " +
@@ -1371,11 +1379,11 @@ describe("check — advisory warnings", () => {
         "and of each folder above it by name to find that folder, and do not run git in it or in " +
         "any folder under it, this one included. " +
         "Two verbs need git: worktree refuses without it, and gate reads every change from it, " +
-        "so here gate scan exits 1 and /st-quick and /st-work list " +
-        "`secret scan: not run` under `Not done:`. " +
-        "Neither flow stops at this cause, and the git a flow's session and its sub-agents start " +
-        "is not set to refuse such a folder as the engine's is, so start no flow here until that " +
-        "folder is moved off this path. " +
+        "so here gate scan exits 1 saying git was not started, and on that reason " +
+        "/st-work stops the run as BLOCKED_DEPENDENCY and /st-quick stops the batch. " +
+        "That stop comes at the gate call, and the git a flow's session and its sub-agents start " +
+        "before it is not set to refuse such a folder as the engine's is, so start no flow here " +
+        "until that folder is moved off this path. " +
         "sync's dirty-tree warning simply stays silent while git does not answer.",
     );
   });
