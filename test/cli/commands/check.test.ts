@@ -4223,6 +4223,25 @@ describe("check — model-pins", () => {
     expect(verdict.detail).not.toContain("\u001b");
   });
 
+  // review/89: the lister's own message is the reason an unreadable read prints, and it is text
+  // a client program wrote, so the row cleans it before printing: a line break reads as a space,
+  // other control characters are dropped.
+  it("says why an unreadable live read left a client unverified, its message cleaned", async () => {
+    const manifest = pinnedManifest(["copilot"], { pins: { standard: { all: "gpt-5.5" } } });
+    const { lister, calls } = fakeLister({
+      copilot: { kind: "unreadable", message: "`copilot help config` exited 2:\u0007 bad\u001b[31m\nflag" },
+    });
+
+    const verdict = await checkModelPins(manifest, {}, lister, "/repo");
+
+    expect(calls.map((call) => call.tool)).toEqual(["copilot"]);
+    expect(verdict).toEqual({
+      id: "model-pins",
+      status: "pass",
+      detail: "copilot: unverified — `copilot help config` exited 2: bad[31m flag and no saved list",
+    });
+  });
+
   it("passes with nothing to list for a Claude-only setup or no readable manifest", async () => {
     const { lister, calls } = fakeLister({});
 
