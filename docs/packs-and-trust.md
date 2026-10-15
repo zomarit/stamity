@@ -200,8 +200,14 @@ notice asks the npm registry the running package publishes to — the public one
 `@zomarit/stamity`, and for a fork made with `scripts/fork-identity.mjs --registry` that registry and
 never the public one — whether a version newer than the running one exists. It is a GET at most
 once a day. `STAMITY_NO_UPDATE_CHECK=1` turns it off, and so do `NO_UPDATE_NOTIFIER` and `CI` on
-any non-empty value. [`SECURITY.md`](../SECURITY.md) states the same boundary as a control, and lists
-both exceptions.
+any non-empty value.
+
+The client programs the engine starts to read a model list may make network calls of their own.
+`init`, `sync` (`--dry-run` included), `workspace sync` and `check`'s `model-pins` row start each
+selected client's own CLI but Claude Code's, under your account and sign-in, and that program's
+listing call may reach its vendor. `STAMITY_NO_CLIENT_PROBE=1` in the environment starts none of
+them. [`SECURITY.md`'s "Network and data handling"](../SECURITY.md) states this boundary as a
+control: both exceptions, the update notice, and the client programs.
 
 ### Nothing waives a failed signature check
 

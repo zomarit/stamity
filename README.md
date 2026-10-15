@@ -52,14 +52,16 @@ npx @zomarit/stamity init
 `workspace`, `clean` and `add` work from. `validate` runs with or without one; `learn`, `handoff`
 and `ledger` want only `.stamity/`. Node `>= 22.22.2` is the only prerequisite; nothing installs globally.
 
-Two verbs need git: `worktree` refuses without it, and `gate` reads every change from it, so without git
-`gate scan` exits 1 and `/st-quick` and `/st-work` list `secret scan: not run` under `Not done:`. Three things
-reach the network, all documented in [`SECURITY.md`](SECURITY.md): `add` fetches the Sigstore trust root for a
-signed pack, `worktree setup` fetches your own `origin` for a branch with no local copy, and a startup notice asks
-npm about newer versions until you switch it off. Two touchpoints go further, through the authenticated GitHub CLI,
-`gh`: `/st-pr-resolve`, and `/st-board`, which once a board is linked files, edits and comments on its items by
-default behind one preview, and moves them only with `--move`. [Getting started](docs/getting-started.md) has the
-prerequisites, and what `init` asks and writes per client.
+Two verbs need git: `worktree` refuses without it, and `gate` reads every change from it, so without git `gate scan`
+exits 1 and `/st-quick` and `/st-work` list `secret scan: not run` under `Not done:`. The engine reaches the network
+in three places, all in [`SECURITY.md`'s "Network and data handling"](SECURITY.md): `add` fetches the Sigstore trust
+root for a signed pack, `worktree setup` fetches your own `origin` for a branch with no local copy, and a startup
+notice asks npm about newer versions until you switch it off. The client programs it starts to read a model list may
+make network calls of their own: `init`, `sync`, `workspace sync` and `check` start each selected client's own CLI but
+Claude Code's, under your account; `STAMITY_NO_CLIENT_PROBE=1` starts none. Two touchpoints go further, through the
+authenticated GitHub CLI, `gh`: `/st-pr-resolve`, and `/st-board`, which once a board is linked files, edits and
+comments on its items by default behind one preview, and moves them only with `--move`.
+[Getting started](docs/getting-started.md) has the prerequisites, and what `init` asks and writes per client.
 
 ## How it works
 
