@@ -60,7 +60,7 @@ more head lines, bare like the others: `Mode: unattended`, and `Branch:` and `Ba
 that output's `branch` and `base`, never from the checkout. The run then invokes the
 `st-unattended` skill by name and follows it, so its pre-flight runs before any sub-agent is
 briefed. Its user-route stop closes the record rather than leaving it in progress (step 3). Every
-other unattended exit pushes its record through the run verbs too — the close after step 7's fix,
+other unattended exit pushes its record through the run verbs too — step 7's stop after root cause,
 the `--diagnose` report, `BLOCKED_FAILURE` at gate `root-cause-before-fix`, and the escape valve:
 once step 8 has run, it takes the skill's ending, `Status:` rewritten to the exit taken, then
 `stamity run end --run <run-id> --title <title> --paths <p...>`, `--paths` naming the record, which
@@ -131,6 +131,11 @@ stays the three lines above.
    The hand-off carries `run-mode: attended | unattended`: `unattended` when this run was
    invoked with `--unattended` or under `STAMITY_UNATTENDED` set to anything but empty, `false` or
    `0`, `--attended` beating the variable.
+   Unattended, the run stops after gate `root-cause-before-fix`, as `--diagnose` does, and hands
+   nothing to `/st-work`: step 6 does not run, step 8 does, and the fix is deferred as
+   `needs a planned run`, a morning-list row. An in-session hand-off carries no persisted plan,
+   and the ready check exists to stop exactly that start. The record, the ranked hypotheses and
+   gate 2's test when one was written are pushed through the skill's ending (Unattended above).
 8. **Instrumentation cleanup.** `implementer` strips what step 2 added; the orchestrator
    verifies the count itself. Zero residue (see Hard gates).
 9. **Regression clauses.** Write what the repository shall continue to do, one clause per
@@ -226,7 +231,7 @@ same design is not debugging — it is the same experiment run again.
 ## Escalation
 
 Never automatic below the first row: the user switches in session, and step 8 runs before any
-switch. The first row is the exception, and it is step 7 — a default run hands the fix to
+switch. The first row is the exception, and it is step 7 — an attended default run hands the fix to
 `/st-work` on its own, because a command that fixes by default cannot gate the step that
 performs the fix. That row is listed here for the `--diagnose` run, which stops before step 7
 and reaches the same transition as a switch the user makes.

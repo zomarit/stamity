@@ -2,7 +2,7 @@
 id: debug-deterministic-bug-reproduced-in-process
 class: golden
 claim: "A report stating an exact input, the expected output and the actual output, on a repository whose test gate runs, takes the in-process route: the implementer writes the failing test, the test-runner runs it twice, the user is asked nothing, the diagnosis and the test go to /st-work in the same session, the run keeps its record, and the marker count at the close is 0."
-source: content/commands/st-debug.md:48-54,77-79,95-117,125-130,180-193
+source: content/commands/st-debug.md:48-54,77-79,95-117,125-130,185-198
 metric: rubric
 ---
 

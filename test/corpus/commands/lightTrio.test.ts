@@ -968,11 +968,14 @@ describe("debug — hard gates before any fix", () => {
     expect(unattended).toContain("invokes the `st-unattended` skill by name and follows it");
     expect(unattended.indexOf("stamity run start")).toBeLessThan(unattended.indexOf("st-unattended"));
     // review/13 (signed off): every unattended exit pushes its record through the run verbs, not
-    // only the user route — the fixed close, `--diagnose`, the root-cause gate's `BLOCKED_FAILURE`
+    // only the user route — step 7's stop, `--diagnose`, the root-cause gate's `BLOCKED_FAILURE`
     // and the escape valve each take the skill's ending after the strip.
+    // TEST CHANGE, justified: review/83 (signed off) — an unattended run no longer applies a fix at
+    // step 7, so the exit named is step 7's stop after root cause, not "the close after step 7's fix".
     expect(unattended).toContain(
-      "Every other unattended exit pushes its record through the run verbs too — the close after step 7's fix, the `--diagnose` report, `BLOCKED_FAILURE` at gate `root-cause-before-fix`, and the escape valve",
+      "Every other unattended exit pushes its record through the run verbs too — step 7's stop after root cause, the `--diagnose` report, `BLOCKED_FAILURE` at gate `root-cause-before-fix`, and the escape valve",
     );
+    expect(unattended).not.toContain("the close after step 7's fix");
     expect(unattended).toContain("once step 8 has run, it takes the skill's ending, `Status:` rewritten to the exit taken");
     expect(unattended).toContain("`stamity run end --run <run-id> --title <title> --paths <p...>`");
     expect(unattended).toMatch(/`--paths` naming the record, which carries the ranked hypotheses, and gate 2's test when one was written/);
@@ -998,6 +1001,38 @@ describe("debug — hard gates before any fix", () => {
     // The step's existing guarantees stay: debug owns no fix path, and the hand-off is not user-gated.
     expect(step7).toMatch(/Debug owns no fix path of its own/);
     expect(step7).toMatch(/the one in-run transition that is not user-gated/);
+  });
+
+  it("stops an unattended run after root cause and defers the fix as needing a planned run (review/83)", async () => {
+    const body = (await load("commands/st-debug.md")).parsed.body;
+    const step7 = body
+      .slice(body.indexOf("7. **Fix through the work pipeline.**"), body.indexOf("8. **Instrumentation cleanup.**"))
+      .replace(/\s+/g, " ");
+
+    // Attended: the hand-off is unchanged — the diagnosis and the failing test go to /st-work.
+    expect(step7).toContain(
+      "The diagnosis and the failing test become the plan handed to `/st-work`; its Build and Prove phases apply the change and gate it.",
+    );
+    // Unattended: the run stops after the root-cause gate, as --diagnose does, and sends nothing to
+    // /st-work — the nested run's ready check would refuse a hand-off with no persisted plan.
+    expect(step7).toContain(
+      "Unattended, the run stops after gate `root-cause-before-fix`, as `--diagnose` does, and hands nothing to `/st-work`",
+    );
+    expect(step7).toContain("step 6 does not run, step 8 does");
+    expect(step7).toContain("the fix is deferred as `needs a planned run`, a morning-list row");
+    expect(step7).toContain("An in-session hand-off carries no persisted plan, and the ready check exists to stop exactly that start.");
+    // Edge case: no failing test written — the push carries the record and hypotheses alone.
+    expect(step7).toContain(
+      "The record, the ranked hypotheses and gate 2's test when one was written are pushed through the skill's ending (Unattended above).",
+    );
+    // The unattended stop follows the attended hand-off and its mode line, so an attended reader meets the hand-off first.
+    expect(step7.indexOf("`run-mode: attended | unattended`")).toBeLessThan(step7.indexOf("Unattended, the run stops"));
+
+    // Escalation's own account of step 7 is the attended run's; the unattended run does not reach it.
+    const escalation = body
+      .slice(body.indexOf("## Escalation"), body.indexOf("| Situation | Switch to |"))
+      .replace(/\s+/g, " ");
+    expect(escalation).toContain("it is step 7 — an attended default run hands the fix to `/st-work` on its own");
   });
 });
 
