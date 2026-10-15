@@ -1613,8 +1613,10 @@ describe("feedback pair — unattended (REQ-FLOW-097, REQ-FLOW-100, REQ-CTX-012)
     expect(row).toContain(
       "A head ref that fails the allowlist below or is the base repository's default branch is refused, and so is a local branch of that name whose tip is neither `<sha>` nor an ancestor of it (`git merge-base --is-ancestor`), never reset.",
     );
+    // `review/77`: an exit between the record opening and the checkout (a failed fetch, a moved
+    // branch, a failed checkout) closes the record, so no later attended session reads a live run.
     expect(row).toContain(
-      "A refusal before the head is checked out pushes nothing and ends as one scanned comment on this pull request; before the record opens, it writes no record.",
+      "An exit before the head is checked out — a refusal, a failed fetch or a failed checkout — pushes nothing and ends as one scanned comment on this pull request; before the record opens, it writes no record, and after, it rewrites the record's `Status:` to `closed <date> (refused: <reason>)`, as every later exit rewrites it through the skill's ending, so no exit leaves the record `in progress`.",
     );
     // `review/46`: the round is known only from the fetch, so the folder opens after it.
     expect(row).toContain(
@@ -1665,17 +1667,44 @@ describe("feedback pair — unattended (REQ-FLOW-097, REQ-FLOW-100, REQ-CTX-012)
   it("pr-resolve posts a reply only from a file the outbound scan passed (REQ-FLOW-097, REQ-FLOW-103)", () => {
     const replies = clause(artifact(PR_RESOLVE).parsed.body, "## 5. Replies");
 
+    // `review/51`, re-decided: the body posts from the file, never on the command line, where a
+    // PowerShell client joins its lines and Windows caps its length.
     expect(replies).toContain(
-      "**Unattended, a reply posts only from a scanned file.** The body, with the hygiene guards below applied, is written to a file under this run's folder and posted from it as the raw string the field-typing rule asks for, `-f body=\"$(cat <file>)\"`, never `-F body=@<file>`, only after `stamity gate scan --text <file> --label reply` exits 0.",
+      "**Unattended, a reply posts only from a scanned file.** The body, with the hygiene guards below applied, is written to a file under this run's folder and posted from it with `-F body=@<file>`, the field-typing rule's one exception, so the body never rides the command line, where a PowerShell client joins its lines and Windows caps its length, only after `stamity gate scan --text <file> --label reply` exits 0.",
     );
-    // The field-typing rule stands without an exception: `body` is always `-f`.
+    // The field-typing rule names that exception, so no run reconciles the reply back to `-f`.
     expect(replies).toContain("string fields (`body`) need `-f`");
+    expect(replies).toContain(
+      "The one exception is `-F body=@<file>`: `gh` reads the named file and sends its content as a string, never converted to another type, so a body posted from a file takes `-F`.",
+    );
+    // The command-substitution form is retired everywhere in the file.
+    expect(artifact(PR_RESOLVE).parsed.body).not.toContain("$(cat");
     // Edge case: a held reply is not posted, and it is not lost either.
     expect(replies).toContain(
       "A reply the scan holds is not posted: its line and rule go on the morning list and on the run's `not done` line with its finding id.",
     );
     // The scan comes after the guards rewrite the body, so what is scanned is what posts.
     expect(replies.indexOf("with the hygiene guards below applied")).toBeLessThan(replies.indexOf("stamity gate scan --text"));
+  });
+
+  it("pr-resolve skips every comment carrying the run marker, whoever posted it (REQ-FLOW-100)", () => {
+    const preflight = section(artifact(PR_RESOLVE).parsed.body, "## Pre-flight");
+    const rows = tableRows(preflight.slice(preflight.indexOf("**On the fetch result")));
+    const names = rows.map(([guard]) => guard);
+    const marker = rows.find(([guard]) => guard === "Run marker")?.[1] ?? "";
+
+    // `review/78`: the morning list `run end` posts under the run's write account would otherwise
+    // reach round 2 as a write author's finding, carrying a deferred outside ask into a fix.
+    expect(marker).toContain(
+      "A comment whose body carries the run marker `<!-- stamity:run ` is skipped on every fetch, a re-poll's included, whoever posted it:",
+    );
+    expect(marker).toContain("the morning list `stamity run end` posts, and any other body a run wrote, is never a finding");
+    expect(marker).toContain("the proof block lists each skipped comment by id.");
+    // Keyed on the marker alone, never on the author or the permission read.
+    expect(marker).not.toMatch(/admin|write author|permission/);
+    // Skipped before the zero-threads stop counts what is left.
+    expect(names.indexOf("Run marker")).toBeGreaterThan(-1);
+    expect(names.indexOf("Run marker")).toBeLessThan(names.indexOf("Zero open threads"));
   });
 
   it("pr-resolve reads each author's permission through the collaborator endpoint, unknown counting as none (REQ-FLOW-100)", () => {
