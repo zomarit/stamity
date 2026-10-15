@@ -413,9 +413,13 @@ delta's amended text from `build/65`, `build/66` and `review/113`).
 - **Copilot.** Agent files carry `models: [<CLI ids>]`, the class's model first, then its other shipped candidates the
   saved list holds, and, where the shipped list gives the model a display name, a `model: "<Display Name> (copilot)"`
   line whose reader on these agents is unverified, since every agent sets `target: github-copilot`. No `modelPolicy`. A
-  pin typed in the display form is written nowhere: its class takes the pick and `init`/`sync` warn once per class,
-  printing the pin sanitised (`agentModelLines`, `idPins` and `displayNamePinWarnings`, `src/adapters/copilot.ts`;
-  `review/110`, `review/114`).
+  pin typed in the display form is written nowhere, in neither an agent file, the map nor a prompt file's `model:`: its
+  class takes the pick and `init`/`sync` warn once per class, printing the pin sanitised (`agentModelLines`,
+  `modelLine`, `idPins` and `displayNamePinWarnings`, `src/adapters/copilot.ts`; `review/110`, `review/114`,
+  `review/138`). A prompt file whose command declares a class carries `model:` only under a pin, and then the model the
+  agent files and the map carry for that class: a pin the saved list lacks gives way to the class's pick, kept only
+  when the list holds none of the class's candidates, and with no saved list the pin is written as typed (`modelLine`
+  through `classModels`; `review/140`).
 - **Codex.** `.codex/agents/*.toml` carries `model_reasoning_effort`, and `model` whenever the class resolves; a saved
   list holding none of a class's candidates writes no `model` (`buildAgentToml`, `src/adapters/codex.ts`).
 - **The map.** Every client gets `.stamity/generated/models/<client>.json`,
@@ -434,8 +438,10 @@ delta's amended text from `build/65`, `build/66` and `review/113`).
 - GIVEN a Cursor pin and no list THEN the agent file carries `<pin>[effort=<level>]` and the map `<pin>`; GIVEN no list
   and no pin THEN no `model:` line and an empty map class (`test/adapters/cursor.test.ts`).
 - GIVEN no pin and no list THEN Copilot's agent files carry `models` and Codex's `model` from the shipped list; GIVEN a
-  Codex pin THEN it wins; GIVEN a display-form Copilot pin THEN it is in neither `models`, `model:` nor the map, and one
-  sanitised warning names the class; GIVEN each client's map THEN it parses and lists every role
+  Codex pin THEN it wins; GIVEN a display-form Copilot pin THEN it is in neither `models`, `model:`, the map nor a
+  prompt file that declares its class, and one sanitised warning names the class; GIVEN a Copilot id pin the saved list
+  lacks THEN a prompt file that declares its class carries the same re-pick as the agent files and the map, and GIVEN no
+  pin THEN it carries no `model:`; GIVEN each client's map THEN it parses and lists every role
   (`test/adapters/copilot.test.ts`, `test/adapters/codex.test.ts`, `test/adapters/claude.test.ts`).
 
 As built, where the delta differed: the delta's first form wrote a display-form Copilot pin to the `model:` line; it

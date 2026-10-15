@@ -413,7 +413,7 @@ export const copilotResiduePlanner: ResiduePlanner = {
           return [buildAgentFile(item, grantFor(item), render, pins, efforts, listed)];
         }
         default:
-          return [buildPromptFile(item, render, pins)];
+          return [buildPromptFile(item, render, pins, listed)];
       }
     });
 
@@ -594,17 +594,19 @@ export function buildAgentFile(
  * restriction that is not there. `model` is the one that changed hands — it is
  * an operator's declared answer rather than a guess whenever a pin exists for
  * the class the command declares, and stays absent otherwise, exactly as it
- * does on an agent file.
+ * does on an agent file. `listed` is the account's saved model list, which
+ * re-picks a pin the account lacks as it does for the agent files.
  */
 export function buildPromptFile(
   item: CatalogItem,
   render: (raw: string) => string,
   pins: ModelPinMap = {},
+  listed?: readonly string[],
 ): AdapterOutput {
   return {
     path: `${PROMPTS_DIR}/${emittedId(item)}.prompt.md`,
     content: frontmatterDocument(
-      [`description: ${yamlScalar(render(item.description))}`, ...modelLine(item, pins)],
+      [`description: ${yamlScalar(render(item.description))}`, ...modelLine(item, pins, listed)],
       bodyOf(render(item.body)),
     ),
     owner: owner(item.id, item.type),
@@ -623,14 +625,26 @@ export function buildPromptFile(
  * vocabulary a class could map onto, so with no pin there is no honest value to
  * write and the key is dropped, letting the client apply its own default.
  *
+ * Under a pin, the value is the one the agent files and the map carry for the
+ * class ({@link classModels}): the pin passes through {@link idPins}, so a pin
+ * typed as a display name writes no line here either and the warning that says
+ * it is written nowhere stays true (ledger row 2026-10-14_cli-native/review/138);
+ * and a pin the saved list lacks is replaced by the class's pick from it, kept
+ * only when the list holds none of the class's candidates, and written as typed
+ * when no list was saved (review/140). The pick never reaches a prompt with no
+ * pin. Efforts are not passed: Copilot carries effort in a key of its own, so
+ * the level never changes the model value or the pick.
+ *
  * The value is quoted like every other scalar this file emits. An operator pin
  * is free text validated for shape only, so a value carrying `: ` would open a
  * second frontmatter key if it went out bare.
  */
-function modelLine(item: CatalogItem, pins: ModelPinMap): string[] {
+function modelLine(item: CatalogItem, pins: ModelPinMap, listed: readonly string[] | undefined): string[] {
   const declared = item.frontmatter[MODEL_CLASS_FIELD];
-  if (typeof declared !== "string") return [];
-  const model = resolveModelValue(declared, TOOL, pins);
+  if (!isModelClass(declared)) return [];
+  const pin = idPins(pins)[declared];
+  if (pin === undefined || pin.trim() === "") return [];
+  const { model } = classModels(declared, pins, {}, listed);
   return model === undefined ? [] : [`model: ${yamlScalar(model)}`];
 }
 
@@ -678,8 +692,9 @@ const DISPLAY_NAME_PIN = /\s\([^()]+\)$/;
  * The pins that bind on this client: every one but a display-name pin
  * (ledger row 2026-10-14_cli-native/build/65). Such a pin is not written into
  * `models`, which takes CLI ids, nor moved to `model:`, which nothing is shown
- * to read on these `github-copilot` agents; its class takes the pick instead,
- * and {@link displayNamePinWarnings} says so.
+ * to read on these `github-copilot` agents, nor into a prompt file's `model:`
+ * ({@link modelLine}, review/138); its class takes the pick instead, and
+ * {@link displayNamePinWarnings} says so.
  */
 function idPins(pins: ModelPinMap): ModelPinMap {
   const kept: Partial<Record<ModelClass, string>> = {};

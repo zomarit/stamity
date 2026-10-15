@@ -851,6 +851,55 @@ describe("commands → .github/prompts", () => {
     expect(frontmatterValue(undeclared.content, "model")).toBeUndefined();
   });
 
+  it("writes no model line for a pin typed as a display name, as the agent files and the map do not (review/138)", () => {
+    const item = itemOf({ type: "command", id: "cmd-work", frontmatter: { model_class: "standard" } });
+    const display = buildPromptFile(item, asIs, { standard: "Claude Sonnet 5 (copilot)" });
+
+    // Sync warns that such a pin is written nowhere; the prompt file keeps that true.
+    expect(frontmatterValue(display.content, "model")).toBeUndefined();
+    expect(display.content).not.toContain("(copilot)");
+    // Non-degenerate: an id pin on the same class and prompt still binds.
+    const id = buildPromptFile(item, asIs, { standard: "claude-sonnet-5" });
+    expect(frontmatterValue(id.content, "model")).toBe('"claude-sonnet-5"');
+  });
+
+  it("re-picks a pin the saved list lacks as the agent files do, and still writes no line without a pin (review/140)", () => {
+    const item = itemOf({ type: "command", id: "cmd-work", frontmatter: { model_class: "standard" } });
+    const pins = { standard: "gpt-5.5" };
+
+    // The account lacks the pin, so the class's pick from its list, as an agent file would carry.
+    const repicked = buildPromptFile(item, asIs, pins, ["unrelated-1", "gpt-6-sol"]);
+    expect(frontmatterValue(repicked.content, "model")).toBe('"gpt-6-sol"');
+    expect(repicked.content).not.toContain("gpt-5.5");
+    // A list holding none of the class's candidates keeps the operator's value.
+    expect(frontmatterValue(buildPromptFile(item, asIs, pins, ["unrelated-1"]).content, "model")).toBe('"gpt-5.5"');
+    // A pin the list holds binds as typed; with no saved list the pin is written as before.
+    expect(frontmatterValue(buildPromptFile(item, asIs, pins, ["gpt-5.5"]).content, "model")).toBe('"gpt-5.5"');
+    expect(frontmatterValue(buildPromptFile(item, asIs, pins).content, "model")).toBe('"gpt-5.5"');
+    // No pin, no line, whatever the list holds: a prompt takes a model only under a pin.
+    expect(frontmatterValue(buildPromptFile(item, asIs, {}, ["gpt-6-sol"]).content, "model")).toBeUndefined();
+  });
+
+  it("writes the same model into a prompt file as into the agent file and the map for a pinned class (review/140)", async () => {
+    const ctx = ctxOf({ pins: { advanced: { copilot: "gpt-5.5" } }, listed: ["claude-opus-5", "claude-haiku-4.5"] });
+    const prompt = buildPromptFile(
+      itemOf({ type: "command", id: "cmd-work", frontmatter: { model_class: "advanced" } }),
+      asIs,
+      { advanced: "gpt-5.5" },
+      ["claude-opus-5", "claude-haiku-4.5"],
+    );
+    const residue = await copilotResiduePlanner.planResidue(await buildCoreEmissionPlan(ctx), ctx);
+    const map = JSON.parse(rowAt(residue.outputs, ".stamity/generated/models/copilot.json").content) as {
+      classes: Record<string, { model?: string }>;
+    };
+
+    expect(map.classes["advanced"]?.model).toBe("claude-opus-5");
+    expect(rowAt(residue.outputs, ".github/agents/stamity-implementer.agent.md").content).toContain(
+      'models: ["claude-opus-5"',
+    );
+    expect(frontmatterValue(prompt.content, "model")).toBe('"claude-opus-5"');
+  });
+
   it("emits no prompt rows for a zero-command selection while instructions and agents stay", async () => {
     const plan = await planResidue({
       selection: {
