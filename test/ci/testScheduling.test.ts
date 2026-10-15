@@ -90,7 +90,24 @@ describe("Windows fixture scheduling", () => {
       expect(fixtureFiles.toSorted()).toEqual(HEAVY);
       expect(parallelFiles.toSorted()).toEqual(files.filter((file) => !HEAVY.includes(file)).toSorted());
       expect(parallelFiles.filter((file) => fixtureFiles.includes(file))).toEqual([]);
-      expect(parallel?.config.maxWorkers).toBeUndefined();
+      // TEST CHANGE, justified (2026-10-15, Dependabot #111, vitest 5.0.3 → 5.0.4): vitest 5.0.4
+      // writes the default worker count into every resolved config (`resolved.maxWorkers = … :
+      // getDefaultMaxWorkers(resolved.watch)`, available cores less one), where 5.0.3 left an unset
+      // value undefined and chose the default in the pool; `toBeUndefined()` read the old storage,
+      // not the intent. The parallel project declares no limit of its own and resolves to exactly
+      // what this vitest gives a config that sets none, so neither it nor the root is capped.
+      const declared = fixtureScheduling("win32").projects?.find(
+        (project) => typeof project === "object" && !(project instanceof Promise) && project.test?.name === "parallel",
+      );
+      expect(declared, "the parallel project in fixtureScheduling (vitest.config.ts)").toBeDefined();
+      expect(typeof declared === "object" && !(declared instanceof Promise) ? declared.test : undefined)
+        .not.toHaveProperty("maxWorkers");
+      const unconfigured = await createVitest({ watch: false, run: true, config: false, root: ROOT }, {});
+      try {
+        expect(parallel?.config.maxWorkers).toBe(unconfigured.config.maxWorkers);
+      } finally {
+        await unconfigured.close();
+      }
       expect(parallel?.config.sequence.groupOrder).toBe(0);
       expect(heavy?.config.maxWorkers).toBe(1);
       expect(heavy?.config.sequence.groupOrder).toBe(1);
