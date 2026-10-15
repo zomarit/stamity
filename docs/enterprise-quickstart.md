@@ -54,6 +54,7 @@ The admin arms the release, the platform team tags it, then every developer inst
 The platform team runs the update lane, and developers follow the version it pins.
 
 - Opt in to the scheduled update run and decide on its token, through [Turn on the GitHub workflow](enterprise-forks.md).
+- If your fork was set up before 1.15.0, drop the deleted routes' generators and paths first, as [Drop the deleted routes from a fork set up before 1.15.0](enterprise-forks.md) lists.
 - See what the next upstream release touches and merge it on an update branch, as [Take the next release](enterprise-forks.md) shows.
 - Act on what the lane reports, by its outcome and its exit code, from [Read the outcome and the exit code](enterprise-forks.md).
 - Fix a merge conflict in the lane's own worktree rather than in your checkout, by following [Resolve a conflict](enterprise-forks.md).
@@ -61,7 +62,7 @@ The platform team runs the update lane, and developers follow the version it pin
 - Land the update with a merge commit so the next update still finds its base, as [Land the update branch](enterprise-forks.md) explains.
 - Undo an attempt, or a release you already landed, with [Back out an attempt or a landed release](enterprise-forks.md).
 - Recover a failed scheduled run and keep its evidence, as [Recover from a failed run](enterprise-forks.md) lists.
-- Move each repository to the new version, or keep it where it is, as [Keeping your setup current](getting-started.md) describes.
+- Move each repository to the new version with your own package's `sync`, or keep it where it is, the way [Keeping your setup current](getting-started.md) does it with the public one.
 
 ## Where to go next
 

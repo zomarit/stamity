@@ -330,9 +330,10 @@ reported even when the merge is clean.
 
 1.15.0 deletes the APM and plugin routes, and with them the two generators an earlier version of
 this guide put in `regenerate`: `node scripts/generate-plugin-manifests.mjs` and
-`node scripts/generate-apm-package.mjs`. The lane runs the `regenerate` list it reads from the
-merged tree, so a fork that still lists either one ends its 1.15.0 integration as
-`regenerate-failed`. One edit has to land on your integration branch before you integrate 1.15.0:
+`node scripts/generate-apm-package.mjs`. The lane runs the `regenerate` list from
+`.stamity/upstream.json` in the checkout you run it from (from inside an update worktree, the
+checkout that created it), never from the update worktree's copy, so a fork that still lists either
+one ends its 1.15.0 integration as `regenerate-failed`. One edit has to land on your integration branch before you integrate 1.15.0:
 in `.stamity/upstream.json`, remove both commands from `regenerate`, and remove `.apm/**`,
 `apm.yml`, `plugin.json`, `.claude-plugin/**` and `.cursor-plugin/**` from `generatedPaths`.
 
@@ -405,8 +406,8 @@ message is `Merge upstream release <tag> into <branch>`, with three trailers:
 `Stamity-Upstream-Release: <tag>`, `Stamity-Upstream-Commit: <sha>` and
 `Stamity-Upstream-Gates: passed | failed | none | skipped`.
 
-`integrate`, `continue` and `validate` run the merged tree's `regenerate` commands and `gates` with
-your environment. Review the release before you run them on a workstation that holds credentials,
+`integrate`, `continue` and `validate` run the `regenerate` commands and `gates` your checkout's
+`.stamity/upstream.json` lists, inside the merged tree, with your environment. Review the release before you run them on a workstation that holds credentials,
 or run them in CI, where the preparation job holds none. The lane prints that warning itself.
 
 The record beside the trailers is `.stamity/upstream/integrations/<tag>.json`, committed **in the

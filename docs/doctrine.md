@@ -142,8 +142,10 @@ What the project does not do is published beside what it does.
   not.
 - A run that closes without green gates ships a `Not done:` list naming each open gap. That is
   the charter's invariant 4. The work and spec touchpoints carry that list in their closing block
-  by name. Quick's report names it for two things: a secret scan that did not run or left files
-  unscanned, and the items a batch applied before it moved to `/st-work`, which stay ungated.
+  by name. Quick's report names it for a secret scan that did not run or left files unscanned, for
+  a folder git was not started in, which stops the batch, for the items a batch applied before it
+  moved to `/st-work`, which stay ungated, and for each refused or deferred item and each
+  pre-existing failure its close walk leaves there.
   Debug and pr-resolve each name a `not done` line for one exit apiece. Debug's is
   instrumentation left in place under a capture-later agreement. Pr-resolve's is a reply that
   failed to post.

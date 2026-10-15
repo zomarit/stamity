@@ -48,10 +48,11 @@
 //                      verb: `status` against the update branch itself, or `integrate` from a
 //                      runner checkout whose branch carries another name
 //
-// The regenerate commands and the gates are the fork's own, read from the MERGED tree: `integrate`,
-// `continue` and `validate` run them through the shell with the caller's environment, so a release
-// is reviewed before those verbs run on a workstation holding credentials, or they run in CI, where
-// the prepare job holds none. The report says so on the first run of either per invocation.
+// The regenerate commands and the gates are the fork's own, read from `.stamity/upstream.json` in the
+// checkout the lane runs in (from inside an update worktree, the checkout that created it), never
+// from the update worktree's copy: `integrate`, `continue` and `validate` run them inside the MERGED
+// tree, through the shell with the caller's environment, so a release is reviewed before those verbs
+// run on a workstation holding credentials, or they run in CI, where the prepare job holds none. The report says so on the first run of either per invocation.
 //
 // Invariants, quoted from the spec; every verb below is written against them.
 //   1. The target branch is never written. The lane reads the fork's integration branch and
@@ -2533,6 +2534,10 @@ verbs
 --branch <name> takes <name> as the target branch instead of the configured one, for every verb:
 status against the update branch itself, or integrate from a runner checkout whose branch
 carries another name.
+
+the regenerate commands and gates are read from .stamity/upstream.json in the checkout the lane
+runs in (from inside an update worktree, the checkout that created it), never from the update
+worktree's copy; each runs inside the merged tree.
 
 integrate, continue and validate run the merged tree's regenerate commands and gates with the
 caller's environment: review the release before running them on a workstation holding

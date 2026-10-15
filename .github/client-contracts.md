@@ -113,9 +113,12 @@ they do not claim authenticated client sessions, native trust approval, or human
   root", a user hook in `~/.cursor/hooks.json` runs from `~/.cursor/` (hooks page, read
   2026-09-21) — so a repository-relative command is correct for the project rows this engine emits
   and would not be for a user row of the same shape. The client also exports a
-  project-root variable name (`CURSOR_PROJECT_DIR`, observed in the same log; values never read), so
-  an anchor is available if that behaviour ever changes, but the emitted repository-relative command
-  needs none today. The vendor pages refused every connection from the measuring host on 2026-09-20, which is why the
+  project-root variable name (`CURSOR_PROJECT_DIR`, observed in the same log; values never read).
+  Since 1.15.0 the emitted command does not rest on the working directory: each is a `node -e`
+  starter that walks up from the folder the session started in to the folder holding
+  `.cursor/hooks.json`, taking `CURSOR_PROJECT_DIR` first when that folder holds the file, and exits
+  1 naming the `sync` call when the hook runner is missing there
+  (`src/hooks/portableRunner.ts::portableHookCommand`). The vendor pages refused every connection from the measuring host on 2026-09-20, which is why the
   measurement above was taken; they answered that same host on 2026-09-21, and the three cited
   below were re-read then. What the hooks page settles beside the working directory: exit 2 blocks
   and is "equivalent to returning `permission: "deny"`"; any other non-zero exit is a hook
@@ -124,13 +127,17 @@ they do not claim authenticated client sessions, native trust approval, or human
   over allow". [Skills](https://cursor.com/docs/skills),
   [hooks](https://cursor.com/docs/hooks), [MCP](https://cursor.com/docs/mcp) (all three read
   2026-09-21).
-- **Copilot:** repository command hooks run in CLI/cloud, with PascalCase event aliases
-  preserving canonical tool-name matcher semantics. PreToolUse rejects nonzero exits and
+- **Copilot:** repository command hooks run in CLI/cloud. Since 1.15.0 the emitted file keys its
+  events in camelCase (`sessionStart`, `preToolUse` and the rest) with a `bash` key beside each
+  `command`, the form the cloud agent reads (CHANGELOG 1.15.0, Changed), and its matchers keep
+  canonical tool-name semantics. PreToolUse rejects nonzero exits and
   explicit deny; timeouts always fail-open. String and object tool arguments normalize at
   the portable boundary. Session-start command output is injected as additionalContext
   (the hooks reference, read 2026-09-17 and again 2026-09-21). Each hook entry carries its own
-  working directory, `cwd`, documented as "relative to repository root" and emitted as `"."`, so a
-  repository-relative command needs no anchor here (hooks reference, read 2026-09-21). An emitted
+  working directory, `cwd`, documented as "relative to repository root" and emitted as `"."`
+  (hooks reference, read 2026-09-21). Since 1.15.0 the command does not rest on it either: it is
+  the same walk-up starter, to the folder holding `.github/hooks/stamity.json`, and exits 1 naming
+  the `sync` call when the hook runner is missing there (CHANGELOG 1.15.0, Fixed). An emitted
   hook file is loaded only where the FOLDER IS TRUSTED, which is the fact a headless run turns on:
   `COPILOT_ALLOW_ALL` set to exactly `"true"` "additionally trusts the working directory without
   prompting, which loads that directory's skills, plugins, MCP servers, and hooks, including hooks

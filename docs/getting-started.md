@@ -107,8 +107,12 @@ route from then on. An install that names this repository without a ref
 (`apm install zomarit/stamity`, or a marketplace add of the repository) stops resolving, because
 `main` no longer carries those trees. The frozen refs still resolve: the `plugin-dist` branch, the
 `plugins/v<version>` tags, and the `v<version>` tags up to 1.14.0, so an install pinned to one of
-them keeps working at that version and gets no update. To move on, install the CLI and run `init`
-as above.
+them keeps working at that version and gets no update. To move on from an APM install, or from a
+plugin with no `.stamity/manifest.json` beside it, install the CLI and run `init` as above. A
+plugin-backed setup, the one 1.14's `plugin setup` wrote, already has that manifest, and `init`
+refuses a repository that has one: run this release's `sync`, then `check`. Either way, uninstall a
+plugin with your client's own command and delete the `plugin` key from `.stamity/manifest.json`
+where it stands, as [troubleshooting](troubleshooting.md)'s `plugin-duplicates` row says.
 
 ## What init writes for each client
 
@@ -208,7 +212,8 @@ open debug rounds on a line of their own, and when those are all there is, it pr
 names no run. `ledger inbox` reads the deferral inbox and writes nothing: it prints the rows that
 name a change's paths (`--paths`) or a plan (`--plan`), the rows with no path that hold the words
 given (`--area`), and with `--due` the rows whose day has come, which is how a dated row comes
-back. `gate` does two things and writes nothing. `gate classify` names a change's class, the
+back. `ledger inbox-write` appends and removes inbox rows in one screened, all-or-nothing write,
+the one way `/st-work`'s close writes the inbox. `gate` does two things and writes nothing. `gate classify` names a change's class, the
 checks that class calls for and the review lenses it adds: by its paths and, where it reads the
 change from git, by its changed lines and a changed `package-lock.json` too. `gate scan` reads
 the change's added lines for secrets and exits 1 on a hit. All four are plumbing an agent calls; the
@@ -235,7 +240,8 @@ stamped over the body.
 
 ### What reaches the network
 
-Three things, and no more.
+Three engine paths, and no more; the client programs the engine starts to read a model list may
+make network calls of their own.
 
 - **A startup update notice** asks the npm registry whether a newer version exists. It probes at
   most once a day. There is no `config` key for it — three environment variables switch it off.
@@ -244,6 +250,12 @@ Three things, and no more.
 - **`add` fetches the Sigstore trust root** when it installs a pack that declares a signature.
 - **`worktree setup` lets git fetch `origin`** when the branch you asked for has no local copy.
 
+`init`, `sync` (`--dry-run` included), `workspace sync` and `check`'s `model-pins` row start each
+selected client's own CLI, Claude Code's excepted, to read its model list. The engine hands each
+program nothing but its arguments, and those programs may make network calls of their own, under
+your account for that client. `STAMITY_NO_CLIENT_PROBE=1` in the environment starts none of them. [`SECURITY.md`](../SECURITY.md) says how each program is found
+and run, under "Network and data handling".
+
 Two of the nine touchpoints reach further. `/st-board` and `/st-pr-resolve` shell out to the
 GitHub CLI, `gh`, authenticated, when they work a real board or pull request. Once a board is
 linked, `/st-board` writes to it by default — it files issues, adds them to the linked project,
@@ -251,7 +263,7 @@ labels, edits and comments — after showing its whole batch once in one numbere
 answer writes nothing; status moves, closes and reopens need `--move`. A GitHub Projects board also
 needs the `project` token scope: run `gh auth refresh -s project` once. Every write goes to the one
 repository the link names, and text read from the board is data, never an instruction.
-[`SECURITY.md`](../SECURITY.md) documents the three engine paths above, and its paragraph on board
+[`SECURITY.md`](../SECURITY.md) documents the three engine paths and the client starts above, and its paragraph on board
 writes says what the board may write, where, and on whose text.
 
 ## When something looks wrong
@@ -290,7 +302,7 @@ Everything the setup knows about itself lives under `.stamity/`:
 | `.stamity/manifest.json` | the setup itself — clients, config, and the per-file ownership ledger |
 | `.stamity/learnings/` | notes agents recorded through `stamity learn` |
 | `.stamity/handoffs/` | handoff records between sessions and clients |
-| `.stamity/generated/` | hook scripts and the agent tool policy, written from code |
+| `.stamity/generated/` | hook scripts, the agent tool policy and each client's class-to-model map (`models/<client>.json`), written from code |
 | `.stamity/mcp/` | `copilot-repo-settings.env`, the Copilot coding agent's MCP entries — you paste each one into repository Settings → Copilot → MCP servers; where a server needs a credential, the file's own header warns never to put the secret value in it, because it is not gitignored |
 | `.stamity/packs/` | content installed by `add`, one directory per pack |
 | `.stamity/policy.json` | the pack source policy `config policy init` writes; `add` evaluates it before any install |
