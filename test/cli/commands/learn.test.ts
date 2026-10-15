@@ -1149,6 +1149,85 @@ describe("learn read — the screened read", () => {
     expectNoSpan(json.stdout);
   });
 
+  /**
+   * A bounded block row's two halves, built from code points so no screened
+   * phrase is written into this file, and a run of `width` code points `code`
+   * between them — wider than the row's gap, so only a collapse joins them.
+   */
+  function splitRow(code: number, width: number): { split: string; joined: string; tail: string } {
+    const head = String.fromCodePoint(0x74, 0x68, 0x65, 0x20, 0x61, 0x67, 0x65, 0x6e, 0x74);
+    const tail = String.fromCodePoint(0x6d, 0x75, 0x73, 0x74, 0x20, 0x61, 0x6c, 0x77, 0x61, 0x79, 0x73);
+    return { split: `${head}${String.fromCodePoint(code).repeat(width)}${tail}`, joined: `${head} ${tail}`, tail };
+  }
+
+  /** The block ids as the loader reports them: each once, sorted. */
+  function blockIdSet(text: string): string[] {
+    return [...new Set(rawBlockIds(text))].toSorted();
+  }
+
+  it("skips a summary whose control run the strip spaces and the printed collapse then joins", async () => {
+    const temp = tempDir();
+    // A unit-separator run where the row's words have one space: the strip prints it as a run of spaces, which the
+    // index collapses to one.
+    const { split, joined, tail } = splitRow(0x1f, 48);
+    const spaced = split.replaceAll(String.fromCodePoint(0x1f), " ");
+    const document = stampedLearning({ id: "run-note", summary: yamlEscaped(`Ordinary note, ${split}.`) });
+    // The precondition that makes this row a test: neither the file, the decoded run nor the spaced run hits; the
+    // collapsed line does.
+    expect([rawBlockIds(document), rawBlockIds(split), rawBlockIds(spaced)]).toEqual([[], [], []]);
+    const expected = blockIdSet(`Ordinary note, ${joined}.`);
+    expect(expected.length).toBeGreaterThan(0);
+    const root = await seedRepo(temp, { [`repo/${LEARNINGS_DIR}/run-note.md`]: document });
+
+    const json = await runLearn(root, ["read", "--json"]);
+    const human = await runLearn(root, ["read"]);
+    const shared = await loadValidatedLearnings({ rootDir: root });
+
+    expect(json.code).toBe(0);
+    const doc = parseSingleDoc(json.stdout);
+    expect((doc["learnings"] as unknown[]).length, "the run summary loaded").toBe(0);
+    expect(doc["skips"]).toEqual([{ fileName: "run-note.md", reason: "injection-detected", patternIds: expected }]);
+    expect(human.code).toBe(0);
+    expect(human.stdout).toContain(`- skipped run-note.md: injection-detected (patterns: ${expected.join(", ")})`);
+    for (const output of [json.stdout, json.stderr, human.stdout, human.stderr]) {
+      expect(output.includes(tail), "a refused span reached the output").toBe(false);
+    }
+    // The shared loader, which the session-start twin mirrors, is unchanged: it reads no decoded field.
+    expect(shared.learnings.map((learning) => learning.fileName)).toEqual(["run-note.md"]);
+  });
+
+  it("withholds a skipped file's name whose space run the printed collapse joins into a row", async () => {
+    const temp = tempDir();
+    const { split, joined, tail } = splitRow(0x20, 48);
+    const name = `${split}.md`;
+    // Neither the name as written nor as stripped hits; the line the index prints does.
+    expect(rawBlockIds(name)).toEqual([]);
+    const expected = blockIdSet(`${joined}.md`);
+    expect(expected.length).toBeGreaterThan(0);
+    const withheld = `(name withheld: ${expected.length === 1 ? "pattern" : "patterns"} ${expected.join(", ")})`;
+    const root = await seedRepo(temp, { [`repo/${LEARNINGS_DIR}/${name}`]: "no head\n" });
+
+    const human = await runLearn(root, ["read"]);
+    const json = await runLearn(root, ["read", "--json"]);
+    const body = await runLearn(root, ["read", "--body", split]);
+    const bodyJson = await runLearn(root, ["read", "--body", split, "--json"]);
+
+    // Compared as booleans, never whole: a failing comparison would print the joined name it refused.
+    expect(human.code).toBe(0);
+    const line = human.stdout.trimEnd().split("\n")[1];
+    expect(line === `- skipped ${withheld}: invalid-frontmatter`, "the skip line names the withheld placeholder").toBe(true);
+    expect(json.code).toBe(0);
+    const skips = parseSingleDoc(json.stdout)["skips"] as { fileName: string; reason: string; patternIds: string[] }[];
+    expect(skips.length).toBe(1);
+    expect(skips[0]?.fileName === withheld, "the JSON skip names the withheld placeholder").toBe(true);
+    expect([skips[0]?.reason, skips[0]?.patternIds]).toEqual(["invalid-frontmatter", []]);
+    expect([body.code, bodyJson.code]).toEqual([1, 1]);
+    for (const output of [human.stdout, json.stdout, body.stdout, body.stderr, bodyJson.stdout]) {
+      expect(output.includes(joined), "a joined name reached the output").toBe(false);
+    }
+    expect(human.stdout.includes(tail) || json.stdout.includes(tail), "the withheld name was printed").toBe(false);
+  });
+
   it("prints --body with its literal controls stripped, keeping tabs and line breaks", async () => {
     const temp = tempDir();
     const tail = "Title \u001B]0;x\u0007 set,\t\u009B2J cleared, line\rover.\r\nNext line.";

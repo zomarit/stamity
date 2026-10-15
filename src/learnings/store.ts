@@ -278,10 +278,10 @@ export interface LoadValidatedLearningsOptions {
    * pattern ids, before the budget is charged. What the verb prints is then
    * stripped of the unprintable set ({@link printableText}) and screened again
    * in that printed form, since a strip can join or space a row's words: each
-   * printed field, which the loaded learning carries stripped, and the body as
-   * {@link printableBody} gives it. Every skip's file name passes the same
-   * screen, raw and stripped; a name that hits prints as a withheld placeholder
-   * naming the pattern ids.
+   * printed field, collapsed as the index collapses it and carried so by the
+   * loaded learning, and the body as {@link printableBody} gives it. Every
+   * skip's file name passes the same screen, raw and as the index prints it; a
+   * name that hits prints as a withheld placeholder naming the pattern ids.
    */
   screenPrinted?: boolean;
 }
@@ -450,14 +450,16 @@ async function examine(dir: string, candidate: Candidate, now: Date, screenPrint
   if (screenPrinted) {
     // The values as printed, after the parser decoded every escape the raw
     // screen above read as literal ASCII, then stripped of what a terminal
-    // would run: each screened decoded and again stripped. Each field alone, so
-    // no hit is made of two fields the index prints apart.
+    // would run and collapsed as {@link fieldText} collapses it at print: each
+    // screened decoded and again as that exact printed string, since the strip
+    // spaces a control run the collapse then closes. Each field alone, so no
+    // hit is made of two fields the index prints apart.
     const shown: Record<string, unknown> = { ...frontmatter };
     const decoded: string[] = [];
     for (const field of PRINTED_FIELDS) {
       const value = fieldText(frontmatter, field);
       if (value === undefined) continue;
-      const printed = printableText(value);
+      const printed = fieldText({ [field]: printableText(value) }, field) ?? "";
       if (typeof frontmatter[field] === "string") shown[field] = printed;
       decoded.push(...blockedPatternIds(value), ...blockedPatternIds(printed));
     }
@@ -716,13 +718,15 @@ function printableText(text: string, keep = ""): string {
 
 /**
  * A skip's file name for the read verb: screened as a summary is, raw and as
- * {@link printableText} prints it, and printed stripped; a name that hits is
- * withheld behind a placeholder naming the pattern ids, never the name.
- * {@link lineSafe} then flattens and caps it as it does every name.
+ * it prints — {@link printableText}'s strip, then {@link lineSafe}'s collapse
+ * and cap, which can close a space run wider than a row's gap — and carried
+ * stripped; a name that hits is withheld behind a placeholder naming the
+ * pattern ids, never the name. {@link lineSafe} then flattens and caps it as
+ * it does every name, giving the string screened here.
  */
 function printedName(name: string): string {
   const shown = printableText(name);
-  const ids = [...new Set([...blockedPatternIds(name), ...blockedPatternIds(shown)])].toSorted();
+  const ids = [...new Set([...blockedPatternIds(name), ...blockedPatternIds(lineSafe(shown))])].toSorted();
   if (ids.length === 0) return shown;
   return `(name withheld: ${ids.length === 1 ? "pattern" : "patterns"} ${ids.join(", ")})`;
 }
