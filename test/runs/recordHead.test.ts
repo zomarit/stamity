@@ -17,6 +17,8 @@ import { readRecordHead } from "../../src/runs/resumeCard.ts";
  */
 
 const SHA = "02e040eb29de0468d90febe856ae205f31d6632d";
+/** A full commit id in a SHA-256 repository: 64 hex digits. */
+const SHA256 = "02e040eb29de0468d90febe856ae205f31d6632d0123456789abcdef01234567";
 
 /** A head as Frame writes it in 1.16.0, every line bare at column 0. */
 function sixLineHead(lines: { mode?: string; branch?: string; base?: string; resumes?: string } = {}): string {
@@ -70,11 +72,12 @@ describe("the record head's mode, branch, base and resumes lines (REQ-CTX-012)",
     expect(readRecordHead("  Mode: unattended\n").mode).toBeNull();
   });
 
-  it("takes the base sha before a trailing ellipsis, and nothing that is not 7 to 40 hex digits", () => {
+  it("takes the base sha before a trailing ellipsis, and nothing that is not 7 to 64 hex digits", () => {
     expect(readRecordHead(sixLineHead({ base: "02e040eb… (the plan's stamp)" })).base).toBe("02e040eb");
     expect(readRecordHead(sixLineHead({ base: "02e040e" })).base).toBe("02e040e");
     expect(readRecordHead(sixLineHead({ base: "02e040" })).base).toBeNull();
-    expect(readRecordHead(sixLineHead({ base: `${SHA}0` })).base).toBeNull();
+    expect(readRecordHead(sixLineHead({ base: SHA256 })).base).toBe(SHA256);
+    expect(readRecordHead(sixLineHead({ base: `${SHA256}0` })).base).toBeNull();
     expect(readRecordHead(sixLineHead({ base: "main" })).base).toBeNull();
   });
 
@@ -126,7 +129,8 @@ describe("the record head's mode, branch, base and resumes lines (REQ-CTX-012)",
   });
 
   it("reads CRLF line endings and a BOM as LF", () => {
-    const crlf = `﻿${sixLineHead({ resumes: "r" }).replaceAll("\n", "\r\n")}`;
+    // The BOM is built from its code point, so this file holds no invisible character itself.
+    const crlf = `${String.fromCodePoint(0xfeff)}${sixLineHead({ resumes: "r" }).replaceAll("\n", "\r\n")}`;
     expect(readRecordHead(crlf)).toEqual(readRecordHead(sixLineHead({ resumes: "r" })));
   });
 
@@ -135,7 +139,7 @@ describe("the record head's mode, branch, base and resumes lines (REQ-CTX-012)",
     // flag, a looser sha) is a visible edit here too.
     expect(RECORD_MODE_PATTERN).toEqual(/^mode:\s*(attended|unattended)\b/i);
     expect(RECORD_BRANCH_PATTERN).toEqual(/^branch:\s*(\S+)/i);
-    expect(RECORD_BASE_PATTERN).toEqual(/^base:\s*([0-9a-f]{7,40})\b/i);
+    expect(RECORD_BASE_PATTERN).toEqual(/^base:\s*([0-9a-f]{7,64})\b/i);
     expect(RECORD_RESUMES_PATTERN).toEqual(/^resumes:\s*(\S+)/i);
   });
 });

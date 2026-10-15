@@ -1080,6 +1080,9 @@ describe("readRecordHead", () => {
   });
 });
 
+/** A full commit id in a SHA-256 repository: 64 hex digits. */
+const SHA256 = "0123456789abcdef".repeat(4);
+
 /**
  * Heads both twins read, one file each: the hook's `cardRecordHead` and the
  * engine's `readRecordHead` must return the same fields for every one.
@@ -1094,6 +1097,7 @@ const TWIN_HEADS: Readonly<Record<string, string>> = {
   "line-16.md": record({ lead: leadLines(12), more: ["Mode: unattended", "Branch: past-the-head"] }),
   "indented.md": record({ more: [" Mode: unattended", "\tBranch: b"] }),
   "no-plan-or-invocation.md": "Status: in progress\nMode: unattended\nBranch: b\n",
+  "sha256-base.md": record({ more: [`Base: ${SHA256}`] }),
 };
 
 /** The hook body alone, with its host's imports, printing `cardRecordHead` of each path argument. */
@@ -1135,6 +1139,7 @@ describe("the hook twin's record head (REQ-CTX-012)", () => {
       base: SHA,
       resumes: "2026-09-22_earlier",
     });
+    expect(asEngine[names.indexOf("sha256-base.md")]).toMatchObject({ base: SHA256 });
   });
 });
 

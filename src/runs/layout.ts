@@ -92,8 +92,11 @@ export const RECORD_INVOCATION_PATTERN = /^invocation:\s*(.+)$/i;
 export const RECORD_MODE_PATTERN = /^mode:\s*(attended|unattended)\b/i;
 /** The record head's branch line: the branch the run commits and pushes on. */
 export const RECORD_BRANCH_PATTERN = /^branch:\s*(\S+)/i;
-/** The record head's base line: the commit the run started from, 7 to 40 hex digits. */
-export const RECORD_BASE_PATTERN = /^base:\s*([0-9a-f]{7,40})\b/i;
+/**
+ * The record head's base line: the commit the run started from, 7 to 64 hex
+ * digits, so a SHA-256 repository's full commit id reads as a SHA-1 one does.
+ */
+export const RECORD_BASE_PATTERN = /^base:\s*([0-9a-f]{7,64})\b/i;
 /** The record head's resumes line: the run this one carries on from. */
 export const RECORD_RESUMES_PATTERN = /^resumes:\s*(\S+)/i;
 /** What a status value says while the run is open, in any case and any decoration. */

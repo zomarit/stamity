@@ -106,6 +106,8 @@ const FIXTURES: Fixture[] = [
     ["REMOVED REQ-DEMO-001 — retired", "REQ-DEMO-002"]].flatMap(([heading = "", cited = ""]) =>
     [6, 7].map((count) => fx(`${heading} × ${count}`, deltaEntry(heading, cited, count)))),
   fx("### ADDED REQ- defines nothing", "## Spec delta\n\n### ADDED REQ-NEW-001 — the guard\nGiven a fresh plan, Then it holds.\n\n## Units\n### U1\n- **requirements**: REQ-NEW-001.\n- **depends_on**: none.\n"),
+  fx("unit with neither field", plan + "\n### U3 — bare\nA unit with no requirements and no depends_on.\n"),
+  fx("empty fields", plan.replace("- **requirements**: REQ-DEMO-002.", "- **requirements**:").replace("- **depends_on**: U1.", "- **depends_on**:")),
   fx("no units, long notes", `## Spec delta\n\nNone.\n\n## Notes\n### N1\n${Array.from({ length: 70 }, (_, n) => `Note ${n}.`).join("\n")}\n\`\`\`\nx\n\`\`\`\n`),
 ];
 
@@ -138,7 +140,7 @@ describe("REQ-FLOW-091 — the engine's coverage check equals the skill's copy",
     const codes = new Set(results.flatMap(({ port }) => port.findings.map((row) => row.code)));
     expect([...codes].toSorted()).toEqual(["dangling-dependency", "dangling-requirement", "delta-verbose",
       "duplicate-dependency", "duplicate-reference", "duplicate-requirement", "duplicate-unit", "invalid-reference",
-      "missing-coverage", "missing-retirement", "missing-spec-delta", "missing-spec-input", "missing-units", "partial-scope",
+      "missing-coverage", "missing-dependencies", "missing-requirements", "missing-retirement", "missing-spec-delta", "missing-spec-input", "missing-units", "partial-scope",
       "provisional-definition", "unit-oversize", "unit-prewritten", "unit-size"]);
     expect(new Set(results.map(({ port }) => port.status))).toEqual(new Set(["pass", "fail"]));
     const looked = results.flatMap(({ portSeen }) => portSeen);
