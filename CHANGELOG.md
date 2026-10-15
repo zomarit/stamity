@@ -31,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-10-15
+
 ### Security
 
 - **Board writes go to one linked repository, and board text never drives them.** Every `gh issue`
@@ -288,6 +290,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `setup-node` step, with the project's Node version, else `lts/*`, because the generated hooks
   run on Node, and an install step only where the project shows Node. The default action refs move
   to `actions/checkout@v6` and `actions/setup-node@v7`; a project's own pins still win.
+- **The 1.15.0 release eval run.** The release rule calls for a full run of the set: its cases moved,
+  and so did the model-facing text and the files the engine emits for each client. The run's id, its
+  status and its numbers land here after the run.
 
 ### Removed
 
@@ -2603,7 +2608,8 @@ as its item below says.
   emission (Claude, Cursor, Copilot, and Codex); the first-party packs; and the documentation
   site.
 
-[Unreleased]: https://github.com/zomarit/stamity/compare/v1.14.0...HEAD
+[Unreleased]: https://github.com/zomarit/stamity/compare/v1.15.0...HEAD
+[1.15.0]: https://github.com/zomarit/stamity/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/zomarit/stamity/compare/v1.12.0...v1.14.0
 [1.12.0]: https://github.com/zomarit/stamity/compare/v1.11.0...v1.12.0
 [1.11.0]: https://github.com/zomarit/stamity/compare/v1.10.0...v1.11.0
