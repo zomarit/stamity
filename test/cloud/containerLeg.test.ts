@@ -237,6 +237,9 @@ function resultOf(node: string, marker: string, folder: string, index: number): 
   return result;
 }
 
+/** Claude Code's PreToolUse guards whose command ends in the fail-closed `exit 2` tail. */
+const CLAUDE_FAIL_CLOSED: readonly string[] = ["stamity-pre-tool-use-guard", "stamity-person-only-guard"];
+
 /** The rows of one client running one script, each with its index in {@link rows}. */
 function rowsRunning(client: Client, script: string): { row: HookRow; index: number }[] {
   const found = rows.flatMap((row, index) => (row.client === client && row.script === script ? [{ row, index }] : []));
@@ -316,18 +319,24 @@ afterAll(async () => {
 describe("a cloud machine, imitated: every emitted hook command (REQ-PROVE-037)", () => {
   it("reads a command for each hook the four clients carry", () => {
     const scripts = (client: Client): string[] => [...new Set(rows.filter((row) => row.client === client).map((row) => row.script))].toSorted();
+    // TEST CHANGE, justified (record 23:32Z build/44 and 23:40Z, u14/u14b/u20: the person-only
+    // shell guard is wired on every selected client, and the unattended ask gate on Claude Code
+    // alone, each as a row of its own): the lists gain those rows and nothing else.
     if (!WINDOWS) {
       expect(scripts("claude")).toEqual([
         "stamity-config-tamper-notice",
+        "stamity-person-only-guard",
         "stamity-pre-tool-use-guard",
         "stamity-review-gate",
         "stamity-session-start",
+        "stamity-unattended-ask-gate",
       ]);
     }
     expect(scripts("cursor")).toEqual([
       "stamity-config-tamper-notice",
       "stamity-mcp-guard",
       "stamity-model-pins",
+      "stamity-person-only-guard",
       "stamity-pre-tool-use-guard",
       "stamity-session-start",
       "stamity-subagent-guard",
@@ -335,6 +344,7 @@ describe("a cloud machine, imitated: every emitted hook command (REQ-PROVE-037)"
     for (const client of ["copilot", "codex"] as const) {
       expect(scripts(client), client).toEqual([
         "stamity-config-tamper-notice",
+        "stamity-person-only-guard",
         "stamity-pre-tool-use-guard",
         "stamity-session-start",
       ]);
@@ -406,9 +416,13 @@ describe("a cloud machine, imitated: every emitted hook command (REQ-PROVE-037)"
         for (const { index, row } of [...rowsRunning("copilot", "stamity-pre-tool-use-guard"), ...rowsRunning("cursor", "stamity-subagent-guard")]) {
           expectNodeNotFound(resultOf("absent", marker.id, folder, index), `${row.client} ${row.event} ${row.script}`);
         }
-        // Every other command but Claude Code's PreToolUse ends the same way: nothing ran, nothing allowed.
+        // Every other command but Claude Code's fail-closed PreToolUse guards ends the same way:
+        // nothing ran, nothing allowed.
+        // TEST CHANGE, justified (record 23:40Z and plan u20's threat, the shell guard's fail-closed
+        // tail kept per client): Claude Code's person-only guard carries the same `|| { …; exit 2; }`
+        // tail as the pre-tool-use guard, so it is asserted beside it below, not as not-found here.
         for (const [index, row] of rows.entries()) {
-          if (row.client === "claude" && row.script === "stamity-pre-tool-use-guard") continue;
+          if (row.client === "claude" && CLAUDE_FAIL_CLOSED.includes(row.script)) continue;
           expectNodeNotFound(resultOf("absent", marker.id, folder, index), `${row.client} ${row.event} ${row.script}`);
         }
       }
@@ -418,7 +432,7 @@ describe("a cloud machine, imitated: every emitted hook command (REQ-PROVE-037)"
   it.skipIf(WINDOWS)("fails closed with no node: Claude Code's PreToolUse exits 2 with its message", () => {
     for (const marker of MARKERS) {
       for (const folder of FOLDERS) {
-        for (const { index } of rowsRunning("claude", "stamity-pre-tool-use-guard")) {
+        for (const { index } of CLAUDE_FAIL_CLOSED.flatMap((script) => rowsRunning("claude", script))) {
           const result = resultOf("absent", marker.id, folder, index);
           expect(result.code).toBe(2);
           expect(result.stderr).toContain("stamity: the pre-tool-use guard could not run");

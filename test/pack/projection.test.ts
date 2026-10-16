@@ -1304,8 +1304,15 @@ describe("packHookDefinitions", () => {
     ).toBe(true);
 
     // Order contract: core script rows come first, pack supply last.
+    // TEST CHANGE, justified (record 23:41Z u14b and plan u20: Claude Code's unattended ask gate is
+    // adapter-placed as the review gate is, one more PreToolUse entry on `AskUserQuestion` after
+    // every planned row): the planned rows still end with the pack's supply, and the one entry after
+    // them is the ask gate, which no `Bash` call matches.
     const commands = preToolUse.flatMap((entry) => entry.hooks.map((hook) => hook.command));
-    expect(commands.at(-1)).toContain(PACK_HOOK_SENTINEL);
+    expect(preToolUse.at(-1)?.matcher).toBe("AskUserQuestion");
+    expect(preToolUse.at(-1)?.hooks).toHaveLength(1);
+    expect(commands.at(-1)).toContain("stamity-unattended-ask-gate.mjs");
+    expect(commands.at(-2)).toContain(PACK_HOOK_SENTINEL);
 
     // Uninstall reclaims it: with the pack's rows gone the row is gone too.
     const withoutPack: SetupManifest = {

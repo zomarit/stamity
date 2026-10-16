@@ -501,6 +501,9 @@ describe("deselection reclaim", () => {
   // refusal of the unparseable `.codex/hooks.json` and the four scripts it still
   // runs keep their ledger rows, so the report says they stay the engine's and
   // the next sync finishes the reclaim, not that their rows are dropped.
+  // TEST CHANGE, justified (record 23:32Z build/44, u14 and u20: the person-only shell guard is a
+  // core script on every selected client, its Codex row run through the portable runner): the
+  // hooks file now runs five Codex scripts, so six paths are salvaged, each still kept, not deleted.
   it("keeps an edited infra file and discloses it as salvage", async () => {
     // The allowlist exempts a path from the ownership-marker gate ONLY. Bytes
     // the sweep cannot read back are kept, and the report has to say so or the
@@ -517,6 +520,7 @@ describe("deselection reclaim", () => {
     const kept = (report.reclaimed?.entries ?? []).filter((entry) => entry.action !== "deleted" && entry.path !== CODEX_CONFIG_FILE);
     const heldScripts = [
       "stamity-config-tamper-notice.mjs",
+      "stamity-person-only-guard.mjs",
       "stamity-portable-hook.mjs",
       "stamity-pre-tool-use-guard.mjs",
       "stamity-session-start.mjs",
@@ -530,7 +534,7 @@ describe("deselection reclaim", () => {
 
     const rendered = renderSyncReport(await plan(), report, plainPalette);
     expect(rendered).toContain(
-      `  5 kept file(s) are still the engine's — their ledger rows stay, so once you fix what each line above names, ` +
+      `  6 kept file(s) are still the engine's — their ledger rows stay, so once you fix what each line above names, ` +
         `the next sync finishes the reclaim:\n    ${CODEX_HOOKS_FILE}\n`,
     );
     expect(rendered).not.toContain("their ledger rows are dropped");

@@ -99,6 +99,8 @@ interface JsonUserContent {
   at: readonly string[];
   shape: "element" | "member";
   value: unknown;
+  /** What of the element a sync keeps byte for byte, where the engine adds its own beside it. */
+  synced?: Omit<JsonUserContent, "synced">;
 }
 
 /** One user hook entry or key per co-owned JSON file the 1.14.0 ledger records. */
@@ -114,6 +116,11 @@ const JSON_USER_CONTENT: readonly JsonUserContent[] = [
     at: ["permissions"],
     shape: "member",
     value: { allow: ["Bash(npm test)"] },
+    // TEST CHANGE, justified (plan u20 and record 23:32Z build/44: 1.15.0's sync renders the
+    // engine's `permissions.deny` rows into `.claude/settings.json`, an owner's rows staying the
+    // owner's): the user's `permissions` object gains the engine's `deny` beside its `allow`, so
+    // from the first sync on the span held exactly once is the user's `allow` member, unchanged.
+    synced: { path: ".claude/settings.json", at: ["permissions", "allow"], shape: "member", value: ["Bash(npm test)"] },
   },
   {
     path: ".codex/hooks.json",
@@ -139,6 +146,9 @@ const TEXT_USER_CONTENT: readonly { path: string; text: string }[] = [
   { path: "CLAUDE.md", text: "\nTeam notes sit below the managed block.\n" },
   { path: ".gitignore", text: "team-cache/\n" },
 ];
+
+/** The pre-flight canary's ignore line 1.15.0's sync appends; structural, as the manifest path below. */
+const CANARY_IGNORE_LINE = ".stamity/preflight-canary.json";
 
 /** Repo-relative manifest path; structural, never imported from src/ (cliHarness lane discipline). */
 const MANIFEST_REL = ".stamity/manifest.json";
@@ -278,8 +288,9 @@ async function seedUserContent(repoDir: string): Promise<void> {
 }
 
 /** Every seeded user span, present exactly once, byte for byte; `when` names the moment. */
-async function expectUserContent(repoDir: string, when: string): Promise<void> {
-  for (const content of JSON_USER_CONTENT) {
+async function expectUserContent(repoDir: string, when: string, synced = true): Promise<void> {
+  for (const seeded of JSON_USER_CONTENT) {
+    const content = synced ? (seeded.synced ?? seeded) : seeded;
     // oxlint-disable-next-line no-await-in-loop -- a handful of small reads, asserted in order
     const text = await readFile(inRepo(repoDir, content.path), "utf8");
     expect(
@@ -336,8 +347,9 @@ describe("a 1.14.0 tree upgrades through the current sync and check (node dist/c
     const fixture = await upgradeFixture(ctx, seedUserContent);
     try {
       // The spans are what the seeding wrote, so a later miss is the sync's and not the formula's.
-      await expectUserContent(fixture.repoDir, "before sync");
+      await expectUserContent(fixture.repoDir, "before sync", false);
       const before = await treeHashMap(fixture.repoDir);
+      const gitignoreBefore = await readFile(inRepo(fixture.repoDir, ".gitignore"), "utf8");
       const ownedBefore = ledgerPaths(await readManifest(fixture.repoDir));
       // The fixture is the four-client tree, not an empty one: the walk below has work to do.
       expect(ownedBefore.size).toBeGreaterThan(100);
@@ -364,7 +376,16 @@ describe("a 1.14.0 tree upgrades through the current sync and check (node dist/c
           }
         } else {
           userFiles.push(path);
-          expect(afterFirst.get(path), `the user's ${path} was moved by sync`).toBe(hash);
+          // TEST CHANGE, justified (record 23:32Z and 23:37Z, u14's build/45 and build/48: the
+          // pre-flight canary joins the required ignore entries, and the upgrade appends its line
+          // even where `.stamity/review-gate.json*` is already ignored): the user's `.gitignore`
+          // gains that one line at its end, every other byte held; every other user file is held
+          // whole, and the second sync below moves neither.
+          const expected =
+            path === ".gitignore"
+              ? createHash("sha256").update(`${gitignoreBefore}${CANARY_IGNORE_LINE}\n`, "utf8").digest("hex")
+              : hash;
+          expect(afterFirst.get(path), `the user's ${path} was moved by sync`).toBe(expected);
         }
       }
       // Activated, not a no-op: 1.14.0's content is behind this checkout's, so the upgrade rewrites

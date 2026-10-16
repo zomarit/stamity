@@ -2744,8 +2744,17 @@ describe("four-tool union", () => {
     const groups = codex["PreToolUse"] ?? [];
     const userGroup = groups.filter((group) => group.matcher === GOLDEN_USER_HOOK.matcher);
     expect(userGroup).toHaveLength(1);
-    expect(userGroup[0]?.hooks).toHaveLength(1);
-    const entry = userGroup[0]?.hooks[0];
+    // TEST CHANGE, justified (record 23:32Z build/44 and 23:40Z, u20: the person-only shell guard
+    // runs on Codex's shell tool through the portable runner, its matcher `Bash` there, so Codex's
+    // matcher grouping puts its row in the user's `Bash` group): the group holds exactly two
+    // entries, the guard's first and the user's once, and no other.
+    expect(userGroup[0]?.hooks).toHaveLength(2);
+    expect(readPortableRegistration(userGroup[0]?.hooks[0]?.command ?? "")).toEqual({
+      event: "pre_tool_use",
+      command: ["node", `${HOOKS_GENERATED_DIR}/codex/stamity-person-only-guard.mjs`],
+      matcher: "Bash",
+    });
+    const entry = userGroup[0]?.hooks[1];
     expect(readPortableRegistration(entry?.command ?? "")).toEqual(GOLDEN_USER_HOOK);
     expect(entry?.timeout).toBe(5);
   });
