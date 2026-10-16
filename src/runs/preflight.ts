@@ -32,7 +32,7 @@
 
 import semver from "semver";
 import { scanValueForSecrets } from "../mcp/secretScan.ts";
-import { resolveRepo } from "./pullRequest.ts";
+import { CLAUDE_PROXY_ORIGIN, hostOf, resolveRepo } from "./pullRequest.ts";
 
 /** One GitHub REST read: the path (`/repos/...`), answered with its HTTP status and parsed body. */
 export type RestRead = (path: string) => Promise<{ status: number; json: unknown }>;
@@ -85,6 +85,12 @@ export interface PreflightDeps {
   engines?: string | null | undefined;
   /** The manifest's `generatedBy`; absent, the pin cannot be read. */
   pinnedVersion?: string | undefined;
+  /**
+   * True when `.stamity/manifest.json` is there but could not be read or
+   * parsed: the pin and the floor copies are then named as unreadable, not as
+   * missing (review/203).
+   */
+  manifestUnreadable?: boolean | undefined;
   runningVersion: string;
   /** Resolves true when `gate scan` can run here. */
   scanRuns: () => Promise<boolean>;
@@ -132,6 +138,10 @@ const PUSH_URL_FIX ="point every push URL of origin at the repository its fetch 
 const ORIGIN_FIX = "point origin at the GitHub repository the run pushes to";
 const ADMIN_FIX = "run as an account or token without admin on this repository";
 const ENGINES_FIX = "reinstall the CLI so its package.json and its engines.node range can be read";
+const PUSH_RIGHT_FIX =
+  "run as an account or a token with contents write on the repository (a fine-grained token's Contents: Read and write), " +
+  "so the run's own branch can be pushed";
+const MANIFEST_FIX = "repair .stamity/manifest.json (a regular file that parses as the manifest), or run sync to write it again";
 
 /**
  * GitHub's owner and repository name alphabets; anything else never reaches a
@@ -170,6 +180,12 @@ interface DirectPushDetail {
   mergeBypass: boolean;
   /** The fix when it differs from the verdict's usual one. */
   fix?: string;
+  /**
+   * The account has no push right at all (`permissions.push` false): the
+   * default branch is blocked, so the verdict reads `blocked`, but the run's own
+   * branch cannot be pushed either, so the check refuses (review/198).
+   */
+  noPushRight?: true;
 }
 
 /** The classic protection's verdict for an account without admin on the repository. */
@@ -318,8 +334,9 @@ async function inspectDirectPush(rest: RestRead, repo: RepoRef): Promise<DirectP
   if (isRecord(permissions) && permissions["push"] === false) {
     return {
       verdict: "blocked",
-      evidence: "the account has no push right on the repository (the run's own branch pushes will fail too)",
+      evidence: "the account has no push right on the repository, so the run's own branch pushes would fail too",
       mergeBypass: false,
+      noPushRight: true,
     };
   }
   // With no rights block in the reply the account may be an administrator, the
@@ -478,7 +495,10 @@ function nodeEngine(nodeVersion: string, engines: string | null | undefined): Ch
     : { state: "refuse", evidence: `node ${version} is outside engines ${engines}`, fix };
 }
 
-function cliPin(pinned: string | undefined, running: string): CheckResult {
+function cliPin(pinned: string | undefined, running: string, manifestUnreadable: boolean): CheckResult {
+  if (manifestUnreadable) {
+    return { state: "unknown", evidence: `manifest unreadable, so no pinned version was read; the running CLI is ${running}`, fix: MANIFEST_FIX };
+  }
   if (pinned === undefined) {
     return {
       state: "unknown",
@@ -506,7 +526,8 @@ async function gateScan(scanRuns: () => Promise<boolean>): Promise<CheckResult> 
   }
 }
 
-function floorsCheck(floors: PreflightDeps["floors"]): CheckResult {
+function floorsCheck(floors: PreflightDeps["floors"], manifestUnreadable: boolean): CheckResult {
+  if (manifestUnreadable) return { state: "refuse", evidence: "manifest unreadable, so the floor rules' copies were not read", fix: MANIFEST_FIX };
   const fix = "run sync so the question protocol and the injection-screening rule are emitted for this client";
   const absent = REQUIRED_FLOORS.filter((id) => !floors.some((floor) => floor.id === id));
   const missing = floors.filter((floor) => !floor.exists).map((floor) => `${floor.id} at ${floor.path}`);
@@ -532,15 +553,6 @@ function parseGhRepo(value: string): { host: string | null; owner: string; repo:
   return null;
 }
 
-/** A host as a bare lowercase name: no scheme, no port, no trailing `/` (u4's `hostOf`). */
-function hostOf(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/^[a-z][a-z0-9+.-]*:\/\//, "")
-    .replace(/[/:].*$/, "");
-}
-
 /** Characters that would make a `!` helper run more than one program. */
 const SHELL_META = /[\s'"`$;&|<>()*?]/;
 
@@ -558,13 +570,10 @@ function isGhCredentialHelper(helper: string | null): boolean {
   return name === "gh" || name === "gh.exe";
 }
 
-/** u4's `CLAUDE_PROXY_ORIGIN`: the proxy origin Claude Code's cloud gives a checkout. */
-const CLAUDE_PROXY_URL = /^http:\/\/[^/@\s]+@127\.0\.0\.1:[0-9]{1,5}\/git\/[^/\s]+\/[^/\s]+?(?:\.git)?\/?$/;
-
 /** A push URL's transport: `https` only with no userinfo; `other` for anything not tied to a known identity. */
 function pushKind(url: string): "proxy" | "https" | "ssh" | "other" {
   const trimmed = url.trim();
-  if (CLAUDE_PROXY_URL.test(trimmed)) return "proxy";
+  if (CLAUDE_PROXY_ORIGIN.test(trimmed)) return "proxy";
   if (/^https:\/\//i.test(trimmed)) {
     try {
       const parsed = new URL(trimmed);
@@ -663,7 +672,7 @@ async function directPush(deps: PreflightDeps): Promise<DirectPushCheck> {
   const configuredHost = deps.env["GH_HOST"]?.trim() ?? "";
   const ghHost = configuredHost === "" ? "github.com" : hostOf(configuredHost);
   const fetchUrl = deps.pushIdentity.fetchUrl?.trim() ?? "";
-  const originHost = CLAUDE_PROXY_URL.test(fetchUrl) ? "github.com" : ghHost;
+  const originHost = CLAUDE_PROXY_ORIGIN.test(fetchUrl) ? "github.com" : ghHost;
   if (ghHost !== originHost) {
     return settle("refuse", `GH_HOST names another host than the origin's (${originHost})`, GH_HOST_FIX);
   }
@@ -696,6 +705,8 @@ async function directPush(deps: PreflightDeps): Promise<DirectPushCheck> {
     return settle("unknown", `${name}: ${identity.evidence}, so the REST reads prove nothing about it`, identity.fix);
   }
   const detail = await inspectDirectPush(deps.rest, deps.repo);
+  // review/198: a run that cannot push its own branch ends with no branch, no pull request and no morning list.
+  if (detail.noPushRight === true) return settle("refuse", `${name}: ${detail.evidence}`, PUSH_RIGHT_FIX);
   if (detail.verdict === "blocked") {
     return {
       result: { state: "pass", evidence: `${name}: ${detail.evidence}; ${identity.evidence}`, fix: "" },
@@ -813,11 +824,11 @@ export async function runPreflight(deps: PreflightDeps): Promise<PreflightVerdic
   const results: [CheckId, CheckResult][] = [
     ["hooks-loaded", hooksLoaded(deps.canary, deps.now)],
     ["node-engine", nodeEngine(deps.nodeVersion, deps.engines)],
-    ["cli-pin", cliPin(deps.pinnedVersion, deps.runningVersion)],
+    ["cli-pin", cliPin(deps.pinnedVersion, deps.runningVersion, deps.manifestUnreadable === true)],
     ["gate-scan", scan],
     ["direct-push", push.result],
     ["input-author", author],
-    ["floors", floorsCheck(deps.floors)],
+    ["floors", floorsCheck(deps.floors, deps.manifestUnreadable === true)],
   ];
   const checks = results.map(([id, result]) => ({ id, state: result.state, evidence: result.evidence }));
   const refusals = results

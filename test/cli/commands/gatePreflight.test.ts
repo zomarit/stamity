@@ -376,6 +376,20 @@ describe("stamity gate preflight and scan --text", () => {
       expect(evidenceOf(doc, "floors")).toBe("floor rules missing: injection-screening at .claude/rules/stamity-injection-screening.md");
     });
 
+    it("names an unreadable manifest on the pin and the floors, not a missing pin and missing floors (review/203)", async () => {
+      const repo = await seedRepo();
+      protectedRepo();
+      await writeFile(join(repo, ".stamity/manifest.json"), "{ not json\n");
+
+      const { code, doc } = await gate(repo, PREFLIGHT);
+
+      expect(code).toBe(1);
+      expect(stateOf(doc, "cli-pin")).toBe("unknown");
+      expect(evidenceOf(doc, "cli-pin")).toBe(`manifest unreadable, so no pinned version was read; the running CLI is ${VERSION}`);
+      expect(stateOf(doc, "floors")).toBe("refuse");
+      expect(evidenceOf(doc, "floors")).toBe("manifest unreadable, so the floor rules' copies were not read");
+    });
+
     it("refuses gate-scan where the scan cannot run, outside any repository (review/139)", async () => {
       const plain = getRoot().path("plain");
       await mkdir(plain, { recursive: true });

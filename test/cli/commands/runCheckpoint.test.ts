@@ -1,10 +1,11 @@
 import { execFileSync } from "node:child_process";
 import { lstatSync } from "node:fs";
-import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runCommand } from "../../../src/cli/commands/run.ts";
 import type * as GitWriteModule from "../../../src/cli/engine/gitWrite.ts";
+import type * as PersonOnlyModule from "../../../src/hooks/personOnly.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { NO_GIT_CONFIG } from "../../support/repoFixtures.ts";
 import { useTempDir } from "../../support/tempDir.ts";
@@ -52,6 +53,24 @@ vi.mock("../../../src/cli/engine/gitWrite.ts", async (importOriginal) => {
   };
 });
 
+/** The push check's stand-in state (review/211): a reason to deny every `git push` with, and each command it read. */
+const table = vi.hoisted(() => ({ denyPush: null as string | null, commands: [] as string[] }));
+
+// A spy over the real table: every command still gets the real verdict, unless a case sets `denyPush`, which makes
+// the push command's check refuse. Mock reason: after the verb's own branch refusals no branch it can push makes the
+// real table deny `HEAD:refs/heads/<current>` (review/211), so the refusal path is reachable only through a stub.
+vi.mock("../../../src/hooks/personOnly.ts", async (importOriginal) => {
+  const real = await importOriginal<typeof PersonOnlyModule>();
+  return {
+    ...real,
+    personOnlyVerdict: (command: string, ctx: PersonOnlyModule.PersonOnlyContext): PersonOnlyModule.PersonOnlyVerdict => {
+      table.commands.push(command);
+      if (table.denyPush !== null && command.startsWith("git push ")) return { deny: true, rule: "push-default", reason: table.denyPush };
+      return real.personOnlyVerdict(command, ctx);
+    },
+  };
+});
+
 const IDENTITY = {
   GIT_AUTHOR_NAME: "Alice Example",
   GIT_AUTHOR_EMAIL: "alice@example.com",
@@ -81,6 +100,9 @@ const RUN_BRANCH = `stamity/${RUN}`;
 const RUN_DIR = `.stamity/runs/${RUN}`;
 const PATCH = `${RUN_DIR}/held/person-only.patch`;
 const MARKER = `<!-- stamity:run ${RUN} -->`;
+const ORIGIN_PIN = `${RUN_DIR}/origin.json`;
+/** The pin `run start` writes for origin's repository, `https://github.com/o/r.git`. */
+const PIN_TEXT = `${JSON.stringify({ host: "github.com", owner: "o", repo: "r" })}\n`;
 
 /** A token-shaped value built from fragments, so this file carries none. */
 const TOKEN = ["gh", "p", "_", "Q7RTW2KZ9MXC4HBN8JVL5DPF3GYSA6EUT2RW"].join("");
@@ -92,6 +114,8 @@ describe("stamity run checkpoint", () => {
     rest.calls.length = 0;
     rest.routes.clear();
     writes.argv.length = 0;
+    table.denyPush = null;
+    table.commands.length = 0;
     rest.routes.set("GET repos/o/r", { status: 200, json: { default_branch: "main" } });
     rest.routes.set("GET repos/o/r/pulls", { status: 200, json: [] });
     rest.routes.set("POST repos/o/r/pulls", { status: 201, json: { number: 7, html_url: "https://github.com/o/r/pull/7" } });
@@ -108,7 +132,7 @@ describe("stamity run checkpoint", () => {
    * identity in its config, `origin` naming GitHub and pushing to a bare
    * remote, then on the run's branch with a record reading `mode` (no `Mode:` line for `null`).
    */
-  async function seed(mode: "attended" | "unattended" | null, opts: { branch?: string } = {}): Promise<Seeded> {
+  async function seed(mode: "attended" | "unattended" | null, opts: { branch?: string; pin?: "base" | "untracked" | "none" } = {}): Promise<Seeded> {
     const dir = getRoot().path(`case-${Math.random().toString(36).slice(2, 8)}`);
     const repo = join(dir, "repo");
     const remote = join(dir, "remote.git");
@@ -118,6 +142,11 @@ describe("stamity run checkpoint", () => {
     git(repo, ["config", "user.name", "Alice Example"]);
     git(repo, ["config", "user.email", "alice@example.com"]);
     await Promise.all(["a.txt", "b.txt", "[ab].txt", ".cursorrules"].map((name) => writeFile(join(repo, name), `${name}\n`)));
+    // TEST CHANGE, justified: review/209 refuses an unattended checkpoint with no origin pin, which `run start` writes;
+    // the seed carries the pin `start` would write for origin's repository, in the base commit so no case's staged
+    // or pushed set changes. A case about the pin itself rewrites or removes it.
+    // `untracked` leaves it out of the base, as a run whose folder git ignores has it; `none` writes no pin.
+    if ((opts.pin ?? "base") === "base") await put(repo, ORIGIN_PIN, PIN_TEXT);
     git(repo, ["add", "-A"]);
     git(repo, ["commit", "-q", "-m", "seed"]);
     git(repo, ["remote", "add", "origin", "https://github.com/o/r.git"]);
@@ -128,6 +157,7 @@ describe("stamity run checkpoint", () => {
     git(repo, ["update-ref", "refs/remotes/origin/main", base]);
     const branch = opts.branch ?? RUN_BRANCH;
     if (branch !== "main") git(repo, ["switch", "-q", "-c", branch]);
+    if (opts.pin === "untracked") await put(repo, ORIGIN_PIN, PIN_TEXT);
     const modeLine = mode === null ? "" : `Mode: ${mode}\n`;
     await put(repo, `${RUN_DIR}/record.md`, `# Run ${RUN}\n\nStatus: in progress\n${modeLine}Branch: ${branch}\nBase: ${base}\n`);
     return { repo, remote, base };
@@ -337,7 +367,9 @@ describe("stamity run checkpoint", () => {
   });
 
   it("names an ignored record as records: not committed, and still pushes the rest", async () => {
-    const { repo, remote } = await seed("attended");
+    // TEST CHANGE, justified: an attended run with no origin pin is not refused (review/209), and a tracked pin under
+    // the ignored folder is no file git adds; this case is about the record, so it carries none.
+    const { repo, remote } = await seed("attended", { pin: "none" });
     await writeFile(join(repo, ".gitignore"), ".stamity/runs/\n");
     await writeFile(join(repo, "a.txt"), "changed\n");
 
@@ -599,6 +631,193 @@ describe("stamity run checkpoint", () => {
     expect(pushedTree(remote)).not.toContain(PATCH);
     expect(isFile(join(repo, PATCH))).toBe(false);
     expect(git(repo, ["status", "--porcelain", "--", RUN_DIR])).toBe("");
+  });
+
+  it.skipIf(process.platform === "win32")("holds a link added at a held glob's directory prefix, and pushes a link elsewhere (review/200)", async () => {
+    const { repo, remote } = await seed("unattended");
+    // A folder no glob holds, with the settings a client would read through `.claude`.
+    await put(repo, "cfg/settings.json", '{ "hooks": {} }\n');
+    await symlink("cfg", join(repo, ".claude"));
+    await mkdir(join(repo, "sub"));
+    await symlink("../cfg", join(repo, "sub", ".vscode"));
+    await symlink("cfg", join(repo, "notes"));
+
+    const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "cfg", ".claude", "sub/.vscode", "notes"]);
+
+    expect(code).toBe(0);
+    expect(doc).toMatchObject({ pushed: true, notDone: [] });
+    expect(doc["held"]).toEqual([".claude", "sub/.vscode"]);
+    const tree = pushedTree(remote);
+    expect(tree).not.toContain(".claude");
+    expect(tree).not.toContain("sub/.vscode");
+    expect(tree).toEqual(expect.arrayContaining(["cfg/settings.json", "notes", PATCH]));
+    const patch = await readFile(join(repo, PATCH), "utf8");
+    expect(patch).toContain("diff --git a/.claude b/.claude\nnew file mode 120000");
+    expect(patch).toContain("diff --git a/sub/.vscode b/sub/.vscode\nnew file mode 120000");
+    // The work tree keeps both links.
+    expect(lstatSync(join(repo, ".claude")).isSymbolicLink()).toBe(true);
+  });
+
+  it.skipIf(process.platform === "win32")("holds a link a dry run would stage at a held prefix (review/200)", async () => {
+    const { repo } = await seed("unattended");
+    await put(repo, "cfg/hooks.json", "{}\n");
+    await symlink("cfg", join(repo, ".cursor"));
+
+    const { code, doc } = await run(repo, [...CHECKPOINT, "--dry-run", "--paths", "cfg", ".cursor"]);
+
+    expect(code).toBe(0);
+    expect(doc["held"]).toEqual([".cursor"]);
+  });
+
+  it.skipIf(process.platform === "win32")("refuses the push when a commit it would send retypes a file to a link at a held prefix (review/200)", async () => {
+    const { repo, remote } = await seed("unattended");
+    // Committed by the run itself: a plain file first, which no glob holds, then retyped to a link to a settings folder.
+    await put(repo, "cfg/settings.json", '{ "hooks": {} }\n');
+    await put(repo, "pkg/.vscode", "a note\n");
+    git(repo, ["add", "--", "cfg", "pkg/.vscode"]);
+    git(repo, ["commit", "-q", "-m", "a note"]);
+    await rm(join(repo, "pkg/.vscode"));
+    await symlink("../cfg", join(repo, "pkg/.vscode"));
+    git(repo, ["add", "--", "pkg/.vscode"]);
+    git(repo, ["commit", "-q", "-m", "retyped"]);
+
+    const { code, doc } = await run(repo, CHECKPOINT);
+
+    expect(code).toBe(1);
+    expect(doc).toMatchObject({ pushed: false, notDone: ["held path in history (pkg/.vscode)"] });
+    expect(pushes()).toEqual([]);
+    expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
+  });
+
+  it("reads Base..HEAD as the pushed history where origin has no remote-tracking ref, and says so (review/201)", async () => {
+    const { repo, remote } = await seed("unattended");
+    // The seed commit changes .cursorrules, a held path; with no remote-tracking ref every commit would read as unpushed.
+    git(repo, ["update-ref", "-d", "refs/remotes/origin/main"]);
+    await writeFile(join(repo, "a.txt"), "the unit's change\n");
+
+    const json = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+    expect(json.code).toBe(0);
+    expect(json.doc).toMatchObject({ pushed: true, held: [], notDone: [] });
+    expect(pushedTree(remote)).toContain("a.txt");
+
+    await writeFile(join(repo, "b.txt"), "a second change\n");
+    const text = await run(repo, ["checkpoint", "--run", RUN, "--paths", "b.txt"]);
+    // The first push left refs/remotes/origin/<branch>, so this one reads the usual range again.
+    expect(text.code).toBe(0);
+    expect(text.stdout).not.toContain("remote-tracking");
+  });
+
+  it("scans only Base..HEAD where origin has no remote-tracking ref, so a token removed below Base: holds nothing (review/201)", async () => {
+    const { repo, remote } = await seed("unattended");
+    git(repo, ["update-ref", "-d", "refs/remotes/origin/main"]);
+    // History the run did not write: a token committed and removed again, both below the run's Base:.
+    await put(repo, "c.txt", `the key is ${TOKEN}\n`);
+    git(repo, ["add", "--", "c.txt"]);
+    git(repo, ["commit", "-q", "-m", "old"]);
+    git(repo, ["rm", "-q", "--", "c.txt"]);
+    git(repo, ["commit", "-q", "-m", "older fix"]);
+    const base = git(repo, ["rev-parse", "HEAD"]);
+    await put(repo, `${RUN_DIR}/record.md`, `# Run ${RUN}\n\nStatus: in progress\nMode: unattended\nBranch: ${RUN_BRANCH}\nBase: ${base}\n`);
+    await writeFile(join(repo, "a.txt"), "the unit's change\n");
+
+    const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+    expect(code).toBe(0);
+    expect(doc).toMatchObject({ pushed: true, notDone: [], scan: { hits: [] } });
+    expect(pushedTree(remote)).toContain("a.txt");
+  });
+
+  it("names the Base..HEAD fallback in the text where origin has no remote-tracking ref (review/201)", async () => {
+    const { repo } = await seed("unattended");
+    git(repo, ["update-ref", "-d", "refs/remotes/origin/main"]);
+    await writeFile(join(repo, "a.txt"), "the unit's change\n");
+
+    const { code, stdout } = await run(repo, ["checkpoint", "--run", RUN, "--paths", "a.txt"]);
+
+    expect(code).toBe(0);
+    expect(stdout).toContain("history: origin has no remote-tracking ref, so the commits since Base: were read as the ones the push sends");
+    expect(stdout).toContain("scan history: origin has no remote-tracking ref, so the commits since the base were read as the ones the push sends");
+  });
+
+  it("refuses as origin changed where origin names another repository than the pin, staging and pushing nothing (review/209)", async () => {
+    const { repo, remote } = await seed("unattended");
+    git(repo, ["remote", "set-url", "origin", "https://github.com/elsewhere/r.git"]);
+    await writeFile(join(repo, "a.txt"), "changed\n");
+    const head = git(repo, ["rev-parse", "HEAD"]);
+
+    const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+    expect(code).toBe(1);
+    expect(doc["notDone"]).toEqual([
+      `origin changed: ${ORIGIN_PIN} pins github.com/o/r, and origin now names github.com/elsewhere/r`,
+    ]);
+    expect(doc).toMatchObject({ committed: null, pushed: false });
+    expect(git(repo, ["rev-parse", "HEAD"])).toBe(head);
+    expect(pushes()).toEqual([]);
+    expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
+  });
+
+  it("refuses an unattended run with no origin pin, and passes an attended one (review/209)", async () => {
+    const unattended = await seed("unattended", { pin: "none" });
+    const attended = await seed("attended", { pin: "none" });
+
+    const refused = await run(unattended.repo, CHECKPOINT);
+    const kept = await run(attended.repo, CHECKPOINT);
+
+    expect(refused.code).toBe(1);
+    expect(refused.doc["notDone"]).toEqual([`origin not pinned: ${ORIGIN_PIN} is missing, so the push's destination is not proven the run's`]);
+    expect(kept.code).toBe(0);
+    expect(kept.doc).toMatchObject({ pushed: true, notDone: [] });
+  });
+
+  it("refuses a pin that holds no repository, and stages a readable pin with the run folder (review/209)", async () => {
+    const broken = await seed("attended");
+    await writeFile(join(broken.repo, ORIGIN_PIN), '{ "host": "github.com", "owner": "o/../x", "repo": "r" }\n');
+    const fresh = await seed("unattended", { pin: "untracked" });
+
+    const refused = await run(broken.repo, CHECKPOINT);
+    const staged = await run(fresh.repo, CHECKPOINT);
+
+    expect(refused.code).toBe(1);
+    expect(refused.doc["notDone"]).toEqual([`origin not pinned: ${ORIGIN_PIN} holds no repository this verb reads`]);
+    expect(staged.code).toBe(0);
+    expect(pushedFile(fresh.remote, ORIGIN_PIN)).toBe(PIN_TEXT.trimEnd());
+  });
+
+  it("refuses the push when the push command's own check denies it, committing first and pushing nothing (review/211)", async () => {
+    const { repo, remote } = await seed("attended");
+    await writeFile(join(repo, "a.txt"), "changed\n");
+    table.denyPush = "a stand-in refusal";
+
+    const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+    expect(code).toBe(1);
+    expect(doc["notDone"]).toEqual(["push refused: a stand-in refusal"]);
+    expect(doc).toMatchObject({ pushed: false });
+    expect(doc["committed"]).toMatch(/^[0-9a-f]{40}$/);
+    // The check read the exact command the push would have run.
+    expect(table.commands).toEqual([`git push origin HEAD:refs/heads/${RUN_BRANCH}`]);
+    expect(pushes()).toEqual([]);
+    expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
+  });
+
+  it("refuses a commit at a detached HEAD, staging, committing and pushing nothing (review/212)", async () => {
+    const { repo, remote } = await seed("unattended");
+    git(repo, ["switch", "-q", "--detach"]);
+    await writeFile(join(repo, "a.txt"), "changed\n");
+    const head = git(repo, ["rev-parse", "HEAD"]);
+
+    const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+    expect(code).toBe(1);
+    expect(doc).toMatchObject({ branch: null, committed: null, pushed: false });
+    expect(doc["notDone"]).toEqual(["commit refused: HEAD is detached, so there is no run branch to push"]);
+    expect(git(repo, ["rev-parse", "HEAD"])).toBe(head);
+    expect(git(repo, ["diff", "--cached", "--name-only"])).toBe("");
+    expect(writes.argv.some((argv) => argv[0] === "add" || argv[0] === "commit")).toBe(false);
+    expect(pushes()).toEqual([]);
+    expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
   });
 
   it.each([

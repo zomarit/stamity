@@ -1407,6 +1407,8 @@ type ScanOutcome =
       unscanned: string[];
       /** Why the scan is incomplete: the added lines past its hard cap, named (review/135). */
       incomplete?: string;
+      /** How the history read was scoped, where it was not the usual range (review/201). */
+      note?: string;
     }
   | { base: string | null; scope: ScanScope; failed: string };
 
@@ -1420,7 +1422,12 @@ interface HistoryLines {
   unscanned: string[];
   /** Top-level-relative names outside the project the read met. */
   outside: Set<string>;
+  /** How the history read was scoped where it was not the usual range (review/201). */
+  note?: string;
 }
+
+/** The pushed history read's note where `origin` has no remote-tracking ref (review/201). */
+const NO_ORIGIN_REFS_NOTE = "origin has no remote-tracking ref, so the commits since the base were read as the ones the push sends";
 
 /**
  * The added lines of one `diff-tree` read (`revs`: a commit against its
@@ -1482,6 +1489,9 @@ function readTreeDiff(
  * `pushed`, every commit no `origin` remote-tracking ref holds is read too
  * (`HEAD --not --remotes=origin`, review/160, build/108): a push to `origin`
  * sends those below `base` as well, a commit only another remote holds among them.
+ * Where `origin` has no remote-tracking ref at all (a remote added and never
+ * fetched), that range is the whole history, so the read falls back to
+ * `base..HEAD` and says so in `note` (review/201).
  */
 function readHistory(runner: GitRunner, root: ProjectRoot, base: string, windows: boolean, pushed = false): HistoryLines {
   const revList = (range: readonly string[]): string[] =>
@@ -1489,8 +1499,15 @@ function readHistory(runner: GitRunner, root: ProjectRoot, base: string, windows
       .split("\n")
       .filter((line) => line !== "");
   const since = revList([`${base}..HEAD`]);
-  const commits = pushed ? [...new Set([...revList(["HEAD", "--not", "--remotes=origin"]), ...since])] : since;
-  const history: HistoryLines = { files: [], skipped: [], unscanned: [], outside: new Set() };
+  const tracked = pushed && runGit(runner, root.dir, "for-each-ref", ["for-each-ref", "--count=1", "--format=%(refname)", "refs/remotes/origin/"]).trim() !== "";
+  const commits = tracked ? [...new Set([...revList(["HEAD", "--not", "--remotes=origin"]), ...since])] : since;
+  const history: HistoryLines = {
+    files: [],
+    skipped: [],
+    unscanned: [],
+    outside: new Set(),
+    ...(pushed && !tracked ? { note: NO_ORIGIN_REFS_NOTE } : {}),
+  };
   for (const commit of commits) readTreeDiff(runner, root, [commit], commit.slice(0, SHORT_COMMIT), windows, history);
   return history;
 }
@@ -1578,6 +1595,7 @@ export function scanChange(cwd: string, ref: string | undefined, options: { scop
     const unread = linesPastCap(files).map((at) => `${at.path}:${at.line}${at.commit === undefined ? "" : ` (commit ${at.commit})`}`);
     const one = unread.length === 1;
     return {
+      ...(history.note === undefined ? {} : { note: history.note }),
       ...(unread.length === 0
         ? {}
         : {
@@ -1961,10 +1979,12 @@ async function runPreflightVerb(ctx: CliContext, opts: Record<string, unknown>):
   const env = ctx.app.runtime.env;
   const now = ctx.app.runtime.clock.now();
   let manifest: SetupManifest | null = null;
+  let manifestUnreadable = false;
   try {
     manifest = await ctx.engine.manifest.manifest.readManifest(root);
   } catch {
-    // An unreadable manifest pins nothing and lists no floor, which the decision refuses.
+    // An unreadable manifest pins nothing and lists no floor, which the decision refuses, naming the manifest (review/203).
+    manifestUnreadable = true;
   }
   const pushIdentity = readPushIdentity(root, env);
   const origin = pushIdentity.fetchUrl === null ? null : resolveRepo({ ...env }, pushIdentity.fetchUrl);
@@ -1985,6 +2005,7 @@ async function runPreflightVerb(ctx: CliContext, opts: Record<string, unknown>):
     nodeVersion: process.versions.node,
     engines: enginesRange(),
     pinnedVersion: manifest?.generatedBy,
+    manifestUnreadable,
     runningVersion: ctx.app.version,
     scanRuns: () => Promise.resolve(!("failed" in scanChange(root, undefined))),
     rest,

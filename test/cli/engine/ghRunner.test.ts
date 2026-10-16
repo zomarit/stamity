@@ -123,7 +123,7 @@ describe("ghApi", () => {
   async function standIn(
     answer: string,
     exitCode: number,
-    opts: { coloured?: string; readsStdin?: boolean } = {},
+    opts: { coloured?: string; readsStdin?: boolean; stderr?: string } = {},
   ): Promise<{ bin: string; work: string; log: string; input: string; envLog: string }> {
     const bin = getRoot().path("bin");
     const work = getRoot().path("work");
@@ -132,10 +132,12 @@ describe("ghApi", () => {
     const envLog = getRoot().path("env.log");
     const canned = getRoot().path("answer.txt");
     const colouredFile = getRoot().path("coloured.txt");
+    const stderrFile = getRoot().path("stderr.txt");
     await mkdir(bin);
     await mkdir(work);
     await writeFile(canned, answer, "utf8");
     await writeFile(colouredFile, opts.coloured ?? answer, "utf8");
+    await writeFile(stderrFile, opts.stderr ?? "", "utf8");
     const readStdin = opts.readsStdin === false ? "" : `/bin/cat > '${input}'\n`;
     await writeFile(
       join(bin, "gh"),
@@ -144,6 +146,7 @@ describe("ghApi", () => {
         `printf '%s\\n' "NO_COLOR=$NO_COLOR" "CLICOLOR_FORCE=$CLICOLOR_FORCE" "GH_FORCE_TTY=$GH_FORCE_TTY" > '${envLog}'\n` +
         readStdin +
         `if [ -n "$CLICOLOR_FORCE" ] || [ -n "$GH_FORCE_TTY" ]; then /bin/cat '${colouredFile}'; else /bin/cat '${canned}'; fi\n` +
+        `/bin/cat '${stderrFile}' >&2\n` +
         `exit ${exitCode}\n`,
       "utf8",
     );
@@ -213,5 +216,19 @@ describe("ghApi", () => {
     await expect(ghApi({ method: "GET", path: "repos/acme/app", hostname: HOST }, { cwd: work, env: { PATH: bin } })).rejects.toThrow(
       /no HTTP status/,
     );
+  });
+
+  it.skipIf(process.platform === "win32")("classes a no-status failure by its code: no login, or no status (review/199)", async () => {
+    const login = await standIn("", 4, { stderr: "To get started with GitHub CLI, please run:  gh auth login\n" });
+    await expect(
+      ghApi({ method: "GET", path: "repos/acme/app", hostname: HOST }, { cwd: login.work, env: { PATH: login.bin } }),
+    ).rejects.toMatchObject({ code: "GH_NOT_LOGGED_IN" });
+  });
+
+  it.skipIf(process.platform === "win32")("classes a failure with no login words as GH_NO_STATUS (review/199)", async () => {
+    const offline = await standIn("", 1, { stderr: "error connecting to api.github.com\n" });
+    await expect(
+      ghApi({ method: "GET", path: "repos/acme/app", hostname: HOST }, { cwd: offline.work, env: { PATH: offline.bin } }),
+    ).rejects.toMatchObject({ code: "GH_NO_STATUS" });
   });
 });

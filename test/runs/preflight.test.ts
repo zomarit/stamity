@@ -379,6 +379,26 @@ describe("directPushVerdict — rulesets", () => {
   });
 });
 
+describe("runPreflight — an account that cannot push at all (review/198)", () => {
+  it("refuses direct-push for an account with no push right, with a fix naming a token with contents write", async () => {
+    // The default branch is blocked, so the wall reads blocked; the run's own branch could not be pushed either.
+    const { rest, calls } = restTable({ "/repos/o/r": repoReply({ admin: false, push: false, pull: true }) });
+
+    const verdict = await runPreflight(greenDeps({ rest }));
+
+    expect(check(verdict, "direct-push").state).toBe("refuse");
+    expect(check(verdict, "direct-push").evidence).toBe(
+      "o/r: the account has no push right on the repository, so the run's own branch pushes would fail too",
+    );
+    expect(refusal(verdict, "direct-push")?.fix).toBe(
+      "run as an account or a token with contents write on the repository (a fine-grained token's Contents: Read and write), " +
+        "so the run's own branch can be pushed",
+    );
+    expect(verdict.ok).toBe(false);
+    expect(calls).toEqual(["/repos/o/r"]);
+  });
+});
+
 describe("directPushVerdict — classic protection", () => {
   const classic = (permissions: Record<string, boolean>, protection: Record<string, unknown>): RestRead =>
     restTable({
@@ -739,6 +759,18 @@ describe("runPreflight — node, pin, scan, floors", () => {
     const none = await runPreflight(greenDeps({ pinnedVersion: undefined }));
     expect(check(none, "cli-pin").state).toBe("unknown");
     expect(none.ok).toBe(false);
+  });
+
+  it("an unreadable manifest names the manifest on the pin and the floors, not a missing pin or missing floors (review/203)", async () => {
+    // As the verb passes it: no pin and no floor copy were read, because the manifest itself could not be.
+    const verdict = await runPreflight(greenDeps({ pinnedVersion: undefined, floors: [], manifestUnreadable: true }));
+    const fix = "repair .stamity/manifest.json (a regular file that parses as the manifest), or run sync to write it again";
+
+    expect(check(verdict, "cli-pin")).toMatchObject({ state: "unknown", evidence: "manifest unreadable, so no pinned version was read; the running CLI is 1.16.0" });
+    expect(check(verdict, "floors")).toMatchObject({ state: "refuse", evidence: "manifest unreadable, so the floor rules' copies were not read" });
+    expect(refusal(verdict, "cli-pin")?.fix).toBe(fix);
+    expect(refusal(verdict, "floors")?.fix).toBe(fix);
+    expect(verdict.ok).toBe(false);
   });
 
   it("a scan that cannot run refuses; one that throws is unknown", async () => {

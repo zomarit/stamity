@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runCommand } from "../../../src/cli/commands/run.ts";
@@ -286,7 +287,8 @@ describe("stamity run start", () => {
 
     expect(code).toBe(0);
     expect(current(repo)).toBe(RUN_BRANCH);
-    expect(git(repo, ["status", "--porcelain"])).toBe("M a.txt");
+    // TEST CHANGE, justified: review/209 has start write the run folder's origin pin, untracked until a checkpoint stages it.
+    expect(git(repo, ["status", "--porcelain", "--untracked-files=all"]).split("\n")).toEqual(["M a.txt", `?? .stamity/runs/${RUN}/origin.json`]);
   });
 
   it("prints the branch and the base without --json", async () => {
@@ -322,6 +324,52 @@ describe("stamity run start", () => {
     expect(code).toBe(1);
     expect(current(repo)).toBe("main");
     expect(git(repo, ["for-each-ref", "--format=%(refname)", "refs/heads/"])).toBe("refs/heads/main");
+  });
+
+  describe("the origin pin (review/209)", () => {
+    const PIN = `.stamity/runs/${RUN}/origin.json`;
+
+    it("writes origin's repository to the run folder, and keeps it on a second start", async () => {
+      const repo = await seedRepo();
+      restDefault("main");
+
+      expect((await run(repo, START)).code).toBe(0);
+      expect(await readFile(join(repo, PIN), "utf8")).toBe('{"host":"github.com","owner":"o","repo":"r"}\n');
+
+      const again = await run(repo, ["start", "--run", RUN]);
+      expect(again.code).toBe(0);
+      expect(again.stdout).toContain(`origin: github.com/o/r (pinned in ${PIN}, kept)`);
+    });
+
+    it("refuses as origin changed where origin names another repository than the pin, leaving the pin", async () => {
+      const repo = await seedRepo();
+      restDefault("main");
+      expect((await run(repo, START)).code).toBe(0);
+      git(repo, ["remote", "set-url", "origin", "https://github.com/elsewhere/r.git"]);
+
+      const { code, doc } = await run(repo, START);
+
+      expect(code).toBe(1);
+      expect(JSON.stringify(doc["error"])).toContain("Not done: origin changed");
+      expect(JSON.stringify(doc["error"])).toContain("pins github.com/o/r, and origin now names github.com/elsewhere/r");
+      expect(await readFile(join(repo, PIN), "utf8")).toBe('{"host":"github.com","owner":"o","repo":"r"}\n');
+    });
+
+    it("pins nothing for an origin naming no GitHub repository, nor under --dry-run", async () => {
+      const local = await seedRepo({ url: null });
+      const dry = await seedRepo();
+      restDefault("main");
+
+      const none = await run(local, ["start", "--run", RUN]);
+      const planned = await run(dry, ["start", "--run", RUN, "--dry-run"]);
+
+      expect(none.code).toBe(0);
+      expect(none.stdout).toContain("origin: not pinned (origin names no GitHub repository gh reaches)");
+      expect(existsSync(join(local, PIN))).toBe(false);
+      expect(planned.code).toBe(0);
+      expect(planned.stdout).toContain(`origin: github.com/o/r (would be pinned in ${PIN})`);
+      expect(existsSync(join(dry, PIN))).toBe(false);
+    });
   });
 
   it("is a usage error without --run (exit 2)", async () => {

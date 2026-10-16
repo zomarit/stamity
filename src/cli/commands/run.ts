@@ -2,11 +2,12 @@ import { closeSync, fstatSync, lstatSync, mkdtempSync, openSync, readdirSync, re
 import { tmpdir } from "node:os";
 import { isAbsolute, join, posix, relative } from "node:path";
 import { Argument, InvalidArgumentError, type Command } from "commander";
-import { heldPaths } from "../../change/personOnlyPaths.ts";
+import { matchGlob } from "../../change/classify.ts";
+import { heldPaths, PERSON_ONLY_PATHS } from "../../change/personOnlyPaths.ts";
 import { personOnlyVerdict } from "../../hooks/personOnly.ts";
 import { MORNING_FILE, prBodyFrom, screenOutbound } from "../../runs/morning.ts";
 import { inferPrerequisites, type PrereqRow } from "../../runs/prerequisites.ts";
-import { ensureDraftPr, resolveRepo, type PrOutcome } from "../../runs/pullRequest.ts";
+import { ensureDraftPr, HOST_NAME, resolveRepo, type PrOutcome } from "../../runs/pullRequest.ts";
 import { parseGitDefaultBranch } from "../../workspace/git.ts";
 import { ghApi } from "../engine/ghRunner.ts";
 import { gitCheckRunner } from "../engine/gitStatus.ts";
@@ -49,8 +50,14 @@ import { readPushed, scanChange } from "./gate.ts";
  * (`--message=…`). The scan and the prerequisite read are `gate`'s own
  * (`./gate.ts`), on the read runner it gives them.
  *
+ * **`start` pins origin** (review/209): the repository `resolveRepo` matches on
+ * `origin` goes to the run folder's `origin.json` as `{ host, owner, repo }`,
+ * staged with the run folder; one already there is kept, and `start` refuses
+ * when origin now names another repository. An origin naming no GitHub
+ * repository pins nothing, said in the text.
+ *
  * **`start`'s exit codes.** 0 the run is on its branch; 1 a refused run id, no
- * commit to base the run on, or a git call that failed; 2 a usage error, no
+ * commit to base the run on, origin changed, or a git call that failed; 2 a usage error, no
  * `--run` among them. The JSON is `{ subcommand, run, branch, created, base }`,
  * `base` the full commit id at `HEAD` once the run is on its branch, for the
  * record's `Base:`; `dryRun: true` joins it under `--dry-run`, which switches
@@ -60,15 +67,19 @@ import { readPushed, scanChange } from "./gate.ts";
  * and, in this order: refuses a commit on a default branch (and on a checkout
  * that is not the record's `Branch:`, as `branch mismatch`, or a detached one; a
  * `Branch:` naming a default branch matches `stamity/<run-id>`, the branch
- * `start` switches such a run to); stages
- * only the run folder's record, ledger, plan, morning list and `held/*.patch`,
+ * `start` switches such a run to); refuses as `origin changed` where origin
+ * now names another repository than `origin.json` pins (and, unattended, where
+ * no pin is readable, as `origin not pinned`); stages
+ * only the run folder's record, ledger, plan, morning list, origin pin and `held/*.patch`,
  * `.stamity/inbox.md` and `--paths` (never `-A`, never `-f`), a path git
  * ignores reported as `records: not committed (…)`; in an unattended run
  * (`Mode: unattended`, or no `Mode:` line with `STAMITY_UNATTENDED` set, as
  * the shell guard reads it) writes the work tree's and the index's change
  * against `Base:` under the person-only paths to `held/person-only.patch` and
  * restores those paths to `Base:` in the index only, after the staging, so a
- * `--paths` entry naming one is held too; commits (`--signoff` adding the DCO
+ * `--paths` entry naming one is held too, and a symbolic link the change adds
+ * or retypes at a held path or at a held glob's directory prefix (`.claude`,
+ * `.github/workflows`, any `.vscode`) is held the same way (review/200); commits (`--signoff` adding the DCO
  * line); in an unattended run refuses the push when a commit it would send
  * changes a person-only path, or `HEAD`'s tree still does (`held path in
  * history (…)`, never a history rewrite); scans the commits the remote lacks
@@ -115,8 +126,14 @@ const SUBCOMMAND_OPTIONS: Readonly<Record<string, readonly string[]>> = {
   [END]: ["paths", "title", "refused", "signoff"],
 };
 
+/** The origin pin `start` writes in the run folder (review/209). */
+const ORIGIN_PIN = "origin.json";
+
 /** The run folder's files a checkpoint stages where they exist. */
-const RUN_FILES: readonly string[] = ["record.md", "ledger.jsonl", "plan.md", "morning.md"];
+const RUN_FILES: readonly string[] = ["record.md", "ledger.jsonl", "plan.md", "morning.md", ORIGIN_PIN];
+
+/** The most of an origin pin read; a pin is one short JSON object. */
+const ORIGIN_PIN_MAX_BYTES = 4096;
 
 /** The deferral inbox, staged beside the run folder. */
 const INBOX_PATH = ".stamity/inbox.md";
@@ -234,12 +251,13 @@ async function runStart(ctx: CliContext, run: string): Promise<CommandResult> {
       next: "run it inside a repository with at least one commit",
     });
   }
+  const pinned = await pinOrigin(ctx, cwd, run);
   const current = await currentBranch(cwd);
   const defaults = current === null ? null : await defaultBranches(ctx, cwd);
   const onDefault = defaults !== null && current !== null && defaults.names.includes(current.toLowerCase());
 
   if (current !== null && !onDefault) {
-    ctx.io.out(`branch: ${sanitizeLabel(current)} (kept: not the default branch)\nbase: ${head}\n`);
+    ctx.io.out(`branch: ${sanitizeLabel(current)} (kept: not the default branch)\nbase: ${head}\n${pinned}\n`);
     return { exitCode: 0, json: start(run, current, false, head, ctx.dryRun) };
   }
 
@@ -267,11 +285,109 @@ async function runStart(ctx: CliContext, run: string): Promise<CommandResult> {
       next: `read it with git rev-parse HEAD, and write that as the record's Base:`,
     });
   }
-  const lines = [`branch: ${runBranch} (${how})`, `base: ${base}`];
+  const lines = [`branch: ${runBranch} (${how})`, `base: ${base}`, pinned];
   if (defaults !== null) lines.push(`default branch read from: ${SOURCE_LABEL[defaults.source]}`);
   if (ctx.dryRun) lines.push("Dry run: nothing was switched.");
   ctx.io.out(`${lines.join("\n")}\n`);
   return { exitCode: 0, json: start(run, runBranch, existing === null, base, ctx.dryRun) };
+}
+
+/** A GitHub repository as `resolveRepo` names it, and as the origin pin holds it. */
+interface OriginRepo {
+  host: string;
+  owner: string;
+  repo: string;
+}
+
+/** The repository `origin`'s fetch URL names, as `resolveRepo` matches it; `null` where it names none. */
+async function originRepo(ctx: CliContext, cwd: string, verb: string): Promise<OriginRepo | null> {
+  const origin = await git(cwd, ["remote", "get-url", "origin"], verb);
+  if (origin.code !== 0) return null;
+  const repo = resolveRepo({ ...ctx.app.runtime.env }, origin.stdout.trim());
+  return repo === null ? null : { host: repo.host, owner: repo.owner, repo: repo.repo };
+}
+
+function sameRepo(a: OriginRepo, b: OriginRepo): boolean {
+  return a.host === b.host && a.owner.toLowerCase() === b.owner.toLowerCase() && a.repo.toLowerCase() === b.repo.toLowerCase();
+}
+
+function repoName(repo: OriginRepo): string {
+  return `${repo.host}/${repo.owner}/${repo.repo}`;
+}
+
+/**
+ * The run folder's origin pin: `undefined` where there is none, `null` where
+ * one is there but is no regular file holding `{ host, owner, repo }` in the
+ * names `resolveRepo` accepts (a work-tree file, read as data).
+ */
+function readOriginPin(cwd: string, pinRel: string): OriginRepo | null | undefined {
+  if (!exists(join(cwd, pinRel))) return undefined;
+  const read = readCapped(join(cwd, pinRel), ORIGIN_PIN_MAX_BYTES);
+  if (read === null || read.truncated) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(read.text);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null) return null;
+  const { host, owner, repo } = parsed as Record<string, unknown>;
+  if (typeof host !== "string" || typeof owner !== "string" || typeof repo !== "string") return null;
+  const name = /^[A-Za-z0-9._-]+$/;
+  if (!HOST_NAME.test(host) || !name.test(owner) || !name.test(repo)) return null;
+  return { host, owner, repo };
+}
+
+/**
+ * `start`'s pin (review/209): origin's repository to the run folder's
+ * `origin.json`, kept where one is there already; the text line it reports.
+ * Refuses where a pin is there and origin names another repository, or the pin
+ * cannot be read; writes nothing under `--dry-run`.
+ */
+async function pinOrigin(ctx: CliContext, cwd: string, run: string): Promise<string> {
+  const pinRel = `${ctx.engine.runs.layout.runRelPath(run)}/${ORIGIN_PIN}`;
+  const now = await originRepo(ctx, cwd, START);
+  const pin = readOriginPin(cwd, pinRel);
+  if (pin !== undefined) {
+    if (pin !== null && now !== null && sameRepo(pin, now)) return `origin: ${repoName(pin)} (pinned in ${pinRel}, kept)`;
+    throw new CliFailure({
+      code: "FAILURE",
+      message: "Not done: origin changed",
+      why:
+        pin === null
+          ? `${pinRel} holds no repository this verb reads, so the run's origin is not proven`
+          : `${pinRel} pins ${repoName(pin)}, and origin now names ${now === null ? "no GitHub repository gh reaches" : repoName(now)}`,
+      next: "point origin back at the repository the run started on; a person decides whether the run goes on",
+    });
+  }
+  if (now === null) return "origin: not pinned (origin names no GitHub repository gh reaches)";
+  if (ctx.dryRun) return `origin: ${repoName(now)} (would be pinned in ${pinRel})`;
+  try {
+    await ctx.engine.merge.atomicWrite.atomicWriteFile(join(cwd, pinRel), `${JSON.stringify(now)}\n`, { boundaryDir: cwd });
+  } catch (cause) {
+    throw new CliFailure({
+      code: "FAILURE",
+      message: `run start could not write ${pinRel}`,
+      why: cause instanceof Error ? sanitizeLabel(cause.message) : "the write failed",
+      next: "make the run folder writable, then run it again",
+    });
+  }
+  return `origin: ${repoName(now)} (pinned in ${pinRel})`;
+}
+
+/**
+ * Why `checkpoint` and `end` refuse the run's origin (review/209), or `null`:
+ * origin now names another repository than the pin, or no GitHub repository
+ * at all; a pin that is there and unreadable; and, unattended, no pin.
+ */
+async function originRefusal(ctx: CliContext, cwd: string, runDir: string, unattended: boolean, verb: string): Promise<string | null> {
+  const pinRel = `${runDir}/${ORIGIN_PIN}`;
+  const pin = readOriginPin(cwd, pinRel);
+  if (pin === undefined) return unattended ? `origin not pinned: ${pinRel} is missing, so the push's destination is not proven the run's` : null;
+  if (pin === null) return `origin not pinned: ${pinRel} holds no repository this verb reads`;
+  const now = await originRepo(ctx, cwd, verb);
+  if (now !== null && sameRepo(pin, now)) return null;
+  return `origin changed: ${pinRel} pins ${repoName(pin)}, and origin now names ${now === null ? "no GitHub repository gh reaches" : repoName(now)}`;
 }
 
 function start(run: string, branch: string, created: boolean, base: string, dryRun: boolean): Record<string, unknown> {
@@ -449,6 +565,12 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
     result.notDone.push(refusal ?? "commit refused");
     return finish(false);
   }
+  // review/209: the push and the pull request go where origin points, so origin must still be the repository the run started on.
+  const moved = await originRefusal(ctx, cwd, runDir, unattended, verb);
+  if (moved !== null) {
+    result.notDone.push(moved);
+    return finish(false);
+  }
 
   const top = (await git(cwd, ["rev-parse", "--show-toplevel"], verb)).stdout.replace(/\r?\n$/, "");
   const prefix = (await git(cwd, ["rev-parse", "--show-prefix"], verb)).stdout.replace(/\r?\n$/, "");
@@ -474,7 +596,10 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   const stage = wanted.filter((path) => !ignored.has(path));
 
   if (ctx.dryRun) {
-    if (unattended) result.held = heldPaths([...new Set([...(await changedSince(top, base)), ...(await changedSince(top, base, "index")), ...stage])].toSorted());
+    if (unattended) {
+      const wouldStage = stage.map((path) => ({ path, link: isLink(join(top, path)) }));
+      result.held = heldOf([...(await changedSince(top, base)), ...(await changedSince(top, base, "index")), ...wouldStage]);
+    }
     lines.push(`would stage: ${list(stage)}`, `would hold: ${list(result.held)}`, "Dry run: nothing was staged, written, committed or pushed.");
     return finish(true, { dryRun: true });
   }
@@ -484,8 +609,9 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   // review/156: the index is read too, since the commit takes it: a held change staged or committed and then
   // undone in the work tree alone is still held.
   if (unattended) {
-    const inIndex = heldPaths(await changedSince(top, base, "index"));
-    const held = heldPaths([...new Set([...(await changedSince(top, base)), ...inIndex])].toSorted());
+    const indexSide = await changedSince(top, base, "index");
+    const inIndex = heldOf(indexSide);
+    const held = heldOf([...(await changedSince(top, base)), ...indexSide]);
     if (held.length === 0) {
       // A patch an earlier checkpoint wrote names a change the run no longer makes: it leaves the folder and the branch.
       const stale = await removeStalePatch(cwd, top, heldDir, fromTop(patchRel));
@@ -547,7 +673,9 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   );
 
   // review/159: the commits the push would send, read before the checkpoint's own, which puts held paths back to Base: only.
-  const inHistory = unattended ? await heldInHistory(top) : [];
+  const history = unattended ? await heldInHistory(top, base) : { held: [], note: null };
+  const inHistory = history.held;
+  if (history.note !== null) lines.push(`history: ${history.note}`);
 
   // (4) The commit, only when something is staged.
   const staged = await git(top, ["diff", "--cached", "--quiet", "--no-ext-diff", "--ignore-submodules=none"], verb);
@@ -568,7 +696,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   // review/159, review/156: a held path in a pushed commit, or still changed in HEAD's tree (a hook that staged it
   // again), refuses the push; the verb never rewrites history.
   if (unattended) {
-    const atTip = heldPaths(await changedSince(top, base, "HEAD")).filter((path) => !inHistory.includes(path));
+    const atTip = heldOf(await changedSince(top, base, "HEAD")).filter((path) => !inHistory.includes(path));
     result.notDone.push(...inHistory.map((path) => `held path in history (${path})`), ...atTip.map((path) => `held path in the pushed tree (${path})`));
     if (inHistory.length + atTip.length > 0) {
       lines.push("push: refused (a held path would be pushed)");
@@ -591,6 +719,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   }
   if (outcome.incomplete !== undefined) result.notDone.push(`push held: the secret scan is incomplete (${outcome.incomplete})`);
   lines.push(`scan: ${result.scan.hits.length === 0 ? "no hits" : `${result.scan.hits.length} hit(s)`}; unscanned: ${list(result.scan.unscanned)}`);
+  if (outcome.note !== undefined) lines.push(`scan history: ${outcome.note}`);
   if (result.scan.hits.length > 0 || outcome.incomplete !== undefined) return finish(false);
 
   // (6) The push, its command checked by the shell guard's own table before it runs.
@@ -644,9 +773,71 @@ const SIDE_ARGS: Readonly<Record<Side, (base: string) => string[]>> = {
   HEAD: (base) => [base, "HEAD"],
 };
 
-/** The top-level-relative paths `side` changes against `base`, committed changes included. */
-async function changedSince(top: string, base: string, side: Side = "work tree"): Promise<string[]> {
-  const read = await git(top, ["diff", "--name-only", "-z", ...DIFF_PINS, ...SIDE_ARGS[side](base), "--"], CHECKPOINT);
+/** One changed path, and whether its new side is a symbolic link (mode `120000`). */
+interface Changed {
+  path: string;
+  link: boolean;
+}
+
+/** Git's mode for a symbolic link. */
+const LINK_MODE = "120000";
+
+/**
+ * The paths of `git diff --raw -z` or `git log --raw -z` output, each with
+ * whether its new side is a link: one `:<modes> <ids> <status>` field (`::…`
+ * for a merge's combined form, the result's mode last among the modes), then
+ * the path. Renames are pinned off, so one path follows each field.
+ */
+function rawEntries(stdout: string): Changed[] {
+  const fields = stdout.split("\0");
+  const entries: Changed[] = [];
+  for (let index = 0; index < fields.length; index += 1) {
+    const field = (fields[index] ?? "").replace(/^\n+/, "");
+    if (!field.startsWith(":")) continue;
+    const path = fields[index + 1] ?? "";
+    index += 1;
+    if (path === "") continue;
+    const modes = field.replace(/^:+/, "").split(" ").filter((part) => /^[0-7]{6}$/.test(part));
+    entries.push({ path, link: modes.at(-1) === LINK_MODE });
+  }
+  return entries;
+}
+
+/**
+ * The directory prefixes of the person-only globs (review/200): each glob's
+ * leading segments short of the whole, a prefix of `**` alone left out. A link
+ * at one (`.claude`, `.github/workflows`, `x/.vscode`) puts a folder of its
+ * choosing where a held glob reads.
+ */
+const HELD_PREFIXES: readonly string[] = [
+  ...new Set(
+    PERSON_ONLY_PATHS.flatMap((glob) => {
+      const segments = glob.split("/");
+      return segments
+        .slice(1)
+        .map((_, end) => segments.slice(0, end + 1))
+        .filter((prefix) => prefix.some((segment) => segment !== "**"))
+        .map((prefix) => prefix.join("/"));
+    }),
+  ),
+];
+
+/** Whether a link at `path` is held: at a held glob's directory prefix (its own match is {@link heldPaths}'). */
+function heldLink(path: string): boolean {
+  return HELD_PREFIXES.some((prefix) => matchGlob(path, prefix, { foldCase: true }));
+}
+
+/** The held paths of `entries`, sorted and once each: a person-only path, or a link at a held glob's prefix. */
+function heldOf(entries: readonly Changed[]): string[] {
+  const paths = [...new Set(entries.map((entry) => entry.path))];
+  const links = new Set(entries.filter((entry) => entry.link).map((entry) => entry.path));
+  const byGlob = new Set(heldPaths(paths));
+  return paths.filter((path) => byGlob.has(path) || (links.has(path) && heldLink(path))).toSorted();
+}
+
+/** The top-level-relative paths `side` changes against `base`, committed changes included, each with its new mode's link reading. */
+async function changedSince(top: string, base: string, side: Side = "work tree"): Promise<Changed[]> {
+  const read = await git(top, ["diff", "--raw", "-z", ...DIFF_PINS, ...SIDE_ARGS[side](base), "--"], CHECKPOINT);
   if (read.code !== 0) {
     throw new CliFailure({
       code: "FAILURE",
@@ -655,7 +846,7 @@ async function changedSince(top: string, base: string, side: Side = "work tree")
       next: "run it inside the repository's work tree",
     });
   }
-  return read.stdout.split("\0").filter((path) => path !== "");
+  return rawEntries(read.stdout);
 }
 
 /**
@@ -664,10 +855,15 @@ async function changedSince(top: string, base: string, side: Side = "work tree")
  * --remotes=origin`, as the scan reads them, review/160, build/108: the push
  * goes to `origin`, so a commit only another remote holds is still read), a
  * root commit included and a merge by its own resolution (`--cc`), renames
- * read as a deletion and an addition.
+ * read as a deletion and an addition, a link at a held glob's prefix included
+ * (review/200). Where `origin` has no remote-tracking ref at all, that range is
+ * the whole history, so the read is `base..HEAD` and `note` says so (review/201).
  */
-async function heldInHistory(top: string): Promise<string[]> {
-  const read = await git(top, ["log", "--root", "--format=", "--name-only", "-z", "--cc", ...DIFF_PINS, "HEAD", "--not", "--remotes=origin", "--"], CHECKPOINT);
+async function heldInHistory(top: string, base: string): Promise<{ held: string[]; note: string | null }> {
+  const refs = await git(top, ["for-each-ref", "--count=1", "--format=%(refname)", "refs/remotes/origin/"], CHECKPOINT);
+  const tracked = refs.code !== 0 || refs.stdout.trim() !== "";
+  const range = tracked ? ["HEAD", "--not", "--remotes=origin"] : ["HEAD", "--not", base];
+  const read = await git(top, ["log", "--root", "--format=", "--raw", "-z", "--cc", ...DIFF_PINS, ...range, "--"], CHECKPOINT);
   if (read.code !== 0) {
     throw new CliFailure({
       code: "FAILURE",
@@ -676,7 +872,8 @@ async function heldInHistory(top: string): Promise<string[]> {
       next: "run it inside the repository's work tree",
     });
   }
-  return heldPaths([...new Set(read.stdout.split("\0").filter((path) => path !== ""))].toSorted());
+  const note = tracked ? null : "origin has no remote-tracking ref, so the commits since Base: were read as the ones the push sends";
+  return { held: heldOf(rawEntries(read.stdout)), note };
 }
 
 /**
@@ -951,6 +1148,14 @@ function isRegular(path: string): boolean {
 function isDirectory(path: string): boolean {
   try {
     return lstatSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function isLink(path: string): boolean {
+  try {
+    return lstatSync(path).isSymbolicLink();
   } catch {
     return false;
   }

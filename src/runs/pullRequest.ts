@@ -62,8 +62,11 @@ export type PrOutcome =
 /** An owner, a repository or a run id: the characters GitHub and the run folder allow, never a path part of its own. */
 const NAME_PART = /^[A-Za-z0-9._-]+$/;
 
-/** A bare lowercase host name: labels of letters, digits and `-`. */
-const HOST_NAME = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$/;
+/**
+ * A bare lowercase host name: labels of letters, digits and `-`. The one host
+ * grammar: `./preflight.ts` and the `gh api` runner (`../cli/engine/ghRunner.ts`) read it from here.
+ */
+export const HOST_NAME = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$/;
 
 /**
  * GitHub's own refusal of a draft where the repository takes none, matched
@@ -171,9 +174,33 @@ function invalidPart(request: DraftPrRequest): string | null {
   return null;
 }
 
-/** True for the error Node raises where no program of the name could be started. */
-function programMissing(error: unknown): boolean {
-  return isRecord(error) && error["code"] === "ENOENT";
+/**
+ * A rejection of the seam by class (review/199): the codes `ghApi` and Node
+ * give it, never the error's message, which carries `gh`'s own stderr.
+ */
+function ghFailure(error: unknown): string {
+  const code = isRecord(error) ? error["code"] : undefined;
+  if (code === "ENOENT") return "gh not found";
+  if (code === "GH_NOT_LOGGED_IN") return "gh is not logged in";
+  if (code === "GH_NO_STATUS") return "gh answered no HTTP status (no network, or gh failed before GitHub answered)";
+  if (code === "GH_REFUSED") return "the gh runner refused the call before gh started";
+  if (isRecord(error) && error["killed"] === true) return "gh did not finish in time";
+  return "gh failed before GitHub answered";
+}
+
+/**
+ * A 422 on `POST …/pulls` by class (review/199): GitHub's "no commits between"
+ * named with the two branches this request validated, a refused base or head
+ * branch, or a validation failure; GitHub's own text is never copied.
+ */
+function rejection(json: unknown, messages: readonly string[], base: string, head: string): string {
+  if (messages.some((message) => message.startsWith("no commits between"))) {
+    return `GitHub answered HTTP 422: no commits between ${base} and ${head}`;
+  }
+  const errors = isRecord(json) && Array.isArray(json["errors"]) ? json["errors"] : [];
+  const field = errors.map((entry) => (isRecord(entry) ? entry["field"] : undefined)).find((name) => name === "base" || name === "head");
+  if (field !== undefined) return `GitHub answered HTTP 422: the ${field} branch was refused`;
+  return "GitHub answered HTTP 422 (validation failed)";
 }
 
 /**
@@ -187,16 +214,20 @@ function programMissing(error: unknown): boolean {
  * 3. A 422 saying one already exists looks again (step 1) and never falls
  *    back; GitHub's draft refusal ({@link DRAFTS_REFUSED}) posts a normal one
  *    titled `[DRAFT] <title>`.
- * 4. Else `{ notDone: "draft PR not opened (<head>)" }`; with no `gh` at all,
- *    `{ notDone: "gh not found" }`; a part failing validation, before any
- *    call, `{ notDone: "draft PR not opened (<part> failed validation)" }`.
+ * 4. Else `{ notDone: "draft PR not opened (<head>): <cause>" }`, the cause by
+ *    class ({@link ghFailure}, {@link rejection}): `gh not found`, `gh is not
+ *    logged in`, the step and the HTTP status it answered, or a 422's class
+ *    (`no commits between <base> and <head>`); never `gh`'s own stderr, nor
+ *    GitHub's message text. A part failing validation, before any call,
+ *    `{ notDone: "draft PR not opened (<part> failed validation)" }`.
  *    Never a throw.
  */
 export async function ensureDraftPr(gh: GhApi, request: DraftPrRequest): Promise<PrOutcome> {
   const { host, owner, repo, head, base, title, runId } = request;
   const invalid = invalidPart(request);
   if (invalid !== null) return { notDone: `draft PR not opened (${invalid} failed validation)` };
-  const notOpened: PrOutcome = { notDone: `draft PR not opened (${head})` };
+  const notOpened = (cause: string): PrOutcome => ({ notDone: `draft PR not opened (${head}): ${cause}` });
+  const answered = (step: string, status: number): PrOutcome => notOpened(`${step} answered HTTP ${status}`);
   const marker = runMarker(runId);
   const body = withMarker(request.body, marker);
   const repoPath = `repos/${owner}/${repo}`;
@@ -205,58 +236,63 @@ export async function ensureDraftPr(gh: GhApi, request: DraftPrRequest): Promise
   const update = async (found: FoundPr): Promise<PrOutcome> => {
     if (found.body.trimEnd().endsWith(marker)) {
       const patched = await gh({ method: "PATCH", path: `${repoPath}/pulls/${found.number}`, body: { body }, hostname: host });
-      return isOk(patched.status) ? { number: found.number, url: found.url, how: "existing" } : notOpened;
+      return isOk(patched.status) ? { number: found.number, url: found.url, how: "existing" } : answered(`the body update of #${found.number}`, patched.status);
     }
     const commented = await gh({ method: "POST", path: `${repoPath}/issues/${found.number}/comments`, body: { body }, hostname: host });
-    return isOk(commented.status) ? { number: found.number, url: found.url, how: "commented" } : notOpened;
+    return isOk(commented.status) ? { number: found.number, url: found.url, how: "commented" } : answered(`the comment on #${found.number}`, commented.status);
   };
 
-  /** The lookup; `undefined` when GitHub did not answer it, so no step after it can be trusted. */
-  const lookup = async (): Promise<FoundPr | null | undefined> => {
+  /** The lookup: the pull request found or `null`, else the outcome to return, GitHub having not answered it. */
+  const lookup = async (step: string): Promise<FoundPr | null | { failed: PrOutcome }> => {
     const query = `head=${encodeQueryValue(`${owner}:${head}`)}&state=open`;
     const listed = await gh({ method: "GET", path: `${repoPath}/pulls?${query}`, hostname: host });
-    return isOk(listed.status) ? openPrOnBranch(listed.json, owner, head) : undefined;
+    return isOk(listed.status) ? openPrOnBranch(listed.json, owner, head) : { failed: answered(step, listed.status) };
   };
 
-  /** One `POST …/pulls`: the outcome, or the 422's messages for the caller to read. */
-  const create = async (payload: Record<string, unknown>, how: "created" | "created-fallback"): Promise<PrOutcome | { rejected: string[] }> => {
+  /** One `POST …/pulls`: the outcome, or the 422's answer for the caller to read. */
+  const create = async (payload: Record<string, unknown>, how: "created" | "created-fallback"): Promise<PrOutcome | { rejected: string[]; json: unknown }> => {
     const created = await gh({ method: "POST", path: `${repoPath}/pulls`, body: payload, hostname: host });
-    if (created.status === 422) return { rejected: validationMessages(created.json) };
-    const fields = isOk(created.status) ? prFields(created.json) : null;
-    return fields === null ? notOpened : { number: fields.number, url: fields.url, how };
+    if (created.status === 422) return { rejected: validationMessages(created.json), json: created.json };
+    if (!isOk(created.status)) return answered("opening it", created.status);
+    const fields = prFields(created.json);
+    return fields === null ? notOpened("GitHub's answer to opening it named no pull request") : { number: fields.number, url: fields.url, how };
   };
 
   const alreadyExists = (messages: string[]): boolean => messages.some((message) => message.includes("already exists"));
 
   /** A 422 saying the branch already has one: look again and update it, never the fallback. */
   const relook = async (): Promise<PrOutcome> => {
-    const again = await lookup();
-    return again === null || again === undefined ? notOpened : update(again);
+    const again = await lookup("the second lookup");
+    if (again === null) return notOpened("GitHub said one already exists, and the second lookup found none open");
+    return "failed" in again ? again.failed : update(again);
   };
 
   try {
-    const found = await lookup();
-    if (found === undefined) return notOpened;
+    const found = await lookup("the lookup");
+    if (found !== null && "failed" in found) return found.failed;
     if (found !== null) return await update(found);
 
     const first = await create({ title, head, base, body, draft: true }, "created");
     if (!("rejected" in first)) return first;
     if (alreadyExists(first.rejected)) return await relook();
-    if (!first.rejected.some((message) => DRAFTS_REFUSED.test(message))) return notOpened;
+    if (!first.rejected.some((message) => DRAFTS_REFUSED.test(message))) return notOpened(rejection(first.json, first.rejected, base, head));
 
     const fallback = await create({ title: `[DRAFT] ${title}`, head, base, body }, "created-fallback");
     if (!("rejected" in fallback)) return fallback;
-    return alreadyExists(fallback.rejected) ? await relook() : notOpened;
+    return alreadyExists(fallback.rejected) ? await relook() : notOpened(rejection(fallback.json, fallback.rejected, base, head));
   } catch (error) {
-    return programMissing(error) ? { notDone: "gh not found" } : notOpened;
+    return notOpened(ghFailure(error));
   }
 }
 
-/** The proxy origin Claude Code's cloud gives a checkout: `http://<user>@127.0.0.1:<port>/git/<owner>/<repo>`. */
-const CLAUDE_PROXY_ORIGIN = /^http:\/\/[^/@\s]+@127\.0\.0\.1:[0-9]{1,5}\/git\/([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/;
+/**
+ * The proxy origin Claude Code's cloud gives a checkout: `http://<user>@127.0.0.1:<port>/git/<owner>/<repo>`.
+ * The one copy: `./preflight.ts` reads it from here.
+ */
+export const CLAUDE_PROXY_ORIGIN = /^http:\/\/[^/@\s]+@127\.0\.0\.1:[0-9]{1,5}\/git\/([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/;
 
-/** `GH_HOST` as a bare lowercase host: no scheme, no port, no trailing `/`. */
-function hostOf(value: string): string {
+/** `GH_HOST` as a bare lowercase host: no scheme, no port, no trailing `/`. The one copy: `./preflight.ts` reads it from here. */
+export function hostOf(value: string): string {
   return value
     .trim()
     .toLowerCase()

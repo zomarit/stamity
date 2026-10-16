@@ -1,10 +1,13 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { ghApi, ghApiArgs } from "../../src/cli/engine/ghRunner.ts";
 import {
+  CLAUDE_PROXY_ORIGIN,
   ensureDraftPr,
+  HOST_NAME,
+  hostOf,
   resolveRepo,
   runMarker,
   type DraftPrRequest,
@@ -191,7 +194,9 @@ describe("ensureDraftPr", () => {
       { status: 422, json: { message: "Validation Failed", errors: [{ resource: "PullRequest", code: "custom", message: `No commits between main and ${head}` }] } },
     ]);
 
-    expect(await ensureDraftPr(gh, { ...REQUEST, head })).toEqual({ notDone: `draft PR not opened (${head})` });
+    expect(await ensureDraftPr(gh, { ...REQUEST, head })).toEqual({
+      notDone: `draft PR not opened (${head}): GitHub answered HTTP 422: no commits between main and ${head}`,
+    });
     expect(calls).toHaveLength(2);
   });
 
@@ -210,7 +215,9 @@ describe("ensureDraftPr", () => {
   it("reports not done when the re-lookup after 'already exists' finds nothing", async () => {
     const { gh, calls } = scriptedGh([{ status: 200, json: [] }, ALREADY_EXISTS, { status: 200, json: [] }]);
 
-    expect(await ensureDraftPr(gh, REQUEST)).toEqual({ notDone: `draft PR not opened (${BRANCH})` });
+    expect(await ensureDraftPr(gh, REQUEST)).toEqual({
+      notDone: `draft PR not opened (${BRANCH}): GitHub said one already exists, and the second lookup found none open`,
+    });
     expect(calls).toHaveLength(3);
   });
 
@@ -220,14 +227,14 @@ describe("ensureDraftPr", () => {
       { status: 422, json: { message: "Validation Failed", errors: [{ field: "base", code: "invalid" }] } },
     ]);
 
-    expect(await ensureDraftPr(gh, REQUEST)).toEqual({ notDone: `draft PR not opened (${BRANCH})` });
+    expect(await ensureDraftPr(gh, REQUEST)).toEqual({ notDone: `draft PR not opened (${BRANCH}): GitHub answered HTTP 422: the base branch was refused` });
     expect(calls).toHaveLength(2);
   });
 
   it("reports not done, and posts nothing, when the lookup is not answered", async () => {
     const { gh, calls } = scriptedGh([{ status: 404, json: { message: "Not Found" } }]);
 
-    expect(await ensureDraftPr(gh, REQUEST)).toEqual({ notDone: `draft PR not opened (${BRANCH})` });
+    expect(await ensureDraftPr(gh, REQUEST)).toEqual({ notDone: `draft PR not opened (${BRANCH}): the lookup answered HTTP 404` });
     expect(calls).toHaveLength(1);
   });
 
@@ -242,7 +249,38 @@ describe("ensureDraftPr", () => {
     const missing = Object.assign(new Error("spawn gh ENOENT"), { code: "ENOENT" });
     const { gh } = scriptedGh([missing]);
 
-    await expect(ensureDraftPr(gh, REQUEST)).resolves.toEqual({ notDone: "gh not found" });
+    await expect(ensureDraftPr(gh, REQUEST)).resolves.toEqual({ notDone: `draft PR not opened (${BRANCH}): gh not found` });
+  });
+
+  it("names each failure by its class after the prefix, never gh's stderr nor GitHub's text (review/199)", async () => {
+    const stderr = "To get started with GitHub CLI, please run:  gh auth login";
+    const noLogin = Object.assign(new Error(`gh api answered no HTTP status: ${stderr}`), { code: "GH_NOT_LOGGED_IN" });
+    const noStatus = Object.assign(new Error("gh api answered no HTTP status: dial tcp: lookup api.github.com: no such host"), {
+      code: "GH_NO_STATUS",
+    });
+    const timedOut = Object.assign(new Error("Command failed"), { killed: true, signal: "SIGTERM" });
+    const cases: [string, Answer[], string][] = [
+      ["no login", [noLogin], "gh is not logged in"],
+      ["no status", [noStatus], "gh answered no HTTP status (no network, or gh failed before GitHub answered)"],
+      ["timed out", [timedOut], "gh did not finish in time"],
+      ["a lookup 403", [{ status: 403, json: { message: "Resource not accessible by integration" } }], "the lookup answered HTTP 403"],
+      ["an open 500", [{ status: 200, json: [] }, { status: 500, json: { message: "Server Error" } }], "opening it answered HTTP 500"],
+      ["a PATCH 403", [{ status: 200, json: [openPr(5, `old\n\n${MARKER}`)] }, { status: 403, json: null }], "the body update of #5 answered HTTP 403"],
+      ["a comment 404", [{ status: 200, json: [openPr(6, "A person's.")] }, { status: 404, json: null }], "the comment on #6 answered HTTP 404"],
+      ["a 201 naming nothing", [{ status: 200, json: [] }, { status: 201, json: {} }], "GitHub's answer to opening it named no pull request"],
+      [
+        "an unnamed 422",
+        [{ status: 200, json: [] }, { status: 422, json: { message: "Validation Failed", errors: [{ resource: "PullRequest", code: "custom", message: "steered text" }] } }],
+        "GitHub answered HTTP 422 (validation failed)",
+      ],
+    ];
+    const outcomes = await Promise.all(cases.map(([, answers]) => ensureDraftPr(scriptedGh(answers).gh, REQUEST)));
+    for (const [index, [name, , cause]] of cases.entries()) {
+      const outcome = outcomes[index];
+      expect(outcome, name).toEqual({ notDone: `draft PR not opened (${BRANCH}): ${cause}` });
+      const text = JSON.stringify(outcome);
+      for (const echoed of ["gh auth login", "no such host", "Resource not accessible", "steered text", "Server Error"]) expect(text, name).not.toContain(echoed);
+    }
   });
 
   it("answers gh not found through the real runner where no PATH entry holds gh", async () => {
@@ -250,7 +288,7 @@ describe("ensureDraftPr", () => {
     try {
       // The real seam, with a PATH that holds no program: no gh starts, so nothing reaches the network.
       const outcome = await ensureDraftPr((request) => ghApi(request, { cwd: empty, env: { PATH: empty } }), REQUEST);
-      expect(outcome).toEqual({ notDone: "gh not found" });
+      expect(outcome).toEqual({ notDone: `draft PR not opened (${BRANCH}): gh not found` });
     } finally {
       rmSync(empty, { recursive: true, force: true });
     }
@@ -339,5 +377,21 @@ describe("resolveRepo", () => {
   it("returns null for an owner or repository outside the validated alphabet", () => {
     expect(resolveRepo({ GH_HOST: "ghe.example.com" }, "https://ghe.example.com/group/sub/app.git")).toBeNull();
     expect(resolveRepo({}, "http://u@127.0.0.1:1234/git/o%2F..%2Fx/r")).toBeNull();
+  });
+});
+
+describe("the host grammar has one home (review/202)", () => {
+  it("is exported from pullRequest.ts, and preflight.ts and the gh runner hold no copy of it", () => {
+    expect(HOST_NAME.test("ghe.example.com")).toBe(true);
+    expect(HOST_NAME.test("GitHub.com")).toBe(false);
+    expect(hostOf(" https://GHE.example.com:8443/api ")).toBe("ghe.example.com");
+    expect(CLAUDE_PROXY_ORIGIN.exec("http://proxy@127.0.0.1:41000/git/acme/app.git")?.slice(1)).toEqual(["acme", "app"]);
+    // A copy is what drifts: the proxy shape, the host function and the host regex live in pullRequest.ts alone.
+    for (const file of ["../../src/runs/preflight.ts", "../../src/cli/engine/ghRunner.ts"]) {
+      const source = readFileSync(new URL(file, import.meta.url), "utf8");
+      expect(source, file).not.toMatch(/127\\\.0\\\.0\\\.1/);
+      expect(source, file).not.toMatch(/function hostOf\b/);
+      expect(source, file).not.toContain("(?:[a-z0-9-]*[a-z0-9])?");
+    }
   });
 });

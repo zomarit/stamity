@@ -75,6 +75,9 @@ const RUN = "2026-10-16_overnight";
 const RUN_BRANCH = `stamity/${RUN}`;
 const RUN_DIR = `.stamity/runs/${RUN}`;
 const MARKER = `<!-- stamity:run ${RUN} -->`;
+const ORIGIN_PIN = `${RUN_DIR}/origin.json`;
+/** The pin `run start` writes for origin's repository, `https://github.com/o/r.git`. */
+const PIN_TEXT = `${JSON.stringify({ host: "github.com", owner: "o", repo: "r" })}\n`;
 
 /** The morning walk's own run (review/164): an attended record reading `Resumes: <RUN>`, on the same branch. */
 const WALK = "2026-10-16_morning-walk";
@@ -115,7 +118,7 @@ describe("stamity run end", () => {
    * `origin` naming GitHub and pushing to a bare remote, then on the run's
    * branch with a record reading `mode` (no `Mode:` line for `null`).
    */
-  async function seed(mode: "attended" | "unattended" | null, opts: { branch?: string } = {}): Promise<Seeded> {
+  async function seed(mode: "attended" | "unattended" | null, opts: { branch?: string; pin?: "base" | "untracked" | "none" } = {}): Promise<Seeded> {
     const dir = getRoot().path(`case-${Math.random().toString(36).slice(2, 8)}`);
     const repo = join(dir, "repo");
     const remote = join(dir, "remote.git");
@@ -125,6 +128,11 @@ describe("stamity run end", () => {
     git(repo, ["config", "user.name", "Alice Example"]);
     git(repo, ["config", "user.email", "alice@example.com"]);
     await Promise.all(["a.txt", "b.txt"].map((name) => writeFile(join(repo, name), `${name}\n`)));
+    // TEST CHANGE, justified: review/209 refuses an unattended checkpoint with no origin pin, which `run start` writes;
+    // the seed carries the pin `start` would write for origin's repository, in the base commit so no case's staged
+    // or pushed set changes. A case about the pin itself rewrites or removes it.
+    // `untracked` leaves it out of the base, as a run whose folder git ignores has it; `none` writes no pin.
+    if ((opts.pin ?? "base") === "base") await put(repo, ORIGIN_PIN, PIN_TEXT);
     git(repo, ["add", "-A"]);
     git(repo, ["commit", "-q", "-m", "seed"]);
     git(repo, ["remote", "add", "origin", "https://github.com/o/r.git"]);
@@ -132,6 +140,7 @@ describe("stamity run end", () => {
     const base = git(repo, ["rev-parse", "HEAD"]);
     const branch = opts.branch ?? RUN_BRANCH;
     git(repo, ["switch", "-q", "-c", branch]);
+    if (opts.pin === "untracked") await put(repo, ORIGIN_PIN, PIN_TEXT);
     const modeLine = mode === null ? "" : `Mode: ${mode}\n`;
     await put(repo, `${RUN_DIR}/record.md`, `# Run ${RUN}\n\nStatus: in progress\n${modeLine}Branch: ${RUN_BRANCH}\nBase: ${base}\n`);
     return { repo, remote, base };
@@ -242,7 +251,8 @@ describe("stamity run end", () => {
   });
 
   it("posts the fixed body when the morning list holds a token, and no output or request holds the value", async () => {
-    const { repo } = await seed("unattended");
+    // TEST CHANGE, justified: the run folder is ignored, so the origin pin `start` wrote is untracked there (review/209).
+    const { repo } = await seed("unattended", { pin: "untracked" });
     // The run folder is ignored, so the list never reaches the pushed tree and the push scan; the outbound screen still reads it.
     await writeFile(join(repo, ".gitignore"), ".stamity/runs/\n");
     await put(repo, `${RUN_DIR}/morning.md`, morningList(`the key is ${TOKEN}`));
@@ -254,6 +264,7 @@ describe("stamity run end", () => {
     expect(doc["notDone"]).toEqual([
       `records: not committed (${RUN_DIR}/record.md: .gitignore:1 .stamity/runs/)`,
       `records: not committed (${RUN_DIR}/morning.md: .gitignore:1 .stamity/runs/)`,
+      `records: not committed (${ORIGIN_PIN}: .gitignore:1 .stamity/runs/)`,
       "pull request body replaced: the outbound screen matched line 9 (github-token)",
     ]);
     expect(created().body).toBe(
@@ -502,5 +513,31 @@ describe("stamity run end", () => {
     expect(stderr).toContain(message);
     expect(writes.argv).toEqual([]);
     expect(rest.calls).toEqual([]);
+  });
+
+  it("refuses as origin changed, and opens no pull request, where origin names another repository than the pin (review/209)", async () => {
+    const { repo } = await seed("unattended");
+    git(repo, ["remote", "set-url", "origin", "https://github.com/elsewhere/r.git"]);
+
+    const { code, doc } = await run(repo, END("Overnight"));
+
+    expect(code).toBe(1);
+    expect(doc["notDone"]).toEqual([`origin changed: ${ORIGIN_PIN} pins github.com/o/r, and origin now names github.com/elsewhere/r`]);
+    expect(doc).toMatchObject({ pr: null, pushed: false, inferred: [] });
+    expect(pushes()).toEqual([]);
+    expect(writesToGitHub()).toEqual([]);
+  });
+
+  it("refuses at a detached HEAD, and opens no pull request (review/212)", async () => {
+    const { repo } = await seed("unattended");
+    git(repo, ["switch", "-q", "--detach"]);
+
+    const { code, doc } = await run(repo, END("Overnight"));
+
+    expect(code).toBe(1);
+    expect(doc["notDone"]).toEqual(["commit refused: HEAD is detached, so there is no run branch to push"]);
+    expect(doc).toMatchObject({ branch: null, committed: null, pr: null, pushed: false });
+    expect(pushes()).toEqual([]);
+    expect(writesToGitHub()).toEqual([]);
   });
 });

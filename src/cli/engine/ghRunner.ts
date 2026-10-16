@@ -6,6 +6,8 @@ import {
   resolveProgramOnPath,
   searchPathOf,
 } from "../../shared/programPath.ts";
+// The one host grammar (review/202): a bare lowercase host name, as `gh api --hostname` takes it.
+import { HOST_NAME } from "../../runs/pullRequest.ts";
 
 /**
  * The engine's one door onto GitHub's REST API: `gh api`, under the operator's
@@ -79,8 +81,11 @@ const METHODS: ReadonlySet<string> = new Set<GhMethod>(["GET", "POST", "PATCH"])
  */
 const PATH_SHAPE = /^[A-Za-z0-9][A-Za-z0-9._~%/?=&,+-]*$/;
 
-/** A bare lowercase host name, as `gh api --hostname` takes it: labels of letters, digits and `-`. */
-const HOST_SHAPE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$/;
+/**
+ * `gh`'s own words for a missing or refused login, matched in its stderr to
+ * class the failure (`GH_NOT_LOGGED_IN`); the stderr itself is never a class.
+ */
+const NO_LOGIN = /gh auth login|not logged in/i;
 
 /** A repository name part, as `owner` and `repo` are validated everywhere a path is built. */
 const PART = "[A-Za-z0-9._-]+";
@@ -105,7 +110,7 @@ function refusal(message: string): GhRefusal {
 /** `path` without its leading `/`, or the reason it is refused. */
 function checkedPath(request: GhRequest): { path: string } | { refused: string } {
   if (!METHODS.has(request.method)) return { refused: `gh api: method ${String(request.method)} is not one this runner sends` };
-  if (typeof request.hostname !== "string" || !HOST_SHAPE.test(request.hostname)) {
+  if (typeof request.hostname !== "string" || !HOST_NAME.test(request.hostname)) {
     return { refused: "gh api: the host is not a host name this runner sends to" };
   }
   const path = request.path.replace(/^\//, "");
@@ -192,7 +197,9 @@ function ghProgram(cwd: string, env: NodeJS.ProcessEnv): string | null {
  * starts for a method or a path outside the closed sets; with Node's `ENOENT`
  * error, no program started, where no `PATH` entry holds `gh`; and with an
  * error naming `gh`'s first stderr line where `gh` printed no HTTP head (no
- * login, no network). Any answer GitHub gave, a 4xx included, resolves. A
+ * login, no network), its `code` the class a caller may report without the
+ * stderr (review/199): `GH_NOT_LOGGED_IN` where `gh` asked for a login, else
+ * `GH_NO_STATUS`. Any answer GitHub gave, a 4xx included, resolves. A
  * body `gh` never read (it exited first) is no throw: the exit decides.
  */
 export function ghApi(request: GhRequest, opts: GhApiOptions = {}): Promise<GhResponse> {
@@ -223,7 +230,8 @@ export function ghApi(request: GhRequest, opts: GhApiOptions = {}): Promise<GhRe
           return;
         }
         const first = stderr.split(/\r?\n/).find((line) => line.trim() !== "") ?? "no output";
-        rejectPromise(new Error(`gh api answered no HTTP status: ${first.slice(0, 200)}`));
+        const code = NO_LOGIN.test(stderr) ? "GH_NOT_LOGGED_IN" : "GH_NO_STATUS";
+        rejectPromise(Object.assign(new Error(`gh api answered no HTTP status: ${first.slice(0, 200)}`), { code }));
       },
     );
     // `gh` can exit before it reads a body larger than the pipe buffer (no
