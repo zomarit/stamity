@@ -14,7 +14,7 @@
  *
  * **While a run is unattended** the run verbs (`stamity run checkpoint`, `run
  * end`) are the only push path: {@link unattendedPushVerdict} refuses any raw
- * `git push` (`git subtree push` among them), `gh pr create` or `gh pr edit` and a REST write that moves a
+ * `git push` (`git subtree push` among them), `gh pr create` or `gh pr edit`, a `gh repo` form that pushes, and a REST write that moves a
  * branch or a pull request, so the held paths and the last secret scan cannot
  * be stepped around. A reply on a comments endpoint passes. Whether a run is
  * unattended is the guard's to read (u14), not this module's.
@@ -187,8 +187,11 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   const KEYWORDS = new Set(["!", "{", "}", "if", "then", "else", "elif", "fi", "do", "done", "while", "until"]);
   const WRAPPERS = new Set(["env", "command", "builtin", "exec", "nohup", "sudo", "doas", "nice", "timeout", "stdbuf", "time", "xargs",
     "npx", "bunx", "pnpx"]);
-  /** Package runners spelled as a program and a subcommand; each runs its first positional word as a program. */
-  const RUNNERS = new Set(["npm exec", "npm x", "pnpm dlx", "pnpm exec", "yarn dlx", "yarn exec", "bun x"]);
+  /**
+   * Package runners spelled as a program and a subcommand; each runs its first positional word as a program, or
+   * (`bun exec`, yarn's `exec`) as a shell line.
+   */
+  const RUNNERS = new Set(["npm exec", "npm x", "pnpm dlx", "pnpm exec", "yarn dlx", "yarn exec", "bun x", "bun exec"]);
   const RUNNER_OPTIONS: readonly [string, string[], string[]] = ["pw", ["--package", "--workspace", "--filter"], ["-c", "--call", "--shell-mode"]];
   const NO_OPTIONS: readonly [string, string[], string[]] = ["", [], []];
   /**
@@ -407,8 +410,12 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       }
       const cmd = words.slice(k);
       if (cmd.length === 0) continue;
+      // A program word holding a whole command line (`bun exec 'git push'`) is also read as that line.
+      if (depth < 4 && /\s/.test(cmd[0] ?? "")) commands.push(...commandsOf(cmd.join(" "), depth + 1));
       cmd[0] = programName(cmd[0] ?? "");
-      if (depth < 4 && SHELLS.has(cmd[0])) {
+      // git's dashed form (`git-push`, as git's exec path holds it) is git running that subcommand.
+      if (/^git-./.test(cmd[0])) cmd.splice(0, 1, "git", cmd[0].slice(4));
+      if (depth < 4 && SHELLS.has(cmd[0] ?? "")) {
         const flag = cmd.findIndex((word, index) => index > 0 && /^-[A-Za-z]*c[A-Za-z]*$/.test(word));
         const script = flag === -1 ? undefined : cmd[flag + 1];
         if (script !== undefined) commands.push(...commandsOf(script, depth + 1));
@@ -556,7 +563,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     let repoGiven = false;
     const positionals: string[] = [];
     // Refspecs a `-c` pair on the line supplies when the line names none: `remote.<name>.push`, and the upstream
-    // a `branch.<name>.merge` names (where `push.default=upstream` sends a refspec-less push).
+    // a `branch.<name>.merge` names (where `push.default=upstream` sends a refspec-less push). Read whatever
+    // remote or branch the pair names, so they add denials and never lift one.
     const configured: string[] = [];
     for (const pair of config) {
       const eq = pair.indexOf("=");
@@ -633,7 +641,9 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         }
       }
     }
-    if (refspecs.length === 0 && (onDefault || matching)) {
+    // Keyed on the line's own refspecs: a `-c` pair only adds denials, since git applies it only to its own remote
+    // or branch, which the line does not show (review/98).
+    if (named.length === 0 && (onDefault || matching)) {
       return deny("push-default", "A push with no refspec that lands on the default branch");
     }
     return null;
@@ -690,35 +700,117 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   }
 
   /**
-   * A REST or GraphQL person-only act; each path is read below its repository or organisation. A body field the
-   * line does not show reads as the API's default: no `branch` on a contents write is the default branch, and a
-   * required `base` the line cannot show (a body file, a computed `$…` value) reads as the default branch too.
+   * A REST or GraphQL person-only act; each path is read below its repository or organisation. A body field is read
+   * only where a field starts (review/99): a gh field word's own `key=`, a top-level key of a JSON body, or in a
+   * GraphQL text (a `query` field) an argument of the call it belongs to, string literals and comments read as no
+   * syntax. A field the line does not show reads as the API's default (no `branch` on a contents write is the
+   * default branch, no `force` is off); one it shows but cannot place (a computed `$…` value, `-F k=@file`, a
+   * GraphQL variable or block string) reads as the denying value: the default branch, or forced.
    */
   function httpVerdict(cmd: string[]): PersonOnlyVerdict | null {
     const { write, method, paths } = httpCall(cmd);
     const text = cmd.join(" ");
-    /** A body field's values as the line shows them (`-f k=v`, `--field=k=v`, `"k": "v"`), a computed `$…` dropped. */
-    const fields = (key: string): string[] =>
-      [...text.matchAll(new RegExp(`(?:^|[\\s,{=]|-[fF])"?${key}"?\\s*[=:]\\s*"?([^\\s"',}]+)`, "g"))]
-        .map((match) => match[1] ?? "")
-        .filter((value) => !value.startsWith("$"));
-    const landsOnDefault = (key: string): boolean => {
-      const named = fields(key).map(branch);
-      return named.length === 0 || named.some((name) => defaults.has(name));
+    const gh = cmd[0] === "gh";
+    const fieldFlag = gh ? /^(-[fF]|--field|--raw-field)$/ : /^(-[A-Za-z]*d|--data(-raw|-binary|-ascii|-urlencode)?|--json|--post-data|--body-data)$/;
+    const fieldAttached = gh ? /^(-[fF]|--field=|--raw-field=)/ : /^(-d|--(data(-raw|-binary|-ascii|-urlencode)?|json|post-data|body-data)=)/;
+    /** Each body field as `[key, value]`, `null` for a value the line cannot place. */
+    const bodyFields: [string, string | null][] = [];
+    const queries: string[] = [];
+    const add = (key: string, value: unknown, typed: boolean): void => {
+      const placed = typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? String(value) : null;
+      if (key === "query" && typeof value === "string" && !(typed && value.startsWith("@"))) queries.push(value);
+      else bodyFields.push([key, placed === null || /[$`]/.test(placed) || (typed && placed.startsWith("@")) ? null : placed]);
     };
-    const forced = (): boolean => fields("force").some((value) => !["false", "0", "no", "off", ""].includes(value.toLowerCase()));
+    for (let k = 1; k < cmd.length; k += 1) {
+      const word = cmd[k] ?? "";
+      let value = fieldAttached.exec(word)?.[0];
+      if (fieldFlag.test(word)) {
+        value = cmd[k + 1];
+        k += 1;
+      } else if (value !== undefined) value = word.slice(value.length);
+      if (value === undefined) continue;
+      if (gh) {
+        const eq = value.indexOf("=");
+        if (eq > 0) add(value.slice(0, eq), value.slice(eq + 1), /^(-F|--field)/.test(word));
+        continue;
+      }
+      try {
+        const body: unknown = JSON.parse(value);
+        if (typeof body === "object" && body !== null && !Array.isArray(body)) {
+          for (const [key, field] of Object.entries(body)) add(key, field, false);
+        }
+      } catch {
+        // Not a JSON body: none of its fields is shown.
+      }
+    }
+    const fields = (key: string): (string | null)[] => bodyFields.filter(([name]) => name === key).map(([, value]) => value);
+    const landsOnDefault = (values: readonly (string | null)[]): boolean =>
+      values.length === 0 || values.some((value) => value === null || value === "" || defaults.has(branch(value)));
+    const forced = (values: readonly (string | null)[]): boolean =>
+      values.some((value) => value === null || !["false", "0", "no", "off", ""].includes(value.toLowerCase()));
+    /** Per call of the GraphQL field `name` in the line's GraphQL texts, the values its own arguments give `key`. */
+    const calls = (name: string, key: string): (string | null)[][] => {
+      const found: (string | null)[][] = [];
+      for (const query of queries) {
+        // String literals and comments masked, so a call, a key or a parenthesis inside one is no syntax.
+        const masked = query.replace(/"""[\s\S]*?"""|"(?:\\.|[^"\\])*"|#[^\n]*/g, (lit) => (lit.startsWith('"') ? '"' : " ").padEnd(lit.length));
+        for (const call of masked.matchAll(new RegExp(`\\b${name}\\s*\\(`, "g"))) {
+          const start = (call.index ?? 0) + call[0].length;
+          let end = start;
+          for (let level = 1; end < masked.length; end += 1) {
+            if (masked[end] === "(") level += 1;
+            else if (masked[end] === ")") level -= 1;
+            if (level === 0) break;
+          }
+          const values: (string | null)[] = [];
+          for (const arg of masked.slice(start, end).matchAll(new RegExp(`\\b${key}\\s*:\\s*`, "g"))) {
+            const after = query.slice(start + (arg.index ?? 0) + arg[0].length);
+            const literal = after.startsWith('"""') ? undefined : /^"(?:\\.|[^"\\])*"/.exec(after)?.[0];
+            // A bare token (`true`, an enum) as written; a variable, a block string, a list or an object is `null`.
+            let value: string | null = /^[\w.-]+/.exec(after)?.[0] ?? null;
+            if (literal !== undefined) {
+              try {
+                const decoded: unknown = JSON.parse(literal);
+                value = typeof decoded === "string" && !/[$`]/.test(decoded) ? decoded : null;
+              } catch {
+                value = null;
+              }
+            }
+            values.push(value);
+          }
+          found.push(values);
+        }
+      }
+      return found;
+    };
+    /** Whether a call of `name` the line names lands on the default branch: none readable, or one not placed there. */
+    const callsLand = (name: string, key: string): boolean => {
+      const found = calls(name, key);
+      return found.length === 0 || found.some(landsOnDefault);
+    };
     for (const path of paths) {
       const shown = `${method} ${path}`;
       if (/^graphql$/i.test(path)) {
         if (/\b(mergePullRequest|enablePullRequestAutoMerge)\b/.test(text)) return deny("pr-merge", "A GraphQL merge");
         if (/\bmarkPullRequestReadyForReview\b/.test(text)) return deny("pr-ready", "A GraphQL ready-for-review");
-        if (/\bcreateCommitOnBranch\b/.test(text) && landsOnDefault("branchName")) {
+        if (/\bcreateCommitOnBranch\b/.test(text) && callsLand("createCommitOnBranch", "branchName")) {
           return deny("push-default", "A GraphQL commit to the default branch");
         }
-        if (/\bmergeBranch\b/.test(text) && landsOnDefault("base")) {
+        if (/\bmergeBranch\b/.test(text) && callsLand("mergeBranch", "base")) {
           return deny("push-default", "A GraphQL merge into the default branch");
         }
-        if (/\bupdateRefs?\b/.test(text) && forced()) return deny("force-push", "A forced GraphQL ref update");
+        if (/\bupdateRefs?\b/.test(text)) {
+          if ([...calls("updateRef", "force"), ...calls("updateRefs", "force")].some(forced)) {
+            return deny("force-push", "A forced GraphQL ref update");
+          }
+          // The batch form names each ref (review/108); the single form names it by id, which the line cannot show.
+          if (calls("updateRefs", "name").flat().some((ref) => ref !== null && /^refs\/tags\//i.test(ref))) {
+            return deny("push-tags", "A GraphQL tag ref update");
+          }
+          if (/\bupdateRef\b/.test(text) || callsLand("updateRefs", "name")) {
+            return deny("push-default", "A GraphQL ref update onto the default branch, or onto a ref the line cannot show");
+          }
+        }
         continue;
       }
       if (!write) continue;
@@ -734,10 +826,13 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       }
       if (/^branches\/.+\/rename$/i.test(path)) return deny("protection", `A branch rename (${shown})`);
       if (/^transfer$/i.test(path)) return deny("protection", `A repository transfer (${shown})`);
-      if (/^contents(\/|$)/i.test(path) && landsOnDefault("branch")) {
+      if (/^contents(\/|$)/i.test(path) && landsOnDefault(fields("branch"))) {
         return deny("push-default", `A REST commit to the default branch (${shown})`);
       }
-      if ((/^merges$/i.test(path) && landsOnDefault("base")) || (/^merge-upstream$/i.test(path) && landsOnDefault("branch"))) {
+      if (
+        (/^merges$/i.test(path) && landsOnDefault(fields("base"))) ||
+        (/^merge-upstream$/i.test(path) && landsOnDefault(fields("branch")))
+      ) {
         return deny("push-default", `A REST merge into the default branch (${shown})`);
       }
       if (/^((actions|dependabot|codespaces|agents)|environments\/[^/]+)\/(secrets|variables)(\/|$)/i.test(path)) {
@@ -749,9 +844,12 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         if (/^git\/refs\/tags(\/|$)/i.test(path) || /(^|[=\s])refs\/tags\//i.test(text)) {
           return deny("push-tags", `A REST tag ref write (${shown})`);
         }
-        if (forced()) return deny("force-push", `A forced REST ref update (${shown})`);
-        const heads = [...text.matchAll(/(?:^|[=\s/])refs\/heads\/(\S+)/gi)].map((match) => (match[1] ?? "").toLowerCase());
-        if (heads.some((name) => defaults.has(name))) return deny("push-default", `A REST write to the default branch (${shown})`);
+        if (forced(fields("force"))) return deny("force-push", `A forced REST ref update (${shown})`);
+        // The path's own ref read from the path as routing reads it (review/107); a body's `ref` from the line.
+        const heads = [/^git\/refs\/heads\/(.+)$/i.exec(path)?.[1] ?? "", ...[...text.matchAll(/(?:^|[=\s/])refs\/heads\/(\S+)/gi)].map((match) => match[1] ?? "")];
+        if (heads.some((name) => defaults.has(name.toLowerCase()))) {
+          return deny("push-default", `A REST write to the default branch (${shown})`);
+        }
       }
     }
     return null;
@@ -794,7 +892,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
 
 /**
  * Whether `command` steps around the run verbs while a run is unattended
- * (REQ-FLOW-120): any `git push` or `git subtree push`, `gh pr create` or `gh pr edit`, and a `gh
+ * (REQ-FLOW-120): any `git push` or `git subtree push`, `gh pr create` or `gh pr edit`, `gh repo sync` or
+ * `gh repo create --push`, and a `gh
  * api`, `curl` or `wget` write (POST, PATCH, PUT, DELETE) on a repository's
  * `pulls` or `pulls/<n>`, on `contents/…`, on `git/` refs or objects, or on
  * `merges`, with their GraphQL twins. A reply on `pulls/<n>/comments` or
@@ -810,8 +909,11 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
   const KEYWORDS = new Set(["!", "{", "}", "if", "then", "else", "elif", "fi", "do", "done", "while", "until"]);
   const WRAPPERS = new Set(["env", "command", "builtin", "exec", "nohup", "sudo", "doas", "nice", "timeout", "stdbuf", "time", "xargs",
     "npx", "bunx", "pnpx"]);
-  /** Package runners spelled as a program and a subcommand; each runs its first positional word as a program. */
-  const RUNNERS = new Set(["npm exec", "npm x", "pnpm dlx", "pnpm exec", "yarn dlx", "yarn exec", "bun x"]);
+  /**
+   * Package runners spelled as a program and a subcommand; each runs its first positional word as a program, or
+   * (`bun exec`, yarn's `exec`) as a shell line.
+   */
+  const RUNNERS = new Set(["npm exec", "npm x", "pnpm dlx", "pnpm exec", "yarn dlx", "yarn exec", "bun x", "bun exec"]);
   const RUNNER_OPTIONS: readonly [string, string[], string[]] = ["pw", ["--package", "--workspace", "--filter"], ["-c", "--call", "--shell-mode"]];
   const NO_OPTIONS: readonly [string, string[], string[]] = ["", [], []];
   /**
@@ -1030,8 +1132,12 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
       }
       const cmd = words.slice(k);
       if (cmd.length === 0) continue;
+      // A program word holding a whole command line (`bun exec 'git push'`) is also read as that line.
+      if (depth < 4 && /\s/.test(cmd[0] ?? "")) commands.push(...commandsOf(cmd.join(" "), depth + 1));
       cmd[0] = programName(cmd[0] ?? "");
-      if (depth < 4 && SHELLS.has(cmd[0])) {
+      // git's dashed form (`git-push`, as git's exec path holds it) is git running that subcommand.
+      if (/^git-./.test(cmd[0])) cmd.splice(0, 1, "git", cmd[0].slice(4));
+      if (depth < 4 && SHELLS.has(cmd[0] ?? "")) {
         const flag = cmd.findIndex((word, index) => index > 0 && /^-[A-Za-z]*c[A-Za-z]*$/.test(word));
         const script = flag === -1 ? undefined : cmd[flag + 1];
         if (script !== undefined) commands.push(...commandsOf(script, depth + 1));
@@ -1185,6 +1291,10 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
       const [group, sub] = ghPositionals(cmd);
       if (group === "pr" && (sub === "create" || sub === "new" || sub === "edit")) return deny(`\`gh pr ${sub}\``);
       if (group === "repo" && sub === "sync") return deny("`gh repo sync`");
+      // `gh repo create --source <dir> --push` runs `git push` itself, as `repo sync` does (review/109).
+      if (group === "repo" && sub === "create" && cmd.some((word) => /^--push(=|$)/.test(word))) {
+        return deny("`gh repo create --push`");
+      }
       http = group === "api";
     }
     if (!http) continue;

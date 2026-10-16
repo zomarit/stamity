@@ -3,10 +3,11 @@
  *
  * CI definitions (GitHub Actions' workflows and actions, and the pipeline files
  * of GitLab, CircleCI, Azure Pipelines, Jenkins, Buildkite, Travis and
- * Bitbucket), hook and guard configuration (the emitted hooks, the manifest),
- * the class file, CODEOWNERS, the charter files with Codex's override, each
- * client's rule and instruction files, and the agent, command, skill and
- * MCP-server definitions the four clients read decide what every later run is
+ * Bitbucket), hook and guard configuration (the emitted hooks, the manifest,
+ * the clients' settings), the class file, CODEOWNERS, the charter files with
+ * Codex's override, each client's rule and instruction files, the agent,
+ * command, skill and MCP-server definitions the four clients read, and the
+ * cloud agents' environment files decide what every later run is
  * allowed to do, so a change to one of them is the person's to push. In an unattended run `stamity run checkpoint` and `run end` (u18b) move
  * such a change into an inert patch under the run folder, restore those paths
  * in the index only and list it; an attended push holds nothing.
@@ -45,6 +46,9 @@ export const PERSON_ONLY_PATHS: readonly string[] = [
   ".github/hooks/**",
   ".codex/hooks.json",
   ".codex/config.toml",
+  // Copilot's workspace settings carry instruction text, move the instruction and agent file reads and set terminal
+  // auto-approval, as the other clients' held settings do (review/106).
+  ".vscode/settings.json",
   ".stamity/generated/**",
   ".stamity/hooks/**",
   ".stamity/manifest.json",
@@ -81,6 +85,11 @@ export const PERSON_ONLY_PATHS: readonly string[] = [
   ".github/prompts/**",
   ".github/skills/**",
   ".github/chatmodes/**",
+  // The cloud agents' environment files: the setup commands a later cloud run executes (build/50), the dev
+  // container's at both of its locations.
+  ".cursor/environment.json",
+  ".devcontainer.json",
+  ".devcontainer/**",
 ];
 
 /** The paths of `paths` a person-only glob matches, in input order. */

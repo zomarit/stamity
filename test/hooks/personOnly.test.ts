@@ -76,10 +76,19 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["xargs -I {} git push -f origin {}", "force-push"],
   ["time -p git push -f origin feat/x", "force-push"],
   ["env -S 'git push -f origin feat/x'", "force-push"],
+  // git's dashed program form, as git's exec path holds it (build/49).
+  ["/usr/lib/git-core/git-push -f origin feat/x", "force-push"],
+  ["git-push --force origin feat/x", "force-push"],
+  // A runner subcommand handed a whole command line as one word (build/51).
+  ["bun exec 'git push -f origin feat/x'", "force-push"],
+  ["yarn exec 'git push --force origin feat/x'", "force-push"],
   // A forced ref update over REST or GraphQL (review/76).
   ["gh api -X PATCH repos/o/r/git/refs/heads/feat/x -f sha=abc -F force=true", "force-push"],
   ["curl -X PATCH -d '{\"sha\":\"abc\",\"force\":true}' https://api.github.com/repos/o/r/git/refs/heads/feat/x", "force-push"],
   ["gh api graphql -f query='mutation { updateRef(input: {refId: \"x\", oid: \"abc\", force: true}) { clientMutationId } }'", "force-push"],
+  // The batch form forced, and a force the line cannot place (review/108).
+  ["gh api graphql -f query='mutation { updateRefs(input: {repositoryId: \"R\", refUpdates: [{name: \"refs/heads/feat/x\", afterOid: \"abc\", force: true}]}) { clientMutationId } }'", "force-push"],
+  ["gh api graphql -f query='mutation($f: Boolean) { updateRefs(input: {repositoryId: \"R\", refUpdates: [{name: \"refs/heads/feat/x\", afterOid: \"abc\", force: $f}]}) { clientMutationId } }' -F f=true", "force-push"],
   // A `-c` pair supplying the refspec of a bare push (review/71).
   ["git -c remote.origin.push=+HEAD:refs/heads/main push origin", "force-push"],
   // push-default: named, refs/heads/, <src>:X, configured default, case-folded
@@ -99,6 +108,10 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["git -c push.default=matching push", "push-default"],
   ["git -c remote.origin.push=HEAD:refs/heads/main push origin", "push-default"],
   ["git -c push.default=upstream -c branch.feat/x.merge=refs/heads/main push", "push-default"],
+  // A `-c` refspec pair git does not apply to this push leaves it refspec-less (review/98).
+  ["git -c remote.fork.push=HEAD:refs/heads/feat/x push origin", "push-default", ON_MAIN],
+  ["git -c branch.feat/y.merge=refs/heads/feat/y push", "push-default", ON_MAIN],
+  ["git -c push.default=matching -c remote.fork.push=refs/heads/feat/x push origin", "push-default"],
   // A pattern refspec matching the default branch (review/67).
   ["git push origin 'refs/heads/*:refs/heads/*'", "push-default"],
   ["git push origin 'refs/heads/*'", "push-default"],
@@ -108,6 +121,8 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   // `git subtree push` to the default branch (review/74, read attended too).
   ["git subtree push --prefix=dist origin main", "push-default"],
   ["git subtree push -P dist origin main", "push-default"],
+  ["git-subtree push -P dist origin main", "push-default"],
+  ["yarn exec 'git push origin main'", "push-default"],
   // REST and GraphQL commits or merges landing on the default branch (review/68): named, or no branch given.
   ["gh api -X PUT repos/o/r/contents/.github/workflows/x.yml -f message=m -f content=eA==", "push-default"],
   ["gh api -X PUT repos/o/r/contents/a.md -f message=m -f content=eA== -f branch=main", "push-default"],
@@ -125,6 +140,41 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ],
   ["gh api graphql -f query='mutation($b: String!) { createCommitOnBranch(input: {branch: {branchName: $b}}) { commit { oid } } }' -f b=feat/x", "push-default"],
   ["gh api graphql -f query='mutation { mergeBranch(input: {repositoryId: \"x\", base: \"main\", head: \"feat/x\"}) { mergeCommit { oid } } }'", "push-default"],
+  // A field read only where a field starts (review/99): a decoy inside another field's value, string or selection
+  // set names no branch, so the write still lands on the default branch.
+  ["gh api -X PUT repos/o/r/contents/a.md -f 'message=fix branch: feat/x' -f content=eA==", "push-default"],
+  ["gh api -X PUT repos/o/r/contents/a.md -f message=branch=feat/x -f content=eA==", "push-default"],
+  ["gh api -X PUT repos/o/r/contents/a.md -f message=m -f branch=", "push-default"],
+  ["curl -X PUT -d '{\"message\":\"the branch: feat/x\",\"content\":\"eA==\"}' https://api.github.com/repos/o/r/contents/a.md", "push-default"],
+  ["curl -X PUT -d '{\"message\":\"m\",\"committer\":{\"branch\":\"feat/x\"}}' https://api.github.com/repos/o/r/contents/a.md", "push-default"],
+  [
+    "gh api graphql -f query='mutation { createCommitOnBranch(input: {branch: {id: \"B\"}, message: {headline: \"branchName: feat/x\"}}) { commit { oid } } }'",
+    "push-default",
+  ],
+  ["gh api graphql -f query='mutation { createCommitOnBranch(input: {branch: {id: \"B\"}}) { branchName: commit { oid } } }'", "push-default"],
+  [
+    "gh api graphql -f query='mutation { a: createCommitOnBranch(input: {branch: {id: \"B\"}}) { commit { oid } } b: createCommitOnBranch(input: {branch: {branchName: \"feat/x\"}}) { commit { oid } } }'",
+    "push-default",
+  ],
+  ["gh api graphql -f query='mutation { createCommitOnBranch(input: {branch: {branchName: \"\"\"main\"\"\"}}) { commit { oid } } }'", "push-default"],
+  ["gh api graphql -f query='mutation { createCommitOnBranch(input: {branch: {branchName: \"ma\\u0069n\"}}) { commit { oid } } }'", "push-default"],
+  [
+    "curl -X POST -d '{\"query\":\"mutation { createCommitOnBranch(input: {branch: {branchName: \\\"main\\\"}}) { commit { oid } } }\"}' https://api.github.com/graphql",
+    "push-default",
+  ],
+  // A GraphQL ref update onto the default branch, unforced (review/108): the batch form names each ref, the single
+  // form names it by id, which the line cannot show.
+  [
+    "gh api graphql -f query='mutation { updateRefs(input: {repositoryId: \"R\", refUpdates: [{name: \"refs/heads/main\", afterOid: \"abc\"}]}) { clientMutationId } }'",
+    "push-default",
+  ],
+  [
+    "gh api graphql -f query='mutation { updateRefs(input: {repositoryId: \"R\", refUpdates: [{name: \"refs/heads/feat/x\", afterOid: \"a\"}, {name: \"refs/heads/trunk\", afterOid: \"b\"}]}) { clientMutationId } }'",
+    "push-default",
+    ON_TRUNK,
+  ],
+  ["gh api graphql -f query='mutation($u: [RefUpdate!]!) { updateRefs(input: {repositoryId: \"R\", refUpdates: $u}) { clientMutationId } }'", "push-default"],
+  ["gh api graphql -f query='mutation { updateRef(input: {refId: \"x\", oid: \"abc\"}) { clientMutationId } }'", "push-default"],
   // push-default implied: refspec-less, HEAD or @, while on a default branch
   ["git push", "push-default", ON_MAIN],
   ["git push origin", "push-default", ON_MAIN],
@@ -141,6 +191,13 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["git push --follow-tags origin feat/x", "push-tags"],
   ["git push --mirror", "push-tags"],
   ["git push --all origin", "push-tags"],
+  // Named forms the table holds, each pinned (review/110).
+  ["git push --branches origin", "push-tags"],
+  ["git -c remote.origin.mirror=true push origin", "push-tags"],
+  [
+    "gh api graphql -f query='mutation { updateRefs(input: {repositoryId: \"R\", refUpdates: [{name: \"refs/tags/v1\", afterOid: \"abc\"}]}) { clientMutationId } }'",
+    "push-tags",
+  ],
   ["git push origin refs/tags/v1.0.0", "push-tags"],
   ["git push origin HEAD:refs/tags/v1.0.0", "push-tags"],
   ["git -c push.followTags=true push origin feat/x", "push-tags"],
@@ -172,6 +229,7 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["git tag -f v1.0.0 HEAD", "tag"],
   ["git tag --delete v1.0.0", "tag"],
   ["git tag -l -d v1.0.0", "tag"],
+  ["git-tag v1.0.0", "tag"],
   // pr-merge, pr-ready
   ["gh pr merge 3 --squash", "pr-merge"],
   ["gh pr merge --auto --squash", "pr-merge"],
@@ -214,6 +272,8 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["yarn npm publish", "publish"],
   ["bun publish", "publish"],
   ["bun publish --access public", "publish"],
+  ["yarn exec 'npm publish'", "publish"],
+  ["bun exec 'npm publish --access public'", "publish"],
   // secrets
   ["gh secret set TOKEN --body x", "secrets"],
   ["gh secret delete TOKEN", "secrets"],
@@ -255,6 +315,11 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["gh repo transfer o/r other --yes", "protection"],
   // REST respellings of a push
   ["gh api -X PATCH repos/o/r/git/refs/heads/main -f sha=abc", "push-default"],
+  // The path's own ref read from the path as routing reads it: a query, a fragment or a trailing slash (review/107).
+  ["gh api -X PATCH 'repos/o/r/git/refs/heads/main?x=1' -f sha=abc", "push-default"],
+  ["gh api -X PATCH repos/o/r/git/refs/heads/main#x -f sha=abc", "push-default"],
+  ["gh api -X PATCH repos/o/r/git/refs/heads/main/ -f sha=abc", "push-default"],
+  ["curl -X PATCH -d '{\"sha\":\"abc\"}' 'https://api.github.com/repos/o/r/git/refs/heads/main?ref=1'", "push-default"],
   ["gh api repos/o/r/git/refs -f ref=refs/tags/v1 -f sha=abc", "push-tags"],
   ["gh api -X DELETE repos/o/r/git/refs/heads/feat/x", "push-delete"],
 ];
@@ -273,6 +338,11 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
   // A `-c` refspec to a feature branch, and a line refspec, which git takes over the configured one.
   ["git -c remote.origin.push=HEAD:refs/heads/feat/x push origin"],
   ["git -c remote.origin.push=HEAD:refs/heads/main push origin feat/x"],
+  // review/98's twins: the same unapplied pairs on a feature branch, and a mirror pair switched off.
+  ["git -c remote.fork.push=HEAD:refs/heads/feat/x push origin"],
+  ["git -c branch.feat/y.merge=refs/heads/feat/y push"],
+  ["git -c remote.origin.mirror=false push origin feat/x"],
+  ["git push origin branches"],
   ["git push origin tagged-feature"],
   ["git subtree push --prefix=dist origin gh-pages"],
   ["git subtree split --prefix=dist"],
@@ -315,6 +385,11 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
   ["timeout 10 npm test"],
   ["sudo -u root git status"],
   ["echo $'git push -f'"],
+  // build/49's and build/51's twins: the dashed form and a runner's command line that run no person-only act.
+  ["/usr/lib/git-core/git-status"],
+  ["git-lfs ls-files"],
+  ["bun exec 'git status'"],
+  ["yarn exec 'npm test'"],
   ["gh repo view o/r"],
   ["gh repo edit --description 'x'"],
   ["gh repo clone o/r"],
@@ -330,8 +405,23 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
   ["gh api repos/o/r/merges -f base=feat/x -f head=main"],
   ["gh api repos/o/r/merge-upstream -f branch=feat/x"],
   ["gh api graphql -f query='mutation { createCommitOnBranch(input: {branch: {branchName: \"feat/x\"}}) { commit { oid } } }'"],
+  // review/99's twins: a value naming the default branch inside another field, beside the real feature branch.
+  ["gh api -X PUT repos/o/r/contents/a.md -f 'message=fix branch: main' -f content=eA== -f branch=feat/x"],
+  ["curl -X PUT -d '{\"message\":\"branch: main\",\"branch\":\"feat/x\"}' https://api.github.com/repos/o/r/contents/a.md"],
+  [
+    "gh api graphql -f query='mutation { createCommitOnBranch(input: {branch: {branchName: \"feat/x\"}, message: {headline: \"branchName: main\"}}) { commit { oid } } }'",
+  ],
+  [
+    "curl -X POST -d '{\"query\":\"mutation { createCommitOnBranch(input: {branch: {branchName: \\\"feat/x\\\"}}) { commit { oid } } }\"}' https://api.github.com/graphql",
+  ],
+  // review/108's twins: a batch ref update naming only feature branches, unforced.
+  [
+    "gh api graphql -f query='mutation { updateRefs(input: {repositoryId: \"R\", refUpdates: [{name: \"refs/heads/feat/x\", afterOid: \"abc\", force: false}]}) { clientMutationId } }'",
+  ],
   ["gh api -X PATCH repos/o/r/git/refs/heads/feat/x -f sha=abc"],
   ["gh api -X PATCH repos/o/r/git/refs/heads/feat/x -f sha=abc -F force=false"],
+  // review/107's twin: a feature branch's ref with a query.
+  ["gh api -X PATCH 'repos/o/r/git/refs/heads/feat/x?x=1' -f sha=abc"],
   ["gh api repos/o/r/pulls/3"],
   ["gh api repos/o/r/branches/main/protection"],
   ["gh api repos/o/r/rulesets"],
@@ -430,9 +520,21 @@ describe("unattendedPushVerdict", () => {
     ["git subtree push --prefix=dist origin gh-pages"],
     ["git subtree push -P dist origin x"],
     ["sudo -u root git push origin feat/x"],
+    // git's dashed program form (build/49) and a runner's one-word command line (build/51).
+    ["git-push origin feat/x"],
+    ["/usr/libexec/git-core/git-send-pack origin HEAD"],
+    ["bun exec 'git push origin feat/x'"],
+    ["yarn exec 'git push'"],
     ["gh pr create --draft --title t --body-file b.md"],
+    ["gh pr new --draft --title t --body-file b.md"],
     ["gh pr edit 3 --body-file b.md"],
     ["gh repo sync"],
+    // `gh repo create` pushing the local repository to the repository it creates (review/109).
+    ["gh repo create o/new --private --source . --push"],
+    ["gh repo create --source=. --public --push"],
+    // The MOVES rows with no pin before (review/110).
+    ["gh api -X PUT repos/o/r/pulls/3/merge"],
+    ["gh api -X POST repos/o/r/git/tags -f tag=v1 -f object=abc -f type=commit"],
     ["gh api -X PUT repos/o/r/contents/a.yml"],
     ["gh api -X PATCH repos/o/r/git/refs/heads/x"],
     ["gh api repos/o/r/git/refs -f ref=refs/heads/x -f sha=abc"],
@@ -468,6 +570,13 @@ describe("unattendedPushVerdict", () => {
     ["gh api repos/o/r/contents/a.yml"],
     ["gh pr view 3"],
     ["gh pr list"],
+    ["gh pr status"],
+    ["gh repo create o/new --private"],
+    ["gh repo create o/new --private --source . --remote upstream"],
+    ["gh api repos/o/r/pulls/3/merge"],
+    ["gh api repos/o/r/git/tags/abc"],
+    ["git-fetch origin"],
+    ["bun exec 'git fetch origin'"],
     ["git fetch origin"],
     ["git subtree split --prefix=dist -b split"],
     ["git subtree add -P push origin x"],

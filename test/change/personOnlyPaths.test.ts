@@ -84,6 +84,15 @@ describe("heldPaths", () => {
     ".github/prompts/st-work.prompt.md",
     ".github/skills/x/SKILL.md",
     ".github/chatmodes/x.chatmode.md",
+    // Copilot's workspace settings: instruction text, the instruction and agent file locations, terminal
+    // auto-approval (review/106).
+    ".vscode/settings.json",
+    // The cloud agents' environment files: setup commands a later cloud run executes (build/50).
+    ".cursor/environment.json",
+    ".devcontainer.json",
+    ".devcontainer/devcontainer.json",
+    ".devcontainer/python/devcontainer.json",
+    ".devcontainer/Dockerfile",
     // A case-insensitive checkout opens these as the canonical names.
     ".GitHub/Workflows/ci.yml",
     "claude.md",
@@ -111,7 +120,11 @@ describe("heldPaths", () => {
     ".gitlab/issue_templates/bug.md",
     "docs/azure-pipelines.md",
     "Jenkinsfile.md",
-    ".vscode/settings.json",
+    // The held settings and environment files' look-alikes and nested copies.
+    ".vscode/settings.json.example",
+    "pkg/.cursor/environment.json",
+    "docs/.devcontainer.json",
+    "docs/devcontainer.md",
     "README.md",
   ])("does not hold %s", (path) => {
     expect(heldPaths([path, "CODEOWNERS"])).toEqual(["CODEOWNERS"]);
@@ -144,6 +157,7 @@ describe("heldPaths", () => {
       ".github/hooks/**",
       ".codex/hooks.json",
       ".codex/config.toml",
+      ".vscode/settings.json",
       ".stamity/generated/**",
       ".stamity/hooks/**",
       ".stamity/manifest.json",
@@ -176,6 +190,9 @@ describe("heldPaths", () => {
       ".github/prompts/**",
       ".github/skills/**",
       ".github/chatmodes/**",
+      ".cursor/environment.json",
+      ".devcontainer.json",
+      ".devcontainer/**",
     ]);
   });
 });
