@@ -444,12 +444,17 @@ refused. What stays open is named here, as accepted risk:
   git's program-valued variables (`GIT_EDITOR`, `GIT_SEQUENCE_EDITOR`, `GIT_SSH_COMMAND`, `GIT_SSH`,
   `GIT_EXTERNAL_DIFF`, `GIT_ASKPASS`, `GIT_PAGER`, `GIT_PROXY_COMMAND`, `GIT_EXEC_PATH`), wherever
   on the line, `export`, and `declare`, `typeset` or `local` given `-x`, with a value or without one,
-  PowerShell's `$env:`, `Set-Item env:` and `New-Item env:` and
+  a name `read`, `for`, `printf -v`, `mapfile`, `readarray` or `getopts` assigns with no `=`, any
+  of them named on a line that turns allexport on (`set -a`, `set -o allexport`, `setopt
+  allexport`), PowerShell's `$env:`, `Set-Item env:` and `New-Item env:` and
   `[Environment]::SetEnvironmentVariable` among the spellings: the run verbs' git keeps the
   caller's environment, so a variable set on a verb's line reaches its push. Code:
   `src/hooks/personOnly.ts::unattendedPushVerdict`, `src/cli/engine/gitWrite.ts::gitWriteEnv`. A
   program-valued variable set through another of PowerShell's `env:` drive commands, such as
-  `Set-Content env:GIT_EXEC_PATH …`, passes, and the respelling residual above covers it.
+  `Set-Content env:GIT_EXEC_PATH …`, passes, and the respelling residual above covers it. So does
+  one another builtin sets on a line that leaves allexport off (`select`, `readonly`, zsh's
+  `print -v` and `set -A`), which reaches the verb's git when the variable is already in the
+  environment.
 - **Hooks the run writes.** The run verbs keep the repository's hooks: a commit or push of theirs
   runs the repository's own pre-commit and pre-push checks, by design
   (`src/cli/engine/gitWrite.ts::gitWrite`). So a hook a run writes runs when `run checkpoint` or

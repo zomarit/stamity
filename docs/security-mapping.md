@@ -359,9 +359,11 @@ Every gap named in a row above, collected so the list reads without the tables.
     reading of one command line closes it. Unattended, a line that sets one of git's program-valued
     or configuration variables is refused whatever program it runs, `GIT_CONFIG_GLOBAL` and
     `GIT_CONFIG_SYSTEM` among them, `export`, and `declare`, `typeset` or `local` given `-x`, with a
-    value or without one, and PowerShell's `Set-Item env:` and `New-Item env:` among the
-    spellings; a program-valued variable set through another of PowerShell's `env:` drive commands
-    passes, a respelling SECURITY.md names. A hook the run writes runs inside a run verb's commit or push,
+    value or without one, a name `read`, `for`, `printf -v`, `mapfile`, `readarray` or `getopts`
+    assigns with no `=`, any of them named on a line that turns allexport on, and PowerShell's
+    `Set-Item env:` and `New-Item env:` among the spellings; a program-valued variable set through
+    another of PowerShell's `env:` drive commands passes, a respelling SECURITY.md names, and so
+    does one another builtin sets with allexport off. A hook the run writes runs inside a run verb's commit or push,
     which keeps the repository's hooks, and the pre-flight's refusal of an account that can push to
     the default branch is the control that holds. On the clients that take no per-tool deny from
     the engine, a merge, branch write or review approval through the GitHub MCP server is a tool
