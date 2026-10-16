@@ -501,6 +501,12 @@ refused. What stays open is named here, as accepted risk:
   wall is strongest when the account the run acts as has no admin on the repository.
 - **`PATH`.** `PATH` decides which `gh` a credential helper written as `!gh auth git-credential`
   runs: the pre-flight reads the helper's program name, not the binary it resolves to.
+- **A `gh` behind a shim.** A helper that names gh by a path binds only where that path is the
+  `gh` the REST reads run, or the file it resolves to. So a gh installed behind a shim (scoop,
+  Chocolatey, mise, asdf, snap), whose `gh auth setup-git` writes the real executable's path, is
+  refused by path. The way out is the bare `!gh auth git-credential` helper, the `PATH` residual
+  above, which is matched as exactly `gh` or `gh.exe` with no case fold. Code:
+  `src/runs/preflight.ts::isGhCredentialHelper`.
 - **The run verbs' environment.** The environment the run verbs start under picks the git they run
   and the global configuration it reads: `PATH` chooses the git, which they start by the absolute
   path their `PATH` walk finds, and `HOME` and `XDG_CONFIG_HOME` choose the global configuration
@@ -524,10 +530,11 @@ whole check, and these forms pass it:
 
 - gh's own field conversions and its current-branch placeholder are read as literal text, so an
   attended REST commit or ref update made from a checkout on the default branch passes;
-- a batch ref update whose list element is given whole as a GraphQL variable passes;
-- the GraphQL forms of a tag-ref create and of a ref delete pass, while their REST twins are
-  refused;
-- a ref path with a percent-encoded letter passes.
+- a batch ref update whose list element is given whole as a GraphQL variable passes.
+
+The GraphQL forms of a tag-ref create and of a ref delete are refused in an attended session too,
+as their REST twins are, and a ref path with a percent-encoded letter is read decoded, so it is
+refused as the ref it names. Code: `src/hooks/personOnly.ts::personOnlyVerdict`.
 
 In an unattended run the unattended rules cover each of these: the push rule refuses every raw
 `git push`, every REST write on `contents/` and `git/` refs and objects and every GraphQL branch or

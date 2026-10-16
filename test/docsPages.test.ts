@@ -2496,6 +2496,35 @@ describe("SECURITY.md", () => {
         "The control that holds is the pre-flight's refusal of an account that can push to the default branch",
       );
     });
+
+    // ADDED 2026-10-16 (PR #112 round, REQ-FLOW-104): the attended verdict refuses a GraphQL tag-ref create, a GraphQL
+    // ref delete and a percent-encoded ref path (src/hooks/personOnly.ts::personOnlyVerdict, the DENY rows in
+    // test/hooks/personOnly.test.ts), so the page may not list them as passing; and a gh behind a shim is refused by
+    // path, the bare helper its way out (src/runs/preflight.ts::isGhCredentialHelper).
+    it("states the GraphQL ref forms and a percent-encoded ref path as refused, and names a gh behind a shim", () => {
+      const residuals = section("### Cloud and unattended runs", "## Standards mapping");
+      for (const claim of [
+        "The GraphQL forms of a tag-ref create and of a ref delete are refused in an attended session too, as their REST twins are",
+        "a ref path with a percent-encoded letter is read decoded, so it is refused as the ref it names",
+        "A `gh` behind a shim.",
+        "a gh installed behind a shim (scoop, Chocolatey, mise, asdf, snap), whose `gh auth setup-git` writes the real executable's path, is refused by path",
+        "The way out is the bare `!gh auth git-credential` helper",
+        "matched as exactly `gh` or `gh.exe` with no case fold",
+        "`src/runs/preflight.ts::isGhCredentialHelper`",
+      ]) {
+        expect(residuals, `the cloud section does not state: ${claim}`).toContain(claim);
+      }
+      for (const stale of [
+        "the GraphQL forms of a tag-ref create and of a ref delete pass",
+        "a ref path with a percent-encoded letter passes",
+      ]) {
+        expect(flat, `SECURITY.md says again: ${stale}`).not.toContain(stale);
+      }
+      // After the `PATH` residual it names as the way out, before the run verbs' environment.
+      const shim = residuals.indexOf("A `gh` behind a shim.");
+      expect(shim).toBeGreaterThan(residuals.indexOf("`PATH` decides which `gh`"));
+      expect(shim).toBeLessThan(residuals.indexOf("The run verbs' environment."));
+    });
   });
 
   it("covers the four surfaces the phase claims, and the limits", () => {
