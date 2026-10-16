@@ -80,7 +80,8 @@ with 1.15.0.
 
 REQ-PROVE-038 comes from the spec delta of `docs/plans/021-cloud-runs-01.md` (plan 021 file 1, run
 `2026-10-15_cloud-runs`), merged by its unit `u23-spec-merge` before the run's whole-branch review. It cites the
-integration head `4daeb214`. REQ-PROVE-039 to REQ-PROVE-045 are held for plan 021's second file. It is unreleased at
+integration head `4daeb214`; the whole-branch page round re-read its `evals/SET-v7.md` citations with its own edit of
+that file. REQ-PROVE-039 to REQ-PROVE-045 are held for plan 021's second file. It is unreleased at
 this merge; the plan cuts it as 1.16.0.
 
 ## Intent
@@ -98,7 +99,7 @@ against a 150-line cap (`:53`), folding the rule set into one appendix (`src/ada
 The seven invariants (`content/charter/stamity-charter.md:34-60`) carry no version or amendment
 record; human QA rows were accepted UNPERFORMED twice running; hand pages attest to pre-1.7.0 commits
 (`README.md:1`); the checklist names `SET-v5` (`.github/release-controls-checklist.md:170-171`) and the
-default profile `rubric-v4.md` (`evals/model-profiles-v1.json:3-8`); `SECURITY.md:208-221` says no such
+default profile `rubric-v4.md` (`evals/model-profiles-v1.json:3-8`); `SECURITY.md:207-220` says no such
 mapping exists, and no `docs/measurements.md` exists at `949bde9`.
 
 ## Requirements
@@ -635,9 +636,9 @@ the release run 34771477218 as closed evidence. `docs/security-mapping.md` carri
 OWASP (agentic 2026, LLM 2025, web 2021), NSA/CISA and NIST AI RMF mappings — publisher, edition and
 read date, no URL, the hand-page link policy admitting only this repository's GitHub home (`:41-100`)
 — and the actor/vector/control/residual table with mapped ids, every control traced to `path:line`;
-`SECURITY.md:321-323` points at it and the guides roster lists it (`…docsPages.test.ts:134-148`).
+`SECURITY.md:320-322` points at it and the guides roster lists it (`…docsPages.test.ts:134-148`).
 (Amended 2026-10-12: the two citations into `SECURITY.md` were re-read at `ebaac2f2`; they read
-`:260-261` and `SECURITY.md:215-217`.)
+`:260-261` and `SECURITY.md:214-216`.)
 
 - GIVEN the new page WHEN the docs suite runs THEN seven `###` surface headings stand (six engine
   surfaces plus the release publish path) over a `## Gaps` section, every control symbol resolves in the

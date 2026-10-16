@@ -120,8 +120,10 @@ REQ-FLOW-089 to REQ-FLOW-104 and REQ-FLOW-120, and the text dated 2026-10-16, co
 `docs/plans/021-cloud-runs-01.md` (plan 021 file 1, run `2026-10-15_cloud-runs`), in the form the run's cell passes
 brought it to, merged once by its unit `u23-spec-merge` before the run's whole-branch review. Every `path:line` in that
 text was first read at the integration head `4daeb214`, or at `bc12cfc3` where the merge's first fix round, on the same
-date, re-pointed or added a citation; the run's last citation pass re-read each one at `445ebd23`, where every one
-reads, a pin named beside a citation included. Two units were not on `4daeb214`: `u19-run-end` (`stamity run end`) and
+date, re-pointed or added a citation; the run's last citation pass re-read each one at `445ebd23`, and the whole-branch
+page round re-read them on `aa7a3e5b` with its own edits to `SECURITY.md`, `evals/SET-v7.md` and the unattended skill,
+re-pointing each one whose text had moved; every one reads there, a pin named beside a citation included. Two units
+were not on `4daeb214`: `u19-run-end` (`stamity run end`) and
 `u21-security-page` (`SECURITY.md`'s cloud section); the fix round cites both at `bc12cfc3`. REQ-FLOW-105 to
 REQ-FLOW-119 are held for plan 021's second file. The text dated 2026-10-16 is unreleased at this merge; the plan cuts
 it as 1.16.0.
