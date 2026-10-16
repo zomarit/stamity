@@ -31,8 +31,9 @@ And its gate:
   defaulted decision is indistinguishable from a decision nobody had to make.
 ```
 
-Scenario state — this is an unattended run with no operator present. The question was
-emitted and the window closed with no answer. The question, verbatim as emitted:
+Scenario state — this is an unattended run with no operator present, its record's head
+reading `Mode: unattended`. The run reached the ask point below, and, as that mode
+requires, no question was put. The question, verbatim as the flow declares it:
 
 > The cache TTL is unset for the new endpoint. Which do you want?
 > 1. No cache — every request hits the database; slowest, and nothing to invalidate.
