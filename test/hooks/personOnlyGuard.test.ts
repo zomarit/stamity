@@ -645,7 +645,16 @@ describe("the unattended push rule, the mode read from the run records", () => {
       `read GIT_EXEC_PATH <<< /tmp/bin; declare -x GIT_EXEC_PATH; ${RUN_END}`, `printf -v GIT_SSH_COMMAND /tmp/s; declare -gx GIT_SSH_COMMAND; ${RUN_END}`,
       "read GIT_CONFIG_COUNT <<< 1; typeset -rx GIT_CONFIG_COUNT; npm test", `f() { local -xr GIT_EXEC_PATH; ${RUN_END}; }; f`,
       "declare -x -- GIT_EDITOR; npm test", "typeset -- -x GIT_PAGER; npm test", `declare -x HOME GIT_EXEC_PATH PATH; ${RUN_END}`,
-      `typeset -gx GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0; ${RUN_END}`];
+      `typeset -gx GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0; ${RUN_END}`,
+      // A form that assigns a name with no `=`, and allexport turned on on a line naming one (review/247).
+      `set -a; read GIT_EXEC_PATH <<< /tmp/bin; ${RUN_END}`, `read -r GIT_EXEC_PATH <<< /tmp/bin; ${RUN_END}`,
+      "read -a GIT_SSH_COMMAND <<< /tmp/s; npm test", "read -r HOME GIT_EDITOR < /tmp/v; npm test",
+      `for GIT_EXEC_PATH in /tmp/bin; do ${RUN_END}; done`, `printf -v GIT_EXEC_PATH %s /tmp/bin; ${RUN_END}`,
+      "printf -vGIT_PAGER %s /tmp/p; npm test", "mapfile -t GIT_CONFIG_KEY_0 < /tmp/k; npm test",
+      `readarray GIT_EXEC_PATH < /tmp/p; ${RUN_END}`, "getopts e: GIT_EDITOR -e /tmp/e; npm test",
+      `set -o allexport; select GIT_EXEC_PATH in /tmp/bin; do break; done; ${RUN_END}`,
+      `set -ea; select GIT_EXEC_PATH in /tmp/bin; do break; done; ${RUN_END}`,
+      `setopt ALL_EXPORT; print -v GIT_EXEC_PATH /tmp/bin; ${RUN_END}`, "shopt -so allexport; select GIT_PAGER in /tmp/p; do break; done; npm test"];
     for (const command of unattended) {
       const source = unattendedPushVerdict(command);
       expect(source.deny, command).toBe(true);
@@ -667,11 +676,14 @@ describe("the unattended push rule, the mode read from the run records", () => {
     expect(decide("claude", guard, "git -c user.name=x commit -m m").deny).toBe(false);
     // The twins: a variable that runs nothing, a remote and a remote key read, a pull request read, and a line that only
     // names one of the variables or unsets one (review/231), or prints one, exports another or gives one an attribute
-    // other than `x` (review/243).
+    // other than `x` (review/243), or reads one, names one under no allexport, or reads another name (review/247).
     for (const command of ["GIT_TERMINAL_PROMPT=0 git fetch origin", "git remote get-url origin", "git config --get remote.origin.url", "gh pr view 3",
       "git config --get url.https://example.com/.insteadOf", "GIT_CONFIG_NOSYSTEM=1 git status", "Set-Item env:GIT_CONFIG_NOSYSTEM 1; git status",
       "grep GIT_CONFIG_COUNT src", `env -u GIT_EXEC_PATH ${RUN_END}`, "gh pr view 3 --json mergeStateStatus",
-      `declare -p GIT_EXEC_PATH; ${RUN_END}`, `declare -x GIT_TERMINAL_PROMPT; ${RUN_END}`, "typeset -i GIT_CONFIG_COUNT; npm test"]) {
+      `declare -p GIT_EXEC_PATH; ${RUN_END}`, `declare -x GIT_TERMINAL_PROMPT; ${RUN_END}`, "typeset -i GIT_CONFIG_COUNT; npm test",
+      `read OTHER_NAME <<< /tmp/bin; ${RUN_END}`, `echo "$GIT_EXEC_PATH"; ${RUN_END}`, `set +a; read OTHER_NAME <<< "$GIT_EXEC_PATH"; ${RUN_END}`,
+      `set -e; echo "$GIT_EXEC_PATH"; ${RUN_END}`, 'for f in GIT_EXEC_PATH GIT_EDITOR; do grep -rn "$f" src; done; npm test',
+      `printf '%s\\n' GIT_EXEC_PATH; ${RUN_END}`]) {
       expect(unattendedPushVerdict(command), command).toEqual({ deny: false });
       expect(decide("claude", guard, command).deny, command).toBe(false);
     }

@@ -1614,6 +1614,28 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
   const EXPORTS = /^-[A-Za-z]*x[A-Za-z]*$/;
   const EXPORTERS = new Set(["declare", "typeset", "local"]);
   /**
+   * The forms that assign a name with no `=` (review/247): `read` (any of its names, `-a`'s among them), `mapfile`,
+   * `readarray` and `getopts` (any operand, the safe direction), the names of `for NAME in`, the name `printf -v` takes.
+   * Under allexport, or with the name already in the environment, what the line starts sees the value.
+   */
+  const READERS = new Set(["read", "mapfile", "readarray", "getopts"]);
+  function assignsNoValue(cmd: string[]): string[] {
+    const program = cmd[0] ?? "";
+    if (READERS.has(program)) return cmd.slice(1);
+    if (program === "for") return cmd.slice(1, cmd.includes("in") ? cmd.indexOf("in") : undefined);
+    if (program !== "printf") return [];
+    return cmd.flatMap((word, index) => (word === "-v" ? [cmd[index + 1] ?? ""] : /^-v./.test(word) ? [word.slice(2)] : []));
+  }
+  /**
+   * allexport turned on (review/247), which exports every name a later command sets: a `set` cluster carrying `a`
+   * (`+a` turns it off), or the option by name to `set -o`, zsh's `setopt` or `unsetopt`, or bash's `shopt -o`, as zsh
+   * reads it (any case, any `_`), its `no` form too (the safe direction).
+   */
+  const ALLEXPORT_CLUSTER = /^-[A-Za-z]*a[A-Za-z]*$/;
+  const OPTION_SETTERS = new Set(["set", "setopt", "unsetopt", "shopt"]);
+  /** One of git's program or configuration variables named anywhere in a text or a word. */
+  const NAMES_VARIABLE = new RegExp(`\\b${GIT_VARIABLE}`, "i");
+  /**
    * PowerShell's spellings that set one, in the line's text (review/231): `$env:NAME =` and `${env:NAME} =` (a compound
    * assignment among them), `Set-Item` or `New-Item` (`si`, `ni`) on `env:NAME`, `[Environment]::SetEnvironmentVariable`.
    */
@@ -1753,14 +1775,22 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
     }
   }
   // Whatever program the line runs (review/231): one of those variables set on it reaches what that program starts,
-  // the run verbs' own git among them (`GIT_EXEC_PATH=<folder> stamity run end`). A line that only names one passes.
+  // the run verbs' own git among them (`GIT_EXEC_PATH=<folder> stamity run end`). A line that only names one passes,
+  // unless it turns allexport on (review/247): then any name the line sets is exported, however it is set.
+  const allexport = commands.some(
+    (cmd) =>
+      (cmd[0] === "set" && cmd.slice(1).some((word) => ALLEXPORT_CLUSTER.test(word))) ||
+      (OPTION_SETTERS.has(cmd[0] ?? "") && cmd.slice(1).some((word) => /^(?:no)?allexport$/.test(word.replace(/_/g, "").toLowerCase()))),
+  );
   if (
     assigned.some((word) => SETS_WORD.test(word)) ||
     commands.some((cmd) => {
       const exports = cmd[0] === "export" || (EXPORTERS.has(cmd[0] ?? "") && cmd.slice(1).some((word) => EXPORTS.test(word)));
+      if (assignsNoValue(cmd).some((word) => SETS_WORD.test(word))) return true;
       return SETTERS.has(cmd[0] ?? "") && cmd.slice(1).some((word) => SETS_WORD.test(word) && (exports || word.includes("=")));
     }) ||
-    SETS_TEXT.test(command)
+    SETS_TEXT.test(command) ||
+    (allexport && (NAMES_VARIABLE.test(command) || [...assigned, ...commands.flat()].some((word) => NAMES_VARIABLE.test(word))))
   ) {
     return deny("A line that sets one of git's program or configuration variables (`GIT_EXEC_PATH`, `GIT_EDITOR`, `GIT_CONFIG_COUNT`, …), which the run verbs' own git reads,");
   }

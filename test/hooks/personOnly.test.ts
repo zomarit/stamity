@@ -863,6 +863,24 @@ describe("unattendedPushVerdict", () => {
     ["typeset -- -x GIT_PAGER; npm test"],
     ["declare -x HOME GIT_EXEC_PATH PATH; npx --no stamity run end --run x"],
     ["typeset -gx GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0; npx --no stamity run end --run x"],
+    // A form that assigns a name with no `=` (review/247): under allexport, or with the name already in the
+    // environment, the verb's git sees it. The reported line, then each form: `read` (an option, `-a`, a second name),
+    // `for NAME in`, `printf -v` (apart and attached), `mapfile`, `readarray`, `getopts`.
+    ["set -a; read GIT_EXEC_PATH <<< /tmp/bin; npx --no stamity run end --run x"],
+    ["read -r GIT_EXEC_PATH <<< /tmp/bin; npx --no stamity run end --run x"],
+    ["read -a GIT_SSH_COMMAND <<< /tmp/s; npm test"],
+    ["read -r HOME GIT_EDITOR < /tmp/v; npm test"],
+    ["for GIT_EXEC_PATH in /tmp/bin; do npx --no stamity run end --run x; done"],
+    ["printf -v GIT_EXEC_PATH %s /tmp/bin; npx --no stamity run end --run x"],
+    ["printf -vGIT_PAGER %s /tmp/p; npm test"],
+    ["mapfile -t GIT_CONFIG_KEY_0 < /tmp/k; npm test"],
+    ["readarray GIT_EXEC_PATH < /tmp/p; npx --no stamity run end --run x"],
+    ["getopts e: GIT_EDITOR -e /tmp/e; npm test"],
+    // allexport turned on, on a line naming one anywhere: a form the list above does not read is exported too.
+    ["set -o allexport; select GIT_EXEC_PATH in /tmp/bin; do break; done; npx --no stamity run end --run x"],
+    ["set -ea; select GIT_EXEC_PATH in /tmp/bin; do break; done; npx --no stamity run end --run x"],
+    ["setopt ALL_EXPORT; print -v GIT_EXEC_PATH /tmp/bin; npx --no stamity run end --run x"],
+    ["shopt -so allexport; select GIT_PAGER in /tmp/p; do break; done; npm test"],
     ["cmd /c \"set GIT_EXEC_PATH=C:\\tmp&& npx --no stamity run end --run x\""],
     ["$env:GIT_EXEC_PATH = 'C:\\tmp'; npx --no stamity run end --run x"],
     ["$env:GIT_EXEC_PATH+='C:\\tmp'; npx --no stamity run end --run x"],
@@ -1025,6 +1043,14 @@ describe("unattendedPushVerdict", () => {
     ["declare -p GIT_EXEC_PATH; npx --no stamity run end --run x"],
     ["declare -x GIT_TERMINAL_PROMPT; npx --no stamity run end --run x"],
     ["typeset -i GIT_CONFIG_COUNT; npm test"],
+    // review/247's twins: a name outside the set read, one only read from (not assigned), allexport turned off and a
+    // `set` cluster with no `a` on a line naming one, and one named as `for`'s word or `printf`'s argument, no name.
+    ["read OTHER_NAME <<< /tmp/bin; npx --no stamity run end --run x"],
+    ["echo \"$GIT_EXEC_PATH\"; npx --no stamity run end --run x"],
+    ["set +a; read OTHER_NAME <<< \"$GIT_EXEC_PATH\"; npx --no stamity run end --run x"],
+    ["set -e; echo \"$GIT_EXEC_PATH\"; npx --no stamity run end --run x"],
+    ["for f in GIT_EXEC_PATH GIT_EDITOR; do grep -rn \"$f\" src; done; npm test"],
+    ["printf '%s\\n' GIT_EXEC_PATH; npx --no stamity run end --run x"],
     // review/232's twin: the pull request's merge state read.
     ["gh pr view 3 --json mergeStateStatus"],
     // review/209's twins: every `git remote` read, and `git config` reads of a `remote.*` key, writes of another key,
