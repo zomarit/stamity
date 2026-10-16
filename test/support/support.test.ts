@@ -740,7 +740,9 @@ describe("build size budgets", () => {
   it("declares budgets a real build has room inside, and no sourcemap in the config", async () => {
     // The numbers are constants with a stated basis, not a high-water mark, so
     // they must sit above the measured build rather than on it.
-    expect(LOGIC_BUDGET_BYTES).toBe(2 * 1024 * 1024);
+    // Raised from 2 MiB for plan 021's unattended-run modules, wired by u16
+    // (about 115 KB measured); the reason sits beside the constant (build/72).
+    expect(LOGIC_BUDGET_BYTES).toBe(2.25 * 1024 * 1024);
     expect(CORPUS_BUDGET_BYTES).toBe(1536 * 1024);
 
     const config = await readFile(

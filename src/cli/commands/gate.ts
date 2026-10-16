@@ -1697,8 +1697,9 @@ const AUTHORIZATION_HEADER = /^\s*authorization\s*:/i;
  * cannot be placed counts, and so does one git's specificity rule would drop.
  */
 function pushUrlFacts(url: string, config: readonly PushConfigEntry[] | null): PushUrlFacts {
-  // A config read that failed proves nothing about the URL, the header included.
-  if (config === null) return { url, helpers: null, authorizationHeader: true };
+  // A config read that failed proves nothing about the URL: no header was read, so
+  // none is reported, and the decision refuses on `configUnreadable` (build/73).
+  if (config === null) return { url, helpers: null, authorizationHeader: false, configUnreadable: true };
   const target = urlParts(url);
   let helpers: string[] | null = [];
   let authorizationHeader = false;
@@ -1713,7 +1714,7 @@ function pushUrlFacts(url: string, config: readonly PushConfigEntry[] | null): P
       helpers = entry.value === null || applies === null || helpers === null ? null : [...helpers, entry.value];
     }
   }
-  return { url, helpers, authorizationHeader };
+  return { url, helpers, authorizationHeader, configUnreadable: false };
 }
 
 /**

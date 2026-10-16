@@ -66,6 +66,12 @@ export interface PushUrlFacts {
   helpers: readonly string[] | null;
   /** Whether an `http.extraHeader` naming `Authorization`, generic or URL-scoped, applies to this URL. */
   authorizationHeader: boolean;
+  /**
+   * Whether git's configuration could not be read in the push's environment;
+   * when true nothing about the URL is proven (`helpers` is `null`, and
+   * `authorizationHeader` is `false` because no header was read).
+   */
+  configUnreadable: boolean;
 }
 
 export interface PreflightDeps {
@@ -118,7 +124,8 @@ const PUSH_IDENTITY_FIX = "use an https origin with `gh auth setup-git`";
 const HEADER_FIX =
   "remove the Authorization http.extraHeader that applies to origin (actions/checkout's persist-credentials: false), " +
   "and use an https origin with `gh auth setup-git`";
-const PUSH_URL_FIX = "point every push URL of origin at the repository its fetch URL names";
+const CONFIG_FIX = "make git's configuration readable in the run's environment (`git config --list` exits 0 there)";
+const PUSH_URL_FIX ="point every push URL of origin at the repository its fetch URL names";
 const ORIGIN_FIX = "point origin at the GitHub repository the run pushes to";
 const ADMIN_FIX = "run as an account or token without admin on this repository";
 
@@ -583,6 +590,10 @@ function pushIdentityCheck(deps: PreflightDeps, repo: RepoRef): { bound: boolean
   const kinds = new Set<string>();
   for (const [index, facts] of pushUrls.entries()) {
     const which = pushUrls.length === 1 ? "the push URL" : `push URL ${index + 1} of ${pushUrls.length}`;
+    // Any kind, the proxy included: with no config read, no header or helper is proven absent.
+    if (facts.configUnreadable) {
+      return unbound(`configuration unreadable: git's configuration for ${which} could not be read, so its identity is not proven`, CONFIG_FIX);
+    }
     if (facts.authorizationHeader) {
       return unbound(`an Authorization http.extraHeader applies to ${which}, so git pushes as that header's credential`, HEADER_FIX);
     }

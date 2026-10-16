@@ -260,6 +260,21 @@ describe("stamity gate preflight and scan --text", () => {
       expect(code).toBe(0);
     });
 
+    it("refuses as configuration unreadable, not as a header, where git cannot read the push's configuration (build/73)", async () => {
+      const repo = await seedRepo();
+      protectedRepo();
+
+      // A count with no key names a pair git refuses, so the config read fails.
+      const { code, doc } = await gate(repo, PREFLIGHT, { GIT_CONFIG_COUNT: "1" });
+      const check = (doc["checks"] as { id: string; state: string; evidence: string }[]).find((entry) => entry.id === "direct-push");
+
+      expect(code).toBe(1);
+      expect(check?.state).toBe("unknown");
+      expect(check?.evidence).toContain("configuration unreadable");
+      expect(check?.evidence).not.toContain("Authorization");
+      expect(rest.calls).toEqual([]);
+    });
+
     it.each([
       ["a second push URL over ssh", (repo: string) => {
         git(repo, ["remote", "set-url", "--add", "--push", "origin", "https://github.com/o/r.git"]);
@@ -331,7 +346,7 @@ describe("stamity gate preflight and scan --text", () => {
         git(repo, ["config", "--add", `credential.${host}.helper`, GH_HELPER]);
       }
 
-      expect((await facts(repo)).pushUrls).toEqual([{ url: "https://github.com/o/r.git", helpers: [GH_HELPER], authorizationHeader: false }]);
+      expect((await facts(repo)).pushUrls).toEqual([{ url: "https://github.com/o/r.git", helpers: [GH_HELPER], authorizationHeader: false, configUnreadable: false }]);
     });
 
     it("applies a URL-scoped helper and header only to the URLs they name", async () => {
@@ -344,8 +359,8 @@ describe("stamity gate preflight and scan --text", () => {
       const { pushUrls } = await facts(repo);
 
       expect(pushUrls).toEqual([
-        { url: "https://github.com/o/r.git", helpers: [GH_HELPER, OTHER_HELPER], authorizationHeader: true },
-        { url: "https://github.com/o/r.git.other", helpers: [GH_HELPER], authorizationHeader: false },
+        { url: "https://github.com/o/r.git", helpers: [GH_HELPER, OTHER_HELPER], authorizationHeader: true, configUnreadable: false },
+        { url: "https://github.com/o/r.git.other", helpers: [GH_HELPER], authorizationHeader: false, configUnreadable: false },
       ]);
     });
 
@@ -374,16 +389,18 @@ describe("stamity gate preflight and scan --text", () => {
       const file = await facts(repo, { GIT_CONFIG_GLOBAL: global });
       const none = await facts(repo, { GIT_CONFIG_COUNT: "0" });
 
-      expect(pairs.pushUrls).toEqual([{ url: "https://github.com/o/r.git", helpers: [GH_HELPER, OTHER_HELPER], authorizationHeader: false }]);
-      expect(file.pushUrls).toEqual([{ url: "https://github.com/o/r.git", helpers: [GH_HELPER], authorizationHeader: true }]);
-      expect(none.pushUrls).toEqual([{ url: "https://github.com/o/r.git", helpers: [GH_HELPER], authorizationHeader: false }]);
+      expect(pairs.pushUrls).toEqual([{ url: "https://github.com/o/r.git", helpers: [GH_HELPER, OTHER_HELPER], authorizationHeader: false, configUnreadable: false }]);
+      expect(file.pushUrls).toEqual([{ url: "https://github.com/o/r.git", helpers: [GH_HELPER], authorizationHeader: true, configUnreadable: false }]);
+      expect(none.pushUrls).toEqual([{ url: "https://github.com/o/r.git", helpers: [GH_HELPER], authorizationHeader: false, configUnreadable: false }]);
     });
 
-    it("places no helper where git cannot read the push's configuration", async () => {
+    it("reports the configuration unreadable, with no helper and no header, where git cannot read it (build/73)", async () => {
       const repo = await seedRepo();
 
       // A count with no key names a pair git refuses, so the read fails.
-      expect((await facts(repo, { GIT_CONFIG_COUNT: "1" })).pushUrls[0]?.helpers).toBeNull();
+      expect((await facts(repo, { GIT_CONFIG_COUNT: "1" })).pushUrls).toEqual([
+        { url: "https://github.com/o/r.git", helpers: null, authorizationHeader: false, configUnreadable: true },
+      ]);
     });
 
     it("gives no fetch URL and no push URL where origin is absent", async () => {
