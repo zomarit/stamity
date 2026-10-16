@@ -3506,7 +3506,7 @@ function placesOf(command, cwd) {
 }
 
 /**
- * The lines a command runs, as u6's verdicts read them (review/193): sh -c's script, eval's words, PowerShell's command
+ * The lines a command runs, as the push verdicts read them: sh -c's script, eval's words, PowerShell's command
  * string, cmd /c or /k's rest, each git rebase exec line (git's abbreviations and clusters too) and git bisect run's
  * command, so every line the verdicts read for a push is read here for a place. An entry past the line's end is no text.
  */
@@ -3710,7 +3710,7 @@ function decide() {
   // Where the call runs: the payload's working directory (relative to the root), else the root.
   const cwd = typeof payload.cwd === "string" && payload.cwd !== "" ? resolve(root, payload.cwd) : root;
   // The PowerShell tool's text is PowerShell's command string, so the verdicts read it as one too, its backslash a
-  // plain character and its backtick the escape (review/194), beside the text as it stands.
+  // plain character and its backtick the escape, beside the text as it stands.
   const texts = /^powershell$/i.test(payload.tool_name ?? "") ? [command, "pwsh -Command '" + command.replaceAll("'", "'\\''") + "'"] : [command];
   for (const ctx of contextsOf(command, cwd)) {
     for (const text of texts) {
