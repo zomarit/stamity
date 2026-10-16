@@ -2202,9 +2202,31 @@ describe("SECURITY.md", () => {
       ]) {
         expect(residuals.toLowerCase(), `the cloud section does not name: ${gap}`).toContain(gap.toLowerCase());
       }
-      expect(residuals).toMatch(/not covered by the unattended rules/);
-      // The editor's workspace file and every folder's settings and tasks files are held, no gap (build/77, review/186).
+      // The nested lines both verdicts read, and gh's create-and-push alias, are stated as refused, never as gaps
+      // again; what the code still passes is listed as the gaps the unattended rules do not cover, the two forms a
+      // round in flight closes marked as being closed, and the config-named program beside the respelling residual.
+      expect(residuals).toContain("Gaps the unattended rules do not cover:");
+      expect(residuals).toContain("Lines that run inside another line are read as their own by both verdicts");
+      expect(residuals).toContain("`gh repo new --push`, is refused in an unattended run");
+      for (const stale of ["are not read by the always-on verdict", "is not read by the unattended rule", "Two gaps are not covered"]) {
+        expect(flat, `SECURITY.md says again: ${stale}`).not.toContain(stale);
+      }
+      for (const named of [
+        "a PowerShell encoded command (`-EncodedCommand`)",
+        "a line another command pipes into `iex`",
+        "a git named by a Windows path inside a PowerShell payload",
+        "a directory change inside a `cmd /c` or `/k` line",
+        "Programs the repository's configuration names",
+        "no reading of one command line closes this",
+        "`git -c core.fsmonitor=… status`",
+      ]) {
+        expect(residuals, `the cloud section does not name: ${named}`).toContain(named);
+      }
+      expect(residuals.match(/is open at this writing and is being closed/g)?.length).toBe(2);
+      // The editor's workspace file and every folder's settings and tasks files are held, no gap (build/77, review/186),
+      // and every folder's editor MCP-server file with them.
       expect(residuals).toContain("every folder's editor settings and tasks files with their");
+      expect(residuals).toContain("every folder's editor MCP-server");
       expect(flat, "SECURITY.md says again the editor files are not held").not.toMatch(/folder-open task are not held/);
     });
 
@@ -2373,6 +2395,17 @@ describe("docs/security-mapping.md", () => {
       expect(heading.trim().length, "a surface heading is empty").toBeGreaterThan(0);
     }
     expect(text, "the mapping page states no gaps section").toMatch(/^## Gaps/m);
+  });
+
+  // The guard's row and its gap state the nested lines and gh's create-and-push alias as read and refused, as
+  // SECURITY.md does, and name the config-named program beside the respelling residual.
+  it("states the guard's nested lines as read, not as gaps", () => {
+    const flat = text.replace(/\s+/g, " ");
+    expect(flat).not.toContain("and the two they do not, PowerShell's command wrappers");
+    expect(flat).not.toContain("PowerShell's command wrappers and gh's alias for the create-and-push form are not");
+    expect(flat).toContain("are read as lines of their own, and gh's alias for the create-and-push form is refused");
+    expect(flat).toContain("a git builtin can run a program the repository's own configuration names");
+    expect(flat).toContain("every folder's editor settings, tasks and MCP-server files, are held");
   });
 
   it("pins every catalogue it maps to an edition", () => {

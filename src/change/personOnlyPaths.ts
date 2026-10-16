@@ -69,10 +69,12 @@ export const PERSON_ONLY_PATHS: readonly string[] = [
   ".cursorrules",
   ".github/copilot-instructions.md",
   ".github/instructions/**",
-  // MCP-server configuration: an approved server starts a process in every later session.
+  // MCP-server configuration: an approved server starts a process in every later session. The editor's copy is held
+  // in every folder, since a multi-root workspace reads each listed folder's own, as it does the settings and tasks
+  // files above.
   ".mcp.json",
   ".cursor/mcp.json",
-  ".vscode/mcp.json",
+  "**/.vscode/mcp.json",
   // Agent, command and skill definitions are the instructions later runs follow: every tree the four clients read
   // (Stamity's emitted content roots, `src/manifest/ownedPaths.ts`, and the trees the clients read beside them),
   // and Cursor's guard scripts beside its held `hooks.json`.
