@@ -491,19 +491,21 @@ describe("st-unattended — the build's signed-off decisions", () => {
     expect(await flat()).toContain("lands each board write it would make as a morning-list row");
   });
 
-  // review/45: `/st-pr-resolve` runs neither the ready check nor `run start` (its input is the pull
-  // request's threads; its branch is the pull request's head). review/80: every `/st-debug` route skips
-  // the ready check, since `st-debug.md` takes the entry at `run start`, before any route is chosen.
-  it("carves /st-pr-resolve out of run start and both it and every /st-debug route out of the ready check", async () => {
+  // review/45: `/st-pr-resolve` runs no ready check (its input is the pull request's threads; its
+  // branch is the pull request's head). review/225: it runs `run start` once that head is checked out,
+  // so origin is pinned, not first. review/80: every `/st-debug` route skips the ready check, since
+  // `st-debug.md` takes the entry at `run start`, before any route is chosen.
+  it("runs /st-pr-resolve's run start after its checkout and carves it and every /st-debug route out of the ready check", async () => {
     const text = await flat();
     expect(text).toContain(
-      "Every touchpoint that pushes, `/st-pr-resolve` aside, first runs `stamity run start --run <id> --json`",
+      "Every touchpoint that pushes, `/st-pr-resolve` aside (below), first runs `stamity run start --run <id> --json`",
     );
     expect(text).toContain("`/st-debug`, on every route, and `/st-pr-resolve` skip it: neither runs from a plan.");
     expect(text).not.toContain("`/st-debug`'s user route");
     expect(text).toContain(
-      "`/st-pr-resolve` runs no `stamity plan check` and no `stamity run start`: its record, `<UTC date>_pr-resolve-<n>-r<round>`, opens after the fetch, `Branch:` its pull request's head.",
+      "`/st-pr-resolve` runs no `stamity plan check`: its record, `<UTC date>_pr-resolve-<n>-r<round>`, opens after the fetch, `Branch:` its pull request's head, and `stamity run start` runs once that head is checked out on `Base:`.",
     );
+    expect(text).not.toContain("no `stamity run start`");
   });
 
   // review/48: an in-session hand-off carries no persisted plan, so unattended `/st-pr-resolve`

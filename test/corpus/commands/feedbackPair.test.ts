@@ -1611,9 +1611,10 @@ describe("feedback pair — unattended (REQ-FLOW-097, REQ-FLOW-100, REQ-CTX-012)
     );
     expect(row).not.toContain("STAMITY_UNATTENDED=1");
     // `review/45`: the skill's `/st-pr-resolve` entry, with no ready check (the threads are the
-    // input, by reference) and no `run start` (which would name a branch of its own).
+    // input, by reference). `review/225`: `run start` runs only once the head is checked out, on a
+    // branch that is not the default, so it keeps that branch and only pins origin.
     expect(row).toContain(
-      "It invokes the `st-unattended` skill by name and follows its `/st-pr-resolve` entry, which runs no `stamity plan check` and no `stamity run start`: the pre-flight names this pull request as `--item <owner>/<repo>#<n>` before the first fetch, and `Branch:` and `Base:` come only from the pull request's first metadata read, `Branch:` its head ref and `Base:` its head sha.",
+      "It invokes the `st-unattended` skill by name and follows its `/st-pr-resolve` entry, which runs no `stamity plan check` and runs `stamity run start` only once the head is checked out: the pre-flight names this pull request as `--item <owner>/<repo>#<n>` before the first fetch, and `Branch:` and `Base:` come only from the pull request's first metadata read, `Branch:` its head ref and `Base:` its head sha.",
     );
     // `review/50`, `review/52`: an author-chosen ref outside the allowlist, the default branch, or
     // a local branch holding commits the head lacks is refused, never reset.
@@ -1638,6 +1639,18 @@ describe("feedback pair — unattended (REQ-FLOW-097, REQ-FLOW-100, REQ-CTX-012)
     expect(row).toContain(
       'The head is then checked out locally under the `Branch:` name and must land on `Base:` — in a REST-only session `git checkout -B "<ref>" "<sha>"`, in place of `pr-resolve-<n>`.',
     );
+    // `review/225`: only `run start` writes `origin.json`, and every checkpoint and `run end` refuse an
+    // unattended run without it, so the round runs it after the checkout and before the first fix; a
+    // failed one takes the refusal exit, never a push.
+    expect(row).toContain(
+      "Then, before the first fix, `stamity run start --run <its id> --json` runs on that branch: it is not the default branch, so `run start` keeps it and pins origin's repository in the run folder's `origin.json`, which every `run checkpoint` and `run end` checks before it stages.",
+    );
+    expect(row).toContain(
+      "A `run start` that exits other than 0 takes the refusal exit above: it pushes nothing, ends as one scanned comment on this pull request and rewrites the record's `Status:` to `closed <date> (refused: <reason>)`.",
+    );
+    expect(row).not.toContain("no `stamity run start`");
+    expect(row.indexOf("The head is then checked out")).toBeLessThan(row.indexOf("`stamity run start --run <its id> --json` runs"));
+    expect(row.indexOf("`stamity run start --run <its id> --json` runs")).toBeLessThan(row.indexOf("Every push is `stamity run checkpoint"));
     // Added 2026-10-16 (run 2026-10-15_cloud-runs, the whole-branch corpus fix round 1; ledger row
     // review/204, signed off 03:12Z): `pull/<n>/head` updates no origin ref, so `run checkpoint`
     // and `run end`, which read `HEAD --not --remotes=origin`, counted the pull request's own

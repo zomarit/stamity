@@ -26,10 +26,10 @@ step):
 Governing text — the same file, "Other touchpoints" (the `/st-pr-resolve` bullet):
 
 ```text
-- `/st-pr-resolve` runs no `stamity plan check` and no `stamity run start`: its record,
-  `<UTC date>_pr-resolve-<n>-r<round>`, opens after the fetch, `Branch:` its pull request's head. It fixes only the
-  mechanical class and sends nothing to `/st-work`: any other finding is deferred as `needs a planned run`, and one no
-  `admin` or `write` author's own comment asks for as `non-write author`, each a morning-list row, never fixed.
+- `/st-pr-resolve` runs no `stamity plan check`: its record, `<UTC date>_pr-resolve-<n>-r<round>`, opens after the fetch,
+  `Branch:` its pull request's head, and `stamity run start` runs once that head is checked out on `Base:`. It fixes only
+  the mechanical class and sends nothing to `/st-work`: any other finding is deferred as `needs a planned run`, and one
+  no `admin` or `write` author's own comment asks for as `non-write author`, each a morning-list row, never fixed.
 ```
 
 Governing text — `content/commands/st-pr-resolve.md`, the permission read:

@@ -3647,16 +3647,23 @@ Given `Mode: unattended`, When another touchpoint runs, Then `/st-quick` refuses
 `Branch:` its pull request's head) take the unattended entry without the ready check — `Mode:`, `Branch:`, `Base:`, the
 `st-unattended` skill, the pre-flight before the first fetch or push, pushes only through `stamity run checkpoint|end`,
 every reply posted from a file `gate scan --text` passed, and no exit leaving the record in progress
-(`content/commands/st-debug.md:56-68`; `content/commands/st-pr-resolve.md:54`). `/st-pr-resolve` runs no `run start`,
-fetches its pull request's head branch by name into origin's remote-tracking ref, so the run verbs' history check reads
-only the commits the round adds, fixes only the mechanical class and sends nothing to `/st-work`, every other finding
-deferred as `needs a planned run`. Unattended `/st-debug` stops after the root cause and hands nothing to `/st-work`: it
+(`content/commands/st-debug.md:56-68`; `content/commands/st-pr-resolve.md:54`). `/st-pr-resolve` fetches its pull
+request's head branch by name into origin's remote-tracking ref, so the run verbs' history check reads only the commits
+the round adds, runs `run start` once that head is checked out on `Base:` and before the first fix, fixes only the
+mechanical class and sends nothing to `/st-work`, every other finding deferred as `needs a planned run`. Unattended `/st-debug` stops after the root cause and hands nothing to `/st-work`: it
 pushes its record, the ranked hypotheses and the failing test when one was written, and the morning list carries the fix
 as `needs a planned run`; a user-route stop strips its instrumentation, takes the skill's ending and returns
 `BLOCKED_DEPENDENCY` (`content/commands/st-debug.md:134-136`, `:108-115`).
 `/st-rework` passes the mode to `/st-work`; `/st-board pickup` carries it, keeps `preview: stop`, its board writes land
 as morning-list rows (`content/skills/st-unattended/SKILL.md:153-166`).
 
+- **As built, where the delta differed:** the delta had `/st-pr-resolve` run no `run start`, so no origin pin would be
+  written and its every checkpoint and `run end` would refuse as `origin not pinned`. Its Unattended row runs
+  `stamity run start --run <its id> --json` once the head is checked out on `Base:` and before the first fix
+  (`content/commands/st-pr-resolve.md:54`). On that branch, never the default since the row refuses a default-branch
+  head, `run start` keeps the branch and writes the run folder's `origin.json` (`src/cli/commands/run.ts:255-262`). It
+  still runs no `stamity plan check`, and a `run start` that fails takes the row's refusal exit: nothing pushed, one
+  scanned comment on the pull request, the record closed as refused.
 - **Proof:** `test/corpus/commands/lightTrio.test.ts`, `test/corpus/commands/feedbackPair.test.ts` ("feedback pair —
   unattended"), `test/corpus/commands/board.test.ts`, `test/corpus/skills/unattended.test.ts`.
 
