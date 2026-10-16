@@ -369,6 +369,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			nested
 		};
 	}
+	const assigned = [];
 	function commandsOf(text, depth, pwsh) {
 		const { segments, nested } = splitLine(text, true, pwsh);
 		const commands = pwsh ? commandsOf(text, depth, false) : [];
@@ -378,13 +379,16 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			while (k < words.length && line === null) {
 				const word = words[k] ?? "";
 				const runner = `${programName(word)} ${words[k + 1] ?? ""}`;
-				if (ASSIGNMENT.test(word) || KEYWORDS.has(word)) k += 1;
-				else if (WRAPPERS.has(programName(word)) || RUNNERS.has(runner)) {
+				if (ASSIGNMENT.test(word) || KEYWORDS.has(word)) {
+					if (ASSIGNMENT.test(word)) assigned.push(word);
+					k += 1;
+				} else if (WRAPPERS.has(programName(word)) || RUNNERS.has(runner)) {
 					const [short, long, lineOptions] = RUNNERS.has(runner) ? RUNNER_OPTIONS : WRAPPER_OPTIONS.get(programName(word)) ?? NO_OPTIONS;
 					k += RUNNERS.has(runner) ? 2 : 1;
 					while (k < words.length) {
 						const option = words[k] ?? "";
 						if (ASSIGNMENT.test(option)) {
+							assigned.push(option);
 							k += 1;
 							continue;
 						}
@@ -622,7 +626,8 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		...ctx.defaultBranches.map(branch)
 	]);
 	const onDefault = ctx.currentBranch !== null && defaults.has(branch(ctx.currentBranch));
-	const tagNames = new Set(ctx.tags.map((tag) => tag.replace(/^refs\/tags\//i, "").toLowerCase()));
+	let tagNames = null;
+	const isTagName = (name) => (tagNames ??= new Set(ctx.tags.map((tag) => tag.replace(/^refs\/tags\//i, "").toLowerCase()))).has(name);
 	const deny = (rule, what) => ({
 		deny: true,
 		rule,
@@ -705,7 +710,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		const refspecs = named.length > 0 ? named : configured;
 		if (force || refspecs.some((spec) => spec.startsWith("+"))) return deny("force-push", "A force push");
 		if (remove || refspecs.some((spec) => spec.length > 1 && spec.startsWith(":"))) return deny("push-delete", "A remote branch deletion");
-		const namesTag = (side) => side !== "" && (/^(refs\/)?tags\//i.test(side) || tagNames.has(side.toLowerCase()));
+		const namesTag = (side) => side !== "" && (/^(refs\/)?tags\//i.test(side) || isTagName(side.toLowerCase()));
 		const sides = (spec) => {
 			const bare = spec.replace(/^\+/, "");
 			const colon = bare.indexOf(":");
@@ -785,7 +790,18 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 	}
 	function ghVerdict(cmd) {
 		const [group, sub] = ghPositionals(cmd);
+		const flag = (long, short, valued) => cmd.some((word) => {
+			if (word === long || word.startsWith(`${long}=`)) return !/^(?:false|f|0)$/i.test(word.slice(long.length + 1));
+			if (!/^-[^-]/.test(word)) return false;
+			for (const letter of word.slice(1)) {
+				if (letter === short) return true;
+				if (valued.includes(letter)) return false;
+			}
+			return false;
+		});
 		if (group === "pr" && sub === "merge") return deny("pr-merge", "Merging a pull request (`gh pr merge`)");
+		if (group === "pr" && sub === "close" && flag("--delete-branch", "d", "c")) return deny("push-delete", "A remote branch deletion (`gh pr close --delete-branch`)");
+		if (group === "pr" && sub === "review" && flag("--approve", "a", "bF")) return deny("pr-merge", "Approving a pull request review (`gh pr review --approve`)");
 		if (group === "pr" && sub === "ready") return deny("pr-ready", "Marking a pull request ready (`gh pr ready`)");
 		if (group === "release" && sub !== void 0 && ![
 			"list",
@@ -810,6 +826,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		const fieldAttached = gh ? /^(-[fF]|--field=|--raw-field=)/ : /^(-d|--(data(-raw|-binary|-ascii|-urlencode)?|json|post-data|body-data)=)/;
 		const bodyFields = [];
 		const queries = [];
+		let hiddenBody = false;
 		const add = (key, value, typed) => {
 			const shown = typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? String(value) : null;
 			const placed = typed && shown !== null ? shown === "null" ? null : fill(shown) : shown;
@@ -818,6 +835,16 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		};
 		for (let k = 1; k < cmd.length; k += 1) {
 			const word = cmd[k] ?? "";
+			const named = word.split("=")[0] ?? "";
+			if (gh ? named === "--input" : [
+				"-F",
+				"-T",
+				"--upload-file",
+				"--form",
+				"--form-string",
+				"--post-file",
+				"--body-file"
+			].includes(named) || /^-[FT]./.test(word) || /^-[A-Za-z]{2,}$/.test(word) && /[FT]/.test(word.split("X")[0] ?? "")) hiddenBody = true;
 			let value = fieldAttached.exec(word)?.[0];
 			if (fieldFlag.test(word)) {
 				value = cmd[k + 1];
@@ -827,12 +854,16 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			if (gh) {
 				const eq = value.indexOf("=");
 				if (eq > 0) add(value.slice(0, eq), value.slice(eq + 1), /^(-F|--field)/.test(word));
+				if (/^(-F|--field)/.test(word) && value.slice(eq + 1).startsWith("@")) hiddenBody = true;
 				continue;
 			}
 			try {
 				const body = JSON.parse(value);
 				if (typeof body === "object" && body !== null && !Array.isArray(body)) for (const [key, field] of Object.entries(body)) add(key, field, false);
-			} catch {}
+				else hiddenBody = true;
+			} catch {
+				hiddenBody = true;
+			}
 		}
 		const fields = (key) => bodyFields.filter(([name]) => name === key).map(([, value]) => value);
 		const landsOnDefault = (values) => values.length === 0 || values.some((value) => value === null || value === "" || defaults.has(branch(value)));
@@ -883,6 +914,11 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			if (/^graphql$/i.test(path)) {
 				if (/\b(mergePullRequest|enablePullRequestAutoMerge)\b/.test(text)) return deny("pr-merge", "A GraphQL merge");
 				if (/\bmarkPullRequestReadyForReview\b/.test(text)) return deny("pr-ready", "A GraphQL ready-for-review");
+				if (/\b(addPullRequestReview|submitPullRequestReview)\b/.test(text)) {
+					const reviews = [...calls("addPullRequestReview", "event"), ...calls("submitPullRequestReview", "event")];
+					const variables = queries.some((query) => mask(query).includes("$"));
+					if (reviews.length === 0 || reviews.some((events) => events.length === 0 && variables || events.some((event) => event === null || /^approve$/i.test(event)))) return deny("pr-merge", "A GraphQL review approval, or a review whose event the line cannot show");
+				}
 				if (/\bcreateCommitOnBranch\b/.test(text) && callsLand("createCommitOnBranch", "branchName")) return deny("push-default", "A GraphQL commit to the default branch");
 				if (/\bmergeBranch\b/.test(text) && callsLand("mergeBranch", "base")) return deny("push-default", "A GraphQL merge into the default branch");
 				if (/\bupdateRefs?\b/.test(text)) {
@@ -901,6 +937,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			}
 			if (!write) continue;
 			if (/^pulls\/[^/]+\/merge(\/|$)/i.test(path) || /(^|\/)merge-async(\/|$)/i.test(path)) return deny("pr-merge", `A REST merge (${shown})`);
+			if (/^pulls\/[^/]+\/reviews(\/[^/]+\/events)?$/i.test(path) && (hiddenBody || fields("event").some((event) => event === null || /^approve$/i.test(event.trim())))) return deny("pr-merge", `A REST review approval, or a review whose body the line cannot show (${shown})`);
 			if (/^branches\/.+\/protection(\/|$)/i.test(path) || /^rulesets(\/|$)/i.test(path)) return deny("protection", `A protection or ruleset write (${shown})`);
 			if (/^(repos\/[^/]+\/[^/]+|repositories\/[^/]+)$/i.test(path) && (method === "PATCH" || method === "DELETE")) return deny("protection", `A repository settings write or deletion (${shown})`);
 			if (/^branches\/.+\/rename$/i.test(path)) return deny("protection", `A branch rename (${shown})`);
@@ -1270,6 +1307,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 			nested
 		};
 	}
+	const assigned = [];
 	function commandsOf(text, depth, pwsh) {
 		const { segments, nested } = splitLine(text, true, pwsh);
 		const commands = pwsh ? commandsOf(text, depth, false) : [];
@@ -1279,13 +1317,16 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 			while (k < words.length && line === null) {
 				const word = words[k] ?? "";
 				const runner = `${programName(word)} ${words[k + 1] ?? ""}`;
-				if (ASSIGNMENT.test(word) || KEYWORDS.has(word)) k += 1;
-				else if (WRAPPERS.has(programName(word)) || RUNNERS.has(runner)) {
+				if (ASSIGNMENT.test(word) || KEYWORDS.has(word)) {
+					if (ASSIGNMENT.test(word)) assigned.push(word);
+					k += 1;
+				} else if (WRAPPERS.has(programName(word)) || RUNNERS.has(runner)) {
 					const [short, long, lineOptions] = RUNNERS.has(runner) ? RUNNER_OPTIONS : WRAPPER_OPTIONS.get(programName(word)) ?? NO_OPTIONS;
 					k += RUNNERS.has(runner) ? 2 : 1;
 					while (k < words.length) {
 						const option = words[k] ?? "";
 						if (ASSIGNMENT.test(option)) {
+							assigned.push(option);
 							k += 1;
 							continue;
 						}
@@ -1545,8 +1586,105 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 		"sync"
 	])]]);
 	const CONFIG_KEYS = /^(?:color\..+|advice\..+|core\.quotepath|init\.defaultbranch|user\.name|user\.email)$/i;
-	const CONFIG_ENVIRONMENT = /\bGIT_CONFIG_(?:COUNT|KEY_\d+|PARAMETERS)\s*=/i;
-	for (const cmd of commandsOf(command, 0, false)) {
+	const CONFIG_NAMES = "GIT_CONFIG_(?:(?:COUNT|PARAMETERS|GLOBAL|SYSTEM)\\b|(?:KEY|VALUE)_\\d*\\b|(?=[$`{(%]))";
+	const CONFIG_ENVIRONMENT = new RegExp(`\\b${CONFIG_NAMES}`, "i");
+	const PROGRAM_VARIABLES = "GIT_EDITOR|GIT_SEQUENCE_EDITOR|GIT_SSH_COMMAND|GIT_SSH|GIT_EXTERNAL_DIFF|GIT_ASKPASS|GIT_PAGER|GIT_PROXY_COMMAND|GIT_EXEC_PATH";
+	const GIT_VARIABLE = `(?:(?:${PROGRAM_VARIABLES})\\b|${CONFIG_NAMES})`;
+	const SETS_WORD = new RegExp(`^${GIT_VARIABLE}`, "i");
+	const SETTERS = /* @__PURE__ */ new Set([
+		"export",
+		"declare",
+		"typeset",
+		"set"
+	]);
+	const SETS_TEXT = new RegExp(`\\$\\{?env:${GIT_VARIABLE}\\}?\\s*(?:[-+*/%]|\\?\\?)?=|\\b(?:Set-Item|New-Item|si|ni)\\b[^;|&\\n]*?(?<![\\w$\\{])env:\\\\?${GIT_VARIABLE}|\\[(?:System\\.)?Environment\\]::SetEnvironmentVariable\\(\\s*['"]${GIT_VARIABLE}`, "i");
+	const PROGRAM_WORD = new RegExp(`^(?:${PROGRAM_VARIABLES})=`, "i");
+	const PROGRAM_TEXT = new RegExp(`\\b(?:${PROGRAM_VARIABLES})\\}?\\s*=`, "i");
+	const REMOTE_WRITES = /* @__PURE__ */ new Set([
+		"add",
+		"set-url",
+		"rename",
+		"remove",
+		"rm",
+		"set-head",
+		"set-branches"
+	]);
+	function writesRemote(args) {
+		const positionals = [];
+		let write = false;
+		let read = false;
+		let edit = false;
+		let rename = false;
+		for (let j = 0; j < args.length; j += 1) {
+			const arg = args[j] ?? "";
+			const name = (arg.split("=")[0] ?? "").toLowerCase();
+			if (arg === "--") {
+				positionals.push(...args.slice(j + 1));
+				break;
+			}
+			if ([
+				"--add",
+				"--replace-all",
+				"--unset",
+				"--unset-all",
+				"--rename-section",
+				"--remove-section"
+			].includes(name)) {
+				write = true;
+				rename ||= name === "--rename-section";
+			} else if (name === "--edit") edit = true;
+			else if ([
+				"--get",
+				"--get-all",
+				"--get-regexp",
+				"--get-urlmatch",
+				"--get-color",
+				"--get-colorbool",
+				"--list"
+			].includes(name)) read = true;
+			else if ([
+				"--file",
+				"--blob",
+				"--type",
+				"--value",
+				"--comment",
+				"--default",
+				"--url"
+			].includes(name)) {
+				if (!arg.includes("=")) j += 1;
+			} else if (/^-[^-]/.test(arg)) for (let c = 1; c < arg.length; c += 1) {
+				const letter = arg[c] ?? "";
+				if (letter === "e") edit = true;
+				if (letter === "l") read = true;
+				if (letter === "f" || letter === "t") {
+					if (c === arg.length - 1) j += 1;
+					break;
+				}
+			}
+			else if (!arg.startsWith("-")) positionals.push(arg);
+		}
+		const first = (positionals[0] ?? "").toLowerCase();
+		const sub = [
+			"get",
+			"list",
+			"set",
+			"unset",
+			"rename-section",
+			"remove-section",
+			"edit"
+		].includes(first) ? first : "";
+		if (edit || sub === "edit") return true;
+		const rest = sub === "" ? positionals : positionals.slice(1);
+		const keys = rest.slice(0, rename || sub === "rename-section" ? 2 : 1);
+		return (write || [
+			"set",
+			"unset",
+			"rename-section",
+			"remove-section"
+		].includes(sub) || sub === "" && !read && rest.length > 1) && keys.some((key) => /^(?:remote|url)(\.|$)/i.test(key));
+	}
+	const commands = commandsOf(command, 0, false);
+	for (const cmd of commands) {
 		const program = cmd[0] ?? "";
 		if (program === "git") {
 			const { sub, args, config } = gitParts(cmd);
@@ -1566,7 +1704,11 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 			const globals = cmd.slice(1, cmd.length - args.length - 1);
 			const configEnv = globals.flatMap((word, index) => word === "--config-env" ? [globals[index + 1] ?? ""] : word.startsWith("--config-env=") ? [word.slice(13)] : []);
 			if ([...config, ...configEnv].some((pair) => !CONFIG_KEYS.test((pair.split("=")[0] ?? "").trim()))) return deny("A git call setting a configuration key outside the display and identity keys (`-c <key>=…`)");
-			if (CONFIG_ENVIRONMENT.test(command)) return deny("A git call on a line that sets git's configuration through the environment (`GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_<n>`, `GIT_CONFIG_PARAMETERS`)");
+			if (CONFIG_ENVIRONMENT.test(command) || [...assigned, ...commands.flat()].some((word) => CONFIG_ENVIRONMENT.test(word))) return deny("A git call on a line that names git's configuration variables (`GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_<n>`, `GIT_CONFIG_VALUE_<n>`, `GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM`)");
+			if (PROGRAM_TEXT.test(command) || [...assigned, ...commands.flat()].some((word) => PROGRAM_WORD.test(word))) return deny("A git call on a line that sets a program git runs through the environment (`GIT_EDITOR`, `GIT_SSH_COMMAND`, `GIT_EXEC_PATH`, …)");
+			const remoteForm = sub === "remote" ? (args.find((word) => !word.startsWith("-")) ?? "").toLowerCase() : "";
+			if (REMOTE_WRITES.has(remoteForm)) return deny(`A \`git remote ${remoteForm}\`, a write of a remote`);
+			if (sub === "config" && writesRemote(args)) return deny("A `git config` write of a `remote.*` or `url.*` key");
 			const forms = READ_FORMS.get(sub);
 			if (forms !== void 0) {
 				const form = (args.find((word) => !word.startsWith("-")) ?? "").toLowerCase();
@@ -1579,7 +1721,14 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 		let http = program === "curl" || program === "wget";
 		if (program === "gh") {
 			const [group, sub] = ghPositionals(cmd);
-			if (group === "pr" && (sub === "create" || sub === "new" || sub === "edit")) return deny(`\`gh pr ${sub}\``);
+			if (group === "pr" && [
+				"create",
+				"new",
+				"edit",
+				"close",
+				"reopen",
+				"update-branch"
+			].includes(sub ?? "")) return deny(`\`gh pr ${sub}\``);
 			if (group === "repo" && sub === "sync") return deny("`gh repo sync`");
 			if (group === "repo" && (sub === "create" || sub === "new") && cmd.some((word) => /^--push(=|$)/.test(word))) return deny(`\`gh repo ${sub} --push\``);
 			http = group === "api";
@@ -1590,6 +1739,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 			if (GRAPHQL_MOVES.test(cmd.join(" "))) return deny("A GraphQL mutation that moves a branch or a pull request");
 		} else if (write && MOVES.some((pattern) => pattern.test(path))) return deny(`A REST write that moves a branch or a pull request (${method} ${path})`);
 	}
+	if (assigned.some((word) => SETS_WORD.test(word)) || commands.some((cmd) => SETTERS.has(cmd[0] ?? "") && cmd.slice(1).some((word) => SETS_WORD.test(word) && (cmd[0] === "export" || word.includes("=")))) || SETS_TEXT.test(command)) return deny("A line that sets one of git's program or configuration variables (`GIT_EXEC_PATH`, `GIT_EDITOR`, `GIT_CONFIG_COUNT`, …), which the run verbs' own git reads,");
 	return { deny: false };
 };
 
@@ -1956,10 +2106,15 @@ function contextsOf(command, cwd) {
     const detached = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/i.test(head ?? "");
     const origin = dirs === null ? null : gitText(join(dirs.commonDir, "refs", "remotes", "origin", "HEAD"));
     const defaultBranches = origin !== null && origin.startsWith("ref: refs/remotes/origin/") ? [origin.slice(25)] : [];
+    let tags = null;
     contexts.set(key, {
       currentBranch: branch !== ".invalid" ? branch : detached ? null : (defaultBranches[0] ?? "main"),
       defaultBranches,
-      tags: dirs === null ? [] : localTags(dirs.commonDir),
+      // Read the first time the verdict asks, which only a push refspec does: no other call reads a tag.
+      get tags() {
+        tags ??= dirs === null ? [] : localTags(dirs.commonDir);
+        return tags;
+      },
     });
   }
   return [...contexts.values()];
@@ -2060,8 +2215,12 @@ function unattendedBy(root) {
 
 /** The shell command a payload carries; null when the call is not a shell call. */
 function shellCommand(payload) {
-  // Cursor's beforeShellExecution names the command at the top level.
-  if (typeof payload.command === "string" && payload.tool_name === undefined) return payload.command;
+  // Cursor's beforeShellExecution names the command at the top level and no tool: every such payload is a shell call,
+  // so one with no command string is one this guard cannot read, never one that is not a shell call.
+  if (payload.tool_name === undefined || payload.hook_event_name === "beforeShellExecution") {
+    if (typeof payload.command === "string") return payload.command;
+    throw Object.assign(new Error("no command"), { code: "NO_COMMAND" });
+  }
   if (!SHELL_TOOLS.has(payload.tool_name)) return null;
   const input = payload.tool_input;
   const command = input !== null && typeof input === "object" ? input.command : undefined;

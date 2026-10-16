@@ -130,7 +130,20 @@
       "Bash(gh repo rename:*)",
       "Bash(gh repo delete:*)",
       "Bash(gh repo archive:*)",
-      "Bash(gh repo transfer:*)"
+      "Bash(gh repo transfer:*)",
+      "mcp__github__merge_pull_request",
+      "mcp__github__push_files",
+      "mcp__github__create_or_update_file",
+      "mcp__github__delete_file",
+      "mcp__github__update_pull_request_branch",
+      "mcp__github__pull_request_review_write",
+      "mcp__github__create_pull_request_review",
+      "mcp__github__submit_pending_pull_request_review",
+      "mcp__github__update_pull_request",
+      "mcp__github__update_pull_request_state",
+      "mcp__github__update_pull_request_draft_state",
+      "mcp__github__create_branch",
+      "mcp__github__delete_repository"
     ]
   }
 }

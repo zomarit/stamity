@@ -29,11 +29,11 @@ than empty, `false` or `0` (`STAMITY_UNATTENDED=1` on a cloud environment, routi
 the variable, `--attended` beats the variable, and `--resume` is always attended. A client's cloud marker or `CI` in the
 environment means "cloud", never "unattended". A record head with no `Mode:` line reads attended unless the variable is
 set; then it governs, as the shell guard, the ask gate and the run verbs read it, and a `Mode: attended` head wins.
-Every touchpoint that pushes, `/st-pr-resolve` aside, first runs `stamity run start --run <id> --json`, then writes
-three head lines among the record's first 15, bare at column 0: `Mode: unattended`, `Branch: <the run's branch>` and
-`Base: <commit>`, the last two from its `branch` and `base`. `Mode:` is written once at Frame and never rewritten. An
-in-session hand-off to `/st-work` carries `run-mode: attended | unattended`, the caller's resolved mode, which wins
-over `/st-work`'s own reading of the variable; a hand-off read from disk carries `run-mode: attended`.
+Every touchpoint that pushes, `/st-pr-resolve` aside (below), first runs `stamity run start --run <id> --json`, then
+writes three head lines among the record's first 15, bare at column 0: `Mode: unattended`, `Branch: <the run's branch>`
+and `Base: <commit>`, the last two from its `branch` and `base`. `Mode:` is written once at Frame and never rewritten. An
+in-session hand-off to `/st-work` carries `run-mode: attended | unattended`, the caller's resolved mode, which wins over
+`/st-work`'s own reading of the variable; a hand-off read from disk carries `run-mode: attended`.
 
 ## Before Frame
 
@@ -103,9 +103,9 @@ spelled. Every exit pushes its record through the run verbs, closing in this ord
    and rule, never the value. The pull request's title is scanned like its body, a hit replaced with `Run <run-id>`.
 
 `run end` exits 0 with a pull request opened, updated or commented; exit 1 keeps its `notDone[]` (among them
-`Not done: draft PR not opened`) for the final message. A run whose CLI stops answering closes its record and
-ends on `Not done: run end not run — CLI unavailable`, never pushing by hand. Never a push to the default
-branch, a force push, a tag, a merge or ready-for-review: each is the person's call.
+`Not done: draft PR not opened`, and `Not done: origin changed` for a repointed origin) for the final message. A run
+whose CLI stops answering closes its record and ends on `Not done: run end not run — CLI unavailable`, never pushing by
+hand. Never a push to the default branch, a force push, a tag, a merge or ready-for-review: each is the person's call.
 
 ## The morning list
 
@@ -161,10 +161,10 @@ answers (unreadable counts as none); another's answers are not applied, and the 
   only after `stamity gate scan --text <file> --label reply` exits 0. Debug goes no further than the root cause and hands
   nothing to `/st-work`: it strips its instrumentation, pushes its record, the ranked hypotheses and any failing test
   written, and defers the fix as `needs a planned run`, a morning-list row; unreproduced, it returns `BLOCKED_DEPENDENCY`.
-- `/st-pr-resolve` runs no `stamity plan check` and no `stamity run start`: its record,
-  `<UTC date>_pr-resolve-<n>-r<round>`, opens after the fetch, `Branch:` its pull request's head. It fixes only the
-  mechanical class and sends nothing to `/st-work`: any other finding is deferred as `needs a planned run`, and one no
-  `admin` or `write` author's own comment asks for as `non-write author`, each a morning-list row, never fixed.
+- `/st-pr-resolve` runs no `stamity plan check`: its record, `<UTC date>_pr-resolve-<n>-r<round>`, opens after the fetch,
+  `Branch:` its pull request's head, and `stamity run start` runs once that head is checked out on `Base:`. It fixes only
+  the mechanical class and sends nothing to `/st-work`: any other finding is deferred as `needs a planned run`, and one
+  no `admin` or `write` author's own comment asks for as `non-write author`, each a morning-list row, never fixed.
 - `/st-rework` hands the mode to `/st-work` as `run-mode:`; `/st-board pickup` carries `run-mode:`, keeps
   `preview: stop` and `move: off`, and lands each board write it would make as a morning-list row.
 
