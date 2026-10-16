@@ -940,7 +940,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
  * Whether `command` steps around the run verbs while a run is unattended
  * (REQ-FLOW-120): any `git push` or `git subtree push`, `gh pr create` or `gh pr edit`, `gh repo sync` or
  * `gh repo create --push` (or its alias `gh repo new`), a git call defining an alias (`-c alias.<name>=…`) or
- * naming a subcommand that is not a git builtin (an alias, a computed name), and a `gh
+ * naming a subcommand that is not a git builtin (an alias, a computed name) outside the read and setup forms of
+ * `git lfs` (fetch, pull, install, ls-files, env, status) and `git submodule` (status, init, update, sync), and a `gh
  * api`, `curl` or `wget` write (POST, PATCH, PUT, DELETE) on a repository's
  * `pulls` or `pulls/<n>`, on `contents/…`, on `git/` refs or objects, or on
  * `merges`, with their GraphQL twins. A reply on `pulls/<n>/comments` or
@@ -1359,6 +1360,11 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
       "unpack-file unpack-objects update-index update-ref update-server-info upload-archive upload-archive--writer " +
       "upload-pack var verify-commit verify-pack verify-tag version whatchanged worktree write-tree subtree").split(" "),
   );
+  /** The read and setup forms of two subcommands that are no builtins, the only ones of theirs that pass (review/187). */
+  const READ_FORMS = new Map([
+    ["lfs", new Set(["fetch", "pull", "install", "ls-files", "env", "status"])],
+    ["submodule", new Set(["status", "init", "update", "sync"])],
+  ]);
 
   for (const cmd of commandsOf(command, 0)) {
     const program = cmd[0] ?? "";
@@ -1372,6 +1378,14 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
       // An alias, defined on the line or in the configuration, and a computed subcommand can run a push the line
       // does not show (u21's review, the 01:50Z sign-off): unattended, git runs only a builtin this verdict knows.
       if (config.some((pair) => /^alias\./i.test(pair))) return deny("A git call defining an alias (`-c alias.<name>=…`)");
+      // `git lfs` and `git submodule` pass in their read and setup forms; any other of theirs (`lfs push`,
+      // `submodule foreach`, which runs a line) is refused as an unknown subcommand is (review/187).
+      const forms = READ_FORMS.get(sub);
+      if (forms !== undefined) {
+        const form = (args.find((word) => !word.startsWith("-")) ?? "").toLowerCase();
+        if (!forms.has(form)) return deny(`A \`git ${sub}\` subcommand outside its read and setup forms`);
+        continue;
+      }
       if (sub !== "" && !GIT_BUILTINS.has(sub)) return deny("A git subcommand that is not a builtin this guard knows");
       continue;
     }

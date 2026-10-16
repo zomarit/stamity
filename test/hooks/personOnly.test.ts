@@ -630,6 +630,10 @@ describe("unattendedPushVerdict", () => {
     ["git $SUB origin feat/x"],
     ["git \"$(echo push)\" origin feat/x"],
     ["git-p origin feat/x"],
+    // `git lfs` and `git submodule` outside their read and setup forms (review/187): the LFS upload and a line run in
+    // every submodule.
+    ["git lfs push origin feat/x"],
+    ["git submodule foreach 'git push origin HEAD:refs/heads/x'"],
     // The MOVES rows with no pin before (review/110).
     ["gh api -X PUT repos/o/r/pulls/3/merge"],
     ["gh api -X POST repos/o/r/git/tags -f tag=v1 -f object=abc -f type=commit"],
@@ -687,6 +691,17 @@ describe("unattendedPushVerdict", () => {
     ["git --version"],
     ["git subtree split --prefix=dist -b split"],
     ["git subtree add -P push origin x"],
+    // The read and setup forms of `git lfs` and `git submodule` (review/187).
+    ["git lfs fetch origin"],
+    ["git lfs pull"],
+    ["git lfs install --local"],
+    ["git lfs ls-files"],
+    ["git lfs env"],
+    ["git lfs status"],
+    ["git submodule status --recursive"],
+    ["git submodule init"],
+    ["git submodule --quiet update --init --recursive"],
+    ["git submodule sync --recursive"],
     ["git commit -m 'git push later'"],
     ["echo 'git push'"],
     ["curl https://api.github.com/repos/o/r/pulls"],

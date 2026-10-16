@@ -2189,7 +2189,7 @@ describe("SECURITY.md", () => {
         // Without case: a risk may open its sentence on the page.
         expect(residuals.toLowerCase(), `the cloud section does not name: ${risk}`).toContain(risk.toLowerCase());
       }
-      // The attended guard's accepted gaps, which the unattended rules cover, and the three they do not.
+      // The attended guard's accepted gaps, which the unattended rules cover, and the two they do not.
       for (const gap of [
         "gh's own field conversions",
         "current-branch placeholder",
@@ -2199,12 +2199,13 @@ describe("SECURITY.md", () => {
         "a directory change",
         "PowerShell's command wrappers",
         "gh's alias for the create-and-push form",
-        "a multi-root workspace file's settings",
-        "an editor tasks file's folder-open task",
       ]) {
         expect(residuals.toLowerCase(), `the cloud section does not name: ${gap}`).toContain(gap.toLowerCase());
       }
       expect(residuals).toMatch(/not covered by the unattended rules/);
+      // The editor's workspace file and every folder's settings and tasks files are held, no gap (build/77, review/186).
+      expect(residuals).toContain("every folder's editor settings and tasks files with their");
+      expect(flat, "SECURITY.md says again the editor files are not held").not.toMatch(/folder-open task are not held/);
     });
 
     // ADDED 2026-10-16 (plan 021 file 1, unit u21-security-page, fix round 1): the page states

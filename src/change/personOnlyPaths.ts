@@ -47,12 +47,13 @@ export const PERSON_ONLY_PATHS: readonly string[] = [
   ".codex/hooks.json",
   ".codex/config.toml",
   // Copilot's workspace settings carry instruction text, move the instruction and agent file reads and set terminal
-  // auto-approval, as the other clients' held settings do (review/106).
-  ".vscode/settings.json",
+  // auto-approval, as the other clients' held settings do (review/106). Every folder's copy, since a multi-root
+  // workspace reads each listed folder's own (review/186).
+  "**/.vscode/settings.json",
   // The same settings block in a multi-root workspace file, and the editor's tasks file, whose task can run on
-  // folder open (build/77).
+  // folder open (build/77), every folder's (review/186).
   "**/*.code-workspace",
-  ".vscode/tasks.json",
+  "**/.vscode/tasks.json",
   ".stamity/generated/**",
   ".stamity/hooks/**",
   ".stamity/manifest.json",
