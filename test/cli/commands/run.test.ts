@@ -141,6 +141,52 @@ describe("stamity run start", () => {
     expect(current(repo)).toBe(RUN_BRANCH);
   });
 
+  // The guard's table counts main and master whatever the repository's default is (src/hooks/personOnly.ts:96),
+  // so a run kept on either would have every push refused as push-default.
+  it.each(["main", "master"])("leaves %s even where the REST read names another default (develop)", async (branch) => {
+    const repo = await seedRepo({ branch });
+    restDefault("develop");
+
+    const { code, doc } = await run(repo, START);
+
+    expect(code).toBe(0);
+    expect(doc).toMatchObject({ branch: RUN_BRANCH, created: true });
+    expect(current(repo)).toBe(RUN_BRANCH);
+    expect(rest.calls).toHaveLength(1);
+  });
+
+  it("matches the default branch without case, as the guard's table does (HEAD on Trunk, REST names trunk)", async () => {
+    const repo = await seedRepo({ branch: "Trunk" });
+    restDefault("trunk");
+
+    const { code, doc } = await run(repo, START);
+
+    expect(code).toBe(0);
+    expect(doc).toMatchObject({ branch: RUN_BRANCH, created: true });
+    expect(current(repo)).toBe(RUN_BRANCH);
+  });
+
+  // origin/HEAD is set at clone and kept through a default-branch rename on GitHub, so REST must decide over it.
+  it.each([
+    { on: "trunk", branch: RUN_BRANCH, created: true },
+    { on: "develop", branch: "develop", created: false },
+  ])("lets the REST read decide over a different origin/HEAD (REST trunk, origin/HEAD develop, HEAD on $on)", async ({ on, branch, created }) => {
+    const repo = await seedRepo({ branch: "trunk" });
+    restDefault("trunk");
+    const head = git(repo, ["rev-parse", "HEAD"]);
+    git(repo, ["branch", "develop"]);
+    git(repo, ["update-ref", "refs/remotes/origin/develop", head]);
+    git(repo, ["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/develop"]);
+    git(repo, ["switch", "-q", on]);
+
+    const { code, doc } = await run(repo, START);
+
+    expect(code).toBe(0);
+    expect(doc).toMatchObject({ branch, created });
+    expect(current(repo)).toBe(branch);
+    expect(rest.calls).toHaveLength(1);
+  });
+
   it("keeps a branch that is not the default, created false, and switches nothing", async () => {
     const repo = await seedRepo();
     restDefault("main");

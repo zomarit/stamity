@@ -48,7 +48,11 @@ const START = "start";
 /** The prefix of every branch this verb creates; the run id after it is the run folder's name. */
 const RUN_BRANCH_PREFIX = "stamity/";
 
-/** The names that count as the default branch where neither REST nor `origin/HEAD` names one. */
+/**
+ * The names that always count as default branches, beside whatever REST or `origin/HEAD` names
+ * and alone where neither names one, as the guard's table counts them (`../../hooks/personOnly.ts`,
+ * `PersonOnlyContext.defaultBranches`): a run must never stay on a branch a push from would be refused.
+ */
 const FALLBACK_DEFAULTS: readonly string[] = ["main", "master"];
 
 /** Where the default branch was read from, as the text output names it. */
@@ -117,7 +121,7 @@ async function runStart(ctx: CliContext, run: string): Promise<CommandResult> {
   }
   const current = await currentBranch(cwd);
   const defaults = current === null ? null : await defaultBranches(ctx, cwd);
-  const onDefault = defaults !== null && current !== null && defaults.names.includes(current);
+  const onDefault = defaults !== null && current !== null && defaults.names.includes(current.toLowerCase());
 
   if (current !== null && !onDefault) {
     ctx.io.out(`branch: ${sanitizeLabel(current)} (kept: not the default branch)\nbase: ${head}\n`);
@@ -196,18 +200,26 @@ async function currentBranch(cwd: string): Promise<string | null> {
   return ref.slice("refs/heads/".length);
 }
 
-/** The default branch by the first source that names one: REST, then `origin/HEAD`, then main and master. */
+/**
+ * The default branches, lowercased: the one the first source names (REST, then `origin/HEAD`), with
+ * main and master always beside it, the set and the caseless match the guard's table uses
+ * (`../../hooks/personOnly.ts`, `personOnlyVerdict`).
+ */
 async function defaultBranches(ctx: CliContext, cwd: string): Promise<DefaultBranches> {
   const origin = await git(cwd, ["remote", "get-url", "origin"]);
   const url = origin.code === 0 ? origin.stdout.trim() : "";
   if (url !== "") {
     const rest = await restDefaultBranch(ctx, cwd, url);
-    if (rest !== null) return { names: [rest], source: "rest" };
+    if (rest !== null) return withFallbacks(rest, "rest");
   }
   const symbolic = await git(cwd, ["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"]);
   const named = symbolic.code === 0 ? parseGitDefaultBranch(symbolic.stdout) : null;
-  if (named !== null) return { names: [named], source: "origin-head" };
+  if (named !== null) return withFallbacks(named, "origin-head");
   return { names: FALLBACK_DEFAULTS, source: "fallback" };
+}
+
+function withFallbacks(named: string, source: DefaultSource): DefaultBranches {
+  return { names: [...new Set([named, ...FALLBACK_DEFAULTS].map((name) => name.toLowerCase()))], source };
 }
 
 /**
