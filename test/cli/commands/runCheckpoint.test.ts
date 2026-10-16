@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { lstatSync } from "node:fs";
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -65,6 +66,14 @@ function git(cwd: string, args: readonly string[]): string {
     stdio: ["ignore", "pipe", "pipe"],
     env: { ...process.env, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: NO_GIT_CONFIG, ...IDENTITY },
   }).trim();
+}
+
+function isFile(path: string): boolean {
+  try {
+    return lstatSync(path).isFile();
+  } catch {
+    return false;
+  }
 }
 
 const RUN = "2026-10-16_overnight";
@@ -386,6 +395,55 @@ describe("stamity run checkpoint", () => {
 
     expect(code).toBe(0);
     expect(created().title).toBe(`Run ${RUN}`);
+  });
+
+  it.each(["main", "stamity/another-run"])("refuses as branch mismatch when the record's Branch: is %s and HEAD is the run's branch (build/93)", async (named) => {
+    const { repo, base } = await seed("unattended");
+    await put(repo, `${RUN_DIR}/record.md`, `# Run ${RUN}\n\nStatus: in progress\nMode: unattended\nBranch: ${named}\nBase: ${base}\n`);
+    await writeFile(join(repo, "a.txt"), "changed\n");
+
+    const { code, doc, stdout } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+    expect(code).toBe(1);
+    expect(doc).toMatchObject({ branch: RUN_BRANCH, committed: null, pushed: false });
+    expect(doc["notDone"]).toEqual([`branch mismatch: the checkout is on ${RUN_BRANCH}, and the record's Branch: names ${named}`]);
+    expect(stdout).toContain("branch mismatch");
+    expect(git(repo, ["rev-parse", "HEAD"])).toBe(base);
+    expect(pushes()).toEqual([]);
+  });
+
+  it("writes the held patch as bytes, so a held file in Latin-1 applies again from it (build/95)", async () => {
+    const { repo, remote } = await seed("unattended");
+    // "café" in Latin-1: the 0xE9 byte is no UTF-8, so a text decode would turn it into U+FFFD.
+    const latin1 = Buffer.from([0x63, 0x61, 0x66, 0xe9, 0x0a]);
+    await writeFile(join(repo, ".cursorrules"), latin1);
+
+    const { code, doc } = await run(repo, CHECKPOINT);
+
+    expect(code).toBe(0);
+    expect(doc["held"]).toEqual([".cursorrules"]);
+    const pushed = execFileSync("git", ["show", `refs/heads/${RUN_BRANCH}:${PATCH}`], { cwd: remote, stdio: ["ignore", "pipe", "pipe"] });
+    expect(pushed.includes(Buffer.from([0x2b, 0x63, 0x61, 0x66, 0xe9, 0x0a]))).toBe(true);
+    expect((await readFile(join(repo, PATCH))).equals(pushed)).toBe(true);
+    // The work tree holds the change, so the patch applies in reverse there only when its bytes are the file's.
+    git(repo, ["apply", "--check", "--reverse", PATCH]);
+  });
+
+  it("removes a held patch whose change is gone, from the work tree and the pushed branch (build/96)", async () => {
+    const { repo, remote } = await seed("unattended");
+    await writeFile(join(repo, ".cursorrules"), "steered rules\n");
+    expect((await run(repo, CHECKPOINT)).code).toBe(0);
+    expect(pushedTree(remote)).toContain(PATCH);
+    // The change is reverted: the index already holds Base:'s copy, so restoring from it brings the file back.
+    git(repo, ["restore", "--", ".cursorrules"]);
+
+    const { code, doc } = await run(repo, CHECKPOINT);
+
+    expect(code).toBe(0);
+    expect(doc).toMatchObject({ held: [], pushed: true, notDone: [] });
+    expect(pushedTree(remote)).not.toContain(PATCH);
+    expect(isFile(join(repo, PATCH))).toBe(false);
+    expect(git(repo, ["status", "--porcelain", "--", RUN_DIR])).toBe("");
   });
 
   it.each([

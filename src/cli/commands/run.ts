@@ -1,4 +1,5 @@
-import { closeSync, fstatSync, lstatSync, openSync, readdirSync, readSync } from "node:fs";
+import { closeSync, fstatSync, lstatSync, mkdtempSync, openSync, readdirSync, readFileSync, readSync, realpathSync, rmSync, unlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { isAbsolute, join, posix, relative } from "node:path";
 import { Argument, InvalidArgumentError, type Command } from "commander";
 import { heldPaths } from "../../change/personOnlyPaths.ts";
@@ -56,7 +57,7 @@ import { readChange, scanChange } from "./gate.ts";
  *
  * **`checkpoint`** reads the run's record head (`Mode:`, `Branch:`, `Base:`)
  * and, in this order: refuses a commit on a default branch (and on a checkout
- * the record's non-default `Branch:` does not name, or a detached one); stages
+ * that is not the record's `Branch:`, as `branch mismatch`, or a detached one); stages
  * only the run folder's record, ledger, plan, morning list and `held/*.patch`,
  * `.stamity/inbox.md` and `--paths` (never `-A`, never `-f`), a path git
  * ignores reported as `records: not committed (…)`; under `Mode: unattended`
@@ -404,8 +405,8 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>): Pr
       ? "commit refused: HEAD is detached, so there is no run branch to push"
       : isDefault(current)
         ? `commit refused: ${current} is the default branch (read from ${SOURCE_LABEL[defaults.source]})`
-        : head.branch !== null && head.branch !== current && !isDefault(head.branch)
-          ? `commit refused: the checkout is on ${current}, and the record's Branch: names ${head.branch}`
+        : head.branch !== null && head.branch !== current
+          ? `branch mismatch: the checkout is on ${current}, and the record's Branch: names ${head.branch}`
           : PUSHABLE_BRANCH.test(current)
             ? null
             : `commit refused: the branch name ${current} holds characters the push check does not read`;
@@ -448,17 +449,32 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>): Pr
   // (2) Unattended: the person-only paths' change goes to an inert patch, and those paths back to Base: in the index.
   if (unattended) {
     const held = heldPaths(await changedSince(top, base));
-    if (held.length > 0) {
-      const patch = await git(top, ["diff", "--binary", "--full-index", ...DIFF_PINS, base, "--", ...held], CHECKPOINT);
-      if (patch.code !== 0) {
-        result.notDone.push(`hold failed: git diff answered ${patch.code}: ${firstLine(patch.stderr)}`);
+    if (held.length === 0) {
+      // A patch an earlier checkpoint wrote names a change the run no longer makes: it leaves the folder and the branch.
+      const stale = await removeStalePatch(cwd, top, heldDir, fromTop(patchRel));
+      if (stale !== null) {
+        result.notDone.push(stale);
         return finish(false);
       }
+    }
+    if (held.length > 0) {
+      // Git writes the patch to a file, so its bytes never pass a text decode: a held file in any encoding applies again.
+      const scratch = mkdtempSync(join(tmpdir(), "stamity-held-"));
       try {
-        await ctx.engine.merge.atomicWrite.atomicWriteFile(join(cwd, patchRel), patch.stdout, { boundaryDir: cwd });
-      } catch (cause) {
-        result.notDone.push(`hold failed: ${patchRel} could not be written (${cause instanceof Error ? cause.message : "write failed"})`);
-        return finish(false);
+        const out = join(scratch, HELD_PATCH);
+        const patch = await git(top, ["diff", "--binary", "--full-index", ...DIFF_PINS, `--output=${out}`, base, "--", ...held], CHECKPOINT);
+        if (patch.code !== 0) {
+          result.notDone.push(`hold failed: git diff answered ${patch.code}: ${firstLine(patch.stderr)}`);
+          return finish(false);
+        }
+        try {
+          await ctx.engine.merge.atomicWrite.atomicWriteFile(join(cwd, patchRel), readFileSync(out), { boundaryDir: cwd });
+        } catch (cause) {
+          result.notDone.push(`hold failed: ${patchRel} could not be written (${cause instanceof Error ? cause.message : "write failed"})`);
+          return finish(false);
+        }
+      } finally {
+        rmSync(scratch, { recursive: true, force: true });
       }
       const restored = await git(top, ["restore", "--staged", `--source=${base}`, "--", ...held], CHECKPOINT);
       if (restored.code !== 0) {
@@ -623,6 +639,32 @@ async function add(top: string, paths: readonly string[], notDone: string[]): Pr
   if (added.code === 0) return true;
   notDone.push(`stage failed: git add answered ${added.code}: ${firstLine(added.stderr)}`);
   return false;
+}
+
+/**
+ * Removes the held patch where it is left from an earlier checkpoint: out of
+ * the index (`git rm --cached`, so the commit drops it from the branch), then
+ * out of the work tree, only where `held/` is the run folder's own directory
+ * and the patch a regular file, never through a link. `null` once it is gone
+ * or was never there; else the reason, for `notDone`.
+ */
+async function removeStalePatch(cwd: string, top: string, heldDir: string, patchFromTop: string): Promise<string | null> {
+  const patch = join(top, patchFromTop);
+  const tracked = await git(top, ["ls-files", "-z", "--cached", "--", patchFromTop], CHECKPOINT);
+  if (tracked.code !== 0) return `hold failed: git ls-files answered ${tracked.code}: ${firstLine(tracked.stderr)}`;
+  if (tracked.stdout === "" && !isRegular(patch)) return null;
+  if (tracked.stdout !== "") {
+    const removed = await git(top, ["rm", "--cached", "--quiet", "--ignore-unmatch", "--", patchFromTop], CHECKPOINT);
+    if (removed.code !== 0) return `hold failed: git rm answered ${removed.code}: ${firstLine(removed.stderr)}`;
+  }
+  if (!isRegular(patch)) return null;
+  try {
+    if (realpathSync(join(cwd, heldDir)) !== join(realpathSync(cwd), heldDir)) return `hold failed: ${heldDir} is not the run folder's own directory`;
+    unlinkSync(patch);
+  } catch (cause) {
+    return `hold failed: ${patchFromTop} could not be removed (${cause instanceof Error ? cause.message : "remove failed"})`;
+  }
+  return null;
 }
 
 /** The repository's local tag names, read through the write runner; `[]` where git names none. */
