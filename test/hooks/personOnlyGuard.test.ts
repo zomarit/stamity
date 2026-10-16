@@ -640,7 +640,12 @@ describe("the unattended push rule, the mode read from the run records", () => {
       // (review/231; the two `npm test` lines were allowed before it), the global configuration file (review/233), and
       // GitHub merging the base into a pull request's branch (review/232).
       `GIT_EXEC_PATH=/tmp/bin ${RUN_END}`, "GIT_EDITOR=/tmp/e npm test", "Set-Item env:GIT_CONFIG_COUNT 1; npm test",
-      "GIT_CONFIG_GLOBAL=/tmp/c git fetch", "gh pr update-branch 3"];
+      "GIT_CONFIG_GLOBAL=/tmp/c git fetch", "gh pr update-branch 3",
+      // A `declare`, `typeset` or `local` whose option cluster carries `x`, with no `=` (review/243).
+      `read GIT_EXEC_PATH <<< /tmp/bin; declare -x GIT_EXEC_PATH; ${RUN_END}`, `printf -v GIT_SSH_COMMAND /tmp/s; declare -gx GIT_SSH_COMMAND; ${RUN_END}`,
+      "read GIT_CONFIG_COUNT <<< 1; typeset -rx GIT_CONFIG_COUNT; npm test", `f() { local -xr GIT_EXEC_PATH; ${RUN_END}; }; f`,
+      "declare -x -- GIT_EDITOR; npm test", "typeset -- -x GIT_PAGER; npm test", `declare -x HOME GIT_EXEC_PATH PATH; ${RUN_END}`,
+      `typeset -gx GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0; ${RUN_END}`];
     for (const command of unattended) {
       const source = unattendedPushVerdict(command);
       expect(source.deny, command).toBe(true);
@@ -661,10 +666,12 @@ describe("the unattended push rule, the mode read from the run records", () => {
     expect(decide("claude", guard, "git -c color.ui=never status").deny).toBe(false);
     expect(decide("claude", guard, "git -c user.name=x commit -m m").deny).toBe(false);
     // The twins: a variable that runs nothing, a remote and a remote key read, a pull request read, and a line that only
-    // names one of the variables or unsets one (review/231).
+    // names one of the variables or unsets one (review/231), or prints one, exports another or gives one an attribute
+    // other than `x` (review/243).
     for (const command of ["GIT_TERMINAL_PROMPT=0 git fetch origin", "git remote get-url origin", "git config --get remote.origin.url", "gh pr view 3",
       "git config --get url.https://example.com/.insteadOf", "GIT_CONFIG_NOSYSTEM=1 git status", "Set-Item env:GIT_CONFIG_NOSYSTEM 1; git status",
-      "grep GIT_CONFIG_COUNT src", `env -u GIT_EXEC_PATH ${RUN_END}`, "gh pr view 3 --json mergeStateStatus"]) {
+      "grep GIT_CONFIG_COUNT src", `env -u GIT_EXEC_PATH ${RUN_END}`, "gh pr view 3 --json mergeStateStatus",
+      `declare -p GIT_EXEC_PATH; ${RUN_END}`, `declare -x GIT_TERMINAL_PROMPT; ${RUN_END}`, "typeset -i GIT_CONFIG_COUNT; npm test"]) {
       expect(unattendedPushVerdict(command), command).toEqual({ deny: false });
       expect(decide("claude", guard, command).deny, command).toBe(false);
     }

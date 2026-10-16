@@ -852,6 +852,17 @@ describe("unattendedPushVerdict", () => {
     ["export GIT_SSH_COMMAND=/tmp/s; npx --no stamity run end --run x"],
     ["export GIT_EXEC_PATH; npx --no stamity run end --run x"],
     ["declare -x GIT_EXEC_PATH=/tmp/bin; npx --no stamity run end --run x"],
+    // A `declare`, `typeset` or `local` whose option cluster carries `x` exports a name with no `=` as `export` does,
+    // its value set by a command that is no assignment (review/243): each cluster, the option before and after `--`
+    // (read wherever it stands, the safe direction), and several names on one line.
+    ["read GIT_EXEC_PATH <<< /tmp/bin; declare -x GIT_EXEC_PATH; npx --no stamity run end --run x"],
+    ["printf -v GIT_SSH_COMMAND /tmp/s; declare -gx GIT_SSH_COMMAND; npx --no stamity run end --run x"],
+    ["read GIT_CONFIG_COUNT <<< 1; typeset -rx GIT_CONFIG_COUNT; npm test"],
+    ["f() { local -xr GIT_EXEC_PATH; npx --no stamity run end --run x; }; f"],
+    ["for GIT_EDITOR in /tmp/e; do :; done; declare -x -- GIT_EDITOR; npm test"],
+    ["typeset -- -x GIT_PAGER; npm test"],
+    ["declare -x HOME GIT_EXEC_PATH PATH; npx --no stamity run end --run x"],
+    ["typeset -gx GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0; npx --no stamity run end --run x"],
     ["cmd /c \"set GIT_EXEC_PATH=C:\\tmp&& npx --no stamity run end --run x\""],
     ["$env:GIT_EXEC_PATH = 'C:\\tmp'; npx --no stamity run end --run x"],
     ["$env:GIT_EXEC_PATH+='C:\\tmp'; npx --no stamity run end --run x"],
@@ -1009,6 +1020,11 @@ describe("unattendedPushVerdict", () => {
     ["$env:GIT_EXEC_PATH; npm test"],
     ["${env:GIT_CONFIG_NOSYSTEM}='1'; npx --no stamity run end --run x"],
     ["Set-Item env:GIT_CONFIG_NOSYSTEM 1; npm test"],
+    // review/243's twins: a `declare` that prints one, exports a variable outside the set, or gives one an attribute
+    // other than `x`.
+    ["declare -p GIT_EXEC_PATH; npx --no stamity run end --run x"],
+    ["declare -x GIT_TERMINAL_PROMPT; npx --no stamity run end --run x"],
+    ["typeset -i GIT_CONFIG_COUNT; npm test"],
     // review/232's twin: the pull request's merge state read.
     ["gh pr view 3 --json mergeStateStatus"],
     // review/209's twins: every `git remote` read, and `git config` reads of a `remote.*` key, writes of another key,

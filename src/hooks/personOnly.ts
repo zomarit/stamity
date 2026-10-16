@@ -1602,10 +1602,17 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
   const GIT_VARIABLE = `(?:(?:${PROGRAM_VARIABLES})\\b|${CONFIG_NAMES})`;
   /**
    * A word, as the reading decoded it, that sets one (review/231): an assignment before a program or after a wrapper,
-   * and an operand of `export`, `declare`, `typeset` or the Windows command interpreter's `set`.
+   * and an operand of `export`, `declare`, `typeset`, `local` or the Windows command interpreter's `set`.
    */
   const SETS_WORD = new RegExp(`^${GIT_VARIABLE}`, "i");
-  const SETTERS = new Set(["export", "declare", "typeset", "set"]);
+  const SETTERS = new Set(["export", "declare", "typeset", "local", "set"]);
+  /**
+   * An option word of `declare`, `typeset` or `local` whose cluster carries `x` (`-x`, `-gx`, `-rx`, `-xr`), read
+   * wherever it stands on the command, before or after `--` (review/243): the command exports its operands as `export`
+   * does, so a name with no `=` is set too, its value from an earlier `read`, `for` or `printf -v`.
+   */
+  const EXPORTS = /^-[A-Za-z]*x[A-Za-z]*$/;
+  const EXPORTERS = new Set(["declare", "typeset", "local"]);
   /**
    * PowerShell's spellings that set one, in the line's text (review/231): `$env:NAME =` and `${env:NAME} =` (a compound
    * assignment among them), `Set-Item` or `New-Item` (`si`, `ni`) on `env:NAME`, `[Environment]::SetEnvironmentVariable`.
@@ -1749,7 +1756,10 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
   // the run verbs' own git among them (`GIT_EXEC_PATH=<folder> stamity run end`). A line that only names one passes.
   if (
     assigned.some((word) => SETS_WORD.test(word)) ||
-    commands.some((cmd) => SETTERS.has(cmd[0] ?? "") && cmd.slice(1).some((word) => SETS_WORD.test(word) && (cmd[0] === "export" || word.includes("=")))) ||
+    commands.some((cmd) => {
+      const exports = cmd[0] === "export" || (EXPORTERS.has(cmd[0] ?? "") && cmd.slice(1).some((word) => EXPORTS.test(word)));
+      return SETTERS.has(cmd[0] ?? "") && cmd.slice(1).some((word) => SETS_WORD.test(word) && (exports || word.includes("=")));
+    }) ||
     SETS_TEXT.test(command)
   ) {
     return deny("A line that sets one of git's program or configuration variables (`GIT_EXEC_PATH`, `GIT_EDITOR`, `GIT_CONFIG_COUNT`, …), which the run verbs' own git reads,");
