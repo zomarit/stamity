@@ -150,6 +150,9 @@ const TEXT_USER_CONTENT: readonly { path: string; text: string }[] = [
 /** The pre-flight canary's ignore line 1.15.0's sync appends; structural, as the manifest path below. */
 const CANARY_IGNORE_LINE = ".stamity/preflight-canary.json";
 
+/** The run-ended marker's ignore line, appended after the canary's; structural, as the canary's. */
+const MARKER_IGNORE_LINE = ".stamity/run-ended.json";
+
 /** Repo-relative manifest path; structural, never imported from src/ (cliHarness lane discipline). */
 const MANIFEST_REL = ".stamity/manifest.json";
 
@@ -381,9 +384,13 @@ describe("a 1.14.0 tree upgrades through the current sync and check (node dist/c
           // even where `.stamity/review-gate.json*` is already ignored): the user's `.gitignore`
           // gains that one line at its end, every other byte held; every other user file is held
           // whole, and the second sync below moves neither.
+          // TEST CHANGE, justified (pr/17): the engine now ignores the run-ended marker too, so the upgrade appends
+          // its line after the canary's; the user's bytes before them are still held.
           const expected =
             path === ".gitignore"
-              ? createHash("sha256").update(`${gitignoreBefore}${CANARY_IGNORE_LINE}\n`, "utf8").digest("hex")
+              ? createHash("sha256")
+                  .update(`${gitignoreBefore}${CANARY_IGNORE_LINE}\n${MARKER_IGNORE_LINE}\n`, "utf8")
+                  .digest("hex")
               : hash;
           expect(afterFirst.get(path), `the user's ${path} was moved by sync`).toBe(expected);
         }
