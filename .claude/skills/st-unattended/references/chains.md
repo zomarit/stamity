@@ -16,3 +16,7 @@ the first `BLOCKED_*`, with one draft pull request and one morning list for the 
 base — the HEAD sha the first record's `Base:` carries — never the plans' stamp: a `reads` path that only commits
 after that base moved is exempt from the freshness guard, and a path a commit between the stamp and the base moved
 stays stale.
+
+Every file's `stamity run end` but the chain's last one, the last file or the first to stop at a `BLOCKED_*`, adds
+`--chain-next`: it writes no run-ended marker and removes one left there, so the ask gate lets no question through
+before the next file's `stamity run start`; only that last `run end` opens the final question round.

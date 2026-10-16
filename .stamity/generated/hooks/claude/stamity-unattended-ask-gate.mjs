@@ -11,7 +11,7 @@
 // Trust posture: exec form, repo-committed, no dynamic evaluation, no network reach.
 // Reads outside repo state: the pending call's payload on stdin and the
 // STAMITY_UNATTENDED and STAMITY_REPO_ROOT variables. Reads the run records'
-// heads; writes nothing.
+// heads and the run-ended marker; writes nothing.
 
 import { closeSync, lstatSync, openSync, readFileSync, readSync, readdirSync, statSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
@@ -29,6 +29,7 @@ const HEAD_LINES = 15;
 const HEAD_READ_BYTES = 65536;
 const RUNS_READ_MAX = 50;
 const GIT_MAX_BYTES = 4096;
+const MARKER_SEGMENTS = [".stamity","run-ended.json"];
 const ASK_TOOL = "AskUserQuestion";
 const REASON = "This run is unattended: take the declared default and record `Default applied: <question> → option <N> (unattended)`; with no declared default, stop at BLOCKED_AMBIGUITY.";
 const RECORD_SOURCE = " (<record> is in progress and reads `Mode: unattended`.)";
@@ -118,7 +119,7 @@ function recordHeads(root) {
   const heads = [];
   for (const name of names) {
     const head = recordHead(join(runsDir, name, RECORD_FILE));
-    if (head !== null) heads.push({ ...head, path: [...RUNS_SEGMENTS, name, RECORD_FILE].join("/") });
+    if (head !== null) heads.push({ ...head, run: name, path: [...RUNS_SEGMENTS, name, RECORD_FILE].join("/") });
   }
   return heads;
 }
@@ -156,6 +157,19 @@ function currentBranch(root) {
   return head !== null && head.startsWith("ref: refs/heads/") ? head.slice(16) : null;
 }
 
+/** The run id the run-ended marker names; null when absent, a link, not a file, past GIT_MAX_BYTES or naming no run id. */
+function endedRun(root) {
+  const text = gitText(join(root, ...MARKER_SEGMENTS));
+  if (text === null) return null;
+  let run = null;
+  try {
+    run = JSON.parse(text)?.run ?? null;
+  } catch {
+    return null;
+  }
+  return typeof run === "string" && RUN_ID.test(run) ? run : null;
+}
+
 /** What says nobody is there to answer, as the refusal names it; null when a question may be put. */
 function unattendedSource(root) {
   const heads = recordHeads(root);
@@ -166,11 +180,13 @@ function unattendedSource(root) {
   if (running.some((head) => head.mode === "attended")) return null;
   const flag = (process.env.STAMITY_UNATTENDED ?? "").trim().toLowerCase();
   if (["", "false", "0"].includes(flag)) return null;
-  // Claude Code's final round: no run in progress, and this branch's unattended run closed its record before asking.
+  // Claude Code's final round: no run in progress, and this branch's unattended run closed its record before asking,
+  // its run end's marker still in place: a later session on the branch, before its own record opens, has none.
   const closed = running.length === 0 ? heads.filter((head) => head.mode === "unattended" && head.branch !== null) : [];
   if (closed.length > 0) {
-    const branch = currentBranch(root);
-    if (branch !== null && closed.some((head) => head.branch === branch)) return null;
+    const ended = endedRun(root);
+    const branch = ended === null ? null : currentBranch(root);
+    if (branch !== null && closed.some((head) => head.branch === branch && head.run === ended)) return null;
   }
   return VARIABLE_SOURCE;
 }

@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "generatedBy": "1.15.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-16T08:58:10.654Z",
+  "updatedAt": "2026-10-16T12:30:29.122Z",
   "tools": [
     "claude"
   ],
@@ -467,7 +467,7 @@
       "adapter": "claude",
       "artifactId": "unattended",
       "artifactType": "skill",
-      "contentHash": "6393fd33b3183bd6c5aeef7c07ce69adbb65441c4c6a93e88d725c159ee75bf3",
+      "contentHash": "da724fc15d2afc3314e9614ac869deb3dd0f4e9f1b8b3aeae8c0aef41973554f",
       "path": ".claude/skills/st-unattended/SKILL.md"
     },
     {
@@ -481,7 +481,7 @@
       "adapter": "claude",
       "artifactId": "unattended",
       "artifactType": "skill",
-      "contentHash": "5c80671886db493b4b1864827286289aea3ebd8f9f4ed34643a2a650103ee0f6",
+      "contentHash": "821eb91da001a92666f799ccb28b0a741d9ebb0cdf5886380ebb3ab47a1a53fd",
       "path": ".claude/skills/st-unattended/references/chains.md"
     },
     {
@@ -572,7 +572,7 @@
       "adapter": "claude",
       "artifactId": "verify",
       "artifactType": "skill",
-      "contentHash": "9a6d268583c05cf6df811efa56fa03a2dd3978aa50a8ae943cca733ffd1d7250",
+      "contentHash": "c30437a15d43b19d6e782ed1c07f340279b6a83240faaf870344ce7a3e18bd07",
       "path": ".claude/skills/st-verify/scripts/spec-plan-coverage.mjs"
     },
     {
@@ -607,7 +607,7 @@
       "adapter": "claude",
       "artifactId": "stamity-person-only-guard",
       "artifactType": "infra",
-      "contentHash": "312406ade62fa93cd7ea609ff3f100a44437d09efc7f4fe34549ab17c38aea62",
+      "contentHash": "5d110583f243f796aa945748abe6e9f49866282b07caace544b4945240fc158c",
       "path": ".stamity/generated/hooks/claude/stamity-person-only-guard.mjs"
     },
     {
@@ -635,7 +635,7 @@
       "adapter": "claude",
       "artifactId": "claude-ask-gate",
       "artifactType": "infra",
-      "contentHash": "634c9bfd0ab38497e16df1dba5ca926bbd19778371ec0af321da8eb5fa872f4f",
+      "contentHash": "947eea33ad11672a4f6bdfdf49454845e85ee1bdcb2f513319ea3c570f90b3a7",
       "path": ".stamity/generated/hooks/claude/stamity-unattended-ask-gate.mjs"
     },
     {

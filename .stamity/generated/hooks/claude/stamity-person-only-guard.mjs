@@ -136,6 +136,24 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		[],
 		[]
 	];
+	const MANAGERS = /* @__PURE__ */ new Set([
+		"npm",
+		"pnpm",
+		"yarn",
+		"bun"
+	]);
+	const MANAGER_VALUED = /* @__PURE__ */ new Set([
+		"-w",
+		"--workspace",
+		"--filter",
+		"-F",
+		"--prefix",
+		"-C",
+		"--dir",
+		"--cwd",
+		"--registry",
+		"--userconfig"
+	]);
 	const WRAPPER_OPTIONS = /* @__PURE__ */ new Map([
 		["env", [
 			"uCP",
@@ -378,13 +396,22 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			let line = null;
 			while (k < words.length && line === null) {
 				const word = words[k] ?? "";
-				const runner = `${programName(word)} ${words[k + 1] ?? ""}`;
+				let sub = k + 1;
+				while (MANAGERS.has(programName(word)) && sub < words.length) {
+					const option = words[sub] ?? "";
+					const next = words[sub + 1] ?? "-";
+					if (MANAGER_VALUED.has(option) || programName(word) === "yarn" && option === "workspace") sub += 2;
+					else if (/^--[^=]+$/.test(option) && !next.startsWith("-") && !RUNNERS.has(`${programName(word)} ${next}`)) sub += 2;
+					else if (option.startsWith("-") && option !== "--") sub += 1;
+					else break;
+				}
+				const runner = `${programName(word)} ${words[sub] ?? ""}`;
 				if (ASSIGNMENT.test(word) || KEYWORDS.has(word)) {
 					if (ASSIGNMENT.test(word)) assigned.push(word);
 					k += 1;
 				} else if (WRAPPERS.has(programName(word)) || RUNNERS.has(runner)) {
 					const [short, long, lineOptions] = RUNNERS.has(runner) ? RUNNER_OPTIONS : WRAPPER_OPTIONS.get(programName(word)) ?? NO_OPTIONS;
-					k += RUNNERS.has(runner) ? 2 : 1;
+					k = RUNNERS.has(runner) ? sub + 1 : k + 1;
 					while (k < words.length) {
 						const option = words[k] ?? "";
 						if (ASSIGNMENT.test(option)) {
@@ -441,7 +468,9 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				for (const word of first === -1 ? [] : cmd.slice(first + 1)) if (/\s/.test(word)) commands.push(...commandsOf(word, depth + 1, true));
 			} else if (depth < 4 && cmd[0] === "cmd") {
 				const at = cmd.findIndex((word, index) => index > 0 && /^\/[ck]/i.test(word));
-				if (at !== -1) commands.push(...commandsOf([(cmd[at] ?? "").slice(2), ...cmd.slice(at + 1)].join(" "), depth + 1, true));
+				const rest = at === -1 ? "" : [(cmd[at] ?? "").slice(2), ...cmd.slice(at + 1)].join(" ");
+				if (at !== -1) commands.push(...commandsOf(rest, depth + 1, true));
+				if (rest.includes("^")) commands.push(...commandsOf(rest.replace(/\^([\s\S])/g, "$1"), depth + 1, true));
 			} else if (depth < 4 && cmd[0] === "git") {
 				const { sub, args } = gitParts(cmd);
 				const rebase = sub === "rebase" ? args : [];
@@ -501,8 +530,45 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		}
 		return positionals;
 	}
-	function httpCall(cmd) {
-		const tool = cmd[0] ?? "";
+	function httpCall(raw) {
+		const tool = raw[0] ?? "";
+		const expanded = raw.map((word) => {
+			const name = word.split("=")[0] ?? "";
+			const full = tool === "wget" && /^--[a-z-]{2,}$/i.test(name) ? [
+				"--method",
+				"--post-data",
+				"--post-file",
+				"--body-data",
+				"--body-file",
+				"--execute"
+			].find((option) => option.startsWith(name.toLowerCase())) : void 0;
+			return full === void 0 ? word : full + word.slice(name.length);
+		});
+		const WGETRC = /* @__PURE__ */ new Map([
+			["method", "--method"],
+			["postdata", "--post-data"],
+			["postfile", "--post-file"],
+			["bodydata", "--body-data"],
+			["bodyfile", "--body-file"]
+		]);
+		const cmd = [];
+		for (let k = 0; k < expanded.length; k += 1) {
+			const word = expanded[k] ?? "";
+			const own = /^(-[A-Za-z]*e|--execute)$/.test(word);
+			let rc;
+			if (tool === "wget" && k > 0) {
+				if (own) rc = expanded[k + 1];
+				else if (word.startsWith("--execute=")) rc = word.slice(10);
+				else rc = /^-[A-Za-z]*?e(.+)$/.exec(word)?.[1];
+			}
+			const eq = rc?.indexOf("=") ?? -1;
+			const option = rc !== void 0 && eq > 0 ? WGETRC.get(rc.slice(0, eq).trim().toLowerCase().replace(/[-_]/g, "")) : void 0;
+			if (rc === void 0 || option === void 0) cmd.push(word);
+			else {
+				cmd.push(`${option}=${rc.slice(eq + 1).trim()}`);
+				if (own) k += 1;
+			}
+		}
 		let method = null;
 		let body = false;
 		const targets = [];
@@ -616,7 +682,8 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				"DELETE"
 			].includes(verb),
 			method: verb,
-			paths
+			paths,
+			cmd
 		};
 	}
 	const branch = (ref) => ref.replace(/^refs\/heads\//i, "").replace(/^refs\/remotes\/[^/]+\//i, "").toLowerCase();
@@ -672,27 +739,28 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			}
 			if (arg.startsWith("--")) {
 				const name = (arg.split("=")[0] ?? "").toLowerCase();
-				if ([
+				const is = (options) => name.length > 2 && options.some((option) => option.startsWith(name));
+				if (is([
 					"--force",
 					"--force-with-lease",
 					"--force-if-includes"
-				].includes(name)) force = true;
-				else if ([
+				])) force = true;
+				else if (is([
 					"--tags",
 					"--follow-tags",
 					"--mirror",
 					"--all",
 					"--branches"
-				].includes(name)) tags = true;
-				else if (["--delete", "--prune"].includes(name)) remove = true;
-				else if (name === "--repo") {
+				])) tags = true;
+				else if (is(["--delete", "--prune"])) remove = true;
+				else if (is(["--repo"])) {
 					repoGiven = true;
 					if (!arg.includes("=")) j += 1;
-				} else if ([
+				} else if (is([
 					"--push-option",
 					"--receive-pack",
 					"--exec"
-				].includes(name) && !arg.includes("=")) j += 1;
+				]) && !arg.includes("=")) j += 1;
 			} else if (arg.startsWith("-") && arg.length > 1) for (let c = 1; c < arg.length; c += 1) {
 				const flag = arg[c];
 				if (flag === "f") force = true;
@@ -816,10 +884,10 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		if (group === "api") return httpVerdict(cmd);
 		return null;
 	}
-	function httpVerdict(cmd) {
-		const gh = cmd[0] === "gh";
+	function httpVerdict(line) {
+		const gh = line[0] === "gh";
 		const fill = (value) => value.replace(/\{branch\}|:branch\b/g, () => ctx.currentBranch === null ? "main" : branch(ctx.currentBranch));
-		const { write, method, paths: targets } = httpCall(cmd);
+		const { write, method, paths: targets, cmd } = httpCall(line);
 		const paths = gh ? targets.map(fill) : targets;
 		const text = cmd.join(" ");
 		const fieldFlag = gh ? /^(-[fF]|--field|--raw-field)$/ : /^(-[A-Za-z]*d|--data(-raw|-binary|-ascii|-urlencode)?|--json|--post-data|--body-data)$/;
@@ -948,9 +1016,14 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			if (/^releases(\/|$)/i.test(path)) return deny("release", `A release write (${shown})`);
 			if (/^git\/refs(\/|$)/i.test(path)) {
 				if (method === "DELETE") return deny("push-delete", `A REST ref deletion (${shown})`);
-				if (/^git\/refs\/tags(\/|$)/i.test(path) || /(^|[=\s])refs\/tags\//i.test(text)) return deny("push-tags", `A REST tag ref write (${shown})`);
+				const refs = fields("ref");
+				if (/^git\/refs\/tags(\/|$)/i.test(path) || /(^|[=\s])refs\/tags\//i.test(text) || refs.some((ref) => ref === null || /^refs\/tags\//i.test(ref))) return deny("push-tags", `A REST tag ref write (${shown})`);
 				if (forced(fields("force"))) return deny("force-push", `A forced REST ref update (${shown})`);
-				if ([/^git\/refs\/heads\/(.+)$/i.exec(path)?.[1] ?? "", ...[...text.matchAll(/(?:^|[=\s/])refs\/heads\/(\S+)/gi)].map((match) => match[1] ?? "")].some((name) => defaults.has(name.toLowerCase()))) return deny("push-default", `A REST write to the default branch (${shown})`);
+				if ([
+					/^git\/refs\/heads\/(.+)$/i.exec(path)?.[1] ?? "",
+					...[...text.matchAll(/(?:^|[=\s/])refs\/heads\/(\S+)/gi)].map((match) => match[1] ?? ""),
+					...refs.map((ref) => /^refs\/heads\/(.+)$/i.exec(ref ?? "")?.[1] ?? "")
+				].some((name) => defaults.has(name.toLowerCase()))) return deny("push-default", `A REST write to the default branch (${shown})`);
 			}
 		}
 		return null;
@@ -976,9 +1049,12 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			if (valued.has(word)) k += 1;
 			else if (!word.startsWith("-")) positionals.push(word);
 		}
-		const [first, second] = positionals;
-		const yarnNpm = cmd[0] === "yarn" && first === "npm" && second === "publish";
-		return first === "publish" || yarnNpm ? deny("publish", `Publishing a package (\`${cmd[0]} publish\`)`) : null;
+		return positionals.some((word, index) => word === "publish" && (index === 0 || [
+			"npm",
+			"pnpm",
+			"yarn",
+			"bun"
+		].includes(positionals[index - 1] ?? "") || cmd[0] === "yarn" && index === 2 && positionals[0] === "workspace")) ? deny("publish", `Publishing a package (\`${cmd[0]} publish\`)`) : null;
 	}
 	for (const cmd of commandsOf(command, 0, false)) {
 		const program = cmd[0] ?? "";
@@ -986,6 +1062,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		if (program === "git") {
 			const { sub, args, config } = gitParts(cmd);
 			if (sub === "push") verdict = pushVerdict(args, config);
+			else if (sub === "send-pack") verdict = pushVerdict(args, [...config, "push.default=matching"]);
 			else if (sub === "tag") verdict = tagVerdict(args);
 			else if (sub === "subtree") {
 				const valued = /* @__PURE__ */ new Set([
@@ -1074,6 +1151,24 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 		[],
 		[]
 	];
+	const MANAGERS = /* @__PURE__ */ new Set([
+		"npm",
+		"pnpm",
+		"yarn",
+		"bun"
+	]);
+	const MANAGER_VALUED = /* @__PURE__ */ new Set([
+		"-w",
+		"--workspace",
+		"--filter",
+		"-F",
+		"--prefix",
+		"-C",
+		"--dir",
+		"--cwd",
+		"--registry",
+		"--userconfig"
+	]);
 	const WRAPPER_OPTIONS = /* @__PURE__ */ new Map([
 		["env", [
 			"uCP",
@@ -1316,13 +1411,22 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 			let line = null;
 			while (k < words.length && line === null) {
 				const word = words[k] ?? "";
-				const runner = `${programName(word)} ${words[k + 1] ?? ""}`;
+				let sub = k + 1;
+				while (MANAGERS.has(programName(word)) && sub < words.length) {
+					const option = words[sub] ?? "";
+					const next = words[sub + 1] ?? "-";
+					if (MANAGER_VALUED.has(option) || programName(word) === "yarn" && option === "workspace") sub += 2;
+					else if (/^--[^=]+$/.test(option) && !next.startsWith("-") && !RUNNERS.has(`${programName(word)} ${next}`)) sub += 2;
+					else if (option.startsWith("-") && option !== "--") sub += 1;
+					else break;
+				}
+				const runner = `${programName(word)} ${words[sub] ?? ""}`;
 				if (ASSIGNMENT.test(word) || KEYWORDS.has(word)) {
 					if (ASSIGNMENT.test(word)) assigned.push(word);
 					k += 1;
 				} else if (WRAPPERS.has(programName(word)) || RUNNERS.has(runner)) {
 					const [short, long, lineOptions] = RUNNERS.has(runner) ? RUNNER_OPTIONS : WRAPPER_OPTIONS.get(programName(word)) ?? NO_OPTIONS;
-					k += RUNNERS.has(runner) ? 2 : 1;
+					k = RUNNERS.has(runner) ? sub + 1 : k + 1;
 					while (k < words.length) {
 						const option = words[k] ?? "";
 						if (ASSIGNMENT.test(option)) {
@@ -1379,7 +1483,9 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 				for (const word of first === -1 ? [] : cmd.slice(first + 1)) if (/\s/.test(word)) commands.push(...commandsOf(word, depth + 1, true));
 			} else if (depth < 4 && cmd[0] === "cmd") {
 				const at = cmd.findIndex((word, index) => index > 0 && /^\/[ck]/i.test(word));
-				if (at !== -1) commands.push(...commandsOf([(cmd[at] ?? "").slice(2), ...cmd.slice(at + 1)].join(" "), depth + 1, true));
+				const rest = at === -1 ? "" : [(cmd[at] ?? "").slice(2), ...cmd.slice(at + 1)].join(" ");
+				if (at !== -1) commands.push(...commandsOf(rest, depth + 1, true));
+				if (rest.includes("^")) commands.push(...commandsOf(rest.replace(/\^([\s\S])/g, "$1"), depth + 1, true));
 			} else if (depth < 4 && cmd[0] === "git") {
 				const { sub, args } = gitParts(cmd);
 				const rebase = sub === "rebase" ? args : [];
@@ -1439,8 +1545,45 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 		}
 		return positionals;
 	}
-	function httpCall(cmd) {
-		const tool = cmd[0] ?? "";
+	function httpCall(raw) {
+		const tool = raw[0] ?? "";
+		const expanded = raw.map((word) => {
+			const name = word.split("=")[0] ?? "";
+			const full = tool === "wget" && /^--[a-z-]{2,}$/i.test(name) ? [
+				"--method",
+				"--post-data",
+				"--post-file",
+				"--body-data",
+				"--body-file",
+				"--execute"
+			].find((option) => option.startsWith(name.toLowerCase())) : void 0;
+			return full === void 0 ? word : full + word.slice(name.length);
+		});
+		const WGETRC = /* @__PURE__ */ new Map([
+			["method", "--method"],
+			["postdata", "--post-data"],
+			["postfile", "--post-file"],
+			["bodydata", "--body-data"],
+			["bodyfile", "--body-file"]
+		]);
+		const cmd = [];
+		for (let k = 0; k < expanded.length; k += 1) {
+			const word = expanded[k] ?? "";
+			const own = /^(-[A-Za-z]*e|--execute)$/.test(word);
+			let rc;
+			if (tool === "wget" && k > 0) {
+				if (own) rc = expanded[k + 1];
+				else if (word.startsWith("--execute=")) rc = word.slice(10);
+				else rc = /^-[A-Za-z]*?e(.+)$/.exec(word)?.[1];
+			}
+			const eq = rc?.indexOf("=") ?? -1;
+			const option = rc !== void 0 && eq > 0 ? WGETRC.get(rc.slice(0, eq).trim().toLowerCase().replace(/[-_]/g, "")) : void 0;
+			if (rc === void 0 || option === void 0) cmd.push(word);
+			else {
+				cmd.push(`${option}=${rc.slice(eq + 1).trim()}`);
+				if (own) k += 1;
+			}
+		}
 		let method = null;
 		let body = false;
 		const targets = [];
@@ -1554,7 +1697,8 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 				"DELETE"
 			].includes(verb),
 			method: verb,
-			paths
+			paths,
+			cmd
 		};
 	}
 	const deny = (what) => ({
@@ -1954,6 +2098,8 @@ const WRAPPERS = new Map([
   ["pnpx", RUNNER],
 ]);
 const RUNNERS = new Set(["npm exec", "npm x", "pnpm dlx", "pnpm exec", "yarn dlx", "yarn exec", "bun x", "bun exec"]);
+const MANAGERS = new Set(["npm", "pnpm", "yarn", "bun"]);
+const MANAGER_VALUED = new Set(["-w", "--workspace", "--filter", "-F", "--prefix", "-C", "--dir", "--cwd", "--registry", "--userconfig"]);
 const KEYWORDS = new Set(["!", "if", "then", "else", "elif", "fi", "do", "done", "while", "until"]);
 const SHELLS = new Set(["sh", "bash", "zsh", "dash", "ksh"]);
 const POWERSHELLS = new Set(["pwsh", "powershell", "invoke-expression", "iex"]);
@@ -1999,12 +2145,22 @@ function placesOf(command, cwd) {
       if (/\s/.test(word) && !/^@\s/.test(word)) inner(rest(k).join(" "));
       const name = programName(word);
       const assigned = /^\$env:git_dir(=.*)?$/i.exec(word);
+      // A package manager's options before a runner's subcommand (npm -w x exec), skipped as u6 skips them.
+      let sub = k + 1;
+      while (MANAGERS.has(name) && typeof words[sub] === "string") {
+        const option = words[sub];
+        const next = typeof words[sub + 1] === "string" ? words[sub + 1] : "-";
+        if (MANAGER_VALUED.has(option) || (name === "yarn" && option === "workspace")) sub += 2;
+        else if (/^--[^=]+$/.test(option) && !next.startsWith("-") && !RUNNERS.has(name + " " + next)) sub += 2;
+        else if (option.startsWith("-") && option !== "--") sub += 1;
+        else break;
+      }
       if (assigned !== null) {
         const value = assigned[1] ?? (/^=/.test(words[k + 1] ?? "") ? words[(k += 1)] : undefined);
         if (value !== undefined) gitDir(value === "=" ? words[(k += 1)] : value.slice(1));
-      } else if (WRAPPERS.has(name) || RUNNERS.has(name + " " + words[k + 1])) {
+      } else if (WRAPPERS.has(name) || RUNNERS.has(name + " " + words[sub])) {
         const [short = "", long = "", lines = ""] = WRAPPERS.get(name) ?? RUNNER;
-        if (!WRAPPERS.has(name)) k += 1;
+        if (!WRAPPERS.has(name)) k = sub;
         at = true;
         while (typeof words[k + 1] === "string" && (ASSIGNMENT.test(words[k + 1]) || /^(-|\d)/.test(words[k + 1]))) {
           const option = words[(k += 1)];
