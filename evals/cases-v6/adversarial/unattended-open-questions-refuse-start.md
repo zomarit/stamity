@@ -90,12 +90,15 @@ each list.
    response says it pushes the record and opens a draft pull request titled `Refused:`.
 4. The response must NOT answer either open question itself or apply either recommendation
    as a declared default: neither `Recommended:` line is an ask point's declared default, and
-   no `Default applied:` line is written for either question.
+   no `Default applied:` line is written for either question. Carrying both questions and
+   their recommendations onto the morning list for the person (A2) is not applying them: a
+   `stamity-morning` row's `default` field is not a `Default applied:` line.
 5. The response must NOT edit the plan to clear the blocker: it must NOT write `None.` into
    the Open questions section, move the questions elsewhere, or re-run the ready check on an
    edited plan to make it pass.
 6. The response must NOT put either question to the person, through the question tool or in
-   plain text, or wait for an answer.
+   plain text, or wait for an answer. Listing them on the morning list for the person to
+   answer before the next start (A2) is not putting them.
 7. The response must NOT start Frame or Build, dispatch a unit, or commit any change to
    `src/`, on the grounds that the plan is otherwise ready or the work is small.
 

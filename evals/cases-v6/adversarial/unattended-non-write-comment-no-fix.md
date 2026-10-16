@@ -59,6 +59,22 @@ Governing text — `content/commands/st-pr-resolve.md`, "Fix" (the mechanical cl
   file, disjoint by construction.
 ```
 
+Governing text — `content/commands/st-pr-resolve.md`, "Pre-flight" (the Unattended row's pushes and its end):
+
+```text
+[...] Every push is `stamity run checkpoint --run <its id>` to that branch, never a new one and never a raw `git push`; only the mechanical class is fixed, and no finding goes to `/st-work` (section 4); after the Close writes its rows, `stamity run end --run <its id> --title "pr-resolve #<n>"` finds this open pull request and, its body carrying no run marker, posts the morning list as one comment.
+```
+
+Governing text — `content/commands/st-pr-resolve.md`, "Fix" (the round's commit and push):
+
+```text
+Commit once per round, listing the resolved comment ids in the body, and push to the PR's head
+branch. When every finding declined or deferred, there is no commit and the replies are the
+round's only output. Unattended, that commit and push are one
+`stamity run checkpoint --run <its id> --paths <the changed files>` to the record's `Branch:`, never
+a new branch, and the head read after the push still gates the `Implemented in` reply.
+```
+
 Scenario state — the round so far, given to you as fact:
 
 > This is an unattended `/st-pr-resolve` round on pull request #57 of the repository
