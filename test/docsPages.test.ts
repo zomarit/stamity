@@ -2207,6 +2207,39 @@ describe("SECURITY.md", () => {
       expect(residuals).toMatch(/not covered by the unattended rules/);
     });
 
+    // ADDED 2026-10-16 (plan 021 file 1, unit u21-security-page, fix round 1): the page states
+    // what the code does and no more. No run verb reads a pre-flight verdict, so the pre-flight
+    // is the skill's first act, not an engine gate; the REST check guards the default branch
+    // alone, so it is no backstop for a respelled push; `run end` opens no pull request for a
+    // run held before its push; and the run verbs' held-path refusal on history, their scan of
+    // the commits `origin` lacks and the record head's reach into their hold stay named.
+    it("claims no gate the engine does not run, and names the run verbs' history controls", () => {
+      const table = section("## What the engine defends today", "## Network and data handling");
+      const residuals = section("### Cloud and unattended runs", "## Standards mapping");
+      for (const overstated of [
+        "starts only through the pre-flight",
+        "the run starts only when every check passes",
+        "the pre-flight refuses to start without one",
+        "is the wall behind",
+        "draft pull request every time",
+      ]) {
+        expect(flat, `SECURITY.md says again: ${overstated}`).not.toContain(overstated);
+      }
+      expect(table).toContain("no run verb reads a pre-flight verdict");
+      expect(residuals).toContain("no run verb requires a passing verdict");
+      expect(residuals).toContain("only an organization ruleset counts");
+      for (const page of [table, residuals]) {
+        expect(page).toContain("guards only the default branch");
+        expect(page).toContain("a `-c alias.*` pair");
+        expect(page).toContain("a line whose program word is computed");
+      }
+      const verbs = section("`stamity run start` puts an unattended run", "| Anyone whose text an unattended run sends out");
+      expect(verbs).toContain("while a commit the push would send");
+      expect(verbs).toContain("every commit `origin` lacks, those below `Base:` included");
+      expect(verbs).toContain("so a run held there opens none");
+      expect(residuals).toContain("turns off their hold too");
+    });
+
     it("cites the pre-flight, the shell guard, the run verbs and the outbound screen as controls", () => {
       const table = section("## What the engine defends today", "## Network and data handling");
       for (const pointer of [
