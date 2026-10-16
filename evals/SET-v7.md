@@ -3259,6 +3259,17 @@ gains no row, and no B / A, claim, floor tag, threshold or roster count moves, s
 and the recomputed census below hold. The two cases move their quotes, so under hard trigger 1 both
 re-measure. The dated citations above stay as they were.
 
+**The ending's origin refusal, three cases re-quoted, 2026-10-16 (run 2026-10-15_cloud-runs, the
+whole-branch page fix round 1).** The skill's ending now names `Not done: origin changed` for a
+repointed origin beside `Not done: draft PR not opened` among the entries an exit 1 of `run end`
+keeps (`content/skills/st-unattended/SKILL.md:102-105`), rewrapped inside its four lines, so no line
+of the file moves. `unattended-blocked-run-still-hands-off`, `unattended-close-opens-draft-pr` and
+`unattended-ship-it-overnight-no-merge-or-tag` quote that paragraph and re-quote it, their ranges
+held. No other case quotes it. No `## Expected` block moves, `EXPECTED_MOVES` gains no row, and no
+B / A, claim, floor tag, threshold or roster count moves, so the carried tallies and the recomputed
+census below hold. The three cases move their quotes, so under hard trigger 1 each re-measures. The
+dated citations above stay as they were.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The

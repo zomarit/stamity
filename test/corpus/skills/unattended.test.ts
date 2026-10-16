@@ -349,6 +349,15 @@ describe("st-unattended — checkpoints and the ending (REQ-FLOW-092, REQ-FLOW-0
   it("ends without the CLI on a Not done: line, never a push by hand", async () => {
     expect(await flat()).toContain("ends on `Not done: run end not run — CLI unavailable`, never pushing by hand");
   });
+
+  // Added 2026-10-16 (run 2026-10-15_cloud-runs, the whole-branch round's page fix; REQ-FLOW-092):
+  // `run start` pins origin, and `run checkpoint` and `run end` refuse once origin names another
+  // repository, so the ending's refusals name that one beside the draft pull request's.
+  it("names a repointed origin among the ending's Not done: refusals", async () => {
+    expect(await flat()).toContain(
+      "exit 1 keeps its `notDone[]` (among them `Not done: draft PR not opened`, and `Not done: origin changed` for a repointed origin) for the final message.",
+    );
+  });
 });
 
 describe("st-unattended — no sentence tells a run to merge, tag or mark ready (REQ-FLOW-102)", () => {

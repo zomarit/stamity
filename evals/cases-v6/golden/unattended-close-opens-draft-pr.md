@@ -46,9 +46,9 @@ spelled. Every exit pushes its record through the run verbs, closing in this ord
    and rule, never the value. The pull request's title is scanned like its body, a hit replaced with `Run <run-id>`.
 
 `run end` exits 0 with a pull request opened, updated or commented; exit 1 keeps its `notDone[]` (among them
-`Not done: draft PR not opened`) for the final message. A run whose CLI stops answering closes its record and
-ends on `Not done: run end not run — CLI unavailable`, never pushing by hand. Never a push to the default
-branch, a force push, a tag, a merge or ready-for-review: each is the person's call.
+`Not done: draft PR not opened`, and `Not done: origin changed` for a repointed origin) for the final message. A run
+whose CLI stops answering closes its record and ends on `Not done: run end not run — CLI unavailable`, never pushing by
+hand. Never a push to the default branch, a force push, a tag, a merge or ready-for-review: each is the person's call.
 ```
 
 Governing text — the same file, "The morning list" (its first two sections):

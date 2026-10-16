@@ -559,8 +559,8 @@ first 15 lines of `record.md` carry `Status:`, `Plan:`, `Base:`, `Branch: <the r
 returns `mode`, `branch` and `base` (`src/runs/resumeCard.ts:73-82`, `:225-253`), and a missing `Mode:` line or any
 other value reads as attended unless `STAMITY_UNATTENDED` is set (to a value other than empty, `false` or `0`); then the
 variable governs, as the shell guard, the ask gate and the run verbs read it, a `Mode: attended` head winning over it
-(`unattendedBy` and `unattendedSource`, `src/hooks/scripts.ts:3642-3670`, `:4026-4042`; `readsUnattended`,
-`src/cli/commands/run.ts:408`, `:687-690`; read at `445ebd23`). The debug record keeps its three head lines when
+(`unattendedBy` and `unattendedSource`, `src/hooks/scripts.ts:3656-3684`, `:4044-4060`; `readsUnattended`,
+`src/cli/commands/run.ts:541`, `:901-904`; read after the whole-branch page round). The debug record keeps its three head lines when
 attended; an unattended `/st-debug` record adds `Mode:`, `Branch:` and `Base:` (`content/commands/st-debug.md:56-68`), and an unattended
 `/st-pr-resolve` opens a record of its own with the six lines (`content/commands/st-pr-resolve.md:54`). The resume
 card's printed lines do not change.

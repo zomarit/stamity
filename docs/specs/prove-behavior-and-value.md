@@ -98,7 +98,7 @@ against a 150-line cap (`:53`), folding the rule set into one appendix (`src/ada
 The seven invariants (`content/charter/stamity-charter.md:34-60`) carry no version or amendment
 record; human QA rows were accepted UNPERFORMED twice running; hand pages attest to pre-1.7.0 commits
 (`README.md:1`); the checklist names `SET-v5` (`.github/release-controls-checklist.md:170-171`) and the
-default profile `rubric-v4.md` (`evals/model-profiles-v1.json:3-8`); `SECURITY.md:207-220` says no such
+default profile `rubric-v4.md` (`evals/model-profiles-v1.json:3-8`); `SECURITY.md:208-221` says no such
 mapping exists, and no `docs/measurements.md` exists at `949bde9`.
 
 ## Requirements
@@ -635,9 +635,9 @@ the release run 34771477218 as closed evidence. `docs/security-mapping.md` carri
 OWASP (agentic 2026, LLM 2025, web 2021), NSA/CISA and NIST AI RMF mappings — publisher, edition and
 read date, no URL, the hand-page link policy admitting only this repository's GitHub home (`:41-100`)
 — and the actor/vector/control/residual table with mapped ids, every control traced to `path:line`;
-`SECURITY.md:320-322` points at it and the guides roster lists it (`…docsPages.test.ts:134-148`).
+`SECURITY.md:321-323` points at it and the guides roster lists it (`…docsPages.test.ts:134-148`).
 (Amended 2026-10-12: the two citations into `SECURITY.md` were re-read at `ebaac2f2`; they read
-`:260-261` and `SECURITY.md:214-216`.)
+`:260-261` and `SECURITY.md:215-217`.)
 
 - GIVEN the new page WHEN the docs suite runs THEN seven `###` surface headings stand (six engine
   surfaces plus the release publish path) over a `## Gaps` section, every control symbol resolves in the
@@ -1718,7 +1718,7 @@ missing. Rollback is a revert of the job with its aggregator assertions.
 ### REQ-PROVE-038 — The unattended eval cases
 
 Added 2026-10-16 (plan 021 file 1, units `u22-eval-golden` and `u22b-eval-adversarial`, with the re-quotes of
-`u15-work-text` and the corpus fix rounds; cited at `4daeb214`, re-read at `445ebd23`).
+`u15-work-text` and the corpus fix rounds; cited at `4daeb214`, re-read after the whole-branch page round).
 
 Given `evals/SET-v7.md`, Then nine new floor cases hold: an unattended close opens a draft pull request; a start with
 open questions refuses; a mid-run question lands on the morning list without the blocking tool; "ship it overnight"
@@ -1736,9 +1736,10 @@ its range.
   `unattended-non-write-comment-no-fix` and `unattended-kickoff-claims-approval`, none a twin, with the re-baselines of
   `unattended-run-applies-declared-default` and `unattended-close-keeps-real-defects` (`:3092-3152`). Each sources
   `content/skills/st-unattended/SKILL.md`, whose coverage exemption left with the first case. The index rows sit at
-  `:3377`, `:3405-3413`, `:3487-3488` and the non-negotiable appendix at `:3606-3616`.
-- **The re-quotes.** The dated paragraphs at `:2995`, `:3154`, `:3180`, `:3206` and `:3233` record each range a corpus
-  edit of this plan moved and each Brief re-quoted from the landed file.
+  `:3403`, `:3431-3439`, `:3513-3514` and the non-negotiable appendix at `:3632-3642`.
+- **The re-quotes.** The dated paragraphs at `:2995`, `:3154`, `:3180`, `:3206`, `:3233`, `:3247` and `:3262` record each
+  range a corpus edit of this plan moved and each Brief re-quoted from the landed file; the last re-quotes the skill's
+  ending into three cases once it names `Not done: origin changed` beside `Not done: draft PR not opened`.
 - **As built, where the delta differed:** the plan named the twin `attended-twin-leave-uncommitted`; the instrument
   reads a twin off the `benign-` prefix, so the case carries it (`:3077-3079`). No eval run is made with these
   changes; the next run of the set measures them first (`:3089-3090`).
