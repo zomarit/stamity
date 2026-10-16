@@ -1604,6 +1604,27 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 		"typeset",
 		"local"
 	]);
+	const READERS = /* @__PURE__ */ new Set([
+		"read",
+		"mapfile",
+		"readarray",
+		"getopts"
+	]);
+	function assignsNoValue(cmd) {
+		const program = cmd[0] ?? "";
+		if (READERS.has(program)) return cmd.slice(1);
+		if (program === "for") return cmd.slice(1, cmd.includes("in") ? cmd.indexOf("in") : void 0);
+		if (program !== "printf") return [];
+		return cmd.flatMap((word, index) => word === "-v" ? [cmd[index + 1] ?? ""] : /^-v./.test(word) ? [word.slice(2)] : []);
+	}
+	const ALLEXPORT_CLUSTER = /^-[A-Za-z]*a[A-Za-z]*$/;
+	const OPTION_SETTERS = /* @__PURE__ */ new Set([
+		"set",
+		"setopt",
+		"unsetopt",
+		"shopt"
+	]);
+	const NAMES_VARIABLE = new RegExp(`\\b${GIT_VARIABLE}`, "i");
 	const SETS_TEXT = new RegExp(`\\$\\{?env:${GIT_VARIABLE}\\}?\\s*(?:[-+*/%]|\\?\\?)?=|\\b(?:Set-Item|New-Item|si|ni)\\b[^;|&\\n]*?(?<![\\w$\\{])env:\\\\?${GIT_VARIABLE}|\\[(?:System\\.)?Environment\\]::SetEnvironmentVariable\\(\\s*['"]${GIT_VARIABLE}`, "i");
 	const PROGRAM_WORD = new RegExp(`^(?:${PROGRAM_VARIABLES})=`, "i");
 	const PROGRAM_TEXT = new RegExp(`\\b(?:${PROGRAM_VARIABLES})\\}?\\s*=`, "i");
@@ -1746,10 +1767,12 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 			if (GRAPHQL_MOVES.test(cmd.join(" "))) return deny("A GraphQL mutation that moves a branch or a pull request");
 		} else if (write && MOVES.some((pattern) => pattern.test(path))) return deny(`A REST write that moves a branch or a pull request (${method} ${path})`);
 	}
+	const allexport = commands.some((cmd) => cmd[0] === "set" && cmd.slice(1).some((word) => ALLEXPORT_CLUSTER.test(word)) || OPTION_SETTERS.has(cmd[0] ?? "") && cmd.slice(1).some((word) => /^(?:no)?allexport$/.test(word.replace(/_/g, "").toLowerCase())));
 	if (assigned.some((word) => SETS_WORD.test(word)) || commands.some((cmd) => {
 		const exports = cmd[0] === "export" || EXPORTERS.has(cmd[0] ?? "") && cmd.slice(1).some((word) => EXPORTS.test(word));
+		if (assignsNoValue(cmd).some((word) => SETS_WORD.test(word))) return true;
 		return SETTERS.has(cmd[0] ?? "") && cmd.slice(1).some((word) => SETS_WORD.test(word) && (exports || word.includes("=")));
-	}) || SETS_TEXT.test(command)) return deny("A line that sets one of git's program or configuration variables (`GIT_EXEC_PATH`, `GIT_EDITOR`, `GIT_CONFIG_COUNT`, …), which the run verbs' own git reads,");
+	}) || SETS_TEXT.test(command) || allexport && (NAMES_VARIABLE.test(command) || [...assigned, ...commands.flat()].some((word) => NAMES_VARIABLE.test(word)))) return deny("A line that sets one of git's program or configuration variables (`GIT_EXEC_PATH`, `GIT_EDITOR`, `GIT_CONFIG_COUNT`, …), which the run verbs' own git reads,");
 	return { deny: false };
 };
 
