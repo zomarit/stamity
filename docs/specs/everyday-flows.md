@@ -3502,15 +3502,18 @@ refuse unless the invocation names the plan paths, and an ask with no default re
 (`content/skills/st-unattended/SKILL.md:67-72`). On Claude Code a PreToolUse hook on `AskUserQuestion`, with no
 fail-closed tail, exits 2 naming the rule and the record or the variable it read, reading no order among records: while
 any in-progress record reads `Mode: unattended`; else, with no in-progress record reading `Mode: attended`, while the
-variable is set, except when no run is in progress and a closed record reading `Mode: unattended` names the current
-branch as its `Branch:` (Claude Code's final round after that run handed off; on any other branch the variable
-decides). The gate is `UNATTENDED_ASK_GATE_FILE` and its reasons in `src/hooks/scripts.ts`, wired after every planned
-PreToolUse row (`src/adapters/claude.ts:924-930`). The detail lives in the `st-unattended` skill, called by name only
-in that mode.
+variable is set, except when no run is in progress, a closed record reading `Mode: unattended` names the current
+branch as its `Branch:`, and the run-ended marker `.stamity/run-ended.json` names that record's run: `stamity run end`
+writes it, `{ "run": "<run-id>" }`, at the run's final exit and `stamity run start` deletes it, so a later session
+on that branch has none before its own record opens (Claude Code's final round after that run handed off; on any
+other branch, or with no marker naming the run, the variable decides; pr/17). The gate is `UNATTENDED_ASK_GATE_FILE`
+and its reasons in `src/hooks/scripts.ts`, wired after every planned PreToolUse row (`src/adapters/claude.ts:924-930`).
+The detail lives in the `st-unattended` skill, called by name only in that mode.
 
-- **Proof:** `test/hooks/unattendedAskGate.test.ts` ("the ask gate's five cases (REQ-FLOW-090)"),
-  `test/adapters/claude.test.ts` (the ask gate's placement), `test/hooks/scriptBudget.test.ts`,
-  `test/corpus/skills/unattended.test.ts` ("st-unattended — asks (REQ-FLOW-090)").
+- **Proof:** `test/hooks/unattendedAskGate.test.ts` ("the ask gate's five cases (REQ-FLOW-090)", and the closed
+  record with no marker naming its run), `test/cli/commands/runEnd.test.ts` and `test/cli/commands/run.test.ts` (the
+  marker's write and delete), `test/adapters/claude.test.ts` (the ask gate's placement),
+  `test/hooks/scriptBudget.test.ts`, `test/corpus/skills/unattended.test.ts` ("st-unattended — asks (REQ-FLOW-090)").
 
 ### REQ-FLOW-091 — An unattended start needs a ready plan
 
@@ -3551,19 +3554,19 @@ exit 1 (0 with a pull request). No call runs `gh pr create`, `gh pr ready`, a me
 the default branch, read by REST; `run start` leaves it for a branch of the run's own
 (`content/skills/st-unattended/SKILL.md:76-77`, `:86-105`). The pull request's marker is `runMarker` and its ladder
 `ensureDraftPr` (`src/runs/pullRequest.ts:82`, `:225`), which `run end` and `run checkpoint --pr` take through
-`draftPr` (`src/cli/commands/run.ts:1102-1146`). `run end` runs the checkpoint's commit, scan and push
-(`src/cli/commands/run.ts:227`), then the pull-request step on every `end` that reaches it, `--refused` giving the
-`Refused: <title>` title (`:805-817`).
+`draftPr` (`src/cli/commands/run.ts:1115-1159`). `run end` runs the checkpoint's commit, scan and push
+(`src/cli/commands/run.ts:233`), then the pull-request step on every `end` that reaches it, `--refused` giving the
+`Refused: <title>` title (`:818-830`).
 
 - **As built, where the delta differed:** not every exit reaches the pull request. A held path, a scan hit or a
   refused push returns before that step, so `run end` exits 1 with no pull request opened or updated
-  (`src/cli/commands/run.ts:748-757`, `:759-779`, `:792-800`). Nor does an exit whose origin moved: `run start` pins
+  (`src/cli/commands/run.ts:761-770`, `:772-792`, `:805-813`). Nor does an exit whose origin moved: `run start` pins
   origin's repository in the run folder's `origin.json` once the run is on its branch, so a pin a checkpoint committed
   there is the one compared (pr/4), read from its fetch URL and from every push URL as git resolves it (`insteadOf`
   and `pushInsteadOf` applied), and `run checkpoint` and `run end` resolve them again before they stage, refusing as
   `origin changed: …` where one names another repository and, unattended, as `origin not pinned: …` where no pin is
   readable, with nothing committed, pushed or opened (`pinOrigin` and `originRefusal`,
-  `src/cli/commands/run.ts:370-414`, called at `:263`, `:294` and `:607`). A refused open names its cause,
+  `src/cli/commands/run.ts:378-422`, called at `:271`, `:302` and `:620`). A refused open names its cause,
   `draft PR not opened (<branch>): <cause>`, by class and never in `gh`'s or GitHub's own words (`ensureDraftPr`,
   `src/runs/pullRequest.ts:225-229`; `ghFailure` and `rejection`, `:181-204`).
 - **Proof:** `test/runs/pullRequest.test.ts`, `test/cli/commands/run.test.ts`, `test/cli/commands/runCheckpoint.test.ts`,
@@ -3578,23 +3581,23 @@ Given `Mode: unattended`, When a unit closes or the run is about to wait, Then `
 explicit path list and pushes the run's branch under the limits of REQ-FLOW-092, and with nothing staged commits nothing
 and pushes only when the branch is ahead; the draft pull request opens when Build starts; the record, ledger, plan and
 morning list ride the branch wherever git does not ignore them (an ignored one reads `records: not committed`)
-(`content/skills/st-unattended/SKILL.md:76-84`; `runCheckpoint`, `src/cli/commands/run.ts:545`).
+(`content/skills/st-unattended/SKILL.md:76-84`; `runCheckpoint`, `src/cli/commands/run.ts:553`).
 
 - **As built, where the delta differed:** the checkpoint does not always push. Where a commit the push would send
   changes a held path, or `HEAD`'s tree still does, it pushes nothing and exits 1 (REQ-FLOW-102's "As built" line;
-  `src/cli/commands/run.ts:748-757`). A symbolic link the change adds or retypes at a held glob's folder (`.claude`,
-  `.github/workflows`, any folder's `.vscode`) counts as a held path there and in the held patch (`heldOf`, `:887-892`,
-  over the raw diff's modes, `:847-860`); a held path staged and then edited again carries both layers there, the
-  staged change and the index-to-work-tree one after it (pr/6, `:663-672`). Nor does it push once origin no longer
+  `src/cli/commands/run.ts:761-770`). A symbolic link the change adds or retypes at a held glob's folder (`.claude`,
+  `.github/workflows`, any folder's `.vscode`) counts as a held path there and in the held patch (`heldOf`, `:900-905`,
+  over the raw diff's modes, `:860-873`); a held path staged and then edited again carries both layers there, the
+  staged change and the index-to-work-tree one after it (pr/6, `:676-685`). Nor does it push once origin no longer
   names the repository `run start` pinned: it exits 1 as `origin changed: …` before it stages (REQ-FLOW-092's "As
-  built" line; `:607-611`), and the pin rides the branch with the record (`RUN_FILES`, `:137`). Nor does it commit a
+  built" line; `:620-624`), and the pin rides the branch with the record (`RUN_FILES`, `:143`). Nor does it commit a
   path staged before it ran that is none of the run files, the held paths and patches or `--paths` (a folder entry
   covering what is under it): it exits 1 as
-  `commit refused: <path> is staged and not in --paths` (pr/5; `strayStaged`, `:1013-1022`, called at `:721-730`).
+  `commit refused: <path> is staged and not in --paths` (pr/5; `strayStaged`, `:1026-1035`, called at `:734-743`).
   "Ahead" is read from the remote's own branch, `git ls-remote --exit-code origin refs/heads/<branch>`, never a
-  remote-tracking ref a deletion on the remote left stale (pr/20; `remoteTip`, `:447-454`). A pushed code file the
+  remote-tracking ref a deletion on the remote left stale (pr/20; `remoteTip`, `:455-462`). A pushed code file the
   scan could not read leaves the push and the exit as they are and adds `secret scan: <n> files unscanned (<paths>)`
-  to `notDone[]` (pr/7; `:773-776`), which the skill copies on any exit.
+  to `notDone[]` (pr/7; `:786-789`), which the skill copies on any exit.
 - **Proof:** `test/cli/commands/runCheckpoint.test.ts`, `test/cli/commands/run.test.ts`,
   `test/corpus/skills/unattended.test.ts`.
 
@@ -4787,7 +4790,12 @@ above.
 
 - GIVEN an in-progress record reading `Mode: unattended` THEN the ask gate exits 2 naming it; GIVEN one reading
   `Mode: attended` beside it THEN still 2; GIVEN no run in progress and a closed unattended record whose `Branch:` is the
-  current branch THEN 0; GIVEN another branch THEN the variable decides. *(test: `test/hooks/unattendedAskGate.test.ts`)*
+  current branch, with the run-ended marker naming its run, THEN 0; GIVEN the same record and branch with no marker, or
+  one naming another run, THEN 2; GIVEN another branch THEN the variable decides. *(test:
+  `test/hooks/unattendedAskGate.test.ts`)*
+- GIVEN `run end` at any exit THEN the marker names its run; GIVEN `run start` THEN it is gone; neither under
+  `--dry-run`.
+  *(test: `test/cli/commands/runEnd.test.ts`, `test/cli/commands/run.test.ts`)*
 - GIVEN Claude Code's settings THEN the ask gate sits on `AskUserQuestion` after every planned PreToolUse row, with no
   fail-closed tail. *(test: `test/adapters/claude.test.ts`)*
 
@@ -4804,7 +4812,7 @@ above.
   *(test: `test/runs/pullRequest.test.ts`; through `run end`, `test/cli/commands/runEnd.test.ts`)*
 - GIVEN `run start` on the default branch THEN the run moves to `stamity/<run-id>`; GIVEN any call THEN no `gh pr create`,
   no force, no tag and no default-branch push. *(test: `test/cli/commands/run.test.ts`,
-  `test/cli/commands/runCheckpoint.test.ts`, whose push step `run end` runs as its own (`src/cli/commands/run.ts:227`);
+  `test/cli/commands/runCheckpoint.test.ts`, whose push step `run end` runs as its own (`src/cli/commands/run.ts:233`);
   `test/cli/commands/runEnd.test.ts` for what `run end` adds, the pull request after the push and none after a held one)*
 - GIVEN `run start` on the default branch and a run branch whose tip tracks its origin pin THEN the switch goes through,
   the pin is kept and the checkout is clean; GIVEN that pin naming another repository THEN exit 1, `Not done: origin

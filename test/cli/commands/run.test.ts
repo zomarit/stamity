@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runCommand } from "../../../src/cli/commands/run.ts";
+import { RUN_ENDED_MARKER_FILE } from "../../../src/mcp/env.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { NO_GIT_CONFIG } from "../../support/repoFixtures.ts";
 import { useTempDir } from "../../support/tempDir.ts";
@@ -424,6 +425,25 @@ describe("stamity run start", () => {
       expect(planned.stdout).toContain(`origin: github.com/o/r (would be pinned in ${PIN})`);
       expect(existsSync(join(dry, PIN))).toBe(false);
     });
+  });
+
+  // pr/17: a new run closes the last one's final question round, which the ask gate reads off run end's marker.
+  it("deletes the run-ended marker an earlier run end wrote, and keeps it under --dry-run", async () => {
+    const repo = await seedRepo();
+    const dry = await seedRepo();
+    restDefault("main");
+    await Promise.all(
+      [repo, dry].map(async (at) => {
+        await mkdir(join(at, ".stamity"), { recursive: true });
+        await writeFile(join(at, RUN_ENDED_MARKER_FILE), `${JSON.stringify({ run: "2026-10-15_earlier" })}\n`);
+      }),
+    );
+
+    expect((await run(repo, START)).code).toBe(0);
+    expect((await run(dry, [...START, "--dry-run"])).code).toBe(0);
+
+    expect(existsSync(join(repo, RUN_ENDED_MARKER_FILE))).toBe(false);
+    expect(existsSync(join(dry, RUN_ENDED_MARKER_FILE))).toBe(true);
   });
 
   it("is a usage error without --run (exit 2)", async () => {

@@ -30,7 +30,7 @@ import {
 import type { Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
 import { CONTENT_PREFIX, GENERATED_SCRIPT_LINT_DIRECTIVE, STATE_DIR } from "../types/markers.ts";
-import { PREFLIGHT_CANARY_FILE } from "../mcp/env.ts";
+import { PREFLIGHT_CANARY_FILE, RUN_ENDED_MARKER_FILE } from "../mcp/env.ts";
 import { buildResumeCardSource, RESUME_CARD_HOST_NAMES } from "../runs/cardSource.ts";
 import {
   GIT_METADATA_MAX_BYTES,
@@ -3913,10 +3913,13 @@ const ASK_TOOL_NAME = "AskUserQuestion";
  * allows, whatever the variable says. Otherwise `STAMITY_UNATTENDED` decides:
  * set (not "", "false", "0") it refuses — except when no run is in progress and
  * a closed record reading `Mode: unattended` names the current branch (read off
- * `.git/HEAD` as the guard reads it) on its `Branch:` line, which is Claude
- * Code's final question round after that run handed off. A closed record carried
- * into a later clone on another branch exempts nothing (review/100). A refusal
- * names the record or the variable it read (review/104).
+ * `.git/HEAD` as the guard reads it) on its `Branch:` line, and the run-ended
+ * marker {@link RUN_ENDED_MARKER_FILE} that `run end` writes and `run start`
+ * deletes names that record's run, which is Claude Code's final question round
+ * after that run handed off (pr/17). A closed record carried into a later clone on
+ * another branch exempts nothing (review/100), nor one on this branch with no
+ * marker naming it: a later session on that branch before its own record opens
+ * (pr/17). A refusal names the record or the variable it read (review/104).
  *
  * Fail-open by design: a question is the safe failure, so a payload it cannot
  * read, a records folder, record or git file it cannot read, or any fault while
@@ -3939,7 +3942,7 @@ export function buildUnattendedAskGate(opts: { layout?: HookScriptLayout } = {})
     [
       "Reads outside repo state: the pending call's payload on stdin and the",
       "STAMITY_UNATTENDED and STAMITY_REPO_ROOT variables. Reads the run records'",
-      "heads; writes nothing.",
+      "heads and the run-ended marker; writes nothing.",
     ],
   )}
 
@@ -3958,6 +3961,7 @@ const HEAD_LINES = ${RECORD_HEAD_LINES};
 const HEAD_READ_BYTES = ${RECORD_HEAD_READ_BYTES};
 const RUNS_READ_MAX = ${GUARD_RUNS_READ_MAX};
 const GIT_MAX_BYTES = ${GIT_METADATA_MAX_BYTES};
+const MARKER_SEGMENTS = ${json(RUN_ENDED_MARKER_FILE.split("/"))};
 const ASK_TOOL = ${json(ASK_TOOL_NAME)};
 const REASON = ${json(UNATTENDED_ASK_GATE_REASON)};
 const RECORD_SOURCE = ${json(UNATTENDED_ASK_GATE_RECORD_SOURCE)};
@@ -4014,7 +4018,7 @@ function recordHeads(root) {
   const heads = [];
   for (const name of names) {
     const head = recordHead(join(runsDir, name, RECORD_FILE));
-    if (head !== null) heads.push({ ...head, path: [...RUNS_SEGMENTS, name, RECORD_FILE].join("/") });
+    if (head !== null) heads.push({ ...head, run: name, path: [...RUNS_SEGMENTS, name, RECORD_FILE].join("/") });
   }
   return heads;
 }
@@ -4052,6 +4056,19 @@ function currentBranch(root) {
   return head !== null && head.startsWith("ref: refs/heads/") ? head.slice(16) : null;
 }
 
+/** The run id the run-ended marker names; null when absent, a link, not a file, past GIT_MAX_BYTES or naming no run id. */
+function endedRun(root) {
+  const text = gitText(join(root, ...MARKER_SEGMENTS));
+  if (text === null) return null;
+  let run = null;
+  try {
+    run = JSON.parse(text)?.run ?? null;
+  } catch {
+    return null;
+  }
+  return typeof run === "string" && RUN_ID.test(run) ? run : null;
+}
+
 /** What says nobody is there to answer, as the refusal names it; null when a question may be put. */
 function unattendedSource(root) {
   const heads = recordHeads(root);
@@ -4062,11 +4079,13 @@ function unattendedSource(root) {
   if (running.some((head) => head.mode === "attended")) return null;
   const flag = (process.env.STAMITY_UNATTENDED ?? "").trim().toLowerCase();
   if (["", "false", "0"].includes(flag)) return null;
-  // Claude Code's final round: no run in progress, and this branch's unattended run closed its record before asking.
+  // Claude Code's final round: no run in progress, and this branch's unattended run closed its record before asking,
+  // its run end's marker still in place (pr/17): a later session on the branch, before its own record opens, has none.
   const closed = running.length === 0 ? heads.filter((head) => head.mode === "unattended" && head.branch !== null) : [];
   if (closed.length > 0) {
-    const branch = currentBranch(root);
-    if (branch !== null && closed.some((head) => head.branch === branch)) return null;
+    const ended = endedRun(root);
+    const branch = ended === null ? null : currentBranch(root);
+    if (branch !== null && closed.some((head) => head.branch === branch && head.run === ended)) return null;
   }
   return VARIABLE_SOURCE;
 }

@@ -187,6 +187,16 @@ const TOOL_ENV_NOTES: Record<Tool, string> = {
 export const PREFLIGHT_CANARY_FILE = `${STATE_DIR}/preflight-canary.json`;
 
 /**
+ * The run-ended marker (REQ-FLOW-090, pr/17): `stamity run end` writes
+ * `{ "run": "<run-id>" }` here at the run's final exit and `stamity run start`
+ * deletes it; the unattended ask gate lets Claude Code's final question round
+ * through only on the branch of the closed run this names. Machine-local: a
+ * fresh clone or another checkout never holds it, so a closed record carried
+ * there exempts nothing.
+ */
+export const RUN_ENDED_MARKER_FILE = `${STATE_DIR}/run-ended.json`;
+
+/**
  * Paths this engine writes that must never reach a commit: the credential
  * file, and the review gate's runtime state — its counter, the lock directory
  * beside it, and the temp files its publish renames over the counter. The gate

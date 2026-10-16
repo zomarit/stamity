@@ -22,6 +22,7 @@ import {
   UNATTENDED_ASK_GATE_RECORD_SOURCE,
   UNATTENDED_ASK_GATE_VARIABLE_SOURCE,
 } from "../../src/hooks/scripts.ts";
+import { RUN_ENDED_MARKER_FILE } from "../../src/mcp/env.ts";
 import { TOOLS } from "../../src/types/core.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
@@ -98,6 +99,11 @@ function record(status: string, mode?: "attended" | "unattended", branch?: strin
   return `# Run\n\nStatus: ${status}\nPlan: docs/plans/x.md\n${modeLine}${branchLine}Invocation: /st-work x\n`;
 }
 
+/** The run-ended marker `run end` writes at the run's final exit, naming `runId` (pr/17). */
+function ended(runId: string): Record<string, string> {
+  return { [RUN_ENDED_MARKER_FILE]: `${JSON.stringify({ run: runId })}\n` };
+}
+
 /** `.git/HEAD` on a branch, as a checkout writes it. */
 function onBranch(branch: string): Record<string, string> {
   return { ".git/HEAD": `ref: refs/heads/${branch}\n` };
@@ -128,10 +134,12 @@ describe("the ask gate's five cases (REQ-FLOW-090)", () => {
     for (const on of ["true", "yes", "unattended"]) expect(denies(gate, { STAMITY_UNATTENDED: on }), on).toBe(true);
   });
 
+  // TEST CHANGE, justified: pr/17 (signed off 11:33Z) ties the final round to the run-ended marker `run end` writes too.
   it("allows Claude Code's final round: the variable set, the newest record a closed unattended run", async () => {
     const gate = await placeGate({
       ".stamity/runs/2026-10-15_older/record.md": record("done", "attended"),
       ".stamity/runs/2026-10-16_night/record.md": record("handed off", "unattended", "stamity/night"),
+      ...ended("2026-10-16_night"),
       ...onBranch("stamity/night"),
     });
     expect(denies(gate, ON)).toBe(false);
@@ -186,10 +194,13 @@ describe("which record the gate reads", () => {
     });
   }
 
+  // TEST CHANGE, justified: pr/17 (signed off 11:33Z) needs the run-ended marker for the final round, so it is seeded
+  // here and each refusal below is still the branch's, as review/100 pins it.
   it("holds the final round only on the closed unattended record's own branch (review/100)", async () => {
     // A record carried into a later clone: committed on its run's branch, merged, read from main.
     const gate = await placeGate({
       ".stamity/runs/2026-10-16_night/record.md": record("handed off", "unattended", "stamity/night"),
+      ...ended("2026-10-16_night"),
       ...onBranch("main"),
     });
     expect(refusal(gate, ON)).toBe(BY_VARIABLE);
@@ -207,9 +218,11 @@ describe("which record the gate reads", () => {
     expect(refusal(gate, ON)).toBe(BY_VARIABLE);
   });
 
+  // TEST CHANGE, justified: pr/17 needs the run-ended marker for the final round this case reads the branch for.
   it("follows a linked worktree's gitdir: pointer to the HEAD it reads", async () => {
     const gate = await placeGate({
       ".stamity/runs/2026-10-16_night/record.md": record("handed off", "unattended", "stamity/night"),
+      ...ended("2026-10-16_night"),
       ".git": "gitdir: common/.git/worktrees/night\n",
       "common/.git/worktrees/night/HEAD": "ref: refs/heads/stamity/night\n",
     });
@@ -217,6 +230,26 @@ describe("which record the gate reads", () => {
     // One fact away: the worktree's own HEAD on another branch.
     await getRepo().seedFiles({ "common/.git/worktrees/night/HEAD": "ref: refs/heads/main\n" });
     expect(refusal(gate, ON)).toBe(BY_VARIABLE);
+  });
+
+  // pr/17: a later session on a closed run's branch (a chain's next file, an unattended /st-pr-resolve on its head)
+  // asks nothing before its own record opens, since only the closed run's own run end leaves the marker behind.
+  it("refuses on a closed unattended record's branch with no run-ended marker naming that run (pr/17)", async () => {
+    const gate = await placeGate({
+      ".stamity/runs/2026-10-16_night/record.md": record("handed off", "unattended", "stamity/night"),
+      ...onBranch("stamity/night"),
+    });
+    expect(refusal(gate, ON)).toBe(BY_VARIABLE);
+    // A marker naming another run, or no run id, or one that is no JSON, exempts nothing either.
+    await getRepo().seedFiles(ended("2026-10-15_other"));
+    expect(refusal(gate, ON)).toBe(BY_VARIABLE);
+    await getRepo().seedFiles(ended("../night"));
+    expect(refusal(gate, ON)).toBe(BY_VARIABLE);
+    await getRepo().seedFiles({ [RUN_ENDED_MARKER_FILE]: "{not json\n" });
+    expect(refusal(gate, ON)).toBe(BY_VARIABLE);
+    // One fact away: the marker names the closed run → its final round may ask.
+    await getRepo().seedFiles(ended("2026-10-16_night"));
+    expect(denies(gate, ON)).toBe(false);
   });
 
   it("reads a debug round's record too", async () => {

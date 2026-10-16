@@ -5,6 +5,7 @@ import { Argument, InvalidArgumentError, type Command } from "commander";
 import { matchGlob } from "../../change/classify.ts";
 import { heldPaths, PERSON_ONLY_PATHS } from "../../change/personOnlyPaths.ts";
 import { personOnlyVerdict } from "../../hooks/personOnly.ts";
+import { RUN_ENDED_MARKER_FILE } from "../../mcp/env.ts";
 import { MORNING_FILE, prBodyFrom, screenOutbound } from "../../runs/morning.ts";
 import { inferPrerequisites, type PrereqRow } from "../../runs/prerequisites.ts";
 import { ensureDraftPr, HOST_NAME, resolveRepo, type PrOutcome } from "../../runs/pullRequest.ts";
@@ -107,6 +108,11 @@ import { readPushed, scanChange } from "./gate.ts";
  * Exit 0 when the remote branch holds `HEAD` and a pull request was opened,
  * updated or commented; else 1. The JSON is `checkpoint`'s with
  * `subcommand: "end"`, `inferred` always present.
+ *
+ * **The run-ended marker** (pr/17): every `end` exit past the record's read,
+ * `--dry-run` aside, writes `{ "run": "<run-id>" }` to `.stamity/run-ended.json`,
+ * and `start` deletes it first; the ask gate allows the final question round
+ * only on the branch of the closed run it names.
  */
 
 const START = "start";
@@ -255,6 +261,8 @@ async function runStart(ctx: CliContext, run: string): Promise<CommandResult> {
       next: "run it inside a repository with at least one commit",
     });
   }
+  // pr/17: a new run starting closes the last one's final question round, which the ask gate reads off this marker.
+  if (!ctx.dryRun) removeRunEndedMarker(cwd);
   const current = await currentBranch(cwd);
   const defaults = current === null ? null : await defaultBranches(ctx, cwd);
   const onDefault = defaults !== null && current !== null && defaults.names.includes(current.toLowerCase());
@@ -573,7 +581,12 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
 
   const result: Checkpoint = { branch: null, base, committed: null, pushed: false, held: [], scan: { hits: [], unscanned: [] }, pr: null, notDone: [] };
   const lines: string[] = [`run: ${run} (${unattended ? "unattended" : "attended"})`, `base: ${base}`];
-  const finish = (ok: boolean, extra: Record<string, unknown> = {}): CommandResult => {
+  const finish = async (ok: boolean, extra: Record<string, unknown> = {}): Promise<CommandResult> => {
+    // pr/17: `end` is the run's final exit, whichever way it goes; the marker names the run the ask gate's final round is for.
+    if (verb === END && !ctx.dryRun) {
+      const marked = await markRunEnded(ctx, cwd, run);
+      if (marked !== null) result.notDone.push(marked);
+    }
     const notDone = result.notDone.map((entry) => sanitizeLabel(entry));
     result.notDone = notDone;
     ctx.io.out(`${[...lines, ...(notDone.length === 0 ? [] : ["Not done:", ...notDone.map((entry) => `  - ${entry}`)])].join("\n")}\n`);
@@ -1240,6 +1253,41 @@ function exists(path: string): boolean {
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * `end`'s run-ended marker (pr/17, REQ-FLOW-090): `{ "run": "<run-id>" }` at
+ * {@link RUN_ENDED_MARKER_FILE}, never through a link; `null` once written,
+ * else the `notDone` line. A marker not written only refuses the final round's
+ * question, so the exit stays as the run's own steps set it.
+ */
+async function markRunEnded(ctx: CliContext, cwd: string, run: string): Promise<string | null> {
+  try {
+    await ctx.engine.merge.atomicWrite.atomicWriteFile(join(cwd, RUN_ENDED_MARKER_FILE), `${JSON.stringify({ run })}\n`, { boundaryDir: cwd });
+    return null;
+  } catch (cause) {
+    return `run-ended marker not written: ${RUN_ENDED_MARKER_FILE} (${cause instanceof Error ? cause.message : "write failed"}), so the final round's question is refused`;
+  }
+}
+
+/**
+ * `start` removes the run-ended marker an earlier `end` wrote (pr/17): the
+ * link itself where one is there, never its target; a marker that cannot be
+ * removed fails the verb, since it would keep the earlier run's final round open.
+ */
+function removeRunEndedMarker(cwd: string): void {
+  const marker = join(cwd, RUN_ENDED_MARKER_FILE);
+  if (!exists(marker)) return;
+  try {
+    unlinkSync(marker);
+  } catch (cause) {
+    throw new CliFailure({
+      code: "FAILURE",
+      message: `run start could not remove ${RUN_ENDED_MARKER_FILE}`,
+      why: cause instanceof Error ? sanitizeLabel(cause.message) : "the remove failed",
+      next: `remove ${RUN_ENDED_MARKER_FILE} by hand, then run it again`,
+    });
   }
 }
 

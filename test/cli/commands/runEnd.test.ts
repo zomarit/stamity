@@ -1,10 +1,11 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { chmod, mkdir, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runCommand } from "../../../src/cli/commands/run.ts";
 import type * as GitWriteModule from "../../../src/cli/engine/gitWrite.ts";
+import { RUN_ENDED_MARKER_FILE } from "../../../src/mcp/env.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { NO_GIT_CONFIG } from "../../support/repoFixtures.ts";
 import { useTempDir } from "../../support/tempDir.ts";
@@ -358,6 +359,27 @@ describe("stamity run end", () => {
     expect(doc).toMatchObject({ subcommand: "end", pushed: false, pr: null, inferred: [], notDone: ["push held: secret scan hit at a.txt:1 (github-token)"] });
     expect(writesToGitHub()).toEqual([]);
     expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
+  });
+
+  // pr/17: the ask gate allows the final question round only where this marker names the closed run.
+  it("writes the run-ended marker naming the run at its exit, refused or not, and never pushes it; none under --dry-run", async () => {
+    const done = await seed("attended");
+    const refused = await seed("unattended", { branch: "feature/other" });
+    const dry = await seed("attended");
+    await Promise.all([done, refused, dry].map(({ repo }) => writeFile(join(repo, "a.txt"), "changed\n")));
+
+    const ok = await run(done.repo, [...END("feat: x"), "--paths", "a.txt"]);
+    const no = await run(refused.repo, [...END("feat: x"), "--paths", "a.txt"]);
+    const planned = await run(dry.repo, [...END("feat: x"), "--paths", "a.txt", "--dry-run"]);
+
+    const marker = `${JSON.stringify({ run: RUN })}\n`;
+    expect(ok.code).toBe(0);
+    expect(await readFile(join(done.repo, RUN_ENDED_MARKER_FILE), "utf8")).toBe(marker);
+    expect(git(done.remote, ["ls-tree", "-r", "--name-only", `refs/heads/${RUN_BRANCH}`])).not.toContain(RUN_ENDED_MARKER_FILE);
+    expect(no.code).toBe(1);
+    expect(await readFile(join(refused.repo, RUN_ENDED_MARKER_FILE), "utf8")).toBe(marker);
+    expect(planned.code).toBe(0);
+    expect(existsSync(join(dry.repo, RUN_ENDED_MARKER_FILE))).toBe(false);
   });
 
   it("refuses as branch mismatch off the record's Branch:, pushing nothing and opening no pull request", async () => {
