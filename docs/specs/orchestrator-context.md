@@ -556,16 +556,19 @@ Amended 2026-10-16 (plan 021 file 1, run `2026-10-15_cloud-runs`, units `u1-reco
 integration head `4daeb214`). The head names the plan, the invocation, the branch and the mode. Given Frame, Then the
 first 15 lines of `record.md` carry `Status:`, `Plan:`, `Base:`, `Branch: <the run's branch>`, `Invocation:` and
 `Mode: attended | unattended`, each bare at column 0 (`content/commands/st-work.md:405-410`); `readRecordHead`
-returns `mode`, `branch` and `base`, and a missing `Mode:` line or any other value reads as attended
-(`src/runs/resumeCard.ts:73-82`, `:225-253`). The debug record keeps its three head lines when attended; an unattended
-`/st-debug` record adds `Mode:`, `Branch:` and `Base:` (`content/commands/st-debug.md:56-68`), and an unattended
+returns `mode`, `branch` and `base` (`src/runs/resumeCard.ts:73-82`, `:225-253`), and a missing `Mode:` line or any
+other value reads as attended unless `STAMITY_UNATTENDED` is set (to a value other than empty, `false` or `0`); then the
+variable governs, as the shell guard, the ask gate and the run verbs read it, a `Mode: attended` head winning over it
+(`unattendedBy` and `unattendedSource`, `src/hooks/scripts.ts:3575-3603`, `:3954-3970`; `readsUnattended`,
+`src/cli/commands/run.ts:408`, `:687-690`; read at `bc12cfc3`). The debug record keeps its three head lines when
+attended; an unattended `/st-debug` record adds `Mode:`, `Branch:` and `Base:` (`content/commands/st-debug.md:56-68`), and an unattended
 `/st-pr-resolve` opens a record of its own with the six lines (`content/commands/st-pr-resolve.md:54`). The resume
 card's printed lines do not change.
 
 - **As built, where the delta differed:** `readRecordHead` returns `mode: null` for a missing line or any other value,
-  and every reader takes only `unattended` as the mode, so `null` reads as attended; it also returns `resumes`, the
-  `Resumes: <run-id>` line a morning walk's record carries (`content/skills/st-unattended/SKILL.md:140-142`), so the
-  hook twin reads seven head lines where it read three.
+  which reads attended where `STAMITY_UNATTENDED` is unset and lets the variable decide where it is set, as above; it
+  also returns `resumes`, the `Resumes: <run-id>` line a morning walk's record carries
+  (`content/skills/st-unattended/SKILL.md:140-142`), so the hook twin reads seven head lines where it read three.
 - **Proof:** `test/runs/recordHead.test.ts` ("the record head's mode, branch, base and resumes lines (REQ-CTX-012)"),
   `test/runs/resumeCardParity.test.ts` ("the hook twin's record head (REQ-CTX-012)"), `test/corpus/commands/work.test.ts`,
   `test/corpus/commands/lightTrio.test.ts`, `test/corpus/commands/feedbackPair.test.ts`.
@@ -1515,9 +1518,13 @@ command again whenever this section grows; do not count by eye.
   instructs writing". Amended 2026-10-09, `review/115`, `review/133`; it named `Plan:` and
   `Invocation:` only).
 - GIVEN that paragraph THEN it also names `Mode: attended | unattended` and `Branch:` among the six head lines; GIVEN a
-  head with no `Mode:` line, or another value, THEN `readRecordHead` returns `mode: null`, which no reader takes as
-  unattended; GIVEN `Mode: Unattended` THEN `unattended` (added 2026-10-16, plan 021 file 1;
-  `test/runs/recordHead.test.ts`, `test/corpus/commands/work.test.ts`).
+  head with no `Mode:` line, or another value, THEN `readRecordHead` returns `mode: null`, which the shell guard, the
+  ask gate and the run verbs read as attended with `STAMITY_UNATTENDED` unset and as unattended with it set, a
+  `Mode: attended` head reading attended either way; GIVEN `Mode: Unattended` THEN `unattended` (added 2026-10-16, plan
+  021 file 1; `test/runs/recordHead.test.ts`, `test/corpus/commands/work.test.ts`; the variable's reading,
+  `test/hooks/personOnlyGuard.test.ts`, `test/hooks/unattendedAskGate.test.ts`,
+  `test/cli/commands/runCheckpoint.test.ts`, `test/cli/commands/runEnd.test.ts`, amended 2026-10-16 in the merge's
+  first fix round).
 - GIVEN every changed-shape replay run WHEN its Frame phase has ended THEN:
   - the first 15 lines of `.stamity/runs/<run-id>/record.md` hold exactly one line each
     beginning `Status:`, `Plan:` and `Invocation:`;
