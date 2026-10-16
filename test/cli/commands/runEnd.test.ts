@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,8 +14,8 @@ import { useTempDir } from "../../support/tempDir.ts";
  * `stamity run end`, through the in-process funnel. It runs `checkpoint`'s
  * steps and then the draft pull request every time; on the morning walk's
  * attended record (`Resumes: <run-id>`) the body is the resumed run's list. Git runs for real, in
- * scratch repositories pushing to a real bare remote (`remote.origin.pushurl`),
- * while `remote.origin.url` names a GitHub repository so the REST reads and the
+ * scratch repositories pushing to a real bare remote (each push alone maps origin's
+ * GitHub URL to it, see the spy below), while origin names a GitHub repository so the REST reads and the
  * pull request step have one to match.
  */
 
@@ -50,7 +51,23 @@ vi.mock("../../../src/cli/engine/gitWrite.ts", async (importOriginal) => {
     ...real,
     gitWrite: (cwd: string, args: readonly string[], opts?: Parameters<typeof real.gitWrite>[2]) => {
       writes.argv.push([...args]);
-      return real.gitWrite(cwd, args, opts);
+      // TEST CHANGE, justified: review/209 refuses a push URL naming no GitHub repository, so origin's push URL is
+      // its GitHub URL; for the push call alone an `insteadOf` in the environment (read once, as the call starts)
+      // sends it to the case's bare remote, `remote.git` beside the repository the push runs at the top of, so
+      // every read the verb makes sees the GitHub URL git would push to.
+      const remote = join(dirname(cwd), "remote.git");
+      if (args[0] !== "push" || !existsSync(remote)) return real.gitWrite(cwd, args, opts);
+      const mapping = { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: `url.${remote}.insteadOf`, GIT_CONFIG_VALUE_0: "https://github.com/o/r.git" };
+      const previous = Object.fromEntries(Object.keys(mapping).map((key) => [key, process.env[key]]));
+      Object.assign(process.env, mapping);
+      try {
+        return real.gitWrite(cwd, args, opts);
+      } finally {
+        for (const [key, value] of Object.entries(previous)) {
+          if (value === undefined) delete process.env[key];
+          else process.env[key] = value;
+        }
+      }
     },
   };
 });
@@ -136,7 +153,6 @@ describe("stamity run end", () => {
     git(repo, ["add", "-A"]);
     git(repo, ["commit", "-q", "-m", "seed"]);
     git(repo, ["remote", "add", "origin", "https://github.com/o/r.git"]);
-    git(repo, ["config", "remote.origin.pushurl", remote]);
     const base = git(repo, ["rev-parse", "HEAD"]);
     const branch = opts.branch ?? RUN_BRANCH;
     git(repo, ["switch", "-q", "-c", branch]);

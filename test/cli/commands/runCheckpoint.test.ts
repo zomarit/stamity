@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { lstatSync } from "node:fs";
+import { existsSync, lstatSync } from "node:fs";
 import { chmod, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -14,7 +14,7 @@ import { useTempDir } from "../../support/tempDir.ts";
  * u18b-run-checkpoint (REQ-FLOW-092, REQ-FLOW-093, REQ-FLOW-102,
  * REQ-FLOW-103): `stamity run checkpoint`, through the in-process funnel.
  * Git runs for real, in scratch repositories pushing to a real bare remote
- * (`remote.origin.pushurl`), while `remote.origin.url` names a GitHub
+ * (each push alone maps origin's GitHub URL to it, see the spy below), while origin names a GitHub
  * repository so the REST reads and the pull request step have one to match.
  * What landed is read from the remote's refs afterwards.
  */
@@ -48,7 +48,23 @@ vi.mock("../../../src/cli/engine/gitWrite.ts", async (importOriginal) => {
     ...real,
     gitWrite: (cwd: string, args: readonly string[], opts?: Parameters<typeof real.gitWrite>[2]) => {
       writes.argv.push([...args]);
-      return real.gitWrite(cwd, args, opts);
+      // TEST CHANGE, justified: review/209 refuses a push URL naming no GitHub repository, so origin's push URL is
+      // its GitHub URL; for the push call alone an `insteadOf` in the environment (read once, as the call starts)
+      // sends it to the case's bare remote, `remote.git` beside the repository the push runs at the top of, so
+      // every read the verb makes sees the GitHub URL git would push to.
+      const remote = join(dirname(cwd), "remote.git");
+      if (args[0] !== "push" || !existsSync(remote)) return real.gitWrite(cwd, args, opts);
+      const mapping = { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: `url.${remote}.insteadOf`, GIT_CONFIG_VALUE_0: "https://github.com/o/r.git" };
+      const previous = Object.fromEntries(Object.keys(mapping).map((key) => [key, process.env[key]]));
+      Object.assign(process.env, mapping);
+      try {
+        return real.gitWrite(cwd, args, opts);
+      } finally {
+        for (const [key, value] of Object.entries(previous)) {
+          if (value === undefined) delete process.env[key];
+          else process.env[key] = value;
+        }
+      }
     },
   };
 });
@@ -150,7 +166,6 @@ describe("stamity run checkpoint", () => {
     git(repo, ["add", "-A"]);
     git(repo, ["commit", "-q", "-m", "seed"]);
     git(repo, ["remote", "add", "origin", "https://github.com/o/r.git"]);
-    git(repo, ["config", "remote.origin.pushurl", remote]);
     const base = git(repo, ["rev-parse", "HEAD"]);
     // TEST CHANGE, justified: review/159 and review/160 read every commit no remote-tracking ref holds, so the
     // seed is fetched as origin/main, as a run's clone has it; with none, the seed (.cursorrules) would be unpushed.
@@ -756,6 +771,41 @@ describe("stamity run checkpoint", () => {
     expect(git(repo, ["rev-parse", "HEAD"])).toBe(head);
     expect(pushes()).toEqual([]);
     expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
+  });
+
+  it("refuses as Not done: origin changed where a pushInsteadOf set after run start moves origin's push (review/209)", async () => {
+    const { repo, remote } = await seed("unattended", { pin: "none" });
+    expect((await run(repo, ["start", "--run", RUN])).code).toBe(0);
+    expect(await readFile(join(repo, ORIGIN_PIN), "utf8")).toBe(PIN_TEXT);
+    // A config write with no remote.* key: git now pushes origin to another repository, and fetches it from the same one.
+    git(repo, ["config", "url.https://github.com/elsewhere/.pushInsteadOf", "https://github.com/o/"]);
+    await writeFile(join(repo, "a.txt"), "changed\n");
+
+    const json = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+    const text = await run(repo, ["checkpoint", "--run", RUN, "--paths", "a.txt"]);
+
+    expect(json.code).toBe(1);
+    expect(json.doc["notDone"]).toEqual([
+      `origin changed: ${ORIGIN_PIN} pins github.com/o/r, and a push URL of origin names another repository than its fetch URL`,
+    ]);
+    expect(json.doc).toMatchObject({ committed: null, pushed: false });
+    expect(text.code).toBe(1);
+    expect(text.stdout).toContain(`Not done:\n  - origin changed: ${ORIGIN_PIN} pins github.com/o/r`);
+    expect(pushes()).toEqual([]);
+    expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
+  });
+
+  it("refuses as origin changed where a pushInsteadOf sends origin's push off GitHub (review/209)", async () => {
+    const { repo } = await seed("unattended");
+    git(repo, ["config", "url.https://git.example.com/.pushInsteadOf", "https://github.com/"]);
+
+    const { code, doc } = await run(repo, CHECKPOINT);
+
+    expect(code).toBe(1);
+    expect(doc["notDone"]).toEqual([
+      `origin changed: ${ORIGIN_PIN} pins github.com/o/r, and a push URL of origin names no GitHub repository gh reaches`,
+    ]);
+    expect(pushes()).toEqual([]);
   });
 
   it("refuses an unattended run with no origin pin, and passes an attended one (review/209)", async () => {

@@ -50,8 +50,9 @@ import { readPushed, scanChange } from "./gate.ts";
  * (`--message=…`). The scan and the prerequisite read are `gate`'s own
  * (`./gate.ts`), on the read runner it gives them.
  *
- * **`start` pins origin** (review/209): the repository `resolveRepo` matches on
- * `origin` goes to the run folder's `origin.json` as `{ host, owner, repo }`,
+ * **`start` pins origin** (review/209): the one repository `resolveRepo` matches on
+ * `origin`'s fetch URL and on every push URL git resolves for it (`pushInsteadOf`
+ * applied) goes to the run folder's `origin.json` as `{ host, owner, repo }`,
  * staged with the run folder; one already there is kept, and `start` refuses
  * when origin now names another repository. An origin naming no GitHub
  * repository pins nothing, said in the text.
@@ -67,8 +68,8 @@ import { readPushed, scanChange } from "./gate.ts";
  * and, in this order: refuses a commit on a default branch (and on a checkout
  * that is not the record's `Branch:`, as `branch mismatch`, or a detached one; a
  * `Branch:` naming a default branch matches `stamity/<run-id>`, the branch
- * `start` switches such a run to); refuses as `origin changed` where origin
- * now names another repository than `origin.json` pins (and, unattended, where
+ * `start` switches such a run to); refuses as `origin changed` where origin's
+ * fetch URL or any push URL git resolves now names another repository than `origin.json` pins (and, unattended, where
  * no pin is readable, as `origin not pinned`); stages
  * only the run folder's record, ledger, plan, morning list, origin pin and `held/*.patch`,
  * `.stamity/inbox.md` and `--paths` (never `-A`, never `-f`), a path git
@@ -299,12 +300,28 @@ interface OriginRepo {
   repo: string;
 }
 
-/** The repository `origin`'s fetch URL names, as `resolveRepo` matches it; `null` where it names none. */
-async function originRepo(ctx: CliContext, cwd: string, verb: string): Promise<OriginRepo | null> {
-  const origin = await git(cwd, ["remote", "get-url", "origin"], verb);
-  if (origin.code !== 0) return null;
-  const repo = resolveRepo({ ...ctx.app.runtime.env }, origin.stdout.trim());
-  return repo === null ? null : { host: repo.host, owner: repo.owner, repo: repo.repo };
+/**
+ * The one repository `origin` names, as git will use it: its fetch URL (where
+ * the pull request goes) and every push URL `git remote get-url --push --all`
+ * prints, `pushInsteadOf` and `insteadOf` applied (a `url.<base>.pushInsteadOf`
+ * write moves the push with no `remote.*` key, review/209), each matched by
+ * `resolveRepo`; else why there is none, for the text.
+ */
+async function originRepo(ctx: CliContext, cwd: string, verb: string): Promise<OriginRepo | { none: string }> {
+  const env: NodeJS.ProcessEnv = { ...ctx.app.runtime.env };
+  const fetch = await git(cwd, ["remote", "get-url", "origin"], verb);
+  const fetched = fetch.code === 0 ? resolveRepo(env, fetch.stdout.trim()) : null;
+  if (fetched === null) return { none: "origin names no GitHub repository gh reaches" };
+  const push = await git(cwd, ["remote", "get-url", "--push", "--all", "origin"], verb);
+  const urls = push.code === 0 ? push.stdout.split(/\r?\n/).filter((line) => line.trim() !== "") : [];
+  if (urls.length === 0) return { none: "git names no push URL for origin" };
+  const repo: OriginRepo = { host: fetched.host, owner: fetched.owner, repo: fetched.repo };
+  for (const url of urls) {
+    const target = resolveRepo(env, url.trim());
+    if (target === null) return { none: "a push URL of origin names no GitHub repository gh reaches" };
+    if (!sameRepo(repo, target)) return { none: "a push URL of origin names another repository than its fetch URL" };
+  }
+  return repo;
 }
 
 function sameRepo(a: OriginRepo, b: OriginRepo): boolean {
@@ -349,18 +366,18 @@ async function pinOrigin(ctx: CliContext, cwd: string, run: string): Promise<str
   const now = await originRepo(ctx, cwd, START);
   const pin = readOriginPin(cwd, pinRel);
   if (pin !== undefined) {
-    if (pin !== null && now !== null && sameRepo(pin, now)) return `origin: ${repoName(pin)} (pinned in ${pinRel}, kept)`;
+    if (pin !== null && !("none" in now) && sameRepo(pin, now)) return `origin: ${repoName(pin)} (pinned in ${pinRel}, kept)`;
     throw new CliFailure({
       code: "FAILURE",
       message: "Not done: origin changed",
       why:
         pin === null
           ? `${pinRel} holds no repository this verb reads, so the run's origin is not proven`
-          : `${pinRel} pins ${repoName(pin)}, and origin now names ${now === null ? "no GitHub repository gh reaches" : repoName(now)}`,
+          : `${pinRel} pins ${repoName(pin)}, and ${"none" in now ? now.none : `origin now names ${repoName(now)}`}`,
       next: "point origin back at the repository the run started on; a person decides whether the run goes on",
     });
   }
-  if (now === null) return "origin: not pinned (origin names no GitHub repository gh reaches)";
+  if ("none" in now) return `origin: not pinned (${now.none})`;
   if (ctx.dryRun) return `origin: ${repoName(now)} (would be pinned in ${pinRel})`;
   try {
     await ctx.engine.merge.atomicWrite.atomicWriteFile(join(cwd, pinRel), `${JSON.stringify(now)}\n`, { boundaryDir: cwd });
@@ -386,8 +403,8 @@ async function originRefusal(ctx: CliContext, cwd: string, runDir: string, unatt
   if (pin === undefined) return unattended ? `origin not pinned: ${pinRel} is missing, so the push's destination is not proven the run's` : null;
   if (pin === null) return `origin not pinned: ${pinRel} holds no repository this verb reads`;
   const now = await originRepo(ctx, cwd, verb);
-  if (now !== null && sameRepo(pin, now)) return null;
-  return `origin changed: ${pinRel} pins ${repoName(pin)}, and origin now names ${now === null ? "no GitHub repository gh reaches" : repoName(now)}`;
+  if (!("none" in now) && sameRepo(pin, now)) return null;
+  return `origin changed: ${pinRel} pins ${repoName(pin)}, and ${"none" in now ? now.none : `origin now names ${repoName(now)}`}`;
 }
 
 function start(run: string, branch: string, created: boolean, base: string, dryRun: boolean): Record<string, unknown> {

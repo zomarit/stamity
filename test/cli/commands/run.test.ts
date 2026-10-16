@@ -355,6 +355,24 @@ describe("stamity run start", () => {
       expect(await readFile(join(repo, PIN), "utf8")).toBe('{"host":"github.com","owner":"o","repo":"r"}\n');
     });
 
+    it("pins the push as git resolves it: a pushInsteadOf moving it pins nothing, or refuses a pin already there", async () => {
+      const moved = await seedRepo();
+      const pinned = await seedRepo();
+      restDefault("main");
+      git(moved, ["config", "url.https://github.com/elsewhere/.pushInsteadOf", "https://github.com/o/"]);
+      expect((await run(pinned, START)).code).toBe(0);
+      git(pinned, ["config", "url.https://github.com/elsewhere/.pushInsteadOf", "https://github.com/o/"]);
+
+      const fresh = await run(moved, ["start", "--run", RUN]);
+      const again = await run(pinned, START);
+
+      expect(fresh.code).toBe(0);
+      expect(fresh.stdout).toContain("origin: not pinned (a push URL of origin names another repository than its fetch URL)");
+      expect(existsSync(join(moved, PIN))).toBe(false);
+      expect(again.code).toBe(1);
+      expect(JSON.stringify(again.doc["error"])).toContain("Not done: origin changed");
+    });
+
     it("pins nothing for an origin naming no GitHub repository, nor under --dry-run", async () => {
       const local = await seedRepo({ url: null });
       const dry = await seedRepo();
