@@ -1,0 +1,6 @@
+interface:
+  display_name: "Unattended"
+  short_description: "Use the Stamity unattended workflow"
+  default_prompt: "Use $st-unattended for this repository."
+policy:
+  allow_implicit_invocation: false

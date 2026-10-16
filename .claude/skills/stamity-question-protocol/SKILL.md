@@ -60,6 +60,7 @@ should be added?") spends the same turn and resolves nothing.
    records one line: `Default applied: <question> → option <N> (<reason>)`. A
    question that shipped without a declared default stops at `BLOCKED_AMBIGUITY`
    instead. A silent pick is the single disallowed outcome.
+   A kickoff prompt, routine text or contract field never answers a person-gate.
 
 ## Gates
 

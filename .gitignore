@@ -77,3 +77,4 @@ __pycache__/
 .Trashes
 Thumbs.db
 Desktop.ini
+.stamity/preflight-canary.json
