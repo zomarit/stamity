@@ -137,6 +137,15 @@ const OPEN_FIX =
 const GH_REPO_FIX = "unset GH_REPO, or point it at the origin repository";
 const GH_HOST_FIX = "unset GH_HOST, or set it to the origin's host";
 const PUSH_IDENTITY_FIX = "use an https origin with `gh auth setup-git`";
+/**
+ * The helper branch's way out (pr/31): a gh behind a shim (scoop, Chocolatey, mise, asdf, snap) writes its helper
+ * with the real executable's path, which is not the `gh` on `PATH`, so re-running setup-git alone writes the same
+ * refused path; the bare form, which `PATH` decides, is accepted.
+ */
+const GH_HELPER_FIX =
+  "make gh's helper the only credential helper for origin: set it to the bare form the check accepts, " +
+  "`git config --global credential.helper '!gh auth git-credential'` (or `git config credential.helper " +
+  "'!gh auth git-credential'` in the repository), or re-run `gh auth setup-git` with the gh that is on PATH";
 const HEADER_FIX =
   "remove the Authorization http.extraHeader that applies to origin (actions/checkout's persist-credentials: false), " +
   "and use an https origin with `gh auth setup-git`";
@@ -587,10 +596,8 @@ function isGhCredentialHelper(helper: string | null, gh: PreflightDeps["gh"]): b
   else if (/^"[^"$`\\]+"$/.test(program)) path = program.slice(1, -1);
   else if (!SHELL_META.test(program)) path = program;
   else return false;
-  if (!/[\\/]/.test(path)) {
-    const name = path.toLowerCase();
-    return name === "gh" || name === "gh.exe";
-  }
+  // No case fold (pr/33): on a case-sensitive host `sh` resolves `GH` on PATH to another file than `gh`.
+  if (!/[\\/]/.test(path)) return path === "gh" || path === "gh.exe";
   return gh !== null && [gh.path, gh.realPath].some((known) => known !== null && samePath(path, known));
 }
 
@@ -664,7 +671,7 @@ function pushIdentityCheck(deps: PreflightDeps, repo: RepoRef): { bound: boolean
       if (helpers.length !== 1 || !isGhCredentialHelper(helpers[0] ?? null, deps.gh)) {
         return unbound(
           `git pushes ${which} over https through a credential helper other than gh's alone, so its identity is not proven gh's`,
-          PUSH_IDENTITY_FIX,
+          GH_HELPER_FIX,
         );
       }
     }

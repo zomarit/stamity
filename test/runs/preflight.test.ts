@@ -583,6 +583,12 @@ describe("runPreflight — direct-push inputs", () => {
 
 describe("runPreflight — the push identity (review/36)", () => {
   const fix = "use an https origin with `gh auth setup-git`";
+  // pr/31: the helper branch names its own way out, the bare helper the check accepts, since a gh behind a shim
+  // writes the real executable's path and re-running setup-git alone writes the same refused path.
+  const helperFix =
+    "make gh's helper the only credential helper for origin: set it to the bare form the check accepts, " +
+    "`git config --global credential.helper '!gh auth git-credential'` (or `git config credential.helper " +
+    "'!gh auth git-credential'` in the repository), or re-run `gh auth setup-git` with the gh that is on PATH";
 
   // Changed for pr/8: a helper naming gh by a path now binds only where that path is the gh the REST reads run
   // (`deps.gh`, its path or its realpath), so each row names the resolved gh it is checked against; before, any
@@ -593,7 +599,8 @@ describe("runPreflight — the push identity (review/36)", () => {
     ["gh's helper at the file that path resolves to", `!${GH.realPath} auth git-credential`, GH],
     ["gh's helper at a quoted Windows path", `!'${WINDOWS_GH}' auth git-credential`, { path: WINDOWS_GH, realPath: WINDOWS_GH }],
     ["gh's helper at a Windows path spelled in another case", `!'${WINDOWS_GH}' auth git-credential`, { path: WINDOWS_GH.toLowerCase(), realPath: null }],
-    ["gh's helper on PATH", "!gh auth git-credential", GH],
+    ["gh's helper on PATH (the allowed twin of the `GH` row, pr/33)", "!gh auth git-credential", GH],
+    ["gh.exe's helper on PATH", "!gh.exe auth git-credential", GH],
   ])("an https origin with %s passes", async (_label, helper, gh) => {
     const verdict = await runPreflight(greenDeps({ gh, pushIdentity: { fetchUrl: FETCH_URL, pushUrls: [pushTo(FETCH_URL, [helper])] } }));
     expect(check(verdict, "direct-push").state).toBe("pass");
@@ -607,24 +614,27 @@ describe("runPreflight — the push identity (review/36)", () => {
   });
 
   it.each([
-    ["an ssh push URL", pushTo("git@github.com:o/r.git", [])],
-    ["an ssh:// push URL", pushTo("ssh://git@github.com/o/r.git", [GH_HELPER])],
-    ["an https push URL carrying credentials", pushTo("https://x-access-token:s3cr3tvalue@github.com/o/r", [GH_HELPER])],
-    ["a plain http push URL", pushTo("http://github.com/o/r", [GH_HELPER])],
-    ["no credential helper", pushTo(FETCH_URL, [])],
-    ["a helper list that cannot be placed", pushTo(FETCH_URL, null)],
-    ["osxkeychain", pushTo(FETCH_URL, ["osxkeychain"])],
-    ["gh's helper beside another", pushTo(FETCH_URL, [GH_HELPER, "osxkeychain"])],
-    ["a helper chaining a command", pushTo(FETCH_URL, ["!evil && /usr/bin/gh auth git-credential"])],
-    ["a helper that is not gh", pushTo(FETCH_URL, ["!/tmp/not-gh auth git-credential"])],
-    ["gh's binary on another verb", pushTo(FETCH_URL, ["!/usr/bin/gh auth status"])],
-    ["a helper naming a relative gh (pr/8)", pushTo(FETCH_URL, ["!./gh auth git-credential"])],
-    ["a helper naming another file called gh than the one the REST reads run (pr/8)", pushTo(FETCH_URL, ["!/tmp/x/gh auth git-credential"])],
-  ])("%s is unknown, refused with the gh fix, and reads nothing", async (_label, facts) => {
+    ["an ssh push URL", pushTo("git@github.com:o/r.git", []), fix],
+    ["an ssh:// push URL", pushTo("ssh://git@github.com/o/r.git", [GH_HELPER]), fix],
+    ["an https push URL carrying credentials", pushTo("https://x-access-token:s3cr3tvalue@github.com/o/r", [GH_HELPER]), fix],
+    ["a plain http push URL", pushTo("http://github.com/o/r", [GH_HELPER]), fix],
+    ["no credential helper", pushTo(FETCH_URL, []), fix],
+    ["a helper list that cannot be placed", pushTo(FETCH_URL, null), fix],
+    ["osxkeychain", pushTo(FETCH_URL, ["osxkeychain"]), helperFix],
+    ["gh's helper beside another", pushTo(FETCH_URL, [GH_HELPER, "osxkeychain"]), helperFix],
+    ["a helper chaining a command", pushTo(FETCH_URL, ["!evil && /usr/bin/gh auth git-credential"]), helperFix],
+    ["a helper that is not gh", pushTo(FETCH_URL, ["!/tmp/not-gh auth git-credential"]), helperFix],
+    ["gh's binary on another verb", pushTo(FETCH_URL, ["!/usr/bin/gh auth status"]), helperFix],
+    ["a helper naming a relative gh (pr/8)", pushTo(FETCH_URL, ["!./gh auth git-credential"]), helperFix],
+    ["a helper naming another file called gh than the one the REST reads run (pr/8)", pushTo(FETCH_URL, ["!/tmp/x/gh auth git-credential"]), helperFix],
+    // pr/33: no case fold on the bare name; on a case-sensitive host `GH` is another file than `gh`.
+    ["a bare helper named GH (pr/33)", pushTo(FETCH_URL, ["!GH auth git-credential"]), helperFix],
+    ["a bare helper named Gh.EXE (pr/33)", pushTo(FETCH_URL, ["!Gh.EXE auth git-credential"]), helperFix],
+  ])("%s is unknown, refused with its fix, and reads nothing", async (_label, facts, expected) => {
     const { rest, calls } = restTable({});
     const verdict = await runPreflight(greenDeps({ rest, pushIdentity: { fetchUrl: FETCH_URL, pushUrls: [facts] } }));
     expect(check(verdict, "direct-push").state).toBe("unknown");
-    expect(refusal(verdict, "direct-push")?.fix).toBe(fix);
+    expect(refusal(verdict, "direct-push")?.fix).toBe(expected);
     expect(verdict.ok).toBe(false);
     expect(calls).toEqual([]);
     // Neither the URL nor a helper is ever echoed.
