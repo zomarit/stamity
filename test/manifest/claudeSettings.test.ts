@@ -531,10 +531,14 @@ describe("planClaudeSettings — the engine's deny rows (u20-hook-emission, REQ-
     const again = planClaudeSettings("x", EMITTED_DENY, plan.content, own({ owned: true, record: plan.record }));
     expect(again.result.action).toBe("unchanged");
 
-    // The sweep takes the engine's rows out and leaves both of the owner's, the equal one included.
+    // TEST CHANGE, justified (review/124, signed off 00:14Z): the sweep removes no deny row, the engine's included,
+    // and names the rows equal to the engine's it left; it still takes the engine's hook entries out.
     const reduction = reduceClaudeSettingsToForeignContent(plan.content!, reduceOpts(plan.record, false));
     expect(reduction).toMatchObject({ kind: "reduced", proven: true });
-    expect(reduction.kind === "reduced" && JSON.parse(reduction.content)).toEqual({ permissions: { deny: [OWNER_RULE, SHARED] }, model: "opus" });
+    expect(reduction.kind === "reduced" && JSON.parse(reduction.content)).toEqual({ permissions: { deny }, model: "opus" });
+    expect(reduction.detail).toContain("clean removes no deny row");
+    expect(reduction.detail).toContain(JSON.stringify(SHARED));
+    expect(reduction.detail).not.toContain(OWNER_RULE);
   });
 
   it("re-adds an engine row the owner deleted, and keeps a row the owner added after setup byte for byte", () => {
@@ -545,7 +549,63 @@ describe("planClaudeSettings — the engine's deny rows (u20-hook-emission, REQ-
 
     expect(plan.backup).toBeNull();
     const deny = (JSON.parse(plan.content!) as { permissions: { deny: string[] } }).permissions.deny;
-    expect(deny).toEqual([...ENGINE_DENY, OWNER_RULE]);
+    // TEST CHANGE, justified (review/124, signed off 00:14Z): every row already in the file keeps its place, so the
+    // re-added row follows them rather than re-forming the engine's block ahead of the owner's row.
+    expect(deny).toEqual([...ENGINE_DENY.slice(1), OWNER_RULE, ENGINE_DENY[0]]);
+    expect(plan.record?.elements?.["/permissions/deny"]?.toSorted()).toEqual(ENGINE_DENY.map(memberHash).toSorted());
+  });
+
+  it("keeps an owner's in-table row under a 1.11.0 ledger row: never recorded, kept in place by sync and clean (review/124)", () => {
+    const existing = doc({ permissions: { deny: [SHARED, OWNER_RULE] }, model: "opus" });
+
+    // clean before any sync: nothing is the engine's, and the in-table row is named, not removed.
+    const before = reduceClaudeSettingsToForeignContent(existing, { record: null, legacy: true, deleteWhenEngineOnly: true });
+    expect(before).toMatchObject({ kind: "untouched", refused: false });
+    expect(before.detail).toContain(JSON.stringify(SHARED));
+
+    const plan = planClaudeSettings("x", EMITTED_DENY, existing, own(LEGACY));
+    expect(plan.backup).toBeNull();
+    const deny = (JSON.parse(plan.content!) as { permissions: { deny: string[] } }).permissions.deny;
+    expect(deny).toEqual([SHARED, OWNER_RULE, ...ENGINE_DENY.filter((row) => row !== SHARED)]);
+    const recordedDeny = plan.record?.elements?.["/permissions/deny"] ?? [];
+    expect(recordedDeny).not.toContain(memberHash(SHARED));
+    expect(recordedDeny).toHaveLength(ENGINE_DENY.length - 1);
+
+    // The next sync, under the record that one wrote: nothing moves and the record holds.
+    const again = planClaudeSettings("x", EMITTED_DENY, plan.content, own({ owned: true, record: plan.record }));
+    expect(again.result.action).toBe("unchanged");
+    expect(again.record).toEqual(plan.record);
+
+    // clean, under the record or still under the 1.11.0 row: every deny row stays, the owner's first and in place.
+    for (const opts of [reduceOpts(plan.record), { record: null, legacy: true, deleteWhenEngineOnly: true }] as const) {
+      const reduction = reduceClaudeSettingsToForeignContent(plan.content!, opts);
+      expect(reduction.kind, JSON.stringify(opts)).toBe("reduced");
+      expect(reduction.kind === "reduced" && JSON.parse(reduction.content)).toEqual({ permissions: { deny }, model: "opus" });
+    }
+  });
+
+  it("keeps an equal row the owner adds after setup: sync moves no byte, and clean keeps both copies (review/125)", () => {
+    const created = planClaudeSettings("x", EMITTED_DENY, null, own());
+    const edited = doc({ permissions: { deny: [...ENGINE_DENY, SHARED] }, hooks: ENGINE_HOOKS });
+
+    const plan = planClaudeSettings("x", EMITTED_DENY, edited, own({ owned: true, record: created.record }));
+
+    expect(plan).toMatchObject({ content: null, backup: null, result: { action: "unchanged" } });
+    expect(plan.record).toEqual(created.record);
+    const reduction = reduceClaudeSettingsToForeignContent(edited, reduceOpts(created.record));
+    expect(reduction.kind === "reduced" && JSON.parse(reduction.content)).toEqual({ permissions: { deny: [...ENGINE_DENY, SHARED] } });
+  });
+
+  it("keeps the engine's rows after a lost ledger record: adoption moves no byte, records none, and clean names them (build/70)", () => {
+    const written = planClaudeSettings("x", EMITTED_DENY, null, own()).content!;
+
+    const adopted = planClaudeSettings("x", EMITTED_DENY, written, own());
+
+    expect(adopted).toMatchObject({ content: null, backup: null, result: { action: "unchanged" } });
+    expect(adopted.record?.elements?.["/permissions/deny"]).toBeUndefined();
+    const reduction = reduceClaudeSettingsToForeignContent(written, reduceOpts(adopted.record));
+    expect(reduction.kind === "reduced" && JSON.parse(reduction.content)).toEqual({ permissions: { deny: ENGINE_DENY } });
+    for (const row of ENGINE_DENY) expect(reduction.detail).toContain(JSON.stringify(row));
   });
 
   it("refuses a deny of another type, and still refuses a mistyped allow beside the deny rows", () => {
@@ -820,11 +880,12 @@ describe("claudeSettingsSpec", () => {
     expect(["Read", "Bash", 3].map((row) => allow?.inBound(row))).toEqual([true, false, false]);
     expect(allow?.outsideBound).toBe("foreign");
     expect(hooks?.outsideBound).toBe("backup");
-    // u20-hook-emission: the deny rows, bounded by CLAUDE_DENY_ROWS and never recognised by content,
-    // so an owner's equal row is not taken for the engine's.
+    // u20-hook-emission: the deny rows, never recognised by content, so an owner's equal row is not taken for the
+    // engine's. TEST CHANGE, justified (review/124, signed off 00:14Z): and bounding nothing, so no deny row is
+    // ever the engine's to move or remove, a table row included.
     expect(deny?.pointer).toBe("/permissions/deny");
     expect(deny?.recognise(CLAUDE_DENY_ROWS[0])).toBe(false);
-    expect([CLAUDE_DENY_ROWS[0], "Bash(rm -rf:*)", 3].map((row) => deny?.inBound(row))).toEqual([true, false, false]);
+    expect([CLAUDE_DENY_ROWS[0], "Bash(rm -rf:*)", 3].map((row) => deny?.inBound(row))).toEqual([false, false, false]);
     expect(deny?.outsideBound).toBe("foreign");
   });
 
