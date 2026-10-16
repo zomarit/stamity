@@ -1489,6 +1489,15 @@ describe("/st-work — Prove", () => {
     const notDone = "Option 1 copies each `notDone` entry `run checkpoint` returns into the proof block's `Not done:`.";
     expect(qa).toContain(notDone);
     expect(qa.indexOf(notDone)).toBeLessThan(qa.indexOf("`Default if no response: leave uncommitted`"));
+    // Added 2026-10-16 (run 2026-10-15_cloud-runs, the corpus fix round, ledger row build/64;
+    // REQ-FLOW-019): an unattended run takes every ask point's declared default, and the commit part's
+    // is `leave uncommitted`, so the walk names the commit part as no ask there: the unattended skill's
+    // ending answers it. It follows the default it overrides and precedes the leftovers pointer.
+    const unattendedCommit =
+      "In an unattended run the commit part is not an ask: the `st-unattended` skill's ending (`run end`, the draft pull request) answers it.";
+    expect(qa).toContain(unattendedCommit);
+    expect(qa.indexOf(unattendedCommit)).toBeGreaterThan(qa.indexOf("those rows not signed and the delta unmerged."));
+    expect(qa.indexOf(unattendedCommit)).toBeLessThan(qa.indexOf("The leftovers join it as a fourth part"));
     expect(qa).toContain("with none left, there is no ask");
     // Added 2026-10-14 (run 2026-10-14_cli-native, corpus fix batch round 1, review/44): the walk
     // asks in rounds and the protocol puts Critical, Warning and `decision-waiting` rows first, so a

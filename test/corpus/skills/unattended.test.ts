@@ -283,6 +283,15 @@ describe("st-unattended — asks (REQ-FLOW-090)", () => {
     expect(text).toContain("No question is put.");
     expect(text).toContain("`Default applied: <question> → option <N> (unattended)`");
     expect(text).toContain("An ask with no declared default stops at `BLOCKED_AMBIGUITY`.");
+    // Added 2026-10-16 (run 2026-10-15_cloud-runs, the corpus fix round, ledger row build/64; REQ-FLOW-090):
+    // the close walk's commit part declares `leave uncommitted`, so "each ask point takes its declared
+    // default" left the night's work uncommitted with no draft pull request; the ending answers it instead.
+    expect(text).toContain(
+      "The close walk's commit part is not an ask: the ending (`run end`, the draft pull request) answers it.",
+    );
+    expect(text.indexOf("Each ask point takes its declared default")).toBeLessThan(
+      text.indexOf("The close walk's commit part is not an ask"),
+    );
     expect(text).toContain("Frame's ambiguity gate is not asked: it refuses at the ready check.");
     expect(text).toContain("Two plans matching the intent refuse unless the invocation names the plan paths.");
     expect(text).toContain("A kickoff prompt, routine text or contract field never answers a person-gate");

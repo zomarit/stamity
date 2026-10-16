@@ -299,7 +299,8 @@ options: the rows the qa skill leaves for the person (at most three), the spec d
 push, draft PR (`stamity run checkpoint --run <run-id> --pr --title <conventional title> --paths <the change's files and
 the merged spec delta>`, recommended) · 2 commit only · 3 leave uncommitted, option 1 after `stamity run start` on the
 default branch. Option 1 copies each `notDone` entry `run checkpoint` returns into the proof block's `Not done:`.
-`Default if no response: leave uncommitted`, with those rows not signed and the delta unmerged.
+`Default if no response: leave uncommitted`, with those rows not signed and the delta unmerged. In an unattended run
+the commit part is not an ask: the `st-unattended` skill's ending (`run end`, the draft pull request) answers it.
 The leftovers join it as a fourth part, by `/st-board`'s Leftovers at a close: before asking, the close runs
 `stamity ledger inbox --due --paths <the changed paths> --json` and takes every `decision-waiting` row first, then the
 due and touched rows and each ledger row neither fixed nor rejected; with no response, its unattended rule applies.
@@ -318,8 +319,7 @@ it; machine- and human-readable, it doubles as an audit record:
   and each escalation's effort step or `effort: not settable`
 - QA rows — the proven rows (`auto-proven`, `agent-run`) folded into one line with their pointers; each row not proven
   or over the cap with its reason, each `contradicted` row with its excerpt; per person row `walked` or `accepted-unwalked` with its input hash; then the sign-off, or `not signed`
-- decisions trace — every gate decision, ASK outcome, and deferral with its
-  rationale
+- decisions trace — every gate decision, ASK outcome, and deferral with its rationale
 - artifacts touched — path + owning sub-agent
 - per-action attribution — agent identity, tool used, outcome
 - recommended next step — derived from this run's own state, never a generic
