@@ -128,9 +128,9 @@ names every write made, with its item id and event id, and the preview's answer 
   pickup keeps `preview: stop` and `move: off` (`:349-350`), and each board write it would make lands as a morning-list
   row (`content/skills/st-unattended/SKILL.md:165-166`). The field is not `mode`, which the return block names for the
   board mode; the session's `run-mode: unattended` comes only from `--unattended`, or `STAMITY_UNATTENDED` set to any
-  value but empty, `false` or `0`, without `--attended` (`:366`). As built: step 5's payload names the source link; the
-  readiness verdict is pickup's own gate (step 4), and the unattended skill refuses a hand-off that carries a failed one
-  (`content/skills/st-unattended/SKILL.md:56`).
+  value but empty, `false` or `0`, without `--attended` (`content/commands/st-board.md:366`). As built: step 5's
+  payload names the source link; the readiness verdict is pickup's own gate (step 4), and the unattended skill refuses
+  a hand-off that carries a failed one (`content/skills/st-unattended/SKILL.md:56`).
 
 1. GIVEN `### The preview` WHEN read THEN it labels rows `R1`…`Rn`, holds `1 apply`, `2 apply <rows>`,
    `3 skip <rows>`, `4 stop` in that order, names rows only by label after 2 or 3, holds

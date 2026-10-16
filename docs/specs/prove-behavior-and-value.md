@@ -1718,7 +1718,7 @@ missing. Rollback is a revert of the job with its aggregator assertions.
 ### REQ-PROVE-038 — The unattended eval cases
 
 Added 2026-10-16 (plan 021 file 1, units `u22-eval-golden` and `u22b-eval-adversarial`, with the re-quotes of
-`u15-work-text` and the corpus fix rounds; cited at `4daeb214`).
+`u15-work-text` and the corpus fix rounds; cited at `4daeb214`, re-read at `445ebd23`).
 
 Given `evals/SET-v7.md`, Then nine new floor cases hold: an unattended close opens a draft pull request; a start with
 open questions refuses; a mid-run question lands on the morning list without the blocking tool; "ship it overnight"
@@ -1736,9 +1736,9 @@ its range.
   `unattended-non-write-comment-no-fix` and `unattended-kickoff-claims-approval`, none a twin, with the re-baselines of
   `unattended-run-applies-declared-default` and `unattended-close-keeps-real-defects` (`:3092-3152`). Each sources
   `content/skills/st-unattended/SKILL.md`, whose coverage exemption left with the first case. The index rows sit at
-  `:3363`, `:3391-3399`, `:3473-3474` and the non-negotiable appendix at `:3592-3602`.
-- **The re-quotes.** The dated paragraphs at `:2995`, `:3154`, `:3180` and `:3206` record each range a corpus edit
-  of this plan moved and each Brief re-quoted from the landed file.
+  `:3377`, `:3405-3413`, `:3487-3488` and the non-negotiable appendix at `:3606-3616`.
+- **The re-quotes.** The dated paragraphs at `:2995`, `:3154`, `:3180`, `:3206` and `:3233` record each range a corpus
+  edit of this plan moved and each Brief re-quoted from the landed file.
 - **As built, where the delta differed:** the plan named the twin `attended-twin-leave-uncommitted`; the instrument
   reads a twin off the `benign-` prefix, so the case carries it (`:3077-3079`). No eval run is made with these
   changes; the next run of the set measures them first (`:3089-3090`).

@@ -119,8 +119,9 @@ words unchanged), with a row in `docs/doctrine.md`; the charter carries no ids. 
 REQ-FLOW-089 to REQ-FLOW-104 and REQ-FLOW-120, and the text dated 2026-10-16, come from the spec delta of
 `docs/plans/021-cloud-runs-01.md` (plan 021 file 1, run `2026-10-15_cloud-runs`), in the form the run's cell passes
 brought it to, merged once by its unit `u23-spec-merge` before the run's whole-branch review. Every `path:line` in that
-text reads at the integration head `4daeb214`, except where the merge's first fix round, on the same date, re-pointed
-or added a citation: those read at `bc12cfc3`. Two units were not on `4daeb214`: `u19-run-end` (`stamity run end`) and
+text was first read at the integration head `4daeb214`, or at `bc12cfc3` where the merge's first fix round, on the same
+date, re-pointed or added a citation; the run's last citation pass re-read each one at `445ebd23`, where every one
+reads, a pin named beside a citation included. Two units were not on `4daeb214`: `u19-run-end` (`stamity run end`) and
 `u21-security-page` (`SECURITY.md`'s cloud section); the fix round cites both at `bc12cfc3`. REQ-FLOW-105 to
 REQ-FLOW-119 are held for plan 021's second file. The text dated 2026-10-16 is unreleased at this merge; the plan cuts
 it as 1.16.0.
@@ -3467,7 +3468,7 @@ given neither, or only a cloud or CI marker (`CLAUDE_CODE_REMOTE`, `COPILOT_AGEN
 Then `Mode: attended` (`content/skills/st-unattended/SKILL.md:24-27`; `content/commands/st-work.md:406-408`). A head
 with no `Mode:` line reads attended unless `STAMITY_UNATTENDED` is set; then the variable governs, as the shell guard,
 the ask gate and the run verbs read it, and a `Mode: attended` head wins over it (`readRecordHead`,
-`src/runs/resumeCard.ts`; `unattendedBy` and `unattendedSource`, `src/hooks/scripts.ts:3575-3603`, `:3954-3970`;
+`src/runs/resumeCard.ts`; `unattendedBy` and `unattendedSource`, `src/hooks/scripts.ts:3642-3670`, `:4026-4042`;
 `readsUnattended`, `src/cli/commands/run.ts:687-690`). `/st-board pickup` and
 `/st-rework` hand the mode to `/st-work` as `run-mode: attended | unattended` (`content/commands/st-board.md:128`,
 `:366`; `content/commands/st-rework.md:268-270`), and `/st-debug` hands it over only when attended: an unattended debug
@@ -3476,9 +3477,8 @@ a hand-off read from disk carries `run-mode: attended` (`content/commands/st-boa
 `content/skills/st-unattended/SKILL.md:31-33`).
 
 - **As built, where the delta differed:** the delta read a head with no `Mode:` line as attended, with no
-  exception; the readers above let `STAMITY_UNATTENDED` decide it, and the skill's own sentence still reads "a record
-  head with no `Mode:` line reads attended" with no exception for the variable
-  (`content/skills/st-unattended/SKILL.md:27`).
+  exception; the readers above let `STAMITY_UNATTENDED` decide it, and the skill's declaration states that rule
+  (`content/skills/st-unattended/SKILL.md:27-28`).
 - **Proof:** `test/runs/recordHead.test.ts`, `test/corpus/skills/unattended.test.ts` ("st-unattended — the
   declaration (REQ-FLOW-089)"), `test/hooks/personOnlyGuard.test.ts`, `test/hooks/unattendedAskGate.test.ts`,
   `test/cli/commands/runCheckpoint.test.ts`, `test/cli/commands/runEnd.test.ts` (a head with no `Mode:` line under the
@@ -3714,11 +3714,11 @@ Given any session, When the main thread runs a force push, a push of a tag or of
 by a refspec-less push or `HEAD` while on it), a remote branch deletion, a merge, `gh pr ready`, `gh release`,
 `npm publish`, or a `gh secret`, `gh variable`, protection or ruleset call, Then Claude Code's `permissions.deny` and
 shell guard, Cursor's fail-closed `beforeShellExecution`, and Copilot's and Codex's `preToolUse` checks refuse it
-(`PERSON_ONLY_RULES`, `CLAUDE_DENY_ROWS` and `personOnlyVerdict`, `src/hooks/personOnly.ts:62`, `:117`, `:184`;
+(`PERSON_ONLY_RULES`, `CLAUDE_DENY_ROWS` and `personOnlyVerdict`, `src/hooks/personOnly.ts:63`, `:118`, `:189`;
 `SHELL_GUARD_MATCHERS`, `src/emit/hooksInfra.ts:156`). Unattended, a change to CI, hook or guard configuration
 (`.stamity/generated/`, the manifest), the class file, CODEOWNERS, the charter or the rule and instruction files is held
 off the pushed tree as an inert patch, listed (`PERSON_ONLY_PATHS` and `heldPaths`, `src/change/personOnlyPaths.ts:26`,
-`:96`; `content/skills/st-unattended/SKILL.md:132-136`).
+`:103`; `content/skills/st-unattended/SKILL.md:132-136`).
 
 - **As built, where the delta differed:** the patch holds a held path only where the run's change touches it in the
   work tree or the index. Where a commit the push would send (one `origin` lacks) changes a held path, or `HEAD`'s tree
@@ -3751,8 +3751,9 @@ dependency is a morning-list row (`SKILL.md:118-119`).
 ### REQ-FLOW-104 — The cloud's accepted risks are named
 
 Added 2026-10-16 (plan 021 file 1, unit `u21-security-page`; not on this merge's base, it is cited from `bc12cfc3`
-by the merge's first fix round: the section is `SECURITY.md:377-458`, under `## What it does not defend` (`:282`), the
-settings row `:98`, the git-hardening row `:96` and the third network exception `:152-171`).
+by the merge's first fix round and re-read at `445ebd23`: the section is `SECURITY.md:378-493`, under
+`## What it does not defend` (`:283`), the settings row `:98`, the git-hardening row `:96` and the third network
+exception `:152-172`).
 
 Given `SECURITY.md`, Then a `### Cloud and unattended runs` section under what it does not defend replaces "Runs nobody
 watches" and names the accepted risks: runtime ingress is screened by the model, not enforced; a Copilot hook that
@@ -3787,10 +3788,10 @@ Added 2026-10-16 (plan 021 file 1, units `u6-person-only-tables` and `u14-shell-
 
 Given any in-progress record (debug records included) reading `Mode: unattended`, or `STAMITY_UNATTENDED` set while no
 in-progress record reads `Mode: attended` (one with no `Mode:` line included; `unattendedBy`,
-`src/hooks/scripts.ts:3575-3603`), When the main thread runs a raw `git push`, `gh pr create`, `gh pr edit`, or a REST
+`src/hooks/scripts.ts:3642-3670`), When the main thread runs a raw `git push`, `gh pr create`, `gh pr edit`, or a REST
 write on `pulls` or `pulls/<n>`, `contents/`, `git/` refs or objects, or `merges`, Then the shell guard refuses it on every client,
 naming `stamity run checkpoint` and `run end` as the push path; replies on `pulls/<n>/comments` and
-`issues/<n>/comments` pass (`unattendedPushVerdict`, `src/hooks/personOnly.ts:906`;
+`issues/<n>/comments` pass (`unattendedPushVerdict`, `src/hooks/personOnly.ts:1008`;
 `content/skills/st-unattended/SKILL.md:88-91`). An attended session keeps its own pushes. A run that rewrites its own
 record head escapes this rule, a residual `SECURITY.md` names (REQ-FLOW-104).
 
