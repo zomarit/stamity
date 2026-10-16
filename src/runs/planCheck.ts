@@ -321,7 +321,7 @@ function stringList(value: unknown): string[] {
 function headLine(lines: readonly string[], key: string): number | undefined {
   const pattern = new RegExp(`^${key}\\s*:`);
   for (let index = 1; index < lines.length; index += 1) {
-    const line = (lines[index] ?? "").replace(/^﻿/, "");
+    const line = (lines[index] ?? "").replace(/^\uFEFF/, "");
     if (/^---[ \t]*$/.test(line)) return undefined;
     if (pattern.test(line)) return index + 1;
   }

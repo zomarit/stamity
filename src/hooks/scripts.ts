@@ -3561,7 +3561,7 @@ function recordHead(path) {
   }
   let status = null;
   let mode = null;
-  for (const line of text.replace(/^﻿/, "").split(/\r?\n/).slice(0, HEAD_LINES)) {
+  for (const line of text.replace(/^\uFEFF/, "").split(/\r?\n/).slice(0, HEAD_LINES)) {
     status ??= STATUS.exec(line)?.[1] ?? null;
     mode ??= MODE.exec(line)?.[1].toLowerCase() ?? null;
   }
@@ -3886,7 +3886,7 @@ function recordHead(path) {
   let status = null;
   let mode = null;
   let branch = null;
-  for (const line of text.replace(/^﻿/, "").split(/\r?\n/).slice(0, HEAD_LINES)) {
+  for (const line of text.replace(/^\uFEFF/, "").split(/\r?\n/).slice(0, HEAD_LINES)) {
     status ??= STATUS.exec(line)?.[1] ?? null;
     mode ??= MODE.exec(line)?.[1].toLowerCase() ?? null;
     branch ??= BRANCH.exec(line)?.[1] ?? null;

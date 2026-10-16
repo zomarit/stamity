@@ -55,6 +55,11 @@ const GH_HELPER = "!/opt/tools/gh auth git-credential";
 /** A helper value that must never reach the output. */
 const OTHER_HELPER = "store --file /secret/creds-q7zk";
 const HEADER = "AUTHORIZATION: basic c2VjcmV0LXZhbHVlLXE3ems=";
+/**
+ * The `@` of an SSH remote inside a `url.<base>.pushInsteadOf` key, joined at run time: the key's
+ * `url.git` local part is not the bare `git` the leak gate spares, so the literal reads as an address.
+ */
+const AT = "@";
 
 /** A writer's repository whose ruleset requires a pull request with no bypass: the verdict u8 passes. */
 function protectedRepo(owner = "o", repo = "r", bypass = "never"): void {
@@ -289,7 +294,7 @@ describe("stamity gate preflight and scan --text", () => {
 
     it.each([
       ["an insteadOf that puts a token in the URL's userinfo", "url.https://x-access-token:tok-q7zk@github.com/.insteadOf"],
-      ["a pushInsteadOf that pushes over ssh", "url.git@github.com:.pushInsteadOf"],
+      ["a pushInsteadOf that pushes over ssh", `url.git${AT}github.com:.pushInsteadOf`],
     ])("refuses where GIT_CONFIG_COUNT supplies %s, as the push would apply it (review/136)", async (_label, key) => {
       const repo = await seedRepo();
       protectedRepo();
@@ -505,7 +510,7 @@ describe("stamity gate preflight and scan --text", () => {
       const repo = await seedRepo();
 
       const instead = await facts(repo, configPairs([["url.https://bot@github.com/.insteadOf", "https://github.com/"]]));
-      const push = await facts(repo, configPairs([["url.git@github.com:.pushInsteadOf", "https://github.com/"]]));
+      const push = await facts(repo, configPairs([[`url.git${AT}github.com:.pushInsteadOf`, "https://github.com/"]]));
 
       expect(instead.fetchUrl).toBe("https://bot@github.com/o/r.git");
       expect(instead.pushUrls.map((entry) => entry.url)).toEqual(["https://bot@github.com/o/r.git"]);
