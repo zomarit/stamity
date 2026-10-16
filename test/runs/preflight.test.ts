@@ -620,22 +620,23 @@ describe("runPreflight — the push identity (review/36)", () => {
     expect(check(clean, "direct-push").state).toBe("pass");
   });
 
-  it("a configuration git could not read is unknown on any kind of URL, the proxy included, before the header check (build/73)", async () => {
+  it.each([
+    ["an https", false, FETCH_URL],
+    ["an https", true, FETCH_URL],
+    ["the proxy", false, PROXY_URL],
+    ["the proxy", true, PROXY_URL],
+  ] as const)("a configuration git could not read is unknown on %s URL (header fact %s), before the header check (build/73)", async (_kind, header, url) => {
     const configFix = "make git's configuration readable in the run's environment (`git config --list` exits 0 there)";
-    for (const url of [FETCH_URL, PROXY_URL]) {
-      for (const header of [false, true]) {
-        const { rest, calls } = restTable({});
-        const verdict = await runPreflight(
-          greenDeps({ rest, pushIdentity: { fetchUrl: url, pushUrls: [pushTo(url, null, header, true)] } }),
-        );
-        expect(check(verdict, "direct-push").state).toBe("unknown");
-        expect(check(verdict, "direct-push").evidence).toContain("configuration unreadable");
-        expect(check(verdict, "direct-push").evidence).not.toContain("Authorization");
-        expect(refusal(verdict, "direct-push")?.fix).toBe(configFix);
-        expect(JSON.stringify(verdict)).not.toContain(url);
-        expect(calls).toEqual([]);
-      }
-    }
+    const { rest, calls } = restTable({});
+    const verdict = await runPreflight(
+      greenDeps({ rest, pushIdentity: { fetchUrl: url, pushUrls: [pushTo(url, null, header, true)] } }),
+    );
+    expect(check(verdict, "direct-push").state).toBe("unknown");
+    expect(check(verdict, "direct-push").evidence).toContain("configuration unreadable");
+    expect(check(verdict, "direct-push").evidence).not.toContain("Authorization");
+    expect(refusal(verdict, "direct-push")?.fix).toBe(configFix);
+    expect(JSON.stringify(verdict)).not.toContain(url);
+    expect(calls).toEqual([]);
   });
 
   const twice = (second: PushUrlFacts): PreflightDeps["pushIdentity"] => ({ fetchUrl: FETCH_URL, pushUrls: [pushTo(), second] });

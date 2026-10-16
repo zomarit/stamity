@@ -1690,11 +1690,31 @@ function scopeApplies(scope: string, target: UrlParts | null): boolean | null {
 const AUTHORIZATION_HEADER = /^\s*authorization\s*:/i;
 
 /**
+ * How specific an `http.*` key that applies is, as git's URL matching ranks
+ * it: a URL-scoped key over the generic one, then the longer path, then a
+ * named user. Every placed scope that applies names the target's own host, so
+ * the host match is the same length for each.
+ */
+function headerSpecificity(scope: string | null): readonly [number, number, number] {
+  const pattern = scope === null ? null : urlParts(scope);
+  return pattern === null ? [0, 0, 0] : [1, pattern.path.length, pattern.user === null ? 0 : 1];
+}
+
+/** Whether `a` ranks at least as specific as `b`: git applies such an entry and skips a less specific one. */
+function atLeastAsSpecific(a: readonly number[], b: readonly number[]): boolean {
+  const at = a.findIndex((value, index) => value !== b[index]);
+  return at === -1 || (a[at] ?? 0) > (b[at] ?? 0);
+}
+
+/**
  * The facts git applies to one push URL: the helper list built in config
  * order, an empty value resetting it, `null` once an entry that may apply
  * cannot be placed (until a reset that surely applies); and whether any
  * Authorization header may apply, over-read on purpose: an entry whose reach
  * cannot be placed counts, and so does one git's specificity rule would drop.
+ * An empty header value resets the header list, as git does, only when it
+ * surely applies and ranks at least as specific as every header entry before
+ * it; git skips a less specific one, so it then resets nothing here either.
  */
 function pushUrlFacts(url: string, config: readonly PushConfigEntry[] | null): PushUrlFacts {
   // A config read that failed proves nothing about the URL: no header was read, so
@@ -1703,11 +1723,19 @@ function pushUrlFacts(url: string, config: readonly PushConfigEntry[] | null): P
   const target = urlParts(url);
   let helpers: string[] | null = [];
   let authorizationHeader = false;
+  // The most specific header entry git may have applied so far; `null` once one cannot be placed.
+  let headerBest: readonly number[] | null = [-1, -1, -1];
   for (const entry of config) {
     const applies = entry.scope === null ? true : scopeApplies(entry.scope, target);
     if (applies === false) continue;
     if (entry.kind === "header") {
-      if (entry.value !== null && AUTHORIZATION_HEADER.test(entry.value)) authorizationHeader = true;
+      const rank = applies === true ? headerSpecificity(entry.scope) : null;
+      if (entry.value === "" && rank !== null && headerBest !== null && atLeastAsSpecific(rank, headerBest)) {
+        authorizationHeader = false;
+      } else if (entry.value !== null && AUTHORIZATION_HEADER.test(entry.value)) {
+        authorizationHeader = true;
+      }
+      headerBest = rank === null || headerBest === null ? null : atLeastAsSpecific(rank, headerBest) ? rank : headerBest;
     } else if (entry.value === "") {
       helpers = applies ? [] : null;
     } else {
@@ -1721,12 +1749,17 @@ function pushUrlFacts(url: string, config: readonly PushConfigEntry[] | null): P
  * How `git push origin` pushes from `cwd`, as raw facts for
  * `../../runs/preflight.ts` to decide on, read through the hardened read
  * runner: origin's fetch URL, and every push URL with its helper list and
- * Authorization-header fact. Git's configuration is read through git in the
- * push's environment ({@link pushConfigRunner}), so config that `env` supplies
- * through a `GIT_CONFIG_*` variable is read like any other config.
+ * Authorization-header fact. Git's configuration, origin's URLs with it, is
+ * read through git in the push's environment ({@link pushConfigRunner}), so
+ * config that `env` supplies through a `GIT_CONFIG_*` variable (a `pushurl`,
+ * an `insteadOf` or `pushInsteadOf` rewrite) is read like any other config.
  */
 export function readPushIdentity(cwd: string, env: Readonly<Record<string, string | undefined>>): PreflightDeps["pushIdentity"] {
-  const runner = gitCheckRunner();
+  const config = readPushConfig(pushConfigRunner(env), cwd);
+  // A configuration git cannot read fails the URL reads in that environment too. Without it the URLs
+  // are read only so each one is refused by that reason (build/73), never as a missing origin: every
+  // fact then carries `configUnreadable`, which no push URL passes.
+  const runner = config === null ? gitCheckRunner() : pushConfigRunner(env);
   const lines = (args: readonly string[]): string[] | null => {
     try {
       return runner(args, cwd).split(/\r?\n/).filter((line) => line !== "");
@@ -1737,7 +1770,6 @@ export function readPushIdentity(cwd: string, env: Readonly<Record<string, strin
   };
   const fetchUrl = lines(["remote", "get-url", "origin"])?.[0] ?? null;
   const pushed = lines(["remote", "get-url", "--push", "--all", "origin"]) ?? [];
-  const config = readPushConfig(pushConfigRunner(env), cwd);
   return { fetchUrl, pushUrls: pushed.map((url) => pushUrlFacts(url, config)) };
 }
 

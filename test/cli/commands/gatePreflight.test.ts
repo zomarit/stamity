@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { chmod, mkdir, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { gateCommand, readPushIdentity } from "../../../src/cli/commands/gate.ts";
@@ -78,8 +78,9 @@ describe("stamity gate preflight and scan --text", () => {
    * A committed repository with `origin` at `url`, git's helpers reset and set
    * to `helpers`, a fresh canary, and a manifest at this version whose two
    * floor copies exist: everything u8 reads passes but what a case changes.
+   * `version` is the pinned version the manifest records.
    */
-  async function seedRepo(opts: { url?: string; helpers?: readonly string[]; canary?: boolean } = {}): Promise<string> {
+  async function seedRepo(opts: { url?: string; helpers?: readonly string[]; canary?: boolean; version?: string } = {}): Promise<string> {
     const repo = getRoot().path(`repo-${Math.random().toString(36).slice(2, 8)}`);
     await mkdir(repo, { recursive: true });
     git(repo, ["init", "-q"]);
@@ -89,7 +90,7 @@ describe("stamity gate preflight and scan --text", () => {
     git(repo, ["remote", "add", "origin", opts.url ?? "https://github.com/o/r.git"]);
     for (const helper of ["", ...(opts.helpers ?? [GH_HELPER])]) git(repo, ["config", "--add", "credential.helper", helper]);
     const floors = { ".claude/rules/stamity-injection-screening.md": "injection-screening", ".claude/skills/stamity-question-protocol/SKILL.md": "question-protocol" };
-    const manifest = createManifest({ tools: ["claude"], selection: { items: { agent: [], skill: [], rule: [], command: [] } }, generatorVersion: VERSION });
+    const manifest = createManifest({ tools: ["claude"], selection: { items: { agent: [], skill: [], rule: [], command: [] } }, generatorVersion: opts.version ?? VERSION });
     await Promise.all(
       Object.entries(floors).map(async ([path, id]) => {
         await mkdir(join(repo, path, ".."), { recursive: true });
@@ -142,6 +143,17 @@ describe("stamity gate preflight and scan --text", () => {
   const PREFLIGHT = ["preflight", "--unattended", "--json"];
   const stateOf = (doc: Record<string, unknown>, id: string): unknown =>
     (doc["checks"] as { id: string; state: string }[]).find((check) => check.id === id)?.state;
+  const evidenceOf = (doc: Record<string, unknown>, id: string): string | undefined =>
+    (doc["checks"] as { id: string; evidence: string }[]).find((check) => check.id === id)?.evidence;
+  /** `GIT_CONFIG_COUNT` and its key and value pairs, as a run's environment hands git config. */
+  const configPairs = (pairs: readonly (readonly [string, string])[]): Record<string, string> =>
+    Object.fromEntries([
+      ["GIT_CONFIG_COUNT", String(pairs.length)],
+      ...pairs.flatMap(([key, value], index) => [
+        [`GIT_CONFIG_KEY_${index}`, key],
+        [`GIT_CONFIG_VALUE_${index}`, value],
+      ]),
+    ]);
 
   describe("the verdict through the verb", () => {
     it("passes a writer under a ruleset with no bypass, every REST call naming the host origin matched", async () => {
@@ -276,6 +288,101 @@ describe("stamity gate preflight and scan --text", () => {
     });
 
     it.each([
+      ["an insteadOf that puts a token in the URL's userinfo", "url.https://x-access-token:tok-q7zk@github.com/.insteadOf"],
+      ["a pushInsteadOf that pushes over ssh", "url.git@github.com:.pushInsteadOf"],
+    ])("refuses where GIT_CONFIG_COUNT supplies %s, as the push would apply it (review/136)", async (_label, key) => {
+      const repo = await seedRepo();
+      protectedRepo();
+
+      const { code, doc, stdout, stderr } = await gate(repo, PREFLIGHT, configPairs([[key, "https://github.com/"]]));
+
+      expect(code).toBe(1);
+      expect(stateOf(doc, "direct-push")).toBe("unknown");
+      expect(`${stdout}${stderr}`).not.toContain("tok-q7zk");
+    });
+
+    it("reads --item's author through the verb: a read author refuses, a write author passes (review/139)", async () => {
+      const repo = await seedRepo();
+      protectedRepo();
+      rest.routes.set("repos/o/r/issues/3", { status: 200, json: { user: { login: "reader" } } });
+      rest.routes.set("repos/o/r/collaborators/reader/permission", { status: 200, json: { permission: "read" } });
+      rest.routes.set("repos/o/r/issues/4", { status: 200, json: { user: { login: "writer" } } });
+      rest.routes.set("repos/o/r/collaborators/writer/permission", { status: 200, json: { permission: "write" } });
+
+      const read = await gate(repo, [...PREFLIGHT, "--item", "o/r#3"]);
+      const write = await gate(repo, [...PREFLIGHT, "--item", "o/r#4"]);
+
+      expect(read.code).toBe(1);
+      expect(stateOf(read.doc, "input-author")).toBe("refuse");
+      expect(evidenceOf(read.doc, "input-author")).toBe("o/r#3: reader has read permission on o/r");
+      expect(write.code).toBe(0);
+      expect(evidenceOf(write.doc, "input-author")).toBe("o/r#4: writer has write on o/r");
+    });
+
+    it("refuses GH_REPO naming another repository than origin's (review/139)", async () => {
+      const repo = await seedRepo();
+      protectedRepo();
+
+      const { code, doc } = await gate(repo, PREFLIGHT, { GH_REPO: "x/y" });
+
+      expect(code).toBe(1);
+      expect(stateOf(doc, "direct-push")).toBe("refuse");
+      expect(evidenceOf(doc, "direct-push")).toBe("GH_REPO names x/y, not the origin repository");
+    });
+
+    it("refuses a running CLI that is not the manifest's pinned version (review/139)", async () => {
+      const repo = await seedRepo({ version: "0.0.1" });
+      protectedRepo();
+
+      const { code, doc } = await gate(repo, PREFLIGHT);
+
+      expect(code).toBe(1);
+      expect(stateOf(doc, "cli-pin")).toBe("refuse");
+      expect(evidenceOf(doc, "cli-pin")).toBe(`the running CLI ${VERSION} is not the pinned version 0.0.1`);
+    });
+
+    it("refuses a node outside the CLI's own engines range (review/139)", async () => {
+      const repo = await seedRepo();
+      protectedRepo();
+      const manifest = JSON.parse(await readFile(new URL("../../../package.json", import.meta.url), "utf8")) as { engines: { node: string } };
+      const node = Object.getOwnPropertyDescriptor(process.versions, "node");
+      Object.defineProperty(process.versions, "node", { ...node, value: "1.0.0" });
+      let result: Awaited<ReturnType<typeof gate>>;
+      try {
+        result = await gate(repo, PREFLIGHT);
+      } finally {
+        if (node !== undefined) Object.defineProperty(process.versions, "node", node);
+      }
+
+      expect(result.code).toBe(1);
+      expect(stateOf(result.doc, "node-engine")).toBe("refuse");
+      expect(evidenceOf(result.doc, "node-engine")).toBe(`node 1.0.0 is outside engines ${manifest.engines.node}`);
+    });
+
+    it("refuses a floor copy the manifest lists and the checkout lacks (review/139)", async () => {
+      const repo = await seedRepo();
+      protectedRepo();
+      await rm(join(repo, ".claude/rules/stamity-injection-screening.md"));
+
+      const { code, doc } = await gate(repo, PREFLIGHT);
+
+      expect(code).toBe(1);
+      expect(stateOf(doc, "floors")).toBe("refuse");
+      expect(evidenceOf(doc, "floors")).toBe("floor rules missing: injection-screening at .claude/rules/stamity-injection-screening.md");
+    });
+
+    it("refuses gate-scan where the scan cannot run, outside any repository (review/139)", async () => {
+      const plain = getRoot().path("plain");
+      await mkdir(plain, { recursive: true });
+
+      const { code, doc } = await gate(plain, PREFLIGHT);
+
+      expect(code).toBe(1);
+      expect(stateOf(doc, "gate-scan")).toBe("refuse");
+      expect(evidenceOf(doc, "gate-scan")).toBe("gate scan cannot run");
+    });
+
+    it.each([
       ["a second push URL over ssh", (repo: string) => {
         git(repo, ["remote", "set-url", "--add", "--push", "origin", "https://github.com/o/r.git"]);
         git(repo, ["remote", "set-url", "--add", "--push", "origin", "git@github.com:o/r.git"]);
@@ -392,6 +499,38 @@ describe("stamity gate preflight and scan --text", () => {
       expect(pairs.pushUrls).toEqual([{ url: "https://github.com/o/r.git", helpers: [GH_HELPER, OTHER_HELPER], authorizationHeader: false, configUnreadable: false }]);
       expect(file.pushUrls).toEqual([{ url: "https://github.com/o/r.git", helpers: [GH_HELPER], authorizationHeader: true, configUnreadable: false }]);
       expect(none.pushUrls).toEqual([{ url: "https://github.com/o/r.git", helpers: [GH_HELPER], authorizationHeader: false, configUnreadable: false }]);
+    });
+
+    it("reads origin's URLs through an insteadOf or pushInsteadOf that GIT_CONFIG_* supplies (review/136)", async () => {
+      const repo = await seedRepo();
+
+      const instead = await facts(repo, configPairs([["url.https://bot@github.com/.insteadOf", "https://github.com/"]]));
+      const push = await facts(repo, configPairs([["url.git@github.com:.pushInsteadOf", "https://github.com/"]]));
+
+      expect(instead.fetchUrl).toBe("https://bot@github.com/o/r.git");
+      expect(instead.pushUrls.map((entry) => entry.url)).toEqual(["https://bot@github.com/o/r.git"]);
+      expect(push.fetchUrl).toBe("https://github.com/o/r.git");
+      expect(push.pushUrls.map((entry) => entry.url)).toEqual(["git@github.com:o/r.git"]);
+    });
+
+    it.each([
+      ["a generic header and a generic reset", [["http.extraheader", HEADER], ["http.extraheader", ""]], false],
+      ["a host header and a reset at the same scope", [["http.https://github.com/.extraheader", HEADER], ["http.https://github.com/.extraheader", ""]], false],
+      ["a generic header and a host reset", [["http.extraheader", HEADER], ["http.https://github.com/.extraheader", ""]], false],
+      ["a host header and a path reset", [["http.https://github.com/.extraheader", HEADER], ["http.https://github.com/o/.extraheader", ""]], false],
+      ["a host header and a generic reset, which git skips", [["http.https://github.com/.extraheader", HEADER], ["http.extraheader", ""]], true],
+      ["a path header and a host reset, which git skips", [["http.https://github.com/o/r.git.extraheader", HEADER], ["http.https://github.com/.extraheader", ""]], true],
+      [
+        "a generic reset after a host header of another name, which git skips",
+        [["http.extraheader", HEADER], ["http.https://github.com/.extraheader", "X-Trace: 1"], ["http.extraheader", ""]],
+        true,
+      ],
+      ["a header after a reset", [["http.extraheader", ""], ["http.extraheader", HEADER]], true],
+      ["a reset whose scope cannot be placed", [["http.extraheader", HEADER], ["http.https://*.github.com/.extraheader", ""]], true],
+    ] as const)("reads %s as git applies it (review/141)", async (_label, pairs, header) => {
+      const repo = await seedRepo();
+
+      expect((await facts(repo, configPairs(pairs))).pushUrls.map((entry) => entry.authorizationHeader)).toEqual([header]);
     });
 
     it("reports the configuration unreadable, with no helper and no header, where git cannot read it (build/73)", async () => {
