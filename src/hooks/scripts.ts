@@ -208,7 +208,16 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // rename among them); then 60,501 / 1,863 (cursor's bytes, claude's and codex's
   // lines) with u14's round 2, which reads the branch where the call runs
   // (review/94). × 1.25 = 75,626.25 / 2,328.75, rounded up to 75,776 / 2,330.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 75_776, lines: 2_330 },
+  // Measured 2026-10-16 on base 4daeb214, the same way: 72,763 / 2,130, u6's
+  // round 3 (ded883c6) having grown the embedded verdicts after the row was set;
+  // then 81,086 / 2,226 with the whole-branch guard round 1, which reads
+  // PowerShell's command strings in both verdicts and the place reader
+  // (build/89), gh's own field conversions (review/127), two GraphQL ref forms
+  // (review/128, build/75), a percent-encoded path (build/76), a place in a
+  // program word holding a line (review/153), and refuses an unattended git
+  // alias or non-builtin subcommand (the 01:50Z sign-off). × 1.25 =
+  // 101,357.5 / 2,782.5, rounded up to 101,376 / 2,790.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 101_376, lines: 2_790 },
 };
 
 /** One generated script, ready for an adapter to place and register. */
@@ -3221,11 +3230,13 @@ function gitDirsFrom(start) {
   // Push-Location), a git -C or --git-dir value, or a GIT_DIR or $env:GIT_DIR assignment. One counts only where
   // the shell runs a command: a line's start, after an operator (; & | ( ) { }, a backtick or a newline), a
   // keyword, an assignment or one of u6's wrappers with its options, and in the lines a command runs: sh -c's,
-  // eval's, env -S's, a runner's -c, a $(...) or backtick in double quotes or in an unquoted heredoc's body, and a
-  // heredoc's body where a shell on the line reads it. Any other word, a commit message's among them, is data and
-  // adds no place. A redirection's target and a comment are no words. A path is read against each directory the
-  // line can be in by then; null is a place that cannot be read, such as a move with no target, or one past
-  // PLACES_MAX.
+  // eval's, env -S's, a runner's -c, a $(...) or backtick in double quotes or in an unquoted heredoc's body, a
+  // heredoc's body where a shell on the line reads it, PowerShell's command string as u6 reads it (build/89), and a
+  // program word holding a blank, which u6 also reads as a line (review/153; a PowerShell here-string, @'...'@, is
+  // a literal). Any other word, a commit message's among them, is data and adds no place. A redirection's target
+  // and a comment are no words. A path is read against each directory the line can be in by then; null is a place
+  // that cannot be read, such as a move with no target, a git -C or --git-dir with no word for its value (a brace
+  // placeholder, review/154), or one past PLACES_MAX.
   //
   // A PowerShell line is split as u6's verdict splits it, the way it finds the push, so a quote PowerShell reads
   // otherwise can only hide a place where it hides the push too, or turn a path unreadable (a refusal). The
@@ -3234,10 +3245,17 @@ function gitDirsFrom(start) {
   // (a unique prefix) or the first word that is no option, and cd.. moves to the parent. Forms not read sit in the
   // named respelling residual: a braced variable name, Set-Item env:, cmd's cd /d, sudo -D.
   //
-  // The wrapper table is u6's (personOnly.ts, inside both verdicts), copied: per wrapper, the short letters and the
-  // long options taking a value, and the options whose value is a command line.
+  // The wrapper, runner, shell and PowerShell tables are u6's (personOnly.ts, inside both verdicts), copied: per
+  // wrapper, the short letters and the long options taking a value, and the options whose value is a command line.
+  // test/hooks/personOnlyGuard.test.ts holds the copies equal (build/90).
   String.raw`function programName(word) {
   return (word.split(/[\\/]/).pop() ?? "").toLowerCase().replace(/\.(exe|cmd|bat)$/, "");
+}
+
+function commandFlag(word) {
+  const match = /^(?:--?|\/)([a-z]+)(?::([\s\S]*))?$/i.exec(word);
+  const name = (match?.[1] ?? "").toLowerCase();
+  return name !== "" && ("commandwithargs".startsWith(name) || name === "cwa") ? (match?.[2] ?? "") : null;
 }
 
 function present(path) {
@@ -3362,9 +3380,10 @@ const WRAPPERS = new Map([
   ["bunx", RUNNER],
   ["pnpx", RUNNER],
 ]);
-const RUNNERS = new Set(["npm exec", "npm x", "pnpm dlx", "pnpm exec", "yarn dlx", "yarn exec", "bun x"]);
+const RUNNERS = new Set(["npm exec", "npm x", "pnpm dlx", "pnpm exec", "yarn dlx", "yarn exec", "bun x", "bun exec"]);
 const KEYWORDS = new Set(["!", "if", "then", "else", "elif", "fi", "do", "done", "while", "until"]);
 const SHELLS = new Set(["sh", "bash", "zsh", "dash", "ksh"]);
+const POWERSHELLS = new Set(["pwsh", "powershell", "invoke-expression", "iex"]);
 const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
 
 /** Where a shell call's git runs: its working directory and each place a command on the line moves it to. */
@@ -3404,6 +3423,7 @@ function placesOf(command, cwd) {
         continue;
       }
       at = false;
+      if (/\s/.test(word) && !/^@\s/.test(word)) inner(rest(k).join(" "));
       const name = programName(word);
       const assigned = /^\$env:git_dir(=.*)?$/i.exec(word);
       if (assigned !== null) {
@@ -3457,7 +3477,11 @@ function placesOf(command, cwd) {
         let from = [...bases];
         for (let j = k + 1; typeof words[j] === "string"; j += 1) {
           const option = words[j];
-          const value = option === "-C" || option === "--git-dir" ? (words[(j += 1)] ?? "") : option.slice(10);
+          const value = option === "-C" || option === "--git-dir" ? words[(j += 1)] : option.slice(10);
+          if (typeof value !== "string") {
+            places.push(null);
+            break;
+          }
           if (option === "-C") {
             from = from.map((base) => resolve(base, value));
             for (const dir of from) places.push({ work: dir });
@@ -3472,6 +3496,14 @@ function placesOf(command, cwd) {
         if (flag !== -1) inner(words[k + 2 + flag]);
       } else if (name === "eval") {
         inner(rest(k + 1).join(" "));
+      } else if (POWERSHELLS.has(name)) {
+        shell = true;
+        const tail = rest(k + 1);
+        const flag = tail.findIndex((option) => commandFlag(option) !== null);
+        const first = flag !== -1 ? -1 : tail.findIndex((option) => !/^-|^\/\w*$/.test(option));
+        if (flag !== -1) inner([commandFlag(tail[flag]), ...tail.slice(flag + 1)].join(" "));
+        else if (first !== -1) inner(tail.slice(first).join(" "));
+        for (const option of first === -1 ? [] : tail.slice(first + 1)) if (/\s/.test(option)) inner(option);
       } else if (["export", "declare", "typeset", "local", "readonly"].includes(name)) {
         for (const option of rest(k + 1)) if (option.startsWith("GIT_DIR=")) gitDir(option.slice(8));
       }

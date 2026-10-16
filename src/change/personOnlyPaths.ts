@@ -4,7 +4,7 @@
  * CI definitions (GitHub Actions' workflows and actions, and the pipeline files
  * of GitLab, CircleCI, Azure Pipelines, Jenkins, Buildkite, Travis and
  * Bitbucket), hook and guard configuration (the emitted hooks, the manifest,
- * the clients' settings), the class file, CODEOWNERS, the charter files with
+ * the clients' settings, the editor's workspace and tasks files), the class file, CODEOWNERS, the charter files with
  * Codex's override, each client's rule and instruction files, the agent,
  * command, skill and MCP-server definitions the four clients read, and the
  * cloud agents' environment files decide what every later run is
@@ -49,6 +49,10 @@ export const PERSON_ONLY_PATHS: readonly string[] = [
   // Copilot's workspace settings carry instruction text, move the instruction and agent file reads and set terminal
   // auto-approval, as the other clients' held settings do (review/106).
   ".vscode/settings.json",
+  // The same settings block in a multi-root workspace file, and the editor's tasks file, whose task can run on
+  // folder open (build/77).
+  "**/*.code-workspace",
+  ".vscode/tasks.json",
   ".stamity/generated/**",
   ".stamity/hooks/**",
   ".stamity/manifest.json",

@@ -109,6 +109,9 @@ const MATRIX: readonly (readonly [command: string, rule: string | null])[] = [
   ["npm test", null],
   ["gh secret set TOKEN", "secrets"],
   ["gh api -X PUT repos/o/r/branches/main/protection", "protection"],
+  // PowerShell's command string, read by the embedded verdict on every client (build/89).
+  ["pwsh -c 'git push --force origin feat/x'", "force-push"],
+  ["pwsh -c 'git push origin feat/x'", null],
 ];
 
 describe("the person-only guard, on every client", () => {
@@ -366,6 +369,86 @@ describe("PowerShell's location commands and $env:GIT_DIR (review/117)", () => {
   });
 });
 
+describe("a place inside a line u6 reads (build/89, review/153) and a value the line cannot show (review/154)", () => {
+  // Each denied line moves to `wt-main` (on main) inside text u6 reads as a line of its own; its twin moves to
+  // `wt-feat` (on `feat/y`), so the push is judged where it runs, not on the root checkout's `feat/x`.
+  const forms = [
+    "pwsh -c 'Set-Location {dir}; git push'",
+    "pwsh -NoProfile -Command \"cd {dir}; git push origin HEAD\"",
+    "powershell.exe -ExecutionPolicy Bypass -NoProfile 'cd {dir}; git push'",
+    "Invoke-Expression 'Set-Location {dir}; git push'",
+    "iex -Command 'git -C {dir} push'",
+    "bun exec 'cd {dir} && git push'",
+    "yarn exec 'git -C {dir} push'",
+    // A substitution whose parenthesis sits in quotes: both readers take the rest of the line as one word.
+    "git commit -m \"$(printf '(')\" && cd {dir} && git push",
+  ];
+
+  it.each(forms.flatMap((form) => (["Bash", "PowerShell"] as const).map((shell) => [form, shell] as const)))(
+    "reads the place in %j on the %s tool, and allows the feature twin",
+    async (form, shell) => {
+      const guard = await placeGuard("claude", LINKED);
+      const denied = form.replaceAll("{dir}", "wt-main");
+      expect(decide("claude", guard, denied, undefined, undefined, shell), denied).toMatchObject({ deny: true, reason: expect.stringContaining("push-default") });
+      const allowed = form.replaceAll("{dir}", "wt-feat");
+      expect(decide("claude", guard, allowed, undefined, undefined, shell).deny, allowed).toBe(false);
+    },
+  );
+
+  it("counts a git -C value the line cannot show, a wrapper's brace placeholder among them, as unreadable", async () => {
+    const guard = await placeGuard("claude", LINKED);
+    for (const command of ["echo wt-main | xargs -I {} git -C {} push", "xargs -I{} git --git-dir {} push"]) {
+      expect(decide("claude", guard, command), command).toMatchObject({ deny: true, reason: expect.stringContaining("push-default") });
+    }
+    expect(decide("claude", guard, "xargs -I {} git -C wt-feat push").deny).toBe(false);
+    expect(decide("claude", guard, "echo wt-main | xargs -I {} git -C {} push origin feat/x").deny).toBe(false);
+  });
+
+  it("reads a PowerShell here-string as a literal, so a feature branch's push after one stays allowed", async () => {
+    const guard = await placeGuard("copilot", LINKED);
+    const command = "@'\ncd wt-main\nSet-Location wt-main\n'@ | git commit -F -; git push";
+    expect(decide("copilot", guard, command, undefined, undefined, "PowerShell").deny).toBe(false);
+    expect(decide("copilot", guard, "Set-Location wt-main; git push", undefined, undefined, "PowerShell").deny).toBe(true);
+  });
+
+  it("carries u6's wrapper, runner, shell and PowerShell tables, so a wrapper u6 reads never hides a place (build/90)", () => {
+    /** The constants a source text declares between two markers, evaluated. */
+    const tablesOf = (source: string, from: string, to: string, names: string): Record<string, unknown> => {
+      const start = source.indexOf(from);
+      const end = source.indexOf(to, start);
+      expect(start, from).toBeGreaterThan(-1);
+      expect(end, to).toBeGreaterThan(start);
+      return new Function(`${source.slice(start, end)}\nreturn { ${names} };`)() as Record<string, unknown>;
+    };
+    type Options = readonly [string?, (string | readonly string[])?, (string | readonly string[])?];
+    /** One wrapper's options in one shape: its short letters, then its long and its line options, space-joined. */
+    const shape = (options: Options | undefined): string[] =>
+      [0, 1, 2].map((index) => {
+        const part = options?.[index] ?? "";
+        return typeof part === "string" ? part : part.join(" ");
+      });
+    const u6 = tablesOf(personOnlyVerdict.toString(), "const ASSIGNMENT", "function programName",
+      "ASSIGNMENT, KEYWORDS, WRAPPERS, RUNNERS, RUNNER_OPTIONS, WRAPPER_OPTIONS, SHELLS, POWERSHELLS");
+    const wrappers = u6.WRAPPERS as Set<string>;
+    const options = u6.WRAPPER_OPTIONS as Map<string, Options>;
+    expect(wrappers.size).toBeGreaterThan(10);
+    for (const tool of TOOLS) {
+      const content = planCoreHookScripts(POLICY, tool, { ...CLI_PIN, personOnlyGuard: true }).at(-1)?.content ?? "";
+      const guard = tablesOf(content, "const RUNNER = ", "function placesOf", "RUNNER, WRAPPERS, RUNNERS, KEYWORDS, SHELLS, POWERSHELLS, ASSIGNMENT");
+      const table = guard.WRAPPERS as Map<string, Options>;
+      expect([...table.keys()].toSorted(), tool).toEqual([...wrappers].toSorted());
+      for (const name of wrappers) expect(shape(table.get(name)), `${tool}: ${name}`).toEqual(shape(options.get(name)));
+      expect(shape(guard.RUNNER as Options), tool).toEqual(shape(u6.RUNNER_OPTIONS as Options));
+      expect([...(guard.RUNNERS as Set<string>)].toSorted(), tool).toEqual([...(u6.RUNNERS as Set<string>)].toSorted());
+      expect([...(guard.SHELLS as Set<string>)], tool).toEqual([...(u6.SHELLS as Set<string>)]);
+      expect([...(guard.POWERSHELLS as Set<string>)], tool).toEqual([...(u6.POWERSHELLS as Set<string>)]);
+      // The guard splits a brace as an operator, so u6's two brace keywords never reach it as words.
+      expect([...(guard.KEYWORDS as Set<string>)], tool).toEqual([...(u6.KEYWORDS as Set<string>)].filter((word) => word !== "{" && word !== "}"));
+      expect(String(guard.ASSIGNMENT), tool).toBe(String(u6.ASSIGNMENT));
+    }
+  });
+});
+
 describe("a HEAD that names no branch (review/118)", () => {
   const IMPLIED = ["git push", "git push origin HEAD", "git push origin @"];
 
@@ -419,7 +502,11 @@ describe("the unattended push rule, the mode read from the run records", () => {
     // Non-degenerate: with no record the same push passes.
     expect(decide("claude", guard, RAW_PUSH).deny).toBe(false);
     await getRepo().seedFiles({ ".stamity/runs/2026-10-16_x/record.md": record("in progress", "unattended") });
-    for (const command of [RAW_PUSH, "gh pr create --draft --fill"]) {
+    // gh's alias for the create-and-push form (review/129), a push in PowerShell's command string (build/89), and a git
+    // alias defined on the line or read from the configuration (the 01:50Z sign-off).
+    const unattended = [RAW_PUSH, "gh pr create --draft --fill", "gh repo new o/x --source . --push", `pwsh -c '${RAW_PUSH}'`,
+      "git -c alias.p=push p origin x", "git p origin x"];
+    for (const command of unattended) {
       const source = unattendedPushVerdict(command);
       expect(source.deny, command).toBe(true);
       if (source.deny) expect(decide("claude", guard, command)).toEqual({ deny: true, reason: expect.stringContaining(source.reason) });
@@ -430,6 +517,7 @@ describe("the unattended push rule, the mode read from the run records", () => {
       reason: expect.stringContaining("unattended because .stamity/runs/2026-10-16_x/record.md reads `Status: in progress` and `Mode: unattended`."),
     });
     expect(decide("claude", guard, RUN_END).deny).toBe(false);
+    expect(decide("claude", guard, "git -c color.ui=never status").deny).toBe(false);
   });
 
   it("reads a debug round's record too", async () => {

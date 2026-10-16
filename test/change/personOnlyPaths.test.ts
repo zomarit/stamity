@@ -87,6 +87,11 @@ describe("heldPaths", () => {
     // Copilot's workspace settings: instruction text, the instruction and agent file locations, terminal
     // auto-approval (review/106).
     ".vscode/settings.json",
+    // The same settings block in a multi-root workspace file, wherever it sits, and the tasks file's folder-open task
+    // (build/77).
+    "stamity.code-workspace",
+    "tools/dev.code-workspace",
+    ".vscode/tasks.json",
     // The cloud agents' environment files: setup commands a later cloud run executes (build/50).
     ".cursor/environment.json",
     ".devcontainer.json",
@@ -122,6 +127,10 @@ describe("heldPaths", () => {
     "Jenkinsfile.md",
     // The held settings and environment files' look-alikes and nested copies.
     ".vscode/settings.json.example",
+    ".vscode/tasks.json.bak",
+    ".vscode/launch.json",
+    "docs/code-workspace.md",
+    "stamity.code-workspace.md",
     "pkg/.cursor/environment.json",
     "docs/.devcontainer.json",
     "docs/devcontainer.md",
@@ -158,6 +167,8 @@ describe("heldPaths", () => {
       ".codex/hooks.json",
       ".codex/config.toml",
       ".vscode/settings.json",
+      "**/*.code-workspace",
+      ".vscode/tasks.json",
       ".stamity/generated/**",
       ".stamity/hooks/**",
       ".stamity/manifest.json",

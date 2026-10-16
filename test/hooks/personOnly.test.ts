@@ -82,6 +82,18 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   // A runner subcommand handed a whole command line as one word (build/51).
   ["bun exec 'git push -f origin feat/x'", "force-push"],
   ["yarn exec 'git push --force origin feat/x'", "force-push"],
+  // PowerShell's command string read as its own line (build/89): `-Command` in any prefix, after `-`, `--` or `/`, its
+  // value attached or not, `-CommandWithArgs`, a positional command past option values, and `Invoke-Expression`.
+  ["pwsh -c 'git push --force origin feat/x'", "force-push"],
+  ["pwsh -nop -co git push --force origin feat/x", "force-push"],
+  ["powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"git push --force origin feat/x\"", "force-push"],
+  ["'powershell.exe' '-Command' 'git push --force origin feat/x'", "force-push"],
+  ["pwsh -Command:'git push --force origin feat/x'", "force-push"],
+  ["pwsh --command 'git push --force origin feat/x'", "force-push"],
+  ["pwsh -cwa 'git push --force origin feat/x'", "force-push"],
+  ["powershell -ExecutionPolicy Bypass -NoProfile 'git push --force origin feat/x'", "force-push"],
+  ["Invoke-Expression 'git push --force origin feat/x'", "force-push"],
+  ["iex -ErrorAction Stop 'git push --force origin feat/x'", "force-push"],
   // A forced ref update over REST or GraphQL (review/76).
   ["gh api -X PATCH repos/o/r/git/refs/heads/feat/x -f sha=abc -F force=true", "force-push"],
   ["curl -X PATCH -d '{\"sha\":\"abc\",\"force\":true}' https://api.github.com/repos/o/r/git/refs/heads/feat/x", "force-push"],
@@ -175,6 +187,38 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ],
   ["gh api graphql -f query='mutation($u: [RefUpdate!]!) { updateRefs(input: {repositoryId: \"R\", refUpdates: $u}) { clientMutationId } }'", "push-default"],
   ["gh api graphql -f query='mutation { updateRef(input: {refId: \"x\", oid: \"abc\"}) { clientMutationId } }'", "push-default"],
+  // A batch element given whole as a variable, beside a literal feature-branch element, in either order (review/128).
+  [
+    "gh api graphql -f query='mutation($u: RefUpdate!) { updateRefs(input: {repositoryId: \"R\", refUpdates: [$u, {name: \"refs/heads/feat/x\", afterOid: \"a\"}]}) { clientMutationId } }'",
+    "push-default",
+  ],
+  [
+    "gh api graphql -f query='mutation($u: RefUpdate!) { updateRefs(input: {repositoryId: \"R\", refUpdates: [{name: \"refs/heads/feat/x\", afterOid: \"a\"}, $u]}) { clientMutationId } }'",
+    "push-default",
+  ],
+  // GraphQL ref creation on the default branch (build/75), the twin of a REST `git/refs` write naming its head.
+  ["gh api graphql -f query='mutation { createRef(input: {repositoryId: \"R\", name: \"refs/heads/main\", oid: \"abc\"}) { ref { id } } }'", "push-default"],
+  // gh's own conversions (review/127): `{branch}` and `:branch` filled from the checkout, in a typed field and in the
+  // endpoint; a checkout on no branch reads as the default branch.
+  ["gh api -X PUT repos/o/r/contents/a.md -f message=m -f content=eA== -F branch={branch}", "push-default", ON_MAIN],
+  ["gh api -X PUT repos/o/r/contents/a.md -f message=m -f content=eA== --field branch=:branch", "push-default", ON_MAIN],
+  ["gh api repos/{owner}/{repo}/merges -F base={branch} -f head=feat/x", "push-default", ON_TRUNK],
+  ["gh api -X PATCH repos/{owner}/{repo}/git/refs/heads/{branch} -f sha=abc", "push-default", ON_MAIN],
+  ["gh api -X PATCH repos/:owner/:repo/git/refs/heads/:branch -f sha=abc", "push-default", ON_MAIN],
+  ["gh api -X PATCH repos/o/r/git/refs/heads/{branch} -f sha=abc", "push-default", { defaultBranches: [], currentBranch: null, tags: [] }],
+  [
+    "gh api graphql -F query='mutation { createCommitOnBranch(input: {branch: {branchName: \"{branch}\"}}) { commit { oid } } }'",
+    "push-default",
+    ON_MAIN,
+  ],
+  // gh's typed `null` is JSON null, read as the denying value as a JSON body's `null` is (review/127).
+  ["gh api -X PUT repos/o/r/contents/a.md -f message=m -f content=eA== -F branch=null", "push-default"],
+  ["gh api -X PATCH repos/o/r/git/refs/heads/feat/x -f sha=abc -F force=null", "force-push"],
+  // A percent-encoded path, decoded as the API reads it (build/76).
+  ["gh api -X PATCH repos/o/r/git/refs/heads/ma%69n -f sha=abc", "push-default"],
+  ["gh api -X PATCH repos/o/r/git/refs/heads%2Fmain -f sha=abc", "push-default"],
+  ["curl -X PATCH -d '{\"sha\":\"abc\"}' https://api.github.com/repos/o/r/git/refs/heads/%6Dain", "push-default"],
+  ["pwsh -c 'git push'", "push-default", ON_MAIN],
   // push-default implied: refspec-less, HEAD or @, while on a default branch
   ["git push", "push-default", ON_MAIN],
   ["git push origin", "push-default", ON_MAIN],
@@ -198,6 +242,13 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
     "gh api graphql -f query='mutation { updateRefs(input: {repositoryId: \"R\", refUpdates: [{name: \"refs/tags/v1\", afterOid: \"abc\"}]}) { clientMutationId } }'",
     "push-tags",
   ],
+  // GraphQL tag ref creation, and a created name the line cannot show (build/75): POST `git/refs`'s twins.
+  ["gh api graphql -f query='mutation { createRef(input: {repositoryId: \"R\", name: \"refs/tags/v1\", oid: \"abc\"}) { ref { id } } }'", "push-tags"],
+  [
+    "gh api graphql -f query='mutation($n: String!) { createRef(input: {repositoryId: \"R\", name: $n, oid: \"abc\"}) { ref { id } } }' -f n=refs/tags/v1",
+    "push-tags",
+  ],
+  ["gh api graphql -f query='mutation($i: CreateRefInput!) { createRef(input: $i) { ref { id } } }'", "push-tags"],
   ["git push origin refs/tags/v1.0.0", "push-tags"],
   ["git push origin HEAD:refs/tags/v1.0.0", "push-tags"],
   ["git -c push.followTags=true push origin feat/x", "push-tags"],
@@ -221,6 +272,8 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["git push origin :feat/x", "push-delete"],
   ["git push origin :refs/heads/feat/x", "push-delete"],
   ["git push --prune origin", "push-delete"],
+  // Any GraphQL ref deletion, DELETE `git/refs`'s twin (build/75).
+  ["gh api graphql -f query='mutation { deleteRef(input: {refId: \"x\"}) { clientMutationId } }'", "push-delete"],
   // tag
   ["git tag v1.0.0", "tag"],
   ["git tag -a v1.0.0 -m release", "tag"],
@@ -234,6 +287,8 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["gh pr merge 3 --squash", "pr-merge"],
   ["gh pr merge --auto --squash", "pr-merge"],
   ["gh pr --repo o/r merge 3", "pr-merge"],
+  ["pwsh -NoProfile -Command \"gh pr merge 3\"", "pr-merge"],
+  ["Invoke-Expression -Command 'gh pr merge 3'", "pr-merge"],
   ["gh pr ready 3", "pr-ready"],
   ["gh api -X PUT repos/o/r/pulls/3/merge", "pr-merge"],
   ["gh api --method=PUT /repos/o/r/pulls/3/merge -f merge_method=squash", "pr-merge"],
@@ -274,6 +329,8 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["bun publish --access public", "publish"],
   ["yarn exec 'npm publish'", "publish"],
   ["bun exec 'npm publish --access public'", "publish"],
+  ["iex 'npm publish'", "publish"],
+  ["pwsh /c 'npm publish'", "publish"],
   // secrets
   ["gh secret set TOKEN --body x", "secrets"],
   ["gh secret delete TOKEN", "secrets"],
@@ -390,6 +447,14 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
   ["git-lfs ls-files"],
   ["bun exec 'git status'"],
   ["yarn exec 'npm test'"],
+  // build/89's twins: PowerShell's command strings that run no person-only act, and a host given a script file.
+  ["pwsh -c 'git push origin feat/x'"],
+  ["pwsh -c 'git push'"],
+  ["pwsh -NoProfile -Command \"gh pr view 3\""],
+  ["powershell -ExecutionPolicy Bypass -NoProfile 'git push origin feat/x'"],
+  ["powershell -ExecutionPolicy Bypass -File deploy.ps1"],
+  ["iex 'npm test'"],
+  ["Invoke-Expression -Command 'git status'"],
   ["gh repo view o/r"],
   ["gh repo edit --description 'x'"],
   ["gh repo clone o/r"],
@@ -418,8 +483,22 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
   [
     "gh api graphql -f query='mutation { updateRefs(input: {repositoryId: \"R\", refUpdates: [{name: \"refs/heads/feat/x\", afterOid: \"abc\", force: false}]}) { clientMutationId } }'",
   ],
-  ["gh api -X PATCH repos/o/r/git/refs/heads/feat/x -f sha=abc"],
+  // review/128's twin: literal elements only, one of them with a variable object id.
+  [
+    "gh api graphql -f query='mutation($o: GitObjectID!) { updateRefs(input: {repositoryId: \"R\", refUpdates: [{name: \"refs/heads/feat/x\", afterOid: $o}, {name: \"refs/heads/feat/y\", afterOid: \"b\"}]}) { clientMutationId } }'",
+  ],
+  // build/75's twins: a branch created off the default branch, and a read naming a ref.
+  ["gh api graphql -f query='mutation { createRef(input: {repositoryId: \"R\", name: \"refs/heads/feat/x\", oid: \"abc\"}) { ref { id } } }'"],
+  ["gh api graphql -f query='query { repository(owner: \"o\", name: \"r\") { ref(qualifiedName: \"refs/heads/feat/x\") { id } } }'"],
+  // review/127's twins: a raw `-f` field keeps its text, and a placeholder filled from a feature checkout.
+  ["gh api -X PUT repos/o/r/contents/a.md -f message=m -f content=eA== -f branch=null"],
+  ["gh api -X PUT repos/o/r/contents/a.md -f message=m -f content=eA== -F branch={branch}"],
+  ["gh api -X PATCH repos/{owner}/{repo}/git/refs/heads/{branch} -f sha=abc"],
+  ["gh api -X PATCH repos/:owner/:repo/git/refs/heads/:branch -f sha=abc"],
   ["gh api -X PATCH repos/o/r/git/refs/heads/feat/x -f sha=abc -F force=false"],
+  // build/76's twin: a feature branch's ref with its slash encoded.
+  ["gh api -X PATCH repos/o/r/git/refs/heads/feat%2Fx -f sha=abc"],
+  ["gh api -X PATCH repos/o/r/git/refs/heads/feat/x -f sha=abc"],
   // review/107's twin: a feature branch's ref with a query.
   ["gh api -X PATCH 'repos/o/r/git/refs/heads/feat/x?x=1' -f sha=abc"],
   ["gh api repos/o/r/pulls/3"],
@@ -504,6 +583,9 @@ describe("personOnlyVerdict — the respelling residual (named in SECURITY.md by
     // A tag pushed by its bare name reads as a branch name when the context lists no such tag (u14 unable to read
     // `refs/tags/`); with the tag listed it is denied, in the matrix above.
     ["git push origin v1.0.0"],
+    // PowerShell's encoded command, and a line another command pipes into `iex` (build/89).
+    ["pwsh -EncodedCommand ZwBpAHQAIABwAHUAcwBoACAALQBmAA=="],
+    ["echo 'git push -f origin feat/x' | iex"],
   ])("allows %j", (command) => {
     expect(personOnlyVerdict(command, ON_MAIN)).toEqual({ deny: false });
   });
@@ -529,9 +611,25 @@ describe("unattendedPushVerdict", () => {
     ["gh pr new --draft --title t --body-file b.md"],
     ["gh pr edit 3 --body-file b.md"],
     ["gh repo sync"],
-    // `gh repo create` pushing the local repository to the repository it creates (review/109).
+    // `gh repo create` pushing the local repository to the repository it creates (review/109), and its alias `new`
+    // (review/129, read from gh 2.102.0's help).
     ["gh repo create o/new --private --source . --push"],
     ["gh repo create --source=. --public --push"],
+    ["gh repo new o/new --private --source . --push"],
+    ["gh repo new --source=. --public --push=true"],
+    // A push inside PowerShell's command string (build/89), and a percent-encoded contents path (build/76).
+    ["pwsh -c 'git push origin feat/x'"],
+    ["powershell -NoProfile -Command \"gh pr create --draft --fill\""],
+    ["iex 'git push'"],
+    ["gh api -X PUT repos/o/r/%63ontents/a.yml"],
+    // A git call defining an alias, and a subcommand that is no builtin: an alias from the configuration, a computed
+    // or variable name, a dashed program git does not build in (the 01:50Z sign-off, u21's review).
+    ["git -c alias.p=push p origin feat/x"],
+    ["git -c alias.st='!git push' status"],
+    ["git p origin feat/x"],
+    ["git $SUB origin feat/x"],
+    ["git \"$(echo push)\" origin feat/x"],
+    ["git-p origin feat/x"],
     // The MOVES rows with no pin before (review/110).
     ["gh api -X PUT repos/o/r/pulls/3/merge"],
     ["gh api -X POST repos/o/r/git/tags -f tag=v1 -f object=abc -f type=commit"],
@@ -573,11 +671,20 @@ describe("unattendedPushVerdict", () => {
     ["gh pr status"],
     ["gh repo create o/new --private"],
     ["gh repo create o/new --private --source . --remote upstream"],
+    ["gh repo new o/new --private"],
+    ["pwsh -c 'git fetch origin'"],
+    ["iex 'gh pr view 3'"],
+    ["gh api repos/o/r/%63ontents/a.yml"],
     ["gh api repos/o/r/pulls/3/merge"],
     ["gh api repos/o/r/git/tags/abc"],
     ["git-fetch origin"],
     ["bun exec 'git fetch origin'"],
     ["git fetch origin"],
+    // The alias rule's twins: a builtin, a `-c` pair that defines no alias, and git with no subcommand.
+    ["git status"],
+    ["git -c color.ui=never status"],
+    ["git log --oneline -1"],
+    ["git --version"],
     ["git subtree split --prefix=dist -b split"],
     ["git subtree add -P push origin x"],
     ["git commit -m 'git push later'"],

@@ -28,6 +28,7 @@
  *
  * **What the text cannot show.** A command reaches the guard as text, so a
  * respelling the text hides — a git or shell alias, a computed `sh -c "$(…)"`,
+ * a PowerShell `-EncodedCommand` or a line piped into `iex` or a shell,
  * a bare tag name the context's `tags` does not list, a repository's own push
  * configuration, a GraphQL mutation or a REST body read from a file where the
  * API's default is not the default branch — passes. The tests assert
@@ -70,9 +71,9 @@ export const PERSON_ONLY_RULES: readonly PersonOnlyRule[] = [
   },
   {
     id: "push-tags",
-    act: "a push of tags (`--tags`, `--follow-tags`, `--mirror`, `--all`, `tag <name>`, a refspec naming a tag: `refs/tags/…`, `tags/…` or a local tag's bare name)",
+    act: "a push of tags (`--tags`, `--follow-tags`, `--mirror`, `--all`, `tag <name>`, a refspec naming a tag: `refs/tags/…`, `tags/…` or a local tag's bare name, a REST or GraphQL tag ref)",
   },
-  { id: "push-delete", act: "a remote branch deletion (`--delete`, `-d`, a `:ref` refspec)" },
+  { id: "push-delete", act: "a remote branch deletion (`--delete`, `-d`, a `:ref` refspec, a REST or GraphQL ref deletion)" },
   { id: "tag", act: "creating or deleting a tag (`git tag` beyond listing)" },
   { id: "pr-merge", act: "merging a pull request (`gh pr merge`, the REST or GraphQL merge)" },
   { id: "pr-ready", act: "marking a pull request ready for review (`gh pr ready`)" },
@@ -174,7 +175,8 @@ export const CLAUDE_DENY_ROWS: readonly string[] = [
  * comments dropped, leading assignments, keywords, wrappers (`env`, `command`,
  * `sudo`, …) and package runners (`npx`, `npm exec`, `pnpm dlx`, …) skipped with
  * their options' values, a literal `sh -c`, `eval`, `env -S` or runner `-c`
- * argument read as its own line, and git's global options (`-c k=v` pairs among
+ * argument, and PowerShell's `-Command` or `Invoke-Expression` string, read as
+ * its own line, and git's global options (`-c k=v` pairs among
  * them, a `remote.<name>.push` or `branch.<name>.merge` read as the refspec a
  * bare push takes) skipped before the subcommand.
  *
@@ -217,11 +219,23 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   const ANSI_ESCAPES = new Map([["n", "\n"], ["t", "\t"], ["r", "\r"], ["a", "\x07"], ["b", "\b"], ["e", "\x1b"], ["E", "\x1b"],
     ["f", "\f"], ["v", "\v"], ["\\", "\\"], ["'", "'"], ['"', '"'], ["?", "?"]]);
   const SHELLS = new Set(["sh", "bash", "zsh", "dash", "ksh"]);
+  /** PowerShell's two hosts and `Invoke-Expression`, each running a command string of its own (build/89). */
+  const POWERSHELLS = new Set(["pwsh", "powershell", "invoke-expression", "iex"]);
 
   /** A program word as the shell finds it: its last path part, without case or a Windows suffix. */
   function programName(word: string): string {
     const last = word.split(/[\\/]/).pop() ?? "";
     return last.toLowerCase().replace(/\.(exe|cmd|bat)$/, "");
+  }
+
+  /**
+   * PowerShell's `-Command` (any prefix of it, `-c` among them, or of `-CommandWithArgs`, or `-cwa`) after `-`, `--`
+   * or `/`: the value attached after a `:` (`""` when none), or `null` when `word` is another word.
+   */
+  function commandFlag(word: string): string | null {
+    const match = /^(?:--?|\/)([a-z]+)(?::([\s\S]*))?$/i.exec(word);
+    const name = (match?.[1] ?? "").toLowerCase();
+    return name !== "" && ("commandwithargs".startsWith(name) || name === "cwa") ? (match?.[2] ?? "") : null;
   }
 
   /** The words of each simple command in `text`, a command substitution's text read as its own lines. */
@@ -421,6 +435,14 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         if (script !== undefined) commands.push(...commandsOf(script, depth + 1));
       } else if (depth < 4 && cmd[0] === "eval") {
         commands.push(...commandsOf(cmd.slice(1).join(" "), depth + 1));
+      } else if (depth < 4 && POWERSHELLS.has(cmd[0] ?? "")) {
+        // PowerShell's command string (build/89): the words after `-Command`; with none, the words from the first one
+        // that is no option, and each later word holding a blank, a quoted command past an option's value.
+        const at = cmd.findIndex((word, index) => index > 0 && commandFlag(word) !== null);
+        const first = at !== -1 ? -1 : cmd.findIndex((word, index) => index > 0 && !/^-|^\/\w*$/.test(word));
+        if (at !== -1) commands.push(...commandsOf([commandFlag(cmd[at] ?? ""), ...cmd.slice(at + 1)].join(" "), depth + 1));
+        else if (first !== -1) commands.push(...commandsOf(cmd.slice(first).join(" "), depth + 1));
+        for (const word of first === -1 ? [] : cmd.slice(first + 1)) if (/\s/.test(word)) commands.push(...commandsOf(word, depth + 1));
       }
       commands.push(cmd);
     }
@@ -460,7 +482,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   /**
    * An HTTP call's method (the tool's default unless a flag or a body sets it), whether that is a write, and each
    * target's path below its repository or organisation (`repos/<o>/<r>/` cut), without scheme, host, query or a
-   * trailing slash; the repository's own path stays whole.
+   * trailing slash and with its percent-encoding decoded (build/76); the repository's own path stays whole.
    */
   function httpCall(cmd: string[]): { write: boolean; method: string; paths: string[] } {
     const tool = cmd[0] ?? "";
@@ -524,6 +546,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         .replace(/^\/+/, "")
         .replace(/^api\/v3\//i, "")
         .split(/[?#]/)[0] ?? "")
+        .replace(/%([0-9A-Fa-f]{2})/g, (_, hex: string) => String.fromCharCode(Number.parseInt(hex, 16)))
         // A trailing slash dropped first, so the bare repository path stays `repos/<o>/<r>` (or `repositories/<id>`).
         .replace(/\/+$/, "")
         .replace(/^repos\/[^/]+\/[^/]+\//i, "")
@@ -708,17 +731,24 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
    * GraphQL variable or block string) reads as the denying value: the default branch, or forced.
    */
   function httpVerdict(cmd: string[]): PersonOnlyVerdict | null {
-    const { write, method, paths } = httpCall(cmd);
-    const text = cmd.join(" ");
     const gh = cmd[0] === "gh";
+    // gh fills `{branch}` and `:branch` (its own placeholder pattern) from the checkout, in the endpoint and in a typed
+    // `-F` field (review/127): the current branch, or the default branch where the checkout is on none.
+    const fill = (value: string): string =>
+      value.replace(/\{branch\}|:branch\b/g, () => (ctx.currentBranch === null ? "main" : branch(ctx.currentBranch)));
+    const { write, method, paths: targets } = httpCall(cmd);
+    const paths = gh ? targets.map(fill) : targets;
+    const text = cmd.join(" ");
     const fieldFlag = gh ? /^(-[fF]|--field|--raw-field)$/ : /^(-[A-Za-z]*d|--data(-raw|-binary|-ascii|-urlencode)?|--json|--post-data|--body-data)$/;
     const fieldAttached = gh ? /^(-[fF]|--field=|--raw-field=)/ : /^(-d|--(data(-raw|-binary|-ascii|-urlencode)?|json|post-data|body-data)=)/;
     /** Each body field as `[key, value]`, `null` for a value the line cannot place. */
     const bodyFields: [string, string | null][] = [];
     const queries: string[] = [];
     const add = (key: string, value: unknown, typed: boolean): void => {
-      const placed = typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? String(value) : null;
-      if (key === "query" && typeof value === "string" && !(typed && value.startsWith("@"))) queries.push(value);
+      const shown = typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? String(value) : null;
+      // A typed `-F` field reads a literal `null` as JSON null, and its placeholders filled (review/127).
+      const placed = typed && shown !== null ? (shown === "null" ? null : fill(shown)) : shown;
+      if (key === "query" && typeof value === "string" && !(typed && value.startsWith("@"))) queries.push(typed ? fill(value) : value);
       else bodyFields.push([key, placed === null || /[$`]/.test(placed) || (typed && placed.startsWith("@")) ? null : placed]);
     };
     for (let k = 1; k < cmd.length; k += 1) {
@@ -748,12 +778,14 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       values.length === 0 || values.some((value) => value === null || value === "" || defaults.has(branch(value)));
     const forced = (values: readonly (string | null)[]): boolean =>
       values.some((value) => value === null || !["false", "0", "no", "off", ""].includes(value.toLowerCase()));
+    /** A GraphQL text with its string literals and comments masked, so a call, a key or a bracket inside one is no syntax. */
+    const mask = (query: string): string =>
+      query.replace(/"""[\s\S]*?"""|"(?:\\.|[^"\\])*"|#[^\n]*/g, (lit) => (lit.startsWith('"') ? '"' : " ").padEnd(lit.length));
     /** Per call of the GraphQL field `name` in the line's GraphQL texts, the values its own arguments give `key`. */
     const calls = (name: string, key: string): (string | null)[][] => {
       const found: (string | null)[][] = [];
       for (const query of queries) {
-        // String literals and comments masked, so a call, a key or a parenthesis inside one is no syntax.
-        const masked = query.replace(/"""[\s\S]*?"""|"(?:\\.|[^"\\])*"|#[^\n]*/g, (lit) => (lit.startsWith('"') ? '"' : " ").padEnd(lit.length));
+        const masked = mask(query);
         for (const call of masked.matchAll(new RegExp(`\\b${name}\\s*\\(`, "g"))) {
           const start = (call.index ?? 0) + call[0].length;
           let end = start;
@@ -807,8 +839,22 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
           if (calls("updateRefs", "name").flat().some((ref) => ref !== null && /^refs\/tags\//i.test(ref))) {
             return deny("push-tags", "A GraphQL tag ref update");
           }
-          if (/\bupdateRef\b/.test(text) || callsLand("updateRefs", "name")) {
+          // A list element given whole as a variable, beside literal ones, names a ref the line cannot show (review/128).
+          const hidden = queries.some((query) => /\brefUpdates\s*:\s*\[(?:[^\]]*,)?\s*\$/.test(mask(query)));
+          if (/\bupdateRef\b/.test(text) || hidden || callsLand("updateRefs", "name")) {
             return deny("push-default", "A GraphQL ref update onto the default branch, or onto a ref the line cannot show");
+          }
+        }
+        // The GraphQL twins of the REST ref writes (build/75): any ref deletion, and a ref created as a tag or on the
+        // default branch, a name the line cannot show reading as a tag.
+        if (/\bdeleteRef\b/.test(text)) return deny("push-delete", "A GraphQL ref deletion");
+        if (/\bcreateRef\b/.test(text)) {
+          const created = calls("createRef", "name");
+          if (created.length === 0 || created.some((refs) => refs.length === 0 || refs.some((ref) => ref === null || /^refs\/tags\//i.test(ref)))) {
+            return deny("push-tags", "A GraphQL tag ref created, or a ref the line cannot show");
+          }
+          if (created.flat().some((ref) => ref !== null && defaults.has(branch(ref)))) {
+            return deny("push-default", "A GraphQL ref created on the default branch");
           }
         }
         continue;
@@ -893,7 +939,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
 /**
  * Whether `command` steps around the run verbs while a run is unattended
  * (REQ-FLOW-120): any `git push` or `git subtree push`, `gh pr create` or `gh pr edit`, `gh repo sync` or
- * `gh repo create --push`, and a `gh
+ * `gh repo create --push` (or its alias `gh repo new`), a git call defining an alias (`-c alias.<name>=…`) or
+ * naming a subcommand that is not a git builtin (an alias, a computed name), and a `gh
  * api`, `curl` or `wget` write (POST, PATCH, PUT, DELETE) on a repository's
  * `pulls` or `pulls/<n>`, on `contents/…`, on `git/` refs or objects, or on
  * `merges`, with their GraphQL twins. A reply on `pulls/<n>/comments` or
@@ -939,11 +986,23 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
   const ANSI_ESCAPES = new Map([["n", "\n"], ["t", "\t"], ["r", "\r"], ["a", "\x07"], ["b", "\b"], ["e", "\x1b"], ["E", "\x1b"],
     ["f", "\f"], ["v", "\v"], ["\\", "\\"], ["'", "'"], ['"', '"'], ["?", "?"]]);
   const SHELLS = new Set(["sh", "bash", "zsh", "dash", "ksh"]);
+  /** PowerShell's two hosts and `Invoke-Expression`, each running a command string of its own (build/89). */
+  const POWERSHELLS = new Set(["pwsh", "powershell", "invoke-expression", "iex"]);
 
   /** A program word as the shell finds it: its last path part, without case or a Windows suffix. */
   function programName(word: string): string {
     const last = word.split(/[\\/]/).pop() ?? "";
     return last.toLowerCase().replace(/\.(exe|cmd|bat)$/, "");
+  }
+
+  /**
+   * PowerShell's `-Command` (any prefix of it, `-c` among them, or of `-CommandWithArgs`, or `-cwa`) after `-`, `--`
+   * or `/`: the value attached after a `:` (`""` when none), or `null` when `word` is another word.
+   */
+  function commandFlag(word: string): string | null {
+    const match = /^(?:--?|\/)([a-z]+)(?::([\s\S]*))?$/i.exec(word);
+    const name = (match?.[1] ?? "").toLowerCase();
+    return name !== "" && ("commandwithargs".startsWith(name) || name === "cwa") ? (match?.[2] ?? "") : null;
   }
 
   /** The words of each simple command in `text`, a command substitution's text read as its own lines. */
@@ -1143,6 +1202,14 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
         if (script !== undefined) commands.push(...commandsOf(script, depth + 1));
       } else if (depth < 4 && cmd[0] === "eval") {
         commands.push(...commandsOf(cmd.slice(1).join(" "), depth + 1));
+      } else if (depth < 4 && POWERSHELLS.has(cmd[0] ?? "")) {
+        // PowerShell's command string (build/89): the words after `-Command`; with none, the words from the first one
+        // that is no option, and each later word holding a blank, a quoted command past an option's value.
+        const at = cmd.findIndex((word, index) => index > 0 && commandFlag(word) !== null);
+        const first = at !== -1 ? -1 : cmd.findIndex((word, index) => index > 0 && !/^-|^\/\w*$/.test(word));
+        if (at !== -1) commands.push(...commandsOf([commandFlag(cmd[at] ?? ""), ...cmd.slice(at + 1)].join(" "), depth + 1));
+        else if (first !== -1) commands.push(...commandsOf(cmd.slice(first).join(" "), depth + 1));
+        for (const word of first === -1 ? [] : cmd.slice(first + 1)) if (/\s/.test(word)) commands.push(...commandsOf(word, depth + 1));
       }
       commands.push(cmd);
     }
@@ -1182,7 +1249,7 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
   /**
    * An HTTP call's method (the tool's default unless a flag or a body sets it), whether that is a write, and each
    * target's path below its repository or organisation (`repos/<o>/<r>/` cut), without scheme, host, query or a
-   * trailing slash; the repository's own path stays whole.
+   * trailing slash and with its percent-encoding decoded (build/76); the repository's own path stays whole.
    */
   function httpCall(cmd: string[]): { write: boolean; method: string; paths: string[] } {
     const tool = cmd[0] ?? "";
@@ -1246,6 +1313,7 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
         .replace(/^\/+/, "")
         .replace(/^api\/v3\//i, "")
         .split(/[?#]/)[0] ?? "")
+        .replace(/%([0-9A-Fa-f]{2})/g, (_, hex: string) => String.fromCharCode(Number.parseInt(hex, 16)))
         // A trailing slash dropped first, so the bare repository path stays `repos/<o>/<r>` (or `repositories/<id>`).
         .replace(/\/+$/, "")
         .replace(/^repos\/[^/]+\/[^/]+\//i, "")
@@ -1274,16 +1342,37 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
   ];
   const GRAPHQL_MOVES =
     /\b(createPullRequest|updatePullRequest|updatePullRequestBranch|createCommitOnBranch|createRef|updateRef|updateRefs|deleteRef|mergeBranch|mergePullRequest|enablePullRequestAutoMerge)\b/;
+  /** git's builtins (`git --list-cmds=builtins`, git 2.52.0), and `subtree`, which this verdict reads. */
+  const GIT_BUILTINS = new Set(
+    ("add am annotate apply archive backfill bisect blame branch bugreport bundle cat-file check-attr check-ignore " +
+      "check-mailmap check-ref-format checkout checkout--worker checkout-index cherry cherry-pick clean clone column " +
+      "commit commit-graph commit-tree config count-objects credential credential-cache credential-cache--daemon " +
+      "credential-store describe diagnose diff diff-files diff-index diff-pairs diff-tree difftool fast-export " +
+      "fast-import fetch fetch-pack fmt-merge-msg for-each-ref for-each-repo format-patch fsck fsck-objects " +
+      "fsmonitor--daemon gc get-tar-commit-id grep hash-object help hook index-pack init init-db interpret-trailers " +
+      "last-modified log ls-files ls-remote ls-tree mailinfo mailsplit maintenance merge merge-base merge-file " +
+      "merge-index merge-ours merge-recursive merge-recursive-ours merge-recursive-theirs merge-subtree merge-tree " +
+      "mktag mktree multi-pack-index mv name-rev notes pack-objects pack-redundant pack-refs patch-id pickaxe prune " +
+      "prune-packed pull push range-diff read-tree rebase receive-pack reflog refs remote remote-ext remote-fd repack " +
+      "replace replay repo rerere reset restore rev-list rev-parse revert rm send-pack shortlog show show-branch " +
+      "show-index show-ref sparse-checkout stage stash status stripspace submodule--helper switch symbolic-ref tag " +
+      "unpack-file unpack-objects update-index update-ref update-server-info upload-archive upload-archive--writer " +
+      "upload-pack var verify-commit verify-pack verify-tag version whatchanged worktree write-tree subtree").split(" "),
+  );
 
   for (const cmd of commandsOf(command, 0)) {
     const program = cmd[0] ?? "";
     if (program === "git") {
-      const { sub, args } = gitParts(cmd);
+      const { sub, args, config } = gitParts(cmd);
       if (sub === "push" || sub === "send-pack") return deny(`A raw \`git ${sub}\``);
       // `git subtree push` runs `git push` itself.
       const valued = new Set(["-P", "--prefix", "-m", "--message", "-b", "--branch", "--onto"]);
       const first = args.find((word, index) => !word.startsWith("-") && !valued.has(args[index - 1] ?? ""));
       if (sub === "subtree" && first === "push") return deny("A `git subtree push`");
+      // An alias, defined on the line or in the configuration, and a computed subcommand can run a push the line
+      // does not show (u21's review, the 01:50Z sign-off): unattended, git runs only a builtin this verdict knows.
+      if (config.some((pair) => /^alias\./i.test(pair))) return deny("A git call defining an alias (`-c alias.<name>=…`)");
+      if (sub !== "" && !GIT_BUILTINS.has(sub)) return deny("A git subcommand that is not a builtin this guard knows");
       continue;
     }
     let http = program === "curl" || program === "wget";
@@ -1291,9 +1380,10 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
       const [group, sub] = ghPositionals(cmd);
       if (group === "pr" && (sub === "create" || sub === "new" || sub === "edit")) return deny(`\`gh pr ${sub}\``);
       if (group === "repo" && sub === "sync") return deny("`gh repo sync`");
-      // `gh repo create --source <dir> --push` runs `git push` itself, as `repo sync` does (review/109).
-      if (group === "repo" && sub === "create" && cmd.some((word) => /^--push(=|$)/.test(word))) {
-        return deny("`gh repo create --push`");
+      // `gh repo create --source <dir> --push` runs `git push` itself, as `repo sync` does (review/109); `new` is gh's
+      // alias for `create` (review/129).
+      if (group === "repo" && (sub === "create" || sub === "new") && cmd.some((word) => /^--push(=|$)/.test(word))) {
+        return deny(`\`gh repo ${sub} --push\``);
       }
       http = group === "api";
     }
