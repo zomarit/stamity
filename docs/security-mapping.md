@@ -360,10 +360,14 @@ Every gap named in a row above, collected so the list reads without the tables.
     or configuration variables is refused whatever program it runs, `GIT_CONFIG_GLOBAL` and
     `GIT_CONFIG_SYSTEM` among them, `export`, and `declare`, `typeset` or `local` given `-x`, with a
     value or without one, a name `read`, `for`, `printf -v`, `mapfile`, `readarray` or `getopts`
-    assigns with no `=`, any of them named on a line that turns allexport on, and PowerShell's
-    `Set-Item env:` and `New-Item env:` among the spellings; a program-valued variable set through
-    another of PowerShell's `env:` drive commands passes, a respelling SECURITY.md names, and so
-    does one another builtin sets with allexport off. A hook the run writes runs inside a run verb's commit or push,
+    assigns with no `=`, any of them named on a line that turns allexport on with `set`'s letter or
+    the option's name, and PowerShell's `Set-Item env:` and `New-Item env:` among the spellings; a
+    program-valued variable set through another of PowerShell's `env:` drive commands passes, a
+    respelling SECURITY.md names. So do `readonly NAME=…` and zsh's `readonly -x`, `select`, zsh's
+    `print -v` and `foreach`, `: ${NAME:=…}`, allexport turned on by zsh's `setopt -a` or by a shell
+    started with `-a`, and `source <file>` before the verb, each changing the environment the
+    verb's git runs in; the pre-flight's refusal of an account that can push to the default branch
+    is the control that holds. A hook the run writes runs inside a run verb's commit or push,
     which keeps the repository's hooks, and the pre-flight's refusal of an account that can push to
     the default branch is the control that holds. On the clients that take no per-tool deny from
     the engine, a merge, branch write or review approval through the GitHub MCP server is a tool

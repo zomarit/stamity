@@ -2235,11 +2235,25 @@ describe("SECURITY.md", () => {
         // A `declare`, `typeset` or `local` export with no value is a refused spelling too (review/243), and so are the
         // forms that assign with no `=` and allexport turned on (review/247), with the builtins the rule does not read.
         "`export`, and `declare`, `typeset` or `local` given `-x`, with a value or without one, a name `read`, `for`, `printf -v`, `mapfile`, `readarray` or `getopts` assigns with no `=`",
-        "any of them named on a line that turns allexport on (`set -a`, `set -o allexport`, `setopt allexport`), PowerShell's `$env:`",
+        "any of them named on a line that turns allexport on with `set`'s letter or the option's name (`set -a`, `set -o allexport`, `setopt allexport`), PowerShell's `$env:`",
         "`Set-Content env:GIT_EXEC_PATH …`, passes, and the respelling residual above covers it",
-        "one another builtin sets on a line that leaves allexport off (`select`, `readonly`, zsh's `print -v` and `set -A`), which reaches the verb's git when the variable is already in the environment",
+        // The spellings that still pass until a run verb must stand alone on its line, each named with the control
+        // that holds; the allexport spellings the rule does not read among them, and no array form.
+        "These spellings pass the rule too, and each changes the environment the verb's git runs in",
+        "`readonly NAME=…`, `select`, zsh's `print -v` and `foreach`, and `: ${NAME:=…}`, each of which sets a value that reaches the verb's git when the variable is already in the environment",
+        "zsh's `readonly -x NAME=…`, which exports the variable whether or not it was before",
+        "allexport turned on by zsh's `setopt -a` or by a shell started with `-a` (`bash -a -c '…'`), which exports a variable one of those forms then sets on the line",
+        "`source <file>` (or `. <file>`) before the verb, since the guard does not read the file, which can set or export any of them",
+        "The control that holds is the pre-flight's refusal of an account that can push to the default branch: a push such a git makes meets the protection the pre-flight proved there, and reaches any other branch unheld",
       ]) {
         expect(residuals, `the cloud section does not name: ${named}`).toContain(named);
+      }
+      for (const stale of [
+        "any of them named on a line that turns allexport on (`set -a`",
+        "one another builtin sets on a line that leaves allexport off",
+        "`set -A`",
+      ]) {
+        expect(residuals, `the cloud section says again: ${stale}`).not.toContain(stale);
       }
       // The editor's workspace file and every folder's settings and tasks files are held, no gap (build/77, review/186),
       // and every folder's editor MCP-server file with them.
@@ -2646,13 +2660,17 @@ describe("docs/security-mapping.md", () => {
     for (const claim of [
       "the environment the run verbs start under (`PATH`, `HOME`, `XDG_CONFIG_HOME`) choosing the git they run and the global configuration it reads",
       "PowerShell's `Set-Item env:` and `New-Item env:` among the spellings; a program-valued variable set through another of PowerShell's `env:` drive commands passes",
-      "`export`, and `declare`, `typeset` or `local` given `-x`, with a value or without one, a name `read`, `for`, `printf -v`, `mapfile`, `readarray` or `getopts` assigns with no `=`, any of them named on a line that turns allexport on, and PowerShell's `Set-Item env:`",
-      "a respelling SECURITY.md names, and so does one another builtin sets with allexport off",
+      "`export`, and `declare`, `typeset` or `local` given `-x`, with a value or without one, a name `read`, `for`, `printf -v`, `mapfile`, `readarray` or `getopts` assigns with no `=`, any of them named on a line that turns allexport on with `set`'s letter or the option's name, and PowerShell's `Set-Item env:`",
+      "a respelling SECURITY.md names. So do `readonly NAME=…` and zsh's `readonly -x`, `select`, zsh's `print -v` and `foreach`, `: ${NAME:=…}`, allexport turned on by zsh's `setopt -a` or by a shell started with `-a`, and `source <file>` before the verb, each changing the environment the verb's git runs in; the pre-flight's refusal of an account that can push to the default branch is the control that holds",
       "a program-valued variable set through a PowerShell `env:` drive command other than `Set-Item` and `New-Item` among the ways",
     ]) {
       expect(flat, `the mapping page does not state: ${claim}`).toContain(claim);
     }
-    for (const stale of ["`Set-Item env:` form of a program-valued variable", "PowerShell `Set-Item env:` line setting a program-valued variable"]) {
+    for (const stale of [
+      "`Set-Item env:` form of a program-valued variable",
+      "PowerShell `Set-Item env:` line setting a program-valued variable",
+      "and so does one another builtin sets with allexport off",
+    ]) {
       expect(flat, `the mapping page says again: ${stale}`).not.toContain(stale);
     }
   });
