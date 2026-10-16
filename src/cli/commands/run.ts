@@ -17,8 +17,9 @@ import { sanitizeLabel } from "../kit/prompts.ts";
 import { readChange, scanChange } from "./gate.ts";
 
 /**
- * `stamity run start` and `stamity run checkpoint` — put an unattended run on a
- * branch of its own and push its work there (REQ-FLOW-092, REQ-FLOW-093,
+ * `stamity run start`, `stamity run checkpoint` and `stamity run end` — put an
+ * unattended run on a branch of its own, push its work there and end on its
+ * draft pull request (REQ-FLOW-092, REQ-FLOW-093, REQ-FLOW-094,
  * REQ-FLOW-102, REQ-FLOW-103), and the CLI's sixth hidden plumbing verb.
  * Hidden for the reason `learn`, `handoff`, `ledger`, `gate` and `plan` are:
  * its callers are the `st-unattended` skill and the close walks, not a person.
@@ -76,17 +77,35 @@ import { readChange, scanChange } from "./gate.ts";
  * else 1, `notDone[]` naming why. `notDone[]` may carry entries on exit 0 too
  * (an ignored record). Under `--dry-run` nothing is staged, written,
  * committed or pushed.
+ *
+ * **`end`** (`--title` required, no `--pr`) runs `checkpoint`'s steps and
+ * then the draft pull request every time, `--refused` titling it
+ * `Refused: <title>` before the title screen. A refusal, a scan hit or a
+ * refused push returns before any pull request call, as in `checkpoint`.
+ * Exit 0 when the remote branch holds `HEAD` and a pull request was opened,
+ * updated or commented; else 1. The JSON is `checkpoint`'s with
+ * `subcommand: "end"`, `inferred` always present.
  */
 
 const START = "start";
 const CHECKPOINT = "checkpoint";
+const END = "end";
 
-/** The options only `checkpoint` takes; on `start` each one is a usage error. */
-const CHECKPOINT_OPTIONS: Readonly<Record<string, string>> = {
+/** Every option beyond `--run`, by its key in commander's parsed options. */
+const OPTION_FLAGS: Readonly<Record<string, string>> = {
   paths: "--paths",
   pr: "--pr",
   title: "--title",
   signoff: "--signoff",
+  refused: "--refused",
+};
+
+/** The options each subcommand takes beyond `--run`; any other one given is a usage error. */
+const SUBCOMMAND_OPTIONS: Readonly<Record<string, readonly string[]>> = {
+  [START]: [],
+  [CHECKPOINT]: ["paths", "pr", "title", "signoff"],
+  // No --pr: the pull request is not optional at the end.
+  [END]: ["paths", "title", "refused", "signoff"],
 };
 
 /** The run folder's files a checkpoint stages where they exist. */
@@ -149,22 +168,23 @@ export const runCommand: CommandModule = {
 
   configure(cmd: Command): void {
     cmd
-      .addArgument(new Argument("<subcommand>", "which run action to run").choices([START, CHECKPOINT]))
+      .addArgument(new Argument("<subcommand>", "which run action to run").choices([START, CHECKPOINT, END]))
       .option("--run <run-id>", "the run folder's name under .stamity/runs/", parseRun)
-      .option("--paths <path...>", "checkpoint: also stage these paths, relative to the project root")
+      .option("--paths <path...>", "checkpoint and end: also stage these paths, relative to the project root")
       .option("--pr", "checkpoint: open or update the run's draft pull request after the push (with --title)")
-      .option("--title <title>", "checkpoint: the draft pull request's title")
-      .option("--signoff", "checkpoint: add the Signed-off-by line to the commit")
+      .option("--title <title>", "checkpoint and end: the draft pull request's title (end needs it)")
+      .option("--signoff", "checkpoint and end: add the Signed-off-by line to the commit")
+      .option("--refused", "end: title the draft pull request Refused: <title>, for a run that refused to start")
       // Usage errors, so exit 2 before the action and before git runs.
       .hook("preAction", (command) => {
         const subcommand = String(command.processedArgs[0]);
         const given = command.opts();
         if (given["run"] === undefined) command.error(`error: run ${subcommand} needs --run <run-id>`, { exitCode: 2 });
-        if (subcommand === START) {
-          const stray = Object.keys(CHECKPOINT_OPTIONS).find((key) => given[key] !== undefined);
-          if (stray !== undefined) command.error(`error: ${CHECKPOINT_OPTIONS[stray] ?? stray} does not apply to start`, { exitCode: 2 });
-        }
-        if ((given["pr"] === true) !== (given["title"] !== undefined)) {
+        const allowed = SUBCOMMAND_OPTIONS[subcommand] ?? [];
+        const stray = Object.keys(OPTION_FLAGS).find((key) => given[key] !== undefined && !allowed.includes(key));
+        if (stray !== undefined) command.error(`error: ${OPTION_FLAGS[stray] ?? stray} does not apply to ${subcommand}`, { exitCode: 2 });
+        if (subcommand === END && given["title"] === undefined) command.error("error: run end needs --title <title>", { exitCode: 2 });
+        if (subcommand === CHECKPOINT && (given["pr"] === true) !== (given["title"] !== undefined)) {
           command.error("error: --pr and --title <title> go together", { exitCode: 2 });
         }
         if (typeof given["title"] === "string" && given["title"].trim() === "") command.error("error: --title takes a title", { exitCode: 2 });
@@ -175,7 +195,8 @@ export const runCommand: CommandModule = {
 
   run(ctx, opts, args): Promise<CommandResult> {
     // Commander's `choices()` already refused every other subcommand at parse time.
-    if (args[0] === CHECKPOINT) return runCheckpoint(ctx, opts);
+    if (args[0] === CHECKPOINT) return runCheckpoint(ctx, opts, CHECKPOINT);
+    if (args[0] === END) return runCheckpoint(ctx, opts, END);
     return runStart(ctx, String(opts["run"]));
   },
 };
@@ -360,9 +381,9 @@ interface PrStep {
   notDone: string[];
 }
 
-async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>): Promise<CommandResult> {
+async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, verb: typeof CHECKPOINT | typeof END): Promise<CommandResult> {
   const run = String(opts["run"]);
-  checkRunId(ctx, CHECKPOINT, run);
+  checkRunId(ctx, verb, run);
   const { layout, resumeCard } = ctx.engine.runs;
   const cwd = ctx.app.runtime.cwd;
   const runDir = layout.runRelPath(run);
@@ -371,19 +392,19 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>): Pr
   if (record === null) {
     throw new CliFailure({
       code: "FAILURE",
-      message: `run checkpoint found no record at ${recordRel}`,
-      why: "the checkpoint reads the record's Mode:, Branch: and Base: before it stages anything",
+      message: `run ${verb} found no record at ${recordRel}`,
+      why: "the verb reads the record's Mode:, Branch: and Base: before it stages anything",
       next: "run it from the project root, naming the run folder that holds the record",
     });
   }
   const head = resumeCard.readRecordHead(record.text);
   const unattended = head.mode === "unattended";
   const recordBase = head.base;
-  const base = recordBase === null ? null : await commitAt(cwd, recordBase, CHECKPOINT);
+  const base = recordBase === null ? null : await commitAt(cwd, recordBase, verb);
   if (base === null) {
     throw new CliFailure({
       code: "FAILURE",
-      message: recordBase === null ? `run checkpoint: ${recordRel} names no Base:` : `run checkpoint: the record's Base: ${recordBase} names no commit here`,
+      message: recordBase === null ? `run ${verb}: ${recordRel} names no Base:` : `run ${verb}: the record's Base: ${recordBase} names no commit here`,
       why: "the held paths and the secret scan are both read against the commit the run started from",
       next: "write the run's branch point as Base: <commit> in the record's head",
     });
@@ -395,12 +416,12 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>): Pr
     const notDone = result.notDone.map((entry) => sanitizeLabel(entry));
     result.notDone = notDone;
     ctx.io.out(`${[...lines, ...(notDone.length === 0 ? [] : ["Not done:", ...notDone.map((entry) => `  - ${entry}`)])].join("\n")}\n`);
-    return { exitCode: ok ? 0 : 1, json: { subcommand: CHECKPOINT, run, ...result, ...extra } };
+    return { exitCode: ok ? 0 : 1, json: { subcommand: verb, run, ...result, ...(verb === END ? { inferred: [] } : {}), ...extra } };
   };
 
   // (1) Never a commit on a default branch, nor on a checkout that is not the run's.
-  const current = await currentBranch(cwd, CHECKPOINT);
-  const defaults = await defaultBranches(ctx, cwd, CHECKPOINT);
+  const current = await currentBranch(cwd, verb);
+  const defaults = await defaultBranches(ctx, cwd, verb);
   const isDefault = (name: string): boolean => defaults.names.includes(name.toLowerCase());
   // build/97: a record whose Branch: names a default branch matches the branch `run start` switches this run to.
   const matches = (recorded: string, checkout: string): boolean =>
@@ -422,8 +443,8 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>): Pr
     return finish(false);
   }
 
-  const top = (await git(cwd, ["rev-parse", "--show-toplevel"], CHECKPOINT)).stdout.replace(/\r?\n$/, "");
-  const prefix = (await git(cwd, ["rev-parse", "--show-prefix"], CHECKPOINT)).stdout.replace(/\r?\n$/, "");
+  const top = (await git(cwd, ["rev-parse", "--show-toplevel"], verb)).stdout.replace(/\r?\n$/, "");
+  const prefix = (await git(cwd, ["rev-parse", "--show-prefix"], verb)).stdout.replace(/\r?\n$/, "");
   const fromTop = (projectPath: string): string => posix.normalize(`${prefix}${projectPath}`);
 
   // (3) What is staged: the run folder's files, the inbox and --paths; never -A, never -f.
@@ -468,7 +489,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>): Pr
       const scratch = mkdtempSync(join(tmpdir(), "stamity-held-"));
       try {
         const out = join(scratch, HELD_PATCH);
-        const patch = await git(top, ["diff", "--binary", "--full-index", ...DIFF_PINS, `--output=${out}`, base, "--", ...held], CHECKPOINT);
+        const patch = await git(top, ["diff", "--binary", "--full-index", ...DIFF_PINS, `--output=${out}`, base, "--", ...held], verb);
         if (patch.code !== 0) {
           result.notDone.push(`hold failed: git diff answered ${patch.code}: ${firstLine(patch.stderr)}`);
           return finish(false);
@@ -482,7 +503,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>): Pr
       } finally {
         rmSync(scratch, { recursive: true, force: true });
       }
-      const restored = await git(top, ["restore", "--staged", `--source=${base}`, "--", ...held], CHECKPOINT);
+      const restored = await git(top, ["restore", "--staged", `--source=${base}`, "--", ...held], verb);
       if (restored.code !== 0) {
         result.notDone.push(`hold failed: git restore answered ${restored.code}: ${firstLine(restored.stderr)}`);
         return finish(false);
@@ -503,15 +524,15 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>): Pr
   );
 
   // (4) The commit, only when something is staged.
-  const staged = await git(top, ["diff", "--cached", "--quiet", "--no-ext-diff", "--ignore-submodules=none"], CHECKPOINT);
+  const staged = await git(top, ["diff", "--cached", "--quiet", "--no-ext-diff", "--ignore-submodules=none"], verb);
   if (staged.code === 1) {
-    const commit = await git(top, ["commit", "--quiet", `--message=chore(run): checkpoint ${run}`, ...(opts["signoff"] === true ? ["--signoff"] : [])], CHECKPOINT);
+    const commit = await git(top, ["commit", "--quiet", `--message=chore(run): checkpoint ${run}`, ...(opts["signoff"] === true ? ["--signoff"] : [])], verb);
     if (commit.code !== 0) {
       const why = `${commit.stderr}\n${commit.stdout}`;
       result.notDone.push(IDENTITY_REFUSAL.test(why) ? "commit failed (identity)" : `commit failed: ${firstLine(why)}`);
       return finish(false);
     }
-    result.committed = await commitAt(top, "HEAD", CHECKPOINT);
+    result.committed = await commitAt(top, "HEAD", verb);
   } else if (staged.code !== 0) {
     result.notDone.push(`commit failed: git diff --cached answered ${staged.code}: ${firstLine(staged.stderr)}`);
     return finish(false);
@@ -537,8 +558,8 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>): Pr
 
   // (6) The push, its command checked by the shell guard's own table before it runs.
   const refspec = `HEAD:refs/heads/${current}`;
-  const tip = await commitAt(top, "HEAD", CHECKPOINT);
-  if (tip !== null && tip === (await commitAt(top, `refs/remotes/origin/${current}`, CHECKPOINT))) {
+  const tip = await commitAt(top, "HEAD", verb);
+  if (tip !== null && tip === (await commitAt(top, `refs/remotes/origin/${current}`, verb))) {
     lines.push(`push: nothing ahead of origin/${current}`);
   } else {
     const verdict = personOnlyVerdict(`git push origin ${refspec}`, {
@@ -550,7 +571,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>): Pr
       result.notDone.push(`push refused: ${verdict.reason}`);
       return finish(false);
     }
-    const pushed = await git(top, ["push", "--quiet", "origin", refspec], CHECKPOINT);
+    const pushed = await git(top, ["push", "--quiet", "origin", refspec], verb);
     if (pushed.code !== 0) {
       result.notDone.push(pushFailure(pushed));
       return finish(false);
@@ -559,9 +580,11 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>): Pr
     lines.push(`push: origin ${refspec}`);
   }
 
-  // (7) The draft pull request, as `run end` opens it.
-  if (opts["pr"] !== true) return finish(true);
-  const step = await draftPr(ctx, { run, runDir, recordRel, top, cwd, base, branch: current, defaults, unattended, title: String(opts["title"]) });
+  // (7) The draft pull request: `end` opens it every time, `checkpoint` only with --pr.
+  if (verb !== END && opts["pr"] !== true) return finish(true);
+  // --refused names the title before the screen reads it, so a hit still gives `Run <run-id>`.
+  const title = verb === END && opts["refused"] === true ? `Refused: ${String(opts["title"])}` : String(opts["title"]);
+  const step = await draftPr(ctx, { run, runDir, recordRel, top, cwd, base, branch: current, defaults, unattended, title });
   result.pr = step.pr;
   result.notDone.push(...step.notDone);
   lines.push(`pr: ${step.pr === null ? "not opened" : `#${step.pr.number} ${step.pr.url} (${step.pr.how})`}`);

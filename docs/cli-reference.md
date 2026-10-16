@@ -371,14 +371,15 @@ May write when it runs, so `--dry-run` previews any change without making it.
 
 | Argument | What it is |
 |---|---|
-| `<subcommand>` | which run action to run — one of `start`, `checkpoint` |
+| `<subcommand>` | which run action to run — one of `start`, `checkpoint`, `end` |
 
 | Flag | What it does | Default |
 |---|---|---|
 | `--run <run-id>` | the run folder's name under .stamity/runs/ | — |
-| `--paths <path...>` | checkpoint: also stage these paths, relative to the project root | — |
+| `--paths <path...>` | checkpoint and end: also stage these paths, relative to the project root | — |
 | `--pr` | checkpoint: open or update the run's draft pull request after the push (with --title) | — |
-| `--title <title>` | checkpoint: the draft pull request's title | — |
-| `--signoff` | checkpoint: add the Signed-off-by line to the commit | — |
+| `--title <title>` | checkpoint and end: the draft pull request's title (end needs it) | — |
+| `--signoff` | checkpoint and end: add the Signed-off-by line to the commit | — |
+| `--refused` | end: title the draft pull request Refused: <title>, for a run that refused to start | — |
 
 Regenerate this page with `node scripts/generate-docs.mjs`.
