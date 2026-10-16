@@ -597,14 +597,37 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   function httpCall(raw: string[]): { write: boolean; method: string; paths: string[]; cmd: string[] } {
     const tool = raw[0] ?? "";
     // wget reads a long option's unique prefix as the option (`--meth=DELETE`, `--post-d`, pr/11): one of three letters
-    // or more is expanded to the method or body option it begins, so a misread prefix only adds a write.
-    const cmd = raw.map((word) => {
+    // or more is expanded to the method, body or `--execute` option it begins, so a misread prefix only adds a write.
+    const expanded = raw.map((word) => {
       const name = word.split("=")[0] ?? "";
       const full = tool === "wget" && /^--[a-z-]{3,}$/i.test(name)
-        ? ["--method", "--post-data", "--post-file", "--body-data", "--body-file"].find((option) => option.startsWith(name.toLowerCase()))
+        ? ["--method", "--post-data", "--post-file", "--body-data", "--body-file", "--execute"].find((option) => option.startsWith(name.toLowerCase()))
         : undefined;
       return full === undefined ? word : full + word.slice(name.length);
     });
+    // wget runs `-e`/`--execute`'s value as a wgetrc command (pr/23), its name read regardless of case, `_` and `-`:
+    // `method=<M>` and the four body commands become the option each sets, so the call is read as that option's.
+    // Any other command stays a skipped value. A cluster ending in `e`, or with a command attached after its `e`, counts.
+    const WGETRC = new Map([["method", "--method"], ["postdata", "--post-data"], ["postfile", "--post-file"],
+      ["bodydata", "--body-data"], ["bodyfile", "--body-file"]]);
+    const cmd: string[] = [];
+    for (let k = 0; k < expanded.length; k += 1) {
+      const word = expanded[k] ?? "";
+      const own = /^(-[A-Za-z]*e|--execute)$/.test(word);
+      let rc: string | undefined;
+      if (tool === "wget" && k > 0) {
+        if (own) rc = expanded[k + 1];
+        else if (word.startsWith("--execute=")) rc = word.slice(10);
+        else rc = /^-[A-Za-z]*?e(.+)$/.exec(word)?.[1];
+      }
+      const eq = rc?.indexOf("=") ?? -1;
+      const option = rc !== undefined && eq > 0 ? WGETRC.get(rc.slice(0, eq).trim().toLowerCase().replace(/[-_]/g, "")) : undefined;
+      if (rc === undefined || option === undefined) cmd.push(word);
+      else {
+        cmd.push(`${option}=${rc.slice(eq + 1).trim()}`);
+        if (own) k += 1;
+      }
+    }
     let method: string | null = null;
     let body = false;
     const targets: string[] = [];
@@ -1543,14 +1566,37 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
   function httpCall(raw: string[]): { write: boolean; method: string; paths: string[]; cmd: string[] } {
     const tool = raw[0] ?? "";
     // wget reads a long option's unique prefix as the option (`--meth=DELETE`, `--post-d`, pr/11): one of three letters
-    // or more is expanded to the method or body option it begins, so a misread prefix only adds a write.
-    const cmd = raw.map((word) => {
+    // or more is expanded to the method, body or `--execute` option it begins, so a misread prefix only adds a write.
+    const expanded = raw.map((word) => {
       const name = word.split("=")[0] ?? "";
       const full = tool === "wget" && /^--[a-z-]{3,}$/i.test(name)
-        ? ["--method", "--post-data", "--post-file", "--body-data", "--body-file"].find((option) => option.startsWith(name.toLowerCase()))
+        ? ["--method", "--post-data", "--post-file", "--body-data", "--body-file", "--execute"].find((option) => option.startsWith(name.toLowerCase()))
         : undefined;
       return full === undefined ? word : full + word.slice(name.length);
     });
+    // wget runs `-e`/`--execute`'s value as a wgetrc command (pr/23), its name read regardless of case, `_` and `-`:
+    // `method=<M>` and the four body commands become the option each sets, so the call is read as that option's.
+    // Any other command stays a skipped value. A cluster ending in `e`, or with a command attached after its `e`, counts.
+    const WGETRC = new Map([["method", "--method"], ["postdata", "--post-data"], ["postfile", "--post-file"],
+      ["bodydata", "--body-data"], ["bodyfile", "--body-file"]]);
+    const cmd: string[] = [];
+    for (let k = 0; k < expanded.length; k += 1) {
+      const word = expanded[k] ?? "";
+      const own = /^(-[A-Za-z]*e|--execute)$/.test(word);
+      let rc: string | undefined;
+      if (tool === "wget" && k > 0) {
+        if (own) rc = expanded[k + 1];
+        else if (word.startsWith("--execute=")) rc = word.slice(10);
+        else rc = /^-[A-Za-z]*?e(.+)$/.exec(word)?.[1];
+      }
+      const eq = rc?.indexOf("=") ?? -1;
+      const option = rc !== undefined && eq > 0 ? WGETRC.get(rc.slice(0, eq).trim().toLowerCase().replace(/[-_]/g, "")) : undefined;
+      if (rc === undefined || option === undefined) cmd.push(word);
+      else {
+        cmd.push(`${option}=${rc.slice(eq + 1).trim()}`);
+        if (own) k += 1;
+      }
+    }
     let method: string | null = null;
     let body = false;
     const targets: string[] = [];

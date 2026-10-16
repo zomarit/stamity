@@ -3391,6 +3391,8 @@ const WRAPPERS = new Map([
   ["pnpx", RUNNER],
 ]);
 const RUNNERS = new Set(["npm exec", "npm x", "pnpm dlx", "pnpm exec", "yarn dlx", "yarn exec", "bun x", "bun exec"]);
+const MANAGERS = new Set(["npm", "pnpm", "yarn", "bun"]);
+const MANAGER_VALUED = new Set(["-w", "--workspace", "--filter", "-F", "--prefix", "-C", "--dir", "--cwd", "--registry", "--userconfig"]);
 const KEYWORDS = new Set(["!", "if", "then", "else", "elif", "fi", "do", "done", "while", "until"]);
 const SHELLS = new Set(["sh", "bash", "zsh", "dash", "ksh"]);
 const POWERSHELLS = new Set(["pwsh", "powershell", "invoke-expression", "iex"]);
@@ -3436,12 +3438,22 @@ function placesOf(command, cwd) {
       if (/\s/.test(word) && !/^@\s/.test(word)) inner(rest(k).join(" "));
       const name = programName(word);
       const assigned = /^\$env:git_dir(=.*)?$/i.exec(word);
+      // A package manager's options before a runner's subcommand (npm -w x exec, pr/22), skipped as u6 skips them.
+      let sub = k + 1;
+      while (MANAGERS.has(name) && typeof words[sub] === "string") {
+        const option = words[sub];
+        const next = typeof words[sub + 1] === "string" ? words[sub + 1] : "-";
+        if (MANAGER_VALUED.has(option) || (name === "yarn" && option === "workspace")) sub += 2;
+        else if (/^--[^=]+$/.test(option) && !next.startsWith("-") && !RUNNERS.has(name + " " + next)) sub += 2;
+        else if (option.startsWith("-") && option !== "--") sub += 1;
+        else break;
+      }
       if (assigned !== null) {
         const value = assigned[1] ?? (/^=/.test(words[k + 1] ?? "") ? words[(k += 1)] : undefined);
         if (value !== undefined) gitDir(value === "=" ? words[(k += 1)] : value.slice(1));
-      } else if (WRAPPERS.has(name) || RUNNERS.has(name + " " + words[k + 1])) {
+      } else if (WRAPPERS.has(name) || RUNNERS.has(name + " " + words[sub])) {
         const [short = "", long = "", lines = ""] = WRAPPERS.get(name) ?? RUNNER;
-        if (!WRAPPERS.has(name)) k += 1;
+        if (!WRAPPERS.has(name)) k = sub;
         at = true;
         while (typeof words[k + 1] === "string" && (ASSIGNMENT.test(words[k + 1]) || /^(-|\d)/.test(words[k + 1]))) {
           const option = words[(k += 1)];

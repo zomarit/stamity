@@ -468,6 +468,15 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["wget --meth DELETE https://api.github.com/repos/o/r/releases/1", "release"],
   ["wget --post-d '{\"event\":\"APPROVE\"}' https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
   ["wget --body-f=r.json --meth=POST https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
+  // wget's `-e`/`--execute` run as wgetrc commands (pr/23): `method` sets the method, the body commands send a body.
+  ["wget -e method=DELETE https://api.github.com/repos/o/r/git/refs/heads/feat/x", "push-delete"],
+  ["wget --execute=method=DELETE https://api.github.com/repos/o/r/releases/1", "release"],
+  ["wget --exec 'Method = PUT' https://api.github.com/repos/o/r/pulls/3/merge", "pr-merge"],
+  ["wget -qemethod=PUT https://api.github.com/repos/o/r/pulls/3/merge", "pr-merge"],
+  ["wget -e 'body_data={\"event\":\"APPROVE\"}' https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
+  ["wget -e post_file=r.json https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
+  ["wget -e POST-DATA='{\"ref\":\"refs/tags/v2\",\"sha\":\"abc\"}' https://api.github.com/repos/o/r/git/refs", "push-tags"],
+  ["wget -e body_file=r.json -e method=POST https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
   // `git send-pack`, read as a push, no ref reading as a matching push (pr/16).
   ["git send-pack --force git@github.com:o/r.git feat/x", "force-push"],
   ["git send-pack git@github.com:o/r.git main", "push-default"],
@@ -670,6 +679,10 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
   ["wget --meth=GET https://api.github.com/repos/o/r/releases/1"],
   ["wget --post-d '{\"event\":\"COMMENT\"}' https://api.github.com/repos/o/r/pulls/3/reviews"],
   ["git send-pack git@github.com:o/r.git feat/x"],
+  // pr/23's twins: a wgetrc command that sets no method or body, a read method, and a comment-event review body.
+  ["wget -e robots=off https://api.github.com/repos/o/r/releases"],
+  ["wget -e method=GET https://api.github.com/repos/o/r/releases/1"],
+  ["wget -e 'body_data={\"event\":\"COMMENT\"}' https://api.github.com/repos/o/r/pulls/3/reviews"],
 ];
 
 describe("personOnlyVerdict — the deny matrix", () => {
@@ -1017,6 +1030,9 @@ describe("unattendedPushVerdict", () => {
     ["cmd /c g^it push origin feat/x"],
     ["wget --meth=PATCH https://api.github.com/repos/o/r/pulls/3"],
     ["wget --post-d x https://api.github.com/repos/o/r/pulls"],
+    // wget's wgetrc commands (pr/23).
+    ["wget -e method=PATCH https://api.github.com/repos/o/r/pulls/3"],
+    ["wget -e post_data=x https://api.github.com/repos/o/r/pulls"],
   ])("denies %j, naming the run verbs", (command) => {
     const verdict = unattendedPushVerdict(command);
     expect(verdict.deny).toBe(true);
@@ -1156,6 +1172,8 @@ describe("unattendedPushVerdict", () => {
     ["npm -w x exec -- git status"],
     ["cmd /c g^it status"],
     ["wget --meth=GET https://api.github.com/repos/o/r/pulls/3"],
+    ["wget -e method=GET https://api.github.com/repos/o/r/pulls/3"],
+    ["wget -e robots=off https://api.github.com/repos/o/r/pulls/3"],
   ])("allows %j", (command) => {
     expect(unattendedPushVerdict(command)).toEqual({ deny: false });
   });

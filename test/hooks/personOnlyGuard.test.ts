@@ -145,6 +145,9 @@ const MATRIX: readonly (readonly [command: string, rule: string | null])[] = [
   ["cmd /c g^it status", null],
   ["wget --meth=DELETE https://api.github.com/repos/o/r/releases/1", "release"],
   ["wget https://api.github.com/repos/o/r/releases", null],
+  // wget's `-e` wgetrc command (pr/23).
+  ["wget -e method=DELETE https://api.github.com/repos/o/r/releases/1", "release"],
+  ["wget -e robots=off https://api.github.com/repos/o/r/releases", null],
   ["git send-pack git@github.com:o/r.git main", "push-default"],
   ["git send-pack git@github.com:o/r.git feat/x", null],
 ];
@@ -424,6 +427,27 @@ describe("a directory read only where the shell runs a command (review/116)", ()
     ];
     for (const command of denied) expect(decide("claude", guard, command), command).toMatchObject({ deny: true, reason: expect.stringContaining("push-default") });
   });
+
+  it.each(TOOLS)("%s: reads a runner's git place behind a package manager's options (pr/22)", async (tool) => {
+    const guard = await placeGuard(tool, LINKED);
+    const denied = [
+      "npm -w x exec -- git -C wt-main push",
+      "npm --workspace x x git -C wt-main push",
+      "pnpm --filter x exec git -C wt-main push",
+      "pnpm -r exec git -C wt-main push",
+      "yarn workspace x exec git -C wt-main push",
+      "npm --loglevel silly exec -- git -C wt-main push",
+      "npm -w x exec -- env -C wt-main git push",
+    ];
+    for (const command of denied) expect(decide(tool, guard, command), `${tool}: ${command}`).toMatchObject({ deny: true, reason: expect.stringContaining("push-default") });
+    const allowed = [
+      "npm -w x exec -- git -C wt-feat push",
+      "npm -w x exec -- git -C wt-main push origin feat/x",
+      "pnpm --filter x exec git -C wt-main status",
+      "npm --loglevel silly exec -- git push",
+    ];
+    for (const command of allowed) expect(decide(tool, guard, command).deny, `${tool}: ${command}`).toBe(false);
+  });
 });
 
 describe("PowerShell's location commands and $env:GIT_DIR (review/117)", () => {
@@ -562,18 +586,22 @@ describe("a place inside a line u6 reads (build/89, review/153) and a value the 
         return typeof part === "string" ? part : part.join(" ");
       });
     const u6 = tablesOf(personOnlyVerdict.toString(), "const ASSIGNMENT", "function programName",
-      "ASSIGNMENT, KEYWORDS, WRAPPERS, RUNNERS, RUNNER_OPTIONS, WRAPPER_OPTIONS, SHELLS, POWERSHELLS");
+      "ASSIGNMENT, KEYWORDS, WRAPPERS, RUNNERS, RUNNER_OPTIONS, MANAGERS, MANAGER_VALUED, WRAPPER_OPTIONS, SHELLS, POWERSHELLS");
     const wrappers = u6.WRAPPERS as Set<string>;
     const options = u6.WRAPPER_OPTIONS as Map<string, Options>;
     expect(wrappers.size).toBeGreaterThan(10);
     for (const tool of TOOLS) {
       const content = planCoreHookScripts(POLICY, tool, { ...CLI_PIN, personOnlyGuard: true }).at(-1)?.content ?? "";
-      const guard = tablesOf(content, "const RUNNER = ", "function placesOf", "RUNNER, WRAPPERS, RUNNERS, KEYWORDS, SHELLS, POWERSHELLS, ASSIGNMENT");
+      const guard = tablesOf(content, "const RUNNER = ", "function placesOf",
+        "RUNNER, WRAPPERS, RUNNERS, MANAGERS, MANAGER_VALUED, KEYWORDS, SHELLS, POWERSHELLS, ASSIGNMENT");
       const table = guard.WRAPPERS as Map<string, Options>;
       expect([...table.keys()].toSorted(), tool).toEqual([...wrappers].toSorted());
       for (const name of wrappers) expect(shape(table.get(name)), `${tool}: ${name}`).toEqual(shape(options.get(name)));
       expect(shape(guard.RUNNER as Options), tool).toEqual(shape(u6.RUNNER_OPTIONS as Options));
       expect([...(guard.RUNNERS as Set<string>)].toSorted(), tool).toEqual([...(u6.RUNNERS as Set<string>)].toSorted());
+      // The package managers whose options stand before a runner's subcommand, and the options skipped with a value (pr/22).
+      expect([...(guard.MANAGERS as Set<string>)], tool).toEqual([...(u6.MANAGERS as Set<string>)]);
+      expect([...(guard.MANAGER_VALUED as Set<string>)], tool).toEqual([...(u6.MANAGER_VALUED as Set<string>)]);
       expect([...(guard.SHELLS as Set<string>)], tool).toEqual([...(u6.SHELLS as Set<string>)]);
       expect([...(guard.POWERSHELLS as Set<string>)], tool).toEqual([...(u6.POWERSHELLS as Set<string>)]);
       // The guard splits a brace as an operator, so u6's two brace keywords never reach it as words.
@@ -671,7 +699,9 @@ describe("the unattended push rule, the mode read from the run records", () => {
       `set -ea; select GIT_EXEC_PATH in /tmp/bin; do break; done; ${RUN_END}`,
       `setopt ALL_EXPORT; print -v GIT_EXEC_PATH /tmp/bin; ${RUN_END}`, "shopt -so allexport; select GIT_PAGER in /tmp/p; do break; done; npm test",
       // A runner behind a package manager's options (pr/3), the interpreter's caret (pr/10), a shortened wget method (pr/11).
-      "npm -w x exec -- git push origin feat/x", "cmd /c g^it push origin feat/x", "wget --meth=PATCH https://api.github.com/repos/o/r/pulls/3"];
+      "npm -w x exec -- git push origin feat/x", "cmd /c g^it push origin feat/x", "wget --meth=PATCH https://api.github.com/repos/o/r/pulls/3",
+      // wget's `-e` wgetrc command (pr/23).
+      "wget -e method=PATCH https://api.github.com/repos/o/r/pulls/3"];
     for (const command of unattended) {
       const source = unattendedPushVerdict(command);
       expect(source.deny, command).toBe(true);
@@ -700,7 +730,8 @@ describe("the unattended push rule, the mode read from the run records", () => {
       `declare -p GIT_EXEC_PATH; ${RUN_END}`, `declare -x GIT_TERMINAL_PROMPT; ${RUN_END}`, "typeset -i GIT_CONFIG_COUNT; npm test",
       `read OTHER_NAME <<< /tmp/bin; ${RUN_END}`, `echo "$GIT_EXEC_PATH"; ${RUN_END}`, `set +a; read OTHER_NAME <<< "$GIT_EXEC_PATH"; ${RUN_END}`,
       `set -e; echo "$GIT_EXEC_PATH"; ${RUN_END}`, 'for f in GIT_EXEC_PATH GIT_EDITOR; do grep -rn "$f" src; done; npm test',
-      `printf '%s\\n' GIT_EXEC_PATH; ${RUN_END}`, "npm -w x exec -- git status", "cmd /c g^it status", "wget --meth=GET https://api.github.com/repos/o/r/pulls/3"]) {
+      `printf '%s\\n' GIT_EXEC_PATH; ${RUN_END}`, "npm -w x exec -- git status", "cmd /c g^it status", "wget --meth=GET https://api.github.com/repos/o/r/pulls/3",
+      "wget -e method=GET https://api.github.com/repos/o/r/pulls/3"]) {
       expect(unattendedPushVerdict(command), command).toEqual({ deny: false });
       expect(decide("claude", guard, command).deny, command).toBe(false);
     }
