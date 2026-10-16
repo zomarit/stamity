@@ -1,6 +1,6 @@
 ---
 id: orchestrator-context
-# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, amended on 2026-09-29 by the maintainer's decision to retire the replay, amended from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, its citations re-pointed in run 2026-10-12_board-writes on 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, and excluded from the site build.
+# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, amended on 2026-09-29 by the maintainer's decision to retire the replay, amended from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, its citations re-pointed in run 2026-10-12_board-writes on 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, and excluded from the site build.
 # The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.15.0
@@ -242,6 +242,8 @@ The replay's files were deleted on 2026-09-30; every path below reads at tag `re
   table's lead); `test/corpus/commands/board.test.ts` (the leftovers bullet).
 - `source` (added 2026-10-10): `content/commands/st-board.md` (the "Leftovers at a close" bullet);
   `src/cli/docs/measurements.ts` (the table reader).
+- `docs/plans/021-cloud-runs-01.md`, with `.stamity/runs/2026-10-15_cloud-runs/` (REQ-CTX-012 amended), added
+  2026-10-16; `test/runs/recordHead.test.ts` (the head's new lines).
 
 ## Requirements
 
@@ -548,6 +550,25 @@ Amended 2026-10-10 (run `2026-10-10_next-tier`, unit `f0-make-room`). The body n
 `reports/` folder with its ignore file, in the Proof block's record paragraph (`content/commands/st-work.md:408-412`);
 Frame step 5 opens the record "with the head lines and the `reports/` folder the Proof block names" (`:31-32`). Frame
 still writes the head, and the requirement does not change.
+
+Amended 2026-10-16 (plan 021 file 1, run `2026-10-15_cloud-runs`, units `u1-record-head`, `u10b-debug-quick`,
+`u11-rework-pr-resolve` and `u15-work-text`; merged by its unit `u23-spec-merge`, every `path:line` read at the
+integration head `4daeb214`). The head names the plan, the invocation, the branch and the mode. Given Frame, Then the
+first 15 lines of `record.md` carry `Status:`, `Plan:`, `Base:`, `Branch: <the run's branch>`, `Invocation:` and
+`Mode: attended | unattended`, each bare at column 0 (`content/commands/st-work.md:405-410`); `readRecordHead`
+returns `mode`, `branch` and `base`, and a missing `Mode:` line or any other value reads as attended
+(`src/runs/resumeCard.ts:73-82`, `:225-253`). The debug record keeps its three head lines when attended; an unattended
+`/st-debug` record adds `Mode:`, `Branch:` and `Base:` (`content/commands/st-debug.md:56-68`), and an unattended
+`/st-pr-resolve` opens a record of its own with the six lines (`content/commands/st-pr-resolve.md:54`). The resume
+card's printed lines do not change.
+
+- **As built, where the delta differed:** `readRecordHead` returns `mode: null` for a missing line or any other value,
+  and every reader takes only `unattended` as the mode, so `null` reads as attended; it also returns `resumes`, the
+  `Resumes: <run-id>` line a morning walk's record carries (`content/skills/st-unattended/SKILL.md:140-142`), so the
+  hook twin reads seven head lines where it read three.
+- **Proof:** `test/runs/recordHead.test.ts` ("the record head's mode, branch, base and resumes lines (REQ-CTX-012)"),
+  `test/runs/resumeCardParity.test.ts` ("the hook twin's record head (REQ-CTX-012)"), `test/corpus/commands/work.test.ts`,
+  `test/corpus/commands/lightTrio.test.ts`, `test/corpus/commands/feedbackPair.test.ts`.
 
 Implements C5 (D6, D7).
 
@@ -1493,6 +1514,10 @@ command again whenever this section grows; do not count by eye.
   from the Frame phase to that paragraph; it read "WHEN its Frame phase is read THEN it
   instructs writing". Amended 2026-10-09, `review/115`, `review/133`; it named `Plan:` and
   `Invocation:` only).
+- GIVEN that paragraph THEN it also names `Mode: attended | unattended` and `Branch:` among the six head lines; GIVEN a
+  head with no `Mode:` line, or another value, THEN `readRecordHead` returns `mode: null`, which no reader takes as
+  unattended; GIVEN `Mode: Unattended` THEN `unattended` (added 2026-10-16, plan 021 file 1;
+  `test/runs/recordHead.test.ts`, `test/corpus/commands/work.test.ts`).
 - GIVEN every changed-shape replay run WHEN its Frame phase has ended THEN:
   - the first 15 lines of `.stamity/runs/<run-id>/record.md` hold exactly one line each
     beginning `Status:`, `Plan:` and `Invocation:`;

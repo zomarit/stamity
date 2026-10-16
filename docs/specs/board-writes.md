@@ -1,6 +1,6 @@
 ---
 id: board-writes
-# A design document, authored from docs/plans/015-board-writes.md on 2026-10-01; its requirement text merged on 2026-10-12 at the Prove phase of run 2026-10-12_board-writes, by its unit s1-spec-merge against the integration head 3415e721, amended in run 2026-10-14_cli-native on 2026-10-15, and excluded from the site build.
+# A design document, authored from docs/plans/015-board-writes.md on 2026-10-01; its requirement text merged on 2026-10-12 at the Prove phase of run 2026-10-12_board-writes, by its unit s1-spec-merge against the integration head 3415e721, amended in run 2026-10-14_cli-native on 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.15.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the command reference carries it, or a decision row cuts the surface
@@ -121,6 +121,16 @@ names every write made, with its item id and event id, and the preview's answer 
   from a preview answered in the same session is `review/25`. The tick's author rule is the re-plan's; plan 015 ticked
   every verified criterion the body lists as a task.
 - **Proof:** `test/corpus/commands/board.test.ts`; the eval case `board-write-back-four-channels`; QA rows R2 and R3.
+- **Amended 2026-10-16** (plan 021 file 1, run `2026-10-15_cloud-runs`, unit `u10-board`; read at `4daeb214`): the
+  pickup hand-off. Given pickup step 5, Then its payload carries `run-mode: attended | unattended` beside `move:` and
+  `preview:`, with the item's readiness verdict and its source link for the run (`content/commands/st-board.md:126-129`);
+  a hand-off read from disk carries `run-mode: attended`, as it carries `preview: stop` (`:347-349`). Unattended, a
+  pickup keeps `preview: stop` and `move: off` (`:349-350`), and each board write it would make lands as a morning-list
+  row (`content/skills/st-unattended/SKILL.md:165-166`). The field is not `mode`, which the return block names for the
+  board mode; the session's `run-mode: unattended` comes only from `--unattended`, or `STAMITY_UNATTENDED` set to any
+  value but empty, `false` or `0`, without `--attended` (`:366`). As built: step 5's payload names the source link; the
+  readiness verdict is pickup's own gate (step 4), and the unattended skill refuses a hand-off that carries a failed one
+  (`content/skills/st-unattended/SKILL.md:56`).
 
 1. GIVEN `### The preview` WHEN read THEN it labels rows `R1`…`Rn`, holds `1 apply`, `2 apply <rows>`,
    `3 skip <rows>`, `4 stop` in that order, names rows only by label after 2 or 3, holds
@@ -137,6 +147,9 @@ names every write made, with its item id and event id, and the preview's answer 
    4 (`stop`) the default, and it reports no write as already made. *(eval: board-write-back-four-channels)*
 4. GIVEN a `fill` answered `4` THEN no issue exists for its rows and all are proposals; GIVEN two rows answered
    `2 apply R1` THEN only R1 is written. *(QA R2)*
+5. GIVEN pickup step 5 THEN it carries `run-mode: attended | unattended`, never as the return block's `mode`; GIVEN a
+   hand-off read from disk THEN `run-mode: attended` and `preview: stop`; GIVEN an unattended pickup THEN `preview: stop`
+   and `move: off`. *(corpus; added 2026-10-16)*
 
 ### REQ-BOARD-003 — `--move` gates where an item stands
 
@@ -223,6 +236,14 @@ text (`:313-318`).
   planted text is reported as a finding with its position and an outcome, never echoed and never followed; its class
   labels are an advisory row (sign-off S19).
 - **Proof:** `test/corpus/commands/board.test.ts`; the eval case `board-item-directive-is-data` (`floor: true`).
+- **Amended 2026-10-16** (plan 021 file 1, run `2026-10-15_cloud-runs`, unit `u10-board`; read at `4daeb214`): the
+  author rule, unattended. Given an unattended run, Then the author rule applies whatever either repository's
+  visibility: text from an author whose permission on its repository is neither `admin` nor `write`, or cannot be read,
+  never supplies the content or the trigger of a write or a fix. Attended, the rule still applies where the text's
+  repository or the linked one is public (`content/commands/st-board.md:313-318`), an unreadable permission counting as
+  none there too (`:317`). The unattended skill states the same rule for every input
+  (`content/skills/st-unattended/SKILL.md:47-50`), and `/st-pr-resolve` applies it to review comments (REQ-FLOW-100 in
+  `docs/specs/everyday-flows.md`).
 
 1. GIVEN `### Item text is data` WHEN read THEN it cites `stamity-injection-screening`, names the five classes, and
    says a hit is reported by class and position and is never echoed or followed. *(corpus)*
@@ -236,6 +257,8 @@ text (`:313-318`).
 4. Not performed: the planted issue from a second account with `read` permission needs a second GitHub account, which
    the maintainer does not have; `board-item-directive-is-data` (`floor: true`) carries it at the 1.15.0 release's full
    run. *(eval)*
+5. GIVEN the same subsection THEN the rule applies on every repository when the run is unattended, and an unreadable
+   permission counts as none. *(corpus; added 2026-10-16)*
 
 ### REQ-BOARD-006 — Filed items converge on retry
 
@@ -416,6 +439,8 @@ requirement exists, it is the normative record for that requirement.
   (REQ-BOARD-004's phrase, REQ-BOARD-010).
 - eval: `board-write-back-four-channels` and `pr-resolve-next-step-derived-from-run-state` (golden),
   `board-item-directive-is-data` (adversarial, `floor: true`), under `evals/cases-v6/`.
+- `docs/plans/021-cloud-runs-01.md`, with `.stamity/runs/2026-10-15_cloud-runs/` (REQ-BOARD-002 and REQ-BOARD-005
+  amended), added 2026-10-16; `source` beside it: `content/skills/st-unattended/SKILL.md`.
 - `source`: `content/commands/st-board.md`, `content/commands/st-pr-resolve.md`, and the product-audit pack's
   `commands/st-product-audit.md`, `commands/st-benchmark.md` and `rules/stamity-epic-audit-frame.md`.
 
