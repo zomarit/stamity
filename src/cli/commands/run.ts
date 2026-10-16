@@ -299,7 +299,9 @@ async function runStart(ctx: CliContext, run: string): Promise<CommandResult> {
   }
   // pr/4: read on the run's branch, so a pin a checkpoint committed there is the one compared, and none is
   // written untracked first, where the switch to a branch that tracks it would refuse to overwrite it.
-  const pinned = await pinOrigin(ctx, cwd, run);
+  // pr/28: a dry run switched nothing, so an existing branch's pin is read from its tree; pr/27: a refusal after a
+  // switch names the branch the checkout is left on.
+  const pinned = await pinOrigin(ctx, cwd, run, ctx.dryRun ? { rev: existing ?? undefined } : { checkout: runBranch });
   const lines = [`branch: ${runBranch} (${how})`, `base: ${base}`, pinned];
   if (defaults !== null) lines.push(`default branch read from: ${SOURCE_LABEL[defaults.source]}`);
   if (ctx.dryRun) lines.push("Dry run: nothing was switched.");
@@ -354,10 +356,29 @@ function repoName(repo: OriginRepo): string {
 function readOriginPin(cwd: string, pinRel: string): OriginRepo | null | undefined {
   if (!exists(join(cwd, pinRel))) return undefined;
   const read = readCapped(join(cwd, pinRel), ORIGIN_PIN_MAX_BYTES);
-  if (read === null || read.truncated) return null;
+  return read === null ? null : parseOriginPin(read.text, read.truncated);
+}
+
+/**
+ * The origin pin as commit `rev`'s tree holds it (pr/28), what a switch to it
+ * would leave in the work tree: `undefined` where the tree has none, `null`
+ * where its entry is no regular file holding a pin.
+ */
+async function readOriginPinAt(cwd: string, rev: string, pinRel: string): Promise<OriginRepo | null | undefined> {
+  const listed = await git(cwd, ["ls-tree", "-z", rev, "--", pinRel]);
+  if (listed.code !== 0 || listed.stdout === "") return undefined;
+  if (!/^100(?:644|755) blob /.test(listed.stdout)) return null;
+  const shown = await git(cwd, ["show", `${rev}:./${pinRel}`]);
+  if (shown.code !== 0) return null;
+  return parseOriginPin(shown.stdout.slice(0, ORIGIN_PIN_MAX_BYTES), shown.stdout.length > ORIGIN_PIN_MAX_BYTES);
+}
+
+/** A pin's text read as `{ host, owner, repo }` in the names `resolveRepo` accepts, else `null`. */
+function parseOriginPin(text: string, truncated: boolean): OriginRepo | null {
+  if (truncated) return null;
   let parsed: unknown;
   try {
-    parsed = JSON.parse(read.text);
+    parsed = JSON.parse(text);
   } catch {
     return null;
   }
@@ -373,21 +394,26 @@ function readOriginPin(cwd: string, pinRel: string): OriginRepo | null | undefin
  * `start`'s pin (review/209): origin's repository to the run folder's
  * `origin.json`, kept where one is there already; the text line it reports.
  * Refuses where a pin is there and origin names another repository, or the pin
- * cannot be read; writes nothing under `--dry-run`.
+ * cannot be read; writes nothing under `--dry-run`. `rev`, a dry run's existing
+ * run branch, is read from its tree where it holds a pin (pr/28); `checkout`, the
+ * branch `start` switched to, is named in a refusal (pr/27).
  */
-async function pinOrigin(ctx: CliContext, cwd: string, run: string): Promise<string> {
+async function pinOrigin(ctx: CliContext, cwd: string, run: string, at: { rev?: string | undefined; checkout?: string } = {}): Promise<string> {
   const pinRel = `${ctx.engine.runs.layout.runRelPath(run)}/${ORIGIN_PIN}`;
   const now = await originRepo(ctx, cwd, START);
-  const pin = readOriginPin(cwd, pinRel);
+  const tracked = at.rev === undefined ? undefined : await readOriginPinAt(cwd, at.rev, pinRel);
+  // A tree with no pin leaves the work tree's untracked one in place across the switch, so that one is read then.
+  const pin = tracked !== undefined ? tracked : readOriginPin(cwd, pinRel);
   if (pin !== undefined) {
     if (pin !== null && !("none" in now) && sameRepo(pin, now)) return `origin: ${repoName(pin)} (pinned in ${pinRel}, kept)`;
+    const where = at.checkout === undefined ? "" : `; the checkout is on ${at.checkout} now`;
     throw new CliFailure({
       code: "FAILURE",
       message: "Not done: origin changed",
       why:
-        pin === null
+        (pin === null
           ? `${pinRel} holds no repository this verb reads, so the run's origin is not proven`
-          : `${pinRel} pins ${repoName(pin)}, and ${"none" in now ? now.none : `origin now names ${repoName(now)}`}`,
+          : `${pinRel} pins ${repoName(pin)}, and ${"none" in now ? now.none : `origin now names ${repoName(now)}`}`) + where,
       next: "point origin back at the repository the run started on; a person decides whether the run goes on",
     });
   }

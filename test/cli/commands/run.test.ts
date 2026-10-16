@@ -410,6 +410,40 @@ describe("stamity run start", () => {
       expect(JSON.stringify(doc["error"])).toContain("pins github.com/elsewhere/r, and origin now names github.com/o/r");
     });
 
+    // pr/27: the refusal comes after the switch, so it says where the checkout was left.
+    it("names the run branch the checkout is left on when it refuses as origin changed after the switch", async () => {
+      const repo = await branchWithPin('{"host":"github.com","owner":"elsewhere","repo":"r"}\n');
+      restDefault("main");
+
+      const { code, doc } = await run(repo, START);
+
+      expect(code).toBe(1);
+      expect(current(repo)).toBe(RUN_BRANCH);
+      expect(JSON.stringify(doc["error"])).toContain(`origin now names github.com/o/r; the checkout is on ${RUN_BRANCH} now`);
+    });
+
+    // pr/28: a dry run switches nothing, so the existing branch's pin is read from its tree, as the real start reads it.
+    it("previews an existing run branch's committed pin under --dry-run: kept where it matches, origin changed where not", async () => {
+      const kept = await branchWithPin('{"host":"github.com","owner":"o","repo":"r"}\n');
+      const moved = await branchWithPin('{"host":"github.com","owner":"elsewhere","repo":"r"}\n');
+      restDefault("main");
+
+      const same = await run(kept, ["start", "--run", RUN, "--dry-run"]);
+      const other = await run(moved, [...START, "--dry-run"]);
+
+      expect(same.code).toBe(0);
+      expect(same.stdout).toContain(`origin: github.com/o/r (pinned in ${PIN}, kept)`);
+      expect(same.stdout).not.toContain("would be pinned");
+      expect(other.code).toBe(1);
+      expect(JSON.stringify(other.doc["error"])).toContain("Not done: origin changed");
+      expect(JSON.stringify(other.doc["error"])).toContain("pins github.com/elsewhere/r, and origin now names github.com/o/r");
+      expect(JSON.stringify(other.doc["error"])).not.toContain("the checkout is on");
+      for (const repo of [kept, moved]) {
+        expect(current(repo)).toBe("main");
+        expect(existsSync(join(repo, PIN))).toBe(false);
+      }
+    });
+
     it("pins nothing for an origin naming no GitHub repository, nor under --dry-run", async () => {
       const local = await seedRepo({ url: null });
       const dry = await seedRepo();
