@@ -1,3 +1,5 @@
+import { spawnSync } from "node:child_process";
+import { rm } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import {
   CODEX_AGENTS_DIR,
@@ -472,6 +474,65 @@ describe("hooks.json — native command strings and trust controls", () => {
     expect(command.indexOf("'.codex','hooks.json'")).toBeLessThan(
       command.indexOf(".stamity/generated/hooks/codex/stamity-portable-hook.mjs"),
     );
+  });
+
+  /** The interchange row a Codex entry's starter carries, decoded from its last word. */
+  const rowOf = (command: string): { command: string[] } =>
+    JSON.parse(Buffer.from(command.split(" ").at(-1) ?? "", "base64url").toString()) as { command: string[] };
+  const PERSON_ONLY = ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs";
+
+  it("runs the person-only shell guard in its own Bash group through the runner, its starter failing with 2 (u20)", async () => {
+    const core = await buildCoreEmissionPlan(ctxOf({ contentRoot: await seedCorpus() }));
+    const document = JSON.parse(buildHooksJson(core, CLI_PIN)) as {
+      hooks: { PreToolUse: { matcher?: string; hooks: { command: string; commandWindows: string }[] }[] };
+    };
+    const groups = document.hooks.PreToolUse;
+
+    // The core guard's group keeps no matcher; the shell guard sits in a group of its own on `Bash`.
+    expect(groups.map((group) => group.matcher)).toEqual([undefined, "Bash"]);
+    expect(groups[1]?.hooks).toHaveLength(1);
+    const hook = groups[1]!.hooks[0]!;
+    expect(rowOf(hook.command).command).toEqual(["node", PERSON_ONLY]);
+    expect(hook.commandWindows).toBe(hook.command);
+    // Codex blocks on exit 2 alone, so the starter's own failures on this authored-gate row are 2.
+    expect(hook.command).toContain("process.exitCode=2");
+    expect(groups[0]?.hooks[0]?.command).not.toContain("process.exitCode=2");
+  });
+
+  it("refuses a force push through the emitted entry with exit 2, lets a status read through, and blocks when the guard is missing (u20)", async () => {
+    const ctx = ctxOf({ contentRoot: await seedCorpus() });
+    const core = await buildCoreEmissionPlan(ctx);
+    const rows = (await codexResiduePlanner.planResidue(core, ctx)).outputs;
+    const runner = ".stamity/generated/hooks/codex/stamity-portable-hook.mjs";
+    const temp = getTemp();
+    await temp.seedFiles({
+      [`run/${CODEX_HOOKS_FILE}`]: byPath(rows).get(CODEX_HOOKS_FILE)!.content,
+      [`run/${runner}`]: byPath(rows).get(runner)!.content,
+      [`run/${PERSON_ONLY}`]: core.hooks.scripts.find((script) => script.path === PERSON_ONLY)!.content,
+    });
+    const document = JSON.parse(byPath(rows).get(CODEX_HOOKS_FILE)!.content) as {
+      hooks: { PreToolUse: { matcher?: string; hooks: { command: string }[] }[] };
+    };
+    const command = document.hooks.PreToolUse.find((group) => group.matcher === "Bash")!.hooks[0]!.command;
+    const env: NodeJS.ProcessEnv = { ...process.env };
+    delete env["STAMITY_UNATTENDED"];
+    const run = (shellCommand: string) =>
+      spawnSync(command, {
+        cwd: temp.path("run"),
+        env,
+        shell: true,
+        input: JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: shellCommand } }),
+        encoding: "utf8",
+      });
+
+    const denied = run("git push --force origin feature");
+    expect(denied.status).toBe(2);
+    expect(denied.stderr).toContain("stamity person-only guard:");
+    expect(run("git status")).toMatchObject({ status: 0, stdout: "" });
+
+    await rm(temp.path("run", ...PERSON_ONLY.split("/")));
+    // The runner exits 2 on a failing authored pre-tool-use row, so a guard that cannot run blocks.
+    expect(run("git status").status).toBe(2);
   });
 });
 

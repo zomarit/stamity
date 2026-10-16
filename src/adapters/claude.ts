@@ -55,20 +55,24 @@
  *    operator write this file too): the engine owns exactly the entries it
  *    wrote and recorded by hash — the hook entries of the `hooks` object (the
  *    core hook interchange transformed to the client shape, the `ConfigChange`
- *    tamper wiring, the review-gate wiring below) when the repository owns
- *    hooks — plus, until they leave,
- *    the `permissions.allow` rows a release up to 1.12.0 wrote and recorded.
- *    Every other entry and key (`enabledPlugins`, `model`, the owner's own
- *    `permissions` rows, …) is kept as it is. A `permissions` that is not an
- *    object, or an `allow` that is not an array, still collides on both routes
- *    (`../manifest/claudeSettings.ts`).
- * 7. **The work-scoped review gate** ({@link CLAUDE_REVIEW_GATE_PATH}) beside
- *    the three core hook scripts. Adapter-owned rather than core, because it
- *    rides two events only this client fires ({@link REVIEW_GATE_EVENTS}).
+ *    tamper wiring, the review-gate and ask-gate wiring below) when the
+ *    repository owns hooks — and each `permissions.deny` row it renders from
+ *    `CLAUDE_DENY_ROWS` (`../hooks/personOnly.ts`, REQ-FLOW-102), plus, until
+ *    they leave, the `permissions.allow` rows a release up to 1.12.0 wrote and
+ *    recorded. Every other entry and key (`enabledPlugins`, `model`, the
+ *    owner's own `permissions` rows, an owner's deny row equal to an engine
+ *    one among them, …) is kept as it is. A `permissions` that is not an
+ *    object, or an `allow` or `deny` that is not an array, collides on both
+ *    routes (`../manifest/claudeSettings.ts`).
+ * 7. **The work-scoped review gate** ({@link CLAUDE_REVIEW_GATE_PATH}) and the
+ *    **unattended ask gate** ({@link CLAUDE_ASK_GATE_PATH}) beside the core hook
+ *    scripts. Adapter-owned rather than core, because the review gate rides two
+ *    events only this client fires ({@link REVIEW_GATE_EVENTS}) and the ask
+ *    gate this client's question tool.
  * 8. **The MCP documents the core planned for this client**, placed verbatim.
  *
- * **No tool is pre-approved.** The settings document carries no
- * `permissions` member. A `permissions.allow` row is session-wide standing
+ * **No tool is pre-approved.** The settings document's `permissions` member
+ * carries deny rows alone, never an allow row. A `permissions.allow` row is session-wide standing
  * consent that also covers the MAIN thread, which the generated pre-tool-use
  * guard exempts by design. Releases v1.1.0 to 1.12.0 rendered three read rows
  * (`Read`, `Grep`, `Glob`); a bare `Read` matches every file read anywhere,
@@ -127,10 +131,14 @@ import {
   type HookInterchange,
 } from "../hooks/model.ts";
 import { ROOT_VARIABLE_PATH } from "../hooks/portableRunner.ts";
+import { CLAUDE_DENY_ROWS } from "../hooks/personOnly.ts";
 import {
+  PERSON_ONLY_GUARD_FILE,
   REVIEW_GATE_FILE,
   REVIEW_GATE_STATE_FILE,
+  UNATTENDED_ASK_GATE_FILE,
   buildReviewGateScript,
+  buildUnattendedAskGate,
 } from "../hooks/scripts.ts";
 import { readReviewCap } from "../manifest/manifest.ts";
 import type { McpEmission } from "../mcp/emit.ts";
@@ -214,6 +222,20 @@ export const CLAUDE_SETTINGS_PATH = ".claude/settings.json";
 export const CLAUDE_REVIEW_GATE_PATH = `${HOOKS_GENERATED_DIR}/${TOOL}/${REVIEW_GATE_FILE}`;
 
 /**
+ * The unattended ask gate (REQ-FLOW-090), placed beside the review gate and for
+ * the same reason: it rides this client's question tool alone, so the adapter
+ * that wires it places it (`planCoreHookScripts` does not return it).
+ */
+export const CLAUDE_ASK_GATE_PATH = `${HOOKS_GENERATED_DIR}/${TOOL}/${UNATTENDED_ASK_GATE_FILE}`;
+
+/**
+ * The one tool the ask gate is wired to: Claude Code's question tool
+ * (code.claude.com/docs/en/tools-reference). The gate passes every other tool
+ * itself; the matcher keeps it from launching on them.
+ */
+const ASK_GATE_MATCHER = "AskUserQuestion";
+
+/**
  * The client's configuration-change event — a per-client EXTENSION outside the
  * six-intent portable set (`CANONICAL_HOOK_EVENTS`), so it is NON-PORTABLE by
  * construction: no other target client fires it, and the portable wiring of
@@ -271,6 +293,13 @@ const PRE_TOOL_USE_GUARD_SCRIPT_FILE = "stamity-pre-tool-use-guard.mjs";
 const CLAUDE_GUARD_PATH = `${HOOKS_GENERATED_DIR}/${TOOL}/${PRE_TOOL_USE_GUARD_SCRIPT_FILE}`;
 
 /**
+ * The repository path of the person-only shell guard (REQ-FLOW-102), the
+ * second row {@link failsClosedOnLaunchFailure} picks: a shell guard that
+ * cannot launch would otherwise let a force push through.
+ */
+const CLAUDE_PERSON_ONLY_GUARD_PATH = `${HOOKS_GENERATED_DIR}/${TOOL}/${PERSON_ONLY_GUARD_FILE}`;
+
+/**
  * The client's own name for the repository root: "the project root where the
  * session started" (code.claude.com/docs/en/hooks, accessed 2026-09-20),
  * exported into every hook process in both shell and exec form.
@@ -289,7 +318,8 @@ const PROJECT_DIR_VARIABLE = "${CLAUDE_PROJECT_DIR}";
 
 /**
  * The shell tail that turns "the guard could not launch" into a block, appended
- * to the core guard's command line and to nothing else.
+ * to the core guard's command line and the person-only shell guard's, and to
+ * nothing else. Both bodies exit 0 or 2 alone, so what follows holds for each.
  *
  * It reclassifies no verdict the guard reaches, and — the part the first
  * rendering got wrong — it says nothing on one either. The emitted body exits 0
@@ -309,7 +339,7 @@ const PROJECT_DIR_VARIABLE = "${CLAUDE_PROJECT_DIR}";
  * feeds back to the model. Every non-zero path exits 2 — the status is
  * classified, never forwarded.
  *
- * Only this row. The session-start and tamper-notice scripts and the review gate
+ * Only these two rows. The session-start and tamper-notice scripts, the review gate and the ask gate
  * keep the client's non-blocking semantics — a notice that cannot run is not a
  * guard, and blocking every tool call because a context printer is missing would
  * trade a lost line for a wedged session. A user row keeps them too: its exit
@@ -514,6 +544,13 @@ export const claudeResiduePlanner: ResiduePlanner = {
       owner: owner("claude-settings", "infra"),
     });
     rows.push(buildReviewGate(ctx));
+    rows.push({
+      path: CLAUDE_ASK_GATE_PATH,
+      // The layout decided as the review gate's is: the repository copy finds
+      // the root from its own location, a plugin copy keeps the cwd resolver.
+      content: buildUnattendedAskGate({ layout: ctx.facts.hookScriptsRoot === undefined ? "generated" : "container" }),
+      owner: owner("claude-ask-gate", "infra"),
+    });
     rows.push({
       path: modelMapPath(TOOL),
       content: `${JSON.stringify(buildClaudeModelMap(roles, ctx), null, 2)}\n`,
@@ -810,9 +847,10 @@ interface ClaudeHookEntry {
 /**
  * `.claude/settings.json`: the hook wiring, as one JSON document (plain `.json`
  * takes no managed block — it has no comment syntax to carry markers, per
- * `src/types/markers.ts`). No `permissions` member: the engine pre-approves no
- * tool (the module header). The writers merge it entry by entry: each hook
- * entry this rendering carries is the engine's, and every other member, row or
+ * `src/types/markers.ts`). Its `permissions` member holds the
+ * {@link CLAUDE_DENY_ROWS} and no allow row: the engine pre-approves no tool
+ * (the module header). The writers merge it entry by entry: each hook entry and
+ * deny row this rendering carries is the engine's, and every other member, row or
  * entry the client or the operator put there survives every write
  * (`../manifest/claudeSettings.ts`).
  *
@@ -831,7 +869,9 @@ interface ClaudeHookEntry {
  * portable session-start wiring stays, exactly the dual reading the script
  * body is written for; and the review gate takes
  * {@link REVIEW_GATE_EVENTS}, the two events that carry a work run's
- * completion and its finishing reviewers. Insertion order is fixed, so the
+ * completion and its finishing reviewers; then the ask gate, as one more
+ * `PreToolUse` entry matched to the question tool, after every planned row.
+ * Insertion order is fixed, so the
  * whole-file JSON is byte-stable across runs and the drift check has nothing
  * to report.
  */
@@ -851,6 +891,10 @@ function buildSettingsJson(
     hookScriptsRoot === undefined
       ? CLAUDE_REVIEW_GATE_PATH
       : `${hookScriptsRoot}/${REVIEW_GATE_FILE}`;
+  const askGate =
+    hookScriptsRoot === undefined
+      ? CLAUDE_ASK_GATE_PATH
+      : `${hookScriptsRoot}/${UNATTENDED_ASK_GATE_FILE}`;
 
   const hooks: Record<string, ClaudeHookEntry[]> = {};
   const failClosedTail = guardFailClosedTail(cli);
@@ -877,8 +921,18 @@ function buildSettingsJson(
   for (const event of REVIEW_GATE_EVENTS) {
     hooks[event] = [{ hooks: [commandHook(["node", reviewGate])] }];
   }
+  // The ask gate on the question tool, after every planned PreToolUse row and
+  // with no fail-closed tail: it fails open by design, since a question that
+  // reaches nobody is the safe failure (`../hooks/scripts.ts`).
+  (hooks[CLAUDE_EVENT_NAMES.pre_tool_use] ??= []).push({
+    matcher: ASK_GATE_MATCHER,
+    hooks: [commandHook(["node", askGate])],
+  });
 
-  return `${JSON.stringify({ hooks }, null, 2)}\n`;
+  // The person-only acts a prefix rule can say, as data from the one table the
+  // shell guard also denies from (`../hooks/personOnly.ts`), so a call the
+  // client refuses here is one the guard would refuse too.
+  return `${JSON.stringify({ permissions: { deny: [...CLAUDE_DENY_ROWS] }, hooks }, null, 2)}\n`;
 }
 
 /**
@@ -901,7 +955,7 @@ export function claudeUserHookEntries(rows: readonly HookInterchange[]): Record<
 
 /**
  * One interchange row as a client config entry; `failClosedTail` is appended
- * to the one row {@link failsClosedOnLaunchFailure} picks, and to no other.
+ * to the two rows {@link failsClosedOnLaunchFailure} picks, and to no other.
  */
 function hookEntryWith(row: HookInterchange, failClosedTail: string | undefined): ClaudeHookEntry {
   return {
@@ -917,8 +971,9 @@ function hookEntryWith(row: HookInterchange, failClosedTail: string | undefined)
 }
 
 /**
- * Whether this row is the one the {@link guardFailClosedTail} belongs to: the
- * CORE pre-tool-use guard, in repository mode, as the core planned it.
+ * Whether this row is one the {@link guardFailClosedTail} belongs to: the
+ * CORE pre-tool-use guard or the person-only shell guard, in repository mode,
+ * as the core planned them.
  *
  * Identified by the whole script path rather than by {@link argvTail}'s
  * basename. Both answer the same question for every row this engine emits, and
@@ -928,7 +983,7 @@ function hookEntryWith(row: HookInterchange, failClosedTail: string | undefined)
  * to name a script of the same file name.
  */
 function failsClosedOnLaunchFailure(row: HookInterchange): boolean {
-  return row.event === "pre_tool_use" && row.command[1] === CLAUDE_GUARD_PATH;
+  return row.event === "pre_tool_use" && (row.command[1] === CLAUDE_GUARD_PATH || row.command[1] === CLAUDE_PERSON_ONLY_GUARD_PATH);
 }
 
 /**

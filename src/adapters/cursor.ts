@@ -36,7 +36,7 @@ import {
   type CliCallContext,
 } from "../emit/substitution.ts";
 import { CANONICAL_HOOK_EVENTS, type CanonicalHookEvent, type HookInterchange } from "../hooks/model.ts";
-import { IDENTITY_FREE_PRE_TOOL_USE_PAYLOADS } from "../hooks/scripts.ts";
+import { IDENTITY_FREE_PRE_TOOL_USE_PAYLOADS, PERSON_ONLY_GUARD_FILE } from "../hooks/scripts.ts";
 import {
   grantableFootprint,
   resolveAgentGrant,
@@ -127,6 +127,15 @@ export const SUBAGENT_GUARD_PATH = `${CURSOR_GUARD_DIR}/stamity-subagent-guard.m
 export const MCP_GUARD_PATH = `${CURSOR_GUARD_DIR}/stamity-mcp-guard.mjs`;
 
 /**
+ * The person-only shell guard (REQ-FLOW-102, REQ-FLOW-120): a CORE script the
+ * hooks plan places for every selected client (`../emit/hooksInfra.ts`), which
+ * this adapter wires to `beforeShellExecution` alone. The plan gives it no
+ * portable row here, so Cursor runs one copy, never a second through
+ * `preToolUse`.
+ */
+export const PERSON_ONLY_GUARD_PATH = `${HOOKS_GENERATED_DIR}/cursor/${PERSON_ONLY_GUARD_FILE}`;
+
+/**
  * The guards' names up to 1.11.0, in the order of the two above. Nothing
  * writes them any more; they are still read, so the first `sync` after an
  * upgrade can move the guards. `.cursor/hooks.json`'s spec recognises an entry
@@ -186,7 +195,7 @@ export const EVENT_RENAME: Readonly<Record<CanonicalHookEvent, string>> = {
 };
 
 /**
- * Client-specific events with no portable counterpart, used by the two guards.
+ * Client-specific events with no portable counterpart, used by the three guards.
  * They are extensions by definition — no other target client exposes a spawn
  * or an MCP-execution decision point — so they live outside
  * {@link EVENT_RENAME} instead of pretending to be portable.
@@ -196,11 +205,14 @@ export const EVENT_RENAME: Readonly<Record<CanonicalHookEvent, string>> = {
  * identity of a pending MCP call as `tool_name` plus EITHER `url` (a remote
  * server) OR `command` (a stdio one) — the three spellings
  * {@link buildMcpGuardScript} matches on (cursor.com/docs/hooks, both
- * input schemas accessed 2026-09-17).
+ * input schemas accessed 2026-09-17). `beforeShellExecution` carries the
+ * pending shell call's `command` at the top level, which the person-only guard
+ * reads ({@link PERSON_ONLY_GUARD_PATH}; `../hooks/scripts.ts`).
  */
 export const CURSOR_GUARD_EVENTS = {
   subagentSpawn: "subagentStart",
   mcpExecution: "beforeMCPExecution",
+  shellExecution: "beforeShellExecution",
 } as const;
 
 /**
@@ -346,8 +358,8 @@ export const cursorDialectFacts: AdapterDialectFacts = {
       value:
         "Exit 2 denies; failClosed: true also denies hook errors and timeouts, and this client counts no output as such a failure (cursor.com/docs/hooks, accessed 2026-09-17), so every allow is written explicitly. Emitted on " +
         (CORE_GUARD_REACHES_VERDICT
-          ? "the pre-tool-use gate and both guards"
-          : "both guards and on any authored pre-tool-use row, but NOT on the core pre-tool-use guard: this client's tool-call payload names no calling agent, so that guard is emitted as telemetry and has no verdict to block on"),
+          ? "the pre-tool-use gate, both guards and the person-only shell guard on beforeShellExecution"
+          : "both guards, the person-only shell guard on beforeShellExecution and any authored pre-tool-use row, but NOT on the core pre-tool-use guard: this client's tool-call payload names no calling agent, so that guard is emitted as telemetry and has no verdict to block on"),
     },
     {
       name: "hook timeout",
@@ -887,7 +899,8 @@ interface CursorHookEntry {
  * The `.cursor/hooks.json` document: portable interchange rows renamed into
  * the client's taxonomy, plus the two adapter-owned guards
  * ({@link SUBAGENT_GUARD_PATH}, {@link MCP_GUARD_PATH}; their 1.11.0 names,
- * {@link LEGACY_CURSOR_GUARD_PATHS}, are never written here).
+ * {@link LEGACY_CURSOR_GUARD_PATHS}, are never written here) and the core
+ * person-only shell guard on `beforeShellExecution` ({@link PERSON_ONLY_GUARD_PATH}).
  *
  * The document is co-owned entry by entry (REQ-FLOW-037,
  * `../manifest/hookDocuments.ts`): this function renders the engine's
@@ -976,6 +989,12 @@ export function buildHooksJson(
   // exit 1, which `failClosed` turns into a refusal.
   events[CURSOR_GUARD_EVENTS.subagentSpawn] = [{ command: adapterScriptCommand(SUBAGENT_GUARD_PATH), failClosed: true }];
   events[CURSOR_GUARD_EVENTS.mcpExecution] = [{ command: adapterScriptCommand(MCP_GUARD_PATH), failClosed: true }];
+  // The person-only shell guard, run by the starter directly and never through
+  // the portable runner: it already writes Cursor's own `permission` document,
+  // which the runner reads as an undecidable key and refuses on every call. It
+  // answers allow or deny on every path it controls; `failClosed` turns a crash, a timeout or a
+  // missing script into a refusal, so a push it cannot judge does not go through.
+  events[CURSOR_GUARD_EVENTS.shellExecution] = [{ command: adapterScriptCommand(PERSON_ONLY_GUARD_PATH), failClosed: true }];
 
   return `${JSON.stringify({ version: 1, hooks: events }, null, 2)}\n`;
 }

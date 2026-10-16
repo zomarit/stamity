@@ -6,20 +6,26 @@
  * this file as an `enabledPlugins` key (measured on Claude Code 2.1.278,
  * 2026-09-22). An operator sets `model`, `env`, `permissions.deny`, `ask`, rows
  * and hook entries of their own. The engine renders hook entries (one element
- * of a `hooks.<Event>` array) while the repository owns hooks, and no
+ * of a `hooks.<Event>` array) while the repository owns hooks, the person-only
+ * `permissions.deny` rows (`CLAUDE_DENY_ROWS`, REQ-FLOW-102), and no
  * `permissions.allow` row; releases up to 1.12.0 rendered three, which leave
  * through the bound below. No comment syntax can carry a marker, so ownership is
  * decided per ENTRY by the shared core (`./coOwnedJson.ts`, whose rules this
- * module only parameterises): **the engine owns each allow row and each hook
- * entry it wrote, recorded on the ledger row by the hash of its canonical JSON
- * (`LedgerEntry.coOwned`), and nothing else in the file.** It never writes,
- * replaces or removes `permissions.deny`, `permissions.ask`, any other member
- * of `permissions`, or an entry it did not write; the file keeps its own
+ * module only parameterises): **the engine owns each allow row, deny row and
+ * hook entry it wrote, recorded on the ledger row by the hash of its canonical
+ * JSON (`LedgerEntry.coOwned`), and nothing else in the file.** An owner's deny
+ * row is theirs, equal to an engine row or not: the engine adds no second copy
+ * of an equal one and does not record it, so it stays when the engine's leave
+ * (under a 1.11.0 ledger row, which records nothing, an in-table row reads as
+ * the engine's, as an allow row does — a release that wrote no deny row). It
+ * never writes, replaces or removes `permissions.ask`, any other member of
+ * `permissions`, or an entry it did not write; the file keeps its own
  * indentation, key order, line ending and final newline.
  *
  * The bound ({@link claudeSettingsSpec}). An engine entry leaves silently only
  * when it lies inside what the engine can prove it wrote by path: an allow row
- * a release rendered ({@link ENGINE_PERMISSION_ROWS}), or a hook entry whose
+ * a release rendered ({@link ENGINE_PERMISSION_ROWS}), a deny row of
+ * `CLAUDE_DENY_ROWS`, or a hook entry whose
  * every command executes one of the engine's own scripts — under
  * `.stamity/generated/hooks/` or an installed pack's `.stamity/packs/<id>/`,
  * never the user's `.stamity/hooks/` (`./coOwnedJson.ts::commandRunsStateScript`).
@@ -53,6 +59,7 @@
  */
 
 import { isPlainObject } from "../config/parse.ts";
+import { CLAUDE_DENY_ROWS } from "../hooks/personOnly.ts";
 import type { CoOwnedReducer, CoOwnedReduction } from "../types/content.ts";
 import type { CoOwnership } from "../types/manifest.ts";
 import { HOOKS_GENERATED_DIR } from "../types/markers.ts";
@@ -114,8 +121,12 @@ function hookGroupInBound(element: unknown): boolean {
 
 /**
  * What the engine owns in `.claude/settings.json`: each hook entry it writes,
- * and each allow row an earlier release wrote (the slot stays declared so a
- * recorded row can leave; the rendering carries none). `extraMembers` is the extension point for whole members a later
+ * each person-only deny row it writes, and each allow row an earlier release
+ * wrote (the slot stays declared so a recorded row can leave; the rendering
+ * carries none). A deny row is never recognised by content: an owner may have
+ * written the same rule, and a row only the record claims is the engine's. A
+ * recorded row outside the table is the owner's (`foreign`), so a forged record
+ * cannot take an owner's rule out. `extraMembers` is the extension point for whole members a later
  * requirement declares (passed as `{ pointer, foreign: "yield" }`).
  */
 export function claudeSettingsSpec(extraMembers: readonly MemberSpec[] = []): CoOwnedJsonSpec {
@@ -129,6 +140,12 @@ export function claudeSettingsSpec(extraMembers: readonly MemberSpec[] = []): Co
         outsideBound: "foreign",
       },
       { pointer: "/hooks/*", recognise: isEngineHookGroup, inBound: hookGroupInBound, outsideBound: "backup" },
+      {
+        pointer: "/permissions/deny",
+        recognise: () => false,
+        inBound: (element) => typeof element === "string" && CLAUDE_DENY_ROWS.includes(element),
+        outsideBound: "foreign",
+      },
     ],
     members: extraMembers,
     personalHint: "Personal rows belong in .claude/settings.local.json, which this engine never writes.",
@@ -165,7 +182,10 @@ export function planClaudeSettings(
 ): SettingsPlan {
   const plan = planCoOwnedJson(filePath, emitted, existingRaw, claudeSettingsSpec(), ownership);
   if (plan.collision !== null || existingRaw === null || !allowContainerMistyped(existingRaw)) return plan;
-  const withRows = `${JSON.stringify({ permissions: { allow: ENGINE_PERMISSION_ROWS }, ...(JSON.parse(emitted) as object) })}\n`;
+  // The rendering's own `permissions` (its deny rows) kept beside the allow rows put back.
+  const rendering = JSON.parse(emitted) as Record<string, unknown>;
+  const permissions = isPlainObject(rendering["permissions"]) ? rendering["permissions"] : {};
+  const withRows = `${JSON.stringify({ ...rendering, permissions: { allow: ENGINE_PERMISSION_ROWS, ...permissions } })}\n`;
   const refused = planCoOwnedJson(filePath, withRows, existingRaw, claudeSettingsSpec(), ownership);
   return refused.collision !== null ? refused : plan;
 }
