@@ -189,6 +189,13 @@ answerer: "@maintainer"
     expect(problems[1]).toContain("`budget.max-units`");
   });
 
+  // `Date.parse` rolls an impossible day over into the next month, so the shape check alone kept it.
+  it.each(["2026-02-30", "2026-02-30T06:00:00Z", "2026-04-31"])("refuses a stop-by of %s, a day the calendar does not have", (value) => {
+    const problems = problemsOf(FULL.replace('stop-by: "2026-10-16T06:00:00Z"', `stop-by: "${value}"`));
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain("`budget.stop-by`");
+  });
+
   it("refuses an empty acceptance, an empty scope and a missing answerer in one pass", () => {
     const text = FULL.replace(
       "acceptance: |\n  The draft pull request lists every unit closed.\n  No push lands on main.\n",

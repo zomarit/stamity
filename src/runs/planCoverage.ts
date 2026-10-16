@@ -121,6 +121,9 @@ const AREA = "[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z][A-Za-z0-9]*)*";
 const VALID_TOKEN = new RegExp(`^REQ-${AREA}-\\d{3,}(?:[–-](?:REQ-${AREA}-)?\\d{3,})?$`);
 /** One ID, or the `, -002` shorthand, which needs a comma or the line start in front of it. */
 const ID_SCAN = new RegExp(`REQ-(${AREA})-(\\d{3,})|(?:^|(?<=,\\s))-(\\d{3,})`, "gm");
+/** Every shorthand-shaped word, valid or not: a `-` and a digit where {@link ID_SCAN} reads shorthand. */
+const SHORTHAND_SCAN = /(?:^|(?<=,\s))-\d[^\s,;|.)\]:(]*/gm;
+const VALID_SHORTHAND = new RegExp(`^-\\d{3,}(?:[–-](?:REQ-${AREA}-)?\\d{3,})?$`);
 /** A range closing the ID just matched; an em dash is deliberately absent (a parenthetical, not a range). */
 const RANGE_SUFFIX = new RegExp(`^(?:[–-](?:REQ-(${AREA})-)?(\\d{3,})|\\s*(?:…|\\.{3}|to|through|[-–])\\s*REQ-(${AREA})-(\\d{3,}))`);
 /** An ellipsis that opens a range nothing closes. */
@@ -135,6 +138,9 @@ const pad = (value: number): string => String(value).padStart(3, "0");
 function references(text: string, report: (code: string, message: string) => void = () => {}): string[] {
   for (const [token] of text.matchAll(TOKEN_SCAN)) {
     if (!VALID_TOKEN.test(token)) throw new Error(`Malformed requirement reference: ${token}`);
+  }
+  for (const [token] of text.matchAll(SHORTHAND_SCAN)) {
+    if (!VALID_SHORTHAND.test(token)) throw new Error(`Malformed requirement reference: ${token}`);
   }
   const ids: string[] = [];
   let prefix: string | undefined;
@@ -395,9 +401,15 @@ export function checkCoverage(plan: CoverageDoc, specs: readonly CoverageDoc[], 
     if (!covered.has(id) && !removed.has(id)) add("missing-coverage", plan.path, 1, `${id} is in the spec delta but no unit covers it.`);
   }
   for (const id of removed) if (!definitions.has(id)) add("dangling-requirement", plan.path, 1, `Retired ${id} must retain a definition and disposition in its spec.`);
+  // A unit whose walk added no finding reaches no cycle, so a later walk through it adds none either:
+  // skipping it keeps the findings and their order, and keeps a dense acyclic graph linear, not one call per path.
+  const acyclic = new Set<string>();
   const visit = (id: string, trail: string[]): void => {
     if (trail.includes(id)) { add("dependency-cycle", plan.path, 1, `Dependency cycle: ${[...trail, id].join(" -> ")}.`); return; }
+    if (acyclic.has(id)) return;
+    const before = findings.length;
     for (const target of graph.get(id) ?? []) visit(target, [...trail, id]);
+    if (findings.length === before) acyclic.add(id);
   };
   for (const id of graph.keys()) visit(id, []);
   for (const item of units) {

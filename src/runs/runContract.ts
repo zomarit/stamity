@@ -1,6 +1,7 @@
 import { LineCounter, isAlias, isMap, isNode, isScalar, isSeq, parseDocument, visit } from "yaml";
 import type { Pair } from "yaml";
 import { isPlainObject, parseYamlStrict, unknownFields } from "../config/parse.ts";
+import { isIsoDate } from "./disposition.ts";
 
 /**
  * The run contract (REQ-FLOW-098): a committed YAML file that states, by
@@ -409,7 +410,7 @@ function readBudget(value: unknown, locate: Locate, say: Say): { stopBy?: string
   const budget: { stopBy?: string; maxUnits?: number } = {};
   const stopBy = own(value, "stop-by");
   if (stopBy !== undefined) {
-    if (typeof stopBy === "string" && STOP_BY.test(stopBy) && !Number.isNaN(Date.parse(stopBy))) {
+    if (typeof stopBy === "string" && STOP_BY.test(stopBy) && isIsoDate(stopBy.slice(0, 10)) && !Number.isNaN(Date.parse(stopBy))) {
       budget.stopBy = stopBy;
     } else {
       say("`budget.stop-by` must be an ISO 8601 day, or a day and time with its offset (`2026-10-16T06:00:00Z`).");

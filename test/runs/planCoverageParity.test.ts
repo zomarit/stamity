@@ -1,4 +1,6 @@
+import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — the skill's standalone native ESM copy, shipped as content with no declaration file.
 import { checkCoverage as skillCheckCoverage } from "../../content/skills/st-verify/scripts/spec-plan-coverage.mjs";
@@ -64,6 +66,7 @@ const FIXTURES: Fixture[] = [
   ...["U1, missing-unit", "U1, docs/missing.md", "U1 and missing-unit", `U1, ${PRESENT}`, "U1, external (owner: ops)"].map((value) =>
     fx(`mixed dependencies ${value}`, plan.replace("- **depends_on**: U1.", `- **depends_on**: ${value}.`))),
   fx("malformed token", plan.replace("REQ-DEMO-002.", "REQ-DEMO-002, REQ-DEMO-00X.")),
+  fx("malformed shorthand", plan.replace("- **requirements**: REQ-DEMO-002.", "- **requirements**: REQ-DEMO-002, -00X.")),
   fx("removed range", removedRange),
   fx("removed range past the spec", removedRange.replace("001–002", "001–003")),
   fx("prose range", "## Spec delta\nADDED REQ-DEMO-001 … REQ-DEMO-003.\n## Units\n### U1\n- **requirements**: REQ-DEMO-001, REQ-DEMO-003.\n- **depends_on**: none.\n", wideSpec),
@@ -155,6 +158,36 @@ describe("REQ-FLOW-091 — the engine's coverage check equals the skill's copy",
     expect(port).toEqual(copy);
     expect(port.findings.map((row) => row.code)).toEqual(["duplicate-field", "dependency-cycle", "dependency-cycle"]);
   });
+
+  it("refuses a malformed shorthand beside a valid ID instead of reading the valid ID alone", () => {
+    const { port, copy } = both(fx("malformed shorthand", plan.replace("- **requirements**: REQ-DEMO-002.", "- **requirements**: REQ-DEMO-002, -00X.")));
+    expect(port).toEqual(copy);
+    expect(port.status).toBe("fail");
+    expect(port.findings).toContainEqual(expect.objectContaining({ code: "invalid-reference", message: "Malformed requirement reference: -00X" }));
+  });
+
+  // A walk per path made this plan about fib(60) calls, a run that never ends. The twins run in a child
+  // process because a synchronous loop never yields to vitest's own timeout; the child's is a kill.
+  it("checks a 60-unit plan where each unit depends on the two before it, in both twins, within a short bound", () => {
+    const units = Array.from({ length: 60 }, (_, k) => {
+      const dependsOn = k === 0 ? "none" : k === 1 ? "u0" : `u${k - 1}, u${k - 2}`;
+      return `### u${k}\n- **requirements**: spec carries no ids.\n- **depends_on**: ${dependsOn}.\n`;
+    });
+    const dense = `## Spec delta\n\nNone.\n\n## Units\n\n${units.join("\n")}`;
+    const program = [
+      'import { readFileSync } from "node:fs";',
+      `const { checkCoverage } = await import(${JSON.stringify(pathToFileURL(resolve("src/runs/planCoverage.ts")).href)});`,
+      `const { checkCoverage: copy } = await import(${JSON.stringify(pathToFileURL(resolve("content/skills/st-verify/scripts/spec-plan-coverage.mjs")).href)});`,
+      'const doc = { path: "plan.md", text: readFileSync(0, "utf8") };',
+      'const options = { exists: () => false, cwd: "/repo" };',
+      "process.stdout.write(JSON.stringify({ port: checkCoverage(doc, [], options), copy: copy(doc, [], options) }));",
+    ].join("\n");
+    const output = execFileSync(process.execPath, ["--input-type=module", "-e", program], { input: dense, encoding: "utf8", timeout: 10_000 });
+    const { port, copy } = JSON.parse(output) as { port: CoverageResult; copy: CoverageResult };
+    expect(port).toEqual(copy);
+    expect(port).toMatchObject({ status: "pass", findings: [] });
+    expect(port.units).toHaveLength(60);
+  }, 20_000);
 
   it("reads CRLF line endings exactly as LF, in both twins", () => {
     for (const fixture of FIXTURES) {

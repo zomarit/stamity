@@ -65,6 +65,11 @@ describe("REQ-FINISH-003 — structural spec/plan coverage", () => {
   it("rejects malformed requirement tokens beside valid IDs", () => {
     expect(check(plan.replace("REQ-DEMO-002.", "REQ-DEMO-002, REQ-DEMO-00X.")).findings.map((row) => row.code)).toContain("invalid-reference");
   });
+  it("rejects a malformed shorthand beside a valid ID instead of reading the valid ID alone", () => {
+    const result = check(plan.replace("- **requirements**: REQ-DEMO-002.", "- **requirements**: REQ-DEMO-002, -00X."));
+    expect(result.status).toBe("fail");
+    expect(result.findings).toContainEqual(expect.objectContaining({ code: "invalid-reference", message: "Malformed requirement reference: -00X" }));
+  });
   it("checks every removed ID and expands removed ranges", () => {
     const removal = "## Spec delta\nREMOVED REQ-DEMO-001–002 — retired with disposition: replaced externally.\n## Units\n### U1\n- **requirements**: REQ-DEMO-001.\n- **depends_on**: none.\n";
     expect(check(removal).status).toBe("pass");
