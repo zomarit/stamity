@@ -841,7 +841,7 @@ interface ChangeRead {
  * inside it with `\` as a separator is read there too, and stays counted
  * outside: the stronger reading wins either way (review/43).
  */
-export function readChange(runner: GitRunner, root: ProjectRoot, commit: string, windows: boolean): ChangeRead {
+function readChange(runner: GitRunner, root: ProjectRoot, commit: string, windows: boolean): ChangeRead {
   const { dir: cwd, prefix } = root;
   const diff = parseNameStatus(
     runGit(runner, cwd, "diff --name-status", [

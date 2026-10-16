@@ -32,7 +32,7 @@ import {
  */
 
 /** The closed method set. */
-export type GhMethod = "GET" | "POST" | "PATCH";
+type GhMethod = "GET" | "POST" | "PATCH";
 
 /** One REST call. `path` is relative to the API root, with or without a leading `/`. */
 export interface GhRequest {
@@ -60,7 +60,7 @@ export interface GhApiOptions {
 }
 
 /** A call {@link ghApi} refused before `gh` started; `code` is `GH_REFUSED`. */
-export interface GhRefusal extends Error {
+interface GhRefusal extends Error {
   code: "GH_REFUSED";
 }
 
