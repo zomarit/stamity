@@ -381,5 +381,6 @@ May write when it runs, so `--dry-run` previews any change without making it.
 | `--title <title>` | checkpoint and end: the draft pull request's title (end needs it) | — |
 | `--signoff` | checkpoint and end: add the Signed-off-by line to the commit | — |
 | `--refused` | end: title the draft pull request Refused: <title>, for a run that refused to start | — |
+| `--chain-next` | end: a chain file another file follows; write no run-ended marker, and remove a stale one | — |
 
 Regenerate this page with `node scripts/generate-docs.mjs`.
