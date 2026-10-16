@@ -36,8 +36,8 @@ The run verbs are the only push path: `stamity run checkpoint` and `stamity run 
 pull request write, or REST write on `contents/`, `git/` refs or objects or `merges` runs at all, however it is
 spelled. Every exit pushes its record through the run verbs, closing in this order:
 
-1. The close's own writes: the record, the ledger, the inbox and the learnings. The spec delta stays unmerged,
-   a morning-list decision; QA reads `Shippable: not signed`.
+1. The close's own writes: the record, the ledger, the inbox and the learnings, each learning file it captured named in
+   step 3's `--paths`. The spec delta stays unmerged, a morning-list decision; QA reads `Shippable: not signed`.
 2. `morning.md`, then `stamity gate scan --text .stamity/runs/<id>/morning.md --label morning`; a hit is
    rewritten without the value and scanned again.
 3. `Status:` rewritten to the exit taken (`Status: closed <date> (blocked: <reason>)` for an exit that waits on a
@@ -65,11 +65,12 @@ Governing text — `content/commands/st-work.md`, "QA checkpoint" (the close wal
 ```text
 **The close walk.** What is left for the person is asked by the question protocol's Close walk, in rounds of numbered
 options: the rows the qa skill leaves for the person (at most three), the spec delta merge and the commit, as 1 commit,
-push, draft PR (`stamity run checkpoint --run <run-id> --pr --title <conventional title> --paths <the change's files and
-the merged spec delta>`, recommended) · 2 commit only · 3 leave uncommitted, option 1 after `stamity run start` on the
-default branch. Option 1 copies each `notDone` entry `run checkpoint` returns into the proof block's `Not done:`.
-`Default if no response: leave uncommitted`, with those rows not signed and the delta unmerged. In an unattended run
-the commit part is not an ask: the `st-unattended` skill's ending (`run end`, the draft pull request) answers it.
+push, draft PR (`stamity run checkpoint --run <run-id> --pr --title <conventional title> --paths <the change's files,
+the merged spec delta and the learning files the close captured under .stamity/learnings/>`, recommended) · 2 commit
+only · 3 leave uncommitted, option 1 after `stamity run start` on the default branch. Option 1 copies each `notDone`
+entry `run checkpoint` returns into the proof block's `Not done:`. `Default if no response: leave uncommitted`, with
+those rows not signed and the delta unmerged. In an unattended run the commit part is not an ask: the `st-unattended`
+skill's ending (`run end`, the draft pull request) answers it.
 The leftovers join it as a fourth part, by `/st-board`'s Leftovers at a close: before asking, the close runs
 `stamity ledger inbox --due --paths <the changed paths> --json` and takes every `decision-waiting` row first, then the
 due and touched rows and each ledger row neither fixed nor rejected; with no response, its unattended rule applies.
@@ -83,8 +84,9 @@ sentences):
 ```text
 [...] Unattended, Frame first runs `stamity run start --run <id> --json`, taking `Branch:`
 and `Base:` from it. When `Mode:` reads `unattended`, invoke the `st-unattended` skill by name and follow it. On
-`--resume <run-id>` of any run whose record reads `Mode: unattended`, and on `/st-work` run on the branch of such a
-run whose record is closed, invoke `st-unattended` by name and follow its `## The morning walk`.
+`--resume <run-id>` of any run whose record reads `Mode: unattended`, and on `/st-work` run on the branch of such a run
+whose record is closed, invoke `st-unattended` by name and follow its `## The morning walk`, which `STAMITY_UNATTENDED`
+alone does not stop: `--unattended`, `run-mode: unattended` or a chain's next file makes an unattended start instead.
 ```
 
 Scenario state — the run so far, given to you as fact:

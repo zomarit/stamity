@@ -318,6 +318,20 @@ describe("st-unattended — checkpoints and the ending (REQ-FLOW-092, REQ-FLOW-0
     expect(text).toContain("The spec delta stays unmerged, a morning-list decision; QA reads `Shippable: not signed`.");
   });
 
+  // Added 2026-10-16 (run 2026-10-15_cloud-runs, the corpus cap-round fix, ledger row review/146;
+  // REQ-FLOW-092, sign-off 00:36Z): `run end` stages only the run folder, the inbox and `--paths`, and
+  // `stamity learn capture` commits nothing, so the close's learning files ride the push only when
+  // step 3's `--paths` names them.
+  it("names the learning files the close captured in run end's --paths", async () => {
+    const text = await flat();
+    expect(text).toContain(
+      "1. The close's own writes: the record, the ledger, the inbox and the learnings, each learning file it captured named in step 3's `--paths`.",
+    );
+    expect(text.indexOf("each learning file it captured named in step 3's `--paths`")).toBeLessThan(
+      text.indexOf("`stamity run end --run <id> --title <t> --paths <p...> --json`"),
+    );
+  });
+
   it("names the person-only acts the run never takes", async () => {
     expect(await flat()).toContain(
       "Never a push to the default branch, a force push, a tag, a merge or ready-for-review: each is the person's call.",
@@ -376,6 +390,16 @@ describe("st-unattended — the morning list and the walk (REQ-FLOW-094, REQ-FLO
     expect(text).toContain("The walk is attended by definition and opens only on a run whose record is closed.");
     expect(text).toContain("opens a record of its own reading `Mode: attended` whatever the environment sets");
     expect(text).toContain("On a run still in progress `--resume` refuses and names the continuation");
+    // Added 2026-10-16 (run 2026-10-15_cloud-runs, the corpus cap-round fix, ledger row review/145;
+    // REQ-FLOW-095, REQ-FLOW-096, sign-off 00:36Z): a chain's next file opens on the branch where the
+    // file before it closed its record, so a start declared unattended there is named as no walk; the
+    // variable alone is not such a declaration ("whatever the environment sets" above stays).
+    expect(text).toContain(
+      "`--unattended`, `run-mode: unattended` or a chain's next file makes a start on that branch unattended, never the walk.",
+    );
+    expect(text.indexOf("never the walk.")).toBeGreaterThan(
+      text.indexOf("opens a record of its own reading `Mode: attended` whatever the environment sets"),
+    );
     // Each client's way back is named by what its cloud does, not by its name (invariant 17).
     expect(text).toContain("a cloud session that stays open for a question closes the record, pushes, then asks one final round");
     expect(text).toContain("a cloud agent that takes follow-ups on its pull request's comments takes the answers there");

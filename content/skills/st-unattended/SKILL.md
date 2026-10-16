@@ -90,8 +90,8 @@ The run verbs are the only push path: `stamity run checkpoint` and `stamity run 
 pull request write, or REST write on `contents/`, `git/` refs or objects or `merges` runs at all, however it is
 spelled. Every exit pushes its record through the run verbs, closing in this order:
 
-1. The close's own writes: the record, the ledger, the inbox and the learnings. The spec delta stays unmerged,
-   a morning-list decision; QA reads `Shippable: not signed`.
+1. The close's own writes: the record, the ledger, the inbox and the learnings, each learning file it captured named in
+   step 3's `--paths`. The spec delta stays unmerged, a morning-list decision; QA reads `Shippable: not signed`.
 2. `morning.md`, then `stamity gate scan --text .stamity/runs/<id>/morning.md --label morning`; a hit is
    rewritten without the value and scanned again.
 3. `Status:` rewritten to the exit taken (`Status: closed <date> (blocked: <reason>)` for an exit that waits on a
@@ -140,8 +140,9 @@ listed path is a row here; the run never routes one around the verbs.
 The walk is attended by definition and opens only on a run whose record is closed. `/st-work --resume <run-id>`, or
 `/st-work` on that run's branch, opens a record of its own reading `Mode: attended` whatever the environment sets,
 citing the first run as `Resumes: <run-id>`; it walks the morning list through the client's question tool in rounds,
-applies the answers on the same branch, pushes through the run verbs and refreshes the pull request body. On a run
-still in progress `--resume` refuses and names the continuation: an unattended start on that branch.
+applies the answers on the same branch, pushes through the run verbs and refreshes the pull request body.
+`--unattended`, `run-mode: unattended` or a chain's next file makes a start on that branch unattended, never the walk.
+On a run still in progress `--resume` refuses and names the continuation: an unattended start on that branch.
 
 `## How to answer` names the client's way back: a cloud session that stays open for a question closes the record,
 pushes, then asks one final round; a cloud agent that takes follow-ups on its pull request's comments takes the
@@ -154,10 +155,9 @@ answers (unreadable counts as none); another's answers are not applied, and the 
 - `/st-quick`: "An unattended run does not take /st-quick: run `/st-work --effort light` instead."
 - `/st-debug`, on every route, and `/st-pr-resolve` take this same entry: the three head lines, the pre-flight before
   any fetch or push, pushes only through the run verbs, and each reply or comment written to a file and posted from it
-  only after `stamity gate scan --text <file> --label reply` exits 0. Debug goes no further than the root cause and
-  hands nothing to `/st-work`: it strips its instrumentation, pushes its record, the ranked hypotheses and any failing
-  test written, and defers the fix as `needs a planned run`, a morning-list row; unreproduced, it returns
-  `BLOCKED_DEPENDENCY`.
+  only after `stamity gate scan --text <file> --label reply` exits 0. Debug goes no further than the root cause and hands
+  nothing to `/st-work`: it strips its instrumentation, pushes its record, the ranked hypotheses and any failing test
+  written, and defers the fix as `needs a planned run`, a morning-list row; unreproduced, it returns `BLOCKED_DEPENDENCY`.
 - `/st-pr-resolve` runs no `stamity plan check` and no `stamity run start`: its record,
   `<UTC date>_pr-resolve-<n>-r<round>`, opens after the fetch, `Branch:` its pull request's head. It fixes only the
   mechanical class and sends nothing to `/st-work`: any other finding is deferred as `needs a planned run`, and one no

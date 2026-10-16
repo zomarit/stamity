@@ -23,8 +23,8 @@ The run verbs are the only push path: `stamity run checkpoint` and `stamity run 
 pull request write, or REST write on `contents/`, `git/` refs or objects or `merges` runs at all, however it is
 spelled. Every exit pushes its record through the run verbs, closing in this order:
 
-1. The close's own writes: the record, the ledger, the inbox and the learnings. The spec delta stays unmerged,
-   a morning-list decision; QA reads `Shippable: not signed`.
+1. The close's own writes: the record, the ledger, the inbox and the learnings, each learning file it captured named in
+   step 3's `--paths`. The spec delta stays unmerged, a morning-list decision; QA reads `Shippable: not signed`.
 2. `morning.md`, then `stamity gate scan --text .stamity/runs/<id>/morning.md --label morning`; a hit is
    rewritten without the value and scanned again.
 3. `Status:` rewritten to the exit taken (`Status: closed <date> (blocked: <reason>)` for an exit that waits on a

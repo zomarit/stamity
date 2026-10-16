@@ -759,8 +759,21 @@ describe("/st-work — Frame and Plan", () => {
     // branch". What moved: "any run" stays in the `--resume` clause only; the branch clause takes
     // back its closed-record condition, so an unattended start on an in-progress run's branch (the
     // continuation the walk names) is not sent to a walk that opens only on a closed run.
-    expect(proof).toContain(
-      "On `--resume <run-id>` of any run whose record reads `Mode: unattended`, and on `/st-work` run on the branch of such a run whose record is closed, invoke `st-unattended` by name and follow its `## The morning walk`.",
+    // TEST CHANGE, justified (2026-10-16, run 2026-10-15_cloud-runs, the corpus cap-round fix, ledger
+    // row review/145; REQ-FLOW-095, REQ-FLOW-096, sign-off 00:36Z): the pin ended "follow its `## The
+    // morning walk`." What moved: a chain's next file, or `--unattended`, starting on the branch of a
+    // closed unattended run met both this pointer and the one before it, and the walk opens attended,
+    // so its questions went to nobody. The walk now fires only for an attended start there: an
+    // unattended declaration makes an unattended start instead, and the variable alone does not stop
+    // the walk, since a cloud's follow-up walk runs with it set. The clause before the comma is
+    // pinned word for word as before.
+    const walkPointer =
+      "On `--resume <run-id>` of any run whose record reads `Mode: unattended`, and on `/st-work` run on the branch of such a run whose record is closed, invoke `st-unattended` by name and follow its `## The morning walk`, which `STAMITY_UNATTENDED` alone does not stop: `--unattended`, `run-mode: unattended` or a chain's next file makes an unattended start instead.";
+    expect(proof).toContain(walkPointer);
+    expect(proof).not.toContain("follow its `## The morning walk`.");
+    // It follows the unattended pointer it makes the exception to.
+    expect(proof.indexOf(walkPointer)).toBeGreaterThan(
+      proof.indexOf("When `Mode:` reads `unattended`, invoke the `st-unattended` skill by name and follow it."),
     );
     expect(proof).not.toContain("`--resume <run-id>` of a closed run");
     expect(proof).not.toContain("on `/st-work` run on such a run's branch");
@@ -1477,9 +1490,15 @@ describe("/st-work — Prove", () => {
     // moved: `run checkpoint` stages only the run folder, the inbox and `--paths`, so option 1 names
     // the run, the title and the paths, the merged spec delta among them, or the person's commit
     // leaves the change's own files and the delta uncommitted.
+    // TEST CHANGE, justified (2026-10-16, run 2026-10-15_cloud-runs, the corpus cap-round fix, ledger
+    // row review/146; REQ-FLOW-019, sign-off 00:36Z): the pin read "--paths <the change's files and the
+    // merged spec delta>". What moved: `stamity learn capture` commits nothing and `run checkpoint`
+    // stages no learnings folder, so the learning the close captured stayed in the work tree though
+    // the person chose commit and push; option 1's paths now name the learning files as well.
     const options =
-      "the commit, as 1 commit, push, draft PR (`stamity run checkpoint --run <run-id> --pr --title <conventional title> --paths <the change's files and the merged spec delta>`, recommended) · 2 commit only · 3 leave uncommitted";
+      "the commit, as 1 commit, push, draft PR (`stamity run checkpoint --run <run-id> --pr --title <conventional title> --paths <the change's files, the merged spec delta and the learning files the close captured under .stamity/learnings/>`, recommended) · 2 commit only · 3 leave uncommitted";
     expect(qa).toContain(options);
+    expect(qa).not.toContain("--paths <the change's files and the merged spec delta>");
     expect(qa.indexOf(options)).toBeLessThan(qa.indexOf("`Default if no response: leave uncommitted`"));
     // Option 1 never pushes the default branch: `run start` puts the run on a branch of its own first.
     expect(qa).toContain("option 1 after `stamity run start` on the default branch.");
