@@ -31,8 +31,8 @@ before any wait, `--paths` naming the files the closed units changed; at the sta
 line. Each checkpoint writes one record line, `- <UTC> checkpoint: <sha> units done=<n> remaining=<m>`. With nothing
 staged it commits nothing and pushes only when the branch is ahead. The record, ledger, plan and morning list ride
 the branch wherever git does not ignore them; an ignored one reads `records: not committed (<source>)`. A checkpoint
-that exits 1 copies its `notDone[]` lines into the record and the morning list's `## Not done:`, and is never
-retried with a raw push, `--no-verify` or a force.
+copies its `notDone[]` lines, on any exit, into the record and the morning list's `## Not done:`; one that exits 1
+is never retried with a raw push, `--no-verify` or a force.
 ```
 
 Governing text — the same file, "The ending" (its last step and what follows it):
