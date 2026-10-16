@@ -3580,7 +3580,7 @@ function contextsOf(command, cwd) {
     contexts.set(key, {
       currentBranch: branch !== ".invalid" ? branch : detached ? null : (defaultBranches[0] ?? "main"),
       defaultBranches,
-      // Read the first time the verdict asks, which only a push refspec does (review/218): no other call reads a tag.
+      // Read the first time the verdict asks, which only a push refspec does: no other call reads a tag.
       get tags() {
         tags ??= dirs === null ? [] : localTags(dirs.commonDir);
         return tags;
@@ -3686,7 +3686,7 @@ function unattendedBy(root) {
 /** The shell command a payload carries; null when the call is not a shell call. */
 function shellCommand(payload) {
   // Cursor's beforeShellExecution names the command at the top level and no tool: every such payload is a shell call,
-  // so one with no command string is one this guard cannot read, never one that is not a shell call (review/215).
+  // so one with no command string is one this guard cannot read, never one that is not a shell call.
   if (payload.tool_name === undefined || payload.hook_event_name === "beforeShellExecution") {
     if (typeof payload.command === "string") return payload.command;
     throw Object.assign(new Error("no command"), { code: "NO_COMMAND" });
