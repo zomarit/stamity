@@ -1796,14 +1796,28 @@ function readJson(path: string): unknown {
   }
 }
 
-/** The CLI's own `engines.node`, as npm enforces it; `undefined` when it cannot be read. */
-function enginesRange(): string | undefined {
+/**
+ * The `engines.node` range of the package.json at `path`: `undefined` when the file declares none,
+ * `null` when the file, its `engines` or its `engines.node` cannot be read (the pre-flight refuses
+ * `null`, review/142, where `undefined` passes).
+ */
+export function enginesOf(path: string): string | null | undefined {
+  const parsed = readJson(path);
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
+  const engines = (parsed as { engines?: unknown }).engines;
+  if (engines === undefined) return undefined;
+  if (typeof engines !== "object" || engines === null || Array.isArray(engines)) return null;
+  const node = (engines as { node?: unknown }).node;
+  if (node === undefined) return undefined;
+  return typeof node === "string" ? node : null;
+}
+
+/** The CLI's own `engines.node`, as npm enforces it (see {@link enginesOf}); `null` when its package root cannot be found. */
+function enginesRange(): string | null | undefined {
   try {
-    const parsed = readJson(join(findPackageRoot(dirname(fileURLToPath(import.meta.url))), "package.json"));
-    const engines = typeof parsed === "object" && parsed !== null ? (parsed as { engines?: { node?: unknown } }).engines : undefined;
-    return typeof engines?.node === "string" ? engines.node : undefined;
+    return enginesOf(join(findPackageRoot(dirname(fileURLToPath(import.meta.url))), "package.json"));
   } catch {
-    return undefined;
+    return null;
   }
 }
 

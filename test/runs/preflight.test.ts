@@ -721,6 +721,16 @@ describe("runPreflight — node, pin, scan, floors", () => {
     expect(check(odd, "node-engine").state).toBe("refuse");
   });
 
+  it("an unreadable engines range (null) refuses by that cause, where none declared passes (review/142)", async () => {
+    const unread = await runPreflight(greenDeps({ nodeVersion: "v22.22.2", engines: null }));
+    const node = check(unread, "node-engine");
+    expect(node.state).toBe("refuse");
+    expect(node.evidence).toBe("node 22.22.2; package.json's engines.node could not be read");
+    expect(refusal(unread, "node-engine")?.reason).toContain("could not be read");
+    expect(refusal(unread, "node-engine")?.fix).toBe("reinstall the CLI so its package.json and its engines.node range can be read");
+    expect(unread.ok).toBe(false);
+  });
+
   it("a pin the running CLI does not match refuses naming both; no pin is unknown", async () => {
     const drift = await runPreflight(greenDeps({ pinnedVersion: "1.15.0", runningVersion: "1.16.0" }));
     expect(check(drift, "cli-pin").state).toBe("refuse");

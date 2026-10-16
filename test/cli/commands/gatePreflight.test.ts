@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { gateCommand, readPushIdentity } from "../../../src/cli/commands/gate.ts";
+import { enginesOf, gateCommand, readPushIdentity } from "../../../src/cli/commands/gate.ts";
 import { VERSION } from "../../../src/composition/root.ts";
 import { createManifest, writeManifest } from "../../../src/manifest/manifest.ts";
 import { runInProcess } from "../../support/inProcess.ts";
@@ -547,6 +547,25 @@ describe("stamity gate preflight and scan --text", () => {
       git(repo, ["remote", "remove", "origin"]);
 
       expect(await facts(repo)).toEqual({ fetchUrl: null, pushUrls: [] });
+    });
+  });
+
+  describe("the engines range (enginesOf, review/142)", () => {
+    it.each([
+      ["a declared range", `{"engines":{"node":">=22.22.2"}}`, ">=22.22.2"],
+      ["no engines field", `{"name":"x"}`, undefined],
+      ["engines without node", `{"engines":{"npm":">=10"}}`, undefined],
+      ["a package.json that is not JSON", `{"engines":`, null],
+      ["a package.json that is not an object", `["engines"]`, null],
+      ["engines that is not an object", `{"engines":">=22"}`, null],
+      ["engines.node that is not a string", `{"engines":{"node":22}}`, null],
+    ])("%s", async (_name, body, expected) => {
+      await getRoot().seedFiles({ "pkg/package.json": body });
+      expect(enginesOf(getRoot().path("pkg", "package.json"))).toBe(expected);
+    });
+
+    it("a missing package.json is unreadable (null), not none declared", () => {
+      expect(enginesOf(getRoot().path("absent", "package.json"))).toBeNull();
     });
   });
 

@@ -78,8 +78,11 @@ export interface PreflightDeps {
   env: Readonly<Record<string, string | undefined>>;
   /** `process.versions.node`; a leading `v` is accepted. */
   nodeVersion: string;
-  /** `package.json`'s `engines.node` range; absent, any node passes. */
-  engines?: string | undefined;
+  /**
+   * `package.json`'s `engines.node` range; absent (`undefined`, none declared), any node passes.
+   * `null` when package.json or its `engines.node` could not be read: that refuses, never passes.
+   */
+  engines?: string | null | undefined;
   /** The manifest's `generatedBy`; absent, the pin cannot be read. */
   pinnedVersion?: string | undefined;
   runningVersion: string;
@@ -128,6 +131,7 @@ const CONFIG_FIX = "make git's configuration readable in the run's environment (
 const PUSH_URL_FIX ="point every push URL of origin at the repository its fetch URL names";
 const ORIGIN_FIX = "point origin at the GitHub repository the run pushes to";
 const ADMIN_FIX = "run as an account or token without admin on this repository";
+const ENGINES_FIX = "reinstall the CLI so its package.json and its engines.node range can be read";
 
 /**
  * GitHub's owner and repository name alphabets; anything else never reaches a
@@ -457,10 +461,14 @@ function hooksLoaded(canary: { at: string } | null, now: Date): CheckResult {
   return { state: "pass", evidence: `hooks canary (a canary, not a wall) written ${seconds} s ago`, fix };
 }
 
-function nodeEngine(nodeVersion: string, engines: string | undefined): CheckResult {
+function nodeEngine(nodeVersion: string, engines: string | null | undefined): CheckResult {
   const version = semver.clean(nodeVersion);
   const fix = `run under a node release inside ${engines ?? "the declared engines"}`;
   if (version === null) return { state: "refuse", evidence: "the node version is unreadable", fix };
+  // Unreadable is not "none declared": no range was read, so nothing shows this node is inside it.
+  if (engines === null) {
+    return { state: "refuse", evidence: `node ${version}; package.json's engines.node could not be read`, fix: ENGINES_FIX };
+  }
   if (engines === undefined) return { state: "pass", evidence: `node ${version}; no engines range declared`, fix };
   if (semver.validRange(engines) === null) {
     return { state: "refuse", evidence: `node ${version}; the engines range ${engines} is unreadable`, fix };
