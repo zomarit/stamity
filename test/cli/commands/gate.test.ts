@@ -2594,6 +2594,30 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
         });
       });
 
+      it("reads a committed UTF-16 file from HEAD's blob, little- or big-endian, whatever the work tree holds (review/98)", async () => {
+        const utf16le = (text: string): Buffer => Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, "utf16le")]);
+        const utf16be = (text: string): Buffer => Buffer.concat([Buffer.from([0xfe, 0xff]), Buffer.from(text, "utf16le").swap16()]);
+        const repo = await seedRepo("repo", { "src/a.ts": "export {};\n" });
+        const root = git(repo, ["rev-parse", "HEAD"]).trim();
+        // A non-ASCII character on each side of the token: its replacement takes no byte of the token.
+        await writeFile(join(repo, "export.txt"), utf16le(`first\r\n\u00e9${TOKEN}\u4e2d\r\n`));
+        await writeFile(join(repo, "settings.json"), utf16be(`{}\r\n"${TOKEN}"\r\n`));
+        git(repo, ["add", "--", "export.txt", "settings.json"]);
+        git(repo, ["commit", "-q", "-m", "two UTF-16 files"]);
+        // The work tree drops both tokens; the push still sends them.
+        await writeFile(join(repo, "export.txt"), utf16le("first\r\n"));
+        await writeFile(join(repo, "settings.json"), utf16be("{}\r\n"));
+
+        const outcome = await scanPushed(repo, root);
+
+        expect(outcome).toMatchObject({
+          hits: [
+            { path: "export.txt", line: 2, rule: "github-token" },
+            { path: "settings.json", line: 2, rule: "github-token" },
+          ],
+        });
+      });
+
       it("fails with no base, never a clean scan", async () => {
         const repo = await seedRepo("repo", { "src/a.ts": "export {};\n" });
 

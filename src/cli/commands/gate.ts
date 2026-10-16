@@ -926,12 +926,40 @@ function gitSaidNo(err: unknown, status?: number): boolean {
  * as a name, never as pathspec magic; `--full-tree` ignores the cwd.
  */
 function baseEntryType(runner: GitRunner, cwd: string, treeish: string, path: string): string | null {
+  return baseEntry(runner, cwd, treeish, path)?.type ?? null;
+}
+
+/** The type and object id of the entry `treeish` holds at `path`, read as {@link baseEntryType} reads it. */
+function baseEntry(runner: GitRunner, cwd: string, treeish: string, path: string): { type: string; id: string } | null {
   const output = runGit(runner, cwd, "ls-tree", ["--literal-pathspecs", "ls-tree", "-z", "--full-tree", treeish, "--", path]);
   for (const record of output.split("\0")) {
     const tab = record.indexOf("\t");
-    if (tab !== -1 && record.slice(tab + 1) === path) return record.slice(0, tab).split(" ")[1] ?? null;
+    if (tab === -1 || record.slice(tab + 1) !== path) continue;
+    const [, type, id] = record.slice(0, tab).split(" ");
+    return type === undefined ? null : { type, id: id ?? "" };
   }
   return null;
+}
+
+/**
+ * The text of `HEAD`'s blob at the top-level-relative `name` when it opens
+ * as a UTF-16 byte-order mark reads (review/98, for the pushed scope,
+ * build/94), from the object store, never the work tree, so what is read is
+ * what a push sends. The read runner decodes UTF-8: either mark (`FF FE`,
+ * `FE FF`) reads as two U+FFFD, and no ASCII byte is ever taken into a
+ * replacement, so with the NULs dropped the file's ASCII, where every rule's
+ * value lives, keeps its order and its lines. A blob opening with another pair
+ * UTF-8 cannot start a character with is read the same way: more read, never
+ * less. `undefined` for no blob there, no such opening, or a blob past the
+ * untracked bound.
+ */
+function headUtf16(runner: GitRunner, root: ProjectRoot, name: string): string | undefined {
+  const entry = baseEntry(runner, root.dir, "HEAD", name);
+  if (entry?.type !== "blob") return undefined;
+  const size = Number(runGit(runner, root.dir, "cat-file -s", ["cat-file", "-s", entry.id]).trim());
+  if (!(size <= UNTRACKED_MAX_BYTES)) return undefined;
+  const text = runGit(runner, root.dir, "cat-file blob", ["cat-file", "blob", entry.id]);
+  return text.startsWith("\uFFFD\uFFFD") ? text.slice(2).replaceAll("\0", "") : undefined;
 }
 
 /** Whether `<treeish>:<prefix>.stamity` is a folder in that commit's tree; any failed read throws (p2a M-2). */
@@ -1402,7 +1430,15 @@ interface HistoryLines {
  * sections named by the `-z` name list. A file whose added lines hold a NUL is
  * named, never read.
  */
-function readTreeDiff(runner: GitRunner, root: ProjectRoot, revs: readonly string[], commit: string | undefined, windows: boolean, into: HistoryLines): void {
+function readTreeDiff(
+  runner: GitRunner,
+  root: ProjectRoot,
+  revs: readonly string[],
+  commit: string | undefined,
+  windows: boolean,
+  into: HistoryLines,
+  decode = false,
+): void {
   const inside = insideOf(root.prefix, windows);
   const away = awayFrom(root.prefix);
   const pins = ["-r", "--root", "--no-commit-id", "-M", ...DIFF_PINS];
@@ -1431,7 +1467,10 @@ function readTreeDiff(runner: GitRunner, root: ProjectRoot, revs: readonly strin
     const shown = path ?? away(name);
     const added = section.hunks.flatMap((hunk) => hunk.added);
     if (section.unshown || holdsNul(added.map((line) => line.text))) {
-      (hasCodeExtension(shown) ? into.unscanned : into.skipped).push(shown);
+      // `decode`: a UTF-16 file the read reaches at HEAD is scanned whole, as the work-tree read scans one (review/98).
+      const text = decode && !section.deleted ? headUtf16(runner, root, name) : undefined;
+      if (text !== undefined) into.files.push(wholeFile(shown, text));
+      else (hasCodeExtension(shown) ? into.unscanned : into.skipped).push(shown);
     } else if (added.length > 0) into.files.push({ path: shown, ...(commit === undefined ? {} : { commit }), added });
   });
 }
@@ -1454,11 +1493,11 @@ function readHistory(runner: GitRunner, root: ProjectRoot, base: string, windows
  * The pushed scope's current side (build/94): `HEAD`'s committed tree against
  * `base`, one {@link readTreeDiff}, in place of the work tree and the index.
  * The net read keeps a merge's own resolution in the scan, which the history
- * (merges left out) does not read.
+ * (merges left out) does not read, and decodes a UTF-16 file at `HEAD` whole.
  */
 function readPushed(runner: GitRunner, root: ProjectRoot, base: string, windows: boolean): HistoryLines {
   const net: HistoryLines = { files: [], skipped: [], unscanned: [], outside: new Set() };
-  readTreeDiff(runner, root, [base, "HEAD"], undefined, windows, net);
+  readTreeDiff(runner, root, [base, "HEAD"], undefined, windows, net, true);
   return net;
 }
 
