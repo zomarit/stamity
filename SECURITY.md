@@ -414,8 +414,14 @@ so a repository ruleset leaves it refused. What stays open is named here, as acc
   reading of one command line closes this. The program runs inside git, not as a shell call the
   guard sees, so a push it makes steps around the run verbs, the held paths and the last scan, as a
   respelled one does. The push rule allows `git submodule update`, which a repository with
-  submodules needs, and `git status`. It refuses a `-c alias.*` pair but not a `-c` pair naming
-  such a program on the builtin's own line (`git -c core.fsmonitor=… status`), which passes too.
+  submodules needs, and `git status`. On the builtin's own line it refuses such a program: while a
+  run is unattended, a git call carrying a `-c` or `--config-env` pair outside the display and
+  identity keys (`color.*`, `advice.*`, `core.quotepath`, `init.defaultBranch`, `user.name`,
+  `user.email`) is refused, `git -c core.fsmonitor=… status` among them, and so is a git call on a
+  line that assigns `GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_<n>` or `GIT_CONFIG_PARAMETERS`. Code:
+  `src/hooks/personOnly.ts::unattendedPushVerdict`. A line that sets those variables without an
+  assignment, PowerShell's `Set-Item env:GIT_CONFIG_COUNT 1` among them, passes, and this residual
+  covers it as it covers a configuration write.
 - **The environment.** Every command in Claude Code's cloud can read the environment, a token the
   session holds included. The pre-flight's `token-env` warning names credential-shaped variables, by
   name only, and removes none.
@@ -458,13 +464,7 @@ whole check, and these forms pass it:
 - a batch ref update whose list element is given whole as a GraphQL variable passes;
 - the GraphQL forms of a tag-ref create and of a ref delete pass, while their REST twins are
   refused;
-- a ref path with a percent-encoded letter passes;
-- a directory change inside a program word that holds a whole line, or a brace placeholder given
-  as `git -C`'s value, is not followed, so an implied push there is judged on the working
-  directory's branch;
-- a directory change inside a `cmd /c` or `/k` line, a rebase exec line, a bisect run command or a
-  PowerShell script block is not followed either. This one is open at this writing and is being
-  closed.
+- a ref path with a percent-encoded letter passes.
 
 In an unattended run the unattended rules cover each of these: the push rule refuses every raw
 `git push`, every REST write on `contents/` and `git/` refs and objects and every GraphQL branch or
@@ -477,16 +477,22 @@ the unattended one: PowerShell's command wrappers (`pwsh -c`, `powershell -Comma
 `git rebase --exec` line and the command `git bisect run` runs. A person-only act wrapped in one is
 refused on every client, and in an unattended run so is a raw push. gh's alias for the
 create-and-push form, `gh repo new --push`, is refused in an unattended run as `gh repo create
---push` is. Code: `src/hooks/personOnly.ts::personOnlyVerdict`,
-`src/hooks/personOnly.ts::unattendedPushVerdict`.
+--push` is. In a PowerShell payload and a `cmd` line a backslash is a plain character, PowerShell's
+escape being the backtick, and a program word reads by its file name, so a git named by a Windows
+path inside a PowerShell payload (`C:\…\git.exe push`) is read as git by both verdicts. Code:
+`src/hooks/personOnly.ts::personOnlyVerdict`, `src/hooks/personOnly.ts::unattendedPushVerdict`.
+
+The guard's place reader follows a directory change inside each of those lines too, a `cmd /c` or
+`/k` line, a rebase exec line, a bisect run command and a PowerShell script block among them, and
+inside a program word that holds a whole line, so an implied push there is judged on the branch the
+line moves to. A `git -C` or `--git-dir` value the line cannot show, a brace placeholder among them,
+is a place it cannot read, and an implied push from it is refused as one to the default branch. Code:
+`src/hooks/scripts.ts::buildPersonOnlyGuardScript`.
 
 Gaps the unattended rules do not cover:
 
 - a PowerShell encoded command (`-EncodedCommand`) and a line another command pipes into `iex` are
-  data to the guard, not a line it reads, so a push in one passes both verdicts;
-- a git named by a Windows path inside a PowerShell payload (`C:\…\git.exe push`) passes both
-  verdicts, since the guard reads the payload's backslashes as a POSIX shell's escapes and the
-  program no longer reads as git. This one is open at this writing and is being closed.
+  data to the guard, not a line it reads, so a push in one passes both verdicts.
 
 A multi-root workspace file, and every folder's editor settings and tasks files with their
 folder-open task, are held paths, not only the root's, and so is every folder's editor MCP-server

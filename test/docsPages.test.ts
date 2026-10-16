@@ -2202,27 +2202,38 @@ describe("SECURITY.md", () => {
       ]) {
         expect(residuals.toLowerCase(), `the cloud section does not name: ${gap}`).toContain(gap.toLowerCase());
       }
-      // The nested lines both verdicts read, and gh's create-and-push alias, are stated as refused, never as gaps
-      // again; what the code still passes is listed as the gaps the unattended rules do not cover, the two forms a
-      // round in flight closes marked as being closed, and the config-named program beside the respelling residual.
+      // The nested lines both verdicts read, gh's create-and-push alias, a Windows-path git in a PowerShell payload,
+      // a directory change inside a nested line and an unattended `-c` pair outside the display and identity keys are
+      // stated as read or refused, never as gaps again, as the guard round at 445ebd23 made them; what the code still
+      // passes is listed as the gaps the unattended rules do not cover, and the config-named program, PowerShell's
+      // `Set-Item env:` form with it, beside the respelling residual.
       expect(residuals).toContain("Gaps the unattended rules do not cover:");
       expect(residuals).toContain("Lines that run inside another line are read as their own by both verdicts");
       expect(residuals).toContain("`gh repo new --push`, is refused in an unattended run");
-      for (const stale of ["are not read by the always-on verdict", "is not read by the unattended rule", "Two gaps are not covered"]) {
+      for (const stale of [
+        "are not read by the always-on verdict",
+        "is not read by the unattended rule",
+        "Two gaps are not covered",
+        "being closed",
+        "is not followed",
+        "the guard reads the payload's backslashes as a POSIX shell's escapes",
+        "but not a `-c` pair naming",
+      ]) {
         expect(flat, `SECURITY.md says again: ${stale}`).not.toContain(stale);
       }
       for (const named of [
         "a PowerShell encoded command (`-EncodedCommand`)",
         "a line another command pipes into `iex`",
-        "a git named by a Windows path inside a PowerShell payload",
-        "a directory change inside a `cmd /c` or `/k` line",
+        "a git named by a Windows path inside a PowerShell payload (`C:\\…\\git.exe push`) is read as git by both verdicts",
+        "The guard's place reader follows a directory change inside each of those lines too, a `cmd /c` or `/k` line",
         "Programs the repository's configuration names",
         "no reading of one command line closes this",
-        "`git -c core.fsmonitor=… status`",
+        "a git call carrying a `-c` or `--config-env` pair outside the display and identity keys",
+        "`git -c core.fsmonitor=… status` among them",
+        "PowerShell's `Set-Item env:GIT_CONFIG_COUNT 1` among them, passes",
       ]) {
         expect(residuals, `the cloud section does not name: ${named}`).toContain(named);
       }
-      expect(residuals.match(/is open at this writing and is being closed/g)?.length).toBe(2);
       // The editor's workspace file and every folder's settings and tasks files are held, no gap (build/77, review/186),
       // and every folder's editor MCP-server file with them.
       expect(residuals).toContain("every folder's editor settings and tasks files with their");
@@ -2398,9 +2409,14 @@ describe("docs/security-mapping.md", () => {
   });
 
   // The guard's row and its gap state the nested lines and gh's create-and-push alias as read and refused, as
-  // SECURITY.md does, and name the config-named program beside the respelling residual.
+  // SECURITY.md does, the Windows-path git and a directory change inside a nested line too, and name the config-named
+  // program beside the respelling residual.
   it("states the guard's nested lines as read, not as gaps", () => {
     const flat = text.replace(/\s+/g, " ");
+    expect(flat).not.toContain("being closed");
+    expect(flat).toContain("a Windows-path git inside a PowerShell payload is read as git");
+    expect(flat).toContain("A directory change inside those lines is followed");
+    expect(flat).toContain("a `-c` pair outside the display and identity keys is refused");
     expect(flat).not.toContain("and the two they do not, PowerShell's command wrappers");
     expect(flat).not.toContain("PowerShell's command wrappers and gh's alias for the create-and-push form are not");
     expect(flat).toContain("are read as lines of their own, and gh's alias for the create-and-push form is refused");
