@@ -754,12 +754,23 @@ describe("/st-work — Frame and Plan", () => {
     // build/61; REQ-FLOW-095): the pin read "of a closed run whose record". What moved: the pointer
     // fires on any unattended run, so a resume of one still in progress reaches the skill's walk,
     // whose own refusal names the continuation; the command no longer screens on "closed".
+    // TEST CHANGE, justified (2026-10-16, run 2026-10-15_cloud-runs, u15's fix round 3, ledger row
+    // review/112; REQ-FLOW-095, sign-off 23:56Z): the pin read "on `/st-work` run on such a run's
+    // branch". What moved: "any run" stays in the `--resume` clause only; the branch clause takes
+    // back its closed-record condition, so an unattended start on an in-progress run's branch (the
+    // continuation the walk names) is not sent to a walk that opens only on a closed run.
     expect(proof).toContain(
-      "On `--resume <run-id>` of any run whose record reads `Mode: unattended`, and on `/st-work` run on such a run's branch, invoke `st-unattended` by name and follow its `## The morning walk`.",
+      "On `--resume <run-id>` of any run whose record reads `Mode: unattended`, and on `/st-work` run on the branch of such a run whose record is closed, invoke `st-unattended` by name and follow its `## The morning walk`.",
     );
     expect(proof).not.toContain("`--resume <run-id>` of a closed run");
+    expect(proof).not.toContain("on `/st-work` run on such a run's branch");
     const unattended = (await corpusFile(UNATTENDED_SKILL_PATH)).parsed.body;
     expect(unattended.split("\n")).toContain("## The morning walk");
+    // Added 2026-10-16 (run 2026-10-15_cloud-runs, u15's fix round 3, ledger row review/111): the
+    // resume opens `Mode: attended`, so the skill's opening line has to let an attended reader
+    // reach the section this pointer names rather than stop at the first line.
+    expect(collapse(unattended)).toContain("an attended run reads only `## The morning walk`.");
+    expect(unattended).not.toContain("stop reading here");
     // TEST CHANGE, justified (2026-10-09, plan 019 file 2, the p3 fix round 2, `review/133`): the
     // line holds the commit id `HEAD` resolves to at Frame, never the word, which `gate` would
     // resolve at Prove time, after the units commit (sign-off: `git rev-parse HEAD`).
@@ -1461,8 +1472,13 @@ describe("/st-work — Prove", () => {
     expect(qa).toContain("those rows not signed and the delta unmerged");
     // Added 2026-10-16 (plan 021 file 1, unit u15-work-text; REQ-FLOW-019): the commit part's three
     // options, in order, the recommended one first, before the default sentence that stays verbatim.
+    // TEST CHANGE, justified (2026-10-16, run 2026-10-15_cloud-runs, u15's fix round 3, ledger row
+    // review/113; REQ-FLOW-019): the pin read "(`stamity run checkpoint --pr`, recommended)". What
+    // moved: `run checkpoint` stages only the run folder, the inbox and `--paths`, so option 1 names
+    // the run, the title and the paths, the merged spec delta among them, or the person's commit
+    // leaves the change's own files and the delta uncommitted.
     const options =
-      "the commit, as 1 commit, push, draft PR (`stamity run checkpoint --pr`, recommended) · 2 commit only · 3 leave uncommitted";
+      "the commit, as 1 commit, push, draft PR (`stamity run checkpoint --run <run-id> --pr --title <conventional title> --paths <the change's files and the merged spec delta>`, recommended) · 2 commit only · 3 leave uncommitted";
     expect(qa).toContain(options);
     expect(qa.indexOf(options)).toBeLessThan(qa.indexOf("`Default if no response: leave uncommitted`"));
     // Option 1 never pushes the default branch: `run start` puts the run on a branch of its own first.
@@ -1981,6 +1997,13 @@ describe("/st-work — Prove", () => {
     expect(effects).toContain("Where a platform is linked");
     expect(effects).toContain("`pr.linked`");
     expect(effects).toContain("With no linked platform the step is a no-op");
+    // Added 2026-10-16 (run 2026-10-15_cloud-runs, u15's fix round 3, ledger row review/115;
+    // REQ-FLOW-019): the step ran whatever the commit answer, so "2 commit only" still met a pull
+    // request and option 1 met a second one beside `run checkpoint --pr`; it is option 1's own step.
+    expect(effects).toContain(
+      "only the close walk's option 1 opens that branch's draft pull request, as its own `run checkpoint --pr` step",
+    );
+    expect(effects).not.toContain("the close opens that branch's pull request");
   });
 
   it("no-ops board progress events when no source is linked", async () => {

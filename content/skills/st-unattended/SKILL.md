@@ -3,7 +3,7 @@ license: MIT
 compatibility: Requires a supported coding client, repository access, git, the GitHub CLI, and the project verification tools.
 id: unattended
 type: skill
-description: "Binds a run with nobody watching to its floors — the pre-flight and the ready check before Frame, declared defaults in place of every ask, pushes only through the run verbs, and one draft pull request carrying the morning list at every exit. Called by name from a flow whose record reads `Mode: unattended` and never selected on its own. Triggers only when a touchpoint's run record head reads `Mode: unattended`."
+description: "Binds a run with nobody watching to its floors — the pre-flight and the ready check before Frame, declared defaults in place of every ask, pushes only through the run verbs, and one draft pull request carrying the morning list at every exit. Called by name from a flow whose record reads `Mode: unattended`, or by `/st-work` for its morning walk, and never selected on its own. Triggers only when a touchpoint's run record head reads `Mode: unattended`, or when `/st-work` points a run at the morning walk."
 tags: [orchestration]
 load: on-demand
 obsolete_when: every supported client enforces an unattended mode natively — a pre-flight, a push limited to the run's own branch, no person-only act, and a draft pull request at every exit — so no run follows those floors from text
@@ -11,7 +11,7 @@ obsolete_when: every supported client enforces an unattended mode natively — a
 
 # Unattended runs
 
-This skill applies only when the run's record reads `Mode: unattended`; in an attended run, stop reading here.
+This skill applies only when the run's record reads `Mode: unattended`; an attended run reads only `## The morning walk`.
 An unattended run asks nothing, pushes only its own branch, and ends every exit — done, blocked, failed or
 refused — on one draft pull request whose body is the morning list. Each floor below is charter invariant 1: none
 is skipped for a missing tool; the run refuses or reports `Not done:` instead.

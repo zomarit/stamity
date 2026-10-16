@@ -292,14 +292,14 @@ different change. Human QA sign-off still comes from the guided pass.
 
 The checkpoint covers what automation cannot.
 
-**Row states.** The qa skill closes each row in its own row states, under
-its `## Human sign-off` rules.
+**Row states.** The qa skill closes each row in its own row states, under its `## Human sign-off` rules.
 
 **The close walk.** What is left for the person is asked by the question protocol's Close walk, in rounds of numbered
 options: the rows the qa skill leaves for the person (at most three), the spec delta merge and the commit, as 1 commit,
-push, draft PR (`stamity run checkpoint --pr`, recommended) · 2 commit only · 3 leave uncommitted, option 1 after
-`stamity run start` on the default branch. Option 1 copies each `notDone` entry `run checkpoint` returns into the proof
-block's `Not done:`. `Default if no response: leave uncommitted`, with those rows not signed and the delta unmerged.
+push, draft PR (`stamity run checkpoint --run <run-id> --pr --title <conventional title> --paths <the change's files and
+the merged spec delta>`, recommended) · 2 commit only · 3 leave uncommitted, option 1 after `stamity run start` on the
+default branch. Option 1 copies each `notDone` entry `run checkpoint` returns into the proof block's `Not done:`.
+`Default if no response: leave uncommitted`, with those rows not signed and the delta unmerged.
 The leftovers join it as a fourth part, by `/st-board`'s Leftovers at a close: before asking, the close runs
 `stamity ledger inbox --due --paths <the changed paths> --json` and takes every `decision-waiting` row first, then the
 due and touched rows and each ledger row neither fixed nor rejected; with no response, its unattended rule applies.
@@ -410,8 +410,8 @@ first 15: `Status:`, reading `in progress` until the close; `Mode: attended | un
 never the word `HEAD`); and `Invocation: <this command line, verbatim>`. A `reports/` folder beside the record holds a
 `.gitignore` whose one line is `*`. Unattended, Frame first runs `stamity run start --run <id> --json`, taking `Branch:`
 and `Base:` from it. When `Mode:` reads `unattended`, invoke the `st-unattended` skill by name and follow it. On
-`--resume <run-id>` of any run whose record reads `Mode: unattended`, and on `/st-work` run on such a run's branch,
-invoke `st-unattended` by name and follow its `## The morning walk`.
+`--resume <run-id>` of any run whose record reads `Mode: unattended`, and on `/st-work` run on the branch of such a
+run whose record is closed, invoke `st-unattended` by name and follow its `## The morning walk`.
 
 ### Side effects
 
@@ -424,10 +424,10 @@ Run after gates pass; each lands in the run report:
   owns its fields — advisories, licences, the path to a transitive package — so invoke it rather
   than derive them a second time.
 - **Learnings capture.** Resolved failures land in `.stamity/learnings/`.
-- **Pull-request emission.** Where a platform is linked and the change sits on a branch, the close
-  opens that branch's pull request — or updates the one already open — and emits `pr.linked`
-  carrying the link. With no linked platform the step is a no-op, and the run names the branch it
-  left.
+- **Pull-request emission.** Where a platform is linked and the change sits on a branch, only the
+  close walk's option 1 opens that branch's draft pull request, as its own `run checkpoint --pr`
+  step — or updates the one already open — and the close emits `pr.linked` carrying the link. With
+  no linked platform the step is a no-op, and the run names the branch it left.
 - **Board progress events.** Emit idempotent progress events — phase transition,
   acceptance-criterion done, PR link, terminal state — with zero platform knowledge; the board
   layer maps them. When no board source is linked, emission is a silent no-op; events publish only

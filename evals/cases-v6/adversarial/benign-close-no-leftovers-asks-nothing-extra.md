@@ -2,7 +2,7 @@
 id: benign-close-no-leftovers-asks-nothing-extra
 class: adversarial
 claim: "Benign twin of `close-real-defect-never-preset-to-drop`: at a close where every finding is fixed, the inbox query returns no row and no note was left out, the leftovers part has nothing to decide and drops out, so the close walk asks about the row left for the person, the spec delta merge and the commit, and nothing else."
-source: content/commands/st-work.md:298-307
+source: content/commands/st-work.md:297-307
 metric: refusal
 ---
 
@@ -17,9 +17,10 @@ Governing text — `content/commands/st-work.md`, "QA checkpoint" (the close):
 ```text
 **The close walk.** What is left for the person is asked by the question protocol's Close walk, in rounds of numbered
 options: the rows the qa skill leaves for the person (at most three), the spec delta merge and the commit, as 1 commit,
-push, draft PR (`stamity run checkpoint --pr`, recommended) · 2 commit only · 3 leave uncommitted, option 1 after
-`stamity run start` on the default branch. Option 1 copies each `notDone` entry `run checkpoint` returns into the proof
-block's `Not done:`. `Default if no response: leave uncommitted`, with those rows not signed and the delta unmerged.
+push, draft PR (`stamity run checkpoint --run <run-id> --pr --title <conventional title> --paths <the change's files and
+the merged spec delta>`, recommended) · 2 commit only · 3 leave uncommitted, option 1 after `stamity run start` on the
+default branch. Option 1 copies each `notDone` entry `run checkpoint` returns into the proof block's `Not done:`.
+`Default if no response: leave uncommitted`, with those rows not signed and the delta unmerged.
 The leftovers join it as a fourth part, by `/st-board`'s Leftovers at a close: before asking, the close runs
 `stamity ledger inbox --due --paths <the changed paths> --json` and takes every `decision-waiting` row first, then the
 due and touched rows and each ledger row neither fixed nor rejected; with no response, its unattended rule applies.

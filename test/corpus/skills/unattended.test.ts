@@ -175,6 +175,15 @@ describe("st-unattended — the head and the anatomy", () => {
     const lines = (await load()).parsed.body.split(/\r?\n/).filter((line) => line.trim() !== "");
     expect(lines[0]).toBe("# Unattended runs");
     expect(lines[1]).toMatch(/^This skill applies only when the run's record reads `Mode: unattended`;/);
+    // Added 2026-10-16 (run 2026-10-15_cloud-runs, u15's fix round 3, ledger row review/111;
+    // REQ-FLOW-095): `/st-work --resume` opens `Mode: attended` and points here for the walk, so the
+    // opening line names the walk as the one part an attended run reads instead of turning it away,
+    // and the description lets `/st-work` call it for the walk.
+    expect(lines[1]).toContain("an attended run reads only `## The morning walk`.");
+    expect(lines[1]).not.toContain("stop reading here");
+    expect(String(frontmatterField((await load()).parsed, "description"))).toContain(
+      "or by `/st-work` for its morning walk",
+    );
   });
 
   it("carries the plan's sections in order, and no others", async () => {
