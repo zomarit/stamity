@@ -3504,7 +3504,8 @@ fail-closed tail, exits 2 naming the rule and the record or the variable it read
 any in-progress record reads `Mode: unattended`; else, with no in-progress record reading `Mode: attended`, while the
 variable is set, except when no run is in progress, a closed record reading `Mode: unattended` names the current
 branch as its `Branch:`, and the run-ended marker `.stamity/run-ended.json` names that record's run: `stamity run end`
-writes it, `{ "run": "<run-id>" }`, at the run's final exit and `stamity run start` deletes it, so a later session
+writes it, `{ "run": "<run-id>" }`, at the run's final exit (`--chain-next`, a chain file the next one follows, writes
+none and removes one there, REQ-FLOW-096) and `stamity run start` deletes it, so a later session
 on that branch has none before its own record opens (Claude Code's final round after that run handed off; on any
 other branch, or with no marker naming the run, the variable decides; pr/17). The gate is `UNATTENDED_ASK_GATE_FILE`
 and its reasons in `src/hooks/scripts.ts`, wired after every planned PreToolUse row (`src/adapters/claude.ts:924-930`).
@@ -3647,10 +3648,14 @@ one unattended invocation runs the chain on one branch, each file its own run an
 `BLOCKED_*`, with one draft pull request and one merged morning list; otherwise the blocker `chain-order` refuses. A
 `reads` path that only commits after the chain's run base moved is exempt from the freshness guard; a path a commit
 between the stamp and that base moved stays stale (`content/skills/st-unattended/references/chains.md:12-18`;
-`freshness`, `src/runs/freshness.ts`).
+`freshness`, `src/runs/freshness.ts`). Every file's `stamity run end` but the chain's last one (the last file, or the
+first to stop at a `BLOCKED_*`) passes `--chain-next`, which writes no run-ended marker and removes one already there,
+so the ask gate (REQ-FLOW-090) puts no question through between two chain files; only that last `run end` opens the
+final question round (`content/skills/st-unattended/references/chains.md:20-22`; `src/cli/commands/run.ts`, pr/25).
 
 - **Proof:** `test/corpus/skills/unattended.test.ts` ("st-unattended — the other touchpoints and chains"),
-  `test/corpus/commands/work.test.ts`, `test/cli/commands/plan.test.ts`.
+  `test/corpus/commands/work.test.ts`, `test/cli/commands/plan.test.ts`, `test/cli/commands/runEnd.test.ts` (the gate
+  refuses a question between two chain files).
 
 ### REQ-FLOW-097 — The other touchpoints, unattended
 
@@ -4793,8 +4798,8 @@ above.
   current branch, with the run-ended marker naming its run, THEN 0; GIVEN the same record and branch with no marker, or
   one naming another run, THEN 2; GIVEN another branch THEN the variable decides. *(test:
   `test/hooks/unattendedAskGate.test.ts`)*
-- GIVEN `run end` at any exit THEN the marker names its run; GIVEN `run start` THEN it is gone; neither under
-  `--dry-run`.
+- GIVEN `run end` at any exit THEN the marker names its run, `--chain-next` aside; GIVEN `run start` THEN it is gone;
+  neither under `--dry-run`.
   *(test: `test/cli/commands/runEnd.test.ts`, `test/cli/commands/run.test.ts`)*
 - GIVEN Claude Code's settings THEN the ask gate sits on `AskUserQuestion` after every planned PreToolUse row, with no
   fail-closed tail. *(test: `test/adapters/claude.test.ts`)*
@@ -4846,6 +4851,9 @@ above.
 - GIVEN a chain whose second head does not name the first THEN `chain-order`; GIVEN a `reads` path moved only after the
   run base THEN no `stale`; GIVEN one moved between the stamp and the base THEN `stale`. *(test:
   `test/cli/commands/plan.test.ts`, `test/runs/freshness.test.ts`)*
+- GIVEN `run end --chain-next` on a closed unattended record, a stale marker naming its run there THEN no marker is left
+  and the ask gate refuses a question on that branch; GIVEN the same `run end` without `--chain-next` THEN the marker
+  names the run and the gate allows it. *(test: `test/cli/commands/runEnd.test.ts`)*
 
 **REQ-FLOW-097** (added 2026-10-16)
 

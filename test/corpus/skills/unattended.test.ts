@@ -598,4 +598,13 @@ describe("st-unattended — the other touchpoints and chains (REQ-FLOW-096, REQ-
     expect(text).toContain("never the plans' stamp");
     expect(text).toContain("a path a commit between the stamp and the base moved stays stale");
   });
+
+  // pr/25: the ask gate's final round opens on run end's marker, so only the chain's last file may leave one.
+  it("ends every chain file but the last with run end --chain-next", async () => {
+    const text = await flat(CHAINS_REL_PATH);
+    expect(text).toContain(
+      "Every file's `stamity run end` but the chain's last one, the last file or the first to stop at a `BLOCKED_*`, adds `--chain-next`",
+    );
+    expect(text).toContain("so the ask gate lets no question through before the next file's `stamity run start`");
+  });
 });

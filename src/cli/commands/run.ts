@@ -112,7 +112,10 @@ import { readPushed, scanChange } from "./gate.ts";
  * **The run-ended marker** (pr/17): every `end` exit past the record's read,
  * `--dry-run` aside, writes `{ "run": "<run-id>" }` to `.stamity/run-ended.json`,
  * and `start` deletes it first; the ask gate allows the final question round
- * only on the branch of the closed run it names.
+ * only on the branch of the closed run it names. `end --chain-next`, a chain
+ * file the next one follows (pr/25), writes none and removes one already there,
+ * so no question passes between two chain files; one it cannot remove makes the
+ * exit 1, its `notDone` line naming it.
  */
 
 const START = "start";
@@ -126,6 +129,7 @@ const OPTION_FLAGS: Readonly<Record<string, string>> = {
   title: "--title",
   signoff: "--signoff",
   refused: "--refused",
+  chainNext: "--chain-next",
 };
 
 /** The options each subcommand takes beyond `--run`; any other one given is a usage error. */
@@ -133,7 +137,7 @@ const SUBCOMMAND_OPTIONS: Readonly<Record<string, readonly string[]>> = {
   [START]: [],
   [CHECKPOINT]: ["paths", "pr", "title", "signoff"],
   // No --pr: the pull request is not optional at the end.
-  [END]: ["paths", "title", "refused", "signoff"],
+  [END]: ["paths", "title", "refused", "signoff", "chainNext"],
 };
 
 /** The origin pin `start` writes in the run folder (review/209). */
@@ -209,6 +213,7 @@ export const runCommand: CommandModule = {
       .option("--title <title>", "checkpoint and end: the draft pull request's title (end needs it)")
       .option("--signoff", "checkpoint and end: add the Signed-off-by line to the commit")
       .option("--refused", "end: title the draft pull request Refused: <title>, for a run that refused to start")
+      .option("--chain-next", "end: a chain file another file follows; write no run-ended marker, and remove a stale one")
       // Usage errors, so exit 2 before the action and before git runs.
       .hook("preAction", (command) => {
         const subcommand = String(command.processedArgs[0]);
@@ -607,11 +612,21 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
 
   const result: Checkpoint = { branch: null, base, committed: null, pushed: false, held: [], scan: { hits: [], unscanned: [] }, pr: null, notDone: [] };
   const lines: string[] = [`run: ${run} (${unattended ? "unattended" : "attended"})`, `base: ${base}`];
-  const finish = async (ok: boolean, extra: Record<string, unknown> = {}): Promise<CommandResult> => {
+  const finish = async (passed: boolean, extra: Record<string, unknown> = {}): Promise<CommandResult> => {
+    let ok = passed;
     // pr/17: `end` is the run's final exit, whichever way it goes; the marker names the run the ask gate's final round is for.
+    // pr/25: a chain file the next one follows is not the final exit, so it leaves no marker for a question to pass on.
     if (verb === END && !ctx.dryRun) {
-      const marked = await markRunEnded(ctx, cwd, run);
-      if (marked !== null) result.notDone.push(marked);
+      if (opts["chainNext"] === true) {
+        const left = dropRunEndedMarker(cwd);
+        if (left !== null) {
+          result.notDone.push(`run-ended marker not removed: ${RUN_ENDED_MARKER_FILE} (${left}), so a question before the next chain file's start could pass`);
+          ok = false;
+        }
+      } else {
+        const marked = await markRunEnded(ctx, cwd, run);
+        if (marked !== null) result.notDone.push(marked);
+      }
     }
     const notDone = result.notDone.map((entry) => sanitizeLabel(entry));
     result.notDone = notDone;
@@ -1303,17 +1318,25 @@ async function markRunEnded(ctx: CliContext, cwd: string, run: string): Promise<
  * removed fails the verb, since it would keep the earlier run's final round open.
  */
 function removeRunEndedMarker(cwd: string): void {
+  const left = dropRunEndedMarker(cwd);
+  if (left === null) return;
+  throw new CliFailure({
+    code: "FAILURE",
+    message: `run start could not remove ${RUN_ENDED_MARKER_FILE}`,
+    why: sanitizeLabel(left),
+    next: `remove ${RUN_ENDED_MARKER_FILE} by hand, then run it again`,
+  });
+}
+
+/** Removes the run-ended marker, the link itself where one is there; `null` once gone, else why it is still there. */
+function dropRunEndedMarker(cwd: string): string | null {
   const marker = join(cwd, RUN_ENDED_MARKER_FILE);
-  if (!exists(marker)) return;
+  if (!exists(marker)) return null;
   try {
     unlinkSync(marker);
+    return null;
   } catch (cause) {
-    throw new CliFailure({
-      code: "FAILURE",
-      message: `run start could not remove ${RUN_ENDED_MARKER_FILE}`,
-      why: cause instanceof Error ? sanitizeLabel(cause.message) : "the remove failed",
-      next: `remove ${RUN_ENDED_MARKER_FILE} by hand, then run it again`,
-    });
+    return cause instanceof Error ? cause.message : "the remove failed";
   }
 }
 

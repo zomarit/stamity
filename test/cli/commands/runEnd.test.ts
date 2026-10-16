@@ -1,10 +1,11 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { dirname, join, relative } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runCommand } from "../../../src/cli/commands/run.ts";
 import type * as GitWriteModule from "../../../src/cli/engine/gitWrite.ts";
+import { buildUnattendedAskGate, UNATTENDED_ASK_GATE_FILE } from "../../../src/hooks/scripts.ts";
 import { RUN_ENDED_MARKER_FILE } from "../../../src/mcp/env.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { NO_GIT_CONFIG } from "../../support/repoFixtures.ts";
@@ -380,6 +381,47 @@ describe("stamity run end", () => {
     expect(await readFile(join(refused.repo, RUN_ENDED_MARKER_FILE), "utf8")).toBe(marker);
     expect(planned.code).toBe(0);
     expect(existsSync(join(dry.repo, RUN_ENDED_MARKER_FILE))).toBe(false);
+  });
+
+  // pr/25: between two chain files the session is still unattended with nobody to answer, so file N's end leaves no
+  // marker for the gate's final-round exception to read, and removes one left behind that names this run.
+  it("leaves no run-ended marker under --chain-next, so the ask gate refuses a question between two chain files", async () => {
+    const closed = (base: string): string =>
+      `# Run ${RUN}\n\nStatus: closed 2026-10-16\nMode: unattended\nBranch: ${RUN_BRANCH}\nBase: ${base}\n`;
+    const stale = `${JSON.stringify({ run: RUN })}\n`;
+    const chained = await seed("unattended");
+    const last = await seed("unattended");
+    const dry = await seed("unattended");
+    await Promise.all(
+      [chained, last, dry].flatMap(({ repo, base }) => [put(repo, `${RUN_DIR}/record.md`, closed(base)), put(repo, RUN_ENDED_MARKER_FILE, stale)]),
+    );
+    await rm(join(last.repo, RUN_ENDED_MARKER_FILE));
+
+    const next = await run(chained.repo, [...END("feat: x"), "--chain-next"]);
+    const final = await run(last.repo, END("feat: x"));
+    const planned = await run(dry.repo, [...END("feat: x"), "--chain-next", "--dry-run"]);
+    const misplaced = await run(chained.repo, ["checkpoint", "--run", RUN, "--chain-next", "--json"]);
+
+    /** The ask gate as Claude Code runs it in that checkout, the variable set: its exit code. */
+    const ask = async (repo: string): Promise<number | null> => {
+      const gate = join(repo, ".stamity", "generated", "hooks", "claude", UNATTENDED_ASK_GATE_FILE);
+      await put(repo, relative(repo, gate), buildUnattendedAskGate({ layout: "generated" }));
+      const input = JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "AskUserQuestion", tool_input: { questions: [] } });
+      const env: NodeJS.ProcessEnv = { ...process.env, STAMITY_UNATTENDED: "1" };
+      delete env["STAMITY_REPO_ROOT"];
+      return spawnSync(process.execPath, [gate], { input, encoding: "utf8", env, cwd: repo }).status;
+    };
+
+    expect(next.code).toBe(0);
+    expect(existsSync(join(chained.repo, RUN_ENDED_MARKER_FILE))).toBe(false);
+    expect(await ask(chained.repo)).toBe(2);
+    // One fact away: the chain's last file ends without the flag, so its final round may ask.
+    expect(final.code).toBe(0);
+    expect(await readFile(join(last.repo, RUN_ENDED_MARKER_FILE), "utf8")).toBe(stale);
+    expect(await ask(last.repo)).toBe(0);
+    expect(planned.code).toBe(0);
+    expect(await readFile(join(dry.repo, RUN_ENDED_MARKER_FILE), "utf8")).toBe(stale);
+    expect(misplaced.code).toBe(2);
   });
 
   it("refuses as branch mismatch off the record's Branch:, pushing nothing and opening no pull request", async () => {
