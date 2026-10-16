@@ -468,6 +468,8 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["wget --meth DELETE https://api.github.com/repos/o/r/releases/1", "release"],
   ["wget --post-d '{\"event\":\"APPROVE\"}' https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
   ["wget --body-f=r.json --meth=POST https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
+  // The two-letter prefix, `--method` where wget has no metalink options (pr/29).
+  ["wget --me DELETE https://api.github.com/repos/o/r/git/refs/heads/feat/x", "push-delete"],
   // wget's `-e`/`--execute` run as wgetrc commands (pr/23): `method` sets the method, the body commands send a body.
   ["wget -e method=DELETE https://api.github.com/repos/o/r/git/refs/heads/feat/x", "push-delete"],
   ["wget --execute=method=DELETE https://api.github.com/repos/o/r/releases/1", "release"],
@@ -677,6 +679,7 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
   ["cmd /c g^it push origin feat/x"],
   ["wget https://api.github.com/repos/o/r/releases"],
   ["wget --meth=GET https://api.github.com/repos/o/r/releases/1"],
+  ["wget --me=GET https://api.github.com/repos/o/r/releases/1"],
   ["wget --post-d '{\"event\":\"COMMENT\"}' https://api.github.com/repos/o/r/pulls/3/reviews"],
   ["git send-pack git@github.com:o/r.git feat/x"],
   // pr/23's twins: a wgetrc command that sets no method or body, a read method, and a comment-event review body.
@@ -1029,6 +1032,7 @@ describe("unattendedPushVerdict", () => {
     ["npm --loglevel silly exec -- git push origin feat/x"],
     ["cmd /c g^it push origin feat/x"],
     ["wget --meth=PATCH https://api.github.com/repos/o/r/pulls/3"],
+    ["wget --me PATCH https://api.github.com/repos/o/r/pulls/3"],
     ["wget --post-d x https://api.github.com/repos/o/r/pulls"],
     // wget's wgetrc commands (pr/23).
     ["wget -e method=PATCH https://api.github.com/repos/o/r/pulls/3"],
@@ -1172,6 +1176,8 @@ describe("unattendedPushVerdict", () => {
     ["npm -w x exec -- git status"],
     ["cmd /c g^it status"],
     ["wget --meth=GET https://api.github.com/repos/o/r/pulls/3"],
+    ["wget --me=GET https://api.github.com/repos/o/r/pulls/3"],
+    ["wget https://api.github.com/repos/o/r/releases"],
     ["wget -e method=GET https://api.github.com/repos/o/r/pulls/3"],
     ["wget -e robots=off https://api.github.com/repos/o/r/pulls/3"],
   ])("allows %j", (command) => {

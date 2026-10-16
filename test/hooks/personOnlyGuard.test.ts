@@ -145,6 +145,8 @@ const MATRIX: readonly (readonly [command: string, rule: string | null])[] = [
   ["cmd /c g^it status", null],
   ["wget --meth=DELETE https://api.github.com/repos/o/r/releases/1", "release"],
   ["wget https://api.github.com/repos/o/r/releases", null],
+  ["wget --me DELETE https://api.github.com/repos/o/r/git/refs/heads/feat/x", "push-delete"],
+  ["wget --me=GET https://api.github.com/repos/o/r/releases/1", null],
   // wget's `-e` wgetrc command (pr/23).
   ["wget -e method=DELETE https://api.github.com/repos/o/r/releases/1", "release"],
   ["wget -e robots=off https://api.github.com/repos/o/r/releases", null],
@@ -700,6 +702,7 @@ describe("the unattended push rule, the mode read from the run records", () => {
       `setopt ALL_EXPORT; print -v GIT_EXEC_PATH /tmp/bin; ${RUN_END}`, "shopt -so allexport; select GIT_PAGER in /tmp/p; do break; done; npm test",
       // A runner behind a package manager's options (pr/3), the interpreter's caret (pr/10), a shortened wget method (pr/11).
       "npm -w x exec -- git push origin feat/x", "cmd /c g^it push origin feat/x", "wget --meth=PATCH https://api.github.com/repos/o/r/pulls/3",
+      "wget --me PATCH https://api.github.com/repos/o/r/pulls/3",
       // wget's `-e` wgetrc command (pr/23).
       "wget -e method=PATCH https://api.github.com/repos/o/r/pulls/3"];
     for (const command of unattended) {
@@ -731,6 +734,7 @@ describe("the unattended push rule, the mode read from the run records", () => {
       `read OTHER_NAME <<< /tmp/bin; ${RUN_END}`, `echo "$GIT_EXEC_PATH"; ${RUN_END}`, `set +a; read OTHER_NAME <<< "$GIT_EXEC_PATH"; ${RUN_END}`,
       `set -e; echo "$GIT_EXEC_PATH"; ${RUN_END}`, 'for f in GIT_EXEC_PATH GIT_EDITOR; do grep -rn "$f" src; done; npm test',
       `printf '%s\\n' GIT_EXEC_PATH; ${RUN_END}`, "npm -w x exec -- git status", "cmd /c g^it status", "wget --meth=GET https://api.github.com/repos/o/r/pulls/3",
+      "wget --me=GET https://api.github.com/repos/o/r/pulls/3", "wget https://api.github.com/repos/o/r/releases",
       "wget -e method=GET https://api.github.com/repos/o/r/pulls/3"]) {
       expect(unattendedPushVerdict(command), command).toEqual({ deny: false });
       expect(decide("claude", guard, command).deny, command).toBe(false);

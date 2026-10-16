@@ -596,11 +596,13 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
    */
   function httpCall(raw: string[]): { write: boolean; method: string; paths: string[]; cmd: string[] } {
     const tool = raw[0] ?? "";
-    // wget reads a long option's unique prefix as the option (`--meth=DELETE`, `--post-d`, pr/11): one of three letters
-    // or more is expanded to the method, body or `--execute` option it begins, so a misread prefix only adds a write.
+    // wget reads a long option's unique prefix as the option (`--meth=DELETE`, `--post-d`, pr/11): one of two letters
+    // or more (`--me`, pr/29) is expanded to the method, body or `--execute` option it begins, so a misread prefix only
+    // adds a write. A two-letter prefix wget finds ambiguous (`--po`, `--bo`, `--ex`) is one it refuses, so reading it
+    // as the option over-reads a line that sends nothing into a denial.
     const expanded = raw.map((word) => {
       const name = word.split("=")[0] ?? "";
-      const full = tool === "wget" && /^--[a-z-]{3,}$/i.test(name)
+      const full = tool === "wget" && /^--[a-z-]{2,}$/i.test(name)
         ? ["--method", "--post-data", "--post-file", "--body-data", "--body-file", "--execute"].find((option) => option.startsWith(name.toLowerCase()))
         : undefined;
       return full === undefined ? word : full + word.slice(name.length);
@@ -1565,11 +1567,13 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
    */
   function httpCall(raw: string[]): { write: boolean; method: string; paths: string[]; cmd: string[] } {
     const tool = raw[0] ?? "";
-    // wget reads a long option's unique prefix as the option (`--meth=DELETE`, `--post-d`, pr/11): one of three letters
-    // or more is expanded to the method, body or `--execute` option it begins, so a misread prefix only adds a write.
+    // wget reads a long option's unique prefix as the option (`--meth=DELETE`, `--post-d`, pr/11): one of two letters
+    // or more (`--me`, pr/29) is expanded to the method, body or `--execute` option it begins, so a misread prefix only
+    // adds a write. A two-letter prefix wget finds ambiguous (`--po`, `--bo`, `--ex`) is one it refuses, so reading it
+    // as the option over-reads a line that sends nothing into a denial.
     const expanded = raw.map((word) => {
       const name = word.split("=")[0] ?? "";
-      const full = tool === "wget" && /^--[a-z-]{3,}$/i.test(name)
+      const full = tool === "wget" && /^--[a-z-]{2,}$/i.test(name)
         ? ["--method", "--post-data", "--post-file", "--body-data", "--body-file", "--execute"].find((option) => option.startsWith(name.toLowerCase()))
         : undefined;
       return full === undefined ? word : full + word.slice(name.length);
