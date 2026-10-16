@@ -55,14 +55,15 @@ whose record is closed, invoke `st-unattended` by name and follow its `## The mo
 alone does not stop: `--unattended`, `run-mode: unattended` or a chain's next file makes an unattended start instead.
 ```
 
-Governing text — `content/skills/st-unattended/SKILL.md`, "The declaration" (its first
-paragraph):
+Governing text — `content/skills/st-unattended/SKILL.md`, "The declaration" (its first five
+lines):
 
 ```text
-A run is unattended only by declaration: `--unattended` on the touchpoint, or `STAMITY_UNATTENDED` set to a value
-other than empty, `false` or `0` (`STAMITY_UNATTENDED=1` on a cloud environment, routine or automation). The flag
-wins over the variable, `--attended` beats the variable, and `--resume` is always attended. A client's cloud marker
-or `CI` in the environment means "cloud", never "unattended", and a record head with no `Mode:` line reads attended.
+A run is unattended only by declaration: `--unattended` on the touchpoint, or `STAMITY_UNATTENDED` set to a value other
+than empty, `false` or `0` (`STAMITY_UNATTENDED=1` on a cloud environment, routine or automation). The flag wins over
+the variable, `--attended` beats the variable, and `--resume` is always attended. A client's cloud marker or `CI` in the
+environment means "cloud", never "unattended". A record head with no `Mode:` line reads attended unless the variable is
+set; then it governs, as the shell guard, the ask gate and the run verbs read it, and a `Mode: attended` head wins.
 ```
 
 Scenario state — given to you as fact:

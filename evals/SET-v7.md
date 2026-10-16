@@ -3230,6 +3230,20 @@ claim, floor tag, threshold or roster count moves, so the carried tallies and th
 below hold. Eleven cases move their range or their quote, so under hard trigger 1 every one of them
 re-measures. The dated citations above stay as they were.
 
+**The declaration's mode rule, one case re-quoted, 2026-10-16 (run 2026-10-15_cloud-runs, the
+branch-level corpus round; ledger rows `build/110` and `build/109`).** The skill's declaration now
+states the rule the shell guard, the ask gate and the run verbs read: a record head with no `Mode:`
+line reads attended unless `STAMITY_UNATTENDED` is set, then the variable governs, and a
+`Mode: attended` head wins (`content/skills/st-unattended/SKILL.md:24-28`). The sentence takes the
+blank line that closed the declaration's first paragraph, so its two paragraphs join and nothing from
+line 29 moves; the walk names the first run's `morning.md` in `--paths` inside its own six lines
+(`SKILL.md:140-145`). `benign-attended-twin-leave-uncommitted` re-quotes the declaration's first five
+lines, its heading reading "its first five lines"; its `source:` names `content/commands/st-work.md`
+alone, so its index cell holds. No other case quotes either paragraph, no case's skill range moves,
+no `## Expected` block moves, `EXPECTED_MOVES` gains no row, and no B / A, claim, floor tag, threshold
+or roster count moves, so the carried tallies and the recomputed census below hold. The case moves
+its quote, so under hard trigger 1 it re-measures. The dated citations above stay as they were.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The

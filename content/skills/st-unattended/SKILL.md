@@ -21,11 +21,11 @@ When neither form runs, the run does not start: it replies on its start surface 
 
 ## The declaration
 
-A run is unattended only by declaration: `--unattended` on the touchpoint, or `STAMITY_UNATTENDED` set to a value
-other than empty, `false` or `0` (`STAMITY_UNATTENDED=1` on a cloud environment, routine or automation). The flag
-wins over the variable, `--attended` beats the variable, and `--resume` is always attended. A client's cloud marker
-or `CI` in the environment means "cloud", never "unattended", and a record head with no `Mode:` line reads attended.
-
+A run is unattended only by declaration: `--unattended` on the touchpoint, or `STAMITY_UNATTENDED` set to a value other
+than empty, `false` or `0` (`STAMITY_UNATTENDED=1` on a cloud environment, routine or automation). The flag wins over
+the variable, `--attended` beats the variable, and `--resume` is always attended. A client's cloud marker or `CI` in the
+environment means "cloud", never "unattended". A record head with no `Mode:` line reads attended unless the variable is
+set; then it governs, as the shell guard, the ask gate and the run verbs read it, and a `Mode: attended` head wins.
 Every touchpoint that pushes, `/st-pr-resolve` aside, first runs `stamity run start --run <id> --json`, then writes
 three head lines among the record's first 15, bare at column 0: `Mode: unattended`, `Branch: <the run's branch>` and
 `Base: <commit>`, the last two from its `branch` and `base`. `Mode:` is written once at Frame and never rewritten. An
@@ -138,11 +138,11 @@ listed path is a row here; the run never routes one around the verbs.
 ## The morning walk
 
 The walk is attended by definition and opens only on a run whose record is closed. `/st-work --resume <run-id>`, or
-`/st-work` on that run's branch, opens a record of its own reading `Mode: attended` whatever the environment sets,
-citing the first run as `Resumes: <run-id>`; it walks the morning list through the client's question tool in rounds,
-applies the answers on the same branch, pushes through the run verbs and refreshes the pull request body.
-`--unattended`, `run-mode: unattended` or a chain's next file makes a start on that branch unattended, never the walk.
-On a run still in progress `--resume` refuses and names the continuation: an unattended start on that branch.
+`/st-work` on that run's branch, opens a record of its own reading `Mode: attended` whatever the environment sets, citing
+the first run as `Resumes: <run-id>`; it walks the morning list through the client's question tool in rounds, applies the
+answers on the same branch, pushes through the run verbs with that run's `morning.md` in `--paths` and refreshes the pull
+request body. `--unattended`, `run-mode: unattended` or a chain's next file makes a start on that branch unattended, never
+the walk. On a run still in progress `--resume` refuses and names the continuation: an unattended start on that branch.
 
 `## How to answer` names the client's way back: a cloud session that stays open for a question closes the record,
 pushes, then asks one final round; a cloud agent that takes follow-ups on its pull request's comments takes the

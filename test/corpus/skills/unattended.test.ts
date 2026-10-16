@@ -224,7 +224,15 @@ describe("st-unattended — the declaration (REQ-FLOW-089)", () => {
     expect(text).toContain(
       "A client's cloud marker or `CI` in the environment means \"cloud\", never \"unattended\"",
     );
-    expect(text).toContain("a record head with no `Mode:` line reads attended");
+    // Amended 2026-10-16 (run 2026-10-15_cloud-runs, the branch-level corpus round, ledger row
+    // build/110; REQ-CTX-012, REQ-FLOW-089, sign-off 02:06Z): the shell guard, the ask gate and the run
+    // verbs read a head with no `Mode:` line as unattended while `STAMITY_UNATTENDED` is set, and a
+    // `Mode: attended` head wins over the variable, so the skill states that rule; the old sentence,
+    // attended with no exception, sent a run under the variable into an ask the gate refuses.
+    expect(text).toContain(
+      "A record head with no `Mode:` line reads attended unless the variable is set; then it governs, as the shell guard, the ask gate and the run verbs read it, and a `Mode: attended` head wins.",
+    );
+    expect(text).not.toMatch(/no `Mode:` line reads attended(?! unless the variable is set)/);
   });
 
   it("writes the three head lines and never rewrites Mode:", async () => {
@@ -399,6 +407,13 @@ describe("st-unattended — the morning list and the walk (REQ-FLOW-094, REQ-FLO
     );
     expect(text.indexOf("never the walk.")).toBeGreaterThan(
       text.indexOf("opens a record of its own reading `Mode: attended` whatever the environment sets"),
+    );
+    // Added 2026-10-16 (run 2026-10-15_cloud-runs, the branch-level corpus round, ledger row build/109;
+    // REQ-FLOW-095, sign-off 02:06Z): `run end` on the walk stages the walk's own run folder, the inbox
+    // and `--paths`, so the first run's answered `morning.md` reaches the branch beside the refreshed
+    // body only when the walk names it there.
+    expect(text).toContain(
+      "pushes through the run verbs with that run's `morning.md` in `--paths` and refreshes the pull request body.",
     );
     // Each client's way back is named by what its cloud does, not by its name (invariant 17).
     expect(text).toContain("a cloud session that stays open for a question closes the record, pushes, then asks one final round");
