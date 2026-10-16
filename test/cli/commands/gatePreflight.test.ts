@@ -242,6 +242,24 @@ describe("stamity gate preflight and scan --text", () => {
       }
     });
 
+    it("passes where the run's environment sets GIT_CONFIG_* variables that keep gh's helper alone (build/73)", async () => {
+      const repo = await seedRepo();
+      protectedRepo();
+      const global = getRoot().path("global-gitconfig");
+      await writeFile(global, "[core]\n\tautocrlf = false\n");
+
+      const { code, doc } = await gate(repo, PREFLIGHT, {
+        GIT_CONFIG_NOSYSTEM: "1",
+        GIT_CONFIG_GLOBAL: global,
+        GIT_CONFIG_COUNT: "1",
+        GIT_CONFIG_KEY_0: "core.quotePath",
+        GIT_CONFIG_VALUE_0: "false",
+      });
+
+      expect(doc["refusals"]).toEqual([]);
+      expect(code).toBe(0);
+    });
+
     it.each([
       ["a second push URL over ssh", (repo: string) => {
         git(repo, ["remote", "set-url", "--add", "--push", "origin", "https://github.com/o/r.git"]);
@@ -340,13 +358,32 @@ describe("stamity gate preflight and scan --text", () => {
       expect((await facts(repo)).pushUrls.map((entry) => entry.authorizationHeader)).toEqual([true, false]);
     });
 
-    it("places nothing where a helper's scope cannot be placed, or a GIT_CONFIG_* variable adds config the read cannot see", async () => {
+    it("places nothing where a helper's scope cannot be placed", async () => {
       const wildcard = await seedRepo();
       git(wildcard, ["config", "credential.https://*.github.com.helper", OTHER_HELPER]);
-      const injected = await seedRepo();
 
       expect((await facts(wildcard)).pushUrls[0]?.helpers).toBeNull();
-      expect((await facts(injected, { GIT_CONFIG_COUNT: "1" })).pushUrls[0]).toMatchObject({ helpers: null, authorizationHeader: true });
+    });
+
+    it("reads config the push's environment supplies through GIT_CONFIG_* variables like any other config (build/73)", async () => {
+      const repo = await seedRepo();
+      const global = getRoot().path("global-header");
+      await writeFile(global, `[http "https://github.com/"]\n\textraheader = ${HEADER}\n`);
+
+      const pairs = await facts(repo, { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "credential.helper", GIT_CONFIG_VALUE_0: OTHER_HELPER });
+      const file = await facts(repo, { GIT_CONFIG_GLOBAL: global });
+      const none = await facts(repo, { GIT_CONFIG_COUNT: "0" });
+
+      expect(pairs.pushUrls).toEqual([{ url: "https://github.com/o/r.git", helpers: [GH_HELPER, OTHER_HELPER], authorizationHeader: false }]);
+      expect(file.pushUrls).toEqual([{ url: "https://github.com/o/r.git", helpers: [GH_HELPER], authorizationHeader: true }]);
+      expect(none.pushUrls).toEqual([{ url: "https://github.com/o/r.git", helpers: [GH_HELPER], authorizationHeader: false }]);
+    });
+
+    it("places no helper where git cannot read the push's configuration", async () => {
+      const repo = await seedRepo();
+
+      // A count with no key names a pair git refuses, so the read fails.
+      expect((await facts(repo, { GIT_CONFIG_COUNT: "1" })).pushUrls[0]?.helpers).toBeNull();
     });
 
     it("gives no fetch URL and no push URL where origin is absent", async () => {

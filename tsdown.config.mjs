@@ -27,8 +27,9 @@ import { defineConfig } from "tsdown";
  * The bundled logic half — every JavaScript and declaration file tsdown emits
  * into dist/, entries and shared chunks together.
  *
- * 2 MiB, and held there. Not derived from the current build: it is the ceiling
- * the distribution design fixed for the logic bundle. What follows is the
+ * 2 MiB, and held there until the raise recorded at the end of this comment.
+ * Not derived from the current build: it is the ceiling the distribution
+ * design fixed for the logic bundle. What follows is the
  * measurement it is held against, taken on the build that stripped JSDoc from
  * the output (`outputOptions` below).
  *
@@ -78,8 +79,14 @@ import { defineConfig } from "tsdown";
  * `outputOptions.comments.jsdoc === false`, and that assertion goes red on both
  * regressions. This ceiling catches something else: bytes ARRIVING, a
  * dependency or a fixture tree bundled in.
+ *
+ * Raised from 2 MiB to 2.25 MiB (2,359,296 bytes), with its own reason: plan
+ * 021's unattended-run modules, wired by u16, about 115 KB measured. Those
+ * modules are the feature, not something bundled in by accident, and the 2 MiB
+ * build they crossed printed 2,195,070 bytes. The pre-strip figure above stays
+ * under this ceiling too, so the JSDoc test is still the strip's guard.
  */
-export const LOGIC_BUDGET_BYTES = 2 * 1024 * 1024;
+export const LOGIC_BUDGET_BYTES = 2.25 * 1024 * 1024;
 
 /**
  * The staged corpus half — `dist/content` plus `dist/packs`, plus `dist/fork` in

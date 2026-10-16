@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { closeSync, constants, existsSync, fstatSync, lstatSync, openSync, readFileSync, readSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -39,7 +40,8 @@ import { resolveRepo } from "../../runs/pullRequest.ts";
 import { RECORD_FILE, REPORT_READ_MAX_BYTES, runRelPath } from "../../runs/layout.ts";
 import { findCardRun } from "../../runs/resumeCard.ts";
 import { findPackageRoot } from "../../shared/paths.ts";
-import { fileSystemProbe, isNodeModulesBin, resolveProgramOnPath, searchPathOf } from "../../shared/programPath.ts";
+import { bareShapeRefusal, gitDiscoveryMeetsBareShape } from "../../merge/safeWrite.ts";
+import { fileSystemProbe, gitProgramFor, isNodeModulesBin, programNotFound, resolveProgramOnPath, searchPathOf } from "../../shared/programPath.ts";
 import type { SetupManifest } from "../../types/manifest.ts";
 import { REVIEW_GATE_STATE_FILE } from "../../types/markers.ts";
 import { ghApi } from "../engine/ghRunner.ts";
@@ -1584,11 +1586,38 @@ interface PushConfigEntry {
 }
 
 /**
- * The variables that give the push config this read cannot see: the read
- * runner drops every `GIT_*` variable, the write runner keeps these.
- * `GIT_CONFIG_NOSYSTEM` is not one: it only takes entries away from the push.
+ * The variables through which the push's environment hands git configuration:
+ * `-c` pairs, the `GIT_CONFIG_COUNT` key and value pairs, the global and
+ * system file paths, and `GIT_CONFIG_NOSYSTEM`.
  */
-const CONFIG_VARIABLES = /^GIT_CONFIG_(?:PARAMETERS|COUNT|GLOBAL|SYSTEM)$/i;
+const CONFIG_VARIABLES = /^GIT_CONFIG_(?:PARAMETERS|COUNT|KEY_[0-9]+|VALUE_[0-9]+|GLOBAL|SYSTEM|NOSYSTEM)$/i;
+
+/**
+ * The config read runs the same hardened git as {@link gitCheckRunner}, with
+ * every `GIT_*` variable dropped and `GIT_OPTIONAL_LOCKS=0`. The difference is
+ * that it puts back the {@link CONFIG_VARIABLES} the push's environment `env`
+ * sets, so git reads the configuration the push would apply, whatever
+ * variables supply it.
+ */
+function pushConfigRunner(env: Readonly<Record<string, string | undefined>>): GitRunner {
+  return (args, cwd) => {
+    if (gitDiscoveryMeetsBareShape(cwd)) {
+      throw Object.assign(new Error(bareShapeRefusal(cwd)), { status: 128, keptFromGit: true });
+    }
+    const childEnv: NodeJS.ProcessEnv = {};
+    for (const [key, value] of Object.entries(process.env)) {
+      if (!/^GIT_/i.test(key)) childEnv[key] = value;
+    }
+    for (const [key, value] of Object.entries(env)) {
+      if (CONFIG_VARIABLES.test(key) && value !== undefined) childEnv[key] = value;
+    }
+    childEnv["GIT_OPTIONAL_LOCKS"] = "0";
+    const pinned = ["-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", ...args];
+    const git = gitProgramFor(cwd, childEnv);
+    if (git === null) throw programNotFound("git", "spawnSync", pinned);
+    return execFileSync(git, pinned, { cwd, env: childEnv, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 5_000, windowsHide: true });
+  };
+}
 
 /** Every helper and extra-header entry git's config holds, or `null` when the read fails. */
 function readPushConfig(runner: GitRunner, cwd: string): PushConfigEntry[] | null {
@@ -1668,7 +1697,7 @@ const AUTHORIZATION_HEADER = /^\s*authorization\s*:/i;
  * cannot be placed counts, and so does one git's specificity rule would drop.
  */
 function pushUrlFacts(url: string, config: readonly PushConfigEntry[] | null): PushUrlFacts {
-  // Config this read could not see: nothing about the URL is proven, the header included.
+  // A config read that failed proves nothing about the URL, the header included.
   if (config === null) return { url, helpers: null, authorizationHeader: true };
   const target = urlParts(url);
   let helpers: string[] | null = [];
@@ -1691,8 +1720,9 @@ function pushUrlFacts(url: string, config: readonly PushConfigEntry[] | null): P
  * How `git push origin` pushes from `cwd`, as raw facts for
  * `../../runs/preflight.ts` to decide on, read through the hardened read
  * runner: origin's fetch URL, and every push URL with its helper list and
- * Authorization-header fact. A config `env` adds through a `GIT_CONFIG_*`
- * variable is invisible to that runner, so with one set nothing is proven.
+ * Authorization-header fact. Git's configuration is read through git in the
+ * push's environment ({@link pushConfigRunner}), so config that `env` supplies
+ * through a `GIT_CONFIG_*` variable is read like any other config.
  */
 export function readPushIdentity(cwd: string, env: Readonly<Record<string, string | undefined>>): PreflightDeps["pushIdentity"] {
   const runner = gitCheckRunner();
@@ -1706,8 +1736,7 @@ export function readPushIdentity(cwd: string, env: Readonly<Record<string, strin
   };
   const fetchUrl = lines(["remote", "get-url", "origin"])?.[0] ?? null;
   const pushed = lines(["remote", "get-url", "--push", "--all", "origin"]) ?? [];
-  const injected = Object.entries(env).some(([name, value]) => CONFIG_VARIABLES.test(name) && value !== undefined && value !== "");
-  const config = injected ? null : readPushConfig(runner, cwd);
+  const config = readPushConfig(pushConfigRunner(env), cwd);
   return { fetchUrl, pushUrls: pushed.map((url) => pushUrlFacts(url, config)) };
 }
 
