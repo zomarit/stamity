@@ -122,7 +122,9 @@ brought it to, merged once by its unit `u23-spec-merge` before the run's whole-b
 text was first read at the integration head `4daeb214`, or at `bc12cfc3` where the merge's first fix round, on the same
 date, re-pointed or added a citation; the run's last citation pass re-read each one at `445ebd23`, and the whole-branch
 page round re-read them on `aa7a3e5b` with its own edits to `SECURITY.md`, `evals/SET-v7.md` and the unattended skill,
-re-pointing each one whose text had moved; every one reads there, a pin named beside a citation included. Two units
+re-pointing each one whose text had moved; the run's final derived pass re-pointed each one a later commit moved,
+mapped through git's diff from the commit it was read at, and every one reads at `54cfa4f7`, a pin named beside a
+citation included. Two units
 were not on `4daeb214`: `u19-run-end` (`stamity run end`) and
 `u21-security-page` (`SECURITY.md`'s cloud section); the fix round cites both at `bc12cfc3`. REQ-FLOW-105 to
 REQ-FLOW-119 are held for plan 021's second file. The text dated 2026-10-16 is unreleased at this merge; the plan cuts
@@ -3738,7 +3740,7 @@ Given any session, When the main thread runs a force push, a push of a tag or of
 by a refspec-less push or `HEAD` while on it), a remote branch deletion, a merge, `gh pr ready`, `gh release`,
 `npm publish`, or a `gh secret`, `gh variable`, protection or ruleset call, Then Claude Code's `permissions.deny` and
 shell guard, Cursor's fail-closed `beforeShellExecution`, and Copilot's and Codex's `preToolUse` checks refuse it
-(`PERSON_ONLY_RULES`, `CLAUDE_DENY_ROWS` and `personOnlyVerdict`, `src/hooks/personOnly.ts:63`, `:129`, `:205`;
+(`PERSON_ONLY_RULES`, `CLAUDE_DENY_ROWS` and `personOnlyVerdict`, `src/hooks/personOnly.ts:63`, `:132`, `:220`;
 `SHELL_GUARD_MATCHERS`, `src/emit/hooksInfra.ts:156`). Unattended, a change to CI, hook or guard configuration
 (`.stamity/generated/`, the manifest), the class file, CODEOWNERS, the charter or the rule and instruction files is held
 off the pushed tree as an inert patch, listed (`PERSON_ONLY_PATHS` and `heldPaths`, `src/change/personOnlyPaths.ts:26`,
@@ -3775,7 +3777,7 @@ dependency is a morning-list row (`SKILL.md:118-119`).
 ### REQ-FLOW-104 — The cloud's accepted risks are named
 
 Added 2026-10-16 (plan 021 file 1, unit `u21-security-page`; not on this merge's base, it is cited from `bc12cfc3`
-by the merge's first fix round and re-read after the whole-branch page round: the section is `SECURITY.md:379-525`, under
+by the merge's first fix round and re-read after the whole-branch page round: the section is `SECURITY.md:379-549`, under
 `## What it does not defend` (`:284`), the settings row `:98`, the git-hardening row `:96` and the third network
 exception `:152-173`).
 
@@ -3808,13 +3810,13 @@ named network exceptions, and the run verbs on the git-hardening row.
 - **As built, where the delta differed:** the delta named PowerShell's command wrappers, gh's alias for the
   create-and-push form, a multi-root workspace file's settings and an editor tasks file's folder-open task as uncovered
   by the unattended rules and not held. The guard rounds after it closed each: the page states the wrapped lines read
-  and refused, the alias refused and those files held (`SECURITY.md:500-509`, `:523-525`), the encoded command and the
-  `iex` pipe staying the gaps the unattended rules do not cover (`:518-521`). The page's place-reader paragraph
-  (`:511-516`) and its residual for programs the repository's configuration names (`:426-444`) are not restated here; a
+  and refused, the alias refused and those files held (`SECURITY.md:524-533`, `:547-549`), the encoded command and the
+  `iex` pipe staying the gaps the unattended rules do not cover (`:542-545`). The page's place-reader paragraph
+  (`:535-540`) and its residual for programs the repository's configuration names (`:429-451`) are not restated here; a
   later page round settles them. The whole-branch round added three residuals in plain words: the GitHub MCP server
   on the clients that take no per-tool deny, the origin pin rewritten together with git's configuration, and the
-  working directory Claude Code keeps across shell calls, attended only (`SECURITY.md:400-406`, `:456-461`,
-  `:407-413`).
+  working directory Claude Code keeps across shell calls, attended only (`SECURITY.md:400-409`, `:471-476`,
+  `:410-416`).
 - **Proof:** `test/docsPages.test.ts` ("cloud and unattended runs (REQ-FLOW-104)": the section's place, every risk
   and gap named above, the retired bullet gone, the control table's pointers, the settings row and the network
   exception); `judgment: reviewer` for the wording around them.
@@ -3828,18 +3830,18 @@ in-progress record reads `Mode: attended` (one with no `Mode:` line included; `u
 `src/hooks/scripts.ts:3656-3684`), When the main thread runs a raw `git push`, `gh pr create`, `gh pr edit`, or a REST
 write on `pulls` or `pulls/<n>`, `contents/`, `git/` refs or objects, or `merges`, Then the shell guard refuses it on every client,
 naming `stamity run checkpoint` and `run end` as the push path; replies on `pulls/<n>/comments` and
-`issues/<n>/comments` pass (`unattendedPushVerdict`, `src/hooks/personOnly.ts:1075`;
+`issues/<n>/comments` pass (`unattendedPushVerdict`, `src/hooks/personOnly.ts:1114`;
 `content/skills/st-unattended/SKILL.md:88-91`). An attended session keeps its own pushes. A run that rewrites its own
 record head escapes this rule, a residual `SECURITY.md` names (REQ-FLOW-104).
 
 - **As built, where the delta differed:** the rule refuses more than the delta named, so the run verbs' push stays on
   the repository the run started on. While the run is unattended it also refuses `gh pr close` and `gh pr reopen`, a
   `git remote` write and a `git config` write of a `remote.*` key or section, and a git call on a line that sets one of
-  git's program-valued variables (`src/hooks/personOnly.ts:1636-1642`, `:1658`; the variables at `:1550-1555`). A
-  `git config` write of a `url.*` key is refused beside a `remote.*` one (`writesRemote`, `:1606` and `:1646` read at
-  `9e07bc9e`); the run verbs' origin pin is the second check on the push it would move (REQ-FLOW-092's "As built"
+  git's program-valued variables (`src/hooks/personOnly.ts:1706-1712`, `:1729`; the variables at `:1599-1622`). A
+  `git config` write of a `url.*` key is refused beside a `remote.*` one (`writesRemote`, `:1671` and `:1712`); the
+  run verbs' origin pin is the second check on the push it would move (REQ-FLOW-092's "As built"
   line). On Claude Code, `permissions.deny` rows also refuse the GitHub MCP server's merge and branch-write
-  tools by name (`CLAUDE_DENY_ROWS`, `:179-183`); the other clients take no per-tool deny, a residual `SECURITY.md`
+  tools by name (`CLAUDE_DENY_ROWS`, `:182-186`); the other clients take no per-tool deny, a residual `SECURITY.md`
   names.
 - **Proof:** `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`,
   `test/corpus/commands/feedbackPair.test.ts` ("pr-resolve pushes only through the run verbs"),
