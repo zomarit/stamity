@@ -2148,6 +2148,101 @@ describe("SECURITY.md", () => {
     expect(row).toMatch(/full lists and the record's status/);
   });
 
+  // ADDED 2026-10-16 (plan 021 file 1, unit u21-security-page, REQ-FLOW-104): the cloud and
+  // unattended runs land with controls the table names at the symbols that run them, and with
+  // accepted risks the page names in the words the requirement uses. The old "Runs nobody
+  // watches" bullet said nothing stopped such a run from pushing to `main`; with the pre-flight,
+  // the shell guard and the run verbs shipped, that sentence is false, so it may not come back.
+  describe("cloud and unattended runs (REQ-FLOW-104)", () => {
+    const flat = text.replace(/\s+/g, " ");
+    const section = (start: string, end: string): string => {
+      const from = flat.indexOf(start);
+      const to = flat.indexOf(end, from + start.length);
+      expect(from, `SECURITY.md has no "${start}"`).toBeGreaterThanOrEqual(0);
+      expect(to, `SECURITY.md has no "${end}" after "${start}"`).toBeGreaterThan(from);
+      return flat.slice(from, to);
+    };
+
+    it("names the cloud's accepted risks under what it does not defend", () => {
+      const residuals = section("### Cloud and unattended runs", "## Standards mapping");
+      expect(flat.indexOf("### Cloud and unattended runs")).toBeGreaterThan(flat.indexOf("## What it does not defend"));
+      expect(flat, "the retired bullet is back").not.toContain("Runs nobody watches");
+      for (const risk of [
+        "screened by the model, not enforced",
+        "a Copilot hook that times out fails open",
+        "Cursor's read-only first turns run no hooks",
+        "no shell guard sees Cursor's own push",
+        "a pattern deny rule can be respelled",
+        "every command in Claude Code's cloud can read the environment",
+        "a run that rewrites its own record head escapes the unattended push rule",
+        "Codex's non-interactive mode was seen running no project hooks",
+        "a repository's own push configuration",
+        "a GraphQL mutation read from a file",
+        "the platform's shared app identity",
+        "a custom repository role that can edit rules",
+        "a custom organization role that manages rulesets",
+        "an administrator's repository-level acts",
+        "`PATH` decides which `gh`",
+        "a `GIT_CONFIG_*` value changed between the pre-flight and the push",
+        "an environment file can name a build file outside the held set",
+      ]) {
+        // Without case: a risk may open its sentence on the page.
+        expect(residuals.toLowerCase(), `the cloud section does not name: ${risk}`).toContain(risk.toLowerCase());
+      }
+      // The attended guard's accepted gaps, which the unattended rules cover, and the three they do not.
+      for (const gap of [
+        "gh's own field conversions",
+        "current-branch placeholder",
+        "a batch ref update",
+        "tag-ref create",
+        "percent-encoded",
+        "a directory change",
+        "PowerShell's command wrappers",
+        "gh's alias for the create-and-push form",
+        "a multi-root workspace file's settings",
+        "an editor tasks file's folder-open task",
+      ]) {
+        expect(residuals.toLowerCase(), `the cloud section does not name: ${gap}`).toContain(gap.toLowerCase());
+      }
+      expect(residuals).toMatch(/not covered by the unattended rules/);
+    });
+
+    it("cites the pre-flight, the shell guard, the run verbs and the outbound screen as controls", () => {
+      const table = section("## What the engine defends today", "## Network and data handling");
+      for (const pointer of [
+        "`src/runs/preflight.ts::runPreflight`",
+        "`src/runs/preflight.ts::inspectDirectPush`",
+        "`src/hooks/personOnly.ts::personOnlyVerdict`",
+        "`src/hooks/personOnly.ts::unattendedPushVerdict`",
+        "`src/hooks/scripts.ts::buildPersonOnlyGuardScript`",
+        "`src/cli/commands/run.ts::runCheckpoint`",
+        "`src/change/personOnlyPaths.ts::heldPaths`",
+        "`src/runs/morning.ts::screenOutbound`",
+        "`src/change/scan.ts::scanAddedLines`",
+      ]) {
+        expect(table, `the control table does not cite ${pointer}`).toContain(pointer);
+      }
+      // The run verbs join the git-hardening row, by the runner they start git through.
+      const hardening = table.split(" | Any repository writer, a pull request included | Committing a folder")[1] ?? "";
+      expect(hardening, "the git-hardening row is gone").not.toBe("");
+      expect(hardening.split(" | Any repository writer")[0]).toContain("`src/cli/engine/gitWrite.ts::gitWrite`");
+    });
+
+    it("restates the settings promise to what clean does with a deny row", () => {
+      const row = section("Any tool or person editing a client config the engine also writes", "| A pull request author |");
+      expect(row).toContain("removes no `permissions.deny` row");
+      expect(row).toMatch(/`clean` leaves every deny row and names those equal to the engine's/);
+      expect(row).toContain("`src/manifest/claudeSettings.ts::reduceClaudeSettingsToForeignContent`");
+    });
+
+    it("lists the engine's start of gh among its named network exceptions", () => {
+      const network = section("## Network and data handling", "## Publishing this package");
+      expect(network).toContain("with the three exceptions named next");
+      expect(network).toContain("`src/cli/engine/ghRunner.ts::ghApi`");
+      expect(network).toContain("`gh api`");
+    });
+  });
+
   it("covers the four surfaces the phase claims, and the limits", () => {
     expect(text).toMatch(/trust ladder/i);
     expect(text).toMatch(/deny-scan/i);
@@ -2273,6 +2368,29 @@ describe("docs/security-mapping.md", () => {
     }
     // The read date is what makes every one of those falsifiable.
     expect(text, "the mapping page states no catalogue read date").toContain("read on 2026-09-14");
+  });
+
+  // ADDED 2026-10-16 (plan 021 file 1, unit u21-security-page, REQ-FLOW-104): a row per control the
+  // security page's table gained for the cloud and unattended runs, and the two strip rows the
+  // mapping lacked beside them (the resume card's and the ledger writer's).
+  it("holds a row per cloud control, and the resume card's and the ledger writer's strip rows", () => {
+    const rows = surfaces()
+      .split("\n")
+      .filter((line) => line.startsWith("| "));
+    for (const pointer of [
+      "`src/runs/preflight.ts::runPreflight`",
+      "`src/hooks/personOnly.ts::personOnlyVerdict`",
+      "`src/hooks/personOnly.ts::unattendedPushVerdict`",
+      "`src/cli/commands/run.ts::runCheckpoint`",
+      "`src/runs/morning.ts::screenOutbound`",
+      "`src/runs/resumeCard.ts::screenCard`",
+      "`src/runs/ledgerStore.ts::committedText`",
+    ]) {
+      expect(
+        rows.some((row) => row.includes(pointer)),
+        `the mapping holds no surface row citing ${pointer}`,
+      ).toBe(true);
+    }
   });
 });
 
