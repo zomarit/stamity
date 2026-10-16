@@ -2,6 +2,7 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import { join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
+import { CLAUDE_DENY_ROWS } from "../../src/hooks/personOnly.ts";
 import { buildChildEnv, spawnCollect, useCliFixture } from "../support/cliHarness.ts";
 import { npxCommand } from "../support/identity.ts";
 /**
@@ -68,7 +69,7 @@ async function readManifest(path: string): Promise<ObservedManifest> {
 describe("the full lifecycle journey", () => {
   const getFixture = useCliFixture({ git: true });
 
-  it("init -y through clean -y returns the tree to pre-init plus .gitignore", {
+  it("init -y through clean -y returns the tree to pre-init plus .gitignore and the engine's deny rows", {
     timeout: 180_000,
   }, async () => {
     const fixture = getFixture();
@@ -203,9 +204,19 @@ describe("the full lifecycle journey", () => {
     expect(clean.code).toBe(0);
     expect(clean.stdout).toContain(".stamity/ removed");
 
+    // TEST CHANGE, justified (review/124, signed off 00:14Z): `clean` removes no
+    // `permissions.deny` row, since an owner's row equal to an engine row cannot be
+    // told apart from the engine's, and it names the engine-equal rows it left for
+    // the person to remove by hand. So `.claude/settings.json` survives holding
+    // exactly the engine's deny rows and nothing else — no hook, no other key, no
+    // other row — and clean's output names every one of them.
     const treeAfter = await snapshotTree(fixture.repoDir);
-    expect(treeAfter).toEqual([".gitignore", "history.md"]);
-    // The one surviving addition is the engine's gitignore entries: the
+    expect(treeAfter).toEqual([".claude/settings.json", ".gitignore", "history.md"]);
+    const settings: unknown = JSON.parse(await readFile(join(fixture.repoDir, ".claude", "settings.json"), "utf8"));
+    expect(settings).toStrictEqual({ permissions: { deny: [...CLAUDE_DENY_ROWS] } });
+    expect(clean.stdout).toContain("clean removes no deny row, as an equal one may be yours.");
+    for (const row of CLAUDE_DENY_ROWS) expect(clean.stdout, `clean did not name ${row}`).toContain(JSON.stringify(row));
+    // Beside them survive the engine's gitignore entries: the
     // credential file and the review gate's runtime state (REQ-FLOW-016).
     const gitignore = await readFile(join(fixture.repoDir, ".gitignore"), "utf8");
     expect(gitignore).toContain(".env.mcp");
