@@ -3438,7 +3438,7 @@ function placesOf(command, cwd) {
       if (/\s/.test(word) && !/^@\s/.test(word)) inner(rest(k).join(" "));
       const name = programName(word);
       const assigned = /^\$env:git_dir(=.*)?$/i.exec(word);
-      // A package manager's options before a runner's subcommand (npm -w x exec, pr/22), skipped as u6 skips them.
+      // A package manager's options before a runner's subcommand (npm -w x exec), skipped as u6 skips them.
       let sub = k + 1;
       while (MANAGERS.has(name) && typeof words[sub] === "string") {
         const option = words[sub];
@@ -4080,7 +4080,7 @@ function unattendedSource(root) {
   const flag = (process.env.STAMITY_UNATTENDED ?? "").trim().toLowerCase();
   if (["", "false", "0"].includes(flag)) return null;
   // Claude Code's final round: no run in progress, and this branch's unattended run closed its record before asking,
-  // its run end's marker still in place (pr/17): a later session on the branch, before its own record opens, has none.
+  // its run end's marker still in place: a later session on the branch, before its own record opens, has none.
   const closed = running.length === 0 ? heads.filter((head) => head.mode === "unattended" && head.branch !== null) : [];
   if (closed.length > 0) {
     const ended = endedRun(root);
