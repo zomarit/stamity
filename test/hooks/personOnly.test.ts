@@ -825,6 +825,44 @@ describe("unattendedPushVerdict", () => {
     ["gh pr close 3"],
     ["gh pr reopen 3"],
     ["gh -R o/r pr close 3 -c done"],
+    // GitHub merging the base into a pull request's branch, the REST twin's `PUT pulls/<n>/update-branch` (review/232).
+    ["gh pr update-branch 3"],
+    ["gh pr update-branch 3 --rebase"],
+    ["gh -R o/r pr update-branch 3"],
+    // The file git reads in place of the global or system configuration, set or named on a git call's line (review/233),
+    // and a commit message naming one, which the text cannot tell from a setting (review/227's choice); the message row
+    // was allowed before review/233.
+    ["GIT_CONFIG_GLOBAL=/tmp/c git fetch"],
+    ["GIT_CONFIG_SYSTEM=/tmp/c git fetch"],
+    ["$env:GIT_CONFIG_GLOBAL = 'C:\\c'; git fetch"],
+    ["git commit -m 'GIT_CONFIG_GLOBAL is left unset'"],
+    // One of git's program or configuration variables set on a line whatever program it runs (review/231): the run
+    // verb's own push reads it, in each spelling of the verb, and in each setting form. `GIT_EDITOR=/tmp/e npm test` and
+    // the two `npm test` lines setting `GIT_CONFIG_COUNT` were allowed before review/231: a program the line starts can
+    // start git with them.
+    ["GIT_EXEC_PATH=/tmp/bin stamity run end --run x"],
+    ["GIT_EXEC_PATH=/tmp/bin npx --no stamity run end --run x"],
+    ["GIT_EXEC_PATH=/tmp/bin node dist/cli.js run end --run x"],
+    ["GIT_EDITOR=/tmp/e npm test"],
+    ["env GIT_CONF''IG_COUNT=1 npm test"],
+    ["Set-Item env:GIT_CONFIG_COUNT 1; npm test"],
+    ["env GIT_ASKPASS=/tmp/a npx --no stamity run checkpoint --run x"],
+    ["sudo -u root GIT_SSH_COMMAND=/tmp/s npx --no stamity run end --run x"],
+    ["sh -c 'GIT_EXEC_PATH=/tmp/bin stamity run end --run x'"],
+    ["export GIT_SSH_COMMAND=/tmp/s; npx --no stamity run end --run x"],
+    ["export GIT_EXEC_PATH; npx --no stamity run end --run x"],
+    ["declare -x GIT_EXEC_PATH=/tmp/bin; npx --no stamity run end --run x"],
+    ["cmd /c \"set GIT_EXEC_PATH=C:\\tmp&& npx --no stamity run end --run x\""],
+    ["$env:GIT_EXEC_PATH = 'C:\\tmp'; npx --no stamity run end --run x"],
+    ["$env:GIT_EXEC_PATH+='C:\\tmp'; npx --no stamity run end --run x"],
+    ["${env:GIT_EXEC_PATH}='C:\\tmp'; npx --no stamity run end --run x"],
+    ["Set-Item -Path env:GIT_EXEC_PATH -Value C:\\tmp; npx --no stamity run end --run x"],
+    ["New-Item env:\\GIT_SSH -Value C:\\s; npx --no stamity run end --run x"],
+    ["[Environment]::SetEnvironmentVariable('GIT_EXEC_PATH', 'C:\\tmp'); npx --no stamity run end --run x"],
+    ["GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.sshCommand GIT_CONFIG_VALUE_0=/tmp/s npx --no stamity run end --run x"],
+    ["export GIT_CONFIG_PARAMETERS=\"'core.sshCommand=/tmp/s'\"; npx --no stamity run end --run x"],
+    ["export GIT_CONFIG_KEY_$i=core.sshCommand; npx --no stamity run end --run x"],
+    ["GIT_CONFIG_GLOBAL=/tmp/c npx --no stamity run end --run x"],
     // A program-valued git variable set on a git call's line (review/208): each of the nine, and the spellings the
     // reading handles — after a wrapper, quoted or escaped, after `export`, inside a nested line, PowerShell's `$env:`
     // and `${env:…}`, another letter case, and after the git call.
@@ -952,13 +990,27 @@ describe("unattendedPushVerdict", () => {
     ["gh pr list --state closed"],
     ["gh pr checks 3"],
     ["gh pr comment 3 --body-file reply.md"],
-    // review/208's twins: a variable git reads that runs nothing, one unset, a program variable on a line with no git
-    // call, and a commit message naming one.
+    // review/208's twins: a variable git reads that runs nothing, one unset, and a commit message naming one. A program
+    // variable set on a line with no git call is refused since review/231 (above).
     ["GIT_TRACE=1 git status"],
     ["GIT_TERMINAL_PROMPT=0 git fetch origin"],
     ["env -u GIT_EDITOR git commit -m m"],
-    ["GIT_EDITOR=/tmp/e npm test"],
     ["git commit -m 'GIT_EDITOR is left unset'"],
+    // review/231's twins: a line with no git call that only names one of the variables, reads or unsets it, or sets a
+    // variable outside the set, the run verb's line among them.
+    ["grep GIT_CONFIG_COUNT src"],
+    ["grep -rn GIT_EXEC_PATH src"],
+    ["rg 'GIT_EDITOR=' src"],
+    ["echo $GIT_EXEC_PATH"],
+    ["env -u GIT_EXEC_PATH npx --no stamity run end --run x"],
+    ["GIT_TERMINAL_PROMPT=0 npx --no stamity run end --run x"],
+    ["export GIT_TRACE=1; npx --no stamity run end --run x"],
+    ["Get-Item env:GIT_EXEC_PATH; npm test"],
+    ["$env:GIT_EXEC_PATH; npm test"],
+    ["${env:GIT_CONFIG_NOSYSTEM}='1'; npx --no stamity run end --run x"],
+    ["Set-Item env:GIT_CONFIG_NOSYSTEM 1; npm test"],
+    // review/232's twin: the pull request's merge state read.
+    ["gh pr view 3 --json mergeStateStatus"],
     // review/209's twins: every `git remote` read, and `git config` reads of a `remote.*` key, writes of another key,
     // and a value that merely starts as a remote key does.
     ["git remote"],
@@ -985,16 +1037,16 @@ describe("unattendedPushVerdict", () => {
     ["git config --get-regexp '^url\\.'"],
     ["git config --get-urlmatch http https://example.com"],
     ["git config user.email url.bot@example.com"],
-    // review/221's and review/227's twins: a git variable that sets no configuration, in PowerShell's spellings too, the
-    // variables on a line with no git call, and a commit message naming another git variable or a longer name. A commit
-    // message naming one of the variables is refused since review/227 (above).
+    // review/221's and review/227's twins: a git variable that sets no configuration, in PowerShell's spellings too, and
+    // a commit message naming another git variable or a longer name. A commit message naming one of the variables is
+    // refused since review/227, and the variables set on a line with no git call since review/231 (above).
     ["GIT_CONFIG_NOSYSTEM=1 git status"],
     ["${env:GIT_CONFIG_NOSYSTEM}='1'; git status"],
     ["Set-Item env:GIT_CONFIG_NOSYSTEM 1; git status"],
-    ["env GIT_CONF''IG_COUNT=1 npm test"],
-    ["Set-Item env:GIT_CONFIG_COUNT 1; npm test"],
-    ["git commit -m 'GIT_CONFIG_GLOBAL is left unset'"],
     ["git commit -m 'MY_GIT_CONFIG_COUNT and GIT_CONFIG_COUNTER are left unset'"],
+    // review/233's twins: git's own option reading the global file, and a commit message naming a longer name.
+    ["git config --global --get user.name"],
+    ["git commit -m 'GIT_CONFIG_NOSYSTEM and GIT_CONFIG_GLOBALS are left unset'"],
   ])("allows %j", (command) => {
     expect(unattendedPushVerdict(command)).toEqual({ deny: false });
   });

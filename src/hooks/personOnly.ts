@@ -1093,12 +1093,14 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
 
 /**
  * Whether `command` steps around the run verbs while a run is unattended
- * (REQ-FLOW-120): any `git push` or `git subtree push`, `gh pr create`, `gh pr edit`, `gh pr close` or `gh pr
- * reopen`, `gh repo sync` or `gh repo create --push` (or its alias `gh repo new`), a git call defining an alias
- * (`-c alias.<name>=…`) or naming a subcommand that is not a git builtin (an alias, a computed name) outside the read
- * and setup forms of `git lfs` (fetch, pull, install, ls-files, env, status) and `git submodule` (status, init,
- * update, sync), a git call on a line that sets one of git's program-valued variables (`GIT_EDITOR`,
- * `GIT_SSH_COMMAND`, …), a `git remote` write (`add`, `set-url`, `rename`, `remove`, `set-head`, `set-branches`) or a
+ * (REQ-FLOW-120): any `git push` or `git subtree push`, `gh pr create`, `gh pr edit`, `gh pr close`, `gh pr
+ * reopen` or `gh pr update-branch`, `gh repo sync` or `gh repo create --push` (or its alias `gh repo new`), a git call
+ * defining an alias (`-c alias.<name>=…`) or naming a subcommand that is not a git builtin (an alias, a computed name)
+ * outside the read and setup forms of `git lfs` (fetch, pull, install, ls-files, env, status) and `git submodule`
+ * (status, init, update, sync), a git call on a line that names one of git's configuration variables
+ * (`GIT_CONFIG_COUNT`, `GIT_CONFIG_GLOBAL`, …) or sets a program-valued one (`GIT_EDITOR`, `GIT_SSH_COMMAND`, …), any
+ * line that sets one of either, whatever its program, a
+ * `git remote` write (`add`, `set-url`, `rename`, `remove`, `set-head`, `set-branches`) or a
  * `git config` write of a `remote.*` key, and a `gh
  * api`, `curl` or `wget` write (POST, PATCH, PUT, DELETE) on a repository's
  * `pulls` or `pulls/<n>`, on `contents/…`, on `git/` refs or objects, or on
@@ -1582,16 +1584,38 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
   /** The configuration keys an unattended git call may set on its line: display and identity keys only. */
   const CONFIG_KEYS = /^(?:color\..+|advice\..+|core\.quotepath|init\.defaultbranch|user\.name|user\.email)$/i;
   /**
-   * A name of the variables through which git reads configuration pairs from the environment, in the line's text or in
-   * a word as the reading decoded it (review/221), whatever form sets it (review/227, review/196): an assignment,
-   * PowerShell's `$env:` and `${env:…}`, `Set-Item env:…`, `New-Item env:…`, `[Environment]::SetEnvironmentVariable`,
-   * `export` or `declare -x` of a name set earlier; a pair's number the line computes (`GIT_CONFIG_KEY_$i`) and a
-   * name the line builds from the prefix (`GIT_CONFIG_$v`) among them.
+   * The names of the variables through which git reads configuration from the environment: the pairs (review/221) and
+   * the files git reads in place of the global and system ones (review/233); a pair's number the line computes
+   * (`GIT_CONFIG_KEY_$i`) and a name the line builds from the prefix (`GIT_CONFIG_$v`) among them.
    */
-  const CONFIG_ENVIRONMENT = /\bGIT_CONFIG_(?:(?:COUNT|PARAMETERS)\b|(?:KEY|VALUE)_\d*\b|(?=[$`{(%]))/i;
+  const CONFIG_NAMES = "GIT_CONFIG_(?:(?:COUNT|PARAMETERS|GLOBAL|SYSTEM)\\b|(?:KEY|VALUE)_\\d*\\b|(?=[$`{(%]))";
+  /**
+   * One of those names in the line's text or in a word as the reading decoded it (review/221), whatever form sets it
+   * (review/227, review/196): an assignment, PowerShell's `$env:` and `${env:…}`, `Set-Item env:…`, `New-Item env:…`,
+   * `[Environment]::SetEnvironmentVariable`, `export` or `declare -x` of a name set earlier.
+   */
+  const CONFIG_ENVIRONMENT = new RegExp(`\\b${CONFIG_NAMES}`, "i");
   /** git's environment variables whose value is a program git runs (review/208): twins of the `-c` keys refused below. */
   const PROGRAM_VARIABLES =
     "GIT_EDITOR|GIT_SEQUENCE_EDITOR|GIT_SSH_COMMAND|GIT_SSH|GIT_EXTERNAL_DIFF|GIT_ASKPASS|GIT_PAGER|GIT_PROXY_COMMAND|GIT_EXEC_PATH";
+  /** A program-valued or configuration variable's name, as a word starts with it: the set the line-wide rule reads. */
+  const GIT_VARIABLE = `(?:(?:${PROGRAM_VARIABLES})\\b|${CONFIG_NAMES})`;
+  /**
+   * A word, as the reading decoded it, that sets one (review/231): an assignment before a program or after a wrapper,
+   * and an operand of `export`, `declare`, `typeset` or the Windows command interpreter's `set`.
+   */
+  const SETS_WORD = new RegExp(`^${GIT_VARIABLE}`, "i");
+  const SETTERS = new Set(["export", "declare", "typeset", "set"]);
+  /**
+   * PowerShell's spellings that set one, in the line's text (review/231): `$env:NAME =` and `${env:NAME} =` (a compound
+   * assignment among them), `Set-Item` or `New-Item` (`si`, `ni`) on `env:NAME`, `[Environment]::SetEnvironmentVariable`.
+   */
+  const SETS_TEXT = new RegExp(
+    `\\$\\{?env:${GIT_VARIABLE}\\}?\\s*(?:[-+*/%]|\\?\\?)?=|` +
+      `\\b(?:Set-Item|New-Item|si|ni)\\b[^;|&\\n]*?(?<![\\w$\\{])env:\\\\?${GIT_VARIABLE}|` +
+      `\\[(?:System\\.)?Environment\\]::SetEnvironmentVariable\\(\\s*['"]${GIT_VARIABLE}`,
+    "i",
+  );
   /** A word, as the reading decoded it, assigning one: before a program, after `env` or `sudo`, after `export`. */
   const PROGRAM_WORD = new RegExp(`^(?:${PROGRAM_VARIABLES})=`, "i");
   /** The line's own text assigning one, PowerShell's `$env:` and `${env:…}` among the spellings. */
@@ -1674,7 +1698,7 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
         return deny("A git call setting a configuration key outside the display and identity keys (`-c <key>=…`)");
       }
       if (CONFIG_ENVIRONMENT.test(command) || [...assigned, ...commands.flat()].some((word) => CONFIG_ENVIRONMENT.test(word))) {
-        return deny("A git call on a line that names git's configuration variables (`GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_<n>`, `GIT_CONFIG_VALUE_<n>`, `GIT_CONFIG_PARAMETERS`)");
+        return deny("A git call on a line that names git's configuration variables (`GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_<n>`, `GIT_CONFIG_VALUE_<n>`, `GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM`)");
       }
       // The environment twins of those keys (review/208): a variable whose value git runs as a program, set anywhere on
       // the line, as the reading decodes it (a quoted or escaped word, after a wrapper, inside a nested line) or as
@@ -1700,8 +1724,9 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
     let http = program === "curl" || program === "wget";
     if (program === "gh") {
       const [group, sub] = ghPositionals(cmd);
-      // Closing and reopening are the REST twin's `PATCH pulls/<n>` (review/213).
-      if (group === "pr" && ["create", "new", "edit", "close", "reopen"].includes(sub ?? "")) return deny(`\`gh pr ${sub}\``);
+      // Closing and reopening are the REST twin's `PATCH pulls/<n>` (review/213), `update-branch` its `PUT
+      // pulls/<n>/update-branch` (review/232).
+      if (group === "pr" && ["create", "new", "edit", "close", "reopen", "update-branch"].includes(sub ?? "")) return deny(`\`gh pr ${sub}\``);
       if (group === "repo" && sub === "sync") return deny("`gh repo sync`");
       // `gh repo create --source <dir> --push` runs `git push` itself, as `repo sync` does (review/109); `new` is gh's
       // alias for `create` (review/129).
@@ -1719,6 +1744,15 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
         return deny(`A REST write that moves a branch or a pull request (${method} ${path})`);
       }
     }
+  }
+  // Whatever program the line runs (review/231): one of those variables set on it reaches what that program starts,
+  // the run verbs' own git among them (`GIT_EXEC_PATH=<folder> stamity run end`). A line that only names one passes.
+  if (
+    assigned.some((word) => SETS_WORD.test(word)) ||
+    commands.some((cmd) => SETTERS.has(cmd[0] ?? "") && cmd.slice(1).some((word) => SETS_WORD.test(word) && (cmd[0] === "export" || word.includes("=")))) ||
+    SETS_TEXT.test(command)
+  ) {
+    return deny("A line that sets one of git's program or configuration variables (`GIT_EXEC_PATH`, `GIT_EDITOR`, `GIT_CONFIG_COUNT`, …), which the run verbs' own git reads,");
   }
   return { deny: false };
 }
