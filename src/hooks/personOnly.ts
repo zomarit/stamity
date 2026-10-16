@@ -175,8 +175,10 @@ export const CLAUDE_DENY_ROWS: readonly string[] = [
  * comments dropped, leading assignments, keywords, wrappers (`env`, `command`,
  * `sudo`, …) and package runners (`npx`, `npm exec`, `pnpm dlx`, …) skipped with
  * their options' values, a literal `sh -c`, `eval`, `env -S` or runner `-c`
- * argument, and PowerShell's `-Command` or `Invoke-Expression` string, read as
- * its own line, and git's global options (`-c k=v` pairs among
+ * argument, PowerShell's `-Command` or `Invoke-Expression` string, `cmd /c` or
+ * `/k`'s rest, a `git rebase --exec` line and `git bisect run`'s command, read as
+ * its own line, a brace attached to a word read as a PowerShell script block's
+ * edge as well, and git's global options (`-c k=v` pairs among
  * them, a `remote.<name>.push` or `branch.<name>.merge` read as the refspec a
  * bare push takes) skipped before the subcommand.
  *
@@ -238,8 +240,12 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     return name !== "" && ("commandwithargs".startsWith(name) || name === "cwa") ? (match?.[2] ?? "") : null;
   }
 
-  /** The words of each simple command in `text`, a command substitution's text read as its own lines. */
-  function splitLine(text: string): { segments: string[][]; nested: string[] } {
+  /**
+   * The words of each simple command in `text`, a command substitution's text read as its own lines; with `blocks`, a
+   * brace attached to a word starts or ends a PowerShell script block (`{git push}`), a brace a word opened (`@{1}`,
+   * `${x}`) staying part of it.
+   */
+  function splitLine(text: string, blocks: boolean): { segments: string[][]; nested: string[] } {
     const segments: string[][] = [];
     const nested: string[] = [];
     let words: string[] = [];
@@ -351,7 +357,11 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         } else endWord();
         while (i < text.length && "<>&|".includes(text[i] ?? "")) i += 1;
         dropNext = true;
-      } else if (";&|\n\r()`".includes(ch)) {
+      } else if (
+        ";&|\n\r()`".includes(ch) ||
+        (blocks && ch === "{" && !inWord) ||
+        (blocks && ch === "}" && word.split("{").length <= word.split("}").length)
+      ) {
         cut();
         i += 1;
       } else {
@@ -366,9 +376,11 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
 
   /** Each simple command's words, its program word first and normalized; `sh -c` and `eval` text read too. */
   function commandsOf(text: string, depth: number): string[][] {
-    const { segments, nested } = splitLine(text);
+    const { segments, nested } = splitLine(text, true);
     const commands: string[][] = [];
-    for (const words of segments) {
+    // A line with a brace is read with its braces as words too (review/185), so a block reading adds denials and never
+    // lifts one: `git push origin x} -f` still forces.
+    for (const words of [...segments, ...(/[{}]/.test(text) ? splitLine(text, false).segments : [])]) {
       let k = 0;
       let line: string | null = null;
       while (k < words.length && line === null) {
@@ -443,6 +455,35 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         if (at !== -1) commands.push(...commandsOf([commandFlag(cmd[at] ?? ""), ...cmd.slice(at + 1)].join(" "), depth + 1));
         else if (first !== -1) commands.push(...commandsOf(cmd.slice(first).join(" "), depth + 1));
         for (const word of first === -1 ? [] : cmd.slice(first + 1)) if (/\s/.test(word)) commands.push(...commandsOf(word, depth + 1));
+      } else if (depth < 4 && cmd[0] === "cmd") {
+        // The Windows command interpreter (review/183): the words after `/c` or `/k`, any letter case, a value attached.
+        const at = cmd.findIndex((word, index) => index > 0 && /^\/[ck]/i.test(word));
+        if (at !== -1) commands.push(...commandsOf([(cmd[at] ?? "").slice(2), ...cmd.slice(at + 1)].join(" "), depth + 1));
+      } else if (depth < 4 && cmd[0] === "git") {
+        // Lines a git builtin runs (review/184): each `git rebase --exec` or `-x` line (`--ex`, `--exe` and a cluster
+        // as git's option parser reads them), and the command `git bisect run` runs, its words kept as words.
+        const { sub, args } = gitParts(cmd);
+        const rebase = sub === "rebase" ? args : [];
+        for (let j = 0; j < rebase.length && rebase[j] !== "--"; j += 1) {
+          const arg = rebase[j] ?? "";
+          const long = /^--ex(?:ec?)?(=[\s\S]*)?$/.exec(arg);
+          let exec: string | undefined;
+          if (long !== null) exec = long[1] === undefined ? rebase[(j += 1)] : long[1].slice(1);
+          else if (/^-[^-]/.test(arg)) {
+            for (let c = 1; c < arg.length; c += 1) {
+              const letter = arg[c] ?? "";
+              if (letter === "x") exec = c === arg.length - 1 ? rebase[(j += 1)] : arg.slice(c + 1);
+              if (letter === "x" || "sXCS".includes(letter)) {
+                if (letter !== "x" && letter !== "S" && c === arg.length - 1) j += 1;
+                break;
+              }
+            }
+          }
+          if (exec !== undefined) commands.push(...commandsOf(exec, depth + 1));
+        }
+        if (sub === "bisect" && args[0] === "run") {
+          commands.push(...commandsOf(args.slice(1).map((word) => `'${word.replace(/'/g, "'\\''")}'`).join(" "), depth + 1));
+        }
       }
       commands.push(cmd);
     }
@@ -1006,8 +1047,12 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
     return name !== "" && ("commandwithargs".startsWith(name) || name === "cwa") ? (match?.[2] ?? "") : null;
   }
 
-  /** The words of each simple command in `text`, a command substitution's text read as its own lines. */
-  function splitLine(text: string): { segments: string[][]; nested: string[] } {
+  /**
+   * The words of each simple command in `text`, a command substitution's text read as its own lines; with `blocks`, a
+   * brace attached to a word starts or ends a PowerShell script block (`{git push}`), a brace a word opened (`@{1}`,
+   * `${x}`) staying part of it.
+   */
+  function splitLine(text: string, blocks: boolean): { segments: string[][]; nested: string[] } {
     const segments: string[][] = [];
     const nested: string[] = [];
     let words: string[] = [];
@@ -1119,7 +1164,11 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
         } else endWord();
         while (i < text.length && "<>&|".includes(text[i] ?? "")) i += 1;
         dropNext = true;
-      } else if (";&|\n\r()`".includes(ch)) {
+      } else if (
+        ";&|\n\r()`".includes(ch) ||
+        (blocks && ch === "{" && !inWord) ||
+        (blocks && ch === "}" && word.split("{").length <= word.split("}").length)
+      ) {
         cut();
         i += 1;
       } else {
@@ -1134,9 +1183,11 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
 
   /** Each simple command's words, its program word first and normalized; `sh -c` and `eval` text read too. */
   function commandsOf(text: string, depth: number): string[][] {
-    const { segments, nested } = splitLine(text);
+    const { segments, nested } = splitLine(text, true);
     const commands: string[][] = [];
-    for (const words of segments) {
+    // A line with a brace is read with its braces as words too (review/185), so a block reading adds denials and never
+    // lifts one: `git push origin x} -f` still forces.
+    for (const words of [...segments, ...(/[{}]/.test(text) ? splitLine(text, false).segments : [])]) {
       let k = 0;
       let line: string | null = null;
       while (k < words.length && line === null) {
@@ -1211,6 +1262,35 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
         if (at !== -1) commands.push(...commandsOf([commandFlag(cmd[at] ?? ""), ...cmd.slice(at + 1)].join(" "), depth + 1));
         else if (first !== -1) commands.push(...commandsOf(cmd.slice(first).join(" "), depth + 1));
         for (const word of first === -1 ? [] : cmd.slice(first + 1)) if (/\s/.test(word)) commands.push(...commandsOf(word, depth + 1));
+      } else if (depth < 4 && cmd[0] === "cmd") {
+        // The Windows command interpreter (review/183): the words after `/c` or `/k`, any letter case, a value attached.
+        const at = cmd.findIndex((word, index) => index > 0 && /^\/[ck]/i.test(word));
+        if (at !== -1) commands.push(...commandsOf([(cmd[at] ?? "").slice(2), ...cmd.slice(at + 1)].join(" "), depth + 1));
+      } else if (depth < 4 && cmd[0] === "git") {
+        // Lines a git builtin runs (review/184): each `git rebase --exec` or `-x` line (`--ex`, `--exe` and a cluster
+        // as git's option parser reads them), and the command `git bisect run` runs, its words kept as words.
+        const { sub, args } = gitParts(cmd);
+        const rebase = sub === "rebase" ? args : [];
+        for (let j = 0; j < rebase.length && rebase[j] !== "--"; j += 1) {
+          const arg = rebase[j] ?? "";
+          const long = /^--ex(?:ec?)?(=[\s\S]*)?$/.exec(arg);
+          let exec: string | undefined;
+          if (long !== null) exec = long[1] === undefined ? rebase[(j += 1)] : long[1].slice(1);
+          else if (/^-[^-]/.test(arg)) {
+            for (let c = 1; c < arg.length; c += 1) {
+              const letter = arg[c] ?? "";
+              if (letter === "x") exec = c === arg.length - 1 ? rebase[(j += 1)] : arg.slice(c + 1);
+              if (letter === "x" || "sXCS".includes(letter)) {
+                if (letter !== "x" && letter !== "S" && c === arg.length - 1) j += 1;
+                break;
+              }
+            }
+          }
+          if (exec !== undefined) commands.push(...commandsOf(exec, depth + 1));
+        }
+        if (sub === "bisect" && args[0] === "run") {
+          commands.push(...commandsOf(args.slice(1).map((word) => `'${word.replace(/'/g, "'\\''")}'`).join(" "), depth + 1));
+        }
       }
       commands.push(cmd);
     }

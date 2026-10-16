@@ -94,6 +94,15 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["powershell -ExecutionPolicy Bypass -NoProfile 'git push --force origin feat/x'", "force-push"],
   ["Invoke-Expression 'git push --force origin feat/x'", "force-push"],
   ["iex -ErrorAction Stop 'git push --force origin feat/x'", "force-push"],
+  // The Windows command interpreter's `/c` and `/k` rest, read as its own line (review/183).
+  ["cmd /c git push --force origin feat/x", "force-push"],
+  ["CMD.EXE /S /K \"git push --force origin feat/x\"", "force-push"],
+  // The lines a git builtin runs, read as their own lines (review/184): `git rebase --exec` or `-x`, `git bisect run`.
+  ["git rebase --exec 'git push --force origin feat/x' main", "force-push"],
+  ["git rebase -x 'git push --force origin feat/x' main", "force-push"],
+  ["git bisect run git push --force origin feat/x", "force-push"],
+  // A PowerShell script block, a brace attached to its first and last words (review/185).
+  ["Invoke-Command -ScriptBlock {git push --force origin feat/x}", "force-push"],
   // A forced ref update over REST or GraphQL (review/76).
   ["gh api -X PATCH repos/o/r/git/refs/heads/feat/x -f sha=abc -F force=true", "force-push"],
   ["curl -X PATCH -d '{\"sha\":\"abc\",\"force\":true}' https://api.github.com/repos/o/r/git/refs/heads/feat/x", "force-push"],
@@ -455,6 +464,16 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
   ["powershell -ExecutionPolicy Bypass -File deploy.ps1"],
   ["iex 'npm test'"],
   ["Invoke-Expression -Command 'git status'"],
+  // review/183's twins: the interpreter's rest runs no person-only act.
+  ["cmd /c git status"],
+  ["CMD.EXE /S /K \"git status\""],
+  // review/184's twins: a rebase's exec line and a bisect's command that run no person-only act.
+  ["git rebase --exec 'git status' main"],
+  ["git rebase -x 'git status' main"],
+  ["git bisect run git status"],
+  // review/185's twins: a script block that runs no person-only act, and a brace a word opened, which is no block.
+  ["Invoke-Command -ScriptBlock {git status}"],
+  ["git show HEAD@{1}"],
   ["gh repo view o/r"],
   ["gh repo edit --description 'x'"],
   ["gh repo clone o/r"],
@@ -654,6 +673,12 @@ describe("unattendedPushVerdict", () => {
     ["wget --method=PATCH https://api.github.com/repos/o/r/pulls/3"],
     ["gh api graphql -f query='mutation { createCommitOnBranch(input: {}) { commit { oid } } }'"],
     ["gh api graphql -f query='mutation { createPullRequest(input: {}) { pullRequest { id } } }'"],
+    // A push inside `cmd /c` (review/183), a rebase's exec line or a bisect's command (review/184), a script block
+    // (review/185).
+    ["cmd /c git push --force origin feat/x"],
+    ["git rebase --exec 'git push --force origin feat/x' main"],
+    ["git bisect run git push --force origin feat/x"],
+    ["Invoke-Command -ScriptBlock {git push --force origin feat/x}"],
   ])("denies %j, naming the run verbs", (command) => {
     const verdict = unattendedPushVerdict(command);
     expect(verdict.deny).toBe(true);
@@ -705,6 +730,11 @@ describe("unattendedPushVerdict", () => {
     ["git commit -m 'git push later'"],
     ["echo 'git push'"],
     ["curl https://api.github.com/repos/o/r/pulls"],
+    // The twins of review/183, review/184 and review/185.
+    ["cmd /c git status"],
+    ["git rebase --exec 'git status' main"],
+    ["git bisect run git status"],
+    ["Invoke-Command -ScriptBlock {git status}"],
   ])("allows %j", (command) => {
     expect(unattendedPushVerdict(command)).toEqual({ deny: false });
   });

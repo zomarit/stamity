@@ -112,6 +112,16 @@ const MATRIX: readonly (readonly [command: string, rule: string | null])[] = [
   // PowerShell's command string, read by the embedded verdict on every client (build/89).
   ["pwsh -c 'git push --force origin feat/x'", "force-push"],
   ["pwsh -c 'git push origin feat/x'", null],
+  // The Windows command interpreter's rest (review/183), a rebase's exec line and a bisect's command (review/184) and a
+  // PowerShell script block (review/185), each read by the embedded verdict as its own line.
+  ["cmd /c git push --force origin feat/x", "force-push"],
+  ["cmd /c git status", null],
+  ["git rebase --exec 'git push --force origin feat/x' main", "force-push"],
+  ["git rebase --exec 'git status' main", null],
+  ["git bisect run git push --force origin feat/x", "force-push"],
+  ["git bisect run git status", null],
+  ["Invoke-Command -ScriptBlock {git push --force origin feat/x}", "force-push"],
+  ["Invoke-Command -ScriptBlock {git status}", null],
 ];
 
 describe("the person-only guard, on every client", () => {
