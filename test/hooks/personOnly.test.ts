@@ -1010,13 +1010,22 @@ describe("CLAUDE_DENY_ROWS", () => {
     for (const row of BASH_ROWS) expect(row).toMatch(/^Bash\([^()]+:\*\)$/);
     expect(new Set(CLAUDE_DENY_ROWS).size).toBe(CLAUDE_DENY_ROWS.length);
     // Claude Code's MCP permission-rule form, `mcp__<server>__<tool>`: the server's merge and branch-write tools, one
-    // row each, after every prefix row (review/214, the 03:12Z sign-off).
+    // row each, after every prefix row (review/214, the 03:12Z sign-off), then its review-submit, pull-request-update,
+    // branch-create and repository-delete tools (review/226, the 04:01Z and 04:05Z sign-offs).
     expect(MCP_ROWS).toEqual([
       "mcp__github__merge_pull_request",
       "mcp__github__push_files",
       "mcp__github__create_or_update_file",
       "mcp__github__delete_file",
       "mcp__github__update_pull_request_branch",
+      "mcp__github__pull_request_review_write",
+      "mcp__github__create_pull_request_review",
+      "mcp__github__submit_pending_pull_request_review",
+      "mcp__github__update_pull_request",
+      "mcp__github__update_pull_request_state",
+      "mcp__github__update_pull_request_draft_state",
+      "mcp__github__create_branch",
+      "mcp__github__delete_repository",
     ]);
     expect(CLAUDE_DENY_ROWS.slice(BASH_ROWS.length)).toEqual(MCP_ROWS);
   });

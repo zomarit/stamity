@@ -121,10 +121,13 @@ export interface PersonOnlyContext {
  * every `Bash(…)` row's prefix is one {@link personOnlyVerdict} denies, so the two layers
  * never disagree on what is the person's.
  *
- * The last rows are the GitHub MCP server's merge and branch-write tools, by name, in
+ * The last rows are the GitHub MCP server's merge, branch-write, review-submit,
+ * pull-request-update and repository-delete tools, by name, in
  * Claude Code's MCP rule form (`mcp__<server>__<tool>`, the server under the `github` key
  * the engine writes to `.mcp.json`): a merge or a push made as a tool call is no shell
- * call, so neither the prefix rows nor the shell guard see it (review/214).
+ * call, so neither the prefix rows nor the shell guard see it (review/214, review/226).
+ * A row cannot read a tool's arguments, so a pull-request update through that server is
+ * refused whole; `gh pr edit` through the shell stays the route.
  */
 export const CLAUDE_DENY_ROWS: readonly string[] = [
   "Bash(git push --force:*)",
@@ -181,6 +184,18 @@ export const CLAUDE_DENY_ROWS: readonly string[] = [
   "mcp__github__create_or_update_file",
   "mcp__github__delete_file",
   "mcp__github__update_pull_request_branch",
+  // review/226: these names were read on 2026-10-16 from the GitHub MCP server's README and its `pkg/github/`
+  // sources. `create_pull_request_review`, `submit_pending_pull_request_review`, `update_pull_request_state` and
+  // `update_pull_request_draft_state` are registered behind its `pull_requests_granular` flag. Like the rows above,
+  // these name a server configured as `github`; a server given another name escapes them.
+  "mcp__github__pull_request_review_write",
+  "mcp__github__create_pull_request_review",
+  "mcp__github__submit_pending_pull_request_review",
+  "mcp__github__update_pull_request",
+  "mcp__github__update_pull_request_state",
+  "mcp__github__update_pull_request_draft_state",
+  "mcp__github__create_branch",
+  "mcp__github__delete_repository",
 ];
 
 /**

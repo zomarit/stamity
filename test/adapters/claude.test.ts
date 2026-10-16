@@ -1723,7 +1723,8 @@ describe("the person-only deny rows (u20-hook-emission, REQ-FLOW-102)", () => {
     expect(CLAUDE_DENY_ROWS.length).toBeGreaterThan(10);
     expect(deny).toEqual([...CLAUDE_DENY_ROWS]);
     // The `Bash(<prefix>:*)` form the repository's tests pin for a Claude Code prefix rule, then the GitHub MCP
-    // server's merge and branch-write tools in Claude Code's MCP rule form, one row each (review/214).
+    // server's merge and branch-write tools in Claude Code's MCP rule form, one row each (review/214), then its
+    // review-submit, pull-request-update, branch-create and repository-delete tools (review/226).
     const mcp = deny.filter((row) => !row.startsWith("Bash("));
     for (const row of deny.slice(0, deny.length - mcp.length)) expect(row).toMatch(/^Bash\([^()]+:\*\)$/);
     expect(mcp).toEqual([
@@ -1732,6 +1733,14 @@ describe("the person-only deny rows (u20-hook-emission, REQ-FLOW-102)", () => {
       "mcp__github__create_or_update_file",
       "mcp__github__delete_file",
       "mcp__github__update_pull_request_branch",
+      "mcp__github__pull_request_review_write",
+      "mcp__github__create_pull_request_review",
+      "mcp__github__submit_pending_pull_request_review",
+      "mcp__github__update_pull_request",
+      "mcp__github__update_pull_request_state",
+      "mcp__github__update_pull_request_draft_state",
+      "mcp__github__create_branch",
+      "mcp__github__delete_repository",
     ]);
   });
 
