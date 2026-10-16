@@ -318,6 +318,10 @@ describe("st-unattended — checkpoints and the ending (REQ-FLOW-092, REQ-FLOW-0
     expect(text).toContain("`- <UTC> checkpoint: <sha> units done=<n> remaining=<m>`");
     expect(text).toContain("`records: not committed (<source>)`");
     expect(text).toContain("is never retried with a raw push, `--no-verify` or a force");
+    // Added 2026-10-16 (run 2026-10-15_cloud-runs, PR #112 round 1, pr/7; REQ-FLOW-093): a checkpoint that exits 0
+    // can carry `secret scan: <n> files unscanned (…)`, so its `notDone[]` is copied on any exit, not on exit 1 alone.
+    expect(text).toContain("A checkpoint copies its `notDone[]` lines, on any exit, into the record and the morning list's `## Not done:`");
+    expect(text).not.toContain("that exits 1 copies its `notDone[]`");
   });
 
   it("scans last, after every close write, and holds the push on a hit (REQ-FLOW-103)", async () => {

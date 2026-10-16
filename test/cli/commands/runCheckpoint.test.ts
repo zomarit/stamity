@@ -53,7 +53,8 @@ vi.mock("../../../src/cli/engine/gitWrite.ts", async (importOriginal) => {
       // sends it to the case's bare remote, `remote.git` beside the repository the push runs at the top of, so
       // every read the verb makes sees the GitHub URL git would push to.
       const remote = join(dirname(cwd), "remote.git");
-      if (args[0] !== "push" || !existsSync(remote)) return real.gitWrite(cwd, args, opts);
+      // TEST CHANGE, justified: pr/20 reads the remote branch with `git ls-remote origin`, so that read goes there too.
+      if ((args[0] !== "push" && args[0] !== "ls-remote") || !existsSync(remote)) return real.gitWrite(cwd, args, opts);
       const mapping = { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: `url.${remote}.insteadOf`, GIT_CONFIG_VALUE_0: "https://github.com/o/r.git" };
       const previous = Object.fromEntries(Object.keys(mapping).map((key) => [key, process.env[key]]));
       Object.assign(process.env, mapping);
@@ -248,7 +249,7 @@ describe("stamity run checkpoint", () => {
   });
 
   it("holds a held change staged and then undone in the work tree alone, from the index side (review/156)", async () => {
-    const { repo, remote } = await seed("unattended");
+    const { repo, remote, base } = await seed("unattended");
     // Staged, then the work tree put back to Base:'s bytes; and a workflow staged, then deleted from the work tree.
     await writeFile(join(repo, ".cursorrules"), "steered rules\n");
     await put(repo, ".github/workflows/x.yml", "on: push\n");
@@ -265,6 +266,33 @@ describe("stamity run checkpoint", () => {
     const patch = pushedFile(remote, PATCH);
     expect(patch).toContain("+steered rules");
     expect(patch).toContain("+on: push");
+    // TEST CHANGE, justified: pr/6 adds the index-to-work-tree part, so the patch applied on Base: gives the work
+    // tree's .cursorrules; the workflow's deletion part is in the patch too.
+    expect(patch).toContain("deleted file mode");
+    const fresh = join(dirname(repo), "at-base");
+    git(repo, ["worktree", "add", "-q", "--detach", fresh, base]);
+    git(fresh, ["apply", join(repo, PATCH)]);
+    expect(await readFile(join(fresh, ".cursorrules"), "utf8")).toBe(".cursorrules\n");
+  });
+
+  // pr/6: a held path staged and then edited again keeps both layers, so the patch reproduces the work tree's bytes.
+  it("holds a held file staged and then edited again with both layers, the patch applying on Base: to the work tree's bytes", async () => {
+    const { repo, base } = await seed("unattended");
+    await writeFile(join(repo, ".cursorrules"), "staged rules\n");
+    git(repo, ["add", "--", ".cursorrules"]);
+    await writeFile(join(repo, ".cursorrules"), "edited rules\n");
+
+    const { code, doc } = await run(repo, CHECKPOINT);
+
+    expect(code).toBe(0);
+    expect(doc).toMatchObject({ pushed: true, notDone: [], held: [".cursorrules"] });
+    const patch = await readFile(join(repo, PATCH), "utf8");
+    expect(patch).toContain("+staged rules");
+    expect(patch).toContain("+edited rules");
+    const fresh = join(dirname(repo), "at-base");
+    git(repo, ["worktree", "add", "-q", "--detach", fresh, base]);
+    git(fresh, ["apply", join(repo, PATCH)]);
+    expect(await readFile(join(fresh, ".cursorrules"), "utf8")).toBe("edited rules\n");
   });
 
   it("refuses the push when a commit it would send changes a held path, rewriting no history (review/159)", async () => {
@@ -429,6 +457,65 @@ describe("stamity run checkpoint", () => {
     expect(code).toBe(0);
     expect(doc).toMatchObject({ committed: null, pushed: false, notDone: [] });
     expect(pushes()).toEqual([]);
+  });
+
+  // pr/20: "nothing ahead" is the remote's own branch, not a remote-tracking ref a deletion on the remote left stale.
+  it("pushes again when the remote's branch is gone though the remote-tracking ref still names HEAD", async () => {
+    const { repo, remote } = await seed("attended");
+    await writeFile(join(repo, "a.txt"), "changed\n");
+    expect((await run(repo, [...CHECKPOINT, "--paths", "a.txt"])).code).toBe(0);
+    const head = git(repo, ["rev-parse", "HEAD"]);
+    expect(git(repo, ["rev-parse", `refs/remotes/origin/${RUN_BRANCH}`])).toBe(head);
+    git(remote, ["update-ref", "-d", `refs/heads/${RUN_BRANCH}`]);
+    writes.argv.length = 0;
+
+    const { code, doc } = await run(repo, CHECKPOINT);
+
+    expect(code).toBe(0);
+    expect(doc).toMatchObject({ committed: null, pushed: true, notDone: [] });
+    expect(pushes()).toHaveLength(1);
+    expect(git(remote, ["rev-parse", `refs/heads/${RUN_BRANCH}`])).toBe(head);
+  });
+
+  // pr/5: the commit takes the whole index, so a path staged before the verb ran and not in its list refuses it.
+  it("refuses a path staged outside --paths, naming it and committing and pushing nothing", async () => {
+    const { repo, remote, base } = await seed("attended");
+    await writeFile(join(repo, "a.txt"), "changed\n");
+    await writeFile(join(repo, "b.txt"), "staged by someone else\n");
+    git(repo, ["add", "--", "b.txt"]);
+
+    const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+    expect(code).toBe(1);
+    expect(doc).toMatchObject({ committed: null, pushed: false, notDone: ["commit refused: b.txt is staged and not in --paths"] });
+    expect(git(repo, ["rev-parse", "HEAD"])).toBe(base);
+    expect(pushes()).toEqual([]);
+    expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
+  });
+
+  it("commits a path staged beforehand under a --paths folder", async () => {
+    const { repo, remote } = await seed("attended");
+    await put(repo, "src/x.ts", "export const x = 1;\n");
+    git(repo, ["add", "--", "src/x.ts"]);
+
+    const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "src"]);
+
+    expect(code).toBe(0);
+    expect(doc).toMatchObject({ pushed: true, notDone: [] });
+    expect(pushedTree(remote)).toContain("src/x.ts");
+  });
+
+  // pr/7: an unread code file does not hold the push, and notDone says the scan left it out.
+  it("names a pushed code file the scan could not read in notDone, and still pushes with exit 0", async () => {
+    const { repo, remote } = await seed("attended");
+    await writeFile(join(repo, "x.ts"), Buffer.from("export const x = 1;\n\0\n"));
+
+    const { code, doc, stdout } = await run(repo, [...CHECKPOINT, "--paths", "x.ts"]);
+
+    expect(code).toBe(0);
+    expect(doc).toMatchObject({ pushed: true, scan: { hits: [], unscanned: ["x.ts"] }, notDone: ["secret scan: 1 files unscanned (x.ts)"] });
+    expect(stdout).toContain("secret scan: 1 files unscanned (x.ts)");
+    expect(pushedTree(remote)).toContain("x.ts");
   });
 
   it("names a failing pre-push hook and never retries around it", async () => {

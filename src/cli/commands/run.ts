@@ -53,7 +53,8 @@ import { readPushed, scanChange } from "./gate.ts";
  * **`start` pins origin** (review/209): the one repository `resolveRepo` matches on
  * `origin`'s fetch URL and on every push URL git resolves for it (`pushInsteadOf`
  * applied) goes to the run folder's `origin.json` as `{ host, owner, repo }`,
- * staged with the run folder; one already there is kept, and `start` refuses
+ * staged with the run folder, read and written once the run is on its branch
+ * (pr/4); one already there is kept, and `start` refuses
  * when origin now names another repository. An origin naming no GitHub
  * repository pins nothing, said in the text.
  *
@@ -80,7 +81,9 @@ import { readPushed, scanChange } from "./gate.ts";
  * restores those paths to `Base:` in the index only, after the staging, so a
  * `--paths` entry naming one is held too, and a symbolic link the change adds
  * or retypes at a held path or at a held glob's directory prefix (`.claude`,
- * `.github/workflows`, any `.vscode`) is held the same way (review/200); commits (`--signoff` adding the DCO
+ * `.github/workflows`, any `.vscode`) is held the same way (review/200); refuses
+ * a path staged outside that list as `commit refused: <path> is staged and not
+ * in --paths` (pr/5); commits (`--signoff` adding the DCO
  * line); in an unattended run refuses the push when a commit it would send
  * changes a person-only path, or `HEAD`'s tree still does (`held path in
  * history (…)`, never a history rewrite); scans the commits the remote lacks
@@ -89,9 +92,9 @@ import { readPushed, scanChange } from "./gate.ts";
  * the command checked by the shell guard's own person-only table first; and
  * with `--pr` opens or updates the run's draft pull request. Exit 0 when the
  * remote branch holds `HEAD` (pushed now, or already there with nothing
- * ahead) and, with `--pr`, a pull request was opened, updated or commented;
+ * ahead, read from the remote itself, pr/20) and, with `--pr`, a pull request was opened, updated or commented;
  * else 1, `notDone[]` naming why. `notDone[]` may carry entries on exit 0 too
- * (an ignored record). Under `--dry-run` nothing is staged, written,
+ * (an ignored record, a file the scan left unread). Under `--dry-run` nothing is staged, written,
  * committed or pushed.
  *
  * **`end`** (`--title` required, no `--pr`) runs `checkpoint`'s steps and
@@ -252,12 +255,12 @@ async function runStart(ctx: CliContext, run: string): Promise<CommandResult> {
       next: "run it inside a repository with at least one commit",
     });
   }
-  const pinned = await pinOrigin(ctx, cwd, run);
   const current = await currentBranch(cwd);
   const defaults = current === null ? null : await defaultBranches(ctx, cwd);
   const onDefault = defaults !== null && current !== null && defaults.names.includes(current.toLowerCase());
 
   if (current !== null && !onDefault) {
+    const pinned = await pinOrigin(ctx, cwd, run);
     ctx.io.out(`branch: ${sanitizeLabel(current)} (kept: not the default branch)\nbase: ${head}\n${pinned}\n`);
     return { exitCode: 0, json: start(run, current, false, head, ctx.dryRun) };
   }
@@ -286,6 +289,9 @@ async function runStart(ctx: CliContext, run: string): Promise<CommandResult> {
       next: `read it with git rev-parse HEAD, and write that as the record's Base:`,
     });
   }
+  // pr/4: read on the run's branch, so a pin a checkpoint committed there is the one compared, and none is
+  // written untracked first, where the switch to a branch that tracks it would refuse to overwrite it.
+  const pinned = await pinOrigin(ctx, cwd, run);
   const lines = [`branch: ${runBranch} (${how})`, `base: ${base}`, pinned];
   if (defaults !== null) lines.push(`default branch read from: ${SOURCE_LABEL[defaults.source]}`);
   if (ctx.dryRun) lines.push("Dry run: nothing was switched.");
@@ -430,6 +436,21 @@ async function commitAt(cwd: string, rev: string, verb: string = START): Promise
   const read = await git(cwd, ["rev-parse", "--verify", "--quiet", `${rev}^{commit}`], verb);
   const sha = read.stdout.trim();
   return read.code === 0 && /^[0-9a-f]{40,64}$/.test(sha) ? sha : null;
+}
+
+/**
+ * The commit origin's own `refs/heads/<branch>` names, read from the remote
+ * (`git ls-remote --exit-code`, pr/20) rather than off a remote-tracking ref a
+ * deletion or a move on the remote leaves stale; `null` where the remote has no
+ * such branch or could not be read, so the push runs and says what it found.
+ */
+async function remoteTip(top: string, branch: string, verb: string): Promise<string | null> {
+  const ref = `refs/heads/${branch}`;
+  const read = await git(top, ["ls-remote", "--exit-code", "origin", ref], verb);
+  if (read.code !== 0) return null;
+  const row = read.stdout.split(/\r?\n/).find((line) => line.endsWith(`\t${ref}`));
+  const sha = row?.slice(0, row.indexOf("\t")) ?? "";
+  return /^[0-9a-f]{40,64}$/.test(sha) ? sha : null;
 }
 
 /** The branch `HEAD` is on, or `null` at a detached `HEAD`. */
@@ -639,19 +660,22 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
     }
     if (held.length > 0) {
       // Git writes the patch to a file, so its bytes never pass a text decode: a held file in any encoding applies again.
-      // Each path from the side the push would have carried: the index where it changes the path, else the work tree.
+      // Each path from the side the push would have carried: the index where it changes the path, else the work tree;
+      // pr/6: a staged path then edited again also gets the index-to-work-tree part, so the patch applies to the work tree's bytes.
       const scratch = mkdtempSync(join(tmpdir(), "stamity-held-"));
       try {
+        const staged = held.filter((path) => inIndex.includes(path));
         const sides: [string[], string[]][] = [
-          [["--cached"], held.filter((path) => inIndex.includes(path))],
-          [[], held.filter((path) => !inIndex.includes(path))],
+          [["--cached", base], staged],
+          [[base], held.filter((path) => !inIndex.includes(path))],
+          [[], staged],
         ];
         const written = await Promise.all(
           sides
             .filter(([, paths]) => paths.length > 0)
             .map(async ([side, paths], index) => {
               const out = join(scratch, `${index}-${HELD_PATCH}`);
-              return { out, patch: await git(top, ["diff", ...side, "--binary", "--full-index", ...DIFF_PINS, `--output=${out}`, base, "--", ...paths], verb) };
+              return { out, patch: await git(top, ["diff", "--binary", "--full-index", ...DIFF_PINS, `--output=${out}`, ...side, "--", ...paths], verb) };
             }),
         );
         const failed = written.find(({ patch }) => patch.code !== 0);
@@ -694,6 +718,17 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   const inHistory = history.held;
   if (history.note !== null) lines.push(`history: ${history.note}`);
 
+  // pr/5: the commit takes the whole index, so a path staged before the verb ran and not in its own list refuses it.
+  const stray = await strayStaged(top, [...stage, ...patches, ...result.held], named);
+  if (stray === null) {
+    result.notDone.push("commit failed: git diff --cached could not list the staged paths");
+    return finish(false);
+  }
+  if (stray.length > 0) {
+    result.notDone.push(...stray.map((path) => `commit refused: ${path} is staged and not in --paths`));
+    return finish(false);
+  }
+
   // (4) The commit, only when something is staged.
   const staged = await git(top, ["diff", "--cached", "--quiet", "--no-ext-diff", "--ignore-submodules=none"], verb);
   if (staged.code === 1) {
@@ -735,6 +770,10 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
     result.notDone.push(`push held: secret scan hit at ${hit.path}:${hit.line}${hit.commit === undefined ? "" : ` (commit ${hit.commit})`} (${hit.rule})`);
   }
   if (outcome.incomplete !== undefined) result.notDone.push(`push held: the secret scan is incomplete (${outcome.incomplete})`);
+  // pr/7: an unread code file does not hold the push, but the morning list says the scan did not cover it.
+  if (result.scan.unscanned.length > 0) {
+    result.notDone.push(`secret scan: ${result.scan.unscanned.length} files unscanned (${result.scan.unscanned.join(", ")})`);
+  }
   lines.push(`scan: ${result.scan.hits.length === 0 ? "no hits" : `${result.scan.hits.length} hit(s)`}; unscanned: ${list(result.scan.unscanned)}`);
   if (outcome.note !== undefined) lines.push(`scan history: ${outcome.note}`);
   if (result.scan.hits.length > 0 || outcome.incomplete !== undefined) return finish(false);
@@ -742,7 +781,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   // (6) The push, its command checked by the shell guard's own table before it runs.
   const refspec = `HEAD:refs/heads/${current}`;
   const tip = await commitAt(top, "HEAD", verb);
-  if (tip !== null && tip === (await commitAt(top, `refs/remotes/origin/${current}`, verb))) {
+  if (tip !== null && tip === (await remoteTip(top, current, verb))) {
     lines.push(`push: nothing ahead of origin/${current}`);
   } else {
     const verdict = personOnlyVerdict(`git push origin ${refspec}`, {
@@ -963,6 +1002,23 @@ async function add(top: string, paths: readonly string[], notDone: string[]): Pr
   if (added.code === 0) return true;
   notDone.push(`stage failed: git add answered ${added.code}: ${firstLine(added.stderr)}`);
   return false;
+}
+
+/**
+ * The staged paths (the index against `HEAD`, what the commit takes) that are
+ * neither one of `own` (the run files, the inbox, `--paths`, the held patches,
+ * the held paths) nor under a `--paths` folder (pr/5); `null` when git could
+ * not list them.
+ */
+async function strayStaged(top: string, own: readonly string[], named: readonly string[]): Promise<string[] | null> {
+  const read = await git(top, ["diff", "--cached", "--name-only", "-z", ...DIFF_PINS, "HEAD", "--"], CHECKPOINT);
+  if (read.code !== 0) return null;
+  const exact = new Set(own);
+  const folders = named.map((path) => `${path.replace(/\/+$/, "")}/`);
+  return read.stdout
+    .split("\0")
+    .filter((path) => path !== "" && !exact.has(path) && !folders.some((folder) => path.startsWith(folder)))
+    .toSorted();
 }
 
 /**

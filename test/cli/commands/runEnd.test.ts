@@ -56,7 +56,8 @@ vi.mock("../../../src/cli/engine/gitWrite.ts", async (importOriginal) => {
       // sends it to the case's bare remote, `remote.git` beside the repository the push runs at the top of, so
       // every read the verb makes sees the GitHub URL git would push to.
       const remote = join(dirname(cwd), "remote.git");
-      if (args[0] !== "push" || !existsSync(remote)) return real.gitWrite(cwd, args, opts);
+      // TEST CHANGE, justified: pr/20 reads the remote branch with `git ls-remote origin`, so that read goes there too.
+      if ((args[0] !== "push" && args[0] !== "ls-remote") || !existsSync(remote)) return real.gitWrite(cwd, args, opts);
       const mapping = { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: `url.${remote}.insteadOf`, GIT_CONFIG_VALUE_0: "https://github.com/o/r.git" };
       const previous = Object.fromEntries(Object.keys(mapping).map((key) => [key, process.env[key]]));
       Object.assign(process.env, mapping);

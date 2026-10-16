@@ -373,6 +373,42 @@ describe("stamity run start", () => {
       expect(JSON.stringify(again.doc["error"])).toContain("Not done: origin changed");
     });
 
+    /** A run branch whose tip commits `pin` at the pin's path, the checkout back on main. */
+    async function branchWithPin(pin: string): Promise<string> {
+      const repo = await seedRepo();
+      git(repo, ["switch", "-q", "-c", RUN_BRANCH]);
+      await mkdir(join(repo, ".stamity", "runs", RUN), { recursive: true });
+      await writeFile(join(repo, PIN), pin);
+      git(repo, ["add", "--", PIN]);
+      git(repo, ["commit", "-q", "-m", "checkpoint"]);
+      git(repo, ["switch", "-q", "main"]);
+      return repo;
+    }
+
+    // pr/4: the pin is read once the run is on its branch, so a resumed run's committed pin is compared, not shadowed.
+    it("checks out an existing run branch that tracks its pin, keeping it, the checkout clean", async () => {
+      const repo = await branchWithPin('{"host":"github.com","owner":"o","repo":"r"}\n');
+      restDefault("main");
+
+      const { code, stdout } = await run(repo, ["start", "--run", RUN]);
+
+      expect(code).toBe(0);
+      expect(current(repo)).toBe(RUN_BRANCH);
+      expect(stdout).toContain(`origin: github.com/o/r (pinned in ${PIN}, kept)`);
+      expect(git(repo, ["status", "--porcelain", "--untracked-files=all"])).toBe("");
+    });
+
+    it("refuses as origin changed where the existing run branch's committed pin names another repository", async () => {
+      const repo = await branchWithPin('{"host":"github.com","owner":"elsewhere","repo":"r"}\n');
+      restDefault("main");
+
+      const { code, doc } = await run(repo, START);
+
+      expect(code).toBe(1);
+      expect(JSON.stringify(doc["error"])).toContain("Not done: origin changed");
+      expect(JSON.stringify(doc["error"])).toContain("pins github.com/elsewhere/r, and origin now names github.com/o/r");
+    });
+
     it("pins nothing for an origin naming no GitHub repository, nor under --dry-run", async () => {
       const local = await seedRepo({ url: null });
       const dry = await seedRepo();
