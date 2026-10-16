@@ -83,8 +83,12 @@ export function parseYamlStrict(raw: string, source: string): unknown {
     // `merge: true` — `<<: *anchor` merge keys are opt-in from yaml v2 onward and
     // shared config blocks rely on them. `maxAliasCount` stays at the library
     // default (100): that is the alias-expansion bomb guard, so a bomb is refused
-    // in milliseconds here instead of expanding into memory.
-    parsed = parseYaml(raw, { merge: true }) as unknown;
+    // in milliseconds here instead of expanding into memory. `logLevel: "error"`
+    // — the library's default `"warn"` prints each warning through
+    // `process.emitWarning`, quoting the document's source line, around every
+    // caller's output and sanitizer. Errors still throw at this level (only
+    // `"silent"` drops them).
+    parsed = parseYaml(raw, { merge: true, logLevel: "error" }) as unknown;
   } catch (cause) {
     throw new EngineError(
       `Malformed YAML in ${source}: ${firstLine(cause)}. Fix the YAML syntax and re-run.`,

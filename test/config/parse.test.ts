@@ -145,6 +145,20 @@ describe("parseYamlStrict", () => {
     expect(Date.now() - started).toBeLessThan(2000);
     expect(error.message).toContain(YAML_SOURCE);
   });
+
+  it("writes no warning to the process for an unresolved tag or a collection key", () => {
+    // The yaml library's default log level hands each warning, with the
+    // document's source line, to process.emitWarning, which prints it to stderr
+    // around the caller's io and sanitizer. The spy catches any such write.
+    const emitWarning = vi.spyOn(process, "emitWarning").mockImplementation(() => {});
+    try {
+      expect(parseYamlStrict("a: !sentinel-tag value\n", YAML_SOURCE)).toEqual({ a: "value" });
+      expect(parseYamlStrict("? [sentinel-key]\n: v\n", YAML_SOURCE)).toEqual({ "[ sentinel-key ]": "v" });
+      expect(emitWarning).not.toHaveBeenCalled();
+    } finally {
+      emitWarning.mockRestore();
+    }
+  });
 });
 
 describe("require* field validators", () => {
