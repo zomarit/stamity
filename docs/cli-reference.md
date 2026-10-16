@@ -32,6 +32,7 @@ mistake.
 | `stamity ledger` | plumbing | writes | append findings to a run's ledger, close its rows, print its resume card, and read and write the deferral inbox (plumbing) |
 | `stamity gate` | plumbing | reads only | classify a change, scan its added lines or an outbound text for secrets, or check an unattended start (plumbing) |
 | `stamity plan` | plumbing | reads only | check that plans are ready for an unattended start (plumbing) |
+| `stamity run` | plumbing | writes | put an unattended run on a branch of its own (plumbing) |
 
 ## What every command shares
 
@@ -50,7 +51,7 @@ identically everywhere they apply.
 ### JSON output
 
 `--json` produces exactly one JSON document on stdout, and nothing else, for every
-run that reaches a command — all 14 of the commands above, success and
+run that reaches a command — all 15 of the commands above, success and
 failure alike. Human output is suppressed in the same run, so a reader never has to
 separate prose from payload. Every document carries `ok`, `command` and `version`;
 a success adds the command's own fields, and a failure adds `error` with `code` and
@@ -356,5 +357,24 @@ Reads only. Nothing is written, so there is no preview mode to need.
 | `--chain` | the plans are one chain: each file's head depends_on names the file before it | — |
 | `--since <sha>` | with --chain, the run's base: a path moved only after it is exempt | — |
 | `--contract <path>` | the run contract the plans run under | — |
+
+## `stamity run`
+
+put an unattended run on a branch of its own (plumbing)
+
+Plumbing. This verb is not listed in `stamity --help` because its caller is generated
+agent content rather than a person. Hidden is not secret — `stamity run --help` prints
+in full — and it is documented here because a verb that exists and is undocumented is
+worse than one that is merely unadvertised.
+
+May write when it runs, so `--dry-run` previews any change without making it.
+
+| Argument | What it is |
+|---|---|
+| `<subcommand>` | which run action to run — one of `start` |
+
+| Flag | What it does | Default |
+|---|---|---|
+| `--run <run-id>` | the run folder's name under .stamity/runs/ | — |
 
 Regenerate this page with `node scripts/generate-docs.mjs`.
