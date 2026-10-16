@@ -32,7 +32,7 @@ mistake.
 | `stamity ledger` | plumbing | writes | append findings to a run's ledger, close its rows, print its resume card, and read and write the deferral inbox (plumbing) |
 | `stamity gate` | plumbing | reads only | classify a change, scan its added lines or an outbound text for secrets, or check an unattended start (plumbing) |
 | `stamity plan` | plumbing | reads only | check that plans are ready for an unattended start (plumbing) |
-| `stamity run` | plumbing | writes | put an unattended run on a branch of its own (plumbing) |
+| `stamity run` | plumbing | writes | put an unattended run on a branch of its own, and push its work there (plumbing) |
 
 ## What every command shares
 
@@ -360,7 +360,7 @@ Reads only. Nothing is written, so there is no preview mode to need.
 
 ## `stamity run`
 
-put an unattended run on a branch of its own (plumbing)
+put an unattended run on a branch of its own, and push its work there (plumbing)
 
 Plumbing. This verb is not listed in `stamity --help` because its caller is generated
 agent content rather than a person. Hidden is not secret — `stamity run --help` prints
@@ -371,10 +371,14 @@ May write when it runs, so `--dry-run` previews any change without making it.
 
 | Argument | What it is |
 |---|---|
-| `<subcommand>` | which run action to run — one of `start` |
+| `<subcommand>` | which run action to run — one of `start`, `checkpoint` |
 
 | Flag | What it does | Default |
 |---|---|---|
 | `--run <run-id>` | the run folder's name under .stamity/runs/ | — |
+| `--paths <path...>` | checkpoint: also stage these paths, relative to the project root | — |
+| `--pr` | checkpoint: open or update the run's draft pull request after the push (with --title) | — |
+| `--title <title>` | checkpoint: the draft pull request's title | — |
+| `--signoff` | checkpoint: add the Signed-off-by line to the commit | — |
 
 Regenerate this page with `node scripts/generate-docs.mjs`.
