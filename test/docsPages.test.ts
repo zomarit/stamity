@@ -2232,6 +2232,8 @@ describe("SECURITY.md", () => {
         "a git call carrying a `-c` or `--config-env` pair outside the display and identity keys",
         "`git -c core.fsmonitor=… status` among them",
         "`Set-Item env:` and `New-Item env:` and `[Environment]::SetEnvironmentVariable` among the spellings",
+        // A `declare`, `typeset` or `local` export with no value is a refused spelling too (review/243).
+        "`export`, and `declare`, `typeset` or `local` given `-x`, with a value or without one, PowerShell's `$env:`",
         "`Set-Content env:GIT_EXEC_PATH …`, passes, and the respelling residual above covers it",
       ]) {
         expect(residuals, `the cloud section does not name: ${named}`).toContain(named);
@@ -2641,6 +2643,7 @@ describe("docs/security-mapping.md", () => {
     for (const claim of [
       "the environment the run verbs start under (`PATH`, `HOME`, `XDG_CONFIG_HOME`) choosing the git they run and the global configuration it reads",
       "PowerShell's `Set-Item env:` and `New-Item env:` among the spellings; a program-valued variable set through another of PowerShell's `env:` drive commands passes",
+      "`export`, and `declare`, `typeset` or `local` given `-x`, with a value or without one, and PowerShell's `Set-Item env:`",
       "a program-valued variable set through a PowerShell `env:` drive command other than `Set-Item` and `New-Item` among the ways",
     ]) {
       expect(flat, `the mapping page does not state: ${claim}`).toContain(claim);

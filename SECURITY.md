@@ -443,7 +443,8 @@ refused. What stays open is named here, as accepted risk:
   `GIT_CONFIG_SYSTEM`), in any form that sets one, PowerShell's `Set-Item env:` among them, or one of
   git's program-valued variables (`GIT_EDITOR`, `GIT_SEQUENCE_EDITOR`, `GIT_SSH_COMMAND`, `GIT_SSH`,
   `GIT_EXTERNAL_DIFF`, `GIT_ASKPASS`, `GIT_PAGER`, `GIT_PROXY_COMMAND`, `GIT_EXEC_PATH`), wherever
-  on the line, `export`, PowerShell's `$env:`, `Set-Item env:` and `New-Item env:` and
+  on the line, `export`, and `declare`, `typeset` or `local` given `-x`, with a value or without one,
+  PowerShell's `$env:`, `Set-Item env:` and `New-Item env:` and
   `[Environment]::SetEnvironmentVariable` among the spellings: the run verbs' git keeps the
   caller's environment, so a variable set on a verb's line reaches its push. Code:
   `src/hooks/personOnly.ts::unattendedPushVerdict`, `src/cli/engine/gitWrite.ts::gitWriteEnv`. A
