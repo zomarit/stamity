@@ -625,7 +625,10 @@ describe("the unattended push rule, the mode read from the run records", () => {
       // A program-valued git variable (review/208), a remote write in both spellings (review/209), and a close
       // (review/213).
       "GIT_SSH_COMMAND='sh -c \"git push origin x\"' git fetch", "git remote set-url origin https://example.com/r.git",
-      "git config remote.origin.url https://example.com/r.git", "gh pr close 3"];
+      "git config remote.origin.url https://example.com/r.git", "gh pr close 3",
+      // A `url.*` rewrite (review/220) and the configuration variables in a quoted spelling (review/221).
+      "git config url.https://example.com/.pushInsteadOf https://github.com/",
+      "env GIT_CONF''IG_COUNT=1 GIT_CONF''IG_KEY_0=core.sshCommand GIT_CONFIG_VALUE_0=x git fetch"];
     for (const command of unattended) {
       const source = unattendedPushVerdict(command);
       expect(source.deny, command).toBe(true);
@@ -640,7 +643,8 @@ describe("the unattended push rule, the mode read from the run records", () => {
     expect(decide("claude", guard, "git -c color.ui=never status").deny).toBe(false);
     expect(decide("claude", guard, "git -c user.name=x commit -m m").deny).toBe(false);
     // The twins: a variable that runs nothing, a remote and a remote key read, a pull request read.
-    for (const command of ["GIT_TERMINAL_PROMPT=0 git fetch origin", "git remote get-url origin", "git config --get remote.origin.url", "gh pr view 3"]) {
+    for (const command of ["GIT_TERMINAL_PROMPT=0 git fetch origin", "git remote get-url origin", "git config --get remote.origin.url", "gh pr view 3",
+      "git config --get url.https://example.com/.insteadOf", "GIT_CONFIG_NOSYSTEM=1 git status"]) {
       expect(unattendedPushVerdict(command), command).toEqual({ deny: false });
       expect(decide("claude", guard, command).deny, command).toBe(false);
     }

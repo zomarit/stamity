@@ -778,6 +778,12 @@ describe("unattendedPushVerdict", () => {
     ["git --config-env=core.fsmonitor=HOOK status"],
     ["GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.fsmonitor GIT_CONFIG_VALUE_0='git push origin x' git status"],
     ["export GIT_CONFIG_PARAMETERS=\"'core.fsmonitor=git push'\"; git status"],
+    // The same variables as the reading decodes them (review/221): quoted or escaped, after `env` or `export`, inside a
+    // nested line.
+    ["env GIT_CONF''IG_COUNT=1 GIT_CONF''IG_KEY_0=core.sshCommand GIT_CONFIG_VALUE_0=x git fetch"],
+    ["env $'GIT\\x5fCONFIG_PARAMETERS=x' git status"],
+    ["export GIT_CONF\"\"IG_COUNT=1; git status"],
+    ["sh -c 'GIT_CONF\"\"IG_KEY_0=core.fsmonitor git status'"],
     // Closing or reopening a pull request, the REST twin's `PATCH pulls/<n>` (review/213).
     ["gh pr close 3"],
     ["gh pr reopen 3"],
@@ -836,6 +842,14 @@ describe("unattendedPushVerdict", () => {
     ["git config --edit"],
     ["git config -e"],
     ["git config edit --local"],
+    // A `git config` write of a `url.*` key (review/220): `insteadOf` and `pushInsteadOf` rewrite where a remote fetches
+    // and pushes without naming a `remote.*` key, in the option forms and the subcommands, any scope.
+    ["git config url.https://example.com/.pushInsteadOf https://github.com/"],
+    ["git config --global url.git@example.com:.insteadOf https://github.com/"],
+    ["git config set url.https://example.com/.insteadOf https://github.com/"],
+    ["git config --add url.https://example.com/.pushInsteadOf https://github.com/"],
+    ["git config --unset url.https://example.com/.insteadOf"],
+    ["git config --remove-section url.https://example.com/"],
   ])("denies %j, naming the run verbs", (command) => {
     const verdict = unattendedPushVerdict(command);
     expect(verdict.deny).toBe(true);
@@ -929,6 +943,16 @@ describe("unattendedPushVerdict", () => {
     ["git config user.name bot"],
     ["git config set user.email bot@example.com"],
     ["git config user.email remote.bot@example.com"],
+    // review/220's twins: reads of a `url.*` key, and a value that merely starts as one does.
+    ["git config --get url.https://example.com/.insteadOf"],
+    ["git config --get-regexp '^url\\.'"],
+    ["git config --get-urlmatch http https://example.com"],
+    ["git config user.email url.bot@example.com"],
+    // review/221's twins: a git variable that sets no configuration, the variables on a line with no git call, and a
+    // commit message naming one.
+    ["GIT_CONFIG_NOSYSTEM=1 git status"],
+    ["env GIT_CONF''IG_COUNT=1 npm test"],
+    ["git commit -m 'GIT_CONFIG_COUNT is left unset'"],
   ])("allows %j", (command) => {
     expect(unattendedPushVerdict(command)).toEqual({ deny: false });
   });

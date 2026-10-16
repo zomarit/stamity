@@ -1546,6 +1546,8 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
   const CONFIG_KEYS = /^(?:color\..+|advice\..+|core\.quotepath|init\.defaultbranch|user\.name|user\.email)$/i;
   /** An assignment of the variables through which git reads configuration pairs from the environment. */
   const CONFIG_ENVIRONMENT = /\bGIT_CONFIG_(?:COUNT|KEY_\d+|PARAMETERS)\s*=/i;
+  /** A word, as the reading decoded it, assigning one of them (review/221): a quoted or escaped spelling among them. */
+  const CONFIG_ENVIRONMENT_WORD = /^GIT_CONFIG_(?:COUNT|KEY_\d+|PARAMETERS)=/i;
   /** git's environment variables whose value is a program git runs (review/208): twins of the `-c` keys refused below. */
   const PROGRAM_VARIABLES =
     "GIT_EDITOR|GIT_SEQUENCE_EDITOR|GIT_SSH_COMMAND|GIT_SSH|GIT_EXTERNAL_DIFF|GIT_ASKPASS|GIT_PAGER|GIT_PROXY_COMMAND|GIT_EXEC_PATH";
@@ -1557,7 +1559,8 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
   const REMOTE_WRITES = new Set(["add", "set-url", "rename", "remove", "rm", "set-head", "set-branches"]);
 
   /**
-   * Whether a `git config` call writes a `remote.*` key or section (review/209): a set, an add, an unset, a section
+   * Whether a `git config` call writes a `remote.*` key or section (review/209), or a `url.*` one, whose `insteadOf`
+   * and `pushInsteadOf` rewrite where a remote fetches and pushes (review/220): a set, an add, an unset, a section
    * renamed or removed, in the option forms or the subcommands, and an edit of the file, which can write any key.
    */
   function writesRemote(args: string[]): boolean {
@@ -1600,7 +1603,7 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
     const rest = sub === "" ? positionals : positionals.slice(1);
     const keys = rest.slice(0, rename || sub === "rename-section" ? 2 : 1);
     const writes = write || ["set", "unset", "rename-section", "remove-section"].includes(sub) || (sub === "" && !read && rest.length > 1);
-    return writes && keys.some((key) => /^remote(\.|$)/i.test(key));
+    return writes && keys.some((key) => /^(?:remote|url)(\.|$)/i.test(key));
   }
 
   const commands = commandsOf(command, 0, false);
@@ -1619,7 +1622,8 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
       // A configuration value git runs as a line (`core.fsmonitor`, `core.sshCommand`, …) runs whatever it names, so
       // unattended a git call sets only display and identity keys (the 02:31Z sign-off): a `-c` pair, or a
       // `--config-env` one, outside CONFIG_KEYS is refused, and so is any git call on a line that sets git's
-      // configuration through the environment, wherever on the line, since the text cannot always settle the order.
+      // configuration through the environment, wherever on the line, since the text cannot always settle the order,
+      // as the text spells it or as the reading decodes it (a quoted or escaped word, review/221).
       const globals = cmd.slice(1, cmd.length - args.length - 1);
       const configEnv = globals.flatMap((word, index) =>
         word === "--config-env" ? [globals[index + 1] ?? ""] : word.startsWith("--config-env=") ? [word.slice(13)] : [],
@@ -1627,7 +1631,7 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
       if ([...config, ...configEnv].some((pair) => !CONFIG_KEYS.test((pair.split("=")[0] ?? "").trim()))) {
         return deny("A git call setting a configuration key outside the display and identity keys (`-c <key>=…`)");
       }
-      if (CONFIG_ENVIRONMENT.test(command)) {
+      if (CONFIG_ENVIRONMENT.test(command) || [...assigned, ...commands.flat()].some((word) => CONFIG_ENVIRONMENT_WORD.test(word))) {
         return deny("A git call on a line that sets git's configuration through the environment (`GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_<n>`, `GIT_CONFIG_PARAMETERS`)");
       }
       // The environment twins of those keys (review/208): a variable whose value git runs as a program, set anywhere on
@@ -1639,7 +1643,7 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
       // A remote repointed mid-run sends the run verbs' push somewhere the pre-flight never proved (review/209).
       const remoteForm = sub === "remote" ? (args.find((word) => !word.startsWith("-")) ?? "").toLowerCase() : "";
       if (REMOTE_WRITES.has(remoteForm)) return deny(`A \`git remote ${remoteForm}\`, a write of a remote`);
-      if (sub === "config" && writesRemote(args)) return deny("A `git config` write of a `remote.*` key");
+      if (sub === "config" && writesRemote(args)) return deny("A `git config` write of a `remote.*` or `url.*` key");
       // `git lfs` and `git submodule` pass in their read and setup forms; any other of theirs (`lfs push`,
       // `submodule foreach`, which runs a line) is refused as an unknown subcommand is (review/187).
       const forms = READ_FORMS.get(sub);
