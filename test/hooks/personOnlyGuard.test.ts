@@ -45,15 +45,19 @@ async function placeGuard(tool: Tool, files: Record<string, string> = {}): Promi
   return getRepo().path(".stamity", "generated", "hooks", tool, guard.fileName);
 }
 
+/** The shell tool a call names: POSIX text, or PowerShell's. */
+type Shell = "Bash" | "PowerShell";
+
 /**
  * A shell call as each client hands it to the script: Claude Code natively; Codex
  * and Copilot through the portable runner, which restores `tool_name` and
- * `tool_input` (Copilot's `bash` mapped to `Bash`); Cursor's `beforeShellExecution`.
+ * `tool_input` (Copilot's `bash` mapped to `Bash`, its `powershell` to `PowerShell`);
+ * Cursor's `beforeShellExecution`, which names no shell.
  */
-function payload(tool: Tool, command: string, cwd?: string): string {
+function payload(tool: Tool, command: string, cwd?: string, shell: Shell = "Bash"): string {
   if (tool === "cursor") return JSON.stringify({ hook_event_name: "beforeShellExecution", command, cwd: cwd ?? "." });
-  const extra = tool === "copilot" ? { toolName: "bash" } : { hook_event_name: "PreToolUse" };
-  return JSON.stringify({ ...extra, tool_name: "Bash", tool_input: { command }, ...(cwd === undefined ? {} : { cwd }) });
+  const extra = tool === "copilot" ? { toolName: shell.toLowerCase() } : { hook_event_name: "PreToolUse" };
+  return JSON.stringify({ ...extra, tool_name: shell, tool_input: { command }, ...(cwd === undefined ? {} : { cwd }) });
 }
 
 /** Runs the guard as a client does, with the two variables it reads under the test's control. */
@@ -65,8 +69,8 @@ function run(guard: string, input: string, env: Record<string, string> = {}): Re
 }
 
 /** The decision each client's output carries: exit 2 and stderr, or the client's own JSON. */
-function decide(tool: Tool, guard: string, command: string, env?: Record<string, string>, cwd?: string): Decision {
-  const result = run(guard, payload(tool, command, cwd), env);
+function decide(tool: Tool, guard: string, command: string, env?: Record<string, string>, cwd?: string, shell?: Shell): Decision {
+  const result = run(guard, payload(tool, command, cwd, shell), env);
   const stdout = String(result.stdout).trim();
   if (tool === "claude" || tool === "codex") {
     expect(stdout, command).toBe("");
@@ -254,6 +258,150 @@ describe("the branch read where the command runs", () => {
     }
     expect(decide("claude", guard, 'git -C "$WT" push origin feat/x').deny).toBe(false);
     expect(decide("claude", guard, "git push", undefined, getRepo().path("missing")).deny).toBe(true);
+  });
+});
+
+/** A commit message naming every directory read, with no single quote, so each quoting form below can carry it. */
+const MESSAGE = [
+  "fix(hooks): read a directory change only where a command starts",
+  "",
+  "cd wt-main, pushd wt-main and chdir wt-main count at a command position.",
+  "env -C wt-main and GIT_DIR=.git/worktrees/wt-main count there too, as does git -C wt-main log.",
+  "Set-Location wt-main, sl wt-main, Push-Location wt-main and CD wt-main on PowerShell,",
+  "$env:GIT_DIR = .git/worktrees/wt-main, sh -c and eval cd wt-main; a reftable HEAD is .invalid.",
+].join("\n");
+
+describe("a directory read only where the shell runs a command (review/116)", () => {
+  it("reads a commit message and other quoted or argument words as data, so a feature branch's push stays allowed", async () => {
+    const guard = await placeGuard("claude", LINKED);
+    const allowed = [
+      `git commit -m "${MESSAGE}" && git push`,
+      `git commit -s -m '${MESSAGE}'; git push origin HEAD`,
+      `git commit -s -F - <<'EOF' && git push\n${MESSAGE}\nEOF`,
+      `git commit -F - <<EOF && git push\n${MESSAGE}\nEOF`,
+      `git commit -m "$(cat <<'EOF'\n${MESSAGE}\nEOF\n)" && git push`,
+      "echo cd wt-main && git push",
+      'git log --grep "env -C wt-main" -1 && git push',
+      "cat <<'EOF'\ncd wt-main\nEOF\ngit push",
+      "cat <<'EOF'\n$(cd wt-main && git push)\nEOF",
+    ];
+    for (const command of allowed) expect(decide("claude", guard, command).deny, command).toBe(false);
+  });
+
+  it("still reads each one where the shell runs it: after a keyword, a group, a wrapper, and in a line a command runs", async () => {
+    const guard = await placeGuard("claude", LINKED);
+    const denied = [
+      "if cd wt-main; then git push; fi",
+      "(cd wt-main && git push)",
+      "true && { cd wt-main; git push; }",
+      "echo `cd wt-main && git push`",
+      'echo "$(cd wt-main && git push)"',
+      "command cd wt-main && git push",
+      "sudo -u root git -C wt-main push",
+      "timeout -s KILL 60 git -C wt-main push",
+      "export GIT_DIR=.git/worktrees/wt-main; git push",
+      "eval 'cd wt-main && git push'",
+      "eval cd wt-main '&&' git push",
+      "env -S 'git -C wt-main push'",
+      "npx -c 'cd wt-main && git push'",
+      "npm exec -c 'cd wt-main && git push'",
+      "bash <<'EOF'\ncd wt-main\ngit push\nEOF",
+      "cat <<'EOF' | sh\ncd wt-main\ngit push\nEOF",
+      "cat <<EOF\n$(cd wt-main && git push)\nEOF",
+    ];
+    for (const command of denied) expect(decide("claude", guard, command), command).toMatchObject({ deny: true, reason: expect.stringContaining("push-default") });
+  });
+});
+
+describe("PowerShell's location commands and $env:GIT_DIR (review/117)", () => {
+  const denied = [
+    "Set-Location wt-main; git push",
+    "sl wt-main; git push",
+    "chdir wt-main; git push",
+    "Push-Location wt-main; git push",
+    "pushd wt-main; git push",
+    "CD wt-main; git push",
+    "Cd wt-main\ngit push origin HEAD",
+    "SET-LOCATION -Path wt-main; git push",
+    "Set-Location -LiteralPath 'wt-main'; git push",
+    "Set-Location -Path:wt-main; git push",
+    "Set-Location -PassThru wt-main | Out-Null; git push",
+    "if ($true) { Set-Location wt-main }; git push",
+    "$env:GIT_DIR = '.git/worktrees/wt-main'; git push",
+    "$env:GIT_DIR='.git/worktrees/wt-main'; git push",
+    '$ENV:git_dir = ".git/worktrees/wt-main"; git push',
+  ];
+
+  it.each(["claude", "copilot"] as const)("%s: reads each where a command starts, letter case aside, on the PowerShell tool", async (tool) => {
+    // The line is split as u6's verdict splits it, so these read where the push is read.
+    const guard = await placeGuard(tool, LINKED);
+    for (const command of denied) {
+      expect(decide(tool, guard, command, undefined, undefined, "PowerShell"), command).toMatchObject({ deny: true, reason: expect.stringContaining("push-default") });
+    }
+    const allowed = [
+      "Set-Location wt-feat; git push",
+      "Set-Location wt-main; git push origin feat/x",
+      "Write-Output 'Set-Location wt-main'; git push",
+      `git commit -m '${MESSAGE}'; git push`,
+      `@'\n${MESSAGE}\n'@ | git commit -F -; git push`,
+    ];
+    for (const command of allowed) expect(decide(tool, guard, command, undefined, undefined, "PowerShell").deny, command).toBe(false);
+  });
+
+  it("counts a target it cannot place as unreadable, and reads cd.. as the parent", async () => {
+    const guard = await placeGuard("claude", { ...LINKED, ".git/HEAD": "ref: refs/heads/main\n" });
+    const feature = getRepo().path("wt-feat");
+    expect(decide("claude", guard, "git push", undefined, feature, "PowerShell").deny).toBe(false);
+    for (const command of ["cd..; git push", "Set-Location $env:WT; git push", "Set-Location; git push", "'wt-main' | Set-Location; git push"]) {
+      expect(decide("claude", guard, command, undefined, feature, "PowerShell"), command).toMatchObject({ deny: true, reason: expect.stringContaining("push-default") });
+    }
+  });
+
+  it("reads them on a client whose payload names no shell too", async () => {
+    const guard = await placeGuard("cursor", LINKED);
+    expect(decide("cursor", guard, "Set-Location wt-feat; git push").deny).toBe(false);
+    for (const command of ["Set-Location wt-main; git push", "$env:GIT_DIR = '.git/worktrees/wt-main'; git push"]) {
+      expect(decide("cursor", guard, command), command).toMatchObject({ deny: true, reason: expect.stringContaining("push-default") });
+    }
+  });
+});
+
+describe("a HEAD that names no branch (review/118)", () => {
+  const IMPLIED = ["git push", "git push origin HEAD", "git push origin @"];
+
+  it("counts a reftable repository's placeholder HEAD as unreadable, so an implied destination is the default branch", async () => {
+    const guard = await placeGuard("claude", { ".git/HEAD": "ref: refs/heads/.invalid\n", ".git/reftable/tables.list": "" });
+    for (const command of IMPLIED) expect(decide("claude", guard, command), command).toMatchObject({ deny: true, reason: expect.stringContaining("push-default") });
+    expect(decide("claude", guard, "git push origin feat/x").deny).toBe(false);
+  });
+
+  it("reads the placeholder alone, and a reftable entry beside any HEAD, as unreadable", async () => {
+    const guard = await placeGuard("claude", { ".git/HEAD": "ref: refs/heads/.invalid\n" });
+    expect(decide("claude", guard, "git push origin HEAD").deny).toBe(true);
+    await getRepo().seedFiles({ ".git/HEAD": "ref: refs/heads/feat/x\n" });
+    expect(decide("claude", guard, "git push").deny).toBe(false);
+    await getRepo().seedFiles({ ".git/reftable/tables.list": "" });
+    expect(decide("claude", guard, "git push").deny).toBe(true);
+  });
+
+  it("reads a reftable worktree's HEAD the same way, where the call runs", async () => {
+    const guard = await placeGuard("claude", {
+      ...LINKED,
+      "wt-r/.git": "gitdir: ../.git/worktrees/wt-r\n",
+      ".git/worktrees/wt-r/HEAD": "ref: refs/heads/.invalid\n",
+      ".git/worktrees/wt-r/commondir": "../..\n",
+      ".git/worktrees/wt-r/reftable/tables.list": "",
+    });
+    expect(decide("claude", guard, "git -C wt-feat push").deny).toBe(false);
+    expect(decide("claude", guard, "git -C wt-r push")).toMatchObject({ deny: true, reason: expect.stringContaining("push-default") });
+    expect(decide("claude", guard, "git push", undefined, getRepo().path("wt-r")).deny).toBe(true);
+  });
+
+  it("counts a HEAD naming no branch and no commit as unreadable, and a detached HEAD as on no branch", async () => {
+    const guard = await placeGuard("claude", { ".git/HEAD": "ref: refs/remotes/origin/main\n" });
+    for (const command of IMPLIED) expect(decide("claude", guard, command).deny, command).toBe(true);
+    await getRepo().seedFiles({ ".git/HEAD": `${"a".repeat(40)}\n` });
+    for (const command of IMPLIED) expect(decide("claude", guard, command).deny, command).toBe(false);
   });
 });
 

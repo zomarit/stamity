@@ -3098,12 +3098,15 @@ function guardDecisionOutput(tool: Tool): string {
  * added there reaches this script on the next sync without an edit here.
  *
  * The branch context comes off the git metadata with `node:fs`, read where the
- * call runs: the payload's working directory, each `cd` or `pushd` target and
- * each `git -C`, `--git-dir` or `GIT_DIR=` value, the nearest `.git` above each
- * (a linked worktree's `gitdir:` pointer followed). Each place gives `HEAD` from
+ * call runs: the payload's working directory, each `cd`, `pushd`, `env -C` or
+ * PowerShell location target and each `git -C`, `--git-dir`, `GIT_DIR=` or
+ * `$env:GIT_DIR` value, read only where the shell runs a command (a quoted word
+ * elsewhere is data), the nearest `.git` above each (a linked worktree's
+ * `gitdir:` pointer followed). Each place gives `HEAD` from
  * its git dir, the default branch from `refs/remotes/origin/HEAD` and the local
  * tags from `refs/tags/` and `packed-refs` in its common dir, and the verdict
- * runs once per place. Where `HEAD` cannot be read, an implied destination
+ * runs once per place. Where `HEAD` cannot be read (a reftable repository's
+ * placeholder among it), an implied destination
  * counts as the default branch; `main` and `master` always count. The mode comes
  * off the run records, read only for a call the unattended rule would refuse:
  * unattended when any of the {@link GUARD_RUNS_READ_MAX} newest run folders,
@@ -3212,80 +3215,248 @@ function gitDirsFrom(start) {
   }
 }
 
-/** A command's words, quotes honoured, split on blanks and the shell's operators (each a null); a leading ~ read as HOME. */
+`}${
+  // Where a shell call's git runs (review/94, review/116, review/117). Beside the payload's working directory, a
+  // place is a directory a command moves to (cd, pushd, chdir, env -C, and PowerShell's Set-Location, sl and
+  // Push-Location), a git -C or --git-dir value, or a GIT_DIR or $env:GIT_DIR assignment. One counts only where
+  // the shell runs a command: a line's start, after an operator (; & | ( ) { }, a backtick or a newline), a
+  // keyword, an assignment or one of u6's wrappers with its options, and in the lines a command runs: sh -c's,
+  // eval's, env -S's, a runner's -c, a $(...) or backtick in double quotes or in an unquoted heredoc's body, and a
+  // heredoc's body where a shell on the line reads it. Any other word, a commit message's among them, is data and
+  // adds no place. A redirection's target and a comment are no words. A path is read against each directory the
+  // line can be in by then; null is a place that cannot be read, such as a move with no target, or one past
+  // PLACES_MAX.
+  //
+  // A PowerShell line is split as u6's verdict splits it, the way it finds the push, so a quote PowerShell reads
+  // otherwise can only hide a place where it hides the push too, or turn a path unreadable (a refusal). The
+  // location commands count in any letter case, on every shell tool (Cursor's payload names no shell, and a POSIX
+  // shell has no such command, so one read there only adds a place); a target is the -Path or -LiteralPath value
+  // (a unique prefix) or the first word that is no option, and cd.. moves to the parent. Forms not read sit in the
+  // named respelling residual: a braced variable name, Set-Item env:, cmd's cd /d, sudo -D.
+  //
+  // The wrapper table is u6's (personOnly.ts, inside both verdicts), copied: per wrapper, the short letters and the
+  // long options taking a value, and the options whose value is a command line.
+  String.raw`function programName(word) {
+  return (word.split(/[\\/]/).pop() ?? "").toLowerCase().replace(/\.(exe|cmd|bat)$/, "");
+}
+
+function present(path) {
+  try {
+    lstatSync(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** A line's words (a null where a command can follow), the lines they run, and its heredocs' bodies. */
 function shellWords(command) {
   const words = [];
+  const nested = [];
+  const docs = [];
+  const pending = [];
   let word = null;
+  let drop = false;
+  const end = () => {
+    if (word !== null && !drop) words.push(word);
+    else if (word !== null) drop = false;
+    word = null;
+  };
+  const opens = (text, j) => (text[j] === "$" && text[j + 1] === "(") || text[j] === "\`";
+  const sub = (text, j) => {
+    let close = text[j] === "\`" ? text.indexOf("\`", j + 1) : j + 1;
+    for (let level = 0; text[j] === "$" && close < text.length; close += 1) {
+      if (text[close] === "(") level += 1;
+      else if (text[close] === ")" && --level === 0) break;
+    }
+    if (close === -1) close = text.length;
+    nested.push(text.slice(j + (text[j] === "$" ? 2 : 1), close));
+    return close;
+  };
+  const bodies = (k) => {
+    let at = k + 1;
+    for (const doc of pending.splice(0)) {
+      let body = "";
+      while (at < command.length) {
+        let stop = command.indexOf("\n", at);
+        if (stop === -1) stop = command.length;
+        const line = command.slice(at, stop).replace(/\r$/, "");
+        at = stop + 1;
+        if ((doc.strip ? line.replace(/^\t+/, "") : line) === doc.delimiter) break;
+        body += line + "\n";
+      }
+      docs.push(body);
+      for (let j = 0; doc.expand && j < body.length; j += 1) {
+        if (body[j] === "\\") j += 1;
+        else if (opens(body, j)) j = sub(body, j);
+      }
+    }
+    return at - 1;
+  };
   for (let k = 0; k < command.length; k += 1) {
     const c = command[k];
     if (c === "'") {
-      const end = command.indexOf("'", k + 1);
-      word = (word ?? "") + command.slice(k + 1, end === -1 ? command.length : end);
-      k = end === -1 ? command.length : end;
+      const close = command.indexOf("'", k + 1);
+      word = (word ?? "") + command.slice(k + 1, close === -1 ? command.length : close);
+      k = close === -1 ? command.length : close;
     } else if (c === '"') {
       word ??= "";
       for (k += 1; k < command.length && command[k] !== '"'; k += 1) {
+        if (opens(command, k)) {
+          const close = sub(command, k);
+          word += command.slice(k, close + 1);
+          k = close;
+          continue;
+        }
         if (command[k] === "\\" && '$\`"\\\n'.includes(command[k + 1] ?? "")) k += 1;
         word += command[k] ?? "";
       }
     } else if (c === "\\" && process.platform !== "win32") {
       // A backslash escapes the next character, except on Windows, where it separates a path's parts.
-      word = (word ?? "") + (command[k + 1] ?? "");
+      if (command[k + 1] !== "\n") word = (word ?? "") + (command[k + 1] ?? "");
       k += 1;
-    } else if (/[\s;&|()<>\`]/.test(c)) {
-      if (word !== null) words.push(word);
-      if (c === "\n" || !/\s/.test(c)) words.push(null);
-      word = null;
+    } else if (c === "#" && word === null) {
+      while (k + 1 < command.length && command[k + 1] !== "\n") k += 1;
+    } else if (c === "<" || c === ">") {
+      if (word !== null && /^\d+$/.test(word)) word = null;
+      else end();
+      if (command.startsWith("<<", k) && command[k + 2] !== "<") {
+        let j = k + 2 + (command[k + 2] === "-" ? 1 : 0);
+        while (command[j] === " " || command[j] === "\t") j += 1;
+        const delimiter = /^[^\s;&|()<>]*/.exec(command.slice(j))[0];
+        pending.push({ delimiter: delimiter.replace(/['"\\]/g, ""), strip: command[k + 2] === "-", expand: !/['"\\]/.test(delimiter) });
+        k = j + delimiter.length - 1;
+      } else {
+        while (/[<>&|]/.test(command[k + 1] ?? "")) k += 1;
+        drop = true;
+      }
+    } else if (/[\s;&|(){}\`]/.test(c)) {
+      end();
+      if (c === "\n" || c === "\r" || !/\s/.test(c)) {
+        drop = false;
+        words.push(null);
+      }
+      if (c === "\n" && pending.length > 0) k = bodies(k);
     } else word = (word ?? "") + c;
   }
-  if (word !== null) words.push(word);
+  end();
   const home = process.env.HOME ?? process.env.USERPROFILE;
-  return words.map((w) => (w !== null && home && /^~(?=[\\/]|$)/.test(w) ? home + w.slice(1) : w));
+  return { words: words.map((w) => (w !== null && home && /^~(?=[\\/]|$)/.test(w) ? home + w.slice(1) : w)), nested, docs };
 }
 
-/**
- * Where a shell call's git runs: its working directory, each cd, pushd or env -C target, and each git -C,
- * --git-dir or GIT_DIR= value. A cd moves where the words after it run, so every path is read against each
- * directory the line can be in by then, and a quoted line (sh -c's, eval's) is read as a line too. null is a
- * place that cannot be read, such as a cd with no target, or one past PLACES_MAX.
- */
+const RUNNER = ["pw", "--package --workspace --filter", "-c --call --shell-mode"];
+const WRAPPERS = new Map([
+  ["env", ["uCP", "--unset --chdir", "-S --split-string"]],
+  ["sudo", ["ugpCrtUDRT", "--user --group --prompt --close-from --role --type --other-user --chdir --chroot --command-timeout --host"]],
+  ["doas", ["uC"]],
+  ["exec", ["a"]],
+  ["nice", ["n", "--adjustment"]],
+  ["timeout", ["sk", "--signal --kill-after"]],
+  ["stdbuf", ["ioe", "--input --output --error"]],
+  ["time", ["fo", "--format --output"]],
+  ["xargs", ["ILnPsdEa", "--max-args --max-procs --max-chars --delimiter --arg-file --process-slot-var"]],
+  ["command", []],
+  ["builtin", []],
+  ["nohup", []],
+  ["npx", RUNNER],
+  ["bunx", RUNNER],
+  ["pnpx", RUNNER],
+]);
+const RUNNERS = new Set(["npm exec", "npm x", "pnpm dlx", "pnpm exec", "yarn dlx", "yarn exec", "bun x"]);
+const KEYWORDS = new Set(["!", "if", "then", "else", "elif", "fi", "do", "done", "while", "until"]);
+const SHELLS = new Set(["sh", "bash", "zsh", "dash", "ksh"]);
+const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
+
+/** Where a shell call's git runs: its working directory and each place a command on the line moves it to. */
 function placesOf(command, cwd) {
   const places = [{ work: cwd }];
   const bases = [cwd];
   const full = () => places.length > PLACES_MAX || bases.length > PLACES_MAX;
+  const has = (list, option) => list.split(" ").includes(option);
   const move = (path) => {
-    for (const dir of bases.map((base) => resolve(base, path))) {
+    if (typeof path !== "string" || path === "-" || path === "+") places.push(null);
+    else for (const dir of bases.map((base) => resolve(base, path))) {
       places.push({ work: dir });
       if (!bases.includes(dir)) bases.push(dir);
     }
   };
+  const gitDir = (path) => {
+    if (typeof path !== "string") places.push(null);
+    else for (const base of bases) places.push({ git: resolve(base, path) });
+  };
   const scan = (line, depth) => {
-    const words = shellWords(line);
-    for (let k = 0; k < words.length && !full(); k += 1) {
+    const { words, nested, docs } = shellWords(line);
+    const inner = (text) => {
+      if (depth < 4 && typeof text === "string") scan(text, depth + 1);
+    };
+    const rest = (j) => {
+      const tail = [];
+      while (typeof words[j] === "string") tail.push(words[j++]);
+      return tail;
+    };
+    let shell = false;
+    for (let k = 0, at = true; k < words.length && !full(); k += 1) {
       const word = words[k];
-      if (word === null) continue;
-      if (depth < 4 && /[\s;&|()\`]/.test(word)) scan(word, depth + 1);
-      if (word === "cd" || word === "pushd") {
-        let j = k + 1;
-        while (/^-[LPe@]+$/.test(words[j] ?? "")) j += 1;
-        const target = words[j] ?? null;
-        if (target === null || target === "-") places.push(null);
-        else move(target);
-      } else if (word === "env") {
-        for (let j = k + 1; typeof words[j] === "string" && words[j].startsWith("-"); j += 1) {
-          const option = words[j];
-          if (option === "-C" || option === "--chdir") move(words[(j += 1)] ?? "");
-          else if (option.startsWith("--chdir=")) move(option.slice(8));
-          else if (/^-C./.test(option)) move(option.slice(2));
-          else if (option === "-u" || option === "--unset") j += 1;
+      if (word === null) at = true;
+      if (word === null || !at) continue;
+      if (ASSIGNMENT.test(word) || KEYWORDS.has(word)) {
+        if (word.startsWith("GIT_DIR=")) gitDir(word.slice(8));
+        continue;
+      }
+      at = false;
+      const name = programName(word);
+      const assigned = /^\$env:git_dir(=.*)?$/i.exec(word);
+      if (assigned !== null) {
+        const value = assigned[1] ?? (/^=/.test(words[k + 1] ?? "") ? words[(k += 1)] : undefined);
+        if (value !== undefined) gitDir(value === "=" ? words[(k += 1)] : value.slice(1));
+      } else if (WRAPPERS.has(name) || RUNNERS.has(name + " " + words[k + 1])) {
+        const [short = "", long = "", lines = ""] = WRAPPERS.get(name) ?? RUNNER;
+        if (!WRAPPERS.has(name)) k += 1;
+        at = true;
+        while (typeof words[k + 1] === "string" && (ASSIGNMENT.test(words[k + 1]) || /^(-|\d)/.test(words[k + 1]))) {
+          const option = words[(k += 1)];
+          if (ASSIGNMENT.test(option)) {
+            if (option.startsWith("GIT_DIR=")) gitDir(option.slice(8));
+            continue;
+          }
+          if (option === "--") break;
+          let flag = null;
+          let value;
+          if (option.startsWith("--")) {
+            const key = option.split("=")[0];
+            if (has(long, key) || has(lines, key)) {
+              flag = key;
+              value = option.includes("=") ? option.slice(key.length + 1) : words[(k += 1)];
+            }
+          } else if (option.startsWith("-")) {
+            for (let c = 1; c < option.length && flag === null; c += 1) {
+              if (!short.includes(option[c]) && !has(lines, "-" + option[c])) continue;
+              flag = "-" + option[c];
+              value = c === option.length - 1 ? words[(k += 1)] : option.slice(c + 1);
+            }
+          }
+          if (name === "env" && (flag === "-C" || flag === "--chdir")) move(value);
+          else if (flag !== null && has(lines, flag)) {
+            inner([value, ...rest(k + 1)].join(" "));
+            at = false;
+            break;
+          }
         }
-      } else if (word.startsWith("GIT_DIR=")) {
-        for (const base of bases) places.push({ git: resolve(base, word.slice(8)) });
-      } else if (/(?:^|[\\/])git(?:\.exe)?$/i.test(word)) {
+      } else if (["cd", "pushd", "chdir", "sl", "set-location", "push-location"].includes(name)) {
+        let path;
+        for (let j = k + 1; path === undefined && typeof words[j] === "string"; j += 1) {
+          const option = /^--?(\w*)(?::(.*))?$/.exec(words[j]);
+          if (option === null) path = words[j];
+          else if (/^(?:path?|l\w*|pspath)$/i.test(option[1])) path = option[2] || words[j + 1] || null;
+          else if (/^s/i.test(option[1]) && option[2] === undefined) j += 1;
+        }
+        move(path);
+      } else if (name === "cd..") {
+        move("..");
+      } else if (name === "git") {
         let from = [...bases];
-        for (let j = k + 1; j < words.length; j += 1) {
+        for (let j = k + 1; typeof words[j] === "string"; j += 1) {
           const option = words[j];
-          if (option === null) break;
           const value = option === "-C" || option === "--git-dir" ? (words[(j += 1)] ?? "") : option.slice(10);
           if (option === "-C") {
             from = from.map((base) => resolve(base, value));
@@ -3295,8 +3466,18 @@ function placesOf(command, cwd) {
           } else if (["-c", "--work-tree", "--namespace", "--config-env", "--super-prefix"].includes(option)) j += 1;
           else if (!option.startsWith("-")) break;
         }
+      } else if (SHELLS.has(name)) {
+        shell = true;
+        const flag = rest(k + 1).findIndex((option) => /^-[A-Za-z]*c[A-Za-z]*$/.test(option));
+        if (flag !== -1) inner(words[k + 2 + flag]);
+      } else if (name === "eval") {
+        inner(rest(k + 1).join(" "));
+      } else if (["export", "declare", "typeset", "local", "readonly"].includes(name)) {
+        for (const option of rest(k + 1)) if (option.startsWith("GIT_DIR=")) gitDir(option.slice(8));
       }
     }
+    for (const text of nested) inner(text);
+    if (shell) for (const text of docs) inner(text);
   };
   scan(command, 0);
   if (full()) places.push(null);
@@ -3304,8 +3485,8 @@ function placesOf(command, cwd) {
 }
 
 /**
- * The branch context of each place a shell call's git runs in, one per git dir. Where HEAD cannot be read, an
- * implied destination counts as the default branch, so a refspec-less push there is refused.
+ * The branch context of each place a shell call's git runs in, one per git dir. Where HEAD names no branch or commit
+ * (reftable's placeholder too), an implied destination counts as the default branch, so a refspec-less push is refused.
  */
 function contextsOf(command, cwd) {
   const contexts = new Map();
@@ -3313,18 +3494,21 @@ function contextsOf(command, cwd) {
     const dirs = place === null ? null : place.git !== undefined ? gitDirsOf(place.git) : gitDirsFrom(place.work);
     const key = dirs === null ? "" : dirs.gitDir;
     if (contexts.has(key)) continue;
-    const head = dirs === null ? null : gitText(join(dirs.gitDir, "HEAD"));
+    const reftable = dirs !== null && (present(join(dirs.gitDir, "reftable")) || present(join(dirs.commonDir, "reftable")));
+    const head = dirs === null || reftable ? null : gitText(join(dirs.gitDir, "HEAD"));
+    const branch = /^ref: refs\/heads\/(.+)$/.exec(head ?? "")?.[1] ?? ".invalid";
+    const detached = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/i.test(head ?? "");
     const origin = dirs === null ? null : gitText(join(dirs.commonDir, "refs", "remotes", "origin", "HEAD"));
     const defaultBranches = origin !== null && origin.startsWith("ref: refs/remotes/origin/") ? [origin.slice(25)] : [];
     contexts.set(key, {
-      currentBranch: head === null ? (defaultBranches[0] ?? "main") : head.startsWith("ref: refs/heads/") ? head.slice(16) : null,
+      currentBranch: branch !== ".invalid" ? branch : detached ? null : (defaultBranches[0] ?? "main"),
       defaultBranches,
       tags: dirs === null ? [] : localTags(dirs.commonDir),
     });
   }
   return [...contexts.values()];
 }
-
+`}${String.raw`
 /** The local tag names, loose and packed, up to TAG_NAMES_MAX. */
 function localTags(commonDir) {
   const tags = [];
