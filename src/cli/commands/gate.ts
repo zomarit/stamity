@@ -1360,8 +1360,12 @@ function runClassify(ctx: CliContext, opts: Record<string, unknown>): CommandRes
   };
 }
 
-/** What the scan read: no base and only the uncommitted change, or everything since a base (plan/56). */
-type ScanScope = "uncommitted" | "since-base";
+/**
+ * What the scan read: no base and only the uncommitted change, or everything
+ * since a base (plan/56); or, for a push (build/94), the commits since a base
+ * alone, the work tree and the index left out.
+ */
+type ScanScope = "uncommitted" | "since-base" | "pushed";
 
 /** The scan of one run: its hits and what the read could not show, or why the change could not be read. */
 type ScanOutcome =
@@ -1386,53 +1390,76 @@ interface HistoryLines {
   files: ScanFile[];
   skipped: string[];
   unscanned: string[];
+  /** Top-level-relative names outside the project the read met. */
+  outside: Set<string>;
+}
+
+/**
+ * The added lines of one `diff-tree` read (`revs`: a commit against its
+ * parent, or two commits), into `into`, each file under `commit` when one is
+ * given. Two reads through the same runner and bounds, with the line read's
+ * pins (`--text`, no external diff, colour or textconv, fixed prefixes), its
+ * sections named by the `-z` name list. A file whose added lines hold a NUL is
+ * named, never read.
+ */
+function readTreeDiff(runner: GitRunner, root: ProjectRoot, revs: readonly string[], commit: string | undefined, windows: boolean, into: HistoryLines): void {
+  const inside = insideOf(root.prefix, windows);
+  const away = awayFrom(root.prefix);
+  const pins = ["-r", "--root", "--no-commit-id", "-M", ...DIFF_PINS];
+  const { sections } = parseNameStatus(
+    runGit(runner, root.dir, "diff-tree --name-status", ["diff-tree", ...pins, "--name-status", "-z", ...revs, "--"]),
+  );
+  const patch = runGit(runner, root.dir, "diff-tree --text", [
+    "-c",
+    "core.quotePath=false",
+    "diff-tree",
+    ...pins,
+    "-p",
+    "-U0",
+    "--text",
+    "--src-prefix=a/",
+    "--dst-prefix=b/",
+    "--inter-hunk-context=0",
+    "--submodule=short",
+    ...revs,
+    "--",
+  ]);
+  parsePatch(patch, sections).forEach((section, index) => {
+    const name = sections[index]?.to ?? "";
+    const path = inside(name);
+    if (path === null) into.outside.add(name);
+    const shown = path ?? away(name);
+    const added = section.hunks.flatMap((hunk) => hunk.added);
+    if (section.unshown || holdsNul(added.map((line) => line.text))) {
+      (hasCodeExtension(shown) ? into.unscanned : into.skipped).push(shown);
+    } else if (added.length > 0) into.files.push({ path: shown, ...(commit === undefined ? {} : { commit }), added });
+  });
 }
 
 /**
  * The added lines of every commit since `base`, merges left out, oldest first
  * (review/112): a value committed and removed again before the scan stays in
- * the history a push sends. Each commit is two `diff-tree` reads through the
- * same runner and bounds, with the line read's pins (`--text`, no external
- * diff, colour or textconv, fixed prefixes), its sections named by the `-z`
- * name list. A file whose added lines hold a NUL is named, never read.
+ * the history a push sends. Each commit is one {@link readTreeDiff}.
  */
 function readHistory(runner: GitRunner, root: ProjectRoot, base: string, windows: boolean): HistoryLines {
-  const inside = insideOf(root.prefix, windows);
-  const away = awayFrom(root.prefix);
   const commits = runGit(runner, root.dir, "rev-list", ["rev-list", "--reverse", "--no-merges", `${base}..HEAD`, "--"])
     .split("\n")
     .filter((line) => line !== "");
-  const history: HistoryLines = { files: [], skipped: [], unscanned: [] };
-  for (const commit of commits) {
-    const pins = ["-r", "--root", "--no-commit-id", "-M", ...DIFF_PINS];
-    const { sections } = parseNameStatus(
-      runGit(runner, root.dir, "diff-tree --name-status", ["diff-tree", ...pins, "--name-status", "-z", commit, "--"]),
-    );
-    const patch = runGit(runner, root.dir, "diff-tree --text", [
-      "-c",
-      "core.quotePath=false",
-      "diff-tree",
-      ...pins,
-      "-p",
-      "-U0",
-      "--text",
-      "--src-prefix=a/",
-      "--dst-prefix=b/",
-      "--inter-hunk-context=0",
-      "--submodule=short",
-      commit,
-      "--",
-    ]);
-    parsePatch(patch, sections).forEach((section, index) => {
-      const name = sections[index]?.to ?? "";
-      const shown = inside(name) ?? away(name);
-      const added = section.hunks.flatMap((hunk) => hunk.added);
-      if (section.unshown || holdsNul(added.map((line) => line.text))) {
-        (hasCodeExtension(shown) ? history.unscanned : history.skipped).push(shown);
-      } else if (added.length > 0) history.files.push({ path: shown, commit: commit.slice(0, SHORT_COMMIT), added });
-    });
-  }
+  const history: HistoryLines = { files: [], skipped: [], unscanned: [], outside: new Set() };
+  for (const commit of commits) readTreeDiff(runner, root, [commit], commit.slice(0, SHORT_COMMIT), windows, history);
   return history;
+}
+
+/**
+ * The pushed scope's current side (build/94): `HEAD`'s committed tree against
+ * `base`, one {@link readTreeDiff}, in place of the work tree and the index.
+ * The net read keeps a merge's own resolution in the scan, which the history
+ * (merges left out) does not read.
+ */
+function readPushed(runner: GitRunner, root: ProjectRoot, base: string, windows: boolean): HistoryLines {
+  const net: HistoryLines = { files: [], skipped: [], unscanned: [], outside: new Set() };
+  readTreeDiff(runner, root, [base, "HEAD"], undefined, windows, net);
+  return net;
 }
 
 /**
@@ -1443,9 +1470,16 @@ function readHistory(runner: GitRunner, root: ProjectRoot, base: string, windows
  * less those the change still adds to the same file, each hit naming its
  * commit. Every git failure, a failed line or history read and a base that
  * does not resolve are a `failed` outcome, never a clean one.
+ *
+ * `{ scope: "pushed" }` (build/94, `run checkpoint`'s scan) reads what a push
+ * of `HEAD` sends and nothing else: `HEAD`'s tree against the base ({@link
+ * readPushed}) stands in for the change, so an uncommitted or untracked file
+ * the push leaves behind is not read. It needs a base; without one it fails.
  */
-export function scanChange(cwd: string, ref: string | undefined): ScanOutcome {
-  const scope: ScanScope = ref === undefined ? "uncommitted" : "since-base";
+export function scanChange(cwd: string, ref: string | undefined, options: { scope?: "pushed" } = {}): ScanOutcome {
+  const pushed = options.scope === "pushed";
+  const scope: ScanScope = pushed ? "pushed" : ref === undefined ? "uncommitted" : "since-base";
+  if (pushed && ref === undefined) return { base: null, scope, failed: "the pushed scope reads the commits since a base, and none was given" };
   const runner = gitCheckRunner({ timeoutMs: GATE_GIT_TIMEOUT_MS, maxBuffer: GATE_GIT_MAX_BUFFER });
   try {
     const cwdPrefix = readCwdPrefix(runner, cwd);
@@ -1456,10 +1490,27 @@ export function scanChange(cwd: string, ref: string | undefined): ScanOutcome {
     const treeish = commit ?? "HEAD";
     const root = findProjectRoot(runner, cwd, cwdPrefix, treeish);
     const windows = process.platform === "win32";
-    const { lines } = readChange(runner, root, treeish, windows);
-    if ("failed" in lines) return { base: commit, scope, failed: `the changed lines could not be read (${lines.failed})` };
-    const current: ScanFile[] = [...lines.hunks, ...lines.scan.hunks];
-    let history: HistoryLines = { files: [], skipped: [], unscanned: [] };
+    // The change's side: the work tree and the index, or under the pushed scope HEAD's tree alone (build/94).
+    let current: ScanFile[];
+    let side: { skipped: string[]; outside: number; unscanned: string[] };
+    if (pushed && commit !== null) {
+      let net: HistoryLines;
+      try {
+        net = readPushed(runner, root, commit, windows);
+      } catch (err) {
+        if (!(err instanceof GitReadError) && !(err instanceof PatchError)) throw err;
+        const why = err instanceof GitReadError ? describeGitFailure(err) : err.message;
+        return { base: commit, scope, failed: `the committed change could not be read (${why})` };
+      }
+      current = net.files;
+      side = { skipped: net.skipped, outside: net.outside.size, unscanned: net.unscanned };
+    } else {
+      const { lines } = readChange(runner, root, treeish, windows);
+      if ("failed" in lines) return { base: commit, scope, failed: `the changed lines could not be read (${lines.failed})` };
+      current = [...lines.hunks, ...lines.scan.hunks];
+      side = lines.scan;
+    }
+    let history: HistoryLines = { files: [], skipped: [], unscanned: [], outside: new Set() };
     try {
       if (commit !== null) history = readHistory(runner, root, commit, windows);
     } catch (err) {
@@ -1487,9 +1538,9 @@ export function scanChange(cwd: string, ref: string | undefined): ScanOutcome {
       scope,
       hits: scanAddedLines(files),
       scanned: new Set(files.map((file) => file.path)).size,
-      skipped: [...new Set([...lines.scan.skipped, ...history.skipped])],
-      outside: lines.scan.outside,
-      unscanned: [...new Set([...lines.scan.unscanned, ...history.unscanned])],
+      skipped: [...new Set([...side.skipped, ...history.skipped])],
+      outside: side.outside,
+      unscanned: [...new Set([...side.unscanned, ...history.unscanned])],
     };
   } catch (err) {
     if (!(err instanceof GitReadError)) throw err;

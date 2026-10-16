@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { chmod, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { gateCommand, toProjectPath } from "../../../src/cli/commands/gate.ts";
+import { gateCommand, scanChange, toProjectPath } from "../../../src/cli/commands/gate.ts";
 import { gitCheckRunner } from "../../../src/cli/engine/gitStatus.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { NO_GIT_CONFIG } from "../../support/repoFixtures.ts";
@@ -2537,6 +2537,84 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
 
       expect(code).toBe(1);
       expect(doc["hits"]).toEqual([{ path: "src/a.ts", line: 2, rule: "github-token" }]);
+    });
+
+    // build/94: the pushed scope reads what a push of HEAD sends, so the work tree and the index are left out.
+    describe("the pushed scope (build/94)", () => {
+      /** `scanChange` with the pushed scope, under `gateIn`'s isolation: `HOME` at an empty folder. */
+      async function scanPushed(cwd: string, base: string | undefined): Promise<ReturnType<typeof scanChange>> {
+        const home = getRoot().path("home");
+        await mkdir(home, { recursive: true });
+        const previous = { HOME: process.env["HOME"], XDG_CONFIG_HOME: process.env["XDG_CONFIG_HOME"] };
+        Object.assign(process.env, { HOME: home, XDG_CONFIG_HOME: home });
+        try {
+          return scanChange(cwd, base, { scope: "pushed" });
+        } finally {
+          for (const [key, value] of Object.entries(previous)) {
+            if (value === undefined) delete process.env[key];
+            else process.env[key] = value;
+          }
+        }
+      }
+
+      it("leaves an unstaged, a staged and an untracked token out, which gate scan --base still stops on", async () => {
+        const repo = await seedRepo("repo", { "src/a.ts": "export {};\n", "src/b.ts": "export {};\n" });
+        const root = git(repo, ["rev-parse", "HEAD"]).trim();
+        await getRoot().seedFiles({ "repo/src/a.ts": `export {};\n${LINE}`, "repo/src/b.ts": `export {};\n${LINE}`, "repo/src/new.ts": LINE });
+        git(repo, ["add", "--", "src/b.ts"]);
+
+        const outcome = await scanPushed(repo, root);
+        const sinceBase = await gateIn(repo, ["scan", "--base", root, "--json"]);
+
+        expect(outcome).toEqual({ base: root, scope: "pushed", hits: [], scanned: 0, skipped: [], outside: 0, unscanned: [] });
+        expect(sinceBase.code).toBe(1);
+        expect(sinceBase.doc["hits"]).toHaveLength(3);
+      });
+
+      it("stops on the same token once it is committed, from the net change, and on one a later commit removed, naming it", async () => {
+        const repo = await seedRepo("repo", { "src/a.ts": "export {};\n", "src/b.ts": "export {};\n" });
+        const root = git(repo, ["rev-parse", "HEAD"]).trim();
+        await getRoot().seedFiles({ "repo/src/a.ts": `export {};\n${LINE}`, "repo/src/b.ts": `export {};\n${LINE}` });
+        git(repo, ["commit", "-q", "-am", "add"]);
+        const added = git(repo, ["rev-parse", "HEAD"]).trim();
+        await getRoot().seedFiles({ "repo/src/b.ts": "export {};\n" });
+        git(repo, ["commit", "-q", "-am", "remove"]);
+        // The work tree removes the committed token too: a push still sends it, so the scan still names it.
+        await getRoot().seedFiles({ "repo/src/a.ts": "export {};\n" });
+
+        const outcome = await scanPushed(repo, root);
+
+        expect(outcome).toMatchObject({
+          base: root,
+          scope: "pushed",
+          hits: [
+            { path: "src/a.ts", line: 2, rule: "github-token" },
+            { path: "src/b.ts", line: 2, rule: "github-token", commit: added.slice(0, 12) },
+          ],
+        });
+      });
+
+      it("fails with no base, never a clean scan", async () => {
+        const repo = await seedRepo("repo", { "src/a.ts": "export {};\n" });
+
+        const outcome = await scanPushed(repo, undefined);
+
+        expect(outcome).toEqual({ base: null, scope: "pushed", failed: "the pushed scope reads the commits since a base, and none was given" });
+      });
+
+      it("fails, naming the read, when HEAD's tree against the base cannot be read", async () => {
+        const repo = await seedRepo("repo", { "src/a.ts": "export {};\n" });
+        const root = git(repo, ["rev-parse", "HEAD"]).trim();
+        await getRoot().seedFiles({ "repo/src/a.ts": "export {};\nexport const b = 1;\n" });
+        git(repo, ["commit", "-q", "-am", "work"]);
+
+        gitSpy.fault = { step: "diff-tree", error: realFailure("process.exit(3)") };
+        const outcome = await scanPushed(repo, root);
+        gitSpy.fault = undefined;
+
+        expect(outcome).toMatchObject({ base: root, scope: "pushed" });
+        expect("failed" in outcome && outcome.failed).toContain("the committed change could not be read");
+      });
     });
 
     it("exits 1 with the reason when a commit since the base cannot be read", async () => {

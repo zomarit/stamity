@@ -57,14 +57,17 @@ import { readChange, scanChange } from "./gate.ts";
  *
  * **`checkpoint`** reads the run's record head (`Mode:`, `Branch:`, `Base:`)
  * and, in this order: refuses a commit on a default branch (and on a checkout
- * that is not the record's `Branch:`, as `branch mismatch`, or a detached one); stages
+ * that is not the record's `Branch:`, as `branch mismatch`, or a detached one; a
+ * `Branch:` naming a default branch matches `stamity/<run-id>`, the branch
+ * `start` switches such a run to); stages
  * only the run folder's record, ledger, plan, morning list and `held/*.patch`,
  * `.stamity/inbox.md` and `--paths` (never `-A`, never `-f`), a path git
  * ignores reported as `records: not committed (…)`; under `Mode: unattended`
  * writes the change against `Base:` under the person-only paths to
  * `held/person-only.patch` and restores those paths to `Base:` in the index
  * only, after the staging, so a `--paths` entry naming one is held too;
- * commits (`--signoff` adding the DCO line); scans `Base..HEAD` (a hit, a
+ * commits (`--signoff` adding the DCO line); scans `Base..HEAD`'s commits, the
+ * work tree and the index left out (a hit, a
  * failed or an incomplete scan holds the push); pushes `HEAD` to the branch,
  * the command checked by the shell guard's own person-only table first; and
  * with `--pr` opens or updates the run's draft pull request. Exit 0 when the
@@ -399,13 +402,16 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>): Pr
   const current = await currentBranch(cwd, CHECKPOINT);
   const defaults = await defaultBranches(ctx, cwd, CHECKPOINT);
   const isDefault = (name: string): boolean => defaults.names.includes(name.toLowerCase());
+  // build/97: a record whose Branch: names a default branch matches the branch `run start` switches this run to.
+  const matches = (recorded: string, checkout: string): boolean =>
+    recorded === checkout || (isDefault(recorded) && checkout === `${RUN_BRANCH_PREFIX}${run}`);
   result.branch = current;
   const refusal =
     current === null
       ? "commit refused: HEAD is detached, so there is no run branch to push"
       : isDefault(current)
         ? `commit refused: ${current} is the default branch (read from ${SOURCE_LABEL[defaults.source]})`
-        : head.branch !== null && head.branch !== current
+        : head.branch !== null && !matches(head.branch, current)
           ? `branch mismatch: the checkout is on ${current}, and the record's Branch: names ${head.branch}`
           : PUSHABLE_BRANCH.test(current)
             ? null
@@ -512,8 +518,8 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>): Pr
   }
   lines.push(`commit: ${result.committed ?? "nothing to commit"}`);
 
-  // (5) The secret scan over Base..HEAD and the work tree: a hit, a failure or an unread line holds the push.
-  const outcome = scanChange(cwd, base);
+  // (5) The secret scan over Base..HEAD, what the push sends and no more (build/94): a hit, a failure or an unread line holds the push.
+  const outcome = scanChange(cwd, base, { scope: "pushed" });
   if ("failed" in outcome) {
     result.notDone.push(`push held: the secret scan failed (${outcome.failed})`);
     return finish(false);

@@ -397,19 +397,69 @@ describe("stamity run checkpoint", () => {
     expect(created().title).toBe(`Run ${RUN}`);
   });
 
-  it.each(["main", "stamity/another-run"])("refuses as branch mismatch when the record's Branch: is %s and HEAD is the run's branch (build/93)", async (named) => {
-    const { repo, base } = await seed("unattended");
+  // TEST CHANGE, justified: build/97 (signed off 01:08Z) counts Branch: main as matching stamity/<this run's id>, so the
+  // former "main" row here now goes ahead (pinned in the case below); the refusals left are a run branch that is not this
+  // run's, under either record, and a record naming another feature branch.
+  it.each([
+    ["stamity/another-run", RUN_BRANCH],
+    ["feature/other", RUN_BRANCH],
+    ["main", "stamity/another-run"],
+  ])("refuses as branch mismatch when the record's Branch: is %s and HEAD is on %s (build/93, build/97)", async (named, checkout) => {
+    const { repo, base } = await seed("unattended", { branch: checkout });
     await put(repo, `${RUN_DIR}/record.md`, `# Run ${RUN}\n\nStatus: in progress\nMode: unattended\nBranch: ${named}\nBase: ${base}\n`);
     await writeFile(join(repo, "a.txt"), "changed\n");
 
     const { code, doc, stdout } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
 
     expect(code).toBe(1);
-    expect(doc).toMatchObject({ branch: RUN_BRANCH, committed: null, pushed: false });
-    expect(doc["notDone"]).toEqual([`branch mismatch: the checkout is on ${RUN_BRANCH}, and the record's Branch: names ${named}`]);
+    expect(doc).toMatchObject({ branch: checkout, committed: null, pushed: false });
+    expect(doc["notDone"]).toEqual([`branch mismatch: the checkout is on ${checkout}, and the record's Branch: names ${named}`]);
     expect(stdout).toContain("branch mismatch");
     expect(git(repo, ["rev-parse", "HEAD"])).toBe(base);
     expect(pushes()).toEqual([]);
+  });
+
+  it.each(["main", "Master"])("counts a record's Branch: %s as this run's stamity/<run-id>, committing and pushing, the record unedited (build/97)", async (named) => {
+    const { repo, remote, base } = await seed("attended");
+    const record = `# Run ${RUN}\n\nStatus: in progress\nMode: attended\nBranch: ${named}\nBase: ${base}\n`;
+    await put(repo, `${RUN_DIR}/record.md`, record);
+    await writeFile(join(repo, "a.txt"), "changed\n");
+
+    const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+    expect(code).toBe(0);
+    expect(doc).toMatchObject({ branch: RUN_BRANCH, pushed: true, notDone: [] });
+    expect(await readFile(join(repo, RUN_DIR, "record.md"), "utf8")).toBe(record);
+    expect(pushedFile(remote, `${RUN_DIR}/record.md`)).toBe(record.trimEnd());
+    expect(pushedFile(remote, "a.txt")).toBe("changed");
+  });
+
+  it("pushes past a token in an unstaged change and an untracked file the push leaves behind (build/94)", async () => {
+    const { repo, remote } = await seed("attended");
+    await writeFile(join(repo, "a.txt"), "changed\n");
+    await writeFile(join(repo, "b.txt"), `the key is ${TOKEN}\n`);
+    await writeFile(join(repo, "notes.txt"), `the key is ${TOKEN}\n`);
+
+    const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+    expect(code).toBe(0);
+    expect(doc).toMatchObject({ pushed: true, notDone: [], scan: { hits: [], unscanned: [] } });
+    expect(pushedTree(remote)).not.toContain("notes.txt");
+    expect(pushedFile(remote, "b.txt")).toBe("b.txt");
+  });
+
+  it("holds the push on the same token once it is committed, though the work tree has since removed it (build/94)", async () => {
+    const { repo, remote } = await seed("attended");
+    await writeFile(join(repo, "b.txt"), `the key is ${TOKEN}\n`);
+    git(repo, ["commit", "-q", "-am", "work"]);
+    await writeFile(join(repo, "b.txt"), "b.txt\n");
+
+    const { code, doc } = await run(repo, CHECKPOINT);
+
+    expect(code).toBe(1);
+    expect(doc["notDone"]).toEqual(["push held: secret scan hit at b.txt:1 (github-token)"]);
+    expect(pushes()).toEqual([]);
+    expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
   });
 
   it("writes the held patch as bytes, so a held file in Latin-1 applies again from it (build/95)", async () => {
