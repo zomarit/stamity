@@ -4,6 +4,7 @@ import { availableParallelism } from "node:os";
 import { basename, join } from "node:path";
 import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { personOnlyVerdict } from "../../src/hooks/personOnly.ts";
 import { buildChildEnv, makeCliFixture, type CliFixture, type CliRunResult } from "../support/cliHarness.ts";
 import { ensureDistBuilt } from "../support/distBuild.ts";
 
@@ -79,9 +80,44 @@ const NODE_STATES = ["present", "absent"] as const;
 const DENIED_SHELL = "touch cloud-leg-marker";
 const READ_ONLY_ROLE = "stamity-reviewer";
 
+/** A shell call the person-only guard allows, and the person-only act it refuses, on every client. */
+const ALLOWED_SHELL = "git status";
+const PERSON_ONLY_SHELL = "git push --force";
+
+/** The force push's verdict from u6's own source; its rule reads no branch (the fixture's repository is on `main`). */
+const FORCED = personOnlyVerdict(PERSON_ONLY_SHELL, { defaultBranches: [], currentBranch: "main", tags: [] });
+
+/** The fields every payload carries: its event, the session, and the folder it runs in. */
+function basePayload(row: HookRow, cwd: string): Record<string, unknown> {
+  return { hook_event_name: row.event, session_id: "cloud-leg", cwd };
+}
+
+/**
+ * A shell call as each client hands its person-only guard row one, the shapes test/hooks/personOnlyGuard.test.ts
+ * gives the script, here before the portable runner: Cursor's beforeShellExecution names the command at the top level
+ * and no tool; Copilot's preToolUse names its `bash` tool and serializes the arguments (the runner restores `tool_name`
+ * and `tool_input`); Claude Code's and Codex's PreToolUse name the Bash tool.
+ */
+function shellCall(row: HookRow, cwd: string, command: string): Record<string, unknown> {
+  const base = basePayload(row, cwd);
+  if (row.client === "cursor") return { ...base, command };
+  if (row.client === "copilot") return { ...base, toolName: "bash", toolArgs: JSON.stringify({ command }) };
+  return { ...base, tool_name: "Bash", tool_input: { command } };
+}
+
+/**
+ * The person-only guard's calls beside the grid's allowed one, each run with node present under every marker from
+ * every folder: the person-only act, and the payload this grid used to hand the guard, which names no tool and no
+ * command.
+ */
+const PROBES = [
+  { id: "person-only act", payload: (row: HookRow, cwd: string) => shellCall(row, cwd, PERSON_ONLY_SHELL) },
+  { id: "no command", payload: (row: HookRow, cwd: string) => ({ ...basePayload(row, cwd), source: "startup" }) },
+] as const;
+
 /** The payload each hook script is handed, keyed by script; every payload carries its folder. */
 function payloadFor(row: HookRow, cwd: string): Record<string, unknown> {
-  const base = { hook_event_name: row.event, session_id: "cloud-leg", cwd };
+  const base = basePayload(row, cwd);
   switch (row.script) {
     case "stamity-pre-tool-use-guard":
       if (row.client === "copilot") {
@@ -99,6 +135,11 @@ function payloadFor(row: HookRow, cwd: string): Record<string, unknown> {
       return { ...base, subagent_type: READ_ONLY_ROLE };
     case "stamity-mcp-guard":
       return { ...base, tool_name: "MCP:docs__search", server: "docs" };
+    // TEST CHANGE, justified (20ac8475, review/215, REQ-FLOW-102): the person-only guard now reads a payload naming no
+    // tool as Cursor's shell call and refuses one with no command string, where it used to allow it as no shell call;
+    // the default payload below is such a payload, so the grid hands this guard a real, harmless shell call instead.
+    case "stamity-person-only-guard":
+      return shellCall(row, cwd, ALLOWED_SHELL);
     default:
       return { ...base, source: "startup" };
   }
@@ -237,6 +278,37 @@ function resultOf(node: string, marker: string, folder: string, index: number): 
   return result;
 }
 
+/** The person-only guard's {@link PROBES} runs, node present, keyed by probe in the node slot. */
+const probes = new Map<string, CliRunResult>();
+
+function probeOf(probe: (typeof PROBES)[number]["id"], marker: string, folder: string, index: number): CliRunResult {
+  const result = probes.get(keyOf(probe, marker, folder, index));
+  if (result === undefined) throw new Error(`no ${probe} run for ${keyOf(probe, marker, folder, index)}`);
+  return result;
+}
+
+/**
+ * The person-only guard's decision as its client hears it: Claude Code and Codex exit 2 with the reason on stderr;
+ * Cursor exits 0 with `permission` on stdout; Copilot exits 0 with a `permissionDecision` on stdout, or nothing. An
+ * exit code alone says nothing on Cursor or Copilot, whose refusal also exits 0.
+ */
+function guardVerdict(client: Client, result: CliRunResult, label: string): { deny: false } | { deny: true; reason: string } {
+  const stdout = result.stdout.trim();
+  if (client === "claude" || client === "codex") {
+    expect(stdout, label).toBe("");
+    if (result.code === 0) return { deny: false };
+    expect(result.code, `${label}: ${result.stderr}`).toBe(2);
+    return { deny: true, reason: result.stderr };
+  }
+  expect(result.code, `${label}: ${result.stderr}`).toBe(0);
+  if (client === "copilot" && stdout === "") return { deny: false };
+  const out = JSON.parse(stdout) as Record<string, string | undefined>;
+  const verdict = client === "cursor" ? out["permission"] : out["permissionDecision"];
+  if (verdict === "allow") return { deny: false };
+  expect(verdict, label).toBe("deny");
+  return { deny: true, reason: (client === "cursor" ? out["user_message"] : out["permissionDecisionReason"]) ?? "" };
+}
+
 /** Claude Code's PreToolUse guards whose command ends in the fail-closed `exit 2` tail. */
 const CLAUDE_FAIL_CLOSED: readonly string[] = ["stamity-pre-tool-use-guard", "stamity-person-only-guard"];
 
@@ -309,6 +381,20 @@ beforeAll(async () => {
       }
     }
   }
+  for (const probe of PROBES) {
+    for (const marker of MARKERS) {
+      for (const folder of FOLDERS) {
+        for (const [index, row] of rows.entries()) {
+          if (row.script !== "stamity-person-only-guard") continue;
+          const cwd = join(root, folder);
+          tasks.push(async () => {
+            const result = await runShell(row.command, cwd, hookEnv(paths.present, marker.env), JSON.stringify(probe.payload(row, cwd)));
+            probes.set(keyOf(probe.id, marker.id, folder, index), result);
+          });
+        }
+      }
+    }
+  }
   await pooled(tasks, Math.max(2, Math.min(8, availableParallelism())));
 }, 600_000);
 
@@ -367,6 +453,7 @@ describe("a cloud machine, imitated: every emitted hook command (REQ-PROVE-037)"
   });
 
   it("runs every command with node present, and the guards decide from every folder", () => {
+    expect(FORCED).toMatchObject({ deny: true, rule: "force-push" });
     for (const marker of MARKERS) {
       for (const folder of FOLDERS) {
         for (const [index, row] of rows.entries()) {
@@ -382,6 +469,26 @@ describe("a cloud machine, imitated: every emitted hook command (REQ-PROVE-037)"
         for (const client of ["copilot", "codex"] as const) {
           for (const { index } of rowsRunning(client, "stamity-pre-tool-use-guard")) {
             expect(resultOf("present", marker.id, folder, index).stderr, client).toContain('"reasonCode":"CATEGORY_DENIED"');
+          }
+        }
+        // The person-only guard's verdicts in each client's own output, read from the root however deep the session
+        // started: the harmless call allowed, and the force push refused for its rule's own reason.
+        for (const client of ["claude", "cursor", "copilot", "codex"] as const) {
+          if (WINDOWS && client === "claude") continue;
+          for (const { index } of rowsRunning(client, "stamity-person-only-guard")) {
+            const label = `${client} person-only guard marker ${marker.id} from ${folder || "the root"}`;
+            const allowed = guardVerdict(client, resultOf("present", marker.id, folder, index), `${label}: ${ALLOWED_SHELL}`);
+            expect(allowed, `${label}: ${ALLOWED_SHELL}`).toEqual({ deny: false });
+            const forced = guardVerdict(client, probeOf("person-only act", marker.id, folder, index), `${label}: ${PERSON_ONLY_SHELL}`);
+            expect(forced, `${label}: ${PERSON_ONLY_SHELL}`).toEqual({
+              deny: true,
+              reason: expect.stringContaining(FORCED.deny ? FORCED.reason : "the force push's own reason"),
+            });
+            // TEST CHANGE, justified (20ac8475, review/215, REQ-FLOW-102): a payload naming no tool and no command was
+            // allowed as no shell call, and this grid ran it to exit 0; the guard now reads it as Cursor's shell call
+            // with no command string, one it cannot read, and refuses it on every client.
+            const unread = guardVerdict(client, probeOf("no command", marker.id, folder, index), `${label}: no command`);
+            expect(unread, `${label}: no command`).toEqual({ deny: true, reason: expect.stringContaining("(NO_COMMAND)") });
           }
         }
       }
