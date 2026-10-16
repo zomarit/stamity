@@ -136,6 +136,25 @@ describe("the person-only guard, on every client", () => {
     }
   });
 
+  it.each(TOOLS.filter((tool) => tool !== "cursor"))(
+    "%s: reads the PowerShell tool's backslash as a plain character, so a Windows-path git reads as git (review/194)",
+    async (tool) => {
+      const guard = await placeGuard(tool);
+      // The guard reads the PowerShell tool's text as PowerShell's command string, beside the text as it stands.
+      const asPowerShell = (command: string): string => `pwsh -Command '${command.replaceAll("'", "'\\''")}'`;
+      const forced = String.raw`C:\Git\bin\git.exe push --force origin feat/x`;
+      const source = personOnlyVerdict(asPowerShell(forced), ON_FEATURE);
+      expect(source).toMatchObject({ deny: true, rule: "force-push" });
+      expect(decide(tool, guard, forced, undefined, undefined, "PowerShell")).toEqual({ deny: true, reason: expect.stringContaining(source.deny ? source.reason : "") });
+      const status = String.raw`C:\Git\bin\git.exe status`;
+      expect(personOnlyVerdict(asPowerShell(status), ON_FEATURE)).toEqual({ deny: false });
+      expect(decide(tool, guard, status, undefined, undefined, "PowerShell").deny).toBe(false);
+      // A POSIX shell line keeps its escape: there the program is `C:Gitbingit.exe`, no git.
+      expect(personOnlyVerdict(forced, ON_FEATURE)).toEqual({ deny: false });
+      expect(decide(tool, guard, forced).deny).toBe(false);
+    },
+  );
+
   it.each(TOOLS)("%s: allows a call that is not a shell call at once", async (tool) => {
     const guard = await placeGuard(tool);
     const read = JSON.stringify({ tool_name: "Read", tool_input: { file_path: "git push --force" } });
@@ -405,6 +424,30 @@ describe("a place inside a line u6 reads (build/89, review/153) and a value the 
     },
   );
 
+  // Each form moves to `wt-main` (on main) inside a line u6's verdicts read (review/183, review/184), then pushes; a
+  // push with no named destination is denied there, and the same line naming a feature destination is allowed
+  // (review/193).
+  const nestedForms = [
+    'cmd /c "cd wt-main && {push}"',
+    'CMD.EXE /S /K "cd wt-main && {push}"',
+    "cmd /c'cd wt-main && {push}'",
+    'git rebase --exec "cd wt-main && {push}" main',
+    "git rebase -x 'cd wt-main && {push}' main",
+    "git rebase -ix 'cd wt-main && {push}' main",
+    "git -C . rebase --exe='cd wt-main && {push}' main",
+    "git bisect run sh -c 'cd wt-main && {push}'",
+  ];
+  it.each(nestedForms.flatMap((form) => (["Bash", "PowerShell"] as const).map((shell) => [form, shell] as const)))(
+    "reads the place in %j on the %s tool, and allows the line naming a feature destination",
+    async (form, shell) => {
+      const guard = await placeGuard("claude", LINKED);
+      const denied = form.replace("{push}", "git push");
+      expect(decide("claude", guard, denied, undefined, undefined, shell), denied).toMatchObject({ deny: true, reason: expect.stringContaining("push-default") });
+      const allowed = form.replace("{push}", "git push origin feat/x");
+      expect(decide("claude", guard, allowed, undefined, undefined, shell).deny, allowed).toBe(false);
+    },
+  );
+
   it("counts a git -C value the line cannot show, a wrapper's brace placeholder among them, as unreadable", async () => {
     const guard = await placeGuard("claude", LINKED);
     for (const command of ["echo wt-main | xargs -I {} git -C {} push", "xargs -I{} git --git-dir {} push"]) {
@@ -515,7 +558,9 @@ describe("the unattended push rule, the mode read from the run records", () => {
     // gh's alias for the create-and-push form (review/129), a push in PowerShell's command string (build/89), and a git
     // alias defined on the line or read from the configuration (the 01:50Z sign-off).
     const unattended = [RAW_PUSH, "gh pr create --draft --fill", "gh repo new o/x --source . --push", `pwsh -c '${RAW_PUSH}'`,
-      "git -c alias.p=push p origin x", "git p origin x"];
+      "git -c alias.p=push p origin x", "git p origin x",
+      // A configuration pair git can run as a line, on the line or through the environment (the 02:31Z sign-off).
+      "git -c core.fsmonitor='git push origin x' status", "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.sshCommand GIT_CONFIG_VALUE_0=x git fetch"];
     for (const command of unattended) {
       const source = unattendedPushVerdict(command);
       expect(source.deny, command).toBe(true);
@@ -528,6 +573,7 @@ describe("the unattended push rule, the mode read from the run records", () => {
     });
     expect(decide("claude", guard, RUN_END).deny).toBe(false);
     expect(decide("claude", guard, "git -c color.ui=never status").deny).toBe(false);
+    expect(decide("claude", guard, "git -c user.name=x commit -m m").deny).toBe(false);
   });
 
   it("reads a debug round's record too", async () => {

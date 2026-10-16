@@ -177,7 +177,8 @@ export const CLAUDE_DENY_ROWS: readonly string[] = [
  * their options' values, a literal `sh -c`, `eval`, `env -S` or runner `-c`
  * argument, PowerShell's `-Command` or `Invoke-Expression` string, `cmd /c` or
  * `/k`'s rest, a `git rebase --exec` line and `git bisect run`'s command, read as
- * its own line, a brace attached to a word read as a PowerShell script block's
+ * its own line (PowerShell's and `cmd`'s with a backslash as a plain character
+ * and PowerShell's backtick escape, as well as a POSIX shell's), a brace attached to a word read as a PowerShell script block's
  * edge as well, and git's global options (`-c k=v` pairs among
  * them, a `remote.<name>.push` or `branch.<name>.merge` read as the refspec a
  * bare push takes) skipped before the subcommand.
@@ -243,9 +244,10 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   /**
    * The words of each simple command in `text`, a command substitution's text read as its own lines; with `blocks`, a
    * brace attached to a word starts or ends a PowerShell script block (`{git push}`), a brace a word opened (`@{1}`,
-   * `${x}`) staying part of it.
+   * `${x}`) staying part of it; with `pwsh`, PowerShell's escape (review/194): the backtick escapes, a backslash is a
+   * plain character.
    */
-  function splitLine(text: string, blocks: boolean): { segments: string[][]; nested: string[] } {
+  function splitLine(text: string, blocks: boolean, pwsh: boolean): { segments: string[][]; nested: string[] } {
     const segments: string[][] = [];
     const nested: string[] = [];
     let words: string[] = [];
@@ -280,10 +282,13 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         while (i < text.length && text[i] !== '"') {
           const c = text[i] ?? "";
           const next = text[i + 1] ?? "";
-          if (c === "\\" && i + 1 < text.length) {
+          if (pwsh && c === "`" && i + 1 < text.length) {
+            word += next;
+            i += 2;
+          } else if (!pwsh && c === "\\" && i + 1 < text.length) {
             word += '"\\$`'.includes(next) ? next : next === "\n" ? "" : c + next;
             i += 2;
-          } else if ((c === "$" && next === "(") || c === "`") {
+          } else if ((c === "$" && next === "(") || (!pwsh && c === "`")) {
             // A substitution inside double quotes still runs: its text is read as a line of its own.
             const start = c === "`" ? i + 1 : i + 2;
             let j = start;
@@ -337,13 +342,15 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         }
         inWord = true;
         i = j + 1;
-      } else if (ch === "\\") {
+      } else if (ch === (pwsh ? "`" : "\\")) {
+        // The escape takes the next character as it is, a line break after it joining the lines.
         const next = text[i + 1];
-        if (next !== undefined && next !== "\n") {
+        const crlf = next === "\r" && text[i + 2] === "\n";
+        if (next !== undefined && next !== "\n" && !(pwsh && crlf)) {
           word += next;
           inWord = true;
         }
-        i += 2;
+        i += pwsh && crlf ? 3 : 2;
       } else if (ch === " " || ch === "\t") {
         endWord();
         i += 1;
@@ -374,13 +381,17 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     return { segments, nested };
   }
 
-  /** Each simple command's words, its program word first and normalized; `sh -c` and `eval` text read too. */
-  function commandsOf(text: string, depth: number): string[][] {
-    const { segments, nested } = splitLine(text, true);
-    const commands: string[][] = [];
-    // A line with a brace is read with its braces as words too (review/185), so a block reading adds denials and never
-    // lifts one: `git push origin x} -f` still forces.
-    for (const words of [...segments, ...(/[{}]/.test(text) ? splitLine(text, false).segments : [])]) {
+  /**
+   * Each simple command's words, its program word first and normalized; `sh -c` and `eval` text read too. With `pwsh`,
+   * the text is PowerShell's: a PowerShell command string or the Windows command interpreter's rest, whose backslash is
+   * a plain character (review/194).
+   */
+  function commandsOf(text: string, depth: number, pwsh: boolean): string[][] {
+    const { segments, nested } = splitLine(text, true, pwsh);
+    // A PowerShell line is read with a POSIX shell's escapes too, and a line with a brace with its braces as words too
+    // (review/185), so either reading adds denials and never lifts one: `git push origin x} -f` still forces.
+    const commands: string[][] = pwsh ? commandsOf(text, depth, false) : [];
+    for (const words of [...segments, ...(/[{}]/.test(text) ? splitLine(text, false, pwsh).segments : [])]) {
       let k = 0;
       let line: string | null = null;
       while (k < words.length && line === null) {
@@ -431,34 +442,36 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         } else break;
       }
       if (line !== null) {
-        if (depth < 4) commands.push(...commandsOf(line, depth + 1));
+        if (depth < 4) commands.push(...commandsOf(line, depth + 1, pwsh));
         continue;
       }
       const cmd = words.slice(k);
       if (cmd.length === 0) continue;
       // A program word holding a whole command line (`bun exec 'git push'`) is also read as that line.
-      if (depth < 4 && /\s/.test(cmd[0] ?? "")) commands.push(...commandsOf(cmd.join(" "), depth + 1));
+      if (depth < 4 && /\s/.test(cmd[0] ?? "")) commands.push(...commandsOf(cmd.join(" "), depth + 1, pwsh));
       cmd[0] = programName(cmd[0] ?? "");
       // git's dashed form (`git-push`, as git's exec path holds it) is git running that subcommand.
       if (/^git-./.test(cmd[0])) cmd.splice(0, 1, "git", cmd[0].slice(4));
       if (depth < 4 && SHELLS.has(cmd[0] ?? "")) {
         const flag = cmd.findIndex((word, index) => index > 0 && /^-[A-Za-z]*c[A-Za-z]*$/.test(word));
         const script = flag === -1 ? undefined : cmd[flag + 1];
-        if (script !== undefined) commands.push(...commandsOf(script, depth + 1));
+        if (script !== undefined) commands.push(...commandsOf(script, depth + 1, false));
       } else if (depth < 4 && cmd[0] === "eval") {
-        commands.push(...commandsOf(cmd.slice(1).join(" "), depth + 1));
+        commands.push(...commandsOf(cmd.slice(1).join(" "), depth + 1, false));
       } else if (depth < 4 && POWERSHELLS.has(cmd[0] ?? "")) {
         // PowerShell's command string (build/89): the words after `-Command`; with none, the words from the first one
-        // that is no option, and each later word holding a blank, a quoted command past an option's value.
+        // that is no option, and each later word holding a blank, a quoted command past an option's value, each read
+        // with PowerShell's escape (review/194).
         const at = cmd.findIndex((word, index) => index > 0 && commandFlag(word) !== null);
         const first = at !== -1 ? -1 : cmd.findIndex((word, index) => index > 0 && !/^-|^\/\w*$/.test(word));
-        if (at !== -1) commands.push(...commandsOf([commandFlag(cmd[at] ?? ""), ...cmd.slice(at + 1)].join(" "), depth + 1));
-        else if (first !== -1) commands.push(...commandsOf(cmd.slice(first).join(" "), depth + 1));
-        for (const word of first === -1 ? [] : cmd.slice(first + 1)) if (/\s/.test(word)) commands.push(...commandsOf(word, depth + 1));
+        if (at !== -1) commands.push(...commandsOf([commandFlag(cmd[at] ?? ""), ...cmd.slice(at + 1)].join(" "), depth + 1, true));
+        else if (first !== -1) commands.push(...commandsOf(cmd.slice(first).join(" "), depth + 1, true));
+        for (const word of first === -1 ? [] : cmd.slice(first + 1)) if (/\s/.test(word)) commands.push(...commandsOf(word, depth + 1, true));
       } else if (depth < 4 && cmd[0] === "cmd") {
-        // The Windows command interpreter (review/183): the words after `/c` or `/k`, any letter case, a value attached.
+        // The Windows command interpreter (review/183): the words after `/c` or `/k`, any letter case, a value attached,
+        // read as PowerShell's are, a backslash being a plain character there too (review/194).
         const at = cmd.findIndex((word, index) => index > 0 && /^\/[ck]/i.test(word));
-        if (at !== -1) commands.push(...commandsOf([(cmd[at] ?? "").slice(2), ...cmd.slice(at + 1)].join(" "), depth + 1));
+        if (at !== -1) commands.push(...commandsOf([(cmd[at] ?? "").slice(2), ...cmd.slice(at + 1)].join(" "), depth + 1, true));
       } else if (depth < 4 && cmd[0] === "git") {
         // Lines a git builtin runs (review/184): each `git rebase --exec` or `-x` line (`--ex`, `--exe` and a cluster
         // as git's option parser reads them), and the command `git bisect run` runs, its words kept as words.
@@ -479,15 +492,15 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
               }
             }
           }
-          if (exec !== undefined) commands.push(...commandsOf(exec, depth + 1));
+          if (exec !== undefined) commands.push(...commandsOf(exec, depth + 1, false));
         }
         if (sub === "bisect" && args[0] === "run") {
-          commands.push(...commandsOf(args.slice(1).map((word) => `'${word.replace(/'/g, "'\\''")}'`).join(" "), depth + 1));
+          commands.push(...commandsOf(args.slice(1).map((word) => `'${word.replace(/'/g, "'\\''")}'`).join(" "), depth + 1, false));
         }
       }
       commands.push(cmd);
     }
-    if (depth < 4) for (const inner of nested) commands.push(...commandsOf(inner, depth + 1));
+    if (depth < 4) for (const inner of nested) commands.push(...commandsOf(inner, depth + 1, pwsh));
     return commands;
   }
 
@@ -956,7 +969,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     return first === "publish" || yarnNpm ? deny("publish", `Publishing a package (\`${cmd[0]} publish\`)`) : null;
   }
 
-  for (const cmd of commandsOf(command, 0)) {
+  for (const cmd of commandsOf(command, 0, false)) {
     const program = cmd[0] ?? "";
     let verdict: PersonOnlyVerdict | null = null;
     if (program === "git") {
@@ -1050,9 +1063,10 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
   /**
    * The words of each simple command in `text`, a command substitution's text read as its own lines; with `blocks`, a
    * brace attached to a word starts or ends a PowerShell script block (`{git push}`), a brace a word opened (`@{1}`,
-   * `${x}`) staying part of it.
+   * `${x}`) staying part of it; with `pwsh`, PowerShell's escape (review/194): the backtick escapes, a backslash is a
+   * plain character.
    */
-  function splitLine(text: string, blocks: boolean): { segments: string[][]; nested: string[] } {
+  function splitLine(text: string, blocks: boolean, pwsh: boolean): { segments: string[][]; nested: string[] } {
     const segments: string[][] = [];
     const nested: string[] = [];
     let words: string[] = [];
@@ -1087,10 +1101,13 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
         while (i < text.length && text[i] !== '"') {
           const c = text[i] ?? "";
           const next = text[i + 1] ?? "";
-          if (c === "\\" && i + 1 < text.length) {
+          if (pwsh && c === "`" && i + 1 < text.length) {
+            word += next;
+            i += 2;
+          } else if (!pwsh && c === "\\" && i + 1 < text.length) {
             word += '"\\$`'.includes(next) ? next : next === "\n" ? "" : c + next;
             i += 2;
-          } else if ((c === "$" && next === "(") || c === "`") {
+          } else if ((c === "$" && next === "(") || (!pwsh && c === "`")) {
             // A substitution inside double quotes still runs: its text is read as a line of its own.
             const start = c === "`" ? i + 1 : i + 2;
             let j = start;
@@ -1144,13 +1161,15 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
         }
         inWord = true;
         i = j + 1;
-      } else if (ch === "\\") {
+      } else if (ch === (pwsh ? "`" : "\\")) {
+        // The escape takes the next character as it is, a line break after it joining the lines.
         const next = text[i + 1];
-        if (next !== undefined && next !== "\n") {
+        const crlf = next === "\r" && text[i + 2] === "\n";
+        if (next !== undefined && next !== "\n" && !(pwsh && crlf)) {
           word += next;
           inWord = true;
         }
-        i += 2;
+        i += pwsh && crlf ? 3 : 2;
       } else if (ch === " " || ch === "\t") {
         endWord();
         i += 1;
@@ -1181,13 +1200,17 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
     return { segments, nested };
   }
 
-  /** Each simple command's words, its program word first and normalized; `sh -c` and `eval` text read too. */
-  function commandsOf(text: string, depth: number): string[][] {
-    const { segments, nested } = splitLine(text, true);
-    const commands: string[][] = [];
-    // A line with a brace is read with its braces as words too (review/185), so a block reading adds denials and never
-    // lifts one: `git push origin x} -f` still forces.
-    for (const words of [...segments, ...(/[{}]/.test(text) ? splitLine(text, false).segments : [])]) {
+  /**
+   * Each simple command's words, its program word first and normalized; `sh -c` and `eval` text read too. With `pwsh`,
+   * the text is PowerShell's: a PowerShell command string or the Windows command interpreter's rest, whose backslash is
+   * a plain character (review/194).
+   */
+  function commandsOf(text: string, depth: number, pwsh: boolean): string[][] {
+    const { segments, nested } = splitLine(text, true, pwsh);
+    // A PowerShell line is read with a POSIX shell's escapes too, and a line with a brace with its braces as words too
+    // (review/185), so either reading adds denials and never lifts one: `git push origin x} -f` still forces.
+    const commands: string[][] = pwsh ? commandsOf(text, depth, false) : [];
+    for (const words of [...segments, ...(/[{}]/.test(text) ? splitLine(text, false, pwsh).segments : [])]) {
       let k = 0;
       let line: string | null = null;
       while (k < words.length && line === null) {
@@ -1238,34 +1261,36 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
         } else break;
       }
       if (line !== null) {
-        if (depth < 4) commands.push(...commandsOf(line, depth + 1));
+        if (depth < 4) commands.push(...commandsOf(line, depth + 1, pwsh));
         continue;
       }
       const cmd = words.slice(k);
       if (cmd.length === 0) continue;
       // A program word holding a whole command line (`bun exec 'git push'`) is also read as that line.
-      if (depth < 4 && /\s/.test(cmd[0] ?? "")) commands.push(...commandsOf(cmd.join(" "), depth + 1));
+      if (depth < 4 && /\s/.test(cmd[0] ?? "")) commands.push(...commandsOf(cmd.join(" "), depth + 1, pwsh));
       cmd[0] = programName(cmd[0] ?? "");
       // git's dashed form (`git-push`, as git's exec path holds it) is git running that subcommand.
       if (/^git-./.test(cmd[0])) cmd.splice(0, 1, "git", cmd[0].slice(4));
       if (depth < 4 && SHELLS.has(cmd[0] ?? "")) {
         const flag = cmd.findIndex((word, index) => index > 0 && /^-[A-Za-z]*c[A-Za-z]*$/.test(word));
         const script = flag === -1 ? undefined : cmd[flag + 1];
-        if (script !== undefined) commands.push(...commandsOf(script, depth + 1));
+        if (script !== undefined) commands.push(...commandsOf(script, depth + 1, false));
       } else if (depth < 4 && cmd[0] === "eval") {
-        commands.push(...commandsOf(cmd.slice(1).join(" "), depth + 1));
+        commands.push(...commandsOf(cmd.slice(1).join(" "), depth + 1, false));
       } else if (depth < 4 && POWERSHELLS.has(cmd[0] ?? "")) {
         // PowerShell's command string (build/89): the words after `-Command`; with none, the words from the first one
-        // that is no option, and each later word holding a blank, a quoted command past an option's value.
+        // that is no option, and each later word holding a blank, a quoted command past an option's value, each read
+        // with PowerShell's escape (review/194).
         const at = cmd.findIndex((word, index) => index > 0 && commandFlag(word) !== null);
         const first = at !== -1 ? -1 : cmd.findIndex((word, index) => index > 0 && !/^-|^\/\w*$/.test(word));
-        if (at !== -1) commands.push(...commandsOf([commandFlag(cmd[at] ?? ""), ...cmd.slice(at + 1)].join(" "), depth + 1));
-        else if (first !== -1) commands.push(...commandsOf(cmd.slice(first).join(" "), depth + 1));
-        for (const word of first === -1 ? [] : cmd.slice(first + 1)) if (/\s/.test(word)) commands.push(...commandsOf(word, depth + 1));
+        if (at !== -1) commands.push(...commandsOf([commandFlag(cmd[at] ?? ""), ...cmd.slice(at + 1)].join(" "), depth + 1, true));
+        else if (first !== -1) commands.push(...commandsOf(cmd.slice(first).join(" "), depth + 1, true));
+        for (const word of first === -1 ? [] : cmd.slice(first + 1)) if (/\s/.test(word)) commands.push(...commandsOf(word, depth + 1, true));
       } else if (depth < 4 && cmd[0] === "cmd") {
-        // The Windows command interpreter (review/183): the words after `/c` or `/k`, any letter case, a value attached.
+        // The Windows command interpreter (review/183): the words after `/c` or `/k`, any letter case, a value attached,
+        // read as PowerShell's are, a backslash being a plain character there too (review/194).
         const at = cmd.findIndex((word, index) => index > 0 && /^\/[ck]/i.test(word));
-        if (at !== -1) commands.push(...commandsOf([(cmd[at] ?? "").slice(2), ...cmd.slice(at + 1)].join(" "), depth + 1));
+        if (at !== -1) commands.push(...commandsOf([(cmd[at] ?? "").slice(2), ...cmd.slice(at + 1)].join(" "), depth + 1, true));
       } else if (depth < 4 && cmd[0] === "git") {
         // Lines a git builtin runs (review/184): each `git rebase --exec` or `-x` line (`--ex`, `--exe` and a cluster
         // as git's option parser reads them), and the command `git bisect run` runs, its words kept as words.
@@ -1286,15 +1311,15 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
               }
             }
           }
-          if (exec !== undefined) commands.push(...commandsOf(exec, depth + 1));
+          if (exec !== undefined) commands.push(...commandsOf(exec, depth + 1, false));
         }
         if (sub === "bisect" && args[0] === "run") {
-          commands.push(...commandsOf(args.slice(1).map((word) => `'${word.replace(/'/g, "'\\''")}'`).join(" "), depth + 1));
+          commands.push(...commandsOf(args.slice(1).map((word) => `'${word.replace(/'/g, "'\\''")}'`).join(" "), depth + 1, false));
         }
       }
       commands.push(cmd);
     }
-    if (depth < 4) for (const inner of nested) commands.push(...commandsOf(inner, depth + 1));
+    if (depth < 4) for (const inner of nested) commands.push(...commandsOf(inner, depth + 1, pwsh));
     return commands;
   }
 
@@ -1445,8 +1470,12 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
     ["lfs", new Set(["fetch", "pull", "install", "ls-files", "env", "status"])],
     ["submodule", new Set(["status", "init", "update", "sync"])],
   ]);
+  /** The configuration keys an unattended git call may set on its line: display and identity keys only. */
+  const CONFIG_KEYS = /^(?:color\..+|advice\..+|core\.quotepath|init\.defaultbranch|user\.name|user\.email)$/i;
+  /** An assignment of the variables through which git reads configuration pairs from the environment. */
+  const CONFIG_ENVIRONMENT = /\bGIT_CONFIG_(?:COUNT|KEY_\d+|PARAMETERS)\s*=/i;
 
-  for (const cmd of commandsOf(command, 0)) {
+  for (const cmd of commandsOf(command, 0, false)) {
     const program = cmd[0] ?? "";
     if (program === "git") {
       const { sub, args, config } = gitParts(cmd);
@@ -1458,6 +1487,20 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
       // An alias, defined on the line or in the configuration, and a computed subcommand can run a push the line
       // does not show (u21's review, the 01:50Z sign-off): unattended, git runs only a builtin this verdict knows.
       if (config.some((pair) => /^alias\./i.test(pair))) return deny("A git call defining an alias (`-c alias.<name>=…`)");
+      // A configuration value git runs as a line (`core.fsmonitor`, `core.sshCommand`, …) runs whatever it names, so
+      // unattended a git call sets only display and identity keys (the 02:31Z sign-off): a `-c` pair, or a
+      // `--config-env` one, outside CONFIG_KEYS is refused, and so is any git call on a line that sets git's
+      // configuration through the environment, wherever on the line, since the text cannot always settle the order.
+      const globals = cmd.slice(1, cmd.length - args.length - 1);
+      const configEnv = globals.flatMap((word, index) =>
+        word === "--config-env" ? [globals[index + 1] ?? ""] : word.startsWith("--config-env=") ? [word.slice(13)] : [],
+      );
+      if ([...config, ...configEnv].some((pair) => !CONFIG_KEYS.test((pair.split("=")[0] ?? "").trim()))) {
+        return deny("A git call setting a configuration key outside the display and identity keys (`-c <key>=…`)");
+      }
+      if (CONFIG_ENVIRONMENT.test(command)) {
+        return deny("A git call on a line that sets git's configuration through the environment (`GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_<n>`, `GIT_CONFIG_PARAMETERS`)");
+      }
       // `git lfs` and `git submodule` pass in their read and setup forms; any other of theirs (`lfs push`,
       // `submodule foreach`, which runs a line) is refused as an unknown subcommand is (review/187).
       const forms = READ_FORMS.get(sub);

@@ -103,6 +103,13 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["git bisect run git push --force origin feat/x", "force-push"],
   // A PowerShell script block, a brace attached to its first and last words (review/185).
   ["Invoke-Command -ScriptBlock {git push --force origin feat/x}", "force-push"],
+  // PowerShell's and cmd's text read with a backslash as a plain character, so a Windows-path git reads as `git`, and
+  // PowerShell's backtick as its escape (review/194).
+  ["pwsh -c 'C:\\Git\\bin\\git.exe push --force origin feat/x'", "force-push"],
+  ["cmd /c 'C:\\Git\\bin\\git.exe push --force origin feat/x'", "force-push"],
+  ["pwsh -c 'git push `--force origin feat/x'", "force-push"],
+  // A POSIX shell line keeps its own escape: `\git` is `git` (review/194).
+  ["\\git push --force origin feat/x", "force-push"],
   // A forced ref update over REST or GraphQL (review/76).
   ["gh api -X PATCH repos/o/r/git/refs/heads/feat/x -f sha=abc -F force=true", "force-push"],
   ["curl -X PATCH -d '{\"sha\":\"abc\",\"force\":true}' https://api.github.com/repos/o/r/git/refs/heads/feat/x", "force-push"],
@@ -474,6 +481,11 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
   // review/185's twins: a script block that runs no person-only act, and a brace a word opened, which is no block.
   ["Invoke-Command -ScriptBlock {git status}"],
   ["git show HEAD@{1}"],
+  // review/194's twins: a Windows-path git that runs no person-only act, and a POSIX line whose backslashes git's
+  // name loses (`C:Gitbingit.exe` is what a POSIX shell runs).
+  ["pwsh -c 'C:\\Git\\bin\\git.exe status'"],
+  ["cmd /c 'C:\\Git\\bin\\git.exe status'"],
+  ["C:\\Git\\bin\\git.exe push --force origin feat/x"],
   ["gh repo view o/r"],
   ["gh repo edit --description 'x'"],
   ["gh repo clone o/r"],
@@ -679,6 +691,15 @@ describe("unattendedPushVerdict", () => {
     ["git rebase --exec 'git push --force origin feat/x' main"],
     ["git bisect run git push --force origin feat/x"],
     ["Invoke-Command -ScriptBlock {git push --force origin feat/x}"],
+    // A push through a Windows-path git in PowerShell's command string (review/194).
+    ["pwsh -c 'C:\\Git\\bin\\git.exe push origin feat/x'"],
+    // A configuration pair outside the display and identity keys, on the line or through the environment, which git
+    // can run as a line (the 02:31Z sign-off).
+    ["git -c core.fsmonitor='git push origin HEAD:refs/heads/x' status"],
+    ["git -c core.sshCommand='sh -c \"git push origin x\"' fetch"],
+    ["git --config-env=core.fsmonitor=HOOK status"],
+    ["GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.fsmonitor GIT_CONFIG_VALUE_0='git push origin x' git status"],
+    ["export GIT_CONFIG_PARAMETERS=\"'core.fsmonitor=git push'\"; git status"],
   ])("denies %j, naming the run verbs", (command) => {
     const verdict = unattendedPushVerdict(command);
     expect(verdict.deny).toBe(true);
@@ -735,6 +756,11 @@ describe("unattendedPushVerdict", () => {
     ["git rebase --exec 'git status' main"],
     ["git bisect run git status"],
     ["Invoke-Command -ScriptBlock {git status}"],
+    // The twins of review/194 and of the 02:31Z sign-off.
+    ["pwsh -c 'C:\\Git\\bin\\git.exe status'"],
+    ["git -c color.ui=never status"],
+    ["git -c user.name=x commit -m m"],
+    ["git -c user.email=x@example.com -c core.quotePath=false -c advice.detachedHead=false status"],
   ])("allows %j", (command) => {
     expect(unattendedPushVerdict(command)).toEqual({ deny: false });
   });

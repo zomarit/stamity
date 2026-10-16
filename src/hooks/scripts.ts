@@ -3231,7 +3231,8 @@ function gitDirsFrom(start) {
   // the shell runs a command: a line's start, after an operator (; & | ( ) { }, a backtick or a newline), a
   // keyword, an assignment or one of u6's wrappers with its options, and in the lines a command runs: sh -c's,
   // eval's, env -S's, a runner's -c, a $(...) or backtick in double quotes or in an unquoted heredoc's body, a
-  // heredoc's body where a shell on the line reads it, PowerShell's command string as u6 reads it (build/89), and a
+  // heredoc's body where a shell on the line reads it, PowerShell's command string as u6 reads it (build/89), cmd /c
+  // or /k's rest, a git rebase exec line and git bisect run's command (review/193, linesOf), and a
   // program word holding a blank, which u6 also reads as a line (review/153; a PowerShell here-string, @'...'@, is
   // a literal). Any other word, a commit message's among them, is data and adds no place. A redirection's target
   // and a comment are no words. A path is read against each directory the line can be in by then; null is a place
@@ -3490,23 +3491,11 @@ function placesOf(command, cwd) {
           } else if (["-c", "--work-tree", "--namespace", "--config-env", "--super-prefix"].includes(option)) j += 1;
           else if (!option.startsWith("-")) break;
         }
-      } else if (SHELLS.has(name)) {
-        shell = true;
-        const flag = rest(k + 1).findIndex((option) => /^-[A-Za-z]*c[A-Za-z]*$/.test(option));
-        if (flag !== -1) inner(words[k + 2 + flag]);
-      } else if (name === "eval") {
-        inner(rest(k + 1).join(" "));
-      } else if (POWERSHELLS.has(name)) {
-        shell = true;
-        const tail = rest(k + 1);
-        const flag = tail.findIndex((option) => commandFlag(option) !== null);
-        const first = flag !== -1 ? -1 : tail.findIndex((option) => !/^-|^\/\w*$/.test(option));
-        if (flag !== -1) inner([commandFlag(tail[flag]), ...tail.slice(flag + 1)].join(" "));
-        else if (first !== -1) inner(tail.slice(first).join(" "));
-        for (const option of first === -1 ? [] : tail.slice(first + 1)) if (/\s/.test(option)) inner(option);
       } else if (["export", "declare", "typeset", "local", "readonly"].includes(name)) {
         for (const option of rest(k + 1)) if (option.startsWith("GIT_DIR=")) gitDir(option.slice(8));
       }
+      if (SHELLS.has(name) || POWERSHELLS.has(name)) shell = true;
+      for (const text of linesOf(name, rest(k + 1))) inner(text);
     }
     for (const text of nested) inner(text);
     if (shell) for (const text of docs) inner(text);
@@ -3514,6 +3503,52 @@ function placesOf(command, cwd) {
   scan(command, 0);
   if (full()) places.push(null);
   return places;
+}
+
+/**
+ * The lines a command runs, as u6's verdicts read them (review/193): sh -c's script, eval's words, PowerShell's command
+ * string, cmd /c or /k's rest, each git rebase exec line (git's abbreviations and clusters too) and git bisect run's
+ * command, so every line the verdicts read for a push is read here for a place. An entry past the line's end is no text.
+ */
+function linesOf(name, tail) {
+  if (/^git-./.test(name)) return linesOf("git", [name.slice(4), ...tail]);
+  if (SHELLS.has(name)) {
+    const flag = tail.findIndex((option) => /^-[A-Za-z]*c[A-Za-z]*$/.test(option));
+    return flag === -1 ? [] : [tail[flag + 1]];
+  }
+  if (name === "eval") return [tail.join(" ")];
+  if (POWERSHELLS.has(name)) {
+    const flag = tail.findIndex((option) => commandFlag(option) !== null);
+    const first = flag !== -1 ? -1 : tail.findIndex((option) => !/^-|^\/\w*$/.test(option));
+    const line = flag !== -1 ? [[commandFlag(tail[flag]), ...tail.slice(flag + 1)].join(" ")] : first !== -1 ? [tail.slice(first).join(" ")] : [];
+    return [...line, ...(first === -1 ? [] : tail.slice(first + 1).filter((option) => /\s/.test(option)))];
+  }
+  if (name === "cmd") {
+    const at = tail.findIndex((option) => /^\/[ck]/i.test(option));
+    return at === -1 ? [] : [[tail[at].slice(2), ...tail.slice(at + 1)].join(" ")];
+  }
+  if (name !== "git") return [];
+  let k = 0;
+  while (k < tail.length && tail[k].startsWith("-")) k += ["-c", "-C", "--git-dir", "--work-tree", "--namespace", "--config-env", "--super-prefix"].includes(tail[k]) ? 2 : 1;
+  const sub = (tail[k] ?? "").toLowerCase();
+  const args = tail.slice(k + 1);
+  if (sub === "bisect" && args[0] === "run") return [args.slice(1).map((word) => "'" + word.replaceAll("'", "'\\''") + "'").join(" ")];
+  const lines = [];
+  for (let j = 0; sub === "rebase" && j < args.length && args[j] !== "--"; j += 1) {
+    const arg = args[j];
+    const long = /^--ex(?:ec?)?(=[\s\S]*)?$/.exec(arg);
+    if (long !== null) lines.push(long[1] === undefined ? args[(j += 1)] : long[1].slice(1));
+    else if (/^-[^-]/.test(arg)) {
+      for (let c = 1; c < arg.length; c += 1) {
+        if (arg[c] === "x") lines.push(c === arg.length - 1 ? args[(j += 1)] : arg.slice(c + 1));
+        if (arg[c] === "x" || "sXCS".includes(arg[c])) {
+          if (arg[c] !== "x" && arg[c] !== "S" && c === arg.length - 1) j += 1;
+          break;
+        }
+      }
+    }
+  }
+  return lines;
 }
 
 /**
@@ -3674,12 +3709,17 @@ function decide() {
   const root = repoRoot();
   // Where the call runs: the payload's working directory (relative to the root), else the root.
   const cwd = typeof payload.cwd === "string" && payload.cwd !== "" ? resolve(root, payload.cwd) : root;
+  // The PowerShell tool's text is PowerShell's command string, so the verdicts read it as one too, its backslash a
+  // plain character and its backtick the escape (review/194), beside the text as it stands.
+  const texts = /^powershell$/i.test(payload.tool_name ?? "") ? [command, "pwsh -Command '" + command.replaceAll("'", "'\\''") + "'"] : [command];
   for (const ctx of contextsOf(command, cwd)) {
-    const always = personOnlyVerdict(command, ctx);
-    if (always.deny) return always.reason;
+    for (const text of texts) {
+      const always = personOnlyVerdict(text, ctx);
+      if (always.deny) return always.reason;
+    }
   }
   // The mode is read only for a call the unattended rule would refuse, so an unreadable record refuses no other call.
-  const run = unattendedPushVerdict(command);
+  const run = texts.map((text) => unattendedPushVerdict(text)).find((verdict) => verdict.deny) ?? { deny: false };
   if (run.deny) {
     const why = unattendedBy(root);
     if (why !== null) return run.reason + " " + why;
