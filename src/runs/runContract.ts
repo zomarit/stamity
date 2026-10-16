@@ -1,3 +1,5 @@
+import { LineCounter, isAlias, isMap, isNode, isScalar, isSeq, parseDocument, visit } from "yaml";
+import type { Pair } from "yaml";
 import { isPlainObject, parseYamlStrict, unknownFields } from "../config/parse.ts";
 
 /**
@@ -28,9 +30,11 @@ import { isPlainObject, parseYamlStrict, unknownFields } from "../config/parse.t
  * version 1, and a prerequisite neither `done` nor `owned` by a named owner is
  * refused under the plan check's blocker code `prerequisite-open`. Every
  * defect is collected in one pass, so the person fixing a refused file needs
- * one round. A problem names a key and where it stands (a list index, or the
- * line and column of a YAML syntax error), never a value the file holds: not
- * a version, not a prerequisite's name or state, not the text of a YAML error.
+ * one round. A problem names a key this engine knows and where it stands (a
+ * list index, the line of an unknown key, or the line and column of a YAML
+ * syntax error), never text the file holds: not a version, not a
+ * prerequisite's name or state, not the text of a YAML error, and not an
+ * unknown key, which a problem counts and places by line instead of quoting.
  *
  * Pure: text in, verdict out; a path in the file is never resolved or opened.
  * Erasable syntax only, as the rest of `src/runs`.
@@ -108,7 +112,8 @@ export function parseRunContract(text: string, source: string): RunContractResul
     problems.push(`${source}: ${message}`);
   };
 
-  checkUnknown(root, ROOT_KEYS, "the contract", say);
+  const locate = keyLocator(text);
+  checkUnknown(root, ROOT_KEYS, "the contract", [], locate, say);
   checkVersion(own(root, "run-contract"), say);
 
   const plan = optionalText(own(root, "plan"), "plan", say);
@@ -122,9 +127,9 @@ export function parseRunContract(text: string, source: string): RunContractResul
 
   const base = readBase(own(root, "base"), say);
   const acceptance = requiredText(own(root, "acceptance"), "acceptance", say);
-  const scope = readScope(own(root, "scope"), say);
-  const prerequisites = readPrerequisites(own(root, "prerequisites"), say);
-  const budget = readBudget(own(root, "budget"), say);
+  const scope = readScope(own(root, "scope"), locate, say);
+  const prerequisites = readPrerequisites(own(root, "prerequisites"), locate, say);
+  const budget = readBudget(own(root, "budget"), locate, say);
   const answerer = requiredText(own(root, "answerer"), "answerer", say);
   checkFixed(own(root, "preview"), "preview", "stop", say);
   checkFixed(own(root, "move"), "move", "off", say);
@@ -171,18 +176,123 @@ function own(obj: Record<string, unknown>, key: string): unknown {
   return Object.hasOwn(obj, key) ? obj[key] : undefined;
 }
 
+/**
+ * Unknown keys by count and line, never by their text: a key the file holds can be any quoted
+ * text of any length, and a problem reaches the plan check's output. The allowed keys are named,
+ * since this engine wrote those words.
+ */
 function checkUnknown(
   obj: Record<string, unknown>,
   known: readonly string[],
   where: string,
+  at: MapPath,
+  locate: Locate,
   say: Say,
 ): void {
-  const unknown = unknownFields(obj, known);
-  if (unknown.length === 0) return;
+  const count = unknownFields(obj, known).length;
+  if (count === 0) return;
+  const lines = locate(at, known);
+  const place = lines.length === 0 ? "" : `, at line${lines.length === 1 ? "" : "s"} ${lines.join(", ")}`;
   say(
-    `unknown field(s) ${unknown.map((key) => JSON.stringify(key)).join(", ")} in ${where}. ` +
+    `${count} unknown field${count === 1 ? "" : "s"} in ${where}${place}. ` +
       `Allowed: ${known.map((key) => JSON.stringify(key)).join(", ")}.`,
   );
+}
+
+/** Where a map sits in the contract: the keys and list indexes that lead to it from the root. */
+type MapPath = readonly (string | number)[];
+
+/** The lines of the keys outside `known` in the map at a path, ascending. */
+type Locate = (at: MapPath, known: readonly string[]) => number[];
+
+type Deref = (node: unknown) => unknown;
+
+/**
+ * Places unknown keys by line. The text is parsed again, on the first call only and for
+ * positions alone: the parsed object has already decided that a key is unknown, and no key's
+ * text is read back out. A key merged in through `<<` is placed where it is written. A map this
+ * cannot find yields no line, and the problem keeps its count.
+ */
+function keyLocator(text: string): Locate {
+  let read: { root: unknown; deref: Deref; line: (offset: number) => number } | undefined;
+  // Each map's values by key name, built once, so a check per list row walks the root once.
+  const named = new Map<unknown, Map<string, unknown>>();
+  return (at, known) => {
+    read ??= positions(text);
+    const { deref, line } = read;
+    const valueAt = (map: unknown, name: string): unknown => {
+      let values = named.get(map);
+      if (values === undefined) {
+        values = new Map();
+        for (const pair of pairsOf(map, deref)) {
+          const key = keyName(pair.key, deref);
+          if (key !== undefined && !values.has(key)) values.set(key, pair.value);
+        }
+        named.set(map, values);
+      }
+      return deref(values.get(name));
+    };
+    let node = deref(read.root);
+    for (const step of at) {
+      node = typeof step === "number" ? deref(isSeq(node) ? node.items[step] : undefined) : valueAt(node, step);
+    }
+    const allowed = new Set(known);
+    const lines = new Set<number>();
+    for (const pair of pairsOf(node, deref)) {
+      const name = keyName(pair.key, deref);
+      if (name !== undefined && allowed.has(name)) continue;
+      const start = isNode(pair.key) ? pair.key.range?.[0] : undefined;
+      if (start !== undefined) lines.add(line(start));
+    }
+    return [...lines].toSorted((a, b) => a - b);
+  };
+}
+
+/** The document's root, its aliases resolved in one pass, and an offset's 1-based line. */
+function positions(text: string): { root: unknown; deref: Deref; line: (offset: number) => number } {
+  const lineCounter = new LineCounter();
+  const doc = parseDocument(text, { merge: true, logLevel: "error", lineCounter });
+  // An alias stands for the last node anchored under its name before it, as the parser reads it.
+  const targets = new Map<unknown, unknown>();
+  const anchors = new Map<string, unknown>();
+  visit(doc, {
+    Node: (_key, node) => {
+      if (isAlias(node)) targets.set(node, anchors.get(node.source));
+      else if (node.anchor !== undefined) anchors.set(node.anchor, node);
+    },
+  });
+  return {
+    root: doc.contents,
+    deref: (node) => (isAlias(node) ? targets.get(node) : node),
+    line: (offset) => lineCounter.linePos(offset).line,
+  };
+}
+
+/** A `<<` key, which the parser resolves to a symbol: it merges a map in and names no field. */
+function isMergeKey(key: unknown): boolean {
+  return isScalar(key) && typeof key.value === "symbol";
+}
+
+/**
+ * A map's own pairs, then each merge source's in order, so the first pair under a name is the
+ * one the parsed object holds. A map already entered is skipped, so a merge loop ends.
+ */
+function pairsOf(node: unknown, deref: Deref, entered = new Set<unknown>()): Pair<unknown, unknown>[] {
+  if (!isMap(node) || entered.has(node)) return [];
+  entered.add(node);
+  const merged = node.items.filter((pair) => isMergeKey(pair.key)).flatMap((pair) => {
+    const source = deref(pair.value);
+    const sources = isSeq(source) ? source.items.map(deref) : [source];
+    return sources.flatMap((each) => pairsOf(each, deref, entered));
+  });
+  return [...node.items.filter((pair) => !isMergeKey(pair.key)), ...merged];
+}
+
+/** The name the parsed object keys a scalar key by; a collection key names no field. */
+function keyName(key: unknown, deref: Deref): string | undefined {
+  const node = deref(key);
+  if (!isScalar(node)) return undefined;
+  return node.value === null ? "" : String(node.value);
 }
 
 function checkVersion(value: unknown, say: Say): void {
@@ -232,12 +342,12 @@ function readStringList(value: unknown, key: string, say: Say): string[] | null 
   return null;
 }
 
-function readScope(value: unknown, say: Say): { in: string[]; out: string[] } {
+function readScope(value: unknown, locate: Locate, say: Say): { in: string[]; out: string[] } {
   if (!isPlainObject(value)) {
     say("`scope` is required, a map with `in` (and optionally `out`).");
     return { in: [], out: [] };
   }
-  checkUnknown(value, SCOPE_KEYS, "`scope`", say);
+  checkUnknown(value, SCOPE_KEYS, "`scope`", ["scope"], locate, say);
   const inside = readStringList(own(value, "in"), "scope.in", say) ?? [];
   if (Array.isArray(own(value, "in")) && inside.length === 0) {
     say("`scope.in` must name at least one path or area.");
@@ -247,7 +357,7 @@ function readScope(value: unknown, say: Say): { in: string[]; out: string[] } {
   return { in: inside, out: outside };
 }
 
-function readPrerequisites(value: unknown, say: Say): RunContractPrerequisite[] {
+function readPrerequisites(value: unknown, locate: Locate, say: Say): RunContractPrerequisite[] {
   if (value === undefined) return [];
   if (!Array.isArray(value)) {
     say("`prerequisites` must be a list of maps.");
@@ -260,7 +370,7 @@ function readPrerequisites(value: unknown, say: Say): RunContractPrerequisite[] 
       say(`\`${at}\` must be a map with \`name\` and \`state\`.`);
       return;
     }
-    checkUnknown(entry, PREREQUISITE_KEYS, `\`${at}\``, say);
+    checkUnknown(entry, PREREQUISITE_KEYS, `\`${at}\``, ["prerequisites", index], locate, say);
     const name = own(entry, "name");
     if (typeof name !== "string" || name.trim() === "") {
       say(`\`${at}.name\` is required, a non-empty string.`);
@@ -289,13 +399,13 @@ function readPrerequisites(value: unknown, say: Say): RunContractPrerequisite[] 
   return rows;
 }
 
-function readBudget(value: unknown, say: Say): { stopBy?: string; maxUnits?: number } {
+function readBudget(value: unknown, locate: Locate, say: Say): { stopBy?: string; maxUnits?: number } {
   if (value === undefined) return {};
   if (!isPlainObject(value)) {
     say("`budget` must be a map with `stop-by` and/or `max-units`.");
     return {};
   }
-  checkUnknown(value, BUDGET_KEYS, "`budget`", say);
+  checkUnknown(value, BUDGET_KEYS, "`budget`", ["budget"], locate, say);
   const budget: { stopBy?: string; maxUnits?: number } = {};
   const stopBy = own(value, "stop-by");
   if (stopBy !== undefined) {
