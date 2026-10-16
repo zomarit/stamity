@@ -2527,6 +2527,24 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
       expect(uncommitted.code).toBe(0);
     });
 
+    // build/98: the history read decodes a UTF-16 file from that commit's blob, so a later removal does not hide it.
+    it("names the commit that added a token to a UTF-16 file a later commit removed, with --base", async () => {
+      const utf16le = (text: string): Buffer => Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, "utf16le")]);
+      const repo = await seedRepo("repo", { "src/a.ts": "export {};\n" });
+      const root = git(repo, ["rev-parse", "HEAD"]).trim();
+      await writeFile(join(repo, "export.txt"), utf16le(`first\r\n${LINE}\r\n`));
+      git(repo, ["add", "--", "export.txt"]);
+      git(repo, ["commit", "-q", "-m", "a UTF-16 file"]);
+      const added = git(repo, ["rev-parse", "HEAD"]).trim();
+      git(repo, ["rm", "-q", "--", "export.txt"]);
+      git(repo, ["commit", "-q", "-m", "remove"]);
+
+      const { code, doc } = await gateIn(repo, ["scan", "--base", root, "--json"]);
+
+      expect(code).toBe(1);
+      expect(doc["hits"]).toEqual([{ path: "export.txt", line: 2, rule: "github-token", commit: added.slice(0, 12) }]);
+    });
+
     it("reads a token still in the tree once, from the tree, not again from the commit that added it", async () => {
       const repo = await seedRepo("repo", { "src/a.ts": "export {};\n" });
       const root = git(repo, ["rev-parse", "HEAD"]).trim();
@@ -2541,8 +2559,13 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
 
     // build/94: the pushed scope reads what a push of HEAD sends, so the work tree and the index are left out.
     describe("the pushed scope (build/94)", () => {
-      /** `scanChange` with the pushed scope, under `gateIn`'s isolation: `HOME` at an empty folder. */
-      async function scanPushed(cwd: string, base: string | undefined): Promise<ReturnType<typeof scanChange>> {
+      /**
+       * `scanChange` with the pushed scope, under `gateIn`'s isolation: `HOME` at an empty folder. TEST CHANGE,
+       * justified: review/160 reads every commit no remote-tracking ref holds, so the remote is taken to hold the
+       * base (`refs/remotes/origin/main`), as a run's clone does; `remoteAt` puts it elsewhere.
+       */
+      async function scanPushed(cwd: string, base: string | undefined, remoteAt = base): Promise<ReturnType<typeof scanChange>> {
+        if (remoteAt !== undefined) git(cwd, ["update-ref", "refs/remotes/origin/main", remoteAt]);
         const home = getRoot().path("home");
         await mkdir(home, { recursive: true });
         const previous = { HOME: process.env["HOME"], XDG_CONFIG_HOME: process.env["XDG_CONFIG_HOME"] };
@@ -2616,6 +2639,22 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
             { path: "settings.json", line: 2, rule: "github-token" },
           ],
         });
+      });
+
+      it("stops on a token in a commit below the base the remote lacks, naming it (review/160)", async () => {
+        const repo = await seedRepo("repo", { "src/a.ts": "export {};\n" });
+        const root = git(repo, ["rev-parse", "HEAD"]).trim();
+        await getRoot().seedFiles({ "repo/src/a.ts": `export {};\n${LINE}` });
+        git(repo, ["commit", "-q", "-am", "add"]);
+        const added = git(repo, ["rev-parse", "HEAD"]).trim();
+        await getRoot().seedFiles({ "repo/src/a.ts": "export {};\n" });
+        git(repo, ["commit", "-q", "-am", "remove"]);
+        // The run's base is the local tip, and the remote holds only the root: both commits go out with the push.
+        const base = git(repo, ["rev-parse", "HEAD"]).trim();
+
+        const outcome = await scanPushed(repo, base, root);
+
+        expect(outcome).toMatchObject({ base, scope: "pushed", hits: [{ path: "src/a.ts", line: 2, rule: "github-token", commit: added.slice(0, 12) }] });
       });
 
       it("fails with no base, never a clean scan", async () => {

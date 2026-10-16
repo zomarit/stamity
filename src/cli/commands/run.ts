@@ -14,7 +14,7 @@ import { gitWrite, type GitWriteResult } from "../engine/gitWrite.ts";
 import { CliFailure } from "../kit/output.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import { sanitizeLabel } from "../kit/prompts.ts";
-import { readChange, scanChange } from "./gate.ts";
+import { readPushed, scanChange } from "./gate.ts";
 
 /**
  * `stamity run start`, `stamity run checkpoint` and `stamity run end` — put an
@@ -63,12 +63,16 @@ import { readChange, scanChange } from "./gate.ts";
  * `start` switches such a run to); stages
  * only the run folder's record, ledger, plan, morning list and `held/*.patch`,
  * `.stamity/inbox.md` and `--paths` (never `-A`, never `-f`), a path git
- * ignores reported as `records: not committed (…)`; under `Mode: unattended`
- * writes the change against `Base:` under the person-only paths to
- * `held/person-only.patch` and restores those paths to `Base:` in the index
- * only, after the staging, so a `--paths` entry naming one is held too;
- * commits (`--signoff` adding the DCO line); scans `Base..HEAD`'s commits, the
- * work tree and the index left out (a hit, a
+ * ignores reported as `records: not committed (…)`; in an unattended run
+ * (`Mode: unattended`, or no `Mode:` line with `STAMITY_UNATTENDED` set, as
+ * the shell guard reads it) writes the work tree's and the index's change
+ * against `Base:` under the person-only paths to `held/person-only.patch` and
+ * restores those paths to `Base:` in the index only, after the staging, so a
+ * `--paths` entry naming one is held too; commits (`--signoff` adding the DCO
+ * line); in an unattended run refuses the push when a commit it would send
+ * changes a person-only path, or `HEAD`'s tree still does (`held path in
+ * history (…)`, never a history rewrite); scans the commits the remote lacks
+ * and `Base..HEAD`'s, the work tree and the index left out (a hit, a
  * failed or an incomplete scan holds the push); pushes `HEAD` to the branch,
  * the command checked by the shell guard's own person-only table first; and
  * with `--pr` opens or updates the run's draft pull request. Exit 0 when the
@@ -398,7 +402,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
     });
   }
   const head = resumeCard.readRecordHead(record.text);
-  const unattended = head.mode === "unattended";
+  const unattended = readsUnattended(head.mode, ctx.app.runtime.env["STAMITY_UNATTENDED"]);
   const recordBase = head.base;
   const base = recordBase === null ? null : await commitAt(cwd, recordBase, verb);
   if (base === null) {
@@ -467,15 +471,18 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   const stage = wanted.filter((path) => !ignored.has(path));
 
   if (ctx.dryRun) {
-    if (unattended) result.held = heldPaths([...new Set([...(await changedSince(top, base)), ...stage])]);
+    if (unattended) result.held = heldPaths([...new Set([...(await changedSince(top, base)), ...(await changedSince(top, base, "index")), ...stage])].toSorted());
     lines.push(`would stage: ${list(stage)}`, `would hold: ${list(result.held)}`, "Dry run: nothing was staged, written, committed or pushed.");
     return finish(true, { dryRun: true });
   }
   if (!(await add(top, stage, result.notDone))) return finish(false);
 
   // (2) Unattended: the person-only paths' change goes to an inert patch, and those paths back to Base: in the index.
+  // review/156: the index is read too, since the commit takes it: a held change staged or committed and then
+  // undone in the work tree alone is still held.
   if (unattended) {
-    const held = heldPaths(await changedSince(top, base));
+    const inIndex = heldPaths(await changedSince(top, base, "index"));
+    const held = heldPaths([...new Set([...(await changedSince(top, base)), ...inIndex])].toSorted());
     if (held.length === 0) {
       // A patch an earlier checkpoint wrote names a change the run no longer makes: it leaves the folder and the branch.
       const stale = await removeStalePatch(cwd, top, heldDir, fromTop(patchRel));
@@ -486,16 +493,29 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
     }
     if (held.length > 0) {
       // Git writes the patch to a file, so its bytes never pass a text decode: a held file in any encoding applies again.
+      // Each path from the side the push would have carried: the index where it changes the path, else the work tree.
       const scratch = mkdtempSync(join(tmpdir(), "stamity-held-"));
       try {
-        const out = join(scratch, HELD_PATCH);
-        const patch = await git(top, ["diff", "--binary", "--full-index", ...DIFF_PINS, `--output=${out}`, base, "--", ...held], verb);
-        if (patch.code !== 0) {
-          result.notDone.push(`hold failed: git diff answered ${patch.code}: ${firstLine(patch.stderr)}`);
+        const sides: [string[], string[]][] = [
+          [["--cached"], held.filter((path) => inIndex.includes(path))],
+          [[], held.filter((path) => !inIndex.includes(path))],
+        ];
+        const written = await Promise.all(
+          sides
+            .filter(([, paths]) => paths.length > 0)
+            .map(async ([side, paths], index) => {
+              const out = join(scratch, `${index}-${HELD_PATCH}`);
+              return { out, patch: await git(top, ["diff", ...side, "--binary", "--full-index", ...DIFF_PINS, `--output=${out}`, base, "--", ...paths], verb) };
+            }),
+        );
+        const failed = written.find(({ patch }) => patch.code !== 0);
+        if (failed !== undefined) {
+          result.notDone.push(`hold failed: git diff answered ${failed.patch.code}: ${firstLine(failed.patch.stderr)}`);
           return finish(false);
         }
+        const parts = written.map(({ out }) => readFileSync(out));
         try {
-          await ctx.engine.merge.atomicWrite.atomicWriteFile(join(cwd, patchRel), readFileSync(out), { boundaryDir: cwd });
+          await ctx.engine.merge.atomicWrite.atomicWriteFile(join(cwd, patchRel), Buffer.concat(parts), { boundaryDir: cwd });
         } catch (cause) {
           result.notDone.push(`hold failed: ${patchRel} could not be written (${cause instanceof Error ? cause.message : "write failed"})`);
           return finish(false);
@@ -523,6 +543,9 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
       : `held (in ${patchRel}; the work tree keeps them): ${list(result.held)}`,
   );
 
+  // review/159: the commits the push would send, read before the checkpoint's own, which puts held paths back to Base: only.
+  const inHistory = unattended ? await heldInHistory(top) : [];
+
   // (4) The commit, only when something is staged.
   const staged = await git(top, ["diff", "--cached", "--quiet", "--no-ext-diff", "--ignore-submodules=none"], verb);
   if (staged.code === 1) {
@@ -538,6 +561,17 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
     return finish(false);
   }
   lines.push(`commit: ${result.committed ?? "nothing to commit"}`);
+
+  // review/159, review/156: a held path in a pushed commit, or still changed in HEAD's tree (a hook that staged it
+  // again), refuses the push; the verb never rewrites history.
+  if (unattended) {
+    const atTip = heldPaths(await changedSince(top, base, "HEAD")).filter((path) => !inHistory.includes(path));
+    result.notDone.push(...inHistory.map((path) => `held path in history (${path})`), ...atTip.map((path) => `held path in the pushed tree (${path})`));
+    if (inHistory.length + atTip.length > 0) {
+      lines.push("push: refused (a held path would be pushed)");
+      return finish(false);
+    }
+  }
 
   // (5) The secret scan over Base..HEAD, what the push sends and no more (build/94): a hit, a failure or an unread line holds the push.
   const outcome = scanChange(cwd, base, { scope: "pushed" });
@@ -594,18 +628,56 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
 /** The pins every diff here takes against config: no external diff, colour, textconv or rename pairing, top-level names. */
 const DIFF_PINS: readonly string[] = ["--no-color", "--no-ext-diff", "--no-textconv", "--no-renames", "--no-relative", "--ignore-submodules=none"];
 
-/** The top-level-relative paths the work tree and the index change against `base`, committed changes included. */
-async function changedSince(top: string, base: string): Promise<string[]> {
-  const read = await git(top, ["diff", "--name-only", "-z", ...DIFF_PINS, base, "--"], CHECKPOINT);
+/** What `changedSince` compares with `base`: the work tree, the index, or `HEAD`'s tree. */
+type Side = "work tree" | "index" | "HEAD";
+
+const SIDE_ARGS: Readonly<Record<Side, (base: string) => string[]>> = {
+  "work tree": (base) => [base],
+  index: (base) => ["--cached", base],
+  HEAD: (base) => [base, "HEAD"],
+};
+
+/** The top-level-relative paths `side` changes against `base`, committed changes included. */
+async function changedSince(top: string, base: string, side: Side = "work tree"): Promise<string[]> {
+  const read = await git(top, ["diff", "--name-only", "-z", ...DIFF_PINS, ...SIDE_ARGS[side](base), "--"], CHECKPOINT);
   if (read.code !== 0) {
     throw new CliFailure({
       code: "FAILURE",
-      message: "run checkpoint could not list the change against the record's Base:",
+      message: `run checkpoint could not list the ${side}'s change against the record's Base:`,
       why: `git diff answered ${read.code}: ${firstLine(read.stderr)}`,
       next: "run it inside the repository's work tree",
     });
   }
   return read.stdout.split("\0").filter((path) => path !== "");
+}
+
+/**
+ * The person-only paths a commit the push would send changes (review/159):
+ * every commit no remote-tracking ref holds (`HEAD --not --remotes`, as the
+ * scan reads them, review/160), a root commit included and a merge by its own
+ * resolution (`--cc`), renames read as a deletion and an addition.
+ */
+async function heldInHistory(top: string): Promise<string[]> {
+  const read = await git(top, ["log", "--root", "--format=", "--name-only", "-z", "--cc", ...DIFF_PINS, "HEAD", "--not", "--remotes", "--"], CHECKPOINT);
+  if (read.code !== 0) {
+    throw new CliFailure({
+      code: "FAILURE",
+      message: "run checkpoint could not list the paths the commits it would push change",
+      why: `git log answered ${read.code}: ${firstLine(read.stderr)}`,
+      next: "run it inside the repository's work tree",
+    });
+  }
+  return heldPaths([...new Set(read.stdout.split("\0").filter((path) => path !== ""))].toSorted());
+}
+
+/**
+ * Whether the run is unattended as the shell guard reads it: `Mode:
+ * unattended`, or no `Mode:` line while `STAMITY_UNATTENDED` is set (not
+ * empty, `false` or `0`); `Mode: attended` wins over the variable (review/162).
+ */
+function readsUnattended(mode: "attended" | "unattended" | null, flag: string | undefined): boolean {
+  if (mode !== null) return mode === "unattended";
+  return !["", "false", "0"].includes((flag ?? "").trim().toLowerCase());
 }
 
 /**
@@ -743,7 +815,9 @@ async function draftPr(ctx: CliContext, at: PrInputs): Promise<PrStep> {
   if (target === undefined) return { pr: null, inferred: [], notDone: ["draft PR not opened (no default branch was read to target)"] };
 
   const notDone: string[] = [];
-  const title = screenOutbound(at.title, "pr-title").ok ? sanitizeLabel(at.title) : `Run ${at.run}`;
+  // review/157: the title is screened as it posts, after the clean-up, so a character it drops cannot split a token past the screen.
+  const cleanTitle = sanitizeLabel(at.title);
+  const title = screenOutbound(cleanTitle, "pr-title").ok ? cleanTitle : `Run ${at.run}`;
   let inferred: PrereqRow[] = [];
   let body = `Run \`${at.run}\`, attended. Its record: \`${at.recordRel}\`.`;
   if (at.unattended) {
@@ -770,12 +844,15 @@ async function draftPr(ctx: CliContext, at: PrInputs): Promise<PrStep> {
   return { pr: { number: outcome.number, url: outcome.url, how: outcome.how }, inferred, notDone };
 }
 
-/** The prerequisites the change's added lines against `base` imply; none where the lines cannot be read. */
+/**
+ * The prerequisites the pushed change's added lines imply, `HEAD`'s tree
+ * against `base` (review/161): a line only the work tree or an untracked file
+ * holds is not in the pull request; none where the lines cannot be read.
+ */
 function inferredFrom(top: string, base: string): PrereqRow[] {
   try {
     const runner = gitCheckRunner({ timeoutMs: 60_000, maxBuffer: 64 * 1024 * 1024 });
-    const { lines } = readChange(runner, { dir: top, prefix: "", topLevel: top }, base, process.platform === "win32");
-    return "failed" in lines ? [] : inferPrerequisites(lines.hunks);
+    return inferPrerequisites(readPushed(runner, { dir: top, prefix: "", topLevel: top }, base, process.platform === "win32").files);
   } catch {
     return [];
   }

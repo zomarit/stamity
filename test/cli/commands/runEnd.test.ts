@@ -108,9 +108,9 @@ describe("stamity run end", () => {
   /**
    * A repository on `main` (a.txt, b.txt), its own identity in its config,
    * `origin` naming GitHub and pushing to a bare remote, then on the run's
-   * branch with a record reading `mode`.
+   * branch with a record reading `mode` (no `Mode:` line for `null`).
    */
-  async function seed(mode: "attended" | "unattended", opts: { branch?: string } = {}): Promise<Seeded> {
+  async function seed(mode: "attended" | "unattended" | null, opts: { branch?: string } = {}): Promise<Seeded> {
     const dir = getRoot().path(`case-${Math.random().toString(36).slice(2, 8)}`);
     const repo = join(dir, "repo");
     const remote = join(dir, "remote.git");
@@ -127,7 +127,8 @@ describe("stamity run end", () => {
     const base = git(repo, ["rev-parse", "HEAD"]);
     const branch = opts.branch ?? RUN_BRANCH;
     git(repo, ["switch", "-q", "-c", branch]);
-    await put(repo, `${RUN_DIR}/record.md`, `# Run ${RUN}\n\nStatus: in progress\nMode: ${mode}\nBranch: ${RUN_BRANCH}\nBase: ${base}\n`);
+    const modeLine = mode === null ? "" : `Mode: ${mode}\n`;
+    await put(repo, `${RUN_DIR}/record.md`, `# Run ${RUN}\n\nStatus: in progress\n${modeLine}Branch: ${RUN_BRANCH}\nBase: ${base}\n`);
     return { repo, remote, base };
   }
 
@@ -137,7 +138,7 @@ describe("stamity run end", () => {
   }
 
   /** Runs the verb with `HOME` at an empty folder and no host identity, so only the repository's config decides. */
-  async function run(cwd: string, argv: readonly string[]) {
+  async function run(cwd: string, argv: readonly string[], env?: Record<string, string>) {
     const home = getRoot().path("home");
     await mkdir(home, { recursive: true });
     const overrides: Record<string, string | undefined> = { HOME: home, XDG_CONFIG_HOME: home, GIT_CONFIG_NOSYSTEM: "1", EMAIL: undefined };
@@ -148,7 +149,7 @@ describe("stamity run end", () => {
       else process.env[key] = value;
     }
     try {
-      const result = await runInProcess([runCommand], ["run", ...argv], { cwd });
+      const result = await runInProcess([runCommand], ["run", ...argv], { cwd, ...(env === undefined ? {} : { env }) });
       const envelope = argv.includes("--json") && result.stdout !== "" ? (JSON.parse(result.stdout) as Record<string, unknown>) : {};
       // The funnel's three envelope keys, set aside so `doc` is the verb's own document.
       const { ok, command, version, ...doc } = envelope;
@@ -301,6 +302,16 @@ describe("stamity run end", () => {
 
     expect(code).toBe(0);
     expect(doc).toMatchObject({ pr: { how: "created" }, notDone: ["morning list missing"], inferred: [] });
+    expect(created().body).toBe(`Run \`${RUN}\`: no morning list was posted. Its record: \`${RUN_DIR}/record.md\`.\n\n${MARKER}`);
+  });
+
+  it("reads a record with no Mode: line as unattended while STAMITY_UNATTENDED is set, posting the unattended body (review/162)", async () => {
+    const { repo } = await seed(null);
+
+    const { code, doc } = await run(repo, END("feat: x"), { STAMITY_UNATTENDED: "1" });
+
+    expect(code).toBe(0);
+    expect(doc).toMatchObject({ pr: { how: "created" }, notDone: ["morning list missing"] });
     expect(created().body).toBe(`Run \`${RUN}\`: no morning list was posted. Its record: \`${RUN_DIR}/record.md\`.\n\n${MARKER}`);
   });
 

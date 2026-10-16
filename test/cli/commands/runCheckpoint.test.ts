@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { lstatSync } from "node:fs";
-import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runCommand } from "../../../src/cli/commands/run.ts";
@@ -106,9 +106,9 @@ describe("stamity run checkpoint", () => {
   /**
    * A repository on `main` (a.txt, b.txt, `[ab].txt`, .cursorrules), its own
    * identity in its config, `origin` naming GitHub and pushing to a bare
-   * remote, then on the run's branch with a record reading `mode`.
+   * remote, then on the run's branch with a record reading `mode` (no `Mode:` line for `null`).
    */
-  async function seed(mode: "attended" | "unattended", opts: { branch?: string } = {}): Promise<Seeded> {
+  async function seed(mode: "attended" | "unattended" | null, opts: { branch?: string } = {}): Promise<Seeded> {
     const dir = getRoot().path(`case-${Math.random().toString(36).slice(2, 8)}`);
     const repo = join(dir, "repo");
     const remote = join(dir, "remote.git");
@@ -123,9 +123,13 @@ describe("stamity run checkpoint", () => {
     git(repo, ["remote", "add", "origin", "https://github.com/o/r.git"]);
     git(repo, ["config", "remote.origin.pushurl", remote]);
     const base = git(repo, ["rev-parse", "HEAD"]);
+    // TEST CHANGE, justified: review/159 and review/160 read every commit no remote-tracking ref holds, so the
+    // seed is fetched as origin/main, as a run's clone has it; with none, the seed (.cursorrules) would be unpushed.
+    git(repo, ["update-ref", "refs/remotes/origin/main", base]);
     const branch = opts.branch ?? RUN_BRANCH;
     if (branch !== "main") git(repo, ["switch", "-q", "-c", branch]);
-    await put(repo, `${RUN_DIR}/record.md`, `# Run ${RUN}\n\nStatus: in progress\nMode: ${mode}\nBranch: ${branch}\nBase: ${base}\n`);
+    const modeLine = mode === null ? "" : `Mode: ${mode}\n`;
+    await put(repo, `${RUN_DIR}/record.md`, `# Run ${RUN}\n\nStatus: in progress\n${modeLine}Branch: ${branch}\nBase: ${base}\n`);
     return { repo, remote, base };
   }
 
@@ -135,7 +139,7 @@ describe("stamity run checkpoint", () => {
   }
 
   /** Runs the verb with `HOME` at an empty folder and no host identity, so only the repository's config decides. */
-  async function run(cwd: string, argv: readonly string[]) {
+  async function run(cwd: string, argv: readonly string[], env?: Record<string, string>) {
     const home = getRoot().path("home");
     await mkdir(home, { recursive: true });
     const overrides: Record<string, string | undefined> = { HOME: home, XDG_CONFIG_HOME: home, GIT_CONFIG_NOSYSTEM: "1", EMAIL: undefined };
@@ -146,7 +150,7 @@ describe("stamity run checkpoint", () => {
       else process.env[key] = value;
     }
     try {
-      const result = await runInProcess([runCommand], ["run", ...argv], { cwd });
+      const result = await runInProcess([runCommand], ["run", ...argv], { cwd, ...(env === undefined ? {} : { env }) });
       const envelope = argv.includes("--json") && result.stdout !== "" ? (JSON.parse(result.stdout) as Record<string, unknown>) : {};
       // The funnel's three envelope keys, set aside so `doc` is the verb's own document.
       const { ok, command, version, ...doc } = envelope;
@@ -171,11 +175,12 @@ describe("stamity run checkpoint", () => {
     return call.body as { title: string; body: string };
   };
 
+  // TEST CHANGE, justified: review/159 (signed off 01:28Z) refuses a push whose commits change a held path, so the
+  // .cursorrules change here stays in the work tree; the committed case is pinned as a refusal below.
   it("holds a workflow change and a .cursorrules change out of an unattended push, in the patch and the work tree", async () => {
     const { repo, remote } = await seed("unattended");
-    // .cursorrules changed by a commit of the run's own; the workflow only in the work tree, named in --paths.
+    // .cursorrules changed in the work tree only; the workflow only in the work tree, named in --paths.
     await writeFile(join(repo, ".cursorrules"), "steered rules\n");
-    git(repo, ["commit", "-q", "-am", "run's own commit"]);
     await put(repo, ".github/workflows/x.yml", "on: push\n");
     await writeFile(join(repo, "a.txt"), "the unit's change\n");
 
@@ -195,6 +200,77 @@ describe("stamity run checkpoint", () => {
     expect(await readFile(join(repo, ".github/workflows/x.yml"), "utf8")).toBe("on: push\n");
     expect(await readFile(join(repo, ".cursorrules"), "utf8")).toBe("steered rules\n");
     expect(doc["committed"]).toBe(git(repo, ["rev-parse", "HEAD"]));
+  });
+
+  it("holds a held change staged and then undone in the work tree alone, from the index side (review/156)", async () => {
+    const { repo, remote } = await seed("unattended");
+    // Staged, then the work tree put back to Base:'s bytes; and a workflow staged, then deleted from the work tree.
+    await writeFile(join(repo, ".cursorrules"), "steered rules\n");
+    await put(repo, ".github/workflows/x.yml", "on: push\n");
+    git(repo, ["add", "--", ".cursorrules", ".github/workflows/x.yml"]);
+    await writeFile(join(repo, ".cursorrules"), ".cursorrules\n");
+    await rm(join(repo, ".github"), { recursive: true });
+
+    const { code, doc } = await run(repo, CHECKPOINT);
+
+    expect(code).toBe(0);
+    expect(doc).toMatchObject({ pushed: true, notDone: [], held: [".cursorrules", ".github/workflows/x.yml"] });
+    expect(pushedTree(remote)).not.toContain(".github/workflows/x.yml");
+    expect(pushedFile(remote, ".cursorrules")).toBe(".cursorrules");
+    const patch = pushedFile(remote, PATCH);
+    expect(patch).toContain("+steered rules");
+    expect(patch).toContain("+on: push");
+  });
+
+  it("refuses the push when a commit it would send changes a held path, rewriting no history (review/159)", async () => {
+    const { repo, remote } = await seed("unattended");
+    await writeFile(join(repo, ".cursorrules"), "steered rules\n");
+    git(repo, ["commit", "-q", "-am", "run's own commit"]);
+    const own = git(repo, ["rev-parse", "HEAD"]);
+    // The work tree undoes it too, so neither the work tree nor the index differs from Base: at the path.
+    await writeFile(join(repo, ".cursorrules"), ".cursorrules\n");
+    await writeFile(join(repo, "a.txt"), "changed\n");
+
+    const { code, doc, stdout } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+    expect(code).toBe(1);
+    expect(doc).toMatchObject({ pushed: false, notDone: ["held path in history (.cursorrules)"] });
+    expect(stdout).toContain("held path in history (.cursorrules)");
+    expect(git(repo, ["rev-parse", "HEAD~1"])).toBe(own);
+    expect(pushes()).toEqual([]);
+    expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
+  });
+
+  it("refuses the push when HEAD's tree still changes a held path after the commit, a hook having staged it (review/156)", async () => {
+    const { repo, remote } = await seed("unattended");
+    await writeFile(join(repo, ".cursorrules"), "steered rules\n");
+    await writeFile(join(repo, "a.txt"), "changed\n");
+    const hook = join(repo, ".git", "hooks", "pre-commit");
+    await writeFile(hook, "#!/bin/sh\ngit add -- .cursorrules\n");
+    await chmod(hook, 0o755);
+
+    const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+    expect(code).toBe(1);
+    expect(doc).toMatchObject({ pushed: false, held: [".cursorrules"], notDone: ["held path in the pushed tree (.cursorrules)"] });
+    expect(pushes()).toEqual([]);
+    expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
+  });
+
+  it("holds as unattended a record with no Mode: line while STAMITY_UNATTENDED is set, and not one reading Mode: attended (review/162)", async () => {
+    const bare = await seed(null);
+    const attended = await seed("attended");
+    await Promise.all([bare, attended].map(({ repo }) => put(repo, ".github/workflows/x.yml", "on: push\n")));
+
+    const held = await run(bare.repo, [...CHECKPOINT, "--paths", ".github/workflows/x.yml"], { STAMITY_UNATTENDED: "1" });
+    const kept = await run(attended.repo, [...CHECKPOINT, "--paths", ".github/workflows/x.yml"], { STAMITY_UNATTENDED: "1" });
+
+    expect(held.code).toBe(0);
+    expect(held.doc["held"]).toEqual([".github/workflows/x.yml"]);
+    expect(pushedTree(bare.remote)).not.toContain(".github/workflows/x.yml");
+    expect(kept.code).toBe(0);
+    expect(kept.doc["held"]).toEqual([]);
+    expect(pushedTree(attended.remote)).toContain(".github/workflows/x.yml");
   });
 
   it("pushes an attended run's workflow change as it is, holding nothing", async () => {
@@ -355,6 +431,7 @@ describe("stamity run checkpoint", () => {
   it("opens an unattended run's pull request from its morning list, with the prerequisites the change implies", async () => {
     const { repo } = await seed("unattended");
     await put(repo, "src/client.ts", "export const url = process.env.SERVICE_URL;\n");
+    await put(repo, "src/scratch.ts", "export const probe = process.env.SCRATCH_ONLY;\n");
     const question = JSON.stringify({ id: "Q1", kind: "decision", question: "Merge the delta?", options: ["yes", "no"], default: 2, source: "record" });
     await put(
       repo,
@@ -368,6 +445,7 @@ describe("stamity run checkpoint", () => {
 
     expect(code).toBe(0);
     expect(doc["notDone"]).toEqual([]);
+    // review/161: read from what the push carries, so the untracked scratch file's variable is no row.
     expect(doc["inferred"]).toMatchObject([{ kind: "env", name: "SERVICE_URL", where: "src/client.ts:1" }]);
     const { body } = created();
     expect(body.startsWith(`# Morning list — ${RUN}`)).toBe(true);
@@ -392,6 +470,16 @@ describe("stamity run checkpoint", () => {
     await writeFile(join(repo, "a.txt"), "changed\n");
 
     const { code } = await run(repo, [...CHECKPOINT, "--paths", "a.txt", "--pr", "--title", `fix ${TOKEN}`]);
+
+    expect(code).toBe(0);
+    expect(created().title).toBe(`Run ${RUN}`);
+  });
+
+  it("screens the title as it posts, so a token split by a character the clean-up drops is still replaced (review/157)", async () => {
+    const { repo } = await seed("attended");
+    await writeFile(join(repo, "a.txt"), "changed\n");
+
+    const { code } = await run(repo, [...CHECKPOINT, "--paths", "a.txt", "--pr", "--title", `fix ${TOKEN.slice(0, 10)}\u200b${TOKEN.slice(10)}`]);
 
     expect(code).toBe(0);
     expect(created().title).toBe(`Run ${RUN}`);

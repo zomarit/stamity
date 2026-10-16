@@ -942,10 +942,10 @@ function baseEntry(runner: GitRunner, cwd: string, treeish: string, path: string
 }
 
 /**
- * The text of `HEAD`'s blob at the top-level-relative `name` when it opens
- * as a UTF-16 byte-order mark reads (review/98, for the pushed scope,
- * build/94), from the object store, never the work tree, so what is read is
- * what a push sends. The read runner decodes UTF-8: either mark (`FF FE`,
+ * The text of `treeish`'s blob at the top-level-relative `name` when it opens
+ * as a UTF-16 byte-order mark reads (review/98: `HEAD`'s for the pushed
+ * scope, build/94, and each commit's for the history, build/98), from the
+ * object store, never the work tree, so what is read is what a push sends. The read runner decodes UTF-8: either mark (`FF FE`,
  * `FE FF`) reads as two U+FFFD, and no ASCII byte is ever taken into a
  * replacement, so with the NULs dropped the file's ASCII, where every rule's
  * value lives, keeps its order and its lines. A blob opening with another pair
@@ -953,8 +953,8 @@ function baseEntry(runner: GitRunner, cwd: string, treeish: string, path: string
  * less. `undefined` for no blob there, no such opening, or a blob past the
  * untracked bound.
  */
-function headUtf16(runner: GitRunner, root: ProjectRoot, name: string): string | undefined {
-  const entry = baseEntry(runner, root.dir, "HEAD", name);
+function blobUtf16(runner: GitRunner, root: ProjectRoot, treeish: string, name: string): string | undefined {
+  const entry = baseEntry(runner, root.dir, treeish, name);
   if (entry?.type !== "blob") return undefined;
   const size = Number(runGit(runner, root.dir, "cat-file -s", ["cat-file", "-s", entry.id]).trim());
   if (!(size <= UNTRACKED_MAX_BYTES)) return undefined;
@@ -1428,7 +1428,8 @@ interface HistoryLines {
  * given. Two reads through the same runner and bounds, with the line read's
  * pins (`--text`, no external diff, colour or textconv, fixed prefixes), its
  * sections named by the `-z` name list. A file whose added lines hold a NUL is
- * named, never read.
+ * named, never read, unless it is UTF-16 at the last of `revs`, which is read
+ * whole from that commit's blob (review/98, build/98).
  */
 function readTreeDiff(
   runner: GitRunner,
@@ -1437,7 +1438,6 @@ function readTreeDiff(
   commit: string | undefined,
   windows: boolean,
   into: HistoryLines,
-  decode = false,
 ): void {
   const inside = insideOf(root.prefix, windows);
   const away = awayFrom(root.prefix);
@@ -1467,9 +1467,9 @@ function readTreeDiff(
     const shown = path ?? away(name);
     const added = section.hunks.flatMap((hunk) => hunk.added);
     if (section.unshown || holdsNul(added.map((line) => line.text))) {
-      // `decode`: a UTF-16 file the read reaches at HEAD is scanned whole, as the work-tree read scans one (review/98).
-      const text = decode && !section.deleted ? headUtf16(runner, root, name) : undefined;
-      if (text !== undefined) into.files.push(wholeFile(shown, text));
+      // A UTF-16 file is scanned whole from the commit the read ends at, as the work-tree read scans one (review/98, build/98).
+      const text = section.deleted ? undefined : blobUtf16(runner, root, revs.at(-1) ?? "HEAD", name);
+      if (text !== undefined) into.files.push({ ...wholeFile(shown, text), ...(commit === undefined ? {} : { commit }) });
       else (hasCodeExtension(shown) ? into.unscanned : into.skipped).push(shown);
     } else if (added.length > 0) into.files.push({ path: shown, ...(commit === undefined ? {} : { commit }), added });
   });
@@ -1478,12 +1478,17 @@ function readTreeDiff(
 /**
  * The added lines of every commit since `base`, merges left out, oldest first
  * (review/112): a value committed and removed again before the scan stays in
- * the history a push sends. Each commit is one {@link readTreeDiff}.
+ * the history a push sends. Each commit is one {@link readTreeDiff}. With
+ * `pushed`, every commit no remote-tracking ref holds is read too
+ * (`HEAD --not --remotes`, review/160): a push sends those below `base` as well.
  */
-function readHistory(runner: GitRunner, root: ProjectRoot, base: string, windows: boolean): HistoryLines {
-  const commits = runGit(runner, root.dir, "rev-list", ["rev-list", "--reverse", "--no-merges", `${base}..HEAD`, "--"])
-    .split("\n")
-    .filter((line) => line !== "");
+function readHistory(runner: GitRunner, root: ProjectRoot, base: string, windows: boolean, pushed = false): HistoryLines {
+  const revList = (range: readonly string[]): string[] =>
+    runGit(runner, root.dir, "rev-list", ["rev-list", "--reverse", "--no-merges", ...range, "--"])
+      .split("\n")
+      .filter((line) => line !== "");
+  const since = revList([`${base}..HEAD`]);
+  const commits = pushed ? [...new Set([...revList(["HEAD", "--not", "--remotes"]), ...since])] : since;
   const history: HistoryLines = { files: [], skipped: [], unscanned: [], outside: new Set() };
   for (const commit of commits) readTreeDiff(runner, root, [commit], commit.slice(0, SHORT_COMMIT), windows, history);
   return history;
@@ -1494,10 +1499,12 @@ function readHistory(runner: GitRunner, root: ProjectRoot, base: string, windows
  * `base`, one {@link readTreeDiff}, in place of the work tree and the index.
  * The net read keeps a merge's own resolution in the scan, which the history
  * (merges left out) does not read, and decodes a UTF-16 file at `HEAD` whole.
+ * Exported for `run`'s inferred prerequisites, read from what the push carries
+ * (review/161); a failed read throws.
  */
-function readPushed(runner: GitRunner, root: ProjectRoot, base: string, windows: boolean): HistoryLines {
+export function readPushed(runner: GitRunner, root: ProjectRoot, base: string, windows: boolean): HistoryLines {
   const net: HistoryLines = { files: [], skipped: [], unscanned: [], outside: new Set() };
-  readTreeDiff(runner, root, [base, "HEAD"], undefined, windows, net, true);
+  readTreeDiff(runner, root, [base, "HEAD"], undefined, windows, net);
   return net;
 }
 
@@ -1513,7 +1520,9 @@ function readPushed(runner: GitRunner, root: ProjectRoot, base: string, windows:
  * `{ scope: "pushed" }` (build/94, `run checkpoint`'s scan) reads what a push
  * of `HEAD` sends and nothing else: `HEAD`'s tree against the base ({@link
  * readPushed}) stands in for the change, so an uncommitted or untracked file
- * the push leaves behind is not read. It needs a base; without one it fails.
+ * the push leaves behind is not read, and the history read covers every commit
+ * the remote lacks, those below the base included (review/160). It needs a
+ * base; without one it fails.
  */
 export function scanChange(cwd: string, ref: string | undefined, options: { scope?: "pushed" } = {}): ScanOutcome {
   const pushed = options.scope === "pushed";
@@ -1551,7 +1560,7 @@ export function scanChange(cwd: string, ref: string | undefined, options: { scop
     }
     let history: HistoryLines = { files: [], skipped: [], unscanned: [], outside: new Set() };
     try {
-      if (commit !== null) history = readHistory(runner, root, commit, windows);
+      if (commit !== null) history = readHistory(runner, root, commit, windows, pushed);
     } catch (err) {
       if (!(err instanceof GitReadError) && !(err instanceof PatchError)) throw err;
       const why = err instanceof GitReadError ? describeGitFailure(err) : err.message;
