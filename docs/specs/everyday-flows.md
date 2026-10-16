@@ -123,7 +123,7 @@ text was first read at the integration head `4daeb214`, or at `bc12cfc3` where t
 date, re-pointed or added a citation; the run's last citation pass re-read each one at `445ebd23`, and the whole-branch
 page round re-read them on `aa7a3e5b` with its own edits to `SECURITY.md`, `evals/SET-v7.md` and the unattended skill,
 re-pointing each one whose text had moved; the run's final derived pass re-pointed each one a later commit moved,
-mapped through git's diff from the commit it was read at, and every one reads at `54cfa4f7`, a pin named beside a
+mapped through git's diff from the commit it was read at, and every one reads at `1dd92ad6`, a pin named beside a
 citation included. Two units
 were not on `4daeb214`: `u19-run-end` (`stamity run end`) and
 `u21-security-page` (`SECURITY.md`'s cloud section); the fix round cites both at `bc12cfc3`. REQ-FLOW-105 to
@@ -3835,14 +3835,20 @@ naming `stamity run checkpoint` and `run end` as the push path; replies on `pull
 record head escapes this rule, a residual `SECURITY.md` names (REQ-FLOW-104).
 
 - **As built, where the delta differed:** the rule refuses more than the delta named, so the run verbs' push stays on
-  the repository the run started on. While the run is unattended it also refuses `gh pr close` and `gh pr reopen`, a
-  `git remote` write and a `git config` write of a `remote.*` key or section, and a git call on a line that sets one of
-  git's program-valued variables (`src/hooks/personOnly.ts:1706-1712`, `:1729`; the variables at `:1599-1622`). A
-  `git config` write of a `url.*` key is refused beside a `remote.*` one (`writesRemote`, `:1671` and `:1712`); the
-  run verbs' origin pin is the second check on the push it would move (REQ-FLOW-092's "As built"
-  line). On Claude Code, `permissions.deny` rows also refuse the GitHub MCP server's merge and branch-write
-  tools by name (`CLAUDE_DENY_ROWS`, `:182-186`); the other clients take no per-tool deny, a residual `SECURITY.md`
-  names.
+  the repository the run started on. While the run is unattended it also refuses `gh pr close`, `gh pr reopen` and
+  `gh pr update-branch` (`src/hooks/personOnly.ts:1729`), a `git remote` write and a `git config` write of a
+  `remote.*` key or section (`:1711-1712`), and any line that sets one of git's program-valued or configuration
+  variables, whatever program it runs, the run verbs among them (`:1748-1756`). The configuration variables
+  include `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` (`:1591`), the program-valued ones are at `:1599-1600`, and the
+  spellings that set either at `:1602-1618`; a git call on a line that names a configuration variable or sets a
+  program-valued one is refused before that (`:1700-1708`). A `git config` write of a `url.*` key is refused beside a
+  `remote.*` one (`writesRemote`, `:1671` and `:1712`); the run verbs' origin pin is the second check on the push it
+  would move (REQ-FLOW-092's "As built" line). In every mode, attended or not, a REST review write whose body the line
+  cannot show is refused as an approval (`personOnlyVerdict`, `:1015-1020`). On Claude Code, thirteen
+  `permissions.deny` rows refuse the GitHub MCP server's tools by name (`CLAUDE_DENY_ROWS`, `:182-198`): merge and
+  branch writes (`:182-186`), review writes and submission (`:191-193`), pull-request update and state (`:194-196`),
+  branch creation (`:197`) and repository deletion (`:198`). The other clients take no per-tool deny, a residual
+  `SECURITY.md` names.
 - **Proof:** `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`,
   `test/corpus/commands/feedbackPair.test.ts` ("pr-resolve pushes only through the run verbs"),
   `test/corpus/skills/unattended.test.ts`.
