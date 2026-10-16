@@ -96,10 +96,19 @@ import * as runsLedgerStore from "../runs/ledgerStore.ts";
 import * as runsResumeCard from "../runs/resumeCard.ts";
 import * as runsInboxStore from "../runs/inboxStore.ts";
 import * as runsDisposition from "../runs/disposition.ts";
+import * as runsPlanCoverage from "../runs/planCoverage.ts";
+import * as runsFreshness from "../runs/freshness.ts";
+import * as runsRunContract from "../runs/runContract.ts";
+import * as runsPullRequest from "../runs/pullRequest.ts";
+import * as runsPrerequisites from "../runs/prerequisites.ts";
+import * as runsMorning from "../runs/morning.ts";
+import * as runsPreflight from "../runs/preflight.ts";
+import * as runsPlanCheck from "../runs/planCheck.ts";
 import * as hooksModel from "../hooks/model.ts";
 import * as portableRunner from "../hooks/portableRunner.ts";
 import * as userHooks from "../hooks/userHooks.ts";
 import * as hookScripts from "../hooks/scripts.ts";
+import * as hookPersonOnly from "../hooks/personOnly.ts";
 import * as toolCategories from "../tools/categories.ts";
 import * as allowlist from "../tools/allowlist.ts";
 import * as translator from "../tools/translator.ts";
@@ -138,6 +147,7 @@ import * as modelDefaults from "../roster/modelDefaults.ts";
 import * as changeClassify from "../change/classify.ts";
 import * as changeTestInputs from "../change/testInputs.ts";
 import * as changeScan from "../change/scan.ts";
+import * as changePersonOnlyPaths from "../change/personOnlyPaths.ts";
 
 /**
  * Every engine module, grouped by feature. Fields are concrete module namespace
@@ -248,7 +258,11 @@ export interface EngineRegistry {
    * reports, the resume card's bounds), the resume card's embeddable body, the
    * findings-block reader, the ledger's one serialized writer, the engine's
    * own reader of the resume card, the hook body's twin, the deferral
-   * inbox's grammar and query, and the schedule rule's `retired` grammar.
+   * inbox's grammar and query, and the schedule rule's `retired` grammar; and
+   * the unattended run's logic: a plan's structural coverage, the freshness
+   * guard, the run contract and the readiness check over them, the draft pull
+   * request and its inferred prerequisites, the morning list, and the
+   * pre-flight's checks.
    */
   readonly runs: {
     readonly layout: typeof runsLayout;
@@ -258,12 +272,22 @@ export interface EngineRegistry {
     readonly resumeCard: typeof runsResumeCard;
     readonly inboxStore: typeof runsInboxStore;
     readonly disposition: typeof runsDisposition;
+    readonly planCoverage: typeof runsPlanCoverage;
+    readonly freshness: typeof runsFreshness;
+    readonly runContract: typeof runsRunContract;
+    readonly pullRequest: typeof runsPullRequest;
+    readonly prerequisites: typeof runsPrerequisites;
+    readonly morning: typeof runsMorning;
+    readonly preflight: typeof runsPreflight;
+    readonly planCheck: typeof runsPlanCheck;
   };
   readonly hooks: {
     readonly model: typeof hooksModel;
     readonly portableRunner: typeof portableRunner;
     readonly userHooks: typeof userHooks;
     readonly scripts: typeof hookScripts;
+    /** The person-only acts and the unattended push rule the shell guard enforces (REQ-FLOW-102, REQ-FLOW-120). */
+    readonly personOnly: typeof hookPersonOnly;
   };
   readonly tools: {
     readonly categories: typeof toolCategories;
@@ -348,6 +372,8 @@ export interface EngineRegistry {
     readonly classify: typeof changeClassify;
     readonly testInputs: typeof changeTestInputs;
     readonly scan: typeof changeScan;
+    /** The person-only paths an unattended push holds off its tree (REQ-FLOW-102). */
+    readonly personOnlyPaths: typeof changePersonOnlyPaths;
   };
 }
 
@@ -430,8 +456,16 @@ export function createEngine(): EngineRegistry {
       resumeCard: runsResumeCard,
       inboxStore: runsInboxStore,
       disposition: runsDisposition,
+      planCoverage: runsPlanCoverage,
+      freshness: runsFreshness,
+      runContract: runsRunContract,
+      pullRequest: runsPullRequest,
+      prerequisites: runsPrerequisites,
+      morning: runsMorning,
+      preflight: runsPreflight,
+      planCheck: runsPlanCheck,
     },
-    hooks: { model: hooksModel, portableRunner, userHooks, scripts: hookScripts },
+    hooks: { model: hooksModel, portableRunner, userHooks, scripts: hookScripts, personOnly: hookPersonOnly },
     tools: { categories: toolCategories, allowlist, translator },
     detect: {
       repoAnalyzer,
@@ -462,7 +496,7 @@ export function createEngine(): EngineRegistry {
     resilience: { retry, failureClass, failureLog, adapterTimeout },
     roster: { triggers: rosterTriggers, reviewCaps, agentPolicies, agentGrants, modelLadder, modelDefaults },
     config: { parse: configParse },
-    change: { classify: changeClassify, testInputs: changeTestInputs, scan: changeScan },
+    change: { classify: changeClassify, testInputs: changeTestInputs, scan: changeScan, personOnlyPaths: changePersonOnlyPaths },
   });
 }
 

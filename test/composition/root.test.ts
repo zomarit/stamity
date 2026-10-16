@@ -248,6 +248,22 @@ describe("createEngine", () => {
   });
 });
 
+describe("the unattended run's modules (plan 021 file 1)", () => {
+  it("wires each of them to its real exports", () => {
+    const engine = createEngine();
+    expect(typeof engine.runs.preflight.runPreflight).toBe("function");
+    expect(typeof engine.runs.planCheck.checkPlans).toBe("function");
+    expect(typeof engine.runs.planCoverage.checkCoverage).toBe("function");
+    expect(typeof engine.runs.freshness.freshness).toBe("function");
+    expect(typeof engine.runs.runContract.parseRunContract).toBe("function");
+    expect(typeof engine.runs.pullRequest.ensureDraftPr).toBe("function");
+    expect(typeof engine.runs.morning.screenOutbound).toBe("function");
+    expect(typeof engine.runs.prerequisites.inferPrerequisites).toBe("function");
+    expect(typeof engine.hooks.personOnly.personOnlyVerdict).toBe("function");
+    expect(typeof engine.change.personOnlyPaths.heldPaths).toBe("function");
+  });
+});
+
 describe("public entry", () => {
   it("re-exports the composition root, not a copy", () => {
     expect(publicApi.createEngine).toBe(createEngine);

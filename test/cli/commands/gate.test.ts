@@ -2567,6 +2567,36 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
       expect(stdout).toBe("");
       expect(gitSpy.calls).toEqual([]);
     });
+
+    // u16-gate-verbs: each subcommand takes its own options; another one is a usage error before git runs.
+    it.each([
+      ["--text with --base, since a text scan reads no change", ["scan", "--text", "x.md", "--label", "reply", "--base", "HEAD", "--json"]],
+      ["--label without --text", ["scan", "--label", "reply", "--json"]],
+      ["a label outside the four", ["scan", "--text", "x.md", "--label", "readme", "--json"]],
+      ["--unattended, which only preflight takes", ["scan", "--unattended", "--json"]],
+      ["--text on classify", ["classify", "--text", "x.md", "--label", "reply", "--json"]],
+    ])("exits 2 on %s, before git runs", async (_label, argv) => {
+      const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
+
+      gitSpy.calls.length = 0;
+      const { code, stdout } = await gateIn(repo, argv);
+
+      expect(code).toBe(2);
+      expect(stdout).toBe("");
+      expect(gitSpy.calls).toEqual([]);
+    });
+
+    it("scans a text file without reading the change from git", async () => {
+      const repo = await seedRepo("repo", { "docs/a.md": "base\n" });
+      await getRoot().seedFiles({ "repo/body.md": `first\n${LINE}` });
+
+      gitSpy.calls.length = 0;
+      const { code, doc } = await gateIn(repo, ["scan", "--text", "body.md", "--label", "morning", "--json"]);
+
+      expect(code).toBe(1);
+      expect(doc["hits"]).toEqual([{ label: "morning", line: 2, rule: "github-token" }]);
+      expect(gitSpy.calls).toEqual([]);
+    });
   });
 });
 
