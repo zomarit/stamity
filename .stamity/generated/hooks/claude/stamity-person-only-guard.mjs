@@ -1595,7 +1595,14 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 		"export",
 		"declare",
 		"typeset",
+		"local",
 		"set"
+	]);
+	const EXPORTS = /^-[A-Za-z]*x[A-Za-z]*$/;
+	const EXPORTERS = /* @__PURE__ */ new Set([
+		"declare",
+		"typeset",
+		"local"
 	]);
 	const SETS_TEXT = new RegExp(`\\$\\{?env:${GIT_VARIABLE}\\}?\\s*(?:[-+*/%]|\\?\\?)?=|\\b(?:Set-Item|New-Item|si|ni)\\b[^;|&\\n]*?(?<![\\w$\\{])env:\\\\?${GIT_VARIABLE}|\\[(?:System\\.)?Environment\\]::SetEnvironmentVariable\\(\\s*['"]${GIT_VARIABLE}`, "i");
 	const PROGRAM_WORD = new RegExp(`^(?:${PROGRAM_VARIABLES})=`, "i");
@@ -1739,7 +1746,10 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 			if (GRAPHQL_MOVES.test(cmd.join(" "))) return deny("A GraphQL mutation that moves a branch or a pull request");
 		} else if (write && MOVES.some((pattern) => pattern.test(path))) return deny(`A REST write that moves a branch or a pull request (${method} ${path})`);
 	}
-	if (assigned.some((word) => SETS_WORD.test(word)) || commands.some((cmd) => SETTERS.has(cmd[0] ?? "") && cmd.slice(1).some((word) => SETS_WORD.test(word) && (cmd[0] === "export" || word.includes("=")))) || SETS_TEXT.test(command)) return deny("A line that sets one of git's program or configuration variables (`GIT_EXEC_PATH`, `GIT_EDITOR`, `GIT_CONFIG_COUNT`, …), which the run verbs' own git reads,");
+	if (assigned.some((word) => SETS_WORD.test(word)) || commands.some((cmd) => {
+		const exports = cmd[0] === "export" || EXPORTERS.has(cmd[0] ?? "") && cmd.slice(1).some((word) => EXPORTS.test(word));
+		return SETTERS.has(cmd[0] ?? "") && cmd.slice(1).some((word) => SETS_WORD.test(word) && (exports || word.includes("=")));
+	}) || SETS_TEXT.test(command)) return deny("A line that sets one of git's program or configuration variables (`GIT_EXEC_PATH`, `GIT_EDITOR`, `GIT_CONFIG_COUNT`, …), which the run verbs' own git reads,");
 	return { deny: false };
 };
 
