@@ -2318,8 +2318,9 @@ describe("SECURITY.md", () => {
     // refuses an account with no push right, the run verbs pin origin's push as git resolves it and
     // hold a link at a held glob's folder, and the guard refuses a review approval, a branch-deleting
     // close, remote writes and git's program variables, while Claude Code denies the GitHub MCP
-    // server's merge and branch-write tools. What that leaves open is named in plain words, and a
-    // `url.*` config write, which the guard does not refuse, is stated as passing it.
+    // server's merge and branch-write tools. What that leaves open is named in plain words. A
+    // `url.*` config write is refused beside a `remote.*` one, the origin pin the second check, and
+    // the page no longer says such a write passes the guard.
     it("states the origin pin, the held links, the new refusals and what they leave open", () => {
       const table = section("## What the engine defends today", "## Network and data handling");
       const residuals = section("### Cloud and unattended runs", "## Standards mapping");
@@ -2346,7 +2347,7 @@ describe("SECURITY.md", () => {
         "a merge or a review approval",
         "`gh pr close` and `gh pr reopen`",
         "a `git remote` write",
-        "a `git config` write of a `remote.*` key or section",
+        "a `git config` write of a `remote.*` or `url.*` key or section",
         "one of git's program-valued variables",
         "deny the GitHub MCP server's merge and branch-write tools by name",
       ]) {
@@ -2365,7 +2366,8 @@ describe("SECURITY.md", () => {
         "Cursor, Copilot and Codex take no per-tool deny from the engine",
         "The origin pin.",
         "together with git's configuration (`.git/config`)",
-        "a `git config` write of a `url.*` key passes it",
+        "a `git config` write of a `remote.*` or `url.*` key, and the pin is the second check",
+        "meets it at the next `run checkpoint` or `run end`, which refuses the push",
         "Claude Code keeps the shell's working directory from one call to the next",
         "Whether Claude Code's field follows a directory an earlier call moved to was not checked",
         "This is attended only",
@@ -2373,7 +2375,8 @@ describe("SECURITY.md", () => {
       ]) {
         expect(residuals, `the cloud section does not name: ${residual}`).toContain(residual);
       }
-      expect(flat, "SECURITY.md claims the guard refuses a url.* write").not.toMatch(/`url\.\*` key is refused/);
+      expect(flat, "SECURITY.md says again that a url.* write passes the guard").not.toMatch(/`url\.\*` key passes/);
+      expect(guard, "the guard's row names a url.* write as a gap").not.toContain("a `git config` write of a `url.*` key among them");
     });
   });
 
@@ -2495,17 +2498,18 @@ describe("docs/security-mapping.md", () => {
       "names another repository than the one `run start` pinned in the run folder's `origin.json`",
       "and a symbolic link at a held glob's folder, into an inert patch",
       "a merge or a review approval",
-      "a `git remote` write and a `git config` write of a `remote.*` key",
+      "a `git remote` write and a `git config` write of a `remote.*` or `url.*` key",
       "one of git's program-valued variables",
       "five rows more deny the GitHub MCP server's merge and branch-write tools by name",
       "the GitHub MCP server on the clients that take no per-tool deny",
-      "a `git config` write of a `url.*` key passes the guard",
+      "A `git config` write of a `url.*` key is refused beside a `remote.*` one, the run verbs' origin pin the second check",
       "The held set is a glob list, and the origin pin a work-tree file",
       "rewrites that file together with git's configuration passes the check",
       "which was not checked to follow it",
     ]) {
       expect(flat, `the mapping page does not state: ${claim}`).toContain(claim);
     }
+    expect(flat, "the mapping page says again that a url.* write passes the guard").not.toMatch(/`url\.\*` key passes/);
   });
 
   it("pins every catalogue it maps to an edition", () => {

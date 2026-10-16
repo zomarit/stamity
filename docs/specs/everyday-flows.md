@@ -3836,8 +3836,9 @@ record head escapes this rule, a residual `SECURITY.md` names (REQ-FLOW-104).
   the repository the run started on. While the run is unattended it also refuses `gh pr close` and `gh pr reopen`, a
   `git remote` write and a `git config` write of a `remote.*` key or section, and a git call on a line that sets one of
   git's program-valued variables (`src/hooks/personOnly.ts:1636-1642`, `:1658`; the variables at `:1550-1555`). A
-  `git config` write of a `url.*` key passes it; the run verbs' origin pin refuses the push it moves (REQ-FLOW-092's
-  "As built" line). On Claude Code, `permissions.deny` rows also refuse the GitHub MCP server's merge and branch-write
+  `git config` write of a `url.*` key is refused beside a `remote.*` one (`writesRemote`, `:1606` and `:1646` read at
+  `9e07bc9e`); the run verbs' origin pin is the second check on the push it would move (REQ-FLOW-092's "As built"
+  line). On Claude Code, `permissions.deny` rows also refuse the GitHub MCP server's merge and branch-write
   tools by name (`CLAUDE_DENY_ROWS`, `:179-183`); the other clients take no per-tool deny, a residual `SECURITY.md`
   names.
 - **Proof:** `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`,
