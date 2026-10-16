@@ -245,6 +245,23 @@ describe("ensureDraftPr", () => {
     expect(calls.some((call) => call.path.includes("/pulls/3"))).toBe(false);
   });
 
+  it("takes the run's own pull request whose label spells the owner in GitHub's canonical case (pr/12)", async () => {
+    // The origin URL spells the owner `acme`; GitHub's `head=` filter matches it caselessly and labels the head `Acme:`.
+    const canonical = { ...openPr(7, `old list\n\n${MARKER}\n`), head: { ref: BRANCH, label: `Acme:${BRANCH}` } };
+    const { gh, calls } = scriptedGh([{ status: 200, json: [canonical] }, { status: 200, json: openPr(7, "new") }]);
+
+    expect(await ensureDraftPr(gh, REQUEST)).toEqual({ number: 7, url: "https://github.com/acme/app/pull/7", how: "existing" });
+    expect(calls.map((call) => `${call.method} ${call.path}`)).toEqual([`GET ${LOOKUP}`, "PATCH repos/acme/app/pulls/7"]);
+  });
+
+  it("still reads a pull request from another owner's branch of the same name as none (pr/12)", async () => {
+    const fork = { ...openPr(3, `x\n\n${MARKER}`), head: { ref: BRANCH, label: `other:${BRANCH}` } };
+    const { gh, calls } = scriptedGh([{ status: 200, json: [fork] }, CREATED]);
+
+    expect(await ensureDraftPr(gh, REQUEST)).toMatchObject({ number: 12, how: "created" });
+    expect(calls.some((call) => call.path.includes("/pulls/3"))).toBe(false);
+  });
+
   it("answers gh not found, and does not throw, when the seam cannot start gh", async () => {
     const missing = Object.assign(new Error("spawn gh ENOENT"), { code: "ENOENT" });
     const { gh } = scriptedGh([missing]);

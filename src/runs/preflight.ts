@@ -96,6 +96,13 @@ export interface PreflightDeps {
   scanRuns: () => Promise<boolean>;
   /** `null` when `gh` is not available. */
   rest: RestRead | null;
+  /**
+   * The `gh` the REST reads run, as the REST runner resolves it on `PATH`: its
+   * path and the file that path resolves to (`realPath` `null` when it cannot
+   * be read); `null` when `PATH` holds none. A credential helper naming `gh`
+   * by a path binds only where that path is one of these two.
+   */
+  gh: { path: string; realPath: string | null } | null;
   /** The `origin` repository; `null` for no origin or a non-GitHub host. */
   repo: RepoRef | null;
   /** `GH_REPO` as set, or `null`. */
@@ -556,8 +563,22 @@ function parseGhRepo(value: string): { host: string | null; owner: string; repo:
 /** Characters that would make a `!` helper run more than one program. */
 const SHELL_META = /[\s'"`$;&|<>()*?]/;
 
-/** Whether a credential helper is `gh`'s own, `!<path to gh> auth git-credential` as `gh auth setup-git` writes it. */
-function isGhCredentialHelper(helper: string | null): boolean {
+/** Whether two paths name one file: equal, or two Windows drive paths equal in any case and with either separator. */
+function samePath(a: string, b: string): boolean {
+  if (a === b) return true;
+  const drive = /^[A-Za-z]:[\\/]/;
+  const fold = (path: string): string => path.replaceAll("/", "\\").toLowerCase();
+  return drive.test(a) && drive.test(b) && fold(a) === fold(b);
+}
+
+/**
+ * Whether a credential helper is `gh`'s own, `!<gh> auth git-credential` as
+ * `gh auth setup-git` writes it: a bare `gh` or `gh.exe`, which `PATH` decides
+ * (a named residual), or a path that is the `gh` the REST reads run (pr/8).
+ * Any other path refuses, `./gh` and another file named `gh` included: git
+ * would push as whatever that program answers, not as the REST reads' account.
+ */
+function isGhCredentialHelper(helper: string | null, gh: PreflightDeps["gh"]): boolean {
   const match = /^!\s*(.+?)\s+auth\s+git-credential\s*$/.exec(helper?.trim() ?? "");
   const program = match?.[1];
   if (program === undefined) return false;
@@ -566,8 +587,11 @@ function isGhCredentialHelper(helper: string | null): boolean {
   else if (/^"[^"$`\\]+"$/.test(program)) path = program.slice(1, -1);
   else if (!SHELL_META.test(program)) path = program;
   else return false;
-  const name = path.split(/[\\/]/).at(-1)?.toLowerCase();
-  return name === "gh" || name === "gh.exe";
+  if (!/[\\/]/.test(path)) {
+    const name = path.toLowerCase();
+    return name === "gh" || name === "gh.exe";
+  }
+  return gh !== null && [gh.path, gh.realPath].some((known) => known !== null && samePath(path, known));
 }
 
 /** A push URL's transport: `https` only with no userinfo; `other` for anything not tied to a known identity. */
@@ -637,7 +661,7 @@ function pushIdentityCheck(deps: PreflightDeps, repo: RepoRef): { bound: boolean
       if (helpers.length === 0) {
         return unbound(`git pushes ${which} over https with no credential helper, so its identity is not gh's`, PUSH_IDENTITY_FIX);
       }
-      if (helpers.length !== 1 || !isGhCredentialHelper(helpers[0] ?? null)) {
+      if (helpers.length !== 1 || !isGhCredentialHelper(helpers[0] ?? null, deps.gh)) {
         return unbound(
           `git pushes ${which} over https through a credential helper other than gh's alone, so its identity is not proven gh's`,
           PUSH_IDENTITY_FIX,

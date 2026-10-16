@@ -1891,8 +1891,12 @@ export function readPushIdentity(cwd: string, env: Readonly<Record<string, strin
   return { fetchUrl, pushUrls: pushed.map((url) => pushUrlFacts(url, config)) };
 }
 
-/** Whether a `gh` the REST runner would start is on `PATH`, by the runner's own search (`../engine/ghRunner.ts`). */
-function ghFound(cwd: string, env: NodeJS.ProcessEnv): boolean {
+/**
+ * The `gh` the REST runner would start, by the runner's own search
+ * (`../engine/ghRunner.ts`): its path and the file it resolves to, or `null`
+ * where no accepted `PATH` entry holds one.
+ */
+function ghFound(cwd: string, env: NodeJS.ProcessEnv): PreflightDeps["gh"] {
   const platform = process.platform;
   const windows = platform === "win32";
   const delimiter = windows ? ";" : ":";
@@ -1900,7 +1904,15 @@ function ghFound(cwd: string, env: NodeJS.ProcessEnv): boolean {
     ?.split(delimiter)
     .filter((entry) => !isNodeModulesBin(entry, windows))
     .join(delimiter);
-  return resolveProgramOnPath("gh", { platform, path, cwd, probe: fileSystemProbe }) !== null;
+  const found = resolveProgramOnPath("gh", { platform, path, cwd, probe: fileSystemProbe });
+  if (found === null) return null;
+  let realPath: string | null;
+  try {
+    realPath = realpathSync(found);
+  } catch {
+    realPath = null;
+  }
+  return { path: found, realPath };
 }
 
 /** A small JSON file at `path`, read without following a link, or `undefined`. */
@@ -1989,8 +2001,9 @@ async function runPreflightVerb(ctx: CliContext, opts: Record<string, unknown>):
   const pushIdentity = readPushIdentity(root, env);
   const origin = pushIdentity.fetchUrl === null ? null : resolveRepo({ ...env }, pushIdentity.fetchUrl);
   const ghEnv: NodeJS.ProcessEnv = { ...env };
+  const gh = ghFound(root, ghEnv);
   const rest: RestRead | null =
-    origin === null || !ghFound(root, ghEnv)
+    origin === null || gh === null
       ? null
       : async (path) => {
           const reply = await ghApi({ method: "GET", path, hostname: origin.host }, { cwd: root, env: ghEnv });
@@ -2009,6 +2022,7 @@ async function runPreflightVerb(ctx: CliContext, opts: Record<string, unknown>):
     runningVersion: ctx.app.version,
     scanRuns: () => Promise.resolve(!("failed" in scanChange(root, undefined))),
     rest,
+    gh,
     repo: origin === null ? null : { owner: origin.owner, repo: origin.repo },
     ghRepoEnv: env["GH_REPO"] ?? null,
     canary: canary === undefined ? null : { at: typeof at === "string" ? at : "" },

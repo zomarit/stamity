@@ -133,16 +133,29 @@ function prFields(value: unknown): FoundPr | null {
 }
 
 /**
- * The open pull request whose head is exactly `owner:head`, from a list
- * answer. Matched again here rather than trusted to the query: GitHub answers
- * a `head` filter it cannot read with every open pull request.
+ * Whether a head's `label` names `owner:head`: the owner part in any case, as
+ * GitHub's logins are (its `head=` filter matches the origin's spelling and
+ * answers with the canonical one), the branch part exactly, as git's refs are.
+ * An absent label leaves the decision to `ref`.
+ */
+function labelNames(label: unknown, owner: string, head: string): boolean {
+  if (label === undefined) return true;
+  if (typeof label !== "string") return false;
+  const colon = label.indexOf(":");
+  return colon > 0 && label.slice(0, colon).toLowerCase() === owner.toLowerCase() && label.slice(colon + 1) === head;
+}
+
+/**
+ * The open pull request whose head is `owner:head` ({@link labelNames}), from
+ * a list answer. Matched again here rather than trusted to the query: GitHub
+ * answers a `head` filter it cannot read with every open pull request.
  */
 function openPrOnBranch(json: unknown, owner: string, head: string): FoundPr | null {
   if (!Array.isArray(json)) return null;
   for (const entry of json) {
     if (!isRecord(entry) || !isRecord(entry["head"])) continue;
     const { ref, label } = entry["head"];
-    if (ref !== head || (label !== undefined && label !== `${owner}:${head}`)) continue;
+    if (ref !== head || !labelNames(label, owner, head)) continue;
     const found = prFields(entry);
     if (found !== null) return found;
   }

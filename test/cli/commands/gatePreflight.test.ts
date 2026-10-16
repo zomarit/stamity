@@ -50,8 +50,8 @@ function git(cwd: string, args: readonly string[]): string {
   return execFileSync("git", [...args], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, ...SEED_ENV } });
 }
 
-/** `gh auth setup-git`'s helper; the program need not exist, its shape is what binds. */
-const GH_HELPER = "!/opt/tools/gh auth git-credential";
+/** A helper naming a `gh` the verb never runs: on its name alone it no longer binds (pr/8). */
+const FOREIGN_GH_HELPER = "!/opt/tools/gh auth git-credential";
 /** A helper value that must never reach the output. */
 const OTHER_HELPER = "store --file /secret/creds-q7zk";
 const HEADER = "AUTHORIZATION: basic c2VjcmV0LXZhbHVlLXE3ems=";
@@ -74,6 +74,13 @@ function protectedRepo(owner = "o", repo = "r", bypass = "never"): void {
 describe("stamity gate preflight and scan --text", () => {
   const getRoot = useTempDir("gate-preflight");
 
+  /**
+   * `gh auth setup-git`'s helper, naming the `gh` {@link ghBin} puts on the verb's `PATH`. Changed for pr/8: a
+   * helper naming gh by a path binds only where that path is the gh the REST reads run, so the fixture names its
+   * own gh file; before, `!/opt/tools/gh auth git-credential`, a file that need not exist, passed on its name alone.
+   */
+  const ghHelper = (): string => `!'${join(getRoot().path("bin"), process.platform === "win32" ? "gh.exe" : "gh")}' auth git-credential`;
+
   beforeEach(() => {
     rest.calls.length = 0;
     rest.routes.clear();
@@ -93,7 +100,7 @@ describe("stamity gate preflight and scan --text", () => {
     git(repo, ["add", "-A"]);
     git(repo, ["commit", "-q", "-m", "base"]);
     git(repo, ["remote", "add", "origin", opts.url ?? "https://github.com/o/r.git"]);
-    for (const helper of ["", ...(opts.helpers ?? [GH_HELPER])]) git(repo, ["config", "--add", "credential.helper", helper]);
+    for (const helper of ["", ...(opts.helpers ?? [ghHelper()])]) git(repo, ["config", "--add", "credential.helper", helper]);
     const floors = { ".claude/rules/stamity-injection-screening.md": "injection-screening", ".claude/skills/stamity-question-protocol/SKILL.md": "question-protocol" };
     const manifest = createManifest({ tools: ["claude"], selection: { items: { agent: [], skill: [], rule: [], command: [] } }, generatorVersion: opts.version ?? VERSION });
     await Promise.all(
@@ -243,7 +250,7 @@ describe("stamity gate preflight and scan --text", () => {
     });
 
     it("refuses with no REST read where an Authorization header applies to the push URL, echoing no header, helper or URL", async () => {
-      const repo = await seedRepo({ helpers: [OTHER_HELPER, GH_HELPER] });
+      const repo = await seedRepo({ helpers: [OTHER_HELPER, ghHelper()] });
       git(repo, ["config", "http.https://github.com/.extraheader", HEADER]);
       git(repo, ["remote", "set-url", "--push", "origin", "https://github.com/o/r-push-q7zk.git"]);
       protectedRepo();
@@ -255,7 +262,7 @@ describe("stamity gate preflight and scan --text", () => {
       expect(stateOf(json.doc, "direct-push")).toBe("unknown");
       expect(rest.calls).toEqual([]);
       for (const output of [json.stdout, json.stderr, human.stdout, human.stderr]) {
-        for (const value of ["c2VjcmV0", "creds-q7zk", "r-push-q7zk", "/opt/tools/gh"]) expect(output).not.toContain(value);
+        for (const value of ["c2VjcmV0", "creds-q7zk", "r-push-q7zk", getRoot().path("bin")]) expect(output).not.toContain(value);
       }
     });
 
@@ -418,6 +425,18 @@ describe("stamity gate preflight and scan --text", () => {
       expect(code).toBe(1);
       expect(stateOf(doc, "direct-push")).toBe("unknown");
     });
+
+    it("refuses gh's helper alone where it names another gh than the one the REST reads run, with no REST read (pr/8)", async () => {
+      const repo = await seedRepo({ helpers: [FOREIGN_GH_HELPER] });
+      protectedRepo();
+
+      const { code, doc } = await gate(repo, PREFLIGHT);
+
+      expect(code).toBe(1);
+      expect(stateOf(doc, "direct-push")).toBe("unknown");
+      expect(evidenceOf(doc, "direct-push")).toContain("credential helper other than gh's alone");
+      expect(rest.calls).toEqual([]);
+    });
   });
 
   describe("the push facts (readPushIdentity)", () => {
@@ -458,21 +477,21 @@ describe("stamity gate preflight and scan --text", () => {
     });
 
     it("builds the helper list in config order, and an empty value resets it", async () => {
-      const both = await seedRepo({ helpers: [OTHER_HELPER, GH_HELPER] });
-      const reset = await seedRepo({ helpers: [OTHER_HELPER, "", GH_HELPER] });
+      const both = await seedRepo({ helpers: [OTHER_HELPER, ghHelper()] });
+      const reset = await seedRepo({ helpers: [OTHER_HELPER, "", ghHelper()] });
 
-      expect((await facts(both)).pushUrls[0]?.helpers).toEqual([OTHER_HELPER, GH_HELPER]);
-      expect((await facts(reset)).pushUrls[0]?.helpers).toEqual([GH_HELPER]);
+      expect((await facts(both)).pushUrls[0]?.helpers).toEqual([OTHER_HELPER, ghHelper()]);
+      expect((await facts(reset)).pushUrls[0]?.helpers).toEqual([ghHelper()]);
     });
 
     it("reads `gh auth setup-git`'s host-scoped reset and helper over a generic one as gh's alone", async () => {
       const repo = await seedRepo({ helpers: [OTHER_HELPER] });
       for (const host of ["https://github.com", "https://gist.github.com"]) {
         git(repo, ["config", "--add", `credential.${host}.helper`, ""]);
-        git(repo, ["config", "--add", `credential.${host}.helper`, GH_HELPER]);
+        git(repo, ["config", "--add", `credential.${host}.helper`, ghHelper()]);
       }
 
-      expect((await facts(repo)).pushUrls).toEqual([{ url: "https://github.com/o/r.git", helpers: [GH_HELPER], authorizationHeader: false, configUnreadable: false }]);
+      expect((await facts(repo)).pushUrls).toEqual([{ url: "https://github.com/o/r.git", helpers: [ghHelper()], authorizationHeader: false, configUnreadable: false }]);
     });
 
     it("applies a URL-scoped helper and header only to the URLs they name", async () => {
@@ -485,8 +504,8 @@ describe("stamity gate preflight and scan --text", () => {
       const { pushUrls } = await facts(repo);
 
       expect(pushUrls).toEqual([
-        { url: "https://github.com/o/r.git", helpers: [GH_HELPER, OTHER_HELPER], authorizationHeader: true, configUnreadable: false },
-        { url: "https://github.com/o/r.git.other", helpers: [GH_HELPER], authorizationHeader: false, configUnreadable: false },
+        { url: "https://github.com/o/r.git", helpers: [ghHelper(), OTHER_HELPER], authorizationHeader: true, configUnreadable: false },
+        { url: "https://github.com/o/r.git.other", helpers: [ghHelper()], authorizationHeader: false, configUnreadable: false },
       ]);
     });
 
@@ -515,9 +534,9 @@ describe("stamity gate preflight and scan --text", () => {
       const file = await facts(repo, { GIT_CONFIG_GLOBAL: global });
       const none = await facts(repo, { GIT_CONFIG_COUNT: "0" });
 
-      expect(pairs.pushUrls).toEqual([{ url: "https://github.com/o/r.git", helpers: [GH_HELPER, OTHER_HELPER], authorizationHeader: false, configUnreadable: false }]);
-      expect(file.pushUrls).toEqual([{ url: "https://github.com/o/r.git", helpers: [GH_HELPER], authorizationHeader: true, configUnreadable: false }]);
-      expect(none.pushUrls).toEqual([{ url: "https://github.com/o/r.git", helpers: [GH_HELPER], authorizationHeader: false, configUnreadable: false }]);
+      expect(pairs.pushUrls).toEqual([{ url: "https://github.com/o/r.git", helpers: [ghHelper(), OTHER_HELPER], authorizationHeader: false, configUnreadable: false }]);
+      expect(file.pushUrls).toEqual([{ url: "https://github.com/o/r.git", helpers: [ghHelper()], authorizationHeader: true, configUnreadable: false }]);
+      expect(none.pushUrls).toEqual([{ url: "https://github.com/o/r.git", helpers: [ghHelper()], authorizationHeader: false, configUnreadable: false }]);
     });
 
     it("reads origin's URLs through an insteadOf or pushInsteadOf that GIT_CONFIG_* supplies (review/136)", async () => {

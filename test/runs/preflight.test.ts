@@ -66,6 +66,8 @@ function pullRequestRule(rulesetId: number, reviews = 1, source: "Repository" | 
 
 /** The credential helper `gh auth setup-git` writes. */
 const GH_HELPER = "!/opt/homebrew/bin/gh auth git-credential";
+/** The `gh` the REST reads run: the `PATH` link {@link GH_HELPER} names, and the file it resolves to. */
+const GH = { path: "/opt/homebrew/bin/gh", realPath: "/opt/homebrew/Cellar/gh/2.80.0/bin/gh" };
 
 const FETCH_URL = "https://github.com/o/r.git";
 const PROXY_URL = "http://proxy@127.0.0.1:43123/git/o/r";
@@ -122,6 +124,7 @@ function greenDeps(overrides: Partial<PreflightDeps> = {}): PreflightDeps {
     runningVersion: "1.16.0",
     scanRuns: () => Promise.resolve(true),
     rest,
+    gh: GH,
     repo: REPO,
     ghRepoEnv: null,
     canary: { at: secondsBefore(5) },
@@ -581,12 +584,18 @@ describe("runPreflight — direct-push inputs", () => {
 describe("runPreflight — the push identity (review/36)", () => {
   const fix = "use an https origin with `gh auth setup-git`";
 
+  // Changed for pr/8: a helper naming gh by a path now binds only where that path is the gh the REST reads run
+  // (`deps.gh`, its path or its realpath), so each row names the resolved gh it is checked against; before, any
+  // path whose last part was `gh` passed, whichever program the REST runner started.
+  const WINDOWS_GH = "C:\\Program Files\\GitHub CLI\\gh.exe";
   it.each([
-    ["gh's helper at a plain path", GH_HELPER],
-    ["gh's helper at a quoted Windows path", "!'C:\\Program Files\\GitHub CLI\\gh.exe' auth git-credential"],
-    ["gh's helper on PATH", "!gh auth git-credential"],
-  ])("an https origin with %s passes", async (_label, helper) => {
-    const verdict = await runPreflight(greenDeps({ pushIdentity: { fetchUrl: FETCH_URL, pushUrls: [pushTo(FETCH_URL, [helper])] } }));
+    ["gh's helper at the path the REST runner resolved", GH_HELPER, GH],
+    ["gh's helper at the file that path resolves to", `!${GH.realPath} auth git-credential`, GH],
+    ["gh's helper at a quoted Windows path", `!'${WINDOWS_GH}' auth git-credential`, { path: WINDOWS_GH, realPath: WINDOWS_GH }],
+    ["gh's helper at a Windows path spelled in another case", `!'${WINDOWS_GH}' auth git-credential`, { path: WINDOWS_GH.toLowerCase(), realPath: null }],
+    ["gh's helper on PATH", "!gh auth git-credential", GH],
+  ])("an https origin with %s passes", async (_label, helper, gh) => {
+    const verdict = await runPreflight(greenDeps({ gh, pushIdentity: { fetchUrl: FETCH_URL, pushUrls: [pushTo(FETCH_URL, [helper])] } }));
     expect(check(verdict, "direct-push").state).toBe("pass");
     expect(check(verdict, "direct-push").evidence).toContain("gh's credential");
   });
@@ -609,6 +618,8 @@ describe("runPreflight — the push identity (review/36)", () => {
     ["a helper chaining a command", pushTo(FETCH_URL, ["!evil && /usr/bin/gh auth git-credential"])],
     ["a helper that is not gh", pushTo(FETCH_URL, ["!/tmp/not-gh auth git-credential"])],
     ["gh's binary on another verb", pushTo(FETCH_URL, ["!/usr/bin/gh auth status"])],
+    ["a helper naming a relative gh (pr/8)", pushTo(FETCH_URL, ["!./gh auth git-credential"])],
+    ["a helper naming another file called gh than the one the REST reads run (pr/8)", pushTo(FETCH_URL, ["!/tmp/x/gh auth git-credential"])],
   ])("%s is unknown, refused with the gh fix, and reads nothing", async (_label, facts) => {
     const { rest, calls } = restTable({});
     const verdict = await runPreflight(greenDeps({ rest, pushIdentity: { fetchUrl: FETCH_URL, pushUrls: [facts] } }));
