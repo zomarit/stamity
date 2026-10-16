@@ -2235,8 +2235,13 @@ describe("SECURITY.md", () => {
       }
       const verbs = section("`stamity run start` puts an unattended run", "| Anyone whose text an unattended run sends out");
       expect(verbs).toContain("while a commit the push would send");
-      expect(verbs).toContain("every commit `origin` lacks, those below `Base:` included");
+      expect(verbs).toContain("every commit no `origin` remote-tracking ref holds, those below `Base:` included");
       expect(verbs).toContain("so a run held there opens none");
+      expect(verbs).toContain("with no `Mode:` line in the record's head while `STAMITY_UNATTENDED` is set");
+      const wall = section("`stamity gate preflight --unattended` is the `st-unattended` skill's first act", "| The main thread of any session");
+      expect(wall).toContain("A classic bypass list that names any team or app reads `unknown`");
+      const network = section("## Network and data handling", "## Publishing this package");
+      expect(network).toContain("the account's own login where that protection's pull-request bypass lists users");
       expect(residuals).toContain("turns off their hold too");
     });
 
