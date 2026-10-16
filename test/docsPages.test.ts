@@ -2205,8 +2205,9 @@ describe("SECURITY.md", () => {
       // The nested lines both verdicts read, gh's create-and-push alias, a Windows-path git in a PowerShell payload,
       // a directory change inside a nested line and an unattended `-c` pair outside the display and identity keys are
       // stated as read or refused, never as gaps again, as the guard round at 445ebd23 made them; what the code still
-      // passes is listed as the gaps the unattended rules do not cover, and the config-named program, PowerShell's
-      // `Set-Item env:` form with it, beside the respelling residual.
+      // passes is listed as the gaps the unattended rules do not cover, and the config-named program beside the
+      // respelling residual; since 372a3d2d `Set-Item env:` and `New-Item env:` are refused spellings of git's
+      // variables, and only PowerShell's other `env:` drive commands stay a respelling.
       expect(residuals).toContain("Gaps the unattended rules do not cover:");
       expect(residuals).toContain("Lines that run inside another line are read as their own by both verdicts");
       expect(residuals).toContain("`gh repo new --push`, is refused in an unattended run");
@@ -2230,7 +2231,8 @@ describe("SECURITY.md", () => {
         "no reading of one command line closes this",
         "a git call carrying a `-c` or `--config-env` pair outside the display and identity keys",
         "`git -c core.fsmonitor=… status` among them",
-        "PowerShell's `Set-Item env:GIT_EDITOR …` among them, passes",
+        "`Set-Item env:` and `New-Item env:` and `[Environment]::SetEnvironmentVariable` among the spellings",
+        "`Set-Content env:GIT_EXEC_PATH …`, passes, and the respelling residual above covers it",
       ]) {
         expect(residuals, `the cloud section does not name: ${named}`).toContain(named);
       }
@@ -2440,9 +2442,40 @@ describe("SECURITY.md", () => {
         "five `permissions.deny` rows",
         "and a git call on a line that sets one of git's program-valued variables",
         "PowerShell's `Set-Item env:GIT_CONFIG_COUNT 1` among them, passes",
+        "PowerShell's `Set-Item env:GIT_EDITOR …` among them, passes",
+        "a GraphQL mutation or a REST body read from a file. The guard",
       ]) {
         expect(flat, `SECURITY.md says again: ${stale}`).not.toContain(stale);
       }
+    });
+
+    // ADDED 2026-10-16 (plan 021 file 1, the final derived lane): the environment the run verbs
+    // start under picks the git they run and the global configuration it reads, named beside the
+    // residual it shares a class with (`PATH` deciding which `gh` runs), the pre-flight's
+    // push-right refusal the control that holds; and a REST review write whose body the line
+    // cannot show is refused as an approval, so the guard's gap cell no longer lists it as passing.
+    it("names the run verbs' environment and the REST review body the line cannot show", () => {
+      const guard = section("| The main thread of any session", "| An unattended run, or the text that steers one | Pushing a change");
+      const residuals = section("### Cloud and unattended runs", "## Standards mapping");
+      expect(guard).toContain(
+        "a GraphQL mutation or a REST body read from a file, a REST review write aside, which is refused as an approval when the line cannot show its body (`src/hooks/personOnly.ts::personOnlyVerdict`)",
+      );
+      for (const claim of [
+        "The run verbs' environment.",
+        "The environment the run verbs start under picks the git they run and the global configuration it reads",
+        "`HOME` and `XDG_CONFIG_HOME` choose the global configuration file",
+        "passes the push rule, which reads git's own variables only",
+        "`src/shared/programPath.ts::gitProgramFor`",
+      ]) {
+        expect(residuals, `the cloud section does not state: ${claim}`).toContain(claim);
+      }
+      // Beside the residual it shares a class with, and the control that holds named in it.
+      const environment = residuals.indexOf("The run verbs' environment.");
+      expect(environment).toBeGreaterThan(residuals.indexOf("`PATH` decides which `gh`"));
+      expect(environment).toBeLessThan(residuals.indexOf("The configuration window."));
+      expect(residuals.slice(environment, residuals.indexOf("The configuration window."))).toContain(
+        "The control that holds is the pre-flight's refusal of an account that can push to the default branch",
+      );
     });
   });
 
@@ -2596,6 +2629,23 @@ describe("docs/security-mapping.md", () => {
       expect(flat, `the mapping page does not state: ${claim}`).toContain(claim);
     }
     for (const stale of ["five rows more deny", "and a git call on a line that sets one of git's program-valued variables"]) {
+      expect(flat, `the mapping page says again: ${stale}`).not.toContain(stale);
+    }
+  });
+
+  // ADDED 2026-10-16 (plan 021 file 1, the final derived lane): the mapping page carries the run
+  // verbs' environment residual beside `PATH` choosing the `gh`, and states `Set-Item env:` and
+  // `New-Item env:` as refused spellings, PowerShell's other `env:` drive commands the gap.
+  it("states the run verbs' environment and the env: drive spellings as SECURITY.md does", () => {
+    const flat = text.replace(/\s+/g, " ");
+    for (const claim of [
+      "the environment the run verbs start under (`PATH`, `HOME`, `XDG_CONFIG_HOME`) choosing the git they run and the global configuration it reads",
+      "PowerShell's `Set-Item env:` and `New-Item env:` among the spellings; a program-valued variable set through another of PowerShell's `env:` drive commands passes",
+      "a program-valued variable set through a PowerShell `env:` drive command other than `Set-Item` and `New-Item` among the ways",
+    ]) {
+      expect(flat, `the mapping page does not state: ${claim}`).toContain(claim);
+    }
+    for (const stale of ["`Set-Item env:` form of a program-valued variable", "PowerShell `Set-Item env:` line setting a program-valued variable"]) {
       expect(flat, `the mapping page says again: ${stale}`).not.toContain(stale);
     }
   });
