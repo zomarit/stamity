@@ -3244,6 +3244,21 @@ no `## Expected` block moves, `EXPECTED_MOVES` gains no row, and no B / A, claim
 or roster count moves, so the carried tallies and the recomputed census below hold. The case moves
 its quote, so under hard trigger 1 it re-measures. The dated citations above stay as they were.
 
+**The walk pointer's exception, two cases re-quoted, 2026-10-16 (run 2026-10-15_cloud-runs, the
+whole-branch corpus fix round 1; ledger rows `review/206`, `review/204` and `review/205`).** In
+`/st-work`'s record head the walk pointer's exception now names a start on the closed run's branch
+and never a `--resume`, which the head keeps always attended (`content/commands/st-work.md:413-415`),
+rewrapped inside its three lines, so no line of the file moves. `benign-attended-twin-leave-uncommitted`
+and `unattended-close-opens-draft-pr` re-quote the pointer, their ranges held. `/st-pr-resolve`'s
+Unattended row fetches the head branch by name into origin's remote-tracking ref (`:54`, one table
+line) and its REST-only paragraph names that fetch inside its own line; `/st-debug`'s user-route stop
+takes the skill's ending inside its own eight lines (`content/commands/st-debug.md:108-115`) and the
+Unattended paragraph names it among the exits inside its seven (`:62-68`). No case quotes any of
+those sentences, so no other quote or range moves. No `## Expected` block moves, `EXPECTED_MOVES`
+gains no row, and no B / A, claim, floor tag, threshold or roster count moves, so the carried tallies
+and the recomputed census below hold. The two cases move their quotes, so under hard trigger 1 both
+re-measure. The dated citations above stay as they were.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The

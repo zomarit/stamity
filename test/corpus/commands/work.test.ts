@@ -767,9 +767,17 @@ describe("/st-work — Frame and Plan", () => {
     // unattended declaration makes an unattended start instead, and the variable alone does not stop
     // the walk, since a cloud's follow-up walk runs with it set. The clause before the comma is
     // pinned word for word as before.
+    // TEST CHANGE, justified (2026-10-16, run 2026-10-15_cloud-runs, the whole-branch corpus fix
+    // round 1; ledger row review/206, signed off with review/145 at 00:36Z): the pin ended "makes an
+    // unattended start instead." What changed about the contract: nothing in the rule; the
+    // exception read as attached to the `--resume` clause too, against the head's "`--resume`
+    // always attended" and the skill's "a start on that branch". It now names a start on that
+    // branch and excludes `--resume`. Nothing is relaxed: the clause before the colon is pinned word
+    // for word as before, and `--resume` stays always attended (pinned above).
     const walkPointer =
-      "On `--resume <run-id>` of any run whose record reads `Mode: unattended`, and on `/st-work` run on the branch of such a run whose record is closed, invoke `st-unattended` by name and follow its `## The morning walk`, which `STAMITY_UNATTENDED` alone does not stop: `--unattended`, `run-mode: unattended` or a chain's next file makes an unattended start instead.";
+      "On `--resume <run-id>` of any run whose record reads `Mode: unattended`, and on `/st-work` run on the branch of such a run whose record is closed, invoke `st-unattended` by name and follow its `## The morning walk`, which `STAMITY_UNATTENDED` alone does not stop: `--unattended`, `run-mode: unattended` or a chain's next file makes a start on that branch unattended instead, never a `--resume`.";
     expect(proof).toContain(walkPointer);
+    expect(proof).not.toContain("makes an unattended start instead.");
     expect(proof).not.toContain("follow its `## The morning walk`.");
     // It follows the unattended pointer it makes the exception to.
     expect(proof.indexOf(walkPointer)).toBeGreaterThan(

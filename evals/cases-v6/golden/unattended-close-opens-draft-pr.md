@@ -84,9 +84,9 @@ sentences):
 ```text
 [...] Unattended, Frame first runs `stamity run start --run <id> --json`, taking `Branch:`
 and `Base:` from it. When `Mode:` reads `unattended`, invoke the `st-unattended` skill by name and follow it. On
-`--resume <run-id>` of any run whose record reads `Mode: unattended`, and on `/st-work` run on the branch of such a run
-whose record is closed, invoke `st-unattended` by name and follow its `## The morning walk`, which `STAMITY_UNATTENDED`
-alone does not stop: `--unattended`, `run-mode: unattended` or a chain's next file makes an unattended start instead.
+`--resume <run-id>` of any run whose record reads `Mode: unattended`, and on `/st-work` run on the branch of such a run whose record
+is closed, invoke `st-unattended` by name and follow its `## The morning walk`, which `STAMITY_UNATTENDED` alone does not stop:
+`--unattended`, `run-mode: unattended` or a chain's next file makes a start on that branch unattended instead, never a `--resume`.
 ```
 
 Scenario state — the run so far, given to you as fact:

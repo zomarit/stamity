@@ -3422,11 +3422,12 @@ The text names the session by what the agent observes, never by client.
   is refused on that read, before any fetch. Then `git fetch origin "pull/<n>/head"`, a failed fetch stopping the round;
   `git rev-parse FETCH_HEAD` must equal the head sha the read returned, else the round is refused before any checkout;
   then `git checkout -B "pr-resolve-<n>" "<sha>"` on that verified sha. The author's branch name enters no fetch and no
-  checkout. A pushed ref holds only letters, digits, `.`, `_`, `/` and `-`, then passes `git check-ref-format --branch`,
-  and is always quoted; after the push a fresh read of the head sha must equal `git rev-parse HEAD`, else no
-  `Implemented in` reply posts. No remote URL is read or printed (`content/commands/st-pr-resolve.md:58-80`). A review
-  thread's resolution state is reported `unknown`, and a thread counts answered when its newest comment carries the
-  command's signature line posted by the account the run replies as (section 1).
+  checkout but an unattended round's (REQ-FLOW-097). A pushed ref holds only letters, digits, `.`, `_`, `/` and `-`,
+  then passes `git check-ref-format --branch`, and is always quoted; after the push a fresh read of the head sha must
+  equal `git rev-parse HEAD`, else no `Implemented in` reply posts. No remote URL is read or printed
+  (`content/commands/st-pr-resolve.md:58-80`). A review thread's resolution state is reported `unknown`, and a thread
+  counts answered when its newest comment carries the command's signature line posted by the account the run replies as
+  (section 1).
 
 - **As built, where the delta differed:** the delta's first sentence named Claude Code's cloud; the corpus names no
   client in model-facing text, so the condition is named by observation (`f4`'s blocked return). The REST checkout
@@ -3632,11 +3633,12 @@ Given `Mode: unattended`, When another touchpoint runs, Then `/st-quick` refuses
 `st-unattended` skill, the pre-flight before the first fetch or push, pushes only through `stamity run checkpoint|end`,
 every reply posted from a file `gate scan --text` passed, and no exit leaving the record in progress
 (`content/commands/st-debug.md:56-68`; `content/commands/st-pr-resolve.md:54`). `/st-pr-resolve` runs no `run start`,
-fixes only the mechanical class and sends nothing to `/st-work`, every other finding deferred as `needs a planned run`.
-Unattended `/st-debug` stops after the root cause and hands nothing to `/st-work`: it pushes its record, the ranked
-hypotheses and the failing test when one was written, and the morning list carries the fix as `needs a planned run`; a
-user-route stop strips its instrumentation and returns `BLOCKED_DEPENDENCY` (`content/commands/st-debug.md:134-136`,
-`:108-115`).
+fetches its pull request's head branch by name into origin's remote-tracking ref, so the run verbs' history check reads
+only the commits the round adds, fixes only the mechanical class and sends nothing to `/st-work`, every other finding
+deferred as `needs a planned run`. Unattended `/st-debug` stops after the root cause and hands nothing to `/st-work`: it
+pushes its record, the ranked hypotheses and the failing test when one was written, and the morning list carries the fix
+as `needs a planned run`; a user-route stop strips its instrumentation, takes the skill's ending and returns
+`BLOCKED_DEPENDENCY` (`content/commands/st-debug.md:134-136`, `:108-115`).
 `/st-rework` passes the mode to `/st-work`; `/st-board pickup` carries it, keeps `preview: stop`, its board writes land
 as morning-list rows (`content/skills/st-unattended/SKILL.md:153-166`).
 
@@ -3751,7 +3753,7 @@ dependency is a morning-list row (`SKILL.md:118-119`).
 ### REQ-FLOW-104 — The cloud's accepted risks are named
 
 Added 2026-10-16 (plan 021 file 1, unit `u21-security-page`; not on this merge's base, it is cited from `bc12cfc3`
-by the merge's first fix round and re-read at `445ebd23`: the section is `SECURITY.md:378-493`, under
+by the merge's first fix round and re-read at `48e1520b`: the section is `SECURITY.md:378-499`, under
 `## What it does not defend` (`:283`), the settings row `:98`, the git-hardening row `:96` and the third network
 exception `:152-172`).
 
@@ -3771,13 +3773,23 @@ decides which `gh` a credential helper naming `gh` runs; a `GIT_CONFIG_*` value 
 push goes unseen; and an environment file can name a build file outside the held set. It names the attended guard's
 accepted gaps — gh's field conversions and current-branch placeholder read as literal text, a batch ref update given as
 a GraphQL variable, the GraphQL tag-ref create and ref delete, a percent-encoded ref path, and a directory change the
-place reader does not follow — as covered in an unattended run by the push rule and the REST check, and names as
-uncovered by the unattended rules PowerShell's command wrappers, gh's alias for the create-and-push form, and a
-multi-root workspace file's settings and an editor tasks file's folder-open task, which are not held. Its settings row
-says the engine removes no `permissions.deny` row: `sync` keeps each byte for byte and `clean` names those equal to the
-engine's that it left. The engine's start of `gh` is listed among its named network exceptions, and the run verbs on
-the git-hardening row.
+place reader does not follow — as covered in an unattended run by the push rule and the REST check. It names the lines
+that run inside another line (PowerShell's command wrappers and script blocks, `cmd /c` and `/k`, a rebase exec line,
+the command `git bisect run` runs) as read by both verdicts, a person-only act wrapped in one refused on every client
+and a raw push in one refused unattended; gh's alias for the create-and-push form as refused unattended; a git named by
+a Windows path inside a PowerShell payload as read as git; a PowerShell encoded command and a line piped into `iex` as
+uncovered by the unattended rules; and a multi-root workspace file and every folder's editor settings, tasks and
+MCP-server files as held paths. Its settings row says the engine removes no `permissions.deny` row: `sync` keeps each
+byte for byte and `clean` names those equal to the engine's that it left. The engine's start of `gh` is listed among its
+named network exceptions, and the run verbs on the git-hardening row.
 
+- **As built, where the delta differed:** the delta named PowerShell's command wrappers, gh's alias for the
+  create-and-push form, a multi-root workspace file's settings and an editor tasks file's folder-open task as uncovered
+  by the unattended rules and not held. The guard rounds after it closed each: the page states the wrapped lines read
+  and refused, the alias refused and those files held (`SECURITY.md:474-483`, `:497-499`), the encoded command and the
+  `iex` pipe staying the gaps the unattended rules do not cover (`:492-495`). The page's place-reader paragraph
+  (`:485-490`) and its residual for programs the repository's configuration names (`:410-424`) are not restated here; a
+  later page round settles them.
 - **Proof:** `test/docsPages.test.ts` ("cloud and unattended runs (REQ-FLOW-104)": the section's place, every risk
   and gap named above, the retired bullet gone, the control table's pointers, the settings row and the network
   exception); `judgment: reviewer` for the wording around them.

@@ -50,9 +50,9 @@ first 15: `Status:`, reading `in progress` until the close; `Mode: attended | un
 never the word `HEAD`); and `Invocation: <this command line, verbatim>`. A `reports/` folder beside the record holds a
 `.gitignore` whose one line is `*`. Unattended, Frame first runs `stamity run start --run <id> --json`, taking `Branch:`
 and `Base:` from it. When `Mode:` reads `unattended`, invoke the `st-unattended` skill by name and follow it. On
-`--resume <run-id>` of any run whose record reads `Mode: unattended`, and on `/st-work` run on the branch of such a run
-whose record is closed, invoke `st-unattended` by name and follow its `## The morning walk`, which `STAMITY_UNATTENDED`
-alone does not stop: `--unattended`, `run-mode: unattended` or a chain's next file makes an unattended start instead.
+`--resume <run-id>` of any run whose record reads `Mode: unattended`, and on `/st-work` run on the branch of such a run whose record
+is closed, invoke `st-unattended` by name and follow its `## The morning walk`, which `STAMITY_UNATTENDED` alone does not stop:
+`--unattended`, `run-mode: unattended` or a chain's next file makes a start on that branch unattended instead, never a `--resume`.
 ```
 
 Governing text — `content/skills/st-unattended/SKILL.md`, "The declaration" (its first five

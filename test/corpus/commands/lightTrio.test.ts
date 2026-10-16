@@ -935,12 +935,22 @@ describe("debug — hard gates before any fix", () => {
     // run verb, the blocked return. Edge case: no failing test written → the push carries the record
     // and hypotheses, and the missing test is named on `Not done:` rather than silently absent.
     expect(userRoute).toMatch(/strip the instrumentation \(step 8\)/);
-    expect(userRoute).toContain("rewrite `Status:` to `closed <date> (blocked: a person reproduces)`");
-    expect(userRoute).toContain("`stamity run checkpoint --run <run-id> --pr --title <title>`");
-    expect(userRoute.indexOf("rewrite `Status:`")).toBeLessThan(userRoute.indexOf("`stamity run checkpoint"));
+    // TEST CHANGE, justified (2026-10-16, run 2026-10-15_cloud-runs, the whole-branch corpus fix
+    // round 1; ledger row review/205, signed off 03:12Z): the pins read "rewrite `Status:` to …",
+    // "`stamity run checkpoint --run <run-id> --pr --title <title>`" and "`--paths` adding the
+    // failing test only if one was written, else `Not done: failing test not written`". What
+    // changed about the contract: that checkpoint wrote no `morning.md`, so the draft's body read
+    // "no morning list was posted"; the stop now takes the skill's ending as every other unattended
+    // exit does, the morning list carrying the two `Not done:` rows, `Status:` closed, then
+    // `stamity run end`. Nothing is relaxed: each step and its order is pinned, the record still
+    // closes before the push, and the checkpoint form is asserted absent.
+    expect(userRoute).toContain(
+      "then take the skill's ending as Unattended above does, `morning.md` naming `a person reproduces` under `## Not done:`, and `failing test not written` when none was, and `Status:` rewritten to `closed <date> (blocked: a person reproduces)` before `stamity run end` pushes the record with the ranked hypotheses",
+    );
+    expect(userRoute.indexOf("`morning.md`")).toBeLessThan(userRoute.indexOf("`Status:` rewritten"));
+    expect(userRoute.indexOf("`Status:` rewritten")).toBeLessThan(userRoute.indexOf("`stamity run end`"));
+    expect(userRoute).not.toContain("stamity run checkpoint");
     expect(userRoute).not.toMatch(/in progress/);
-    expect(userRoute).toMatch(/the record with the ranked hypotheses/);
-    expect(userRoute).toMatch(/`--paths` adding the failing test only if one was written, else `Not done: failing test not written`/);
     expect(userRoute).toMatch(/return `BLOCKED_DEPENDENCY`/);
     // A person reproducing later opens a record of their own, attended.
     expect(userRoute).toMatch(/runs `\/st-debug` attended, which opens its own record/);
@@ -972,11 +982,20 @@ describe("debug — hard gates before any fix", () => {
     // and the escape valve each take the skill's ending after the strip.
     // TEST CHANGE, justified: review/83 (signed off) — an unattended run no longer applies a fix at
     // step 7, so the exit named is step 7's stop after root cause, not "the close after step 7's fix".
+    // TEST CHANGE, justified (2026-10-16, run 2026-10-15_cloud-runs, the whole-branch corpus fix
+    // round 1; ledger row review/205, signed off 03:12Z): the pins read "Every other unattended
+    // exit …" and "it takes the skill's ending, `Status:` rewritten". What changed about the
+    // contract: the user-route stop joins the list and takes the same ending, and the ending names
+    // its morning list and scan. Nothing is relaxed: the four other exits are pinned as before, and
+    // the user-route stop still closes the record rather than leaving it in progress.
     expect(unattended).toContain(
-      "Every other unattended exit pushes its record through the run verbs too — step 7's stop after root cause, the `--diagnose` report, `BLOCKED_FAILURE` at gate `root-cause-before-fix`, and the escape valve",
+      "Every unattended exit pushes its record through the run verbs — step 3's user-route stop, which closes the record rather than leaving it in progress, step 7's stop after root cause, the `--diagnose` report, `BLOCKED_FAILURE` at gate `root-cause-before-fix`, and the escape valve",
     );
+    expect(unattended).not.toContain("Every other unattended exit");
     expect(unattended).not.toContain("the close after step 7's fix");
-    expect(unattended).toContain("once step 8 has run, it takes the skill's ending, `Status:` rewritten to the exit taken");
+    expect(unattended).toContain(
+      "once step 8 has run, it takes the skill's ending, `morning.md` and its scan, `Status:` rewritten to the exit taken",
+    );
     expect(unattended).toContain("`stamity run end --run <run-id> --title <title> --paths <p...>`");
     expect(unattended).toMatch(/`--paths` naming the record, which carries the ranked hypotheses, and gate 2's test when one was written/);
     expect(unattended.indexOf("step 8 has run")).toBeLessThan(unattended.indexOf("`stamity run end"));

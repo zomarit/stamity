@@ -59,13 +59,13 @@ is `stamity run start --run <run-id> --json`, before step 1, and the record open
 more head lines, bare like the others: `Mode: unattended`, and `Branch:` and `Base:` taken from
 that output's `branch` and `base`, never from the checkout. The run then invokes the
 `st-unattended` skill by name and follows it, so its pre-flight runs before any sub-agent is
-briefed. Its user-route stop closes the record rather than leaving it in progress (step 3). Every
-other unattended exit pushes its record through the run verbs too — step 7's stop after root cause,
+briefed. Every unattended exit pushes its record through the run verbs — step 3's user-route
+stop, which closes the record rather than leaving it in progress, step 7's stop after root cause,
 the `--diagnose` report, `BLOCKED_FAILURE` at gate `root-cause-before-fix`, and the escape valve:
-once step 8 has run, it takes the skill's ending, `Status:` rewritten to the exit taken, then
-`stamity run end --run <run-id> --title <title> --paths <p...>`, `--paths` naming the record, which
-carries the ranked hypotheses, and gate 2's test when one was written. An attended run's head
-stays the three lines above.
+once step 8 has run, it takes the skill's ending, `morning.md` and its scan, `Status:` rewritten
+to the exit taken, then `stamity run end --run <run-id> --title <title> --paths <p...>`, `--paths`
+naming the record, which carries the ranked hypotheses, and gate 2's test when one was written.
+An attended run's head stays the three lines above.
 
 1. **Hypotheses.** From the symptom — expected, actual, reproduction path, frequency — write
    numbered hypotheses ranked by prior probability, each paired with the single observation
@@ -107,10 +107,10 @@ stays the three lines above.
      scenario and returns the output.
      When run unattended (`--unattended` or `STAMITY_UNATTENDED`, `--attended` beating the
      variable, as Unattended above reads them), nobody is there to run the scenario: strip the
-     instrumentation (step 8), rewrite `Status:` to `closed <date> (blocked: a person reproduces)`,
-     push the record with the ranked hypotheses through
-     `stamity run checkpoint --run <run-id> --pr --title <title>` — `--paths` adding the failing
-     test only if one was written, else `Not done: failing test not written` — and return
+     instrumentation (step 8), then take the skill's ending as Unattended above does, `morning.md`
+     naming `a person reproduces` under `## Not done:`, and `failing test not written` when none
+     was, and `Status:` rewritten to `closed <date> (blocked: a person reproduces)` before
+     `stamity run end` pushes the record with the ranked hypotheses — and return
      `BLOCKED_DEPENDENCY`. The closed record is no live run for the guards; a person who then
      reproduces runs `/st-debug` attended, which opens its own record.
    This step is not simulated, not inferred from reading the code, and not passed over

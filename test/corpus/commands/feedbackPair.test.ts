@@ -1207,7 +1207,14 @@ describe("pr-resolve — collection and evaluation", () => {
     // allowlist and `git check-ref-format` below pass. Nothing else is relaxed: the fetch still
     // names the number alone, the attended checkout still names `pr-resolve-<n>`, and the
     // unattended exception is pinned whole in the case that pins the Unattended row.
-    expect(rest).toContain("The author's branch name enters no fetch, and no checkout but the Unattended row's.");
+    // TEST CHANGE, justified (2026-10-16, run 2026-10-15_cloud-runs, the whole-branch corpus fix
+    // round 1; ledger row review/204, signed off 03:12Z): the pin read "enters no fetch, and no
+    // checkout but the Unattended row's". What changed about the contract: unattended, the head
+    // branch is fetched by name into origin's remote-tracking ref, so the run verbs' history check
+    // reads only the round's own commits; the exception now covers the fetch as it covers the
+    // checkout. Nothing else is relaxed: the attended fetch still names the number alone (pinned
+    // above), and the unattended fetch is pinned whole in the case that pins the Unattended row.
+    expect(rest).toContain("The author's branch name enters no fetch and no checkout but the Unattended row's.");
     expect(rest).not.toMatch(/git fetch origin <ref>|git checkout <ref>/);
     // A fork head is refused here in one plain sentence.
     // TEST CHANGE, justified (2026-10-14, f6-touchpoints-b fix round 2; ledger rows
@@ -1631,13 +1638,26 @@ describe("feedback pair — unattended (REQ-FLOW-097, REQ-FLOW-100, REQ-CTX-012)
     expect(row).toContain(
       'The head is then checked out locally under the `Branch:` name and must land on `Base:` — in a REST-only session `git checkout -B "<ref>" "<sha>"`, in place of `pr-resolve-<n>`.',
     );
+    // Added 2026-10-16 (run 2026-10-15_cloud-runs, the whole-branch corpus fix round 1; ledger row
+    // review/204, signed off 03:12Z): `pull/<n>/head` updates no origin ref, so `run checkpoint`
+    // and `run end`, which read `HEAD --not --remotes=origin`, counted the pull request's own
+    // commits as the push's and refused every push on a pull request that touches a held path.
+    // The head branch is fetched by name into origin's remote-tracking ref, after the ref checks
+    // and before the checkout. Edge case: a REST-only session keeps its `FETCH_HEAD` sha check.
+    expect(row).toContain(
+      'The head branch is fetched by name into origin\'s remote-tracking ref, `git fetch origin "+refs/heads/<ref>:refs/remotes/origin/<ref>"`, once the ref allowlist and `git check-ref-format` below pass — in a REST-only session in place of `pull/<n>/head`, the `FETCH_HEAD` check unchanged — so the pull request\'s own commits read as origin\'s and the run verbs\' history check reads only the commits this round adds.',
+    );
+    expect(row.indexOf("is refused, and so is a local branch")).toBeLessThan(row.indexOf("The head branch is fetched by name"));
+    expect(row.indexOf("The head branch is fetched by name")).toBeLessThan(row.indexOf("The head is then checked out"));
     // `review/44`: the Fork PR row itself refuses every fork unattended, maintainer edits included.
     const preflight = clause(artifact(PR_RESOLVE).parsed.body, "## Pre-flight");
     const fork = /\| Fork PR \|(.*?)\| Scope \|/.exec(preflight)?.[1] ?? "";
     expect(fork).toContain("Unattended, every fork is **refused** before any checkout, maintainer edits or not.");
     // The REST-only paragraph names the one checkout the author's ref may enter.
+    // TEST CHANGE, justified (2026-10-16, ledger row review/204, signed off 03:12Z): the exception
+    // now covers the Unattended row's fetch by name too, pinned above; see the REST-only case.
     expect(clause(artifact(PR_RESOLVE).parsed.body, "## Pre-flight")).toContain(
-      "The author's branch name enters no fetch, and no checkout but the Unattended row's.",
+      "The author's branch name enters no fetch and no checkout but the Unattended row's.",
     );
   });
 
