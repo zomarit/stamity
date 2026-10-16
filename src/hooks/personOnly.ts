@@ -829,7 +829,9 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
    * GraphQL text (a `query` field) an argument of the call it belongs to, string literals and comments read as no
    * syntax. A field the line does not show reads as the API's default (no `branch` on a contents write is the
    * default branch, no `force` is off); one it shows but cannot place (a computed `$…` value, `-F k=@file`, a
-   * GraphQL variable or block string) reads as the denying value: the default branch, or forced.
+   * GraphQL variable or block string) reads as the denying value: the default branch, or forced. On a review, a body
+   * the line cannot show at all (gh's `--input`, a `-F` field read from `@<file>`, a curl or wget body that is no JSON
+   * object literal, a file or a form, stdin among them) reads as the denying value too (review/228).
    */
   function httpVerdict(cmd: string[]): PersonOnlyVerdict | null {
     const gh = cmd[0] === "gh";
@@ -845,6 +847,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     /** Each body field as `[key, value]`, `null` for a value the line cannot place. */
     const bodyFields: [string, string | null][] = [];
     const queries: string[] = [];
+    /** Whether the line sends a body, or a field of one, it cannot show (review/228). */
+    let hiddenBody = false;
     const add = (key: string, value: unknown, typed: boolean): void => {
       const shown = typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? String(value) : null;
       // A typed `-F` field reads a literal `null` as JSON null, and its placeholders filled (review/127).
@@ -854,6 +858,17 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     };
     for (let k = 1; k < cmd.length; k += 1) {
       const word = cmd[k] ?? "";
+      // gh's body file, and curl's or wget's upload, form or body file, attached or in a short cluster before its `X`.
+      const named = word.split("=")[0] ?? "";
+      if (
+        gh
+          ? named === "--input"
+          : ["-F", "-T", "--upload-file", "--form", "--form-string", "--post-file", "--body-file"].includes(named) ||
+            /^-[FT]./.test(word) ||
+            (/^-[A-Za-z]{2,}$/.test(word) && /[FT]/.test(word.split("X")[0] ?? ""))
+      ) {
+        hiddenBody = true;
+      }
       let value = fieldAttached.exec(word)?.[0];
       if (fieldFlag.test(word)) {
         value = cmd[k + 1];
@@ -863,15 +878,18 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       if (gh) {
         const eq = value.indexOf("=");
         if (eq > 0) add(value.slice(0, eq), value.slice(eq + 1), /^(-F|--field)/.test(word));
+        // A typed field gh reads from a file, or from stdin (`@-`).
+        if (/^(-F|--field)/.test(word) && value.slice(eq + 1).startsWith("@")) hiddenBody = true;
         continue;
       }
       try {
         const body: unknown = JSON.parse(value);
         if (typeof body === "object" && body !== null && !Array.isArray(body)) {
           for (const [key, field] of Object.entries(body)) add(key, field, false);
-        }
+        } else hiddenBody = true;
       } catch {
-        // Not a JSON body: none of its fields is shown.
+        // Not a JSON body (`@<file>`, `@-`, a computed value): none of its fields is shown.
+        hiddenBody = true;
       }
     }
     const fields = (key: string): (string | null)[] => bodyFields.filter(([name]) => name === key).map(([, value]) => value);
@@ -977,9 +995,13 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         return deny("pr-merge", `A REST merge (${shown})`);
       }
       // A review created, or a pending one submitted, with the event `APPROVE` (review/210); an event the line shows
-      // but cannot place reads as one, and none shown is the API's pending review.
-      if (/^pulls\/[^/]+\/reviews(\/[^/]+\/events)?$/i.test(path) && fields("event").some((event) => event === null || /^approve$/i.test(event.trim()))) {
-        return deny("pr-merge", `A REST review approval (${shown})`);
+      // but cannot place reads as one, and so does a body the line cannot show (review/228), as on GraphQL; no event in
+      // a body the line shows whole is the API's pending review.
+      if (
+        /^pulls\/[^/]+\/reviews(\/[^/]+\/events)?$/i.test(path) &&
+        (hiddenBody || fields("event").some((event) => event === null || /^approve$/i.test(event.trim())))
+      ) {
+        return deny("pr-merge", `A REST review approval, or a review whose body the line cannot show (${shown})`);
       }
       if (/^branches\/.+\/protection(\/|$)/i.test(path) || /^rulesets(\/|$)/i.test(path)) {
         return deny("protection", `A protection or ruleset write (${shown})`);
@@ -1544,10 +1566,14 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
   ]);
   /** The configuration keys an unattended git call may set on its line: display and identity keys only. */
   const CONFIG_KEYS = /^(?:color\..+|advice\..+|core\.quotepath|init\.defaultbranch|user\.name|user\.email)$/i;
-  /** An assignment of the variables through which git reads configuration pairs from the environment. */
-  const CONFIG_ENVIRONMENT = /\bGIT_CONFIG_(?:COUNT|KEY_\d+|PARAMETERS)\s*=/i;
-  /** A word, as the reading decoded it, assigning one of them (review/221): a quoted or escaped spelling among them. */
-  const CONFIG_ENVIRONMENT_WORD = /^GIT_CONFIG_(?:COUNT|KEY_\d+|PARAMETERS)=/i;
+  /**
+   * A name of the variables through which git reads configuration pairs from the environment, in the line's text or in
+   * a word as the reading decoded it (review/221), whatever form sets it (review/227, review/196): an assignment,
+   * PowerShell's `$env:` and `${env:…}`, `Set-Item env:…`, `New-Item env:…`, `[Environment]::SetEnvironmentVariable`,
+   * `export` or `declare -x` of a name set earlier; a pair's number the line computes (`GIT_CONFIG_KEY_$i`) and a
+   * name the line builds from the prefix (`GIT_CONFIG_$v`) among them.
+   */
+  const CONFIG_ENVIRONMENT = /\bGIT_CONFIG_(?:(?:COUNT|PARAMETERS)\b|(?:KEY|VALUE)_\d*\b|(?=[$`{(%]))/i;
   /** git's environment variables whose value is a program git runs (review/208): twins of the `-c` keys refused below. */
   const PROGRAM_VARIABLES =
     "GIT_EDITOR|GIT_SEQUENCE_EDITOR|GIT_SSH_COMMAND|GIT_SSH|GIT_EXTERNAL_DIFF|GIT_ASKPASS|GIT_PAGER|GIT_PROXY_COMMAND|GIT_EXEC_PATH";
@@ -1621,9 +1647,10 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
       if (config.some((pair) => /^alias\./i.test(pair))) return deny("A git call defining an alias (`-c alias.<name>=…`)");
       // A configuration value git runs as a line (`core.fsmonitor`, `core.sshCommand`, …) runs whatever it names, so
       // unattended a git call sets only display and identity keys (the 02:31Z sign-off): a `-c` pair, or a
-      // `--config-env` one, outside CONFIG_KEYS is refused, and so is any git call on a line that sets git's
-      // configuration through the environment, wherever on the line, since the text cannot always settle the order,
-      // as the text spells it or as the reading decodes it (a quoted or escaped word, review/221).
+      // `--config-env` one, outside CONFIG_KEYS is refused, and so is any git call on a line that names git's
+      // configuration variables, wherever on the line and in whatever form sets them, since the text cannot always
+      // settle the order or the form, as the text spells it or as the reading decodes it (a quoted or escaped word,
+      // review/221; a PowerShell spelling, review/227); a commit message naming one is refused with them.
       const globals = cmd.slice(1, cmd.length - args.length - 1);
       const configEnv = globals.flatMap((word, index) =>
         word === "--config-env" ? [globals[index + 1] ?? ""] : word.startsWith("--config-env=") ? [word.slice(13)] : [],
@@ -1631,8 +1658,8 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
       if ([...config, ...configEnv].some((pair) => !CONFIG_KEYS.test((pair.split("=")[0] ?? "").trim()))) {
         return deny("A git call setting a configuration key outside the display and identity keys (`-c <key>=…`)");
       }
-      if (CONFIG_ENVIRONMENT.test(command) || [...assigned, ...commands.flat()].some((word) => CONFIG_ENVIRONMENT_WORD.test(word))) {
-        return deny("A git call on a line that sets git's configuration through the environment (`GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_<n>`, `GIT_CONFIG_PARAMETERS`)");
+      if (CONFIG_ENVIRONMENT.test(command) || [...assigned, ...commands.flat()].some((word) => CONFIG_ENVIRONMENT.test(word))) {
+        return deny("A git call on a line that names git's configuration variables (`GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_<n>`, `GIT_CONFIG_VALUE_<n>`, `GIT_CONFIG_PARAMETERS`)");
       }
       // The environment twins of those keys (review/208): a variable whose value git runs as a program, set anywhere on
       // the line, as the reading decodes it (a quoted or escaped word, after a wrapper, inside a nested line) or as

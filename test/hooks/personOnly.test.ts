@@ -415,6 +415,21 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["gh api repos/o/r/pulls/3/reviews/9/events -f event=APPROVE", "pr-merge"],
   ["gh api repos/o/r/pulls/3/reviews -f event=$EVENT", "pr-merge"],
   ["curl -X POST -d '{\"event\":\"APPROVE\"}' https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
+  // A REST review whose body the line cannot show reads as an approval, as on GraphQL (review/228): gh's `--input` file
+  // or stdin, a typed field read from a file or stdin, and curl's and wget's body files, stdin, uploads and computed
+  // bodies, in every mode.
+  ["gh api -X POST repos/o/r/pulls/3/reviews --input r.json", "pr-merge"],
+  ["gh api repos/o/r/pulls/3/reviews --input -", "pr-merge"],
+  ["gh api repos/o/r/pulls/3/reviews/9/events --input=r.json", "pr-merge"],
+  ["gh api repos/o/r/pulls/3/reviews -F body=@r.md", "pr-merge"],
+  ["gh api repos/o/r/pulls/3/reviews -f event=COMMENT --field body=@-", "pr-merge"],
+  ["curl -X POST -d @r.json https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
+  ["curl --data-binary @r.json https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
+  ["curl -sd @- https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
+  ["curl -d \"$BODY\" https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
+  ["curl -X POST -T r.json https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
+  ["curl -d '{\"body\":\"x\"}' -d @r.json https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
+  ["wget --post-file=r.json https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
   ["gh api graphql -f query='mutation { addPullRequestReview(input: {pullRequestId: \"PR_1\", event: APPROVE}) { clientMutationId } }'", "pr-merge"],
   ["gh api graphql -f query='mutation { submitPullRequestReview(input: {pullRequestReviewId: \"R_1\", event: APPROVE}) { clientMutationId } }'", "pr-merge"],
   ["gh api graphql -f query='mutation($e: PullRequestReviewEvent!) { submitPullRequestReview(input: {pullRequestReviewId: \"R_1\", event: $e}) { clientMutationId } }' -f e=APPROVE", "pr-merge"],
@@ -584,6 +599,14 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
   ["gh api -X GET repos/o/r/pulls/3/reviews -f event=APPROVE"],
   ["gh api repos/o/r/pulls/3/reviews/9/events -f event=REQUEST_CHANGES -f body=x"],
   ["curl -X POST -d '{\"event\":\"COMMENT\",\"body\":\"x\"}' https://api.github.com/repos/o/r/pulls/3/reviews"],
+  // review/228's twins: the same body files on a read and on a pull request's comments, a raw field whose `@` is text,
+  // and a body the line shows whole beside `-XPOST` and a valued flag whose letters hold no upload.
+  ["gh api -X GET repos/o/r/pulls/3/reviews --input r.json"],
+  ["gh api -X POST repos/o/r/pulls/3/comments --input r.json"],
+  ["gh api repos/o/r/pulls/3/reviews -f body=@r.md"],
+  ["curl -X POST -d @r.json https://api.github.com/repos/o/r/pulls/3/comments"],
+  ["curl -XPOST -d '{\"event\":\"COMMENT\"}' https://api.github.com/repos/o/r/pulls/3/reviews"],
+  ["curl -o out.json --data-binary '{\"event\":\"COMMENT\"}' https://api.github.com/repos/o/r/pulls/3/reviews"],
   ["gh api graphql -f query='mutation { addPullRequestReview(input: {pullRequestId: \"PR_1\", event: COMMENT}) { clientMutationId } }'"],
   ["gh api graphql -f query='mutation { addPullRequestReview(input: {pullRequestId: \"PR_1\", body: \"x\"}) { clientMutationId } }'"],
   ["gh api graphql -f query='mutation { submitPullRequestReview(input: {pullRequestReviewId: \"R_1\", event: REQUEST_CHANGES}) { clientMutationId } }'"],
@@ -784,6 +807,20 @@ describe("unattendedPushVerdict", () => {
     ["env $'GIT\\x5fCONFIG_PARAMETERS=x' git status"],
     ["export GIT_CONF\"\"IG_COUNT=1; git status"],
     ["sh -c 'GIT_CONF\"\"IG_KEY_0=core.fsmonitor git status'"],
+    // The same variables named in whatever form sets them (review/227, review/196): PowerShell's braced `${env:…}`, its
+    // `Set-Item` and `New-Item` on the `env:` drive and `[Environment]::SetEnvironmentVariable`, a value variable
+    // alone, an `export` of a name set earlier, a pair's number or a name the line computes, and a commit message
+    // naming one, which the text cannot tell from a setting (the 02:31Z sign-off's choice).
+    ["${env:GIT_CONFIG_PARAMETERS}=\"'core.fsmonitor=git push origin x'\"; git status"],
+    ["${env:GIT_CONFIG_COUNT} = 1; git status"],
+    ["Set-Item env:GIT_CONFIG_COUNT 1; Set-Item env:GIT_CONFIG_KEY_0 core.fsmonitor; Set-Item env:GIT_CONFIG_VALUE_0 'git push origin x'; git status"],
+    ["New-Item -Path env:GIT_CONFIG_PARAMETERS -Value x; git status"],
+    ["[Environment]::SetEnvironmentVariable('GIT_CONFIG_PARAMETERS', 'x'); git status"],
+    ["GIT_CONFIG_VALUE_0='git push origin x' git status"],
+    ["export GIT_CONFIG_COUNT; git status"],
+    ["export GIT_CONFIG_KEY_$i=core.fsmonitor; git status"],
+    ["v=PARAMETERS; export \"GIT_CONFIG_$v=x\"; git status"],
+    ["git commit -m 'GIT_CONFIG_COUNT is left unset'"],
     // Closing or reopening a pull request, the REST twin's `PATCH pulls/<n>` (review/213).
     ["gh pr close 3"],
     ["gh pr reopen 3"],
@@ -948,11 +985,16 @@ describe("unattendedPushVerdict", () => {
     ["git config --get-regexp '^url\\.'"],
     ["git config --get-urlmatch http https://example.com"],
     ["git config user.email url.bot@example.com"],
-    // review/221's twins: a git variable that sets no configuration, the variables on a line with no git call, and a
-    // commit message naming one.
+    // review/221's and review/227's twins: a git variable that sets no configuration, in PowerShell's spellings too, the
+    // variables on a line with no git call, and a commit message naming another git variable or a longer name. A commit
+    // message naming one of the variables is refused since review/227 (above).
     ["GIT_CONFIG_NOSYSTEM=1 git status"],
+    ["${env:GIT_CONFIG_NOSYSTEM}='1'; git status"],
+    ["Set-Item env:GIT_CONFIG_NOSYSTEM 1; git status"],
     ["env GIT_CONF''IG_COUNT=1 npm test"],
-    ["git commit -m 'GIT_CONFIG_COUNT is left unset'"],
+    ["Set-Item env:GIT_CONFIG_COUNT 1; npm test"],
+    ["git commit -m 'GIT_CONFIG_GLOBAL is left unset'"],
+    ["git commit -m 'MY_GIT_CONFIG_COUNT and GIT_CONFIG_COUNTER are left unset'"],
   ])("allows %j", (command) => {
     expect(unattendedPushVerdict(command)).toEqual({ deny: false });
   });

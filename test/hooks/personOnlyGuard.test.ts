@@ -127,6 +127,11 @@ const MATRIX: readonly (readonly [command: string, rule: string | null])[] = [
   ["gh pr close 3", null],
   ["gh pr review 3 --approve", "pr-merge"],
   ["gh pr review 3 --comment -b lgtm", null],
+  // A REST review whose body the line cannot show (review/228), beside the same body file on a read.
+  ["gh api repos/o/r/pulls/3/reviews --input r.json", "pr-merge"],
+  ["gh api -X GET repos/o/r/pulls/3/reviews --input r.json", null],
+  ["curl -d @r.json https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
+  ["curl -d @r.json https://api.github.com/repos/o/r/pulls/3/comments", null],
 ];
 
 describe("the person-only guard, on every client", () => {
@@ -628,12 +633,17 @@ describe("the unattended push rule, the mode read from the run records", () => {
       "git config remote.origin.url https://example.com/r.git", "gh pr close 3",
       // A `url.*` rewrite (review/220) and the configuration variables in a quoted spelling (review/221).
       "git config url.https://example.com/.pushInsteadOf https://github.com/",
-      "env GIT_CONF''IG_COUNT=1 GIT_CONF''IG_KEY_0=core.sshCommand GIT_CONFIG_VALUE_0=x git fetch"];
+      "env GIT_CONF''IG_COUNT=1 GIT_CONF''IG_KEY_0=core.sshCommand GIT_CONFIG_VALUE_0=x git fetch",
+      // The same variables named in PowerShell's forms (review/227, review/196).
+      "${env:GIT_CONFIG_PARAMETERS}=\"'core.fsmonitor=git push origin x'\"; git status", "Set-Item env:GIT_CONFIG_COUNT 1; git status"];
     for (const command of unattended) {
       const source = unattendedPushVerdict(command);
       expect(source.deny, command).toBe(true);
       if (source.deny) expect(decide("claude", guard, command)).toEqual({ deny: true, reason: expect.stringContaining(source.reason) });
     }
+    // review/227's line as the PowerShell tool sends it, beside a variable that sets no configuration.
+    expect(decide("claude", guard, "${env:GIT_CONFIG_PARAMETERS}=\"'core.fsmonitor=git push origin x'\"; git status", undefined, undefined, "PowerShell").deny).toBe(true);
+    expect(decide("claude", guard, "${env:GIT_CONFIG_NOSYSTEM}='1'; git status", undefined, undefined, "PowerShell").deny).toBe(false);
     // The refusal names the record that made the session unattended, so the person knows which run to close.
     expect(decide("claude", guard, RAW_PUSH)).toEqual({
       deny: true,
@@ -644,7 +654,8 @@ describe("the unattended push rule, the mode read from the run records", () => {
     expect(decide("claude", guard, "git -c user.name=x commit -m m").deny).toBe(false);
     // The twins: a variable that runs nothing, a remote and a remote key read, a pull request read.
     for (const command of ["GIT_TERMINAL_PROMPT=0 git fetch origin", "git remote get-url origin", "git config --get remote.origin.url", "gh pr view 3",
-      "git config --get url.https://example.com/.insteadOf", "GIT_CONFIG_NOSYSTEM=1 git status"]) {
+      "git config --get url.https://example.com/.insteadOf", "GIT_CONFIG_NOSYSTEM=1 git status", "Set-Item env:GIT_CONFIG_NOSYSTEM 1; git status",
+      "Set-Item env:GIT_CONFIG_COUNT 1; npm test"]) {
       expect(unattendedPushVerdict(command), command).toEqual({ deny: false });
       expect(decide("claude", guard, command).deny, command).toBe(false);
     }
