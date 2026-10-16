@@ -2313,6 +2313,68 @@ describe("SECURITY.md", () => {
       expect(network).toContain("`src/cli/engine/ghRunner.ts::ghApi`");
       expect(network).toContain("`gh api`");
     });
+
+    // ADDED 2026-10-16 (plan 021 file 1, the whole-branch round's page fix): the pre-flight now
+    // refuses an account with no push right, the run verbs pin origin's push as git resolves it and
+    // hold a link at a held glob's folder, and the guard refuses a review approval, a branch-deleting
+    // close, remote writes and git's program variables, while Claude Code denies the GitHub MCP
+    // server's merge and branch-write tools. What that leaves open is named in plain words, and a
+    // `url.*` config write, which the guard does not refuse, is stated as passing it.
+    it("states the origin pin, the held links, the new refusals and what they leave open", () => {
+      const table = section("## What the engine defends today", "## Network and data handling");
+      const residuals = section("### Cloud and unattended runs", "## Standards mapping");
+      const wall = section("`stamity gate preflight --unattended` is the `st-unattended` skill's first act", "| The main thread of any session");
+      const guard = section("| The main thread of any session", "| An unattended run, or the text that steers one | Pushing a change");
+      const verbs = section("`stamity run start` puts an unattended run", "| Anyone whose text an unattended run sends out");
+      expect(wall).toContain("An account with no push right on the repository at all (`permissions.push` false) is refused");
+      expect(residuals).toContain("an account with no push right at all is refused");
+      for (const stale of ["or an account with no push right on the repository", "and so does an account with no push right"]) {
+        expect(flat, `SECURITY.md says again: ${stale}`).not.toContain(stale);
+      }
+      for (const claim of [
+        "`run start` pins origin's repository in the run folder's `origin.json`",
+        "from every push URL as git resolves it, `insteadOf` and `pushInsteadOf` applied",
+        "refuses as `origin changed`",
+        "`Not done: origin changed`",
+        "refuses as `origin not pinned`",
+        "A symbolic link the change adds or retypes at a held glob's folder",
+      ]) {
+        expect(verbs, `the run verbs' row does not state: ${claim}`).toContain(claim);
+      }
+      for (const claim of [
+        "a pull request closed with `--delete-branch` among them",
+        "a merge or a review approval",
+        "`gh pr close` and `gh pr reopen`",
+        "a `git remote` write",
+        "a `git config` write of a `remote.*` key or section",
+        "one of git's program-valued variables",
+        "deny the GitHub MCP server's merge and branch-write tools by name",
+      ]) {
+        expect(guard, `the guard's row does not state: ${claim}`).toContain(claim);
+      }
+      for (const pointer of [
+        "`src/cli/commands/run.ts::pinOrigin`",
+        "`src/cli/commands/run.ts::originRefusal`",
+        "`src/cli/commands/run.ts::heldOf`",
+        "`src/hooks/personOnly.ts::CLAUDE_DENY_ROWS`",
+      ]) {
+        expect(table, `the control table does not cite ${pointer}`).toContain(pointer);
+      }
+      for (const residual of [
+        "The GitHub MCP server on the other clients.",
+        "Cursor, Copilot and Codex take no per-tool deny from the engine",
+        "The origin pin.",
+        "together with git's configuration (`.git/config`)",
+        "a `git config` write of a `url.*` key passes it",
+        "Claude Code keeps the shell's working directory from one call to the next",
+        "Whether Claude Code's field follows a directory an earlier call moved to was not checked",
+        "This is attended only",
+        "one of git's program-valued variables",
+      ]) {
+        expect(residuals, `the cloud section does not name: ${residual}`).toContain(residual);
+      }
+      expect(flat, "SECURITY.md claims the guard refuses a url.* write").not.toMatch(/`url\.\*` key is refused/);
+    });
   });
 
   it("covers the four surfaces the phase claims, and the limits", () => {
@@ -2422,6 +2484,28 @@ describe("docs/security-mapping.md", () => {
     expect(flat).toContain("are read as lines of their own, and gh's alias for the create-and-push form is refused");
     expect(flat).toContain("a git builtin can run a program the repository's own configuration names");
     expect(flat).toContain("every folder's editor settings, tasks and MCP-server files, are held");
+  });
+
+  // ADDED 2026-10-16 (plan 021 file 1, the whole-branch round's page fix): the rows and gaps carry
+  // what SECURITY.md now states, the origin pin and its work-tree residual among them.
+  it("states the origin pin, the held links and the new refusals with their residuals", () => {
+    const flat = text.replace(/\s+/g, " ");
+    for (const claim of [
+      "an account with no push right at all is refused",
+      "names another repository than the one `run start` pinned in the run folder's `origin.json`",
+      "and a symbolic link at a held glob's folder, into an inert patch",
+      "a merge or a review approval",
+      "a `git remote` write and a `git config` write of a `remote.*` key",
+      "one of git's program-valued variables",
+      "five rows more deny the GitHub MCP server's merge and branch-write tools by name",
+      "the GitHub MCP server on the clients that take no per-tool deny",
+      "a `git config` write of a `url.*` key passes the guard",
+      "The held set is a glob list, and the origin pin a work-tree file",
+      "rewrites that file together with git's configuration passes the check",
+      "which was not checked to follow it",
+    ]) {
+      expect(flat, `the mapping page does not state: ${claim}`).toContain(claim);
+    }
   });
 
   it("pins every catalogue it maps to an edition", () => {
