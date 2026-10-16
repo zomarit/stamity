@@ -123,7 +123,7 @@ text was first read at the integration head `4daeb214`, or at `bc12cfc3` where t
 date, re-pointed or added a citation; the run's last citation pass re-read each one at `445ebd23`, and the whole-branch
 page round re-read them on `aa7a3e5b` with its own edits to `SECURITY.md`, `evals/SET-v7.md` and the unattended skill,
 re-pointing each one whose text had moved; the run's final derived pass re-pointed each one a later commit moved,
-mapped through git's diff from the commit it was read at, and every one reads at `6c5d09d5`, a pin named beside a
+mapped through git's diff from the commit it was read at, and every one reads at `001be432`, a pin named beside a
 citation included. Two units
 were not on `4daeb214`: `u19-run-end` (`stamity run end`) and
 `u21-security-page` (`SECURITY.md`'s cloud section); the fix round cites both at `bc12cfc3`. REQ-FLOW-105 to
@@ -3777,7 +3777,7 @@ dependency is a morning-list row (`SKILL.md:118-119`).
 ### REQ-FLOW-104 — The cloud's accepted risks are named
 
 Added 2026-10-16 (plan 021 file 1, unit `u21-security-page`; not on this merge's base, it is cited from `bc12cfc3`
-by the merge's first fix round and re-read after the whole-branch page round: the section is `SECURITY.md:379-549`, under
+by the merge's first fix round and re-read after the whole-branch page round: the section is `SECURITY.md:379-562`, under
 `## What it does not defend` (`:284`), the settings row `:98`, the git-hardening row `:96` and the third network
 exception `:152-173`).
 
@@ -3810,12 +3810,12 @@ named network exceptions, and the run verbs on the git-hardening row.
 - **As built, where the delta differed:** the delta named PowerShell's command wrappers, gh's alias for the
   create-and-push form, a multi-root workspace file's settings and an editor tasks file's folder-open task as uncovered
   by the unattended rules and not held. The guard rounds after it closed each: the page states the wrapped lines read
-  and refused, the alias refused and those files held (`SECURITY.md:524-533`, `:547-549`), the encoded command and the
-  `iex` pipe staying the gaps the unattended rules do not cover (`:542-545`). The page's place-reader paragraph
-  (`:535-540`) and its residual for programs the repository's configuration names (`:429-451`) are not restated here; a
+  and refused, the alias refused and those files held (`SECURITY.md:537-546`, `:560-562`), the encoded command and the
+  `iex` pipe staying the gaps the unattended rules do not cover (`:555-558`). The page's place-reader paragraph
+  (`:548-553`) and its residual for programs the repository's configuration names (`:429-464`) are not restated here; a
   later page round settles them. The whole-branch round added three residuals in plain words: the GitHub MCP server
   on the clients that take no per-tool deny, the origin pin rewritten together with git's configuration, and the
-  working directory Claude Code keeps across shell calls, attended only (`SECURITY.md:400-409`, `:471-476`,
+  working directory Claude Code keeps across shell calls, attended only (`SECURITY.md:400-409`, `:484-489`,
   `:410-416`).
 - **Proof:** `test/docsPages.test.ts` ("cloud and unattended runs (REQ-FLOW-104)": the section's place, every risk
   and gap named above, the retired bullet gone, the control table's pointers, the settings row and the network
