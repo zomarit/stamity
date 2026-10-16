@@ -1024,6 +1024,8 @@ describe("the review gate's state is ignored on sync", () => {
       ".stamity/review-gate.json.lock",
       ".stamity/review-gate.json.tmp-*",
       ".stamity/preflight-canary.json",
+      // TEST CHANGE, justified (pr/17): the engine now ignores the run-ended marker, so a sync adds it too.
+      ".stamity/run-ended.json",
     ];
 
     const firstPlan = await planSync(root, ENGINE_VERSION);

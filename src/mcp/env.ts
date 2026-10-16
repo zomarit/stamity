@@ -214,6 +214,7 @@ export const REQUIRED_GITIGNORE_ENTRIES: readonly string[] = [
   REVIEW_GATE_STATE_FILE + REVIEW_GATE_LOCK_SUFFIX,
   `${REVIEW_GATE_STATE_FILE}${REVIEW_GATE_TEMP_INFIX}*`,
   PREFLIGHT_CANARY_FILE,
+  RUN_ENDED_MARKER_FILE,
 ];
 
 /**
@@ -246,18 +247,23 @@ const REVIEW_GATE_DOMINATORS: readonly string[] = [
 /**
  * Existing patterns that already ignore an entry. Appending our literal beside
  * one of these would add a redundant rule to a file the operator maintains.
- * Each review-gate entry and the canary is also dominated by its own
+ * Each review-gate entry, the canary and the marker is also dominated by its own
  * root-anchored twin (`/.stamity/review-gate.json` — the spelling a
- * hand-written rule usually takes). The canary takes the state directory's
- * spellings only: a `review-gate.json*` prefix does not cover it, and a canary
- * git does not ignore could be committed.
+ * hand-written rule usually takes). The canary and the run-ended marker take the
+ * state directory's spellings only: a `review-gate.json*` prefix covers neither,
+ * and a file git does not ignore could be committed.
  */
 const DOMINATING_PATTERNS: Record<string, readonly string[]> = {
   [ENV_MCP_FILE]: [".env.*", ".env*", "*.mcp"],
   ...Object.fromEntries(
     REQUIRED_GITIGNORE_ENTRIES.filter((entry) => entry !== ENV_MCP_FILE).map((entry) => [
       entry,
-      [`/${entry}`, ...(entry === PREFLIGHT_CANARY_FILE ? STATE_DIR_DOMINATORS : REVIEW_GATE_DOMINATORS)],
+      [
+        `/${entry}`,
+        ...(entry === PREFLIGHT_CANARY_FILE || entry === RUN_ENDED_MARKER_FILE
+          ? STATE_DIR_DOMINATORS
+          : REVIEW_GATE_DOMINATORS),
+      ],
     ]),
   ),
 };

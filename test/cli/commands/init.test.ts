@@ -502,6 +502,8 @@ describe("init — fresh repo", () => {
         ".stamity/review-gate.json.tmp-*",
         // REQ-FLOW-101: the shell guard's hooks canary is ignored too.
         ".stamity/preflight-canary.json",
+        // TEST CHANGE, justified (pr/17): the engine now ignores the run-ended marker too.
+        ".stamity/run-ended.json",
       ]),
     );
     // The edit is DISCLOSED too. This repo has no predecessor and no
@@ -512,10 +514,13 @@ describe("init — fresh repo", () => {
     // entries init guarantees, not the credential file alone.
     // TEST CHANGE (sw10-first-run-output, REQ-FLOW-022): each entry named carries a
     // neutral reason now; the four entries and the tense are what this still pins.
-    // TEST CHANGE (REQ-FLOW-101): the hooks canary is the fifth entry, named last.
+    // TEST CHANGE (REQ-FLOW-101): the hooks canary is the fifth entry.
+    // TEST CHANGE, justified (pr/17): the engine now ignores the run-ended marker, the sixth entry, named last
+    // with the neutral fallback reason.
     expect(result.stdout).toContain(
       ".stamity/review-gate.json.tmp-* (the review gate's temporary writes), " +
-        ".stamity/preflight-canary.json (the shell guard's hooks canary) — were added to your .gitignore",
+        ".stamity/preflight-canary.json (the shell guard's hooks canary), " +
+        ".stamity/run-ended.json (machine-local state this setup writes) — were added to your .gitignore",
     );
     expect(result.stdout).toContain("security: these lines — .env.mcp (MCP server credentials), ");
     // No MCP server, so no credential file this setup uses.
@@ -1905,10 +1910,13 @@ describe("init --dry-run", () => {
     // nothing written.
     // TEST CHANGE (sw10-first-run-output): the neutral reason per entry, as on the
     // panel; still the four entries, still the future tense.
-    // TEST CHANGE (REQ-FLOW-101): the hooks canary is the fifth entry, named last.
+    // TEST CHANGE (REQ-FLOW-101): the hooks canary is the fifth entry.
+    // TEST CHANGE, justified (pr/17): the engine now ignores the run-ended marker, the sixth entry, named last
+    // with the neutral fallback reason.
     expect(result.stdout).toContain(
       ".stamity/review-gate.json.tmp-* (the review gate's temporary writes), " +
-        ".stamity/preflight-canary.json (the shell guard's hooks canary) — would be added to your .gitignore",
+        ".stamity/preflight-canary.json (the shell guard's hooks canary), " +
+        ".stamity/run-ended.json (machine-local state this setup writes) — would be added to your .gitignore",
     );
     expect(result.stdout).toContain("security: these lines — .env.mcp (MCP server credentials), ");
     // REQ-FLOW-022: the preview names a defaulted client set as the default too.
