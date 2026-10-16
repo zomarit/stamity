@@ -21,6 +21,7 @@ import {
   buildUnattendedAskGate,
   HOOK_SCRIPT_BUDGETS,
   type HookScriptLayout,
+  PERSON_ONLY_GUARD_FILE,
   planCoreHookScripts,
   REVIEW_GATE_FILE,
   REVIEW_GATE_STATE_FILE,
@@ -198,6 +199,14 @@ describe("hook script budgets (REQ-CTX-016)", () => {
       expect(script.content, script.tool).toContain("Session: ");
       expect(budgetViolation(script), script.tool).toBeUndefined();
     }
+  });
+
+  it("holds the person-only guard to the row re-sized from its last measurement (review/219)", () => {
+    // The literal pins the re-sized row, so its next move is a visible edit here too, with its reason in the row.
+    expect(HOOK_SCRIPT_BUDGETS[PERSON_ONLY_GUARD_FILE]).toEqual({ bytes: 124_928, lines: 3_210 });
+    const guards = renders.filter((script) => script.fileName === PERSON_ONLY_GUARD_FILE);
+    expect(guards).toHaveLength(TOOLS.length);
+    for (const script of guards) expect(budgetViolation(script), script.tool).toBeUndefined();
   });
 
   it("counts CRLF and LF line endings alike", () => {

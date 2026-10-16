@@ -7,6 +7,7 @@ import {
   personOnlyVerdict,
   unattendedPushVerdict,
 } from "../../src/hooks/personOnly.ts";
+import { CURATED_MCP_SERVERS, PLATFORM_MCP_SERVER } from "../../src/mcp/catalog.ts";
 
 /**
  * u6-person-only-tables (REQ-FLOW-102, REQ-FLOW-120): the person-only acts the
@@ -395,6 +396,29 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["curl -X PATCH -d '{\"sha\":\"abc\"}' 'https://api.github.com/repos/o/r/git/refs/heads/main?ref=1'", "push-default"],
   ["gh api repos/o/r/git/refs -f ref=refs/tags/v1 -f sha=abc", "push-tags"],
   ["gh api -X DELETE repos/o/r/git/refs/heads/feat/x", "push-delete"],
+  // gh's close with its delete-branch flag deletes the head branch on the remote, as the REST DELETE above (review/207,
+  // read from gh 2.102.0's help: `-d, --delete-branch`, `-c, --comment string`).
+  ["gh pr close 3 --delete-branch", "push-delete"],
+  ["gh pr close 3 --delete-branch=true", "push-delete"],
+  ["gh pr close 3 -d", "push-delete"],
+  ["gh pr close -d feat/x", "push-delete"],
+  ["gh -R o/r pr close 3 -dc done", "push-delete"],
+  // Approving a review counts toward a required review (review/210): gh's flag (`-a, --approve`; `-b` and `-F` take a
+  // value), the REST review and the submit of a pending one with the event APPROVE, an event the line cannot place,
+  // and the GraphQL review mutations.
+  ["gh pr review 3 --approve", "pr-merge"],
+  ["gh pr review --approve=true", "pr-merge"],
+  ["gh pr review -a", "pr-merge"],
+  ["gh pr review 3 -ab lgtm", "pr-merge"],
+  ["gh api repos/o/r/pulls/3/reviews -f event=APPROVE", "pr-merge"],
+  ["gh api -X POST repos/o/r/pulls/3/reviews -F event=approve -f body=lgtm", "pr-merge"],
+  ["gh api repos/o/r/pulls/3/reviews/9/events -f event=APPROVE", "pr-merge"],
+  ["gh api repos/o/r/pulls/3/reviews -f event=$EVENT", "pr-merge"],
+  ["curl -X POST -d '{\"event\":\"APPROVE\"}' https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
+  ["gh api graphql -f query='mutation { addPullRequestReview(input: {pullRequestId: \"PR_1\", event: APPROVE}) { clientMutationId } }'", "pr-merge"],
+  ["gh api graphql -f query='mutation { submitPullRequestReview(input: {pullRequestReviewId: \"R_1\", event: APPROVE}) { clientMutationId } }'", "pr-merge"],
+  ["gh api graphql -f query='mutation($e: PullRequestReviewEvent!) { submitPullRequestReview(input: {pullRequestReviewId: \"R_1\", event: $e}) { clientMutationId } }' -f e=APPROVE", "pr-merge"],
+  ["gh api graphql -f query='mutation($i: AddPullRequestReviewInput!) { addPullRequestReview(input: $i) { clientMutationId } }'", "pr-merge"],
 ];
 
 const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
@@ -543,6 +567,26 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
   ["grep -r \"gh pr merge\" docs"],
   ["git log --oneline -1"],
   ["git status"],
+  // review/207's twins: a close that keeps the branch, the flag switched off, and `-c` taking the rest as its comment.
+  ["gh pr close 3"],
+  ["gh pr close 3 --delete-branch=false"],
+  ["gh pr close 3 -c 'done'"],
+  ["gh pr close 3 -cd"],
+  // review/210's twins: a comment or a change request, `-b` taking the rest as its body, the flag switched off, a REST
+  // review with another event or none (the API's pending review), a read, and GraphQL reviews that do not approve.
+  ["gh pr review 3 --comment -b lgtm"],
+  ["gh pr review 3 -r -b 'needs work'"],
+  ["gh pr review 3 -ba"],
+  ["gh pr review 3 --approve=false"],
+  ["gh api repos/o/r/pulls/3/reviews -f event=COMMENT -f body=x"],
+  ["gh api repos/o/r/pulls/3/reviews -f body=x"],
+  ["gh api repos/o/r/pulls/3/reviews"],
+  ["gh api -X GET repos/o/r/pulls/3/reviews -f event=APPROVE"],
+  ["gh api repos/o/r/pulls/3/reviews/9/events -f event=REQUEST_CHANGES -f body=x"],
+  ["curl -X POST -d '{\"event\":\"COMMENT\",\"body\":\"x\"}' https://api.github.com/repos/o/r/pulls/3/reviews"],
+  ["gh api graphql -f query='mutation { addPullRequestReview(input: {pullRequestId: \"PR_1\", event: COMMENT}) { clientMutationId } }'"],
+  ["gh api graphql -f query='mutation { addPullRequestReview(input: {pullRequestId: \"PR_1\", body: \"x\"}) { clientMutationId } }'"],
+  ["gh api graphql -f query='mutation { submitPullRequestReview(input: {pullRequestReviewId: \"R_1\", event: REQUEST_CHANGES}) { clientMutationId } }'"],
   // The run verb's push argv (u4's gitWrite hardening + u18b's push), joined as u18b checks it.
   [
     "git -c safe.bareRepository=explicit -c core.fsmonitor=false -c push.followTags=false push origin HEAD:refs/heads/stamity/2026-10-16_x",
@@ -598,6 +642,40 @@ describe("personOnlyVerdict — the branch context decides an implied destinatio
   it("reads a current branch given as a full ref", () => {
     const ctx = { defaultBranches: [], currentBranch: "refs/heads/main", tags: [] };
     expect(personOnlyVerdict("git push", ctx)).toMatchObject({ deny: true, rule: "push-default" });
+  });
+});
+
+describe("personOnlyVerdict — the local tags are read only for a push refspec (review/218)", () => {
+  /** A context whose tags count each read, as the guard's reads them from disk on access. */
+  const counting = (): { ctx: Ctx; reads: () => number } => {
+    let reads = 0;
+    const ctx = {
+      defaultBranches: [],
+      currentBranch: "feat/x",
+      get tags(): readonly string[] {
+        reads += 1;
+        return ["v1.0.0"];
+      },
+    };
+    return { ctx, reads: () => reads };
+  };
+
+  it.each([["ls -la"], ["git status"], ["git fetch origin"], ["gh pr view 3"], ["git push"], ["git push origin refs/tags/v2"]])(
+    "reads no tag for %j",
+    (command) => {
+      const { ctx, reads } = counting();
+      personOnlyVerdict(command, ctx);
+      expect(reads()).toBe(0);
+    },
+  );
+
+  it("reads them once for a refspec that may name one, and denies the tag it names", () => {
+    const branchPush = counting();
+    expect(personOnlyVerdict("git push origin feat/x feat/y", branchPush.ctx)).toEqual({ deny: false });
+    expect(branchPush.reads()).toBe(1);
+    const tagPush = counting();
+    expect(personOnlyVerdict("git push origin v1.0.0", tagPush.ctx)).toMatchObject({ deny: true, rule: "push-tags" });
+    expect(tagPush.reads()).toBe(1);
   });
 });
 
@@ -700,6 +778,64 @@ describe("unattendedPushVerdict", () => {
     ["git --config-env=core.fsmonitor=HOOK status"],
     ["GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.fsmonitor GIT_CONFIG_VALUE_0='git push origin x' git status"],
     ["export GIT_CONFIG_PARAMETERS=\"'core.fsmonitor=git push'\"; git status"],
+    // Closing or reopening a pull request, the REST twin's `PATCH pulls/<n>` (review/213).
+    ["gh pr close 3"],
+    ["gh pr reopen 3"],
+    ["gh -R o/r pr close 3 -c done"],
+    // A program-valued git variable set on a git call's line (review/208): each of the nine, and the spellings the
+    // reading handles — after a wrapper, quoted or escaped, after `export`, inside a nested line, PowerShell's `$env:`
+    // and `${env:…}`, another letter case, and after the git call.
+    ["GIT_EDITOR='git push origin x' git commit"],
+    ["GIT_SEQUENCE_EDITOR='sh -c \"git push origin x\"' git rebase -i main"],
+    ["GIT_SSH_COMMAND='sh -c \"git push origin x\"' git fetch"],
+    ["GIT_SSH=/tmp/ssh git fetch"],
+    ["GIT_EXTERNAL_DIFF=/tmp/diff git diff"],
+    ["GIT_ASKPASS=/tmp/askpass git fetch"],
+    ["GIT_PAGER='git push origin x' git --paginate log"],
+    ["GIT_PROXY_COMMAND=/tmp/proxy git fetch"],
+    ["GIT_EXEC_PATH=/tmp/bin git status"],
+    ["env GIT_EDITOR=/tmp/e git commit"],
+    ["sudo -u root GIT_EDITOR=/tmp/e git commit"],
+    ["env GIT_EDI''TOR=/tmp/e git commit"],
+    ["env $'GIT\\x5fEDITOR=/tmp/e' git commit"],
+    ["export GIT_EDITOR=/tmp/e; git commit"],
+    ["export GIT_EDI\"\"TOR=/tmp/e; git commit"],
+    ["sh -c 'GIT_EDITOR=/tmp/e git commit'"],
+    ["$env:GIT_EDITOR = '/tmp/e'; git commit"],
+    ["${env:GIT_SSH_COMMAND}='/tmp/s'; git fetch"],
+    ["git_editor=/tmp/e git commit"],
+    ["git status; GIT_EDITOR=/tmp/e git commit"],
+    // A write of a git remote (review/209): each `git remote` write, `rm` (git's alias for `remove`) and an option
+    // before the subcommand among them, and each `git config` write of a `remote.*` key or section, in the option
+    // forms and the subcommands, any scope or file, and an edit of the file, which can write any key.
+    ["git remote add fork https://example.com/r.git"],
+    ["git remote set-url origin https://example.com/r.git"],
+    ["git remote set-url --push origin https://example.com/r.git"],
+    ["git remote -v set-url origin https://example.com/r.git"],
+    ["git remote rename origin old"],
+    ["git remote remove origin"],
+    ["git remote rm origin"],
+    ["git remote set-head origin -a"],
+    ["git remote set-branches origin main"],
+    ["git config remote.origin.url https://example.com/r.git"],
+    ["git config set remote.origin.url https://example.com/r.git"],
+    ["git config set --append remote.origin.pushurl https://example.com/r.git"],
+    ["git config --add remote.origin.pushurl https://example.com/r.git"],
+    ["git config --replace-all remote.origin.url https://example.com/r.git"],
+    ["git config --unset remote.origin.pushurl"],
+    ["git config unset remote.origin.url"],
+    ["git config --rename-section remote.origin remote.old"],
+    ["git config --rename-section old remote.origin"],
+    ["git config rename-section remote.origin remote.old"],
+    ["git config --remove-section remote.origin"],
+    ["git config remove-section remote.origin"],
+    ["git config --global remote.pushDefault fork"],
+    ["git config -f .git/config remote.origin.url https://example.com/r.git"],
+    ["git config --file=.git/config remote.origin.url https://example.com/r.git"],
+    ["git config --type=bool remote.origin.mirror true"],
+    ["git config --edit"],
+    ["git config -e"],
+    ["git config edit --local"],
   ])("denies %j, naming the run verbs", (command) => {
     const verdict = unattendedPushVerdict(command);
     expect(verdict.deny).toBe(true);
@@ -761,20 +897,73 @@ describe("unattendedPushVerdict", () => {
     ["git -c color.ui=never status"],
     ["git -c user.name=x commit -m m"],
     ["git -c user.email=x@example.com -c core.quotePath=false -c advice.detachedHead=false status"],
+    // review/213's twins: the pull request read, listed, checked and commented on.
+    ["gh pr list --state closed"],
+    ["gh pr checks 3"],
+    ["gh pr comment 3 --body-file reply.md"],
+    // review/208's twins: a variable git reads that runs nothing, one unset, a program variable on a line with no git
+    // call, and a commit message naming one.
+    ["GIT_TRACE=1 git status"],
+    ["GIT_TERMINAL_PROMPT=0 git fetch origin"],
+    ["env -u GIT_EDITOR git commit -m m"],
+    ["GIT_EDITOR=/tmp/e npm test"],
+    ["git commit -m 'GIT_EDITOR is left unset'"],
+    // review/209's twins: every `git remote` read, and `git config` reads of a `remote.*` key, writes of another key,
+    // and a value that merely starts as a remote key does.
+    ["git remote"],
+    ["git remote -v"],
+    ["git remote get-url origin"],
+    ["git remote get-url --push origin"],
+    ["git remote show origin"],
+    ["git remote update"],
+    ["git remote prune origin"],
+    ["git config remote.origin.url"],
+    ["git config --get remote.origin.url"],
+    ["git config get remote.origin.url"],
+    ["git config --get-all remote.origin.fetch"],
+    ["git config --get-regexp '^remote\\.'"],
+    ["git config -f .git/config --get remote.origin.url"],
+    ["git config --list"],
+    ["git config -l"],
+    ["git config list --show-origin"],
+    ["git config user.name bot"],
+    ["git config set user.email bot@example.com"],
+    ["git config user.email remote.bot@example.com"],
   ])("allows %j", (command) => {
     expect(unattendedPushVerdict(command)).toEqual({ deny: false });
   });
 });
 
 describe("CLAUDE_DENY_ROWS", () => {
-  it("is a list of Claude Code prefix rules", () => {
-    expect(CLAUDE_DENY_ROWS.length).toBeGreaterThan(10);
-    for (const row of CLAUDE_DENY_ROWS) expect(row).toMatch(/^Bash\([^()]+:\*\)$/);
+  /** The prefix rows the shell guard's verdict reads, and the MCP tool rows no shell verdict sees (review/214). */
+  const BASH_ROWS = CLAUDE_DENY_ROWS.filter((row) => row.startsWith("Bash("));
+  const MCP_ROWS = CLAUDE_DENY_ROWS.filter((row) => !row.startsWith("Bash("));
+
+  it("is a list of Claude Code prefix rules, then the GitHub MCP server's write tools by name", () => {
+    expect(BASH_ROWS.length).toBeGreaterThan(10);
+    for (const row of BASH_ROWS) expect(row).toMatch(/^Bash\([^()]+:\*\)$/);
     expect(new Set(CLAUDE_DENY_ROWS).size).toBe(CLAUDE_DENY_ROWS.length);
+    // Claude Code's MCP permission-rule form, `mcp__<server>__<tool>`: the server's merge and branch-write tools, one
+    // row each, after every prefix row (review/214, the 03:12Z sign-off).
+    expect(MCP_ROWS).toEqual([
+      "mcp__github__merge_pull_request",
+      "mcp__github__push_files",
+      "mcp__github__create_or_update_file",
+      "mcp__github__delete_file",
+      "mcp__github__update_pull_request_branch",
+    ]);
+    expect(CLAUDE_DENY_ROWS.slice(BASH_ROWS.length)).toEqual(MCP_ROWS);
+  });
+
+  it("names the GitHub MCP server by the key the engine writes it under", () => {
+    // A row naming another server would match no tool the client surfaces: the key is the platform server's catalog id.
+    expect(PLATFORM_MCP_SERVER.github).toBe("github");
+    expect(CURATED_MCP_SERVERS.github?.id).toBe("github");
+    for (const row of MCP_ROWS) expect(row.split("__")[1]).toBe(PLATFORM_MCP_SERVER.github);
   });
 
   it("holds only prefixes the shell guard also denies, so the two layers agree", () => {
-    for (const row of CLAUDE_DENY_ROWS) {
+    for (const row of BASH_ROWS) {
       const prefix = row.slice("Bash(".length, -":*)".length);
       expect(personOnlyVerdict(prefix, ON_FEATURE), row).toMatchObject({ deny: true });
     }
@@ -782,7 +971,7 @@ describe("CLAUDE_DENY_ROWS", () => {
 
   it("reaches every rule a prefix can express", () => {
     const rules = new Set(
-      CLAUDE_DENY_ROWS.map((row) => {
+      BASH_ROWS.map((row) => {
         const verdict = personOnlyVerdict(row.slice("Bash(".length, -":*)".length), ON_FEATURE);
         return verdict.deny ? verdict.rule : "none";
       }),
@@ -806,7 +995,7 @@ describe("CLAUDE_DENY_ROWS", () => {
       "git push origin HEAD:refs/heads/master-x",
       "git push -u origin main-feature",
     ];
-    for (const row of CLAUDE_DENY_ROWS) {
+    for (const row of BASH_ROWS) {
       const prefix = row.slice("Bash(".length, -":*)".length);
       for (const command of allowed) expect(command.startsWith(prefix), `${row} over ${command}`).toBe(false);
     }

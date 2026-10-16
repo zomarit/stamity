@@ -1722,14 +1722,24 @@ describe("the person-only deny rows (u20-hook-emission, REQ-FLOW-102)", () => {
 
     expect(CLAUDE_DENY_ROWS.length).toBeGreaterThan(10);
     expect(deny).toEqual([...CLAUDE_DENY_ROWS]);
-    // The `Bash(<prefix>:*)` form the repository's tests pin for a Claude Code prefix rule.
-    for (const row of deny) expect(row).toMatch(/^Bash\([^()]+:\*\)$/);
+    // The `Bash(<prefix>:*)` form the repository's tests pin for a Claude Code prefix rule, then the GitHub MCP
+    // server's merge and branch-write tools in Claude Code's MCP rule form, one row each (review/214).
+    const mcp = deny.filter((row) => !row.startsWith("Bash("));
+    for (const row of deny.slice(0, deny.length - mcp.length)) expect(row).toMatch(/^Bash\([^()]+:\*\)$/);
+    expect(mcp).toEqual([
+      "mcp__github__merge_pull_request",
+      "mcp__github__push_files",
+      "mcp__github__create_or_update_file",
+      "mcp__github__delete_file",
+      "mcp__github__update_pull_request_branch",
+    ]);
   });
 
   it("holds only rows the shell guard also denies, on a feature branch, so the two layers agree", async () => {
     const { rows } = await planned({ selection: EMPTY_SELECTION });
     const ctx = { defaultBranches: ["main"], currentBranch: "feature", tags: [] };
-    const deny = settingsOf(rows).permissions?.deny ?? [];
+    // The prefix rows; the MCP tool rows name no shell line (review/214).
+    const deny = (settingsOf(rows).permissions?.deny ?? []).filter((row) => row.startsWith("Bash("));
     expect(deny.length).toBeGreaterThan(10);
     for (const row of deny) {
       const prefix = row.slice("Bash(".length, -":*)".length);

@@ -122,6 +122,11 @@ const MATRIX: readonly (readonly [command: string, rule: string | null])[] = [
   ["git bisect run git status", null],
   ["Invoke-Command -ScriptBlock {git push --force origin feat/x}", "force-push"],
   ["Invoke-Command -ScriptBlock {git status}", null],
+  // A close deleting the head branch (review/207) and a review approval (review/210), each beside its neighbour.
+  ["gh pr close 3 --delete-branch", "push-delete"],
+  ["gh pr close 3", null],
+  ["gh pr review 3 --approve", "pr-merge"],
+  ["gh pr review 3 --comment -b lgtm", null],
 ];
 
 describe("the person-only guard, on every client", () => {
@@ -170,6 +175,62 @@ describe("the person-only guard, on every client", () => {
       return tool === "claude" || tool === "codex" ? result.status : String(result.stdout);
     });
     for (const decision of decisions) expect(decision).toEqual(tool === "claude" || tool === "codex" ? 2 : expect.stringContaining("deny"));
+  });
+});
+
+describe("Cursor's beforeShellExecution with no command string (review/215)", () => {
+  it("refuses it as a shell call it cannot read, never as a call that is no shell call", async () => {
+    const guard = await placeGuard("cursor");
+    const shapes = [
+      { hook_event_name: "beforeShellExecution", cwd: "." },
+      { hook_event_name: "beforeShellExecution", command: ["git", "push", "--force"], cwd: "." },
+      { hook_event_name: "beforeShellExecution", tool_name: "Shell", tool_input: { command: "git status" } },
+      { cwd: "." },
+      {},
+    ];
+    for (const shape of shapes) {
+      const out = JSON.parse(String(run(guard, JSON.stringify(shape)).stdout).trim()) as Record<string, string>;
+      expect(out.permission, JSON.stringify(shape)).toBe("deny");
+      expect(out.user_message, JSON.stringify(shape)).toContain("NO_COMMAND");
+    }
+    // Non-degenerate: the same event carrying its command string is read and allowed.
+    expect(decide("cursor", guard, "git status")).toEqual({ deny: false });
+  });
+});
+
+describe("the local tags read only for a push (review/218)", () => {
+  it("walks refs/tags for a push refspec alone", async () => {
+    const guard = await placeGuard("claude", { ".git/refs/tags/v1.0.0": "0".repeat(40) });
+    // Observes the guard's own reads: a preload marks each listing of a `refs/tags` directory on stderr, the ESM named
+    // imports synced to the patched function.
+    await getRepo().seedFiles({
+      "probe.cjs": [
+        "const fs = require('node:fs');",
+        "const { syncBuiltinESMExports } = require('node:module');",
+        "const list = fs.readdirSync;",
+        "fs.readdirSync = function (path, ...rest) {",
+        "  if (String(path).replaceAll('\\\\', '/').endsWith('refs/tags')) process.stderr.write('tags listed\\n');",
+        "  return list.call(this, path, ...rest);",
+        "};",
+        "syncBuiltinESMExports();",
+      ].join("\n"),
+    });
+    const probe = getRepo().path("probe.cjs");
+    const probed = (command: string): { status: number | null; stderr: string } => {
+      const base = { ...process.env };
+      delete base.STAMITY_UNATTENDED;
+      delete base.STAMITY_REPO_ROOT;
+      const result = spawnSync(process.execPath, ["--require", probe, guard], { input: payload("claude", command), encoding: "utf8", env: base });
+      return { status: result.status, stderr: String(result.stderr) };
+    };
+    for (const command of ["ls -la", "git status", "git fetch origin", "git push"]) {
+      expect(probed(command), command).toEqual({ status: 0, stderr: "" });
+    }
+    expect(probed("git push origin feat/x")).toEqual({ status: 0, stderr: "tags listed\n" });
+    const tagPush = probed("git push origin v1.0.0");
+    expect(tagPush.status).toBe(2);
+    expect(tagPush.stderr).toContain("tags listed\n");
+    expect(tagPush.stderr).toContain("push-tags");
   });
 });
 
@@ -560,7 +621,11 @@ describe("the unattended push rule, the mode read from the run records", () => {
     const unattended = [RAW_PUSH, "gh pr create --draft --fill", "gh repo new o/x --source . --push", `pwsh -c '${RAW_PUSH}'`,
       "git -c alias.p=push p origin x", "git p origin x",
       // A configuration pair git can run as a line, on the line or through the environment (the 02:31Z sign-off).
-      "git -c core.fsmonitor='git push origin x' status", "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.sshCommand GIT_CONFIG_VALUE_0=x git fetch"];
+      "git -c core.fsmonitor='git push origin x' status", "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.sshCommand GIT_CONFIG_VALUE_0=x git fetch",
+      // A program-valued git variable (review/208), a remote write in both spellings (review/209), and a close
+      // (review/213).
+      "GIT_SSH_COMMAND='sh -c \"git push origin x\"' git fetch", "git remote set-url origin https://example.com/r.git",
+      "git config remote.origin.url https://example.com/r.git", "gh pr close 3"];
     for (const command of unattended) {
       const source = unattendedPushVerdict(command);
       expect(source.deny, command).toBe(true);
@@ -574,6 +639,11 @@ describe("the unattended push rule, the mode read from the run records", () => {
     expect(decide("claude", guard, RUN_END).deny).toBe(false);
     expect(decide("claude", guard, "git -c color.ui=never status").deny).toBe(false);
     expect(decide("claude", guard, "git -c user.name=x commit -m m").deny).toBe(false);
+    // The twins: a variable that runs nothing, a remote and a remote key read, a pull request read.
+    for (const command of ["GIT_TERMINAL_PROMPT=0 git fetch origin", "git remote get-url origin", "git config --get remote.origin.url", "gh pr view 3"]) {
+      expect(unattendedPushVerdict(command), command).toEqual({ deny: false });
+      expect(decide("claude", guard, command).deny, command).toBe(false);
+    }
   });
 
   it("reads a debug round's record too", async () => {

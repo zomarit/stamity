@@ -5,7 +5,7 @@
  * **Person-only acts** are refused to the main thread on every client, attended
  * or not: a force push, a push of a tag or of the default branch (named, or
  * implied by a refspec-less push or `HEAD` while on it), a remote branch
- * deletion, a tag, a merge, `gh pr ready`, a release, a publish, a secret,
+ * deletion, a tag, a merge or a review approval, `gh pr ready`, a release, a publish, a secret,
  * variable, protection or ruleset write, a write to the repository itself (its
  * default branch, visibility or name, its deletion, archiving or transfer) and a branch
  * rename. {@link personOnlyVerdict} reads a
@@ -14,9 +14,9 @@
  *
  * **While a run is unattended** the run verbs (`stamity run checkpoint`, `run
  * end`) are the only push path: {@link unattendedPushVerdict} refuses any raw
- * `git push` (`git subtree push` among them), `gh pr create` or `gh pr edit`, a `gh repo` form that pushes, and a REST write that moves a
- * branch or a pull request, so the held paths and the last secret scan cannot
- * be stepped around. A reply on a comments endpoint passes. Whether a run is
+ * `git push` (`git subtree push` among them), `gh pr create`, `gh pr edit`, `gh pr close` or `gh pr reopen`, a `gh repo` form that
+ * pushes, a write of a git remote, and a REST write that moves a branch or a pull request, so the held paths and the
+ * last secret scan cannot be stepped around and the run verbs push where the run started. A reply on a comments endpoint passes. Whether a run is
  * unattended is the guard's to read (u14), not this module's.
  *
  * **Embedded as source.** The emitted shell guard (u14) carries both verdicts as
@@ -73,9 +73,15 @@ export const PERSON_ONLY_RULES: readonly PersonOnlyRule[] = [
     id: "push-tags",
     act: "a push of tags (`--tags`, `--follow-tags`, `--mirror`, `--all`, `tag <name>`, a refspec naming a tag: `refs/tags/…`, `tags/…` or a local tag's bare name, a REST or GraphQL tag ref)",
   },
-  { id: "push-delete", act: "a remote branch deletion (`--delete`, `-d`, a `:ref` refspec, a REST or GraphQL ref deletion)" },
+  {
+    id: "push-delete",
+    act: "a remote branch deletion (`--delete`, `-d`, a `:ref` refspec, `gh pr close --delete-branch`, a REST or GraphQL ref deletion)",
+  },
   { id: "tag", act: "creating or deleting a tag (`git tag` beyond listing)" },
-  { id: "pr-merge", act: "merging a pull request (`gh pr merge`, the REST or GraphQL merge)" },
+  {
+    id: "pr-merge",
+    act: "merging a pull request or approving a review of one (`gh pr merge`, `gh pr review --approve`, the REST or GraphQL merge, a REST or GraphQL review with the event `APPROVE`)",
+  },
   { id: "pr-ready", act: "marking a pull request ready for review (`gh pr ready`)" },
   { id: "release", act: "creating, editing or deleting a release (`gh release` beyond list, view, download)" },
   { id: "publish", act: "publishing a package (`npm`, `pnpm`, `yarn`, `bun` publish)" },
@@ -112,8 +118,13 @@ export interface PersonOnlyContext {
  * and so is a push naming the default branch: a row ending in a branch name
  * (`git push origin main`) would also refuse a longer one (`main-feature`) if
  * the prefix matches as a raw string, so no row ends in a name;
- * every row's prefix is one {@link personOnlyVerdict} denies, so the two layers
+ * every `Bash(…)` row's prefix is one {@link personOnlyVerdict} denies, so the two layers
  * never disagree on what is the person's.
+ *
+ * The last rows are the GitHub MCP server's merge and branch-write tools, by name, in
+ * Claude Code's MCP rule form (`mcp__<server>__<tool>`, the server under the `github` key
+ * the engine writes to `.mcp.json`): a merge or a push made as a tool call is no shell
+ * call, so neither the prefix rows nor the shell guard see it (review/214).
  */
 export const CLAUDE_DENY_ROWS: readonly string[] = [
   "Bash(git push --force:*)",
@@ -165,6 +176,11 @@ export const CLAUDE_DENY_ROWS: readonly string[] = [
   "Bash(gh repo delete:*)",
   "Bash(gh repo archive:*)",
   "Bash(gh repo transfer:*)",
+  "mcp__github__merge_pull_request",
+  "mcp__github__push_files",
+  "mcp__github__create_or_update_file",
+  "mcp__github__delete_file",
+  "mcp__github__update_pull_request_branch",
 ];
 
 /**
@@ -381,6 +397,9 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     return { segments, nested };
   }
 
+  /** Each assignment word the reading below skips (`X=v git …`, `env X=v …`), as it decoded it (review/208). */
+  const assigned: string[] = [];
+
   /**
    * Each simple command's words, its program word first and normalized; `sh -c` and `eval` text read too. With `pwsh`,
    * the text is PowerShell's: a PowerShell command string or the Windows command interpreter's rest, whose backslash is
@@ -398,6 +417,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         const word = words[k] ?? "";
         const runner = `${programName(word)} ${words[k + 1] ?? ""}`;
         if (ASSIGNMENT.test(word) || KEYWORDS.has(word)) {
+          if (ASSIGNMENT.test(word)) assigned.push(word);
           k += 1;
         } else if (WRAPPERS.has(programName(word)) || RUNNERS.has(runner)) {
           // A wrapper's options are skipped with their values, so `sudo -u root git …` reads `git` as the program.
@@ -408,6 +428,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
           while (k < words.length) {
             const option = words[k] ?? "";
             if (ASSIGNMENT.test(option)) {
+              assigned.push(option);
               k += 1;
               continue;
             }
@@ -614,8 +635,12 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     ref.replace(/^refs\/heads\//i, "").replace(/^refs\/remotes\/[^/]+\//i, "").toLowerCase();
   const defaults = new Set(["main", "master", ...ctx.defaultBranches.map(branch)]);
   const onDefault = ctx.currentBranch !== null && defaults.has(branch(ctx.currentBranch));
-  const tagNames = new Set(ctx.tags.map((tag) => tag.replace(/^refs\/tags\//i, "").toLowerCase()));
-  const deny = (rule: PersonOnlyRuleId, what: string): PersonOnlyVerdict => ({
+  // The local tags are read the first time a push refspec's side asks (review/218), so the guard, which reads them
+  // from disk on access, reads none for any other call.
+  let tagNames: Set<string> | null = null;
+  const isTagName = (name: string): boolean =>
+    (tagNames ??= new Set(ctx.tags.map((tag) => tag.replace(/^refs\/tags\//i, "").toLowerCase()))).has(name);
+  const deny =(rule: PersonOnlyRuleId, what: string): PersonOnlyVerdict => ({
     deny: true,
     rule,
     reason:
@@ -693,7 +718,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     // A side naming a tag (`refs/tags/…`, `tags/…`, or a bare local tag name) pushes one: git gives a bare
     // destination the source's `refs/tags/` namespace, so `v1:x` and `refs/tags/v1:x` create the remote tag `x`.
     const namesTag = (side: string): boolean =>
-      side !== "" && (/^(refs\/)?tags\//i.test(side) || tagNames.has(side.toLowerCase()));
+      side !== "" && (/^(refs\/)?tags\//i.test(side) || isTagName(side.toLowerCase()));
     const sides = (spec: string): string[] => {
       const bare = spec.replace(/^\+/, "");
       const colon = bare.indexOf(":");
@@ -755,7 +780,29 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
 
   function ghVerdict(cmd: string[]): PersonOnlyVerdict | null {
     const [group, sub] = ghPositionals(cmd);
+    /**
+     * Whether the call sets gh's boolean flag `long` (`--x`, or `--x=<value>` other than a false spelling) or its
+     * letter `short`, alone or in a cluster before a letter in `valued`, whose value the rest of the cluster is.
+     */
+    const flag = (long: string, short: string, valued: string): boolean =>
+      cmd.some((word) => {
+        if (word === long || word.startsWith(`${long}=`)) return !/^(?:false|f|0)$/i.test(word.slice(long.length + 1));
+        if (!/^-[^-]/.test(word)) return false;
+        for (const letter of word.slice(1)) {
+          if (letter === short) return true;
+          if (valued.includes(letter)) return false;
+        }
+        return false;
+      });
     if (group === "pr" && sub === "merge") return deny("pr-merge", "Merging a pull request (`gh pr merge`)");
+    // Closing with `--delete-branch` deletes the pull request's head branch on the remote (review/207).
+    if (group === "pr" && sub === "close" && flag("--delete-branch", "d", "c")) {
+      return deny("push-delete", "A remote branch deletion (`gh pr close --delete-branch`)");
+    }
+    // An approval counts toward a required review, as a merge's own gate (review/210).
+    if (group === "pr" && sub === "review" && flag("--approve", "a", "bF")) {
+      return deny("pr-merge", "Approving a pull request review (`gh pr review --approve`)");
+    }
     if (group === "pr" && sub === "ready") return deny("pr-ready", "Marking a pull request ready (`gh pr ready`)");
     if (group === "release" && sub !== undefined && !["list", "ls", "view", "download"].includes(sub)) {
       return deny("release", "A release write (`gh release`)");
@@ -879,6 +926,18 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       if (/^graphql$/i.test(path)) {
         if (/\b(mergePullRequest|enablePullRequestAutoMerge)\b/.test(text)) return deny("pr-merge", "A GraphQL merge");
         if (/\bmarkPullRequestReadyForReview\b/.test(text)) return deny("pr-ready", "A GraphQL ready-for-review");
+        // A review added or submitted with the event `APPROVE` (review/210); an event the line cannot show (a variable,
+        // a call it cannot find) reads as one, and a review with no event is the API's pending one.
+        if (/\b(addPullRequestReview|submitPullRequestReview)\b/.test(text)) {
+          const reviews = [...calls("addPullRequestReview", "event"), ...calls("submitPullRequestReview", "event")];
+          const variables = queries.some((query) => mask(query).includes("$"));
+          if (
+            reviews.length === 0 ||
+            reviews.some((events) => (events.length === 0 && variables) || events.some((event) => event === null || /^approve$/i.test(event)))
+          ) {
+            return deny("pr-merge", "A GraphQL review approval, or a review whose event the line cannot show");
+          }
+        }
         if (/\bcreateCommitOnBranch\b/.test(text) && callsLand("createCommitOnBranch", "branchName")) {
           return deny("push-default", "A GraphQL commit to the default branch");
         }
@@ -916,6 +975,11 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       if (!write) continue;
       if (/^pulls\/[^/]+\/merge(\/|$)/i.test(path) || /(^|\/)merge-async(\/|$)/i.test(path)) {
         return deny("pr-merge", `A REST merge (${shown})`);
+      }
+      // A review created, or a pending one submitted, with the event `APPROVE` (review/210); an event the line shows
+      // but cannot place reads as one, and none shown is the API's pending review.
+      if (/^pulls\/[^/]+\/reviews(\/[^/]+\/events)?$/i.test(path) && fields("event").some((event) => event === null || /^approve$/i.test(event.trim()))) {
+        return deny("pr-merge", `A REST review approval (${shown})`);
       }
       if (/^branches\/.+\/protection(\/|$)/i.test(path) || /^rulesets(\/|$)/i.test(path)) {
         return deny("protection", `A protection or ruleset write (${shown})`);
@@ -992,10 +1056,13 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
 
 /**
  * Whether `command` steps around the run verbs while a run is unattended
- * (REQ-FLOW-120): any `git push` or `git subtree push`, `gh pr create` or `gh pr edit`, `gh repo sync` or
- * `gh repo create --push` (or its alias `gh repo new`), a git call defining an alias (`-c alias.<name>=…`) or
- * naming a subcommand that is not a git builtin (an alias, a computed name) outside the read and setup forms of
- * `git lfs` (fetch, pull, install, ls-files, env, status) and `git submodule` (status, init, update, sync), and a `gh
+ * (REQ-FLOW-120): any `git push` or `git subtree push`, `gh pr create`, `gh pr edit`, `gh pr close` or `gh pr
+ * reopen`, `gh repo sync` or `gh repo create --push` (or its alias `gh repo new`), a git call defining an alias
+ * (`-c alias.<name>=…`) or naming a subcommand that is not a git builtin (an alias, a computed name) outside the read
+ * and setup forms of `git lfs` (fetch, pull, install, ls-files, env, status) and `git submodule` (status, init,
+ * update, sync), a git call on a line that sets one of git's program-valued variables (`GIT_EDITOR`,
+ * `GIT_SSH_COMMAND`, …), a `git remote` write (`add`, `set-url`, `rename`, `remove`, `set-head`, `set-branches`) or a
+ * `git config` write of a `remote.*` key, and a `gh
  * api`, `curl` or `wget` write (POST, PATCH, PUT, DELETE) on a repository's
  * `pulls` or `pulls/<n>`, on `contents/…`, on `git/` refs or objects, or on
  * `merges`, with their GraphQL twins. A reply on `pulls/<n>/comments` or
@@ -1200,6 +1267,9 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
     return { segments, nested };
   }
 
+  /** Each assignment word the reading below skips (`X=v git …`, `env X=v …`), as it decoded it (review/208). */
+  const assigned: string[] = [];
+
   /**
    * Each simple command's words, its program word first and normalized; `sh -c` and `eval` text read too. With `pwsh`,
    * the text is PowerShell's: a PowerShell command string or the Windows command interpreter's rest, whose backslash is
@@ -1217,6 +1287,7 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
         const word = words[k] ?? "";
         const runner = `${programName(word)} ${words[k + 1] ?? ""}`;
         if (ASSIGNMENT.test(word) || KEYWORDS.has(word)) {
+          if (ASSIGNMENT.test(word)) assigned.push(word);
           k += 1;
         } else if (WRAPPERS.has(programName(word)) || RUNNERS.has(runner)) {
           // A wrapper's options are skipped with their values, so `sudo -u root git …` reads `git` as the program.
@@ -1227,6 +1298,7 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
           while (k < words.length) {
             const option = words[k] ?? "";
             if (ASSIGNMENT.test(option)) {
+              assigned.push(option);
               k += 1;
               continue;
             }
@@ -1474,8 +1546,65 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
   const CONFIG_KEYS = /^(?:color\..+|advice\..+|core\.quotepath|init\.defaultbranch|user\.name|user\.email)$/i;
   /** An assignment of the variables through which git reads configuration pairs from the environment. */
   const CONFIG_ENVIRONMENT = /\bGIT_CONFIG_(?:COUNT|KEY_\d+|PARAMETERS)\s*=/i;
+  /** git's environment variables whose value is a program git runs (review/208): twins of the `-c` keys refused below. */
+  const PROGRAM_VARIABLES =
+    "GIT_EDITOR|GIT_SEQUENCE_EDITOR|GIT_SSH_COMMAND|GIT_SSH|GIT_EXTERNAL_DIFF|GIT_ASKPASS|GIT_PAGER|GIT_PROXY_COMMAND|GIT_EXEC_PATH";
+  /** A word, as the reading decoded it, assigning one: before a program, after `env` or `sudo`, after `export`. */
+  const PROGRAM_WORD = new RegExp(`^(?:${PROGRAM_VARIABLES})=`, "i");
+  /** The line's own text assigning one, PowerShell's `$env:` and `${env:…}` among the spellings. */
+  const PROGRAM_TEXT = new RegExp(`\\b(?:${PROGRAM_VARIABLES})\\}?\\s*=`, "i");
+  /** `git remote`'s writes (review/209): each changes what a remote, the run verbs' `origin` among them, names. */
+  const REMOTE_WRITES = new Set(["add", "set-url", "rename", "remove", "rm", "set-head", "set-branches"]);
 
-  for (const cmd of commandsOf(command, 0, false)) {
+  /**
+   * Whether a `git config` call writes a `remote.*` key or section (review/209): a set, an add, an unset, a section
+   * renamed or removed, in the option forms or the subcommands, and an edit of the file, which can write any key.
+   */
+  function writesRemote(args: string[]): boolean {
+    const positionals: string[] = [];
+    let write = false;
+    let read = false;
+    let edit = false;
+    let rename = false;
+    for (let j = 0; j < args.length; j += 1) {
+      const arg = args[j] ?? "";
+      const name = (arg.split("=")[0] ?? "").toLowerCase();
+      if (arg === "--") {
+        positionals.push(...args.slice(j + 1));
+        break;
+      }
+      if (["--add", "--replace-all", "--unset", "--unset-all", "--rename-section", "--remove-section"].includes(name)) {
+        write = true;
+        rename ||= name === "--rename-section";
+      } else if (name === "--edit") edit = true;
+      else if (["--get", "--get-all", "--get-regexp", "--get-urlmatch", "--get-color", "--get-colorbool", "--list"].includes(name)) {
+        read = true;
+      } else if (["--file", "--blob", "--type", "--value", "--comment", "--default", "--url"].includes(name)) {
+        if (!arg.includes("=")) j += 1;
+      } else if (/^-[^-]/.test(arg)) {
+        // A short cluster: `-e` edits, `-l` lists, and `-f` or `-t` takes the rest, or the next word, as its value.
+        for (let c = 1; c < arg.length; c += 1) {
+          const letter = arg[c] ?? "";
+          if (letter === "e") edit = true;
+          if (letter === "l") read = true;
+          if (letter === "f" || letter === "t") {
+            if (c === arg.length - 1) j += 1;
+            break;
+          }
+        }
+      } else if (!arg.startsWith("-")) positionals.push(arg);
+    }
+    const first = (positionals[0] ?? "").toLowerCase();
+    const sub = ["get", "list", "set", "unset", "rename-section", "remove-section", "edit"].includes(first) ? first : "";
+    if (edit || sub === "edit") return true;
+    const rest = sub === "" ? positionals : positionals.slice(1);
+    const keys = rest.slice(0, rename || sub === "rename-section" ? 2 : 1);
+    const writes = write || ["set", "unset", "rename-section", "remove-section"].includes(sub) || (sub === "" && !read && rest.length > 1);
+    return writes && keys.some((key) => /^remote(\.|$)/i.test(key));
+  }
+
+  const commands = commandsOf(command, 0, false);
+  for (const cmd of commands) {
     const program = cmd[0] ?? "";
     if (program === "git") {
       const { sub, args, config } = gitParts(cmd);
@@ -1501,6 +1630,16 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
       if (CONFIG_ENVIRONMENT.test(command)) {
         return deny("A git call on a line that sets git's configuration through the environment (`GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_<n>`, `GIT_CONFIG_PARAMETERS`)");
       }
+      // The environment twins of those keys (review/208): a variable whose value git runs as a program, set anywhere on
+      // the line, as the reading decodes it (a quoted or escaped word, after a wrapper, inside a nested line) or as
+      // the text spells it (`export`, PowerShell's `$env:`).
+      if (PROGRAM_TEXT.test(command) || [...assigned, ...commands.flat()].some((word) => PROGRAM_WORD.test(word))) {
+        return deny("A git call on a line that sets a program git runs through the environment (`GIT_EDITOR`, `GIT_SSH_COMMAND`, `GIT_EXEC_PATH`, …)");
+      }
+      // A remote repointed mid-run sends the run verbs' push somewhere the pre-flight never proved (review/209).
+      const remoteForm = sub === "remote" ? (args.find((word) => !word.startsWith("-")) ?? "").toLowerCase() : "";
+      if (REMOTE_WRITES.has(remoteForm)) return deny(`A \`git remote ${remoteForm}\`, a write of a remote`);
+      if (sub === "config" && writesRemote(args)) return deny("A `git config` write of a `remote.*` key");
       // `git lfs` and `git submodule` pass in their read and setup forms; any other of theirs (`lfs push`,
       // `submodule foreach`, which runs a line) is refused as an unknown subcommand is (review/187).
       const forms = READ_FORMS.get(sub);
@@ -1515,7 +1654,8 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
     let http = program === "curl" || program === "wget";
     if (program === "gh") {
       const [group, sub] = ghPositionals(cmd);
-      if (group === "pr" && (sub === "create" || sub === "new" || sub === "edit")) return deny(`\`gh pr ${sub}\``);
+      // Closing and reopening are the REST twin's `PATCH pulls/<n>` (review/213).
+      if (group === "pr" && ["create", "new", "edit", "close", "reopen"].includes(sub ?? "")) return deny(`\`gh pr ${sub}\``);
       if (group === "repo" && sub === "sync") return deny("`gh repo sync`");
       // `gh repo create --source <dir> --push` runs `git push` itself, as `repo sync` does (review/109); `new` is gh's
       // alias for `create` (review/129).

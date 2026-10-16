@@ -216,8 +216,16 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // (review/128, build/75), a percent-encoded path (build/76), a place in a
   // program word holding a line (review/153), and refuses an unattended git
   // alias or non-builtin subcommand (the 01:50Z sign-off). × 1.25 =
-  // 101,357.5 / 2,782.5, rounded up to 101,376 / 2,790.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 101_376, lines: 2_790 },
+  // 101,357.5 / 2,782.5, rounded up to 101,376 / 2,790. Re-sized 2026-10-16
+  // (review/219) from a fresh measurement on the whole-branch guard round's
+  // tree (base 48e1520b), the same way: 99,579 bytes (cursor, generated) /
+  // 2,568 lines (claude and codex, generated), 98% of the old row, because the
+  // later guard rounds grew the embedded verdicts past the 81,086 the row was
+  // set from (the review read 91,741 in the goldens at f8b7f57a) and this round adds a
+  // review approval, a close deleting a branch, git's program-valued variables,
+  // the remote writes, Cursor's payload with no command and the tags read only
+  // for a push. × 1.25 = 124,473.75 / 3,210, rounded up to 124,928 / 3,210.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 124_928, lines: 3_210 },
 };
 
 /** One generated script, ready for an adapter to place and register. */
@@ -3113,9 +3121,9 @@ function guardDecisionOutput(tool: Tool): string {
  * elsewhere is data), the nearest `.git` above each (a linked worktree's
  * `gitdir:` pointer followed). Each place gives `HEAD` from
  * its git dir, the default branch from `refs/remotes/origin/HEAD` and the local
- * tags from `refs/tags/` and `packed-refs` in its common dir, and the verdict
- * runs once per place. Where `HEAD` cannot be read (a reftable repository's
- * placeholder among it), an implied destination
+ * tags from `refs/tags/` and `packed-refs` in its common dir (read only when a
+ * push refspec asks for them), and the verdict runs once per place. Where
+ * `HEAD` cannot be read (a reftable repository's placeholder among it), an implied destination
  * counts as the default branch; `main` and `master` always count. The mode comes
  * off the run records, read only for a call the unattended rule would refuse:
  * unattended when any of the {@link GUARD_RUNS_READ_MAX} newest run folders,
@@ -3126,7 +3134,8 @@ function guardDecisionOutput(tool: Tool): string {
  * A command naming `gate preflight` that the guard allows writes
  * `{ "at": <ISO> }` to {@link PREFLIGHT_CANARY_FILE}, the pre-flight's proof
  * that hooks loaded. A call that is not a shell call is allowed at once; a
- * shell call the guard cannot read, or a fault while deciding one, is refused.
+ * shell call the guard cannot read (a payload naming no tool, Cursor's, with no
+ * command string among them), or a fault while deciding one, is refused.
  */
 export function buildPersonOnlyGuardScript(opts: { tool: Tool; layout: HookScriptLayout }): string {
   const extra = repoRootImports(opts.layout);
@@ -3567,10 +3576,15 @@ function contextsOf(command, cwd) {
     const detached = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/i.test(head ?? "");
     const origin = dirs === null ? null : gitText(join(dirs.commonDir, "refs", "remotes", "origin", "HEAD"));
     const defaultBranches = origin !== null && origin.startsWith("ref: refs/remotes/origin/") ? [origin.slice(25)] : [];
+    let tags = null;
     contexts.set(key, {
       currentBranch: branch !== ".invalid" ? branch : detached ? null : (defaultBranches[0] ?? "main"),
       defaultBranches,
-      tags: dirs === null ? [] : localTags(dirs.commonDir),
+      // Read the first time the verdict asks, which only a push refspec does (review/218): no other call reads a tag.
+      get tags() {
+        tags ??= dirs === null ? [] : localTags(dirs.commonDir);
+        return tags;
+      },
     });
   }
   return [...contexts.values()];
@@ -3671,8 +3685,12 @@ function unattendedBy(root) {
 
 /** The shell command a payload carries; null when the call is not a shell call. */
 function shellCommand(payload) {
-  // Cursor's beforeShellExecution names the command at the top level.
-  if (typeof payload.command === "string" && payload.tool_name === undefined) return payload.command;
+  // Cursor's beforeShellExecution names the command at the top level and no tool: every such payload is a shell call,
+  // so one with no command string is one this guard cannot read, never one that is not a shell call (review/215).
+  if (payload.tool_name === undefined || payload.hook_event_name === "beforeShellExecution") {
+    if (typeof payload.command === "string") return payload.command;
+    throw Object.assign(new Error("no command"), { code: "NO_COMMAND" });
+  }
   if (!SHELL_TOOLS.has(payload.tool_name)) return null;
   const input = payload.tool_input;
   const command = input !== null && typeof input === "object" ? input.command : undefined;
