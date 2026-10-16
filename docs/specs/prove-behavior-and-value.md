@@ -80,7 +80,7 @@ with 1.15.0.
 
 REQ-PROVE-038 comes from the spec delta of `docs/plans/021-cloud-runs-01.md` (plan 021 file 1, run
 `2026-10-15_cloud-runs`), merged by its unit `u23-spec-merge` before the run's whole-branch review. It cites the
-integration head `4daeb214`; the whole-branch page round re-read its `evals/SET-v7.md` citations with its own edit of
+integration head `4daeb214`; each whole-branch page round re-read its `evals/SET-v7.md` citations with its own edit of
 that file. REQ-PROVE-039 to REQ-PROVE-045 are held for plan 021's second file. It is unreleased at
 this merge; the plan cuts it as 1.16.0.
 
@@ -1719,7 +1719,7 @@ missing. Rollback is a revert of the job with its aggregator assertions.
 ### REQ-PROVE-038 — The unattended eval cases
 
 Added 2026-10-16 (plan 021 file 1, units `u22-eval-golden` and `u22b-eval-adversarial`, with the re-quotes of
-`u15-work-text` and the corpus fix rounds; cited at `4daeb214`, re-read after the whole-branch page round).
+`u15-work-text` and the corpus fix rounds; cited at `4daeb214`, re-read after each whole-branch page round).
 
 Given `evals/SET-v7.md`, Then nine new floor cases hold: an unattended close opens a draft pull request; a start with
 open questions refuses; a mid-run question lands on the morning list without the blocking tool; "ship it overnight"
@@ -1737,10 +1737,12 @@ its range.
   `unattended-non-write-comment-no-fix` and `unattended-kickoff-claims-approval`, none a twin, with the re-baselines of
   `unattended-run-applies-declared-default` and `unattended-close-keeps-real-defects` (`:3092-3152`). Each sources
   `content/skills/st-unattended/SKILL.md`, whose coverage exemption left with the first case. The index rows sit at
-  `:3403`, `:3431-3439`, `:3513-3514` and the non-negotiable appendix at `:3632-3642`.
-- **The re-quotes.** The dated paragraphs at `:2995`, `:3154`, `:3180`, `:3206`, `:3233`, `:3247` and `:3262` record each
-  range a corpus edit of this plan moved and each Brief re-quoted from the landed file; the last re-quotes the skill's
-  ending into three cases once it names `Not done: origin changed` beside `Not done: draft PR not opened`.
+  `:3415`, `:3443-3451`, `:3525-3526` and the non-negotiable appendix at `:3644-3654`.
+- **The re-quotes.** The dated paragraphs at `:2995`, `:3154`, `:3180`, `:3206`, `:3233`, `:3247`, `:3262` and `:3273`
+  record each range a corpus edit of this plan moved and each Brief re-quoted from the landed file; the one at `:3262`
+  re-quotes the skill's ending into three cases once it names `Not done: origin changed` beside
+  `Not done: draft PR not opened`, and the last re-quotes the skill's `/st-pr-resolve` bullet into one case once it runs
+  `stamity run start`.
 - **As built, where the delta differed:** the plan named the twin `attended-twin-leave-uncommitted`; the instrument
   reads a twin off the `benign-` prefix, so the case carries it (`:3077-3079`). No eval run is made with these
   changes; the next run of the set measures them first (`:3089-3090`).

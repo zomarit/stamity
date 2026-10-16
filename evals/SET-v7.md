@@ -3270,6 +3270,18 @@ B / A, claim, floor tag, threshold or roster count moves, so the carried tallies
 census below hold. The three cases move their quotes, so under hard trigger 1 each re-measures. The
 dated citations above stay as they were.
 
+**`/st-pr-resolve`'s origin pin, one case re-quoted, 2026-10-16 (run 2026-10-15_cloud-runs, the
+whole-branch corpus fix round 2).** The skill's `/st-pr-resolve` bullet now states that
+`stamity run start` runs once the pull request's head is checked out on `Base:`, where it said the
+touchpoint runs none (`content/skills/st-unattended/SKILL.md:161-164`), and the declaration's
+carve-out reads "`/st-pr-resolve` aside (below)" (`:29-33`), each rewrapped inside its own lines, so
+no line of the file moves. `unattended-non-write-comment-no-fix` re-quotes the bullet, its range
+held. No other case quotes either paragraph, and none quotes the command's Unattended row the same
+change rewrote inside its one line (`content/commands/st-pr-resolve.md:54`). No `## Expected` block
+moves, `EXPECTED_MOVES` gains no row, and no B / A, claim, floor tag, threshold or roster count
+moves, so the carried tallies and the recomputed census below hold. The case moves its quote, so
+under hard trigger 1 it re-measures. The dated citations above stay as they were.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The

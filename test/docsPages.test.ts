@@ -2230,7 +2230,7 @@ describe("SECURITY.md", () => {
         "no reading of one command line closes this",
         "a git call carrying a `-c` or `--config-env` pair outside the display and identity keys",
         "`git -c core.fsmonitor=… status` among them",
-        "PowerShell's `Set-Item env:GIT_CONFIG_COUNT 1` among them, passes",
+        "PowerShell's `Set-Item env:GIT_EDITOR …` among them, passes",
       ]) {
         expect(residuals, `the cloud section does not name: ${named}`).toContain(named);
       }
@@ -2318,7 +2318,7 @@ describe("SECURITY.md", () => {
     // refuses an account with no push right, the run verbs pin origin's push as git resolves it and
     // hold a link at a held glob's folder, and the guard refuses a review approval, a branch-deleting
     // close, remote writes and git's program variables, while Claude Code denies the GitHub MCP
-    // server's merge and branch-write tools. What that leaves open is named in plain words. A
+    // server's merge and branch tools. What that leaves open is named in plain words. A
     // `url.*` config write is refused beside a `remote.*` one, the origin pin the second check, and
     // the page no longer says such a write passes the guard.
     it("states the origin pin, the held links, the new refusals and what they leave open", () => {
@@ -2349,7 +2349,7 @@ describe("SECURITY.md", () => {
         "a `git remote` write",
         "a `git config` write of a `remote.*` or `url.*` key or section",
         "one of git's program-valued variables",
-        "deny the GitHub MCP server's merge and branch-write tools by name",
+        "thirteen rows more deny the GitHub MCP server's tools by name",
       ]) {
         expect(guard, `the guard's row does not state: ${claim}`).toContain(claim);
       }
@@ -2377,6 +2377,72 @@ describe("SECURITY.md", () => {
       }
       expect(flat, "SECURITY.md says again that a url.* write passes the guard").not.toMatch(/`url\.\*` key passes/);
       expect(guard, "the guard's row names a url.* write as a gap").not.toContain("a `git config` write of a `url.*` key among them");
+    });
+
+    // ADDED 2026-10-16 (plan 021 file 1, the whole-branch round's second page fix): Claude Code's
+    // deny rows name thirteen GitHub MCP tools, read from the server's tool list on that date, a
+    // server configured under another name escaping them; the run verbs keep the repository's
+    // hooks, so a hook the run writes is named beside the configured-program residual; and,
+    // unattended, a line setting git's program or configuration variables is refused whatever
+    // program it runs, `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` joining the set, and
+    // `gh pr update-branch` is refused.
+    it("states the thirteen MCP rows, the hooks residual and the any-program variable rule", () => {
+      const guard = section("| The main thread of any session", "| An unattended run, or the text that steers one | Pushing a change");
+      const residuals = section("### Cloud and unattended runs", "## Standards mapping");
+      for (const tool of [
+        "merge_pull_request",
+        "push_files",
+        "create_or_update_file",
+        "delete_file",
+        "update_pull_request_branch",
+        "create_branch",
+        "pull_request_review_write",
+        "create_pull_request_review",
+        "submit_pending_pull_request_review",
+        "update_pull_request",
+        "update_pull_request_state",
+        "update_pull_request_draft_state",
+        "delete_repository",
+      ]) {
+        expect(guard, `the guard's row does not name the MCP tool ${tool}`).toContain(`\`${tool}\``);
+      }
+      for (const claim of [
+        "as the server's published tool list named them when read on 2026-10-16",
+        "a pull-request update through that server is refused whole, and `gh pr edit` through the shell stays the route",
+        "the MCP rows name a server configured as `github`, so one configured under another name escapes them",
+        "A hook the run writes runs when a run verb commits or pushes",
+        "`gh pr update-branch`",
+        "`GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM`) anywhere on it, whatever program it runs, a `stamity run` line among them",
+      ]) {
+        expect(guard, `the guard's row does not state: ${claim}`).toContain(claim);
+      }
+      for (const residual of [
+        "thirteen `permissions.deny` rows refuse the GitHub MCP server's merge",
+        "a merge, a branch write, a review approval or a ready-for-review mark it makes is a tool call",
+        "the rows name a server configured as `github`, the key the engine writes, so the same server configured under another name escapes them",
+        "Hooks the run writes.",
+        "The run verbs keep the repository's hooks",
+        "a hook a run writes runs when `run checkpoint` or `run end` commits or pushes",
+        "The control that holds is the pre-flight's refusal of an account that can push to the default branch",
+        "Unattended too, a line is refused whatever program it runs, a `stamity run checkpoint` or `run end` line, `npx`, `node` and `npm test` alike, when it sets one of git's configuration variables",
+        "`GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM`), in any form that sets one",
+        "the run verbs' git keeps the caller's environment, so a variable set on a verb's line reaches its push",
+        "`src/cli/engine/gitWrite.ts::gitWriteEnv`",
+        "`src/cli/engine/gitWrite.ts::gitWrite`",
+      ]) {
+        expect(residuals, `the cloud section does not name: ${residual}`).toContain(residual);
+      }
+      // The programs residual precedes the hooks one, so the hook is named beside it.
+      expect(residuals.indexOf("Hooks the run writes.")).toBeGreaterThan(residuals.indexOf("Programs the repository's configuration names"));
+      expect(residuals.indexOf("Hooks the run writes.")).toBeLessThan(residuals.indexOf("The environment."));
+      for (const stale of [
+        "five rows more deny",
+        "five `permissions.deny` rows",
+        "and a git call on a line that sets one of git's program-valued variables",
+        "PowerShell's `Set-Item env:GIT_CONFIG_COUNT 1` among them, passes",
+      ]) {
+        expect(flat, `SECURITY.md says again: ${stale}`).not.toContain(stale);
+      }
     });
   });
 
@@ -2500,7 +2566,7 @@ describe("docs/security-mapping.md", () => {
       "a merge or a review approval",
       "a `git remote` write and a `git config` write of a `remote.*` or `url.*` key",
       "one of git's program-valued variables",
-      "five rows more deny the GitHub MCP server's merge and branch-write tools by name",
+      "thirteen rows more deny the GitHub MCP server's merge, branch-content, branch-creation, review-submitting, pull-request-update and repository-delete tools by name",
       "the GitHub MCP server on the clients that take no per-tool deny",
       "A `git config` write of a `url.*` key is refused beside a `remote.*` one, the run verbs' origin pin the second check",
       "The held set is a glob list, and the origin pin a work-tree file",
@@ -2510,6 +2576,28 @@ describe("docs/security-mapping.md", () => {
       expect(flat, `the mapping page does not state: ${claim}`).toContain(claim);
     }
     expect(flat, "the mapping page says again that a url.* write passes the guard").not.toMatch(/`url\.\*` key passes/);
+  });
+
+  // ADDED 2026-10-16 (plan 021 file 1, the whole-branch round's second page fix): the mapping
+  // page carries what SECURITY.md now states: the thirteen MCP rows and the server-name gap, the
+  // hooks residual, the any-program variable rule and `gh pr update-branch`.
+  it("states the thirteen MCP rows, the hooks residual and the any-program variable rule", () => {
+    const flat = text.replace(/\s+/g, " ");
+    for (const claim of [
+      "`gh pr update-branch`",
+      "a line, whatever program it runs, that sets one of git's program-valued variables or one of its configuration variables, `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` among them",
+      "as its tool list named them on 2026-10-16; a pull-request update through that server is refused whole, and `gh pr edit` stays the route",
+      "a hook the run writes, which a run verb's commit or push runs",
+      "the server configured under another name than `github` on Claude Code",
+      "A hook the run writes runs inside a run verb's commit or push, which keeps the repository's hooks",
+      "a merge, branch write or review approval through the GitHub MCP server is a tool call no shell guard sees",
+      "on Claude Code its deny rows miss the server configured under another name than `github`",
+    ]) {
+      expect(flat, `the mapping page does not state: ${claim}`).toContain(claim);
+    }
+    for (const stale of ["five rows more deny", "and a git call on a line that sets one of git's program-valued variables"]) {
+      expect(flat, `the mapping page says again: ${stale}`).not.toContain(stale);
+    }
   });
 
   it("pins every catalogue it maps to an edition", () => {
