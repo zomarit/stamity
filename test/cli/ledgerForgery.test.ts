@@ -14,6 +14,7 @@ import { buildInitDecisions } from "../../src/cli/commands/init/plan.ts";
 import { syncCommand } from "../../src/cli/commands/sync.ts";
 import { planSync, previewReclaim } from "../../src/cli/commands/sync/engine.ts";
 import { engineRenderingsFor } from "../../src/cli/engine/emissionWrite.ts";
+import { CLAUDE_DENY_ROWS } from "../../src/hooks/personOnly.ts";
 import { createApp } from "../../src/index.ts";
 import { ORG_POLICY_REL_PATH } from "../../src/pack/orgPolicy.ts";
 import { discoverInstalledPacksWithPolicy, ignoringPolicyDenialForProof } from "../../src/pack/projection.ts";
@@ -1415,7 +1416,10 @@ describe("clean refuses while a file it would keep is one a sync with this versi
     }
   }, 120_000);
 
-  it("after sync, clean -y removes every engine file and .stamity/", async () => {
+  // TEST CHANGE, justified (review/124, signed off 00:14Z): clean removes no permissions.deny row,
+  // as one equal to the engine's may be the owner's, so the settings file stays holding the deny rows
+  // alone; no engine file was left, and the case was titled "removes every engine file".
+  it("after sync, clean -y removes every engine file but the settings file's deny rows, and .stamity/", async () => {
     const { root } = await olderSetup();
     const sync = await runInProcess([syncCommand], ["sync", "-y"], { cwd: root });
     expect(sync.code, sync.stderr).toBe(0);
@@ -1426,7 +1430,10 @@ describe("clean refuses while a file it would keep is one a sync with this versi
 
     expect(clean.code, clean.stderr).toBe(0);
     const left = ledger.map((row) => row.path).filter((path) => existsSync(join(root, path)));
-    expect(left).toEqual([]);
+    expect(left).toEqual([".claude/settings.json"]);
+    expect(JSON.parse(await readFile(join(root, ".claude", "settings.json"), "utf8"))).toEqual({
+      permissions: { deny: [...CLAUDE_DENY_ROWS] },
+    });
     expect(existsSync(join(root, ".stamity"))).toBe(false);
   }, 120_000);
 });
