@@ -66,7 +66,11 @@ const ADVERTISED = [
 // TEST CHANGE, justified (2026-10-09, plan 019 file 2, unit p1a-classifier-verb): `gate`
 // joined the hidden plumbing verbs as the change classifier a flow's gates follow
 // (REQ-FLOW-061), so the surface grew a command; no assertion below was loosened.
-const HIDDEN = ["learn", "handoff", "ledger", "gate"] as const;
+// TEST CHANGE, justified (2026-10-16, plan 021 file 1, unit u17-plan-verb): `plan` joined the
+// hidden plumbing verbs as the unattended start's ready check (REQ-FLOW-091), so the surface grew a
+// command and the counts below moved from thirteen registered and four hidden to fourteen and five;
+// no assertion was loosened.
+const HIDDEN = ["learn", "handoff", "ledger", "gate", "plan"] as const;
 
 /** A minimal CommandModule under the given name, for the uniqueness guard. */
 const twin = (name: string): CommandModule => ({
@@ -77,10 +81,10 @@ const twin = (name: string): CommandModule => ({
 });
 
 describe("COMMANDS enumeration (in-process)", () => {
-  it("registers exactly 13 uniquely-named commands in help order, the hidden four last", () => {
+  it("registers exactly 14 uniquely-named commands in help order, the hidden five last", () => {
     expect(COMMANDS.map((command) => command.name)).toEqual([...ADVERTISED, ...HIDDEN]);
-    expect(new Set(COMMANDS.map((command) => command.name)).size).toBe(13);
-    expect(HIDDEN).toHaveLength(4);
+    expect(new Set(COMMANDS.map((command) => command.name)).size).toBe(14);
+    expect(HIDDEN).toHaveLength(5);
     expect(COMMANDS.filter((command) => command.hidden === true).map((c) => c.name)).toEqual([
       ...HIDDEN,
     ]);

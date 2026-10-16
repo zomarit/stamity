@@ -27,10 +27,11 @@ mistake.
 | `stamity workspace` | yes | writes | one policy across several repositories: status, guided creation, and the cascade |
 | `stamity worktree` | yes | writes | parallel checkouts of this repository: the inventory, guided setup, and receipt-based teardown |
 | `stamity clean` | yes | writes | remove every generated file and the .stamity/ state directory |
-| `stamity learn` | plumbing | writes | capture a learning through the engine's write gates (plumbing) |
+| `stamity learn` | plumbing | writes | capture a learning through the engine's write gates, or read them through its screen (plumbing) |
 | `stamity handoff` | plumbing | writes | prepare, resume, list, complete and prune handoffs through the engine's gates (plumbing) |
 | `stamity ledger` | plumbing | writes | append findings to a run's ledger, close its rows, print its resume card, and read and write the deferral inbox (plumbing) |
-| `stamity gate` | plumbing | reads only | classify a change by its paths, or scan its added lines for secrets (plumbing) |
+| `stamity gate` | plumbing | reads only | classify a change, scan its added lines or an outbound text for secrets, or check an unattended start (plumbing) |
+| `stamity plan` | plumbing | reads only | check that plans are ready for an unattended start (plumbing) |
 
 ## What every command shares
 
@@ -49,7 +50,7 @@ identically everywhere they apply.
 ### JSON output
 
 `--json` produces exactly one JSON document on stdout, and nothing else, for every
-run that reaches a command — all 13 of the commands above, success and
+run that reaches a command — all 14 of the commands above, success and
 failure alike. Human output is suppressed in the same run, so a reader never has to
 separate prose from payload. Every document carries `ok`, `command` and `version`;
 a success adds the command's own fields, and a failure adds `error` with `code` and
@@ -227,7 +228,7 @@ May write when it runs, so `--dry-run` previews any change without making it.
 
 ## `stamity learn`
 
-capture a learning through the engine's write gates (plumbing)
+capture a learning through the engine's write gates, or read them through its screen (plumbing)
 
 Plumbing. This verb is not listed in `stamity --help` because its caller is generated
 agent content rather than a person. Hidden is not secret — `stamity learn --help` prints
@@ -238,14 +239,15 @@ May write when it runs, so `--dry-run` previews any change without making it.
 
 | Argument | What it is |
 |---|---|
-| `<subcommand>` | the only verb — one of `capture` |
+| `<subcommand>` | capture a learning, or read the screened index — one of `capture`, `read` |
 
 | Flag | What it does | Default |
 |---|---|---|
-| `--title <text>` | what the learning is about; also its file-name slug | required |
-| `--summary <text>` | one index line, under 200 characters | required |
-| `--confidence <level>` | how much evidence backs the finding — one of `low`, `medium`, `high` | `medium` |
-| `--body-file <path>` | read the body from a file instead of stdin | — |
+| `--title <text>` | capture (required): what the learning is about; also its file-name slug | — |
+| `--summary <text>` | capture (required): one index line, under 200 characters | — |
+| `--confidence <level>` | capture: how much evidence backs the finding — one of `low`, `medium`, `high` | `medium` |
+| `--body-file <path>` | capture: read the body from a file instead of stdin | — |
+| `--body <id>` | read: print one loaded learning's body instead of the index | — |
 
 ## `stamity handoff`
 
@@ -311,7 +313,7 @@ May write when it runs, so `--dry-run` previews any change without making it.
 
 ## `stamity gate`
 
-classify a change by its paths, or scan its added lines for secrets (plumbing)
+classify a change, scan its added lines or an outbound text for secrets, or check an unattended start (plumbing)
 
 Plumbing. This verb is not listed in `stamity --help` because its caller is generated
 agent content rather than a person. Hidden is not secret — `stamity gate --help` prints
@@ -322,11 +324,37 @@ Reads only. Nothing is written, so there is no preview mode to need.
 
 | Argument | What it is |
 |---|---|
-| `<subcommand>` | which gate action to run — one of `classify`, `scan` |
+| `<subcommand>` | which gate action to run — one of `classify`, `scan`, `preflight` |
 
 | Flag | What it does | Default |
 |---|---|---|
 | `--base <ref>` | the base the change is read against (default: HEAD, reported as no base) | — |
 | `--paths <path...>` | classify these paths by path rules instead of reading the change from git | — |
+| `--text <file>` | scan this outbound text file instead of the change (with --label) | — |
+| `--label <label>` | what the --text file is — one of `pr-body`, `morning`, `reply`, `comment` | — |
+| `--unattended` | preflight: check that an unattended run may start here, the one mode it checks | — |
+| `--item <owner/repo#n>` | preflight: the board item or issue the run takes as input | — |
+
+## `stamity plan`
+
+check that plans are ready for an unattended start (plumbing)
+
+Plumbing. This verb is not listed in `stamity --help` because its caller is generated
+agent content rather than a person. Hidden is not secret — `stamity plan --help` prints
+in full — and it is documented here because a verb that exists and is undocumented is
+worse than one that is merely unadvertised.
+
+Reads only. Nothing is written, so there is no preview mode to need.
+
+| Argument | What it is |
+|---|---|
+| `<subcommand>` | which plan action to run — one of `check` |
+| `<plan>` | one or more plan files, in chain order with --chain |
+
+| Flag | What it does | Default |
+|---|---|---|
+| `--chain` | the plans are one chain: each file's head depends_on names the file before it | — |
+| `--since <sha>` | with --chain, the run's base: a path moved only after it is exempt | — |
+| `--contract <path>` | the run contract the plans run under | — |
 
 Regenerate this page with `node scripts/generate-docs.mjs`.

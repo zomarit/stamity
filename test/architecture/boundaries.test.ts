@@ -622,6 +622,10 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // three above: it calls the wave-2 change classifier and the wave-13 kit, and
   // imports no wave-14 command engine.
   "src/cli/commands/gate.ts": { unit: "p1a-classifier-verb", wave: 14 },
+  // The plan verb, the fifth hidden plumbing command and the same shape as the four above: it
+  // reads the plans, the specs and the contract and hands them to the wave-4 readiness check, with
+  // the wave-13 git runner and kit, and imports no wave-14 command engine.
+  "src/cli/commands/plan.ts": { unit: "u17-plan-verb", wave: 14 },
   "src/cli/notice/updateNotice.ts": { unit: "p2-12", wave: 14 },
   // The worktree verb (WT-U2), at the leaf-command wave rather than beside
   // `workspace.ts` one above it. Wave 14 is its true depth: everything it calls
