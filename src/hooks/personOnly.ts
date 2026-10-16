@@ -231,6 +231,12 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   const RUNNER_OPTIONS: readonly [string, string[], string[]] = ["pw", ["--package", "--workspace", "--filter"], ["-c", "--call", "--shell-mode"]];
   const NO_OPTIONS: readonly [string, string[], string[]] = ["", [], []];
   /**
+   * The package managers whose options can stand before a runner's subcommand (`npm -w x exec`, `pnpm --filter x exec`,
+   * pr/3): those that take a value, skipped with it, and yarn's `workspace <name>`, which runs a yarn command there.
+   */
+  const MANAGERS = new Set(["npm", "pnpm", "yarn", "bun"]);
+  const MANAGER_VALUED = new Set(["-w", "--workspace", "--filter", "-F", "--prefix", "-C", "--dir", "--cwd", "--registry", "--userconfig"]);
+  /**
    * Per wrapper: the short letters and the long options that take a value (the next word when nothing is attached),
    * and the options whose value is a command line of its own (`env -S`, a runner's `-c`).
    */
@@ -430,7 +436,18 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       let line: string | null = null;
       while (k < words.length && line === null) {
         const word = words[k] ?? "";
-        const runner = `${programName(word)} ${words[k + 1] ?? ""}`;
+        let sub = k + 1;
+        while (MANAGERS.has(programName(word)) && sub < words.length) {
+          const option = words[sub] ?? "";
+          const next = words[sub + 1] ?? "-";
+          if (MANAGER_VALUED.has(option) || (programName(word) === "yarn" && option === "workspace")) sub += 2;
+          // npm reads any `--<key> <value>` as a setting (`--loglevel silly`): a long option's next word is its value
+          // unless it is an option or a runner's subcommand.
+          else if (/^--[^=]+$/.test(option) && !next.startsWith("-") && !RUNNERS.has(`${programName(word)} ${next}`)) sub += 2;
+          else if (option.startsWith("-") && option !== "--") sub += 1;
+          else break;
+        }
+        const runner = `${programName(word)} ${words[sub] ?? ""}`;
         if (ASSIGNMENT.test(word) || KEYWORDS.has(word)) {
           if (ASSIGNMENT.test(word)) assigned.push(word);
           k += 1;
@@ -439,7 +456,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
           const [short, long, lineOptions] = RUNNERS.has(runner)
             ? RUNNER_OPTIONS
             : (WRAPPER_OPTIONS.get(programName(word)) ?? NO_OPTIONS);
-          k += RUNNERS.has(runner) ? 2 : 1;
+          k = RUNNERS.has(runner) ? sub + 1 : k + 1;
           while (k < words.length) {
             const option = words[k] ?? "";
             if (ASSIGNMENT.test(option)) {
@@ -505,9 +522,12 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         for (const word of first === -1 ? [] : cmd.slice(first + 1)) if (/\s/.test(word)) commands.push(...commandsOf(word, depth + 1, true));
       } else if (depth < 4 && cmd[0] === "cmd") {
         // The Windows command interpreter (review/183): the words after `/c` or `/k`, any letter case, a value attached,
-        // read as PowerShell's are, a backslash being a plain character there too (review/194).
+        // read as PowerShell's are, a backslash being a plain character there too (review/194), and read with each
+        // caret escape taken off as well (`g^it`, `--for^ce`, pr/10), so that reading only adds denials.
         const at = cmd.findIndex((word, index) => index > 0 && /^\/[ck]/i.test(word));
-        if (at !== -1) commands.push(...commandsOf([(cmd[at] ?? "").slice(2), ...cmd.slice(at + 1)].join(" "), depth + 1, true));
+        const rest = at === -1 ? "" : [(cmd[at] ?? "").slice(2), ...cmd.slice(at + 1)].join(" ");
+        if (at !== -1) commands.push(...commandsOf(rest, depth + 1, true));
+        if (rest.includes("^")) commands.push(...commandsOf(rest.replace(/\^([\s\S])/g, "$1"), depth + 1, true));
       } else if (depth < 4 && cmd[0] === "git") {
         // Lines a git builtin runs (review/184): each `git rebase --exec` or `-x` line (`--ex`, `--exe` and a cluster
         // as git's option parser reads them), and the command `git bisect run` runs, its words kept as words.
@@ -574,8 +594,17 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
    * target's path below its repository or organisation (`repos/<o>/<r>/` cut), without scheme, host, query or a
    * trailing slash and with its percent-encoding decoded (build/76); the repository's own path stays whole.
    */
-  function httpCall(cmd: string[]): { write: boolean; method: string; paths: string[] } {
-    const tool = cmd[0] ?? "";
+  function httpCall(raw: string[]): { write: boolean; method: string; paths: string[]; cmd: string[] } {
+    const tool = raw[0] ?? "";
+    // wget reads a long option's unique prefix as the option (`--meth=DELETE`, `--post-d`, pr/11): one of three letters
+    // or more is expanded to the method or body option it begins, so a misread prefix only adds a write.
+    const cmd = raw.map((word) => {
+      const name = word.split("=")[0] ?? "";
+      const full = tool === "wget" && /^--[a-z-]{3,}$/i.test(name)
+        ? ["--method", "--post-data", "--post-file", "--body-data", "--body-file"].find((option) => option.startsWith(name.toLowerCase()))
+        : undefined;
+      return full === undefined ? word : full + word.slice(name.length);
+    });
     let method: string | null = null;
     let body = false;
     const targets: string[] = [];
@@ -642,7 +671,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         .replace(/^repos\/[^/]+\/[^/]+\//i, "")
         .replace(/^(orgs|enterprises|users|repositories)\/[^/]+\//i, ""),
     );
-    return { write: ["POST", "PUT", "PATCH", "DELETE"].includes(verb), method: verb, paths };
+    return { write: ["POST", "PUT", "PATCH", "DELETE"].includes(verb), method: verb, paths, cmd };
   }
   // </shell-reading>
 
@@ -701,13 +730,17 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       }
       if (arg.startsWith("--")) {
         const name = (arg.split("=")[0] ?? "").toLowerCase();
-        if (["--force", "--force-with-lease", "--force-if-includes"].includes(name)) force = true;
-        else if (["--tags", "--follow-tags", "--mirror", "--all", "--branches"].includes(name)) tags = true;
-        else if (["--delete", "--prune"].includes(name)) remove = true;
-        else if (name === "--repo") {
+        // git reads an option's unique prefix as the option (`--force-w`, `--del`, `--rep=`, pr/9): a
+        // name is read as each option it begins. A prefix of two options is one git refuses, so reading it as either
+        // adds a denial to a line that pushes nothing, and a `--no-` form begins none of these.
+        const is = (options: string[]): boolean => name.length > 2 && options.some((option) => option.startsWith(name));
+        if (is(["--force", "--force-with-lease", "--force-if-includes"])) force = true;
+        else if (is(["--tags", "--follow-tags", "--mirror", "--all", "--branches"])) tags = true;
+        else if (is(["--delete", "--prune"])) remove = true;
+        else if (is(["--repo"])) {
           repoGiven = true;
           if (!arg.includes("=")) j += 1;
-        } else if (["--push-option", "--receive-pack", "--exec"].includes(name) && !arg.includes("=")) j += 1;
+        } else if (is(["--push-option", "--receive-pack", "--exec"]) && !arg.includes("=")) j += 1;
       } else if (arg.startsWith("-") && arg.length > 1) {
         for (let c = 1; c < arg.length; c += 1) {
           const flag = arg[c];
@@ -848,13 +881,14 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
    * the line cannot show at all (gh's `--input`, a `-F` field read from `@<file>`, a curl or wget body that is no JSON
    * object literal, a file or a form, stdin among them) reads as the denying value too (review/228).
    */
-  function httpVerdict(cmd: string[]): PersonOnlyVerdict | null {
-    const gh = cmd[0] === "gh";
+  function httpVerdict(line: string[]): PersonOnlyVerdict | null {
+    const gh = line[0] === "gh";
     // gh fills `{branch}` and `:branch` (its own placeholder pattern) from the checkout, in the endpoint and in a typed
     // `-F` field (review/127): the current branch, or the default branch where the checkout is on none.
     const fill = (value: string): string =>
       value.replace(/\{branch\}|:branch\b/g, () => (ctx.currentBranch === null ? "main" : branch(ctx.currentBranch)));
-    const { write, method, paths: targets } = httpCall(cmd);
+    // The words as `httpCall` reads them, wget's shortened method and body options expanded (pr/11).
+    const { write, method, paths: targets, cmd } = httpCall(line);
     const paths = gh ? targets.map(fill) : targets;
     const text = cmd.join(" ");
     const fieldFlag = gh ? /^(-[fF]|--field|--raw-field)$/ : /^(-[A-Za-z]*d|--data(-raw|-binary|-ascii|-urlencode)?|--json|--post-data|--body-data)$/;
@@ -1042,12 +1076,20 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       if (/^releases(\/|$)/i.test(path)) return deny("release", `A release write (${shown})`);
       if (/^git\/refs(\/|$)/i.test(path)) {
         if (method === "DELETE") return deny("push-delete", `A REST ref deletion (${shown})`);
-        if (/^git\/refs\/tags(\/|$)/i.test(path) || /(^|[=\s])refs\/tags\//i.test(text)) {
+        // A body's `ref` read from the line's text and as the parsed field (pr/1), a JSON body's quote before it among
+        // the spellings; one the line cannot place reads as a tag.
+        const refs = fields("ref");
+        if (
+          /^git\/refs\/tags(\/|$)/i.test(path) ||
+          /(^|[=\s])refs\/tags\//i.test(text) ||
+          refs.some((ref) => ref === null || /^refs\/tags\//i.test(ref))
+        ) {
           return deny("push-tags", `A REST tag ref write (${shown})`);
         }
         if (forced(fields("force"))) return deny("force-push", `A forced REST ref update (${shown})`);
         // The path's own ref read from the path as routing reads it (review/107); a body's `ref` from the line.
-        const heads = [/^git\/refs\/heads\/(.+)$/i.exec(path)?.[1] ?? "", ...[...text.matchAll(/(?:^|[=\s/])refs\/heads\/(\S+)/gi)].map((match) => match[1] ?? "")];
+        const heads = [/^git\/refs\/heads\/(.+)$/i.exec(path)?.[1] ?? "", ...[...text.matchAll(/(?:^|[=\s/])refs\/heads\/(\S+)/gi)].map((match) => match[1] ?? ""),
+          ...refs.map((ref) => /^refs\/heads\/(.+)$/i.exec(ref ?? "")?.[1] ?? "")];
         if (heads.some((name) => defaults.has(name.toLowerCase()))) {
           return deny("push-default", `A REST write to the default branch (${shown})`);
         }
@@ -1065,9 +1107,16 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       if (valued.has(word)) k += 1;
       else if (!word.startsWith("-")) positionals.push(word);
     }
-    const [first, second] = positionals;
-    const yarnNpm = cmd[0] === "yarn" && first === "npm" && second === "publish";
-    return first === "publish" || yarnNpm ? deny("publish", `Publishing a package (\`${cmd[0]} publish\`)`) : null;
+    // `publish` as the subcommand, or after a package manager's word (`yarn npm publish`, `npm --workspace x exec --
+    // npm publish`) or yarn's `workspace <name>` (pr/3), the forms that run it in place of a script of that name.
+    const publishes = positionals.some(
+      (word, index) =>
+        word === "publish" &&
+        (index === 0 ||
+          ["npm", "pnpm", "yarn", "bun"].includes(positionals[index - 1] ?? "") ||
+          (cmd[0] === "yarn" && index === 2 && positionals[0] === "workspace")),
+    );
+    return publishes ? deny("publish", `Publishing a package (\`${cmd[0]} publish\`)`) : null;
   }
 
   for (const cmd of commandsOf(command, 0, false)) {
@@ -1075,7 +1124,10 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     let verdict: PersonOnlyVerdict | null = null;
     if (program === "git") {
       const { sub, args, config } = gitParts(cmd);
+      // `git send-pack` pushes as `git push` does, its options and refspecs laid out the same (pr/16); with
+      // no ref it updates the refs both sides have, the default branch among them, read as a matching push.
       if (sub === "push") verdict = pushVerdict(args, config);
+      else if (sub === "send-pack") verdict = pushVerdict(args, [...config, "push.default=matching"]);
       else if (sub === "tag") verdict = tagVerdict(args);
       else if (sub === "subtree") {
         // `git subtree push <remote> <branch>` runs `git push <remote> <split>:refs/heads/<branch>`.
@@ -1124,6 +1176,12 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
   const RUNNERS = new Set(["npm exec", "npm x", "pnpm dlx", "pnpm exec", "yarn dlx", "yarn exec", "bun x", "bun exec"]);
   const RUNNER_OPTIONS: readonly [string, string[], string[]] = ["pw", ["--package", "--workspace", "--filter"], ["-c", "--call", "--shell-mode"]];
   const NO_OPTIONS: readonly [string, string[], string[]] = ["", [], []];
+  /**
+   * The package managers whose options can stand before a runner's subcommand (`npm -w x exec`, `pnpm --filter x exec`,
+   * pr/3): those that take a value, skipped with it, and yarn's `workspace <name>`, which runs a yarn command there.
+   */
+  const MANAGERS = new Set(["npm", "pnpm", "yarn", "bun"]);
+  const MANAGER_VALUED = new Set(["-w", "--workspace", "--filter", "-F", "--prefix", "-C", "--dir", "--cwd", "--registry", "--userconfig"]);
   /**
    * Per wrapper: the short letters and the long options that take a value (the next word when nothing is attached),
    * and the options whose value is a command line of its own (`env -S`, a runner's `-c`).
@@ -1324,7 +1382,18 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
       let line: string | null = null;
       while (k < words.length && line === null) {
         const word = words[k] ?? "";
-        const runner = `${programName(word)} ${words[k + 1] ?? ""}`;
+        let sub = k + 1;
+        while (MANAGERS.has(programName(word)) && sub < words.length) {
+          const option = words[sub] ?? "";
+          const next = words[sub + 1] ?? "-";
+          if (MANAGER_VALUED.has(option) || (programName(word) === "yarn" && option === "workspace")) sub += 2;
+          // npm reads any `--<key> <value>` as a setting (`--loglevel silly`): a long option's next word is its value
+          // unless it is an option or a runner's subcommand.
+          else if (/^--[^=]+$/.test(option) && !next.startsWith("-") && !RUNNERS.has(`${programName(word)} ${next}`)) sub += 2;
+          else if (option.startsWith("-") && option !== "--") sub += 1;
+          else break;
+        }
+        const runner = `${programName(word)} ${words[sub] ?? ""}`;
         if (ASSIGNMENT.test(word) || KEYWORDS.has(word)) {
           if (ASSIGNMENT.test(word)) assigned.push(word);
           k += 1;
@@ -1333,7 +1402,7 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
           const [short, long, lineOptions] = RUNNERS.has(runner)
             ? RUNNER_OPTIONS
             : (WRAPPER_OPTIONS.get(programName(word)) ?? NO_OPTIONS);
-          k += RUNNERS.has(runner) ? 2 : 1;
+          k = RUNNERS.has(runner) ? sub + 1 : k + 1;
           while (k < words.length) {
             const option = words[k] ?? "";
             if (ASSIGNMENT.test(option)) {
@@ -1399,9 +1468,12 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
         for (const word of first === -1 ? [] : cmd.slice(first + 1)) if (/\s/.test(word)) commands.push(...commandsOf(word, depth + 1, true));
       } else if (depth < 4 && cmd[0] === "cmd") {
         // The Windows command interpreter (review/183): the words after `/c` or `/k`, any letter case, a value attached,
-        // read as PowerShell's are, a backslash being a plain character there too (review/194).
+        // read as PowerShell's are, a backslash being a plain character there too (review/194), and read with each
+        // caret escape taken off as well (`g^it`, `--for^ce`, pr/10), so that reading only adds denials.
         const at = cmd.findIndex((word, index) => index > 0 && /^\/[ck]/i.test(word));
-        if (at !== -1) commands.push(...commandsOf([(cmd[at] ?? "").slice(2), ...cmd.slice(at + 1)].join(" "), depth + 1, true));
+        const rest = at === -1 ? "" : [(cmd[at] ?? "").slice(2), ...cmd.slice(at + 1)].join(" ");
+        if (at !== -1) commands.push(...commandsOf(rest, depth + 1, true));
+        if (rest.includes("^")) commands.push(...commandsOf(rest.replace(/\^([\s\S])/g, "$1"), depth + 1, true));
       } else if (depth < 4 && cmd[0] === "git") {
         // Lines a git builtin runs (review/184): each `git rebase --exec` or `-x` line (`--ex`, `--exe` and a cluster
         // as git's option parser reads them), and the command `git bisect run` runs, its words kept as words.
@@ -1468,8 +1540,17 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
    * target's path below its repository or organisation (`repos/<o>/<r>/` cut), without scheme, host, query or a
    * trailing slash and with its percent-encoding decoded (build/76); the repository's own path stays whole.
    */
-  function httpCall(cmd: string[]): { write: boolean; method: string; paths: string[] } {
-    const tool = cmd[0] ?? "";
+  function httpCall(raw: string[]): { write: boolean; method: string; paths: string[]; cmd: string[] } {
+    const tool = raw[0] ?? "";
+    // wget reads a long option's unique prefix as the option (`--meth=DELETE`, `--post-d`, pr/11): one of three letters
+    // or more is expanded to the method or body option it begins, so a misread prefix only adds a write.
+    const cmd = raw.map((word) => {
+      const name = word.split("=")[0] ?? "";
+      const full = tool === "wget" && /^--[a-z-]{3,}$/i.test(name)
+        ? ["--method", "--post-data", "--post-file", "--body-data", "--body-file"].find((option) => option.startsWith(name.toLowerCase()))
+        : undefined;
+      return full === undefined ? word : full + word.slice(name.length);
+    });
     let method: string | null = null;
     let body = false;
     const targets: string[] = [];
@@ -1536,7 +1617,7 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
         .replace(/^repos\/[^/]+\/[^/]+\//i, "")
         .replace(/^(orgs|enterprises|users|repositories)\/[^/]+\//i, ""),
     );
-    return { write: ["POST", "PUT", "PATCH", "DELETE"].includes(verb), method: verb, paths };
+    return { write: ["POST", "PUT", "PATCH", "DELETE"].includes(verb), method: verb, paths, cmd };
   }
   // </shell-reading>
 

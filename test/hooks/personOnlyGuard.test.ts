@@ -132,6 +132,21 @@ const MATRIX: readonly (readonly [command: string, rule: string | null])[] = [
   ["gh api -X GET repos/o/r/pulls/3/reviews --input r.json", null],
   ["curl -d @r.json https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
   ["curl -d @r.json https://api.github.com/repos/o/r/pulls/3/comments", null],
+  // PR #112's resolution round 1, each beside its neighbour: a JSON body's `ref` (pr/1), a runner behind a package
+  // manager's options (pr/3), a shortened push option (pr/9), the interpreter's caret (pr/10), a shortened wget method
+  // (pr/11), `git send-pack` (pr/16).
+  ["curl -X POST -d '{\"ref\":\"refs/tags/v2\",\"sha\":\"abc\"}' https://api.github.com/repos/o/r/git/refs", "push-tags"],
+  ["curl -X POST -d '{\"ref\":\"refs/heads/feat/y\",\"sha\":\"abc\"}' https://api.github.com/repos/o/r/git/refs", null],
+  ["npm --workspace mypkg exec -- npm publish", "publish"],
+  ["npm --workspace mypkg run build", null],
+  ["git push --force-w origin feat/x", "force-push"],
+  ["git push --dry-r origin feat/x", null],
+  ["cmd /c g^it push --for^ce origin feat/x", "force-push"],
+  ["cmd /c g^it status", null],
+  ["wget --meth=DELETE https://api.github.com/repos/o/r/releases/1", "release"],
+  ["wget https://api.github.com/repos/o/r/releases", null],
+  ["git send-pack git@github.com:o/r.git main", "push-default"],
+  ["git send-pack git@github.com:o/r.git feat/x", null],
 ];
 
 describe("the person-only guard, on every client", () => {
@@ -654,7 +669,9 @@ describe("the unattended push rule, the mode read from the run records", () => {
       `readarray GIT_EXEC_PATH < /tmp/p; ${RUN_END}`, "getopts e: GIT_EDITOR -e /tmp/e; npm test",
       `set -o allexport; select GIT_EXEC_PATH in /tmp/bin; do break; done; ${RUN_END}`,
       `set -ea; select GIT_EXEC_PATH in /tmp/bin; do break; done; ${RUN_END}`,
-      `setopt ALL_EXPORT; print -v GIT_EXEC_PATH /tmp/bin; ${RUN_END}`, "shopt -so allexport; select GIT_PAGER in /tmp/p; do break; done; npm test"];
+      `setopt ALL_EXPORT; print -v GIT_EXEC_PATH /tmp/bin; ${RUN_END}`, "shopt -so allexport; select GIT_PAGER in /tmp/p; do break; done; npm test",
+      // A runner behind a package manager's options (pr/3), the interpreter's caret (pr/10), a shortened wget method (pr/11).
+      "npm -w x exec -- git push origin feat/x", "cmd /c g^it push origin feat/x", "wget --meth=PATCH https://api.github.com/repos/o/r/pulls/3"];
     for (const command of unattended) {
       const source = unattendedPushVerdict(command);
       expect(source.deny, command).toBe(true);
@@ -683,7 +700,7 @@ describe("the unattended push rule, the mode read from the run records", () => {
       `declare -p GIT_EXEC_PATH; ${RUN_END}`, `declare -x GIT_TERMINAL_PROMPT; ${RUN_END}`, "typeset -i GIT_CONFIG_COUNT; npm test",
       `read OTHER_NAME <<< /tmp/bin; ${RUN_END}`, `echo "$GIT_EXEC_PATH"; ${RUN_END}`, `set +a; read OTHER_NAME <<< "$GIT_EXEC_PATH"; ${RUN_END}`,
       `set -e; echo "$GIT_EXEC_PATH"; ${RUN_END}`, 'for f in GIT_EXEC_PATH GIT_EDITOR; do grep -rn "$f" src; done; npm test',
-      `printf '%s\\n' GIT_EXEC_PATH; ${RUN_END}`]) {
+      `printf '%s\\n' GIT_EXEC_PATH; ${RUN_END}`, "npm -w x exec -- git status", "cmd /c g^it status", "wget --meth=GET https://api.github.com/repos/o/r/pulls/3"]) {
       expect(unattendedPushVerdict(command), command).toEqual({ deny: false });
       expect(decide("claude", guard, command).deny, command).toBe(false);
     }

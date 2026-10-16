@@ -434,6 +434,46 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["gh api graphql -f query='mutation { submitPullRequestReview(input: {pullRequestReviewId: \"R_1\", event: APPROVE}) { clientMutationId } }'", "pr-merge"],
   ["gh api graphql -f query='mutation($e: PullRequestReviewEvent!) { submitPullRequestReview(input: {pullRequestReviewId: \"R_1\", event: $e}) { clientMutationId } }' -f e=APPROVE", "pr-merge"],
   ["gh api graphql -f query='mutation($i: AddPullRequestReviewInput!) { addPullRequestReview(input: $i) { clientMutationId } }'", "pr-merge"],
+  // PR #112's resolution round 1. A `git/refs` write's parsed `ref` field, a JSON body's quote before it among the
+  // spellings, one the line cannot place reading as a tag (pr/1).
+  ["curl -X POST -d '{\"ref\":\"refs/tags/v2\",\"sha\":\"abc\"}' https://api.github.com/repos/o/r/git/refs", "push-tags"],
+  ["curl -X POST --json '{\"ref\":\"refs/tags/v2\",\"sha\":\"abc\"}' https://api.github.com/repos/o/r/git/refs", "push-tags"],
+  ["wget --post-data='{\"ref\":\"refs/tags/v2\",\"sha\":\"abc\"}' https://api.github.com/repos/o/r/git/refs", "push-tags"],
+  ["curl -X POST -d '{\"ref\":\"$REF\",\"sha\":\"abc\"}' https://api.github.com/repos/o/r/git/refs", "push-tags"],
+  ["curl -X POST -d '{\"ref\":\"refs/heads/main\",\"sha\":\"abc\"}' https://api.github.com/repos/o/r/git/refs", "push-default"],
+  // A package manager's options before a runner's subcommand, and a `publish` after a package manager's word or yarn's
+  // `workspace <name>` (pr/3).
+  ["npm --workspace mypkg exec -- npm publish", "publish"],
+  ["pnpm --filter mypkg exec npm publish", "publish"],
+  ["yarn workspace mypkg npm publish", "publish"],
+  ["yarn workspace mypkg publish", "publish"],
+  ["npm -w x exec -- git push --force origin feat/x", "force-push"],
+  ["pnpm --filter x exec git push origin main", "push-default"],
+  ["yarn workspace x exec git push -f origin feat/x", "force-push"],
+  ["npm --loglevel silly exec -- git push --force origin feat/x", "force-push"],
+  ["npm --force publish", "publish"],
+  // git push's options as the unique prefixes git reads (pr/9), a valued one's value skipped.
+  ["git push --force-w origin feat/x", "force-push"],
+  ["git push --del origin feat/x", "push-delete"],
+  ["git push --mir", "push-tags"],
+  ["git push --follow-t origin feat/x", "push-tags"],
+  ["git push --rep=origin main", "push-default"],
+  ["git push --push-o ci.skip origin", "push-default", ON_MAIN],
+  // The Windows command interpreter's caret escape (pr/10), in an option and in the program word.
+  ["cmd /c git push --for^ce origin feat/x", "force-push"],
+  ["cmd /c git push --del^ete origin feat/x", "push-delete"],
+  ["cmd /c g^it push --force origin feat/x", "force-push"],
+  // wget's method and body options as the unique prefixes wget reads (pr/11).
+  ["wget --meth=DELETE https://api.github.com/repos/o/r/git/refs/heads/feat/x", "push-delete"],
+  ["wget --meth DELETE https://api.github.com/repos/o/r/releases/1", "release"],
+  ["wget --post-d '{\"event\":\"APPROVE\"}' https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
+  ["wget --body-f=r.json --meth=POST https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
+  // `git send-pack`, read as a push, no ref reading as a matching push (pr/16).
+  ["git send-pack --force git@github.com:o/r.git feat/x", "force-push"],
+  ["git send-pack git@github.com:o/r.git main", "push-default"],
+  ["git send-pack git@github.com:o/r.git refs/tags/v1", "push-tags"],
+  ["git send-pack git@github.com:o/r.git", "push-default"],
+  ["git-send-pack -f git@github.com:o/r.git feat/x", "force-push"],
 ];
 
 const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
@@ -615,6 +655,21 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
     "git -c safe.bareRepository=explicit -c core.fsmonitor=false -c push.followTags=false push origin HEAD:refs/heads/stamity/2026-10-16_x",
     { defaultBranches: ["main"], currentBranch: "stamity/2026-10-16_x", tags: ["v1.0.0"] },
   ],
+  // PR #112's resolution round 1's twins (pr/1, pr/3, pr/9, pr/10, pr/11, pr/16).
+  ["curl -X POST -d '{\"ref\":\"refs/heads/feat/y\",\"sha\":\"abc\"}' https://api.github.com/repos/o/r/git/refs"],
+  ["npm --workspace mypkg run build"],
+  ["yarn workspace mypkg run publish"],
+  ["npm -w x exec -- git push origin feat/x"],
+  ["npm --loglevel silly exec -- git push origin feat/x"],
+  ["git push --dry-r origin feat/x"],
+  ["git push --no-force-w origin feat/x"],
+  ["git push --push-o ci.skip origin feat/x"],
+  ["cmd /c g^it status"],
+  ["cmd /c g^it push origin feat/x"],
+  ["wget https://api.github.com/repos/o/r/releases"],
+  ["wget --meth=GET https://api.github.com/repos/o/r/releases/1"],
+  ["wget --post-d '{\"event\":\"COMMENT\"}' https://api.github.com/repos/o/r/pulls/3/reviews"],
+  ["git send-pack git@github.com:o/r.git feat/x"],
 ];
 
 describe("personOnlyVerdict — the deny matrix", () => {
@@ -954,6 +1009,14 @@ describe("unattendedPushVerdict", () => {
     ["git config --add url.https://example.com/.pushInsteadOf https://github.com/"],
     ["git config --unset url.https://example.com/.insteadOf"],
     ["git config --remove-section url.https://example.com/"],
+    // A runner behind a package manager's options (pr/3), the interpreter's caret escape (pr/10), wget's shortened
+    // method and body options (pr/11).
+    ["npm -w x exec -- git push origin feat/x"],
+    ["pnpm --filter x exec git push"],
+    ["npm --loglevel silly exec -- git push origin feat/x"],
+    ["cmd /c g^it push origin feat/x"],
+    ["wget --meth=PATCH https://api.github.com/repos/o/r/pulls/3"],
+    ["wget --post-d x https://api.github.com/repos/o/r/pulls"],
   ])("denies %j, naming the run verbs", (command) => {
     const verdict = unattendedPushVerdict(command);
     expect(verdict.deny).toBe(true);
@@ -1089,6 +1152,10 @@ describe("unattendedPushVerdict", () => {
     // review/233's twins: git's own option reading the global file, and a commit message naming a longer name.
     ["git config --global --get user.name"],
     ["git commit -m 'GIT_CONFIG_NOSYSTEM and GIT_CONFIG_GLOBALS are left unset'"],
+    // Their twins (pr/3, pr/10, pr/11).
+    ["npm -w x exec -- git status"],
+    ["cmd /c g^it status"],
+    ["wget --meth=GET https://api.github.com/repos/o/r/pulls/3"],
   ])("allows %j", (command) => {
     expect(unattendedPushVerdict(command)).toEqual({ deny: false });
   });
