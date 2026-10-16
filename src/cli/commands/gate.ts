@@ -1479,8 +1479,9 @@ function readTreeDiff(
  * The added lines of every commit since `base`, merges left out, oldest first
  * (review/112): a value committed and removed again before the scan stays in
  * the history a push sends. Each commit is one {@link readTreeDiff}. With
- * `pushed`, every commit no remote-tracking ref holds is read too
- * (`HEAD --not --remotes`, review/160): a push sends those below `base` as well.
+ * `pushed`, every commit no `origin` remote-tracking ref holds is read too
+ * (`HEAD --not --remotes=origin`, review/160, build/108): a push to `origin`
+ * sends those below `base` as well, a commit only another remote holds among them.
  */
 function readHistory(runner: GitRunner, root: ProjectRoot, base: string, windows: boolean, pushed = false): HistoryLines {
   const revList = (range: readonly string[]): string[] =>
@@ -1488,7 +1489,7 @@ function readHistory(runner: GitRunner, root: ProjectRoot, base: string, windows
       .split("\n")
       .filter((line) => line !== "");
   const since = revList([`${base}..HEAD`]);
-  const commits = pushed ? [...new Set([...revList(["HEAD", "--not", "--remotes"]), ...since])] : since;
+  const commits = pushed ? [...new Set([...revList(["HEAD", "--not", "--remotes=origin"]), ...since])] : since;
   const history: HistoryLines = { files: [], skipped: [], unscanned: [], outside: new Set() };
   for (const commit of commits) readTreeDiff(runner, root, [commit], commit.slice(0, SHORT_COMMIT), windows, history);
   return history;
@@ -1521,7 +1522,7 @@ export function readPushed(runner: GitRunner, root: ProjectRoot, base: string, w
  * of `HEAD` sends and nothing else: `HEAD`'s tree against the base ({@link
  * readPushed}) stands in for the change, so an uncommitted or untracked file
  * the push leaves behind is not read, and the history read covers every commit
- * the remote lacks, those below the base included (review/160). It needs a
+ * `origin` lacks, those below the base included (review/160, build/108). It needs a
  * base; without one it fails.
  */
 export function scanChange(cwd: string, ref: string | undefined, options: { scope?: "pushed" } = {}): ScanOutcome {

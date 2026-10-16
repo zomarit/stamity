@@ -2657,6 +2657,23 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
         expect(outcome).toMatchObject({ base, scope: "pushed", hits: [{ path: "src/a.ts", line: 2, rule: "github-token", commit: added.slice(0, 12) }] });
       });
 
+      it("stops on a token in a commit only another remote holds, since the push goes to origin (build/108)", async () => {
+        const repo = await seedRepo("repo", { "src/a.ts": "export {};\n" });
+        const root = git(repo, ["rev-parse", "HEAD"]).trim();
+        await getRoot().seedFiles({ "repo/src/a.ts": `export {};\n${LINE}` });
+        git(repo, ["commit", "-q", "-am", "add"]);
+        const added = git(repo, ["rev-parse", "HEAD"]).trim();
+        await getRoot().seedFiles({ "repo/src/a.ts": "export {};\n" });
+        git(repo, ["commit", "-q", "-am", "remove"]);
+        const base = git(repo, ["rev-parse", "HEAD"]).trim();
+        // A second remote (a mirror) holds both commits; origin holds only the root, so the push still sends them.
+        git(repo, ["update-ref", "refs/remotes/upstream/main", base]);
+
+        const outcome = await scanPushed(repo, base, root);
+
+        expect(outcome).toMatchObject({ base, scope: "pushed", hits: [{ path: "src/a.ts", line: 2, rule: "github-token", commit: added.slice(0, 12) }] });
+      });
+
       it("fails with no base, never a clean scan", async () => {
         const repo = await seedRepo("repo", { "src/a.ts": "export {};\n" });
 

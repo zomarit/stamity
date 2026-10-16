@@ -241,6 +241,23 @@ describe("stamity run checkpoint", () => {
     expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
   });
 
+  it("refuses the push when a commit only another remote holds changes a held path, since the push goes to origin (build/108)", async () => {
+    const { repo, remote } = await seed("unattended");
+    await writeFile(join(repo, ".cursorrules"), "steered rules\n");
+    git(repo, ["commit", "-q", "-am", "a mirror's commit"]);
+    // A second remote (a mirror) holds the commit; origin does not, so the push sends it.
+    git(repo, ["update-ref", "refs/remotes/upstream/main", "HEAD"]);
+    await writeFile(join(repo, ".cursorrules"), ".cursorrules\n");
+    await writeFile(join(repo, "a.txt"), "changed\n");
+
+    const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+    expect(code).toBe(1);
+    expect(doc).toMatchObject({ pushed: false, notDone: ["held path in history (.cursorrules)"] });
+    expect(pushes()).toEqual([]);
+    expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
+  });
+
   it("refuses the push when HEAD's tree still changes a held path after the commit, a hook having staged it (review/156)", async () => {
     const { repo, remote } = await seed("unattended");
     await writeFile(join(repo, ".cursorrules"), "steered rules\n");

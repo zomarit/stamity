@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runCommand } from "../../../src/cli/commands/run.ts";
@@ -11,7 +11,8 @@ import { useTempDir } from "../../support/tempDir.ts";
 /**
  * u19-run-end (REQ-FLOW-092, REQ-FLOW-094, REQ-FLOW-095, REQ-FLOW-103):
  * `stamity run end`, through the in-process funnel. It runs `checkpoint`'s
- * steps and then the draft pull request every time. Git runs for real, in
+ * steps and then the draft pull request every time; on the morning walk's
+ * attended record (`Resumes: <run-id>`) the body is the resumed run's list. Git runs for real, in
  * scratch repositories pushing to a real bare remote (`remote.origin.pushurl`),
  * while `remote.origin.url` names a GitHub repository so the REST reads and the
  * pull request step have one to match.
@@ -74,6 +75,10 @@ const RUN = "2026-10-16_overnight";
 const RUN_BRANCH = `stamity/${RUN}`;
 const RUN_DIR = `.stamity/runs/${RUN}`;
 const MARKER = `<!-- stamity:run ${RUN} -->`;
+
+/** The morning walk's own run (review/164): an attended record reading `Resumes: <RUN>`, on the same branch. */
+const WALK = "2026-10-16_morning-walk";
+const WALK_DIR = `.stamity/runs/${WALK}`;
 
 /** A token-shaped value built from fragments, so this file carries none. */
 const TOKEN = ["gh", "p", "_", "Q7RTW2KZ9MXC4HBN8JVL5DPF3GYSA6EUT2RW"].join("");
@@ -339,6 +344,147 @@ describe("stamity run end", () => {
     expect(git(repo, ["rev-parse", "HEAD"])).toBe(base);
     expect(pushes()).toEqual([]);
     expect(writesToGitHub()).toEqual([]);
+  });
+
+  // review/166: one input activates the inferred rows, so `end`'s JSON is shown to carry draftPr's, not the default.
+  it("carries the prerequisites the pushed change implies in end's inferred, and in the body", async () => {
+    const { repo } = await seed("unattended");
+    await put(repo, "src/client.ts", "export const url = process.env.SERVICE_URL;\n");
+    await put(repo, `${RUN_DIR}/morning.md`, morningList("the delta"));
+
+    const { code, doc } = await run(repo, [...END("feat: client"), "--paths", "src/client.ts"]);
+
+    expect(code).toBe(0);
+    expect(doc["inferred"]).toMatchObject([{ kind: "env", name: "SERVICE_URL", where: "src/client.ts:1" }]);
+    expect(created().body).toContain("SERVICE_URL");
+  });
+
+  // review/165: the step sends only a body to a pull request already open, so the Refused: title never lands there.
+  it("says a refused run's title was not changed when its branch already has an open pull request", async () => {
+    const { repo } = await seed("unattended");
+    await put(repo, `${RUN_DIR}/morning.md`, morningList("refused at the ready check"));
+    rest.routes.set("GET repos/o/r/pulls", {
+      status: 200,
+      json: [{ number: 12, html_url: "https://github.com/o/r/pull/12", body: `an earlier list\n\n${MARKER}`, head: { ref: RUN_BRANCH, label: `o:${RUN_BRANCH}` } }],
+    });
+    rest.routes.set("PATCH repos/o/r/pulls/12", { status: 200, json: {} });
+
+    const { code, doc } = await run(repo, [...END("plan 021 not ready"), "--refused"]);
+
+    expect(code).toBe(0);
+    expect(doc).toMatchObject({ pr: { number: 12, how: "existing" } });
+    expect(doc["notDone"]).toEqual(["title not changed: pull request #12 was already open, so it keeps its own title, not the Refused: one"]);
+    expect(writesToGitHub().map((call) => `${call.method} ${call.path}`)).toEqual(["PATCH repos/o/r/pulls/12"]);
+  });
+
+  // review/168: a push git refuses stops end before any pull request call, as a scan hit does.
+  it("opens no pull request when a pre-push hook refuses the push", async () => {
+    const { repo, remote } = await seed("attended");
+    const hook = join(repo, ".git", "hooks", "pre-push");
+    await writeFile(hook, "#!/bin/sh\nexit 1\n");
+    await chmod(hook, 0o755);
+    await writeFile(join(repo, "a.txt"), "changed\n");
+
+    const { code, doc } = await run(repo, [...END("feat: x"), "--paths", "a.txt"]);
+
+    expect(code).toBe(1);
+    expect(doc).toMatchObject({ subcommand: "end", pushed: false, pr: null, inferred: [], notDone: ["push refused by a hook"] });
+    expect(pushes()).toHaveLength(1);
+    expect(writesToGitHub()).toEqual([]);
+    expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
+  });
+
+  describe("the morning walk's body (review/164)", () => {
+    const WALK_END = (title: string): string[] => ["end", "--run", WALK, "--title", title, "--json"];
+    const WALK_RECORD = `${WALK_DIR}/record.md`;
+    /** The body of the one write the verb sent GitHub. */
+    const sent = (): string => (writesToGitHub()[0]?.body as { body?: string } | undefined)?.body ?? "";
+
+    /**
+     * The overnight run's branch after its close: the first run's record and
+     * morning list, an overnight commit adding an env read, then the walk's own
+     * attended record reading `Resumes: <resumes>`, its `Base:` the overnight tip.
+     */
+    async function walk(resumes: string, opts: { firstBase?: boolean } = {}): Promise<Seeded & { tip: string }> {
+      const seeded = await seed("unattended");
+      const { repo } = seeded;
+      if (opts.firstBase === false) await put(repo, `${RUN_DIR}/record.md`, `# Run ${RUN}\n\nStatus: closed\nMode: unattended\n`);
+      await put(repo, "src/client.ts", "export const url = process.env.SERVICE_URL;\n");
+      git(repo, ["add", "--", "src/client.ts"]);
+      git(repo, ["commit", "-q", "-m", "overnight"]);
+      const tip = git(repo, ["rev-parse", "HEAD"]);
+      await put(repo, WALK_RECORD, `# Run ${WALK}\n\nStatus: in progress\nMode: attended\nBranch: ${RUN_BRANCH}\nBase: ${tip}\nResumes: ${resumes}\n`);
+      rest.routes.set("GET repos/o/r/pulls", {
+        status: 200,
+        json: [{ number: 12, html_url: "https://github.com/o/r/pull/12", body: `the overnight list\n\n${MARKER}`, head: { ref: RUN_BRANCH, label: `o:${RUN_BRANCH}` } }],
+      });
+      rest.routes.set("PATCH repos/o/r/pulls/12", { status: 200, json: {} });
+      rest.routes.set("POST repos/o/r/issues/12/comments", { status: 201, json: {} });
+      return { ...seeded, tip };
+    }
+
+    it("replaces the open pull request's body with the resumed run's answered list, under its marker, never a comment", async () => {
+      const { repo } = await walk(RUN);
+      await put(repo, `${RUN_DIR}/morning.md`, morningList("the delta, answered Q1→1"));
+
+      const { code, doc } = await run(repo, [...WALK_END("Morning walk"), "--paths", `${RUN_DIR}/morning.md`]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ run: WALK, pushed: true, pr: { number: 12, how: "existing" }, notDone: [] });
+      expect(writesToGitHub().map((call) => `${call.method} ${call.path}`)).toEqual(["PATCH repos/o/r/pulls/12"]);
+      const body = sent();
+      expect(body.startsWith(`# Morning list — ${RUN}`)).toBe(true);
+      expect(body).toContain("the delta, answered Q1→1");
+      expect(body.trimEnd().endsWith(MARKER)).toBe(true);
+      expect(body).not.toContain(`stamity:run ${WALK}`);
+      // The prerequisites are read since the resumed run's Base:, so the overnight commit's env read stays in the body.
+      expect(doc["inferred"]).toMatchObject([{ kind: "env", name: "SERVICE_URL", where: "src/client.ts:1" }]);
+    });
+
+    it("screens the walk's body as the unattended one, a hit posting the replacement under the resumed run's marker", async () => {
+      const { repo } = await walk(RUN);
+      // Not staged, so the push scan leaves it out; the outbound screen still reads it.
+      await put(repo, `${RUN_DIR}/morning.md`, morningList(`the key is ${TOKEN}`));
+
+      const { code, doc, stdout, stderr } = await run(repo, WALK_END("Morning walk"));
+
+      expect(code).toBe(0);
+      expect(doc["notDone"]).toEqual(["pull request body replaced: the outbound screen matched line 9 (github-token)"]);
+      const body = sent();
+      expect(body).toBe(
+        `Run \`${RUN}\`: the body made from \`${RUN_DIR}/morning.md\` was not posted, because the outbound screen matched its line 9 (github-token). Read the morning list on the branch.\n\n${MARKER}`,
+      );
+      const fragment = TOKEN.slice(4, 16);
+      expect(stdout).not.toContain(fragment);
+      expect(stderr).not.toContain(fragment);
+      expect(JSON.stringify(rest.calls)).not.toContain(fragment);
+    });
+
+    it("reads the prerequisites since the walk's own Base: where the resumed record names none, saying so", async () => {
+      const { repo } = await walk(RUN, { firstBase: false });
+      await put(repo, `${RUN_DIR}/morning.md`, morningList("the delta"));
+
+      const { code, doc } = await run(repo, WALK_END("Morning walk"));
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pr: { number: 12, how: "existing" }, inferred: [] });
+      expect(doc["notDone"]).toEqual([`prerequisites read since this run's Base: only: ${RUN_DIR}/record.md names no Base: that is a commit here`]);
+    });
+
+    it.each([
+      ["names no run id", "../escape", "pull request body not refreshed: the record's Resumes: names no run id"],
+      ["names a run with no folder", "2026-10-15_gone", "pull request body not refreshed: Resumes: names 2026-10-15_gone, and .stamity/runs/2026-10-15_gone is no run folder here"],
+      ["names a run with no morning list", RUN, `pull request body not refreshed: the morning list of ${RUN} is missing`],
+    ])("keeps the attended fixed body, commenting, when Resumes: %s", async (_case, resumes, reason) => {
+      const { repo } = await walk(resumes);
+
+      const { code, doc } = await run(repo, WALK_END("Morning walk"));
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pr: { number: 12, how: "commented" }, inferred: [], notDone: [reason] });
+      expect(writesToGitHub().map((call) => `${call.method} ${call.path}`)).toEqual(["POST repos/o/r/issues/12/comments"]);
+      expect(sent()).toBe(`Run \`${WALK}\`, attended. Its record: \`${WALK_RECORD}\`.\n\n<!-- stamity:run ${WALK} -->`);
+    });
   });
 
   it.each([

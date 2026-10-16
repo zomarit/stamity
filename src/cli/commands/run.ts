@@ -84,7 +84,10 @@ import { readPushed, scanChange } from "./gate.ts";
  *
  * **`end`** (`--title` required, no `--pr`) runs `checkpoint`'s steps and
  * then the draft pull request every time, `--refused` titling it
- * `Refused: <title>` before the title screen. A refusal, a scan hit or a
+ * `Refused: <title>` before the title screen (a pull request already open
+ * keeps its own title, said in `notDone`). On an attended record reading
+ * `Resumes: <run-id>` (the morning walk), the body is that run's morning
+ * list, under its marker. A refusal, a scan hit or a
  * refused push returns before any pull request call, as in `checkpoint`.
  * Exit 0 when the remote branch holds `HEAD` and a pull request was opened,
  * updated or commented; else 1. The JSON is `checkpoint`'s with
@@ -618,9 +621,13 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   if (verb !== END && opts["pr"] !== true) return finish(true);
   // --refused names the title before the screen reads it, so a hit still gives `Run <run-id>`.
   const title = verb === END && opts["refused"] === true ? `Refused: ${String(opts["title"])}` : String(opts["title"]);
-  const step = await draftPr(ctx, { run, runDir, recordRel, top, cwd, base, branch: current, defaults, unattended, title });
+  const step = await draftPr(ctx, { run, runDir, recordRel, top, cwd, base, branch: current, defaults, unattended, resumes: head.resumes, title });
   result.pr = step.pr;
   result.notDone.push(...step.notDone);
+  // review/165: an open pull request keeps its own title, since the step sends only a body to one.
+  if (verb === END && opts["refused"] === true && step.pr !== null && (step.pr.how === "existing" || step.pr.how === "commented")) {
+    result.notDone.push(`title not changed: pull request #${step.pr.number} was already open, so it keeps its own title, not the Refused: one`);
+  }
   lines.push(`pr: ${step.pr === null ? "not opened" : `#${step.pr.number} ${step.pr.url} (${step.pr.how})`}`);
   return finish(step.pr !== null, { inferred: step.inferred });
 }
@@ -653,12 +660,14 @@ async function changedSince(top: string, base: string, side: Side = "work tree")
 
 /**
  * The person-only paths a commit the push would send changes (review/159):
- * every commit no remote-tracking ref holds (`HEAD --not --remotes`, as the
- * scan reads them, review/160), a root commit included and a merge by its own
- * resolution (`--cc`), renames read as a deletion and an addition.
+ * every commit no `origin` remote-tracking ref holds (`HEAD --not
+ * --remotes=origin`, as the scan reads them, review/160, build/108: the push
+ * goes to `origin`, so a commit only another remote holds is still read), a
+ * root commit included and a merge by its own resolution (`--cc`), renames
+ * read as a deletion and an addition.
  */
 async function heldInHistory(top: string): Promise<string[]> {
-  const read = await git(top, ["log", "--root", "--format=", "--name-only", "-z", "--cc", ...DIFF_PINS, "HEAD", "--not", "--remotes", "--"], CHECKPOINT);
+  const read = await git(top, ["log", "--root", "--format=", "--name-only", "-z", "--cc", ...DIFF_PINS, "HEAD", "--not", "--remotes=origin", "--"], CHECKPOINT);
   if (read.code !== 0) {
     throw new CliFailure({
       code: "FAILURE",
@@ -793,7 +802,15 @@ interface PrInputs {
   branch: string;
   defaults: DefaultBranches;
   unattended: boolean;
+  /** The record head's `Resumes:` value, as read; only an attended record's is used. */
+  resumes: string | null;
   title: string;
+}
+
+/** The morning list a pull request body is made from: its run, and the base its prerequisites are read against. */
+interface ListSource {
+  run: string;
+  base: string;
 }
 
 /**
@@ -803,8 +820,14 @@ interface PrInputs {
  * with the prerequisites the change's added lines imply, after
  * `screenOutbound`; a hit, or no morning list, puts a fixed body in its
  * place. Attended, no morning list is written, so the body is a fixed one
- * naming the run and its record. The title passes the screen too, a hit
- * replacing it with `Run <run-id>`.
+ * naming the run and its record, except on the morning walk (review/164): an
+ * attended record reading `Resumes: <run-id>`, a run id whose folder is under
+ * `.stamity/runs/`, takes the body from that run's `morning.md` as the walk
+ * left it, under that run's marker and through the same screen, so the open
+ * pull request's body is replaced, not commented on; a `Resumes:` that names
+ * no such run, or a list that cannot be read, keeps the fixed body, with a
+ * `notDone` entry. The title passes the screen too, a hit replacing it with
+ * `Run <run-id>`.
  */
 async function draftPr(ctx: CliContext, at: PrInputs): Promise<PrStep> {
   const env: NodeJS.ProcessEnv = { ...ctx.app.runtime.env };
@@ -820,28 +843,64 @@ async function draftPr(ctx: CliContext, at: PrInputs): Promise<PrStep> {
   const title = screenOutbound(cleanTitle, "pr-title").ok ? cleanTitle : `Run ${at.run}`;
   let inferred: PrereqRow[] = [];
   let body = `Run \`${at.run}\`, attended. Its record: \`${at.recordRel}\`.`;
-  if (at.unattended) {
-    const morningRel = `${at.runDir}/${MORNING_FILE}`;
+  let marked = at.run;
+  const source = at.unattended ? { run: at.run, base: at.base } : await resumedList(ctx, at, notDone);
+  if (source !== null) {
+    const morningRel = `${ctx.engine.runs.layout.runRelPath(source.run)}/${MORNING_FILE}`;
     const morning = readCapped(join(at.cwd, morningRel), MORNING_READ_MAX_BYTES);
     if (morning === null || morning.truncated) {
-      notDone.push(morning === null ? "morning list missing" : `morning list not posted (over ${MORNING_READ_MAX_BYTES} bytes)`);
-      body = `Run \`${at.run}\`: no morning list was posted. Its record: \`${at.recordRel}\`.`;
+      const why = morning === null ? "missing" : `not posted (over ${MORNING_READ_MAX_BYTES} bytes)`;
+      if (at.unattended) {
+        notDone.push(morning === null ? "morning list missing" : `morning list ${why}`);
+        body = `Run \`${at.run}\`: no morning list was posted. Its record: \`${at.recordRel}\`.`;
+      } else {
+        notDone.push(`pull request body not refreshed: the morning list of ${source.run} is ${why}`);
+      }
     } else {
-      inferred = inferredFrom(at.top, at.base);
-      const made = prBodyFrom(morning.text, at.run, { inferred });
+      marked = source.run;
+      inferred = inferredFrom(at.top, source.base);
+      const made = prBodyFrom(morning.text, source.run, { inferred });
       const screen = screenOutbound(made, "pr-body");
       body = made;
       if (!screen.ok) {
         const where = screen.hits.map((hit) => `line ${hit.line} (${hit.rule})`).join(", ");
         notDone.push(`pull request body replaced: the outbound screen matched ${where}`);
-        body = `Run \`${at.run}\`: the body made from \`${morningRel}\` was not posted, because the outbound screen matched its ${where}. Read the morning list on the branch.`;
+        body = `Run \`${source.run}\`: the body made from \`${morningRel}\` was not posted, because the outbound screen matched its ${where}. Read the morning list on the branch.`;
       }
     }
   }
   const gh = (request: Parameters<typeof ghApi>[0]) => ghApi(request, { cwd: at.top, env });
-  const outcome: PrOutcome = await ensureDraftPr(gh, { host: repo.host, owner: repo.owner, repo: repo.repo, head: at.branch, base: target, title, body, runId: at.run });
+  const outcome: PrOutcome = await ensureDraftPr(gh, { host: repo.host, owner: repo.owner, repo: repo.repo, head: at.branch, base: target, title, body, runId: marked });
   if ("notDone" in outcome) return { pr: null, inferred, notDone: [...notDone, outcome.notDone] };
   return { pr: { number: outcome.number, url: outcome.url, how: outcome.how }, inferred, notDone };
+}
+
+/**
+ * The run an attended record's `Resumes:` names, for the morning walk's body
+ * (review/164): a run id whose folder is a directory under `.stamity/runs/`,
+ * never through a link, and the base its prerequisites are read against, that
+ * run's own `Base:` so the body names what the whole pull request implies (the
+ * walk's `Base:` where that one names no commit here, said in `notDone`).
+ * `null` with no `Resumes:`, and with a `notDone` entry where it names no such
+ * run; the value itself is never echoed, since it may be any text.
+ */
+async function resumedList(ctx: CliContext, at: PrInputs, notDone: string[]): Promise<ListSource | null> {
+  if (at.resumes === null) return null;
+  const { layout, resumeCard } = ctx.engine.runs;
+  if (!layout.isRunId(at.resumes)) {
+    notDone.push("pull request body not refreshed: the record's Resumes: names no run id");
+    return null;
+  }
+  const dir = layout.runRelPath(at.resumes);
+  if (!isDirectory(join(at.cwd, dir))) {
+    notDone.push(`pull request body not refreshed: Resumes: names ${at.resumes}, and ${dir} is no run folder here`);
+    return null;
+  }
+  const record = readCapped(join(at.cwd, dir, layout.RECORD_FILE), layout.RECORD_HEAD_READ_BYTES);
+  const named = record === null ? null : resumeCard.readRecordHead(record.text).base;
+  const base = named === null ? null : await commitAt(at.top, named, CHECKPOINT);
+  if (base === null) notDone.push(`prerequisites read since this run's Base: only: ${dir}/${layout.RECORD_FILE} names no Base: that is a commit here`);
+  return { run: at.resumes, base: base ?? at.base };
 }
 
 /**
@@ -884,6 +943,14 @@ function readCapped(path: string, maxBytes: number): { text: string; truncated: 
 function isRegular(path: string): boolean {
   try {
     return lstatSync(path).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function isDirectory(path: string): boolean {
+  try {
+    return lstatSync(path).isDirectory();
   } catch {
     return false;
   }
