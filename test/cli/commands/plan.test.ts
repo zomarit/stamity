@@ -30,8 +30,24 @@ function writeGit(cwd: string, args: readonly string[]): string {
     cwd,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
-    env: { ...process.env, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: NO_GIT_CONFIG },
+    env: {
+      ...process.env,
+      GIT_CONFIG_NOSYSTEM: "1",
+      GIT_CONFIG_GLOBAL: NO_GIT_CONFIG,
+      GIT_AUTHOR_NAME: "Fixture One",
+      GIT_AUTHOR_EMAIL: "one@fixture.invalid",
+      GIT_COMMITTER_NAME: "Fixture One",
+      GIT_COMMITTER_EMAIL: "one@fixture.invalid",
+    },
   });
+}
+
+/** Append to `path` and commit it alone; returns the new HEAD. */
+async function touchAndCommit(cwd: string, path: string, line: string): Promise<string> {
+  await writeFile(join(cwd, path), `${line}\n`, { encoding: "utf8", flag: "a" });
+  writeGit(cwd, ["add", "--", path]);
+  writeGit(cwd, ["-c", "commit.gpgsign=false", "commit", "--quiet", "-m", `touch ${path}`]);
+  return writeGit(cwd, ["rev-parse", "HEAD"]).trim();
 }
 
 /**
@@ -148,7 +164,7 @@ async function planJson(cwd: string, argv: readonly string[]) {
 interface PlanDoc {
   ok: boolean;
   ready: boolean;
-  plans: { path: string; ready: boolean; blockers: { code: string; line?: number; message: string }[]; advisories: { code: string; message: string }[]; lint: Record<string, unknown> }[];
+  plans: { path: string; ready: boolean; blockers: { code: string; line?: number; message: string }[]; advisories: { code: string; message: string }[]; freshness: { stale: { path: string; reason: string }[]; exempt: string[] } | null; lint: Record<string, unknown> }[];
   contract?: { ok: boolean; problems: string[] };
   blockers?: { code: string; path: string; message: string }[];
 }
@@ -207,6 +223,32 @@ describe("stamity plan check", () => {
 
     // Without --chain the reversed pair is two independent plans, each ready.
     expect((await plan(cwd, ["check", NEXT_PATH, PLAN_PATH])).code).toBe(0);
+  });
+
+  it("passes --since through as the chain's base: a move after it is exempt, one between the stamp and it stays stale", async (ctx) => {
+    const { cwd, stamp } = await seeded(() => ctx.skip());
+    const between = await touchAndCommit(cwd, "docs/a.md", "moved between the stamp and the base");
+    const base = await touchAndCommit(cwd, "history.md", "the run's base");
+    await touchAndCommit(cwd, "src/b.ts", "export const fromTheChain = 3;");
+    await put(cwd, PLAN_PATH, cleanPlan(stamp));
+    await put(cwd, NEXT_PATH, cleanPlan(stamp, { id: "demo-02", extra: `depends_on: [${PLAN_PATH}]` }));
+    const chain = ["check", PLAN_PATH, NEXT_PATH, "--chain", "--since"];
+
+    // The run's base: src/b.ts moved only after it, so it is exempt; docs/a.md moved before it, so it is stale.
+    const atBase = await planJson(cwd, [...chain, base]);
+    expect(atBase.code).toBe(1);
+    for (const report of atBase.doc.plans) {
+      expect(report.freshness).toMatchObject({ stale: [{ path: "docs/a.md", reason: "moved" }], exempt: ["src/b.ts"] });
+      expect(codes(report)).toEqual(["stale"]);
+    }
+
+    // The stamp as the base: no commit lies between the stamp and itself, so both moves are exempt.
+    const atStamp = await planJson(cwd, [...chain, stamp]);
+    expect(atStamp.code).toBe(0);
+    for (const report of atStamp.doc.plans) {
+      expect(report.freshness).toMatchObject({ stale: [], exempt: ["docs/a.md", "src/b.ts"] });
+    }
+    expect(between).not.toBe(base);
   });
 
   it("refuses a version-2 run contract: exit 1 with the contract's problem on every plan", async (ctx) => {

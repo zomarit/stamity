@@ -28,8 +28,9 @@ import { isPlainObject, parseYamlStrict, unknownFields } from "../config/parse.t
  * version 1, and a prerequisite neither `done` nor `owned` by a named owner is
  * refused under the plan check's blocker code `prerequisite-open`. Every
  * defect is collected in one pass, so the person fixing a refused file needs
- * one round. A problem names a key, an index and a prerequisite's name, never
- * any other value the file holds.
+ * one round. A problem names a key and where it stands (a list index, or the
+ * line and column of a YAML syntax error), never a value the file holds: not
+ * a version, not a prerequisite's name or state, not the text of a YAML error.
  *
  * Pure: text in, verdict out; a path in the file is never resolved or opened.
  * Erasable syntax only, as the rest of `src/runs`.
@@ -93,14 +94,14 @@ const STOP_BY = /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]
  * every problem.
  */
 export function parseRunContract(text: string, source: string): RunContractResult {
-  let root: Record<string, unknown>;
+  let parsed: unknown;
   try {
-    const parsed = parseYamlStrict(text, source);
-    if (!isPlainObject(parsed)) throw new Error(`${source}: expected a map at the document root.`);
-    root = parsed;
+    parsed = parseYamlStrict(text, source);
   } catch (cause) {
-    return { ok: false, problems: [cause instanceof Error ? cause.message : String(cause)] };
+    return { ok: false, problems: [`${source}: ${unparsed(cause)}`] };
   }
+  if (!isPlainObject(parsed)) return { ok: false, problems: [`${source}: ${NOT_A_MAP}`] };
+  const root = parsed;
 
   const problems: string[] = [];
   const say = (message: string): void => {
@@ -149,6 +150,22 @@ export function parseRunContract(text: string, source: string): RunContractResul
 
 type Say = (message: string) => void;
 
+const NOT_A_MAP = "expected a map at the document root.";
+
+/**
+ * Why the text did not parse, in words that hold none of it. `parseYamlStrict`
+ * throws with the YAML library's error as `cause` on a syntax failure, whose
+ * message can quote the file (an alias's name), and with no cause when the root
+ * is not a map, whose message shows the root's value (`src/config/parse.ts`).
+ */
+function unparsed(cause: unknown): string {
+  const syntax = cause instanceof Error ? cause.cause : undefined;
+  if (!(syntax instanceof Error)) return NOT_A_MAP;
+  const at = (syntax as { linePos?: readonly { line: number; col: number }[] }).linePos?.[0];
+  const where = at === undefined ? "" : ` at line ${at.line}, column ${at.col}`;
+  return `the file is not valid YAML${where}; fix the syntax and re-run.`;
+}
+
 /** Own keys only: a prototype member never reads as a supplied value. */
 function own(obj: Record<string, unknown>, key: string): unknown {
   return Object.hasOwn(obj, key) ? obj[key] : undefined;
@@ -174,10 +191,7 @@ function checkVersion(value: unknown, say: Say): void {
     say(`\`run-contract\` is required; this engine reads version ${RUN_CONTRACT_VERSION}.`);
     return;
   }
-  const shown = typeof value === "number" ? String(value) : JSON.stringify(value) ?? typeof value;
-  say(
-    `\`run-contract: ${shown}\` is not a version this engine reads; it reads version ${RUN_CONTRACT_VERSION}.`,
-  );
+  say(`\`run-contract\` names a version this engine does not read; it reads version ${RUN_CONTRACT_VERSION}.`);
 }
 
 /** A non-empty string, kept as written. */
@@ -268,9 +282,9 @@ function readPrerequisites(value: unknown, say: Say): RunContractPrerequisite[] 
     }
     const why =
       state === "owned"
-        ? 'is "owned" but names no `owner`'
-        : `is neither done nor owned (state ${state === undefined ? "absent" : JSON.stringify(state)})`;
-    say(`${PREREQUISITE_OPEN}: ${at} ${JSON.stringify(name)} ${why}.`);
+        ? `is owned but names no \`owner\``
+        : `is neither done nor owned (\`${at}.state\` ${state === undefined ? "is absent" : "is neither `done` nor `owned`"})`;
+    say(`${PREREQUISITE_OPEN}: ${at} ${why}.`);
   });
   return rows;
 }

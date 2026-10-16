@@ -85,9 +85,9 @@ answerer: "@maintainer"
 
   it("refuses version 2, naming version 1", () => {
     const problems = problemsOf(FULL.replace("run-contract: 1", "run-contract: 2"));
-    expect(problems).toHaveLength(1);
-    expect(problems[0]).toContain("`run-contract: 2`");
-    expect(problems[0]).toContain("version 1");
+    expect(problems).toEqual([
+      `${SOURCE}: \`run-contract\` names a version this engine does not read; it reads version 1.`,
+    ]);
   });
 
   it("refuses a file with no run-contract key", () => {
@@ -102,10 +102,15 @@ answerer: "@maintainer"
     );
     const problems = problemsOf(text);
     // The done row stays out; the open row and the owned row with no owner are named.
-    expect(problems).toHaveLength(2);
-    expect(problems[0]).toMatch(/prerequisite-open: prerequisites\[1\] "staging database"/);
-    expect(problems[1]).toMatch(/prerequisite-open: prerequisites\[2\] "signing key"/);
-    expect(problems.join("\n")).not.toContain("GH_TOKEN");
+    // Each is named by its index, never by its name or its state.
+    expect(problems).toEqual([
+      `${SOURCE}: prerequisite-open: prerequisites[1] is neither done nor owned (\`prerequisites[1].state\` is neither \`done\` nor \`owned\`).`,
+      `${SOURCE}: prerequisite-open: prerequisites[2] is owned but names no \`owner\`.`,
+    ]);
+    const absent = problemsOf(FULL.replace("    state: owned\n    owner: \"@ops\"\n", ""));
+    expect(absent).toEqual([
+      `${SOURCE}: prerequisite-open: prerequisites[1] is neither done nor owned (\`prerequisites[1].state\` is absent).`,
+    ]);
   });
 
   it("refuses preview: write and move: on", () => {
@@ -174,10 +179,35 @@ answerer: "@maintainer"
     expect(problems.join("\n")).toContain("`answerer`");
   });
 
-  it("returns malformed YAML and a non-map root as a problem, never a throw", () => {
-    const malformed = problemsOf("run-contract: 1\nscope: [unclosed\n");
-    expect(malformed).toHaveLength(1);
-    expect(malformed[0]).toContain(SOURCE);
-    expect(problemsOf("- a\n- b\n")).toHaveLength(1);
+  it("returns malformed YAML and a non-map root as a problem, never a throw, by line and column", () => {
+    expect(problemsOf("run-contract: 1\nscope: [unclosed\n")).toEqual([
+      `${SOURCE}: the file is not valid YAML at line 3, column 1; fix the syntax and re-run.`,
+    ]);
+    expect(problemsOf("- a\n- b\n")).toEqual([`${SOURCE}: expected a map at the document root.`]);
+  });
+
+  it("holds no value the file holds in any problem: names the key and its position", () => {
+    const canary = "canary-7f3e";
+    const refused = [
+      FULL.replace("run-contract: 1", `run-contract: ${canary}`),
+      FULL.replace("run-contract: 1", "run-contract: 7031"),
+      FULL.replace("  - name: staging database\n    state: owned\n", `  - name: ${canary}\n    state: ${canary}-state\n`),
+      FULL.replace("plan: docs/plans/021-cloud-runs-01.md", `plan: ../${canary}.md`),
+      FULL.replace("base: 02e040eb29de0468d90febe856ae205f31d6632d", `base: ${canary}`),
+      FULL.replace('item: "#412"', `item: ${canary}`).replace("acceptance: |", "acceptance: 7031\nunused: |"),
+      FULL.replace('stop-by: "2026-10-16T06:00:00Z"', `stop-by: ${canary}`).replace("max-units: 12", "max-units: 7031"),
+      FULL.replace("preview: stop", `preview: ${canary}`).replace("move: off", "move: 7031"),
+      FULL.replace("in: [src/runs, test/runs]", `in: [${canary}, 7031]`),
+      `run-contract: 1\nplan: *${canary}\n`,
+      `${canary}\n`,
+    ];
+    for (const text of refused) {
+      const problems = problemsOf(text);
+      expect(problems.length).toBeGreaterThan(0);
+      for (const problem of problems) {
+        expect(problem).not.toContain("canary");
+        expect(problem).not.toContain("7031");
+      }
+    }
   });
 });
