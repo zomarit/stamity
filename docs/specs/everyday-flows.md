@@ -124,7 +124,7 @@ date, re-pointed or added a citation; the run's last citation pass re-read each 
 page round re-read them on `aa7a3e5b` with its own edits to `SECURITY.md`, `evals/SET-v7.md` and the unattended skill,
 re-pointing each one whose text had moved; the run's final derived pass, and the pull-request rounds' after it,
 re-pointed each one a later commit moved, mapped through git's diff from the commit it was read at, and every one
-reads at `40c43e0e`, a pin named beside a citation included. Two units
+reads at `49682363`, a pin named beside a citation included. Two units
 were not on `4daeb214`: `u19-run-end` (`stamity run end`) and
 `u21-security-page` (`SECURITY.md`'s cloud section); the fix round cites both at `bc12cfc3`. REQ-FLOW-105 to
 REQ-FLOW-119 are held for plan 021's second file. The text dated 2026-10-16 is unreleased at this merge; the plan cuts
@@ -3475,7 +3475,7 @@ given neither, or only a cloud or CI marker (`CLAUDE_CODE_REMOTE`, `COPILOT_AGEN
 Then `Mode: attended` (`content/skills/st-unattended/SKILL.md:24-27`; `content/commands/st-work.md:406-408`). A head
 with no `Mode:` line reads attended unless `STAMITY_UNATTENDED` is set; then the variable governs, as the shell guard,
 the ask gate and the run verbs read it, and a `Mode: attended` head wins over it (`readRecordHead`,
-`src/runs/resumeCard.ts`; `unattendedBy` and `unattendedSource`, `src/hooks/scripts.ts:3669-3697`, `:4080-4098`;
+`src/runs/resumeCard.ts`; `unattendedBy` and `unattendedSource`, `src/hooks/scripts.ts:3668-3696`, `:4079-4097`;
 `readsUnattended`, `src/cli/commands/run.ts:996-999`). `/st-board pickup` and
 `/st-rework` hand the mode to `/st-work` as `run-mode: attended | unattended` (`content/commands/st-board.md:128`,
 `:366`; `content/commands/st-rework.md:268-270`), and `/st-debug` hands it over only when attended: an unattended debug
@@ -3504,18 +3504,19 @@ fail-closed tail, exits 2 naming the rule and the record or the variable it read
 any in-progress record reads `Mode: unattended`; else, with no in-progress record reading `Mode: attended`, while the
 variable is set, except when no run is in progress, a closed record reading `Mode: unattended` names the current
 branch as its `Branch:`, and the run-ended marker `.stamity/run-ended.json` names that record's run with an `at` at
-most 120 seconds old and not after now, the pre-flight canary's window (`CANARY_MAX_AGE_MS`, REQ-FLOW-101):
+most 15 minutes old and not after now, its own window for a person-paced final round of several question calls
+(`RUN_ENDED_MAX_AGE_MS`, `src/mcp/env.ts:193`, not the pre-flight canary's 120 s, REQ-FLOW-101; pr/41):
 `stamity run end --final-round`, the run's last `run end`, writes it, `{ "run": "<run-id>", "at": "<ISO time>" }`, at
 that exit; a plain `run end` writes none and removes one there (REQ-FLOW-096), and `stamity run start` deletes it
 (Claude Code's final round after that run handed off; on any other branch, or with no fresh marker naming the run, the
 variable decides; pr/17, pr/36, pr/37). So a later session on that branch, in the same checkout, finds no marker the
-gate honours once the window has passed; one that starts inside it is the residual `SECURITY.md` names
-(`SECURITY.md:484-492`). The gate is `UNATTENDED_ASK_GATE_FILE`
+gate honours once the window has passed; one that starts inside its 15 minutes is the residual `SECURITY.md` names
+(`SECURITY.md:484-493`). The gate is `UNATTENDED_ASK_GATE_FILE`
 and its reasons in `src/hooks/scripts.ts`, wired after every planned PreToolUse row (`src/adapters/claude.ts:924-930`).
 The detail lives in the `st-unattended` skill, called by name only in that mode.
 
 - **Proof:** `test/hooks/unattendedAskGate.test.ts` ("the ask gate's five cases (REQ-FLOW-090)", the closed
-  record with no marker naming its run, and the marker past the canary's window), `test/cli/commands/runEnd.test.ts`
+  record with no marker naming its run, and the marker past its window), `test/cli/commands/runEnd.test.ts`
   and `test/cli/commands/run.test.ts` (the marker's write and delete), `test/adapters/claude.test.ts` (the ask gate's placement),
   `test/hooks/scriptBudget.test.ts`, `test/corpus/skills/unattended.test.ts` ("st-unattended — asks (REQ-FLOW-090)").
 
@@ -3710,7 +3711,7 @@ Added 2026-10-16 (plan 021 file 1, units `u7-learn-read`, `u8-preflight-core` an
 
 Given `Mode: unattended`, When the run starts, Then it loads the question protocol and the injection-screening rule by
 name and the record names both (`content/skills/st-unattended/SKILL.md:41-42`; `REQUIRED_FLOORS`,
-`src/runs/preflight.ts:131`); learnings come from the session-start banner, else `stamity learn read` (`--body <id>`
+`src/runs/preflight.ts:129`); learnings come from the session-start banner, else `stamity learn read` (`--body <id>`
 for one body) beside `stamity handoff list`, else the session-start script run by hand, never a file opened with the
 file tools (`SKILL.md:43-46`); `learn read` screens with the write gate's whole catalog, exfil rows included, lists a
 refused file by its pattern ids with no span, and exits 1 when the folder cannot be listed or a `--body` id is skipped
@@ -3746,8 +3747,8 @@ pinned CLI is unreachable, `gate scan` cannot run, the item's author is not `adm
 the account cannot push to the default branch of the `origin` repository (no protection, a direct-push bypass, a 403, a
 404, a non-GitHub origin, or `GH_REPO` naming another repository; a pull-request-only bypass passes). It warns on Cursor
 egress, token-shaped variable names (names only) and missing review state; with no refusal it exits 0
-(`CANARY_MAX_AGE_MS`, `directPushVerdict` and `runPreflight`, `src/runs/preflight.ts:128`, `:471`, `:853-877`; the
-verb in `src/cli/commands/gate.ts`, its flags at `:2079-2082`).
+(`CANARY_MAX_AGE_MS`, `src/mcp/env.ts:190`; `directPushVerdict` and `runPreflight`, `src/runs/preflight.ts:474`,
+`:856-880`; the verb in `src/cli/commands/gate.ts`, its flags at `:2079-2082`).
 
 - **Proof:** `test/runs/preflight.test.ts`, `test/cli/commands/gatePreflight.test.ts`,
   `test/hooks/personOnlyGuard.test.ts` (the canary), `test/mcp/env.test.ts`, `test/cli/commands/init.test.ts` and
@@ -3799,7 +3800,7 @@ dependency is a morning-list row (`SKILL.md:118-119`).
 ### REQ-FLOW-104 — The cloud's accepted risks are named
 
 Added 2026-10-16 (plan 021 file 1, unit `u21-security-page`; not on this merge's base, it is cited from `bc12cfc3`
-by the merge's first fix round and re-read after the whole-branch page round: the section is `SECURITY.md:379-578`, under
+by the merge's first fix round and re-read after the whole-branch page round: the section is `SECURITY.md:379-579`, under
 `## What it does not defend` (`:284`), the settings row `:98`, the git-hardening row `:96` and the third network
 exception `:152-173`).
 
@@ -3832,12 +3833,12 @@ named network exceptions, and the run verbs on the git-hardening row.
 - **As built, where the delta differed:** the delta named PowerShell's command wrappers, gh's alias for the
   create-and-push form, a multi-root workspace file's settings and an editor tasks file's folder-open task as uncovered
   by the unattended rules and not held. The guard rounds after it closed each: the page states the wrapped lines read
-  and refused, the alias refused and those files held (`SECURITY.md:553-562`, `:576-578`), the encoded command and the
-  `iex` pipe staying the gaps the unattended rules do not cover (`:571-574`). The page's place-reader paragraph
-  (`:564-569`) and its residual for programs the repository's configuration names (`:429-464`) are not restated here; a
+  and refused, the alias refused and those files held (`SECURITY.md:554-563`, `:577-579`), the encoded command and the
+  `iex` pipe staying the gaps the unattended rules do not cover (`:572-575`). The page's place-reader paragraph
+  (`:565-570`) and its residual for programs the repository's configuration names (`:429-464`) are not restated here; a
   later page round settles them. The whole-branch round added three residuals in plain words: the GitHub MCP server
   on the clients that take no per-tool deny, the origin pin rewritten together with git's configuration, and the
-  working directory Claude Code keeps across shell calls, attended only (`SECURITY.md:400-409`, `:493-498`,
+  working directory Claude Code keeps across shell calls, attended only (`SECURITY.md:400-409`, `:494-499`,
   `:410-416`).
 - **Proof:** `test/docsPages.test.ts` ("cloud and unattended runs (REQ-FLOW-104)": the section's place, every risk
   and gap named above, the retired bullet gone, the control table's pointers, the settings row and the network
@@ -3849,7 +3850,7 @@ Added 2026-10-16 (plan 021 file 1, units `u6-person-only-tables` and `u14-shell-
 
 Given any in-progress record (debug records included) reading `Mode: unattended`, or `STAMITY_UNATTENDED` set while no
 in-progress record reads `Mode: attended` (one with no `Mode:` line included; `unattendedBy`,
-`src/hooks/scripts.ts:3669-3697`), When the main thread runs a raw `git push`, `gh pr create`, `gh pr edit`, or a REST
+`src/hooks/scripts.ts:3668-3696`), When the main thread runs a raw `git push`, `gh pr create`, `gh pr edit`, or a REST
 write on `pulls` or `pulls/<n>`, `contents/`, `git/` refs or objects, or `merges`, Then the shell guard refuses it on every client,
 naming `stamity run checkpoint` and `run end` as the push path; replies on `pulls/<n>/comments` and
 `issues/<n>/comments` pass (`unattendedPushVerdict`, `src/hooks/personOnly.ts:1191`;
@@ -4800,9 +4801,9 @@ above.
 
 - GIVEN an in-progress record reading `Mode: unattended` THEN the ask gate exits 2 naming it; GIVEN one reading
   `Mode: attended` beside it THEN still 2; GIVEN no run in progress and a closed unattended record whose `Branch:` is the
-  current branch, with the run-ended marker naming its run and its `at` within 120 seconds, THEN 0; GIVEN the same
-  record and branch with no marker, one naming another run, or one past 120 seconds, with no `at` or dated after now,
-  THEN 2; GIVEN another branch THEN the variable decides. *(test: `test/hooks/unattendedAskGate.test.ts`)*
+  current branch, with the run-ended marker naming its run and its `at` within 15 minutes, 14 minutes old included,
+  THEN 0; GIVEN the same record and branch with no marker, one naming another run, or one past 15 minutes (16 minutes
+  old), with no `at` or dated after now, THEN 2; GIVEN another branch THEN the variable decides. *(test: `test/hooks/unattendedAskGate.test.ts`)*
 - GIVEN `run end --final-round` at any exit THEN the marker names its run and the time it was written; GIVEN a plain
   `run end` THEN no marker is left; GIVEN `run start` THEN it is gone; none of them under `--dry-run`.
   *(test: `test/cli/commands/runEnd.test.ts`, `test/cli/commands/run.test.ts`)*
@@ -4858,7 +4859,7 @@ above.
   `test/cli/commands/plan.test.ts`, `test/runs/freshness.test.ts`)*
 - GIVEN a plain `run end` on a closed unattended record, a marker naming its run there or none, THEN no marker is left
   and the ask gate refuses a question on that branch; GIVEN the same `run end` with `--final-round` THEN the marker
-  names the run and the gate allows it, until the marker is past 120 seconds. *(test:
+  names the run and the gate allows it, until the marker is past 15 minutes. *(test:
   `test/cli/commands/runEnd.test.ts`)*
 
 **REQ-FLOW-097** (added 2026-10-16)
