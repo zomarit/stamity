@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "generatedBy": "1.15.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-17T17:27:06.713Z",
+  "updatedAt": "2026-10-17T17:57:24.589Z",
   "tools": [
     "claude"
   ],
@@ -635,7 +635,7 @@
       "adapter": "claude",
       "artifactId": "claude-ask-gate",
       "artifactType": "infra",
-      "contentHash": "68f778f1568a97a450892836f4e2399bd81e5961997c424ab7aceda9fb718939",
+      "contentHash": "7847c0b71ce5168646b229aa64abe14a4b7835f56b4d9c97e8e2692a9f6ef64f",
       "path": ".stamity/generated/hooks/claude/stamity-unattended-ask-gate.mjs"
     },
     {
