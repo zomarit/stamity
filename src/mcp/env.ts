@@ -186,16 +186,19 @@ const TOOL_ENV_NOTES: Record<Tool, string> = {
  */
 export const PREFLIGHT_CANARY_FILE = `${STATE_DIR}/preflight-canary.json`;
 
-/** The canary's oldest accepted age, and the window the ask gate honours the run-ended marker for. */
+/** The canary's oldest accepted age: the guard writes it as the pre-flight command starts, so one process spans it. */
 export const CANARY_MAX_AGE_MS = 120_000;
+
+/** The run-ended marker's window (pr/41): 15 minutes, since the final round is person-paced, several question calls. */
+export const RUN_ENDED_MAX_AGE_MS = 900_000;
 
 /**
  * The run-ended marker (REQ-FLOW-090, pr/17, pr/36, pr/37): `stamity run end
  * --final-round` writes `{ "run": "<run-id>", "at": "<ISO time>" }` here at the
  * run's final exit, a plain `run end` and `stamity run start` delete it; the
  * unattended ask gate lets Claude Code's final question round through only on
- * the branch of the closed run this names, and only within the pre-flight
- * canary's window after `at`. Machine-local: a fresh clone or another checkout
+ * the branch of the closed run this names, and only within
+ * {@link RUN_ENDED_MAX_AGE_MS} after `at`. Machine-local: a fresh clone or another checkout
  * never holds it, so a closed record carried there exempts nothing.
  */
 export const RUN_ENDED_MARKER_FILE = `${STATE_DIR}/run-ended.json`;

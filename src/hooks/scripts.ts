@@ -30,7 +30,7 @@ import {
 import type { Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
 import { CONTENT_PREFIX, GENERATED_SCRIPT_LINT_DIRECTIVE, STATE_DIR } from "../types/markers.ts";
-import { CANARY_MAX_AGE_MS, PREFLIGHT_CANARY_FILE, RUN_ENDED_MARKER_FILE } from "../mcp/env.ts";
+import { PREFLIGHT_CANARY_FILE, RUN_ENDED_MARKER_FILE, RUN_ENDED_MAX_AGE_MS } from "../mcp/env.ts";
 import { buildResumeCardSource, RESUME_CARD_HOST_NAMES } from "../runs/cardSource.ts";
 import {
   GIT_METADATA_MAX_BYTES,
@@ -3916,9 +3916,9 @@ const ASK_TOOL_NAME = "AskUserQuestion";
  * `.git/HEAD` as the guard reads it) on its `Branch:` line, and the run-ended
  * marker {@link RUN_ENDED_MARKER_FILE} that `run end --final-round` writes and
  * `run start` deletes names that record's run, its `at` at most
- * {@link CANARY_MAX_AGE_MS} old (the pre-flight canary's window, 120 s) and not
- * after now, which is Claude Code's final question round after that run handed
- * off (pr/17, pr/36). A closed record carried into a later clone on another branch
+ * {@link RUN_ENDED_MAX_AGE_MS} old (15 minutes, a person-paced round of several
+ * question calls) and not after now, which is Claude Code's final question round
+ * after that run handed off (pr/17, pr/36, pr/41). A closed record carried into a later clone on another branch
  * exempts nothing (review/100), nor one on this branch with no fresh marker naming
  * it: a later session on that branch before its own record opens, past the window
  * (pr/17, pr/36). A refusal names the record or the variable it read (review/104).
@@ -3964,7 +3964,7 @@ const HEAD_READ_BYTES = ${RECORD_HEAD_READ_BYTES};
 const RUNS_READ_MAX = ${GUARD_RUNS_READ_MAX};
 const GIT_MAX_BYTES = ${GIT_METADATA_MAX_BYTES};
 const MARKER_SEGMENTS = ${json(RUN_ENDED_MARKER_FILE.split("/"))};
-const MARKER_MAX_AGE_MS = ${CANARY_MAX_AGE_MS};
+const MARKER_MAX_AGE_MS = ${RUN_ENDED_MAX_AGE_MS};
 const ASK_TOOL = ${json(ASK_TOOL_NAME)};
 const REASON = ${json(UNATTENDED_ASK_GATE_REASON)};
 const RECORD_SOURCE = ${json(UNATTENDED_ASK_GATE_RECORD_SOURCE)};

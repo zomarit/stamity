@@ -22,7 +22,7 @@ import {
   UNATTENDED_ASK_GATE_RECORD_SOURCE,
   UNATTENDED_ASK_GATE_VARIABLE_SOURCE,
 } from "../../src/hooks/scripts.ts";
-import { CANARY_MAX_AGE_MS, RUN_ENDED_MARKER_FILE } from "../../src/mcp/env.ts";
+import { RUN_ENDED_MARKER_FILE, RUN_ENDED_MAX_AGE_MS } from "../../src/mcp/env.ts";
 import { TOOLS } from "../../src/types/core.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
@@ -101,7 +101,7 @@ function record(status: string, mode?: "attended" | "unattended", branch?: strin
 
 /**
  * The run-ended marker `run end --final-round` writes at the run's final exit, naming `runId` (pr/17), its `at`
- * `ageMs` before now (pr/36: the gate honours it only within the pre-flight canary's window).
+ * `ageMs` before now (pr/36, pr/41: the gate honours it only within its own window, 15 minutes).
  */
 // TEST CHANGE, justified (pr/36, signed off 12:41Z): the marker carries `at` now, and one without it exempts nothing.
 function ended(runId: string, ageMs = 0): Record<string, string> {
@@ -257,12 +257,14 @@ describe("which record the gate reads", () => {
   });
 
   // pr/36: on a persistent checkout the marker outlives the final round, so a later session on the closed run's branch
-  // finds it before its own run start; the gate honours it only within the pre-flight canary's window after `at`.
-  it("refuses on a closed unattended record's branch once its run-ended marker is past the canary's window (pr/36)", async () => {
-    expect(CANARY_MAX_AGE_MS).toBe(120_000);
+  // finds it before its own run start; the gate honours it only within the marker's window after `at` (pr/41: 15
+  // minutes, a person-paced final round of several question calls, not the pre-flight canary's 120 s).
+  // TEST CHANGE, justified (pr/41, signed off 17:49Z): the window moved from 120 s to 15 minutes, so the ages follow.
+  it("refuses on a closed unattended record's branch once its run-ended marker is past its window (pr/36, pr/41)", async () => {
+    expect(RUN_ENDED_MAX_AGE_MS).toBe(900_000);
     const gate = await placeGate({
       ".stamity/runs/2026-10-16_night/record.md": record("handed off", "unattended", "stamity/night"),
-      ...ended("2026-10-16_night", CANARY_MAX_AGE_MS + 60_000),
+      ...ended("2026-10-16_night", 16 * 60_000),
       ...onBranch("stamity/night"),
     });
     expect(refusal(gate, ON)).toBe(BY_VARIABLE);
@@ -273,8 +275,8 @@ describe("which record the gate reads", () => {
     expect(refusal(gate, ON)).toBe(BY_VARIABLE);
     await getRepo().seedFiles(ended("2026-10-16_night", -60_000));
     expect(refusal(gate, ON)).toBe(BY_VARIABLE);
-    // One fact away: the marker inside the window → the final round may ask.
-    await getRepo().seedFiles(ended("2026-10-16_night", CANARY_MAX_AGE_MS - 30_000));
+    // One fact away: the marker inside the window → the final round may ask, a later question 14 minutes on too.
+    await getRepo().seedFiles(ended("2026-10-16_night", 14 * 60_000));
     expect(denies(gate, ON)).toBe(false);
   });
 

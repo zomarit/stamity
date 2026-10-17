@@ -441,7 +441,8 @@ describe("stamity run end", () => {
     expect(existsSync(join(last.repo, RUN_ENDED_MARKER_FILE))).toBe(true);
     expect(await ask(last.repo)).toBe(0);
     // The same marker gone stale, as a later session on a persistent checkout finds it: the gate refuses (pr/36).
-    await put(last.repo, RUN_ENDED_MARKER_FILE, `${JSON.stringify({ run: RUN, at: new Date(Date.now() - 600_000).toISOString() })}\n`);
+    // TEST CHANGE, justified (pr/41, signed off 17:49Z): the window is 15 minutes now, so stale is 16 minutes, not 10.
+    await put(last.repo, RUN_ENDED_MARKER_FILE, `${JSON.stringify({ run: RUN, at: new Date(Date.now() - 16 * 60_000).toISOString() })}\n`);
     expect(await ask(last.repo)).toBe(2);
     expect(planned.code).toBe(0);
     expect(await readFile(join(dry.repo, RUN_ENDED_MARKER_FILE), "utf8")).toBe(left);
