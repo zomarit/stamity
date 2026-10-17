@@ -585,10 +585,14 @@ describe("runPreflight — the push identity (review/36)", () => {
   const fix = "use an https origin with `gh auth setup-git`";
   // pr/31: the helper branch names its own way out, the bare helper the check accepts, since a gh behind a shim
   // writes the real executable's path and re-running setup-git alone writes the same refused path.
+  // TEST CHANGE, justified (pr/42, signed off 17:49Z): the advice replaces the list (`--replace-all`), since a plain
+  // set adds gh's helper beside the others, and names the system-level helper the person removes.
   const helperFix =
-    "make gh's helper the only credential helper for origin: set it to the bare form the check accepts, " +
-    "`git config --global credential.helper '!gh auth git-credential'` (or `git config credential.helper " +
-    "'!gh auth git-credential'` in the repository), or re-run `gh auth setup-git` with the gh that is on PATH";
+    "make gh's helper the only credential helper for origin: replace the list with the bare form the check accepts, " +
+    "`git config --global --replace-all credential.helper '!gh auth git-credential'` (or `git config --replace-all " +
+    "credential.helper '!gh auth git-credential'` in the repository); a system-level helper (Apple's git ships one, " +
+    "and an /etc/gitconfig can name one) stays in the list beside it, so remove that too, the person running " +
+    "`git config --system --unset-all credential.helper`; or re-run `gh auth setup-git` with the gh that is on PATH";
 
   // Changed for pr/8: a helper naming gh by a path now binds only where that path is the gh the REST reads run
   // (`deps.gh`, its path or its realpath), so each row names the resolved gh it is checked against; before, any

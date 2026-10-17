@@ -138,12 +138,17 @@ const PUSH_IDENTITY_FIX = "use an https origin with `gh auth setup-git`";
 /**
  * The helper branch's way out (pr/31): a gh behind a shim (scoop, Chocolatey, mise, asdf, snap) writes its helper
  * with the real executable's path, which is not the `gh` on `PATH`, so re-running setup-git alone writes the same
- * refused path; the bare form, which `PATH` decides, is accepted.
+ * refused path; the bare form, which `PATH` decides, is accepted. pr/42: `--replace-all` makes it the level's only
+ * entry, since a plain set adds one beside the rest; a system-level helper (Apple git's osxkeychain) is read first
+ * and stays in the list, so the text names its removal too, a write the person runs. It names no helper's value, as
+ * the verdict echoes none.
  */
 const GH_HELPER_FIX =
-  "make gh's helper the only credential helper for origin: set it to the bare form the check accepts, " +
-  "`git config --global credential.helper '!gh auth git-credential'` (or `git config credential.helper " +
-  "'!gh auth git-credential'` in the repository), or re-run `gh auth setup-git` with the gh that is on PATH";
+  "make gh's helper the only credential helper for origin: replace the list with the bare form the check accepts, " +
+  "`git config --global --replace-all credential.helper '!gh auth git-credential'` (or `git config --replace-all " +
+  "credential.helper '!gh auth git-credential'` in the repository); a system-level helper (Apple's git ships one, " +
+  "and an /etc/gitconfig can name one) stays in the list beside it, so remove that too, the person running " +
+  "`git config --system --unset-all credential.helper`; or re-run `gh auth setup-git` with the gh that is on PATH";
 const HEADER_FIX =
   "remove the Authorization http.extraHeader that applies to origin (actions/checkout's persist-credentials: false), " +
   "and use an https origin with `gh auth setup-git`";
