@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "generatedBy": "1.15.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-16T12:30:29.122Z",
+  "updatedAt": "2026-10-17T17:27:06.713Z",
   "tools": [
     "claude"
   ],
@@ -467,7 +467,7 @@
       "adapter": "claude",
       "artifactId": "unattended",
       "artifactType": "skill",
-      "contentHash": "da724fc15d2afc3314e9614ac869deb3dd0f4e9f1b8b3aeae8c0aef41973554f",
+      "contentHash": "fd22ba08fe96d09b6db57b193421b08e183d01c4f10f44d2de56c7f0e34b5e9d",
       "path": ".claude/skills/st-unattended/SKILL.md"
     },
     {
@@ -481,7 +481,7 @@
       "adapter": "claude",
       "artifactId": "unattended",
       "artifactType": "skill",
-      "contentHash": "821eb91da001a92666f799ccb28b0a741d9ebb0cdf5886380ebb3ab47a1a53fd",
+      "contentHash": "36f0a28346c24a899d0f27e6f39070964cc25f2ebce886d0b21b99cc8d277d8d",
       "path": ".claude/skills/st-unattended/references/chains.md"
     },
     {
@@ -635,7 +635,7 @@
       "adapter": "claude",
       "artifactId": "claude-ask-gate",
       "artifactType": "infra",
-      "contentHash": "947eea33ad11672a4f6bdfdf49454845e85ee1bdcb2f513319ea3c570f90b3a7",
+      "contentHash": "68f778f1568a97a450892836f4e2399bd81e5961997c424ab7aceda9fb718939",
       "path": ".stamity/generated/hooks/claude/stamity-unattended-ask-gate.mjs"
     },
     {

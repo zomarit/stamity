@@ -30,6 +30,7 @@ const HEAD_READ_BYTES = 65536;
 const RUNS_READ_MAX = 50;
 const GIT_MAX_BYTES = 4096;
 const MARKER_SEGMENTS = [".stamity","run-ended.json"];
+const MARKER_MAX_AGE_MS = 120000;
 const ASK_TOOL = "AskUserQuestion";
 const REASON = "This run is unattended: take the declared default and record `Default applied: <question> → option <N> (unattended)`; with no declared default, stop at BLOCKED_AMBIGUITY.";
 const RECORD_SOURCE = " (<record> is in progress and reads `Mode: unattended`.)";
@@ -157,16 +158,19 @@ function currentBranch(root) {
   return head !== null && head.startsWith("ref: refs/heads/") ? head.slice(16) : null;
 }
 
-/** The run id the run-ended marker names; null when absent, a link, not a file, past GIT_MAX_BYTES or naming no run id. */
+/** The run id a fresh run-ended marker names; null when absent, a link, not a file, past GIT_MAX_BYTES, naming no run id, or its at unreadable, after now or past MARKER_MAX_AGE_MS. */
 function endedRun(root) {
   const text = gitText(join(root, ...MARKER_SEGMENTS));
   if (text === null) return null;
-  let run = null;
+  let marker = null;
   try {
-    run = JSON.parse(text)?.run ?? null;
+    marker = JSON.parse(text);
   } catch {
     return null;
   }
+  const run = marker?.run;
+  const age = Date.now() - (typeof marker?.at === "string" ? Date.parse(marker.at) : Number.NaN);
+  if (!(age >= 0 && age <= MARKER_MAX_AGE_MS)) return null;
   return typeof run === "string" && RUN_ID.test(run) ? run : null;
 }
 
@@ -181,7 +185,7 @@ function unattendedSource(root) {
   const flag = (process.env.STAMITY_UNATTENDED ?? "").trim().toLowerCase();
   if (["", "false", "0"].includes(flag)) return null;
   // Claude Code's final round: no run in progress, and this branch's unattended run closed its record before asking,
-  // its run end's marker still in place: a later session on the branch, before its own record opens, has none.
+  // its last run end's marker fresh: a later session on the branch, before its own record opens, has none in date.
   const closed = running.length === 0 ? heads.filter((head) => head.mode === "unattended" && head.branch !== null) : [];
   if (closed.length > 0) {
     const ended = endedRun(root);
