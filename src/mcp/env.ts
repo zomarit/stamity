@@ -187,12 +187,13 @@ const TOOL_ENV_NOTES: Record<Tool, string> = {
 export const PREFLIGHT_CANARY_FILE = `${STATE_DIR}/preflight-canary.json`;
 
 /**
- * The run-ended marker (REQ-FLOW-090, pr/17): `stamity run end` writes
- * `{ "run": "<run-id>" }` here at the run's final exit and `stamity run start`
- * deletes it; the unattended ask gate lets Claude Code's final question round
- * through only on the branch of the closed run this names. Machine-local: a
- * fresh clone or another checkout never holds it, so a closed record carried
- * there exempts nothing.
+ * The run-ended marker (REQ-FLOW-090, pr/17, pr/36, pr/37): `stamity run end
+ * --final-round` writes `{ "run": "<run-id>", "at": "<ISO time>" }` here at the
+ * run's final exit, a plain `run end` and `stamity run start` delete it; the
+ * unattended ask gate lets Claude Code's final question round through only on
+ * the branch of the closed run this names, and only within the pre-flight
+ * canary's window after `at`. Machine-local: a fresh clone or another checkout
+ * never holds it, so a closed record carried there exempts nothing.
  */
 export const RUN_ENDED_MARKER_FILE = `${STATE_DIR}/run-ended.json`;
 

@@ -429,7 +429,10 @@ describe("st-unattended — the morning list and the walk (REQ-FLOW-094, REQ-FLO
       "pushes through the run verbs with that run's `morning.md` in `--paths` and refreshes the pull request body.",
     );
     // Each client's way back is named by what its cloud does, not by its name (invariant 17).
-    expect(text).toContain("a cloud session that stays open for a question closes the record, pushes, then asks one final round");
+    // TEST CHANGE, justified (pr/37, signed off 12:41Z): the session's last run end passes --final-round, the marker
+    // its final question round needs, so the clause names it.
+    expect(text).toContain("a cloud session that stays open closes the record, ends on `run end --final-round`, then asks one final round");
+    expect(await flat()).not.toContain("--chain-next");
     expect(text).toContain("a cloud agent that takes follow-ups on its pull request's comments takes the answers there");
     expect(text).toContain("`@<agent> answers: Q1→2, Q3→1`");
     expect(text).toContain("Where the client runs the ask gate, it denies the question tool while the mode is unattended.");
@@ -600,11 +603,14 @@ describe("st-unattended — the other touchpoints and chains (REQ-FLOW-096, REQ-
   });
 
   // pr/25: the ask gate's final round opens on run end's marker, so only the chain's last file may leave one.
-  it("ends every chain file but the last with run end --chain-next", async () => {
+  // TEST CHANGE, justified (pr/37, signed off 12:41Z): the flag inverts, so only the chain's final round passes
+  // --final-round and every other file's plain run end leaves no marker; --chain-next is gone.
+  it("passes run end --final-round on the chain's last file alone, and no flag on every other file", async () => {
     const text = await flat(CHAINS_REL_PATH);
     expect(text).toContain(
-      "Every file's `stamity run end` but the chain's last one, the last file or the first to stop at a `BLOCKED_*`, adds `--chain-next`",
+      "Only the chain's final round passes `--final-round`: the last file's `stamity run end`, the last file being the chain's last or the first to stop at a `BLOCKED_*`.",
     );
-    expect(text).toContain("so the ask gate lets no question through before the next file's `stamity run start`");
+    expect(text).toContain("Every other file's `run end` takes no flag, so it writes no run-ended marker and removes one left there");
+    expect(text).not.toContain("--chain-next");
   });
 });

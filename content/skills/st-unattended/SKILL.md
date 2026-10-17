@@ -144,11 +144,11 @@ answers on the same branch, pushes through the run verbs with that run's `mornin
 request body. `--unattended`, `run-mode: unattended` or a chain's next file makes a start on that branch unattended, never
 the walk. On a run still in progress `--resume` refuses and names the continuation: an unattended start on that branch.
 
-`## How to answer` names the client's way back: a cloud session that stays open for a question closes the record,
-pushes, then asks one final round; a cloud agent that takes follow-ups on its pull request's comments takes the
-answers there; one that answers a mention takes one comment, `@<agent> answers: Q1→2, Q3→1`, `@<agent>` written as the
-literal mention of the client the run is on; locally, the touchpoint. Only a `write` or `admin` author's comment
-answers (unreadable counts as none); another's answers are not applied, and the next morning list lists them.
+`## How to answer` names the client's way back: a cloud session that stays open closes the record, ends on
+`run end --final-round`, then asks one final round; a cloud agent that takes follow-ups on its pull request's comments
+takes the answers there; one that answers a mention takes one comment, `@<agent> answers: Q1→2, Q3→1`, `@<agent>`
+written as the literal mention of the client the run is on; locally, the touchpoint. Only a `write` or `admin` author's
+comment answers (unreadable counts as none); another's answers are not applied, and the next morning list lists them.
 
 ## Other touchpoints
 

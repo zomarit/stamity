@@ -481,6 +481,15 @@ refused. What stays open is named here, as accepted risk:
   head rewritten to `Mode: attended` turns off their hold too: `run checkpoint` and `run end` then
   push a change to the person-only paths as any other, with no patch and no held-path refusal, and
   only the secret scan and the person-only table still read the push.
+- **The final round's window.** With `STAMITY_UNATTENDED` set and no run in progress, the ask gate
+  lets a question through only while `.stamity/run-ended.json` names the closed unattended run
+  whose `Branch:` is the checkout's branch, and its `at` is at most 120 seconds old, the pre-flight
+  canary's window. Only `run end --final-round`, the run's last, writes it; a plain `run end` and
+  `run start` remove it. The window that is left: a later unattended session on that branch, in
+  the same checkout, that starts inside it can put a question before its own `run start`. The gate
+  is the backstop, since the skill puts no question before Frame. The marker is a file a run can
+  write, as the record head above is, and it opens nothing while a record reads in progress. Code:
+  `src/hooks/scripts.ts::buildUnattendedAskGate`, `src/cli/commands/run.ts::markRunEnded`.
 - **The origin pin.** `origin.json` is a file in the run folder, read as data. A run that rewrites it
   together with git's configuration (`.git/config`) before its next checkpoint moves the push and the
   pin as one, and the check passes. The pin holds against origin's URL, a push URL, or a `url.*`

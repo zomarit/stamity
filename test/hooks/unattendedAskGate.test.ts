@@ -23,6 +23,7 @@ import {
   UNATTENDED_ASK_GATE_VARIABLE_SOURCE,
 } from "../../src/hooks/scripts.ts";
 import { RUN_ENDED_MARKER_FILE } from "../../src/mcp/env.ts";
+import { CANARY_MAX_AGE_MS } from "../../src/runs/preflight.ts";
 import { TOOLS } from "../../src/types/core.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
@@ -99,9 +100,13 @@ function record(status: string, mode?: "attended" | "unattended", branch?: strin
   return `# Run\n\nStatus: ${status}\nPlan: docs/plans/x.md\n${modeLine}${branchLine}Invocation: /st-work x\n`;
 }
 
-/** The run-ended marker `run end` writes at the run's final exit, naming `runId` (pr/17). */
-function ended(runId: string): Record<string, string> {
-  return { [RUN_ENDED_MARKER_FILE]: `${JSON.stringify({ run: runId })}\n` };
+/**
+ * The run-ended marker `run end --final-round` writes at the run's final exit, naming `runId` (pr/17), its `at`
+ * `ageMs` before now (pr/36: the gate honours it only within the pre-flight canary's window).
+ */
+// TEST CHANGE, justified (pr/36, signed off 12:41Z): the marker carries `at` now, and one without it exempts nothing.
+function ended(runId: string, ageMs = 0): Record<string, string> {
+  return { [RUN_ENDED_MARKER_FILE]: `${JSON.stringify({ run: runId, at: new Date(Date.now() - ageMs).toISOString() })}\n` };
 }
 
 /** `.git/HEAD` on a branch, as a checkout writes it. */
@@ -249,6 +254,28 @@ describe("which record the gate reads", () => {
     expect(refusal(gate, ON)).toBe(BY_VARIABLE);
     // One fact away: the marker names the closed run → its final round may ask.
     await getRepo().seedFiles(ended("2026-10-16_night"));
+    expect(denies(gate, ON)).toBe(false);
+  });
+
+  // pr/36: on a persistent checkout the marker outlives the final round, so a later session on the closed run's branch
+  // finds it before its own run start; the gate honours it only within the pre-flight canary's window after `at`.
+  it("refuses on a closed unattended record's branch once its run-ended marker is past the canary's window (pr/36)", async () => {
+    expect(CANARY_MAX_AGE_MS).toBe(120_000);
+    const gate = await placeGate({
+      ".stamity/runs/2026-10-16_night/record.md": record("handed off", "unattended", "stamity/night"),
+      ...ended("2026-10-16_night", CANARY_MAX_AGE_MS + 60_000),
+      ...onBranch("stamity/night"),
+    });
+    expect(refusal(gate, ON)).toBe(BY_VARIABLE);
+    // A marker with no at, an unreadable one, or one dated after now exempts nothing either.
+    await getRepo().seedFiles({ [RUN_ENDED_MARKER_FILE]: `${JSON.stringify({ run: "2026-10-16_night" })}\n` });
+    expect(refusal(gate, ON)).toBe(BY_VARIABLE);
+    await getRepo().seedFiles({ [RUN_ENDED_MARKER_FILE]: `${JSON.stringify({ run: "2026-10-16_night", at: "yesterday" })}\n` });
+    expect(refusal(gate, ON)).toBe(BY_VARIABLE);
+    await getRepo().seedFiles(ended("2026-10-16_night", -60_000));
+    expect(refusal(gate, ON)).toBe(BY_VARIABLE);
+    // One fact away: the marker inside the window → the final round may ask.
+    await getRepo().seedFiles(ended("2026-10-16_night", CANARY_MAX_AGE_MS - 30_000));
     expect(denies(gate, ON)).toBe(false);
   });
 

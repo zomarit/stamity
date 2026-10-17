@@ -719,14 +719,14 @@ describe("renderInitPanel — security disclosure", () => {
     // the whole set "wherever it lacked them". The case pinned — disclosed on an
     // ordinary init with no MCP server — is unchanged.
     // TEST CHANGE (REQ-FLOW-101): the hooks canary is the fifth entry.
-    // TEST CHANGE, justified (pr/17): the engine now ignores the run-ended marker, the sixth entry, named last
-    // with the neutral fallback reason.
+    // TEST CHANGE, justified (pr/17): the engine now ignores the run-ended marker, the sixth entry, named last;
+    // its reason is its own since GITIGNORE_REASONS names it, not the neutral fallback.
     expect(output).toContain(
       "these lines — .env.mcp (MCP server credentials), .stamity/review-gate.json (the review " +
         "gate's per-run state), .stamity/review-gate.json.lock (the review gate's lock), " +
         ".stamity/review-gate.json.tmp-* (the review gate's temporary writes), " +
         ".stamity/preflight-canary.json (the shell guard's hooks canary), " +
-        ".stamity/run-ended.json (machine-local state this setup writes) — were added to your .gitignore",
+        ".stamity/run-ended.json (the run that just ended, read by the ask gate) — were added to your .gitignore",
     );
     // No MCP server: no credential file this setup uses, so no such claim.
     expect(output).not.toContain("credential file this setup uses");

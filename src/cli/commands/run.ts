@@ -109,13 +109,15 @@ import { readPushed, scanChange } from "./gate.ts";
  * updated or commented; else 1. The JSON is `checkpoint`'s with
  * `subcommand: "end"`, `inferred` always present.
  *
- * **The run-ended marker** (pr/17): every `end` exit past the record's read,
- * `--dry-run` aside, writes `{ "run": "<run-id>" }` to `.stamity/run-ended.json`,
- * and `start` deletes it first; the ask gate allows the final question round
- * only on the branch of the closed run it names. `end --chain-next`, a chain
- * file the next one follows (pr/25), writes none and removes one already there,
- * so no question passes between two chain files; one it cannot remove makes the
- * exit 1, its `notDone` line naming it.
+ * **The run-ended marker** (pr/17, pr/36, pr/37): `end --final-round`, the
+ * run's last `end`, writes `{ "run": "<run-id>", "at": "<ISO time>" }` to
+ * `.stamity/run-ended.json` at every exit past the record's read, `--dry-run`
+ * aside, and `start` deletes it first; the ask gate allows the final question
+ * round only on the branch of the closed run it names, and only for the
+ * pre-flight canary's window after `at`. A plain `end` (a chain file the next one
+ * follows, or a flag left out) writes none and removes one already there, so no
+ * question passes between two chain files; one it cannot remove makes the exit 1,
+ * its `notDone` line naming it.
  */
 
 const START = "start";
@@ -129,7 +131,7 @@ const OPTION_FLAGS: Readonly<Record<string, string>> = {
   title: "--title",
   signoff: "--signoff",
   refused: "--refused",
-  chainNext: "--chain-next",
+  finalRound: "--final-round",
 };
 
 /** The options each subcommand takes beyond `--run`; any other one given is a usage error. */
@@ -137,7 +139,7 @@ const SUBCOMMAND_OPTIONS: Readonly<Record<string, readonly string[]>> = {
   [START]: [],
   [CHECKPOINT]: ["paths", "pr", "title", "signoff"],
   // No --pr: the pull request is not optional at the end.
-  [END]: ["paths", "title", "refused", "signoff", "chainNext"],
+  [END]: ["paths", "title", "refused", "signoff", "finalRound"],
 };
 
 /** The origin pin `start` writes in the run folder (review/209). */
@@ -213,7 +215,7 @@ export const runCommand: CommandModule = {
       .option("--title <title>", "checkpoint and end: the draft pull request's title (end needs it)")
       .option("--signoff", "checkpoint and end: add the Signed-off-by line to the commit")
       .option("--refused", "end: title the draft pull request Refused: <title>, for a run that refused to start")
-      .option("--chain-next", "end: a chain file another file follows; write no run-ended marker, and remove a stale one")
+      .option("--final-round", "end: the run's last end; write the run-ended marker the final question round needs (a plain end removes one)")
       // Usage errors, so exit 2 before the action and before git runs.
       .hook("preAction", (command) => {
         const subcommand = String(command.processedArgs[0]);
@@ -614,18 +616,18 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   const lines: string[] = [`run: ${run} (${unattended ? "unattended" : "attended"})`, `base: ${base}`];
   const finish = async (passed: boolean, extra: Record<string, unknown> = {}): Promise<CommandResult> => {
     let ok = passed;
-    // pr/17: `end` is the run's final exit, whichever way it goes; the marker names the run the ask gate's final round is for.
-    // pr/25: a chain file the next one follows is not the final exit, so it leaves no marker for a question to pass on.
+    // pr/37: only the run's last `end`, told so by --final-round, writes the marker the ask gate's final round reads;
+    // a plain `end` (a chain file the next one follows, or the flag left out) leaves none for a question to pass on.
     if (verb === END && !ctx.dryRun) {
-      if (opts["chainNext"] === true) {
-        const left = dropRunEndedMarker(cwd);
-        if (left !== null) {
-          result.notDone.push(`run-ended marker not removed: ${RUN_ENDED_MARKER_FILE} (${left}), so a question before the next chain file's start could pass`);
-          ok = false;
-        }
-      } else {
+      if (opts["finalRound"] === true) {
         const marked = await markRunEnded(ctx, cwd, run);
         if (marked !== null) result.notDone.push(marked);
+      } else {
+        const left = dropRunEndedMarker(cwd);
+        if (left !== null) {
+          result.notDone.push(`run-ended marker not removed: ${RUN_ENDED_MARKER_FILE} (${left}), so a question before the next start could pass`);
+          ok = false;
+        }
       }
     }
     const notDone = result.notDone.map((entry) => sanitizeLabel(entry));
@@ -1298,14 +1300,15 @@ function exists(path: string): boolean {
 }
 
 /**
- * `end`'s run-ended marker (pr/17, REQ-FLOW-090): `{ "run": "<run-id>" }` at
- * {@link RUN_ENDED_MARKER_FILE}, never through a link; `null` once written,
- * else the `notDone` line. A marker not written only refuses the final round's
- * question, so the exit stays as the run's own steps set it.
+ * `end --final-round`'s run-ended marker (pr/17, pr/36, REQ-FLOW-090): `{ "run": "<run-id>", "at": "<ISO time>" }`
+ * at {@link RUN_ENDED_MARKER_FILE}, never through a link, `at` read as the verb exits, so the ask gate's window
+ * opens after the push and the pull request; `null` once written, else the `notDone` line. A marker not written only
+ * refuses the final round's question, so the exit stays as the run's own steps set it.
  */
 async function markRunEnded(ctx: CliContext, cwd: string, run: string): Promise<string | null> {
   try {
-    await ctx.engine.merge.atomicWrite.atomicWriteFile(join(cwd, RUN_ENDED_MARKER_FILE), `${JSON.stringify({ run })}\n`, { boundaryDir: cwd });
+    const at = ctx.app.runtime.clock.now().toISOString();
+    await ctx.engine.merge.atomicWrite.atomicWriteFile(join(cwd, RUN_ENDED_MARKER_FILE), `${JSON.stringify({ run, at })}\n`, { boundaryDir: cwd });
     return null;
   } catch (cause) {
     return `run-ended marker not written: ${RUN_ENDED_MARKER_FILE} (${cause instanceof Error ? cause.message : "write failed"}), so the final round's question is refused`;

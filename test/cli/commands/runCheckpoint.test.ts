@@ -248,7 +248,9 @@ describe("stamity run checkpoint", () => {
     expect(doc["committed"]).toBe(git(repo, ["rev-parse", "HEAD"]));
   });
 
-  it("holds a held change staged and then undone in the work tree alone, from the index side (review/156)", async () => {
+  // TEST CHANGE, justified (pr/38): since pr/6's third part the patch no longer yields the index side when applied on
+  // Base:; it yields the work tree's bytes, and the staged change is read from its first part, so the title says so.
+  it("holds a held change staged and then undone in the work tree alone: part 0 carries the staged change, the whole patch applies on Base: to the work tree's bytes (review/156)", async () => {
     const { repo, remote, base } = await seed("unattended");
     // Staged, then the work tree put back to Base:'s bytes; and a workflow staged, then deleted from the work tree.
     await writeFile(join(repo, ".cursorrules"), "steered rules\n");
@@ -269,9 +271,19 @@ describe("stamity run checkpoint", () => {
     // TEST CHANGE, justified: pr/6 adds the index-to-work-tree part, so the patch applied on Base: gives the work
     // tree's .cursorrules; the workflow's deletion part is in the patch too.
     expect(patch).toContain("deleted file mode");
+    // pr/38: part 0 (Base: to the index) is where the staged change lives: .cursorrules' first section adds it, and
+    // the last section, the index-to-work-tree part, takes it back out.
+    const sections = patch.split(/^(?=diff --git )/m).filter((section) => section.startsWith("diff --git a/.cursorrules "));
+    expect(sections).toHaveLength(2);
+    expect(sections[0]).toContain("+steered rules");
+    expect(sections[0]).not.toContain("-steered rules");
+    expect(sections[1]).toContain("-steered rules");
+    expect(sections[1]).toContain("+.cursorrules");
     const fresh = join(dirname(repo), "at-base");
     git(repo, ["worktree", "add", "-q", "--detach", fresh, base]);
     git(fresh, ["apply", join(repo, PATCH)]);
+    // The whole patch yields the work tree's bytes, Base:'s here, not the staged ones.
+    expect(await readFile(join(fresh, ".cursorrules"), "utf8")).toBe(await readFile(join(repo, ".cursorrules"), "utf8"));
     expect(await readFile(join(fresh, ".cursorrules"), "utf8")).toBe(".cursorrules\n");
   });
 

@@ -32,6 +32,7 @@ import { EngineError } from "../types/errors.ts";
 import { CONTENT_PREFIX, GENERATED_SCRIPT_LINT_DIRECTIVE, STATE_DIR } from "../types/markers.ts";
 import { PREFLIGHT_CANARY_FILE, RUN_ENDED_MARKER_FILE } from "../mcp/env.ts";
 import { buildResumeCardSource, RESUME_CARD_HOST_NAMES } from "../runs/cardSource.ts";
+import { CANARY_MAX_AGE_MS } from "../runs/preflight.ts";
 import {
   GIT_METADATA_MAX_BYTES,
   IN_PROGRESS_PATTERN,
@@ -3914,12 +3915,14 @@ const ASK_TOOL_NAME = "AskUserQuestion";
  * set (not "", "false", "0") it refuses — except when no run is in progress and
  * a closed record reading `Mode: unattended` names the current branch (read off
  * `.git/HEAD` as the guard reads it) on its `Branch:` line, and the run-ended
- * marker {@link RUN_ENDED_MARKER_FILE} that `run end` writes and `run start`
- * deletes names that record's run, which is Claude Code's final question round
- * after that run handed off (pr/17). A closed record carried into a later clone on
- * another branch exempts nothing (review/100), nor one on this branch with no
- * marker naming it: a later session on that branch before its own record opens
- * (pr/17). A refusal names the record or the variable it read (review/104).
+ * marker {@link RUN_ENDED_MARKER_FILE} that `run end --final-round` writes and
+ * `run start` deletes names that record's run, its `at` at most
+ * {@link CANARY_MAX_AGE_MS} old (the pre-flight canary's window, 120 s) and not
+ * after now, which is Claude Code's final question round after that run handed
+ * off (pr/17, pr/36). A closed record carried into a later clone on another branch
+ * exempts nothing (review/100), nor one on this branch with no fresh marker naming
+ * it: a later session on that branch before its own record opens, past the window
+ * (pr/17, pr/36). A refusal names the record or the variable it read (review/104).
  *
  * Fail-open by design: a question is the safe failure, so a payload it cannot
  * read, a records folder, record or git file it cannot read, or any fault while
@@ -3962,6 +3965,7 @@ const HEAD_READ_BYTES = ${RECORD_HEAD_READ_BYTES};
 const RUNS_READ_MAX = ${GUARD_RUNS_READ_MAX};
 const GIT_MAX_BYTES = ${GIT_METADATA_MAX_BYTES};
 const MARKER_SEGMENTS = ${json(RUN_ENDED_MARKER_FILE.split("/"))};
+const MARKER_MAX_AGE_MS = ${CANARY_MAX_AGE_MS};
 const ASK_TOOL = ${json(ASK_TOOL_NAME)};
 const REASON = ${json(UNATTENDED_ASK_GATE_REASON)};
 const RECORD_SOURCE = ${json(UNATTENDED_ASK_GATE_RECORD_SOURCE)};
@@ -4056,16 +4060,19 @@ function currentBranch(root) {
   return head !== null && head.startsWith("ref: refs/heads/") ? head.slice(16) : null;
 }
 
-/** The run id the run-ended marker names; null when absent, a link, not a file, past GIT_MAX_BYTES or naming no run id. */
+/** The run id a fresh run-ended marker names; null when absent, a link, not a file, past GIT_MAX_BYTES, naming no run id, or its at unreadable, after now or past MARKER_MAX_AGE_MS. */
 function endedRun(root) {
   const text = gitText(join(root, ...MARKER_SEGMENTS));
   if (text === null) return null;
-  let run = null;
+  let marker = null;
   try {
-    run = JSON.parse(text)?.run ?? null;
+    marker = JSON.parse(text);
   } catch {
     return null;
   }
+  const run = marker?.run;
+  const age = Date.now() - (typeof marker?.at === "string" ? Date.parse(marker.at) : Number.NaN);
+  if (!(age >= 0 && age <= MARKER_MAX_AGE_MS)) return null;
   return typeof run === "string" && RUN_ID.test(run) ? run : null;
 }
 
@@ -4080,7 +4087,7 @@ function unattendedSource(root) {
   const flag = (process.env.STAMITY_UNATTENDED ?? "").trim().toLowerCase();
   if (["", "false", "0"].includes(flag)) return null;
   // Claude Code's final round: no run in progress, and this branch's unattended run closed its record before asking,
-  // its run end's marker still in place: a later session on the branch, before its own record opens, has none.
+  // its last run end's marker fresh: a later session on the branch, before its own record opens, has none in date.
   const closed = running.length === 0 ? heads.filter((head) => head.mode === "unattended" && head.branch !== null) : [];
   if (closed.length > 0) {
     const ended = endedRun(root);

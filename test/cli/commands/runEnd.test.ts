@@ -1,6 +1,6 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runCommand } from "../../../src/cli/commands/run.ts";
@@ -363,44 +363,60 @@ describe("stamity run end", () => {
   });
 
   // pr/17: the ask gate allows the final question round only where this marker names the closed run.
-  it("writes the run-ended marker naming the run at its exit, refused or not, and never pushes it; none under --dry-run", async () => {
+  // TEST CHANGE, justified (pr/36, pr/37, signed off 12:41Z): only the run's last end, --final-round, writes the
+  // marker, and it carries the time it was written, which the gate's window is read from.
+  it("writes the run-ended marker under --final-round, naming the run and when it ended, refused or not, never pushed; none under --dry-run", async () => {
     const done = await seed("attended");
     const refused = await seed("unattended", { branch: "feature/other" });
     const dry = await seed("attended");
     await Promise.all([done, refused, dry].map(({ repo }) => writeFile(join(repo, "a.txt"), "changed\n")));
 
-    const ok = await run(done.repo, [...END("feat: x"), "--paths", "a.txt"]);
-    const no = await run(refused.repo, [...END("feat: x"), "--paths", "a.txt"]);
-    const planned = await run(dry.repo, [...END("feat: x"), "--paths", "a.txt", "--dry-run"]);
+    const before = Date.now();
+    const ok = await run(done.repo, [...END("feat: x"), "--paths", "a.txt", "--final-round"]);
+    const no = await run(refused.repo, [...END("feat: x"), "--paths", "a.txt", "--final-round"]);
+    const planned = await run(dry.repo, [...END("feat: x"), "--paths", "a.txt", "--final-round", "--dry-run"]);
+    const after = Date.now();
 
-    const marker = `${JSON.stringify({ run: RUN })}\n`;
+    /** The marker's fields, its at checked to fall while the verb ran. */
+    const marker = async (repo: string): Promise<unknown> => {
+      const text = await readFile(join(repo, RUN_ENDED_MARKER_FILE), "utf8");
+      const parsed = JSON.parse(text) as { run: unknown; at: string };
+      expect(text).toBe(`${JSON.stringify({ run: RUN, at: parsed.at })}\n`);
+      const at = Date.parse(parsed.at);
+      expect(at >= before && at <= after, parsed.at).toBe(true);
+      return parsed.run;
+    };
     expect(ok.code).toBe(0);
-    expect(await readFile(join(done.repo, RUN_ENDED_MARKER_FILE), "utf8")).toBe(marker);
+    expect(await marker(done.repo)).toBe(RUN);
     expect(git(done.remote, ["ls-tree", "-r", "--name-only", `refs/heads/${RUN_BRANCH}`])).not.toContain(RUN_ENDED_MARKER_FILE);
     expect(no.code).toBe(1);
-    expect(await readFile(join(refused.repo, RUN_ENDED_MARKER_FILE), "utf8")).toBe(marker);
+    expect(await marker(refused.repo)).toBe(RUN);
     expect(planned.code).toBe(0);
     expect(existsSync(join(dry.repo, RUN_ENDED_MARKER_FILE))).toBe(false);
   });
 
-  // pr/25: between two chain files the session is still unattended with nobody to answer, so file N's end leaves no
-  // marker for the gate's final-round exception to read, and removes one left behind that names this run.
-  it("leaves no run-ended marker under --chain-next, so the ask gate refuses a question between two chain files", async () => {
+  // pr/25, pr/37: between two chain files the session is still unattended with nobody to answer, so a plain end, the
+  // chain's middle file or a final round that left the flag out, writes no marker and removes one left behind; only
+  // --final-round opens the gate's final-round exception, and only within its window (pr/36).
+  // TEST CHANGE, justified (pr/37, signed off 12:41Z): the flag inverts, so --chain-next is gone and the plain end
+  // is the one that closes the gate.
+  it("leaves no run-ended marker on a plain end, so the ask gate refuses a question between two chain files", async () => {
     const closed = (base: string): string =>
       `# Run ${RUN}\n\nStatus: closed 2026-10-16\nMode: unattended\nBranch: ${RUN_BRANCH}\nBase: ${base}\n`;
-    const stale = `${JSON.stringify({ run: RUN })}\n`;
+    const left = `${JSON.stringify({ run: RUN, at: new Date().toISOString() })}\n`;
     const chained = await seed("unattended");
+    const bare = await seed("unattended");
     const last = await seed("unattended");
     const dry = await seed("unattended");
-    await Promise.all(
-      [chained, last, dry].flatMap(({ repo, base }) => [put(repo, `${RUN_DIR}/record.md`, closed(base)), put(repo, RUN_ENDED_MARKER_FILE, stale)]),
-    );
-    await rm(join(last.repo, RUN_ENDED_MARKER_FILE));
+    await Promise.all([chained, bare, last, dry].map(({ repo, base }) => put(repo, `${RUN_DIR}/record.md`, closed(base))));
+    await Promise.all([chained, dry].map(({ repo }) => put(repo, RUN_ENDED_MARKER_FILE, left)));
 
-    const next = await run(chained.repo, [...END("feat: x"), "--chain-next"]);
-    const final = await run(last.repo, END("feat: x"));
-    const planned = await run(dry.repo, [...END("feat: x"), "--chain-next", "--dry-run"]);
-    const misplaced = await run(chained.repo, ["checkpoint", "--run", RUN, "--chain-next", "--json"]);
+    const next = await run(chained.repo, END("feat: x"));
+    const none = await run(bare.repo, END("feat: x"));
+    const final = await run(last.repo, [...END("feat: x"), "--final-round"]);
+    const planned = await run(dry.repo, [...END("feat: x"), "--dry-run"]);
+    const misplaced = await run(chained.repo, ["checkpoint", "--run", RUN, "--final-round", "--json"]);
+    const dropped = await run(chained.repo, [...END("feat: x"), "--chain-next"]);
 
     /** The ask gate as Claude Code runs it in that checkout, the variable set: its exit code. */
     const ask = async (repo: string): Promise<number | null> => {
@@ -412,16 +428,25 @@ describe("stamity run end", () => {
       return spawnSync(process.execPath, [gate], { input, encoding: "utf8", env, cwd: repo }).status;
     };
 
+    // A chain's middle file: the marker an earlier final round left is removed, and the gate refuses.
     expect(next.code).toBe(0);
     expect(existsSync(join(chained.repo, RUN_ENDED_MARKER_FILE))).toBe(false);
     expect(await ask(chained.repo)).toBe(2);
-    // One fact away: the chain's last file ends without the flag, so its final round may ask.
+    // No marker there to begin with: a plain end writes none, and the gate refuses.
+    expect(none.code).toBe(0);
+    expect(existsSync(join(bare.repo, RUN_ENDED_MARKER_FILE))).toBe(false);
+    expect(await ask(bare.repo)).toBe(2);
+    // One fact away: the chain's last file ends with --final-round, so its final round may ask.
     expect(final.code).toBe(0);
-    expect(await readFile(join(last.repo, RUN_ENDED_MARKER_FILE), "utf8")).toBe(stale);
+    expect(existsSync(join(last.repo, RUN_ENDED_MARKER_FILE))).toBe(true);
     expect(await ask(last.repo)).toBe(0);
+    // The same marker gone stale, as a later session on a persistent checkout finds it: the gate refuses (pr/36).
+    await put(last.repo, RUN_ENDED_MARKER_FILE, `${JSON.stringify({ run: RUN, at: new Date(Date.now() - 600_000).toISOString() })}\n`);
+    expect(await ask(last.repo)).toBe(2);
     expect(planned.code).toBe(0);
-    expect(await readFile(join(dry.repo, RUN_ENDED_MARKER_FILE), "utf8")).toBe(stale);
+    expect(await readFile(join(dry.repo, RUN_ENDED_MARKER_FILE), "utf8")).toBe(left);
     expect(misplaced.code).toBe(2);
+    expect(dropped.code).toBe(2);
   });
 
   it("refuses as branch mismatch off the record's Branch:, pushing nothing and opening no pull request", async () => {

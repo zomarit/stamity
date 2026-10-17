@@ -17,6 +17,6 @@ base — the HEAD sha the first record's `Base:` carries — never the plans' st
 after that base moved is exempt from the freshness guard, and a path a commit between the stamp and the base moved
 stays stale.
 
-Every file's `stamity run end` but the chain's last one, the last file or the first to stop at a `BLOCKED_*`, adds
-`--chain-next`: it writes no run-ended marker and removes one left there, so the ask gate lets no question through
-before the next file's `stamity run start`; only that last `run end` opens the final question round.
+Only the chain's final round passes `--final-round`: the last file's `stamity run end`, the last file being the
+chain's last or the first to stop at a `BLOCKED_*`. Every other file's `run end` takes no flag, so it writes no
+run-ended marker and removes one left there, and the ask gate lets no question through before the next file's start.
