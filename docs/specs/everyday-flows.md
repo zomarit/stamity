@@ -122,9 +122,9 @@ brought it to, merged once by its unit `u23-spec-merge` before the run's whole-b
 text was first read at the integration head `4daeb214`, or at `bc12cfc3` where the merge's first fix round, on the same
 date, re-pointed or added a citation; the run's last citation pass re-read each one at `445ebd23`, and the whole-branch
 page round re-read them on `aa7a3e5b` with its own edits to `SECURITY.md`, `evals/SET-v7.md` and the unattended skill,
-re-pointing each one whose text had moved; the run's final derived pass, and the pull-request round's after it,
+re-pointing each one whose text had moved; the run's final derived pass, and the pull-request rounds' after it,
 re-pointed each one a later commit moved, mapped through git's diff from the commit it was read at, and every one
-reads at `09c94055`, a pin named beside a citation included. Two units
+reads at `40c43e0e`, a pin named beside a citation included. Two units
 were not on `4daeb214`: `u19-run-end` (`stamity run end`) and
 `u21-security-page` (`SECURITY.md`'s cloud section); the fix round cites both at `bc12cfc3`. REQ-FLOW-105 to
 REQ-FLOW-119 are held for plan 021's second file. The text dated 2026-10-16 is unreleased at this merge; the plan cuts
@@ -577,7 +577,7 @@ sign-off or `not signed` (`content/commands/st-work.md:318-319`).
   no ask (`:303-304`). As built: a refused open reads `draft PR not opened (<branch>): <cause>`, the cause named by its
   class (`gh not found`, `gh is not logged in`, the step and the HTTP status it answered, a 422's class), never `gh`'s
   or GitHub's own text, and an `origin` naming no GitHub repository reads `draft PR not opened (origin names no GitHub
-  repository gh reaches)`, naming the reason in the branch's place (`draftPr`, `src/cli/commands/run.ts:1156-1200`;
+  repository gh reaches)`, naming the reason in the branch's place (`draftPr`, `src/cli/commands/run.ts:1158-1202`;
   `ensureDraftPr`, `src/runs/pullRequest.ts:238-242`, its causes `ghFailure` and `rejection`, `:194-217`).
 - **Proof:** `test/corpus/commands/work.test.ts`; census `probe-none-work-run-qa-checkpoint` and
   `work-proof-block-fields`; must-holds `question-shape-and-default`, its charter-only twin and
@@ -3475,8 +3475,8 @@ given neither, or only a cloud or CI marker (`CLAUDE_CODE_REMOTE`, `COPILOT_AGEN
 Then `Mode: attended` (`content/skills/st-unattended/SKILL.md:24-27`; `content/commands/st-work.md:406-408`). A head
 with no `Mode:` line reads attended unless `STAMITY_UNATTENDED` is set; then the variable governs, as the shell guard,
 the ask gate and the run verbs read it, and a `Mode: attended` head wins over it (`readRecordHead`,
-`src/runs/resumeCard.ts`; `unattendedBy` and `unattendedSource`, `src/hooks/scripts.ts:3668-3696`, `:4073-4091`;
-`readsUnattended`, `src/cli/commands/run.ts:994-997`). `/st-board pickup` and
+`src/runs/resumeCard.ts`; `unattendedBy` and `unattendedSource`, `src/hooks/scripts.ts:3669-3697`, `:4080-4098`;
+`readsUnattended`, `src/cli/commands/run.ts:996-999`). `/st-board pickup` and
 `/st-rework` hand the mode to `/st-work` as `run-mode: attended | unattended` (`content/commands/st-board.md:128`,
 `:366`; `content/commands/st-rework.md:268-270`), and `/st-debug` hands it over only when attended: an unattended debug
 run stops after the root cause and hands nothing to `/st-work` (REQ-FLOW-097; `content/commands/st-debug.md:131-136`);
@@ -3503,17 +3503,20 @@ refuse unless the invocation names the plan paths, and an ask with no default re
 fail-closed tail, exits 2 naming the rule and the record or the variable it read, reading no order among records: while
 any in-progress record reads `Mode: unattended`; else, with no in-progress record reading `Mode: attended`, while the
 variable is set, except when no run is in progress, a closed record reading `Mode: unattended` names the current
-branch as its `Branch:`, and the run-ended marker `.stamity/run-ended.json` names that record's run: `stamity run end`
-writes it, `{ "run": "<run-id>" }`, at the run's final exit (`--chain-next`, a chain file the next one follows, writes
-none and removes one there, REQ-FLOW-096) and `stamity run start` deletes it, so a later session
-on that branch has none before its own record opens (Claude Code's final round after that run handed off; on any
-other branch, or with no marker naming the run, the variable decides; pr/17). The gate is `UNATTENDED_ASK_GATE_FILE`
+branch as its `Branch:`, and the run-ended marker `.stamity/run-ended.json` names that record's run with an `at` at
+most 120 seconds old and not after now, the pre-flight canary's window (`CANARY_MAX_AGE_MS`, REQ-FLOW-101):
+`stamity run end --final-round`, the run's last `run end`, writes it, `{ "run": "<run-id>", "at": "<ISO time>" }`, at
+that exit; a plain `run end` writes none and removes one there (REQ-FLOW-096), and `stamity run start` deletes it
+(Claude Code's final round after that run handed off; on any other branch, or with no fresh marker naming the run, the
+variable decides; pr/17, pr/36, pr/37). So a later session on that branch, in the same checkout, finds no marker the
+gate honours once the window has passed; one that starts inside it is the residual `SECURITY.md` names
+(`SECURITY.md:484-492`). The gate is `UNATTENDED_ASK_GATE_FILE`
 and its reasons in `src/hooks/scripts.ts`, wired after every planned PreToolUse row (`src/adapters/claude.ts:924-930`).
 The detail lives in the `st-unattended` skill, called by name only in that mode.
 
-- **Proof:** `test/hooks/unattendedAskGate.test.ts` ("the ask gate's five cases (REQ-FLOW-090)", and the closed
-  record with no marker naming its run), `test/cli/commands/runEnd.test.ts` and `test/cli/commands/run.test.ts` (the
-  marker's write and delete), `test/adapters/claude.test.ts` (the ask gate's placement),
+- **Proof:** `test/hooks/unattendedAskGate.test.ts` ("the ask gate's five cases (REQ-FLOW-090)", the closed
+  record with no marker naming its run, and the marker past the canary's window), `test/cli/commands/runEnd.test.ts`
+  and `test/cli/commands/run.test.ts` (the marker's write and delete), `test/adapters/claude.test.ts` (the ask gate's placement),
   `test/hooks/scriptBudget.test.ts`, `test/corpus/skills/unattended.test.ts` ("st-unattended — asks (REQ-FLOW-090)").
 
 ### REQ-FLOW-091 — An unattended start needs a ready plan
@@ -3555,19 +3558,19 @@ exit 1 (0 with a pull request). No call runs `gh pr create`, `gh pr ready`, a me
 the default branch, read by REST; `run start` leaves it for a branch of the run's own
 (`content/skills/st-unattended/SKILL.md:76-77`, `:86-105`). The pull request's marker is `runMarker` and its ladder
 `ensureDraftPr` (`src/runs/pullRequest.ts:82`, `:238`), which `run end` and `run checkpoint --pr` take through
-`draftPr` (`src/cli/commands/run.ts:1156-1200`). `run end` runs the checkpoint's commit, scan and push
-(`src/cli/commands/run.ts:238`), then the pull-request step on every `end` that reaches it, `--refused` giving the
-`Refused: <title>` title (`:859-871`).
+`draftPr` (`src/cli/commands/run.ts:1158-1202`). `run end` runs the checkpoint's commit, scan and push
+(`src/cli/commands/run.ts:240`), then the pull-request step on every `end` that reaches it, `--refused` giving the
+`Refused: <title>` title (`:861-873`).
 
 - **As built, where the delta differed:** not every exit reaches the pull request. A held path, a scan hit or a
   refused push returns before that step, so `run end` exits 1 with no pull request opened or updated
-  (`src/cli/commands/run.ts:802-811`, `:813-833`, `:846-854`). Nor does an exit whose origin moved: `run start` pins
+  (`src/cli/commands/run.ts:804-813`, `:815-835`, `:848-856`). Nor does an exit whose origin moved: `run start` pins
   origin's repository in the run folder's `origin.json` once the run is on its branch, so a pin a checkpoint committed
   there is the one compared (pr/4), read from its fetch URL and from every push URL as git resolves it (`insteadOf`
   and `pushInsteadOf` applied), and `run checkpoint` and `run end` resolve them again before they stage, refusing as
   `origin changed: …` where one names another repository and, unattended, as `origin not pinned: …` where no pin is
   readable, with nothing committed, pushed or opened (`pinOrigin` and `originRefusal`,
-  `src/cli/commands/run.ts:406-453`, called at `:276`, `:309` and `:661`). A refused open names its cause,
+  `src/cli/commands/run.ts:408-455`, called at `:278`, `:311` and `:663`). A refused open names its cause,
   `draft PR not opened (<branch>): <cause>`, by class and never in `gh`'s or GitHub's own words (`ensureDraftPr`,
   `src/runs/pullRequest.ts:238-242`; `ghFailure` and `rejection`, `:194-217`).
 - **Proof:** `test/runs/pullRequest.test.ts`, `test/cli/commands/run.test.ts`, `test/cli/commands/runCheckpoint.test.ts`,
@@ -3582,23 +3585,23 @@ Given `Mode: unattended`, When a unit closes or the run is about to wait, Then `
 explicit path list and pushes the run's branch under the limits of REQ-FLOW-092, and with nothing staged commits nothing
 and pushes only when the branch is ahead; the draft pull request opens when Build starts; the record, ledger, plan and
 morning list ride the branch wherever git does not ignore them (an ignored one reads `records: not committed`)
-(`content/skills/st-unattended/SKILL.md:76-84`; `runCheckpoint`, `src/cli/commands/run.ts:584`).
+(`content/skills/st-unattended/SKILL.md:76-84`; `runCheckpoint`, `src/cli/commands/run.ts:586`).
 
 - **As built, where the delta differed:** the checkpoint does not always push. Where a commit the push would send
   changes a held path, or `HEAD`'s tree still does, it pushes nothing and exits 1 (REQ-FLOW-102's "As built" line;
-  `src/cli/commands/run.ts:802-811`). A symbolic link the change adds or retypes at a held glob's folder (`.claude`,
-  `.github/workflows`, any folder's `.vscode`) counts as a held path there and in the held patch (`heldOf`, `:941-946`,
-  over the raw diff's modes, `:901-914`); a held path staged and then edited again carries both layers there, the
-  staged change and the index-to-work-tree one after it (pr/6, `:717-726`). Nor does it push once origin no longer
+  `src/cli/commands/run.ts:804-813`). A symbolic link the change adds or retypes at a held glob's folder (`.claude`,
+  `.github/workflows`, any folder's `.vscode`) counts as a held path there and in the held patch (`heldOf`, `:943-948`,
+  over the raw diff's modes, `:903-916`); a held path staged and then edited again carries both layers there, the
+  staged change and the index-to-work-tree one after it (pr/6, `:719-728`). Nor does it push once origin no longer
   names the repository `run start` pinned: it exits 1 as `origin changed: …` before it stages (REQ-FLOW-092's "As
-  built" line; `:661-665`), and the pin rides the branch with the record (`RUN_FILES`, `:147`). Nor does it commit a
+  built" line; `:663-667`), and the pin rides the branch with the record (`RUN_FILES`, `:149`). Nor does it commit a
   path staged before it ran that is none of the run files, the held paths and patches or `--paths` (a folder entry
   covering what is under it): it exits 1 as
-  `commit refused: <path> is staged and not in --paths` (pr/5; `strayStaged`, `:1067-1076`, called at `:775-784`).
+  `commit refused: <path> is staged and not in --paths` (pr/5; `strayStaged`, `:1069-1078`, called at `:777-786`).
   "Ahead" is read from the remote's own branch, `git ls-remote --exit-code origin refs/heads/<branch>`, never a
-  remote-tracking ref a deletion on the remote left stale (pr/20; `remoteTip`, `:486-493`). A pushed code file the
+  remote-tracking ref a deletion on the remote left stale (pr/20; `remoteTip`, `:488-495`). A pushed code file the
   scan could not read leaves the push and the exit as they are and adds `secret scan: <n> files unscanned (<paths>)`
-  to `notDone[]` (pr/7; `:827-830`), which the skill copies on any exit.
+  to `notDone[]` (pr/7; `:829-832`), which the skill copies on any exit.
 - **Proof:** `test/cli/commands/runCheckpoint.test.ts`, `test/cli/commands/run.test.ts`,
   `test/corpus/skills/unattended.test.ts`.
 
@@ -3628,8 +3631,8 @@ citing the first run, walks the morning list through the client's question tool 
 same branch, pushes and refreshes the pull request body; an invocation that itself declares the start unattended
 (`--unattended`, a hand-off's `run-mode: unattended`, or a chain's next file) takes the unattended entry on that branch,
 never the walk (`content/commands/st-work.md:412-415`, `content/skills/st-unattended/SKILL.md:140-145`); on a run still
-in progress `--resume` refuses, naming the continuation. In Claude Code's cloud the run closes its record, pushes, then
-asks one final round; on Cursor, follow-ups on its pull request's comments; on Copilot, one
+in progress `--resume` refuses, naming the continuation. In Claude Code's cloud the run closes its record, ends on
+`run end --final-round`, then asks one final round (REQ-FLOW-090); on Cursor, follow-ups on its pull request's comments; on Copilot, one
 `@copilot answers: Q1→2, Q3→1` comment; locally, the touchpoint (`content/skills/st-unattended/SKILL.md:147-151`).
 
 - **As built, where the delta differed:** the skill names no client in that last sentence: it names each way back by
@@ -3648,10 +3651,12 @@ one unattended invocation runs the chain on one branch, each file its own run an
 `BLOCKED_*`, with one draft pull request and one merged morning list; otherwise the blocker `chain-order` refuses. A
 `reads` path that only commits after the chain's run base moved is exempt from the freshness guard; a path a commit
 between the stamp and that base moved stays stale (`content/skills/st-unattended/references/chains.md:12-18`;
-`freshness`, `src/runs/freshness.ts`). Every file's `stamity run end` but the chain's last one (the last file, or the
-first to stop at a `BLOCKED_*`) passes `--chain-next`, which writes no run-ended marker and removes one already there,
-so the ask gate (REQ-FLOW-090) puts no question through between two chain files; only that last `run end` opens the
-final question round (`content/skills/st-unattended/references/chains.md:20-22`; `src/cli/commands/run.ts`, pr/25).
+`freshness`, `src/runs/freshness.ts`). Only the chain's final round passes `--final-round`: the last file's
+`stamity run end`, the last file being the chain's last or the first to stop at a `BLOCKED_*`. Every other file's
+`run end` takes no flag, so it writes no run-ended marker and removes one already there, and the ask gate
+(REQ-FLOW-090) puts no question through between two chain files; a flag left out refuses the final round rather than
+opening a middle one (`content/skills/st-unattended/references/chains.md:20-22`; `src/cli/commands/run.ts`, pr/25,
+pr/37).
 
 - **Proof:** `test/corpus/skills/unattended.test.ts` ("st-unattended — the other touchpoints and chains"),
   `test/corpus/commands/work.test.ts`, `test/cli/commands/plan.test.ts`, `test/cli/commands/runEnd.test.ts` (the gate
@@ -3680,7 +3685,7 @@ as morning-list rows (`content/skills/st-unattended/SKILL.md:153-166`).
   written and its every checkpoint and `run end` would refuse as `origin not pinned`. Its Unattended row runs
   `stamity run start --run <its id> --json` once the head is checked out on `Base:` and before the first fix
   (`content/commands/st-pr-resolve.md:54`). On that branch, never the default since the row refuses a default-branch
-  head, `run start` keeps the branch and writes the run folder's `origin.json` (`src/cli/commands/run.ts:271-278`). It
+  head, `run start` keeps the branch and writes the run folder's `origin.json` (`src/cli/commands/run.ts:273-280`). It
   still runs no `stamity plan check`, and a `run start` that fails takes the row's refusal exit: nothing pushed, one
   scanned comment on the pull request, the record closed as refused.
 - **Proof:** `test/corpus/commands/lightTrio.test.ts`, `test/corpus/commands/feedbackPair.test.ts` ("feedback pair —
@@ -3767,8 +3772,8 @@ off the pushed tree as an inert patch, listed (`PERSON_ONLY_PATHS` and `heldPath
   work tree or the index. Where a commit the push would send (one `origin` lacks) changes a held path, or `HEAD`'s tree
   still does after the commit, `run checkpoint` and `run end` refuse the push instead: they exit 1 naming
   `held path in history (<path>)` or `held path in the pushed tree (<path>)`, push nothing and rewrite no history, so
-  the branch stays unpushed until a person rewrites it (`src/cli/commands/run.ts:802-811`; `heldInHistory`,
-  `:972-987`).
+  the branch stays unpushed until a person rewrites it (`src/cli/commands/run.ts:804-813`; `heldInHistory`,
+  `:974-989`).
 - **Proof:** `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`, `test/change/personOnlyPaths.test.ts`,
   `test/cli/commands/runCheckpoint.test.ts` (the held patch; the refused push, "refuses the push when a commit it would
   send changes a held path, rewriting no history"), `test/adapters/claude.test.ts`,
@@ -3794,7 +3799,7 @@ dependency is a morning-list row (`SKILL.md:118-119`).
 ### REQ-FLOW-104 — The cloud's accepted risks are named
 
 Added 2026-10-16 (plan 021 file 1, unit `u21-security-page`; not on this merge's base, it is cited from `bc12cfc3`
-by the merge's first fix round and re-read after the whole-branch page round: the section is `SECURITY.md:379-569`, under
+by the merge's first fix round and re-read after the whole-branch page round: the section is `SECURITY.md:379-578`, under
 `## What it does not defend` (`:284`), the settings row `:98`, the git-hardening row `:96` and the third network
 exception `:152-173`).
 
@@ -3827,12 +3832,12 @@ named network exceptions, and the run verbs on the git-hardening row.
 - **As built, where the delta differed:** the delta named PowerShell's command wrappers, gh's alias for the
   create-and-push form, a multi-root workspace file's settings and an editor tasks file's folder-open task as uncovered
   by the unattended rules and not held. The guard rounds after it closed each: the page states the wrapped lines read
-  and refused, the alias refused and those files held (`SECURITY.md:544-553`, `:567-569`), the encoded command and the
-  `iex` pipe staying the gaps the unattended rules do not cover (`:562-565`). The page's place-reader paragraph
-  (`:555-560`) and its residual for programs the repository's configuration names (`:429-464`) are not restated here; a
+  and refused, the alias refused and those files held (`SECURITY.md:553-562`, `:576-578`), the encoded command and the
+  `iex` pipe staying the gaps the unattended rules do not cover (`:571-574`). The page's place-reader paragraph
+  (`:564-569`) and its residual for programs the repository's configuration names (`:429-464`) are not restated here; a
   later page round settles them. The whole-branch round added three residuals in plain words: the GitHub MCP server
   on the clients that take no per-tool deny, the origin pin rewritten together with git's configuration, and the
-  working directory Claude Code keeps across shell calls, attended only (`SECURITY.md:400-409`, `:484-489`,
+  working directory Claude Code keeps across shell calls, attended only (`SECURITY.md:400-409`, `:493-498`,
   `:410-416`).
 - **Proof:** `test/docsPages.test.ts` ("cloud and unattended runs (REQ-FLOW-104)": the section's place, every risk
   and gap named above, the retired bullet gone, the control table's pointers, the settings row and the network
@@ -3844,7 +3849,7 @@ Added 2026-10-16 (plan 021 file 1, units `u6-person-only-tables` and `u14-shell-
 
 Given any in-progress record (debug records included) reading `Mode: unattended`, or `STAMITY_UNATTENDED` set while no
 in-progress record reads `Mode: attended` (one with no `Mode:` line included; `unattendedBy`,
-`src/hooks/scripts.ts:3668-3696`), When the main thread runs a raw `git push`, `gh pr create`, `gh pr edit`, or a REST
+`src/hooks/scripts.ts:3669-3697`), When the main thread runs a raw `git push`, `gh pr create`, `gh pr edit`, or a REST
 write on `pulls` or `pulls/<n>`, `contents/`, `git/` refs or objects, or `merges`, Then the shell guard refuses it on every client,
 naming `stamity run checkpoint` and `run end` as the push path; replies on `pulls/<n>/comments` and
 `issues/<n>/comments` pass (`unattendedPushVerdict`, `src/hooks/personOnly.ts:1191`;
@@ -4795,11 +4800,11 @@ above.
 
 - GIVEN an in-progress record reading `Mode: unattended` THEN the ask gate exits 2 naming it; GIVEN one reading
   `Mode: attended` beside it THEN still 2; GIVEN no run in progress and a closed unattended record whose `Branch:` is the
-  current branch, with the run-ended marker naming its run, THEN 0; GIVEN the same record and branch with no marker, or
-  one naming another run, THEN 2; GIVEN another branch THEN the variable decides. *(test:
-  `test/hooks/unattendedAskGate.test.ts`)*
-- GIVEN `run end` at any exit THEN the marker names its run, `--chain-next` aside; GIVEN `run start` THEN it is gone;
-  neither under `--dry-run`.
+  current branch, with the run-ended marker naming its run and its `at` within 120 seconds, THEN 0; GIVEN the same
+  record and branch with no marker, one naming another run, or one past 120 seconds, with no `at` or dated after now,
+  THEN 2; GIVEN another branch THEN the variable decides. *(test: `test/hooks/unattendedAskGate.test.ts`)*
+- GIVEN `run end --final-round` at any exit THEN the marker names its run and the time it was written; GIVEN a plain
+  `run end` THEN no marker is left; GIVEN `run start` THEN it is gone; none of them under `--dry-run`.
   *(test: `test/cli/commands/runEnd.test.ts`, `test/cli/commands/run.test.ts`)*
 - GIVEN Claude Code's settings THEN the ask gate sits on `AskUserQuestion` after every planned PreToolUse row, with no
   fail-closed tail. *(test: `test/adapters/claude.test.ts`)*
@@ -4817,7 +4822,7 @@ above.
   *(test: `test/runs/pullRequest.test.ts`; through `run end`, `test/cli/commands/runEnd.test.ts`)*
 - GIVEN `run start` on the default branch THEN the run moves to `stamity/<run-id>`; GIVEN any call THEN no `gh pr create`,
   no force, no tag and no default-branch push. *(test: `test/cli/commands/run.test.ts`,
-  `test/cli/commands/runCheckpoint.test.ts`, whose push step `run end` runs as its own (`src/cli/commands/run.ts:238`);
+  `test/cli/commands/runCheckpoint.test.ts`, whose push step `run end` runs as its own (`src/cli/commands/run.ts:240`);
   `test/cli/commands/runEnd.test.ts` for what `run end` adds, the pull request after the push and none after a held one)*
 - GIVEN `run start` on the default branch and a run branch whose tip tracks its origin pin THEN the switch goes through,
   the pin is kept and the checkout is clean; GIVEN that pin naming another repository THEN exit 1, `Not done: origin
@@ -4851,9 +4856,10 @@ above.
 - GIVEN a chain whose second head does not name the first THEN `chain-order`; GIVEN a `reads` path moved only after the
   run base THEN no `stale`; GIVEN one moved between the stamp and the base THEN `stale`. *(test:
   `test/cli/commands/plan.test.ts`, `test/runs/freshness.test.ts`)*
-- GIVEN `run end --chain-next` on a closed unattended record, a stale marker naming its run there THEN no marker is left
-  and the ask gate refuses a question on that branch; GIVEN the same `run end` without `--chain-next` THEN the marker
-  names the run and the gate allows it. *(test: `test/cli/commands/runEnd.test.ts`)*
+- GIVEN a plain `run end` on a closed unattended record, a marker naming its run there or none, THEN no marker is left
+  and the ask gate refuses a question on that branch; GIVEN the same `run end` with `--final-round` THEN the marker
+  names the run and the gate allows it, until the marker is past 120 seconds. *(test:
+  `test/cli/commands/runEnd.test.ts`)*
 
 **REQ-FLOW-097** (added 2026-10-16)
 
