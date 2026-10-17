@@ -30,8 +30,21 @@ import {
 import type { Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
 import { CONTENT_PREFIX, GENERATED_SCRIPT_LINT_DIRECTIVE, STATE_DIR } from "../types/markers.ts";
+import { PREFLIGHT_CANARY_FILE, RUN_ENDED_MARKER_FILE, RUN_ENDED_MAX_AGE_MS } from "../mcp/env.ts";
 import { buildResumeCardSource, RESUME_CARD_HOST_NAMES } from "../runs/cardSource.ts";
-import { UNPRINTABLE_CHARS } from "../runs/layout.ts";
+import {
+  GIT_METADATA_MAX_BYTES,
+  IN_PROGRESS_PATTERN,
+  RECORD_BRANCH_PATTERN,
+  RECORD_FILE,
+  RECORD_HEAD_LINES,
+  RECORD_HEAD_READ_BYTES,
+  RECORD_MODE_PATTERN,
+  RECORD_STATUS_PATTERN,
+  RUN_ID_PATTERN,
+  RUNS_SEGMENTS,
+  UNPRINTABLE_CHARS,
+} from "../runs/layout.ts";
 import { cliCallHint } from "../shared/cliCall.ts";
 import {
   CLIENT_CLOUD_FACTS,
@@ -39,6 +52,7 @@ import {
   type CanonicalHookEvent,
   type HookFailMode,
 } from "./model.ts";
+import { personOnlyVerdict, unattendedPushVerdict } from "./personOnly.ts";
 
 /**
  * The three core hook scripts plus one work-scoped extension, as generated text.
@@ -66,7 +80,8 @@ import {
  * it gates a work run's completion on that run's review loop, rides events one
  * client fires, and is planned by the adapter that wires those events rather
  * than by {@link planCoreHookScripts}. Every other client carries work's review
- * ladder as prose.
+ * ladder as prose. {@link buildUnattendedAskGate} is placed the same way: it
+ * refuses Claude Code's question tool while a run is unattended.
  *
  * Trust posture, held by every body here and asserted by the suite: exec form
  * (a hook is `node <script>`, never a shell line), repo-committed and
@@ -112,11 +127,25 @@ const GUARD_FILE = "stamity-pre-tool-use-guard.mjs";
 const TAMPER_NOTICE_FILE = "stamity-config-tamper-notice.mjs";
 
 /**
+ * The unattended ask gate (REQ-FLOW-090). NON-portable carrier: Claude Code's
+ * `PreToolUse` on `AskUserQuestion`, one client only. Exported because, like
+ * {@link REVIEW_GATE_FILE}, no plan function returns it: the wiring adapter names it.
+ */
+export const UNATTENDED_ASK_GATE_FILE = "stamity-unattended-ask-gate.mjs";
+
+/**
  * Work-scoped review gate. NON-portable carriers, one client only — the
  * adapter that wires them reads them off `CLIENT_EXTENSION_EVENTS`. Exported
  * because no plan function returns this script: the wiring adapter names it.
  */
 export const REVIEW_GATE_FILE = "stamity-review-gate.mjs";
+
+/**
+ * The person-only shell guard (REQ-FLOW-102, REQ-FLOW-120). Portable carrier:
+ * `pre_tool_use` on each client's shell tools, Cursor's `beforeShellExecution`.
+ * Rendered only when {@link planCoreHookScripts} is asked for it; emission wires it.
+ */
+export const PERSON_ONLY_GUARD_FILE = "stamity-person-only-guard.mjs";
 
 /**
  * Byte and line ceilings on each emitted core script, keyed by file name
@@ -135,8 +164,9 @@ export const REVIEW_GATE_FILE = "stamity-review-gate.mjs";
  * because a script grew into it is how the ceiling stops meaning anything.
  *
  * The guard and session-start rows are the plan's fixed ceilings. The review
- * gate and the tamper notice are their measured size times 1.25, bytes rounded
- * up to a multiple of 1,024 and lines to a multiple of 10.
+ * gate, the tamper notice and the person-only guard are their measured size
+ * times 1.25, bytes rounded up to a multiple of 1,024 and lines to a multiple
+ * of 10.
  */
 export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: number; readonly lines: number }>> = {
   // Fixed ceiling. Measured 2026-09-26 at 8c08660e: 19,125 bytes / 475 lines
@@ -155,10 +185,47 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // 2 bytes; a plugin root renders 40,021 / 870). × 1.25 = 50,925 / 1,113.75,
   // rounded up to 51,200 / 1,120.
   [REVIEW_GATE_FILE]: { bytes: 51_200, lines: 1_120 },
+  // Measured 2026-10-16 on the u14b lane (base 2a1c5226): 5,711 bytes / 150
+  // lines (claude, generated layout; a plugin root renders 4,983 / 129). Its
+  // measured size × 1.25, rounded as the review gate's is: 7,138.75 / 187.5,
+  // rounded up to 7,168 / 190. Moved 2026-10-16 by u14b's first fix round
+  // (base 37c8d6cc): the gate reads the record's `Branch:` and `.git/HEAD` for
+  // the final round (review/100), names what it read in a refusal (review/104)
+  // and writes one note on a fail-open (review/105): 8,501 bytes / 201 lines
+  // (a plugin root renders 7,773 / 180). × 1.25 = 10,626.25 / 251.25, rounded
+  // up to 10,752 / 260.
+  [UNATTENDED_ASK_GATE_FILE]: { bytes: 10_752, lines: 260 },
   // Measured 2026-09-24 and again 2026-09-26 at 8c08660e: 2,383 bytes / 67
   // lines, the same in both layouts. × 1.25 = 2,978.75 / 83.75, rounded up to
   // 3,072 / 90.
   [TAMPER_NOTICE_FILE]: { bytes: 3_072, lines: 90 },
+  // Measured 2026-10-15 on the u14 lane (base 6cd93d17): 39,671 bytes / 1,245
+  // lines (cursor, generated layout, as the suite's transform renders u6's two
+  // verdicts; the bundle's copy is smaller). × 1.25 = 49,588.75 / 1,556.25,
+  // rounded up to 50,176 / 1,560. Measured 2026-10-15 on base 00ff4f60, the same
+  // way: 54,060 / 1,722, past the row, because u6's round 2 (2fc0824b) grew the
+  // two verdicts the script embeds as source (thirteen rows, transfer and branch
+  // rename among them); then 60,501 / 1,863 (cursor's bytes, claude's and codex's
+  // lines) with u14's round 2, which reads the branch where the call runs
+  // (review/94). × 1.25 = 75,626.25 / 2,328.75, rounded up to 75,776 / 2,330.
+  // Measured 2026-10-16 on base 4daeb214, the same way: 72,763 / 2,130, u6's
+  // round 3 (ded883c6) having grown the embedded verdicts after the row was set;
+  // then 81,086 / 2,226 with the whole-branch guard round 1, which reads
+  // PowerShell's command strings in both verdicts and the place reader
+  // (build/89), gh's own field conversions (review/127), two GraphQL ref forms
+  // (review/128, build/75), a percent-encoded path (build/76), a place in a
+  // program word holding a line (review/153), and refuses an unattended git
+  // alias or non-builtin subcommand (the 01:50Z sign-off). × 1.25 =
+  // 101,357.5 / 2,782.5, rounded up to 101,376 / 2,790. Re-sized 2026-10-16
+  // (review/219) from a fresh measurement on the whole-branch guard round's
+  // tree (base 48e1520b), the same way: 99,579 bytes (cursor, generated) /
+  // 2,568 lines (claude and codex, generated), 98% of the old row, because the
+  // later guard rounds grew the embedded verdicts past the 81,086 the row was
+  // set from (the review read 91,741 in the goldens at f8b7f57a) and this round adds a
+  // review approval, a close deleting a branch, git's program-valued variables,
+  // the remote writes, Cursor's payload with no command and the tags read only
+  // for a push. × 1.25 = 124,473.75 / 3,210, rounded up to 124,928 / 3,210.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 124_928, lines: 3_210 },
 };
 
 /** One generated script, ready for an adapter to place and register. */
@@ -3006,6 +3073,703 @@ if (outcome !== null) {
 `;
 }
 
+// ── 5. Person-only shell guard ───────────────────────────────────
+
+/** Run folders whose record heads the guard reads, newest by name first. */
+const GUARD_RUNS_READ_MAX = 50;
+
+/** Ceilings on the tag names the guard collects and the `packed-refs` file it reads. */
+const GUARD_TAG_NAMES_MAX = 10_000;
+const GUARD_PACKED_REFS_MAX_BYTES = 8_388_608;
+
+/** Places a shell call's git can run in that the guard reads; past this one more counts as unreadable. */
+const GUARD_PLACES_MAX = 32;
+
+/**
+ * How a client hears the guard's decision, rendered for that client alone:
+ * Claude Code and Codex (through the portable runner) block on exit 2 with the
+ * reason on stderr; Copilot reads `permissionDecision` on stdout, through the
+ * runner or not; Cursor's `beforeShellExecution` reads `permission`, and its
+ * `failClosed` counts silence as a failure, so it is told to allow out loud.
+ */
+function guardDecisionOutput(tool: Tool): string {
+  if (tool === "cursor") {
+    return String.raw`process.stdout.write(JSON.stringify(reason === null ? { permission: "allow" } : { permission: "deny", user_message: reason, agent_message: reason }) + "\n");`;
+  }
+  if (tool === "copilot") {
+    return String.raw`if (reason !== null) process.stdout.write(JSON.stringify({ permissionDecision: "deny", permissionDecisionReason: reason }) + "\n");`;
+  }
+  return String.raw`if (reason !== null) {
+  process.stderr.write("stamity person-only guard: " + reason + "\n");
+  process.exitCode = ${BLOCKING_EXIT_CODE};
+}`;
+}
+
+/**
+ * The person-only shell guard (REQ-FLOW-102, REQ-FLOW-120): refuses the main
+ * thread's person-only acts on every client, attended or not, and while a run
+ * is unattended any push that steps around the run verbs.
+ *
+ * The two verdicts are `./personOnly.ts`'s own functions, carried as their
+ * source text the way {@link NORMALIZE_FOR_SCREEN} carries the fold, so a row
+ * added there reaches this script on the next sync without an edit here.
+ *
+ * The branch context comes off the git metadata with `node:fs`, read where the
+ * call runs: the payload's working directory, each `cd`, `pushd`, `env -C` or
+ * PowerShell location target and each `git -C`, `--git-dir`, `GIT_DIR=` or
+ * `$env:GIT_DIR` value, read only where the shell runs a command (a quoted word
+ * elsewhere is data), the nearest `.git` above each (a linked worktree's
+ * `gitdir:` pointer followed). Each place gives `HEAD` from
+ * its git dir, the default branch from `refs/remotes/origin/HEAD` and the local
+ * tags from `refs/tags/` and `packed-refs` in its common dir (read only when a
+ * push refspec asks for them), and the verdict runs once per place. Where
+ * `HEAD` cannot be read (a reftable repository's placeholder among it), an implied destination
+ * counts as the default branch; `main` and `master` always count. The mode comes
+ * off the run records, read only for a call the unattended rule would refuse:
+ * unattended when any of the {@link GUARD_RUNS_READ_MAX} newest run folders,
+ * debug rounds included, holds an in-progress record reading `Mode:
+ * unattended`, or when `STAMITY_UNATTENDED` is set (not "", "false", "0") and
+ * none reads `Mode: attended`; the refusal names which.
+ *
+ * A command naming `gate preflight` that the guard allows writes
+ * `{ "at": <ISO> }` to {@link PREFLIGHT_CANARY_FILE}, the pre-flight's proof
+ * that hooks loaded. A call that is not a shell call is allowed at once; a
+ * shell call the guard cannot read (a payload naming no tool, Cursor's, with no
+ * command string among them), or a fault while deciding one, is refused.
+ */
+export function buildPersonOnlyGuardScript(opts: { tool: Tool; layout: HookScriptLayout }): string {
+  const extra = repoRootImports(opts.layout);
+  const regex = (pattern: RegExp): string => `new RegExp(${json(pattern.source)}, ${json(pattern.flags)})`;
+  return `${header(
+    [
+      "stamity — person-only shell guard.",
+      "",
+      "Refuses the person-only acts (a force push, a push of a tag or of the default",
+      "branch, a tag, a merge, a release, a publish, a secret or protection write) on",
+      "every shell call, and while a run is unattended any push that steps around",
+      "`stamity run checkpoint` and `stamity run end`. `curl` and `wget` appear below",
+      "only as command words it reads; it runs none.",
+    ],
+    [
+      "Reads outside repo state: the pending call's payload on stdin and the",
+      "STAMITY_UNATTENDED and STAMITY_REPO_ROOT variables. Reads the git metadata and",
+      "the run records' heads; writes only the pre-flight canary.",
+    ],
+  )}
+
+${namedImport(["closeSync", "lstatSync", "mkdirSync", "openSync", "readFileSync", "readSync", "readdirSync", "statSync", "writeFileSync"], "node:fs")}
+${namedImport(["dirname", "isAbsolute", "join", "resolve", "sep", ...extra.path], "node:path")}
+${extra.url}
+const STATE_SEGMENTS = ${json([RUNS_SEGMENTS[0]])};
+const RUNS_SEGMENTS = ${json(RUNS_SEGMENTS)};
+const RECORD_FILE = ${json(RECORD_FILE)};
+const RUN_ID = ${regex(RUN_ID_PATTERN)};
+const STATUS = ${regex(RECORD_STATUS_PATTERN)};
+const MODE = ${regex(RECORD_MODE_PATTERN)};
+const IN_PROGRESS = ${regex(IN_PROGRESS_PATTERN)};
+const HEAD_LINES = ${RECORD_HEAD_LINES};
+const HEAD_READ_BYTES = ${RECORD_HEAD_READ_BYTES};
+const RUNS_READ_MAX = ${GUARD_RUNS_READ_MAX};
+const GIT_MAX_BYTES = ${GIT_METADATA_MAX_BYTES};
+const TAG_NAMES_MAX = ${GUARD_TAG_NAMES_MAX};
+const PACKED_REFS_MAX_BYTES = ${GUARD_PACKED_REFS_MAX_BYTES};
+const PLACES_MAX = ${GUARD_PLACES_MAX};
+const CANARY_SEGMENTS = ${json(PREFLIGHT_CANARY_FILE.split("/"))};
+const SHELL_TOOLS = new Set(["Bash", "PowerShell", "Shell", "bash", "powershell", "shell"]);
+
+${resolveRepoRoot(opts.layout)}
+
+// The person-only verdict and the unattended push rule, as their own source
+// (src/hooks/personOnly.ts in the engine that wrote this file). An engine loaded
+// through a name-keeping transformer (tsx) wraps their inner functions in
+// __name(fn, "name"), a helper it defines outside them: a no-op one stands in.
+const __name = (target) => target;
+const personOnlyVerdict = ${personOnlyVerdict.toString()};
+
+const unattendedPushVerdict = ${unattendedPushVerdict.toString()};
+${String.raw`
+/** A git metadata file's text, trimmed: a regular file of at most GIT_MAX_BYTES, never through a link. */
+function gitText(path) {
+  try {
+    const stats = lstatSync(path);
+    return stats.isFile() && stats.size <= GIT_MAX_BYTES ? readFileSync(path, "utf8").trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The git dir HEAD lives in and the common dir the refs live in, from a git dir or a gitdir: file; null when neither. */
+function gitDirsOf(path) {
+  let gitDir = path;
+  try {
+    if (!lstatSync(path).isDirectory()) {
+      const pointer = /^gitdir:[ \t]*(.+)$/.exec((gitText(path) ?? "").split(/\r?\n/)[0]);
+      if (pointer === null) return null;
+      const target = pointer[1].trim();
+      gitDir = isAbsolute(target) ? target : resolve(dirname(path), target);
+    }
+  } catch {
+    return null;
+  }
+  const common = gitText(join(gitDir, "commondir"));
+  return { gitDir, commonDir: common === null ? gitDir : resolve(gitDir, common) };
+}
+
+/** The git dirs of the repository a directory sits in, the nearest .git upward; null when none can be placed. */
+function gitDirsFrom(start) {
+  try {
+    if (!statSync(start).isDirectory()) return null;
+  } catch {
+    return null;
+  }
+  for (let dir = start; ; dir = dirname(dir)) {
+    try {
+      lstatSync(join(dir, ".git"));
+      return gitDirsOf(join(dir, ".git"));
+    } catch (error) {
+      if (!error || (error.code !== "ENOENT" && error.code !== "ENOTDIR")) return null;
+    }
+    if (dirname(dir) === dir) return null;
+  }
+}
+
+`}${
+  // Where a shell call's git runs (review/94, review/116, review/117). Beside the payload's working directory, a
+  // place is a directory a command moves to (cd, pushd, chdir, env -C, and PowerShell's Set-Location, sl and
+  // Push-Location), a git -C or --git-dir value, or a GIT_DIR or $env:GIT_DIR assignment. One counts only where
+  // the shell runs a command: a line's start, after an operator (; & | ( ) { }, a backtick or a newline), a
+  // keyword, an assignment or one of u6's wrappers with its options, and in the lines a command runs: sh -c's,
+  // eval's, env -S's, a runner's -c, a $(...) or backtick in double quotes or in an unquoted heredoc's body, a
+  // heredoc's body where a shell on the line reads it, PowerShell's command string as u6 reads it (build/89), cmd /c
+  // or /k's rest, a git rebase exec line and git bisect run's command (review/193, linesOf), and a
+  // program word holding a blank, which u6 also reads as a line (review/153; a PowerShell here-string, @'...'@, is
+  // a literal). Any other word, a commit message's among them, is data and adds no place. A redirection's target
+  // and a comment are no words. A path is read against each directory the line can be in by then; null is a place
+  // that cannot be read, such as a move with no target, a git -C or --git-dir with no word for its value (a brace
+  // placeholder, review/154), or one past PLACES_MAX.
+  //
+  // A PowerShell line is split as u6's verdict splits it, the way it finds the push, so a quote PowerShell reads
+  // otherwise can only hide a place where it hides the push too, or turn a path unreadable (a refusal). The
+  // location commands count in any letter case, on every shell tool (Cursor's payload names no shell, and a POSIX
+  // shell has no such command, so one read there only adds a place); a target is the -Path or -LiteralPath value
+  // (a unique prefix) or the first word that is no option, and cd.. moves to the parent. Forms not read sit in the
+  // named respelling residual: a braced variable name, Set-Item env:, cmd's cd /d, sudo -D.
+  //
+  // The wrapper, runner, shell and PowerShell tables are u6's (personOnly.ts, inside both verdicts), copied: per
+  // wrapper, the short letters and the long options taking a value, and the options whose value is a command line.
+  // test/hooks/personOnlyGuard.test.ts holds the copies equal (build/90).
+  String.raw`function programName(word) {
+  return (word.split(/[\\/]/).pop() ?? "").toLowerCase().replace(/\.(exe|cmd|bat)$/, "");
+}
+
+function commandFlag(word) {
+  const match = /^(?:--?|\/)([a-z]+)(?::([\s\S]*))?$/i.exec(word);
+  const name = (match?.[1] ?? "").toLowerCase();
+  return name !== "" && ("commandwithargs".startsWith(name) || name === "cwa") ? (match?.[2] ?? "") : null;
+}
+
+function present(path) {
+  try {
+    lstatSync(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** A line's words (a null where a command can follow), the lines they run, and its heredocs' bodies. */
+function shellWords(command) {
+  const words = [];
+  const nested = [];
+  const docs = [];
+  const pending = [];
+  let word = null;
+  let drop = false;
+  const end = () => {
+    if (word !== null && !drop) words.push(word);
+    else if (word !== null) drop = false;
+    word = null;
+  };
+  const opens = (text, j) => (text[j] === "$" && text[j + 1] === "(") || text[j] === "\`";
+  const sub = (text, j) => {
+    let close = text[j] === "\`" ? text.indexOf("\`", j + 1) : j + 1;
+    for (let level = 0; text[j] === "$" && close < text.length; close += 1) {
+      if (text[close] === "(") level += 1;
+      else if (text[close] === ")" && --level === 0) break;
+    }
+    if (close === -1) close = text.length;
+    nested.push(text.slice(j + (text[j] === "$" ? 2 : 1), close));
+    return close;
+  };
+  const bodies = (k) => {
+    let at = k + 1;
+    for (const doc of pending.splice(0)) {
+      let body = "";
+      while (at < command.length) {
+        let stop = command.indexOf("\n", at);
+        if (stop === -1) stop = command.length;
+        const line = command.slice(at, stop).replace(/\r$/, "");
+        at = stop + 1;
+        if ((doc.strip ? line.replace(/^\t+/, "") : line) === doc.delimiter) break;
+        body += line + "\n";
+      }
+      docs.push(body);
+      for (let j = 0; doc.expand && j < body.length; j += 1) {
+        if (body[j] === "\\") j += 1;
+        else if (opens(body, j)) j = sub(body, j);
+      }
+    }
+    return at - 1;
+  };
+  for (let k = 0; k < command.length; k += 1) {
+    const c = command[k];
+    if (c === "'") {
+      const close = command.indexOf("'", k + 1);
+      word = (word ?? "") + command.slice(k + 1, close === -1 ? command.length : close);
+      k = close === -1 ? command.length : close;
+    } else if (c === '"') {
+      word ??= "";
+      for (k += 1; k < command.length && command[k] !== '"'; k += 1) {
+        if (opens(command, k)) {
+          const close = sub(command, k);
+          word += command.slice(k, close + 1);
+          k = close;
+          continue;
+        }
+        if (command[k] === "\\" && '$\`"\\\n'.includes(command[k + 1] ?? "")) k += 1;
+        word += command[k] ?? "";
+      }
+    } else if (c === "\\" && process.platform !== "win32") {
+      // A backslash escapes the next character, except on Windows, where it separates a path's parts.
+      if (command[k + 1] !== "\n") word = (word ?? "") + (command[k + 1] ?? "");
+      k += 1;
+    } else if (c === "#" && word === null) {
+      while (k + 1 < command.length && command[k + 1] !== "\n") k += 1;
+    } else if (c === "<" || c === ">") {
+      if (word !== null && /^\d+$/.test(word)) word = null;
+      else end();
+      if (command.startsWith("<<", k) && command[k + 2] !== "<") {
+        let j = k + 2 + (command[k + 2] === "-" ? 1 : 0);
+        while (command[j] === " " || command[j] === "\t") j += 1;
+        const delimiter = /^[^\s;&|()<>]*/.exec(command.slice(j))[0];
+        pending.push({ delimiter: delimiter.replace(/['"\\]/g, ""), strip: command[k + 2] === "-", expand: !/['"\\]/.test(delimiter) });
+        k = j + delimiter.length - 1;
+      } else {
+        while (/[<>&|]/.test(command[k + 1] ?? "")) k += 1;
+        drop = true;
+      }
+    } else if (/[\s;&|(){}\`]/.test(c)) {
+      end();
+      if (c === "\n" || c === "\r" || !/\s/.test(c)) {
+        drop = false;
+        words.push(null);
+      }
+      if (c === "\n" && pending.length > 0) k = bodies(k);
+    } else word = (word ?? "") + c;
+  }
+  end();
+  const home = process.env.HOME ?? process.env.USERPROFILE;
+  return { words: words.map((w) => (w !== null && home && /^~(?=[\\/]|$)/.test(w) ? home + w.slice(1) : w)), nested, docs };
+}
+
+const RUNNER = ["pw", "--package --workspace --filter", "-c --call --shell-mode"];
+const WRAPPERS = new Map([
+  ["env", ["uCP", "--unset --chdir", "-S --split-string"]],
+  ["sudo", ["ugpCrtUDRT", "--user --group --prompt --close-from --role --type --other-user --chdir --chroot --command-timeout --host"]],
+  ["doas", ["uC"]],
+  ["exec", ["a"]],
+  ["nice", ["n", "--adjustment"]],
+  ["timeout", ["sk", "--signal --kill-after"]],
+  ["stdbuf", ["ioe", "--input --output --error"]],
+  ["time", ["fo", "--format --output"]],
+  ["xargs", ["ILnPsdEa", "--max-args --max-procs --max-chars --delimiter --arg-file --process-slot-var"]],
+  ["command", []],
+  ["builtin", []],
+  ["nohup", []],
+  ["npx", RUNNER],
+  ["bunx", RUNNER],
+  ["pnpx", RUNNER],
+]);
+const RUNNERS = new Set(["npm exec", "npm x", "pnpm dlx", "pnpm exec", "yarn dlx", "yarn exec", "bun x", "bun exec"]);
+const MANAGERS = new Set(["npm", "pnpm", "yarn", "bun"]);
+const MANAGER_VALUED = new Set(["-w", "--workspace", "--filter", "-F", "--prefix", "-C", "--dir", "--cwd", "--registry", "--userconfig"]);
+const KEYWORDS = new Set(["!", "if", "then", "else", "elif", "fi", "do", "done", "while", "until"]);
+const SHELLS = new Set(["sh", "bash", "zsh", "dash", "ksh"]);
+const POWERSHELLS = new Set(["pwsh", "powershell", "invoke-expression", "iex"]);
+const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
+
+/** Where a shell call's git runs: its working directory and each place a command on the line moves it to. */
+function placesOf(command, cwd) {
+  const places = [{ work: cwd }];
+  const bases = [cwd];
+  const full = () => places.length > PLACES_MAX || bases.length > PLACES_MAX;
+  const has = (list, option) => list.split(" ").includes(option);
+  const move = (path) => {
+    if (typeof path !== "string" || path === "-" || path === "+") places.push(null);
+    else for (const dir of bases.map((base) => resolve(base, path))) {
+      places.push({ work: dir });
+      if (!bases.includes(dir)) bases.push(dir);
+    }
+  };
+  const gitDir = (path) => {
+    if (typeof path !== "string") places.push(null);
+    else for (const base of bases) places.push({ git: resolve(base, path) });
+  };
+  const scan = (line, depth) => {
+    const { words, nested, docs } = shellWords(line);
+    const inner = (text) => {
+      if (depth < 4 && typeof text === "string") scan(text, depth + 1);
+    };
+    const rest = (j) => {
+      const tail = [];
+      while (typeof words[j] === "string") tail.push(words[j++]);
+      return tail;
+    };
+    let shell = false;
+    for (let k = 0, at = true; k < words.length && !full(); k += 1) {
+      const word = words[k];
+      if (word === null) at = true;
+      if (word === null || !at) continue;
+      if (ASSIGNMENT.test(word) || KEYWORDS.has(word)) {
+        if (word.startsWith("GIT_DIR=")) gitDir(word.slice(8));
+        continue;
+      }
+      at = false;
+      if (/\s/.test(word) && !/^@\s/.test(word)) inner(rest(k).join(" "));
+      const name = programName(word);
+      const assigned = /^\$env:git_dir(=.*)?$/i.exec(word);
+      // A package manager's options before a runner's subcommand (npm -w x exec), skipped as u6 skips them.
+      let sub = k + 1;
+      while (MANAGERS.has(name) && typeof words[sub] === "string") {
+        const option = words[sub];
+        const next = typeof words[sub + 1] === "string" ? words[sub + 1] : "-";
+        if (MANAGER_VALUED.has(option) || (name === "yarn" && option === "workspace")) sub += 2;
+        else if (/^--[^=]+$/.test(option) && !next.startsWith("-") && !RUNNERS.has(name + " " + next)) sub += 2;
+        else if (option.startsWith("-") && option !== "--") sub += 1;
+        else break;
+      }
+      if (assigned !== null) {
+        const value = assigned[1] ?? (/^=/.test(words[k + 1] ?? "") ? words[(k += 1)] : undefined);
+        if (value !== undefined) gitDir(value === "=" ? words[(k += 1)] : value.slice(1));
+      } else if (WRAPPERS.has(name) || RUNNERS.has(name + " " + words[sub])) {
+        const [short = "", long = "", lines = ""] = WRAPPERS.get(name) ?? RUNNER;
+        if (!WRAPPERS.has(name)) k = sub;
+        at = true;
+        while (typeof words[k + 1] === "string" && (ASSIGNMENT.test(words[k + 1]) || /^(-|\d)/.test(words[k + 1]))) {
+          const option = words[(k += 1)];
+          if (ASSIGNMENT.test(option)) {
+            if (option.startsWith("GIT_DIR=")) gitDir(option.slice(8));
+            continue;
+          }
+          if (option === "--") break;
+          let flag = null;
+          let value;
+          if (option.startsWith("--")) {
+            const key = option.split("=")[0];
+            if (has(long, key) || has(lines, key)) {
+              flag = key;
+              value = option.includes("=") ? option.slice(key.length + 1) : words[(k += 1)];
+            }
+          } else if (option.startsWith("-")) {
+            for (let c = 1; c < option.length && flag === null; c += 1) {
+              if (!short.includes(option[c]) && !has(lines, "-" + option[c])) continue;
+              flag = "-" + option[c];
+              value = c === option.length - 1 ? words[(k += 1)] : option.slice(c + 1);
+            }
+          }
+          if (name === "env" && (flag === "-C" || flag === "--chdir")) move(value);
+          else if (flag !== null && has(lines, flag)) {
+            inner([value, ...rest(k + 1)].join(" "));
+            at = false;
+            break;
+          }
+        }
+      } else if (["cd", "pushd", "chdir", "sl", "set-location", "push-location"].includes(name)) {
+        let path;
+        for (let j = k + 1; path === undefined && typeof words[j] === "string"; j += 1) {
+          const option = /^--?(\w*)(?::(.*))?$/.exec(words[j]);
+          if (option === null) path = words[j];
+          else if (/^(?:path?|l\w*|pspath)$/i.test(option[1])) path = option[2] || words[j + 1] || null;
+          else if (/^s/i.test(option[1]) && option[2] === undefined) j += 1;
+        }
+        move(path);
+      } else if (name === "cd..") {
+        move("..");
+      } else if (name === "git") {
+        let from = [...bases];
+        for (let j = k + 1; typeof words[j] === "string"; j += 1) {
+          const option = words[j];
+          const value = option === "-C" || option === "--git-dir" ? words[(j += 1)] : option.slice(10);
+          if (typeof value !== "string") {
+            places.push(null);
+            break;
+          }
+          if (option === "-C") {
+            from = from.map((base) => resolve(base, value));
+            for (const dir of from) places.push({ work: dir });
+          } else if (option === "--git-dir" || option.startsWith("--git-dir=")) {
+            for (const base of from) places.push({ git: resolve(base, value) });
+          } else if (["-c", "--work-tree", "--namespace", "--config-env", "--super-prefix"].includes(option)) j += 1;
+          else if (!option.startsWith("-")) break;
+        }
+      } else if (["export", "declare", "typeset", "local", "readonly"].includes(name)) {
+        for (const option of rest(k + 1)) if (option.startsWith("GIT_DIR=")) gitDir(option.slice(8));
+      }
+      if (SHELLS.has(name) || POWERSHELLS.has(name)) shell = true;
+      for (const text of linesOf(name, rest(k + 1))) inner(text);
+    }
+    for (const text of nested) inner(text);
+    if (shell) for (const text of docs) inner(text);
+  };
+  scan(command, 0);
+  if (full()) places.push(null);
+  return places;
+}
+
+/**
+ * The lines a command runs, as the push verdicts read them: sh -c's script, eval's words, PowerShell's command
+ * string, cmd /c or /k's rest, each git rebase exec line (git's abbreviations and clusters too) and git bisect run's
+ * command, so every line the verdicts read for a push is read here for a place. An entry past the line's end is no text.
+ */
+function linesOf(name, tail) {
+  if (/^git-./.test(name)) return linesOf("git", [name.slice(4), ...tail]);
+  if (SHELLS.has(name)) {
+    const flag = tail.findIndex((option) => /^-[A-Za-z]*c[A-Za-z]*$/.test(option));
+    return flag === -1 ? [] : [tail[flag + 1]];
+  }
+  if (name === "eval") return [tail.join(" ")];
+  if (POWERSHELLS.has(name)) {
+    const flag = tail.findIndex((option) => commandFlag(option) !== null);
+    const first = flag !== -1 ? -1 : tail.findIndex((option) => !/^-|^\/\w*$/.test(option));
+    const line = flag !== -1 ? [[commandFlag(tail[flag]), ...tail.slice(flag + 1)].join(" ")] : first !== -1 ? [tail.slice(first).join(" ")] : [];
+    return [...line, ...(first === -1 ? [] : tail.slice(first + 1).filter((option) => /\s/.test(option)))];
+  }
+  if (name === "cmd") {
+    const at = tail.findIndex((option) => /^\/[ck]/i.test(option));
+    return at === -1 ? [] : [[tail[at].slice(2), ...tail.slice(at + 1)].join(" ")];
+  }
+  if (name !== "git") return [];
+  let k = 0;
+  while (k < tail.length && tail[k].startsWith("-")) k += ["-c", "-C", "--git-dir", "--work-tree", "--namespace", "--config-env", "--super-prefix"].includes(tail[k]) ? 2 : 1;
+  const sub = (tail[k] ?? "").toLowerCase();
+  const args = tail.slice(k + 1);
+  if (sub === "bisect" && args[0] === "run") return [args.slice(1).map((word) => "'" + word.replaceAll("'", "'\\''") + "'").join(" ")];
+  const lines = [];
+  for (let j = 0; sub === "rebase" && j < args.length && args[j] !== "--"; j += 1) {
+    const arg = args[j];
+    const long = /^--ex(?:ec?)?(=[\s\S]*)?$/.exec(arg);
+    if (long !== null) lines.push(long[1] === undefined ? args[(j += 1)] : long[1].slice(1));
+    else if (/^-[^-]/.test(arg)) {
+      for (let c = 1; c < arg.length; c += 1) {
+        if (arg[c] === "x") lines.push(c === arg.length - 1 ? args[(j += 1)] : arg.slice(c + 1));
+        if (arg[c] === "x" || "sXCS".includes(arg[c])) {
+          if (arg[c] !== "x" && arg[c] !== "S" && c === arg.length - 1) j += 1;
+          break;
+        }
+      }
+    }
+  }
+  return lines;
+}
+
+/**
+ * The branch context of each place a shell call's git runs in, one per git dir. Where HEAD names no branch or commit
+ * (reftable's placeholder too), an implied destination counts as the default branch, so a refspec-less push is refused.
+ */
+function contextsOf(command, cwd) {
+  const contexts = new Map();
+  for (const place of placesOf(command, cwd)) {
+    const dirs = place === null ? null : place.git !== undefined ? gitDirsOf(place.git) : gitDirsFrom(place.work);
+    const key = dirs === null ? "" : dirs.gitDir;
+    if (contexts.has(key)) continue;
+    const reftable = dirs !== null && (present(join(dirs.gitDir, "reftable")) || present(join(dirs.commonDir, "reftable")));
+    const head = dirs === null || reftable ? null : gitText(join(dirs.gitDir, "HEAD"));
+    const branch = /^ref: refs\/heads\/(.+)$/.exec(head ?? "")?.[1] ?? ".invalid";
+    const detached = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/i.test(head ?? "");
+    const origin = dirs === null ? null : gitText(join(dirs.commonDir, "refs", "remotes", "origin", "HEAD"));
+    const defaultBranches = origin !== null && origin.startsWith("ref: refs/remotes/origin/") ? [origin.slice(25)] : [];
+    let tags = null;
+    contexts.set(key, {
+      currentBranch: branch !== ".invalid" ? branch : detached ? null : (defaultBranches[0] ?? "main"),
+      defaultBranches,
+      // Read the first time the verdict asks, which only a push refspec does: no other call reads a tag.
+      get tags() {
+        tags ??= dirs === null ? [] : localTags(dirs.commonDir);
+        return tags;
+      },
+    });
+  }
+  return [...contexts.values()];
+}
+`}${String.raw`
+/** The local tag names, loose and packed, up to TAG_NAMES_MAX. */
+function localTags(commonDir) {
+  const tags = [];
+  const walk = (dir, prefix) => {
+    let entries = [];
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (tags.length >= TAG_NAMES_MAX) return;
+      if (entry.isDirectory()) walk(join(dir, entry.name), prefix + entry.name + "/");
+      else if (entry.isFile()) tags.push(prefix + entry.name);
+    }
+  };
+  walk(join(commonDir, "refs", "tags"), "");
+  try {
+    const packed = join(commonDir, "packed-refs");
+    const stats = lstatSync(packed);
+    if (stats.isFile() && stats.size <= PACKED_REFS_MAX_BYTES) {
+      for (const line of readFileSync(packed, "utf8").split(/\r?\n/)) {
+        const hit = /^[0-9a-f]{40,64} refs\/tags\/(.+)$/i.exec(line);
+        if (hit !== null && tags.length < TAG_NAMES_MAX) tags.push(hit[1]);
+      }
+    }
+  } catch {
+    // No packed refs: the loose tags are all there are.
+  }
+  return tags;
+}
+
+/** A record's status and mode from its first HEAD_LINES lines; null when absent or not a regular file. */
+function recordHead(path) {
+  let stats;
+  try {
+    stats = lstatSync(path);
+  } catch (error) {
+    if (error && error.code === "ENOENT") return null;
+    throw error;
+  }
+  if (!stats.isFile()) return null;
+  const fd = openSync(path, "r");
+  let text = "";
+  try {
+    const buffer = Buffer.alloc(Math.min(HEAD_READ_BYTES, stats.size));
+    text = buffer.toString("utf8", 0, readSync(fd, buffer, 0, buffer.length, 0));
+  } finally {
+    closeSync(fd);
+  }
+  let status = null;
+  let mode = null;
+  for (const line of text.replace(/^\uFEFF/, "").split(/\r?\n/).slice(0, HEAD_LINES)) {
+    status ??= STATUS.exec(line)?.[1] ?? null;
+    mode ??= MODE.exec(line)?.[1].toLowerCase() ?? null;
+  }
+  return { inProgress: status !== null && IN_PROGRESS.test(status), mode };
+}
+
+/**
+ * What makes the session unattended, as a refusal names it: the in-progress records reading Mode: unattended,
+ * or the variable when it is set and no in-progress record reads attended; null when nothing does.
+ */
+function unattendedBy(root) {
+  const modes = { attended: false, unattended: false };
+  const runs = [];
+  const runsDir = join(root, ...RUNS_SEGMENTS);
+  let entries = [];
+  try {
+    if (lstatSync(runsDir).isDirectory()) entries = readdirSync(runsDir, { withFileTypes: true });
+  } catch (error) {
+    if (!error || (error.code !== "ENOENT" && error.code !== "ENOTDIR")) throw error;
+  }
+  const names = entries
+    .filter((entry) => entry.isDirectory() && RUN_ID.test(entry.name))
+    .map((entry) => entry.name)
+    .sort()
+    .reverse()
+    .slice(0, RUNS_READ_MAX);
+  for (const name of names) {
+    const head = recordHead(join(runsDir, name, RECORD_FILE));
+    if (head !== null && head.inProgress && head.mode !== null) modes[head.mode] = true;
+    if (head !== null && head.inProgress && head.mode === "unattended") runs.push([...RUNS_SEGMENTS, name, RECORD_FILE].join("/"));
+  }
+  if (runs.length > 0) {
+    const named = runs.slice(0, 3).join(", ") + (runs.length > 3 ? " and " + (runs.length - 3) + " more" : "");
+    return "This session is unattended because " + named + " read" + (runs.length === 1 ? "s" : "") + " \`Status: in progress\` and \`Mode: unattended\`.";
+  }
+  const flag = (process.env.STAMITY_UNATTENDED ?? "").trim().toLowerCase();
+  if (["", "false", "0"].includes(flag) || modes.attended) return null;
+  return "This session is unattended because STAMITY_UNATTENDED is set and no in-progress run record reads \`Mode: attended\`.";
+}
+
+/** The shell command a payload carries; null when the call is not a shell call. */
+function shellCommand(payload) {
+  // Cursor's beforeShellExecution names the command at the top level and no tool: every such payload is a shell call,
+  // so one with no command string is one this guard cannot read, never one that is not a shell call.
+  if (payload.tool_name === undefined || payload.hook_event_name === "beforeShellExecution") {
+    if (typeof payload.command === "string") return payload.command;
+    throw Object.assign(new Error("no command"), { code: "NO_COMMAND" });
+  }
+  if (!SHELL_TOOLS.has(payload.tool_name)) return null;
+  const input = payload.tool_input;
+  const command = input !== null && typeof input === "object" ? input.command : undefined;
+  if (typeof command === "string") return command;
+  if (Array.isArray(command) && command.every((word) => typeof word === "string")) {
+    return command.map((word) => "'" + word.replaceAll("'", "'\\''") + "'").join(" ");
+  }
+  throw Object.assign(new Error("no command"), { code: "NO_COMMAND" });
+}
+
+/** The pre-flight's canary; a link at its path is not followed, and a failed write leaves the pre-flight to refuse. */
+function writeCanary(root) {
+  const path = join(root, ...CANARY_SEGMENTS);
+  try {
+    try {
+      if (!lstatSync(path).isFile()) return;
+    } catch {
+      // Absent: written below.
+    }
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, JSON.stringify({ at: new Date().toISOString() }) + "\n");
+  } catch {
+    // Not written: the pre-flight then finds no fresh canary and refuses.
+  }
+}
+
+/** The refusal this call earns, or null. */
+function decide() {
+  const raw = readFileSync(0, "utf8");
+  const payload = raw.trim() === "" ? {} : JSON.parse(raw);
+  if (payload === null || typeof payload !== "object") throw new Error("payload");
+  const command = shellCommand(payload);
+  if (command === null) return null;
+  const root = repoRoot();
+  // Where the call runs: the payload's working directory (relative to the root), else the root.
+  const cwd = typeof payload.cwd === "string" && payload.cwd !== "" ? resolve(root, payload.cwd) : root;
+  // The PowerShell tool's text is PowerShell's command string, so the verdicts read it as one too, its backslash a
+  // plain character and its backtick the escape, beside the text as it stands.
+  const texts = /^powershell$/i.test(payload.tool_name ?? "") ? [command, "pwsh -Command '" + command.replaceAll("'", "'\\''") + "'"] : [command];
+  for (const ctx of contextsOf(command, cwd)) {
+    for (const text of texts) {
+      const always = personOnlyVerdict(text, ctx);
+      if (always.deny) return always.reason;
+    }
+  }
+  // The mode is read only for a call the unattended rule would refuse, so an unreadable record refuses no other call.
+  const run = texts.map((text) => unattendedPushVerdict(text)).find((verdict) => verdict.deny) ?? { deny: false };
+  if (run.deny) {
+    const why = unattendedBy(root);
+    if (why !== null) return run.reason + " " + why;
+  }
+  if (/(?:^|[^\w-])gate\s+preflight(?![\w-])/.test(command)) writeCanary(root);
+  return null;
+}
+
+let reason = null;
+try {
+  reason = decide();
+} catch (error) {
+  // Fail closed: a shell call this guard could not read is not one it allows.
+  const what = error instanceof SyntaxError ? "an unreadable payload" : error && error.code ? error.code + (typeof error.path === "string" ? " on " + error.path : "") : "an internal fault";
+  reason = "The person-only guard could not decide this shell call (" + what + "), so it is refused (REQ-FLOW-102).";
+}
+`}${guardDecisionOutput(opts.tool)}
+`;
+}
+
 // ── Plan ─────────────────────────────────────────────────────────
 
 /**
@@ -3039,10 +3803,22 @@ if (outcome !== null) {
 export function planCoreHookScripts(
   policiesJsonPath: string,
   tool: Tool,
-  opts: { packageName: string; version: string; npmChannel?: boolean; registry?: string },
+  opts: { packageName: string; version: string; npmChannel?: boolean; registry?: string; personOnlyGuard?: boolean },
 ): GeneratedHookScript[] {
   const failMode =
     CLIENT_HOOK_GUARANTEES.find((guarantee) => guarantee.tool === tool)?.failMode ?? "fail-closed";
+  // Asked for by emission once it wires the guard on the client's shell tools;
+  // until then the core set stays the three scripts every caller expects.
+  const guard: GeneratedHookScript[] =
+    opts.personOnlyGuard === true
+      ? [
+          {
+            fileName: PERSON_ONLY_GUARD_FILE,
+            content: buildPersonOnlyGuardScript({ tool, layout: layoutFor(policiesJsonPath) }),
+            event: "pre_tool_use",
+          },
+        ]
+      : [];
   return [
     {
       fileName: SESSION_START_FILE,
@@ -3066,6 +3842,7 @@ export function planCoreHookScripts(
       }),
       event: "session_start",
     },
+    ...guard,
   ];
 }
 
@@ -3086,4 +3863,262 @@ export function planCoreHookScripts(
  */
 function layoutFor(policiesJsonPath: string): HookScriptLayout {
   return policiesJsonPath.startsWith("../") ? "generated" : "container";
+}
+
+// ── 6. Unattended ask gate (non-core, Claude Code only) ──────────
+
+/**
+ * What the ask gate tells the agent it refused (REQ-FLOW-090): the rule, the
+ * record line the default leaves, and the stop when there is no default.
+ */
+export const UNATTENDED_ASK_GATE_REASON =
+  "This run is unattended: take the declared default and record `Default applied: <question> → option <N> (unattended)`; " +
+  "with no declared default, stop at BLOCKED_AMBIGUITY.";
+
+/**
+ * What a refusal adds after {@link UNATTENDED_ASK_GATE_REASON}, naming what it
+ * read: the record's repo-relative path stands in for `<record>`.
+ */
+export const UNATTENDED_ASK_GATE_RECORD_SOURCE = " (<record> is in progress and reads `Mode: unattended`.)";
+
+/** The same, when the variable decided. */
+export const UNATTENDED_ASK_GATE_VARIABLE_SOURCE =
+  " (STAMITY_UNATTENDED is set, and no in-progress record reads `Mode: attended`.)";
+
+/**
+ * The one stderr line a fail-open allow writes: `<read>` names what could not
+ * be read, `<cause>` the error code (or `not JSON`, or the fault's own name).
+ */
+export const UNATTENDED_ASK_GATE_FAULT_NOTE =
+  "stamity unattended ask gate: <read> could not be read (<cause>), so the question goes through.";
+
+/** The one tool the gate governs: Claude Code's question tool. */
+const ASK_TOOL_NAME = "AskUserQuestion";
+
+/**
+ * The unattended ask gate (REQ-FLOW-090, REQ-FLOW-095): refuses Claude Code's
+ * question tool while nobody is there to answer, so an unattended run takes its
+ * declared defaults instead of waiting forever.
+ *
+ * Like {@link buildReviewGateScript} it is NOT core: it rides one client's
+ * `PreToolUse` on `AskUserQuestion`, and the Claude adapter places and wires it.
+ * Until that adapter asks for it, nothing renders it.
+ *
+ * The mode comes off the run records the way {@link buildPersonOnlyGuardScript}
+ * reads them — the {@link GUARD_RUNS_READ_MAX} newest run folders by name, debug
+ * rounds included, each record's head only — and, like the guard, it reads no
+ * order among them: a run id carries only the UTC date, so two runs of one day
+ * would rank by slug (review/101). Any in-progress record reading `Mode:
+ * unattended` refuses. Otherwise an in-progress record reading `Mode: attended`
+ * allows, whatever the variable says. Otherwise `STAMITY_UNATTENDED` decides:
+ * set (not "", "false", "0") it refuses — except when no run is in progress and
+ * a closed record reading `Mode: unattended` names the current branch (read off
+ * `.git/HEAD` as the guard reads it) on its `Branch:` line, and the run-ended
+ * marker {@link RUN_ENDED_MARKER_FILE} that `run end --final-round` writes and
+ * `run start` deletes names that record's run, its `at` at most
+ * {@link RUN_ENDED_MAX_AGE_MS} old (15 minutes, a person-paced round of several
+ * question calls) and not after now, which is Claude Code's final question round
+ * after that run handed off (pr/17, pr/36, pr/41). A closed record carried into a later clone on another branch
+ * exempts nothing (review/100), nor one on this branch with no fresh marker naming
+ * it: a later session on that branch before its own record opens, past the window
+ * (pr/17, pr/36). A refusal names the record or the variable it read (review/104).
+ *
+ * Fail-open by design: a question is the safe failure, so a payload it cannot
+ * read, a records folder, record or git file it cannot read, or any fault while
+ * deciding lets the question through, with one stderr line naming the read
+ * that failed (review/105). Every other tool passes at once.
+ */
+export function buildUnattendedAskGate(opts: { layout?: HookScriptLayout } = {}): string {
+  const layout = opts.layout ?? "generated";
+  const extra = repoRootImports(layout);
+  const regex = (pattern: RegExp): string => `new RegExp(${json(pattern.source)}, ${json(pattern.flags)})`;
+  return `${header(
+    [
+      "stamity — unattended ask gate (Claude Code).",
+      "",
+      `Refuses ${ASK_TOOL_NAME} while a run is unattended, so the run takes its`,
+      "declared default and records it instead of waiting on nobody. A question",
+      "is the safe failure: anything this script cannot read lets the question through.",
+      `Blocking client: a refusal exits ${BLOCKING_EXIT_CODE} with the rule on stderr.`,
+    ],
+    [
+      "Reads outside repo state: the pending call's payload on stdin and the",
+      "STAMITY_UNATTENDED and STAMITY_REPO_ROOT variables. Reads the run records'",
+      "heads and the run-ended marker; writes nothing.",
+    ],
+  )}
+
+${namedImport(["closeSync", "lstatSync", "openSync", "readFileSync", "readSync", "readdirSync", "statSync"], "node:fs")}
+${namedImport(["isAbsolute", "join", "resolve", "sep", ...extra.path], "node:path")}
+${extra.url}
+const STATE_SEGMENTS = ${json([RUNS_SEGMENTS[0]])};
+const RUNS_SEGMENTS = ${json(RUNS_SEGMENTS)};
+const RECORD_FILE = ${json(RECORD_FILE)};
+const RUN_ID = ${regex(RUN_ID_PATTERN)};
+const STATUS = ${regex(RECORD_STATUS_PATTERN)};
+const MODE = ${regex(RECORD_MODE_PATTERN)};
+const BRANCH = ${regex(RECORD_BRANCH_PATTERN)};
+const IN_PROGRESS = ${regex(IN_PROGRESS_PATTERN)};
+const HEAD_LINES = ${RECORD_HEAD_LINES};
+const HEAD_READ_BYTES = ${RECORD_HEAD_READ_BYTES};
+const RUNS_READ_MAX = ${GUARD_RUNS_READ_MAX};
+const GIT_MAX_BYTES = ${GIT_METADATA_MAX_BYTES};
+const MARKER_SEGMENTS = ${json(RUN_ENDED_MARKER_FILE.split("/"))};
+const MARKER_MAX_AGE_MS = ${RUN_ENDED_MAX_AGE_MS};
+const ASK_TOOL = ${json(ASK_TOOL_NAME)};
+const REASON = ${json(UNATTENDED_ASK_GATE_REASON)};
+const RECORD_SOURCE = ${json(UNATTENDED_ASK_GATE_RECORD_SOURCE)};
+const VARIABLE_SOURCE = ${json(UNATTENDED_ASK_GATE_VARIABLE_SOURCE)};
+const FAULT_NOTE = ${json(UNATTENDED_ASK_GATE_FAULT_NOTE)};
+const BLOCK_EXIT = ${BLOCKING_EXIT_CODE};
+
+${resolveRepoRoot(layout)}
+${String.raw`
+/** A record's status, mode and branch from its first HEAD_LINES lines; null when absent or not a regular file. */
+function recordHead(path) {
+  let stats;
+  try {
+    stats = lstatSync(path);
+  } catch (error) {
+    if (error && error.code === "ENOENT") return null;
+    throw error;
+  }
+  if (!stats.isFile()) return null;
+  const fd = openSync(path, "r");
+  let text = "";
+  try {
+    const buffer = Buffer.alloc(Math.min(HEAD_READ_BYTES, stats.size));
+    text = buffer.toString("utf8", 0, readSync(fd, buffer, 0, buffer.length, 0));
+  } finally {
+    closeSync(fd);
+  }
+  let status = null;
+  let mode = null;
+  let branch = null;
+  for (const line of text.replace(/^\uFEFF/, "").split(/\r?\n/).slice(0, HEAD_LINES)) {
+    status ??= STATUS.exec(line)?.[1] ?? null;
+    mode ??= MODE.exec(line)?.[1].toLowerCase() ?? null;
+    branch ??= BRANCH.exec(line)?.[1] ?? null;
+  }
+  return { inProgress: status !== null && IN_PROGRESS.test(status), mode, branch };
+}
+
+/** The heads of the RUNS_READ_MAX newest run folders' records, each with its repo-relative path; no records folder holds none. */
+function recordHeads(root) {
+  const runsDir = join(root, ...RUNS_SEGMENTS);
+  let entries = [];
+  try {
+    if (lstatSync(runsDir).isDirectory()) entries = readdirSync(runsDir, { withFileTypes: true });
+  } catch (error) {
+    if (!error || (error.code !== "ENOENT" && error.code !== "ENOTDIR")) throw error;
+  }
+  const names = entries
+    .filter((entry) => entry.isDirectory() && RUN_ID.test(entry.name))
+    .map((entry) => entry.name)
+    .sort()
+    .reverse()
+    .slice(0, RUNS_READ_MAX);
+  const heads = [];
+  for (const name of names) {
+    const head = recordHead(join(runsDir, name, RECORD_FILE));
+    if (head !== null) heads.push({ ...head, run: name, path: [...RUNS_SEGMENTS, name, RECORD_FILE].join("/") });
+  }
+  return heads;
+}
+
+/** A git metadata file's text, trimmed; null when absent, a link, not a file or past GIT_MAX_BYTES. */
+function gitText(path) {
+  let stats;
+  try {
+    stats = lstatSync(path);
+  } catch (error) {
+    if (error && (error.code === "ENOENT" || error.code === "ENOTDIR")) return null;
+    throw error;
+  }
+  return stats.isFile() && stats.size <= GIT_MAX_BYTES ? readFileSync(path, "utf8").trim() : null;
+}
+
+/** The current branch off .git/HEAD, a linked worktree's gitdir: pointer followed; null when detached or there is no .git. */
+function currentBranch(root) {
+  const dotGit = join(root, ".git");
+  let gitDir = dotGit;
+  let stats;
+  try {
+    stats = lstatSync(dotGit);
+  } catch (error) {
+    if (error && (error.code === "ENOENT" || error.code === "ENOTDIR")) return null;
+    throw error;
+  }
+  if (!stats.isDirectory()) {
+    const pointer = /^gitdir:[ \t]*(.+)$/.exec((gitText(dotGit) ?? "").split(/\r?\n/)[0]);
+    if (pointer === null) return null;
+    const target = pointer[1].trim();
+    gitDir = isAbsolute(target) ? target : resolve(root, target);
+  }
+  const head = gitText(join(gitDir, "HEAD"));
+  return head !== null && head.startsWith("ref: refs/heads/") ? head.slice(16) : null;
+}
+
+/** The run id a fresh run-ended marker names; null when absent, a link, not a file, past GIT_MAX_BYTES, naming no run id, or its at unreadable, after now or past MARKER_MAX_AGE_MS. */
+function endedRun(root) {
+  const text = gitText(join(root, ...MARKER_SEGMENTS));
+  if (text === null) return null;
+  let marker = null;
+  try {
+    marker = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  const run = marker?.run;
+  const age = Date.now() - (typeof marker?.at === "string" ? Date.parse(marker.at) : Number.NaN);
+  if (!(age >= 0 && age <= MARKER_MAX_AGE_MS)) return null;
+  return typeof run === "string" && RUN_ID.test(run) ? run : null;
+}
+
+/** What says nobody is there to answer, as the refusal names it; null when a question may be put. */
+function unattendedSource(root) {
+  const heads = recordHeads(root);
+  const running = heads.filter((head) => head.inProgress);
+  // No order among records: a run id carries only the date, so two runs of one day would rank by slug.
+  const unattendedRun = running.find((head) => head.mode === "unattended");
+  if (unattendedRun !== undefined) return RECORD_SOURCE.replace("<record>", () => unattendedRun.path);
+  if (running.some((head) => head.mode === "attended")) return null;
+  const flag = (process.env.STAMITY_UNATTENDED ?? "").trim().toLowerCase();
+  if (["", "false", "0"].includes(flag)) return null;
+  // Claude Code's final round: no run in progress, and this branch's unattended run closed its record before asking,
+  // its last run end's marker fresh: a later session on the branch, before its own record opens, has none in date.
+  const closed = running.length === 0 ? heads.filter((head) => head.mode === "unattended" && head.branch !== null) : [];
+  if (closed.length > 0) {
+    const ended = endedRun(root);
+    const branch = ended === null ? null : currentBranch(root);
+    if (branch !== null && closed.some((head) => head.branch === branch && head.run === ended)) return null;
+  }
+  return VARIABLE_SOURCE;
+}
+
+/** The source of the refusal this call earns, or null when the call goes through. */
+function decide() {
+  const raw = readFileSync(0, "utf8");
+  const payload = raw.trim() === "" ? null : JSON.parse(raw);
+  if (payload === null || typeof payload !== "object" || payload.tool_name !== ASK_TOOL) return null;
+  return unattendedSource(repoRoot());
+}
+
+let refusal = null;
+try {
+  refusal = decide();
+} catch (error) {
+  // Fail open: a question this gate could not decide is one it lets through, and one line says which read failed.
+  const syntax = error instanceof SyntaxError;
+  const read = syntax ? "the hook payload" : error && typeof error.path === "string" ? error.path : "an input";
+  const cause = syntax ? "not JSON" : error && error.code ? String(error.code) : (error && error.name) || "a fault";
+  const note = FAULT_NOTE.replace("<read>", () => read).replace("<cause>", () => cause);
+  process.stderr.write(note.replace(/[\u0000-\u001f\u007f]/g, "?") + "\n");
+  refusal = null;
+}
+if (refusal !== null) {
+  process.stderr.write(REASON + refusal + "\n");
+  process.exitCode = BLOCK_EXIT;
+}
+`}`;
 }

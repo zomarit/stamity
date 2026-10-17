@@ -109,6 +109,8 @@ function withoutPathScopedWrite(body: string): string[] {
 }
 
 const TAMPER = "stamity-config-tamper-notice.mjs";
+/** The person-only shell guard: a fourth core script on every client, with a portable row on three of them. */
+const PERSON_ONLY = "stamity-person-only-guard.mjs";
 
 const hookDoc = (...hooks: unknown[]): string => JSON.stringify({ hooks }, null, 2);
 
@@ -207,7 +209,10 @@ async function tree(dir: string): Promise<string[]> {
 }
 
 describe("core script rows", () => {
-  it("plans three scripts per selected tool plus exactly one policy document", async () => {
+  // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102, build/44): three scripts became four.
+  // Emission now asks for the person-only shell guard on every selected client, Cursor included (its
+  // adapter wires the copy to beforeShellExecution), so each tool's set gains it, last.
+  it("plans four scripts per selected tool plus exactly one policy document", async () => {
     // Manifest order is cursor-first on purpose: the plan normalizes to
     // canonical tool order, so selection spelling never changes the bytes.
     const p = await plan(["cursor", "claude"]);
@@ -216,14 +221,18 @@ describe("core script rows", () => {
       `${HOOKS_ROOT}/claude/${SESSION_START}`,
       `${HOOKS_ROOT}/claude/${GUARD}`,
       `${HOOKS_ROOT}/claude/${TAMPER}`,
+      `${HOOKS_ROOT}/claude/${PERSON_ONLY}`,
       `${HOOKS_ROOT}/cursor/${SESSION_START}`,
       `${HOOKS_ROOT}/cursor/${GUARD}`,
       `${HOOKS_ROOT}/cursor/${TAMPER}`,
+      `${HOOKS_ROOT}/cursor/${PERSON_ONLY}`,
     ]);
     expect(p.scripts.map((s) => s.tool)).toEqual([
       "claude",
       "claude",
       "claude",
+      "claude",
+      "cursor",
       "cursor",
       "cursor",
       "cursor",
@@ -238,7 +247,8 @@ describe("core script rows", () => {
   it("emits no orphan rows for unselected tools on a single-tool selection", async () => {
     const p = await plan(["codex"]);
 
-    expect(p.scripts).toHaveLength(3);
+    // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102, build/44): the person-only guard is the fourth core script.
+    expect(p.scripts).toHaveLength(4);
     for (const script of p.scripts) {
       expect(script.tool).toBe("codex");
       expect(script.path.startsWith(`${HOOKS_ROOT}/codex/`)).toBe(true);
@@ -287,7 +297,12 @@ describe("core script rows", () => {
     const p = await plan(["claude", "cursor", "copilot", "codex"]);
 
     for (const script of p.scripts) {
-      expect(script.content, script.path).not.toMatch(/https?:\/\/|\bcurl\b|\bwget\b|\bfetch\(/i);
+      // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102): narrowed for the person-only guard
+      // alone. It reads `curl` and `wget` as command words a shell call may carry (a REST write is a
+      // person-only act), so those two words are in its bytes by design; it still names no URL and
+      // makes no fetch, and every other script keeps the full ban.
+      const banned = script.path.endsWith(`/${PERSON_ONLY}`) ? /https?:\/\/|\bfetch\(/i : /https?:\/\/|\bcurl\b|\bwget\b|\bfetch\(/i;
+      expect(script.content, script.path).not.toMatch(banned);
       expect(script.content.startsWith("#!/usr/bin/env node\n"), script.path).toBe(true);
     }
   });
@@ -546,15 +561,24 @@ describe("policy document: installed-pack agent rows", () => {
 });
 
 describe("interchange rows", () => {
-  it("yields session_start twice and pre_tool_use once for the core scripts, in script order", async () => {
+  // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102): the core set gains the person-only shell
+  // guard's row, a second pre_tool_use row matched to the shell tools, last; Cursor's set does not (its
+  // adapter runs the guard on beforeShellExecution), which the case now pins too.
+  it("yields session_start twice and pre_tool_use twice for the core scripts, in script order", async () => {
     const p = await plan(["claude", "cursor"]);
     const rows = p.interchangeFor("claude");
 
-    expect(rows.map((row) => row.event)).toEqual(["session_start", "pre_tool_use", "session_start"]);
+    expect(rows.map((row) => row.event)).toEqual(["session_start", "pre_tool_use", "session_start", "pre_tool_use"]);
     expect(rows.map((row) => row.command)).toEqual([
       ["node", `${HOOKS_ROOT}/claude/${SESSION_START}`],
       ["node", `${HOOKS_ROOT}/claude/${GUARD}`],
       ["node", `${HOOKS_ROOT}/claude/${TAMPER}`],
+      ["node", `${HOOKS_ROOT}/claude/${PERSON_ONLY}`],
+    ]);
+    expect(p.interchangeFor("cursor").map((row) => row.command[1])).toEqual([
+      `${HOOKS_ROOT}/cursor/${SESSION_START}`,
+      `${HOOKS_ROOT}/cursor/${GUARD}`,
+      `${HOOKS_ROOT}/cursor/${TAMPER}`,
     ]);
 
     for (const row of rows) {
@@ -564,7 +588,9 @@ describe("interchange rows", () => {
         expect(typeof part).toBe("string");
         expect(part).not.toMatch(/[;|&`<>]|\$\(|\s{2}/);
       }
-      expect(Object.hasOwn(row, "matcher")).toBe(false);
+      // The shell guard's row alone carries a matcher, the client's shell tools.
+      if (row.command[1]?.endsWith(`/${PERSON_ONLY}`)) expect(row.matcher).toBe("Bash|PowerShell");
+      else expect(Object.hasOwn(row, "matcher")).toBe(false);
       // TEST CHANGE 2026-09-24 (REQ-CTX-016, declared hook budgets), justified:
       // narrowed, not dropped. The two session-start rows now declare the
       // 30-second budget, so "no core row carries timeoutMs" is no longer the
@@ -578,6 +604,40 @@ describe("interchange rows", () => {
       }
     }
     expect(HOOK_SESSION_START_TIMEOUT_MS).toBe(30_000);
+  });
+
+  it("wires the person-only shell guard once per client: a row on each one's shell tools, and none on Cursor", async () => {
+    const p = await plan(["claude", "cursor", "copilot", "codex"]);
+    const guardRows = (tool: Tool) => p.interchangeFor(tool).filter((row) => row.command[1]?.endsWith(`/${PERSON_ONLY}`));
+
+    // The client's shell tools, in the Claude names the interchange speaks; Copilot's adapter translates them.
+    expect(guardRows("claude")).toEqual([
+      { event: "pre_tool_use", command: ["node", `${HOOKS_ROOT}/claude/${PERSON_ONLY}`], matcher: "Bash|PowerShell" },
+    ]);
+    expect(guardRows("copilot")).toEqual([
+      { event: "pre_tool_use", command: ["node", `${HOOKS_ROOT}/copilot/${PERSON_ONLY}`], matcher: "Bash|PowerShell" },
+    ]);
+    expect(guardRows("codex")).toEqual([
+      { event: "pre_tool_use", command: ["node", `${HOOKS_ROOT}/codex/${PERSON_ONLY}`], matcher: "Bash" },
+    ]);
+    // Cursor's copy is placed and carries no portable row: its adapter runs it on beforeShellExecution.
+    expect(guardRows("cursor")).toEqual([]);
+    for (const tool of ["claude", "cursor", "copilot", "codex"] as const) {
+      expect(scriptContent(p, tool, PERSON_ONLY), tool).toContain("person-only shell guard");
+    }
+    // Each copy carries its own client's deny output: Cursor's permission document, Copilot's JSON deny,
+    // and exit 2 on Claude Code and Codex.
+    expect(scriptContent(p, "cursor", PERSON_ONLY)).toContain('permission: "deny"');
+    expect(scriptContent(p, "copilot", PERSON_ONLY)).toContain('permissionDecision: "deny"');
+    for (const tool of ["claude", "codex"] as const) expect(scriptContent(p, tool, PERSON_ONLY), tool).toContain("process.exitCode = 2");
+  });
+
+  it("places no shell guard for a client the selection leaves out", async () => {
+    const p = await plan(["claude"]);
+    expect(p.scripts.filter((s) => s.path.endsWith(`/${PERSON_ONLY}`)).map((s) => s.path)).toEqual([
+      `${HOOKS_ROOT}/claude/${PERSON_ONLY}`,
+    ]);
+    expect(p.interchangeFor("cursor")).toEqual([]);
   });
 
   it("carries a user hook into every selected tool's rows, after the core set", async () => {
@@ -602,12 +662,14 @@ describe("interchange rows", () => {
     const claudeRows = p.interchangeFor("claude");
     const cursorRows = p.interchangeFor("cursor");
 
-    expect(claudeRows).toHaveLength(4);
+    // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102, build/44): Claude's core set holds four rows now
+    // (the shell guard's), Cursor's still three; the user row follows each set.
+    expect(claudeRows).toHaveLength(5);
     expect(cursorRows).toHaveLength(4);
-    expect(claudeRows[3]).toEqual(userRow);
+    expect(claudeRows[4]).toEqual(userRow);
     expect(cursorRows[3]).toEqual(userRow);
     // Portable interchange shape only — reader provenance stays out of the rows.
-    expect(Object.hasOwn(claudeRows[3]!, "sourceFile")).toBe(false);
+    expect(Object.hasOwn(claudeRows[4]!, "sourceFile")).toBe(false);
   });
 
   it("carries an installed pack's hooks after the repo's own, into every selected tool", async () => {
@@ -640,11 +702,13 @@ describe("interchange rows", () => {
     expect(p.warnings).toEqual([]);
     for (const tool of ["claude", "cursor"] as const) {
       const rows = p.interchangeFor(tool);
-      expect(rows).toHaveLength(5);
+      // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102, build/44): Claude's core set holds the shell
+      // guard's row, Cursor's does not, so the two lanes after it are read from the end.
+      expect(rows).toHaveLength(tool === "claude" ? 6 : 5);
       // Lane order: core scripts, then the repo's own hook, then pack supply.
-      expect(rows[3]?.event).toBe("session_end");
-      expect(rows[4]).toEqual(packRow);
-      expect(Object.hasOwn(rows[4]!, "sourceFile")).toBe(false);
+      expect(rows.at(-2)?.event).toBe("session_end");
+      expect(rows.at(-1)).toEqual(packRow);
+      expect(Object.hasOwn(rows.at(-1)!, "sourceFile")).toBe(false);
     }
   });
 
@@ -769,8 +833,9 @@ describe("interchange rows", () => {
 
     const p = await planHooksInfra({ ...ctxFor(repo.dir, ["claude"]), packHooks });
 
-    // Nothing is wired: the three core rows are all a client's config receives.
-    expect(p.interchangeFor("claude")).toHaveLength(3);
+    // Nothing is wired: the core rows are all a client's config receives.
+    // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102, build/44): four core rows on Claude, the shell guard's among them.
+    expect(p.interchangeFor("claude")).toHaveLength(4);
     for (const row of p.interchangeFor("claude")) {
       expect(row.command).not.toContain("-e");
     }
@@ -799,7 +864,8 @@ describe("interchange rows", () => {
         "hooks[0]: command must be exec-form argv",
     ]);
     // A defective pack hook costs itself: the core rows still plan.
-    expect(p.interchangeFor("claude")).toHaveLength(3);
+    // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102, build/44): four core rows on Claude, the shell guard's among them.
+    expect(p.interchangeFor("claude")).toHaveLength(4);
   });
 
   it("reads user hooks from manifest.hooks.userHooksDir when configured", async () => {
@@ -897,8 +963,9 @@ describe("interchange rows", () => {
 
     // The healthy hook still loads; every carried event is canonical.
     const rows = p.interchangeFor("claude");
-    expect(rows).toHaveLength(4);
-    expect(rows[3]!.event).toBe("session_end");
+    // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102, build/44): four core rows on Claude, then the healthy hook.
+    expect(rows).toHaveLength(5);
+    expect(rows[4]!.event).toBe("session_end");
     for (const row of rows) {
       expect(CANONICAL_HOOK_EVENTS).toContain(row.event);
     }
@@ -908,7 +975,8 @@ describe("interchange rows", () => {
     const p = await plan(["claude"]);
 
     expect(p.warnings).toEqual([]);
-    expect(p.interchangeFor("claude")).toHaveLength(3);
+    // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102, build/44): four core rows on Claude, the shell guard's among them.
+    expect(p.interchangeFor("claude")).toHaveLength(4);
   });
 
   it("passes an outside-root userHooksDir through unchanged and wires accepted commands verbatim", async () => {
@@ -990,7 +1058,8 @@ describe("determinism and purity", () => {
     // step wrote, the root would exist afterwards.
     const ghost = repo.path("ghost");
     const ghostPlan = await planHooksInfra(ctxFor(ghost, ["claude", "cursor"]));
-    expect(ghostPlan.scripts).toHaveLength(6);
+    // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102, build/44): four core scripts per tool.
+    expect(ghostPlan.scripts).toHaveLength(8);
     expect(ghostPlan.warnings).toEqual([]);
     expect(existsSync(ghost)).toBe(false);
   });
@@ -1050,10 +1119,12 @@ describe("hookScriptsRoot: the client-visible root the plugin emission needs", (
     const differing = pluginLines.filter((line, i) => line !== repoWithoutWrite[i]);
     expect(differing).toEqual([expect.stringMatching(/^const POLICY_FILE = /)]);
 
+    // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102, build/44): the shell guard's row is re-rooted with the rest.
     expect(plugin.interchangeFor("claude").map((row) => row.command)).toEqual([
       ["node", `${PLUGIN_ROOT}/${SESSION_START}`],
       ["node", `${PLUGIN_ROOT}/${GUARD}`],
       ["node", `${PLUGIN_ROOT}/${TAMPER}`],
+      ["node", `${PLUGIN_ROOT}/${PERSON_ONLY}`],
     ]);
     expect(JSON.stringify(plugin.interchangeFor("claude"))).not.toContain(HOOKS_ROOT);
     // The shared document keeps its repository path: the plugin emitter places
@@ -1080,13 +1151,15 @@ describe("hookScriptsRoot: the client-visible root the plugin emission needs", (
 
     for (const tool of ["claude", "codex"] as const) {
       const rows = p.interchangeFor(tool);
-      // Three core rows re-rooted, then the user row verbatim: a repo's own
+      // The core rows re-rooted, then the user row verbatim: a repo's own
       // hook names a script the repo owns, and re-writing its argv would point
       // it at a file no plugin root holds.
-      expect(rows.slice(0, 3).map((row) => row.command[1]), tool).toEqual([
+      // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102, build/44): four core rows, the shell guard's last.
+      expect(rows.slice(0, 4).map((row) => row.command[1]), tool).toEqual([
         `\${PLUGIN_ROOT}/hooks/${SESSION_START}`,
         `\${PLUGIN_ROOT}/hooks/${GUARD}`,
         `\${PLUGIN_ROOT}/hooks/${TAMPER}`,
+        `\${PLUGIN_ROOT}/hooks/${PERSON_ONLY}`,
       ]);
       expect(rows.at(-1)?.command, tool).toEqual(["node", NOTIFY_SCRIPT]);
     }
@@ -1095,6 +1168,7 @@ describe("hookScriptsRoot: the client-visible root the plugin emission needs", (
       `${HOOKS_ROOT}/codex/${SESSION_START}`,
       `${HOOKS_ROOT}/codex/${GUARD}`,
       `${HOOKS_ROOT}/codex/${TAMPER}`,
+      `${HOOKS_ROOT}/codex/${PERSON_ONLY}`,
     ]);
   });
 });
@@ -1179,14 +1253,18 @@ describe("hook budgets: session start carries 30 s, the guard and the review gat
       for (const tool of ["claude", "cursor", "copilot", "codex"] as const) {
         const rows = p.interchangeFor(tool);
         const label = `${tool} ${hookScriptsRoot ?? "repository"}`;
+        // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102, build/44): the shell guard's row joins the
+        // core guard with no budget, on every client but Cursor, which carries no portable row for it.
         expect(rows.map((row) => [row.event, row.command[1]?.split("/").at(-1), row.timeoutMs]), label).toEqual([
           ["session_start", SESSION_START, 30_000],
           ["pre_tool_use", GUARD, undefined],
           ["session_start", TAMPER, 30_000],
+          ...(tool === "cursor" ? [] : [["pre_tool_use", PERSON_ONLY, undefined]]),
         ]);
         // Absent, not present-and-undefined: an adapter tests `!== undefined`,
         // and a serialized row must not grow the key.
         expect(Object.hasOwn(rows[1]!, "timeoutMs"), label).toBe(false);
+        if (tool !== "cursor") expect(Object.hasOwn(rows[3]!, "timeoutMs"), label).toBe(false);
       }
     }
   });
@@ -1203,7 +1281,8 @@ describe("hook budgets: session start carries 30 s, the guard and the review gat
 
     const p = await plan(["claude"]);
     expect(p.warnings).toEqual([]);
-    const user = p.interchangeFor("claude").slice(3);
+    // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102, build/44): four core rows on Claude.
+    const user = p.interchangeFor("claude").slice(4);
     expect(user).toEqual([
       { event: "session_start", command: ["node", NOTIFY_SCRIPT] },
       { event: "session_start", command: ["node", NOTIFY_SCRIPT, "--budgeted"], timeoutMs: 4500 },
@@ -1242,16 +1321,20 @@ describe("hook budgets: session start carries 30 s, the guard and the review gat
     // leaves since e7-cursor-pins, the guard and the model-fill hook on `Task`; neither carries a
     // budget, which is the property this line pins.
     expect(leaves(cursor["preToolUse"]).map((hook) => Object.hasOwn(hook, "timeout"))).toEqual([false, false]);
+    // The person-only guard on beforeShellExecution carries no budget either (u20-hook-emission).
+    expect(leaves(cursor["beforeShellExecution"]).map((hook) => Object.hasOwn(hook, "timeout"))).toEqual([false]);
 
     const copilot = await renderedHooks("copilot");
     // TEST CHANGE, justified (e6-copilot-adapter, REQ-FLOW-086, signed off as build/56):
     // Copilot's hooks file keys its events camelCase now, so the two entries are read
     // under `sessionStart` and `preToolUse`. The budgets asserted are unchanged.
     expect(leaves(copilot["sessionStart"]).map((hook) => hook.timeoutSec)).toEqual([30, 30]);
-    expect(leaves(copilot["preToolUse"]).map((hook) => Object.hasOwn(hook, "timeoutSec"))).toEqual([false]);
+    // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102, build/44): the shell guard is a second
+    // preToolUse leaf on Copilot and Codex, with no budget, as the core guard.
+    expect(leaves(copilot["preToolUse"]).map((hook) => Object.hasOwn(hook, "timeoutSec"))).toEqual([false, false]);
 
     const codex = await renderedHooks("codex");
     expect(leaves(codex["SessionStart"]).map((hook) => hook.timeout)).toEqual([30, 30]);
-    expect(leaves(codex["PreToolUse"]).map((hook) => Object.hasOwn(hook, "timeout"))).toEqual([false]);
+    expect(leaves(codex["PreToolUse"]).map((hook) => Object.hasOwn(hook, "timeout"))).toEqual([false, false]);
   });
 });

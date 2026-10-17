@@ -23,11 +23,15 @@ import {
   IN_PROGRESS_PATTERN,
   LEDGER_FILE,
   LEDGER_READ_MAX_BYTES,
+  RECORD_BASE_PATTERN,
+  RECORD_BRANCH_PATTERN,
   RECORD_FILE,
   RECORD_HEAD_LINES,
   RECORD_HEAD_READ_BYTES,
   RECORD_INVOCATION_PATTERN,
+  RECORD_MODE_PATTERN,
   RECORD_PLAN_PATTERN,
+  RECORD_RESUMES_PATTERN,
   RECORD_STATUS_PATTERN,
   REPORT_NAME_PATTERN,
   REPORT_READ_MAX_BYTES,
@@ -99,9 +103,15 @@ const CARD_LEDGER_FILE = ${json(LEDGER_FILE)};
 const CARD_RECORD_FILE = ${json(RECORD_FILE)};
 const CARD_FINDINGS_OPEN = ${regex(fenceOpenPattern(FINDINGS_FENCE))};
 const CARD_FENCE_CLOSE = ${regex(FENCE_CLOSE_PATTERN)};
-const CARD_STATUS = ${regex(RECORD_STATUS_PATTERN)};
-const CARD_PLAN = ${regex(RECORD_PLAN_PATTERN)};
-const CARD_INVOCATION = ${regex(RECORD_INVOCATION_PATTERN)};
+const CARD_HEAD = {
+  status: ${regex(RECORD_STATUS_PATTERN)},
+  plan: ${regex(RECORD_PLAN_PATTERN)},
+  invocation: ${regex(RECORD_INVOCATION_PATTERN)},
+  mode: ${regex(RECORD_MODE_PATTERN)},
+  branch: ${regex(RECORD_BRANCH_PATTERN)},
+  base: ${regex(RECORD_BASE_PATTERN)},
+  resumes: ${regex(RECORD_RESUMES_PATTERN)},
+};
 const CARD_IN_PROGRESS = ${regex(IN_PROGRESS_PATTERN)};
 const CARD_HEAD_LINES = ${json(RECORD_HEAD_LINES)};
 const CARD_HEAD_READ_BYTES = ${json(RECORD_HEAD_READ_BYTES)};
@@ -172,9 +182,9 @@ function cardGitText(path) {
 
 /**
  * The record's head: its first CARD_HEAD_LINES lines, from at most
- * CARD_HEAD_READ_BYTES bytes, BOM stripped. The first status, plan and
- * invocation line each win. Null when the record is absent, a link, or
- * unreadable.
+ * CARD_HEAD_READ_BYTES bytes, BOM stripped. The first line of each CARD_HEAD
+ * field wins; the mode is lower-cased, and an absent plan or invocation is ""
+ * (printed as not recorded). Null when the record is absent, a link, or unreadable.
  */
 function cardRecordHead(path) {
   if (!cardRegularFile(path)) return null;
@@ -202,21 +212,18 @@ function cardRecordHead(path) {
     }
   }
   const text = raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
-  const head = { status: null, plan: "", invocation: "" };
+  const head = { status: null, plan: null, invocation: null, mode: null, branch: null, base: null, resumes: null };
   for (const line of text.split(/\r?\n/).slice(0, CARD_HEAD_LINES)) {
-    const status = CARD_STATUS.exec(line);
-    if (status !== null && head.status === null) head.status = status[1];
-    const plan = CARD_PLAN.exec(line);
-    if (plan !== null && head.plan === "") head.plan = plan[1];
-    const invocation = CARD_INVOCATION.exec(line);
-    if (invocation !== null && head.invocation === "") head.invocation = invocation[1];
+    for (const key in CARD_HEAD) {
+      const hit = CARD_HEAD[key].exec(line);
+      if (hit !== null && head[key] === null) head[key] = hit[1];
+    }
   }
-  return {
-    status: head.status,
-    inProgress: head.status !== null && CARD_IN_PROGRESS.test(head.status),
-    plan: head.plan,
-    invocation: head.invocation,
-  };
+  if (head.mode !== null) head.mode = head.mode.toLowerCase();
+  if (head.plan === null) head.plan = "";
+  if (head.invocation === null) head.invocation = "";
+  head.inProgress = head.status !== null && CARD_IN_PROGRESS.test(head.status);
+  return head;
 }
 
 /**

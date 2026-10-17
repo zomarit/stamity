@@ -545,9 +545,15 @@ const CARD_LEDGER_FILE = "ledger.jsonl";
 const CARD_RECORD_FILE = "record.md";
 const CARD_FINDINGS_OPEN = new RegExp("^ {0,3}```stamity-findings[ \\t]*$", "");
 const CARD_FENCE_CLOSE = new RegExp("^ {0,3}```[ \\t]*$", "");
-const CARD_STATUS = new RegExp("^status:\\s*(.*)$", "i");
-const CARD_PLAN = new RegExp("^plan:\\s*(.+)$", "i");
-const CARD_INVOCATION = new RegExp("^invocation:\\s*(.+)$", "i");
+const CARD_HEAD = {
+  status: new RegExp("^status:\\s*(.*)$", "i"),
+  plan: new RegExp("^plan:\\s*(.+)$", "i"),
+  invocation: new RegExp("^invocation:\\s*(.+)$", "i"),
+  mode: new RegExp("^mode:\\s*(attended|unattended)\\b", "i"),
+  branch: new RegExp("^branch:\\s*(\\S+)", "i"),
+  base: new RegExp("^base:\\s*([0-9a-f]{7,64})\\b", "i"),
+  resumes: new RegExp("^resumes:\\s*(\\S+)", "i"),
+};
 const CARD_IN_PROGRESS = new RegExp("\\bin progress\\b", "i");
 const CARD_HEAD_LINES = 15;
 const CARD_HEAD_READ_BYTES = 65536;
@@ -618,9 +624,9 @@ function cardGitText(path) {
 
 /**
  * The record's head: its first CARD_HEAD_LINES lines, from at most
- * CARD_HEAD_READ_BYTES bytes, BOM stripped. The first status, plan and
- * invocation line each win. Null when the record is absent, a link, or
- * unreadable.
+ * CARD_HEAD_READ_BYTES bytes, BOM stripped. The first line of each CARD_HEAD
+ * field wins; the mode is lower-cased, and an absent plan or invocation is ""
+ * (printed as not recorded). Null when the record is absent, a link, or unreadable.
  */
 function cardRecordHead(path) {
   if (!cardRegularFile(path)) return null;
@@ -648,21 +654,18 @@ function cardRecordHead(path) {
     }
   }
   const text = raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
-  const head = { status: null, plan: "", invocation: "" };
+  const head = { status: null, plan: null, invocation: null, mode: null, branch: null, base: null, resumes: null };
   for (const line of text.split(/\r?\n/).slice(0, CARD_HEAD_LINES)) {
-    const status = CARD_STATUS.exec(line);
-    if (status !== null && head.status === null) head.status = status[1];
-    const plan = CARD_PLAN.exec(line);
-    if (plan !== null && head.plan === "") head.plan = plan[1];
-    const invocation = CARD_INVOCATION.exec(line);
-    if (invocation !== null && head.invocation === "") head.invocation = invocation[1];
+    for (const key in CARD_HEAD) {
+      const hit = CARD_HEAD[key].exec(line);
+      if (hit !== null && head[key] === null) head[key] = hit[1];
+    }
   }
-  return {
-    status: head.status,
-    inProgress: head.status !== null && CARD_IN_PROGRESS.test(head.status),
-    plan: head.plan,
-    invocation: head.invocation,
-  };
+  if (head.mode !== null) head.mode = head.mode.toLowerCase();
+  if (head.plan === null) head.plan = "";
+  if (head.invocation === null) head.invocation = "";
+  head.inProgress = head.status !== null && CARD_IN_PROGRESS.test(head.status);
+  return head;
 }
 
 /**

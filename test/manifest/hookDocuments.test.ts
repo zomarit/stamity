@@ -28,7 +28,9 @@ import { HOOKS_GENERATED_DIR, STATE_DIR } from "../../src/types/markers.ts";
  */
 
 const GUARDS = [SUBAGENT_GUARD_PATH, MCP_GUARD_PATH];
-const cursor = cursorHooksSpec({ guardPaths: GUARDS });
+/** The core person-only shell guard Cursor's `beforeShellExecution` row runs (u20). */
+const PERSON_ONLY_GUARD = `${HOOKS_GENERATED_DIR}/cursor/stamity-person-only-guard.mjs`;
+const cursor =cursorHooksSpec({ guardPaths: GUARDS });
 const codex = codexHooksSpec();
 const cursorElement = cursor.elements[0]!;
 const codexElement = codex.elements[0]!;
@@ -241,7 +243,11 @@ describe("cursorHooksSpec", () => {
         hooks: Record<string, { command: string }[]>;
       };
       const commands = Object.values(rendered.hooks).flat().map((entry) => entry.command);
-      expect(commands).toHaveLength(3);
+      // TEST CHANGE, justified (record 23:40Z and plan u20: Cursor runs the person-only shell guard
+      // directly on `beforeShellExecution`, a row of its own): the rendering holds four starters,
+      // the guard's among them, and each is recognised and bounded as the other three are.
+      expect(commands).toHaveLength(4);
+      expect(commands.filter((command) => walkUpStarterScript("cursor", command) === PERSON_ONLY_GUARD)).toHaveLength(1);
       for (const command of [...commands, started(RUNNER, forkCall), started(SUBAGENT_GUARD_PATH, undefined), started(MCP_GUARD_PATH, "stamity sync")]) {
         expect(walkUpStarterScript("cursor", command), command).not.toBeNull();
         expect(cursorElement.recognise({ command, failClosed: true }), command).toBe(true);
@@ -693,8 +699,11 @@ describe("referencedHookScripts", () => {
   it("over each client's rendering: the runner, each core script inside the encoded rows and, on Cursor, both guards", () => {
     const core = [row("session_start", `${HOOKS_GENERATED_DIR}/cursor/stamity-session-start.mjs`), row("pre_tool_use", ".stamity/hooks/guard.mjs")];
     const cursorText = buildHooksJson(core, CLI);
+    // TEST CHANGE, justified (record 23:40Z and plan u20: Cursor's `beforeShellExecution` row runs
+    // the core person-only guard directly): the referenced set gains that script and nothing else.
     expect([...referencedHookScripts(cursorText)].toSorted()).toEqual(
       [
+        PERSON_ONLY_GUARD,
         `${HOOKS_GENERATED_DIR}/cursor/stamity-portable-hook.mjs`,
         `${HOOKS_GENERATED_DIR}/cursor/stamity-session-start.mjs`,
         ".stamity/hooks/guard.mjs",

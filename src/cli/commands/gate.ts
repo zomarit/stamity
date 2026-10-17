@@ -1,5 +1,7 @@
+import { execFileSync } from "node:child_process";
 import { closeSync, constants, existsSync, fstatSync, lstatSync, openSync, readFileSync, readSync, realpathSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Argument, InvalidArgumentError, Option, type Command } from "commander";
 import {
   BUILT_IN_RULES,
@@ -31,6 +33,18 @@ import {
   type TestSource,
 } from "../../change/testInputs.ts";
 import { linesPastCap, SCAN_LINE_MAX_CHARS, scanAddedLines, type ScanFile, type ScanHit } from "../../change/scan.ts";
+import { PREFLIGHT_CANARY_FILE } from "../../mcp/env.ts";
+import { screenOutbound } from "../../runs/morning.ts";
+import { REQUIRED_FLOORS, runPreflight, type PreflightDeps, type PushUrlFacts, type RestRead } from "../../runs/preflight.ts";
+import { resolveRepo } from "../../runs/pullRequest.ts";
+import { RECORD_FILE, REPORT_READ_MAX_BYTES, runRelPath } from "../../runs/layout.ts";
+import { findCardRun } from "../../runs/resumeCard.ts";
+import { findPackageRoot } from "../../shared/paths.ts";
+import { bareShapeRefusal, gitDiscoveryMeetsBareShape } from "../../merge/safeWrite.ts";
+import { fileSystemProbe, gitProgramFor, isNodeModulesBin, programNotFound, resolveProgramOnPath, searchPathOf } from "../../shared/programPath.ts";
+import type { SetupManifest } from "../../types/manifest.ts";
+import { REVIEW_GATE_STATE_FILE } from "../../types/markers.ts";
+import { ghApi } from "../engine/ghRunner.ts";
 import { gitCheckRunner, keptFromGit } from "../engine/gitStatus.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import { sanitizeLabel } from "../kit/prompts.ts";
@@ -142,6 +156,20 @@ import type { GitRunner } from "../../workspace/git.ts";
  * run exits 1 with a `reason` naming it beside its hits, never clean
  * (review/135).
  *
+ * **`gate scan --text <file> --label <label>`** (REQ-FLOW-103) screens one
+ * outbound text, a pull request's body, a morning list, a reply or a comment,
+ * through `../../runs/morning.ts::screenOutbound`: exit 1 on a hit or a line
+ * past the cap, each named by label, line and rule, never the value; a file
+ * that cannot be read, or one past `MAX_USER_CONTENT_LENGTH`, exits 1 too.
+ *
+ * **`gate preflight --unattended`** (REQ-FLOW-101) gathers every fact
+ * `../../runs/preflight.ts` decides on from the engine's own reads, never from
+ * the caller: the canary, the manifest's pin and floor copies, the review
+ * state, the REST reads through `gh` on the host `origin` resolved to, and
+ * the push identity as raw facts ({@link readPushIdentity}). No URL, helper or
+ * header value reaches the output. Exit 0 with no refusal, 1 on any refusal
+ * or unknown.
+ *
  * **Why the subcommand is positional**, as in `ledger.ts`: the funnel
  * (`../kit/program.ts`) owns the exit codes and the one JSON document through
  * the action it registers on THIS command, and a commander sub-command would run
@@ -151,6 +179,7 @@ import type { GitRunner } from "../../workspace/git.ts";
 
 const CLASSIFY = "classify";
 const SCAN = "scan";
+const PREFLIGHT = "preflight";
 
 /** A change's diff can outgrow a status probe, so `gate` widens the runner's bounds. */
 const GATE_GIT_TIMEOUT_MS = 60_000;
@@ -897,12 +926,40 @@ function gitSaidNo(err: unknown, status?: number): boolean {
  * as a name, never as pathspec magic; `--full-tree` ignores the cwd.
  */
 function baseEntryType(runner: GitRunner, cwd: string, treeish: string, path: string): string | null {
+  return baseEntry(runner, cwd, treeish, path)?.type ?? null;
+}
+
+/** The type and object id of the entry `treeish` holds at `path`, read as {@link baseEntryType} reads it. */
+function baseEntry(runner: GitRunner, cwd: string, treeish: string, path: string): { type: string; id: string } | null {
   const output = runGit(runner, cwd, "ls-tree", ["--literal-pathspecs", "ls-tree", "-z", "--full-tree", treeish, "--", path]);
   for (const record of output.split("\0")) {
     const tab = record.indexOf("\t");
-    if (tab !== -1 && record.slice(tab + 1) === path) return record.slice(0, tab).split(" ")[1] ?? null;
+    if (tab === -1 || record.slice(tab + 1) !== path) continue;
+    const [, type, id] = record.slice(0, tab).split(" ");
+    return type === undefined ? null : { type, id: id ?? "" };
   }
   return null;
+}
+
+/**
+ * The text of `treeish`'s blob at the top-level-relative `name` when it opens
+ * as a UTF-16 byte-order mark reads (review/98: `HEAD`'s for the pushed
+ * scope, build/94, and each commit's for the history, build/98), from the
+ * object store, never the work tree, so what is read is what a push sends. The read runner decodes UTF-8: either mark (`FF FE`,
+ * `FE FF`) reads as two U+FFFD, and no ASCII byte is ever taken into a
+ * replacement, so with the NULs dropped the file's ASCII, where every rule's
+ * value lives, keeps its order and its lines. A blob opening with another pair
+ * UTF-8 cannot start a character with is read the same way: more read, never
+ * less. `undefined` for no blob there, no such opening, or a blob past the
+ * untracked bound.
+ */
+function blobUtf16(runner: GitRunner, root: ProjectRoot, treeish: string, name: string): string | undefined {
+  const entry = baseEntry(runner, root.dir, treeish, name);
+  if (entry?.type !== "blob") return undefined;
+  const size = Number(runGit(runner, root.dir, "cat-file -s", ["cat-file", "-s", entry.id]).trim());
+  if (!(size <= UNTRACKED_MAX_BYTES)) return undefined;
+  const text = runGit(runner, root.dir, "cat-file blob", ["cat-file", "blob", entry.id]);
+  return text.startsWith("\uFFFD\uFFFD") ? text.slice(2).replaceAll("\0", "") : undefined;
 }
 
 /** Whether `<treeish>:<prefix>.stamity` is a folder in that commit's tree; any failed read throws (p2a M-2). */
@@ -1331,8 +1388,12 @@ function runClassify(ctx: CliContext, opts: Record<string, unknown>): CommandRes
   };
 }
 
-/** What the scan read: no base and only the uncommitted change, or everything since a base (plan/56). */
-type ScanScope = "uncommitted" | "since-base";
+/**
+ * What the scan read: no base and only the uncommitted change, or everything
+ * since a base (plan/56); or, for a push (build/94), the commits since a base
+ * alone, the work tree and the index left out.
+ */
+type ScanScope = "uncommitted" | "since-base" | "pushed";
 
 /** The scan of one run: its hits and what the read could not show, or why the change could not be read. */
 type ScanOutcome =
@@ -1346,6 +1407,8 @@ type ScanOutcome =
       unscanned: string[];
       /** Why the scan is incomplete: the added lines past its hard cap, named (review/135). */
       incomplete?: string;
+      /** How the history read was scoped, where it was not the usual range (review/201). */
+      note?: string;
     }
   | { base: string | null; scope: ScanScope; failed: string };
 
@@ -1357,53 +1420,110 @@ interface HistoryLines {
   files: ScanFile[];
   skipped: string[];
   unscanned: string[];
+  /** Top-level-relative names outside the project the read met. */
+  outside: Set<string>;
+  /** How the history read was scoped where it was not the usual range (review/201). */
+  note?: string;
+}
+
+/** The pushed history read's note where `origin` has no remote-tracking ref (review/201). */
+const NO_ORIGIN_REFS_NOTE = "origin has no remote-tracking ref, so the commits since the base were read as the ones the push sends";
+
+/**
+ * The added lines of one `diff-tree` read (`revs`: a commit against its
+ * parent, or two commits), into `into`, each file under `commit` when one is
+ * given. Two reads through the same runner and bounds, with the line read's
+ * pins (`--text`, no external diff, colour or textconv, fixed prefixes), its
+ * sections named by the `-z` name list. A file whose added lines hold a NUL is
+ * named, never read, unless it is UTF-16 at the last of `revs`, which is read
+ * whole from that commit's blob (review/98, build/98).
+ */
+function readTreeDiff(
+  runner: GitRunner,
+  root: ProjectRoot,
+  revs: readonly string[],
+  commit: string | undefined,
+  windows: boolean,
+  into: HistoryLines,
+): void {
+  const inside = insideOf(root.prefix, windows);
+  const away = awayFrom(root.prefix);
+  const pins = ["-r", "--root", "--no-commit-id", "-M", ...DIFF_PINS];
+  const { sections } = parseNameStatus(
+    runGit(runner, root.dir, "diff-tree --name-status", ["diff-tree", ...pins, "--name-status", "-z", ...revs, "--"]),
+  );
+  const patch = runGit(runner, root.dir, "diff-tree --text", [
+    "-c",
+    "core.quotePath=false",
+    "diff-tree",
+    ...pins,
+    "-p",
+    "-U0",
+    "--text",
+    "--src-prefix=a/",
+    "--dst-prefix=b/",
+    "--inter-hunk-context=0",
+    "--submodule=short",
+    ...revs,
+    "--",
+  ]);
+  parsePatch(patch, sections).forEach((section, index) => {
+    const name = sections[index]?.to ?? "";
+    const path = inside(name);
+    if (path === null) into.outside.add(name);
+    const shown = path ?? away(name);
+    const added = section.hunks.flatMap((hunk) => hunk.added);
+    if (section.unshown || holdsNul(added.map((line) => line.text))) {
+      // A UTF-16 file is scanned whole from the commit the read ends at, as the work-tree read scans one (review/98, build/98).
+      const text = section.deleted ? undefined : blobUtf16(runner, root, revs.at(-1) ?? "HEAD", name);
+      if (text !== undefined) into.files.push({ ...wholeFile(shown, text), ...(commit === undefined ? {} : { commit }) });
+      else (hasCodeExtension(shown) ? into.unscanned : into.skipped).push(shown);
+    } else if (added.length > 0) into.files.push({ path: shown, ...(commit === undefined ? {} : { commit }), added });
+  });
 }
 
 /**
  * The added lines of every commit since `base`, merges left out, oldest first
  * (review/112): a value committed and removed again before the scan stays in
- * the history a push sends. Each commit is two `diff-tree` reads through the
- * same runner and bounds, with the line read's pins (`--text`, no external
- * diff, colour or textconv, fixed prefixes), its sections named by the `-z`
- * name list. A file whose added lines hold a NUL is named, never read.
+ * the history a push sends. Each commit is one {@link readTreeDiff}. With
+ * `pushed`, every commit no `origin` remote-tracking ref holds is read too
+ * (`HEAD --not --remotes=origin`, review/160, build/108): a push to `origin`
+ * sends those below `base` as well, a commit only another remote holds among them.
+ * Where `origin` has no remote-tracking ref at all (a remote added and never
+ * fetched), that range is the whole history, so the read falls back to
+ * `base..HEAD` and says so in `note` (review/201).
  */
-function readHistory(runner: GitRunner, root: ProjectRoot, base: string, windows: boolean): HistoryLines {
-  const inside = insideOf(root.prefix, windows);
-  const away = awayFrom(root.prefix);
-  const commits = runGit(runner, root.dir, "rev-list", ["rev-list", "--reverse", "--no-merges", `${base}..HEAD`, "--"])
-    .split("\n")
-    .filter((line) => line !== "");
-  const history: HistoryLines = { files: [], skipped: [], unscanned: [] };
-  for (const commit of commits) {
-    const pins = ["-r", "--root", "--no-commit-id", "-M", ...DIFF_PINS];
-    const { sections } = parseNameStatus(
-      runGit(runner, root.dir, "diff-tree --name-status", ["diff-tree", ...pins, "--name-status", "-z", commit, "--"]),
-    );
-    const patch = runGit(runner, root.dir, "diff-tree --text", [
-      "-c",
-      "core.quotePath=false",
-      "diff-tree",
-      ...pins,
-      "-p",
-      "-U0",
-      "--text",
-      "--src-prefix=a/",
-      "--dst-prefix=b/",
-      "--inter-hunk-context=0",
-      "--submodule=short",
-      commit,
-      "--",
-    ]);
-    parsePatch(patch, sections).forEach((section, index) => {
-      const name = sections[index]?.to ?? "";
-      const shown = inside(name) ?? away(name);
-      const added = section.hunks.flatMap((hunk) => hunk.added);
-      if (section.unshown || holdsNul(added.map((line) => line.text))) {
-        (hasCodeExtension(shown) ? history.unscanned : history.skipped).push(shown);
-      } else if (added.length > 0) history.files.push({ path: shown, commit: commit.slice(0, SHORT_COMMIT), added });
-    });
-  }
+function readHistory(runner: GitRunner, root: ProjectRoot, base: string, windows: boolean, pushed = false): HistoryLines {
+  const revList = (range: readonly string[]): string[] =>
+    runGit(runner, root.dir, "rev-list", ["rev-list", "--reverse", "--no-merges", ...range, "--"])
+      .split("\n")
+      .filter((line) => line !== "");
+  const since = revList([`${base}..HEAD`]);
+  const tracked = pushed && runGit(runner, root.dir, "for-each-ref", ["for-each-ref", "--count=1", "--format=%(refname)", "refs/remotes/origin/"]).trim() !== "";
+  const commits = tracked ? [...new Set([...revList(["HEAD", "--not", "--remotes=origin"]), ...since])] : since;
+  const history: HistoryLines = {
+    files: [],
+    skipped: [],
+    unscanned: [],
+    outside: new Set(),
+    ...(pushed && !tracked ? { note: NO_ORIGIN_REFS_NOTE } : {}),
+  };
+  for (const commit of commits) readTreeDiff(runner, root, [commit], commit.slice(0, SHORT_COMMIT), windows, history);
   return history;
+}
+
+/**
+ * The pushed scope's current side (build/94): `HEAD`'s committed tree against
+ * `base`, one {@link readTreeDiff}, in place of the work tree and the index.
+ * The net read keeps a merge's own resolution in the scan, which the history
+ * (merges left out) does not read, and decodes a UTF-16 file at `HEAD` whole.
+ * Exported for `run`'s inferred prerequisites, read from what the push carries
+ * (review/161); a failed read throws.
+ */
+export function readPushed(runner: GitRunner, root: ProjectRoot, base: string, windows: boolean): HistoryLines {
+  const net: HistoryLines = { files: [], skipped: [], unscanned: [], outside: new Set() };
+  readTreeDiff(runner, root, [base, "HEAD"], undefined, windows, net);
+  return net;
 }
 
 /**
@@ -1414,9 +1534,18 @@ function readHistory(runner: GitRunner, root: ProjectRoot, base: string, windows
  * less those the change still adds to the same file, each hit naming its
  * commit. Every git failure, a failed line or history read and a base that
  * does not resolve are a `failed` outcome, never a clean one.
+ *
+ * `{ scope: "pushed" }` (build/94, `run checkpoint`'s scan) reads what a push
+ * of `HEAD` sends and nothing else: `HEAD`'s tree against the base ({@link
+ * readPushed}) stands in for the change, so an uncommitted or untracked file
+ * the push leaves behind is not read, and the history read covers every commit
+ * `origin` lacks, those below the base included (review/160, build/108). It needs a
+ * base; without one it fails.
  */
-function scanChange(cwd: string, ref: string | undefined): ScanOutcome {
-  const scope: ScanScope = ref === undefined ? "uncommitted" : "since-base";
+export function scanChange(cwd: string, ref: string | undefined, options: { scope?: "pushed" } = {}): ScanOutcome {
+  const pushed = options.scope === "pushed";
+  const scope: ScanScope = pushed ? "pushed" : ref === undefined ? "uncommitted" : "since-base";
+  if (pushed && ref === undefined) return { base: null, scope, failed: "the pushed scope reads the commits since a base, and none was given" };
   const runner = gitCheckRunner({ timeoutMs: GATE_GIT_TIMEOUT_MS, maxBuffer: GATE_GIT_MAX_BUFFER });
   try {
     const cwdPrefix = readCwdPrefix(runner, cwd);
@@ -1427,12 +1556,29 @@ function scanChange(cwd: string, ref: string | undefined): ScanOutcome {
     const treeish = commit ?? "HEAD";
     const root = findProjectRoot(runner, cwd, cwdPrefix, treeish);
     const windows = process.platform === "win32";
-    const { lines } = readChange(runner, root, treeish, windows);
-    if ("failed" in lines) return { base: commit, scope, failed: `the changed lines could not be read (${lines.failed})` };
-    const current: ScanFile[] = [...lines.hunks, ...lines.scan.hunks];
-    let history: HistoryLines = { files: [], skipped: [], unscanned: [] };
+    // The change's side: the work tree and the index, or under the pushed scope HEAD's tree alone (build/94).
+    let current: ScanFile[];
+    let side: { skipped: string[]; outside: number; unscanned: string[] };
+    if (pushed && commit !== null) {
+      let net: HistoryLines;
+      try {
+        net = readPushed(runner, root, commit, windows);
+      } catch (err) {
+        if (!(err instanceof GitReadError) && !(err instanceof PatchError)) throw err;
+        const why = err instanceof GitReadError ? describeGitFailure(err) : err.message;
+        return { base: commit, scope, failed: `the committed change could not be read (${why})` };
+      }
+      current = net.files;
+      side = { skipped: net.skipped, outside: net.outside.size, unscanned: net.unscanned };
+    } else {
+      const { lines } = readChange(runner, root, treeish, windows);
+      if ("failed" in lines) return { base: commit, scope, failed: `the changed lines could not be read (${lines.failed})` };
+      current = [...lines.hunks, ...lines.scan.hunks];
+      side = lines.scan;
+    }
+    let history: HistoryLines = { files: [], skipped: [], unscanned: [], outside: new Set() };
     try {
-      if (commit !== null) history = readHistory(runner, root, commit, windows);
+      if (commit !== null) history = readHistory(runner, root, commit, windows, pushed);
     } catch (err) {
       if (!(err instanceof GitReadError) && !(err instanceof PatchError)) throw err;
       const why = err instanceof GitReadError ? describeGitFailure(err) : err.message;
@@ -1449,6 +1595,7 @@ function scanChange(cwd: string, ref: string | undefined): ScanOutcome {
     const unread = linesPastCap(files).map((at) => `${at.path}:${at.line}${at.commit === undefined ? "" : ` (commit ${at.commit})`}`);
     const one = unread.length === 1;
     return {
+      ...(history.note === undefined ? {} : { note: history.note }),
       ...(unread.length === 0
         ? {}
         : {
@@ -1458,9 +1605,9 @@ function scanChange(cwd: string, ref: string | undefined): ScanOutcome {
       scope,
       hits: scanAddedLines(files),
       scanned: new Set(files.map((file) => file.path)).size,
-      skipped: [...new Set([...lines.scan.skipped, ...history.skipped])],
-      outside: lines.scan.outside,
-      unscanned: [...new Set([...lines.scan.unscanned, ...history.unscanned])],
+      skipped: [...new Set([...side.skipped, ...history.skipped])],
+      outside: side.outside,
+      unscanned: [...new Set([...side.unscanned, ...history.unscanned])],
     };
   } catch (err) {
     if (!(err instanceof GitReadError)) throw err;
@@ -1509,31 +1656,472 @@ function runScan(ctx: CliContext, opts: Record<string, unknown>): CommandResult 
   };
 }
 
+/** What `scan --text` screens: the outbound texts an unattended run posts (REQ-FLOW-103). */
+const TEXT_LABELS = ["pr-body", "morning", "reply", "comment"] as const;
+
+/**
+ * `scan --text <file> --label <label>`: the file read whole, as a regular file
+ * within {@link MAX_USER_CONTENT_LENGTH}-many characters, through the outbound
+ * screen. A file that cannot be read exits 1 naming it, never clean.
+ */
+function runTextScan(ctx: CliContext, file: string, label: string): CommandResult {
+  const shown = sanitizeLabel(file);
+  const cap = ctx.engine.guard.promptGuard.MAX_USER_CONTENT_LENGTH;
+  const path = resolve(ctx.app.runtime.cwd, file);
+  // Up to four UTF-8 bytes a character, plus one to tell a full file from a longer one.
+  const body = readRegular(path, cap * 4 + 1);
+  let reason: string | undefined;
+  if (body === undefined) {
+    reason = existsSync(path) ? `${shown} is not a regular file the scan can read` : `${shown} does not exist`;
+  } else if (body.length > cap * 4 || body.toString("utf8").length > cap) {
+    reason = `${shown} is longer than ${cap} characters, so it was not scanned`;
+  }
+  if (body === undefined || reason !== undefined) {
+    ctx.io.err(`scan failed: ${reason ?? shown}\n`);
+    return { exitCode: 1, json: { subcommand: SCAN, label, reason } };
+  }
+  const screened = screenOutbound(body.toString("utf8"), label);
+  const hits = screened.hits.map(({ line, rule }) => ({ label, line, rule }));
+  ctx.io.out(
+    `${[`text: ${label}`, `hits: ${hits.length === 0 ? "none" : String(hits.length)}`, ...hits.map((hit) => `  ${label}:${hit.line}  ${hit.rule}`)].join("\n")}\n`,
+  );
+  return { exitCode: screened.ok ? 0 : 1, json: { subcommand: SCAN, label, hits } };
+}
+
+/** `owner/repo#n`, as `--item` takes it, in GitHub's name alphabets; anything else exits 2. */
+function parseItemRef(value: string): { owner: string; repo: string; number: number } {
+  const match = /^([A-Za-z0-9][A-Za-z0-9_-]{0,99})\/([A-Za-z0-9._-]{1,100})#([1-9][0-9]{0,8})$/.exec(value);
+  if (match === null) throw new InvalidArgumentError("an item is owner/repo#<number>.");
+  return { owner: match[1] ?? "", repo: match[2] ?? "", number: Number(match[3]) };
+}
+
+/** One `credential.helper` or `http.extraHeader` entry, in git's config order; `scope` is its key's URL, `null` generic. */
+interface PushConfigEntry {
+  kind: "helper" | "header";
+  scope: string | null;
+  /** `null` for a key with no value, which git refuses. */
+  value: string | null;
+}
+
+/**
+ * The variables through which the push's environment hands git configuration:
+ * `-c` pairs, the `GIT_CONFIG_COUNT` key and value pairs, the global and
+ * system file paths, and `GIT_CONFIG_NOSYSTEM`.
+ */
+const CONFIG_VARIABLES = /^GIT_CONFIG_(?:PARAMETERS|COUNT|KEY_[0-9]+|VALUE_[0-9]+|GLOBAL|SYSTEM|NOSYSTEM)$/i;
+
+/**
+ * The config read runs the same hardened git as {@link gitCheckRunner}, with
+ * every `GIT_*` variable dropped and `GIT_OPTIONAL_LOCKS=0`. The difference is
+ * that it puts back the {@link CONFIG_VARIABLES} the push's environment `env`
+ * sets, so git reads the configuration the push would apply, whatever
+ * variables supply it.
+ */
+function pushConfigRunner(env: Readonly<Record<string, string | undefined>>): GitRunner {
+  return (args, cwd) => {
+    if (gitDiscoveryMeetsBareShape(cwd)) {
+      throw Object.assign(new Error(bareShapeRefusal(cwd)), { status: 128, keptFromGit: true });
+    }
+    const childEnv: NodeJS.ProcessEnv = {};
+    for (const [key, value] of Object.entries(process.env)) {
+      if (!/^GIT_/i.test(key)) childEnv[key] = value;
+    }
+    for (const [key, value] of Object.entries(env)) {
+      if (CONFIG_VARIABLES.test(key) && value !== undefined) childEnv[key] = value;
+    }
+    childEnv["GIT_OPTIONAL_LOCKS"] = "0";
+    const pinned = ["-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", ...args];
+    const git = gitProgramFor(cwd, childEnv);
+    if (git === null) throw programNotFound("git", "spawnSync", pinned);
+    return execFileSync(git, pinned, { cwd, env: childEnv, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 5_000, windowsHide: true });
+  };
+}
+
+/** Every helper and extra-header entry git's config holds, or `null` when the read fails. */
+function readPushConfig(runner: GitRunner, cwd: string): PushConfigEntry[] | null {
+  let output: string;
+  try {
+    output = runner(["config", "-z", "--get-regexp", "^(credential|http)\\."], cwd);
+  } catch (err) {
+    // `--get-regexp` exits 1 when no key matches.
+    return gitSaidNo(err, 1) ? [] : null;
+  }
+  const entries: PushConfigEntry[] = [];
+  for (const record of output.split("\0")) {
+    const newline = record.indexOf("\n");
+    // git prints the section and the variable name lowercased, the subsection as written.
+    const key = newline === -1 ? record : record.slice(0, newline);
+    const value = newline === -1 ? null : record.slice(newline + 1);
+    const lower = key.toLowerCase();
+    const kind = lower.startsWith("credential.") && lower.endsWith(".helper") ? "helper" : lower.startsWith("http.") && lower.endsWith(".extraheader") ? "header" : null;
+    if (kind === null) continue;
+    const [section, variable] = kind === "helper" ? ["credential.", ".helper"] : ["http.", ".extraheader"];
+    const scope = lower === `${section.slice(0, -1)}${variable}` ? null : key.slice(section.length, key.length - variable.length);
+    entries.push({ kind, scope, value });
+  }
+  return entries;
+}
+
+/** A URL as git's URL matching reads it, or `null` for a shape whose normalisation this read does not model. */
+interface UrlParts {
+  scheme: string;
+  user: string | null;
+  host: string;
+  port: string;
+  path: string;
+}
+
+const URL_SHAPE = /^([a-z][a-z0-9+.-]*):\/\/(?:([^@/?#]*)@)?([^@/?#:]+)(?::([0-9]{0,5}))?(\/[^?#]*)?$/i;
+const DEFAULT_PORTS: Readonly<Record<string, string>> = { http: "80", https: "443" };
+
+function urlParts(url: string): UrlParts | null {
+  const match = URL_SHAPE.exec(url.trim());
+  // Percent-escapes, `*` host wildcards, backslashes and `//` are normalised by git in ways not modelled here.
+  if (match === null || /[%*\\\s]/.test(url.trim()) || (match[5] ?? "").includes("//")) return null;
+  const segments = (match[5] ?? "").split("/").filter((segment) => segment !== "");
+  if (segments.some((segment) => segment === "." || segment === "..")) return null;
+  const scheme = (match[1] ?? "").toLowerCase();
+  const port = match[4] === undefined || match[4] === "" ? (DEFAULT_PORTS[scheme] ?? "") : String(Number(match[4]));
+  const user = match[2] === undefined ? null : (match[2].split(":", 1)[0] ?? "");
+  return { scheme, user, host: (match[3] ?? "").toLowerCase(), port, path: segments.join("/") };
+}
+
+/**
+ * Whether a key scoped to `scope` applies to `target`, as git's URL matching
+ * decides it: scheme, host and port equal, the scope's user (when it names
+ * one) the target's, and the scope's path a prefix of the target's at a `/`.
+ * `null` when either cannot be placed.
+ */
+function scopeApplies(scope: string, target: UrlParts | null): boolean | null {
+  const pattern = urlParts(scope);
+  if (pattern === null || target === null) return null;
+  return (
+    pattern.scheme === target.scheme &&
+    (pattern.user === null || pattern.user === target.user) &&
+    pattern.host === target.host &&
+    pattern.port === target.port &&
+    (pattern.path === "" || target.path === pattern.path || target.path.startsWith(`${pattern.path}/`))
+  );
+}
+
+/** An extra header that sends a credential of its own. */
+const AUTHORIZATION_HEADER = /^\s*authorization\s*:/i;
+
+/**
+ * How specific an `http.*` key that applies is, as git's URL matching ranks
+ * it: a URL-scoped key over the generic one, then the longer path, then a
+ * named user. Every placed scope that applies names the target's own host, so
+ * the host match is the same length for each.
+ */
+function headerSpecificity(scope: string | null): readonly [number, number, number] {
+  const pattern = scope === null ? null : urlParts(scope);
+  return pattern === null ? [0, 0, 0] : [1, pattern.path.length, pattern.user === null ? 0 : 1];
+}
+
+/** Whether `a` ranks at least as specific as `b`: git applies such an entry and skips a less specific one. */
+function atLeastAsSpecific(a: readonly number[], b: readonly number[]): boolean {
+  const at = a.findIndex((value, index) => value !== b[index]);
+  return at === -1 || (a[at] ?? 0) > (b[at] ?? 0);
+}
+
+/**
+ * The facts git applies to one push URL: the helper list built in config
+ * order, an empty value resetting it, `null` once an entry that may apply
+ * cannot be placed (until a reset that surely applies); and whether any
+ * Authorization header may apply, over-read on purpose: an entry whose reach
+ * cannot be placed counts, and so does one git's specificity rule would drop.
+ * An empty header value resets the header list, as git does, only when it
+ * surely applies and ranks at least as specific as every header entry before
+ * it; git skips a less specific one, so it then resets nothing here either.
+ */
+function pushUrlFacts(url: string, config: readonly PushConfigEntry[] | null): PushUrlFacts {
+  // A config read that failed proves nothing about the URL: no header was read, so
+  // none is reported, and the decision refuses on `configUnreadable` (build/73).
+  if (config === null) return { url, helpers: null, authorizationHeader: false, configUnreadable: true };
+  const target = urlParts(url);
+  let helpers: string[] | null = [];
+  let authorizationHeader = false;
+  // The most specific header entry git may have applied so far; `null` once one cannot be placed.
+  let headerBest: readonly number[] | null = [-1, -1, -1];
+  for (const entry of config) {
+    const applies = entry.scope === null ? true : scopeApplies(entry.scope, target);
+    if (applies === false) continue;
+    if (entry.kind === "header") {
+      const rank = applies === true ? headerSpecificity(entry.scope) : null;
+      if (entry.value === "" && rank !== null && headerBest !== null && atLeastAsSpecific(rank, headerBest)) {
+        authorizationHeader = false;
+      } else if (entry.value !== null && AUTHORIZATION_HEADER.test(entry.value)) {
+        authorizationHeader = true;
+      }
+      headerBest = rank === null || headerBest === null ? null : atLeastAsSpecific(rank, headerBest) ? rank : headerBest;
+    } else if (entry.value === "") {
+      helpers = applies ? [] : null;
+    } else {
+      helpers = entry.value === null || applies === null || helpers === null ? null : [...helpers, entry.value];
+    }
+  }
+  return { url, helpers, authorizationHeader, configUnreadable: false };
+}
+
+/**
+ * How `git push origin` pushes from `cwd`, as raw facts for
+ * `../../runs/preflight.ts` to decide on, read through the hardened read
+ * runner: origin's fetch URL, and every push URL with its helper list and
+ * Authorization-header fact. Git's configuration, origin's URLs with it, is
+ * read through git in the push's environment ({@link pushConfigRunner}), so
+ * config that `env` supplies through a `GIT_CONFIG_*` variable (a `pushurl`,
+ * an `insteadOf` or `pushInsteadOf` rewrite) is read like any other config.
+ */
+export function readPushIdentity(cwd: string, env: Readonly<Record<string, string | undefined>>): PreflightDeps["pushIdentity"] {
+  const config = readPushConfig(pushConfigRunner(env), cwd);
+  // A configuration git cannot read fails the URL reads in that environment too. Without it the URLs
+  // are read only so each one is refused by that reason (build/73), never as a missing origin: every
+  // fact then carries `configUnreadable`, which no push URL passes.
+  const runner = config === null ? gitCheckRunner() : pushConfigRunner(env);
+  const lines = (args: readonly string[]): string[] | null => {
+    try {
+      return runner(args, cwd).split(/\r?\n/).filter((line) => line !== "");
+    } catch {
+      // No origin (exit 2) or a failed read: nothing is proven, which the decision refuses.
+      return null;
+    }
+  };
+  const fetchUrl = lines(["remote", "get-url", "origin"])?.[0] ?? null;
+  const pushed = lines(["remote", "get-url", "--push", "--all", "origin"]) ?? [];
+  return { fetchUrl, pushUrls: pushed.map((url) => pushUrlFacts(url, config)) };
+}
+
+/**
+ * The `gh` the REST runner would start, by the runner's own search
+ * (`../engine/ghRunner.ts`): its path and the file it resolves to, or `null`
+ * where no accepted `PATH` entry holds one.
+ */
+function ghFound(cwd: string, env: NodeJS.ProcessEnv): PreflightDeps["gh"] {
+  const platform = process.platform;
+  const windows = platform === "win32";
+  const delimiter = windows ? ";" : ":";
+  const path = searchPathOf(env, platform)
+    ?.split(delimiter)
+    .filter((entry) => !isNodeModulesBin(entry, windows))
+    .join(delimiter);
+  const found = resolveProgramOnPath("gh", { platform, path, cwd, probe: fileSystemProbe });
+  if (found === null) return null;
+  let realPath: string | null;
+  try {
+    realPath = realpathSync(found);
+  } catch {
+    realPath = null;
+  }
+  return { path: found, realPath };
+}
+
+/** A small JSON file at `path`, read without following a link, or `undefined`. */
+function readJson(path: string): unknown {
+  const body = readRegular(path, 64 * 1024);
+  if (body === undefined) return undefined;
+  try {
+    return JSON.parse(body.toString("utf8")) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The `engines.node` range of the package.json at `path`: `undefined` when the file declares none,
+ * `null` when the file, its `engines` or its `engines.node` cannot be read (the pre-flight refuses
+ * `null`, review/142, where `undefined` passes).
+ */
+export function enginesOf(path: string): string | null | undefined {
+  const parsed = readJson(path);
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
+  const engines = (parsed as { engines?: unknown }).engines;
+  if (engines === undefined) return undefined;
+  if (typeof engines !== "object" || engines === null || Array.isArray(engines)) return null;
+  const node = (engines as { node?: unknown }).node;
+  if (node === undefined) return undefined;
+  return typeof node === "string" ? node : null;
+}
+
+/** The CLI's own `engines.node`, as npm enforces it (see {@link enginesOf}); `null` when its package root cannot be found. */
+function enginesRange(): string | null | undefined {
+  try {
+    return enginesOf(join(findPackageRoot(dirname(fileURLToPath(import.meta.url))), "package.json"));
+  } catch {
+    return null;
+  }
+}
+
+/** The emitted floor copies for the manifest's clients, each with whether its file is there. */
+function floorCopies(root: string, manifest: SetupManifest | null): PreflightDeps["floors"] {
+  if (manifest === null) return [];
+  const floors: ReadonlySet<string> = new Set(REQUIRED_FLOORS);
+  const clients: ReadonlySet<string> = new Set(manifest.tools);
+  return manifest.ledger
+    .filter((row) => row.artifactType === "rule" && floors.has(row.artifactId) && clients.has(row.adapter))
+    .map((row) => {
+      // A ledger path is repo-relative; one that leaves the root is never opened.
+      const inside = !isAbsolute(row.path) && !row.path.split(/[\\/]/).includes("..");
+      return { id: row.artifactId, path: row.path, exists: inside && isRegularFile(join(root, row.path)) };
+    });
+}
+
+/** The in-progress record's `usage: review` lines, `0` with no run in progress. */
+function usageReviewLines(root: string, now: Date): number {
+  const run = findCardRun(root, now);
+  if (run === null || run.closed) return 0;
+  const record = readRegular(join(root, runRelPath(run.runId, RECORD_FILE)), REPORT_READ_MAX_BYTES);
+  return record === undefined ? 0 : record.toString("utf8").split(/\r?\n/).filter((line) => /\busage:\s*review\b/.test(line)).length;
+}
+
+/** The cloud markers a client sets (REQ-FLOW-089): each means "cloud", never "unattended". */
+const CLOUD_MARKERS: readonly (readonly [string, string | null])[] = [
+  ["CLAUDE_CODE_REMOTE", "claude"],
+  ["COPILOT_AGENT_PROMPT", "copilot"],
+  ["CURSOR_AGENT_SOCKET", "cursor"],
+  ["CI", null],
+];
+
+function setIn(env: Readonly<Record<string, string | undefined>>, name: string): boolean {
+  const value = env[name]?.trim().toLowerCase() ?? "";
+  return value !== "" && value !== "false" && value !== "0";
+}
+
+async function runPreflightVerb(ctx: CliContext, opts: Record<string, unknown>): Promise<CommandResult> {
+  const root = ctx.app.runtime.cwd;
+  const env = ctx.app.runtime.env;
+  const now = ctx.app.runtime.clock.now();
+  let manifest: SetupManifest | null = null;
+  let manifestUnreadable = false;
+  try {
+    manifest = await ctx.engine.manifest.manifest.readManifest(root);
+  } catch {
+    // An unreadable manifest pins nothing and lists no floor, which the decision refuses, naming the manifest (review/203).
+    manifestUnreadable = true;
+  }
+  const pushIdentity = readPushIdentity(root, env);
+  const origin = pushIdentity.fetchUrl === null ? null : resolveRepo({ ...env }, pushIdentity.fetchUrl);
+  const ghEnv: NodeJS.ProcessEnv = { ...env };
+  const gh = ghFound(root, ghEnv);
+  const rest: RestRead | null =
+    origin === null || gh === null
+      ? null
+      : async (path) => {
+          const reply = await ghApi({ method: "GET", path, hostname: origin.host }, { cwd: root, env: ghEnv });
+          return { status: reply.status, json: reply.json };
+        };
+  const canary = readJson(join(root, PREFLIGHT_CANARY_FILE));
+  const at = typeof canary === "object" && canary !== null ? (canary as { at?: unknown }).at : undefined;
+  const item = opts["item"] as PreflightDeps["item"];
+  const floors = floorCopies(root, manifest);
+  const verdict = await runPreflight({
+    env,
+    nodeVersion: process.versions.node,
+    engines: enginesRange(),
+    pinnedVersion: manifest?.generatedBy,
+    manifestUnreadable,
+    runningVersion: ctx.app.version,
+    scanRuns: () => Promise.resolve(!("failed" in scanChange(root, undefined))),
+    rest,
+    gh,
+    repo: origin === null ? null : { owner: origin.owner, repo: origin.repo },
+    ghRepoEnv: env["GH_REPO"] ?? null,
+    canary: canary === undefined ? null : { at: typeof at === "string" ? at : "" },
+    now,
+    ...(item === undefined ? {} : { item }),
+    floors,
+    pushIdentity,
+    reviewState: { counter: existsSync(join(root, REVIEW_GATE_STATE_FILE)), usageReviewLines: usageReviewLines(root, now) },
+  });
+  const marker = CLOUD_MARKERS.find(([name, client]) => client !== null && setIn(env, name));
+  const client = marker?.[1] ?? (setIn(env, "CLAUDECODE") ? "claude" : null);
+  const cloud = CLOUD_MARKERS.some(([name]) => setIn(env, name));
+  const checks = verdict.checks.map((check) => ({ ...check, evidence: sanitizeLabel(check.evidence) }));
+  const refusals = verdict.refusals.map((refusal) => ({ ...refusal, reason: sanitizeLabel(refusal.reason) }));
+  const shownFloors = floors.map(({ id, path, exists }) => ({ id, path: sanitizeLabel(path), exists }));
+  // `names` lists environment variable names, the one field here the caller's environment spells.
+  const warnings = verdict.warnings.map((warning) =>
+    warning.names === undefined ? warning : Object.assign(warning, { names: warning.names.map((name) => sanitizeLabel(name)) }),
+  );
+  ctx.io.out(
+    `${[
+      "mode: unattended",
+      `pre-flight: ${verdict.ok ? "passed" : "refused"}`,
+      ...checks.map((check) => `  ${check.id}  ${check.state}  ${check.evidence}`),
+      ...refusals.map((refusal) => `refused: ${refusal.id}: ${refusal.reason} (fix: ${refusal.fix})`),
+      ...warnings.map((warning) => `warning: ${warning.id}${warning.names === undefined ? "" : `: ${warning.names.join(", ")}`}${warning.reason === undefined ? "" : `: ${warning.reason}`}`),
+    ].join("\n")}\n`,
+  );
+  return {
+    exitCode: verdict.ok ? 0 : 1,
+    json: { subcommand: PREFLIGHT, mode: "unattended", client, cloud, checks, refusals, warnings, floors: shownFloors },
+  };
+}
+
+/** The options each subcommand takes; any other one given is a usage error, exit 2, before anything is read. */
+const SUBCOMMAND_OPTIONS: Readonly<Record<string, readonly string[]>> = {
+  [CLASSIFY]: ["base", "paths"],
+  [SCAN]: ["base", "text", "label"],
+  [PREFLIGHT]: ["unattended", "item"],
+};
+
+const OPTION_FLAGS: Readonly<Record<string, string>> = {
+  base: "--base",
+  paths: "--paths",
+  unattended: "--unattended",
+  item: "--item",
+  text: "--text",
+  label: "--label",
+};
+
 export const gateCommand: CommandModule = {
   name: "gate",
-  summary: "classify a change by its paths, or scan its added lines for secrets (plumbing)",
+  summary: "classify a change, scan its added lines or an outbound text for secrets, or check an unattended start (plumbing)",
   hidden: true,
   mutating: false,
 
   configure(cmd: Command): void {
     cmd
-      .addArgument(new Argument("<subcommand>", "which gate action to run").choices([CLASSIFY, SCAN]))
+      .addArgument(new Argument("<subcommand>", "which gate action to run").choices([CLASSIFY, SCAN, PREFLIGHT]))
       .addOption(
         new Option("--base <ref>", "the base the change is read against (default: HEAD, reported as no base)").argParser(
           parseBaseRef,
         ),
       )
       .option("--paths <path...>", "classify these paths by path rules instead of reading the change from git")
-      // A usage error, so exit 2 before the action and before git runs: `scan` always reads the change from git.
+      .option("--text <file>", "scan this outbound text file instead of the change (with --label)")
+      .addOption(new Option("--label <label>", "what the --text file is").choices([...TEXT_LABELS]))
+      .option("--unattended", "preflight: check that an unattended run may start here, the one mode it checks")
+      .addOption(
+        new Option("--item <owner/repo#n>", "preflight: the board item or issue the run takes as input").argParser(parseItemRef),
+      )
+      // Usage errors, so exit 2 before the action and before git runs.
       .hook("preAction", (command) => {
-        if (command.processedArgs[0] === SCAN && command.opts()["paths"] !== undefined) {
+        const subcommand = String(command.processedArgs[0]);
+        const given = command.opts();
+        if (subcommand === SCAN && given["paths"] !== undefined) {
           command.error("error: --paths applies to classify only; scan reads the change from git", { exitCode: 2 });
+        }
+        const allowed = SUBCOMMAND_OPTIONS[subcommand] ?? [];
+        const stray = Object.keys(OPTION_FLAGS).find((key) => given[key] !== undefined && !allowed.includes(key));
+        if (stray !== undefined) command.error(`error: ${OPTION_FLAGS[stray] ?? stray} does not apply to ${subcommand}`, { exitCode: 2 });
+        if ((given["text"] === undefined) !== (given["label"] === undefined)) {
+          command.error("error: --text and --label go together", { exitCode: 2 });
+        }
+        if (given["text"] !== undefined && given["base"] !== undefined) {
+          command.error("error: --text scans one file, so --base does not apply", { exitCode: 2 });
+        }
+        if (subcommand === PREFLIGHT && given["unattended"] !== true) {
+          command.error("error: preflight checks an unattended start only; pass --unattended", { exitCode: 2 });
         }
       });
   },
 
   run(ctx, opts, args): Promise<CommandResult> {
     // Commander's `choices()` already refused every other subcommand at parse time.
+    if (args[0] === PREFLIGHT) return runPreflightVerb(ctx, opts);
+    if (args[0] === SCAN && typeof opts["text"] === "string") {
+      return Promise.resolve(runTextScan(ctx, opts["text"], String(opts["label"])));
+    }
     return Promise.resolve(args[0] === SCAN ? runScan(ctx, opts) : runClassify(ctx, opts));
   },
 };

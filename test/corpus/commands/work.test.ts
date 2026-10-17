@@ -138,6 +138,9 @@ const DEP_AUDIT_SKILL_PATH = "skills/st-dep-audit/SKILL.md";
 /** The census rule the Phase 2 → Phase 3 step runs. */
 const CENSUS_RULE_PATH = "rules/stamity-contract-census.md";
 
+/** The unattended skill: owner of the morning walk the record head points a resumed run at. */
+const UNATTENDED_SKILL_PATH = "skills/st-unattended/SKILL.md";
+
 /** One corpus walk shared by every case; a missing artifact fails each with the same message. */
 const corpus: Promise<CorpusFile[]> = walkAllMarkdown();
 
@@ -714,7 +717,81 @@ describe("/st-work — Frame and Plan", () => {
     expect(proof).toContain("among its first 15");
     // Added 2026-10-09 (plan 019 file 2, the p3 fix round, `review/115`): the head records the
     // run's base, which the Gates read for the scan and the class (sign-off: the run's branch point).
-    expect(proof).toContain("with four lines among its first 15");
+    // TEST CHANGE, justified (2026-10-16, plan 021 file 1, unit u15-work-text; REQ-CTX-012,
+    // REQ-FLOW-089): the pin read "with four lines among its first 15". What moved: the head gains
+    // `Mode:` and `Branch:`, so it reads six lines; the four it held are pinned unchanged below.
+    expect(proof).toContain("with six lines among its first 15");
+    expect(proof).not.toContain("with four lines among its first 15");
+    expect(proof).toContain("`Status:`, reading `in progress` until the close");
+    expect(proof).toContain("`Mode: attended | unattended`");
+    expect(proof).toContain("`Branch:`, the run's branch");
+    // The six names, each in the head sentence, in the order the record writes them.
+    const head = proof.slice(proof.indexOf("with six lines among its first 15"));
+    const order = ["`Status:`", "`Mode:", "`Branch:`", "`Plan: <path>`", "`Base: <commit>`", "`Invocation:"].map(
+      (name) => head.indexOf(name),
+    );
+    expect(order.every((at) => at > -1)).toBe(true);
+    expect(order.toSorted((a, b) => a - b)).toEqual(order);
+    // REQ-FLOW-089's reading of the declaration: the variable is unattended for any value but
+    // empty, `false` or `0`, never only `=1`; `--attended` and a hand-off's `run-mode:` beat it;
+    // `--resume` is always attended.
+    expect(proof).toContain(
+      "`unattended` under `--unattended` or `STAMITY_UNATTENDED` set to any value but empty, `false` or `0`, `--attended` and a hand-off's `run-mode:` beating the variable and `--resume` always attended",
+    );
+    expect(proof).not.toContain("STAMITY_UNATTENDED=1");
+    // An unattended run takes its branch and base from `run start`, run before the head is written.
+    expect(proof).toContain(
+      "Unattended, Frame first runs `stamity run start --run <id> --json`, taking `Branch:` and `Base:` from it.",
+    );
+    // The skill is called by name, and only on the unattended reading.
+    expect(proof).toContain(
+      "When `Mode:` reads `unattended`, invoke the `st-unattended` skill by name and follow it.",
+    );
+    // Added 2026-10-16 (run 2026-10-15_cloud-runs, u15's fix round, ledger row build/52;
+    // REQ-FLOW-095): a resumed run reads `Mode: attended`, so the pointer above never fires on the
+    // morning after; the head names the walk's entry itself, and the section it names is the skill's.
+    // TEST CHANGE, justified (2026-10-16, run 2026-10-15_cloud-runs, u15's fix round 2, ledger row
+    // build/61; REQ-FLOW-095): the pin read "of a closed run whose record". What moved: the pointer
+    // fires on any unattended run, so a resume of one still in progress reaches the skill's walk,
+    // whose own refusal names the continuation; the command no longer screens on "closed".
+    // TEST CHANGE, justified (2026-10-16, run 2026-10-15_cloud-runs, u15's fix round 3, ledger row
+    // review/112; REQ-FLOW-095, sign-off 23:56Z): the pin read "on `/st-work` run on such a run's
+    // branch". What moved: "any run" stays in the `--resume` clause only; the branch clause takes
+    // back its closed-record condition, so an unattended start on an in-progress run's branch (the
+    // continuation the walk names) is not sent to a walk that opens only on a closed run.
+    // TEST CHANGE, justified (2026-10-16, run 2026-10-15_cloud-runs, the corpus cap-round fix, ledger
+    // row review/145; REQ-FLOW-095, REQ-FLOW-096, sign-off 00:36Z): the pin ended "follow its `## The
+    // morning walk`." What moved: a chain's next file, or `--unattended`, starting on the branch of a
+    // closed unattended run met both this pointer and the one before it, and the walk opens attended,
+    // so its questions went to nobody. The walk now fires only for an attended start there: an
+    // unattended declaration makes an unattended start instead, and the variable alone does not stop
+    // the walk, since a cloud's follow-up walk runs with it set. The clause before the comma is
+    // pinned word for word as before.
+    // TEST CHANGE, justified (2026-10-16, run 2026-10-15_cloud-runs, the whole-branch corpus fix
+    // round 1; ledger row review/206, signed off with review/145 at 00:36Z): the pin ended "makes an
+    // unattended start instead." What changed about the contract: nothing in the rule; the
+    // exception read as attached to the `--resume` clause too, against the head's "`--resume`
+    // always attended" and the skill's "a start on that branch". It now names a start on that
+    // branch and excludes `--resume`. Nothing is relaxed: the clause before the colon is pinned word
+    // for word as before, and `--resume` stays always attended (pinned above).
+    const walkPointer =
+      "On `--resume <run-id>` of any run whose record reads `Mode: unattended`, and on `/st-work` run on the branch of such a run whose record is closed, invoke `st-unattended` by name and follow its `## The morning walk`, which `STAMITY_UNATTENDED` alone does not stop: `--unattended`, `run-mode: unattended` or a chain's next file makes a start on that branch unattended instead, never a `--resume`.";
+    expect(proof).toContain(walkPointer);
+    expect(proof).not.toContain("makes an unattended start instead.");
+    expect(proof).not.toContain("follow its `## The morning walk`.");
+    // It follows the unattended pointer it makes the exception to.
+    expect(proof.indexOf(walkPointer)).toBeGreaterThan(
+      proof.indexOf("When `Mode:` reads `unattended`, invoke the `st-unattended` skill by name and follow it."),
+    );
+    expect(proof).not.toContain("`--resume <run-id>` of a closed run");
+    expect(proof).not.toContain("on `/st-work` run on such a run's branch");
+    const unattended = (await corpusFile(UNATTENDED_SKILL_PATH)).parsed.body;
+    expect(unattended.split("\n")).toContain("## The morning walk");
+    // Added 2026-10-16 (run 2026-10-15_cloud-runs, u15's fix round 3, ledger row review/111): the
+    // resume opens `Mode: attended`, so the skill's opening line has to let an attended reader
+    // reach the section this pointer names rather than stop at the first line.
+    expect(collapse(unattended)).toContain("an attended run reads only `## The morning walk`.");
+    expect(unattended).not.toContain("stop reading here");
     // TEST CHANGE, justified (2026-10-09, plan 019 file 2, the p3 fix round 2, `review/133`): the
     // line holds the commit id `HEAD` resolves to at Frame, never the word, which `gate` would
     // resolve at Prove time, after the units commit (sign-off: `git rev-parse HEAD`).
@@ -1414,6 +1491,40 @@ describe("/st-work — Prove", () => {
     // The declared default is the lowest-blast-radius one: nothing committed, merged or signed.
     expect(qa).toContain("`Default if no response: leave uncommitted`");
     expect(qa).toContain("those rows not signed and the delta unmerged");
+    // Added 2026-10-16 (plan 021 file 1, unit u15-work-text; REQ-FLOW-019): the commit part's three
+    // options, in order, the recommended one first, before the default sentence that stays verbatim.
+    // TEST CHANGE, justified (2026-10-16, run 2026-10-15_cloud-runs, u15's fix round 3, ledger row
+    // review/113; REQ-FLOW-019): the pin read "(`stamity run checkpoint --pr`, recommended)". What
+    // moved: `run checkpoint` stages only the run folder, the inbox and `--paths`, so option 1 names
+    // the run, the title and the paths, the merged spec delta among them, or the person's commit
+    // leaves the change's own files and the delta uncommitted.
+    // TEST CHANGE, justified (2026-10-16, run 2026-10-15_cloud-runs, the corpus cap-round fix, ledger
+    // row review/146; REQ-FLOW-019, sign-off 00:36Z): the pin read "--paths <the change's files and the
+    // merged spec delta>". What moved: `stamity learn capture` commits nothing and `run checkpoint`
+    // stages no learnings folder, so the learning the close captured stayed in the work tree though
+    // the person chose commit and push; option 1's paths now name the learning files as well.
+    const options =
+      "the commit, as 1 commit, push, draft PR (`stamity run checkpoint --run <run-id> --pr --title <conventional title> --paths <the change's files, the merged spec delta and the learning files the close captured under .stamity/learnings/>`, recommended) · 2 commit only · 3 leave uncommitted";
+    expect(qa).toContain(options);
+    expect(qa).not.toContain("--paths <the change's files and the merged spec delta>");
+    expect(qa.indexOf(options)).toBeLessThan(qa.indexOf("`Default if no response: leave uncommitted`"));
+    // Option 1 never pushes the default branch: `run start` puts the run on a branch of its own first.
+    expect(qa).toContain("option 1 after `stamity run start` on the default branch.");
+    // Added 2026-10-16 (run 2026-10-15_cloud-runs, u15's fix round, ledger row build/53;
+    // REQ-FLOW-019): option 1 with no PR opened is not done, so what `run checkpoint` reports
+    // undone reaches the proof block, ahead of the default sentence.
+    const notDone = "Option 1 copies each `notDone` entry `run checkpoint` returns into the proof block's `Not done:`.";
+    expect(qa).toContain(notDone);
+    expect(qa.indexOf(notDone)).toBeLessThan(qa.indexOf("`Default if no response: leave uncommitted`"));
+    // Added 2026-10-16 (run 2026-10-15_cloud-runs, the corpus fix round, ledger row build/64;
+    // REQ-FLOW-019): an unattended run takes every ask point's declared default, and the commit part's
+    // is `leave uncommitted`, so the walk names the commit part as no ask there: the unattended skill's
+    // ending answers it. It follows the default it overrides and precedes the leftovers pointer.
+    const unattendedCommit =
+      "In an unattended run the commit part is not an ask: the `st-unattended` skill's ending (`run end`, the draft pull request) answers it.";
+    expect(qa).toContain(unattendedCommit);
+    expect(qa.indexOf(unattendedCommit)).toBeGreaterThan(qa.indexOf("those rows not signed and the delta unmerged."));
+    expect(qa.indexOf(unattendedCommit)).toBeLessThan(qa.indexOf("The leftovers join it as a fourth part"));
     expect(qa).toContain("with none left, there is no ask");
     // Added 2026-10-14 (run 2026-10-14_cli-native, corpus fix batch round 1, review/44): the walk
     // asks in rounds and the protocol puts Critical, Warning and `decision-waiting` rows first, so a
@@ -1922,6 +2033,13 @@ describe("/st-work — Prove", () => {
     expect(effects).toContain("Where a platform is linked");
     expect(effects).toContain("`pr.linked`");
     expect(effects).toContain("With no linked platform the step is a no-op");
+    // Added 2026-10-16 (run 2026-10-15_cloud-runs, u15's fix round 3, ledger row review/115;
+    // REQ-FLOW-019): the step ran whatever the commit answer, so "2 commit only" still met a pull
+    // request and option 1 met a second one beside `run checkpoint --pr`; it is option 1's own step.
+    expect(effects).toContain(
+      "only the close walk's option 1 opens that branch's draft pull request, as its own `run checkpoint --pr` step",
+    );
+    expect(effects).not.toContain("the close opens that branch's pull request");
   });
 
   it("no-ops board progress events when no source is linked", async () => {

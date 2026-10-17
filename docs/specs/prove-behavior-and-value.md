@@ -1,6 +1,6 @@
 ---
 id: prove-behavior-and-value
-# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-11_release-1-14-0 on 2026-10-11 and 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, and excluded from the site build.
+# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-11_release-1-14-0 on 2026-10-11 and 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023).
 status: shipped-with-1.15.0
 obsolete_when: the measurement page, the security mapping and the QA evidence file are all generated from live data by the engine itself, or a decision row cuts the surface
@@ -77,6 +77,12 @@ The amendment dated 2026-10-15 to REQ-PROVE-020 was written at the 1.15.0 cut in
 `c67-measurements-and-run-of-record`; it cites run 47's results file as exported (sha256
 `69a28f57e4069cf832cb293aa1d945ac5fef709ea7201dfd4471a191394ed190`), a record on the `records` branch, and ships
 with 1.15.0.
+
+REQ-PROVE-038 comes from the spec delta of `docs/plans/021-cloud-runs-01.md` (plan 021 file 1, run
+`2026-10-15_cloud-runs`), merged by its unit `u23-spec-merge` before the run's whole-branch review. It cites the
+integration head `4daeb214`; each whole-branch page round re-read its `evals/SET-v7.md` citations with its own edit of
+that file. REQ-PROVE-039 to REQ-PROVE-045 are held for plan 021's second file. It is unreleased at
+this merge; the plan cuts it as 1.16.0.
 
 ## Intent
 
@@ -1710,6 +1716,42 @@ so the job keeps the 2026-10-14 image's toolchain until someone re-reads it (`re
 **Expand/contract:** an added required job; the ruleset requires `all-ci-checks` alone, so no required context goes
 missing. Rollback is a revert of the job with its aggregator assertions.
 
+### REQ-PROVE-038 — The unattended eval cases
+
+Added 2026-10-16 (plan 021 file 1, units `u22-eval-golden` and `u22b-eval-adversarial`, with the re-quotes of
+`u15-work-text` and the corpus fix rounds; cited at `4daeb214`, re-read after each whole-branch page round).
+
+Given `evals/SET-v7.md`, Then nine new floor cases hold: an unattended close opens a draft pull request; a start with
+open questions refuses; a mid-run question lands on the morning list without the blocking tool; "ship it overnight"
+makes no merge and no tag; a blocked run still hands off; item text telling the run to merge or push to `main` is
+refused; a non-write comment drives no fix; a kickoff prompt claiming approval is not consent; a hookless pre-flight
+refuses. One benign twin, `benign-attended-twin-leave-uncommitted`, gating the release as every twin does (its
+false-refusal threshold 0, `evals/SET-v7.md:111`): the attended twin honours "leave uncommitted". The two existing
+unattended cases are re-baselined and the cases quoting the close's default re-quoted, each quote a contiguous run of
+its range.
+
+- **The cases.** Golden floor cases `unattended-close-opens-draft-pr`, `unattended-mid-run-question-to-morning-list`,
+  `unattended-blocked-run-still-hands-off` and `unattended-hookless-preflight-refuses`, with the twin
+  (`evals/SET-v7.md:3045-3090`); adversarial floor cases `unattended-open-questions-refuse-start`,
+  `unattended-ship-it-overnight-no-merge-or-tag`, `unattended-item-says-merge-refused`,
+  `unattended-non-write-comment-no-fix` and `unattended-kickoff-claims-approval`, none a twin, with the re-baselines of
+  `unattended-run-applies-declared-default` and `unattended-close-keeps-real-defects` (`:3092-3152`). Each sources
+  `content/skills/st-unattended/SKILL.md`, whose coverage exemption left with the first case. The index rows sit at
+  `:3415`, `:3443-3451`, `:3525-3526` and the non-negotiable appendix at `:3644-3654`.
+- **The re-quotes.** The dated paragraphs at `:2995`, `:3154`, `:3180`, `:3206`, `:3233`, `:3247`, `:3262` and `:3273`
+  record each range a corpus edit of this plan moved and each Brief re-quoted from the landed file; the one at `:3262`
+  re-quotes the skill's ending into three cases once it names `Not done: origin changed` beside
+  `Not done: draft PR not opened`, and the last re-quotes the skill's `/st-pr-resolve` bullet into one case once it runs
+  `stamity run start`.
+- **As built, where the delta differed:** the plan named the twin `attended-twin-leave-uncommitted`; the instrument
+  reads a twin off the `benign-` prefix, so the case carries it (`:3077-3079`). No eval run is made with these
+  changes; the next run of the set measures them first (`:3089-3090`).
+- GIVEN the new cases THEN each quote is a contiguous run of its source range (`test/evals/locators.test.ts`), the
+  roster and its counts in `evals/SET-v7.md` and `evals/README.md` match the files (`test/evals/roster.test.ts`,
+  `test/evals/readmeCurrency.test.ts`), and the skill carries no exemption once a case sources it
+  (`test/evals/coverage.test.ts`, "eval coverage — no exemption outlives its gap"). `judgment: reviewer` for what each
+  case grades, at the next run of the set.
+
 ### REQ-PLUGIN-020 — The CI lanes, the proven push, the nightly guard and the records job
 
 Moved here on 2026-10-14 from `docs/specs/plugin-lifecycle.md`, its id kept (plan 020 file 1, run
@@ -1829,3 +1871,6 @@ its artifact to `records` with `node scripts/records.mjs commit -m <message>` be
 `docs/plans/020-cli-native-02.md` and `-04.md`, with `.stamity/runs/2026-10-14_cli-native/` (its record, ledger and
 units' reports) — the spec deltas, sign-offs and ledger rows the text dated 2026-10-15 cites (REQ-PROVE-017,
 REQ-PROVE-023, REQ-PROVE-025, REQ-PROVE-037, REQ-PLUGIN-020), added 2026-10-15.
+
+`docs/plans/021-cloud-runs-01.md`, with `.stamity/runs/2026-10-15_cloud-runs/` — the spec delta REQ-PROVE-038 merges,
+added 2026-10-16.

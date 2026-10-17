@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { COMMANDS } from "../../src/cli.ts";
 import { runCli } from "../../src/cli/kit/program.ts";
 import { buildSessionStartScript, SESSION_START_SCREEN_PATTERN_IDS } from "../../src/hooks/scripts.ts";
+import { buildResumeCardSource, RESUME_CARD_HOST_NAMES } from "../../src/runs/cardSource.ts";
 import { CARD_MAX_CHARS } from "../../src/runs/layout.ts";
 import { collectResumeCard, readRecordHead, renderResumeCard, screenCard } from "../../src/runs/resumeCard.ts";
 import { runInProcess } from "../support/inProcess.ts";
@@ -47,17 +48,28 @@ const TAG_PAIR = String.fromCodePoint(0xe0041, 0xe0042);
 /** A C1 control (U+0085) and a bidi override (U+202E) between words. */
 const HOSTILE_STATUS_TAIL = ` a${String.fromCharCode(0x85)} b ${String.fromCharCode(0x202e)}c`;
 
-function record(opts: { status?: string; plan?: string; invocation?: string; lead?: readonly string[] } = {}): string {
+function record(
+  opts: { status?: string; plan?: string; invocation?: string; lead?: readonly string[]; more?: readonly string[] } = {},
+): string {
   return [
     ...(opts.lead ?? ["# Demo run", ""]),
     `Status: ${opts.status ?? "in progress — opened 2026-09-23T08:00Z"}`,
     `Plan: ${opts.plan ?? "docs/plans/009-x.md"}`,
     `Invocation: ${opts.invocation ?? "/st-work docs/plans/009-x.md"}`,
+    ...(opts.more ?? []),
     "",
     "## Frame",
     "",
   ].join("\n");
 }
+
+/** The head lines a 1.16.0 run adds (REQ-CTX-012): base, branch, mode and the run it resumes. */
+const SIX_LINE_MORE = [
+  "Base: 0123456789abcdef0123456789abcdef01234567",
+  "Branch: stamity/2026-09-23_demo",
+  "Mode: unattended",
+  "Resumes: 2026-09-22_earlier",
+] as const;
 
 /** A debug round's record head (census S6): three head lines bare at column 0. */
 function debugRecord(status: string, invocation = "/st-debug the card drops a lane"): string {
@@ -275,6 +287,15 @@ const FIXTURES: readonly Fixture[] = [
         [runFile("2026-09-30_release-1.3.0", "record.md")]: record({ plan: "docs/plans/dotted.md" }),
       }),
     expect: (lines) => expect(lines?.[0]).toContain("run 2026-09-23_newer "),
+  },
+  {
+    name: "a six-line head (base, branch, mode, resumes) prints the card it printed before",
+    seed: async (repo) => {
+      await seedDemo(repo);
+      await repo.seedFiles({ [runFile(RUN, "record.md")]: record({ more: SIX_LINE_MORE }) });
+    },
+    expect: (lines) =>
+      expect(lines?.slice(1, 2)).toEqual(["plan: docs/plans/009-x.md  ·  invocation: /st-work docs/plans/009-x.md"]),
   },
   {
     name: "Status on line 15",
@@ -1025,6 +1046,12 @@ describe("the resume card's two twins", () => {
   });
 });
 
+// The three expectations below gained the head's four new fields, each null on
+// these heads: REQ-CTX-012 moved the head from three read lines to seven
+// (mode, branch, base, resumes), and toEqual would otherwise fail on the keys
+// alone. The status, plan and invocation values they pin are unchanged.
+const NO_NEW_HEAD_LINES = { mode: null, branch: null, base: null, resumes: null } as const;
+
 describe("readRecordHead", () => {
   it("strips a BOM and reads a bold in-progress status", () => {
     expect(readRecordHead(`${BOM}Status: **in progress** — opened\nPlan: p.md\nInvocation: /st-work p.md\n`)).toEqual({
@@ -1032,6 +1059,7 @@ describe("readRecordHead", () => {
       inProgress: true,
       plan: "p.md",
       invocation: "/st-work p.md",
+      ...NO_NEW_HEAD_LINES,
     });
   });
 
@@ -1042,12 +1070,76 @@ describe("readRecordHead", () => {
       inProgress: false,
       plan: null,
       invocation: null,
+      ...NO_NEW_HEAD_LINES,
     });
   });
 
   it("lets the first match of each line win", () => {
     const head = readRecordHead("Status: closed\nStatus: in progress\nPlan: first.md\nplan: second.md\n");
-    expect(head).toEqual({ status: "closed", inProgress: false, plan: "first.md", invocation: null });
+    expect(head).toEqual({ status: "closed", inProgress: false, plan: "first.md", invocation: null, ...NO_NEW_HEAD_LINES });
+  });
+});
+
+/** A full commit id in a SHA-256 repository: 64 hex digits. */
+const SHA256 = "0123456789abcdef".repeat(4);
+
+/**
+ * Heads both twins read, one file each: the hook's `cardRecordHead` and the
+ * engine's `readRecordHead` must return the same fields for every one.
+ */
+const TWIN_HEADS: Readonly<Record<string, string>> = {
+  "six-line-unattended.md": record({ more: SIX_LINE_MORE }),
+  "attended-upper-case.md": record({ more: ["MODE: Attended", "BRANCH: feat/x", "BASE: ABCDEF0"] }),
+  "1-15-0.md": record(),
+  "unknown-mode-short-base.md": record({ more: ["Mode: sometimes", "Base: 0123ab", "Branch:", "Resumes:"] }),
+  "first-wins.md": record({ more: ["Mode: attended", "Mode: unattended", "Branch: a", "Branch: b", "Resumes: x y"] }),
+  "ellipsis-base-crlf-bom.md": BOM + record({ more: ["Base: 02e040eb… (stamp)", "Mode: unattended"] }).replaceAll("\n", "\r\n"),
+  "line-16.md": record({ lead: leadLines(12), more: ["Mode: unattended", "Branch: past-the-head"] }),
+  "indented.md": record({ more: [" Mode: unattended", "\tBranch: b"] }),
+  "no-plan-or-invocation.md": "Status: in progress\nMode: unattended\nBranch: b\n",
+  "sha256-base.md": record({ more: [`Base: ${SHA256}`] }),
+};
+
+/** The hook body alone, with its host's imports, printing `cardRecordHead` of each path argument. */
+function headProbe(): string {
+  return [
+    `import { ${RESUME_CARD_HOST_NAMES.fs.join(", ")} } from "node:fs";`,
+    `import { ${RESUME_CARD_HOST_NAMES.path.join(", ")} } from "node:path";`,
+    buildResumeCardSource(),
+    "process.stdout.write(JSON.stringify(process.argv.slice(2).map((path) => cardRecordHead(path))));",
+    "",
+  ].join("\n");
+}
+
+describe("the hook twin's record head (REQ-CTX-012)", () => {
+  it("reads every head as the engine does, mode, branch, base and resumes included", () => {
+    const repo = getRepo();
+    const names = Object.keys(TWIN_HEADS);
+    for (const name of names) writeFileSync(repo.path(name), TWIN_HEADS[name] ?? "");
+    writeFileSync(repo.path("head-probe.mjs"), headProbe());
+    const result = spawnSync(process.execPath, [repo.path("head-probe.mjs"), ...names.map((name) => repo.path(name))], {
+      encoding: "utf8",
+    });
+    expect(result.status, result.stderr).toBe(0);
+    const asEngine = JSON.parse(result.stdout) as Record<string, unknown>[];
+    // The hook keeps an absent plan or invocation as "" (its card prints that as
+    // not recorded); the engine keeps null. Only that spelling is mapped.
+    for (const head of asEngine) {
+      if (head["plan"] === "") head["plan"] = null;
+      if (head["invocation"] === "") head["invocation"] = null;
+    }
+    expect(asEngine).toEqual(names.map((name) => readRecordHead(TWIN_HEADS[name] ?? "")));
+    // Non-degenerate: the set holds both modes, a null mode, and a read branch and base.
+    expect(asEngine.map((head) => head["mode"])).toEqual(
+      expect.arrayContaining(["unattended", "attended", null]),
+    );
+    expect(asEngine[0]).toMatchObject({
+      mode: "unattended",
+      branch: "stamity/2026-09-23_demo",
+      base: SHA,
+      resumes: "2026-09-22_earlier",
+    });
+    expect(asEngine[names.indexOf("sha256-base.md")]).toMatchObject({ base: SHA256 });
   });
 });
 

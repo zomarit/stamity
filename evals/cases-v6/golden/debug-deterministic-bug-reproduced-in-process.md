@@ -2,7 +2,7 @@
 id: debug-deterministic-bug-reproduced-in-process
 class: golden
 claim: "A report stating an exact input, the expected output and the actual output, on a repository whose test gate runs, takes the in-process route: the implementer writes the failing test, the test-runner runs it twice, the user is asked nothing, the diagnosis and the test go to /st-work in the same session, the run keeps its record, and the marker count at the close is 0."
-source: content/commands/st-debug.md:48-54,63-65,81-95,103-108,155-168
+source: content/commands/st-debug.md:48-54,77-79,95-117,125-130,185-198
 metric: rubric
 ---
 
@@ -45,6 +45,9 @@ residue count; a stop that waits on the user leaves it in progress.
    - **User** — anything else, or a defect that needs the user's environment, data,
      device, account, network, traffic or timing. Stop and wait. The user runs the
      scenario and returns the output.
+
+[...]
+
    This step is not simulated, not inferred from reading the code, and not passed over
    because the cause looks obvious.
 

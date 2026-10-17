@@ -22,7 +22,7 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
 
 /**
  * The final census: the shipped corpus holds EXACTLY the rosters below —
- * 1 charter, 9 commands, 10 agents, 8 skills, 12 rules, 3 core hook scripts —
+ * 1 charter, 9 commands, 10 agents, 9 skills, 12 rules, 3 core hook scripts —
  * and nothing the engine cannot address. This is framework CI for canonical
  * content (`stamity validate` deliberately checks user content only, so the
  * corpus is validated here, where it is authored).
@@ -66,7 +66,11 @@ const AGENT_CENSUS: readonly string[] = [
   "performance",
 ];
 
-/** The eight skills. */
+/**
+ * The nine skills. `unattended` joined 2026-10-15 (plan 021-cloud-runs-01, unit
+ * u9-unattended-skill): the skill an unattended run is sent to by name, so the
+ * roster, its count word and the length assertion below move together.
+ */
 const SKILL_CENSUS: readonly string[] = [
   "onboard",
   "handoff",
@@ -76,6 +80,7 @@ const SKILL_CENSUS: readonly string[] = [
   "design-system-detect",
   "dep-audit",
   "learn",
+  "unattended",
 ];
 
 /** The twelve rules. */
@@ -184,10 +189,12 @@ describe("census — shipped corpus", () => {
     expectExactRoster("agent", ids, AGENT_CENSUS);
   });
 
-  it("skills: exactly the eight procedures", async () => {
+  // TEST CHANGE, justified (u9-unattended-skill, 2026-10-15): the roster gained the
+  // ninth skill, `unattended`; the title's count word and the length move with it.
+  it("skills: exactly the nine procedures", async () => {
     const ids = await idsOf("skill");
 
-    expect(ids).toHaveLength(8);
+    expect(ids).toHaveLength(9);
     expectExactRoster("skill", ids, SKILL_CENSUS);
   });
 

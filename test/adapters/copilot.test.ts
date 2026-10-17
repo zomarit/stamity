@@ -1,6 +1,7 @@
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { readFile, readdir } from "node:fs/promises";
+import { readFile, readdir, rm } from "node:fs/promises";
 import { join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
@@ -1523,7 +1524,61 @@ describe("hooks", () => {
     expect(native.version).toBe(1);
     // TEST CHANGE, justified (e6-copilot-adapter, REQ-FLOW-086): the file keys its
     // events camelCase now, so the guard's one entry sits under `preToolUse`.
-    expect(native.hooks.preToolUse).toHaveLength(1);
+    // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102): two entries now, the core guard and
+    // the person-only shell guard on the shell tools.
+    expect(native.hooks.preToolUse).toHaveLength(2);
+  });
+
+  /** The interchange row a Copilot entry's starter carries, decoded from its last word. */
+  const rowOf = (command: string): { event: string; command: string[] } =>
+    JSON.parse(Buffer.from(command.split(" ").at(-1) ?? "", "base64url").toString()) as { event: string; command: string[] };
+  const PERSON_ONLY = ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs";
+
+  it("runs the person-only shell guard on bash and powershell through the portable runner (u20)", async () => {
+    const native = JSON.parse(rowAt(await planResidue(), COPILOT_HOOKS_PATH).content) as {
+      hooks: Record<string, { command: string; matcher?: string }[]>;
+    };
+    const guards = (native.hooks["preToolUse"] ?? []).filter((entry) => rowOf(entry.command).command[1] === PERSON_ONLY);
+
+    // One entry, keyed by Copilot's runtime shell tool names, launching the runner (the starter's default script).
+    expect(guards).toHaveLength(1);
+    expect(guards[0]?.matcher).toBe("bash|powershell");
+    expect(guards[0]?.command).toContain("stamity-portable-hook.mjs");
+    expect(rowOf(guards[0]!.command)).toEqual({ event: "pre_tool_use", command: ["node", PERSON_ONLY], matcher: "Bash|PowerShell" });
+  });
+
+  it("refuses a force push through the emitted entry, lets a status read through, and fails closed when the guard is missing (u20)", async () => {
+    const plan = await planComposed();
+    const temp = getTemp();
+    const runner = ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs";
+    await temp.seedFiles({
+      [`run/${COPILOT_HOOKS_PATH}`]: rowAt(plan, COPILOT_HOOKS_PATH).content,
+      [`run/${runner}`]: rowAt(plan, runner).content,
+      [`run/${PERSON_ONLY}`]: rowAt(plan, PERSON_ONLY).content,
+    });
+    const native = JSON.parse(rowAt(plan, COPILOT_HOOKS_PATH).content) as { hooks: Record<string, { command: string }[]> };
+    const command = (native.hooks["preToolUse"] ?? []).find((entry) => rowOf(entry.command).command[1] === PERSON_ONLY)!.command;
+    const env: NodeJS.ProcessEnv = { ...process.env };
+    delete env["STAMITY_UNATTENDED"];
+    // Copilot's camelCase payload, its tool arguments serialized, as the runner normalizes them.
+    const run = (shellCommand: string) =>
+      spawnSync(command, {
+        cwd: temp.path("run"),
+        env,
+        shell: true,
+        input: JSON.stringify({ toolName: "bash", toolArgs: JSON.stringify({ command: shellCommand }) }),
+        encoding: "utf8",
+      });
+
+    const denied = run("git push --force origin feature");
+    expect(denied.status, denied.stderr).toBe(0);
+    expect(JSON.parse(denied.stdout)).toMatchObject({ permissionDecision: "deny" });
+    const allowed = run("git status");
+    expect({ status: allowed.status, stdout: allowed.stdout }).toEqual({ status: 0, stdout: "" });
+
+    await rm(temp.path("run", ...PERSON_ONLY.split("/")));
+    // Copilot rejects a preToolUse call on any non-zero exit, so a guard that cannot run refuses the call.
+    expect(run("git status").status).not.toBe(0);
   });
 
   it("keys every event camelCase and gives every entry a bash command equal to its command (REQ-FLOW-086)", async () => {

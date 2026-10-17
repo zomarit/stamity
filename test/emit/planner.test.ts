@@ -105,10 +105,14 @@ const P = {
   hooksRoot: ".stamity/generated/hooks",
 } as const;
 
+// TEST CHANGE, justified (record 23:32Z build/44, u14 and u20: the person-only shell guard is a
+// core script copied for every selected client, a row of its own): the core copies gain it, each
+// still owned singly by its tool as the other three are.
 const HOOK_FILES = [
   "stamity-session-start.mjs",
   "stamity-pre-tool-use-guard.mjs",
   "stamity-config-tamper-notice.mjs",
+  "stamity-person-only-guard.mjs",
 ] as const;
 
 /** Seeds the fixture corpus (charter + one skill with a reference) and returns its root. */

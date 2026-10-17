@@ -299,6 +299,14 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   "src/runs/layout.ts": { unit: "ctx-hook-card", wave: 1 },
   // The schedule rule's grammar: pure, zero imports, read by the wave-4 ledger store.
   "src/runs/disposition.ts": { unit: "q9a-disposition", wave: 1 },
+  // Plan 021 file 1, the unattended run. Each row sits at the depth its own
+  // imports put it, under the wave-12 root that wires it and the wave-14 verbs
+  // that call it. Zero internal imports: the plan's structural coverage check,
+  // the inferred-prerequisite rows the morning list reads, and the person-only
+  // tables the wave-4 hook scripts import (u14).
+  "src/runs/planCoverage.ts": { unit: "u2-coverage-port", wave: 1 },
+  "src/runs/prerequisites.ts": { unit: "u5-morning", wave: 1 },
+  "src/hooks/personOnly.ts": { unit: "u6-person-only-tables", wave: 1 },
   // wave 2
   "src/merge/fsErrors.ts": { unit: "p1-08", wave: 2 },
   "src/merge/managedBlocks.ts": { unit: "p1-08", wave: 2 },
@@ -356,10 +364,18 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // The secret scan of added lines (plan 019 file 2, unit p5e): reads the
   // wave-1 shipped secret patterns, under the wave-14 verb that calls it.
   "src/change/scan.ts": { unit: "p5e-secret-scan", wave: 2 },
+  // The run contract: strict YAML over the wave-1 config parser.
+  "src/runs/runContract.ts": { unit: "u3-freshness-contract", wave: 2 },
   // wave 3
   // Test selection (plan 019 file 2, unit p2b): reads the wave-2 classifier's
   // globs and code extensions, under the wave-14 verb that calls it.
   "src/change/testInputs.ts": { unit: "p2b-test-inputs", wave: 3 },
+  // Plan 021 file 1: the held person-only paths over the wave-2 classifier's
+  // glob matcher; the freshness guard and the draft pull request's REST logic
+  // over the wave-2 git seam's types and remote parser.
+  "src/change/personOnlyPaths.ts": { unit: "u6-person-only-tables", wave: 3 },
+  "src/runs/freshness.ts": { unit: "u3-freshness-contract", wave: 3 },
+  "src/runs/pullRequest.ts": { unit: "u4-pr-runners", wave: 3 },
   "src/detect/stackSupport.ts": { unit: "p1-19", wave: 3 },
   "src/detect/verificationGates.ts": { unit: "p1-19", wave: 3 },
   "src/merge/atomicWrite.ts": { unit: "p1-23", wave: 3 },
@@ -424,6 +440,13 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // the wave-2 block reader and the wave-1 run layout, reached by the wave-14
   // `stamity ledger` verb.
   "src/runs/ledgerStore.ts": { unit: "ctx-ledger-append", wave: 4 },
+  // Plan 021 file 1: the morning list (the wave-2 scan and block reader, the
+  // wave-3 pull request's marker), the pre-flight's checks (the wave-1 secret
+  // patterns, the wave-3 repository resolver) and the readiness check (the
+  // wave-3 freshness guard, the wave-2 contract, the wave-1 coverage check).
+  "src/runs/morning.ts": { unit: "u5-morning", wave: 4 },
+  "src/runs/preflight.ts": { unit: "u8-preflight-core", wave: 4 },
+  "src/runs/planCheck.ts": { unit: "u13-plan-check", wave: 4 },
   // wave 5
   // RE-PLANNED 2026-09-15, 3 -> 5, with `src/emit/agentsMd.ts` 4 -> 6 below it.
   // The charter loader is still a corpus reader over the wave-2 content
@@ -561,6 +584,11 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // same-wave edges in both directions that no call site wants.
   "src/cli/engine/emissionWrite.ts": { unit: "ew-u1", wave: 13 },
   "src/cli/engine/gitStatus.ts": { unit: "p2-03", wave: 13 },
+  // Plan 021 file 1 (u4): the engine's one git runner that writes and its one
+  // door onto GitHub's REST API, over the wave-1 PATH walk and the wave-4 bare
+  // look, below the wave-14 `gate` and run verbs that start them.
+  "src/cli/engine/gitWrite.ts": { unit: "u4-pr-runners", wave: 13 },
+  "src/cli/engine/ghRunner.ts": { unit: "u4-pr-runners", wave: 13 },
   // The client lister (REQ-LADDER-006): starts a client's own CLI through the
   // wave-1 PATH walk and reads the wave-1 manifest types. Wave 13 beside the
   // other engine seams of the CLI layer, below the wave-14 `init` and `sync`
@@ -594,6 +622,10 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // three above: it calls the wave-2 change classifier and the wave-13 kit, and
   // imports no wave-14 command engine.
   "src/cli/commands/gate.ts": { unit: "p1a-classifier-verb", wave: 14 },
+  // The plan verb, the fifth hidden plumbing command and the same shape as the four above: it
+  // reads the plans, the specs and the contract and hands them to the wave-4 readiness check, with
+  // the wave-13 git runner and kit, and imports no wave-14 command engine.
+  "src/cli/commands/plan.ts": { unit: "u17-plan-verb", wave: 14 },
   "src/cli/notice/updateNotice.ts": { unit: "p2-12", wave: 14 },
   // The worktree verb (WT-U2), at the leaf-command wave rather than beside
   // `workspace.ts` one above it. Wave 14 is its true depth: everything it calls
@@ -621,6 +653,12 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // its own wave under another unit is the violation `checkWaveLayering`
   // names. The module header states the same refusal at the call site.
   "src/cli/commands/workspace.ts": { unit: "w-u1", wave: 15 },
+  // The run verb, the sixth hidden plumbing command, beside `workspace.ts` for the same reason: it
+  // puts a run on a branch of its own through the wave-13 git write and REST runners, with the wave-3
+  // repository match, the wave-2 default-branch parse and the wave-13 kit, and its checkpoint also
+  // imports the wave-14 gate verb's `scanChange` and `readChange` (`./gate.ts`), which a file at
+  // wave 14 under another unit could not.
+  "src/cli/commands/run.ts": { unit: "u18-run-verb", wave: 15 },
   // TEST CHANGE, justified (2026-10-14, plan 020 file 1, units d6-verb and
   // d7-engine): the `stamity plugin` verb, its setup engine, its status report
   // and the capability reader at wave 2 (pl-c6) left with the plugin route in

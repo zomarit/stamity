@@ -4,6 +4,7 @@ import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  CLAUDE_ASK_GATE_PATH,
   CLAUDE_COMMANDS_DIR,
   CLAUDE_DIALECT_FACTS,
   CLAUDE_MD_PATH,
@@ -27,10 +28,13 @@ import { LIVE_CAPABILITY_INPUTS } from "../../src/emit/capabilityMatrix.ts";
 import { NATIVE_SKILL_DIRS, SKILLS_PROJECTION_DIR } from "../../src/emit/skillsProjection.ts";
 import { TOOLS, type Tool } from "../../src/types/core.ts";
 import { CLIENT_EXTENSION_EVENTS } from "../../src/hooks/model.ts";
+import { CLAUDE_DENY_ROWS, personOnlyVerdict } from "../../src/hooks/personOnly.ts";
 import {
   REVIEW_GATE_FILE,
   REVIEW_GATE_STATE_FILE,
+  UNATTENDED_ASK_GATE_FILE,
   buildReviewGateScript,
+  buildUnattendedAskGate,
 } from "../../src/hooks/scripts.ts";
 import { executedScript } from "../../src/manifest/coOwnedJson.ts";
 import { isKnownCodexHooksDescription } from "../../src/manifest/hookDocuments.ts";
@@ -171,6 +175,16 @@ const HOOK_COMMANDS = {
     'node "${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs"',
   reviewGate:
     'node "${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-review-gate.mjs"',
+  // u20-hook-emission (REQ-FLOW-102): the person-only shell guard, anchored and carrying the same
+  // fail-closed tail as the core guard, and the ask gate (REQ-FLOW-090), which carries none.
+  personOnlyGuard:
+    'node "${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-person-only-guard.mjs" ' +
+    '|| { s=$?; [ "$s" -eq 2 ] && exit 2; ' +
+    "echo 'stamity: the pre-tool-use guard could not run; run " +
+    "`stamity sync` where the CLI is installed, else `npx -y @zomarit/stamity@0.0.0-test sync`, " +
+    "which needs the npm registry' >&2; exit 2; }",
+  askGate:
+    'node "${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-unattended-ask-gate.mjs"',
 } as const;
 
 /**
@@ -217,7 +231,9 @@ const EMPTY_SELECTION: ContentSelection = {
 interface SettingsShape {
   // TEST CHANGE, justified (2026-10-08, inbox row 324): the engine renders no
   // `permissions` member on either route, so the shape types it as absent.
-  permissions?: never;
+  // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102): the member is back, carrying the
+  // person-only deny rows alone; `allow` stays typed absent, since no allow row is rendered.
+  permissions?: { deny: string[]; allow?: never };
   hooks: Record<
     string,
     { matcher?: string; hooks: { type: string; command: string; timeout?: number }[] }[]
@@ -672,13 +688,17 @@ describe("claude residue over the real corpus", () => {
   // three read rows `Read`, `Grep`, `Glob`. A bare `Read` row matches every file
   // read anywhere, and reads inside the project need no rule, so the rows only
   // took the prompt off reads outside it; the document now renders hooks alone.
-  it("emits settings.json with the hook transform, all three extensions, and no permissions member", async () => {
+  // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102, REQ-FLOW-090): the document gains a
+  // `permissions` member holding the person-only deny rows (and no allow row), and `PreToolUse` gains
+  // the shell guard on the shell tools and the ask gate on the question tool beside the core guard.
+  it("emits settings.json with the hook transform, all three extensions, and the deny rows as its only permissions", async () => {
     const { rows } = await planned();
     const settings = settingsOf(rows);
 
-    // Whole-file JSON: hooks, nothing else — no permissions member, no
-    // teammate modes, no experimental flags.
-    expect(Object.keys(settings)).toEqual(["hooks"]);
+    // Whole-file JSON: the deny rows and the hooks, nothing else — no allow
+    // row, no teammate modes, no experimental flags.
+    expect(Object.keys(settings)).toEqual(["permissions", "hooks"]);
+    expect(settings.permissions).toEqual({ deny: [...CLAUDE_DENY_ROWS] });
     const raw = byPath(rows).get(CLAUDE_SETTINGS_PATH)!.content;
     // CHANGED: `TaskCompleted` used to be asserted ABSENT as one of the
     // predecessor's Agent-Teams echo gates. It is now a deliberate carrier for
@@ -698,11 +718,21 @@ describe("claude residue over the real corpus", () => {
       HOOK_COMMANDS.tamper,
     ]);
 
-    // The guard fires on every tool call: exec-form command, no matcher.
+    // The guard fires on every tool call: exec-form command, no matcher. The
+    // shell guard follows on the two shell tools, then the ask gate on the
+    // question tool.
     const preToolUse = settings.hooks["PreToolUse"];
-    expect(preToolUse).toHaveLength(1);
+    expect(preToolUse).toHaveLength(3);
     expect(preToolUse?.[0]?.hooks[0]).toEqual({ type: "command", command: HOOK_COMMANDS.guard });
     expect(preToolUse?.[0]?.matcher).toBeUndefined();
+    expect(preToolUse?.[1]).toEqual({
+      matcher: "Bash|PowerShell",
+      hooks: [{ type: "command", command: HOOK_COMMANDS.personOnlyGuard }],
+    });
+    expect(preToolUse?.[2]).toEqual({
+      matcher: "AskUserQuestion",
+      hooks: [{ type: "command", command: HOOK_COMMANDS.askGate }],
+    });
 
     // The Claude-only ConfigChange extension wires the SAME tamper script the
     // portable event carries — per-change alert beside session-start guidance.
@@ -716,6 +746,7 @@ describe("claude residue over the real corpus", () => {
     for (const name of ["Read", "Grep", "Glob", "Edit", "Write", "Bash", "WebFetch"]) {
       expect(raw).not.toContain(`"${name}"`);
     }
+    expect(raw).not.toContain('"allow"');
 
     const row = byPath(rows).get(CLAUDE_SETTINGS_PATH)!;
     expect(row.owner).toEqual({
@@ -771,14 +802,17 @@ describe("claude residue over the real corpus", () => {
     // slash-command surface — the deselection is honoured, not overridden.
     expect(paths.filter((path) => path.startsWith(`${CLAUDE_COMMANDS_DIR}/`))).toEqual([]);
 
-    // Hooks-only settings still carry the full wiring.
+    // The settings still carry the full wiring.
     const settings = settingsOf(rows);
     expect(settings.hooks["SessionStart"]).toHaveLength(2);
-    expect(settings.hooks["PreToolUse"]).toHaveLength(1);
+    // TEST CHANGE, justified (u20-hook-emission): the core guard, the shell guard and the ask gate.
+    expect(settings.hooks["PreToolUse"]).toHaveLength(3);
     expect(settings.hooks["ConfigChange"]).toHaveLength(1);
     // TEST CHANGE, justified (2026-10-08, inbox row 324): pinned three allow
     // rows; the document now carries no permissions member.
-    expect(settings).not.toHaveProperty("permissions");
+    // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102): it carries the deny rows again, on an
+    // empty selection too, and still no allow row.
+    expect(settings.permissions).toEqual({ deny: [...CLAUDE_DENY_ROWS] });
   });
 
   it("emits only claude-owned residue paths, never a core-owned one", async () => {
@@ -791,11 +825,14 @@ describe("claude residue over the real corpus", () => {
       // TEST CHANGE, justified (2026-10-14, e8-copilot-codex-claude-pins): the surface gains
       // the class-to-model map every client writes under `.stamity/generated/models/`
       // (REQ-LADDER-007), a claude-owned row; no other path is admitted.
+      // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-090): and the ask gate, placed as the
+      // review gate is, a claude-owned row.
       expect(
         row.path === CLAUDE_MD_PATH ||
           row.path.startsWith(".claude/") ||
           row.path === ".mcp.json" ||
           row.path === CLAUDE_REVIEW_GATE_PATH ||
+          row.path === CLAUDE_ASK_GATE_PATH ||
           row.path === CLAUDE_MODEL_MAP_PATH,
         row.path,
       ).toBe(true);
@@ -810,8 +847,9 @@ describe("claude residue over the real corpus", () => {
     // from "no `.stamity/` path" to "no `.stamity/` path but that one".
     // TEST CHANGE, justified (2026-10-14, e8-copilot-codex-claude-pins): and the model map, the
     // second adapter-owned row there (REQ-LADDER-007).
+    // TEST CHANGE, justified (u20-hook-emission): and the ask gate, the third.
     expect(paths.filter((path) => path.startsWith(".stamity/")).toSorted()).toEqual(
-      [CLAUDE_REVIEW_GATE_PATH, CLAUDE_MODEL_MAP_PATH].toSorted(),
+      [CLAUDE_REVIEW_GATE_PATH, CLAUDE_ASK_GATE_PATH, CLAUDE_MODEL_MAP_PATH].toSorted(),
     );
   });
 
@@ -1294,12 +1332,15 @@ describe("user hook lane", () => {
     const settings = settingsOf(rows);
 
     // Declaration order: core scripts first, then user rows as the reader
-    // returned them.
+    // returned them. TEST CHANGE, justified (u20-hook-emission): the shell guard is a core row, so it
+    // precedes the user row, and the adapter's ask gate follows every planned row.
     expect(settings.hooks["PreToolUse"]?.map((entry) => entry.hooks[0]?.command)).toEqual([
       HOOK_COMMANDS.guard,
+      HOOK_COMMANDS.personOnlyGuard,
       USER_HOOK_COMMAND,
+      HOOK_COMMANDS.askGate,
     ]);
-    const userEntry = settings.hooks["PreToolUse"]?.[1];
+    const userEntry = settings.hooks["PreToolUse"]?.[2];
     expect(userEntry?.matcher).toBe("Bash");
     // 1500 ms rounds UP to the client's whole-second unit.
     expect(userEntry?.hooks[0]?.timeout).toBe(2);
@@ -1373,7 +1414,10 @@ describe("the project-directory anchor", () => {
     expect(raw).not.toMatch(/"command": "node \.stamity\//);
   });
 
-  it("gives the fail-closed tail to the core guard row and to no other row", async () => {
+  // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102): the tail now belongs to two rows, the
+  // core guard and the person-only shell guard, since a shell guard that cannot launch would let a
+  // force push through; the ask gate fails open by design and the user row stays its author's.
+  it("gives the fail-closed tail to the core guard and the shell guard rows and to no other row", async () => {
     const temp = getTemp();
     await temp.seedFiles({
       "repo/.stamity/hooks/10-user.json": `${JSON.stringify({
@@ -1390,17 +1434,20 @@ describe("the project-directory anchor", () => {
       entries.flatMap((entry) => entry.hooks.map((hook) => hook.command)),
     );
 
-    // Two pre-tool-use rows and several non-guard rows in one document, so
-    // "only the guard" is a statement about a populated list.
-    expect(settings.hooks["PreToolUse"]).toHaveLength(2);
+    // Four pre-tool-use rows and several non-guard rows in one document, so
+    // "only the guards" is a statement about a populated list.
+    expect(settings.hooks["PreToolUse"]).toHaveLength(4);
     expect(commands.filter((command) => command.endsWith(GUARD_TAIL))).toEqual([
       HOOK_COMMANDS.guard,
+      HOOK_COMMANDS.personOnlyGuard,
     ]);
     expect(HOOK_COMMANDS.guard.endsWith(GUARD_TAIL)).toBe(true);
+    expect(HOOK_COMMANDS.personOnlyGuard.endsWith(GUARD_TAIL)).toBe(true);
     // A notice that cannot run is not a guard, and a user hook's exit semantics
     // are its author's — both keep the client's non-blocking reading.
     expect(settings.hooks["SessionStart"]?.every((entry) => !entry.hooks[0]!.command.includes("exit 2"))).toBe(true);
-    expect(settings.hooks["PreToolUse"]?.[1]?.hooks[0]?.command).toBe(USER_HOOK_COMMAND);
+    expect(settings.hooks["PreToolUse"]?.[2]?.hooks[0]?.command).toBe(USER_HOOK_COMMAND);
+    expect(settings.hooks["PreToolUse"]?.[3]?.hooks[0]?.command).toBe(HOOK_COMMANDS.askGate);
   });
 
   /**
@@ -1623,6 +1670,119 @@ describe("the project-directory anchor", () => {
       expect(result.stderr).toContain(GUARD_REPAIR_LINE);
     },
   );
+
+  /** A Bash call carrying `command`, as Claude Code hands the shell guard its payload. */
+  const bashCall = (command: string): string => JSON.stringify({ tool_name: "Bash", tool_input: { command } });
+
+  /** The emitted shell guard line, read off the same rendering {@link emitted} seeds. */
+  async function emittedShellGuard(): Promise<{ root: string; command: string }> {
+    const { root } = await emitted();
+    const { rows } = await planned({ selection: EMPTY_SELECTION, rootDir: root });
+    const entry = settingsOf(rows).hooks["PreToolUse"]?.find((group) => group.matcher === "Bash|PowerShell");
+    return { root, command: entry?.hooks[0]?.command ?? "" };
+  }
+
+  it.skipIf(HOOK_SHELL === undefined)(
+    "refuses a force push through the emitted shell guard line, from a sub-directory, and lets a status read through (u20)",
+    async () => {
+      const { root, command } = await emittedShellGuard();
+      expect(command).toBe(HOOK_COMMANDS.personOnlyGuard);
+      const sub = join(root, "sub", "dir");
+
+      const denied = shell(command, sub, bashCall("git push --force origin feature"), root);
+      expect(denied.code).toBe(2);
+      expect(denied.stderr).toContain("stamity person-only guard:");
+      // The guard's own refusal, without the launch-failure repair beside it.
+      expect(denied.stderr).not.toContain(GUARD_REPAIR_LINE);
+
+      const allowed = shell(command, sub, bashCall("git status"), root);
+      expect(allowed).toMatchObject({ code: 0, stderr: "" });
+    },
+  );
+
+  it.skipIf(HOOK_SHELL === undefined)(
+    "blocks a shell call with the repair when the shell guard script is missing (u20)",
+    async () => {
+      const { root, command } = await emittedShellGuard();
+      rmSync(join(root, ".stamity", "generated", "hooks", "claude", "stamity-person-only-guard.mjs"));
+
+      const result = shell(command, join(root, "sub", "dir"), bashCall("git status"), root);
+
+      // Fail CLOSED, as the core guard: a shell guard that cannot launch would let a force push through.
+      expect(result.code).toBe(2);
+      expect(result.stderr).toContain(GUARD_REPAIR_LINE);
+    },
+  );
+});
+
+describe("the person-only deny rows (u20-hook-emission, REQ-FLOW-102)", () => {
+  it("renders every row of CLAUDE_DENY_ROWS, in order, in Claude Code's prefix-rule form", async () => {
+    const { rows } = await planned({ selection: EMPTY_SELECTION });
+    const deny = settingsOf(rows).permissions?.deny ?? [];
+
+    expect(CLAUDE_DENY_ROWS.length).toBeGreaterThan(10);
+    expect(deny).toEqual([...CLAUDE_DENY_ROWS]);
+    // The `Bash(<prefix>:*)` form the repository's tests pin for a Claude Code prefix rule, then the GitHub MCP
+    // server's merge and branch-write tools in Claude Code's MCP rule form, one row each (review/214), then its
+    // review-submit, pull-request-update, branch-create and repository-delete tools (review/226).
+    const mcp = deny.filter((row) => !row.startsWith("Bash("));
+    for (const row of deny.slice(0, deny.length - mcp.length)) expect(row).toMatch(/^Bash\([^()]+:\*\)$/);
+    expect(mcp).toEqual([
+      "mcp__github__merge_pull_request",
+      "mcp__github__push_files",
+      "mcp__github__create_or_update_file",
+      "mcp__github__delete_file",
+      "mcp__github__update_pull_request_branch",
+      "mcp__github__pull_request_review_write",
+      "mcp__github__create_pull_request_review",
+      "mcp__github__submit_pending_pull_request_review",
+      "mcp__github__update_pull_request",
+      "mcp__github__update_pull_request_state",
+      "mcp__github__update_pull_request_draft_state",
+      "mcp__github__create_branch",
+      "mcp__github__delete_repository",
+    ]);
+  });
+
+  it("holds only rows the shell guard also denies, on a feature branch, so the two layers agree", async () => {
+    const { rows } = await planned({ selection: EMPTY_SELECTION });
+    const ctx = { defaultBranches: ["main"], currentBranch: "feature", tags: [] };
+    // The prefix rows; the MCP tool rows name no shell line (review/214).
+    const deny = (settingsOf(rows).permissions?.deny ?? []).filter((row) => row.startsWith("Bash("));
+    expect(deny.length).toBeGreaterThan(10);
+    for (const row of deny) {
+      const prefix = row.slice("Bash(".length, -":*)".length);
+      expect(personOnlyVerdict(prefix, ctx), row).toMatchObject({ deny: true });
+      // And a command that only extends the prefix, as the client's rule would also match.
+      expect(personOnlyVerdict(`${prefix} x`, ctx), row).toMatchObject({ deny: true });
+    }
+    // Control: an ordinary push of the feature branch is neither rule's.
+    expect(personOnlyVerdict("git push origin feature", ctx)).toEqual({ deny: false });
+  });
+});
+
+describe("the unattended ask gate's placement (u20-hook-emission, REQ-FLOW-090)", () => {
+  it("places the gate beside the review gate as an adapter-owned row, in the repository layout", async () => {
+    const { rows } = await planned({ selection: EMPTY_SELECTION });
+    const row = byPath(rows).get(CLAUDE_ASK_GATE_PATH);
+
+    expect(CLAUDE_ASK_GATE_PATH).toBe(`${HOOKS_GENERATED_DIR}/claude/${UNATTENDED_ASK_GATE_FILE}`);
+    expect(row?.content).toBe(buildUnattendedAskGate({ layout: "generated" }));
+    expect(row?.owner).toEqual({ adapter: "claude", artifactId: "claude-ask-gate", artifactType: "infra" });
+    const askEntries = settingsOf(rows).hooks["PreToolUse"]?.filter((entry) => entry.matcher === "AskUserQuestion") ?? [];
+    // One entry, the gate alone, and no fail-closed tail: a question that reaches nobody is the safe failure.
+    expect(askEntries).toEqual([{ matcher: "AskUserQuestion", hooks: [{ type: "command", command: HOOK_COMMANDS.askGate }] }]);
+    expect(askEntries[0]?.hooks[0]?.command).not.toContain("exit 2");
+  });
+
+  it("addresses the gate through the plugin root under one, and keeps its script row on the repository path", async () => {
+    const root = "${CLAUDE_PLUGIN_ROOT}/hooks";
+    const { rows } = await planned({ selection: EMPTY_SELECTION, hookScriptsRoot: root });
+
+    expect(byPath(rows).get(CLAUDE_ASK_GATE_PATH)?.content).toBe(buildUnattendedAskGate({ layout: "container" }));
+    const entry = settingsOf(rows).hooks["PreToolUse"]?.find((group) => group.matcher === "AskUserQuestion");
+    expect(entry?.hooks[0]?.command).toBe(`node "${root}/${UNATTENDED_ASK_GATE_FILE}"`);
+  });
 });
 
 /**
@@ -2144,7 +2304,9 @@ describe("the settings document's allow rows and the per-entry bound", () => {
   it("renders no allow row, keeps the earlier releases' rows as the bound, and renders the hooks", async () => {
     const generated = await planned();
     const repoDoc = JSON.parse(byPath(generated.rows).get(CLAUDE_SETTINGS_PATH)!.content) as Record<string, unknown>;
-    expect(repoDoc).not.toHaveProperty("permissions");
+    // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102): `permissions` is rendered again for
+    // the deny rows; the pin that matters here, no allow row, moves onto the member's keys.
+    expect(Object.keys(repoDoc["permissions"] as object)).toEqual(["deny"]);
     expect(repoDoc).toHaveProperty("hooks");
     expect(ENGINE_PERMISSION_ROWS).toEqual(["Read", "Grep", "Glob"]);
   });
@@ -2224,7 +2386,8 @@ describe("the verdict roles' path-scoped report write", () => {
     // A verdict role's `Write` stays prompt-on-use and reaches the file system
     // only through the guard's scope. TEST CHANGE, justified (2026-10-08, inbox
     // row 324): read `permissions.allow`; no permissions member is rendered now.
-    expect(settingsOf(rows)).not.toHaveProperty("permissions");
+    // TEST CHANGE, justified (u20-hook-emission): the member holds deny rows alone, so no allow row.
+    expect(settingsOf(rows).permissions).not.toHaveProperty("allow");
     expect(byPath(rows).get(CLAUDE_SETTINGS_PATH)!.content).not.toContain(`"${CLAUDE_REPORT_WRITE_TOOL}"`);
   });
 
@@ -2387,7 +2550,12 @@ describe("read-only git on the Claude tools line (sw05-read-only-git-grants)", (
     // Ask mode: each git call prompts unless the user allows it. TEST CHANGE,
     // justified (2026-10-08, inbox row 324): read `permissions.allow`; no
     // permissions member is rendered now, so no tool is pre-approved.
-    expect(settingsOf(rows)).not.toHaveProperty("permissions");
-    expect(byPath(rows).get(CLAUDE_SETTINGS_PATH)!.content).not.toContain('"Bash');
+    // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102): the member holds the person-only
+    // deny rows, each a `Bash(...)` rule, and the shell guard's matcher names `Bash|PowerShell`, so
+    // the raw `"Bash` probe would match a refusal and a matcher; the pin becomes "no allow row, and
+    // no `Bash` or `Bash(...)` rule anywhere but the deny list".
+    const settings = settingsOf(rows);
+    expect(settings.permissions).not.toHaveProperty("allow");
+    expect(JSON.stringify(settings.hooks)).not.toMatch(/"Bash(?:"|\()/);
   });
 });

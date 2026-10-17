@@ -917,9 +917,165 @@ describe("debug — hard gates before any fix", () => {
       file.parsed.body.indexOf("## Hard gates"),
     );
   });
+
+  it("takes the unattended entry at the record's opening and closes it on the user route (REQ-FLOW-089, REQ-FLOW-097, REQ-CTX-012)", async () => {
+    const file = await load("commands/st-debug.md");
+    const body = file.parsed.body;
+    const userRoute = body
+      .slice(body.indexOf("   - **User** —"), body.indexOf("This step is not simulated"))
+      .replace(/\s+/g, " ");
+
+    // The attended user route is unchanged: it still stops and waits for the user's output.
+    expect(userRoute).toMatch(/traffic or timing\. Stop and wait\. The user runs the scenario and returns the output\./);
+    // The unattended condition on the user route names `--attended` beating the variable, as step 7 does.
+    expect(userRoute).toContain(
+      "When run unattended (`--unattended` or `STAMITY_UNATTENDED`, `--attended` beating the variable, as Unattended above reads them)",
+    );
+    // Then nobody can reproduce: the strip, the record closed before the push, the push through the
+    // run verb, the blocked return. Edge case: no failing test written → the push carries the record
+    // and hypotheses, and the missing test is named on `Not done:` rather than silently absent.
+    expect(userRoute).toMatch(/strip the instrumentation \(step 8\)/);
+    // TEST CHANGE, justified (2026-10-16, run 2026-10-15_cloud-runs, the whole-branch corpus fix
+    // round 1; ledger row review/205, signed off 03:12Z): the pins read "rewrite `Status:` to …",
+    // "`stamity run checkpoint --run <run-id> --pr --title <title>`" and "`--paths` adding the
+    // failing test only if one was written, else `Not done: failing test not written`". What
+    // changed about the contract: that checkpoint wrote no `morning.md`, so the draft's body read
+    // "no morning list was posted"; the stop now takes the skill's ending as every other unattended
+    // exit does, the morning list carrying the two `Not done:` rows, `Status:` closed, then
+    // `stamity run end`. Nothing is relaxed: each step and its order is pinned, the record still
+    // closes before the push, and the checkpoint form is asserted absent.
+    expect(userRoute).toContain(
+      "then take the skill's ending as Unattended above does, `morning.md` naming `a person reproduces` under `## Not done:`, and `failing test not written` when none was, and `Status:` rewritten to `closed <date> (blocked: a person reproduces)` before `stamity run end` pushes the record with the ranked hypotheses",
+    );
+    expect(userRoute.indexOf("`morning.md`")).toBeLessThan(userRoute.indexOf("`Status:` rewritten"));
+    expect(userRoute.indexOf("`Status:` rewritten")).toBeLessThan(userRoute.indexOf("`stamity run end`"));
+    expect(userRoute).not.toContain("stamity run checkpoint");
+    expect(userRoute).not.toMatch(/in progress/);
+    expect(userRoute).toMatch(/return `BLOCKED_DEPENDENCY`/);
+    // A person reproducing later opens a record of their own, attended.
+    expect(userRoute).toMatch(/runs `\/st-debug` attended, which opens its own record/);
+    // The unattended branch comes after the attended stop, so an attended reader meets "Stop and wait" first.
+    expect(userRoute.indexOf("Stop and wait")).toBeLessThan(userRoute.indexOf("When run unattended"));
+
+    // The head lines land when the record opens, never at the user route: `run start` first, and
+    // `Branch:` and `Base:` from its output, so they never name the default branch.
+    const head = body.slice(body.indexOf("**Run record.**"), body.indexOf("**Unattended.**"));
+    expect(head).toContain("`Status: in progress`");
+    expect(head).toContain("`Plan: none — debug round`");
+    expect(head).toContain("`Invocation: <this command line, verbatim>`");
+    expect(head).not.toMatch(/`Mode:|`Branch:|`Base:/);
+    const unattended = body
+      .slice(body.indexOf("**Unattended.**"), body.indexOf("1. **Hypotheses.**"))
+      .replace(/\s+/g, " ");
+    // REQ-FLOW-089's reading of the variable, `--attended` beating it.
+    expect(unattended).toContain(
+      "`--unattended` or under `STAMITY_UNATTENDED` set to anything but empty, `false` or `0`, `--attended` beating the variable",
+    );
+    expect(unattended).toContain("Its first mutation is `stamity run start --run <run-id> --json`, before step 1");
+    expect(unattended).toContain(
+      "`Mode: unattended`, and `Branch:` and `Base:` taken from that output's `branch` and `base`, never from the checkout",
+    );
+    expect(unattended).toContain("invokes the `st-unattended` skill by name and follows it");
+    expect(unattended.indexOf("stamity run start")).toBeLessThan(unattended.indexOf("st-unattended"));
+    // review/13 (signed off): every unattended exit pushes its record through the run verbs, not
+    // only the user route — step 7's stop, `--diagnose`, the root-cause gate's `BLOCKED_FAILURE`
+    // and the escape valve each take the skill's ending after the strip.
+    // TEST CHANGE, justified: review/83 (signed off) — an unattended run no longer applies a fix at
+    // step 7, so the exit named is step 7's stop after root cause, not "the close after step 7's fix".
+    // TEST CHANGE, justified (2026-10-16, run 2026-10-15_cloud-runs, the whole-branch corpus fix
+    // round 1; ledger row review/205, signed off 03:12Z): the pins read "Every other unattended
+    // exit …" and "it takes the skill's ending, `Status:` rewritten". What changed about the
+    // contract: the user-route stop joins the list and takes the same ending, and the ending names
+    // its morning list and scan. Nothing is relaxed: the four other exits are pinned as before, and
+    // the user-route stop still closes the record rather than leaving it in progress.
+    expect(unattended).toContain(
+      "Every unattended exit pushes its record through the run verbs — step 3's user-route stop, which closes the record rather than leaving it in progress, step 7's stop after root cause, the `--diagnose` report, `BLOCKED_FAILURE` at gate `root-cause-before-fix`, and the escape valve",
+    );
+    expect(unattended).not.toContain("Every other unattended exit");
+    expect(unattended).not.toContain("the close after step 7's fix");
+    expect(unattended).toContain(
+      "once step 8 has run, it takes the skill's ending, `morning.md` and its scan, `Status:` rewritten to the exit taken",
+    );
+    expect(unattended).toContain("`stamity run end --run <run-id> --title <title> --paths <p...>`");
+    expect(unattended).toMatch(/`--paths` naming the record, which carries the ranked hypotheses, and gate 2's test when one was written/);
+    expect(unattended.indexOf("step 8 has run")).toBeLessThan(unattended.indexOf("`stamity run end"));
+    // The attended head stays three lines; `Mode:` is named nowhere else in the body.
+    expect(unattended).toMatch(/An attended run's head stays the three lines above\./);
+    expect(body.split("`Mode: unattended`").length - 1).toBe(1);
+    expect(body.split("`Mode:`").length - 1).toBe(0);
+    expect(body.indexOf("**Unattended.**")).toBeLessThan(body.indexOf("1. **Hypotheses.**"));
+  });
+
+  it("hands the run's mode to /st-work at step 7 (REQ-FLOW-089)", async () => {
+    const body = (await load("commands/st-debug.md")).parsed.body;
+    const step7 = body
+      .slice(body.indexOf("7. **Fix through the work pipeline.**"), body.indexOf("8. **Instrumentation cleanup.**"))
+      .replace(/\s+/g, " ");
+
+    expect(step7).toContain("`run-mode: attended | unattended`");
+    expect(step7).toMatch(/`--attended` beating the variable/);
+    // REQ-FLOW-089: any value but empty, `false` or `0` declares the run, as the hooks read it.
+    expect(step7).toContain("`STAMITY_UNATTENDED` set to anything but empty, `false` or `0`");
+    expect(step7).not.toContain("STAMITY_UNATTENDED=1");
+    // The step's existing guarantees stay: debug owns no fix path, and the hand-off is not user-gated.
+    expect(step7).toMatch(/Debug owns no fix path of its own/);
+    expect(step7).toMatch(/the one in-run transition that is not user-gated/);
+  });
+
+  it("stops an unattended run after root cause and defers the fix as needing a planned run (review/83)", async () => {
+    const body = (await load("commands/st-debug.md")).parsed.body;
+    const step7 = body
+      .slice(body.indexOf("7. **Fix through the work pipeline.**"), body.indexOf("8. **Instrumentation cleanup.**"))
+      .replace(/\s+/g, " ");
+
+    // Attended: the hand-off is unchanged — the diagnosis and the failing test go to /st-work.
+    expect(step7).toContain(
+      "The diagnosis and the failing test become the plan handed to `/st-work`; its Build and Prove phases apply the change and gate it.",
+    );
+    // Unattended: the run stops after the root-cause gate, as --diagnose does, and sends nothing to
+    // /st-work — the nested run's ready check would refuse a hand-off with no persisted plan.
+    expect(step7).toContain(
+      "Unattended, the run stops after gate `root-cause-before-fix`, as `--diagnose` does, and hands nothing to `/st-work`",
+    );
+    expect(step7).toContain("step 6 does not run, step 8 does");
+    expect(step7).toContain("the fix is deferred as `needs a planned run`, a morning-list row");
+    expect(step7).toContain("An in-session hand-off carries no persisted plan, and the ready check exists to stop exactly that start.");
+    // Edge case: no failing test written — the push carries the record and hypotheses alone.
+    expect(step7).toContain(
+      "The record, the ranked hypotheses and gate 2's test when one was written are pushed through the skill's ending (Unattended above).",
+    );
+    // The unattended stop follows the attended hand-off and its mode line, so an attended reader meets the hand-off first.
+    expect(step7.indexOf("`run-mode: attended | unattended`")).toBeLessThan(step7.indexOf("Unattended, the run stops"));
+
+    // Escalation's own account of step 7 is the attended run's; the unattended run does not reach it.
+    const escalation = body
+      .slice(body.indexOf("## Escalation"), body.indexOf("| Situation | Switch to |"))
+      .replace(/\s+/g, " ");
+    expect(escalation).toContain("it is step 7 — an attended default run hands the fix to `/st-work` on its own");
+  });
 });
 
 describe("quick — the guardrails are the command", () => {
+  it("refuses an unattended run and names the lane that takes it (REQ-FLOW-097)", async () => {
+    const file = await load("commands/st-quick.md");
+    const notQuick = section(file, "What quick is not").replace(/\s+/g, " ");
+
+    expect(notQuick).toContain(
+      "An unattended run does not take /st-quick: run `/st-work --effort light` instead.",
+    );
+    // review/11: quick's own text names what makes a run unattended, REQ-FLOW-089's reading, so the
+    // refusal is reachable under the variable alone; `--attended` beats it.
+    expect(notQuick).toContain(
+      "A run is unattended when invoked with `--unattended`, or under `STAMITY_UNATTENDED` set to any value but empty, `false` or `0`, with `--attended` beating it.",
+    );
+    expect(notQuick).not.toContain("STAMITY_UNATTENDED=1");
+    expect(notQuick.indexOf("A run is unattended when")).toBeLessThan(notQuick.indexOf("An unattended run does not take"));
+    // The refusal sits in the contract paragraph, before any threshold or trivial signal is read.
+    expect(file.parsed.body.indexOf("An unattended run does not take")).toBeLessThan(
+      file.parsed.body.indexOf("## Trivial signals"),
+    );
+  });
+
   it("states the literal thresholds and refuses hard above them", async () => {
     const text = flow(await load("commands/st-quick.md"));
 

@@ -286,18 +286,21 @@ different change. Human QA sign-off still comes from the guided pass.
 
 The checkpoint covers what automation cannot.
 
-**Row states.** The qa skill closes each row in its own row states, under
-its `## Human sign-off` rules.
+**Row states.** The qa skill closes each row in its own row states, under its `## Human sign-off` rules.
 
-**The close walk.** What is left for the person is asked by the question protocol's Close walk,
-in rounds of numbered options: the rows the qa skill leaves for the person (at most three), the spec delta merge and
-the commit. `Default if no response: leave uncommitted`, with those rows not signed and the delta unmerged.
-The leftovers join it as a fourth part, by `/st-board`'s Leftovers at a close: before asking, the
-close runs `stamity ledger inbox --due --paths <the changed paths> --json` and takes every
-`decision-waiting` row first, then the due and touched rows and each ledger row neither fixed nor
-rejected; with no response, its unattended rule applies.
-A part with nothing to decide drops out; with none left, there is no ask. The answers take effect
-together after the last round: fixes and schedules first, the commit or hand-off choice last.
+**The close walk.** What is left for the person is asked by the question protocol's Close walk, in rounds of numbered
+options: the rows the qa skill leaves for the person (at most three), the spec delta merge and the commit, as 1 commit,
+push, draft PR (`stamity run checkpoint --run <run-id> --pr --title <conventional title> --paths <the change's files,
+the merged spec delta and the learning files the close captured under .stamity/learnings/>`, recommended) · 2 commit
+only · 3 leave uncommitted, option 1 after `stamity run start` on the default branch. Option 1 copies each `notDone`
+entry `run checkpoint` returns into the proof block's `Not done:`. `Default if no response: leave uncommitted`, with
+those rows not signed and the delta unmerged. In an unattended run the commit part is not an ask: the `st-unattended`
+skill's ending (`run end`, the draft pull request) answers it.
+The leftovers join it as a fourth part, by `/st-board`'s Leftovers at a close: before asking, the close runs
+`stamity ledger inbox --due --paths <the changed paths> --json` and takes every `decision-waiting` row first, then the
+due and touched rows and each ledger row neither fixed nor rejected; with no response, its unattended rule applies.
+A part with nothing to decide drops out; with none left, there is no ask. The answers take effect together after the
+last round: fixes and schedules first, the commit or hand-off choice last.
 
 ### Proof block
 
@@ -311,8 +314,7 @@ it; machine- and human-readable, it doubles as an audit record:
   and each escalation's effort step or `effort: not settable`
 - QA rows — the proven rows (`auto-proven`, `agent-run`) folded into one line with their pointers; each row not proven
   or over the cap with its reason, each `contradicted` row with its excerpt; per person row `walked` or `accepted-unwalked` with its input hash; then the sign-off, or `not signed`
-- decisions trace — every gate decision, ASK outcome, and deferral with its
-  rationale
+- decisions trace — every gate decision, ASK outcome, and deferral with its rationale
 - artifacts touched — path + owning sub-agent
 - per-action attribution — agent identity, tool used, outcome
 - recommended next step — derived from this run's own state, never a generic
@@ -371,39 +373,40 @@ writing the record and refuses while any row reads `open`. The proof block's nex
 the inbox rows the run appended, and its `Not done:` list is empty or names the scheduled item each
 line became, and each accepted risk.
 
-An inbox row this run fixed — folded in at Frame or settled by the persisted plan — leaves the
-inbox at the close: a row whose `Ref:` names a ledger row is first retired, its state kept, through
-`stamity ledger close --run <its run> --id <row id> --retired "fixed in <run id>"`; then its bullet
-is removed, and the run record carries `- inbox retired: <location> — fixed in <run id>`. An inbox
-row the close's answer decided follows `/st-board`'s Removal rule: a drop retires it `cut <reason>`
-and removes its bullet, a plan, board or handoff place retires it there, and a new date or trigger
-replaces its bullet with one row carrying the same `Ref:`; each removal adds an `- inbox retired:`
-line naming its disposition. A row the query withholds or skips is listed as it prints, the person's
-to read, and never decided: the close offers no disposition for it and applies none, and it stays in
-the inbox until the person edits it or hands over its `Ref:` with an instruction. A row no answer
-reached stays as it is.
+An inbox row this run fixed — folded in at Frame or settled by the persisted plan — leaves the inbox at the close: a row
+whose `Ref:` names a ledger row is first retired, its state kept, through
+`stamity ledger close --run <its run> --id <row id> --retired "fixed in <run id>"`; then its bullet is removed, and the
+run record carries `- inbox retired: <location> — fixed in <run id>`. An inbox row the close's answer decided follows
+`/st-board`'s Removal rule: a drop retires it `cut <reason>` and removes its bullet, a plan, board or handoff place
+retires it there, and a new date or trigger replaces its bullet with one row carrying the same `Ref:`; each removal adds
+an `- inbox retired:` line naming its disposition. A row the query withholds or skips is listed as it prints, the
+person's to read, and never decided: the close offers no disposition for it and applies none, and it stays in the inbox
+until the person edits it or hands over its `Ref:` with an instruction. A row no answer reached stays as it is.
 
-Inbox appends, removals and re-dates at the close run `stamity ledger inbox-write --run <run id>`:
-rows on `--stdin`, a bullet a line; leaving bullets as `--remove <Ref>,…`; a re-date in one call. It
-adds an absent heading, screens each row and prints only line numbers and `Ref:` values; a refusal
-is a finding, never a hand edit. Each `Ref:` is the row's `ref` in `ledger inbox --json` (null if
-withheld, never decided). A decided row with no unique `Ref:` stays, on `Not done:` as
-`decided, not applied (no unique Ref:): line <n>`. A call refused on such a `--remove` alone runs
-again without it. Where no CLI form runs or the copy lacks `inbox-write`, the close appends with the
-file tools and records `inbox: by hand (no CLI)`; else it never opens the inbox with them.
+Inbox appends, removals and re-dates at the close run `stamity ledger inbox-write --run <run id>`: rows on
+`--stdin`, a bullet a line; leaving bullets as `--remove <Ref>,…`; a re-date in one call. It adds an absent
+heading, screens each row and prints only line numbers and `Ref:` values; a refusal is a finding, never a hand
+edit. Each `Ref:` is the row's `ref` in `ledger inbox --json` (null if withheld, never decided). A decided row with
+no unique `Ref:` stays, on `Not done:` as `decided, not applied (no unique Ref:): line <n>`. A call refused on such
+a `--remove` alone runs again without it. Where no CLI form runs or the copy lacks `inbox-write`, the close appends
+with the file tools and records `inbox: by hand (no CLI)`; else it never opens the inbox with them.
 
-Beside `retired`, two more optional fields ride a row appended from a report: `report`, the
-repo-relative path of the report it came from, and `decision_needed`, present only as `true` when
-the fix changes a shared contract or needs a product choice.
+Beside `retired`, two more optional fields ride a row appended from a report: `report`, the repo-relative path of the report
+it came from, and `decision_needed`, present only as `true` when the fix changes a shared contract or needs a product choice.
 
-Both persist under the state directory, in `.stamity/runs/` — one record per run carrying the
-fields above, with that run's ledger rows beside it. That is the baseline `/st-rework` reads and
-the directory `/st-pr-resolve` appends its own record to; a record already written is read-only to
-every later run. Frame opens the record with four lines among its first 15: `Status:`, reading
-`in progress` until the close; `Plan: <path>`, the `/st-plan` artifact or this run's own `plan.md`
-once Phase 2 writes it; `Base: <commit>`, the run's branch point (`git rev-parse HEAD` at Frame,
-never the word `HEAD`); and `Invocation: <this command line, verbatim>`. It also creates the run's
-`reports/` folder beside the record, holding a `.gitignore` whose one line is `*`.
+Both persist under the state directory, in `.stamity/runs/` — one record per run carrying the fields above, with that
+run's ledger rows beside it. That is the baseline `/st-rework` reads and the directory `/st-pr-resolve` appends its own
+record to; a record already written is read-only to every later run. Frame opens the record with six lines among its
+first 15: `Status:`, reading `in progress` until the close; `Mode: attended | unattended`, `unattended` under
+`--unattended` or `STAMITY_UNATTENDED` set to any value but empty, `false` or `0`, `--attended` and a hand-off's
+`run-mode:` beating the variable and `--resume` always attended; `Branch:`, the run's branch; `Plan: <path>`, the
+`/st-plan` artifact or Phase 2's `plan.md`; `Base: <commit>`, the run's branch point (`git rev-parse HEAD` at Frame,
+never the word `HEAD`); and `Invocation: <this command line, verbatim>`. A `reports/` folder beside the record holds a
+`.gitignore` whose one line is `*`. Unattended, Frame first runs `stamity run start --run <id> --json`, taking `Branch:`
+and `Base:` from it. When `Mode:` reads `unattended`, invoke the `st-unattended` skill by name and follow it. On
+`--resume <run-id>` of any run whose record reads `Mode: unattended`, and on `/st-work` run on the branch of such a run whose record
+is closed, invoke `st-unattended` by name and follow its `## The morning walk`, which `STAMITY_UNATTENDED` alone does not stop:
+`--unattended`, `run-mode: unattended` or a chain's next file makes a start on that branch unattended instead, never a `--resume`.
 
 ### Side effects
 
@@ -416,14 +419,13 @@ Run after gates pass; each lands in the run report:
   owns its fields — advisories, licences, the path to a transitive package — so invoke it rather
   than derive them a second time.
 - **Learnings capture.** Resolved failures land in `.stamity/learnings/`.
-- **Pull-request emission.** Where a platform is linked and the change sits on a branch, the close
-  opens that branch's pull request — or updates the one already open — and emits `pr.linked`
-  carrying the link. With no linked platform the step is a no-op, and the run names the branch it
-  left.
-- **Board progress events.** Emit idempotent progress events — phase transition,
-  acceptance-criterion done, PR link, terminal state — with zero platform knowledge; the board
-  layer maps them. When no board source is linked, emission is a silent no-op; events publish only
-  when a linked source exists.
+- **Pull-request emission.** Where a platform is linked and the change sits on a branch, only the
+  close walk's option 1 opens that branch's draft pull request, as its own `run checkpoint --pr`
+  step — or updates the one already open — and the close emits `pr.linked` carrying the link. With
+  no linked platform the step is a no-op, and the run names the branch it left.
+- **Board progress events.** Emit idempotent progress events — phase transition, acceptance-criterion
+  done, PR link, terminal state — with zero platform knowledge; the board layer maps them. When no
+  board source is linked, emission is a silent no-op; events publish only when a linked source exists.
 
 ## Dials
 
@@ -478,11 +480,9 @@ one-class drop for a build role (Dispatch contract) and the escalation fixer's e
 
 ## Testing philosophy
 
-> No green, no done. Real-deal-first — mocks justified inline. Tests ship with
-> the change that motivates them. Verification runs in a dedicated runner
-> sub-agent, never in the orchestrator's context. The QA phase covers what
-> automation can't. Green counts only against tests the implementer did not
-> weaken: gating tests are not edited, deleted, or special-cased in the change
-> that makes them pass — any test modification in that change requires the
-> same inline justification as a mock, and review treats changed tests as part
-> of the diff under scrutiny.
+> No green, no done. Real-deal-first — mocks justified inline. Tests ship with the change that
+> motivates them. Verification runs in a dedicated runner sub-agent, never in the orchestrator's
+> context. The QA phase covers what automation can't. Green counts only against tests the
+> implementer did not weaken: gating tests are not edited, deleted, or special-cased in the change
+> that makes them pass — any test modification in that change requires the same inline justification
+> as a mock, and review treats changed tests as part of the diff under scrutiny.

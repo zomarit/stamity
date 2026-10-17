@@ -418,11 +418,15 @@ describe(".cursor/hooks.json holding an entry Cursor rejects (S19)", () => {
     await init(root, ["cursor"]);
     // Cursor's documented prompt-based hook (cursor.com/docs/hooks, re-read
     // 2026-10-07); the record quotes its prompt elided, so this one is ours.
-    const doc = await readDoc(root, CURSOR_HOOKS);
-    (doc["hooks"] as Record<string, unknown>)["beforeShellExecution"] = [
-      { type: "prompt", prompt: "Is this shell command safe to run in this repository?", timeout: 10 },
-    ];
-    await writeDoc(root, CURSOR_HOOKS, doc);
+    // TEST CHANGE, justified (record 23:40Z and plan u20: Cursor's `beforeShellExecution` now holds
+    // the engine's fail-closed person-only guard row): the owner adds the prompt entry beside the
+    // engine's row, as an owner editing the file would, instead of overwriting the key, which
+    // removed the engine's guard and so drifted for the engine's row, not for the prompt entry.
+    const prompt = { type: "prompt", prompt: "Is this shell command safe to run in this repository?", timeout: 10 };
+    const engineRows = ((await readDoc(root, CURSOR_HOOKS))["hooks"] as Record<string, unknown[]>)["beforeShellExecution"] ?? [];
+    expect(engineRows).toHaveLength(1);
+    await addHookEntry(root, CURSOR_HOOKS, "beforeShellExecution", prompt);
+    expect(((await readDoc(root, CURSOR_HOOKS))["hooks"] as Record<string, unknown[]>)["beforeShellExecution"]).toEqual([...engineRows, prompt]);
 
     const drift = await runDriftGate(root, ENGINE_VERSION);
     expect(drift.changes.filter((entry) => entry.path === CURSOR_HOOKS)).toEqual([]);

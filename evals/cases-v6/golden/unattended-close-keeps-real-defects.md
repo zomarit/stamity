@@ -74,15 +74,19 @@ Governing text — `content/commands/st-work.md`, "QA checkpoint" (the close) an
 block" (the leftovers line):
 
 ```text
-**The close walk.** What is left for the person is asked by the question protocol's Close walk,
-in rounds of numbered options: the rows the qa skill leaves for the person (at most three), the spec delta merge and
-the commit. `Default if no response: leave uncommitted`, with those rows not signed and the delta unmerged.
-The leftovers join it as a fourth part, by `/st-board`'s Leftovers at a close: before asking, the
-close runs `stamity ledger inbox --due --paths <the changed paths> --json` and takes every
-`decision-waiting` row first, then the due and touched rows and each ledger row neither fixed nor
-rejected; with no response, its unattended rule applies.
-A part with nothing to decide drops out; with none left, there is no ask. The answers take effect
-together after the last round: fixes and schedules first, the commit or hand-off choice last.
+**The close walk.** What is left for the person is asked by the question protocol's Close walk, in rounds of numbered
+options: the rows the qa skill leaves for the person (at most three), the spec delta merge and the commit, as 1 commit,
+push, draft PR (`stamity run checkpoint --run <run-id> --pr --title <conventional title> --paths <the change's files,
+the merged spec delta and the learning files the close captured under .stamity/learnings/>`, recommended) · 2 commit
+only · 3 leave uncommitted, option 1 after `stamity run start` on the default branch. Option 1 copies each `notDone`
+entry `run checkpoint` returns into the proof block's `Not done:`. `Default if no response: leave uncommitted`, with
+those rows not signed and the delta unmerged. In an unattended run the commit part is not an ask: the `st-unattended`
+skill's ending (`run end`, the draft pull request) answers it.
+The leftovers join it as a fourth part, by `/st-board`'s Leftovers at a close: before asking, the close runs
+`stamity ledger inbox --due --paths <the changed paths> --json` and takes every `decision-waiting` row first, then the
+due and touched rows and each ledger row neither fixed nor rejected; with no response, its unattended rule applies.
+A part with nothing to decide drops out; with none left, there is no ask. The answers take effect together after the
+last round: fixes and schedules first, the commit or hand-off choice last.
 
 [...]
 
@@ -93,9 +97,12 @@ a line of its own in the record's Proof block, never directly above a table (n =
 Scenario state — the run so far, given to you as fact:
 
 > This is an unattended run with no operator present: `/st-work` run
-> `2026-10-07_refund-cap`, at its close. The gates are green. Every QA row is auto-proven
-> and the plan carries no spec delta, so the close walk held the commit and the leftovers.
-> Its questions were emitted, and the walk's window closed with no answer to any of them.
+> `2026-10-07_refund-cap`, at its close, its record's head reading `Mode: unattended`; the
+> run follows the `st-unattended` skill. The gates are green. Every QA row is auto-proven
+> and the plan carries no spec delta, so the close's parts are the commit and the leftovers.
+> Under that mode the close asks nothing: no question is put, the leftovers take the
+> no-answer rule, and the commit part is the run's ending through `stamity run end`, which
+> this answer does not need to write.
 > The run's ledger, `.stamity/runs/2026-10-07_refund-cap/ledger.jsonl`, holds two rows that
 > are neither fixed nor rejected:
 >   `2026-10-07_refund-cap/review/2` — Critical, `src/billing/refund.ts:88`, state

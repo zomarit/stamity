@@ -8,7 +8,7 @@ title: Skills
 
 A skill is a procedure an agent runs when the work calls for it. Its `description` is the trigger a client matches against the task at hand — it is the only part always in context, so it carries the whole activation claim. Authored in `content/skills/st-<id>/SKILL.md`. Each heading is the name the skill is emitted and invoked under: the frontmatter `id` behind the `st-` prefix the invocable classes carry — the same prefix the path above spells out. The bare id is the `id:` line inside that `SKILL.md`.
 
-8 skills.
+9 skills.
 
 ## `st-browser-evidence`
 
@@ -65,6 +65,14 @@ Builds the human QA walk-through for a change — a risk-ordered table of scenar
 - **Tags:** `review`
 - **Load:** `on-demand`
 - **Obsolete when:** three consecutive release runs close with every QA checkpoint row auto-proven from existing evidence, so the walk added no row a person judged
+
+## `st-unattended`
+
+Binds a run with nobody watching to its floors — the pre-flight and the ready check before Frame, declared defaults in place of every ask, pushes only through the run verbs, and one draft pull request carrying the morning list at every exit. Called by name from a flow whose record reads `Mode: unattended`, or by `/st-work` for its morning walk, and never selected on its own. Triggers only when a touchpoint's run record head reads `Mode: unattended`, or when `/st-work` points a run at the morning walk.
+
+- **Tags:** `orchestration`
+- **Load:** `on-demand`
+- **Obsolete when:** every supported client enforces an unattended mode natively — a pre-flight, a push limited to the run's own branch, no person-only act, and a draft pull request at every exit — so no run follows those floors from text
 
 ## `st-verify`
 

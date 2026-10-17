@@ -12,6 +12,7 @@ import {
   LEGACY_CURSOR_GUARD_PATHS,
   MCP_GUARD_PATH,
   MODEL_PINS_HOOK_PATH,
+  PERSON_ONLY_GUARD_PATH,
   SUBAGENT_GUARD_PATH,
   buildCursorAgent,
   buildHooksJson,
@@ -1216,6 +1217,9 @@ describe("`.cursor/hooks.json`", () => {
 
     // And the claim is bound to the emitted bytes, not to its own phrasing:
     // exactly the two adapter-owned guards carry the flag on a default run.
+    // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102): and the person-only shell guard on
+    // beforeShellExecution, the third, which the row now names.
+    expect(row?.value).toContain("the person-only shell guard on beforeShellExecution");
     const doc = parseHooks(contentAt(await planFor(await seedCorpus()), P.hooksConfig));
     const blocking = Object.values(doc.hooks)
       .flat()
@@ -1223,7 +1227,7 @@ describe("`.cursor/hooks.json`", () => {
       .map((entry) => startedScript(entry.command));
     // TEST CHANGE, justified (unit e5-hook-starter, REQ-FLOW-084): read by the
     // script each guard's walk-up starter runs, no longer by a relative command.
-    expect(blocking).toEqual([SUBAGENT_GUARD_PATH, MCP_GUARD_PATH]);
+    expect(blocking).toEqual([SUBAGENT_GUARD_PATH, MCP_GUARD_PATH, PERSON_ONLY_GUARD_PATH]);
 
     // The single fact both the guard's body and the matrix row are derived
     // from. If this client ever starts naming the calling agent in its
@@ -1293,12 +1297,15 @@ describe("`.cursor/hooks.json`", () => {
     expect(entry).toMatchObject({ matcher: "git push", timeout: 5 });
   });
 
-  it("emits the config, and both guards, with no rows to wire", async () => {
+  // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102): the adapter wires a third guard event,
+  // beforeShellExecution, whatever the planned rows hold, as it wires the other two.
+  it("emits the config, and the three guards, with no rows to wire", async () => {
     // TEST CHANGE, justified (unit e5-hook-starter): the builder takes the pinned CLI context.
     const rows = parseHooks(buildHooksJson([], CLI_PIN));
     expect(Object.keys(rows.hooks)).toEqual([
       CURSOR_GUARD_EVENTS.subagentSpawn,
       CURSOR_GUARD_EVENTS.mcpExecution,
+      CURSOR_GUARD_EVENTS.shellExecution,
     ]);
     // The rename table stays total over the canonical set, so no event can
     // reach emission without a declared name.
@@ -1414,6 +1421,59 @@ describe("`.cursor/hooks.json`", () => {
     expect(missing.stderr).toBe(
       `Stamity hook script missing beside .cursor/hooks.json; run npx -y @zomarit/stamity@${ENGINE_VERSION} sync`,
     );
+  });
+
+  it("runs the person-only shell guard on beforeShellExecution alone, failClosed, through the starter and never the runner (u20)", async () => {
+    const plan = await planFor(await seedCorpus());
+    const doc = parseHooks(contentAt(plan, P.hooksConfig));
+
+    expect(PERSON_ONLY_GUARD_PATH).toBe(".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs");
+    const shell = doc.hooks[CURSOR_GUARD_EVENTS.shellExecution] ?? [];
+    expect(CURSOR_GUARD_EVENTS.shellExecution).toBe("beforeShellExecution");
+    expect(shell).toHaveLength(1);
+    expect(shell[0]).toEqual({ command: shell[0]!.command, failClosed: true });
+    // The starter runs the guard itself: the script it starts is the guard, not the portable runner.
+    expect(startedScript(shell[0]!.command)).toBe(PERSON_ONLY_GUARD_PATH);
+    // One copy: no other entry, on any event, runs the guard.
+    const others = Object.entries(doc.hooks)
+      .filter(([event]) => event !== CURSOR_GUARD_EVENTS.shellExecution)
+      .flatMap(([, entries]) => entries.map((entry) => entry.command));
+    for (const command of others) {
+      expect(startedScript(command)).not.toBe(PERSON_ONLY_GUARD_PATH);
+      expect(childArgv(command)).not.toContain(PERSON_ONLY_GUARD_PATH);
+    }
+    // The core plan places the script this entry starts.
+    expect(contentAt(plan, PERSON_ONLY_GUARD_PATH)).toContain("person-only shell guard");
+  });
+
+  it("refuses a force push and allows a status read through the emitted beforeShellExecution entry, and refuses when the guard is missing (u20)", async () => {
+    const plan = await planFor(await seedCorpus());
+    const temp = getTemp();
+    await temp.seedFiles({
+      "repo/.cursor/hooks.json": contentAt(plan, P.hooksConfig),
+      [`repo/${PERSON_ONLY_GUARD_PATH}`]: contentAt(plan, PERSON_ONLY_GUARD_PATH),
+      "repo/sub/.keep": "",
+    });
+    const command = parseHooks(contentAt(plan, P.hooksConfig)).hooks[CURSOR_GUARD_EVENTS.shellExecution]![0]!.command;
+    const env: NodeJS.ProcessEnv = { ...process.env };
+    delete env["CURSOR_PROJECT_DIR"];
+    delete env["STAMITY_UNATTENDED"];
+    // Cursor's beforeShellExecution payload names the command at the top level.
+    const run = (shellCommand: string) =>
+      spawnSync(command, { cwd: temp.path("repo", "sub"), env, shell: true, input: JSON.stringify({ command: shellCommand, cwd: "." }), encoding: "utf8" });
+
+    const denied = run("git push --force origin feature");
+    expect(denied.status).toBe(0);
+    expect(JSON.parse(denied.stdout)).toMatchObject({ permission: "deny" });
+    const allowed = run("git status");
+    expect(allowed.status).toBe(0);
+    expect(JSON.parse(allowed.stdout)).toEqual({ permission: "allow" });
+
+    await rm(temp.path("repo", ...PERSON_ONLY_GUARD_PATH.split("/")));
+    const missing = run("git status");
+    // failClosed: Cursor counts the failed hook as a refusal of the call.
+    expect(missing.status).toBe(1);
+    expect(missing.stdout).toBe("");
   });
 });
 

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { CLAUDE_SETTINGS_PATH } from "../../src/adapters/claude.ts";
 import { checkCommand, runDriftGate } from "../../src/cli/commands/check.ts";
 import { cleanCommand } from "../../src/cli/commands/clean.ts";
+import { CLAUDE_DENY_ROWS } from "../../src/hooks/personOnly.ts";
 import { applyInit } from "../../src/cli/commands/init/apply.ts";
 import { buildInitDecisions } from "../../src/cli/commands/init/plan.ts";
 import { applySync, planSync, type SyncPlanEntry } from "../../src/cli/commands/sync/engine.ts";
@@ -154,6 +155,15 @@ async function addKeys(root: string, keys: Record<string, unknown>): Promise<voi
   await writeFile(SETTINGS_ABS(root), `${JSON.stringify(doc, null, 2)}\n`, "utf8");
 }
 
+/**
+ * An owner's rows added inside the engine's `permissions` member, so the deny rows the engine
+ * wrote stay where they are; `keys` are added beside, as {@link addKeys} adds them.
+ */
+async function addPermissionRows(root: string, members: Record<string, unknown>, keys: Record<string, unknown> = {}): Promise<void> {
+  const permissions = (await settingsDoc(root))["permissions"] as Record<string, unknown>;
+  await addKeys(root, { permissions: { ...permissions, ...members }, ...keys });
+}
+
 async function seedSettings(root: string, raw: string): Promise<void> {
   await mkdir(join(root, ".claude"), { recursive: true });
   await writeFile(SETTINGS_ABS(root), raw, "utf8");
@@ -221,6 +231,11 @@ async function dropSettingsLedgerRow(root: string): Promise<void> {
 
 /** The allow rows releases v1.1.0 to 1.12.0 rendered; this engine renders none (inbox row 324). */
 const PERMISSIONS = { allow: ["Read", "Grep", "Glob"] };
+/**
+ * The `permissions` member `clean` and the sync sweep leave: every deny row stays, as one equal to
+ * the engine's may be the owner's (review/124, signed off 00:14Z).
+ */
+const DENY_LEFT = { deny: [...CLAUDE_DENY_ROWS] };
 /** An operator's own hooks: no command under the engine's generated directory. */
 const OPERATOR_HOOKS = { Stop: [{ hooks: [{ type: "command", command: "node scripts/notify.mjs" }] }] };
 
@@ -232,7 +247,9 @@ const OPERATOR_HOOKS = { Stop: [{ hooks: [{ type: "command", command: "node scri
 // case moved in from the deleted mode-move group. The subject is unchanged: the client's
 // `enabledPlugins` key survives every verb, byte for byte.
 describe("the client's project-scope install write beside the engine's rendering", () => {
-  it("client key first, then init: the key survives beside hooks, the ledger holds the file's bytes, and check is clean", async () => {
+  // TEST CHANGE, justified (review/124, signed off 00:14Z): retitled and its key list grew `permissions`,
+  // the engine's deny rows (u20); it read "the key survives beside hooks".
+  it("client key first, then init: the key survives beside the deny rows and hooks, the ledger holds the file's bytes, and check is clean", async () => {
     const root = await freshRepo();
     await seedSettings(root, CLIENT_SETTINGS);
 
@@ -241,7 +258,7 @@ describe("the client's project-scope install write beside the engine's rendering
     // Not skipped: the engine owns entries, not the file, so the client's file is no collision.
     expect(settingsRow(report.wrote).action).toBe("updated");
     const doc = await settingsDoc(root);
-    expect(Object.keys(doc)).toEqual(["enabledPlugins", "hooks"]);
+    expect(Object.keys(doc)).toEqual(["enabledPlugins", "permissions", "hooks"]);
     expect(doc["enabledPlugins"]).toEqual({ "stamity@stamity": true });
     // The ledger records the file's bytes, so the sweep and the drift gate hash the right ones.
     const rows = await settingsLedgerRows(root);
@@ -311,7 +328,9 @@ describe("the client's project-scope install write beside the engine's rendering
 describe("repository mode and an operator's own keys", () => {
   // TEST CHANGE, justified (2026-10-08, inbox row 324): the title read "beside
   // permissions and hooks"; the engine renders `hooks` alone in repository mode.
-  it("keys first, then init: model and enabledPlugins survive beside hooks, and check is clean", async () => {
+  // TEST CHANGE, justified (review/124, signed off 00:14Z): retitled; it read "beside hooks", and init
+  // now renders the engine's deny rows in `permissions` beside them (u20).
+  it("keys first, then init: model and enabledPlugins survive beside the deny rows and hooks, and check is clean", async () => {
     const root = await freshRepo();
     await seedSettings(root, `${JSON.stringify({ model: "opus", enabledPlugins: { "x@y": true } }, null, 2)}\n`);
 
@@ -321,7 +340,9 @@ describe("repository mode and an operator's own keys", () => {
     const doc = await settingsDoc(root);
     // TEST CHANGE, justified (2026-10-08, inbox row 324): `permissions` sat between the owner's keys
     // and `hooks`; the engine renders no allow row now.
-    expect(Object.keys(doc)).toEqual(["model", "enabledPlugins", "hooks"]);
+    // TEST CHANGE, justified (review/124, signed off 00:14Z): `permissions` holds the engine's deny rows now (u20).
+    expect(Object.keys(doc)).toEqual(["model", "enabledPlugins", "permissions", "hooks"]);
+    expect(doc["permissions"]).toEqual(DENY_LEFT);
     expect(doc["model"]).toBe("opus");
     expect(await runDriftGate(root, ENGINE_VERSION)).toMatchObject({ clean: true });
   });
@@ -347,7 +368,9 @@ describe("repository mode and an operator's own keys", () => {
   it("an owner's allow row added after setup: check reads no drift and sync keeps it, with no .bak", async () => {
     const root = await freshRepo();
     await repositoryInit(root);
-    await addKeys(root, { permissions: { allow: ["Bash"] }, model: "opus" });
+    // TEST CHANGE, justified (review/124, signed off 00:14Z): the owner's row goes in beside the engine's
+    // deny rows (u20); replacing the member whole would delete them, which sync rightly puts back.
+    await addPermissionRows(root, { allow: ["Bash"] }, { model: "opus" });
     const before = await readSettings(root);
 
     const drift = await runDriftGate(root, ENGINE_VERSION);
@@ -357,7 +380,8 @@ describe("repository mode and an operator's own keys", () => {
 
     expect(settingsRow(live.report.wrote).action).toBe("unchanged");
     expect(await readSettings(root)).toBe(before);
-    expect((await settingsDoc(root))["permissions"]).toEqual({ allow: ["Bash"] });
+    // TEST CHANGE, justified (review/124, signed off 00:14Z): the deny rows stay beside the owner's row.
+    expect((await settingsDoc(root))["permissions"]).toEqual({ ...DENY_LEFT, allow: ["Bash"] });
     expect(existsSync(BAK_ABS(root))).toBe(false);
   });
 
@@ -368,7 +392,8 @@ describe("repository mode and an operator's own keys", () => {
   it("a Read row the entry record does not list stays, even when the file's bytes match the ledgered hash", async () => {
     const root = await freshRepo();
     await repositoryInit(root);
-    await addKeys(root, { permissions: { allow: ["Read"] } });
+    // TEST CHANGE, justified (review/124, signed off 00:14Z): the row goes in beside the engine's deny rows (u20).
+    await addPermissionRows(root, { allow: ["Read"] });
     await recordSettingsAsWritten(root);
 
     const live = await sync(root);
@@ -376,7 +401,8 @@ describe("repository mode and an operator's own keys", () => {
     const row = settingsRow(live.report.wrote);
     expect(row.action).toBe("unchanged");
     expect(row.warning).toBeUndefined();
-    expect((await settingsDoc(root))["permissions"]).toEqual({ allow: ["Read"] });
+    // TEST CHANGE, justified (review/124, signed off 00:14Z): the deny rows stay beside it.
+    expect((await settingsDoc(root))["permissions"]).toEqual({ ...DENY_LEFT, allow: ["Read"] });
     expect(existsSync(BAK_ABS(root))).toBe(false);
   });
 });
@@ -397,11 +423,16 @@ describe("clean and the sync reclaim sweep remove only the engine's keys", () =>
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain(`co-owned-reduced  ${CLAUDE_SETTINGS_PATH}`);
-    expect(await readSettings(root)).toBe(CLIENT_SETTINGS);
+    // TEST CHANGE, justified (review/124, signed off 00:14Z): the engine's deny rows stay
+    // beside the client's record, which keeps its bytes; the file was the client's bytes alone.
+    expect(await readSettings(root)).toBe(
+      `${JSON.stringify({ enabledPlugins: { "stamity@stamity": true }, permissions: DENY_LEFT }, null, 2)}\n`,
+    );
     expect(existsSync(BAK_ABS(root))).toBe(false);
   });
 
-  it("clean on a repository-mode file strips permissions and hooks and keeps the operator's key", async () => {
+  // TEST CHANGE, justified (review/124, signed off 00:14Z): retitled; it read "strips permissions and hooks".
+  it("clean on a repository-mode file strips the hooks and keeps the deny rows and the operator's key", async () => {
     const root = await freshRepo();
     await repositoryInit(root);
     await addKeys(root, { model: "opus" });
@@ -410,18 +441,22 @@ describe("clean and the sync reclaim sweep remove only the engine's keys", () =>
     const result = await clean(root);
 
     expect(result.code).toBe(0);
-    expect(await settingsDoc(root)).toEqual({ model: "opus" });
+    // TEST CHANGE, justified (review/124, signed off 00:14Z): the hooks leave and the
+    // deny rows stay; it left `{ model }` alone.
+    expect(await settingsDoc(root)).toEqual({ model: "opus", permissions: DENY_LEFT });
   });
 
-  it("clean removes a file holding only the engine's keys, as before, with no backup while the bytes are the engine's", async () => {
+  // TEST CHANGE, justified (review/124, signed off 00:14Z): clean removes no deny row,
+  // so a file holding only the engine's keys keeps its deny rows (`co-owned-reduced`); it was deleted.
+  it("clean over a file holding only the engine's keys keeps its deny rows, reads co-owned-reduced, and takes no backup", async () => {
     const root = await freshRepo();
     await repositoryInit(root);
 
     const result = await clean(root);
 
     expect(result.code).toBe(0);
-    expect(result.stdout).toContain(`deleted  ${CLAUDE_SETTINGS_PATH}`);
-    expect(existsSync(SETTINGS_ABS(root))).toBe(false);
+    expect(result.stdout).toContain(`co-owned-reduced  ${CLAUDE_SETTINGS_PATH}`);
+    expect(await settingsDoc(root)).toEqual({ permissions: DENY_LEFT });
     expect(existsSync(BAK_ABS(root))).toBe(false);
   });
 
@@ -439,7 +474,9 @@ describe("clean and the sync reclaim sweep remove only the engine's keys", () =>
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain(`co-owned-reduced  ${CLAUDE_SETTINGS_PATH}`);
-    expect(await settingsDoc(root)).toEqual({ hooks: OPERATOR_HOOKS });
+    // TEST CHANGE, justified (review/124, signed off 00:14Z): the deny rows stay beside
+    // the operator's entry; it left `{ hooks }` alone.
+    expect(await settingsDoc(root)).toEqual({ permissions: DENY_LEFT, hooks: OPERATOR_HOOKS });
     expect(existsSync(BAK_ABS(root))).toBe(false);
   });
 
@@ -474,7 +511,11 @@ describe("clean and the sync reclaim sweep remove only the engine's keys", () =>
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain(`co-owned-reduced  ${CLAUDE_SETTINGS_PATH}`);
-    expect(await readSettings(root)).toBe('{\n  "enabledPlugins": {\n    "other@othermkt": true\n  }\n}\n');
+    // TEST CHANGE, justified (review/124, signed off 00:14Z): the deny rows stay in their
+    // place before the other writer's key; it left that key alone.
+    expect(await readSettings(root)).toBe(
+      `${JSON.stringify({ permissions: DENY_LEFT, enabledPlugins: { "other@othermkt": true } }, null, 2)}\n`,
+    );
     expect(existsSync(BAK_ABS(root))).toBe(false);
   });
 
@@ -489,7 +530,9 @@ describe("clean and the sync reclaim sweep remove only the engine's keys", () =>
 
     const entry = report.reclaimed?.entries.find((row) => row.path === CLAUDE_SETTINGS_PATH);
     expect(entry?.action).toBe("co-owned-reduced");
-    expect(await settingsDoc(root)).toEqual({ model: "opus" });
+    // TEST CHANGE, justified (review/124, signed off 00:14Z): the sweep runs clean's
+    // reducer, so the deny rows stay; it left `{ model }` alone.
+    expect(await settingsDoc(root)).toEqual({ model: "opus", permissions: DENY_LEFT });
   });
 
   // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d6-verb): set up through `plugin
@@ -555,7 +598,9 @@ describe("collisions the lane keeps", () => {
     expect(existsSync(BAK_ABS(root))).toBe(false);
   });
 
-  it("a hand-written permissions key with no ledger row: setup keeps the owner's rows and adds none, and check is clean", async () => {
+  // TEST CHANGE, justified (review/124, signed off 00:14Z): retitled; it read "adds none". init appends the
+  // engine's deny rows the owner's member lacks (u20), and still adds no allow row.
+  it("a hand-written permissions key with no ledger row: setup keeps the owner's rows, adds no allow row, and check is clean", async () => {
     const root = await freshRepo();
     const handWritten = `${JSON.stringify({ permissions: { allow: ["Bash"] }, model: "opus" }, null, 2)}\n`;
     await seedSettings(root, handWritten);
@@ -572,7 +617,8 @@ describe("collisions the lane keeps", () => {
     expect(row.action).toBe("updated");
     const doc = await settingsDoc(root);
     expect(Object.keys(doc)).toEqual(["permissions", "model", "hooks"]);
-    expect(doc["permissions"]).toEqual({ allow: ["Bash"] });
+    // TEST CHANGE, justified (review/124, signed off 00:14Z): the engine's deny rows follow the owner's row.
+    expect(doc["permissions"]).toEqual({ allow: ["Bash"], ...DENY_LEFT });
     expect(doc["model"]).toBe("opus");
     expect(await settingsLedgerRows(root)).toHaveLength(1);
     expect(await runDriftGate(root, ENGINE_VERSION)).toMatchObject({ clean: true, changes: [] });
@@ -607,7 +653,8 @@ describe("collisions the lane keeps", () => {
     // TEST CHANGE, justified (2026-10-14, d6-verb): `init` adds its `hooks` member (`updated`);
     // the three rows stay the owner's, untouched.
     expect(settingsRow(report.wrote).action).toBe("updated");
-    expect((await settingsDoc(root))["permissions"]).toEqual(PERMISSIONS);
+    // TEST CHANGE, justified (review/124, signed off 00:14Z): the engine's deny rows follow the owner's three (u20).
+    expect((await settingsDoc(root))["permissions"]).toEqual({ ...PERMISSIONS, ...DENY_LEFT });
     expect(await settingsLedgerRows(root)).toHaveLength(1);
     expect(await runDriftGate(root, ENGINE_VERSION)).toMatchObject({ clean: true });
   });
@@ -615,7 +662,9 @@ describe("collisions the lane keeps", () => {
   it("without a ledger row an owner's allow row reads as a merge the engine keeps, not a collision", async () => {
     const root = await freshRepo();
     await repositoryInit(root);
-    await addKeys(root, { permissions: { allow: ["Bash"] } });
+    // TEST CHANGE, justified (review/124, signed off 00:14Z): the owner's row goes in beside the engine's
+    // deny rows (u20); replacing the member whole would delete them, a change the merge puts back.
+    await addPermissionRows(root, { allow: ["Bash"] });
     await dropSettingsLedgerRow(root);
 
     const drift = await runDriftGate(root, ENGINE_VERSION);

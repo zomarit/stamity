@@ -53,6 +53,20 @@ head lines are written bare at column 0, with no list marker and no bold; the re
 the record by its `_debug-` segment. The close rewrites `Status:` to the exit taken and the
 residue count; a stop that waits on the user leaves it in progress.
 
+**Unattended.** A run is unattended when invoked with `--unattended` or under `STAMITY_UNATTENDED`
+set to anything but empty, `false` or `0`, `--attended` beating the variable. Its first mutation
+is `stamity run start --run <run-id> --json`, before step 1, and the record opens on it with three
+more head lines, bare like the others: `Mode: unattended`, and `Branch:` and `Base:` taken from
+that output's `branch` and `base`, never from the checkout. The run then invokes the
+`st-unattended` skill by name and follows it, so its pre-flight runs before any sub-agent is
+briefed. Every unattended exit pushes its record through the run verbs — step 3's user-route
+stop, which closes the record rather than leaving it in progress, step 7's stop after root cause,
+the `--diagnose` report, `BLOCKED_FAILURE` at gate `root-cause-before-fix`, and the escape valve:
+once step 8 has run, it takes the skill's ending, `morning.md` and its scan, `Status:` rewritten
+to the exit taken, then `stamity run end --run <run-id> --title <title> --paths <p...>`, `--paths`
+naming the record, which carries the ranked hypotheses, and gate 2's test when one was written.
+An attended run's head stays the three lines above.
+
 1. **Hypotheses.** From the symptom — expected, actual, reproduction path, frequency — write
    numbered hypotheses ranked by prior probability, each paired with the single observation
    that separates it from its neighbours. A hypothesis with no discriminating observation is
@@ -91,6 +105,14 @@ residue count; a stop that waits on the user leaves it in progress.
    - **User** — anything else, or a defect that needs the user's environment, data,
      device, account, network, traffic or timing. Stop and wait. The user runs the
      scenario and returns the output.
+     When run unattended (`--unattended` or `STAMITY_UNATTENDED`, `--attended` beating the
+     variable, as Unattended above reads them), nobody is there to run the scenario: strip the
+     instrumentation (step 8), then take the skill's ending as Unattended above does, `morning.md`
+     naming `a person reproduces` under `## Not done:`, and `failing test not written` when none
+     was, and `Status:` rewritten to `closed <date> (blocked: a person reproduces)` before
+     `stamity run end` pushes the record with the ranked hypotheses — and return
+     `BLOCKED_DEPENDENCY`. The closed record is no live run for the guards; a person who then
+     reproduces runs `/st-debug` attended, which opens its own record.
    This step is not simulated, not inferred from reading the code, and not passed over
    because the cause looks obvious.
 4. **Log analysis.** Order the tagged lines; state which instrumentation points did *not*
@@ -106,6 +128,14 @@ residue count; a stop that waits on the user leaves it in progress.
    user-gated: the command fixes by default, and gating the step that performs the fix would
    leave every run stopped at its own purpose. `--diagnose` is how a run opts out, and step 8
    still runs before the switch.
+   The hand-off carries `run-mode: attended | unattended`: `unattended` when this run was
+   invoked with `--unattended` or under `STAMITY_UNATTENDED` set to anything but empty, `false` or
+   `0`, `--attended` beating the variable.
+   Unattended, the run stops after gate `root-cause-before-fix`, as `--diagnose` does, and hands
+   nothing to `/st-work`: step 6 does not run, step 8 does, and the fix is deferred as
+   `needs a planned run`, a morning-list row. An in-session hand-off carries no persisted plan,
+   and the ready check exists to stop exactly that start. The record, the ranked hypotheses and
+   gate 2's test when one was written are pushed through the skill's ending (Unattended above).
 8. **Instrumentation cleanup.** `implementer` strips what step 2 added; the orchestrator
    verifies the count itself. Zero residue (see Hard gates).
 9. **Regression clauses.** Write what the repository shall continue to do, one clause per
@@ -201,7 +231,7 @@ same design is not debugging — it is the same experiment run again.
 ## Escalation
 
 Never automatic below the first row: the user switches in session, and step 8 runs before any
-switch. The first row is the exception, and it is step 7 — a default run hands the fix to
+switch. The first row is the exception, and it is step 7 — an attended default run hands the fix to
 `/st-work` on its own, because a command that fixes by default cannot gate the step that
 performs the fix. That row is listed here for the `--diagnose` run, which stops before step 7
 and reaches the same transition as a switch the user makes.

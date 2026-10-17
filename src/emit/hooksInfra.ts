@@ -6,8 +6,9 @@
  * repo-committed scripts — not prose a client interprets. This module plans
  * three kinds of row for the selected tools:
  *
- * 1. **Core scripts** — the three bodies `planCoreHookScripts` builds
- *    (session-start context load, pre-tool-use guard, config-tamper notice),
+ * 1. **Core scripts** — the four bodies `planCoreHookScripts` builds
+ *    (session-start context load, pre-tool-use guard, config-tamper notice,
+ *    and the person-only shell guard, asked for on every selected tool),
  *    one copy per selected tool under {@link HOOKS_GENERATED_DIR}. Copies are
  *    per-tool because the guard body bakes the client's honest fail mode from
  *    `CLIENT_HOOK_GUARANTEES`; tools whose guarantees agree produce identical
@@ -61,7 +62,7 @@
 
 import { resolve } from "node:path";
 import { HOOK_SESSION_START_TIMEOUT_MS, type HookInterchange } from "../hooks/model.ts";
-import { MAX_POLICY_FILE_BYTES, planCoreHookScripts } from "../hooks/scripts.ts";
+import { MAX_POLICY_FILE_BYTES, PERSON_ONLY_GUARD_FILE, planCoreHookScripts } from "../hooks/scripts.ts";
 import { readHookDefinitions, type ReadHooksResult } from "../hooks/userHooks.ts";
 import { resolveAgentGrant } from "../roster/agentGrants.ts";
 import { AGENT_POLICY_ROSTER, type GrantableToolCategory } from "../roster/agentPolicies.ts";
@@ -130,6 +131,33 @@ const DEFAULT_USER_HOOKS_DIR = `${STATE_DIR}/hooks`;
 
 /** Every supported adapter now emits native hook configuration. */
 const HOOK_CONFIG_CAPABLE_TOOLS: ReadonlySet<Tool> = new Set<Tool>(TOOLS);
+
+/**
+ * The matcher the person-only shell guard's portable row carries on each
+ * client: that client's shell tools, in the Claude names the interchange
+ * speaks (REQ-FLOW-102, REQ-FLOW-120).
+ *
+ * - Claude Code: `Bash` and `PowerShell`, the two shell tools its hook matchers
+ *   name (code.claude.com/docs/en/tools-reference, read 2026-10-15).
+ * - Copilot: the same two names; its adapter translates them to the runtime
+ *   `bash` and `powershell` through the runner's one table
+ *   (`../hooks/portableRunner.ts` `COPILOT_RUNTIME_TOOL_NAMES`), and the runner
+ *   hands the guard `Bash` or `PowerShell` back.
+ * - Codex: `Bash`, the shell tool name its PreToolUse payload carries (the
+ *   runner's own `["Bash", "apply_patch"]` rewrite check reads the same name).
+ *
+ * Cursor has no row: its guard runs on `beforeShellExecution`, which its
+ * adapter wires directly (`../adapters/cursor.ts`), so a `preToolUse` copy would
+ * run the guard twice and through the runner, where every call reads as
+ * refused. A row's fail-closed posture is each client's own: Claude Code's
+ * adapter appends its launch-failure tail, the runner exits 2 on a Codex
+ * authored pre-tool-use row, and Copilot rejects any non-zero exit.
+ */
+const SHELL_GUARD_MATCHERS: Readonly<Partial<Record<Tool, string>>> = Object.freeze({
+  claude: "Bash|PowerShell",
+  codex: "Bash",
+  copilot: "Bash|PowerShell",
+});
 
 // ── Plan shape ───────────────────────────────────────────────────
 
@@ -428,9 +456,19 @@ export async function planHooksInfra(ctx: HooksPlanContext): Promise<CoreHooksPl
   const rowsByTool = new Map<Tool, HookInterchange[]>();
   for (const tool of tools) {
     const rows: HookInterchange[] = [];
-    for (const script of planCoreHookScripts(policiesPathFor(ctx.hookScriptsRoot), tool, cliCallContextOf(ctx))) {
+    // The person-only guard is asked for on every selected client, with no
+    // switch: it is the floor an unattended run's pushes stand on (build/44).
+    const planned = planCoreHookScripts(policiesPathFor(ctx.hookScriptsRoot), tool, {
+      ...cliCallContextOf(ctx),
+      personOnlyGuard: true,
+    });
+    for (const script of planned) {
       const path = `${HOOKS_GENERATED_DIR}/${tool}/${script.fileName}`;
       scripts.push({ path, content: script.content, tool });
+      const shellGuard = script.fileName === PERSON_ONLY_GUARD_FILE;
+      const matcher = shellGuard ? SHELL_GUARD_MATCHERS[tool] : undefined;
+      // Cursor's copy is placed but carries no portable row (see the table).
+      if (shellGuard && matcher === undefined) continue;
       rows.push({
         event: script.event,
         command: [
@@ -439,7 +477,8 @@ export async function planHooksInfra(ctx: HooksPlanContext): Promise<CoreHooksPl
             ? path
             : `${ctx.hookScriptsRoot}/${script.fileName}`,
         ],
-        // Session start declares its budget; the guard declares none, on
+        ...(matcher === undefined ? {} : { matcher }),
+        // Session start declares its budget; the two guards declare none, on
         // purpose — see HOOK_SESSION_START_TIMEOUT_MS for why each way.
         ...(script.event === "session_start" ? { timeoutMs: HOOK_SESSION_START_TIMEOUT_MS } : {}),
       });

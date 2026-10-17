@@ -18,11 +18,14 @@ import { describe, expect, it } from "vitest";
 import { CLIENT_EXTENSION_EVENTS, CLIENT_HOOK_GUARANTEES } from "../../src/hooks/model.ts";
 import {
   buildReviewGateScript,
+  buildUnattendedAskGate,
   HOOK_SCRIPT_BUDGETS,
   type HookScriptLayout,
+  PERSON_ONLY_GUARD_FILE,
   planCoreHookScripts,
   REVIEW_GATE_FILE,
   REVIEW_GATE_STATE_FILE,
+  UNATTENDED_ASK_GATE_FILE,
 } from "../../src/hooks/scripts.ts";
 import { HARD_MAX_REVIEW_ITERATIONS } from "../../src/roster/reviewCaps.ts";
 import { AGENT_TOOL_POLICIES_FILE } from "../../src/tools/allowlist.ts";
@@ -58,6 +61,13 @@ const REVIEW_GATE_TOOLS: ReadonlySet<Tool> = new Set(
   CLIENT_EXTENSION_EVENTS.filter((row) => row.event !== "ConfigChange").map((row) => row.tool),
 );
 
+/**
+ * The clients whose adapter places the unattended ask gate: Claude Code alone,
+ * the one client with a question tool a PreToolUse hook can refuse
+ * (REQ-FLOW-090). Like the review gate, `planCoreHookScripts` does not return it.
+ */
+const ASK_GATE_TOOLS: ReadonlySet<Tool> = new Set<Tool>(["claude"]);
+
 /** Lines as the budget counts them: `\n` only, so CRLF and LF count alike. */
 function lineCount(content: string): number {
   return content.split("\n").length - 1;
@@ -69,12 +79,16 @@ function lineCount(content: string): number {
  * (the cap is the only number in the body that varies with configuration).
  */
 function renderAll(tool: Tool, layout: HookScriptLayout): Rendered[] {
-  const core = planCoreHookScripts(POLICY_PATH_BY_LAYOUT[layout], tool, CLI_PIN).map((script) => ({
+  // The person-only shell guard is rendered on request (emission asks for it), so it is asked for here.
+  const core = planCoreHookScripts(POLICY_PATH_BY_LAYOUT[layout], tool, { ...CLI_PIN, personOnlyGuard: true }).map((script) => ({
     tool,
     fileName: script.fileName,
     content: script.content,
   }));
-  if (!REVIEW_GATE_TOOLS.has(tool)) return core;
+  const askGate: Rendered[] = ASK_GATE_TOOLS.has(tool)
+    ? [{ tool, fileName: UNATTENDED_ASK_GATE_FILE, content: buildUnattendedAskGate({ layout }) }]
+    : [];
+  if (!REVIEW_GATE_TOOLS.has(tool)) return [...core, ...askGate];
   const failMode =
     CLIENT_HOOK_GUARANTEES.find((guarantee) => guarantee.tool === tool)?.failMode ?? "fail-closed";
   return [
@@ -89,6 +103,7 @@ function renderAll(tool: Tool, layout: HookScriptLayout): Rendered[] {
         layout,
       }),
     },
+    ...askGate,
   ];
 }
 
@@ -136,8 +151,10 @@ describe("hook script budgets (REQ-CTX-016)", () => {
     // is a ceiling on nothing, and a new script with no row would be unbounded.
     const rendered = new Set(renders.map((script) => script.fileName));
     expect([...rendered].toSorted()).toEqual(Object.keys(HOOK_SCRIPT_BUDGETS).toSorted());
-    // Four clients × three core scripts, plus the review gate where it is wired.
-    expect(renders).toHaveLength(TOOLS.length * 3 + REVIEW_GATE_TOOLS.size);
+    // Four clients × four core scripts (the person-only guard among them), plus the review gate where it is wired.
+    // Moved from × 3 by u14-shell-guard: the guard is a core script with a budget row of its own.
+    // Moved by u14b-ask-gate: the ask gate is a fifth script with a budget row, rendered where its adapter places it.
+    expect(renders).toHaveLength(TOOLS.length * 4 + REVIEW_GATE_TOOLS.size + ASK_GATE_TOOLS.size);
   });
 
   it.each(renders.map((script) => [`${script.tool}/${script.fileName}`, script] as const))(
@@ -184,6 +201,14 @@ describe("hook script budgets (REQ-CTX-016)", () => {
     }
   });
 
+  it("holds the person-only guard to the row re-sized from its last measurement (review/219)", () => {
+    // The literal pins the re-sized row, so its next move is a visible edit here too, with its reason in the row.
+    expect(HOOK_SCRIPT_BUDGETS[PERSON_ONLY_GUARD_FILE]).toEqual({ bytes: 124_928, lines: 3_210 });
+    const guards = renders.filter((script) => script.fileName === PERSON_ONLY_GUARD_FILE);
+    expect(guards).toHaveLength(TOOLS.length);
+    for (const script of guards) expect(budgetViolation(script), script.tool).toBeUndefined();
+  });
+
   it("counts CRLF and LF line endings alike", () => {
     const [first] = renders;
     if (first === undefined) throw new Error("no script was rendered");
@@ -196,5 +221,11 @@ describe("hook script budgets (REQ-CTX-016)", () => {
     const gated = renders.filter((script) => script.fileName === REVIEW_GATE_FILE).map((script) => script.tool);
     expect(gated).toEqual(TOOLS.filter((tool) => REVIEW_GATE_TOOLS.has(tool)));
     expect(gated.length).toBeGreaterThan(0);
+  });
+
+  it("renders the unattended ask gate on Claude Code only, within its ceilings", () => {
+    const gated = renders.filter((script) => script.fileName === UNATTENDED_ASK_GATE_FILE);
+    expect(gated.map((script) => script.tool)).toEqual(["claude"]);
+    for (const script of gated) expect(budgetViolation(script)).toBeUndefined();
   });
 });

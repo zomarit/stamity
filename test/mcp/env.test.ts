@@ -407,8 +407,15 @@ const REVIEW_GATE_TAIL = [
   ".stamity/review-gate.json.tmp-*",
 ];
 
+/** The shell guard's hooks canary (REQ-FLOW-101), appended after the review gate's entries. */
+const CANARY_ENTRY = ".stamity/preflight-canary.json";
+
+/** The run-ended marker (REQUIRED_GITIGNORE_ENTRIES since pr/17), appended after the canary. */
+const MARKER_ENTRY = ".stamity/run-ended.json";
+
 /** Every entry an empty `.gitignore` receives, in order. */
-const REQUIRED_TAIL = [".env.mcp", ...REVIEW_GATE_TAIL];
+// TEST CHANGE, justified (pr/17): the engine now ignores the run-ended marker, so the tail gains it last.
+const REQUIRED_TAIL = [".env.mcp", ...REVIEW_GATE_TAIL, CANARY_ENTRY, MARKER_ENTRY];
 
 describe("ensureGitignoreEntry", () => {
   it("creates the file, then stays idempotent across repeat calls", async () => {
@@ -433,7 +440,8 @@ describe("ensureGitignoreEntry", () => {
     const content = await readFile(dir.path(".gitignore"), "utf8");
     // TEST CHANGE, justified (REQ-FLOW-016): the required set grew from the
     // credential file alone to it plus the review gate's three state entries, so
-    // the appended tail is four CRLF lines, not one. The behaviour pinned here —
+    // the appended tail is four CRLF lines, not one (five since the hooks canary,
+    // REQ-FLOW-101; six since the engine now ignores the run-ended marker, pr/17). The behaviour pinned here —
     // existing bytes kept, CRLF answered with CRLF — is unchanged.
     expect(content).toBe(`${existing}${REQUIRED_TAIL.join("\r\n")}\r\n`);
     expect(content).not.toMatch(/[^\r]\n/);
@@ -445,7 +453,8 @@ describe("ensureGitignoreEntry", () => {
 
     await ensureGitignoreEntry(dir.dir);
 
-    // TEST CHANGE, justified (REQ-FLOW-016): four required entries now, not one;
+    // TEST CHANGE, justified (REQ-FLOW-016, REQ-FLOW-101, pr/17): six required entries now, not one, since the
+    // engine now ignores the run-ended marker;
     // the new line still goes after the last byte, never glued onto `dist/`.
     expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(`dist/\n${REQUIRED_TAIL.join("\n")}\n`);
   });
@@ -457,9 +466,12 @@ describe("ensureGitignoreEntry", () => {
     await ensureGitignoreEntry(dir.dir);
 
     // TEST CHANGE, justified (REQ-FLOW-016): `.env.*` dominates the credential
-    // file only, so the three review-gate entries it does not cover are appended;
-    // what this case pins is that `.env.mcp` itself is NOT added beside it.
-    expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(`.env.*\n${REVIEW_GATE_TAIL.join("\n")}\n`);
+    // file only, so the three review-gate entries and the hooks canary it does not
+    // cover are appended (and the run-ended marker, which the engine now ignores, pr/17); what this case pins is
+    // that `.env.mcp` itself is NOT added beside it.
+    expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(
+      `.env.*\n${[...REVIEW_GATE_TAIL, CANARY_ENTRY, MARKER_ENTRY].join("\n")}\n`,
+    );
   });
 
   it("leaves an explicit negation alone rather than overriding the decision", async () => {
@@ -469,14 +481,15 @@ describe("ensureGitignoreEntry", () => {
     await ensureGitignoreEntry(dir.dir);
 
     // TEST CHANGE, justified (REQ-FLOW-016): the negation keeps `.env.mcp` out
-    // as before; the review gate's three entries, which it says nothing about, are
-    // now appended after it.
+    // as before; the review gate's three entries and the hooks canary, which it
+    // says nothing about, are now appended after it (with the run-ended marker, which the engine now ignores, pr/17).
     expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(
-      `.env.*\n!.env.mcp\n${REVIEW_GATE_TAIL.join("\n")}\n`,
+      `.env.*\n!.env.mcp\n${[...REVIEW_GATE_TAIL, CANARY_ENTRY, MARKER_ENTRY].join("\n")}\n`,
     );
   });
 
-  it("adds each of the four required entries exactly once across three runs", async () => {
+  // TEST CHANGE, justified (pr/17): six entries, not five, since the engine now ignores the run-ended marker.
+  it("adds each of the six required entries exactly once across three runs", async () => {
     const dir = repo();
 
     await ensureGitignoreEntry(dir.dir);
@@ -492,11 +505,13 @@ describe("ensureGitignoreEntry", () => {
     expect(REQUIRED_GITIGNORE_ENTRIES).toEqual(REQUIRED_TAIL);
   });
 
-  it("adds nothing when the three review-gate files are already ignored in root-anchored form", async () => {
+  it("adds nothing when the three review-gate files, the canary and the marker are already ignored in root-anchored form", async () => {
     // This repository's own spelling (`.gitignore`), beside a `.env*` rule.
+    // TEST CHANGE, justified (pr/17): the engine now ignores the run-ended marker, so the seeded file names it too.
     const dir = repo();
     const existing =
-      ".env*\n/.stamity/review-gate.json\n/.stamity/review-gate.json.lock\n/.stamity/review-gate.json.tmp-*\n";
+      ".env*\n/.stamity/review-gate.json\n/.stamity/review-gate.json.lock\n/.stamity/review-gate.json.tmp-*\n" +
+      "/.stamity/preflight-canary.json\n/.stamity/run-ended.json\n";
     await dir.seedFiles({ ".gitignore": existing });
 
     await ensureGitignoreEntry(dir.dir);
@@ -514,9 +529,7 @@ describe("ensureGitignoreEntry", () => {
     "/.stamity/*",
     [".stamity", "**"].join("/"),
     "/.stamity/**",
-    ".stamity/review-gate.json*",
-    "/.stamity/review-gate.json*",
-  ])("adds no review-gate line when %s already ignores it", async (rule) => {
+  ])("adds no review-gate, canary or marker line when %s already ignores them", async (rule) => {
     const dir = repo();
     const existing = `.env.mcp\n${rule}\n`;
     await dir.seedFiles({ ".gitignore": existing });
@@ -526,6 +539,22 @@ describe("ensureGitignoreEntry", () => {
     expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(existing);
   });
 
+  // The prefix rule covers the review gate's files and not the canary or the run-ended marker, which git would then
+  // let a commit carry.
+  // TEST CHANGE, justified (pr/17): the engine now ignores the run-ended marker, which the prefix does not cover.
+  it.each([".stamity/review-gate.json*", "/.stamity/review-gate.json*"])(
+    "adds no review-gate line when %s already ignores it, and still adds the canary and the marker",
+    async (rule) => {
+      const dir = repo();
+      const existing = `.env.mcp\n${rule}\n`;
+      await dir.seedFiles({ ".gitignore": existing });
+
+      await ensureGitignoreEntry(dir.dir);
+
+      expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(`${existing}${CANARY_ENTRY}\n${MARKER_ENTRY}\n`);
+    },
+  );
+
   it("leaves a negated review-gate file alone and adds only the entries it does not name", async () => {
     const dir = repo();
     await dir.seedFiles({ ".gitignore": ".env.mcp\n!.stamity/review-gate.json\n" });
@@ -533,7 +562,9 @@ describe("ensureGitignoreEntry", () => {
     await ensureGitignoreEntry(dir.dir);
 
     expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(
-      ".env.mcp\n!.stamity/review-gate.json\n.stamity/review-gate.json.lock\n.stamity/review-gate.json.tmp-*\n",
+      // TEST CHANGE, justified (pr/17): the engine now ignores the run-ended marker, appended last.
+      ".env.mcp\n!.stamity/review-gate.json\n.stamity/review-gate.json.lock\n.stamity/review-gate.json.tmp-*\n" +
+        ".stamity/preflight-canary.json\n.stamity/run-ended.json\n",
     );
   });
 
@@ -546,7 +577,9 @@ describe("ensureGitignoreEntry", () => {
     await ensureGitignoreEntry(dir.dir);
 
     expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(
-      ".env.mcp\n!/.stamity/review-gate.json\n.stamity/review-gate.json.lock\n.stamity/review-gate.json.tmp-*\n",
+      // TEST CHANGE, justified (pr/17): the engine now ignores the run-ended marker, appended last.
+      ".env.mcp\n!/.stamity/review-gate.json\n.stamity/review-gate.json.lock\n.stamity/review-gate.json.tmp-*\n" +
+        ".stamity/preflight-canary.json\n.stamity/run-ended.json\n",
     );
   });
 

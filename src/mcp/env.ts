@@ -179,6 +179,31 @@ const TOOL_ENV_NOTES: Record<Tool, string> = {
 };
 
 /**
+ * The hooks canary (REQ-FLOW-101): the person-only shell guard writes
+ * `{ "at": <ISO time> }` here when the command it guards is the pre-flight, and
+ * the pre-flight refuses unless the file is fresh. Machine-local: a committed or
+ * copied canary would vouch for hooks that never ran in that checkout.
+ */
+export const PREFLIGHT_CANARY_FILE = `${STATE_DIR}/preflight-canary.json`;
+
+/** The canary's oldest accepted age: the guard writes it as the pre-flight command starts, so one process spans it. */
+export const CANARY_MAX_AGE_MS = 120_000;
+
+/** The run-ended marker's window (pr/41): 15 minutes, since the final round is person-paced, several question calls. */
+export const RUN_ENDED_MAX_AGE_MS = 900_000;
+
+/**
+ * The run-ended marker (REQ-FLOW-090, pr/17, pr/36, pr/37): `stamity run end
+ * --final-round` writes `{ "run": "<run-id>", "at": "<ISO time>" }` here at the
+ * run's final exit, a plain `run end` and `stamity run start` delete it; the
+ * unattended ask gate lets Claude Code's final question round through only on
+ * the branch of the closed run this names, and only within
+ * {@link RUN_ENDED_MAX_AGE_MS} after `at`. Machine-local: a fresh clone or another checkout
+ * never holds it, so a closed record carried there exempts nothing.
+ */
+export const RUN_ENDED_MARKER_FILE = `${STATE_DIR}/run-ended.json`;
+
+/**
  * Paths this engine writes that must never reach a commit: the credential
  * file, and the review gate's runtime state — its counter, the lock directory
  * beside it, and the temp files its publish renames over the counter. The gate
@@ -195,15 +220,17 @@ export const REQUIRED_GITIGNORE_ENTRIES: readonly string[] = [
   REVIEW_GATE_STATE_FILE,
   REVIEW_GATE_STATE_FILE + REVIEW_GATE_LOCK_SUFFIX,
   `${REVIEW_GATE_STATE_FILE}${REVIEW_GATE_TEMP_INFIX}*`,
+  PREFLIGHT_CANARY_FILE,
+  RUN_ENDED_MARKER_FILE,
 ];
 
 /**
- * Rules that ignore every review-gate entry at once: the state directory in
- * each spelling git reads as covering its contents, and the state file's own
- * name as a prefix pattern. Rooted and unrooted forms both count, because the
- * `.gitignore` this lane edits is the one at the repository root.
+ * Rules that ignore every file in the state directory at once: the directory
+ * in each spelling git reads as covering its contents. Rooted and unrooted
+ * forms both count, because the `.gitignore` this lane edits is the one at the
+ * repository root.
  */
-const REVIEW_GATE_DOMINATORS: readonly string[] = [
+const STATE_DIR_DOMINATORS: readonly string[] = [
   STATE_DIR,
   `**/${STATE_DIR}/`,
   `${STATE_DIR}/`,
@@ -212,6 +239,14 @@ const REVIEW_GATE_DOMINATORS: readonly string[] = [
   `/${STATE_DIR}/*`,
   `${STATE_DIR}/**`,
   `/${STATE_DIR}/**`,
+];
+
+/**
+ * Rules that ignore every review-gate entry at once: the state directory's
+ * spellings, and the state file's own name as a prefix pattern.
+ */
+const REVIEW_GATE_DOMINATORS: readonly string[] = [
+  ...STATE_DIR_DOMINATORS,
   `${REVIEW_GATE_STATE_FILE}*`,
   `/${REVIEW_GATE_STATE_FILE}*`,
 ];
@@ -219,16 +254,23 @@ const REVIEW_GATE_DOMINATORS: readonly string[] = [
 /**
  * Existing patterns that already ignore an entry. Appending our literal beside
  * one of these would add a redundant rule to a file the operator maintains.
- * Each review-gate entry is also dominated by its own root-anchored twin
- * (`/.stamity/review-gate.json` — the spelling a hand-written rule usually
- * takes).
+ * Each review-gate entry, the canary and the marker is also dominated by its own
+ * root-anchored twin (`/.stamity/review-gate.json` — the spelling a
+ * hand-written rule usually takes). The canary and the run-ended marker take the
+ * state directory's spellings only: a `review-gate.json*` prefix covers neither,
+ * and a file git does not ignore could be committed.
  */
 const DOMINATING_PATTERNS: Record<string, readonly string[]> = {
   [ENV_MCP_FILE]: [".env.*", ".env*", "*.mcp"],
   ...Object.fromEntries(
     REQUIRED_GITIGNORE_ENTRIES.filter((entry) => entry !== ENV_MCP_FILE).map((entry) => [
       entry,
-      [`/${entry}`, ...REVIEW_GATE_DOMINATORS],
+      [
+        `/${entry}`,
+        ...(entry === PREFLIGHT_CANARY_FILE || entry === RUN_ENDED_MARKER_FILE
+          ? STATE_DIR_DOMINATORS
+          : REVIEW_GATE_DOMINATORS),
+      ],
     ]),
   ),
 };
