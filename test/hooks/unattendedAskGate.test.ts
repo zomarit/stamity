@@ -22,8 +22,7 @@ import {
   UNATTENDED_ASK_GATE_RECORD_SOURCE,
   UNATTENDED_ASK_GATE_VARIABLE_SOURCE,
 } from "../../src/hooks/scripts.ts";
-import { RUN_ENDED_MARKER_FILE } from "../../src/mcp/env.ts";
-import { CANARY_MAX_AGE_MS } from "../../src/runs/preflight.ts";
+import { CANARY_MAX_AGE_MS, RUN_ENDED_MARKER_FILE } from "../../src/mcp/env.ts";
 import { TOOLS } from "../../src/types/core.ts";
 import { useTempDir } from "../support/tempDir.ts";
 

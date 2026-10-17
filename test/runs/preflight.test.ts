@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { CANARY_MAX_AGE_MS } from "../../src/mcp/env.ts";
 import {
-  CANARY_MAX_AGE_MS,
   directPushVerdict,
   REQUIRED_FLOORS,
   runPreflight,

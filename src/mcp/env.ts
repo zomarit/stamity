@@ -186,6 +186,9 @@ const TOOL_ENV_NOTES: Record<Tool, string> = {
  */
 export const PREFLIGHT_CANARY_FILE = `${STATE_DIR}/preflight-canary.json`;
 
+/** The canary's oldest accepted age, and the window the ask gate honours the run-ended marker for. */
+export const CANARY_MAX_AGE_MS = 120_000;
+
 /**
  * The run-ended marker (REQ-FLOW-090, pr/17, pr/36, pr/37): `stamity run end
  * --final-round` writes `{ "run": "<run-id>", "at": "<ISO time>" }` here at the

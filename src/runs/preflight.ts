@@ -31,6 +31,7 @@
  */
 
 import semver from "semver";
+import { CANARY_MAX_AGE_MS } from "../mcp/env.ts";
 import { scanValueForSecrets } from "../mcp/secretScan.ts";
 import { CLAUDE_PROXY_ORIGIN, hostOf, resolveRepo } from "./pullRequest.ts";
 
@@ -123,9 +124,6 @@ export interface PreflightDeps {
   /** Whether the review gate holds a counter, and the in-progress record's `usage: review` line count. */
   reviewState: { counter: boolean; usageReviewLines: number };
 }
-
-/** The canary's oldest accepted age. */
-export const CANARY_MAX_AGE_MS = 120_000;
 
 /** The floors an unattended run loads by name; each needs at least one copy, and every listed copy must exist. */
 export const REQUIRED_FLOORS = ["question-protocol", "injection-screening"] as const;

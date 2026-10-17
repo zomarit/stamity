@@ -30,9 +30,8 @@ import {
 import type { Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
 import { CONTENT_PREFIX, GENERATED_SCRIPT_LINT_DIRECTIVE, STATE_DIR } from "../types/markers.ts";
-import { PREFLIGHT_CANARY_FILE, RUN_ENDED_MARKER_FILE } from "../mcp/env.ts";
+import { CANARY_MAX_AGE_MS, PREFLIGHT_CANARY_FILE, RUN_ENDED_MARKER_FILE } from "../mcp/env.ts";
 import { buildResumeCardSource, RESUME_CARD_HOST_NAMES } from "../runs/cardSource.ts";
-import { CANARY_MAX_AGE_MS } from "../runs/preflight.ts";
 import {
   GIT_METADATA_MAX_BYTES,
   IN_PROGRESS_PATTERN,
