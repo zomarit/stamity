@@ -109,6 +109,7 @@ import * as portableRunner from "../hooks/portableRunner.ts";
 import * as userHooks from "../hooks/userHooks.ts";
 import * as hookScripts from "../hooks/scripts.ts";
 import * as hookPersonOnly from "../hooks/personOnly.ts";
+import * as sessionDetect from "../session/detect.ts";
 import * as toolCategories from "../tools/categories.ts";
 import * as allowlist from "../tools/allowlist.ts";
 import * as translator from "../tools/translator.ts";
@@ -289,6 +290,14 @@ export interface EngineRegistry {
     /** The person-only acts and the unattended push rule the shell guard enforces (REQ-FLOW-102, REQ-FLOW-120). */
     readonly personOnly: typeof hookPersonOnly;
   };
+  /**
+   * The one session detector (REQ-FLOW-085): which cloud or CI session an
+   * environment's markers name. The pre-flight and the hidden `gate` verb call
+   * it, and the hook scripts embed its rule as source text.
+   */
+  readonly session: {
+    readonly detect: typeof sessionDetect;
+  };
   readonly tools: {
     readonly categories: typeof toolCategories;
     readonly allowlist: typeof allowlist;
@@ -466,6 +475,7 @@ export function createEngine(): EngineRegistry {
       planCheck: runsPlanCheck,
     },
     hooks: { model: hooksModel, portableRunner, userHooks, scripts: hookScripts, personOnly: hookPersonOnly },
+    session: { detect: sessionDetect },
     tools: { categories: toolCategories, allowlist, translator },
     detect: {
       repoAnalyzer,
