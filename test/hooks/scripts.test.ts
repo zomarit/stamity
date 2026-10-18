@@ -991,7 +991,10 @@ describe("the session start names a cloud or CI session (REQ-FLOW-085)", () => {
   // TEST CHANGE (e10-cloud-docs-matrix fix round 1, review/120): the read-only-turn line goes too,
   // by the same rule. Cursor's page states it of cloud agents, not of self-hosted workers, which
   // are the only Cursor sessions this prints in. The session is still named, with no lines.
-  const CURSOR_WORKER = ["Session: a self-hosted Cursor worker."];
+  // TEST CHANGE, justified (v6-cursor-cloud, REQ-FLOW-085): Cursor sets CURSOR_AGENT_SOCKET on its managed
+  // VMs as well as on self-hosted workers (cursor.com/docs/cloud-agent/identity, read 2026-10-18), so the line
+  // names a Cursor agent machine, managed or self-hosted; the managed reading is the context-once script's.
+  const CURSOR_WORKER = ["Session: a Cursor agent machine, managed or self-hosted."];
   const CI_RUN = ["Session: a CI run.", "- No person answers; declared defaults apply."];
 
   /** The banner of an empty repository, then whatever the session adds. */
@@ -1057,7 +1060,8 @@ describe("the session start names a cloud or CI session (REQ-FLOW-085)", () => {
         BANNER,
         "",
         ...CLAUDE_CLOUD,
-        "Also detected: a Copilot cloud agent session, a self-hosted Cursor worker, a CI run.",
+        // TEST CHANGE, justified (v6-cursor-cloud, REQ-FLOW-085): the Cursor session's renamed name, as above.
+        "Also detected: a Copilot cloud agent session, a Cursor agent machine, managed or self-hosted, a CI run.",
         "",
       ].join("\n"),
     );
@@ -1074,7 +1078,8 @@ describe("the session start names a cloud or CI session (REQ-FLOW-085)", () => {
     expect(printed).not.toContain("push to main");
     expect(printed).not.toContain("cursor.sock");
     expect(printed).not.toContain("a trusted local session");
-    expect(printed).toBe([BANNER, "", ...COPILOT_CLOUD, "Also detected: a self-hosted Cursor worker.", ""].join("\n"));
+    // TEST CHANGE, justified (v6-cursor-cloud, REQ-FLOW-085): the Cursor session's renamed name, as above.
+    expect(printed).toBe([BANNER, "", ...COPILOT_CLOUD, "Also detected: a Cursor agent machine, managed or self-hosted.", ""].join("\n"));
   });
 
   it("puts the session lines after the learnings index, and keeps the banner unchanged", async () => {

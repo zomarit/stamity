@@ -39,7 +39,8 @@ const LEG_PROFILES = PROFILES as readonly Profile[];
 /** What the session start names for each profile's marker. */
 const SESSION_NAME: Readonly<Record<string, string>> = {
   claude: "a Claude Code cloud session",
-  cursor: "a self-hosted Cursor worker",
+  // TEST CHANGE, justified (v6-cursor-cloud, REQ-FLOW-085): the session start now names any Cursor agent machine.
+  cursor: "a Cursor agent machine, managed or self-hosted",
   copilot: "a Copilot cloud agent session",
   offline: "a Claude Code cloud session",
 };

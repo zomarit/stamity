@@ -18,10 +18,12 @@ import { describe, expect, it } from "vitest";
 import { CLIENT_EXTENSION_EVENTS, CLIENT_HOOK_GUARANTEES } from "../../src/hooks/model.ts";
 import {
   buildCloudReadinessScript,
+  buildContextOnceScript,
   buildCursorContinueScript,
   buildReviewGateScript,
   CLOUD_READINESS_FILE,
   buildUnattendedAskGate,
+  CONTEXT_ONCE_FILE,
   CURSOR_CONTINUE_FILE,
   HOOK_SCRIPT_BUDGETS,
   type HookScriptLayout,
@@ -79,6 +81,12 @@ const ASK_GATE_TOOLS: ReadonlySet<Tool> = new Set<Tool>(["claude"]);
 const CONTINUE_TOOLS: ReadonlySet<Tool> = new Set<Tool>(["cursor"]);
 
 /**
+ * The clients whose adapter places the context-once hook: Cursor alone, on its `postToolUse`
+ * (REQ-FLOW-115). Like the continue hook, `planCoreHookScripts` does not return it.
+ */
+const CONTEXT_ONCE_TOOLS: ReadonlySet<Tool> = new Set<Tool>(["cursor"]);
+
+/**
  * The clients whose adapter places the cloud readiness hook: Claude Code alone, on its
  * `SessionStart` (REQ-FLOW-110). Like the ask gate, `planCoreHookScripts` does not return it.
  */
@@ -107,7 +115,10 @@ function renderAll(tool: Tool, layout: HookScriptLayout): Rendered[] {
   const continueHook: Rendered[] = CONTINUE_TOOLS.has(tool)
     ? [{ tool, fileName: CURSOR_CONTINUE_FILE, content: buildCursorContinueScript({ layout }) }]
     : [];
-  if (!REVIEW_GATE_TOOLS.has(tool)) return [...core, ...askGate, ...continueHook];
+  const contextOnce: Rendered[] = CONTEXT_ONCE_TOOLS.has(tool)
+    ? [{ tool, fileName: CONTEXT_ONCE_FILE, content: buildContextOnceScript({ layout }) }]
+    : [];
+  if (!REVIEW_GATE_TOOLS.has(tool)) return [...core, ...askGate, ...continueHook, ...contextOnce];
   const failMode =
     CLIENT_HOOK_GUARANTEES.find((guarantee) => guarantee.tool === tool)?.failMode ?? "fail-closed";
   return [
@@ -128,6 +139,7 @@ function renderAll(tool: Tool, layout: HookScriptLayout): Rendered[] {
       : []),
     ...askGate,
     ...continueHook,
+    ...contextOnce,
   ];
 }
 
@@ -182,8 +194,15 @@ describe("hook script budgets (REQ-CTX-016)", () => {
     // budget row, rendered where its adapter places it, so the count gains its one client.
     // TEST CHANGE, justified (v5-claude-readiness, REQ-FLOW-110, REQ-CTX-016): Claude Code's cloud readiness hook is
     // a seventh script with a budget row, rendered where its adapter places it, so the count gains its one client.
+    // TEST CHANGE, justified (v6-cursor-cloud, REQ-FLOW-115, REQ-CTX-016): Cursor's context-once hook is an
+    // eighth script with a budget row, rendered where its adapter places it, so the count gains its one client.
     expect(renders).toHaveLength(
-      TOOLS.length * 4 + REVIEW_GATE_TOOLS.size + READINESS_TOOLS.size + ASK_GATE_TOOLS.size + CONTINUE_TOOLS.size,
+      TOOLS.length * 4 +
+        REVIEW_GATE_TOOLS.size +
+        READINESS_TOOLS.size +
+        ASK_GATE_TOOLS.size +
+        CONTINUE_TOOLS.size +
+        CONTEXT_ONCE_TOOLS.size,
     );
   });
 
@@ -272,6 +291,12 @@ describe("hook script budgets (REQ-CTX-016)", () => {
   it("renders the cloud readiness hook on Claude Code only, within its ceilings (REQ-FLOW-110)", () => {
     const placed = renders.filter((script) => script.fileName === CLOUD_READINESS_FILE);
     expect(placed.map((script) => script.tool)).toEqual(["claude"]);
+    for (const script of placed) expect(budgetViolation(script)).toBeUndefined();
+  });
+
+  it("renders the context-once hook on Cursor only, within its ceilings (REQ-FLOW-115)", () => {
+    const placed = renders.filter((script) => script.fileName === CONTEXT_ONCE_FILE);
+    expect(placed.map((script) => script.tool)).toEqual(["cursor"]);
     for (const script of placed) expect(budgetViolation(script)).toBeUndefined();
   });
 

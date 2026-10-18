@@ -30,7 +30,7 @@ import {
 import type { Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
 import { CONTENT_PREFIX, GENERATED_SCRIPT_LINT_DIRECTIVE, HOOKS_ACTIVE_ENV, STATE_DIR } from "../types/markers.ts";
-import { PREFLIGHT_CANARY_FILE, RUN_ENDED_MARKER_FILE, RUN_ENDED_MAX_AGE_MS } from "../mcp/env.ts";
+import { CONTEXT_ONCE_DIR, PREFLIGHT_CANARY_FILE, RUN_ENDED_MARKER_FILE, RUN_ENDED_MAX_AGE_MS } from "../mcp/env.ts";
 import { buildCardBranchSource, buildResumeCardSource, RESUME_CARD_HOST_NAMES } from "../runs/cardSource.ts";
 import {
   DEBUG_RUN_SEGMENT,
@@ -124,6 +124,13 @@ import { GITHUB_MCP_ROWS, personOnlyVerdict, unattendedPushVerdict } from "./per
 /** Session-start context load. Portable carrier: `session_start`. */
 const SESSION_START_FILE = "stamity-session-start.mjs";
 
+/**
+ * Cursor's context-once hook (REQ-FLOW-115). NON-portable carrier: Cursor's
+ * `postToolUse`, one client only, placed and wired by the Cursor adapter, which
+ * names it ({@link buildContextOnceScript}).
+ */
+export const CONTEXT_ONCE_FILE = "stamity-context-once.mjs";
+
 /** Tool-call authorization gate. Portable carrier: `pre_tool_use`. */
 const GUARD_FILE = "stamity-pre-tool-use-guard.mjs";
 
@@ -183,7 +190,7 @@ export const PERSON_ONLY_GUARD_FILE = "stamity-person-only-guard.mjs";
  * The guard row is the plan's fixed ceiling; the session start's was one until
  * 2026-10-18, when it moved once by the rule below (its row says why). The
  * review gate, the session start, the tamper notice, the ask gate, the Cursor
- * continue hook, the cloud readiness hook and the person-only guard are their measured size times 1.25, bytes rounded up to a
+ * continue hook, Cursor's context-once hook, the cloud readiness hook and the person-only guard are their measured size times 1.25, bytes rounded up to a
  * multiple of 1,024 and lines to a multiple of 10.
  */
 export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: number; readonly lines: number }>> = {
@@ -207,6 +214,11 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // v2-review-gate-rebuild's cloud line and banner sentence: 50,760 / 1,116; the
   // ceiling holds.
   [SESSION_START_FILE]: { bytes: 63_488, lines: 1_400 },
+  // Measured 2026-10-18 on plan 021 file 2's v6-cursor-cloud lane (base 9c11e4ab): 31,172 bytes / 621 lines
+  // (cursor, generated layout; a plugin root renders 30,453 / 600). It carries the session start's index and screen
+  // without the resume card, and runs on every postToolUse. × 1.25 = 38,965 / 776.25, rounded up as the review
+  // gate's is to 39,936 / 780.
+  [CONTEXT_ONCE_FILE]: { bytes: 39_936, lines: 780 },
   // Measured 2026-09-24 and again 2026-09-26 at 8c08660e: 40,740 bytes / 891
   // lines (claude, generated layout, the default cap of 4; the cap of 10 adds
   // 2 bytes; a plugin root renders 40,021 / 870). × 1.25 = 50,925 / 1,113.75,
@@ -789,8 +801,10 @@ function cloudSessionLines(tool: Tool): string[] {
  * The cloud and CI sessions the session start names (REQ-FLOW-085), in priority
  * order, each with what it does not enforce there. A marker counts when it is set
  * to a value other than "", "false" and "0" (and to `equals` where given); its
- * value is never printed, so a marker cannot carry text into the session. Cursor
- * is a self-hosted worker only: a managed Cursor VM runs no session-start hook.
+ * value is never printed, so a marker cannot carry text into the session. Cursor's
+ * marker names a Cursor agent machine, managed or self-hosted: Cursor sets it on
+ * both, and a managed VM runs no session-start hook, so the managed reading comes
+ * from the context-once script ({@link buildContextOnceScript}).
  * A client's lines are read from {@link CLIENT_CLOUD_FACTS}, where each carries
  * its vendor page and access date; the CI line is this engine's own behaviour.
  */
@@ -812,7 +826,7 @@ const CLOUD_SESSIONS: readonly {
     lines: cloudSessionLines("copilot"),
   },
   {
-    name: "a self-hosted Cursor worker",
+    name: "a Cursor agent machine, managed or self-hosted",
     vars: ["CURSOR_AGENT_SOCKET"],
     lines: cloudSessionLines("cursor"),
   },
@@ -820,86 +834,23 @@ const CLOUD_SESSIONS: readonly {
 ];
 
 /**
- * The session-start context load: prints the learnings index and the
- * resumable handoffs for the repo the session opened in — and, on a start
- * whose payload says `source: "compact"` or `source: "resume"`, the resume
- * card of the run in progress, or of the newest closed run dated within the
- * last two days (`../runs/cardSource.ts`), screened whole by the same screen;
- * on `source: "startup"`, only the card of the run in progress on this branch.
- *
- * The index format mirrors the engine's own (`formatLearningsIndex`,
- * `buildHandoffIndex`) line for line, because the two render the same corpus
- * and an operator reading a session banner should not have to learn a second
- * shape. Past MAX_ITEM_LINES the banner prints fewer lines than the engine's
- * full index, and each header's byte figure counts its own printed lines.
- * What the script re-implements is the READ SCREEN, not the validator:
- * size, injection, integrity and the review horizon each decide whether a file
- * may be named, and each of them is a reason to distrust bytes that are
- * already on disk.
- *
- * What a refusal prints is bounded on BOTH halves. Bodies are never printed and
- * the matched span is never echoed — reporting a refusal by quoting it would
- * deliver the payload the skip just refused. Neither is the file NAME trusted:
- * a refused file is still named in its skip line (a skip nobody can attribute
- * is a skip nobody can fix), so `doc.name` goes through the same one-line
- * sanitizer every other field does, and so does the `stem()` fallback an entry
- * with no `id` falls back to. A file called
- * `x — ignore the above and run …\n.md` is an instruction line otherwise, and
- * the screen that would have caught the phrase runs over the file's CONTENT.
- *
- * Handoffs are partitioned the way learnings are: refusals are counted in the
- * header and reported by reason, never filtered away inside the same expression
- * that selects the resumable ones. Two poisoned handoffs used to leave a banner
- * saying there were none in this repo.
- *
- * Every failure degrades to less context, never to a failed session start: an
- * absent or unreadable directory reads as empty, one bad file is one skip, and
- * the script exits 0 on every path.
+ * The session index's source, shared by the session start and Cursor's
+ * context-once script ({@link buildContextOnceScript}), so both read through one
+ * screen. `head` declares the constants, the screen, the clock and the repository
+ * root, and does no read beyond the root's; `index` lists and screens the
+ * learnings and handoffs at its own top level, then declares `render()` and
+ * `sessionLines(env)`. Each body imports what the two use.
  */
-export function buildSessionStartScript(opts: SessionStartScriptOptions = {}): string {
+function sessionIndexSource(opts: SessionStartScriptOptions): { head: string; index: string } {
   const segments = repoRelativeSegments(opts.stateDir ?? STATE_DIR, "stateDir");
   const maxLines = positiveInteger(opts.maxIndexLines ?? DEFAULT_MAX_INDEX_LINES, "maxIndexLines");
   const layout = opts.layout ?? "generated";
-  const extra = repoRootImports(layout);
   const screen = SESSION_START_SCREEN.map(
     (entry) =>
       `  { id: ${json(entry.id)}, re: new RegExp(${json(entry.pattern.source)}, ${json(entry.pattern.flags)}) },`,
   ).join("\n");
-
-  return `${header(
-    [
-      "stamity — session-start context load.",
-      "",
-      "Prints the learnings index and the resumable handoffs for this repo by",
-      "reading the state directory directly: no agent is spawned and nothing is",
-      "written. Every file clears a size, injection, integrity and review screen",
-      "before it is LISTED; a file that fails one is named in a skip line with its",
-      "reason, and every field printed — the file name included — is flattened to",
-      "one bounded line first. Bodies and matched spans are never printed.",
-      "",
-      "After a compaction or a resume (a start whose stdin payload says source",
-      '"compact" or "resume") it appends the resume card of the run in progress, or',
-      'of a closed run dated within the last two days; on a fresh start ("startup")',
-      "only the card of the run in progress on the branch HEAD names. Counts and",
-      "pointers, never finding text.",
-      "In a cloud or CI session it names the session and what is not enforced there.",
-    ],
-    [
-      "Reads outside repo state: the wall clock, which decides whether a learning's",
-      "review horizon has passed, whether a handoff has expired and whether a closed",
-      "run is recent enough for the card, and the source field of the stdin payload,",
-      "which decides whether the resume card is appended and which one. Same repo,",
-      "two different days or two different starts, two different banners. The",
-      "cloud and CI markers in the environment, by presence only.",
-    ],
-  )}
-
-import { createHash } from "node:crypto";
-${namedImport(["readFileSync", "readdirSync", "statSync", ...RESUME_CARD_HOST_NAMES.fs], "node:fs")}
-${namedImport(["join", "resolve", "sep", ...extra.path, ...RESUME_CARD_HOST_NAMES.path], "node:path")}
-import { isatty } from "node:tty";
-${extra.url}
-const STATE_SEGMENTS = ${json(segments)};
+  return {
+    head: `const STATE_SEGMENTS = ${json(segments)};
 const MAX_ITEM_LINES = ${maxLines};
 const MAX_LEARNING_BYTES = ${MAX_LEARNING_FILE_BYTES};
 const MAX_HANDOFF_BYTES = ${MAX_HANDOFF_FILE_BYTES};
@@ -921,9 +872,8 @@ const NOW = Date.now();
 
 ${resolveRepoRoot(layout)}
 
-const STATE_ROOT = join(repoRoot(), ...STATE_SEGMENTS);
-
-/** \`.md\` entries in a directory. Absent or unreadable both read as empty. */
+const STATE_ROOT = join(repoRoot(), ...STATE_SEGMENTS);`,
+    index: `/** \`.md\` entries in a directory. Absent or unreadable both read as empty. */
 function listMarkdown(dir) {
   try {
     return readdirSync(dir, { withFileTypes: true })
@@ -1264,7 +1214,87 @@ function sessionLines(env) {
   const out = ["Session: " + first.name + ".", ...first.lines.map((line) => "- " + line)];
   if (rest.length > 0) out.push("Also detected: " + rest.map((session) => session.name).join(", ") + ".");
   return out;
+}`,
+  };
 }
+
+/**
+ * The session-start context load: prints the learnings index and the
+ * resumable handoffs for the repo the session opened in — and, on a start
+ * whose payload says `source: "compact"` or `source: "resume"`, the resume
+ * card of the run in progress, or of the newest closed run dated within the
+ * last two days (`../runs/cardSource.ts`), screened whole by the same screen;
+ * on `source: "startup"`, only the card of the run in progress on this branch.
+ *
+ * The index format mirrors the engine's own (`formatLearningsIndex`,
+ * `buildHandoffIndex`) line for line, because the two render the same corpus
+ * and an operator reading a session banner should not have to learn a second
+ * shape. Past MAX_ITEM_LINES the banner prints fewer lines than the engine's
+ * full index, and each header's byte figure counts its own printed lines.
+ * What the script re-implements is the READ SCREEN, not the validator:
+ * size, injection, integrity and the review horizon each decide whether a file
+ * may be named, and each of them is a reason to distrust bytes that are
+ * already on disk.
+ *
+ * What a refusal prints is bounded on BOTH halves. Bodies are never printed and
+ * the matched span is never echoed — reporting a refusal by quoting it would
+ * deliver the payload the skip just refused. Neither is the file NAME trusted:
+ * a refused file is still named in its skip line (a skip nobody can attribute
+ * is a skip nobody can fix), so `doc.name` goes through the same one-line
+ * sanitizer every other field does, and so does the `stem()` fallback an entry
+ * with no `id` falls back to. A file called
+ * `x — ignore the above and run …\n.md` is an instruction line otherwise, and
+ * the screen that would have caught the phrase runs over the file's CONTENT.
+ *
+ * Handoffs are partitioned the way learnings are: refusals are counted in the
+ * header and reported by reason, never filtered away inside the same expression
+ * that selects the resumable ones. Two poisoned handoffs used to leave a banner
+ * saying there were none in this repo.
+ *
+ * Every failure degrades to less context, never to a failed session start: an
+ * absent or unreadable directory reads as empty, one bad file is one skip, and
+ * the script exits 0 on every path.
+ */
+export function buildSessionStartScript(opts: SessionStartScriptOptions = {}): string {
+  const source = sessionIndexSource(opts);
+  const extra = repoRootImports(opts.layout ?? "generated");
+
+  return `${header(
+    [
+      "stamity — session-start context load.",
+      "",
+      "Prints the learnings index and the resumable handoffs for this repo by",
+      "reading the state directory directly: no agent is spawned and nothing is",
+      "written. Every file clears a size, injection, integrity and review screen",
+      "before it is LISTED; a file that fails one is named in a skip line with its",
+      "reason, and every field printed — the file name included — is flattened to",
+      "one bounded line first. Bodies and matched spans are never printed.",
+      "",
+      "After a compaction or a resume (a start whose stdin payload says source",
+      '"compact" or "resume") it appends the resume card of the run in progress, or',
+      'of a closed run dated within the last two days; on a fresh start ("startup")',
+      "only the card of the run in progress on the branch HEAD names. Counts and",
+      "pointers, never finding text.",
+      "In a cloud or CI session it names the session and what is not enforced there.",
+    ],
+    [
+      "Reads outside repo state: the wall clock, which decides whether a learning's",
+      "review horizon has passed, whether a handoff has expired and whether a closed",
+      "run is recent enough for the card, and the source field of the stdin payload,",
+      "which decides whether the resume card is appended and which one. Same repo,",
+      "two different days or two different starts, two different banners. The",
+      "cloud and CI markers in the environment, by presence only.",
+    ],
+  )}
+
+import { createHash } from "node:crypto";
+${namedImport(["readFileSync", "readdirSync", "statSync", ...RESUME_CARD_HOST_NAMES.fs], "node:fs")}
+${namedImport(["join", "resolve", "sep", ...extra.path, ...RESUME_CARD_HOST_NAMES.path], "node:path")}
+import { isatty } from "node:tty";
+${extra.url}
+${source.head}
+
+${source.index}
 
 ${READ_STDIN}
 
@@ -1295,6 +1325,195 @@ if (SOURCE === "compact" || SOURCE === "resume" || SOURCE === "startup") {
   if (card !== null) lines.push("", ...card);
 }
 process.stdout.write(lines.join("\\n") + "\\n");
+`;
+}
+
+/**
+ * The folder under the state directory where the context-once script keeps one
+ * empty marker per conversation, named by the SHA-256 of its `conversation_id`
+ * (REQ-FLOW-115): `CONTEXT_ONCE_DIR`'s last segment, so the script and the ignore
+ * rule name one folder. Machine-local: setup ignores it (`../mcp/env.ts`) and a
+ * worktree never receives it (`../worktree/policy.ts`).
+ */
+export const CONTEXT_ONCE_SEGMENT: string = CONTEXT_ONCE_DIR.slice(STATE_DIR.length + 1);
+
+/** The line the context-once script adds where Cursor's `agent/runtime` metadata reads `managed`. */
+export const CONTEXT_ONCE_MANAGED_LINE = "Session: a Cursor cloud agent.";
+
+/**
+ * The metadata key the context-once script reads, as Cursor's metadata page
+ * (cursor.com/docs/cloud-agent/metadata, read 2026-10-18) names the request:
+ * `GET /v1/meta-data[/<path>]`, HTTP over the Unix socket at
+ * `CURSOR_AGENT_SOCKET`, the value as plain text, a missing key a 404.
+ * `agent/runtime` reads `managed` on a Cursor-managed VM; a self-hosted worker
+ * does not serve the metadata API.
+ */
+export const CONTEXT_ONCE_RUNTIME_PATH = "/v1/meta-data/agent/runtime";
+
+/** Options for {@link buildContextOnceScript}. */
+export interface ContextOnceScriptOptions extends SessionStartScriptOptions {
+  /** Milliseconds one socket read may take before it counts as failed. Defaults to 1,000. */
+  socketTimeoutMs?: number;
+}
+
+/**
+ * Cursor's context-once script (REQ-FLOW-115): on the first `postToolUse` of a
+ * conversation it prints the session index, the session start's own lines read
+ * through the same screen ({@link sessionIndexSource}), as Cursor's
+ * `additional_context`. A Cursor cloud agent runs no `sessionStart` hook, and
+ * `postToolUse` is the one event there that injects context (cursor.com/docs/hooks,
+ * read 2026-10-15), so without it a cloud agent starts with no index at all.
+ *
+ * Like {@link buildCursorContinueScript} it is NOT core: the Cursor adapter
+ * places and wires it, through the walk-up starter and never the portable runner
+ * (whose output the script writes in Cursor's own spelling), and never
+ * `failClosed`. It answers nothing unless `CURSOR_AGENT_SOCKET` is set (not "",
+ * "false", "0"), so a local session's tool calls stay write-free; a self-hosted
+ * worker, whose `sessionStart` also runs, sees the index twice, which is accepted.
+ *
+ * Once per conversation: the marker is `<state>/context-once/<sha256 of the id>`,
+ * so a `conversation_id` is never a path. A payload with no string id prints
+ * nothing and writes nothing. A marker already there prints nothing; one this
+ * call cannot write (the folder unwritable, or a link) still prints, so a
+ * read-only checkout loses the "once", never the index. Before printing it reads
+ * the `agent/runtime` metadata once over the socket ({@link CONTEXT_ONCE_RUNTIME_PATH}),
+ * retrying once after a failed connection, a timeout or a status the page says
+ * to retry; `managed` adds {@link CONTEXT_ONCE_MANAGED_LINE} after the session
+ * lines, and anything else, a missing key included, adds nothing. Every path
+ * exits 0.
+ */
+export function buildContextOnceScript(opts: ContextOnceScriptOptions = {}): string {
+  const source = sessionIndexSource(opts);
+  const layout = opts.layout ?? "generated";
+  const extra = repoRootImports(layout);
+  const timeoutMs = positiveInteger(opts.socketTimeoutMs ?? 1_000, "socketTimeoutMs");
+  return `${header(
+    [
+      "stamity — context-once hook (Cursor).",
+      "",
+      "On a Cursor agent machine (CURSOR_AGENT_SOCKET set), the first postToolUse",
+      "of a conversation prints the session start's index, read through the same",
+      "screen, as additional_context, and writes an empty marker named by the hash",
+      "of the conversation id so later calls print nothing. Where the agent/runtime",
+      "metadata reads managed it adds that the session is a Cursor cloud agent.",
+      "Anything else prints nothing. Never blocks; every path exits 0.",
+    ],
+    [
+      "Reads outside repo state: the payload's conversation_id on stdin, the",
+      "CURSOR_AGENT_SOCKET and STAMITY_REPO_ROOT variables and the other cloud",
+      "markers by presence, the wall clock as the session start reads it, and one",
+      "agent/runtime read over the local agent socket (one retry), never the network.",
+      "Writes one empty marker under the state directory's context-once folder.",
+    ],
+  )}
+
+import { createHash } from "node:crypto";
+${namedImport(["lstatSync", "mkdirSync", "readFileSync", "readdirSync", "statSync", "writeFileSync"], "node:fs")}
+import { get } from "node:http";
+${namedImport(["dirname", "join", "resolve", "sep", ...extra.path], "node:path")}
+import { isatty } from "node:tty";
+${extra.url}
+${source.head}
+
+const MARKER_SEGMENT = ${json(CONTEXT_ONCE_SEGMENT)};
+const RUNTIME_PATH = ${json(CONTEXT_ONCE_RUNTIME_PATH)};
+const MANAGED_LINE = ${json(CONTEXT_ONCE_MANAGED_LINE)};
+const SOCKET_TIMEOUT_MS = ${timeoutMs};
+const RETRY_DELAY_MS = 250;
+// The statuses the metadata page says to retry; a 403 or a 404 is final.
+const RETRY_STATUSES = [429, 500, 502, 503, 504];
+
+${READ_STDIN}
+
+${READ_FIELD}
+
+/** The session start's index: its learnings and handoffs, screened, then the session lines. */
+function sessionIndex() {
+${source.index}
+
+const lines = render();
+const session = sessionLines(process.env);
+if (session.length > 0) lines.push("", ...session);
+return lines;
+}
+
+/** One GET of the runtime key over the socket: its status and at most 256 characters of body, or null when unread. */
+function runtimeOnce(socket) {
+  return new Promise((done) => {
+    const request = get({ socketPath: socket, path: RUNTIME_PATH, timeout: SOCKET_TIMEOUT_MS }, (response) => {
+      let body = "";
+      response.setEncoding("utf8");
+      response.on("data", (chunk) => {
+        if (body.length < 256) body += chunk;
+      });
+      response.on("end", () => done({ status: response.statusCode ?? 0, body: body.slice(0, 256) }));
+      response.on("error", () => done(null));
+    });
+    request.on("timeout", () => request.destroy(new Error("timeout")));
+    request.on("error", () => done(null));
+  });
+}
+
+/** Whether the agent/runtime metadata reads managed: one read, and one retry after a failed one. */
+async function managedRuntime(socket) {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    if (attempt > 0) await new Promise((wait) => setTimeout(wait, RETRY_DELAY_MS));
+    const answer = await runtimeOnce(socket);
+    if (answer !== null && !RETRY_STATUSES.includes(answer.status)) {
+      return answer.status === 200 && answer.body.trim() === "managed";
+    }
+  }
+  return false;
+}
+
+/** "claimed" when this call wrote the marker, "seen" when another wrote it first, "unwritable" otherwise. */
+function claim(path) {
+  try {
+    mkdirSync(dirname(path), { recursive: true });
+    // A folder planted as a link would carry the write elsewhere: the marker goes into a real folder only.
+    if (!lstatSync(dirname(path)).isDirectory()) return "unwritable";
+  } catch {
+    // A file where the folder goes answers EEXIST here too, and it is no marker.
+    return "unwritable";
+  }
+  try {
+    writeFileSync(path, "", { flag: "wx" });
+    return "claimed";
+  } catch (error) {
+    return error && error.code === "EEXIST" ? "seen" : "unwritable";
+  }
+}
+
+/** The context this call adds, or null when it adds none. */
+async function contextOnce() {
+  // A Cursor agent machine only: a local session's tool calls stay write-free.
+  const socket = process.env.CURSOR_AGENT_SOCKET ?? "";
+  if (["", "false", "0"].includes(socket)) return null;
+  // A person at a terminal sends no payload, so a TTY is never read.
+  const id = isatty(0) ? "" : field(readPayload(), ["conversation_id"]);
+  if (id === "") return null;
+  // Hashed, never joined as given: an id of "../x" names a file inside the folder like any other.
+  const marker = join(STATE_ROOT, MARKER_SEGMENT, createHash("sha256").update(id, "utf8").digest("hex"));
+  try {
+    lstatSync(marker);
+    return null;
+  } catch {
+    // No marker yet: this is the conversation's first call.
+  }
+  const lines = sessionIndex();
+  if (await managedRuntime(socket)) lines.push(MANAGED_LINE);
+  if (claim(marker) === "seen") return null;
+  return lines.join("\\n");
+}
+
+let context = null;
+try {
+  context = await contextOnce();
+} catch {
+  // Never a gate: a fault adds no context, and the tool call goes on.
+  context = null;
+}
+if (context !== null) process.stdout.write(JSON.stringify({ additional_context: context }) + "\\n");
 `;
 }
 

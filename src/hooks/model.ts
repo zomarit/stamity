@@ -289,10 +289,11 @@ export const CLIENT_CLOUD_FACTS: readonly ClientCloudFact[] = [
     tool: "cursor",
     subject: "Session marker",
     fact:
-      "`CURSOR_AGENT_SOCKET` marks a self-hosted worker's session, as the research behind " +
-      "`docs/plans/020-cli-native-02.md` found on 2026-10-14; the self-hosted page names no such variable.",
-    status: "unverified",
-    citation: { url: "https://cursor.com/docs/cloud-agent/self-hosted", accessDate: "2026-10-15" },
+      "`CURSOR_AGENT_SOCKET` is the agent's identity socket: always set on a Cursor-managed VM, and set " +
+      "per claimed agent by a self-hosted worker started with `--identity-socket`, so it marks a Cursor " +
+      "agent machine, managed or self-hosted.",
+    status: "documented",
+    citation: { url: "https://cursor.com/docs/cloud-agent/identity", accessDate: "2026-10-18" },
   },
   {
     tool: "cursor",

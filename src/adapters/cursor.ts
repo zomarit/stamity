@@ -37,7 +37,9 @@ import {
 } from "../emit/substitution.ts";
 import { CANONICAL_HOOK_EVENTS, type CanonicalHookEvent, type HookInterchange } from "../hooks/model.ts";
 import {
+  buildContextOnceScript,
   buildCursorContinueScript,
+  CONTEXT_ONCE_FILE,
   CURSOR_CONTINUE_FILE,
   IDENTITY_FREE_PRE_TOOL_USE_PAYLOADS,
   PERSON_ONLY_GUARD_FILE,
@@ -309,6 +311,7 @@ const ARTIFACT_IDS = {
   modelMap: "cursor-model-map",
   modelPins: "cursor-model-pins",
   continueRun: "cursor-continue",
+  contextOnce: "cursor-context-once",
   mcp: "mcp-config",
 } as const;
 
@@ -335,6 +338,14 @@ export const CURSOR_CONTINUE_HOOK_PATH = `${HOOKS_GENERATED_DIR}/cursor/${CURSOR
  * record cannot keep an agent looping past it.
  */
 export const CURSOR_CONTINUE_LOOP_LIMIT = 50;
+
+/**
+ * The context-once hook (REQ-FLOW-115): a `postToolUse` script that prints the
+ * session index once per conversation on a Cursor agent machine, where no
+ * `sessionStart` runs ({@link buildContextOnceScript}). It sits beside the
+ * continue hook, in the folder `.cursor/hooks.json`'s recogniser counts as the engine's.
+ */
+export const CURSOR_CONTEXT_ONCE_HOOK_PATH = `${HOOKS_GENERATED_DIR}/cursor/${CONTEXT_ONCE_FILE}`;
 
 /** The tool Cursor spawns a sub-agent through, and the model-fill hook's matcher (cursor.com/docs/hooks, read 2026-10-14). */
 const SUBAGENT_TOOL = "Task";
@@ -566,6 +577,12 @@ export const cursorResiduePlanner: ResiduePlanner = {
         owner: { adapter: "cursor", artifactId: ARTIFACT_IDS.continueRun, artifactType: "infra" },
       },
       {
+        path: CURSOR_CONTEXT_ONCE_HOOK_PATH,
+        // The layout decided as the continue hook's is.
+        content: buildContextOnceScript({ layout: ctx.facts.hookScriptsRoot === undefined ? "generated" : "container" }),
+        owner: { adapter: "cursor", artifactId: ARTIFACT_IDS.contextOnce, artifactType: "infra" },
+      },
+      {
         path: SUBAGENT_GUARD_PATH,
         // Every id this run can legitimately spawn: the shipped roster, plus
         // the agents actually emitted above. A pack agent emitted without a
@@ -582,7 +599,7 @@ export const cursorResiduePlanner: ResiduePlanner = {
       },
       {
         path: CURSOR_HOOKS_CONFIG_PATH,
-        content: buildHooksJson(core.hooks.interchangeFor("cursor"), cliCallContextOf(ctx), ctx.facts.hookScriptsRoot, { modelPins: true, continueRun: true }),
+        content: buildHooksJson(core.hooks.interchangeFor("cursor"), cliCallContextOf(ctx), ctx.facts.hookScriptsRoot, { modelPins: true, continueRun: true, contextOnce: true }),
         owner: { adapter: "cursor", artifactId: ARTIFACT_IDS.hooksConfig, artifactType: "infra" },
       },
     );
@@ -971,12 +988,18 @@ interface CursorHookEntry {
  * never `failClosed`: a stop decides nothing. It too runs through the starter
  * directly, which hands Cursor its `followup_message` as written, and its row
  * names its own event. The residue planner sets it, as it sets `modelPins`.
+ *
+ * `opts.contextOnce` appends the context-once hook ({@link CURSOR_CONTEXT_ONCE_HOOK_PATH})
+ * to `postToolUse`, after the planned rows, never `failClosed`: it adds context
+ * and decides nothing. It runs through the starter directly, its row naming
+ * `post_tool_use`, and writes Cursor's own `additional_context`. The residue
+ * planner sets it too.
  */
 export function buildHooksJson(
   rows: readonly HookInterchange[],
   cli: CliCallContext,
   hookScriptsRoot?: string,
-  opts: { modelPins?: boolean; continueRun?: boolean } = {},
+  opts: { modelPins?: boolean; continueRun?: boolean; contextOnce?: boolean } = {},
 ): string {
   const syncCall = pinnedCliCall(cli.packageName, cli.version, "sync", cli);
   const events: Record<string, CursorHookEntry[]> = {};
@@ -1013,6 +1036,9 @@ export function buildHooksJson(
       });
     if (event === "pre_tool_use" && opts.modelPins === true) {
       entries.push({ command: adapterScriptCommand(MODEL_PINS_HOOK_PATH), matcher: SUBAGENT_TOOL });
+    }
+    if (event === "post_tool_use" && opts.contextOnce === true) {
+      entries.push({ command: adapterScriptCommand(CURSOR_CONTEXT_ONCE_HOOK_PATH, "post_tool_use") });
     }
     if (event === "stop" && opts.continueRun === true) {
       entries.push({ command: adapterScriptCommand(CURSOR_CONTINUE_HOOK_PATH, "stop"), loop_limit: CURSOR_CONTINUE_LOOP_LIMIT });

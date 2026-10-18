@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
-import { ENV_MCP_FILE, PREFLIGHT_CANARY_FILE, RUN_ENDED_MARKER_FILE } from "../mcp/env.ts";
+import { CONTEXT_ONCE_DIR, ENV_MCP_FILE, PREFLIGHT_CANARY_FILE, RUN_ENDED_MARKER_FILE } from "../mcp/env.ts";
 import { EngineError } from "../types/errors.ts";
 import {
   REVIEW_GATE_LOCK_SUFFIX,
@@ -231,6 +231,18 @@ function isPreflightCanaryPath(relPath: string): boolean {
  */
 function isRunEndedMarkerPath(relPath: string): boolean {
   return foldPathSpelling(relPath) === foldPathSpelling(RUN_ENDED_MARKER_FILE);
+}
+
+/**
+ * True when `relPath` is Cursor's context-once folder or anything under it,
+ * refused by name as the canary is (REQ-FLOW-115): a marker carried into another
+ * worktree would silence the session index for a conversation that never saw it
+ * there. A folder prefix, since each marker is named by a conversation's hash.
+ */
+function isContextOnceStatePath(relPath: string): boolean {
+  const path = foldPathSpelling(relPath);
+  const folder = foldPathSpelling(CONTEXT_ONCE_DIR);
+  return path === folder || path.startsWith(`${folder}/`);
 }
 
 const TOP_LEVEL_KEYS: ReadonlySet<string> = new Set(["version", "farmDir", "entries", "overrides"]);
@@ -533,7 +545,14 @@ export function matchPolicyRule(policy: WorktreePolicy, relPath: string): Worktr
  * be carved this way: the link shares the directory live.
  */
 export function resolveStrategy(policy: WorktreePolicy, relPath: string): WorktreeStrategy {
-  if (isReviewGateStatePath(relPath) || isPreflightCanaryPath(relPath) || isRunEndedMarkerPath(relPath)) return "skip";
+  if (
+    isReviewGateStatePath(relPath) ||
+    isPreflightCanaryPath(relPath) ||
+    isRunEndedMarkerPath(relPath) ||
+    isContextOnceStatePath(relPath)
+  ) {
+    return "skip";
+  }
   return matchPolicyRule(policy, relPath)?.strategy ?? "skip";
 }
 
@@ -591,6 +610,14 @@ export function assertRulesAdmissible(
         `${policy.source}: ${rule.list} row ${JSON.stringify(rule.path)} names the run-ended marker, ` +
           `which is never copied between worktrees: it would open the ask gate's final-round exception ` +
           `in a checkout that never ran \`run end\`.`,
+        `Remove the row from ${policy.source}.`,
+      );
+    }
+    if (isContextOnceStatePath(rule.path)) {
+      refuse(
+        `${policy.source}: ${rule.list} row ${JSON.stringify(rule.path)} names Cursor's context-once markers, ` +
+          `which are never copied between worktrees: they would silence the session index for a ` +
+          `conversation that never saw it there.`,
         `Remove the row from ${policy.source}.`,
       );
     }

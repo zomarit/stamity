@@ -273,9 +273,9 @@ writes says what the board may write, where, and on whose text.
 npx @zomarit/stamity check
 ```
 
-`check` is the diagnosis. It runs fifteen environment probes, and a sixteenth where
-`.stamity/change-classes.json` exists. Then it asks the one question that matters more than the
-rest: **would a sync change anything?**
+`check` is the diagnosis. It runs fourteen environment probes, plus `cloud-install` in a
+repository that targets Cursor and `change-classes` where `.stamity/change-classes.json` exists.
+Then it asks the one question that matters more than the rest: **would a sync change anything?**
 
 If the answer is yes, disk and the engine's output disagree. Something was hand-edited, a
 generated file was deleted, or a pack's content no longer matches what was installed. A failing
@@ -336,7 +336,7 @@ and `check` is what catches it drifting from what the engine would emit today.
 
 ### What not to commit
 
-Apart from each run's `reports/` folder, which ignores itself, two things stay out of the
+Apart from each run's `reports/` folder, which ignores itself, three things stay out of the
 repository, and `init` and `sync` add their `.gitignore` lines for you:
 
 - `.env.mcp`, which holds MCP credentials.
@@ -345,6 +345,8 @@ repository, and `init` and `sync` add their `.gitignore` lines for you:
   When the counter is missing, as on a cloud machine that was reclaimed, the gate rebuilds the
   round count from the `usage: review` lines of the in-progress run record on this branch and
   holds completion until a review is recorded; with no such record, the gate is open.
+- `.stamity/context-once/`, where Cursor's hook keeps one empty marker per conversation on a
+  Cursor agent machine, so the session index is printed once per conversation there.
 
 A line your `.gitignore` already covers, with `.stamity/` or `.env*` for example, is not added
 twice. A file you committed before the line existed stays tracked: setup never touches the git index.

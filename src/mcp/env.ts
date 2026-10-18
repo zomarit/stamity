@@ -204,6 +204,17 @@ export const RUN_ENDED_MAX_AGE_MS = 900_000;
 export const RUN_ENDED_MARKER_FILE = `${STATE_DIR}/run-ended.json`;
 
 /**
+ * Cursor's context-once markers (REQ-FLOW-115): the hook writes one empty file
+ * here per conversation, named by the SHA-256 of its id, so the session index is
+ * printed once. Machine-local: a marker committed or copied into another checkout
+ * would silence the index for a conversation that never saw it there.
+ */
+export const CONTEXT_ONCE_DIR = `${STATE_DIR}/context-once`;
+
+/** The `.gitignore` line for {@link CONTEXT_ONCE_DIR}: the folder, with git's trailing slash. */
+export const CONTEXT_ONCE_GITIGNORE_ENTRY = `${CONTEXT_ONCE_DIR}/`;
+
+/**
  * Paths this engine writes that must never reach a commit: the credential
  * file, and the review gate's runtime state — its counter, the lock directory
  * beside it, and the temp files its publish renames over the counter. The gate
@@ -222,6 +233,7 @@ export const REQUIRED_GITIGNORE_ENTRIES: readonly string[] = [
   `${REVIEW_GATE_STATE_FILE}${REVIEW_GATE_TEMP_INFIX}*`,
   PREFLIGHT_CANARY_FILE,
   RUN_ENDED_MARKER_FILE,
+  CONTEXT_ONCE_GITIGNORE_ENTRY,
 ];
 
 /**
@@ -254,11 +266,12 @@ const REVIEW_GATE_DOMINATORS: readonly string[] = [
 /**
  * Existing patterns that already ignore an entry. Appending our literal beside
  * one of these would add a redundant rule to a file the operator maintains.
- * Each review-gate entry, the canary and the marker is also dominated by its own
- * root-anchored twin (`/.stamity/review-gate.json` — the spelling a
- * hand-written rule usually takes). The canary and the run-ended marker take the
- * state directory's spellings only: a `review-gate.json*` prefix covers neither,
- * and a file git does not ignore could be committed.
+ * Each review-gate entry, the canary, the marker and the context-once folder is
+ * also dominated by its own root-anchored twin (`/.stamity/review-gate.json` — the
+ * spelling a hand-written rule usually takes). The canary, the run-ended marker
+ * and the context-once folder take the state directory's spellings only: a
+ * `review-gate.json*` prefix covers none of them, and a file git does not ignore
+ * could be committed.
  */
 const DOMINATING_PATTERNS: Record<string, readonly string[]> = {
   [ENV_MCP_FILE]: [".env.*", ".env*", "*.mcp"],
@@ -267,7 +280,7 @@ const DOMINATING_PATTERNS: Record<string, readonly string[]> = {
       entry,
       [
         `/${entry}`,
-        ...(entry === PREFLIGHT_CANARY_FILE || entry === RUN_ENDED_MARKER_FILE
+        ...(entry === PREFLIGHT_CANARY_FILE || entry === RUN_ENDED_MARKER_FILE || entry === CONTEXT_ONCE_GITIGNORE_ENTRY
           ? STATE_DIR_DOMINATORS
           : REVIEW_GATE_DOMINATORS),
       ],

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   CURSOR_AGENTS_DIR,
   CURSOR_COMMANDS_DIR,
+  CURSOR_CONTEXT_ONCE_HOOK_PATH,
   CURSOR_CONTINUE_HOOK_PATH,
   CURSOR_CONTINUE_LOOP_LIMIT,
   CURSOR_GUARD_EVENTS,
@@ -1437,6 +1438,70 @@ describe("`.cursor/hooks.json`", () => {
       followup_message: "Continue the run: 2 units remain; the record is .stamity/runs/2026-10-18_night/record.md.",
     });
     const local = stop({});
+    expect({ status: local.status, stdout: local.stdout }).toEqual({ status: 0, stdout: "" });
+  });
+
+  // REQ-FLOW-115: the context-once hook, wired by this adapter on `postToolUse`; its answers are run in
+  // `../hooks/contextOnce.test.ts`.
+  it("wires the context-once hook on postToolUse alone, through the starter and never the runner or failClosed", async () => {
+    const plan = await planFor(await seedCorpus());
+    const doc = parseHooks(contentAt(plan, P.hooksConfig));
+    const post = doc.hooks[EVENT_RENAME.post_tool_use] ?? [];
+    expect(post).toEqual([{ command: post[0]?.command }]);
+    // The starter runs the hook itself, not the portable runner, and the row it carries names its event.
+    expect(startedScript(post[0]!.command)).toBe(CURSOR_CONTEXT_ONCE_HOOK_PATH);
+    expect(childArgv(post[0]!.command)).toEqual(["node", CURSOR_CONTEXT_ONCE_HOOK_PATH]);
+    expect(JSON.parse(Buffer.from(post[0]!.command.split(" ").at(-1)!, "base64url").toString())).toMatchObject({
+      event: "post_tool_use",
+    });
+    expect(post[0]!.command).toContain(`; run npx -y @zomarit/stamity@${ENGINE_VERSION} sync'`);
+    // One copy: no other event runs it.
+    const others = Object.entries(doc.hooks).filter(([event]) => event !== EVENT_RENAME.post_tool_use).flatMap(([, entries]) => entries);
+    for (const entry of others) expect(startedScript(entry.command)).not.toBe(CURSOR_CONTEXT_ONCE_HOOK_PATH);
+
+    expect(CURSOR_CONTEXT_ONCE_HOOK_PATH).toBe(".stamity/generated/hooks/cursor/stamity-context-once.mjs");
+    const script = byPath(plan).get(CURSOR_CONTEXT_ONCE_HOOK_PATH);
+    expect(script?.owner).toEqual({ adapter: "cursor", artifactId: "cursor-context-once", artifactType: "infra" });
+    expect(script?.content).toContain("context-once hook (Cursor)");
+    // A direct call without the option renders the document as before the hook existed.
+    expect(parseHooks(buildHooksJson([], CLI_PIN)).hooks[EVENT_RENAME.post_tool_use]).toBeUndefined();
+  });
+
+  it("prints the index once through the emitted postToolUse entry from a subfolder, on a Cursor agent machine only", async () => {
+    const plan = await planFor(await seedCorpus());
+    const temp = getTemp();
+    await temp.seedFiles({
+      "repo/.cursor/hooks.json": contentAt(plan, P.hooksConfig),
+      [`repo/${CURSOR_CONTEXT_ONCE_HOOK_PATH}`]: contentAt(plan, CURSOR_CONTEXT_ONCE_HOOK_PATH),
+      "repo/sub/.keep": "",
+    });
+    const command = parseHooks(contentAt(plan, P.hooksConfig)).hooks[EVENT_RENAME.post_tool_use]![0]!.command;
+    const env: NodeJS.ProcessEnv = { ...process.env };
+    for (const name of ["CURSOR_PROJECT_DIR", "CURSOR_AGENT_SOCKET", "STAMITY_REPO_ROOT", "CLAUDE_CODE_REMOTE", "COPILOT_AGENT_PROMPT", "CI", "GITHUB_ACTIONS"]) {
+      delete env[name];
+    }
+    const post = (extra: NodeJS.ProcessEnv) =>
+      spawnSync(command, {
+        cwd: temp.path("repo", "sub"),
+        env: { ...env, ...extra },
+        shell: true,
+        input: JSON.stringify({ hook_event_name: "postToolUse", conversation_id: "conv-1", tool_name: "Shell" }),
+        encoding: "utf8",
+      });
+
+    // No socket listens at this path, so the metadata read fails and no cloud line is added.
+    const machine = { CURSOR_AGENT_SOCKET: temp.path("no-such.sock") };
+    const first = post(machine);
+    expect(first.status, first.stderr).toBe(0);
+    expect(JSON.parse(first.stdout)).toEqual({
+      additional_context: [
+        "stamity: no learnings and no resumable handoffs in this repo yet.",
+        "",
+        "Session: a Cursor agent machine, managed or self-hosted.",
+      ].join("\n"),
+    });
+    expect({ status: post(machine).status, stdout: post(machine).stdout }).toEqual({ status: 0, stdout: "" });
+    const local = post({});
     expect({ status: local.status, stdout: local.stdout }).toEqual({ status: 0, stdout: "" });
   });
 
