@@ -696,7 +696,8 @@ describe("upstream-update.yml — the recovery comparison keeps no copy of the m
     // This record is TOTAL over the interface, so the two keys are placed the day they land and
     // the assertion below then covers their names too — the binding, working as intended. The
     // assertion itself is untouched: no field is excluded, and the masked field stays `updatedAt`.
-    plugin: true,
+    // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-014): `plugin` left the
+    // interface, so the total record drops it the day it leaves; `gates` stays.
     gates: true,
     importChoice: true,
     toolOptions: true,

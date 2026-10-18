@@ -358,20 +358,6 @@ export interface SetupManifest {
   /** Operator overrides for the model ladder and the review cap (see {@link ModelConfig}). */
   models?: ModelConfig;
   /**
-   * The install record a 1.14 setup wrote, HELD through the 1.15 line: opaque.
-   * 1.15.0 deleted the plugin route and its `plugin-backed` mode, and a
-   * manifest still carrying the block must keep parsing — removing the key from
-   * the schema would make `check`, `sync` and `clean` refuse it. So the value
-   * is accepted without validation, never read by emission, and written back
-   * as it stands by `sync` (`../manifest/manifest.ts`, the preserved fields).
-   * Its one reader is the leftover-plugin warning `check`'s
-   * `plugin-duplicates` row, `sync`'s report and `clean` print
-   * (`../cli/kit/packageName.ts::leftoverPluginLines`), which reads it as
-   * untrusted JSON. The release after 1.15.0 removes the key with a
-   * manifest migration step.
-   */
-  plugin?: unknown;
-  /**
    * Operator-pinned verification-gate commands (see {@link GatesConfig});
    * absent members fall back to detection. Additive and optional, so
    * {@link MANIFEST_VERSION} does not move for it: a manifest written before

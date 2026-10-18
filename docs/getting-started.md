@@ -110,9 +110,10 @@ route from then on. An install that names this repository without a ref
 them keeps working at that version and gets no update. To move on from an APM install, or from a
 plugin with no `.stamity/manifest.json` beside it, install the CLI and run `init` as above. A
 plugin-backed setup, the one 1.14's `plugin setup` wrote, already has that manifest, and `init`
-refuses a repository that has one: run this release's `sync`, then `check`. Either way, uninstall a
-plugin with your client's own command and delete the `plugin` key from `.stamity/manifest.json`
-where it stands, as [troubleshooting](troubleshooting.md)'s `plugin-duplicates` row says.
+refuses a repository that has one: run this release's `sync`, then `check`; that `sync` drops the
+`plugin` key from `.stamity/manifest.json` and says so. Either way, uninstall the plugin with your
+client's own command: `claude plugin uninstall stamity@<your marketplace>`, Cursor's Customize view,
+`copilot plugin uninstall stamity` or `codex plugin remove stamity@<your marketplace>`.
 
 ## What init writes for each client
 

@@ -7,7 +7,6 @@ import {
   type SetupManifest,
 } from "../../../types/manifest.ts";
 import { coOwnedReclaimReducers, rowsCarriedThroughSweep } from "../../engine/emissionWrite.ts";
-import { leftoverPluginLines } from "../../kit/packageName.ts";
 import type { Palette } from "../../kit/terminal.ts";
 import type { SyncApplyReport, SyncPlan, SyncPlanEntry } from "./engine.ts";
 
@@ -203,17 +202,16 @@ function salvageLines(plan: SyncPlan, report: SyncApplyReport, palette: Palette)
 }
 
 /**
- * The leftover-plugin warning (`../../kit/packageName.ts::leftoverPluginLines`)
- * in this report: the manifest's held `plugin` block is what a sync carries, so
- * it is what the report reads (`check` reads the settings document as well).
+ * The one line naming the 1.14 `plugin` key the manifest reader dropped
+ * ({@link SyncPlan.pluginBlockDropped}): a live run has written the manifest
+ * without it, and a dry run says what that run would do. Plain, not a warning —
+ * the drop is the expected outcome — and printed once, since the next run reads
+ * a file with no key.
  */
-function leftoverPluginReportLines(manifest: SetupManifest, palette: Palette): string[] {
-  const [first, ...rest] = leftoverPluginLines(manifest.plugin, undefined);
-  if (first === undefined) return [];
-  return [
-    palette.yellow(`  warning: ${first}`),
-    ...rest.map((line) => palette.yellow(`    ${line}`)),
-  ];
+function pluginBlockDropLines(plan: SyncPlan, report: SyncApplyReport): string[] {
+  if (plan.pluginBlockDropped !== true) return [];
+  const verb = report.dryRun ? "would drop" : "dropped";
+  return [`  manifest: ${verb} the \`plugin\` key a 1.14 setup recorded; nothing has read it since 1.15.0`];
 }
 
 function provenanceLines(rollup: ProvenanceRollup, palette: Palette): string[] {
@@ -327,7 +325,7 @@ export function renderSyncReport(
     lines.push(...salvageLines(plan, report, palette));
   }
 
-  lines.push(...leftoverPluginReportLines(provenanceSource(plan, report), palette));
+  lines.push(...pluginBlockDropLines(plan, report));
   lines.push(...provenanceLines(provenanceFromManifest(provenanceSource(plan, report)), palette));
   return lines.join("\n");
 }
@@ -343,6 +341,7 @@ export function syncJsonPayload(plan: SyncPlan, report: SyncApplyReport): Record
     dryRun: report.dryRun,
     plannerId: plan.plannerId,
     manifestMigrated: plan.manifestMigrated,
+    pluginBlockDropped: plan.pluginBlockDropped === true,
     manifestPath: report.manifestPath,
     emptyBuild: isEmptyBuild(plan),
     counts: {

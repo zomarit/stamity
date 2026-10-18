@@ -261,11 +261,6 @@ interface PlanOverrides {
    * emission every other case in this file asserts.
    */
   hookScriptsRoot?: string;
-  /**
-   * The manifest's held 1.14 `plugin` block. Set only by the case that proves
-   * it steers nothing; absent everywhere else.
-   */
-  plugin?: unknown;
 }
 
 /** Every rule, agent and command of the real corpus, selected by bare catalog id. */
@@ -297,9 +292,6 @@ async function ctxOf(over: PlanOverrides = {}): Promise<EmissionContext> {
   // Same shape a repo carries after `stamity config set ruleDelivery …`; absent
   // means the engine default, which is what every other case in this file runs.
   if (over.ruleDelivery !== undefined) manifest.ruleDelivery = over.ruleDelivery;
-  // The block a 1.14 `stamity plugin setup` persisted; `createManifest` takes
-  // no option for it either.
-  if (over.plugin !== undefined) manifest.plugin = over.plugin;
   return {
     rootDir: over.rootDir ?? getTemp().path("repo"),
     manifest,
@@ -2265,31 +2257,10 @@ describe("settings under a plugin root", () => {
   });
 });
 
-/**
- * TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): the four
- * cases here pinned what a `plugin-backed` record took out of claude's residue —
- * the agents, skills, commands and hook rows, the settings `hooks` member — and
- * the pack-skill exception to it. 1.15.0 deleted that mode: the manifest's
- * `plugin` block is held for the leftover-plugin warning and steers nothing, so
- * the one case left pins that the residue under the 1.14 record carrying every
- * class equals the residue with no block, row for row and byte for byte.
- */
-describe("claude residue under a held plugin block", () => {
-  it("plans the same rows, byte for byte, as a manifest with no block", async () => {
-    const held = {
-      mode: "plugin-backed",
-      clients: { claude: { version: "1.14.0", classes: ["agent", "skill", "command", "hooks"] } },
-    };
-    const withBlock = (await planned({ plugin: held })).rows;
-    const control = (await planned()).rows;
-
-    const shape = (rows: readonly { path: string; content: string }[]) =>
-      rows.map((row) => [row.path, row.content]);
-    expect(withBlock.some((row) => row.path.startsWith(".claude/agents/"))).toBe(true);
-    expect(shape(withBlock)).toEqual(shape(control));
-    expect(JSON.parse(byPath(withBlock).get(CLAUDE_SETTINGS_PATH)!.content)).toHaveProperty("hooks");
-  });
-});
+// TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-014): the case comparing claude's
+// residue under a held `plugin` block with the residue without one left. The block is dropped
+// on read, so no manifest the adapter sees carries it; `test/cli/commands/syncEngine.test.ts`
+// pins that a block on disk moves no emitted byte, for all four clients.
 
 // TEST CHANGE, justified: REQ-FLOW-036 — `claudeSettingsOwnedKeys` is gone: the
 // engine owns allow rows and hook entries, not top-level keys. What the reclaim
@@ -2406,17 +2377,9 @@ describe("the verdict roles' path-scoped report write", () => {
     }
   });
 
-  // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): the case that
-  // pinned no `Write` under a plugin carrying the hooks left with the `plugin-backed` mode; a
-  // held block no longer moves the hooks, so the verdict roles keep the repository render.
-  it("keeps Write for the verdict roles under a held plugin block naming the hooks", async () => {
-    expectVerdictRowsCarryWritePaths();
-    const { rows } = await planned({
-      plugin: { mode: "plugin-backed", clients: { claude: { version: "1.14.0", classes: ["hooks"] } } },
-    });
-
-    for (const id of VERDICT_IDS) expect(toolNames(rows, id), id).toContain(CLAUDE_REPORT_WRITE_TOOL);
-  });
+  // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-014): the case that kept
+  // `Write` for the verdict roles under a held `plugin` block naming the hooks left: the block is
+  // dropped on read, so the render it compared is the repository render the cases above pin.
 
   it("renders no Write for a verdict row whose every pattern fails the grammar", () => {
     // The adapter cannot be pointed at another roster, so the row is resolved

@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 // `link` is the hard-link primitive, aliased for the same reason the write-escape
 // suite aliases it: `link` reads as a symlink at a glance, and the shared-name
 // class is precisely the shape that is NOT one.
-import { link as hardLink, lstat, readFile, readdir, stat } from "node:fs/promises";
+import { link as hardLink, lstat, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -147,10 +147,16 @@ async function seedRepo(
       generatorVersion: ENGINE_VERSION,
       now: T0,
     }),
-    ...(opts.plugin === undefined ? {} : { plugin: opts.plugin }),
     ledger: opts.ledger ?? [],
   };
   await writeManifest(root, manifest, { now: T0 });
+  if (opts.plugin !== undefined) {
+    // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-014): the writer refuses a
+    // `plugin` key now, so the 1.14 block a file on disk still carries is added to the bytes.
+    const path = manifestPath(root);
+    const onDisk = JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
+    await writeFile(path, `${JSON.stringify({ ...onDisk, plugin: opts.plugin }, null, 2)}\n`, "utf8");
+  }
   return root;
 }
 
@@ -1344,64 +1350,87 @@ describe("MCP documents are merged, never overwritten", () => {
 });
 
 /**
- * The leftover-plugin warning in sync's report, and the held block it reads.
+ * The 1.14 `plugin` block a manifest on disk still carries, dropped by the first sync.
  *
  * TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): the two
  * cases here pinned the `plugin-owned` lines and the `pluginOwned` JSON key a
- * `plugin-backed` record produced. 1.15.0 deleted that mode: the manifest's
- * `plugin` block is held through the 1.15 line — written back as it stands,
- * steering nothing — and sync prints the warning `check`'s `plugin-duplicates`
- * row prints, naming only the four client ids.
+ * `plugin-backed` record produced. 1.15.0 deleted that mode, and the block was
+ * held through the 1.15 line, written back as it stood, with the warning
+ * `check`'s `plugin-duplicates` row printed.
+ *
+ * TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-014,
+ * REQ-PLUGIN-016): the hold ends. The cases that pinned the block kept and the
+ * warning printed on every run now pin the reverse: the first sync writes the
+ * manifest without the block and says so once, in "would" wording on a dry run;
+ * a second sync moves no byte and says nothing; no leftover-plugin line prints;
+ * and a block of any shape steers no emitted byte for any client.
  */
-describe("the leftover-plugin warning and the held block", () => {
+describe("the 1.14 plugin block, dropped by the first sync", () => {
   const SKILL = "---\nid: drill\ntype: skill\ndescription: fixture skill\ntags: [orchestration]\nload: on-demand\nobsolete_when: fixture trigger\n---\n\n# Drill\n\nSkill body.\n";
   /** The block a 1.14 `stamity plugin setup` wrote, keys out of the order the serializer writes. */
   const HELD = { mode: "plugin-backed", clients: { claude: { version: "1.14.0", classes: ["skill"] } } };
-  const PLUGIN_ID = packageName().replace(/^@[^/]+\//, "");
+  const DROPPED = "  manifest: dropped the `plugin` key a 1.14 setup recorded; nothing has read it since 1.15.0";
+  const WOULD_DROP = "  manifest: would drop the `plugin` key a 1.14 setup recorded; nothing has read it since 1.15.0";
 
-  async function syncOnce(root: string) {
+  async function syncOnce(root: string, dryRun = false) {
     const plan = await planSync(root, ENGINE_VERSION, { runner: () => "" });
-    const report = await applySync(root, plan, { engineVersion: ENGINE_VERSION, force: false, dryRun: false, now: T1 });
-    return { plan, report };
+    const report = await applySync(root, plan, { engineVersion: ENGINE_VERSION, force: false, dryRun, now: T1 });
+    return { plan, report, text: renderSyncReport(plan, report, plainPalette) };
   }
 
-  it("emits the claude skills, prints the warning, and keeps the block value-identical", async () => {
+  const onDiskKeys = async (root: string): Promise<string[]> =>
+    Object.keys(JSON.parse(await readFile(manifestPath(root), "utf8")) as Record<string, unknown>);
+
+  it("writes the manifest without the block and says so once; a second sync moves no byte and says nothing", async () => {
     const handle = tempDir();
     const root = await seedRepo(handle, { plugin: HELD });
     await handle.seedFiles({ "corpus/skills/st-drill/SKILL.md": SKILL });
 
-    const { plan, report } = await syncOnce(root);
-    const text = renderSyncReport(plan, report, plainPalette);
+    const first = await syncOnce(root);
 
-    expect(report.wrote.map((row) => row.path)).toContain(".claude/skills/st-drill/SKILL.md");
-    expect(text).toContain(
-      "  warning: a plugin install from before 1.15.0 is still recorded; 1.15.0 removed the plugin route",
-    );
-    expect(text).toContain(`    claude: claude plugin uninstall ${PLUGIN_ID}@<your marketplace>`);
-    expect(text).toContain("    then delete the `plugin` key from .stamity/manifest.json; nothing reads it since 1.15.0");
-    expect(syncJsonPayload(plan, report)).not.toHaveProperty("pluginOwned");
-    expect((await readManifest(root))?.plugin).toEqual(HELD);
+    expect(first.plan.pluginBlockDropped).toBe(true);
+    expect(first.report.wrote.map((row) => row.path)).toContain(".claude/skills/st-drill/SKILL.md");
+    expect(first.text.split("\n").filter((line) => line.includes("`plugin` key"))).toEqual([DROPPED]);
+    expect(first.text).not.toContain("a plugin install from before 1.15.0");
+    expect(syncJsonPayload(first.plan, first.report)).toMatchObject({ pluginBlockDropped: true });
+    expect(await onDiskKeys(root)).not.toContain("plugin");
+    const bytes = await readFile(manifestPath(root), "utf8");
 
-    // A second sync: the block is still there, so the warning lasts the release.
-    const again = await syncOnce(root);
-    expect((await readManifest(root))?.plugin).toEqual(HELD);
-    expect(renderSyncReport(again.plan, again.report, plainPalette)).toContain("warning: a plugin install from before 1.15.0");
+    const second = await syncOnce(root);
+
+    expect(second.plan.pluginBlockDropped).toBe(false);
+    expect(second.text).not.toContain("plugin");
+    expect(syncJsonPayload(second.plan, second.report)).toMatchObject({ pluginBlockDropped: false });
+    expect(await readFile(manifestPath(root), "utf8")).toBe(bytes);
   });
 
-  it("emits byte-for-byte what a repository with no block emits, for a hostile block, and prints none of it", async () => {
+  it("says on a dry run what the live run would do, and writes nothing", async () => {
+    const handle = tempDir();
+    const root = await seedRepo(handle, { plugin: HELD });
+    const before = await readFile(manifestPath(root), "utf8");
+
+    const dry = await syncOnce(root, true);
+
+    expect(dry.plan.pluginBlockDropped).toBe(true);
+    expect(dry.text.split("\n").filter((line) => line.includes("`plugin` key"))).toEqual([WOULD_DROP]);
+    expect(await readFile(manifestPath(root), "utf8")).toBe(before);
+    expect(await onDiskKeys(root)).toContain("plugin");
+  });
+
+  it("emits byte-for-byte what a repository with no block emits, for a hostile block over all four clients, and prints none of it", async () => {
     const esc = String.fromCharCode(27);
     const hostile = {
       mode: `${esc}[2K\rsynced: 0 created`,
       clients: { [`vim${esc}]0;x`]: { classes: ["agent"] }, cursor: "anything", claude: { classes: "all" } },
       root: "../../outside",
     };
+    const tools: Tool[] = ["claude", "cursor", "copilot", "codex"];
     const handle = tempDir();
-    const withBlock = await seedRepo(handle, { plugin: hostile, dir: "with-block" });
-    const without = await seedRepo(handle, { dir: "without" });
+    const withBlock = await seedRepo(handle, { plugin: hostile, dir: "with-block", tools });
+    const without = await seedRepo(handle, { dir: "without", tools });
     await handle.seedFiles({ "corpus/skills/st-drill/SKILL.md": SKILL });
     expect(withBlock).not.toBe(without);
     const a = await syncOnce(withBlock);
-    const textA = renderSyncReport(a.plan, a.report, plainPalette);
     const b = await syncOnce(without);
 
     const rows = (plan: typeof a.plan) => plan.outputs.map((row) => [row.path, row.content]);
@@ -1410,22 +1439,24 @@ describe("the leftover-plugin warning and the held block", () => {
     expect((await readManifest(withBlock))?.ledger).toEqual((await readManifest(without))?.ledger);
     const onDisk = await Promise.all(rows(b.plan).map(async ([path]) => [path, await readFile(join(withBlock, path!), "utf8")]));
     expect(onDisk).toEqual(rows(b.plan));
-    // Only the two known ids it names are printed, and nothing of the block itself.
-    expect(textA).toContain(`    claude: claude plugin uninstall ${PLUGIN_ID}@<your marketplace>`);
-    expect(textA).toContain(`    cursor: uninstall the ${PLUGIN_ID} plugin from Cursor's Customize view`);
-    expect(textA).not.toContain("vim");
-    expect(textA).not.toContain(esc);
-    expect(textA).not.toContain("outside");
-    expect((await readManifest(withBlock))?.plugin).toEqual(hostile);
+    // The one line naming the drop, and nothing of the block itself.
+    expect(a.text).toContain(DROPPED);
+    expect(a.text).not.toContain("vim");
+    expect(a.text).not.toContain(esc);
+    expect(a.text).not.toContain("outside");
+    // The written manifest is the one the repository with no block writes.
+    expect(await readFile(manifestPath(withBlock), "utf8")).toBe(await readFile(manifestPath(without), "utf8"));
   });
 
-  it("prints no warning on a repository with no plugin field", async () => {
+  it("prints no plugin line on a repository with no plugin field", async () => {
     const handle = tempDir();
     const root = await seedRepo(handle);
+    await handle.seedFiles({ "corpus/skills/st-drill/SKILL.md": SKILL });
 
-    const { plan, report } = await syncOnce(root);
+    const { plan, report, text } = await syncOnce(root);
 
-    expect(renderSyncReport(plan, report, plainPalette)).not.toContain("plugin");
+    expect(plan.pluginBlockDropped).toBe(false);
+    expect(text).not.toContain("plugin");
     expect(syncJsonPayload(plan, report)).not.toHaveProperty("pluginOwned");
   });
 });

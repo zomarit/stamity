@@ -342,16 +342,7 @@ describe("composeEmissionPlanner({}) — core rows only", () => {
 
 // ── Residue merging ──────────────────────────────────────────────
 
-// ── A held plugin block over the shared projection ───────────────
-
-/** `ctx` with a held 1.14 plugin block bolted on; `createManifest` takes no such option. */
-const withPlugin = (
-  ctx: EmissionContext,
-  plugin: unknown,
-): EmissionContext => ({
-  ...ctx,
-  manifest: { ...ctx.manifest, plugin },
-});
+// ── The shared projection ─────────────────────────────────────────
 
 /** A registered, row-free residue planner per tool — the facts are what matter here. */
 const residuesFor = (tools: readonly Tool[]): Partial<Record<Tool, ResiduePlanner>> =>
@@ -410,14 +401,18 @@ describe("the effort disclosures the plan carries", () => {
  * cases here pinned what a `plugin-backed` record did to the plan — the shared
  * skills tree dropped or narrowed to the readers no plugin carried skills for,
  * the hook copies skipped, the "hook wiring" disclosure. 1.15.0 deleted that
- * mode, so the block is held for the leftover-plugin warning and steers
- * nothing: the two cases replacing them pin the plan and its warnings
- * byte-identical to a manifest with no block.
+ * mode, so the block was held and steered nothing.
+ *
+ * TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-014): the block
+ * is now dropped on read, so no manifest the planner sees carries one, and the
+ * three cases that compared a plan under a held block with the plan without it
+ * compared two identical inputs. What each pinned of the plan itself stays: the
+ * tree co-owned by every reader, claude's hook copies, and no "hook wiring"
+ * disclosure. That a block on disk moves no emitted byte is pinned end
+ * to end in `test/cli/commands/syncEngine.test.ts`.
  */
-describe("a held plugin block over the shared skills projection", () => {
-  it("emits the tree co-owned by every reader when no plugin owns skills", async () => {
-    // The control. It is the same repository as the cases below with one
-    // field absent, so a difference there is the field's and nothing else's.
+describe("the shared skills projection and the hook copies", () => {
+  it("emits the tree co-owned by every reader", async () => {
     const corpus = await seedCorpus();
     const tools: Tool[] = ["cursor", "copilot", "codex"];
 
@@ -428,69 +423,37 @@ describe("a held plugin block over the shared skills projection", () => {
     expect(adaptersOf(rows.get(P.skillRef)!)).toEqual(tools);
   });
 
-  it("plans byte-for-byte the plan with no block, when the block records every reader's skills and hooks", async () => {
+  it("plans every reader's skills and claude's hook copies over all four clients", async () => {
     const corpus = await seedCorpus();
     const tools: Tool[] = ["claude", "cursor", "copilot", "codex"];
-    const ctx = withPlugin(ctxOf(tools, corpus), {
-      mode: "plugin-backed",
-      clients: Object.fromEntries(
-        tools.map((tool) => [tool, { version: "1.14.0", classes: ["skill", "hooks"] }]),
-      ),
-    });
 
-    const plan = await composeEmissionPlanner(residuesFor(tools)).plan(ctx);
+    const plan = await composeEmissionPlanner(residuesFor(tools)).plan(ctxOf(tools, corpus));
 
-    const control = await composeEmissionPlanner(residuesFor(tools)).plan(ctxOf(tools, corpus));
-    expect(plan).toEqual(control);
     expect(adaptersOf(byPath(plan).get(P.skillMain)!)).toEqual(tools);
     expect(plan.map((output) => output.path).filter((path) => path.startsWith(`${P.hooksRoot}/claude/`))).toHaveLength(
       HOOK_FILES.length,
     );
   });
 
-  it("wires the repo's own hooks into every client and discloses nothing, whatever the block records", async () => {
+  it("plans a repo with its own hooks and no \"hook wiring\" disclosure", async () => {
     const corpus = await seedCorpus();
     const temp = getTemp();
-    const rootDir = temp.path("plugin-hooks-repo");
+    const rootDir = temp.path("hooks-repo");
     await temp.seedFiles({
-      "plugin-hooks-repo/.stamity/hooks/guard.mjs": "process.exit(0)\n",
-      "plugin-hooks-repo/.stamity/hooks/hooks.json": JSON.stringify(
+      "hooks-repo/.stamity/hooks/guard.mjs": "process.exit(0)\n",
+      "hooks-repo/.stamity/hooks/hooks.json": JSON.stringify(
         { hooks: [{ event: "session_start", command: ["node", ".stamity/hooks/guard.mjs"] }] },
         null,
         2,
       ),
     });
     const tools: Tool[] = ["claude", "codex"];
-    const ctx = withPlugin(ctxOf(tools, corpus, { rootDir }), {
-      mode: "plugin-backed",
-      clients: { claude: { version: "1.14.0", classes: ["hooks"] } },
-    });
 
-    const result = await composeEmissionPlanner(residuesFor(tools)).planWithWarnings(ctx);
-    const control = await composeEmissionPlanner(residuesFor(tools)).planWithWarnings(
+    const result = await composeEmissionPlanner(residuesFor(tools)).planWithWarnings(
       ctxOf(tools, corpus, { rootDir }),
     );
 
-    expect(result.warnings).toEqual(control.warnings);
-    expect(result.outputs).toEqual(control.outputs);
     expect(result.warnings.filter((warning) => warning.startsWith("hook wiring:"))).toEqual([]);
-  });
-
-  it("ignores a client recorded in the plugin but absent from the selection", async () => {
-    const corpus = await seedCorpus();
-    const tools: Tool[] = ["codex"];
-    const ctx = withPlugin(ctxOf(tools, corpus), {
-      mode: "plugin-backed",
-      clients: { claude: { version: "1.9.0", classes: ["skill", "hooks"] } },
-    });
-
-    const plan = await composeEmissionPlanner(residuesFor(tools)).plan(ctx);
-
-    // Byte-for-byte the plan the same selection produces with no plugin field:
-    // a record for a client emission never planned for cannot move a row.
-    const control = await composeEmissionPlanner(residuesFor(tools)).plan(ctxOf(tools, corpus));
-    expect(plan).toEqual(control);
-    expect(plan.map((output) => output.path)).toContain(P.skillMain);
   });
 });
 

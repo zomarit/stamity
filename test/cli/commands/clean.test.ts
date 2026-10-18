@@ -1358,23 +1358,26 @@ describe("clean — consent is separate from output format", () => {
  * TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): `clean`
  * printed each recorded client's vendor uninstall command and carried them as
  * `pluginUninstall` in `--json`. 1.15.0 deleted the plugin route and removed that
- * key outright; the lines are now the leftover-plugin warning `check` and `sync`
- * print (`test/cli/commands/check.test.ts` pins its wording and the renamed
- * package's id), and `clean` prints it as text, before it deletes the held block
- * that is the install's last record. What stays: the block changes nothing
- * `clean` removes, and `--json` carries no plugin key.
+ * key outright; the lines became the leftover-plugin warning `check` and `sync`
+ * printed, which `clean` printed before it deleted the held block.
+ *
+ * TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-014,
+ * REQ-PLUGIN-016): the warning left with the held block. A manifest still
+ * carrying the 1.14 block loads with no refusal, and neither it nor Claude's
+ * `enabledPlugins` makes `clean` print a leftover-plugin line, preview included.
+ * What stays: the block changes nothing `clean` removes, and `--json` carries no
+ * plugin key.
  */
-describe("a held plugin block under clean", () => {
+describe("a 1.14 plugin block under clean", () => {
   /** The initialised fixture, with a 1.14 plugin block recorded for two of the four clients. */
   async function seedWithPlugin(temp: TempDirHandle): Promise<string> {
     const root = await seedInitialisedRepo(temp);
-    const manifest: SetupManifest = {
+    // Raw JSON, as a 1.14 setup left it on disk: the writer and the type hold no `plugin` key.
+    const manifest = {
       ...manifestFixture(ledgerFixture()),
       plugin: {
         mode: "plugin-backed",
         clients: {
-          // Written out of TOOLS order on purpose, so the printed order is the
-          // canonical one rather than the object's.
           codex: { version: "1.9.0", classes: ["agent"] },
           claude: { version: "1.9.0", classes: ["agent", "skill", "command", "hooks"] },
         },
@@ -1386,26 +1389,22 @@ describe("a held plugin block under clean", () => {
     return root;
   }
 
-  it("prints the leftover-plugin warning for each client the held block names, in TOOLS order, and no pluginUninstall key", async () => {
+  const LEFTOVER = "a plugin install from before 1.15.0";
+
+  it("cleans a repository whose manifest carries the block, printing no leftover-plugin line and no pluginUninstall key", async () => {
     const root = await seedWithPlugin(tempDir());
 
     const result = await runClean(root, ["-y"]);
 
     expect(result.code).toBe(0);
-    expect(result.stdout).toContain("warning: a plugin install from before 1.15.0 is still recorded");
-    const lines = result.stdout
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => /^(claude|cursor|copilot|codex):/.test(line));
-    expect(lines).toEqual([
-      "claude: claude plugin uninstall stamity@<your marketplace>",
-      "codex: codex plugin remove stamity@<your marketplace>",
-    ]);
-    // Printed before the state directory went, which is why it can still be said.
+    expect(result.stdout).not.toContain(LEFTOVER);
+    expect(result.stdout).not.toContain("plugin uninstall");
     expect(existsSync(join(root, STATE_DIR))).toBe(false);
 
     const preview = await runClean(await seedWithPlugin(tempDir()), ["--dry-run"]);
-    expect(preview.stdout).toContain("claude: claude plugin uninstall stamity@<your marketplace>");
+    expect(preview.code).toBe(0);
+    expect(preview.stdout).not.toContain(LEFTOVER);
+    expect(preview.stdout).not.toContain("plugin uninstall");
 
     const again = await seedWithPlugin(tempDir());
     const doc = parseSingleDoc((await runClean(again, ["-y", "--json"])).stdout);
@@ -1419,8 +1418,8 @@ describe("a held plugin block under clean", () => {
     const after = await snapshot(withPlugin);
 
     // The control: the same repository with no plugin field at all. The sweep's
-    // result is identical, which is the whole claim — the record changes what
-    // is PRINTED and nothing about what is removed.
+    // result is identical, which is the whole claim — the record changes nothing
+    // about what is removed.
     const control = await seedInitialisedRepo(tempDir());
     await runClean(control, ["-y"]);
 
@@ -1428,7 +1427,7 @@ describe("a held plugin block under clean", () => {
     expect(Object.keys(after)).toContain("README.md");
   });
 
-  it("warns for a plugin Claude's settings record when the manifest names none, as check does (review/134)", async () => {
+  it("prints no leftover-plugin line for a plugin Claude's settings record", async () => {
     const temp = tempDir();
     const root = await seedInitialisedRepo(temp);
     await temp.seedFiles({
@@ -1438,19 +1437,8 @@ describe("a held plugin block under clean", () => {
     const result = await runClean(root, ["-y"]);
 
     expect(result.code).toBe(0);
-    expect(result.stdout).toContain("warning: a plugin install from before 1.15.0 is still recorded");
-    expect(result.stdout).toContain("claude: claude plugin uninstall stamity@<your marketplace>");
-    // The settings key alone named it, so no line sends the operator to a manifest key.
-    expect(result.stdout).not.toContain("then delete the `plugin` key");
-    expect(existsSync(join(root, STATE_DIR))).toBe(false);
-  });
-
-  it("says nothing at all on a repository that records no plugin", async () => {
-    const root = await seedInitialisedRepo(tempDir());
-
-    const result = await runClean(root, ["-y"]);
-
-    expect(result.stdout).not.toContain("stays installed");
+    expect(result.stdout).not.toContain(LEFTOVER);
     expect(result.stdout).not.toContain("plugin uninstall");
+    expect(existsSync(join(root, STATE_DIR))).toBe(false);
   });
 });

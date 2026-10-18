@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { chmod, readFile, rm } from "node:fs/promises";
+import { chmod, readFile, rm, writeFile } from "node:fs/promises";
 import { delimiter, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -540,6 +540,39 @@ describe("sync --dry-run", () => {
     expect(existsSync(join(root, `${USER_DOC}.bak`))).toBe(false);
     expect(await readFile(manifestPath(root), "utf8")).toBe(manifestBytesBefore);
   });
+
+  // v16-manifest-plugin-block (REQ-PLUGIN-014, REQ-LADDER-005, inbox rows 266 and 279): a manifest
+  // a 1.14 setup wrote, generation 1.0.0 and the `plugin` block, read by this engine.
+  it("says what a live run would do with a 1.14 manifest, writes nothing, and the live run says it once", async () => {
+    const handle = tempDir();
+    const root = await seedRepo(handle);
+    const path = manifestPath(root);
+    const current = JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
+    const plugin = { mode: "plugin-backed", clients: { claude: { version: "1.14.0", classes: ["skill"] } } };
+    await writeFile(path, `${JSON.stringify({ ...current, version: "1.0.0", plugin }, null, 2)}\n`, "utf8");
+    const before = await readFile(path, "utf8");
+
+    const dry = await runSync(root, ["--dry-run"]);
+
+    expect(dry.code).toBe(0);
+    expect(dry.stdout).toContain("manifest schema would be migrated to 2.0.0");
+    expect(dry.stdout).not.toContain("manifest schema migrated");
+    expect(dry.stdout).toContain("manifest: would drop the `plugin` key a 1.14 setup recorded");
+    expect(await readFile(path, "utf8")).toBe(before);
+
+    const live = await runSync(root);
+
+    expect(live.code).toBe(0);
+    expect(live.stdout).toContain("manifest schema migrated to 2.0.0");
+    expect(live.stdout).toContain("manifest: dropped the `plugin` key a 1.14 setup recorded");
+    expect(Object.keys(JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>)).not.toContain("plugin");
+
+    const again = await runSync(root);
+
+    expect(again.code).toBe(0);
+    expect(again.stdout).not.toContain("manifest schema");
+    expect(again.stdout).not.toContain("plugin");
+  });
 });
 
 describe("sync — collision refusal and --force", () => {
@@ -870,6 +903,13 @@ describe("syncClosingLines", () => {
     const lines = syncClosingLines(planFixture({ manifestMigrated: true }), reportFixture());
 
     expect(lines).toEqual([`manifest schema migrated to ${MANIFEST_VERSION}`]);
+  });
+
+  // Inbox row 266: a dry run writes nothing, so its migration line says what the live run would do.
+  it("words the migration line as what a live run would do on a dry run", () => {
+    const lines = syncClosingLines(planFixture({ manifestMigrated: true }), reportFixture({ dryRun: true }));
+
+    expect(lines).toEqual([`manifest schema would be migrated to ${MANIFEST_VERSION}`]);
   });
 
   it("adds the review next-step only when a live run changed files", () => {

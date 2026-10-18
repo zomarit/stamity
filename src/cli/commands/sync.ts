@@ -169,7 +169,8 @@ export function dirtyTreeWarning(dirty: WorkingTreeStatus): string | null {
 
 /**
  * Human-mode lines appended after the rendered report, derived from run state:
- * the migration notice whenever the manifest reader rewrote the schema, and
+ * the migration notice whenever the manifest reader rewrote the schema (in
+ * "would be" wording on a dry run, which writes nothing), and
  * the review next-step only when a live run actually changed files — an
  * all-unchanged or empty-corpus run has nothing to review, and a dry run wrote
  * nothing (the report's own honesty lines cover both; this layer never
@@ -182,7 +183,14 @@ export function dirtyTreeWarning(dirty: WorkingTreeStatus): string | null {
  */
 export function syncClosingLines(plan: SyncPlan, report: SyncApplyReport): string[] {
   const lines: string[] = [];
-  if (plan.manifestMigrated) lines.push(`manifest schema migrated to ${plan.manifest.version}`);
+  if (plan.manifestMigrated) {
+    // A dry run writes nothing, so it says what the live run would do.
+    lines.push(
+      report.dryRun
+        ? `manifest schema would be migrated to ${plan.manifest.version}`
+        : `manifest schema migrated to ${plan.manifest.version}`,
+    );
+  }
   if (!report.dryRun && report.created + report.updated > 0) {
     const withoutGit =
       plan.dirty.reason === "bare-layout"

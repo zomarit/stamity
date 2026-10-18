@@ -280,10 +280,8 @@ else { process.stderr.write('Unexpected GitHub mutation: ' + args.join(' ')); pr
     // construction, so the two keys are placed here the day they land — which is exactly the
     // binding it exists for. No assertion is weakened and none is removed: the recovery
     // comparison below still runs over a manifest carrying EVERY optional key, now two wider.
-    plugin: {
-      mode: "plugin-backed",
-      clients: { claude: { version: "1.9.0", classes: ["agent", "skill", "command", "hooks"] } },
-    },
+    // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-014): `plugin` left the
+    // interface (dropped on read), so this total record drops it; every remaining key stays.
     gates: { test: "npm run test", all: "npm run lint && npm run typecheck && npm run test" },
     importChoice: [{ path: "AGENTS.md", mode: "supplement" }],
     toolOptions: { codex: { inlineAppendix: true } },

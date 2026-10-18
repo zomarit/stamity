@@ -494,7 +494,10 @@ describe("live-emission wiring: installed packs join the emission corpus", () =>
   // trees and left the pack skill. 1.15.0 deleted that mode, so the same record is a held
   // block that steers nothing: both skills reach both trees. The origin stamp, the defect
   // this case was written for, is asserted unchanged.
-  it("stamps every pack skill row origin pack, and a held plugin block drops neither skill", async () => {
+  // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-014): the manifest no longer
+  // carries a `plugin` block (dropped on read), so the held-block half compared two identical
+  // plans; it pins the plan's skill rows directly instead. The origin stamp is unchanged.
+  it("stamps every pack skill row origin pack, and plans both skills into both trees", async () => {
     // Defect 3 of run 2026-10-03_debug-pack-defects: the pack lane built its
     // rows without `origin`, so both plugin-mode exemptions (the shared tree's
     // and Claude's native copy) read them as core rows and dropped them.
@@ -513,18 +516,7 @@ describe("live-emission wiring: installed packs join the emission corpus", () =>
       [".agents/skills/stamity-runbook/references/notes.md", "pack"],
     ]);
 
-    // The 1.14 record that carried both readers' skills: held, so neither skill leaves.
-    const held: SetupManifest = {
-      ...installed,
-      plugin: {
-        mode: "plugin-backed",
-        clients: {
-          claude: { version: "1.11.0", classes: ["skill"] },
-          copilot: { version: "1.11.0", classes: ["skill"] },
-        },
-      },
-    };
-    const paths = [...byPath(await planAll(ctxOf(fixture, held))).keys()];
+    const paths = [...byPath(await planAll(ctxOf(fixture, installed))).keys()];
     expect(paths).toEqual(
       expect.arrayContaining([
         ".agents/skills/stamity-runbook/SKILL.md",
@@ -535,8 +527,6 @@ describe("live-emission wiring: installed packs join the emission corpus", () =>
         ".claude/skills/stamity-alpha/SKILL.md",
       ]),
     );
-    // And no row at all moved: the plan equals the one with no block.
-    expect(paths).toEqual([...byPath(await planAll(ctxOf(fixture, installed))).keys()]);
   });
 
   it("projects pack rules, agents and commands through each tool's own residue surface", async () => {

@@ -539,7 +539,6 @@ describe("the renderings are the setup's own", () => {
     const manifest: SetupManifest = {
       ...onDisk,
       tools: ["claude"],
-      plugin: { mode: "plugin-backed", clients: { claude: { version: "1.11.0", classes: ["skill"] } } },
       ledger: [
         ...onDisk.ledger,
         { path: ".cursor/rules/30-stamity-style.mdc", adapter: "cursor", artifactId: "style", artifactType: "rule", contentHash: "a".repeat(64) },
@@ -564,10 +563,10 @@ describe("the renderings are the setup's own", () => {
 
     expect(seen).toHaveLength(1);
     expect([...(seen[0] as SetupManifest).tools].toSorted()).toEqual(["claude", "cursor"]);
-    expect(seen[0]).not.toHaveProperty("plugin");
-    // The caller's manifest is not the one planned: it keeps its own clients and plugin record.
+    // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-014): the fixture carried a
+    // `plugin` record the proof plan deleted; the manifest is read without one now, so the record
+    // and its two pins left. The caller's manifest is still not the one planned: it keeps its clients.
     expect(manifest.tools).toEqual(["claude"]);
-    expect(manifest.plugin).toBeDefined();
     expect([...renderings.keys()]).toEqual([".cursor/rules/30-stamity-style.mdc"]);
     expect(renderings.get(".cursor/rules/30-stamity-style.mdc")).toEqual(new Set([sha256(rendered)]));
     expect(renderingsUnbuilt).toBeUndefined();

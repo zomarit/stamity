@@ -206,7 +206,6 @@ interface Scenario {
   tools: readonly Tool[];
   mcp?: readonly string[];
   ruleDelivery?: SetupManifest["ruleDelivery"];
-  pluginBacked?: boolean;
   pack?: boolean;
 }
 
@@ -238,14 +237,6 @@ async function plannedOutputs(scenario: Scenario, sub: string): Promise<AdapterO
     }),
     ...(scenario.mcp === undefined ? {} : { mcp: { servers: [...scenario.mcp] } }),
     ...(scenario.ruleDelivery === undefined ? {} : { ruleDelivery: scenario.ruleDelivery }),
-    ...(scenario.pluginBacked === true
-      ? {
-          plugin: {
-            mode: "plugin-backed" as const,
-            clients: { claude: { version: "1.11.0", classes: ["agent", "skill", "command", "hooks"] as const } },
-          },
-        }
-      : {}),
   };
   await writeManifest(root, manifest, { now: T0 });
   if (scenario.pack === true) {
@@ -267,7 +258,9 @@ const SCENARIOS: readonly Scenario[] = [
   ...TOOLS.map((tool) => ({ label: `${tool} alone`, tools: [tool] })),
   { label: "four clients with every MCP dialect", tools: ALL, mcp: ["github", "context7"] },
   { label: "four clients with on-demand rules", tools: ALL, ruleDelivery: "on-demand" },
-  { label: "four clients plugin-backed", tools: ALL, pluginBacked: true },
+  // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-014): the "four clients
+  // plugin-backed" scenario left: the writer refuses a `plugin` key and the reader drops it, so
+  // the manifest it planned from is the four-client one the scenarios here already plan.
   { label: "four clients with an installed pack", tools: ALL, pack: true },
 ];
 

@@ -38,8 +38,8 @@ import { seedGitRepo } from "../support/repoFixtures.ts";
  * `.fixture` name left over, so `sync` meets the tree exactly as 1.14.0 wrote it.
  *
  * What the cases hold, and nothing about the manifest's own shape beyond its ledger's `path`s and
- * the held `plugin` block: the manifest generation moves in this package (a migration on read), and
- * the claims here are the upgrade's, not a schema's.
+ * the `plugin` block a 1.14.0 setup could record: the manifest generation moves in this package (a
+ * migration on read), and the claims here are the upgrade's, not a schema's.
  *   - `sync` exits 0; every path the 1.14.0 ledger recorded is still on disk and still owned after it
  *     (rewritten or confirmed under the owner rules), unless {@link EXPECTED_RECLAIMS} names it with
  *     its reason; every other file the tree held — the user's — keeps its bytes; any file `sync`
@@ -48,9 +48,12 @@ import { seedGitRepo } from "../support/repoFixtures.ts";
  *     ({@link JSON_USER_CONTENT}, {@link TEXT_USER_CONTENT}) survives both syncs byte for byte.
  *   - a second `sync` moves no byte: the one permitted difference is the manifest's `updatedAt`, the
  *     write clock `sync` stamps on every run (the same allowance the dist dogfood journey makes).
- *   - `check` exits 0 on the upgraded tree, its `plugin-duplicates` row `pass`.
- *   - with the 1.14.0 `plugin` block added to the manifest, `sync` keeps the block value-identical
- *     and `check` still exits 0, the row `warn`.
+ *   - `check` exits 0 on the upgraded tree, its `manifest` row `pass`, and no `plugin-duplicates` row.
+ *   - with the 1.14.0 `plugin` block added to the manifest (the block a 1.15.0 sync carried on as
+ *     it stood), the first `sync` writes the manifest without it and says so once, a second `sync`
+ *     moves no byte and says nothing of it, and `check` exits 0 with no `plugin-duplicates` row
+ *     (TEST CHANGE, justified: v16-manifest-plugin-block, REQ-PLUGIN-014, REQ-PLUGIN-016 — the
+ *     block was held through the 1.15 line and the row warned; both leave after it).
  *
  * Git-less machines skip per the harness convention. The fixture is committed before the first
  * `sync`, as an operator's tree would be, so an overwrite is recoverable from history and no `.bak`
@@ -176,7 +179,7 @@ interface DoctorRow {
  * `PluginConfig` shape (`mode`, `clients.<tool>.{version, classes}`). `mode: "generated"` is
  * legal 1.14.0 with `clients` present (the record names the roots without moving ownership), which
  * keeps the fixture's generated tree exactly what that manifest describes. Two clients, so the
- * warning has more than one line to carry.
+ * block is more than the one-client record the unit cases drop.
  */
 const HELD_PLUGIN_BLOCK = {
   mode: "generated",
@@ -331,6 +334,14 @@ async function upgradeFixture(
   return fixture;
 }
 
+/** The one line `sync` prints when it writes the manifest without the 1.14.0 `plugin` block. */
+const DROP_LINE = "  manifest: dropped the `plugin` key a 1.14 setup recorded; nothing has read it since 1.15.0";
+
+/** `check --json`'s doctor row ids, in order. */
+function doctorIds(stdout: string): string[] {
+  return (JSON.parse(stdout) as { doctor: DoctorRow[] }).doctor.map((row) => row.id);
+}
+
 /** `check --json`'s doctor row by id; fails the case when the row is missing. */
 function doctorRow(stdout: string, id: string): DoctorRow {
   const report = JSON.parse(stdout) as { doctor: DoctorRow[] };
@@ -425,14 +436,19 @@ describe("a 1.14.0 tree upgrades through the current sync and check (node dist/c
 
       const check = await fixture.run(["check", "--json"]);
       expect(check.code, `check failed:\n${check.stdout}\n${check.stderr}`).toBe(0);
-      // The contrast for the variant below: no held block, no leftover warning.
-      expect(doctorRow(check.stdout, "plugin-duplicates").status).toBe("pass");
+      // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-016): the leftover-plugin
+      // row left, so the contrast for the variant below is the manifest row and the row's absence.
+      expect(doctorRow(check.stdout, "manifest").status).toBe("pass");
+      expect(doctorIds(check.stdout)).not.toContain("plugin-duplicates");
     } finally {
       await fixture.cleanup();
     }
   });
 
-  it("keeps a held 1.14.0 plugin block through sync, and check exits 0 with plugin-duplicates warn", {
+  // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-014, REQ-PLUGIN-016): the case
+  // pinned the block kept value-identical through sync and the leftover row's warn; the hold ended,
+  // so it pins the block dropped by the first sync, said once, and a second sync moving no byte.
+  it("drops a 1.14.0 plugin block on the first sync, says so once, moves no byte on the second, and check exits 0", {
     timeout: CASE_TIMEOUT_MS,
   }, async (ctx) => {
     const fixture = await upgradeFixture(ctx, async (repoDir) => {
@@ -444,15 +460,26 @@ describe("a 1.14.0 tree upgrades through the current sync and check (node dist/c
     try {
       const sync = await fixture.run(["sync"]);
       expect(sync.code, `sync failed:\n${sync.stdout}\n${sync.stderr}`).toBe(0);
-      // Held, not read: the block sync writes back is the one 1.14.0 recorded, value for value.
-      expect((await readManifest(fixture.repoDir)).plugin).toEqual(HELD_PLUGIN_BLOCK);
+      expect(sync.stdout.split("\n").filter((line) => line.includes("`plugin` key"))).toEqual([DROP_LINE]);
+      const upgraded = await readManifest(fixture.repoDir);
+      expect(Object.keys(upgraded)).not.toContain("plugin");
+      const afterFirst = await treeHashMap(fixture.repoDir);
+
+      const second = await fixture.run(["sync"]);
+      expect(second.code, `second sync failed:\n${second.stdout}\n${second.stderr}`).toBe(0);
+      expect(second.stdout).not.toContain("`plugin` key");
+      const afterSecond = await treeHashMap(fixture.repoDir);
+      expect([...afterSecond.keys()].toSorted()).toEqual([...afterFirst.keys()].toSorted());
+      for (const [path, hash] of afterFirst) {
+        if (path === MANIFEST_REL) continue;
+        expect(afterSecond.get(path), `the second sync moved ${path}`).toBe(hash);
+      }
+      expect(withoutClock(await readManifest(fixture.repoDir))).toEqual(withoutClock(upgraded));
 
       const check = await fixture.run(["check", "--json"]);
       expect(check.code, `check failed:\n${check.stdout}\n${check.stderr}`).toBe(0);
-      const row = doctorRow(check.stdout, "plugin-duplicates");
-      expect(row.status).toBe("warn");
-      expect(row.detail).toContain("claude:");
-      expect(row.detail).toContain("cursor:");
+      expect(doctorRow(check.stdout, "manifest").status).toBe("pass");
+      expect(doctorIds(check.stdout)).not.toContain("plugin-duplicates");
     } finally {
       await fixture.cleanup();
     }

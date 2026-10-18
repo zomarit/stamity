@@ -163,8 +163,6 @@ interface CtxOptions {
   efforts?: EffortMap;
   /** The ids a Copilot CLI listed for the account, persisted as `models.listed.copilot`. */
   listed?: readonly string[];
-  /** The manifest's held 1.14 `plugin` block; absent everywhere but the case proving it steers nothing. */
-  plugin?: unknown;
 }
 
 function ctxOf(over: CtxOptions = {}): EmissionContext {
@@ -198,7 +196,6 @@ function ctxOf(over: CtxOptions = {}): EmissionContext {
             },
           }),
       ...(over.ruleDelivery === undefined ? {} : { ruleDelivery: over.ruleDelivery }),
-      ...(over.plugin === undefined ? {} : { plugin: over.plugin }),
     },
     engineVersion: ENGINE_VERSION,
     facts: { monorepoPackages: over.packages ?? [] },
@@ -2285,24 +2282,7 @@ describe("copilot under ruleDelivery: on-demand", () => {
   });
 });
 
-/**
- * TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): the case
- * pinned the agent, command and hook rows a `plugin-backed` record took out of
- * copilot's residue. 1.15.0 deleted that mode; the held block steers nothing, so
- * the residue under the 1.14 record equals the residue with no block.
- */
-describe("copilot residue under a held plugin block", () => {
-  it("plans the same rows, byte for byte, as a manifest with no block", async () => {
-    const plugin = {
-      mode: "plugin-backed",
-      clients: { copilot: { version: "1.14.0", classes: ["agent", "command", "hooks"] } },
-    };
-    const withBlock = await planResidue({ plugin });
-    const control = await planResidue();
-
-    const shape = (rows: readonly { path: string; content: string }[]) =>
-      rows.map((row) => [row.path, row.content]);
-    expect(pathsOf(withBlock)).toContain(COPILOT_HOOKS_PATH);
-    expect(shape(withBlock)).toEqual(shape(control));
-  });
-});
+// TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-014): the case comparing copilot's
+// residue under a held `plugin` block with the residue without one left. The block is dropped
+// on read, so no manifest the adapter sees carries it; `test/cli/commands/syncEngine.test.ts`
+// pins that a block on disk moves no emitted byte, for all four clients.

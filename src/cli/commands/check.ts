@@ -6,9 +6,7 @@ import { fileURLToPath } from "node:url";
 import type { Command } from "commander";
 import semver from "semver";
 import type { App, EngineRegistry } from "../../index.ts";
-import { CLAUDE_SETTINGS_PATH } from "../../adapters/claude.ts";
 import { CLASS_FILE, parseClassFile } from "../../change/classify.ts";
-import { isPlainObject } from "../../config/parse.ts";
 import { readCharterTemplate } from "../../content/charter.ts";
 import { renderInvariantsVersion } from "../../emit/substitution.ts";
 import { readGates } from "../../manifest/manifest.ts";
@@ -57,7 +55,7 @@ import {
 import { getEmissionPlanner } from "../engine/emission.ts";
 import { readWorkingTreeStatus } from "../engine/gitStatus.ts";
 import { CliFailure, type FailureDoc } from "../kit/output.ts";
-import { leftoverPluginLines, packageCommand, packageCommandAt } from "../kit/packageName.ts";
+import { packageCommand, packageCommandAt } from "../kit/packageName.ts";
 import { sanitizeLabel } from "../kit/prompts.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import type { Palette } from "../kit/terminal.ts";
@@ -1181,62 +1179,6 @@ async function checkInvariants(): Promise<DoctorCheck> {
   return { id, status: "pass", detail: `invariants ${renderInvariantsVersion(charter.invariants)}` };
 }
 
-
-// ── The leftover plugin row ────────────────────────────────────────────────
-
-/**
- * JSON text as a value, or `undefined` for text that is absent or does not
- * parse — the `manifest` row and the settings merge own those defects, and this
- * row only asks what a document names.
- */
-function parseJsonLeniently(text: string | null): unknown {
-  if (text === null) return undefined;
-  // A leading byte-order mark is an editor's, not the document's.
-  const body = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
-  try {
-    return JSON.parse(body) as unknown;
-  } catch {
-    return undefined;
-  }
-}
-
-/**
- * A plugin install from before 1.15.0 that this repository still records,
- * held for the 1.15 line and then removed with the manifest's `plugin` key.
- *
- * 1.15.0 deleted the plugin route: this repository's own files carry every
- * class now, so a plugin a 1.14 setup installed loads a second copy beside
- * them. Two records name one: the manifest's held `plugin` block (its
- * `clients`), and Claude's `.claude/settings.json` `enabledPlugins` key for
- * this package's plugin id. Both are read here as raw JSON, never through the
- * manifest validator, so a manifest that fails another field still gets the
- * warning, and nothing in either document is printed: the lines name only the
- * four client ids and each vendor's uninstall command
- * (`../kit/packageName.ts::leftoverPluginLines`, which `sync` and `clean`
- * print too).
- *
- * Never `fail`: the plugin lives in the operator's client, outside anything
- * this repository can change, and a CI gate on it would fail every repository
- * mid-upgrade.
- */
-async function checkPluginDuplicates(rootDir: string): Promise<DoctorCheck> {
-  const id = "plugin-duplicates";
-  const [manifestRaw, settingsJson] = await Promise.all([
-    readIfPresent(join(rootDir, STATE_DIR, MANIFEST_FILE)),
-    readIfPresent(join(rootDir, ...CLAUDE_SETTINGS_PATH.split("/"))),
-  ]);
-  const manifestDocument = parseJsonLeniently(manifestRaw);
-  const settingsDocument = parseJsonLeniently(settingsJson);
-  const lines = leftoverPluginLines(
-    isPlainObject(manifestDocument) ? manifestDocument["plugin"] : undefined,
-    isPlainObject(settingsDocument) ? settingsDocument["enabledPlugins"] : undefined,
-  );
-  if (lines.length === 0) return { id, status: "pass", detail: "no leftover plugin install" };
-  // Plain newlines: the renderer indents each continuation line under the
-  // detail column, so `--json` carries no layout whitespace.
-  return { id, status: "warn", detail: lines.join("\n") };
-}
-
 /**
  * Installed packs, judged by whether what they ship reaches a selected client
  * (REQ-PLUGIN-016).
@@ -1697,7 +1639,6 @@ export async function runDoctor(
     envMcp,
     preservedDuplicate,
     packIntegrity,
-    pluginDuplicates,
     packReach,
     modelPins,
     changeClasses,
@@ -1709,7 +1650,6 @@ export async function runDoctor(
     guarded("env-mcp", () => checkEnvMcp(rootDir, engine, manifest)),
     guarded("preserved-duplicate", () => checkPreservedDuplicate(rootDir, manifest)),
     guarded("pack-integrity", () => checkPackIntegrity(rootDir, manifest)),
-    guarded("plugin-duplicates", () => checkPluginDuplicates(rootDir)),
     guarded("pack-reach", () => checkPackReach(rootDir, manifest, app.version)),
     guarded("model-pins", async () =>
       checkModelPins(manifest, app.runtime.env, listClientModels, await listerTreeRoot(rootDir)),
@@ -1733,9 +1673,6 @@ export async function runDoctor(
     checkClaudeHookShell(manifest, { platform: process.platform, env: process.env }),
     preservedDuplicate,
     packIntegrity,
-    // After the repository-state probes: what this repository still records of
-    // a plugin install from before 1.15.0.
-    pluginDuplicates,
     // What an installed pack ships that no selected client receives.
     packReach,
     // Whether each client's pinned and emitted models are on the account's own
@@ -2066,7 +2003,7 @@ function paintStatus(status: DoctorCheck["status"], palette: Palette): string {
 
 function renderDoctor(ctx: CliContext, doctor: readonly DoctorCheck[]): void {
   const width = Math.max(...doctor.map((row) => row.id.length));
-  // A multi-line detail (`plugin-duplicates`, `pack-reach`) carries plain
+  // A multi-line detail (`model-pins`, `pack-reach`) carries plain
   // newlines; each continuation line starts under the detail column —
   // two spaces, the four-column status token, two, the padded id, two.
   const continuation = `\n${" ".repeat(2 + 4 + 2 + width + 2)}`;

@@ -106,11 +106,11 @@ export const MANIFEST_REPO_PATH = `${STATE_DIR}/${MANIFEST_FILE}`;
  * Only a STRING pin is rewritten. Any other value — a number, an array, an
  * object already shaped for generation 2 — is carried as it stands, so
  * validation names a malformed one instead of the step dropping it. Every
- * other field is passed through untouched, the held `plugin` block of a 1.14
- * setup included: the step builds new objects only along the `models.pins`
- * path and shares the rest with its input, which `migrateManifest` has
- * already deep-copied. Idempotent: a generation-2 shape passes through with
- * nothing to rewrite.
+ * other field is passed through untouched, the `plugin` block of a 1.14 setup
+ * included (the read drops that one after the walk, {@link readManifest}): the
+ * step builds new objects only along the `models.pins` path and shares the rest
+ * with its input, which `migrateManifest` has already deep-copied. Idempotent:
+ * a generation-2 shape passes through with nothing to rewrite.
  */
 export const PER_CLIENT_PINS_STEP: ManifestMigration = {
   fromVersion: "1.0.0",
@@ -232,7 +232,6 @@ const MANIFEST_FIELD_ORDER: Record<keyof SetupManifest, true> = {
   learnings: true,
   hooks: true,
   models: true,
-  plugin: true,
   gates: true,
   importChoice: true,
   toolOptions: true,
@@ -1021,8 +1020,6 @@ export function collectManifestErrors(data: unknown): string[] {
     }
   }
   if (data.models !== undefined) collectModelsErrors(data.models, errors);
-  // `plugin` is held, not validated: any value a 1.14 setup wrote parses, so
-  // the manifest that still carries it is not refused (`SetupManifest.plugin`).
   if (data.gates !== undefined) collectGatesErrors(data.gates, errors);
   if (data.importChoice !== undefined) {
     collectImportChoiceErrors(data.importChoice, errors);
@@ -1129,6 +1126,12 @@ function assertReadableGeneration(document: Record<string, unknown>, path: strin
 const BOM = "\uFEFF";
 
 /**
+ * The top-level key a 1.14 setup wrote its plugin install record under, held
+ * unread through the 1.15 line and dropped on read since (REQ-PLUGIN-014).
+ */
+export const DROPPED_PLUGIN_KEY = "plugin";
+
+/**
  * Read the manifest under `rootDir`, or `null` when the repo has none — absence
  * is the un-initialised case, not a failure.
  *
@@ -1154,6 +1157,12 @@ export async function readManifest(rootDir: string): Promise<SetupManifest | nul
   ) as Record<string, unknown>;
   assertReadableGeneration(document, path);
   const migrated = migrateManifest(document);
+  // The install record a 1.14 setup wrote, held unread through the 1.15 line:
+  // dropped here, of any shape, before validation names it as unknown, so the
+  // manifest that still carries it loads and the next write holds no `plugin`
+  // key. No migration step and no generation bump: a 1.15 engine reads a
+  // manifest without the key, so it still reads what this one writes.
+  delete migrated[DROPPED_PLUGIN_KEY];
 
   const errors = collectManifestErrors(migrated);
   if (errors.length > 0) {
@@ -1221,12 +1230,6 @@ export interface PreservedManifestFields {
   communicationStyle?: CommunicationStyle;
   learnings?: LearningsConfig;
   toolOptions?: SetupManifest["toolOptions"];
-  /**
-   * The held 1.14 install record, carried as it stands through the 1.15 line
-   * (`SetupManifest.plugin`): a regeneration that dropped it would end the
-   * leftover-plugin warning after one run, before the operator uninstalled.
-   */
-  plugin?: unknown;
   /** The operator's pinned gate commands; a fresh run only detects, never asks. */
   gates?: GatesConfig;
 }
@@ -1245,7 +1248,6 @@ export function extractPreservedManifestFields(manifest: SetupManifest): Preserv
   if (manifest.toolOptions !== undefined) {
     preserved.toolOptions = structuredClone(manifest.toolOptions);
   }
-  if (manifest.plugin !== undefined) preserved.plugin = structuredClone(manifest.plugin);
   if (manifest.gates !== undefined) preserved.gates = structuredClone(manifest.gates);
   return preserved;
 }
@@ -1270,7 +1272,6 @@ export function applyPreservedManifestFields(
   if (preserved.toolOptions !== undefined) {
     merged.toolOptions = structuredClone(preserved.toolOptions);
   }
-  if (preserved.plugin !== undefined) merged.plugin = structuredClone(preserved.plugin);
   if (preserved.gates !== undefined) merged.gates = structuredClone(preserved.gates);
   return merged;
 }

@@ -12,7 +12,7 @@ import {
   type EmittedArtifact,
   type ReclaimCandidate,
 } from "../../../manifest/ledger.ts";
-import { manifestPath, readManifest, writeManifest } from "../../../manifest/manifest.ts";
+import { DROPPED_PLUGIN_KEY, manifestPath, readManifest, writeManifest } from "../../../manifest/manifest.ts";
 import { OWNED_PATHS } from "../../../manifest/ownedPaths.ts";
 import { materializeUserMcpJson } from "../../../manifest/mcpFilter.ts";
 import type { PackSuppliedServer } from "../../../mcp/catalog.ts";
@@ -202,6 +202,16 @@ export interface SyncPlan {
   dirty: WorkingTreeStatus;
   /** True when the manifest reader migrated the schema; apply persists the migrated shape. */
   manifestMigrated: boolean;
+  /**
+   * True when the manifest on disk still carries the `plugin` key a 1.14 setup
+   * wrote, which the reader drops (`../../../manifest/manifest.ts::readManifest`):
+   * a live apply writes the manifest without it, a dry run writes nothing, and
+   * `./report.ts` says which, once — the next run reads a file with no key.
+   *
+   * Optional in the TYPE only, for the same hand-built fixtures as
+   * {@link warnings}; {@link planSync} always sets it.
+   */
+  pluginBlockDropped?: boolean;
   plannerId: string;
   /**
    * The planned emission the entries were judged from — apply writes exactly
@@ -251,18 +261,26 @@ const ACTION_OF: Record<MergeAction, SyncPlanEntry["action"]> = {
 };
 
 /**
- * The manifest `version` as it sits on disk, read leniently — planSync calls
- * this only after `readManifest` succeeded, so parse failures cannot happen on
- * the same bytes and collapse to `null` (read as "unknown", never a throw).
+ * What the manifest on disk says before the reader reshapes it: its `version`,
+ * and whether it still carries the dropped `plugin` key. Read leniently —
+ * planSync calls this only after `readManifest` succeeded, so parse failures
+ * cannot happen on the same bytes and collapse to "unknown" (`null`, `false`),
+ * never a throw.
  */
-async function readOnDiskManifestVersion(rootDir: string): Promise<string | null> {
+async function readOnDiskManifestFacts(
+  rootDir: string,
+): Promise<{ version: string | null; pluginBlock: boolean }> {
   try {
     const raw = await readFile(manifestPath(rootDir), "utf8");
     const parsed: unknown = JSON.parse(raw.startsWith("\uFEFF") ? raw.slice(1) : raw);
-    const version = (parsed as { version?: unknown } | null)?.version;
-    return typeof version === "string" ? version : null;
+    if (parsed === null || typeof parsed !== "object") return { version: null, pluginBlock: false };
+    const version = (parsed as { version?: unknown }).version;
+    return {
+      version: typeof version === "string" ? version : null,
+      pluginBlock: Object.hasOwn(parsed, DROPPED_PLUGIN_KEY),
+    };
   } catch {
-    return null;
+    return { version: null, pluginBlock: false };
   }
 }
 
@@ -538,10 +556,11 @@ export async function planSync(
       { code: "VALIDATION_ERROR" },
     );
   }
-  // The manifest reader already ran schema migrations; the flag records whether they
-  // changed anything, so apply knows it is persisting a migrated shape.
-  const onDiskVersion = await readOnDiskManifestVersion(rootDir);
-  const manifestMigrated = onDiskVersion !== null && onDiskVersion !== manifest.version;
+  // The manifest reader already ran schema migrations and dropped the 1.14
+  // `plugin` key; the flags record whether either changed anything, so apply
+  // knows it is persisting a reshaped manifest and the report can say so.
+  const onDisk = await readOnDiskManifestFacts(rootDir);
+  const manifestMigrated = onDisk.version !== null && onDisk.version !== manifest.version;
 
   const [index, repoInfo] = await Promise.all([buildContentIndex(), analyzeRepo(rootDir)]);
   const detected: DetectedSummary = summarizeDetection(repoInfo);
@@ -628,6 +647,7 @@ export async function planSync(
     reclaim,
     dirty: readWorkingTreeStatus(rootDir, opts.runner),
     manifestMigrated,
+    pluginBlockDropped: onDisk.pluginBlock,
     plannerId: planner.id,
     outputs,
     warnings,

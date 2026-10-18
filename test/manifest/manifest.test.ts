@@ -884,7 +884,12 @@ describe("migrateManifest", () => {
     expect({ ...migrated, version: before["version"], models: before["models"] }).toEqual(before);
     // Pure: the caller's object is not touched.
     expect(raw).toEqual(before);
-    expect(collectManifestErrors(migrated)).toEqual([]);
+    // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-014): the schema no longer
+    // holds `plugin`, so validation names the key; `readManifest` drops it before validating,
+    // which the read below pins. The rest of the migrated shape validates as it did.
+    expect(collectManifestErrors(migrated)).toEqual(["unknown field `plugin`"]);
+    const { plugin: _dropped, ...withoutBlock } = migrated;
+    expect(collectManifestErrors(withoutBlock)).toEqual([]);
   });
 
   it("is idempotent: migrating twice equals migrating once, and the step is a fixed point on its output", () => {
@@ -911,7 +916,11 @@ describe("migrateManifest", () => {
     expect(migrated["models"]).toEqual({
       pins: { standard: 7, advanced: { all: "X" }, economy: { all: "Z" } },
     });
-    const errors = collectManifestErrors(migrated);
+    // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-014): the fixture is a 1.14
+    // file carrying the `plugin` block, which the schema no longer holds; validated as
+    // `readManifest` validates it, with the block dropped, the one defect is still the pin.
+    const { plugin: _dropped, ...asRead } = migrated;
+    const errors = collectManifestErrors(asRead);
     expect(errors).toHaveLength(1);
     expect(errors[0]).toContain("`models.pins.standard` 7 must be an object keyed by client");
   });
@@ -1085,7 +1094,10 @@ describe("readManifest / writeManifest", () => {
     expect(error.message).toContain("Upgrade to a release that understands schema 3.x");
   });
 
-  it("reads a 1.0.0 file as 2.0.0 with per-client pins and the plugin block unchanged, and persists 2.0.0 (REQ-LADDER-005)", async () => {
+  // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-LADDER-005, REQ-PLUGIN-014): the
+  // block was held and written back through the 1.15 line; it is now dropped on read, so the
+  // read and the write it feeds carry no `plugin` key. The pins and the generation are as before.
+  it("reads a 1.0.0 file as 2.0.0 with per-client pins and no plugin block, and persists 2.0.0 without it (REQ-LADDER-005)", async () => {
     const root = getRoot().dir;
     const plugin = { mode: "plugin-backed", clients: { claude: { version: "1.9.0", classes: ["agent"] } } };
     await seedManifest(
@@ -1097,14 +1109,14 @@ describe("readManifest / writeManifest", () => {
 
     expect(read?.version).toBe("2.0.0");
     expect(read?.models?.pins?.standard).toEqual({ all: "Y" });
-    expect(read?.plugin).toEqual(plugin);
+    expect(read).not.toHaveProperty("plugin");
 
     // The write a `sync` makes of what it read: the file now declares the new generation.
     await writeManifest(root, read as SetupManifest, { now: FIXED_NOW });
     const persisted = JSON.parse(await readFile(manifestPath(root), "utf8")) as Record<string, unknown>;
     expect(persisted["version"]).toBe("2.0.0");
     expect(persisted["models"]).toEqual({ pins: { standard: { all: "Y" } } });
-    expect(persisted["plugin"]).toEqual(plugin);
+    expect(persisted).not.toHaveProperty("plugin");
   });
 
   it.each(["__proto__", "constructor"])(
@@ -1348,35 +1360,33 @@ describe("models — the operator's ladder overrides", () => {
     expect(await readFile(manifestPath(root), "utf8")).toBe(bytes);
   });
 });
-
 /**
- * The held 1.14 install record and the operator's pinned gate commands.
+ * The dropped 1.14 install record and the operator's pinned gate commands.
  *
- * Both fields are additive at the current schema generation, so the first case
- * IS the contract: a manifest written before they existed parses unchanged,
+ * `gates` is additive at the current schema generation, so the first case IS
+ * its contract: a manifest written before it existed parses unchanged,
  * round-trips without gaining a key, and needs no migration step.
  *
  * TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): 1.15.0
- * deleted the `plugin-backed` install mode, so the `plugin` block is HELD, not
- * validated or read: the cases that pinned its ownership readers
- * (`readInstallMode`, `pluginOwnedClasses`, `INSTALL_MODES`,
- * `PLUGIN_OWNED_CLASSES`) and its per-key validation errors left with them, and
- * two cases below pin the held behaviour instead — any value is accepted and
- * written back value-identical.
+ * deleted the `plugin-backed` install mode, so the `plugin` block was HELD, not
+ * validated or read, through the 1.15 line.
+ *
+ * TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-014): the hold
+ * ends. The cases that pinned the block written back value-identical, carried
+ * across a regeneration and serialized after `models` now pin the reverse: a
+ * file carrying a `plugin` key of any shape still loads, with no refusal, the
+ * manifest read holds no such key, a write holds none, and a second write moves
+ * no byte. No migration step and no generation bump: a 1.15 engine still reads
+ * what this one writes, since it accepts a manifest with no `plugin` key.
  */
-describe("plugin and gates — the held install record", () => {
+describe("plugin and gates — the dropped install record", () => {
   /** The record a 1.14 setup wrote: claude plugin-backed, four classes carried. */
-  function pluginBacked(): SetupManifest {
-    return {
-      ...fullManifest(),
-      plugin: {
-        mode: "plugin-backed",
-        clients: {
-          claude: { version: "1.9.0", classes: ["agent", "skill", "command", "hooks"] },
-        },
-      },
-    };
-  }
+  const PLUGIN_BACKED = {
+    mode: "plugin-backed",
+    clients: {
+      claude: { version: "1.9.0", classes: ["agent", "skill", "command", "hooks"] },
+    },
+  };
 
   it("leaves a manifest that sets neither field untouched — no migration, no added key", async () => {
     const root = getRoot().dir;
@@ -1396,7 +1406,7 @@ describe("plugin and gates — the held install record", () => {
     // step; "no migration" is the runner leaving this current-generation document as it is.
     expect(migrateManifest(JSON.parse(bytes) as Record<string, unknown>)).toEqual(JSON.parse(bytes));
     expect(reread).toEqual(manifest);
-    expect(reread?.plugin).toBeUndefined();
+    expect(reread).not.toHaveProperty("plugin");
     expect(reread?.gates).toBeUndefined();
 
     // ...and writing what was read back produces the same bytes, so a no-op
@@ -1405,10 +1415,10 @@ describe("plugin and gates — the held install record", () => {
     expect(await readFile(manifestPath(root), "utf8")).toBe(bytes);
   });
 
-  it("round-trips a populated plugin and gates block through write -> read deep-equal", async () => {
+  it("round-trips a populated gates block through write -> read deep-equal", async () => {
     const root = getRoot().dir;
     const manifest: SetupManifest = {
-      ...pluginBacked(),
+      ...fullManifest(),
       gates: {
         test: "npm run test",
         lint: "npm run lint",
@@ -1422,10 +1432,10 @@ describe("plugin and gates — the held install record", () => {
     expect(await readManifest(root)).toEqual(manifest);
   });
 
-  it("serializes `plugin` and `gates` directly after `models`", async () => {
+  it("serializes `gates` directly after `models`", async () => {
     const root = getRoot().dir;
     const manifest: SetupManifest = {
-      ...pluginBacked(),
+      ...fullManifest(),
       models: { reviewCap: 3 },
       gates: { test: "npm run test" },
     };
@@ -1437,37 +1447,56 @@ describe("plugin and gates — the held install record", () => {
 
     const models = keys.indexOf("models");
     expect(models).toBeGreaterThan(-1);
-    expect(keys.slice(models, models + 3)).toEqual(["models", "plugin", "gates"]);
+    expect(keys.slice(models, models + 2)).toEqual(["models", "gates"]);
   });
 
-  it("accepts the 1.14 plugin-backed record without validating it, and owns nothing by it", () => {
-    expect(collectManifestErrors(pluginBacked())).toEqual([]);
+  it("names a `plugin` key as unknown to validation, and refuses to write a manifest carrying one", async () => {
+    // The schema holds no `plugin` key now: only the read drops it, so a
+    // manifest built in memory with one is a defect the writer names.
+    const carrying = { ...fullManifest(), plugin: PLUGIN_BACKED } as SetupManifest;
+
+    expect(collectManifestErrors(carrying)).toEqual(["unknown field `plugin`"]);
+    const error = await rejects(
+      () => writeManifest(getRoot().dir, carrying, { now: FIXED_NOW }),
+      "CONFIG_ERROR",
+    );
+    expect(error.message).toContain("unknown field `plugin`");
   });
 
-  it("holds any value under `plugin` — one 1.14 never wrote included — and writes it back value-identical", async () => {
-    // Each of these was a validation error before 1.15.0. The block is held,
-    // not read, so none may refuse the manifest that carries it: a refusal here
-    // would make `check`, `sync` and `clean` stop on a repository mid-upgrade.
+  it("loads a file carrying `plugin` of any shape with no refusal, drops it, and a second write moves no byte", async () => {
+    // Each of these was held through the 1.15 line. None may refuse the manifest
+    // that carries it, or `check`, `sync` and `clean` would stop on a repository
+    // mid-upgrade; and none may reach the manifest the engine acts on.
     const held: [string, unknown][] = [
+      ["the 1.14 plugin-backed record", PLUGIN_BACKED],
       ["a mode outside the two", { mode: "other" }],
-      ["a missing mode", { clients: {} }],
       ["a plugin that is not an object", "plugin-backed"],
       ["a null", null],
       ["an unknown tool", { mode: "plugin-backed", clients: { vim: { version: "1.9.0", classes: ["agent"] } } }],
-      ["a version that is not a version", { mode: "plugin-backed", clients: { claude: { version: "x", classes: [] } } }],
       ["a stray key, keys out of order", { root: "/plugins", mode: "generated", clients: { claude: "1.9.0" } }],
     ];
+    const control = join(getRoot().dir, "control");
+    await writeManifest(control, fullManifest(), { now: FIXED_NOW });
+    const controlBytes = await readFile(manifestPath(control), "utf8");
 
-    const reread = await Promise.all(
+    await Promise.all(
       held.map(async ([label, plugin]) => {
-        const manifest = { ...fullManifest(), plugin } as SetupManifest;
-        expect(collectManifestErrors(manifest), label).toEqual([]);
-        const root = join(getRoot().dir, label.replaceAll(/[^a-z]+/g, "-"));
-        await writeManifest(root, manifest, { now: FIXED_NOW });
-        return (await readManifest(root))?.plugin;
+        const root = join(getRoot().dir, label.replaceAll(/[^a-z0-9]+/g, "-"));
+        await seedManifest(root, JSON.stringify({ ...fullManifest(), plugin }));
+
+        const read = await readManifest(root);
+        expect(read, label).not.toHaveProperty("plugin");
+        expect(read, label).toEqual(fullManifest());
+
+        await writeManifest(root, read as SetupManifest, { now: FIXED_NOW });
+        const once = await readFile(manifestPath(root), "utf8");
+        expect(Object.keys(JSON.parse(once) as Record<string, unknown>), label).not.toContain("plugin");
+        // The written file is the one a manifest that never carried the block writes.
+        expect(once, label).toBe(controlBytes);
+        await writeManifest(root, (await readManifest(root)) as SetupManifest, { now: FIXED_NOW });
+        expect(await readFile(manifestPath(root), "utf8"), label).toBe(once);
       }),
     );
-    expect(reread).toEqual(held.map(([, plugin]) => plugin));
   });
 
   it("names exactly the one defective gate command", () => {
@@ -1524,9 +1553,9 @@ describe("plugin and gates — the held install record", () => {
     expect(manifest.gates?.test).toBe("npm run test");
   });
 
-  it("carries both fields across a regeneration, deep-copied", () => {
+  it("carries gates across a regeneration, deep-copied, and no plugin key", () => {
     const previous: SetupManifest = {
-      ...pluginBacked(),
+      ...fullManifest(),
       gates: { test: "npm run test", all: "npm run lint && npm run test" },
     };
     const preserved = extractPreservedManifestFields(previous);
@@ -1539,12 +1568,13 @@ describe("plugin and gates — the held install record", () => {
     });
     const merged = applyPreservedManifestFields(fresh, preserved);
 
-    expect(merged.plugin).toEqual(previous.plugin);
     expect(merged.gates).toEqual(previous.gates);
     expect(validateManifest(merged)).toBe(true);
+    expect(preserved).not.toHaveProperty("plugin");
+    expect(merged).not.toHaveProperty("plugin");
     // Deep-copied: the bag outlives the manifest it came from.
-    expect(preserved.plugin).not.toBe(previous.plugin);
-    expect(merged.plugin).not.toBe(previous.plugin);
+    expect(preserved.gates).not.toBe(previous.gates);
+    expect(merged.gates).not.toBe(previous.gates);
   });
 });
 

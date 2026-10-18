@@ -968,8 +968,8 @@ export interface RenderingProof {
  * in its own bytes (`metadata.stamity.tools`), so a render for every client is
  * not what a narrower setup wrote. The manifest handed to `planFor` is built
  * the way `sync` builds its own (`../commands/sync/engine.ts::planSync`):
- * full-corpus selection and fresh detection, with those clients selected and
- * no held `plugin` block, and with every installed pack rendered whatever the org
+ * full-corpus selection and fresh detection, with those clients selected, and
+ * with every installed pack rendered whatever the org
  * policy says (`../../pack/projection.ts::ignoringPolicyDenialForProof`): the
  * copies a pack projected before the policy denied it are still the engine's,
  * and keeping them would leave the denied pack active in every client. The
@@ -1032,9 +1032,6 @@ export async function engineRenderingsFor(
     setupClients.tools = clients;
     setupClients.selection = fullCorpusSelection(index);
     setupClients.detected = summarizeDetection(repoInfo);
-    // The held 1.14 `plugin` block steers no emission; the proof plan drops it
-    // all the same, so no rendering this proof hashes is planned with it.
-    delete setupClients.plugin;
     const plan = (planned: SetupManifest): Promise<readonly AdapterOutput[]> =>
       withoutPolicyWarningPrint(() =>
         ignoringPolicyDenialForProof(() => planFor(planned, { monorepoPackages: repoInfo.monorepoPackages })),

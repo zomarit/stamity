@@ -212,7 +212,10 @@ interface SeedOptions {
   /** `false` leaves `.stamity/learnings` and `.stamity/handoffs` absent. */
   stateDirs?: boolean;
   files?: Record<string, string>;
-  /** The manifest's held `plugin` block, as a 1.14 `stamity plugin setup` persisted it. */
+  /**
+   * A `plugin` block written into the manifest file after the fixture sync, as a 1.14
+   * `stamity plugin setup` persisted it: the writer refuses the key, and the reader drops it.
+   */
   plugin?: unknown;
   /**
    * Files seeded BEFORE the fixture sync. Sync re-detects the repository and persists what it
@@ -332,10 +335,16 @@ async function seedRepo(handle: TempDirHandle, opts: SeedOptions = {}): Promise<
     ...(synced ?? base),
     generatedBy: opts.generatedBy ?? engineVersion,
     ...(opts.version === undefined ? {} : { version: opts.version }),
-    ...(opts.plugin === undefined ? {} : { plugin: opts.plugin }),
     ledger: [...(synced?.ledger ?? []), ...(opts.ledger ?? [])],
   };
   await writeManifest(handle.dir, manifest, { now: T0 });
+  if (opts.plugin !== undefined) {
+    // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-014): the writer refuses a
+    // `plugin` key now, so the 1.14 block is added to the bytes on disk, where a repository holds it.
+    const path = join(handle.dir, STATE_DIR, "manifest.json");
+    const onDisk = JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
+    await writeFile(path, `${JSON.stringify({ ...onDisk, plugin: opts.plugin }, null, 2)}\n`, "utf8");
+  }
 
   if (opts.files !== undefined) await handle.seedFiles(opts.files);
   return handle.dir;
@@ -510,7 +519,9 @@ describe("check — a healthy repository", () => {
   // fourteen — the `plugin-runtime` row left with the plugin route.
   // TEST CHANGE, justified (2026-10-14, plan 020 file 2, unit e4-check-model-row,
   // REQ-LADDER-008): fourteen to fifteen with the `model-pins` row below.
-  it("returns the fifteen doctor rows in a fixed order", async () => {
+  // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-016): fifteen to fourteen —
+  // the `plugin-duplicates` row left with the held `plugin` block it warned about.
+  it("returns the fourteen doctor rows in a fixed order", async () => {
     const root = await seedRepo(getRepo());
 
     const doctor = await runDoctor(root, createEngine(), createApp({ cwd: root, env: {} }));
@@ -552,7 +563,8 @@ describe("check — a healthy repository", () => {
       // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine):
       // `plugin-runtime` left with the plugin route; `plugin-duplicates` stays one
       // release as the leftover-plugin warning, in the same place.
-      "plugin-duplicates",
+      // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-016): `plugin-duplicates`
+      // left after that release; `pack-reach` keeps its place before `invariants`.
       // TEST CHANGE, justified (2026-10-03, REQ-PLUGIN-016, run 2026-10-03_pack-engine-defects
       // unit u4b-pack-reach-row): `pack-reach` joined the doctor after the plugin rows. It reads
       // the same plugin boundary from the other side — not what the repository holds twice, but
@@ -2265,9 +2277,6 @@ async function doctorRow(
   return found;
 }
 
-const duplicatesRow = (root: string): Promise<DoctorCheck> =>
-  doctorRow(root, "plugin-duplicates");
-
 /**
  * A Node repository as detection reads it: a `package.json` declaring the three scripts, so
  * the charter's gates are `npm run lint`, `npm run typecheck` and `npm run test`. Without it
@@ -2692,231 +2701,89 @@ describe("check — the troubleshooting page's doctor sample", () => {
   // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): the sample
   // pinned the `plugin-runtime` line, a row that left with the plugin route; the line a
   // repository recording nothing prints is now `plugin-duplicates`'s pass.
-  it("shows the plugin-duplicates line a repository recording nothing really prints", async () => {
+  // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-016): `plugin-duplicates`
+  // left too, so the case pins the sample's rows against a real run instead — the same ids in
+  // the same order, each under the verdict and the detail the run prints for it where those are
+  // this checkout's own (the node version, the counts and the charter's dates are the sample run's).
+  it("shows the doctor rows a repository recording nothing really prints, in order", async () => {
     const page = await readFile(
       fileURLToPath(new URL("../../../docs/troubleshooting.md", import.meta.url)),
       "utf8",
     );
-    const sample = page
+    const start = page.indexOf("```text\ndoctor\n");
+    expect(start, "the troubleshooting page has no doctor sample").toBeGreaterThan(-1);
+    // The doctor block alone: it runs from `doctor` to the first blank line, before drift.
+    const block = page.slice(start + "```text\ndoctor\n".length);
+    const sample = block
+      .slice(0, block.indexOf("\n\n"))
       .split("\n")
-      .find((line) => line.trimStart().startsWith("ok    plugin-duplicates"));
-    expect(sample, "the troubleshooting sample has no ok plugin-duplicates line").toBeDefined();
+      .map((line) => /^ {2}(\S+) +(\S+) +(.*)$/.exec(line))
+      .filter((match): match is RegExpExecArray => match !== null)
+      .map((match) => ({ status: match[1] ?? "", id: match[2] ?? "", detail: match[3] ?? "" }));
 
     const root = await seedRepo(getRepo());
-    const probe = await doctorRow(root, "plugin-duplicates", {});
+    const doctor = await runDoctor(root, createEngine(), createApp({ cwd: root, env: {} }));
 
-    // Status and detail both: a sample showing the right sentence under the
-    // wrong verdict is the exact defect this pins against.
-    expect(probe.status).toBe("pass");
-    // Column padding collapsed: the page aligns its table, and the alignment is
-    // not the claim — the verdict word and the sentence are.
-    expect(sample?.trim().replaceAll(/\s+/g, " ")).toBe(`ok plugin-duplicates ${probe.detail}`);
+    expect(sample.map((entry) => entry.id)).toEqual(doctor.map((entry) => entry.id));
+    expect(sample.every((entry) => entry.status === "ok")).toBe(true);
+    // Status and detail both on a row whose sentence is this checkout's own: a sample showing
+    // the right sentence under the wrong verdict is the exact defect this pins against.
+    const reach = doctor.find((entry) => entry.id === "pack-reach");
+    expect(reach?.status).toBe("pass");
+    expect(sample.find((entry) => entry.id === "pack-reach")?.detail).toBe(reach?.detail);
+    expect(sample.map((entry) => entry.id)).not.toContain("plugin-duplicates");
   });
 });
 
 /**
- * `plugin-duplicates` — the leftover-plugin warning, held for the 1.15 line.
+ * The 1.14 `plugin` block a manifest on disk still carries, and Claude's `enabledPlugins`.
  *
  * TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): 1.15.0
- * deleted the plugin route, its `plugin-backed` mode and the duplicate scan this
- * row ran over the ledger, an APM manifest and the native folders, so every case
- * that pinned that scan, its three sources and its `fail` under `plugin-backed`
- * left with it. The row now warns, and never fails, when the manifest's held
- * `plugin` block or Claude's `enabledPlugins` still records an install, naming
- * only the four client ids and each vendor's uninstall command.
+ * deleted the plugin route, its `plugin-backed` mode and the duplicate scan the
+ * `plugin-duplicates` row ran, and the row warned, held for the 1.15 line, when
+ * the manifest's `plugin` block or Claude's `enabledPlugins` recorded an install.
+ *
+ * TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-014,
+ * REQ-PLUGIN-016): the row and the held block leave after that line. The cases
+ * that pinned the warning's wording, its client order, the renamed package's id
+ * and its read past an unreadable manifest left with it; what stays is that a
+ * manifest carrying the block, of any shape, loads with no refusal, and that no
+ * row and no line names a leftover plugin install. The multi-line rendering case
+ * moved to `model-pins`, the other row whose detail runs over several lines.
  */
-describe("check — plugin-duplicates", () => {
-  const PLUGIN_ID = canonical().name.replace(/^@[^/]+\//, "");
-  const HEADER =
-    "a plugin install from before 1.15.0 is still recorded; 1.15.0 removed the plugin route and " +
-    "this repository's own files now carry its content, so uninstall the plugin with your " +
-    "client's own command:";
-  const MANIFEST_LINE = `then delete the \`plugin\` key from ${STATE_DIR}/manifest.json; nothing reads it since 1.15.0`;
+describe("check — the dropped plugin block", () => {
   /** The block a 1.14 `stamity plugin setup` wrote for claude. */
   const HELD_1_14 = { mode: "plugin-backed", clients: { claude: { version: "1.14.0", classes: ["skill"] } } };
 
-  it("warns on the held 1.14 block, naming claude and its uninstall command, and still exits 0", async () => {
+  it("loads a manifest carrying the 1.14 block and Claude's enabledPlugins, with no leftover-plugin row or line", async () => {
     const root = await seedRepo(getRepo(), { plugin: HELD_1_14 });
+    const settingsPath = join(root, ".claude", "settings.json");
+    const settings = JSON.parse(await readFile(settingsPath, "utf8")) as Record<string, unknown>;
+    await writeFile(settingsPath, `${JSON.stringify({ ...settings, enabledPlugins: { "stamity@acme": true } }, null, 2)}\n`);
 
     const { code, doc } = await runJson(root);
+    const human = await runHuman(root);
 
-    expect(row(doc, "plugin-duplicates")).toEqual({
-      id: "plugin-duplicates",
-      status: "warn",
-      detail: [HEADER, `claude: claude plugin uninstall ${PLUGIN_ID}@<your marketplace>`, MANIFEST_LINE].join("\n"),
-    });
-    // The manifest that holds the block is valid, and drift is clean: the block steers nothing.
     expect(row(doc, "manifest").status).toBe("pass");
     expect(doc.drift?.clean).toBe(true);
+    expect(doc.doctor.map((entry) => entry.id)).not.toContain("plugin-duplicates");
     expect(code).toBe(0);
-  });
-
-  it("names every client the held block records, in TOOLS order, each with its own command", async () => {
-    const root = await seedRepo(getRepo(), {
-      plugin: { mode: "generated", clients: { codex: {}, cursor: {}, claude: {}, copilot: {} } },
-    });
-
-    const probe = await duplicatesRow(root);
-
-    expect(probe.status).toBe("warn");
-    expect(probe.detail.split("\n")).toEqual([
-      HEADER,
-      `claude: claude plugin uninstall ${PLUGIN_ID}@<your marketplace>`,
-      `cursor: uninstall the ${PLUGIN_ID} plugin from Cursor's Customize view`,
-      `copilot: copilot plugin uninstall ${PLUGIN_ID}`,
-      `codex: codex plugin remove ${PLUGIN_ID}@<your marketplace>`,
-      MANIFEST_LINE,
-    ]);
-  });
-
-  it("warns on Claude's enabledPlugins key for this package's plugin, with no manifest line", async () => {
-    const root = await seedRepo(getRepo());
-    const settingsPath = join(root, ".claude", "settings.json");
-    const settings = JSON.parse(await readFile(settingsPath, "utf8")) as Record<string, unknown>;
-    await writeFile(settingsPath, `${JSON.stringify({ ...settings, enabledPlugins: { [`${PLUGIN_ID}@acme`]: true } }, null, 2)}\n`);
-
-    const probe = await duplicatesRow(root);
-
-    expect(probe).toEqual({
-      id: "plugin-duplicates",
-      status: "warn",
-      detail: [HEADER, `claude: claude plugin uninstall ${PLUGIN_ID}@<your marketplace>`].join("\n"),
-    });
-  });
-
-  it("passes on another product's plugin in enabledPlugins, and on a repository recording nothing", async () => {
-    const root = await seedRepo(getRepo());
-    expect(await duplicatesRow(root)).toEqual({
-      id: "plugin-duplicates",
-      status: "pass",
-      detail: "no leftover plugin install",
-    });
-
-    const settingsPath = join(root, ".claude", "settings.json");
-    const settings = JSON.parse(await readFile(settingsPath, "utf8")) as Record<string, unknown>;
-    await writeFile(
-      settingsPath,
-      `${JSON.stringify({ ...settings, enabledPlugins: { [`not-${PLUGIN_ID}@acme`]: true, [PLUGIN_ID]: true } }, null, 2)}\n`,
-    );
-
-    expect((await duplicatesRow(root)).status).toBe("pass");
-  });
-
-  it("prints nothing of a hostile block but the known client ids, and accepts a block of any shape", async () => {
-    const esc = String.fromCharCode(27);
-    const root = await seedRepo(getRepo(), {
-      plugin: {
-        mode: `${esc}[2K\rok    plugin-duplicates  spoofed`,
-        clients: { [`vim${esc}[2K`]: { version: "x" }, codex: "not a record", toString: 1 },
-      },
-    });
-
-    const { code, doc } = await runJson(root);
-    const probe = row(doc, "plugin-duplicates");
-
-    expect(probe.status).toBe("warn");
-    expect(probe.detail.split("\n")).toEqual([
-      HEADER,
-      `codex: codex plugin remove ${PLUGIN_ID}@<your marketplace>`,
-      MANIFEST_LINE,
-    ]);
-    expect(probe.detail).not.toContain("vim");
-    expect(probe.detail).not.toContain("spoofed");
-    expect(code).toBe(0);
+    expect(human.code).toBe(0);
+    expect(human.stdout).not.toContain("plugin install");
+    expect(human.stdout).not.toContain("plugin-duplicates");
   });
 
   it.each([["a string", "plugin-backed"], ["an array", ["claude"]], ["a null", null]])(
-    "holds %s under `plugin` without refusing the manifest, naming no client",
+    "loads a manifest carrying %s under `plugin` without refusing it",
     async (_label, plugin) => {
       const root = await seedRepo(getRepo(), { plugin });
 
       const { code, doc } = await runJson(root);
 
       expect(row(doc, "manifest").status).toBe("pass");
-      expect(row(doc, "plugin-duplicates").status).toBe("pass");
       expect(code).toBe(0);
     },
   );
-
-  it("names the plugin id a RENAMED package installed, not the canonical one", async () => {
-    // The plugin id on every client surface was the package name with its npm
-    // scope removed; a hardcoded `stamity` would send a fork's operator at a plugin
-    // id their marketplace never carried, and would miss their `enabledPlugins` key.
-    //
-    // MOCK, with its reason: the running package's name is fixed by the manifest
-    // this suite runs out of, and a rename cannot be staged in-process. Only the
-    // kit's own package-root walk is redirected, to a real renamed `package.json`;
-    // the name read and the warning's lines are the real module.
-    const handle = getRepo();
-    const pseudoInstall = handle.path("pseudo-install");
-    await mkdir(pseudoInstall, { recursive: true });
-    await writeFile(join(pseudoInstall, "package.json"), `${JSON.stringify({ name: "@acme/stamity-fork", version: "1.8.0" })}\n`);
-    const kitDir = join("src", "cli", "kit");
-    vi.resetModules();
-    vi.doMock("../../../src/shared/paths.ts", async (importOriginal) => {
-      const actual = await importOriginal<typeof PathsApi>();
-      return {
-        ...actual,
-        findPackageRoot: (from: string): string =>
-          from.endsWith(kitDir) ? pseudoInstall : actual.findPackageRoot(from),
-      };
-    });
-    try {
-      const kit = await import("../../../src/cli/kit/packageName.ts");
-
-      expect(kit.leftoverPluginLines(undefined, { "stamity-fork@acme": true })).toEqual([
-        HEADER,
-        "claude: claude plugin uninstall stamity-fork@<your marketplace>",
-      ]);
-      expect(kit.leftoverPluginLines({ clients: { codex: {} } }, undefined)[1]).toBe(
-        "codex: codex plugin remove stamity-fork@<your marketplace>",
-      );
-      // The canonical id is another product's plugin to a fork.
-      expect(kit.leftoverPluginLines(undefined, { "stamity@acme": true })).toEqual([]);
-    } finally {
-      vi.doUnmock("../../../src/shared/paths.ts");
-      vi.resetModules();
-    }
-  });
-
-  it("still warns when another field makes the manifest unreadable", async () => {
-    // The row reads the file as raw JSON, not through the validator, so a defect
-    // elsewhere in the manifest cannot hide a leftover install.
-    const root = await seedRepo(getRepo(), { plugin: HELD_1_14 });
-    const path = join(root, STATE_DIR, "manifest.json");
-    const manifest = JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
-    await writeFile(path, `${JSON.stringify({ ...manifest, ledgar: [] }, null, 2)}\n`);
-
-    const { doc } = await runJson(root);
-
-    expect(row(doc, "manifest").status).toBe("fail");
-    expect(row(doc, "plugin-duplicates").status).toBe("warn");
-  });
-
-  it("puts each further line under the detail column, and no padding in the --json detail", async () => {
-    // review/41: continuation lines were joined with a fixed 25-space indent,
-    // four columns left of the detail column, and the spaces shipped in --json.
-    // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): moved here
-    // from `pack-reach`, whose only two-line warning was the plugin drop that left
-    // with the `plugin-backed` mode; this row's warning is the multi-line one now.
-    const root = await seedRepo(getRepo(), { plugin: HELD_1_14 });
-
-    const { doc } = await runJson(root);
-    const probe = row(doc, "plugin-duplicates");
-    const lines = probe.detail.split("\n");
-    expect(lines).toHaveLength(3);
-    expect(lines.every((line) => line === line.trim())).toBe(true);
-
-    const human = await runHuman(root);
-    const width = Math.max(...doc.doctor.map((entry) => entry.id.length));
-    const column = 2 + 4 + 2 + width + 2;
-    const out = human.stdout.split("\n");
-    const first = out.findIndex((line) => line.includes(lines[0]!));
-    expect(first).toBeGreaterThan(-1);
-    expect(out[first]!.indexOf(lines[0]!)).toBe(column);
-    expect(out[first + 1]).toBe(`${" ".repeat(column)}${lines[1]!}`);
-    expect(out[first + 2]).toBe(`${" ".repeat(column)}${lines[2]!}`);
-  });
 });
 
 /**
@@ -3031,9 +2898,11 @@ describe("check — pack-reach", () => {
     expect(code).toBe(0);
   });
 
-  it("drops nothing for a held plugin block: the pack's command reaches every selected client", async () => {
+  // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-014): the block is dropped on
+  // read rather than held, so the case names it as a block on disk; the assertions are unchanged.
+  it("drops nothing for a 1.14 plugin block on disk: the pack's command reaches every selected client", async () => {
     // The 1.14 record that carried claude's commands no longer moves a class out
-    // of emission: the block is held for the warning and read by nothing else.
+    // of emission: the reader drops the block, so nothing reads it.
     const handle = getRepo();
     const root = await seedRepo(handle, {
       tools: ["claude", "codex"],
@@ -3337,7 +3206,10 @@ describe("check — the non-mutation guarantee (REQ-PLUGIN-019)", () => {
     const before = await hashTree(root);
 
     const { doc } = await runJson(root);
-    expect(row(doc, "plugin-duplicates").status).toBe("warn");
+    // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-016): the row that warned
+    // here left; the manifest carrying the block loads, and check, the read-only verb, still
+    // writes nothing — the block stays on disk until a `sync` drops it.
+    expect(row(doc, "manifest").status).toBe("pass");
 
     // Every byte, not a spot check: `check` is the read-only verb, and a row that
     // reads the manifest and the settings document beside the validator is one way
@@ -3393,7 +3265,8 @@ describe("check — the caller's expectations (REQ-PLUGIN-047)", () => {
     // Outside `runDoctor`: the fifteenth row exists only because a flag asked for it.
     // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): one row fewer — `plugin-runtime` left with the plugin route.
     // TEST CHANGE, justified (2026-10-14, plan 020 file 2, unit e4-check-model-row): one row more — `model-pins` joined the doctor.
-    expect(doc.doctor.map((entry) => entry.id).indexOf("expectations")).toBe(15);
+    // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-016): one row fewer — `plugin-duplicates` left.
+    expect(doc.doctor.map((entry) => entry.id).indexOf("expectations")).toBe(14);
   });
 
   it("fails another --expect-version naming the running release and generatedBy", async () => {
@@ -3759,7 +3632,8 @@ describe("check — the caller's expectations (REQ-PLUGIN-047)", () => {
     expect(doc).not.toHaveProperty("expectations");
     // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): one row fewer — `plugin-runtime` left with the plugin route.
     // TEST CHANGE, justified (2026-10-14, plan 020 file 2, unit e4-check-model-row): one row more — `model-pins` joined the doctor.
-    expect(doc.doctor).toHaveLength(15);
+    // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-016): one row fewer — `plugin-duplicates` left.
+    expect(doc.doctor).toHaveLength(14);
     expect(human.stdout).not.toContain("expectations");
   });
 });
@@ -3775,12 +3649,14 @@ describe("check — change-classes (p2a-class-file, REQ-FLOW-061)", () => {
     expect(doc.doctor.map((entry) => entry.id)).not.toContain("change-classes");
     // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): one row fewer — `plugin-runtime` left with the plugin route.
     // TEST CHANGE, justified (2026-10-14, plan 020 file 2, unit e4-check-model-row): one row more — `model-pins` joined the doctor.
-    expect(doc.doctor).toHaveLength(15);
+    // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-016): one row fewer — `plugin-duplicates` left.
+    expect(doc.doctor).toHaveLength(14);
   });
 
   // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): one row fewer — `plugin-runtime` left with the plugin route.
   // TEST CHANGE, justified (2026-10-14, plan 020 file 2, unit e4-check-model-row): one row more — `model-pins` joined the doctor.
-  it("passes a valid class file, as the sixteenth row before invariants", async () => {
+  // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-016): one row fewer — `plugin-duplicates` left.
+  it("passes a valid class file, as the fifteenth row before invariants", async () => {
     const root = await seedRepo(getRepo(), {
       files: {
         [CLASS_FILE]: JSON.stringify({
@@ -3800,7 +3676,7 @@ describe("check — change-classes (p2a-class-file, REQ-FLOW-061)", () => {
       detail: `${CLASS_FILE} is valid: 3 glob(s) across 2 class(es), 1 test-input entry(ies)`,
     });
     const ids = doc.doctor.map((entry) => entry.id);
-    expect(ids).toHaveLength(16);
+    expect(ids).toHaveLength(15);
     expect(ids.indexOf("change-classes")).toBe(ids.indexOf("invariants") - 1);
   });
 
@@ -4431,5 +4307,37 @@ describe("check — model-pins", () => {
       detail: "codex: 4 class(es), each pinned or emitted model on the list (saved by the last sync)",
     });
     expect(existsSync(marker)).toBe(false);
+  });
+
+  it("puts each further line under the detail column, and no padding in the --json detail", async () => {
+    // review/41: continuation lines were joined with a fixed 25-space indent,
+    // four columns left of the detail column, and the spaces shipped in --json.
+    // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-016): moved here from
+    // `plugin-duplicates`, which left; two codex pins the saved list lacks make this row's
+    // warning the multi-line one. The probe is off, so no client starts.
+    const root = await seedRepo(getRepo(), { tools: ["claude", "codex"] });
+    await pinCodex(root, {
+      pins: { standard: { codex: "gpt-4-retired" }, advanced: { codex: "gpt-3-retired" } },
+      listed: { codex: { ids: ["gpt-6-astra", "gpt-6-luna"], source: "codex-debug-models" } },
+    });
+    const env = { STAMITY_NO_CLIENT_PROBE: "1" };
+
+    const { doc } = await runJson(root, env);
+    const probe = row(doc, "model-pins");
+    const lines = probe.detail.split("\n");
+    expect(probe.status).toBe("warn");
+    expect(lines.length).toBeGreaterThanOrEqual(2);
+    expect(lines.every((line) => line === line.trim())).toBe(true);
+
+    const human = await runHuman(root, env);
+    const width = Math.max(...doc.doctor.map((entry) => entry.id.length));
+    const column = 2 + 4 + 2 + width + 2;
+    const out = human.stdout.split("\n");
+    const first = out.findIndex((line) => line.includes(lines[0]!));
+    expect(first).toBeGreaterThan(-1);
+    expect(out[first]!.indexOf(lines[0]!)).toBe(column);
+    for (const [index, line] of lines.entries()) {
+      if (index > 0) expect(out[first + index]).toBe(`${" ".repeat(column)}${line}`);
+    }
   });
 });
