@@ -3623,7 +3623,7 @@ function contextsOf(command, cwd) {
 `}${String.raw`
 /**
  * The local tag names, loose and packed. A further tag past TAG_NAMES_MAX, or a packed-refs file past
- * PACKED_REFS_MAX_BYTES, faults with a coded error the guard refuses on (pr/95), so a cut-off list never reads as
+ * PACKED_REFS_MAX_BYTES, faults with a coded error the guard refuses on, so a cut-off list never reads as
  * every tag there is; the throws sit outside the reads' catches.
  */
 function localTags(commonDir) {
