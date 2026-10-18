@@ -1,6 +1,6 @@
 ---
 id: orchestrator-context
-# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, amended on 2026-09-29 by the maintainer's decision to retire the replay, amended from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, its citations re-pointed in run 2026-10-12_board-writes on 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, and excluded from the site build.
+# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, amended on 2026-09-29 by the maintainer's decision to retire the replay, amended from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, its citations re-pointed in run 2026-10-12_board-writes on 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, and excluded from the site build.
 # The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.15.0
@@ -654,6 +654,43 @@ S5 and S6). "Where it prints" changes, and the card gains two shapes and one lin
 The 2,000-character cap, the screen and the parity of the two twins stand. `SECURITY.md:104` names the card's new
 reads and lines.
 
+Amended 2026-10-18 (plan 021 file 2, run `2026-10-18_cloud-runs-2`, unit `v1-branch-card` and its two fix rounds;
+merged by its unit `v20-spec-merge`, every `path:line` read at the integration head `e64bc09f`). Given an in-progress run
+whose record's `Branch:` names the branch `.git/HEAD` points at, When the session-start hook runs with
+`"source":"startup"`, Then stdout carries the line beginning `stamity resume card — run` for that run, HEAD read from
+disk with no process spawned, an attended record only within the closed card's two-day age (an unattended one at any
+age); Given only a run on another branch, a record with no `Branch:` line, a detached HEAD, or only a closed or debug
+record, Then startup prints no card. `ledger status` prefers the run in progress on this branch. `compact` and `resume`
+keep today's pick, and the 2,000-character cap, the screen and the twins' parity stand. So the amendment of 2026-09-30's
+"a startup and a clear print none" reads: a startup prints the card of the run in progress on this branch, and a clear
+prints none (REQ-FLOW-105 in `docs/specs/everyday-flows.md`).
+
+- **As built, beyond the delta:**
+  - The HEAD reader is one source both twins and the ask gate embed, lifted from the ask gate's `currentBranch`: it
+    reads with `node:fs` only, follows a linked worktree's `gitdir:`, reads no branch on a detached HEAD, on reftable's
+    `.invalid` placeholder or on a HEAD file of more than one line, and on a read that fails for another reason prints
+    no card (`buildCardBranchSource` and `resumeCardLines`, `src/runs/cardSource.ts`; `readCurrentBranch`, and
+    `findCardRun` with `currentBranch` and `recentOnly`, `src/runs/resumeCard.ts`). The pre-flight's caller passes no
+    option and keeps its pick (`src/cli/commands/gate.ts`).
+  - The age limit reads the run id's date, `CARD_CLOSED_MAX_AGE_DAYS`, lower bound only; on startup an attended record
+    past it is passed over, and a record reading `Mode: unattended` prints at any age, since REQ-FLOW-105 continues it
+    on its branch.
+  - `ledger status` with no `--run` looks first for the run in progress on this branch, at any age, then falls back to
+    the newest run in progress, the closed card and the debug card, as before. `ledger status --json` names the
+    record's `branch`, screened with the lists and `null` on a hit, and `onCurrentBranch`, and the no-card document
+    carries both keys, `null` and `false` (`src/cli/commands/ledger.ts`, its status document and `NO_CARD_JSON`).
+  - So the hook and `ledger status` print the same card but in one case: an attended run on this branch older than two
+    days while a newer run is in progress elsewhere, where the startup card is none and `ledger status` names the
+    branch's run. The criterion of 2026-09-26 that they print the same card reads with that exception.
+  - The session-start row was measured and raised once (REQ-CTX-016, amended 2026-10-18). The injection-screening
+    rule's read-pass sentence names a startup that finds a run on this branch
+    (`content/rules/stamity-injection-screening.md:25-29`), and `SECURITY.md`'s resume-card row states the startup
+    print and its age rule.
+- **Proof:** `test/hooks/sessionStartCard.test.ts` ("the startup card for the run on this branch", the screened
+  startup card, and the three-day unattended case), `test/runs/resumeCardParity.test.ts` (startup parity, the linked
+  worktree lane, `ledger status --json`'s `branch` and `onCurrentBranch`, and its preference),
+  `test/corpus/rules/security.test.ts`.
+
 Implements C6, C7 (D6).
 
 ### REQ-CTX-014 — The `/st-work` body's order puts what a resumed run needs before the re-attachment cut
@@ -1007,6 +1044,35 @@ it before the tag (`.github/release-controls-checklist.md:235`). Tests: `test/em
 the suite of a built plugin root, deleted with the route). Not measured: the resume
 card's own wall time against the 30-second budget; the 7-run median is recorded at the release, and
 no release has recorded it yet.
+
+Amended 2026-10-18 (plan 021 file 2, run `2026-10-18_cloud-runs-2`, units `v1-branch-card`, `v4-cursor-continue`,
+`v5-claude-readiness`, `v6-cursor-cloud` and `v0b-run-verb-alone`; merged by its unit `v20-spec-merge`, read at the
+integration head `e64bc09f`). Given an emitted Claude configuration, Then the cloud readiness `SessionStart` entry
+(REQ-FLOW-110 in `docs/specs/everyday-flows.md`) carries a timeout of its own, a declared constant apart from
+`HOOK_SESSION_START_TIMEOUT_MS`, while the session-start rows keep 30 s on all four clients and the guard and review
+gate carry none; Given the readiness script, Cursor's once-per-conversation script and its stop script, Then each has a
+byte and line ceiling row in `HOOK_SCRIPT_BUDGETS`, and a script over its ceiling fails the budget test naming the
+script, its size and the budget.
+
+- **As built:** the readiness entry's timeout is `CLOUD_READINESS_TIMEOUT_MS`, 300 s (`src/hooks/scripts.ts`; wired at
+  `src/adapters/claude.ts:984-987`), inside which the script holds its own 240 s install and 45 s CLI limits. The rows
+  of `HOOK_SCRIPT_BUDGETS` (`src/hooks/scripts.ts`), each measured as the larger of its two layouts and set at its
+  measured size × 1.25, bytes rounded up to a multiple of 1,024 and lines to a multiple of 10, with a dated reason in
+  the row:
+  - the session start, raised once to 63,488 bytes and 1,400 lines from a measured 50,647 / 1,114, the room left for
+    the rebuild's line, the Cursor line and the inlined detector, so "≤ 49,152 bytes and 1,100 lines" above reads so;
+  - the guard, raised to 196,608 bytes and 4,540 lines for the stand-alone rule and the parser fixes, the guard's
+    ceiling above reading so;
+  - the review gate, unchanged at 51,200 / 1,120, rendering 51,152 bytes with the rebuild and the mark;
+  - the readiness script, 14,336 / 320, measured 11,361 / 255;
+  - the context-once script, 39,936 / 780, measured 31,172 / 621;
+  - the continue script, 12,288 / 280, measured 9,500 / 221.
+  The budget table's docstring names each new hook, and the build's logic ceiling rose to 2.375 MiB beside them
+  (`LOGIC_BUDGET_BYTES`, `tsdown.config.mjs`). The criterion that "its session-start entries carry a 30-second timeout"
+  reads for the core session-start rows; the readiness entry carries its own.
+- **Proof:** `test/hooks/scriptBudget.test.ts` (each row's pinned literal, and each new script's render),
+  `test/emit/hooksInfra.test.ts` (Claude's session-start timeouts with the readiness entry's 300 s),
+  `test/adapters/claude.test.ts`, `test/support/support.test.ts` (the logic ceiling).
 
 ### REQ-CTX-017 — Verdict roles and the spec-author read git themselves; the brief carries the diff, not the implementer's account
 
@@ -1555,12 +1621,20 @@ command again whenever this section grows; do not count by eye.
   modified a file under `.stamity/`.
 - GIVEN two run folders whose records are both in progress WHEN `stamity ledger status` runs
   without `--run` THEN the card names the newer run, and WHEN it runs with `--run <older>` THEN
-  the card names the older one.
+  the card names the older one (amended 2026-10-18: where the older one's `Branch:` names the branch
+  HEAD points at, `ledger status` without `--run` names it, the newer only where neither or both do).
 - GIVEN the emitted Claude session-start script and an in-progress run WHEN stdin carries
   `"source":"compact"` or `"source":"resume"` THEN stdout carries a line beginning
   `stamity resume card — run`, and WHEN stdin carries `"source":"startup"` THEN stdout carries no
   such line (amended 2026-09-30; it read "WHEN stdin carries `"source":"startup"`, or no run is in
-  progress, THEN stdout carries no such line").
+  progress, THEN stdout carries no such line"; amended 2026-10-18: on `"source":"startup"` the card
+  prints where the run's `Branch:` names HEAD's branch, and only there).
+- GIVEN `"source":"startup"` and an in-progress run whose `Branch:` names HEAD THEN the card prints; on another
+  branch, with a detached HEAD, with no `Branch:` line, or with only a closed or debug record THEN none; GIVEN an
+  attended run on this branch dated two days ago THEN none, and an unattended one dated three days ago THEN the card;
+  GIVEN a linked worktree THEN its HEAD is read through `gitdir:`; GIVEN `ledger status --json` THEN it names `branch`
+  and `onCurrentBranch` (added 2026-10-18; `test/hooks/sessionStartCard.test.ts`,
+  `test/runs/resumeCardParity.test.ts`).
 - GIVEN no run in progress and a closed newest record dated within the last two days WHEN the card
   prints on a resume or a compaction THEN it names that run, quotes its closing `Status:` and says
   no run is in progress; GIVEN the newest closed record dated three days ago THEN no card prints
@@ -1769,6 +1843,10 @@ frozen files.").
   and the budget.
 - GIVEN `node scripts/hook-latency.mjs` at a release THEN it prints the median table, and exits 0
   when both overheads are ≤ 15 ms, 1 when either is over, and 2 when it cannot run.
+- GIVEN Claude Code's emitted settings THEN the readiness `SessionStart` entry carries 300 s and the core
+  session-start rows 30 s; GIVEN the readiness, context-once and continue scripts THEN each renders within its row,
+  and one over its row fails naming the script, its size and the budget (added 2026-10-18;
+  `test/emit/hooksInfra.test.ts`, `test/hooks/scriptBudget.test.ts`).
 
 **REQ-CTX-017** (added 2026-09-30)
 

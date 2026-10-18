@@ -1,6 +1,6 @@
 ---
 id: prove-behavior-and-value
-# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-11_release-1-14-0 on 2026-10-11 and 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, and excluded from the site build.
+# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-11_release-1-14-0 on 2026-10-11 and 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023).
 status: shipped-with-1.15.0
 obsolete_when: the measurement page, the security mapping and the QA evidence file are all generated from live data by the engine itself, or a decision row cuts the surface
@@ -81,8 +81,16 @@ with 1.15.0.
 REQ-PROVE-038 comes from the spec delta of `docs/plans/021-cloud-runs-01.md` (plan 021 file 1, run
 `2026-10-15_cloud-runs`), merged by its unit `u23-spec-merge` before the run's whole-branch review. It cites the
 integration head `4daeb214`; each whole-branch page round re-read its `evals/SET-v7.md` citations with its own edit of
-that file. REQ-PROVE-039 to REQ-PROVE-045 are held for plan 021's second file. It is unreleased at
-this merge; the plan cuts it as 1.16.0.
+that file. REQ-PROVE-039 to REQ-PROVE-045 were held for plan 021's second file, which allocated them on 2026-10-18
+(the next paragraph; amended 2026-10-18, it read "are held for plan 021's second file"). It is unreleased at this
+merge; the plan cuts it as 1.16.0.
+
+REQ-PROVE-039 to REQ-PROVE-045, and the text dated 2026-10-18 under REQ-PROVE-003, REQ-PROVE-005, REQ-PROVE-018,
+REQ-PROVE-021 and REQ-PROVE-037, come from the spec delta of `docs/plans/021-cloud-runs-02.md` (plan 021 file 2, run
+`2026-10-18_cloud-runs-2`), in its amended form, merged by its unit `v20-spec-merge`, with the clauses its units' and
+fixers' reports declared where the delta is silent, under a line headed "As built". Every `path:line` in that text reads
+at the integration head `e64bc09f`; a module that run rewrote is cited by file and symbol. It is unreleased at this
+merge; the plan cuts it as 1.16.0.
 
 ## Intent
 
@@ -200,6 +208,20 @@ every selection, so its bytes are the same with and without Codex (REQ-PROVE-005
 - Tests: `test/emit/sharedCharterIdentity.test.ts`, `test/adapters/codex.test.ts`,
   `test/emit/syncDriftProof.e2e.test.ts` (route clause dropped 1.15.0: the Codex plugin packager's suite, deleted).
 
+Amended 2026-10-18 (plan 021 file 2, unit `v7-cursor-agents-block` and its fix round). The shared `AGENTS.md` is the
+core charter for every selection without Cursor; with Cursor selected, the root file ends on the block of REQ-FLOW-114
+in `docs/specs/everyday-flows.md`. Codex's override still holds the core render (or the operator's text around it under
+`supplement`), so with Cursor selected the override no longer repeats `AGENTS.md`: the block is the one part it leaves
+out. The requirement's four criteria hold as written. So "The shared `AGENTS.md` is the core charter for every
+selection" and "What the override holds. `AGENTS.md` as this sync writes it" above read with Cursor's block left out of
+the override (`renderCursorCloudBlock`, `src/emit/agentsMd.ts`, appended to the root row alone by
+`src/emit/planner.ts`); the capability page's Codex paragraph says the override "leaves out the one part of that file it
+does not repeat, Cursor's cloud block" (`src/emit/capabilityMatrix.ts`).
+
+- GIVEN Cursor beside Codex THEN the root `AGENTS.md` ends on the block and the root `AGENTS.override.md` holds no part
+  of it; GIVEN Codex without Cursor THEN both files are byte-identical to the emission before the block
+  (`test/emit/agentsMd.test.ts`; added 2026-10-18).
+
 ### REQ-PROVE-004 — Codex skills-list budget
 
 Emission sums `name` plus `description` characters over every projected skill when codex is selected
@@ -305,6 +327,24 @@ are the figures of record, and a charter edit moves them.
   equals the computed composite (`test/corpus/invariants.test.ts`).
 - GIVEN a disclosure whose two shared figures differ, or whose override figure is not larger than the shared one,
   WHEN the capability page renders THEN it refuses (`test/emit/capabilityMatrix.test.ts`).
+
+Amended 2026-10-18 (plan 021 file 2, unit `v7-cursor-agents-block` and its fix round). The emission golden carries two
+root `AGENTS.md` byte figures: the charter alone for every selection without Cursor, equal to both shared constants, and
+the charter plus the block for exactly the selections with Cursor, equal to `ALWAYS_ON_SHARED_BYTES_WITH_CURSOR`.
+`ALWAYS_ON_CURSOR_BLOCK_LINES` (14) is counted apart from the line ceilings; `composeAlwaysOnLoad` takes the selection
+and adds the block on every client but Codex; the capability page refuses a with-Cursor figure no larger than the
+charter's, or a block of zero lines. So the paragraph above's "one root `AGENTS.md` figure in the golden" reads as one
+per side of that split.
+
+- **As built:** at the golden's version the two figures read 5,610 bytes without Cursor and 6,476 with it
+  (`src/content/charter.ts`, the constants beside `ALWAYS_ON_SHARED_BYTES_WITH_CODEX`); the line ceilings stand,
+  cursor 95 · claude 95 · copilot 95 · codex 407. The capability page states a Cursor session's load as its ceiling
+  plus the block, 95 + 14 = 109 lines, and that a Claude Code or Copilot session on a selection with Cursor loads its
+  own ceiling plus the block, Claude Code through `CLAUDE.md`'s import; its refusal reads "the block cannot be empty;
+  one is stale" (`requireAlwaysOnFigures` and the always-on section, `src/emit/capabilityMatrix.ts`).
+- GIVEN the golden THEN the root figure per selection equals the constant for its side, and the codex cross-client
+  figure list carries both; GIVEN a with-Cursor figure equal to the charter's, or `cursorBlockLines: 0`, THEN the page
+  refuses (`test/corpus/invariants.test.ts`, `test/emit/capabilityMatrix.test.ts`; added 2026-10-18).
 
 ### REQ-PROVE-006 — Charter carries the ai-evals floor in one line
 
@@ -617,9 +657,9 @@ Every hand page carries `verified against the tree at the 1.8.0 release cut (<da
 claim-by-claim check, replacing the pre-1.7.0 attestations (`README.md:1`, `SECURITY.md:1`).
 `test/docsPages.test.ts`'s `RELEASE_CUT_DATE` equals it, and its `describe("hand pages")` case
 `it("dates the bucket at this cut, and no page later than it")` enforces both halves over the
-fourteen-page `HAND_PAGES` bucket — `PAGES`, the three root pages, plus `GUIDES`, the eleven guides —
+fifteen-page `HAND_PAGES` bucket — `PAGES`, the three root pages, plus `GUIDES`, the twelve guides —
 holding a re-attested page to `REATTESTATION_DATE` and a cut-form page to `RELEASE_CUT_DATE`.
-`GOVERNANCE.md:1` is restamped as a fifteenth page, deliberately outside that bucket: its `GOVERNANCE`
+`GOVERNANCE.md:1` is restamped as a sixteenth page, deliberately outside that bucket: its `GOVERNANCE`
 constant is kept out of `PAGES`. Those citations name the constants and the test case rather than
 line numbers ON PURPOSE (2026-09-22): every release cut moves this suite's lines — `RELEASE_CUT_DATE`
 and the gate both moved again in this session — so a line-numbered citation into it stops pointing at
@@ -628,6 +668,12 @@ not.
 
 - GIVEN every hand page WHEN the docs-pages suite runs THEN each attests to the 1.8.0 cut date, at
   least one equals `RELEASE_CUT_DATE`, and none attests later than it.
+
+Amended 2026-10-18 (plan 021 file 2, unit `v15-cloud-page`). The bucket's count words moved with `docs/cloud.md`, which
+joined `GUIDES` (REQ-PROVE-043): it read "fourteen-page `HAND_PAGES` bucket", "the eleven guides" and "a fifteenth
+page". The suite's case "all fourteen exist …" reads "all fifteen", `docs/doctrine.md` names "twelve guides" and "all
+fifteen", and README's `llms.txt` row names "the twelve guides" (`test/docsPages.test.ts`, its `GUIDES` constant and
+the bucket's docstrings).
 
 ### REQ-PROVE-019 — Security mapping written
 
@@ -1104,6 +1150,25 @@ and no `--skip-plugins` (its usage, `:163-168`; `parseArgs`, `:179-205`).
   retired plugin-route rows"). GIVEN `run.mjs` THEN a run writes exactly the nine catalogue rows, and `--dist` and
   `--skip-plugins` are refused as unknown options (`test/qa/run.test.ts`, "main — no plugins lane"; added
   2026-10-14).
+
+Amended 2026-10-18 (plan 021 file 2, unit `v14-cloud-check` and its two fix rounds). Given the QA form, Then the harness
+measures twelve rows: the nine of 2026-10-14 (`H1a`–`H1d`, `H2`, `H3a`–`H3d`) and the maintainer's cloud checks
+`P1`–`P3` in a `cloud` lane, which `scripts/qa/run.mjs` reads from `cloud-check.mjs verify`'s output and otherwise
+records `not-run` with its reason (`P3`: no Copilot cloud-agent account), never as a keyboard row; a person can sign
+`--walked P1` or `P2`. The retired rows' rendering and the evidence binding are unchanged. So the paragraph of
+2026-10-14's "measures nine rows" reads twelve.
+
+- **As built, beyond the delta:** `run.mjs` reads verify's output through a repeatable `--cloud <verify.json>`, labelled
+  `cloud/<client>.json` and never by the path it was read from; a malformed file, an unknown client or a repeated one is
+  refused before anything is measured (`readCloudOutputs`, `scripts/qa/run.mjs`). A verify `pass` lands as `unperformed`,
+  a person row open for the walk; a `failed` stays a measurement, which takes no signature; a `not-run` keeps its
+  reason. `--walked` on a cloud row is refused unless its verify output reads `pass`, naming `--cloud` and
+  `--accept-unwalked` where there is none, while `--accept-unwalked` over a `not-run` records `accepted-unwalked`
+  (`assertCloudWalksHaveOutput`, the same file). The rows sit after `H3d` in `QA_ROWS` (`scripts/qa/form.mjs`).
+- GIVEN the form THEN twelve rows, P1–P3 in the `cloud` lane after `H3d`; GIVEN a verify `pass` for P1 THEN P1 reads
+  `unperformed` and `--walked P1` records `performed`; GIVEN a `not-run` P1 or a `failed` P2 THEN `--walked` is refused;
+  GIVEN no output THEN P1 and P2 read `not-run` and P3 the account reason (`test/qa/form.test.ts`,
+  `test/qa/run.test.ts`, `test/qa/cloudCheck.test.ts`; added 2026-10-18).
 
 ### REQ-PROVE-022 — Table headers associated on the docs site
 
@@ -1716,6 +1781,36 @@ so the job keeps the 2026-10-14 image's toolchain until someone re-reads it (`re
 **Expand/contract:** an added required job; the ruleset requires `all-ci-checks` alone, so no required context goes
 missing. Rollback is a revert of the job with its aggregator assertions.
 
+Amended 2026-10-18 (plan 021 file 2, unit `v12-container-leg`, and `v4-cursor-continue`, `v5-claude-readiness` and
+`v6-cursor-cloud` for the suite's hook lists). Given `ci.yml`'s `cloud-container` job, Then it keeps its name, its
+`needs`, its condition and its place in `all-ci-checks`, holds no `container:` key, and runs the `node:24-bookworm`
+image pinned by digest through `docker run` once per cloud profile and once more under `--network none`, with the source
+mounted read-only, no Docker socket, no secret and no client account; the release checklist's per-release line re-reads
+the digest the leg runs, and `test/ci/workflow.test.ts` pins each of these. So "inside a Linux container", "`runs-on:
+ubuntu-latest` in `container: node:24-bookworm`" and the job's `npm ci`, `npm run build` and `npx vitest run test/cloud`
+steps above describe 1.15.0.
+
+- **As built, beyond the delta:**
+  - The job's steps are Checkout, Set up Node (24, the image's own major, so the tree built on the runner is the one each
+    container runs) and `node scripts/ci/cloud-leg.mjs`, its timeout 30 minutes, not yet measured on the runner
+    (`.github/workflows/ci.yml:463-498`, the job's comment at `:463-474`, the file header's at `:78-85`).
+  - The digest's home is `IMAGE` in `scripts/ci/cloud-leg.mjs`, with its read date and the re-read command, and the
+    checklist's line re-reads that constant (`.github/release-controls-checklist.md:334`). The script builds on the host
+    (`npm ci`, `npm run build`), then gives each run the built tree as one read-only bind mount, copied to a writable
+    folder inside with `node_modules` linked, environment flags only as `K=V` from the profile, no host variable, no
+    socket, no privilege and `no-new-privileges`; a failed profile still runs the rest and exits 1 naming it, a failed
+    build stops before any container, and `--dry-run` prints every run (`PROFILES`, `dockerArgs` and `runLeg`).
+  - The pins live in two files: `test/ci/workflow.test.ts` for the job ("holds no container: key and runs the image the
+    leg script pins by digest…", "checks out, sets up Node 24, then runs the leg script as its one step" and "is the job
+    whose digest the release checklist re-reads, at the leg script's pin"), and `test/ci/cloudLeg.test.ts` for the
+    per-profile runs, `--network none` on the offline run alone, the read-only mount and the missing socket.
+  - The suite's hook lists name the new scripts: Claude Code's `stamity-cloud-readiness`, run against `npm` and `npx`
+    stubs so no profile fetches from a registry, and Cursor's `stamity-cursor-continue` and `stamity-context-once`
+    (`test/cloud/containerLeg.test.ts`, `test/cloud/profiles.test.ts`).
+- GIVEN the leg script THEN four runs, `--network none` only on the offline one, one read-only mount, no socket and no
+  host variable; GIVEN `ci.yml` THEN no `container:` key, the three steps and the aggregator's place (`test/ci/cloudLeg.test.ts`,
+  `test/ci/workflow.test.ts`; added 2026-10-18).
+
 ### REQ-PROVE-038 — The unattended eval cases
 
 Added 2026-10-16 (plan 021 file 1, units `u22-eval-golden` and `u22b-eval-adversarial`, with the re-quotes of
@@ -1751,6 +1846,182 @@ its range.
   `test/evals/readmeCurrency.test.ts`), and the skill carries no exemption once a case sources it
   (`test/evals/coverage.test.ts`, "eval coverage — no exemption outlives its gap"). `judgment: reviewer` for what each
   case grades, at the next run of the set.
+
+### REQ-PROVE-039 — The container leg's cloud profiles
+
+Added 2026-10-18 (plan 021 file 2, units `v12-container-leg` and `v8-detect-translator`).
+
+Given the leg's profiles for Claude Code's, Cursor's and Copilot's clouds, each with its marker and `HOME` shape, and
+Copilot's with `/workspace` as its working folder, Then `detectSession()`, the one detector the CLI and the emitted
+session start share, names that cloud; two clones under one parent each run their own hooks; and against a bare remote
+refusing tags, deletions and pushes to `main`, and a `gh` stub answering the default-branch read and refusing
+`draft: true` with 422, the ending verb opens a `[DRAFT]` PR, or with both POSTs refused prints `Not done: draft PR not
+opened` naming the branch. A red leg blocks the merge.
+
+- **As built, beyond the delta:**
+  - The profiles are `claude` (an empty `HOME`, `CLAUDE_CODE_REMOTE=true`), `cursor` (a socket stub and its variable),
+    `copilot` (`HOME=/root`, `/workspace`, `GITHUB_TOKEN` unset, the marker `COPILOT_AGENT_PROMPT`) and `offline`,
+    Claude Code's profile again under `--network none` (`PROFILES`, `scripts/ci/cloud-leg.mjs`). Each is asserted
+    through the session start's printed cloud line on every client, from the root and from `sub/`, and the detector
+    names each profile's cloud (`detectSession` and `SESSION_MARKERS`, `src/session/detect.ts`).
+  - "Each run their own hooks" is shown by the `resume` card naming that clone's run alone. The bare remote's
+    `pre-receive` refuses a tag, a fast-forward to its default branch and a deletion, refs unchanged; the verb's
+    `notDone` names a push the remote refuses, and the verb itself pushes no tag and no default branch. The `gh` stub
+    answers `GET repos/o/r` with `default_branch`, an empty pull-request list, a 422 on `draft: true` and then a 201,
+    so the run ends `created-fallback`; with both POSTs refused it prints `draft PR not opened (stamity/<run>): opening
+    it answered HTTP 403` (`test/support/cloudRemote.ts`). GraphQL is refused before `gh` starts, so none is stubbed.
+  - The ending suite skips on Windows, with its reason in its name, since a POSIX `pre-receive` hook and a `gh` launcher
+    cannot start there.
+- **Proof:** `test/cloud/profiles.test.ts`, `test/cloud/ending.test.ts`, `test/session/detect.test.ts` ("names the cloud
+  of each container-leg profile"), `test/ci/cloudLeg.test.ts`; the job runs on every full CI run, and its in-leg cases
+  skip off the leg with their reason.
+
+### REQ-PROVE-040 — Client legs and a release-prep run, built and off without secrets
+
+Added 2026-10-18 (plan 021 file 2, unit `v13-client-legs` and its two fix rounds).
+
+Given the workflows, Then a nightly hook-fire job and an on-demand release-prep job run under the canonical guard, each
+client step holding exactly one secret behind an arm step that writes only `armed=true|false`; with no secret every
+drive step is skipped, the job ends green, and neither feeds `all-ci-checks`. Armed, hook-fire runs
+`scripts/qa/hook-runs.mjs` in the pinned image (`claude -p` without `--bare`, `agent --trust -p`, `copilot -p` with
+`COPILOT_ALLOW_ALL=true`), and release-prep runs a light unattended `/st-work` with `--permission-prompts none` against
+a bare remote.
+
+- **As built, beyond the delta:**
+  - The jobs are `hook-fire` and `release-prep-unattended` in `.github/workflows/nightly.yml`, each carrying the exact
+    canonical guard. Each secret enters through `env:` as exactly `${{ secrets.<NAME> }}`, one per arm or drive step;
+    the closed secrets list gains `ANTHROPIC_API_KEY`, `COPILOT_GITHUB_TOKEN` and `CURSOR_API_KEY`, `CODEX_API_KEY`
+    staying out, and no secret is referenced anywhere else in the parsed workflow, every key, `if` and expression-bearing
+    string read.
+  - Installs and drives run in the image `scripts/ci/cloud-leg.mjs` pins, through `docker run`: each install writes only
+    its client's folder under `$RUNNER_TEMP`, and each drive mounts the checkout and that folder read-only and runs
+    `hook-runs.mjs --clients <c> --require-observation`.
+  - Release prep is armed only on a `workflow_dispatch` whose `release_prep` input is true, in a concurrency group of its
+    own that no later run cancels. A scratch-repository step routes push, fetch, `ls-remote` and pull to the bare remote
+    through a `git` shim, leaves gh's helper the only credential helper, answers the pre-flight's repository and ruleset
+    reads from a `gh` stub, and installs the build into the scratch repository. The drive is red unless exactly one run
+    branch reached the remote, its record's `Status:` is not a refusal, its `morning.md` has no `## Refused`, the unit's
+    file is on the branch, and `main` and the tags are unchanged.
+  - The vendor install paths and Claude's `--permission-prompts none` were not re-read at build; the first armed night
+    may be red for one of them, never in the merge gate. On an armed night a red claude leg skips the other two, open as
+    a Minor.
+- **Proof:** `test/ci/workflow.test.ts` ("nightly.yml — the client legs, built and off without secrets", the parsed
+  secrets walk with its planted cases, the concurrency group and the executed scratch repository),
+  `test/qa/hookRunsCli.test.ts`, `test/qa/hookRuns.test.ts`.
+
+### REQ-PROVE-041 — The maintainer's cloud checks
+
+Added 2026-10-18 (plan 021 file 2, unit `v14-cloud-check` and its two fix rounds).
+
+Given Package 25's close, Then two person rows each run once: Claude Code's cloud, an overnight unattended `/st-work`
+whose morning question is answered at least eight hours after its start, and Cursor's cloud agents; each starts from a
+public scratch repository `scripts/qa/cloud-check.mjs setup` makes outside this checkout, and its `verify` reads by REST
+one open draft PR, unmerged, with `main` and the tags unchanged; `teardown` prints the delete and runs nothing.
+Copilot's row is not run, for want of a Copilot cloud-agent account, and `Not done:` names it.
+
+- **As built, beyond the delta:**
+  - `setup --owner <login> [--clients claude,cursor] [--dir <tmp>]` refuses a folder inside this checkout before any
+    call; it runs `npm run build` here and packs this checkout's build with `npm pack`, refusing with no `dist/cli.js`,
+    and installs the tarball into each scratch repository as a `file:` dependency with a lockfile, so
+    `npx --no stamity` runs the candidate, never the published package. It commits the fixture, a plan and a run
+    contract, tags `main` as `stamity-cloud-check-base`, creates the public repository by REST (`/user/repos`, or
+    `/orgs/<owner>/repos`) and pushes `main` and that tag only, never forced. It prints the pre-flight's identity
+    prerequisite, that a repository under a personal account cannot pass the pre-flight when that account runs it, that
+    setup created no ruleset, and the start lines with `--main <sha>` and HEAD's short sha; a later failure names each
+    repository already made with its delete line (`setup`, `packCandidate` and `PREFLIGHT_PREREQUISITE`,
+    `scripts/qa/cloud-check.mjs`).
+  - `verify --repo <o/r> --client <c> [--main <sha>] [--out]` reads by GET only and prints `pass`, `failed` or
+    `not-run (<reason>)`: two drafts or a PR no longer a draft fail, a merged or closed one fails, `main` or the baseline
+    tag moved fails naming which, a missing morning-list section, `Default applied:` line or run marker fails, a record
+    not reading `Mode: unattended` fails, no PR reads `not-run (no PR)`, and a draft whose body opens `## Refused` reads
+    `not-run (pre-flight refused: …)`, the run's text cleaned of control characters and cut at 300 characters
+    (`verdictForCloud`). `--out` writes the verdict `run.mjs --cloud` reads (REQ-PROVE-021).
+  - The REST shapes are proven against canned answers only, and a dirty tree's build is printed under HEAD's sha; both
+    open as Minors.
+- **Proof:** `test/qa/cloudCheck.test.ts`, `test/qa/run.test.ts`, `test/qa/form.test.ts`; the person rows themselves are
+  `judgment: maintainer`, run once at Package 25's close.
+
+### REQ-PROVE-042 — The cloud proof's cadence
+
+Added 2026-10-18 (plan 021 file 2, units `v15-cloud-page` and its fix round, `v13-client-legs` for the measurement).
+
+Given the release checklist, Then one line carrying `Runs when:` re-reads the vendor pages the capability matrix's cloud
+column cites, and a page changed since its read date re-owes that cloud's person row at the next release; the container
+leg runs on every full CI run, the hook-fire check nightly and at release prep where its secrets exist, and the person
+rows once, at Package 25's end. `test/docsPages.test.ts` pins the line.
+
+- **As built, beyond the delta:** the vendor-pages line (`.github/release-controls-checklist.md:336-342`) and a second
+  further line carrying `Runs when:` (`:344-357`), which runs `node scripts/qa/hook-runs.mjs --ask --require-observation`
+  under the machine lock and never during an eval run, names its four statuses, `held`, `ran`, `not-run` and
+  `not-installed`, and Claude Code as the one ask-class client it measures: `held` keeps the one-click ask, a client
+  whose ask ran moves to refusing before the tag, and `not-run` or `not-installed` holds the tag until a run on a machine
+  with Claude Code reads `held` or `ran` (REQ-FLOW-123 in `docs/specs/everyday-flows.md`). Both take no ordinal.
+- **Proof:** `test/docsPages.test.ts` ("puts the cloud cadence on the release checklist: the vendor pages re-read, each
+  client's ask re-measured"), `test/ci/workflow.test.ts` (the leg in the aggregator), `test/qa/hookRunsCli.test.ts`.
+
+### REQ-PROVE-043 — The cloud page
+
+Added 2026-10-18 (plan 021 file 2, unit `v15-cloud-page` and its fix round).
+
+Given `docs/cloud.md`, Then it is a hand page listed with the guides, in the sidebar, the README map and the LLM index,
+linking only under this repository's own home, and per cloud it gives the setup, branch protection as a prerequisite,
+the secrets, starting a contract run and the morning walk; its run-contract section names `run-contract: 1`, the plan
+or board item, base, acceptance, scope, prerequisites, budget and who answers, the fixed `preview: stop` and
+`move: off`, the outputs and the failure modes. `test/docsPages.test.ts` pins it.
+
+- **As built, beyond the delta:** the page also states who asks and who refuses (Claude Code asks for one click;
+  Copilot CLI, Cursor and Codex refuse, Copilot CLI because its payload names no calling agent; every deletion and force
+  push refused everywhere; an unattended run asks nothing and pushes only through the run verbs), the identity half of
+  the protection prerequisite (a signed-in `gh` that is origin's only credential helper), Codex Cloud as refused at the
+  pre-flight's `hooks-loaded`, Claude Code's GitHub Action as a six-hour surface whose pull request still supplies the
+  hook scripts and the `AGENTS.md` the base branch imports (REQ-FLOW-113), and an opening that promises a night with
+  nobody there on Claude Code and Cursor only (REQ-FLOW-117). Its contract example parses through `parseRunContract`
+  with no problem, and it names the start check `stamity plan check --contract <path>` and the blockers `contract`,
+  `prerequisite-open` and `contract-mismatch`. It is registered in `GUIDES`, `website/sidebars.ts`, README's map and
+  `src/cli/docs/llmsIndex.ts`, with `llms.txt` regenerated, and carries its currency header on the commit form
+  (REQ-PROVE-018, amended 2026-10-18).
+- **Proof:** `test/docsPages.test.ts` (the describe `docs/cloud.md`, its six cases, and the hand-page cases over
+  `GUIDES`), `test/ci/docsRoster.test.ts`, `test/ci/docsSite.test.ts`, `test/cli/docs/llmsIndex.test.ts`; a vendor URL
+  typed on the page turns the hand-page link case red.
+
+### REQ-PROVE-044 — The capability matrix's unattended rows
+
+Added 2026-10-18 (plan 021 file 2, unit `v11-cloud-facts-matrix` and its fix round).
+
+Given the capability matrix's cloud column, Then each client gains facts for an unattended run (the draft-PR ending,
+question handling, and Copilot's chain of 59-minute sessions), and a fact may carry an optional `run` field naming the
+person check and its date, rendered "not run" when absent; Copilot's unattended rows read documented, not run, and a
+fact carrying a session-start line stays `documented` (`test/emit/capabilityMatrix.test.ts`).
+
+- **As built, beyond the delta:**
+  - "Each client" is each of the three clouds the plan covers: Claude Code, Cursor and Copilot; Codex's cloud is out of
+    the plan's scope and gains no row. The field is `run?: { record: string; date: string }` on `ClientCloudFact`
+    (`src/hooks/model.ts`), rendered in a last column, "Person check", as `not run` or `<record>, run <date>`; a blank
+    record or a date that is not ISO is refused, naming the fact (`resolveCloudGlance`, `cloudRunCell` and
+    `cloudSection`, `src/emit/capabilityMatrix.ts`).
+  - Ten rows, each vendor page read 2026-10-18 and none carrying a run record or a session line: Claude Code's draft
+    pull request and questions, and the GitHub Action's job cap, questions and configuration (REQ-FLOW-113); Copilot's
+    draft pull request, session limit and next session, `documented`, its question fact being the existing "Ask
+    decisions" row; Cursor's draft pull request and questions, `not documented`, the draft row adding that the
+    platform's own push meets no shell guard, so branch protection is needed.
+- **Proof:** `test/emit/capabilityMatrix.test.ts` ("names each fact's person check, reading "not run" where a fact
+  carries none (REQ-PROVE-044)", "refuses a person check with no record or an undated one, naming the fact", "gives
+  each cloud its unattended rows …"), and the matrix page byte-equal to its regeneration (`docs/capability-matrix.md`).
+
+### REQ-PROVE-045 — The release network page's action pins match the workflows
+
+Added 2026-10-18 (plan 021 file 2, unit `v18-egress-pins`).
+
+Given `.github/release-egress.md`, Then every action it links at a pinned commit, the hardening action included, names
+the sha the release workflows pin for that action, and a test fails naming the action and both shas when they differ.
+
+- **As built:** the page's one pinned link, the hardener, names `ccd8616d44fd3846e67624a50d5aad6d37bf2d25`, the pin of
+  `release.yml` and `pack-signing-rehearsal.yml` (`.github/release-egress.md:29`). The test reads a GitHub link at
+  `tree`, `blob` or `commit` with a full sha, or an `owner/repo@<sha>` mention, against every `uses:` line under
+  `.github/workflows/`, skipping local and `docker://` uses and commented lines; a drift line names the action, the
+  page's line and sha and the workflow's file, line and ref, a tag-pinned use counting as a differing ref, and an action
+  the page pins that no workflow uses is named too; a guard keeps it from passing with nothing to compare.
+- **Proof:** `test/ci/releaseEgress.test.ts`; the host checks at `test/ci/workflow.test.ts` stay.
 
 ### REQ-PLUGIN-020 — The CI lanes, the proven push, the nightly guard and the records job
 
@@ -1874,3 +2145,6 @@ REQ-PROVE-023, REQ-PROVE-025, REQ-PROVE-037, REQ-PLUGIN-020), added 2026-10-15.
 
 `docs/plans/021-cloud-runs-01.md`, with `.stamity/runs/2026-10-15_cloud-runs/` — the spec delta REQ-PROVE-038 merges,
 added 2026-10-16.
+
+`docs/plans/021-cloud-runs-02.md`, with `.stamity/runs/2026-10-18_cloud-runs-2/` — the spec delta REQ-PROVE-039 to
+REQ-PROVE-045 merge, with the amendments of REQ-PROVE-003, -005, -018, -021 and -037, added 2026-10-18.

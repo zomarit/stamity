@@ -1,6 +1,6 @@
 ---
 id: everyday-flows
-# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-12_board-writes on 2026-10-12, one citation re-pointed in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, and excluded from the site build.
+# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-12_board-writes on 2026-10-12, one citation re-pointed in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.15.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the command reference carries it, or a decision row cuts the surface
@@ -127,8 +127,18 @@ re-pointed each one a later commit moved, mapped through git's diff from the com
 reads at `02c2af6d`, a pin named beside a citation included. Two units
 were not on `4daeb214`: `u19-run-end` (`stamity run end`) and
 `u21-security-page` (`SECURITY.md`'s cloud section); the fix round cites both at `bc12cfc3`. REQ-FLOW-105 to
-REQ-FLOW-119 are held for plan 021's second file. The text dated 2026-10-16 is unreleased at this merge; the plan cuts
-it as 1.16.0.
+REQ-FLOW-119 were held for plan 021's second file, which allocated them on 2026-10-18 (the next paragraph; amended
+2026-10-18, it read "are held for plan 021's second file"). The text dated 2026-10-16 is unreleased at this merge; the
+plan cuts it as 1.16.0.
+
+REQ-FLOW-105 to REQ-FLOW-119 and REQ-FLOW-121 to REQ-FLOW-124, and the text dated 2026-10-18, come from the spec delta
+of `docs/plans/021-cloud-runs-02.md` (plan 021 file 2, run `2026-10-18_cloud-runs-2`), in its amended form, merged
+once by its unit `v20-spec-merge`. Where the units' and fixers' reports declared a clause the delta is silent on, the
+text adds it under a line headed "As built"; where they differ, the delta's decided wording stands and the "As built"
+line says what the code holds. Every `path:line` in that text reads at the integration head `e64bc09f`. Citations
+into `src/hooks/personOnly.ts`, `src/hooks/scripts.ts` and the other modules the run rewrote by hundreds of lines name
+the file and the symbol, as the plan's own cells anchor them; a citation of a content file, a page, a test case or a
+small module names its lines. The text dated 2026-10-18 is unreleased at this merge; the plan cuts it as 1.16.0.
 
 ## Intent
 
@@ -473,6 +483,18 @@ name them (`review/67`).
   member's added `.gitignore` entries into its row as `gitignoreAdded` (`src/cli/commands/workspace.ts:1079`, `:1312`,
   read at `a9e94f06`; `review/101`, fixed by minor-polish-b, integrated at `ffadc8a2`).
 - **Evidence:** the state file is defined at `src/types/markers.ts:183-196`.
+- **Amended 2026-10-18** (plan 021 file 2, units `v6-cursor-cloud` and `v17-model-list-cache`). Setup's required
+  ignore entries gain `.stamity/context-once/`, Cursor's once-per-conversation markers (REQ-FLOW-115), dominated by the
+  state directory's own rule as the review gate's entries are; the entry count the requirement states moves with it.
+  As built, beyond the delta: the model list cache, `.stamity/client-models.json` (REQ-LADDER-009 in
+  `docs/specs/model-ladder.md`), joins in the same way, so the list holds eight entries where the paragraph above says
+  four: `.env.mcp`, the review gate's three, the pre-flight's canary and the run-ended marker of plan 021 file 1, the
+  context-once folder and the model list cache (`REQUIRED_GITIGNORE_ENTRIES`, `src/mcp/env.ts:237-246`;
+  `CONTEXT_ONCE_DIR`, `CONTEXT_ONCE_GITIGNORE_ENTRY` and `CLIENT_MODELS_CACHE_FILE`, `:212-223`; the dominating
+  spellings, `:293-296`). The init panel names the folder "Cursor's once-per-conversation context markers" and the
+  cache with the neutral reason (`GITIGNORE_REASONS`, `src/cli/commands/init/panel.ts`). Proof: `test/mcp/env.test.ts`,
+  `test/cli/commands/init.test.ts`, `test/cli/commands/initPanel.test.ts`, `test/cli/commands/syncEngine.test.ts`,
+  `test/emit/upgradeFrom1140.e2e.test.ts`, each holding the new entries last.
 - **Proof:** `test/mcp/env.test.ts`, `test/cli/commands/syncEngine.test.ts`, `test/merge/writeEscape.test.ts`; QA.
 
 ### REQ-FLOW-017 — QA rows record walked, auto-proven or accepted-unwalked
@@ -796,6 +818,13 @@ permission allowlist"", deferred under ledger `build/124` (answered on 2026-09-3
   permission allowlist" holds and "The engine renders no `permissions` member" above reads "renders no
   `permissions.allow` row"; the tests that pinned no `permissions` member moved with it (`test/adapters/claude.test.ts`,
   its describe on the person-only deny rows; `test/merge/settingsOwnerEntries.test.ts`).
+- **Amended 2026-10-18** (plan 021 file 2, unit `v0a2-ask-emission` and its test-file fix round). Given
+  `buildSettingsJson`, Then `.claude/settings.json` carries the engine's `permissions.ask` rows (REQ-FLOW-123) beside
+  its `permissions.deny` rows, which now hold only deletions and force pushes (REQ-FLOW-124), and still no allow row, so
+  "setup writes no permission allowlist" holds; the criterion added 2026-10-16 reads `permissions` holding the engine's
+  `ask` and `deny` rows and no `allow` row (`src/adapters/claude.ts:1003`, `CLAUDE_DENY_ROWS` and `CLAUDE_ASK_ROWS`
+  from `src/hooks/personOnly.ts`). The file-tool and inbox clauses are unchanged. Proof: `test/adapters/claude.test.ts`,
+  `test/merge/settingsKeyOwnership.test.ts`, `test/cli/flows.e2e.test.ts`, `test/cli/ledgerForgery.test.ts`.
 - **Proof:** `test/corpus/recordWrites.test.ts` (the Frame text, and a line lint over `content/` that fails on a shell
   redirect, heredoc or `tee` aimed under `.stamity/`); must-holds `work-proof-block-fields` and the floor
   `charter-touchpoints-delegate`; QA.
@@ -932,6 +961,17 @@ or an entry it did not write.
   `u21-security-page`: the engine removes no `permissions.deny` row, `sync` keeps every deny row byte for byte and
   `clean` leaves every deny row and names those equal to the engine's (read at `bc12cfc3`; `test/docsPages.test.ts`,
   "restates the settings promise to what clean does with a deny row").
+- **Amended 2026-10-18** (plan 021 file 2, unit `v0a2-ask-emission`). Given the engine's ask rows (REQ-FLOW-123), Then
+  `permissions.ask` takes the co-ownership `permissions.deny` took on 2026-10-16: the engine adds the rows of its table
+  the list lacks and records those it added, `sync` keeps every row of either list byte for byte and in place, an
+  owner's row equal to an engine row included, whatever the ledger's age, and `clean` removes no row of either list and
+  names those equal to the engine's that it left. "Never writes, replaces or removes `permissions.ask`" reads as never
+  replaces or removes an ask row; `SECURITY.md`'s settings row says the same (`src/manifest/claudeSettings.ts`, the
+  co-ownership and `isEngineDenyRow`, which reads both tables). As built, beyond the delta: `clean`'s detail reads "It
+  left the rows equal to the engine's in permissions.deny (…) and permissions.ask (…): clean removes no deny row, as an
+  equal one may be yours. It removes no ask row either."; an owner's deny row equal to an engine ask row is kept, and
+  the client's deny-before-ask order then refuses that act. Proof: `test/merge/settingsOwnerEntries.test.ts`,
+  `test/manifest/claudeSettings.test.ts`.
 - **Proof:** `test/merge/settingsOwnerEntries.test.ts`, `test/merge/settingsKeyOwnership.test.ts`,
   `test/manifest/coOwnedJson.test.ts`, `test/manifest/jsonMembers.test.ts`, `test/manifest/claudeSettings.test.ts`,
   `test/merge/reclaim.test.ts`; QA.
@@ -1154,6 +1194,29 @@ it is held through the 1.15 line; the release after 1.15.0 removes it with a man
   (`test/manifest/manifest.test.ts`, "accepts the 1.14 record without validating it" and the held-value cases; added
   2026-10-14).
 
+Amended 2026-10-18 (plan 021 file 2, unit `v16-manifest-plugin-block`). Given a manifest holding a `plugin` key of any
+shape, When `check`, `sync` or `clean` reads it, Then it loads with no refusal, and When `sync` writes it, Then the
+written manifest holds no `plugin` key, `MANIFEST_FIELD_ORDER` names none, and a second `sync` moves no byte: the key is
+no longer held. The `gates` object's grammar and bounds are unchanged. This closes the follow-up due at the first
+release after 1.15.0. So the paragraph of 2026-10-14 ("The `plugin` key is held, not read … the release after 1.15.0
+removes it with a manifest migration step") describes 1.15.0.
+
+- **As built, beyond the delta:** `readManifest` deletes `plugin` from the raw object before validation, with no
+  migration step, since the migrations are keyed by the version they start from, and no generation bump, so a 1.15
+  engine still reads a manifest 1.16 wrote (`DROPPED_PLUGIN_KEY` and `readManifest`, `src/manifest/manifest.ts`). An
+  in-memory manifest carrying the key is named `unknown field` by validation and refused by the writer. The first live
+  `sync` over a file holding the key prints once `manifest: dropped the \`plugin\` key a 1.14 setup recorded; nothing
+  has read it since 1.15.0`, `--dry-run` prints `would drop` and writes nothing, and `sync --json` carries
+  `pluginBlockDropped` (`readOnDiskManifestFacts` and `SyncPlan.pluginBlockDropped`, `src/cli/commands/sync/engine.ts`;
+  `syncJsonPayload`, `src/cli/commands/sync/report.ts`). A dry run's migration line reads `manifest schema would be
+  migrated to <v>` (`syncClosingLines`, `src/cli/commands/sync.ts`). `SetupManifest` loses `plugin`, a public type
+  losing a field.
+- GIVEN a 1.14.0 tree whose manifest carries the block WHEN `sync` runs THEN the drop line prints once and the written
+  manifest holds no `plugin`, and a second `sync` moves no byte but `updatedAt` and prints no such line; GIVEN a block of
+  any of six shapes THEN the manifest loads and writes the bytes a never-carried control writes; GIVEN `--dry-run` THEN
+  `would drop` and nothing written (`test/manifest/manifest.test.ts`, `test/cli/commands/syncEngine.test.ts`,
+  `test/cli/commands/sync.test.ts`, `test/emit/upgradeFrom1140.e2e.test.ts`; added 2026-10-18).
+
 ### REQ-PLUGIN-016 — The ledger bound, settings co-ownership, the node row and the pack-reach row
 
 Moved here on 2026-10-14 from `docs/specs/plugin-lifecycle.md`, its id kept (plan 020 file 1, run
@@ -1332,6 +1395,23 @@ paragraph of 2026-10-08, and "it never writes or removes `permissions.deny`", in
 REQ-FLOW-025 and REQ-FLOW-036 now state them (both amended 2026-10-16): the engine renders its own deny rows and no
 allow row, appends only the rows the file lacks, and removes no deny row, `clean` included
 (`reduceClaudeSettingsToForeignContent`, `src/manifest/claudeSettings.ts:337-346`).
+
+Amended 2026-10-18 (plan 021 file 2, units `v16-manifest-plugin-block` and `v0a2-ask-emission`). Given any manifest and
+any `.claude/settings.json`, `enabledPlugins` included, When `check` runs, Then its doctor rows hold no
+`plugin-duplicates` row and `pack-reach` keeps its place before `invariants`; `sync`'s report and `clean`, its preview
+included, print no leftover-plugin lines, and `init`, `sync` and `clean` still keep `enabledPlugins`. The settings
+co-ownership takes `permissions.ask` beside `permissions.deny` (REQ-FLOW-036, amended 2026-10-18): only missing engine
+rows are appended, none is removed. The ledger bound, the `node-version` row and `pack-reach`'s states are unchanged.
+So the bullets of 2026-10-14 on `plugin-duplicates` and on `sync` and `clean` printing the held block's lines describe
+1.15.0. As built: `leftoverPluginLines` and its helpers are deleted from `src/cli/kit/packageName.ts`, with their call
+sites in `check`, `clean` and `sync`'s report; `check` prints fourteen environment probes, plus `cloud-install` with
+Cursor (REQ-FLOW-111) and `change-classes` where a class file exists, and `docs/troubleshooting.md` lists the same set.
+No CLI output now names the uninstall step for a 1.14 client plugin still installed; `docs/getting-started.md` names
+each client's command.
+
+- GIVEN a 1.14 block and `enabledPlugins` WHEN `check`, `sync` or `clean` runs THEN no row and no line names a leftover
+  plugin, and `enabledPlugins` is kept (`test/cli/commands/check.test.ts`, "check — the dropped plugin block";
+  `test/cli/commands/clean.test.ts`; added 2026-10-18).
 
 ### REQ-PLUGIN-017 — Explicit gates beat detection
 
@@ -3228,6 +3308,29 @@ among them, the answers taking effect together after the last round (`content/co
 `Mode: unattended` there is no walk: each part takes its declared default by REQ-FLOW-075, and the morning list
 carries what the walk would have asked (REQ-FLOW-094; `content/skills/st-unattended/SKILL.md:67-69`, `:116-119`).
 
+Amended 2026-10-18 (plan 021 file 2, units `v8-detect-translator` and `v19-eval-cut-prep`). Given the question-tool map
+(`ASK_USER_TOOLS`), Then a row may carry an optional `cloud` note of one sentence, rendered as its own column; Cursor's
+says that in a managed cloud run, which its session line names, the agent asks nothing and takes the declared default;
+each local note keeps its two-sentence cap and the four rows stay; a client's own per-client copy of the question
+protocol carries its cloud note too (Cursor's and Copilot's). Given the golden, non-floor eval case on Cursor's note,
+Then a managed Cursor run reaching an ask calls no question tool and writes `Default applied:` (the case is golden with
+binding rows, not advisory).
+
+- **As built:** `AskUserToolEntry` gains `cloud?: string` (`src/tools/translator.ts:390-395`). Cursor's reads "In a
+  managed cloud run, ask nothing and take the declared default." (`:423`) and Copilot's "The cloud agent has no person
+  to answer; take the declared default." (`:436`); Claude Code's and Codex's rows carry none. The cross-client table
+  gains a fourth column, "Cloud run", `—` where a row has none (`buildAskUserPlatformTable`, `:485-487`), and a client's
+  own copy renders `<note> **Cloud run:** <cloud>` (`substituteCanonicalPlatformMarker`, `:505-506`), so Cursor's
+  `.cursor/rules/stamity-question-protocol.mdc` and Copilot's copy state it. The case is
+  `evals/cases-v6/golden/cursor-cloud-question-takes-default.md`, golden and not a floor, six binding rows and one
+  advisory, its `source:` the question protocol's lines holding the platform marker
+  (`content/rules/stamity-question-protocol.md:51-57`, `:89-98`); the set's roster reads 155 cases, 88 golden and 42
+  floors (`evals/SET-v7.md`, its paragraph "One case added, 2026-10-18").
+- GIVEN the map THEN Cursor's and Copilot's rows carry their cloud sentence and the table its "Cloud run" column; GIVEN
+  Cursor's and Copilot's rendered protocol THEN the sentence follows `**Cloud run:**`, and Claude Code's and Codex's are
+  unchanged (`test/tools/translator.test.ts`; added 2026-10-18). GIVEN the eval set THEN the case's locators, roster and
+  coverage hold (`test/evals/locators.test.ts`, `test/evals/roster.test.ts`, `test/evals/coverage.test.ts`).
+
 ### REQ-FLOW-081 — The run proves a row before it asks the person
 
 Added 2026-10-15 (plan 020 file 3, unit `f7-prove-before-asking` and its fix rounds; the delta's amended text from
@@ -3362,6 +3465,21 @@ clouds run which hooks and cite that section (REQ-FLOW-086).
   changed copy never runs (`review/120`, `review/121`). `CURSOR_AGENT_SOCKET` as the self-hosted marker is an
   `unverified` row: the self-hosted page names no such variable. The blank line before the lines keeps the resume card "everything after the
   last blank line" for its two readers.
+- **Amended 2026-10-18** (plan 021 file 2, units `v2-review-gate-rebuild`, `v6-cursor-cloud` and
+  `v8-detect-translator`). Given `CLAUDE_CODE_REMOTE=true`, Then none of Claude Code's lines reads "The review-gate
+  counter resets with the VM." or says a missing counter opens the gate, now rebuilt from the run record
+  (REQ-FLOW-106); Given `CURSOR_AGENT_SOCKET`, Then its line names "a Cursor agent machine (managed or self-hosted)", the
+  managed reading coming from the once-per-conversation script (REQ-FLOW-115); the session start keeps its markers, its
+  order and no network call, and the capability matrix's cloud table is regenerated to match. As built: Claude Code's
+  second line reads "A missing review-gate counter is rebuilt from the run record on this branch." (`CLIENT_CLOUD_FACTS`,
+  `src/hooks/model.ts`); the Cursor name is parenthesised so a list of detected sessions holds no comma inside a name,
+  and the Cursor marker row is `documented` from Cursor's identity page, read 2026-10-18 (the same table;
+  `CLOUD_SESSIONS`, `src/hooks/scripts.ts`). The markers, their order and their rule now come from one detector,
+  `detectSession` and `SESSION_MARKERS` (`src/session/detect.ts`), whose matcher the session start and Cursor's
+  context-once script inline as source text (`MATCH_SESSIONS_SOURCE`; `sessionIndexSource`, `src/hooks/scripts.ts`), so
+  the emitted bytes do not depend on the loader that ran `sync`; the printed lines are otherwise unchanged. Proof:
+  `test/hooks/scripts.test.ts`, `test/hooks/sessionStartCard.test.ts`, `test/session/detect.test.ts` ("the detector the
+  session start carries"), `test/cloud/profiles.test.ts`, `test/emit/capabilityMatrix.test.ts`.
 - **Proof:** `test/hooks/scripts.test.ts` ("the session start names a cloud or CI session (REQ-FLOW-085)"),
   `test/hooks/sessionStartCard.test.ts`, `test/hooks/scriptBudget.test.ts` (the session-start row at 49,152 bytes and
   1,100 lines), `test/emit/capabilityMatrix.test.ts` ("the cloud column and the Cloud sessions section", which also
@@ -3543,6 +3661,21 @@ and a draft pull request titled `Refused:` where a branch can be pushed, else th
   flow, and the skill's ready check still says so (`content/skills/st-unattended/SKILL.md:56`); pickup's payload
   carries no readiness verdict (REQ-BOARD-002's "As built" line), so no input reaches that refusal, and the readiness
   gate is pickup's step 4 alone (amended 2026-10-16 in the merge's first fix round).
+- **Amended 2026-10-18** (plan 021 file 2, units `v22-plan-check` and, for `--since`, `v3-cloud-skill`'s fix round).
+  Given `stamity plan check` and the skill's `spec-plan-coverage.mjs`, which answer alike, When units depend on one
+  another in a cycle, Then one `dependency-cycle` finding names it however many units lead into it, and the walk stays
+  linear in the plan's units; When a unit's requirement list holds a bare number of three or more digits after a comma
+  that follows an id, Then it reads as that id's area with that number, as the dash shorthand does, and prose elsewhere
+  reads as today. The blocker codes, exit codes and L1 are unchanged. As built: the walk keeps an on-stack set and a
+  done set, marks a unit done after its walk whatever it found, and names the cycle as the trail from the unit found on
+  the stack (`Dependency cycle: c1 -> c2 -> c1.`); the bare form is read in a unit's `requirements` field only, its
+  comma directly after the last id read, a range's end included, so `REQ-DEMO-001, 002` covers `REQ-DEMO-002`, `, 009`
+  is `dangling-requirement`, and `300ms, -50ms` stays `invalid-reference` (`checkCoverage` and `parsePlanUnits`,
+  `src/runs/planCoverage.ts`; the twin, `content/skills/st-verify/scripts/spec-plan-coverage.mjs`). One usage rule
+  moved beside it: `--since <sha>` alone on one plan is accepted, read as a chain of one, and only `--since` over several
+  plans without `--chain` exits 2 (`src/cli/commands/plan.ts:79`, `:87-88`, `:130`; REQ-FLOW-105). Proof:
+  `test/runs/planCoverageParity.test.ts` (the 60-unit chain into a cycle, inside the 10-second kill),
+  `test/authoring/specPlanCoverage.test.ts` (its `REQ-FLOW-091` describe), `test/cli/commands/plan.test.ts`.
 - **Proof:** `test/cli/commands/plan.test.ts`, `test/runs/planCoverageParity.test.ts` (the engine's coverage check equals
   the skill's copy), `test/cli/surface.e2e.test.ts`, `test/corpus/cliCallForm.test.ts`,
   `test/corpus/skills/unattended.test.ts` (one case per blocker code), `test/corpus/commands/board.test.ts` ("gates
@@ -3611,6 +3744,27 @@ stray check `:872`, the index read `indexTracked`, `:1129-1139`, which `--paths`
   `:518-532`, called at `:862-867`). A pushed code file the scan could not read leaves the push and the exit as they
   are and adds `secret scan: <n> files unscanned (<paths>)` to `notDone[]` (pr/7; `:923-926`), which the skill copies
   on any exit.
+- **Amended 2026-10-18** (plan 021 file 2, unit `v21-run-verbs`, its fix round and the run-verbs fix round). Given an
+  unattended checkpoint and a held path absent at `Base:`, staged as new and then deleted from the work tree, Then the
+  held patch carries no section for it and the `held` line still names it; a held path whose deletion is staged while
+  the work tree has a file there gets a new-file part after the deletion; so the patch applied on `Base:` gives the work
+  tree's bytes. A held patch the branch already carries is kept and listed while the work tree holds no held change.
+- **As built, beyond the delta:**
+  - The held line names the first path `<path> (staged, then deleted: no section)`; it is still restored out of the
+    index. The new-file part is built without touching the real index: the file is stored with `git hash-object -w
+    --path=<path>`, its folders with `git mktree -z`, and the part is the diff from the empty tree to that tree
+    (`untrackedOf` and `workTreeAddition`, `src/cli/commands/run.ts`).
+  - A kept patch is read from the commit `HEAD` carries (`committedPatchPaths`); its paths join `held`, the held line
+    reads `held (kept in <patch> from an earlier checkpoint; the work tree holds no held change): …`, and one that cannot
+    be parsed fails the checkpoint as `hold failed`, never a removal. A patch no commit carries is still removed.
+  - The raw reads take `--no-abbrev` (`RAW_IDS`), so a short `core.abbrev` cannot split an object id and let a link at a
+    held prefix escape holding.
+  - A `--paths` entry whose deletion `git rm` already staged against `HEAD`, a file or a folder holding one, is
+    committed as that deletion, left out of `git add` and of the ignore check; a held path stays held (`namedPaths` and
+    `stagedDeletions`, `src/cli/commands/run.ts`). It was refused as staged and not in `--paths`.
+  - Proof: `test/cli/commands/runCheckpoint.test.ts` (the staged-then-deleted case, the three re-added cases, the
+    `core.abbrev 6` cases, the kept patch on a fresh clone, and the describe "a --paths entry whose deletion is already
+    staged").
 - **Proof:** `test/cli/commands/runCheckpoint.test.ts`, `test/cli/commands/run.test.ts`,
   `test/corpus/skills/unattended.test.ts`.
 
@@ -3648,6 +3802,18 @@ in progress `--resume` refuses, naming the continuation. In Claude Code's cloud 
   what the client does (a session that stays open, a cloud agent taking follow-ups on its pull request's comments, one
   answering a mention as `@<agent> answers: …`), `@<agent>` written as the literal mention of the client the run is on.
   `parseAnswers` (`src/runs/morning.ts`) reads the answers.
+- **Amended 2026-10-18** (plan 021 file 2, unit `v0d-guard-pages`). Given the morning walk and a held person-only act
+  the morning list names, When the walk reaches it, Then the walk runs it, the client's approve prompt being the
+  person's one click, on Claude Code; a REQ-FLOW-124 act, every held act on Copilot CLI, Cursor and Codex, and every held
+  act in Claude Code's cloud final round (where `STAMITY_UNATTENDED` stays set, so the guard still refuses) are handed
+  to the person as the exact command, which the walk does not run. The walk's entry, its rounds and the answers' mapping
+  are unchanged. As built: the skill names the clients by what their guard does, never by name, "a deletion, a force
+  push and every held act a client's guard refuses to ask for go to the person as the exact command", and its walk
+  section also counts the commits after the last checkpoint on `## Not done:` (REQ-FLOW-116), since an attended walk
+  reads that section and not the cloud reference (`content/skills/st-unattended/SKILL.md:139-145`); the final round's
+  sentence says the variable, still set, keeps the guard refusing (`:147-151`). Proof:
+  `test/corpus/skills/unattended.test.ts` ("the ask rule, the run verb's line and the walk's held acts"), and the five
+  unattended eval briefs re-quoted at the lines that moved (`test/evals/locators.test.ts`).
 - **Proof:** `test/corpus/skills/unattended.test.ts`, `test/corpus/commands/work.test.ts`,
   `test/hooks/unattendedAskGate.test.ts` (the final round's branch), `test/runs/morning.test.ts`.
 
@@ -3758,11 +3924,28 @@ egress, token-shaped variable names (names only) and missing review state; with 
 (`CANARY_MAX_AGE_MS`, `src/mcp/env.ts:190`; `directPushVerdict` and `runPreflight`, `src/runs/preflight.ts:474`,
 `:856-880`; the verb in `src/cli/commands/gate.ts`, its flags at `:2082-2085`).
 
+- **Amended 2026-10-18** (plan 021 file 2, units `v5-claude-readiness` and `v8-detect-translator`). Given `direct-push`
+  refusing because origin's https push goes through a credential helper other than gh's alone, Then its fix is one
+  sequence run in the repository, an empty `credential.helper` entry that resets the list, then
+  `!gh auth git-credential` added after it, which leaves gh's helper the only entry whatever the system or global
+  configuration holds, a helper `gh auth setup-git` wrote through a shim included; the fix names no `--global` or
+  `--system` write and echoes no value. The pre-flight's JSON `client` and `cloud` fields and its Cursor egress warning
+  are read through the one session detector (REQ-FLOW-080's), so: `CLAUDE_CODE_REMOTE` counts only as exactly `true`
+  (`1` is not a cloud), `GITHUB_ACTIONS` alone reads as a cloud, a `CURSOR_AGENT_SOCKET` of `0` or `false` no longer
+  warns, and marker values are no longer trimmed or lower-cased; these are labels, and none selects an unattended run.
+  The checks, their states and the other fixes are unchanged.
+- **As built, beyond the delta:** the fix's text says a credential helper entry later in the repository's own
+  configuration is read after the two, so they must come last (`GH_HELPER_FIX`, `src/runs/preflight.ts:152-158`);
+  `CLAUDECODE` alone still names `claude` with `cloud: false` (`setIn`, kept for that marker alone, in
+  `src/cli/commands/gate.ts`); the egress warning reads the detector's markers (`src/runs/preflight.ts:898-899`); and
+  `hooks-loaded` gains Claude Code's cloud refusal of REQ-FLOW-112 (`:497`, `:501-512`). Proof:
+  `test/cli/commands/gatePreflight.test.ts` ("the helper advice, run literally"; "reads the client and cloud fields and
+  Cursor's egress warning through detectSession (v8)"), `test/runs/preflight.test.ts`, `test/session/detect.test.ts`.
 - **Proof:** `test/runs/preflight.test.ts`, `test/cli/commands/gatePreflight.test.ts`,
   `test/hooks/personOnlyGuard.test.ts` (the canary), `test/mcp/env.test.ts`, `test/cli/commands/init.test.ts` and
   `test/cli/commands/initPanel.test.ts` (the canary's ignore entry).
 
-### REQ-FLOW-102 — Person-only acts are denied on every client, and person-only paths are held
+### REQ-FLOW-102 — Person-only acts that can be undone ask, attended; person-only paths are held
 
 Added 2026-10-16 (plan 021 file 1, units `u6-person-only-tables`, `u14-shell-guard`, `u18b-run-checkpoint` and
 `u20-hook-emission`).
@@ -3830,6 +4013,33 @@ off the pushed tree as an inert patch, listed (`PERSON_ONLY_PATHS` and `heldPath
   `packed-refs` file, naming `TAG_NAMES_OVER_10000` or `PACKED_REFS_OVER_8388608`, so a push naming a refspec in that
   repository is refused as a call the guard cannot decide rather than read against a cut-off list (pr/95; `localTags`,
   `src/hooks/scripts.ts:3624-3668`; the ceilings, `:3093-3098`). What stays open is REQ-FLOW-104's tag ceiling.
+- **Amended 2026-10-18** (plan 021 file 2, units `v0a-ask-then-act`, `v0a2-ask-emission` and `v0b-run-verb-alone`,
+  with their fix rounds; the heading read "Person-only acts are denied on every client, and person-only paths are
+  held"). Given an attended session, When the main thread runs a person-only act that can be undone (a merge in any
+  form: gh, REST, GraphQL, the merge queue, the MCP merge row; marking ready; a review approval; a non-forced push or
+  sync of the default branch; creating or pushing a tag; a release create, edit or upload; a publish or dist-tag; a
+  secret or variable write; a protection, ruleset or custom-property write; a repository's settings, name, archive state
+  or default branch), Then the client asks (REQ-FLOW-123) and the agent runs it on yes; the acts of REQ-FLOW-124 stay
+  refused, and the held-path half of this requirement is unchanged. So the requirement's first paragraph, "Then …
+  refuse it", reads for those acts as "Then the client asks or refuses by REQ-FLOW-123", and stands whole for the acts of
+  REQ-FLOW-124.
+- **As built, beyond the delta:**
+  - `personOnlyVerdict` returns `{ deny: true, rule, act, reason, ask }` for every person-only line: `deny` stays true,
+    so the run verbs' push check refuses as before, and `ask` is true only when every act the line holds is ask-class
+    (`PersonOnlyVerdict` and `PERSON_ONLY_RULES`, each rule carrying `ask`, `src/hooks/personOnly.ts`). Every act is
+    collected — each segment, each call `--next` joins, each path of a call, each rule one REST path matches, each flag
+    of one gh call, each field of one REST body, each GraphQL mutation and `updateRefs` entry — and the first
+    refuse-class act is the verdict, so a deletion never rides an approval.
+  - The ask-class rules are `push-default` (with plain `gh repo sync`), `push-tags`, `tag`, `pr-merge`, `pr-ready`,
+    `release`, `publish` (with `npm dist-tag add`, pnpm's and yarn's `dist-tag add` and yarn's `tag add`), `secrets`
+    (a user's Codespaces secret written by REST included) and `protection`, which also reads a deployment environment's
+    write and a write to its deployment protection rules or branch policies, an environment name holding a slash
+    included, and `gh repo edit` with no flag.
+  - `gh variable get` is a read. The shell reading, in both copies: an unquoted `$(…)`, backtick or `(` stays a word of
+    its command; wget's `-X` is no method; a gh option placed before the subcommand, or before `api`, is read as gh
+    reads it, with its value; PowerShell's typographic quotes open and close quotes.
+  - Proof: `test/hooks/personOnly.test.ts` (each DENY row's class, and the `CLASSES` conformance rows),
+    `test/hooks/personOnlyGuard.test.ts`, `test/cli/commands/runCheckpoint.test.ts` (the push stub's verdict).
 - **Proof:** `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`, `test/change/personOnlyPaths.test.ts`,
   `test/cli/commands/runCheckpoint.test.ts` (the held patch; the refused push, "refuses the push when a commit it would
   send changes a held path, rewriting no history"), `test/adapters/claude.test.ts`,
@@ -3909,9 +4119,385 @@ named network exceptions, and the run verbs on the git-hardening row.
   past 10,000 local tag names, or a `packed-refs` file past 8 MiB, the guard refuses every push naming a refspec in
   that repository, attended sessions included, and a call that reads no tag still passes (`SECURITY.md:530-536`); the
   attended paragraph states a path with dot segments read resolved as well as written (`:602-605`).
+- **Amended 2026-10-18** (plan 021 file 2, units `v0d-guard-pages`, `v13-client-legs` and `v15-cloud-page`, and the
+  page items folded into `v17-model-list-cache`). Given `SECURITY.md`, Then its rows state each client's answer to a
+  person-only act (REQ-FLOW-123), the deletions and force pushes refused everywhere (REQ-FLOW-124), the run-verb line
+  rule and the verbs' git environment (REQ-FLOW-121, REQ-FLOW-122), the settings' ask and deny lists (REQ-FLOW-036) and
+  the MCP hook (REQ-FLOW-120); and it names as accepted residuals: an ask holds only while a client honours it (Claude
+  Code's hook ask in bypass mode measured, not documented; re-measured each release); where no hook runs, a respelling
+  no settings row names is one click; a `GIT_CONFIG_*` variable gained after the pre-flight reaches the verbs' git,
+  including one set on a line whose run verb the stand-alone rule's text reading cannot see (a launcher it does not
+  unwrap, a name split by quotes or built by an expression); and a checkout synced from an unreleased build keeps its old
+  deny rows. The cloud section's intro states the attended rule (`SECURITY.md:390-392`); "How each client answers an
+  ask." (`:408-417`), "Where no hook runs." (`:418-426`) and the MCP bullet (`:427-438`) follow it.
+- **As built, beyond the delta:** the page also names, each with its control: Cursor 2026.10.14 running a command
+  despite an ask under `--force` and Codex letting an ask through, measured or read 2026-10-18; Copilot CLI refusing
+  because its tool-call payload names no calling agent; a sub-agent's ask-class act and one in Claude Code's `auto`
+  permission mode refused by the guard, while where no hook runs the settings' ask rows still reach `auto` mode's
+  classifier; a colon-refspec deletion behind an ask prefix, which no settings row can name; the readiness hook's
+  `npm ci`, whose install scripts inherit `$CLAUDE_ENV_FILE` and so could write lines that run before every later shell
+  command, `hooks-loaded` being a canary there and not a wall (REQ-FLOW-110); Claude Code's GitHub Action on a pull
+  request, whose base-branch restore leaves the hook scripts under `.stamity/generated/hooks/` and the `AGENTS.md` the
+  base branch's `CLAUDE.md` imports to the pull request (REQ-FLOW-113); `SSH_ASKPASS` among the variables the verbs'
+  git drops; the release checklist's `hook-runs.mjs --ask --require-observation` as the re-measurement (REQ-PROVE-042);
+  and the model list cache in place of "the account's list lands in the committed manifest" (REQ-LADDER-009). The
+  security mapping's rows and gaps follow each (`docs/security-mapping.md`). Proof: `test/docsPages.test.ts` ("states
+  file 2's ask rule, each client's answer, the run verb's line and the residuals REQ-FLOW-104 names", and its mapping
+  twin), `test/corpus/rules/security.test.ts`.
 - **Proof:** `test/docsPages.test.ts` ("cloud and unattended runs (REQ-FLOW-104)": the section's place, every risk
   and gap named above, the retired bullet gone, the control table's pointers, the settings row and the network
   exception); `judgment: reviewer` for the wording around them.
+
+### REQ-FLOW-105 — Continue a run from its branch
+
+Added 2026-10-18 (plan 021 file 2, units `v1-branch-card`, `v3-cloud-skill` and `v21-run-verbs`, with their fix
+rounds).
+
+Given an in-progress run record whose `Branch:` names the checked-out branch, When a session starts there, Then the
+session start prints that run's resume card (REQ-CTX-013), and an unattended `/st-work` continues that run from its
+record and ledger at Frame instead of opening a new record, the folder count under `.stamity/runs/` unchanged; Given a
+record naming another branch, a detached HEAD, or no `Branch:` line, Then Frame opens a new record as today. Where no
+session-start hook runs, `stamity ledger status` prints the card. Given `stamity run start --run <id>` on a fresh clone
+where `stamity/<id>` is only on origin, Then the local branch starts at origin's tip, so the next push fast-forwards. A
+session continues only the run whose record is on the branch it was given, and never guesses another branch; a
+continued run passes its record's `Base:` to the readiness check (`stamity plan check <plan> --since <Base>`, which one
+plan now accepts as a chain does), so a path moved only by the run's own commits is not read as stale; a continued
+chain file passes the chain's first record's `Base:`, as the chain rules do.
+
+- **As built, beyond the delta:**
+  - The startup card is REQ-CTX-013's, as amended 2026-10-18: HEAD is read from disk with no process spawned, through
+    one reader the ask gate embeds too, which follows a linked worktree's `gitdir:` (`buildCardBranchSource` and
+    `resumeCardLines`, `src/runs/cardSource.ts`; `readCurrentBranch` and `findCardRun`, `src/runs/resumeCard.ts`); an
+    attended record prints on startup only within the closed card's two-day age, an unattended one at any age.
+  - Frame's continuation is the skill's text, `content/skills/st-unattended/references/cloud.md:53-65`, which the
+    skill's body points at in its last line (`content/skills/st-unattended/SKILL.md:171`): the session runs
+    `stamity run start --run <id> --json` first, `<id>` the record's folder name, and with no in-progress record on the
+    branch it was given, as on a clone given the default branch or a platform's own, it opens a new run.
+  - `run start` with no local `stamity/<id>` reads `refs/remotes/origin/stamity/<id>`; where the run's record at that
+    tip names a `Base:` the tip descends from, it switches to a new branch at the tip and reports
+    `created from origin's stamity/<id>`, a dry run reading that tip as its base. A tip carrying no record, a record
+    with no `Base:`, a `Base:` that names no commit here, or a tip that does not descend from it is refused, exit 1,
+    naming both commits, and on a shallow clone the refusal names `git fetch --unshallow origin` (`originRunTip`,
+    `src/cli/commands/run.ts`). A clone that never fetched the branch keeps today's start, a named residual.
+- **Proof:** `test/hooks/sessionStartCard.test.ts` ("the startup card for the run on this branch"),
+  `test/runs/resumeCardParity.test.ts`, `test/cli/commands/run.test.ts` (the fresh-clone continuation cases and the
+  refusals), `test/cli/commands/plan.test.ts` ("takes --since for a single plan without --chain: a move after the base
+  is exempt, one before it stays stale"), `test/corpus/skills/unattended.test.ts` ("continues at Frame only the
+  in-progress record on the branch it was given, its Base: as --since (REQ-FLOW-105)"). No eval case observes a whole
+  continuation; it is proven by its parts, an accepted gap the plan's QA walk names.
+
+### REQ-FLOW-106 — The review gate survives a reclaimed machine
+
+Added 2026-10-18 (plan 021 file 2, unit `v2-review-gate-rebuild` and its two fix rounds; `v3-cloud-skill` for the
+checkpoint after each round).
+
+Given no `.stamity/review-gate.json`, or one that cannot be read or parsed, and the newest in-progress record (not a
+`_debug-` run) whose `Branch:` matches HEAD holding N `usage: review rN` lines, When the review gate decides or records,
+Then it rebuilds N rounds with the last verdict unrecorded and holds the completion, below the cap as an open round and
+at the cap with a message of its own (the last verdict went with the machine; one fresh review re-records it), never
+the cap's end-of-run text, instead of opening; with no such record or line it stays open, naming the missing counter;
+when the records cannot be read it holds and names the fault, and a reviewer's stop whose rebuild faults records round
+1, naming the fault and the lost count. A readable counter file wins and nothing is rebuilt, a faulted one is replaced
+once a rebuild succeeds, and the text names that the counter is keyed by the client's session, not by the run. An
+unattended cloud run checkpoints after each review round, so the round's usage line reaches the branch before a
+reclaim.
+
+- **As built, beyond the delta:**
+  - The usage line is `USAGE_REVIEW_PATTERN` (`src/runs/layout.ts:108`), the one spelling the gate's rebuild and the
+    pre-flight's `review-state` warning count; the pre-flight counts the run on the branch `.git/HEAD` names, 0 on a
+    detached HEAD (`usageReviewLines`, `src/cli/commands/gate.ts`).
+  - At the cap the reason code is `ROUNDS_REBUILT_AT_CAP`, and the next review re-records round N rather than counting
+    N + 1; a count padded past the cap rebuilds as the cap. A fault holds as `RUN_FOLDERS_OVER_2000`,
+    `RECORD_TOO_LARGE` (a matching record over 1 MiB) or `RECORDS_UNREADABLE`, naming the path relative to the
+    repository. A linked run folder and a `_debug-` folder are passed over, as `findCardRun` passes them; the
+    pre-flight still counts 0 past 1 MiB where the gate holds, erring toward holding.
+  - Where the delta and the code differ: a counter written from a rebuild carries `rebuilt: true`, which every later
+    write keeps, and a session with no entry in a counter so marked rebuilds from the record as for a missing counter,
+    so a peer session's completion in the same checkout holds instead of opening. "A readable counter file wins" holds
+    for a file holding this session's entry, or carrying no mark; an unmarked counter keeps today's meaning
+    (`buildReviewGateScript`, its `load`, `save`, `record` and `decide`, `src/hooks/scripts.ts`). A governed sub-agent
+    stop other than the reviewer's prints no line for a faulted counter.
+  - The cloud reference states the checkpoint after each round (`content/skills/st-unattended/references/cloud.md:27-29`).
+- **Proof:** `test/hooks/scripts.test.ts` (the REQ-FLOW-106 block, its peer-session and marked-counter cases among
+  them), `test/runs/preflight.test.ts`, `test/hooks/sessionStartCard.test.ts`, `test/corpus/skills/unattended.test.ts`.
+
+### REQ-FLOW-107 — Pacing an unattended night in a cloud session
+
+Added 2026-10-18 (plan 021 file 2, unit `v3-cloud-skill`).
+
+Given an unattended run in a session the session start names a cloud session, Then the run uses no `/loop`, wakeup or
+agent team to pace itself, runs the full gate as one background command under a stated timeout (the one exception to
+the bound agents' Shell paragraph, whose words stay byte for byte), and runs at most two implementers at once; the text
+sits in the unattended skill's cloud reference, and a corpus test pins each clause beside the Shell paragraph's pin.
+
+- **As built:** `content/skills/st-unattended/references/cloud.md:17-33`; the completion notice is taken, never polled
+  with `sleep`, and the brief that dispatches the gate names the exception. A local unattended run and an attended one
+  keep `/st-work`'s capacity rung (`:12-14`).
+- **Proof:** `test/corpus/skills/unattended.test.ts`, `test/corpus/agents/shellDiscipline.test.ts` (the Shell
+  paragraph unchanged).
+
+### REQ-FLOW-108 — Lanes in a cloud session
+
+Added 2026-10-18 (plan 021 file 2, unit `v3-cloud-skill` and its three fix rounds).
+
+Given an unattended run in a cloud session with units that could run in parallel, Then each lane uses the client's own
+isolation or the units run one at a time, never the sibling folder `stamity worktree setup` makes, so no folder appears
+under `<parent>/.stamity-worktrees/`; each lane's change is applied to the run's work tree uncommitted before the next
+checkpoint, whose own classifier moves any held part into `held/person-only.patch` and commits the rest, so no held path
+enters the pushed history and nothing a lane did is lost at a reclaim. Text only: the `stamity worktree` verbs and their
+lane requirement are unchanged, and a corpus test pins the text.
+
+- **As built:** the lane is folded once, when its agent returns, as `git diff --binary <run-branch>...<lane> | git
+  apply` applies it to the work tree alone, never to the index, where a deletion already staged would refuse the
+  checkpoint; the checkpoint's `--paths` names every path `git diff --name-only --no-renames <run-branch>...<lane>`
+  lists, so a rename's old side is staged as deleted; a lane's commit never lands on the run branch itself
+  (`content/skills/st-unattended/references/cloud.md:35-46`). The checkpoint commits a `--paths` entry whose deletion is
+  already staged (REQ-FLOW-093, amended 2026-10-18).
+- **Proof:** `test/corpus/skills/unattended.test.ts` ("runs lanes in the client's own isolation or one at a time, never
+  the sibling worktree folder (REQ-FLOW-108)").
+
+### REQ-FLOW-109 — Cursor's stop hook carries an unattended run on
+
+Added 2026-10-18 (plan 021 file 2, unit `v4-cursor-continue` and its fix round).
+
+Given Cursor selected, Then `.cursor/hooks.json` wires a `stop` entry, never `failClosed`, running an adapter-owned
+script under one fixed emitted `loop_limit`; When it runs, Then it answers a follow-up only where `CURSOR_AGENT_SOCKET`
+is set and an in-progress record on this branch reads `Mode: unattended` and states units left, and otherwise (a local
+session, no `Mode:` line, a closed run, a count it cannot read) answers nothing and exits 0, so a local session on a
+branch carrying such a record never gets one. The `stop` event, `loop_limit` and the follow-up answer are
+vendor-documented, re-checked at build.
+
+- **As built, beyond the delta:**
+  - The socket variable counts when set to a value other than empty, `false` or `0`. The stop's payload `status` must
+    be `completed` or absent; `aborted`, `error`, `null` or any other value gets nothing.
+  - "Units left" is the last checkpoint line's `remaining=<m>`, digits only and above 0 (`RECORD_CHECKPOINT_PATTERN`,
+    `src/runs/layout.ts:115`); the answer is `{"followup_message":"Continue the run: <m> units remain; the record is
+    <path>."}`, `<m>` printed as a number and `<path>` built from the run folder's name, never from record text
+    (`CURSOR_CONTINUE_FOLLOW_UP` and `buildCursorContinueScript`, `src/hooks/scripts.ts`).
+  - No follow-up is answered while the newest capacity line ending in `BLOCKED_DEPENDENCY` has at most one checkpoint
+    line after it, the stop's own, so a run stopped at a usage limit is not re-started into the limit
+    (`CURSOR_CONTINUE_CAPACITY_STOP_PATTERN`, the same file).
+  - The record is read whole up to the report bound; a larger or unreadable record, or a payload that is not JSON, gets
+    nothing and one stderr line naming the read. The record heads come from one reader the ask gate shares, the ask
+    gate's bytes unchanged (`RECORD_HEADS_SOURCE`).
+  - The row runs through the walk-up starter, its data naming `stop`, with `loop_limit` 50 (`CURSOR_CONTINUE_LOOP_LIMIT`
+    and `CURSOR_CONTINUE_HOOK_PATH`, `src/adapters/cursor.ts:333`, `:340`; the row, `:1044-1046`). The vendor citations
+    carry no read date, open as a Minor.
+- **Proof:** `test/hooks/cursorContinue.test.ts`, `test/adapters/cursor.test.ts`, `test/hooks/scriptBudget.test.ts`,
+  `test/cloud/containerLeg.test.ts` (the Cursor script list).
+
+### REQ-FLOW-110 — Claude Code's cloud machine readies itself
+
+Added 2026-10-18 (plan 021 file 2, unit `v5-claude-readiness` and its fix round).
+
+Given Claude Code selected, Then `.claude/settings.json` gains its own `SessionStart` entry, matcher `startup|resume`,
+running an adapter-placed script that does nothing unless `CLAUDE_CODE_REMOTE` is `true`; there it checks `node`
+against `engines`, runs `npm ci` when `node_modules` is missing and a lockfile exists, pre-warms the pinned CLI and
+appends `STAMITY_HOOKS_ACTIVE=1` to `$CLAUDE_ENV_FILE`; offline, or with that variable unset, it says so and exits 0. Its
+budget is the one REQ-CTX-016 declares; that the file reaches shell commands only is vendor-documented, re-checked at
+build.
+
+- **As built, beyond the delta:**
+  - The line written is `export STAMITY_HOOKS_ACTIVE=1`, the client's documented form, appended first, before any
+    install step, and once across startup and resume, so an install that runs out of time leaves it written
+    (`HOOKS_ACTIVE_ENV`, `src/types/markers.ts:206`).
+  - The node check reads the common range shapes (`^`, `~`, `x`, `||`, the comparators) and names any other as unread,
+    never guessing. `npm ci` runs only from a `package-lock.json` or `npm-shrinkwrap.json`; another lockfile installs
+    nothing and says so, as does a repository with no `package.json`. The pinned CLI is resolved through its `help`
+    verb.
+  - The script's own limits are 240 s for the install and 45 s for the CLI, inside the entry's 300 s. Stdout carries
+    fixed text, versions and exit codes only, with control characters masked, and the script's banner names the
+    registry reach and the install scripts (`buildCloudReadinessScript`, `CLOUD_READINESS_FILE` and
+    `CLOUD_READINESS_TIMEOUT_MS`, `src/hooks/scripts.ts`).
+  - The adapter places the script beside the ask gate and pushes the entry after every planned `SessionStart` row,
+    with no fail-closed tail (`CLAUDE_CLOUD_READINESS_PATH`, `src/adapters/claude.ts:243`; the matcher, `:251`; the
+    entry, `:984-987`).
+  - The vendor facts were re-read on 2026-10-18: `CLAUDE_ENV_FILE` is documented for `SessionStart`, its lines run
+    before each later Bash command, and `startup|resume` is an exact list.
+  - The install scripts `npm ci` runs inherit `$CLAUDE_ENV_FILE`, a residual `SECURITY.md` names (REQ-FLOW-104).
+- **Proof:** `test/hooks/cloudReadiness.test.ts`, `test/adapters/claude.test.ts` ("the cloud readiness hook's
+  placement"), `test/manifest/claudeSettings.test.ts` ("the cloud readiness entry"), `test/hooks/scriptBudget.test.ts`,
+  `test/cloud/containerLeg.test.ts` ("runs Claude Code's cloud readiness under the claude-cloud marker against the npm
+  stubs alone"), `test/cloud/profiles.test.ts`.
+
+### REQ-FLOW-111 — Readiness on Copilot and Cursor
+
+Added 2026-10-18 (plan 021 file 2, unit `v10-copilot-cursor-setup`, and `v7-cursor-agents-block`'s fix round for the
+row's warning).
+
+Given Copilot selected, Then `copilot-setup-steps.yml` installs Node and the pinned CLI so `stamity` resolves with no
+registry fetch, at the generator's current action pins; Given Cursor selected, Then no `.cursor/environment.json` is
+emitted and `stamity check` prints an install row with the lines a Cursor environment needs. Both name `gate scan` and
+`ledger status` as hard needs. That a repository file overrides Cursor's saved environments is vendor-documented,
+re-checked at build.
+
+- **As built, beyond the delta:**
+  - Both lanes of the setup steps end on a comment naming the two hard needs, `npm install --global
+    [--@<scope>:registry=<url>] <package>@<version>` and `stamity --version`, a fork's package and registry reaching
+    the line; a package with no npm channel gets no registry install, only a comment saying to install the fork's own
+    copy (`pinnedCliInstall` and `buildSetupSteps`, `src/adapters/copilot.ts`).
+  - `check`'s row is `cloud-install`, printed only with Cursor selected, after `model-pins`. It names Node's range, the
+    pinned CLI and the two hard needs, says no `.cursor/environment.json` is written, then prints `node --version` and
+    the install line at the manifest's `generatedBy`, and never fails. It warns, first, when the manifest records the
+    root `AGENTS.md` as `skip`, since the Cursor block of REQ-FLOW-114 then never lands (`checkCloudInstall`,
+    `src/cli/commands/check.ts`). `docs/troubleshooting.md` lists the row.
+  - The global install bypasses a project `.npmrc` mirror at setup, and the vendor facts were not re-read at build;
+    both are open as Minors. A project pinning Node below the CLI's engines gets a red `stamity --version` step.
+- **Proof:** `test/adapters/copilot.test.ts` (the "copilot-setup-steps.yml" cases), `test/cli/commands/check.test.ts`
+  ("check — cloud-install (REQ-FLOW-111)"), `test/docsPages.test.ts`.
+
+### REQ-FLOW-112 — A Claude Code session with several repositories refuses unattended
+
+Added 2026-10-18 (plan 021 file 2, units `v5-claude-readiness` and `v3-cloud-skill`).
+
+Given a shell that sees `CLAUDE_CODE_REMOTE=true` and no `STAMITY_HOOKS_ACTIVE`, When an unattended run starts, Then it
+refuses with "hooks did not load" first: the pre-flight's canary finds no fresh marker, and where no CLI runs the run
+refuses first because the CLI is not reachable (the skill names no client variable); the refusal names a session
+holding several repositories and the remedy, one repository per session. That such a session loads no repository's
+hooks is vendor-documented, re-checked at build; a repository added after the start is a named residual.
+
+- **As built:** `hooks-loaded` refuses where the detector reads `CLAUDE_CODE_REMOTE` (exactly `true`) and
+  `STAMITY_HOOKS_ACTIVE` is not exactly `1`, before and whatever the canary, so a canary a steered run wrote does not
+  stand in for the variable; its evidence opens `hooks did not load` and names `$CLAUDE_ENV_FILE`, and its fix names one
+  repository per session (`hooksLoaded`, `src/runs/preflight.ts:497`, `:501-512`). The cloud reference names the
+  refusal by the check's id, `hooks-loaded` (`content/skills/st-unattended/references/cloud.md:48-51`).
+- **Proof:** `test/runs/preflight.test.ts` ("hooks-loaded in Claude Code's cloud"),
+  `test/cli/commands/gatePreflight.test.ts`, `test/corpus/skills/unattended.test.ts`.
+
+### REQ-FLOW-113 — Claude Code's GitHub Action is a short surface
+
+Added 2026-10-18 (plan 021 file 2, units `v11-cloud-facts-matrix`, `v13-client-legs` and `v15-cloud-page`, with
+their fix rounds).
+
+Given `docs/cloud.md` and the capability matrix's Claude Code facts, Then the GitHub Action is named a job of at most
+six hours with no question tool by default, never an overnight surface, where declared defaults apply, each fact with
+the status its vendor page gives at build; Given `scripts/qa/hook-runs.mjs`, Then a unit test pins Claude's runner
+arguments to hold no `--bare`, and the nightly hook-fire check (REQ-PROVE-040) records `failed` when `claude -p` ran a
+tool call and no hook fired.
+
+- **As built:** three `CLIENT_CLOUD_FACTS` rows (`src/hooks/model.ts`): the job cap `documented`; the question tool
+  `not documented, read 2026-10-18`, the page being silent; the configuration restored from the base branch
+  `documented`, the row adding that the hook scripts those entries start live under `.stamity/generated/hooks/`, which
+  the restore does not cover, and come from the pull request. None prints a session line. `docs/cloud.md`'s Action
+  section adds the `AGENTS.md` the base branch's `CLAUDE.md` imports, which comes from the pull request too. The
+  hook-fire failure is `--require-observation`, which turns an empty observation log red (`main`,
+  `scripts/qa/hook-runs.mjs`).
+- **Proof:** `test/emit/capabilityMatrix.test.ts` ("states Claude Code's GitHub Action as a six-hour job with no
+  question tool by default (REQ-FLOW-113)"), `test/qa/hookRuns.test.ts` ("drives claude without --bare"),
+  `test/qa/hookRunsCli.test.ts`, `test/docsPages.test.ts` ("names the GitHub Action a short surface, and what a pull
+  request still changes there").
+
+### REQ-FLOW-114 — Cursor's cloud block in `AGENTS.md`
+
+Added 2026-10-18 (plan 021 file 2, unit `v7-cursor-agents-block` and its fix round).
+
+Given Cursor selected, Then the root `AGENTS.md` ends on a "Cursor Cloud specific instructions" block: `/st-<id>` means
+read `.agents/skills/st-<id>/SKILL.md`; the screened learnings read of charter invariant 5; `node --version` first, the
+missing-`node` remedy, with no prefix on any hook command; keep the PR a draft, never ready; the unattended rule.
+Without Cursor no byte moves, Codex's override and nested copies included. The block is counted apart from the
+charter's 95-line pin, the always-on figure is published with and without it, and the heading is vendor-documented.
+
+- **As built:** the block is 14 lines (`ALWAYS_ON_CURSOR_BLOCK_LINES`, `src/content/charter.ts`), rendered by
+  `renderCursorCloudBlock` (`src/emit/agentsMd.ts`) and appended to the root row by the planner (`src/emit/planner.ts`);
+  at the golden's version the root file reads 5,610 bytes without Cursor and 6,476 with it
+  (`ALWAYS_ON_SHARED_BYTES_WITH_CURSOR`; REQ-PROVE-005, amended 2026-10-18). A root `AGENTS.md` recorded as `skip`
+  carries no block, and `check`'s `cloud-install` row warns (REQ-FLOW-111). With Claude Code beside Cursor, Claude pays
+  the block through `CLAUDE.md`'s import, and the disclosure says so. An upgrade that moves the block's pinned call
+  rewrites the file, which takes a `.bak` where git cannot confirm it committed (REQ-PLUGIN-046).
+- **Proof:** `test/emit/agentsMd.test.ts`, `test/corpus/invariants.test.ts`, `test/emit/capabilityMatrix.test.ts`,
+  `test/cli/commands/check.test.ts`, `test/merge/hookFilesOwnership.test.ts`, `test/cli/checkExpectations.test.ts`.
+
+### REQ-FLOW-115 — Cursor's context once per conversation, and its managed runs
+
+Added 2026-10-18 (plan 021 file 2, unit `v6-cursor-cloud`).
+
+Given Cursor selected, Then a `postToolUse` entry, never `failClosed`, runs an adapter-owned script that prints the
+screened session-start index once per `conversation_id` (a git-ignored marker keyed on its hash), only where
+`CURSOR_AGENT_SOCKET` is set, and names a Cursor cloud agent when the `agent/runtime` metadata reads managed; a missing
+or non-string id prints nothing, a failed metadata read prints no cloud line, and both exit 0. That this event alone
+injects context in the cloud, never on the read-only first turns, is vendor-documented, re-checked at build.
+
+- **As built, beyond the delta:**
+  - The marker is `.stamity/context-once/<sha256(conversation_id)>`, claimed by an exclusive create, so an id is never
+    a path; a folder that is a file or a link gets no marker and the index still prints, the call losing the "once",
+    never the index.
+  - The runtime read is `GET /v1/meta-data/agent/runtime` over the socket, 1,000 ms a try, one retry after a failed
+    connection, a timeout, a 429 or a 5xx, a 403 or 404 final; `managed` adds `Session: a Cursor cloud agent.` after the
+    session lines (`CONTEXT_ONCE_MANAGED_LINE` and `buildContextOnceScript`, `src/hooks/scripts.ts`). The index is the
+    session start's own, shared byte for byte (`sessionIndexSource`), and the script prints Cursor's own
+    `additional_context`.
+  - The row runs through the walk-up starter, its data naming `post_tool_use`, with no timeout of its own
+    (`CURSOR_CONTEXT_ONCE_HOOK_PATH`, `src/adapters/cursor.ts:348`; the row, `:1041-1043`). The folder is ignored
+    (REQ-FLOW-016) and never copied between worktrees (REQ-WORKTREE-003 and REQ-WORKTREE-004 in
+    `docs/specs/worktree-lane.md`). The socket timeout is an idle timeout, so a responder trickling data holds the hook
+    to Cursor's own limit, open as a Minor.
+- **Proof:** `test/hooks/contextOnce.test.ts`, `test/adapters/cursor.test.ts`, `test/hooks/scriptBudget.test.ts`.
+
+### REQ-FLOW-116 — Commits after the proof block are counted
+
+Added 2026-10-18 (plan 021 file 2, units `v3-cloud-skill` and `v0d-guard-pages`).
+
+Given commits on the run branch after its last checkpoint's sha that the run verbs did not make (theirs carry the
+subject `chore(run): checkpoint <id>`), a cloud's CI autofix or a person's push among them, When the morning list is
+regenerated, Then its `Not done:` section carries one row naming their count, and the proof block's gate results are
+not read as covering them; the run's own closing commit is never counted.
+
+- **As built:** the count is the subjects `git log --format=%s <sha>..HEAD` lists, less each reading
+  `chore(run): checkpoint <id>`, on one row, `Not done: <n> commits after checkpoint <sha>, not covered by the proof
+  block's gates` (`content/skills/st-unattended/references/cloud.md:67-73`); the skill's morning walk section says the
+  same (`content/skills/st-unattended/SKILL.md:139-145`). It is text the run follows: no engine code counts the commits.
+- **Proof:** `test/corpus/skills/unattended.test.ts`.
+
+### REQ-FLOW-117 — Copilot runs a long plan as a chain of sessions
+
+Added 2026-10-18 (plan 021 file 2, units `v3-cloud-skill`, `v9-copilot-entry` and `v15-cloud-page`).
+
+Given an unattended run on Copilot's cloud agent, Then each session commits and pushes a checkpoint before about minute
+45 to 50, plan units are sized to one session, and the next session starts on a write-access person's
+`@copilot continue` and resumes from the committed record on the same PR; `docs/cloud.md` promises a night with nobody
+there on Claude Code and Cursor only. The 59-minute cap and the continuation are vendor-documented and not run, with no
+Copilot cloud-agent account.
+
+- **As built:** the skill names the agent by what it does, "a cloud agent whose session ends near an hour"
+  (`content/skills/st-unattended/references/cloud.md:75-81`), and the entry agent states the chain (REQ-FLOW-118). The
+  setup job is bounded at `timeout-minutes: 30` (`SETUP_STEPS_TIMEOUT_MINUTES`, `src/adapters/copilot.ts`). The cloud
+  page's opening says Copilot's cloud agent runs as a chain a person continues, so it is no night with nobody there.
+- **Proof:** `test/adapters/copilot.test.ts` ("bounds the job with timeout-minutes, under the platform's 59 on every
+  lane (REQ-FLOW-117)"), `test/corpus/skills/unattended.test.ts`, `test/docsPages.test.ts` ("states the cloud facts the
+  capability matrix's table holds").
+
+### REQ-FLOW-118 — Copilot's entry and its roles
+
+Added 2026-10-18 (plan 021 file 2, units `v9-copilot-entry` and `v3-cloud-skill`).
+
+Given Copilot selected, Then `.github/agents/stamity-run.agent.md`, under 2,000 characters, tells the agent to read
+`.github/prompts/st-work.prompt.md` and the plan the issue names, since a prompt file is not run by name there; where
+no sub-agent tool exists, the roles run in line in their order and the proof block says so. Without Copilot the file is
+not emitted, and no roster row is added. The 30,000-character cap, the prompt-file rule and the sub-agent question are
+vendor-documented, not run.
+
+- **As built, beyond the delta:** the file is emitted only where the `/st-work` prompt is planned too, since it names
+  that prompt (`runAgentRows`, `src/adapters/copilot.ts`); its frontmatter carries `name: stamity-run`,
+  `target: github-copilot`, `include-custom-instructions: true` and `tools: ["*"]`, no model line, and it is owned as
+  the Copilot adapter's `agent` row with no roster row; an agent already planned at its path is refused by name with
+  `VALIDATION_ERROR` (`COPILOT_RUN_AGENT_PATH` and `buildRunAgentFile`, the same file). It is 1,100 bytes and never
+  inlines the prompt. Where the file is not yet on the default branch, the run writes a declared `## Prerequisites` row
+  naming it (`content/skills/st-unattended/references/cloud.md:85-86`). The entry also loads on Copilot CLI and states
+  cloud-only rules, open as a Minor.
+- **Proof:** `test/adapters/copilot.test.ts` ("Copilot's entry agent (REQ-FLOW-117, REQ-FLOW-118)"),
+  `test/roster/agentPolicies.test.ts` (the roster unchanged), `test/corpus/skills/unattended.test.ts`.
+
+### REQ-FLOW-119 — Copilot's gates and CI approval
+
+Added 2026-10-18 (plan 021 file 2, unit `v3-cloud-skill`).
+
+Given an unattended run on Copilot's cloud agent, Then the gates run in its sandbox; while PR CI waits for "Approve and
+run workflows" the proof block reads `CI not run: awaiting approval`, never green, and the morning list carries that
+setup row and, under required reviews, the prerequisite of a second approver. Detection stays `COPILOT_AGENT_PROMPT`
+and the hooks file camelCase, as today; the approval step and the second approver are vendor-documented, not run.
+
+- **As built:** `content/skills/st-unattended/references/cloud.md:83-86`, the second approver a `## Prerequisites` row.
+- **Proof:** `test/corpus/skills/unattended.test.ts`.
 
 ### REQ-FLOW-120 — An unattended run pushes only through the run verbs
 
@@ -3951,9 +4537,163 @@ this rule, a residual `SECURITY.md` names (REQ-FLOW-104).
   branch writes (`:191-195`), review writes and submission (`:200-202`), pull-request update and state (`:203-205`),
   branch creation (`:206`), repository deletion (`:207`) and pull-request creation (`:210`). The other clients take no per-tool deny, a residual
   `SECURITY.md` names.
+- **Amended 2026-10-18** (plan 021 file 2, units `v0a2-ask-emission` and `v0b-run-verb-alone`, with their fix rounds).
+  Given Claude Code's settings, Then the thirteen GitHub MCP rows that can be undone (merge, branch and file writes,
+  review writes and submission, pull-request update, state and creation, branch creation) sit in `permissions.ask`, and
+  `delete_repository` alone stays in `permissions.deny`; a PreToolUse entry on those tools runs the person-only guard,
+  which refuses each while an unattended run is in progress, since a settings row cannot read the mode, and answers ask
+  in an attended session. The push rule and its other refusals are unchanged. So the bullet above's "fourteen
+  `permissions.deny` rows refuse the GitHub MCP server's tools by name" reads as thirteen ask rows and one deny row.
+- **As built, beyond the delta:**
+  - The MCP entry is the shell guard's own row wired a second time, last among the `PreToolUse` entries, with the
+    guard's fail-closed tail and its matcher every row of `GITHUB_MCP_ROWS` (`GITHUB_MCP_MATCHER`,
+    `src/adapters/claude.ts:267`; the entry, `:994-997`). An attended MCP act prints as "A call to the GitHub MCP
+    server" with the tool's row name, and a sub-agent's or an `auto`-mode call is refused as REQ-FLOW-123 says
+    (`mcpDecision` and `attendedAsk`, `src/hooks/scripts.ts`). A server configured under another name than `github`
+    escapes the rows, a named residual.
+  - While a run is unattended, `gh extension`, `gh extensions` and `gh ext exec` are refused, and a gh option placed
+    before the subcommand is read as gh reads it, so `gh -R o/r pr merge 1` and `gh --repo o/r repo sync --force` meet
+    their subcommand's rule (`unattendedPushVerdict`, `src/hooks/personOnly.ts`).
+  - Proof: `test/hooks/personOnlyGuard.test.ts` (the MCP cases), `test/adapters/claude.test.ts`,
+    `test/hooks/personOnly.test.ts`.
 - **Proof:** `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`,
   `test/corpus/commands/feedbackPair.test.ts` ("pr-resolve pushes only through the run verbs"),
   `test/corpus/skills/unattended.test.ts`.
+
+### REQ-FLOW-121 — A run verb stands alone on its line, unattended
+
+Added 2026-10-18 (plan 021 file 2, unit `v0b-run-verb-alone` and its fix round).
+
+Given an unattended run, When a shell line runs `stamity run start|checkpoint|end` (its parsed command at any depth, or
+raw text naming the verb and the package), Then it passes only as one simple command: `stamity`, `st`, or `npx` with
+`-y|--yes|--no|--no-yes`, an optional `--@<scope>:registry=<url>`, then `stamity` or `<pkg>@<semver>`; then
+`run <verb>`, literal option words and at most one closing `2>&1`, and no other command, prefix assignment, wrapper,
+nested line, `$`, backtick, backslash or redirection; else it is refused as a deny naming the run verbs. Attended lines
+are unaffected, and a PowerShell tool call is read as PowerShell, not through its synthetic `pwsh -Command` wrapper.
+
+- **As built, beyond the delta:**
+  - `npx`'s first word is exactly one of the four yes-or-no flags, so a bare `npx stamity run …` is refused; the
+    registry option matches `REGISTRY_URL` (`src/shared/cliCall.ts`); `node … cli.js run …` is refused.
+  - The PowerShell reading bans `&`, `;`, `|`, `@{`, `@(`, `$`, a backtick, `--%` and typographic quotes, single
+    quotes literal.
+  - The text backstop is `\brun\W+(start|checkpoint|end)\b` beside `stamity`, `st` (the package's second bin, read as a
+    word), `cli.js`, `cli.mjs` or `@<x.y.z>`, so a line whose text names a verb beside the package, an echo or a commit
+    message among them, is refused unattended. The refusal names the run verbs, what broke the shape and
+    REQ-FLOW-121; it is a deny, never a throw (`unattendedPushVerdict`, `src/hooks/personOnly.ts`).
+  - For the PowerShell tool, the guard's decision reads the tool's own text with a PowerShell flag
+    (`decide()`, `src/hooks/scripts.ts`); an agent's own `pwsh -Command '<verb>'` is refused, since it loads a profile
+    the run can write. The skill states the line rule (`content/skills/st-unattended/SKILL.md:83-84`).
+  - A launcher the text reading does not unwrap, or a verb name split by quotes or built by an expression, skips the
+    rule; that is the residual REQ-FLOW-104 names.
+- **Proof:** `test/hooks/personOnly.test.ts` (the stand-alone rule's denies and allows, POSIX and PowerShell, and the
+  `st` twins of every launch route), `test/hooks/personOnlyGuard.test.ts` (the unattended block on every client),
+  `test/hooks/personOnlyGuardDist.e2e.test.ts`, `test/corpus/skills/unattended.test.ts`.
+
+### REQ-FLOW-122 — The run verbs' git runs without inherited program variables, unattended
+
+Added 2026-10-18 (plan 021 file 2, unit `v0c-verb-git-env` and its fix rounds, with `v0b-run-verb-alone` for
+`SSH_ASKPASS`).
+
+Given an unattended run, When `stamity run start`, `checkpoint` or `end` starts git, Then git's program-valued
+variables (the set the guard's line-wide rule names in `src/hooks/personOnly.ts`: `GIT_EXEC_PATH`, `GIT_SSH`,
+`GIT_SSH_COMMAND`, `GIT_ASKPASS`, `GIT_EDITOR`, `GIT_PAGER` and `GIT_EXTERNAL_DIFF` among them) are removed from its
+environment, the `GIT_CONFIG_*` variables the pre-flight vetted are kept, and the verb's output names each removed
+variable by name only, never its value; an attended run starts git as today.
+
+- **As built, beyond the delta:**
+  - The set is `GIT_PROGRAM_VARIABLES`, ten names: `GIT_EDITOR`, `GIT_SEQUENCE_EDITOR`, `GIT_SSH_COMMAND`, `GIT_SSH`,
+    `GIT_EXTERNAL_DIFF`, `GIT_ASKPASS`, `GIT_PAGER`, `GIT_PROXY_COMMAND`, `GIT_EXEC_PATH` and `SSH_ASKPASS`, matched in
+    any letter case, an empty value counting as set (`src/cli/engine/gitWrite.ts:112-123`), held equal to the guard's
+    `PROGRAM_VARIABLES` by a parity test.
+  - Unattended, `GIT_ASKPASS` is then set to the empty string, which git reads as no askpass, so it consults neither
+    `core.askPass` nor `SSH_ASKPASS` (`gitWriteEnv`, `:165-173`). `PATH`, `HOME` and `XDG_CONFIG_HOME` stay, a named
+    residual.
+  - The text prints `removed from git's environment: <NAME>, …` and each verb's JSON carries `gitEnvRemoved`, names
+    only, absent when nothing was removed (`gitProgramVariablesIn`, `:184`; the verbs, `src/cli/commands/run.ts`). The
+    skill has the checkpoint's record line go on, after a space, with `git-env-removed=<name,...>`
+    (`content/skills/st-unattended/SKILL.md:79-80`), the space keeping REQ-FLOW-109's reader of `remaining=` to digits.
+- **Proof:** `test/cli/engine/gitWrite.test.ts` (the unattended and attended environments, the real-git `SSH_ASKPASS`
+  case, the parity case), `test/cli/commands/runCheckpoint.test.ts` ("git's program-valued variables, unattended (v0c,
+  REQ-FLOW-122)").
+
+### REQ-FLOW-123 — How each client answers a person-only act, and the unattended refusal
+
+Added 2026-10-18 (plan 021 file 2, unit `v0a2-ask-emission` and its three fix rounds, `v13-client-legs` for the
+measurement).
+
+Given an attended act that can be undone (REQ-FLOW-102), Then Claude Code asks through the guard's `"ask"` and the
+settings' `permissions.ask` rows; Copilot CLI, Cursor and Codex refuse: Copilot CLI holds an ask, but its tool-call
+payload names no calling agent, so the guard cannot keep the ask for the person alone, Cursor ran a command despite an
+ask under `--force` (measured 2026-10-18) and Codex lets an ask through. The ask is the person's only: an ask-class act a
+sub-agent runs is refused, and so is one in Claude Code's `auto` permission mode, where a classifier may settle a prompt.
+Given a session the guard reads as unattended (an in-progress record reading `Mode: unattended`, or `STAMITY_UNATTENDED`
+set with none reading `Mode: attended`), or a fault reading it, Then every client refuses every person-only act, and the
+act lands on the morning list.
+
+- **As built, beyond the delta:**
+  - Claude Code prints `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"<reason>"}}`
+    and exits 0, the reason "<act> is a person-only act (`<rule>`): approve it to let the agent run it once
+    (REQ-FLOW-102)."; a refuse-class act's reason says it "deletes, force-pushes or cannot be undone … even with
+    approval (REQ-FLOW-124). Give the person the exact command." Cursor and Codex print their deny shape with
+    `GUARD_CANNOT_ASK` ("This client cannot ask the person for a click, so the guard refuses it: give the person the
+    exact command."), and Copilot prints `deny` with `GUARD_NO_CALLER` ("Copilot CLI names no calling agent in its
+    tool-call payload, so the guard cannot keep the ask for the person alone and refuses it: give the person the exact
+    command."), never `ask` (`guardDecisionOutput`, `src/hooks/scripts.ts`).
+  - The guard's decision collects the verdict over every place it reads and both readings of a PowerShell call, and
+    asks only when every verdict is ask-class and the mode reads attended; every coded throw stays a refusal. A
+    sub-agent is read from `agent_type`, `subagent_type`, `agentType`, `subagentType`, `agent_id` or `subagent_id`, an
+    own non-empty string; Claude Code also sets `agent_type` on the main thread of a session started with `--agent`,
+    whose asks are therefore refused, the safe direction. `auto` is read from the payload's `permission_mode`
+    (`attendedAsk`, the same file). Unattended, an act other than a push reads "… and this run is unattended: list it
+    on the morning list, whose walk runs it after one click."
+  - The release re-measurement is `node scripts/qa/hook-runs.mjs --ask`, which measures each installed client's answer
+    to a hook's `ask` in its permissive mode in a throwaway folder outside the checkout and reports `held`, `ran`,
+    `not-run` or `not-installed`; Claude Code is the one ask-class client it fails on (`ASK_CLASS_CLIENTS` and
+    `verdictForAsk`, `scripts/qa/hook-runs.mjs`; REQ-PROVE-042).
+- **Proof:** `test/hooks/personOnlyGuard.test.ts` ("each client's answer to a person-only act (v0a2)", the sub-agent,
+  `auto`-mode and Copilot byte-for-byte cases), `test/hooks/personOnlyGuardDist.e2e.test.ts`,
+  `test/cloud/containerLeg.test.ts` (each client's answer to an ask act), `test/qa/hookRunsCli.test.ts`.
+
+### REQ-FLOW-124 — Deletions, force pushes and acts that cannot be undone stay refused, attended too
+
+Added 2026-10-18 (plan 021 file 2, units `v0a-ask-then-act` and `v0a2-ask-emission`, with their fix rounds).
+
+Given any session, When the main thread deletes a branch (`--delete-branch` on `gh pr close` or `merge`, a `:branch`,
+`--delete` or `--prune` push, an `updateRefs` entry to the zero sha), a tag (remote, or local by `-d` or `-f`), a release
+or asset (`--clobber` too), a repository, a secret or variable, a protection rule, ruleset or custom property, or a
+package version (`npm unpublish`, `npm dist-tag rm`); force-pushes (`--force`, `--force-with-lease`, `+`, `--mirror`,
+`gh repo sync --force`); or changes a repository's visibility or owner, Then every client refuses it; a refused act in
+any reading of a line or GraphQL text wins over an ask, and a hidden method or URL target, the nesting limit and no
+command stay refused.
+
+- **As built, beyond the delta:**
+  - The refuse-class rules are `force-push`, `push-delete` and seven new ones: `tag-delete`, `release-delete`,
+    `secrets-delete`, `repo-delete`, `repo-irreversible`, `protection-delete` and `unpublish` (`PERSON_ONLY_RULES`,
+    `src/hooks/personOnly.ts`).
+  - An `updateRefs` entry whose `afterOid` the line cannot show, a list or an entry held in a variable among them,
+    reads as a deletion. A repository PATCH whose body holds `visibility` or `private`, or that the line cannot show,
+    reads as `repo-irreversible`. A REST `git/refs` PATCH whose body the line hides reads as a force, on any branch.
+  - `npm unpublish` is read from its unique prefix `unp`, and `npm dist-tag rm` in npm's aliases (`r`, `del`, `d`,
+    `remove`); pnpm's `unpublish` and `dist-tag rm` and yarn's `npm tag remove` and `tag remove` or `tag rm` are refused
+    as npm's are. A local `git update-ref` that deletes a tag ref, by `-d`, a `-dm` cluster, a zero or emptied new
+    value, or a `--stdin` `delete` or emptied `update` after an escaped line break, reads as `tag-delete`.
+  - A deployment environment's deletion, and the deletion of its deployment protection rules or branch policies, an
+    environment name holding a slash included, read as `protection-delete`; a user's Codespaces secret deleted through
+    REST reads as `secrets-delete`, as `gh secret delete --user` does.
+  - Claude Code's `CLAUDE_DENY_ROWS` hold the refused prefix rows, `npm unpublish` and `npm dist-tag rm`, a mid-pattern
+    row for each refused flag that can follow an ask-class prefix (`git push * --force*`, `git push * -f*`,
+    `git push * --mirror*`, `git push * --prune*`, `git push * --delete*`, `git push * -d *`, `git push * +*`,
+    `gh pr merge * -d*`, `gh pr merge * --delete-branch*`, `gh pr merge -d*`, `gh pr merge --delete-branch*`,
+    `gh release upload * --clobber*`, `gh release upload --clobber*`, `gh repo edit * --visibility*`,
+    `gh repo sync * --force*`, `gh repo sync --force*`, and the four tag rows `git tag * -f*`, `git tag * --force*`,
+    `git tag * -d*`, `git tag * --delete*`), and `mcp__github__delete_repository`; no row sits on both lists. A `*`
+    inside a Bash row matches anywhere on the line (measured on Claude Code 2.1.302). A colon-refspec deletion behind an
+    ask prefix has no row, since a row ending in ` :*` after a `*` matched nothing; that and every respelling no row
+    names stay the hook's, a residual `SECURITY.md` names. The mid-pattern rows also refuse a line whose message holds
+    the flag, the safe direction; the `gh repo sync --force` rows refuse a local forced sync too.
+- **Proof:** `test/hooks/personOnly.test.ts` (the `CLASSES` conformance rows, and "CLAUDE_DENY_ROWS and
+  CLAUDE_ASK_ROWS"), `test/adapters/claude.test.ts` (`MID_PATTERN`, each row against a line it must match and an ask
+  line it must not), `test/hooks/personOnlyGuard.test.ts`.
 
 ## Acceptance criteria
 
@@ -4128,6 +4868,9 @@ above.
 - GIVEN a repository where the state file is already tracked WHEN init runs THEN the output of `git ls-files --stage` is
   unchanged.
 - GIVEN a live sync that the injection screen refuses at `.gitignore` THEN no emitted file was written.
+- GIVEN a `.gitignore` without them WHEN init or a live sync runs THEN `git check-ignore -q` exits 0 for a file under
+  `.stamity/context-once/` and for `.stamity/client-models.json`, each added last, and none is appended where the state
+  directory's rule already covers it (added 2026-10-18; `test/mcp/env.test.ts`, `test/cli/commands/sync.test.ts`).
 
 **REQ-FLOW-017**
 
@@ -4245,7 +4988,8 @@ above.
 - GIVEN Phase 0 collapsed WHEN read THEN it contains "Records are files: create and extend `record.md`, `plan.md` and
   reports with the client's file write and edit tools — never a shell redirect, a heredoc or `cat >` — and move ledger
   rows only through the `ledger` verb under Ledger writes." (added 2026-10-12; `test/corpus/recordWrites.test.ts`).
-- GIVEN `buildSettingsJson` THEN `permissions` holds the engine's `deny` rows and no `allow` row (added 2026-10-16;
+- GIVEN `buildSettingsJson` THEN `permissions` holds the engine's `ask` and `deny` rows and no `allow` row (added
+  2026-10-16; amended 2026-10-18, plan 021 file 2, it read "holds the engine's `deny` rows and no `allow` row";
   `test/adapters/claude.test.ts`, `test/merge/settingsOwnerEntries.test.ts`).
 
 **REQ-FLOW-026**
@@ -4311,6 +5055,10 @@ above.
   both stay byte for byte and in place and only the missing engine rows are appended; WHEN `clean -y` runs THEN no deny
   row is removed and its result names the rows equal to the engine's that it left (added 2026-10-16;
   `test/merge/settingsOwnerEntries.test.ts`, `test/manifest/claudeSettings.test.ts`).
+- GIVEN a file whose `permissions.ask` holds an owner's row and a row equal to an engine ask row WHEN `sync -y` runs
+  THEN both stay byte for byte and in place, a second `sync` moves no byte, and only missing engine rows are appended;
+  WHEN `clean -y` runs THEN no ask row is removed and a leftover deny row equal to an engine ask row is named (added
+  2026-10-18; `test/merge/settingsOwnerEntries.test.ts`, `test/manifest/claudeSettings.test.ts`).
 
 **REQ-FLOW-037**
 
@@ -4764,6 +5512,11 @@ above.
 - GIVEN three leftovers on a client with no question tool and an operator asking for the summary THEN the summary prints
   only after the last answer, no leftover is decided by the run itself, and no real defect is defaulted to dropped.
   `judgment: reviewer` *(eval: floor case `close-summary-after-last-decision`)*
+- GIVEN the map THEN Cursor's and Copilot's rows carry a one-sentence `cloud` note, the table a "Cloud run" column, and
+  their own copies of the protocol the note after `**Cloud run:**` (added 2026-10-18; *test:
+  `test/tools/translator.test.ts`*); GIVEN a managed Cursor run reaching an ask with a declared default THEN no question
+  tool is called and `Default applied:` is written (added 2026-10-18; *eval: golden case
+  `cursor-cloud-question-takes-default`, binding rows*).
 
 **REQ-FLOW-081** (added 2026-10-15)
 
@@ -4820,6 +5573,11 @@ above.
   glance cell carries a dated cloud cell, and every `CLIENT_CLOUD_FACTS` row renders once with its URL and an ISO
   date, a page that says nothing as "not documented, read <date>"; GIVEN the session start's lines THEN they equal the
   table's `sessionStart` rows, in order. *(test: `test/emit/capabilityMatrix.test.ts`)*
+- GIVEN `CLAUDE_CODE_REMOTE=true` THEN no line reads "The review-gate counter resets with the VM." and the second line
+  reads "A missing review-gate counter is rebuilt from the run record on this branch."; GIVEN `CURSOR_AGENT_SOCKET` THEN
+  `Session: a Cursor agent machine (managed or self-hosted).`; GIVEN every existing fixture THEN the printed output is
+  byte-equal to the detector's, and the inlined matcher equals its source text (added 2026-10-18; *test:
+  `test/hooks/scripts.test.ts`, `test/session/detect.test.ts`, `test/cloud/profiles.test.ts`*).
 
 **REQ-FLOW-086** (added 2026-10-15)
 
@@ -4894,6 +5652,11 @@ above.
 - GIVEN each blocker's fixture THEN exit 1 naming that code on its plan; GIVEN an unreadable input THEN `no-plan` in the
   top-level `blockers` beside `plans: []`; GIVEN `--chain` without `--since` THEN exit 2; GIVEN a ready plan THEN exit 0
   and L1 `not-checked`. *(test: `test/cli/commands/plan.test.ts`, `test/runs/planCoverageParity.test.ts`)*
+- GIVEN a 60-unit chain leading into a two-unit cycle THEN both twins finish inside a 10-second kill with exactly one
+  `dependency-cycle` finding; GIVEN `REQ-DEMO-001, 002` in a unit's requirements THEN `REQ-DEMO-002` is covered, and in
+  delta prose it is not read; GIVEN `--since` on one plan THEN it is accepted, and over two plans without `--chain` THEN
+  exit 2 (added 2026-10-18; *test: `test/runs/planCoverageParity.test.ts`, `test/authoring/specPlanCoverage.test.ts`,
+  `test/cli/commands/plan.test.ts`*).
 
 **REQ-FLOW-092** (added 2026-10-16)
 
@@ -4916,6 +5679,12 @@ above.
   staged outside `--paths` THEN exit 1 naming it, nothing committed or pushed; GIVEN a pushed code file the scan cannot
   read THEN exit 0 with `secret scan: 1 files unscanned (<path>)`; GIVEN a held file staged and edited again THEN the
   patch applied on `Base:` gives the work tree's bytes. *(test: `test/cli/commands/runCheckpoint.test.ts`)*
+- GIVEN a held path absent at `Base:`, staged as new and then deleted THEN the patch holds no section for it and the
+  held line names it `staged, then deleted: no section`; GIVEN a held path `Base:` holds, removed from the index while
+  the work tree has a file there THEN the patch holds a deletion then a new-file section, and applied on `Base:` gives
+  the work tree's bytes; GIVEN a continuation whose branch carries a held patch and a work tree with no held change THEN
+  the patch is kept and listed in `held`; GIVEN a `--paths` entry whose deletion `git rm` staged THEN it is committed and
+  pushed (added 2026-10-18; *test: `test/cli/commands/runCheckpoint.test.ts`*).
 
 **REQ-FLOW-094** (added 2026-10-16)
 
@@ -4930,6 +5699,10 @@ above.
   *(corpus: `test/corpus/commands/work.test.ts`, `test/corpus/skills/unattended.test.ts`)*
 - GIVEN an answer comment `Q1→2, Q3→1` THEN each answer maps to its question and option.
   *(test: `test/runs/morning.test.ts`)*
+- GIVEN the skill's walk section THEN each held act runs after the client's approve prompt, a deletion, a force push and
+  every act a client's guard refuses to ask for go to the person as the exact command, the final round keeps the guard
+  refusing, and the commits after the last checkpoint are counted on `## Not done:` (added 2026-10-18; *corpus:
+  `test/corpus/skills/unattended.test.ts`*).
 
 **REQ-FLOW-096** (added 2026-10-16)
 
@@ -4973,11 +5746,17 @@ above.
   bypass, a 403, a 404, a non-GitHub origin or `GH_REPO` naming another repository THEN exit 1 naming each; GIVEN a
   pull-request-only bypass THEN that check passes. *(test: `test/runs/preflight.test.ts`,
   `test/cli/commands/gatePreflight.test.ts`)*
+- GIVEN a shim's URL-scoped helper pair and a global helper WHEN the advice's two commands run literally THEN one gh
+  entry is left and `direct-push` passes; GIVEN `CLAUDE_CODE_REMOTE=1`, `GITHUB_ACTIONS` alone or a
+  `CURSOR_AGENT_SOCKET` of `0` THEN the JSON reads `cloud: false`, `cloud: true` and no `cursor-egress` warning (added
+  2026-10-18; *test: `test/cli/commands/gatePreflight.test.ts`*).
 
 **REQ-FLOW-102** (added 2026-10-16)
 
 - GIVEN each person-only form on the main thread THEN every client's guard refuses it, and Claude Code's settings carry
-  `CLAUDE_DENY_ROWS`; GIVEN an unattended checkpoint over a held path THEN the change lands in the inert patch, is
+  `CLAUDE_DENY_ROWS` (amended 2026-10-18, plan 021 file 2: attended, an ask-class form is asked for on Claude Code and
+  refused on the other three, and a REQ-FLOW-124 form is refused on all four; Claude Code's settings carry
+  `CLAUDE_ASK_ROWS` beside the deny rows); GIVEN an unattended checkpoint over a held path THEN the change lands in the inert patch, is
   restored in the index only and is listed. *(test: `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`,
   `test/change/personOnlyPaths.test.ts`, `test/cli/commands/runCheckpoint.test.ts`)*
 - GIVEN the QA walk's scratch session after `sync` THEN `git tag v0` and `git push origin HEAD:main` are refused by the
@@ -4993,6 +5772,104 @@ above.
 
 - GIVEN `SECURITY.md` THEN its `### Cloud and unattended runs` section names every risk above and "Runs nobody watches"
   is gone. *(test: `test/docsPages.test.ts`, "names the cloud's accepted risks under what it does not defend")*
+- GIVEN `SECURITY.md` and `docs/security-mapping.md` THEN each names every client's answer to an ask, the run verb's
+  line, the verbs' git environment with `SSH_ASKPASS`, the ask and deny lists and the residuals of the 2026-10-18
+  amendment (added 2026-10-18; *test: `test/docsPages.test.ts`, "states file 2's ask rule, each client's answer, the run
+  verb's line and the residuals REQ-FLOW-104 names" and its mapping twin*).
+
+**REQ-FLOW-105** (added 2026-10-18)
+
+- GIVEN a startup with an in-progress run whose `Branch:` names HEAD THEN the card prints; on another branch, a closed
+  run or a record with no `Branch:` THEN none. *(test: `test/hooks/sessionStartCard.test.ts`)*
+- GIVEN a fresh clone of a remote holding `stamity/<id>` one commit ahead of `main` WHEN `run start --run <id>` runs THEN
+  HEAD and `base` equal the remote tip and the next checkpoint pushes as a fast-forward; GIVEN a tip that does not
+  descend from its record's `Base:`, or carries no record, THEN exit 1 and no local branch. *(test:
+  `test/cli/commands/run.test.ts`)*
+- GIVEN the cloud reference THEN Frame continues only the record on the branch it was given and passes `--since
+  <Base>`. *(corpus: `test/corpus/skills/unattended.test.ts`)*
+
+**REQ-FLOW-106** (added 2026-10-18)
+
+- GIVEN no counter and two `usage: review rN` lines on this branch's run THEN the completion holds at round 2; GIVEN no
+  record or no line THEN the gate opens naming the missing counter; GIVEN a rebuilt count at the cap THEN it holds with
+  `ROUNDS_REBUILT_AT_CAP`, never `CAP_REACHED`; GIVEN an unparseable counter THEN it is rebuilt, not opened; GIVEN a peer
+  session with no entry in a counter marked rebuilt THEN its completion holds. *(test: `test/hooks/scripts.test.ts`)*
+
+**REQ-FLOW-107** (added 2026-10-18)
+
+- GIVEN the cloud reference THEN it names no `/loop`, wakeup or agent team, the background gate under a timeout and at
+  most two implementers, and the Shell paragraph is byte-identical. *(corpus: `test/corpus/skills/unattended.test.ts`,
+  `test/corpus/agents/shellDiscipline.test.ts`)*
+
+**REQ-FLOW-108** (added 2026-10-18)
+
+- GIVEN the cloud reference THEN it names the client's isolation or one at a time, never the sibling folder, the fold
+  applied to the work tree alone with `--no-renames` in the path list, and no lane commit on the run branch.
+  *(corpus: `test/corpus/skills/unattended.test.ts`)*
+
+**REQ-FLOW-109** (added 2026-10-18)
+
+- GIVEN the socket variable set and an unattended run on this branch with units left THEN the follow-up; GIVEN no
+  variable, another branch, an attended record, no `Mode:`, `remaining=0`, a status other than `completed`, or a
+  capacity stop with at most its own checkpoint after it THEN nothing; GIVEN the emitted row THEN `loop_limit` 50 and no
+  runner. *(test: `test/hooks/cursorContinue.test.ts`, `test/adapters/cursor.test.ts`)*
+
+**REQ-FLOW-110** (added 2026-10-18)
+
+- GIVEN a local startup THEN nothing is done; GIVEN the cloud marker and a writable env file THEN the line is written
+  before any install step, and stays after an install that runs out of time; GIVEN no env file THEN it says so and
+  exits 0. *(test: `test/hooks/cloudReadiness.test.ts`)*
+
+**REQ-FLOW-111** (added 2026-10-18)
+
+- GIVEN Copilot selected THEN the setup steps hold the pinned install and `stamity --version`, a fork's channel and
+  registry reaching it; GIVEN Cursor selected THEN `check` lists `cloud-install`, never failing, and without Cursor no
+  row. *(test: `test/adapters/copilot.test.ts`, `test/cli/commands/check.test.ts`)*
+
+**REQ-FLOW-112** (added 2026-10-18)
+
+- GIVEN `CLAUDE_CODE_REMOTE=true` and no `STAMITY_HOOKS_ACTIVE=1` THEN `hooks-loaded` refuses, naming
+  `$CLAUDE_ENV_FILE` and one repository per session, a fresh canary notwithstanding. *(test:
+  `test/runs/preflight.test.ts`)*
+
+**REQ-FLOW-113** (added 2026-10-18)
+
+- GIVEN the matrix THEN the Action's three rows render with their statuses and no session line; GIVEN Claude's runner
+  arguments THEN no `--bare`. *(test: `test/emit/capabilityMatrix.test.ts`, `test/qa/hookRuns.test.ts`)*
+
+**REQ-FLOW-114** (added 2026-10-18)
+
+- GIVEN Cursor selected THEN the root `AGENTS.md` ends on the 14-line block; without Cursor THEN no byte moves, Codex's
+  override included; GIVEN the golden THEN the two root figures per selection. *(test: `test/emit/agentsMd.test.ts`,
+  `test/corpus/invariants.test.ts`)*
+
+**REQ-FLOW-115** (added 2026-10-18)
+
+- GIVEN a first call THEN the index once; a second call with the same id THEN nothing; no socket variable THEN nothing;
+  a `conversation_id` of `../x` THEN hashed, never a path; `managed` THEN the cloud line after one request. *(test:
+  `test/hooks/contextOnce.test.ts`)*
+
+**REQ-FLOW-116** (added 2026-10-18)
+
+- GIVEN the cloud reference and the skill's walk THEN both count the commits after the last checkpoint less the run
+  verbs' own subject, on one `Not done:` row. *(corpus: `test/corpus/skills/unattended.test.ts`)*
+
+**REQ-FLOW-117** (added 2026-10-18)
+
+- GIVEN the setup steps THEN `timeout-minutes` under 59 on every lane; GIVEN the cloud reference THEN the chain's
+  checkpoint, sizing and continuation; GIVEN `docs/cloud.md`'s opening THEN no unattended night on Copilot. *(test:
+  `test/adapters/copilot.test.ts`, `test/docsPages.test.ts`; corpus: `test/corpus/skills/unattended.test.ts`)*
+
+**REQ-FLOW-118** (added 2026-10-18)
+
+- GIVEN Copilot selected with the work prompt THEN the entry is emitted, under 2,000 characters, naming the prompt and
+  the plan; without Copilot, or with only `cmd-ask`, THEN none; GIVEN the roster THEN its count is unchanged. *(test:
+  `test/adapters/copilot.test.ts`)*
+
+**REQ-FLOW-119** (added 2026-10-18)
+
+- GIVEN the cloud reference THEN `CI not run: awaiting approval`, the morning-list row and the second approver as a
+  prerequisite. *(corpus: `test/corpus/skills/unattended.test.ts`)*
 
 **REQ-FLOW-120** (added 2026-10-16)
 
@@ -5000,6 +5877,36 @@ above.
   barred REST write are refused naming the run verbs, and a reply on `pulls/<n>/comments` passes; GIVEN an attended
   session THEN the push passes the push rule. *(test: `test/hooks/personOnly.test.ts`,
   `test/hooks/personOnlyGuard.test.ts`)*
+- GIVEN `mcp__github__merge_pull_request` THEN attended an ask on Claude Code, unattended a refusal; GIVEN
+  `mcp__github__delete_repository` THEN a refusal; GIVEN an unattended `gh ext exec x` THEN a refusal (added 2026-10-18;
+  *test: `test/hooks/personOnlyGuard.test.ts`, `test/hooks/personOnly.test.ts`*).
+
+**REQ-FLOW-121** (added 2026-10-18)
+
+- GIVEN an unattended line adding an `env:` drive write, an assignment, a wrapper, a nested verb, a trailing `&`, a
+  `> file` or the `node` form to a run verb THEN a deny naming the run verbs; GIVEN the four accepted invocations, a
+  closing ` 2>&1` or a single-quoted title THEN allowed; GIVEN the same lines attended THEN as before. *(test:
+  `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`, `test/hooks/personOnlyGuardDist.e2e.test.ts`)*
+
+**REQ-FLOW-122** (added 2026-10-18)
+
+- GIVEN `GIT_EXEC_PATH`, `GIT_SSH_COMMAND` and `GIT_ASKPASS` set WHEN an unattended verb starts git THEN git sees none
+  of them and the line names them, values never printed; attended THEN they reach git; GIVEN the two variable lists THEN
+  the parity test fails when they differ. *(test: `test/cli/engine/gitWrite.test.ts`,
+  `test/cli/commands/runCheckpoint.test.ts`)*
+
+**REQ-FLOW-123** (added 2026-10-18)
+
+- GIVEN an attended `gh pr merge 1` THEN Claude Code's ask JSON with exit 0, and a deny on Copilot, Cursor and Codex;
+  GIVEN `Mode: unattended`, a fault reading the mode, a sub-agent's identity or `permission_mode: "auto"` THEN a deny on
+  all four. *(test: `test/hooks/personOnlyGuard.test.ts`)*
+
+**REQ-FLOW-124** (added 2026-10-18)
+
+- GIVEN `git push --force origin main`, `gh pr merge 1 --delete-branch`, `gh release upload v1 a --clobber`,
+  `gh repo edit --visibility public` or `npm unpublish x@1.0.0` THEN a deny on all four clients; GIVEN
+  `gh pr merge 1 && git push origin :feat` THEN `ask: false`; GIVEN each mid-pattern deny row THEN it matches its
+  refused line and no ask line. *(test: `test/hooks/personOnly.test.ts`, `test/adapters/claude.test.ts`)*
 
 ## References
 
@@ -5073,6 +5980,22 @@ above.
 - `test` (added 2026-10-16): `test/corpus/skills/unattended.test.ts`, `test/hooks/unattendedAskGate.test.ts`,
   `test/hooks/personOnlyGuard.test.ts`, and the suites each requirement names; eval cases in `evals/cases-v6/` as
   REQ-PROVE-038 in `docs/specs/prove-behavior-and-value.md` names them.
+- `docs/plans/021-cloud-runs-02.md`, with `.stamity/runs/2026-10-18_cloud-runs-2/` (its record and its units' and
+  fixers' reports) — the spec delta the text dated 2026-10-18 merges (REQ-FLOW-105 to REQ-FLOW-119 and REQ-FLOW-121 to
+  REQ-FLOW-124; the amended requirements name theirs), added 2026-10-18.
+- `source` (added 2026-10-18): `content/skills/st-unattended/references/cloud.md`, `src/session/detect.ts`,
+  `src/hooks/personOnly.ts` (`CLAUDE_ASK_ROWS`, `GITHUB_MCP_ROWS`, `unattendedPushVerdict`), `src/hooks/scripts.ts`
+  (`guardDecisionOutput`, `attendedAsk`, `buildReviewGateScript`, `buildCloudReadinessScript`,
+  `buildContextOnceScript`, `buildCursorContinueScript`), `src/cli/engine/gitWrite.ts` (`GIT_PROGRAM_VARIABLES`),
+  `src/cli/commands/run.ts` (`originRunTip`, `workTreeAddition`, `committedPatchPaths`, `stagedDeletions`),
+  `src/runs/cardSource.ts`, `src/runs/resumeCard.ts`, `src/runs/layout.ts` (`USAGE_REVIEW_PATTERN`,
+  `RECORD_CHECKPOINT_PATTERN`), `src/emit/agentsMd.ts` (`renderCursorCloudBlock`), `src/adapters/claude.ts`,
+  `src/adapters/cursor.ts`, `src/adapters/copilot.ts` (`buildRunAgentFile`, `pinnedCliInstall`),
+  `src/cli/commands/check.ts` (`checkCloudInstall`), `src/tools/translator.ts` (`AskUserToolEntry.cloud`),
+  `src/manifest/manifest.ts` (`DROPPED_PLUGIN_KEY`), `scripts/qa/hook-runs.mjs` (`--ask`), and `docs/cloud.md`.
+- `test` (added 2026-10-18): `test/hooks/cursorContinue.test.ts`, `test/hooks/contextOnce.test.ts`,
+  `test/hooks/cloudReadiness.test.ts`, `test/session/detect.test.ts`, `test/qa/hookRunsCli.test.ts`, and the suites
+  each requirement names; the eval case `evals/cases-v6/golden/cursor-cloud-question-takes-default.md`.
 
 ## Risks
 
@@ -5264,3 +6187,21 @@ above.
     `preToolUse` hooks on `Task`.
   - **`/st-debug` and a refused folder.** It starts git itself and reads no `gate` reason, so REQ-PLUGIN-046's stop of
     2026-10-15 does not reach it (recorded by `f5-touchpoints-a`'s report as pre-existing).
+- REQ-FLOW-105 to REQ-FLOW-124 and the text dated 2026-10-18 — what plan 021 file 2's units and fixers recorded as
+  open, as merged:
+  - **Attended safety rests on one client holding an ask.** Claude Code's hook `ask` in bypass mode is measured, not
+    documented; `hook-runs.mjs --ask` re-measures it at each release, and a client whose ask ran moves to refusing
+    (REQ-FLOW-123, REQ-PROVE-042).
+  - **The stand-alone rule is a layer, not a wall.** A launcher its text reading does not unwrap, or a verb name split
+    by quotes or built by an expression, skips it, and an environment set earlier then reaches the verbs' git
+    (REQ-FLOW-104, REQ-FLOW-121). Matching `st` as a word refuses more unattended lines than needed, the safe direction.
+  - **A shell heredoc's body is read as shell text** by the guard, so a commit message quoting a person-only command
+    through a quoted heredoc is refused or asked; commits go through a message file.
+  - **The review counter stays keyed by the client session**, so every reviewer stop in a session counts toward one cap,
+    and the `rebuilt` mark is never cleared, so a once-marked checkout holds a side session's completion until it
+    reviews (REQ-FLOW-106).
+  - **Vendor facts not re-read at build:** Cursor's `stop` and `loop_limit` citations carry no read date
+    (REQ-FLOW-109), and the Cursor environment-override and Copilot `PATH` facts behind REQ-FLOW-111 rest on the plan's
+    reading. Copilot's cloud rows read documented, not run, for want of a Copilot cloud-agent account.
+  - **Windows shells and the helper advice.** The advice's empty value is not checked under Windows PowerShell 5.1 or
+    `cmd` (REQ-FLOW-101).

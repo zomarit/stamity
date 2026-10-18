@@ -1,6 +1,6 @@
 ---
 id: model-ladder
-# A design document, authored from docs/plans/008-plugin-lifecycle-02.md on 2026-09-17, extended from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, and excluded from the site build.
+# A design document, authored from docs/plans/008-plugin-lifecycle-02.md on 2026-09-17, extended from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.15.0
 obsolete_when: every supported client publishes one effort scale the ladder can name without a per-client table and resumes, waits out and reports a sub-agent's capacity stop on its own, or a decision row cuts the surface
@@ -38,6 +38,12 @@ moved. A ledger id in that text (`build/66`, `review/86`) is that run's own. The
 `status` to `shipped-with-1.15.0`. File 2's delta also removed the "never invent a value" rule from
 this spec's Invariants; no bullet here states it (the rule stood in the code comment of `src/roster/modelLadder.ts`
 and in `docs/configuration.md`, both superseded by the pick of REQ-LADDER-006), so the Invariants are unchanged.
+
+REQ-LADDER-009, and the paragraphs dated 2026-10-18 under REQ-LADDER-002, REQ-LADDER-005 and REQ-LADDER-006, come from
+the spec delta of `docs/plans/021-cloud-runs-02.md` (plan 021 file 2, run `2026-10-18_cloud-runs-2`), in its amended
+form, merged by its unit `v20-spec-merge`, with the clauses its units' and fixers' reports declared where the delta is
+silent. Every `path:line` in that text reads at the integration head `e64bc09f`; a module that run rewrote is cited by
+file and symbol. It is unreleased at this merge; the plan cuts it as 1.16.0.
 
 ## Intent
 
@@ -151,6 +157,19 @@ the run record's capacity lines. No engine surface changes. Codex carries the bu
 2026-10-15, ledger row `review/142` of run `2026-10-14_cli-native`; it read "Codex receives no touchpoint bodies
 (`docs/capability-matrix.md:240`), so the bullet has no carrier there", untrue since the touchpoints shipped as shared
 skills in 1.11.0.)
+
+Amended 2026-10-18 (plan 021 file 2, unit `v3-cloud-skill`). Given an unattended run in a session the session start
+names a cloud session, When a sub-agent stops as `limit-reset`, Then nothing waits inside the machine, however near the
+reset: the run commits and pushes a checkpoint, refreshes its draft PR's body, writes
+`- <UTC> capacity: <role> limit-reset → BLOCKED_DEPENDENCY` and returns `BLOCKED_DEPENDENCY` naming the reset time, a
+failed push adding `Not done:` naming the branch; an attended run and a local one keep the 12-hour wait, and the
+failure-ladder bullet and its pins are unchanged. As built: the rule binds an unattended run in a cloud session alone
+and lives in the unattended skill's cloud reference, which writes the capacity line, adds the stop to `morning.md`, then
+runs `stamity run checkpoint --run <id> --paths <p...> --pr --title <t> --json`; the record stays in progress, so the
+next session on the branch continues it (`content/skills/st-unattended/references/cloud.md:12-14`, `:19-25`;
+REQ-FLOW-105 in `docs/specs/everyday-flows.md`). `/st-work`'s capacity bullet is not edited. Cursor's stop hook answers
+no follow-up while that stop has at most its own checkpoint line after it (REQ-FLOW-109). Proof:
+`test/corpus/skills/unattended.test.ts` (the capacity line's shape and the pacing pins).
 
 ### REQ-LADDER-003 — Verdict roles never fall back; a build role drops one class only under `limit-no-reset`
 
@@ -334,6 +353,18 @@ downgrade to 1.14 needs the per-client keys removed and the version written back
 re-sync at the prior version on a manifest restored from history. The consumers are the four adapters, `config`, the
 `model-pins` row (REQ-LADDER-008) and `src/index.ts`'s exported types `ClassPins` and `ListedModels`.
 
+Amended 2026-10-18 (plan 021 file 2, unit `v16-manifest-plugin-block`). Given a 1.0.0 manifest with
+`pins.standard = "Y"` and a `plugin` block, When `PER_CLIENT_PINS_STEP` alone runs, Then `pins.standard` is
+`{ all: "Y" }`, the block is value-identical, the version reads 2.0.0, and migrating twice equals migrating once; When
+this engine reads it and `sync` writes it, Then no `plugin` key is written back (REQ-PLUGIN-014 in
+`docs/specs/everyday-flows.md`, amended 2026-10-18). The other criteria stand. So the second criterion above, "WHEN it is
+read THEN … the block is value-identical", holds of the step alone: `readManifest` drops the block after the step,
+before validation (`src/manifest/manifest.ts`).
+
+- GIVEN the 1.0.0 manifest above WHEN the step alone runs THEN the block is value-identical; WHEN it is read and written
+  THEN the written file holds no `plugin` key and validation of the migrated object with the block left in names it as
+  an unknown field (`test/manifest/manifest.test.ts`; added 2026-10-18).
+
 ### REQ-LADDER-006 — A working pick out of the box
 
 Added 2026-10-15 (plan 020 file 2, units `e2-model-defaults-lister`, `e3-config-wiring` and `e8-copilot-codex-claude-pins`
@@ -430,6 +461,20 @@ file's model" following "the key is left out." directly.
 - GIVEN the wording case THEN it reads the new sentence too, and checks it on the resolver: a Cursor list gives an
   unpinned class no model, and a pin the list lacks resolves to `<pin>[effort=<level>]`
   (`test/roster/modelLadder.test.ts`; added 2026-10-15).
+
+Amended 2026-10-18 (plan 021 file 2, unit `v17-model-list-cache` and its round). Given a Cursor, Codex or Copilot CLI on
+`PATH`, When `init`, `sync` or `workspace sync` reads its model list, Then the list is kept as `{ ids, source }` per
+client in the git-ignored cache of REQ-LADDER-009, never under `models.listed` in the committed manifest, and the pick
+reads it there; the resolver's order, the read, the 200-id cap and `STAMITY_NO_CLIENT_PROBE` are unchanged, `SECURITY.md`
+no longer says the list lands in the committed manifest, and the `sync` criterion reads the cache where it read
+`models.listed.cursor`. So "persisted under `models.listed.<client>`", the "What is kept" bullet's saved lists and the
+"As built" line's "the account's list lands in the committed manifest" read as the cache. The adapters read the lists
+`init` and `sync` lay in memory from the cache (their comments name it; no adapter logic moved).
+
+- GIVEN a fake lister answering for Cursor WHEN `sync` runs THEN `.stamity/client-models.json` holds the list and the
+  committed manifest holds no `models.listed`, and a second `sync` moves no byte but the `updatedAt` stamp
+  (`test/cli/commands/sync.test.ts`, "keeps what a selected client listed in the cache, and a second sync moves no
+  byte"; amended 2026-10-18, the criterion above read `models.listed.cursor` as persisted).
 
 ### REQ-LADDER-007 — Each client carries the pick
 
@@ -560,6 +605,51 @@ needs. Open, as Minors of the run: a pin live-listed but missing from the saved 
 `qa/1` and `f575afb1`, the second for `856c71a5`; it read "now gives on Cursor and Copilot" and "no test reaches the
 `unreadable` reason".)
 
+### REQ-LADDER-009 — No account's model list in the committed manifest
+
+Added 2026-10-18 (plan 021 file 2, unit `v17-model-list-cache` and its round).
+
+Given a client's model list read by `init` or `sync`, Then it lands in a cache file `git check-ignore` reports ignored,
+the committed manifest carries no `models.listed` key, and its generation stays 2.0.0; Given a manifest still holding
+`models.listed`, Then it loads, and `sync` moves its lists to the cache and writes the manifest without the key; Given a
+fresh clone with no cache, Then `check` reports no drift and exits 0, every client's emitted pick kept (Cursor's
+included); Given a cache another account's list filled, Then `check` warns, naming the client and class, and still exits
+0. With no list read, the picks stay as the committed model maps have them until a `sync` that reads the client updates
+them.
+
+- **As built, beyond the delta:**
+  - The cache is `.stamity/client-models.json` (`CLIENT_MODELS_CACHE_FILE`, `src/mcp/env.ts:223`, in
+    `REQUIRED_GITIGNORE_ENTRIES`), shaped `{ "listed": { <client>: { ids, source } } }`, clients in sort order and
+    written atomically. It is read with the manifest list's validation, the id shape, the source, the 200-id cap and the
+    order as written, and taken whole or not at all; a cache that is a link, too large or of another shape gives no list
+    and is named in `sync`'s plan warnings, `init`'s warnings and the `model-pins` row (`readModelListCache` and
+    `writeModelListCache`, `src/cli/engine/clientModels.ts`). `writeManifest` never writes the key (`withoutListedModels`,
+    `src/manifest/manifest.ts`).
+  - The lists are laid out in this order: a fresh read, the cache, a 1.15.0 manifest's `models.listed`, then the list
+    read off the files the last emission wrote, where the ledger names them: Codex's and Copilot's model maps, each
+    class's model with its bracket options dropped plus its fallbacks, and the `model:` values of Cursor's agent files
+    without an effort group (`resolveModelLists` and `emittedPickLists`, the same file). So `sync` keeps the pick already
+    emitted, and `check`'s drift gate plans with the lists read off the emitted files first (`planSync`'s
+    `keepEmittedPicks`, `src/cli/commands/sync/engine.ts`; `src/cli/commands/check.ts`). Which models an account's list
+    holds is the `model-pins` row's to warn on, never drift; with no cache and no live read the row reads `unverified`.
+  - A cache that cannot be written leaves the lists for that run only: `sync` warns on stderr, `workspace sync` warns
+    naming the member, and `init` adds it to its warnings. The move from a 1.15.0 manifest happens at `sync` and
+    `workspace sync`; another writer (`config set`, `add`, `clean`, `config mcp`) run first leaves the key out without
+    moving it, so `model-pins` reads `unverified` until a `sync` reads the client, open as a Minor. A hand edit moving a
+    class to another shipped candidate in both a map and its agent files reads as no drift, open as a Minor.
+  - Accepted as designed: with no list read, a later release that reorders the shipped priority list does not move
+    Codex's and Copilot's picks on a machine that never reads a list.
+- **Expand/contract:** additive, with no generation bump: a 1.15 engine reads a manifest with no `models.listed`, and a
+  1.15.0 manifest's lists move once. Rollback is a re-sync at the prior version, which writes the key again from a list
+  it reads.
+- GIVEN a fresh clone with no cache THEN `check` exits 0 with no drift for a Codex pick and a Cursor pin that came from a
+  list, the row reading unverified; GIVEN another account's cache THEN a warning naming the client and the class, exit 0;
+  GIVEN an over-cap cache THEN a warning naming the cache (`test/cli/commands/check.test.ts`). GIVEN a 1.15.0 manifest's
+  lists THEN they move to the cache once and no later write carries the key; GIVEN an unwritable cache THEN a warning
+  and the list kept in memory; GIVEN `git check-ignore` THEN the cache is ignored (`test/cli/commands/sync.test.ts`,
+  `test/cli/engine/clientModels.test.ts`, `test/manifest/manifest.test.ts`, `test/cli/commands/workspace.test.ts`,
+  `test/emit/upgradeFrom1140.e2e.test.ts`).
+
 ## References
 
 - `docs/plans/008-plugin-lifecycle-02.md` — unit C9.
@@ -600,6 +690,11 @@ needs. Open, as Minors of the run: a pin live-listed but missing from the saved 
 - `test` (added 2026-10-15): `test/roster/modelDefaults.test.ts`, `test/cli/engine/clientModels.test.ts` with its
   fixtures under `test/fixtures/client-models/`, `test/adapters/cursorModelHook.test.ts`, and the suites each
   requirement above names.
+- `docs/plans/021-cloud-runs-02.md`, with `.stamity/runs/2026-10-18_cloud-runs-2/` — the spec delta and the units'
+  reports the text dated 2026-10-18 cites (REQ-LADDER-009; REQ-LADDER-002, -005 and -006 amended), added 2026-10-18.
+- `source` (added 2026-10-18): `src/cli/engine/clientModels.ts` (`readModelListCache`, `writeModelListCache`,
+  `resolveModelLists`, `emittedPickLists`), `src/mcp/env.ts` (`CLIENT_MODELS_CACHE_FILE`), `src/manifest/manifest.ts`
+  (`withoutListedModels`), `content/skills/st-unattended/references/cloud.md` (§ Pacing).
 
 ## Concerns
 

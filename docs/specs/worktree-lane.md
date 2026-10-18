@@ -1,6 +1,6 @@
 ---
 id: worktree-lane
-# A design document, authored outside the spec command, amended from docs/plans/013-optimization-sweep-02.md on 2026-09-30, amended in run 2026-10-11_release-1-14-0 on 2026-10-12, one citation re-pointed in run 2026-10-14_cli-native on 2026-10-14, and excluded from the site build.
+# A design document, authored outside the spec command, amended from docs/plans/013-optimization-sweep-02.md on 2026-09-30, amended in run 2026-10-11_release-1-14-0 on 2026-10-12, one citation re-pointed in run 2026-10-14_cli-native on 2026-10-14, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.1.0
 obsolete_when: the managed worktree lane ships and the CLI reference plus the working-with page carry its behaviour, or a decision cuts the surface
@@ -475,6 +475,13 @@ Rules, all of them refusals rather than resolutions:
   would open the ask gate's final-round exception in a checkout that never ran
   `run end` (`src/worktree/policy.ts:582-588` and `:589-596`, read at
   `fb2118d9`). A `skip` row naming either is admitted, as every `skip` row is.
+- **Cursor's context-once folder is refused by name** (added 2026-10-18, `docs/plans/021-cloud-runs-02.md`, unit
+  `v6-cursor-cloud`; merged by its unit `v20-spec-merge`, read at `e64bc09f`). The context-once folder and everything
+  under it resolve to `skip` by name, whatever the manifest says, as the review gate's state does. A materializing row
+  naming `.stamity/context-once` or a path under it is refused before git is asked, case and trailing dots folded, and
+  the message says the markers are never copied between worktrees: a marker carried across would silence the session
+  index for a conversation that never saw it there (`isContextOnceStatePath`, `src/worktree/policy.ts:242-246`; the
+  skip, `:548-555`; the refusal, `:616-623`). A `skip` row naming it is admitted, as every `skip` row is.
 - **Both admissibility refusals apply to MATERIALIZING rows only.** A `skip` row
   is exempt, and so is a row whose own path is owned by a deeper rule — the
   checked set is exactly the paths whose longest-prefix answer is themselves
@@ -576,6 +583,13 @@ no entry**:
   the ask gate's final-round exception (REQ-FLOW-090) in a checkout that never
   ran `run end`. A `symlink` row over `.stamity` shares both live, the same
   exception the review gate's state has, and setup cannot split it.
+- `.stamity/context-once/`, Cursor's once-per-conversation markers (REQ-FLOW-115
+  in `docs/specs/everyday-flows.md`) — runtime state of one machine: never
+  committed, never copied into a lane, and a rule naming it is refused by name
+  with case and trailing dots folded (added 2026-10-18, plan 021 file 2, unit
+  `v6-cursor-cloud`; `src/mcp/env.ts:212`, git-ignored by setup;
+  `src/worktree/policy.ts:242-246`, read at `e64bc09f`). A `symlink` row over
+  `.stamity` shares it live, the same exception as above.
 - Build output (`dist/`, `coverage/`, `*.tsbuildinfo`, the docs site's build and
   cache, `.gitignore:1-9`) — regenerable, so not materialized and not listed.
 
@@ -1374,6 +1388,12 @@ REQ-WORKTREE-001 take it to ninety-two.)
 - GIVEN a `copy` row over `.stamity` WHEN `.stamity/preflight-canary.json` and
   `.stamity/run-ended.json` resolve THEN both resolve to `skip`, the marker in a
   case-and-trailing-dot spelling too (added 2026-10-18, the same two tests).
+- GIVEN a materializing entry naming `.stamity/context-once` or a path under it,
+  in any letter case or with trailing dots, WHEN **setup resolves its plan**
+  THEN it fails with `VALIDATION_ERROR` naming Cursor's context-once markers as
+  never copied between worktrees; GIVEN a `copy` row over `.stamity` THEN the
+  folder resolves to `skip` (added 2026-10-18, plan 021 file 2;
+  `test/hooks/contextOnce.test.ts`, its cases on the worktree skip and refusal).
 - GIVEN a `skip` row naming a path git TRACKS — a repository that commits
   `node_modules`, under the built-in defaults — WHEN setup resolves its plan
   THEN it does NOT fail: the row writes nothing, so it is never checked, and the
