@@ -28,9 +28,12 @@ on:
 permissions:
   contents: read
 
+# A dispatch that sets release_prep runs in a group of its own, and nothing cancels it. A later run
+# on the same ref would otherwise cancel the whole run, release prep's paid model turns included:
+# GitHub cancels every job of a run, so a job-level group alone would not keep that job running.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}-release-prep-${{ inputs.release_prep == true }}
+  cancel-in-progress: ${{ inputs.release_prep != true }}
 
 # Every job runs only in the canonical repository: a private import that enables Actions keeps
 # this file but runs none of it. GitHub has no workflow-level `if`, so each job carries the guard.
@@ -331,10 +334,20 @@ jobs:
   # A light unattended `/st-work` before a release, on demand: a dispatch with `release_prep` set and
   # the ANTHROPIC_API_KEY secret configured, else every step after the arm is skipped and the job is
   # green. It runs the cloud check's one-unit plan and run contract (scripts/qa/cloud-check.mjs) in a
-  # scratch repository whose origin is a bare remote with a cloud's push rules (no tag, no deletion, no
-  # push to `main`), with `--permission-prompts none` and no `--bare`, and is red unless a run branch
-  # reached the remote while `main` and the tags stayed as they were. `gh` is a stub that refuses, so
-  # the run's draft pull request is reported not opened rather than attempted against GitHub.
+  # scratch repository, with `--permission-prompts none` and no `--bare`. The repository stands where
+  # the run's pre-flight passes, as a cloud machine's does:
+  #   - origin names https://github.com/o/r.git, and a `git` shim on PATH sends only a push, fetch or
+  #     ls-remote to a bare remote with a cloud's push rules (no tag, no deletion, no push to `main`),
+  #     so `git remote get-url` and the config reads still name GitHub;
+  #   - git's one credential helper is gh's own, the push identity the pre-flight proves;
+  #   - `gh` is a stub answering as GitHub would for o/r: push but no admin right, and `main` under an
+  #     active ruleset requiring a pull request that the account cannot bypass; the pull request calls
+  #     answer too, so the run's draft opens;
+  #   - the build is installed in the repository, because the skill's `npx --no stamity` runs no
+  #     program found on PATH alone.
+  # It is red unless one run branch reached the remote with a record whose `Status:` is no refusal, a
+  # morning list with no `## Refused`, and the unit's src/greet.mjs, while `main` and the tags stayed
+  # as they were.
   release-prep-unattended:
     name: release prep (an unattended run, on demand, off without a secret)
     if: github.repository == 'zomarit/stamity'
@@ -383,27 +396,70 @@ jobs:
           npm install -g --prefix "$RUNNER_TEMP/claude" --ignore-scripts @anthropic-ai/claude-code
           node "$RUNNER_TEMP/claude/lib/node_modules/@anthropic-ai/claude-code/install.cjs"
 
-      - name: Drive (claude)
+      # Holds no secret: the scratch repository, the bare remote and the two stand-ins the drive puts on PATH.
+      - name: Scratch repository
         if: steps.arm-claude.outputs.armed == 'true'
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           set -eu
           WORK="$RUNNER_TEMP/release-prep"
           REPO="$WORK/repo"
           REMOTE="$WORK/remote.git"
-          mkdir -p "$WORK/bin"
-          printf '#!/bin/sh\nexec node %s/dist/cli.js "$@"\n' "$GITHUB_WORKSPACE" > "$WORK/bin/stamity"
-          printf '#!/bin/sh\necho "gh is not available in the release-prep run" >&2\nexit 1\n' > "$WORK/bin/gh"
-          chmod +x "$WORK/bin/stamity" "$WORK/bin/gh"
-          export PATH="$WORK/bin:$RUNNER_TEMP/claude/bin:$PATH"
+          ORIGIN=https://github.com/o/r.git
+          REAL_GIT="$(command -v git)"
+          mkdir -p "$WORK/bin" "$REPO"
 
-          git init -q --initial-branch main "$REPO"
+          # A push, fetch or ls-remote reaches the bare remote for origin's URL, set on that call's
+          # command line alone; every other git call, `remote get-url` and the config reads among
+          # them, runs as written and reads origin as GitHub.
+          cat > "$WORK/bin/git" <<EOF
+          #!/bin/sh
+          skip=0
+          for arg in "\$@"; do
+            if [ "\$skip" = 1 ]; then skip=0; continue; fi
+            case "\$arg" in
+              -c|-C|--git-dir|--work-tree|--namespace|--config-env) skip=1 ;;
+              -*) ;;
+              push|fetch|ls-remote|pull) exec "$REAL_GIT" -c "url.$REMOTE.insteadOf=$ORIGIN" "\$@" ;;
+              *) break ;;
+            esac
+          done
+          exec "$REAL_GIT" "\$@"
+          EOF
+
+          # `gh api --include` for o/r, as the engine's REST runner calls it (src/cli/engine/ghRunner.ts).
+          cat > "$WORK/bin/gh" <<'EOF'
+          #!/bin/sh
+          if [ "$1" != api ] || [ "$2" != --hostname ] || [ "$4" != --include ] || [ "$5" != --method ]; then
+            echo "gh stub: unexpected arguments: $*" >&2
+            exit 2
+          fi
+          method=$6
+          if [ "$7" = --input ]; then path=$9; cat > /dev/null; else path=$7; fi
+          reply() {
+            printf 'HTTP/2.0 %s\r\nContent-Type: application/json; charset=utf-8\r\n\r\n%s\n' "$1" "$2"
+            case "$1" in 2*) exit 0 ;; *) exit 1 ;; esac
+          }
+          case "$method ${path%%\?*}" in
+            "GET repos/o/r") reply "200 OK" '{"id":1,"full_name":"o/r","default_branch":"main","permissions":{"admin":false,"maintain":false,"push":true,"triage":true,"pull":true}}' ;;
+            "GET repos/o/r/rules/branches/main") reply "200 OK" '[{"type":"pull_request","ruleset_source_type":"Repository","ruleset_source":"o/r","ruleset_id":1}]' ;;
+            "GET repos/o/r/rulesets/1") reply "200 OK" '{"id":1,"target":"branch","source_type":"Repository","enforcement":"active","current_user_can_bypass":"never"}' ;;
+            "GET repos/o/r/pulls") reply "200 OK" '[]' ;;
+            "POST repos/o/r/pulls") reply "201 Created" '{"number":1,"html_url":"https://github.com/o/r/pull/1","draft":true}' ;;
+            "GET repos/o/r/pulls/1"|"PATCH repos/o/r/pulls/1") reply "200 OK" '{"number":1,"html_url":"https://github.com/o/r/pull/1","draft":true,"state":"open"}' ;;
+            *) reply "404 Not Found" '{"message":"Not Found"}' ;;
+          esac
+          EOF
+          chmod +x "$WORK/bin/git" "$WORK/bin/gh"
+          export PATH="$WORK/bin:$PATH"
+
           cd "$REPO"
+          git init -q --initial-branch main
           git config user.email release-prep@invalid.local
           git config user.name "stamity release prep"
           printf '{"name":"release-prep","private":true,"type":"module","scripts":{"test":"node --test"}}\n' > package.json
-          stamity init -y --tools claude
+          printf 'node_modules/\n' > .gitignore
+          npm install --no-save --no-audit --no-fund --ignore-scripts "$GITHUB_WORKSPACE"
+          npx --no stamity init -y --tools claude
           git add -A
           git commit -qm "release prep: the stamity setup"
           node --input-type=module -e '
@@ -418,7 +474,6 @@ jobs:
           ' "$GITHUB_WORKSPACE" "$(git rev-parse HEAD)"
           git add -A
           git commit -qm "release prep: the plan and the run contract"
-          MAIN="$(git rev-parse HEAD)"
 
           # The bare remote takes `main` once, then gets a cloud's push rules.
           git init -q --bare "$REMOTE"
@@ -430,15 +485,47 @@ jobs:
             '  if [ "$new" = "$zero" ]; then echo "refused: deleting $ref" >&2; exit 1; fi' \
             'done' > "$REMOTE/hooks/pre-receive"
           chmod +x "$REMOTE/hooks/pre-receive"
-          git remote add origin https://github.com/o/r.git
-          git config "url.$REMOTE.insteadOf" https://github.com/o/r.git
+          git remote add origin "$ORIGIN"
+          # gh's credential helper alone, the push identity the pre-flight proves; the empty entry
+          # clears any helper the runner's own git configuration names.
+          git config --add credential.helper ''
+          git config --add credential.helper '!gh auth git-credential'
+
+      - name: Drive (claude)
+        if: steps.arm-claude.outputs.armed == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -eu
+          WORK="$RUNNER_TEMP/release-prep"
+          REPO="$WORK/repo"
+          REMOTE="$WORK/remote.git"
+          export PATH="$WORK/bin:$RUNNER_TEMP/claude/bin:$PATH"
+          cd "$REPO"
+          MAIN="$(git -C "$REMOTE" rev-parse refs/heads/main)"
+          fail() { echo "::error title=Release prep::$1"; exit 1; }
 
           status=0
           claude -p "/st-work --unattended docs/plans/001-cloud-check.md (run contract: run-contract.yml)" \
             --permission-prompts none --output-format stream-json --verbose > "$WORK/transcript.jsonl" || status=$?
-          test "$status" -eq 0 || { echo "::error title=Release prep::claude -p exited $status"; exit 1; }
-          test "$(git -C "$REMOTE" rev-parse refs/heads/main)" = "$MAIN" || { echo "::error title=Release prep::main moved on the remote"; exit 1; }
-          test -z "$(git -C "$REMOTE" tag --list)" || { echo "::error title=Release prep::a tag reached the remote"; exit 1; }
+          test "$status" -eq 0 || fail "claude -p exited $status"
+          test "$(git -C "$REMOTE" rev-parse refs/heads/main)" = "$MAIN" || fail "main moved on the remote"
+          test -z "$(git -C "$REMOTE" tag --list)" || fail "a tag reached the remote"
+
+          # The outcome, read from the remote: one run branch, whose record and morning list show no
+          # refusal, carrying the unit's file.
           branches="$(git -C "$REMOTE" for-each-ref --format='%(refname:short)' refs/heads/ | grep -vx main || true)"
-          test -n "$branches" || { echo "::error title=Release prep::no run branch reached the remote"; exit 1; }
-          echo "Release prep: run branch(es) $branches on the remote; main and the tags unchanged"
+          test -n "$branches" || fail "no run branch reached the remote"
+          set -- $branches
+          test "$#" -eq 1 || fail "more than one branch reached the remote: $*"
+          branch="$1"
+          run="${branch#stamity/}"
+          test "$run" != "$branch" || fail "$branch is not a run branch (stamity/<run id>)"
+          record="$(git -C "$REMOTE" show "$branch:.stamity/runs/$run/record.md")" || fail "$branch carries no record for $run"
+          state="$(printf '%s\n' "$record" | sed -n '/^Status:/{p;q;}')"
+          test -n "$state" || fail "the record on $branch has no Status: line"
+          case "$state" in *[Rr]efused*) fail "the run refused: $state" ;; esac
+          morning="$(git -C "$REMOTE" show "$branch:.stamity/runs/$run/morning.md")" || fail "$branch carries no morning list for $run"
+          if printf '%s\n' "$morning" | grep -q '^## Refused'; then fail "the morning list on $branch opens ## Refused"; fi
+          git -C "$REMOTE" cat-file -e "$branch:src/greet.mjs" || fail "the unit's file src/greet.mjs is not on $branch"
+          echo "Release prep: $branch on the remote ($state), no refusal on its morning list, src/greet.mjs on it; main and the tags unchanged"

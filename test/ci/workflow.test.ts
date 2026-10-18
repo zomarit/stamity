@@ -23,6 +23,8 @@ import { decide as classifyChange } from "../../scripts/ci/records-only.mjs";
 import { IMAGE as CLOUD_LEG_IMAGE } from "../../scripts/ci/cloud-leg.mjs";
 import { CURATED_MCP_SERVERS, pinnedPackageSpec } from "../../src/mcp/catalog.ts";
 import { evaluateWorkflowExpression, type ExpressionContext } from "./workflowExpression.ts";
+import { ensureDistBuilt } from "../support/distBuild.ts";
+import { carriedProcessEnv, NO_GIT_CONFIG } from "../support/repoFixtures.ts";
 
 /**
  * Drift guard on every workflow in `.github/workflows/` and the update policy that feeds them.
@@ -1529,12 +1531,9 @@ describe("nightly.yml — demoted lanes, none of them merge-blocking", () => {
     expect(JSON.stringify(job), "the headless lane reads a secret").not.toContain("secrets.");
     // TEST CHANGE, justified (plan 021 file 2, unit v13-client-legs; REQ-PROVE-040): the file-wide
     // "no secret" moved, since the client legs read one secret per arm and drive step. The headless
-    // lane above still holds none; every secret the file reads now sits in those two jobs, which the
-    // client-leg suite below pins step by step.
-    for (const [jobId, other] of Object.entries(nightly.workflow.jobs)) {
-      if (jobId === "hook-fire" || jobId === "release-prep-unattended") continue;
-      expect(JSON.stringify(other), `${jobId} reads a secret`).not.toContain("secrets.");
-    }
+    // lane above still holds none. TEST CHANGE, justified (review/46, run 2026-10-18_cloud-runs-2):
+    // the per-job loop that stood here read no workflow-level `env:` or `defaults`; the client-leg
+    // suite below now reads the whole file with those two jobs cut out, in any spelling.
   });
 });
 
@@ -1594,9 +1593,43 @@ const CLIENT_LEGS = [
 
 const CLIENT_LEG_JOBS = ["hook-fire", "release-prep-unattended"] as const;
 
-/** The secrets one step names, anywhere in it. */
-function secretsOf(step: WorkflowStep): string[] {
-  return [...JSON.stringify(step).matchAll(/secrets\.([A-Z_][A-Z0-9_]*)/g)].map((match) => match[1] ?? "");
+/**
+ * Every reference to the secrets context in `text`, in any spelling: `secrets.NAME`, `secrets['NAME']`,
+ * `toJSON(secrets)` and the bare context. GitHub reads a context name in any letter case.
+ * TEST CHANGE, justified (review/47, run 2026-10-18_cloud-runs-2): the dotted `secrets.NAME` was the
+ * only spelling read, so a step handed `toJSON(secrets)` or a bracketed name counted as holding none.
+ */
+function secretRefsIn(text: string): string[] {
+  return [...text.matchAll(/\bsecrets\b/gi)].map((match) => text.slice(Math.max(0, (match.index ?? 0) - 8), (match.index ?? 0) + 24));
+}
+
+/** nightly.yml's lines with the client-leg jobs and every comment line cut out, and the cut job ids. */
+function nightlyOutsideClientLegs(): { text: string; cut: string[] } {
+  const kept: string[] = [];
+  const cut: string[] = [];
+  let skipping = false;
+  for (const line of nightly.source.split("\n")) {
+    const key = /^ {2}([A-Za-z0-9_-]+):\s*$/.exec(line)?.[1];
+    if (key !== undefined) {
+      skipping = (CLIENT_LEG_JOBS as readonly string[]).includes(key);
+      if (skipping) cut.push(key);
+    }
+    if (!skipping && !/^\s*#/.test(line)) kept.push(line);
+  }
+  return { text: kept.join("\n"), cut };
+}
+
+/** A `${{ … }}` template rendered as GitHub renders it: a context path's value, else the expression's boolean. */
+function renderTemplate(template: string, context: ExpressionContext): string {
+  return template.replace(/\$\{\{(.*?)\}\}/g, (_whole, expression: string) => {
+    const path = expression.trim();
+    if (/^[A-Za-z_][\w-]*(?:\.[\w-]+)*$/.test(path) && !["true", "false", "null"].includes(path)) {
+      let cursor: unknown = context;
+      for (const segment of path.split(".")) cursor = (cursor as Record<string, unknown> | undefined)?.[segment];
+      return cursor === undefined || cursor === null ? "" : String(cursor);
+    }
+    return String(evaluateWorkflowExpression(expression, context));
+  });
 }
 
 function armed(client: string, value: string): ExpressionContext {
@@ -1632,7 +1665,7 @@ describe("nightly.yml — the client legs, built and off without secrets", () =>
       expect(job.permissions, jobId).toEqual({ contents: "read" });
       let holders = 0;
       for (const step of job.steps) {
-        const held = secretsOf(step);
+        const held = secretRefsIn(JSON.stringify(step));
         const leg = /^(?:Arm|Drive) \((\w+)\)$/.exec(step.name ?? "")?.[1];
         if (leg === undefined) {
           expect(held, `${jobId}: ${step.name}`).toEqual([]);
@@ -1640,13 +1673,49 @@ describe("nightly.yml — the client legs, built and off without secrets", () =>
         }
         holders += 1;
         const secret = CLIENT_LEGS.find((entry) => entry.client === leg)?.secret;
-        // The secret enters through `env:` alone, never a `run:` line or an input.
-        expect(held, `${jobId}: ${step.name}`).toEqual([secret]);
+        // The secret enters through `env:` alone, as the one `secrets.<NAME>`, never a `run:` line or an input.
+        expect(held, `${jobId}: ${step.name}`).toHaveLength(1);
         expect(step.env?.[secret ?? ""], `${jobId}: ${step.name}`).toBe(`\${{ secrets.${secret} }}`);
-        expect(step.run ?? "", `${jobId}: ${step.name}`).not.toContain("secrets.");
       }
       expect(holders, jobId).toBe(jobId === "hook-fire" ? 6 : 2);
     }
+  });
+
+  // ADDED (review/46, run 2026-10-18_cloud-runs-2): a secret at the workflow's own `env:` or `defaults`
+  // would reach every step of every nightly job, the vendor installers included.
+  it("reads no secret anywhere in the file outside the two client-leg jobs", () => {
+    const { text, cut } = nightlyOutsideClientLegs();
+    expect(cut).toEqual([...CLIENT_LEG_JOBS]);
+    // The cut kept the rest: the other jobs are still read.
+    for (const jobId of Object.keys(nightly.workflow.jobs).filter((id) => !(CLIENT_LEG_JOBS as readonly string[]).includes(id))) {
+      expect(text, jobId).toContain(`  ${jobId}:`);
+    }
+    expect(secretRefsIn(text)).toEqual([]);
+  });
+
+  // ADDED (review/44, run 2026-10-18_cloud-runs-2): GitHub cancels a whole run, every job in it, when a
+  // later run takes its group, so release prep needs a group of its own that nothing cancels.
+  it("runs a release-prep dispatch in a group of its own that no later run cancels", () => {
+    const concurrency = nightly.workflow.concurrency as { group?: string; "cancel-in-progress"?: unknown } | undefined;
+    const github = (event_name: string) => ({ workflow: "Nightly", event_name, ref: "refs/heads/main" });
+    const runs = {
+      schedule: { github: github("schedule"), inputs: {} },
+      dispatch: { github: github("workflow_dispatch"), inputs: { release_prep: false } },
+      releasePrep: { github: github("workflow_dispatch"), inputs: { release_prep: true } },
+    };
+    const group = (context: ExpressionContext) => renderTemplate(concurrency?.group ?? "", context);
+    const cancels = (context: ExpressionContext) => {
+      const value = concurrency?.["cancel-in-progress"];
+      return typeof value === "boolean" ? value : evaluateWorkflowExpression(String(value), context);
+    };
+    expect(group(runs.releasePrep)).not.toBe(group(runs.dispatch));
+    expect(group(runs.releasePrep)).not.toBe(group(runs.schedule));
+    expect(cancels(runs.releasePrep)).toBe(false);
+    // Every other run keeps its group per event and ref, and a newer one still cancels it.
+    expect(group(runs.dispatch)).toContain("workflow_dispatch-refs/heads/main");
+    expect(group(runs.schedule)).toContain("schedule-refs/heads/main");
+    expect(cancels(runs.dispatch)).toBe(true);
+    expect(cancels(runs.schedule)).toBe(true);
   });
 
   it("drives hook-runs.mjs in the image the cloud leg pins, requiring an observation, with no --bare", () => {
@@ -1674,9 +1743,12 @@ describe("nightly.yml — the client legs, built and off without secrets", () =>
     for (const step of steps.slice(1)) {
       expect(step.if, step.name).toBe("steps.arm-claude.outputs.armed == 'true'");
     }
+    // TEST CHANGE, justified (review/40, run 2026-10-18_cloud-runs-2): the bare remote is built in the
+    // "Scratch repository" step, which holds no secret, so the case below can run it.
+    const scratch = runOf(steps, "Scratch repository");
+    expect(scratch).toContain('git init -q --bare "$REMOTE"');
+    expect(scratch).toContain('"$REMOTE/hooks/pre-receive"');
     const drive = runOf(steps, "Drive (claude)");
-    expect(drive).toContain('git init -q --bare "$REMOTE"');
-    expect(drive).toContain('"$REMOTE/hooks/pre-receive"');
     expect(drive).toMatch(/claude -p "\/st-work --unattended [^"]+" \\\n\s+--permission-prompts none /);
   });
 
@@ -1736,6 +1808,121 @@ describe("nightly.yml — the client legs, built and off without secrets", () =>
     });
   });
 });
+
+/**
+ * ADDED (review/40, run 2026-10-18_cloud-runs-2): release prep's scratch repository, EXECUTED. Its step
+ * runs under `sh` as written, with the runner's two folders substituted, and the engine then decides in
+ * it: the unattended pre-flight passes every check, and the run verbs push the run's branch to the bare
+ * remote and open the draft through the `gh` stub. The drive step's outcome checks then run with its
+ * `claude -p` call left out (inline mock reason: a client run needs an account and costs a model turn):
+ * green on that branch, red on a refused record and on a morning list opening `## Refused`. The canary
+ * the shell guard writes on the run's first shell call is written here by hand.
+ */
+describe.skipIf(process.platform === "win32" || spawnSync("sh", ["-c", "exit 0"]).status !== 0)(
+  "nightly.yml — release prep's scratch repository, executed",
+  () => {
+    const root = mkdtempSync(join(tmpdir(), "stamity-release-prep-"));
+    afterAll(() => rmSync(root, { recursive: true, force: true }));
+    const temp = join(root, "temp");
+    const work = join(temp, "release-prep");
+    const repo = join(work, "repo");
+    const RUN = "2026-10-18_release-prep";
+    const BRANCH = `stamity/${RUN}`;
+    const runDir = [".stamity", "runs", RUN].join("/");
+    const env: Record<string, string> = {
+      ...carriedProcessEnv(),
+      HOME: join(root, "home"),
+      GIT_CONFIG_NOSYSTEM: "1",
+      GIT_CONFIG_GLOBAL: NO_GIT_CONFIG,
+      npm_config_update_notifier: "false",
+      RUNNER_TEMP: temp,
+      GITHUB_WORKSPACE: REPO_ROOT,
+    };
+    /** The drive's PATH: the `git` shim and the `gh` stub first. */
+    const shimmed = { ...env, PATH: `${join(work, "bin")}${delimiter}${env["PATH"] ?? ""}` };
+    const steps = stepsOf(nightly, "release-prep-unattended");
+
+    function sh(body: string): { status: number | null; out: string } {
+      const result = spawnSync("sh", ["-e", "-c", body], { cwd: root, env, encoding: "utf8", timeout: 120_000 });
+      return { status: result.status, out: `${result.stdout}${result.stderr}` };
+    }
+
+    /** `npx --no stamity <args> --json` in the scratch repository, unattended; its parsed JSON. */
+    function stamity(args: readonly string[]): Record<string, unknown> {
+      const result = spawnSync("npx", ["--no", "stamity", ...args, "--json"], {
+        cwd: repo,
+        env: { ...shimmed, STAMITY_UNATTENDED: "1" },
+        encoding: "utf8",
+        timeout: 120_000,
+      });
+      expect(result.stdout, `stamity ${args.join(" ")}: ${result.stderr}`).toMatch(/^\{/);
+      return JSON.parse(result.stdout) as Record<string, unknown>;
+    }
+
+    function gitIn(args: readonly string[]): string {
+      return execFileSync("git", [...args], { cwd: repo, env: shimmed, encoding: "utf8" }).trim();
+    }
+
+    function put(path: string, text: string): void {
+      mkdirSync(dirname(join(repo, path)), { recursive: true });
+      writeFileSync(join(repo, path), text);
+    }
+
+    it("builds a repository whose unattended pre-flight passes every check", async () => {
+      await ensureDistBuilt();
+      const built = sh(runOf(steps, "Scratch repository"));
+      expect(built.status, built.out).toBe(0);
+      expect(gitIn(["remote", "get-url", "origin"]), "origin reads as GitHub").toBe("https://github.com/o/r.git");
+      put(".stamity/preflight-canary.json", JSON.stringify({ at: new Date().toISOString() }));
+      const verdict = stamity(["gate", "preflight", "--unattended"]) as { ok: boolean; checks: { id: string; state: string; evidence: string }[] };
+      expect(verdict.checks.filter((check) => check.state !== "pass"), JSON.stringify(verdict.checks)).toEqual([]);
+      expect(verdict.ok).toBe(true);
+      expect(verdict.checks.find((check) => check.id === "direct-push")?.evidence).toContain("cannot bypass it for a direct push");
+    }, 180_000);
+
+    it("pushes the run through the verbs, and the drive's checks pass only on a run that did not refuse", () => {
+      const started = stamity(["run", "start", "--run", RUN]);
+      expect(started).toMatchObject({ ok: true, branch: BRANCH });
+      put("src/greet.mjs", "export function greet(name) {\n  return `Hello, ${name || \"there\"}!`\n}\n");
+      const record = (status: string) =>
+        `# Run ${RUN}\n\nStatus: ${status}\nMode: unattended\nBranch: ${BRANCH}\nBase: ${String(started["base"])}\n`;
+      put(`${runDir}/record.md`, record("in progress"));
+      const checkpoint = stamity(["run", "checkpoint", "--run", RUN, "--paths", "src/greet.mjs", `${runDir}/record.md`, "--pr", "--title", "Cloud check: a greeting"]);
+      expect(checkpoint).toMatchObject({ pushed: true, pr: { number: 1, how: "created" } });
+      const sections = ["For you to check", "Decisions", "Prerequisites", "Person's calls held", "Not done:", "How to answer"];
+      const morning = (refused: boolean) =>
+        [`# Morning list — ${RUN}`, "", ...(refused ? ["## Refused", "", "- direct-push: unknown", ""] : []), ...sections.flatMap((name) => [`## ${name}`, "", "none", ""])].join("\n");
+      put(`${runDir}/morning.md`, morning(false));
+      put(`${runDir}/record.md`, record("closed 2026-10-18 (done)"));
+      const ended = stamity(["run", "end", "--run", RUN, "--title", "Cloud check: a greeting", "--paths", `${runDir}/record.md`, `${runDir}/morning.md`]);
+      expect(ended).toMatchObject({ ok: true, pushed: true, notDone: [] });
+
+      const drive = runOf(steps, "Drive (claude)");
+      const outcome = drive.replace(/claude -p [^\n]*\\\n[^\n]*\n/, ":\n");
+      expect(outcome, "the claude -p call is left out").not.toBe(drive);
+      const green = sh(outcome);
+      expect(green.status, green.out).toBe(0);
+      expect(green.out).toContain(`${BRANCH} on the remote (Status: closed 2026-10-18 (done))`);
+
+      // A raw commit and push stand in for the refusals a run would push through `run end`.
+      const pushAs = (message: string) => {
+        gitIn(["commit", "-qam", message]);
+        gitIn(["push", "-q", "origin", BRANCH]);
+      };
+      put(`${runDir}/record.md`, record("closed 2026-10-18 (refused: direct-push unknown)"));
+      pushAs("a refused record");
+      const refusedRecord = sh(outcome);
+      expect(refusedRecord.status).toBe(1);
+      expect(refusedRecord.out).toContain("the run refused");
+      put(`${runDir}/record.md`, record("closed 2026-10-18 (done)"));
+      put(`${runDir}/morning.md`, morning(true));
+      pushAs("a refused morning list");
+      const refusedMorning = sh(outcome);
+      expect(refusedMorning.status).toBe(1);
+      expect(refusedMorning.out).toContain("opens ## Refused");
+    }, 180_000);
+  },
+);
 
 // ── pr-checks.yml ────────────────────────────────────────────────────────────
 
