@@ -1046,12 +1046,37 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			"--access"
 		]);
 		const npm = cmd[0] === "npm";
+		const flags = /* @__PURE__ */ new Set([
+			"--json",
+			"--dry-run",
+			"--force",
+			"--global",
+			"--parseable",
+			"--color",
+			"--no-color",
+			"--silent",
+			"--quiet",
+			"--verbose",
+			"-s",
+			"-q",
+			"-d",
+			"-g",
+			"-f",
+			"-p"
+		]);
+		const kept = (option, next) => /^pu(?:b(?:l(?:i(?:sh?)?)?)?)?$/.test(next) || flags.has(option.replace(/^-(?=[^-]{2})/, "--")) && [
+			"run",
+			"run-script",
+			"exec",
+			"x"
+		].includes(next);
 		const positionalsOf = (settings) => {
 			const positionals = [];
 			for (let k = 1; k < cmd.length; k += 1) {
 				const word = cmd[k] ?? "";
+				const next = cmd[k + 1] ?? "-";
 				if (valued.has(word)) k += 1;
-				else if (settings && positionals.length === 0 && /^--[^=]+$/.test(word) && !(cmd[k + 1] ?? "-").startsWith("-")) k += 1;
+				else if (settings && positionals.length === 0 && /^-{1,2}[^-=][^=]*$/.test(word) && !next.startsWith("-") && !kept(word, next)) k += 1;
 				else if (!word.startsWith("-")) positionals.push(word);
 			}
 			return positionals;
@@ -1725,7 +1750,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 		/^branches\/.+\/rename\/?$/i
 	];
 	const GRAPHQL_MOVES = /\b(createPullRequest|updatePullRequest|updatePullRequestBranch|createCommitOnBranch|createRef|updateRef|updateRefs|deleteRef|mergeBranch|mergePullRequest|enablePullRequestAutoMerge|enqueuePullRequest)\b/;
-	const GH_BUILTINS = new Set("agent-task alias api attestation auth browse cache co codespace completion config copilot discussion extension gist gpg-key help issue label licenses org pr preview project release repo ruleset run search secret skill ssh-key status variable version workflow".split(" "));
+	const GH_BUILTINS = new Set("agent-task alias api attestation auth browse cache co codespace completion config copilot discussion extension gist gpg-key help issue label licenses org pr preview project release repo ruleset run search secret skill ssh-key status variable version workflow agent-tasks agent agents at cs extensions ext rs skills".split(" "));
 	const GIT_BUILTINS = new Set("add am annotate apply archive backfill bisect blame branch bugreport bundle cat-file check-attr check-ignore check-mailmap check-ref-format checkout checkout--worker checkout-index cherry cherry-pick clean clone column commit commit-graph commit-tree config count-objects credential credential-cache credential-cache--daemon credential-store describe diagnose diff diff-files diff-index diff-pairs diff-tree difftool fast-export fast-import fetch fetch-pack fmt-merge-msg for-each-ref for-each-repo format-patch fsck fsck-objects fsmonitor--daemon gc get-tar-commit-id grep hash-object help hook index-pack init init-db interpret-trailers last-modified log ls-files ls-remote ls-tree mailinfo mailsplit maintenance merge merge-base merge-file merge-index merge-ours merge-recursive merge-recursive-ours merge-recursive-theirs merge-subtree merge-tree mktag mktree multi-pack-index mv name-rev notes pack-objects pack-redundant pack-refs patch-id pickaxe prune prune-packed pull push range-diff read-tree rebase receive-pack reflog refs remote remote-ext remote-fd repack replace replay repo rerere reset restore rev-list rev-parse revert rm send-pack shortlog show show-branch show-index show-ref sparse-checkout stage stash status stripspace submodule--helper switch symbolic-ref tag unpack-file unpack-objects update-index update-ref update-server-info upload-archive upload-archive--writer upload-pack var verify-commit verify-pack verify-tag version whatchanged worktree write-tree subtree".split(" "));
 	const READ_FORMS = /* @__PURE__ */ new Map([["lfs", /* @__PURE__ */ new Set([
 		"fetch",
