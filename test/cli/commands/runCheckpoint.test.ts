@@ -1510,6 +1510,51 @@ describe("stamity run checkpoint", () => {
       expect(plain.code).toBe(0);
       expect(plain.stdout).not.toContain("removed from git's environment");
     });
+
+    // review/17: an unattended run calls every verb with --json, which silences the text line, so the JSON names them.
+    it("checkpoint's --json document names them in gitEnvRemoved unattended, by name only; attended, or with none set, it has no such key", async () => {
+      const unattended = await seed("unattended");
+      const attended = await seed("attended");
+      const none = await seed("unattended");
+      await Promise.all([unattended, attended, none].map(({ repo }) => writeFile(join(repo, "a.txt"), "the unit's change\n")));
+      const set = { GIT_SSH_COMMAND: PLANTED.GIT_SSH_COMMAND, GIT_ASKPASS: PLANTED.GIT_ASKPASS, GIT_EDITOR: "" };
+
+      const named = await withPrograms(set, () => run(unattended.repo, [...CHECKPOINT, "--paths", "a.txt"]));
+      const plain = await withPrograms(set, () => run(attended.repo, [...CHECKPOINT, "--paths", "a.txt"]));
+      const clean = await withPrograms({}, () => run(none.repo, [...CHECKPOINT, "--paths", "a.txt"]));
+
+      expect(named.code).toBe(0);
+      expect(named.doc["gitEnvRemoved"]).toEqual(["GIT_EDITOR", "GIT_SSH_COMMAND", "GIT_ASKPASS"]);
+      expect(named.doc).toMatchObject({ subcommand: "checkpoint", run: RUN, pushed: true });
+      expect(named.stdout).not.toContain(PLANTED.GIT_SSH_COMMAND);
+      expect(named.stdout).not.toContain(PLANTED.GIT_ASKPASS);
+      expect(plain.code).toBe(0);
+      expect(plain.doc).toMatchObject({ subcommand: "checkpoint", pushed: true });
+      expect(plain.doc).not.toHaveProperty("gitEnvRemoved");
+      expect(clean.code).toBe(0);
+      expect(clean.doc).toMatchObject({ subcommand: "checkpoint", pushed: true });
+      expect(clean.doc).not.toHaveProperty("gitEnvRemoved");
+    });
+
+    // review/17 for start, and the security lens' M-1: what start's own git calls receive is read where git runs.
+    it.skipIf(process.platform === "win32")("run start, unattended: its git receives none of them and its --json names them in gitEnvRemoved; attended: no such key", async () => {
+      const unattended = await seed("unattended");
+      const attended = await seed("attended");
+      const stand = await standIn(dirname(unattended.repo));
+
+      const named = await withPrograms({ ...PLANTED, PATH: stand.path }, () => run(unattended.repo, ["start", "--run", RUN, "--json"]));
+      const plain = await withPrograms({ GIT_SSH_COMMAND: PLANTED.GIT_SSH_COMMAND, GIT_EDITOR: "" }, () => run(attended.repo, ["start", "--run", RUN, "--json"]));
+
+      expect(named.code).toBe(0);
+      expect(named.doc).toMatchObject({ subcommand: "start", run: RUN, gitEnvRemoved: ["GIT_SSH_COMMAND", "GIT_ASKPASS", "GIT_EXEC_PATH"] });
+      for (const value of Object.values(PLANTED)) expect(named.stdout).not.toContain(value);
+      // Non-degenerate: start ran git, and not one of its calls received any of the three.
+      expect(stand.lines().length).toBeGreaterThan(0);
+      expect(new Set(stand.lines())).toEqual(new Set(["unset|unset|unset"]));
+      expect(plain.code).toBe(0);
+      expect(plain.doc).toMatchObject({ subcommand: "start", run: RUN });
+      expect(plain.doc).not.toHaveProperty("gitEnvRemoved");
+    });
   });
 
   it.each([

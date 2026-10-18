@@ -75,7 +75,9 @@ import { readPushed, scanChange } from "./gate.ts";
  * `--run` among them. The JSON is `{ subcommand, run, branch, created, base }`,
  * `base` the full commit id at `HEAD` once the run is on its branch, for the
  * record's `Base:`; `dryRun: true` joins it under `--dry-run`, which switches
- * nothing and reports what the run would land on.
+ * nothing and reports what the run would land on. Unattended, `gitEnvRemoved`
+ * joins it where git's program-valued variables were removed from git's
+ * environment: their names, never their values (REQ-FLOW-122, review/17).
  *
  * **`checkpoint`** reads the run's record head (`Mode:`, `Branch:`, `Base:`)
  * and, in this order: refuses a commit on a default branch (and on a checkout
@@ -123,7 +125,8 @@ import { readPushed, scanChange } from "./gate.ts";
  * refused push returns before any pull request call, as in `checkpoint`.
  * Exit 0 when the remote branch holds `HEAD` and a pull request was opened,
  * updated or commented; else 1. The JSON is `checkpoint`'s with
- * `subcommand: "end"`, `inferred` always present.
+ * `subcommand: "end"`, `inferred` always present. Both carry `start`'s
+ * `gitEnvRemoved` the same way, absent where none was removed.
  *
  * **The run-ended marker** (pr/17, pr/36, pr/37): `end --final-round`, the
  * run's last `end`, writes `{ "run": "<run-id>", "at": "<ISO time>" }` to
@@ -272,7 +275,7 @@ function checkRunId(ctx: CliContext, verb: string, run: string): void {
 
 async function runStart(ctx: CliContext, run: string): Promise<CommandResult> {
   checkRunId(ctx, START, run);
-  const removedLine = startVerbGit(startsUnattended(ctx, run));
+  const removed = startVerbGit(startsUnattended(ctx, run));
   const cwd = ctx.app.runtime.cwd;
   const runBranch = `${RUN_BRANCH_PREFIX}${run}`;
 
@@ -303,9 +306,9 @@ async function runStart(ctx: CliContext, run: string): Promise<CommandResult> {
 
   if (current !== null && !onDefault) {
     const pinned = await pinOrigin(ctx, cwd, run);
-    const kept = [`branch: ${sanitizeLabel(current)} (kept: not the default branch)`, `base: ${head}`, ...removedLine, pinned, ...(originHead === null ? [] : [originHead])];
+    const kept = [`branch: ${sanitizeLabel(current)} (kept: not the default branch)`, `base: ${head}`, ...removedLine(removed), pinned, ...(originHead === null ? [] : [originHead])];
     ctx.io.out(`${kept.join("\n")}\n`);
-    return { exitCode: 0, json: start(run, current, false, head, ctx.dryRun) };
+    return { exitCode: 0, json: start(run, current, false, head, ctx.dryRun, removed) };
   }
 
   const existing = await commitAt(cwd, `refs/heads/${runBranch}`);
@@ -342,12 +345,12 @@ async function runStart(ctx: CliContext, run: string): Promise<CommandResult> {
   // pr/28: a dry run switched nothing, so an existing branch's pin is read from its tree; pr/27: a refusal after a
   // switch names the branch the checkout is left on.
   const pinned = await pinOrigin(ctx, cwd, run, ctx.dryRun ? { rev: existing ?? remoteTip ?? undefined } : { checkout: runBranch });
-  const lines = [`branch: ${runBranch} (${how})`, `base: ${base}`, ...removedLine, pinned];
+  const lines = [`branch: ${runBranch} (${how})`, `base: ${base}`, ...removedLine(removed), pinned];
   if (defaults !== null) lines.push(`default branch read from: ${SOURCE_LABEL[defaults.source]}`);
   if (originHead !== null) lines.push(originHead);
   if (ctx.dryRun) lines.push("Dry run: nothing was switched.");
   ctx.io.out(`${lines.join("\n")}\n`);
-  return { exitCode: 0, json: start(run, runBranch, existing === null, base, ctx.dryRun) };
+  return { exitCode: 0, json: start(run, runBranch, existing === null, base, ctx.dryRun, removed) };
 }
 
 /**
@@ -525,8 +528,8 @@ async function originRefusal(ctx: CliContext, cwd: string, runDir: string, unatt
   return `origin changed: ${pinRel} pins ${repoName(pin)}, and ${"none" in now ? now.none : `origin now names ${repoName(now)}`}`;
 }
 
-function start(run: string, branch: string, created: boolean, base: string, dryRun: boolean): Record<string, unknown> {
-  return { subcommand: START, run, branch, created, base, ...(dryRun ? { dryRun: true } : {}) };
+function start(run: string, branch: string, created: boolean, base: string, dryRun: boolean, removed: readonly string[]): Record<string, unknown> {
+  return { subcommand: START, run, branch, created, base, ...removedKey(removed), ...(dryRun ? { dryRun: true } : {}) };
 }
 
 /**
@@ -536,13 +539,25 @@ function start(run: string, branch: string, created: boolean, base: string, dryR
 const verbGit = { unattended: false };
 
 /**
- * Sets the mode {@link git} starts git in and returns the verb's line naming, by name only and never by value, the
- * program-valued variables an unattended run removes from git's environment; no line where it removes none.
+ * Sets the mode {@link git} starts git in and returns the names, never the values, of the program-valued variables
+ * an unattended run removes from git's environment; none where it is attended.
  */
 function startVerbGit(unattended: boolean): string[] {
   verbGit.unattended = unattended;
-  const removed = unattended ? gitProgramVariablesIn(process.env) : [];
+  return unattended ? gitProgramVariablesIn(process.env) : [];
+}
+
+/** The verb's text line naming the removed variables ({@link startVerbGit}); no line where it removes none. */
+function removedLine(removed: readonly string[]): string[] {
   return removed.length === 0 ? [] : [`removed from git's environment: ${removed.join(", ")}`];
+}
+
+/**
+ * The same names for the verb's JSON (review/17): an unattended run calls every verb with `--json`, which silences
+ * the text line, so `gitEnvRemoved` carries them; absent where none was removed, so an attended document is unchanged.
+ */
+function removedKey(removed: readonly string[]): { gitEnvRemoved?: string[] } {
+  return removed.length === 0 ? {} : { gitEnvRemoved: [...removed] };
 }
 
 /**
@@ -741,7 +756,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   }
   const head = resumeCard.readRecordHead(record.text);
   const unattended = readsUnattended(head.mode, ctx.app.runtime.env["STAMITY_UNATTENDED"]);
-  const removedLine = startVerbGit(unattended);
+  const removed = startVerbGit(unattended);
   const recordBase = head.base;
   const base = recordBase === null ? null : await commitAt(cwd, recordBase, verb);
   if (base === null) {
@@ -754,7 +769,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   }
 
   const result: Checkpoint = { branch: null, base, committed: null, pushed: false, held: [], scan: { hits: [], unscanned: [] }, pr: null, notDone: [] };
-  const lines: string[] = [`run: ${run} (${unattended ? "unattended" : "attended"})`, `base: ${base}`, ...removedLine];
+  const lines: string[] = [`run: ${run} (${unattended ? "unattended" : "attended"})`, `base: ${base}`, ...removedLine(removed)];
   const finish = async (passed: boolean, extra: Record<string, unknown> = {}): Promise<CommandResult> => {
     let ok = passed;
     // pr/37: only the run's last `end`, told so by --final-round, writes the marker the ask gate's final round reads;
@@ -774,7 +789,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
     const notDone = result.notDone.map((entry) => sanitizeLabel(entry));
     result.notDone = notDone;
     ctx.io.out(`${[...lines, ...(notDone.length === 0 ? [] : ["Not done:", ...notDone.map((entry) => `  - ${entry}`)])].join("\n")}\n`);
-    return { exitCode: ok ? 0 : 1, json: { subcommand: verb, run, ...result, ...(verb === END ? { inferred: [] } : {}), ...extra } };
+    return { exitCode: ok ? 0 : 1, json: { subcommand: verb, run, ...removedKey(removed), ...result, ...(verb === END ? { inferred: [] } : {}), ...extra } };
   };
 
   // (1) Never a commit on a default branch, nor on a checkout that is not the run's.

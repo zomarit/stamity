@@ -693,4 +693,30 @@ describe("stamity run end", () => {
     expect(pushes()).toEqual([]);
     expect(writesToGitHub()).toEqual([]);
   });
+
+  // review/17 (REQ-FLOW-122): the skill calls `end` with --json, which silences the text line, so the JSON names
+  // the program-valued variables an unattended run removed from git's environment, by name only.
+  it("unattended, names the removed git variables in gitEnvRemoved, never their values; attended, carries no such key", async () => {
+    const unattended = await seed("unattended");
+    await put(unattended.repo, `${RUN_DIR}/morning.md`, morningList("the delta"));
+    const attended = await seed("attended");
+    const { GIT_PROGRAM_VARIABLES } = await vi.importActual<typeof GitWriteModule>("../../../src/cli/engine/gitWrite.ts");
+    // No program-valued variable from the host's own shell reaches the case, so the key names only what it sets.
+    for (const name of GIT_PROGRAM_VARIABLES) vi.stubEnv(name, undefined);
+    vi.stubEnv("GIT_SSH_COMMAND", "planted-ssh -i /planted/key");
+    vi.stubEnv("GIT_EDITOR", "");
+    try {
+      const named = await run(unattended.repo, END("Overnight"));
+      const plain = await run(attended.repo, END("feat: the change"));
+
+      expect(named.code).toBe(0);
+      expect(named.doc).toMatchObject({ subcommand: "end", run: RUN, gitEnvRemoved: ["GIT_EDITOR", "GIT_SSH_COMMAND"], inferred: [] });
+      expect(named.stdout).not.toContain("planted");
+      expect(plain.code).toBe(0);
+      expect(plain.doc).toMatchObject({ subcommand: "end", run: RUN });
+      expect(plain.doc).not.toHaveProperty("gitEnvRemoved");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 });
