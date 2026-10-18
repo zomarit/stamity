@@ -35,26 +35,33 @@ everywhere else: the brief that dispatches it names this exception.
 ## Lanes
 
 Units that could run in parallel run each in the client's own isolation, or one at a time; never in the sibling folder
-`stamity worktree setup` makes, so no folder appears under `<parent>/.stamity-worktrees/`. Each lane is committed and
-folded into the run branch before every checkpoint.
+`stamity worktree setup` makes, so no folder appears under `<parent>/.stamity-worktrees/`. Each lane is committed, and
+before every checkpoint one whose changed paths hold no held path is folded into the run branch: its paths, as
+`git diff --name-only <run-branch>...<lane>` lists them, are read against the held paths the skill's
+`## Person's calls held` names. A lane touching a held path stays unfolded and is a `## Person's calls held` row naming
+the lane and the path, since a folded commit carrying one refuses every later `run checkpoint` and `run end`.
 
 ## Hooks
 
-A cloud session that holds several repositories loads none of their hooks. An unattended start there refuses with
-`hooks did not load` first, as the pre-flight's refusal names it, and its fix is one repository per session.
+A cloud session that holds several repositories loads none of their hooks. An unattended start there is refused first
+by the pre-flight's `hooks-loaded` check, and its fix is one repository per session.
 
 ## Continuing a run from its branch
 
 Frame in an unattended run continues the in-progress record whose `Branch:` names the checked-out branch — the run
 the session start's resume card names, or `stamity ledger status` where no hook ran — from its record and ledger,
-instead of opening a new record; its head lines stand as written. On a fresh clone, where the run's branch is only
-origin's, it runs `stamity run start --run <id> --json` first, which starts the branch at origin's tip so the next
-push fast-forwards. A record naming another branch, a detached HEAD, or no `Branch:` line opens a new record.
+instead of opening a new record; its head lines stand as written. A session continues only a record on the branch
+it was given: it runs `stamity run start --run <id> --json` first, `<id>` that record's folder name, and its ready
+check passes the record's `Base:` as `--since`, `stamity plan check <plan> --since <Base> --json`, so a `reads` path
+only the run's own commits moved is exempt and one moved between the stamp and the base stays stale. With no such
+record on that branch, as on a clone given the default branch or a platform's own, it opens a new run and never
+guesses another branch. A record naming another branch, a detached HEAD, or no `Branch:` line opens a new record.
 
 ## Commits after the last checkpoint
 
-At the morning walk, the commits on the run branch after the last checkpoint's sha, a cloud's CI autofix among them,
-are counted as `git rev-list <sha>..HEAD` lists them, on one row under `## Not done:`:
+At the morning walk, the commits on the run branch after the last checkpoint's sha are counted: the subjects
+`git log --format=%s <sha>..HEAD` lists, less each reading `chore(run): checkpoint <id>`, the run verbs' own subject.
+The run's closing commit is never counted; a cloud's CI autofix or a person's push is, on one row under `## Not done:`:
 `Not done: <n> commits after checkpoint <sha>, not covered by the proof block's gates`. The proof block's gate results
 are never read as covering them.
 

@@ -673,6 +673,15 @@ describe("st-unattended — the cloud reference (plan 021 file 2, v3-cloud-skill
     expect(text).toContain("a local unattended run and an attended one keep `/st-work`'s capacity rung, its 12-hour wait included");
   });
 
+  // review/65: the scope paragraph's two other sentences. Without the first, the continuation and late-commit
+  // rules read as cloud-only and a local unattended run loses them; without the second, the reference's bare
+  // `stamity <verb>` forms lose the definition `test/corpus/cliCallForm.test.ts` relies on.
+  it("binds continuing a run and the late commits to every unattended run, and ties its calls to Running the CLI", async () => {
+    const text = await flat(CLOUD_REL_PATH);
+    expect(text).toContain("Continuing a run and the commits after the last checkpoint bind every unattended run.");
+    expect(text).toContain("Every `stamity <verb>` call runs in the form the skill's Running-the-CLI paragraph gives.");
+  });
+
   it("paces a night with no loop, wakeup or agent team, and at most two implementers at once (REQ-FLOW-107)", async () => {
     const text = await flat(CLOUD_REL_PATH);
     expect(text).toContain("The run uses no `/loop`, no wakeup and no agent team to pace itself");
@@ -703,30 +712,50 @@ describe("st-unattended — the cloud reference (plan 021 file 2, v3-cloud-skill
     const text = await flat(CLOUD_REL_PATH);
     expect(text).toContain("each in the client's own isolation, or one at a time");
     expect(text).toContain("never in the sibling folder `stamity worktree setup` makes, so no folder appears under `<parent>/.stamity-worktrees/`");
-    expect(text).toContain("Each lane is committed and folded into the run branch before every checkpoint.");
+    // TEST CHANGE, justified (review/62, signed off): a lane is folded only when none of its changed paths is held,
+    // since a folded commit carrying a held path refuses every later checkpoint and run end, which never rewrite history.
+    expect(text).toContain("before every checkpoint one whose changed paths hold no held path is folded into the run branch");
+    expect(text).toContain("as `git diff --name-only <run-branch>...<lane>` lists them, are read against the held paths the skill's `## Person's calls held` names");
+    expect(text).toContain("A lane touching a held path stays unfolded and is a `## Person's calls held` row naming the lane and the path");
   });
 
-  it("refuses a session holding several repositories with hooks did not load first (REQ-FLOW-112)", async () => {
+  // TEST CHANGE, justified (review/64): the refusal is named by the pre-flight check's id (`src/runs/preflight.ts`,
+  // `hooks-loaded`), not by a quoted text its evidence does not carry.
+  it("refuses a session holding several repositories at the hooks-loaded check first (REQ-FLOW-112)", async () => {
     const text = await flat(CLOUD_REL_PATH);
     expect(text).toContain("A cloud session that holds several repositories loads none of their hooks");
-    expect(text).toContain("refuses with `hooks did not load` first");
+    expect(text).toContain("is refused first by the pre-flight's `hooks-loaded` check");
+    expect(text).not.toContain("hooks did not load");
     expect(text).toContain("one repository per session");
   });
 
-  it("continues the in-progress record on this branch at Frame, and runs run start first on a fresh clone (REQ-FLOW-105)", async () => {
+  it("continues at Frame only the in-progress record on the branch it was given, its Base: as --since (REQ-FLOW-105)", async () => {
     const text = await flat(CLOUD_REL_PATH);
     expect(text).toContain(
       "Frame in an unattended run continues the in-progress record whose `Branch:` names the checked-out branch",
     );
     expect(text).toContain("instead of opening a new record");
     expect(text).toContain("`stamity ledger status` where no hook ran");
-    expect(text).toContain("it runs `stamity run start --run <id> --json` first");
+    expect(text).toContain("it runs `stamity run start --run <id> --json` first, `<id>` that record's folder name");
     expect(text).toContain("A record naming another branch, a detached HEAD, or no `Branch:` line opens a new record.");
+    // TEST CHANGE, justified (review/61, signed off): run start keeps any branch but the default one, so a session
+    // continues only a record on the branch it was given and never guesses another; the origin-tip claim is gone.
+    expect(text).toContain("A session continues only a record on the branch it was given");
+    expect(text).toContain("it opens a new run and never guesses another branch");
+    expect(text).not.toContain("origin's tip");
+    // review/60 (signed off): the continuation's ready check exempts what the run's own commits moved.
+    expect(text).toContain("its ready check passes the record's `Base:` as `--since`, `stamity plan check <plan> --since <Base> --json`");
+    expect(text).toContain("one moved between the stamp and the base stays stale");
   });
 
   it("counts the commits after the last checkpoint on Not done:, never covered by the proof block (REQ-FLOW-116)", async () => {
     const text = await flat(CLOUD_REL_PATH);
-    expect(text).toContain("as `git rev-list <sha>..HEAD` lists them");
+    // TEST CHANGE, justified (review/63, signed off): the run verbs commit after the last checkpoint themselves
+    // (`run end`'s closing commit), so the count leaves out their subject (`src/cli/commands/run.ts`, `chore(run):
+    // checkpoint ${run}`) and counts a CI autofix or a person's push.
+    expect(text).toContain("the subjects `git log --format=%s <sha>..HEAD` lists, less each reading `chore(run): checkpoint <id>`, the run verbs' own subject");
+    expect(text).toContain("The run's closing commit is never counted; a cloud's CI autofix or a person's push is");
+    expect(text).not.toContain("git rev-list");
     expect(text).toContain("`Not done: <n> commits after checkpoint <sha>, not covered by the proof block's gates`");
     expect(text).toContain("The proof block's gate results are never read as covering them.");
   });
