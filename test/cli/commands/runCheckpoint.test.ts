@@ -1092,7 +1092,12 @@ describe("stamity run checkpoint", () => {
       expect(doc).toMatchObject({ pushed: true, notDone: [] });
     });
 
-    it("on a checkout of that branch, refuses the commit by its name before the verdict runs", async () => {
+    // Skipped on Windows (prove/10): NTFS, through the Windows file API, cannot hold `"` in a loose ref's file name, so
+    // the seed's `git switch -c` fails there ("cannot lock ref", "Invalid argument") and no Windows checkout on git's
+    // default files backend can carry the branch this case needs. The name refusal it pins is a string check that reads
+    // alike on every platform, proven here on the POSIX legs; the spy-driven case above hands the same name to the real
+    // verdict without a checkout, so the NESTING_DEPTH catch is proven on every platform, Windows included.
+    it.skipIf(process.platform === "win32")("on a checkout of that branch, refuses the commit by its name before the verdict runs", async () => {
       const { repo, remote } = await seed("attended", { branch: NESTED });
       await writeFile(join(repo, "a.txt"), "changed\n");
 
