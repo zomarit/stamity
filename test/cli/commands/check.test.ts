@@ -24,6 +24,7 @@ import {
   __setContentRootForTests,
 } from "../../../src/content/contentRoot.ts";
 import { applySync, planSync } from "../../../src/cli/commands/sync/engine.ts";
+import { AGENTS_MD_FILE } from "../../../src/emit/agentsMd.ts";
 import { createApp, createEngine } from "../../../src/index.ts";
 import { applyPackInstall, planPackInstall } from "../../../src/pack/install.ts";
 import {
@@ -3885,32 +3886,32 @@ describe("check — cloud-install (REQ-FLOW-111)", () => {
   it("warns, and never fails, when the root AGENTS.md is recorded as skip, naming the block and the remedy", () => {
     const manifest: SetupManifest = {
       ...manifestFor(["claude", "cursor"]),
-      importChoice: [{ path: "AGENTS.md", mode: "skip" }],
+      importChoice: [{ path: AGENTS_MD_FILE, mode: "skip" }],
     };
 
     const verdict = checkCloudInstall(manifest, CANONICAL_CALL, ">=22.22.2");
 
     expect(verdict?.status).toBe("warn");
     const lines = (verdict?.detail ?? "").split("\n");
-    expect(lines[0]).toContain('AGENTS.md is recorded as "skip"');
+    expect(lines[0]).toContain(`${AGENTS_MD_FILE} is recorded as "skip"`);
     expect(lines[0]).toContain("Cursor Cloud specific instructions");
     expect(lines[0]).toContain('"supplement"');
-    expect(lines[0]).toContain(".stamity/manifest.json");
+    expect(lines[0]).toContain(`${STATE_DIR}/manifest.json`);
     // The install lines are still the row's, after the warning.
     expect(lines.slice(-2)).toEqual(["node --version", "npm install --global @zomarit/stamity@1.16.0"]);
   });
 
   it("stays a pass for a skip on another path and for supplement or replace on AGENTS.md", () => {
     for (const importChoice of [
-      [{ path: "CLAUDE.md", mode: "skip" }],
-      [{ path: "AGENTS.md", mode: "supplement" }],
-      [{ path: "AGENTS.md", mode: "replace" }],
+      [{ path: "GEMINI.md", mode: "skip" }],
+      [{ path: AGENTS_MD_FILE, mode: "supplement" }],
+      [{ path: AGENTS_MD_FILE, mode: "replace" }],
     ] as const) {
       const manifest: SetupManifest = { ...manifestFor(["cursor"]), importChoice };
       expect(checkCloudInstall(manifest, CANONICAL_CALL, ">=22.22.2")?.status, JSON.stringify(importChoice)).toBe("pass");
     }
     // Without Cursor a skip prints no row at all.
-    const noCursor: SetupManifest = { ...manifestFor(["claude"]), importChoice: [{ path: "AGENTS.md", mode: "skip" }] };
+    const noCursor: SetupManifest = { ...manifestFor(["claude"]), importChoice: [{ path: AGENTS_MD_FILE, mode: "skip" }] };
     expect(checkCloudInstall(noCursor, CANONICAL_CALL, ">=22.22.2")).toBeNull();
   });
 
@@ -3923,8 +3924,8 @@ describe("check — cloud-install (REQ-FLOW-111)", () => {
       root,
       {
         ...manifest,
-        ledger: manifest.ledger.filter((entry) => entry.path !== "AGENTS.md"),
-        importChoice: [{ path: "AGENTS.md", mode: "skip" }],
+        ledger: manifest.ledger.filter((entry) => entry.path !== AGENTS_MD_FILE),
+        importChoice: [{ path: AGENTS_MD_FILE, mode: "skip" }],
       },
       { now: T0 },
     );
@@ -3933,7 +3934,7 @@ describe("check — cloud-install (REQ-FLOW-111)", () => {
 
     const verdict = row(doc, "cloud-install");
     expect(verdict.status).toBe("warn");
-    expect(verdict.detail).toContain('AGENTS.md is recorded as "skip"');
+    expect(verdict.detail).toContain(`${AGENTS_MD_FILE} is recorded as "skip"`);
   });
 });
 
