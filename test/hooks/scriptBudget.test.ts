@@ -17,8 +17,10 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
 import { describe, expect, it } from "vitest";
 import { CLIENT_EXTENSION_EVENTS, CLIENT_HOOK_GUARANTEES } from "../../src/hooks/model.ts";
 import {
+  buildCloudReadinessScript,
   buildCursorContinueScript,
   buildReviewGateScript,
+  CLOUD_READINESS_FILE,
   buildUnattendedAskGate,
   CURSOR_CONTINUE_FILE,
   HOOK_SCRIPT_BUDGETS,
@@ -76,6 +78,12 @@ const ASK_GATE_TOOLS: ReadonlySet<Tool> = new Set<Tool>(["claude"]);
  */
 const CONTINUE_TOOLS: ReadonlySet<Tool> = new Set<Tool>(["cursor"]);
 
+/**
+ * The clients whose adapter places the cloud readiness hook: Claude Code alone, on its
+ * `SessionStart` (REQ-FLOW-110). Like the ask gate, `planCoreHookScripts` does not return it.
+ */
+const READINESS_TOOLS: ReadonlySet<Tool> = new Set<Tool>(["claude"]);
+
 /** Lines as the budget counts them: `\n` only, so CRLF and LF count alike. */
 function lineCount(content: string): number {
   return content.split("\n").length - 1;
@@ -114,6 +122,10 @@ function renderAll(tool: Tool, layout: HookScriptLayout): Rendered[] {
         layout,
       }),
     },
+    // The readiness hook carries the CLI pin it resolves, rendered with the suite's own pin.
+    ...(READINESS_TOOLS.has(tool)
+      ? [{ tool, fileName: CLOUD_READINESS_FILE, content: buildCloudReadinessScript({ cli: CLI_PIN, layout }) }]
+      : []),
     ...askGate,
     ...continueHook,
   ];
@@ -168,7 +180,11 @@ describe("hook script budgets (REQ-CTX-016)", () => {
     // Moved by u14b-ask-gate: the ask gate is a fifth script with a budget row, rendered where its adapter places it.
     // TEST CHANGE, justified (v4-cursor-continue, REQ-FLOW-109): the Cursor continue hook is a sixth script with a
     // budget row, rendered where its adapter places it, so the count gains its one client.
-    expect(renders).toHaveLength(TOOLS.length * 4 + REVIEW_GATE_TOOLS.size + ASK_GATE_TOOLS.size + CONTINUE_TOOLS.size);
+    // TEST CHANGE, justified (v5-claude-readiness, REQ-FLOW-110, REQ-CTX-016): Claude Code's cloud readiness hook is
+    // a seventh script with a budget row, rendered where its adapter places it, so the count gains its one client.
+    expect(renders).toHaveLength(
+      TOOLS.length * 4 + REVIEW_GATE_TOOLS.size + READINESS_TOOLS.size + ASK_GATE_TOOLS.size + CONTINUE_TOOLS.size,
+    );
   });
 
   it.each(renders.map((script) => [`${script.tool}/${script.fileName}`, script] as const))(
@@ -249,6 +265,12 @@ describe("hook script budgets (REQ-CTX-016)", () => {
     const gated = renders.filter((script) => script.fileName === REVIEW_GATE_FILE).map((script) => script.tool);
     expect(gated).toEqual(TOOLS.filter((tool) => REVIEW_GATE_TOOLS.has(tool)));
     expect(gated.length).toBeGreaterThan(0);
+  });
+
+  it("renders the cloud readiness hook on Claude Code only, within its ceilings (REQ-FLOW-110)", () => {
+    const placed = renders.filter((script) => script.fileName === CLOUD_READINESS_FILE);
+    expect(placed.map((script) => script.tool)).toEqual(["claude"]);
+    for (const script of placed) expect(budgetViolation(script)).toBeUndefined();
   });
 
   it("renders the unattended ask gate on Claude Code only, within its ceilings", () => {

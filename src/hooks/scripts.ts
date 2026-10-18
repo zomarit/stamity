@@ -29,7 +29,7 @@ import {
 } from "../tools/translator.ts";
 import type { Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
-import { CONTENT_PREFIX, GENERATED_SCRIPT_LINT_DIRECTIVE, STATE_DIR } from "../types/markers.ts";
+import { CONTENT_PREFIX, GENERATED_SCRIPT_LINT_DIRECTIVE, HOOKS_ACTIVE_ENV, STATE_DIR } from "../types/markers.ts";
 import { PREFLIGHT_CANARY_FILE, RUN_ENDED_MARKER_FILE, RUN_ENDED_MAX_AGE_MS } from "../mcp/env.ts";
 import { buildCardBranchSource, buildResumeCardSource, RESUME_CARD_HOST_NAMES } from "../runs/cardSource.ts";
 import {
@@ -49,7 +49,7 @@ import {
   UNPRINTABLE_CHARS,
   USAGE_REVIEW_PATTERN,
 } from "../runs/layout.ts";
-import { cliCallHint } from "../shared/cliCall.ts";
+import { cliCallHint, pinnedCliCall } from "../shared/cliCall.ts";
 import {
   CLIENT_CLOUD_FACTS,
   CLIENT_HOOK_GUARANTEES,
@@ -151,6 +151,13 @@ export const CURSOR_CONTINUE_FILE = "stamity-cursor-continue.mjs";
 export const REVIEW_GATE_FILE = "stamity-review-gate.mjs";
 
 /**
+ * Claude Code's cloud readiness hook (REQ-FLOW-110). NON-portable carrier: Claude
+ * Code's `SessionStart` on `startup|resume`, one client only, placed and wired by
+ * the Claude adapter, which names it ({@link buildCloudReadinessScript}).
+ */
+export const CLOUD_READINESS_FILE = "stamity-cloud-readiness.mjs";
+
+/**
  * The person-only shell guard (REQ-FLOW-102, REQ-FLOW-120). Portable carrier:
  * `pre_tool_use` on each client's shell tools, Cursor's `beforeShellExecution`.
  * Rendered only when {@link planCoreHookScripts} is asked for it; emission wires it.
@@ -176,7 +183,7 @@ export const PERSON_ONLY_GUARD_FILE = "stamity-person-only-guard.mjs";
  * The guard row is the plan's fixed ceiling; the session start's was one until
  * 2026-10-18, when it moved once by the rule below (its row says why). The
  * review gate, the session start, the tamper notice, the ask gate, the Cursor
- * continue hook and the person-only guard are their measured size times 1.25, bytes rounded up to a
+ * continue hook, the cloud readiness hook and the person-only guard are their measured size times 1.25, bytes rounded up to a
  * multiple of 1,024 and lines to a multiple of 10.
  */
 export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: number; readonly lines: number }>> = {
@@ -214,6 +221,10 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // a file written from a rebuild is marked, and a session with no entry in a
   // marked file rebuilds): 51,152 / 1,089; the ceiling holds, 48 bytes inside it.
   [REVIEW_GATE_FILE]: { bytes: 51_200, lines: 1_120 },
+  // Measured 2026-10-18 on plan 021 file 2's v5-claude-readiness lane (base 4f13752d): 11,361 bytes / 255 lines
+  // (claude, generated layout, the suite's pin; a plugin root renders 10,633 / 234, and a fork's scope registry adds
+  // 43 bytes). × 1.25 = 14,201.25 / 318.75, rounded up as the review gate's is to 14,336 / 320.
+  [CLOUD_READINESS_FILE]: { bytes: 14_336, lines: 320 },
   // Measured 2026-10-16 on the u14b lane (base 2a1c5226): 5,711 bytes / 150
   // lines (claude, generated layout; a plugin root renders 4,983 / 129). Its
   // measured size × 1.25, rounded as the review gate's is: 7,138.75 / 187.5,
@@ -3310,6 +3321,308 @@ if (outcome !== null) {
   process.exitCode = outcome.blocked ? BLOCK_EXIT : 0;
 }
 `;
+}
+
+// ── 4b. Cloud readiness (non-core, Claude Code only) ─────────────
+
+/**
+ * The readiness entry's own budget (REQ-CTX-016), apart from the 30 s
+ * `HOOK_SESSION_START_TIMEOUT_MS` the session-start rows keep: an `npm ci` on a
+ * fresh cloud machine takes minutes, and a 30 s budget would end most of them
+ * half done. Under Claude Code's 600 s default, so a hung registry still holds a
+ * session's start for a bounded wait; the client fails open on it, and the
+ * hook's first act, the variable, is already written by then.
+ */
+export const CLOUD_READINESS_TIMEOUT_MS = 300_000;
+
+/** The hook's own limit on `npm ci`, inside {@link CLOUD_READINESS_TIMEOUT_MS}, so the hook says how it ended. */
+const CLOUD_READINESS_INSTALL_MS = 240_000;
+
+/** The hook's own limit on resolving the pinned CLI, inside {@link CLOUD_READINESS_TIMEOUT_MS} beside the install. */
+const CLOUD_READINESS_CLI_MS = 45_000;
+
+/** Options for {@link buildCloudReadinessScript}. */
+export interface CloudReadinessScriptOptions {
+  /** The pinned CLI the hook resolves once: the emission context's package, version, channel and scope registry. */
+  cli: { packageName: string; version: string; npmChannel?: boolean; registry?: string };
+  /** Where this copy will sit ({@link HookScriptLayout}); defaults to `generated`. */
+  layout?: HookScriptLayout;
+  /** The hook's limit on `npm ci`, in milliseconds; the default fits the entry's budget. */
+  installTimeoutMs?: number;
+  /** The hook's limit on resolving the pinned CLI, in milliseconds; the default fits the entry's budget. */
+  cliTimeoutMs?: number;
+}
+
+function stepLimit(value: number, field: string): number {
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new EngineError(`${field} must be a positive whole number of milliseconds (got ${JSON.stringify(value)}).`, {
+      code: "VALIDATION_ERROR",
+    });
+  }
+  return value;
+}
+
+/**
+ * Claude Code's cloud readiness hook (REQ-FLOW-110, REQ-FLOW-112): makes a cloud
+ * machine ready for a run at the session's start, and tells the pre-flight the
+ * repository's hooks loaded.
+ *
+ * Like {@link buildUnattendedAskGate} it is NOT core: the Claude adapter places
+ * it and wires it on `SessionStart` with the matcher `startup|resume`, under its
+ * own {@link CLOUD_READINESS_TIMEOUT_MS}. It does nothing at all unless
+ * `CLAUDE_CODE_REMOTE` is exactly `true`, the marker Claude Code's cloud machine
+ * sets and a local session never does, so a local start reads and writes nothing.
+ *
+ * In the cloud, in this order, each step on its own so a fault in one leaves the
+ * rest: it appends `export STAMITY_HOOKS_ACTIVE=1` to `$CLAUDE_ENV_FILE`, which
+ * the client sources before each shell command of the session — first, so the
+ * hooks count as loaded whatever the install does next, and once across a
+ * startup and a resume; it checks `node` against `package.json`'s `engines.node`
+ * (the common range shapes; another is named as unread, never guessed); it runs
+ * `npm ci` when `node_modules` is missing and a `package-lock.json` or
+ * `npm-shrinkwrap.json` is there, under {@link CLOUD_READINESS_INSTALL_MS}; and it
+ * resolves the pinned CLI once through its `help` verb, under
+ * {@link CLOUD_READINESS_CLI_MS}. With no `package.json` it installs nothing and
+ * says so. One line per step goes to stdout, which the client adds to the
+ * session's context: fixed text, versions and exit codes only, never the
+ * output of `npm` or a value read from the repository. It always exits 0.
+ *
+ * `npm ci` runs the lockfile's install scripts, in the cloud machine only: a
+ * named residual (`SECURITY.md`).
+ */
+export function buildCloudReadinessScript(opts: CloudReadinessScriptOptions): string {
+  const layout = opts.layout ?? "generated";
+  const extra = repoRootImports(layout);
+  const install = stepLimit(opts.installTimeoutMs ?? CLOUD_READINESS_INSTALL_MS, "installTimeoutMs");
+  const cli = stepLimit(opts.cliTimeoutMs ?? CLOUD_READINESS_CLI_MS, "cliTimeoutMs");
+  const call = pinnedCliCall(opts.cli.packageName, opts.cli.version, "help", opts.cli).split(" ");
+  // Its own banner, not `header()`: that one's posture line says "no network reach", which this script breaks.
+  const banner = [
+    "#!/usr/bin/env node",
+    GENERATED_SCRIPT_LINT_DIRECTIVE,
+    "// stamity — cloud readiness (Claude Code).",
+    "//",
+    "// Does nothing unless CLAUDE_CODE_REMOTE is exactly true. In Claude Code's",
+    "// cloud machine it appends STAMITY_HOOKS_ACTIVE=1 to $CLAUDE_ENV_FILE first,",
+    "// so the unattended pre-flight reads the hooks as loaded, then checks node",
+    "// against package.json's engines.node, runs npm ci where node_modules is",
+    "// missing and a lockfile is there, and resolves the pinned CLI once. One line",
+    "// per step goes to stdout; it always exits 0.",
+    "//",
+    "// Generated file — regenerate it rather than editing; local edits are overwritten.",
+    "// Trust posture: exec form, repo-committed, no dynamic evaluation, nothing run through a shell.",
+    "// Network: in Claude Code's cloud alone it starts npm ci, which runs the lockfile's install scripts,",
+    "// and npx; both reach the npm registry.",
+    "// Reads outside repo state: CLAUDE_CODE_REMOTE, CLAUDE_ENV_FILE, STAMITY_REPO_ROOT and node's version.",
+    "// Writes the environment file and, through npm ci, node_modules.",
+  ].join("\n");
+
+  return `${banner}
+
+import { spawnSync } from "node:child_process";
+${namedImport(["appendFileSync", "existsSync", "readFileSync", "statSync"], "node:fs")}
+${namedImport(["join", "resolve", "sep", ...extra.path], "node:path")}
+${extra.url}
+const STATE_SEGMENTS = ${json([RUNS_SEGMENTS[0]])};
+const MARKER = ${json(`export ${HOOKS_ACTIVE_ENV}=1`)};
+const LOCKFILES = ["npm-shrinkwrap.json", "package-lock.json"];
+const MAX_FILE_BYTES = 1048576;
+const INSTALL_TIMEOUT_MS = ${install};
+const CLI_TIMEOUT_MS = ${cli};
+const CLI_CALL = ${json(call)};
+const PREFIX = "stamity cloud readiness: ";
+
+${resolveRepoRoot(layout)}
+${String.raw`
+const lines = [];
+
+/** One line for the session's context; control characters cannot reach it. */
+function say(text) {
+  lines.push(PREFIX + text.replace(/[\u0000-\u001f\u007f]/g, "?"));
+}
+
+/** An error's code, or its name: never its message, which can carry a path or a value. */
+function cause(error) {
+  const named = error && typeof error.code === "string" ? error.code : (error && error.name) || "a fault";
+  return /^[A-Za-z0-9_]{1,40}$/.test(named) ? named : "a fault";
+}
+
+/** First: the variable the pre-flight reads, written once, so the hooks count as loaded whatever comes next. */
+function markHooksActive() {
+  const file = process.env.CLAUDE_ENV_FILE;
+  if (typeof file !== "string" || file === "") {
+    say("CLAUDE_ENV_FILE is not set, so STAMITY_HOOKS_ACTIVE was not written and an unattended pre-flight refuses here.");
+    return;
+  }
+  let lead = "";
+  try {
+    const stats = statSync(file);
+    if (stats.isFile() && stats.size > 0 && stats.size <= MAX_FILE_BYTES) {
+      const text = readFileSync(file, "utf8");
+      if (text.split(/\r?\n/).includes(MARKER)) {
+        say("STAMITY_HOOKS_ACTIVE=1 is already in the environment file.");
+        return;
+      }
+      lead = text.endsWith("\n") ? "" : "\n";
+    } else if (stats.size > 0) {
+      lead = "\n";
+    }
+  } catch {
+    // A file not there yet is created below; a read fault is met again by the write, which names it.
+  }
+  try {
+    appendFileSync(file, lead + MARKER + "\n");
+  } catch (error) {
+    say("the environment file could not be written (" + cause(error) + "), so an unattended pre-flight refuses here.");
+    return;
+  }
+  say("wrote STAMITY_HOOKS_ACTIVE=1 to the environment file, for this session's shell commands.");
+}
+
+/** package.json's object, or null when there is none; a file it cannot read, or that holds no object, throws. */
+function readManifest(root) {
+  const path = join(root, "package.json");
+  let stats;
+  try {
+    stats = statSync(path);
+  } catch (error) {
+    if (error && error.code === "ENOENT") return null;
+    throw error;
+  }
+  if (!stats.isFile() || stats.size > MAX_FILE_BYTES) throw Object.assign(new Error("package.json"), { code: "NOT_A_SMALL_FILE" });
+  const parsed = JSON.parse(readFileSync(path, "utf8"));
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) throw Object.assign(new Error("package.json"), { code: "NOT_AN_OBJECT" });
+  return parsed;
+}
+
+/** A version's three numbers, or null. */
+function triple(text) {
+  const match = /^v?(\d+)\.(\d+)\.(\d+)/.exec(text);
+  return match === null ? null : [Number(match[1]), Number(match[2]), Number(match[3])];
+}
+
+function compare(a, b) {
+  for (let index = 0; index < 3; index += 1) if (a[index] !== b[index]) return a[index] < b[index] ? -1 : 1;
+  return 0;
+}
+
+/** One comparator as the bounds it allows (a null bound is open), or null for a shape this hook does not read. */
+function bounds(word) {
+  const match = /^(>=|<=|>|<|=|\^|~)?v?(\d+|[xX*])(?:\.(\d+|[xX*]))?(?:\.(\d+|[xX*]))?$/.exec(word);
+  if (match === null) return null;
+  const op = match[1] ?? "";
+  const parts = [match[2], match[3], match[4]];
+  let given = 0;
+  while (given < 3 && parts[given] !== undefined && /^\d+$/.test(parts[given])) given += 1;
+  if (parts.slice(given).some((part) => part !== undefined && /^\d+$/.test(part))) return null;
+  const n = parts.map((part, index) => (index < given ? Number(part) : 0));
+  const bump = (at) => n.map((value, index) => (index < at ? value : index === at ? value + 1 : 0));
+  if (given === 0) return op === "<" || op === ">" ? null : { low: null, high: null };
+  if (op === "" || op === "=") return given === 3 ? { low: n, lowIn: true, high: n, highIn: true } : { low: n, lowIn: true, high: bump(given - 1) };
+  if (op === ">=") return { low: n, lowIn: true, high: null };
+  if (op === ">") return given === 3 ? { low: n, lowIn: false, high: null } : { low: bump(given - 1), lowIn: true, high: null };
+  if (op === "<") return { low: null, high: n };
+  if (op === "<=") return given === 3 ? { low: null, high: n, highIn: true } : { low: null, high: bump(given - 1) };
+  if (op === "~") return { low: n, lowIn: true, high: bump(given >= 2 ? 1 : 0) };
+  // A caret holds the left-most number given that is not 0.
+  const held = n.findIndex((value, index) => index < given && value !== 0);
+  return { low: n, lowIn: true, high: bump(held === -1 ? given - 1 : held) };
+}
+
+/** Whether a version meets an npm range of the common shapes; null when any part is not one of them. */
+function meets(version, range) {
+  const have = triple(version);
+  if (have === null) return null;
+  let met = false;
+  for (const set of range.split("||")) {
+    const words = set.trim().replace(/(>=|<=|>|<|=|\^|~)\s+/g, "$1").split(/\s+/).filter((word) => word !== "");
+    let all = true;
+    for (const word of words) {
+      const allowed = bounds(word);
+      if (allowed === null) return null;
+      if (allowed.low !== null && compare(have, allowed.low) < (allowed.lowIn ? 0 : 1)) all = false;
+      if (allowed.high !== null && compare(have, allowed.high) > (allowed.highIn ? 0 : -1)) all = false;
+    }
+    if (all) met = true;
+  }
+  return met;
+}
+
+function checkNode(manifest) {
+  const node = process.versions.node;
+  const range = manifest.engines && typeof manifest.engines === "object" ? manifest.engines.node : undefined;
+  if (typeof range !== "string" || range.trim() === "") {
+    say("package.json declares no engines.node, so node " + node + " is not checked.");
+    return;
+  }
+  const met = meets(node, range);
+  if (met === null) say("engines.node is not a range this hook reads, so node " + node + " is not checked.");
+  else if (met) say("node " + node + " meets engines.node.");
+  else say("node " + node + " is outside engines.node; the run needs a node it names.");
+}
+
+/** How a child ended, in fixed words and its code. */
+function ended(result) {
+  if (result.error && result.error.code === "ETIMEDOUT") return "timeout";
+  if (result.error) return "could not start (" + cause(result.error) + ")";
+  if (result.status === 0) return "ok";
+  return result.status === null ? "signal " + cause({ code: result.signal }) : "exit " + result.status;
+}
+
+function installDependencies(root) {
+  if (existsSync(join(root, "node_modules"))) {
+    say("node_modules is there, so npm ci does not run.");
+    return;
+  }
+  const lock = LOCKFILES.find((name) => existsSync(join(root, name)));
+  if (lock === undefined) {
+    say("node_modules is missing and no package-lock.json or npm-shrinkwrap.json is there, so npm ci does not run.");
+    return;
+  }
+  // No shell, and no output kept: npm's text never reaches the session.
+  const how = ended(spawnSync("npm", ["ci"], { cwd: root, stdio: "ignore", timeout: INSTALL_TIMEOUT_MS, windowsHide: true }));
+  if (how === "ok") say("npm ci finished from " + lock + ".");
+  else if (how === "timeout") say("npm ci stopped at its limit of " + INSTALL_TIMEOUT_MS / 1000 + " s; node_modules may be partial, so run npm ci again.");
+  else say("npm ci failed (" + how + "); it needs the npm registry, so run npm ci again once it is reachable.");
+}
+
+function resolveCli(root) {
+  const how = ended(spawnSync(CLI_CALL[0], CLI_CALL.slice(1), { cwd: root, stdio: "ignore", timeout: CLI_TIMEOUT_MS, windowsHide: true }));
+  const named = CLI_CALL.slice(0, -1).join(" ");
+  if (how === "ok") say("the pinned CLI resolved (" + named + ").");
+  else say("the pinned CLI did not resolve (" + (how === "timeout" ? "past " + CLI_TIMEOUT_MS / 1000 + " s" : how) + "); " + named + " needs the npm registry or an installed copy.");
+}
+
+/** One step; a fault names the step and its code, and the next step still runs. */
+function step(name, run) {
+  try {
+    run();
+  } catch (error) {
+    say(name + " stopped (" + cause(error) + ").");
+  }
+}
+
+if (process.env.CLAUDE_CODE_REMOTE === "true") {
+  step("writing the environment file", markHooksActive);
+  step("the readiness steps", () => {
+    const root = repoRoot();
+    let manifest = null;
+    try {
+      manifest = readManifest(root);
+    } catch (error) {
+      say("package.json could not be read (" + cause(error) + "), so node is not checked and nothing is installed.");
+      manifest = undefined;
+    }
+    if (manifest === null) say("no package.json, so nothing is installed and node is not checked.");
+    if (manifest) {
+      step("the node check", () => checkNode(manifest));
+      step("the install", () => installDependencies(root));
+    }
+    step("resolving the pinned CLI", () => resolveCli(root));
+  });
+  process.stdout.write(lines.join("\n") + "\n");
+}
+`}`;
 }
 
 // ── 5. Person-only shell guard ───────────────────────────────────

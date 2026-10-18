@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   CLAUDE_ASK_GATE_PATH,
+  CLAUDE_CLOUD_READINESS_PATH,
   CLAUDE_COMMANDS_DIR,
   CLAUDE_DIALECT_FACTS,
   CLAUDE_MD_PATH,
@@ -30,12 +31,16 @@ import { TOOLS, type Tool } from "../../src/types/core.ts";
 import { CLIENT_EXTENSION_EVENTS } from "../../src/hooks/model.ts";
 import { CLAUDE_ASK_ROWS, CLAUDE_DENY_ROWS, GITHUB_MCP_ROWS, personOnlyVerdict } from "../../src/hooks/personOnly.ts";
 import {
+  CLOUD_READINESS_FILE,
+  CLOUD_READINESS_TIMEOUT_MS,
   REVIEW_GATE_FILE,
   REVIEW_GATE_STATE_FILE,
   UNATTENDED_ASK_GATE_FILE,
+  buildCloudReadinessScript,
   buildReviewGateScript,
   buildUnattendedAskGate,
 } from "../../src/hooks/scripts.ts";
+import { HOOK_SESSION_START_TIMEOUT_MS } from "../../src/hooks/model.ts";
 import { executedScript } from "../../src/manifest/coOwnedJson.ts";
 import { isKnownCodexHooksDescription } from "../../src/manifest/hookDocuments.ts";
 import { createManifest } from "../../src/manifest/manifest.ts";
@@ -185,6 +190,9 @@ const HOOK_COMMANDS = {
     "which needs the npm registry' >&2; exit 2; }",
   askGate:
     'node "${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-unattended-ask-gate.mjs"',
+  // v5-claude-readiness (REQ-FLOW-110): the cloud readiness hook, anchored like every core row, with no tail.
+  readiness:
+    'node "${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-cloud-readiness.mjs"',
 } as const;
 
 /**
@@ -728,9 +736,12 @@ describe("claude residue over the real corpus", () => {
     // declaration order: context load first, then the tamper notice (whose
     // body is written to double as session-start drift guidance).
     const sessionStart = settings.hooks["SessionStart"];
+    // TEST CHANGE, justified (v5-claude-readiness, REQ-FLOW-110): the cloud readiness hook follows the two, its own
+    // entry on `startup|resume` (asserted whole in its placement describe below).
     expect(sessionStart?.map((entry) => entry.hooks[0]?.command)).toEqual([
       HOOK_COMMANDS.sessionStart,
       HOOK_COMMANDS.tamper,
+      HOOK_COMMANDS.readiness,
     ]);
 
     // The guard fires on every tool call: exec-form command, no matcher. The
@@ -824,7 +835,8 @@ describe("claude residue over the real corpus", () => {
 
     // The settings still carry the full wiring.
     const settings = settingsOf(rows);
-    expect(settings.hooks["SessionStart"]).toHaveLength(2);
+    // TEST CHANGE, justified (v5-claude-readiness, REQ-FLOW-110): the two core rows and the cloud readiness hook.
+    expect(settings.hooks["SessionStart"]).toHaveLength(3);
     // TEST CHANGE, justified (u20-hook-emission): the core guard, the shell guard and the ask gate.
     // TEST CHANGE, justified (v0a2, REQ-FLOW-120, REQ-FLOW-123): and the shell guard on the GitHub MCP tools.
     expect(settings.hooks["PreToolUse"]).toHaveLength(4);
@@ -854,6 +866,8 @@ describe("claude residue over the real corpus", () => {
           row.path === ".mcp.json" ||
           row.path === CLAUDE_REVIEW_GATE_PATH ||
           row.path === CLAUDE_ASK_GATE_PATH ||
+          // TEST CHANGE, justified (v5-claude-readiness, REQ-FLOW-110): and the cloud readiness hook, placed as the ask gate is.
+          row.path === CLAUDE_CLOUD_READINESS_PATH ||
           row.path === CLAUDE_MODEL_MAP_PATH,
         row.path,
       ).toBe(true);
@@ -869,8 +883,9 @@ describe("claude residue over the real corpus", () => {
     // TEST CHANGE, justified (2026-10-14, e8-copilot-codex-claude-pins): and the model map, the
     // second adapter-owned row there (REQ-LADDER-007).
     // TEST CHANGE, justified (u20-hook-emission): and the ask gate, the third.
+    // TEST CHANGE, justified (v5-claude-readiness, REQ-FLOW-110): and the cloud readiness hook, the fourth.
     expect(paths.filter((path) => path.startsWith(".stamity/")).toSorted()).toEqual(
-      [CLAUDE_REVIEW_GATE_PATH, CLAUDE_ASK_GATE_PATH, CLAUDE_MODEL_MAP_PATH].toSorted(),
+      [CLAUDE_REVIEW_GATE_PATH, CLAUDE_ASK_GATE_PATH, CLAUDE_CLOUD_READINESS_PATH, CLAUDE_MODEL_MAP_PATH].toSorted(),
     );
   });
 
@@ -1372,6 +1387,8 @@ describe("user hook lane", () => {
       HOOK_COMMANDS.sessionStart,
       HOOK_COMMANDS.tamper,
       USER_HOOK_COMMAND,
+      // TEST CHANGE, justified (v5-claude-readiness, REQ-FLOW-110): the cloud readiness hook, after every planned row.
+      HOOK_COMMANDS.readiness,
     ]);
     // The ConfigChange extension still targets the tamper script, not the
     // user's session-start hook.
@@ -1531,7 +1548,9 @@ describe("the project-directory anchor", () => {
     // The allow-list accepts a root-level committed script, so the anchor has to
     // reach it too: with no separator to recognise, this row is the one that
     // would have gone on resolving against the session's own directory.
-    expect(settingsOf(rows).hooks["SessionStart"]?.at(-1)?.hooks[0]?.command).toBe(
+    // TEST CHANGE, justified (v5-claude-readiness, REQ-FLOW-110): the user row is the third entry, the two core rows
+    // before it and the cloud readiness hook after it.
+    expect(settingsOf(rows).hooks["SessionStart"]?.[2]?.hooks[0]?.command).toBe(
       `node "${PROJECT_DIR}/root-hook.mjs"`,
     );
   });
@@ -1548,7 +1567,9 @@ describe("the project-directory anchor", () => {
     const { rows } = await planned({ selection: EMPTY_SELECTION, rootDir: temp.path("repo") });
 
     // The rendered command is anchored...
-    expect(settingsOf(rows).hooks["SessionStart"]?.at(-1)?.hooks[0]?.command).toBe(
+    // TEST CHANGE, justified (v5-claude-readiness, REQ-FLOW-110): the user row is the third entry, the two core rows
+    // before it and the cloud readiness hook after it.
+    expect(settingsOf(rows).hooks["SessionStart"]?.[2]?.hooks[0]?.command).toBe(
       USER_HOOK_COMMAND,
     );
     // ...and the declaration on disk is untouched, which is what the launcher
@@ -1881,6 +1902,43 @@ describe("the unattended ask gate's placement (u20-hook-emission, REQ-FLOW-090)"
   });
 });
 
+describe("the cloud readiness hook's placement (v5-claude-readiness, REQ-FLOW-110, REQ-CTX-016)", () => {
+  it("places the hook beside the ask gate as an adapter-owned row, wired on startup and resume with its own timeout", async () => {
+    const { rows, ctx } = await planned({ selection: EMPTY_SELECTION });
+    const row = byPath(rows).get(CLAUDE_CLOUD_READINESS_PATH);
+
+    expect(CLAUDE_CLOUD_READINESS_PATH).toBe(`${HOOKS_GENERATED_DIR}/claude/${CLOUD_READINESS_FILE}`);
+    // The pin it resolves is the emission's own: this package at the engine version the setup is generated with.
+    expect(row?.content).toBe(
+      buildCloudReadinessScript({ cli: { packageName: "@zomarit/stamity", version: ctx.engineVersion }, layout: "generated" }),
+    );
+    expect(row?.owner).toEqual({ adapter: "claude", artifactId: "claude-cloud-readiness", artifactType: "infra" });
+    const entries = settingsOf(rows).hooks["SessionStart"]?.filter((entry) => entry.matcher === "startup|resume") ?? [];
+    // One entry, the hook alone, in seconds as the client reads them, apart from the session start's 30 s.
+    expect(entries).toEqual([
+      {
+        matcher: "startup|resume",
+        hooks: [{ type: "command", command: HOOK_COMMANDS.readiness, timeout: CLOUD_READINESS_TIMEOUT_MS / 1000 }],
+      },
+    ]);
+    expect(CLOUD_READINESS_TIMEOUT_MS).not.toBe(HOOK_SESSION_START_TIMEOUT_MS);
+    // The core session-start rows keep their own budget and carry no matcher.
+    const core = settingsOf(rows).hooks["SessionStart"]?.filter((entry) => entry.matcher === undefined) ?? [];
+    expect(core.map((entry) => entry.hooks[0]?.timeout)).toEqual([30, 30]);
+  });
+
+  it("addresses the hook through the plugin root under one, and keeps its script row on the repository path", async () => {
+    const root = "${CLAUDE_PLUGIN_ROOT}/hooks";
+    const { rows, ctx } = await planned({ selection: EMPTY_SELECTION, hookScriptsRoot: root });
+
+    expect(byPath(rows).get(CLAUDE_CLOUD_READINESS_PATH)?.content).toBe(
+      buildCloudReadinessScript({ cli: { packageName: "@zomarit/stamity", version: ctx.engineVersion }, layout: "container" }),
+    );
+    const entry = settingsOf(rows).hooks["SessionStart"]?.find((group) => group.matcher === "startup|resume");
+    expect(entry?.hooks[0]?.command).toBe(`node "${root}/${CLOUD_READINESS_FILE}"`);
+  });
+});
+
 /**
  * The emitted line re-split by a REAL shell, exactly as the client would parse
  * it. The criterion is what `sh` does with the string, and a re-splitter written
@@ -1954,8 +2012,10 @@ describe("hook argv joining", () => {
     const { settings } = await settingsFromHooks({
       hooks: [{ event: "session_start", command: [...argv] }],
     });
-    // Last SessionStart entry is the user row — the two core scripts precede it.
-    return settings.hooks["SessionStart"]?.at(-1)?.hooks[0]?.command ?? "";
+    // The third SessionStart entry is the user row — the two core scripts precede it.
+    // TEST CHANGE, justified (v5-claude-readiness, REQ-FLOW-110): it was the last; the cloud readiness hook now
+    // follows every planned row, so the user row is read by its place after the two core rows.
+    return settings.hooks["SessionStart"]?.[2]?.hooks[0]?.command ?? "";
   }
 
   it("renders every quote-forcing element in the POSIX single-quoted form", async () => {
@@ -2072,6 +2132,8 @@ describe("hook argv joining", () => {
       HOOK_COMMANDS.sessionStart,
       HOOK_COMMANDS.tamper,
       USER_HOOK_COMMAND,
+      // TEST CHANGE, justified (v5-claude-readiness, REQ-FLOW-110): the cloud readiness hook, after every planned row.
+      HOOK_COMMANDS.readiness,
     ]);
     // Neither refused argv ever reaches the join, so no trace of either can be
     // in the file the client runs.

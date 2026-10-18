@@ -343,6 +343,43 @@ describe("planClaudeSettings — the hooks key across install modes", () => {
   });
 });
 
+describe("planClaudeSettings — the cloud readiness entry (v5-claude-readiness, REQ-FLOW-110, REQ-FLOW-036)", () => {
+  /** The readiness entry as the adapter renders it: its own matcher and timeout, a generated script. */
+  const READINESS = {
+    matcher: "startup|resume",
+    hooks: [{ type: "command", command: 'node "${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-cloud-readiness.mjs"', timeout: 300 }],
+  };
+  /** An owner's own SessionStart entry, added to the file after setup. */
+  const OWNER_START = { matcher: "startup", hooks: [{ type: "command", command: "node scripts/warm-cache.mjs" }] };
+  const BEFORE = doc({ hooks: ENGINE_HOOKS });
+  const AFTER = doc({ hooks: { SessionStart: [...ENGINE_HOOKS.SessionStart, READINESS] } });
+
+  it("reads the readiness entry as the engine's, by its generated script", () => {
+    expect(isEngineHookGroup(READINESS)).toBe(true);
+    expect(isEngineHookGroup(OWNER_START)).toBe(false);
+  });
+
+  it("adds the entry on the sync after an upgrade, keeping an owner's own SessionStart entry, with no backup, and moves no byte after", () => {
+    const created = planClaudeSettings("x", BEFORE, null, own());
+    const edited = doc({ hooks: { SessionStart: [...ENGINE_HOOKS.SessionStart, OWNER_START] } });
+
+    const plan = planClaudeSettings("x", AFTER, edited, own({ owned: true, record: created.record }));
+
+    expect(plan.collision).toBeNull();
+    expect(plan.backup).toBeNull();
+    const starts = (JSON.parse(plan.content!) as { hooks: { SessionStart: unknown[] } }).hooks.SessionStart;
+    expect(starts).toHaveLength(3);
+    expect(starts).toContainEqual(OWNER_START);
+    expect(starts).toContainEqual(READINESS);
+    expect(starts).toContainEqual(ENGINE_HOOKS.SessionStart[0]);
+    const again = planClaudeSettings("x", AFTER, plan.content, own({ owned: true, record: plan.record }));
+    expect(again.result.action).toBe("unchanged");
+    // The sweep takes the engine's entries, the readiness one among them, and leaves the owner's.
+    const reduction = reduceClaudeSettingsToForeignContent(plan.content!, reduceOpts(plan.record, false));
+    expect(reduction.kind === "reduced" && JSON.parse(reduction.content)).toEqual({ hooks: { SessionStart: [OWNER_START] } });
+  });
+});
+
 describe("planClaudeSettings — an owner's permissions member", () => {
   it("merges into an unowned file's permissions: the owner's row stays and the engine's rows are added, with no collision", () => {
     const existing = doc({ permissions: { allow: ["Bash"] }, model: "opus" });

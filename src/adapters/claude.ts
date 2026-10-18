@@ -69,7 +69,9 @@
  *    **unattended ask gate** ({@link CLAUDE_ASK_GATE_PATH}) beside the core hook
  *    scripts. Adapter-owned rather than core, because the review gate rides two
  *    events only this client fires ({@link REVIEW_GATE_EVENTS}) and the ask
- *    gate this client's question tool.
+ *    gate this client's question tool; and the **cloud readiness hook**
+ *    ({@link CLAUDE_CLOUD_READINESS_PATH}), which rides this client's
+ *    `SessionStart` with a source matcher and a timeout of its own.
  * 8. **The MCP documents the core planned for this client**, placed verbatim.
  *
  * **No tool is pre-approved.** The settings document's `permissions` member
@@ -134,10 +136,13 @@ import {
 import { ROOT_VARIABLE_PATH } from "../hooks/portableRunner.ts";
 import { CLAUDE_ASK_ROWS, CLAUDE_DENY_ROWS, GITHUB_MCP_ROWS } from "../hooks/personOnly.ts";
 import {
+  CLOUD_READINESS_FILE,
+  CLOUD_READINESS_TIMEOUT_MS,
   PERSON_ONLY_GUARD_FILE,
   REVIEW_GATE_FILE,
   REVIEW_GATE_STATE_FILE,
   UNATTENDED_ASK_GATE_FILE,
+  buildCloudReadinessScript,
   buildReviewGateScript,
   buildUnattendedAskGate,
 } from "../hooks/scripts.ts";
@@ -228,6 +233,22 @@ export const CLAUDE_REVIEW_GATE_PATH = `${HOOKS_GENERATED_DIR}/${TOOL}/${REVIEW_
  * that wires it places it (`planCoreHookScripts` does not return it).
  */
 export const CLAUDE_ASK_GATE_PATH = `${HOOKS_GENERATED_DIR}/${TOOL}/${UNATTENDED_ASK_GATE_FILE}`;
+
+/**
+ * Claude Code's cloud readiness hook (REQ-FLOW-110), placed beside the ask gate
+ * and for the same reason: it rides this client's `SessionStart` with a source
+ * matcher and a budget of its own, so the adapter that wires it places it
+ * (`planCoreHookScripts` does not return it).
+ */
+export const CLAUDE_CLOUD_READINESS_PATH = `${HOOKS_GENERATED_DIR}/${TOOL}/${CLOUD_READINESS_FILE}`;
+
+/**
+ * The session sources the readiness hook runs on: a new session and a resumed
+ * one, the two that may start on a fresh cloud machine. Not `clear` or
+ * `compact`, which continue a session whose machine is already ready
+ * (code.claude.com/docs/en/hooks, the `SessionStart` matcher values).
+ */
+const CLOUD_READINESS_MATCHER = "startup|resume";
 
 /**
  * The one tool the ask gate is wired to: Claude Code's question tool
@@ -562,6 +583,15 @@ export const claudeResiduePlanner: ResiduePlanner = {
       owner: owner("claude-ask-gate", "infra"),
     });
     rows.push({
+      path: CLAUDE_CLOUD_READINESS_PATH,
+      // The layout decided as the ask gate's is; the CLI it resolves is the pin every emitted hint names.
+      content: buildCloudReadinessScript({
+        cli: cliCallContextOf(ctx),
+        layout: ctx.facts.hookScriptsRoot === undefined ? "generated" : "container",
+      }),
+      owner: owner("claude-cloud-readiness", "infra"),
+    });
+    rows.push({
       path: modelMapPath(TOOL),
       content: `${JSON.stringify(buildClaudeModelMap(roles, ctx), null, 2)}\n`,
       owner: owner("claude-model-map", "infra"),
@@ -882,6 +912,8 @@ interface ClaudeHookEntry {
  * {@link REVIEW_GATE_EVENTS}, the two events that carry a work run's
  * completion and its finishing reviewers; then the ask gate, as one more
  * `PreToolUse` entry matched to the question tool, after every planned row;
+ * then the cloud readiness hook, as one more `SessionStart` entry matched to
+ * `startup|resume`, under its own timeout;
  * then the person-only guard's row once more, matched to the GitHub MCP
  * server's person-only tools ({@link GITHUB_MCP_MATCHER}).
  * Insertion order is fixed, so the
@@ -908,6 +940,10 @@ function buildSettingsJson(
     hookScriptsRoot === undefined
       ? CLAUDE_ASK_GATE_PATH
       : `${hookScriptsRoot}/${UNATTENDED_ASK_GATE_FILE}`;
+  const readiness =
+    hookScriptsRoot === undefined
+      ? CLAUDE_CLOUD_READINESS_PATH
+      : `${hookScriptsRoot}/${CLOUD_READINESS_FILE}`;
 
   const hooks: Record<string, ClaudeHookEntry[]> = {};
   const failClosedTail = guardFailClosedTail(cli);
@@ -940,6 +976,13 @@ function buildSettingsJson(
   (hooks[CLAUDE_EVENT_NAMES.pre_tool_use] ??= []).push({
     matcher: ASK_GATE_MATCHER,
     hooks: [commandHook(["node", askGate])],
+  });
+  // The cloud readiness hook on a new or resumed session, after every planned
+  // SessionStart row, under its own budget (REQ-CTX-016) and with no tail: it
+  // does nothing outside Claude Code's cloud and always exits 0.
+  (hooks[CLAUDE_EVENT_NAMES.session_start] ??= []).push({
+    matcher: CLOUD_READINESS_MATCHER,
+    hooks: [commandHook(["node", readiness], CLOUD_READINESS_TIMEOUT_MS)],
   });
   // The person-only guard on the GitHub MCP server's person-only tools
   // (REQ-FLOW-120), last: the core planned the guard's row on the shell tools,
