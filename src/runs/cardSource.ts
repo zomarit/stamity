@@ -579,7 +579,8 @@ function cardRenderClosed(run, head, ledger, debug, nowMs, k) {
  * dated within CARD_CLOSED_MAX_AGE_DAYS whose record head reads (the closed
  * card); with neither, of the open debug rounds alone, naming no run; else
  * null. On startup, only the newest run in progress whose Branch: line names
- * the branch HEAD names, and never the closed or the debug card. A debug
+ * the branch HEAD names, dated within CARD_CLOSED_MAX_AGE_DAYS as the closed
+ * card is, and never the closed or the debug card. A debug
  * round's record is never the run: the open ones are listed on
  * the debug line. Lists shrink until the card fits CARD_MAX_CHARS; with every
  * list at zero it always does. A card whose text trips the screen is withheld whole.
@@ -620,6 +621,10 @@ function resumeCardLines(rootDir, stateRoot, nowMs, startup) {
   let chosen = null;
   let closed = null;
   for (const run of runs) {
+    const day = run.slice(0, 10);
+    // On startup a run dated before the closed card's cutoff day is never picked, nor any
+    // older one: a run abandoned before its close stops greeting every fresh start.
+    if (startup && day < cutoff) break;
     const head = cardRecordHead(join(runsDir, run, CARD_RECORD_FILE));
     if (head === null) continue;
     if (head.inProgress && (!startup || head.branch === branch)) {
@@ -627,7 +632,6 @@ function resumeCardLines(rootDir, stateRoot, nowMs, startup) {
       break;
     }
     // A folder dated after today (a clock skew or a hand-made name) is never the closed run.
-    const day = run.slice(0, 10);
     if (closed === null && day >= cutoff && day <= today) closed = { run, head };
   }
   const pick = chosen === null && !startup ? closed : chosen;

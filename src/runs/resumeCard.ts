@@ -321,13 +321,19 @@ export interface CardRun {
  * folder, a name that is not a run id and a record that is a link are all
  * passed over.
  *
- * With `currentBranch` (the session start's `startup` pick, REQ-CTX-013), only
- * a run in progress whose record's `Branch:` equals it, the newest first, and
- * never the closed card: a run on another branch, or with no `Branch:` line, is
- * passed over.
+ * With `currentBranch` (the session start's `startup` pick, REQ-CTX-013, and
+ * `ledger status`'s preference), only a run in progress whose record's `Branch:`
+ * equals it, the newest first, and never the closed card: a run on another
+ * branch, or with no `Branch:` line, is passed over. With `recentOnly` too (the
+ * `startup` pick), a run dated before the closed card's cutoff day is never
+ * picked, so a run abandoned before its close stops greeting every fresh start.
  */
-export function findCardRun(rootDir: string, now: Date, opts: { readonly currentBranch?: string } = {}): CardRun | null {
-  const { currentBranch } = opts;
+export function findCardRun(
+  rootDir: string,
+  now: Date,
+  opts: { readonly currentBranch?: string; readonly recentOnly?: boolean } = {},
+): CardRun | null {
+  const { currentBranch, recentOnly } = opts;
   const runsDir = runsDirOf(rootDir);
   // A linked runs folder is not this repo's runs: nothing in it is read.
   if (!realDir(runsDir)) return null;
@@ -343,11 +349,13 @@ export function findCardRun(rootDir: string, now: Date, opts: { readonly current
   const today = now.toISOString().slice(0, 10);
   let closed: string | null = null;
   for (const run of runs) {
+    const day = run.slice(0, 10);
+    // Newest first, so every run after the first one past the cutoff is older still.
+    if (recentOnly === true && day < cutoff) break;
     const head = readRecordHeadFile(join(runsDir, run, RECORD_FILE));
     if (head === null) continue;
     if (head.inProgress && (currentBranch === undefined || head.branch === currentBranch)) return { runId: run, closed: false };
     // A folder dated after today (a clock skew or a hand-made name) is never the closed run.
-    const day = run.slice(0, 10);
     if (closed === null && day >= cutoff && day <= today) closed = run;
   }
   return closed === null || currentBranch !== undefined ? null : { runId: closed, closed: true };
@@ -794,24 +802,35 @@ export function screenCard(text: string): string {
  * withheld one carries the debug line while a debug round is open.
  *
  * With `startup` and no `runId`, the session start's fresh-start pick
- * (REQ-CTX-013): only the run in progress on the branch `.git/HEAD` names, and
- * null when HEAD names none, when no such run is, or for what would be the
- * closed or the debug card.
+ * (REQ-CTX-013): only the run in progress on the branch `.git/HEAD` names,
+ * dated within CARD_CLOSED_MAX_AGE_DAYS, and null when HEAD names none, when no
+ * such run is, or for what would be the closed or the debug card.
+ *
+ * With `preferBranch` and no `runId` (`ledger status`, REQ-FLOW-105's no-hook
+ * fallback): the run in progress on that branch, whatever its age, when one is;
+ * else the pick with no option.
  */
 export function collectResumeCard(opts: {
   readonly rootDir: string;
   readonly runId?: string;
   readonly now: Date;
   readonly startup?: boolean;
+  readonly preferBranch?: boolean;
 }): ResumeCard | null {
   const runsDir = runsDirOf(opts.rootDir);
   const currentBranch = readCurrentBranch(opts.rootDir);
   const startup = opts.startup === true && opts.runId === undefined;
   if ((startup && currentBranch === null) || !realDir(runsDir)) return null;
+  const onBranch =
+    opts.runId === undefined && (startup || opts.preferBranch === true) && currentBranch !== null
+      ? findCardRun(opts.rootDir, opts.now, { currentBranch, recentOnly: startup })
+      : null;
   const picked =
-    opts.runId === undefined
-      ? findCardRun(opts.rootDir, opts.now, startup && currentBranch !== null ? { currentBranch } : {})
-      : { runId: opts.runId, closed: false };
+    opts.runId !== undefined
+      ? { runId: opts.runId, closed: false }
+      : startup
+        ? onBranch
+        : (onBranch ?? findCardRun(opts.rootDir, opts.now));
   const debugRounds = openDebugRounds(runsDir);
   if (picked === null) return debugRounds.length === 0 || startup ? null : debugOnlyCard(debugRounds, opts.now);
   if (!RUN_ID_PATTERN.test(picked.runId)) return null;

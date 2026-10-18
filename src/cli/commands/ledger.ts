@@ -29,7 +29,7 @@ import { sanitizeLabel } from "../kit/prompts.ts";
  * `--ids` it was handed), by one manual transition (`--id`, `--state`,
  * `--rationale`) or by one retirement (`--id`, `--retired`); `status`
  * prints the run's resume card, the same lines the session-start hook prints
- * after a compaction or a resume, and writes nothing; `inbox` prints the
+ * for that run, and writes nothing; `inbox` prints the
  * deferral inbox's rows a change's paths touch and, under `--due`, the rows
  * whose day has come, each line screened first in the form it prints in, and
  * writes nothing; `inbox-write` appends inbox rows piped on stdin and removes
@@ -659,7 +659,8 @@ const NO_CARD_JSON = {
  * shape, and empty on a hit. `run` is null on the card of open debug rounds alone.
  * `branch` is the record's `Branch:` value, screened with the lists, and
  * `onCurrentBranch` whether it names the branch `.git/HEAD` names: the run a
- * fresh session start on this checkout prints the card of (REQ-CTX-013).
+ * fresh session start on this checkout prints the card of while it is dated
+ * within the closed card's age limit (REQ-CTX-013).
  */
 function statusJson(card: ResumeCard): Record<string, unknown> {
   const echo = card.withheld === null && card.listsWithheld === null;
@@ -693,7 +694,9 @@ function statusJson(card: ResumeCard): Record<string, unknown> {
 }
 
 /**
- * `ledger status`: the resume card of the run in progress — with none, the
+ * `ledger status`: the resume card of the run in progress on the branch
+ * `.git/HEAD` names, whatever its age (REQ-FLOW-105) — with none, of the newest
+ * run in progress — with none, the
  * closed card of the newest closed run dated within the last two days; with
  * neither, the card of the open debug rounds, which names no run — or of the run `--run`
  * names whether or not it is in progress, in the in-progress layout. The
@@ -715,7 +718,7 @@ async function runStatus(ctx: CliContext, opts: Record<string, unknown>): Promis
   const card = resumeCard.collectResumeCard({
     rootDir,
     now: ctx.app.runtime.clock.now(),
-    ...(runId === undefined ? {} : { runId }),
+    ...(runId === undefined ? { preferBranch: true } : { runId }),
   });
   if (card === null) {
     ctx.io.out(`${NO_CARD}\n`);
