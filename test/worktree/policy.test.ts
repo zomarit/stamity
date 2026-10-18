@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { RUN_ENDED_MARKER_FILE } from "../../src/mcp/env.ts";
 import { EngineError, type ErrorCode } from "../../src/types/errors.ts";
 import { materializeEntries } from "../../src/worktree/materialize.ts";
 import {
@@ -553,6 +554,43 @@ describe("worktree policy — admissibility against git facts (REQ-WORKTREE-003)
     for (const carried of ["review-gate.json", "review-gate.json.lock", "review-gate.json.tmp-deadbeef"]) {
       expect(existsSync(root.path("wt", ".stamity", carried)), carried).toBe(false);
     }
+  });
+
+  /**
+   * [pr/75] The run-ended marker is refused by name as the pre-flight canary
+   * is: setup ignores it, so git would admit it, and a copy carried into
+   * another checkout on the closed run's branch would open the ask gate's
+   * final-round exception there.
+   */
+  it("keeps the run-ended marker out of a .stamity copy row and refuses a row naming it", () => {
+    expect(RUN_ENDED_MARKER_FILE).toBe(".stamity/run-ended.json");
+    const policy = parseWorktreePolicy(
+      policyText({ version: 1, entries: [{ path: ".stamity", strategy: "copy" }] }),
+      POLICY_PATH,
+    );
+    expect(resolveStrategy(policy, ".stamity/manifest.json")).toBe("copy");
+    expect(resolveStrategy(policy, RUN_ENDED_MARKER_FILE)).toBe("skip");
+    expect(resolveStrategy(policy, ".STAMITY/Run-Ended.json.")).toBe("skip");
+    for (const path of [RUN_ENDED_MARKER_FILE, ".Stamity/RUN-ENDED.json"]) {
+      for (const strategy of ["copy", "symlink"] as const) {
+        const named = parseWorktreePolicy(
+          policyText({ version: 1, entries: [{ path, strategy }] }),
+          POLICY_PATH,
+        );
+        const error = refuses(
+          () => assertRulesAdmissible(named, classifierFor({ [path]: "ignored" })),
+          "VALIDATION_ERROR",
+        );
+        expect(error.message, `${path} ${strategy}`).toContain(JSON.stringify(path));
+        expect(error.message, `${path} ${strategy}`).toContain("run-ended marker");
+        expect(error.message, `${path} ${strategy}`).toContain("is never copied between worktrees");
+      }
+    }
+    const skipped = parseWorktreePolicy(
+      policyText({ version: 1, entries: [{ path: RUN_ENDED_MARKER_FILE, strategy: "skip" }] }),
+      POLICY_PATH,
+    );
+    expect(() => assertRulesAdmissible(skipped, classifierFor({}))).not.toThrow();
   });
 
   /**

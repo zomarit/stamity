@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
-import { ENV_MCP_FILE, PREFLIGHT_CANARY_FILE } from "../mcp/env.ts";
+import { ENV_MCP_FILE, PREFLIGHT_CANARY_FILE, RUN_ENDED_MARKER_FILE } from "../mcp/env.ts";
 import { EngineError } from "../types/errors.ts";
 import {
   REVIEW_GATE_LOCK_SUFFIX,
@@ -221,6 +221,16 @@ function isReviewGateStatePath(relPath: string): boolean {
  */
 function isPreflightCanaryPath(relPath: string): boolean {
   return foldPathSpelling(relPath) === foldPathSpelling(PREFLIGHT_CANARY_FILE);
+}
+
+/**
+ * True when `relPath` is `run end --final-round`'s run-ended marker, refused by
+ * name as the canary is (pr/75): a marker carried into another worktree on the
+ * closed run's branch would open the ask gate's final-round exception in a
+ * checkout that never ran `run end`.
+ */
+function isRunEndedMarkerPath(relPath: string): boolean {
+  return foldPathSpelling(relPath) === foldPathSpelling(RUN_ENDED_MARKER_FILE);
 }
 
 const TOP_LEVEL_KEYS: ReadonlySet<string> = new Set(["version", "farmDir", "entries", "overrides"]);
@@ -523,7 +533,7 @@ export function matchPolicyRule(policy: WorktreePolicy, relPath: string): Worktr
  * be carved this way: the link shares the directory live.
  */
 export function resolveStrategy(policy: WorktreePolicy, relPath: string): WorktreeStrategy {
-  if (isReviewGateStatePath(relPath) || isPreflightCanaryPath(relPath)) return "skip";
+  if (isReviewGateStatePath(relPath) || isPreflightCanaryPath(relPath) || isRunEndedMarkerPath(relPath)) return "skip";
   return matchPolicyRule(policy, relPath)?.strategy ?? "skip";
 }
 
@@ -573,6 +583,14 @@ export function assertRulesAdmissible(
       refuse(
         `${policy.source}: ${rule.list} row ${JSON.stringify(rule.path)} names the pre-flight's hooks ` +
           `canary, which is never copied between worktrees: it would vouch for hooks that never ran there.`,
+        `Remove the row from ${policy.source}.`,
+      );
+    }
+    if (isRunEndedMarkerPath(rule.path)) {
+      refuse(
+        `${policy.source}: ${rule.list} row ${JSON.stringify(rule.path)} names the run-ended marker, ` +
+          `which is never copied between worktrees: it would open the ask gate's final-round exception ` +
+          `in a checkout that never ran \`run end\`.`,
         `Remove the row from ${policy.source}.`,
       );
     }
