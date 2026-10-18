@@ -9,6 +9,7 @@ import {
   type PushUrlFacts,
   type RestRead,
 } from "../../src/runs/preflight.ts";
+import { USAGE_REVIEW_PATTERN } from "../../src/runs/layout.ts";
 
 /**
  * u8-preflight-core (REQ-FLOW-101): the unattended pre-flight's checks as pure functions.
@@ -985,6 +986,31 @@ describe("runPreflight — warnings", () => {
     expect(counted.warnings.map((entry) => entry.id)).not.toContain("review-state");
     const recorded = await runPreflight(greenDeps({ rest: routes(0), reviewState: { counter: false, usageReviewLines: 2 } }));
     expect(recorded.warnings.map((entry) => entry.id)).not.toContain("review-state");
+  });
+
+  it("review-state counts the usage: review r<N> lines the review gate rebuilds a missing counter from (REQ-FLOW-106)", async () => {
+    // One spelling: `gate preflight` counts with USAGE_REVIEW_PATTERN, and the review gate embeds the same source.
+    const record = [
+      "Status: in progress",
+      "The orchestrator appends one usage: review line per round.",
+      "- 2026-10-18T02:00Z usage: review r1 minutes=30 tokens=unreported (claude-code)",
+      "- 2026-10-18T03:00Z usage: implement minutes=40 tokens=unreported (claude-code)",
+      "- 2026-10-18T04:00Z usage: review r2 minutes=25 tokens=1200 (claude-code)",
+      "- usage: review r3",
+      "- 2026-10-18T05:00Z usage: review rN minutes=1 tokens=unreported (claude-code)",
+    ];
+    const count = (lines: readonly string[]): number => lines.filter((line) => USAGE_REVIEW_PATTERN.test(line)).length;
+    expect(count(record)).toBe(2);
+    const routes = restTable({
+      "/repos/o/r": repoReply(WRITER),
+      "/repos/o/r/rules/branches/main": { status: 200, json: [pullRequestRule(7, 1)] },
+      "/repos/o/r/rulesets/7": ruleset(7, "active", "never"),
+    }).rest;
+    const recorded = await runPreflight(greenDeps({ rest: routes, reviewState: { counter: false, usageReviewLines: count(record) } }));
+    expect(recorded.warnings.map((entry) => entry.id)).not.toContain("review-state");
+    // Prose alone is no round: the run reads as unreviewed.
+    const prose = await runPreflight(greenDeps({ rest: routes, reviewState: { counter: false, usageReviewLines: count(record.slice(0, 2)) } }));
+    expect(prose.warnings.map((entry) => entry.id)).toContain("review-state");
   });
 
   it("a pull_requests_only bypass warns review-state that the account can merge without the review (review/38)", async () => {

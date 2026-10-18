@@ -207,7 +207,7 @@ export const CLIENT_CLOUD_FACTS: readonly ClientCloudFact[] = [
       "the review gate's round counter included, does not carry over.",
     status: "documented",
     citation: { url: "https://code.claude.com/docs/en/cloud-environments", accessDate: "2026-10-15" },
-    sessionStart: "The review-gate counter resets with the VM.",
+    sessionStart: "A missing review-gate counter is rebuilt from the run record on this branch.",
   },
   {
     tool: "copilot",

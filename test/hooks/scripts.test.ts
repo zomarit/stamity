@@ -36,7 +36,13 @@ import { computeLearningIntegrity, REVIEW_WARNING_DAYS } from "../../src/learnin
 import { RENAME_RETRY_COUNT } from "../../src/merge/atomicWrite.ts";
 import { REQUIRED_GITIGNORE_ENTRIES } from "../../src/mcp/env.ts";
 import { AGENT_POLICY_ROSTER, isWritePathPattern, verdictReportWritePaths } from "../../src/roster/agentPolicies.ts";
-import { REPORT_NAME_PATTERN, REPORT_ROLES, UNPRINTABLE_CHARS } from "../../src/runs/layout.ts";
+import {
+  REPORT_NAME_PATTERN,
+  REPORT_READ_MAX_BYTES,
+  REPORT_ROLES,
+  UNPRINTABLE_CHARS,
+  USAGE_REVIEW_PATTERN,
+} from "../../src/runs/layout.ts";
 import {
   clampReviewIterations,
   DEFAULT_MAX_REVIEW_ITERATIONS,
@@ -964,7 +970,9 @@ describe("the session start names a cloud or CI session (REQ-FLOW-085)", () => {
   const CLAUDE_CLOUD = [
     "Session: a Claude Code cloud session.",
     "- GraphQL, gh pr, gh issue and Projects are unavailable here; use gh api.",
-    "- The review-gate counter resets with the VM.",
+    // TEST CHANGE (v2-review-gate-rebuild, REQ-FLOW-085/106): a missing counter is rebuilt from the run
+    // record on this branch now, so the line no longer says it resets with the VM.
+    "- A missing review-gate counter is rebuilt from the run record on this branch.",
   ];
   const COPILOT_CLOUD = [
     "Session: a Copilot cloud agent session.",
@@ -2269,8 +2277,11 @@ function runAsync(
  * Asserted to be a unique anchor before any surgery, so a case that injects a
  * fault is still measuring the script this engine ships.
  */
+// TEST CHANGE (v2-review-gate-rebuild, REQ-FLOW-106): the emitted line gains lstatSync, readdirSync
+// and readSync, which the rebuild of a missing counter reads the run records and .git/HEAD with; the
+// anchor is spelled as the builder now emits it, and the shim below binds the three names unfaulted.
 const GATE_FS_IMPORT =
-  'import { closeSync, constants as FS, mkdirSync, openSync, readFileSync, renameSync, statSync, unlinkSync, utimesSync, writeSync } from "node:fs";';
+  'import { closeSync, constants as FS, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, renameSync, statSync, unlinkSync, utimesSync, writeSync } from "node:fs";';
 
 const FAULT_GATE_PATH = "hooks/review-gate-faulting.mjs";
 
@@ -2318,7 +2329,7 @@ type FaultSite = "lock-create" | "state-stat" | "state-read" | "publish-rename" 
 function faultShim(stateFileName: string): string {
   return [
     'import * as REAL_FS from "node:fs";',
-    "const { closeSync, constants: FS, mkdirSync, utimesSync, writeSync } = REAL_FS;",
+    "const { closeSync, constants: FS, lstatSync, mkdirSync, readdirSync, readSync, utimesSync, writeSync } = REAL_FS;",
     'const FAULT_SITES = (process.env.STAMITY_FAULT_SITE ?? "").split(",").filter((name) => name !== "");',
     'const FAULT_CODE = process.env.STAMITY_FAULT_CODE ?? "EBUSY";',
     'const FAULT_CLAIM = process.env.STAMITY_FAULT_CLAIM ?? "";',
@@ -3513,6 +3524,192 @@ describe("buildReviewGateScript", () => {
       expect(names, tool).toHaveLength(3);
       expect(names, tool).not.toContain(REVIEW_GATE_FILE);
     }
+  });
+});
+
+describe("the review gate rebuilds a missing counter from this branch's run record (REQ-FLOW-106)", () => {
+  const BRANCH = "stamity/2026-10-18_night";
+
+  /** A run record as `stamity run start` heads it, then `usage: review r<N>` lines for rounds 1..`rounds`. */
+  function runRecord(branch: string | null, rounds: number, status = "in progress — opened 2026-10-18T01:00Z"): string {
+    return [
+      "# Night run",
+      "",
+      `Status: ${status}`,
+      "Plan: docs/plans/021-x.md",
+      ...(branch === null ? [] : [`Branch: ${branch}`]),
+      "",
+      "## Proof",
+      "",
+      // A prose mention is not a usage line: only the `- <UTC> usage: review r<N>` shape counts.
+      "The orchestrator appends one usage: review line per round.",
+      "",
+      ...Array.from(
+        { length: rounds },
+        (_, index) => `- 2026-10-18T0${index + 2}:00Z usage: review r${index + 1} minutes=30 tokens=unreported (claude-code)`,
+      ),
+      "",
+    ].join("\n");
+  }
+
+  async function seedRun(runId: string, branch: string | null, rounds: number, status?: string): Promise<void> {
+    await getRepo().seedFiles({ [`.stamity/runs/${runId}/record.md`]: runRecord(branch, rounds, status) });
+  }
+
+  async function seedHead(head = `ref: refs/heads/${BRANCH}`): Promise<void> {
+    await getRepo().seedFiles({ ".git/HEAD": `${head}\n` });
+  }
+
+  it("holds the completion when two usage: review lines on this branch's run survive a lost counter", async () => {
+    await seedHead();
+    await seedRun("2026-10-18_night", BRANCH, 2);
+    const gate = await placeGate();
+
+    const held = run(gate, { cwd: getRepo().dir, input: completion("fresh-session") });
+
+    expect(held.code).toBe(2);
+    expect(refusal(held)).toMatchObject({ blocked: true, reasonCode: "REVIEW_ROUND_OPEN", round: 2, verdict: "" });
+    const message = String(refusal(held)["message"]);
+    expect(message).toContain(".stamity/runs/2026-10-18_night/record.md");
+    expect(message).toContain("keyed by the client's session, not by the run");
+    // Nothing is written on the completion path: the counter stays absent until a review records a round.
+    expect(existsSync(getRepo().path(REVIEW_GATE_STATE_FILE))).toBe(false);
+  });
+
+  it("seeds the next reviewer's round from the rebuilt count", async () => {
+    await seedHead();
+    await seedRun("2026-10-18_night", BRANCH, 2);
+    const gate = await placeGate();
+
+    const recorded = run(gate, { cwd: getRepo().dir, input: reviewerStop("fresh-session", "request-changes") });
+
+    expect(refusal(recorded)).toMatchObject({ reasonCode: "ROUND_RECORDED", round: 3 });
+    expect(readGateState().runs["fresh-session"]).toMatchObject({ rounds: 3, verdict: "request-changes" });
+  });
+
+  it("holds at the cap with the rebuild's own message, never the cap's end-of-run text, until a fresh review re-records the verdict", async () => {
+    await seedHead();
+    await seedRun("2026-10-18_night", BRANCH, DEFAULT_MAX_REVIEW_ITERATIONS);
+    const gate = await placeGate();
+
+    const held = run(gate, { cwd: getRepo().dir, input: completion("fresh-session") });
+
+    expect(held.code).toBe(2);
+    expect(refusal(held)).toMatchObject({
+      blocked: true,
+      reasonCode: "ROUNDS_REBUILT_AT_CAP",
+      round: DEFAULT_MAX_REVIEW_ITERATIONS,
+    });
+    const message = String(refusal(held)["message"]);
+    expect(message).not.toContain("BLOCKED_FAILURE");
+    expect(message).toContain("one fresh review re-records it");
+
+    // The fresh review re-records the last round rather than counting one past the cap.
+    run(gate, { cwd: getRepo().dir, input: reviewerStop("fresh-session", "approve") });
+    expect(readGateState().runs["fresh-session"]).toMatchObject({ rounds: DEFAULT_MAX_REVIEW_ITERATIONS, verdict: "approve" });
+    expect(run(gate, { cwd: getRepo().dir, input: completion("fresh-session") })).toEqual({ code: 0, stdout: "", stderr: "" });
+  });
+
+  it("holds one round below the cap when the last round approved just before the reclaim", async () => {
+    await seedHead();
+    await seedRun("2026-10-18_night", BRANCH, DEFAULT_MAX_REVIEW_ITERATIONS - 1);
+    const gate = await placeGate();
+
+    const held = run(gate, { cwd: getRepo().dir, input: completion("fresh-session") });
+
+    // The approval went with the counter, so the verdict is unrecorded and the round stays open.
+    expect(held.code).toBe(2);
+    expect(refusal(held)).toMatchObject({ reasonCode: "REVIEW_ROUND_OPEN", round: DEFAULT_MAX_REVIEW_ITERATIONS - 1 });
+  });
+
+  it("reads the run on this branch when two runs are in progress, and stays open when none matches", async () => {
+    await seedHead();
+    await seedRun("2026-10-18_night", BRANCH, 1);
+    await seedRun("2026-10-18_other", "feat/other", 2);
+    const gate = await placeGate();
+
+    expect(refusal(run(gate, { cwd: getRepo().dir, input: completion("s") }))).toMatchObject({
+      reasonCode: "REVIEW_ROUND_OPEN",
+      round: 1,
+    });
+
+    await seedHead("ref: refs/heads/feat/third");
+    const open = run(gate, { cwd: getRepo().dir, input: completion("s") });
+    expect(open.code).toBe(0);
+    expect(refusal(open)).toMatchObject({ blocked: false, reasonCode: "STATE_ABSENT" });
+    expect(String(refusal(open)["message"])).toContain("the gate is open");
+  });
+
+  it.each([
+    { label: "no run record", seed: async () => undefined },
+    { label: "a record with no usage: review line", seed: () => seedRun("2026-10-18_night", BRANCH, 0) },
+    { label: "a closed record", seed: () => seedRun("2026-10-18_night", BRANCH, 2, "closed — merged") },
+    { label: "a record with no Branch: line", seed: () => seedRun("2026-10-18_night", null, 2) },
+  ])("stays open, naming the missing counter, with $label", async (testCase) => {
+    await seedHead();
+    await testCase.seed();
+    const gate = await placeGate();
+
+    const open = run(gate, { cwd: getRepo().dir, input: completion("s") });
+
+    expect(open.code).toBe(0);
+    expect(refusal(open)).toMatchObject({ blocked: false, reasonCode: "STATE_ABSENT" });
+    const message = String(refusal(open)["message"]);
+    expect(message).toContain(`No review-gate counter at ${getRepo().path(REVIEW_GATE_STATE_FILE)}`);
+    expect(message).toContain("the gate is open");
+    expect(message).toContain("keyed by the client's session, not by the run");
+  });
+
+  it("stays open on a detached HEAD", async () => {
+    await seedHead("0123456789abcdef0123456789abcdef01234567");
+    await seedRun("2026-10-18_night", BRANCH, 2);
+    const gate = await placeGate();
+
+    expect(refusal(run(gate, { cwd: getRepo().dir, input: completion("s") }))).toMatchObject({ reasonCode: "STATE_ABSENT" });
+  });
+
+  it("follows a linked worktree's gitdir: pointer to the branch it names", async () => {
+    await getRepo().seedFiles({
+      ".git": "gitdir: admin/worktrees/night\n",
+      "admin/worktrees/night/HEAD": `ref: refs/heads/${BRANCH}\n`,
+    });
+    await seedRun("2026-10-18_night", BRANCH, 2);
+    const gate = await placeGate();
+
+    expect(refusal(run(gate, { cwd: getRepo().dir, input: completion("s") }))).toMatchObject({
+      reasonCode: "REVIEW_ROUND_OPEN",
+      round: 2,
+    });
+  });
+
+  it("uses a present counter as is and rebuilds nothing", async () => {
+    await seedHead();
+    await seedRun("2026-10-18_night", BRANCH, 2);
+    await seedGateState(midLoop("another-session", "request-changes", 1));
+    const gate = await placeGate();
+
+    // This session has no entry in the counter that is there, so no review loop is gated: silent, as today.
+    expect(run(gate, { cwd: getRepo().dir, input: completion("fresh-session") })).toEqual({ code: 0, stdout: "", stderr: "" });
+    run(gate, { cwd: getRepo().dir, input: reviewerStop("fresh-session", "request-changes") });
+    expect(readGateState().runs["fresh-session"]).toMatchObject({ rounds: 1 });
+  });
+
+  it("opens and names the read when a matching record is past the read bound", async () => {
+    await seedHead();
+    await getRepo().seedFiles({
+      ".stamity/runs/2026-10-18_night/record.md": runRecord(BRANCH, 2) + "x".repeat(REPORT_READ_MAX_BYTES),
+    });
+    const gate = await placeGate();
+
+    const open = run(gate, { cwd: getRepo().dir, input: completion("s") });
+
+    expect(open.code).toBe(0);
+    expect(refusal(open)).toMatchObject({ blocked: false, reasonCode: "STATE_ABSENT" });
+    expect(String(refusal(open)["message"])).toContain("RECORD_TOO_LARGE");
+  });
+
+  it("embeds the one usage-line pattern the pre-flight counts by", () => {
+    expect(buildReviewGateScript(GATE_OPTIONS)).toContain(JSON.stringify(USAGE_REVIEW_PATTERN.source));
   });
 });
 

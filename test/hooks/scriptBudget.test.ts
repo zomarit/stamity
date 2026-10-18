@@ -204,6 +204,17 @@ describe("hook script budgets (REQ-CTX-016)", () => {
     }
   });
 
+  it("holds the review gate, the rebuild of a missing counter included, to its row (REQ-FLOW-106)", () => {
+    // The rebuild had to fit, not move the row: the literal pins it so a raise is a visible edit here too.
+    expect(HOOK_SCRIPT_BUDGETS[REVIEW_GATE_FILE]).toEqual({ bytes: 51_200, lines: 1_120 });
+    const gates = renders.filter((script) => script.fileName === REVIEW_GATE_FILE);
+    expect(gates.length).toBeGreaterThan(0);
+    for (const script of gates) {
+      expect(script.content, script.tool).toContain("function rebuilt(root)");
+      expect(budgetViolation(script), script.tool).toBeUndefined();
+    }
+  });
+
   it("holds the person-only guard to the row re-sized from its last measurement (review/219)", () => {
     // The literal pins the re-sized row, so its next move is a visible edit here too, with its reason in the row.
     expect(HOOK_SCRIPT_BUDGETS[PERSON_ONLY_GUARD_FILE]).toEqual({ bytes: 156_672, lines: 3_830 }); // Re-sized 2026-10-18 from round 4's fresh measurement, the same rule as review/219.

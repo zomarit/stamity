@@ -99,6 +99,13 @@ export const RECORD_BRANCH_PATTERN = /^branch:\s*(\S+)/i;
 export const RECORD_BASE_PATTERN = /^base:\s*([0-9a-f]{7,64})\b/i;
 /** The record head's resumes line: the run this one carries on from. */
 export const RECORD_RESUMES_PATTERN = /^resumes:\s*(\S+)/i;
+/**
+ * One review round's usage line in the record, `- <UTC> usage: review r<N> …`, as `/st-work` appends it at
+ * each round's end (`content/commands/st-work.md`, Usage lines). The one spelling the pre-flight's
+ * `review-state` warning and the review gate's rebuild of a missing counter count by (REQ-FLOW-106): a prose
+ * mention of `usage: review` is not a round.
+ */
+export const USAGE_REVIEW_PATTERN = /^\s*- +\S+ +usage: *review +r[1-9][0-9]*\b/;
 /** What a status value says while the run is open, in any case and any decoration. */
 export const IN_PROGRESS_PATTERN = /\bin progress\b/i;
 

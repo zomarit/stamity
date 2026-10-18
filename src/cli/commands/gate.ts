@@ -37,7 +37,7 @@ import { PREFLIGHT_CANARY_FILE } from "../../mcp/env.ts";
 import { screenOutbound } from "../../runs/morning.ts";
 import { REQUIRED_FLOORS, runPreflight, type PreflightDeps, type PushUrlFacts, type RestRead } from "../../runs/preflight.ts";
 import { resolveRepo } from "../../runs/pullRequest.ts";
-import { RECORD_FILE, REPORT_READ_MAX_BYTES, runRelPath } from "../../runs/layout.ts";
+import { RECORD_FILE, REPORT_READ_MAX_BYTES, runRelPath, USAGE_REVIEW_PATTERN } from "../../runs/layout.ts";
 import { findCardRun } from "../../runs/resumeCard.ts";
 import { findPackageRoot } from "../../shared/paths.ts";
 import { bareShapeRefusal, gitDiscoveryMeetsBareShape } from "../../merge/safeWrite.ts";
@@ -1954,12 +1954,12 @@ function floorCopies(root: string, manifest: SetupManifest | null): PreflightDep
     });
 }
 
-/** The in-progress record's `usage: review` lines, `0` with no run in progress. */
+/** The in-progress record's `usage: review r<N>` lines ({@link USAGE_REVIEW_PATTERN}), `0` with no run in progress. */
 function usageReviewLines(root: string, now: Date): number {
   const run = findCardRun(root, now);
   if (run === null || run.closed) return 0;
   const record = readRegular(join(root, runRelPath(run.runId, RECORD_FILE)), REPORT_READ_MAX_BYTES);
-  return record === undefined ? 0 : record.toString("utf8").split(/\r?\n/).filter((line) => /\busage:\s*review\b/.test(line)).length;
+  return record === undefined ? 0 : record.toString("utf8").split(/\r?\n/).filter((line) => USAGE_REVIEW_PATTERN.test(line)).length;
 }
 
 /** The cloud markers a client sets (REQ-FLOW-089): each means "cloud", never "unattended". */

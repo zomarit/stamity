@@ -341,8 +341,10 @@ repository, and `init` and `sync` add their `.gitignore` lines for you:
 
 - `.env.mcp`, which holds MCP credentials.
 - The review gate's runtime state: `.stamity/review-gate.json`, its `.lock` and its `.tmp-*`
-  files. A run writes them, and they belong to the run that wrote them. When the counter is
-  missing, the review gate is open.
+  files. A run writes them, and the counter is keyed by the client's session, not by the run.
+  When the counter is missing, as on a cloud machine that was reclaimed, the gate rebuilds the
+  round count from the `usage: review` lines of the in-progress run record on this branch and
+  holds completion until a review is recorded; with no such record, the gate is open.
 
 A line your `.gitignore` already covers, with `.stamity/` or `.env*` for example, is not added
 twice. A file you committed before the line existed stays tracked: setup never touches the git index.

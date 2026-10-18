@@ -702,6 +702,20 @@ describe("the cloud column and the Cloud sessions section", () => {
     );
   });
 
+  it("says a lost review-gate counter is rebuilt, never that it resets or opens the gate (REQ-FLOW-085, REQ-FLOW-106)", () => {
+    const claude = CLIENT_CLOUD_FACTS.filter((row) => row.tool === "claude" && row.sessionStart !== undefined);
+    expect(claude.map((row) => row.sessionStart)).toContain(
+      "A missing review-gate counter is rebuilt from the run record on this branch.",
+    );
+    for (const row of claude) {
+      expect(row.sessionStart, row.subject).not.toBe("The review-gate counter resets with the VM.");
+      expect(row.sessionStart, row.subject).not.toMatch(/\bopen/i);
+    }
+    // The cloud table prints the same line beside the vendor's fact it answers.
+    const printed = rows.find((line) => cells(line)[0] === "`claude`" && cells(line)[1] === "Session state");
+    expect(cells(printed ?? "")[3]).toBe("A missing review-gate counter is rebuilt from the run record on this branch.");
+  });
+
   it("records the open Copilot path-argument question as unverified, not as a claim", () => {
     const row = cloudFact("copilot", "Tool arguments");
     expect(row.status).toBe("unverified");
