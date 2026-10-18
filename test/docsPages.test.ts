@@ -2614,7 +2614,8 @@ describe("SECURITY.md", () => {
         "the branch protection rule, ruleset and custom-property mutations, and a REST write of a custom property's value or definition",
         "are refused as protection writes, attended or not",
         "So is an HTTP call whose method or targets the line hides (`HTTP_TARGET_HIDDEN`)",
-        "a curl write whose target curl's globbing would expand (`{` or `[`) unless `-g` or `--globoff` is set, and a wget write reading its targets from `-i`",
+        // MOVED 2026-10-18 (PR #112 round 4d, pr/87): the list's last item is now the curl short cluster holding `:`.
+        "a curl write whose target curl's globbing would expand (`{` or `[`) unless `-g` or `--globoff` is set, a wget write reading its targets from `-i`",
         "pull-request creation (`create_pull_request`)",
         "as `gh pr create` does for a new pull request",
         "a symbolic ref already on disk, a branch switch earlier on the line before a push whose destination is implied, a method, body or URL from curl's or wget's default configuration file",
@@ -2670,6 +2671,36 @@ describe("SECURITY.md", () => {
       ]) {
         expect(residuals, `the cloud section does not name: ${residual}`).toContain(residual);
       }
+    });
+
+    // ADDED 2026-10-18 (PR #112 round 4d, REQ-FLOW-102, REQ-FLOW-104, REQ-FLOW-120): a symref command is read wherever
+    // it stands in the text, a short cluster's method whatever it holds (gh's `-i` cluster and `-X=` among them), and
+    // curl's long options from a unique prefix (src/hooks/personOnly.ts::personOnlyVerdict); the hidden-call list names
+    // the curl cluster holding `:`; a symref command word the line cannot show is a named respelling; and the default
+    // configuration files' unattended control holds the default branch alone.
+    it("states round 4d's guard readings, the symref-word respelling and the configuration files' control", () => {
+      const guard = section("| The main thread of any session", "| An unattended run, or the text that steers one | Pushing a change");
+      const residuals = section("### Cloud and unattended runs", "## Standards mapping");
+      for (const claim of [
+        "read as `git symbolic-ref` is, each wherever it stands in the text, a second one after an escaped line break (`\\n`, `\\0`) among them",
+        "and so does a curl method (`-XDELETE`, `-sX$M`), a letter after another value letter being that letter's value (`-oX` names a file)",
+        "A curl long option counts from a unique prefix, as wget's do (`--req`, `--dat`)",
+        "gh's `-i` clustered with a method or a field (`-iXDELETE`) and its `-X=<method>` count as gh reads them",
+        "attached in a short cluster too (`-sX$M`, gh's `-iX$M`), or cut from the line by an unquoted one",
+        "a wget write reading its targets from `-i`, and a curl short cluster holding `:` among other letters, which starts a request where the line does not show",
+        "a `git update-ref --stdin` text read from a file or a symref command word the line cannot show",
+      ]) {
+        expect(guard, `the guard's row does not state: ${claim}`).toContain(claim);
+      }
+      for (const residual of [
+        "a symref command word the line cannot show (`symref-%s` with the command as printf's argument, or a variable holding it)",
+        "the pre-flight's refusal of an account that can push to the default branch holds that branch alone: a write such a file hides reaches the run's own branch around the run verbs, the held paths and the last scan, as the other respellings do",
+      ]) {
+        expect(residuals, `the cloud section does not name: ${residual}`).toContain(residual);
+      }
+      expect(residuals, "the configuration files' residual names the pre-flight's wall as the unattended control again").not.toContain(
+        "such a call meets the protection the pre-flight proved there",
+      );
     });
   });
 
@@ -2901,6 +2932,26 @@ describe("docs/security-mapping.md", () => {
     ]) {
       expect(flat, `the mapping page does not state: ${claim}`).toContain(claim);
     }
+  });
+
+  // ADDED 2026-10-18 (PR #112 round 4d): the mapping page carries round 4d's readings, the hidden-call list's curl
+  // cluster holding `:`, the symref-word respelling and the configuration files' unattended control as SECURITY.md does.
+  it("states round 4d's guard readings, the symref-word respelling and the configuration files' control as SECURITY.md does", () => {
+    const flat = text.replace(/\s+/g, " ");
+    for (const claim of [
+      "are read the same way, each wherever it stands in the text",
+      "and so does a curl method, a letter after another value letter being that letter's value",
+      "a curl long option counts from a unique prefix, as wget's do, and gh's `-i` clustered with a method or a field, and its `-X=<method>`, count as gh reads them",
+      "attached in a short cluster too or cut from the line by an unquoted one",
+      "a wget write reading `-i`, and a curl short cluster holding `:` among other letters",
+      "a gh extension, a symref command word the line cannot show, a `git update-ref --stdin` text read from a file",
+      "the pre-flight's refusal of an account that can push to the default branch holds the third on that branch alone: a write such a file hides reaches the run's own branch around the run verbs, the held paths and the last scan",
+    ]) {
+      expect(flat, `the mapping page does not state: ${claim}`).toContain(claim);
+    }
+    expect(flat, "the mapping page names the pre-flight's wall as the third residual's whole control again").not.toContain(
+      "can push to the default branch the third",
+    );
   });
 
   it("pins every catalogue it maps to an edition", () => {
