@@ -155,7 +155,12 @@ describe("renderForm", () => {
   // become nine. `H4a`–`H4d` (the plugin route, one per client) and `H5` (its upgrade-and-rollback
   // walk) leave the catalogue with the plugin route, which 1.15.0 deletes; the nine left keep their
   // ids and their order, which is the join key the form, the harness and the run record share.
-  it("renders all nine rows, in catalogue order", () => {
+  //
+  // TEST CHANGE, justified (2026-10-18, run 2026-10-18_cloud-runs-2, unit v14-cloud-check): nine rows
+  // become twelve. The cloud-check person rows `P1`–`P3` (REQ-PROVE-041, REQ-PROVE-021) join after the
+  // nine, in a `cloud` lane; the nine keep their ids and their order, and every catalogue row still
+  // renders in order (the evidence fixture carries no P row, so those render as not-run).
+  it("renders all twelve rows, in catalogue order", () => {
     const markdown = renderForm(evidence) as string;
 
     const ids = (QA_ROWS as CatalogueRow[]).map((row) => row.id);
@@ -163,6 +168,7 @@ describe("renderForm", () => {
       "H1a", "H1b", "H1c", "H1d",
       "H2",
       "H3a", "H3b", "H3c", "H3d",
+      "P1", "P2", "P3",
     ]);
     for (const id of ids) expect(markdown).toContain(`**${id}**`);
 

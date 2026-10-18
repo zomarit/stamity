@@ -3,8 +3,9 @@
 //
 // Nine rows were carried through two releases as "UNPERFORMED", which is an honest record of a
 // walk-through nobody did and a useless one for deciding whether the next release needs it. This
-// module renders those nine rows out of `.stamity/evidence/qa-<sha>.json`, so each one arrives with
-// the thing a typed form never carries: what it was measured against. The five plugin-route rows
+// module renders those nine rows, and the three cloud-check person rows beside them (`P1`–`P3`),
+// out of `.stamity/evidence/qa-<sha>.json`, so each one arrives with the thing a typed form never
+// carries: what it was measured against. The five plugin-route rows
 // (`H4a`–`H4d`, `H5`) left the form in 1.15.0 with the route they measured; an evidence file that
 // still carries them renders them under "Retired rows", never in the table. The rows the harness can measure end to end it
 // measures; the rest stay human, and a human row reads UNPERFORMED until somebody signs it — with
@@ -22,13 +23,16 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 /**
- * The nine rows, in form order.
+ * The twelve rows, in form order.
  *
- * The ids are the form's (`H1a`–`H1d`, `H2`, `H3a`–`H3d`) and the split follows what each row is
- * measured BY: H1 is one row per client whose hook lane is exercised, H2 is the accessibility tree
- * and scanner pass over the built pages, and H3 is one row per viewport/theme pair of the keyboard
- * journey. `lane` names which half of the harness owns the row, and is what `run.mjs` dispatches
- * on — a row nobody owns would be a row nobody measures.
+ * The ids are the form's (`H1a`–`H1d`, `H2`, `H3a`–`H3d`, `P1`–`P3`) and the split follows what
+ * each row is measured BY: H1 is one row per client whose hook lane is exercised, H2 is the
+ * accessibility tree and scanner pass over the built pages, H3 is one row per viewport/theme pair
+ * of the keyboard journey, and P is one person row per client cloud (REQ-PROVE-041): a person
+ * starts the cloud run, `scripts/qa/cloud-check.mjs verify` reads what it left, and the person
+ * signs the row. `lane` names which half of the harness owns the row, and is what `run.mjs`
+ * dispatches on — a row nobody owns would be a row nobody measures. A cloud row's `notRun` is the
+ * reason it reads when no verify output is given: P3's names the account nobody has.
  */
 export const QA_ROWS = [
   {
@@ -96,6 +100,28 @@ export const QA_ROWS = [
     theme: 'dark',
     title: 'Keyboard journey — 1440px, dark',
     proves: 'every focus stop is visible, reading order equals DOM order, and the table page answers the arrow keys or says why not',
+  },
+  {
+    id: 'P1',
+    lane: 'cloud',
+    client: 'claude',
+    title: "Cloud check — Claude Code's cloud",
+    proves: 'an overnight unattended `/st-work` in a scratch repository ends on one open draft PR with the morning list, main and the tags unchanged, its morning question answered at least eight hours after the start',
+  },
+  {
+    id: 'P2',
+    lane: 'cloud',
+    client: 'cursor',
+    title: "Cloud check — Cursor's cloud agents",
+    proves: 'an unattended `/st-work` cloud agent run in a scratch repository ends on one open draft PR with the morning list, main and the tags unchanged',
+  },
+  {
+    id: 'P3',
+    lane: 'cloud',
+    client: 'copilot',
+    title: "Cloud check — Copilot's cloud agent",
+    proves: 'an unattended run in a scratch repository ends on one open draft PR with the morning list, main and the tags unchanged',
+    notRun: 'no Copilot cloud-agent account',
   },
 ]
 

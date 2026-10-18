@@ -348,7 +348,10 @@ describe("main — no plugins lane", () => {
     } finally {
       write.mockRestore();
     }
-    expect(evidence.rows.map((row) => row.row)).toEqual(["H1a", "H1b", "H1c", "H1d", "H2", "H3a", "H3b", "H3c", "H3d"]);
+    // TEST CHANGE, justified (2026-10-18, run 2026-10-18_cloud-runs-2, unit v14-cloud-check, ledger
+    // build/1): the catalogue gains the cloud-check person rows P1–P3 (REQ-PROVE-041, REQ-PROVE-021),
+    // which every run writes after the nine; the nine keep their ids and order, and no retired row returns.
+    expect(evidence.rows.map((row) => row.row)).toEqual(["H1a", "H1b", "H1c", "H1d", "H2", "H3a", "H3b", "H3c", "H3d", "P1", "P2", "P3"]);
     for (const id of Object.keys(RETIRED_ROWS as Record<string, string>)) {
       expect(evidence.rows.some((row) => row.row === id), id).toBe(false);
     }
@@ -562,7 +565,9 @@ describe("main — human answers across two runs", () => {
     expect(answeredRow(first, "H1a")).toMatchObject({ status: "performed", performedAt: "2026-09-30" });
     expect(answeredRow(first, "H1b")).toMatchObject({ status: "accepted-unwalked", acceptedAt: "2026-09-30", acceptedBy: "the maintainer" });
     expect(answeredRow(first, "H1c").status).toBe("accepted-unwalked");
-    expect(printed).toContain("[qa] human answers: 1 performed, 2 accepted-unwalked, 1 open");
+    // TEST CHANGE, justified (unit v14-cloud-check, as above): the three cloud rows read `not-run`
+    // with no `--cloud` output, so the open count moves from 1 (H1d) to 4 (H1d, P1, P2, P3).
+    expect(printed).toContain("[qa] human answers: 1 performed, 2 accepted-unwalked, 4 open");
 
     expect(answeredRow(second, "H1a")).toMatchObject({ status: "performed", performedAt: "2026-09-30" });
     for (const id of ["H1b", "H1c"]) {

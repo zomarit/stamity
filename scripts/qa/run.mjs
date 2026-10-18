@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// The QA harness: measures the nine form rows it can measure, binds all nine to the bytes they
-// were measured against, and writes one evidence file.
+// The QA harness: measures the nine form rows it can measure, reads the three cloud-check person
+// rows (`P1`–`P3`) from `cloud-check.mjs verify`'s output, binds all twelve to the bytes they were
+// measured against, and writes one evidence file.
 //
 // WHAT THIS REPLACES. Nine rows of a manual walk-through have been carried to two releases reading
 // UNPERFORMED, which is honest and useless: nobody could tell which of them had gone stale and
@@ -27,8 +28,14 @@
 // Usage:
 //   node scripts/qa/run.mjs [--site website/build] [--sha <sha>] [--out <path>]
 //                           [--fixtures <dir>] [--clients claude,codex,cursor,copilot]
-//                           [--skip-hooks] [--skip-browser]
+//                           [--skip-hooks] [--skip-browser] [--cloud <verify.json> ...]
 //                           [--walked <ids>] [--accept-unwalked <ids>] [--by <name>] [--on <YYYY-MM-DD>]
+//
+// The cloud rows are person rows (REQ-PROVE-041): a person runs the cloud check, and `--cloud`
+// hands this run each `node scripts/qa/cloud-check.mjs verify --out` file. A `pass` leaves the row
+// open for the person's `--walked` (the overnight run and its morning answer are theirs to sign); a
+// `failed` is a measurement no signature sits on; no output reads `not-run`, P3's with its account
+// reason. A cloud row never reads the built pages.
 //
 // A person's answers ride on the run that measures: `--walked` records the rows they walked as
 // `performed`, `--accept-unwalked` the rows they signed off without a walk as `accepted-unwalked`,
@@ -41,9 +48,12 @@ import { createServer } from 'node:http'
 import { createRequire } from 'node:module'
 import { extname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { carryForward, hashFile, inputHashMap, recordHumanAnswers, rowHash } from './bind.mjs'
+import { carryForward, hashFile, inputHashMap, recordHumanAnswers, rowHash, sha256 } from './bind.mjs'
 import { QA_ROWS } from './form.mjs'
 import { exitDescription, runHookClients } from './hook-runs.mjs'
+
+/** The cloud-check script, hashed into every cloud row: a changed check reopens a signed row. */
+const CLOUD_CHECK = fileURLToPath(new URL('./cloud-check.mjs', import.meta.url))
 
 const SELF = fileURLToPath(import.meta.url)
 const REPO_ROOT = resolve(SELF, '..', '..', '..')
@@ -164,7 +174,7 @@ export const USAGE =
   'Usage: node scripts/qa/run.mjs [--site website/build] [--sha <sha>] [--out <path>]\n' +
   '                               [--fixtures <dir>]\n' +
   '                               [--clients claude,codex,cursor,copilot]\n' +
-  '                               [--skip-hooks] [--skip-browser]\n' +
+  '                               [--skip-hooks] [--skip-browser] [--cloud <verify.json> ...]\n' +
   '                               [--walked <ids>] [--accept-unwalked <ids>] [--by <name>] [--on <YYYY-MM-DD>]'
 
 /**
@@ -175,7 +185,7 @@ function idList(value) {
   return (value ?? '').split(',').filter((id) => id !== '')
 }
 
-/** `--flag value` and `--flag` over argv. Deliberately small: this script takes eleven options. */
+/** `--flag value` and `--flag` over argv. Deliberately small: this script takes twelve options. */
 export function parseArgs(argv) {
   const options = {
     clients: ['claude', 'codex', 'cursor', 'copilot'],
@@ -183,6 +193,7 @@ export function parseArgs(argv) {
     skipBrowser: false,
     walked: [],
     acceptUnwalked: [],
+    cloud: [],
   }
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]
@@ -195,6 +206,7 @@ export function parseArgs(argv) {
     else if (arg === '--clients') { options.clients = (next ?? '').split(',').filter((c) => c !== ''); i += 1 }
     else if (arg === '--skip-hooks') options.skipHooks = true
     else if (arg === '--skip-browser') options.skipBrowser = true
+    else if (arg === '--cloud') { options.cloud.push(next); i += 1 }
     else if (arg === '--walked') { options.walked.push(...idList(next)); i += 1 }
     else if (arg === '--accept-unwalked') { options.acceptUnwalked.push(...idList(next)); i += 1 }
     else if (arg === '--by') { options.by = next; i += 1 }
@@ -416,6 +428,68 @@ function a11yRowFor({ results, pageInputs, skipped }) {
   })
 }
 
+/**
+ * Read every `--cloud` file: `cloud-check.mjs verify --out`'s `{ check, client, repo, verdict,
+ * reason }`, keyed by client. Refused whole, before anything is measured, when a file cannot be
+ * read as one, names a client no cloud row carries, or repeats a client: a row decided from the
+ * wrong file is worse than a run that stops.
+ */
+export function readCloudOutputs(paths) {
+  const clients = new Set(QA_ROWS.filter((row) => row.lane === 'cloud').map((row) => row.client))
+  const byClient = new Map()
+  for (const path of paths) {
+    if (typeof path !== 'string' || path === '') throw new Error(`--cloud takes a file.\n${USAGE}`)
+    let parsed
+    let bytes
+    try {
+      bytes = readFileSync(path)
+      parsed = JSON.parse(bytes.toString('utf8'))
+    } catch {
+      // The path is the operator's own argument; the parser's message is left out of the error.
+      throw new Error(`--cloud ${path} is not a readable cloud-check verify output`)
+    }
+    const shaped =
+      parsed !== null &&
+      typeof parsed === 'object' &&
+      parsed.check === 'cloud-check' &&
+      clients.has(parsed.client) &&
+      ['pass', 'failed', 'not-run'].includes(parsed.verdict) &&
+      typeof parsed.reason === 'string' &&
+      typeof parsed.repo === 'string'
+    if (!shaped) {
+      throw new Error(
+        `--cloud ${path} is not a cloud-check verify output for one of ${[...clients].join(', ')} ` +
+          '(`node scripts/qa/cloud-check.mjs verify --out` writes one)',
+      )
+    }
+    if (byClient.has(parsed.client)) throw new Error(`--cloud names two verify outputs for ${parsed.client}`)
+    byClient.set(parsed.client, { ...parsed, sha256: sha256(bytes) })
+  }
+  return byClient
+}
+
+/**
+ * One cloud row. Bound to the cloud-check script and, where given, the verify output's bytes
+ * (labelled `cloud/<client>.json`, never the path it was read from). A `pass` stays a person's
+ * row (`unperformed`, open for `--walked`), a `failed` is the measurement it is, a verify `not-run`
+ * keeps its reason, and no output reads `not-run` with the row's own reason.
+ */
+function cloudRowFor(definition, output) {
+  const inputs = existsSync(CLOUD_CHECK) ? [{ path: repoRelativeLabel(CLOUD_CHECK), sha256: hashFile(CLOUD_CHECK) }] : []
+  if (output === undefined) {
+    const reason =
+      definition.notRun ??
+      `no cloud-check.mjs verify output for ${definition.client}; pass --cloud <file> from \`node scripts/qa/cloud-check.mjs verify --out\``
+    return buildRow({ id: definition.id, status: 'not-run', reason, inputs })
+  }
+  inputs.push({ path: `cloud/${definition.client}.json`, sha256: output.sha256 })
+  const read = `cloud-check verify ${output.verdict} on ${output.repo}${output.readAt === undefined ? '' : ` at ${output.readAt}`}: ${output.reason}`
+  if (output.verdict === 'pass') {
+    return buildRow({ id: definition.id, status: 'unperformed', reason: `${read}; the person signs it with --walked ${definition.id}`, inputs })
+  }
+  return buildRow({ id: definition.id, status: output.verdict === 'failed' ? 'failed' : 'not-run', reason: read, inputs })
+}
+
 /** Read the previous evidence file at `out`, if one is there. Absent is normal on a first run. */
 function previousEvidence(out) {
   if (!existsSync(out)) return null
@@ -451,6 +525,7 @@ export async function main(argv) {
     QA_ROWS.map((definition) => ({ row: definition.id, status: 'not-run' })),
     answers,
   )
+  const cloudOutputs = readCloudOutputs(options.cloud)
   const sha = options.sha ?? execFileSync('git', ['rev-parse', 'HEAD'], { cwd: REPO_ROOT, encoding: 'utf8' }).trim()
   const out = resolve(REPO_ROOT, options.out ?? `.stamity/evidence/qa-${sha.slice(0, 7)}.json`)
 
@@ -531,6 +606,10 @@ export async function main(argv) {
 
   const rows = []
   for (const definition of QA_ROWS) {
+    if (definition.lane === 'cloud') {
+      rows.push(cloudRowFor(definition, cloudOutputs.get(definition.client)))
+      continue
+    }
     if (definition.lane === 'hooks') {
       const result = hookResults.find((row) => row.client === definition.client)
       const { inputs, missing } = hashFixtureInputs(definition.client, result?.fixture)
