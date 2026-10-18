@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "generatedBy": "1.15.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-18T18:56:39.213Z",
+  "updatedAt": "2026-10-18T19:53:06.195Z",
   "tools": [
     "claude"
   ],
@@ -574,7 +574,7 @@
       "adapter": "claude",
       "artifactId": "verify",
       "artifactType": "skill",
-      "contentHash": "c30437a15d43b19d6e782ed1c07f340279b6a83240faaf870344ce7a3e18bd07",
+      "contentHash": "742e08467fc02dd92853bc5634dd7e660c580ce386adf5d6c4f3b36b3e9a10c2",
       "path": ".claude/skills/st-verify/scripts/spec-plan-coverage.mjs"
     },
     {
@@ -609,7 +609,7 @@
       "adapter": "claude",
       "artifactId": "stamity-person-only-guard",
       "artifactType": "infra",
-      "contentHash": "612113d51b33a024bb6ce4169e09e785b2a5e208eaf27deed59d95de3bdf959b",
+      "contentHash": "6f742afebca51c8667ab6a2c164254959f9a3c4a2182a59dcff4944fe7af8d4e",
       "path": ".stamity/generated/hooks/claude/stamity-person-only-guard.mjs"
     },
     {
@@ -630,14 +630,14 @@
       "adapter": "claude",
       "artifactId": "stamity-session-start",
       "artifactType": "infra",
-      "contentHash": "ba301a2a1a864c8bb1565f39e907e7860e30ecefddc48fd0095725c82d3f323c",
+      "contentHash": "300c68c56a36a08875d81e7ded049b69c3837dc6ee423244e1a0a0ffc30430c0",
       "path": ".stamity/generated/hooks/claude/stamity-session-start.mjs"
     },
     {
       "adapter": "claude",
       "artifactId": "claude-ask-gate",
       "artifactType": "infra",
-      "contentHash": "f30aaa234cfdcac69eb04e7e0eff302bee7163cf9c268ad4906b6d2a236d6717",
+      "contentHash": "713d5305ea637d789a5441bece982f56d94ee69a10421a94a504acc694cfcec8",
       "path": ".stamity/generated/hooks/claude/stamity-unattended-ask-gate.mjs"
     },
     {

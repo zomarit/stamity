@@ -140,9 +140,19 @@ function gitText(path) {
   return stats.isFile() && stats.size <= GIT_MAX_BYTES ? readFileSync(path, "utf8").trim() : null;
 }
 
-/** The current branch off .git/HEAD, a linked worktree's gitdir: pointer followed; null when detached or there is no .git. */
-function currentBranch(root) {
-  const dotGit = join(root, ".git");
+/** The branch .git/HEAD names; null when none is named. Throws on a read failing past absence. */
+function cardCurrentBranch(rootDir) {
+  const read = (path) => {
+    let stats;
+    try {
+      stats = lstatSync(path);
+    } catch (error) {
+      if (error && (error.code === "ENOENT" || error.code === "ENOTDIR")) return null;
+      throw error;
+    }
+    return stats.isFile() && stats.size <= 4096 ? readFileSync(path, "utf8").trim() : null;
+  };
+  const dotGit = join(rootDir, ".git");
   let gitDir = dotGit;
   let stats;
   try {
@@ -152,13 +162,13 @@ function currentBranch(root) {
     throw error;
   }
   if (!stats.isDirectory()) {
-    const pointer = /^gitdir:[ \t]*(.+)$/.exec((gitText(dotGit) ?? "").split(/\r?\n/)[0]);
+    const pointer = /^gitdir:[ \t]*(.+)$/.exec((read(dotGit) ?? "").split(/\r?\n/)[0]);
     if (pointer === null) return null;
     const target = pointer[1].trim();
-    gitDir = isAbsolute(target) ? target : resolve(root, target);
+    gitDir = isAbsolute(target) ? target : resolve(rootDir, target);
   }
-  const head = gitText(join(gitDir, "HEAD"));
-  return head !== null && head.startsWith("ref: refs/heads/") ? head.slice(16) : null;
+  const branch = /^ref: refs\/heads\/(.+)$/.exec(read(join(gitDir, "HEAD")) ?? "")?.[1] ?? null;
+  return branch === ".invalid" ? null : branch;
 }
 
 /** The run id a fresh run-ended marker names; null when absent, a link, not a file, past GIT_MAX_BYTES, naming no run id, or its at unreadable, after now or past MARKER_MAX_AGE_MS. */
@@ -192,7 +202,7 @@ function unattendedSource(root) {
   const closed = running.length === 0 ? heads.filter((head) => head.mode === "unattended" && head.branch !== null) : [];
   if (closed.length > 0) {
     const ended = endedRun(root);
-    const branch = ended === null ? null : currentBranch(root);
+    const branch = ended === null ? null : cardCurrentBranch(root);
     if (branch !== null && closed.some((head) => head.branch === branch && head.run === ended)) return null;
   }
   return VARIABLE_SOURCE;

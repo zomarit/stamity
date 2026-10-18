@@ -754,11 +754,29 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 	const onDefault = ctx.currentBranch !== null && defaults.has(branch(ctx.currentBranch));
 	let tagNames = null;
 	const isTagName = (name) => (tagNames ??= new Set(ctx.tags.map((tag) => tag.replace(/^refs\/tags\//i, "").toLowerCase()))).has(name);
-	const deny = (rule, what) => ({
-		deny: true,
-		rule,
-		reason: `${what} is a person-only act (${rule}): the person runs it, never the agent (REQ-FLOW-102). Stop here and list it for the person.`
-	});
+	const ASK_RULES = /* @__PURE__ */ new Set([
+		"push-default",
+		"push-tags",
+		"tag",
+		"pr-merge",
+		"pr-ready",
+		"release",
+		"publish",
+		"secrets",
+		"protection"
+	]);
+	const acts = [];
+	const deny = (rule, what) => {
+		const verdict = {
+			deny: true,
+			rule,
+			act: what,
+			reason: `${what} is a person-only act (${rule}): the person runs it, never the agent (REQ-FLOW-102). Stop here and list it for the person.`,
+			ask: ASK_RULES.has(rule)
+		};
+		acts.push(verdict);
+		return verdict;
+	};
 	function destination(refspec) {
 		const spec = refspec.replace(/^\+/, "");
 		const colon = spec.indexOf(":");
@@ -785,7 +803,8 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				"0",
 				""
 			].includes(value);
-			if ((key === "push.followtags" || /^remote\..+\.mirror$/.test(key)) && on) tags = true;
+			if (key === "push.followtags" && on) tags = true;
+			if (/^remote\..+\.mirror$/.test(key) && on) force = true;
 			if (key === "push.default" && value === "matching") matching = true;
 			if (/^remote\..+\.push$/.test(key) && eq !== -1) configured.push(pair.slice(eq + 1));
 			if (/^branch\..+\.merge$/.test(key) && eq !== -1) configured.push(`HEAD:${pair.slice(eq + 1)}`);
@@ -802,12 +821,12 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				if (is([
 					"--force",
 					"--force-with-lease",
-					"--force-if-includes"
+					"--force-if-includes",
+					"--mirror"
 				])) force = true;
 				else if (is([
 					"--tags",
 					"--follow-tags",
-					"--mirror",
 					"--all",
 					"--branches"
 				])) tags = true;
@@ -833,11 +852,16 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		}
 		const named = repoGiven ? positionals : positionals.slice(1);
 		const tagWord = named.indexOf("tag");
-		if (tagWord !== -1 && tagWord < named.length - 1) return deny("push-tags", "A push of tags");
+		const tagNamed = tagWord !== -1 && tagWord < named.length - 1;
 		const refspecs = named.length > 0 ? named : configured;
-		if (force || refspecs.some((spec) => spec.startsWith("+"))) return deny("force-push", "A force push");
-		if (remove || refspecs.some((spec) => spec.length > 1 && spec.startsWith(":"))) return deny("push-delete", "A remote branch deletion");
 		const namesTag = (side) => side !== "" && (/^(refs\/)?tags\//i.test(side) || isTagName(side.toLowerCase()));
+		if (force || refspecs.some((spec) => spec.startsWith("+"))) return deny("force-push", "A force push");
+		const deleted = refspecs.filter((spec) => spec.length > 1 && spec.startsWith(":")).map((spec) => spec.slice(1));
+		if (remove || deleted.length > 0) {
+			if (tagNamed || [...deleted, ...remove ? refspecs : []].some(namesTag)) return deny("tag-delete", "A remote tag deletion");
+			return deny("push-delete", "A remote branch deletion");
+		}
+		if (tagNamed) return deny("push-tags", "A push of tags");
 		const sides = (spec) => {
 			const bare = spec.replace(/^\+/, "");
 			const colon = bare.indexOf(":");
@@ -896,6 +920,8 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			"--points-at"
 		]);
 		let list = false;
+		let written = false;
+		let removed = false;
 		const positionals = [];
 		for (let j = 0; j < args.length; j += 1) {
 			const arg = args[j] ?? "";
@@ -905,14 +931,30 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			}
 			if (arg.startsWith("--")) {
 				const name = arg.split("=")[0] ?? "";
-				if (write.has(name)) return deny("tag", "A tag write (`git tag`)");
+				if (name.length > 2 && ["--delete", "--force"].some((option) => option.startsWith(name))) removed = true;
+				else if (write.has(name)) written = true;
 				if (listing.has(name)) list = true;
-				if (valued.has(name) && !arg.includes("=")) j += 1;
-			} else if (arg.startsWith("-") && arg.length > 1) {
-				if (/[asufdmFev]/.test(arg.slice(1).replace(/n\d*$/, ""))) return deny("tag", "A tag write (`git tag`)");
-				if (/[ln]/.test(arg)) list = true;
-			} else positionals.push(arg);
+				if ((valued.has(name) || [
+					"--local-user",
+					"--message",
+					"--file",
+					"--cleanup",
+					"--trailer"
+				].includes(name)) && !arg.includes("=")) j += 1;
+			} else if (arg.startsWith("-") && arg.length > 1) for (let c = 1; c < arg.length; c += 1) {
+				const letter = arg[c] ?? "";
+				if (letter === "d" || letter === "f") removed = true;
+				else if ("asmFuev".includes(letter)) written = true;
+				if (letter === "l" || letter === "n") list = true;
+				if ("umFn".includes(letter)) {
+					if (c === arg.length - 1 && letter !== "n") j += 1;
+					break;
+				}
+			}
+			else positionals.push(arg);
 		}
+		if (removed) return deny("tag-delete", "A tag deleted or moved (`git tag -d` or `-f`)");
+		if (written) return deny("tag", "A tag write (`git tag`)");
 		return list || positionals.length === 0 ? null : deny("tag", "A tag created (`git tag <name>`)");
 	}
 	function symbolicRefVerdict(args, via = "git symbolic-ref") {
@@ -936,7 +978,8 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			} else positionals.push(arg);
 		}
 		const [name = "", target] = positionals;
-		if ((remove || target !== void 0) && /^(refs\/)?tags\//i.test(name)) return deny("tag", `A symbolic tag ref written or deleted (\`${via}\`)`);
+		if (remove && /^(refs\/)?tags\//i.test(name)) return deny("tag-delete", `A symbolic tag ref deleted (\`${via}\`)`);
+		if (target !== void 0 && /^(refs\/)?tags\//i.test(name)) return deny("tag", `A symbolic tag ref written or deleted (\`${via}\`)`);
 		if (remove || target === void 0 || name === "HEAD") return null;
 		if (/[$`]/.test(target) || defaults.has(target.replace(/^(refs\/)?heads\//i, "").toLowerCase())) return deny("push-default", `A symbolic ref pointed at the default branch, or at a branch the line cannot show (\`${via}\`)`);
 		return null;
@@ -952,24 +995,35 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			}
 			return false;
 		});
-		if (group === "pr" && sub === "merge") return deny("pr-merge", "Merging a pull request (`gh pr merge`)");
-		if (group === "pr" && sub === "close" && flag("--delete-branch", "d", "c")) return deny("push-delete", "A remote branch deletion (`gh pr close --delete-branch`)");
-		if (group === "pr" && sub === "review" && flag("--approve", "a", "bF")) return deny("pr-merge", "Approving a pull request review (`gh pr review --approve`)");
-		if (group === "pr" && sub === "ready") return deny("pr-ready", "Marking a pull request ready (`gh pr ready`)");
+		if (group === "pr" && sub === "merge" && flag("--delete-branch", "d", "bFtA")) deny("push-delete", "A remote branch deletion (`gh pr merge --delete-branch`)");
+		if (group === "pr" && sub === "merge") deny("pr-merge", "Merging a pull request (`gh pr merge`)");
+		if (group === "pr" && sub === "close" && flag("--delete-branch", "d", "c")) deny("push-delete", "A remote branch deletion (`gh pr close --delete-branch`)");
+		if (group === "pr" && sub === "review" && flag("--approve", "a", "bF")) deny("pr-merge", "Approving a pull request review (`gh pr review --approve`)");
+		if (group === "pr" && sub === "ready") deny("pr-ready", "Marking a pull request ready (`gh pr ready`)");
 		if (group === "release" && sub !== void 0 && ![
 			"list",
 			"ls",
 			"view",
 			"download"
-		].includes(sub)) return deny("release", "A release write (`gh release`)");
-		if ((group === "secret" || group === "variable") && sub !== void 0 && !["list", "ls"].includes(sub)) return deny("secrets", `A ${group} write (\`gh ${group}\`)`);
+		].includes(sub)) {
+			if (sub === "delete" || sub === "delete-asset" || sub === "upload" && flag("--clobber", "", "")) deny("release-delete", `A release or asset deletion (\`gh release ${sub}\`)`);
+			else deny("release", "A release write (`gh release`)");
+		}
+		if ((group === "secret" || group === "variable") && sub !== void 0 && ![
+			"list",
+			"ls",
+			...group === "variable" ? ["get"] : []
+		].includes(sub)) {
+			if (sub === "delete" || sub === "remove") deny("secrets-delete", `A ${group} deletion (\`gh ${group} ${sub}\`)`);
+			else deny("secrets", `A ${group} write (\`gh ${group}\`)`);
+		}
+		if (group === "repo" && sub === "delete") deny("repo-delete", "A repository delete (`gh repo delete`)");
+		if (group === "repo" && sub === "transfer") deny("repo-irreversible", "A repository transfer (`gh repo transfer`)");
 		if (group === "repo" && [
-			"delete",
 			"archive",
 			"unarchive",
-			"rename",
-			"transfer"
-		].includes(sub ?? "")) return deny("protection", `A repository ${sub} (\`gh repo ${sub}\`)`);
+			"rename"
+		].includes(sub ?? "")) deny("protection", `A repository ${sub} (\`gh repo ${sub}\`)`);
 		if (group === "repo" && sub === "sync") {
 			const words = [];
 			const branches = [];
@@ -987,21 +1041,22 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				else if (!word.startsWith("-")) words.push(word);
 			}
 			if (words.length > 2) {
-				if (flag("--force", "", "")) return deny("force-push", "A forced sync of a repository (`gh repo sync --force`)");
-				if (branches.length === 0 || branches.some((name) => name === "" || /[$`]/.test(name) || defaults.has(branch(name)))) return deny("push-default", "A sync of a repository's default branch, or of a branch the line cannot show (`gh repo sync`)");
+				if (flag("--force", "", "")) deny("force-push", "A forced sync of a repository (`gh repo sync --force`)");
+				if (branches.length === 0 || branches.some((name) => name === "" || /[$`]/.test(name) || defaults.has(branch(name)))) deny("push-default", "A sync of a repository's default branch, or of a branch the line cannot show (`gh repo sync`)");
 			}
 		}
-		if (group === "repo" && sub === "edit" && cmd.some((word) => /^--default-branch(=|$)/.test(word))) return deny("protection", "A default-branch change (`gh repo edit --default-branch`)");
-		if (group === "repo" && sub === "edit" && cmd.some((word) => /^--visibility(=|$)/.test(word))) return deny("protection", "A visibility change (`gh repo edit --visibility`)");
-		if (group === "api") return httpVerdict(cmd);
-		return null;
+		if (group === "repo" && sub === "edit") {
+			if (cmd.some((word) => /^--visibility(=|$)/.test(word))) deny("repo-irreversible", "A visibility change (`gh repo edit --visibility`)");
+			if (cmd.some((word) => /^--default-branch(=|$)/.test(word))) deny("protection", "A default-branch change (`gh repo edit --default-branch`)");
+			else deny("protection", "A repository settings write (`gh repo edit`)");
+		}
+		if (group === "api") httpVerdict(cmd);
 	}
 	function httpVerdict(line) {
 		const gh = line[0] === "gh";
 		const fill = (value) => value.replace(/\{branch\}|:branch\b/g, () => ctx.currentBranch === null ? "main" : branch(ctx.currentBranch));
 		const { write, method, paths: targets, cmd, next } = httpCall(line);
-		const later = next === null ? null : httpVerdict(next);
-		if (later !== null) return later;
+		if (next !== null) httpVerdict(next);
 		const paths = gh ? targets.map(fill) : targets;
 		const text = cmd.join(" ");
 		const fieldFlag = gh ? /^(-[fF]|--field|--raw-field)$/ : /^(-[A-Za-z]*d|--data(-raw|-binary|-ascii|-urlencode)?|--json|--post-data|--body-data)$/;
@@ -1057,7 +1112,19 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			""
 		].includes(value.toLowerCase()));
 		const mask = (query) => query.replace(/"""[\s\S]*?"""|"(?:\\.|[^"\\])*"|#[^\n]*/g, (lit) => (lit.startsWith("\"") ? "\"" : " ").padEnd(lit.length));
-		const calls = (name, key) => {
+		const valueAt = (query, at) => {
+			const after = query.slice(at);
+			const literal = after.startsWith("\"\"\"") ? void 0 : /^"(?:\\.|[^"\\])*"/.exec(after)?.[0];
+			let value = /^[\w.-]+/.exec(after)?.[0] ?? null;
+			if (literal !== void 0) try {
+				const decoded = JSON.parse(literal);
+				value = typeof decoded === "string" && !/[$`]/.test(decoded) ? decoded : null;
+			} catch {
+				value = null;
+			}
+			return value;
+		};
+		const spans = (name) => {
 			const found = [];
 			for (const query of queries) {
 				const masked = mask(query);
@@ -1069,23 +1136,54 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 						else if (masked[end] === ")") level -= 1;
 						if (level === 0) break;
 					}
-					const values = [];
-					for (const arg of masked.slice(start, end).matchAll(new RegExp(`\\b${key}\\s*:\\s*`, "g"))) {
-						const after = query.slice(start + (arg.index ?? 0) + arg[0].length);
-						const literal = after.startsWith("\"\"\"") ? void 0 : /^"(?:\\.|[^"\\])*"/.exec(after)?.[0];
-						let value = /^[\w.-]+/.exec(after)?.[0] ?? null;
-						if (literal !== void 0) try {
-							const decoded = JSON.parse(literal);
-							value = typeof decoded === "string" && !/[$`]/.test(decoded) ? decoded : null;
-						} catch {
-							value = null;
-						}
-						values.push(value);
-					}
-					found.push(values);
+					found.push([
+						query,
+						masked,
+						start,
+						end
+					]);
 				}
 			}
 			return found;
+		};
+		const calls = (name, key) => spans(name).map(([query, masked, start, end]) => [...masked.slice(start, end).matchAll(new RegExp(`\\b${key}\\s*:\\s*`, "g"))].map((arg) => valueAt(query, start + (arg.index ?? 0) + arg[0].length)));
+		const refEntries = () => {
+			const entries = [];
+			const read = (query, masked, from, to, key) => {
+				const arg = new RegExp(`\\b${key}\\s*:\\s*`).exec(masked.slice(from, to));
+				return arg === null ? null : valueAt(query, from + arg.index + arg[0].length);
+			};
+			for (const [query, masked, start, end] of spans("updateRefs")) {
+				const list = /\brefUpdates\s*:\s*/.exec(masked.slice(start, end));
+				let k = list === null ? end : start + list.index + list[0].length;
+				if (masked[k] !== "[") {
+					entries.push({
+						name: null,
+						oid: null
+					});
+					continue;
+				}
+				let depth = 0;
+				let from = k;
+				for (k += 1; k < end; k += 1) {
+					const ch = masked[k];
+					if (depth === 0 && ch === "]") break;
+					if (ch === "{") {
+						if (depth === 0) from = k;
+						depth += 1;
+					} else if (ch === "}") {
+						depth -= 1;
+						if (depth === 0) entries.push({
+							name: read(query, masked, from, k, "name"),
+							oid: read(query, masked, from, k, "afterOid")
+						});
+					} else if (ch === "$" && depth === 0) entries.push({
+						name: null,
+						oid: null
+					});
+				}
+			}
+			return entries;
 		};
 		const callsLand = (name, key) => {
 			const found = calls(name, key);
@@ -1094,54 +1192,75 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		for (const path of paths) {
 			const shown = `${method} ${path}`;
 			if (/^graphql$/i.test(path)) {
-				if (/\b(mergePullRequest|enablePullRequestAutoMerge|enqueuePullRequest)\b/.test(text)) return deny("pr-merge", "A GraphQL merge");
-				if (/\bmarkPullRequestReadyForReview\b/.test(text)) return deny("pr-ready", "A GraphQL ready-for-review");
-				if (/\b(archiveRepository|unarchiveRepository|updateRepository(CustomProperty|Ruleset|WebCommitSignoffSetting)?|(create|update|delete)(BranchProtectionRule|RepositoryRuleset)|(create|delete|promote)RepositoryCustomProperty|setRepositoryCustomPropertyValues)\b/.test(text)) return deny("protection", "A GraphQL repository settings, protection or ruleset write");
+				if (/\b(mergePullRequest|enablePullRequestAutoMerge|enqueuePullRequest)\b/.test(text)) deny("pr-merge", "A GraphQL merge");
+				if (/\bmarkPullRequestReadyForReview\b/.test(text)) deny("pr-ready", "A GraphQL ready-for-review");
+				if (/\b(deleteBranchProtectionRule|deleteRepositoryRuleset|deleteRepositoryCustomProperty)\b/.test(text)) deny("protection-delete", "A GraphQL protection, ruleset or custom property deletion");
+				if (/\b(archiveRepository|unarchiveRepository|updateRepository(CustomProperty|Ruleset|WebCommitSignoffSetting)?|(create|update)(BranchProtectionRule|RepositoryRuleset)|(create|promote)RepositoryCustomProperty|setRepositoryCustomPropertyValues)\b/.test(text)) deny("protection", "A GraphQL repository settings, protection or ruleset write");
 				if (/\b(addPullRequestReview|submitPullRequestReview)\b/.test(text)) {
 					const reviews = [...calls("addPullRequestReview", "event"), ...calls("submitPullRequestReview", "event")];
 					const variables = queries.some((query) => mask(query).includes("$"));
-					if (reviews.length === 0 || reviews.some((events) => events.length === 0 && variables || events.some((event) => event === null || /^approve$/i.test(event)))) return deny("pr-merge", "A GraphQL review approval, or a review whose event the line cannot show");
+					if (reviews.length === 0 || reviews.some((events) => events.length === 0 && variables || events.some((event) => event === null || /^approve$/i.test(event)))) deny("pr-merge", "A GraphQL review approval, or a review whose event the line cannot show");
 				}
-				if (/\bcreateCommitOnBranch\b/.test(text) && callsLand("createCommitOnBranch", "branchName")) return deny("push-default", "A GraphQL commit to the default branch");
-				if (/\bmergeBranch\b/.test(text) && callsLand("mergeBranch", "base")) return deny("push-default", "A GraphQL merge into the default branch");
+				if (/\bcreateCommitOnBranch\b/.test(text) && callsLand("createCommitOnBranch", "branchName")) deny("push-default", "A GraphQL commit to the default branch");
+				if (/\bmergeBranch\b/.test(text) && callsLand("mergeBranch", "base")) deny("push-default", "A GraphQL merge into the default branch");
 				if (/\bupdateRefs?\b/.test(text)) {
-					if ([...calls("updateRef", "force"), ...calls("updateRefs", "force")].some(forced)) return deny("force-push", "A forced GraphQL ref update");
-					if (calls("updateRefs", "name").flat().some((ref) => ref !== null && /^refs\/tags\//i.test(ref))) return deny("push-tags", "A GraphQL tag ref update");
+					if ([...calls("updateRef", "force"), ...calls("updateRefs", "force")].some(forced)) deny("force-push", "A forced GraphQL ref update");
+					for (const entry of refEntries()) {
+						if (entry.oid !== null && !/^(0{40}|0{64})$/.test(entry.oid)) continue;
+						if (entry.name !== null && /^refs\/tags\//i.test(entry.name)) deny("tag-delete", "A GraphQL tag ref deletion");
+						else deny("push-delete", "A GraphQL ref deletion, or a ref update whose target the line cannot show");
+					}
+					if (calls("updateRefs", "name").flat().some((ref) => ref !== null && /^refs\/tags\//i.test(ref))) deny("push-tags", "A GraphQL tag ref update");
 					const hidden = queries.some((query) => /\brefUpdates\s*:\s*\[(?:[^\]]*,)?\s*\$/.test(mask(query)));
-					if (/\bupdateRef\b/.test(text) || hidden || callsLand("updateRefs", "name")) return deny("push-default", "A GraphQL ref update onto the default branch, or onto a ref the line cannot show");
+					if (/\bupdateRef\b/.test(text) || hidden || callsLand("updateRefs", "name")) deny("push-default", "A GraphQL ref update onto the default branch, or onto a ref the line cannot show");
 				}
-				if (/\bdeleteRef\b/.test(text)) return deny("push-delete", "A GraphQL ref deletion");
+				if (/\bdeleteRef\b/.test(text)) deny("push-delete", "A GraphQL ref deletion");
 				if (/\bcreateRef\b/.test(text)) {
 					const created = calls("createRef", "name");
-					if (created.length === 0 || created.some((refs) => refs.length === 0 || refs.some((ref) => ref === null || /^refs\/tags\//i.test(ref)))) return deny("push-tags", "A GraphQL tag ref created, or a ref the line cannot show");
-					if (created.flat().some((ref) => ref !== null && defaults.has(branch(ref)))) return deny("push-default", "A GraphQL ref created on the default branch");
+					if (created.length === 0 || created.some((refs) => refs.length === 0 || refs.some((ref) => ref === null || /^refs\/tags\//i.test(ref)))) deny("push-tags", "A GraphQL tag ref created, or a ref the line cannot show");
+					else if (created.flat().some((ref) => ref !== null && defaults.has(branch(ref)))) deny("push-default", "A GraphQL ref created on the default branch");
 				}
 				continue;
 			}
-			if (!write) continue;
+			if (write) restAct(path, shown);
+		}
+		function restAct(path, shown) {
 			if (/^pulls\/[^/]+\/merge(\/|$)/i.test(path) || /(^|\/)merge-async(\/|$)/i.test(path)) return deny("pr-merge", `A REST merge (${shown})`);
 			if (/^pulls\/[^/]+\/reviews(\/[^/]+\/events)?$/i.test(path) && (hiddenBody || fields("event").some((event) => event === null || /^approve$/i.test(event.trim())))) return deny("pr-merge", `A REST review approval, or a review whose body the line cannot show (${shown})`);
-			if (/^branches\/.+\/protection(\/|$)/i.test(path) || /^(rulesets|properties)(\/|$)/i.test(path)) return deny("protection", `A protection or ruleset write (${shown})`);
-			if (/^(repos\/[^/]+\/[^/]+|repositories\/[^/]+)$/i.test(path) && (method === "PATCH" || method === "DELETE")) return deny("protection", `A repository settings write or deletion (${shown})`);
+			if (/^branches\/.+\/protection(\/|$)/i.test(path) || /^(rulesets|properties)(\/|$)/i.test(path)) {
+				if (method === "DELETE") return deny("protection-delete", `A protection, ruleset or custom property deletion (${shown})`);
+				return deny("protection", `A protection or ruleset write (${shown})`);
+			}
+			if (/^(repos\/[^/]+\/[^/]+|repositories\/[^/]+)$/i.test(path) && (method === "PATCH" || method === "DELETE")) {
+				if (method === "DELETE") return deny("repo-delete", `A repository settings write or deletion (${shown})`);
+				if (hiddenBody || fields("visibility").length > 0 || fields("private").length > 0) return deny("repo-irreversible", `A repository visibility change, or a settings write whose body the line cannot show (${shown})`);
+				return deny("protection", `A repository settings write or deletion (${shown})`);
+			}
 			if (/^branches\/.+\/rename$/i.test(path)) return deny("protection", `A branch rename (${shown})`);
-			if (/^transfer$/i.test(path)) return deny("protection", `A repository transfer (${shown})`);
+			if (/^transfer$/i.test(path)) return deny("repo-irreversible", `A repository transfer (${shown})`);
 			if (/^contents(\/|$)/i.test(path) && landsOnDefault(fields("branch"))) return deny("push-default", `A REST commit to the default branch (${shown})`);
 			if (/^merges$/i.test(path) && landsOnDefault(fields("base")) || /^merge-upstream$/i.test(path) && landsOnDefault(fields("branch"))) return deny("push-default", `A REST merge into the default branch (${shown})`);
-			if (/^((actions|dependabot|codespaces|agents)|environments\/[^/]+)\/(secrets|variables)(\/|$)/i.test(path)) return deny("secrets", `A secret or variable write (${shown})`);
-			if (/^releases(\/|$)/i.test(path)) return deny("release", `A release write (${shown})`);
+			if (/^((actions|dependabot|codespaces|agents)|environments\/[^/]+)\/(secrets|variables)(\/|$)/i.test(path)) {
+				if (method === "DELETE") return deny("secrets-delete", `A secret or variable deletion (${shown})`);
+				return deny("secrets", `A secret or variable write (${shown})`);
+			}
+			if (/^releases(\/|$)/i.test(path)) return method === "DELETE" ? deny("release-delete", `A release or asset deletion (${shown})`) : deny("release", `A release write (${shown})`);
 			if (/^git\/refs(\/|$)/i.test(path)) {
-				if (method === "DELETE") return deny("push-delete", `A REST ref deletion (${shown})`);
+				if (method === "DELETE") {
+					if (/^git\/refs\/tags(\/|$)/i.test(path)) return deny("tag-delete", `A REST tag ref deletion (${shown})`);
+					return deny("push-delete", `A REST ref deletion (${shown})`);
+				}
+				if (forced(fields("force"))) return deny("force-push", `A forced REST ref update (${shown})`);
 				const refs = fields("ref");
 				if (/^git\/refs\/tags(\/|$)/i.test(path) || /(^|[=\s])refs\/tags\//i.test(text) || refs.some((ref) => ref === null || /^refs\/tags\//i.test(ref))) return deny("push-tags", `A REST tag ref write (${shown})`);
-				if (forced(fields("force"))) return deny("force-push", `A forced REST ref update (${shown})`);
 				if ([
 					/^git\/refs\/heads\/(.+)$/i.exec(path)?.[1] ?? "",
 					...[...text.matchAll(/(?:^|[=\s/])refs\/heads\/(\S+)/gi)].map((match) => match[1] ?? ""),
 					...refs.map((ref) => /^refs\/heads\/(.+)$/i.exec(ref ?? "")?.[1] ?? "")
 				].some((name) => defaults.has(name.toLowerCase()))) return deny("push-default", `A REST write to the default branch (${shown})`);
 			}
+			return null;
 		}
-		return null;
 	}
 	function publishVerdict(cmd) {
 		const valued = /* @__PURE__ */ new Set([
@@ -1194,29 +1313,51 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			}
 			return positionals;
 		};
-		return [positionalsOf(false), ...npm ? [positionalsOf(true)] : []].some((positionals) => positionals.some((word, index) => (word === "publish" || (index === 0 ? npm : positionals[index - 1] === "npm") && /^pu(?:b(?:l(?:i(?:sh?)?)?)?)?$/.test(word)) && (index === 0 || [
+		const publishes = [positionalsOf(false), ...npm ? [positionalsOf(true)] : []].some((positionals) => positionals.some((word, index) => (word === "publish" || (index === 0 ? npm : positionals[index - 1] === "npm") && /^pu(?:b(?:l(?:i(?:sh?)?)?)?)?$/.test(word)) && (index === 0 || [
 			"npm",
 			"pnpm",
 			"yarn",
 			"bun"
-		].includes(positionals[index - 1] ?? "") || cmd[0] === "yarn" && index === 2 && positionals[0] === "workspace"))) ? deny("publish", `Publishing a package (\`${cmd[0]} publish\`)`) : null;
+		].includes(positionals[index - 1] ?? "") || cmd[0] === "yarn" && index === 2 && positionals[0] === "workspace")));
+		for (const positionals of npm ? [positionalsOf(false), positionalsOf(true)] : [positionalsOf(false)]) for (const [index, word] of positionals.entries()) {
+			if (!(index === 0 ? npm : positionals[index - 1] === "npm")) continue;
+			if (/^unp(?:u(?:b(?:l(?:i(?:sh?)?)?)?)?)?$/.test(word)) deny("unpublish", "Withdrawing a package (`npm unpublish`)");
+			const action = word === "dist-tag" || word === "dist-tags" ? positionals[index + 1] ?? "" : "";
+			if ([
+				"rm",
+				"r",
+				"del",
+				"d",
+				"remove"
+			].includes(action)) deny("unpublish", "A dist-tag removed (`npm dist-tag rm`)");
+			if ([
+				"add",
+				"a",
+				"set",
+				"s"
+			].includes(action)) deny("publish", "A dist-tag moved (`npm dist-tag add`)");
+		}
+		return publishes ? deny("publish", `Publishing a package (\`${cmd[0]} publish\`)`) : null;
 	}
 	for (const cmd of commandsOf(command, 0, false)) {
 		const program = cmd[0] ?? "";
-		let verdict = null;
 		if (program === "git") {
 			const { sub, args, config } = gitParts(cmd);
-			if (sub === "push") verdict = pushVerdict(args, config);
-			else if (sub === "send-pack") verdict = pushVerdict(args, [...config, "push.default=matching"]);
-			else if (sub === "tag") verdict = tagVerdict(args);
-			else if (sub === "update-ref" && (args.some((arg) => /^(refs\/)?tags\//i.test(arg)) || args.includes("--stdin") && /refs\/tags\//i.test(command))) verdict = deny("tag", "A tag ref write (`git update-ref`)");
-			else if (sub === "update-ref" && args.includes("--stdin")) {
+			if (sub === "push") pushVerdict(args, config);
+			else if (sub === "send-pack") pushVerdict(args, [...config, "push.default=matching"]);
+			else if (sub === "tag") tagVerdict(args);
+			else if (sub === "update-ref" && (args.some((arg) => /^(refs\/)?tags\//i.test(arg)) || args.includes("--stdin") && /refs\/tags\//i.test(command))) {
+				const zero = /(^|[^0-9a-f])(0{40}|0{64})([^0-9a-f]|$)/i;
+				const [, value = ""] = args.filter((arg, index) => !arg.startsWith("-") && args[index - 1] !== "-m");
+				if (args.includes("-d") || zero.test(value) || args.includes("--stdin") && (/\bdelete\b/.test(command) || zero.test(command))) deny("tag-delete", "A tag ref deleted (`git update-ref`)");
+				else deny("tag", "A tag ref write (`git update-ref`)");
+			} else if (sub === "update-ref" && args.includes("--stdin")) {
 				const word = String.raw`(?:[\s'"]|\\(?:x[\da-fA-F]{1,2}|u[\da-fA-F]{1,4}|U[\da-fA-F]{1,8}|[0-7]{1,4}|[a-z]))+([^\s'"\\|;&<>()]+)`;
 				for (const [, op, ref = "", target] of command.matchAll(new RegExp(String.raw`symref-(create|update|delete)${word}(?:${word})?`, "g"))) {
 					const shown = target === void 0 || target.includes("%") ? "$" : target;
-					verdict ??= symbolicRefVerdict(op === "delete" ? ["-d", ref] : [ref, shown], "git update-ref --stdin");
+					symbolicRefVerdict(op === "delete" ? ["-d", ref] : [ref, shown], "git update-ref --stdin");
 				}
-			} else if (sub === "symbolic-ref") verdict = symbolicRefVerdict(args);
+			} else if (sub === "symbolic-ref") symbolicRefVerdict(args);
 			else if (sub === "subtree") {
 				const valued = /* @__PURE__ */ new Set([
 					"-P",
@@ -1228,19 +1369,18 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 					"--onto"
 				]);
 				const words = args.filter((word, index) => !word.startsWith("-") && !valued.has(args[index - 1] ?? ""));
-				if (words[0] === "push") verdict = pushVerdict(words.slice(1), config);
+				if (words[0] === "push") pushVerdict(words.slice(1), config);
 			}
-		} else if (program === "gh") verdict = ghVerdict(cmd);
-		else if (program === "curl" || program === "wget") verdict = httpVerdict(cmd);
+		} else if (program === "gh") ghVerdict(cmd);
+		else if (program === "curl" || program === "wget") httpVerdict(cmd);
 		else if ([
 			"npm",
 			"pnpm",
 			"yarn",
 			"bun"
-		].includes(program)) verdict = publishVerdict(cmd);
-		if (verdict !== null) return verdict;
+		].includes(program)) publishVerdict(cmd);
 	}
-	return { deny: false };
+	return acts.find((act) => !act.ask) ?? acts[0] ?? { deny: false };
 };
 
 const unattendedPushVerdict = function unattendedPushVerdict(command) {

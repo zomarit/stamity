@@ -580,6 +580,37 @@ const CARD_DEBUG_ROUNDS_LABEL = "debug rounds open";
 const CARD_NO_RUN = "no run in progress";
 const CARD_DEBUG_NEXT_LINE = "next: each open debug round's record names its probes and where it stopped";
 
+/** The branch .git/HEAD names; null when none is named. Throws on a read failing past absence. */
+function cardCurrentBranch(rootDir) {
+  const read = (path) => {
+    let stats;
+    try {
+      stats = lstatSync(path);
+    } catch (error) {
+      if (error && (error.code === "ENOENT" || error.code === "ENOTDIR")) return null;
+      throw error;
+    }
+    return stats.isFile() && stats.size <= 4096 ? readFileSync(path, "utf8").trim() : null;
+  };
+  const dotGit = join(rootDir, ".git");
+  let gitDir = dotGit;
+  let stats;
+  try {
+    stats = lstatSync(dotGit);
+  } catch (error) {
+    if (error && (error.code === "ENOENT" || error.code === "ENOTDIR")) return null;
+    throw error;
+  }
+  if (!stats.isDirectory()) {
+    const pointer = /^gitdir:[ \t]*(.+)$/.exec((read(dotGit) ?? "").split(/\r?\n/)[0]);
+    if (pointer === null) return null;
+    const target = pointer[1].trim();
+    gitDir = isAbsolute(target) ? target : resolve(rootDir, target);
+  }
+  const branch = /^ref: refs\/heads\/(.+)$/.exec(read(join(gitDir, "HEAD")) ?? "")?.[1] ?? null;
+  return branch === ".invalid" ? null : branch;
+}
+
 /** A regular file, never through a link. Absent or unreadable reads as not one. */
 function cardRegularFile(path) {
   try {
@@ -974,11 +1005,22 @@ function cardRenderClosed(run, head, ledger, debug, nowMs, k) {
  * The resume card of the newest run in progress; with none, of the newest run
  * dated within CARD_CLOSED_MAX_AGE_DAYS whose record head reads (the closed
  * card); with neither, of the open debug rounds alone, naming no run; else
- * null. A debug round's record is never the run: the open ones are listed on
+ * null. On startup, only the newest run in progress whose Branch: line names
+ * the branch HEAD names, and never the closed or the debug card. A debug
+ * round's record is never the run: the open ones are listed on
  * the debug line. Lists shrink until the card fits CARD_MAX_CHARS; with every
  * list at zero it always does. A card whose text trips the screen is withheld whole.
  */
-function resumeCardLines(rootDir, stateRoot, nowMs) {
+function resumeCardLines(rootDir, stateRoot, nowMs, startup) {
+  let branch = null;
+  if (startup) {
+    try {
+      branch = cardCurrentBranch(rootDir);
+    } catch {
+      // A HEAD that cannot be read names no branch: a fresh start gets no card.
+    }
+    if (branch === null) return null;
+  }
   const runsDir = join(stateRoot, CARD_RUNS_DIR);
   // A linked runs folder is not this repo's runs: nothing in it is read.
   if (!cardRealDir(runsDir)) return null;
@@ -1007,7 +1049,7 @@ function resumeCardLines(rootDir, stateRoot, nowMs) {
   for (const run of runs) {
     const head = cardRecordHead(join(runsDir, run, CARD_RECORD_FILE));
     if (head === null) continue;
-    if (head.inProgress) {
+    if (head.inProgress && (!startup || head.branch === branch)) {
       chosen = { run, head };
       break;
     }
@@ -1015,8 +1057,8 @@ function resumeCardLines(rootDir, stateRoot, nowMs) {
     const day = run.slice(0, 10);
     if (closed === null && day >= cutoff && day <= today) closed = { run, head };
   }
-  const pick = chosen === null ? closed : chosen;
-  if (pick === null && debug.length === 0) return null;
+  const pick = chosen === null && !startup ? closed : chosen;
+  if (pick === null && (startup || debug.length === 0)) return null;
 
   let render;
   if (pick === null) {
@@ -1051,10 +1093,11 @@ function resumeCardLines(rootDir, stateRoot, nowMs) {
 // payload, so a TTY is never read — reading it would wait for input nobody is
 // going to type. The check asks fd 0 directly: touching process.stdin would
 // open it as a non-blocking stream, and the read below would then fail with
-// EAGAIN whenever the client had not finished writing yet. Only a start after
-// a compaction or on a resume appends the card: a fresh session has no run
-// state to lose, and a client that sends no source (or neither "compact" nor
-// "resume") gets the banner it always got.
+// EAGAIN whenever the client had not finished writing yet. A start after a
+// compaction or on a resume appends the card; a fresh start appends it only for
+// the run in progress on the branch HEAD names, which a new machine continues
+// (REQ-CTX-013); a client that sends no source (or none of the three) gets the
+// banner it always got.
 const SOURCE = isatty(0) ? "" : field(readPayload(), ["source"]);
 
 // Written once, then the process ends on its own. `process.exit` would race
@@ -1064,8 +1107,8 @@ const lines = render();
 // Before the card, so the card stays everything after the last blank line.
 const session = sessionLines(process.env);
 if (session.length > 0) lines.push("", ...session);
-if (SOURCE === "compact" || SOURCE === "resume") {
-  const card = resumeCardLines(repoRoot(), STATE_ROOT, NOW);
+if (SOURCE === "compact" || SOURCE === "resume" || SOURCE === "startup") {
+  const card = resumeCardLines(repoRoot(), STATE_ROOT, NOW, SOURCE === "startup");
   if (card !== null) lines.push("", ...card);
 }
 process.stdout.write(lines.join("\n") + "\n");
