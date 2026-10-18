@@ -897,6 +897,25 @@ describe("stamity run checkpoint", () => {
     expect(pushes()).toEqual([]);
   });
 
+  // pr/47: a record whose Branch: is missing, or not bare at column 0, names no branch to match, so it refuses.
+  it.each([
+    ["no Branch: line", ""],
+    ["a bulleted Branch: line", `- Branch: ${RUN_BRANCH}\n`],
+  ])("refuses a record with %s, committing and pushing nothing (pr/47)", async (_, branchLine) => {
+    const { repo, remote, base } = await seed("unattended", { branch: "feature/other" });
+    await put(repo, `${RUN_DIR}/record.md`, `# Run ${RUN}\n\nStatus: in progress\nMode: unattended\n${branchLine}Base: ${base}\n`);
+    await writeFile(join(repo, "a.txt"), "changed\n");
+
+    const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+    expect(code).toBe(1);
+    expect(doc).toMatchObject({ branch: "feature/other", committed: null, pushed: false });
+    expect(doc["notDone"]).toEqual([`commit refused: ${RUN_DIR}/record.md names no Branch:`]);
+    expect(git(repo, ["rev-parse", "HEAD"])).toBe(base);
+    expect(pushes()).toEqual([]);
+    expect(remoteHeads(remote)).toEqual(SEEDED);
+  });
+
   it("refuses as origin changed where origin names another repository than the pin, staging and pushing nothing (review/209)", async () => {
     const { repo, remote } = await seed("unattended");
     git(repo, ["remote", "set-url", "origin", "https://github.com/elsewhere/r.git"]);

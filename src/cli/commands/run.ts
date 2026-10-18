@@ -70,7 +70,8 @@ import { readPushed, scanChange } from "./gate.ts";
  * and, in this order: refuses a commit on a default branch (and on a checkout
  * that is not the record's `Branch:`, as `branch mismatch`, or a detached one; a
  * `Branch:` naming a default branch matches `stamity/<run-id>`, the branch
- * `start` switches such a run to); refuses as `origin changed` where origin's
+ * `start` switches such a run to; a record with no `Branch:` line at column 0
+ * refuses as `commit refused: <record> names no Branch:`, pr/47); refuses as `origin changed` where origin's
  * fetch URL or any push URL git resolves now names another repository than `origin.json` pins (and, unattended, where
  * no pin is readable, as `origin not pinned`); stages
  * only the run folder's record, ledger, plan, morning list, origin pin and `held/*.patch`,
@@ -666,11 +667,13 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
       ? "commit refused: HEAD is detached, so there is no run branch to push"
       : isDefault(current)
         ? `commit refused: ${current} is the default branch (read from ${SOURCE_LABEL[defaults.source]})`
-        : head.branch !== null && !matches(head.branch, current)
-          ? `branch mismatch: the checkout is on ${current}, and the record's Branch: names ${head.branch}`
-          : PUSHABLE_BRANCH.test(current)
-            ? null
-            : `commit refused: the branch name ${current} holds characters the push check does not read`;
+        : head.branch === null
+          ? `commit refused: ${recordRel} names no Branch:`
+          : !matches(head.branch, current)
+            ? `branch mismatch: the checkout is on ${current}, and the record's Branch: names ${head.branch}`
+            : PUSHABLE_BRANCH.test(current)
+              ? null
+              : `commit refused: the branch name ${current} holds characters the push check does not read`;
   lines.push(`branch: ${sanitizeLabel(current ?? "(detached HEAD)")}`);
   if (refusal !== null || current === null) {
     result.notDone.push(refusal ?? "commit refused");

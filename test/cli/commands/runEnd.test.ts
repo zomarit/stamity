@@ -464,6 +464,26 @@ describe("stamity run end", () => {
     expect(writesToGitHub()).toEqual([]);
   });
 
+  // pr/47: a record whose Branch: is missing, or not bare at column 0, names no branch to match, so end refuses it.
+  it.each([
+    ["no Branch: line", ""],
+    ["a bulleted Branch: line", `- Branch: ${RUN_BRANCH}\n`],
+  ])("refuses a record with %s, pushing nothing and opening no pull request", async (_, branchLine) => {
+    const { repo, remote, base } = await seed("unattended", { branch: "feature/other" });
+    await put(repo, `${RUN_DIR}/record.md`, `# Run ${RUN}\n\nStatus: in progress\nMode: unattended\n${branchLine}Base: ${base}\n`);
+    await writeFile(join(repo, "a.txt"), "changed\n");
+
+    const { code, doc } = await run(repo, [...END("feat: x"), "--paths", "a.txt"]);
+
+    expect(code).toBe(1);
+    expect(doc).toMatchObject({ subcommand: "end", branch: "feature/other", committed: null, pushed: false, pr: null, inferred: [] });
+    expect(doc["notDone"]).toEqual([`commit refused: ${RUN_DIR}/record.md names no Branch:`]);
+    expect(git(repo, ["rev-parse", "HEAD"])).toBe(base);
+    expect(pushes()).toEqual([]);
+    expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
+    expect(writesToGitHub()).toEqual([]);
+  });
+
   // review/166: one input activates the inferred rows, so `end`'s JSON is shown to carry draftPr's, not the default.
   it("carries the prerequisites the pushed change implies in end's inferred, and in the body", async () => {
     const { repo } = await seed("unattended");
