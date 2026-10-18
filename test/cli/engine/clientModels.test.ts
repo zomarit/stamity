@@ -8,8 +8,16 @@ import {
   parseCodexModels,
   parseCopilotHelpConfig,
   parseCursorModels,
+  readModelListCache,
+  resolveModelLists,
   trustedSearchPath,
+  withModelLists,
+  writeModelListCache,
+  type ModelLists,
 } from "../../../src/cli/engine/clientModels.ts";
+import { createManifest } from "../../../src/manifest/manifest.ts";
+import type { Tool } from "../../../src/types/core.ts";
+import type { SetupManifest } from "../../../src/types/manifest.ts";
 import type { ProgramFileProbe } from "../../../src/shared/programPath.ts";
 import { useTempDir } from "../../support/tempDir.ts";
 
@@ -474,5 +482,124 @@ describe("listClientModels", () => {
     expect(trustedSearchPath("/out:/gone:/repo/bin", "/repo", "linux", { ...probe, realPath: (path) => (path === "/gone" ? null : path) })).toBe(
       "/out:/gone",
     );
+  });
+});
+
+/** REQ-LADDER-009: the account's lists live in the git-ignored cache, never in the committed manifest. */
+describe("the model list cache", () => {
+  const CACHE = ".stamity/client-models.json";
+  const CODEX = { ids: ["gpt-6-sol", "gpt-5.6-luna"], source: "codex-debug-models" } as const;
+  const CURSOR_OLD = { ids: ["claude-opus-5-high"], source: "cursor-agent-models" } as const;
+  const CURSOR_FRESH = { ids: ["claude-opus-5-5-high"], source: "cursor-agent-models" } as const;
+
+  /** A manifest selecting `tools`, its ledger naming `ledgered` paths, and `listed` as a 1.15.0 one saved it. */
+  function setup(tools: Tool[], ledgered: string[], listed?: ModelLists): SetupManifest {
+    const manifest = createManifest({
+      tools,
+      selection: { items: { agent: [], skill: [], rule: [], command: [] } },
+      generatorVersion: "1.16.0",
+      now: new Date("2026-10-19T00:00:00.000Z"),
+    });
+    manifest.ledger = ledgered.map((path) => ({ path, adapter: "copilot", artifactId: "copilot-model-map", artifactType: "infra" }));
+    return listed === undefined ? manifest : { ...manifest, models: { listed: structuredClone(listed) } };
+  }
+
+  it("reads nothing and names no problem where no cache is, and reads back what it wrote, clients in sort order", async () => {
+    const temp = getTemp();
+
+    expect(await readModelListCache(temp.dir)).toEqual({ lists: {}, problem: null });
+    expect(await writeModelListCache(temp.dir, { cursor: { ...CURSOR_FRESH, ids: [...CURSOR_FRESH.ids] }, codex: { ...CODEX, ids: [...CODEX.ids] } })).toBeNull();
+
+    expect(Object.keys(JSON.parse(readFileSync(temp.path(CACHE), "utf8")).listed as object)).toEqual(["codex", "cursor"]);
+    expect(await readModelListCache(temp.dir)).toEqual({ lists: { codex: CODEX, cursor: CURSOR_FRESH }, problem: null });
+  });
+
+  it("reads a cache past the 200-id ceiling, of another shape or holding a malformed id as no list, naming it", async () => {
+    const temp = getTemp();
+    const flood = Array.from({ length: 201 }, (_unused, index) => `gpt-flood-${index}`);
+    // Sequential on purpose: each body is written over the one before at the same path.
+    /* oxlint-disable no-await-in-loop */
+    for (const body of [
+      { listed: { codex: { ids: flood, source: "codex-debug-models" } } },
+      { listed: { codex: CODEX }, extra: true },
+      { listed: { codex: { ids: ["gpt 6\n"], source: "codex-debug-models" } } },
+      { listed: { codex: { ids: ["gpt-6-sol"], source: "a-planted-source" } } },
+    ]) {
+      await temp.seedFiles({ [CACHE]: JSON.stringify(body) });
+
+      const read = await readModelListCache(temp.dir);
+
+      expect(read.lists).toEqual({});
+      expect(read.problem).toContain(`the model list cache ${CACHE} was not read`);
+    }
+    /* oxlint-enable no-await-in-loop */
+    // Exactly 200 ids is still a list.
+    await temp.seedFiles({ [CACHE]: JSON.stringify({ listed: { codex: { ids: flood.slice(0, 200), source: "codex-debug-models" } } }) });
+    expect((await readModelListCache(temp.dir)).lists.codex?.ids).toHaveLength(200);
+  });
+
+  it.skipIf(process.platform === "win32")("reads a cache that is a link as no list, naming it", async () => {
+    const temp = getTemp();
+    await temp.seedFiles({ "elsewhere.json": JSON.stringify({ listed: { codex: CODEX } }) });
+    await mkdir(temp.path(".stamity"), { recursive: true });
+    await symlink(temp.path("elsewhere.json"), temp.path(CACHE));
+
+    const read = await readModelListCache(temp.dir);
+
+    expect(read).toEqual({ lists: {}, problem: expect.stringContaining("it is not a regular file") as unknown });
+  });
+
+  it("answers a warning, never a throw, when the cache cannot be written", async () => {
+    const temp = getTemp();
+    await mkdir(temp.path(CACHE), { recursive: true });
+
+    const warning = await writeModelListCache(temp.dir, { codex: { ...CODEX, ids: [...CODEX.ids] } });
+
+    expect(warning).toContain(`could not be kept in ${CACHE}`);
+    expect(warning).toContain("held for this run only");
+  });
+
+  it("lays the fresh read over the cache, over a 1.15.0 manifest's lists, over the ledgered emitted map", async () => {
+    const temp = getTemp();
+    const copilotMap = ".stamity/generated/models/copilot.json";
+    await temp.seedFiles({
+      [CACHE]: JSON.stringify({ listed: { codex: CODEX } }),
+      // Copilot's map, ledgered: each class's model (its bracket options dropped) and its fallbacks.
+      [copilotMap]: JSON.stringify({
+        classes: { standard: { model: "gpt-5.5-mini[x=1]", fallbacks: ["claude-haiku-5"] }, economy: { fallbacks: ["gpt-5.5-mini"] } },
+        roles: {},
+      }),
+      // Codex's map is not ledgered here, so it gives nothing.
+      ".stamity/generated/models/codex.json": JSON.stringify({ classes: { standard: { model: "gpt-planted", fallbacks: [] } } }),
+    });
+    const manifest = setup(["codex", "copilot", "cursor"], [copilotMap], {
+      cursor: { ...CURSOR_OLD, ids: [...CURSOR_OLD.ids] },
+      codex: { ids: ["gpt-old"], source: "codex-debug-models" },
+    });
+
+    const lists = await resolveModelLists(temp.dir, manifest, { cursor: { ...CURSOR_FRESH, ids: [...CURSOR_FRESH.ids] } });
+
+    const fromMap = { ids: ["gpt-5.5-mini", "claude-haiku-5"], source: "copilot-help-config" };
+    expect(lists.kept).toEqual({ codex: CODEX, cursor: CURSOR_FRESH });
+    expect(lists.effective).toEqual({ codex: CODEX, copilot: fromMap, cursor: CURSOR_FRESH });
+    expect(lists.toWrite).toEqual({ codex: CODEX, cursor: CURSOR_FRESH });
+    expect(lists.problem).toBeNull();
+
+    // Once kept, with the manifest's key gone, the same read writes nothing new.
+    await writeModelListCache(temp.dir, lists.kept);
+    const again = await resolveModelLists(temp.dir, setup(["codex", "copilot", "cursor"], [copilotMap]));
+    expect(again.toWrite).toBeNull();
+    expect(again.effective).toEqual(lists.effective);
+    // The emitted map wins over a kept list where the drift gate asks for the picks the files carry.
+    const kept = await resolveModelLists(temp.dir, setup(["copilot"], [copilotMap]), { copilot: { ids: ["gpt-6"], source: "copilot-help-config" } });
+    expect(kept.effective.copilot?.ids).toEqual(["gpt-6"]);
+    expect(kept.asEmitted).toEqual({ codex: CODEX, copilot: fromMap, cursor: CURSOR_FRESH });
+  });
+
+  it("leaves `models.listed` out of the in-memory copy when no list is given, and drops an emptied block", () => {
+    const manifest = setup(["cursor"], [], { cursor: { ...CURSOR_OLD, ids: [...CURSOR_OLD.ids] } });
+
+    expect(withModelLists(manifest, {}).models).toBeUndefined();
+    expect(withModelLists(manifest, { codex: { ...CODEX, ids: [...CODEX.ids] } }).models).toEqual({ listed: { codex: CODEX } });
   });
 });

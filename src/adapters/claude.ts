@@ -664,7 +664,8 @@ function grantFor(item: CatalogItem): ResolvedAgentGrant {
 
 /**
  * The pick source this client hands the resolver: the ids its CLI listed for
- * the account, where `init` or `sync` saved a list. None is read for this
+ * the account, where `init` or `sync` kept a list in the git-ignored cache
+ * (REQ-LADDER-009). None is read for this
  * client today, so a pin binds as written and a class takes its family alias;
  * passing the source keeps the one resolver call every adapter makes.
  */

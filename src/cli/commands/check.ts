@@ -51,8 +51,11 @@ import {
   CLIENT_LIST_TIMEOUT_MS,
   listClientModels,
   listerTreeRoot,
+  resolveModelLists,
+  withModelLists,
   type ListClientModelsOptions,
   type ModelListOutcome,
+  type ModelLists,
 } from "../engine/clientModels.ts";
 import { getEmissionPlanner } from "../engine/emission.ts";
 import { readWorkingTreeStatus } from "../engine/gitStatus.ts";
@@ -1477,6 +1480,7 @@ function verifyClientModels(
   tool: Tool,
   models: SetupManifest["models"],
   live: ModelListOutcome | null,
+  emittedFrom: readonly string[] | undefined,
 ): ClientModelVerdict {
   const saved = models?.listed?.[tool]?.ids;
   const reference =
@@ -1491,11 +1495,19 @@ function verifyClientModels(
 
   const pins = pinsFor(models, tool);
   const efforts = models?.effort ?? {};
-  const pick = saved === undefined ? {} : { listed: saved };
+  // The files resolved from the saved list; with none, from the list their own
+  // model map gives (REQ-LADDER-009), which keeps the pick already emitted.
+  const filesList = saved ?? emittedFrom;
+  const pick = filesList === undefined ? {} : { listed: filesList };
   // The list a `sync` now would read, where the live read is that list: never
-  // Codex's bundled read. The files resolved from the saved list, or from none.
+  // Codex's bundled read.
   const syncReads = live?.kind === "listed" && tool !== "codex" ? live.ids : undefined;
-  const filesFrom = saved === undefined ? "the pick made with no saved list" : "the pick from the list the last sync saved";
+  const filesFrom =
+    saved !== undefined
+      ? "the pick from the list the last sync saved"
+      : emittedFrom === undefined
+        ? "the pick made with no saved list"
+        : "the pick already emitted, with no saved list";
   const warnings: string[] = [];
   // Pins the printed list holds on a client whose sub-agents take a narrower one.
   const narrower = NARROWER_SUBAGENT_LIST.get(tool);
@@ -1559,7 +1571,10 @@ function verifyClientModels(
  * Claude Code runs on its family aliases), every class's pinned model and the
  * model emission writes are compared with the list the client's CLI prints now
  * or, where the CLI is absent, slow or unreadable, with the list the last
- * `sync` saved under `models.listed`. Codex is the exception: its saved list,
+ * `sync` saved in the git-ignored cache (REQ-LADDER-009), which `manifest`
+ * carries in memory under `models.listed`. A checkout with no cached list, a
+ * fresh clone among them, reads as unverified, and the emitted model is the
+ * one `emitted` (the lists the plan resolves with) keeps. Codex is the exception: its saved list,
  * whenever one exists, is the reference, and only without one is Codex asked
  * for its bundled catalogue, so the read makes no network call.
  * `STAMITY_NO_CLIENT_PROBE=1` starts no client and reads the saved list only.
@@ -1583,6 +1598,7 @@ export async function checkModelPins(
   env: NodeJS.ProcessEnv,
   lister: ModelLister,
   cwd: string,
+  emitted: ModelLists = {},
 ): Promise<DoctorCheck> {
   const id = "model-pins";
   if (manifest === null) {
@@ -1603,7 +1619,9 @@ export async function checkModelPins(
         : lister(tool, env, cwd, { codexBundled: true }),
     ),
   );
-  const verdicts = clients.map((tool, index) => verifyClientModels(tool, manifest.models, live[index] ?? null));
+  const verdicts = clients.map((tool, index) =>
+    verifyClientModels(tool, manifest.models, live[index] ?? null, emitted[tool]?.ids),
+  );
   const warnings = verdicts.flatMap((verdict) => verdict.warnings);
   if (warnings.length > 0) {
     // Plain newlines: the renderer indents each continuation line under the
@@ -1612,6 +1630,26 @@ export async function checkModelPins(
     return { id, status: "warn", detail: [...warnings, ...unverified].join("\n") };
   }
   return { id, status: "pass", detail: verdicts.map((verdict) => verdict.note).join("; ") };
+}
+
+/**
+ * The `model-pins` row for the setup at `rootDir`: the account's lists read
+ * from the git-ignored cache (and a 1.15.0 manifest's `models.listed`), never
+ * from the committed manifest alone (REQ-LADDER-009). A cache that is there
+ * but unreadable warns, naming it, and the row still never fails.
+ */
+async function modelPinsRow(rootDir: string, manifest: SetupManifest | null, env: NodeJS.ProcessEnv): Promise<DoctorCheck> {
+  if (manifest === null) return checkModelPins(null, env, listClientModels, rootDir);
+  const lists = await resolveModelLists(rootDir, manifest);
+  const row = await checkModelPins(
+    withModelLists(manifest, lists.kept),
+    env,
+    listClientModels,
+    await listerTreeRoot(rootDir),
+    lists.effective,
+  );
+  if (lists.problem === null) return row;
+  return { id: row.id, status: "warn", detail: `${lists.problem}\n${row.detail}` };
 }
 
 /**
@@ -1710,9 +1748,7 @@ export async function runDoctor(
     guarded("preserved-duplicate", () => checkPreservedDuplicate(rootDir, manifest)),
     guarded("pack-integrity", () => checkPackIntegrity(rootDir, manifest)),
     guarded("pack-reach", () => checkPackReach(rootDir, manifest, app.version)),
-    guarded("model-pins", async () =>
-      checkModelPins(manifest, app.runtime.env, listClientModels, await listerTreeRoot(rootDir)),
-    ),
+    guarded("model-pins", async () => modelPinsRow(rootDir, manifest, app.runtime.env)),
     checkChangeClasses(rootDir),
     guarded("invariants", checkInvariants),
   ]);
@@ -1777,11 +1813,16 @@ export async function runDoctor(
  *   longer exists;
  * - a pending reclaim candidate — a file queued for removal on the next sync.
  *
+ * The plan keeps the model each emitted model map records
+ * (`keepEmittedPicks`, REQ-LADDER-009): which models an account's list holds
+ * is the `model-pins` row's to warn on, never drift, so a fresh clone with no
+ * cached list, or a cache another account's list filled, reads no change here.
+ *
  * Propagates the plan's failures: an un-initialised repo (`VALIDATION_ERROR`)
  * and an unreadable manifest (`CONFIG_ERROR`) are the caller's to interpret.
  */
 export async function runDriftGate(rootDir: string, engineVersion: string): Promise<DriftReport> {
-  const plan = await planSync(rootDir, engineVersion);
+  const plan = await planSync(rootDir, engineVersion, { keepEmittedPicks: true });
   // The dry-run sweep `sync --dry-run` runs, so the path list here and the
   // one a sync would act on are one computation, not two kept in agreement.
   const preview = await previewReclaim(rootDir, plan);

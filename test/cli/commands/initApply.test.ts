@@ -918,7 +918,7 @@ describe("applyInit — the client model lists (REQ-LADDER-006)", () => {
     return { lister, asked };
   }
 
-  it("reads the selected non-Claude clients once each and persists what they listed", async () => {
+  it("reads the selected non-Claude clients once each and keeps what they listed in the cache", async () => {
     const root = await makeRepo();
     const { lister, asked } = tableLister({
       cursor: { kind: "listed", ids: ["claude-opus-5-5-high", "gpt-5.6-sol-high"], source: "cursor-agent-models" },
@@ -935,9 +935,12 @@ describe("applyInit — the client model lists (REQ-LADDER-006)", () => {
 
     expect(asked.toSorted()).toEqual(["codex", "cursor"]);
     const manifest = await readManifest(root);
-    expect(manifest?.models?.listed).toEqual({
-      cursor: { ids: ["claude-opus-5-5-high", "gpt-5.6-sol-high"], source: "cursor-agent-models" },
+    // TEST CHANGE, justified (v17-model-list-cache, REQ-LADDER-009): the list is kept in the git-ignored
+    // cache, never in the committed manifest, so the case reads it there and the manifest holds no `listed`.
+    expect(JSON.parse(await readFile(join(root, ".stamity", "client-models.json"), "utf8"))).toEqual({
+      listed: { cursor: { ids: ["claude-opus-5-5-high", "gpt-5.6-sol-high"], source: "cursor-agent-models" } },
     });
+    expect(manifest?.models?.listed).toBeUndefined();
     expect(collectManifestErrors(manifest)).toEqual([]);
   });
 

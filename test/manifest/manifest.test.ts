@@ -1335,7 +1335,26 @@ describe("models — the operator's ladder overrides", () => {
 
     await writeManifest(root, manifest, { now: FIXED_NOW });
 
-    expect(await readManifest(root)).toEqual(manifest);
+    // TEST CHANGE, justified (v17-model-list-cache, REQ-LADDER-009): `listed` is never written now, so
+    // the round trip returns every other member of the block and no `listed`.
+    const written = structuredClone(manifest);
+    delete written.models?.listed;
+    expect(await readManifest(root)).toEqual(written);
+  });
+
+  // REQ-LADDER-009: the account's lists live in the git-ignored cache. The writer never writes the
+  // key, a block it alone filled is dropped, and a 1.15.0 file that still holds it loads as it is.
+  it("writes no `models.listed`, dropping a block it alone filled, and still loads a 1.15.0 file holding it", async () => {
+    const root = getRoot().dir;
+    const listed = { codex: { ids: ["gpt-6-sol", "gpt-5.6-luna"], source: "codex-debug-models" as const } };
+
+    await writeManifest(root, { ...fullManifest(), models: { listed: structuredClone(listed) } }, { now: FIXED_NOW });
+    const bytes = await readFile(manifestPath(root), "utf8");
+    expect(bytes).not.toContain('"listed"');
+    expect(JSON.parse(bytes)).not.toHaveProperty("models");
+
+    await writeFile(manifestPath(root), `${JSON.stringify({ ...JSON.parse(bytes), models: { listed } }, null, 2)}\n`);
+    expect((await readManifest(root))?.models?.listed).toEqual(listed);
   });
 
   it("leaves a manifest that sets no models untouched — no migration, no added key", async () => {

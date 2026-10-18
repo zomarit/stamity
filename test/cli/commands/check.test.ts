@@ -4376,10 +4376,14 @@ describe("check — model-pins", () => {
     return { env: { PATH: [handle.path("bin"), "/usr/bin", "/bin"].join(delimiter) }, marker };
   }
 
+  // TEST CHANGE, justified (v17-model-list-cache, REQ-LADDER-009): a `listed` block is kept in the
+  // git-ignored cache now, never in the manifest, so the helper seeds it there and the rest in the manifest.
   async function pinCodex(root: string, models: SetupManifest["models"]): Promise<void> {
     const manifest = await readManifest(root);
     if (manifest === null) throw new Error("the fixture wrote no manifest");
-    await writeManifest(root, { ...manifest, ...(models === undefined ? {} : { models }) }, { now: T0 });
+    const { listed, ...rest } = models ?? {};
+    if (listed !== undefined) await writeFile(join(root, STATE_DIR, "client-models.json"), `${JSON.stringify({ listed })}\n`);
+    await writeManifest(root, { ...manifest, ...(models === undefined ? {} : { models: rest }) }, { now: T0 });
   }
 
   const posixOnly = process.platform === "win32" ? it.skip : it;
@@ -4479,5 +4483,63 @@ describe("check — model-pins", () => {
     for (const [index, line] of lines.entries()) {
       if (index > 0) expect(out[first + index]).toBe(`${" ".repeat(column)}${line}`);
     }
+  });
+  // REQ-LADDER-009: the account's list lives in a git-ignored cache, so a fresh clone has none.
+  const CACHE = join(STATE_DIR, "client-models.json");
+  /** An account whose Codex list lacks the shipped entry 0 of frontier, advanced and economy. */
+  const OTHER_CODEX = { codex: { ids: ["gpt-5.6-terra", "gpt-6-sol", "gpt-5.6-luna"], source: "codex-debug-models" as const } };
+
+  it("reads a fresh clone with no cache as no drift, keeping the pick the files carry, and the row unverified", async () => {
+    const root = await seedRepo(getRepo(), { tools: ["claude", "codex"] });
+    const engineVersion = createApp().version;
+    const plan = await planSync(root, engineVersion, { listedOverlay: structuredClone(OTHER_CODEX) });
+    await applySync(root, plan, { engineVersion, force: false, dryRun: false, now: T0 });
+    const map = JSON.parse(await readFile(join(root, STATE_DIR, "generated", "models", "codex.json"), "utf8")) as {
+      classes: Record<string, { model?: string }>;
+    };
+    // The list moved the pick off the shipped entry 0, so a plan with no list would differ.
+    expect(map.classes["economy"]?.model).toBe("gpt-5.6-luna");
+    expect(map.classes["frontier"]?.model).toBe("gpt-6-sol");
+    expect(JSON.stringify(JSON.parse(await readFile(join(root, STATE_DIR, "manifest.json"), "utf8")))).not.toContain(
+      '"listed"',
+    );
+
+    await rm(join(root, CACHE));
+    const { code, doc } = await runJson(root, { STAMITY_NO_CLIENT_PROBE: "1" });
+
+    expect(doc.drift).toEqual({ clean: true, changes: [], missing: [], reclaimPending: 0, reclaim: [] });
+    expect(code).toBe(0);
+    expect(row(doc, "model-pins")).toEqual({
+      id: "model-pins",
+      status: "pass",
+      detail: "codex: unverified — client probe off (STAMITY_NO_CLIENT_PROBE=1) and no saved list",
+    });
+  });
+
+  it("warns, naming the client and the class, on a cache another account's list filled, and still exits 0", async () => {
+    const root = await seedRepo(getRepo(), { tools: ["claude", "codex"] });
+    await pinCodex(root, { pins: { standard: { codex: "gpt-6-sol" } } });
+    // Another account's list, cached on this machine: it lacks the pinned model.
+    await writeFile(join(root, CACHE), `${JSON.stringify({ listed: { codex: { ids: ["gpt-6-astra"], source: "codex-debug-models" } } })}\n`);
+
+    const { code, doc } = await runJson(root, { STAMITY_NO_CLIENT_PROBE: "1" });
+
+    const verdict = row(doc, "model-pins");
+    expect(verdict.status).toBe("warn");
+    expect(verdict.detail).toContain(`codex standard: the pinned model "gpt-6-sol" is not on codex's list (saved by the last sync)`);
+    expect(doc.doctor.some((entry) => entry.status === "fail")).toBe(false);
+    expect(code).toBe(0);
+  });
+
+  it("warns naming a cache it will not read, past the 200-id ceiling, and reads no list from it", async () => {
+    const root = await seedRepo(getRepo(), { tools: ["claude", "codex"] });
+    const flood = Array.from({ length: 201 }, (_unused, index) => `gpt-flood-${index}`);
+    await writeFile(join(root, CACHE), `${JSON.stringify({ listed: { codex: { ids: flood, source: "codex-debug-models" } } })}\n`);
+
+    const verdict = await doctorRow(root, "model-pins", { STAMITY_NO_CLIENT_PROBE: "1" });
+
+    expect(verdict.status).toBe("warn");
+    expect(verdict.detail).toContain("the model list cache .stamity/client-models.json was not read");
+    expect(verdict.detail).toContain("codex: unverified — client probe off (STAMITY_NO_CLIENT_PROBE=1) and no saved list");
   });
 });

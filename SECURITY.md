@@ -176,7 +176,7 @@ as the outbound-text row above states. No other verb starts `gh`, and none of th
 included) and `workspace sync` read the model list of each selected client but Claude Code, and
 `check`'s `model-pins` row reads it again, by starting the client's own CLI once per client:
 `cursor-agent models` (or `agent models`), `codex debug models`, which `check` runs, with
-`--bundled`, only when no Codex list was saved, or `copilot help config` (`src/cli/engine/clientModels.ts::listClientModels`). The
+`--bundled`, only when no Codex list was kept, or `copilot help config` (`src/cli/engine/clientModels.ts::listClientModels`). The
 program is found by the engine's `PATH` walk over the entries left once every relative entry,
 every entry inside the project tree and every `node_modules/.bin` entry are dropped, and one whose
 real path lies inside the tree is refused, never started. For every verb, the tree is the enclosing
@@ -185,19 +185,24 @@ else the repository's own root; no program the repository or a sibling member ca
 sign-in, given that trimmed `PATH`, started in the user's home folder (nothing starts when home
 lies inside the tree), with its input closed, no window, a 10-second limit after which it is
 killed, and at most 8 MiB of output read. Only ids shaped like a model id are kept, at most 200 a
-client, saved under `models.listed` in the manifest. The engine hands the program nothing but
+client, kept in `.stamity/client-models.json`, never in the manifest. The engine hands the program nothing but
 those arguments, but the client's own listing call may reach its vendor over the network under
 that account (`codex debug models` without `--bundled` may refresh its catalogue), and may write
 its own files under the home folder; what each client does there was not checked.
 `STAMITY_NO_CLIENT_PROBE=1` in the environment starts none of them. Emission and `check`'s drift
-comparison read only the saved list and start no client.
+comparison read only the kept list and start no client.
 
-**The saved model lists are committed with the setup.** Each selected client's list is saved under
-`models.listed` in `.stamity/manifest.json`, a file a repository commits, so anyone who can read the
-repository, everyone for a public one, sees which models that client's account offered when the
-list was read, Codex's hidden entries included. With `STAMITY_NO_CLIENT_PROBE=1` set from the first
-`init`, no list is read and `models.listed` stays empty. Set later, it stops further reads but keeps
-the lists already saved; delete `models.listed` from the manifest to drop them.
+**The kept model lists stay on the machine.** Each selected client's list is kept in
+`.stamity/client-models.json`, which setup adds to `.gitignore`, so the committed manifest names no
+account's models (REQ-LADDER-009). A 1.15.0 manifest that still saves them under `models.listed`
+loads, and the next `sync` moves them to that file and writes the manifest without the key; a
+history committed before then still holds them. The cache is read with the manifest list's checks
+(the id shape, at most 200 ids a client, the order as written) and taken whole or not at all; a
+planted cache can only choose among the shipped candidates and the pins, and `check`'s `model-pins`
+row warns on a pick the live list lacks, never fails. With no cache, a fresh clone among them, the
+pick already emitted is kept, read from the ledgered `.stamity/generated/models/` maps of Codex and
+Copilot, and `model-pins` reads as unverified. With `STAMITY_NO_CLIENT_PROBE=1` set, no list is
+read; delete the cache to drop the lists already kept.
 
 **Board writes are the touchpoints' own, not the engine's.** `/st-board` and `/st-pr-resolve` call
 the authenticated GitHub CLI, `gh`, or a configured GitHub MCP server from the agent's session; the
@@ -404,8 +409,9 @@ refused. What stays open is named here, as accepted risk:
   2026-10-18 in throwaway folders; its documentation does not state it), and a `-p` run denies it
   for want of a person, as it denies a settings ask row; its settings `permissions.ask` rows are
   documented to prompt in every mode. That reading is re-measured before each release with
-  `node scripts/qa/hook-runs.mjs --ask`, per installed client, and a client whose ask lets the
-  command run moves to refusing. Copilot CLI, Cursor and Codex refuse every ask-class act, for the
+  `node scripts/qa/hook-runs.mjs --ask`, which the release checklist runs with
+  `--require-observation`, so an unmeasured Claude Code holds the tag, per installed client, and a
+  client whose ask lets the command run moves to refusing. Copilot CLI, Cursor and Codex refuse every ask-class act, for the
   reasons the guard's row above gives, so on them a person runs the act from the exact command.
   Code: `src/hooks/scripts.ts::buildPersonOnlyGuardScript`.
 - **Where no hook runs.** On Claude Code with no hook loaded, the settings rows are the only layer,
@@ -538,6 +544,11 @@ refused. What stays open is named here, as accepted risk:
 - **The environment.** Every command in Claude Code's cloud can read the environment, a token the
   session holds included. The pre-flight's `token-env` warning names credential-shaped variables, by
   name only, and removes none.
+- **Claude Code's GitHub Action on a pull request.** On a pull request, the Action restores `.claude/`
+  and `CLAUDE.md` from the base branch, but the hook scripts those settings start, under
+  `.stamity/generated/hooks/`, and the `AGENTS.md` that `CLAUDE.md` imports come from the pull
+  request, so a pull request can change what the guard runs and what the agent reads on its own
+  Action run.
 - **The record head.** The guard reads whether a run is unattended off the run records, so a run
   that rewrites its own record head escapes the unattended push rule: a record rewritten to read
   `Mode: attended`, or closed while `STAMITY_UNATTENDED` is unset, no longer makes the session

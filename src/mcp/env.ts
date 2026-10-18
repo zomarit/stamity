@@ -215,6 +215,14 @@ export const CONTEXT_ONCE_DIR = `${STATE_DIR}/context-once`;
 export const CONTEXT_ONCE_GITIGNORE_ENTRY = `${CONTEXT_ONCE_DIR}/`;
 
 /**
+ * The account's client model lists (REQ-LADDER-009): `init` and `sync` keep
+ * what each client's CLI listed here, never in the committed manifest.
+ * Machine-local: the list is one account's, and a copy committed or carried
+ * into another checkout would steer every teammate's model pick by it.
+ */
+export const CLIENT_MODELS_CACHE_FILE = `${STATE_DIR}/client-models.json`;
+
+/**
  * Paths this engine writes that must never reach a commit: the credential
  * file, and the review gate's runtime state — its counter, the lock directory
  * beside it, and the temp files its publish renames over the counter. The gate
@@ -234,6 +242,7 @@ export const REQUIRED_GITIGNORE_ENTRIES: readonly string[] = [
   PREFLIGHT_CANARY_FILE,
   RUN_ENDED_MARKER_FILE,
   CONTEXT_ONCE_GITIGNORE_ENTRY,
+  CLIENT_MODELS_CACHE_FILE,
 ];
 
 /**
@@ -266,12 +275,13 @@ const REVIEW_GATE_DOMINATORS: readonly string[] = [
 /**
  * Existing patterns that already ignore an entry. Appending our literal beside
  * one of these would add a redundant rule to a file the operator maintains.
- * Each review-gate entry, the canary, the marker and the context-once folder is
- * also dominated by its own root-anchored twin (`/.stamity/review-gate.json` — the
- * spelling a hand-written rule usually takes). The canary, the run-ended marker
- * and the context-once folder take the state directory's spellings only: a
- * `review-gate.json*` prefix covers none of them, and a file git does not ignore
- * could be committed.
+ * Each review-gate entry, the canary, the marker, the context-once folder and
+ * the model list cache is also dominated by its own root-anchored twin
+ * (`/.stamity/review-gate.json` — the spelling a hand-written rule usually
+ * takes). The canary, the run-ended marker, the context-once folder and the
+ * model list cache take the state directory's spellings only: a
+ * `review-gate.json*` prefix covers none of them, and a file git does not
+ * ignore could be committed.
  */
 const DOMINATING_PATTERNS: Record<string, readonly string[]> = {
   [ENV_MCP_FILE]: [".env.*", ".env*", "*.mcp"],
@@ -280,7 +290,10 @@ const DOMINATING_PATTERNS: Record<string, readonly string[]> = {
       entry,
       [
         `/${entry}`,
-        ...(entry === PREFLIGHT_CANARY_FILE || entry === RUN_ENDED_MARKER_FILE || entry === CONTEXT_ONCE_GITIGNORE_ENTRY
+        ...(entry === PREFLIGHT_CANARY_FILE ||
+        entry === RUN_ENDED_MARKER_FILE ||
+        entry === CONTEXT_ONCE_GITIGNORE_ENTRY ||
+        entry === CLIENT_MODELS_CACHE_FILE
           ? STATE_DIR_DOMINATORS
           : REVIEW_GATE_DOMINATORS),
       ],

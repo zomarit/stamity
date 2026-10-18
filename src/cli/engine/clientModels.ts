@@ -1,5 +1,12 @@
 import { execFile } from "node:child_process";
+import { lstat, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
+import { join } from "node:path";
+import { isPlainObject } from "../../config/parse.ts";
+import { collectListedErrors, withoutListedModels } from "../../manifest/manifest.ts";
+import { CLIENT_MODELS_CACHE_FILE } from "../../mcp/env.ts";
+import { atomicWriteFile } from "../../merge/atomicWrite.ts";
+import { modelMapPath } from "../../roster/modelDefaults.ts";
 import {
   fileSystemProbe,
   isFullPath,
@@ -9,7 +16,7 @@ import {
   type ProgramFileProbe,
 } from "../../shared/programPath.ts";
 import type { Tool } from "../../types/core.ts";
-import type { ListedModels } from "../../types/manifest.ts";
+import type { ListedModels, SetupManifest } from "../../types/manifest.ts";
 import { detectWorkspaceContext } from "../../workspace/detect.ts";
 
 /**
@@ -17,8 +24,9 @@ import { detectWorkspaceContext } from "../../workspace/detect.ts";
  * which models this account may use (REQ-LADDER-006).
  *
  * Called by `init` and `sync` before they plan, never by emission or by the
- * drift gate: the answer is persisted under `models.listed.<client>`, and every
- * later plan reads that copy. `STAMITY_NO_CLIENT_PROBE=1` in the environment a
+ * drift gate: the answer is kept in the git-ignored cache
+ * `.stamity/client-models.json` (REQ-LADDER-009, {@link resolveModelLists}),
+ * never in the committed manifest, and every later plan reads that copy. `STAMITY_NO_CLIENT_PROBE=1` in the environment a
  * caller hands in makes every call answer `absent` with nothing started, so a
  * test run or this repository's own `sync` never reads the machine's accounts
  * even where a caller forgot to check the switch first.
@@ -435,4 +443,195 @@ function outcomeOf(
     return { kind: "unreadable", message: `\`${call}\` printed no model list (expected ${lister.header})` };
   }
   return { kind: "listed", ids, source: lister.source };
+}
+
+// ── The kept lists (REQ-LADDER-009) ────────────────────────────────────────
+
+/** Ceiling on the ids one client's kept list holds (REQ-LADDER-006's threat cell). */
+export const MAX_LISTED_MODELS = 200;
+
+/** Each client's model list, keyed by client. */
+export type ModelLists = Partial<Record<Tool, ListedModels>>;
+
+/** Ceiling on the bytes one cache or model map read takes; three lists of 200 ids fit many times over. */
+const MAX_LIST_FILE_BYTES = 1024 * 1024;
+
+/** The text of the regular file at `path`, or `null` when nothing is there; throws naming why it was not read. */
+async function readListFile(path: string): Promise<string | null> {
+  let size: number;
+  try {
+    const info = await lstat(path);
+    if (!info.isFile()) throw new Error("it is not a regular file");
+    size = info.size;
+  } catch (cause) {
+    if ((cause as NodeJS.ErrnoException | null)?.code === "ENOENT") return null;
+    throw cause;
+  }
+  if (size > MAX_LIST_FILE_BYTES) throw new Error(`it is larger than ${MAX_LIST_FILE_BYTES} bytes`);
+  return readFile(path, "utf8");
+}
+
+/** The defects of the cache's `listed` block: the manifest list's own validation, and the id ceiling. */
+function cacheDefects(listed: unknown): string[] {
+  const errors: string[] = [];
+  collectListedErrors(listed, errors, "listed");
+  if (isPlainObject(listed)) {
+    for (const [tool, entry] of Object.entries(listed)) {
+      if (isPlainObject(entry) && Array.isArray(entry["ids"]) && entry["ids"].length > MAX_LISTED_MODELS) {
+        errors.push(`\`listed.${tool}.ids\` holds more than ${MAX_LISTED_MODELS} ids`);
+      }
+    }
+  }
+  return errors;
+}
+
+/**
+ * The lists the cache under `rootDir` keeps, with `problem` naming why none
+ * was read from a cache that is there but is not one this engine writes. A
+ * cache is read with the manifest list's validation (the shape, a pin's id
+ * shape, the 200-id ceiling) and the order kept as written, and taken whole or
+ * not at all. Absent is no problem: a fresh clone has none.
+ */
+export async function readModelListCache(rootDir: string): Promise<{ lists: ModelLists; problem: string | null }> {
+  const unread = (why: string): { lists: ModelLists; problem: string } => ({
+    lists: {},
+    problem: `the model list cache ${CLIENT_MODELS_CACHE_FILE} was not read: ${why}; delete it, and the next sync reads each client again`,
+  });
+  let text: string | null;
+  try {
+    text = await readListFile(join(rootDir, CLIENT_MODELS_CACHE_FILE));
+  } catch (cause) {
+    return unread(cause instanceof Error && cause.message.startsWith("it is") ? cause.message : "it could not be read");
+  }
+  if (text === null) return { lists: {}, problem: null };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return unread("it is not JSON");
+  }
+  if (!isPlainObject(parsed) || Object.keys(parsed).some((key) => key !== "listed")) {
+    return unread("it is not an object holding `listed` alone");
+  }
+  const defects = cacheDefects(parsed["listed"] ?? {});
+  if (defects.length > 0) return unread(`it holds ${defects.length} defect(s) a model list may not have`);
+  return { lists: (parsed["listed"] ?? {}) as ModelLists, problem: null };
+}
+
+/** `lists` with its clients in sort order, so the same lists always write the same bytes. */
+function sortedLists(lists: ModelLists): ModelLists {
+  return Object.fromEntries(Object.entries(lists).toSorted(([a], [b]) => (a < b ? -1 : 1)));
+}
+
+/**
+ * Keep `lists` in the cache under `rootDir`, atomically. Answers `null`, or the
+ * warning a run prints when the write failed: the lists then held for that run
+ * only, and nothing else of the run is undone.
+ */
+export async function writeModelListCache(rootDir: string, lists: ModelLists): Promise<string | null> {
+  try {
+    await atomicWriteFile(join(rootDir, CLIENT_MODELS_CACHE_FILE), `${JSON.stringify({ listed: sortedLists(lists) }, null, 2)}\n`);
+    return null;
+  } catch (cause) {
+    const code = (cause as NodeJS.ErrnoException | null)?.code;
+    return (
+      `the client model lists could not be kept in ${CLIENT_MODELS_CACHE_FILE}` +
+      `${typeof code === "string" ? ` (${code})` : ""}, so they held for this run only; the next sync reads each client again`
+    );
+  }
+}
+
+/** The clients whose model map holds every id a list moved their pick to; Cursor's map drops the effort group a list decides. */
+const WITNESS_CLIENTS: readonly Tool[] = ["codex", "copilot"];
+
+/**
+ * For each of Codex and Copilot that `manifest` selects, a list read off the
+ * model map the last emission wrote (`.stamity/generated/models/<client>.json`,
+ * ledgered): every class's model, its bracket options dropped, and its
+ * fallbacks, which are the shipped candidates the list it was picked from held.
+ * The resolver picks from it exactly what it picked from that list, so a
+ * checkout with no cached list keeps the pick already emitted, and a fresh
+ * clone's drift gate reports none. A map that is not ledgered, is too large or
+ * has another shape gives nothing.
+ */
+async function emittedPickLists(rootDir: string, manifest: SetupManifest): Promise<ModelLists> {
+  const read = await Promise.all(
+    WITNESS_CLIENTS.map(async (tool): Promise<[Tool, ListedModels] | null> => {
+      const path = modelMapPath(tool);
+      const lister = LISTERS[tool];
+      if (lister === undefined || !manifest.tools.includes(tool) || !manifest.ledger.some((row) => row.path === path)) {
+        return null;
+      }
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse((await readListFile(join(rootDir, path))) ?? "null");
+      } catch {
+        return null;
+      }
+      if (!isPlainObject(parsed) || !isPlainObject(parsed["classes"])) return null;
+      const candidates: string[] = [];
+      for (const entry of Object.values(parsed["classes"])) {
+        if (!isPlainObject(entry)) continue;
+        if (typeof entry["model"] === "string") candidates.push(entry["model"].trim().split("[")[0] ?? "");
+        if (Array.isArray(entry["fallbacks"])) candidates.push(...entry["fallbacks"].filter((id) => typeof id === "string"));
+      }
+      return [tool, { ids: shapedIds(candidates).slice(0, MAX_LISTED_MODELS), source: lister.source }];
+    }),
+  );
+  return Object.fromEntries(read.filter((entry) => entry !== null));
+}
+
+/** What one verb resolves its model picks with, and what it keeps for the account. */
+export interface ResolvedModelLists {
+  /**
+   * The lists a plan resolves with, client by client: the one read fresh, else
+   * the cached one, else the one a 1.15.0 manifest still saved, else the one
+   * read off the emitted model map.
+   */
+  readonly effective: ModelLists;
+  /**
+   * The lists that reproduce the files already emitted: the emitted model
+   * map's first, then {@link effective}'s. What the drift gate plans with.
+   */
+  readonly asEmitted: ModelLists;
+  /** The account's lists without the map's: what a live run keeps in the cache. */
+  readonly kept: ModelLists;
+  /** {@link kept} where it differs from what the cache holds, so a live run writes it; else `null`. */
+  readonly toWrite: ModelLists | null;
+  /** Why a cache that is there was not read, or `null`. */
+  readonly problem: string | null;
+}
+
+/**
+ * The model lists for the setup at `rootDir` (REQ-LADDER-009): `fresh` (what
+ * `init` or `sync` read from the clients this run) over the cache, over the
+ * lists a 1.15.0 `manifest` still carries under `models.listed`, which move to
+ * the cache at the next live run, and, for a client with none of those, over
+ * the list its emitted model map gives. Reads only; never starts a client.
+ */
+export async function resolveModelLists(
+  rootDir: string,
+  manifest: SetupManifest,
+  fresh: ModelLists = {},
+): Promise<ResolvedModelLists> {
+  const [cache, emitted] = await Promise.all([readModelListCache(rootDir), emittedPickLists(rootDir, manifest)]);
+  const kept = sortedLists({ ...manifest.models?.listed, ...cache.lists, ...structuredClone(fresh) });
+  const unchanged = JSON.stringify(kept) === JSON.stringify(sortedLists(cache.lists));
+  return {
+    effective: { ...emitted, ...kept },
+    asEmitted: { ...kept, ...emitted },
+    kept,
+    toWrite: unchanged || Object.keys(kept).length === 0 ? null : kept,
+    problem: cache.problem,
+  };
+}
+
+/**
+ * `manifest` with `models.listed` set to `lists` (or without it, when empty),
+ * as a new object: the in-memory copy a plan, a report or `config` resolves
+ * picks from. `writeManifest` never writes the key.
+ */
+export function withModelLists(manifest: SetupManifest, lists: ModelLists): SetupManifest {
+  const base = withoutListedModels(manifest);
+  return Object.keys(lists).length === 0 ? base : { ...base, models: { ...base.models, listed: structuredClone(lists) } };
 }

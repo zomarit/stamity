@@ -214,9 +214,10 @@ export function syncClosingLines(plan: SyncPlan, report: SyncApplyReport): strin
 
 /**
  * The model lists the selected clients' own CLIs give this account, read
- * before the plan (REQ-LADDER-006) and handed to it as an overlay on the saved
- * `models.listed`: a live run persists it with the rest of the manifest, a dry
- * run writes nothing, and a client that does not answer keeps its saved list.
+ * before the plan (REQ-LADDER-006) and handed to it as an overlay on the lists
+ * the git-ignored cache keeps (REQ-LADDER-009): a live run keeps them in that
+ * cache, never in the manifest, a dry run writes nothing, and a client that
+ * does not answer keeps its cached list.
  * Read through the run's own environment, so `STAMITY_NO_CLIENT_PROBE=1`
  * there skips every read. An uninitialised repository reads nothing here and
  * gets the plan's own refusal.
@@ -256,6 +257,7 @@ export const syncCommand: CommandModule = {
       now: ctx.app.runtime.clock.now(),
     });
     ctx.spinner.stop();
+    if (report.modelListCacheWarning !== undefined) ctx.io.err(`warning: ${report.modelListCacheWarning}\n`);
 
     ctx.io.out(`${renderSyncReport(plan, report, ctx.palette)}\n`);
     for (const line of syncClosingLines(plan, report)) ctx.io.out(`${line}\n`);

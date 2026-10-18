@@ -12,12 +12,13 @@ import {
   type EmittedArtifact,
   type ReclaimCandidate,
 } from "../../../manifest/ledger.ts";
-import { DROPPED_PLUGIN_KEY, manifestPath, readManifest, writeManifest } from "../../../manifest/manifest.ts";
+import { DROPPED_PLUGIN_KEY, manifestPath, readManifest, withoutListedModels, writeManifest } from "../../../manifest/manifest.ts";
 import { OWNED_PATHS } from "../../../manifest/ownedPaths.ts";
 import { materializeUserMcpJson } from "../../../manifest/mcpFilter.ts";
 import type { PackSuppliedServer } from "../../../mcp/catalog.ts";
 import { engineOwnedServerIds, MERGED_MCP_JSON_PATHS } from "../../../mcp/emit.ts";
 import { ensureGitignoreEntry } from "../../../mcp/env.ts";
+import { resolveModelLists, withModelLists, writeModelListCache, type ModelLists } from "../../engine/clientModels.ts";
 import { assertWriteTargetContained, isSharedRegularFile } from "../../../merge/atomicWrite.ts";
 import { extractManagedBlock, hasOwnerTextOutsideBlock } from "../../../merge/managedBlocks.ts";
 import { sweepReclaimCandidates, type ReclaimReport } from "../../../merge/reclaim.ts";
@@ -212,6 +213,13 @@ export interface SyncPlan {
    * {@link warnings}; {@link planSync} always sets it.
    */
   pluginBlockDropped?: boolean;
+  /**
+   * The account's model lists a live apply keeps in the git-ignored cache
+   * (REQ-LADDER-009): the fresh read laid over the cache and over a 1.15.0
+   * manifest's `models.listed`, which the manifest write then leaves out.
+   * Absent when the cache already holds them; a dry run writes nothing.
+   */
+  modelListCache?: ModelLists;
   plannerId: string;
   /**
    * The planned emission the entries were judged from — apply writes exactly
@@ -540,12 +548,22 @@ export async function planSync(
     npmRegistry?: string;
     /**
      * Client model lists read fresh by the caller (`sync` reads them before
-     * it plans, REQ-LADDER-006), laid client by client over the saved
-     * `models.listed`; a client absent here keeps its saved list. The plan's
-     * manifest carries the result, so a live apply persists it and a dry run
-     * writes nothing. Planning itself never starts a client.
+     * it plans, REQ-LADDER-006), laid client by client over the lists the
+     * git-ignored cache keeps (REQ-LADDER-009); a client absent here keeps its
+     * cached list, and one with no list at all keeps the pick its emitted
+     * model map records (`../../engine/clientModels.ts::resolveModelLists`).
+     * The plan's manifest carries the result in memory, a live apply keeps it
+     * in the cache ({@link SyncPlan.modelListCache}), and a dry run writes
+     * nothing. Planning itself never starts a client.
      */
     listedOverlay?: Partial<Record<Tool, ListedModels>>;
+    /**
+     * Resolve each client's models with the list its emitted model map
+     * records ahead of any kept list (REQ-LADDER-009): `check`'s drift gate,
+     * for which an account's list moving a pick is the `model-pins` row's
+     * warning, not drift. `sync` itself leaves it off.
+     */
+    keepEmittedPicks?: boolean;
   } = {},
 ): Promise<SyncPlan> {
   const manifest = await readManifest(rootDir);
@@ -564,22 +582,20 @@ export async function planSync(
 
   const [index, repoInfo] = await Promise.all([buildContentIndex(), analyzeRepo(rootDir)]);
   const detected: DetectedSummary = summarizeDetection(repoInfo);
-  const planningManifest = structuredClone(manifest);
+  const modelLists = await resolveModelLists(rootDir, manifest, opts.listedOverlay);
+  const planningManifest = withModelLists(
+    structuredClone(manifest),
+    opts.keepEmittedPicks === true ? modelLists.asEmitted : modelLists.effective,
+  );
   planningManifest.selection = fullCorpusSelection(index);
   planningManifest.detected = detected;
-  if (opts.listedOverlay !== undefined && Object.keys(opts.listedOverlay).length > 0) {
-    planningManifest.models = {
-      ...planningManifest.models,
-      listed: { ...planningManifest.models?.listed, ...structuredClone(opts.listedOverlay) },
-    };
-  }
 
   const planner = getEmissionPlanner();
   // `planWithWarnings`, not `plan`: sync prints a report, so it takes the view
   // that carries what the pass found. The narrow view would drop every
   // hooks-planner finding on the floor, and a sync that re-emits a rejected
   // hook would stay silent about it on every run.
-  const { outputs, warnings } = await planner.planWithWarnings({
+  const { outputs, warnings: planned } = await planner.planWithWarnings({
     rootDir,
     manifest: planningManifest,
     engineVersion,
@@ -648,9 +664,10 @@ export async function planSync(
     dirty: readWorkingTreeStatus(rootDir, opts.runner),
     manifestMigrated,
     pluginBlockDropped: onDisk.pluginBlock,
+    ...(modelLists.toWrite === null ? {} : { modelListCache: modelLists.toWrite }),
     plannerId: planner.id,
     outputs,
-    warnings,
+    warnings: modelLists.problem === null ? planned : [...planned, modelLists.problem],
     engineVersion,
   };
 }
@@ -687,6 +704,12 @@ export interface SyncApplyReport {
   dryRun: boolean;
   /** The manifest exactly as persisted — the provenance record. `null` on a dry run. */
   manifest: SetupManifest | null;
+  /**
+   * Why the account's model lists could not be kept in the git-ignored cache
+   * (REQ-LADDER-009): they held for this run only. Absent when they were kept,
+   * had nothing new to keep, or on a dry run.
+   */
+  modelListCacheWarning?: string;
 }
 
 function tally(entries: readonly SyncPlanEntry[], action: SyncPlanEntry["action"]): number {
@@ -1331,14 +1354,21 @@ export async function applySync(
   // the commit point below.
   await ensureStateScaffold(rootDir);
 
+  // The account's model lists into the git-ignored cache, ahead of the
+  // manifest write that leaves `models.listed` out (REQ-LADDER-009), so a
+  // 1.15.0 manifest's lists are moved, not lost. A cache that cannot be
+  // written leaves them for this run only, and the report says so.
+  const modelListCacheWarning =
+    plan.modelListCache === undefined ? null : await writeModelListCache(rootDir, plan.modelListCache);
+
   // Manifest LAST — the commit point. Persists the migrated shape, the
   // refreshed selection + detection, the rebuilt ledger, and the new stamps.
-  const manifest: SetupManifest = {
+  const manifest: SetupManifest = withoutListedModels({
     ...plan.manifest,
     generatedBy: engineVersion,
     updatedAt: now.toISOString(),
     ledger,
-  };
+  });
   await writeManifest(rootDir, manifest, { now });
 
   const done = (action: MergeResult["action"]): number =>
@@ -1355,5 +1385,6 @@ export async function applySync(
     manifestPath: statePath,
     dryRun: false,
     manifest,
+    ...(modelListCacheWarning === null ? {} : { modelListCacheWarning }),
   };
 }

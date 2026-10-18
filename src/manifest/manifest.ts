@@ -674,17 +674,18 @@ const LISTED_SOURCES: ReadonlySet<string> = new Set<ListedModels["source"]>([
 ]);
 
 /**
- * The persisted per-client model lists ({@link ListedModels}). Shape only: each
- * id must be a value a pin could be, since a later emission may copy one into
- * an agent file exactly as it copies a pin.
+ * The per-client model lists ({@link ListedModels}) a 1.15.0 manifest saved
+ * under `models.listed`, or the git-ignored cache holds under `field`
+ * (REQ-LADDER-009). Shape only: each id must be a value a pin could be, since a
+ * later emission may copy one into an agent file exactly as it copies a pin.
  */
-function collectListedErrors(value: unknown, errors: string[]): void {
+export function collectListedErrors(value: unknown, errors: string[], prefix = "models.listed"): void {
   if (!isPlainObject(value)) {
-    errors.push("`models.listed` must be an object keyed by client");
+    errors.push(`\`${prefix}\` must be an object keyed by client`);
     return;
   }
   for (const [tool, entry] of Object.entries(value)) {
-    const field = `models.listed.${tool}`;
+    const field = `${prefix}.${tool}`;
     if (!VALID_TOOLS.has(tool)) {
       errors.push(`\`${field}\` names unknown tool (known: ${TOOLS.join(", ")})`);
       continue;
@@ -1185,7 +1186,8 @@ export async function readManifest(rootDir: string): Promise<SetupManifest | nul
  * the caller's object is not mutated, so a manifest handed to the writer twice
  * is not silently different from the one the caller still holds.
  *
- * The manifest is validated first. `SetupManifest` is a type, and the defects
+ * `models.listed` is never written ({@link withoutListedModels}). The manifest
+ * is validated first. `SetupManifest` is a type, and the defects
  * that matter here — an escaping ledger path, two rows claiming one file — are
  * values, so refusing to persist what {@link readManifest} would reject keeps
  * the failure at the site that produced it.
@@ -1197,7 +1199,7 @@ export async function writeManifest(
 ): Promise<void> {
   const path = manifestPath(rootDir);
   const stamped: SetupManifest = {
-    ...manifest,
+    ...withoutListedModels(manifest),
     updatedAt: (opts.now ?? new Date()).toISOString(),
   };
   const errors = collectManifestErrors(stamped);
@@ -1208,6 +1210,23 @@ export async function writeManifest(
     );
   }
   await atomicWriteFile(path, serializeManifest(stamped));
+}
+
+/**
+ * `manifest` without `models.listed`, as a new object (REQ-LADDER-009): the
+ * account's model lists live in the git-ignored cache
+ * (`../cli/engine/clientModels.ts`), so {@link writeManifest} never writes the
+ * key, whatever a caller carries in memory. A `models` block left empty is
+ * dropped with it. A 1.15.0 manifest that still holds the key loads; `sync`
+ * moves its lists to the cache before its write leaves them out.
+ */
+export function withoutListedModels(manifest: SetupManifest): SetupManifest {
+  if (manifest.models?.listed === undefined) return manifest;
+  const models = { ...manifest.models };
+  delete models.listed;
+  const next: SetupManifest = { ...manifest, models };
+  if (Object.keys(models).length === 0) delete next.models;
+  return next;
 }
 
 // ── Preserved fields ───────────────────────────────────────────────────────

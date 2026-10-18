@@ -497,7 +497,8 @@ export const cursorResiduePlanner: ResiduePlanner = {
     // over an operator setting `stamity config` already displays as binding.
     const pins = pinsFor(ctx.manifest.models, "cursor");
     const efforts = ctx.manifest.models?.effort ?? {};
-    // The account's own list, as `init` and `sync` persisted it. The resolver
+    // The account's own list, as `init` and `sync` kept it in the git-ignored
+    // cache and laid it in memory (REQ-LADDER-009). The resolver
     // picks nothing from it on this client (ledger row qa/1): it only tells a
     // pin that is a listed effort variant, which takes no `[effort=…]` group,
     // from one that is not. Emission reads the saved copy and never starts the

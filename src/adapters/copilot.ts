@@ -411,10 +411,10 @@ export const copilotResiduePlanner: ResiduePlanner = {
     // The operator's effort overrides, read once beside them: a class with none
     // runs at the ladder's own default.
     const efforts = ctx.manifest.models?.effort ?? {};
-    // The account's own list, as `init` and `sync` persisted it: a class with no
-    // pin takes the first shipped candidate on it, and with no list the shipped
-    // list's entry 0. Emission reads the saved copy and never starts the client
-    // (REQ-LADDER-006).
+    // The account's own list, as `init` and `sync` kept it in the git-ignored
+    // cache and laid it in memory (REQ-LADDER-009): a class with no pin takes the
+    // first shipped candidate on it, and with no list the shipped list's entry 0.
+    // Emission reads that copy and never starts the client (REQ-LADDER-006).
     const listed = ctx.manifest.models?.listed?.[TOOL]?.ids;
     // Each emitted agent's runtime id by its declared class, for the model map.
     const roles: Partial<Record<string, ModelClass>> = {};

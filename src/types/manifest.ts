@@ -201,10 +201,12 @@ export interface ModelConfig {
    */
   reviewCap?: number;
   /**
-   * The model ids each client's own CLI listed for this account when `init` or
-   * `sync` last read it (REQ-LADDER-006). Emission and the drift gate read this
-   * persisted copy and never spawn a client; a client that did not answer
-   * keeps its last list.
+   * The model ids each client's own CLI listed for this account (REQ-LADDER-006),
+   * in memory only (REQ-LADDER-009): a verb fills it from the git-ignored cache
+   * `.stamity/client-models.json` (`../cli/engine/clientModels.ts`) before it
+   * plans, and `writeManifest` never writes it. A 1.15.0 manifest that still
+   * holds the key loads, and `sync` moves its lists to the cache. Emission and
+   * the drift gate read this copy and never spawn a client.
    */
   listed?: Partial<Record<Tool, ListedModels>>;
 }

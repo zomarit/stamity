@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { chmod, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { delimiter, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -1050,6 +1050,17 @@ describe("sync — the client model lists (REQ-LADDER-006)", () => {
     return root;
   }
 
+  /** TEST CHANGE, justified (v17-model-list-cache, REQ-LADDER-009): the lists a run keeps, read from the git-ignored cache the manifest no longer carries them in. */
+  async function cachedLists(root: string): Promise<unknown> {
+    return (JSON.parse(await readFile(join(root, ".stamity", "client-models.json"), "utf8")) as { listed: unknown }).listed;
+  }
+
+  /** TEST CHANGE, justified (v17-model-list-cache, REQ-LADDER-009): a list kept by an earlier run, seeded in the cache, where `writeManifest` no longer puts it. */
+  async function seedCache(root: string, listed: ModelConfig["listed"]): Promise<void> {
+    await mkdir(join(root, ".stamity"), { recursive: true });
+    await writeFile(join(root, ".stamity", "client-models.json"), `${JSON.stringify({ listed })}\n`);
+  }
+
   /** The manifest's bytes without the one stamp every live run moves. */
   async function manifestWithoutStamp(root: string): Promise<string> {
     return (await readFile(manifestPath(root), "utf8")).replace(/"updatedAt": "[^"]*"/, '"updatedAt": "-"');
@@ -1060,7 +1071,7 @@ describe("sync — the client model lists (REQ-LADDER-006)", () => {
     return runInProcess([syncCommand], ["sync", ...argv], { cwd: root, env });
   }
 
-  it("persists what a selected client listed, and a second sync moves no byte", async () => {
+  it("keeps what a selected client listed in the cache, and a second sync moves no byte", async () => {
     const root = await seedClients(tempDir(), ["claude", "cursor"]);
     listerAnswers.value = { cursor: CURSOR_LIST };
 
@@ -1068,9 +1079,11 @@ describe("sync — the client model lists (REQ-LADDER-006)", () => {
 
     expect(first.code).toBe(0);
     expect(listerAnswers.asked).toEqual(["cursor"]);
-    expect((await readManifest(root))?.models?.listed).toEqual({
+    // TEST CHANGE, justified (v17-model-list-cache, REQ-LADDER-009): kept in the cache, and the manifest holds no `listed`.
+    expect(await cachedLists(root)).toEqual({
       cursor: { ids: ["claude-opus-5-5-high", "claude-sonnet-5-5-medium"], source: "cursor-agent-models" },
     });
+    expect((await readManifest(root))?.models?.listed).toBeUndefined();
     const after = await manifestWithoutStamp(root);
 
     const second = await runSyncIn(root, {});
@@ -1081,7 +1094,9 @@ describe("sync — the client model lists (REQ-LADDER-006)", () => {
 
   it("keeps a client's saved list when it times out, beside a fresh list from another", async () => {
     const saved = { ids: ["claude-opus-5-high"], source: "cursor-agent-models" } as const;
-    const root = await seedClients(tempDir(), ["cursor", "codex"], { listed: { cursor: { ...saved, ids: [...saved.ids] } } });
+    // TEST CHANGE, justified (v17-model-list-cache, REQ-LADDER-009): the saved list is seeded in the cache.
+    const root = await seedClients(tempDir(), ["cursor", "codex"]);
+    await seedCache(root, { cursor: { ...saved, ids: [...saved.ids] } });
     listerAnswers.value = {
       cursor: { kind: "timeout" },
       codex: { kind: "listed", ids: ["gpt-6-sol"], source: "codex-debug-models" },
@@ -1090,9 +1105,10 @@ describe("sync — the client model lists (REQ-LADDER-006)", () => {
     expect((await runSyncIn(root, {})).code).toBe(0);
 
     expect(listerAnswers.asked.toSorted()).toEqual(["codex", "cursor"]);
-    expect((await readManifest(root))?.models?.listed).toEqual({
-      cursor: { ids: ["claude-opus-5-high"], source: "cursor-agent-models" },
+    // TEST CHANGE, justified (v17-model-list-cache, REQ-LADDER-009): read from the cache, clients in sort order.
+    expect(await cachedLists(root)).toEqual({
       codex: { ids: ["gpt-6-sol"], source: "codex-debug-models" },
+      cursor: { ids: ["claude-opus-5-high"], source: "cursor-agent-models" },
     });
   });
 
@@ -1119,9 +1135,9 @@ describe("sync — the client model lists (REQ-LADDER-006)", () => {
   });
 
   it("plans from the saved lists with a fresh one laid over them, without starting a client", async () => {
-    const root = await seedClients(tempDir(), ["cursor", "codex"], {
-      listed: { codex: { ids: ["gpt-6-sol"], source: "codex-debug-models" } },
-    });
+    // TEST CHANGE, justified (v17-model-list-cache, REQ-LADDER-009): the saved list is seeded in the cache.
+    const root = await seedClients(tempDir(), ["cursor", "codex"]);
+    await seedCache(root, { codex: { ids: ["gpt-6-sol"], source: "codex-debug-models" } });
 
     const plan = await planSync(root, VERSION, {
       listedOverlay: { cursor: { ids: ["claude-opus-5-5-high"], source: "cursor-agent-models" } },
@@ -1136,6 +1152,63 @@ describe("sync — the client model lists (REQ-LADDER-006)", () => {
     expect((await planSync(root, VERSION)).manifest.models?.listed).toEqual({
       codex: { ids: ["gpt-6-sol"], source: "codex-debug-models" },
     });
+  });
+
+  // REQ-LADDER-009, edge: a 1.15.0 manifest saved the lists under `models.listed`. With the probe
+  // off, the next sync moves them to the cache once, and no later write carries the key again.
+  it("moves a 1.15.0 manifest's lists to the cache once under STAMITY_NO_CLIENT_PROBE=1, and writes them no more", async () => {
+    const root = await seedClients(tempDir(), ["cursor", "codex"]);
+    const old = {
+      codex: { ids: ["gpt-6-sol", "gpt-5.6-luna"], source: "codex-debug-models" },
+      cursor: { ids: ["claude-opus-5-high"], source: "cursor-agent-models" },
+    };
+    const onDisk = JSON.parse(await readFile(manifestPath(root), "utf8")) as Record<string, unknown>;
+    await writeFile(manifestPath(root), `${JSON.stringify({ ...onDisk, models: { listed: old } }, null, 2)}\n`);
+
+    expect((await runSyncIn(root, { STAMITY_NO_CLIENT_PROBE: "1" })).code).toBe(0);
+
+    expect(listerAnswers.asked).toEqual([]);
+    expect(await cachedLists(root)).toEqual(old);
+    expect(await readFile(manifestPath(root), "utf8")).not.toContain('"listed"');
+    expect((await readManifest(root))?.models).toBeUndefined();
+    const cache = await readFile(join(root, ".stamity", "client-models.json"), "utf8");
+
+    expect((await runSyncIn(root, { STAMITY_NO_CLIENT_PROBE: "1" })).code).toBe(0);
+
+    expect(await readFile(manifestPath(root), "utf8")).not.toContain('"listed"');
+    expect(await readFile(join(root, ".stamity", "client-models.json"), "utf8")).toBe(cache);
+  });
+
+  // REQ-LADDER-009, edge: a cache that cannot be written leaves the fresh list in memory for the
+  // run, which the plan resolves with, and a warning; the run itself succeeds.
+  it("keeps a fresh list for the run and warns when the cache cannot be written", async () => {
+    const root = await seedClients(tempDir(), ["codex"]);
+    await mkdir(join(root, ".stamity", "client-models.json"), { recursive: true });
+    listerAnswers.value = { codex: { kind: "listed", ids: ["gpt-5.6-terra"], source: "codex-debug-models" } };
+
+    const result = await runSyncIn(root, {});
+
+    expect(result.code).toBe(0);
+    expect(result.stderr).toContain("warning: the client model lists could not be kept in .stamity/client-models.json");
+    expect(result.stderr).toContain("held for this run only");
+    expect((await readManifest(root))?.models).toBeUndefined();
+    // The plan of the same run reads the fresh list in memory.
+    const plan = await planSync(root, VERSION, {
+      listedOverlay: { codex: { ids: ["gpt-5.6-terra"], source: "codex-debug-models" } },
+    });
+    expect(plan.manifest.models?.listed?.codex?.ids).toEqual(["gpt-5.6-terra"]);
+    expect(plan.modelListCache).toEqual({ codex: { ids: ["gpt-5.6-terra"], source: "codex-debug-models" } });
+  });
+
+  it("keeps the lists in a file git check-ignore reports ignored", async () => {
+    const root = await seedClients(tempDir(), ["cursor"]);
+    execFileSync("git", ["init", "--quiet"], { cwd: root });
+    listerAnswers.value = { cursor: CURSOR_LIST };
+
+    expect((await runSyncIn(root, {})).code).toBe(0);
+
+    expect(existsSync(join(root, ".stamity", "client-models.json"))).toBe(true);
+    expect(() => execFileSync("git", ["check-ignore", "--quiet", ".stamity/client-models.json"], { cwd: root })).not.toThrow();
   });
 });
 

@@ -46,7 +46,15 @@ import {
   type SetupManifest,
 } from "../../../types/manifest.ts";
 import { STATE_DIR } from "../../../types/markers.ts";
-import { listClientModels, listerTreeRoot, type ModelListOutcome } from "../../engine/clientModels.ts";
+import {
+  listClientModels,
+  listerTreeRoot,
+  MAX_LISTED_MODELS,
+  resolveModelLists,
+  withModelLists,
+  writeModelListCache,
+  type ModelListOutcome,
+} from "../../engine/clientModels.ts";
 import { getEmissionPlanner } from "../../engine/emission.ts";
 import { hasNpmChannel, packageName, registryOption } from "../../kit/packageName.ts";
 import {
@@ -174,13 +182,12 @@ export interface InitApplyReport {
 /** Reads one client's model list for this account; {@link listClientModels} is the production one. */
 export type ModelLister = (tool: Tool, env: NodeJS.ProcessEnv, cwd: string) => Promise<ModelListOutcome>;
 
-/** Ceiling on the ids one client's saved list keeps (REQ-LADDER-006's threat cell). */
-export const MAX_LISTED_MODELS = 200;
+export { MAX_LISTED_MODELS };
 
 /**
- * The shape a saved id must have: the lister's own rule, held again here
- * because whatever a lister answers is written into the manifest and may later
- * be copied into an agent file. No line break, space or quote passes it, so a
+ * The shape a kept id must have: the lister's own rule, held again here
+ * because whatever a lister answers is kept in the model list cache and may
+ * later be copied into an agent file. No line break, space or quote passes it, so a
  * kept id is one the manifest validator accepts as a pin.
  */
 const LISTED_MODEL_ID = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,99}$/;
@@ -189,12 +196,13 @@ const LISTED_MODEL_ID = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,99}$/;
  * The model lists the selected clients' own CLIs give this account, read in
  * parallel, one call per client; Claude Code has no list and is not asked.
  * Shared by `init` and `sync`, which read the lists before they plan;
- * emission and the drift gate only ever read the saved copy.
+ * emission and the drift gate only ever read the kept copy, the git-ignored
+ * cache (REQ-LADDER-009, `../../engine/clientModels.ts::resolveModelLists`).
  *
  * Holds only the clients that answered with at least one well-shaped id, the
  * first {@link MAX_LISTED_MODELS} of them in the order printed: a client that
  * is absent, times out or prints no listing is left out, so the caller keeps
- * the list it saved last. `STAMITY_NO_CLIENT_PROBE=1` in `env` answers `{}`
+ * the list it cached last. `STAMITY_NO_CLIENT_PROBE=1` in `env` answers `{}`
  * with no lister called. Never throws past what the lister throws.
  */
 export async function readClientModelLists(
@@ -247,7 +255,7 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
     );
   }
 
-  const manifest = await composeManifest(
+  const composed = await composeManifest(
     decisions,
     defaults,
     importChoice,
@@ -256,15 +264,18 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
   );
 
   // Each selected client's own model list, read once before anything is
-  // planned (REQ-LADDER-006): the emission below picks every class's model
-  // from it, and every later plan reads the copy saved here.
-  const listed = await readClientModelLists(
-    manifest.tools,
+  // planned (REQ-LADDER-006) and laid over the lists this machine's cache
+  // already keeps: the emission below picks every class's model from them, and
+  // every later plan reads the copy the cache keeps (REQ-LADDER-009). The
+  // manifest carries them in memory only; its write leaves them out.
+  const fresh = await readClientModelLists(
+    composed.tools,
     opts.env ?? process.env,
     await listerTreeRoot(rootDir),
     opts.listModels,
   );
-  if (Object.keys(listed).length > 0) manifest.models = { ...manifest.models, listed };
+  const modelLists = await resolveModelLists(rootDir, composed, fresh);
+  const manifest = withModelLists(composed, modelLists.effective);
 
   // Installed packs survive a re-init, so their ledger rows must too. Seeded
   // BEFORE the emission plan below, because every consumer downstream reads the
@@ -514,9 +525,14 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
     // this engine gitignores; the rest of the state dir is committed by design.
     // Kept, not discarded: the panel names the entries this run actually added.
     gitignoreAdded = await ensureGitignoreEntry(rootDir);
+    // The account's lists, kept beside the manifest and never in it: a cache
+    // that cannot be written leaves them for this run only, and says so.
+    const cacheFailure = modelLists.toWrite === null ? null : await writeModelListCache(rootDir, modelLists.toWrite);
+    if (cacheFailure !== null) warnings.push(cacheFailure);
     // The commit point, last — see the module header.
     await writeManifest(rootDir, manifest, { now });
   }
+  if (modelLists.problem !== null) warnings.push(modelLists.problem);
 
   return {
     manifestPath: manifestPath(rootDir),

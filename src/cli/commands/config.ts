@@ -1,3 +1,4 @@
+import { resolveModelLists, withModelLists } from "../engine/clientModels.ts";
 import { gitCheckRunner } from "../engine/gitStatus.ts";
 import { CliFailure } from "../kit/output.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
@@ -330,8 +331,18 @@ function readPin(manifest: SetupManifest, modelClass: ModelClass): string | null
 }
 
 /**
+ * The setup manifest, carrying in memory the model lists the pick reads
+ * (REQ-LADDER-009): the git-ignored cache's, a 1.15.0 manifest's own, else the
+ * list the emitted model map gives. `writeManifest` never writes them.
+ */
+async function readConfigManifest(ctx: CliContext, rootDir: string): Promise<SetupManifest> {
+  const manifest = await requireSetupManifest(ctx, rootDir);
+  return withModelLists(manifest, (await resolveModelLists(rootDir, manifest)).effective);
+}
+
+/**
  * What the pick reads for `tool`: the model list `init` or `sync` last read
- * from that client's CLI and saved under `models.listed`, or none.
+ * from that client's CLI and kept in the git-ignored cache, or none.
  */
 function pickSourceFor(manifest: SetupManifest, tool: Tool): ModelPickSource {
   const listed = manifest.models?.listed?.[tool]?.ids;
@@ -997,7 +1008,7 @@ export function setConfigValue(
 
 /** Every key with its effective value and a (set)/(default) marker. */
 async function runList(ctx: CliContext, rootDir: string): Promise<CommandResult> {
-  const manifest = await requireSetupManifest(ctx, rootDir);
+  const manifest = await readConfigManifest(ctx, rootDir);
   const rows = CONFIG_KEYS.map((key) => ({ key, ...getConfigValue(manifest, key) }));
   const width = Math.max(...rows.map((row) => row.key.length));
 
@@ -1128,7 +1139,7 @@ async function runPicker(
   rootDir: string,
   gate: PromptGate,
 ): Promise<CommandResult> {
-  const manifest = await requireSetupManifest(ctx, rootDir);
+  const manifest = await readConfigManifest(ctx, rootDir);
   // The list's own header: which manifest these rows come from.
   ctx.io.out(`${ctx.engine.manifest.manifest.manifestPath(rootDir)}\n`);
 
@@ -1160,7 +1171,7 @@ async function runPicker(
   // hazard); only the write's input is refreshed, immediately before it is
   // used, the same way `runSet` and `runDetect` already read exactly once,
   // right before they write.
-  const fresh = await requireSetupManifest(ctx, rootDir);
+  const fresh = await readConfigManifest(ctx, rootDir);
   return await applyKeyValue(ctx, rootDir, fresh, key, value);
 }
 
@@ -1178,7 +1189,7 @@ async function runGet(
       next: `run stamity config get <key> — keys: ${CONFIG_KEYS.join(", ")}`,
     });
   }
-  const manifest = await requireSetupManifest(ctx, rootDir);
+  const manifest = await readConfigManifest(ctx, rootDir);
   const read = getConfigValue(manifest, key);
 
   ctx.io.out(
@@ -1224,7 +1235,7 @@ async function runSet(
     });
   }
 
-  const manifest = await requireSetupManifest(ctx, rootDir);
+  const manifest = await readConfigManifest(ctx, rootDir);
   return await applyKeyValue(ctx, rootDir, manifest, key, value);
 }
 
@@ -1306,7 +1317,7 @@ function diffDetection(
  * platform alone rather than erasing an answer the operator gave.
  */
 async function runDetect(ctx: CliContext, rootDir: string): Promise<CommandResult> {
-  const manifest = await requireSetupManifest(ctx, rootDir);
+  const manifest = await readConfigManifest(ctx, rootDir);
 
   ctx.spinner.start("scanning the repo");
   const info = await ctx.engine.detect.repoAnalyzer.analyzeRepo(rootDir);

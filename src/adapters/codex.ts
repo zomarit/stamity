@@ -455,7 +455,8 @@ export const codexResiduePlanner: ResiduePlanner = {
     // efforts are per class, not per agent, so resolving them per file would
     // re-read the same two maps once per subagent.
     //
-    // The account's saved list rides beside them: a class with no pin takes the
+    // The account's list rides beside them, as the verb laid it in memory from
+    // the git-ignored cache (REQ-LADDER-009): a class with no pin takes the
     // first shipped candidate on it, and nothing when it holds none; the shipped
     // list's entry 0 only when no list was read. Emission never starts the
     // client to read it (REQ-LADDER-006).
