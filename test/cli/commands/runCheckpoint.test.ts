@@ -737,6 +737,22 @@ describe("stamity run checkpoint", () => {
       expect(pushedTree(remote)).not.toContain("docs/x.md");
     });
 
+    it("commits the staged deletion of a file tracked under an ignore rule, never naming it as an ignored record", async () => {
+      const { repo, remote } = await seed("attended");
+      await put(repo, ".gitignore", "*.log\n");
+      await put(repo, "kept.log", "kept\n");
+      git(repo, ["add", "-f", "--", ".gitignore", "kept.log"]);
+      git(repo, ["commit", "-q", "-m", "a tracked log"]);
+      git(repo, ["rm", "-q", "--", "kept.log"]);
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "kept.log"]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [] });
+      expect(committedChanges(repo)).toEqual(expect.arrayContaining(["D\tkept.log"]));
+      expect(pushedTree(remote)).not.toContain("kept.log");
+    });
+
     it("keeps today's reading of a deletion not yet staged, and of a path no layer holds", async () => {
       const { repo, remote } = await seed("attended");
       await rm(join(repo, "b.txt"));

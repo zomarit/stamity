@@ -850,7 +850,8 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   const patchRel = `${heldDir}/${HELD_PATCH}`;
   const patches = [...new Set([patchRel, ...listPatches(join(cwd, heldDir)).map((name) => `${heldDir}/${name}`)])].map(fromTop);
   const { paths: named, deleted: namedDeleted } = await namedPaths(top, cwd, prefix, (opts["paths"] ?? []) as string[], result.notDone);
-  const ignored = await ignoredPaths(top, [...own, ...named, ...patches]);
+  // review/84: a deletion already staged is no ignored record, though check-ignore reads its path as untracked now.
+  const ignored = await ignoredPaths(top, [...own, ...named.filter((path) => !namedDeleted.includes(path)), ...patches]);
   if (ignored === null) {
     result.notDone.push("stage failed: git check-ignore could not read the ignore rules");
     return finish(false);
