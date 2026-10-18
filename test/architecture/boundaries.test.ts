@@ -307,6 +307,9 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   "src/runs/planCoverage.ts": { unit: "u2-coverage-port", wave: 1 },
   "src/runs/prerequisites.ts": { unit: "u5-morning", wave: 1 },
   "src/hooks/personOnly.ts": { unit: "u6-person-only-tables", wave: 1 },
+  // Plan 021 file 2: the one session detector, zero imports, read by the wave-4
+  // hook scripts and pre-flight and the wave-14 gate verb (v8-detect-translator).
+  "src/session/detect.ts": { unit: "v8-detect-translator", wave: 1 },
   // wave 2
   "src/merge/fsErrors.ts": { unit: "p1-08", wave: 2 },
   "src/merge/managedBlocks.ts": { unit: "p1-08", wave: 2 },

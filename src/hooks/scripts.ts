@@ -50,6 +50,7 @@ import {
   USAGE_REVIEW_PATTERN,
 } from "../runs/layout.ts";
 import { cliCallHint, pinnedCliCall } from "../shared/cliCall.ts";
+import { matchSessions, SESSION_MARKERS, type SessionMarkerRow } from "../session/detect.ts";
 import {
   CLIENT_CLOUD_FACTS,
   CLIENT_HOOK_GUARANTEES,
@@ -798,40 +799,28 @@ function cloudSessionLines(tool: Tool): string[] {
 }
 
 /**
- * The cloud and CI sessions the session start names (REQ-FLOW-085), in priority
- * order, each with what it does not enforce there. A marker counts when it is set
- * to a value other than "", "false" and "0" (and to `equals` where given); its
- * value is never printed, so a marker cannot carry text into the session. Cursor's
- * marker names a Cursor agent machine (managed or self-hosted): Cursor sets it on
- * both, and a managed VM runs no session-start hook, so the managed reading comes
- * from the context-once script ({@link buildContextOnceScript}).
+ * The cloud and CI sessions the session start names (REQ-FLOW-085), in the
+ * detector's priority order (`../session/detect.ts`, {@link SESSION_MARKERS}),
+ * each with its name and what it does not enforce there. Which markers count is
+ * the detector's rule, carried into the script as {@link matchSessions}'s own
+ * source; a marker's value is never printed, so a marker cannot carry text into
+ * the session. Cursor's marker names a Cursor agent machine (managed or
+ * self-hosted): Cursor sets it on both, and a managed VM runs no session-start
+ * hook, so the managed reading comes from the context-once script
+ * ({@link buildContextOnceScript}).
  * A client's lines are read from {@link CLIENT_CLOUD_FACTS}, where each carries
  * its vendor page and access date; the CI line is this engine's own behaviour.
  */
-const CLOUD_SESSIONS: readonly {
-  name: string;
-  vars: readonly string[];
-  equals?: string;
-  lines: readonly string[];
-}[] = [
-  {
-    name: "a Claude Code cloud session",
-    vars: ["CLAUDE_CODE_REMOTE"],
-    equals: "true",
-    lines: cloudSessionLines("claude"),
-  },
-  {
-    name: "a Copilot cloud agent session",
-    vars: ["COPILOT_AGENT_PROMPT"],
-    lines: cloudSessionLines("copilot"),
-  },
-  {
-    name: "a Cursor agent machine (managed or self-hosted)",
-    vars: ["CURSOR_AGENT_SOCKET"],
-    lines: cloudSessionLines("cursor"),
-  },
-  { name: "a CI run", vars: ["CI", "GITHUB_ACTIONS"], lines: ["No person answers; declared defaults apply."] },
-];
+const SESSION_TEXT: Readonly<Record<SessionMarkerRow["kind"], { name: string; lines: readonly string[] }>> = {
+  "claude-cloud": { name: "a Claude Code cloud session", lines: cloudSessionLines("claude") },
+  "copilot-cloud": { name: "a Copilot cloud agent session", lines: cloudSessionLines("copilot") },
+  "cursor-agent": { name: "a Cursor agent machine (managed or self-hosted)", lines: cloudSessionLines("cursor") },
+  ci: { name: "a CI run", lines: ["No person answers; declared defaults apply."] },
+};
+
+const CLOUD_SESSIONS: readonly (SessionMarkerRow & { name: string; lines: readonly string[] })[] = SESSION_MARKERS.map(
+  (row) => Object.assign({}, row, SESSION_TEXT[row.kind]),
+);
 
 /**
  * The session index's source, shared by the session start and Cursor's
@@ -861,6 +850,8 @@ const RESUMABLE = ${json([...RESUMABLE_STATUSES])};
 const SESSIONS = [
 ${CLOUD_SESSIONS.map((session) => `  ${json(session)},`).join("\n")}
 ];
+// The session detector, as its own source (src/session/detect.ts in the engine that wrote this file).
+const matchSessions = ${matchSessions.toString()};
 const INVISIBLE = new RegExp(${json(INVISIBLE_SMUGGLING_CHARS.source)}, "g");
 const SCREEN = [
 ${screen}
@@ -1204,12 +1195,7 @@ function fileName(doc) {
 
 /** The first cloud or CI session by priority, its lines, then the others by name. */
 function sessionLines(env) {
-  const [first, ...rest] = SESSIONS.filter((session) =>
-    session.vars.some((name) => {
-      const value = env[name];
-      return typeof value === "string" && !["", "false", "0"].includes(value) && (session.equals ?? value) === value;
-    }),
-  );
+  const [first, ...rest] = matchSessions(SESSIONS, env).map((match) => match.row);
   if (first === undefined) return [];
   const out = ["Session: " + first.name + ".", ...first.lines.map((line) => "- " + line)];
   if (rest.length > 0) out.push("Also detected: " + rest.map((session) => session.name).join(", ") + ".");

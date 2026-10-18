@@ -278,7 +278,10 @@ describe("ask-user platform table", () => {
   it("renders one markdown row per tool", () => {
     const lines = buildAskUserPlatformTable().split("\n");
     expect(lines).toHaveLength(TOOLS.length + 2);
-    expect(lines[0]).toBe("| Client | Native question tool | Guidance |");
+    // TEST CHANGE, justified (2026-10-18, plan 021 file 2, unit v8-detect-translator; REQ-FLOW-080):
+    // this pin read "| Client | Native question tool | Guidance |"; a row's cloud note now renders
+    // as a fourth column of its own, so the header names it.
+    expect(lines[0]).toBe("| Client | Native question tool | Guidance | Cloud run |");
     for (const tool of TOOLS) {
       expect(lines.some((line) => line.startsWith(`| \`${tool}\` |`))).toBe(true);
     }
@@ -288,6 +291,29 @@ describe("ask-user platform table", () => {
       expect(buildAskUserPlatformTable()).toContain(`| \`${name}\` |`);
     }
     expect(buildAskUserPlatformTable()).not.toContain("_none documented_");
+  });
+
+  it("carries Cursor's and Copilot's cloud notes, one sentence each, in a column of their own (v8)", () => {
+    expect(getAskUserToolEntry("cursor").cloud).toBe("In a managed cloud run, ask nothing and take the declared default.");
+    expect(getAskUserToolEntry("copilot").cloud).toBe("The cloud agent has no person to answer; take the declared default.");
+    expect(getAskUserToolEntry("claude").cloud).toBeUndefined();
+    expect(getAskUserToolEntry("codex").cloud).toBeUndefined();
+    for (const tool of TOOLS) {
+      const { cloud, note } = getAskUserToolEntry(tool);
+      if (cloud === undefined) continue;
+      expect(cloud.split(/[.!?](?=\s|$)/).filter((part) => part.trim().length > 0), tool).toHaveLength(1);
+      expect(cloud, tool).toContain("declared default");
+      expect(cloud, tool).not.toContain("|");
+      // The local note keeps its own two sentences: the cloud one is never folded into it.
+      expect(note, tool).not.toContain(cloud);
+    }
+    const rows = buildAskUserPlatformTable().split("\n");
+    expect(rows[1]).toBe("|---|---|---|---|");
+    for (const tool of TOOLS) {
+      const { cloud, note } = getAskUserToolEntry(tool);
+      const row = rows.find((line) => line.startsWith(`| \`${tool}\` |`));
+      expect(row, tool).toBe(`| \`${tool}\` | \`${String(getAskUserToolEntry(tool).toolName)}\` | ${note} | ${cloud ?? "—"} |`);
+    }
   });
 });
 
@@ -472,6 +498,12 @@ describe("task/skill category resolution", () => {
 });
 
 describe("platform-tool marker substitution", () => {
+  /** The note the marker resolves to for `tool`: its local note, then its cloud note where it carries one. */
+  const renderedNote = (tool: Tool): string => {
+    const { cloud, note } = getAskUserToolEntry(tool);
+    return cloud === undefined ? note : `${note} **Cloud run:** ${cloud}`;
+  };
+
   it("replaces every occurrence with the target client's note", () => {
     const body = [
       `Before asking: ${PLATFORM_TOOL_MARKER}`,
@@ -486,8 +518,27 @@ describe("platform-tool marker substitution", () => {
 
       expect(out).not.toContain(PLATFORM_TOOL_MARKER);
       expect(out.split(note)).toHaveLength(4);
-      expect(out).toBe(body.split(PLATFORM_TOOL_MARKER).join(note));
+      // TEST CHANGE, justified (2026-10-19, plan 021 file 2, unit v8-detect-translator; REQ-FLOW-080): this pin
+      // read `join(note)`; a client whose entry carries a cloud note now renders it beside its local note, so the
+      // expected text is the rendered note, which equals `note` for the clients with none (asserted below).
+      expect(out).toBe(body.split(PLATFORM_TOOL_MARKER).join(renderedNote(tool)));
     }
+  });
+
+  it("renders a client's cloud note beside its local note, and nothing more where it has none (v8)", () => {
+    for (const tool of TOOLS) {
+      const { cloud, note } = getAskUserToolEntry(tool);
+      const out = substituteCanonicalPlatformMarker(`pre ${PLATFORM_TOOL_MARKER} post`, tool);
+      expect(out, tool).toBe(cloud === undefined ? `pre ${note} post` : `pre ${note} **Cloud run:** ${cloud} post`);
+    }
+    expect(substituteCanonicalPlatformMarker(PLATFORM_TOOL_MARKER, "cursor")).toContain(
+      "**Cloud run:** In a managed cloud run, ask nothing and take the declared default.",
+    );
+    expect(substituteCanonicalPlatformMarker(PLATFORM_TOOL_MARKER, "copilot")).toContain(
+      "**Cloud run:** The cloud agent has no person to answer; take the declared default.",
+    );
+    expect(substituteCanonicalPlatformMarker(PLATFORM_TOOL_MARKER, "claude")).not.toContain("Cloud run");
+    expect(substituteCanonicalPlatformMarker(PLATFORM_TOOL_MARKER, "codex")).not.toContain("Cloud run");
   });
 
   it("returns content without the marker unchanged", () => {

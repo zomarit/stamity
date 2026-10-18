@@ -541,6 +541,36 @@ describe("stamity gate preflight and scan --text", () => {
         }
       }
     });
+
+    it("reads the client and cloud fields and Cursor's egress warning through detectSession (v8)", async () => {
+      const repo = await seedRepo();
+      protectedRepo();
+      // [environment, client, cloud]; the rows marked "changed" read otherwise before the one detector:
+      // `CLAUDE_CODE_REMOTE=1` was a Claude cloud, `GITHUB_ACTIONS` alone no cloud, a socket of `0` Cursor's egress.
+      const cases: readonly (readonly [Record<string, string>, string | null, boolean])[] = [
+        [{}, null, false],
+        [{ CLAUDECODE: "1" }, "claude", false],
+        [{ CLAUDE_CODE_REMOTE: "true" }, "claude", true],
+        [{ CLAUDE_CODE_REMOTE: "1" }, null, false], // changed
+        [{ CLAUDE_CODE_REMOTE: "1", CLAUDECODE: "1" }, "claude", false], // changed
+        [{ CI: "true", CLAUDE_CODE_REMOTE: "true" }, "claude", true],
+        [{ COPILOT_AGENT_PROMPT: "prompt-q7zk", GITHUB_ACTIONS: "true", CI: "true" }, "copilot", true],
+        [{ CURSOR_AGENT_SOCKET: "/tmp/cursor-agent.sock", CI: "true" }, "cursor", true],
+        [{ CURSOR_AGENT_SOCKET: "0" }, null, false], // changed
+        [{ GITHUB_ACTIONS: "true" }, null, true], // changed
+        [{ CI: "true" }, null, true],
+      ];
+      for (const [env, client, cloud] of cases) {
+        // oxlint-disable-next-line no-await-in-loop -- each run sets the process's HOME in turn (gate above)
+        const { doc } = await gate(repo, PREFLIGHT, env);
+        const label = JSON.stringify(env);
+        expect({ client: doc["client"], cloud: doc["cloud"] }, label).toEqual({ client, cloud });
+        const warnings = (doc["warnings"] as { id: string }[]).map((warning) => warning.id);
+        if (client === "cursor") expect(warnings, label).toContain("cursor-egress");
+        else expect(warnings, label).not.toContain("cursor-egress");
+        expect(JSON.stringify(doc), label).not.toContain("prompt-q7zk");
+      }
+    });
   });
 
   describe("the push facts (readPushIdentity)", () => {

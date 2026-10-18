@@ -387,6 +387,12 @@ export interface AskUserToolEntry {
   readonly toolName: string | null;
   /** Guidance rendered into generated content — at most two sentences. */
   readonly note: string;
+  /**
+   * What the client's cloud run does at an ask, one sentence, rendered as its own column of
+   * {@link buildAskUserPlatformTable} and beside the note in the client's own copy
+   * ({@link substituteCanonicalPlatformMarker}); absent where the map states nothing for the client's cloud.
+   */
+  readonly cloud?: string;
 }
 
 const ASK_USER_TOOLS: Readonly<Record<Tool, AskUserToolEntry>> = {
@@ -412,6 +418,9 @@ const ASK_USER_TOOLS: Readonly<Record<Tool, AskUserToolEntry>> = {
     // is not on a docs page as of 2026-10-15 (cursor.com/docs/agent/tools names
     // it "Ask questions"), so the forum reply is its one source.
     note: "**Platform:** Ask through the `AskQuestion` tool where the serving model offers it (Cursor 2.4 and later), and otherwise use the plain-text fallback below; a sub-agent still returns its question as a blocked result. `agent -p` rejects the tool as if the user skipped it, so a skipped or headless question reads as no answer.",
+    // A managed cloud agent, which the session line names a Cursor agent machine (REQ-FLOW-085), has no person
+    // watching the conversation (REQ-FLOW-080).
+    cloud: "In a managed cloud run, ask nothing and take the declared default.",
   },
   copilot: {
     tool: "copilot",
@@ -423,6 +432,8 @@ const ASK_USER_TOOLS: Readonly<Record<Tool, AskUserToolEntry>> = {
     // Unverified 2026-10-15: that `ask_user` takes one question a call — no page
     // read today states its per-call limit.
     note: "**Platform:** In VS Code ask through the `askQuestions` tool (it reaches sub-agents since 1.110, yet a sub-agent still returns its question as a blocked result); in Copilot CLI use `ask_user`, one question at a time, which `--no-ask-user` turns off. Where neither is offered use the plain-text fallback below, and a skipped or headless question reads as no answer.",
+    // The cloud agent works an issue on a GitHub Actions runner and answers in its pull request (REQ-FLOW-080).
+    cloud: "The cloud agent has no person to answer; take the declared default.",
   },
   codex: {
     tool: "codex",
@@ -465,20 +476,23 @@ export const PLATFORM_TOOL_MARKER = "<!-- STAMITY:PLATFORM-TOOL -->";
 /**
  * Render every client's ask-user row as a markdown table — for documentation
  * read across clients, where naming one platform's tool would strand the
- * others.
+ * others. A row's cloud note is its own column, `—` where it has none.
  */
 export function buildAskUserPlatformTable(): string {
   const rows = TOOLS.map((tool) => {
     const entry = getAskUserToolEntry(tool);
     const name = entry.toolName === null ? "_none documented_" : `\`${entry.toolName}\``;
-    return `| \`${tool}\` | ${name} | ${entry.note} |`;
+    return `| \`${tool}\` | ${name} | ${entry.note} | ${entry.cloud ?? "—"} |`;
   });
-  return ["| Client | Native question tool | Guidance |", "|---|---|---|", ...rows].join("\n");
+  return ["| Client | Native question tool | Guidance | Cloud run |", "|---|---|---|---|", ...rows].join("\n");
 }
 
 /**
  * Replace every {@link PLATFORM_TOOL_MARKER} in a canonical body with the
- * target client's ask-user note.
+ * target client's ask-user note, followed by its cloud note under
+ * `**Cloud run:**` where the entry carries one (REQ-FLOW-080), so a client's own
+ * copy of the protocol says what its cloud run does at an ask, as the
+ * cross-client table's column does.
  *
  * Content without the marker is returned unchanged, which keeps the call
  * cheap on the majority of files and makes the transform safe to run over a
@@ -488,5 +502,6 @@ export function buildAskUserPlatformTable(): string {
  */
 export function substituteCanonicalPlatformMarker(content: string, tool: Tool): string {
   if (!content.includes(PLATFORM_TOOL_MARKER)) return content;
-  return content.split(PLATFORM_TOOL_MARKER).join(getAskUserToolEntry(tool).note);
+  const { cloud, note } = getAskUserToolEntry(tool);
+  return content.split(PLATFORM_TOOL_MARKER).join(cloud === undefined ? note : `${note} **Cloud run:** ${cloud}`);
 }

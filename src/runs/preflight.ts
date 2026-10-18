@@ -33,6 +33,7 @@
 import semver from "semver";
 import { CANARY_MAX_AGE_MS } from "../mcp/env.ts";
 import { scanValueForSecrets } from "../mcp/secretScan.ts";
+import { detectSession } from "../session/detect.ts";
 import { HOOKS_ACTIVE_ENV } from "../types/markers.ts";
 import { CLAUDE_PROXY_ORIGIN, hostOf, resolveRepo } from "./pullRequest.ts";
 
@@ -497,7 +498,7 @@ function hooksLoaded(canary: { at: string } | null, now: Date, env: PreflightDep
   const fix =
     "run the pre-flight through the shell tool of a session whose hooks loaded, so the shell guard writes the " +
     "canary first; re-run sync if the guard is not emitted";
-  if (env["CLAUDE_CODE_REMOTE"] === "true" && env[HOOKS_ACTIVE_ENV] !== "1") {
+  if (detectSession(env).markers.includes("CLAUDE_CODE_REMOTE") && env[HOOKS_ACTIVE_ENV] !== "1") {
     return {
       state: "refuse",
       evidence:
@@ -894,8 +895,8 @@ export async function runPreflight(deps: PreflightDeps): Promise<PreflightVerdic
     .map(([id, result]) => ({ id, reason: result.evidence, fix: result.fix }));
 
   const warnings: PreflightVerdict["warnings"] = [];
-  const cursorSocket = deps.env["CURSOR_AGENT_SOCKET"];
-  if (cursorSocket !== undefined && cursorSocket !== "") warnings.push({ id: "cursor-egress" });
+  // Any Cursor agent machine, whichever session the detector names first (a Cursor run inside CI included).
+  if (detectSession(deps.env).markers.includes("CURSOR_AGENT_SOCKET")) warnings.push({ id: "cursor-egress" });
   const names = tokenEnvNames(deps.env);
   if (names.length > 0) warnings.push({ id: "token-env", names });
   const reviewReason = reviewStateReason(deps.reviewState, push.mergeBypass);

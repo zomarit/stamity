@@ -39,6 +39,7 @@ import { REQUIRED_FLOORS, runPreflight, type PreflightDeps, type PushUrlFacts, t
 import { resolveRepo } from "../../runs/pullRequest.ts";
 import { RECORD_FILE, REPORT_READ_MAX_BYTES, runRelPath, USAGE_REVIEW_PATTERN } from "../../runs/layout.ts";
 import { findCardRun, readCurrentBranch } from "../../runs/resumeCard.ts";
+import { detectSession, type SessionKind } from "../../session/detect.ts";
 import { findPackageRoot } from "../../shared/paths.ts";
 import { bareShapeRefusal, gitDiscoveryMeetsBareShape } from "../../merge/safeWrite.ts";
 import { fileSystemProbe, gitProgramFor, isNodeModulesBin, programNotFound, resolveProgramOnPath, searchPathOf } from "../../shared/programPath.ts";
@@ -1967,14 +1968,19 @@ export function usageReviewLines(root: string, now: Date): number {
   return record === undefined ? 0 : record.toString("utf8").split(/\r?\n/).filter((line) => USAGE_REVIEW_PATTERN.test(line)).length;
 }
 
-/** The cloud markers a client sets (REQ-FLOW-089): each means "cloud", never "unattended". */
-const CLOUD_MARKERS: readonly (readonly [string, string | null])[] = [
-  ["CLAUDE_CODE_REMOTE", "claude"],
-  ["COPILOT_AGENT_PROMPT", "copilot"],
-  ["CURSOR_AGENT_SOCKET", "cursor"],
-  ["CI", null],
-];
+/**
+ * The client each session the detector names runs (`../../session/detect.ts`): a cloud marker means "cloud", never
+ * "unattended" (REQ-FLOW-089). CI and a local session name none, and fall back to Claude Code's local `CLAUDECODE`.
+ */
+const SESSION_CLIENT: Readonly<Record<SessionKind, string | null>> = {
+  "claude-cloud": "claude",
+  "copilot-cloud": "copilot",
+  "cursor-agent": "cursor",
+  ci: null,
+  local: null,
+};
 
+/** Whether Claude Code's local marker `CLAUDECODE` is set: not a session marker, so not the detector's. */
 function setIn(env: Readonly<Record<string, string | undefined>>, name: string): boolean {
   const value = env[name]?.trim().toLowerCase() ?? "";
   return value !== "" && value !== "false" && value !== "0";
@@ -2026,9 +2032,9 @@ async function runPreflightVerb(ctx: CliContext, opts: Record<string, unknown>):
     pushIdentity,
     reviewState: { counter: existsSync(join(root, REVIEW_GATE_STATE_FILE)), usageReviewLines: usageReviewLines(root, now) },
   });
-  const marker = CLOUD_MARKERS.find(([name, client]) => client !== null && setIn(env, name));
-  const client = marker?.[1] ?? (setIn(env, "CLAUDECODE") ? "claude" : null);
-  const cloud = CLOUD_MARKERS.some(([name]) => setIn(env, name));
+  const session = detectSession(env);
+  const client = SESSION_CLIENT[session.kind] ?? (setIn(env, "CLAUDECODE") ? "claude" : null);
+  const cloud = session.kind !== "local";
   const checks = verdict.checks.map((check) => ({ ...check, evidence: sanitizeLabel(check.evidence) }));
   const refusals = verdict.refusals.map((refusal) => ({ ...refusal, reason: sanitizeLabel(refusal.reason) }));
   const shownFloors = floors.map(({ id, path, exists }) => ({ id, path: sanitizeLabel(path), exists }));
