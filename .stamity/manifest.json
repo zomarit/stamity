@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "generatedBy": "1.15.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-18T17:52:05.153Z",
+  "updatedAt": "2026-10-18T18:56:39.213Z",
   "tools": [
     "claude"
   ],
@@ -352,11 +352,12 @@
             "4cb924fc957429ce07dcb547f956ee5a379c5dac1bbd2016cabea9a0e4af7b11",
             "55c7e93117c3d2c4319b2f8ccb501225e94ebac3cd13b30fcf67f9a2c9b0199f",
             "e9178df111f6b1c2950e81b2b39c9c9019822c3815f270dca8c1b226f59f06a6",
-            "6668040568a65d9db76545e03a8cc55822093297612709dc6c37f1dfe3f24225"
+            "6668040568a65d9db76545e03a8cc55822093297612709dc6c37f1dfe3f24225",
+            "0d6b4ecb45301c91f9f2b33620b02062ee68d6c749380864e154d5dfc88b9dcf"
           ]
         }
       },
-      "contentHash": "e60da9ab4252102179747f8f354e484c55464e4a70868b8eb03d9147ff95f592",
+      "contentHash": "7681badb2ebb83a2be2a671f660a4d775081e308dcb6646cbd90aca3576174c5",
       "path": ".claude/settings.json"
     },
     {
@@ -608,7 +609,7 @@
       "adapter": "claude",
       "artifactId": "stamity-person-only-guard",
       "artifactType": "infra",
-      "contentHash": "5e18c1ffb1d1b9868a076dc85cc2e99cec96a3fc1c4be38629347baab292630f",
+      "contentHash": "612113d51b33a024bb6ce4169e09e785b2a5e208eaf27deed59d95de3bdf959b",
       "path": ".stamity/generated/hooks/claude/stamity-person-only-guard.mjs"
     },
     {

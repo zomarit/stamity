@@ -144,7 +144,8 @@
       "mcp__github__update_pull_request_draft_state",
       "mcp__github__create_branch",
       "mcp__github__delete_repository",
-      "mcp__github__create_pull_request"
+      "mcp__github__create_pull_request",
+      "Bash(gh repo unarchive:*)"
     ]
   }
 }

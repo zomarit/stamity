@@ -724,10 +724,23 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		if (method !== null && /[$`]/.test(method)) hidden();
 		if (tool === "curl" && (write || body) && !globoff && targets.some((target) => /[{[]/.test(target))) hidden();
 		if (tool === "wget" && write && inputFile) hidden();
+		const resolved = (path) => {
+			const segments = path.split("/");
+			const kept = [];
+			segments.forEach((segment, index) => {
+				if (segment === "..") kept.pop();
+				else if (segment !== ".") kept.push(segment);
+				if ((segment === "." || segment === "..") && index === segments.length - 1) kept.push("");
+			});
+			return kept.join("/").replace(/^\/+/, "").replace(/^api\/v3\//i, "");
+		};
 		return {
 			write,
 			method: verb,
-			paths: targets.map((target) => (target.replace(/^[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/]*/, "").replace(/^[\w-]+(\.[\w-]+)+(:\d+)?(?=\/)/, "").replace(/^\/+/, "").replace(/^api\/v3\//i, "").split(/[?#]/)[0] ?? "").replace(/%([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(Number.parseInt(hex, 16))).replace(/\/+$/, "").replace(/^repos\/[^/]+\/[^/]+\//i, "").replace(/^(orgs|enterprises|users|repositories)\/[^/]+\//i, "")),
+			paths: targets.flatMap((target) => {
+				const decoded = (target.replace(/^[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/]*/, "").replace(/^[\w-]+(\.[\w-]+)+(:\d+)?(?=\/)/, "").replace(/^\/+/, "").replace(/^api\/v3\//i, "").split(/[?#]/)[0] ?? "").replace(/%([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(Number.parseInt(hex, 16)));
+				return [.../* @__PURE__ */ new Set([decoded, resolved(decoded)])].map((path) => path.replace(/\/+$/, "").replace(/^repos\/[^/]+\/[^/]+\//i, "").replace(/^(orgs|enterprises|users|repositories)\/[^/]+\//i, ""));
+			}),
 			cmd: cmd.slice(0, end),
 			next
 		};
@@ -950,7 +963,34 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			"download"
 		].includes(sub)) return deny("release", "A release write (`gh release`)");
 		if ((group === "secret" || group === "variable") && sub !== void 0 && !["list", "ls"].includes(sub)) return deny("secrets", `A ${group} write (\`gh ${group}\`)`);
-		if (group === "repo" && (sub === "delete" || sub === "archive" || sub === "rename" || sub === "transfer")) return deny("protection", `A repository ${sub} (\`gh repo ${sub}\`)`);
+		if (group === "repo" && [
+			"delete",
+			"archive",
+			"unarchive",
+			"rename",
+			"transfer"
+		].includes(sub ?? "")) return deny("protection", `A repository ${sub} (\`gh repo ${sub}\`)`);
+		if (group === "repo" && sub === "sync") {
+			const words = [];
+			const branches = [];
+			for (let k = 1; k < cmd.length; k += 1) {
+				const word = cmd[k] ?? "";
+				if (word === "-b" || word === "--branch") branches.push(cmd[k += 1] ?? "");
+				else if (word.startsWith("--branch=")) branches.push(word.slice(9));
+				else if (/^-b./.test(word)) branches.push(word.slice(2).replace(/^=/, ""));
+				else if ([
+					"-R",
+					"--repo",
+					"-s",
+					"--source"
+				].includes(word)) k += 1;
+				else if (!word.startsWith("-")) words.push(word);
+			}
+			if (words.length > 2) {
+				if (flag("--force", "", "")) return deny("force-push", "A forced sync of a repository (`gh repo sync --force`)");
+				if (branches.length === 0 || branches.some((name) => name === "" || /[$`]/.test(name) || defaults.has(branch(name)))) return deny("push-default", "A sync of a repository's default branch, or of a branch the line cannot show (`gh repo sync`)");
+			}
+		}
 		if (group === "repo" && sub === "edit" && cmd.some((word) => /^--default-branch(=|$)/.test(word))) return deny("protection", "A default-branch change (`gh repo edit --default-branch`)");
 		if (group === "repo" && sub === "edit" && cmd.some((word) => /^--visibility(=|$)/.test(word))) return deny("protection", "A visibility change (`gh repo edit --visibility`)");
 		if (group === "api") return httpVerdict(cmd);
@@ -1852,10 +1892,23 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 		if (method !== null && /[$`]/.test(method)) hidden();
 		if (tool === "curl" && (write || body) && !globoff && targets.some((target) => /[{[]/.test(target))) hidden();
 		if (tool === "wget" && write && inputFile) hidden();
+		const resolved = (path) => {
+			const segments = path.split("/");
+			const kept = [];
+			segments.forEach((segment, index) => {
+				if (segment === "..") kept.pop();
+				else if (segment !== ".") kept.push(segment);
+				if ((segment === "." || segment === "..") && index === segments.length - 1) kept.push("");
+			});
+			return kept.join("/").replace(/^\/+/, "").replace(/^api\/v3\//i, "");
+		};
 		return {
 			write,
 			method: verb,
-			paths: targets.map((target) => (target.replace(/^[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/]*/, "").replace(/^[\w-]+(\.[\w-]+)+(:\d+)?(?=\/)/, "").replace(/^\/+/, "").replace(/^api\/v3\//i, "").split(/[?#]/)[0] ?? "").replace(/%([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(Number.parseInt(hex, 16))).replace(/\/+$/, "").replace(/^repos\/[^/]+\/[^/]+\//i, "").replace(/^(orgs|enterprises|users|repositories)\/[^/]+\//i, "")),
+			paths: targets.flatMap((target) => {
+				const decoded = (target.replace(/^[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/]*/, "").replace(/^[\w-]+(\.[\w-]+)+(:\d+)?(?=\/)/, "").replace(/^\/+/, "").replace(/^api\/v3\//i, "").split(/[?#]/)[0] ?? "").replace(/%([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(Number.parseInt(hex, 16)));
+				return [.../* @__PURE__ */ new Set([decoded, resolved(decoded)])].map((path) => path.replace(/\/+$/, "").replace(/^repos\/[^/]+\/[^/]+\//i, "").replace(/^(orgs|enterprises|users|repositories)\/[^/]+\//i, ""));
+			}),
 			cmd: cmd.slice(0, end),
 			next
 		};
@@ -2475,9 +2528,19 @@ function contextsOf(command, cwd) {
   return [...contexts.values()];
 }
 
-/** The local tag names, loose and packed, up to TAG_NAMES_MAX. */
+/**
+ * The local tag names, loose and packed. A further tag past TAG_NAMES_MAX, or a packed-refs file past
+ * PACKED_REFS_MAX_BYTES, faults with a coded error the guard refuses on, so a cut-off list never reads as
+ * every tag there is; the throws sit outside the reads' catches.
+ */
 function localTags(commonDir) {
-  const tags = [];
+  // A name both loose and packed counts once.
+  const tags = new Set();
+  const add = (name, path) => {
+    if (tags.has(name)) return;
+    if (tags.size >= TAG_NAMES_MAX) throw Object.assign(new Error("tag names"), { code: "TAG_NAMES_OVER_" + TAG_NAMES_MAX, path });
+    tags.add(name);
+  };
   const walk = (dir, prefix) => {
     let entries = [];
     try {
@@ -2486,25 +2549,29 @@ function localTags(commonDir) {
       return;
     }
     for (const entry of entries) {
-      if (tags.length >= TAG_NAMES_MAX) return;
       if (entry.isDirectory()) walk(join(dir, entry.name), prefix + entry.name + "/");
-      else if (entry.isFile()) tags.push(prefix + entry.name);
+      else if (entry.isFile()) add(prefix + entry.name, dir);
     }
   };
   walk(join(commonDir, "refs", "tags"), "");
+  const packed = join(commonDir, "packed-refs");
+  let text = "";
+  let size = 0;
   try {
-    const packed = join(commonDir, "packed-refs");
     const stats = lstatSync(packed);
-    if (stats.isFile() && stats.size <= PACKED_REFS_MAX_BYTES) {
-      for (const line of readFileSync(packed, "utf8").split(/\r?\n/)) {
-        const hit = /^[0-9a-f]{40,64} refs\/tags\/(.+)$/i.exec(line);
-        if (hit !== null && tags.length < TAG_NAMES_MAX) tags.push(hit[1]);
-      }
-    }
+    if (stats.isFile()) size = stats.size;
+    if (stats.isFile() && size <= PACKED_REFS_MAX_BYTES) text = readFileSync(packed, "utf8");
   } catch {
     // No packed refs: the loose tags are all there are.
   }
-  return tags;
+  if (size > PACKED_REFS_MAX_BYTES) {
+    throw Object.assign(new Error("packed refs"), { code: "PACKED_REFS_OVER_" + PACKED_REFS_MAX_BYTES, path: packed });
+  }
+  for (const line of text.split(/\r?\n/)) {
+    const hit = /^[0-9a-f]{40,64} refs\/tags\/(.+)$/i.exec(line);
+    if (hit !== null) add(hit[1], packed);
+  }
+  return [...tags];
 }
 
 /** A record's status and mode from its first HEAD_LINES lines; null when absent or not a regular file. */
