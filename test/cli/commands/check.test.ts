@@ -3810,7 +3810,7 @@ describe("check — cloud-install (REQ-FLOW-111)", () => {
     });
   }
 
-  const CANONICAL_CALL = { packageName: "@zomarit/stamity", npmChannel: true } as const;
+  const CANONICAL_CALL = { packageName: canonical().name, npmChannel: true } as const;
 
   it("prints no row without Cursor selected", () => {
     expect(checkCloudInstall(manifestFor(["claude", "copilot", "codex"]), CANONICAL_CALL, ">=22.22.2")).toBeNull();
@@ -3824,7 +3824,7 @@ describe("check — cloud-install (REQ-FLOW-111)", () => {
     expect(verdict?.status).toBe("pass");
     const lines = (verdict?.detail ?? "").split("\n");
     // The lines a Cursor environment's install step runs, each alone on its own line.
-    expect(lines.slice(1)).toEqual(["node --version", "npm install --global @zomarit/stamity@1.16.0"]);
+    expect(lines.slice(1)).toEqual(["node --version", `npm install --global ${CANONICAL_CALL.packageName}@1.16.0`]);
     // The hard needs and the Node floor are named, and where the lines go.
     expect(lines[0]).toContain("gate scan and ledger status");
     expect(lines[0]).toContain("Node >=22.22.2");
@@ -3898,7 +3898,7 @@ describe("check — cloud-install (REQ-FLOW-111)", () => {
     expect(lines[0]).toContain('"supplement"');
     expect(lines[0]).toContain(`${STATE_DIR}/manifest.json`);
     // The install lines are still the row's, after the warning.
-    expect(lines.slice(-2)).toEqual(["node --version", "npm install --global @zomarit/stamity@1.16.0"]);
+    expect(lines.slice(-2)).toEqual(["node --version", `npm install --global ${CANONICAL_CALL.packageName}@1.16.0`]);
   });
 
   it("stays a pass for a skip on another path and for supplement or replace on AGENTS.md", () => {

@@ -1298,11 +1298,19 @@ describe("packHookDefinitions", () => {
     // adapter-placed as the review gate is, one more PreToolUse entry on `AskUserQuestion` after
     // every planned row): the planned rows still end with the pack's supply, and the one entry after
     // them is the ask gate, which no `Bash` call matches.
+    // TEST CHANGE, justified (plan 021 file 2, REQ-FLOW-120: the adapter places the person-only
+    // guard's row once more, last, matched to the GitHub MCP server's person-only tools,
+    // `../../src/adapters/claude.ts` buildSettingsJson): two adapter-placed entries now follow the
+    // planned rows, the ask gate and then the MCP guard entry, and neither matches a `Bash` call.
     const commands = preToolUse.flatMap((entry) => entry.hooks.map((hook) => hook.command));
-    expect(preToolUse.at(-1)?.matcher).toBe("AskUserQuestion");
+    expect(preToolUse.at(-2)?.matcher).toBe("AskUserQuestion");
+    expect(preToolUse.at(-2)?.hooks).toHaveLength(1);
+    expect(preToolUse.at(-1)?.matcher).toMatch(/^mcp__github__/);
+    expect(preToolUse.at(-1)?.matcher?.split("|")).not.toContain("Bash");
     expect(preToolUse.at(-1)?.hooks).toHaveLength(1);
-    expect(commands.at(-1)).toContain("stamity-unattended-ask-gate.mjs");
-    expect(commands.at(-2)).toContain(PACK_HOOK_SENTINEL);
+    expect(commands.at(-1)).toContain("stamity-person-only-guard.mjs");
+    expect(commands.at(-2)).toContain("stamity-unattended-ask-gate.mjs");
+    expect(commands.at(-3)).toContain(PACK_HOOK_SENTINEL);
 
     // Uninstall reclaims it: with the pack's rows gone the row is gone too.
     const withoutPack: SetupManifest = {
