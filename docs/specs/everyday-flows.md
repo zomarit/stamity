@@ -124,7 +124,7 @@ date, re-pointed or added a citation; the run's last citation pass re-read each 
 page round re-read them on `aa7a3e5b` with its own edits to `SECURITY.md`, `evals/SET-v7.md` and the unattended skill,
 re-pointing each one whose text had moved; the run's final derived pass, and the pull-request rounds' after it,
 re-pointed each one a later commit moved, mapped through git's diff from the commit it was read at, and every one
-reads at `49682363`, a pin named beside a citation included. Two units
+reads at `b5ad0460`, a pin named beside a citation included. Two units
 were not on `4daeb214`: `u19-run-end` (`stamity run end`) and
 `u21-security-page` (`SECURITY.md`'s cloud section); the fix round cites both at `bc12cfc3`. REQ-FLOW-105 to
 REQ-FLOW-119 are held for plan 021's second file. The text dated 2026-10-16 is unreleased at this merge; the plan cuts
@@ -577,7 +577,7 @@ sign-off or `not signed` (`content/commands/st-work.md:318-319`).
   no ask (`:303-304`). As built: a refused open reads `draft PR not opened (<branch>): <cause>`, the cause named by its
   class (`gh not found`, `gh is not logged in`, the step and the HTTP status it answered, a 422's class), never `gh`'s
   or GitHub's own text, and an `origin` naming no GitHub repository reads `draft PR not opened (origin names no GitHub
-  repository gh reaches)`, naming the reason in the branch's place (`draftPr`, `src/cli/commands/run.ts:1158-1202`;
+  repository gh reaches)`, naming the reason in the branch's place (`draftPr`, `src/cli/commands/run.ts:1178-1222`;
   `ensureDraftPr`, `src/runs/pullRequest.ts:238-242`, its causes `ghFailure` and `rejection`, `:194-217`).
 - **Proof:** `test/corpus/commands/work.test.ts`; census `probe-none-work-run-qa-checkpoint` and
   `work-proof-block-fields`; must-holds `question-shape-and-default`, its charter-only twin and
@@ -3476,7 +3476,7 @@ Then `Mode: attended` (`content/skills/st-unattended/SKILL.md:24-27`; `content/c
 with no `Mode:` line reads attended unless `STAMITY_UNATTENDED` is set; then the variable governs, as the shell guard,
 the ask gate and the run verbs read it, and a `Mode: attended` head wins over it (`readRecordHead`,
 `src/runs/resumeCard.ts`; `unattendedBy` and `unattendedSource`, `src/hooks/scripts.ts:3668-3696`, `:4079-4097`;
-`readsUnattended`, `src/cli/commands/run.ts:996-999`). `/st-board pickup` and
+`readsUnattended`, `src/cli/commands/run.ts:1016-1019`). `/st-board pickup` and
 `/st-rework` hand the mode to `/st-work` as `run-mode: attended | unattended` (`content/commands/st-board.md:128`,
 `:366`; `content/commands/st-rework.md:268-270`), and `/st-debug` hands it over only when attended: an unattended debug
 run stops after the root cause and hands nothing to `/st-work` (REQ-FLOW-097; `content/commands/st-debug.md:131-136`);
@@ -3559,19 +3559,19 @@ exit 1 (0 with a pull request). No call runs `gh pr create`, `gh pr ready`, a me
 the default branch, read by REST; `run start` leaves it for a branch of the run's own
 (`content/skills/st-unattended/SKILL.md:76-77`, `:86-105`). The pull request's marker is `runMarker` and its ladder
 `ensureDraftPr` (`src/runs/pullRequest.ts:82`, `:238`), which `run end` and `run checkpoint --pr` take through
-`draftPr` (`src/cli/commands/run.ts:1158-1202`). `run end` runs the checkpoint's commit, scan and push
-(`src/cli/commands/run.ts:240`), then the pull-request step on every `end` that reaches it, `--refused` giving the
-`Refused: <title>` title (`:861-873`).
+`draftPr` (`src/cli/commands/run.ts:1178-1222`). `run end` runs the checkpoint's commit, scan and push
+(`src/cli/commands/run.ts:243`), then the pull-request step on every `end` that reaches it, `--refused` giving the
+`Refused: <title>` title (`:884-896`).
 
 - **As built, where the delta differed:** not every exit reaches the pull request. A held path, a scan hit or a
   refused push returns before that step, so `run end` exits 1 with no pull request opened or updated
-  (`src/cli/commands/run.ts:804-813`, `:815-835`, `:848-856`). Nor does an exit whose origin moved: `run start` pins
+  (`src/cli/commands/run.ts:828-837`, `:839-858`, `:871-879`). Nor does an exit whose origin moved: `run start` pins
   origin's repository in the run folder's `origin.json` once the run is on its branch, so a pin a checkpoint committed
   there is the one compared (pr/4), read from its fetch URL and from every push URL as git resolves it (`insteadOf`
   and `pushInsteadOf` applied), and `run checkpoint` and `run end` resolve them again before they stage, refusing as
   `origin changed: …` where one names another repository and, unattended, as `origin not pinned: …` where no pin is
   readable, with nothing committed, pushed or opened (`pinOrigin` and `originRefusal`,
-  `src/cli/commands/run.ts:408-455`, called at `:278`, `:311` and `:663`). A refused open names its cause,
+  `src/cli/commands/run.ts:411-458`, called at `:281`, `:314` and `:683`). A refused open names its cause,
   `draft PR not opened (<branch>): <cause>`, by class and never in `gh`'s or GitHub's own words (`ensureDraftPr`,
   `src/runs/pullRequest.ts:238-242`; `ghFailure` and `rejection`, `:194-217`).
 - **Proof:** `test/runs/pullRequest.test.ts`, `test/cli/commands/run.test.ts`, `test/cli/commands/runCheckpoint.test.ts`,
@@ -3586,23 +3586,26 @@ Given `Mode: unattended`, When a unit closes or the run is about to wait, Then `
 explicit path list and pushes the run's branch under the limits of REQ-FLOW-092, and with nothing staged commits nothing
 and pushes only when the branch is ahead; the draft pull request opens when Build starts; the record, ledger, plan and
 morning list ride the branch wherever git does not ignore them (an ignored one reads `records: not committed`)
-(`content/skills/st-unattended/SKILL.md:76-84`; `runCheckpoint`, `src/cli/commands/run.ts:586`).
+(`content/skills/st-unattended/SKILL.md:76-84`; `runCheckpoint`, `src/cli/commands/run.ts:604`).
 
 - **As built, where the delta differed:** the checkpoint does not always push. Where a commit the push would send
   changes a held path, or `HEAD`'s tree still does, it pushes nothing and exits 1 (REQ-FLOW-102's "As built" line;
-  `src/cli/commands/run.ts:804-813`). A symbolic link the change adds or retypes at a held glob's folder (`.claude`,
-  `.github/workflows`, any folder's `.vscode`) counts as a held path there and in the held patch (`heldOf`, `:943-948`,
-  over the raw diff's modes, `:903-916`); a held path staged and then edited again carries both layers there, the
-  staged change and the index-to-work-tree one after it (pr/6, `:719-728`). Nor does it push once origin no longer
+  `src/cli/commands/run.ts:828-837`). A symbolic link the change adds or retypes at a held glob's folder (`.claude`,
+  `.github/workflows`, any folder's `.vscode`) counts as a held path there and in the held patch (`heldOf`, `:966-971`,
+  over the raw diff's modes, `:926-939`); a held path staged and then edited again carries both layers there, the
+  staged change and the index-to-work-tree one after it (pr/6, `:739-748`). Nor does it push once origin no longer
   names the repository `run start` pinned: it exits 1 as `origin changed: …` before it stages (REQ-FLOW-092's "As
-  built" line; `:663-667`), and the pin rides the branch with the record (`RUN_FILES`, `:149`). Nor does it commit a
+  built" line; `:683-687`), and the pin rides the branch with the record (`RUN_FILES`, `:152`). Nor does it commit a
   path staged before it ran that is none of the run files, the held paths and patches or `--paths` (a folder entry
   covering what is under it): it exits 1 as
-  `commit refused: <path> is staged and not in --paths` (pr/5; `strayStaged`, `:1069-1078`, called at `:777-786`).
-  "Ahead" is read from the remote's own branch, `git ls-remote --exit-code origin refs/heads/<branch>`, never a
-  remote-tracking ref a deletion on the remote left stale (pr/20; `remoteTip`, `:488-495`). A pushed code file the
-  scan could not read leaves the push and the exit as they are and adds `secret scan: <n> files unscanned (<paths>)`
-  to `notDone[]` (pr/7; `:829-832`), which the skill copies on any exit.
+  `commit refused: <path> is staged and not in --paths` (pr/5; `strayStaged`, `:1089-1098`, called at `:801-810`).
+  "Ahead" is read from the remote's own branch, in the one `git ls-remote origin` a checkpoint makes, never a
+  remote-tracking ref a deletion on the remote left stale (pr/20). The same read's branches and tags are what both
+  history reads take origin to hold, all of `HEAD`'s history where it names none, and a remote it cannot read holds
+  the push before the commit as `push held: origin's branches and tags could not be read (…)` (pr/46; `remoteRefs`,
+  `:499-513`, called at `:792-797`). A pushed code file the scan could not read leaves the push and the exit as they
+  are and adds `secret scan: <n> files unscanned (<paths>)` to `notDone[]` (pr/7; `:853-856`), which the skill copies
+  on any exit.
 - **Proof:** `test/cli/commands/runCheckpoint.test.ts`, `test/cli/commands/run.test.ts`,
   `test/corpus/skills/unattended.test.ts`.
 
@@ -3686,7 +3689,7 @@ as morning-list rows (`content/skills/st-unattended/SKILL.md:153-166`).
   written and its every checkpoint and `run end` would refuse as `origin not pinned`. Its Unattended row runs
   `stamity run start --run <its id> --json` once the head is checked out on `Base:` and before the first fix
   (`content/commands/st-pr-resolve.md:54`). On that branch, never the default since the row refuses a default-branch
-  head, `run start` keeps the branch and writes the run folder's `origin.json` (`src/cli/commands/run.ts:273-280`). It
+  head, `run start` keeps the branch and writes the run folder's `origin.json` (`src/cli/commands/run.ts:276-283`). It
   still runs no `stamity plan check`, and a `run start` that fails takes the row's refusal exit: nothing pushed, one
   scanned comment on the pull request, the record closed as refused.
 - **Proof:** `test/corpus/commands/lightTrio.test.ts`, `test/corpus/commands/feedbackPair.test.ts` ("feedback pair —
@@ -3748,7 +3751,7 @@ the account cannot push to the default branch of the `origin` repository (no pro
 404, a non-GitHub origin, or `GH_REPO` naming another repository; a pull-request-only bypass passes). It warns on Cursor
 egress, token-shaped variable names (names only) and missing review state; with no refusal it exits 0
 (`CANARY_MAX_AGE_MS`, `src/mcp/env.ts:190`; `directPushVerdict` and `runPreflight`, `src/runs/preflight.ts:474`,
-`:856-880`; the verb in `src/cli/commands/gate.ts`, its flags at `:2079-2082`).
+`:856-880`; the verb in `src/cli/commands/gate.ts`, its flags at `:2082-2085`).
 
 - **Proof:** `test/runs/preflight.test.ts`, `test/cli/commands/gatePreflight.test.ts`,
   `test/hooks/personOnlyGuard.test.ts` (the canary), `test/mcp/env.test.ts`, `test/cli/commands/init.test.ts` and
@@ -3773,8 +3776,8 @@ off the pushed tree as an inert patch, listed (`PERSON_ONLY_PATHS` and `heldPath
   work tree or the index. Where a commit the push would send (one `origin` lacks) changes a held path, or `HEAD`'s tree
   still does after the commit, `run checkpoint` and `run end` refuse the push instead: they exit 1 naming
   `held path in history (<path>)` or `held path in the pushed tree (<path>)`, push nothing and rewrite no history, so
-  the branch stays unpushed until a person rewrites it (`src/cli/commands/run.ts:804-813`; `heldInHistory`,
-  `:974-989`).
+  the branch stays unpushed until a person rewrites it (`src/cli/commands/run.ts:828-837`; `heldInHistory`,
+  `:997-1009`).
 - **Proof:** `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`, `test/change/personOnlyPaths.test.ts`,
   `test/cli/commands/runCheckpoint.test.ts` (the held patch; the refused push, "refuses the push when a commit it would
   send changes a held path, rewriting no history"), `test/adapters/claude.test.ts`,
@@ -4823,7 +4826,7 @@ above.
   *(test: `test/runs/pullRequest.test.ts`; through `run end`, `test/cli/commands/runEnd.test.ts`)*
 - GIVEN `run start` on the default branch THEN the run moves to `stamity/<run-id>`; GIVEN any call THEN no `gh pr create`,
   no force, no tag and no default-branch push. *(test: `test/cli/commands/run.test.ts`,
-  `test/cli/commands/runCheckpoint.test.ts`, whose push step `run end` runs as its own (`src/cli/commands/run.ts:240`);
+  `test/cli/commands/runCheckpoint.test.ts`, whose push step `run end` runs as its own (`src/cli/commands/run.ts:243`);
   `test/cli/commands/runEnd.test.ts` for what `run end` adds, the pull request after the push and none after a held one)*
 - GIVEN `run start` on the default branch and a run branch whose tip tracks its origin pin THEN the switch goes through,
   the pin is kept and the checkout is clean; GIVEN that pin naming another repository THEN exit 1, `Not done: origin
