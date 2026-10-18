@@ -2148,6 +2148,20 @@ describe("SECURITY.md", () => {
     expect(row).toMatch(/full lists and the record's status/);
   });
 
+  // ADDED 2026-10-19 (plan 021 file 2, units v1-branch-card and v0d-guard-pages; REQ-CTX-013, review/12): the card
+  // also prints on a fresh start, for the run in progress on the checked-out branch, and `ledger status --json` names
+  // the record's branch; the residual names a planted record on a branch and the startup source.
+  it("states the resume card's startup print for the run on this branch", () => {
+    const flat = text.replace(/\s+/g, " ");
+    const row = flat.slice(flat.indexOf("through the resume card"), flat.indexOf("| A verdict role or the orchestrating session"));
+    expect(row).toContain("on a fresh start (`startup`) only the card of the run in progress whose record's `Branch:` names the branch `.git/HEAD` names");
+    expect(row).toContain("an attended record only while it is dated within the last two UTC days, an unattended one at any age");
+    expect(row).toContain("its `--json` adds the record's `branch`, screened with the lists, and `onCurrentBranch`");
+    expect(row).toContain("a startup prints neither that card nor the closed one");
+    expect(row).toContain("A client whose hook sends no compaction, resume or startup source never prints the card");
+    expect(row).not.toContain("neither a compaction nor a resume source");
+  });
+
   // ADDED 2026-10-16 (plan 021 file 1, unit u21-security-page, REQ-FLOW-104): the cloud and
   // unattended runs land with controls the table names at the symbols that run them, and with
   // accepted risks the page names in the words the requirement uses. The old "Runs nobody
@@ -2237,17 +2251,26 @@ describe("SECURITY.md", () => {
         "`export`, and `declare`, `typeset` or `local` given `-x`, with a value or without one, a name `read`, `for`, `printf -v`, `mapfile`, `readarray` or `getopts` assigns with no `=`",
         "any of them named on a line that turns allexport on with `set`'s letter or the option's name (`set -a`, `set -o allexport`, `setopt allexport`), PowerShell's `$env:`",
         "`Set-Content env:GIT_EXEC_PATH …`, passes, and the respelling residual above covers it",
-        // The spellings that still pass until a run verb must stand alone on its line, each named with the control
-        // that holds; the allexport spellings the rule does not read among them, and no array form.
-        "These spellings pass the rule too, and each changes the environment the verb's git runs in",
-        "`readonly NAME=…`, `select`, zsh's `print -v` and `foreach`, and `: ${NAME:=…}`, each of which sets a value that reaches the verb's git when the variable is already in the environment",
+        // The spellings the line-wide rule does not read, each named with the control that holds; the allexport
+        // spellings the rule does not read among them, and no array form.
+        // TEST CHANGE, justified (plan 021 file 2, v0b and v0d; REQ-FLOW-121, REQ-FLOW-122): a run verb now stands
+        // alone on its line, so these spellings no longer ride the verb's own line; they pass only on an earlier line
+        // of a shell that persists, where the verb's git drops a program-valued variable and keeps a `GIT_CONFIG_*`
+        // one. The pins move from "the verb's git runs in" and "on the line" / "before the verb" to that reading.
+        "These spellings pass the rule too, on a line of their own in a shell that persists, and each changes the environment a later verb's git starts from",
+        "`readonly NAME=…`, `select`, zsh's `print -v` and `foreach`, and `: ${NAME:=…}`, each of which sets a value that reaches it when the variable is already in the environment",
         "zsh's `readonly -x NAME=…`, which exports the variable whether or not it was before",
-        "allexport turned on by zsh's `setopt -a` or by a shell started with `-a` (`bash -a -c '…'`), which exports a variable one of those forms then sets on the line",
-        "`source <file>` (or `. <file>`) before the verb, since the guard does not read the file, which can set or export any of them",
+        "allexport turned on by zsh's `setopt -a` or by a shell started with `-a` (`bash -a -c '…'`), which exports a variable one of those forms then sets",
+        "`source <file>` (or `. <file>`), since the guard does not read the file, which can set or export any of them",
+        "On the verb's own line each is refused, since the verb stands alone there",
+        "Set on an earlier line, a program-valued variable is removed from the verb's git, which names it, and a `GIT_CONFIG_*` one is kept",
         "The control that holds is the pre-flight's refusal of an account that can push to the default branch: a push such a git makes meets the protection the pre-flight proved there, and reaches any other branch unheld",
       ]) {
         expect(residuals, `the cloud section does not name: ${named}`).toContain(named);
       }
+      expect(residuals, "the cloud section says again that a variable set on a verb's line reaches its push").not.toContain(
+        "so a variable set on a verb's line reaches its push",
+      );
       for (const stale of [
         "any of them named on a line that turns allexport on (`set -a`",
         "one another builtin sets on a line that leaves allexport off",
@@ -2328,7 +2351,12 @@ describe("SECURITY.md", () => {
     it("restates the settings promise to what clean does with a deny row", () => {
       const row = section("Any tool or person editing a client config the engine also writes", "| A pull request author |");
       expect(row).toContain("removes no `permissions.deny` row");
-      expect(row).toMatch(/`clean` leaves every deny row and names those equal to the engine's/);
+      // TEST CHANGE, justified (plan 021 file 2, v0a2 and v0d; REQ-FLOW-036, REQ-FLOW-104): the engine now writes
+      // `permissions.ask` rows beside the deny rows and `clean` keeps both lists, naming rows equal to either table's,
+      // so the pin reads both lists, and the unreleased build's leftover deny rows are named as REQ-FLOW-104 asks.
+      expect(row).toContain("and no `permissions.ask` row");
+      expect(row).toMatch(/`clean` leaves every row of both lists and names those equal to an engine row of either table/);
+      expect(row).toContain("a checkout synced from an unreleased build before 1.16.0 keeps the deny rows that build wrote for acts that now ask");
       expect(row).toContain("`src/manifest/claudeSettings.ts::reduceClaudeSettingsToForeignContent`");
     });
 
@@ -2375,7 +2403,13 @@ describe("SECURITY.md", () => {
         "a `git config` write of a `remote.*` or `url.*` key or section",
         "one of git's program-valued variables",
         // MOVED 2026-10-18 (PR #112 round 4): create_pull_request joined the MCP rows, thirteen to fourteen.
-        "fourteen rows more deny the GitHub MCP server's tools by name",
+        // TEST CHANGE, justified (plan 021 file 2, v0a, v0a2 and v0d; REQ-FLOW-102, REQ-FLOW-123, REQ-FLOW-124):
+        // attended, an act that can be undone now asks on Claude Code and is refused elsewhere, and only deletions,
+        // force pushes and acts that cannot be undone stay refused everywhere, so the page's claim moves with it.
+        // Thirteen of the fourteen rows ask and one denies.
+        "Fourteen rows more name the GitHub MCP server's tools",
+        "thirteen ask rows",
+        "and one deny row, repository deletion (`delete_repository`)",
       ]) {
         expect(guard, `the guard's row does not state: ${claim}`).toContain(claim);
       }
@@ -2436,16 +2470,26 @@ describe("SECURITY.md", () => {
       }
       for (const claim of [
         "as the server's published tool list named them when read on 2026-10-16",
-        "a pull-request update through that server is refused whole, and `gh pr edit` through the shell stays the route",
+        // TEST CHANGE, justified (plan 021 file 2, v0a, v0a2 and v0d; REQ-FLOW-102, REQ-FLOW-123, REQ-FLOW-124):
+        // attended, an act that can be undone now asks on Claude Code and is refused elsewhere, and only deletions,
+        // force pushes and acts that cannot be undone stay refused everywhere, so the page's claim moves with it.
+        "A row cannot read a tool's arguments, so each tool is classed whole: a pull-request update through that server asks whole",
+        "A `PreToolUse` entry on those fourteen tools runs the person-only guard, with its fail-closed tail",
         "the MCP rows name a server configured as `github`, so one configured under another name escapes them",
         "A hook the run writes runs when a run verb commits or pushes",
         "`gh pr update-branch`",
-        "`GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM`) anywhere on it, whatever program it runs, a `stamity run` line among them",
+        // TEST CHANGE, justified (plan 021 file 2, v0b and v0d; REQ-FLOW-121): a run verb's line is now refused unless
+        // the verb stands alone on it, which the row states in place of "a `stamity run` line among them".
+        "`GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM`) anywhere on it, whatever program it runs, and a line that runs `stamity run start`, `checkpoint` or `end`",
+        "unless the verb stands alone on it as one simple command",
       ]) {
         expect(guard, `the guard's row does not state: ${claim}`).toContain(claim);
       }
       for (const residual of [
-        "fourteen `permissions.deny` rows refuse the GitHub MCP server's merge",
+        // TEST CHANGE, justified (plan 021 file 2, v0a, v0a2 and v0d; REQ-FLOW-102, REQ-FLOW-123, REQ-FLOW-124):
+        // attended, an act that can be undone now asks on Claude Code and is refused elsewhere, and only deletions,
+        // force pushes and acts that cannot be undone stay refused everywhere, so the page's claim moves with it.
+        "thirteen `permissions.ask` rows and one `permissions.deny` row name the GitHub MCP server's merge",
         "a merge, a branch write, a review approval or a ready-for-review mark it makes is a tool call",
         "the rows name a server configured as `github`, the key the engine writes, so the same server configured under another name escapes them",
         "Hooks the run writes.",
@@ -2454,7 +2498,9 @@ describe("SECURITY.md", () => {
         "The control that holds is the pre-flight's refusal of an account that can push to the default branch",
         "Unattended too, a line is refused whatever program it runs, a `stamity run checkpoint` or `run end` line, `npx`, `node` and `npm test` alike, when it sets one of git's configuration variables",
         "`GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM`), in any form that sets one",
-        "the run verbs' git keeps the caller's environment, so a variable set on a verb's line reaches its push",
+        // TEST CHANGE, justified (plan 021 file 2, v0b and v0d; REQ-FLOW-121): nothing rides a run verb's own line any
+        // more, so a variable set there no longer reaches its push.
+        "A run verb's own line holds the verb alone, so no spelling of any kind rides it",
         "`src/cli/engine/gitWrite.ts::gitWriteEnv`",
         "`src/cli/engine/gitWrite.ts::gitWrite`",
       ]) {
@@ -2468,6 +2514,8 @@ describe("SECURITY.md", () => {
         "five `permissions.deny` rows",
         "thirteen rows more deny",
         "thirteen `permissions.deny` rows",
+        "fourteen rows more deny",
+        "fourteen `permissions.deny` rows",
         "and a git call on a line that sets one of git's program-valued variables",
         "PowerShell's `Set-Item env:GIT_CONFIG_COUNT 1` among them, passes",
         "PowerShell's `Set-Item env:GIT_EDITOR …` among them, passes",
@@ -2485,14 +2533,19 @@ describe("SECURITY.md", () => {
     it("names the run verbs' environment and the REST review body the line cannot show", () => {
       const guard = section("| The main thread of any session", "| An unattended run, or the text that steers one | Pushing a change");
       const residuals = section("### Cloud and unattended runs", "## Standards mapping");
+      // TEST CHANGE, justified (plan 021 file 2, v0a and v0d): a repository settings PATCH and a `git/refs` PATCH whose
+      // body the line hides are refused now too, beside the review, so the gap cell names all three.
       expect(guard).toContain(
-        "a GraphQL mutation or a REST body read from a file, a REST review write aside, which is refused as an approval when the line cannot show its body (`src/hooks/personOnly.ts::personOnlyVerdict`)",
+        "a GraphQL mutation read from a file, and a REST body read from a file, except where the guard reads a body the line cannot show as the refusing value: a review, refused as an approval, a repository settings `PATCH`, refused as a visibility change, and a `git/refs` `PATCH`, refused as a forced ref update (`src/hooks/personOnly.ts::personOnlyVerdict`)",
       );
       for (const claim of [
         "The run verbs' environment.",
         "The environment the run verbs start under picks the git they run and the global configuration it reads",
         "`HOME` and `XDG_CONFIG_HOME` choose the global configuration file",
-        "passes the push rule, which reads git's own variables only",
+        // TEST CHANGE, justified (plan 021 file 2, v0b and v0d; REQ-FLOW-121): set on the verb's own line they are
+        // refused now; only set earlier, or by the platform, do they reach its git.
+        "Set on the verb's own line they are refused, since the verb stands alone there",
+        "set earlier in a shell that persists, or by the platform, they reach its git, since the push rule reads git's own variables only",
         "`src/shared/programPath.ts::gitProgramFor`",
       ]) {
         expect(residuals, `the cloud section does not state: ${claim}`).toContain(claim);
@@ -2513,7 +2566,9 @@ describe("SECURITY.md", () => {
     it("states the GraphQL ref forms and a percent-encoded ref path as refused, and names a gh behind a shim", () => {
       const residuals = section("### Cloud and unattended runs", "## Standards mapping");
       for (const claim of [
-        "The GraphQL forms of a tag-ref create and of a ref delete are refused in an attended session too, as their REST twins are",
+        // TEST CHANGE, justified (plan 021 file 2, v0a and v0d; REQ-FLOW-102, REQ-FLOW-124): a tag write is ask-class
+        // and a ref deletion refuse-class, so the GraphQL forms are read in an attended session and answered by class.
+        "The GraphQL forms of a tag-ref create and of a ref delete are read in an attended session too, as their REST twins are, the create asking and the delete refused",
         "a ref path with a percent-encoded letter is read decoded, so it is refused as the ref it names",
         "A `gh` behind a shim.",
         "a gh installed behind a shim (scoop, Chocolatey, mise, asdf, snap), whose `gh auth setup-git` writes the real executable's path, is refused by path",
@@ -2556,7 +2611,10 @@ describe("SECURITY.md", () => {
         "an in-progress record in any run folder reads `Mode: unattended`",
         "past 2,000 run folders the read faults, naming `RUN_FOLDERS_OVER_2000`",
         "a `gh` group that is not one of gh's built-in commands (an alias or an extension), `gh alias set` and `gh alias import`",
-        "The merge queue's GraphQL `enqueuePullRequest` is refused as a merge, attended or not",
+        // TEST CHANGE, justified (plan 021 file 2, v0a, v0a2 and v0d; REQ-FLOW-102, REQ-FLOW-123, REQ-FLOW-124):
+        // attended, an act that can be undone now asks on Claude Code and is refused elsewhere, and only deletions,
+        // force pushes and acts that cannot be undone stay refused everywhere, so the page's claim moves with it.
+        "The merge queue's GraphQL `enqueuePullRequest` is read as a merge, so it asks or is refused as a merge does",
         "a line nested more than four levels deep is one it cannot read (`NESTING_DEPTH`)",
         "a git, shell or gh alias, a gh extension (the gh forms refused unattended)",
         "a `git update-ref --stdin` text read from a file",
@@ -2612,12 +2670,18 @@ describe("SECURITY.md", () => {
         "A `git symbolic-ref` write is read too: one naming a tag is refused as a tag, and one pointing a name at the default branch as a push of that branch to come",
         "Each curl request after `--next` (or `-:`) is judged alone, with its own method, body and targets",
         "the branch protection rule, ruleset and custom-property mutations, and a REST write of a custom property's value or definition",
-        "are refused as protection writes, attended or not",
+        // TEST CHANGE, justified (plan 021 file 2, v0a, v0a2 and v0d; REQ-FLOW-102, REQ-FLOW-123, REQ-FLOW-124):
+        // attended, an act that can be undone now asks on Claude Code and is refused elsewhere, and only deletions,
+        // force pushes and acts that cannot be undone stay refused everywhere, so the page's claim moves with it.
+        "are read as protection writes, which ask or are refused as the classes above say, their deletions refused everywhere",
         "So is an HTTP call whose method or targets the line hides (`HTTP_TARGET_HIDDEN`)",
         // MOVED 2026-10-18 (PR #112 round 4d, pr/87): the list's last item is now the curl short cluster holding `:`.
         "a curl write whose target curl's globbing would expand (`{` or `[`) unless `-g` or `--globoff` is set, a wget write reading its targets from `-i`",
         "pull-request creation (`create_pull_request`)",
-        "as `gh pr create` does for a new pull request",
+        // TEST CHANGE, justified (plan 021 file 2, v0a2 and v0d; REQ-FLOW-120, REQ-FLOW-123): the MCP pull-request
+        // tools now ask, attended, instead of being refused whole, so the shell route the row named for them is gone;
+        // the row states the whole-tool class instead.
+        "and `delete_file`, a commit rather than a ref deletion, asks",
         "a symbolic ref already on disk, a branch switch earlier on the line before a push whose destination is implied, a method, body or URL from curl's or wget's default configuration file",
       ]) {
         expect(guard, `the guard's row does not state: ${claim}`).toContain(claim);
@@ -2684,7 +2748,10 @@ describe("SECURITY.md", () => {
       for (const claim of [
         "read as `git symbolic-ref` is, each wherever it stands in the text, a second one after an escaped line break (`\\n`, `\\0`) among them",
         "and so does a curl method (`-XDELETE`, `-sX$M`), a letter after another value letter being that letter's value (`-oX` names a file)",
-        "A curl long option counts from a unique prefix, as wget's do (`--req`, `--dat`)",
+        // TEST CHANGE, justified (plan 021 file 2, v0d; pr/91): the code reads any prefix of two or more letters of a
+        // listed long option (src/hooks/personOnly.ts, httpCall's LONG), not a unique one, and real curl refuses
+        // `--dat` as ambiguous, so the page states what the code does.
+        "A curl or wget long option counts from any prefix of two or more letters of a long option the guard lists, read as the first listed option it begins (`--req`, `--me`)",
         "gh's `-i` clustered with a method or a field (`-iXDELETE`) and its `-X=<method>` count as gh reads them",
         "attached in a short cluster too (`-sX$M`, gh's `-iX$M`), or cut from the line by an unquoted one",
         "a wget write reading its targets from `-i`, and a curl short cluster holding `:` among other letters, which starts a request where the line does not show",
@@ -2730,6 +2797,67 @@ describe("SECURITY.md", () => {
       // Beside the run folder ceiling it follows.
       expect(residuals.indexOf("The tag ceiling.")).toBeGreaterThan(residuals.indexOf("The run folder ceiling."));
       expect(residuals.indexOf("The tag ceiling.")).toBeLessThan(residuals.indexOf("The final round's window."));
+    });
+
+    // ADDED 2026-10-19 (plan 021 file 2, unit v0d-guard-pages; REQ-FLOW-104, REQ-FLOW-121 to REQ-FLOW-124, REQ-CTX-013):
+    // the page states each client's answer to a person-only act with its measurement or source, the refuse class, the
+    // run verb's stand-alone line and the verbs' git environment, the startup card, and the residuals REQ-FLOW-104
+    // names: an ask holds only while a client honours it, a respelling no settings row names, a `GIT_CONFIG_*` variable
+    // gained after the pre-flight, the unreleased build's deny rows, the readiness hook's install scripts and the
+    // stand-alone rule's text reading (review/97).
+    it("states file 2's ask rule, each client's answer, the run verb's line and the residuals REQ-FLOW-104 names", () => {
+      const guard = section("| The main thread of any session", "| An unattended run, or the text that steers one | Pushing a change");
+      const residuals = section("### Cloud and unattended runs", "## Standards mapping");
+      for (const claim of [
+        "A deletion, a force push or an act that cannot be undone is refused on every client, attended or not",
+        "Attended, an act that can be undone asks on Claude Code for one click, the hook's `ask` answer, and the agent runs it on yes",
+        "it is refused instead where a sub-agent runs it (any agent identity the payload names), since the act is the person's, and in Claude Code's `auto` permission mode",
+        "Copilot CLI holds an ask (1.0.89 under `-p --allow-all-tools`, measured 2026-10-18",
+        "but its tool-call payload names no calling agent, so the guard cannot keep the ask for the person alone",
+        "Cursor 2026.10.14 ran the command despite a `beforeShellExecution` ask under `--force` (measured 2026-10-18)",
+        "Codex's hooks page says an ask is parsed and not honoured",
+        "so one refuse-class act refuses the whole call and a deletion never rides an approval",
+        "is refused, never asked about",
+        "`gh extension exec`",
+        "`GIT_EXEC_PATH` and seven more, `SSH_ASKPASS` among them",
+        "unless the verb stands alone on it as one simple command",
+        "a `packed-refs` file or a loose tag entry that is not a regular file (a link, a FIFO) is read as absent",
+        "the ask-class ones are `permissions.ask` rows",
+        "a `git/refs` `PATCH`, refused as a forced ref update",
+        "An attended ask holds only while the client honours it",
+      ]) {
+        expect(guard, `the guard's row does not state: ${claim}`).toContain(claim);
+      }
+      for (const residual of [
+        "How each client answers an ask.",
+        "Claude Code 2.1.302 holds a hook's `ask` in bypass-permissions mode (measured on 2026-10-18 in throwaway folders; its documentation does not state it)",
+        "That reading is re-measured before each release with `node scripts/qa/hook-runs.mjs --ask`",
+        "Where no hook runs.",
+        "a respelling no row names costs one click there",
+        "since a row ending in ` :*` after a `*` matched nothing in the same measurement",
+        "so such a variable gained after the pre-flight, set on an earlier line of a shell that persists or by a line of Claude Code's environment file, reaches their git",
+        "The stand-alone rule for a run verb's line finds the verb by its name in the line's text, so a launcher the guard does not unwrap, a name split by quotes or a line built by an expression can skip it",
+        "Claude Code's cloud readiness hook.",
+        "`npm ci` runs the locked dependencies' install scripts, and they inherit `CLAUDE_ENV_FILE`, so one can append lines that run before every later shell command",
+        "`src/hooks/scripts.ts::buildCloudReadinessScript`",
+        "`SSH_ASKPASS`, which git runs when no askpass helper answers",
+        "a deletion, a force push or an act that cannot be undone stays refused on every client, with a click or without one",
+      ]) {
+        expect(residuals, `the cloud section does not name: ${residual}`).toContain(residual);
+      }
+      const verbsGit = section("| Any repository writer, a pull request included | Committing a folder in the shape", "| Any repository writer, a pull request included | Committing a file under git's program name");
+      expect(verbsGit).toContain("In an unattended run it also leaves out git's program-valued variables");
+      expect(verbsGit).toContain("sets `GIT_ASKPASS` to the empty string, so no askpass program runs");
+      expect(verbsGit).toContain("lists them in its JSON's `gitEnvRemoved`, never a value");
+      const settings = section("Any tool or person editing a client config the engine also writes", "| A pull request author |");
+      expect(settings).toContain("those acts stay refused there until the person removes the rows, which `clean` names");
+      for (const stale of [
+        "refuses a person-only act on every client, attended or not",
+        "a `stamity run` line among them, since the run verbs' git keeps the caller's environment",
+        "whose local tags it cannot read whole",
+      ]) {
+        expect(flat, `SECURITY.md says again: ${stale}`).not.toContain(stale);
+      }
     });
   });
 
@@ -2854,7 +2982,10 @@ describe("docs/security-mapping.md", () => {
       "a `git remote` write and a `git config` write of a `remote.*` or `url.*` key",
       "one of git's program-valued variables",
       // MOVED 2026-10-18 (PR #112 round 4): create_pull_request joined the MCP rows.
-      "fourteen rows more deny the GitHub MCP server's merge, branch-content, branch-creation, review-submitting, pull-request-creating, pull-request-update and repository-delete tools by name",
+      // TEST CHANGE, justified (plan 021 file 2, v0a, v0a2 and v0d; REQ-FLOW-120, REQ-FLOW-123, REQ-FLOW-124): thirteen
+      // of the fourteen MCP rows now ask, attended, and `delete_repository` alone is denied, so the mapping says so.
+      "fourteen rows more name the GitHub MCP server's merge, branch-content, branch-creation, review-submitting, pull-request-creating, pull-request-update and repository-delete tools by name",
+      "thirteen asking and `delete_repository` denied",
       "the GitHub MCP server on the clients that take no per-tool deny",
       "A `git config` write of a `url.*` key is refused beside a `remote.*` one, the run verbs' origin pin the second check",
       "The held set is a glob list, and the origin pin a work-tree file",
@@ -2875,12 +3006,15 @@ describe("docs/security-mapping.md", () => {
     for (const claim of [
       "`gh pr update-branch`",
       "a line, whatever program it runs, that sets one of git's program-valued variables or one of its configuration variables, `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` among them",
-      "as its tool list named them on 2026-10-16; a pull-request update through that server is refused whole, and `gh pr edit` stays the route",
+      // TEST CHANGE, justified (plan 021 file 2, v0a, v0a2 and v0d; REQ-FLOW-120, REQ-FLOW-123, REQ-FLOW-124): thirteen
+      // of the fourteen MCP rows now ask, attended, and `delete_repository` alone is denied, so the mapping says so.
+      "a pull-request update through that server asks whole",
       "a hook the run writes, which a run verb's commit or push runs",
       "the server configured under another name than `github` on Claude Code",
       "A hook the run writes runs inside a run verb's commit or push, which keeps the repository's hooks",
       "a merge, branch write or review approval through the GitHub MCP server is a tool call no shell guard sees",
-      "on Claude Code its deny rows miss the server configured under another name than `github`",
+      // TEST CHANGE, justified (plan 021 file 2, v0a2 and v0d): the MCP rows are ask rows and one deny row now.
+      "on Claude Code its ask and deny rows miss the server configured under another name than `github`",
     ]) {
       expect(flat, `the mapping page does not state: ${claim}`).toContain(claim);
     }
@@ -2898,7 +3032,10 @@ describe("docs/security-mapping.md", () => {
       "the environment the run verbs start under (`PATH`, `HOME`, `XDG_CONFIG_HOME`) choosing the git they run and the global configuration it reads",
       "PowerShell's `Set-Item env:` and `New-Item env:` among the spellings; a program-valued variable set through another of PowerShell's `env:` drive commands passes",
       "`export`, and `declare`, `typeset` or `local` given `-x`, with a value or without one, a name `read`, `for`, `printf -v`, `mapfile`, `readarray` or `getopts` assigns with no `=`, any of them named on a line that turns allexport on with `set`'s letter or the option's name, and PowerShell's `Set-Item env:`",
-      "a respelling SECURITY.md names. So do `readonly NAME=…` and zsh's `readonly -x`, `select`, zsh's `print -v` and `foreach`, `: ${NAME:=…}`, allexport turned on by zsh's `setopt -a` or by a shell started with `-a`, and `source <file>` before the verb, each changing the environment the verb's git runs in; the pre-flight's refusal of an account that can push to the default branch is the control that holds",
+      // TEST CHANGE, justified (plan 021 file 2, v0b and v0d; REQ-FLOW-121, REQ-FLOW-122): a run verb stands alone on
+      // its line, so these spellings pass only on an earlier line of a shell that persists, where the verb's git
+      // drops a program-valued variable and keeps a `GIT_CONFIG_*` one.
+      "a respelling SECURITY.md names. So do `readonly NAME=…` and zsh's `readonly -x`, `select`, zsh's `print -v` and `foreach`, `: ${NAME:=…}`, allexport turned on by zsh's `setopt -a` or by a shell started with `-a`, and `source <file>`, on a line of their own in a shell that persists, each changing the environment a later verb's git starts from, since a run verb's own line holds the verb alone; set that way, a program-valued variable is removed from the verb's git and a `GIT_CONFIG_*` one reaches it; the pre-flight's refusal of an account that can push to the default branch is the control that holds",
       "a program-valued variable set through a PowerShell `env:` drive command other than `Set-Item` and `New-Item` among the ways",
     ]) {
       expect(flat, `the mapping page does not state: ${claim}`).toContain(claim);
@@ -2939,7 +3076,9 @@ describe("docs/security-mapping.md", () => {
       "each curl request after `--next` is judged alone",
       "the GraphQL repository-settings, protection, ruleset and custom-property mutations, and a custom-property REST write, are protection writes",
       "and so is an HTTP call whose method or targets the line hides (`HTTP_TARGET_HIDDEN`)",
-      "as `gh pr create` does for a new pull request",
+      // TEST CHANGE, justified (plan 021 file 2, v0a, v0a2 and v0d; REQ-FLOW-120, REQ-FLOW-123, REQ-FLOW-124): thirteen
+      // of the fourteen MCP rows now ask, attended, and `delete_repository` alone is denied, so the mapping says so.
+      "with a `PreToolUse` hook on those tools that refuses each while a run is unattended",
       "a symbolic ref already on disk, a branch switch earlier on the line before a push whose destination is implied, and a method, body or URL from curl's or wget's default configuration file",
       "the remote's own protection the control that holds; unattended, the raw-push refusal holds the first two",
     ]) {
@@ -2970,7 +3109,9 @@ describe("docs/security-mapping.md", () => {
     for (const claim of [
       "are read the same way, each wherever it stands in the text",
       "and so does a curl method, a letter after another value letter being that letter's value",
-      "a curl long option counts from a unique prefix, as wget's do, and gh's `-i` clustered with a method or a field, and its `-X=<method>`, count as gh reads them",
+      // TEST CHANGE, justified (plan 021 file 2, v0d; pr/91): the code reads any prefix of two or more letters of a
+      // listed long option, not a unique one, so the mapping states what the code does, as SECURITY.md does.
+      "a curl or wget long option counts from any prefix of two or more letters of a long option the guard lists, read as the first it begins, and gh's `-i` clustered with a method or a field, and its `-X=<method>`, count as gh reads them",
       "attached in a short cluster too or cut from the line by an unquoted one",
       "a wget write reading `-i`, and a curl short cluster holding `:` among other letters",
       "a gh extension, a symref command word the line cannot show, a `git update-ref --stdin` text read from a file",
@@ -2996,6 +3137,32 @@ describe("docs/security-mapping.md", () => {
     ]) {
       expect(flat, `the mapping page does not state: ${claim}`).toContain(claim);
     }
+  });
+
+  // ADDED 2026-10-19 (plan 021 file 2, unit v0d-guard-pages; REQ-FLOW-104, REQ-FLOW-121 to REQ-FLOW-124): the
+  // mapping page carries each client's answer, the refuse class, the run verb's line, the settings' two lists and the
+  // residuals as SECURITY.md does.
+  it("states file 2's ask rule, each client's answer and the residuals as SECURITY.md does", () => {
+    const flat = text.replace(/\s+/g, " ");
+    for (const claim of [
+      "a deletion, a force push or an act that cannot be undone is refused on every client, attended or not, and one such act on a line refuses the whole call",
+      "attended, an act that can be undone asks on Claude Code for one click, refused where a sub-agent runs it or in Claude Code's `auto` permission mode",
+      "Copilot CLI, whose tool-call payload names no calling agent, Cursor, which ran a command despite a `beforeShellExecution` ask under `--force` (measured 2026-10-18), and Codex, whose hooks page says an ask is not honoured, refuse it",
+      "`gh extension exec`",
+      "and a line that runs `stamity run start`, `checkpoint` or `end` unless the verb stands alone on it as one simple command",
+      "An attended ask holds only while the client honours it",
+      "No `permissions.deny` or `permissions.ask` row leaves `.claude/settings.json`",
+      "A checkout synced from an unreleased build before 1.16.0 keeps the deny rows it wrote for acts that now ask",
+      "Attended, an ask holds only while the client honours it, and where no hook runs a respelling no settings row names costs one click",
+      "a `GIT_CONFIG_*` value changed or gained after it stay open",
+      "which the cloud readiness hook's `npm ci` install scripts inherit and can append to",
+      "and a run verb's line the stand-alone rule skips, since it finds the verb by its name in the line's text",
+    ]) {
+      expect(flat, `the mapping page does not state: ${claim}`).toContain(claim);
+    }
+    expect(flat, "the mapping page says again that the guard refuses every person-only act").not.toContain(
+      "refuses a person-only act on every client, naming the rule",
+    );
   });
 
   it("pins every catalogue it maps to an edition", () => {
