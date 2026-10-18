@@ -465,6 +465,16 @@ Rules, all of them refusals rather than resolutions:
   (`src/worktree/policy.ts:550-562`, the message at `:557-559`, read at `a9e94f06`; `review/150`). A `skip` row naming them is
   admitted, as every `skip` row is: it carries nothing across (ledger `build/54`,
   closed rejected).
+- **The pre-flight's hooks canary and the run-ended marker are refused by name**
+  (added 2026-10-18, `docs/plans/021-cloud-runs-01.md`; the canary came with the
+  shell guard, the marker with `pr/75`). A materializing row naming
+  `.stamity/preflight-canary.json` or `.stamity/run-ended.json` is refused before
+  git is asked, case and trailing dots folded for both; the
+  message says the file is never copied between worktrees. A canary carried
+  across would vouch for hooks that never ran in the new worktree, and a marker
+  would open the ask gate's final-round exception in a checkout that never ran
+  `run end` (`src/worktree/policy.ts:582-588` and `:589-596`, read at
+  `fb2118d9`). A `skip` row naming either is admitted, as every `skip` row is.
 - **Both admissibility refusals apply to MATERIALIZING rows only.** A `skip` row
   is exempt, and so is a row whose own path is owned by a deeper rule — the
   checked set is exactly the paths whose longest-prefix answer is themselves
@@ -556,6 +566,16 @@ no entry**:
   `docs/plans/013-optimization-sweep-02.md` unit `sw27-ignore-review-gate-state`;
   it read "`.stamity/review-gate.json` — untracked and un-ignored, so
   REQ-WORKTREE-003 refuses it as an entry.")
+- `.stamity/preflight-canary.json`, the pre-flight's hooks canary, and
+  `.stamity/run-ended.json`, the run-ended marker — machine-local run state,
+  which never travels (added 2026-10-18). `resolveStrategy` answers `skip` for
+  both before any row is read, so a `copy` walk over `.stamity` leaves them out,
+  and REQ-WORKTREE-003 refuses a materializing row that names either, by name
+  (`src/worktree/policy.ts:536`, read at `fb2118d9`). A canary carried across
+  would vouch for hooks that never ran in the new worktree; a marker would open
+  the ask gate's final-round exception (REQ-FLOW-090) in a checkout that never
+  ran `run end`. A `symlink` row over `.stamity` shares both live, the same
+  exception the review gate's state has, and setup cannot split it.
 - Build output (`dist/`, `coverage/`, `*.tsbuildinfo`, the docs site's build and
   cache, `.gitignore:1-9`) — regenerable, so not materialized and not listed.
 
@@ -1344,6 +1364,16 @@ REQ-WORKTREE-001 take it to ninety-two.)
 - GIVEN a `copy` row over `.stamity`, ignored, WHEN setup materializes it THEN
   the new worktree holds none of the three review-gate names (added
   2026-09-30).
+- GIVEN a materializing entry naming `.stamity/preflight-canary.json` or
+  `.stamity/run-ended.json` WHEN **setup resolves its plan** THEN it fails with
+  `VALIDATION_ERROR` naming the path as the pre-flight's hooks canary or the
+  run-ended marker, never copied between worktrees; a `skip` row naming the
+  marker is admitted (added 2026-10-18; `test/hooks/personOnlyGuard.test.ts`,
+  "the hooks canary", and `test/worktree/policy.test.ts`, "keeps the run-ended
+  marker out of a .stamity copy row and refuses a row naming it").
+- GIVEN a `copy` row over `.stamity` WHEN `.stamity/preflight-canary.json` and
+  `.stamity/run-ended.json` resolve THEN both resolve to `skip`, the marker in a
+  case-and-trailing-dot spelling too (added 2026-10-18, the same two tests).
 - GIVEN a `skip` row naming a path git TRACKS — a repository that commits
   `node_modules`, under the built-in defaults — WHEN setup resolves its plan
   THEN it does NOT fail: the row writes nothing, so it is never checked, and the

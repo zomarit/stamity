@@ -124,7 +124,7 @@ date, re-pointed or added a citation; the run's last citation pass re-read each 
 page round re-read them on `aa7a3e5b` with its own edits to `SECURITY.md`, `evals/SET-v7.md` and the unattended skill,
 re-pointing each one whose text had moved; the run's final derived pass, and the pull-request rounds' after it,
 re-pointed each one a later commit moved, mapped through git's diff from the commit it was read at, and every one
-reads at `08d28112`, a pin named beside a citation included. Two units
+reads at `fb2118d9`, a pin named beside a citation included. Two units
 were not on `4daeb214`: `u19-run-end` (`stamity run end`) and
 `u21-security-page` (`SECURITY.md`'s cloud section); the fix round cites both at `bc12cfc3`. REQ-FLOW-105 to
 REQ-FLOW-119 are held for plan 021's second file. The text dated 2026-10-16 is unreleased at this merge; the plan cuts
@@ -577,7 +577,7 @@ sign-off or `not signed` (`content/commands/st-work.md:318-319`).
   no ask (`:303-304`). As built: a refused open reads `draft PR not opened (<branch>): <cause>`, the cause named by its
   class (`gh not found`, `gh is not logged in`, the step and the HTTP status it answered, a 422's class), never `gh`'s
   or GitHub's own text, and an `origin` naming no GitHub repository reads `draft PR not opened (origin names no GitHub
-  repository gh reaches)`, naming the reason in the branch's place (`draftPr`, `src/cli/commands/run.ts:1246-1290`;
+  repository gh reaches)`, naming the reason in the branch's place (`draftPr`, `src/cli/commands/run.ts:1269-1313`;
   `ensureDraftPr`, `src/runs/pullRequest.ts:241-245`, its causes `ghFailure` and `rejection`, `:196-219`).
 - **Proof:** `test/corpus/commands/work.test.ts`; census `probe-none-work-run-qa-checkpoint` and
   `work-proof-block-fields`; must-holds `question-shape-and-default`, its charter-only twin and
@@ -3475,8 +3475,8 @@ given neither, or only a cloud or CI marker (`CLAUDE_CODE_REMOTE`, `COPILOT_AGEN
 Then `Mode: attended` (`content/skills/st-unattended/SKILL.md:24-27`; `content/commands/st-work.md:406-408`). A head
 with no `Mode:` line reads attended unless `STAMITY_UNATTENDED` is set; then the variable governs, as the shell guard,
 the ask gate and the run verbs read it, and a `Mode: attended` head wins over it (`readRecordHead`,
-`src/runs/resumeCard.ts`; `unattendedBy` and `unattendedSource`, `src/hooks/scripts.ts:3676-3707`, `:4093-4111`;
-`readsUnattended`, `src/cli/commands/run.ts:1084-1087`). `/st-board pickup` and
+`src/runs/resumeCard.ts`; `unattendedBy` and `unattendedSource`, `src/hooks/scripts.ts:3684-3715`, `:4101-4119`;
+`readsUnattended`, `src/cli/commands/run.ts:1092-1095`). `/st-board pickup` and
 `/st-rework` hand the mode to `/st-work` as `run-mode: attended | unattended` (`content/commands/st-board.md:128`,
 `:366`; `content/commands/st-rework.md:268-270`), and `/st-debug` hands it over only when attended: an unattended debug
 run stops after the root cause and hands nothing to `/st-work` (REQ-FLOW-097; `content/commands/st-debug.md:131-136`);
@@ -3511,7 +3511,9 @@ that exit; a plain `run end` writes none and removes one there (REQ-FLOW-096), a
 (Claude Code's final round after that run handed off; on any other branch, or with no fresh marker naming the run, the
 variable decides; pr/17, pr/36, pr/37). So a later session on that branch, in the same checkout, finds no marker the
 gate honours once the window has passed; one that starts inside its 15 minutes is the residual `SECURITY.md` names
-(`SECURITY.md:502-511`). The gate is `UNATTENDED_ASK_GATE_FILE`
+(`SECURITY.md:523-536`). The marker is machine-local: a worktree policy never materializes it into another
+worktree, a `.stamity` copy row skipping it and a row naming it refused (`src/worktree/policy.ts:536`, `:589-596`;
+REQ-WORKTREE-003), though a `symlink` row over `.stamity` still shares it live. The gate is `UNATTENDED_ASK_GATE_FILE`
 and its reasons in `src/hooks/scripts.ts`, wired after every planned PreToolUse row (`src/adapters/claude.ts:924-930`).
 The detail lives in the `st-unattended` skill, called by name only in that mode.
 
@@ -3559,13 +3561,13 @@ exit 1 (0 with a pull request). No call runs `gh pr create`, `gh pr ready`, a me
 the default branch, read by REST; `run start` leaves it for a branch of the run's own
 (`content/skills/st-unattended/SKILL.md:76-77`, `:86-105`). The pull request's marker is `runMarker` and its ladder
 `ensureDraftPr` (`src/runs/pullRequest.ts:82`, `:241`), which `run end` and `run checkpoint --pr` take through
-`draftPr` (`src/cli/commands/run.ts:1246-1290`). `run end` runs the checkpoint's commit, scan and push
+`draftPr` (`src/cli/commands/run.ts:1269-1313`). `run end` runs the checkpoint's commit, scan and push
 (`src/cli/commands/run.ts:250`), then the pull-request step on every `end` that reaches it, `--refused` giving the
-`Refused: <title>` title (`:952-964`).
+`Refused: <title>` title (`:960-972`).
 
 - **As built, where the delta differed:** not every exit reaches the pull request. A held path, a scan hit or a
   refused push returns before that step, so `run end` exits 1 with no pull request opened or updated
-  (`src/cli/commands/run.ts:890-899`, `:901-920`, `:939-947`). Nor does an exit whose origin moved: `run start` pins
+  (`src/cli/commands/run.ts:898-907`, `:909-928`, `:947-955`). Nor does an exit whose origin moved: `run start` pins
   origin's repository in the run folder's `origin.json` once the run is on its branch, so a pin a checkpoint committed
   there is the one compared (pr/4), read from its fetch URL and from every push URL as git resolves it (`insteadOf`
   and `pushInsteadOf` applied), and `run checkpoint` and `run end` resolve them again before they stage, refusing as
@@ -3586,25 +3588,28 @@ Given `Mode: unattended`, When a unit closes or the run is about to wait, Then `
 explicit path list and pushes the run's branch under the limits of REQ-FLOW-092, and with nothing staged commits nothing
 and pushes only when the branch is ahead; the draft pull request opens when Build starts; the record, ledger, plan and
 morning list ride the branch wherever git does not ignore them (an ignored one reads `records: not committed`)
-(`content/skills/st-unattended/SKILL.md:76-84`; `runCheckpoint`, `src/cli/commands/run.ts:658`).
+(`content/skills/st-unattended/SKILL.md:76-84`; `runCheckpoint`, `src/cli/commands/run.ts:658`). A tracked run-owned
+file the work tree lost is staged as its deletion, and one whose deletion `git rm` already staged is committed, not
+refused as staged and not in `--paths`; a link stays out, as before (pr/79; `src/cli/commands/run.ts:755-763`, the
+stray check `:872`, the index read `indexTracked`, `:1129-1139`, which `--paths` shares, `:1116`).
 
 - **As built, where the delta differed:** the checkpoint does not always push. Where a commit the push would send
   changes a held path, or `HEAD`'s tree still does, it pushes nothing and exits 1 (REQ-FLOW-102's "As built" line;
-  `src/cli/commands/run.ts:890-899`). A symbolic link the change adds or retypes at a held glob's folder (`.claude`,
-  `.github/workflows`, any folder's `.vscode`) counts as a held path there and in the held patch (`heldOf`, `:1034-1039`,
-  over the raw diff's modes, `:994-1007`); a held path staged and then edited again carries both layers there, the
-  staged change and the index-to-work-tree one after it (pr/6, `:801-810`). Nor does it push once origin no longer
+  `src/cli/commands/run.ts:898-907`). A symbolic link the change adds or retypes at a held glob's folder (`.claude`,
+  `.github/workflows`, any folder's `.vscode`) counts as a held path there and in the held patch (`heldOf`, `:1042-1047`,
+  over the raw diff's modes, `:1002-1015`); a held path staged and then edited again carries both layers there, the
+  staged change and the index-to-work-tree one after it (pr/6, `:809-818`). Nor does it push once origin no longer
   names the repository `run start` pinned: it exits 1 as `origin changed: …` before it stages (REQ-FLOW-092's "As
   built" line; `:740-744`), and the pin rides the branch with the record (`RUN_FILES`, `:159`). Nor does it commit a
   path staged before it ran that is none of the run files, the held paths and patches or `--paths` (a folder entry
   covering what is under it): it exits 1 as
-  `commit refused: <path> is staged and not in --paths` (pr/5; `strayStaged`, `:1157-1166`, called at `:863-872`).
+  `commit refused: <path> is staged and not in --paths` (pr/5; `strayStaged`, `:1180-1189`, called at `:871-880`).
   "Ahead" is read from the remote's own branch, in the one `git ls-remote origin` a checkpoint makes, never a
   remote-tracking ref a deletion on the remote left stale (pr/20). The same read's branches and tags are what both
   history reads take origin to hold, all of `HEAD`'s history where it names none, and a remote it cannot read holds
   the push before the commit as `push held: origin's branches and tags could not be read (…)` (pr/46; `remoteRefs`,
-  `:518-532`, called at `:854-859`). A pushed code file the scan could not read leaves the push and the exit as they
-  are and adds `secret scan: <n> files unscanned (<paths>)` to `notDone[]` (pr/7; `:915-918`), which the skill copies
+  `:518-532`, called at `:862-867`). A pushed code file the scan could not read leaves the push and the exit as they
+  are and adds `secret scan: <n> files unscanned (<paths>)` to `notDone[]` (pr/7; `:923-926`), which the skill copies
   on any exit.
 - **Proof:** `test/cli/commands/runCheckpoint.test.ts`, `test/cli/commands/run.test.ts`,
   `test/corpus/skills/unattended.test.ts`.
@@ -3766,7 +3771,7 @@ Given any session, When the main thread runs a force push, a push of a tag or of
 by a refspec-less push or `HEAD` while on it), a remote branch deletion, a merge, `gh pr ready`, `gh release`,
 `npm publish`, or a `gh secret`, `gh variable`, protection or ruleset call, Then Claude Code's `permissions.deny` and
 shell guard, Cursor's fail-closed `beforeShellExecution`, and Copilot's and Codex's `preToolUse` checks refuse it
-(`PERSON_ONLY_RULES`, `CLAUDE_DENY_ROWS` and `personOnlyVerdict`, `src/hooks/personOnly.ts:67`, `:136`, `:227`;
+(`PERSON_ONLY_RULES`, `CLAUDE_DENY_ROWS` and `personOnlyVerdict`, `src/hooks/personOnly.ts:70`, `:139`, `:261`;
 `SHELL_GUARD_MATCHERS`, `src/emit/hooksInfra.ts:156`). Unattended, a change to CI, hook or guard configuration
 (`.stamity/generated/`, the manifest), the class file, CODEOWNERS, the charter or the rule and instruction files is held
 off the pushed tree as an inert patch, listed (`PERSON_ONLY_PATHS` and `heldPaths`, `src/change/personOnlyPaths.ts:26`,
@@ -3776,8 +3781,20 @@ off the pushed tree as an inert patch, listed (`PERSON_ONLY_PATHS` and `heldPath
   work tree or the index. Where a commit the push would send (one `origin` lacks) changes a held path, or `HEAD`'s tree
   still does after the commit, `run checkpoint` and `run end` refuse the push instead: they exit 1 naming
   `held path in history (<path>)` or `held path in the pushed tree (<path>)`, push nothing and rewrite no history, so
-  the branch stays unpushed until a person rewrites it (`src/cli/commands/run.ts:890-899`; `heldInHistory`,
-  `:1065-1077`).
+  the branch stays unpushed until a person rewrites it (`src/cli/commands/run.ts:898-907`; `heldInHistory`,
+  `:1073-1085`).
+- **As built, PR #112's fourth round (2026-10-18):** the table reads a `git symbolic-ref` write: one naming a tag
+  (`refs/tags/` or `tags/`, a delete included) is refused as a tag, and one pointing any name but `HEAD` at the default
+  branch, or at a target holding `$` or a backtick, as a push of that branch to come (pr/70; `symbolicRefVerdict`,
+  `src/hooks/personOnly.ts:935-966`, dispatched at `:1314`). It refuses as protection, attended or not, the GraphQL
+  repository-settings, branch protection rule, ruleset and custom-property mutations (pr/74, pr/80; `:1139-1144`) and a
+  REST write under `properties/` beside the ruleset rule (pr/80; `:1205`). An HTTP call whose method or targets the
+  line hides throws `HTTP_TARGET_HIDDEN`, which the guard refuses as a call it cannot decide: a curl or wget
+  configuration file the line names, a curl write whose target curl's globbing would expand unless `-g` or
+  `--globoff` is set, and a wget write reading `-i` (pr/73, pr/76, pr/77; `httpCall`, `:644-647`, and the unattended
+  copy, `:1733-1736`). Claude Code's deny rows gain the GitHub MCP server's `create_pull_request` (pr/78; `:208`).
+  What stays open is REQ-FLOW-104's: a symbolic ref already on disk, a branch switch on the same line before a push
+  whose destination is implied, and curl's and wget's default configuration files.
 - **Proof:** `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`, `test/change/personOnlyPaths.test.ts`,
   `test/cli/commands/runCheckpoint.test.ts` (the held patch; the refused push, "refuses the push when a commit it would
   send changes a held path, rewriting no history"), `test/adapters/claude.test.ts`,
@@ -3803,7 +3820,7 @@ dependency is a morning-list row (`SKILL.md:118-119`).
 ### REQ-FLOW-104 — The cloud's accepted risks are named
 
 Added 2026-10-16 (plan 021 file 1, unit `u21-security-page`; not on this merge's base, it is cited from `bc12cfc3`
-by the merge's first fix round and re-read after the whole-branch page round: the section is `SECURITY.md:379-599`, under
+by the merge's first fix round and re-read after the whole-branch page round: the section is `SECURITY.md:379-624`, under
 `## What it does not defend` (`:284`), the settings row `:98`, the git-hardening row `:96` and the third network
 exception `:152-173`).
 
@@ -3836,13 +3853,18 @@ named network exceptions, and the run verbs on the git-hardening row.
 - **As built, where the delta differed:** the delta named PowerShell's command wrappers, gh's alias for the
   create-and-push form, a multi-root workspace file's settings and an editor tasks file's folder-open task as uncovered
   by the unattended rules and not held. The guard rounds after it closed each: the page states the wrapped lines read
-  and refused, the alias refused and those files held (`SECURITY.md:572-583`, `:597-599`), the encoded command and the
-  `iex` pipe staying the gaps the unattended rules do not cover (`:592-595`). The page's place-reader paragraph
-  (`:585-590`) and its residual for programs the repository's configuration names (`:441-476`) are not restated here; a
+  and refused, the alias refused and those files held (`SECURITY.md:597-608`, `:622-624`), the encoded command and the
+  `iex` pipe staying the gaps the unattended rules do not cover (`:617-620`). The page's place-reader paragraph
+  (`:610-615`) and its residual for programs the repository's configuration names (`:462-497`) are not restated here; a
   later page round settles them. The whole-branch round added three residuals in plain words: the GitHub MCP server
   on the clients that take no per-tool deny, the origin pin rewritten together with git's configuration, and the
-  working directory Claude Code keeps across shell calls, attended only (`SECURITY.md:400-409`, `:512-517`,
-  `:410-416`).
+  working directory Claude Code keeps across shell calls, attended only (`SECURITY.md:400-409`, `:537-542`,
+  `:410-416`). PR #112's fourth round (2026-10-18) added three attended residuals, each naming the control that holds,
+  the remote's own protection and, unattended, the raw-push refusal or the pre-flight's wall: a symbolic ref already on
+  disk, a branch switch on the same line before a push whose destination is implied, and curl's and wget's default
+  configuration files (`SECURITY.md:426-446`). The MCP residual counts fourteen rows (`:400-409`), and the final
+  round's window states that a worktree policy never carries the run-ended marker into another checkout, a `symlink`
+  row on `.stamity` still sharing it live (`:523-536`).
 - **Proof:** `test/docsPages.test.ts` ("cloud and unattended runs (REQ-FLOW-104)": the section's place, every risk
   and gap named above, the retired bullet gone, the control table's pointers, the settings row and the network
   exception); `judgment: reviewer` for the wording around them.
@@ -3853,30 +3875,32 @@ Added 2026-10-16 (plan 021 file 1, units `u6-person-only-tables` and `u14-shell-
 
 Given any in-progress record (debug records included) reading `Mode: unattended`, or `STAMITY_UNATTENDED` set while no
 in-progress record reads `Mode: attended` (one with no `Mode:` line included; `unattendedBy`,
-`src/hooks/scripts.ts:3676-3707`), When the main thread runs a raw `git push`, `gh pr create`, `gh pr edit`, or a REST
+`src/hooks/scripts.ts:3684-3715`), When the main thread runs a raw `git push`, `gh pr create`, `gh pr edit`, or a REST
 write on `pulls` or `pulls/<n>`, `contents/`, `git/` refs or objects, or `merges`, Then the shell guard refuses it on every client,
 naming `stamity run checkpoint` and `run end` as the push path; replies on `pulls/<n>/comments` and
-`issues/<n>/comments` pass (`unattendedPushVerdict`, `src/hooks/personOnly.ts:1237`;
+`issues/<n>/comments` pass (`unattendedPushVerdict`, `src/hooks/personOnly.ts:1350`;
 `content/skills/st-unattended/SKILL.md:88-91`). An attended session keeps its own pushes. Every run folder's head is
 read, so no pile of folders sorted ahead of an open record hides it; past 2,000 run folders the read faults, naming
-`RUN_FOLDERS_OVER_2000` (`GUARD_RUN_FOLDERS_MAX`, `src/hooks/scripts.ts:3083`; the check, `:3692-3694`), and the guard
+`RUN_FOLDERS_OVER_2000` (`GUARD_RUN_FOLDERS_MAX`, `src/hooks/scripts.ts:3091`; the check, `:3700-3702`), and the guard
 refuses each call this rule would refuse, attended sessions included. A run that rewrites its own record head escapes
 this rule, a residual `SECURITY.md` names (REQ-FLOW-104).
 
 - **As built, where the delta differed:** the rule refuses more than the delta named, so the run verbs' push stays on
   the repository the run started on. While the run is unattended it also refuses `gh pr close`, `gh pr reopen` and
-  `gh pr update-branch` (`src/hooks/personOnly.ts:1956`), a `git remote` write and a `git config` write of a
-  `remote.*` key or section (`:1935-1936`), and any line that sets one of git's program-valued or configuration
-  variables, whatever program it runs, the run verbs among them (`:1975-1994`). The configuration variables
-  include `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` (`:1786`), the program-valued ones are at `:1794-1795`, and the
-  spellings that set either at `:1797-1842`; a git call on a line that names a configuration variable or sets a
-  program-valued one is refused before that (`:1924-1932`). A `git config` write of a `url.*` key is refused beside a
-  `remote.*` one (`writesRemote`, `:1895` and `:1936`); the run verbs' origin pin is the second check on the push it
+  `gh pr update-branch` (`src/hooks/personOnly.ts:2103`), a `git remote` write and a `git config` write of a
+  `remote.*` key or section (`:2082-2083`), and any line that sets one of git's program-valued or configuration
+  variables, whatever program it runs, the run verbs among them (`:2126-2145`). The configuration variables
+  include `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` (`:1933`), the program-valued ones are at `:1941-1942`, and the
+  spellings that set either at `:1944-1989`; a git call on a line that names a configuration variable or sets a
+  program-valued one is refused before that (`:2071-2079`). A `git config` write of a `url.*` key is refused beside a
+  `remote.*` one (`writesRemote`, `:2042` and `:2083`); the run verbs' origin pin is the second check on the push it
   would move (REQ-FLOW-092's "As built" line). In every mode, attended or not, a REST review write whose body the line
-  cannot show is refused as an approval (`personOnlyVerdict`, `:1087-1092`). On Claude Code, thirteen
-  `permissions.deny` rows refuse the GitHub MCP server's tools by name (`CLAUDE_DENY_ROWS`, `:186-202`): merge and
-  branch writes (`:186-190`), review writes and submission (`:195-197`), pull-request update and state (`:198-200`),
-  branch creation (`:201`) and repository deletion (`:202`). The other clients take no per-tool deny, a residual
+  cannot show is refused as an approval (`personOnlyVerdict`, `:1198-1203`). Each curl request after `--next` or `-:`
+  is judged as a call of its own, with its own method, body and targets, in both verdicts (pr/72; `httpCall`, `:707`
+  and `:1796`; `httpVerdict`, `:1030-1032`; the unattended walk, `:2115`). On Claude Code, fourteen
+  `permissions.deny` rows refuse the GitHub MCP server's tools by name (`CLAUDE_DENY_ROWS`, `:189-208`): merge and
+  branch writes (`:189-193`), review writes and submission (`:198-200`), pull-request update and state (`:201-203`),
+  branch creation (`:204`), repository deletion (`:205`) and pull-request creation (`:208`). The other clients take no per-tool deny, a residual
   `SECURITY.md` names.
 - **Proof:** `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`,
   `test/corpus/commands/feedbackPair.test.ts` ("pr-resolve pushes only through the run verbs"),
