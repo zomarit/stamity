@@ -42,7 +42,8 @@ const REQUEST: DraftPrRequest = {
   runId: RUN,
 };
 
-const LOOKUP = `repos/acme/app/pulls?head=${encodeURIComponent(`acme:${BRANCH}`)}&state=open`;
+// The lookup filters by base as well as head (pr/52): one head may have open pull requests into other bases.
+const LOOKUP = `repos/acme/app/pulls?head=${encodeURIComponent(`acme:${BRANCH}`)}&state=open&base=main`;
 
 type Answer = RestResponse | Error;
 
@@ -64,8 +65,9 @@ function scriptedGh(answers: readonly Answer[]): { gh: GhApi; calls: RestRequest
   return { gh, calls };
 }
 
+/** An open pull request into `main`: the lookup now matches the base too (pr/52), so each fixture names it. */
 function openPr(number: number, body: string | null, head = BRANCH): Record<string, unknown> {
-  return { number, html_url: `https://github.com/acme/app/pull/${number}`, body, head: { ref: head, label: `acme:${head}` } };
+  return { number, html_url: `https://github.com/acme/app/pull/${number}`, body, head: { ref: head, label: `acme:${head}` }, base: { ref: "main" } };
 }
 
 const CREATED = { status: 201, json: { number: 12, html_url: "https://github.com/acme/app/pull/12" } };
@@ -254,6 +256,17 @@ describe("ensureDraftPr", () => {
     expect(calls.map((call) => `${call.method} ${call.path}`)).toEqual([`GET ${LOOKUP}`, "PATCH repos/acme/app/pulls/7"]);
   });
 
+  it("opens a draft into the default branch when the branch's only open pull request targets another base", async () => {
+    // GitHub keeps one open pull request per head and base, so a kept branch may already have a person's one into a release branch.
+    const release = { ...openPr(7, `old list\n\n${MARKER}\n`), base: { ref: "release/1.x" } };
+    const { gh, calls } = scriptedGh([{ status: 200, json: [release] }, CREATED]);
+
+    expect(await ensureDraftPr(gh, REQUEST)).toEqual({ number: 12, url: "https://github.com/acme/app/pull/12", how: "created" });
+    expect(calls.map((call) => `${call.method} ${call.path}`)).toEqual([`GET ${LOOKUP}`, "POST repos/acme/app/pulls"]);
+    expect(calls[1]?.body).toMatchObject({ head: BRANCH, base: "main", draft: true });
+    expect(calls.some((call) => call.method === "PATCH" || call.path.includes("/issues/7/"))).toBe(false);
+  });
+
   it("still reads a pull request from another owner's branch of the same name as none (pr/12)", async () => {
     const fork = { ...openPr(3, `x\n\n${MARKER}`), head: { ref: BRANCH, label: `other:${BRANCH}` } };
     const { gh, calls } = scriptedGh([{ status: 200, json: [fork] }, CREATED]);
@@ -316,7 +329,7 @@ describe("ensureDraftPr", () => {
 
     await ensureDraftPr(gh, { ...REQUEST, head: "feat/a&state=closed" });
 
-    expect(calls[0]?.path).toBe("repos/acme/app/pulls?head=acme%3Afeat%2Fa%26state%3Dclosed&state=open");
+    expect(calls[0]?.path).toBe("repos/acme/app/pulls?head=acme%3Afeat%2Fa%26state%3Dclosed&state=open&base=main");
   });
 
   it("encodes the ! ' ( ) a git branch name may hold, so the lookup passes the runner's path check", async () => {
@@ -324,7 +337,7 @@ describe("ensureDraftPr", () => {
     const { gh, calls } = scriptedGh([{ status: 200, json: [openPr(5, `x\n\n${MARKER}`, head)] }, { status: 200, json: openPr(5, "new") }]);
 
     expect(await ensureDraftPr(gh, { ...REQUEST, head })).toMatchObject({ number: 5, how: "existing" });
-    expect(calls[0]?.path).toBe("repos/acme/app/pulls?head=acme%3Afix%28auth%29%21%27s&state=open");
+    expect(calls[0]?.path).toBe("repos/acme/app/pulls?head=acme%3Afix%28auth%29%21%27s&state=open&base=main");
     for (const call of calls) expect(() => ghApiArgs(call), call.path).not.toThrow();
   });
 

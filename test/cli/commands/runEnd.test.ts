@@ -239,7 +239,8 @@ describe("stamity run end", () => {
     await put(repo, `${RUN_DIR}/morning.md`, morningList("the delta"));
     rest.routes.set("GET repos/o/r/pulls", {
       status: 200,
-      json: [{ number: 12, html_url: "https://github.com/o/r/pull/12", body: `an earlier list\n\n${MARKER}`, head: { ref: RUN_BRANCH, label: `o:${RUN_BRANCH}` } }],
+      // The lookup now matches the base as well as the head (pr/52), so the open pull request names its base.
+      json: [{ number: 12, html_url: "https://github.com/o/r/pull/12", body: `an earlier list\n\n${MARKER}`, head: { ref: RUN_BRANCH, label: `o:${RUN_BRANCH}` }, base: { ref: "main" } }],
     });
     rest.routes.set("PATCH repos/o/r/pulls/12", { status: 200, json: {} });
 
@@ -258,7 +259,8 @@ describe("stamity run end", () => {
     await put(repo, `${RUN_DIR}/morning.md`, morningList("the delta"));
     rest.routes.set("GET repos/o/r/pulls", {
       status: 200,
-      json: [{ number: 15, html_url: "https://github.com/o/r/pull/15", body: "A person's description.", head: { ref: RUN_BRANCH, label: `o:${RUN_BRANCH}` } }],
+      // The lookup now matches the base as well as the head (pr/52), so the open pull request names its base.
+      json: [{ number: 15, html_url: "https://github.com/o/r/pull/15", body: "A person's description.", head: { ref: RUN_BRANCH, label: `o:${RUN_BRANCH}` }, base: { ref: "main" } }],
     });
     rest.routes.set("POST repos/o/r/issues/15/comments", { status: 201, json: {} });
 
@@ -503,7 +505,8 @@ describe("stamity run end", () => {
     await put(repo, `${RUN_DIR}/morning.md`, morningList("refused at the ready check"));
     rest.routes.set("GET repos/o/r/pulls", {
       status: 200,
-      json: [{ number: 12, html_url: "https://github.com/o/r/pull/12", body: `an earlier list\n\n${MARKER}`, head: { ref: RUN_BRANCH, label: `o:${RUN_BRANCH}` } }],
+      // The lookup now matches the base as well as the head (pr/52), so the open pull request names its base.
+      json: [{ number: 12, html_url: "https://github.com/o/r/pull/12", body: `an earlier list\n\n${MARKER}`, head: { ref: RUN_BRANCH, label: `o:${RUN_BRANCH}` }, base: { ref: "main" } }],
     });
     rest.routes.set("PATCH repos/o/r/pulls/12", { status: 200, json: {} });
 
@@ -554,7 +557,8 @@ describe("stamity run end", () => {
       await put(repo, WALK_RECORD, `# Run ${WALK}\n\nStatus: in progress\nMode: attended\nBranch: ${RUN_BRANCH}\nBase: ${tip}\nResumes: ${resumes}\n`);
       rest.routes.set("GET repos/o/r/pulls", {
         status: 200,
-        json: [{ number: 12, html_url: "https://github.com/o/r/pull/12", body: `the overnight list\n\n${MARKER}`, head: { ref: RUN_BRANCH, label: `o:${RUN_BRANCH}` } }],
+        // The lookup now matches the base as well as the head (pr/52), so the open pull request names its base.
+        json: [{ number: 12, html_url: "https://github.com/o/r/pull/12", body: `the overnight list\n\n${MARKER}`, head: { ref: RUN_BRANCH, label: `o:${RUN_BRANCH}` }, base: { ref: "main" } }],
       });
       rest.routes.set("PATCH repos/o/r/pulls/12", { status: 200, json: {} });
       rest.routes.set("POST repos/o/r/issues/12/comments", { status: 201, json: {} });

@@ -146,16 +146,18 @@ function labelNames(label: unknown, owner: string, head: string): boolean {
 }
 
 /**
- * The open pull request whose head is `owner:head` ({@link labelNames}), from
- * a list answer. Matched again here rather than trusted to the query: GitHub
- * answers a `head` filter it cannot read with every open pull request.
+ * The open pull request whose head is `owner:head` ({@link labelNames}) and
+ * whose base is `base`, from a list answer. Matched again here rather than
+ * trusted to the query: GitHub answers a filter it cannot read with every open
+ * pull request, and one head may have open ones into other bases.
  */
-function openPrOnBranch(json: unknown, owner: string, head: string): FoundPr | null {
+function openPrOnBranch(json: unknown, owner: string, head: string, base: string): FoundPr | null {
   if (!Array.isArray(json)) return null;
   for (const entry of json) {
     if (!isRecord(entry) || !isRecord(entry["head"])) continue;
     const { ref, label } = entry["head"];
     if (ref !== head || !labelNames(label, owner, head)) continue;
+    if (!isRecord(entry["base"]) || entry["base"]["ref"] !== base) continue;
     const found = prFields(entry);
     if (found !== null) return found;
   }
@@ -219,10 +221,11 @@ function rejection(json: unknown, messages: readonly string[], base: string, hea
 /**
  * Open or update the run's one draft pull request.
  *
- * 1. `GET …/pulls?head=<owner>:<head>&state=open`: an open one on the branch
- *    whose body ends with this run's marker gets its body replaced, the body
- *    alone (`PATCH …/pulls/<n>`); any other gets the body as one comment
- *    (`POST …/issues/<n>/comments`), its own body untouched.
+ * 1. `GET …/pulls?head=<owner>:<head>&state=open&base=<base>`: an open one
+ *    from the branch into `base` whose body ends with this run's marker gets
+ *    its body replaced, the body alone (`PATCH …/pulls/<n>`); any other gets
+ *    the body as one comment (`POST …/issues/<n>/comments`), its own body
+ *    untouched.
  * 2. Else `POST …/pulls` with `draft: true`.
  * 3. A 422 saying one already exists looks again (step 1) and never falls
  *    back; GitHub's draft refusal ({@link DRAFTS_REFUSED}) posts a normal one
@@ -257,9 +260,9 @@ export async function ensureDraftPr(gh: GhApi, request: DraftPrRequest): Promise
 
   /** The lookup: the pull request found or `null`, else the outcome to return, GitHub having not answered it. */
   const lookup = async (step: string): Promise<FoundPr | null | { failed: PrOutcome }> => {
-    const query = `head=${encodeQueryValue(`${owner}:${head}`)}&state=open`;
+    const query = `head=${encodeQueryValue(`${owner}:${head}`)}&state=open&base=${encodeQueryValue(base)}`;
     const listed = await gh({ method: "GET", path: `${repoPath}/pulls?${query}`, hostname: host });
-    return isOk(listed.status) ? openPrOnBranch(listed.json, owner, head) : { failed: answered(step, listed.status) };
+    return isOk(listed.status) ? openPrOnBranch(listed.json, owner, head, base) : { failed: answered(step, listed.status) };
   };
 
   /** One `POST …/pulls`: the outcome, or the 422's answer for the caller to read. */
