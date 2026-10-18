@@ -71,7 +71,8 @@ const categories = [
     // Daily-use first, rarest last: the two a reader reaches for while working
     // lead, then the ones a growing setup reaches for, then the two an
     // organisation reaches for once. README's map lists them in this same
-    // order, and so does `src/cli/docs/llmsIndex.ts`.
+    // order, and so does `src/cli/docs/llmsIndex.ts`. The security mapping and
+    // the cloud guide were appended after them.
     label: 'Guides',
     items: present([
       'customization',
@@ -81,6 +82,7 @@ const categories = [
       'enterprise-quickstart',
       'enterprise-forks',
       'security-mapping',
+      'cloud',
     ]),
   },
 ];

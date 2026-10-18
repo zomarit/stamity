@@ -12,7 +12,7 @@
  * constants their renderers export, so a page cannot be generated without
  * being listed here, or listed here without something generating it. Only the
  * hand-written pages — the five root pages (README, CONTRIBUTING, SECURITY,
- * GOVERNANCE, CODE_OF_CONDUCT) and the eleven guides under `docs/` — and the
+ * GOVERNANCE, CODE_OF_CONDUCT) and the twelve guides under `docs/` — and the
  * charter are named literally, because nothing generates them to be read from.
  * The guides are held to the same dated hand-page contract as three of those
  * root pages — README, SECURITY, CONTRIBUTING — by `test/docsPages.test.ts`,
@@ -217,6 +217,13 @@ export const LLMS_INDEX_SECTIONS: readonly IndexSection[] = [
         title: "Security mapping",
         description:
           "the version-pinned crosswalk from this repository's own controls to the OWASP agentic, LLM and web lists, the joint guidance and the NIST AI RMF — seven surfaces, their residuals, and the gaps.",
+        regenerateCommand: null,
+      },
+      {
+        path: "docs/cloud.md",
+        title: "Cloud runs",
+        description:
+          "running a planned change in a vendor's cloud with nobody watching — each cloud's setup, branch protection, secrets, contract start and morning walk, the GitHub Action's limits and what a pull request still changes there, and the run contract.",
         regenerateCommand: null,
       },
       {

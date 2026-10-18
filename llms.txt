@@ -30,6 +30,7 @@ hand-written or corpus source. Nothing here links outside this tree.
 - [Enterprise quickstart](docs/enterprise-quickstart.md): the enterprise route in order — who does what, day 0 the fork, day 1 the release and the rollout, day 2 the updates — with each step linked to the guide section that has its commands.
 - [Enterprise forks](docs/enterprise-forks.md): taking the next upstream release into a customized fork — the lane's config and verbs, conflicts, the gates that decide, landing, the fork layer, releasing the fork through its own workflow, and the opt-in update workflow.
 - [Security mapping](docs/security-mapping.md): the version-pinned crosswalk from this repository's own controls to the OWASP agentic, LLM and web lists, the joint guidance and the NIST AI RMF — seven surfaces, their residuals, and the gaps.
+- [Cloud runs](docs/cloud.md): running a planned change in a vendor's cloud with nobody watching — each cloud's setup, branch protection, secrets, contract start and morning walk, the GitHub Action's limits and what a pull request still changes there, and the run contract.
 - [Migration](docs/migration.md): moving a repository off the predecessor setup — the in-place path, the uninstall-first path, what transfers, and the removal left to you.
 
 ## Generated reference

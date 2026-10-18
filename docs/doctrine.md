@@ -2,7 +2,7 @@
 title: Doctrine
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.15.0 release cut (2026-10-15). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit e98f6bf2. Re-attested 2026-10-18 for the hand bucket's two count words. -->
 <!-- Re-open when: an invariant's text changes, a pillar gains or loses a public enforcement
      surface, the root question's three answers change, the always-on split across clients moves,
      or the deferred with-versus-without measurement lands. `test/docsPages.test.ts` holds this
@@ -117,8 +117,8 @@ An artifact that was true once and says nothing about when is unfalsifiable.
   sources. A platform fact is only as current as the date beside it.
 - Every page in the hand-written bucket carries a currency stamp and a re-open trigger. They are
   the two comments at the top of this page. The bucket is `README.md`, `SECURITY.md`,
-  `CONTRIBUTING.md` and the eleven guides under `docs/`, and `test/docsPages.test.ts` holds all
-  fourteen to that pair. [`GOVERNANCE.md`](../GOVERNANCE.md) carries the same pair on its own
+  `CONTRIBUTING.md` and the twelve guides under `docs/`, and `test/docsPages.test.ts` holds all
+  fifteen to that pair. [`GOVERNANCE.md`](../GOVERNANCE.md) carries the same pair on its own
   trigger.
 - The release controls checklist carries a per-release currency section. Re-verification is part
   of cutting a release, rather than something somebody has to remember.

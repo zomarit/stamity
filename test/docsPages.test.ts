@@ -29,6 +29,8 @@ import {
 import { TRUST_TIERS } from "../src/pack/trust.ts";
 import { packReinstallSteps } from "../src/pack/verifyInstalled.ts";
 import { CONTENT_CLASSES } from "../src/types/content.ts";
+import { CLIENT_CLOUD_FACTS } from "../src/hooks/model.ts";
+import { parseRunContract } from "../src/runs/runContract.ts";
 import { CORPUS_ROOT, loadCorpusIndex } from "./corpus/harness.ts";
 import { GATE_RUN_TIMEOUT_MS, leakGateFailureDetail, runLeakGateOnce } from "./support/leakGateRun.ts";
 import {
@@ -52,13 +54,15 @@ import { isRecordPath } from "../scripts/records-paths.mjs";
 import { RUNNER_FILES } from "../scripts/eval/run.mjs";
 // @ts-expect-error — the CI lane classifier is import-safe native ESM with no type declarations.
 import { LANE_PATHS } from "../scripts/ci/records-only.mjs";
+// @ts-expect-error — the QA hook-runs instrument is import-safe native ESM with no type declarations.
+import { ASK_CLASS_CLIENTS } from "../scripts/qa/hook-runs.mjs";
 
 /**
- * The gate on the fourteen hand-written pages: three at the root, eleven guides
+ * The gate on the fifteen hand-written pages: three at the root, twelve guides
  * under `docs/`.
  *
  * The rest of `docs/` is generated and drift-tested against its renderer; these
- * fourteen are typed by a human, so the only guard is this file.
+ * fifteen are typed by a human, so the only guard is this file.
  * It asserts the properties a rewrite could silently break — the public
  * opening surviving a reflow, the ≤150-line budget, links that stay inside the
  * tree or inside this repository's own GitHub home, no bare domain, no contact
@@ -90,7 +94,7 @@ import { LANE_PATHS } from "../scripts/ci/records-only.mjs";
  * of about nine targets; all four have shipped, and an exemption kept past its
  * reason means renaming one of them breaks README and passes both suites.
  *
- * Two properties are asserted on all fourteen pages because the hand bucket is
+ * Two properties are asserted on all fifteen pages because the hand bucket is
  * DEFINED by them: a currency header naming what the page was verified against,
  * and a published re-open trigger — a falsifiable condition under which the page
  * must be rewritten. A hand page without them is a page nobody can tell is
@@ -170,12 +174,14 @@ const SECURITY_MAPPING = "docs/security-mapping.md";
 const TROUBLESHOOTING = "docs/troubleshooting.md";
 const WORKING_WITH_STAMITY = "docs/working-with-stamity.md";
 const WORKSPACES = "docs/workspaces.md";
+// Declared apart from the path-order block above, so the ordinals its comment names stay true.
+const CLOUD = "docs/cloud.md";
 
 /**
- * The eleven hand-written guides under `docs/`.
+ * The twelve hand-written guides under `docs/`.
  *
  * Everything else in that directory is rendered from code and carries a
- * "GENERATED FILE, rewrite it with X" header; these eleven are the only pages
+ * "GENERATED FILE, rewrite it with X" header; these twelve are the only pages
  * there a human types, which is exactly the line the hand bucket is drawn on.
  *
  * `docs/specs/` is outside the bucket and outside the site: five engineering
@@ -205,6 +211,10 @@ const GUIDES: readonly string[] = [
   // the comment above index into this literal, so an insertion in the middle moves every entry
   // after it and the note goes stale the same day.
   SECURITY_MAPPING,
+  // ADDED 2026-10-18 (plan 021 file 2, unit v15-cloud-page, REQ-PROVE-043): the cloud guide joins
+  // the bucket, so it is twelve guides and fifteen pages. Appended for the same reason as the entry
+  // above; the sidebar, README's map and `llms.txt` list it last of the mapped guides too.
+  CLOUD,
 ];
 
 /**
@@ -365,8 +375,13 @@ const MAX_LINES = 150;
  * fourth time. `docs/enterprise-quickstart.md` is a new hand page (plan 010, unit
  * docs-quickstart), so the map owes it a row. The `llms.txt` row's guide count moved from eleven
  * to twelve IN PLACE and paid for nothing. So the budget moves by exactly the row.
+ *
+ * TEST CHANGE, justified: 159 to 160, the cost of ONE more map row, on the same reasoning a fifth
+ * time. `docs/cloud.md` is a new hand page (plan 021 file 2, unit v15-cloud-page), so the map owes
+ * it a row. The `llms.txt` row's guide count moved from eleven to twelve IN PLACE and paid for
+ * nothing. So the budget moves by exactly the row.
  */
-const README_MAX_LINES = 159;
+const README_MAX_LINES = 160;
 
 /**
  * The product, its installable package, and the owner the pages name.
@@ -736,8 +751,16 @@ const RELEASE_CUT_DATE = "2026-10-15";
  * with them), so the commit form has no members and the assertion's else branch requires this
  * constant to equal RELEASE_CUT_DATE. Their `Re-attested 2026-10-14` clauses are not carried: each
  * page now says it was verified at the cut, and the cut is the later pass.
+ *
+ * TEST CHANGE, justified: MOVED 2026-10-18, from 2026-10-15, by plan 021 file 2, unit
+ * v15-cloud-page (REQ-PROVE-043). `docs/cloud.md` is a new hand page, and the only honest date a
+ * page written today can carry is today's, which the 2026-10-15 pin refused as later than the pass
+ * it ships in. The pages the new guide moved were re-read for those claims and moved onto the commit
+ * form naming the lane base e98f6bf2 plus `Re-attested 2026-10-18`: `README.md` (its map row and the
+ * `llms.txt` row's guide count) and `docs/doctrine.md` (the bucket's two count words). Every other
+ * page keeps its cut date.
  */
-const REATTESTATION_DATE = "2026-10-15";
+const REATTESTATION_DATE = "2026-10-18";
 
 /** Absolute URLs removed, so the domain and link rules read only what is left. */
 const withoutAllowedUrls = (text: string): string => text.replace(ABSOLUTE_URLS, " ");
@@ -904,10 +927,11 @@ describe("hand pages", () => {
   // Renamed on each growth of the bucket — "all seven" when the workflow guide joined, "all
   // eight" when the customization guide did, "all nine" when the workspaces guide did, "all
   // twelve" when the enterprise-forks guide did, "all fifteen" when the enterprise quickstart did,
-  // and "all fourteen" when the plugins guide left with the plugin route (plan 020 file 1):
+  // "all fourteen" when the plugins guide left with the plugin route (plan 020 file 1), and "all
+  // fifteen" again when the cloud guide joined (plan 021 file 2, unit v15-cloud-page):
   // the name states the membership count, and the loop below is unchanged through all of them and
   // still runs over every member.
-  it("all fourteen exist and carry real content", () => {
+  it("all fifteen exist and carry real content", () => {
     for (const page of HAND_PAGES) {
       expect(existsSync(join(REPO_ROOT, page)), `${page} is missing`).toBe(true);
       expect(read(page).trim().length, `${page} is empty`).toBeGreaterThan(500);
@@ -4226,5 +4250,180 @@ describe("the guides", () => {
     expect(text, "the troubleshooting guide does not route security away from public issues").toMatch(
       /do not open a public issue/i,
     );
+  });
+});
+
+// ADDED 2026-10-18 (plan 021 file 2, unit v15-cloud-page; REQ-PROVE-043, REQ-PROVE-042, REQ-FLOW-113).
+// The cloud guide is a hand page, so the bucket's properties above hold it: no vendor URL, a
+// currency header, links that resolve. What these cases add is what only this page claims: each
+// cloud's five steps, the run contract as the parser reads it, the GitHub Action's limits and what a
+// pull request still changes on it, each client's answer to a person-only act, and the cloud facts
+// the capability matrix's table holds. The release checklist's two cloud lines are pinned here too,
+// since they keep this page's facts current.
+describe("docs/cloud.md", () => {
+  const cloudPage = (): string => read(CLOUD);
+
+  /** The three clouds an unattended run can start on, each a `##` section of the page. */
+  const CLOUD_SECTIONS: readonly string[] = [
+    "## Claude Code on the web",
+    "## Cursor's cloud agents",
+    "## Copilot's cloud agent",
+  ];
+
+  /** The five steps each cloud's section walks, in this order. */
+  const CLOUD_STEPS: readonly string[] = [
+    "### Set it up",
+    "### Protect the default branch",
+    "### Secrets",
+    "### Start a contract run",
+    "### The morning walk",
+  ];
+
+  /** The fact a row of the cloud table states for one client and subject. */
+  const cloudFact = (tool: string, subject: string) => {
+    const row = CLIENT_CLOUD_FACTS.find((fact) => fact.tool === tool && fact.subject === subject);
+    expect(row, `CLIENT_CLOUD_FACTS has no ${tool} "${subject}" row`).toBeDefined();
+    return row as (typeof CLIENT_CLOUD_FACTS)[number];
+  };
+
+  /** The duration a fact states (`59 minutes`, `6 hours`), read off the fact itself. */
+  const durationOf = (fact: string): string => {
+    const found = /\b(\d+) (minutes|hours)\b/.exec(fact)?.[0];
+    expect(found, `the fact states no duration: "${fact.slice(0, 80)}…"`).toBeDefined();
+    return found ?? "";
+  };
+
+  it("gives each cloud its setup, branch protection, secrets, contract start and morning walk", () => {
+    const text = cloudPage();
+    for (const heading of CLOUD_SECTIONS) {
+      const section = sectionOf(text, heading);
+      expect(section, `${CLOUD} has no "${heading}" section`).not.toBe("");
+      const at = CLOUD_STEPS.map((step) => lines(section).indexOf(step));
+      for (const [index, step] of CLOUD_STEPS.entries()) {
+        expect(at[index], `${heading} has no "${step}"`).toBeGreaterThan(-1);
+      }
+      expect(at, `${heading}'s steps are out of order`).toEqual(at.toSorted((a, b) => a - b));
+      // Branch protection is a prerequisite, not advice: the pre-flight refuses without it.
+      const protect = flowed(sectionOf(section, "### Protect the default branch"));
+      expect(protect, `${heading} does not tie protection to the pre-flight`).toContain("`direct-push`");
+      expect(protect, `${heading} does not say the run refuses without protection`).toMatch(/refuse/);
+      // The run starts under its contract, checked first.
+      expect(flowed(sectionOf(section, "### Start a contract run")), `${heading} starts no contract run`).toContain(
+        "--contract",
+      );
+    }
+  });
+
+  it("states the run contract as the parser reads it, its example a contract that parses", () => {
+    const section = sectionOf(cloudPage(), "## The run contract");
+    expect(section, `${CLOUD} has no "## The run contract" section`).not.toBe("");
+    const [example] = fencedBlocksOf(section, "yaml");
+    expect(example, "the run contract section shows no yaml example").toBeDefined();
+    const parsed = parseRunContract(example ?? "", CLOUD);
+    expect(parsed.ok ? [] : parsed.problems, "the page's example is not a contract the parser accepts").toEqual([]);
+    if (!parsed.ok) return;
+    // Non-degenerate: every optional key is set, and one prerequisite is owned by a named owner.
+    const { contract } = parsed;
+    expect(contract.plan).toBeDefined();
+    expect(contract.item).toBeDefined();
+    expect(contract.budget.stopBy).toBeDefined();
+    expect(contract.budget.maxUnits).toBeGreaterThan(0);
+    expect(contract.scope.in.length).toBeGreaterThan(0);
+    expect(contract.scope.out.length).toBeGreaterThan(0);
+    expect(contract.prerequisites.map((entry) => entry.state).toSorted()).toEqual(["done", "owned"]);
+
+    // The prose names every key the parser takes, the two fixed values and the start check.
+    const prose = flowed(section);
+    for (const key of [
+      "run-contract",
+      "plan",
+      "item",
+      "base",
+      "acceptance",
+      "scope",
+      "prerequisites",
+      "budget",
+      "stop-by",
+      "max-units",
+      "answerer",
+      "preview",
+      "move",
+    ]) {
+      expect(prose, `the run contract section does not name \`${key}\``).toContain(`\`${key}`);
+    }
+    expect(prose).toContain("`preview: stop`");
+    expect(prose).toContain("`move: off`");
+    expect(prose).toContain("stamity plan check");
+    expect(prose).toContain("--contract");
+    for (const code of ["`contract`", "`prerequisite-open`", "`contract-mismatch`"]) {
+      expect(prose, `the run contract section does not name the blocker ${code}`).toContain(code);
+    }
+    expect(section, "the run contract section states no outputs").toContain("### What a run leaves");
+    expect(section, "the run contract section states no failure modes").toContain("### When it stops");
+  });
+
+  it("names the GitHub Action a short surface, and what a pull request still changes there", () => {
+    const section = flowed(sectionOf(cloudPage(), "## Claude Code's GitHub Action"));
+    expect(section, `${CLOUD} has no "## Claude Code's GitHub Action" section`).not.toBe("");
+    const cap = cloudFact("claude", "GitHub Action job cap");
+    expect(section, "the Action's job cap is not the table's").toContain(durationOf(cap.fact));
+    expect(section).toContain(`(${cap.status})`);
+    expect(section).toContain("never an overnight surface");
+    const questions = cloudFact("claude", "GitHub Action questions");
+    expect(section, "the Action's question fact does not carry the table's status").toContain(
+      `(${questions.status})`,
+    );
+    // The base-branch restore covers `.claude/`, not the scripts its entries start nor the charter
+    // `CLAUDE.md` imports, so the page says what a pull request still changes on its own run.
+    expect(section).toContain("`.stamity/generated/hooks/`");
+    expect(section).toMatch(/a pull request can change what the guard runs/);
+    expect(section).toContain("`AGENTS.md`");
+    expect(section).toMatch(/that pull request's `AGENTS\.md`/);
+  });
+
+  it("states each client's answer to a person-only act, as the guard gives it", () => {
+    const section = flowed(sectionOf(cloudPage(), "## What asks, and what refuses"));
+    expect(section, `${CLOUD} has no "## What asks, and what refuses" section`).not.toBe("");
+    expect(section).toMatch(/Claude Code asks for one click/);
+    expect(section).toMatch(/Copilot CLI, Cursor and Codex refuse/);
+    expect(section).toMatch(/names no calling agent/);
+    expect(section).toMatch(/every deletion and every force push is refused on every client/i);
+    expect(section).toMatch(/asks nothing/);
+    expect(section).toContain("`stamity run checkpoint`");
+    expect(section).toContain("`stamity run end`");
+  });
+
+  it("states the cloud facts the capability matrix's table holds", () => {
+    const text = flowed(cloudPage());
+    const sessionLimit = cloudFact("copilot", "Session limit");
+    expect(text, "Copilot's session limit is not the table's").toContain(durationOf(sessionLimit.fact));
+    expect(cloudFact("claude", "Session marker").fact).toContain("`CLAUDE_CODE_REMOTE`");
+    expect(text).toContain("`CLAUDE_CODE_REMOTE`");
+    expect(cloudFact("copilot", "Default branch").fact).toContain("default branch");
+    expect(flowed(sectionOf(cloudPage(), "## Copilot's cloud agent"))).toMatch(/on the default branch/);
+    expect(text, "the page does not send the reader to the dated table").toContain("(capability-matrix.md)");
+  });
+
+  it("puts the cloud cadence on the release checklist: the vendor pages re-read, each client's ask re-measured", () => {
+    const further = perReleaseLines().filter((line) => line.startsWith("A further line"));
+    const vendor = further.find((line) => /re-read the vendor pages/.test(collapsed(line)));
+    const ask = further.find((line) => line.includes("`node scripts/qa/hook-runs.mjs --ask`"));
+    expect(vendor, `${RELEASE_CHECKLIST} has no line re-reading the cloud's vendor pages`).toBeDefined();
+    expect(ask, `${RELEASE_CHECKLIST} has no line running hook-runs.mjs --ask`).toBeDefined();
+    for (const line of [vendor ?? "", ask ?? ""]) {
+      expect(line, `a cloud line names no trigger: "${line.slice(0, 60)}…"`).toContain("Runs when:");
+    }
+    const vendorText = collapsed(vendor ?? "");
+    expect(vendorText).toContain("`CLIENT_CLOUD_FACTS`");
+    expect(vendorText).toMatch(/re-owes that cloud's person row/);
+    const askText = collapsed(ask ?? "");
+    for (const status of ["`held`", "`ran`", "`not-run`", "`not-installed`"]) {
+      expect(askText, `the ask line does not name the status ${status}`).toContain(status);
+    }
+    expect(askText).toContain("machine lock");
+    // The one ask-class client the script measures, read from the script itself.
+    expect(ASK_CLASS_CLIENTS).toEqual(["claude"]);
+    expect(askText).toMatch(/Claude Code is the one ask-class client it measures/);
+    expect(askText).toMatch(/moves to refusing before the tag/);
   });
 });

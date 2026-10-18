@@ -333,6 +333,24 @@ A sixth line rides the cut, before the tag: `node scripts/hook-latency.mjs` exit
 
 A further line rides the cut, before the tag, and takes no ordinal so the tag stays the seventh: re-read the digest of the `cloud-container` job's image (`node:24-bookworm`, pinned as `IMAGE` in `scripts/ci/cloud-leg.mjs`, the image every cloud profile of the leg runs) through the registry's HTTP API, with the command that constant's comment prints (no Docker needed), and when the tag now resolves to a newer build than the pinned digest, bump the digest and rewrite the comment's read date in a `main` commit before the tag; the release record states the digest read and whether it moved (added 2026-10-15, ledger row `2026-10-14_cli-native/review/115`, when the pin was found to have no update route; re-pointed 2026-10-18, when the pin left the job's `container:` key for the script). Runs when: every release, a patch included — a newer build of the same tag is registry state no diff shows.
 
+A further line rides the cut, before the tag, and takes no ordinal: re-read the vendor pages the
+capability matrix's cloud table cites (`CLIENT_CLOUD_FACTS` in `src/hooks/model.ts`, each row's
+`citation` with its read date). A page changed since its read date moves its row and the date in a
+`main` commit, and re-owes that cloud's person row (`P1` to `P3` of the QA form, measured with
+`scripts/qa/cloud-check.mjs`) at the next release; the release record names each page read and
+whether it moved (added 2026-10-18, REQ-PROVE-042, with `docs/cloud.md`). Runs when: every
+release, a patch included — a vendor page moves on the vendor's schedule, which no diff here shows.
+
+A further line rides the cut, before the tag, and takes no ordinal: under the machine lock, and
+never while an eval run is running, run `node scripts/qa/hook-runs.mjs --ask`, which measures how
+each installed client answers a hook's `ask` in its permissive mode and prints each client's row as
+`held`, `ran`, `not-run` or `not-installed`. Claude Code is the one ask-class client it measures,
+the only client whose guard asks for one click on a person-only act; the others are reported and
+refuse already. A client whose ask ran (`ran`) moves to refusing before the tag, in a `main` commit
+to the guard and its pages, and the release record carries the rows (added 2026-10-18, REQ-PROVE-042).
+Runs when: every release, a patch included — a client's own update changes its answer, and no diff
+here shows it.
+
 A seventh line is the tag itself, cut last, after every line above has landed: an annotated tag
 whose message names the records commit the release is gated on, as one line `records: <sha>`,
 `<sha>` being the records branch's tip after the cut's last records publish, read by its full ref
