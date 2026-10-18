@@ -19,6 +19,8 @@ import { parse } from "yaml";
 import { osvQueryBatch } from "../../scripts/advisory-check.mjs";
 // @ts-expect-error — import-safe native ESM CI helper with no type declarations, outside the product package.
 import { decide as classifyChange } from "../../scripts/ci/records-only.mjs";
+// @ts-expect-error — import-safe native ESM CI helper with no type declarations, outside the product package.
+import { IMAGE as CLOUD_LEG_IMAGE } from "../../scripts/ci/cloud-leg.mjs";
 import { CURATED_MCP_SERVERS, pinnedPackageSpec } from "../../src/mcp/catalog.ts";
 import { evaluateWorkflowExpression, type ExpressionContext } from "./workflowExpression.ts";
 
@@ -663,9 +665,10 @@ describe("ci.yml — the merge-blocking gate", () => {
   });
 
   // ADDED (2026-10-14, run 2026-10-14_cli-native, unit e11-ci-container-leg; REQ-PROVE-037). A
-  // cloud agent's machine is a Linux container with no user folders; this job is one, running the
-  // suite that drives every emitted hook command from below the root, with `node` present and
-  // absent (test/cloud/containerLeg.test.ts). It runs repository code, so what is pinned is what
+  // cloud agent's machine is a Linux container with no user folders; this job starts one per cloud
+  // profile (scripts/ci/cloud-leg.mjs, since unit v12-container-leg), each running the suite that
+  // drives every emitted hook command from below the root, with `node` present and absent
+  // (test/cloud/containerLeg.test.ts). It runs repository code, so what is pinned is what
   // it trusts: an image fixed by digest, a read-only token that the checkout does not keep, and no
   // secret or client account anywhere in the job.
   describe("the cloud container job", () => {
@@ -680,14 +683,18 @@ describe("ci.yml — the merge-blocking gate", () => {
       expect(job()["timeout-minutes"]).toBeLessThanOrEqual(30);
     });
 
-    it("runs inside node:24-bookworm pinned by digest, the full image that ships git", () => {
-      const container = (job() as WorkflowJob & { readonly container?: unknown }).container;
-      const image = typeof container === "string" ? container : (container as { readonly image?: unknown } | undefined)?.image;
+    // TEST CHANGE, justified (plan 021 file 2, unit v12-container-leg; REQ-PROVE-037 modified): the job held the image
+    // in `container:` and ran the suite inside it; a job inside `container:` cannot start `docker run --network none`,
+    // so the job now runs on the runner and `scripts/ci/cloud-leg.mjs` starts the image, pinned by digest there, once
+    // per cloud profile and once with no network. The pin's property moves with it: a digest, the full image, no
+    // `container:` key left to carry a second one.
+    it("holds no container: key and runs the image the leg script pins by digest, the full image that ships git", () => {
+      expect(Object.keys(job())).not.toContain("container");
       // A tag alone is a moving target: the image that runs is whatever the tag names that day.
       // The slim image ships no git, which `init` and the fixture's commit need.
-      expect(image).toMatch(/^node:24-bookworm@sha256:[0-9a-f]{64}$/);
-      // Nothing else in the container block: no credentials, no ports, no volume from the host.
-      expect(Object.keys(container as object)).toEqual(["image"]);
+      expect(CLOUD_LEG_IMAGE).toMatch(/^node:24-bookworm@sha256:[0-9a-f]{64}$/);
+      // No step names an image of its own beside the script's, and none reaches the Docker socket.
+      expect(JSON.stringify(job())).not.toMatch(/node:24|docker\.sock|services/);
     });
 
     it("holds a read-only token that its checkout does not keep, and no secret", () => {
@@ -701,15 +708,28 @@ describe("ci.yml — the merge-blocking gate", () => {
       expect(job().env).toBeUndefined();
     });
 
-    it("installs, builds, then runs the cloud suite with an empty HOME and no client probe", () => {
-      expect(steps().map((step) => step.name)).toEqual(["Checkout", "Install", "Build", "Cloud container suite"]);
-      // The image carries its own Node; a setup step would put the runner's toolchain back.
-      expect(steps().some((step) => (step.uses ?? "").startsWith("actions/setup-node@"))).toBe(false);
-      expect(runOf(steps(), "Install")).toBe("npm ci");
-      expect(runOf(steps(), "Build")).toBe("npm run build");
-      const suite = stepOf(steps(), "Cloud container suite");
-      expect(suite.env).toEqual({ STAMITY_NO_CLIENT_PROBE: "1" });
-      expect(suite.run?.trim().split("\n")).toEqual(['HOME="$(mktemp -d)"', "export HOME", "npx vitest run test/cloud"]);
+    // TEST CHANGE, justified (unit v12-container-leg, as above): the install, the build and the suite moved into the
+    // leg script, which builds on the host and runs the suite in each container with a fresh HOME and no client probe
+    // (test/ci/cloudLeg.test.ts pins those); the job sets up Node 24, the image's own major, so the tree the host builds
+    // is the one each container runs, then runs the script as its one step.
+    it("checks out, sets up Node 24, then runs the leg script as its one step", () => {
+      expect(steps().map((step) => step.name)).toEqual(["Checkout", "Set up Node", "Cloud leg"]);
+      const node = stepOf(steps(), "Set up Node");
+      expect(node.uses).toBe(stepOf(stepsOf(ci, "check"), "Set up Node ${{ matrix.node }}").uses);
+      expect(node.with).toEqual({ "node-version": "24", cache: "npm" });
+      expect(runOf(steps(), "Cloud leg")).toBe("node scripts/ci/cloud-leg.mjs");
+      expect(stepOf(steps(), "Cloud leg").env).toBeUndefined();
+    });
+
+    // ADDED (unit v12-container-leg; REQ-PROVE-037): the release checklist's per-release digest line re-reads the
+    // digest the leg runs, so it names the pin's new home rather than the job's retired `container:` key.
+    it("is the job whose digest the release checklist re-reads, at the leg script's pin", () => {
+      const checklist = readFileSync(join(REPO_ROOT, ".github", "release-controls-checklist.md"), "utf8");
+      const line = checklist.split("\n").find((text) => text.includes("re-read the digest of the `cloud-container` job's image"));
+      expect(line).toBeDefined();
+      expect(line).toContain("`IMAGE` in `scripts/ci/cloud-leg.mjs`");
+      expect(line).not.toContain("`.github/workflows/ci.yml`");
+      expect(line).toContain("Runs when: every release, a patch included");
     });
 
     it("is required by the aggregator", () => {

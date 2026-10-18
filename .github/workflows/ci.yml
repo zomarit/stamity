@@ -75,11 +75,14 @@
 #     mixing a `website` path with one in no lane, or a diff it could not read), the LTS leg also
 #     builds the docs site, last, with docs-site.yml's own steps.
 #   - `cloud-container`, one leg, beside `check` and under its condition, so it runs on the full
-#     side only. It imitates a cloud agent's machine: a Linux container (`node:24-bookworm`,
-#     pinned by digest) with an empty `HOME` and no client account, where the suite under
-#     `test/cloud/` runs every hook command `init` emits from the root and from below it, with
-#     `node` on PATH and without it, under each cloud session marker. The `check` legs run the same
-#     suite on the runner, the Windows shards through `cmd`.
+#     side only. It imitates a cloud agent's machine: `scripts/ci/cloud-leg.mjs` builds on the
+#     runner, then runs a Linux container (`node:24-bookworm`, pinned by digest in that script) once
+#     per cloud profile — Claude Code's, Cursor's and Copilot's, each with its marker and `HOME`
+#     shape — and once more with no network, the built tree mounted read-only, no client account and
+#     no Docker socket. In each, the suite under `test/cloud/` runs every hook command `init` emits
+#     from the root and from below it, with `node` on PATH and without it, asserts the profile's
+#     cloud line, and ends a run against a bare remote with a cloud's push rules and a `gh` stub.
+#     The `check` legs run the same suite on the runner, the Windows shards through `cmd`.
 #   - The aggregator itself. It is the ONE required status context THIS file exposes: the legs
 #     name themselves per leg, so a rule written against them binds names that rotate with the
 #     matrix.
@@ -458,48 +461,41 @@ jobs:
           retention-days: 7
 
   # A cloud agent's machine, imitated: the suite under `test/cloud/` inside a Linux container with
-  # no user folders. It carries `check`'s needs and condition, so it runs exactly where `check`
-  # does. The image is the full `node:24-bookworm`, not the slim one, which ships no git; it is
-  # pinned by the digest of its multi-platform index, read from Docker Hub on 2026-10-14 at
-  # 22:27:49 UTC. Re-read it when bumping, and rewrite this date:
-  #   curl -sI -H "Authorization: Bearer <token>" \
-  #     -H "Accept: application/vnd.oci.image.index.v1+json" \
-  #     https://registry-1.docker.io/v2/library/node/manifests/24-bookworm
-  # (the `docker-content-digest` header; the token from auth.docker.io's anonymous pull scope).
-  # The job runs repository code, so it holds a read-only token that the checkout does not keep,
-  # no secret and no client account. The image brings its own Node, so there is no setup step. The
-  # suite's `HOME` is a fresh empty folder, as on a cloud machine, and no client CLI is probed.
+  # no user folders, once per cloud profile and once with no network (`scripts/ci/cloud-leg.mjs`,
+  # REQ-PROVE-037, REQ-PROVE-039). It carries `check`'s needs and condition, so it runs exactly
+  # where `check` does. The job holds no `container:` key: a job inside one cannot start
+  # `docker run --network none`. So it runs on the runner, sets up Node 24 (the image's own major,
+  # so the tree built here is the one each container runs), and the script does the rest: `npm ci`
+  # and `npm run build` here, then `docker run` of the full `node:24-bookworm` (not the slim one,
+  # which ships no git), pinned by digest in the script, where the read date and the re-read
+  # command live. Each run mounts the built tree read-only, copies it to a writable folder inside,
+  # and gets no Docker socket, no host variable but the profile's, no secret and no client
+  # account. The job runs repository code, so it holds a read-only token that the checkout does
+  # not keep.
   cloud-container:
     name: cloud-container (a Linux container with no user folders)
     needs: [changes, prove-pr]
     if: "!cancelled() && needs.changes.result == 'success' && (needs.prove-pr.result == 'success' || needs.prove-pr.result == 'skipped') && needs.prove-pr.outputs.proven != 'true' && needs.changes.outputs.full != 'false'"
     runs-on: ubuntu-latest
-    # 20: an install, a build and one suite file, on the ubuntu runner a coverage leg's whole job
-    # takes 4.3-5.5 min on; not measured inside the container.
-    timeout-minutes: 20
+    # 30: an install, a build, the image's pull and four runs of the cloud suite, where the 20 it
+    # carried held one run; not yet measured on the runner.
+    timeout-minutes: 30
     permissions:
       contents: read
-    container:
-      image: node:24-bookworm@sha256:14078204b6bb268c107ceff6d3c43f45a888105e5c2b18b14c32b3409d93a1b0
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Install
-        run: npm ci
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
 
-      - name: Build
-        run: npm run build
-
-      - name: Cloud container suite
-        env:
-          STAMITY_NO_CLIENT_PROBE: '1'
-        run: |
-          HOME="$(mktemp -d)"
-          export HOME
-          npx vitest run test/cloud
+      - name: Cloud leg
+        run: node scripts/ci/cloud-leg.mjs
 
   # The short side, for a push or pull request whose every changed path falls in a lane. It
   # replaces `check` rather than running beside it, so its
