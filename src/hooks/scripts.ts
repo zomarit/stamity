@@ -3090,7 +3090,10 @@ if (outcome !== null) {
  */
 const GUARD_RUN_FOLDERS_MAX = 2_000;
 
-/** Ceilings on the tag names the guard collects and the `packed-refs` file it reads. */
+/**
+ * Ceilings on the tag names the guard collects and the `packed-refs` file it reads; past either the read faults
+ * (`TAG_NAMES_OVER_<max>`, `PACKED_REFS_OVER_<max>`, pr/95), which the guard refuses on, as past the run-folder one.
+ */
 const GUARD_TAG_NAMES_MAX = 10_000;
 const GUARD_PACKED_REFS_MAX_BYTES = 8_388_608;
 
@@ -3618,9 +3621,19 @@ function contextsOf(command, cwd) {
   return [...contexts.values()];
 }
 `}${String.raw`
-/** The local tag names, loose and packed, up to TAG_NAMES_MAX. */
+/**
+ * The local tag names, loose and packed. A further tag past TAG_NAMES_MAX, or a packed-refs file past
+ * PACKED_REFS_MAX_BYTES, faults with a coded error the guard refuses on (pr/95), so a cut-off list never reads as
+ * every tag there is; the throws sit outside the reads' catches.
+ */
 function localTags(commonDir) {
-  const tags = [];
+  // A name both loose and packed counts once.
+  const tags = new Set();
+  const add = (name, path) => {
+    if (tags.has(name)) return;
+    if (tags.size >= TAG_NAMES_MAX) throw Object.assign(new Error("tag names"), { code: "TAG_NAMES_OVER_" + TAG_NAMES_MAX, path });
+    tags.add(name);
+  };
   const walk = (dir, prefix) => {
     let entries = [];
     try {
@@ -3629,25 +3642,29 @@ function localTags(commonDir) {
       return;
     }
     for (const entry of entries) {
-      if (tags.length >= TAG_NAMES_MAX) return;
       if (entry.isDirectory()) walk(join(dir, entry.name), prefix + entry.name + "/");
-      else if (entry.isFile()) tags.push(prefix + entry.name);
+      else if (entry.isFile()) add(prefix + entry.name, dir);
     }
   };
   walk(join(commonDir, "refs", "tags"), "");
+  const packed = join(commonDir, "packed-refs");
+  let text = "";
+  let size = 0;
   try {
-    const packed = join(commonDir, "packed-refs");
     const stats = lstatSync(packed);
-    if (stats.isFile() && stats.size <= PACKED_REFS_MAX_BYTES) {
-      for (const line of readFileSync(packed, "utf8").split(/\r?\n/)) {
-        const hit = /^[0-9a-f]{40,64} refs\/tags\/(.+)$/i.exec(line);
-        if (hit !== null && tags.length < TAG_NAMES_MAX) tags.push(hit[1]);
-      }
-    }
+    if (stats.isFile()) size = stats.size;
+    if (stats.isFile() && size <= PACKED_REFS_MAX_BYTES) text = readFileSync(packed, "utf8");
   } catch {
     // No packed refs: the loose tags are all there are.
   }
-  return tags;
+  if (size > PACKED_REFS_MAX_BYTES) {
+    throw Object.assign(new Error("packed refs"), { code: "PACKED_REFS_OVER_" + PACKED_REFS_MAX_BYTES, path: packed });
+  }
+  for (const line of text.split(/\r?\n/)) {
+    const hit = /^[0-9a-f]{40,64} refs\/tags\/(.+)$/i.exec(line);
+    if (hit !== null) add(hit[1], packed);
+  }
+  return [...tags];
 }
 
 /** A record's status and mode from its first HEAD_LINES lines; null when absent or not a regular file. */

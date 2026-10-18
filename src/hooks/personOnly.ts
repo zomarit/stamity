@@ -7,7 +7,7 @@
  * implied by a refspec-less push or `HEAD` while on it), a remote branch
  * deletion, a tag, a merge or a review approval, `gh pr ready`, a release, a publish, a secret,
  * variable, protection or ruleset write, a write to the repository itself (its
- * default branch, visibility or name, its deletion, archiving or transfer) and a branch
+ * default branch, visibility or name, its deletion, archiving or unarchiving, or transfer) and a branch
  * rename. {@link personOnlyVerdict} reads a
  * command line for them; {@link CLAUDE_DENY_ROWS} is the part a Claude Code
  * prefix rule can say, so the settings layer and the guard agree.
@@ -96,7 +96,7 @@ export const PERSON_ONLY_RULES: readonly PersonOnlyRule[] = [
   { id: "secrets", act: "writing a secret or a variable (`gh secret`, `gh variable` beyond list, their REST paths)" },
   {
     id: "protection",
-    act: "writing branch protection, a ruleset or a custom property a ruleset can target by, renaming a branch, or writing the repository itself (`gh repo edit --default-branch` or `--visibility`, `gh repo rename`, `gh repo delete`, `gh repo archive`, a transfer, a REST PATCH or DELETE on the repository)",
+    act: "writing branch protection, a ruleset or a custom property a ruleset can target by, renaming a branch, or writing the repository itself (`gh repo edit --default-branch` or `--visibility`, `gh repo rename`, `gh repo delete`, `gh repo archive` or `gh repo unarchive`, a transfer, a REST PATCH or DELETE on the repository)",
   },
 ];
 
@@ -186,6 +186,7 @@ export const CLAUDE_DENY_ROWS: readonly string[] = [
   "Bash(gh repo rename:*)",
   "Bash(gh repo delete:*)",
   "Bash(gh repo archive:*)",
+  "Bash(gh repo unarchive:*)",
   "Bash(gh repo transfer:*)",
   "mcp__github__merge_pull_request",
   "mcp__github__push_files",
@@ -639,7 +640,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   /**
    * An HTTP call's method (the tool's default unless a flag or a body sets it), whether that is a write, and each
    * target's path below its repository or organisation (`repos/<o>/<r>/` cut), without scheme, host, query or a
-   * trailing slash and with its percent-encoding decoded (build/76); the repository's own path stays whole. `next` is
+   * trailing slash and with its percent-encoding decoded (build/76), read a second time with its dot segments resolved
+   * (pr/93); the repository's own path stays whole. `next` is
    * the call after curl's `--next` (pr/72).
    */
   function httpCall(raw: string[]): { write: boolean; method: string; paths: string[]; cmd: string[]; next: string[] | null } {
@@ -774,19 +776,35 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     if (method !== null && /[$`]/.test(method)) hidden();
     if (tool === "curl" && (write || body) && !globoff && targets.some((target) => /[{[]/.test(target))) hidden();
     if (tool === "wget" && write && inputFile) hidden();
-    const paths = targets.map((target) =>
-      (target
+    // Each target read twice (pr/93): as written, and with its dot segments resolved (RFC 3986 §5.2.4), as curl sends
+    // it unless `--path-as-is` is set, `api/v3/` cut again from the resolved one. A rule matching either denies, so the
+    // second reading only adds denials, whatever the tool does with the segments.
+    const resolved = (path: string): string => {
+      const segments = path.split("/");
+      const kept: string[] = [];
+      segments.forEach((segment, index) => {
+        if (segment === "..") kept.pop();
+        else if (segment !== ".") kept.push(segment);
+        if ((segment === "." || segment === "..") && index === segments.length - 1) kept.push("");
+      });
+      return kept.join("/").replace(/^\/+/, "").replace(/^api\/v3\//i, "");
+    };
+    const paths = targets.flatMap((target) => {
+      const decoded = (target
         .replace(/^[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/]*/, "")
         .replace(/^[\w-]+(\.[\w-]+)+(:\d+)?(?=\/)/, "")
         .replace(/^\/+/, "")
         .replace(/^api\/v3\//i, "")
         .split(/[?#]/)[0] ?? "")
-        .replace(/%([0-9A-Fa-f]{2})/g, (_, hex: string) => String.fromCharCode(Number.parseInt(hex, 16)))
-        // A trailing slash dropped first, so the bare repository path stays `repos/<o>/<r>` (or `repositories/<id>`).
-        .replace(/\/+$/, "")
-        .replace(/^repos\/[^/]+\/[^/]+\//i, "")
-        .replace(/^(orgs|enterprises|users|repositories)\/[^/]+\//i, ""),
-    );
+        .replace(/%([0-9A-Fa-f]{2})/g, (_, hex: string) => String.fromCharCode(Number.parseInt(hex, 16)));
+      return [...new Set([decoded, resolved(decoded)])].map((path) =>
+        path
+          // A trailing slash dropped first, so the bare repository path stays `repos/<o>/<r>` (or `repositories/<id>`).
+          .replace(/\/+$/, "")
+          .replace(/^repos\/[^/]+\/[^/]+\//i, "")
+          .replace(/^(orgs|enterprises|users|repositories)\/[^/]+\//i, ""),
+      );
+    });
     return { write, method: verb, paths, cmd: cmd.slice(0, end), next };
   }
   // </shell-reading>
@@ -1008,8 +1026,32 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     if ((group === "secret" || group === "variable") && sub !== undefined && !["list", "ls"].includes(sub)) {
       return deny("secrets", `A ${group} write (\`gh ${group}\`)`);
     }
-    if (group === "repo" && (sub === "delete" || sub === "archive" || sub === "rename" || sub === "transfer")) {
+    // Unarchiving makes the repository take writes again, as the GraphQL and REST twins do (pr/96).
+    if (group === "repo" && ["delete", "archive", "unarchive", "rename", "transfer"].includes(sub ?? "")) {
       return deny("protection", `A repository ${sub} (\`gh repo ${sub}\`)`);
+    }
+    // `gh repo sync` with a destination repository updates that repository's branch, the default one unless
+    // `--branch` names another, a fast-forward or under `--force` a hard reset (pr/94): the twins of the REST
+    // `merge-upstream` and forced ref update. With none it syncs the local checkout, which writes nothing remote.
+    if (group === "repo" && sub === "sync") {
+      const words: string[] = [];
+      const branches: string[] = [];
+      for (let k = 1; k < cmd.length; k += 1) {
+        const word = cmd[k] ?? "";
+        if (word === "-b" || word === "--branch") branches.push(cmd[(k += 1)] ?? "");
+        else if (word.startsWith("--branch=")) branches.push(word.slice(9));
+        else if (/^-b./.test(word)) branches.push(word.slice(2).replace(/^=/, ""));
+        else if (["-R", "--repo", "-s", "--source"].includes(word)) k += 1;
+        else if (!word.startsWith("-")) words.push(word);
+      }
+      // `repo`, `sync`, then the destination.
+      if (words.length > 2) {
+        if (flag("--force", "", "")) return deny("force-push", "A forced sync of a repository (`gh repo sync --force`)");
+        // A branch flag whose value the line ends before, an unquoted substitution having cut it, shows none.
+        if (branches.length === 0 || branches.some((name) => name === "" || /[$`]/.test(name) || defaults.has(branch(name)))) {
+          return deny("push-default", "A sync of a repository's default branch, or of a branch the line cannot show (`gh repo sync`)");
+        }
+      }
     }
     if (group === "repo" && sub === "edit" && cmd.some((word) => /^--default-branch(=|$)/.test(word))) {
       return deny("protection", "A default-branch change (`gh repo edit --default-branch`)");
@@ -1749,7 +1791,8 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
   /**
    * An HTTP call's method (the tool's default unless a flag or a body sets it), whether that is a write, and each
    * target's path below its repository or organisation (`repos/<o>/<r>/` cut), without scheme, host, query or a
-   * trailing slash and with its percent-encoding decoded (build/76); the repository's own path stays whole. `next` is
+   * trailing slash and with its percent-encoding decoded (build/76), read a second time with its dot segments resolved
+   * (pr/93); the repository's own path stays whole. `next` is
    * the call after curl's `--next` (pr/72).
    */
   function httpCall(raw: string[]): { write: boolean; method: string; paths: string[]; cmd: string[]; next: string[] | null } {
@@ -1884,19 +1927,35 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
     if (method !== null && /[$`]/.test(method)) hidden();
     if (tool === "curl" && (write || body) && !globoff && targets.some((target) => /[{[]/.test(target))) hidden();
     if (tool === "wget" && write && inputFile) hidden();
-    const paths = targets.map((target) =>
-      (target
+    // Each target read twice (pr/93): as written, and with its dot segments resolved (RFC 3986 §5.2.4), as curl sends
+    // it unless `--path-as-is` is set, `api/v3/` cut again from the resolved one. A rule matching either denies, so the
+    // second reading only adds denials, whatever the tool does with the segments.
+    const resolved = (path: string): string => {
+      const segments = path.split("/");
+      const kept: string[] = [];
+      segments.forEach((segment, index) => {
+        if (segment === "..") kept.pop();
+        else if (segment !== ".") kept.push(segment);
+        if ((segment === "." || segment === "..") && index === segments.length - 1) kept.push("");
+      });
+      return kept.join("/").replace(/^\/+/, "").replace(/^api\/v3\//i, "");
+    };
+    const paths = targets.flatMap((target) => {
+      const decoded = (target
         .replace(/^[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/]*/, "")
         .replace(/^[\w-]+(\.[\w-]+)+(:\d+)?(?=\/)/, "")
         .replace(/^\/+/, "")
         .replace(/^api\/v3\//i, "")
         .split(/[?#]/)[0] ?? "")
-        .replace(/%([0-9A-Fa-f]{2})/g, (_, hex: string) => String.fromCharCode(Number.parseInt(hex, 16)))
-        // A trailing slash dropped first, so the bare repository path stays `repos/<o>/<r>` (or `repositories/<id>`).
-        .replace(/\/+$/, "")
-        .replace(/^repos\/[^/]+\/[^/]+\//i, "")
-        .replace(/^(orgs|enterprises|users|repositories)\/[^/]+\//i, ""),
-    );
+        .replace(/%([0-9A-Fa-f]{2})/g, (_, hex: string) => String.fromCharCode(Number.parseInt(hex, 16)));
+      return [...new Set([decoded, resolved(decoded)])].map((path) =>
+        path
+          // A trailing slash dropped first, so the bare repository path stays `repos/<o>/<r>` (or `repositories/<id>`).
+          .replace(/\/+$/, "")
+          .replace(/^repos\/[^/]+\/[^/]+\//i, "")
+          .replace(/^(orgs|enterprises|users|repositories)\/[^/]+\//i, ""),
+      );
+    });
     return { write, method: verb, paths, cmd: cmd.slice(0, end), next };
   }
   // </shell-reading>

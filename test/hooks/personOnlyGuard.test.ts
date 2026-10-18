@@ -13,7 +13,8 @@
  * everything, or nothing, fails.
  */
 import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { gitignoreLine } from "../../src/cli/commands/init/panel.ts";
 import { PREFLIGHT_CANARY_FILE, REQUIRED_GITIGNORE_ENTRIES } from "../../src/mcp/env.ts";
@@ -196,6 +197,16 @@ const MATRIX: readonly (readonly [command: string, rule: string | null])[] = [
   // curl's method option through a unique prefix (pr/84).
   ["curl --req DELETE https://api.github.com/repos/o/r/git/refs/heads/feat", "push-delete"],
   ["curl --sil https://api.github.com/repos/o/r/git/refs/heads/feat", null],
+  // PR #112's resolution round 5, each beside its neighbour: a path's dot segments resolved (pr/93), `gh repo sync` onto
+  // a named repository (pr/94), `gh repo unarchive` (pr/96).
+  ["curl -X DELETE https://api.github.com/repos/o/r/tmp/../git/refs/heads/feature", "push-delete"],
+  ["curl https://api.github.com/repos/o/r/tmp/../git/refs/heads/feature", null],
+  ["gh repo sync o/r", "push-default"],
+  ["gh repo sync o/r --force", "force-push"],
+  ["gh repo sync o/r --branch feat/y", null],
+  ["gh repo sync", null],
+  ["gh repo unarchive o/r --yes", "protection"],
+  ["gh repo view o/r", null],
 ];
 
 describe("the person-only guard, on every client", () => {
@@ -342,6 +353,50 @@ describe("the local tags read only for a push (review/218)", () => {
     expect(tagPush.status).toBe(2);
     expect(tagPush.stderr).toContain("tags listed\n");
     expect(tagPush.stderr).toContain("push-tags");
+  });
+});
+
+describe("the local tags past their ceilings (pr/95)", () => {
+  /** `packed-refs` text naming `count` tags, `t0` up. */
+  const packed = (count: number): string =>
+    ["# pack-refs with: peeled fully-peeled sorted", ...Array.from({ length: count }, (_, n) => `${"a".repeat(40)} refs/tags/t${n}`), ""].join("\n");
+  const CANNOT = (code: string): Decision => ({ deny: true, reason: expect.stringContaining(`could not decide this shell call (${code} on `) });
+  // The calls that read no tag: a status, a fetch, a refspec-less push off the default branch.
+  const NO_TAGS = ["git status", "git fetch origin", "git push"];
+
+  it.each(TOOLS)("%s: reads exactly 10,000 tags whole, and refuses a refspec push past them, naming the code", async (tool) => {
+    // One loose tag and 9,999 packed ones: the ceiling, every one read, the last packed one among them.
+    const guard = await placeGuard(tool, { ".git/refs/tags/v1.0.0": "0".repeat(40), ".git/packed-refs": packed(9_999) });
+    expect(decide(tool, guard, "git push origin t9998")).toMatchObject({ deny: true, reason: expect.stringContaining("push-tags") });
+    expect(decide(tool, guard, "git push origin v9.9.9").deny).toBe(false);
+    // A packed tag also loose counts once, so the list is still at the ceiling.
+    await getRepo().seedFiles({ ".git/refs/tags/t0": "0".repeat(40) });
+    expect(decide(tool, guard, "git push origin t9998")).toMatchObject({ deny: true, reason: expect.stringContaining("push-tags") });
+    // One packed tag more.
+    await getRepo().seedFiles({ ".git/packed-refs": packed(10_000) });
+    for (const command of ["git push origin t9999", "git push origin v9.9.9"]) {
+      expect(decide(tool, guard, command), command).toEqual(CANNOT("TAG_NAMES_OVER_10000"));
+    }
+    for (const command of NO_TAGS) expect(decide(tool, guard, command).deny, command).toBe(false);
+  });
+
+  it.each(TOOLS)("%s: refuses a refspec push past 10,001 loose tags, naming the code, and no call that reads none", async (tool) => {
+    const guard = await placeGuard(tool);
+    const dir = getRepo().path(".git", "refs", "tags");
+    mkdirSync(dir, { recursive: true });
+    for (let n = 0; n <= 10_000; n += 1) writeFileSync(join(dir, `t${n}`), "0".repeat(40));
+    expect(decide(tool, guard, "git push origin v9.9.9")).toEqual(CANNOT("TAG_NAMES_OVER_10000"));
+    for (const command of NO_TAGS) expect(decide(tool, guard, command).deny, command).toBe(false);
+  });
+
+  it.each(TOOLS)("%s: refuses a refspec push when packed-refs is past 8 MiB, naming the code", async (tool) => {
+    const guard = await placeGuard(tool, { ".git/packed-refs": packed(1) });
+    expect(decide(tool, guard, "git push origin t0")).toMatchObject({ deny: true, reason: expect.stringContaining("push-tags") });
+    // The same file one byte past the ceiling.
+    const text = packed(1);
+    await getRepo().seedFiles({ ".git/packed-refs": text + "#".repeat(8_388_609 - text.length) });
+    expect(decide(tool, guard, "git push origin v9.9.9")).toEqual(CANNOT("PACKED_REFS_OVER_8388608"));
+    for (const command of NO_TAGS) expect(decide(tool, guard, command).deny, command).toBe(false);
   });
 });
 

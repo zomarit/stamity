@@ -626,6 +626,39 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["curl --form-s event=APPROVE https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
   ["curl -X DELETE https://api.github.com/repos/o/r/git/refs/heads/feat --nex -X GET https://example.com", "push-delete"],
   ["curl --ur https://api.github.com/repos/o/r/releases/1 --req DELETE", "release"],
+  // PR #112's resolution round 5. A path read with its dot segments resolved as well as written, as curl sends it
+  // (pr/93): a ref deletion through `..` and through `.`, the default branch's ref, the repository path climbing out of
+  // another repository's, a `..` past the end, percent-encoded dots, wget's and a GHES `api/v3/` path, a merge and
+  // GraphQL.
+  ["curl -X DELETE https://api.github.com/repos/o/r/tmp/../git/refs/heads/feature", "push-delete"],
+  ["curl -X DELETE https://api.github.com/repos/o/r/./git/refs/heads/feature", "push-delete"],
+  ["gh api -X PATCH repos/o/r/x/../git/refs/heads/main -f sha=abc", "push-default"],
+  ["gh api -X PATCH repos/x/y/../../o/r -f archived=true", "protection"],
+  ["gh api -X PATCH repos/o/r/git/refs/heads/main/x/.. -f sha=abc", "push-default"],
+  ["gh api -X DELETE repos/o/r/tmp/%2e%2e/git/refs/heads/feat", "push-delete"],
+  ["wget --method=DELETE https://api.github.com/repos/o/r/a/b/../../git/refs/heads/feat", "push-delete"],
+  ["curl -X DELETE https://ghe.example/x/../api/v3/repos/o/r/git/refs/heads/feat", "push-delete"],
+  ["gh api -X PUT repos/o/r/x/../pulls/3/merge", "pr-merge"],
+  ["gh api x/../graphql -f query='mutation { mergePullRequest(input: {pullRequestId: \"x\"}) { clientMutationId } }'", "pr-merge"],
+  // `gh repo sync` onto a named repository (pr/94): no branch, a default branch or one the line cannot show is the
+  // default branch's update, `--force` its hard reset; the branch and source values skipped when finding the repository.
+  ["gh repo sync o/r", "push-default"],
+  ["gh repo sync o/r --branch main", "push-default"],
+  ["gh repo sync o/r -b master", "push-default"],
+  ["gh repo sync o/r --branch=main", "push-default"],
+  ["gh repo sync o/r -bmain", "push-default"],
+  ["gh repo sync -b main o/r", "push-default"],
+  ["gh repo sync o/r --branch \"$B\"", "push-default"],
+  ["gh repo sync o/r --branch `cat b`", "push-default"],
+  ["gh repo sync o/r --source up/r", "push-default"],
+  ["gh repo sync o/r -b trunk", "push-default", ON_TRUNK],
+  ["gh repo sync o/r --force", "force-push"],
+  ["gh repo sync o/r --force --branch feat/x", "force-push"],
+  ["gh repo sync -s up/r o/r -b feat/x --force", "force-push"],
+  // `gh repo unarchive`, the twin of `archive` and of the GraphQL and REST unarchive (pr/96).
+  ["gh repo unarchive o/r --yes", "protection"],
+  ["gh repo unarchive", "protection"],
+  ["gh repo unarchive -R o/r --yes", "protection"],
 ];
 
 const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
@@ -908,6 +941,24 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
   ["curl https://a.example --nex https://b.example"],
   ["curl --ur https://api.github.com/repos/o/r/releases/1"],
   ["curl --glo -X PATCH -d '{\"sha\":\"abc\"}' 'https://api.github.com/repos/o/r/git/refs/heads/{feature,main}'"],
+  // pr/93's twins: a read through a dot segment, and a write whose resolved path no rule names.
+  ["curl https://api.github.com/repos/o/r/tmp/../git/refs/heads/main"],
+  ["gh api repos/x/y/../../o/r"],
+  ["gh api -X PATCH repos/o/r/git/../issues/3 -f title=x"],
+  ["curl -X POST -d '{\"body\":\"x\"}' https://api.github.com/repos/o/r/pulls/../issues/3/comments"],
+  // pr/94's twins: a sync of the local checkout (no repository named), forced or naming a branch or a source, and a
+  // named repository's other branch without `--force`.
+  ["gh repo sync"],
+  ["gh repo sync --force"],
+  ["gh repo sync --branch main"],
+  ["gh repo sync -b feat/x --force"],
+  ["gh repo sync --source up/r"],
+  ["gh repo sync -s up/r -b main"],
+  ["gh repo sync o/r --branch feat/x"],
+  ["gh repo sync --branch feat/x o/r"],
+  ["gh repo sync o/r --branch feat/x --force=false"],
+  // pr/96's twins: the repository read.
+  ["gh repo view o/r --json isArchived"],
 ];
 
 describe("personOnlyVerdict — the deny matrix", () => {
@@ -1391,6 +1442,10 @@ describe("unattendedPushVerdict", () => {
     // A pull request moved, and one opened, through curl's long-option prefixes (pr/84).
     ["curl --req PATCH https://api.github.com/repos/o/r/pulls/3"],
     ["curl --dat '{\"title\":\"x\",\"head\":\"a\",\"base\":\"main\"}' https://api.github.com/repos/o/r/pulls"],
+    // A contents write and a pull request moved through a dot segment, read resolved as curl sends it (pr/93).
+    ["gh api -X PUT repos/o/r/x/../contents/a.yml"],
+    ["curl -X PATCH https://api.github.com/repos/o/r/tmp/../pulls/3"],
+    ["gh api -X PUT repos/o/r/./git/refs/heads/feat"],
   ])("denies %j, naming the run verbs", (command) => {
     const verdict = unattendedPushVerdict(command);
     expect(verdict.deny).toBe(true);
@@ -1568,6 +1623,9 @@ describe("unattendedPushVerdict", () => {
     ["gh api -i repos/o/r/pulls/3"],
     // pr/84's twin: the pull request read through a prefix of a no-value option.
     ["curl --sil https://api.github.com/repos/o/r/pulls/3"],
+    // pr/93's twins: the same contents read through a dot segment, and a reply whose resolved path is a comments one.
+    ["gh api repos/o/r/x/../contents/a.yml"],
+    ["gh api -X POST repos/o/r/x/../issues/3/comments -F body=@reply.md"],
   ])("allows %j", (command) => {
     expect(unattendedPushVerdict(command)).toEqual({ deny: false });
   });
@@ -1604,6 +1662,12 @@ describe("CLAUDE_DENY_ROWS", () => {
       "mcp__github__create_pull_request",
     ]);
     expect(CLAUDE_DENY_ROWS.slice(BASH_ROWS.length)).toEqual(MCP_ROWS);
+  });
+
+  it("holds unarchiving beside archiving, since both change whether the repository takes writes (pr/96)", () => {
+    const at = CLAUDE_DENY_ROWS.indexOf("Bash(gh repo archive:*)");
+    expect(at).toBeGreaterThan(-1);
+    expect(CLAUDE_DENY_ROWS[at + 1]).toBe("Bash(gh repo unarchive:*)");
   });
 
   it("names the GitHub MCP server by the key the engine writes it under", () => {
