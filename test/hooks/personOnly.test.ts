@@ -1548,6 +1548,71 @@ describe("unattendedPushVerdict — a run verb stands alone on its line (v0b, RE
     expectRefused(unattendedPushVerdict(command, true), broke);
   });
 
+  // review/93: `package.json` declares a second bin, `st`, for the same CLI. Each launch route the rows above cover for
+  // `stamity` holds under `st`, and so does a launcher outside the reading's wrappers and runners, which only the text
+  // backstop names.
+  const ST = "st run end --run x";
+  it.each([
+    ["setopt -a; : ${GIT_CONFIG_GLOBAL=/tmp/c}; " + ST, "an unquoted `;`"],
+    ["bash -a -c ': ${GIT_CONFIG_GLOBAL=/tmp/c}; " + ST + "'", "a first word other than `stamity`, `st` or `npx`"],
+    ["readonly GIT_EXEC_PATH=/tmp/bin; " + ST, "an unquoted `;`"],
+    ["select GIT_EXEC_PATH in /tmp/bin; do " + ST + "; done", "an unquoted `;`"],
+    ["print -v GIT_EXEC_PATH /tmp/bin; " + ST, "an unquoted `;`"],
+    ["foreach GIT_EXEC_PATH (/tmp/bin) " + ST + "; end", "an unquoted `(`"],
+    [": ${GIT_EXEC_PATH:=/tmp/bin} && " + ST, "an unquoted `$`"],
+    ["source /tmp/env.sh && " + ST, "an unquoted `&`"],
+    ["sh -c '" + ST + "'", "a first word other than `stamity`, `st` or `npx`"],
+    ["echo $(" + ST + ")", "an unquoted `$`"],
+    [ST + " &", "an unquoted `&`"],
+    [ST + " > out.txt", "an unquoted `>`"],
+    [ST + " 2>&1 2>&1", "an unquoted `>`"],
+    ["env -u GIT_EXEC_PATH " + ST, "a first word other than `stamity`, `st` or `npx`"],
+    ["NODE_OPTIONS=--require=/tmp/x.js " + ST, "a first word other than `stamity`, `st` or `npx`"],
+    [ST + "\nnpm test", "a line break"],
+    ["st run end --run \"$RUN\"", "inside double quotes"],
+    ["npx st run end --run x", "an `npx` call whose first word is not"],
+    ["npx --no st run end --run x", "an `npx` option or package other than"],
+    ["st --verbose run end --run x", "words between the program and `run <verb>`"],
+    // Launchers the reading does not unwrap: only the backstop names the verb.
+    ["parallel " + ST, "a first word other than `stamity`, `st` or `npx`"],
+    ["watch " + ST, "a first word other than `stamity`, `st` or `npx`"],
+    ["strace -f " + ST, "a first word other than `stamity`, `st` or `npx`"],
+    ["flock /tmp/l " + ST, "a first word other than `stamity`, `st` or `npx`"],
+    ["unbuffer ./node_modules/.bin/st run end --run x", "a first word other than `stamity`, `st` or `npx`"],
+  ])("refuses %j under the second bin, naming what broke the shape (review/93)", (command, broke) => {
+    expectRefused(unattendedPushVerdict(command), broke);
+    expect(personOnlyVerdict(command, ON_FEATURE)).toEqual({ deny: false });
+  });
+
+  it.each([
+    ["Set-Content env:GIT_EXEC_PATH C:/tmp; " + ST, "an unquoted `;`"],
+    ["Add-Content env:GIT_EXEC_PATH C:/tmp; " + ST, "an unquoted `;`"],
+    ["Copy-Item env:PATH env:GIT_EXEC_PATH; " + ST, "an unquoted `;`"],
+    ["Rename-Item env:OTHER GIT_EXEC_PATH; " + ST, "an unquoted `;`"],
+    ["Set-Item env:/GIT_EXEC_PATH C:/tmp; " + ST, "an unquoted `;`"],
+    ["Start-Process -Environment @{GIT_EXEC_PATH='C:/tmp'} st -ArgumentList 'run end --run x'", "an unquoted `{`"],
+    ["Start-Process -Environment @{GIT_EXEC_PATH='C:/tmp'} npx -ArgumentList '--no st run end --run x'", "an unquoted `{`"],
+    ["Set-Content env:GIT_EXEC_PATH C:/tmp; Start-Process -FilePath st.cmd -ArgumentList 'run','end'", "an unquoted `;`"],
+    ["pwsh -Command '" + ST + "'", "a first word other than `stamity`, `st` or `npx`"],
+    ["& " + ST, "an unquoted `&`"],
+    [ST + " --%", "stop-parsing"],
+    [ST + " --title 'a" + RSQ + "; Remove-Item x; " + RSQ + "b'", "a typographic quote"],
+  ])("refuses the PowerShell line %j under the second bin, read as PowerShell (review/93)", (command, broke) => {
+    expectRefused(unattendedPushVerdict(command, true), broke);
+  });
+
+  it("reads a line that opens on a substitution once, not as its own nested line (review/94)", () => {
+    // A program word holding a blank (the substitution read as a word) is read as a line of its own unless it is the
+    // line itself; without that guard the reading recurses to its depth cap and refuses on every client.
+    for (const command of ["$(echo git status) --short", "`echo git status` --short", "$(npm test)"]) {
+      expect(personOnlyVerdict(command, ON_FEATURE), command).toEqual({ deny: false });
+      expect(unattendedPushVerdict(command), command).toEqual({ deny: false });
+    }
+    // The twin: the same opening still shows an act the substitution holds.
+    expect(personOnlyVerdict("$(git push --force origin feat/x) --short", ON_FEATURE)).toMatchObject({ deny: true, rule: "force-push" });
+    expect(unattendedPushVerdict("$(git push origin feat/x) --short").deny).toBe(true);
+  });
+
   it.each([
     ["npx --no stamity run end --run x"],
     ["npx --no-yes stamity run checkpoint --run x"],

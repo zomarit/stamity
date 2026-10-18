@@ -2487,10 +2487,13 @@ export function unattendedPushVerdict(command: string, powershell = false): Unat
     return writes && keys.some((key) => /^(?:remote|url)(\.|$)/i.test(key));
   }
 
-  /** The run verbs, and a text naming one beside the package (`stamity`, the CLI file, a pinned `@<semver>`). */
+  /**
+   * The run verbs, and a text naming one beside the package: either bin `package.json` declares (`stamity`, and `st` as
+   * a word, review/93), the CLI file, a pinned `@<semver>`.
+   */
   const RUN_VERBS = new Set(["start", "checkpoint", "end"]);
   const namesVerb = (text: string): boolean =>
-    /\brun\W+(?:start|checkpoint|end)\b/i.test(text) && /stamity|\bcli\.m?js\b|@\d+\.\d+\.\d+/i.test(text);
+    /\brun\W+(?:start|checkpoint|end)\b/i.test(text) && /stamity|\bst\b|\bcli\.m?js\b|@\d+\.\d+\.\d+/i.test(text);
   /** npm's per-scope registry URL, as `REGISTRY_URL` in `src/shared/cliCall.ts` reads one. */
   const REGISTRY_URL = /^https:\/\/[A-Za-z0-9.-]+(?::(?:[1-9]\d{0,3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-5]))?(?:\/[A-Za-z0-9._~/-]*)?$/;
   /** A pinned package: a runnable npm name, then `@` and a semver-shaped version (`src/shared/cliCall.ts`). */
