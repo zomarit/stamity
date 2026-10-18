@@ -1,7 +1,7 @@
 import { execFile, spawn } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
-import { basename, join } from "node:path";
+import { basename, delimiter, join } from "node:path";
 import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { personOnlyVerdict } from "../../src/hooks/personOnly.ts";
@@ -279,6 +279,8 @@ const execFileAsync = promisify(execFile);
 let fixture: CliFixture;
 let root: string;
 let rows: HookRow[];
+/** The npm and npx stubs' call log ({@link writeNpmStubs}). */
+let stubLog: string;
 const results = new Map<string, CliRunResult>();
 
 const keyOf = (node: string, marker: string, folder: string, index: number): string =>
@@ -353,6 +355,26 @@ function nodeFreePath(empty: string): string {
   return ["/usr/bin", "/bin"].some((dir) => existsSync(join(dir, "node"))) ? empty : "/usr/bin:/bin";
 }
 
+/** Claude Code's cloud readiness hook, which starts `npm ci` and `npx` under the claude-cloud marker. */
+const READINESS = "stamity-cloud-readiness";
+
+/**
+ * review/90: `npm` and `npx` stubs for the readiness hook's runs, first on their PATH, so the hook reaches no
+ * registry and its output does not hang on one. Each stub logs its name and arguments, one line a call, to
+ * `calls.log` beside it and exits 0. POSIX only, as Claude Code's commands run on the POSIX legs alone.
+ */
+function writeNpmStubs(dir: string): string {
+  mkdirSync(dir, { recursive: true });
+  const log = join(dir, "calls.log");
+  writeFileSync(log, "");
+  const quoted = `'${log.replace(/'/g, `'\\''`)}'`;
+  for (const name of ["npm", "npx"]) {
+    writeFileSync(join(dir, name), `#!/bin/sh\nprintf '%s\\n' "${name} $*" >> ${quoted}\nexit 0\n`);
+    chmodSync(join(dir, name), 0o755);
+  }
+  return log;
+}
+
 /** The child env for one hook run: the harness's fresh env, one PATH key, the marker on top. */
 function hookEnv(path: string, marker: Readonly<Record<string, string>>): Record<string, string> {
   const env = buildChildEnv(fixture.home, { CLAUDE_PROJECT_DIR: root, ...marker });
@@ -386,9 +408,14 @@ beforeAll(async () => {
   mkdirSync(join(root, "sub", "deeper"), { recursive: true });
   const empty = join(fixture.home.home, "no-node");
   mkdirSync(empty, { recursive: true });
+  const stubs = join(fixture.home.home, "npm-stubs");
+  stubLog = writeNpmStubs(stubs);
 
   rows = hookRows(root);
   const paths = { present: process.env["PATH"] ?? process.env["Path"] ?? "", absent: nodeFreePath(empty) };
+  // review/90: the readiness hook runs with the stubs first on its PATH, under every marker and node state.
+  const pathFor = (row: HookRow, node: (typeof NODE_STATES)[number]): string =>
+    row.script === READINESS ? `${stubs}${delimiter}${paths[node]}` : paths[node];
   const tasks: (() => Promise<void>)[] = [];
   for (const node of NODE_STATES) {
     for (const marker of MARKERS) {
@@ -396,7 +423,7 @@ beforeAll(async () => {
         for (const [index, row] of rows.entries()) {
           const cwd = join(root, folder);
           tasks.push(async () => {
-            const result = await runShell(row.command, cwd, hookEnv(paths[node], marker.env), JSON.stringify(payloadFor(row, cwd)));
+            const result = await runShell(row.command, cwd, hookEnv(pathFor(row, node), marker.env), JSON.stringify(payloadFor(row, cwd)));
             results.set(keyOf(node, marker.id, folder, index), result);
           });
         }
@@ -430,8 +457,11 @@ describe("a cloud machine, imitated: every emitted hook command (REQ-PROVE-037)"
     // TEST CHANGE, justified (record 23:32Z build/44 and 23:40Z, u14/u14b/u20: the person-only
     // shell guard is wired on every selected client, and the unattended ask gate on Claude Code
     // alone, each as a row of its own): the lists gain those rows and nothing else.
+    // TEST CHANGE, justified (v5-claude-readiness, review/90, REQ-FLOW-110): Claude Code gains its cloud readiness
+    // SessionStart entry, run here with npm and npx stubbed.
     if (!WINDOWS) {
       expect(scripts("claude")).toEqual([
+        "stamity-cloud-readiness",
         "stamity-config-tamper-notice",
         "stamity-person-only-guard",
         "stamity-pre-tool-use-guard",
@@ -600,5 +630,27 @@ describe("a cloud machine, imitated: every emitted hook command (REQ-PROVE-037)"
         }
       }
     }
+  });
+
+  // review/90 (REQ-FLOW-110): the readiness hook runs offline and the same on every run, its npx call answered by the
+  // stub; it does nothing under any other marker. The fixture holds no package.json, so npm ci is not started.
+  it.skipIf(WINDOWS)("runs Claude Code's cloud readiness under the claude-cloud marker against the npm stubs alone", () => {
+    const readiness = rowsRunning("claude", READINESS);
+    const resolved = /stamity cloud readiness: the pinned CLI resolved \((npx -y \S+@\d\S*)\)\./;
+    const named = resolved.exec(resultOf("present", "claude-cloud", "", readiness[0]?.index ?? -1).stdout)?.[1];
+    expect(named, "the readiness hook named no resolved pinned CLI").toBeDefined();
+    for (const { index } of readiness) {
+      for (const marker of MARKERS) {
+        for (const folder of FOLDERS) {
+          const result = resultOf("present", marker.id, folder, index);
+          const label = `readiness marker ${marker.id} from ${folder || "the root"}`;
+          expect(result.code, `${label}: ${result.stderr}`).toBe(0);
+          if (marker.id === "claude-cloud") expect(result.stdout, label).toContain(`the pinned CLI resolved (${named ?? "?"}).`);
+          else expect(result.stdout, label).toBe("");
+        }
+      }
+    }
+    const calls = readFileSync(stubLog, "utf8").split("\n").filter((line) => line !== "");
+    expect(calls).toEqual(Array.from({ length: readiness.length * FOLDERS.length }, () => `${named ?? "?"} help`));
   });
 });

@@ -1,8 +1,8 @@
 import { execFile } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { connect } from "node:net";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 // @ts-expect-error — import-safe native ESM CI helper with no type declarations, outside the product package.
@@ -66,6 +66,26 @@ const UNDECLARED_TIMEOUT_SECONDS = 30;
 const HOOK_CASE_TIMEOUT_MS = 120_000;
 
 const execFileAsync = promisify(execFile);
+
+/** Claude Code's cloud readiness hook, which starts `npm ci` and `npx` when `CLAUDE_CODE_REMOTE` is `true`. */
+const READINESS = "stamity-cloud-readiness";
+
+/**
+ * review/90: `npm` and `npx` stubs for the readiness hook's run, first on its PATH, so the hook reaches no registry in
+ * the leg's Claude Code profiles. Each stub logs its name and arguments, one line a call, to the returned log and exits
+ * 0 (test/cloud/containerLeg.test.ts's stubs). POSIX only, as Claude Code's commands run on the POSIX legs alone.
+ */
+function writeNpmStubs(dir: string): string {
+  mkdirSync(dir, { recursive: true });
+  const log = join(dir, "calls.log");
+  writeFileSync(log, "");
+  const quoted = `'${log.replace(/'/g, `'\\''`)}'`;
+  for (const name of ["npm", "npx"]) {
+    writeFileSync(join(dir, name), `#!/bin/sh\nprintf '%s\\n' "${name} $*" >> ${quoted}\nexit 0\n`);
+    chmodSync(join(dir, name), 0o755);
+  }
+  return log;
+}
 
 let fixture: CliFixture;
 let root: string;
@@ -193,15 +213,27 @@ describe("the container leg's cloud profiles (REQ-PROVE-039)", () => {
   it(`exits 0 from every emitted hook within its declared timeout under this run's environment, offline in the leg's no-network run`, { timeout: HOOK_CASE_TIMEOUT_MS }, async () => {
     expect(hooks.length).toBeGreaterThan(starts.length);
     const vars = ACTIVE === undefined ? { HOME: emptyHome() } : { ...process.env };
+    // review/90: the readiness hook's run has the npm and npx stubs first on its PATH, so no registry is reached.
+    const stubs = join(scratch, "npm-stubs");
+    const stubLog = writeNpmStubs(stubs);
+    const path = hookEnv({})["PATH"] ?? "";
     const runs = hooks.map(async (row) => {
       const bound = (row.timeoutSeconds ?? UNDECLARED_TIMEOUT_SECONDS) * 1000;
-      return { row, bound, result: await runHook(row.command, root, hookEnv({ ...vars, CLAUDE_PROJECT_DIR: root }), harmlessPayload(row, root), bound) };
+      const env = hookEnv({ ...vars, CLAUDE_PROJECT_DIR: root, ...(row.script === READINESS ? { PATH: `${stubs}${delimiter}${path}` } : {}) });
+      return { row, bound, result: await runHook(row.command, root, env, harmlessPayload(row, root), bound) };
     });
     for (const { row, bound, result } of await Promise.all(runs)) {
       const label = `${row.client} ${row.event} ${row.script} (profile ${ACTIVE?.id ?? "none"})`;
       expect(result.code, `${label}: ${result.stderr}`).toBe(0);
       expect(result.ms, label).toBeLessThan(bound);
     }
+    // The stub answered the pinned CLI's one call per readiness run where the profile marks Claude Code's cloud, and
+    // none elsewhere, where the hook does nothing.
+    const cloud = ACTIVE?.env["CLAUDE_CODE_REMOTE"] === "true";
+    const readiness = hooks.filter((row) => row.script === READINESS).length;
+    const calls = readFileSync(stubLog, "utf8").split("\n").filter((line) => line !== "");
+    expect(calls.length, calls.join("\n")).toBe(cloud ? readiness : 0);
+    for (const call of calls) expect(call).toMatch(/^npx -y \S+@\d\S* help$/);
   });
 
   describe("inside the leg: this run's own environment is the profile", () => {
