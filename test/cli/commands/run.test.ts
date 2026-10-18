@@ -1,9 +1,10 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runCommand } from "../../../src/cli/commands/run.ts";
+import { PERSON_ONLY_GUARD_FILE, planCoreHookScripts } from "../../../src/hooks/scripts.ts";
 import { RUN_ENDED_MARKER_FILE } from "../../../src/mcp/env.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { NO_GIT_CONFIG } from "../../support/repoFixtures.ts";
@@ -458,6 +459,114 @@ describe("stamity run start", () => {
       expect(planned.code).toBe(0);
       expect(planned.stdout).toContain(`origin: github.com/o/r (would be pinned in ${PIN})`);
       expect(existsSync(join(dry, PIN))).toBe(false);
+    });
+  });
+
+  describe("origin/HEAD, the shell guard's default branch (pr/55)", () => {
+    const originHead = (repo: string): string | null => {
+      try {
+        return git(repo, ["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"]);
+      } catch {
+        return null;
+      }
+    };
+
+    /** The person-only guard's decision on `command` in `repo`, the guard emitted where the engine writes it. */
+    async function guardDenies(repo: string, command: string): Promise<string | null> {
+      const guard = planCoreHookScripts("../../agent-tool-policies.json", "claude", { packageName: "@zomarit/stamity", version: "1.0.0-golden", personOnlyGuard: true }).find(
+        (script) => script.fileName === PERSON_ONLY_GUARD_FILE,
+      );
+      if (guard === undefined) throw new Error("the plan carried no person-only guard");
+      const dir = join(repo, ".stamity", "generated", "hooks", "claude");
+      await mkdir(dir, { recursive: true });
+      await writeFile(join(dir, guard.fileName), guard.content);
+      const env = { ...process.env };
+      delete env.STAMITY_UNATTENDED;
+      delete env.STAMITY_REPO_ROOT;
+      const input = JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command }, cwd: "." });
+      const result = spawnSync(process.execPath, [join(dir, guard.fileName)], { input, encoding: "utf8", env });
+      return result.status === 0 ? null : String(result.stderr);
+    }
+
+    it("points an absent origin/HEAD at the default branch REST names, so the guard then refuses its push", async () => {
+      const repo = await seedRepo({ branch: "develop" });
+      restDefault("develop");
+      // Non-degenerate: with no origin/HEAD the guard counts only main and master, and lets this push through.
+      expect(await guardDenies(repo, "git push origin develop")).toBeNull();
+
+      const { code, stdout } = await run(repo, ["start", "--run", RUN]);
+
+      expect(code).toBe(0);
+      expect(originHead(repo)).toBe("refs/remotes/origin/develop");
+      expect(stdout).toContain("origin/HEAD: pointed at refs/remotes/origin/develop (was absent), so the shell guard counts develop as the default branch");
+      expect(await guardDenies(repo, "git push origin develop")).toContain("push-default");
+      expect(await guardDenies(repo, "git push origin feat/y")).toBeNull();
+    });
+
+    it("rewrites a stale origin/HEAD naming main to the branch REST names, on a kept branch too", async () => {
+      const repo = await seedRepo();
+      restDefault("develop");
+      git(repo, ["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"]);
+      git(repo, ["switch", "-q", "-c", "feat/x"]);
+
+      const { code, stdout } = await run(repo, ["start", "--run", RUN]);
+
+      expect(code).toBe(0);
+      expect(current(repo)).toBe("feat/x");
+      expect(originHead(repo)).toBe("refs/remotes/origin/develop");
+      expect(stdout).toContain("origin/HEAD: pointed at refs/remotes/origin/develop (was naming refs/remotes/origin/main)");
+    });
+
+    it("leaves origin/HEAD alone where it already names the default, and where REST gives no answer", async () => {
+      const named = await seedRepo();
+      const silent = await seedRepo();
+      const absent = await seedRepo({ url: "https://gitlab.com/o/r.git" });
+      git(named, ["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"]);
+      git(silent, ["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/trunk"]);
+      restDefault("main");
+
+      const same = await run(named, ["start", "--run", RUN]);
+      rest.routes.clear();
+      const none = await run(silent, ["start", "--run", RUN]);
+      const off = await run(absent, ["start", "--run", RUN]);
+
+      expect([same.code, none.code, off.code]).toEqual([0, 0, 0]);
+      expect(originHead(named)).toBe("refs/remotes/origin/main");
+      expect(originHead(silent)).toBe("refs/remotes/origin/trunk");
+      expect(originHead(absent)).toBeNull();
+      for (const result of [same, none, off]) expect(result.stdout).not.toContain("origin/HEAD:");
+    });
+
+    it("writes nothing under --dry-run, and says what it would point the ref at", async () => {
+      const repo = await seedRepo({ branch: "develop" });
+      restDefault("develop");
+
+      const { code, stdout } = await run(repo, ["start", "--run", RUN, "--dry-run"]);
+
+      expect(code).toBe(0);
+      expect(originHead(repo)).toBeNull();
+      expect(stdout).toContain("origin/HEAD: would point at refs/remotes/origin/develop (absent)");
+    });
+
+    it("refuses an unattended start where only the main/master fallback answered, and lets an attended one keep the branch", async () => {
+      const byVariable = await seedRepo({ branch: "develop", url: null });
+      const byRecord = await seedRepo({ branch: "develop", url: null });
+      const attended = await seedRepo({ branch: "develop", url: null });
+      await mkdir(join(byRecord, ".stamity", "runs", RUN), { recursive: true });
+      await writeFile(join(byRecord, ".stamity", "runs", RUN, "record.md"), "# Run\n\nStatus: in progress\nMode: unattended\n");
+
+      const refused = await run(byVariable, START, { STAMITY_UNATTENDED: "1" });
+      const fromRecord = await run(byRecord, START);
+      const kept = await run(attended, START);
+
+      for (const [result, repo] of [[refused, byVariable], [fromRecord, byRecord]] as const) {
+        expect(result.code).toBe(1);
+        expect(JSON.stringify(result.doc["error"])).toContain("run start refused: no source named the default branch");
+        expect(current(repo)).toBe("develop");
+        expect(existsSync(join(repo, ".stamity", "runs", RUN, "origin.json"))).toBe(false);
+      }
+      expect(kept.code).toBe(0);
+      expect(kept.doc).toMatchObject({ branch: "develop", created: false });
     });
   });
 

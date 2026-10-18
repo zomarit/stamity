@@ -646,6 +646,28 @@ describe("stamity run end", () => {
     expect(rest.calls).toEqual([]);
   });
 
+  it("refuses an unattended end where only the main/master fallback answered, opening no pull request (pr/55)", async () => {
+    rest.routes.delete("GET repos/o/r");
+    const { repo } = await seed("unattended");
+
+    const { code, doc } = await run(repo, END("overnight"));
+
+    expect(code).toBe(1);
+    expect(doc["notDone"]).toEqual([
+      "commit refused: no source named the default branch (GitHub's REST API gave no answer and refs/remotes/origin/HEAD names none), so an unattended run pushes nothing",
+    ]);
+    expect(pushes()).toEqual([]);
+    expect(writesToGitHub()).toEqual([]);
+    // One fact away: the same unattended end, origin/HEAD naming the default, commits and pushes (its missing morning
+    // list is the only gap it names).
+    const named = await seed("unattended");
+    git(named.repo, ["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"]);
+    const pushed = await run(named.repo, END("overnight"));
+    expect(pushed.doc["notDone"]).toEqual(["morning list missing"]);
+    expect(pushed.doc).toMatchObject({ pushed: true });
+    expect(pushes()).toHaveLength(1);
+  });
+
   it("refuses as origin changed, and opens no pull request, where origin names another repository than the pin (review/209)", async () => {
     const { repo } = await seed("unattended");
     git(repo, ["remote", "set-url", "origin", "https://github.com/elsewhere/r.git"]);

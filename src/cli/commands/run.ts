@@ -41,7 +41,14 @@ import { readPushed, scanChange } from "./gate.ts";
  * (no `origin`, a host `gh` does not talk to, no `gh`, no login, any status
  * but 200), from `refs/remotes/origin/HEAD`; and where neither names one,
  * `main` and `master` both count as the default. The first source that answers
- * decides.
+ * decides. Where REST named it, `start`, `checkpoint` and `end` point
+ * `refs/remotes/origin/HEAD`, the shell guard's only source, at
+ * `refs/remotes/origin/<named>` when it is absent or names another branch,
+ * said in the text and skipped under `--dry-run` (pr/55). Unattended, all
+ * three refuse where only the `main`/`master` fallback answered: `start` (its
+ * record's `Mode:` where one is there, else the variable) exits 1, and
+ * `checkpoint` and `end` refuse the commit after the origin check, before
+ * they stage.
  *
  * **Every git call goes through the write runner** (`../engine/gitWrite.ts`),
  * reads included, so the run verbs share one hardened git: the pinned options,
@@ -275,11 +282,22 @@ async function runStart(ctx: CliContext, run: string): Promise<CommandResult> {
   if (!ctx.dryRun) removeRunEndedMarker(cwd);
   const current = await currentBranch(cwd);
   const defaults = current === null ? null : await defaultBranches(ctx, cwd);
+  // pr/55: unattended, main and master alone would let a run keep, and push, a default branch of another name.
+  if (defaults !== null && defaults.source === "fallback" && startsUnattended(ctx, run)) {
+    throw new CliFailure({
+      code: "FAILURE",
+      message: `run start refused: ${FALLBACK_REFUSAL}`,
+      why: "an unattended run must not stay on, or push, a default branch neither source names",
+      next: "log gh in for origin's host, or have a person run git remote set-head origin -a, then run it again",
+    });
+  }
+  const originHead = defaults === null ? null : await alignOriginHead(ctx, cwd, defaults);
   const onDefault = defaults !== null && current !== null && defaults.names.includes(current.toLowerCase());
 
   if (current !== null && !onDefault) {
     const pinned = await pinOrigin(ctx, cwd, run);
-    ctx.io.out(`branch: ${sanitizeLabel(current)} (kept: not the default branch)\nbase: ${head}\n${pinned}\n`);
+    const kept = [`branch: ${sanitizeLabel(current)} (kept: not the default branch)`, `base: ${head}`, pinned, ...(originHead === null ? [] : [originHead])];
+    ctx.io.out(`${kept.join("\n")}\n`);
     return { exitCode: 0, json: start(run, current, false, head, ctx.dryRun) };
   }
 
@@ -314,6 +332,7 @@ async function runStart(ctx: CliContext, run: string): Promise<CommandResult> {
   const pinned = await pinOrigin(ctx, cwd, run, ctx.dryRun ? { rev: existing ?? undefined } : { checkout: runBranch });
   const lines = [`branch: ${runBranch} (${how})`, `base: ${base}`, pinned];
   if (defaults !== null) lines.push(`default branch read from: ${SOURCE_LABEL[defaults.source]}`);
+  if (originHead !== null) lines.push(originHead);
   if (ctx.dryRun) lines.push("Dry run: nothing was switched.");
   ctx.io.out(`${lines.join("\n")}\n`);
   return { exitCode: 0, json: start(run, runBranch, existing === null, base, ctx.dryRun) };
@@ -550,6 +569,41 @@ function withFallbacks(named: string, source: DefaultSource): DefaultBranches {
   return { names: [...new Set([named, ...FALLBACK_DEFAULTS].map((name) => name.toLowerCase()))], source, named };
 }
 
+/** Why an unattended run verb refuses where no source named the default branch (pr/55). */
+const FALLBACK_REFUSAL = "no source named the default branch (GitHub's REST API gave no answer and refs/remotes/origin/HEAD names none)";
+
+/** The ref the shell guard reads the default branch from, and the only one it reads it from. */
+const ORIGIN_HEAD = "refs/remotes/origin/HEAD";
+
+/**
+ * pr/55: the shell guard reads the default branch off {@link ORIGIN_HEAD} alone, so where GitHub's REST API named it
+ * and that ref is absent or names another branch, it is pointed at `refs/remotes/origin/<named>`, as `git remote
+ * set-head origin -a` would; nothing is written under `--dry-run`, nor where REST gave no answer. The text line, or
+ * `null` where the ref already names it.
+ */
+async function alignOriginHead(ctx: CliContext, cwd: string, defaults: DefaultBranches, verb: string = START): Promise<string | null> {
+  if (defaults.source !== "rest" || defaults.named === undefined) return null;
+  const named = defaults.named;
+  const target = `refs/remotes/origin/${named}`;
+  const read = await git(cwd, ["symbolic-ref", "--quiet", ORIGIN_HEAD], verb);
+  const now = read.code === 0 ? read.stdout.trim() : null;
+  if (now === target) return null;
+  const was = now === null ? "absent" : `naming ${sanitizeLabel(now)}`;
+  if (!PUSHABLE_BRANCH.test(named)) return `origin/HEAD: not written (${was}): the default branch's name holds characters the push check does not read`;
+  const counts = `so the shell guard counts ${named} as the default branch`;
+  if (ctx.dryRun) return `origin/HEAD: would point at ${target} (${was}), ${counts}`;
+  const wrote = await git(cwd, ["symbolic-ref", ORIGIN_HEAD, target], verb);
+  if (wrote.code !== 0) return `origin/HEAD: not written (${was}): git symbolic-ref answered ${wrote.code}: ${firstLine(wrote.stderr)}`;
+  return `origin/HEAD: pointed at ${target} (was ${was}), ${counts}`;
+}
+
+/** Whether `run start` starts an unattended run: its record's `Mode:` where one is there yet, else the variable. */
+function startsUnattended(ctx: CliContext, run: string): boolean {
+  const { layout, resumeCard } = ctx.engine.runs;
+  const record = readCapped(join(ctx.app.runtime.cwd, `${layout.runRelPath(run)}/${layout.RECORD_FILE}`), layout.RECORD_HEAD_READ_BYTES);
+  return readsUnattended(record === null ? null : resumeCard.readRecordHead(record.text).mode, ctx.app.runtime.env["STAMITY_UNATTENDED"]);
+}
+
 /**
  * `default_branch` of the repository `origin` names, read through `gh api` on the host
  * `resolveRepo` matched; `null` for every answer that names none, a `gh` that is absent or
@@ -657,6 +711,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   // (1) Never a commit on a default branch, nor on a checkout that is not the run's.
   const current = await currentBranch(cwd, verb);
   const defaults = await defaultBranches(ctx, cwd, verb);
+  const originHead = await alignOriginHead(ctx, cwd, defaults, verb);
   const isDefault = (name: string): boolean => defaults.names.includes(name.toLowerCase());
   // build/97: a record whose Branch: names a default branch matches the branch `run start` switches this run to.
   const matches = (recorded: string, checkout: string): boolean =>
@@ -675,6 +730,8 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
               ? null
               : `commit refused: the branch name ${current} holds characters the push check does not read`;
   lines.push(`branch: ${sanitizeLabel(current ?? "(detached HEAD)")}`);
+  if (originHead !== null) lines.push(originHead);
+  if (originHead?.startsWith("origin/HEAD: not written") === true) result.notDone.push(originHead);
   if (refusal !== null || current === null) {
     result.notDone.push(refusal ?? "commit refused");
     return finish(false);
@@ -683,6 +740,11 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   const moved = await originRefusal(ctx, cwd, runDir, unattended, verb);
   if (moved !== null) {
     result.notDone.push(moved);
+    return finish(false);
+  }
+  // pr/55: unattended, main and master alone would let the run push a default branch of another name.
+  if (unattended && defaults.source === "fallback") {
+    result.notDone.push(`commit refused: ${FALLBACK_REFUSAL}, so an unattended run pushes nothing`);
     return finish(false);
   }
 

@@ -1052,6 +1052,64 @@ describe("stamity run checkpoint", () => {
     expect(remoteHeads(remote)).toEqual(SEEDED);
   });
 
+  describe("the default branch's sources (pr/55)", () => {
+    const FALLBACK = "commit refused: no source named the default branch (GitHub's REST API gave no answer and refs/remotes/origin/HEAD names none), so an unattended run pushes nothing";
+    const originHead = (repo: string): string | null => {
+      try {
+        return git(repo, ["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"]);
+      } catch {
+        return null;
+      }
+    };
+
+    it("points an absent origin/HEAD at the default branch REST names, and writes nothing under --dry-run", async () => {
+      const { repo } = await seed("attended");
+      const dry = await seed("attended");
+
+      const wrote = await run(repo, ["checkpoint", "--run", RUN]);
+      const planned = await run(dry.repo, ["checkpoint", "--run", RUN, "--dry-run"]);
+
+      expect(wrote.code).toBe(0);
+      expect(originHead(repo)).toBe("refs/remotes/origin/main");
+      expect(wrote.stdout).toContain("origin/HEAD: pointed at refs/remotes/origin/main (was absent), so the shell guard counts main as the default branch");
+      expect(planned.code).toBe(0);
+      expect(originHead(dry.repo)).toBeNull();
+      expect(planned.stdout).toContain("origin/HEAD: would point at refs/remotes/origin/main (absent)");
+    });
+
+    it("refuses an unattended commit where only the main/master fallback answered, staging and pushing nothing", async () => {
+      rest.routes.delete("GET repos/o/r");
+      const { repo, remote } = await seed("unattended");
+      await writeFile(join(repo, "a.txt"), "changed\n");
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      expect(code).toBe(1);
+      expect(doc["notDone"]).toEqual([FALLBACK]);
+      expect(writes.argv.some((argv) => argv[0] === "add" || argv[0] === "commit")).toBe(false);
+      expect(pushes()).toEqual([]);
+      expect(remoteHeads(remote)).toEqual(SEEDED);
+      expect(originHead(repo)).toBeNull();
+    });
+
+    it("lets an attended commit through on the fallback, and an unattended one once origin/HEAD names the default", async () => {
+      rest.routes.delete("GET repos/o/r");
+      const attended = await seed("attended");
+      const named = await seed("unattended");
+      git(named.repo, ["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"]);
+      await Promise.all([attended, named].map(({ repo }) => writeFile(join(repo, "a.txt"), "changed\n")));
+
+      const kept = await run(attended.repo, [...CHECKPOINT, "--paths", "a.txt"]);
+      const read = await run(named.repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      for (const result of [kept, read]) {
+        expect(result.code).toBe(0);
+        expect(result.doc).toMatchObject({ pushed: true, notDone: [] });
+      }
+      expect(remoteHeads(named.remote)).toEqual([...SEEDED, `refs/heads/${RUN_BRANCH}`]);
+    });
+  });
+
   it("refuses a commit at a detached HEAD, staging, committing and pushing nothing (review/212)", async () => {
     const { repo, remote } = await seed("unattended");
     git(repo, ["switch", "-q", "--detach"]);
