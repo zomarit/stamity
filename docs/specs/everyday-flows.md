@@ -1189,10 +1189,14 @@ refuse every manifest that still holds it, and dropping it on the first `sync` w
 it is held through the 1.15 line; the release after 1.15.0 removes it with a manifest migration step
 (`docs/plans/020-cli-native-01.md`, its "Settled by this plan" and its Follow-ups).
 
-- GIVEN a manifest a 1.14.0 setup wrote with a `plugin` block WHEN it is read and written back THEN it loads with no
-  refusal and the block is value-identical; GIVEN a `plugin` value of any other shape THEN it is held the same way
-  (`test/manifest/manifest.test.ts`, "accepts the 1.14 record without validating it" and the held-value cases; added
-  2026-10-14).
+- GIVEN a manifest a 1.14.0 setup wrote with a `plugin` block WHEN it is read THEN it loads with no refusal, and WHEN it
+  is written back THEN the written manifest holds no `plugin` key; GIVEN a `plugin` value of any other shape THEN it is
+  accepted and dropped the same way (`test/manifest/manifest.test.ts`, "loads a file carrying `plugin` of any shape with
+  no refusal, drops it, and a second write moves no byte" and "names a `plugin` key as unknown to validation, and
+  refuses to write a manifest carrying one"; added 2026-10-14, amended 2026-10-18 by plan 021 file 2's unit
+  `v16-manifest-plugin-block`: it read "WHEN it is read and written back THEN it loads with no refusal and the block is
+  value-identical; GIVEN a `plugin` value of any other shape THEN it is held the same way", citing "accepts the 1.14
+  record without validating it" and the held-value cases, which that unit replaced).
 
 Amended 2026-10-18 (plan 021 file 2, unit `v16-manifest-plugin-block`). Given a manifest holding a `plugin` key of any
 shape, When `check`, `sync` or `clean` reads it, Then it loads with no refusal, and When `sync` writes it, Then the
@@ -3481,8 +3485,10 @@ clouds run which hooks and cite that section (REQ-FLOW-086).
   `test/hooks/scripts.test.ts`, `test/hooks/sessionStartCard.test.ts`, `test/session/detect.test.ts` ("the detector the
   session start carries"), `test/cloud/profiles.test.ts`, `test/emit/capabilityMatrix.test.ts`.
 - **Proof:** `test/hooks/scripts.test.ts` ("the session start names a cloud or CI session (REQ-FLOW-085)"),
-  `test/hooks/sessionStartCard.test.ts`, `test/hooks/scriptBudget.test.ts` (the session-start row at 49,152 bytes and
-  1,100 lines), `test/emit/capabilityMatrix.test.ts` ("the cloud column and the Cloud sessions section", which also
+  `test/hooks/sessionStartCard.test.ts`, `test/hooks/scriptBudget.test.ts` (the session-start row at 63,488 bytes and
+  1,400 lines, `HOOK_SCRIPT_BUDGETS` in `src/hooks/scripts.ts`; amended 2026-10-18, plan 021 file 2's unit
+  `v1-branch-card` having raised the row by × 1.25: it read "49,152 bytes and 1,100 lines"),
+  `test/emit/capabilityMatrix.test.ts` ("the cloud column and the Cloud sessions section", which also
   holds every row carrying a session line to `documented`), and
   `test/cloud/containerLeg.test.ts`.
 
@@ -3930,7 +3936,8 @@ egress, token-shaped variable names (names only) and missing review state; with 
   `!gh auth git-credential` added after it, which leaves gh's helper the only entry whatever the system or global
   configuration holds, a helper `gh auth setup-git` wrote through a shim included; the fix names no `--global` or
   `--system` write and echoes no value. The pre-flight's JSON `client` and `cloud` fields and its Cursor egress warning
-  are read through the one session detector (REQ-FLOW-080's), so: `CLAUDE_CODE_REMOTE` counts only as exactly `true`
+  are read through the one session detector (REQ-FLOW-085's; amended 2026-10-18 with the delta's correction, it read
+  "REQ-FLOW-080's"), so: `CLAUDE_CODE_REMOTE` counts only as exactly `true`
   (`1` is not a cloud), `GITHUB_ACTIONS` alone reads as a cloud, a `CURSOR_AGENT_SOCKET` of `0` or `false` no longer
   warns, and marker values are no longer trimmed or lower-cased; these are labels, and none selects an unattended run.
   The checks, their states and the other fixes are unchanged.
