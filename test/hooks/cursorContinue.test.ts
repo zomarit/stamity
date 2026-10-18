@@ -25,7 +25,7 @@ import { useTempDir } from "../support/tempDir.ts";
 
 const getRepo = useTempDir("cursor-continue");
 
-/** Cursor's `stop` payload (cursor.com/docs/hooks): the hook reads none of it. */
+/** Cursor's `stop` payload (cursor.com/docs/hooks): the hook reads its `status` alone. */
 const STOP_PAYLOAD = JSON.stringify({ hook_event_name: "stop", status: "completed", loop_count: 0 });
 
 /** A Cursor agent machine's marker, as the client sets it; its value is never read past being set. */
@@ -47,17 +47,17 @@ interface Outcome {
 }
 
 /** Runs the hook as Cursor does, with the variables it reads under the test's control. */
-function run(hook: string, env: Record<string, string> = {}, cwd?: string): Outcome {
+function run(hook: string, env: Record<string, string> = {}, cwd?: string, input = STOP_PAYLOAD): Outcome {
   const base = { ...process.env };
   delete base.CURSOR_AGENT_SOCKET;
   delete base.STAMITY_REPO_ROOT;
-  const result = spawnSync(process.execPath, [hook], { input: STOP_PAYLOAD, encoding: "utf8", env: { ...base, ...env }, cwd });
+  const result = spawnSync(process.execPath, [hook], { input, encoding: "utf8", env: { ...base, ...env }, cwd });
   return { status: result.status, stdout: String(result.stdout), stderr: String(result.stderr) };
 }
 
 /** The follow-up the hook answers, or null when it answers nothing; it exits 0 either way. */
-function followUp(hook: string, env: Record<string, string> = MACHINE): string | null {
-  const outcome = run(hook, env);
+function followUp(hook: string, env: Record<string, string> = MACHINE, input = STOP_PAYLOAD): string | null {
+  const outcome = run(hook, env, undefined, input);
   expect(outcome.status).toBe(0);
   if (outcome.stdout === "") return null;
   const answer = JSON.parse(outcome.stdout) as Record<string, unknown>;
@@ -163,6 +163,19 @@ describe("the follow-up (REQ-FLOW-109)", () => {
     expect(followUp(hook)).toBe(continueFor(RUN, 3));
   });
 
+  // build/31: a person's stop (aborted) or a failed turn (error) is not continued.
+  it("continues a completed stop, or one whose payload names no status, and no other", async () => {
+    const hook = await placeHook({ ...onBranch("main"), [RECORD]: unattended("main", "3") });
+    const stop = (status?: unknown): string =>
+      JSON.stringify(status === undefined ? { hook_event_name: "stop", loop_count: 1 } : { hook_event_name: "stop", status, loop_count: 1 });
+    expect(followUp(hook, MACHINE, stop("completed"))).toBe(continueFor(RUN, 3));
+    expect(followUp(hook, MACHINE, stop())).toBe(continueFor(RUN, 3));
+    expect(followUp(hook, MACHINE, "")).toBe(continueFor(RUN, 3));
+    for (const status of ["aborted", "error", "COMPLETED", null, 0]) {
+      expect(followUp(hook, MACHINE, stop(status)), JSON.stringify(status)).toBeNull();
+    }
+  });
+
   it("resolves the repository from the working directory in a plugin root's layout", async () => {
     await getRepo().seedFiles({ ...onBranch("main"), [RECORD]: unattended("main", "2") });
     await getRepo().seedFiles({ "plugin/hooks/continue.mjs": buildCursorContinueScript({ layout: "container" }) });
@@ -177,6 +190,11 @@ describe("what the hook does with a read it cannot finish", () => {
   /** The stderr note for one read that failed. */
   const faultNote = (read: string, cause: string): string =>
     `${CURSOR_CONTINUE_FAULT_NOTE.replace("<read>", read).replace("<cause>", cause)}\n`;
+
+  it("answers nothing for a payload that is no JSON, naming it", async () => {
+    const hook = await placeHook({ ...onBranch("main"), [RECORD]: unattended("main", "3") });
+    expect(run(hook, MACHINE, undefined, "{not json")).toEqual({ status: 0, stdout: "", stderr: faultNote("the hook payload", "not JSON") });
+  });
 
   it("answers nothing for a record past the read bound, naming it", async () => {
     const hook = await placeHook(onBranch("main"));

@@ -221,10 +221,10 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // (a plugin root renders 7,773 / 180). × 1.25 = 10,626.25 / 251.25, rounded
   // up to 10,752 / 260.
   [UNATTENDED_ASK_GATE_FILE]: { bytes: 10_752, lines: 260 },
-  // Measured 2026-10-18 on plan 021 file 2's v4-cursor-continue lane (base 3519efee): 8,577 bytes / 202 lines
-  // (cursor, generated layout; a plugin root renders 7,849 / 181). × 1.25 = 10,721.25 / 252.5, rounded up as
-  // the review gate's is to 11,264 / 260.
-  [CURSOR_CONTINUE_FILE]: { bytes: 11_264, lines: 260 },
+  // Measured 2026-10-18 on plan 021 file 2's v4-cursor-continue lane (base 3519efee), with the stop payload's
+  // status read (build/31): 9,043 bytes / 209 lines (cursor, generated layout; a plugin root renders 8,315 / 188).
+  // × 1.25 = 11,303.75 / 261.25, rounded up as the review gate's is to 12,288 / 270.
+  [CURSOR_CONTINUE_FILE]: { bytes: 12_288, lines: 270 },
   // Measured 2026-09-24 and again 2026-09-26 at 8c08660e: 2,383 bytes / 67
   // lines, the same in both layouts. × 1.25 = 2,978.75 / 83.75, rounded up to
   // 3,072 / 90.
@@ -4471,11 +4471,13 @@ export const CURSOR_CONTINUE_FAULT_NOTE = "stamity cursor continue: <read> could
  * ({@link RECORD_CHECKPOINT_PATTERN}, the whole record read when it is at most
  * {@link REPORT_READ_MAX_BYTES}) leaves a count of digits above 0 earns
  * {@link CURSOR_CONTINUE_FOLLOW_UP}. The message carries that count and a path
- * built from the folder's name, never text read from the record.
+ * built from the folder's name, never text read from the record. The stop
+ * payload's `status` must read `completed`, or be absent (a build that sends
+ * none): an `aborted` or `error` stop, a person's or a failure's, ends there.
  *
  * Never a gate: a stop decides nothing, so anything else answers nothing, and a
- * read it cannot finish answers nothing with one stderr line naming that read.
- * It always exits 0 and never reads its payload.
+ * read it cannot finish (a payload that is no JSON among them) answers nothing
+ * with one stderr line naming that read. It always exits 0.
  */
 export function buildCursorContinueScript(opts: { layout?: HookScriptLayout } = {}): string {
   const layout = opts.layout ?? "generated";
@@ -4489,11 +4491,13 @@ export function buildCursorContinueScript(opts: { layout?: HookScriptLayout } = 
       "run in progress on this branch reads `Mode: unattended` and its last",
       "checkpoint line leaves units, it answers a followup_message naming the count",
       "and the record. Anything else, or a read it cannot finish, answers nothing.",
-      "Never blocks; the hooks file caps the follow-ups at the row's loop_limit.",
+      "A stop whose status is aborted or error ends there. Never blocks; the hooks",
+      "file caps the follow-ups at the row's loop_limit.",
     ],
     [
-      "Reads outside repo state: the CURSOR_AGENT_SOCKET and STAMITY_REPO_ROOT",
-      "variables. Reads the run records and .git/HEAD, never its payload; writes nothing.",
+      "Reads outside repo state: the stop payload's status on stdin and the",
+      "CURSOR_AGENT_SOCKET and STAMITY_REPO_ROOT variables. Reads the run records",
+      "and .git/HEAD; writes nothing.",
     ],
   )}
 
@@ -4543,6 +4547,10 @@ function unitsLeft(path) {
 function followUp() {
   // A Cursor agent machine only: a local session on a branch carrying such a record is never steered.
   if (["", "false", "0"].includes(process.env.CURSOR_AGENT_SOCKET ?? "")) return null;
+  // A completed stop only, or one whose payload names no status: an aborted or failed one is not continued.
+  const raw = readFileSync(0, "utf8");
+  const status = raw.trim() === "" ? undefined : JSON.parse(raw)?.status;
+  if (status !== undefined && status !== "completed") return null;
   const root = repoRoot();
   const branch = cardCurrentBranch(root);
   if (branch === null) return null;
@@ -4561,8 +4569,9 @@ try {
   message = followUp();
 } catch (error) {
   // Never a gate: a read this hook could not finish stops the run here, and one line says which read failed.
-  const read = error && typeof error.path === "string" ? error.path : "an input";
-  const cause = error && error.code ? String(error.code) : (error && error.name) || "a fault";
+  const syntax = error instanceof SyntaxError;
+  const read = syntax ? "the hook payload" : error && typeof error.path === "string" ? error.path : "an input";
+  const cause = syntax ? "not JSON" : error && error.code ? String(error.code) : (error && error.name) || "a fault";
   const note = FAULT_NOTE.replace("<read>", () => read).replace("<cause>", () => cause);
   process.stderr.write(note.replace(/[\u0000-\u001f\u007f]/g, "?") + "\n");
 }

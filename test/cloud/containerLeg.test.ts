@@ -439,6 +439,7 @@ describe("a cloud machine, imitated: every emitted hook command (REQ-PROVE-037)"
     }
     expect(scripts("cursor")).toEqual([
       "stamity-config-tamper-notice",
+      "stamity-cursor-continue", // TEST CHANGE, justified (v4-cursor-continue, REQ-FLOW-109): Cursor gains its stop hook script.
       "stamity-mcp-guard",
       "stamity-model-pins",
       "stamity-person-only-guard",
