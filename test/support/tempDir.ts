@@ -54,7 +54,10 @@ export async function makeTempDir(
     dir,
     path: (...segments) => resolveWithin(dir, segments, "path()"),
     seedFiles: (files) => seedFiles(dir, files),
-    cleanup: () => rm(dir, { recursive: true, force: true }),
+    // The retries, as `./lazyCleanup.ts` has them (prove/12): a process the case did not await can still write in the
+    // tree while it is removed (git's detached auto maintenance under a pushed-to bare remote), so the removal's last
+    // `rmdir` fails `ENOTEMPTY`; Node's `rm` retries that code, and Windows' `EBUSY` and `EPERM`, before it fails.
+    cleanup: () => rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }),
   };
 }
 

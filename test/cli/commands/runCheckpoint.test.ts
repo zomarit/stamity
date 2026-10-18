@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, lstatSync } from "node:fs";
-import { chmod, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { appendFile, chmod, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runCommand } from "../../../src/cli/commands/run.ts";
@@ -138,6 +138,16 @@ const PIN_TEXT = `${JSON.stringify({ host: "github.com", owner: "o", repo: "r" }
 /** A token-shaped value built from fragments, so this file carries none. */
 const TOKEN = ["gh", "p", "_", "Q7RTW2KZ9MXC4HBN8JVL5DPF3GYSA6EUT2RW"].join("");
 
+/**
+ * Git's auto maintenance off, in the bare remote and the repository alike (prove/12). The race it closes: every push
+ * into the remote ends with receive-pack starting `git maintenance run --auto --detach`, and every commit starts the
+ * same in the repository. That command forks and its parent exits, so the child outlives git, the verb and the case,
+ * and nothing awaits it; under load it was still writing under `remote.git/objects` while the case's cleanup removed
+ * the folder, which failed `ENOTEMPTY` (CI's coverage leg). With these keys git starts no maintenance at all, so no git
+ * process outlives the call that started it.
+ */
+const NO_AUTO_MAINTENANCE = "[receive]\n\tautogc = false\n[gc]\n\tauto = 0\n[maintenance]\n\tauto = false\n";
+
 describe("stamity run checkpoint", () => {
   const getRoot = useTempDir("run-checkpoint");
 
@@ -172,7 +182,10 @@ describe("stamity run checkpoint", () => {
     const remote = join(dir, "remote.git");
     await mkdir(repo, { recursive: true });
     git(dir, ["init", "-q", "--bare", remote]);
+    // prove/12: before the first push or commit, so no detached maintenance child outlives either (see the constant).
+    await appendFile(join(remote, "config"), NO_AUTO_MAINTENANCE);
     git(repo, ["-c", "init.defaultBranch=main", "init", "-q"]);
+    await appendFile(join(repo, ".git", "config"), NO_AUTO_MAINTENANCE);
     git(repo, ["config", "user.name", "Alice Example"]);
     git(repo, ["config", "user.email", "alice@example.com"]);
     await Promise.all(["a.txt", "b.txt", "[ab].txt", ".cursorrules"].map((name) => writeFile(join(repo, name), `${name}\n`)));
