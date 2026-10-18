@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  CLAUDE_ASK_ROWS,
   CLAUDE_DENY_ROWS,
   PERSON_ONLY_RULES,
   personOnlyVerdict,
@@ -1875,19 +1876,40 @@ describe("unattendedPushVerdict", () => {
   });
 });
 
-describe("CLAUDE_DENY_ROWS", () => {
-  /** The prefix rows the shell guard's verdict reads, and the MCP tool rows no shell verdict sees (review/214). */
-  const BASH_ROWS = CLAUDE_DENY_ROWS.filter((row) => row.startsWith("Bash("));
-  const MCP_ROWS = CLAUDE_DENY_ROWS.filter((row) => !row.startsWith("Bash("));
+describe("CLAUDE_DENY_ROWS and CLAUDE_ASK_ROWS", () => {
+  // TEST CHANGE (v0a2, REQ-FLOW-123, REQ-FLOW-124): Claude Code's settings now split the person-only rows. The deny list
+  // holds the refused acts (deletions, force pushes, acts that cannot be undone) as `:*` prefix rows, then mid-pattern
+  // rows for a refused flag that can follow an ask prefix, then the one refused MCP tool; the ask list holds the acts
+  // that can be undone as `:*` prefix rows, then the MCP tools that ask. Each check below now reads both lists.
+  /** A `Bash(<prefix>:*)` row: the prefix the shell guard's verdict reads. */
+  const isPrefixRow = (row: string): boolean => /^Bash\([^()]+:\*\)$/.test(row);
+  /** A mid-pattern row, `Bash(<prefix> * <flag>*)` with no `:*`: test/adapters/claude.test.ts pins these with a wildcard matcher. */
+  const isMidPatternRow = (row: string): boolean => row.startsWith("Bash(") && !isPrefixRow(row);
+  const DENY_PREFIX_ROWS = CLAUDE_DENY_ROWS.filter(isPrefixRow);
+  const DENY_MID_ROWS = CLAUDE_DENY_ROWS.filter(isMidPatternRow);
+  const ASK_PREFIX_ROWS = CLAUDE_ASK_ROWS.filter(isPrefixRow);
+  /** The MCP tool rows no shell verdict sees (review/214). */
+  const DENY_MCP_ROWS = CLAUDE_DENY_ROWS.filter((row) => !row.startsWith("Bash("));
+  const ASK_MCP_ROWS = CLAUDE_ASK_ROWS.filter((row) => !row.startsWith("Bash("));
+  const prefixOf = (row: string): string => row.slice("Bash(".length, -":*)".length);
 
-  it("is a list of Claude Code prefix rules, then the GitHub MCP server's write tools by name", () => {
-    expect(BASH_ROWS.length).toBeGreaterThan(10);
-    for (const row of BASH_ROWS) expect(row).toMatch(/^Bash\([^()]+:\*\)$/);
+  it("denies prefix rows, then mid-pattern rows, then the GitHub MCP server's repository deletion alone", () => {
+    expect(DENY_PREFIX_ROWS.length).toBeGreaterThan(10);
+    expect(DENY_MID_ROWS.length).toBeGreaterThan(0);
+    for (const row of DENY_MID_ROWS) expect(row).toMatch(/^Bash\([^():]+\*\)$/);
     expect(new Set(CLAUDE_DENY_ROWS).size).toBe(CLAUDE_DENY_ROWS.length);
+    expect(DENY_MCP_ROWS).toEqual(["mcp__github__delete_repository"]);
+    expect(CLAUDE_DENY_ROWS).toEqual([...DENY_PREFIX_ROWS, ...DENY_MID_ROWS, ...DENY_MCP_ROWS]);
+  });
+
+  it("asks on prefix rows, then the GitHub MCP server's write tools by name", () => {
+    expect(ASK_PREFIX_ROWS.length).toBeGreaterThan(10);
+    expect(new Set(CLAUDE_ASK_ROWS).size).toBe(CLAUDE_ASK_ROWS.length);
     // Claude Code's MCP permission-rule form, `mcp__<server>__<tool>`: the server's merge and branch-write tools, one
-    // row each, after every prefix row (review/214, the 03:12Z sign-off), then its review-submit, pull-request-update,
-    // branch-create and repository-delete tools (review/226, the 04:01Z and 04:05Z sign-offs).
-    expect(MCP_ROWS).toEqual([
+    // row each, after every prefix row (review/214, the 03:12Z sign-off), then its review-submit, pull-request-update
+    // and branch-create tools (review/226, the 04:01Z and 04:05Z sign-offs). Each asks; the repository deletion is
+    // the deny list's.
+    expect(ASK_MCP_ROWS).toEqual([
       "mcp__github__merge_pull_request",
       "mcp__github__push_files",
       "mcp__github__create_or_update_file",
@@ -1900,54 +1922,57 @@ describe("CLAUDE_DENY_ROWS", () => {
       "mcp__github__update_pull_request_state",
       "mcp__github__update_pull_request_draft_state",
       "mcp__github__create_branch",
-      "mcp__github__delete_repository",
-      // pr/78: a pull request opened as a tool call skips the run verbs' draft and their title and body screen; the row
-      // cannot read the mode, so it refuses attended sessions too, where `gh pr create` through the shell is the route.
+      // pr/78: a pull request opened as a tool call skips the run verbs' draft and their title and body screen; the
+      // row cannot read the mode, so it asks in every session, and the shell guard refuses it while a run is unattended.
       "mcp__github__create_pull_request",
     ]);
-    expect(CLAUDE_DENY_ROWS.slice(BASH_ROWS.length)).toEqual(MCP_ROWS);
+    expect(CLAUDE_ASK_ROWS).toEqual([...ASK_PREFIX_ROWS, ...ASK_MCP_ROWS]);
+    // A row on both lists would be refused, never asked: the client reads a deny row first.
+    for (const row of CLAUDE_ASK_ROWS) expect(CLAUDE_DENY_ROWS, row).not.toContain(row);
   });
 
   it("holds unarchiving beside archiving, since both change whether the repository takes writes (pr/96)", () => {
-    const at = CLAUDE_DENY_ROWS.indexOf("Bash(gh repo archive:*)");
+    const at = CLAUDE_ASK_ROWS.indexOf("Bash(gh repo archive:*)");
     expect(at).toBeGreaterThan(-1);
-    expect(CLAUDE_DENY_ROWS[at + 1]).toBe("Bash(gh repo unarchive:*)");
+    expect(CLAUDE_ASK_ROWS[at + 1]).toBe("Bash(gh repo unarchive:*)");
   });
 
   it("names the GitHub MCP server by the key the engine writes it under", () => {
     // A row naming another server would match no tool the client surfaces: the key is the platform server's catalog id.
     expect(PLATFORM_MCP_SERVER.github).toBe("github");
     expect(CURATED_MCP_SERVERS.github?.id).toBe("github");
-    for (const row of MCP_ROWS) expect(row.split("__")[1]).toBe(PLATFORM_MCP_SERVER.github);
+    for (const row of [...DENY_MCP_ROWS, ...ASK_MCP_ROWS]) expect(row.split("__")[1]).toBe(PLATFORM_MCP_SERVER.github);
   });
 
-  it("holds only prefixes the shell guard also denies, so the two layers agree", () => {
-    for (const row of BASH_ROWS) {
-      const prefix = row.slice("Bash(".length, -":*)".length);
-      expect(personOnlyVerdict(prefix, ON_FEATURE), row).toMatchObject({ deny: true });
+  it("holds only prefixes the shell guard also denies, each in its own list's class, so the two layers agree", () => {
+    for (const row of DENY_PREFIX_ROWS) {
+      expect(personOnlyVerdict(prefixOf(row), ON_FEATURE), row).toMatchObject({ deny: true, ask: false });
+    }
+    for (const row of ASK_PREFIX_ROWS) {
+      expect(personOnlyVerdict(prefixOf(row), ON_FEATURE), row).toMatchObject({ deny: true, ask: true });
     }
   });
 
   it("reaches every rule a prefix can express", () => {
     const rules = new Set(
-      BASH_ROWS.map((row) => {
-        const verdict = personOnlyVerdict(row.slice("Bash(".length, -":*)".length), ON_FEATURE);
+      [...DENY_PREFIX_ROWS, ...ASK_PREFIX_ROWS].map((row) => {
+        const verdict = personOnlyVerdict(prefixOf(row), ON_FEATURE);
         return verdict.deny ? verdict.rule : "none";
       }),
     );
     // `push-default` has no row: a prefix ending in a branch name over-matches a longer one (see below).
-    // TEST CHANGE (v0a): `protection-delete` is a REST or GraphQL form only, which no prefix can say, and the
-    // `unpublish` rows (`npm unpublish`, `npm dist-tag rm`) are v0a2's to add with the settings' ask rows.
+    // `protection-delete` is a REST or GraphQL form only, which no prefix can say.
     expect([...rules].toSorted()).toEqual(
       PERSON_ONLY_RULES.map((rule) => rule.id)
-        .filter((id) => !["push-default", "protection-delete", "unpublish"].includes(id))
+        .filter((id) => !["push-default", "protection-delete"].includes(id))
         .toSorted(),
     );
   });
 
-  it("holds no row whose prefix, read as a raw string, also refuses an allowed command", () => {
+  it("holds no prefix row whose prefix, read as a raw string, also refuses or asks for an allowed command", () => {
     // If Claude Code's `:*` matched a raw string prefix rather than at a word boundary, `Bash(git push origin
     // main:*)` would refuse `git push origin main-feature` in an attended session; no row may prefix an allowed line.
+    // The mid-pattern rows hold a `*` inside, which no raw prefix reads; test/adapters/claude.test.ts pins them.
     const allowed = [
       ...ALLOW.map(([command]) => command),
       "git push origin main-feature",
@@ -1956,8 +1981,8 @@ describe("CLAUDE_DENY_ROWS", () => {
       "git push origin HEAD:refs/heads/master-x",
       "git push -u origin main-feature",
     ];
-    for (const row of BASH_ROWS) {
-      const prefix = row.slice("Bash(".length, -":*)".length);
+    for (const row of [...DENY_PREFIX_ROWS, ...ASK_PREFIX_ROWS]) {
+      const prefix = prefixOf(row);
       for (const command of allowed) expect(command.startsWith(prefix), `${row} over ${command}`).toBe(false);
     }
   });

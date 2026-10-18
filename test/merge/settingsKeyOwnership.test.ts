@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { CLAUDE_SETTINGS_PATH } from "../../src/adapters/claude.ts";
 import { checkCommand, runDriftGate } from "../../src/cli/commands/check.ts";
 import { cleanCommand } from "../../src/cli/commands/clean.ts";
-import { CLAUDE_DENY_ROWS } from "../../src/hooks/personOnly.ts";
+import { CLAUDE_ASK_ROWS, CLAUDE_DENY_ROWS } from "../../src/hooks/personOnly.ts";
 import { applyInit } from "../../src/cli/commands/init/apply.ts";
 import { buildInitDecisions } from "../../src/cli/commands/init/plan.ts";
 import { applySync, planSync, type SyncPlanEntry } from "../../src/cli/commands/sync/engine.ts";
@@ -234,8 +234,12 @@ const PERMISSIONS = { allow: ["Read", "Grep", "Glob"] };
 /**
  * The `permissions` member `clean` and the sync sweep leave: every deny row stays, as one equal to
  * the engine's may be the owner's (review/124, signed off 00:14Z).
+ *
+ * TEST CHANGE (v0a2, REQ-FLOW-123, REQ-FLOW-124): the person-only rows are split, the refused acts in
+ * `deny` and the acts that can be undone in `ask`; clean removes no row of either list, so both stay, `ask`
+ * after `deny` as the engine writes them. Every expectation below reads this constant.
  */
-const DENY_LEFT = { deny: [...CLAUDE_DENY_ROWS] };
+const DENY_LEFT = { deny: [...CLAUDE_DENY_ROWS], ask: [...CLAUDE_ASK_ROWS] };
 /** An operator's own hooks: no command under the engine's generated directory. */
 const OPERATOR_HOOKS = { Stop: [{ hooks: [{ type: "command", command: "node scripts/notify.mjs" }] }] };
 

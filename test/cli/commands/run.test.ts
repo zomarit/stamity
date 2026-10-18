@@ -704,7 +704,10 @@ describe("stamity run start", () => {
       }
     };
 
-    /** The person-only guard's decision on `command` in `repo`, the guard emitted where the engine writes it. */
+    /**
+     * The person-only guard's decision on `command` in `repo`, the guard emitted where the engine writes it: the
+     * reason it stops the call with, an ask's or a refusal's, or null when it lets the call through.
+     */
     async function guardDenies(repo: string, command: string): Promise<string | null> {
       const guard = planCoreHookScripts("../../agent-tool-policies.json", "claude", { packageName: canonical().name, version: "1.0.0-golden", personOnlyGuard: true }).find(
         (script) => script.fileName === PERSON_ONLY_GUARD_FILE,
@@ -718,7 +721,14 @@ describe("stamity run start", () => {
       delete env.STAMITY_REPO_ROOT;
       const input = JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command }, cwd: "." });
       const result = spawnSync(process.execPath, [join(dir, guard.fileName)], { input, encoding: "utf8", env });
-      return result.status === 0 ? null : String(result.stderr);
+      // TEST CHANGE (v0a2, REQ-FLOW-123, REQ-FLOW-124): attended, Claude Code's guard now asks for an act that can be
+      // undone (a push of the default branch among them) through its `hookSpecificOutput` ask on stdout with exit 0, and
+      // refuses only a deletion, a force push or an act that cannot be undone, on exit 2. Either one stops the call.
+      if (result.status !== 0) return String(result.stderr);
+      if (String(result.stdout).trim() === "") return null;
+      const output = JSON.parse(String(result.stdout)) as { hookSpecificOutput?: { permissionDecision?: string; permissionDecisionReason?: string } };
+      const decided = output.hookSpecificOutput;
+      return decided?.permissionDecision === "ask" ? String(decided.permissionDecisionReason) : null;
     }
 
     it("points an absent origin/HEAD at the default branch REST names, so the guard then refuses its push", async () => {

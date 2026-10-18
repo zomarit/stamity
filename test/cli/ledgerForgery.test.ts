@@ -14,7 +14,7 @@ import { buildInitDecisions } from "../../src/cli/commands/init/plan.ts";
 import { syncCommand } from "../../src/cli/commands/sync.ts";
 import { planSync, previewReclaim } from "../../src/cli/commands/sync/engine.ts";
 import { engineRenderingsFor } from "../../src/cli/engine/emissionWrite.ts";
-import { CLAUDE_DENY_ROWS } from "../../src/hooks/personOnly.ts";
+import { CLAUDE_ASK_ROWS, CLAUDE_DENY_ROWS } from "../../src/hooks/personOnly.ts";
 import { createApp } from "../../src/index.ts";
 import { ORG_POLICY_REL_PATH } from "../../src/pack/orgPolicy.ts";
 import { discoverInstalledPacksWithPolicy, ignoringPolicyDenialForProof } from "../../src/pack/projection.ts";
@@ -1431,7 +1431,9 @@ describe("clean refuses while a file it would keep is one a sync with this versi
     const left = ledger.map((row) => row.path).filter((path) => existsSync(join(root, path)));
     expect(left).toEqual([".claude/settings.json"]);
     expect(JSON.parse(await readFile(join(root, ".claude", "settings.json"), "utf8"))).toEqual({
-      permissions: { deny: [...CLAUDE_DENY_ROWS] },
+      // TEST CHANGE (v0a2, REQ-FLOW-123, REQ-FLOW-124): the person-only rows are split, the refused acts in `deny`
+      // and the acts that can be undone in `ask`; clean removes no row of either list, so both stay.
+      permissions: { deny: [...CLAUDE_DENY_ROWS], ask: [...CLAUDE_ASK_ROWS] },
     });
     expect(existsSync(join(root, ".stamity"))).toBe(false);
   }, 120_000);

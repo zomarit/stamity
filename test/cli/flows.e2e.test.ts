@@ -2,7 +2,7 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import { join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
-import { CLAUDE_DENY_ROWS } from "../../src/hooks/personOnly.ts";
+import { CLAUDE_ASK_ROWS, CLAUDE_DENY_ROWS } from "../../src/hooks/personOnly.ts";
 import { buildChildEnv, spawnCollect, useCliFixture } from "../support/cliHarness.ts";
 import { npxCommand } from "../support/identity.ts";
 /**
@@ -213,7 +213,9 @@ describe("the full lifecycle journey", () => {
     const treeAfter = await snapshotTree(fixture.repoDir);
     expect(treeAfter).toEqual([".claude/settings.json", ".gitignore", "history.md"]);
     const settings: unknown = JSON.parse(await readFile(join(fixture.repoDir, ".claude", "settings.json"), "utf8"));
-    expect(settings).toStrictEqual({ permissions: { deny: [...CLAUDE_DENY_ROWS] } });
+    // TEST CHANGE (v0a2, REQ-FLOW-123, REQ-FLOW-124): the person-only rows are split, the refused acts in
+    // `deny` and the acts that can be undone in `ask`, and clean removes no row of either list, so both survive.
+    expect(settings).toStrictEqual({ permissions: { deny: [...CLAUDE_DENY_ROWS], ask: [...CLAUDE_ASK_ROWS] } });
     expect(clean.stdout).toContain("clean removes no deny row, as an equal one may be yours.");
     for (const row of CLAUDE_DENY_ROWS) expect(clean.stdout, `clean did not name ${row}`).toContain(JSON.stringify(row));
     // Beside them survive the engine's gitignore entries: the
