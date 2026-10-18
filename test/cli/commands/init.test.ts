@@ -506,6 +506,8 @@ describe("init — fresh repo", () => {
         ".stamity/run-ended.json",
         // TEST CHANGE, justified (v6-cursor-cloud, REQ-FLOW-115): the engine now ignores Cursor's context-once markers too.
         ".stamity/context-once/",
+        // TEST CHANGE, justified (v17-model-list-cache, REQ-LADDER-009): the engine now ignores the client model list cache too.
+        ".stamity/client-models.json",
       ]),
     );
     // The edit is DISCLOSED too. This repo has no predecessor and no
@@ -522,7 +524,7 @@ describe("init — fresh repo", () => {
     expect(result.stdout).toContain(
       ".stamity/review-gate.json.tmp-* (the review gate's temporary writes), " +
         ".stamity/preflight-canary.json (the shell guard's hooks canary), " +
-        ".stamity/run-ended.json (the run that just ended, read by the ask gate), .stamity/context-once/ (Cursor's once-per-conversation context markers) — were added to your .gitignore", // TEST CHANGE, justified (v6-cursor-cloud, REQ-FLOW-115): the engine now ignores Cursor's context-once markers, named last.
+        ".stamity/run-ended.json (the run that just ended, read by the ask gate), .stamity/context-once/ (Cursor's once-per-conversation context markers), .stamity/client-models.json (machine-local state this setup writes) — were added to your .gitignore", // TEST CHANGE, justified (v6-cursor-cloud, REQ-FLOW-115): the engine now ignores Cursor's context-once markers, named last. // TEST CHANGE, justified (v17-model-list-cache, REQ-LADDER-009): the engine now ignores the client model list cache, named last with the panel's neutral reason.
     );
     expect(result.stdout).toContain("security: these lines — .env.mcp (MCP server credentials), ");
     // No MCP server, so no credential file this setup uses.
@@ -1918,7 +1920,7 @@ describe("init --dry-run", () => {
     expect(result.stdout).toContain(
       ".stamity/review-gate.json.tmp-* (the review gate's temporary writes), " +
         ".stamity/preflight-canary.json (the shell guard's hooks canary), " +
-        ".stamity/run-ended.json (the run that just ended, read by the ask gate), .stamity/context-once/ (Cursor's once-per-conversation context markers) — would be added to your .gitignore", // TEST CHANGE, justified (v6-cursor-cloud, REQ-FLOW-115): the engine now ignores Cursor's context-once markers, named last.
+        ".stamity/run-ended.json (the run that just ended, read by the ask gate), .stamity/context-once/ (Cursor's once-per-conversation context markers), .stamity/client-models.json (machine-local state this setup writes) — would be added to your .gitignore", // TEST CHANGE, justified (v6-cursor-cloud, REQ-FLOW-115): the engine now ignores Cursor's context-once markers, named last. // TEST CHANGE, justified (v17-model-list-cache, REQ-LADDER-009): the engine now ignores the client model list cache, named last with the panel's neutral reason.
     );
     expect(result.stdout).toContain("security: these lines — .env.mcp (MCP server credentials), ");
     // REQ-FLOW-022: the preview names a defaulted client set as the default too.

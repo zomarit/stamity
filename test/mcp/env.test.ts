@@ -416,10 +416,14 @@ const MARKER_ENTRY = ".stamity/run-ended.json";
 /** Cursor's context-once folder (REQUIRED_GITIGNORE_ENTRIES since v6-cursor-cloud), appended after the marker. */
 const CONTEXT_ONCE_ENTRY = ".stamity/context-once/";
 
+/** The client model list cache (REQUIRED_GITIGNORE_ENTRIES since v17-model-list-cache), appended after the folder. */
+const MODEL_CACHE_ENTRY = ".stamity/client-models.json";
+
 /** Every entry an empty `.gitignore` receives, in order. */
 // TEST CHANGE, justified (pr/17): the engine now ignores the run-ended marker, so the tail gains it last.
 // TEST CHANGE, justified (v6-cursor-cloud, REQ-FLOW-115): the engine now ignores Cursor's context-once markers, so the tail gains its folder last.
-const REQUIRED_TAIL = [".env.mcp", ...REVIEW_GATE_TAIL, CANARY_ENTRY, MARKER_ENTRY, CONTEXT_ONCE_ENTRY];
+// TEST CHANGE, justified (v17-model-list-cache, REQ-LADDER-009): the engine now ignores the client model list cache, so the tail gains it last.
+const REQUIRED_TAIL = [".env.mcp", ...REVIEW_GATE_TAIL, CANARY_ENTRY, MARKER_ENTRY, CONTEXT_ONCE_ENTRY, MODEL_CACHE_ENTRY];
 
 describe("ensureGitignoreEntry", () => {
   it("creates the file, then stays idempotent across repeat calls", async () => {
@@ -475,7 +479,7 @@ describe("ensureGitignoreEntry", () => {
     // that `.env.mcp` itself is NOT added beside it.
     expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(
       // TEST CHANGE, justified (v6-cursor-cloud, REQ-FLOW-115): the engine now ignores Cursor's context-once markers, appended last.
-      `.env.*\n${[...REVIEW_GATE_TAIL, CANARY_ENTRY, MARKER_ENTRY, CONTEXT_ONCE_ENTRY].join("\n")}\n`,
+      `.env.*\n${[...REVIEW_GATE_TAIL, CANARY_ENTRY, MARKER_ENTRY, CONTEXT_ONCE_ENTRY, MODEL_CACHE_ENTRY].join("\n")}\n`,
     );
   });
 
@@ -490,7 +494,7 @@ describe("ensureGitignoreEntry", () => {
     // says nothing about, are now appended after it (with the run-ended marker, which the engine now ignores, pr/17).
     expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(
       // TEST CHANGE, justified (v6-cursor-cloud, REQ-FLOW-115): the engine now ignores Cursor's context-once markers, appended last.
-      `.env.*\n!.env.mcp\n${[...REVIEW_GATE_TAIL, CANARY_ENTRY, MARKER_ENTRY, CONTEXT_ONCE_ENTRY].join("\n")}\n`,
+      `.env.*\n!.env.mcp\n${[...REVIEW_GATE_TAIL, CANARY_ENTRY, MARKER_ENTRY, CONTEXT_ONCE_ENTRY, MODEL_CACHE_ENTRY].join("\n")}\n`,
     );
   });
 
@@ -518,7 +522,8 @@ describe("ensureGitignoreEntry", () => {
     const existing =
       ".env*\n/.stamity/review-gate.json\n/.stamity/review-gate.json.lock\n/.stamity/review-gate.json.tmp-*\n" +
       // TEST CHANGE, justified (v6-cursor-cloud, REQ-FLOW-115): the engine now ignores Cursor's context-once markers, so the seeded file names its folder too.
-      "/.stamity/preflight-canary.json\n/.stamity/run-ended.json\n/.stamity/context-once/\n";
+      // TEST CHANGE, justified (v17-model-list-cache, REQ-LADDER-009): the seeded file names the client model list cache too.
+      "/.stamity/preflight-canary.json\n/.stamity/run-ended.json\n/.stamity/context-once/\n/.stamity/client-models.json\n";
     await dir.seedFiles({ ".gitignore": existing });
 
     await ensureGitignoreEntry(dir.dir);
@@ -559,7 +564,7 @@ describe("ensureGitignoreEntry", () => {
       await ensureGitignoreEntry(dir.dir);
 
       // TEST CHANGE, justified (v6-cursor-cloud, REQ-FLOW-115): the engine now ignores Cursor's context-once markers, which the prefix does not cover either.
-      expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(`${existing}${CANARY_ENTRY}\n${MARKER_ENTRY}\n${CONTEXT_ONCE_ENTRY}\n`);
+      expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(`${existing}${CANARY_ENTRY}\n${MARKER_ENTRY}\n${CONTEXT_ONCE_ENTRY}\n${MODEL_CACHE_ENTRY}\n`);
     },
   );
 
@@ -573,7 +578,7 @@ describe("ensureGitignoreEntry", () => {
       // TEST CHANGE, justified (pr/17): the engine now ignores the run-ended marker, appended last.
       ".env.mcp\n!.stamity/review-gate.json\n.stamity/review-gate.json.lock\n.stamity/review-gate.json.tmp-*\n" +
         // TEST CHANGE, justified (v6-cursor-cloud, REQ-FLOW-115): the engine now ignores Cursor's context-once markers, appended last.
-        ".stamity/preflight-canary.json\n.stamity/run-ended.json\n.stamity/context-once/\n",
+        ".stamity/preflight-canary.json\n.stamity/run-ended.json\n.stamity/context-once/\n.stamity/client-models.json\n", // TEST CHANGE, justified (v17-model-list-cache, REQ-LADDER-009): the client model list cache, appended last.
     );
   });
 
@@ -589,7 +594,7 @@ describe("ensureGitignoreEntry", () => {
       // TEST CHANGE, justified (pr/17): the engine now ignores the run-ended marker, appended last.
       ".env.mcp\n!/.stamity/review-gate.json\n.stamity/review-gate.json.lock\n.stamity/review-gate.json.tmp-*\n" +
         // TEST CHANGE, justified (v6-cursor-cloud, REQ-FLOW-115): the engine now ignores Cursor's context-once markers, appended last.
-        ".stamity/preflight-canary.json\n.stamity/run-ended.json\n.stamity/context-once/\n",
+        ".stamity/preflight-canary.json\n.stamity/run-ended.json\n.stamity/context-once/\n.stamity/client-models.json\n", // TEST CHANGE, justified (v17-model-list-cache, REQ-LADDER-009): the client model list cache, appended last.
     );
   });
 

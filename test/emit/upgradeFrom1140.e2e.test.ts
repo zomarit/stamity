@@ -159,6 +159,9 @@ const MARKER_IGNORE_LINE = ".stamity/run-ended.json";
 /** Cursor's context-once folder's ignore line, appended after the marker's; structural, as the canary's. */
 const CONTEXT_ONCE_IGNORE_LINE = ".stamity/context-once/";
 
+/** The client model list cache's ignore line, appended after the context-once folder's; structural, as the canary's. */
+const MODEL_CACHE_IGNORE_LINE = ".stamity/client-models.json";
+
 /** Repo-relative manifest path; structural, never imported from src/ (cliHarness lane discipline). */
 const MANIFEST_REL = ".stamity/manifest.json";
 
@@ -402,10 +405,12 @@ describe("a 1.14.0 tree upgrades through the current sync and check (node dist/c
           // its line after the canary's; the user's bytes before them are still held.
           // TEST CHANGE, justified (v6-cursor-cloud, REQ-FLOW-115): the engine now ignores Cursor's context-once
           // markers, so the upgrade appends that folder's line after the marker's.
+          // TEST CHANGE, justified (v17-model-list-cache, REQ-LADDER-009): the engine now ignores the
+          // client model list cache, so the upgrade appends its line last.
           const expected =
             path === ".gitignore"
               ? createHash("sha256")
-                  .update(`${gitignoreBefore}${CANARY_IGNORE_LINE}\n${MARKER_IGNORE_LINE}\n${CONTEXT_ONCE_IGNORE_LINE}\n`, "utf8")
+                  .update(`${gitignoreBefore}${CANARY_IGNORE_LINE}\n${MARKER_IGNORE_LINE}\n${CONTEXT_ONCE_IGNORE_LINE}\n${MODEL_CACHE_IGNORE_LINE}\n`, "utf8")
                   .digest("hex")
               : hash;
           expect(afterFirst.get(path), `the user's ${path} was moved by sync`).toBe(expected);
