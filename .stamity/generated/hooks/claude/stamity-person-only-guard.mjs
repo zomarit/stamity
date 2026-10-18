@@ -534,6 +534,9 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 	}
 	function httpCall(raw) {
 		const tool = raw[0] ?? "";
+		const hidden = () => {
+			throw Object.assign(/* @__PURE__ */ new Error("http target hidden"), { code: "HTTP_TARGET_HIDDEN" });
+		};
 		const expanded = raw.map((word) => {
 			const name = word.split("=")[0] ?? "";
 			const full = tool === "wget" && /^--[a-z-]{2,}$/i.test(name) ? [
@@ -542,7 +545,9 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				"--post-file",
 				"--body-data",
 				"--body-file",
-				"--execute"
+				"--execute",
+				"--config",
+				"--input-file"
 			].find((option) => option.startsWith(name.toLowerCase())) : void 0;
 			return full === void 0 ? word : full + word.slice(name.length);
 		});
@@ -551,7 +556,8 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			["postdata", "--post-data"],
 			["postfile", "--post-file"],
 			["bodydata", "--body-data"],
-			["bodyfile", "--body-file"]
+			["bodyfile", "--body-file"],
+			["input", "--input-file"]
 		]);
 		const cmd = [];
 		for (let k = 0; k < expanded.length; k += 1) {
@@ -573,6 +579,10 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		}
 		let method = null;
 		let body = false;
+		let globoff = false;
+		let inputFile = false;
+		let end = cmd.length;
+		let next = null;
 		const targets = [];
 		const start = tool === "gh" ? cmd.indexOf("api") + 1 : 1;
 		const valueFlags = tool === "gh" ? [
@@ -649,6 +659,22 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		for (let k = start; k < cmd.length; k += 1) {
 			const word = cmd[k] ?? "";
 			const name = word.split("=")[0] ?? "";
+			if (tool === "curl" && (word === "--next" || word === "-:")) {
+				next = ["curl", ...cmd.slice(k + 1)];
+				end = k;
+				break;
+			}
+			if (tool !== "gh" && /^--conf(ig?)?(=|$)/.test(word)) hidden();
+			if (tool === "wget" && /^--input-file(=|$)/.test(word)) inputFile = true;
+			if (tool !== "gh" && /^-[^-]/.test(word)) for (const letter of word.slice(1)) if (tool === "curl") {
+				if (letter === "K" || letter === ":") hidden();
+				if (letter === "g") globoff = true;
+				if ("HouAebcwmxrEdFTXCDPQtyYzU".includes(letter)) break;
+			} else {
+				if (letter === "i") inputFile = true;
+				if ("oaeiBtOTwQPlARDXIU".includes(letter)) break;
+			}
+			if (tool === "curl" && word === "--globoff") globoff = true;
 			if (word === "-X" || word === "--method" || word === "--request") {
 				method = cmd[k + 1] ?? "";
 				k += 1;
@@ -675,17 +701,20 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			else if (!word.startsWith("-")) targets.push(word);
 		}
 		const verb = (method ?? (body ? "POST" : "GET")).toUpperCase();
-		const paths = targets.map((target) => (target.replace(/^[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/]*/, "").replace(/^[\w-]+(\.[\w-]+)+(:\d+)?(?=\/)/, "").replace(/^\/+/, "").replace(/^api\/v3\//i, "").split(/[?#]/)[0] ?? "").replace(/%([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(Number.parseInt(hex, 16))).replace(/\/+$/, "").replace(/^repos\/[^/]+\/[^/]+\//i, "").replace(/^(orgs|enterprises|users|repositories)\/[^/]+\//i, ""));
+		const write = [
+			"POST",
+			"PUT",
+			"PATCH",
+			"DELETE"
+		].includes(verb);
+		if (tool === "curl" && (write || body) && !globoff && targets.some((target) => /[{[]/.test(target))) hidden();
+		if (tool === "wget" && write && inputFile) hidden();
 		return {
-			write: [
-				"POST",
-				"PUT",
-				"PATCH",
-				"DELETE"
-			].includes(verb),
+			write,
 			method: verb,
-			paths,
-			cmd
+			paths: targets.map((target) => (target.replace(/^[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/]*/, "").replace(/^[\w-]+(\.[\w-]+)+(:\d+)?(?=\/)/, "").replace(/^\/+/, "").replace(/^api\/v3\//i, "").split(/[?#]/)[0] ?? "").replace(/%([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(Number.parseInt(hex, 16))).replace(/\/+$/, "").replace(/^repos\/[^/]+\/[^/]+\//i, "").replace(/^(orgs|enterprises|users|repositories)\/[^/]+\//i, "")),
+			cmd: cmd.slice(0, end),
+			next
 		};
 	}
 	const branch = (ref) => ref.replace(/^refs\/heads\//i, "").replace(/^refs\/remotes\/[^/]+\//i, "").toLowerCase();
@@ -858,6 +887,32 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		}
 		return list || positionals.length === 0 ? null : deny("tag", "A tag created (`git tag <name>`)");
 	}
+	function symbolicRefVerdict(args) {
+		let remove = false;
+		const positionals = [];
+		for (let j = 0; j < args.length; j += 1) {
+			const arg = args[j] ?? "";
+			if (arg === "--") {
+				positionals.push(...args.slice(j + 1));
+				break;
+			}
+			if (arg.startsWith("--")) {
+				const name = (arg.split("=")[0] ?? "").toLowerCase();
+				if (name.length > 2 && "--delete".startsWith(name)) remove = true;
+			} else if (arg.startsWith("-") && arg.length > 1) {
+				for (let c = 1; c < arg.length; c += 1) if (arg[c] === "d") remove = true;
+				else if (arg[c] === "m") {
+					if (c === arg.length - 1) j += 1;
+					break;
+				}
+			} else positionals.push(arg);
+		}
+		const [name = "", target] = positionals;
+		if ((remove || target !== void 0) && /^(refs\/)?tags\//i.test(name)) return deny("tag", "A symbolic tag ref written or deleted (`git symbolic-ref`)");
+		if (remove || target === void 0 || name === "HEAD") return null;
+		if (/[$`]/.test(target) || defaults.has(target.replace(/^(refs\/)?heads\//i, "").toLowerCase())) return deny("push-default", "A symbolic ref pointed at the default branch, or at a branch the line cannot show (`git symbolic-ref`)");
+		return null;
+	}
 	function ghVerdict(cmd) {
 		const [group, sub] = ghPositionals(cmd);
 		const flag = (long, short, valued) => cmd.some((word) => {
@@ -889,7 +944,9 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 	function httpVerdict(line) {
 		const gh = line[0] === "gh";
 		const fill = (value) => value.replace(/\{branch\}|:branch\b/g, () => ctx.currentBranch === null ? "main" : branch(ctx.currentBranch));
-		const { write, method, paths: targets, cmd } = httpCall(line);
+		const { write, method, paths: targets, cmd, next } = httpCall(line);
+		const later = next === null ? null : httpVerdict(next);
+		if (later !== null) return later;
 		const paths = gh ? targets.map(fill) : targets;
 		const text = cmd.join(" ");
 		const fieldFlag = gh ? /^(-[fF]|--field|--raw-field)$/ : /^(-[A-Za-z]*d|--data(-raw|-binary|-ascii|-urlencode)?|--json|--post-data|--body-data)$/;
@@ -984,6 +1041,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			if (/^graphql$/i.test(path)) {
 				if (/\b(mergePullRequest|enablePullRequestAutoMerge|enqueuePullRequest)\b/.test(text)) return deny("pr-merge", "A GraphQL merge");
 				if (/\bmarkPullRequestReadyForReview\b/.test(text)) return deny("pr-ready", "A GraphQL ready-for-review");
+				if (/\b(archiveRepository|unarchiveRepository|updateRepository(CustomProperty|Ruleset|WebCommitSignoffSetting)?|(create|update|delete)(BranchProtectionRule|RepositoryRuleset)|(create|delete|promote)RepositoryCustomProperty|setRepositoryCustomPropertyValues)\b/.test(text)) return deny("protection", "A GraphQL repository settings, protection or ruleset write");
 				if (/\b(addPullRequestReview|submitPullRequestReview)\b/.test(text)) {
 					const reviews = [...calls("addPullRequestReview", "event"), ...calls("submitPullRequestReview", "event")];
 					const variables = queries.some((query) => mask(query).includes("$"));
@@ -1008,7 +1066,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			if (!write) continue;
 			if (/^pulls\/[^/]+\/merge(\/|$)/i.test(path) || /(^|\/)merge-async(\/|$)/i.test(path)) return deny("pr-merge", `A REST merge (${shown})`);
 			if (/^pulls\/[^/]+\/reviews(\/[^/]+\/events)?$/i.test(path) && (hiddenBody || fields("event").some((event) => event === null || /^approve$/i.test(event.trim())))) return deny("pr-merge", `A REST review approval, or a review whose body the line cannot show (${shown})`);
-			if (/^branches\/.+\/protection(\/|$)/i.test(path) || /^rulesets(\/|$)/i.test(path)) return deny("protection", `A protection or ruleset write (${shown})`);
+			if (/^branches\/.+\/protection(\/|$)/i.test(path) || /^(rulesets|properties)(\/|$)/i.test(path)) return deny("protection", `A protection or ruleset write (${shown})`);
 			if (/^(repos\/[^/]+\/[^/]+|repositories\/[^/]+)$/i.test(path) && (method === "PATCH" || method === "DELETE")) return deny("protection", `A repository settings write or deletion (${shown})`);
 			if (/^branches\/.+\/rename$/i.test(path)) return deny("protection", `A branch rename (${shown})`);
 			if (/^transfer$/i.test(path)) return deny("protection", `A repository transfer (${shown})`);
@@ -1097,6 +1155,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			else if (sub === "send-pack") verdict = pushVerdict(args, [...config, "push.default=matching"]);
 			else if (sub === "tag") verdict = tagVerdict(args);
 			else if (sub === "update-ref" && (args.some((arg) => /^(refs\/)?tags\//i.test(arg)) || args.includes("--stdin") && /refs\/tags\//i.test(command))) verdict = deny("tag", "A tag ref write (`git update-ref`)");
+			else if (sub === "symbolic-ref") verdict = symbolicRefVerdict(args);
 			else if (sub === "subtree") {
 				const valued = /* @__PURE__ */ new Set([
 					"-P",
@@ -1582,6 +1641,9 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 	}
 	function httpCall(raw) {
 		const tool = raw[0] ?? "";
+		const hidden = () => {
+			throw Object.assign(/* @__PURE__ */ new Error("http target hidden"), { code: "HTTP_TARGET_HIDDEN" });
+		};
 		const expanded = raw.map((word) => {
 			const name = word.split("=")[0] ?? "";
 			const full = tool === "wget" && /^--[a-z-]{2,}$/i.test(name) ? [
@@ -1590,7 +1652,9 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 				"--post-file",
 				"--body-data",
 				"--body-file",
-				"--execute"
+				"--execute",
+				"--config",
+				"--input-file"
 			].find((option) => option.startsWith(name.toLowerCase())) : void 0;
 			return full === void 0 ? word : full + word.slice(name.length);
 		});
@@ -1599,7 +1663,8 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 			["postdata", "--post-data"],
 			["postfile", "--post-file"],
 			["bodydata", "--body-data"],
-			["bodyfile", "--body-file"]
+			["bodyfile", "--body-file"],
+			["input", "--input-file"]
 		]);
 		const cmd = [];
 		for (let k = 0; k < expanded.length; k += 1) {
@@ -1621,6 +1686,10 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 		}
 		let method = null;
 		let body = false;
+		let globoff = false;
+		let inputFile = false;
+		let end = cmd.length;
+		let next = null;
 		const targets = [];
 		const start = tool === "gh" ? cmd.indexOf("api") + 1 : 1;
 		const valueFlags = tool === "gh" ? [
@@ -1697,6 +1766,22 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 		for (let k = start; k < cmd.length; k += 1) {
 			const word = cmd[k] ?? "";
 			const name = word.split("=")[0] ?? "";
+			if (tool === "curl" && (word === "--next" || word === "-:")) {
+				next = ["curl", ...cmd.slice(k + 1)];
+				end = k;
+				break;
+			}
+			if (tool !== "gh" && /^--conf(ig?)?(=|$)/.test(word)) hidden();
+			if (tool === "wget" && /^--input-file(=|$)/.test(word)) inputFile = true;
+			if (tool !== "gh" && /^-[^-]/.test(word)) for (const letter of word.slice(1)) if (tool === "curl") {
+				if (letter === "K" || letter === ":") hidden();
+				if (letter === "g") globoff = true;
+				if ("HouAebcwmxrEdFTXCDPQtyYzU".includes(letter)) break;
+			} else {
+				if (letter === "i") inputFile = true;
+				if ("oaeiBtOTwQPlARDXIU".includes(letter)) break;
+			}
+			if (tool === "curl" && word === "--globoff") globoff = true;
 			if (word === "-X" || word === "--method" || word === "--request") {
 				method = cmd[k + 1] ?? "";
 				k += 1;
@@ -1723,17 +1808,20 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 			else if (!word.startsWith("-")) targets.push(word);
 		}
 		const verb = (method ?? (body ? "POST" : "GET")).toUpperCase();
-		const paths = targets.map((target) => (target.replace(/^[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/]*/, "").replace(/^[\w-]+(\.[\w-]+)+(:\d+)?(?=\/)/, "").replace(/^\/+/, "").replace(/^api\/v3\//i, "").split(/[?#]/)[0] ?? "").replace(/%([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(Number.parseInt(hex, 16))).replace(/\/+$/, "").replace(/^repos\/[^/]+\/[^/]+\//i, "").replace(/^(orgs|enterprises|users|repositories)\/[^/]+\//i, ""));
+		const write = [
+			"POST",
+			"PUT",
+			"PATCH",
+			"DELETE"
+		].includes(verb);
+		if (tool === "curl" && (write || body) && !globoff && targets.some((target) => /[{[]/.test(target))) hidden();
+		if (tool === "wget" && write && inputFile) hidden();
 		return {
-			write: [
-				"POST",
-				"PUT",
-				"PATCH",
-				"DELETE"
-			].includes(verb),
+			write,
 			method: verb,
-			paths,
-			cmd
+			paths: targets.map((target) => (target.replace(/^[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/]*/, "").replace(/^[\w-]+(\.[\w-]+)+(:\d+)?(?=\/)/, "").replace(/^\/+/, "").replace(/^api\/v3\//i, "").split(/[?#]/)[0] ?? "").replace(/%([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(Number.parseInt(hex, 16))).replace(/\/+$/, "").replace(/^repos\/[^/]+\/[^/]+\//i, "").replace(/^(orgs|enterprises|users|repositories)\/[^/]+\//i, "")),
+			cmd: cmd.slice(0, end),
+			next
 		};
 	}
 	const deny = (what) => ({
@@ -1944,10 +2032,13 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 			http = group === "api";
 		}
 		if (!http) continue;
-		const { write, method, paths } = httpCall(cmd);
-		for (const path of paths) if (/^graphql$/i.test(path)) {
-			if (GRAPHQL_MOVES.test(cmd.join(" "))) return deny("A GraphQL mutation that moves a branch or a pull request");
-		} else if (write && MOVES.some((pattern) => pattern.test(path))) return deny(`A REST write that moves a branch or a pull request (${method} ${path})`);
+		for (let words = cmd; words !== null;) {
+			const { write, method, paths, cmd: part, next } = httpCall(words);
+			for (const path of paths) if (/^graphql$/i.test(path)) {
+				if (GRAPHQL_MOVES.test(part.join(" "))) return deny("A GraphQL mutation that moves a branch or a pull request");
+			} else if (write && MOVES.some((pattern) => pattern.test(path))) return deny(`A REST write that moves a branch or a pull request (${method} ${path})`);
+			words = next;
+		}
 	}
 	const allexport = commands.some((cmd) => cmd[0] === "set" && cmd.slice(1).some((word) => ALLEXPORT_CLUSTER.test(word)) || OPTION_SETTERS.has(cmd[0] ?? "") && cmd.slice(1).some((word) => /^(?:no)?allexport$/.test(word.replace(/_/g, "").toLowerCase())));
 	if (assigned.some((word) => SETS_WORD.test(word)) || commands.some((cmd) => {
