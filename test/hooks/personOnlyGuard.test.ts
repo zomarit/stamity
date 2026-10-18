@@ -144,12 +144,14 @@ const MATRIX: readonly (readonly [command: string, rule: string | null])[] = [
   ["git push --dry-r origin feat/x", null],
   ["cmd /c g^it push --for^ce origin feat/x", "force-push"],
   ["cmd /c g^it status", null],
-  ["wget --meth=DELETE https://api.github.com/repos/o/r/releases/1", "release"],
+  // TEST CHANGE (v0a, REQ-FLOW-124): a REST DELETE on a release is now the refuse-class release-delete, here and in
+  // the wgetrc `method=DELETE` row below; the guard still denies both.
+  ["wget --meth=DELETE https://api.github.com/repos/o/r/releases/1", "release-delete"],
   ["wget https://api.github.com/repos/o/r/releases", null],
   ["wget --me DELETE https://api.github.com/repos/o/r/git/refs/heads/feat/x", "push-delete"],
   ["wget --me=GET https://api.github.com/repos/o/r/releases/1", null],
   // wget's `-e` wgetrc command (pr/23).
-  ["wget -e method=DELETE https://api.github.com/repos/o/r/releases/1", "release"],
+  ["wget -e method=DELETE https://api.github.com/repos/o/r/releases/1", "release-delete"],
   ["wget -e robots=off https://api.github.com/repos/o/r/releases", null],
   ["git send-pack git@github.com:o/r.git main", "push-default"],
   ["git send-pack git@github.com:o/r.git feat/x", null],

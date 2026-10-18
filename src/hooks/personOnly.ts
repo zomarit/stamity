@@ -12,6 +12,12 @@
  * command line for them; {@link CLAUDE_DENY_ROWS} is the part a Claude Code
  * prefix rule can say, so the settings layer and the guard agree.
  *
+ * **Ask or refuse** (REQ-FLOW-102, REQ-FLOW-124). Each rule has a class: an act
+ * that can be undone is ask-class, and a deletion, a force push or an act that
+ * cannot be undone is refuse-class. The verdict collects every act a line holds
+ * and is `ask: true` only when all of them are ask-class, so a refused act
+ * never rides an approval; `deny` stays true on every person-only verdict.
+ *
  * **While a run is unattended** the run verbs (`stamity run checkpoint`, `run
  * end`) are the only push path: {@link unattendedPushVerdict} refuses any raw
  * `git push` (`git subtree push` among them), `gh pr create`, `gh pr edit`, `gh pr close` or `gh pr reopen`, a `gh repo` form that
@@ -59,49 +65,87 @@ export type PersonOnlyRuleId =
   | "release"
   | "publish"
   | "secrets"
-  | "protection";
+  | "protection"
+  | "tag-delete"
+  | "release-delete"
+  | "secrets-delete"
+  | "repo-delete"
+  | "repo-irreversible"
+  | "protection-delete"
+  | "unpublish";
 
-/** One person-only act: its rule id and what the person keeps. */
+/** One person-only act: its rule id, what the person keeps, and whether it is ask-class (it can be undone). */
 export interface PersonOnlyRule {
   readonly id: PersonOnlyRuleId;
   readonly act: string;
+  readonly ask: boolean;
 }
 
 /** Every person-only act, one row per rule id {@link personOnlyVerdict} returns. */
 export const PERSON_ONLY_RULES: readonly PersonOnlyRule[] = [
   {
     id: "force-push",
-    act: "a force push (`-f`, `--force`, `--force-with-lease`, `--force-if-includes`, a `+` refspec, a forced REST or GraphQL ref update)",
+    act: "a force push (`-f`, `--force`, `--force-with-lease`, `--force-if-includes`, a `+` refspec, `--mirror`, a forced REST or GraphQL ref update)",
+    ask: false,
   },
   {
     id: "push-default",
     act: "a push to the default branch, named, matched by a pattern refspec or implied by a refspec-less push or `HEAD` while on it, or a REST or GraphQL commit or merge onto it",
+    ask: true,
   },
   {
     id: "push-tags",
-    act: "a push of tags (`--tags`, `--follow-tags`, `--mirror`, `--all`, `tag <name>`, a refspec naming a tag: `refs/tags/…`, `tags/…` or a local tag's bare name, a REST or GraphQL tag ref)",
+    act: "a push of tags (`--tags`, `--follow-tags`, `--all`, `tag <name>`, a refspec naming a tag: `refs/tags/…`, `tags/…` or a local tag's bare name, a REST or GraphQL tag ref)",
+    ask: true,
   },
   {
     id: "push-delete",
-    act: "a remote branch deletion (`--delete`, `-d`, a `:ref` refspec, `gh pr close --delete-branch`, a REST or GraphQL ref deletion)",
+    act: "a remote branch deletion (`--delete`, `-d`, `--prune`, a `:ref` refspec, `gh pr close` or `gh pr merge` with `--delete-branch`, a REST or GraphQL ref deletion, a GraphQL ref update to the zero sha or one the line cannot show)",
+    ask: false,
   },
-  { id: "tag", act: "creating or deleting a tag (`git tag` beyond listing)" },
+  { id: "tag", act: "creating a tag (`git tag` beyond listing)", ask: true },
   {
     id: "pr-merge",
     act: "merging a pull request or approving a review of one (`gh pr merge`, `gh pr review --approve`, the REST or GraphQL merge, a REST or GraphQL review with the event `APPROVE`)",
+    ask: true,
   },
-  { id: "pr-ready", act: "marking a pull request ready for review (`gh pr ready`)" },
-  { id: "release", act: "creating, editing or deleting a release (`gh release` beyond list, view, download)" },
-  { id: "publish", act: "publishing a package (`npm`, `pnpm`, `yarn`, `bun` publish)" },
-  { id: "secrets", act: "writing a secret or a variable (`gh secret`, `gh variable` beyond list, their REST paths)" },
+  { id: "pr-ready", act: "marking a pull request ready for review (`gh pr ready`)", ask: true },
+  { id: "release", act: "creating, editing or uploading to a release (`gh release` beyond list, view, download)", ask: true },
+  { id: "publish", act: "publishing a package (`npm`, `pnpm`, `yarn`, `bun` publish, `npm dist-tag add`)", ask: true },
+  { id: "secrets", act: "writing a secret or a variable (`gh secret`, `gh variable` beyond list, their REST paths)", ask: true },
   {
     id: "protection",
-    act: "writing branch protection, a ruleset or a custom property a ruleset can target by, renaming a branch, or writing the repository itself (`gh repo edit --default-branch` or `--visibility`, `gh repo rename`, `gh repo delete`, `gh repo archive` or `gh repo unarchive`, a transfer, a REST PATCH or DELETE on the repository)",
+    act: "writing branch protection, a ruleset or a custom property a ruleset can target by, renaming a branch, or writing the repository's settings (`gh repo edit` but `--visibility`, `gh repo rename`, `gh repo archive` or `gh repo unarchive`, a REST PATCH on the repository)",
+    ask: true,
   },
+  {
+    id: "tag-delete",
+    act: "deleting or moving a tag (a remote tag deletion, `git tag -d` or `-f`, a `git update-ref` or `git symbolic-ref` deletion under `refs/tags/`)",
+    ask: false,
+  },
+  { id: "release-delete", act: "deleting a release or an asset (`gh release delete`, `delete-asset`, `upload --clobber`, a REST DELETE)", ask: false },
+  { id: "secrets-delete", act: "deleting a secret or a variable (`gh secret` or `gh variable` `delete` or `remove`, a REST DELETE)", ask: false },
+  { id: "repo-delete", act: "deleting the repository (`gh repo delete`, a REST DELETE on the repository)", ask: false },
+  {
+    id: "repo-irreversible",
+    act: "changing the repository's visibility or owner (`gh repo edit --visibility`, `gh repo transfer`, a REST PATCH whose body holds `visibility` or `private` or that the line cannot show, a REST transfer)",
+    ask: false,
+  },
+  {
+    id: "protection-delete",
+    act: "deleting branch protection, a ruleset or a custom property (a REST DELETE on them, GraphQL's `deleteBranchProtectionRule`, `deleteRepositoryRuleset`, `deleteRepositoryCustomProperty`)",
+    ask: false,
+  },
+  { id: "unpublish", act: "withdrawing a published package or tag (`npm unpublish`, `npm dist-tag rm`)", ask: false },
 ];
 
-/** A command's person-only verdict: allowed, or denied naming its rule. */
-export type PersonOnlyVerdict = { deny: false } | { deny: true; rule: PersonOnlyRuleId; reason: string };
+/**
+ * A command's person-only verdict: allowed, or denied naming its rule, the act and whether every act the line holds
+ * is ask-class (`ask`); a line with a refuse-class act names that act.
+ */
+export type PersonOnlyVerdict =
+  | { deny: false }
+  | { deny: true; rule: PersonOnlyRuleId; act: string; reason: string; ask: boolean };
 
 /** A command's verdict under the unattended push rule. */
 export type UnattendedPushVerdict = { deny: false } | { deny: true; reason: string };
@@ -225,6 +269,10 @@ export const CLAUDE_DENY_ROWS: readonly string[] = [
  * edge as well, and git's global options (`-c k=v` pairs among
  * them, a `remote.<name>.push` or `branch.<name>.merge` read as the refspec a
  * bare push takes) skipped before the subcommand.
+ *
+ * Every act is collected (v0a): each segment, each call `--next` joins, each path of a call, each flag of one gh
+ * call, each field of one REST body, each mutation and `updateRefs` entry in a GraphQL text. The verdict names the
+ * first refuse-class act when there is one, else the first act, and is `ask: true` only when every act is ask-class.
  *
  * `git symbolic-ref` (pr/70): a write or deletion of a name under `refs/tags/` is
  * a tag written; a write of any name but `HEAD` pointed at the default branch
@@ -818,13 +866,24 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   let tagNames: Set<string> | null = null;
   const isTagName = (name: string): boolean =>
     (tagNames ??= new Set(ctx.tags.map((tag) => tag.replace(/^refs\/tags\//i, "").toLowerCase()))).has(name);
-  const deny =(rule: PersonOnlyRuleId, what: string): PersonOnlyVerdict => ({
-    deny: true,
-    rule,
-    reason:
-      `${what} is a person-only act (${rule}): the person runs it, never the agent (REQ-FLOW-102). ` +
-      `Stop here and list it for the person.`,
-  });
+  // The ask-class rules (REQ-FLOW-102): any other rule refuses (REQ-FLOW-124), so a rule missing here never asks.
+  const ASK_RULES = new Set(["push-default", "push-tags", "tag", "pr-merge", "pr-ready", "release", "publish", "secrets", "protection"]);
+  // Every act the line holds (v0a): each segment, each call `--next` joins, each path, flag, body field and GraphQL
+  // entry; a refuse-class one decides the verdict, so a deletion never rides an approval.
+  const acts: { deny: true; rule: PersonOnlyRuleId; act: string; reason: string; ask: boolean }[] = [];
+  const deny = (rule: PersonOnlyRuleId, what: string): PersonOnlyVerdict => {
+    const verdict = {
+      deny: true as const,
+      rule,
+      act: what,
+      reason:
+        `${what} is a person-only act (${rule}): the person runs it, never the agent (REQ-FLOW-102). ` +
+        `Stop here and list it for the person.`,
+      ask: ASK_RULES.has(rule),
+    };
+    acts.push(verdict);
+    return verdict;
+  };
 
   /** A refspec's destination as a branch name: `+` dropped, `<src>:` cut, `refs/heads/` or `heads/` cut. */
   function destination(refspec: string): string {
@@ -851,7 +910,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       const key = (eq === -1 ? pair : pair.slice(0, eq)).toLowerCase();
       const value = eq === -1 ? "true" : pair.slice(eq + 1).toLowerCase();
       const on = !["false", "no", "off", "0", ""].includes(value);
-      if ((key === "push.followtags" || /^remote\..+\.mirror$/.test(key)) && on) tags = true;
+      if (key === "push.followtags" && on) tags = true;
+      if (/^remote\..+\.mirror$/.test(key) && on) force = true;
       if (key === "push.default" && value === "matching") matching = true;
       if (/^remote\..+\.push$/.test(key) && eq !== -1) configured.push(pair.slice(eq + 1));
       if (/^branch\..+\.merge$/.test(key) && eq !== -1) configured.push(`HEAD:${pair.slice(eq + 1)}`);
@@ -868,8 +928,9 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         // name is read as each option it begins. A prefix of two options is one git refuses, so reading it as either
         // adds a denial to a line that pushes nothing, and a `--no-` form begins none of these.
         const is = (options: string[]): boolean => name.length > 2 && options.some((option) => option.startsWith(name));
-        if (is(["--force", "--force-with-lease", "--force-if-includes"])) force = true;
-        else if (is(["--tags", "--follow-tags", "--mirror", "--all", "--branches"])) tags = true;
+        // `--mirror` also force-updates and deletes remote refs, so it reads as a force push (v0a).
+        if (is(["--force", "--force-with-lease", "--force-if-includes", "--mirror"])) force = true;
+        else if (is(["--tags", "--follow-tags", "--all", "--branches"])) tags = true;
         else if (is(["--delete", "--prune"])) remove = true;
         else if (is(["--repo"])) {
           repoGiven = true;
@@ -890,17 +951,21 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     const named = repoGiven ? positionals : positionals.slice(1);
     // git reads `tag <name>` as `refs/tags/<name>:refs/tags/<name>`, whatever the context lists.
     const tagWord = named.indexOf("tag");
-    if (tagWord !== -1 && tagWord < named.length - 1) return deny("push-tags", "A push of tags");
+    const tagNamed = tagWord !== -1 && tagWord < named.length - 1;
     const refspecs = named.length > 0 ? named : configured;
-    // A reason names the act and a branch at most, never the arguments: a remote URL can carry a credential.
-    if (force || refspecs.some((spec) => spec.startsWith("+"))) return deny("force-push", "A force push");
-    if (remove || refspecs.some((spec) => spec.length > 1 && spec.startsWith(":"))) {
-      return deny("push-delete", "A remote branch deletion");
-    }
     // A side naming a tag (`refs/tags/…`, `tags/…`, or a bare local tag name) pushes one: git gives a bare
     // destination the source's `refs/tags/` namespace, so `v1:x` and `refs/tags/v1:x` create the remote tag `x`.
     const namesTag = (side: string): boolean =>
       side !== "" && (/^(refs\/)?tags\//i.test(side) || isTagName(side.toLowerCase()));
+    // Force and deletion are read before the `tag` word (v0a): both are refuse-class, the tag push ask-class.
+    // A reason names the act and a branch at most, never the arguments: a remote URL can carry a credential.
+    if (force || refspecs.some((spec) => spec.startsWith("+"))) return deny("force-push", "A force push");
+    const deleted = refspecs.filter((spec) => spec.length > 1 && spec.startsWith(":")).map((spec) => spec.slice(1));
+    if (remove || deleted.length > 0) {
+      if (tagNamed || [...deleted, ...(remove ? refspecs : [])].some(namesTag)) return deny("tag-delete", "A remote tag deletion");
+      return deny("push-delete", "A remote branch deletion");
+    }
+    if (tagNamed) return deny("push-tags", "A push of tags");
     const sides = (spec: string): string[] => {
       const bare = spec.replace(/^\+/, "");
       const colon = bare.indexOf(":");
@@ -939,6 +1004,11 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     const valued = new Set(["--contains", "--no-contains", "--merged", "--no-merged", "--points-at", "--sort", "--format"]);
     const listing = new Set(["--list", "--contains", "--no-contains", "--merged", "--no-merged", "--points-at"]);
     let list = false;
+    let written = false;
+    // A deletion or a forced move (`-d`, `-f`, `--delete`, `--force` and git's unique prefixes of the two) is
+    // refuse-class (v0a); any other write is a tag created. A write option's value is skipped, so a message reading
+    // `-d` is no flag.
+    let removed = false;
     const positionals: string[] = [];
     for (let j = 0; j < args.length; j += 1) {
       const arg = args[j] ?? "";
@@ -948,15 +1018,27 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       }
       if (arg.startsWith("--")) {
         const name = arg.split("=")[0] ?? "";
-        if (write.has(name)) return deny("tag", "A tag write (`git tag`)");
+        if (name.length > 2 && ["--delete", "--force"].some((option) => option.startsWith(name))) removed = true;
+        else if (write.has(name)) written = true;
         if (listing.has(name)) list = true;
-        if (valued.has(name) && !arg.includes("=")) j += 1;
+        if ((valued.has(name) || ["--local-user", "--message", "--file", "--cleanup", "--trailer"].includes(name)) && !arg.includes("=")) j += 1;
       } else if (arg.startsWith("-") && arg.length > 1) {
-        // `-n<num>` lists; any of a s u f d m F e v in a short cluster writes or verifies.
-        if (/[asufdmFev]/.test(arg.slice(1).replace(/n\d*$/, ""))) return deny("tag", "A tag write (`git tag`)");
-        if (/[ln]/.test(arg)) list = true;
+        // `-n<num>` lists; any of a s u f d m F e v in a short cluster writes or verifies, `u`, `m` and `F` taking
+        // the rest of the cluster or the next word as their value.
+        for (let c = 1; c < arg.length; c += 1) {
+          const letter = arg[c] ?? "";
+          if (letter === "d" || letter === "f") removed = true;
+          else if ("asmFuev".includes(letter)) written = true;
+          if (letter === "l" || letter === "n") list = true;
+          if ("umFn".includes(letter)) {
+            if (c === arg.length - 1 && letter !== "n") j += 1;
+            break;
+          }
+        }
       } else positionals.push(arg);
     }
+    if (removed) return deny("tag-delete", "A tag deleted or moved (`git tag -d` or `-f`)");
+    if (written) return deny("tag", "A tag write (`git tag`)");
     return list || positionals.length === 0 ? null : deny("tag", "A tag created (`git tag <name>`)");
   }
 
@@ -984,7 +1066,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       } else positionals.push(arg);
     }
     const [name = "", target] = positionals;
-    if ((remove || target !== undefined) && /^(refs\/)?tags\//i.test(name)) {
+    if (remove && /^(refs\/)?tags\//i.test(name)) return deny("tag-delete", `A symbolic tag ref deleted (\`${via}\`)`);
+    if (target !== undefined && /^(refs\/)?tags\//i.test(name)) {
       return deny("tag", `A symbolic tag ref written or deleted (\`${via}\`)`);
     }
     if (remove || target === undefined || name === "HEAD") return null;
@@ -994,7 +1077,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     return null;
   }
 
-  function ghVerdict(cmd: string[]): PersonOnlyVerdict | null {
+  /** Every act of one gh call (v0a): each flag is read, the refuse-class ones before the call's ask-class act. */
+  function ghVerdict(cmd: string[]): void {
     const [group, sub] = ghPositionals(cmd);
     /**
      * Whether the call sets gh's boolean flag `long` (`--x`, or `--x=<value>` other than a false spelling) or its
@@ -1010,29 +1094,41 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         }
         return false;
       });
-    if (group === "pr" && sub === "merge") return deny("pr-merge", "Merging a pull request (`gh pr merge`)");
+    // Merging with `-d`/`--delete-branch` deletes the head branch on the remote, as closing with it does (v0a).
+    if (group === "pr" && sub === "merge" && flag("--delete-branch", "d", "bFtA")) {
+      deny("push-delete", "A remote branch deletion (`gh pr merge --delete-branch`)");
+    }
+    if (group === "pr" && sub === "merge") deny("pr-merge", "Merging a pull request (`gh pr merge`)");
     // Closing with `--delete-branch` deletes the pull request's head branch on the remote (review/207).
     if (group === "pr" && sub === "close" && flag("--delete-branch", "d", "c")) {
-      return deny("push-delete", "A remote branch deletion (`gh pr close --delete-branch`)");
+      deny("push-delete", "A remote branch deletion (`gh pr close --delete-branch`)");
     }
     // An approval counts toward a required review, as a merge's own gate (review/210).
     if (group === "pr" && sub === "review" && flag("--approve", "a", "bF")) {
-      return deny("pr-merge", "Approving a pull request review (`gh pr review --approve`)");
+      deny("pr-merge", "Approving a pull request review (`gh pr review --approve`)");
     }
-    if (group === "pr" && sub === "ready") return deny("pr-ready", "Marking a pull request ready (`gh pr ready`)");
+    if (group === "pr" && sub === "ready") deny("pr-ready", "Marking a pull request ready (`gh pr ready`)");
     if (group === "release" && sub !== undefined && !["list", "ls", "view", "download"].includes(sub)) {
-      return deny("release", "A release write (`gh release`)");
+      // `upload --clobber` replaces an asset, which removes the one it replaces.
+      if (sub === "delete" || sub === "delete-asset" || (sub === "upload" && flag("--clobber", "", ""))) {
+        deny("release-delete", `A release or asset deletion (\`gh release ${sub}\`)`);
+      } else deny("release", "A release write (`gh release`)");
     }
     if ((group === "secret" || group === "variable") && sub !== undefined && !["list", "ls"].includes(sub)) {
-      return deny("secrets", `A ${group} write (\`gh ${group}\`)`);
+      if (sub === "delete" || sub === "remove") deny("secrets-delete", `A ${group} deletion (\`gh ${group} ${sub}\`)`);
+      else deny("secrets", `A ${group} write (\`gh ${group}\`)`);
     }
-    // Unarchiving makes the repository take writes again, as the GraphQL and REST twins do (pr/96).
-    if (group === "repo" && ["delete", "archive", "unarchive", "rename", "transfer"].includes(sub ?? "")) {
-      return deny("protection", `A repository ${sub} (\`gh repo ${sub}\`)`);
+    if (group === "repo" && sub === "delete") deny("repo-delete", "A repository delete (`gh repo delete`)");
+    // A transfer back needs the new owner, so it is one the agent cannot undo (v0a).
+    if (group === "repo" && sub === "transfer") deny("repo-irreversible", "A repository transfer (`gh repo transfer`)");
+    // Unarchiving makes the repository take writes again, as the GraphQL and REST twins do (pr/96); archiving undoes it.
+    if (group === "repo" && ["archive", "unarchive", "rename"].includes(sub ?? "")) {
+      deny("protection", `A repository ${sub} (\`gh repo ${sub}\`)`);
     }
     // `gh repo sync` with a destination repository updates that repository's branch, the default one unless
     // `--branch` names another, a fast-forward or under `--force` a hard reset (pr/94): the twins of the REST
     // `merge-upstream` and forced ref update. With none it syncs the local checkout, which writes nothing remote.
+    // The hard reset is refuse-class, the fast-forward ask-class (v0a).
     if (group === "repo" && sub === "sync") {
       const words: string[] = [];
       const branches: string[] = [];
@@ -1046,21 +1142,23 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       }
       // `repo`, `sync`, then the destination.
       if (words.length > 2) {
-        if (flag("--force", "", "")) return deny("force-push", "A forced sync of a repository (`gh repo sync --force`)");
+        if (flag("--force", "", "")) deny("force-push", "A forced sync of a repository (`gh repo sync --force`)");
         // A branch flag whose value the line ends before, an unquoted substitution having cut it, shows none.
         if (branches.length === 0 || branches.some((name) => name === "" || /[$`]/.test(name) || defaults.has(branch(name)))) {
-          return deny("push-default", "A sync of a repository's default branch, or of a branch the line cannot show (`gh repo sync`)");
+          deny("push-default", "A sync of a repository's default branch, or of a branch the line cannot show (`gh repo sync`)");
         }
       }
     }
-    if (group === "repo" && sub === "edit" && cmd.some((word) => /^--default-branch(=|$)/.test(word))) {
-      return deny("protection", "A default-branch change (`gh repo edit --default-branch`)");
+    if (group === "repo" && sub === "edit") {
+      // A repository made public cannot be made private again in effect; every other settings flag can be undone.
+      if (cmd.some((word) => /^--visibility(=|$)/.test(word))) {
+        deny("repo-irreversible", "A visibility change (`gh repo edit --visibility`)");
+      }
+      if (cmd.some((word) => /^--default-branch(=|$)/.test(word))) {
+        deny("protection", "A default-branch change (`gh repo edit --default-branch`)");
+      } else deny("protection", "A repository settings write (`gh repo edit`)");
     }
-    if (group === "repo" && sub === "edit" && cmd.some((word) => /^--visibility(=|$)/.test(word))) {
-      return deny("protection", "A visibility change (`gh repo edit --visibility`)");
-    }
-    if (group === "api") return httpVerdict(cmd);
-    return null;
+    if (group === "api") httpVerdict(cmd);
   }
 
   /**
@@ -1073,7 +1171,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
    * the line cannot show at all (gh's `--input`, a `-F` field read from `@<file>`, a curl or wget body that is no JSON
    * object literal, a file or a form, stdin among them) reads as the denying value too (review/228).
    */
-  function httpVerdict(line: string[]): PersonOnlyVerdict | null {
+  function httpVerdict(line: string[]): void {
     const gh = line[0] === "gh";
     // gh fills `{branch}` and `:branch` (its own placeholder pattern) from the checkout, in the endpoint and in a typed
     // `-F` field (review/127): the current branch, or the default branch where the checkout is on none.
@@ -1081,9 +1179,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       value.replace(/\{branch\}|:branch\b/g, () => (ctx.currentBranch === null ? "main" : branch(ctx.currentBranch)));
     // The words as `httpCall` reads them, wget's shortened method and body options expanded (pr/11).
     const { write, method, paths: targets, cmd, next } = httpCall(line);
-    // The call after `--next` (pr/72).
-    const later = next === null ? null : httpVerdict(next);
-    if (later !== null) return later;
+    // The call after `--next` (pr/72), its acts collected beside this call's (v0a).
+    if (next !== null) httpVerdict(next);
     const paths = gh ? targets.map(fill) : targets;
     const text = cmd.join(" ");
     const fieldFlag = gh ? /^(-[fF]|--field|--raw-field)$/ : /^(-[A-Za-z]*d|--data(-raw|-binary|-ascii|-urlencode)?|--json|--post-data|--body-data)$/;
@@ -1144,9 +1241,25 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     /** A GraphQL text with its string literals and comments masked, so a call, a key or a bracket inside one is no syntax. */
     const mask = (query: string): string =>
       query.replace(/"""[\s\S]*?"""|"(?:\\.|[^"\\])*"|#[^\n]*/g, (lit) => (lit.startsWith('"') ? '"' : " ").padEnd(lit.length));
-    /** Per call of the GraphQL field `name` in the line's GraphQL texts, the values its own arguments give `key`. */
-    const calls = (name: string, key: string): (string | null)[][] => {
-      const found: (string | null)[][] = [];
+    /** The argument value written at `at` in `query`. */
+    const valueAt = (query: string, at: number): string | null => {
+      const after = query.slice(at);
+      const literal = after.startsWith('"""') ? undefined : /^"(?:\\.|[^"\\])*"/.exec(after)?.[0];
+      // A bare token (`true`, an enum) as written; a variable, a block string, a list or an object is `null`.
+      let value: string | null = /^[\w.-]+/.exec(after)?.[0] ?? null;
+      if (literal !== undefined) {
+        try {
+          const decoded: unknown = JSON.parse(literal);
+          value = typeof decoded === "string" && !/[$`]/.test(decoded) ? decoded : null;
+        } catch {
+          value = null;
+        }
+      }
+      return value;
+    };
+    /** Per call of the GraphQL field `name` in the line's GraphQL texts, its argument span `[start, end)`. */
+    const spans = (name: string): [query: string, masked: string, start: number, end: number][] => {
+      const found: [string, string, number, number][] = [];
       for (const query of queries) {
         const masked = mask(query);
         for (const call of masked.matchAll(new RegExp(`\\b${name}\\s*\\(`, "g"))) {
@@ -1157,43 +1270,70 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
             else if (masked[end] === ")") level -= 1;
             if (level === 0) break;
           }
-          const values: (string | null)[] = [];
-          for (const arg of masked.slice(start, end).matchAll(new RegExp(`\\b${key}\\s*:\\s*`, "g"))) {
-            const after = query.slice(start + (arg.index ?? 0) + arg[0].length);
-            const literal = after.startsWith('"""') ? undefined : /^"(?:\\.|[^"\\])*"/.exec(after)?.[0];
-            // A bare token (`true`, an enum) as written; a variable, a block string, a list or an object is `null`.
-            let value: string | null = /^[\w.-]+/.exec(after)?.[0] ?? null;
-            if (literal !== undefined) {
-              try {
-                const decoded: unknown = JSON.parse(literal);
-                value = typeof decoded === "string" && !/[$`]/.test(decoded) ? decoded : null;
-              } catch {
-                value = null;
-              }
-            }
-            values.push(value);
-          }
-          found.push(values);
+          found.push([query, masked, start, end]);
         }
       }
       return found;
+    };
+    /** Per call of the GraphQL field `name` in the line's GraphQL texts, the values its own arguments give `key`. */
+    const calls = (name: string, key: string): (string | null)[][] =>
+      spans(name).map(([query, masked, start, end]) =>
+        [...masked.slice(start, end).matchAll(new RegExp(`\\b${key}\\s*:\\s*`, "g"))].map((arg) =>
+          valueAt(query, start + (arg.index ?? 0) + arg[0].length)));
+    /**
+     * Each `updateRefs` entry's `name` and `afterOid` (v0a), `null` where the line cannot show it: an entry, a list or
+     * an input given whole as a variable reads as an entry whose name and `afterOid` are both hidden.
+     */
+    const refEntries = (): { name: string | null; oid: string | null }[] => {
+      const entries: { name: string | null; oid: string | null }[] = [];
+      const read = (query: string, masked: string, from: number, to: number, key: string): string | null => {
+        const arg = new RegExp(`\\b${key}\\s*:\\s*`).exec(masked.slice(from, to));
+        return arg === null ? null : valueAt(query, from + arg.index + arg[0].length);
+      };
+      for (const [query, masked, start, end] of spans("updateRefs")) {
+        const list = /\brefUpdates\s*:\s*/.exec(masked.slice(start, end));
+        let k = list === null ? end : start + list.index + list[0].length;
+        if (masked[k] !== "[") {
+          entries.push({ name: null, oid: null });
+          continue;
+        }
+        let depth = 0;
+        let from = k;
+        for (k += 1; k < end; k += 1) {
+          const ch = masked[k];
+          if (depth === 0 && ch === "]") break;
+          if (ch === "{") {
+            if (depth === 0) from = k;
+            depth += 1;
+          } else if (ch === "}") {
+            depth -= 1;
+            if (depth === 0) entries.push({ name: read(query, masked, from, k, "name"), oid: read(query, masked, from, k, "afterOid") });
+          } else if (ch === "$" && depth === 0) entries.push({ name: null, oid: null });
+        }
+      }
+      return entries;
     };
     /** Whether a call of `name` the line names lands on the default branch: none readable, or one not placed there. */
     const callsLand = (name: string, key: string): boolean => {
       const found = calls(name, key);
       return found.length === 0 || found.some(landsOnDefault);
     };
+    // Every act of the call is collected (v0a): each GraphQL mutation and `updateRefs` entry, and each path's act.
     for (const path of paths) {
       const shown = `${method} ${path}`;
       if (/^graphql$/i.test(path)) {
         // A pull request added to the merge queue is merged by the queue later (pr/57).
-        if (/\b(mergePullRequest|enablePullRequestAutoMerge|enqueuePullRequest)\b/.test(text)) return deny("pr-merge", "A GraphQL merge");
-        if (/\bmarkPullRequestReadyForReview\b/.test(text)) return deny("pr-ready", "A GraphQL ready-for-review");
-        // pr/74, from GitHub's schema read on 2026-10-18.
+        if (/\b(mergePullRequest|enablePullRequestAutoMerge|enqueuePullRequest)\b/.test(text)) deny("pr-merge", "A GraphQL merge");
+        if (/\bmarkPullRequestReadyForReview\b/.test(text)) deny("pr-ready", "A GraphQL ready-for-review");
+        // pr/74, from GitHub's schema read on 2026-10-18; a protection rule's, a ruleset's or a property's deletion is
+        // refuse-class (v0a).
+        if (/\b(deleteBranchProtectionRule|deleteRepositoryRuleset|deleteRepositoryCustomProperty)\b/.test(text)) {
+          deny("protection-delete", "A GraphQL protection, ruleset or custom property deletion");
+        }
         if (
-          /\b(archiveRepository|unarchiveRepository|updateRepository(CustomProperty|Ruleset|WebCommitSignoffSetting)?|(create|update|delete)(BranchProtectionRule|RepositoryRuleset)|(create|delete|promote)RepositoryCustomProperty|setRepositoryCustomPropertyValues)\b/.test(text)
+          /\b(archiveRepository|unarchiveRepository|updateRepository(CustomProperty|Ruleset|WebCommitSignoffSetting)?|(create|update)(BranchProtectionRule|RepositoryRuleset)|(create|promote)RepositoryCustomProperty|setRepositoryCustomPropertyValues)\b/.test(text)
         ) {
-          return deny("protection", "A GraphQL repository settings, protection or ruleset write");
+          deny("protection", "A GraphQL repository settings, protection or ruleset write");
         }
         // A review added or submitted with the event `APPROVE` (review/210); an event the line cannot show (a variable,
         // a call it cannot find) reads as one, and a review with no event is the API's pending one.
@@ -1204,44 +1344,54 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
             reviews.length === 0 ||
             reviews.some((events) => (events.length === 0 && variables) || events.some((event) => event === null || /^approve$/i.test(event)))
           ) {
-            return deny("pr-merge", "A GraphQL review approval, or a review whose event the line cannot show");
+            deny("pr-merge", "A GraphQL review approval, or a review whose event the line cannot show");
           }
         }
         if (/\bcreateCommitOnBranch\b/.test(text) && callsLand("createCommitOnBranch", "branchName")) {
-          return deny("push-default", "A GraphQL commit to the default branch");
+          deny("push-default", "A GraphQL commit to the default branch");
         }
         if (/\bmergeBranch\b/.test(text) && callsLand("mergeBranch", "base")) {
-          return deny("push-default", "A GraphQL merge into the default branch");
+          deny("push-default", "A GraphQL merge into the default branch");
         }
         if (/\bupdateRefs?\b/.test(text)) {
           if ([...calls("updateRef", "force"), ...calls("updateRefs", "force")].some(forced)) {
-            return deny("force-push", "A forced GraphQL ref update");
+            deny("force-push", "A forced GraphQL ref update");
+          }
+          // An entry to the zero sha deletes its ref, and one whose `afterOid` the line cannot show reads as a deletion
+          // (v0a): a tag's under `refs/tags/`, any other a branch's.
+          for (const entry of refEntries()) {
+            if (entry.oid !== null && !/^(0{40}|0{64})$/.test(entry.oid)) continue;
+            if (entry.name !== null && /^refs\/tags\//i.test(entry.name)) deny("tag-delete", "A GraphQL tag ref deletion");
+            else deny("push-delete", "A GraphQL ref deletion, or a ref update whose target the line cannot show");
           }
           // The batch form names each ref (review/108); the single form names it by id, which the line cannot show.
           if (calls("updateRefs", "name").flat().some((ref) => ref !== null && /^refs\/tags\//i.test(ref))) {
-            return deny("push-tags", "A GraphQL tag ref update");
+            deny("push-tags", "A GraphQL tag ref update");
           }
           // A list element given whole as a variable, beside literal ones, names a ref the line cannot show (review/128).
           const hidden = queries.some((query) => /\brefUpdates\s*:\s*\[(?:[^\]]*,)?\s*\$/.test(mask(query)));
           if (/\bupdateRef\b/.test(text) || hidden || callsLand("updateRefs", "name")) {
-            return deny("push-default", "A GraphQL ref update onto the default branch, or onto a ref the line cannot show");
+            deny("push-default", "A GraphQL ref update onto the default branch, or onto a ref the line cannot show");
           }
         }
         // The GraphQL twins of the REST ref writes (build/75): any ref deletion, and a ref created as a tag or on the
         // default branch, a name the line cannot show reading as a tag.
-        if (/\bdeleteRef\b/.test(text)) return deny("push-delete", "A GraphQL ref deletion");
+        if (/\bdeleteRef\b/.test(text)) deny("push-delete", "A GraphQL ref deletion");
         if (/\bcreateRef\b/.test(text)) {
           const created = calls("createRef", "name");
           if (created.length === 0 || created.some((refs) => refs.length === 0 || refs.some((ref) => ref === null || /^refs\/tags\//i.test(ref)))) {
-            return deny("push-tags", "A GraphQL tag ref created, or a ref the line cannot show");
-          }
-          if (created.flat().some((ref) => ref !== null && defaults.has(branch(ref)))) {
-            return deny("push-default", "A GraphQL ref created on the default branch");
+            deny("push-tags", "A GraphQL tag ref created, or a ref the line cannot show");
+          } else if (created.flat().some((ref) => ref !== null && defaults.has(branch(ref)))) {
+            deny("push-default", "A GraphQL ref created on the default branch");
           }
         }
         continue;
       }
-      if (!write) continue;
+      if (write) restAct(path, shown);
+    }
+
+    /** The act of one REST write path below its repository or organisation, the refuse-class readings first (v0a). */
+    function restAct(path: string, shown: string): PersonOnlyVerdict | null {
       if (/^pulls\/[^/]+\/merge(\/|$)/i.test(path) || /(^|\/)merge-async(\/|$)/i.test(path)) {
         return deny("pr-merge", `A REST merge (${shown})`);
       }
@@ -1256,14 +1406,20 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       }
       // A custom property, which a ruleset can target repositories by (pr/80).
       if (/^branches\/.+\/protection(\/|$)/i.test(path) || /^(rulesets|properties)(\/|$)/i.test(path)) {
+        if (method === "DELETE") return deny("protection-delete", `A protection, ruleset or custom property deletion (${shown})`);
         return deny("protection", `A protection or ruleset write (${shown})`);
       }
       // The repository's own path carries its default branch, visibility, name and archived state; DELETE removes it.
+      // A body holding `visibility` or `private`, or one the line cannot show, may change the visibility (v0a).
       if (/^(repos\/[^/]+\/[^/]+|repositories\/[^/]+)$/i.test(path) && (method === "PATCH" || method === "DELETE")) {
+        if (method === "DELETE") return deny("repo-delete", `A repository settings write or deletion (${shown})`);
+        if (hiddenBody || fields("visibility").length > 0 || fields("private").length > 0) {
+          return deny("repo-irreversible", `A repository visibility change, or a settings write whose body the line cannot show (${shown})`);
+        }
         return deny("protection", `A repository settings write or deletion (${shown})`);
       }
       if (/^branches\/.+\/rename$/i.test(path)) return deny("protection", `A branch rename (${shown})`);
-      if (/^transfer$/i.test(path)) return deny("protection", `A repository transfer (${shown})`);
+      if (/^transfer$/i.test(path)) return deny("repo-irreversible", `A repository transfer (${shown})`);
       if (/^contents(\/|$)/i.test(path) && landsOnDefault(fields("branch"))) {
         return deny("push-default", `A REST commit to the default branch (${shown})`);
       }
@@ -1274,11 +1430,19 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         return deny("push-default", `A REST merge into the default branch (${shown})`);
       }
       if (/^((actions|dependabot|codespaces|agents)|environments\/[^/]+)\/(secrets|variables)(\/|$)/i.test(path)) {
+        if (method === "DELETE") return deny("secrets-delete", `A secret or variable deletion (${shown})`);
         return deny("secrets", `A secret or variable write (${shown})`);
       }
-      if (/^releases(\/|$)/i.test(path)) return deny("release", `A release write (${shown})`);
+      if (/^releases(\/|$)/i.test(path)) {
+        return method === "DELETE" ? deny("release-delete", `A release or asset deletion (${shown})`) : deny("release", `A release write (${shown})`);
+      }
       if (/^git\/refs(\/|$)/i.test(path)) {
-        if (method === "DELETE") return deny("push-delete", `A REST ref deletion (${shown})`);
+        if (method === "DELETE") {
+          if (/^git\/refs\/tags(\/|$)/i.test(path)) return deny("tag-delete", `A REST tag ref deletion (${shown})`);
+          return deny("push-delete", `A REST ref deletion (${shown})`);
+        }
+        // Force is read before tags (v0a): a forced tag move is refuse-class, a tag write ask-class.
+        if (forced(fields("force"))) return deny("force-push", `A forced REST ref update (${shown})`);
         // A body's `ref` read from the line's text and as the parsed field (pr/1), a JSON body's quote before it among
         // the spellings; one the line cannot place reads as a tag.
         const refs = fields("ref");
@@ -1289,7 +1453,6 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         ) {
           return deny("push-tags", `A REST tag ref write (${shown})`);
         }
-        if (forced(fields("force"))) return deny("force-push", `A forced REST ref update (${shown})`);
         // The path's own ref read from the path as routing reads it (review/107); a body's `ref` from the line.
         const heads = [/^git\/refs\/heads\/(.+)$/i.exec(path)?.[1] ?? "", ...[...text.matchAll(/(?:^|[=\s/])refs\/heads\/(\S+)/gi)].map((match) => match[1] ?? ""),
           ...refs.map((ref) => /^refs\/heads\/(.+)$/i.exec(ref ?? "")?.[1] ?? "")];
@@ -1297,8 +1460,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
           return deny("push-default", `A REST write to the default branch (${shown})`);
         }
       }
+      return null;
     }
-    return null;
   }
 
   function publishVerdict(cmd: string[]): PersonOnlyVerdict | null {
@@ -1344,26 +1507,44 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
             (cmd[0] === "yarn" && index === 2 && positionals[0] === "workspace")),
       ),
     );
+    // npm's `unpublish` (from its unique prefix `unp`) and `dist-tag rm` withdraw what a publish put out, refuse-class;
+    // `dist-tag add` moves a tag, ask-class as a publish (v0a). The prefix and the subcommands' aliases are npm
+    // 10.9.8's (`lib/utils/cmd-list.js`, `lib/commands/dist-tag.js`), read where npm runs them.
+    for (const positionals of npm ? [positionalsOf(false), positionalsOf(true)] : [positionalsOf(false)]) {
+      for (const [index, word] of positionals.entries()) {
+        if (!(index === 0 ? npm : positionals[index - 1] === "npm")) continue;
+        if (/^unp(?:u(?:b(?:l(?:i(?:sh?)?)?)?)?)?$/.test(word)) deny("unpublish", "Withdrawing a package (`npm unpublish`)");
+        const action = word === "dist-tag" || word === "dist-tags" ? (positionals[index + 1] ?? "") : "";
+        if (["rm", "r", "del", "d", "remove"].includes(action)) deny("unpublish", "A dist-tag removed (`npm dist-tag rm`)");
+        if (["add", "a", "set", "s"].includes(action)) deny("publish", "A dist-tag moved (`npm dist-tag add`)");
+      }
+    }
     return publishes ? deny("publish", `Publishing a package (\`${cmd[0]} publish\`)`) : null;
   }
 
+  // Each segment's acts are collected (v0a); the readers record them through `deny`.
   for (const cmd of commandsOf(command, 0, false)) {
     const program = cmd[0] ?? "";
-    let verdict: PersonOnlyVerdict | null = null;
     if (program === "git") {
       const { sub, args, config } = gitParts(cmd);
       // `git send-pack` pushes as `git push` does, its options and refspecs laid out the same (pr/16); with
       // no ref it updates the refs both sides have, the default branch among them, read as a matching push.
-      if (sub === "push") verdict = pushVerdict(args, config);
-      else if (sub === "send-pack") verdict = pushVerdict(args, [...config, "push.default=matching"]);
-      else if (sub === "tag") verdict = tagVerdict(args);
+      if (sub === "push") pushVerdict(args, config);
+      else if (sub === "send-pack") pushVerdict(args, [...config, "push.default=matching"]);
+      else if (sub === "tag") tagVerdict(args);
       else if (
         sub === "update-ref" &&
         (args.some((arg) => /^(refs\/)?tags\//i.test(arg)) || (args.includes("--stdin") && /refs\/tags\//i.test(command)))
       ) {
         // `git update-ref` writes or deletes a ref by name (pr/53): a tag ref named on the line, or in a `--stdin` text
         // the line itself carries, is a tag created or deleted. A `--stdin` text read from a file is the residual.
-        verdict = deny("tag", "A tag ref write (`git update-ref`)");
+        // A deletion (`-d`, a zero new value, a `delete` command or a zero sha in that text, read in excess) is
+        // refuse-class (v0a).
+        const zero = /(^|[^0-9a-f])(0{40}|0{64})([^0-9a-f]|$)/i;
+        const [, value = ""] = args.filter((arg, index) => !arg.startsWith("-") && args[index - 1] !== "-m");
+        if (args.includes("-d") || zero.test(value) || (args.includes("--stdin") && (/\bdelete\b/.test(command) || zero.test(command)))) {
+          deny("tag-delete", "A tag ref deleted (`git update-ref`)");
+        } else deny("tag", "A tag ref write (`git update-ref`)");
       } else if (sub === "update-ref" && args.includes("--stdin")) {
         // git 2.46's symref commands in that text (pr/82), by `git symbolic-ref`'s rules: `symref-create` and
         // `symref-update` as `<ref> <target>`, `symref-delete` as `-d <ref>`. A target missing or a printf placeholder
@@ -1373,21 +1554,21 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         const word = String.raw`(?:[\s'"]|\\(?:x[\da-fA-F]{1,2}|u[\da-fA-F]{1,4}|U[\da-fA-F]{1,8}|[0-7]{1,4}|[a-z]))+([^\s'"\\|;&<>()]+)`;
         for (const [, op, ref = "", target] of command.matchAll(new RegExp(String.raw`symref-(create|update|delete)${word}(?:${word})?`, "g"))) {
           const shown = target === undefined || target.includes("%") ? "$" : target;
-          verdict ??= symbolicRefVerdict(op === "delete" ? ["-d", ref] : [ref, shown], "git update-ref --stdin");
+          symbolicRefVerdict(op === "delete" ? ["-d", ref] : [ref, shown], "git update-ref --stdin");
         }
-      } else if (sub === "symbolic-ref") verdict = symbolicRefVerdict(args);
+      } else if (sub === "symbolic-ref") symbolicRefVerdict(args);
       else if (sub === "subtree") {
         // `git subtree push <remote> <branch>` runs `git push <remote> <split>:refs/heads/<branch>`.
         const valued = new Set(["-P", "--prefix", "-m", "--message", "-b", "--branch", "--onto"]);
         const words = args.filter((word, index) => !word.startsWith("-") && !valued.has(args[index - 1] ?? ""));
-        if (words[0] === "push") verdict = pushVerdict(words.slice(1), config);
+        if (words[0] === "push") pushVerdict(words.slice(1), config);
       }
-    } else if (program === "gh") verdict = ghVerdict(cmd);
-    else if (program === "curl" || program === "wget") verdict = httpVerdict(cmd);
-    else if (["npm", "pnpm", "yarn", "bun"].includes(program)) verdict = publishVerdict(cmd);
-    if (verdict !== null) return verdict;
+    } else if (program === "gh") ghVerdict(cmd);
+    else if (program === "curl" || program === "wget") httpVerdict(cmd);
+    else if (["npm", "pnpm", "yarn", "bun"].includes(program)) publishVerdict(cmd);
   }
-  return { deny: false };
+  // A refuse-class act decides the line; with none, the first act asks (v0a).
+  return acts.find((act) => !act.ask) ?? acts[0] ?? { deny: false };
 }
 
 /**

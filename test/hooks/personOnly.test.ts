@@ -202,16 +202,18 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
     "push-default",
     ON_TRUNK,
   ],
-  ["gh api graphql -f query='mutation($u: [RefUpdate!]!) { updateRefs(input: {repositoryId: \"R\", refUpdates: $u}) { clientMutationId } }'", "push-default"],
+  // TEST CHANGE (v0a, REQ-FLOW-124): a list or an element given whole as a variable hides its `afterOid`, which now
+  // reads as a deletion, so these three move from push-default to the refuse-class push-delete; still denied.
+  ["gh api graphql -f query='mutation($u: [RefUpdate!]!) { updateRefs(input: {repositoryId: \"R\", refUpdates: $u}) { clientMutationId } }'", "push-delete"],
   ["gh api graphql -f query='mutation { updateRef(input: {refId: \"x\", oid: \"abc\"}) { clientMutationId } }'", "push-default"],
   // A batch element given whole as a variable, beside a literal feature-branch element, in either order (review/128).
   [
     "gh api graphql -f query='mutation($u: RefUpdate!) { updateRefs(input: {repositoryId: \"R\", refUpdates: [$u, {name: \"refs/heads/feat/x\", afterOid: \"a\"}]}) { clientMutationId } }'",
-    "push-default",
+    "push-delete",
   ],
   [
     "gh api graphql -f query='mutation($u: RefUpdate!) { updateRefs(input: {repositoryId: \"R\", refUpdates: [{name: \"refs/heads/feat/x\", afterOid: \"a\"}, $u]}) { clientMutationId } }'",
-    "push-default",
+    "push-delete",
   ],
   // GraphQL ref creation on the default branch (build/75), the twin of a REST `git/refs` write naming its head.
   ["gh api graphql -f query='mutation { createRef(input: {repositoryId: \"R\", name: \"refs/heads/main\", oid: \"abc\"}) { ref { id } } }'", "push-default"],
@@ -250,11 +252,13 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["git push --tags", "push-tags"],
   ["git push origin --tags", "push-tags"],
   ["git push --follow-tags origin feat/x", "push-tags"],
-  ["git push --mirror", "push-tags"],
+  // TEST CHANGE (v0a, REQ-FLOW-124): `--mirror` and `remote.*.mirror` also force-update and delete remote refs, so
+  // they move from push-tags to the refuse-class force-push; still denied.
+  ["git push --mirror", "force-push"],
   ["git push --all origin", "push-tags"],
   // Named forms the table holds, each pinned (review/110).
   ["git push --branches origin", "push-tags"],
-  ["git -c remote.origin.mirror=true push origin", "push-tags"],
+  ["git -c remote.origin.mirror=true push origin", "force-push"],
   [
     "gh api graphql -f query='mutation { updateRefs(input: {repositoryId: \"R\", refUpdates: [{name: \"refs/tags/v1\", afterOid: \"abc\"}]}) { clientMutationId } }'",
     "push-tags",
@@ -295,14 +299,16 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["git tag v1.0.0", "tag"],
   ["git tag -a v1.0.0 -m release", "tag"],
   ["git tag -s v1.0.0", "tag"],
-  ["git tag -d v1.0.0", "tag"],
-  ["git tag -f v1.0.0 HEAD", "tag"],
-  ["git tag --delete v1.0.0", "tag"],
-  ["git tag -l -d v1.0.0", "tag"],
+  // TEST CHANGE (v0a, REQ-FLOW-124): a tag deleted or moved by force is the refuse-class tag-delete, no longer tag;
+  // still denied. The same for the `git update-ref -d` and `git symbolic-ref -d` deletions below.
+  ["git tag -d v1.0.0", "tag-delete"],
+  ["git tag -f v1.0.0 HEAD", "tag-delete"],
+  ["git tag --delete v1.0.0", "tag-delete"],
+  ["git tag -l -d v1.0.0", "tag-delete"],
   ["git-tag v1.0.0", "tag"],
   // A tag ref written through `git update-ref` (pr/53): created, deleted, and named in a piped `--stdin` text.
   ["git update-ref refs/tags/v1 HEAD", "tag"],
-  ["git update-ref -d refs/tags/v1", "tag"],
+  ["git update-ref -d refs/tags/v1", "tag-delete"],
   ["printf 'create refs/tags/v1 HEAD\\n' | git update-ref --stdin", "tag"],
   // pr-merge, pr-ready
   ["gh pr merge 3 --squash", "pr-merge"],
@@ -324,7 +330,8 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["gh api graphql -f query='mutation { markPullRequestReadyForReview(input: {pullRequestId: \"x\"}) { clientMutationId } }'", "pr-ready"],
   // release
   ["gh release create v1.0.0", "release"],
-  ["gh release delete v1.0.0 --yes", "release"],
+  // TEST CHANGE (v0a, REQ-FLOW-124): a release deletion is the refuse-class release-delete; still denied.
+  ["gh release delete v1.0.0 --yes", "release-delete"],
   ["gh release edit v1.0.0 --draft=false", "release"],
   ["gh release upload v1.0.0 dist.tgz", "release"],
   ["gh api -X POST repos/o/r/releases -f tag_name=v1", "release"],
@@ -378,44 +385,48 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["corepack pnpm@9.1.0 publish", "publish"],
   ["npx npm@10 publish", "publish"],
   // secrets
+  // TEST CHANGE (v0a, REQ-FLOW-124): each deletion below moves to its refuse-class rule (secrets-delete,
+  // protection-delete, repo-delete), a visibility change or a transfer to repo-irreversible; every row stays denied.
   ["gh secret set TOKEN --body x", "secrets"],
-  ["gh secret delete TOKEN", "secrets"],
+  ["gh secret delete TOKEN", "secrets-delete"],
   ["gh variable set NAME --body x", "secrets"],
-  ["gh variable delete NAME", "secrets"],
+  ["gh variable delete NAME", "secrets-delete"],
   ["gh api -X PUT repos/o/r/actions/secrets/TOKEN -f encrypted_value=x", "secrets"],
-  ["gh api -X DELETE repos/o/r/actions/variables/NAME", "secrets"],
+  ["gh api -X DELETE repos/o/r/actions/variables/NAME", "secrets-delete"],
   ["gh api repos/o/r/actions/variables -f name=N -f value=v", "secrets"],
   ["gh api -X PUT repos/o/r/environments/prod/secrets/TOKEN", "secrets"],
   // protection
   ["gh api -X PUT repos/o/r/branches/main/protection --input p.json", "protection"],
-  ["gh api -X DELETE repos/o/r/branches/main/protection", "protection"],
+  ["gh api -X DELETE repos/o/r/branches/main/protection", "protection-delete"],
   ["gh api -X POST repos/o/r/rulesets --input r.json", "protection"],
-  ["gh api -X DELETE repos/o/r/rulesets/7", "protection"],
+  ["gh api -X DELETE repos/o/r/rulesets/7", "protection-delete"],
   ["curl -X PUT https://api.github.com/repos/o/r/branches/release/v2/protection", "protection"],
   // the repository itself: its default branch, deleting or archiving it
   ["gh repo edit --default-branch trunk", "protection"],
   ["gh repo edit o/r --default-branch=trunk", "protection"],
-  ["gh repo delete o/r --yes", "protection"],
+  ["gh repo delete o/r --yes", "repo-delete"],
   ["gh repo archive o/r --yes", "protection"],
   // Its visibility and name, and the REST twins on the repository's own path (review/69, build/31).
-  ["gh repo edit --visibility public --accept-visibility-change-consequences", "protection"],
-  ["gh repo edit o/r --visibility=private", "protection"],
+  ["gh repo edit --description 'x'", "protection"],
+  ["gh repo edit --description 'x' --homepage https://x.dev", "protection"],
+  ["gh repo edit --visibility public --accept-visibility-change-consequences", "repo-irreversible"],
+  ["gh repo edit o/r --visibility=private", "repo-irreversible"],
   ["gh repo rename new-name", "protection"],
   ["gh repo rename new-name -R o/r --yes", "protection"],
   ["gh api -X PATCH repos/o/r -f default_branch=x", "protection"],
-  ["gh api -X PATCH /repos/o/r/ -f private=false", "protection"],
-  ["gh api -X DELETE repos/o/r", "protection"],
-  ["curl -X PATCH -d '{\"visibility\":\"public\"}' https://api.github.com/repos/o/r", "protection"],
+  ["gh api -X PATCH /repos/o/r/ -f private=false", "repo-irreversible"],
+  ["gh api -X DELETE repos/o/r", "repo-delete"],
+  ["curl -X PATCH -d '{\"visibility\":\"public\"}' https://api.github.com/repos/o/r", "repo-irreversible"],
   ["gh api -X PATCH repositories/123 -f archived=true", "protection"],
   // The branch-rename endpoint (the 23:20Z sign-off with review/60).
   ["gh api -X POST repos/o/r/branches/main/rename -f new_name=trunk", "protection"],
   ["gh api repos/o/r/branches/feat/x/rename -f new_name=y", "protection"],
   // A repository transfer (the 23:34Z sign-off): the REST form and a gh CLI form.
-  ["gh api -X POST repos/o/r/transfer -f new_owner=other", "protection"],
-  ["gh api repos/o/r/transfer -f new_owner=other", "protection"],
-  ["curl -X POST -d '{\"new_owner\":\"other\"}' https://api.github.com/repos/o/r/transfer", "protection"],
-  ["gh api -X POST repositories/123/transfer -f new_owner=other", "protection"],
-  ["gh repo transfer o/r other --yes", "protection"],
+  ["gh api -X POST repos/o/r/transfer -f new_owner=other", "repo-irreversible"],
+  ["gh api repos/o/r/transfer -f new_owner=other", "repo-irreversible"],
+  ["curl -X POST -d '{\"new_owner\":\"other\"}' https://api.github.com/repos/o/r/transfer", "repo-irreversible"],
+  ["gh api -X POST repositories/123/transfer -f new_owner=other", "repo-irreversible"],
+  ["gh repo transfer o/r other --yes", "repo-irreversible"],
   // REST respellings of a push
   ["gh api -X PATCH repos/o/r/git/refs/heads/main -f sha=abc", "push-default"],
   // The path's own ref read from the path as routing reads it: a query, a fragment or a trailing slash (review/107).
@@ -484,7 +495,8 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   // git push's options as the unique prefixes git reads (pr/9), a valued one's value skipped.
   ["git push --force-w origin feat/x", "force-push"],
   ["git push --del origin feat/x", "push-delete"],
-  ["git push --mir", "push-tags"],
+  // TEST CHANGE (v0a, REQ-FLOW-124): `--mir` is `--mirror`'s prefix, now the refuse-class force-push; still denied.
+  ["git push --mir", "force-push"],
   ["git push --follow-t origin feat/x", "push-tags"],
   ["git push --rep=origin main", "push-default"],
   ["git push --push-o ci.skip origin", "push-default", ON_MAIN],
@@ -494,14 +506,16 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["cmd /c g^it push --force origin feat/x", "force-push"],
   // wget's method and body options as the unique prefixes wget reads (pr/11).
   ["wget --meth=DELETE https://api.github.com/repos/o/r/git/refs/heads/feat/x", "push-delete"],
-  ["wget --meth DELETE https://api.github.com/repos/o/r/releases/1", "release"],
+  // TEST CHANGE (v0a, REQ-FLOW-124): a REST DELETE on a release is the refuse-class release-delete, here and in the
+  // `--execute=method=DELETE` and `--ur … --req DELETE` rows below; each stays denied.
+  ["wget --meth DELETE https://api.github.com/repos/o/r/releases/1", "release-delete"],
   ["wget --post-d '{\"event\":\"APPROVE\"}' https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
   ["wget --body-f=r.json --meth=POST https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
   // The two-letter prefix, `--method` where wget has no metalink options (pr/29).
   ["wget --me DELETE https://api.github.com/repos/o/r/git/refs/heads/feat/x", "push-delete"],
   // wget's `-e`/`--execute` run as wgetrc commands (pr/23): `method` sets the method, the body commands send a body.
   ["wget -e method=DELETE https://api.github.com/repos/o/r/git/refs/heads/feat/x", "push-delete"],
-  ["wget --execute=method=DELETE https://api.github.com/repos/o/r/releases/1", "release"],
+  ["wget --execute=method=DELETE https://api.github.com/repos/o/r/releases/1", "release-delete"],
   ["wget --exec 'Method = PUT' https://api.github.com/repos/o/r/pulls/3/merge", "pr-merge"],
   ["wget -qemethod=PUT https://api.github.com/repos/o/r/pulls/3/merge", "pr-merge"],
   ["wget -e 'body_data={\"event\":\"APPROVE\"}' https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
@@ -525,9 +539,10 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["git symbolic-ref refs/heads/safe \"refs/heads/$(git config init.defaultBranch)\"", "push-default"],
   ["git symbolic-ref refs/remotes/origin/safe refs/heads/main", "push-default"],
   ["git symbolic-ref refs/tags/v9 refs/heads/feat/x", "tag"],
-  ["git symbolic-ref -d refs/tags/v9", "tag"],
-  ["git symbolic-ref --delete -q refs/tags/v9", "tag"],
-  ["git symbolic-ref -qd refs/tags/v9", "tag"],
+  // TEST CHANGE (v0a, REQ-FLOW-124): a symbolic tag ref deleted is the refuse-class tag-delete; still denied.
+  ["git symbolic-ref -d refs/tags/v9", "tag-delete"],
+  ["git symbolic-ref --delete -q refs/tags/v9", "tag-delete"],
+  ["git symbolic-ref -qd refs/tags/v9", "tag-delete"],
   // curl's `--next` and `-:` start a request of their own, its method and body reset (pr/72): each is judged alone.
   ["curl -X DELETE https://api.github.com/repos/o/r/git/refs/heads/feat --next -X GET https://example.com", "push-delete"],
   ["curl -X DELETE https://api.github.com/repos/o/r/git/refs/heads/feat -: -X GET https://example.com", "push-delete"],
@@ -545,7 +560,9 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
     "deleteBranchProtectionRule",
     "createRepositoryRuleset",
     "deleteRepositoryRuleset",
-  ].map((name) => [`gh api graphql -f query='mutation { ${name}(input: {repositoryId: "R"}) { clientMutationId } }'`, "protection"] as const),
+    // TEST CHANGE (v0a, REQ-FLOW-124): a deletion among these names (and `deleteRepositoryCustomProperty` and the
+    // REST DELETE on a property's schema below) is the refuse-class protection-delete; each stays denied.
+  ].map((name) => [`gh api graphql -f query='mutation { ${name}(input: {repositoryId: "R"}) { clientMutationId } }'`, name.startsWith("delete") ? "protection-delete" : "protection"] as const),
   [
     "curl -X POST -d '{\"query\":\"mutation { archiveRepository(input: {repositoryId: \\\"R\\\"}) { clientMutationId } }\"}' https://api.github.com/graphql",
     "protection",
@@ -554,12 +571,12 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   // the write can take this repository out of a ruleset's protection. GraphQL and REST.
   ...["setRepositoryCustomPropertyValues", "createRepositoryCustomProperty", "deleteRepositoryCustomProperty", "promoteRepositoryCustomProperty"]
     .flatMap((name) => [
-      [`gh api graphql -f query='mutation { ${name}(input: {}) { clientMutationId } }'`, "protection"] as const,
-      [`curl -X POST -d '{"query":"mutation { ${name}(input: {}) { clientMutationId } }"}' https://api.github.com/graphql`, "protection"] as const,
+      [`gh api graphql -f query='mutation { ${name}(input: {}) { clientMutationId } }'`, name.startsWith("delete") ? "protection-delete" : "protection"] as const,
+      [`curl -X POST -d '{"query":"mutation { ${name}(input: {}) { clientMutationId } }"}' https://api.github.com/graphql`, name.startsWith("delete") ? "protection-delete" : "protection"] as const,
     ]),
   ["gh api -X PATCH repos/o/r/properties/values", "protection"],
   ["gh api orgs/o/properties/values -F 'repository_names[]=r'", "protection"],
-  ["gh api -X DELETE orgs/o/properties/schema/team", "protection"],
+  ["gh api -X DELETE orgs/o/properties/schema/team", "protection-delete"],
   ["curl -X PUT -d '{}' https://api.github.com/enterprises/e/properties/schema/team", "protection"],
   // curl's body letter with its value attached, or as a short cluster's first value letter, the value attached or the
   // next word (pr/81): a body, so the default POST, read as the spaced form is.
@@ -625,7 +642,7 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["curl --fo event=APPROVE https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
   ["curl --form-s event=APPROVE https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
   ["curl -X DELETE https://api.github.com/repos/o/r/git/refs/heads/feat --nex -X GET https://example.com", "push-delete"],
-  ["curl --ur https://api.github.com/repos/o/r/releases/1 --req DELETE", "release"],
+  ["curl --ur https://api.github.com/repos/o/r/releases/1 --req DELETE", "release-delete"],
   // PR #112's resolution round 5. A path read with its dot segments resolved as well as written, as curl sends it
   // (pr/93): a ref deletion through `..` and through `.`, the default branch's ref, the repository path climbing out of
   // another repository's, a `..` past the end, percent-encoded dots, wget's and a GHES `api/v3/` path, a merge and
@@ -766,9 +783,9 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
   ["cmd /c 'C:\\Git\\bin\\git.exe status'"],
   ["C:\\Git\\bin\\git.exe push --force origin feat/x"],
   ["gh repo view o/r"],
-  ["gh repo edit --description 'x'"],
+  // TEST CHANGE (v0a, REQ-FLOW-102): every `gh repo edit` settings flag is now an ask-class repository write, so the
+  // two `--description`/`--homepage` rows that stood here moved to the deny matrix as `protection`.
   ["gh repo clone o/r"],
-  ["gh repo edit --description 'x' --homepage https://x.dev"],
   ["gh api repos/o/r"],
   ["gh api repos/o/r/branches/main"],
   ["gh api -X PATCH repos/o/r/issues/3 -f state=closed"],
@@ -793,10 +810,8 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
   [
     "gh api graphql -f query='mutation { updateRefs(input: {repositoryId: \"R\", refUpdates: [{name: \"refs/heads/feat/x\", afterOid: \"abc\", force: false}]}) { clientMutationId } }'",
   ],
-  // review/128's twin: literal elements only, one of them with a variable object id.
-  [
-    "gh api graphql -f query='mutation($o: GitObjectID!) { updateRefs(input: {repositoryId: \"R\", refUpdates: [{name: \"refs/heads/feat/x\", afterOid: $o}, {name: \"refs/heads/feat/y\", afterOid: \"b\"}]}) { clientMutationId } }'",
-  ],
+  // TEST CHANGE (v0a, REQ-FLOW-124): review/128's twin with a variable `afterOid` stood here; an `afterOid` the line
+  // cannot show now reads as a deletion, so it moved to the class rows as push-delete.
   // build/75's twins: a branch created off the default branch, and a read naming a ref.
   ["gh api graphql -f query='mutation { createRef(input: {repositoryId: \"R\", name: \"refs/heads/feat/x\", oid: \"abc\"}) { ref { id } } }'"],
   ["gh api graphql -f query='query { repository(owner: \"o\", name: \"r\") { ref(qualifiedName: \"refs/heads/feat/x\") { id } } }'"],
@@ -961,11 +976,115 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
   ["gh repo view o/r --json isArchived"],
 ];
 
+/**
+ * The ask-class rules (REQ-FLOW-102), written here apart from the source's own set so a rule moved between the classes
+ * fails this file: every other rule is refuse-class (REQ-FLOW-124).
+ */
+const ASK_CLASS = new Set(["push-default", "push-tags", "tag", "pr-merge", "pr-ready", "release", "publish", "secrets", "protection"]);
+
+const ZERO = "0".repeat(40);
+/** A GraphQL `updateRefs` call with one entry: its ref name and its `afterOid`. */
+const updateRefs = (name: string, oid: string): string =>
+  `gh api graphql -f query='mutation { updateRefs(input: {repositoryId: "R", refUpdates: [{name: "${name}", afterOid: "${oid}"}]}) { clientMutationId } }'`;
+
+/**
+ * v0a's conformance rows (REQ-FLOW-102, REQ-FLOW-124): a form, the rule the verdict names and its class. A line
+ * holding several acts asks only when every act is ask-class, and names its refuse-class act when it holds one.
+ */
+const CLASSES: readonly (readonly [command: string, rule: string, ask: boolean, ctx?: Ctx])[] = [
+  ["gh pr merge 1 --delete-branch", "push-delete", false],
+  ["gh pr merge 1 -d", "push-delete", false],
+  ["gh pr merge 3 --squash", "pr-merge", true],
+  ["git push origin --mirror", "force-push", false],
+  ["git push --force origin v1 --tags", "force-push", false],
+  ["git push origin :refs/tags/v1", "tag-delete", false],
+  ["gh api -X DELETE repos/o/r/git/refs/tags/v1", "tag-delete", false],
+  ["gh api -X PATCH repos/o/r/git/refs/tags/v1 -F force=true -f sha=abc", "force-push", false],
+  [updateRefs("refs/tags/v1", ZERO), "tag-delete", false],
+  [updateRefs("refs/heads/main", ZERO), "push-delete", false],
+  [updateRefs("refs/heads/feat", ZERO), "push-delete", false],
+  [updateRefs("refs/heads/main", "abc"), "push-default", true],
+  [
+    "gh api graphql -f query='mutation($o: GitObjectID!) { updateRefs(input: {repositoryId: \"R\", refUpdates: [{name: \"refs/heads/feat/x\", afterOid: $o}, {name: \"refs/heads/feat/y\", afterOid: \"b\"}]}) { clientMutationId } }'",
+    "push-delete",
+    false,
+  ],
+  ["gh release delete v1", "release-delete", false],
+  ["gh release upload v1 a --clobber", "release-delete", false],
+  ["gh release upload v1 a", "release", true],
+  ["gh secret delete X", "secrets-delete", false],
+  ["gh repo delete o/r", "repo-delete", false],
+  ["gh repo edit --visibility public", "repo-irreversible", false],
+  ["gh repo edit --visibility private", "repo-irreversible", false],
+  ["gh repo edit --default-branch x --visibility public", "repo-irreversible", false],
+  ["gh repo edit --enable-auto-merge", "protection", true],
+  ["gh repo transfer o/r x", "repo-irreversible", false],
+  ["gh api -X PATCH repos/o/r -f private=false", "repo-irreversible", false],
+  ["gh api -X PATCH repos/o/r --input body.json", "repo-irreversible", false],
+  ["npm unpublish x@1.0.0", "unpublish", false],
+  ["npm dist-tag rm x beta", "unpublish", false],
+  ["npm dist-tag add x@1.0.0 latest", "publish", true],
+  ["gh api graphql -f query='mutation { deleteRepositoryRuleset(input: {repositoryRulesetId: \"R\"}) { clientMutationId } }'", "protection-delete", false],
+  ["gh api -X DELETE repos/o/r/branches/main/protection", "protection-delete", false],
+  ["git tag v1", "tag", true],
+  ["git tag -d v1", "tag-delete", false],
+  // A ref or a review body the line cannot show keeps its concrete ask-class rule.
+  ["gh api graphql -f query='mutation { updateRef(input: {refId: \"x\", oid: \"abc\"}) { clientMutationId } }'", "push-default", true],
+  ["gh api graphql -f query='mutation($n: String!) { createRef(input: {repositoryId: \"R\", name: $n, oid: \"abc\"}) { ref { id } } }' -f n=refs/tags/v1", "push-tags", true],
+  ["gh api repos/o/r/pulls/3/reviews --input r.json", "pr-merge", true],
+  // Mixed lines: a refused act wins over an ask-class one, in a segment, a GraphQL text, a `--next` call or a path.
+  ["gh pr merge 1 && git push origin :feat", "push-delete", false],
+  ["gh pr merge 1 && git tag v1", "pr-merge", true],
+  [
+    "gh api graphql -f query='mutation { mergePullRequest(input: {pullRequestId: \"P\"}) { clientMutationId } deleteRef(input: {refId: \"x\"}) { clientMutationId } }'",
+    "push-delete",
+    false,
+  ],
+  ["curl -X DELETE https://api.github.com/repos/o/r/git/refs/heads/feat --next -X PUT https://api.github.com/repos/o/r/pulls/1/merge", "push-delete", false],
+  ["curl -X DELETE https://api.github.com/repos/o/r/pulls/1/merge https://api.github.com/repos/o/r/git/refs/heads/feat", "push-delete", false],
+  // PR #112's round 5 forms in their classes (the replay onto e377be7a): a sync onto a named repository's default branch
+  // asks and its hard reset refuses, an unarchive asks, and a path read ask-class as written and refuse-class with its
+  // dot segments resolved refuses, both readings collected.
+  ["gh repo sync o/r", "push-default", true],
+  ["gh repo sync o/r --force", "force-push", false],
+  ["gh repo unarchive o/r --yes", "protection", true],
+  ["gh repo unarchive o/r --yes && gh repo sync o/r --force", "force-push", false],
+  ["gh api -X DELETE repos/o/r/pulls/1/merge/../../../git/refs/heads/feat", "push-delete", false],
+];
+
+describe("personOnlyVerdict — ask or refuse (v0a)", () => {
+  it("lets the local tags' coded throw out after an ask-class act, so the guard still refuses the line (pr/95)", () => {
+    // Every segment is read now, so a tag read past the ceiling after a merge throws where it once went unread.
+    const ctx = {
+      defaultBranches: [],
+      currentBranch: "feat/x",
+      get tags(): readonly string[] {
+        throw Object.assign(new Error("tag names"), { code: "TAG_NAMES_OVER_10000" });
+      },
+    };
+    expect(() => personOnlyVerdict("gh pr merge 1 && git push origin v9.9.9", ctx)).toThrow("tag names");
+  });
+
+  it.each(CLASSES.map(([command, rule, ask, ctx]) => ({ command, rule, ask, ctx })))(
+    "reads $command as $rule, ask $ask",
+    ({ command, rule, ask, ctx }) => {
+      expect(personOnlyVerdict(command, ctx ?? ON_FEATURE)).toMatchObject({ deny: true, rule, ask });
+      expect(ASK_CLASS.has(rule)).toBe(ask);
+    },
+  );
+
+  it("allows a dist-tag listing, the read neighbour of its add and rm", () => {
+    expect(personOnlyVerdict("npm dist-tag ls x", ON_FEATURE)).toEqual({ deny: false });
+  });
+});
+
 describe("personOnlyVerdict — the deny matrix", () => {
+  // TEST CHANGE (v0a): each row also asserts its class, `ask` read from the rule's class, and the act the verdict names.
   it.each(DENY.map(([command, rule, ctx]) => ({ command, rule, ctx })))("denies $command as $rule", ({ command, rule, ctx }) => {
     const verdict = personOnlyVerdict(command, ctx ?? ON_FEATURE);
-    expect(verdict).toMatchObject({ deny: true, rule });
+    expect(verdict).toMatchObject({ deny: true, rule, ask: ASK_CLASS.has(rule) });
     if (verdict.deny) expect(verdict.reason).toContain(rule);
+    if (verdict.deny) expect(verdict.reason.startsWith(`${verdict.act} is a person-only act (${rule})`)).toBe(true);
   });
 
   it.each(ALLOW.map(([command, ctx]) => ({ command, ctx })))("allows $command", ({ command, ctx }) => {
@@ -974,6 +1093,7 @@ describe("personOnlyVerdict — the deny matrix", () => {
 
   it("covers every rule id in the table, and names no rule outside it", () => {
     const ids = new Set(PERSON_ONLY_RULES.map((rule) => rule.id));
+    // TEST CHANGE (v0a, REQ-FLOW-124): the seven refuse-class rules join the table after today's eleven.
     expect([...ids]).toEqual([
       "force-push",
       "push-default",
@@ -986,9 +1106,20 @@ describe("personOnlyVerdict — the deny matrix", () => {
       "publish",
       "secrets",
       "protection",
+      "tag-delete",
+      "release-delete",
+      "secrets-delete",
+      "repo-delete",
+      "repo-irreversible",
+      "protection-delete",
+      "unpublish",
     ]);
-    const hit = new Set(DENY.map(([, rule]) => rule));
+    const hit = new Set([...DENY, ...CLASSES].map(([, rule]) => rule));
     expect(hit).toEqual(ids);
+  });
+
+  it("gives each rule in the table the class this file reads it with", () => {
+    for (const rule of PERSON_ONLY_RULES) expect(rule.ask, rule.id).toBe(ASK_CLASS.has(rule.id));
   });
 });
 
@@ -1692,9 +1823,11 @@ describe("CLAUDE_DENY_ROWS", () => {
       }),
     );
     // `push-default` has no row: a prefix ending in a branch name over-matches a longer one (see below).
+    // TEST CHANGE (v0a): `protection-delete` is a REST or GraphQL form only, which no prefix can say, and the
+    // `unpublish` rows (`npm unpublish`, `npm dist-tag rm`) are v0a2's to add with the settings' ask rows.
     expect([...rules].toSorted()).toEqual(
       PERSON_ONLY_RULES.map((rule) => rule.id)
-        .filter((id) => id !== "push-default")
+        .filter((id) => !["push-default", "protection-delete", "unpublish"].includes(id))
         .toSorted(),
     );
   });
@@ -1742,6 +1875,8 @@ describe("embedding as source (u14 embeds both functions into the emitted guard)
       expect(personOnly(command, ctx ?? ON_FEATURE)).toMatchObject({ deny: true, rule });
     }
     for (const [command, ctx] of ALLOW) expect(personOnly(command, ctx ?? ON_FEATURE)).toEqual({ deny: false });
+    // TEST CHANGE (v0a): the embedded copy gives v0a's classes too.
+    for (const [command, rule, ask, ctx] of CLASSES) expect(personOnly(command, ctx ?? ON_FEATURE)).toMatchObject({ rule, ask });
     expect(unattended("git push origin HEAD:refs/heads/x").deny).toBe(true);
     expect(unattended("gh api repos/o/r/pulls/3/comments -F body=@reply.md")).toEqual({ deny: false });
   });
