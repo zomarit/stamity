@@ -2648,6 +2648,29 @@ describe("SECURITY.md", () => {
       }
       expect(residuals.indexOf("A symbolic ref already on disk.")).toBeGreaterThan(residuals.indexOf("The default branch's name in a clone no run verb ran in."));
     });
+
+    // ADDED 2026-10-18 (PR #112 round 4b, REQ-FLOW-102, REQ-FLOW-104, REQ-FLOW-120): curl's body counts in every
+    // spelling, `git update-ref --stdin`'s symref commands on the line are read as `git symbolic-ref` is, and a method
+    // the line cannot show is a hidden call (src/hooks/personOnly.ts::personOnlyVerdict); a REST target held in a
+    // variable is the named respelling, attended and unattended.
+    it("states round 4b's guard readings and the variable-target respelling", () => {
+      const guard = section("| The main thread of any session", "| An unattended run, or the text that steers one | Pushing a change");
+      const residuals = section("### Cloud and unattended runs", "## Standards mapping");
+      for (const claim of [
+        "so are the symref commands of a `git update-ref --stdin` text the line carries (`symref-create`, `symref-update`, `symref-delete`), read as `git symbolic-ref` is",
+        "a curl body counts as one in every spelling: apart, attached (`-d@<file>`, `-d'{…}'`, `-F<field>`, `-T<path>`) or as a short cluster's first value letter (`-sd@<file>`)",
+        "(`HTTP_TARGET_HIDDEN`): a method held in a variable or a substitution (`-X \"$M\"`, `--request \"$(…)\"`, wget's `--method` or a wgetrc `method=`)",
+        "a REST target held in a variable, which the guard judges as the literal word",
+      ]) {
+        expect(guard, `the guard's row does not state: ${claim}`).toContain(claim);
+      }
+      for (const residual of [
+        "a REST target held in a variable (the call is judged on the literal word, so a computed URL passes, where a method held in one is refused as a hidden call, `HTTP_TARGET_HIDDEN`)",
+        "a script the run writes and then runs, a REST target held in a variable, and a GraphQL mutation read from a file",
+      ]) {
+        expect(residuals, `the cloud section does not name: ${residual}`).toContain(residual);
+      }
+    });
   });
 
   it("covers the four surfaces the phase claims, and the limits", () => {
@@ -2859,6 +2882,22 @@ describe("docs/security-mapping.md", () => {
       "as `gh pr create` does for a new pull request",
       "a symbolic ref already on disk, a branch switch earlier on the line before a push whose destination is implied, and a method, body or URL from curl's or wget's default configuration file",
       "the remote's own protection the control that holds; unattended, the raw-push refusal holds the first two",
+    ]) {
+      expect(flat, `the mapping page does not state: ${claim}`).toContain(claim);
+    }
+  });
+
+  // ADDED 2026-10-18 (PR #112 round 4b): the mapping page carries round 4b's readings as SECURITY.md does, and names a
+  // REST target held in a variable among the respellings.
+  it("states round 4b's guard readings and the variable-target respelling as SECURITY.md does", () => {
+    const flat = text.replace(/\s+/g, " ");
+    for (const claim of [
+      "and the symref commands of a `git update-ref --stdin` text the line carries are read the same way",
+      "a curl body counts as one attached or in a short cluster as well as apart",
+      "(`HTTP_TARGET_HIDDEN`): a method held in a variable or a substitution,",
+      "a `git update-ref --stdin` text read from a file among them, a REST target held in a variable too",
+      "a REST target held in a variable, which the guard judges as the literal word, are such respellings",
+      "and an HTTP method held in a variable or a substitution, are refused as `HTTP_TARGET_HIDDEN`",
     ]) {
       expect(flat, `the mapping page does not state: ${claim}`).toContain(claim);
     }
