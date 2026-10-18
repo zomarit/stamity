@@ -648,7 +648,7 @@ them.
     `test/cli/engine/clientModels.test.ts`, `test/adapters/codex.test.ts`, `test/adapters/copilot.test.ts`). A
     committed edit to a map and its agent files recording the current pin as replaced moves that class to a shipped
     candidate with no drift on a checkout with no cache, accepted as a residual since the edit is committed and
-    reviewable (`SECURITY.md`). (Added 2026-10-18, ledger rows `review/118` and `review/123`.)
+    reviewable (`SECURITY.md`). (Added 2026-10-18, plan 021 file 2, unit `v17-model-list-cache`.)
   - Accepted as designed: with no list read, a later release that reorders the shipped priority list does not move
     Codex's and Copilot's picks on a machine that never reads a list.
 - **Expand/contract:** additive, with no generation bump: a 1.15 engine reads a manifest with no `models.listed`, and a
