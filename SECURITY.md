@@ -210,13 +210,20 @@ reference, so the row does not catch a planted Codex cache. With no cache, a fre
 the pick already emitted is kept, read from the ledgered `.stamity/generated/models/` maps of Codex
 and Copilot and from the `model:` lines of Cursor's ledgered agent files, and `model-pins` reads as
 unverified. `check`'s drift comparison reads those emitted lists first, with the manifest's pins
-added where this checkout has no list for the client or its list holds the pin, so a pick the files
-carry is not drift and an unsynced pin edit that `sync` would write is. It keeps only a pick some
+added where this checkout's list holds the pin or it has no list for the client, so a pick the files
+carry is not drift and an unsynced pin edit that `sync` would write is. With no list, a pin the
+committed Codex or Copilot map records as replaced is left out: a `sync` whose account's list lacked
+the pin writes `classes.<class>.pinReplaced: { pin, by }` beside the pick it made instead, and a
+checkout honours the record only while `pin` is the manifest's current pin and `by` the class's
+model, so that class keeps the map's model rather than reading as drift. It keeps only a pick some
 list could have made, each class on a shipped candidate for it or on its pin; a class the files leave
 with no model though it has candidates, or on any other id, reads as drift unless this checkout's own
 list gives the same. A committed edit moving a class to a later shipped candidate, with its files to
-match, is therefore not drift; the diff of `.stamity/generated/models/` shows it. With
-`STAMITY_NO_CLIENT_PROBE=1` set, no list is read; delete the cache to drop the lists already kept.
+match, is therefore not drift; the diff of `.stamity/generated/models/` shows it. A pinned class
+moves the same way: a committed edit to the map recording its current pin as replaced, with the
+agent files to match, moves it to a shipped candidate and passes a `check` with no cache. That is an
+accepted residual, since the edit is committed and reviewable; a `sync` on an account whose list
+holds the pin binds it again and drops the record. With `STAMITY_NO_CLIENT_PROBE=1` set, no list is read; delete the cache to drop the lists already kept.
 
 **Board writes are the touchpoints' own, not the engine's.** `/st-board` and `/st-pr-resolve` call
 the authenticated GitHub CLI, `gh`, or a configured GitHub MCP server from the agent's session; the

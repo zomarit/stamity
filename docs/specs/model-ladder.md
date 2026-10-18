@@ -637,6 +637,18 @@ them.
     `workspace sync`; another writer (`config set`, `add`, `clean`, `config mcp`) run first leaves the key out without
     moving it, so `model-pins` reads `unverified` until a `sync` reads the client, open as a Minor. A hand edit moving a
     class to another shipped candidate in both a map and its agent files reads as no drift, open as a Minor.
+  - A pin the account's list lacked: a `sync` that read a list lacking a class's pin and re-picked that class writes, in
+    Codex's and Copilot's maps beside `model` and `fallbacks`, `classes.<class>.pinReplaced: { "pin", "by" }`, the pin
+    as the manifest holds it and the model taken instead; a Copilot display-form pin binds nowhere and records nothing
+    (`pinReplacement`, `src/adapters/codex.ts` and `src/adapters/copilot.ts`). With no list for the client, the pins
+    join the list read off the files except one whose record names it as the current pin and the class's `model` as
+    `by`, so that class keeps the map's model; a record naming another pin or pick, or of another shape, is ignored, so
+    an unsynced pin edit still reads as drift, and a `sync` whose list holds the pin binds it and drops the record
+    (`mapCandidates` and `withPins`, `src/cli/engine/clientModels.ts`; `test/cli/commands/check.test.ts`,
+    `test/cli/engine/clientModels.test.ts`, `test/adapters/codex.test.ts`, `test/adapters/copilot.test.ts`). A
+    committed edit to a map and its agent files recording the current pin as replaced moves that class to a shipped
+    candidate with no drift on a checkout with no cache, accepted as a residual since the edit is committed and
+    reviewable (`SECURITY.md`). (Added 2026-10-18, ledger rows `review/118` and `review/123`.)
   - Accepted as designed: with no list read, a later release that reorders the shipped priority list does not move
     Codex's and Copilot's picks on a machine that never reads a list.
 - **Expand/contract:** additive, with no generation bump: a 1.15 engine reads a manifest with no `models.listed`, and a
