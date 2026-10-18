@@ -124,6 +124,9 @@ function isProgramVariable(key: string): boolean {
   return GIT_PROGRAM_VARIABLES.includes(key.toUpperCase());
 }
 
+/** The askpass variable an unattended write sets to the empty string ({@link gitWriteEnv}). */
+const ASKPASS = "GIT_ASKPASS";
+
 /** The pathspec magic that makes git read the rest of the argument as a name. */
 const LITERAL_MAGIC = ":(literal)";
 
@@ -151,7 +154,10 @@ export function gitWriteArgs(args: readonly string[]): string[] {
  * variables ({@link PATHSPEC_VARIABLES}), credentials and identity kept, and
  * `GIT_TERMINAL_PROMPT=0` whatever `base` says. With `unattended`, also without
  * the program-valued variables ({@link GIT_PROGRAM_VARIABLES}), an empty one
- * included; the `GIT_CONFIG_*` variables stay, since the pre-flight vetted them.
+ * included, and with `GIT_ASKPASS` set to the empty string (review/18): git
+ * reads a set-but-empty one as "no askpass" and then consults neither
+ * `core.askPass` nor `SSH_ASKPASS`, so with the terminal prompt off nothing
+ * prompts. The `GIT_CONFIG_*` variables stay, since the pre-flight vetted them.
  */
 export function gitWriteEnv(base: NodeJS.ProcessEnv, opts: { unattended?: boolean } = {}): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {};
@@ -160,6 +166,7 @@ export function gitWriteEnv(base: NodeJS.ProcessEnv, opts: { unattended?: boolea
     if (opts.unattended === true && isProgramVariable(key)) continue;
     env[key] = value;
   }
+  if (opts.unattended === true) env[ASKPASS] = "";
   env["GIT_TERMINAL_PROMPT"] = "0";
   return env;
 }
@@ -167,13 +174,14 @@ export function gitWriteEnv(base: NodeJS.ProcessEnv, opts: { unattended?: boolea
 /**
  * The names of the program-valued variables `base` sets, an empty value
  * included, in {@link GIT_PROGRAM_VARIABLES}' order: the ones an unattended
- * write removes ({@link gitWriteEnv}), for the verb's text. Names only, never
- * a value.
+ * write removes ({@link gitWriteEnv}), for the verb's text. An empty
+ * `GIT_ASKPASS` is left out, since the write starts git with it empty as it
+ * was. Names only, never a value.
  */
 export function gitProgramVariablesIn(base: NodeJS.ProcessEnv): string[] {
   const rank = (key: string): number => GIT_PROGRAM_VARIABLES.indexOf(key.toUpperCase());
   return Object.entries(base)
-    .filter(([key, value]) => value !== undefined && isProgramVariable(key))
+    .filter(([key, value]) => value !== undefined && isProgramVariable(key) && !(value === "" && key.toUpperCase() === ASKPASS))
     .map(([key]) => key)
     .toSorted((a, b) => rank(a) - rank(b) || (a < b ? -1 : a > b ? 1 : 0));
 }

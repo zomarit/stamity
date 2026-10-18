@@ -89,10 +89,17 @@ describe("gitWriteEnv", () => {
     GIT_CONFIG_PARAMETERS: "'core.quotepath'='false'",
   };
 
-  it("unattended, removes every program-valued variable, an empty one and another case included, and keeps the GIT_CONFIG_* ones, PATH, HOME and XDG_CONFIG_HOME", () => {
+  it("unattended, removes every program-valued variable, an empty one and another case included, sets GIT_ASKPASS empty, and keeps the GIT_CONFIG_* ones, PATH, HOME and XDG_CONFIG_HOME", () => {
     const env = gitWriteEnv({ ...KEPT, ...PROGRAMS, GIT_DIR: "/elsewhere/.git" }, { unattended: true });
 
-    expect(env).toEqual({ ...KEPT, GIT_TERMINAL_PROMPT: "0" });
+    // TEST CHANGE, justified: review/18 (signed off 19:53Z) sets GIT_ASKPASS to the empty string instead of removing
+    // it, so git consults neither core.askPass nor SSH_ASKPASS; the planted askpass value is still gone.
+    expect(env).toEqual({ ...KEPT, GIT_ASKPASS: "", GIT_TERMINAL_PROMPT: "0" });
+  });
+
+  it("unattended with no GIT_ASKPASS at all, still sets it empty; attended with none, sets none (review/18)", () => {
+    expect(gitWriteEnv({ ...KEPT, SSH_ASKPASS: "/tmp/planted" }, { unattended: true })).toEqual({ ...KEPT, SSH_ASKPASS: "/tmp/planted", GIT_ASKPASS: "", GIT_TERMINAL_PROMPT: "0" });
+    expect(gitWriteEnv({ ...KEPT }, { unattended: false })).not.toHaveProperty("GIT_ASKPASS");
   });
 
   it("attended, as when the option is omitted, keeps every program-valued variable", () => {
@@ -111,6 +118,12 @@ describe("gitProgramVariablesIn", () => {
       "GIT_EXEC_PATH",
     ]);
     expect(gitProgramVariablesIn({ git_ssh: "x" })).toEqual(["git_ssh"]);
+  });
+
+  it("leaves out an empty GIT_ASKPASS, which the unattended write keeps empty, and names a non-empty one (review/18)", () => {
+    expect(gitProgramVariablesIn({ GIT_ASKPASS: "", GIT_EDITOR: "" })).toEqual(["GIT_EDITOR"]);
+    expect(gitProgramVariablesIn({ git_askpass: "" })).toEqual([]);
+    expect(gitProgramVariablesIn({ GIT_ASKPASS: "/y" })).toEqual(["GIT_ASKPASS"]);
   });
 
   it("names none where none is set, an unset (undefined) entry included", () => {
@@ -401,10 +414,56 @@ describe.skipIf(!gitAvailable)("gitWrite against real repositories", () => {
     vi.stubEnv("GIT_CONFIG_COUNT", "0");
 
     expect(await gitWrite(plain, ["push", "origin", "HEAD"], { unattended: true })).toEqual({ code: 0, stdout: "", stderr: "" });
-    expect(readFileSync(log, "utf8")).toBe("unset|unset|unset|0\n");
+    // TEST CHANGE, justified: review/18 (signed off 19:53Z) starts an unattended git with GIT_ASKPASS set and empty,
+    // not removed, so its field reads empty where it read `unset`.
+    expect(readFileSync(log, "utf8")).toBe("unset|unset||0\n");
 
     await gitWrite(plain, ["push", "origin", "HEAD"]);
-    expect(readFileSync(log, "utf8")).toBe(`unset|unset|unset|0\n${getRoot().path("no-git-programs")}|planted-ssh||0\n`);
+    expect(readFileSync(log, "utf8")).toBe(`unset|unset||0\n${getRoot().path("no-git-programs")}|planted-ssh||0\n`);
+  });
+
+  // review/18: the stand-in reports whether GIT_ASKPASS reached it set, and with what, beside SSH_ASKPASS. Mock reason
+  // as above. POSIX only, as above.
+  it.skipIf(process.platform === "win32")("unattended with SSH_ASKPASS set, starts git with GIT_ASKPASS present and empty", async () => {
+    const plain = getRoot().path("plain");
+    await mkdir(plain);
+    const bin = getRoot().path("stand-in");
+    const log = getRoot().path("env.log");
+    await mkdir(bin);
+    await writeFile(join(bin, "git"), `#!/bin/sh\nprintf '%s\\n' "\${GIT_ASKPASS+set}:\${GIT_ASKPASS-}|\${SSH_ASKPASS-unset}" >> '${log}'\nexit 0\n`, "utf8");
+    await chmod(join(bin, "git"), 0o755);
+    vi.stubEnv("PATH", bin);
+    vi.stubEnv("GIT_ASKPASS", "/planted/askpass");
+    vi.stubEnv("SSH_ASKPASS", "/planted/ssh-askpass");
+
+    expect(await gitWrite(plain, ["push", "origin", "HEAD"], { unattended: true })).toEqual({ code: 0, stdout: "", stderr: "" });
+    expect(readFileSync(log, "utf8")).toBe("set:|/planted/ssh-askpass\n");
+  });
+
+  // review/18: git asks GIT_ASKPASS, then core.askPass, then SSH_ASKPASS; a set-but-empty GIT_ASKPASS ends that order,
+  // and GIT_TERMINAL_PROMPT=0 ends the terminal fallback. `git credential fill` with no helper reaches the prompt with
+  // no network. POSIX only: Windows starts no shebang script.
+  it.skipIf(process.platform === "win32")("unattended, a credential prompt starts no SSH_ASKPASS program and fails; attended with no GIT_ASKPASS, it does (the control)", async () => {
+    const plain = getRoot().path("plain");
+    await mkdir(plain);
+    const marker = getRoot().path("askpass-ran");
+    const askpass = getRoot().path("askpass.sh");
+    await writeFile(askpass, `#!/bin/sh\nprintf 'ran\\n' >> '${marker}'\nprintf 'x\\n'\n`, "utf8");
+    await chmod(askpass, 0o755);
+    vi.stubEnv("SSH_ASKPASS", askpass);
+    vi.stubEnv("GIT_ASKPASS", undefined);
+    const input = "protocol=https\nhost=example.invalid\n\n";
+
+    const unattended = await gitWrite(plain, ["credential", "fill"], { input, unattended: true });
+
+    expect(unattended.code).not.toBe(0);
+    expect(existsSync(marker)).toBe(false);
+
+    const attended = await gitWrite(plain, ["credential", "fill"], { input });
+
+    expect(attended.code).toBe(0);
+    expect(attended.stdout).toContain("username=x");
+    expect(existsSync(marker)).toBe(true);
   });
 
   it("rejects with ENOENT, and starts nothing, where no PATH entry holds git", async () => {

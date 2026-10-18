@@ -1415,6 +1415,10 @@ describe("stamity run checkpoint", () => {
     /** The three the cell names, each set to a value the line must never print. */
     const PLANTED = { GIT_EXEC_PATH: "/planted/exec-path", GIT_SSH_COMMAND: "planted-ssh -i /planted/key", GIT_ASKPASS: "/planted/askpass" } as const;
     const LINE = "removed from git's environment: GIT_SSH_COMMAND, GIT_ASKPASS, GIT_EXEC_PATH";
+    /** The stand-in's log line for a write runner's git: the three gone, GIT_ASKPASS set and empty (review/18). */
+    const WRITE_LINE = "unset|unset|";
+    /** The stand-in's log line for a read runner's git (the scan's), which drops every GIT_* variable. */
+    const READ_LINE = "unset|unset|unset";
 
     afterEach(() => {
       vi.unstubAllEnvs();
@@ -1468,7 +1472,10 @@ describe("stamity run checkpoint", () => {
       // Non-degenerate: git ran, a push among its calls, and not one call received any of the three.
       expect(pushes()).toHaveLength(1);
       expect(stand.lines().length).toBeGreaterThan(0);
-      expect(new Set(stand.lines())).toEqual(new Set(["unset|unset|unset"]));
+      // TEST CHANGE, justified: review/18 (signed off 19:53Z) starts the write runner's git with GIT_ASKPASS set and
+      // empty, not removed, so its calls log an empty third field; the read runner's still log `unset` there.
+      expect(stand.lines()).toContain(WRITE_LINE);
+      expect(stand.lines().filter((line) => line !== WRITE_LINE && line !== READ_LINE)).toEqual([]);
       // The spy's GIT_CONFIG_COUNT insteadOf (the push's seam) was kept, so the push landed in the case's remote.
       expect(remoteHeads(remote)).toEqual([...SEEDED, `refs/heads/${RUN_BRANCH}`]);
     });
@@ -1548,9 +1555,9 @@ describe("stamity run checkpoint", () => {
       expect(named.code).toBe(0);
       expect(named.doc).toMatchObject({ subcommand: "start", run: RUN, gitEnvRemoved: ["GIT_SSH_COMMAND", "GIT_ASKPASS", "GIT_EXEC_PATH"] });
       for (const value of Object.values(PLANTED)) expect(named.stdout).not.toContain(value);
-      // Non-degenerate: start ran git, and not one of its calls received any of the three.
-      expect(stand.lines().length).toBeGreaterThan(0);
-      expect(new Set(stand.lines())).toEqual(new Set(["unset|unset|unset"]));
+      // Non-degenerate: start ran git through the write runner, and not one of its calls received any of the three.
+      expect(stand.lines()).toContain(WRITE_LINE);
+      expect(stand.lines().filter((line) => line !== WRITE_LINE && line !== READ_LINE)).toEqual([]);
       expect(plain.code).toBe(0);
       expect(plain.doc).toMatchObject({ subcommand: "start", run: RUN });
       expect(plain.doc).not.toHaveProperty("gitEnvRemoved");
