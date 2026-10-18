@@ -251,7 +251,7 @@ export const CLIENT_CLOUD_FACTS: readonly ClientCloudFact[] = [
       "The Action's page names no question tool among the tools a run is given by default, and nobody " +
       "sits in the job to answer one; that it has none rests on that silence, so a run there takes " +
       "its declared defaults.",
-    status: "unverified",
+    status: "not documented",
     citation: { url: "https://code.claude.com/docs/en/github-actions", accessDate: "2026-10-18" },
   },
   {
@@ -260,7 +260,10 @@ export const CLIENT_CLOUD_FACTS: readonly ClientCloudFact[] = [
     fact:
       "On a pull request the Action restores `.claude/`, `CLAUDE.md` and the other Claude configuration " +
       "paths from the base branch before Claude starts, keeping the pull request's copies under " +
-      "`.claude-pr/` for reference, so the hooks that run are the base branch's.",
+      "`.claude-pr/` for reference, so the hook entries are the base branch's. The page's word ends " +
+      "there: the hook scripts those entries start live under `.stamity/generated/hooks/`, which the " +
+      "restore does not cover, and come from the pull request, so a pull request can change what the " +
+      "guard runs on the Action's run on it.",
     status: "documented",
     citation: {
       url: "https://github.com/anthropics/claude-code-action/blob/main/docs/security.md",
@@ -416,7 +419,9 @@ export const CLIENT_CLOUD_FACTS: readonly ClientCloudFact[] = [
     fact:
       "A cloud agent opens pull requests and tries to fix CI failures on the ones it creates. Whether " +
       "such a pull request is a draft the page does not say, so a run opens its own draft through the " +
-      "run verbs and never marks it ready.",
+      "run verbs and never marks it ready. The platform's own push and pull request, its CI fixes " +
+      "included, meet no shell guard, held-path hold or scan, so branch protection on the default " +
+      "branch is needed to keep them off it.",
     status: "not documented",
     citation: { url: "https://cursor.com/docs/cloud-agent/capabilities", accessDate: "2026-10-18" },
   },

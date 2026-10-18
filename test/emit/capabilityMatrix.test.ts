@@ -772,14 +772,23 @@ describe("the cloud column and the Cloud sessions section", () => {
     expect(cap.fact).toContain("never an overnight surface");
     expect(cap.citation).toEqual({ url: "https://docs.github.com/en/actions/reference/limits", accessDate: "2026-10-18" });
 
+    // TEST CHANGE, justified (v11 review, round 1): the row rests on the page's silence, which the
+    // status legend calls `not documented` with its read date, not `unverified`.
     const questions = cloudFact("claude", "GitHub Action questions");
-    expect(questions.status).toBe("unverified");
+    expect(questions.status).toBe("not documented");
     expect(questions.fact).toContain("declared default");
+    const questionsRow = rows.find((line) => cells(line)[0] === "`claude`" && cells(line)[1] === questions.subject) ?? "";
+    expect(cells(questionsRow)[4]).toBe("not documented, read 2026-10-18");
 
+    // The restore the page documents covers the hook entries, not the scripts they start: those
+    // live under `.stamity/generated/hooks/` and come from the pull request.
     const config = cloudFact("claude", "GitHub Action configuration");
     expect(config.status).toBe("documented");
     expect(config.fact).toContain("`.claude/`");
-    expect(config.fact).toContain("base branch");
+    expect(config.fact).toContain("hook entries are the base branch's");
+    expect(config.fact).toContain("`.stamity/generated/hooks/`");
+    expect(config.fact).toContain("come from the pull request");
+    expect(config.fact).not.toContain("the hooks that run are the base branch's");
     expect(config.citation.url).toBe("https://github.com/anthropics/claude-code-action/blob/main/docs/security.md");
 
     // The Action's job prints no session line: no row of it carries one.
@@ -790,6 +799,9 @@ describe("the cloud column and the Cloud sessions section", () => {
   });
 
   it("gives each cloud its unattended rows: the draft-PR ending, questions, and Copilot's chained sessions (REQ-PROVE-044)", () => {
+    // Copilot's question fact is its "Ask decisions" row: a `preToolUse` ask is read as deny because
+    // no user is there to answer. No separate Copilot "Questions" row is kept (decided in the v11
+    // review, round 1).
     const UNATTENDED: Readonly<Partial<Record<Tool, readonly string[]>>> = {
       claude: ["Draft pull request", "Questions"],
       copilot: ["Draft pull request", "Ask decisions", "Session limit", "Next session"],
@@ -817,6 +829,9 @@ describe("the cloud column and the Cloud sessions section", () => {
     // asked with no subscription, so those rows state the assumption and are dated as such.
     expect(cloudFact("cursor", "Draft pull request").status).toBe("not documented");
     expect(cloudFact("cursor", "Questions").status).toBe("not documented");
+    // Cursor's own push meets no guard, so its row names the wall, as Claude's does.
+    expect(cloudFact("cursor", "Draft pull request").fact).toContain("meet no shell guard, held-path hold or scan");
+    expect(cloudFact("cursor", "Draft pull request").fact).toContain("branch protection on the default branch");
   });
 
   it("holds the session start's cloud lines equal to the table's, marker and order included", () => {
