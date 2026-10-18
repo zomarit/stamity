@@ -95,7 +95,7 @@ export const PERSON_ONLY_RULES: readonly PersonOnlyRule[] = [
   { id: "secrets", act: "writing a secret or a variable (`gh secret`, `gh variable` beyond list, their REST paths)" },
   {
     id: "protection",
-    act: "writing branch protection or a ruleset, renaming a branch, or writing the repository itself (`gh repo edit --default-branch` or `--visibility`, `gh repo rename`, `gh repo delete`, `gh repo archive`, a transfer, a REST PATCH or DELETE on the repository)",
+    act: "writing branch protection, a ruleset or a custom property a ruleset can target by, renaming a branch, or writing the repository itself (`gh repo edit --default-branch` or `--visibility`, `gh repo rename`, `gh repo delete`, `gh repo archive`, a transfer, a REST PATCH or DELETE on the repository)",
   },
 ];
 
@@ -232,7 +232,12 @@ export const CLAUDE_DENY_ROWS: readonly string[] = [
  * writes (pr/74) are named as GitHub's schema lists them, read on 2026-10-18 by
  * `gh api graphql -f query='{__schema{mutationType{fields{name}}}}'`: the archive,
  * `updateRepository` and its `updateRepository…` siblings, and a branch protection
- * rule's or a repository ruleset's create, update and delete.
+ * rule's or a repository ruleset's create, update and delete. A custom property
+ * written (pr/80) is one too, as GraphQL's `setRepositoryCustomPropertyValues` and
+ * `create`, `delete` or `promoteRepositoryCustomProperty`, and as a REST write under
+ * `repos/<o>/<r>/properties/`, `orgs/<o>/properties/` or `enterprises/<e>/properties/`:
+ * an organisation ruleset can target repositories by a property, so the write can
+ * take this repository out of a ruleset's protection.
  *
  * An HTTP call is read as curl or wget reads it: curl's `--next` or `-:` starts a
  * request of its own, its method and body reset, judged alone (pr/72). A call whose
@@ -1133,7 +1138,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         if (/\bmarkPullRequestReadyForReview\b/.test(text)) return deny("pr-ready", "A GraphQL ready-for-review");
         // pr/74, from GitHub's schema read on 2026-10-18.
         if (
-          /\b(archiveRepository|unarchiveRepository|updateRepository(CustomProperty|Ruleset|WebCommitSignoffSetting)?|(create|update|delete)(BranchProtectionRule|RepositoryRuleset))\b/.test(text)
+          /\b(archiveRepository|unarchiveRepository|updateRepository(CustomProperty|Ruleset|WebCommitSignoffSetting)?|(create|update|delete)(BranchProtectionRule|RepositoryRuleset)|(create|delete|promote)RepositoryCustomProperty|setRepositoryCustomPropertyValues)\b/.test(text)
         ) {
           return deny("protection", "A GraphQL repository settings, protection or ruleset write");
         }
@@ -1196,7 +1201,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       ) {
         return deny("pr-merge", `A REST review approval, or a review whose body the line cannot show (${shown})`);
       }
-      if (/^branches\/.+\/protection(\/|$)/i.test(path) || /^rulesets(\/|$)/i.test(path)) {
+      // A custom property, which a ruleset can target repositories by (pr/80).
+      if (/^branches\/.+\/protection(\/|$)/i.test(path) || /^(rulesets|properties)(\/|$)/i.test(path)) {
         return deny("protection", `A protection or ruleset write (${shown})`);
       }
       // The repository's own path carries its default branch, visibility, name and archived state; DELETE removes it.

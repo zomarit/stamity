@@ -550,6 +550,17 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
     "curl -X POST -d '{\"query\":\"mutation { archiveRepository(input: {repositoryId: \\\"R\\\"}) { clientMutationId } }\"}' https://api.github.com/graphql",
     "protection",
   ],
+  // A custom property's value or definition written (pr/80): an organisation ruleset can target repositories by it, so
+  // the write can take this repository out of a ruleset's protection. GraphQL and REST.
+  ...["setRepositoryCustomPropertyValues", "createRepositoryCustomProperty", "deleteRepositoryCustomProperty", "promoteRepositoryCustomProperty"]
+    .flatMap((name) => [
+      [`gh api graphql -f query='mutation { ${name}(input: {}) { clientMutationId } }'`, "protection"] as const,
+      [`curl -X POST -d '{"query":"mutation { ${name}(input: {}) { clientMutationId } }"}' https://api.github.com/graphql`, "protection"] as const,
+    ]),
+  ["gh api -X PATCH repos/o/r/properties/values", "protection"],
+  ["gh api orgs/o/properties/values -F 'repository_names[]=r'", "protection"],
+  ["gh api -X DELETE orgs/o/properties/schema/team", "protection"],
+  ["curl -X PUT -d '{}' https://api.github.com/enterprises/e/properties/schema/team", "protection"],
 ];
 
 const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
@@ -780,6 +791,10 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
   ["curl -d '{\"event\":\"APPROVE\"}' https://example.com --next https://api.github.com/repos/o/r/pulls/3/reviews"],
   // A GraphQL read of the repository (pr/74).
   ["gh api graphql -f query='query { repository(owner:\"o\",name:\"r\") { isArchived } }'"],
+  // Custom properties read (pr/80).
+  ["gh api repos/o/r/properties/values"],
+  ["gh api orgs/o/properties/schema"],
+  ["curl https://api.github.com/repos/o/r/properties/values"],
   // A curl write whose glob is switched off, judged as the literal path it sends; a glob or an IPv6 host on a read; a
   // plain read; wget's input file on a read (pr/76, pr/77).
   ["curl -X PATCH -d '{\"sha\":\"abc\"}' --globoff 'https://api.github.com/repos/o/r/git/refs/heads/{feature,main}'"],
