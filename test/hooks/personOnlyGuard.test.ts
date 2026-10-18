@@ -1109,9 +1109,11 @@ describe("the unattended push rule, the mode read from the run records", () => {
     // review/227's line as the PowerShell tool sends it, beside a variable that sets no configuration.
     expect(decide("claude", guard, "${env:GIT_CONFIG_PARAMETERS}=\"'core.fsmonitor=git push origin x'\"; git status", undefined, undefined, "PowerShell").deny).toBe(true);
     expect(decide("claude", guard, "${env:GIT_CONFIG_NOSYSTEM}='1'; git status", undefined, undefined, "PowerShell").deny).toBe(false);
-    // review/231's line as the PowerShell tool sends it, beside the same verb with no variable set.
+    // review/231's line as the PowerShell tool sends it, beside the same line with no variable set. TEST CHANGE,
+    // justified (v0b, REQ-FLOW-121): the twin ended in the run verb, which now stands alone on its line unattended, so
+    // it is retargeted to `npm test`; the twins in the loop below are retargeted the same way.
     expect(decide("claude", guard, `$env:GIT_EXEC_PATH = 'C:\\tmp'; ${RUN_END}`, undefined, undefined, "PowerShell").deny).toBe(true);
-    expect(decide("claude", guard, `$env:GIT_EXEC_PATH; ${RUN_END}`, undefined, undefined, "PowerShell").deny).toBe(false);
+    expect(decide("claude", guard, "$env:GIT_EXEC_PATH; npm test", undefined, undefined, "PowerShell").deny).toBe(false);
     // The refusal names the record that made the session unattended, so the person knows which run to close.
     expect(decide("claude", guard, RAW_PUSH)).toEqual({
       deny: true,
@@ -1125,11 +1127,11 @@ describe("the unattended push rule, the mode read from the run records", () => {
     // other than `x` (review/243), or reads one, names one under no allexport, or reads another name (review/247).
     for (const command of ["GIT_TERMINAL_PROMPT=0 git fetch origin", "git remote get-url origin", "git config --get remote.origin.url", "gh pr view 3",
       "git config --get url.https://example.com/.insteadOf", "GIT_CONFIG_NOSYSTEM=1 git status", "Set-Item env:GIT_CONFIG_NOSYSTEM 1; git status",
-      "grep GIT_CONFIG_COUNT src", `env -u GIT_EXEC_PATH ${RUN_END}`, "gh pr view 3 --json mergeStateStatus",
-      `declare -p GIT_EXEC_PATH; ${RUN_END}`, `declare -x GIT_TERMINAL_PROMPT; ${RUN_END}`, "typeset -i GIT_CONFIG_COUNT; npm test",
-      `read OTHER_NAME <<< /tmp/bin; ${RUN_END}`, `echo "$GIT_EXEC_PATH"; ${RUN_END}`, `set +a; read OTHER_NAME <<< "$GIT_EXEC_PATH"; ${RUN_END}`,
-      `set -e; echo "$GIT_EXEC_PATH"; ${RUN_END}`, 'for f in GIT_EXEC_PATH GIT_EDITOR; do grep -rn "$f" src; done; npm test',
-      `printf '%s\\n' GIT_EXEC_PATH; ${RUN_END}`, "npm -w x exec -- git status", "cmd /c g^it status", "wget --meth=GET https://api.github.com/repos/o/r/pulls/3",
+      "grep GIT_CONFIG_COUNT src", "env -u GIT_EXEC_PATH npm test", "gh pr view 3 --json mergeStateStatus",
+      "declare -p GIT_EXEC_PATH; npm test", "declare -x GIT_TERMINAL_PROMPT; npm test", "typeset -i GIT_CONFIG_COUNT; npm test",
+      "read OTHER_NAME <<< /tmp/bin; npm test", 'echo "$GIT_EXEC_PATH"; npm test', 'set +a; read OTHER_NAME <<< "$GIT_EXEC_PATH"; npm test',
+      'set -e; echo "$GIT_EXEC_PATH"; npm test', 'for f in GIT_EXEC_PATH GIT_EDITOR; do grep -rn "$f" src; done; npm test',
+      "printf '%s\\n' GIT_EXEC_PATH; npm test", "npm -w x exec -- git status", "cmd /c g^it status", "wget --meth=GET https://api.github.com/repos/o/r/pulls/3",
       "wget --me=GET https://api.github.com/repos/o/r/pulls/3", "wget https://api.github.com/repos/o/r/releases",
       "wget -e method=GET https://api.github.com/repos/o/r/pulls/3", "gh co 3", "gh alias list", "corepack pnpm exec git status",
       // gh's own aliases of its built-ins (pr/67), and a pull request list read (pr/81).
@@ -1201,6 +1203,52 @@ describe("the unattended push rule, the mode read from the run records", () => {
     expect(decide("claude", guard, RAW_PUSH, { STAMITY_UNATTENDED: "1" }).deny).toBe(true);
     await getRepo().seedFiles({ ".stamity/runs/2026-10-16_walk/record.md": record("in progress", "attended") });
     expect(decide("claude", guard, RAW_PUSH, { STAMITY_UNATTENDED: "1" }).deny).toBe(false);
+  });
+});
+
+describe("a run verb alone on its line, unattended, on every client (v0b, REQ-FLOW-121)", () => {
+  const WRAPPED = `env -u GIT_EXEC_PATH ${RUN_END}`;
+
+  it.each(TOOLS)("on %s, refuses the verb behind a wrapper and lets it pass alone; attended, both pass", async (tool) => {
+    const guard = await placeGuard(tool);
+    // Non-degenerate: attended (no record), the wrapped verb passes, as it did before the rule.
+    expect(decide(tool, guard, WRAPPED)).toEqual({ deny: false });
+    await getRepo().seedFiles({ ".stamity/runs/2026-10-18_x/record.md": record("in progress", "unattended") });
+    const verdict = unattendedPushVerdict(WRAPPED);
+    expect(verdict.deny).toBe(true);
+    if (verdict.deny) expect(decide(tool, guard, WRAPPED)).toEqual({ deny: true, reason: expect.stringContaining(verdict.reason) });
+    expect(decide(tool, guard, RUN_END)).toEqual({ deny: false });
+  });
+
+  it.each(["claude", "copilot"] as const)(
+    "on %s, reads the PowerShell tool's text as PowerShell: the verb alone passes, a line before it or the agent's own pwsh -Command does not",
+    async (tool) => {
+      const guard = await placeGuard(tool, { ".stamity/runs/2026-10-18_x/record.md": record("in progress", "unattended") });
+      expect(decide(tool, guard, RUN_END, undefined, undefined, "PowerShell")).toEqual({ deny: false });
+      for (const command of [`Set-Content env:GIT_EXEC_PATH C:/tmp; ${RUN_END}`, `pwsh -Command '${RUN_END}'`]) {
+        const verdict = unattendedPushVerdict(command, true);
+        expect(verdict.deny, command).toBe(true);
+        if (verdict.deny) {
+          expect(decide(tool, guard, command, undefined, undefined, "PowerShell"), command).toEqual({
+            deny: true,
+            reason: expect.stringContaining(verdict.reason),
+          });
+        }
+      }
+    },
+  );
+});
+
+describe("PowerShell's typographic quotes, read as quotes on the PowerShell tool (v0b, W-1)", () => {
+  it.each(["claude", "copilot"] as const)("on %s, refuses a force push placed after one, attended, and allows its read twin", async (tool) => {
+    const [LSQ, RSQ] = [0x2018, 0x2019].map((code) => String.fromCharCode(code));
+    const guard = await placeGuard(tool);
+    const hidden = `echo 'a${RSQ}; git push --force origin feat/x; ${LSQ}b'`;
+    expect(decide(tool, guard, hidden, undefined, undefined, "PowerShell")).toEqual({
+      deny: true,
+      reason: expect.stringContaining("(`force-push`)"),
+    });
+    expect(decide(tool, guard, `echo 'a${RSQ}; git status; ${LSQ}b'`, undefined, undefined, "PowerShell")).toEqual({ deny: false });
   });
 });
 

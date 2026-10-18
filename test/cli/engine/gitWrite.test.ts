@@ -98,7 +98,9 @@ describe("gitWriteEnv", () => {
   });
 
   it("unattended with no GIT_ASKPASS at all, still sets it empty; attended with none, sets none (review/18)", () => {
-    expect(gitWriteEnv({ ...KEPT, SSH_ASKPASS: "/tmp/planted" }, { unattended: true })).toEqual({ ...KEPT, SSH_ASKPASS: "/tmp/planted", GIT_ASKPASS: "", GIT_TERMINAL_PROMPT: "0" });
+    // TEST CHANGE, justified (v0b, the orchestrator's sign-off of 2026-10-18): SSH_ASKPASS joins the program-valued
+    // variables an unattended write removes, defense in depth beside the empty GIT_ASKPASS, so it is no longer kept.
+    expect(gitWriteEnv({ ...KEPT, SSH_ASKPASS: "/tmp/planted" }, { unattended: true })).toEqual({ ...KEPT, GIT_ASKPASS: "", GIT_TERMINAL_PROMPT: "0" });
     expect(gitWriteEnv({ ...KEPT }, { unattended: false })).not.toHaveProperty("GIT_ASKPASS");
   });
 
@@ -424,7 +426,9 @@ describe.skipIf(!gitAvailable)("gitWrite against real repositories", () => {
 
   // review/18: the stand-in reports whether GIT_ASKPASS reached it set, and with what, beside SSH_ASKPASS. Mock reason
   // as above. POSIX only, as above.
-  it.skipIf(process.platform === "win32")("unattended with SSH_ASKPASS set, starts git with GIT_ASKPASS present and empty", async () => {
+  // TEST CHANGE, justified (v0b, the orchestrator's sign-off of 2026-10-18): SSH_ASKPASS is now removed unattended, as
+  // one of the program-valued variables, so the stand-in sees it unset; GIT_ASKPASS stays present and empty.
+  it.skipIf(process.platform === "win32")("unattended with SSH_ASKPASS set, starts git with GIT_ASKPASS present and empty, and without SSH_ASKPASS", async () => {
     const plain = getRoot().path("plain");
     await mkdir(plain);
     const bin = getRoot().path("stand-in");
@@ -437,7 +441,7 @@ describe.skipIf(!gitAvailable)("gitWrite against real repositories", () => {
     vi.stubEnv("SSH_ASKPASS", "/planted/ssh-askpass");
 
     expect(await gitWrite(plain, ["push", "origin", "HEAD"], { unattended: true })).toEqual({ code: 0, stdout: "", stderr: "" });
-    expect(readFileSync(log, "utf8")).toBe("set:|/planted/ssh-askpass\n");
+    expect(readFileSync(log, "utf8")).toBe("set:|unset\n");
   });
 
   // review/18: git asks GIT_ASKPASS, then core.askPass, then SSH_ASKPASS; a set-but-empty GIT_ASKPASS ends that order,

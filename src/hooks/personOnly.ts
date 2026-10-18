@@ -400,6 +400,9 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   const SHELLS = new Set(["sh", "bash", "zsh", "dash", "ksh"]);
   /** PowerShell's two hosts and `Invoke-Expression`, each running a command string of its own (build/89). */
   const POWERSHELLS = new Set(["pwsh", "powershell", "invoke-expression", "iex"]);
+  /** The quotes PowerShell opens and closes with: `'` and U+2018 to U+201B, `"` and U+201C to U+201E (v0b). */
+  const PS_SINGLE = "'" + String.fromCharCode(0x2018, 0x2019, 0x201a, 0x201b);
+  const PS_DOUBLE = '"' + String.fromCharCode(0x201c, 0x201d, 0x201e);
 
   /**
    * A program word as the shell finds it: its last path part, without case or a Windows suffix, and without a trailing
@@ -446,19 +449,21 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       if (words.length > 0) segments.push(words);
       words = [];
     };
+    // PowerShell's reading takes its typographic quotes as quotes too, so an act after one is read, not hidden.
+    const quote = (c: string | undefined, kind: string): boolean => c !== undefined && (c === kind[0] || (pwsh && kind.includes(c)));
     let i = 0;
     while (i < text.length) {
       const ch = text[i] ?? "";
-      if (ch === "'") {
-        const close = text.indexOf("'", i + 1);
-        const stop = close === -1 ? text.length : close;
+      if (quote(ch, PS_SINGLE)) {
+        let stop = i + 1;
+        while (stop < text.length && !quote(text[stop], PS_SINGLE)) stop += 1;
         word += text.slice(i + 1, stop);
         inWord = true;
         i = stop + 1;
-      } else if (ch === '"') {
+      } else if (quote(ch, PS_DOUBLE)) {
         inWord = true;
         i += 1;
-        while (i < text.length && text[i] !== '"') {
+        while (i < text.length && !quote(text[i], PS_DOUBLE)) {
           const c = text[i] ?? "";
           const next = text[i + 1] ?? "";
           if (pwsh && c === "`" && i + 1 < text.length) {
@@ -530,6 +535,26 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
           inWord = true;
         }
         i += pwsh && crlf ? 3 : 2;
+      } else if ((ch === "$" && text[i + 1] === "(") || ch === "`" || (ch === "(" && (inWord || words.length > 0))) {
+        // An unquoted substitution, or a group inside a command (PowerShell's `(…)`), is read as its own line and stays
+        // a word, so the words after it are still this command's (pr/89). A group opening a command is cut below.
+        const start = ch === "$" ? i + 2 : i + 1;
+        let j = start;
+        if (ch === "`") {
+          while (j < text.length && text[j] !== "`") j += 1;
+        } else {
+          let level = 1;
+          while (j < text.length) {
+            if (text[j] === "(") level += 1;
+            else if (text[j] === ")") level -= 1;
+            if (level === 0) break;
+            j += 1;
+          }
+        }
+        nested.push(text.slice(start, j));
+        word += text.slice(i, Math.min(j + 1, text.length));
+        inWord = true;
+        i = j + 1;
       } else if (ch === " " || ch === "\t") {
         endWord();
         i += 1;
@@ -644,8 +669,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       }
       const cmd = words.slice(k);
       if (cmd.length === 0) continue;
-      // A program word holding a whole command line (`bun exec 'git push'`) is also read as that line.
-      if (/\s/.test(cmd[0] ?? "")) commands.push(...commandsOf(cmd.join(" "), depth + 1, pwsh));
+      // A program word holding a whole command line (`bun exec 'git push'`) is also read as that line, unless it is this one.
+      if (/\s/.test(cmd[0] ?? "") && cmd.join(" ") !== text) commands.push(...commandsOf(cmd.join(" "), depth + 1, pwsh));
       cmd[0] = programName(cmd[0] ?? "");
       // git's dashed form (`git-push`, as git's exec path holds it) is git running that subcommand.
       if (/^git-./.test(cmd[0])) cmd.splice(0, 1, "git", cmd[0].slice(4));
@@ -722,12 +747,16 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     return { sub: (cmd[k] ?? "").toLowerCase(), args: cmd.slice(k + 1), config };
   }
 
-  /** gh's positional words, `-R`/`--repo` and its value skipped. */
+  /**
+   * gh's positional words, `-R`/`--repo` and its value skipped. Before the subcommand, as gh's parser reads it (pr/97),
+   * an option with no `=` but help and version takes the next word: `gh pr --body x merge 1` merges.
+   */
   function ghPositionals(cmd: string[]): string[] {
     const positionals: string[] = [];
     for (let k = 1; k < cmd.length; k += 1) {
       const word = cmd[k] ?? "";
       if (word === "-R" || word === "--repo") k += 1;
+      else if (positionals.length < 2 && /^(?:--[^=]+|-[^-])$/.test(word) && !["-h", "--help", "--version"].includes(word)) k += 1;
       else if (!word.startsWith("-")) positionals.push(word);
     }
     return positionals;
@@ -805,7 +834,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     let end = cmd.length;
     let next: string[] | null = null;
     const targets: string[] = [];
-    const start = tool === "gh" ? cmd.indexOf("api") + 1 : 1;
+    // gh's options before `api` are the call's too (pr/97).
+    const api = tool === "gh" ? cmd.indexOf("api") : -1;
     const valueFlags =
       tool === "gh"
         ? ["-H", "--header", "-q", "--jq", "-t", "--template", "--hostname", "-p", "--preview", "--cache"]
@@ -818,7 +848,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         ? ["-f", "-F", "--field", "--raw-field", "--input"]
         : ["-d", "--data", "--data-raw", "--data-binary", "--data-urlencode", "--data-ascii", "--json", "-F", "--form",
            "--form-string", "-T", "--upload-file", "--post-data", "--post-file", "--body-data", "--body-file"];
-    for (let k = start; k < cmd.length; k += 1) {
+    for (let k = 1; k < cmd.length; k += 1) {
+      if (k === api) continue;
       const word = cmd[k] ?? "";
       const name = word.split("=")[0] ?? "";
       if (tool === "curl" && (word === "--next" || word === "-:")) {
@@ -842,14 +873,18 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         }
       }
       if (tool === "curl" && word === "--globoff") globoff = true;
-      if (word === "-X" || word === "--method" || word === "--request") {
-        // A method word the line ends before, an unquoted substitution having cut it, is one it cannot show (pr/83).
+      // wget's `-X` is `--exclude-directories` (pr/90).
+      const methodLetter = tool !== "wget";
+      if ((word === "-X" && methodLetter) || word === "--method" || word === "--request") {
+        // A method word the line ends before is one it cannot show (pr/83).
         method = cmd[k + 1] ?? hidden();
         k += 1;
       } else if (name === "--method" || name === "--request") {
         method = word.slice(name.length + 1);
-      } else if (/^-X./.test(word)) {
+      } else if (/^-X./.test(word) && methodLetter) {
         method = word.slice(2);
+      } else if (word === "-X") {
+        k += 1;
       } else if (bodyFlags.includes(word)) {
         body = true;
         k += 1;
@@ -1681,13 +1716,18 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
  * `pulls` or `pulls/<n>`, on `contents/…`, on `git/` refs or objects, or on
  * `merges`, with their GraphQL twins. A reply on `pulls/<n>/comments` or
  * `issues/<n>/comments` passes. A `gh` group outside gh's built-in commands (an
- * alias or an extension) and `gh alias set` or `import` are refused too. The line
- * is read as {@link personOnlyVerdict} reads it, and throws as it does.
+ * alias or an extension), `gh alias set` or `import` and `gh extension exec` are refused too. The line
+ * is read as {@link personOnlyVerdict} reads it, and throws as it does; with `powershell`, as PowerShell's command string
+ * (the PowerShell tool's text), a POSIX shell's reading beside it.
+ *
+ * A run verb stands alone on its line (REQ-FLOW-121): a line that runs `stamity run start`, `checkpoint` or `end`, or
+ * names one beside the package, is refused unless it is that one simple command, so nothing on the line changes the
+ * environment the verb's git runs in.
  *
  * Self-contained, so the emitted guard can carry it as source (see the module
  * comment).
  */
-export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
+export function unattendedPushVerdict(command: string, powershell = false): UnattendedPushVerdict {
   // <shell-reading>
   const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
   const KEYWORDS = new Set(["!", "{", "}", "if", "then", "else", "elif", "fi", "do", "done", "while", "until"]);
@@ -1731,6 +1771,9 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
   const SHELLS = new Set(["sh", "bash", "zsh", "dash", "ksh"]);
   /** PowerShell's two hosts and `Invoke-Expression`, each running a command string of its own (build/89). */
   const POWERSHELLS = new Set(["pwsh", "powershell", "invoke-expression", "iex"]);
+  /** The quotes PowerShell opens and closes with: `'` and U+2018 to U+201B, `"` and U+201C to U+201E (v0b). */
+  const PS_SINGLE = "'" + String.fromCharCode(0x2018, 0x2019, 0x201a, 0x201b);
+  const PS_DOUBLE = '"' + String.fromCharCode(0x201c, 0x201d, 0x201e);
 
   /**
    * A program word as the shell finds it: its last path part, without case or a Windows suffix, and without a trailing
@@ -1777,19 +1820,21 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
       if (words.length > 0) segments.push(words);
       words = [];
     };
+    // PowerShell's reading takes its typographic quotes as quotes too, so an act after one is read, not hidden.
+    const quote = (c: string | undefined, kind: string): boolean => c !== undefined && (c === kind[0] || (pwsh && kind.includes(c)));
     let i = 0;
     while (i < text.length) {
       const ch = text[i] ?? "";
-      if (ch === "'") {
-        const close = text.indexOf("'", i + 1);
-        const stop = close === -1 ? text.length : close;
+      if (quote(ch, PS_SINGLE)) {
+        let stop = i + 1;
+        while (stop < text.length && !quote(text[stop], PS_SINGLE)) stop += 1;
         word += text.slice(i + 1, stop);
         inWord = true;
         i = stop + 1;
-      } else if (ch === '"') {
+      } else if (quote(ch, PS_DOUBLE)) {
         inWord = true;
         i += 1;
-        while (i < text.length && text[i] !== '"') {
+        while (i < text.length && !quote(text[i], PS_DOUBLE)) {
           const c = text[i] ?? "";
           const next = text[i + 1] ?? "";
           if (pwsh && c === "`" && i + 1 < text.length) {
@@ -1861,6 +1906,26 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
           inWord = true;
         }
         i += pwsh && crlf ? 3 : 2;
+      } else if ((ch === "$" && text[i + 1] === "(") || ch === "`" || (ch === "(" && (inWord || words.length > 0))) {
+        // An unquoted substitution, or a group inside a command (PowerShell's `(…)`), is read as its own line and stays
+        // a word, so the words after it are still this command's (pr/89). A group opening a command is cut below.
+        const start = ch === "$" ? i + 2 : i + 1;
+        let j = start;
+        if (ch === "`") {
+          while (j < text.length && text[j] !== "`") j += 1;
+        } else {
+          let level = 1;
+          while (j < text.length) {
+            if (text[j] === "(") level += 1;
+            else if (text[j] === ")") level -= 1;
+            if (level === 0) break;
+            j += 1;
+          }
+        }
+        nested.push(text.slice(start, j));
+        word += text.slice(i, Math.min(j + 1, text.length));
+        inWord = true;
+        i = j + 1;
       } else if (ch === " " || ch === "\t") {
         endWord();
         i += 1;
@@ -1975,8 +2040,8 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
       }
       const cmd = words.slice(k);
       if (cmd.length === 0) continue;
-      // A program word holding a whole command line (`bun exec 'git push'`) is also read as that line.
-      if (/\s/.test(cmd[0] ?? "")) commands.push(...commandsOf(cmd.join(" "), depth + 1, pwsh));
+      // A program word holding a whole command line (`bun exec 'git push'`) is also read as that line, unless it is this one.
+      if (/\s/.test(cmd[0] ?? "") && cmd.join(" ") !== text) commands.push(...commandsOf(cmd.join(" "), depth + 1, pwsh));
       cmd[0] = programName(cmd[0] ?? "");
       // git's dashed form (`git-push`, as git's exec path holds it) is git running that subcommand.
       if (/^git-./.test(cmd[0])) cmd.splice(0, 1, "git", cmd[0].slice(4));
@@ -2053,12 +2118,16 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
     return { sub: (cmd[k] ?? "").toLowerCase(), args: cmd.slice(k + 1), config };
   }
 
-  /** gh's positional words, `-R`/`--repo` and its value skipped. */
+  /**
+   * gh's positional words, `-R`/`--repo` and its value skipped. Before the subcommand, as gh's parser reads it (pr/97),
+   * an option with no `=` but help and version takes the next word: `gh pr --body x merge 1` merges.
+   */
   function ghPositionals(cmd: string[]): string[] {
     const positionals: string[] = [];
     for (let k = 1; k < cmd.length; k += 1) {
       const word = cmd[k] ?? "";
       if (word === "-R" || word === "--repo") k += 1;
+      else if (positionals.length < 2 && /^(?:--[^=]+|-[^-])$/.test(word) && !["-h", "--help", "--version"].includes(word)) k += 1;
       else if (!word.startsWith("-")) positionals.push(word);
     }
     return positionals;
@@ -2136,7 +2205,8 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
     let end = cmd.length;
     let next: string[] | null = null;
     const targets: string[] = [];
-    const start = tool === "gh" ? cmd.indexOf("api") + 1 : 1;
+    // gh's options before `api` are the call's too (pr/97).
+    const api = tool === "gh" ? cmd.indexOf("api") : -1;
     const valueFlags =
       tool === "gh"
         ? ["-H", "--header", "-q", "--jq", "-t", "--template", "--hostname", "-p", "--preview", "--cache"]
@@ -2149,7 +2219,8 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
         ? ["-f", "-F", "--field", "--raw-field", "--input"]
         : ["-d", "--data", "--data-raw", "--data-binary", "--data-urlencode", "--data-ascii", "--json", "-F", "--form",
            "--form-string", "-T", "--upload-file", "--post-data", "--post-file", "--body-data", "--body-file"];
-    for (let k = start; k < cmd.length; k += 1) {
+    for (let k = 1; k < cmd.length; k += 1) {
+      if (k === api) continue;
       const word = cmd[k] ?? "";
       const name = word.split("=")[0] ?? "";
       if (tool === "curl" && (word === "--next" || word === "-:")) {
@@ -2173,14 +2244,18 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
         }
       }
       if (tool === "curl" && word === "--globoff") globoff = true;
-      if (word === "-X" || word === "--method" || word === "--request") {
-        // A method word the line ends before, an unquoted substitution having cut it, is one it cannot show (pr/83).
+      // wget's `-X` is `--exclude-directories` (pr/90).
+      const methodLetter = tool !== "wget";
+      if ((word === "-X" && methodLetter) || word === "--method" || word === "--request") {
+        // A method word the line ends before is one it cannot show (pr/83).
         method = cmd[k + 1] ?? hidden();
         k += 1;
       } else if (name === "--method" || name === "--request") {
         method = word.slice(name.length + 1);
-      } else if (/^-X./.test(word)) {
+      } else if (/^-X./.test(word) && methodLetter) {
         method = word.slice(2);
+      } else if (word === "-X") {
+        k += 1;
       } else if (bodyFlags.includes(word)) {
         body = true;
         k += 1;
@@ -2304,9 +2379,12 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
    * `[Environment]::SetEnvironmentVariable`, `export` or `declare -x` of a name set earlier.
    */
   const CONFIG_ENVIRONMENT = new RegExp(`\\b${CONFIG_NAMES}`, "i");
-  /** git's environment variables whose value is a program git runs (review/208): twins of the `-c` keys refused below. */
+  /**
+   * git's environment variables whose value is a program git runs (review/208): twins of the `-c` keys refused below;
+   * and `SSH_ASKPASS`, which git runs when no askpass helper is set, as the ssh it starts does (v0b).
+   */
   const PROGRAM_VARIABLES =
-    "GIT_EDITOR|GIT_SEQUENCE_EDITOR|GIT_SSH_COMMAND|GIT_SSH|GIT_EXTERNAL_DIFF|GIT_ASKPASS|GIT_PAGER|GIT_PROXY_COMMAND|GIT_EXEC_PATH";
+    "GIT_EDITOR|GIT_SEQUENCE_EDITOR|GIT_SSH_COMMAND|GIT_SSH|GIT_EXTERNAL_DIFF|GIT_ASKPASS|GIT_PAGER|GIT_PROXY_COMMAND|GIT_EXEC_PATH|SSH_ASKPASS";
   /** A program-valued or configuration variable's name, as a word starts with it: the set the line-wide rule reads. */
   const GIT_VARIABLE = `(?:(?:${PROGRAM_VARIABLES})\\b|${CONFIG_NAMES})`;
   /**
@@ -2409,7 +2487,68 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
     return writes && keys.some((key) => /^(?:remote|url)(\.|$)/i.test(key));
   }
 
-  const commands = commandsOf(command, 0, false);
+  /** The run verbs, and a text naming one beside the package (`stamity`, the CLI file, a pinned `@<semver>`). */
+  const RUN_VERBS = new Set(["start", "checkpoint", "end"]);
+  const namesVerb = (text: string): boolean =>
+    /\brun\W+(?:start|checkpoint|end)\b/i.test(text) && /stamity|\bcli\.m?js\b|@\d+\.\d+\.\d+/i.test(text);
+  /** npm's per-scope registry URL, as `REGISTRY_URL` in `src/shared/cliCall.ts` reads one. */
+  const REGISTRY_URL = /^https:\/\/[A-Za-z0-9.-]+(?::(?:[1-9]\d{0,3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-5]))?(?:\/[A-Za-z0-9._~/-]*)?$/;
+  /** A pinned package: a runnable npm name, then `@` and a semver-shaped version (`src/shared/cliCall.ts`). */
+  const PINNED_PACKAGE =
+    /^(?:@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*@(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+
+  /**
+   * What keeps a run verb's line from being the one simple command it must be (REQ-FLOW-121), or null when it is that
+   * command: `stamity` or `st`, or `npx` with one of `-y`, `--yes`, `--no` or `--no-yes`, an optional
+   * `--@<scope>:registry=<url>` and then `stamity` or `<pkg>@<semver>`; then `run <verb>` and literal words, at most one
+   * closing `2>&1`. Single quotes are literal; double quotes hold no `$`, backtick or backslash; nothing else on the
+   * line expands, redirects, joins or nests a command. With `powershell` the same, and no typographic quote, which
+   * PowerShell reads as a quote, and no stop-parsing `--%`.
+   */
+  function verbShape(line: string): string | null {
+    const text = line.replace(/[ \t]+2>&1[ \t]*$/, "");
+    if (/[\r\n]/.test(text)) return "a line break";
+    // Anywhere, inside a quote too: PowerShell closes a `'` with a typographic one (U+2018 to U+201E).
+    const typographic = [...text].some((ch) => ch.charCodeAt(0) >= 0x2018 && ch.charCodeAt(0) <= 0x201e);
+    if (powershell && typographic) return "a typographic quote, which PowerShell reads as a quote";
+    const words: string[] = [];
+    let word: string | null = null;
+    for (let i = 0; i < text.length; i += 1) {
+      const ch = text[i] ?? "";
+      if (ch === "'" || ch === '"') {
+        const close = text.indexOf(ch, i + 1);
+        if (close === -1) return "a quote left open";
+        const quoted = text.slice(i + 1, close);
+        if (ch === '"' && /[$`\\]/.test(quoted)) return "a `$`, backtick or backslash inside double quotes";
+        word = (word ?? "") + quoted;
+        i = close;
+      } else if (ch === " " || ch === "\t") {
+        if (word !== null) words.push(word);
+        word = null;
+      } else if ("$`\\(){};|&<>#".includes(ch)) {
+        return ch === "`" ? "an unquoted backtick" : `an unquoted \`${ch}\``;
+      } else word = (word ?? "") + ch;
+    }
+    if (word !== null) words.push(word);
+    if (powershell && words.includes("--%")) return "PowerShell's stop-parsing `--%`";
+    let at = 1;
+    if (words[0] === "npx") {
+      if (!["-y", "--yes", "--no", "--no-yes"].includes(words[1] ?? "")) return "an `npx` call whose first word is not `-y`, `--yes`, `--no` or `--no-yes`";
+      at = 2;
+      const registry = /^--@[a-z0-9][a-z0-9._~-]*:registry=([\s\S]*)$/.exec(words[at] ?? "");
+      if (registry !== null && !REGISTRY_URL.test(registry[1] ?? "")) return "a scope registry that is not a plain https URL";
+      if (registry !== null) at += 1;
+      const spec = words[at] ?? "";
+      if (spec !== "stamity" && !PINNED_PACKAGE.test(spec)) return "an `npx` option or package other than `stamity` or `<pkg>@<semver>`";
+      at += 1;
+    } else if (words[0] !== "stamity" && words[0] !== "st") {
+      return "a first word other than `stamity`, `st` or `npx`: a prefix, a wrapper or another program";
+    }
+    if (words[at] !== "run" || !RUN_VERBS.has(words[at + 1] ?? "")) return "words between the program and `run <verb>`";
+    return null;
+  }
+
+  const commands = commandsOf(command, 0, powershell);
   for (const cmd of commands) {
     const program = cmd[0] ?? "";
     if (program === "git") {
@@ -2465,6 +2604,8 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
       // Unattended, gh runs only a built-in this verdict knows, and defines no alias (pr/56).
       if (group !== undefined && !GH_BUILTINS.has(group)) return deny("A gh command that is not a built-in this guard knows (an alias or an extension)");
       if (group === "alias" && (sub === "set" || sub === "import")) return deny(`\`gh alias ${sub}\`, which defines an alias`);
+      // An installed extension run through the built-in group runs what the line does not show (pr/64).
+      if (["extension", "extensions", "ext"].includes(group ?? "") && sub === "exec") return deny(`\`gh ${group} exec\`, which runs an extension`);
       // Closing and reopening are the REST twin's `PATCH pulls/<n>` (review/213), `update-branch` its `PUT
       // pulls/<n>/update-branch` (review/232).
       if (group === "pr" && ["create", "new", "edit", "close", "reopen", "update-branch"].includes(sub ?? "")) return deny(`\`gh pr ${sub}\``);
@@ -2509,6 +2650,20 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
     (allexport && (NAMES_VARIABLE.test(command) || [...assigned, ...commands.flat()].some((word) => NAMES_VARIABLE.test(word))))
   ) {
     return deny("A line that sets one of git's program or configuration variables (`GIT_EXEC_PATH`, `GIT_EDITOR`, `GIT_CONFIG_COUNT`, …), which the run verbs' own git reads,");
+  }
+  // A run verb alone on its line (REQ-FLOW-121): a parsed command at any depth running one, or, for what the reading
+  // cannot show, the text or a decoded word naming one beside the package. Any form that sets the verb's environment
+  // (a setter, allexport, a wrapper, a nested shell, PowerShell's `env:` drive) needs more on the line than the verb.
+  const runsVerb =
+    commands.some((cmd) => {
+      const positionals = cmd.slice(1).filter((word) => !word.startsWith("-"));
+      return (cmd[0] === "stamity" || cmd[0] === "st") && positionals[0] === "run" && RUN_VERBS.has(positionals[1] ?? "");
+    }) ||
+    namesVerb(command) ||
+    [...assigned, ...commands.flat()].some(namesVerb);
+  const broke = runsVerb ? verbShape(command) : null;
+  if (broke !== null) {
+    return deny(`A run verb (\`stamity run start\`, \`checkpoint\` or \`end\`) on a line that is more than the verb (${broke}; REQ-FLOW-121)`);
   }
   return { deny: false };
 }

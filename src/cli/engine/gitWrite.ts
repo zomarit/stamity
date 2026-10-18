@@ -99,8 +99,10 @@ const LOCATION_VARIABLES =
 const PATHSPEC_VARIABLES = /^GIT_(?:LITERAL|GLOB|NOGLOB|ICASE)_PATHSPECS$/i;
 
 /**
- * git's environment variables whose value is a program git runs: the set the
- * shell guard's line-wide rule names (`PROGRAM_VARIABLES` in
+ * git's environment variables whose value is a program git runs, and
+ * `SSH_ASKPASS`, which git runs when no askpass helper is set, as the ssh it
+ * starts does (defense in depth beside the empty `GIT_ASKPASS` below): the set
+ * the shell guard's line-wide rule names (`PROGRAM_VARIABLES` in
  * `src/hooks/personOnly.ts`), held here as its own list since the guard module
  * stays self-contained, and kept equal to it by a parity test. An unattended
  * write starts git without them (REQ-FLOW-122): set earlier in a shell that
@@ -117,6 +119,7 @@ export const GIT_PROGRAM_VARIABLES: readonly string[] = [
   "GIT_PAGER",
   "GIT_PROXY_COMMAND",
   "GIT_EXEC_PATH",
+  "SSH_ASKPASS",
 ];
 
 /** Whether `key` names one of {@link GIT_PROGRAM_VARIABLES}, in any case, as Windows reads a name. */

@@ -79,6 +79,15 @@ describe("the person-only guard the built bundle renders (review/217)", () => {
       expect(String(allowed.stdout).trim()).toBe("");
       expect(String(allowed.stderr)).toBe("");
 
+      // v0b (REQ-FLOW-121): unattended, the run verb alone passes, and the same verb behind a wrapper is refused by the
+      // stand-alone rule as the bundle renders it, not by a fault.
+      const alone = runGuard(guard, "npx --no stamity run end --run x");
+      expect(alone.status, String(alone.stderr)).toBe(0);
+      const wrapped = runGuard(guard, "env -u GIT_EXEC_PATH npx --no stamity run end --run x");
+      expect(wrapped.status, String(wrapped.stderr)).toBe(2);
+      expect(String(wrapped.stderr)).toContain("on a line that is more than the verb");
+      expect(String(wrapped.stderr)).toContain("REQ-FLOW-121");
+
       // v0a2 (REQ-FLOW-123): attended, a merge asks through Claude Code's hookSpecificOutput on stdout, exit 0, its
       // sentence built by the bundle; unattended, the same merge is refused for the morning list.
       const asked = runGuard(guard, "gh pr merge 1", true);

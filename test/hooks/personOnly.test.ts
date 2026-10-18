@@ -9,6 +9,7 @@ import {
   unattendedPushVerdict,
 } from "../../src/hooks/personOnly.ts";
 import { CURATED_MCP_SERVERS, PLATFORM_MCP_SERVER } from "../../src/mcp/catalog.ts";
+import { REGISTRY_URL } from "../../src/shared/cliCall.ts";
 
 /**
  * u6-person-only-tables (REQ-FLOW-102, REQ-FLOW-120): the person-only acts the
@@ -1430,6 +1431,182 @@ describe("an HTTP call whose method or target the line cannot show (pr/73, pr/76
   });
 });
 
+describe("a substitution, wget's `-X` and gh's options before its subcommand, read in both verdicts (v0b)", () => {
+  // pr/89: an unquoted substitution no longer cuts the command, so the words after it are still its own; pr/90: wget's
+  // `-X` is `--exclude-directories`, no method; pr/97: an option before gh's subcommand takes its value as gh's parser
+  // does there, so the subcommand's rule applies. Conformance rows (the cell's) sit beside the rows that were allowed.
+  it.each([
+    ["git push origin `true` HEAD:main", "push-default"],
+    ["git push origin $(true) HEAD:main", "push-default"],
+    ["curl -X DELETE $(true) https://api.github.com/repos/o/r/git/refs/heads/feat", "push-delete"],
+    ["curl -X DELETE `true` https://api.github.com/repos/o/r/git/refs/heads/feat", "push-delete"],
+    ["curl -sXDELETE $(true) https://api.github.com/repos/o/r/git/refs/heads/feat", "push-delete"],
+    ["curl --req DELETE `true` https://api.github.com/repos/o/r/git/refs/heads/feat", "push-delete"],
+    ["wget --method=DELETE -X /tmp https://api.github.com/repos/o/r/git/refs/heads/feat", "push-delete"],
+    ["wget --method=DELETE -X/tmp https://api.github.com/repos/o/r/git/refs/heads/feat", "push-delete"],
+    ["gh pr --body x merge 1", "pr-merge"],
+    ["gh pr -t x merge 1", "pr-merge"],
+    ["gh repo --source o/up sync o/r --force", "force-push"],
+    ["gh repo -b main sync o/r", "push-default"],
+    ["gh --method DELETE api repos/o/r/git/refs/heads/feat", "push-delete"],
+    // Conformance: `-R` before the group, a group's own value option, and a symref command after another in a text
+    // the line carries, followed by another command.
+    ["gh -R o/r pr merge 1", "pr-merge"],
+    ["gh --repo o/r repo unarchive o/r", "protection"],
+    ["printf 'verify refs/heads/x HEAD\\nsymref-create refs/heads/safe refs/heads/main\\n' | git update-ref --stdin && git status", "push-default"],
+  ])("personOnlyVerdict reads %j as %s", (command, rule) => {
+    expect(personOnlyVerdict(command, ON_FEATURE)).toMatchObject({ deny: true, rule });
+  });
+
+  it.each([
+    ["curl -X PATCH `true` https://api.github.com/repos/o/r/pulls/3", "PATCH pulls/3"],
+    ["curl -X DELETE $(true) https://api.github.com/repos/o/r/git/refs/heads/feat", "DELETE git/refs/heads/feat"],
+    ["wget --method=DELETE -X /tmp https://api.github.com/repos/o/r/git/refs/heads/feat", "DELETE git/refs/heads/feat"],
+    ["gh --method DELETE api repos/o/r/git/refs/heads/feat", "DELETE git/refs/heads/feat"],
+    ["gh pr --title t create", "`gh pr create`"],
+    ["gh repo -b main sync", "`gh repo sync`"],
+    ["gh --repo o/r repo sync --force", "`gh repo sync`"],
+  ])("unattendedPushVerdict refuses %j as the act it hides", (command, act) => {
+    const verdict = unattendedPushVerdict(command);
+    expect(verdict.deny).toBe(true);
+    if (verdict.deny) expect(verdict.reason).toContain(act);
+  });
+
+  it.each([
+    ["wget -X /tmp https://api.github.com/repos/o/r/git/refs/heads/feat"],
+    ["curl -s $(true) https://api.github.com/repos/o/r/pulls/3"],
+    ["gh pr --body x view 1"],
+    ["gh -R o/r pr view 1"],
+    ["git push origin $(true) feat/x"],
+  ])("personOnlyVerdict allows the read or feature-branch twin %j", (command) => {
+    expect(personOnlyVerdict(command, ON_FEATURE)).toEqual({ deny: false });
+  });
+});
+
+describe("unattendedPushVerdict — a run verb stands alone on its line (v0b, REQ-FLOW-121)", () => {
+  const VERB = "npx --no stamity run end --run x";
+  /** PowerShell's closing typographic quote, built from its code so the file holds no raw one. */
+  const RSQ = String.fromCharCode(0x2019);
+  /** The refusal for a line that is more than the verb: the run verbs named, and what broke the shape. */
+  const expectRefused = (verdict: ReturnType<typeof unattendedPushVerdict>, broke: string): void => {
+    expect(verdict.deny).toBe(true);
+    if (!verdict.deny) return;
+    expect(verdict.reason).toContain("on a line that is more than the verb");
+    expect(verdict.reason).toContain(broke);
+    expect(verdict.reason).toContain("REQ-FLOW-121");
+    expect(verdict.reason).toContain("stamity run checkpoint");
+  };
+
+  it.each([
+    // The forms SECURITY.md names that set a name the verb's git reads, before the verb (review/252's expansion under
+    // zsh's `setopt -a` and `bash -a` among them).
+    ["setopt -a; : ${GIT_CONFIG_GLOBAL=/tmp/c}; " + VERB, "an unquoted `;`"],
+    ["bash -a -c ': ${GIT_CONFIG_GLOBAL=/tmp/c}; " + VERB + "'", "a first word other than `stamity`, `st` or `npx`"],
+    ["readonly GIT_EXEC_PATH=/tmp/bin; " + VERB, "an unquoted `;`"],
+    ["select GIT_EXEC_PATH in /tmp/bin; do " + VERB + "; done", "an unquoted `;`"],
+    ["print -v GIT_EXEC_PATH /tmp/bin; " + VERB, "an unquoted `;`"],
+    ["foreach GIT_EXEC_PATH (/tmp/bin) " + VERB + "; end", "an unquoted `(`"],
+    [": ${GIT_EXEC_PATH:=/tmp/bin} && " + VERB, "an unquoted `$`"],
+    ["source /tmp/env.sh && " + VERB, "an unquoted `&`"],
+    // A nested verb, a trailing `&`, a redirection, a wrapper, the CLI file run by node, a prefix assignment.
+    ["sh -c '" + VERB + "'", "a first word other than `stamity`, `st` or `npx`"],
+    ["echo $(" + VERB + ")", "an unquoted `$`"],
+    [VERB + " &", "an unquoted `&`"],
+    [VERB + " > out.txt", "an unquoted `>`"],
+    [VERB + " 2>&1 2>&1", "an unquoted `>`"],
+    ["env -u GIT_EXEC_PATH " + VERB, "a first word other than `stamity`, `st` or `npx`"],
+    ["node dist/cli.js run end --run x", "a first word other than `stamity`, `st` or `npx`"],
+    ["NODE_OPTIONS=--require=/tmp/x.js " + VERB, "a first word other than `stamity`, `st` or `npx`"],
+    [VERB + "\nnpm test", "a line break"],
+    ["npx --no stamity run end --run \"$RUN\"", "inside double quotes"],
+    // npx's own shape: the yes flag first, the registry a plain https URL, no other option, then `run <verb>`.
+    ["npx stamity run end --run x", "an `npx` call whose first word is not"],
+    ["npx -y --package=x stamity run end --run x", "an `npx` option or package other than"],
+    ["npx --yes --@zomarit:registry=http://npm.example.com @zomarit/stamity@1.15.0 run end --run x", "a scope registry"],
+    ["stamity --verbose run end --run x", "words between the program and `run <verb>`"],
+  ])("refuses %j, naming what broke the shape", (command, broke) => {
+    expectRefused(unattendedPushVerdict(command), broke);
+    // Attended, the same line is what it was: no person-only act.
+    expect(personOnlyVerdict(command, ON_FEATURE)).toEqual({ deny: false });
+  });
+
+  it.each([
+    // PowerShell's `env:` drive written before the verb (review/236, review/245), a hashtable given to `Start-Process`
+    // (review/246), the agent's own `pwsh -Command`, which loads a profile the run can write, a call operator, the
+    // stop-parsing token, and a typographic quote closing a `'` in PowerShell.
+    ["Set-Content env:GIT_EXEC_PATH C:/tmp; " + VERB, "an unquoted `;`"],
+    ["Add-Content env:GIT_EXEC_PATH C:/tmp; " + VERB, "an unquoted `;`"],
+    ["Copy-Item env:PATH env:GIT_EXEC_PATH; " + VERB, "an unquoted `;`"],
+    ["Rename-Item env:OTHER GIT_EXEC_PATH; " + VERB, "an unquoted `;`"],
+    ["Set-Item env:/GIT_EXEC_PATH C:/tmp; " + VERB, "an unquoted `;`"],
+    ["Start-Process -Environment @{GIT_EXEC_PATH='C:/tmp'} npx -ArgumentList '--no stamity run end --run x'", "an unquoted `{`"],
+    ["pwsh -Command '" + VERB + "'", "a first word other than `stamity`, `st` or `npx`"],
+    ["& " + VERB, "an unquoted `&`"],
+    [VERB + " --%", "stop-parsing"],
+    ["npx --no stamity run end --run x --title 'a" + RSQ + "; Remove-Item x; " + RSQ + "b'", "a typographic quote"],
+  ])("refuses the PowerShell line %j, read as PowerShell", (command, broke) => {
+    expectRefused(unattendedPushVerdict(command, true), broke);
+  });
+
+  it.each([
+    ["npx --no stamity run end --run x"],
+    ["npx --no-yes stamity run checkpoint --run x"],
+    ["stamity run end --run x"],
+    ["st run checkpoint --run x --pr --title 'a title; with words'"],
+    ["npx -y @zomarit/stamity@1.15.0 run start --run x"],
+    ["npx --yes --@zomarit:registry=https://npm.example.com @zomarit/stamity@1.15.0 run end --run x"],
+    ["npx --no stamity run end --run x 2>&1"],
+    ["npx --no stamity run checkpoint --run x --title \"a title\""],
+    ["npm run start"],
+  ])("allows %j, the verb alone or no verb, in both readings", (command) => {
+    expect(unattendedPushVerdict(command)).toEqual({ deny: false });
+    expect(unattendedPushVerdict(command, true)).toEqual({ deny: false });
+  });
+
+  it("refuses `gh extension exec` under each of its names, and lets the group's reads pass (pr/64)", () => {
+    for (const command of ["gh ext exec x", "gh extension exec x", "gh extensions exec my-ext --flag"]) {
+      const verdict = unattendedPushVerdict(command);
+      expect(verdict.deny, command).toBe(true);
+      if (verdict.deny) expect(verdict.reason, command).toContain("which runs an extension");
+      expect(personOnlyVerdict(command, ON_FEATURE), command).toEqual({ deny: false });
+    }
+    for (const command of ["gh ext list", "gh extension list", "gh extensions browse"]) {
+      expect(unattendedPushVerdict(command), command).toEqual({ deny: false });
+    }
+  });
+
+  it("refuses a line that sets SSH_ASKPASS, which git and the ssh it starts run as a program (v0b)", () => {
+    for (const command of ["SSH_ASKPASS=/tmp/a git fetch", "export SSH_ASKPASS=/tmp/a; npm test", "$env:SSH_ASKPASS = 'C:/a'; npm test"]) {
+      expect(unattendedPushVerdict(command).deny, command).toBe(true);
+    }
+    // The twins: a line that only names it, and one that sets another name.
+    for (const command of ["echo $SSH_ASKPASS", "export SSH_AUTH_SOCK=/tmp/s; npm test"]) {
+      expect(unattendedPushVerdict(command), command).toEqual({ deny: false });
+    }
+  });
+
+  it("reads PowerShell's typographic quotes as quotes, so an act after one is read in both verdicts (v0b, W-1)", () => {
+    const [LSQ, RSQ2, LDQ, RDQ] = [0x2018, 0x2019, 0x201c, 0x201d].map((code) => String.fromCharCode(code));
+    /** The PowerShell tool's text as the guard reads it: beside itself, inside a synthetic `pwsh -Command`. */
+    const asTool = (text: string): string => `pwsh -Command '${text.replaceAll("'", "'\\''")}'`;
+    const single = `echo 'a${RSQ2}; git push --force origin feat/x; ${LSQ}b'`;
+    const double = `echo "a${RDQ}; git push --force origin feat/x; ${LDQ}b"`;
+    for (const text of [single, double]) {
+      expect(personOnlyVerdict(asTool(text), ON_FEATURE), text).toMatchObject({ deny: true, rule: "force-push" });
+      expect(unattendedPushVerdict(text, true).deny, text).toBe(true);
+      // Read as a POSIX shell, the same text holds one quoted word: only PowerShell's reading shows the push.
+      expect(personOnlyVerdict(text, ON_FEATURE), text).toEqual({ deny: false });
+    }
+    // The twin: typographic quotes around plain words hide nothing.
+    expect(personOnlyVerdict(asTool(`echo 'a${RSQ2} ${LSQ}b'; git status`), ON_FEATURE)).toEqual({ deny: false });
+  });
+
+  it("restates the CLI's registry URL rule, so the scope registry a pinned call renders is the one accepted", () => {
+    const source = readFileSync(fileURLToPath(new URL("../../src/hooks/personOnly.ts", import.meta.url)), "utf8");
+    expect(source).toContain(`const REGISTRY_URL = /${REGISTRY_URL.source}/;`);
+  });
+});
+
 describe("unattendedPushVerdict", () => {
   it.each([
     ["git push origin HEAD:refs/heads/x"],
@@ -1778,26 +1955,29 @@ describe("unattendedPushVerdict", () => {
     ["grep -rn GIT_EXEC_PATH src"],
     ["rg 'GIT_EDITOR=' src"],
     ["echo $GIT_EXEC_PATH"],
-    ["env -u GIT_EXEC_PATH npx --no stamity run end --run x"],
-    ["GIT_TERMINAL_PROMPT=0 npx --no stamity run end --run x"],
-    ["export GIT_TRACE=1; npx --no stamity run end --run x"],
+    // TEST CHANGE, justified (v0b, REQ-FLOW-121): these twins ended in the run verb, which now stands alone on its line
+    // unattended, so each is retargeted to `npm test` and still pins the line-wide rule's allowed neighbour; the verb's
+    // own line is pinned in the stand-alone block below.
+    ["env -u GIT_EXEC_PATH npm test"],
+    ["GIT_TERMINAL_PROMPT=0 npm test"],
+    ["export GIT_TRACE=1; npm test"],
     ["Get-Item env:GIT_EXEC_PATH; npm test"],
     ["$env:GIT_EXEC_PATH; npm test"],
-    ["${env:GIT_CONFIG_NOSYSTEM}='1'; npx --no stamity run end --run x"],
+    ["${env:GIT_CONFIG_NOSYSTEM}='1'; npm test"],
     ["Set-Item env:GIT_CONFIG_NOSYSTEM 1; npm test"],
     // review/243's twins: a `declare` that prints one, exports a variable outside the set, or gives one an attribute
     // other than `x`.
-    ["declare -p GIT_EXEC_PATH; npx --no stamity run end --run x"],
-    ["declare -x GIT_TERMINAL_PROMPT; npx --no stamity run end --run x"],
+    ["declare -p GIT_EXEC_PATH; npm test"],
+    ["declare -x GIT_TERMINAL_PROMPT; npm test"],
     ["typeset -i GIT_CONFIG_COUNT; npm test"],
     // review/247's twins: a name outside the set read, one only read from (not assigned), allexport turned off and a
     // `set` cluster with no `a` on a line naming one, and one named as `for`'s word or `printf`'s argument, no name.
-    ["read OTHER_NAME <<< /tmp/bin; npx --no stamity run end --run x"],
-    ["echo \"$GIT_EXEC_PATH\"; npx --no stamity run end --run x"],
-    ["set +a; read OTHER_NAME <<< \"$GIT_EXEC_PATH\"; npx --no stamity run end --run x"],
-    ["set -e; echo \"$GIT_EXEC_PATH\"; npx --no stamity run end --run x"],
+    ["read OTHER_NAME <<< /tmp/bin; npm test"],
+    ["echo \"$GIT_EXEC_PATH\"; npm test"],
+    ["set +a; read OTHER_NAME <<< \"$GIT_EXEC_PATH\"; npm test"],
+    ["set -e; echo \"$GIT_EXEC_PATH\"; npm test"],
     ["for f in GIT_EXEC_PATH GIT_EDITOR; do grep -rn \"$f\" src; done; npm test"],
-    ["printf '%s\\n' GIT_EXEC_PATH; npx --no stamity run end --run x"],
+    ["printf '%s\\n' GIT_EXEC_PATH; npm test"],
     // review/232's twin: the pull request's merge state read.
     ["gh pr view 3 --json mergeStateStatus"],
     // review/209's twins: every `git remote` read, and `git config` reads of a `remote.*` key, writes of another key,

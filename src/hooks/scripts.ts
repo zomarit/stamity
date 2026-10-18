@@ -280,7 +280,14 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // refused (HTTP_TARGET_HIDDEN), the GraphQL repository-settings, protection,
   // ruleset and custom-property mutations, and the custom-property REST writes.
   // × 1.25 = 156,375 / 3,828.75, rounded up to 156,672 / 3,830.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 156_672, lines: 3_830 },
+  // Re-sized 2026-10-18 on the v0b lane (base 4f13752d), the same way: 156,994
+  // bytes (cursor, generated) / 3,626 lines (claude, generated), past the row,
+  // because plan 021 file 2's guard units grew the script: v0a2's ask emission
+  // and MCP branch, then v0b's stand-alone rule for the run verbs, the
+  // substitution kept as a word, gh's options before its subcommand, wget's
+  // `-X`, PowerShell's typographic quotes and SSH_ASKPASS. × 1.25 = 196,242.5 /
+  // 4,532.5, rounded up to 196,608 / 4,540.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 196_608, lines: 4_540 },
 };
 
 /** One generated script, ready for an adapter to place and register. */
@@ -4216,9 +4223,10 @@ function contextsOf(command, cwd) {
 }
 `}${String.raw`
 /**
- * The local tag names, loose and packed. A further tag past TAG_NAMES_MAX, or a packed-refs file past
- * PACKED_REFS_MAX_BYTES, faults with a coded error the guard refuses on, so a cut-off list never reads as
- * every tag there is; the throws sit outside the reads' catches.
+ * The local tag names, loose and packed. Two ceilings fault with a coded error the guard refuses on, a further
+ * tag past TAG_NAMES_MAX and a packed-refs file past PACKED_REFS_MAX_BYTES, so neither cut reads as every tag
+ * there is; the throws sit outside the reads' catches. A packed-refs file or a loose tag entry that is not a
+ * regular file (a link, a FIFO) is read as absent, so the list can still miss a tag that way.
  */
 function localTags(commonDir) {
   // A name both loose and packed counts once.
@@ -4413,8 +4421,10 @@ function decide() {
   // Where the call runs: the payload's working directory (relative to the root), else the root.
   const cwd = typeof payload.cwd === "string" && payload.cwd !== "" ? resolve(root, payload.cwd) : root;
   // The PowerShell tool's text is PowerShell's command string, so the verdicts read it as one too, its backslash a
-  // plain character and its backtick the escape, beside the text as it stands.
-  const texts = /^powershell$/i.test(payload.tool_name ?? "") ? [command, "pwsh -Command '" + command.replaceAll("'", "'\\''") + "'"] : [command];
+  // plain character and its backtick the escape, beside the text as it stands. The unattended verdict reads it with its
+  // PowerShell flag, not through a synthetic pwsh -Command line, which the run verb's stand-alone rule would refuse.
+  const pwsh = /^powershell$/i.test(payload.tool_name ?? "");
+  const texts = pwsh ? [command, "pwsh -Command '" + command.replaceAll("'", "'\\''") + "'"] : [command];
   // Every place and every reading (REQ-FLOW-124): one refuse-class act refuses the call, so a deletion never rides an
   // approval another reading or place would ask for.
   const found = [];
@@ -4428,7 +4438,10 @@ function decide() {
   if (refused !== undefined) return { ask: false, reason: refuseSentence(refused.act, refused.rule) };
   // The mode is read for every ask and for a call the unattended rule would refuse, so an unreadable record refuses
   // those and no other call.
-  const run = () => texts.map((text) => unattendedPushVerdict(text)).find((verdict) => verdict.deny);
+  const run = () => {
+    const verdict = unattendedPushVerdict(command, pwsh);
+    return verdict.deny ? verdict : undefined;
+  };
   if (found.length > 0) {
     const why = unattendedBy(root);
     if (why === null) return attendedAsk(payload, found[0].act, found[0].rule);
