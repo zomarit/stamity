@@ -560,7 +560,7 @@ returns `mode`, `branch` and `base` (`src/runs/resumeCard.ts:73-82`, `:225-253`)
 other value reads as attended unless `STAMITY_UNATTENDED` is set (to a value other than empty, `false` or `0`); then the
 variable governs, as the shell guard, the ask gate and the run verbs read it, a `Mode: attended` head winning over it
 (`unattendedBy` and `unattendedSource`, `src/hooks/scripts.ts:3684-3715`, `:4101-4119`; `readsUnattended`,
-`src/cli/commands/run.ts:675`, `:1092-1095`; read after the whole-branch page round, re-pointed at `aa5213ab`). The debug record keeps its three head lines when
+`src/cli/commands/run.ts:675`, `:1092-1095`; read after the whole-branch page round, re-pointed at `a88285b7`). The debug record keeps its three head lines when
 attended; an unattended `/st-debug` record adds `Mode:`, `Branch:` and `Base:` (`content/commands/st-debug.md:56-68`), and an unattended
 `/st-pr-resolve` opens a record of its own with the six lines (`content/commands/st-pr-resolve.md:54`). The resume
 card's printed lines do not change.
