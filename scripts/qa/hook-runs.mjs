@@ -520,12 +520,14 @@ const shellWord = (text) => `'${text.replaceAll("'", "'\\''")}'`
  * The clients whose answer to a hook's `ask` is part of the attended floor: a person-only act that
  * can be undone asks for one click there, so the client must hold the call until a person answers.
  * Measured 2026-10-18 in throwaway folders: Claude Code 2.1.302 held a hook's ask in bypass mode (a
- * `-p` run denies it for want of a person), and Copilot CLI 1.0.89 held it under `-p
- * --allow-all-tools`; Cursor 2026.10.14 ran the command under `--force`, and Codex's hooks page says
- * an ask is parsed and not honoured, so those two refuse instead. Restated from plan 021 file 2's
- * decision, since this contributor tool imports nothing from the engine.
+ * `-p` run denies it for want of a person); Cursor 2026.10.14 ran the command under `--force`, and
+ * Codex's hooks page says an ask is parsed and not honoured, so those two refuse instead. Copilot CLI
+ * 1.0.89 held it under `-p --allow-all-tools`, but its tool-call payload names no calling agent, so
+ * the guard refuses there too (review/89) and its row is reported, never red, as Cursor's is.
+ * Restated from plan 021 file 2's decision, since this contributor tool imports nothing from the
+ * engine.
  */
-export const ASK_CLASS_CLIENTS = Object.freeze(['claude', 'copilot'])
+export const ASK_CLASS_CLIENTS = Object.freeze(['claude'])
 
 /** The file the harmless marked command creates: its presence after a run is the whole answer. */
 export const ASK_MARKER = 'qa-ask-ran.txt'

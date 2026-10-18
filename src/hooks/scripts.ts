@@ -3652,25 +3652,31 @@ const GUARD_CANNOT_ASK =
   "This client cannot ask the person for a click, so the guard refuses it: give the person the exact command.";
 
 /**
+ * What the guard adds to an ask on Copilot CLI (REQ-FLOW-123, review/89): it holds an ask, but its tool-call payload
+ * names no calling agent ({@link IDENTITY_FREE_PRE_TOOL_USE_PAYLOADS}), so a custom agent's act would reach the person's
+ * approve prompt as the main thread's would.
+ */
+const GUARD_NO_CALLER =
+  "Copilot CLI names no calling agent in its tool-call payload, so the guard cannot keep the ask for the person alone and refuses it: give the person the exact command.";
+
+/**
  * How a client hears the guard's decision (`decision`: null to allow, else `{ ask, reason }`), rendered for that
  * client alone (REQ-FLOW-123): Claude Code asks with its `hookSpecificOutput` ask on stdout and exit 0, and refuses on
- * exit 2 with the reason on stderr; Copilot reads `permissionDecision`, `ask` or `deny`, on stdout, through the runner
- * or not; Codex (through the portable runner) refuses on exit 2 with the reason on stderr; Cursor's
- * `beforeShellExecution` reads `permission`, and its `failClosed` counts silence as a failure, so it is told to allow
- * out loud. Cursor and Codex refuse an ask, the reason saying why ({@link GUARD_CANNOT_ASK}).
+ * exit 2 with the reason on stderr; Copilot reads `permissionDecision` `deny` on stdout, through the runner or not;
+ * Codex (through the portable runner) refuses on exit 2 with the reason on stderr; Cursor's `beforeShellExecution` reads
+ * `permission`, and its `failClosed` counts silence as a failure, so it is told to allow out loud. Copilot, Cursor and
+ * Codex refuse an ask, the reason saying why ({@link GUARD_NO_CALLER}, {@link GUARD_CANNOT_ASK}).
  */
 function guardDecisionOutput(tool: Tool): string {
-  const told = String.raw`const told = decision === null ? null : decision.ask ? decision.reason + " " + ${json(GUARD_CANNOT_ASK)} : decision.reason;`;
+  const why = tool === "copilot" ? GUARD_NO_CALLER : GUARD_CANNOT_ASK;
+  const told = String.raw`const told = decision === null ? null : decision.ask ? decision.reason + " " + ${json(why)} : decision.reason;`;
   if (tool === "cursor") {
     return String.raw`${told}
 process.stdout.write(JSON.stringify(told === null ? { permission: "allow" } : { permission: "deny", user_message: told, agent_message: told }) + "\n");`;
   }
   if (tool === "copilot") {
-    return String.raw`if (decision !== null && decision.ask) {
-  process.stdout.write(JSON.stringify({ permissionDecision: "ask", permissionDecisionReason: decision.reason }) + "\n");
-} else if (decision !== null) {
-  process.stdout.write(JSON.stringify({ permissionDecision: "deny", permissionDecisionReason: decision.reason }) + "\n");
-}`;
+    return String.raw`${told}
+if (told !== null) process.stdout.write(JSON.stringify({ permissionDecision: "deny", permissionDecisionReason: told }) + "\n");`;
   }
   if (tool === "claude") {
     return String.raw`if (decision !== null && decision.ask) {
@@ -3690,8 +3696,9 @@ if (told !== null) {
 /**
  * The person-only shell guard (REQ-FLOW-102, REQ-FLOW-120, REQ-FLOW-123,
  * REQ-FLOW-124): attended, it asks the person for one click on a person-only
- * act that can be undone where the client can ask (Claude Code, Copilot), and
- * refuses it where the client cannot (Cursor, Codex); it refuses every
+ * act that can be undone on Claude Code, and refuses it on Copilot, whose
+ * payload names no calling agent (review/89), and where the client cannot ask
+ * (Cursor, Codex); it refuses every
  * deletion, force push and act that cannot be undone on every client; and
  * while a run is unattended it refuses every person-only act and any push
  * that steps around the run verbs.
@@ -3746,11 +3753,11 @@ export function buildPersonOnlyGuardScript(opts: { tool: Tool; layout: HookScrip
       "Reads every shell call and GitHub MCP write for the person-only acts. Attended,",
       "one that can be undone (a push of a tag or of the default branch, a tag, a",
       "merge, a release, a publish, a secret or protection write) asks the person for",
-      "one click where the client can ask; a deletion, a force push or an act that",
-      "cannot be undone is refused on every client. While a run is unattended every",
-      "person-only act is refused, and any push that steps around `stamity run",
-      "checkpoint` and `stamity run end`. `curl` and `wget` appear below only as",
-      "command words it reads; it runs none.",
+      "one click on Claude Code's main thread and is refused elsewhere; a deletion, a",
+      "force push or an act that cannot be undone is refused on every client. While a",
+      "run is unattended every person-only act is refused, and any push that steps",
+      "around `stamity run checkpoint` and `stamity run end`. `curl` and `wget` appear",
+      "below only as command words it reads; it runs none.",
     ],
     [
       "Reads outside repo state: the pending call's payload on stdin and the",

@@ -94,6 +94,9 @@ const MERGE = personOnlyVerdict(ASK_SHELL, { defaultBranches: [], currentBranch:
 const ASK_REASON = MERGE.deny ? `${MERGE.act} is a person-only act (\`${MERGE.rule}\`): approve it to let the agent run it once (REQ-FLOW-102).` : "";
 /** What Cursor and Codex add to an ask they cannot hold. */
 const CANNOT_ASK = "This client cannot ask the person for a click, so the guard refuses it: give the person the exact command.";
+/** What Copilot adds to an ask the guard does not give it, its payload naming no calling agent (review/89). */
+const NO_CALLER =
+  "Copilot CLI names no calling agent in its tool-call payload, so the guard cannot keep the ask for the person alone and refuses it: give the person the exact command.";
 
 /** The fields every payload carries: its event, the session, and the folder it runs in. */
 function basePayload(row: HookRow, cwd: string): Record<string, unknown> {
@@ -300,9 +303,10 @@ function probeOf(probe: (typeof PROBES)[number]["id"], marker: string, folder: s
  * The person-only guard's decision as its client hears it: Claude Code and Codex exit 2 with the reason on stderr;
  * Cursor exits 0 with `permission` on stdout; Copilot exits 0 with a `permissionDecision` on stdout, or nothing. An
  * exit code alone says nothing on Cursor or Copilot, whose refusal also exits 0. TEST CHANGE, justified (v0a2,
- * REQ-FLOW-123): Claude Code's guard also asks, its `hookSpecificOutput` ask on stdout with exit 0, and Copilot's
- * `permissionDecision` may read `ask`; each is read as an ask (`ask: true`) instead of failing the empty-stdout or
- * deny-only expectation.
+ * REQ-FLOW-123): Claude Code's guard also asks, its `hookSpecificOutput` ask on stdout with exit 0, read as an ask
+ * (`ask: true`) instead of failing the empty-stdout expectation. TEST CHANGE, justified (review/89, REQ-FLOW-123):
+ * Copilot's `permissionDecision` no longer reads `ask`, its payload naming no calling agent, so a Copilot ask now fails
+ * the deny-only expectation where it was read as an ask.
  */
 function guardVerdict(client: Client, result: CliRunResult, label: string): { deny: false } | { deny: true; reason: string; ask?: true } {
   const stdout = result.stdout.trim();
@@ -323,7 +327,6 @@ function guardVerdict(client: Client, result: CliRunResult, label: string): { de
   const out = JSON.parse(stdout) as Record<string, string | undefined>;
   const verdict = client === "cursor" ? out["permission"] : out["permissionDecision"];
   if (verdict === "allow") return { deny: false };
-  if (client === "copilot" && verdict === "ask") return { deny: true, ask: true, reason: out["permissionDecisionReason"] ?? "" };
   expect(verdict, label).toBe("deny");
   return { deny: true, reason: (client === "cursor" ? out["user_message"] : out["permissionDecisionReason"]) ?? "" };
 }
@@ -508,14 +511,15 @@ describe("a cloud machine, imitated: every emitted hook command (REQ-PROVE-037)"
                 FORCED.deny ? `${FORCED.act} deletes, force-pushes or cannot be undone (\`${FORCED.rule}\`)` : "the force push's own sentence",
               ),
             });
-            // v0a2 (REQ-FLOW-123): each client's ask shape, from every folder under every marker: Claude Code and
-            // Copilot ask, Cursor and Codex refuse, saying they cannot ask for a click.
+            // v0a2 (REQ-FLOW-123): each client's ask shape, from every folder under every marker: Claude Code asks,
+            // Cursor and Codex refuse, saying they cannot ask for a click. TEST CHANGE, justified (review/89,
+            // REQ-FLOW-123): Copilot asked here; it now refuses, saying its payload names no calling agent.
             expect(MERGE).toMatchObject({ deny: true, rule: "pr-merge", ask: true });
             const asked = guardVerdict(client, probeOf("ask act", marker.id, folder, index), `${label}: ${ASK_SHELL}`);
             expect(asked, `${label}: ${ASK_SHELL}`).toEqual(
-              client === "claude" || client === "copilot"
+              client === "claude"
                 ? { deny: true, ask: true, reason: ASK_REASON }
-                : { deny: true, reason: expect.stringContaining(`${ASK_REASON} ${CANNOT_ASK}`) },
+                : { deny: true, reason: expect.stringContaining(`${ASK_REASON} ${client === "copilot" ? NO_CALLER : CANNOT_ASK}`) },
             );
             // TEST CHANGE, justified (20ac8475, review/215, REQ-FLOW-102): a payload naming no tool and no command was
             // allowed as no shell call, and this grid ran it to exit 0; the guard now reads it as Cursor's shell call

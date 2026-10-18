@@ -76,9 +76,10 @@ function run(guard: string, input: string, env: Record<string, string> = {}): Re
 
 /**
  * The decision a client's output carries: exit 2 and stderr, or the client's own JSON. TEST CHANGE, justified (v0a2,
- * REQ-FLOW-123): Claude Code's guard now also answers ask, its `hookSpecificOutput` on stdout with exit 0, and
- * Copilot's `permissionDecision` reads `ask`; each is read as an ask instead of failing the empty-stdout or
- * deny-only expectation.
+ * REQ-FLOW-123): Claude Code's guard now also answers ask, its `hookSpecificOutput` on stdout with exit 0, read as an
+ * ask instead of failing the empty-stdout expectation. TEST CHANGE, justified (review/89, REQ-FLOW-123): Copilot's
+ * `permissionDecision` no longer reads `ask`, since its payload names no calling agent, so a Copilot ask now fails the
+ * deny-only expectation where it was read as an ask.
  */
 function clientDecision(tool: Tool, result: ReturnType<typeof spawnSync>, label: string): Decision {
   const stdout = String(result.stdout).trim();
@@ -100,7 +101,6 @@ function clientDecision(tool: Tool, result: ReturnType<typeof spawnSync>, label:
   const out = JSON.parse(stdout) as Record<string, string>;
   const verdict = tool === "cursor" ? out.permission : out.permissionDecision;
   if (verdict === "allow") return { deny: false };
-  if (tool === "copilot" && verdict === "ask") return { deny: true, ask: true, reason: out.permissionDecisionReason ?? "" };
   expect(verdict, label).toBe("deny");
   return { deny: true, reason: tool === "cursor" ? (out.user_message ?? "") : (out.permissionDecisionReason ?? "") };
 }
@@ -110,9 +110,18 @@ function decide(tool: Tool, guard: string, command: string, env?: Record<string,
   return clientDecision(tool, run(guard, payload(tool, command, cwd, shell), env), command);
 }
 
-/** The clients that hold an ask (REQ-FLOW-123); Cursor and Codex refuse one, saying why. */
-const ASKS = new Set<Tool>(["claude", "copilot"]);
+/**
+ * The clients the guard asks on (REQ-FLOW-123); Copilot, Cursor and Codex refuse an ask, saying why. TEST CHANGE,
+ * justified (review/89, REQ-FLOW-123): Copilot left the set, since its tool-call payload names no calling agent, so the
+ * guard cannot keep the ask for the person alone.
+ */
+const ASKS = new Set<Tool>(["claude"]);
 const CANNOT_ASK = "This client cannot ask the person for a click, so the guard refuses it: give the person the exact command.";
+/** What Copilot adds to an ask it is not given (review/89). */
+const NO_CALLER =
+  "Copilot CLI names no calling agent in its tool-call payload, so the guard cannot keep the ask for the person alone and refuses it: give the person the exact command.";
+/** What a client the guard does not ask on adds to an ask-class act's sentence. */
+const refusedAsk = (tool: Tool): string => (tool === "copilot" ? NO_CALLER : CANNOT_ASK);
 
 /** The sentence a person-only verdict earns attended (v0a2), the act printed as the verdict's own text. */
 function told(verdict: { act: string; rule: string; ask: boolean }): string {
@@ -126,10 +135,10 @@ function morningList(verdict: { act: string; rule: string }): string {
   return `${verdict.act} is a person-only act (\`${verdict.rule}\`) and this run is unattended: list it on the morning list, whose walk runs it after one click.`;
 }
 
-/** What one client says to an attended person-only verdict: an ask where it holds one, else a refusal. */
+/** What one client says to an attended person-only verdict: an ask where the guard asks on it, else a refusal. */
 function expectedAttended(tool: Tool, verdict: { act: string; rule: string; ask: boolean }): Decision {
   if (verdict.ask && ASKS.has(tool)) return { deny: true, ask: true, reason: expect.stringContaining(told(verdict)) as unknown as string };
-  const reason = verdict.ask ? `${told(verdict)} ${CANNOT_ASK}` : told(verdict);
+  const reason = verdict.ask ? `${told(verdict)} ${refusedAsk(tool)}` : told(verdict);
   return { deny: true, reason: expect.stringContaining(reason) as unknown as string };
 }
 
@@ -334,16 +343,26 @@ describe("each client's answer to a person-only act (v0a2)", () => {
     expect(decide(tool, guard, MERGE)).toEqual({ deny: true, reason: expect.stringContaining(`${morningList(merge)} ${WHY}`) });
   });
 
-  it.each(["claude", "copilot"] as const)("%s: prints its ask byte for byte, on stdout with exit 0", async (tool) => {
+  // TEST CHANGE, justified (review/89, REQ-FLOW-123): this case ran on Claude Code and Copilot and pinned Copilot's
+  // `permissionDecision: "ask"`; Copilot no longer asks, so it runs on Claude Code alone and the case below pins
+  // Copilot's refusal byte for byte.
+  it("claude: prints its ask byte for byte, on stdout with exit 0", async () => {
     if (!merge.deny) throw new Error("the merge is no person-only act");
-    const reason = told(merge);
-    const result = run(await placeGuard(tool), payload(tool, MERGE));
+    const result = run(await placeGuard("claude"), payload("claude", MERGE));
     expect(result.status).toBe(0);
     expect(String(result.stderr)).toBe("");
-    const shape =
-      tool === "claude"
-        ? { hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "ask", permissionDecisionReason: reason } }
-        : { permissionDecision: "ask", permissionDecisionReason: reason };
+    const shape = { hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "ask", permissionDecisionReason: told(merge) } };
+    expect(String(result.stdout)).toBe(`${JSON.stringify(shape)}\n`);
+  });
+
+  // ADDED (review/89): Copilot's tool-call payload names no calling agent, so a custom agent's merge would reach the
+  // person's approve prompt; the guard refuses the attended merge there, saying why and handing the person the command.
+  it("copilot: refuses an attended merge byte for byte, saying its payload names no calling agent (review/89)", async () => {
+    if (!merge.deny) throw new Error("the merge is no person-only act");
+    const result = run(await placeGuard("copilot"), payload("copilot", MERGE));
+    expect(result.status).toBe(0);
+    expect(String(result.stderr)).toBe("");
+    const shape = { permissionDecision: "deny", permissionDecisionReason: `${told(merge)} ${NO_CALLER}` };
     expect(String(result.stdout)).toBe(`${JSON.stringify(shape)}\n`);
   });
 
@@ -363,17 +382,21 @@ describe("each client's answer to a person-only act (v0a2)", () => {
     expect(decide(tool, await placeGuard(tool), "git push --force origin main")).toEqual(expectedAttended(tool, forced));
   });
 
-  it.each([...ASKS])("%s: refuses a PowerShell call whose pwsh reading shows a forced refspec its POSIX reading does not", async (tool) => {
+  // TEST CHANGE, justified (review/89, REQ-FLOW-123): this case ran on the clients that asked, Claude Code and Copilot,
+  // and its neighbour asserted an ask; Copilot no longer asks, so the case names both clients with a PowerShell tool and
+  // the neighbour reads each client's attended answer to the merge, an ask on Claude Code and a refusal on Copilot.
+  it.each(["claude", "copilot"] as const)("%s: refuses a PowerShell call whose pwsh reading shows a forced refspec its POSIX reading does not", async (tool) => {
     // POSIX reads the backtick as a command substitution, so the line shows the merge alone; PowerShell reads it as
     // the escape, so its reading shows a `+main` refspec. The refused reading wins over the ask.
     const line = "gh pr merge 1; git push origin `+main";
-    expect(personOnlyVerdict(line, ON_FEATURE)).toMatchObject({ deny: true, rule: "pr-merge", ask: true });
+    const posix = personOnlyVerdict(line, ON_FEATURE);
+    expect(posix).toMatchObject({ deny: true, rule: "pr-merge", ask: true });
     const forced = personOnlyVerdict(`pwsh -Command '${line}'`, ON_FEATURE);
     expect(forced).toMatchObject({ deny: true, rule: "force-push", ask: false });
-    if (!forced.deny) return;
+    if (!forced.deny || !posix.deny) return;
     expect(decide(tool, await placeGuard(tool), line, undefined, undefined, "PowerShell")).toEqual({ deny: true, reason: expect.stringContaining(told(forced)) });
-    // The neighbour: the same line on the Bash tool is read once, as POSIX, and asks.
-    expect(decide(tool, await placeGuard(tool), line)).toMatchObject({ deny: true, ask: true });
+    // The neighbour: the same line on the Bash tool is read once, as POSIX, and gets the merge's attended answer.
+    expect(decide(tool, await placeGuard(tool), line)).toEqual(expectedAttended(tool, posix));
   });
 
   it.each(TOOLS)("%s: refuses a merge beside an HTTP call whose target the line hides, never asking", async (tool) => {
@@ -435,7 +458,8 @@ describe("each client's answer to a person-only act (v0a2)", () => {
     ]) {
       expect(read(fields), JSON.stringify(fields)).toEqual({ deny: true, reason: expect.stringContaining(bySubAgent(merge)) });
     }
-    // The main thread, its identity fields absent or empty, asks as before.
+    // The main thread, its identity fields absent or empty, gets the client's attended answer: an ask on Claude Code;
+    // a refusal on Copilot, whose payload never carries these fields (review/89), and on Cursor and Codex.
     expect(read({})).toEqual(expectedAttended(tool, merge));
     expect(read({ agent_type: "", agent_id: "" })).toEqual(expectedAttended(tool, merge));
     // A refuse-class act from a sub-agent keeps the refuse sentence.

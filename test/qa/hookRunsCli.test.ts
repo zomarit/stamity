@@ -155,24 +155,32 @@ describe("verdictForAsk — what one client run says about the ask", () => {
 });
 
 describe("hook-runs --ask — each client's answer, measured in a throwaway folder", () => {
-  it("reports ran and exits non-zero when Claude Code or Copilot ran the marked command after the ask", () => {
-    for (const client of ["claude", "copilot"]) {
-      const runs: FakeRun[] = [];
-      const { code, lines } = mainWith(["--ask", "--clients", client], { measureAsk: measureWith("ignores", runs) });
-      expect(code, client).toBe(1);
-      expect(runs, client).toHaveLength(1);
-      // The hook really answered ask, in this client's own dialect, before the fake ran the command.
-      expect(runs[0]?.answer, client).toBe("ask");
-      expect(lines.join("\n"), client).toMatch(new RegExp(`^hook-runs --ask: ${client} \\(\\S+\\) ran — `, "m"));
-    }
+  // TEST CHANGE, justified (review/89, REQ-FLOW-123): this case read Claude Code and Copilot as ask-class, each red
+  // on `ran`; the guard no longer asks on Copilot, whose payload names no calling agent, so Claude Code alone is red
+  // here and Copilot's `ran` joins Cursor's below.
+  it("reports ran and exits non-zero when Claude Code ran the marked command after the ask", () => {
+    const runs: FakeRun[] = [];
+    const { code, lines } = mainWith(["--ask", "--clients", "claude"], { measureAsk: measureWith("ignores", runs) });
+    expect(code).toBe(1);
+    expect(runs).toHaveLength(1);
+    // The hook really answered ask, in this client's own dialect, before the fake ran the command.
+    expect(runs[0]?.answer).toBe("ask");
+    expect(lines.join("\n")).toMatch(/^hook-runs --ask: claude \(\S+\) ran — /m);
   });
 
-  it("reports ran and exits 0 for Cursor, which refuses rather than asks", () => {
-    const runs: FakeRun[] = [];
-    const { code, lines } = mainWith(["--ask", "--clients", "cursor"], { measureAsk: measureWith("ignores", runs) });
-    expect(runs[0]?.answer).toBe("ask");
-    expect(lines[0]).toContain("cursor (--force) ran");
-    expect(code).toBe(0);
+  // TEST CHANGE, justified (review/89, REQ-FLOW-123): Copilot joins Cursor, since the guard refuses rather than asks
+  // there; its `ran` is reported and exits 0.
+  it("reports ran and exits 0 for Cursor and Copilot, where the guard refuses rather than asks", () => {
+    for (const [client, mode] of [
+      ["cursor", "--force"],
+      ["copilot", "allow-all"],
+    ] as const) {
+      const runs: FakeRun[] = [];
+      const { code, lines } = mainWith(["--ask", "--clients", client], { measureAsk: measureWith("ignores", runs) });
+      expect(runs[0]?.answer, client).toBe("ask");
+      expect(lines[0], client).toContain(`${client} (${mode}) ran`);
+      expect(code, client).toBe(0);
+    }
   });
 
   it("reports held and exits 0 when every client holds the ask", () => {
@@ -240,10 +248,12 @@ describe("hook-runs --ask — each client's answer, measured in a throwaway fold
     const quiet = mainWith(["--ask", "--clients", "claude"], { measureAsk: measureWith("silent", runs) });
     expect(quiet.lines[0]).toContain("claude (bypassPermissions) not-run");
     expect(quiet.code).toBe(1);
-    expect(mainWith(["--ask", "--clients", "copilot"], { measureAsk: measureWith("silent", []) }).code).toBe(1);
     expect(mainWith(["--ask", "--clients", "claude", "--require-observation"], { measureAsk: measureWith("silent", []) }).code).toBe(1);
-    // Cursor is not ask-class: its unmeasured row is reported, never red.
-    expect(mainWith(["--ask", "--clients", "cursor", "--require-observation"], { measureAsk: measureWith("silent", []) }).code).toBe(0);
+    // Cursor and Copilot are not ask-class: an unmeasured row is reported, never red. TEST CHANGE, justified (review/89,
+    // REQ-FLOW-123): Copilot's silent row was red as ask-class; the guard no longer asks there.
+    for (const client of ["cursor", "copilot"]) {
+      expect(mainWith(["--ask", "--clients", client, "--require-observation"], { measureAsk: measureWith("silent", []) }).code, client).toBe(0);
+    }
   });
 
   // ADDED (review/42): an absent binary is its own status, red only where every ask-class client must be installed.
