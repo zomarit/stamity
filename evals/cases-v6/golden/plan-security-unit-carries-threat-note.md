@@ -61,7 +61,7 @@ Scenario state — the run so far, given to you as fact:
 
 Scenario input — the operator's message:
 
-> Before you write the plan: show me both units in full, every field each one carries.
+> Before you write the plan: show me both units in full, each exactly as the plan will hold it.
 
 ## Expected
 

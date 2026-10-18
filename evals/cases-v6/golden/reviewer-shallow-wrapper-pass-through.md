@@ -71,7 +71,7 @@ Scenario state — the dispatch you were spawned with, given to you as fact:
 > Range: `3b7e21..a90c4f`.
 > Plan: `docs/plans/024-user-cache.md`, unit `user-store-cache`. Its criterion: C1 — GIVEN the
 > API's user routes WHEN they read or write a user THEN they go through `CachedUserStore`.
-> The plan says the cache itself lands in a later unit, "once the read pattern is measured".
+> The plan schedules no cache: "add one only if a measured read pattern calls for it".
 > No report path is named, so you return your result in full.
 
 What `git diff 3b7e21..a90c4f` returned, given as fact (new-file line numbers: the new file
