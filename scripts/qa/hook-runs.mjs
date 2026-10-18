@@ -586,8 +586,11 @@ function askAnswer(client) {
 }
 
 /**
- * The hook: records every call it is handed, answers ask on the one that carries the marker, and
- * lets every other call through (Cursor is told so out loud; the others read silence as no opinion).
+ * The hook: records every call it is handed, with whether it names the marker and whether it is a
+ * shell call, answers ask on the one that carries the marker, and lets every other call through
+ * (Cursor is told so out loud; the others read silence as no opinion). A shell call is Claude Code's
+ * `Bash` (`tool_name`), Copilot's `bash` or `powershell` (`toolName`), or Cursor's pre-shell event,
+ * whose payload names no tool and carries the `command` itself.
  */
 function askHookScript(client) {
   const pass = client === 'cursor' ? { permission: 'allow' } : null
@@ -603,39 +606,57 @@ try {
 } catch {
   // No stdin: still a call, recorded as unmarked.
 }
+let payload = null
+try {
+  payload = JSON.parse(raw)
+} catch {
+  // Not JSON: no tool is named, so the call is not read as a shell call.
+}
+const tool = payload?.tool_name ?? payload?.toolName ?? (typeof payload?.command === 'string' ? 'shell' : '')
+const shell = /^(?:bash|shell|powershell)$/i.test(String(tool))
 const marked = raw.includes(${JSON.stringify(ASK_MARKER)})
-appendFileSync(LOG, JSON.stringify({ at: new Date().toISOString(), marked }) + '\\n')
+appendFileSync(LOG, JSON.stringify({ at: new Date().toISOString(), marked, shell }) + '\\n')
 const answer = marked ? ${JSON.stringify(askAnswer(client))} : ${JSON.stringify(pass)}
 if (answer !== null) process.stdout.write(JSON.stringify(answer) + '\\n')
 `
 }
 
-/** The client's project hook configuration, pointing at the hook by absolute path. */
+/**
+ * The client's project hook configuration, pointing at the hook by absolute path. Claude Code's
+ * matcher takes every tool, as Copilot's entry (no matcher) already does: a model denied the marked
+ * shell call that writes the marker with another tool is then asked about that call too, rather than
+ * leaving a marker no hook saw.
+ */
 function askHookConfig(client, command) {
-  if (client === 'claude') return { hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command }] }] } }
+  if (client === 'claude') return { hooks: { PreToolUse: [{ matcher: '*', hooks: [{ type: 'command', command }] }] } }
   if (client === 'cursor') return { version: 1, hooks: { beforeShellExecution: [{ command }] } }
   return { version: 1, hooks: { preToolUse: [{ type: 'command', bash: command, timeoutSec: 30 }] } }
 }
 
 /**
- * One client run's answer to the ask. Pure. A created marker is `ran`, whatever the hook said: the
- * command ran. An ask the hook answered with no marker is `held`. Neither is `not-run`: the hook
- * was never asked about the marked command, so nothing about the ask was measured.
+ * One client run's answer to the ask. Pure. The ask is measured only where the hook's own log shows
+ * it answered ask on a shell call naming the marker. Then a created marker is `ran` (the command ran
+ * after the ask) and no marker is `held`. Without that line the row is `not-run`, a marker included:
+ * a marker no shell ask preceded came by a route the hook did not see, so it says nothing about the
+ * ask.
  */
 export function verdictForAsk({ markerCreated, observations }) {
-  const asked = observations.some((row) => row?.marked === true)
+  const asked = observations.some((row) => row?.marked === true && row?.shell === true)
+  if (asked && markerCreated) {
+    return { status: 'ran', reason: 'the hook answered ask on the marked shell call and the command ran anyway' }
+  }
+  if (asked) return { status: 'held', reason: 'the hook answered ask on the marked shell call and the command did not run' }
   if (markerCreated) {
     return {
-      status: 'ran',
-      reason: asked
-        ? 'the hook answered ask on the marked command and the command ran anyway'
-        : 'the marked command ran and the hook was never asked about it',
+      status: 'not-run',
+      reason:
+        "the marker exists but the hook's log shows no ask on a shell call naming it, so it came by a route the hook " +
+        'did not see and nothing about the ask was measured',
     }
   }
-  if (asked) return { status: 'held', reason: 'the hook answered ask on the marked command and the command did not run' }
   return {
     status: 'not-run',
-    reason: 'the hook was never asked about the marked command and it did not run, so nothing about the ask was measured',
+    reason: 'the hook was never asked about the marked shell call and nothing ran, so nothing about the ask was measured',
   }
 }
 
@@ -653,7 +674,9 @@ export function measureAsk({ client, runners = ASK_RUNNERS, baseDir = tmpdir(), 
   if (runner === undefined) return { client, mode: null, status: 'not-run', reason: `no ask runner is defined for client "${client}"` }
   if (runner.binary === null) return { client, mode: null, status: 'not-run', reason: runner.notRun }
   const found = probe(runner.binary)
-  if (!found.present) return { client, mode: runner.mode, status: 'not-run', reason: found.reason }
+  // Its own status, apart from `not-run`: an installed client that measured nothing is red by
+  // default, and a client that is not here is red only under --require-observation.
+  if (!found.present) return { client, mode: runner.mode, status: 'not-installed', reason: found.reason }
 
   mkdirSync(parent, { recursive: true })
   const dir = mkdtempSync(join(parent, `stamity-qa-ask-${client}-`))
@@ -733,9 +756,10 @@ function hookRowForOut(row) {
 }
 
 /**
- * The command. Returns the exit code: 2 on a usage error; else 1 when an ask-class client ran the
- * asked command (`--ask`) or a hook row `failed`, and under `--require-observation` also when an
- * ask-class client's ask went unmeasured, or a client this module drives left an empty hook log.
+ * The command. Returns the exit code: 2 on a usage error; else 1 when an installed ask-class client
+ * ran the asked command or measured nothing (`--ask`: `ran` or `not-run`), or a hook row `failed`;
+ * and under `--require-observation` also when an ask-class client is not installed (`--ask`), or a
+ * client this module drives left an empty hook log.
  */
 export function main(argv, deps = {}) {
   const print = deps.print ?? ((line) => process.stdout.write(`${line}\n`))
@@ -759,7 +783,8 @@ export function main(argv, deps = {}) {
     for (const row of rows) print(`hook-runs --ask: ${row.client}${row.mode ? ` (${row.mode})` : ''} ${row.status} — ${row.reason}`)
     writeOut('ask', rows)
     const askClass = (row) => ASK_CLASS_CLIENTS.includes(row.client)
-    const red = rows.filter((row) => askClass(row) && (row.status === 'ran' || (options.requireObservation && row.status === 'not-run')))
+    const unmeasured = (row) => row.status === 'not-run' || (options.requireObservation && row.status === 'not-installed')
+    const red = rows.filter((row) => askClass(row) && (row.status === 'ran' || unmeasured(row)))
     return red.length > 0 ? 1 : 0
   }
 

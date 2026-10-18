@@ -33,7 +33,11 @@ function scratch(): string {
   return dir;
 }
 
-type Behaviour = "honours" | "ignores" | "silent";
+/**
+ * `elsewhere` is the model a `-p` run denies the marked shell call, which then makes the marker with
+ * a file tool; `unseen` makes the marker with no hook consulted at all.
+ */
+type Behaviour = "honours" | "ignores" | "silent" | "elsewhere" | "unseen";
 
 interface FakeRun {
   cwd: string;
@@ -51,6 +55,23 @@ function payloadFor(client: string): string {
   return JSON.stringify({ toolName: "bash", toolArgs: JSON.stringify({ command }) });
 }
 
+/** A file-tool call writing the marker, in each client's payload; Cursor's pre-shell hook sees no file tool. */
+function writePayloadFor(client: string): string | undefined {
+  const file = hookRuns.ASK_MARKER as string;
+  if (client === "claude") return JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Write", tool_input: { file_path: file, content: "" } });
+  if (client === "copilot") return JSON.stringify({ toolName: "create", toolArgs: JSON.stringify({ path: file }) });
+  return undefined;
+}
+
+/** Whether the client's configuration sends a file-tool call to the hook: Claude Code by its matcher, Copilot always. */
+function hooksFileTool(client: string, config: string): boolean {
+  if (client === "copilot") return true;
+  if (client !== "claude") return false;
+  const parsed = JSON.parse(config) as { hooks: { PreToolUse: { matcher?: string }[] } };
+  const matcher = parsed.hooks.PreToolUse[0]?.matcher ?? "";
+  return matcher === "" || matcher === "*" || new RegExp(`^(?:${matcher})$`).test("Write");
+}
+
 /** The decision a hook's stdout carries, read the way that client reads it. */
 function decisionOf(client: string, stdout: string): string | undefined {
   const line = stdout.trim();
@@ -64,23 +85,34 @@ function decisionOf(client: string, stdout: string): string | undefined {
 /**
  * A fake client (inline mock reason above): with `honours` it holds the command when the hook asks,
  * with `ignores` it runs it whatever the hook said, and `silent` never consults the hook and runs nothing.
+ * `elsewhere` holds the asked shell call, then writes the marker with a file tool: through the hook,
+ * holding an ask, where the configuration hooks that tool, else unseen. `unseen` writes the marker
+ * and never consults the hook.
  */
 function fakeClient(client: string, behaviour: Behaviour, runs: FakeRun[]) {
   return (binary: string, args: readonly string[], options: { cwd: string; env: Record<string, string | undefined> }) => {
     const run: FakeRun = { cwd: options.cwd, binary, args, env: options.env, answer: undefined };
     runs.push(run);
     if (behaviour === "silent") return { status: 0, signal: null, stdout: "", stderr: "" };
+    const marker = join(options.cwd, hookRuns.ASK_MARKER as string);
+    if (behaviour === "unseen") {
+      writeFileSync(marker, "");
+      return { status: 0, signal: null, stdout: "done\n", stderr: "" };
+    }
     const config = readFileSync(join(options.cwd, hookRuns.ASK_CONFIG_PATHS[client] as string), "utf8");
     expect(config, "the client's config names the hook the module wrote").toContain(hookRuns.ASK_HOOK_FILE);
-    const hook = spawnSync(process.execPath, [join(options.cwd, hookRuns.ASK_HOOK_FILE as string)], {
-      cwd: options.cwd,
-      input: payloadFor(client),
-      encoding: "utf8",
-    });
-    expect(hook.status, hook.stderr).toBe(0);
-    run.answer = decisionOf(client, hook.stdout);
-    if (behaviour === "ignores" || run.answer !== "ask") {
-      writeFileSync(join(options.cwd, hookRuns.ASK_MARKER as string), "");
+    const consult = (input: string): string | undefined => {
+      const hook = spawnSync(process.execPath, [join(options.cwd, hookRuns.ASK_HOOK_FILE as string)], { cwd: options.cwd, input, encoding: "utf8" });
+      expect(hook.status, hook.stderr).toBe(0);
+      return decisionOf(client, hook.stdout);
+    };
+    run.answer = consult(payloadFor(client));
+    if (behaviour === "elsewhere") {
+      const write = writePayloadFor(client);
+      const held = write !== undefined && hooksFileTool(client, config) && consult(write) === "ask";
+      if (!held) writeFileSync(marker, "");
+    } else if (behaviour === "ignores" || run.answer !== "ask") {
+      writeFileSync(marker, "");
     }
     return { status: 0, signal: null, stdout: "done\n", stderr: "" };
   };
@@ -88,9 +120,11 @@ function fakeClient(client: string, behaviour: Behaviour, runs: FakeRun[]) {
 
 const present = () => ({ present: true, version: "fake 1.0.0" });
 
-function measureWith(behaviour: Behaviour, runs: FakeRun[], baseDir = scratch()) {
+const notOnPath = (binary: string) => ({ present: false, reason: `${binary}: not on PATH (ENOENT)` });
+
+function measureWith(behaviour: Behaviour, runs: FakeRun[], baseDir = scratch(), probe: (binary: string) => unknown = present) {
   return ({ client }: { client: string }) =>
-    hookRuns.measureAsk({ client, baseDir, spawn: fakeClient(client, behaviour, runs), probe: present });
+    hookRuns.measureAsk({ client, baseDir, spawn: fakeClient(client, behaviour, runs), probe });
 }
 
 function mainWith(argv: readonly string[], deps: Record<string, unknown>): { code: number; lines: string[] } {
@@ -100,17 +134,23 @@ function mainWith(argv: readonly string[], deps: Record<string, unknown>): { cod
 }
 
 describe("verdictForAsk — what one client run says about the ask", () => {
-  it("reads a created marker as ran, an answered ask with no marker as held, and neither as not-run", () => {
-    const asked = [{ marked: true }];
+  // TEST CHANGE, justified (review/41, run 2026-10-18_cloud-runs-2): the hook's log now records whether a
+  // call was a shell call, and `ran` needs an ask on a marked shell call. The observations below gain
+  // `shell: true`, and a marker with no such line, which this case read as `ran`, reads `not-run`: a
+  // marker no shell ask preceded came by a route the hook did not see.
+  it("reads a marker after a shell ask as ran, a shell ask with no marker as held, and anything else as not-run", () => {
+    const asked = [{ marked: true, shell: true }];
     expect(hookRuns.verdictForAsk({ client: "claude", markerCreated: true, observations: asked }).status).toBe("ran");
     expect(hookRuns.verdictForAsk({ client: "claude", markerCreated: false, observations: asked }).status).toBe("held");
     // No ask was answered and nothing ran: nothing about the ask was measured, which is never `held`.
-    expect(hookRuns.verdictForAsk({ client: "claude", markerCreated: false, observations: [{ marked: false }] }).status).toBe("not-run");
+    expect(hookRuns.verdictForAsk({ client: "claude", markerCreated: false, observations: [{ marked: false, shell: true }] }).status).toBe("not-run");
     expect(hookRuns.verdictForAsk({ client: "claude", markerCreated: false, observations: [] }).status).toBe("not-run");
-    // A marker with no ask answered is still `ran`, and its reason says the hook was not consulted.
-    const unasked = hookRuns.verdictForAsk({ client: "copilot", markerCreated: true, observations: [] });
-    expect(unasked.status).toBe("ran");
-    expect(unasked.reason).toContain("never asked");
+    // A marker with no shell ask in the log: the hook never saw the call that made it.
+    for (const observations of [[], [{ marked: true, shell: false }], [{ marked: true }], [{ marked: false, shell: true }]]) {
+      const unasked = hookRuns.verdictForAsk({ client: "copilot", markerCreated: true, observations });
+      expect(unasked.status, JSON.stringify(observations)).toBe("not-run");
+      expect(unasked.reason).toContain("did not see");
+    }
   });
 });
 
@@ -165,22 +205,62 @@ describe("hook-runs --ask — each client's answer, measured in a throwaway fold
     }
   });
 
+  // ADDED (review/41): a `-p` run denies Claude Code's marked shell call, and a model that then writes
+  // the marker with its Write tool must meet the hook there too, or the row reads a false `ran`.
+  it("holds the ask when the model, denied the marked shell call, writes the marker with a file tool", () => {
+    for (const client of ["claude", "copilot"]) {
+      const runs: FakeRun[] = [];
+      const { code, lines } = mainWith(["--ask", "--clients", client], { measureAsk: measureWith("elsewhere", runs) });
+      expect(runs[0]?.answer, client).toBe("ask");
+      expect(lines[0], client).toMatch(new RegExp(`^hook-runs --ask: ${client} \\(\\S+\\) held — `));
+      expect(code, client).toBe(0);
+    }
+  });
+
+  // ADDED (review/41): a marker the hook never saw being made says nothing about the ask.
+  it("reports not-run, never ran, for a marker no shell ask preceded", () => {
+    const { code, lines } = mainWith(["--ask", "--clients", "claude"], { measureAsk: measureWith("unseen", []) });
+    expect(lines[0]).toContain("claude (bypassPermissions) not-run");
+    expect(lines[0]).toContain("did not see");
+    // An installed ask-class client that measured nothing is red by default (review/42).
+    expect(code).toBe(1);
+  });
+
   it("refuses a throwaway folder inside this checkout", () => {
     expect(() =>
       hookRuns.measureAsk({ client: "claude", baseDir: REPO_ROOT, spawn: fakeClient("claude", "honours", []), probe: present }),
     ).toThrow(/inside this repository/);
   });
 
-  it("reports not-run when the hook was never consulted, and --require-observation makes that red for an ask-class client", () => {
+  // TEST CHANGE, justified (review/42, run 2026-10-18_cloud-runs-2): an installed ask-class client whose
+  // hook was never consulted measured nothing, and the release line reads the exit code, so the row is
+  // red by default; this case expected exit 0 without --require-observation.
+  it("reports not-run when the hook was never consulted, red for an installed ask-class client with or without --require-observation", () => {
     const runs: FakeRun[] = [];
     const quiet = mainWith(["--ask", "--clients", "claude"], { measureAsk: measureWith("silent", runs) });
     expect(quiet.lines[0]).toContain("claude (bypassPermissions) not-run");
-    expect(quiet.code).toBe(0);
+    expect(quiet.code).toBe(1);
+    expect(mainWith(["--ask", "--clients", "copilot"], { measureAsk: measureWith("silent", []) }).code).toBe(1);
     expect(mainWith(["--ask", "--clients", "claude", "--require-observation"], { measureAsk: measureWith("silent", []) }).code).toBe(1);
     // Cursor is not ask-class: its unmeasured row is reported, never red.
     expect(mainWith(["--ask", "--clients", "cursor", "--require-observation"], { measureAsk: measureWith("silent", []) }).code).toBe(0);
   });
 
+  // ADDED (review/42): an absent binary is its own status, red only where every ask-class client must be installed.
+  it("reports an absent client as not-installed, red only under --require-observation", () => {
+    const runs: FakeRun[] = [];
+    const plain = mainWith(["--ask", "--clients", "claude,copilot"], { measureAsk: measureWith("ignores", runs, scratch(), notOnPath) });
+    expect(plain.lines.map((line) => line.split(" — ")[0])).toEqual([
+      "hook-runs --ask: claude (bypassPermissions) not-installed",
+      "hook-runs --ask: copilot (allow-all) not-installed",
+    ]);
+    expect(plain.code).toBe(0);
+    const required = mainWith(["--ask", "--clients", "claude", "--require-observation"], { measureAsk: measureWith("ignores", runs, scratch(), notOnPath) });
+    expect(required.code).toBe(1);
+    expect(runs).toHaveLength(0);
+  });
+
+  // TEST CHANGE, justified (review/42): an absent binary reads `not-installed`, not `not-run`; Codex keeps `not-run`.
   it("spawns nothing for Codex or for a client that is not installed", () => {
     const runs: FakeRun[] = [];
     const codex = hookRuns.measureAsk({ client: "codex", baseDir: scratch(), spawn: fakeClient("codex", "ignores", runs), probe: present });
@@ -192,7 +272,7 @@ describe("hook-runs --ask — each client's answer, measured in a throwaway fold
       spawn: fakeClient("claude", "ignores", runs),
       probe: () => ({ present: false, reason: "claude: not on PATH (ENOENT)" }),
     });
-    expect(absent).toMatchObject({ status: "not-run", reason: "claude: not on PATH (ENOENT)" });
+    expect(absent).toMatchObject({ status: "not-installed", reason: "claude: not on PATH (ENOENT)" });
     expect(runs).toHaveLength(0);
   });
 
