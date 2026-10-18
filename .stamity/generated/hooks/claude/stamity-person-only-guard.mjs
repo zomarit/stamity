@@ -537,18 +537,34 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		const hidden = () => {
 			throw Object.assign(/* @__PURE__ */ new Error("http target hidden"), { code: "HTTP_TARGET_HIDDEN" });
 		};
+		const LONG = /* @__PURE__ */ new Map([["wget", [
+			"--method",
+			"--post-data",
+			"--post-file",
+			"--body-data",
+			"--body-file",
+			"--execute",
+			"--config",
+			"--input-file"
+		]], ["curl", [
+			"--request",
+			"--data",
+			"--data-raw",
+			"--data-binary",
+			"--data-ascii",
+			"--data-urlencode",
+			"--json",
+			"--form",
+			"--form-string",
+			"--upload-file",
+			"--config",
+			"--next",
+			"--globoff",
+			"--url"
+		]]]);
 		const expanded = raw.map((word) => {
 			const name = word.split("=")[0] ?? "";
-			const full = tool === "wget" && /^--[a-z-]{2,}$/i.test(name) ? [
-				"--method",
-				"--post-data",
-				"--post-file",
-				"--body-data",
-				"--body-file",
-				"--execute",
-				"--config",
-				"--input-file"
-			].find((option) => option.startsWith(name.toLowerCase())) : void 0;
+			const full = /^--[a-z-]{2,}$/i.test(name) ? LONG.get(tool)?.find((option) => option.startsWith(name.toLowerCase())) : void 0;
 			return full === void 0 ? word : full + word.slice(name.length);
 		});
 		const WGETRC = /* @__PURE__ */ new Map([
@@ -562,7 +578,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		const cmd = [];
 		for (let k = 0; k < expanded.length; k += 1) {
 			const word = expanded[k] ?? "";
-			const lead = tool === "curl" ? /^-([^-:KHouAebcwmxrEdFTXCDPQtyYzU]*)([dFT])([\s\S]*)$/.exec(word) : null;
+			const lead = tool === "curl" ? /^-([^-:KHouAebcwmxrEdFTXCDPQtyYzU]*)([dFTX])([\s\S]*)$/.exec(word) : tool === "gh" ? /^-(i*)([XfFHpqt])=?([\s\S]*)$/.exec(word) : null;
 			if (lead !== null && word.length > 2) {
 				if (lead[1]) cmd.push(`-${lead[1]}`);
 				cmd.push(`-${lead[2]}`);
@@ -683,7 +699,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			}
 			if (tool === "curl" && word === "--globoff") globoff = true;
 			if (word === "-X" || word === "--method" || word === "--request") {
-				method = cmd[k + 1] ?? "";
+				method = cmd[k + 1] ?? hidden();
 				k += 1;
 			} else if (name === "--method" || name === "--request") method = word.slice(name.length + 1);
 			else if (/^-X./.test(word)) method = word.slice(2);
@@ -695,16 +711,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				targets.push(cmd[k + 1] ?? "");
 				k += 1;
 			} else if (valueFlags.includes(word)) k += 1;
-			else if (/^-[A-Za-z]{2,}$/.test(word) && tool !== "gh") {
-				const x = word.indexOf("X");
-				if (x !== -1) {
-					method = x === word.length - 1 ? cmd[k + 1] ?? "" : word.slice(x + 1);
-					if (x === word.length - 1) k += 1;
-				} else if (/[dFT]/.test(word)) {
-					body = true;
-					if (/[dFT]$/.test(word)) k += 1;
-				}
-			} else if (/^-[fF]./.test(word) && tool === "gh") body = true;
+			else if (/^-[fF]./.test(word) && tool === "gh") body = true;
 			else if (!word.startsWith("-")) targets.push(word);
 		}
 		const verb = (method ?? (body ? "POST" : "GET")).toUpperCase();
@@ -1164,8 +1171,8 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			else if (sub === "tag") verdict = tagVerdict(args);
 			else if (sub === "update-ref" && (args.some((arg) => /^(refs\/)?tags\//i.test(arg)) || args.includes("--stdin") && /refs\/tags\//i.test(command))) verdict = deny("tag", "A tag ref write (`git update-ref`)");
 			else if (sub === "update-ref" && args.includes("--stdin")) {
-				const word = String.raw`(?:[\s'"]|\\(?:x[\da-fA-F]{1,2}|[0-7]{1,3}|[a-z]))+([^\s'"\\|;&<>()]+)`;
-				for (const [, op, ref = "", target] of command.matchAll(new RegExp(String.raw`\bsymref-(create|update|delete)${word}(?:${word})?`, "g"))) {
+				const word = String.raw`(?:[\s'"]|\\(?:x[\da-fA-F]{1,2}|u[\da-fA-F]{1,4}|U[\da-fA-F]{1,8}|[0-7]{1,4}|[a-z]))+([^\s'"\\|;&<>()]+)`;
+				for (const [, op, ref = "", target] of command.matchAll(new RegExp(String.raw`symref-(create|update|delete)${word}(?:${word})?`, "g"))) {
 					const shown = target === void 0 || target.includes("%") ? "$" : target;
 					verdict ??= symbolicRefVerdict(op === "delete" ? ["-d", ref] : [ref, shown], "git update-ref --stdin");
 				}
@@ -1658,18 +1665,34 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 		const hidden = () => {
 			throw Object.assign(/* @__PURE__ */ new Error("http target hidden"), { code: "HTTP_TARGET_HIDDEN" });
 		};
+		const LONG = /* @__PURE__ */ new Map([["wget", [
+			"--method",
+			"--post-data",
+			"--post-file",
+			"--body-data",
+			"--body-file",
+			"--execute",
+			"--config",
+			"--input-file"
+		]], ["curl", [
+			"--request",
+			"--data",
+			"--data-raw",
+			"--data-binary",
+			"--data-ascii",
+			"--data-urlencode",
+			"--json",
+			"--form",
+			"--form-string",
+			"--upload-file",
+			"--config",
+			"--next",
+			"--globoff",
+			"--url"
+		]]]);
 		const expanded = raw.map((word) => {
 			const name = word.split("=")[0] ?? "";
-			const full = tool === "wget" && /^--[a-z-]{2,}$/i.test(name) ? [
-				"--method",
-				"--post-data",
-				"--post-file",
-				"--body-data",
-				"--body-file",
-				"--execute",
-				"--config",
-				"--input-file"
-			].find((option) => option.startsWith(name.toLowerCase())) : void 0;
+			const full = /^--[a-z-]{2,}$/i.test(name) ? LONG.get(tool)?.find((option) => option.startsWith(name.toLowerCase())) : void 0;
 			return full === void 0 ? word : full + word.slice(name.length);
 		});
 		const WGETRC = /* @__PURE__ */ new Map([
@@ -1683,7 +1706,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 		const cmd = [];
 		for (let k = 0; k < expanded.length; k += 1) {
 			const word = expanded[k] ?? "";
-			const lead = tool === "curl" ? /^-([^-:KHouAebcwmxrEdFTXCDPQtyYzU]*)([dFT])([\s\S]*)$/.exec(word) : null;
+			const lead = tool === "curl" ? /^-([^-:KHouAebcwmxrEdFTXCDPQtyYzU]*)([dFTX])([\s\S]*)$/.exec(word) : tool === "gh" ? /^-(i*)([XfFHpqt])=?([\s\S]*)$/.exec(word) : null;
 			if (lead !== null && word.length > 2) {
 				if (lead[1]) cmd.push(`-${lead[1]}`);
 				cmd.push(`-${lead[2]}`);
@@ -1804,7 +1827,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 			}
 			if (tool === "curl" && word === "--globoff") globoff = true;
 			if (word === "-X" || word === "--method" || word === "--request") {
-				method = cmd[k + 1] ?? "";
+				method = cmd[k + 1] ?? hidden();
 				k += 1;
 			} else if (name === "--method" || name === "--request") method = word.slice(name.length + 1);
 			else if (/^-X./.test(word)) method = word.slice(2);
@@ -1816,16 +1839,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 				targets.push(cmd[k + 1] ?? "");
 				k += 1;
 			} else if (valueFlags.includes(word)) k += 1;
-			else if (/^-[A-Za-z]{2,}$/.test(word) && tool !== "gh") {
-				const x = word.indexOf("X");
-				if (x !== -1) {
-					method = x === word.length - 1 ? cmd[k + 1] ?? "" : word.slice(x + 1);
-					if (x === word.length - 1) k += 1;
-				} else if (/[dFT]/.test(word)) {
-					body = true;
-					if (/[dFT]$/.test(word)) k += 1;
-				}
-			} else if (/^-[fF]./.test(word) && tool === "gh") body = true;
+			else if (/^-[fF]./.test(word) && tool === "gh") body = true;
 			else if (!word.startsWith("-")) targets.push(word);
 		}
 		const verb = (method ?? (body ? "POST" : "GET")).toUpperCase();
