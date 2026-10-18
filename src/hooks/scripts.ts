@@ -50,7 +50,7 @@ import {
   USAGE_REVIEW_PATTERN,
 } from "../runs/layout.ts";
 import { cliCallHint, pinnedCliCall } from "../shared/cliCall.ts";
-import { matchSessions, SESSION_MARKERS, type SessionMarkerRow } from "../session/detect.ts";
+import { MATCH_SESSIONS_SOURCE, SESSION_MARKERS, type SessionMarkerRow } from "../session/detect.ts";
 import {
   CLIENT_CLOUD_FACTS,
   CLIENT_HOOK_GUARANTEES,
@@ -802,9 +802,10 @@ function cloudSessionLines(tool: Tool): string[] {
  * The cloud and CI sessions the session start names (REQ-FLOW-085), in the
  * detector's priority order (`../session/detect.ts`, {@link SESSION_MARKERS}),
  * each with its name and what it does not enforce there. Which markers count is
- * the detector's rule, carried into the script as {@link matchSessions}'s own
- * source; a marker's value is never printed, so a marker cannot carry text into
- * the session. Cursor's marker names a Cursor agent machine (managed or
+ * the detector's rule, carried into the script as its source text
+ * {@link MATCH_SESSIONS_SOURCE}, never as a loaded function's re-print; a
+ * marker's value is never printed, so a marker cannot carry text into the
+ * session. Cursor's marker names a Cursor agent machine (managed or
  * self-hosted): Cursor sets it on both, and a managed VM runs no session-start
  * hook, so the managed reading comes from the context-once script
  * ({@link buildContextOnceScript}).
@@ -850,8 +851,8 @@ const RESUMABLE = ${json([...RESUMABLE_STATUSES])};
 const SESSIONS = [
 ${CLOUD_SESSIONS.map((session) => `  ${json(session)},`).join("\n")}
 ];
-// The session detector, as its own source (src/session/detect.ts in the engine that wrote this file).
-const matchSessions = ${matchSessions.toString()};
+// The session detector, as its source text (src/session/detect.ts in the engine that wrote this file).
+${MATCH_SESSIONS_SOURCE}
 const INVISIBLE = new RegExp(${json(INVISIBLE_SMUGGLING_CHARS.source)}, "g");
 const SCREEN = [
 ${screen}

@@ -1,8 +1,16 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — import-safe native ESM CI helper with no type declarations, outside the product package.
 import { PROFILES } from "../../scripts/ci/cloud-leg.mjs";
 import { buildContextOnceScript, buildSessionStartScript } from "../../src/hooks/scripts.ts";
-import { detectSession, matchSessions, SESSION_MARKERS, type SessionKind } from "../../src/session/detect.ts";
+import {
+  detectSession,
+  MATCH_SESSIONS_SOURCE,
+  matchSessions,
+  SESSION_MARKERS,
+  type SessionKind,
+} from "../../src/session/detect.ts";
 
 /**
  * v8-detect-translator (REQ-FLOW-085, REQ-PROVE-039): one session detector the CLI and the emitted session start share.
@@ -97,22 +105,47 @@ describe("detectSession", () => {
   });
 });
 
-describe("the detector the session start carries", () => {
-  // `new Function` sees the global scope only: a reference to anything this module imports or declares outside the
-  // function body throws here, as it would in the emitted script.
-  const embedded = new Function(`${matchSessions.toString()}\nreturn matchSessions;`)() as typeof matchSessions;
+/** Every environment over the markers where each is unset, set to a value that counts, or set to one that does not. */
+function everyValueCombination(): Record<string, string>[] {
+  let out: Record<string, string>[] = [{}];
+  for (const [name, counting] of MARKERS) {
+    const values = [undefined, counting, "", "false", "0", "1", "TRUE", " true"];
+    out = out.flatMap((env) => values.map((value) => (value === undefined ? env : Object.assign({}, env, { [name]: value }))));
+  }
+  return out;
+}
 
-  it("matches the same rows from the function's own source, over every combination of markers", () => {
-    for (const env of everyCombination()) {
+describe("the detector the session start carries", () => {
+  // `new Function` sees the global scope only: a reference to anything outside the source text throws here, as it
+  // would in the emitted script.
+  const embedded = new Function(`${MATCH_SESSIONS_SOURCE}\nreturn matchSessions;`)() as typeof matchSessions;
+
+  it("matches the same rows as the module's function, over every combination of markers and values", () => {
+    const envs = everyValueCombination();
+    expect(envs).toHaveLength(8 ** MARKERS.length);
+    for (const env of envs) {
       expect(embedded(SESSION_MARKERS, env), JSON.stringify(env)).toEqual(matchSessions(SESSION_MARKERS, env));
     }
     expect(embedded(SESSION_MARKERS, { CLAUDE_CODE_REMOTE: "1" })).toEqual([]);
   });
 
-  it("is inlined into the session start and Cursor's context-once script, not written twice", () => {
+  it("is this file's text, whatever loader compiled the module (review/102)", () => {
+    // The constant is a template with no substitution, so its value is the literal text between the backticks in the
+    // file on disk. A loader can re-print a function; it cannot change a string's value.
+    const file = readFileSync(fileURLToPath(new URL("../../src/session/detect.ts", import.meta.url)), "utf8");
+    const open = "export const MATCH_SESSIONS_SOURCE = String.raw`";
+    const start = file.indexOf(open) + open.length;
+    expect(start).toBeGreaterThan(open.length - 1);
+    const text = file.slice(start, file.indexOf("`;", start));
+    expect(text).not.toContain("${");
+    expect(MATCH_SESSIONS_SOURCE).toBe(text);
+  });
+
+  it("is inlined into the session start and Cursor's context-once script once, as its text", () => {
     for (const script of [buildSessionStartScript(), buildContextOnceScript()]) {
-      expect(script).toContain(`const matchSessions = ${matchSessions.toString()};`);
+      expect(script.split(`\n${MATCH_SESSIONS_SOURCE}\n`)).toHaveLength(2);
       expect(script).toContain("matchSessions(SESSIONS, env)");
+      expect(script).not.toContain("const matchSessions =");
       expect(script).not.toContain('!["", "false", "0"].includes(value) && (session.equals ?? value) === value');
     }
   });

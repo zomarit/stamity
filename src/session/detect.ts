@@ -3,8 +3,9 @@
  * session an environment's markers name. The CLI's pre-flight reads its
  * `client` and `cloud` fields and Cursor's egress warning through
  * {@link detectSession}, and the emitted session start, with Cursor's
- * context-once script, carries {@link matchSessions} as its own source
- * (`../hooks/scripts.ts`), so the two never disagree on what a marker means.
+ * context-once script, carries {@link MATCH_SESSIONS_SOURCE}, the same rule as
+ * a source text (`../hooks/scripts.ts`), so the two never disagree on what a
+ * marker means.
  *
  * **Set.** A marker counts when it is set to a value other than `""`, `"false"`
  * and `"0"`, and to its row's `equals` where one is given: `CLAUDE_CODE_REMOTE`
@@ -18,6 +19,13 @@
  * **Only a label.** A marker is an environment variable anyone can set, so the
  * detector only names a session: it never selects an unattended run, which is
  * a declaration (REQ-FLOW-089), and it grants nothing.
+ *
+ * **One rule, two forms.** {@link matchSessions} is the rule the CLI runs;
+ * {@link MATCH_SESSIONS_SOURCE} is the same rule as the text the emitted scripts
+ * carry. The text is a string constant, so its bytes are this file's whatever
+ * loader compiled the module (vitest, tsx, the dist build); a function's
+ * `toString()` would be that loader's re-print (review/102). A parity test runs
+ * both over every marker combination.
  *
  * Pure: no imports, no filesystem, no process.
  */
@@ -51,8 +59,8 @@ export const SESSION_MARKERS: readonly SessionMarkerRow[] = [
 
 /**
  * Every row with at least one marker set, in the rows' order, each with the
- * names of its markers that counted. Embedded as source in the session start,
- * so the body names no binding outside it and declares no named inner function.
+ * names of its markers that counted. The emitted scripts carry the same rule as
+ * {@link MATCH_SESSIONS_SOURCE}; a change here is a change there.
  */
 export function matchSessions<Row extends { readonly vars: readonly string[]; readonly equals?: string }>(
   rows: readonly Row[],
@@ -74,6 +82,31 @@ export function matchSessions<Row extends { readonly vars: readonly string[]; re
   }
   return matches;
 }
+
+/**
+ * {@link matchSessions} as the source text the session start and Cursor's
+ * context-once script declare (`../hooks/scripts.ts`): `function
+ * matchSessions(rows, env)`, the same rule with the types removed, naming no
+ * binding outside its body. String.raw keeps the text exactly as written here,
+ * so the emitted bytes do not depend on the loader that compiled this module.
+ */
+export const MATCH_SESSIONS_SOURCE = String.raw`function matchSessions(rows, env) {
+  const matches = [];
+  for (const row of rows) {
+    const markers = row.vars.filter((name) => {
+      const value = env[name];
+      return (
+        typeof value === "string" &&
+        value !== "" &&
+        value !== "false" &&
+        value !== "0" &&
+        (row.equals === undefined || value === row.equals)
+      );
+    });
+    if (markers.length > 0) matches.push({ row, markers });
+  }
+  return matches;
+}`;
 
 /** The session `env` names: the first match's kind, or `local`, and every marker that counted. */
 export function detectSession(env: SessionEnv): DetectedSession {
