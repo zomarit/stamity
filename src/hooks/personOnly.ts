@@ -35,7 +35,10 @@
  * mutation or a REST body read from a file where the
  * API's default is not the default branch — passes. A line nested past four
  * levels is not read: both verdicts throw a coded `NESTING_DEPTH` error, which
- * the guard refuses. The tests assert
+ * the guard refuses; an HTTP call whose method or targets the line cannot show (a
+ * curl or wget configuration file, a curl write its globbing expands, a wget
+ * write reading its targets from a file) throws a coded `HTTP_TARGET_HIDDEN`
+ * one, refused the same way. The tests assert
  * that residual as allowed so it stays written down; `SECURITY.md` names it, and the
  * pre-flight's REST check that the account cannot push to the default branch
  * (REQ-FLOW-101) is the wall behind this guard.
@@ -231,8 +234,21 @@ export const CLAUDE_DENY_ROWS: readonly string[] = [
  * `updateRepository` and its `updateRepository…` siblings, and a branch protection
  * rule's or a repository ruleset's create, update and delete.
  *
+ * An HTTP call is read as curl or wget reads it: curl's `--next` or `-:` starts a
+ * request of its own, its method and body reset, judged alone (pr/72). A call whose
+ * method or targets the line cannot show throws a coded `HTTP_TARGET_HIDDEN` error
+ * (in both verdicts, from the shared reading): a curl or wget configuration file,
+ * in any spelling (`-K`, attached or in a cluster, `-K -`, `--config`, its `=` form
+ * and prefixes, pr/73); a curl write (a write method or a body) whose target holds
+ * `{` or `[`, which curl's globbing expands into other requests, unless `-g` or
+ * `--globoff` is in the same request (pr/76); a wget write whose targets come from
+ * `-i`/`--input-file` in any spelling, the wgetrc `input` command among them
+ * (pr/77); and a curl short cluster holding `:` among other letters, which starts
+ * a request where the line does not show.
+ *
  * Throws a coded `NESTING_DEPTH` error for a line nested past four levels (pr/58),
- * which the guard refuses as a call it cannot decide.
+ * and `HTTP_TARGET_HIDDEN` as above, each of which the guard refuses as a call it
+ * cannot decide.
  *
  * Self-contained, so the emitted guard can carry it as source (see the module
  * comment).
@@ -617,26 +633,31 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   /**
    * An HTTP call's method (the tool's default unless a flag or a body sets it), whether that is a write, and each
    * target's path below its repository or organisation (`repos/<o>/<r>/` cut), without scheme, host, query or a
-   * trailing slash and with its percent-encoding decoded (build/76); the repository's own path stays whole.
+   * trailing slash and with its percent-encoding decoded (build/76); the repository's own path stays whole. `next` is
+   * the call after curl's `--next` (pr/72).
    */
-  function httpCall(raw: string[]): { write: boolean; method: string; paths: string[]; cmd: string[] } {
+  function httpCall(raw: string[]): { write: boolean; method: string; paths: string[]; cmd: string[]; next: string[] | null } {
     const tool = raw[0] ?? "";
+    const hidden = (): never => {
+      throw Object.assign(new Error("http target hidden"), { code: "HTTP_TARGET_HIDDEN" });
+    };
     // wget reads a long option's unique prefix as the option (`--meth=DELETE`, `--post-d`, pr/11): one of two letters
-    // or more (`--me`, pr/29) is expanded to the method, body or `--execute` option it begins, so a misread prefix only
-    // adds a write. A two-letter prefix wget finds ambiguous (`--po`, `--bo`, `--ex`) is one it refuses, so reading it
-    // as the option over-reads a line that sends nothing into a denial.
+    // or more (`--me`, pr/29) is expanded to the method, body, `--execute`, `--config` or `--input-file` option it
+    // begins, so a misread prefix only adds a denial. A two-letter prefix wget finds ambiguous (`--po`, `--bo`, `--ex`)
+    // is one it refuses, so reading it as the option over-reads a line that sends nothing into a denial.
     const expanded = raw.map((word) => {
       const name = word.split("=")[0] ?? "";
       const full = tool === "wget" && /^--[a-z-]{2,}$/i.test(name)
-        ? ["--method", "--post-data", "--post-file", "--body-data", "--body-file", "--execute"].find((option) => option.startsWith(name.toLowerCase()))
+        ? ["--method", "--post-data", "--post-file", "--body-data", "--body-file", "--execute", "--config", "--input-file"]
+          .find((option) => option.startsWith(name.toLowerCase()))
         : undefined;
       return full === undefined ? word : full + word.slice(name.length);
     });
     // wget runs `-e`/`--execute`'s value as a wgetrc command (pr/23), its name read regardless of case, `_` and `-`:
-    // `method=<M>` and the four body commands become the option each sets, so the call is read as that option's.
+    // `method=<M>`, the four body commands and `input` become the option each sets, so the call is read as that option's.
     // Any other command stays a skipped value. A cluster ending in `e`, or with a command attached after its `e`, counts.
     const WGETRC = new Map([["method", "--method"], ["postdata", "--post-data"], ["postfile", "--post-file"],
-      ["bodydata", "--body-data"], ["bodyfile", "--body-file"]]);
+      ["bodydata", "--body-data"], ["bodyfile", "--body-file"], ["input", "--input-file"]]);
     const cmd: string[] = [];
     for (let k = 0; k < expanded.length; k += 1) {
       const word = expanded[k] ?? "";
@@ -657,6 +678,10 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     }
     let method: string | null = null;
     let body = false;
+    let globoff = false;
+    let inputFile = false;
+    let end = cmd.length;
+    let next: string[] | null = null;
     const targets: string[] = [];
     const start = tool === "gh" ? cmd.indexOf("api") + 1 : 1;
     const valueFlags =
@@ -674,6 +699,27 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     for (let k = start; k < cmd.length; k += 1) {
       const word = cmd[k] ?? "";
       const name = word.split("=")[0] ?? "";
+      if (tool === "curl" && (word === "--next" || word === "-:")) {
+        next = ["curl", ...cmd.slice(k + 1)];
+        end = k;
+        break;
+      }
+      if (tool !== "gh" && /^--conf(ig?)?(=|$)/.test(word)) hidden();
+      if (tool === "wget" && /^--input-file(=|$)/.test(word)) inputFile = true;
+      if (tool !== "gh" && /^-[^-]/.test(word)) {
+        // A cluster's letters up to the first that takes a value.
+        for (const letter of word.slice(1)) {
+          if (tool === "curl") {
+            if (letter === "K" || letter === ":") hidden();
+            if (letter === "g") globoff = true;
+            if ("HouAebcwmxrEdFTXCDPQtyYzU".includes(letter)) break;
+          } else {
+            if (letter === "i") inputFile = true;
+            if ("oaeiBtOTwQPlARDXIU".includes(letter)) break;
+          }
+        }
+      }
+      if (tool === "curl" && word === "--globoff") globoff = true;
       if (word === "-X" || word === "--method" || word === "--request") {
         method = cmd[k + 1] ?? "";
         k += 1;
@@ -708,6 +754,10 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       }
     }
     const verb = (method ?? (body ? "POST" : "GET")).toUpperCase();
+    const write = ["POST", "PUT", "PATCH", "DELETE"].includes(verb);
+    // A target curl's globbing expands (pr/76), targets in wget's input file (pr/77).
+    if (tool === "curl" && (write || body) && !globoff && targets.some((target) => /[{[]/.test(target))) hidden();
+    if (tool === "wget" && write && inputFile) hidden();
     const paths = targets.map((target) =>
       (target
         .replace(/^[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/]*/, "")
@@ -721,7 +771,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         .replace(/^repos\/[^/]+\/[^/]+\//i, "")
         .replace(/^(orgs|enterprises|users|repositories)\/[^/]+\//i, ""),
     );
-    return { write: ["POST", "PUT", "PATCH", "DELETE"].includes(verb), method: verb, paths, cmd };
+    return { write, method: verb, paths, cmd: cmd.slice(0, end), next };
   }
   // </shell-reading>
 
@@ -972,7 +1022,10 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     const fill = (value: string): string =>
       value.replace(/\{branch\}|:branch\b/g, () => (ctx.currentBranch === null ? "main" : branch(ctx.currentBranch)));
     // The words as `httpCall` reads them, wget's shortened method and body options expanded (pr/11).
-    const { write, method, paths: targets, cmd } = httpCall(line);
+    const { write, method, paths: targets, cmd, next } = httpCall(line);
+    // The call after `--next` (pr/72).
+    const later = next === null ? null : httpVerdict(next);
+    if (later !== null) return later;
     const paths = gh ? targets.map(fill) : targets;
     const text = cmd.join(" ");
     const fieldFlag = gh ? /^(-[fF]|--field|--raw-field)$/ : /^(-[A-Za-z]*d|--data(-raw|-binary|-ascii|-urlencode)?|--json|--post-data|--body-data)$/;
@@ -1668,26 +1721,31 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
   /**
    * An HTTP call's method (the tool's default unless a flag or a body sets it), whether that is a write, and each
    * target's path below its repository or organisation (`repos/<o>/<r>/` cut), without scheme, host, query or a
-   * trailing slash and with its percent-encoding decoded (build/76); the repository's own path stays whole.
+   * trailing slash and with its percent-encoding decoded (build/76); the repository's own path stays whole. `next` is
+   * the call after curl's `--next` (pr/72).
    */
-  function httpCall(raw: string[]): { write: boolean; method: string; paths: string[]; cmd: string[] } {
+  function httpCall(raw: string[]): { write: boolean; method: string; paths: string[]; cmd: string[]; next: string[] | null } {
     const tool = raw[0] ?? "";
+    const hidden = (): never => {
+      throw Object.assign(new Error("http target hidden"), { code: "HTTP_TARGET_HIDDEN" });
+    };
     // wget reads a long option's unique prefix as the option (`--meth=DELETE`, `--post-d`, pr/11): one of two letters
-    // or more (`--me`, pr/29) is expanded to the method, body or `--execute` option it begins, so a misread prefix only
-    // adds a write. A two-letter prefix wget finds ambiguous (`--po`, `--bo`, `--ex`) is one it refuses, so reading it
-    // as the option over-reads a line that sends nothing into a denial.
+    // or more (`--me`, pr/29) is expanded to the method, body, `--execute`, `--config` or `--input-file` option it
+    // begins, so a misread prefix only adds a denial. A two-letter prefix wget finds ambiguous (`--po`, `--bo`, `--ex`)
+    // is one it refuses, so reading it as the option over-reads a line that sends nothing into a denial.
     const expanded = raw.map((word) => {
       const name = word.split("=")[0] ?? "";
       const full = tool === "wget" && /^--[a-z-]{2,}$/i.test(name)
-        ? ["--method", "--post-data", "--post-file", "--body-data", "--body-file", "--execute"].find((option) => option.startsWith(name.toLowerCase()))
+        ? ["--method", "--post-data", "--post-file", "--body-data", "--body-file", "--execute", "--config", "--input-file"]
+          .find((option) => option.startsWith(name.toLowerCase()))
         : undefined;
       return full === undefined ? word : full + word.slice(name.length);
     });
     // wget runs `-e`/`--execute`'s value as a wgetrc command (pr/23), its name read regardless of case, `_` and `-`:
-    // `method=<M>` and the four body commands become the option each sets, so the call is read as that option's.
+    // `method=<M>`, the four body commands and `input` become the option each sets, so the call is read as that option's.
     // Any other command stays a skipped value. A cluster ending in `e`, or with a command attached after its `e`, counts.
     const WGETRC = new Map([["method", "--method"], ["postdata", "--post-data"], ["postfile", "--post-file"],
-      ["bodydata", "--body-data"], ["bodyfile", "--body-file"]]);
+      ["bodydata", "--body-data"], ["bodyfile", "--body-file"], ["input", "--input-file"]]);
     const cmd: string[] = [];
     for (let k = 0; k < expanded.length; k += 1) {
       const word = expanded[k] ?? "";
@@ -1708,6 +1766,10 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
     }
     let method: string | null = null;
     let body = false;
+    let globoff = false;
+    let inputFile = false;
+    let end = cmd.length;
+    let next: string[] | null = null;
     const targets: string[] = [];
     const start = tool === "gh" ? cmd.indexOf("api") + 1 : 1;
     const valueFlags =
@@ -1725,6 +1787,27 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
     for (let k = start; k < cmd.length; k += 1) {
       const word = cmd[k] ?? "";
       const name = word.split("=")[0] ?? "";
+      if (tool === "curl" && (word === "--next" || word === "-:")) {
+        next = ["curl", ...cmd.slice(k + 1)];
+        end = k;
+        break;
+      }
+      if (tool !== "gh" && /^--conf(ig?)?(=|$)/.test(word)) hidden();
+      if (tool === "wget" && /^--input-file(=|$)/.test(word)) inputFile = true;
+      if (tool !== "gh" && /^-[^-]/.test(word)) {
+        // A cluster's letters up to the first that takes a value.
+        for (const letter of word.slice(1)) {
+          if (tool === "curl") {
+            if (letter === "K" || letter === ":") hidden();
+            if (letter === "g") globoff = true;
+            if ("HouAebcwmxrEdFTXCDPQtyYzU".includes(letter)) break;
+          } else {
+            if (letter === "i") inputFile = true;
+            if ("oaeiBtOTwQPlARDXIU".includes(letter)) break;
+          }
+        }
+      }
+      if (tool === "curl" && word === "--globoff") globoff = true;
       if (word === "-X" || word === "--method" || word === "--request") {
         method = cmd[k + 1] ?? "";
         k += 1;
@@ -1759,6 +1842,10 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
       }
     }
     const verb = (method ?? (body ? "POST" : "GET")).toUpperCase();
+    const write = ["POST", "PUT", "PATCH", "DELETE"].includes(verb);
+    // A target curl's globbing expands (pr/76), targets in wget's input file (pr/77).
+    if (tool === "curl" && (write || body) && !globoff && targets.some((target) => /[{[]/.test(target))) hidden();
+    if (tool === "wget" && write && inputFile) hidden();
     const paths = targets.map((target) =>
       (target
         .replace(/^[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/]*/, "")
@@ -1772,7 +1859,7 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
         .replace(/^repos\/[^/]+\/[^/]+\//i, "")
         .replace(/^(orgs|enterprises|users|repositories)\/[^/]+\//i, ""),
     );
-    return { write: ["POST", "PUT", "PATCH", "DELETE"].includes(verb), method: verb, paths, cmd };
+    return { write, method: verb, paths, cmd: cmd.slice(0, end), next };
   }
   // </shell-reading>
 
@@ -2017,13 +2104,17 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
       http = group === "api";
     }
     if (!http) continue;
-    const { write, method, paths } = httpCall(cmd);
-    for (const path of paths) {
-      if (/^graphql$/i.test(path)) {
-        if (GRAPHQL_MOVES.test(cmd.join(" "))) return deny("A GraphQL mutation that moves a branch or a pull request");
-      } else if (write && MOVES.some((pattern) => pattern.test(path))) {
-        return deny(`A REST write that moves a branch or a pull request (${method} ${path})`);
+    // Each of curl's requests alone (pr/72).
+    for (let words: string[] | null = cmd; words !== null; ) {
+      const { write, method, paths, cmd: part, next } = httpCall(words);
+      for (const path of paths) {
+        if (/^graphql$/i.test(path)) {
+          if (GRAPHQL_MOVES.test(part.join(" "))) return deny("A GraphQL mutation that moves a branch or a pull request");
+        } else if (write && MOVES.some((pattern) => pattern.test(path))) {
+          return deny(`A REST write that moves a branch or a pull request (${method} ${path})`);
+        }
       }
+      words = next;
     }
   }
   // Whatever program the line runs (review/231): one of those variables set on it reaches what that program starts,

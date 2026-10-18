@@ -172,6 +172,14 @@ const MATRIX: readonly (readonly [command: string, rule: string | null])[] = [
   ["git update-ref refs/heads/feat/y HEAD", null],
   ["gh api graphql -f query='mutation { enqueuePullRequest(input: {pullRequestId: \"x\"}) { mergeQueueEntry { id } } }'", "pr-merge"],
   ["gh api graphql -f query='query { repository(owner:\"o\",name:\"r\") { mergeQueue { entries { totalCount } } } }'", null],
+  // PR #112's resolution round 4, each beside its neighbour: a symbolic ref pointed at the default branch (pr/70), a
+  // curl request after `--next` (pr/72), a GraphQL repository archive (pr/74).
+  ["git symbolic-ref refs/heads/safe refs/heads/main && git push origin safe", "push-default"],
+  ["git symbolic-ref refs/heads/a refs/heads/feat/x", null],
+  ["curl -X DELETE https://api.github.com/repos/o/r/git/refs/heads/feat --next -X GET https://example.com", "push-delete"],
+  ["curl https://a.example --next https://b.example", null],
+  ["gh api graphql -f query='mutation { archiveRepository(input: {repositoryId: \"R\"}) { clientMutationId } }'", "protection"],
+  ["gh api graphql -f query='query { repository(owner:\"o\",name:\"r\") { isArchived } }'", null],
 ];
 
 describe("the person-only guard, on every client", () => {
@@ -240,6 +248,22 @@ describe("the nested-command depth limit (pr/58)", () => {
     expect(forced).toMatchObject({ deny: true, rule: "force-push" });
     expect(decide(tool, guard, nest("git push --force origin feat/x", 4))).toEqual({ deny: true, reason: expect.stringContaining(forced.deny ? forced.reason : "") });
     expect(decide(tool, guard, nest("git status", 4)).deny).toBe(false);
+  });
+});
+
+describe("an HTTP call whose method or target the line cannot show (pr/73, pr/76, pr/77)", () => {
+  it.each(TOOLS)("%s: refuses it as a call it cannot decide, and allows its read neighbour", async (tool) => {
+    const guard = await placeGuard(tool);
+    for (const line of [
+      "curl -K req.cfg",
+      "curl -X PATCH -d x 'https://api.github.com/repos/o/r/git/refs/heads/{a,main}'",
+      "wget --method DELETE -i urls.txt",
+    ]) {
+      expect(decide(tool, guard, line), line).toEqual({ deny: true, reason: expect.stringContaining("could not decide this shell call (HTTP_TARGET_HIDDEN)") });
+    }
+    for (const line of ["curl https://api.github.com/repos/o/r", "curl 'https://example.com/p[1-3].html'", "wget -i urls.txt"]) {
+      expect(decide(tool, guard, line).deny, line).toBe(false);
+    }
   });
 });
 

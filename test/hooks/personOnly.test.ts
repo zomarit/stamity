@@ -528,6 +528,10 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["git symbolic-ref -d refs/tags/v9", "tag"],
   ["git symbolic-ref --delete -q refs/tags/v9", "tag"],
   ["git symbolic-ref -qd refs/tags/v9", "tag"],
+  // curl's `--next` and `-:` start a request of their own, its method and body reset (pr/72): each is judged alone.
+  ["curl -X DELETE https://api.github.com/repos/o/r/git/refs/heads/feat --next -X GET https://example.com", "push-delete"],
+  ["curl -X DELETE https://api.github.com/repos/o/r/git/refs/heads/feat -: -X GET https://example.com", "push-delete"],
+  ["curl https://example.com --next -X PUT https://api.github.com/repos/o/r/pulls/3/merge", "pr-merge"],
   // GraphQL's repository settings, protection and ruleset writes (pr/74), the twins of the REST ones refused above.
   ...[
     "archiveRepository",
@@ -771,8 +775,20 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
   ["git symbolic-ref -d refs/heads/a"],
   ["git symbolic-ref refs/tags/v9"],
   ["git symbolic-ref -m refs/tags/v9 HEAD refs/heads/feat/x"],
+  // Two reads in one curl call, and a body `--next` resets before the review path's own request (pr/72).
+  ["curl https://a.example --next https://b.example"],
+  ["curl -d '{\"event\":\"APPROVE\"}' https://example.com --next https://api.github.com/repos/o/r/pulls/3/reviews"],
   // A GraphQL read of the repository (pr/74).
   ["gh api graphql -f query='query { repository(owner:\"o\",name:\"r\") { isArchived } }'"],
+  // A curl write whose glob is switched off, judged as the literal path it sends; a glob or an IPv6 host on a read; a
+  // plain read; wget's input file on a read (pr/76, pr/77).
+  ["curl -X PATCH -d '{\"sha\":\"abc\"}' --globoff 'https://api.github.com/repos/o/r/git/refs/heads/{feature,main}'"],
+  ["curl -sg -X PATCH -d '{\"sha\":\"abc\"}' 'https://api.github.com/repos/o/r/git/refs/heads/{feature,main}'"],
+  ["curl 'https://example.com/p[1-3].html'"],
+  ["curl 'http://[::1]:3000/health'"],
+  ["curl https://api.github.com/repos/o/r"],
+  ["wget -i urls.txt"],
+  ["wget -qi urls.txt"],
 ];
 
 describe("personOnlyVerdict — the deny matrix", () => {
@@ -916,6 +932,55 @@ describe("the nested-command depth limit (pr/58)", () => {
     }
     // A substitution past the limit is a nesting too.
     expect(thrown(() => personOnlyVerdict(nest("echo \"$(git status)\"", 4), ON_FEATURE))).toBe("NESTING_DEPTH");
+  });
+});
+
+describe("an HTTP call whose method or target the line cannot show (pr/73, pr/76, pr/77)", () => {
+  /** The `code` of what `read` throws, or `null` when it returns. */
+  const thrown = (read: () => unknown): unknown => {
+    try {
+      read();
+      return null;
+    } catch (error) {
+      return (error as { code?: unknown }).code;
+    }
+  };
+
+  it.each([
+    // A curl or wget configuration file holds options the line does not show, a method and a URL among them (pr/73),
+    // in every spelling: apart, attached, the `=` form, inside a short cluster, stdin, a unique prefix, a later request.
+    ["curl -K req.cfg"],
+    ["curl --config req.cfg"],
+    ["curl --config=req.cfg https://api.github.com/repos/o/r"],
+    ["curl -sK req.cfg"],
+    ["curl -Kreq.cfg"],
+    ["curl -K - https://example.com"],
+    ["curl --conf req.cfg"],
+    ["curl https://example.com --next -K req.cfg"],
+    ["wget --config=req.rc https://example.com"],
+    ["wget --config req.rc https://example.com"],
+    ["wget --conf=req.rc https://example.com"],
+    // A curl write whose target curl expands by its globbing (pr/76): `{…}` and `[…]`, a body alone making the write, a
+    // `g` that is a value and no `--globoff`, and `--globoff` given to another request only.
+    ["curl -X PATCH -d '{\"sha\":\"abc\"}' 'https://api.github.com/repos/o/r/git/refs/heads/{feature,main}'"],
+    ["curl -X PUT 'https://api.github.com/repos/o/r/{pulls/3/merge,x}'"],
+    ["curl -d '{\"query\":\"mutation { mergePullRequest(input: {}) { clientMutationId } }\"}' 'https://api.github.com/{graphql,x}'"],
+    ["curl -X DELETE 'https://api.github.com/repos/o/r/git/refs/heads/ma[i-j]n'"],
+    ["curl -og -X PATCH -d x 'https://api.github.com/repos/o/r/git/refs/heads/{a,main}'"],
+    ["curl --globoff https://example.com --next -X PATCH -d x 'https://api.github.com/repos/o/r/git/refs/heads/{a,main}'"],
+    // A wget write whose targets come from an input file (pr/77): apart, the `=` form, a cluster, attached, a prefix,
+    // the wgetrc command.
+    ["wget --method DELETE -i urls.txt"],
+    ["wget --post-data=x --input-file=u.txt"],
+    ["wget -e method=PUT -qi u.txt"],
+    ["wget --method=PATCH -iu.txt"],
+    ["wget --meth=DELETE --input-f u.txt"],
+    ["wget -e input=u.txt --method DELETE"],
+    // A short cluster that holds `-:` among other letters: where curl's next request starts is not shown (pr/72).
+    ["curl -X DELETE https://api.github.com/repos/o/r/git/refs/heads/feat -s: -X GET https://example.com"],
+  ])("throws a coded HTTP_TARGET_HIDDEN for %j in both verdicts, so the guard refuses it", (command) => {
+    expect(thrown(() => personOnlyVerdict(command, ON_FEATURE))).toBe("HTTP_TARGET_HIDDEN");
+    expect(thrown(() => unattendedPushVerdict(command))).toBe("HTTP_TARGET_HIDDEN");
   });
 });
 
@@ -1172,6 +1237,9 @@ describe("unattendedPushVerdict", () => {
     // A push behind Corepack's runner (pr/51), and the merge queue's enrolment (pr/57).
     ["corepack pnpm exec git push origin feat/x"],
     ["gh api graphql -f query='mutation { enqueuePullRequest(input: {pullRequestId: \"x\"}) { mergeQueueEntry { id } } }'"],
+    // A pull request moved by curl's first request, a later `--next` read setting the method no longer hiding it (pr/72).
+    ["curl -X PATCH https://api.github.com/repos/o/r/pulls/3 --next -X GET https://example.com"],
+    ["curl -X PATCH https://api.github.com/repos/o/r/pulls/3 -: https://example.com"],
   ])("denies %j, naming the run verbs", (command) => {
     const verdict = unattendedPushVerdict(command);
     expect(verdict.deny).toBe(true);
@@ -1335,6 +1403,10 @@ describe("unattendedPushVerdict", () => {
     // pr/51's and pr/57's twins: Corepack running a read, and the merge queue read.
     ["corepack pnpm exec git status"],
     ["gh api graphql -f query='query { repository(owner:\"o\",name:\"r\") { mergeQueue { entries { totalCount } } } }'"],
+    // pr/72's and pr/77's twins: two reads in one curl call, wget's input file on a read, `symbolic-ref`'s read (pr/70).
+    ["curl https://a.example --next https://b.example"],
+    ["wget -i urls.txt"],
+    ["git symbolic-ref --short -q HEAD"],
   ])("allows %j", (command) => {
     expect(unattendedPushVerdict(command)).toEqual({ deny: false });
   });
