@@ -64,15 +64,28 @@ plan against, not a reading this page took as it rendered.
 **What co-selecting codex costs every other client: nothing at the root.** Codex's rules
 appendix goes to a codex-only root `AGENTS.override.md`, which codex reads instead of
 `AGENTS.md` and no other client reads at all, so the shared root `AGENTS.md` is 5610 bytes with
-codex selected and 5610 without it. The override repeats that file — an operator's own text in
-it included — and adds the appendix: 25751 bytes, ≈4.6x the shared file, paid by codex alone.
-It is regenerated from `AGENTS.md` as each sync leaves it. Under a `supplement` or `skip`
-import decision the operator's own text in `AGENTS.md` survives, so an edit to that text
+codex selected and 5610 without it. The override repeats the charter — an operator's own text
+in `AGENTS.md` included — and adds the appendix: 25751 bytes, ≈4.6x the shared file, paid by
+codex alone. It is regenerated from `AGENTS.md` as each sync leaves it, and leaves out the one
+part of that file it does not repeat, Cursor's cloud block below. Under a `supplement` or
+`skip` import decision the operator's own text in `AGENTS.md` survives, so an edit to that text
 reaches codex at the next sync and `check` reports it as drift on the override until then. With
 no import decision, or `replace`, `AGENTS.md` is engine-owned whole: a hand edit to it is drift
 the next sync restores behind a `.bak`, and it never reaches the override. An `AGENTS.md` that
 is a symbolic or hard link, or whose operator text carries a block-severity injection pattern,
 is not repeated: `sync` and `check` report the override as a collision.
+
+**What co-selecting cursor costs every client that reads the shared file.** With cursor
+selected, the root `AGENTS.md` ends on a `Cursor Cloud specific instructions` block — Node
+first, the skill paths, the learnings read, the draft pull request and the unattended rule — 14
+lines counted apart from the line figures above, so the file is 6476 bytes with cursor and 5610
+without it. A cursor session therefore loads its ceiling plus the block, 95 + 14 = 109 lines,
+as a claude or copilot session on a selection with cursor loads its own ceiling plus the block.
+Cursor and copilot read it natively, and claude pays it too, through its `CLAUDE.md`'s
+`@AGENTS.md` import: on a claude and cursor selection a claude session loads the block every
+time. Codex reads its own `AGENTS.override.md` instead wherever one is emitted, which never
+carries it, and nested `AGENTS.md` copies do not either. With the root `AGENTS.md` recorded as
+`skip` the block is not written, and `init` and `sync` say so in their warnings.
 
 **What codex folds, and what it pulls.** Under the delivery mode above, the appendix carries 3
 rules — `injection-screening`, `secrets`, `security-patterns` — and they are there for the
@@ -266,7 +279,7 @@ part no page read on its date supports.
 | `claude` | Project hooks | Claude Code on the web runs the hooks in the clone's `.claude/settings.json` in a session with one repository. A session with several repositories loads no repository's hooks, and user-level `~/.claude/settings.json` hooks stay on the operator's machine. | — | documented | <https://code.claude.com/docs/en/cloud-environments> — accessed 2026-10-15 |
 | `claude` | Session marker | `CLAUDE_CODE_REMOTE` is `true` in the session VM and never `true` locally. | — | documented | <https://code.claude.com/docs/en/cloud-environments> — accessed 2026-10-15 |
 | `claude` | GitHub access | The GitHub proxy refuses GraphQL with a 403, so `gh pr`, `gh issue` and Projects v2 fail; `gh api` over REST works. | GraphQL, gh pr, gh issue and Projects are unavailable here; use gh api. | documented | <https://code.claude.com/docs/en/cloud-environments> — accessed 2026-10-15 |
-| `claude` | Session state | A reclaimed VM is rebuilt fresh when the session reopens, so state the hooks wrote there, the review gate's round counter included, does not carry over. | The review-gate counter resets with the VM. | documented | <https://code.claude.com/docs/en/cloud-environments> — accessed 2026-10-15 |
+| `claude` | Session state | A reclaimed VM is rebuilt fresh when the session reopens, so state the hooks wrote there, the review gate's round counter included, does not carry over. | A missing review-gate counter is rebuilt from the run record on this branch. | documented | <https://code.claude.com/docs/en/cloud-environments> — accessed 2026-10-15 |
 | `cursor` | Project hooks | Cursor's cloud agents run the command hooks in the repository's `.cursor/hooks.json`, except `sessionStart`, `sessionEnd` and the MCP hooks; user-level hooks are not available there. | — | documented | <https://cursor.com/docs/hooks> — accessed 2026-10-15 |
 | `cursor` | Self-hosted workers | Pool and My Machines workers run the same command-based project hooks, and `sessionStart` and `sessionEnd` fire when a session claims and releases the worker. | — | documented | <https://cursor.com/docs/hooks> — accessed 2026-10-15 |
 | `cursor` | Session marker | `CURSOR_AGENT_SOCKET` marks a self-hosted worker's session, as the research behind `docs/plans/020-cli-native-02.md` found on 2026-10-14; the self-hosted page names no such variable. | — | unverified | <https://cursor.com/docs/cloud-agent/self-hosted> — accessed 2026-10-15 |
