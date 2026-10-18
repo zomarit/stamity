@@ -76,7 +76,7 @@ export const planCommand: CommandModule = {
       .addArgument(new Argument("<subcommand>", "which plan action to run").choices([CHECK]))
       .addArgument(new Argument("<plan...>", "one or more plan files, in chain order with --chain"))
       .option("--chain", "the plans are one chain: each file's head depends_on names the file before it")
-      .addOption(new Option("--since <sha>", "with --chain, the run's base: a path moved only after it is exempt").argParser(parseSince))
+      .addOption(new Option("--since <sha>", "the run's base: a path moved only after it is exempt; one plan takes it alone, several need --chain").argParser(parseSince))
       .option("--contract <path>", "the run contract the plans run under")
       // Usage errors, so exit 2 before the action and before git runs.
       .hook("preAction", (command) => {
