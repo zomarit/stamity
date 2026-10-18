@@ -675,7 +675,7 @@ describe("planClaudeSettings — the engine's ask rows (v0a2, REQ-FLOW-036, REQ-
     expect(reduction.kind === "reduced" && JSON.parse(reduction.content)).toEqual({ permissions: merged.permissions, model: "opus" });
     expect(reduction.detail).toContain(`permissions.deny (${JSON.stringify(moved)}`);
     expect(reduction.detail).toContain(`permissions.ask (${JSON.stringify(ENGINE_ASK[0])}`);
-    expect(reduction.detail).toContain("clean removes no deny row and no ask row");
+    expect(reduction.detail).toContain("clean removes no deny row, as an equal one may be yours. It removes no ask row either.");
     expect(reduction.detail).not.toContain(OWNER_ASK);
   });
 

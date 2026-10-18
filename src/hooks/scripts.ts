@@ -3323,7 +3323,11 @@ function guardDecisionOutput(tool: Tool): string {
 process.stdout.write(JSON.stringify(told === null ? { permission: "allow" } : { permission: "deny", user_message: told, agent_message: told }) + "\n");`;
   }
   if (tool === "copilot") {
-    return String.raw`if (decision !== null) process.stdout.write(JSON.stringify({ permissionDecision: decision.ask ? "ask" : "deny", permissionDecisionReason: decision.reason }) + "\n");`;
+    return String.raw`if (decision !== null && decision.ask) {
+  process.stdout.write(JSON.stringify({ permissionDecision: "ask", permissionDecisionReason: decision.reason }) + "\n");
+} else if (decision !== null) {
+  process.stdout.write(JSON.stringify({ permissionDecision: "deny", permissionDecisionReason: decision.reason }) + "\n");
+}`;
   }
   if (tool === "claude") {
     return String.raw`if (decision !== null && decision.ask) {

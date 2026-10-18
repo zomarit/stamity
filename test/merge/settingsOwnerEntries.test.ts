@@ -400,7 +400,7 @@ describe("an owner's deny row equal to one of the engine's person-only rows", ()
     expect(cleaned.code).toBe(0);
     expect(await settingsDoc(root)).toEqual({ permissions, model: "opus" });
     expect(cleaned.stdout).toContain(`permissions.deny (${JSON.stringify(moved)}`);
-    expect(cleaned.stdout).toContain("clean removes no deny row and no ask row");
+    expect(cleaned.stdout).toContain("It removes no ask row either.");
   });
 });
 

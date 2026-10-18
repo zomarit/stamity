@@ -363,7 +363,7 @@ export function reduceClaudeSettingsToForeignContent(raw: string, opts: Settings
   if (lists.length === 0 || reduction.kind === "engine-only" || (reduction.kind === "untouched" && reduction.refused)) return reduction;
   const named =
     `It left the rows equal to the engine's in ${lists.join(" and ")}: ` +
-    `clean removes no deny row and no ask row, as an equal one may be yours. Remove the ones you do not want by hand.`;
+    `clean removes no deny row, as an equal one may be yours. It removes no ask row either. Remove the ones you do not want by hand.`;
   return { ...reduction, detail: `${reduction.kind === "reduced" ? reduction.detail : `Co-owned ${DOCUMENT}: nothing was removed.`} ${named}` };
 }
 
