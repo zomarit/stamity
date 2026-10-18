@@ -1597,8 +1597,11 @@ describe("stamity run checkpoint", () => {
       const attended = await seed("attended");
       const stand = await standIn(dirname(unattended.repo));
 
-      const named = await withPrograms({ ...PLANTED, PATH: stand.path }, () => run(unattended.repo, ["start", "--run", RUN, "--json"]));
+      // review/24: attended first, so the mode the run verbs keep between calls reads attended when the unattended start
+      // begins (the case before leaves it unattended): a git call of start's moved above its mode read would then
+      // receive the three, and the stand-in's lines below would fail the case.
       const plain = await withPrograms({ GIT_SSH_COMMAND: PLANTED.GIT_SSH_COMMAND, GIT_EDITOR: "" }, () => run(attended.repo, ["start", "--run", RUN, "--json"]));
+      const named = await withPrograms({ ...PLANTED, PATH: stand.path }, () => run(unattended.repo, ["start", "--run", RUN, "--json"]));
 
       expect(named.code).toBe(0);
       expect(named.doc).toMatchObject({ subcommand: "start", run: RUN, gitEnvRemoved: ["GIT_SSH_COMMAND", "GIT_ASKPASS", "GIT_EXEC_PATH"] });
