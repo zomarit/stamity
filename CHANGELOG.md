@@ -73,6 +73,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the question protocol now says what its cloud run does at an ask: Cursor's managed cloud run asks
   nothing and takes the declared default, and so does Copilot's cloud agent, with no person to
   answer.
+- **A guide to cloud runs.** [`docs/cloud.md`](docs/cloud.md) gives, for Claude Code on the web,
+  Cursor's cloud agents and Copilot's cloud agent, the setup, the branch protection a run needs
+  before it starts, the secrets, how to start a run under a run contract, and the morning walk; then
+  Claude Code's GitHub Action and the run contract itself. Copilot's cloud agent runs a change as a
+  chain of sessions a person continues, so only Claude Code's and Cursor's clouds run a night with
+  nobody there.
 
 ### Changed
 
@@ -102,6 +108,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **One session detector names the session for the session start and the pre-flight.** The
   pre-flight's JSON `cloud` field now reads `CLAUDE_CODE_REMOTE` as a cloud session only when it is
   `true`, so a value of `1` reads `false`.
+- **The account's model lists leave the committed manifest for a git-ignored cache.** `init` and
+  `sync` keep each client's model list in `.stamity/client-models.json`, which setup git-ignores, so
+  one person's account no longer lands in the committed `.stamity/manifest.json`. A 1.15.0 manifest
+  that still holds its lists loads as before, and its next `sync` moves them to the cache and leaves
+  them out of the manifest, with no schema bump. A fresh clone, with no cache, keeps the model picks
+  its committed agent files carry, and its `check` reads no drift from them.
 - **`sync --dry-run` says the manifest schema "would be migrated"**, where it printed "migrated"
   while writing nothing.
 
