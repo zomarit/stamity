@@ -15,6 +15,7 @@ import { chmodSync, writeFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   buildCursorContinueScript,
+  CURSOR_CONTINUE_CAPACITY_STOP_PATTERN,
   CURSOR_CONTINUE_FAULT_NOTE,
   CURSOR_CONTINUE_FILE,
   CURSOR_CONTINUE_FOLLOW_UP,
@@ -147,6 +148,30 @@ describe("the follow-up (REQ-FLOW-109)", () => {
     }
   });
 
+  // review/70: a capacity stop checkpoints and returns BLOCKED_DEPENDENCY with its record in progress
+  // (`content/skills/st-unattended/references/cloud.md`, Pacing); continuing it would re-hit the limit up to the
+  // row's loop_limit. Its own checkpoint line follows the capacity line, so only a second one means a later session.
+  it("answers nothing while the newest capacity stop has at most its own checkpoint line after it", async () => {
+    const hook = await placeHook({ ...onBranch("main"), [RECORD]: "" });
+    const checkpoint = (remaining: string): string => `- 2026-10-18T02:00Z checkpoint: 3519efee units done=2 remaining=${remaining}\n`;
+    const capacity = (outcome: string): string => `- 2026-10-18T02:10Z capacity: implementer limit-reset → ${outcome}\n`;
+    const stop = capacity("BLOCKED_DEPENDENCY");
+    const cases: readonly (readonly [string, string, number | null])[] = [
+      ["the capacity line, then its checkpoint line", unattended("main", "4") + stop + checkpoint("4"), null],
+      ["the capacity line, no checkpoint after it", unattended("main", "4") + stop, null],
+      ["two checkpoint lines after the capacity line", unattended("main", "4") + stop + checkpoint("4") + checkpoint("3"), 3],
+      ["an older stop, then a later session's two", unattended("main", "5") + stop + checkpoint("5") + checkpoint("4") + checkpoint("3"), 3],
+      ["the newest of two stops, then its own line", unattended("main", "5") + stop + checkpoint("5") + checkpoint("4") + stop + checkpoint("4"), null],
+      ["a capacity line that resumed, then one checkpoint", unattended("main", "4") + capacity("resumed") + checkpoint("3"), 3],
+      ["a capacity line that resumed, no checkpoint after it", unattended("main", "4") + capacity("resumed"), 4],
+      ["a capacity line that waited, then one checkpoint", unattended("main", "4") + capacity("waited until 2026-10-18T03:00Z") + checkpoint("3"), 3],
+    ];
+    for (const [name, text, expected] of cases) {
+      rewriteRecord(text);
+      expect(followUp(hook), name).toBe(expected === null ? null : continueFor(RUN, expected));
+    }
+  });
+
   it("continues the run on this branch among several, and never with text read from a record", async () => {
     const hook = await placeHook({
       ...onBranch("stamity/night"),
@@ -227,5 +252,14 @@ describe("the checkpoint line's spelling", () => {
     // Prose naming a checkpoint is not one.
     expect(RECORD_CHECKPOINT_PATTERN.test("QA checkpoint: emitted 2026-08-31 remaining=3")).toBe(false);
     expect(RECORD_CHECKPOINT_PATTERN.test("- 2026-10-18T02:00Z usage: review r1 remaining=3")).toBe(false);
+  });
+
+  it("matches a capacity stop's line as /st-work and the cloud reference write it, and no other outcome", () => {
+    expect(CURSOR_CONTINUE_CAPACITY_STOP_PATTERN.test("- 2026-10-18T02:10Z capacity: implementer limit-reset → BLOCKED_DEPENDENCY")).toBe(true);
+    expect(CURSOR_CONTINUE_CAPACITY_STOP_PATTERN.test("  - 2026-10-18T02:10Z capacity: reviewer limit-reset -> BLOCKED_DEPENDENCY")).toBe(true);
+    expect(CURSOR_CONTINUE_CAPACITY_STOP_PATTERN.test("- 2026-10-18T02:10Z capacity: implementer limit-reset → resumed")).toBe(false);
+    expect(CURSOR_CONTINUE_CAPACITY_STOP_PATTERN.test("- 2026-10-18T02:10Z capacity: implementer limit-reset → waited until 2026-10-18T03:00Z")).toBe(false);
+    // Prose naming a capacity stop is not one.
+    expect(CURSOR_CONTINUE_CAPACITY_STOP_PATTERN.test("A capacity: stop → BLOCKED_DEPENDENCY waits for the reset")).toBe(false);
   });
 });

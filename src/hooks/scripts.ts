@@ -223,8 +223,11 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   [UNATTENDED_ASK_GATE_FILE]: { bytes: 10_752, lines: 260 },
   // Measured 2026-10-18 on plan 021 file 2's v4-cursor-continue lane (base 3519efee), with the stop payload's
   // status read (build/31): 9,043 bytes / 209 lines (cursor, generated layout; a plugin root renders 8,315 / 188).
-  // × 1.25 = 11,303.75 / 261.25, rounded up as the review gate's is to 12,288 / 270.
-  [CURSOR_CONTINUE_FILE]: { bytes: 12_288, lines: 270 },
+  // × 1.25 = 11,303.75 / 261.25, rounded up as the review gate's is to 12,288 / 270. Moved 2026-10-18 by the
+  // lane's first fix round (base 3a3b91da): no follow-up while the newest capacity stop has at most its own
+  // checkpoint line after it (review/70): 9,500 bytes / 221 lines (a plugin root renders 8,772 / 200).
+  // × 1.25 = 11,875 / 276.25, rounded up to 12,288 / 280.
+  [CURSOR_CONTINUE_FILE]: { bytes: 12_288, lines: 280 },
   // Measured 2026-09-24 and again 2026-09-26 at 8c08660e: 2,383 bytes / 67
   // lines, the same in both layouts. × 1.25 = 2,978.75 / 83.75, rounded up to
   // 3,072 / 90.
@@ -4455,6 +4458,13 @@ export const CURSOR_CONTINUE_FOLLOW_UP = "Continue the run: <m> units remain; th
 export const CURSOR_CONTINUE_FAULT_NOTE = "stamity cursor continue: <read> could not be read (<cause>), so the run is not continued.";
 
 /**
+ * A capacity stop's record line, `- <UTC> capacity: <role> <stop class> → BLOCKED_DEPENDENCY`, as `/st-work`'s
+ * capacity rung (`content/commands/st-work.md`, Dispatch) and the cloud reference's pacing
+ * (`content/skills/st-unattended/references/cloud.md`) write it at a limit. A line that resumed or waited is not one.
+ */
+export const CURSOR_CONTINUE_CAPACITY_STOP_PATTERN = /^\s*- +\S+ +capacity: .*(?:\u2192|->) *BLOCKED_DEPENDENCY\b/;
+
+/**
  * The Cursor continue hook (REQ-FLOW-109): on Cursor's `stop`, keeps an
  * unattended run going on a Cursor agent machine by answering a
  * `followup_message`, which Cursor submits as the agent's next prompt.
@@ -4470,7 +4480,11 @@ export const CURSOR_CONTINUE_FAULT_NOTE = "stamity cursor continue: <read> could
  * `.git/HEAD` names, and whose last checkpoint line
  * ({@link RECORD_CHECKPOINT_PATTERN}, the whole record read when it is at most
  * {@link REPORT_READ_MAX_BYTES}) leaves a count of digits above 0 earns
- * {@link CURSOR_CONTINUE_FOLLOW_UP}. The message carries that count and a path
+ * {@link CURSOR_CONTINUE_FOLLOW_UP}, unless the newest capacity stop's line
+ * ({@link CURSOR_CONTINUE_CAPACITY_STOP_PATTERN}) has at most one checkpoint
+ * line after it, the stop's own (review/70): that run returned
+ * BLOCKED_DEPENDENCY to wait for its limit's reset, and continuing it would
+ * re-hit the limit; a second checkpoint line after it is a later session's. The message carries that count and a path
  * built from the folder's name, never text read from the record. The stop
  * payload's `status` must read `completed`, or be absent (a build that sends
  * none): an `aborted` or `error` stop, a person's or a failure's, ends there.
@@ -4513,6 +4527,7 @@ const MODE = ${regex(RECORD_MODE_PATTERN)};
 const BRANCH = ${regex(RECORD_BRANCH_PATTERN)};
 const IN_PROGRESS = ${regex(IN_PROGRESS_PATTERN)};
 const CHECKPOINT = ${regex(RECORD_CHECKPOINT_PATTERN)};
+const CAPACITY_STOP = ${regex(CURSOR_CONTINUE_CAPACITY_STOP_PATTERN)};
 const HEAD_LINES = ${RECORD_HEAD_LINES};
 const HEAD_READ_BYTES = ${RECORD_HEAD_READ_BYTES};
 const RECORD_MAX_BYTES = ${REPORT_READ_MAX_BYTES};
@@ -4525,7 +4540,10 @@ ${RECORD_HEADS_SOURCE}
 
 ${buildCardBranchSource()}
 ${String.raw`
-/** The units a record's last checkpoint line leaves, above 0; null when none is left, its count is not digits or no line is there. */
+/**
+ * The units a record's last checkpoint line leaves, above 0; null when none is left, its count is not digits, no line
+ * is there, or the newest capacity stop has at most one checkpoint line after it (its own: the run waits for a reset).
+ */
 function unitsLeft(path) {
   const stats = lstatSync(path);
   if (!stats.isFile()) return null;
@@ -4539,7 +4557,15 @@ function unitsLeft(path) {
     closeSync(fd);
   }
   let left = null;
-  for (const line of text.split(/\r?\n/)) left = CHECKPOINT.exec(line)?.[1] ?? left;
+  let sinceStop = null;
+  for (const line of text.split(/\r?\n/)) {
+    if (CAPACITY_STOP.test(line)) sinceStop = 0;
+    const count = CHECKPOINT.exec(line)?.[1];
+    if (count === undefined) continue;
+    left = count;
+    if (sinceStop !== null) sinceStop += 1;
+  }
+  if (sinceStop !== null && sinceStop <= 1) return null;
   return left !== null && /^[0-9]{1,9}$/.test(left) && Number(left) > 0 ? Number(left) : null;
 }
 
