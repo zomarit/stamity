@@ -35,8 +35,9 @@
 // hands this run each `node scripts/qa/cloud-check.mjs verify --out` file. A `pass` leaves the row
 // open for the person's `--walked` (the overnight run and its morning answer are theirs to sign); a
 // `failed` is a measurement no signature sits on; no output reads `not-run`, P3's with its account
-// reason, and takes no `--walked` (refused before measuring; `--accept-unwalked` stays open). A
-// cloud row never reads the built pages.
+// reason. Only a verify `pass` takes `--walked`: no output, a `not-run` or a `failed` refuses the
+// walk with its reason before measuring (`--accept-unwalked` is unchanged). A cloud row never reads
+// the built pages.
 //
 // A person's answers ride on the run that measures: `--walked` records the rows they walked as
 // `performed`, `--accept-unwalked` the rows they signed off without a walk as `accepted-unwalked`,
@@ -470,17 +471,27 @@ export function readCloudOutputs(paths) {
 }
 
 /**
- * Refuse `--walked` on a cloud row this run has no verify output for, before anything is measured:
- * a cloud row is signed over what `cloud-check.mjs verify` read, so a walk with no reading would
- * show the row PERFORMED with nothing verified under it. `--accept-unwalked` stays open for it.
+ * Refuse `--walked` on a cloud row unless this run's verify output for it reads `pass`, before
+ * anything is measured: a cloud row is signed over what `cloud-check.mjs verify` read, so a walk
+ * over no reading, a `not-run` (no PR, a refused pre-flight) or a `failed` would show the row
+ * PERFORMED over a run that never left what the check reads. `--accept-unwalked` is unchanged.
  */
 export function assertCloudWalksHaveOutput(walked, cloudOutputs) {
   for (const definition of QA_ROWS) {
-    if (definition.lane !== 'cloud' || !walked.includes(definition.id) || cloudOutputs.has(definition.client)) continue
-    throw new Error(
-      `row ${definition.id} has no cloud-check.mjs verify output for ${definition.client}, so --walked ${definition.id} is refused: ` +
-        `pass --cloud <file> from \`node scripts/qa/cloud-check.mjs verify --out\`, or sign it --accept-unwalked ${definition.id}`,
-    )
+    if (definition.lane !== 'cloud' || !walked.includes(definition.id)) continue
+    const output = cloudOutputs.get(definition.client)
+    if (output === undefined) {
+      throw new Error(
+        `row ${definition.id} has no cloud-check.mjs verify output for ${definition.client}, so --walked ${definition.id} is refused: ` +
+          `pass --cloud <file> from \`node scripts/qa/cloud-check.mjs verify --out\`, or sign it --accept-unwalked ${definition.id}`,
+      )
+    }
+    if (output.verdict !== 'pass') {
+      throw new Error(
+        `row ${definition.id}'s cloud-check.mjs verify output for ${definition.client} reads ${output.verdict} (${output.reason}), ` +
+          `so --walked ${definition.id} is refused: only a verify pass takes a walk`,
+      )
+    }
   }
 }
 

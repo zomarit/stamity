@@ -354,7 +354,8 @@ describe("teardown", () => {
 const CANDIDATE = { name: "@zomarit/stamity", version: "1.16.0-rc", filename: "zomarit-stamity-1.16.0-rc.tgz" };
 
 /**
- * An npm that records its calls: `pack` writes a stand-in tarball where it was told and prints npm's
+ * An npm that records its calls: `run build` does nothing (this checkout's `dist/` is built by
+ * `ensureDistBuilt`), `pack` writes a stand-in tarball where it was told and prints npm's
  * JSON, `install --package-lock-only` writes a stand-in lockfile. Mock reason: network and time — the
  * lockfile resolve reads the npm registry, and a real pack of this checkout takes seconds a case.
  */
@@ -362,6 +363,7 @@ function fakeNpm() {
   const calls: { cwd: string; args: string[] }[] = [];
   const npm = (cwd: string, args: string[]) => {
     calls.push({ cwd, args });
+    if (args[0] === "run" && args[1] === "build") return "";
     if (args[0] === "pack") {
       const dest = args[args.indexOf("--pack-destination") + 1]!;
       writeFileSync(join(dest, CANDIDATE.filename), "stand-in tarball\n");
@@ -473,15 +475,18 @@ describe("setup — a real fixture, REST and the push replaced", () => {
 
       // review/7: this checkout's build is packed into the repository and declared, with a
       // lockfile, so `npx --no stamity` there runs the candidate; the start lines say so.
-      expect(npmCalls[0]).toEqual({ cwd: REPO_ROOT, args: ["pack", "--json", "--ignore-scripts", "--pack-destination", dir] });
-      expect(npmCalls[1]).toMatchObject({ cwd: repo!.dir, args: ["install", "--package-lock-only", "--ignore-scripts", "--no-audit", "--no-fund"] });
+      // review/21: this checkout is built before it is packed, and the start lines name HEAD's sha.
+      expect(npmCalls[0]).toEqual({ cwd: REPO_ROOT, args: ["run", "build"] });
+      expect(npmCalls[1]).toEqual({ cwd: REPO_ROOT, args: ["pack", "--json", "--ignore-scripts", "--pack-destination", dir] });
+      expect(npmCalls[2]).toMatchObject({ cwd: repo!.dir, args: ["install", "--package-lock-only", "--ignore-scripts", "--no-audit", "--no-fund"] });
       const manifest = JSON.parse(readFileSync(join(repo!.dir, "package.json"), "utf8")) as { devDependencies: Record<string, string> };
       expect(manifest.devDependencies).toEqual({ "@zomarit/stamity": `file:./${CANDIDATE.filename}` });
       const tracked = execFileSync("git", ["ls-files"], { cwd: repo!.dir, encoding: "utf8" }).split("\n");
       expect(tracked).toContain(CANDIDATE.filename);
       expect(tracked).toContain("package-lock.json");
       expect(readFileSync(join(repo!.dir, ".gitignore"), "utf8")).toMatch(/^node_modules\/$/m);
-      expect(text).toContain(`packed as ${CANDIDATE.filename} (@zomarit/stamity 1.16.0-rc)`);
+      const headShort = execFileSync("git", ["rev-parse", "--short", "HEAD"], { cwd: REPO_ROOT, encoding: "utf8" }).trim();
+      expect(text).toContain(`build of HEAD ${headShort} (npm run build), packed as ${CANDIDATE.filename} (@zomarit/stamity 1.16.0-rc)`);
       expect(text).toContain("`npx --no stamity` runs this candidate");
       expect(text).toContain("npm ci");
 
@@ -489,7 +494,10 @@ describe("setup — a real fixture, REST and the push replaced", () => {
       expect(text).toContain(cloud.PREFLIGHT_PREREQUISITE);
       expect(text).toContain("WITHOUT admin on the repository");
       expect(text).toContain("ORGANIZATION ruleset");
-      expect(text).toContain("qa-owner created these repositories and administers them");
+      // The round-2 note: a repository under the running account's personal login cannot pass.
+      expect(text).toContain("cannot pass the pre-flight when that same account runs it");
+      expect(text).toContain("binds administrators with no bypass");
+      expect(text).toContain("qa-owner created these repositories under its personal account and administers them, so a run as qa-owner cannot pass the pre-flight");
       expect(text).toContain("setup created no ruleset");
       expect(text).not.toContain("protect main with no bypass");
       expect(calls.some((call) => /rulesets|protection/.test(call.path))).toBe(false);
@@ -544,6 +552,44 @@ describe("setup — a real fixture, REST and the push replaced", () => {
     expect(message).toContain("stamity-cloud-cursor-20261018-2100 answered HTTP 422");
     expect(message).toContain(`made and pushed before it, public: ${made}`);
     expect(message).toContain(`repo delete ${made}`);
+  });
+
+  it("names an organization's repositories as passing only the organization-ruleset way, never as a personal account's", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "stamity-cloud-check-setup-"));
+    temps.push(dir);
+    const made = "qa-org/stamity-cloud-claude-20261018-2100";
+    const { rest, calls } = fakeRest({
+      "GET /user": { status: 200, json: { login: "qa-member" } },
+      "POST /orgs/qa-org/repos": { status: 201, json: { full_name: made, clone_url: `https://github.com/${made}.git` } },
+    });
+    const git = (cwd: string, args: string[]) =>
+      args[0] === "push" || args[0] === "remote" ? "" : execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    const printed: string[] = [];
+    await cloud.setup({
+      owner: "qa-org",
+      clients: ["claude"],
+      dir,
+      rest,
+      git,
+      npm: fakeNpm().npm,
+      buildFixture: bareFixture,
+      print: (line: string) => printed.push(line),
+      now: () => new Date("2026-10-18T21:00:00Z"),
+    });
+    expect(calls.find((call) => call.method === "POST")!.path).toBe("/orgs/qa-org/repos");
+    const text = printed.join("\n");
+    expect(text).toContain("qa-member created these repositories and administers them, so a run as qa-member passes only the organization-ruleset way");
+    expect(text).not.toContain("under its personal account");
+  });
+
+  it("builds this checkout before packing it, and packs nothing when the build fails (review/21)", () => {
+    const calls: string[][] = [];
+    const npm = (_cwd: string, args: string[]) => {
+      calls.push(args);
+      throw new Error("npm run build exited 1");
+    };
+    expect(() => cloud.packCandidate({ repoRoot: REPO_ROOT, dest: tmpdir(), npm })).toThrow("npm run build exited 1");
+    expect(calls).toEqual([["run", "build"]]);
   });
 });
 
@@ -611,7 +657,7 @@ describe("the form's cloud lane and run.mjs's dispatch", () => {
     expect(form.split("\n").find((line) => line.startsWith("| **P3**"))).toContain("no Copilot cloud-agent account");
   });
 
-  it("reads no verify output as not-run, and lets a person sign --walked P1 over a verify pass but not a failed P2", async () => {
+  it("reads no verify output as not-run, and lets a person sign --walked P1 over a verify pass but not a not-run P1 or a failed P2", async () => {
     const bare = await runHarness([]);
     const p1 = bare.rows.find((entry) => entry.row === "P1")!;
     expect(p1.status).toBe("not-run");
@@ -631,10 +677,22 @@ describe("the form's cloud lane and run.mjs's dispatch", () => {
     const accepted = await runHarness(["--accept-unwalked", "P1", "--by", "the maintainer", "--on", "2026-10-19"]);
     expect(accepted.rows.find((entry) => entry.row === "P1")).toMatchObject({ status: "accepted-unwalked" });
 
+    // review/20: a verify not-run (no PR, a refused pre-flight) refuses the walk with its reason;
+    // --accept-unwalked over it is unchanged.
+    const notRunDir = tempDir();
+    const notRun = verifyOutput(notRunDir, "claude", "not-run", "pre-flight refused: direct-push");
+    await expect(runHarness(["--cloud", notRun, "--walked", "P1", "--by", "the maintainer", "--on", "2026-10-19"])).rejects.toThrow(
+      "row P1's cloud-check.mjs verify output for claude reads not-run (pre-flight refused: direct-push), so --walked P1 is refused",
+    );
+    const acceptedNotRun = await runHarness(["--cloud", notRun, "--accept-unwalked", "P1", "--by", "the maintainer", "--on", "2026-10-19"]);
+    expect(acceptedNotRun.rows.find((entry) => entry.row === "P1")).toMatchObject({ status: "accepted-unwalked" });
+
+    // TEST CHANGE (review/20): a failed verify now refuses the walk before measuring, with the
+    // verify's reason, where it was refused after measuring as "measured failed".
     const dir = tempDir();
     await expect(
       runHarness(["--cloud", verifyOutput(dir, "cursor", "failed", "main moved"), "--walked", "P2", "--by", "the maintainer"]),
-    ).rejects.toThrow("row P2 was measured failed");
+    ).rejects.toThrow("row P2's cloud-check.mjs verify output for cursor reads failed (main moved), so --walked P2 is refused");
   });
 
   it("refuses a verify output it cannot read as one, before measuring anything", async () => {

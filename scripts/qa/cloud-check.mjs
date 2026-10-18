@@ -13,8 +13,8 @@
 // branch — and that `main` and the tags did not move. `teardown` prints the deletion and runs
 // nothing: deleting a repository is a person's act.
 //
-// The CLI the run calls is this checkout's build: `setup` packs it (`npm pack`, the `dist/` as it
-// stands) into the scratch repository, declares the tarball as a `file:` devDependency and commits a
+// The CLI the run calls is this checkout's build: `setup` builds HEAD (`npm run build`), packs it
+// (`npm pack`) into the scratch repository, prints the packed version and HEAD's short sha, declares the tarball as a `file:` devDependency and commits a
 // lockfile, so once the cloud environment installs it `npx --no stamity` runs this candidate — never
 // the published version the setup's pinned fallback names, which may predate the verbs a run needs.
 //
@@ -112,7 +112,10 @@ export const PREFLIGHT_PREREQUISITE = [
   'allowances; or an active ORGANIZATION ruleset with such a rule that pins main of this repository (ref ~ALL or',
   'refs/heads/main, no exclude matching it; the repository by id or by name ~ALL, no property condition) with no',
   'direct-push bypass for the account, which is a plain member of the organization, not an owner. An account that',
-  'administers the repository passes only the organization-ruleset way.',
+  'administers the repository passes only the organization-ruleset way. So a scratch repository under a personal',
+  'account cannot pass the pre-flight when that same account runs it (there is no organization ruleset to bind its',
+  'administrator): create the repositories under an organization whose ruleset on the default branch binds',
+  'administrators with no bypass (setup --owner <organization>), or run as an account without admin.',
 ].join(' ')
 
 export const USAGE =
@@ -355,12 +358,14 @@ export function packageText(candidate) {
 }
 
 /**
- * Pack this checkout's build into `dest` (`npm pack`, scripts not run: the `dist/` as it stands).
+ * Build this checkout (`npm run build`), then pack that build into `dest` (`npm pack`, scripts not
+ * run), so the candidate is HEAD's build and never a `dist/` left from an earlier checkout.
  * Returns `{ name, version, filename }` from npm's own JSON.
  */
 export function packCandidate({ repoRoot, dest, npm }) {
+  npm(repoRoot, ['run', 'build'])
   if (!existsSync(join(repoRoot, 'dist', 'cli.js'))) {
-    throw new Error(`${join(repoRoot, 'dist', 'cli.js')} is absent: build this checkout (npm run build) before setup packs it`)
+    throw new Error(`${join(repoRoot, 'dist', 'cli.js')} is absent after npm run build: nothing was packed`)
   }
   const stdout = npm(repoRoot, ['pack', '--json', '--ignore-scripts', '--pack-destination', dest])
   let packed
@@ -492,7 +497,7 @@ const START_SURFACE = {
  *
  * Refuses a `--dir` inside this checkout before any call: a fixture tree there would be walked by
  * every later gate run. The fixture is built with `STAMITY_NO_CLIENT_PROBE=1`, so no client starts
- * on this machine. This checkout's build is packed once (`npm pack`) and committed into each
+ * on this machine. This checkout is built (`npm run build`) and packed once (`npm pack`) and committed into each
  * scratch repository as a `file:` devDependency with its lockfile (`npm install
  * --package-lock-only`, a registry read). The only writes outside the scratch folder are the
  * repository's creation (one REST POST) and one push of `main` and the baseline tag, never forced:
@@ -527,7 +532,7 @@ export async function setup({
   }
   const login = user.json.login
   const createPath = login === owner ? '/user/repos' : `/orgs/${owner}/repos`
-  const candidate = packCandidate({ repoRoot, dest: parent, npm })
+  const candidate = { ...packCandidate({ repoRoot, dest: parent, npm }), head: git(repoRoot, ['rev-parse', '--short', 'HEAD']).trim() }
 
   const started = now()
   const date = started.toISOString().slice(0, 10)
@@ -602,13 +607,18 @@ export async function setup({
   }
   print('')
   print(
-    `The CLI each run calls: this checkout's build, packed as ${candidate.filename} (${candidate.name} ${candidate.version}) ` +
+    `The CLI each run calls: this checkout's build of HEAD ${candidate.head} (npm run build), packed as ${candidate.filename} ` +
+      `(${candidate.name} ${candidate.version}) ` +
       'and declared as a file devDependency with a committed lockfile, so `npx --no stamity` runs this candidate, never ' +
       "the published package. The cloud environment's install step must run `npm ci` (or `npm install`) before the start.",
   )
   print('Before each start:')
   print(`  - ${PREFLIGHT_PREREQUISITE}`)
-  print(`  - ${login} created these repositories and administers them, so a run as ${login} passes only the organization-ruleset way.`)
+  print(
+    createPath === '/user/repos'
+      ? `  - ${login} created these repositories under its personal account and administers them, so a run as ${login} cannot pass the pre-flight: run as an account without admin, or set them up again with --owner <organization>.`
+      : `  - ${login} created these repositories and administers them, so a run as ${login} passes only the organization-ruleset way.`,
+  )
   print("  - setup created no ruleset and changed no repository setting: those are yours to set.")
   print('  - hold the machine lock; no eval run may be running.')
   for (const entry of repos) {
