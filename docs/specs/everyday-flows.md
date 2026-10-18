@@ -124,7 +124,7 @@ date, re-pointed or added a citation; the run's last citation pass re-read each 
 page round re-read them on `aa7a3e5b` with its own edits to `SECURITY.md`, `evals/SET-v7.md` and the unattended skill,
 re-pointing each one whose text had moved; the run's final derived pass, and the pull-request rounds' after it,
 re-pointed each one a later commit moved, mapped through git's diff from the commit it was read at, and every one
-reads at `a88285b7`, a pin named beside a citation included. Two units
+reads at `96f5eda4`, a pin named beside a citation included. Two units
 were not on `4daeb214`: `u19-run-end` (`stamity run end`) and
 `u21-security-page` (`SECURITY.md`'s cloud section); the fix round cites both at `bc12cfc3`. REQ-FLOW-105 to
 REQ-FLOW-119 are held for plan 021's second file. The text dated 2026-10-16 is unreleased at this merge; the plan cuts
@@ -3511,7 +3511,7 @@ that exit; a plain `run end` writes none and removes one there (REQ-FLOW-096), a
 (Claude Code's final round after that run handed off; on any other branch, or with no fresh marker naming the run, the
 variable decides; pr/17, pr/36, pr/37). So a later session on that branch, in the same checkout, finds no marker the
 gate honours once the window has passed; one that starts inside its 15 minutes is the residual `SECURITY.md` names
-(`SECURITY.md:528-541`). The marker is machine-local: a worktree policy never materializes it into another
+(`SECURITY.md:530-543`). The marker is machine-local: a worktree policy never materializes it into another
 worktree, a `.stamity` copy row skipping it and a row naming it refused (`src/worktree/policy.ts:536`, `:589-596`;
 REQ-WORKTREE-003), though a `symlink` row over `.stamity` still shares it live. The gate is `UNATTENDED_ASK_GATE_FILE`
 and its reasons in `src/hooks/scripts.ts`, wired after every planned PreToolUse row (`src/adapters/claude.ts:924-930`).
@@ -3786,25 +3786,37 @@ off the pushed tree as an inert patch, listed (`PERSON_ONLY_PATHS` and `heldPath
 - **As built, PR #112's fourth round (2026-10-18):** the table reads a `git symbolic-ref` write: one naming a tag
   (`refs/tags/` or `tags/`, a delete included) is refused as a tag, and one pointing any name but `HEAD` at the default
   branch, or at a target holding `$` or a backtick, as a push of that branch to come (pr/70; `symbolicRefVerdict`,
-  `src/hooks/personOnly.ts:946-977`, dispatched at `:1334`). It refuses as protection, attended or not, the GraphQL
+  `src/hooks/personOnly.ts:946-977`, dispatched at `:1336`). It refuses as protection, attended or not, the GraphQL
   repository-settings, branch protection rule, ruleset and custom-property mutations (pr/74, pr/80; `:1150-1155`) and a
   REST write under `properties/` beside the ruleset rule (pr/80; `:1216`). An HTTP call whose method or targets the
   line hides throws `HTTP_TARGET_HIDDEN`, which the guard refuses as a call it cannot decide: a curl or wget
   configuration file the line names, a curl write whose target curl's globbing would expand unless `-g` or
   `--globoff` is set, and a wget write reading `-i` (pr/73, pr/76, pr/77; `httpCall`, `:645-648`, and the unattended
-  copy, `:1753-1756`). Claude Code's deny rows gain the GitHub MCP server's `create_pull_request` (pr/78; `:209`).
+  copy, `:1755-1758`). Claude Code's deny rows gain the GitHub MCP server's `create_pull_request` (pr/78; `:209`).
   What stays open is REQ-FLOW-104's: a symbolic ref already on disk, a branch switch on the same line before a push
   whose destination is implied, and curl's and wget's default configuration files.
 - **As built, PR #112's round 4b (2026-10-18):** a curl body counts as one in every spelling, attached (`-d@<file>`,
   `-d'{…}'`, `-F<field>`, `-T<path>`) or as a short cluster's first value letter (`-sd@<file>`), as it does apart: the
   word is read as the letters before the body letter, the letter and its value (pr/81; `httpCall`,
-  `src/hooks/personOnly.ts:670-678`, and the unattended copy, `:1778-1786`). The symref commands of a
+  `src/hooks/personOnly.ts:673-687`, and the unattended copy, `:1783-1797`). The symref commands of a
   `git update-ref --stdin` text the line carries (`symref-create`, `symref-update`, `symref-delete`, git 2.46) are read
   as `git symbolic-ref`'s arguments, by its rules, a target the line cannot show, a printf placeholder among them,
-  read as the default branch (pr/82; `:1325-1333`). An HTTP method held in a variable or a substitution (`-X "$M"`,
+  read as the default branch (pr/82; `:1325-1335`). An HTTP method held in a variable or a substitution (`-X "$M"`,
   `--request "$(…)"`, wget's `--method` or a wgetrc `method=`) throws `HTTP_TARGET_HIDDEN` (pr/83; `:773-774`, and the
-  unattended copy, `:1881-1882`). What stays open is REQ-FLOW-104's: a REST target held in a variable, and a
+  unattended copy, `:1883-1884`). What stays open is REQ-FLOW-104's: a REST target held in a variable, and a
   `--stdin` text read from a file.
+- **As built, PR #112's round 4d (2026-10-18):** a symref command in a `git update-ref --stdin` text is read wherever
+  it stands, so a second one after an escaped line break (`\n`, `\0` with `-z`, `\x0a`, `\012`, a `%b` placeholder)
+  is read as the first is, and a Unicode or four-digit octal escape ends a word of one (pr/82; `:1325-1335`). curl's
+  read-apart pass takes the method letter with the body letters, so a short cluster's attached method is read whatever
+  it holds (`-sXDELETE`, `-sX$M`, the second refused as hidden), a letter after another value letter being that
+  letter's value (`-oX`, `-od`), and gh's `-i` is read apart from the value letter it clusters with, its `=` aside as
+  gh reads it (`-iXDELETE`, `-X=DELETE`, `-F=event=APPROVE`); the letters-only cluster branch is gone, and a method
+  word the line ends before, an unquoted substitution having cut it, throws `HTTP_TARGET_HIDDEN` (pr/83; `:673-687`,
+  `:748-749`, and the unattended copy, `:1783-1797`, `:1858-1859`). curl's long options are read from a unique prefix
+  of two letters or more, as wget's are, a full name kept as it is (`--req`, `--dat`, `--upl`; `--co` read as
+  `--config`; pr/84; `:650-664`, and the unattended copy, `:1760-1774`). What stays open is REQ-FLOW-104's: a symref
+  command word the line cannot show.
 - **Proof:** `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`, `test/change/personOnlyPaths.test.ts`,
   `test/cli/commands/runCheckpoint.test.ts` (the held patch; the refused push, "refuses the push when a commit it would
   send changes a held path, rewriting no history"), `test/adapters/claude.test.ts`,
@@ -3830,7 +3842,7 @@ dependency is a morning-list row (`SKILL.md:118-119`).
 ### REQ-FLOW-104 — The cloud's accepted risks are named
 
 Added 2026-10-16 (plan 021 file 1, unit `u21-security-page`; not on this merge's base, it is cited from `bc12cfc3`
-by the merge's first fix round and re-read after the whole-branch page round: the section is `SECURITY.md:379-629`, under
+by the merge's first fix round and re-read after the whole-branch page round: the section is `SECURITY.md:379-631`, under
 `## What it does not defend` (`:284`), the settings row `:98`, the git-hardening row `:96` and the third network
 exception `:152-173`).
 
@@ -3863,20 +3875,24 @@ named network exceptions, and the run verbs on the git-hardening row.
 - **As built, where the delta differed:** the delta named PowerShell's command wrappers, gh's alias for the
   create-and-push form, a multi-root workspace file's settings and an editor tasks file's folder-open task as uncovered
   by the unattended rules and not held. The guard rounds after it closed each: the page states the wrapped lines read
-  and refused, the alias refused and those files held (`SECURITY.md:602-613`, `:627-629`), the encoded command and the
-  `iex` pipe staying the gaps the unattended rules do not cover (`:622-625`). The page's place-reader paragraph
-  (`:615-620`) and its residual for programs the repository's configuration names (`:467-502`) are not restated here; a
+  and refused, the alias refused and those files held (`SECURITY.md:604-615`, `:629-631`), the encoded command and the
+  `iex` pipe staying the gaps the unattended rules do not cover (`:624-627`). The page's place-reader paragraph
+  (`:617-622`) and its residual for programs the repository's configuration names (`:469-504`) are not restated here; a
   later page round settles them. The whole-branch round added three residuals in plain words: the GitHub MCP server
   on the clients that take no per-tool deny, the origin pin rewritten together with git's configuration, and the
-  working directory Claude Code keeps across shell calls, attended only (`SECURITY.md:400-409`, `:542-547`,
+  working directory Claude Code keeps across shell calls, attended only (`SECURITY.md:400-409`, `:544-549`,
   `:410-416`). PR #112's fourth round (2026-10-18) added three attended residuals, each naming the control that holds,
-  the remote's own protection and, unattended, the raw-push refusal or the pre-flight's wall: a symbolic ref already on
-  disk, a branch switch on the same line before a push whose destination is implied, and curl's and wget's default
-  configuration files (`SECURITY.md:429-449`). The MCP residual counts fourteen rows (`:400-409`), and the final
+  the remote's own protection attended: a symbolic ref already on disk, a branch switch on the same line before a push
+  whose destination is implied, and curl's and wget's default configuration files (`SECURITY.md:429-450`). Unattended,
+  the raw-push refusal holds the first two; for the third, the pre-flight's wall holds the default branch alone, so a
+  write a default `.curlrc` or `.wgetrc` hides reaches the run's own branch around the run verbs, the held paths and
+  the last scan, as the other respellings do (round 4d). The MCP residual counts fourteen rows (`:400-409`), and the final
   round's window states that a worktree policy never carries the run-ended marker into another checkout, a `symlink`
-  row on `.stamity` still sharing it live (`:528-541`). PR #112's round 4b (2026-10-18) names a REST target held in a
+  row on `.stamity` still sharing it live (`:530-543`). PR #112's round 4b (2026-10-18) names a REST target held in a
   variable among the respellings, attended and unattended: the guard judges the call on the literal word, so a
-  computed URL passes, where a method held in one is refused as a hidden call (`SECURITY.md:450-466`).
+  computed URL passes, where a method held in one is refused as a hidden call (`SECURITY.md:451-468`). Round 4d names
+  a symref command word the line cannot show among them (`symref-%s` with the command as printf's argument, or a
+  variable holding it; `:451-468`).
 - **Proof:** `test/docsPages.test.ts` ("cloud and unattended runs (REQ-FLOW-104)": the section's place, every risk
   and gap named above, the retired bullet gone, the control table's pointers, the settings row and the network
   exception); `judgment: reviewer` for the wording around them.
@@ -3890,7 +3906,7 @@ in-progress record reads `Mode: attended` (one with no `Mode:` line included; `u
 `src/hooks/scripts.ts:3684-3715`), When the main thread runs a raw `git push`, `gh pr create`, `gh pr edit`, or a REST
 write on `pulls` or `pulls/<n>`, `contents/`, `git/` refs or objects, or `merges`, Then the shell guard refuses it on every client,
 naming `stamity run checkpoint` and `run end` as the push path; replies on `pulls/<n>/comments` and
-`issues/<n>/comments` pass (`unattendedPushVerdict`, `src/hooks/personOnly.ts:1370`;
+`issues/<n>/comments` pass (`unattendedPushVerdict`, `src/hooks/personOnly.ts:1372`;
 `content/skills/st-unattended/SKILL.md:88-91`). An attended session keeps its own pushes. Every run folder's head is
 read, so no pile of folders sorted ahead of an open record hides it; past 2,000 run folders the read faults, naming
 `RUN_FOLDERS_OVER_2000` (`GUARD_RUN_FOLDERS_MAX`, `src/hooks/scripts.ts:3091`; the check, `:3700-3702`), and the guard
@@ -3899,19 +3915,21 @@ this rule, a residual `SECURITY.md` names (REQ-FLOW-104).
 
 - **As built, where the delta differed:** the rule refuses more than the delta named, so the run verbs' push stays on
   the repository the run started on. While the run is unattended it also refuses `gh pr close`, `gh pr reopen` and
-  `gh pr update-branch` (`src/hooks/personOnly.ts:2133`), a `git remote` write and a `git config` write of a
-  `remote.*` key or section (`:2112-2113`), and any line that sets one of git's program-valued or configuration
-  variables, whatever program it runs, the run verbs among them (`:2156-2175`). The configuration variables
-  include `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` (`:1963`), the program-valued ones are at `:1971-1972`, and the
-  spellings that set either at `:1974-2019`; a git call on a line that names a configuration variable or sets a
-  program-valued one is refused before that (`:2101-2109`). A `git config` write of a `url.*` key is refused beside a
-  `remote.*` one (`writesRemote`, `:2072` and `:2113`); the run verbs' origin pin is the second check on the push it
+  `gh pr update-branch` (`src/hooks/personOnly.ts:2135`), a `git remote` write and a `git config` write of a
+  `remote.*` key or section (`:2114-2115`), and any line that sets one of git's program-valued or configuration
+  variables, whatever program it runs, the run verbs among them (`:2158-2177`). The configuration variables
+  include `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` (`:1965`), the program-valued ones are at `:1973-1974`, and the
+  spellings that set either at `:1976-2021`; a git call on a line that names a configuration variable or sets a
+  program-valued one is refused before that (`:2103-2111`). A `git config` write of a `url.*` key is refused beside a
+  `remote.*` one (`writesRemote`, `:2074` and `:2115`); the run verbs' origin pin is the second check on the push it
   would move (REQ-FLOW-092's "As built" line). In every mode, attended or not, a REST review write whose body the line
   cannot show is refused as an approval (`personOnlyVerdict`, `:1209-1214`). Each curl request after `--next` or `-:`
-  is judged as a call of its own, with its own method, body and targets, in both verdicts (pr/72; `httpCall`, `:717`
-  and `:1825`; `httpVerdict`, `:1041-1043`; the unattended walk, `:2145`). Unattended, a REST write that moves a
+  is judged as a call of its own, with its own method, body and targets, in both verdicts (pr/72; `httpCall`, `:726`
+  and `:1836`; `httpVerdict`, `:1041-1043`; the unattended walk, `:2147`). Unattended, a REST write that moves a
   branch or a pull request is refused through curl's attached body too, and a method the line cannot show throws
-  `HTTP_TARGET_HIDDEN` (pr/81, pr/83; REQ-FLOW-102's round 4b line). On Claude Code, fourteen
+  `HTTP_TARGET_HIDDEN` (pr/81, pr/83; REQ-FLOW-102's round 4b line), and so is one through a short cluster's method,
+  gh's `-i` cluster and `-X=` among them, or a curl long option's unique prefix (pr/83, pr/84; its round 4d line). On
+  Claude Code, fourteen
   `permissions.deny` rows refuse the GitHub MCP server's tools by name (`CLAUDE_DENY_ROWS`, `:190-209`): merge and
   branch writes (`:190-194`), review writes and submission (`:199-201`), pull-request update and state (`:202-204`),
   branch creation (`:205`), repository deletion (`:206`) and pull-request creation (`:209`). The other clients take no per-tool deny, a residual
