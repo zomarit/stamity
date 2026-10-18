@@ -563,15 +563,15 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["curl -X PUT -d '{}' https://api.github.com/enterprises/e/properties/schema/team", "protection"],
   // curl's body letter with its value attached, or as a short cluster's first value letter, the value attached or the
   // next word (pr/81): a body, so the default POST, read as the spaced form is.
-  ["curl -d@review.json https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
+  ["curl -d@./review.json https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
   ["curl -d'{\"ref\":\"refs/tags/v1\",\"sha\":\"a\"}' https://api.github.com/repos/o/r/git/refs", "push-tags"],
   ["curl -d'{\"sha\":\"a\",\"force\":true}' https://api.github.com/repos/o/r/git/refs/heads/main", "force-push"],
   ["curl -d'{}' https://api.github.com/repos/o/r/pulls/3/merge", "pr-merge"],
-  ["curl -sd@r.json https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
+  ["curl -sd@./r.json https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
   ["curl -sdevent=APPROVE https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
   ["curl -Fevent=APPROVE https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
   ["curl -Tr.json https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
-  ["curl -d@r.json https://api.github.com/repos/o/r/releases", "release"],
+  ["curl -d@./r.json https://api.github.com/repos/o/r/releases", "release"],
   // `git update-ref --stdin`'s symref commands (git 2.46) in a text the line carries (pr/82), by `git symbolic-ref`'s
   // rules: a ref pointed at the default branch, named or one the line cannot show, a tag's name written.
   ["printf 'symref-create refs/heads/safe refs/heads/main\\n' | git update-ref --stdin", "push-default"],
@@ -1299,7 +1299,7 @@ describe("unattendedPushVerdict", () => {
     ["curl -X PATCH https://api.github.com/repos/o/r/pulls/3 -: https://example.com"],
     // A pull request opened, and a commit written, through curl's attached body (pr/81).
     ["curl -d'{\"title\":\"x\",\"head\":\"a\",\"base\":\"main\"}' https://api.github.com/repos/o/r/pulls"],
-    ["curl -sd@c.json https://api.github.com/repos/o/r/contents/x"],
+    ["curl -sd@./c.json https://api.github.com/repos/o/r/contents/x"],
   ])("denies %j, naming the run verbs", (command) => {
     const verdict = unattendedPushVerdict(command);
     expect(verdict.deny).toBe(true);
