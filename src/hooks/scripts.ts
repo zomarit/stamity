@@ -225,7 +225,15 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // review approval, a close deleting a branch, git's program-valued variables,
   // the remote writes, Cursor's payload with no command and the tags read only
   // for a push. × 1.25 = 124,473.75 / 3,210, rounded up to 124,928 / 3,210.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 124_928, lines: 3_210 },
+  // Re-sized 2026-10-18 from a fresh measurement on base 47dc9982, the same way:
+  // 125,100 bytes (cursor, generated) / 3,063 lines (claude and codex,
+  // generated), past the row, because PR #112's round 4 grew the embedded
+  // verdicts: git symbolic-ref's tag and default-branch writes, curl's requests
+  // after --next read one by one, a call whose method or targets the line hides
+  // refused (HTTP_TARGET_HIDDEN), the GraphQL repository-settings, protection,
+  // ruleset and custom-property mutations, and the custom-property REST writes.
+  // × 1.25 = 156,375 / 3,828.75, rounded up to 156,672 / 3,830.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 156_672, lines: 3_830 },
 };
 
 /** One generated script, ready for an adapter to place and register. */
