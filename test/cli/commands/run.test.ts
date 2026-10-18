@@ -145,7 +145,7 @@ describe("stamity run start", () => {
     expect(current(repo)).toBe(RUN_BRANCH);
   });
 
-  // The guard's table counts main and master whatever the repository's default is (src/hooks/personOnly.ts:96),
+  // The guard's table counts main and master whatever the repository's default is (src/hooks/personOnly.ts:796),
   // so a run kept on either would have every push refused as push-default.
   it.each(["main", "master"])("leaves %s even where the REST read names another default (develop)", async (branch) => {
     const repo = await seedRepo({ branch });
