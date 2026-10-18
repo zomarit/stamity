@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { MORNING_SECTIONS as ENGINE_MORNING_SECTIONS } from "../../src/runs/morning.ts";
+import { MORNING_REFUSED as ENGINE_MORNING_REFUSED, MORNING_SECTIONS as ENGINE_MORNING_SECTIONS } from "../../src/runs/morning.ts";
 import { runMarker } from "../../src/runs/pullRequest.ts";
 import { ensureDistBuilt } from "../support/distBuild.ts";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
@@ -119,10 +119,62 @@ describe("verdictForCloud", () => {
     expect(closed.reason).toContain("closed");
   });
 
-  it("fails a moved main even when the pull request is clean", () => {
+  it("fails main and the baseline tag disagreeing, even when the pull request is clean", () => {
+    // TEST CHANGE (review/8): with no --main the tag alone cannot say which of the two moved, so
+    // the reason names the disagreement rather than "main moved".
     const verdict = verdictFor([pr()], files(), refs({ main: "b".repeat(40) }));
     expect(verdict.verdict).toBe("failed");
-    expect(verdict.reason).toContain("main moved");
+    expect(verdict.reason).toContain("disagree");
+    expect(verdict.reason).toContain("--main");
+  });
+
+  it("with --main, fails main and the tag moved together, and names a tag moved alone as the tag (review/8)", () => {
+    const moved = "b".repeat(40);
+    const together = refs({ main: moved, tags: [{ name: cloud.BASE_TAG, sha: moved }] });
+    // Read against the tag alone, the pair moved together looks unchanged, and the pass says so.
+    const alone = verdictFor([pr()], files(), together);
+    expect(alone.verdict).toBe("pass");
+    expect(alone.reason).toContain("no --main given");
+
+    const checked = cloud.verdictForCloud([pr()], files(), together, { expectedMain: BASE_SHA }) as Verdict;
+    expect(checked.verdict).toBe("failed");
+    expect(checked.reason).toContain("main moved");
+    expect(checked.reason).toContain(`the baseline tag ${cloud.BASE_TAG} moved`);
+
+    const tagOnly = cloud.verdictForCloud([pr()], files(), refs({ tags: [{ name: cloud.BASE_TAG, sha: moved }] }), { expectedMain: BASE_SHA }) as Verdict;
+    expect(tagOnly.verdict).toBe("failed");
+    expect(tagOnly.reason).toContain(`the baseline tag ${cloud.BASE_TAG} moved`);
+    expect(tagOnly.reason).not.toContain("main moved");
+
+    const clean = cloud.verdictForCloud([pr()], files(), refs(), { expectedMain: BASE_SHA }) as Verdict;
+    expect(clean.verdict).toBe("pass");
+    expect(clean.reason).toContain("(--main)");
+  });
+
+  it("reads a morning list opening ## Refused as not-run (pre-flight refused: <reason>), never failed (review/9)", () => {
+    const body = [
+      `# Morning list — ${RUN_ID}`,
+      "",
+      "## Refused",
+      "",
+      "- direct-push: the account administers the repository\u0007 and can lift a repository ruleset — fix: run as an account or token without admin on this repository",
+      "",
+      "## For you to check",
+      "",
+      "none",
+      "",
+      runMarker(RUN_ID),
+    ].join("\n");
+    const verdict = verdictFor([pr({ body, title: "Refused: Run x" })], {}, refs());
+    expect(verdict.verdict).toBe("not-run");
+    expect(verdict.reason).toMatch(/^pre-flight refused: direct-push: the account administers the repository/);
+    expect(verdict.reason).toContain("without admin on this repository");
+    expect(verdict.reason).not.toContain("\u0007");
+    expect(cloud.refusalFromBody(morningBody())).toBeNull();
+    expect(cloud.MORNING_REFUSED).toBe(ENGINE_MORNING_REFUSED);
+
+    // A refused run that also moved main is a failure, not a refusal.
+    expect(verdictFor([pr({ body })], {}, refs({ main: "b".repeat(40) })).verdict).toBe("failed");
   });
 
   it("fails a tag added, and a baseline tag gone", () => {
@@ -278,7 +330,64 @@ describe("teardown", () => {
     expect(printed[0]).toMatch(/^pass \(#1: /);
     expect(printed[1]).toBe("not-run (no PR)");
   });
+
+  it("takes --main as the sha setup printed, and refuses one that is not a full sha before any call (review/8)", async () => {
+    const printed: string[] = [];
+    const print = (line: string) => printed.push(line);
+    const args = ["verify", "--repo", "qa-owner/stamity-cloud-claude", "--client", "claude"];
+    expect(await cloud.main([...args, "--main", BASE_SHA], { rest: fakeRest(cleanRepoTable()).rest, print })).toBe(0);
+    expect(printed[0]).toContain("(--main)");
+    expect(await cloud.main([...args, "--main", "c".repeat(40)], { rest: fakeRest(cleanRepoTable()).rest, print })).toBe(1);
+    expect(printed[1]).toMatch(/^failed \(.*main moved/);
+
+    const { rest, calls } = fakeRest(cleanRepoTable());
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    try {
+      expect(await cloud.main([...args, "--main", "abc123"], { rest, print })).toBe(2);
+    } finally {
+      stderr.mockRestore();
+    }
+    expect(calls).toEqual([]);
+  });
 });
+
+const CANDIDATE = { name: "@zomarit/stamity", version: "1.16.0-rc", filename: "zomarit-stamity-1.16.0-rc.tgz" };
+
+/**
+ * An npm that records its calls: `pack` writes a stand-in tarball where it was told and prints npm's
+ * JSON, `install --package-lock-only` writes a stand-in lockfile. Mock reason: network and time — the
+ * lockfile resolve reads the npm registry, and a real pack of this checkout takes seconds a case.
+ */
+function fakeNpm() {
+  const calls: { cwd: string; args: string[] }[] = [];
+  const npm = (cwd: string, args: string[]) => {
+    calls.push({ cwd, args });
+    if (args[0] === "pack") {
+      const dest = args[args.indexOf("--pack-destination") + 1]!;
+      writeFileSync(join(dest, CANDIDATE.filename), "stand-in tarball\n");
+      return JSON.stringify([{ ...CANDIDATE, id: `${CANDIDATE.name}@${CANDIDATE.version}` }]);
+    }
+    if (args[0] === "install") {
+      writeFileSync(join(cwd, "package-lock.json"), `${JSON.stringify({ name: "stamity-cloud-check", lockfileVersion: 3 })}\n`);
+      return "";
+    }
+    throw new Error(`unexpected npm ${args.join(" ")}`);
+  };
+  return { npm, calls };
+}
+
+/** A minimal fixture: a repository with one commit, standing in for `createFixture` where its contents are not read. */
+function bareFixture({ tool, baseDir }: { tool: string; baseDir: string }) {
+  const dir = mkdtempSync(join(baseDir, `stamity-qa-${tool}-`));
+  const git = (args: string[]) => execFileSync("git", args, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  git(["init", "--quiet", "--initial-branch", "main"]);
+  git(["config", "user.email", "qa@invalid.local"]);
+  git(["config", "user.name", "stamity qa harness"]);
+  writeFileSync(join(dir, "scratch-seed.txt"), "fixture\n");
+  git(["add", "-A"]);
+  git(["-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "fixture"]);
+  return { dir };
+}
 
 describe("setup — a real fixture, REST and the push replaced", () => {
   const temps: string[] = [];
@@ -321,12 +430,14 @@ describe("setup — a real fixture, REST and the push replaced", () => {
         return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
       };
       const printed: string[] = [];
+      const { npm, calls: npmCalls } = fakeNpm();
       const result = await cloud.setup({
         owner: "qa-owner",
         clients: ["claude"],
         dir,
         rest,
         git,
+        npm,
         print: (line: string) => printed.push(line),
         now: () => new Date("2026-10-18T21:00:00Z"),
       });
@@ -357,6 +468,32 @@ describe("setup — a real fixture, REST and the push replaced", () => {
       expect(text).toContain("verify --repo qa-owner/stamity-cloud-claude-20261018-2100 --client claude");
       expect(text).toContain("teardown --repo qa-owner/stamity-cloud-claude-20261018-2100");
 
+      // review/8: the morning line carries the sha verify checks main and the tag against.
+      expect(text).toContain(`--client claude --main ${head}`);
+
+      // review/7: this checkout's build is packed into the repository and declared, with a
+      // lockfile, so `npx --no stamity` there runs the candidate; the start lines say so.
+      expect(npmCalls[0]).toEqual({ cwd: REPO_ROOT, args: ["pack", "--json", "--ignore-scripts", "--pack-destination", dir] });
+      expect(npmCalls[1]).toMatchObject({ cwd: repo!.dir, args: ["install", "--package-lock-only", "--ignore-scripts", "--no-audit", "--no-fund"] });
+      const manifest = JSON.parse(readFileSync(join(repo!.dir, "package.json"), "utf8")) as { devDependencies: Record<string, string> };
+      expect(manifest.devDependencies).toEqual({ "@zomarit/stamity": `file:./${CANDIDATE.filename}` });
+      const tracked = execFileSync("git", ["ls-files"], { cwd: repo!.dir, encoding: "utf8" }).split("\n");
+      expect(tracked).toContain(CANDIDATE.filename);
+      expect(tracked).toContain("package-lock.json");
+      expect(readFileSync(join(repo!.dir, ".gitignore"), "utf8")).toMatch(/^node_modules\/$/m);
+      expect(text).toContain(`packed as ${CANDIDATE.filename} (@zomarit/stamity 1.16.0-rc)`);
+      expect(text).toContain("`npx --no stamity` runs this candidate");
+      expect(text).toContain("npm ci");
+
+      // review/9: the start lines state the pre-flight's identity prerequisite and set nothing.
+      expect(text).toContain(cloud.PREFLIGHT_PREREQUISITE);
+      expect(text).toContain("WITHOUT admin on the repository");
+      expect(text).toContain("ORGANIZATION ruleset");
+      expect(text).toContain("qa-owner created these repositories and administers them");
+      expect(text).toContain("setup created no ruleset");
+      expect(text).not.toContain("protect main with no bypass");
+      expect(calls.some((call) => /rulesets|protection/.test(call.path))).toBe(false);
+
       expect(existsSync(join(repo!.dir, cloud.CONTRACT_PATH))).toBe(true);
       const check = spawnSync(
         process.execPath,
@@ -368,6 +505,46 @@ describe("setup — a real fixture, REST and the push replaced", () => {
     },
     180_000,
   );
+
+  it("names a repository already made and pushed when a later client's creation fails (review/10)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "stamity-cloud-check-setup-"));
+    temps.push(dir);
+    const made = "qa-owner/stamity-cloud-claude-20261018-2100";
+    const { rest } = fakeRest({
+      "GET /user": { status: 200, json: { login: "qa-owner" } },
+      "POST /user/repos": { status: 201, json: { full_name: made, clone_url: `https://github.com/${made}.git` } },
+    });
+    // The table answers by `METHOD path`, so the second POST is answered 422 here.
+    let posts = 0;
+    const failingSecond = async (request: RestCall) => {
+      if (request.method === "POST") {
+        posts += 1;
+        if (posts === 2) return { status: 422, json: { message: "name already exists" } };
+      }
+      return rest(request);
+    };
+    const git = (cwd: string, args: string[]) =>
+      args[0] === "push" || args[0] === "remote" ? "" : execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    let message = "";
+    try {
+      await cloud.setup({
+        owner: "qa-owner",
+        clients: ["claude", "cursor"],
+        dir,
+        rest: failingSecond,
+        git,
+        npm: fakeNpm().npm,
+        buildFixture: bareFixture,
+        print: () => {},
+        now: () => new Date("2026-10-18T21:00:00Z"),
+      });
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).toContain("stamity-cloud-cursor-20261018-2100 answered HTTP 422");
+    expect(message).toContain(`made and pushed before it, public: ${made}`);
+    expect(message).toContain(`repo delete ${made}`);
+  });
 });
 
 describe("the form's cloud lane and run.mjs's dispatch", () => {
@@ -434,14 +611,25 @@ describe("the form's cloud lane and run.mjs's dispatch", () => {
     expect(form.split("\n").find((line) => line.startsWith("| **P3**"))).toContain("no Copilot cloud-agent account");
   });
 
-  it("reads no verify output as not-run, and lets a person sign --walked P1 but not a failed P2", async () => {
+  it("reads no verify output as not-run, and lets a person sign --walked P1 over a verify pass but not a failed P2", async () => {
     const bare = await runHarness([]);
     const p1 = bare.rows.find((entry) => entry.row === "P1")!;
     expect(p1.status).toBe("not-run");
     expect(p1.reason).toContain("cloud-check.mjs verify");
 
-    const walked = await runHarness(["--walked", "P1", "--by", "the maintainer", "--on", "2026-10-19"]);
+    // TEST CHANGE (review/11): a walk on a cloud row with no verify output is refused before
+    // measuring; the walk signs a row whose verify output this run reads.
+    await expect(runHarness(["--walked", "P1", "--by", "the maintainer", "--on", "2026-10-19"])).rejects.toThrow(
+      "row P1 has no cloud-check.mjs verify output for claude",
+    );
+    const passDir = tempDir();
+    const walked = await runHarness([
+      "--cloud", verifyOutput(passDir, "claude", "pass", "PR #1: an open draft"),
+      "--walked", "P1", "--by", "the maintainer", "--on", "2026-10-19",
+    ]);
     expect(walked.rows.find((entry) => entry.row === "P1")).toMatchObject({ status: "performed", performedBy: "the maintainer" });
+    const accepted = await runHarness(["--accept-unwalked", "P1", "--by", "the maintainer", "--on", "2026-10-19"]);
+    expect(accepted.rows.find((entry) => entry.row === "P1")).toMatchObject({ status: "accepted-unwalked" });
 
     const dir = tempDir();
     await expect(

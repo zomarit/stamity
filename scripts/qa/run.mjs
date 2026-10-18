@@ -35,7 +35,8 @@
 // hands this run each `node scripts/qa/cloud-check.mjs verify --out` file. A `pass` leaves the row
 // open for the person's `--walked` (the overnight run and its morning answer are theirs to sign); a
 // `failed` is a measurement no signature sits on; no output reads `not-run`, P3's with its account
-// reason. A cloud row never reads the built pages.
+// reason, and takes no `--walked` (refused before measuring; `--accept-unwalked` stays open). A
+// cloud row never reads the built pages.
 //
 // A person's answers ride on the run that measures: `--walked` records the rows they walked as
 // `performed`, `--accept-unwalked` the rows they signed off without a walk as `accepted-unwalked`,
@@ -469,6 +470,21 @@ export function readCloudOutputs(paths) {
 }
 
 /**
+ * Refuse `--walked` on a cloud row this run has no verify output for, before anything is measured:
+ * a cloud row is signed over what `cloud-check.mjs verify` read, so a walk with no reading would
+ * show the row PERFORMED with nothing verified under it. `--accept-unwalked` stays open for it.
+ */
+export function assertCloudWalksHaveOutput(walked, cloudOutputs) {
+  for (const definition of QA_ROWS) {
+    if (definition.lane !== 'cloud' || !walked.includes(definition.id) || cloudOutputs.has(definition.client)) continue
+    throw new Error(
+      `row ${definition.id} has no cloud-check.mjs verify output for ${definition.client}, so --walked ${definition.id} is refused: ` +
+        `pass --cloud <file> from \`node scripts/qa/cloud-check.mjs verify --out\`, or sign it --accept-unwalked ${definition.id}`,
+    )
+  }
+}
+
+/**
  * One cloud row. Bound to the cloud-check script and, where given, the verify output's bytes
  * (labelled `cloud/<client>.json`, never the path it was read from). A `pass` stays a person's
  * row (`unperformed`, open for `--walked`), a `failed` is the measurement it is, a verify `not-run`
@@ -526,6 +542,7 @@ export async function main(argv) {
     answers,
   )
   const cloudOutputs = readCloudOutputs(options.cloud)
+  assertCloudWalksHaveOutput(options.walked, cloudOutputs)
   const sha = options.sha ?? execFileSync('git', ['rev-parse', 'HEAD'], { cwd: REPO_ROOT, encoding: 'utf8' }).trim()
   const out = resolve(REPO_ROOT, options.out ?? `.stamity/evidence/qa-${sha.slice(0, 7)}.json`)
 
