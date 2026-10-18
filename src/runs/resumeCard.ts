@@ -325,8 +325,10 @@ export interface CardRun {
  * `ledger status`'s preference), only a run in progress whose record's `Branch:`
  * equals it, the newest first, and never the closed card: a run on another
  * branch, or with no `Branch:` line, is passed over. With `recentOnly` too (the
- * `startup` pick), a run dated before the closed card's cutoff day is never
- * picked, so a run abandoned before its close stops greeting every fresh start.
+ * `startup` pick), a run dated before the closed card's cutoff day is picked
+ * only when its record reads `Mode: unattended`, so an attended run abandoned
+ * before its close stops greeting every fresh start, while an unattended one
+ * continues on its branch however long after it opened (REQ-FLOW-105).
  */
 export function findCardRun(
   rootDir: string,
@@ -350,11 +352,17 @@ export function findCardRun(
   let closed: string | null = null;
   for (const run of runs) {
     const day = run.slice(0, 10);
-    // Newest first, so every run after the first one past the cutoff is older still.
-    if (recentOnly === true && day < cutoff) break;
+    // Past the cutoff, only an unattended record is picked: REQ-FLOW-105 continues it at any age.
+    const stale = recentOnly === true && day < cutoff;
     const head = readRecordHeadFile(join(runsDir, run, RECORD_FILE));
     if (head === null) continue;
-    if (head.inProgress && (currentBranch === undefined || head.branch === currentBranch)) return { runId: run, closed: false };
+    if (
+      head.inProgress &&
+      (currentBranch === undefined || head.branch === currentBranch) &&
+      (!stale || head.mode === "unattended")
+    ) {
+      return { runId: run, closed: false };
+    }
     // A folder dated after today (a clock skew or a hand-made name) is never the closed run.
     if (closed === null && day >= cutoff && day <= today) closed = run;
   }
@@ -803,7 +811,8 @@ export function screenCard(text: string): string {
  *
  * With `startup` and no `runId`, the session start's fresh-start pick
  * (REQ-CTX-013): only the run in progress on the branch `.git/HEAD` names,
- * dated within CARD_CLOSED_MAX_AGE_DAYS, and null when HEAD names none, when no
+ * dated within CARD_CLOSED_MAX_AGE_DAYS unless its record reads `Mode: unattended`
+ * (REQ-FLOW-105), and null when HEAD names none, when no
  * such run is, or for what would be the closed or the debug card.
  *
  * With `preferBranch` and no `runId` (`ledger status`, REQ-FLOW-105's no-hook

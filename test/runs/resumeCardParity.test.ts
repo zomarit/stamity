@@ -1146,6 +1146,31 @@ describe("the resume card's two twins", () => {
     expect(older.compact?.[0]).toMatch(new RegExp(`^stamity resume card — run ${older.run} \\(as of `));
   });
 
+  it("print the same startup card for an unattended run on this branch dated three days ago, and none for an attended one", async () => {
+    const repo = getRepo();
+    const branch = `stamity/${RUN}`;
+    const { unattended, attended } = await onOneUtcDay(async () => {
+      const run = `${utcDay(-3)}_weekend`;
+      await repo.seedFiles({
+        [runFile(run, "record.md")]: record({ more: [`Branch: ${branch}`, "Mode: unattended"] }),
+        ".git/HEAD": `ref: refs/heads/${branch}\n`,
+      });
+      await assertParity(repo, undefined);
+      const first = startupCard(runHook(repo.dir));
+      // REQ-FLOW-105 continues an unattended run on its branch however long after it opened (review/27).
+      expect(findCardRun(repo.dir, new Date(), { currentBranch: branch, recentOnly: true })).toEqual({ runId: run, closed: false });
+
+      await repo.seedFiles({ [runFile(run, "record.md")]: record({ more: [`Branch: ${branch}`, "Mode: attended"] }) });
+      await assertParity(repo, undefined);
+      const second = startupCard(runHook(repo.dir));
+      expect(findCardRun(repo.dir, new Date(), { currentBranch: branch, recentOnly: true })).toBeNull();
+      return { unattended: { run, card: first }, attended: second };
+    });
+    expect(unattended.card).toHaveLength(6);
+    expect(unattended.card?.[0]).toMatch(new RegExp(`^stamity resume card — run ${unattended.run} \\(as of `));
+    expect(attended).toBeNull();
+  });
+
   it("print the same withheld startup card when the run on this branch trips the screen", async () => {
     const repo = getRepo();
     const here = `${TODAY}_demo`;
