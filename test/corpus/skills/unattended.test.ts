@@ -712,11 +712,27 @@ describe("st-unattended — the cloud reference (plan 021 file 2, v3-cloud-skill
     const text = await flat(CLOUD_REL_PATH);
     expect(text).toContain("each in the client's own isolation, or one at a time");
     expect(text).toContain("never in the sibling folder `stamity worktree setup` makes, so no folder appears under `<parent>/.stamity-worktrees/`");
-    // TEST CHANGE, justified (review/62, signed off): a lane is folded only when none of its changed paths is held,
-    // since a folded commit carrying a held path refuses every later checkpoint and run end, which never rewrite history.
-    expect(text).toContain("before every checkpoint one whose changed paths hold no held path is folded into the run branch");
-    expect(text).toContain("as `git diff --name-only <run-branch>...<lane>` lists them, are read against the held paths the skill's `## Person's calls held` names");
-    expect(text).toContain("A lane touching a held path stays unfolded and is a `## Person's calls held` row naming the lane and the path");
+    // TEST CHANGE, justified (review/62 and review/78, signed off): every lane is folded into the run's work tree
+    // uncommitted, and the next checkpoint's own held reading (`src/change/personOnlyPaths.ts`, links at its prefixes,
+    // `src/cli/commands/run.ts` heldOf) moves the held part into the held patch and commits the rest. So the fold reads
+    // no held list the text keeps (which missed `.mcp.json`, `.devcontainer/**`, …), and no lane is left unpushed and
+    // lost at a reclaim. The work tree alone, never the index: a deletion `git cherry-pick --no-commit` stages is
+    // refused by the checkpoint as staged and not in --paths.
+    expect(text).toContain("A lane commits in its isolation and is folded once, when its agent returns and before the next checkpoint");
+    expect(text).toContain(
+      "its change is applied to the run's work tree alone, as `git diff --binary <run-branch>...<lane> | git apply` applies it, never to the index, where a deletion already staged refuses the checkpoint",
+    );
+    expect(text).toContain("that checkpoint's `--paths` names every path `git diff --name-only <run-branch>...<lane>` lists");
+    expect(text).toContain(
+      "The checkpoint reads every held path itself, from no list in this text: it moves any held part into `held/person-only.patch`, restored in the index only, and commits the rest",
+    );
+    expect(text).toContain("so no held path enters the run branch's history and nothing a lane did stays only on the machine");
+    expect(text).toContain(
+      "A lane's commit never lands on the run branch itself: one carrying a held path refuses every later `run checkpoint` and `run end`, which never rewrite history.",
+    );
+    expect(text).not.toContain("stays unfolded");
+    expect(text).not.toContain("the held paths the skill's `## Person's calls held` names");
+    expect(text).not.toContain("cherry-pick");
   });
 
   // TEST CHANGE, justified (review/64): the refusal is named by the pre-flight check's id (`src/runs/preflight.ts`,
@@ -746,6 +762,12 @@ describe("st-unattended — the cloud reference (plan 021 file 2, v3-cloud-skill
     // review/60 (signed off): the continuation's ready check exempts what the run's own commits moved.
     expect(text).toContain("its ready check passes the record's `Base:` as `--since`, `stamity plan check <plan> --since <Base> --json`");
     expect(text).toContain("one moved between the stamp and the base stays stale");
+    // review/77 (signed off): a later chain file's own Base: comes after the earlier files' commits, so its
+    // continuation passes the chain's first record's Base: to the chain's check, as `references/chains.md` does.
+    expect(text).toContain(
+      "A chain file's continuation passes the chain's first record's `Base:` instead, to the chain's check, `stamity plan check a b c --chain --since <Base> --json`, as `references/chains.md` gives it",
+    );
+    expect(text).toContain("the file's own `Base:` comes after the earlier files' commits, so a `reads` path they moved would read stale");
   });
 
   it("counts the commits after the last checkpoint on Not done:, never covered by the proof block (REQ-FLOW-116)", async () => {
