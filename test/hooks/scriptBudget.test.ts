@@ -203,7 +203,7 @@ describe("hook script budgets (REQ-CTX-016)", () => {
 
   it("holds the person-only guard to the row re-sized from its last measurement (review/219)", () => {
     // The literal pins the re-sized row, so its next move is a visible edit here too, with its reason in the row.
-    expect(HOOK_SCRIPT_BUDGETS[PERSON_ONLY_GUARD_FILE]).toEqual({ bytes: 124_928, lines: 3_210 });
+    expect(HOOK_SCRIPT_BUDGETS[PERSON_ONLY_GUARD_FILE]).toEqual({ bytes: 156_672, lines: 3_830 }); // Re-sized 2026-10-18 from round 4's fresh measurement, the same rule as review/219.
     const guards = renders.filter((script) => script.fileName === PERSON_ONLY_GUARD_FILE);
     expect(guards).toHaveLength(TOOLS.length);
     for (const script of guards) expect(budgetViolation(script), script.tool).toBeUndefined();
