@@ -5,8 +5,10 @@ import { join, relative, sep } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { COMMANDS } from "../../../src/cli.ts";
 import { cleanCommand, planCleanCandidates } from "../../../src/cli/commands/clean.ts";
+import { applySync, planSync } from "../../../src/cli/commands/sync/engine.ts";
 import { wrapInManagedBlock } from "../../../src/merge/managedBlocks.ts";
 import { ORG_POLICY_REL_PATH } from "../../../src/pack/orgPolicy.ts";
+import { createApp } from "../../../src/index.ts";
 import { MANIFEST_VERSION, type LedgerEntry, type SetupManifest } from "../../../src/types/manifest.ts";
 import { STATE_DIR } from "../../../src/types/markers.ts";
 import { npxCommand } from "../../support/identity.ts";
@@ -1441,4 +1443,58 @@ describe("a 1.14 plugin block under clean", () => {
     expect(result.stdout).not.toContain("plugin uninstall");
     expect(existsSync(join(root, STATE_DIR))).toBe(false);
   });
+});
+
+/**
+ * review/114: the account's model lists live in the git-ignored cache, not in the manifest
+ * `clean` reads, so a Codex pick a list moved off the shipped entry 0 has to be rendered with
+ * the lists the emitted files carry, or no rendering proves the agent files and every `clean`
+ * refuses them as stale, while the `sync` it names writes the same bytes again.
+ */
+describe("clean — a setup whose model list moved a Codex pick", () => {
+  /** An account's Codex list lacking the shipped entry 0 of frontier, advanced and economy. */
+  const OTHER_CODEX = { codex: { ids: ["gpt-5.6-terra", "gpt-6-sol", "gpt-5.6-luna"], source: "codex-debug-models" as const } };
+  const REVIEWER = ".codex/agents/stamity-reviewer.toml";
+  const RESPONDER = ".codex/agents/stamity-incident-responder.toml";
+
+  async function run(cwd: string, argv: readonly string[]): Promise<void> {
+    const result = await runInProcess(COMMANDS, argv, { cwd });
+    expect(result.code, `${argv.join(" ")}: ${result.stdout}\n${result.stderr}`).toBe(0);
+  }
+
+  /** `init -y --tools claude,codex`, `add ops -y` with `pack`, then a sync whose Codex list moves the advanced pick. */
+  async function listMoved(pack: boolean): Promise<string> {
+    const root = tempDir().path("repo");
+    await mkdir(root, { recursive: true });
+    await seedGitRepo(root);
+    await run(root, ["init", "-y", "--tools", "claude,codex"]);
+    if (pack) await run(root, ["add", "ops", "-y"]);
+    const engineVersion = createApp().version;
+    const plan = await planSync(root, engineVersion, { listedOverlay: structuredClone(OTHER_CODEX) });
+    await applySync(root, plan, { engineVersion, force: false, dryRun: false, now: new Date() });
+    // The list moved the pick: with no list the advanced class runs on the shipped gpt-6-astra.
+    expect(await readFile(join(root, REVIEWER), "utf-8")).toMatch(/^model = "gpt-6-sol"$/m);
+    return root;
+  }
+
+  it("cleans with -y, deleting the agent files the list moved", async () => {
+    const root = await listMoved(false);
+
+    const result = await runClean(root, ["-y"]);
+
+    expect(result.code, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(existsSync(join(root, REVIEWER))).toBe(false);
+    expect(existsSync(join(root, STATE_DIR))).toBe(false);
+  }, 60_000);
+
+  it("removes a pack with --pack, deleting its Codex copy the list moved", async () => {
+    const root = await listMoved(true);
+    expect(await readFile(join(root, RESPONDER), "utf-8")).toMatch(/^model = "gpt-6-sol"$/m);
+
+    const result = await runClean(root, ["--pack", "ops", "-y"]);
+
+    expect(result.code, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(existsSync(join(root, RESPONDER))).toBe(false);
+    expect(existsSync(join(root, REVIEWER))).toBe(true);
+  }, 60_000);
 });

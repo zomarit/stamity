@@ -3,10 +3,11 @@ import { lstat, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { isPlainObject } from "../../config/parse.ts";
-import { collectListedErrors, withoutListedModels } from "../../manifest/manifest.ts";
+import { MANIFEST_REPO_PATH, collectListedErrors, withoutListedModels } from "../../manifest/manifest.ts";
 import { CLIENT_MODELS_CACHE_FILE } from "../../mcp/env.ts";
 import { atomicWriteFile } from "../../merge/atomicWrite.ts";
-import { modelMapPath } from "../../roster/modelDefaults.ts";
+import { MODEL_PRIORITY, modelMapPath } from "../../roster/modelDefaults.ts";
+import { isModelClass, listHoldsPin, pinsFor } from "../../roster/modelLadder.ts";
 import {
   fileSystemProbe,
   isFullPath,
@@ -526,7 +527,10 @@ function sortedLists(lists: ModelLists): ModelLists {
 /**
  * Keep `lists` in the cache under `rootDir`, atomically. Answers `null`, or the
  * warning a run prints when the write failed: the lists then held for that run
- * only, and nothing else of the run is undone.
+ * only and are gone after it (the manifest is written without them, so a
+ * 1.15.0 manifest's lists moved that run go too), and nothing else of the run
+ * is undone. Only a later sync that reads a client from its own CLI (one on
+ * `PATH`, the probe switch unset) keeps that client's list again (review/117).
  */
 export async function writeModelListCache(rootDir: string, lists: ModelLists): Promise<string | null> {
   try {
@@ -536,7 +540,8 @@ export async function writeModelListCache(rootDir: string, lists: ModelLists): P
     const code = (cause as NodeJS.ErrnoException | null)?.code;
     return (
       `the client model lists could not be kept in ${CLIENT_MODELS_CACHE_FILE}` +
-      `${typeof code === "string" ? ` (${code})` : ""}, so they held for this run only; the next sync reads each client again`
+      `${typeof code === "string" ? ` (${code})` : ""}, so they held for this run only and were dropped, a 1.15.0 ` +
+      "manifest's lists moved this run among them; the next sync that reads a client keeps its list again"
     );
   }
 }
@@ -547,14 +552,42 @@ const TOOLS_WITH_LISTS: readonly Tool[] = ["codex", "copilot", "cursor"];
 /** The clients whose model map holds every id a list moved their pick to; Cursor's drops the effort group a list decides. */
 const MAP_CLIENTS: ReadonlySet<Tool> = new Set<Tool>(["codex", "copilot"]);
 
-/** The ids `text` (a model map) records: every class's model, its bracket options dropped, and its fallbacks; `null` for another shape. */
-function mapCandidates(text: string): string[] | null {
+/** Whether `tool` is one of {@link MAP_CLIENTS}. */
+function isMapClient(tool: Tool): tool is "codex" | "copilot" {
+  return MAP_CLIENTS.has(tool);
+}
+
+/** The id a model value names: the text before its first `[`, trimmed, as `listHoldsPin` reads a pin. */
+function baseId(value: string): string {
+  return value.trim().split("[")[0] ?? "";
+}
+
+/**
+ * The ids `text`, `tool`'s model map, records: every class's model, its bracket
+ * options dropped, and its fallbacks; `null` for another shape, and `null` when
+ * a ladder class it records carries a pick no list could have given
+ * (review/109): a model that is neither one of the class's shipped candidates
+ * nor the client's pin for it, or no model for a class that has candidates or a
+ * pin. A list picks only among the shipped candidates, a pin binds whatever the
+ * list, and only a list holding none of a class's candidates leaves it with no
+ * model, which the files alone cannot tell from a hand edit, so a checkout
+ * resolves that class from its own list, or with none from the shipped entry 0.
+ */
+function mapCandidates(text: string, tool: "codex" | "copilot", pins: Readonly<Partial<Record<string, string>>>): string[] | null {
   const parsed: unknown = JSON.parse(text);
   if (!isPlainObject(parsed) || !isPlainObject(parsed["classes"])) return null;
   const candidates: string[] = [];
-  for (const entry of Object.values(parsed["classes"])) {
+  for (const [modelClass, entry] of Object.entries(parsed["classes"])) {
     if (!isPlainObject(entry)) continue;
-    if (typeof entry["model"] === "string") candidates.push(entry["model"].trim().split("[")[0] ?? "");
+    const model = typeof entry["model"] === "string" ? baseId(entry["model"]) : undefined;
+    if (isModelClass(modelClass)) {
+      const pin = pins[modelClass];
+      const shipped = MODEL_PRIORITY[tool][modelClass].map((candidate) => candidate.id);
+      if (model === undefined ? shipped.length > 0 || pin !== undefined : !shipped.includes(model) && model !== (pin === undefined ? undefined : baseId(pin))) {
+        return null;
+      }
+    }
+    if (model !== undefined) candidates.push(model);
     if (Array.isArray(entry["fallbacks"])) candidates.push(...entry["fallbacks"].filter((id) => typeof id === "string"));
   }
   return candidates;
@@ -584,15 +617,19 @@ async function readEmitted(rootDir: string, paths: readonly string[]): Promise<s
 }
 
 /**
- * For each listing client that `manifest` selects, a list read off the files
- * the last emission wrote and the ledger names, so a checkout with no cached
- * list keeps the pick already emitted and a fresh clone's drift gate reports
- * none. Codex and Copilot: their model map (`.stamity/generated/models/<client>.json`),
- * every class's model, its bracket options dropped, and its fallbacks, which are
- * the shipped candidates the list it was picked from held; the resolver picks
- * from it exactly what it picked from that list. Cursor: the `model:` values its
- * agent files carry with no effort group, since a list decides only whether a
- * pin takes one, and a value with a group fails the id shape, so a pin the list
+ * For each listing client the ledger names files of, selected or not, a list
+ * read off the files the last emission wrote, so a checkout with no cached
+ * list keeps the pick already emitted, a fresh clone's drift gate reports
+ * none, and a deselected client's files are proved by what they carry (the
+ * sweep renders them too). Codex and Copilot: their model map
+ * (`.stamity/generated/models/<client>.json`), every class's model, its bracket
+ * options dropped, and its fallbacks, which are the shipped candidates the list
+ * it was picked from held (the client's pins join it in
+ * {@link resolveModelLists}). The resolver picks from it exactly what it picked
+ * from that list. A map whose class carries a pick no list gives
+ * ({@link mapCandidates}) gives nothing. Cursor: the `model:` values its agent
+ * files carry with no effort group, since a list decides only whether a pin
+ * takes one, and a value with a group fails the id shape, so a pin the list
  * held stays bare and one it lacked keeps its group. A file that is not
  * ledgered, is too large or has another shape gives nothing.
  */
@@ -601,13 +638,13 @@ async function emittedPickLists(rootDir: string, manifest: SetupManifest): Promi
   const read = await Promise.all(
     TOOLS_WITH_LISTS.map(async (tool): Promise<[Tool, ListedModels] | null> => {
       const lister = LISTERS[tool];
-      if (lister === undefined || !manifest.tools.includes(tool)) return null;
+      if (lister === undefined) return null;
       let candidates: string[] | null = null;
-      if (MAP_CLIENTS.has(tool)) {
+      if (isMapClient(tool)) {
         if (!ledgered.has(modelMapPath(tool))) return null;
         const [text] = await readEmitted(rootDir, [modelMapPath(tool)]);
         try {
-          candidates = text === undefined ? null : mapCandidates(text);
+          candidates = text === undefined ? null : mapCandidates(text, tool, pinsFor(manifest.models, tool));
         } catch {
           candidates = null;
         }
@@ -624,6 +661,28 @@ async function emittedPickLists(rootDir: string, manifest: SetupManifest): Promi
   return Object.fromEntries(read.filter((entry) => entry !== null));
 }
 
+/**
+ * `emitted` with each Codex and Copilot pin of `manifest` added, as its base id,
+ * to that client's list (review/115), where `kept` has no list for the client
+ * or holds the pin (`listHoldsPin`, the resolver's own test): a pin then binds
+ * as written, so an unsynced pin edit is drift and a sync with no cache writes
+ * it, never a shipped re-pick, while a pin this account's list lacks is
+ * re-picked here as `sync` re-picks it. Cursor's list is left as read: a pin
+ * added there would always read as listed and lose the effort group its files
+ * carry.
+ */
+function withPins(emitted: ModelLists, manifest: SetupManifest, kept: ModelLists): ModelLists {
+  const lists: ModelLists = { ...emitted };
+  for (const tool of TOOLS_WITH_LISTS) {
+    const entry = emitted[tool];
+    if (entry === undefined || !isMapClient(tool)) continue;
+    const account = kept[tool]?.ids;
+    const pins = Object.values(pinsFor(manifest.models, tool)).filter((pin) => account === undefined || listHoldsPin(account, pin));
+    lists[tool] = { ...entry, ids: shapedIds([...entry.ids, ...pins.map(baseId)]).slice(0, MAX_LISTED_MODELS) };
+  }
+  return lists;
+}
+
 /** What one verb resolves its model picks with, and what it keeps for the account. */
 export interface ResolvedModelLists {
   /**
@@ -637,11 +696,19 @@ export interface ResolvedModelLists {
    * them first, then {@link effective}'s. What the drift gate plans with.
    */
   readonly asEmitted: ModelLists;
+  /**
+   * The lists read off the files already emitted alone ({@link emittedPickLists}):
+   * what `check`'s `model-pins` row works out the emitted model from first.
+   */
+  readonly emitted: ModelLists;
   /** The account's lists without those read off the files: what a live run keeps in the cache. */
   readonly kept: ModelLists;
   /** {@link kept} where it differs from what the cache holds, so a live run writes it; else `null`. */
   readonly toWrite: ModelLists | null;
-  /** Why a cache that is there was not read, or `null`. */
+  /**
+   * Why a cache that is there was not read, or why a 1.15.0 manifest's lists
+   * were not moved (one line each), or `null`.
+   */
   readonly problem: string | null;
 }
 
@@ -657,15 +724,28 @@ export async function resolveModelLists(
   manifest: SetupManifest,
   fresh: ModelLists = {},
 ): Promise<ResolvedModelLists> {
-  const [cache, emitted] = await Promise.all([readModelListCache(rootDir), emittedPickLists(rootDir, manifest)]);
-  const kept = sortedLists({ ...manifest.models?.listed, ...cache.lists, ...structuredClone(fresh) });
+  const [cache, fromFiles] = await Promise.all([readModelListCache(rootDir), emittedPickLists(rootDir, manifest)]);
+  // A 1.15.0 manifest's lists are held to the cache reader's checks, the
+  // 200-id ceiling among them, and taken whole or not at all (review/113): one
+  // moved past the ceiling would write a cache every later read turns away.
+  const saved = manifest.models?.listed;
+  const savedDefects = saved === undefined ? [] : cacheDefects(saved);
+  const migrated =
+    savedDefects.length === 0
+      ? null
+      : `the model lists \`${MANIFEST_REPO_PATH}\` saves under \`models.listed\` were not moved to ${CLIENT_MODELS_CACHE_FILE}: ` +
+        `${savedDefects.map((defect) => defect.replace(/^`listed\./, "`models.listed.")).join("; ")}; the next sync that reads a client keeps its list`;
+  const kept = sortedLists({ ...(migrated === null ? saved : {}), ...cache.lists, ...structuredClone(fresh) });
   const unchanged = JSON.stringify(kept) === JSON.stringify(sortedLists(cache.lists));
+  const emitted = withPins(fromFiles, manifest, kept);
+  const problems = [cache.problem, migrated].filter((problem) => problem !== null);
   return {
     effective: { ...emitted, ...kept },
     asEmitted: { ...kept, ...emitted },
+    emitted,
     kept,
     toWrite: unchanged || Object.keys(kept).length === 0 ? null : kept,
-    problem: cache.problem,
+    problem: problems.length === 0 ? null : problems.join("\n"),
   };
 }
 

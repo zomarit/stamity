@@ -190,20 +190,33 @@ those arguments, but the client's own listing call may reach its vendor over the
 that account (`codex debug models` without `--bundled` may refresh its catalogue), and may write
 its own files under the home folder; what each client does there was not checked.
 `STAMITY_NO_CLIENT_PROBE=1` in the environment starts none of them. Emission and `check`'s drift
-comparison read only the kept list and start no client.
+comparison start no client: emission reads the kept list, and the drift comparison reads the lists the
+emitted files give first, as the next paragraph says.
 
 **The kept model lists stay on the machine.** Each selected client's list is kept in
 `.stamity/client-models.json`, which setup adds to `.gitignore`, so the committed manifest names no
 account's models (REQ-LADDER-009). A 1.15.0 manifest that still saves them under `models.listed`
 loads, and the next `sync` moves them to that file and writes the manifest without the key; a
 history committed before then still holds them. The cache is read with the manifest list's checks
-(the id shape, at most 200 ids a client, the order as written) and taken whole or not at all; a
-planted cache can only choose among the shipped candidates and the pins, and `check`'s `model-pins`
-row warns on a pick the live list lacks, never fails. With no cache, a fresh clone among them, the
-pick already emitted is kept, read from the ledgered `.stamity/generated/models/` maps of Codex and
-Copilot and from the `model:` lines of Cursor's ledgered agent files, and `model-pins` reads as
-unverified. With `STAMITY_NO_CLIENT_PROBE=1` set, no list is
-read; delete the cache to drop the lists already kept.
+(the id shape, at most 200 ids a client, the order as written) and taken whole or not at all, and a
+1.15.0 manifest's lists move only when they pass the same checks. A planted cache steers picks within
+these bounds: on Codex and Copilot it can move a class to a later shipped candidate, and a list holding
+none of a class's candidates leaves that class with no model, so it runs on the client's own default
+model; on Cursor a list holding a pin keeps it bare, without its effort group. `sync` reads each client
+again and keeps the fresh list in place of the cached one. `check`'s `model-pins` row warns on a pin or
+an emitted model the reference list lacks, and never fails. The reference is the live list for Cursor
+and Copilot; for Codex, once a cache exists, `check` does not read Codex again and the cache is the
+reference, so the row does not catch a planted Codex cache. With no cache, a fresh clone among them,
+the pick already emitted is kept, read from the ledgered `.stamity/generated/models/` maps of Codex
+and Copilot and from the `model:` lines of Cursor's ledgered agent files, and `model-pins` reads as
+unverified. `check`'s drift comparison reads those emitted lists first, with the manifest's pins
+added where this checkout has no list for the client or its list holds the pin, so a pick the files
+carry is not drift and an unsynced pin edit that `sync` would write is. It keeps only a pick some
+list could have made, each class on a shipped candidate for it or on its pin; a class the files leave
+with no model though it has candidates, or on any other id, reads as drift unless this checkout's own
+list gives the same. A committed edit moving a class to a later shipped candidate, with its files to
+match, is therefore not drift; the diff of `.stamity/generated/models/` shows it. With
+`STAMITY_NO_CLIENT_PROBE=1` set, no list is read; delete the cache to drop the lists already kept.
 
 **Board writes are the touchpoints' own, not the engine's.** `/st-board` and `/st-pr-resolve` call
 the authenticated GitHub CLI, `gh`, or a configured GitHub MCP server from the agent's session; the

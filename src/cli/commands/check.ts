@@ -1461,9 +1461,10 @@ interface ClientModelVerdict {
 /**
  * One listing client's pinned and emitted models against the list `listed`
  * (live) or the one the last `sync` saved. The emitted model is the one
- * emission resolves from the saved list (`resolveModelValue` with the pick),
- * so a saved list the account has since moved past shows as an emitted model
- * the live list lacks.
+ * emission resolves (`resolveModelValue` with the pick) from the list the
+ * committed files give (`emittedFrom`) first, else from the saved list
+ * (review/116): a model a teammate's sync committed that this account's list
+ * lacks warns, and so does a saved list the account has since moved past.
  *
  * Codex is read live only when no list was saved, and then from its bundled
  * catalogue (review/136): `sync` saves the list Codex resolves normally, which
@@ -1495,19 +1496,21 @@ function verifyClientModels(
 
   const pins = pinsFor(models, tool);
   const efforts = models?.effort ?? {};
-  // The files resolved from the saved list; with none, from the list their own
-  // model map gives (REQ-LADDER-009), which keeps the pick already emitted.
-  const filesList = saved ?? emittedFrom;
+  // The files' own pick first: the list their model map gives (REQ-LADDER-009),
+  // whoever's sync committed them; with none, the saved list's (review/116).
+  const filesList = emittedFrom ?? saved;
   const pick = filesList === undefined ? {} : { listed: filesList };
   // The list a `sync` now would read, where the live read is that list: never
   // Codex's bundled read.
   const syncReads = live?.kind === "listed" && tool !== "codex" ? live.ids : undefined;
   const filesFrom =
-    saved !== undefined
-      ? "the pick from the list the last sync saved"
-      : emittedFrom === undefined
+    emittedFrom !== undefined
+      ? saved === undefined
+        ? "the pick already emitted, with no saved list"
+        : "the pick already emitted"
+      : saved === undefined
         ? "the pick made with no saved list"
-        : "the pick already emitted, with no saved list";
+        : "the pick from the list the last sync saved";
   const warnings: string[] = [];
   // Pins the printed list holds on a client whose sub-agents take a narrower one.
   const narrower = NARROWER_SUBAGENT_LIST.get(tool);
@@ -1573,8 +1576,9 @@ function verifyClientModels(
  * or, where the CLI is absent, slow or unreadable, with the list the last
  * `sync` saved in the git-ignored cache (REQ-LADDER-009), which `manifest`
  * carries in memory under `models.listed`. A checkout with no cached list, a
- * fresh clone among them, reads as unverified, and the emitted model is the
- * one `emitted` (the lists the plan resolves with) keeps. Codex is the exception: its saved list,
+ * fresh clone among them, reads as unverified. The emitted model is worked
+ * out from `emitted`, the lists the committed files give, ahead of the saved
+ * list (review/116). Codex is the exception: its saved list,
  * whenever one exists, is the reference, and only without one is Codex asked
  * for its bundled catalogue, so the read makes no network call.
  * `STAMITY_NO_CLIENT_PROBE=1` starts no client and reads the saved list only.
@@ -1646,7 +1650,7 @@ async function modelPinsRow(rootDir: string, manifest: SetupManifest | null, env
     env,
     listClientModels,
     await listerTreeRoot(rootDir),
-    lists.effective,
+    lists.emitted,
   );
   if (lists.problem === null) return row;
   return { id: row.id, status: "warn", detail: `${lists.problem}\n${row.detail}` };
@@ -1817,6 +1821,12 @@ export async function runDoctor(
  * REQ-LADDER-009): which models an account's list holds
  * is the `model-pins` row's to warn on, never drift, so a fresh clone with no
  * cached list, or a cache another account's list filled, reads no change here.
+ * It keeps only a pick some list could have made (review/109): each class on a
+ * shipped candidate for it or on the manifest's pin. A class the files leave
+ * with no model though it has candidates, or on any other id, is resolved from
+ * this checkout's own list, or with none from the shipped entry 0, so it reads
+ * as drift unless that list gives the same; an unsynced pin edit that `sync`
+ * would write is drift too (review/115).
  *
  * Propagates the plan's failures: an un-initialised repo (`VALIDATION_ERROR`)
  * and an unreadable manifest (`CONFIG_ERROR`) are the caller's to interpret.

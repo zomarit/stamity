@@ -557,6 +557,104 @@ describe("the model list cache", () => {
 
     expect(warning).toContain(`could not be kept in ${CACHE}`);
     expect(warning).toContain("held for this run only");
+    // review/117: the lists are gone after the run, and only a sync that reads a client brings its list back.
+    expect(warning).toContain("were dropped");
+    expect(warning).toContain("the next sync that reads a client keeps its list again");
+  });
+
+  // review/113: a 1.15.0 manifest's list past the ceiling is refused whole, as the cache reader
+  // refuses one, so no cache is written that every later read would turn away.
+  it("refuses a 1.15.0 manifest's lists past the 200-id ceiling, writing no cache of them, and names the manifest", async () => {
+    const temp = getTemp();
+    const flood = Array.from({ length: 201 }, (_unused, index) => `gpt-flood-${index}`);
+    const manifest = setup(["codex", "cursor"], [], {
+      codex: { ids: flood, source: "codex-debug-models" },
+      cursor: { ...CURSOR_OLD, ids: [...CURSOR_OLD.ids] },
+    });
+
+    const lists = await resolveModelLists(temp.dir, manifest);
+
+    expect(lists.kept).toEqual({});
+    expect(lists.toWrite).toBeNull();
+    expect(lists.problem).toContain("the model lists `.stamity/manifest.json` saves under `models.listed` were not moved");
+    expect(lists.problem).toContain("more than 200 ids");
+    // Exactly 200 ids still moves.
+    const fits = await resolveModelLists(temp.dir, setup(["codex"], [], { codex: { ids: flood.slice(0, 200), source: "codex-debug-models" } }));
+    expect(fits.toWrite?.codex?.ids).toHaveLength(200);
+    expect(fits.problem).toBeNull();
+  });
+
+  // review/109 and review/115: a map's list is kept only when each class it records carries a
+  // shipped candidate for that class or the client's pin, and it holds the client's pins too.
+  it("keeps a map's list only when each class's model is a candidate for it or the pin, and adds the pins", async () => {
+    const temp = getTemp();
+    const codexMap = ".stamity/generated/models/codex.json";
+    const map = (classes: Record<string, unknown>): string => JSON.stringify({ classes, roles: {} });
+    const pinned = (ledgered: string[]): SetupManifest => {
+      const manifest = setup(["codex"], ledgered);
+      return { ...manifest, models: { pins: { standard: { codex: "gpt-9-custom[x=1]" }, economy: { all: "gpt-6-luna" } } } };
+    };
+    const moved = {
+      frontier: { model: "gpt-6-sol", fallbacks: [] },
+      advanced: { model: "gpt-6-sol", fallbacks: [] },
+      standard: { model: "gpt-6-sol", fallbacks: ["gpt-5.6-terra"] },
+      economy: { model: "gpt-6-luna", fallbacks: [] },
+    };
+    await temp.seedFiles({ [codexMap]: map(moved) });
+
+    const kept = await resolveModelLists(temp.dir, pinned([codexMap]));
+
+    expect(kept.emitted).toEqual({
+      codex: { ids: ["gpt-6-sol", "gpt-5.6-terra", "gpt-6-luna", "gpt-9-custom"], source: "codex-debug-models" },
+    });
+    expect(kept.effective).toEqual(kept.emitted);
+    expect(kept.asEmitted).toEqual(kept.emitted);
+    // A kept list decides: a pin it lacks is left out, so the plan re-picks it as `sync` does,
+    // and one it holds joins.
+    const lacking = await resolveModelLists(temp.dir, pinned([codexMap]), { codex: { ids: ["gpt-6-sol", "gpt-6-luna"], source: "codex-debug-models" } });
+    expect(lacking.emitted.codex?.ids).toEqual(["gpt-6-sol", "gpt-5.6-terra", "gpt-6-luna"]);
+    const holding = await resolveModelLists(temp.dir, pinned([codexMap]), { codex: { ids: ["gpt-9-custom"], source: "codex-debug-models" } });
+    expect(holding.emitted.codex?.ids).toEqual(["gpt-6-sol", "gpt-5.6-terra", "gpt-6-luna", "gpt-9-custom"]);
+
+    // Each of these gives no list: a model off the class's candidates that is not its pin, a
+    // class with candidates and no model, and a pinned class with no model.
+    /* oxlint-disable no-await-in-loop */
+    for (const classes of [
+      { ...moved, frontier: { model: "gpt-6-luna", fallbacks: [] } },
+      { ...moved, frontier: { model: "gpt-planted", fallbacks: [] } },
+      { ...moved, advanced: { fallbacks: [] } },
+      { ...moved, economy: { fallbacks: [] } },
+    ]) {
+      await temp.seedFiles({ [codexMap]: map(classes) });
+
+      const read = await resolveModelLists(temp.dir, pinned([codexMap]));
+
+      expect(read.emitted, JSON.stringify(classes)).toEqual({});
+      expect(read.asEmitted, JSON.stringify(classes)).toEqual({});
+    }
+    /* oxlint-enable no-await-in-loop */
+    // The map's own pin: a model equal to the pin's base id is kept.
+    await temp.seedFiles({ [codexMap]: map({ ...moved, standard: { model: "gpt-9-custom[x=1]", fallbacks: ["gpt-6-sol"] } }) });
+    expect((await resolveModelLists(temp.dir, pinned([codexMap]))).emitted.codex?.ids).toEqual([
+      "gpt-6-sol",
+      "gpt-9-custom",
+      "gpt-6-luna",
+    ]);
+  });
+
+  // The reviewer's open question on review/114: a client the setup no longer selects still has its
+  // ledgered files proved, so the list they give is read for it too.
+  it("reads the list a deselected client's ledgered map gives", async () => {
+    const temp = getTemp();
+    const copilotMap = ".stamity/generated/models/copilot.json";
+    await temp.seedFiles({
+      [copilotMap]: JSON.stringify({ classes: { economy: { model: "gpt-6-luna", fallbacks: [] } }, roles: {} }),
+    });
+
+    const lists = await resolveModelLists(temp.dir, setup(["claude"], [copilotMap]));
+
+    expect(lists.emitted).toEqual({ copilot: { ids: ["gpt-6-luna"], source: "copilot-help-config" } });
+    expect(lists.kept).toEqual({});
   });
 
   it("lays the fresh read over the cache, over a 1.15.0 manifest's lists, over the ledgered emitted map", async () => {
@@ -565,8 +663,10 @@ describe("the model list cache", () => {
     await temp.seedFiles({
       [CACHE]: JSON.stringify({ listed: { codex: CODEX } }),
       // Copilot's map, ledgered: each class's model (its bracket options dropped) and its fallbacks.
+      // TEST CHANGE, justified (review/109): each class now carries a shipped candidate for it, since a
+      // map recording a model off a class's candidates, or none for a class that has some, gives no list.
       [copilotMap]: JSON.stringify({
-        classes: { standard: { model: "gpt-5.5-mini[x=1]", fallbacks: ["claude-haiku-5"] }, economy: { fallbacks: ["gpt-5.5-mini"] } },
+        classes: { standard: { model: "claude-sonnet-5[x=1]", fallbacks: ["gpt-6-sol"] }, economy: { model: "gpt-6-luna", fallbacks: ["gpt-5.4-mini"] } },
         roles: {},
       }),
       // Codex's map is not ledgered here, so it gives nothing.
@@ -579,7 +679,7 @@ describe("the model list cache", () => {
 
     const lists = await resolveModelLists(temp.dir, manifest, { cursor: { ...CURSOR_FRESH, ids: [...CURSOR_FRESH.ids] } });
 
-    const fromMap = { ids: ["gpt-5.5-mini", "claude-haiku-5"], source: "copilot-help-config" };
+    const fromMap = { ids: ["claude-sonnet-5", "gpt-6-sol", "gpt-6-luna", "gpt-5.4-mini"], source: "copilot-help-config" };
     expect(lists.kept).toEqual({ codex: CODEX, cursor: CURSOR_FRESH });
     expect(lists.effective).toEqual({ codex: CODEX, copilot: fromMap, cursor: CURSOR_FRESH });
     expect(lists.toWrite).toEqual({ codex: CODEX, cursor: CURSOR_FRESH });

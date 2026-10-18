@@ -667,7 +667,7 @@ export async function planSync(
     ...(modelLists.toWrite === null ? {} : { modelListCache: modelLists.toWrite }),
     plannerId: planner.id,
     outputs,
-    warnings: modelLists.problem === null ? planned : [...planned, modelLists.problem],
+    warnings: modelLists.problem === null ? planned : [...planned, ...modelLists.problem.split("\n")],
     engineVersion,
   };
 }

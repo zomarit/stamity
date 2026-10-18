@@ -4566,4 +4566,117 @@ describe("check — model-pins", () => {
     expect(verdict.detail).toContain("the model list cache .stamity/client-models.json was not read");
     expect(verdict.detail).toContain("codex: unverified — client probe off (STAMITY_NO_CLIENT_PROBE=1) and no saved list");
   });
+  /** The class-to-model map the last sync wrote for Codex. */
+  async function codexMap(root: string): Promise<Record<string, { model?: string; fallbacks: string[] }>> {
+    const map = JSON.parse(await readFile(join(root, STATE_DIR, "generated", "models", "codex.json"), "utf8")) as {
+      classes: Record<string, { model?: string; fallbacks: string[] }>;
+    };
+    return map.classes;
+  }
+
+  /** A live sync at this build's version, with `overlay` read fresh. */
+  async function syncNow(root: string, overlay?: NonNullable<Parameters<typeof planSync>[2]>["listedOverlay"]): Promise<void> {
+    const engineVersion = createApp().version;
+    const plan = await planSync(root, engineVersion, overlay === undefined ? {} : { listedOverlay: structuredClone(overlay) });
+    await applySync(root, plan, { engineVersion, force: false, dryRun: false, now: T0 });
+  }
+
+  // review/115: the list read off the files holds the manifest's pins too, so a pin the map
+  // lacks is not re-picked to a shipped model: an unsynced pin edit is drift, with a cache that
+  // holds the pin or with none, and a sync on a checkout with no cache writes the pin.
+  it("reads an unsynced Codex pin the map lacks as drift, and a sync with no cache writes the pin", async () => {
+    const root = await seedRepo(getRepo(), { tools: ["claude", "codex"] });
+    await syncNow(root, OTHER_CODEX);
+    expect((await codexMap(root))["standard"]?.model).toBe("gpt-6-sol");
+    await pinCodex(root, {
+      pins: { standard: { codex: "gpt-9-custom" } },
+      listed: { codex: { ids: [...OTHER_CODEX.codex.ids, "gpt-9-custom"], source: "codex-debug-models" } },
+    });
+
+    const withCache = await runJson(root, { STAMITY_NO_CLIENT_PROBE: "1" });
+    await rm(join(root, CACHE));
+    const withoutCache = await runJson(root, { STAMITY_NO_CLIENT_PROBE: "1" });
+
+    expect(withCache.doc.drift?.clean).toBe(false);
+    expect(withoutCache.doc.drift?.clean).toBe(false);
+    await syncNow(root);
+    expect((await codexMap(root))["standard"]?.model).toBe("gpt-9-custom");
+    // The other classes keep the pick the list made.
+    expect((await codexMap(root))["frontier"]?.model).toBe("gpt-6-sol");
+    expect((await runJson(root, { STAMITY_NO_CLIENT_PROBE: "1" })).doc.drift?.clean).toBe(true);
+  });
+
+  // review/115, the other side: where this machine's list lacks the pin, sync re-picks it, so the
+  // drift gate does too, and a check straight after that sync reads no drift.
+  it("reads no drift straight after a sync whose cached list lacked the Codex pin, which it re-picked", async () => {
+    const root = await seedRepo(getRepo(), { tools: ["claude", "codex"] });
+    await pinCodex(root, { pins: { standard: { codex: "gpt-9-custom" } } });
+    await syncNow(root, OTHER_CODEX);
+    expect((await codexMap(root))["standard"]?.model).toBe("gpt-6-sol");
+
+    const { doc } = await runJson(root, { STAMITY_NO_CLIENT_PROBE: "1" });
+
+    expect(doc.drift).toEqual({ clean: true, changes: [], missing: [], reclaimPending: 0, reclaim: [] });
+    expect(row(doc, "model-pins").detail).toContain(`codex standard: the pinned model "gpt-9-custom" is not on codex's list`);
+  });
+
+  // review/116: the row works out the emitted model from the committed files' list first, so a
+  // model a teammate's sync committed that this account's list lacks warns.
+  it("warns on a committed Codex pick this machine's cached list lacks, naming the client and the class", async () => {
+    const root = await seedRepo(getRepo(), { tools: ["claude", "codex"] });
+    await syncNow(root, OTHER_CODEX);
+    // This account's cache: it holds every shipped entry 0 and lacks the teammate's gpt-6-sol.
+    await writeFile(
+      join(root, CACHE),
+      `${JSON.stringify({ listed: { codex: { ids: ["gpt-6-astra", "gpt-5.6-terra", "gpt-6-luna"], source: "codex-debug-models" } } })}\n`,
+    );
+
+    const { code, doc } = await runJson(root, { STAMITY_NO_CLIENT_PROBE: "1" });
+
+    expect(doc.drift?.clean).toBe(true);
+    const verdict = row(doc, "model-pins");
+    expect(verdict.status).toBe("warn");
+    expect(verdict.detail).toContain(`codex frontier: the emitted model "gpt-6-sol" is not on codex's list (saved by the last sync)`);
+    expect(code).toBe(0);
+  });
+
+  // review/109: the drift gate keeps an emitted pick only when it is a shipped candidate for its
+  // class or a pin; a class emitted with no model, though it has candidates, is drift on a
+  // checkout whose own list does not give that, and none where it does.
+  it("reads a Codex class emitted with no model as drift with no cache, and as none where the cache gives it", async () => {
+    const root = await seedRepo(getRepo(), { tools: ["claude", "codex"] });
+    // A list holding none of economy's candidates: the class goes to Codex's own default model.
+    await syncNow(root, { codex: { ids: ["gpt-6-astra", "gpt-6-sol"], source: "codex-debug-models" } });
+    expect((await codexMap(root))["economy"]?.model).toBeUndefined();
+
+    expect((await runJson(root, { STAMITY_NO_CLIENT_PROBE: "1" })).doc.drift?.clean).toBe(true);
+    await rm(join(root, CACHE));
+    const { doc } = await runJson(root, { STAMITY_NO_CLIENT_PROBE: "1" });
+
+    expect(doc.drift?.clean).toBe(false);
+    expect(doc.drift?.changes).toContainEqual(expect.objectContaining({ path: `${STATE_DIR}/generated/models/codex.json` }));
+  });
+
+  // The reviewer's open question on review/114: a deselected client's agent files, on a checkout
+  // with no cache, are proved by the list its own still-ledgered map gives, so a file the list
+  // moved is reclaimed, not kept as the person's content.
+  it("reclaims a deselected Codex's list-moved agent file with no cache, keeping nothing as the person's", async () => {
+    const handle = getRepo();
+    await handle.seedFiles({
+      "corpus/agents/stamity-reviewer.md": await readFile(fileURLToPath(new URL("../../../content/agents/stamity-reviewer.md", import.meta.url)), "utf8"),
+    });
+    const root = await seedRepo(handle, { tools: ["claude", "codex"] });
+    await syncNow(root, OTHER_CODEX);
+    const agent = join(root, ".codex", "agents", "stamity-reviewer.toml");
+    expect(await readFile(agent, "utf8")).toMatch(/^model = "gpt-6-sol"$/m);
+    await rm(join(root, CACHE));
+    const manifest = await readManifest(root);
+    if (manifest === null) throw new Error("the fixture wrote no manifest");
+    await writeManifest(root, { ...manifest, tools: ["claude"] }, { now: T0 });
+
+    await syncNow(root);
+
+    expect(existsSync(agent)).toBe(false);
+    expect((await readManifest(root))?.ledger.some((entry) => entry.adapter === "codex")).toBe(false);
+  });
 });

@@ -37,6 +37,7 @@ import {
   type LegacyCursorIdentity,
   type RenderingProof,
 } from "../engine/emissionWrite.ts";
+import { resolveModelLists, withModelLists } from "../engine/clientModels.ts";
 import { getEmissionPlanner } from "../engine/emission.ts";
 import { CliFailure } from "../kit/output.ts";
 import { hasNpmChannel, packageCommand, packageName, registryOption } from "../kit/packageName.ts";
@@ -125,7 +126,8 @@ export function planCleanCandidates(manifest: SetupManifest): ReclaimCandidate[]
  * the sweep, while the packs and overrides they are rendered from are on disk.
  * With them, what `sync` with this version writes at those paths
  * (`syncRenderings`), which the sweep marks a kept file against
- * ({@link refuseStaleRenderings}).
+ * ({@link refuseStaleRenderings}). `manifest` is {@link renderingManifest}'s,
+ * so a model a list picked renders as the files carry it.
  */
 async function cleanRenderings(
   rootDir: string,
@@ -139,6 +141,19 @@ async function cleanRenderings(
     syncRenderingsFor(rootDir, manifest, paths, cleanPlanner(rootDir, engineVersion)),
   ]);
   return { ...proof, syncRenderings };
+}
+
+/**
+ * `manifest` with the model lists that reproduce the files already emitted
+ * laid in memory (`resolveModelLists(...).asEmitted`, the drift gate's): the
+ * committed manifest carries no list (REQ-LADDER-009), so without them a Codex
+ * or Copilot pick a list moved, or a Cursor pin a list kept bare, renders
+ * otherwise, no rendering proves the file, and every run refuses it as stale
+ * while the `sync` it names writes the same bytes again (review/114). Both
+ * rendering proofs plan from it; nothing writes it.
+ */
+async function renderingManifest(rootDir: string, manifest: SetupManifest): Promise<SetupManifest> {
+  return withModelLists(manifest, (await resolveModelLists(rootDir, manifest)).asEmitted);
 }
 
 /**
@@ -729,6 +744,7 @@ async function runScopedClean(
   rootDir: string,
   manifest: SetupManifest,
   packId: string,
+  rendered: SetupManifest,
 ): Promise<CommandResult> {
   // planPackRemoval validates the id shape first, so `--pack ../x` is refused
   // as a VALIDATION_ERROR before it is ever matched against the ledger.
@@ -755,7 +771,7 @@ async function runScopedClean(
   const selectedFromPack = selectedServersOfPack(manifest, packId, packSupply);
   // Planned while the pack is still installed and before anything is written:
   // the pack's own content is what proves its copies (REQ-PLUGIN-046).
-  const copies = await findPackCopies(rootDir, manifest, packId, candidates, ctx.app.version);
+  const copies = await findPackCopies(rootDir, rendered, packId, candidates, ctx.app.version);
   const alsoCopies =
     copies.rows.size === 0 ? "" : `, its ${copies.rows.size} client copy(ies)`;
   const swept = [...candidates, ...copies.candidates];
@@ -769,7 +785,7 @@ async function runScopedClean(
     ...copies.proof,
     syncRenderings: await syncRenderingsFor(
       rootDir,
-      manifest,
+      rendered,
       copies.candidates.map((candidate) => candidate.entry.path),
       cleanPlanner(rootDir, ctx.app.version),
     ),
@@ -951,8 +967,9 @@ export const cleanCommand: CommandModule = {
     // which is the better repair path than anything this command could add.
     const manifest = await readManifest(rootDir);
     if (manifest === null) return nothingToClean(ctx);
+    const rendered = await renderingManifest(rootDir, manifest);
 
-    if (packId !== undefined) return await runScopedClean(ctx, rootDir, manifest, packId);
+    if (packId !== undefined) return await runScopedClean(ctx, rootDir, manifest, packId, rendered);
 
     const candidates = planCleanCandidates(manifest);
 
@@ -974,7 +991,7 @@ export const cleanCommand: CommandModule = {
         await provenLegacyCursorGuards(rootDir, manifest.ledger, legacyCursorIdentity()),
       ),
       ...hookScriptRetention(manifest, packSupply),
-      ...(await cleanRenderings(rootDir, manifest, candidates, ctx.app.version)),
+      ...(await cleanRenderings(rootDir, rendered, candidates, ctx.app.version)),
       // The state directory goes below, ledger and all: a file the proof could
       // not judge is named for a delete by hand, never promised a retry (review/87).
       setupRemoved: true,
