@@ -124,7 +124,7 @@ date, re-pointed or added a citation; the run's last citation pass re-read each 
 page round re-read them on `aa7a3e5b` with its own edits to `SECURITY.md`, `evals/SET-v7.md` and the unattended skill,
 re-pointing each one whose text had moved; the run's final derived pass, and the pull-request rounds' after it,
 re-pointed each one a later commit moved, mapped through git's diff from the commit it was read at, and every one
-reads at `e320b251`, a pin named beside a citation included. Two units
+reads at `08d28112`, a pin named beside a citation included. Two units
 were not on `4daeb214`: `u19-run-end` (`stamity run end`) and
 `u21-security-page` (`SECURITY.md`'s cloud section); the fix round cites both at `bc12cfc3`. REQ-FLOW-105 to
 REQ-FLOW-119 are held for plan 021's second file. The text dated 2026-10-16 is unreleased at this merge; the plan cuts
@@ -3856,7 +3856,7 @@ in-progress record reads `Mode: attended` (one with no `Mode:` line included; `u
 `src/hooks/scripts.ts:3676-3707`), When the main thread runs a raw `git push`, `gh pr create`, `gh pr edit`, or a REST
 write on `pulls` or `pulls/<n>`, `contents/`, `git/` refs or objects, or `merges`, Then the shell guard refuses it on every client,
 naming `stamity run checkpoint` and `run end` as the push path; replies on `pulls/<n>/comments` and
-`issues/<n>/comments` pass (`unattendedPushVerdict`, `src/hooks/personOnly.ts:1227`;
+`issues/<n>/comments` pass (`unattendedPushVerdict`, `src/hooks/personOnly.ts:1237`;
 `content/skills/st-unattended/SKILL.md:88-91`). An attended session keeps its own pushes. Every run folder's head is
 read, so no pile of folders sorted ahead of an open record hides it; past 2,000 run folders the read faults, naming
 `RUN_FOLDERS_OVER_2000` (`GUARD_RUN_FOLDERS_MAX`, `src/hooks/scripts.ts:3083`; the check, `:3692-3694`), and the guard
@@ -3865,13 +3865,13 @@ this rule, a residual `SECURITY.md` names (REQ-FLOW-104).
 
 - **As built, where the delta differed:** the rule refuses more than the delta named, so the run verbs' push stays on
   the repository the run started on. While the run is unattended it also refuses `gh pr close`, `gh pr reopen` and
-  `gh pr update-branch` (`src/hooks/personOnly.ts:1943`), a `git remote` write and a `git config` write of a
-  `remote.*` key or section (`:1922-1923`), and any line that sets one of git's program-valued or configuration
-  variables, whatever program it runs, the run verbs among them (`:1962-1981`). The configuration variables
-  include `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` (`:1773`), the program-valued ones are at `:1781-1782`, and the
-  spellings that set either at `:1784-1829`; a git call on a line that names a configuration variable or sets a
-  program-valued one is refused before that (`:1911-1919`). A `git config` write of a `url.*` key is refused beside a
-  `remote.*` one (`writesRemote`, `:1882` and `:1923`); the run verbs' origin pin is the second check on the push it
+  `gh pr update-branch` (`src/hooks/personOnly.ts:1956`), a `git remote` write and a `git config` write of a
+  `remote.*` key or section (`:1935-1936`), and any line that sets one of git's program-valued or configuration
+  variables, whatever program it runs, the run verbs among them (`:1975-1994`). The configuration variables
+  include `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` (`:1786`), the program-valued ones are at `:1794-1795`, and the
+  spellings that set either at `:1797-1842`; a git call on a line that names a configuration variable or sets a
+  program-valued one is refused before that (`:1924-1932`). A `git config` write of a `url.*` key is refused beside a
+  `remote.*` one (`writesRemote`, `:1895` and `:1936`); the run verbs' origin pin is the second check on the push it
   would move (REQ-FLOW-092's "As built" line). In every mode, attended or not, a REST review write whose body the line
   cannot show is refused as an approval (`personOnlyVerdict`, `:1087-1092`). On Claude Code, thirteen
   `permissions.deny` rows refuse the GitHub MCP server's tools by name (`CLAUDE_DENY_ROWS`, `:186-202`): merge and
