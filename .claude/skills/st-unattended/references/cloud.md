@@ -35,11 +35,15 @@ everywhere else: the brief that dispatches it names this exception.
 ## Lanes
 
 Units that could run in parallel run each in the client's own isolation, or one at a time; never in the sibling folder
-`stamity worktree setup` makes, so no folder appears under `<parent>/.stamity-worktrees/`. Each lane is committed, and
-before every checkpoint one whose changed paths hold no held path is folded into the run branch: its paths, as
-`git diff --name-only <run-branch>...<lane>` lists them, are read against the held paths the skill's
-`## Person's calls held` names. A lane touching a held path stays unfolded and is a `## Person's calls held` row naming
-the lane and the path, since a folded commit carrying one refuses every later `run checkpoint` and `run end`.
+`stamity worktree setup` makes, so no folder appears under `<parent>/.stamity-worktrees/`. A lane commits in its
+isolation and is folded once, when its agent returns and before the next checkpoint: its change is applied to the run's
+work tree alone, as `git diff --binary <run-branch>...<lane> | git apply` applies it, never to the index, where a
+deletion already staged refuses the checkpoint; that checkpoint's `--paths` names every path
+`git diff --name-only --no-renames <run-branch>...<lane>` lists. The checkpoint reads every held path itself, from no
+list in this text: it moves any held part into `held/person-only.patch`, restored in the index only, and commits the
+rest, so no held path enters the run branch's history and nothing a lane did stays only on the machine. A lane's commit
+never lands on the run branch itself: one carrying a held path refuses every later `run checkpoint` and `run end`, which
+never rewrite history.
 
 ## Hooks
 
@@ -53,8 +57,11 @@ the session start's resume card names, or `stamity ledger status` where no hook 
 instead of opening a new record; its head lines stand as written. A session continues only a record on the branch
 it was given: it runs `stamity run start --run <id> --json` first, `<id>` that record's folder name, and its ready
 check passes the record's `Base:` as `--since`, `stamity plan check <plan> --since <Base> --json`, so a `reads` path
-only the run's own commits moved is exempt and one moved between the stamp and the base stays stale. With no such
-record on that branch, as on a clone given the default branch or a platform's own, it opens a new run and never
+only the run's own commits moved is exempt and one moved between the stamp and the base stays stale. A chain file's
+continuation passes the chain's first record's `Base:` instead, to the chain's check,
+`stamity plan check a b c --chain --since <Base> --json`, as `references/chains.md` gives it: the file's own `Base:`
+comes after the earlier files' commits, so a `reads` path they moved would read stale. With no in-progress record on
+the branch it was given, as on a clone given the default branch or a platform's own, it opens a new run and never
 guesses another branch. A record naming another branch, a detached HEAD, or no `Branch:` line opens a new record.
 
 ## Commits after the last checkpoint

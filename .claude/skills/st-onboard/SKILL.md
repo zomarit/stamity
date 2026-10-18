@@ -159,12 +159,12 @@ the operator makes each call on their own code. An unanswered checkpoint closes
 the run at that phase and reports what stands; it never advances on an assumed
 answer.
 
-| Client | Native question tool | Guidance |
-|---|---|---|
-| `claude` | `AskUserQuestion` | **Platform:** Ask through the `AskUserQuestion` tool, one to four questions a call, two to four options each; a sub-agent never has it, so it returns its question as a blocked result and the delegating agent asks. Where the tool is missing use the plain-text fallback below, and a skipped or headless question reads as no answer. |
-| `cursor` | `AskQuestion` | **Platform:** Ask through the `AskQuestion` tool where the serving model offers it (Cursor 2.4 and later), and otherwise use the plain-text fallback below; a sub-agent still returns its question as a blocked result. `agent -p` rejects the tool as if the user skipped it, so a skipped or headless question reads as no answer. |
-| `copilot` | `askQuestions` | **Platform:** In VS Code ask through the `askQuestions` tool (it reaches sub-agents since 1.110, yet a sub-agent still returns its question as a blocked result); in Copilot CLI use `ask_user`, one question at a time, which `--no-ask-user` turns off. Where neither is offered use the plain-text fallback below, and a skipped or headless question reads as no answer. |
-| `codex` | `request_user_input` | **Platform:** Ask through the `request_user_input` tool, one to three questions a call: Plan mode waits for the answer, Default mode has it only behind a feature flag, and a sub-agent never has it, so it returns its question as a blocked result. Where the tool is refused (Default mode, `codex exec`) use the plain-text fallback below, and a skipped or headless question reads as no answer. |
+| Client | Native question tool | Guidance | Cloud run |
+|---|---|---|---|
+| `claude` | `AskUserQuestion` | **Platform:** Ask through the `AskUserQuestion` tool, one to four questions a call, two to four options each; a sub-agent never has it, so it returns its question as a blocked result and the delegating agent asks. Where the tool is missing use the plain-text fallback below, and a skipped or headless question reads as no answer. | — |
+| `cursor` | `AskQuestion` | **Platform:** Ask through the `AskQuestion` tool where the serving model offers it (Cursor 2.4 and later), and otherwise use the plain-text fallback below; a sub-agent still returns its question as a blocked result. `agent -p` rejects the tool as if the user skipped it, so a skipped or headless question reads as no answer. | In a managed cloud run, ask nothing and take the declared default. |
+| `copilot` | `askQuestions` | **Platform:** In VS Code ask through the `askQuestions` tool (it reaches sub-agents since 1.110, yet a sub-agent still returns its question as a blocked result); in Copilot CLI use `ask_user`, one question at a time, which `--no-ask-user` turns off. Where neither is offered use the plain-text fallback below, and a skipped or headless question reads as no answer. | The cloud agent has no person to answer; take the declared default. |
+| `codex` | `request_user_input` | **Platform:** Ask through the `request_user_input` tool, one to three questions a call: Plan mode waits for the answer, Default mode has it only behind a feature flag, and a sub-agent never has it, so it returns its question as a blocked result. Where the tool is refused (Default mode, `codex exec`) use the plain-text fallback below, and a skipped or headless question reads as no answer. | — |
 
 The plain-text fallback is the checkpoint line itself: print the phase's
 question and the options it offers, name what happens with no answer, and stop

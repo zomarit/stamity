@@ -18,6 +18,16 @@
             "timeout": 30
           }
         ]
+      },
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-cloud-readiness.mjs\"",
+            "timeout": 300
+          }
+        ]
       }
     ],
     "PreToolUse": [
@@ -134,7 +144,11 @@
       "Bash(gh release upload --clobber*)",
       "Bash(gh repo edit * --visibility*)",
       "Bash(gh repo sync * --force*)",
-      "Bash(gh repo sync --force*)"
+      "Bash(gh repo sync --force*)",
+      "Bash(git tag * -f*)",
+      "Bash(git tag * --force*)",
+      "Bash(git tag * -d*)",
+      "Bash(git tag * --delete*)"
     ],
     "ask": [
       "Bash(git push --tags:*)",

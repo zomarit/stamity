@@ -30,7 +30,7 @@ before the first write means ask.
 2. **Multiple valid interpretations** — two or more approaches differ materially
    in cost, blast radius, or scope, and the request does not pick one.
 3. **Irreversible action** — deleting data, dropping a column, renaming a public
-   identifier, rewriting shared history, force-pushing a branch.
+   identifier, rewriting shared history. A force push stays the person's, even on a yes.
 4. **Missing acceptance criteria** — no testable definition of done for the
    change requested.
 5. **Unattested product decision** — the change moves user-visible behaviour or
@@ -97,12 +97,12 @@ undecided) walks them before it reports. No leftovers, no walk.
   to dropped: it waits as `decision-waiting`. A question a headless client
   skipped reads as no answer.
 
-| Client | Native question tool | Guidance |
-|---|---|---|
-| `claude` | `AskUserQuestion` | **Platform:** Ask through the `AskUserQuestion` tool, one to four questions a call, two to four options each; a sub-agent never has it, so it returns its question as a blocked result and the delegating agent asks. Where the tool is missing use the plain-text fallback below, and a skipped or headless question reads as no answer. |
-| `cursor` | `AskQuestion` | **Platform:** Ask through the `AskQuestion` tool where the serving model offers it (Cursor 2.4 and later), and otherwise use the plain-text fallback below; a sub-agent still returns its question as a blocked result. `agent -p` rejects the tool as if the user skipped it, so a skipped or headless question reads as no answer. |
-| `copilot` | `askQuestions` | **Platform:** In VS Code ask through the `askQuestions` tool (it reaches sub-agents since 1.110, yet a sub-agent still returns its question as a blocked result); in Copilot CLI use `ask_user`, one question at a time, which `--no-ask-user` turns off. Where neither is offered use the plain-text fallback below, and a skipped or headless question reads as no answer. |
-| `codex` | `request_user_input` | **Platform:** Ask through the `request_user_input` tool, one to three questions a call: Plan mode waits for the answer, Default mode has it only behind a feature flag, and a sub-agent never has it, so it returns its question as a blocked result. Where the tool is refused (Default mode, `codex exec`) use the plain-text fallback below, and a skipped or headless question reads as no answer. |
+| Client | Native question tool | Guidance | Cloud run |
+|---|---|---|---|
+| `claude` | `AskUserQuestion` | **Platform:** Ask through the `AskUserQuestion` tool, one to four questions a call, two to four options each; a sub-agent never has it, so it returns its question as a blocked result and the delegating agent asks. Where the tool is missing use the plain-text fallback below, and a skipped or headless question reads as no answer. | — |
+| `cursor` | `AskQuestion` | **Platform:** Ask through the `AskQuestion` tool where the serving model offers it (Cursor 2.4 and later), and otherwise use the plain-text fallback below; a sub-agent still returns its question as a blocked result. `agent -p` rejects the tool as if the user skipped it, so a skipped or headless question reads as no answer. | In a managed cloud run, ask nothing and take the declared default. |
+| `copilot` | `askQuestions` | **Platform:** In VS Code ask through the `askQuestions` tool (it reaches sub-agents since 1.110, yet a sub-agent still returns its question as a blocked result); in Copilot CLI use `ask_user`, one question at a time, which `--no-ask-user` turns off. Where neither is offered use the plain-text fallback below, and a skipped or headless question reads as no answer. | The cloud agent has no person to answer; take the declared default. |
+| `codex` | `request_user_input` | **Platform:** Ask through the `request_user_input` tool, one to three questions a call: Plan mode waits for the answer, Default mode has it only behind a feature flag, and a sub-agent never has it, so it returns its question as a blocked result. Where the tool is refused (Default mode, `codex exec`) use the plain-text fallback below, and a skipped or headless question reads as no answer. | — |
 
 Where a client has no question tool, the walk is plain numbered text: one
 leftover per turn, its options numbered and its default named, then stop for

@@ -5,11 +5,11 @@
 // Reads every shell call and GitHub MCP write for the person-only acts. Attended,
 // one that can be undone (a push of a tag or of the default branch, a tag, a
 // merge, a release, a publish, a secret or protection write) asks the person for
-// one click where the client can ask; a deletion, a force push or an act that
-// cannot be undone is refused on every client. While a run is unattended every
-// person-only act is refused, and any push that steps around `stamity run
-// checkpoint` and `stamity run end`. `curl` and `wget` appear below only as
-// command words it reads; it runs none.
+// one click on Claude Code's main thread and is refused elsewhere; a deletion, a
+// force push or an act that cannot be undone is refused on every client. While a
+// run is unattended every person-only act is refused, and any push that steps
+// around `stamity run checkpoint` and `stamity run end`. `curl` and `wget` appear
+// below only as command words it reads; it runs none.
 //
 // Generated file — regenerate it rather than editing; local edits are overwritten.
 // Trust posture: exec form, repo-committed, no dynamic evaluation, no network reach.
@@ -261,6 +261,8 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		"invoke-expression",
 		"iex"
 	]);
+	const PS_SINGLE = "'" + String.fromCharCode(8216, 8217, 8218, 8219);
+	const PS_DOUBLE = "\"" + String.fromCharCode(8220, 8221, 8222);
 	function programName(word) {
 		return (word.split(/[\\/]/).pop() ?? "").toLowerCase().replace(/^([^@]+)@[\s\S]*$/, "$1").replace(/\.(exe|cmd|bat)$/, "");
 	}
@@ -289,19 +291,20 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			if (words.length > 0) segments.push(words);
 			words = [];
 		};
+		const quote = (c, kind) => c !== void 0 && (c === kind[0] || pwsh && kind.includes(c));
 		let i = 0;
 		while (i < text.length) {
 			const ch = text[i] ?? "";
-			if (ch === "'") {
-				const close = text.indexOf("'", i + 1);
-				const stop = close === -1 ? text.length : close;
+			if (quote(ch, PS_SINGLE)) {
+				let stop = i + 1;
+				while (stop < text.length && !quote(text[stop], PS_SINGLE)) stop += 1;
 				word += text.slice(i + 1, stop);
 				inWord = true;
 				i = stop + 1;
-			} else if (ch === "\"") {
+			} else if (quote(ch, PS_DOUBLE)) {
 				inWord = true;
 				i += 1;
-				while (i < text.length && text[i] !== "\"") {
+				while (i < text.length && !quote(text[i], PS_DOUBLE)) {
 					const c = text[i] ?? "";
 					const next = text[i + 1] ?? "";
 					if (pwsh && c === "`" && i + 1 < text.length) {
@@ -367,6 +370,23 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 					inWord = true;
 				}
 				i += pwsh && crlf ? 3 : 2;
+			} else if (ch === "$" && text[i + 1] === "(" || ch === "`" || ch === "(" && (inWord || words.length > 0)) {
+				const start = ch === "$" ? i + 2 : i + 1;
+				let j = start;
+				if (ch === "`") while (j < text.length && text[j] !== "`") j += 1;
+				else {
+					let level = 1;
+					while (j < text.length) {
+						if (text[j] === "(") level += 1;
+						else if (text[j] === ")") level -= 1;
+						if (level === 0) break;
+						j += 1;
+					}
+				}
+				nested.push(text.slice(start, j));
+				word += text.slice(i, Math.min(j + 1, text.length));
+				inWord = true;
+				i = j + 1;
 			} else if (ch === " " || ch === "	") {
 				endWord();
 				i += 1;
@@ -459,7 +479,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			}
 			const cmd = words.slice(k);
 			if (cmd.length === 0) continue;
-			if (/\s/.test(cmd[0] ?? "")) commands.push(...commandsOf(cmd.join(" "), depth + 1, pwsh));
+			if (/\s/.test(cmd[0] ?? "") && cmd.join(" ") !== text) commands.push(...commandsOf(cmd.join(" "), depth + 1, pwsh));
 			cmd[0] = programName(cmd[0] ?? "");
 			if (/^git-./.test(cmd[0])) cmd.splice(0, 1, "git", cmd[0].slice(4));
 			if (SHELLS.has(cmd[0] ?? "")) {
@@ -533,6 +553,11 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		for (let k = 1; k < cmd.length; k += 1) {
 			const word = cmd[k] ?? "";
 			if (word === "-R" || word === "--repo") k += 1;
+			else if (positionals.length < 2 && /^(?:--[^=]+|-[^-])$/.test(word) && ![
+				"-h",
+				"--help",
+				"--version"
+			].includes(word)) k += 1;
 			else if (!word.startsWith("-")) positionals.push(word);
 		}
 		return positionals;
@@ -612,7 +637,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		let end = cmd.length;
 		let next = null;
 		const targets = [];
-		const start = tool === "gh" ? cmd.indexOf("api") + 1 : 1;
+		const api = tool === "gh" ? cmd.indexOf("api") : -1;
 		const valueFlags = tool === "gh" ? [
 			"-H",
 			"--header",
@@ -684,7 +709,8 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			"--body-data",
 			"--body-file"
 		];
-		for (let k = start; k < cmd.length; k += 1) {
+		for (let k = 1; k < cmd.length; k += 1) {
+			if (k === api) continue;
 			const word = cmd[k] ?? "";
 			const name = word.split("=")[0] ?? "";
 			if (tool === "curl" && (word === "--next" || word === "-:")) {
@@ -703,11 +729,13 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				if ("oaeiBtOTwQPlARDXIU".includes(letter)) break;
 			}
 			if (tool === "curl" && word === "--globoff") globoff = true;
-			if (word === "-X" || word === "--method" || word === "--request") {
+			const methodLetter = tool !== "wget";
+			if (word === "-X" && methodLetter || word === "--method" || word === "--request") {
 				method = cmd[k + 1] ?? hidden();
 				k += 1;
 			} else if (name === "--method" || name === "--request") method = word.slice(name.length + 1);
-			else if (/^-X./.test(word)) method = word.slice(2);
+			else if (/^-X./.test(word) && methodLetter) method = word.slice(2);
+			else if (word === "-X") k += 1;
 			else if (bodyFlags.includes(word)) {
 				body = true;
 				k += 1;
@@ -1253,7 +1281,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			if (/^transfer$/i.test(path)) deny("repo-irreversible", `A repository transfer (${shown})`);
 			if (/^contents(\/|$)/i.test(path) && landsOnDefault(fields("branch"))) deny("push-default", `A REST commit to the default branch (${shown})`);
 			if (/^merges$/i.test(path) && landsOnDefault(fields("base")) || /^merge-upstream$/i.test(path) && landsOnDefault(fields("branch"))) deny("push-default", `A REST merge into the default branch (${shown})`);
-			if (/^((actions|dependabot|codespaces|agents)|environments\/.+)\/(secrets|variables)(\/|$)/i.test(path)) {
+			if (/^((actions|dependabot|codespaces|agents|user\/codespaces)|environments\/.+)\/(secrets|variables)(\/|$)/i.test(path)) {
 				if (method === "DELETE") deny("secrets-delete", `A secret or variable deletion (${shown})`);
 				else deny("secrets", `A secret or variable write (${shown})`);
 			}
@@ -1412,7 +1440,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 	return acts.find((act) => !act.ask) ?? acts[0] ?? { deny: false };
 };
 
-const unattendedPushVerdict = function unattendedPushVerdict(command) {
+const unattendedPushVerdict = function unattendedPushVerdict(command, powershell = false) {
 	const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
 	const KEYWORDS = /* @__PURE__ */ new Set([
 		"!",
@@ -1593,6 +1621,8 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 		"invoke-expression",
 		"iex"
 	]);
+	const PS_SINGLE = "'" + String.fromCharCode(8216, 8217, 8218, 8219);
+	const PS_DOUBLE = "\"" + String.fromCharCode(8220, 8221, 8222);
 	function programName(word) {
 		return (word.split(/[\\/]/).pop() ?? "").toLowerCase().replace(/^([^@]+)@[\s\S]*$/, "$1").replace(/\.(exe|cmd|bat)$/, "");
 	}
@@ -1621,19 +1651,20 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 			if (words.length > 0) segments.push(words);
 			words = [];
 		};
+		const quote = (c, kind) => c !== void 0 && (c === kind[0] || pwsh && kind.includes(c));
 		let i = 0;
 		while (i < text.length) {
 			const ch = text[i] ?? "";
-			if (ch === "'") {
-				const close = text.indexOf("'", i + 1);
-				const stop = close === -1 ? text.length : close;
+			if (quote(ch, PS_SINGLE)) {
+				let stop = i + 1;
+				while (stop < text.length && !quote(text[stop], PS_SINGLE)) stop += 1;
 				word += text.slice(i + 1, stop);
 				inWord = true;
 				i = stop + 1;
-			} else if (ch === "\"") {
+			} else if (quote(ch, PS_DOUBLE)) {
 				inWord = true;
 				i += 1;
-				while (i < text.length && text[i] !== "\"") {
+				while (i < text.length && !quote(text[i], PS_DOUBLE)) {
 					const c = text[i] ?? "";
 					const next = text[i + 1] ?? "";
 					if (pwsh && c === "`" && i + 1 < text.length) {
@@ -1699,6 +1730,23 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 					inWord = true;
 				}
 				i += pwsh && crlf ? 3 : 2;
+			} else if (ch === "$" && text[i + 1] === "(" || ch === "`" || ch === "(" && (inWord || words.length > 0)) {
+				const start = ch === "$" ? i + 2 : i + 1;
+				let j = start;
+				if (ch === "`") while (j < text.length && text[j] !== "`") j += 1;
+				else {
+					let level = 1;
+					while (j < text.length) {
+						if (text[j] === "(") level += 1;
+						else if (text[j] === ")") level -= 1;
+						if (level === 0) break;
+						j += 1;
+					}
+				}
+				nested.push(text.slice(start, j));
+				word += text.slice(i, Math.min(j + 1, text.length));
+				inWord = true;
+				i = j + 1;
 			} else if (ch === " " || ch === "	") {
 				endWord();
 				i += 1;
@@ -1791,7 +1839,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 			}
 			const cmd = words.slice(k);
 			if (cmd.length === 0) continue;
-			if (/\s/.test(cmd[0] ?? "")) commands.push(...commandsOf(cmd.join(" "), depth + 1, pwsh));
+			if (/\s/.test(cmd[0] ?? "") && cmd.join(" ") !== text) commands.push(...commandsOf(cmd.join(" "), depth + 1, pwsh));
 			cmd[0] = programName(cmd[0] ?? "");
 			if (/^git-./.test(cmd[0])) cmd.splice(0, 1, "git", cmd[0].slice(4));
 			if (SHELLS.has(cmd[0] ?? "")) {
@@ -1865,6 +1913,11 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 		for (let k = 1; k < cmd.length; k += 1) {
 			const word = cmd[k] ?? "";
 			if (word === "-R" || word === "--repo") k += 1;
+			else if (positionals.length < 2 && /^(?:--[^=]+|-[^-])$/.test(word) && ![
+				"-h",
+				"--help",
+				"--version"
+			].includes(word)) k += 1;
 			else if (!word.startsWith("-")) positionals.push(word);
 		}
 		return positionals;
@@ -1944,7 +1997,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 		let end = cmd.length;
 		let next = null;
 		const targets = [];
-		const start = tool === "gh" ? cmd.indexOf("api") + 1 : 1;
+		const api = tool === "gh" ? cmd.indexOf("api") : -1;
 		const valueFlags = tool === "gh" ? [
 			"-H",
 			"--header",
@@ -2016,7 +2069,8 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 			"--body-data",
 			"--body-file"
 		];
-		for (let k = start; k < cmd.length; k += 1) {
+		for (let k = 1; k < cmd.length; k += 1) {
+			if (k === api) continue;
 			const word = cmd[k] ?? "";
 			const name = word.split("=")[0] ?? "";
 			if (tool === "curl" && (word === "--next" || word === "-:")) {
@@ -2035,11 +2089,13 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 				if ("oaeiBtOTwQPlARDXIU".includes(letter)) break;
 			}
 			if (tool === "curl" && word === "--globoff") globoff = true;
-			if (word === "-X" || word === "--method" || word === "--request") {
+			const methodLetter = tool !== "wget";
+			if (word === "-X" && methodLetter || word === "--method" || word === "--request") {
 				method = cmd[k + 1] ?? hidden();
 				k += 1;
 			} else if (name === "--method" || name === "--request") method = word.slice(name.length + 1);
-			else if (/^-X./.test(word)) method = word.slice(2);
+			else if (/^-X./.test(word) && methodLetter) method = word.slice(2);
+			else if (word === "-X") k += 1;
 			else if (bodyFlags.includes(word)) {
 				body = true;
 				k += 1;
@@ -2114,7 +2170,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 	const CONFIG_KEYS = /^(?:color\..+|advice\..+|core\.quotepath|init\.defaultbranch|user\.name|user\.email)$/i;
 	const CONFIG_NAMES = "GIT_CONFIG_(?:(?:COUNT|PARAMETERS|GLOBAL|SYSTEM)\\b|(?:KEY|VALUE)_\\d*\\b|(?=[$`{(%]))";
 	const CONFIG_ENVIRONMENT = new RegExp(`\\b${CONFIG_NAMES}`, "i");
-	const PROGRAM_VARIABLES = "GIT_EDITOR|GIT_SEQUENCE_EDITOR|GIT_SSH_COMMAND|GIT_SSH|GIT_EXTERNAL_DIFF|GIT_ASKPASS|GIT_PAGER|GIT_PROXY_COMMAND|GIT_EXEC_PATH";
+	const PROGRAM_VARIABLES = "GIT_EDITOR|GIT_SEQUENCE_EDITOR|GIT_SSH_COMMAND|GIT_SSH|GIT_EXTERNAL_DIFF|GIT_ASKPASS|GIT_PAGER|GIT_PROXY_COMMAND|GIT_EXEC_PATH|SSH_ASKPASS";
 	const GIT_VARIABLE = `(?:(?:${PROGRAM_VARIABLES})\\b|${CONFIG_NAMES})`;
 	const SETS_WORD = new RegExp(`^${GIT_VARIABLE}`, "i");
 	const SETTERS = /* @__PURE__ */ new Set([
@@ -2237,7 +2293,58 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 			"remove-section"
 		].includes(sub) || sub === "" && !read && rest.length > 1) && keys.some((key) => /^(?:remote|url)(\.|$)/i.test(key));
 	}
-	const commands = commandsOf(command, 0, false);
+	const RUN_VERBS = /* @__PURE__ */ new Set([
+		"start",
+		"checkpoint",
+		"end"
+	]);
+	const namesVerb = (text) => /\brun\W+(?:start|checkpoint|end)\b/i.test(text) && /stamity|\bst\b|\bcli\.m?js\b|@\d+\.\d+\.\d+/i.test(text);
+	const REGISTRY_URL = /^https:\/\/[A-Za-z0-9.-]+(?::(?:[1-9]\d{0,3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-5]))?(?:\/[A-Za-z0-9._~/-]*)?$/;
+	const PINNED_PACKAGE = /^(?:@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*@(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+	function verbShape(line) {
+		const text = line.replace(/[ \t]+2>&1[ \t]*$/, "");
+		if (/[\r\n]/.test(text)) return "a line break";
+		const typographic = [...text].some((ch) => ch.charCodeAt(0) >= 8216 && ch.charCodeAt(0) <= 8222);
+		if (powershell && typographic) return "a typographic quote, which PowerShell reads as a quote";
+		const words = [];
+		let word = null;
+		for (let i = 0; i < text.length; i += 1) {
+			const ch = text[i] ?? "";
+			if (ch === "'" || ch === "\"") {
+				const close = text.indexOf(ch, i + 1);
+				if (close === -1) return "a quote left open";
+				const quoted = text.slice(i + 1, close);
+				if (ch === "\"" && /[$`\\]/.test(quoted)) return "a `$`, backtick or backslash inside double quotes";
+				word = (word ?? "") + quoted;
+				i = close;
+			} else if (ch === " " || ch === "	") {
+				if (word !== null) words.push(word);
+				word = null;
+			} else if ("$`\\(){};|&<>#".includes(ch)) return ch === "`" ? "an unquoted backtick" : `an unquoted \`${ch}\``;
+			else word = (word ?? "") + ch;
+		}
+		if (word !== null) words.push(word);
+		if (powershell && words.includes("--%")) return "PowerShell's stop-parsing `--%`";
+		let at = 1;
+		if (words[0] === "npx") {
+			if (![
+				"-y",
+				"--yes",
+				"--no",
+				"--no-yes"
+			].includes(words[1] ?? "")) return "an `npx` call whose first word is not `-y`, `--yes`, `--no` or `--no-yes`";
+			at = 2;
+			const registry = /^--@[a-z0-9][a-z0-9._~-]*:registry=([\s\S]*)$/.exec(words[at] ?? "");
+			if (registry !== null && !REGISTRY_URL.test(registry[1] ?? "")) return "a scope registry that is not a plain https URL";
+			if (registry !== null) at += 1;
+			const spec = words[at] ?? "";
+			if (spec !== "stamity" && !PINNED_PACKAGE.test(spec)) return "an `npx` option or package other than `stamity` or `<pkg>@<semver>`";
+			at += 1;
+		} else if (words[0] !== "stamity" && words[0] !== "st") return "a first word other than `stamity`, `st` or `npx`: a prefix, a wrapper or another program";
+		if (words[at] !== "run" || !RUN_VERBS.has(words[at + 1] ?? "")) return "words between the program and `run <verb>`";
+		return null;
+	}
+	const commands = commandsOf(command, 0, powershell);
 	for (const cmd of commands) {
 		const program = cmd[0] ?? "";
 		if (program === "git") {
@@ -2277,6 +2384,11 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 			const [group, sub] = ghPositionals(cmd);
 			if (group !== void 0 && !GH_BUILTINS.has(group)) return deny("A gh command that is not a built-in this guard knows (an alias or an extension)");
 			if (group === "alias" && (sub === "set" || sub === "import")) return deny(`\`gh alias ${sub}\`, which defines an alias`);
+			if ([
+				"extension",
+				"extensions",
+				"ext"
+			].includes(group ?? "") && sub === "exec") return deny(`\`gh ${group} exec\`, which runs an extension`);
 			if (group === "pr" && [
 				"create",
 				"new",
@@ -2304,6 +2416,11 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 		if (assignsNoValue(cmd).some((word) => SETS_WORD.test(word))) return true;
 		return SETTERS.has(cmd[0] ?? "") && cmd.slice(1).some((word) => SETS_WORD.test(word) && (exports || word.includes("=")));
 	}) || SETS_TEXT.test(command) || allexport && (NAMES_VARIABLE.test(command) || [...assigned, ...commands.flat()].some((word) => NAMES_VARIABLE.test(word)))) return deny("A line that sets one of git's program or configuration variables (`GIT_EXEC_PATH`, `GIT_EDITOR`, `GIT_CONFIG_COUNT`, …), which the run verbs' own git reads,");
+	const broke = commands.some((cmd) => {
+		const positionals = cmd.slice(1).filter((word) => !word.startsWith("-"));
+		return (cmd[0] === "stamity" || cmd[0] === "st") && positionals[0] === "run" && RUN_VERBS.has(positionals[1] ?? "");
+	}) || namesVerb(command) || [...assigned, ...commands.flat()].some(namesVerb) ? verbShape(command) : null;
+	if (broke !== null) return deny(`A run verb (\`stamity run start\`, \`checkpoint\` or \`end\`) on a line that is more than the verb (${broke}; REQ-FLOW-121)`);
 	return { deny: false };
 };
 
@@ -2698,9 +2815,10 @@ function contextsOf(command, cwd) {
 }
 
 /**
- * The local tag names, loose and packed. A further tag past TAG_NAMES_MAX, or a packed-refs file past
- * PACKED_REFS_MAX_BYTES, faults with a coded error the guard refuses on, so a cut-off list never reads as
- * every tag there is; the throws sit outside the reads' catches.
+ * The local tag names, loose and packed. Two ceilings fault with a coded error the guard refuses on, a further
+ * tag past TAG_NAMES_MAX and a packed-refs file past PACKED_REFS_MAX_BYTES, so neither cut reads as every tag
+ * there is; the throws sit outside the reads' catches. A packed-refs file or a loose tag entry that is not a
+ * regular file (a link, a FIFO) is read as absent, so the list can still miss a tag that way.
  */
 function localTags(commonDir) {
   // A name both loose and packed counts once.
@@ -2853,14 +2971,32 @@ function unattendedSentence(act, rule) {
 }
 
 /**
+ * An attended ask-class act's decision: the person is asked, except where a sub-agent runs it (any agent identity the
+ * core guard reads, review/72), since the act is the person's, or in Claude Code's \`auto\` permission mode, where a
+ * classifier may settle the prompt (review/75); both are refused.
+ */
+function attendedAsk(payload, act, rule) {
+  const told = act + " is a person-only act (\`" + rule + "\`) and ";
+  const end = " (REQ-FLOW-102). Give the person the exact command.";
+  const names = ["agent_type", "subagent_type", "agentType", "subagentType", "agent_id", "subagent_id"];
+  if (names.some((name) => Object.hasOwn(payload, name) && typeof payload[name] === "string" && payload[name] !== "")) {
+    return { ask: false, reason: told + "a sub-agent runs it: the act is the person's, so only the main thread may ask for it" + end };
+  }
+  if (payload.permission_mode === "auto") {
+    return { ask: false, reason: told + "this session runs in the \`auto\` permission mode, where a classifier may settle the prompt: it stays the person's to run" + end };
+  }
+  return { ask: true, reason: askSentence(act, rule) };
+}
+
+/**
  * A GitHub MCP row's tool, classed by its row: the refused one refuses, and an ask-class one asks only while the mode
  * reads attended, since a settings ask row would otherwise wait for nobody in an unattended run (REQ-FLOW-120).
  */
-function mcpDecision(tool, ask, root) {
+function mcpDecision(tool, ask, root, payload) {
   const act = "A call to the GitHub MCP server";
   if (!ask) return { ask: false, reason: refuseSentence(act, tool) };
   const why = unattendedBy(root);
-  return why === null ? { ask: true, reason: askSentence(act, tool) } : { ask: false, reason: unattendedSentence(act, tool) + " " + why };
+  return why === null ? attendedAsk(payload, act, tool) : { ask: false, reason: unattendedSentence(act, tool) + " " + why };
 }
 
 /** The decision this call earns: null to allow it, else whether the client asks the person and the reason. */
@@ -2869,7 +3005,7 @@ function decide() {
   const payload = raw.trim() === "" ? {} : JSON.parse(raw);
   if (payload === null || typeof payload !== "object") throw new Error("payload");
   if (typeof payload.tool_name === "string" && MCP_ROWS.has(payload.tool_name)) {
-    return mcpDecision(payload.tool_name, MCP_ROWS.get(payload.tool_name), repoRoot());
+    return mcpDecision(payload.tool_name, MCP_ROWS.get(payload.tool_name), repoRoot(), payload);
   }
   const command = shellCommand(payload);
   if (command === null) return null;
@@ -2877,8 +3013,10 @@ function decide() {
   // Where the call runs: the payload's working directory (relative to the root), else the root.
   const cwd = typeof payload.cwd === "string" && payload.cwd !== "" ? resolve(root, payload.cwd) : root;
   // The PowerShell tool's text is PowerShell's command string, so the verdicts read it as one too, its backslash a
-  // plain character and its backtick the escape, beside the text as it stands.
-  const texts = /^powershell$/i.test(payload.tool_name ?? "") ? [command, "pwsh -Command '" + command.replaceAll("'", "'\\''") + "'"] : [command];
+  // plain character and its backtick the escape, beside the text as it stands. The unattended verdict reads it with its
+  // PowerShell flag, not through a synthetic pwsh -Command line, which the run verb's stand-alone rule would refuse.
+  const pwsh = /^powershell$/i.test(payload.tool_name ?? "");
+  const texts = pwsh ? [command, "pwsh -Command '" + command.replaceAll("'", "'\\''") + "'"] : [command];
   // Every place and every reading (REQ-FLOW-124): one refuse-class act refuses the call, so a deletion never rides an
   // approval another reading or place would ask for.
   const found = [];
@@ -2892,10 +3030,13 @@ function decide() {
   if (refused !== undefined) return { ask: false, reason: refuseSentence(refused.act, refused.rule) };
   // The mode is read for every ask and for a call the unattended rule would refuse, so an unreadable record refuses
   // those and no other call.
-  const run = () => texts.map((text) => unattendedPushVerdict(text)).find((verdict) => verdict.deny);
+  const run = () => {
+    const verdict = unattendedPushVerdict(command, pwsh);
+    return verdict.deny ? verdict : undefined;
+  };
   if (found.length > 0) {
     const why = unattendedBy(root);
-    if (why === null) return { ask: true, reason: askSentence(found[0].act, found[0].rule) };
+    if (why === null) return attendedAsk(payload, found[0].act, found[0].rule);
     // Unattended, a push keeps the push rule's own reason; any other act goes on the morning list.
     const push = run();
     return { ask: false, reason: (push !== undefined ? push.reason : unattendedSentence(found[0].act, found[0].rule)) + " " + why };

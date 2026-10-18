@@ -79,3 +79,5 @@ Thumbs.db
 Desktop.ini
 .stamity/preflight-canary.json
 .stamity/run-ended.json
+.stamity/context-once/
+.stamity/client-models.json
