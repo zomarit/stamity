@@ -3263,9 +3263,10 @@ function gitDirsFrom(start) {
   //
   // The wrapper, runner, shell and PowerShell tables are u6's (personOnly.ts, inside both verdicts), copied: per
   // wrapper, the short letters and the long options taking a value, and the options whose value is a command line.
-  // test/hooks/personOnlyGuard.test.ts holds the copies equal (build/90).
+  // test/hooks/personOnlyGuard.test.ts holds the copies equal (build/90). A program word is read as u6 reads it,
+  // a trailing @<version> cut (npx npm@10, corepack pnpm@9), so a versioned manager's runner reads its place.
   String.raw`function programName(word) {
-  return (word.split(/[\\/]/).pop() ?? "").toLowerCase().replace(/\.(exe|cmd|bat)$/, "");
+  return (word.split(/[\\/]/).pop() ?? "").toLowerCase().replace(/^([^@]+)@[\s\S]*$/, "$1").replace(/\.(exe|cmd|bat)$/, "");
 }
 
 function commandFlag(word) {

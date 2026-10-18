@@ -483,6 +483,14 @@ describe("a directory read only where the shell runs a command (review/116)", ()
     ];
     for (const command of allowed) expect(decide(tool, guard, command).deny, `${tool}: ${command}`).toBe(false);
   });
+
+  it.each(TOOLS)("%s: reads a versioned manager's runner place, its @<version> cut as u6 cuts it (pr/60)", async (tool) => {
+    const guard = await placeGuard(tool, LINKED);
+    const denied = ["npx npm@10 exec -- git -C wt-main push", "corepack pnpm@9 exec git -C wt-main push"];
+    for (const command of denied) expect(decide(tool, guard, command), `${tool}: ${command}`).toMatchObject({ deny: true, reason: expect.stringContaining("push-default") });
+    const allowed = ["npx npm@10 exec -- git -C wt-feat push", "npx npm@10 exec -- git -C wt-main push origin feat/x"];
+    for (const command of allowed) expect(decide(tool, guard, command).deny, `${tool}: ${command}`).toBe(false);
+  });
 });
 
 describe("PowerShell's location commands and $env:GIT_DIR (review/117)", () => {
