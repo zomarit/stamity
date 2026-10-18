@@ -210,6 +210,9 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // the ceiling holds. Measured 2026-10-18 on base 7cebcfad after the unit's
   // fix round 1 (an untrusted counter rebuilt, the newest record only, the
   // rebuild fault named on a reviewer's stop): 50,328 / 1,082; the ceiling holds.
+  // Measured 2026-10-18 on base a01c4dde after the unit's fix round 2 (review/66:
+  // a file written from a rebuild is marked, and a session with no entry in a
+  // marked file rebuilds): 51,152 / 1,089; the ceiling holds, 48 bytes inside it.
   [REVIEW_GATE_FILE]: { bytes: 51_200, lines: 1_120 },
   // Measured 2026-10-16 on the u14b lane (base 2a1c5226): 5,711 bytes / 150
   // lines (claude, generated layout; a plugin root renders 4,983 / 129). Its
@@ -2269,6 +2272,11 @@ export interface ReviewGateScriptOptions {
  * ({@link USAGE_REVIEW_PATTERN}) up to the cap, with the last verdict
  * unrecorded. A completion then holds, below the cap and at it, and the next
  * reviewer's round is counted from it, replacing a counter it could not trust.
+ * A file written from a rebuild that found rounds or faulted carries a
+ * document-level `rebuilt: true`, kept by every later write (review/66): the
+ * write held only the writer's session, so a session with no entry in a marked
+ * file rebuilds as if the counter were missing, where an unmarked file's
+ * missing entry still means no review loop to gate on.
  * With no such record or line the gate opens, naming the counter's state, and
  * a faulted file is left as it is, because a gate that cannot read its own
  * state must not wedge a run. A reviewer's stop whose rebuild faults with no
@@ -2327,9 +2335,10 @@ export function buildReviewGateScript(opts: ReviewGateScriptOptions): string {
       "count, its usage: review lines, with the last verdict unrecorded, so a",
       "completion holds, at the cap too, until a review records one. A counter",
       "that is oversized, unreadable or unparseable is read as lost the same way,",
-      "and a review replaces it once the record gives its rounds back. With no",
-      "such record or line the gate opens; run records it cannot read (past the",
-      "folder or size bound, or a read fault) hold it.",
+      "and a review replaces it once the record gives its rounds back. A file",
+      "written from a rebuild is marked: a session with no entry in it rebuilds",
+      "too. With no such record or line the gate opens; run records it cannot",
+      "read (past the folder or size bound, or a read fault) hold it.",
       "",
       "Fail-open: with no rounds in the record, a counter file it cannot trust",
       "opens the gate, says so on stderr and is not overwritten. A gate that cannot",
@@ -2703,7 +2712,7 @@ function load() {
   ) {
     return { fault: "STATE_INVALID", runs: null };
   }
-  return { fault: "", runs: document.runs };
+  return { fault: "", runs: document.runs, rebuilt: document.rebuilt === true };
 }
 
 /**
@@ -2995,7 +3004,7 @@ function unlock() {
  * then made the redirection permanent. A write that cannot land is reported,
  * never raised: the counter is not worth holding a run for.
  */
-function save(runs) {
+function save(runs, rebuilt) {
   const kept = Object.entries(runs)
     .filter((pair) => pair[1] !== null && typeof pair[1] === "object" && NOW - pair[1].updated < MAX_RUN_AGE_MS)
     .sort((a, b) => b[1].updated - a[1].updated || (a[0] < b[0] ? -1 : 1))
@@ -3005,7 +3014,7 @@ function save(runs) {
   try {
     mkdirSync(dirname(STATE_FILE), { recursive: true });
     handle = openSync(temp, FS.O_WRONLY | FS.O_CREAT | FS.O_EXCL | FS.O_NOFOLLOW, 0o600);
-    writeSync(handle, JSON.stringify({ schema: SCHEMA, runs: Object.fromEntries(kept) }));
+    writeSync(handle, JSON.stringify({ schema: SCHEMA, rebuilt: rebuilt || undefined, runs: Object.fromEntries(kept) }));
     closeSync(handle);
     handle = -1;
     // The rename is retried on the errnos Windows raises when something else
@@ -3100,8 +3109,9 @@ function record() {
   try {
     const current = load();
     const untrusted = current.fault !== "" && current.fault !== "STATE_ABSENT";
-    // A missing counter, or one it cannot trust, seeds this round from the run's record, as the completion path reads it.
-    const found = current.fault === "" ? null : rebuild();
+    const own = current.fault === "" ? entryOf(current.runs, runId) : null;
+    // A missing or untrusted counter, or no entry in one marked rebuilt, seeds this round from the run's record.
+    const found = current.fault === "" && (own !== null || !current.rebuilt) ? null : rebuild();
     // A fault under the lock is not "no runs". Treating it as one makes
     // \`rounds\` 1 and publishes a one-round document over a file this script was
     // told not to repair — every round counted so far, gone, on a path that
@@ -3132,17 +3142,19 @@ function record() {
     // Null prototype for the same reason the completion path uses one: a run id
     // of "__proto__" would otherwise reach the inherited setter and vanish.
     const runs = Object.assign(Object.create(null), current.runs === null ? {} : current.runs);
-    previous = found === null ? entryOf(runs, runId) : found.entry;
+    previous = found === null ? own : found.entry;
     // A rebuilt count at the cap lost the last round's verdict, not a round: this review re-records it.
     const again = previous !== null && previous.record !== undefined && previous.rounds >= MAX_ROUNDS;
     rounds = previous === null ? 1 : again ? previous.rounds : previous.rounds + 1;
     runs[runId] = { rounds, verdict, confidence, updated: NOW };
-    stored = save(runs);
+    // Written from a rebuild that found rounds or faulted, the file lacks its peers' entries: marked, for good.
+    stored = save(runs, current.rebuilt || (found !== null && (found.entry !== null || found.fault !== "")));
     if (previous !== null && previous.record !== undefined) note = " Earlier rounds were rebuilt from " + previous.record + ".";
     if (untrusted) note += " The counter it could not trust (" + current.fault + ") was replaced.";
     // A lasting read fault must not stop the loop: round 1 is counted, and the loss is said rather than hidden.
     if (found !== null && found.fault !== "") {
-      note = " No counter was found and " + found.why + ", so the rounds counted before the counter was lost are not in this count, which restarts at round 1.";
+      note = " " + (current.fault === "" ? "This session had no entry in a marked counter" : "No counter was found") +
+        " and " + found.why + ", so the rounds counted before the counter was lost are not in this count, which restarts at round 1.";
     }
   } finally {
     unlock();
@@ -3185,13 +3197,20 @@ function decide() {
   const state = load();
   if (!isCompletion()) return null;
 
-  // A missing counter, or one it cannot trust, is rebuilt from this branch's run record rather than opened:
-  // deleting or corrupting the file, or a reclaimed machine losing it, must not release the run.
+  // Copied onto a null prototype before anything is read out of it: run ids come
+  // from a payload, and a run named after a prototype member would otherwise
+  // resolve to an inherited value instead of this run's record.
+  const runs = Object.assign(Object.create(null), state.runs === null ? {} : state.runs);
+  const own = entryOf(runs, runId);
+  // A missing or untrusted counter, or no entry in one a peer wrote from a rebuild (marked), is rebuilt from this
+  // branch's run record rather than opened: deleting, corrupting or losing the file must not release the run.
+  const stray = state.fault === "" && own === null && state.rebuilt;
   const absent = state.fault === "STATE_ABSENT";
   const lost = absent
     ? "No review-gate counter at " + STATE_FILE
-    : "The review-gate counter at " + STATE_FILE + " cannot be trusted (" + state.fault + ")";
-  const found = state.fault === "" ? null : rebuild();
+    : "The review-gate counter at " + STATE_FILE +
+      (stray ? " is marked rebuilt and has no entry for this session" : " cannot be trusted (" + state.fault + ")");
+  const found = state.fault === "" && !stray ? null : rebuild();
   if (found !== null && found.fault !== "") {
     return {
       blocked: BLOCKING,
@@ -3200,12 +3219,13 @@ function decide() {
       reasonCode: found.fault,
       message:
         lost + " and " + found.why + ", so the rounds cannot be rebuilt and completion is held. " + KEYED +
-        (absent
+        (absent || stray
           ? " Make the records readable, or record a review round, which writes the counter."
           : " Make the records readable, or delete the file, which the next review round then writes anew."),
     };
   }
   if (found !== null && found.entry === null) {
+    if (stray) return null; // No entry, no rounds: nothing to gate, as unmarked.
     return {
       blocked: false,
       runId,
@@ -3218,11 +3238,7 @@ function decide() {
     };
   }
 
-  // Copied onto a null prototype before anything is read out of it: run ids come
-  // from a payload, and a run named after a prototype member would otherwise
-  // resolve to an inherited value instead of this run's record.
-  const runs = Object.assign(Object.create(null), state.runs === null ? {} : state.runs);
-  const entry = found !== null ? found.entry : entryOf(runs, runId);
+  const entry = found !== null ? found.entry : own;
   // Work-scoped: a run with no recorded round has no review loop to gate on.
   if (entry === null) return null;
   if (entry.record !== undefined) {

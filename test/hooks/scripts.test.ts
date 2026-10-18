@@ -2083,6 +2083,8 @@ interface GateEntry {
 
 interface GateDocument {
   schema: string;
+  /** Set on a file a review wrote from a rebuild (review/66); absent on an unmarked one. */
+  rebuilt?: boolean;
   runs: Record<string, GateEntry>;
 }
 
@@ -3863,6 +3865,97 @@ describe("the review gate rebuilds a missing counter from this branch's run reco
       blocked: true,
       reasonCode: "REVIEW_ROUND_OPEN",
       round: 1,
+    });
+  });
+
+  // review/66: a review that writes the file from a rebuild writes its own session's entry alone, so every peer's entry
+  // is gone from it. The file is marked, and a peer with no entry in a marked file rebuilds instead of opening.
+  it.each([
+    {
+      label: "an unparseable counter",
+      seed: () => getRepo().seedFiles({ [REVIEW_GATE_STATE_FILE]: '{"schema":"stamity/review-gate/v1","runs":{"a":{"rou' }),
+    },
+    { label: "a lost counter", seed: async () => undefined },
+  ])("holds a peer session's mid-loop completion after another session's review replaced $label from the record", async (testCase) => {
+    await seedHead();
+    await seedRun("2026-10-18_night", BRANCH, 2);
+    await testCase.seed();
+    const gate = await placeGate();
+    const cwd = getRepo().dir;
+
+    // Before the peer's review, session a's completion rebuilds from the record and holds.
+    expect(refusal(run(gate, { cwd, input: completion("a") }))).toMatchObject({ blocked: true, reasonCode: "REVIEW_ROUND_OPEN", round: 2 });
+
+    // Session b's review writes the file from the rebuild: b's entry alone.
+    expect(refusal(run(gate, { cwd, input: reviewerStop("b", "request-changes") }))).toMatchObject({ reasonCode: "ROUND_RECORDED", round: 3 });
+    expect(Object.keys(readGateState().runs)).toEqual(["b"]);
+
+    // Session a, mid-loop, has no entry in that file: it rebuilds and holds rather than opening in silence.
+    const held = run(gate, { cwd, input: completion("a") });
+    expect(held.code).toBe(2);
+    expect(refusal(held)).toMatchObject({ blocked: true, reasonCode: "REVIEW_ROUND_OPEN", round: 2, verdict: "" });
+    const message = String(refusal(held)["message"]);
+    expect(message).toContain("is marked rebuilt and has no entry for this session");
+    expect(message).toContain(".stamity/runs/2026-10-18_night/record.md");
+    expect(readGateState().rebuilt).toBe(true);
+
+    // a's next review counts from the record, and every later write keeps the mark.
+    const recorded = run(gate, { cwd, input: reviewerStop("a", "request-changes") });
+    expect(refusal(recorded)).toMatchObject({ reasonCode: "ROUND_RECORDED", round: 3 });
+    run(gate, { cwd, input: reviewerStop("b", "request-changes") });
+    expect(readGateState()).toMatchObject({ rebuilt: true, runs: { a: { rounds: 3 }, b: { rounds: 4 } } });
+    expect(refusal(run(gate, { cwd, input: completion("c") }))).toMatchObject({ blocked: true, reasonCode: "REVIEW_ROUND_OPEN", round: 2 });
+  });
+
+  it("keeps an unmarked counter's meaning: a session with no entry in it is not gated, and counts from round 1", async () => {
+    // review/66: the first review on a fresh checkout finds no round in the record, so the file it writes is unmarked.
+    await seedHead();
+    await seedRun("2026-10-18_night", BRANCH, 0);
+    const gate = await placeGate();
+    const cwd = getRepo().dir;
+
+    expect(refusal(run(gate, { cwd, input: reviewerStop("b", "request-changes") }))).toMatchObject({ reasonCode: "ROUND_RECORDED", round: 1 });
+    expect(readGateState().rebuilt).toBeUndefined();
+
+    // The record carries rounds now, and still a session with no entry in an unmarked file exits 0 in silence, as today.
+    await seedRun("2026-10-18_night", BRANCH, 2);
+    expect(run(gate, { cwd, input: completion("a") })).toEqual({ code: 0, stdout: "", stderr: "" });
+    expect(refusal(run(gate, { cwd, input: reviewerStop("a", "request-changes") }))).toMatchObject({ reasonCode: "ROUND_RECORDED", round: 1 });
+    expect(readGateState().rebuilt).toBeUndefined();
+  });
+
+  it("reads a marked counter like a missing one only for a session with no entry in it", async () => {
+    // review/66: no round in the record → not gated, as unmarked; unreadable records → held, naming the fault; a
+    // review then records round 1 naming the loss, and from there the session's own entry wins.
+    await seedHead();
+    await getRepo().seedFiles({
+      [REVIEW_GATE_STATE_FILE]: JSON.stringify({ schema: GATE_STATE_SCHEMA, rebuilt: true, runs: midLoop("b", "request-changes", 3) }),
+    });
+    await seedRun("2026-10-18_night", BRANCH, 0);
+    const gate = await placeGate();
+    const cwd = getRepo().dir;
+
+    expect(run(gate, { cwd, input: completion("a") })).toEqual({ code: 0, stdout: "", stderr: "" });
+
+    await getRepo().seedFiles({
+      ".stamity/runs/2026-10-18_night/record.md": runRecord(BRANCH, 2) + "x".repeat(REPORT_READ_MAX_BYTES),
+    });
+    const held = run(gate, { cwd, input: completion("a") });
+    expect(held.code).toBe(2);
+    expect(refusal(held)).toMatchObject({ blocked: true, reasonCode: "RECORD_TOO_LARGE" });
+    expect(String(refusal(held)["message"])).toContain("record a review round, which writes the counter");
+
+    const recorded = run(gate, { cwd, input: reviewerStop("a", "request-changes") });
+    expect(refusal(recorded)).toMatchObject({ reasonCode: "ROUND_RECORDED", round: 1 });
+    expect(String(refusal(recorded)["message"])).toContain(
+      "This session had no entry in a marked counter and the run records could not be read (RECORD_TOO_LARGE at .stamity/runs/2026-10-18_night/record.md)",
+    );
+    expect(readGateState()).toMatchObject({ rebuilt: true, runs: { a: { rounds: 1 }, b: { rounds: 3 } } });
+    expect(refusal(run(gate, { cwd, input: completion("a") }))).toMatchObject({
+      blocked: true,
+      reasonCode: "REVIEW_ROUND_OPEN",
+      round: 1,
+      verdict: "request-changes",
     });
   });
 
