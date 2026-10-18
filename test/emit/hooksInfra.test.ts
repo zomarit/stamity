@@ -12,7 +12,7 @@ import {
   type PackAgentDeclaration,
 } from "../../src/emit/hooksInfra.ts";
 import { CANONICAL_HOOK_EVENTS, HOOK_SESSION_START_TIMEOUT_MS } from "../../src/hooks/model.ts";
-import { MAX_POLICY_FILE_BYTES } from "../../src/hooks/scripts.ts";
+import { CLOUD_READINESS_FILE, CLOUD_READINESS_TIMEOUT_MS, MAX_POLICY_FILE_BYTES } from "../../src/hooks/scripts.ts";
 import { AGENT_POLICY_ROSTER } from "../../src/roster/agentPolicies.ts";
 import { AGENT_TOOL_POLICIES_SCHEMA } from "../../src/tools/allowlist.ts";
 import type { Tool } from "../../src/types/core.ts";
@@ -1289,13 +1289,29 @@ describe("hook budgets: session start carries 30 s, the guard and the review gat
     ]);
   });
 
-  it("renders Claude's SessionStart and the tamper notice's ConfigChange at 30 s, and its guard and review gate with no timeout, in a repository and in a plugin root", async () => {
+  it("renders Claude's core SessionStart rows and the tamper notice's ConfigChange at 30 s, the readiness entry at its own 300 s, and its guard and review gate with no timeout, in a repository and in a plugin root", async () => {
     const layouts = [undefined, "${CLAUDE_PLUGIN_ROOT}/hooks"] as const;
     const rendered = await Promise.all(layouts.map((hookScriptsRoot) => renderedHooks("claude", hookScriptsRoot)));
     for (const [i, hooks] of rendered.entries()) {
       const hookScriptsRoot = layouts[i];
       const label = hookScriptsRoot ?? "repository";
-      expect(leaves(hooks["SessionStart"]).map((hook) => hook.timeout), label).toEqual([30, 30]);
+      // TEST CHANGE, justified — plan 021 file 2, v5-claude-readiness, build/57 (signed off).
+      // Claude's SessionStart was pinned at [30, 30]; the cloud readiness entry now rides
+      // SessionStart too, under its own CLOUD_READINESS_TIMEOUT_MS (300 s: an `npm ci` on a
+      // fresh cloud machine outlasts 30 s; REQ-CTX-016, REQ-FLOW-110). The pin names each
+      // leaf by its script, so the core rows' 30 s stay pinned and the 300 s is the readiness
+      // entry's alone, not a third row anywhere in the list.
+      const sessionStart = leaves(hooks["SessionStart"]).map((hook) => {
+        const script = /stamity-[\w-]+\.mjs/.exec(hook.command ?? "")?.[0] ?? hook.command;
+        return [script === CLOUD_READINESS_FILE ? "readiness" : "core", hook.timeout];
+      });
+      expect(sessionStart, label).toEqual([
+        ["core", HOOK_SESSION_START_TIMEOUT_MS / 1000],
+        ["core", HOOK_SESSION_START_TIMEOUT_MS / 1000],
+        ["readiness", CLOUD_READINESS_TIMEOUT_MS / 1000],
+      ]);
+      expect(HOOK_SESSION_START_TIMEOUT_MS / 1000, label).toBe(30);
+      expect(CLOUD_READINESS_TIMEOUT_MS / 1000, label).toBe(300);
       // TEST CHANGE, justified — review/28 and review/36, signed off 2026-09-26. ConfigChange
       // was pinned here with the guard and the gate as "none may time out", with no source.
       // REQ-CTX-016 opens with "every wired hook declares its budget" and exempts only the

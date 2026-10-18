@@ -217,6 +217,35 @@ describe("a registry fork's four-client emission", () => {
     return counts;
   }
 
+  /**
+   * Whether the text before a pinned spec ends with the scope registry argument. Two forms:
+   * a command line (`--@acme:registry=… @acme/stamity@…`) and an argument array, as the cloud
+   * readiness hook passes npx its call (`"--@acme:registry=…","@acme/stamity@…"`).
+   *
+   * TEST CHANGE, justified — plan 021 file 2, v5-claude-readiness, build/58 (signed off). The
+   * scan read only the command-line form, so it flagged the readiness hook's warm-up call, which
+   * names the registry directly ahead of the spec as its own array element (src/hooks/scripts.ts,
+   * buildCloudReadinessScript's CLI_CALL). The array form is admitted only with the registry
+   * element immediately ahead; an array with no registry ahead still fails (the case below).
+   */
+  function registryAhead(before: string): boolean {
+    return before.endsWith(`${ARG} `) || before.endsWith(`${JSON.stringify(ARG)},"`);
+  }
+
+  it("reads both forms of a registry-bound call, and neither form without the registry", () => {
+    // Activated input: the reader must fail a spec with no registry ahead in either form.
+    const spec = `${FORK}@1.0.0`;
+    const array = (parts: string[]): string => {
+      const text = JSON.stringify(parts);
+      return text.slice(0, text.indexOf(spec));
+    };
+    expect(registryAhead(`npx -y ${ARG} `)).toBe(true);
+    expect(registryAhead(array(["npx", "-y", ARG, spec, "help"]))).toBe(true);
+    expect(registryAhead("npx -y ")).toBe(false);
+    expect(registryAhead(array(["npx", "-y", spec, "help"]))).toBe(false);
+    expect(registryAhead(array(["npx", ARG, "-y", spec, "help"]))).toBe(false);
+  });
+
   it("names the registry ahead of every pinned spec, and leaves none bare", () => {
     const counts = callsByPath();
     // Non-degenerate: the calls sit in each client's bodies and hook surfaces, not in one file.
@@ -233,11 +262,13 @@ describe("a registry fork's four-client emission", () => {
     // Both of Cursor's guards, by the names they carry since REQ-FLOW-038, so the
     // registry-bound call is proven in the files Cursor runs, not in any `.mjs` there.
     expect([...counts.keys()]).toEqual(expect.arrayContaining([SUBAGENT_GUARD_PATH, MCP_GUARD_PATH]));
+    // And the readiness hook, so the array form is proven in the file that carries it (build/58).
+    expect([...counts.keys()]).toContain(".stamity/generated/hooks/claude/stamity-cloud-readiness.mjs");
     const bare: string[] = [];
     for (const [path] of counts) {
       const content = tree[path] ?? "";
       for (let at = content.indexOf(`${FORK}@`); at !== -1; at = content.indexOf(`${FORK}@`, at + 1)) {
-        if (!content.slice(0, at).endsWith(`${ARG} `)) {
+        if (!registryAhead(content.slice(0, at))) {
           bare.push(`${path}: ${content.slice(Math.max(0, at - 40), at + 40).replaceAll("\n", " ")}`);
         }
       }
