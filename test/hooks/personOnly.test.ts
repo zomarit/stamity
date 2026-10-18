@@ -612,6 +612,20 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["gh api -iX=PUT repos/o/r/pulls/3/merge", "pr-merge"],
   ["gh api repos/o/r/pulls/3/reviews -iFevent=APPROVE", "pr-merge"],
   ["gh api repos/o/r/pulls/3/reviews -F=event=APPROVE", "pr-merge"],
+  // curl's long options as the unique prefixes its 7.x line reads, as wget's are (pr/84): the method, a body in each of
+  // its forms, an upload, `--next` and `--url`. A prefix curl finds ambiguous (`--dat`, `--req`) is one it refuses.
+  ["curl --req DELETE https://api.github.com/repos/o/r/git/refs/heads/feat", "push-delete"],
+  ["curl --dat '{}' https://api.github.com/repos/o/r/pulls/3/merge", "pr-merge"],
+  ["curl --upl f https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
+  ["curl --data-r '{\"event\":\"APPROVE\"}' https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
+  ["curl --data-bin @r.json https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
+  ["curl --data-asc '{}' https://api.github.com/repos/o/r/pulls/3/merge", "pr-merge"],
+  ["curl --data-url event=APPROVE https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
+  ["curl --js '{\"ref\":\"refs/tags/v2\",\"sha\":\"abc\"}' https://api.github.com/repos/o/r/git/refs", "push-tags"],
+  ["curl --fo event=APPROVE https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
+  ["curl --form-s event=APPROVE https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
+  ["curl -X DELETE https://api.github.com/repos/o/r/git/refs/heads/feat --nex -X GET https://example.com", "push-delete"],
+  ["curl --ur https://api.github.com/repos/o/r/releases/1 --req DELETE", "release"],
 ];
 
 const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
@@ -884,6 +898,16 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
   ["gh api -X=GET repos/o/r/pulls/3/merge"],
   ["gh api -iH 'Accept: application/vnd.github+json' repos/o/r/pulls/3/merge"],
   ["gh api repos/o/r/pulls/3/reviews -iFevent=COMMENT"],
+  // pr/84's twins: prefixes of curl options that take no value (`--sil`, `--loc`, `--compr`), `--form-escape`'s beside
+  // `--form`, the method's prefix on a read, `--next` and `--url` on reads, and `--globoff`'s prefix on a write.
+  ["curl --sil https://api.github.com/repos/o/r/git/refs/heads/main"],
+  ["curl --loc https://api.github.com/repos/o/r/pulls/3/merge"],
+  ["curl --compr https://api.github.com/repos/o/r/pulls/3/reviews"],
+  ["curl --form-esc https://api.github.com/repos/o/r/pulls/3/reviews"],
+  ["curl --req GET https://api.github.com/repos/o/r/git/refs/heads/main"],
+  ["curl https://a.example --nex https://b.example"],
+  ["curl --ur https://api.github.com/repos/o/r/releases/1"],
+  ["curl --glo -X PATCH -d '{\"sha\":\"abc\"}' 'https://api.github.com/repos/o/r/git/refs/heads/{feature,main}'"],
 ];
 
 describe("personOnlyVerdict — the deny matrix", () => {
@@ -1091,6 +1115,9 @@ describe("an HTTP call whose method or target the line cannot show (pr/73, pr/76
     ["curl -X `echo DELETE` https://api.github.com/repos/o/r/git/refs/heads/main"],
     ["gh api -iX$M repos/o/r/git/refs/heads/main"],
     ["gh api -iX \"$M\" repos/o/r/git/refs/heads/main"],
+    // A configuration file named through a prefix curl finds ambiguous (pr/84), read as `--config`.
+    ["curl --co req.cfg"],
+    ["curl --con req.cfg https://api.github.com/repos/o/r"],
   ])("throws a coded HTTP_TARGET_HIDDEN for %j in both verdicts, so the guard refuses it", (command) => {
     expect(thrown(() => personOnlyVerdict(command, ON_FEATURE))).toBe("HTTP_TARGET_HIDDEN");
     expect(thrown(() => unattendedPushVerdict(command))).toBe("HTTP_TARGET_HIDDEN");
@@ -1361,6 +1388,9 @@ describe("unattendedPushVerdict", () => {
     ["gh api -iXPATCH repos/o/r/pulls/3"],
     ["gh api -X=PATCH repos/o/r/pulls/3"],
     ["wget -qd https://api.github.com/repos/o/r/pulls/3 --method=PATCH"],
+    // A pull request moved, and one opened, through curl's long-option prefixes (pr/84).
+    ["curl --req PATCH https://api.github.com/repos/o/r/pulls/3"],
+    ["curl --dat '{\"title\":\"x\",\"head\":\"a\",\"base\":\"main\"}' https://api.github.com/repos/o/r/pulls"],
   ])("denies %j, naming the run verbs", (command) => {
     const verdict = unattendedPushVerdict(command);
     expect(verdict.deny).toBe(true);
@@ -1536,6 +1566,8 @@ describe("unattendedPushVerdict", () => {
     ["curl -X POST https://example.com/hook"],
     ["curl -oX https://api.github.com/repos/o/r/pulls/3"],
     ["gh api -i repos/o/r/pulls/3"],
+    // pr/84's twin: the pull request read through a prefix of a no-value option.
+    ["curl --sil https://api.github.com/repos/o/r/pulls/3"],
   ])("allows %j", (command) => {
     expect(unattendedPushVerdict(command)).toEqual({ deny: false });
   });

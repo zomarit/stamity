@@ -193,6 +193,9 @@ const MATRIX: readonly (readonly [command: string, rule: string | null])[] = [
   // gh's `-i` clustered with its method (pr/83).
   ["gh api -iXDELETE repos/o/r/git/refs/heads/feat", "push-delete"],
   ["gh api -i repos/o/r/git/refs/heads/feat", null],
+  // curl's method option through a unique prefix (pr/84).
+  ["curl --req DELETE https://api.github.com/repos/o/r/git/refs/heads/feat", "push-delete"],
+  ["curl --sil https://api.github.com/repos/o/r/git/refs/heads/feat", null],
 ];
 
 describe("the person-only guard, on every client", () => {
@@ -274,6 +277,8 @@ describe("an HTTP call whose method or target the line cannot show (pr/73, pr/76
       "M=DELETE; curl -X \"$M\" https://api.github.com/repos/o/r/git/refs/heads/main",
       // The same method attached in a short cluster (round 4d).
       "M=DELETE; curl -sX$M https://api.github.com/repos/o/r/git/refs/heads/main",
+      // A configuration file named through a prefix of `--config` (pr/84).
+      "curl --co req.cfg",
     ]) {
       expect(decide(tool, guard, line), line).toEqual({ deny: true, reason: expect.stringContaining("could not decide this shell call (HTTP_TARGET_HIDDEN)") });
     }
@@ -799,7 +804,9 @@ describe("the unattended push rule, the mode read from the run records", () => {
       // A group spelled near one of gh's own aliases (pr/67), and a pull request opened through curl's attached body (pr/81).
       "gh exts list", "curl -d'{\"title\":\"x\",\"head\":\"a\",\"base\":\"main\"}' https://api.github.com/repos/o/r/pulls",
       // A pull request moved through gh's `-i` clustered with its method (pr/83).
-      "gh api -iXPATCH repos/o/r/pulls/3"];
+      "gh api -iXPATCH repos/o/r/pulls/3",
+      // The same through curl's shortened method option (pr/84).
+      "curl --req PATCH https://api.github.com/repos/o/r/pulls/3"];
     for (const command of unattended) {
       const source = unattendedPushVerdict(command);
       expect(source.deny, command).toBe(true);
@@ -834,7 +841,7 @@ describe("the unattended push rule, the mode read from the run records", () => {
       // gh's own aliases of its built-ins (pr/67), and a pull request list read (pr/81).
       "gh ext list", "gh cs list", "curl -s https://api.github.com/repos/o/r/pulls",
       // The same pull request read through gh's `-i` (pr/83).
-      "gh api -i repos/o/r/pulls/3"]) {
+      "gh api -i repos/o/r/pulls/3", "curl --sil https://api.github.com/repos/o/r/pulls/3"]) {
       expect(unattendedPushVerdict(command), command).toEqual({ deny: false });
       expect(decide("claude", guard, command).deny, command).toBe(false);
     }

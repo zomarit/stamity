@@ -647,16 +647,19 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     const hidden = (): never => {
       throw Object.assign(new Error("http target hidden"), { code: "HTTP_TARGET_HIDDEN" });
     };
-    // wget reads a long option's unique prefix as the option (`--meth=DELETE`, `--post-d`, pr/11): one of two letters
-    // or more (`--me`, pr/29) is expanded to the method, body, `--execute`, `--config` or `--input-file` option it
-    // begins, so a misread prefix only adds a denial. A two-letter prefix wget finds ambiguous (`--po`, `--bo`, `--ex`)
-    // is one it refuses, so reading it as the option over-reads a line that sends nothing into a denial.
+    // wget reads a long option's unique prefix as the option (`--meth=DELETE`, `--post-d`, pr/11), and curl's 7.x line
+    // does too (`--req DELETE`, `--dat '{}'`, pr/84): one of two letters or more (`--me`, pr/29) is expanded to the
+    // method, body, `--execute`, `--config`, `--input-file`, `--next`, `--globoff` or `--url` option it begins, a full
+    // name kept as it is, so a misread prefix only adds a denial. A prefix the tool finds ambiguous (wget's `--po`,
+    // curl's `--dat`) is one it refuses, so reading it as the option over-reads a line that sends nothing into a denial.
+    const LONG = new Map([
+      ["wget", ["--method", "--post-data", "--post-file", "--body-data", "--body-file", "--execute", "--config", "--input-file"]],
+      ["curl", ["--request", "--data", "--data-raw", "--data-binary", "--data-ascii", "--data-urlencode", "--json", "--form",
+        "--form-string", "--upload-file", "--config", "--next", "--globoff", "--url"]],
+    ]);
     const expanded = raw.map((word) => {
       const name = word.split("=")[0] ?? "";
-      const full = tool === "wget" && /^--[a-z-]{2,}$/i.test(name)
-        ? ["--method", "--post-data", "--post-file", "--body-data", "--body-file", "--execute", "--config", "--input-file"]
-          .find((option) => option.startsWith(name.toLowerCase()))
-        : undefined;
+      const full = /^--[a-z-]{2,}$/i.test(name) ? LONG.get(tool)?.find((option) => option.startsWith(name.toLowerCase())) : undefined;
       return full === undefined ? word : full + word.slice(name.length);
     });
     // wget runs `-e`/`--execute`'s value as a wgetrc command (pr/23), its name read regardless of case, `_` and `-`:
@@ -1754,16 +1757,19 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
     const hidden = (): never => {
       throw Object.assign(new Error("http target hidden"), { code: "HTTP_TARGET_HIDDEN" });
     };
-    // wget reads a long option's unique prefix as the option (`--meth=DELETE`, `--post-d`, pr/11): one of two letters
-    // or more (`--me`, pr/29) is expanded to the method, body, `--execute`, `--config` or `--input-file` option it
-    // begins, so a misread prefix only adds a denial. A two-letter prefix wget finds ambiguous (`--po`, `--bo`, `--ex`)
-    // is one it refuses, so reading it as the option over-reads a line that sends nothing into a denial.
+    // wget reads a long option's unique prefix as the option (`--meth=DELETE`, `--post-d`, pr/11), and curl's 7.x line
+    // does too (`--req DELETE`, `--dat '{}'`, pr/84): one of two letters or more (`--me`, pr/29) is expanded to the
+    // method, body, `--execute`, `--config`, `--input-file`, `--next`, `--globoff` or `--url` option it begins, a full
+    // name kept as it is, so a misread prefix only adds a denial. A prefix the tool finds ambiguous (wget's `--po`,
+    // curl's `--dat`) is one it refuses, so reading it as the option over-reads a line that sends nothing into a denial.
+    const LONG = new Map([
+      ["wget", ["--method", "--post-data", "--post-file", "--body-data", "--body-file", "--execute", "--config", "--input-file"]],
+      ["curl", ["--request", "--data", "--data-raw", "--data-binary", "--data-ascii", "--data-urlencode", "--json", "--form",
+        "--form-string", "--upload-file", "--config", "--next", "--globoff", "--url"]],
+    ]);
     const expanded = raw.map((word) => {
       const name = word.split("=")[0] ?? "";
-      const full = tool === "wget" && /^--[a-z-]{2,}$/i.test(name)
-        ? ["--method", "--post-data", "--post-file", "--body-data", "--body-file", "--execute", "--config", "--input-file"]
-          .find((option) => option.startsWith(name.toLowerCase()))
-        : undefined;
+      const full = /^--[a-z-]{2,}$/i.test(name) ? LONG.get(tool)?.find((option) => option.startsWith(name.toLowerCase())) : undefined;
       return full === undefined ? word : full + word.slice(name.length);
     });
     // wget runs `-e`/`--execute`'s value as a wgetrc command (pr/23), its name read regardless of case, `_` and `-`:
