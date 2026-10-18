@@ -185,6 +185,8 @@ const MATRIX: readonly (readonly [command: string, rule: string | null])[] = [
   ["curl -o out.json https://api.github.com/repos/o/r/pulls/3/reviews", null],
   ["printf 'symref-create refs/heads/safe refs/heads/main\\n' | git update-ref --stdin", "push-default"],
   ["printf 'symref-create refs/heads/a refs/heads/feat/x\\n' | git update-ref --stdin", null],
+  // A method the line shows, the read neighbour of pr/83's refusal (below, as a call it cannot decide).
+  ["curl -X POST https://example.com/hook", null],
 ];
 
 describe("the person-only guard, on every client", () => {
@@ -256,17 +258,19 @@ describe("the nested-command depth limit (pr/58)", () => {
   });
 });
 
-describe("an HTTP call whose method or target the line cannot show (pr/73, pr/76, pr/77)", () => {
+describe("an HTTP call whose method or target the line cannot show (pr/73, pr/76, pr/77, pr/83)", () => {
   it.each(TOOLS)("%s: refuses it as a call it cannot decide, and allows its read neighbour", async (tool) => {
     const guard = await placeGuard(tool);
     for (const line of [
       "curl -K req.cfg",
       "curl -X PATCH -d x 'https://api.github.com/repos/o/r/git/refs/heads/{a,main}'",
       "wget --method DELETE -i urls.txt",
+      "M=DELETE; curl -X \"$M\" https://api.github.com/repos/o/r/git/refs/heads/main",
     ]) {
       expect(decide(tool, guard, line), line).toEqual({ deny: true, reason: expect.stringContaining("could not decide this shell call (HTTP_TARGET_HIDDEN)") });
     }
-    for (const line of ["curl https://api.github.com/repos/o/r", "curl 'https://example.com/p[1-3].html'", "wget -i urls.txt"]) {
+    for (const line of ["curl https://api.github.com/repos/o/r", "curl 'https://example.com/p[1-3].html'", "wget -i urls.txt",
+      "curl -X GET https://api.github.com/repos/o/r"]) {
       expect(decide(tool, guard, line).deny, line).toBe(false);
     }
   });

@@ -33,9 +33,10 @@
  * a bare tag name the context's `tags` does not list, a repository's own push
  * configuration, a `git update-ref --stdin` text read from a file, a GraphQL
  * mutation or a REST body read from a file where the
- * API's default is not the default branch — passes. A line nested past four
+ * API's default is not the default branch, a REST target held in a variable — passes. A line nested past four
  * levels is not read: both verdicts throw a coded `NESTING_DEPTH` error, which
  * the guard refuses; an HTTP call whose method or targets the line cannot show (a
+ * method holding `$` or a backtick (pr/83), a
  * curl or wget configuration file, a curl write its globbing expands, a wget
  * write reading its targets from a file) throws a coded `HTTP_TARGET_HIDDEN`
  * one, refused the same way. The tests assert
@@ -769,7 +770,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     }
     const verb = (method ?? (body ? "POST" : "GET")).toUpperCase();
     const write = ["POST", "PUT", "PATCH", "DELETE"].includes(verb);
-    // A target curl's globbing expands (pr/76), targets in wget's input file (pr/77).
+    // A method the line cannot show (pr/83), a target curl's globbing expands (pr/76), targets in wget's input file (pr/77).
+    if (method !== null && /[$`]/.test(method)) hidden();
     if (tool === "curl" && (write || body) && !globoff && targets.some((target) => /[{[]/.test(target))) hidden();
     if (tool === "wget" && write && inputFile) hidden();
     const paths = targets.map((target) =>
@@ -1876,7 +1878,8 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
     }
     const verb = (method ?? (body ? "POST" : "GET")).toUpperCase();
     const write = ["POST", "PUT", "PATCH", "DELETE"].includes(verb);
-    // A target curl's globbing expands (pr/76), targets in wget's input file (pr/77).
+    // A method the line cannot show (pr/83), a target curl's globbing expands (pr/76), targets in wget's input file (pr/77).
+    if (method !== null && /[$`]/.test(method)) hidden();
     if (tool === "curl" && (write || body) && !globoff && targets.some((target) => /[{[]/.test(target))) hidden();
     if (tool === "wget" && write && inputFile) hidden();
     const paths = targets.map((target) =>

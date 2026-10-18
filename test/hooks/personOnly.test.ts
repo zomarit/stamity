@@ -837,6 +837,9 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
   ["printf 'symref-verify refs/heads/a refs/heads/main\\n' | git update-ref --stdin"],
   ["printf 'symref-delete refs/heads/a\\n' | git update-ref --stdin"],
   ["printf 'update refs/heads/feat/x HEAD\\n' | git update-ref --stdin"],
+  // pr/83's twins: a method the line shows.
+  ["curl -X GET https://api.github.com/repos/o/r"],
+  ["curl -X POST https://example.com/hook"],
 ];
 
 describe("personOnlyVerdict — the deny matrix", () => {
@@ -983,7 +986,7 @@ describe("the nested-command depth limit (pr/58)", () => {
   });
 });
 
-describe("an HTTP call whose method or target the line cannot show (pr/73, pr/76, pr/77)", () => {
+describe("an HTTP call whose method or target the line cannot show (pr/73, pr/76, pr/77, pr/83)", () => {
   /** The `code` of what `read` throws, or `null` when it returns. */
   const thrown = (read: () => unknown): unknown => {
     try {
@@ -1026,6 +1029,12 @@ describe("an HTTP call whose method or target the line cannot show (pr/73, pr/76
     ["wget -e input=u.txt --method DELETE"],
     // A short cluster that holds `-:` among other letters: where curl's next request starts is not shown (pr/72).
     ["curl -X DELETE https://api.github.com/repos/o/r/git/refs/heads/feat -s: -X GET https://example.com"],
+    // A method the line cannot show (pr/83): `-X`, `--request`, `--method` or a wgetrc `method=` holding `$` or a
+    // backtick. A target held in a variable is not refused: it stays the respelling residual.
+    ["M=DELETE; curl -X \"$M\" https://api.github.com/repos/o/r/git/refs/heads/main"],
+    ["curl --request \"$(echo PUT)\" https://api.github.com/repos/o/r/pulls/3/merge"],
+    ["wget --method=\"$M\" https://api.github.com/repos/o/r/pulls/3"],
+    ["wget -e \"method=$M\" https://api.github.com/repos/o/r/pulls/3"],
   ])("throws a coded HTTP_TARGET_HIDDEN for %j in both verdicts, so the guard refuses it", (command) => {
     expect(thrown(() => personOnlyVerdict(command, ON_FEATURE))).toBe("HTTP_TARGET_HIDDEN");
     expect(thrown(() => unattendedPushVerdict(command))).toBe("HTTP_TARGET_HIDDEN");
@@ -1461,6 +1470,9 @@ describe("unattendedPushVerdict", () => {
     // pr/81's twins: the same targets read.
     ["curl -s https://api.github.com/repos/o/r/pulls"],
     ["curl -o out.json https://api.github.com/repos/o/r/contents/x"],
+    // pr/83's twins: a method the line shows.
+    ["curl -X GET https://api.github.com/repos/o/r"],
+    ["curl -X POST https://example.com/hook"],
   ])("allows %j", (command) => {
     expect(unattendedPushVerdict(command)).toEqual({ deny: false });
   });
