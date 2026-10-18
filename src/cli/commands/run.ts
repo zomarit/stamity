@@ -753,7 +753,15 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   const fromTop = (projectPath: string): string => posix.normalize(`${prefix}${projectPath}`);
 
   // (3) What is staged: the run folder's files, the inbox and --paths; never -A, never -f.
-  const own = [...RUN_FILES.map((file) => `${runDir}/${file}`), INBOX_PATH].filter((path) => isRegular(join(cwd, path))).map(fromTop);
+  // pr/79: a run-owned path the work tree no longer holds stages as its deletion where the index tracks it, as a
+  // --paths entry does; one whose deletion is already staged is the run's own too. A link stays out, as before.
+  const runOwned = [...RUN_FILES.map((file) => `${runDir}/${file}`), INBOX_PATH];
+  const gone = runOwned.filter((path) => !exists(join(cwd, path))).map(fromTop);
+  const goneTracked = await indexTracked(top, gone);
+  const own = runOwned.flatMap((path) => {
+    const fromRoot = fromTop(path);
+    return isRegular(join(cwd, path)) || goneTracked.has(fromRoot) ? [fromRoot] : [];
+  });
   const heldDir = `${runDir}/${HELD_DIR}`;
   const patchRel = `${heldDir}/${HELD_PATCH}`;
   const patches = [...new Set([patchRel, ...listPatches(join(cwd, heldDir)).map((name) => `${heldDir}/${name}`)])].map(fromTop);
@@ -861,7 +869,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   const inHistory = unattended ? await heldInHistory(top, remote.tips) : [];
 
   // pr/5: the commit takes the whole index, so a path staged before the verb ran and not in its own list refuses it.
-  const stray = await strayStaged(top, [...stage, ...patches, ...result.held], named);
+  const stray = await strayStaged(top, [...stage, ...gone, ...patches, ...result.held], named);
   if (stray === null) {
     result.notDone.push("commit failed: git diff --cached could not list the staged paths");
     return finish(false);
@@ -1105,14 +1113,29 @@ async function namedPaths(top: string, cwd: string, prefix: string, given: reado
   }
   if (missing.length === 0) return kept;
   // A path the work tree no longer holds still stages as a deletion where the index tracks it.
-  const tracked = await git(top, ["ls-files", "-z", "--cached", "--", ...missing], CHECKPOINT);
-  const names = tracked.code === 0 ? tracked.stdout.split("\0").filter((name) => name !== "") : [];
+  const tracked = await indexTracked(top, missing);
   for (const path of missing) {
-    const under = path.endsWith("/") ? path : `${path}/`;
-    if (names.some((name) => name === path || name.startsWith(under))) kept.push(path);
+    if (tracked.has(path)) kept.push(path);
     else notDone.push(`not staged: ${path} (no such file)`);
   }
   return kept;
+}
+
+/**
+ * The top-relative `paths` the index tracks, as a file or as a folder holding
+ * one (`git ls-files --cached`): a path the work tree no longer holds stages as
+ * its deletion when it is one of these. None where git could not answer.
+ */
+async function indexTracked(top: string, paths: readonly string[]): Promise<Set<string>> {
+  const found = new Set<string>();
+  if (paths.length === 0) return found;
+  const read = await git(top, ["ls-files", "-z", "--cached", "--", ...paths], CHECKPOINT);
+  const names = read.code === 0 ? read.stdout.split("\0").filter((name) => name !== "") : [];
+  for (const path of paths) {
+    const under = path.endsWith("/") ? path : `${path}/`;
+    if (names.some((name) => name === path || name.startsWith(under))) found.add(path);
+  }
+  return found;
 }
 
 /**

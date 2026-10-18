@@ -554,6 +554,52 @@ describe("stamity run checkpoint", () => {
     expect(pushedTree(remote)).toContain("src/x.ts");
   });
 
+  // pr/79: a run-owned file the branch holds and the work tree no longer does is staged as its deletion, as a missing
+  // --paths entry the index tracks is, so the pushed branch stops carrying the stale file.
+  describe("a deleted run-owned file (pr/79)", () => {
+    const LEDGER = `${RUN_DIR}/ledger.jsonl`;
+    const PLAN = `${RUN_DIR}/plan.md`;
+
+    /** An unattended seed whose run branch has committed the record, the ledger and the plan. */
+    async function seedRunFiles(): Promise<Seeded> {
+      const seeded = await seed("unattended");
+      await put(seeded.repo, LEDGER, '{"event":"start"}\n');
+      await put(seeded.repo, PLAN, "# Plan\n");
+      git(seeded.repo, ["add", "--", RUN_DIR]);
+      git(seeded.repo, ["commit", "-q", "-m", "run files"]);
+      await writeFile(join(seeded.repo, PLAN), "# Plan\n\nThe next unit.\n");
+      return seeded;
+    }
+
+    const committedChanges = (repo: string): string[] =>
+      git(repo, ["show", "--name-status", "--format=", "--no-renames", "HEAD"]).split("\n").filter((row) => row !== "");
+
+    it("commits the deletion of a ledger removed from the work tree, and the pushed branch no longer has it", async () => {
+      const { repo, remote } = await seedRunFiles();
+      await rm(join(repo, LEDGER));
+
+      const { code, doc } = await run(repo, CHECKPOINT);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [] });
+      expect(committedChanges(repo)).toEqual(expect.arrayContaining([`D\t${LEDGER}`, `M\t${PLAN}`]));
+      expect(pushedTree(remote)).not.toContain(LEDGER);
+      expect(pushedFile(remote, PLAN)).toContain("The next unit.");
+    });
+
+    it("commits a ledger deletion staged beforehand with git rm, rather than refusing it as staged outside --paths", async () => {
+      const { repo, remote } = await seedRunFiles();
+      git(repo, ["rm", "-q", "--", LEDGER]);
+
+      const { code, doc } = await run(repo, CHECKPOINT);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [] });
+      expect(committedChanges(repo)).toEqual(expect.arrayContaining([`D\t${LEDGER}`, `M\t${PLAN}`]));
+      expect(pushedTree(remote)).not.toContain(LEDGER);
+    });
+  });
+
   // pr/7: an unread code file does not hold the push, and notDone says the scan left it out.
   it("names a pushed code file the scan could not read in notDone, and still pushes with exit 0", async () => {
     const { repo, remote } = await seed("attended");
