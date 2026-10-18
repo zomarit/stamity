@@ -504,6 +504,8 @@ describe("init — fresh repo", () => {
         ".stamity/preflight-canary.json",
         // TEST CHANGE, justified (pr/17): the engine now ignores the run-ended marker too.
         ".stamity/run-ended.json",
+        // TEST CHANGE, justified (v6-cursor-cloud, REQ-FLOW-115): the engine now ignores Cursor's context-once markers too.
+        ".stamity/context-once/",
       ]),
     );
     // The edit is DISCLOSED too. This repo has no predecessor and no
@@ -520,7 +522,7 @@ describe("init — fresh repo", () => {
     expect(result.stdout).toContain(
       ".stamity/review-gate.json.tmp-* (the review gate's temporary writes), " +
         ".stamity/preflight-canary.json (the shell guard's hooks canary), " +
-        ".stamity/run-ended.json (the run that just ended, read by the ask gate) — were added to your .gitignore",
+        ".stamity/run-ended.json (the run that just ended, read by the ask gate), .stamity/context-once/ (Cursor's once-per-conversation context markers) — were added to your .gitignore", // TEST CHANGE, justified (v6-cursor-cloud, REQ-FLOW-115): the engine now ignores Cursor's context-once markers, named last.
     );
     expect(result.stdout).toContain("security: these lines — .env.mcp (MCP server credentials), ");
     // No MCP server, so no credential file this setup uses.
@@ -1916,7 +1918,7 @@ describe("init --dry-run", () => {
     expect(result.stdout).toContain(
       ".stamity/review-gate.json.tmp-* (the review gate's temporary writes), " +
         ".stamity/preflight-canary.json (the shell guard's hooks canary), " +
-        ".stamity/run-ended.json (the run that just ended, read by the ask gate) — would be added to your .gitignore",
+        ".stamity/run-ended.json (the run that just ended, read by the ask gate), .stamity/context-once/ (Cursor's once-per-conversation context markers) — would be added to your .gitignore", // TEST CHANGE, justified (v6-cursor-cloud, REQ-FLOW-115): the engine now ignores Cursor's context-once markers, named last.
     );
     expect(result.stdout).toContain("security: these lines — .env.mcp (MCP server credentials), ");
     // REQ-FLOW-022: the preview names a defaulted client set as the default too.

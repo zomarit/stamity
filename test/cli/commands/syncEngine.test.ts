@@ -1032,6 +1032,8 @@ describe("the review gate's state is ignored on sync", () => {
       ".stamity/preflight-canary.json",
       // TEST CHANGE, justified (pr/17): the engine now ignores the run-ended marker, so a sync adds it too.
       ".stamity/run-ended.json",
+      // TEST CHANGE, justified (v6-cursor-cloud, REQ-FLOW-115): the engine now ignores Cursor's context-once markers, so a sync adds its folder too.
+      ".stamity/context-once/",
     ];
 
     const firstPlan = await planSync(root, ENGINE_VERSION);

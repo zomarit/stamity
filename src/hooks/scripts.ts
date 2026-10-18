@@ -802,7 +802,7 @@ function cloudSessionLines(tool: Tool): string[] {
  * order, each with what it does not enforce there. A marker counts when it is set
  * to a value other than "", "false" and "0" (and to `equals` where given); its
  * value is never printed, so a marker cannot carry text into the session. Cursor's
- * marker names a Cursor agent machine, managed or self-hosted: Cursor sets it on
+ * marker names a Cursor agent machine (managed or self-hosted): Cursor sets it on
  * both, and a managed VM runs no session-start hook, so the managed reading comes
  * from the context-once script ({@link buildContextOnceScript}).
  * A client's lines are read from {@link CLIENT_CLOUD_FACTS}, where each carries
@@ -826,7 +826,7 @@ const CLOUD_SESSIONS: readonly {
     lines: cloudSessionLines("copilot"),
   },
   {
-    name: "a Cursor agent machine, managed or self-hosted",
+    name: "a Cursor agent machine (managed or self-hosted)",
     vars: ["CURSOR_AGENT_SOCKET"],
     lines: cloudSessionLines("cursor"),
   },

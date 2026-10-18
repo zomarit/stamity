@@ -726,7 +726,7 @@ describe("renderInitPanel — security disclosure", () => {
         "gate's per-run state), .stamity/review-gate.json.lock (the review gate's lock), " +
         ".stamity/review-gate.json.tmp-* (the review gate's temporary writes), " +
         ".stamity/preflight-canary.json (the shell guard's hooks canary), " +
-        ".stamity/run-ended.json (the run that just ended, read by the ask gate) — were added to your .gitignore",
+        ".stamity/run-ended.json (the run that just ended, read by the ask gate), .stamity/context-once/ (Cursor's once-per-conversation context markers) — were added to your .gitignore", // TEST CHANGE, justified (v6-cursor-cloud, REQ-FLOW-115): the engine now ignores Cursor's context-once markers, named last.
     );
     // No MCP server: no credential file this setup uses, so no such claim.
     expect(output).not.toContain("credential file this setup uses");

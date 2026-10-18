@@ -73,7 +73,7 @@ const MARKERS = [
   {
     id: "cursor-worker",
     env: { CURSOR_AGENT_SOCKET: "/tmp/cursor-agent.sock" },
-    session: "a Cursor agent machine, managed or self-hosted",
+    session: "a Cursor agent machine (managed or self-hosted)",
   },
   { id: "ci", env: { CI: "true" }, session: "a CI run" },
 ] as const;

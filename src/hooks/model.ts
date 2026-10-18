@@ -291,7 +291,7 @@ export const CLIENT_CLOUD_FACTS: readonly ClientCloudFact[] = [
     fact:
       "`CURSOR_AGENT_SOCKET` is the agent's identity socket: always set on a Cursor-managed VM, and set " +
       "per claimed agent by a self-hosted worker started with `--identity-socket`, so it marks a Cursor " +
-      "agent machine, managed or self-hosted.",
+      "agent machine (managed or self-hosted).",
     status: "documented",
     citation: { url: "https://cursor.com/docs/cloud-agent/identity", accessDate: "2026-10-18" },
   },

@@ -413,9 +413,13 @@ const CANARY_ENTRY = ".stamity/preflight-canary.json";
 /** The run-ended marker (REQUIRED_GITIGNORE_ENTRIES since pr/17), appended after the canary. */
 const MARKER_ENTRY = ".stamity/run-ended.json";
 
+/** Cursor's context-once folder (REQUIRED_GITIGNORE_ENTRIES since v6-cursor-cloud), appended after the marker. */
+const CONTEXT_ONCE_ENTRY = ".stamity/context-once/";
+
 /** Every entry an empty `.gitignore` receives, in order. */
 // TEST CHANGE, justified (pr/17): the engine now ignores the run-ended marker, so the tail gains it last.
-const REQUIRED_TAIL = [".env.mcp", ...REVIEW_GATE_TAIL, CANARY_ENTRY, MARKER_ENTRY];
+// TEST CHANGE, justified (v6-cursor-cloud, REQ-FLOW-115): the engine now ignores Cursor's context-once markers, so the tail gains its folder last.
+const REQUIRED_TAIL = [".env.mcp", ...REVIEW_GATE_TAIL, CANARY_ENTRY, MARKER_ENTRY, CONTEXT_ONCE_ENTRY];
 
 describe("ensureGitignoreEntry", () => {
   it("creates the file, then stays idempotent across repeat calls", async () => {
@@ -470,7 +474,8 @@ describe("ensureGitignoreEntry", () => {
     // cover are appended (and the run-ended marker, which the engine now ignores, pr/17); what this case pins is
     // that `.env.mcp` itself is NOT added beside it.
     expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(
-      `.env.*\n${[...REVIEW_GATE_TAIL, CANARY_ENTRY, MARKER_ENTRY].join("\n")}\n`,
+      // TEST CHANGE, justified (v6-cursor-cloud, REQ-FLOW-115): the engine now ignores Cursor's context-once markers, appended last.
+      `.env.*\n${[...REVIEW_GATE_TAIL, CANARY_ENTRY, MARKER_ENTRY, CONTEXT_ONCE_ENTRY].join("\n")}\n`,
     );
   });
 
@@ -484,7 +489,8 @@ describe("ensureGitignoreEntry", () => {
     // as before; the review gate's three entries and the hooks canary, which it
     // says nothing about, are now appended after it (with the run-ended marker, which the engine now ignores, pr/17).
     expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(
-      `.env.*\n!.env.mcp\n${[...REVIEW_GATE_TAIL, CANARY_ENTRY, MARKER_ENTRY].join("\n")}\n`,
+      // TEST CHANGE, justified (v6-cursor-cloud, REQ-FLOW-115): the engine now ignores Cursor's context-once markers, appended last.
+      `.env.*\n!.env.mcp\n${[...REVIEW_GATE_TAIL, CANARY_ENTRY, MARKER_ENTRY, CONTEXT_ONCE_ENTRY].join("\n")}\n`,
     );
   });
 
@@ -511,7 +517,8 @@ describe("ensureGitignoreEntry", () => {
     const dir = repo();
     const existing =
       ".env*\n/.stamity/review-gate.json\n/.stamity/review-gate.json.lock\n/.stamity/review-gate.json.tmp-*\n" +
-      "/.stamity/preflight-canary.json\n/.stamity/run-ended.json\n";
+      // TEST CHANGE, justified (v6-cursor-cloud, REQ-FLOW-115): the engine now ignores Cursor's context-once markers, so the seeded file names its folder too.
+      "/.stamity/preflight-canary.json\n/.stamity/run-ended.json\n/.stamity/context-once/\n";
     await dir.seedFiles({ ".gitignore": existing });
 
     await ensureGitignoreEntry(dir.dir);
@@ -551,7 +558,8 @@ describe("ensureGitignoreEntry", () => {
 
       await ensureGitignoreEntry(dir.dir);
 
-      expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(`${existing}${CANARY_ENTRY}\n${MARKER_ENTRY}\n`);
+      // TEST CHANGE, justified (v6-cursor-cloud, REQ-FLOW-115): the engine now ignores Cursor's context-once markers, which the prefix does not cover either.
+      expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(`${existing}${CANARY_ENTRY}\n${MARKER_ENTRY}\n${CONTEXT_ONCE_ENTRY}\n`);
     },
   );
 
@@ -564,7 +572,8 @@ describe("ensureGitignoreEntry", () => {
     expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(
       // TEST CHANGE, justified (pr/17): the engine now ignores the run-ended marker, appended last.
       ".env.mcp\n!.stamity/review-gate.json\n.stamity/review-gate.json.lock\n.stamity/review-gate.json.tmp-*\n" +
-        ".stamity/preflight-canary.json\n.stamity/run-ended.json\n",
+        // TEST CHANGE, justified (v6-cursor-cloud, REQ-FLOW-115): the engine now ignores Cursor's context-once markers, appended last.
+        ".stamity/preflight-canary.json\n.stamity/run-ended.json\n.stamity/context-once/\n",
     );
   });
 
@@ -579,7 +588,8 @@ describe("ensureGitignoreEntry", () => {
     expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(
       // TEST CHANGE, justified (pr/17): the engine now ignores the run-ended marker, appended last.
       ".env.mcp\n!/.stamity/review-gate.json\n.stamity/review-gate.json.lock\n.stamity/review-gate.json.tmp-*\n" +
-        ".stamity/preflight-canary.json\n.stamity/run-ended.json\n",
+        // TEST CHANGE, justified (v6-cursor-cloud, REQ-FLOW-115): the engine now ignores Cursor's context-once markers, appended last.
+        ".stamity/preflight-canary.json\n.stamity/run-ended.json\n.stamity/context-once/\n",
     );
   });
 

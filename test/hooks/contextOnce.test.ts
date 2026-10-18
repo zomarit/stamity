@@ -39,7 +39,7 @@ const getRepo = useTempDir("context-once");
 const BANNER = "stamity: no learnings and no resumable handoffs in this repo yet.";
 
 /** What the session start names on a Cursor agent machine (REQ-FLOW-085). */
-const CURSOR_SESSION = "Session: a Cursor agent machine, managed or self-hosted.";
+const CURSOR_SESSION = "Session: a Cursor agent machine (managed or self-hosted).";
 
 /** A socket timeout short enough that a silent socket costs the suite well under a second. */
 const SOCKET_TIMEOUT_MS = 200;

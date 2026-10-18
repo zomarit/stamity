@@ -1497,7 +1497,7 @@ describe("`.cursor/hooks.json`", () => {
       additional_context: [
         "stamity: no learnings and no resumable handoffs in this repo yet.",
         "",
-        "Session: a Cursor agent machine, managed or self-hosted.",
+        "Session: a Cursor agent machine (managed or self-hosted).",
       ].join("\n"),
     });
     expect({ status: post(machine).status, stdout: post(machine).stdout }).toEqual({ status: 0, stdout: "" });
