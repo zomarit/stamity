@@ -85,8 +85,18 @@ import { defineConfig } from "tsdown";
  * modules are the feature, not something bundled in by accident, and the 2 MiB
  * build they crossed printed 2,195,070 bytes. The pre-strip figure above stays
  * under this ceiling too, so the JSDoc test is still the strip's guard.
+ *
+ * Raised 2026-10-18 from 2.25 MiB to 2.375 MiB (2,490,368 bytes), with its own
+ * reason: plan 021 file 2's hook scripts, about 40 KB measured or expected —
+ * the Cursor continue script first (v4-cursor-continue, ledger row build/29),
+ * then the cloud-readiness, context-once, ask-emission and session-detector
+ * code. The build before v4 printed 2,355,284 bytes and v4's printed
+ * 2,361,709, past 2.25 MiB. Those scripts are the feature, not something
+ * bundled in by accident; the ceiling still catches bytes arriving by accident
+ * and is not a ration. The pre-strip figure above stays under this ceiling
+ * too, so the JSDoc test is still the strip's guard.
  */
-export const LOGIC_BUDGET_BYTES = 2.25 * 1024 * 1024;
+export const LOGIC_BUDGET_BYTES = 2.375 * 1024 * 1024;
 
 /**
  * The staged corpus half — `dist/content` plus `dist/packs`, plus `dist/fork` in
