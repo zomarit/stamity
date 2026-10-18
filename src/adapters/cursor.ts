@@ -36,7 +36,12 @@ import {
   type CliCallContext,
 } from "../emit/substitution.ts";
 import { CANONICAL_HOOK_EVENTS, type CanonicalHookEvent, type HookInterchange } from "../hooks/model.ts";
-import { IDENTITY_FREE_PRE_TOOL_USE_PAYLOADS, PERSON_ONLY_GUARD_FILE } from "../hooks/scripts.ts";
+import {
+  buildCursorContinueScript,
+  CURSOR_CONTINUE_FILE,
+  IDENTITY_FREE_PRE_TOOL_USE_PAYLOADS,
+  PERSON_ONLY_GUARD_FILE,
+} from "../hooks/scripts.ts";
 import {
   grantableFootprint,
   resolveAgentGrant,
@@ -303,6 +308,7 @@ const ARTIFACT_IDS = {
   mcpGuard: "cursor-mcp-guard",
   modelMap: "cursor-model-map",
   modelPins: "cursor-model-pins",
+  continueRun: "cursor-continue",
   mcp: "mcp-config",
 } as const;
 
@@ -314,6 +320,21 @@ const ARTIFACT_IDS = {
  * counts as the engine's (`../manifest/hookDocuments.ts`).
  */
 export const MODEL_PINS_HOOK_PATH = `${HOOKS_GENERATED_DIR}/cursor/stamity-model-pins.mjs`;
+
+/**
+ * The continue hook (REQ-FLOW-109): a `stop` script that keeps an unattended run
+ * going on a Cursor agent machine while its record leaves units
+ * ({@link buildCursorContinueScript}). It sits beside the model-fill hook, in
+ * the folder `.cursor/hooks.json`'s recogniser counts as the engine's.
+ */
+export const CURSOR_CONTINUE_HOOK_PATH = `${HOOKS_GENERATED_DIR}/cursor/${CURSOR_CONTINUE_FILE}`;
+
+/**
+ * The continue hook's `loop_limit`: the most follow-ups Cursor runs from it in
+ * one conversation (cursor.com/docs/hooks). Fixed and emitted, so a planted
+ * record cannot keep an agent looping past it.
+ */
+export const CURSOR_CONTINUE_LOOP_LIMIT = 50;
 
 /** The tool Cursor spawns a sub-agent through, and the model-fill hook's matcher (cursor.com/docs/hooks, read 2026-10-14). */
 const SUBAGENT_TOOL = "Task";
@@ -538,6 +559,13 @@ export const cursorResiduePlanner: ResiduePlanner = {
         owner: { adapter: "cursor", artifactId: ARTIFACT_IDS.modelPins, artifactType: "infra" },
       },
       {
+        path: CURSOR_CONTINUE_HOOK_PATH,
+        // The layout decided as the Claude adapter's ask gate's is: the repository copy finds its root from
+        // where it sits, a plugin root's copy from the bounded variable or the working directory.
+        content: buildCursorContinueScript({ layout: ctx.facts.hookScriptsRoot === undefined ? "generated" : "container" }),
+        owner: { adapter: "cursor", artifactId: ARTIFACT_IDS.continueRun, artifactType: "infra" },
+      },
+      {
         path: SUBAGENT_GUARD_PATH,
         // Every id this run can legitimately spawn: the shipped roster, plus
         // the agents actually emitted above. A pack agent emitted without a
@@ -554,7 +582,7 @@ export const cursorResiduePlanner: ResiduePlanner = {
       },
       {
         path: CURSOR_HOOKS_CONFIG_PATH,
-        content: buildHooksJson(core.hooks.interchangeFor("cursor"), cliCallContextOf(ctx), ctx.facts.hookScriptsRoot, { modelPins: true }),
+        content: buildHooksJson(core.hooks.interchangeFor("cursor"), cliCallContextOf(ctx), ctx.facts.hookScriptsRoot, { modelPins: true, continueRun: true }),
         owner: { adapter: "cursor", artifactId: ARTIFACT_IDS.hooksConfig, artifactType: "infra" },
       },
     );
@@ -893,6 +921,8 @@ interface CursorHookEntry {
   timeout?: number;
   matcher?: string;
   failClosed?: boolean;
+  /** On `stop` alone: the most follow-ups the hook's answers run in one conversation. */
+  loop_limit?: number;
 }
 
 /**
@@ -935,12 +965,18 @@ interface CursorHookEntry {
  * starter directly, not through the portable runner, which drops Cursor's
  * `updated_input` (`../hooks/portableRunner.ts`). The residue planner sets it;
  * a direct call without it renders the document as before the hook existed.
+ *
+ * `opts.continueRun` appends the continue hook ({@link CURSOR_CONTINUE_HOOK_PATH})
+ * to `stop`, after the planned rows, under {@link CURSOR_CONTINUE_LOOP_LIMIT} and
+ * never `failClosed`: a stop decides nothing. It too runs through the starter
+ * directly, which hands Cursor its `followup_message` as written, and its row
+ * names its own event. The residue planner sets it, as it sets `modelPins`.
  */
 export function buildHooksJson(
   rows: readonly HookInterchange[],
   cli: CliCallContext,
   hookScriptsRoot?: string,
-  opts: { modelPins?: boolean } = {},
+  opts: { modelPins?: boolean; continueRun?: boolean } = {},
 ): string {
   const syncCall = pinnedCliCall(cli.packageName, cli.version, "sync", cli);
   const events: Record<string, CursorHookEntry[]> = {};
@@ -955,10 +991,10 @@ export function buildHooksJson(
   // In a repository each adapter script runs through the same walk-up starter
   // as the planned rows, so a session started in a subfolder still reaches it;
   // with the script missing the starter exits 1 naming the sync call. The row
-  // it carries names the script; the script reads its payload and no argument.
-  const adapterScriptCommand = (file: string): string =>
+  // it carries names the script and the event it is wired to; a script reads its payload, if at all, and no argument.
+  const adapterScriptCommand = (file: string, event: CanonicalHookEvent = "pre_tool_use"): string =>
     hookScriptsRoot === undefined
-      ? portableHookCommand("cursor", { event: "pre_tool_use", command: ["node", file] }, { syncCall, script: file })
+      ? portableHookCommand("cursor", { event, command: ["node", file] }, { syncCall, script: file })
       : shellCommand(["node", placed(file)]);
 
   for (const event of CANONICAL_HOOK_EVENTS) {
@@ -977,6 +1013,9 @@ export function buildHooksJson(
       });
     if (event === "pre_tool_use" && opts.modelPins === true) {
       entries.push({ command: adapterScriptCommand(MODEL_PINS_HOOK_PATH), matcher: SUBAGENT_TOOL });
+    }
+    if (event === "stop" && opts.continueRun === true) {
+      entries.push({ command: adapterScriptCommand(CURSOR_CONTINUE_HOOK_PATH, "stop"), loop_limit: CURSOR_CONTINUE_LOOP_LIMIT });
     }
     if (entries.length === 0) continue;
     events[EVENT_RENAME[event]] = entries;

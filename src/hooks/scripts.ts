@@ -37,6 +37,7 @@ import {
   GIT_METADATA_MAX_BYTES,
   IN_PROGRESS_PATTERN,
   RECORD_BRANCH_PATTERN,
+  RECORD_CHECKPOINT_PATTERN,
   RECORD_FILE,
   RECORD_HEAD_LINES,
   RECORD_HEAD_READ_BYTES,
@@ -137,6 +138,12 @@ const TAMPER_NOTICE_FILE = "stamity-config-tamper-notice.mjs";
 export const UNATTENDED_ASK_GATE_FILE = "stamity-unattended-ask-gate.mjs";
 
 /**
+ * The Cursor continue hook (REQ-FLOW-109). NON-portable carrier: Cursor's `stop`,
+ * one client only, placed and wired by the Cursor adapter, which names it.
+ */
+export const CURSOR_CONTINUE_FILE = "stamity-cursor-continue.mjs";
+
+/**
  * Work-scoped review gate. NON-portable carriers, one client only — the
  * adapter that wires them reads them off `CLIENT_EXTENSION_EVENTS`. Exported
  * because no plan function returns this script: the wiring adapter names it.
@@ -168,8 +175,8 @@ export const PERSON_ONLY_GUARD_FILE = "stamity-person-only-guard.mjs";
  *
  * The guard row is the plan's fixed ceiling; the session start's was one until
  * 2026-10-18, when it moved once by the rule below (its row says why). The
- * review gate, the session start, the tamper notice, the ask gate and the
- * person-only guard are their measured size times 1.25, bytes rounded up to a
+ * review gate, the session start, the tamper notice, the ask gate, the Cursor
+ * continue hook and the person-only guard are their measured size times 1.25, bytes rounded up to a
  * multiple of 1,024 and lines to a multiple of 10.
  */
 export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: number; readonly lines: number }>> = {
@@ -214,6 +221,10 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // (a plugin root renders 7,773 / 180). × 1.25 = 10,626.25 / 251.25, rounded
   // up to 10,752 / 260.
   [UNATTENDED_ASK_GATE_FILE]: { bytes: 10_752, lines: 260 },
+  // Measured 2026-10-18 on plan 021 file 2's v4-cursor-continue lane (base 3519efee): 8,577 bytes / 202 lines
+  // (cursor, generated layout; a plugin root renders 7,849 / 181). × 1.25 = 10,721.25 / 252.5, rounded up as
+  // the review gate's is to 11,264 / 260.
+  [CURSOR_CONTINUE_FILE]: { bytes: 11_264, lines: 260 },
   // Measured 2026-09-24 and again 2026-09-26 at 8c08660e: 2,383 bytes / 67
   // lines, the same in both layouts. × 1.25 = 2,978.75 / 83.75, rounded up to
   // 3,072 / 90.
@@ -4213,6 +4224,69 @@ export const UNATTENDED_ASK_GATE_FAULT_NOTE =
 const ASK_TOOL_NAME = "AskUserQuestion";
 
 /**
+ * The run-record head reader the ask gate and the Cursor continue hook share, as script text: `recordHead(path)`
+ * reads one record's status, mode and branch from its head, and `recordHeads(root)` every run folder's, each with
+ * its run id and repo-relative path. The host declares the constants it reads (RUNS_SEGMENTS, RECORD_FILE, RUN_ID,
+ * STATUS, MODE, BRANCH, IN_PROGRESS, HEAD_LINES, HEAD_READ_BYTES, RUN_FOLDERS_MAX) and imports the `node:fs` and
+ * `node:path` names it calls.
+ */
+const RECORD_HEADS_SOURCE = String.raw`
+/** A record's status, mode and branch from its first HEAD_LINES lines; null when absent or not a regular file. */
+function recordHead(path) {
+  let stats;
+  try {
+    stats = lstatSync(path);
+  } catch (error) {
+    if (error && error.code === "ENOENT") return null;
+    throw error;
+  }
+  if (!stats.isFile()) return null;
+  const fd = openSync(path, "r");
+  let text = "";
+  try {
+    const buffer = Buffer.alloc(Math.min(HEAD_READ_BYTES, stats.size));
+    text = buffer.toString("utf8", 0, readSync(fd, buffer, 0, buffer.length, 0));
+  } finally {
+    closeSync(fd);
+  }
+  let status = null;
+  let mode = null;
+  let branch = null;
+  for (const line of text.replace(/^\uFEFF/, "").split(/\r?\n/).slice(0, HEAD_LINES)) {
+    status ??= STATUS.exec(line)?.[1] ?? null;
+    mode ??= MODE.exec(line)?.[1].toLowerCase() ?? null;
+    branch ??= BRANCH.exec(line)?.[1] ?? null;
+  }
+  return { inProgress: status !== null && IN_PROGRESS.test(status), mode, branch };
+}
+
+/** The heads of every run folder's record, each with its repo-relative path; no records folder holds none, more than RUN_FOLDERS_MAX throws. */
+function recordHeads(root) {
+  const runsDir = join(root, ...RUNS_SEGMENTS);
+  let entries = [];
+  try {
+    if (lstatSync(runsDir).isDirectory()) entries = readdirSync(runsDir, { withFileTypes: true });
+  } catch (error) {
+    if (!error || (error.code !== "ENOENT" && error.code !== "ENOTDIR")) throw error;
+  }
+  // Every run folder's head, so no pile of folders named after an open record's pushes it out of the read.
+  const names = entries
+    .filter((entry) => entry.isDirectory() && RUN_ID.test(entry.name))
+    .map((entry) => entry.name)
+    .sort()
+    .reverse();
+  if (names.length > RUN_FOLDERS_MAX) {
+    throw Object.assign(new Error("run folders"), { code: "RUN_FOLDERS_OVER_" + RUN_FOLDERS_MAX, path: runsDir });
+  }
+  const heads = [];
+  for (const name of names) {
+    const head = recordHead(join(runsDir, name, RECORD_FILE));
+    if (head !== null) heads.push({ ...head, run: name, path: [...RUNS_SEGMENTS, name, RECORD_FILE].join("/") });
+  }
+  return heads;
+}`;
+
+/**
  * The unattended ask gate (REQ-FLOW-090, REQ-FLOW-095): refuses Claude Code's
  * question tool while nobody is there to answer, so an unattended run takes its
  * declared defaults instead of waiting forever.
@@ -4290,62 +4364,8 @@ const FAULT_NOTE = ${json(UNATTENDED_ASK_GATE_FAULT_NOTE)};
 const BLOCK_EXIT = ${BLOCKING_EXIT_CODE};
 
 ${resolveRepoRoot(layout)}
+${RECORD_HEADS_SOURCE}
 ${String.raw`
-/** A record's status, mode and branch from its first HEAD_LINES lines; null when absent or not a regular file. */
-function recordHead(path) {
-  let stats;
-  try {
-    stats = lstatSync(path);
-  } catch (error) {
-    if (error && error.code === "ENOENT") return null;
-    throw error;
-  }
-  if (!stats.isFile()) return null;
-  const fd = openSync(path, "r");
-  let text = "";
-  try {
-    const buffer = Buffer.alloc(Math.min(HEAD_READ_BYTES, stats.size));
-    text = buffer.toString("utf8", 0, readSync(fd, buffer, 0, buffer.length, 0));
-  } finally {
-    closeSync(fd);
-  }
-  let status = null;
-  let mode = null;
-  let branch = null;
-  for (const line of text.replace(/^\uFEFF/, "").split(/\r?\n/).slice(0, HEAD_LINES)) {
-    status ??= STATUS.exec(line)?.[1] ?? null;
-    mode ??= MODE.exec(line)?.[1].toLowerCase() ?? null;
-    branch ??= BRANCH.exec(line)?.[1] ?? null;
-  }
-  return { inProgress: status !== null && IN_PROGRESS.test(status), mode, branch };
-}
-
-/** The heads of every run folder's record, each with its repo-relative path; no records folder holds none, more than RUN_FOLDERS_MAX throws. */
-function recordHeads(root) {
-  const runsDir = join(root, ...RUNS_SEGMENTS);
-  let entries = [];
-  try {
-    if (lstatSync(runsDir).isDirectory()) entries = readdirSync(runsDir, { withFileTypes: true });
-  } catch (error) {
-    if (!error || (error.code !== "ENOENT" && error.code !== "ENOTDIR")) throw error;
-  }
-  // Every run folder's head, so no pile of folders named after an open record's pushes it out of the read.
-  const names = entries
-    .filter((entry) => entry.isDirectory() && RUN_ID.test(entry.name))
-    .map((entry) => entry.name)
-    .sort()
-    .reverse();
-  if (names.length > RUN_FOLDERS_MAX) {
-    throw Object.assign(new Error("run folders"), { code: "RUN_FOLDERS_OVER_" + RUN_FOLDERS_MAX, path: runsDir });
-  }
-  const heads = [];
-  for (const name of names) {
-    const head = recordHead(join(runsDir, name, RECORD_FILE));
-    if (head !== null) heads.push({ ...head, run: name, path: [...RUNS_SEGMENTS, name, RECORD_FILE].join("/") });
-  }
-  return heads;
-}
-
 /** A git metadata file's text, trimmed; null when absent, a link, not a file or past GIT_MAX_BYTES. */
 function gitText(path) {
   let stats;
@@ -4421,5 +4441,131 @@ if (refusal !== null) {
   process.stderr.write(REASON + refusal + "\n");
   process.exitCode = BLOCK_EXIT;
 }
+`}`;
+}
+
+/**
+ * What the Cursor continue hook answers on `stop` (REQ-FLOW-109): `<m>` is the
+ * count of units the record's last checkpoint line leaves, digits only, and
+ * `<path>` the record's repo-relative path, built from its run folder's name.
+ */
+export const CURSOR_CONTINUE_FOLLOW_UP = "Continue the run: <m> units remain; the record is <path>.";
+
+/** The one stderr line a read this hook could not finish writes: `<read>` names it, `<cause>` its error code. */
+export const CURSOR_CONTINUE_FAULT_NOTE = "stamity cursor continue: <read> could not be read (<cause>), so the run is not continued.";
+
+/**
+ * The Cursor continue hook (REQ-FLOW-109): on Cursor's `stop`, keeps an
+ * unattended run going on a Cursor agent machine by answering a
+ * `followup_message`, which Cursor submits as the agent's next prompt.
+ *
+ * Like {@link buildUnattendedAskGate} it is NOT core: the Cursor adapter places
+ * and wires it, on `stop` alone, under a fixed `loop_limit` that caps how many
+ * follow-ups one conversation takes. It answers nothing unless
+ * `CURSOR_AGENT_SOCKET` is set (not "", "false", "0"), the marker of a Cursor
+ * agent machine, so a local session on a branch carrying such a record is never
+ * steered. Then it reads every run record's head the way the ask gate does
+ * ({@link RECORD_HEADS_SOURCE}), with no order among them; a record in
+ * progress reading `Mode: unattended`, whose `Branch:` names the branch
+ * `.git/HEAD` names, and whose last checkpoint line
+ * ({@link RECORD_CHECKPOINT_PATTERN}, the whole record read when it is at most
+ * {@link REPORT_READ_MAX_BYTES}) leaves a count of digits above 0 earns
+ * {@link CURSOR_CONTINUE_FOLLOW_UP}. The message carries that count and a path
+ * built from the folder's name, never text read from the record.
+ *
+ * Never a gate: a stop decides nothing, so anything else answers nothing, and a
+ * read it cannot finish answers nothing with one stderr line naming that read.
+ * It always exits 0 and never reads its payload.
+ */
+export function buildCursorContinueScript(opts: { layout?: HookScriptLayout } = {}): string {
+  const layout = opts.layout ?? "generated";
+  const extra = repoRootImports(layout);
+  const regex = (pattern: RegExp): string => `new RegExp(${json(pattern.source)}, ${json(pattern.flags)})`;
+  return `${header(
+    [
+      "stamity — continue hook (Cursor).",
+      "",
+      "On stop, keeps an unattended run going on a Cursor agent machine: while a",
+      "run in progress on this branch reads `Mode: unattended` and its last",
+      "checkpoint line leaves units, it answers a followup_message naming the count",
+      "and the record. Anything else, or a read it cannot finish, answers nothing.",
+      "Never blocks; the hooks file caps the follow-ups at the row's loop_limit.",
+    ],
+    [
+      "Reads outside repo state: the CURSOR_AGENT_SOCKET and STAMITY_REPO_ROOT",
+      "variables. Reads the run records and .git/HEAD, never its payload; writes nothing.",
+    ],
+  )}
+
+${namedImport(["closeSync", "lstatSync", "openSync", "readFileSync", "readSync", "readdirSync", "statSync"], "node:fs")}
+${namedImport(["isAbsolute", "join", "resolve", "sep", ...extra.path], "node:path")}
+${extra.url}
+const STATE_SEGMENTS = ${json([RUNS_SEGMENTS[0]])};
+const RUNS_SEGMENTS = ${json(RUNS_SEGMENTS)};
+const RECORD_FILE = ${json(RECORD_FILE)};
+const RUN_ID = ${regex(RUN_ID_PATTERN)};
+const STATUS = ${regex(RECORD_STATUS_PATTERN)};
+const MODE = ${regex(RECORD_MODE_PATTERN)};
+const BRANCH = ${regex(RECORD_BRANCH_PATTERN)};
+const IN_PROGRESS = ${regex(IN_PROGRESS_PATTERN)};
+const CHECKPOINT = ${regex(RECORD_CHECKPOINT_PATTERN)};
+const HEAD_LINES = ${RECORD_HEAD_LINES};
+const HEAD_READ_BYTES = ${RECORD_HEAD_READ_BYTES};
+const RECORD_MAX_BYTES = ${REPORT_READ_MAX_BYTES};
+const RUN_FOLDERS_MAX = ${GUARD_RUN_FOLDERS_MAX};
+const FOLLOW_UP = ${json(CURSOR_CONTINUE_FOLLOW_UP)};
+const FAULT_NOTE = ${json(CURSOR_CONTINUE_FAULT_NOTE)};
+
+${resolveRepoRoot(layout)}
+${RECORD_HEADS_SOURCE}
+
+${buildCardBranchSource()}
+${String.raw`
+/** The units a record's last checkpoint line leaves, above 0; null when none is left, its count is not digits or no line is there. */
+function unitsLeft(path) {
+  const stats = lstatSync(path);
+  if (!stats.isFile()) return null;
+  if (stats.size > RECORD_MAX_BYTES) throw Object.assign(new Error("record"), { code: "RECORD_TOO_LARGE", path });
+  const fd = openSync(path, "r");
+  let text = "";
+  try {
+    const buffer = Buffer.alloc(stats.size);
+    text = buffer.toString("utf8", 0, readSync(fd, buffer, 0, buffer.length, 0));
+  } finally {
+    closeSync(fd);
+  }
+  let left = null;
+  for (const line of text.split(/\r?\n/)) left = CHECKPOINT.exec(line)?.[1] ?? left;
+  return left !== null && /^[0-9]{1,9}$/.test(left) && Number(left) > 0 ? Number(left) : null;
+}
+
+/** The follow-up this stop earns, or null when the agent stops. */
+function followUp() {
+  // A Cursor agent machine only: a local session on a branch carrying such a record is never steered.
+  if (["", "false", "0"].includes(process.env.CURSOR_AGENT_SOCKET ?? "")) return null;
+  const root = repoRoot();
+  const branch = cardCurrentBranch(root);
+  if (branch === null) return null;
+  // No order among records: a run id carries only the date, so two runs of one day would rank by slug.
+  for (const head of recordHeads(root)) {
+    if (!head.inProgress || head.mode !== "unattended" || head.branch !== branch) continue;
+    const left = unitsLeft(join(root, ...RUNS_SEGMENTS, head.run, RECORD_FILE));
+    // Digits and the folder-built path only: no text read from the record reaches the agent's next prompt.
+    if (left !== null) return FOLLOW_UP.replace("<m>", () => String(left)).replace("<path>", () => head.path);
+  }
+  return null;
+}
+
+let message = null;
+try {
+  message = followUp();
+} catch (error) {
+  // Never a gate: a read this hook could not finish stops the run here, and one line says which read failed.
+  const read = error && typeof error.path === "string" ? error.path : "an input";
+  const cause = error && error.code ? String(error.code) : (error && error.name) || "a fault";
+  const note = FAULT_NOTE.replace("<read>", () => read).replace("<cause>", () => cause);
+  process.stderr.write(note.replace(/[\u0000-\u001f\u007f]/g, "?") + "\n");
+}
+if (message !== null) process.stdout.write(JSON.stringify({ followup_message: message }) + "\n");
 `}`;
 }

@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   CURSOR_AGENTS_DIR,
   CURSOR_COMMANDS_DIR,
+  CURSOR_CONTINUE_HOOK_PATH,
+  CURSOR_CONTINUE_LOOP_LIMIT,
   CURSOR_GUARD_EVENTS,
   CURSOR_RULE_LINE_CAP,
   EVENT_RENAME,
@@ -1050,7 +1052,7 @@ describe("touchpoint commands", () => {
 
 interface HooksDocument {
   version: number;
-  hooks: Record<string, { command: string; matcher?: string; failClosed?: boolean; timeout?: number }[]>;
+  hooks: Record<string, { command: string; matcher?: string; failClosed?: boolean; timeout?: number; loop_limit?: number }[]>;
 }
 
 const parseHooks = (raw: string): HooksDocument => JSON.parse(raw) as HooksDocument;
@@ -1367,6 +1369,75 @@ describe("`.cursor/hooks.json`", () => {
     const script = byPath(plan).get(MODEL_PINS_HOOK_PATH);
     expect(script?.owner).toEqual({ adapter: "cursor", artifactId: "cursor-model-pins", artifactType: "infra" });
     expect(script?.content.startsWith("#!/usr/bin/env node\n")).toBe(true);
+  });
+
+  // REQ-FLOW-109: the continue hook, wired by this adapter on `stop`; its answers are run in
+  // `../hooks/cursorContinue.test.ts`.
+  it("wires the continue hook on stop alone, under its fixed loop_limit, through the starter and never the runner or failClosed", async () => {
+    const plan = await planFor(await seedCorpus());
+    const doc = parseHooks(contentAt(plan, P.hooksConfig));
+    const stop = doc.hooks[EVENT_RENAME.stop] ?? [];
+    expect(CURSOR_CONTINUE_LOOP_LIMIT).toBe(50);
+    expect(stop).toEqual([{ command: stop[0]?.command, loop_limit: 50 }]);
+    // The starter runs the hook itself, not the portable runner, and the row it carries names the stop event.
+    expect(startedScript(stop[0]!.command)).toBe(CURSOR_CONTINUE_HOOK_PATH);
+    expect(childArgv(stop[0]!.command)).toEqual(["node", CURSOR_CONTINUE_HOOK_PATH]);
+    expect(JSON.parse(Buffer.from(stop[0]!.command.split(" ").at(-1)!, "base64url").toString())).toMatchObject({ event: "stop" });
+    expect(stop[0]!.command).toContain(`; run npx -y @zomarit/stamity@${ENGINE_VERSION} sync'`);
+    // One copy: no other event runs it, and no other entry carries a loop_limit.
+    const others = Object.entries(doc.hooks).filter(([event]) => event !== EVENT_RENAME.stop).flatMap(([, entries]) => entries);
+    for (const entry of others) {
+      expect(startedScript(entry.command)).not.toBe(CURSOR_CONTINUE_HOOK_PATH);
+      expect(entry.loop_limit).toBeUndefined();
+    }
+
+    expect(CURSOR_CONTINUE_HOOK_PATH).toBe(".stamity/generated/hooks/cursor/stamity-cursor-continue.mjs");
+    const script = byPath(plan).get(CURSOR_CONTINUE_HOOK_PATH);
+    expect(script?.owner).toEqual({ adapter: "cursor", artifactId: "cursor-continue", artifactType: "infra" });
+    expect(script?.content).toContain("continue hook (Cursor)");
+    // A direct call without the option renders the document as before the hook existed.
+    expect(parseHooks(buildHooksJson([], CLI_PIN)).hooks[EVENT_RENAME.stop]).toBeUndefined();
+  });
+
+  it("keeps an authored stop row first and the continue hook after it", async () => {
+    const corpus = await seedCorpus();
+    await getTemp().seedFiles({
+      "repo/.stamity/hooks/stop.json": JSON.stringify({ hooks: [{ event: "stop", command: ["node", ".stamity/hooks/stop.mjs"] }] }),
+      "repo/.stamity/hooks/stop.mjs": "process.exit(0)\n",
+    });
+    const stop = parseHooks(contentAt(await planFor(corpus), P.hooksConfig)).hooks[EVENT_RENAME.stop] ?? [];
+    expect(stop.map((entry) => [childCommand(entry.command), entry.loop_limit])).toEqual([
+      ["node .stamity/hooks/stop.mjs", undefined],
+      [`node ${CURSOR_CONTINUE_HOOK_PATH}`, 50],
+    ]);
+  });
+
+  it("answers the follow-up through the emitted stop entry from a subfolder, on a Cursor agent machine only", async () => {
+    const plan = await planFor(await seedCorpus());
+    const temp = getTemp();
+    await temp.seedFiles({
+      "repo/.cursor/hooks.json": contentAt(plan, P.hooksConfig),
+      [`repo/${CURSOR_CONTINUE_HOOK_PATH}`]: contentAt(plan, CURSOR_CONTINUE_HOOK_PATH),
+      "repo/.git/HEAD": "ref: refs/heads/stamity/night\n",
+      "repo/.stamity/runs/2026-10-18_night/record.md":
+        "# Run\n\nStatus: in progress\nMode: unattended\nBranch: stamity/night\n\n- 2026-10-18T02:00Z checkpoint: 3519efee units done=1 remaining=2\n",
+      "repo/sub/.keep": "",
+    });
+    const command = parseHooks(contentAt(plan, P.hooksConfig)).hooks[EVENT_RENAME.stop]![0]!.command;
+    const env: NodeJS.ProcessEnv = { ...process.env };
+    delete env["CURSOR_PROJECT_DIR"];
+    delete env["CURSOR_AGENT_SOCKET"];
+    delete env["STAMITY_REPO_ROOT"];
+    const stop = (extra: NodeJS.ProcessEnv) =>
+      spawnSync(command, { cwd: temp.path("repo", "sub"), env: { ...env, ...extra }, shell: true, input: JSON.stringify({ status: "completed", loop_count: 0 }), encoding: "utf8" });
+
+    const machine = stop({ CURSOR_AGENT_SOCKET: "/tmp/cursor-agent.sock" });
+    expect(machine.status, machine.stderr).toBe(0);
+    expect(JSON.parse(machine.stdout)).toEqual({
+      followup_message: "Continue the run: 2 units remain; the record is .stamity/runs/2026-10-18_night/record.md.",
+    });
+    const local = stop({});
+    expect({ status: local.status, stdout: local.stdout }).toEqual({ status: 0, stdout: "" });
   });
 
   // review/84 (e5's review): an upgrade moves the pinned sync call the entry's
@@ -1994,6 +2065,15 @@ describe("hooks.json under a plugin root", () => {
       const row = doc.hooks[EVENT_RENAME.pre_tool_use]?.[0];
       expect(row?.failClosed).toBeUndefined();
     }
+  });
+
+  it("re-roots the continue hook's command and keeps its loop_limit (REQ-FLOW-109)", async () => {
+    const plan = await planFor(await seedCorpus(), { hookScriptsRoot: ROOT });
+    expect(parseHooks(contentAt(plan, P.hooksConfig)).hooks[EVENT_RENAME.stop]).toEqual([
+      { command: `node "${ROOT}/stamity-cursor-continue.mjs"`, loop_limit: 50 },
+    ]);
+    // The plugin root's copy finds the repository from the bounded variable or the working directory.
+    expect(byPath(plan).get(CURSOR_CONTINUE_HOOK_PATH)?.content).not.toContain("derivedRoot");
   });
 
   it("leaves the guard SCRIPTS on their repository paths", async () => {

@@ -17,8 +17,10 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
 import { describe, expect, it } from "vitest";
 import { CLIENT_EXTENSION_EVENTS, CLIENT_HOOK_GUARANTEES } from "../../src/hooks/model.ts";
 import {
+  buildCursorContinueScript,
   buildReviewGateScript,
   buildUnattendedAskGate,
+  CURSOR_CONTINUE_FILE,
   HOOK_SCRIPT_BUDGETS,
   type HookScriptLayout,
   PERSON_ONLY_GUARD_FILE,
@@ -68,6 +70,12 @@ const REVIEW_GATE_TOOLS: ReadonlySet<Tool> = new Set(
  */
 const ASK_GATE_TOOLS: ReadonlySet<Tool> = new Set<Tool>(["claude"]);
 
+/**
+ * The clients whose adapter places the continue hook: Cursor alone, on its `stop`
+ * (REQ-FLOW-109). Like the ask gate, `planCoreHookScripts` does not return it.
+ */
+const CONTINUE_TOOLS: ReadonlySet<Tool> = new Set<Tool>(["cursor"]);
+
 /** Lines as the budget counts them: `\n` only, so CRLF and LF count alike. */
 function lineCount(content: string): number {
   return content.split("\n").length - 1;
@@ -88,7 +96,10 @@ function renderAll(tool: Tool, layout: HookScriptLayout): Rendered[] {
   const askGate: Rendered[] = ASK_GATE_TOOLS.has(tool)
     ? [{ tool, fileName: UNATTENDED_ASK_GATE_FILE, content: buildUnattendedAskGate({ layout }) }]
     : [];
-  if (!REVIEW_GATE_TOOLS.has(tool)) return [...core, ...askGate];
+  const continueHook: Rendered[] = CONTINUE_TOOLS.has(tool)
+    ? [{ tool, fileName: CURSOR_CONTINUE_FILE, content: buildCursorContinueScript({ layout }) }]
+    : [];
+  if (!REVIEW_GATE_TOOLS.has(tool)) return [...core, ...askGate, ...continueHook];
   const failMode =
     CLIENT_HOOK_GUARANTEES.find((guarantee) => guarantee.tool === tool)?.failMode ?? "fail-closed";
   return [
@@ -104,6 +115,7 @@ function renderAll(tool: Tool, layout: HookScriptLayout): Rendered[] {
       }),
     },
     ...askGate,
+    ...continueHook,
   ];
 }
 
@@ -154,7 +166,9 @@ describe("hook script budgets (REQ-CTX-016)", () => {
     // Four clients × four core scripts (the person-only guard among them), plus the review gate where it is wired.
     // Moved from × 3 by u14-shell-guard: the guard is a core script with a budget row of its own.
     // Moved by u14b-ask-gate: the ask gate is a fifth script with a budget row, rendered where its adapter places it.
-    expect(renders).toHaveLength(TOOLS.length * 4 + REVIEW_GATE_TOOLS.size + ASK_GATE_TOOLS.size);
+    // TEST CHANGE, justified (v4-cursor-continue, REQ-FLOW-109): the Cursor continue hook is a sixth script with a
+    // budget row, rendered where its adapter places it, so the count gains its one client.
+    expect(renders).toHaveLength(TOOLS.length * 4 + REVIEW_GATE_TOOLS.size + ASK_GATE_TOOLS.size + CONTINUE_TOOLS.size);
   });
 
   it.each(renders.map((script) => [`${script.tool}/${script.fileName}`, script] as const))(

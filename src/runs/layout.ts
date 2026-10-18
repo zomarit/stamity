@@ -106,6 +106,13 @@ export const RECORD_RESUMES_PATTERN = /^resumes:\s*(\S+)/i;
  * mention of `usage: review` is not a round.
  */
 export const USAGE_REVIEW_PATTERN = /^\s*- +\S+ +usage: *review +r[1-9][0-9]*\b/;
+/**
+ * One checkpoint's record line, `- <UTC> checkpoint: <sha> units done=<n> remaining=<m>`, as the `st-unattended`
+ * skill has a run write it after each checkpoint (`content/skills/st-unattended/SKILL.md`, Checkpoints). Group 1 is
+ * the `remaining=` value as written: the reader holds it to digits, so a line whose count is not digits still counts
+ * as the last checkpoint and reads as nothing left (REQ-FLOW-109).
+ */
+export const RECORD_CHECKPOINT_PATTERN = /^\s*- +\S+ +checkpoint: *\S+ +units +done=\S* +remaining=(\S*)/;
 /** What a status value says while the run is open, in any case and any decoration. */
 export const IN_PROGRESS_PATTERN = /\bin progress\b/i;
 
