@@ -29,6 +29,7 @@ import {
   type GeneratedHookScript,
   type ReviewGateScriptOptions,
 } from "../../src/hooks/scripts.ts";
+import { usageReviewLines } from "../../src/cli/commands/gate.ts";
 import { learnCommand } from "../../src/cli/commands/learn.ts";
 import { cliCallHint } from "../../src/shared/cliCall.ts";
 import { formatLearningsIndex, loadValidatedLearnings } from "../../src/learnings/store.ts";
@@ -3707,7 +3708,9 @@ describe("the review gate rebuilds a missing counter from this branch's run reco
 
     expect(held.code).toBe(2);
     expect(refusal(held)).toMatchObject({ blocked: true, reasonCode: "RECORD_TOO_LARGE" });
-    expect(String(refusal(held)["message"])).toContain(join(".stamity", "runs", "2026-10-18_night", "record.md"));
+    // TEST CHANGE (v2 fix round 1, review/55): the fault names the record by its repo-relative POSIX path, never
+    // the absolute one the read used; the old assertion matched the absolute path's platform-separated tail.
+    expect(String(refusal(held)["message"])).toContain("(RECORD_TOO_LARGE at .stamity/runs/2026-10-18_night/record.md)");
   });
 
   it("holds, naming the fault, past 2,000 run folders", async () => {
@@ -3737,12 +3740,131 @@ describe("the review gate rebuilds a missing counter from this branch's run reco
 
         expect(held.code).toBe(2);
         expect(refusal(held)).toMatchObject({ blocked: true, reasonCode: "RECORDS_UNREADABLE" });
-        expect(String(refusal(held)["message"])).toContain("EACCES");
+        // The runs folder is named from the repository, never by an absolute path (review/55).
+        expect(String(refusal(held)["message"])).toContain("(EACCES at .stamity/runs)");
       } finally {
         await chmod(runs, 0o755);
       }
     },
   );
+
+  it("reads only the newest in-progress record on this branch, the run gate preflight counts, and never past the cap", async () => {
+    // review/54, review/58: an older record left in progress on the branch must not raise the count the gate holds on.
+    await seedHead();
+    await seedRun("2026-10-17_older", BRANCH, 3);
+    await seedRun("2026-10-18_newer", BRANCH, 1);
+    const gate = await placeGate();
+
+    const held = run(gate, { cwd: getRepo().dir, input: completion("s") });
+    expect(refusal(held)).toMatchObject({ blocked: true, reasonCode: "REVIEW_ROUND_OPEN", round: 1 });
+    expect(String(refusal(held)["message"])).toContain(".stamity/runs/2026-10-18_newer/record.md");
+    expect(usageReviewLines(getRepo().dir, new Date("2026-10-18T12:00:00Z"))).toBe(1);
+
+    // A record carrying more usage lines than the cap rebuilds the cap, never "round 7 of 4".
+    await seedRun("2026-10-18_newer", BRANCH, DEFAULT_MAX_REVIEW_ITERATIONS + 3);
+    expect(refusal(run(gate, { cwd: getRepo().dir, input: completion("s") }))).toMatchObject({
+      reasonCode: "ROUNDS_REBUILT_AT_CAP",
+      round: DEFAULT_MAX_REVIEW_ITERATIONS,
+    });
+  });
+
+  it("passes over a linked run folder and a debug round's record, as the pre-flight's pick does", async () => {
+    // review/55: a run folder that is a link is never followed out of the checkout.
+    await seedHead();
+    await getRepo().seedFiles({ "elsewhere/2026-10-18_linked/record.md": runRecord(BRANCH, 2) });
+    await mkdir(getRepo().path(".stamity/runs"), { recursive: true });
+    await symlink(
+      getRepo().path("elsewhere/2026-10-18_linked"),
+      getRepo().path(".stamity/runs/2026-10-18_linked"),
+      process.platform === "win32" ? "junction" : "dir",
+    );
+    const gate = await placeGate();
+
+    expect(refusal(run(gate, { cwd: getRepo().dir, input: completion("s") }))).toMatchObject({
+      blocked: false,
+      reasonCode: "STATE_ABSENT",
+    });
+
+    await seedRun("2026-10-18_debug-flake", BRANCH, 2);
+    expect(refusal(run(gate, { cwd: getRepo().dir, input: completion("s") }))).toMatchObject({
+      blocked: false,
+      reasonCode: "STATE_ABSENT",
+    });
+    expect(usageReviewLines(getRepo().dir, new Date("2026-10-18T12:00:00Z"))).toBe(0);
+  });
+
+  it.each([
+    { label: "unparseable", content: '{"schema":"stamity/review-gate/v1","runs":{"s":{"rou', reasonCode: "STATE_INVALID" },
+    {
+      label: "oversized",
+      content: `{"schema":"${GATE_STATE_SCHEMA}","runs":{"pad":"${"x".repeat(MAX_REVIEW_GATE_STATE_BYTES)}"}}`,
+      reasonCode: "STATE_TOO_LARGE",
+    },
+  ])("rebuilds an $label counter from the record rather than opening, and the next review replaces it", async (testCase) => {
+    // review/53: corrupting the counter must not open what deleting it no longer opens.
+    await seedHead();
+    await seedRun("2026-10-18_night", BRANCH, 1);
+    await getRepo().seedFiles({ [REVIEW_GATE_STATE_FILE]: testCase.content });
+    const gate = await placeGate();
+
+    const held = run(gate, { cwd: getRepo().dir, input: completion("s") });
+    expect(held.code).toBe(2);
+    expect(refusal(held)).toMatchObject({ blocked: true, reasonCode: "REVIEW_ROUND_OPEN", round: 1 });
+    expect(String(refusal(held)["message"])).toContain(`cannot be trusted (${testCase.reasonCode})`);
+
+    const recorded = run(gate, { cwd: getRepo().dir, input: reviewerStop("s", "request-changes") });
+    expect(refusal(recorded)).toMatchObject({ reasonCode: "ROUND_RECORDED", round: 2 });
+    expect(String(refusal(recorded)["message"])).toContain(`(${testCase.reasonCode}) was replaced`);
+    expect(readGateState().runs["s"]).toMatchObject({ rounds: 2, verdict: "request-changes" });
+    expect(refusal(run(gate, { cwd: getRepo().dir, input: completion("s") }))).toMatchObject({
+      blocked: true,
+      reasonCode: "REVIEW_ROUND_OPEN",
+      round: 2,
+      verdict: "request-changes",
+    });
+  });
+
+  it("holds an untrusted counter whose records cannot be read, and leaves the file as it is", async () => {
+    await seedHead();
+    await getRepo().seedFiles({
+      ".stamity/runs/2026-10-18_night/record.md": runRecord(BRANCH, 2) + "x".repeat(REPORT_READ_MAX_BYTES),
+    });
+    const unparseable = '{"schema":"stamity/review-gate/v1","runs":{"s":{"rou';
+    await getRepo().seedFiles({ [REVIEW_GATE_STATE_FILE]: unparseable });
+    const gate = await placeGate();
+
+    const held = run(gate, { cwd: getRepo().dir, input: completion("s") });
+    expect(held.code).toBe(2);
+    expect(refusal(held)).toMatchObject({ blocked: true, reasonCode: "RECORD_TOO_LARGE" });
+    expect(String(refusal(held)["message"])).toContain("cannot be trusted (STATE_INVALID)");
+
+    const dropped = run(gate, { cwd: getRepo().dir, input: reviewerStop("s", "request-changes") });
+    expect(refusal(dropped)).toMatchObject({ blocked: false, reasonCode: "STATE_INVALID" });
+    expect(String(refusal(dropped)["message"])).toContain("RECORD_TOO_LARGE");
+    expect(String(refusal(dropped)["message"])).toContain("completion stays held");
+    expect(readFileSync(getRepo().path(REVIEW_GATE_STATE_FILE), "utf8")).toBe(unparseable);
+  });
+
+  it("records round 1 when the rebuild faults with no counter, naming the fault and the lost count", async () => {
+    // review/57, review/49: the reviewer's stop no longer drops the rebuild's fault in silence.
+    await seedHead();
+    await getRepo().seedFiles({
+      ".stamity/runs/2026-10-18_night/record.md": runRecord(BRANCH, 2) + "x".repeat(REPORT_READ_MAX_BYTES),
+    });
+    const gate = await placeGate();
+
+    const recorded = run(gate, { cwd: getRepo().dir, input: reviewerStop("s", "request-changes") });
+    expect(refusal(recorded)).toMatchObject({ reasonCode: "ROUND_RECORDED", round: 1 });
+    const message = String(refusal(recorded)["message"]);
+    expect(message).toContain("(RECORD_TOO_LARGE at .stamity/runs/2026-10-18_night/record.md)");
+    expect(message).toContain("the rounds counted before the counter was lost are not in this count");
+    // The loop stays live: the counter it wrote holds the next completion.
+    expect(refusal(run(gate, { cwd: getRepo().dir, input: completion("s") }))).toMatchObject({
+      blocked: true,
+      reasonCode: "REVIEW_ROUND_OPEN",
+      round: 1,
+    });
+  });
 
   it("embeds the one usage-line pattern the pre-flight counts by", () => {
     expect(buildReviewGateScript(GATE_OPTIONS)).toContain(JSON.stringify(USAGE_REVIEW_PATTERN.source));

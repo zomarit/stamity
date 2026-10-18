@@ -33,6 +33,7 @@ import { CONTENT_PREFIX, GENERATED_SCRIPT_LINT_DIRECTIVE, STATE_DIR } from "../t
 import { PREFLIGHT_CANARY_FILE, RUN_ENDED_MARKER_FILE, RUN_ENDED_MAX_AGE_MS } from "../mcp/env.ts";
 import { buildCardBranchSource, buildResumeCardSource, RESUME_CARD_HOST_NAMES } from "../runs/cardSource.ts";
 import {
+  DEBUG_RUN_SEGMENT,
   GIT_METADATA_MAX_BYTES,
   IN_PROGRESS_PATTERN,
   RECORD_BRANCH_PATTERN,
@@ -199,7 +200,9 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // plan 021 file 2's v2-review-gate-rebuild (a missing counter rebuilt from the
   // run record on this branch, REQ-FLOW-106), at the cap of 10: 40,763 / 892
   // before, 47,838 / 1,040 after, 48,748 / 1,061 with the held read faults;
-  // the ceiling holds.
+  // the ceiling holds. Measured 2026-10-18 on base 7cebcfad after the unit's
+  // fix round 1 (an untrusted counter rebuilt, the newest record only, the
+  // rebuild fault named on a reviewer's stop): 50,328 / 1,082; the ceiling holds.
   [REVIEW_GATE_FILE]: { bytes: 51_200, lines: 1_120 },
   // Measured 2026-10-16 on the u14b lane (base 2a1c5226): 5,711 bytes / 150
   // lines (claude, generated layout; a plugin root renders 4,983 / 129). Its
@@ -2240,20 +2243,23 @@ export interface ReviewGateScriptOptions {
  * Everything outside that is left alone. A payload naming no run, a run with
  * no recorded round (a light pass, a non-work command, a run that has not
  * reached review), and a run whose loop already approved all exit 0 in silence.
- * So does every state fault: a counter file that is oversized, unreadable or
- * unparseable opens the gate and says so, because a gate that cannot read its
- * own state must not wedge a run. It repairs nothing — a file it cannot parse
- * is not one it should overwrite.
  *
- * A MISSING counter is not a fault to open on (REQ-FLOW-106). The counter is
- * keyed by the client's session, not by the run, and a reclaimed cloud machine
- * takes it along, so deleting it would otherwise reopen the gate. The run's
- * committed record survives: the in-progress record whose `Branch:` names the
- * branch `.git/HEAD` names (the card's shared reader) gives the round count, its
- * `usage: review r<N>` lines ({@link USAGE_REVIEW_PATTERN}), with the last verdict
+ * A MISSING counter is not a fault to open on (REQ-FLOW-106), and neither is
+ * one that is oversized, unreadable or unparseable: the counter is keyed by the
+ * client's session, not by the run, a reclaimed cloud machine takes it along,
+ * and deleting or corrupting it would otherwise reopen the gate. The run's
+ * committed record survives: the newest in-progress record whose `Branch:`
+ * names the branch `.git/HEAD` names (the card's shared reader, and the run
+ * `gate preflight` counts; a linked or debug run folder is passed over) gives
+ * the round count, its `usage: review r<N>` lines
+ * ({@link USAGE_REVIEW_PATTERN}) up to the cap, with the last verdict
  * unrecorded. A completion then holds, below the cap and at it, and the next
- * reviewer's round is counted from it; with no such record or line the gate
- * opens, naming the missing counter, as before. Records it cannot read (past
+ * reviewer's round is counted from it, replacing a counter it could not trust.
+ * With no such record or line the gate opens, naming the counter's state, and
+ * a faulted file is left as it is, because a gate that cannot read its own
+ * state must not wedge a run. A reviewer's stop whose rebuild faults with no
+ * counter at all records round 1 and says the earlier count was lost, so a
+ * lasting fault never stalls the loop. Records it cannot read (past
  * {@link GUARD_RUN_FOLDERS_MAX} folders, a matching record past
  * {@link REPORT_READ_MAX_BYTES}, a read fault) hold the completion under a
  * reason code naming the fault, as the guard refuses past the folder bound:
@@ -2302,16 +2308,19 @@ export function buildReviewGateScript(opts: ReviewGateScriptOptions): string {
       "",
       "A missing counter is rebuilt, not opened. It is keyed by the client's",
       "session, not by the run, and a reclaimed machine takes it along; the run's",
-      "committed record stays. The in-progress record whose Branch: names the",
-      "branch .git/HEAD names gives the round count, its usage: review lines, with",
-      "the last verdict unrecorded, so a completion holds, at the cap too, until a",
-      "review records one. With no such record or line the gate opens; run records",
-      "it cannot read (past the folder or size bound, or a read fault) hold it.",
+      "committed record stays. The newest in-progress record whose Branch: names",
+      "the branch .git/HEAD names, the run gate preflight counts, gives the round",
+      "count, its usage: review lines, with the last verdict unrecorded, so a",
+      "completion holds, at the cap too, until a review records one. A counter",
+      "that is oversized, unreadable or unparseable is read as lost the same way,",
+      "and a review replaces it once the record gives its rounds back. With no",
+      "such record or line the gate opens; run records it cannot read (past the",
+      "folder or size bound, or a read fault) hold it.",
       "",
-      "Fail-open: a counter file that is oversized, unreadable or unparseable opens",
-      "the gate and says so on stderr. A gate that cannot read its own state must",
-      "not wedge a run. A run with no recorded round is not this gate's to hold",
-      "either — it exits 0 untouched.",
+      "Fail-open: with no rounds in the record, a counter file it cannot trust",
+      "opens the gate, says so on stderr and is not overwritten. A gate that cannot",
+      "read its own state must not wedge a run. A run with no recorded round is not",
+      "this gate's to hold either — it exits 0 untouched.",
       "",
       ...(blocking
         ? [`Blocking client: a refusal exits ${BLOCKING_EXIT_CODE} and the completion stops.`]
@@ -2358,6 +2367,7 @@ const BLOCK_EXIT = ${BLOCKING_EXIT_CODE};
 const RUNS_SEGMENTS = ${json(RUNS_SEGMENTS)};
 const RECORD_FILE = ${json(RECORD_FILE)};
 const RUN_ID = ${regex(RUN_ID_PATTERN)};
+const DEBUG_SEGMENT = ${json(DEBUG_RUN_SEGMENT)};
 const STATUS = ${regex(RECORD_STATUS_PATTERN)};
 const BRANCH = ${regex(RECORD_BRANCH_PATTERN)};
 const IN_PROGRESS = ${regex(IN_PROGRESS_PATTERN)};
@@ -2721,50 +2731,59 @@ function recordText(path, bytes) {
 }
 
 /**
- * The rounds a missing counter held, rebuilt from the run's committed record:
- * the in-progress record whose Branch: names this branch, and the count of its
- * usage: review lines. Two such runs give the larger count, which holds rather
- * than releases. Null when there is none; throws on a read failing past absence.
+ * The rounds a lost counter held, rebuilt from the run's committed record: the
+ * newest in-progress record whose Branch: names this branch, the run gate
+ * preflight counts, and its usage: review lines, never past the cap. A linked
+ * run folder and a debug round's are passed over, as the card's pick passes them.
+ * Null when there is none; throws on a read failing past absence, naming the
+ * repo-relative path it was reading.
  */
 function rebuilt(root) {
-  const branch = cardCurrentBranch(root);
-  if (branch === null) return null;
-  const runsDir = join(root, ...RUNS_SEGMENTS);
-  let names = [];
+  let where = ".git/HEAD";
   try {
-    if (lstatSync(runsDir).isDirectory()) names = readdirSync(runsDir).filter((name) => RUN_ID.test(name));
+    const branch = cardCurrentBranch(root);
+    if (branch === null) return null;
+    where = RUNS_SEGMENTS.join("/");
+    const runsDir = join(root, ...RUNS_SEGMENTS);
+    let names = [];
+    try {
+      if (lstatSync(runsDir).isDirectory()) {
+        names = readdirSync(runsDir, { withFileTypes: true })
+          .filter((entry) => entry.isDirectory() && RUN_ID.test(entry.name) && !entry.name.includes(DEBUG_SEGMENT))
+          .map((entry) => entry.name);
+      }
+    } catch (error) {
+      if (!error || (error.code !== "ENOENT" && error.code !== "ENOTDIR")) throw error;
+    }
+    if (names.length > RUN_FOLDERS_MAX) throw Object.assign(new Error("run folders"), { code: "RUN_FOLDERS_OVER_" + RUN_FOLDERS_MAX });
+    // Newest first by code-unit order, and the first match is the run: an older record is never read.
+    for (const name of names.sort().reverse()) {
+      // Under the lock this walk is part of the critical section, so each record re-arms the waiters' idle window.
+      beat();
+      where = [...RUNS_SEGMENTS, name, RECORD_FILE].join("/");
+      const path = join(runsDir, name, RECORD_FILE);
+      const head = recordText(path, HEAD_READ_BYTES);
+      if (head === null) continue;
+      let status = null;
+      let named = null;
+      for (const line of head.lines.slice(0, HEAD_LINES)) {
+        status ??= STATUS.exec(line)?.[1] ?? null;
+        named ??= BRANCH.exec(line)?.[1] ?? null;
+      }
+      if (status === null || !IN_PROGRESS.test(status) || named !== branch) continue;
+      if (head.size > RECORD_MAX_BYTES) throw Object.assign(new Error("record"), { code: "RECORD_TOO_LARGE" });
+      const whole = head.size <= HEAD_READ_BYTES ? head : recordText(path, RECORD_MAX_BYTES);
+      const rounds = whole === null ? 0 : whole.lines.filter((line) => USAGE_REVIEW.test(line)).length;
+      return rounds === 0 ? null : { rounds: Math.min(rounds, MAX_ROUNDS), verdict: "", confidence: "", record: where };
+    }
+    return null;
   } catch (error) {
-    if (!error || (error.code !== "ENOENT" && error.code !== "ENOTDIR")) throw error;
+    throw Object.assign(new Error("run records"), { code: String((error && error.code) || "a fault"), where });
   }
-  if (names.length > RUN_FOLDERS_MAX) {
-    throw Object.assign(new Error("run folders"), { code: "RUN_FOLDERS_OVER_" + RUN_FOLDERS_MAX, path: runsDir });
-  }
-  let found = null;
-  for (const name of names) {
-    // Under the lock this walk is part of the critical section, so each record re-arms the waiters' idle window.
-    beat();
-    const path = join(runsDir, name, RECORD_FILE);
-    const head = recordText(path, HEAD_READ_BYTES);
-    if (head === null) continue;
-    let status = null;
-    let named = null;
-    for (const line of head.lines.slice(0, HEAD_LINES)) {
-      status ??= STATUS.exec(line)?.[1] ?? null;
-      named ??= BRANCH.exec(line)?.[1] ?? null;
-    }
-    if (status === null || !IN_PROGRESS.test(status) || named !== branch) continue;
-    if (head.size > RECORD_MAX_BYTES) throw Object.assign(new Error("record"), { code: "RECORD_TOO_LARGE", path });
-    const whole = head.size <= HEAD_READ_BYTES ? head : recordText(path, RECORD_MAX_BYTES);
-    const rounds = whole === null ? 0 : whole.lines.filter((line) => USAGE_REVIEW.test(line)).length;
-    if (rounds > 0 && (found === null || rounds > found.rounds)) {
-      found = { rounds, verdict: "", confidence: "", record: [...RUNS_SEGMENTS, name, RECORD_FILE].join("/") };
-    }
-  }
-  return found;
 }
 
 /**
- * The entry a missing counter is rebuilt to; or null with the reason the gate
+ * The entry a lost counter is rebuilt to; or null with the reason the gate
  * opens; or, when the records cannot be read, the fault that holds it: deleting
  * the counter and then making the records unreadable must not reopen the gate.
  */
@@ -2773,10 +2792,9 @@ function rebuild() {
     const entry = rebuilt(repoRoot());
     return { entry, fault: "", why: entry === null ? "no in-progress run record on this branch has a usage: review line" : "" };
   } catch (error) {
-    const code = String((error && error.code) || "a fault");
+    const code = error.code;
     const fault = code === "RECORD_TOO_LARGE" || code.startsWith("RUN_FOLDERS_OVER_") ? code : "RECORDS_UNREADABLE";
-    const where = error && typeof error.path === "string" ? " at " + error.path : "";
-    return { entry: null, fault, why: "the run records could not be read (" + code + where + ")" };
+    return { entry: null, fault, why: "the run records could not be read (" + code + " at " + error.where + ")" };
   }
 }
 
@@ -3064,13 +3082,18 @@ function record() {
   let rounds = 0;
   let stored = false;
   let previous = null;
+  let note = "";
   try {
     const current = load();
+    const untrusted = current.fault !== "" && current.fault !== "STATE_ABSENT";
+    // A missing counter, or one it cannot trust, seeds this round from the run's record, as the completion path reads it.
+    const found = current.fault === "" ? null : rebuild();
     // A fault under the lock is not "no runs". Treating it as one makes
     // \`rounds\` 1 and publishes a one-round document over a file this script was
     // told not to repair — every round counted so far, gone, on a path that
-    // exits 0. So the round is dropped instead and the fault is named. The
-    // return sits inside the try, so the finally below still releases the lock.
+    // exits 0. So unless the record gave the rounds back, the round is dropped
+    // and the fault is named. The return sits inside the try, so the finally
+    // below still releases the lock.
     //
     // The wording is the unlocked path's, deliberately: this branch is the only
     // report a reviewer ever sees, since the round is counted before the
@@ -3078,33 +3101,39 @@ function record() {
     // "could not be read" because STATE_INVALID parsed a file it did read, and
     // the delete sentence is what the operator needs — one remedy for one
     // fault, whichever path names it.
-    if (current.fault !== "" && current.fault !== "STATE_ABSENT") {
+    if (untrusted && found.entry === null) {
       return {
         blocked: false,
         runId,
         maxRounds: MAX_ROUNDS,
         reasonCode: current.fault,
         message:
-          "The review-gate counter at " + STATE_FILE + " cannot be trusted, so this round was not " +
-          "counted and the gate is open. Deleting the file restarts the counter; it is not " +
-          "overwritten from here.",
+          "The review-gate counter at " + STATE_FILE + " cannot be trusted" +
+          (found.fault === ""
+            ? ", so this round was not counted and the gate is open. Deleting the file restarts the counter; it is not overwritten from here."
+            : " and " + found.why + ", so this round was not counted and completion stays held. " +
+              "Make the records readable, or delete the file, which the next review round then writes anew."),
       };
     }
     // Null prototype for the same reason the completion path uses one: a run id
     // of "__proto__" would otherwise reach the inherited setter and vanish.
     const runs = Object.assign(Object.create(null), current.runs === null ? {} : current.runs);
-    // A missing counter seeds this round from the run's record, as the completion path reads it.
-    previous = current.fault === "STATE_ABSENT" ? rebuild().entry : entryOf(runs, runId);
+    previous = found === null ? entryOf(runs, runId) : found.entry;
     // A rebuilt count at the cap lost the last round's verdict, not a round: this review re-records it.
     const again = previous !== null && previous.record !== undefined && previous.rounds >= MAX_ROUNDS;
     rounds = previous === null ? 1 : again ? previous.rounds : previous.rounds + 1;
     runs[runId] = { rounds, verdict, confidence, updated: NOW };
     stored = save(runs);
+    if (previous !== null && previous.record !== undefined) note = " Earlier rounds were rebuilt from " + previous.record + ".";
+    if (untrusted) note += " The counter it could not trust (" + current.fault + ") was replaced.";
+    // A lasting read fault must not stop the loop: round 1 is counted, and the loss is said rather than hidden.
+    if (found !== null && found.fault !== "") {
+      note = " No counter was found and " + found.why + ", so the rounds counted before the counter was lost are not in this count, which restarts at round 1.";
+    }
   } finally {
     unlock();
   }
 
-  const seeded = previous !== null && previous.record !== undefined ? " Earlier rounds were rebuilt from " + previous.record + "." : "";
   return {
     blocked: false,
     runId,
@@ -3112,7 +3141,7 @@ function record() {
     maxRounds: MAX_ROUNDS,
     reasonCode: stored ? "ROUND_RECORDED" : "STATE_UNWRITABLE",
     message: stored
-      ? standing(rounds, verdict) + " recorded for this run." + seeded
+      ? standing(rounds, verdict) + " recorded for this run." + note
       : standing(rounds, verdict) + " could not be written to " + STATE_FILE + ", so the gate is open.",
   };
 }
@@ -3140,22 +3169,15 @@ function decide() {
   if (agentId === REVIEWER_AGENT) return record();
 
   const state = load();
-  if (state.fault !== "" && state.fault !== "STATE_ABSENT") {
-    return {
-      blocked: false,
-      runId,
-      reasonCode: state.fault,
-      message:
-        "The review-gate counter at " + STATE_FILE + " cannot be trusted, so the gate is open. " +
-        "Deleting the file restarts the counter; it is not overwritten from here.",
-    };
-  }
-
   if (!isCompletion()) return null;
 
-  // A missing counter is rebuilt from this branch's run record rather than opened:
-  // deleting the file, or a reclaimed machine losing it, must not release the run.
-  const found = state.fault === "STATE_ABSENT" ? rebuild() : null;
+  // A missing counter, or one it cannot trust, is rebuilt from this branch's run record rather than opened:
+  // deleting or corrupting the file, or a reclaimed machine losing it, must not release the run.
+  const absent = state.fault === "STATE_ABSENT";
+  const lost = absent
+    ? "No review-gate counter at " + STATE_FILE
+    : "The review-gate counter at " + STATE_FILE + " cannot be trusted (" + state.fault + ")";
+  const found = state.fault === "" ? null : rebuild();
   if (found !== null && found.fault !== "") {
     return {
       blocked: BLOCKING,
@@ -3163,18 +3185,22 @@ function decide() {
       maxRounds: MAX_ROUNDS,
       reasonCode: found.fault,
       message:
-        "No review-gate counter at " + STATE_FILE + " and " + found.why + ", so the rounds cannot be rebuilt " +
-        "and completion is held. " + KEYED + " Make the records readable, or record a review round, which writes the counter.",
+        lost + " and " + found.why + ", so the rounds cannot be rebuilt and completion is held. " + KEYED +
+        (absent
+          ? " Make the records readable, or record a review round, which writes the counter."
+          : " Make the records readable, or delete the file, which the next review round then writes anew."),
     };
   }
   if (found !== null && found.entry === null) {
     return {
       blocked: false,
       runId,
-      reasonCode: "STATE_ABSENT",
+      reasonCode: state.fault,
       message:
-        "No review-gate counter at " + STATE_FILE + " and " + found.why + ", so the gate is open. " + KEYED +
-        " The file is created when this session records its first review round.",
+        lost + " and " + found.why + ", so the gate is open. " + KEYED +
+        (absent
+          ? " The file is created when this session records its first review round."
+          : " Deleting the file restarts the counter; it is not overwritten from here."),
     };
   }
 
@@ -3197,7 +3223,7 @@ function decide() {
       verdict: "",
       reasonCode: atCap ? "ROUNDS_REBUILT_AT_CAP" : "REVIEW_ROUND_OPEN",
       message:
-        "No review-gate counter at " + STATE_FILE + ", so " + standing(entry.rounds, "") + " was rebuilt from " +
+        lost + ", so " + standing(entry.rounds, "") + " was rebuilt from " +
         entry.record + ". " + KEYED + " The last verdict went with the counter, so completion is held: " +
         (atCap
           ? "one fresh review re-records it, and that verdict decides."
