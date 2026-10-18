@@ -124,7 +124,7 @@ date, re-pointed or added a citation; the run's last citation pass re-read each 
 page round re-read them on `aa7a3e5b` with its own edits to `SECURITY.md`, `evals/SET-v7.md` and the unattended skill,
 re-pointing each one whose text had moved; the run's final derived pass, and the pull-request rounds' after it,
 re-pointed each one a later commit moved, mapped through git's diff from the commit it was read at, and every one
-reads at `fb2118d9`, a pin named beside a citation included. Two units
+reads at `aa5213ab`, a pin named beside a citation included. Two units
 were not on `4daeb214`: `u19-run-end` (`stamity run end`) and
 `u21-security-page` (`SECURITY.md`'s cloud section); the fix round cites both at `bc12cfc3`. REQ-FLOW-105 to
 REQ-FLOW-119 are held for plan 021's second file. The text dated 2026-10-16 is unreleased at this merge; the plan cuts
@@ -3511,7 +3511,7 @@ that exit; a plain `run end` writes none and removes one there (REQ-FLOW-096), a
 (Claude Code's final round after that run handed off; on any other branch, or with no fresh marker naming the run, the
 variable decides; pr/17, pr/36, pr/37). So a later session on that branch, in the same checkout, finds no marker the
 gate honours once the window has passed; one that starts inside its 15 minutes is the residual `SECURITY.md` names
-(`SECURITY.md:523-536`). The marker is machine-local: a worktree policy never materializes it into another
+(`SECURITY.md:526-539`). The marker is machine-local: a worktree policy never materializes it into another
 worktree, a `.stamity` copy row skipping it and a row naming it refused (`src/worktree/policy.ts:536`, `:589-596`;
 REQ-WORKTREE-003), though a `symlink` row over `.stamity` still shares it live. The gate is `UNATTENDED_ASK_GATE_FILE`
 and its reasons in `src/hooks/scripts.ts`, wired after every planned PreToolUse row (`src/adapters/claude.ts:924-930`).
@@ -3820,7 +3820,7 @@ dependency is a morning-list row (`SKILL.md:118-119`).
 ### REQ-FLOW-104 — The cloud's accepted risks are named
 
 Added 2026-10-16 (plan 021 file 1, unit `u21-security-page`; not on this merge's base, it is cited from `bc12cfc3`
-by the merge's first fix round and re-read after the whole-branch page round: the section is `SECURITY.md:379-624`, under
+by the merge's first fix round and re-read after the whole-branch page round: the section is `SECURITY.md:379-627`, under
 `## What it does not defend` (`:284`), the settings row `:98`, the git-hardening row `:96` and the third network
 exception `:152-173`).
 
@@ -3853,18 +3853,18 @@ named network exceptions, and the run verbs on the git-hardening row.
 - **As built, where the delta differed:** the delta named PowerShell's command wrappers, gh's alias for the
   create-and-push form, a multi-root workspace file's settings and an editor tasks file's folder-open task as uncovered
   by the unattended rules and not held. The guard rounds after it closed each: the page states the wrapped lines read
-  and refused, the alias refused and those files held (`SECURITY.md:597-608`, `:622-624`), the encoded command and the
-  `iex` pipe staying the gaps the unattended rules do not cover (`:617-620`). The page's place-reader paragraph
-  (`:610-615`) and its residual for programs the repository's configuration names (`:462-497`) are not restated here; a
+  and refused, the alias refused and those files held (`SECURITY.md:600-611`, `:625-627`), the encoded command and the
+  `iex` pipe staying the gaps the unattended rules do not cover (`:620-623`). The page's place-reader paragraph
+  (`:613-618`) and its residual for programs the repository's configuration names (`:465-500`) are not restated here; a
   later page round settles them. The whole-branch round added three residuals in plain words: the GitHub MCP server
   on the clients that take no per-tool deny, the origin pin rewritten together with git's configuration, and the
-  working directory Claude Code keeps across shell calls, attended only (`SECURITY.md:400-409`, `:537-542`,
+  working directory Claude Code keeps across shell calls, attended only (`SECURITY.md:400-409`, `:540-545`,
   `:410-416`). PR #112's fourth round (2026-10-18) added three attended residuals, each naming the control that holds,
   the remote's own protection and, unattended, the raw-push refusal or the pre-flight's wall: a symbolic ref already on
   disk, a branch switch on the same line before a push whose destination is implied, and curl's and wget's default
-  configuration files (`SECURITY.md:426-446`). The MCP residual counts fourteen rows (`:400-409`), and the final
+  configuration files (`SECURITY.md:429-449`). The MCP residual counts fourteen rows (`:400-409`), and the final
   round's window states that a worktree policy never carries the run-ended marker into another checkout, a `symlink`
-  row on `.stamity` still sharing it live (`:523-536`).
+  row on `.stamity` still sharing it live (`:526-539`).
 - **Proof:** `test/docsPages.test.ts` ("cloud and unattended runs (REQ-FLOW-104)": the section's place, every risk
   and gap named above, the retired bullet gone, the control table's pointers, the settings row and the network
   exception); `judgment: reviewer` for the wording around them.
