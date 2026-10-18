@@ -9,6 +9,7 @@ import type { App, EngineRegistry } from "../../index.ts";
 import { CLASS_FILE, parseClassFile } from "../../change/classify.ts";
 import { readCharterTemplate } from "../../content/charter.ts";
 import { pinnedCliInstall } from "../../adapters/copilot.ts";
+import { AGENTS_MD_FILE, CURSOR_CLOUD_BLOCK_HEADING } from "../../emit/agentsMd.ts";
 import { renderInvariantsVersion, type CliCallContext } from "../../emit/substitution.ts";
 import { readGates } from "../../manifest/manifest.ts";
 import { OWNED_PATHS } from "../../manifest/ownedPaths.ts";
@@ -1621,8 +1622,11 @@ export async function checkModelPins(
  * lines live. They pin the version the setup was generated with
  * (`generatedBy`), the one the committed hooks and bodies call, through
  * {@link pinnedCliInstall}, the line Copilot's setup workflow runs; a package
- * with no npm channel gets no registry line. The row passes and never fails: it
- * informs, and a local session has no install step to judge.
+ * with no npm channel gets no registry line. The row informs and never fails: a
+ * local session has no install step to judge. It warns, its first line ahead of
+ * the install lines, when the root `AGENTS.md` is recorded as `skip`: sync then
+ * leaves that file alone, so Cursor's cloud block (REQ-FLOW-114) is not in the
+ * file a Cursor cloud agent reads, and only the run that recorded it said so.
  */
 export function checkCloudInstall(
   manifest: SetupManifest | null,
@@ -1636,10 +1640,21 @@ export function checkCloudInstall(
     `a Cursor cloud environment needs ${nodeRange === null ? "Node" : `Node ${nodeRange}`} and the pinned CLI, ` +
     "or the flows' gate scan and ledger status stop";
   const written = "these lines (no .cursor/environment.json is written)";
+  const skipped = (manifest.importChoice ?? []).some(
+    (decision) => decision.path === AGENTS_MD_FILE && decision.mode === "skip",
+  );
   return {
     id,
-    status: "pass",
+    status: skipped ? "warn" : "pass",
     detail: [
+      ...(skipped
+        ? [
+            `the root ${AGENTS_MD_FILE} is recorded as "skip" in ${MANIFEST_DISPLAY}, so sync leaves it alone and ` +
+              `a Cursor cloud agent reads it without its "${CURSOR_CLOUD_BLOCK_HEADING.replace(/^#+ /, "")}" ` +
+              `block; record "supplement" for ${AGENTS_MD_FILE} there to keep your text and carry the block, ` +
+              "or copy the section in by hand",
+          ]
+        : []),
       install === null
         ? `${needs}; this package has no npm channel, so its saved environment's install step installs ` +
           `the copy your fork distributes and runs ${written}:`

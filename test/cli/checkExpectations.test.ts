@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -5,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { checkCommand } from "../../src/cli/commands/check.ts";
 import { applyInit } from "../../src/cli/commands/init/apply.ts";
 import { buildInitDecisions } from "../../src/cli/commands/init/plan.ts";
+import { AGENTS_MD_FILE, CURSOR_CLOUD_BLOCK_HEADING } from "../../src/emit/agentsMd.ts";
 import { createApp } from "../../src/index.ts";
 import type { Tool } from "../../src/types/core.ts";
 import type { LedgerEntry } from "../../src/types/manifest.ts";
@@ -50,16 +52,35 @@ async function initialisedRepo(tools: readonly Tool[]): Promise<string> {
  * The measured drop: `cursor` leaves `tools`, every `cursor` row leaves the
  * ledger, and every path only `cursor` owned leaves the disk. Returns the
  * removed paths, so the case can prove the fixture removed something.
+ *
+ * TEST CHANGE, justified (plan 021 file 2, unit v7-cursor-agents-block,
+ * build/39): with Cursor selected the root `AGENTS.md` ends on Cursor's cloud
+ * block (REQ-FLOW-114), a shared file the drop does not remove, so a drop
+ * that left the block in place would read as drift and the plain run would no
+ * longer be the measured "clean". Dropping `cursor` therefore also rewrites
+ * that file to the charter alone, as a pull request dropping the client by
+ * hand would, and re-points its rows' recorded hash at those bytes.
  */
 async function dropClient(root: string, client: Tool): Promise<string[]> {
   const path = join(root, ".stamity", "manifest.json");
   const manifest = JSON.parse(await readFile(path, "utf8")) as { tools: Tool[]; ledger: LedgerEntry[] };
-  const kept = manifest.ledger.filter((row) => row.adapter !== client);
+  let kept = manifest.ledger.filter((row) => row.adapter !== client);
   const keptPaths = new Set(kept.map((row) => row.path));
   const only = [
     ...new Set(manifest.ledger.filter((row) => row.adapter === client).map((row) => row.path)),
   ].filter((rowPath) => !keptPaths.has(rowPath));
   for (const rowPath of only) await rm(join(root, rowPath), { force: true });
+  if (client === "cursor") {
+    const rootAgents = join(root, AGENTS_MD_FILE);
+    const text = await readFile(rootAgents, "utf8");
+    const at = text.indexOf(`\n${CURSOR_CLOUD_BLOCK_HEADING}\n`);
+    // Non-degenerate: the file carried the block the drop takes out.
+    expect(at).toBeGreaterThan(0);
+    const charter = text.slice(0, at);
+    await writeFile(rootAgents, charter, "utf8");
+    const contentHash = createHash("sha256").update(charter).digest("hex");
+    kept = kept.map((row) => (row.path === AGENTS_MD_FILE ? { ...row, contentHash } : row));
+  }
   manifest.tools = manifest.tools.filter((tool) => tool !== client);
   manifest.ledger = kept;
   await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");

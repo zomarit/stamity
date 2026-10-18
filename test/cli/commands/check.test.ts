@@ -3879,6 +3879,62 @@ describe("check — cloud-install (REQ-FLOW-111)", () => {
 
     expect(doc.doctor.map((entry) => entry.id)).not.toContain("cloud-install");
   });
+
+  // REQ-FLOW-114, build/38: a `skip` on the root AGENTS.md keeps Cursor's cloud block out of the
+  // file a Cursor cloud agent reads, and only the sync that recorded it said so.
+  it("warns, and never fails, when the root AGENTS.md is recorded as skip, naming the block and the remedy", () => {
+    const manifest: SetupManifest = {
+      ...manifestFor(["claude", "cursor"]),
+      importChoice: [{ path: "AGENTS.md", mode: "skip" }],
+    };
+
+    const verdict = checkCloudInstall(manifest, CANONICAL_CALL, ">=22.22.2");
+
+    expect(verdict?.status).toBe("warn");
+    const lines = (verdict?.detail ?? "").split("\n");
+    expect(lines[0]).toContain('AGENTS.md is recorded as "skip"');
+    expect(lines[0]).toContain("Cursor Cloud specific instructions");
+    expect(lines[0]).toContain('"supplement"');
+    expect(lines[0]).toContain(".stamity/manifest.json");
+    // The install lines are still the row's, after the warning.
+    expect(lines.slice(-2)).toEqual(["node --version", "npm install --global @zomarit/stamity@1.16.0"]);
+  });
+
+  it("stays a pass for a skip on another path and for supplement or replace on AGENTS.md", () => {
+    for (const importChoice of [
+      [{ path: "CLAUDE.md", mode: "skip" }],
+      [{ path: "AGENTS.md", mode: "supplement" }],
+      [{ path: "AGENTS.md", mode: "replace" }],
+    ] as const) {
+      const manifest: SetupManifest = { ...manifestFor(["cursor"]), importChoice };
+      expect(checkCloudInstall(manifest, CANONICAL_CALL, ">=22.22.2")?.status, JSON.stringify(importChoice)).toBe("pass");
+    }
+    // Without Cursor a skip prints no row at all.
+    const noCursor: SetupManifest = { ...manifestFor(["claude"]), importChoice: [{ path: "AGENTS.md", mode: "skip" }] };
+    expect(checkCloudInstall(noCursor, CANONICAL_CALL, ">=22.22.2")).toBeNull();
+  });
+
+  it("warns in check's own run with Cursor selected and the root AGENTS.md recorded as skip", async () => {
+    const root = await seedRepo(getRepo(), { tools: ["claude", "cursor"] });
+    const manifest = await readManifest(root);
+    if (manifest === null) throw new Error("fixture lost its manifest");
+    // A skipped file has no ledger row: the engine never records one, and the manifest refuses one.
+    await writeManifest(
+      root,
+      {
+        ...manifest,
+        ledger: manifest.ledger.filter((entry) => entry.path !== "AGENTS.md"),
+        importChoice: [{ path: "AGENTS.md", mode: "skip" }],
+      },
+      { now: T0 },
+    );
+
+    const { doc } = await runJson(root);
+
+    const verdict = row(doc, "cloud-install");
+    expect(verdict.status).toBe("warn");
+    expect(verdict.detail).toContain('AGENTS.md is recorded as "skip"');
+  });
 });
 
 describe("check — model-pins", () => {

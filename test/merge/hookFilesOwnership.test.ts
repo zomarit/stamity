@@ -139,6 +139,19 @@ async function backups(root: string): Promise<string[]> {
     .toSorted();
 }
 
+/**
+ * {@link backups} without the root `AGENTS.md.bak`. With Cursor selected the root
+ * `AGENTS.md` ends on Cursor's cloud block, which carries the pinned CLI call
+ * (REQ-FLOW-114), so a sync that drops Cursor or moves that call rewrites the
+ * file, and in these git-less temp repositories git cannot confirm the replaced
+ * bytes as committed, so sync's existing rule keeps them behind a `.bak`
+ * (`src/merge/safeWrite.ts`, review/132). That backup is the charter file's, not
+ * the hooks document's these cases are about; every other `.bak` still counts.
+ */
+async function backupsLeavingOutAgentsMd(root: string): Promise<string[]> {
+  return (await backups(root)).filter((path) => path !== "AGENTS.md.bak");
+}
+
 /** The report row of `path`, whichever spelling the verb reports it under. */
 function rowOf(wrote: readonly MergeResult[], path: string): MergeResult {
   const row = wrote.find((entry) => entry.path.replaceAll("\\", "/").endsWith(path));
@@ -361,7 +374,10 @@ describe(".cursor/hooks.json owned entry by entry", () => {
     expect(await readDoc(root, CURSOR_HOOKS)).toEqual({ version: 1, hooks: { afterFileEdit: [OWNER_CURSOR_ENTRY] } });
     expect(existsSync(abs(root, SUBAGENT_GUARD_PATH))).toBe(false);
     expect(existsSync(abs(root, MCP_GUARD_PATH))).toBe(false);
-    expect(await backups(root)).toEqual([]);
+    // TEST CHANGE, justified (plan 021 file 2, unit v7-cursor-agents-block, build/39): Cursor
+    // leaving the selection drops its cloud block from the root AGENTS.md, behind a `.bak` in
+    // this git-less repository ({@link backupsLeavingOutAgentsMd}); the hooks document takes none.
+    expect(await backupsLeavingOutAgentsMd(root)).toEqual([]);
   });
 });
 
@@ -621,7 +637,11 @@ describe("a --registry fork's hook documents are the engine's by the calls it re
     const first = await readText(root, CURSOR_HOOKS);
     const second = rowOf(await forkSync(root), CURSOR_HOOKS);
 
-    expect(await backups(root)).toEqual([]);
+    // TEST CHANGE, justified (plan 021 file 2, unit v7-cursor-agents-block, build/39): the
+    // upgrade moves the pinned call inside the root AGENTS.md's cloud block too, behind a `.bak`
+    // in this git-less repository ({@link backupsLeavingOutAgentsMd}); the hooks document and
+    // the guards take none.
+    expect(await backupsLeavingOutAgentsMd(root)).toEqual([]);
     expect(JSON.parse(first)).toEqual(expected);
     expect(second.action).toBe("unchanged");
     expect(await readText(root, CURSOR_HOOKS)).toBe(first);
@@ -1731,7 +1751,11 @@ describe("a removed client's hooks document the sweep cannot reduce keeps its ro
         expect(repaired.reclaimed?.entries.find((entry) => entry.path === script), script).toMatchObject({ action: "deleted", proof: "hash" });
       }
       expect((await readManifest(root))?.ledger.filter((row) => row.adapter === "cursor")).toEqual([]);
-      expect(await backups(root)).toEqual([]);
+      // TEST CHANGE, justified (plan 021 file 2, unit v7-cursor-agents-block, build/39): Cursor
+      // leaving the selection drops its cloud block from the root AGENTS.md, behind a `.bak` in
+      // this git-less repository ({@link backupsLeavingOutAgentsMd}); nothing Cursor's sweep
+      // reclaims takes one.
+      expect(await backupsLeavingOutAgentsMd(root)).toEqual([]);
     },
   );
 
@@ -1761,7 +1785,10 @@ describe("a removed client's hooks document the sweep cannot reduce keeps its ro
       expect(await readText(root, path)).toBe(owner);
       const rows = (await readManifest(root))?.ledger.filter((row) => row.path === path) ?? [];
       expect(rows).toEqual(refused ? before : []);
-      expect(await backups(root)).toEqual([]);
+      // TEST CHANGE, justified (plan 021 file 2, unit v7-cursor-agents-block, build/39): Cursor
+      // leaving the selection drops its cloud block from the root AGENTS.md, behind a `.bak` in
+      // this git-less repository ({@link backupsLeavingOutAgentsMd}); Codex's cases still count it.
+      expect(await (client === "cursor" ? backupsLeavingOutAgentsMd(root) : backups(root))).toEqual([]);
     },
   );
 
