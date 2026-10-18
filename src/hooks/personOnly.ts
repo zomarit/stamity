@@ -940,8 +940,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     return list || positionals.length === 0 ? null : deny("tag", "A tag created (`git tag <name>`)");
   }
 
-  /** `git symbolic-ref`'s writes (pr/70). */
-  function symbolicRefVerdict(args: string[]): PersonOnlyVerdict | null {
+  /** `git symbolic-ref`'s writes (pr/70), and `git update-ref --stdin`'s symref commands read as its arguments (pr/82). */
+  function symbolicRefVerdict(args: string[], via = "git symbolic-ref"): PersonOnlyVerdict | null {
     let remove = false;
     const positionals: string[] = [];
     for (let j = 0; j < args.length; j += 1) {
@@ -965,11 +965,11 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     }
     const [name = "", target] = positionals;
     if ((remove || target !== undefined) && /^(refs\/)?tags\//i.test(name)) {
-      return deny("tag", "A symbolic tag ref written or deleted (`git symbolic-ref`)");
+      return deny("tag", `A symbolic tag ref written or deleted (\`${via}\`)`);
     }
     if (remove || target === undefined || name === "HEAD") return null;
     if (/[$`]/.test(target) || defaults.has(target.replace(/^(refs\/)?heads\//i, "").toLowerCase())) {
-      return deny("push-default", "A symbolic ref pointed at the default branch, or at a branch the line cannot show (`git symbolic-ref`)");
+      return deny("push-default", `A symbolic ref pointed at the default branch, or at a branch the line cannot show (\`${via}\`)`);
     }
     return null;
   }
@@ -1320,6 +1320,15 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         // `git update-ref` writes or deletes a ref by name (pr/53): a tag ref named on the line, or in a `--stdin` text
         // the line itself carries, is a tag created or deleted. A `--stdin` text read from a file is the residual.
         verdict = deny("tag", "A tag ref write (`git update-ref`)");
+      } else if (sub === "update-ref" && args.includes("--stdin")) {
+        // git 2.46's symref commands in that text (pr/82), by `git symbolic-ref`'s rules: `symref-create` and
+        // `symref-update` as `<ref> <target>`, `symref-delete` as `-d <ref>`. A target missing or a printf placeholder
+        // is one the line cannot show; a space, a quote or an escape (`\n`, `\0`, `\x00`) ends a word.
+        const word = String.raw`(?:[\s'"]|\\(?:x[\da-fA-F]{1,2}|[0-7]{1,3}|[a-z]))+([^\s'"\\|;&<>()]+)`;
+        for (const [, op, ref = "", target] of command.matchAll(new RegExp(String.raw`\bsymref-(create|update|delete)${word}(?:${word})?`, "g"))) {
+          const shown = target === undefined || target.includes("%") ? "$" : target;
+          verdict ??= symbolicRefVerdict(op === "delete" ? ["-d", ref] : [ref, shown], "git update-ref --stdin");
+        }
       } else if (sub === "symbolic-ref") verdict = symbolicRefVerdict(args);
       else if (sub === "subtree") {
         // `git subtree push <remote> <branch>` runs `git push <remote> <split>:refs/heads/<branch>`.

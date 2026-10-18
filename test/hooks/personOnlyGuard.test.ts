@@ -180,9 +180,11 @@ const MATRIX: readonly (readonly [command: string, rule: string | null])[] = [
   ["curl https://a.example --next https://b.example", null],
   ["gh api graphql -f query='mutation { archiveRepository(input: {repositoryId: \"R\"}) { clientMutationId } }'", "protection"],
   ["gh api graphql -f query='query { repository(owner:\"o\",name:\"r\") { isArchived } }'", null],
-  // PR #112's resolution round 4b: curl's attached body (pr/81).
+  // PR #112's resolution round 4b: curl's attached body (pr/81), and `git update-ref --stdin`'s symref commands (pr/82).
   ["curl -d@r.json https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
   ["curl -o out.json https://api.github.com/repos/o/r/pulls/3/reviews", null],
+  ["printf 'symref-create refs/heads/safe refs/heads/main\\n' | git update-ref --stdin", "push-default"],
+  ["printf 'symref-create refs/heads/a refs/heads/feat/x\\n' | git update-ref --stdin", null],
 ];
 
 describe("the person-only guard, on every client", () => {

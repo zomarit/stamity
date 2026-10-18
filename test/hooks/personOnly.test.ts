@@ -572,6 +572,17 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["curl -Fevent=APPROVE https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
   ["curl -Tr.json https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
   ["curl -d@r.json https://api.github.com/repos/o/r/releases", "release"],
+  // `git update-ref --stdin`'s symref commands (git 2.46) in a text the line carries (pr/82), by `git symbolic-ref`'s
+  // rules: a ref pointed at the default branch, named or one the line cannot show, a tag's name written.
+  ["printf 'symref-create refs/heads/safe refs/heads/main\\n' | git update-ref --stdin", "push-default"],
+  ["git update-ref --stdin <<EOF\nsymref-create refs/heads/safe refs/heads/main\nEOF", "push-default"],
+  ["printf 'symref-update refs/heads/safe refs/heads/main\\n' | git update-ref --stdin", "push-default"],
+  ["echo 'symref-create refs/heads/safe main' | git update-ref --stdin", "push-default"],
+  ["printf 'symref-create refs/heads/safe refs/heads/trunk\\n' | git update-ref --stdin", "push-default", ON_TRUNK],
+  ["printf \"symref-create refs/heads/safe $B\\n\" | git update-ref --stdin", "push-default"],
+  ["printf 'symref-create refs/heads/safe refs/heads/%s\\n' \"$B\" | git update-ref --stdin", "push-default"],
+  ["printf 'symref-create refs/heads/safe\\0refs/heads/main\\0' | git update-ref -z --stdin", "push-default"],
+  ["printf 'symref-create refs/tags/v9 refs/heads/feat\\n' | git update-ref --stdin", "tag"],
 ];
 
 const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
@@ -820,6 +831,12 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
   ["curl -s https://api.github.com/repos/o/r/git/refs/heads/main"],
   ["curl -H'Accept: application/vnd.github+json' https://api.github.com/repos/o/r/pulls/3/merge"],
   ["curl -d'{\"event\":\"COMMENT\"}' https://api.github.com/repos/o/r/pulls/3/reviews"],
+  // pr/82's twins: a symbolic ref pointed at another branch, `HEAD` repointed, a check, a branch's deleted, a plain update.
+  ["printf 'symref-create refs/heads/a refs/heads/feat/x\\n' | git update-ref --stdin"],
+  ["printf 'symref-update HEAD refs/heads/main\\n' | git update-ref --stdin"],
+  ["printf 'symref-verify refs/heads/a refs/heads/main\\n' | git update-ref --stdin"],
+  ["printf 'symref-delete refs/heads/a\\n' | git update-ref --stdin"],
+  ["printf 'update refs/heads/feat/x HEAD\\n' | git update-ref --stdin"],
 ];
 
 describe("personOnlyVerdict — the deny matrix", () => {
