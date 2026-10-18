@@ -1101,6 +1101,18 @@ const CLASSES: readonly (readonly [command: string, rule: string, ask: boolean, 
   ["gh api -X PUT repos/o/r/environments/prod/deployment-branch-policies/7 -f name=release", "protection", true],
   ["curl -X POST -d '{\"name\":\"release\"}' https://api.github.com/repos/o/r/environments/prod/deployment-branch-policies", "protection", true],
   ["curl -X PATCH https://api.github.com/repos/o/r/environments/prod/deployment_protection_rules/7", "protection", true],
+  // review/51, round 4: an environment name holding a slash, sent as `%2F` or plain, in each of the three environment
+  // rules; a variable below an environment stays a variable, not the environment.
+  ["gh api -X DELETE repos/o/r/environments/release%2Feu", "protection-delete", false],
+  ["curl -X DELETE https://api.github.com/repos/o/r/environments/release/eu", "protection-delete", false],
+  ["gh api -X PUT repos/o/r/environments/release%2Feu --input env.json", "protection", true],
+  ["gh api -X DELETE repos/o/r/environments/release%2Feu/deployment_protection_rules/7", "protection-delete", false],
+  ["curl -X DELETE https://api.github.com/repos/o/r/environments/release/eu/deployment-branch-policies/7", "protection-delete", false],
+  ["gh api --method POST repos/o/r/environments/release%2Feu/deployment-branch-policies -f name=main", "protection", true],
+  ["gh api -X DELETE repos/o/r/environments/release%2Feu/secrets/TOKEN", "secrets-delete", false],
+  ["curl -X DELETE https://api.github.com/repos/o/r/environments/release/eu/variables/FOO", "secrets-delete", false],
+  ["gh api -X PUT repos/o/r/environments/release%2Feu/secrets/TOKEN -f encrypted_value=x -f key_id=1", "secrets", true],
+  ["gh api -X DELETE repos/o/r/environments/prod/variables/FOO", "secrets-delete", false],
   // review/52: yarn classic's own `tag` command removes and adds a dist-tag, at the start or after `workspace <name>`.
   ["yarn tag remove x beta", "unpublish", false],
   ["yarn tag rm x beta", "unpublish", false],
@@ -1144,6 +1156,33 @@ describe("personOnlyVerdict — ask or refuse (v0a)", () => {
     expect(personOnlyVerdict("curl https://api.github.com/repos/o/r/environments/prod/deployment-branch-policies/7", ON_FEATURE)).toEqual({ deny: false });
     // A deployment created is not a change to what gates one.
     expect(personOnlyVerdict("gh api -X POST repos/o/r/deployments -f ref=feat", ON_FEATURE)).toEqual({ deny: false });
+  });
+
+  it("reads a slash-named environment and each sub-resource below one under its own rule (review/51, round 4)", () => {
+    const act = (command: string): string => {
+      const verdict = personOnlyVerdict(command, ON_FEATURE);
+      return verdict.deny ? verdict.act : "";
+    };
+    expect(act("gh api -X DELETE repos/o/r/environments/release%2Feu")).toMatch(/^A deployment environment deletion /);
+    expect(act("gh api -X DELETE repos/o/r/environments/release%2Feu/deployment_protection_rules/7")).toMatch(
+      /^A deployment protection rule or branch policy deletion /,
+    );
+    expect(act("gh api -X PUT repos/o/r/environments/prod/deployment-branch-policies/7 -f name=release")).toMatch(
+      /^A deployment protection rule or branch policy write /,
+    );
+    expect(act("gh api -X PUT repos/o/r/environments/release%2Feu/secrets/TOKEN -f encrypted_value=x -f key_id=1")).toMatch(
+      /^A secret or variable write /,
+    );
+  });
+
+  it("allows a slash-named environment's read, and a path of the same shape that is no environment's (review/51, round 4)", () => {
+    expect(personOnlyVerdict("gh api repos/o/r/environments/release%2Feu", ON_FEATURE)).toEqual({ deny: false });
+    expect(personOnlyVerdict("gh api -X POST repos/o/r/deployments -f ref=feat -f environment=release/eu", ON_FEATURE)).toEqual({ deny: false });
+    // A repository named `environments`, and a feature branch whose name holds an environment path.
+    expect(personOnlyVerdict("gh api -X POST repos/o/environments/issues -f title=x", ON_FEATURE)).toEqual({ deny: false });
+    expect(personOnlyVerdict("gh api -X PATCH repos/o/r/git/refs/heads/environments/release/eu/secrets -f sha=abc", ON_FEATURE)).toEqual({
+      deny: false,
+    });
   });
 
   it("allows yarn classic's tag listing, and a script named `tag` run through `yarn run` (review/52)", () => {

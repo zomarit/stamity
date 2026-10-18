@@ -1456,14 +1456,16 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         else deny("protection", `A protection or ruleset write (${shown})`);
       }
       // A deployment environment: deleting it deletes its secrets, variables and protection rules with it, so it is
-      // refuse-class; creating or updating it sets its protection rules (review/38).
-      if (/^environments\/[^/]+$/i.test(path)) {
+      // refuse-class; creating or updating it sets its protection rules (review/38). Its name may hold a slash, sent as
+      // `%2F` and decoded above, so the three environment rules read the name as `branches/.+/protection` reads a branch
+      // (review/51); this one stops short of a path that goes on into a sub-resource the two below read.
+      if (/^environments\/(?!.+\/(deployment_protection_rules|deployment-branch-policies|secrets|variables)(\/|$)).+$/i.test(path)) {
         if (method === "DELETE") deny("protection-delete", `A deployment environment deletion (${shown})`);
         else if (method === "PUT") deny("protection", `A deployment environment write (${shown})`);
       }
       // An environment's deployment protection rule or branch policy: removing one lowers what gates a deployment to it,
       // refuse-class as a branch protection deletion is; creating or changing one is ask-class (review/51).
-      if (/^environments\/[^/]+\/(deployment_protection_rules|deployment-branch-policies)(\/|$)/i.test(path)) {
+      if (/^environments\/.+\/(deployment_protection_rules|deployment-branch-policies)(\/|$)/i.test(path)) {
         if (method === "DELETE") deny("protection-delete", `A deployment protection rule or branch policy deletion (${shown})`);
         else deny("protection", `A deployment protection rule or branch policy write (${shown})`);
       }
@@ -1486,7 +1488,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       ) {
         deny("push-default", `A REST merge into the default branch (${shown})`);
       }
-      if (/^((actions|dependabot|codespaces|agents)|environments\/[^/]+)\/(secrets|variables)(\/|$)/i.test(path)) {
+      if (/^((actions|dependabot|codespaces|agents)|environments\/.+)\/(secrets|variables)(\/|$)/i.test(path)) {
         if (method === "DELETE") deny("secrets-delete", `A secret or variable deletion (${shown})`);
         else deny("secrets", `A secret or variable write (${shown})`);
       }
