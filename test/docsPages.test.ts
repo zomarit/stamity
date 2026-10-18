@@ -756,7 +756,7 @@ const RELEASE_CUT_DATE = "2026-10-15";
  * v15-cloud-page (REQ-PROVE-043). `docs/cloud.md` is a new hand page, and the only honest date a
  * page written today can carry is today's, which the 2026-10-15 pin refused as later than the pass
  * it ships in. The pages the new guide moved were re-read for those claims and moved onto the commit
- * form naming the lane base e98f6bf2 plus `Re-attested 2026-10-18`: `README.md` (its map row and the
+ * form naming the lane base 1fd1808d plus `Re-attested 2026-10-18`: `README.md` (its map row and the
  * `llms.txt` row's guide count) and `docs/doctrine.md` (the bucket's two count words). Every other
  * page keeps its cut date.
  */
@@ -4401,15 +4401,27 @@ describe("docs/cloud.md", () => {
     expect(text).toContain("`CLAUDE_CODE_REMOTE`");
     expect(cloudFact("copilot", "Default branch").fact).toContain("default branch");
     expect(flowed(sectionOf(cloudPage(), "## Copilot's cloud agent"))).toMatch(/on the default branch/);
+    // REQ-FLOW-117: the opening a reader chooses from promises a night with nobody there on Claude Code and Cursor
+    // only, and says Copilot's runs as a chain of sessions a person continues (review/107).
+    const opening = flowed(cloudPage().split("\n## ")[0] ?? "");
+    expect(opening).toMatch(/On Claude Code on the web and Cursor's cloud agents it can run through a night with nobody there/);
+    expect(opening).toMatch(/Copilot's cloud agent runs it as a chain of sessions[^.]*a person continues each one/);
+    // The `direct-push` wall's identity half (src/runs/preflight.ts, `pushIdentityCheck`): gh present, its helper
+    // alone, no Authorization header, or Claude Code's proxy (review/106).
+    const needs = flowed(sectionOf(cloudPage(), "## What every cloud needs"));
+    expect(needs).toMatch(/needs `gh` installed and signed in/);
+    expect(needs).toMatch(/gh's credential helper the only helper for origin and no `Authorization` extra header/);
     expect(text, "the page does not send the reader to the dated table").toContain("(capability-matrix.md)");
   });
 
   it("puts the cloud cadence on the release checklist: the vendor pages re-read, each client's ask re-measured", () => {
     const further = perReleaseLines().filter((line) => line.startsWith("A further line"));
     const vendor = further.find((line) => /re-read the vendor pages/.test(collapsed(line)));
-    const ask = further.find((line) => line.includes("`node scripts/qa/hook-runs.mjs --ask`"));
+    // `--require-observation` makes an unmeasured Claude Code (`not-installed`) exit 1, as `not-run` already does,
+    // so the cut cannot pass the line with the attended ask unmeasured (review/105).
+    const ask = further.find((line) => line.includes("`node scripts/qa/hook-runs.mjs --ask --require-observation`"));
     expect(vendor, `${RELEASE_CHECKLIST} has no line re-reading the cloud's vendor pages`).toBeDefined();
-    expect(ask, `${RELEASE_CHECKLIST} has no line running hook-runs.mjs --ask`).toBeDefined();
+    expect(ask, `${RELEASE_CHECKLIST} has no line running hook-runs.mjs --ask --require-observation`).toBeDefined();
     for (const line of [vendor ?? "", ask ?? ""]) {
       expect(line, `a cloud line names no trigger: "${line.slice(0, 60)}…"`).toContain("Runs when:");
     }
@@ -4425,5 +4437,6 @@ describe("docs/cloud.md", () => {
     expect(ASK_CLASS_CLIENTS).toEqual(["claude"]);
     expect(askText).toMatch(/Claude Code is the one ask-class client it measures/);
     expect(askText).toMatch(/moves to refusing before the tag/);
+    expect(askText).toMatch(/`not-run`[^.]*`not-installed`[^.]*each exit 1 and hold the tag/);
   });
 });

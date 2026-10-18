@@ -2,7 +2,7 @@
 title: Cloud runs
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit e98f6bf2. Re-attested 2026-10-18 for the whole page, written that day. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 1fd1808d. Re-attested 2026-10-18 for the whole page, written that day. -->
 <!-- Re-open when: a row of `CLIENT_CLOUD_FACTS` moves, a run contract key or a pre-flight check
      changes, or a client's answer to a person-only act moves. `test/docsPages.test.ts` holds this
      page to the hand-page contract, the contract parser and that table; a vendor page that changed
@@ -10,9 +10,10 @@ title: Cloud runs
 
 # Cloud runs
 
-This page is for you if you want a planned change to run in a vendor's cloud while nobody watches:
-Claude Code on the web, Cursor's cloud agents or Copilot's cloud agent. For each cloud it gives the
-setup, the branch protection the run needs before it starts, the secrets, how to start a run under
+This page is for you if you want a planned change to run in a vendor's cloud. On Claude Code on the
+web and Cursor's cloud agents it can run through a night with nobody there. Copilot's cloud agent
+runs it as a chain of sessions, each stopped at 59 minutes, and a person continues each one, so it
+is no night with nobody there. For each cloud it gives the setup, the branch protection the run needs before it starts, the secrets, how to start a run under
 a run contract, and the morning walk. Then it covers Claude Code's GitHub Action, which is a short
 surface rather than an overnight one, and the run contract itself.
 
@@ -54,7 +55,11 @@ set to any value but empty, `false` or `0`. A cloud's own marker means "cloud", 
 - **Protection the run's account cannot get past.** The run's first act is
   `stamity gate preflight --unattended`, and its `direct-push` check reads, over GitHub's REST API,
   whether the account the cloud's `gh` acts as can push to the default branch. It refuses unless
-  the account cannot. For an account without admin, an active ruleset or classic protection that
+  the account cannot. Those reads go through `gh`, so the cloud needs `gh` installed and signed in,
+  and they prove something only when every URL git pushes origin to goes out as that account: over
+  https with gh's credential helper the only helper for origin and no `Authorization` extra header,
+  or through Claude Code's cloud proxy. Otherwise the check does not pass, and its fix names the git
+  configuration to set. For an account without admin, an active ruleset or classic protection that
   requires a pull request, with no direct-push bypass for that account, counts. For an account that
   administers the repository, only an organization ruleset counts. An account with no push right
   at all is refused too, since the run could not push its own branch.
@@ -113,7 +118,9 @@ root `AGENTS.md` ends on a "Cursor Cloud specific instructions" block: what `/st
 index once per conversation. A `stop` hook keeps an unattended run going while its record leaves
 units. `stamity check`'s `cloud-install` row prints the install lines, `node --version` and then
 the CLI's global install at the version that generated the setup. Put them in the install step of
-the environment you saved in Cursor, with `STAMITY_UNATTENDED=1`. `init` and `sync` write no
+the environment you saved in Cursor, with `STAMITY_UNATTENDED=1`, and give that environment a `gh`
+that is signed in and is origin's only credential helper, which the pre-flight's `direct-push`
+check needs. `init` and `sync` write no
 `.cursor/environment.json`, because a repository file replaces every environment saved there.
 
 ### Protect the default branch
@@ -150,7 +157,9 @@ so each held act comes to you as the exact command, the morning walk included. L
 ### Set it up
 
 The cloud agent uses a hooks file only when it is on the default branch, so `.github/hooks/`
-must be on the default branch before the first run. `copilot-setup-steps.yml` installs the CLI.
+must be on the default branch before the first run. `copilot-setup-steps.yml` installs the CLI;
+the agent's environment also needs a `gh` that is signed in and is origin's only credential
+helper, which the pre-flight's `direct-push` check needs.
 A prompt file is not run by name on this agent, so the setup writes a thin entry agent,
 `.github/agents/stamity-run.agent.md`, that points at `/st-work`'s prompt file and the plan the
 issue names. While that agent is not yet on the default branch, the run writes a
@@ -199,7 +208,7 @@ The Action runs Claude Code as a GitHub Actions job, and a job on a GitHub-hoste
 and failed at 6 hours of execution time (documented). It is a surface for a short task, one unit
 rather than a plan, and never an overnight surface. Its page names no question tool among the tools
 a run is given by default, and nobody sits in the job to answer one. That it has none rests on the
-page's silence (unverified), so a run there takes its declared defaults.
+page's silence (not documented), so a run there takes its declared defaults.
 
 On a pull request, the Action restores `.claude/`, `CLAUDE.md` and the other Claude configuration
 paths from the base branch before Claude starts (documented). Two things this setup keeps elsewhere

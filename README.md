@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit e98f6bf2. Re-attested 2026-10-18 for the cloud guide's map row and the guide count. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 1fd1808d. Re-attested 2026-10-18 for the cloud guide's map row and the guide count. -->
 <!-- Re-open when: the corpus counts, the nine-verb surface or a client capability changes, or a
      newer measurement supersedes the proof figures. `test/docsPages.test.ts` catches the first
      three; the figures are re-read against `docs/measurements.md` and the run record they cite. -->

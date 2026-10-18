@@ -342,12 +342,17 @@ whether it moved (added 2026-10-18, REQ-PROVE-042, with `docs/cloud.md`). Runs w
 release, a patch included — a vendor page moves on the vendor's schedule, which no diff here shows.
 
 A further line rides the cut, before the tag, and takes no ordinal: under the machine lock, and
-never while an eval run is running, run `node scripts/qa/hook-runs.mjs --ask`, which measures how
-each installed client answers a hook's `ask` in its permissive mode and prints each client's row as
-`held`, `ran`, `not-run` or `not-installed`. Claude Code is the one ask-class client it measures,
-the only client whose guard asks for one click on a person-only act; the others are reported and
-refuse already. A client whose ask ran (`ran`) moves to refusing before the tag, in a `main` commit
-to the guard and its pages, and the release record carries the rows (added 2026-10-18, REQ-PROVE-042).
+never while an eval run is running, run `node scripts/qa/hook-runs.mjs --ask --require-observation`,
+which measures how each installed client answers a hook's `ask` in its permissive mode and prints
+each client's row as `held`, `ran`, `not-run` or `not-installed`. Claude Code is the one ask-class
+client it measures, the only client whose guard asks for one click on a person-only act; the others
+are reported and refuse already, and their rows never fail the command. Claude Code's row decides
+the line. `held`, the ask held the command until a person answered, keeps the one-click ask, and the
+command exits 0. A client whose ask ran (`ran`, the command ran past the ask) moves to refusing
+before the tag, in a `main` commit to the guard and its pages. `not-run`, nothing about the ask
+measured, and `not-installed`, no Claude Code on the machine, each exit 1 and hold the tag until a
+re-run on a machine with Claude Code reads `held` or `ran`: the attended one-click ask rests on that
+measurement. The release record carries the rows (added 2026-10-18, REQ-PROVE-042).
 Runs when: every release, a patch included — a client's own update changes its answer, and no diff
 here shows it.
 
