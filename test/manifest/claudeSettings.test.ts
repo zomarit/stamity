@@ -12,7 +12,7 @@ import {
   reduceClaudeSettingsToForeignContent,
   type SettingsOwnership,
 } from "../../src/manifest/claudeSettings.ts";
-import { CLAUDE_DENY_ROWS } from "../../src/hooks/personOnly.ts";
+import { CLAUDE_ASK_ROWS, CLAUDE_DENY_ROWS } from "../../src/hooks/personOnly.ts";
 import { memberHash } from "../../src/manifest/jsonMembers.ts";
 import type * as AtomicWrite from "../../src/merge/atomicWrite.ts";
 import { ledgerHashIndex } from "../../src/merge/safeWrite.ts";
@@ -619,6 +619,78 @@ describe("planClaudeSettings — the engine's deny rows (u20-hook-emission, REQ-
       expect(refused.result.warning, raw).toContain(named);
       expect(refused.content, raw).toBeNull();
     }
+  });
+});
+
+describe("planClaudeSettings — the engine's ask rows (v0a2, REQ-FLOW-036, REQ-FLOW-123)", () => {
+  const ENGINE_DENY = [...CLAUDE_DENY_ROWS];
+  const ENGINE_ASK = [...CLAUDE_ASK_ROWS];
+  /** The current repository-mode rendering's shape: both row lists and the hooks. */
+  const EMITTED_BOTH = doc({ permissions: { deny: ENGINE_DENY, ask: ENGINE_ASK }, hooks: ENGINE_HOOKS });
+  const OWNER_ASK = "Bash(npm version:*)";
+  /** An owner's ask row equal to an engine ask row. */
+  const SHARED_ASK = ENGINE_ASK[1]!;
+
+  it("creates both lists, records each row under its own pointer, and a second plan moves no byte", () => {
+    const plan = planClaudeSettings("x", EMITTED_BOTH, null, own());
+    expect(plan.content).toBe(EMITTED_BOTH);
+    expect(plan.record?.elements?.["/permissions/deny"]).toEqual(ENGINE_DENY.map(memberHash));
+    expect(plan.record?.elements?.["/permissions/ask"]).toEqual(ENGINE_ASK.map(memberHash));
+    const again = planClaudeSettings("x", EMITTED_BOTH, plan.content, own({ owned: true, record: plan.record }));
+    expect(again).toMatchObject({ content: null, result: { action: "unchanged" } });
+    expect(again.record).toEqual(plan.record);
+  });
+
+  it("keeps an owner's ask rows in place, the one equal to an engine row placed once and never recorded", () => {
+    const existing = doc({ permissions: { ask: [OWNER_ASK, SHARED_ASK] }, model: "opus" });
+
+    const plan = planClaudeSettings("x", EMITTED_BOTH, existing, own());
+
+    const permissions = (JSON.parse(plan.content!) as { permissions: { deny: string[]; ask: string[] } }).permissions;
+    expect(permissions.ask.slice(0, 2)).toEqual([OWNER_ASK, SHARED_ASK]);
+    expect(permissions.ask.filter((row) => row === SHARED_ASK)).toHaveLength(1);
+    expect(permissions.ask.toSorted()).toEqual([OWNER_ASK, ...ENGINE_ASK].toSorted());
+    expect(permissions.deny).toEqual(ENGINE_DENY);
+    const recorded = plan.record?.elements?.["/permissions/ask"] ?? [];
+    expect(recorded).toHaveLength(ENGINE_ASK.length - 1);
+    expect(recorded).not.toContain(memberHash(SHARED_ASK));
+    expect(recorded).not.toContain(memberHash(OWNER_ASK));
+    const again = planClaudeSettings("x", EMITTED_BOTH, plan.content, own({ owned: true, record: plan.record }));
+    expect(again.result.action).toBe("unchanged");
+  });
+
+  it("removes no ask row on clean, names the rows equal to either table's, and never the owner's own", () => {
+    // A deny row equal to an engine ask row: a checkout synced from an unreleased build before 1.16.0 keeps one.
+    const moved = ENGINE_ASK[0]!;
+    expect(ENGINE_DENY).not.toContain(moved);
+    const existing = doc({ permissions: { deny: [moved], ask: [OWNER_ASK] }, model: "opus" });
+    const plan = planClaudeSettings("x", EMITTED_BOTH, existing, own());
+    const merged = JSON.parse(plan.content!) as { permissions: { deny: string[]; ask: string[] } };
+    // The client reads a deny row before an ask row, so the moved row still refuses where it is kept.
+    expect(merged.permissions.deny[0]).toBe(moved);
+    expect(merged.permissions.ask).toContain(moved);
+
+    const reduction = reduceClaudeSettingsToForeignContent(plan.content!, reduceOpts(plan.record, false));
+
+    expect(reduction.kind === "reduced" && JSON.parse(reduction.content)).toEqual({ permissions: merged.permissions, model: "opus" });
+    expect(reduction.detail).toContain(`permissions.deny (${JSON.stringify(moved)}`);
+    expect(reduction.detail).toContain(`permissions.ask (${JSON.stringify(ENGINE_ASK[0])}`);
+    expect(reduction.detail).toContain("clean removes no deny row and no ask row");
+    expect(reduction.detail).not.toContain(OWNER_ASK);
+  });
+
+  it("refuses an ask of another type, naming it, as it refuses a deny", () => {
+    const refused = planClaudeSettings("x", EMITTED_BOTH, doc({ permissions: { ask: "Bash" } }), own());
+    expect(refused.result.action).toBe("skipped");
+    expect(refused.result.warning).toContain("permissions.ask is a string, not an array");
+    expect(refused.content).toBeNull();
+  });
+
+  it("declares the ask list as it declares the deny list: never recognised, bounding nothing, foreign", () => {
+    const ask = claudeSettingsSpec().elements.find((element) => element.pointer === "/permissions/ask");
+    expect(ask?.recognise(ENGINE_ASK[0])).toBe(false);
+    expect([ENGINE_ASK[0], OWNER_ASK, 3].map((row) => ask?.inBound(row))).toEqual([false, false, false]);
+    expect(ask?.outsideBound).toBe("foreign");
   });
 });
 

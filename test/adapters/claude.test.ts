@@ -28,7 +28,7 @@ import { LIVE_CAPABILITY_INPUTS } from "../../src/emit/capabilityMatrix.ts";
 import { NATIVE_SKILL_DIRS, SKILLS_PROJECTION_DIR } from "../../src/emit/skillsProjection.ts";
 import { TOOLS, type Tool } from "../../src/types/core.ts";
 import { CLIENT_EXTENSION_EVENTS } from "../../src/hooks/model.ts";
-import { CLAUDE_DENY_ROWS, personOnlyVerdict } from "../../src/hooks/personOnly.ts";
+import { CLAUDE_ASK_ROWS, CLAUDE_DENY_ROWS, GITHUB_MCP_ROWS, personOnlyVerdict } from "../../src/hooks/personOnly.ts";
 import {
   REVIEW_GATE_FILE,
   REVIEW_GATE_STATE_FILE,
@@ -228,12 +228,34 @@ const EMPTY_SELECTION: ContentSelection = {
   items: { agent: [], skill: [], rule: [], command: [] },
 };
 
+/**
+ * v0a2 (REQ-FLOW-120): the matcher of the person-only guard's second PreToolUse entry, the GitHub MCP server's
+ * person-only tools by name, a literal so a renamed tool is a visible edit here.
+ */
+const MCP_GUARD_MATCHER = [
+  "mcp__github__merge_pull_request",
+  "mcp__github__push_files",
+  "mcp__github__create_or_update_file",
+  "mcp__github__delete_file",
+  "mcp__github__update_pull_request_branch",
+  "mcp__github__pull_request_review_write",
+  "mcp__github__create_pull_request_review",
+  "mcp__github__submit_pending_pull_request_review",
+  "mcp__github__update_pull_request",
+  "mcp__github__update_pull_request_state",
+  "mcp__github__update_pull_request_draft_state",
+  "mcp__github__create_branch",
+  "mcp__github__delete_repository",
+  "mcp__github__create_pull_request",
+].join("|");
+
 interface SettingsShape {
   // TEST CHANGE, justified (2026-10-08, inbox row 324): the engine renders no
   // `permissions` member on either route, so the shape types it as absent.
   // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102): the member is back, carrying the
   // person-only deny rows alone; `allow` stays typed absent, since no allow row is rendered.
-  permissions?: { deny: string[]; allow?: never };
+  // TEST CHANGE, justified (v0a2, REQ-FLOW-120, REQ-FLOW-123): and the ask rows beside them.
+  permissions?: { deny: string[]; ask?: string[]; allow?: never };
   hooks: Record<
     string,
     { matcher?: string; hooks: { type: string; command: string; timeout?: number }[] }[]
@@ -690,7 +712,8 @@ describe("claude residue over the real corpus", () => {
     // Whole-file JSON: the deny rows and the hooks, nothing else — no allow
     // row, no teammate modes, no experimental flags.
     expect(Object.keys(settings)).toEqual(["permissions", "hooks"]);
-    expect(settings.permissions).toEqual({ deny: [...CLAUDE_DENY_ROWS] });
+    // TEST CHANGE, justified (v0a2, REQ-FLOW-120, REQ-FLOW-123): the ask rows follow the deny rows.
+    expect(settings.permissions).toEqual({ deny: [...CLAUDE_DENY_ROWS], ask: [...CLAUDE_ASK_ROWS] });
     const raw = byPath(rows).get(CLAUDE_SETTINGS_PATH)!.content;
     // CHANGED: `TaskCompleted` used to be asserted ABSENT as one of the
     // predecessor's Agent-Teams echo gates. It is now a deliberate carrier for
@@ -714,7 +737,8 @@ describe("claude residue over the real corpus", () => {
     // shell guard follows on the two shell tools, then the ask gate on the
     // question tool.
     const preToolUse = settings.hooks["PreToolUse"];
-    expect(preToolUse).toHaveLength(3);
+    // TEST CHANGE, justified (v0a2, REQ-FLOW-120, REQ-FLOW-123): a fourth entry, the shell guard again on the GitHub MCP tools, with its fail-closed tail.
+    expect(preToolUse).toHaveLength(4);
     expect(preToolUse?.[0]?.hooks[0]).toEqual({ type: "command", command: HOOK_COMMANDS.guard });
     expect(preToolUse?.[0]?.matcher).toBeUndefined();
     expect(preToolUse?.[1]).toEqual({
@@ -724,6 +748,10 @@ describe("claude residue over the real corpus", () => {
     expect(preToolUse?.[2]).toEqual({
       matcher: "AskUserQuestion",
       hooks: [{ type: "command", command: HOOK_COMMANDS.askGate }],
+    });
+    expect(preToolUse?.[3]).toEqual({
+      matcher: MCP_GUARD_MATCHER,
+      hooks: [{ type: "command", command: HOOK_COMMANDS.personOnlyGuard }],
     });
 
     // The Claude-only ConfigChange extension wires the SAME tamper script the
@@ -798,13 +826,14 @@ describe("claude residue over the real corpus", () => {
     const settings = settingsOf(rows);
     expect(settings.hooks["SessionStart"]).toHaveLength(2);
     // TEST CHANGE, justified (u20-hook-emission): the core guard, the shell guard and the ask gate.
-    expect(settings.hooks["PreToolUse"]).toHaveLength(3);
+    // TEST CHANGE, justified (v0a2, REQ-FLOW-120, REQ-FLOW-123): and the shell guard on the GitHub MCP tools.
+    expect(settings.hooks["PreToolUse"]).toHaveLength(4);
     expect(settings.hooks["ConfigChange"]).toHaveLength(1);
     // TEST CHANGE, justified (2026-10-08, inbox row 324): pinned three allow
     // rows; the document now carries no permissions member.
     // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102): it carries the deny rows again, on an
-    // empty selection too, and still no allow row.
-    expect(settings.permissions).toEqual({ deny: [...CLAUDE_DENY_ROWS] });
+    // empty selection too, and still no allow row. TEST CHANGE, justified (v0a2, REQ-FLOW-120, REQ-FLOW-123): the ask rows too.
+    expect(settings.permissions).toEqual({ deny: [...CLAUDE_DENY_ROWS], ask: [...CLAUDE_ASK_ROWS] });
   });
 
   it("emits only claude-owned residue paths, never a core-owned one", async () => {
@@ -1325,12 +1354,14 @@ describe("user hook lane", () => {
 
     // Declaration order: core scripts first, then user rows as the reader
     // returned them. TEST CHANGE, justified (u20-hook-emission): the shell guard is a core row, so it
-    // precedes the user row, and the adapter's ask gate follows every planned row.
+    // precedes the user row, and the adapter's ask gate follows every planned row. TEST CHANGE, justified (v0a2,
+    // REQ-FLOW-120): then the shell guard again, on the GitHub MCP tools.
     expect(settings.hooks["PreToolUse"]?.map((entry) => entry.hooks[0]?.command)).toEqual([
       HOOK_COMMANDS.guard,
       HOOK_COMMANDS.personOnlyGuard,
       USER_HOOK_COMMAND,
       HOOK_COMMANDS.askGate,
+      HOOK_COMMANDS.personOnlyGuard,
     ]);
     const userEntry = settings.hooks["PreToolUse"]?.[2];
     expect(userEntry?.matcher).toBe("Bash");
@@ -1428,9 +1459,12 @@ describe("the project-directory anchor", () => {
 
     // Four pre-tool-use rows and several non-guard rows in one document, so
     // "only the guards" is a statement about a populated list.
-    expect(settings.hooks["PreToolUse"]).toHaveLength(4);
+    // TEST CHANGE, justified (v0a2, REQ-FLOW-120, REQ-FLOW-123): a fifth entry, the shell guard on the GitHub MCP tools,
+    // whose command is the shell guard's, tail included, so the tail is on three commands.
+    expect(settings.hooks["PreToolUse"]).toHaveLength(5);
     expect(commands.filter((command) => command.endsWith(GUARD_TAIL))).toEqual([
       HOOK_COMMANDS.guard,
+      HOOK_COMMANDS.personOnlyGuard,
       HOOK_COMMANDS.personOnlyGuard,
     ]);
     expect(HOOK_COMMANDS.guard.endsWith(GUARD_TAIL)).toBe(true);
@@ -1440,6 +1474,7 @@ describe("the project-directory anchor", () => {
     expect(settings.hooks["SessionStart"]?.every((entry) => !entry.hooks[0]!.command.includes("exit 2"))).toBe(true);
     expect(settings.hooks["PreToolUse"]?.[2]?.hooks[0]?.command).toBe(USER_HOOK_COMMAND);
     expect(settings.hooks["PreToolUse"]?.[3]?.hooks[0]?.command).toBe(HOOK_COMMANDS.askGate);
+    expect(settings.hooks["PreToolUse"]?.[4]).toEqual({ matcher: MCP_GUARD_MATCHER, hooks: [{ type: "command", command: HOOK_COMMANDS.personOnlyGuard }] });
   });
 
   /**
@@ -1714,44 +1749,105 @@ describe("the person-only deny rows (u20-hook-emission, REQ-FLOW-102)", () => {
 
     expect(CLAUDE_DENY_ROWS.length).toBeGreaterThan(10);
     expect(deny).toEqual([...CLAUDE_DENY_ROWS]);
-    // The `Bash(<prefix>:*)` form the repository's tests pin for a Claude Code prefix rule, then the GitHub MCP
-    // server's merge and branch-write tools in Claude Code's MCP rule form, one row each (review/214), then its
-    // review-submit, pull-request-update, branch-create and repository-delete tools (review/226).
+    // TEST CHANGE, justified (v0a2, REQ-FLOW-123, REQ-FLOW-124): the deny list keeps the refused rows alone — the
+    // `Bash(<prefix>:*)` prefix rules, then the mid-pattern rules a `*` inside the row matches anywhere (no `:*`), then
+    // the one refused GitHub MCP tool; every other row moved to the ask list, rendered in order too (review/214,
+    // review/226, pr/78 for the MCP rows).
     const mcp = deny.filter((row) => !row.startsWith("Bash("));
-    for (const row of deny.slice(0, deny.length - mcp.length)) expect(row).toMatch(/^Bash\([^()]+:\*\)$/);
-    expect(mcp).toEqual([
-      "mcp__github__merge_pull_request",
-      "mcp__github__push_files",
-      "mcp__github__create_or_update_file",
-      "mcp__github__delete_file",
-      "mcp__github__update_pull_request_branch",
-      "mcp__github__pull_request_review_write",
-      "mcp__github__create_pull_request_review",
-      "mcp__github__submit_pending_pull_request_review",
-      "mcp__github__update_pull_request",
-      "mcp__github__update_pull_request_state",
-      "mcp__github__update_pull_request_draft_state",
-      "mcp__github__create_branch",
-      "mcp__github__delete_repository",
-      // pr/78: a pull request opened as a tool call skips the run verbs' draft and screen; `gh pr create` stays the route.
-      "mcp__github__create_pull_request",
-    ]);
+    const bash = deny.slice(0, deny.length - mcp.length);
+    const prefixes = bash.filter((row) => row.endsWith(":*)"));
+    for (const row of prefixes) expect(row).toMatch(/^Bash\([^()*]+:\*\)$/);
+    for (const row of bash.slice(prefixes.length)) expect(row).toMatch(/^Bash\([^()*:]+ \* [^()]+\)$|^Bash\([^()*:]+ -[-a-z]+\*\)$/);
+    expect(bash.slice(0, prefixes.length)).toEqual(prefixes);
+    expect(mcp).toEqual(["mcp__github__delete_repository"]);
+    const ask = settingsOf(rows).permissions?.ask ?? [];
+    expect(ask).toEqual([...CLAUDE_ASK_ROWS]);
+    const askMcp = ask.filter((row) => !row.startsWith("Bash("));
+    for (const row of ask.slice(0, ask.length - askMcp.length)) expect(row).toMatch(/^Bash\([^()*]+:\*\)$/);
+    // The two lists' MCP rows are the guard entry's matcher, split by class.
+    expect([...askMcp, ...mcp].toSorted()).toEqual(MCP_GUARD_MATCHER.split("|").toSorted());
+    expect(GITHUB_MCP_ROWS.map((entry) => entry.row).join("|")).toBe(MCP_GUARD_MATCHER);
   });
 
+  // TEST CHANGE, justified (v0a2, REQ-FLOW-123, REQ-FLOW-124): the rows split into a deny list and an ask list, so
+  // the agreement is per class: each deny prefix is one the verdict refuses (`ask: false`), and each ask prefix one
+  // it asks for (`ask: true`); the mid-pattern deny rows are pinned by the wildcard reading below.
   it("holds only rows the shell guard also denies, on a feature branch, so the two layers agree", async () => {
     const { rows } = await planned({ selection: EMPTY_SELECTION });
     const ctx = { defaultBranches: ["main"], currentBranch: "feature", tags: [] };
     // The prefix rows; the MCP tool rows name no shell line (review/214).
-    const deny = (settingsOf(rows).permissions?.deny ?? []).filter((row) => row.startsWith("Bash("));
+    const prefixRows = (list: readonly string[]): string[] => list.filter((row) => row.startsWith("Bash(") && row.endsWith(":*)"));
+    const deny = prefixRows(settingsOf(rows).permissions?.deny ?? []);
+    const ask = prefixRows(settingsOf(rows).permissions?.ask ?? []);
     expect(deny.length).toBeGreaterThan(10);
-    for (const row of deny) {
-      const prefix = row.slice("Bash(".length, -":*)".length);
-      expect(personOnlyVerdict(prefix, ctx), row).toMatchObject({ deny: true });
-      // And a command that only extends the prefix, as the client's rule would also match.
-      expect(personOnlyVerdict(`${prefix} x`, ctx), row).toMatchObject({ deny: true });
+    expect(ask.length).toBeGreaterThan(10);
+    for (const [list, asks] of [[deny, false], [ask, true]] as const) {
+      for (const row of list) {
+        const prefix = row.slice("Bash(".length, -":*)".length);
+        expect(personOnlyVerdict(prefix, ctx), row).toMatchObject({ deny: true, ask: asks });
+        // And a command that only extends the prefix, as the client's rule would also match.
+        expect(personOnlyVerdict(`${prefix} x`, ctx), row).toMatchObject({ deny: true, ask: asks });
+      }
     }
     // Control: an ordinary push of the feature branch is neither rule's.
     expect(personOnlyVerdict("git push origin feature", ctx)).toEqual({ deny: false });
+  });
+
+  /**
+   * Claude Code's documented reading of a Bash rule (code.claude.com/docs/en/permissions, and the 2026-10-18
+   * measurement on 2.1.302): a trailing `:*` is a prefix match; a `*` anywhere else matches any run of characters,
+   * the rest literally, over the whole line.
+   */
+  function ruleMatches(row: string, line: string): boolean {
+    const pattern = /^Bash\((.*)\)$/.exec(row)?.[1];
+    if (pattern === undefined) return false;
+    if (pattern.endsWith(":*")) return line.startsWith(pattern.slice(0, -2));
+    const source = pattern.split("*").map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".*");
+    return new RegExp(`^${source}$`, "s").test(line);
+  }
+
+  /** Each mid-pattern deny row, a line it must match (refused by the verdict too), and an ask line it must not. */
+  const MID_PATTERN: readonly (readonly [row: string, refused: string, asked: string])[] = [
+    ["Bash(git push * --force*)", "git push --tags --force origin", "git push --tags origin"],
+    ["Bash(git push * -f*)", "git push --all -f origin", "git push --all origin"],
+    ["Bash(git push * --mirror*)", "git push --follow-tags origin --mirror", "git push --follow-tags origin"],
+    ["Bash(git push * --prune*)", "git push --all --prune", "git push --all"],
+    ["Bash(git push * --delete*)", "git push --tags origin --delete v1", "git push --tags origin v1"],
+    ["Bash(git push * -d *)", "git push --tags origin -d v1", "git push --tags origin"],
+    ["Bash(git push * +*)", "git push --tags origin +main", "git push --tags origin main"],
+    ["Bash(gh pr merge * -d*)", "gh pr merge 7 -d", "gh pr merge 7"],
+    ["Bash(gh pr merge * --delete-branch*)", "gh pr merge 7 --squash --delete-branch", "gh pr merge 7 --squash"],
+    ["Bash(gh pr merge -d*)", "gh pr merge -d 7", "gh pr merge --squash 7"],
+    ["Bash(gh pr merge --delete-branch*)", "gh pr merge --delete-branch 7", "gh pr merge --auto 7"],
+    ["Bash(gh release upload * --clobber*)", "gh release upload v1 a --clobber", "gh release upload v1 a"],
+    ["Bash(gh release upload --clobber*)", "gh release upload --clobber v1 a", "gh release upload v1 a"],
+    ["Bash(gh repo edit * --visibility*)", "gh repo edit --default-branch x --visibility public", "gh repo edit --default-branch x"],
+    ["Bash(gh repo sync * --force*)", "gh repo sync o/r --force", "gh repo sync o/r"],
+    ["Bash(gh repo sync --force*)", "gh repo sync --force o/r", "gh repo sync o/r"],
+  ];
+
+  it("pins each mid-pattern deny row against a refused line it matches and an ask line no deny row matches (v0a2)", async () => {
+    const { rows } = await planned({ selection: EMPTY_SELECTION });
+    const ctx = { defaultBranches: ["main"], currentBranch: "feature", tags: [] };
+    const deny = settingsOf(rows).permissions?.deny ?? [];
+    const ask = settingsOf(rows).permissions?.ask ?? [];
+    // Every mid-pattern row of the rendering is pinned here, and only those.
+    expect(MID_PATTERN.map(([row]) => row)).toEqual(deny.filter((row) => row.startsWith("Bash(") && !row.endsWith(":*)")));
+    for (const [row, refused, asked] of MID_PATTERN) {
+      expect(ruleMatches(row, refused), `${row} over ${refused}`).toBe(true);
+      expect(personOnlyVerdict(refused, ctx), refused).toMatchObject({ deny: true, ask: false });
+      expect(ruleMatches(row, asked), `${row} over ${asked}`).toBe(false);
+      expect(deny.filter((rule) => ruleMatches(rule, asked)), asked).toEqual([]);
+      expect(personOnlyVerdict(asked, ctx), asked).toMatchObject({ deny: true, ask: true });
+    }
+    // The cell's four lines an ask prefix row also matches: a deny row matches each too, which the client reads first.
+    for (const line of ["git push --tags --force origin", "gh pr merge 7 -d", "gh release upload v1 a --clobber", "gh repo edit --default-branch x --visibility public"]) {
+      expect(ask.some((rule) => ruleMatches(rule, line)), line).toBe(true);
+      expect(deny.some((rule) => ruleMatches(rule, line)), line).toBe(true);
+    }
+    // The matcher's own control: a `:*` row is a prefix, and a mid-pattern row needs its literal parts.
+    expect(ruleMatches("Bash(gh pr merge:*)", "gh pr merge 7 -d")).toBe(true);
+    expect(ruleMatches("Bash(gh pr merge * -d*)", "gh pr merge 7")).toBe(false);
   });
 });
 
@@ -2279,7 +2375,8 @@ describe("the settings document's allow rows and the per-entry bound", () => {
     const repoDoc = JSON.parse(byPath(generated.rows).get(CLAUDE_SETTINGS_PATH)!.content) as Record<string, unknown>;
     // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102): `permissions` is rendered again for
     // the deny rows; the pin that matters here, no allow row, moves onto the member's keys.
-    expect(Object.keys(repoDoc["permissions"] as object)).toEqual(["deny"]);
+    // TEST CHANGE, justified (v0a2, REQ-FLOW-120, REQ-FLOW-123): and the ask rows, still no allow row.
+    expect(Object.keys(repoDoc["permissions"] as object)).toEqual(["deny", "ask"]);
     expect(repoDoc).toHaveProperty("hooks");
     expect(ENGINE_PERMISSION_ROWS).toEqual(["Read", "Grep", "Glob"]);
   });

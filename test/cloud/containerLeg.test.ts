@@ -87,6 +87,14 @@ const PERSON_ONLY_SHELL = "git push --force";
 /** The force push's verdict from u6's own source; its rule reads no branch (the fixture's repository is on `main`). */
 const FORCED = personOnlyVerdict(PERSON_ONLY_SHELL, { defaultBranches: [], currentBranch: "main", tags: [] });
 
+/** v0a2 (REQ-FLOW-123): a person-only act that can be undone, which each client answers in its own ask shape. */
+const ASK_SHELL = "gh pr merge 1";
+const MERGE = personOnlyVerdict(ASK_SHELL, { defaultBranches: [], currentBranch: "main", tags: [] });
+/** The ask sentence the guard prints for the merge, the act as the verdict's own text. */
+const ASK_REASON = MERGE.deny ? `${MERGE.act} is a person-only act (\`${MERGE.rule}\`): approve it to let the agent run it once (REQ-FLOW-102).` : "";
+/** What Cursor and Codex add to an ask they cannot hold. */
+const CANNOT_ASK = "This client cannot ask the person for a click, so the guard refuses it: give the person the exact command.";
+
 /** The fields every payload carries: its event, the session, and the folder it runs in. */
 function basePayload(row: HookRow, cwd: string): Record<string, unknown> {
   return { hook_event_name: row.event, session_id: "cloud-leg", cwd };
@@ -112,6 +120,7 @@ function shellCall(row: HookRow, cwd: string, command: string): Record<string, u
  */
 const PROBES = [
   { id: "person-only act", payload: (row: HookRow, cwd: string) => shellCall(row, cwd, PERSON_ONLY_SHELL) },
+  { id: "ask act", payload: (row: HookRow, cwd: string) => shellCall(row, cwd, ASK_SHELL) },
   { id: "no command", payload: (row: HookRow, cwd: string) => ({ ...basePayload(row, cwd), source: "startup" }) },
 ] as const;
 
@@ -290,10 +299,19 @@ function probeOf(probe: (typeof PROBES)[number]["id"], marker: string, folder: s
 /**
  * The person-only guard's decision as its client hears it: Claude Code and Codex exit 2 with the reason on stderr;
  * Cursor exits 0 with `permission` on stdout; Copilot exits 0 with a `permissionDecision` on stdout, or nothing. An
- * exit code alone says nothing on Cursor or Copilot, whose refusal also exits 0.
+ * exit code alone says nothing on Cursor or Copilot, whose refusal also exits 0. TEST CHANGE, justified (v0a2,
+ * REQ-FLOW-123): Claude Code's guard also asks, its `hookSpecificOutput` ask on stdout with exit 0, and Copilot's
+ * `permissionDecision` may read `ask`; each is read as an ask (`ask: true`) instead of failing the empty-stdout or
+ * deny-only expectation.
  */
-function guardVerdict(client: Client, result: CliRunResult, label: string): { deny: false } | { deny: true; reason: string } {
+function guardVerdict(client: Client, result: CliRunResult, label: string): { deny: false } | { deny: true; reason: string; ask?: true } {
   const stdout = result.stdout.trim();
+  if (client === "claude" && stdout !== "") {
+    expect(result.code, `${label}: ${result.stderr}`).toBe(0);
+    const out = JSON.parse(stdout) as { hookSpecificOutput?: Record<string, string | undefined> };
+    expect(out.hookSpecificOutput, label).toMatchObject({ hookEventName: "PreToolUse", permissionDecision: "ask" });
+    return { deny: true, ask: true, reason: out.hookSpecificOutput?.["permissionDecisionReason"] ?? "" };
+  }
   if (client === "claude" || client === "codex") {
     expect(stdout, label).toBe("");
     if (result.code === 0) return { deny: false };
@@ -305,6 +323,7 @@ function guardVerdict(client: Client, result: CliRunResult, label: string): { de
   const out = JSON.parse(stdout) as Record<string, string | undefined>;
   const verdict = client === "cursor" ? out["permission"] : out["permissionDecision"];
   if (verdict === "allow") return { deny: false };
+  if (client === "copilot" && verdict === "ask") return { deny: true, ask: true, reason: out["permissionDecisionReason"] ?? "" };
   expect(verdict, label).toBe("deny");
   return { deny: true, reason: (client === "cursor" ? out["user_message"] : out["permissionDecisionReason"]) ?? "" };
 }
@@ -480,10 +499,23 @@ describe("a cloud machine, imitated: every emitted hook command (REQ-PROVE-037)"
             const allowed = guardVerdict(client, resultOf("present", marker.id, folder, index), `${label}: ${ALLOWED_SHELL}`);
             expect(allowed, `${label}: ${ALLOWED_SHELL}`).toEqual({ deny: false });
             const forced = guardVerdict(client, probeOf("person-only act", marker.id, folder, index), `${label}: ${PERSON_ONLY_SHELL}`);
+            // TEST CHANGE, justified (v0a2, REQ-FLOW-124): the guard prints the refuse sentence, which names the act
+            // and its rule, where it printed the verdict's reason.
             expect(forced, `${label}: ${PERSON_ONLY_SHELL}`).toEqual({
               deny: true,
-              reason: expect.stringContaining(FORCED.deny ? FORCED.reason : "the force push's own reason"),
+              reason: expect.stringContaining(
+                FORCED.deny ? `${FORCED.act} deletes, force-pushes or cannot be undone (\`${FORCED.rule}\`)` : "the force push's own sentence",
+              ),
             });
+            // v0a2 (REQ-FLOW-123): each client's ask shape, from every folder under every marker: Claude Code and
+            // Copilot ask, Cursor and Codex refuse, saying they cannot ask for a click.
+            expect(MERGE).toMatchObject({ deny: true, rule: "pr-merge", ask: true });
+            const asked = guardVerdict(client, probeOf("ask act", marker.id, folder, index), `${label}: ${ASK_SHELL}`);
+            expect(asked, `${label}: ${ASK_SHELL}`).toEqual(
+              client === "claude" || client === "copilot"
+                ? { deny: true, ask: true, reason: ASK_REASON }
+                : { deny: true, reason: expect.stringContaining(`${ASK_REASON} ${CANNOT_ASK}`) },
+            );
             // TEST CHANGE, justified (20ac8475, review/215, REQ-FLOW-102): a payload naming no tool and no command was
             // allowed as no shell call, and this grid ran it to exit 0; the guard now reads it as Cursor's shell call
             // with no command string, one it cannot read, and refuses it on every client.

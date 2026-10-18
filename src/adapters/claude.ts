@@ -56,13 +56,14 @@
  *    wrote and recorded by hash — the hook entries of the `hooks` object (the
  *    core hook interchange transformed to the client shape, the `ConfigChange`
  *    tamper wiring, the review-gate and ask-gate wiring below) when the
- *    repository owns hooks — and each `permissions.deny` row it renders from
- *    `CLAUDE_DENY_ROWS` (`../hooks/personOnly.ts`, REQ-FLOW-102), plus, until
+ *    repository owns hooks — and each `permissions.deny` and `permissions.ask`
+ *    row it renders from `CLAUDE_DENY_ROWS` and `CLAUDE_ASK_ROWS`
+ *    (`../hooks/personOnly.ts`, REQ-FLOW-123, REQ-FLOW-124), plus, until
  *    they leave, the `permissions.allow` rows a release up to 1.12.0 wrote and
  *    recorded. Every other entry and key (`enabledPlugins`, `model`, the
- *    owner's own `permissions` rows, an owner's deny row equal to an engine
- *    one among them, …) is kept as it is. A `permissions` that is not an
- *    object, or an `allow` or `deny` that is not an array, collides on both
+ *    owner's own `permissions` rows, an owner's deny or ask row equal to an
+ *    engine one among them, …) is kept as it is. A `permissions` that is not an
+ *    object, or an `allow`, `deny` or `ask` that is not an array, collides on both
  *    routes (`../manifest/claudeSettings.ts`).
  * 7. **The work-scoped review gate** ({@link CLAUDE_REVIEW_GATE_PATH}) and the
  *    **unattended ask gate** ({@link CLAUDE_ASK_GATE_PATH}) beside the core hook
@@ -72,7 +73,7 @@
  * 8. **The MCP documents the core planned for this client**, placed verbatim.
  *
  * **No tool is pre-approved.** The settings document's `permissions` member
- * carries deny rows alone, never an allow row. A `permissions.allow` row is session-wide standing
+ * carries deny and ask rows alone, never an allow row. A `permissions.allow` row is session-wide standing
  * consent that also covers the MAIN thread, which the generated pre-tool-use
  * guard exempts by design. Releases v1.1.0 to 1.12.0 rendered three read rows
  * (`Read`, `Grep`, `Glob`); a bare `Read` matches every file read anywhere,
@@ -131,7 +132,7 @@ import {
   type HookInterchange,
 } from "../hooks/model.ts";
 import { ROOT_VARIABLE_PATH } from "../hooks/portableRunner.ts";
-import { CLAUDE_DENY_ROWS } from "../hooks/personOnly.ts";
+import { CLAUDE_ASK_ROWS, CLAUDE_DENY_ROWS, GITHUB_MCP_ROWS } from "../hooks/personOnly.ts";
 import {
   PERSON_ONLY_GUARD_FILE,
   REVIEW_GATE_FILE,
@@ -234,6 +235,15 @@ export const CLAUDE_ASK_GATE_PATH = `${HOOKS_GENERATED_DIR}/${TOOL}/${UNATTENDED
  * itself; the matcher keeps it from launching on them.
  */
 const ASK_GATE_MATCHER = "AskUserQuestion";
+
+/**
+ * The GitHub MCP server's person-only tools the person-only guard is wired to,
+ * every row of `GITHUB_MCP_ROWS` (`../hooks/personOnly.ts`), ask-class and
+ * refused alike. Names of letters, digits and underscores joined by `|`, which
+ * the client reads as an exact list (code.claude.com/docs/en/hooks), so no
+ * tool's name matches a longer one.
+ */
+const GITHUB_MCP_MATCHER = GITHUB_MCP_ROWS.map((entry) => entry.row).join("|");
 
 /**
  * The client's configuration-change event — a per-client EXTENSION outside the
@@ -848,9 +858,10 @@ interface ClaudeHookEntry {
  * `.claude/settings.json`: the hook wiring, as one JSON document (plain `.json`
  * takes no managed block — it has no comment syntax to carry markers, per
  * `src/types/markers.ts`). Its `permissions` member holds the
- * {@link CLAUDE_DENY_ROWS} and no allow row: the engine pre-approves no tool
- * (the module header). The writers merge it entry by entry: each hook entry and
- * deny row this rendering carries is the engine's, and every other member, row or
+ * {@link CLAUDE_DENY_ROWS} and the {@link CLAUDE_ASK_ROWS} and no allow row: the
+ * engine pre-approves no tool (the module header). The writers merge it entry by
+ * entry: each hook entry, deny row and ask row this rendering carries is the
+ * engine's, and every other member, row or
  * entry the client or the operator put there survives every write
  * (`../manifest/claudeSettings.ts`).
  *
@@ -870,7 +881,9 @@ interface ClaudeHookEntry {
  * body is written for; and the review gate takes
  * {@link REVIEW_GATE_EVENTS}, the two events that carry a work run's
  * completion and its finishing reviewers; then the ask gate, as one more
- * `PreToolUse` entry matched to the question tool, after every planned row.
+ * `PreToolUse` entry matched to the question tool, after every planned row;
+ * then the person-only guard's row once more, matched to the GitHub MCP
+ * server's person-only tools ({@link GITHUB_MCP_MATCHER}).
  * Insertion order is fixed, so the
  * whole-file JSON is byte-stable across runs and the drift check has nothing
  * to report.
@@ -928,11 +941,22 @@ function buildSettingsJson(
     matcher: ASK_GATE_MATCHER,
     hooks: [commandHook(["node", askGate])],
   });
+  // The person-only guard on the GitHub MCP server's person-only tools
+  // (REQ-FLOW-120), last: the core planned the guard's row on the shell tools,
+  // and this entry is that row with the tools' names for its matcher, so it
+  // runs the same script with the same fail-closed tail. A settings row cannot
+  // read the mode, so the guard is what refuses these tools while a run is
+  // unattended. No entry where the core planned no guard row.
+  const guardRow = rows.find((row) => row.event === "pre_tool_use" && argvTail(row) === PERSON_ONLY_GUARD_FILE);
+  if (guardRow !== undefined) {
+    (hooks[CLAUDE_EVENT_NAMES.pre_tool_use] ??= []).push(hookEntry({ ...guardRow, matcher: GITHUB_MCP_MATCHER }));
+  }
 
-  // The person-only acts a prefix rule can say, as data from the one table the
-  // shell guard also denies from (`../hooks/personOnly.ts`), so a call the
-  // client refuses here is one the guard would refuse too.
-  return `${JSON.stringify({ permissions: { deny: [...CLAUDE_DENY_ROWS] }, hooks }, null, 2)}\n`;
+  // The person-only acts a rule can say, as data from the one table the shell
+  // guard also reads from (`../hooks/personOnly.ts`): the refused ones under
+  // `deny`, those that can be undone under `ask` (REQ-FLOW-123, REQ-FLOW-124),
+  // so a call the client refuses or asks about here is one the guard would too.
+  return `${JSON.stringify({ permissions: { deny: [...CLAUDE_DENY_ROWS], ask: [...CLAUDE_ASK_ROWS] }, hooks }, null, 2)}\n`;
 }
 
 /**

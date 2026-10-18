@@ -55,7 +55,7 @@ import {
   type CanonicalHookEvent,
   type HookFailMode,
 } from "./model.ts";
-import { personOnlyVerdict, unattendedPushVerdict } from "./personOnly.ts";
+import { GITHUB_MCP_ROWS, personOnlyVerdict, unattendedPushVerdict } from "./personOnly.ts";
 
 /**
  * The three core hook scripts plus one work-scoped extension, as generated text.
@@ -3302,29 +3302,59 @@ const GUARD_PACKED_REFS_MAX_BYTES = 8_388_608;
 const GUARD_PLACES_MAX = 32;
 
 /**
- * How a client hears the guard's decision, rendered for that client alone:
- * Claude Code and Codex (through the portable runner) block on exit 2 with the
- * reason on stderr; Copilot reads `permissionDecision` on stdout, through the
- * runner or not; Cursor's `beforeShellExecution` reads `permission`, and its
- * `failClosed` counts silence as a failure, so it is told to allow out loud.
+ * What the guard adds to an ask on a client that cannot hold one (REQ-FLOW-123): Cursor ran a command despite a
+ * `beforeShellExecution` ask under `--force` (measured 2026-10-18), and Codex parses an ask and lets the call through.
+ */
+const GUARD_CANNOT_ASK =
+  "This client cannot ask the person for a click, so the guard refuses it: give the person the exact command.";
+
+/**
+ * How a client hears the guard's decision (`decision`: null to allow, else `{ ask, reason }`), rendered for that
+ * client alone (REQ-FLOW-123): Claude Code asks with its `hookSpecificOutput` ask on stdout and exit 0, and refuses on
+ * exit 2 with the reason on stderr; Copilot reads `permissionDecision`, `ask` or `deny`, on stdout, through the runner
+ * or not; Codex (through the portable runner) refuses on exit 2 with the reason on stderr; Cursor's
+ * `beforeShellExecution` reads `permission`, and its `failClosed` counts silence as a failure, so it is told to allow
+ * out loud. Cursor and Codex refuse an ask, the reason saying why ({@link GUARD_CANNOT_ASK}).
  */
 function guardDecisionOutput(tool: Tool): string {
+  const told = String.raw`const told = decision === null ? null : decision.ask ? decision.reason + " " + ${json(GUARD_CANNOT_ASK)} : decision.reason;`;
   if (tool === "cursor") {
-    return String.raw`process.stdout.write(JSON.stringify(reason === null ? { permission: "allow" } : { permission: "deny", user_message: reason, agent_message: reason }) + "\n");`;
+    return String.raw`${told}
+process.stdout.write(JSON.stringify(told === null ? { permission: "allow" } : { permission: "deny", user_message: told, agent_message: told }) + "\n");`;
   }
   if (tool === "copilot") {
-    return String.raw`if (reason !== null) process.stdout.write(JSON.stringify({ permissionDecision: "deny", permissionDecisionReason: reason }) + "\n");`;
+    return String.raw`if (decision !== null) process.stdout.write(JSON.stringify({ permissionDecision: decision.ask ? "ask" : "deny", permissionDecisionReason: decision.reason }) + "\n");`;
   }
-  return String.raw`if (reason !== null) {
-  process.stderr.write("stamity person-only guard: " + reason + "\n");
+  if (tool === "claude") {
+    return String.raw`if (decision !== null && decision.ask) {
+  process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "ask", permissionDecisionReason: decision.reason } }) + "\n");
+} else if (decision !== null) {
+  process.stderr.write("stamity person-only guard: " + decision.reason + "\n");
+  process.exitCode = ${BLOCKING_EXIT_CODE};
+}`;
+  }
+  return String.raw`${told}
+if (told !== null) {
+  process.stderr.write("stamity person-only guard: " + told + "\n");
   process.exitCode = ${BLOCKING_EXIT_CODE};
 }`;
 }
 
 /**
- * The person-only shell guard (REQ-FLOW-102, REQ-FLOW-120): refuses the main
- * thread's person-only acts on every client, attended or not, and while a run
- * is unattended any push that steps around the run verbs.
+ * The person-only shell guard (REQ-FLOW-102, REQ-FLOW-120, REQ-FLOW-123,
+ * REQ-FLOW-124): attended, it asks the person for one click on a person-only
+ * act that can be undone where the client can ask (Claude Code, Copilot), and
+ * refuses it where the client cannot (Cursor, Codex); it refuses every
+ * deletion, force push and act that cannot be undone on every client; and
+ * while a run is unattended it refuses every person-only act and any push
+ * that steps around the run verbs.
+ *
+ * The verdict is collected over every place the call's git runs in and both
+ * readings of a PowerShell call: one refuse-class act refuses the call, and
+ * the call asks only when every act found is ask-class and the mode reads
+ * attended. The mode is read for every ask, so a fault reading it refuses. A
+ * GitHub MCP tool of {@link GITHUB_MCP_ROWS} is classed by its row the same
+ * way, with no shell reading.
  *
  * The two verdicts are `./personOnly.ts`'s own functions, carried as their
  * source text the way {@link NORMALIZE_FOR_SCREEN} carries the fold, so a row
@@ -3341,7 +3371,8 @@ function guardDecisionOutput(tool: Tool): string {
  * push refspec asks for them), and the verdict runs once per place. Where
  * `HEAD` cannot be read (a reftable repository's placeholder among it), an implied destination
  * counts as the default branch; `main` and `master` always count. The mode comes
- * off the run records, read only for a call the unattended rule would refuse:
+ * off the run records, read only for a person-only act that can be undone and
+ * a call the unattended rule would refuse:
  * unattended when any run folder, debug rounds included, holds an
  * in-progress record reading `Mode:
  * unattended`, or when `STAMITY_UNATTENDED` is set (not "", "false", "0") and
@@ -3351,9 +3382,10 @@ function guardDecisionOutput(tool: Tool): string {
  *
  * A command naming `gate preflight` that the guard allows writes
  * `{ "at": <ISO> }` to {@link PREFLIGHT_CANARY_FILE}, the pre-flight's proof
- * that hooks loaded. A call that is not a shell call is allowed at once; a
- * shell call the guard cannot read (a payload naming no tool, Cursor's, with no
- * command string among them), or a fault while deciding one, is refused.
+ * that hooks loaded. A call that is neither a shell call nor a GitHub MCP row's
+ * tool is allowed at once; a shell call the guard cannot read (a payload naming
+ * no tool, Cursor's, with no command string among them), or a fault while
+ * deciding one, is refused, never asked.
  */
 export function buildPersonOnlyGuardScript(opts: { tool: Tool; layout: HookScriptLayout }): string {
   const extra = repoRootImports(opts.layout);
@@ -3362,11 +3394,14 @@ export function buildPersonOnlyGuardScript(opts: { tool: Tool; layout: HookScrip
     [
       "stamity — person-only shell guard.",
       "",
-      "Refuses the person-only acts (a force push, a push of a tag or of the default",
-      "branch, a tag, a merge, a release, a publish, a secret or protection write) on",
-      "every shell call, and while a run is unattended any push that steps around",
-      "`stamity run checkpoint` and `stamity run end`. `curl` and `wget` appear below",
-      "only as command words it reads; it runs none.",
+      "Reads every shell call and GitHub MCP write for the person-only acts. Attended,",
+      "one that can be undone (a push of a tag or of the default branch, a tag, a",
+      "merge, a release, a publish, a secret or protection write) asks the person for",
+      "one click where the client can ask; a deletion, a force push or an act that",
+      "cannot be undone is refused on every client. While a run is unattended every",
+      "person-only act is refused, and any push that steps around `stamity run",
+      "checkpoint` and `stamity run end`. `curl` and `wget` appear below only as",
+      "command words it reads; it runs none.",
     ],
     [
       "Reads outside repo state: the pending call's payload on stdin and the",
@@ -3394,6 +3429,8 @@ const PACKED_REFS_MAX_BYTES = ${GUARD_PACKED_REFS_MAX_BYTES};
 const PLACES_MAX = ${GUARD_PLACES_MAX};
 const CANARY_SEGMENTS = ${json(PREFLIGHT_CANARY_FILE.split("/"))};
 const SHELL_TOOLS = new Set(["Bash", "PowerShell", "Shell", "bash", "powershell", "shell"]);
+// The GitHub MCP server's person-only tools and whether each is ask-class (personOnly.ts, GITHUB_MCP_ROWS).
+const MCP_ROWS = new Map(${json(GITHUB_MCP_ROWS.map((entry) => [entry.row, entry.ask]))});
 
 ${resolveRepoRoot(opts.layout)}
 
@@ -3966,11 +4003,36 @@ function writeCanary(root) {
   }
 }
 
-/** The refusal this call earns, or null. */
+/** The sentences a person-only act earns (REQ-FLOW-102, REQ-FLOW-124), the act printed as the verdict's own text. */
+function askSentence(act, rule) {
+  return act + " is a person-only act (\`" + rule + "\`): approve it to let the agent run it once (REQ-FLOW-102).";
+}
+function refuseSentence(act, rule) {
+  return act + " deletes, force-pushes or cannot be undone (\`" + rule + "\`): it stays the person's to run, even with approval (REQ-FLOW-124). Give the person the exact command.";
+}
+function unattendedSentence(act, rule) {
+  return act + " is a person-only act (\`" + rule + "\`) and this run is unattended: list it on the morning list, whose walk runs it after one click.";
+}
+
+/**
+ * A GitHub MCP row's tool, classed by its row: the refused one refuses, and an ask-class one asks only while the mode
+ * reads attended, since a settings ask row would otherwise wait for nobody in an unattended run (REQ-FLOW-120).
+ */
+function mcpDecision(tool, ask, root) {
+  const act = "A call to the GitHub MCP server";
+  if (!ask) return { ask: false, reason: refuseSentence(act, tool) };
+  const why = unattendedBy(root);
+  return why === null ? { ask: true, reason: askSentence(act, tool) } : { ask: false, reason: unattendedSentence(act, tool) + " " + why };
+}
+
+/** The decision this call earns: null to allow it, else whether the client asks the person and the reason. */
 function decide() {
   const raw = readFileSync(0, "utf8");
   const payload = raw.trim() === "" ? {} : JSON.parse(raw);
   if (payload === null || typeof payload !== "object") throw new Error("payload");
+  if (typeof payload.tool_name === "string" && MCP_ROWS.has(payload.tool_name)) {
+    return mcpDecision(payload.tool_name, MCP_ROWS.get(payload.tool_name), repoRoot());
+  }
   const command = shellCommand(payload);
   if (command === null) return null;
   const root = repoRoot();
@@ -3979,29 +4041,43 @@ function decide() {
   // The PowerShell tool's text is PowerShell's command string, so the verdicts read it as one too, its backslash a
   // plain character and its backtick the escape, beside the text as it stands.
   const texts = /^powershell$/i.test(payload.tool_name ?? "") ? [command, "pwsh -Command '" + command.replaceAll("'", "'\\''") + "'"] : [command];
+  // Every place and every reading (REQ-FLOW-124): one refuse-class act refuses the call, so a deletion never rides an
+  // approval another reading or place would ask for.
+  const found = [];
   for (const ctx of contextsOf(command, cwd)) {
     for (const text of texts) {
       const always = personOnlyVerdict(text, ctx);
-      if (always.deny) return always.reason;
+      if (always.deny) found.push(always);
     }
   }
-  // The mode is read only for a call the unattended rule would refuse, so an unreadable record refuses no other call.
-  const run = texts.map((text) => unattendedPushVerdict(text)).find((verdict) => verdict.deny) ?? { deny: false };
-  if (run.deny) {
+  const refused = found.find((verdict) => !verdict.ask);
+  if (refused !== undefined) return { ask: false, reason: refuseSentence(refused.act, refused.rule) };
+  // The mode is read for every ask and for a call the unattended rule would refuse, so an unreadable record refuses
+  // those and no other call.
+  const run = () => texts.map((text) => unattendedPushVerdict(text)).find((verdict) => verdict.deny);
+  if (found.length > 0) {
     const why = unattendedBy(root);
-    if (why !== null) return run.reason + " " + why;
+    if (why === null) return { ask: true, reason: askSentence(found[0].act, found[0].rule) };
+    // Unattended, a push keeps the push rule's own reason; any other act goes on the morning list.
+    const push = run();
+    return { ask: false, reason: (push !== undefined ? push.reason : unattendedSentence(found[0].act, found[0].rule)) + " " + why };
+  }
+  const push = run();
+  if (push !== undefined) {
+    const why = unattendedBy(root);
+    if (why !== null) return { ask: false, reason: push.reason + " " + why };
   }
   if (/(?:^|[^\w-])gate\s+preflight(?![\w-])/.test(command)) writeCanary(root);
   return null;
 }
 
-let reason = null;
+let decision = null;
 try {
-  reason = decide();
+  decision = decide();
 } catch (error) {
-  // Fail closed: a shell call this guard could not read is not one it allows.
+  // Fail closed: a shell call this guard could not read is not one it allows, nor one it asks the person about.
   const what = error instanceof SyntaxError ? "an unreadable payload" : error && error.code ? error.code + (typeof error.path === "string" ? " on " + error.path : "") : "an internal fault";
-  reason = "The person-only guard could not decide this shell call (" + what + "), so it is refused (REQ-FLOW-102).";
+  decision = { ask: false, reason: "The person-only guard could not decide this shell call (" + what + "), so it is refused (REQ-FLOW-102)." };
 }
 `}${guardDecisionOutput(opts.tool)}
 `;

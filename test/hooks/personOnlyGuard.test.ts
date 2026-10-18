@@ -30,7 +30,12 @@ const POLICY = "../../agent-tool-policies.json";
 
 const getRepo = useTempDir("person-only-guard");
 
-type Decision = { deny: false } | { deny: true; reason: string };
+/**
+ * A client's decision: allowed, or stopped, `ask: true` where the client asks the person for one click (v0a2,
+ * REQ-FLOW-123). An ask stops the agent as a refusal does, so a check reading `deny` holds for both, as the verdict's
+ * own `deny` does.
+ */
+type Decision = { deny: false } | { deny: true; reason: string; ask?: true };
 
 /** The guard for one client, at `.stamity/generated/hooks/<tool>/`, and the repository it sits in. */
 async function placeGuard(tool: Tool, files: Record<string, string> = {}): Promise<string> {
@@ -69,23 +74,63 @@ function run(guard: string, input: string, env: Record<string, string> = {}): Re
   return spawnSync(process.execPath, [guard], { input, encoding: "utf8", env: { ...base, ...env } });
 }
 
-/** The decision each client's output carries: exit 2 and stderr, or the client's own JSON. */
-function decide(tool: Tool, guard: string, command: string, env?: Record<string, string>, cwd?: string, shell?: Shell): Decision {
-  const result = run(guard, payload(tool, command, cwd, shell), env);
+/**
+ * The decision a client's output carries: exit 2 and stderr, or the client's own JSON. TEST CHANGE, justified (v0a2,
+ * REQ-FLOW-123): Claude Code's guard now also answers ask, its `hookSpecificOutput` on stdout with exit 0, and
+ * Copilot's `permissionDecision` reads `ask`; each is read as an ask instead of failing the empty-stdout or
+ * deny-only expectation.
+ */
+function clientDecision(tool: Tool, result: ReturnType<typeof spawnSync>, label: string): Decision {
   const stdout = String(result.stdout).trim();
+  if (tool === "claude" && stdout !== "") {
+    expect(result.status, label).toBe(0);
+    const out = JSON.parse(stdout) as { hookSpecificOutput?: Record<string, string> };
+    expect(Object.keys(out), label).toEqual(["hookSpecificOutput"]);
+    expect(out.hookSpecificOutput, label).toMatchObject({ hookEventName: "PreToolUse", permissionDecision: "ask" });
+    return { deny: true, ask: true, reason: out.hookSpecificOutput?.permissionDecisionReason ?? "" };
+  }
   if (tool === "claude" || tool === "codex") {
-    expect(stdout, command).toBe("");
+    expect(stdout, label).toBe("");
     if (result.status === 0) return { deny: false };
-    expect(result.status, command).toBe(2);
+    expect(result.status, label).toBe(2);
     return { deny: true, reason: String(result.stderr) };
   }
-  expect(result.status, command).toBe(0);
+  expect(result.status, label).toBe(0);
   if (tool === "copilot" && stdout === "") return { deny: false };
   const out = JSON.parse(stdout) as Record<string, string>;
   const verdict = tool === "cursor" ? out.permission : out.permissionDecision;
   if (verdict === "allow") return { deny: false };
-  expect(verdict, command).toBe("deny");
+  if (tool === "copilot" && verdict === "ask") return { deny: true, ask: true, reason: out.permissionDecisionReason ?? "" };
+  expect(verdict, label).toBe("deny");
   return { deny: true, reason: tool === "cursor" ? (out.user_message ?? "") : (out.permissionDecisionReason ?? "") };
+}
+
+/** The decision each client's output carries for a shell call. */
+function decide(tool: Tool, guard: string, command: string, env?: Record<string, string>, cwd?: string, shell?: Shell): Decision {
+  return clientDecision(tool, run(guard, payload(tool, command, cwd, shell), env), command);
+}
+
+/** The clients that hold an ask (REQ-FLOW-123); Cursor and Codex refuse one, saying why. */
+const ASKS = new Set<Tool>(["claude", "copilot"]);
+const CANNOT_ASK = "This client cannot ask the person for a click, so the guard refuses it: give the person the exact command.";
+
+/** The sentence a person-only verdict earns attended (v0a2), the act printed as the verdict's own text. */
+function told(verdict: { act: string; rule: string; ask: boolean }): string {
+  return verdict.ask
+    ? `${verdict.act} is a person-only act (\`${verdict.rule}\`): approve it to let the agent run it once (REQ-FLOW-102).`
+    : `${verdict.act} deletes, force-pushes or cannot be undone (\`${verdict.rule}\`): it stays the person's to run, even with approval (REQ-FLOW-124). Give the person the exact command.`;
+}
+
+/** The sentence an unattended run earns for a person-only act other than a push (v0a2), before the mode's reason. */
+function morningList(verdict: { act: string; rule: string }): string {
+  return `${verdict.act} is a person-only act (\`${verdict.rule}\`) and this run is unattended: list it on the morning list, whose walk runs it after one click.`;
+}
+
+/** What one client says to an attended person-only verdict: an ask where it holds one, else a refusal. */
+function expectedAttended(tool: Tool, verdict: { act: string; rule: string; ask: boolean }): Decision {
+  if (verdict.ask && ASKS.has(tool)) return { deny: true, ask: true, reason: expect.stringContaining(told(verdict)) as unknown as string };
+  const reason = verdict.ask ? `${told(verdict)} ${CANNOT_ASK}` : told(verdict);
+  return { deny: true, reason: expect.stringContaining(reason) as unknown as string };
 }
 
 const ON_FEATURE = { defaultBranches: [], currentBranch: "feat/x", tags: ["v1.0.0"] };
@@ -219,7 +264,10 @@ describe("the person-only guard, on every client", () => {
       expect(source.deny ? source.rule : null, command).toBe(rule);
       const decision = decide(tool, guard, command);
       expect(decision.deny, `${tool}: ${command}`).toBe(rule !== null);
-      if (decision.deny && source.deny) expect(decision.reason, command).toContain(source.reason);
+      // TEST CHANGE, justified (v0a2, REQ-FLOW-123, REQ-FLOW-124): the client no longer prints the verdict's `reason`;
+      // it asks with the ask sentence where it holds an ask, and refuses with the refuse sentence, or with the ask
+      // sentence and why it cannot ask, so each row now pins the client's answer to the verdict's class.
+      if (source.deny) expect(decision, `${tool}: ${command}`).toEqual(expectedAttended(tool, source));
     }
   });
 
@@ -232,7 +280,8 @@ describe("the person-only guard, on every client", () => {
       const forced = String.raw`C:\Git\bin\git.exe push --force origin feat/x`;
       const source = personOnlyVerdict(asPowerShell(forced), ON_FEATURE);
       expect(source).toMatchObject({ deny: true, rule: "force-push" });
-      expect(decide(tool, guard, forced, undefined, undefined, "PowerShell")).toEqual({ deny: true, reason: expect.stringContaining(source.deny ? source.reason : "") });
+      // TEST CHANGE, justified (v0a2, REQ-FLOW-124): the client prints the refuse sentence, not the verdict's reason.
+      expect(decide(tool, guard, forced, undefined, undefined, "PowerShell")).toEqual({ deny: true, reason: expect.stringContaining(source.deny ? told(source) : "") });
       const status = String.raw`C:\Git\bin\git.exe status`;
       expect(personOnlyVerdict(asPowerShell(status), ON_FEATURE)).toEqual({ deny: false });
       expect(decide(tool, guard, status, undefined, undefined, "PowerShell").deny).toBe(false);
@@ -260,6 +309,109 @@ describe("the person-only guard, on every client", () => {
   });
 });
 
+/**
+ * v0a2 (REQ-FLOW-123, REQ-FLOW-124, REQ-FLOW-120): each client's answer to a person-only act, as conformance rows —
+ * the input form, then what each client prints. Each ask row sits beside the fact that turns it into a refusal (an
+ * unattended record, a fault reading the mode, a refused act in another reading), so a guard that only ever asked, or
+ * only ever refused, fails.
+ */
+describe("each client's answer to a person-only act (v0a2)", () => {
+  const MERGE = "gh pr merge 1";
+  const UNATTENDED = { ".stamity/runs/2026-10-18_x/record.md": record("in progress", "unattended") };
+  const WHY = "This session is unattended because .stamity/runs/2026-10-18_x/record.md reads `Status: in progress` and `Mode: unattended`.";
+  const merge = personOnlyVerdict(MERGE, ON_FEATURE);
+
+  /** Claude Code's PreToolUse payload for a GitHub MCP tool call. */
+  const mcpCall = (tool: string): string =>
+    JSON.stringify({ hook_event_name: "PreToolUse", tool_name: tool, tool_input: { owner: "o", repo: "r", pullNumber: 1 } });
+
+  it.each(TOOLS)("%s: asks for an attended merge where it holds an ask, and refuses it unattended with the morning-list reason", async (tool) => {
+    expect(merge).toMatchObject({ deny: true, rule: "pr-merge", ask: true });
+    if (!merge.deny) return;
+    const guard = await placeGuard(tool);
+    expect(decide(tool, guard, MERGE)).toEqual(expectedAttended(tool, merge));
+    await getRepo().seedFiles(UNATTENDED);
+    expect(decide(tool, guard, MERGE)).toEqual({ deny: true, reason: expect.stringContaining(`${morningList(merge)} ${WHY}`) });
+  });
+
+  it.each(["claude", "copilot"] as const)("%s: prints its ask byte for byte, on stdout with exit 0", async (tool) => {
+    if (!merge.deny) throw new Error("the merge is no person-only act");
+    const reason = told(merge);
+    const result = run(await placeGuard(tool), payload(tool, MERGE));
+    expect(result.status).toBe(0);
+    expect(String(result.stderr)).toBe("");
+    const shape =
+      tool === "claude"
+        ? { hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "ask", permissionDecisionReason: reason } }
+        : { permissionDecision: "ask", permissionDecisionReason: reason };
+    expect(String(result.stdout)).toBe(`${JSON.stringify(shape)}\n`);
+  });
+
+  it.each([...ASKS])("%s: refuses an ask whose mode read faults, and asks at the ceiling", async (tool) => {
+    const guard = await placeGuard(tool);
+    // At the ceiling every head is read, none open: the merge asks. One folder more is a fault, which refuses.
+    for (let n = 1; n <= 2_000; n += 1) mkdirSync(getRepo().path(".stamity", "runs", `2026-10-18_r${n}`), { recursive: true });
+    expect(decide(tool, guard, MERGE)).toMatchObject({ deny: true, ask: true });
+    mkdirSync(getRepo().path(".stamity", "runs", "2026-10-18_r2001"));
+    expect(decide(tool, guard, MERGE)).toEqual({ deny: true, reason: expect.stringMatching(/could not decide this shell call \(RUN_FOLDERS_OVER_2000 on .*runs\)/) });
+  });
+
+  it.each(TOOLS)("%s: refuses a force push of the default branch, attended, with the refuse sentence", async (tool) => {
+    const forced = personOnlyVerdict("git push --force origin main", ON_FEATURE);
+    expect(forced).toMatchObject({ deny: true, rule: "force-push", ask: false });
+    if (!forced.deny) return;
+    expect(decide(tool, await placeGuard(tool), "git push --force origin main")).toEqual(expectedAttended(tool, forced));
+  });
+
+  it.each([...ASKS])("%s: refuses a PowerShell call whose pwsh reading shows a forced refspec its POSIX reading does not", async (tool) => {
+    // POSIX reads the backtick as a command substitution, so the line shows the merge alone; PowerShell reads it as
+    // the escape, so its reading shows a `+main` refspec. The refused reading wins over the ask.
+    const line = "gh pr merge 1; git push origin `+main";
+    expect(personOnlyVerdict(line, ON_FEATURE)).toMatchObject({ deny: true, rule: "pr-merge", ask: true });
+    const forced = personOnlyVerdict(`pwsh -Command '${line}'`, ON_FEATURE);
+    expect(forced).toMatchObject({ deny: true, rule: "force-push", ask: false });
+    if (!forced.deny) return;
+    expect(decide(tool, await placeGuard(tool), line, undefined, undefined, "PowerShell")).toEqual({ deny: true, reason: expect.stringContaining(told(forced)) });
+    // The neighbour: the same line on the Bash tool is read once, as POSIX, and asks.
+    expect(decide(tool, await placeGuard(tool), line)).toMatchObject({ deny: true, ask: true });
+  });
+
+  it.each(TOOLS)("%s: refuses a merge beside an HTTP call whose target the line hides, never asking", async (tool) => {
+    expect(decide(tool, await placeGuard(tool), `${MERGE}; curl -K req.cfg`)).toEqual({
+      deny: true,
+      reason: expect.stringContaining("could not decide this shell call (HTTP_TARGET_HIDDEN)"),
+    });
+  });
+
+  it("asks for a GitHub MCP merge attended, refuses it unattended, refuses the repository deletion, and passes a read", async () => {
+    const guard = await placeGuard("claude");
+    const read = (tool: string): Decision => clientDecision("claude", run(guard, mcpCall(tool)), tool);
+    const act = "A call to the GitHub MCP server";
+    expect(read("mcp__github__merge_pull_request")).toEqual({
+      deny: true,
+      ask: true,
+      reason: `${act} is a person-only act (\`mcp__github__merge_pull_request\`): approve it to let the agent run it once (REQ-FLOW-102).`,
+    });
+    expect(read("mcp__github__create_pull_request")).toMatchObject({ deny: true, ask: true });
+    expect(read("mcp__github__delete_repository")).toEqual({
+      deny: true,
+      reason: expect.stringContaining(
+        `${act} deletes, force-pushes or cannot be undone (\`mcp__github__delete_repository\`): it stays the person's to run, even with approval (REQ-FLOW-124).`,
+      ),
+    });
+    expect(read("mcp__github__get_file_contents")).toEqual({ deny: false });
+    await getRepo().seedFiles(UNATTENDED);
+    expect(read("mcp__github__merge_pull_request")).toEqual({
+      deny: true,
+      reason: expect.stringContaining(
+        `${act} is a person-only act (\`mcp__github__merge_pull_request\`) and this run is unattended: list it on the morning list, whose walk runs it after one click. ${WHY}`,
+      ),
+    });
+    expect(read("mcp__github__delete_repository")).toMatchObject({ deny: true, reason: expect.stringContaining("(REQ-FLOW-124)") });
+    expect(read("mcp__github__get_file_contents")).toEqual({ deny: false });
+  });
+});
+
 describe("the nested-command depth limit (pr/58)", () => {
   /** `line` inside `layers` literal `sh -c` layers, each quoted for the one around it. */
   const nest = (line: string, layers: number): string => {
@@ -275,7 +427,8 @@ describe("the nested-command depth limit (pr/58)", () => {
     }
     const forced = personOnlyVerdict(nest("git push --force origin feat/x", 4), ON_FEATURE);
     expect(forced).toMatchObject({ deny: true, rule: "force-push" });
-    expect(decide(tool, guard, nest("git push --force origin feat/x", 4))).toEqual({ deny: true, reason: expect.stringContaining(forced.deny ? forced.reason : "") });
+    // TEST CHANGE, justified (v0a2, REQ-FLOW-124): the client prints the refuse sentence, not the verdict's reason.
+    expect(decide(tool, guard, nest("git push --force origin feat/x", 4))).toEqual({ deny: true, reason: expect.stringContaining(forced.deny ? told(forced) : "") });
     expect(decide(tool, guard, nest("git status", 4)).deny).toBe(false);
   });
 });
@@ -340,21 +493,24 @@ describe("the local tags read only for a push (review/218)", () => {
       ].join("\n"),
     });
     const probe = getRepo().path("probe.cjs");
-    const probed = (command: string): { status: number | null; stderr: string } => {
+    const probed = (command: string): { status: number | null; stderr: string; stdout: string } => {
       const base = { ...process.env };
       delete base.STAMITY_UNATTENDED;
       delete base.STAMITY_REPO_ROOT;
       const result = spawnSync(process.execPath, ["--require", probe, guard], { input: payload("claude", command), encoding: "utf8", env: base });
-      return { status: result.status, stderr: String(result.stderr) };
+      return { status: result.status, stderr: String(result.stderr), stdout: String(result.stdout) };
     };
     for (const command of ["ls -la", "git status", "git fetch origin", "git push"]) {
-      expect(probed(command), command).toEqual({ status: 0, stderr: "" });
+      expect(probed(command), command).toEqual({ status: 0, stderr: "", stdout: "" });
     }
-    expect(probed("git push origin feat/x")).toEqual({ status: 0, stderr: "tags listed\n" });
+    expect(probed("git push origin feat/x")).toEqual({ status: 0, stderr: "tags listed\n", stdout: "" });
+    // TEST CHANGE, justified (v0a2, REQ-FLOW-123): a tag push is ask-class, so attended Claude Code's guard asks on
+    // stdout with exit 0 where it refused on exit 2; the tags are still listed, and the rule is still named.
     const tagPush = probed("git push origin v1.0.0");
-    expect(tagPush.status).toBe(2);
-    expect(tagPush.stderr).toContain("tags listed\n");
-    expect(tagPush.stderr).toContain("push-tags");
+    expect(tagPush.status).toBe(0);
+    expect(tagPush.stderr).toBe("tags listed\n");
+    expect(tagPush.stdout).toContain('"permissionDecision":"ask"');
+    expect(tagPush.stdout).toContain("push-tags");
   });
 });
 

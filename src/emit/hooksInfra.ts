@@ -138,7 +138,10 @@ const HOOK_CONFIG_CAPABLE_TOOLS: ReadonlySet<Tool> = new Set<Tool>(TOOLS);
  * speaks (REQ-FLOW-102, REQ-FLOW-120).
  *
  * - Claude Code: `Bash` and `PowerShell`, the two shell tools its hook matchers
- *   name (code.claude.com/docs/en/tools-reference, read 2026-10-15).
+ *   name (code.claude.com/docs/en/tools-reference, read 2026-10-15). Its adapter
+ *   wires this same row a second time on the GitHub MCP server's person-only
+ *   tools (REQ-FLOW-120, `../adapters/claude.ts`), so the shell row stays the
+ *   portable one.
  * - Copilot: the same two names; its adapter translates them to the runtime
  *   `bash` and `powershell` through the runner's one table
  *   (`../hooks/portableRunner.ts` `COPILOT_RUNTIME_TOOL_NAMES`), and the runner

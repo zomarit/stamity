@@ -14,7 +14,7 @@ import {
   __resetContentRootCacheForTests,
   __setContentRootForTests,
 } from "../../src/content/contentRoot.ts";
-import { CLAUDE_DENY_ROWS } from "../../src/hooks/personOnly.ts";
+import { CLAUDE_ASK_ROWS, CLAUDE_DENY_ROWS } from "../../src/hooks/personOnly.ts";
 import { createApp } from "../../src/index.ts";
 import { memberHash } from "../../src/manifest/jsonMembers.ts";
 import { readManifest, writeManifest } from "../../src/manifest/manifest.ts";
@@ -72,6 +72,8 @@ afterEach(() => {
 const DENY_RULE = "Bash(rm -rf:*)";
 /** The engine's person-only deny rows, which follow an owner's own rows in `permissions.deny` (u20). */
 const ENGINE_DENY = [...CLAUDE_DENY_ROWS];
+/** The engine's person-only ask rows, co-owned as the deny rows are (v0a2, REQ-FLOW-036). */
+const ENGINE_ASK = [...CLAUDE_ASK_ROWS];
 const OWNER_ROW = "Bash(npm test:*)";
 const OWNER_GROUP = { matcher: "Bash", hooks: [{ type: "command", command: "./scripts/guard.sh" }] };
 /** The criteria's first fixture, in two-space style. */
@@ -88,17 +90,18 @@ const FIRST = `${JSON.stringify(
 /**
  * FIRST as `clean` leaves it after a setup (review/124, signed off 00:14Z): clean removes no `permissions.deny`
  * row, so the engine's rows the setup added stay after the owner's rule, and everything else is back as it was.
+ * TEST CHANGE, justified (v0a2, REQ-FLOW-036, REQ-FLOW-123): nor any `permissions.ask` row, so the engine's ask rows the setup added stay too.
  */
 const FIRST_AFTER_CLEAN = `${JSON.stringify(
   {
-    permissions: { allow: [OWNER_ROW], deny: [DENY_RULE, ...ENGINE_DENY] },
+    permissions: { allow: [OWNER_ROW], deny: [DENY_RULE, ...ENGINE_DENY], ask: ENGINE_ASK },
     hooks: { PreToolUse: [OWNER_GROUP] },
     model: "opus",
   },
   null,
   2,
 )}\n`;
-/** The sentence `clean` prints beside the deny rows it leaves. */
+/** The sentence `clean` prints beside the deny and ask rows it leaves. */
 const DENY_KEPT = "clean removes no deny row";
 
 let counter = 0;
@@ -193,7 +196,8 @@ describe("an owner's permissions and hooks before setup", () => {
     expect(doc["model"]).toBe("opus");
     const hooks = doc["hooks"] as Record<string, unknown[]>;
     expect(hooks["PreToolUse"]?.[0]).toEqual(OWNER_GROUP);
-    expect(hooks["PreToolUse"]).toHaveLength(4);
+    // TEST CHANGE, justified (v0a2, REQ-FLOW-036, REQ-FLOW-123): a fifth group, the shell guard again on the GitHub MCP tools.
+    expect(hooks["PreToolUse"]).toHaveLength(5);
     expect(hooks["PreToolUse"]?.slice(1).every(isEngineGroup)).toBe(true);
     // The owner's bytes, as the file spells them: the merge keeps the two-space style.
     // review/34: compared as bytes, not as parsed values — each owner member's
@@ -211,7 +215,8 @@ describe("an owner's permissions and hooks before setup", () => {
     const elements = rows[0]?.coOwned?.elements ?? {};
     expect(elements).not.toHaveProperty("/permissions/allow");
     // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102): the record holds the engine's deny rows too, and not the owner's rule.
-    const expected: Record<string, string[]> = { "/permissions/deny": ENGINE_DENY.map(memberHash) };
+    // TEST CHANGE, justified (v0a2, REQ-FLOW-036, REQ-FLOW-123): and the engine's ask rows, under their own pointer.
+    const expected: Record<string, string[]> = { "/permissions/deny": ENGINE_DENY.map(memberHash), "/permissions/ask": ENGINE_ASK.map(memberHash) };
     for (const [event, groups] of Object.entries(hooks)) {
       expected[`/hooks/${event}`] = groups.filter(isEngineGroup).map(memberHash);
     }
@@ -285,12 +290,13 @@ describe("an owner's permissions and hooks before setup", () => {
     // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102): and the engine's deny rows, under their own pointer.
     expect(
       Object.keys((await settingsLedgerRows(root))[0]?.coOwned?.elements ?? {}).every(
-        (pointer) => pointer.startsWith("/hooks/") || pointer === "/permissions/deny",
+        // TEST CHANGE, justified (v0a2, REQ-FLOW-036, REQ-FLOW-123): and the ask rows', which clean keeps as it keeps the deny rows.
+        (pointer) => pointer.startsWith("/hooks/") || pointer === "/permissions/deny" || pointer === "/permissions/ask",
       ),
     ).toBe(true);
     const cleaned = await clean(root);
     expect(cleaned.code).toBe(0);
-    expect(await readSettings(root)).toBe(`${JSON.stringify({ permissions: { deny: ENGINE_DENY } }, null, 2)}\n`);
+    expect(await readSettings(root)).toBe(`${JSON.stringify({ permissions: { deny: ENGINE_DENY, ask: ENGINE_ASK } }, null, 2)}\n`);
     expect(cleaned.stdout).toContain(DENY_KEPT);
   });
 
@@ -365,9 +371,36 @@ describe("an owner's deny row equal to one of the engine's person-only rows", ()
 
     const cleaned = await clean(root);
     expect(cleaned.code).toBe(0);
-    expect(await readSettings(root)).toBe(`${JSON.stringify({ permissions: { deny }, model: "opus" }, null, 2)}\n`);
+    // TEST CHANGE, justified (v0a2, REQ-FLOW-036, REQ-FLOW-123): the engine's ask rows stay after the deny list.
+    expect(await readSettings(root)).toBe(`${JSON.stringify({ permissions: { deny, ask: ENGINE_ASK }, model: "opus" }, null, 2)}\n`);
     expect(cleaned.stdout).toContain(DENY_KEPT);
     expect(await backups(root)).toEqual([]);
+  });
+
+  // v0a2 (REQ-FLOW-036): a checkout synced from an unreleased build keeps a deny row that is an ask row now. The engine
+  // moves no row between lists: the deny row stays (the client reads it first, so it still refuses), the ask list
+  // gains the engine's rows, and clean names the leftover deny row because it equals an engine ask row.
+  it("keeps an owner's deny row equal to an engine ask row in place, adds the ask rows beside it, and clean names it", async () => {
+    const root = await freshRepo();
+    const moved = "Bash(gh pr merge:*)";
+    expect(ENGINE_ASK).toContain(moved);
+    expect(ENGINE_DENY).not.toContain(moved);
+    await seedSettings(root, `${JSON.stringify({ permissions: { deny: [moved] }, model: "opus" }, null, 2)}\n`);
+
+    await init(root);
+
+    const permissions = (await settingsDoc(root))["permissions"] as { deny: string[]; ask: string[] };
+    expect(permissions.deny).toEqual([moved, ...ENGINE_DENY]);
+    expect(permissions.ask).toEqual(ENGINE_ASK);
+    const afterInit = await readSettings(root);
+    expect(settingsRow((await sync(root)).wrote).action).toBe("unchanged");
+    expect(await readSettings(root)).toBe(afterInit);
+
+    const cleaned = await clean(root);
+    expect(cleaned.code).toBe(0);
+    expect(await settingsDoc(root)).toEqual({ permissions, model: "opus" });
+    expect(cleaned.stdout).toContain(`permissions.deny (${JSON.stringify(moved)}`);
+    expect(cleaned.stdout).toContain("clean removes no deny row and no ask row");
   });
 });
 
@@ -394,7 +427,8 @@ describe("deny rows clean never removes, whatever the ledger's age (review/124, 
     expect(recorded).toHaveLength(ENGINE_DENY.length - 1);
 
     expect((await clean(root)).code).toBe(0);
-    expect(await settingsDoc(root)).toEqual({ permissions: { deny }, model: "opus" });
+    // TEST CHANGE, justified (v0a2, REQ-FLOW-036, REQ-FLOW-123): sync put back the ask rows the rewrite dropped, and clean keeps them.
+    expect(await settingsDoc(root)).toEqual({ permissions: { deny, ask: ENGINE_ASK }, model: "opus" });
   });
 
   it("an equal row the owner adds after setup: sync moves no byte, and clean keeps both copies", async () => {
@@ -402,14 +436,15 @@ describe("deny rows clean never removes, whatever the ledger's age (review/124, 
     await init(root);
     const doc = await settingsDoc(root);
     const deny = [...((doc["permissions"] as { deny: string[] }).deny), shared];
-    await writeFile(SETTINGS_ABS(root), `${JSON.stringify({ ...doc, permissions: { deny } }, null, 2)}\n`, "utf8");
+    // TEST CHANGE, justified (v0a2, REQ-FLOW-036, REQ-FLOW-123): the owner's edit keeps the engine's ask rows, as it keeps the deny rows.
+    await writeFile(SETTINGS_ABS(root), `${JSON.stringify({ ...doc, permissions: { ...(doc["permissions"] as object), deny } }, null, 2)}\n`, "utf8");
     const before = await readSettings(root);
 
     expect(settingsRow((await sync(root)).wrote).action).toBe("unchanged");
     expect(await readSettings(root)).toBe(before);
 
     expect((await clean(root)).code).toBe(0);
-    expect(await settingsDoc(root)).toEqual({ permissions: { deny } });
+    expect(await settingsDoc(root)).toEqual({ permissions: { deny, ask: ENGINE_ASK } });
   });
 
   it("a lost ledger record: the next sync moves no byte and records no deny row, and clean keeps and names the rows", async () => {
@@ -428,7 +463,8 @@ describe("deny rows clean never removes, whatever the ledger's age (review/124, 
     expect(rows[0]?.coOwned?.elements?.["/permissions/deny"]).toBeUndefined();
     const cleaned = await clean(root);
     expect(cleaned.code).toBe(0);
-    expect(await settingsDoc(root)).toEqual({ permissions: { deny: ENGINE_DENY } });
+    // TEST CHANGE, justified (v0a2, REQ-FLOW-036, REQ-FLOW-123): the ask rows stay beside the deny rows.
+    expect(await settingsDoc(root)).toEqual({ permissions: { deny: ENGINE_DENY, ask: ENGINE_ASK } });
     expect(cleaned.stdout).toContain(DENY_KEPT);
   });
 });
@@ -489,7 +525,8 @@ describe("a ledger record that claims an owner's members", () => {
     doc = await settingsDoc(root);
     // TEST CHANGE, justified (review/124, signed off 00:14Z): clean removes no deny row, so the engine's stay after the
     // owner's rule; the rows it names are the table's, never the owner's rule the forged record claims.
-    expect(doc["permissions"]).toEqual({ allow: [OWNER_ROW], deny: [DENY_RULE, ...ENGINE_DENY] });
+    // TEST CHANGE, justified (v0a2, REQ-FLOW-036, REQ-FLOW-123): the engine's ask rows stay too.
+    expect(doc["permissions"]).toEqual({ allow: [OWNER_ROW], deny: [DENY_RULE, ...ENGINE_DENY], ask: ENGINE_ASK });
     expect(cleaned.stdout).not.toContain(DENY_RULE);
   });
 
@@ -739,7 +776,8 @@ describe("a member the engine writes into, of another type", () => {
 describe("the file's own style", () => {
   // TEST CHANGE, justified (review/124, signed off 00:14Z): clean removes no deny row, so it leaves the owner's
   // member and the engine's deny rows, in the file's own style; each style carries its own spelling of that.
-  const KEPT = { model: "opus", permissions: { deny: ENGINE_DENY } };
+  // TEST CHANGE, justified (v0a2, REQ-FLOW-036, REQ-FLOW-123): the ask rows are left beside the deny rows.
+  const KEPT = { model: "opus", permissions: { deny: ENGINE_DENY, ask: ENGINE_ASK } };
   const STYLES: [string, string, string][] = [
     ["four spaces, no final newline", '{\n    "model": "opus"\n}', JSON.stringify(KEPT, null, 4)],
     ["a tab", '{\n\t"model": "opus"\n}\n', `${JSON.stringify(KEPT, null, "\t")}\n`],
@@ -758,9 +796,10 @@ describe("the file's own style", () => {
       // TEST CHANGE, justified (2026-10-08, inbox row 324): matched the three allow rows; the
       // engine writes hook entries alone now.
       // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102): three engine PreToolUse groups now (the core guard, the shell guard, the ask gate).
-      expect(JSON.parse(merged)).toMatchObject({ model: "opus", hooks: { PreToolUse: [{}, {}, {}] } });
+      // TEST CHANGE, justified (v0a2, REQ-FLOW-036, REQ-FLOW-123): a fourth group, the shell guard on the GitHub MCP tools, and the ask rows beside the deny rows.
+      expect(JSON.parse(merged)).toMatchObject({ model: "opus", hooks: { PreToolUse: [{}, {}, {}, {}] } });
       // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102): the engine writes its deny rows, and still no allow row.
-      expect((JSON.parse(merged) as { permissions: unknown }).permissions).toEqual({ deny: ENGINE_DENY });
+      expect((JSON.parse(merged) as { permissions: unknown }).permissions).toEqual({ deny: ENGINE_DENY, ask: ENGINE_ASK });
       if (name === "one line") expect(merged).toBe(`${JSON.stringify(JSON.parse(merged))}\n`);
       if (name === "a tab") expect(merged).toContain('\n\t"model": "opus",\n');
       if (name === "CRLF") expect(merged).not.toMatch(/[^\r]\n/);
@@ -792,7 +831,8 @@ describe("containers that existed before setup", () => {
     expect((await settingsLedgerRows(root))[0]?.coOwned?.preexisting).toEqual(["/permissions", "/permissions/allow", "/permissions/deny"]);
 
     expect((await clean(root)).code).toBe(0);
-    expect(await readSettings(root)).toBe(`${JSON.stringify({ permissions: { allow: [], deny: ENGINE_DENY } }, null, 2)}\n`);
+    // TEST CHANGE, justified (v0a2, REQ-FLOW-036, REQ-FLOW-123): the ask rows the engine added stay, after the deny list.
+    expect(await readSettings(root)).toBe(`${JSON.stringify({ permissions: { allow: [], deny: ENGINE_DENY, ask: ENGINE_ASK } }, null, 2)}\n`);
   });
 
   // TEST CHANGE, justified (review/124, signed off 00:14Z): clean removes no deny row, so the file keeps the engine's,
@@ -804,7 +844,8 @@ describe("containers that existed before setup", () => {
     await init(root);
     expect((await clean(root)).code).toBe(0);
 
-    expect(await readSettings(root)).toBe(`${JSON.stringify({ permissions: { deny: ENGINE_DENY } })}\n`);
+    // TEST CHANGE, justified (v0a2, REQ-FLOW-036, REQ-FLOW-123): and the ask rows.
+    expect(await readSettings(root)).toBe(`${JSON.stringify({ permissions: { deny: ENGINE_DENY, ask: ENGINE_ASK } })}\n`);
     expect(await backups(root)).toEqual([]);
   });
 });
@@ -849,7 +890,8 @@ describe("a settings row with no coOwned record (a 1.11.0 ledger)", () => {
     const result = await clean(root);
 
     expect(result.code).toBe(0);
-    expect(await settingsDoc(root)).toEqual({ permissions: { deny: ENGINE_DENY }, model: "opus" });
+    // TEST CHANGE, justified (v0a2, REQ-FLOW-036, REQ-FLOW-123): and the ask rows.
+    expect(await settingsDoc(root)).toEqual({ permissions: { deny: ENGINE_DENY, ask: ENGINE_ASK }, model: "opus" });
     expect(await readFile(`${SETTINGS_ABS(root)}.bak`, "utf8")).toBe(before);
   });
 });
@@ -919,7 +961,8 @@ describe("the Read, Grep and Glob allow rows an earlier release rendered (inbox 
     await init(root);
 
     const doc = await settingsDoc(root);
-    expect(doc["permissions"]).toEqual({ deny: ENGINE_DENY });
+    // TEST CHANGE, justified (v0a2, REQ-FLOW-036, REQ-FLOW-123): the ask rows beside the deny rows, still no allow row.
+    expect(doc["permissions"]).toEqual({ deny: ENGINE_DENY, ask: ENGINE_ASK });
     // The hooks member is unchanged by the removal: the engine still wires them.
     expect(Object.keys(doc["hooks"] as Record<string, unknown>).length).toBeGreaterThan(0);
     expect((await settingsLedgerRows(root))[0]?.coOwned?.elements).not.toHaveProperty("/permissions/allow");
@@ -929,13 +972,14 @@ describe("the Read, Grep and Glob allow rows an earlier release rendered (inbox 
     const root = await freshRepo();
     const afterInit = await releasedSetup(root);
     // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102): the engine's deny rows follow the owner's rule throughout.
-    expect((await settingsDoc(root))["permissions"]).toEqual({ deny: [DENY_RULE, ...ENGINE_DENY], allow: RELEASED_ROWS });
+    // TEST CHANGE, justified (v0a2, REQ-FLOW-036, REQ-FLOW-123): the ask rows beside them.
+    expect((await settingsDoc(root))["permissions"]).toEqual({ deny: [DENY_RULE, ...ENGINE_DENY], ask: ENGINE_ASK, allow: RELEASED_ROWS });
 
     const report = await sync(root);
 
     expect(settingsRow(report.wrote).action).toBe("updated");
     expect(settingsRow(report.wrote).warning).toBeUndefined();
-    expect((await settingsDoc(root))["permissions"]).toEqual({ deny: [DENY_RULE, ...ENGINE_DENY] });
+    expect((await settingsDoc(root))["permissions"]).toEqual({ deny: [DENY_RULE, ...ENGINE_DENY], ask: ENGINE_ASK });
     // Bytes, not values: the file is what this engine's init wrote over the deny rule.
     expect(await readSettings(root)).toBe(afterInit);
     expect(await backups(root)).toEqual([]);
@@ -951,7 +995,8 @@ describe("the Read, Grep and Glob allow rows an earlier release rendered (inbox 
     await sync(root);
 
     // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102): the engine's deny rows beside the owner's own row.
-    expect((await settingsDoc(root))["permissions"]).toEqual({ allow: ["Read"], deny: ENGINE_DENY });
+    // TEST CHANGE, justified (v0a2, REQ-FLOW-036, REQ-FLOW-123): and the ask rows.
+    expect((await settingsDoc(root))["permissions"]).toEqual({ allow: ["Read"], deny: ENGINE_DENY, ask: ENGINE_ASK });
     expect(await backups(root)).toEqual([]);
     expect((await settingsLedgerRows(root))[0]?.coOwned?.elements).not.toHaveProperty("/permissions/allow");
   });
@@ -1012,7 +1057,8 @@ describe("the Read, Grep and Glob allow rows an earlier release rendered (inbox 
     const row = settingsRow(report.wrote);
     expect(row.action).toBe("updated");
     expect(row.warning).toContain("permissions.allow");
-    expect((await settingsDoc(root))["permissions"]).toEqual({ allow: [OWNER_READ_ROW], deny: ENGINE_DENY });
+    // TEST CHANGE, justified (v0a2, REQ-FLOW-036, REQ-FLOW-123): and the ask rows.
+    expect((await settingsDoc(root))["permissions"]).toEqual({ allow: [OWNER_READ_ROW], deny: ENGINE_DENY, ask: ENGINE_ASK });
     expect(await readFile(`${SETTINGS_ABS(root)}.bak`, "utf8")).toBe(edited);
     expect((await settingsLedgerRows(root))[0]?.coOwned?.elements).not.toHaveProperty("/permissions/allow");
   });

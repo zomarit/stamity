@@ -1,16 +1,16 @@
 /**
  * Person-only acts (REQ-FLOW-102) and the unattended push rule (REQ-FLOW-120):
- * the table the shell guard and Claude Code's deny rows share.
+ * the table the shell guard and Claude Code's deny and ask rows share.
  *
- * **Person-only acts** are refused to the main thread on every client, attended
+ * **Person-only acts** are never the main thread's own to run, attended
  * or not: a force push, a push of a tag or of the default branch (named, or
  * implied by a refspec-less push or `HEAD` while on it), a remote branch
  * deletion, a tag, a merge or a review approval, `gh pr ready`, a release, a publish, a secret,
  * variable, protection or ruleset write, a write to the repository itself (its
  * default branch, visibility or name, its deletion, archiving or unarchiving, or transfer) and a branch
  * rename. {@link personOnlyVerdict} reads a
- * command line for them; {@link CLAUDE_DENY_ROWS} is the part a Claude Code
- * prefix rule can say, so the settings layer and the guard agree.
+ * command line for them; {@link CLAUDE_DENY_ROWS} and {@link CLAUDE_ASK_ROWS} are
+ * the part a Claude Code rule can say, so the settings layer and the guard agree.
  *
  * **Ask or refuse** (REQ-FLOW-102, REQ-FLOW-124). Each rule has a class: an act
  * that can be undone is ask-class, and a deletion, a force push or an act that
@@ -164,22 +164,51 @@ export interface PersonOnlyContext {
 }
 
 /**
- * The person-only rows a Claude Code prefix rule expresses, for the settings'
- * `permissions.deny` (u20). A form the prefix cannot say (a bare `git tag
- * <name>`, an implied destination, a REST write) is the shell guard's alone,
- * and so is a push naming the default branch: a row ending in a branch name
- * (`git push origin main`) would also refuse a longer one (`main-feature`) if
- * the prefix matches as a raw string, so no row ends in a name;
- * every `Bash(…)` row's prefix is one {@link personOnlyVerdict} denies, so the two layers
- * never disagree on what is the person's.
+ * The GitHub MCP server's person-only tools, by name, in Claude Code's MCP rule form
+ * (`mcp__<server>__<tool>`, the server under the `github` key the engine writes to
+ * `.mcp.json`), each with its class: a merge or a push made as a tool call is no shell
+ * call, so neither the prefix rows nor the shell reading see it (review/214, review/226).
+ * A row cannot read a tool's arguments, so each tool is classed whole: `delete_file` is a
+ * commit, not a ref deletion, and asks; `delete_repository` alone is refused. The shell
+ * guard also runs on these tools (REQ-FLOW-120), and refuses every one while a run is
+ * unattended, since a settings row cannot read the mode.
+ */
+export const GITHUB_MCP_ROWS: readonly { readonly row: string; readonly ask: boolean }[] = [
+  { row: "mcp__github__merge_pull_request", ask: true },
+  { row: "mcp__github__push_files", ask: true },
+  { row: "mcp__github__create_or_update_file", ask: true },
+  { row: "mcp__github__delete_file", ask: true },
+  { row: "mcp__github__update_pull_request_branch", ask: true },
+  // review/226: these names were read on 2026-10-16 from the GitHub MCP server's README and its `pkg/github/`
+  // sources. `create_pull_request_review`, `submit_pending_pull_request_review`, `update_pull_request_state` and
+  // `update_pull_request_draft_state` are registered behind its `pull_requests_granular` flag. Like the rows above,
+  // these name a server configured as `github`; a server given another name escapes them.
+  { row: "mcp__github__pull_request_review_write", ask: true },
+  { row: "mcp__github__create_pull_request_review", ask: true },
+  { row: "mcp__github__submit_pending_pull_request_review", ask: true },
+  { row: "mcp__github__update_pull_request", ask: true },
+  { row: "mcp__github__update_pull_request_state", ask: true },
+  { row: "mcp__github__update_pull_request_draft_state", ask: true },
+  { row: "mcp__github__create_branch", ask: true },
+  { row: "mcp__github__delete_repository", ask: false },
+  // pr/78: a pull request opened as a tool call skips the run verbs' draft and their title and body screen; the guard
+  // refuses it while a run is unattended, and attended it asks.
+  { row: "mcp__github__create_pull_request", ask: true },
+];
+
+/**
+ * The person-only rows Claude Code's settings refuse, for `permissions.deny` (u20,
+ * REQ-FLOW-124): the deletions, force pushes and acts that cannot be undone a rule
+ * can say. A form a rule cannot say (a REST write, a refspec deletion behind an ask
+ * prefix) is the shell guard's alone.
  *
- * The last rows are the GitHub MCP server's merge, branch-write, review-submit,
- * pull-request-update, repository-delete and pull-request-create tools, by name, in
- * Claude Code's MCP rule form (`mcp__<server>__<tool>`, the server under the `github` key
- * the engine writes to `.mcp.json`): a merge or a push made as a tool call is no shell
- * call, so neither the prefix rows nor the shell guard see it (review/214, review/226).
- * A row cannot read a tool's arguments, so a pull-request update through that server is
- * refused whole; `gh pr edit` through the shell stays the route.
+ * Each prefix row (`Bash(<prefix>:*)`) holds a prefix {@link personOnlyVerdict} refuses.
+ * The mid-pattern rows (`Bash(<prefix> * <flag>*)`, no `:*`) are there because a `*`
+ * inside a Bash rule matches anywhere on the line (measured on Claude Code 2.1.302,
+ * 2026-10-18): an ask prefix row ({@link CLAUDE_ASK_ROWS}) also matches a line that
+ * adds a refused flag later (`git push --tags --force`), and the client reads a deny
+ * row before an ask row, so where no hook runs the line is still refused. A respelling
+ * no row names stays the hook's. The last row is the GitHub MCP server's refused tool.
  */
 export const CLAUDE_DENY_ROWS: readonly string[] = [
   "Bash(git push --force:*)",
@@ -189,29 +218,70 @@ export const CLAUDE_DENY_ROWS: readonly string[] = [
   "Bash(git push origin --force:*)",
   "Bash(git push origin -f:*)",
   "Bash(git push origin --force-with-lease:*)",
-  "Bash(git push --tags:*)",
-  "Bash(git push origin --tags:*)",
-  "Bash(git push --follow-tags:*)",
   "Bash(git push --mirror:*)",
-  "Bash(git push --all:*)",
   "Bash(git push --delete:*)",
   "Bash(git push origin --delete:*)",
   "Bash(git push -d:*)",
   "Bash(git push origin -d:*)",
-  "Bash(git tag -a:*)",
-  "Bash(git tag -s:*)",
   "Bash(git tag -d:*)",
   "Bash(git tag -f:*)",
+  "Bash(git tag --delete:*)",
+  "Bash(git tag --force:*)",
+  "Bash(gh release delete:*)",
+  "Bash(gh release delete-asset:*)",
+  "Bash(gh secret delete:*)",
+  "Bash(gh secret remove:*)",
+  "Bash(gh variable delete:*)",
+  "Bash(gh variable remove:*)",
+  "Bash(gh repo edit --visibility:*)",
+  "Bash(gh repo delete:*)",
+  "Bash(gh repo transfer:*)",
+  "Bash(npm unpublish:*)",
+  "Bash(npm dist-tag rm:*)",
+  "Bash(git push * --force*)",
+  "Bash(git push * -f*)",
+  "Bash(git push * --mirror*)",
+  "Bash(git push * --prune*)",
+  "Bash(git push * --delete*)",
+  "Bash(git push * -d *)",
+  "Bash(git push * +*)",
+  "Bash(gh pr merge * -d*)",
+  "Bash(gh pr merge * --delete-branch*)",
+  "Bash(gh pr merge -d*)",
+  "Bash(gh pr merge --delete-branch*)",
+  "Bash(gh release upload * --clobber*)",
+  "Bash(gh release upload --clobber*)",
+  "Bash(gh repo edit * --visibility*)",
+  "Bash(gh repo sync * --force*)",
+  "Bash(gh repo sync --force*)",
+  ...GITHUB_MCP_ROWS.filter((entry) => !entry.ask).map((entry) => entry.row),
+];
+
+/**
+ * The person-only rows Claude Code's settings ask for, for `permissions.ask`
+ * (REQ-FLOW-102, REQ-FLOW-123): the acts that can be undone a prefix rule can say,
+ * then the GitHub MCP server's ask-class tools. Each prefix is one
+ * {@link personOnlyVerdict} denies with `ask: true`. A form the prefix cannot say (a
+ * bare `git tag <name>`, an implied destination, a REST write) is the shell guard's
+ * alone, and so is a push naming the default branch: a row ending in a branch name
+ * (`git push origin main`) would also match a longer one (`main-feature`) if the
+ * prefix matches as a raw string, so no row ends in a name. A settings row cannot
+ * read the mode, so these rows ask in an unattended run too; the shell guard
+ * refuses there first.
+ */
+export const CLAUDE_ASK_ROWS: readonly string[] = [
+  "Bash(git push --tags:*)",
+  "Bash(git push origin --tags:*)",
+  "Bash(git push --follow-tags:*)",
+  "Bash(git push --all:*)",
+  "Bash(git tag -a:*)",
+  "Bash(git tag -s:*)",
   "Bash(git tag -m:*)",
   "Bash(git tag --annotate:*)",
   "Bash(git tag --sign:*)",
-  "Bash(git tag --delete:*)",
-  "Bash(git tag --force:*)",
   "Bash(gh pr merge:*)",
   "Bash(gh pr ready:*)",
   "Bash(gh release create:*)",
-  "Bash(gh release delete:*)",
-  "Bash(gh release delete-asset:*)",
   "Bash(gh release edit:*)",
   "Bash(gh release upload:*)",
   "Bash(npm publish:*)",
@@ -220,38 +290,12 @@ export const CLAUDE_DENY_ROWS: readonly string[] = [
   "Bash(yarn npm publish:*)",
   "Bash(bun publish:*)",
   "Bash(gh secret set:*)",
-  "Bash(gh secret delete:*)",
-  "Bash(gh secret remove:*)",
   "Bash(gh variable set:*)",
-  "Bash(gh variable delete:*)",
-  "Bash(gh variable remove:*)",
   "Bash(gh repo edit --default-branch:*)",
-  "Bash(gh repo edit --visibility:*)",
   "Bash(gh repo rename:*)",
-  "Bash(gh repo delete:*)",
   "Bash(gh repo archive:*)",
   "Bash(gh repo unarchive:*)",
-  "Bash(gh repo transfer:*)",
-  "mcp__github__merge_pull_request",
-  "mcp__github__push_files",
-  "mcp__github__create_or_update_file",
-  "mcp__github__delete_file",
-  "mcp__github__update_pull_request_branch",
-  // review/226: these names were read on 2026-10-16 from the GitHub MCP server's README and its `pkg/github/`
-  // sources. `create_pull_request_review`, `submit_pending_pull_request_review`, `update_pull_request_state` and
-  // `update_pull_request_draft_state` are registered behind its `pull_requests_granular` flag. Like the rows above,
-  // these name a server configured as `github`; a server given another name escapes them.
-  "mcp__github__pull_request_review_write",
-  "mcp__github__create_pull_request_review",
-  "mcp__github__submit_pending_pull_request_review",
-  "mcp__github__update_pull_request",
-  "mcp__github__update_pull_request_state",
-  "mcp__github__update_pull_request_draft_state",
-  "mcp__github__create_branch",
-  "mcp__github__delete_repository",
-  // pr/78: a pull request opened as a tool call skips the run verbs' draft and their title and body screen. A row
-  // cannot read the run's mode, so attended sessions lose it too; there `gh pr create` through the shell stays the route.
-  "mcp__github__create_pull_request",
+  ...GITHUB_MCP_ROWS.filter((entry) => entry.ask).map((entry) => entry.row),
 ];
 
 /**
