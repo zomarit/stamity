@@ -29,7 +29,10 @@ import { readPushed, scanChange } from "./gate.ts";
  * **It never leaves a run on a default branch.** On the repository's default
  * branch, or at a detached `HEAD`, it switches to `stamity/<run-id>`, creating
  * it at `HEAD` where no local branch of that name exists and checking the one
- * that does out, never recreating it. Any other branch, a platform's own
+ * that does out, never recreating it. Where only `refs/remotes/origin/stamity/<run-id>`
+ * names a commit (a run continued on a fresh clone, v21), the branch is created
+ * at that tip instead, once the run's record there names a `Base:` the tip
+ * descends from; a tip that does not, or carries no record, refuses. Any other branch, a platform's own
  * (`claude/…`, `cursor/…`, `copilot/…`) included, is kept. Uncommitted work
  * rides the switch, as `git switch` carries it; a switch git refuses (a local
  * change the target would overwrite) fails the verb and leaves the checkout
@@ -67,7 +70,8 @@ import { readPushed, scanChange } from "./gate.ts";
  * repository pins nothing, said in the text.
  *
  * **`start`'s exit codes.** 0 the run is on its branch; 1 a refused run id, no
- * commit to base the run on, origin changed, or a git call that failed; 2 a usage error, no
+ * commit to base the run on, origin changed, origin's run branch refused (no
+ * record, or not from its `Base:`), or a git call that failed; 2 a usage error, no
  * `--run` among them. The JSON is `{ subcommand, run, branch, created, base }`,
  * `base` the full commit id at `HEAD` once the run is on its branch, for the
  * record's `Base:`; `dryRun: true` joins it under `--dry-run`, which switches
@@ -302,10 +306,15 @@ async function runStart(ctx: CliContext, run: string): Promise<CommandResult> {
   }
 
   const existing = await commitAt(cwd, `refs/heads/${runBranch}`);
+  // v21: a continuation on another machine, the run's branch only origin's, starts at origin's tip, so the next push
+  // fast-forwards; refused where that tip does not carry the run's record or does not descend from its Base:.
+  const remoteTip = existing === null ? await originRunTip(ctx, cwd, run, runBranch) : null;
   const from = current === null ? "a detached HEAD" : `${sanitizeLabel(current)}, the default branch`;
-  const how = existing === null ? `created from ${from}` : `checked out from ${from}; it already existed`;
+  const how =
+    existing !== null ? `checked out from ${from}; it already existed` : remoteTip !== null ? `created from origin's ${runBranch}` : `created from ${from}`;
   if (!ctx.dryRun) {
-    const switched = await git(cwd, existing === null ? ["switch", "--quiet", "--create", runBranch] : ["switch", "--quiet", runBranch]);
+    const create = ["switch", "--quiet", "--create", runBranch, ...(remoteTip === null ? [] : [remoteTip])];
+    const switched = await git(cwd, existing === null ? create : ["switch", "--quiet", runBranch]);
     if (switched.code !== 0) {
       throw new CliFailure({
         code: "FAILURE",
@@ -316,7 +325,7 @@ async function runStart(ctx: CliContext, run: string): Promise<CommandResult> {
     }
   }
   // Read after the switch: an existing branch's own tip is the run's base, not the default branch's.
-  const base = ctx.dryRun ? (existing ?? head) : await commitAt(cwd, "HEAD");
+  const base = ctx.dryRun ? (existing ?? remoteTip ?? head) : await commitAt(cwd, "HEAD");
   if (base === null) {
     throw new CliFailure({
       code: "FAILURE",
@@ -329,13 +338,45 @@ async function runStart(ctx: CliContext, run: string): Promise<CommandResult> {
   // written untracked first, where the switch to a branch that tracks it would refuse to overwrite it.
   // pr/28: a dry run switched nothing, so an existing branch's pin is read from its tree; pr/27: a refusal after a
   // switch names the branch the checkout is left on.
-  const pinned = await pinOrigin(ctx, cwd, run, ctx.dryRun ? { rev: existing ?? undefined } : { checkout: runBranch });
+  const pinned = await pinOrigin(ctx, cwd, run, ctx.dryRun ? { rev: existing ?? remoteTip ?? undefined } : { checkout: runBranch });
   const lines = [`branch: ${runBranch} (${how})`, `base: ${base}`, pinned];
   if (defaults !== null) lines.push(`default branch read from: ${SOURCE_LABEL[defaults.source]}`);
   if (originHead !== null) lines.push(originHead);
   if (ctx.dryRun) lines.push("Dry run: nothing was switched.");
   ctx.io.out(`${lines.join("\n")}\n`);
   return { exitCode: 0, json: start(run, runBranch, existing === null, base, ctx.dryRun) };
+}
+
+/**
+ * v21: the commit `refs/remotes/origin/<runBranch>` names, for a run continued on a machine whose clone has the run's
+ * branch only as origin's; `null` where that ref names no commit (a clone that never fetched it among them), so the
+ * run starts as before. The run's record at that tip, a regular file, must name a `Base:` that is a commit here and
+ * that the tip descends from; anything else refuses, naming the tip, before anything is switched.
+ */
+async function originRunTip(ctx: CliContext, cwd: string, run: string, runBranch: string): Promise<string | null> {
+  const { layout, resumeCard } = ctx.engine.runs;
+  const tip = await commitAt(cwd, `refs/remotes/origin/${runBranch}`);
+  if (tip === null) return null;
+  const recordRel = `${layout.runRelPath(run)}/${layout.RECORD_FILE}`;
+  const refuse = (why: string): CliFailure =>
+    new CliFailure({
+      code: "FAILURE",
+      message: `run start refused: origin's ${runBranch} at ${tip} ${why}`,
+      why: "a run continued from origin's branch must carry its record and descend from the commit the run started from",
+      next: "a person reads origin's branch; the run starts again once it holds the run's record on a history from its Base:",
+    });
+  const listed = await git(cwd, ["ls-tree", "-z", tip, "--", recordRel]);
+  if (listed.code !== 0 || !/^100(?:644|755) blob /.test(listed.stdout)) throw refuse(`carries no run record at ${recordRel}`);
+  const shown = await git(cwd, ["show", `${tip}:./${recordRel}`]);
+  if (shown.code !== 0) throw refuse(`carries no run record at ${recordRel}`);
+  const recordBase = resumeCard.readRecordHead(shown.stdout.slice(0, layout.RECORD_HEAD_READ_BYTES)).base;
+  if (recordBase === null) throw refuse("carries a run record that names no Base:");
+  const base = await commitAt(cwd, recordBase);
+  if (base === null) throw refuse(`carries a run record whose Base: ${recordBase} names no commit here`);
+  const descends = await git(cwd, ["merge-base", "--is-ancestor", base, tip]);
+  if (descends.code === 1) throw refuse(`does not descend from its record's Base: ${base}`);
+  if (descends.code !== 0) throw refuse(`could not be read against its record's Base: ${base} (git merge-base answered ${descends.code}: ${firstLine(descends.stderr)})`);
+  return tip;
 }
 
 /** A GitHub repository as `resolveRepo` names it, and as the origin pin holds it. */
@@ -781,7 +822,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
 
   if (ctx.dryRun) {
     if (unattended) {
-      const wouldStage = stage.map((path) => ({ path, link: isLink(join(top, path)) }));
+      const wouldStage = stage.map((path) => ({ path, link: isLink(join(top, path)), added: false }));
       result.held = heldOf([...(await changedSince(top, base)), ...(await changedSince(top, base, "index")), ...wouldStage]);
     }
     lines.push(`would stage: ${list(stage)}`, `would hold: ${list(result.held)}`, "Dry run: nothing was staged, written, committed or pushed.");
@@ -790,13 +831,21 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   if (!(await add(top, stage, result.notDone))) return finish(false);
 
   // (2) Unattended: the person-only paths' change goes to an inert patch, and those paths back to Base: in the index.
+  let unsectioned: string[] = [];
   // review/156: the index is read too, since the commit takes it: a held change staged or committed and then
   // undone in the work tree alone is still held.
   if (unattended) {
     const indexSide = await changedSince(top, base, "index");
+    const treeSide = await changedSince(top, base);
     const inIndex = heldOf(indexSide);
-    const held = heldOf([...(await changedSince(top, base)), ...indexSide]);
-    if (held.length === 0) {
+    const held = heldOf([...treeSide, ...indexSide]);
+    // v21 (pr/39): a held path absent at Base: and absent from the work tree, staged and then deleted, gets no
+    // section: its two layers would add and delete it, and a patch applied part by part would create a file the run
+    // deleted. Absent at Base:, a path the work tree held would show on the work tree's side, so one missing there is gone.
+    const inTree = new Set(treeSide.map((entry) => entry.path));
+    const bothAbsent = new Set(indexSide.filter((entry) => entry.added && !inTree.has(entry.path)).map((entry) => entry.path));
+    const sectioned = held.filter((path) => !bothAbsent.has(path));
+    if (sectioned.length === 0) {
       // A patch an earlier checkpoint wrote names a change the run no longer makes: it leaves the folder and the branch.
       const stale = await removeStalePatch(cwd, top, heldDir, fromTop(patchRel));
       if (stale !== null) {
@@ -804,16 +853,16 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
         return finish(false);
       }
     }
-    if (held.length > 0) {
+    if (sectioned.length > 0) {
       // Git writes the patch to a file, so its bytes never pass a text decode: a held file in any encoding applies again.
       // Each path from the side the push would have carried: the index where it changes the path, else the work tree;
       // pr/6: a staged path then edited again also gets the index-to-work-tree part, so the patch applies to the work tree's bytes.
       const scratch = mkdtempSync(join(tmpdir(), "stamity-held-"));
       try {
-        const staged = held.filter((path) => inIndex.includes(path));
+        const staged = sectioned.filter((path) => inIndex.includes(path));
         const sides: [string[], string[]][] = [
           [["--cached", base], staged],
-          [[base], held.filter((path) => !inIndex.includes(path))],
+          [[base], sectioned.filter((path) => !inIndex.includes(path))],
           [[], staged],
         ];
         const written = await Promise.all(
@@ -839,12 +888,16 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
       } finally {
         rmSync(scratch, { recursive: true, force: true });
       }
+    }
+    if (held.length > 0) {
+      // Every held path, one with no section too, leaves the index for Base:'s.
       const restored = await git(top, ["restore", "--staged", `--source=${base}`, "--", ...held], verb);
       if (restored.code !== 0) {
         result.notDone.push(`hold failed: git restore answered ${restored.code}: ${firstLine(restored.stderr)}`);
         return finish(false);
       }
       result.held = held;
+      unsectioned = held.filter((path) => bothAbsent.has(path));
     }
   }
   // Checked before it exists, since check-ignore reads the rules, not the file; named only once it does.
@@ -853,10 +906,11 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   const patchFiles = written.filter((path) => !ignored.has(path));
   if (!(await add(top, patchFiles, result.notDone))) return finish(false);
   lines.push(`staged: ${list([...stage, ...patchFiles])}`);
+  const heldNames = result.held.map((path) => (unsectioned.includes(path) ? `${path} (staged, then deleted: no section)` : path));
   lines.push(
     result.held.length === 0
       ? "held: none"
-      : `held (in ${patchRel}; the work tree keeps them): ${list(result.held)}`,
+      : `held (in ${patchRel}; the work tree keeps them): ${list(heldNames)}`,
   );
 
   // pr/46: what origin holds, read from the remote once, before the commit; unread, the push is held.
@@ -984,20 +1038,26 @@ const SIDE_ARGS: Readonly<Record<Side, (base: string) => string[]>> = {
   HEAD: (base) => [base, "HEAD"],
 };
 
-/** One changed path, and whether its new side is a symbolic link (mode `120000`). */
+/** One changed path, whether its new side is a symbolic link (mode `120000`), and whether its old side is absent. */
 interface Changed {
   path: string;
   link: boolean;
+  /** Every old side's mode is `000000`: the path is absent on the side compared against (v21). */
+  added: boolean;
 }
 
 /** Git's mode for a symbolic link. */
 const LINK_MODE = "120000";
 
+/** Git's mode for a path one side does not hold. */
+const ABSENT_MODE = "000000";
+
 /**
  * The paths of `git diff --raw -z` or `git log --raw -z` output, each with
- * whether its new side is a link: one `:<modes> <ids> <status>` field (`::…`
- * for a merge's combined form, the result's mode last among the modes), then
- * the path. Renames are pinned off, so one path follows each field.
+ * whether its new side is a link and whether every old side is absent: one
+ * `:<modes> <ids> <status>` field (`::…` for a merge's combined form, the
+ * result's mode last among the modes), then the path. Renames are pinned off,
+ * so one path follows each field.
  */
 function rawEntries(stdout: string): Changed[] {
   const fields = stdout.split("\0");
@@ -1009,7 +1069,7 @@ function rawEntries(stdout: string): Changed[] {
     index += 1;
     if (path === "") continue;
     const modes = field.replace(/^:+/, "").split(" ").filter((part) => /^[0-7]{6}$/.test(part));
-    entries.push({ path, link: modes.at(-1) === LINK_MODE });
+    entries.push({ path, link: modes.at(-1) === LINK_MODE, added: modes.length > 1 && modes.slice(0, -1).every((mode) => mode === ABSENT_MODE) });
   }
   return entries;
 }

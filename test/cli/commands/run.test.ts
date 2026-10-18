@@ -281,6 +281,118 @@ describe("stamity run start", () => {
     expect(git(repo, ["rev-parse", RUN_BRANCH])).toBe(first);
   });
 
+  describe("a continuation on another machine: the run's branch only on origin (v21, REQ-FLOW-105)", () => {
+    /** Git's auto maintenance off before any push or commit, so no detached child outlives a case (runCheckpoint.test.ts, prove/12). */
+    const NO_AUTO_MAINTENANCE = "[receive]\n\tautogc = false\n[gc]\n\tauto = 0\n[maintenance]\n\tauto = false\n";
+    const RECORD = `.stamity/runs/${RUN}/record.md`;
+
+    interface Continuation {
+      clone: string;
+      remote: string;
+      tip: string;
+      recordBase: string;
+    }
+
+    /**
+     * A bare remote holding `main` and the run's branch one commit ahead of it, that commit carrying the run's record
+     * (`Base:` main's tip, or a side commit the tip does not descend from, or no record at all), and a fresh clone of
+     * the remote on `main`, as a cloud machine that came back has: `stamity/<run-id>` only as origin's.
+     */
+    async function seedContinuation(opts: { base?: "main" | "side"; record?: boolean } = {}): Promise<Continuation> {
+      const source = await seedRepo({ url: null });
+      await writeFile(join(source, ".git", "config"), NO_AUTO_MAINTENANCE, { flag: "a" });
+      const remote = getRoot().path(`remote-${Math.random().toString(36).slice(2, 8)}.git`);
+      git(source, ["-c", "init.defaultBranch=main", "init", "-q", "--bare", remote]);
+      await writeFile(join(remote, "config"), NO_AUTO_MAINTENANCE, { flag: "a" });
+      git(source, ["push", "-q", remote, "main"]);
+      let recordBase = git(source, ["rev-parse", "HEAD"]);
+      if (opts.base === "side") {
+        git(source, ["switch", "-q", "-c", "side", "HEAD~1"]);
+        await writeFile(join(source, "side.txt"), "side\n");
+        git(source, ["add", "--", "side.txt"]);
+        git(source, ["commit", "-q", "-m", "side"]);
+        recordBase = git(source, ["rev-parse", "HEAD"]);
+        git(source, ["push", "-q", remote, "side"]);
+        git(source, ["switch", "-q", "main"]);
+      }
+      git(source, ["switch", "-q", "-c", RUN_BRANCH]);
+      if (opts.record === false) {
+        await writeFile(join(source, "c.txt"), "c\n");
+        git(source, ["add", "--", "c.txt"]);
+      } else {
+        await mkdir(join(source, ".stamity", "runs", RUN), { recursive: true });
+        await writeFile(join(source, RECORD), `# Run ${RUN}\n\nStatus: in progress\nMode: attended\nBranch: ${RUN_BRANCH}\nBase: ${recordBase}\n`);
+        git(source, ["add", "--", RECORD]);
+      }
+      git(source, ["commit", "-q", "-m", "checkpoint"]);
+      const tip = git(source, ["rev-parse", "HEAD"]);
+      git(source, ["push", "-q", remote, RUN_BRANCH]);
+      const clone = getRoot().path(`clone-${Math.random().toString(36).slice(2, 8)}`);
+      git(getRoot().path(), ["clone", "-q", remote, clone]);
+      await writeFile(join(clone, ".git", "config"), NO_AUTO_MAINTENANCE, { flag: "a" });
+      git(clone, ["config", "user.name", "Alice Example"]);
+      git(clone, ["config", "user.email", "alice@example.com"]);
+      return { clone, remote, tip, recordBase };
+    }
+
+    it("creates the run's branch at origin's tip, its base, so the next checkpoint pushes as a fast-forward", async () => {
+      const { clone, remote, tip } = await seedContinuation();
+      expect(current(clone)).toBe("main");
+      expect(git(clone, ["branch", "--list", RUN_BRANCH])).toBe("");
+
+      const { code, doc } = await run(clone, START);
+
+      expect(code).toBe(0);
+      expect(doc).toEqual({ subcommand: "start", run: RUN, branch: RUN_BRANCH, created: true, base: tip });
+      expect(current(clone)).toBe(RUN_BRANCH);
+      expect(git(clone, ["rev-parse", "HEAD"])).toBe(tip);
+
+      await writeFile(join(clone, "a.txt"), "the next unit's change\n");
+      const checkpoint = await run(clone, ["checkpoint", "--run", RUN, "--paths", "a.txt", "--json"]);
+
+      expect(checkpoint.code).toBe(0);
+      expect(checkpoint.doc).toMatchObject({ branch: RUN_BRANCH, pushed: true, notDone: [] });
+      const pushed = git(remote, ["rev-parse", `refs/heads/${RUN_BRANCH}`]);
+      expect(pushed).not.toBe(tip);
+      expect(git(remote, ["rev-parse", `${pushed}^`])).toBe(tip);
+    });
+
+    it("names origin's branch and its tip as the base under --dry-run, switching nothing", async () => {
+      const { clone, tip } = await seedContinuation();
+
+      const { code, stdout } = await run(clone, ["start", "--run", RUN, "--dry-run"]);
+
+      expect(code).toBe(0);
+      expect(stdout).toContain(`branch: ${RUN_BRANCH} (created from origin's ${RUN_BRANCH})`);
+      expect(stdout).toContain(`base: ${tip}`);
+      expect(current(clone)).toBe("main");
+      expect(git(clone, ["branch", "--list", RUN_BRANCH])).toBe("");
+    });
+
+    it("refuses origin's tip where it does not descend from its record's Base:, naming both, creating no branch", async () => {
+      const { clone, tip, recordBase } = await seedContinuation({ base: "side" });
+
+      const { code, doc } = await run(clone, START);
+
+      expect(code).toBe(1);
+      const error = JSON.stringify(doc["error"]);
+      expect(error).toContain(`origin's ${RUN_BRANCH} at ${tip} does not descend from its record's Base: ${recordBase}`);
+      expect(current(clone)).toBe("main");
+      expect(git(clone, ["branch", "--list", RUN_BRANCH])).toBe("");
+    });
+
+    it("refuses origin's tip where it carries no run record, creating no branch", async () => {
+      const { clone, tip } = await seedContinuation({ record: false });
+
+      const { code, doc } = await run(clone, START);
+
+      expect(code).toBe(1);
+      expect(JSON.stringify(doc["error"])).toContain(`origin's ${RUN_BRANCH} at ${tip} carries no run record at ${RECORD}`);
+      expect(current(clone)).toBe("main");
+      expect(git(clone, ["branch", "--list", RUN_BRANCH])).toBe("");
+    });
+  });
+
   it("carries uncommitted work onto the run's branch", async () => {
     const repo = await seedRepo();
     restDefault("main");

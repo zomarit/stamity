@@ -304,10 +304,14 @@ describe("stamity run checkpoint", () => {
     expect(pushedFile(remote, ".cursorrules")).toBe(".cursorrules");
     const patch = pushedFile(remote, PATCH);
     expect(patch).toContain("+steered rules");
-    expect(patch).toContain("+on: push");
-    // TEST CHANGE, justified: pr/6 adds the index-to-work-tree part, so the patch applied on Base: gives the work
-    // tree's .cursorrules; the workflow's deletion part is in the patch too.
-    expect(patch).toContain("deleted file mode");
+    // TEST CHANGE, justified (v21, REQ-FLOW-093, pr/39): the workflow is absent at Base: and absent from the work tree,
+    // staged and then deleted, so the patch carries no section for it (it carried an addition and a deletion, and a
+    // patch applied part by part restored a file the run deleted); `held` still names it (its text line below), and
+    // the index still drops it.
+    expect(patch).not.toContain(".github/workflows/x.yml");
+    expect(patch).not.toContain("+on: push");
+    expect(patch).not.toContain("deleted file mode");
+    expect(git(repo, ["ls-files", "--", ".github/workflows/x.yml"])).toBe("");
     // pr/38: part 0 (Base: to the index) is where the staged change lives: .cursorrules' first section adds it, and
     // the last section, the index-to-work-tree part, takes it back out.
     const sections = patch.split(/^(?=diff --git )/m).filter((section) => section.startsWith("diff --git a/.cursorrules "));
@@ -322,6 +326,51 @@ describe("stamity run checkpoint", () => {
     // The whole patch yields the work tree's bytes, Base:'s here, not the staged ones.
     expect(await readFile(join(fresh, ".cursorrules"), "utf8")).toBe(await readFile(join(repo, ".cursorrules"), "utf8"));
     expect(await readFile(join(fresh, ".cursorrules"), "utf8")).toBe(".cursorrules\n");
+    // v21 (REQ-FLOW-093): the patch applied on Base: does not create the workflow the run staged and then deleted.
+    expect(existsSync(join(fresh, ".github/workflows/x.yml"))).toBe(false);
+  });
+
+  // v21 (REQ-FLOW-093): the text's held line names a staged-then-deleted path and says it has no section; with no
+  // other held path there is no patch to write, so none is left in the run folder or the pushed branch.
+  it("names a held path staged and then deleted, absent at Base:, on the held line with no section, writing no patch", async () => {
+    const { repo, remote } = await seed("unattended");
+    await put(repo, ".github/workflows/x.yml", "on: push\n");
+    git(repo, ["add", "--", ".github/workflows/x.yml"]);
+    await rm(join(repo, ".github"), { recursive: true });
+
+    const { code, stdout } = await run(repo, ["checkpoint", "--run", RUN]);
+
+    expect(code).toBe(0);
+    expect(stdout).toContain(`held (in ${PATCH}; the work tree keeps them): .github/workflows/x.yml (staged, then deleted: no section)`);
+    expect(isFile(join(repo, PATCH))).toBe(false);
+    expect(pushedTree(remote)).not.toContain(PATCH);
+    expect(pushedTree(remote)).not.toContain(".github/workflows/x.yml");
+    expect(git(repo, ["ls-files", "--", ".github/workflows/x.yml"])).toBe("");
+  });
+
+  // v21 (REQ-FLOW-093): the reverse of the staged-then-deleted case, a held path absent at Base:, staged, deleted and then written
+  // again in the work tree, keeps both layers: only a path absent at both ends gets no section.
+  it("keeps both layers for a held path absent at Base:, staged, then deleted and recreated in the work tree, the patch applying on Base: to the work tree's bytes", async () => {
+    const { repo, base } = await seed("unattended");
+    await put(repo, ".github/workflows/x.yml", "on: push\n");
+    git(repo, ["add", "--", ".github/workflows/x.yml"]);
+    await rm(join(repo, ".github"), { recursive: true });
+    await put(repo, ".github/workflows/x.yml", "on: pull_request\n");
+
+    const { code, doc, stdout } = await run(repo, CHECKPOINT);
+
+    expect(code).toBe(0);
+    expect(doc).toMatchObject({ pushed: true, notDone: [], held: [".github/workflows/x.yml"] });
+    expect(stdout).not.toContain("no section");
+    const patch = await readFile(join(repo, PATCH), "utf8");
+    const sections = patch.split(/^(?=diff --git )/m).filter((section) => section.startsWith("diff --git a/.github/workflows/x.yml "));
+    expect(sections).toHaveLength(2);
+    expect(sections[0]).toContain("+on: push");
+    expect(sections[1]).toContain("+on: pull_request");
+    const fresh = join(dirname(repo), "at-base");
+    git(repo, ["worktree", "add", "-q", "--detach", fresh, base]);
+    git(fresh, ["apply", join(repo, PATCH)]);
+    expect(await readFile(join(fresh, ".github/workflows/x.yml"), "utf8")).toBe("on: pull_request\n");
   });
 
   // pr/6: a held path staged and then edited again keeps both layers, so the patch reproduces the work tree's bytes.
