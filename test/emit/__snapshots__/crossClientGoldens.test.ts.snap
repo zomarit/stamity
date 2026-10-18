@@ -12,29 +12,57 @@ exports[`emitted tree for all-four > matches the residue-document golden byte fo
       "Bash(git push origin --force:*)",
       "Bash(git push origin -f:*)",
       "Bash(git push origin --force-with-lease:*)",
-      "Bash(git push --tags:*)",
-      "Bash(git push origin --tags:*)",
-      "Bash(git push --follow-tags:*)",
       "Bash(git push --mirror:*)",
-      "Bash(git push --all:*)",
       "Bash(git push --delete:*)",
       "Bash(git push origin --delete:*)",
       "Bash(git push -d:*)",
       "Bash(git push origin -d:*)",
-      "Bash(git tag -a:*)",
-      "Bash(git tag -s:*)",
       "Bash(git tag -d:*)",
       "Bash(git tag -f:*)",
+      "Bash(git tag --delete:*)",
+      "Bash(git tag --force:*)",
+      "Bash(gh release delete:*)",
+      "Bash(gh release delete-asset:*)",
+      "Bash(gh secret delete:*)",
+      "Bash(gh secret remove:*)",
+      "Bash(gh variable delete:*)",
+      "Bash(gh variable remove:*)",
+      "Bash(gh repo edit --visibility:*)",
+      "Bash(gh repo delete:*)",
+      "Bash(gh repo transfer:*)",
+      "Bash(npm unpublish:*)",
+      "Bash(npm dist-tag rm:*)",
+      "Bash(git push * --force*)",
+      "Bash(git push * -f*)",
+      "Bash(git push * --mirror*)",
+      "Bash(git push * --prune*)",
+      "Bash(git push * --delete*)",
+      "Bash(git push * -d *)",
+      "Bash(git push * +*)",
+      "Bash(gh pr merge * -d*)",
+      "Bash(gh pr merge * --delete-branch*)",
+      "Bash(gh pr merge -d*)",
+      "Bash(gh pr merge --delete-branch*)",
+      "Bash(gh release upload * --clobber*)",
+      "Bash(gh release upload --clobber*)",
+      "Bash(gh repo edit * --visibility*)",
+      "Bash(gh repo sync * --force*)",
+      "Bash(gh repo sync --force*)",
+      "mcp__github__delete_repository"
+    ],
+    "ask": [
+      "Bash(git push --tags:*)",
+      "Bash(git push origin --tags:*)",
+      "Bash(git push --follow-tags:*)",
+      "Bash(git push --all:*)",
+      "Bash(git tag -a:*)",
+      "Bash(git tag -s:*)",
       "Bash(git tag -m:*)",
       "Bash(git tag --annotate:*)",
       "Bash(git tag --sign:*)",
-      "Bash(git tag --delete:*)",
-      "Bash(git tag --force:*)",
       "Bash(gh pr merge:*)",
       "Bash(gh pr ready:*)",
       "Bash(gh release create:*)",
-      "Bash(gh release delete:*)",
-      "Bash(gh release delete-asset:*)",
       "Bash(gh release edit:*)",
       "Bash(gh release upload:*)",
       "Bash(npm publish:*)",
@@ -43,18 +71,11 @@ exports[`emitted tree for all-four > matches the residue-document golden byte fo
       "Bash(yarn npm publish:*)",
       "Bash(bun publish:*)",
       "Bash(gh secret set:*)",
-      "Bash(gh secret delete:*)",
-      "Bash(gh secret remove:*)",
       "Bash(gh variable set:*)",
-      "Bash(gh variable delete:*)",
-      "Bash(gh variable remove:*)",
       "Bash(gh repo edit --default-branch:*)",
-      "Bash(gh repo edit --visibility:*)",
       "Bash(gh repo rename:*)",
-      "Bash(gh repo delete:*)",
       "Bash(gh repo archive:*)",
       "Bash(gh repo unarchive:*)",
-      "Bash(gh repo transfer:*)",
       "mcp__github__merge_pull_request",
       "mcp__github__push_files",
       "mcp__github__create_or_update_file",
@@ -67,7 +88,6 @@ exports[`emitted tree for all-four > matches the residue-document golden byte fo
       "mcp__github__update_pull_request_state",
       "mcp__github__update_pull_request_draft_state",
       "mcp__github__create_branch",
-      "mcp__github__delete_repository",
       "mcp__github__create_pull_request"
     ]
   },
@@ -126,6 +146,15 @@ exports[`emitted tree for all-four > matches the residue-document golden byte fo
           {
             "type": "command",
             "command": "node \\"\${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-unattended-ask-gate.mjs\\""
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__github__merge_pull_request|mcp__github__push_files|mcp__github__create_or_update_file|mcp__github__delete_file|mcp__github__update_pull_request_branch|mcp__github__pull_request_review_write|mcp__github__create_pull_request_review|mcp__github__submit_pending_pull_request_review|mcp__github__update_pull_request|mcp__github__update_pull_request_state|mcp__github__update_pull_request_draft_state|mcp__github__create_branch|mcp__github__delete_repository|mcp__github__create_pull_request",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \\"\${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-person-only-guard.mjs\\" || { s=$?; [ \\"$s\\" -eq 2 ] && exit 2; echo 'stamity: the pre-tool-use guard could not run; run \`stamity sync\` where the CLI is installed, else \`npx -y @zomarit/stamity@1.0.0-golden sync\`, which needs the npm registry' >&2; exit 2; }"
           }
         ]
       }
@@ -285,6 +314,12 @@ env_vars = ["GITHUB_PAT"]
       {
         "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();const e=process.env.CURSOR_PROJECT_DIR;if(e&&fs.existsSync(p.join(e,'.cursor','hooks.json')))d=e;for(;;){if(fs.existsSync(p.join(d,'.cursor','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/cursor/stamity-model-pins.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .cursor/hooks.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:[0,1,2]});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InByZV90b29sX3VzZSIsImNvbW1hbmQiOlsibm9kZSIsIi5zdGFtaXR5L2dlbmVyYXRlZC9ob29rcy9jdXJzb3Ivc3RhbWl0eS1tb2RlbC1waW5zLm1qcyJdfQ",
         "matcher": "Task"
+      }
+    ],
+    "stop": [
+      {
+        "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();const e=process.env.CURSOR_PROJECT_DIR;if(e&&fs.existsSync(p.join(e,'.cursor','hooks.json')))d=e;for(;;){if(fs.existsSync(p.join(d,'.cursor','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/cursor/stamity-cursor-continue.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .cursor/hooks.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:[0,1,2]});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InN0b3AiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY3Vyc29yL3N0YW1pdHktY3Vyc29yLWNvbnRpbnVlLm1qcyJdfQ",
+        "loop_limit": 50
       }
     ],
     "subagentStart": [
@@ -695,6 +730,8 @@ on:
 jobs:
   copilot-setup-steps:
     runs-on: ubuntu-latest
+    # The platform accepts at most 59 here; a stuck install stops at this bound.
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
@@ -706,6 +743,10 @@ jobs:
           node-version: "lts/*"
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
+      # The pinned stamity CLI, at the version this file was generated with: the flows'
+      # \`gate scan\` and \`ledger status\` then find \`stamity\` on PATH with no registry fetch.
+      - run: npm install --global @zomarit/stamity@1.0.0-golden
+      - run: stamity --version
 ",
   ".mcp.json": "{
   "mcpServers": {
@@ -997,6 +1038,20 @@ as any skill (\`/st-<id>\` or \`$st-<id>\`); with neither, ask for the outcome i
 - Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native copy where the
   client reads its own location. Named invocation beats waiting for a trigger match — call a skill whenever its
   description fits the job.
+
+## Cursor Cloud specific instructions
+
+For a Cursor cloud agent in this repository; the charter above binds it as it binds every session.
+
+- Node first: run \`node --version\` before anything else, and stop with that fix if it fails: install Node.js
+  on this machine through the repository's Cursor environment, and confirm it with
+  \`npx -y @zomarit/stamity@1.0.0-golden check\`. Every hook calls \`node\` with no prefix.
+- \`/st-<id>\` means: read \`.agents/skills/st-<id>/SKILL.md\` and follow it.
+- Learnings first: where no session-start banner has printed, run
+  \`node .stamity/generated/hooks/cursor/stamity-session-start.mjs\` with an empty stdin and open only the files
+  it lists as loaded.
+- Keep the pull request a draft and never mark it ready; a person does that.
+- An unattended run follows the \`st-unattended\` skill, \`.agents/skills/st-unattended/SKILL.md\`.
 ",
   "AGENTS.override.md": "
 # Charter
@@ -1583,9 +1638,10 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".agents/skills/st-rework/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
   ".agents/skills/st-spec/SKILL.md": "b5770c6320d8fd6357e55645b0c8b7708ccc14faf73e5c6c6a476bfb52923e50 18992 bytes",
   ".agents/skills/st-spec/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
-  ".agents/skills/st-unattended/SKILL.md": "8b28175defe18ce09e93072f8c1e1e8a63fc6fbb3ea90b11982ee4633e0bd4eb 14994 bytes",
+  ".agents/skills/st-unattended/SKILL.md": "6911321c931286e5231b18f5d75f5862e6c3a595c2be6edfc1d3eaf391863f1b 15116 bytes",
   ".agents/skills/st-unattended/agents/openai.yaml": "09cd1ea5e109f80be04b19f1b1e43602b6aad4972fc6e248d6e355a1c6e72df1 202 bytes",
   ".agents/skills/st-unattended/references/chains.md": "36f0a28346c24a899d0f27e6f39070964cc25f2ebce886d0b21b99cc8d277d8d 1479 bytes",
+  ".agents/skills/st-unattended/references/cloud.md": "97a7246af7a03ae28dbaf4c1f07a2334aa1748d06c6021c15a0006dfb858c4fe 5666 bytes",
   ".agents/skills/st-verify/SKILL.md": "75897507e02d19730f510134ba001062e460ba3411e4833703a212a57354b9fc 7173 bytes",
   ".agents/skills/st-verify/agents/openai.yaml": "0f47c7e1746d88707b7b28e6a27c0acfe00de8a2a1e74b6d38ce63f325df7b13 147 bytes",
   ".agents/skills/st-verify/references/enhancability.md": "dae121ef7399c041d78db0253b8cb2ce5d9290b904156b24079c0a5d7e9e3e9f 3468 bytes",
@@ -1639,7 +1695,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".claude/rules/stamity-security-patterns.md": "38e2df2df4035af00c9e78932e136e1130bfcabc4c6ade96f4e53ec46d859056 6361 bytes",
   ".claude/rules/stamity-testing.md": "7481e2488317f64c22152c4e40011bf01bf2e941ae7d9eb7b28339040093bbe9 4246 bytes",
   ".claude/rules/stamity-ui-states.md": "07974fae66dbff2fff850084ff17447faa1cc3ce0a79fd128fbac77d47e69306 4512 bytes",
-  ".claude/settings.json": "31e6e3b41fa6912b82e87f376f1ca5af5312f9de12a28a082824d5d28090893e 5153 bytes",
+  ".claude/settings.json": "d21410e049e7919f96ee12f9aeaa9a0fccedc4bce7626256a797a802a506d2b5 6798 bytes",
   ".claude/skills/st-browser-evidence/SKILL.md": "a4a40651590d8e03ae621c8a5ee7f71e904aeb87e54cff23ae1b2a4d26fd21c7 7343 bytes",
   ".claude/skills/st-browser-evidence/agents/openai.yaml": "b448baafcaa2f1b0d6c396b1ba98d733fd4424c546b545797ade81ab87efe760 177 bytes",
   ".claude/skills/st-dep-audit/SKILL.md": "631e9365176633f718682b9049c3315ce5f3457af993f92c7e77442192130ba0 8982 bytes",
@@ -1654,9 +1710,10 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".claude/skills/st-onboard/agents/openai.yaml": "5bc57a6fd27440d5f4a4460065a831d281365b8e80cd0ae412e0488a7ace9351 150 bytes",
   ".claude/skills/st-qa/SKILL.md": "eeddea1470277a88d24b5d2fd30e1e691806e3d7d36df0ca0b37f11575c04395 10146 bytes",
   ".claude/skills/st-qa/agents/openai.yaml": "3757a9476321ed7a8e1ea39a8ea0d51eb0bd7ea7f67969c54f545099d5be20e1 135 bytes",
-  ".claude/skills/st-unattended/SKILL.md": "8b28175defe18ce09e93072f8c1e1e8a63fc6fbb3ea90b11982ee4633e0bd4eb 14994 bytes",
+  ".claude/skills/st-unattended/SKILL.md": "6911321c931286e5231b18f5d75f5862e6c3a595c2be6edfc1d3eaf391863f1b 15116 bytes",
   ".claude/skills/st-unattended/agents/openai.yaml": "09cd1ea5e109f80be04b19f1b1e43602b6aad4972fc6e248d6e355a1c6e72df1 202 bytes",
   ".claude/skills/st-unattended/references/chains.md": "36f0a28346c24a899d0f27e6f39070964cc25f2ebce886d0b21b99cc8d277d8d 1479 bytes",
+  ".claude/skills/st-unattended/references/cloud.md": "97a7246af7a03ae28dbaf4c1f07a2334aa1748d06c6021c15a0006dfb858c4fe 5666 bytes",
   ".claude/skills/st-verify/SKILL.md": "75897507e02d19730f510134ba001062e460ba3411e4833703a212a57354b9fc 7173 bytes",
   ".claude/skills/st-verify/agents/openai.yaml": "0f47c7e1746d88707b7b28e6a27c0acfe00de8a2a1e74b6d38ce63f325df7b13 147 bytes",
   ".claude/skills/st-verify/references/enhancability.md": "dae121ef7399c041d78db0253b8cb2ce5d9290b904156b24079c0a5d7e9e3e9f 3468 bytes",
@@ -1694,7 +1751,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".cursor/agents/stamity-security.md": "f90f648c8c90190111f5daf6b98a4a9478b5ba5aa9daa74abab7adb9bee53f7d 12957 bytes",
   ".cursor/agents/stamity-spec-author.md": "0d9336d97be3411e7f6e11c5cb685e8c92d840dc707ad0d541adea3bf865db47 12127 bytes",
   ".cursor/agents/stamity-test-runner.md": "32f01838be02469f7de045b334fd060882febc356859ab4b37356599db966ca7 11867 bytes",
-  ".cursor/hooks.json": "0abb3bb00b675c74f71da10bc520ac10d62dc7ee48e045ab4a657803d92ccc59 7975 bytes",
+  ".cursor/hooks.json": "5c2550a652c9220a5a5eb844b9064eaa6c6c5a3077ed3e9c5cccd577d1988505 8962 bytes",
   ".cursor/hooks/stamity-mcp-guard.mjs": "4873bee27c2b1ae2aab8ca1b407a6e4e9cd03a0c27a08503e7313206c86389fc 7709 bytes",
   ".cursor/hooks/stamity-subagent-guard.mjs": "0f13561fa2415119ded74fda648edffc38fde84e4cd29b98ccf5180abfd4d9df 3761 bytes",
   ".cursor/mcp.json": "3bd0d234eb9a7ee4eff8351d4236a3c22a03ef445538c411f68b9d1267bd3a8d 395 bytes",
@@ -1717,6 +1774,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".github/agents/stamity-performance.agent.md": "4851cbbc3facdba2eb57d511bdf0b3b8d2548e498089491730092a3822aae26b 14164 bytes",
   ".github/agents/stamity-researcher.agent.md": "d6676d000f54b3f3740e9250737f8b9a77df6612bbda5a071fae69f229a842aa 8563 bytes",
   ".github/agents/stamity-reviewer.agent.md": "a45a6181f9c11c80f97314631cda68b336e54b484ee6184a63eb10300a4bb69a 16034 bytes",
+  ".github/agents/stamity-run.agent.md": "43257afb449ac6a504280d2184d40adc31bd2477c49c9b5107650219a699b3a8 1113 bytes",
   ".github/agents/stamity-security.agent.md": "94a635f7803cf708cfb3e78ed15ef5702477bf4795efde98515d4c25446a41df 13168 bytes",
   ".github/agents/stamity-spec-author.agent.md": "87e6dded19b395635b8b25c48febd5a2bfccf0e516b398d30b7cb93f59c6dbb1 12364 bytes",
   ".github/agents/stamity-test-runner.agent.md": "6a6bf7a4f2ad452f96377fd20af17ad75841f2aa81d67c6cfb41c1f6bf740a59 12106 bytes",
@@ -1741,32 +1799,33 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".github/prompts/st-spec.prompt.md": "b43ff93bdc134250068e5e7341d63c544a55f299218240f071eead52190f307c 18947 bytes",
   ".github/prompts/st-work.prompt.md": "405f0333a75bc25751b29bf34006734a87a0c2ba1d06c17112a76669bf615bce 37681 bytes",
   ".github/workflows/ci.yml": "f4f971a7fcd25b9c11a4341c8976e478fe78e38b27fd84cc0f7ad0f224d1195f 60 bytes",
-  ".github/workflows/copilot-setup-steps.yml": "03c39c1ca98f3c05c9d80e33d7ca16ddcaec879e705b971bd7af8ae565c1a84e 880 bytes",
+  ".github/workflows/copilot-setup-steps.yml": "b26624ed6e81eca332046224c9efbe415276bb6f8210b945f7316463189c3426 1260 bytes",
   ".gitignore": "eb36974b2dea8954e0f55926f09c7781a0e935c060958393098b86d6e598f916 153 bytes",
   ".mcp.json": "f4e65233eea1ba936b61b16f2ee2d90f84a2510436d58f6484d872f507314f2f 387 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/claude/stamity-person-only-guard.mjs": "3ff9edb900e0bc800696cfddab64755009404182272dcdf8d6d3e50bd54f00fb 141128 bytes",
+  ".stamity/generated/hooks/claude/stamity-person-only-guard.mjs": "5804a075d42771847096f58bcb2bab425de33e0ce5e8983a984f4f5fe9ac1256 148205 bytes",
   ".stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs": "a9cb6702e22397eab72daa1d1395d835b4910ab7dc0ca59e9aaf612982686a60 20833 bytes",
-  ".stamity/generated/hooks/claude/stamity-review-gate.mjs": "c1a1377c120bc0a0d69c40be75b61b315c888630b7d357398ac0e053dd8efec7 40761 bytes",
-  ".stamity/generated/hooks/claude/stamity-session-start.mjs": "300c68c56a36a08875d81e7ded049b69c3837dc6ee423244e1a0a0ffc30430c0 50647 bytes",
+  ".stamity/generated/hooks/claude/stamity-review-gate.mjs": "609458462c3cfdbe9b08d018ff5e4df50b7725bdcf6a9fd2eb9d2a548cd2dbd7 51150 bytes",
+  ".stamity/generated/hooks/claude/stamity-session-start.mjs": "ff3acb09ec11cb3b90a5f4c8ecd8f2a8733e9f67b3d4c8c1646a9233ff6c42c7 51310 bytes",
   ".stamity/generated/hooks/claude/stamity-unattended-ask-gate.mjs": "713d5305ea637d789a5441bece982f56d94ee69a10421a94a504acc694cfcec8 10042 bytes",
   ".stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "3ff9edb900e0bc800696cfddab64755009404182272dcdf8d6d3e50bd54f00fb 141128 bytes",
+  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "30523004d949c0eca9e85b57f501c67ddbc0346ae963a50f175bb2615c539a9b 148175 bytes",
   ".stamity/generated/hooks/codex/stamity-portable-hook.mjs": "ef3b63ada64fdbc5860b8bd483568a6cc32875a5747de7acabcf56dccfa3b70c 20343 bytes",
   ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
-  ".stamity/generated/hooks/codex/stamity-session-start.mjs": "300c68c56a36a08875d81e7ded049b69c3837dc6ee423244e1a0a0ffc30430c0 50647 bytes",
+  ".stamity/generated/hooks/codex/stamity-session-start.mjs": "ff3acb09ec11cb3b90a5f4c8ecd8f2a8733e9f67b3d4c8c1646a9233ff6c42c7 51310 bytes",
   ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "da2fb8fe1d82427bc73db81770937156835ff122636f2110f15c5edf0232ed3c 141140 bytes",
+  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "9d7567980066bd059801706212b16f7d7037ce7fe08a09810a7936f0a0e9c0e9 148170 bytes",
   ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "b67634419bfa652a30fba0cd2f1402fc61ee89250dfe137cca7d2785f4a427cc 21755 bytes",
   ".stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
-  ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "300c68c56a36a08875d81e7ded049b69c3837dc6ee423244e1a0a0ffc30430c0 50647 bytes",
+  ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "ff3acb09ec11cb3b90a5f4c8ecd8f2a8733e9f67b3d4c8c1646a9233ff6c42c7 51310 bytes",
   ".stamity/generated/hooks/cursor/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
+  ".stamity/generated/hooks/cursor/stamity-cursor-continue.mjs": "08bc51855553f4104a80fbe1ea94ba36a95173e005846467e4af5c643bb26a60 9500 bytes",
   ".stamity/generated/hooks/cursor/stamity-model-pins.mjs": "fc71eb522ff67fd73ff00820d0e59495bca188d2e30fc9a26ce85e89fff6fdd5 3813 bytes",
-  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "312efd7a6ff341da4fd03771e1370bf4b7737a070384f7c03d613bba3dfd475d 141166 bytes",
+  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "7719f17651d714a687e6ae05783bb9c907b35623cd50a110fa1adcdaf7d441f7 148211 bytes",
   ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs": "4bc31f0f2dbdec29a6537dab00d8df9255641b7ee5bed365d3020ce6ac72c12c 20344 bytes",
   ".stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
-  ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "300c68c56a36a08875d81e7ded049b69c3837dc6ee423244e1a0a0ffc30430c0 50647 bytes",
+  ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "ff3acb09ec11cb3b90a5f4c8ecd8f2a8733e9f67b3d4c8c1646a9233ff6c42c7 51310 bytes",
   ".stamity/generated/models/claude.json": "d8b019734f996874130a675b78705669a3a4f121ed8a4e692c913206897bc280 697 bytes",
   ".stamity/generated/models/codex.json": "bd85ba11fdb0504946c2922d8e9b7f753b64a8085f122cf2aa51fc3e527d685a 833 bytes",
   ".stamity/generated/models/copilot.json": "cdbd36f534d2f4a5b4f3c2edfe11cfa48651f7131ba25969992d1794512b0378 953 bytes",
@@ -1775,10 +1834,10 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "94929acc27c43f668e2dd3da38483f2962caa21a1cc7efe961a4b48c66576a25 92115 bytes",
+  ".stamity/manifest.json": "0f21e249dea7dbcdfe62ecafc8fefd96148de6e31db09647b026f3b99d9e38e3 95349 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
-  "AGENTS.md": "b551629ca410622b5f86526a3fdfd0a186206f9ea9b50895c9ac7ca2dab99d22 5610 bytes",
+  "AGENTS.md": "c88cdd0009ebee3b8c5ddd7081e24728535d318d1635badd552610d55e7cb5a1 6476 bytes",
   "AGENTS.override.md": "eca44193582b28c038ae4cea7603b3dd543a430160065599354fd5c0273cea6d 25751 bytes",
   "CLAUDE.md": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
@@ -1808,29 +1867,57 @@ exports[`emitted tree for claude > matches the residue-document golden byte for 
       "Bash(git push origin --force:*)",
       "Bash(git push origin -f:*)",
       "Bash(git push origin --force-with-lease:*)",
-      "Bash(git push --tags:*)",
-      "Bash(git push origin --tags:*)",
-      "Bash(git push --follow-tags:*)",
       "Bash(git push --mirror:*)",
-      "Bash(git push --all:*)",
       "Bash(git push --delete:*)",
       "Bash(git push origin --delete:*)",
       "Bash(git push -d:*)",
       "Bash(git push origin -d:*)",
-      "Bash(git tag -a:*)",
-      "Bash(git tag -s:*)",
       "Bash(git tag -d:*)",
       "Bash(git tag -f:*)",
+      "Bash(git tag --delete:*)",
+      "Bash(git tag --force:*)",
+      "Bash(gh release delete:*)",
+      "Bash(gh release delete-asset:*)",
+      "Bash(gh secret delete:*)",
+      "Bash(gh secret remove:*)",
+      "Bash(gh variable delete:*)",
+      "Bash(gh variable remove:*)",
+      "Bash(gh repo edit --visibility:*)",
+      "Bash(gh repo delete:*)",
+      "Bash(gh repo transfer:*)",
+      "Bash(npm unpublish:*)",
+      "Bash(npm dist-tag rm:*)",
+      "Bash(git push * --force*)",
+      "Bash(git push * -f*)",
+      "Bash(git push * --mirror*)",
+      "Bash(git push * --prune*)",
+      "Bash(git push * --delete*)",
+      "Bash(git push * -d *)",
+      "Bash(git push * +*)",
+      "Bash(gh pr merge * -d*)",
+      "Bash(gh pr merge * --delete-branch*)",
+      "Bash(gh pr merge -d*)",
+      "Bash(gh pr merge --delete-branch*)",
+      "Bash(gh release upload * --clobber*)",
+      "Bash(gh release upload --clobber*)",
+      "Bash(gh repo edit * --visibility*)",
+      "Bash(gh repo sync * --force*)",
+      "Bash(gh repo sync --force*)",
+      "mcp__github__delete_repository"
+    ],
+    "ask": [
+      "Bash(git push --tags:*)",
+      "Bash(git push origin --tags:*)",
+      "Bash(git push --follow-tags:*)",
+      "Bash(git push --all:*)",
+      "Bash(git tag -a:*)",
+      "Bash(git tag -s:*)",
       "Bash(git tag -m:*)",
       "Bash(git tag --annotate:*)",
       "Bash(git tag --sign:*)",
-      "Bash(git tag --delete:*)",
-      "Bash(git tag --force:*)",
       "Bash(gh pr merge:*)",
       "Bash(gh pr ready:*)",
       "Bash(gh release create:*)",
-      "Bash(gh release delete:*)",
-      "Bash(gh release delete-asset:*)",
       "Bash(gh release edit:*)",
       "Bash(gh release upload:*)",
       "Bash(npm publish:*)",
@@ -1839,18 +1926,11 @@ exports[`emitted tree for claude > matches the residue-document golden byte for 
       "Bash(yarn npm publish:*)",
       "Bash(bun publish:*)",
       "Bash(gh secret set:*)",
-      "Bash(gh secret delete:*)",
-      "Bash(gh secret remove:*)",
       "Bash(gh variable set:*)",
-      "Bash(gh variable delete:*)",
-      "Bash(gh variable remove:*)",
       "Bash(gh repo edit --default-branch:*)",
-      "Bash(gh repo edit --visibility:*)",
       "Bash(gh repo rename:*)",
-      "Bash(gh repo delete:*)",
       "Bash(gh repo archive:*)",
       "Bash(gh repo unarchive:*)",
-      "Bash(gh repo transfer:*)",
       "mcp__github__merge_pull_request",
       "mcp__github__push_files",
       "mcp__github__create_or_update_file",
@@ -1863,7 +1943,6 @@ exports[`emitted tree for claude > matches the residue-document golden byte for 
       "mcp__github__update_pull_request_state",
       "mcp__github__update_pull_request_draft_state",
       "mcp__github__create_branch",
-      "mcp__github__delete_repository",
       "mcp__github__create_pull_request"
     ]
   },
@@ -1922,6 +2001,15 @@ exports[`emitted tree for claude > matches the residue-document golden byte for 
           {
             "type": "command",
             "command": "node \\"\${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-unattended-ask-gate.mjs\\""
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__github__merge_pull_request|mcp__github__push_files|mcp__github__create_or_update_file|mcp__github__delete_file|mcp__github__update_pull_request_branch|mcp__github__pull_request_review_write|mcp__github__create_pull_request_review|mcp__github__submit_pending_pull_request_review|mcp__github__update_pull_request|mcp__github__update_pull_request_state|mcp__github__update_pull_request_draft_state|mcp__github__create_branch|mcp__github__delete_repository|mcp__github__create_pull_request",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \\"\${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-person-only-guard.mjs\\" || { s=$?; [ \\"$s\\" -eq 2 ] && exit 2; echo 'stamity: the pre-tool-use guard could not run; run \`stamity sync\` where the CLI is installed, else \`npx -y @zomarit/stamity@1.0.0-golden sync\`, which needs the npm registry' >&2; exit 2; }"
           }
         ]
       }
@@ -2136,7 +2224,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".claude/rules/stamity-security-patterns.md": "38e2df2df4035af00c9e78932e136e1130bfcabc4c6ade96f4e53ec46d859056 6361 bytes",
   ".claude/rules/stamity-testing.md": "7481e2488317f64c22152c4e40011bf01bf2e941ae7d9eb7b28339040093bbe9 4246 bytes",
   ".claude/rules/stamity-ui-states.md": "07974fae66dbff2fff850084ff17447faa1cc3ce0a79fd128fbac77d47e69306 4512 bytes",
-  ".claude/settings.json": "31e6e3b41fa6912b82e87f376f1ca5af5312f9de12a28a082824d5d28090893e 5153 bytes",
+  ".claude/settings.json": "d21410e049e7919f96ee12f9aeaa9a0fccedc4bce7626256a797a802a506d2b5 6798 bytes",
   ".claude/skills/st-browser-evidence/SKILL.md": "a4a40651590d8e03ae621c8a5ee7f71e904aeb87e54cff23ae1b2a4d26fd21c7 7343 bytes",
   ".claude/skills/st-browser-evidence/agents/openai.yaml": "b448baafcaa2f1b0d6c396b1ba98d733fd4424c546b545797ade81ab87efe760 177 bytes",
   ".claude/skills/st-dep-audit/SKILL.md": "631e9365176633f718682b9049c3315ce5f3457af993f92c7e77442192130ba0 8982 bytes",
@@ -2151,9 +2239,10 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".claude/skills/st-onboard/agents/openai.yaml": "5bc57a6fd27440d5f4a4460065a831d281365b8e80cd0ae412e0488a7ace9351 150 bytes",
   ".claude/skills/st-qa/SKILL.md": "eeddea1470277a88d24b5d2fd30e1e691806e3d7d36df0ca0b37f11575c04395 10146 bytes",
   ".claude/skills/st-qa/agents/openai.yaml": "3757a9476321ed7a8e1ea39a8ea0d51eb0bd7ea7f67969c54f545099d5be20e1 135 bytes",
-  ".claude/skills/st-unattended/SKILL.md": "8b28175defe18ce09e93072f8c1e1e8a63fc6fbb3ea90b11982ee4633e0bd4eb 14994 bytes",
+  ".claude/skills/st-unattended/SKILL.md": "6911321c931286e5231b18f5d75f5862e6c3a595c2be6edfc1d3eaf391863f1b 15116 bytes",
   ".claude/skills/st-unattended/agents/openai.yaml": "09cd1ea5e109f80be04b19f1b1e43602b6aad4972fc6e248d6e355a1c6e72df1 202 bytes",
   ".claude/skills/st-unattended/references/chains.md": "36f0a28346c24a899d0f27e6f39070964cc25f2ebce886d0b21b99cc8d277d8d 1479 bytes",
+  ".claude/skills/st-unattended/references/cloud.md": "97a7246af7a03ae28dbaf4c1f07a2334aa1748d06c6021c15a0006dfb858c4fe 5666 bytes",
   ".claude/skills/st-verify/SKILL.md": "75897507e02d19730f510134ba001062e460ba3411e4833703a212a57354b9fc 7173 bytes",
   ".claude/skills/st-verify/agents/openai.yaml": "0f47c7e1746d88707b7b28e6a27c0acfe00de8a2a1e74b6d38ce63f325df7b13 147 bytes",
   ".claude/skills/st-verify/references/enhancability.md": "dae121ef7399c041d78db0253b8cb2ce5d9290b904156b24079c0a5d7e9e3e9f 3468 bytes",
@@ -2174,17 +2263,17 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".mcp.json": "f4e65233eea1ba936b61b16f2ee2d90f84a2510436d58f6484d872f507314f2f 387 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/claude/stamity-person-only-guard.mjs": "3ff9edb900e0bc800696cfddab64755009404182272dcdf8d6d3e50bd54f00fb 141128 bytes",
+  ".stamity/generated/hooks/claude/stamity-person-only-guard.mjs": "5804a075d42771847096f58bcb2bab425de33e0ce5e8983a984f4f5fe9ac1256 148205 bytes",
   ".stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs": "a9cb6702e22397eab72daa1d1395d835b4910ab7dc0ca59e9aaf612982686a60 20833 bytes",
-  ".stamity/generated/hooks/claude/stamity-review-gate.mjs": "c1a1377c120bc0a0d69c40be75b61b315c888630b7d357398ac0e053dd8efec7 40761 bytes",
-  ".stamity/generated/hooks/claude/stamity-session-start.mjs": "300c68c56a36a08875d81e7ded049b69c3837dc6ee423244e1a0a0ffc30430c0 50647 bytes",
+  ".stamity/generated/hooks/claude/stamity-review-gate.mjs": "609458462c3cfdbe9b08d018ff5e4df50b7725bdcf6a9fd2eb9d2a548cd2dbd7 51150 bytes",
+  ".stamity/generated/hooks/claude/stamity-session-start.mjs": "ff3acb09ec11cb3b90a5f4c8ecd8f2a8733e9f67b3d4c8c1646a9233ff6c42c7 51310 bytes",
   ".stamity/generated/hooks/claude/stamity-unattended-ask-gate.mjs": "713d5305ea637d789a5441bece982f56d94ee69a10421a94a504acc694cfcec8 10042 bytes",
   ".stamity/generated/models/claude.json": "d8b019734f996874130a675b78705669a3a4f121ed8a4e692c913206897bc280 697 bytes",
   ".stamity/handoffs/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "64a63c66ec14d691c1cbbfa2f9524c69c0a9dac436409d372604f020185a3618 26219 bytes",
+  ".stamity/manifest.json": "891b5b37a13e41d851829439e9be326c56c331c918ec9adee0afc853c847ff8a 28042 bytes",
   "AGENTS.md": "b551629ca410622b5f86526a3fdfd0a186206f9ea9b50895c9ac7ca2dab99d22 5610 bytes",
   "CLAUDE.md": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
@@ -3004,9 +3093,10 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".agents/skills/st-rework/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
   ".agents/skills/st-spec/SKILL.md": "b5770c6320d8fd6357e55645b0c8b7708ccc14faf73e5c6c6a476bfb52923e50 18992 bytes",
   ".agents/skills/st-spec/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
-  ".agents/skills/st-unattended/SKILL.md": "8b28175defe18ce09e93072f8c1e1e8a63fc6fbb3ea90b11982ee4633e0bd4eb 14994 bytes",
+  ".agents/skills/st-unattended/SKILL.md": "6911321c931286e5231b18f5d75f5862e6c3a595c2be6edfc1d3eaf391863f1b 15116 bytes",
   ".agents/skills/st-unattended/agents/openai.yaml": "09cd1ea5e109f80be04b19f1b1e43602b6aad4972fc6e248d6e355a1c6e72df1 202 bytes",
   ".agents/skills/st-unattended/references/chains.md": "36f0a28346c24a899d0f27e6f39070964cc25f2ebce886d0b21b99cc8d277d8d 1479 bytes",
+  ".agents/skills/st-unattended/references/cloud.md": "97a7246af7a03ae28dbaf4c1f07a2334aa1748d06c6021c15a0006dfb858c4fe 5666 bytes",
   ".agents/skills/st-verify/SKILL.md": "75897507e02d19730f510134ba001062e460ba3411e4833703a212a57354b9fc 7173 bytes",
   ".agents/skills/st-verify/agents/openai.yaml": "0f47c7e1746d88707b7b28e6a27c0acfe00de8a2a1e74b6d38ce63f325df7b13 147 bytes",
   ".agents/skills/st-verify/references/enhancability.md": "dae121ef7399c041d78db0253b8cb2ce5d9290b904156b24079c0a5d7e9e3e9f 3468 bytes",
@@ -3047,16 +3137,16 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".gitignore": "eb36974b2dea8954e0f55926f09c7781a0e935c060958393098b86d6e598f916 153 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "3ff9edb900e0bc800696cfddab64755009404182272dcdf8d6d3e50bd54f00fb 141128 bytes",
+  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "30523004d949c0eca9e85b57f501c67ddbc0346ae963a50f175bb2615c539a9b 148175 bytes",
   ".stamity/generated/hooks/codex/stamity-portable-hook.mjs": "ef3b63ada64fdbc5860b8bd483568a6cc32875a5747de7acabcf56dccfa3b70c 20343 bytes",
   ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
-  ".stamity/generated/hooks/codex/stamity-session-start.mjs": "300c68c56a36a08875d81e7ded049b69c3837dc6ee423244e1a0a0ffc30430c0 50647 bytes",
+  ".stamity/generated/hooks/codex/stamity-session-start.mjs": "ff3acb09ec11cb3b90a5f4c8ecd8f2a8733e9f67b3d4c8c1646a9233ff6c42c7 51310 bytes",
   ".stamity/generated/models/codex.json": "bd85ba11fdb0504946c2922d8e9b7f753b64a8085f122cf2aa51fc3e527d685a 833 bytes",
   ".stamity/handoffs/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "c103f9d04b3ea8b29ad5e9827b23ad22c67ab753b334cc20ef673b077955af8a 22529 bytes",
+  ".stamity/manifest.json": "b49c5647273dbf74d6c7d09fb175c4f9432c1ebb90db16e6215cbb864019b4aa 22787 bytes",
   "AGENTS.md": "b551629ca410622b5f86526a3fdfd0a186206f9ea9b50895c9ac7ca2dab99d22 5610 bytes",
   "AGENTS.override.md": "eca44193582b28c038ae4cea7603b3dd543a430160065599354fd5c0273cea6d 25751 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
@@ -3139,6 +3229,8 @@ on:
 jobs:
   copilot-setup-steps:
     runs-on: ubuntu-latest
+    # The platform accepts at most 59 here; a stuck install stops at this bound.
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
@@ -3150,6 +3242,10 @@ jobs:
           node-version: "lts/*"
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
+      # The pinned stamity CLI, at the version this file was generated with: the flows'
+      # \`gate scan\` and \`ledger status\` then find \`stamity\` on PATH with no registry fetch.
+      - run: npm install --global @zomarit/stamity@1.0.0-golden
+      - run: stamity --version
 ",
   ".stamity/generated/models/copilot.json": "{
   "classes": {
@@ -3338,9 +3434,10 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".agents/skills/st-onboard/agents/openai.yaml": "5bc57a6fd27440d5f4a4460065a831d281365b8e80cd0ae412e0488a7ace9351 150 bytes",
   ".agents/skills/st-qa/SKILL.md": "eeddea1470277a88d24b5d2fd30e1e691806e3d7d36df0ca0b37f11575c04395 10146 bytes",
   ".agents/skills/st-qa/agents/openai.yaml": "3757a9476321ed7a8e1ea39a8ea0d51eb0bd7ea7f67969c54f545099d5be20e1 135 bytes",
-  ".agents/skills/st-unattended/SKILL.md": "8b28175defe18ce09e93072f8c1e1e8a63fc6fbb3ea90b11982ee4633e0bd4eb 14994 bytes",
+  ".agents/skills/st-unattended/SKILL.md": "6911321c931286e5231b18f5d75f5862e6c3a595c2be6edfc1d3eaf391863f1b 15116 bytes",
   ".agents/skills/st-unattended/agents/openai.yaml": "09cd1ea5e109f80be04b19f1b1e43602b6aad4972fc6e248d6e355a1c6e72df1 202 bytes",
   ".agents/skills/st-unattended/references/chains.md": "36f0a28346c24a899d0f27e6f39070964cc25f2ebce886d0b21b99cc8d277d8d 1479 bytes",
+  ".agents/skills/st-unattended/references/cloud.md": "97a7246af7a03ae28dbaf4c1f07a2334aa1748d06c6021c15a0006dfb858c4fe 5666 bytes",
   ".agents/skills/st-verify/SKILL.md": "75897507e02d19730f510134ba001062e460ba3411e4833703a212a57354b9fc 7173 bytes",
   ".agents/skills/st-verify/agents/openai.yaml": "0f47c7e1746d88707b7b28e6a27c0acfe00de8a2a1e74b6d38ce63f325df7b13 147 bytes",
   ".agents/skills/st-verify/references/enhancability.md": "dae121ef7399c041d78db0253b8cb2ce5d9290b904156b24079c0a5d7e9e3e9f 3468 bytes",
@@ -3363,6 +3460,7 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".github/agents/stamity-performance.agent.md": "4851cbbc3facdba2eb57d511bdf0b3b8d2548e498089491730092a3822aae26b 14164 bytes",
   ".github/agents/stamity-researcher.agent.md": "d6676d000f54b3f3740e9250737f8b9a77df6612bbda5a071fae69f229a842aa 8563 bytes",
   ".github/agents/stamity-reviewer.agent.md": "a45a6181f9c11c80f97314631cda68b336e54b484ee6184a63eb10300a4bb69a 16034 bytes",
+  ".github/agents/stamity-run.agent.md": "43257afb449ac6a504280d2184d40adc31bd2477c49c9b5107650219a699b3a8 1113 bytes",
   ".github/agents/stamity-security.agent.md": "94a635f7803cf708cfb3e78ed15ef5702477bf4795efde98515d4c25446a41df 13168 bytes",
   ".github/agents/stamity-spec-author.agent.md": "87e6dded19b395635b8b25c48febd5a2bfccf0e516b398d30b7cb93f59c6dbb1 12364 bytes",
   ".github/agents/stamity-test-runner.agent.md": "6a6bf7a4f2ad452f96377fd20af17ad75841f2aa81d67c6cfb41c1f6bf740a59 12106 bytes",
@@ -3387,20 +3485,20 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".github/prompts/st-spec.prompt.md": "b43ff93bdc134250068e5e7341d63c544a55f299218240f071eead52190f307c 18947 bytes",
   ".github/prompts/st-work.prompt.md": "405f0333a75bc25751b29bf34006734a87a0c2ba1d06c17112a76669bf615bce 37681 bytes",
   ".github/workflows/ci.yml": "f4f971a7fcd25b9c11a4341c8976e478fe78e38b27fd84cc0f7ad0f224d1195f 60 bytes",
-  ".github/workflows/copilot-setup-steps.yml": "03c39c1ca98f3c05c9d80e33d7ca16ddcaec879e705b971bd7af8ae565c1a84e 880 bytes",
+  ".github/workflows/copilot-setup-steps.yml": "b26624ed6e81eca332046224c9efbe415276bb6f8210b945f7316463189c3426 1260 bytes",
   ".gitignore": "eb36974b2dea8954e0f55926f09c7781a0e935c060958393098b86d6e598f916 153 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "da2fb8fe1d82427bc73db81770937156835ff122636f2110f15c5edf0232ed3c 141140 bytes",
+  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "9d7567980066bd059801706212b16f7d7037ce7fe08a09810a7936f0a0e9c0e9 148170 bytes",
   ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "b67634419bfa652a30fba0cd2f1402fc61ee89250dfe137cca7d2785f4a427cc 21755 bytes",
   ".stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
-  ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "300c68c56a36a08875d81e7ded049b69c3837dc6ee423244e1a0a0ffc30430c0 50647 bytes",
+  ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "ff3acb09ec11cb3b90a5f4c8ecd8f2a8733e9f67b3d4c8c1646a9233ff6c42c7 51310 bytes",
   ".stamity/generated/models/copilot.json": "cdbd36f534d2f4a5b4f3c2edfe11cfa48651f7131ba25969992d1794512b0378 953 bytes",
   ".stamity/handoffs/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "33a3b1505fa63f2e10958c402024dd88b8b2c4cd6c2e0ff0fd8c29a3e9166435 20392 bytes",
+  ".stamity/manifest.json": "e02793e090e2c9f638b2f6db93e3176edd6134aa6f4c2a864a5a20a5b3209109 20892 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "b551629ca410622b5f86526a3fdfd0a186206f9ea9b50895c9ac7ca2dab99d22 5610 bytes",
@@ -3445,6 +3543,12 @@ exports[`emitted tree for cursor > matches the residue-document golden byte for 
       {
         "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();const e=process.env.CURSOR_PROJECT_DIR;if(e&&fs.existsSync(p.join(e,'.cursor','hooks.json')))d=e;for(;;){if(fs.existsSync(p.join(d,'.cursor','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/cursor/stamity-model-pins.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .cursor/hooks.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:[0,1,2]});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InByZV90b29sX3VzZSIsImNvbW1hbmQiOlsibm9kZSIsIi5zdGFtaXR5L2dlbmVyYXRlZC9ob29rcy9jdXJzb3Ivc3RhbWl0eS1tb2RlbC1waW5zLm1qcyJdfQ",
         "matcher": "Task"
+      }
+    ],
+    "stop": [
+      {
+        "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();const e=process.env.CURSOR_PROJECT_DIR;if(e&&fs.existsSync(p.join(e,'.cursor','hooks.json')))d=e;for(;;){if(fs.existsSync(p.join(d,'.cursor','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/cursor/stamity-cursor-continue.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .cursor/hooks.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:[0,1,2]});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InN0b3AiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY3Vyc29yL3N0YW1pdHktY3Vyc29yLWNvbnRpbnVlLm1qcyJdfQ",
+        "loop_limit": 50
       }
     ],
     "subagentStart": [
@@ -3905,6 +4009,20 @@ as any skill (\`/st-<id>\` or \`$st-<id>\`); with neither, ask for the outcome i
 - Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native copy where the
   client reads its own location. Named invocation beats waiting for a trigger match — call a skill whenever its
   description fits the job.
+
+## Cursor Cloud specific instructions
+
+For a Cursor cloud agent in this repository; the charter above binds it as it binds every session.
+
+- Node first: run \`node --version\` before anything else, and stop with that fix if it fails: install Node.js
+  on this machine through the repository's Cursor environment, and confirm it with
+  \`npx -y @zomarit/stamity@1.0.0-golden check\`. Every hook calls \`node\` with no prefix.
+- \`/st-<id>\` means: read \`.agents/skills/st-<id>/SKILL.md\` and follow it.
+- Learnings first: where no session-start banner has printed, run
+  \`node .stamity/generated/hooks/cursor/stamity-session-start.mjs\` with an empty stdin and open only the files
+  it lists as loaded.
+- Keep the pull request a draft and never mark it ready; a person does that.
+- An unattended run follows the \`st-unattended\` skill, \`.agents/skills/st-unattended/SKILL.md\`.
 ",
 }
 `;
@@ -3941,9 +4059,10 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".agents/skills/st-rework/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
   ".agents/skills/st-spec/SKILL.md": "b5770c6320d8fd6357e55645b0c8b7708ccc14faf73e5c6c6a476bfb52923e50 18992 bytes",
   ".agents/skills/st-spec/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
-  ".agents/skills/st-unattended/SKILL.md": "8b28175defe18ce09e93072f8c1e1e8a63fc6fbb3ea90b11982ee4633e0bd4eb 14994 bytes",
+  ".agents/skills/st-unattended/SKILL.md": "6911321c931286e5231b18f5d75f5862e6c3a595c2be6edfc1d3eaf391863f1b 15116 bytes",
   ".agents/skills/st-unattended/agents/openai.yaml": "09cd1ea5e109f80be04b19f1b1e43602b6aad4972fc6e248d6e355a1c6e72df1 202 bytes",
   ".agents/skills/st-unattended/references/chains.md": "36f0a28346c24a899d0f27e6f39070964cc25f2ebce886d0b21b99cc8d277d8d 1479 bytes",
+  ".agents/skills/st-unattended/references/cloud.md": "97a7246af7a03ae28dbaf4c1f07a2334aa1748d06c6021c15a0006dfb858c4fe 5666 bytes",
   ".agents/skills/st-verify/SKILL.md": "75897507e02d19730f510134ba001062e460ba3411e4833703a212a57354b9fc 7173 bytes",
   ".agents/skills/st-verify/agents/openai.yaml": "0f47c7e1746d88707b7b28e6a27c0acfe00de8a2a1e74b6d38ce63f325df7b13 147 bytes",
   ".agents/skills/st-verify/references/enhancability.md": "dae121ef7399c041d78db0253b8cb2ce5d9290b904156b24079c0a5d7e9e3e9f 3468 bytes",
@@ -3969,7 +4088,7 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".cursor/agents/stamity-security.md": "f90f648c8c90190111f5daf6b98a4a9478b5ba5aa9daa74abab7adb9bee53f7d 12957 bytes",
   ".cursor/agents/stamity-spec-author.md": "0d9336d97be3411e7f6e11c5cb685e8c92d840dc707ad0d541adea3bf865db47 12127 bytes",
   ".cursor/agents/stamity-test-runner.md": "32f01838be02469f7de045b334fd060882febc356859ab4b37356599db966ca7 11867 bytes",
-  ".cursor/hooks.json": "0abb3bb00b675c74f71da10bc520ac10d62dc7ee48e045ab4a657803d92ccc59 7975 bytes",
+  ".cursor/hooks.json": "5c2550a652c9220a5a5eb844b9064eaa6c6c5a3077ed3e9c5cccd577d1988505 8962 bytes",
   ".cursor/hooks/stamity-mcp-guard.mjs": "4873bee27c2b1ae2aab8ca1b407a6e4e9cd03a0c27a08503e7313206c86389fc 7709 bytes",
   ".cursor/hooks/stamity-subagent-guard.mjs": "0f13561fa2415119ded74fda648edffc38fde84e4cd29b98ccf5180abfd4d9df 3761 bytes",
   ".cursor/mcp.json": "3bd0d234eb9a7ee4eff8351d4236a3c22a03ef445538c411f68b9d1267bd3a8d 395 bytes",
@@ -3989,18 +4108,19 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".gitignore": "eb36974b2dea8954e0f55926f09c7781a0e935c060958393098b86d6e598f916 153 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".stamity/generated/hooks/cursor/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
+  ".stamity/generated/hooks/cursor/stamity-cursor-continue.mjs": "08bc51855553f4104a80fbe1ea94ba36a95173e005846467e4af5c643bb26a60 9500 bytes",
   ".stamity/generated/hooks/cursor/stamity-model-pins.mjs": "fc71eb522ff67fd73ff00820d0e59495bca188d2e30fc9a26ce85e89fff6fdd5 3813 bytes",
-  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "312efd7a6ff341da4fd03771e1370bf4b7737a070384f7c03d613bba3dfd475d 141166 bytes",
+  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "7719f17651d714a687e6ae05783bb9c907b35623cd50a110fa1adcdaf7d441f7 148211 bytes",
   ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs": "4bc31f0f2dbdec29a6537dab00d8df9255641b7ee5bed365d3020ce6ac72c12c 20344 bytes",
   ".stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
-  ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "300c68c56a36a08875d81e7ded049b69c3837dc6ee423244e1a0a0ffc30430c0 50647 bytes",
+  ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "ff3acb09ec11cb3b90a5f4c8ecd8f2a8733e9f67b3d4c8c1646a9233ff6c42c7 51310 bytes",
   ".stamity/generated/models/cursor.json": "6e108834236741075e1d082bba6be814bc0bf04642622c860a6b7e43c348bdbd 601 bytes",
   ".stamity/handoffs/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "318760523a92269dbf324e2d4212e435dbcd7fdc7eb35d41a92cb00aa81178f5 23679 bytes",
-  "AGENTS.md": "b551629ca410622b5f86526a3fdfd0a186206f9ea9b50895c9ac7ca2dab99d22 5610 bytes",
+  ".stamity/manifest.json": "073fc3314ccbfcf25309d3f63ad19f3dea8fa28e186a5710945a48c2aa3e9969 24332 bytes",
+  "AGENTS.md": "c88cdd0009ebee3b8c5ddd7081e24728535d318d1635badd552610d55e7cb5a1 6476 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",

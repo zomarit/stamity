@@ -650,7 +650,9 @@ exports[`emission goldens — hook scripts > plans three deterministic scripts f
 //
 // After a compaction or a resume (a start whose stdin payload says source
 // "compact" or "resume") it appends the resume card of the run in progress, or
-// of a closed run dated within the last two days: counts and pointers, never finding text.
+// of a closed run dated within the last two days; on a fresh start ("startup")
+// only the card of the run in progress on the branch HEAD names. Counts and
+// pointers, never finding text.
 // In a cloud or CI session it names the session and what is not enforced there.
 //
 // Generated file — regenerate it rather than editing; local edits are overwritten.
@@ -658,9 +660,9 @@ exports[`emission goldens — hook scripts > plans three deterministic scripts f
 // Reads outside repo state: the wall clock, which decides whether a learning's
 // review horizon has passed, whether a handoff has expired and whether a closed
 // run is recent enough for the card, and the source field of the stdin payload,
-// which decides whether the resume card is appended, after a compaction or a
-// resume. Same repo, two different days or two different starts, two different
-// banners. The cloud and CI markers in the environment, by presence only.
+// which decides whether the resume card is appended and which one. Same repo,
+// two different days or two different starts, two different banners. The
+// cloud and CI markers in the environment, by presence only.
 
 import { createHash } from "node:crypto";
 import { closeSync, lstatSync, openSync, readFileSync, readSync, readdirSync, statSync } from "node:fs";
@@ -677,7 +679,7 @@ const REVIEW_WARNING_DAYS = 14;
 const ORDERING_HEAD_BYTES = 4096;
 const RESUMABLE = ["active","in-progress"];
 const SESSIONS = [
-  {"name":"a Claude Code cloud session","vars":["CLAUDE_CODE_REMOTE"],"equals":"true","lines":["GraphQL, gh pr, gh issue and Projects are unavailable here; use gh api.","The review-gate counter resets with the VM."]},
+  {"name":"a Claude Code cloud session","vars":["CLAUDE_CODE_REMOTE"],"equals":"true","lines":["GraphQL, gh pr, gh issue and Projects are unavailable here; use gh api.","A missing review-gate counter is rebuilt from the run record on this branch."]},
   {"name":"a Copilot cloud agent session","vars":["COPILOT_AGENT_PROMPT"],"lines":["A preToolUse hook that times out fails open.","An ask answer is read as deny.","Hooks run only when the hooks file is on the default branch; this clone's copy is the one loaded."]},
   {"name":"a self-hosted Cursor worker","vars":["CURSOR_AGENT_SOCKET"],"lines":[]},
   {"name":"a CI run","vars":["CI","GITHUB_ACTIONS"],"lines":["No person answers; declared defaults apply."]},
@@ -1645,7 +1647,9 @@ function cardRenderClosed(run, head, ledger, debug, nowMs, k) {
  * dated within CARD_CLOSED_MAX_AGE_DAYS whose record head reads (the closed
  * card); with neither, of the open debug rounds alone, naming no run; else
  * null. On startup, only the newest run in progress whose Branch: line names
- * the branch HEAD names, and never the closed or the debug card. A debug
+ * the branch HEAD names, dated within CARD_CLOSED_MAX_AGE_DAYS as the closed
+ * card is unless its record reads Mode: unattended (REQ-FLOW-105 continues such
+ * a run on its branch whatever its age), and never the closed or the debug card. A debug
  * round's record is never the run: the open ones are listed on
  * the debug line. Lists shrink until the card fits CARD_MAX_CHARS; with every
  * list at zero it always does. A card whose text trips the screen is withheld whole.
@@ -1686,14 +1690,18 @@ function resumeCardLines(rootDir, stateRoot, nowMs, startup) {
   let chosen = null;
   let closed = null;
   for (const run of runs) {
+    const day = run.slice(0, 10);
+    // On startup a run dated before the closed card's cutoff day is picked only when its record
+    // reads Mode: unattended: an attended run abandoned before its close stops greeting every
+    // fresh start, while an unattended one continues on its branch however long after it opened.
+    const stale = startup && day < cutoff;
     const head = cardRecordHead(join(runsDir, run, CARD_RECORD_FILE));
     if (head === null) continue;
-    if (head.inProgress && (!startup || head.branch === branch)) {
+    if (head.inProgress && (!startup || head.branch === branch) && (!stale || head.mode === "unattended")) {
       chosen = { run, head };
       break;
     }
     // A folder dated after today (a clock skew or a hand-made name) is never the closed run.
-    const day = run.slice(0, 10);
     if (closed === null && day >= cutoff && day <= today) closed = { run, head };
   }
   const pick = chosen === null && !startup ? closed : chosen;
@@ -2117,7 +2125,9 @@ exports[`emission goldens — hook scripts > plans three deterministic scripts f
 //
 // After a compaction or a resume (a start whose stdin payload says source
 // "compact" or "resume") it appends the resume card of the run in progress, or
-// of a closed run dated within the last two days: counts and pointers, never finding text.
+// of a closed run dated within the last two days; on a fresh start ("startup")
+// only the card of the run in progress on the branch HEAD names. Counts and
+// pointers, never finding text.
 // In a cloud or CI session it names the session and what is not enforced there.
 //
 // Generated file — regenerate it rather than editing; local edits are overwritten.
@@ -2125,9 +2135,9 @@ exports[`emission goldens — hook scripts > plans three deterministic scripts f
 // Reads outside repo state: the wall clock, which decides whether a learning's
 // review horizon has passed, whether a handoff has expired and whether a closed
 // run is recent enough for the card, and the source field of the stdin payload,
-// which decides whether the resume card is appended, after a compaction or a
-// resume. Same repo, two different days or two different starts, two different
-// banners. The cloud and CI markers in the environment, by presence only.
+// which decides whether the resume card is appended and which one. Same repo,
+// two different days or two different starts, two different banners. The
+// cloud and CI markers in the environment, by presence only.
 
 import { createHash } from "node:crypto";
 import { closeSync, lstatSync, openSync, readFileSync, readSync, readdirSync, statSync } from "node:fs";
@@ -2144,7 +2154,7 @@ const REVIEW_WARNING_DAYS = 14;
 const ORDERING_HEAD_BYTES = 4096;
 const RESUMABLE = ["active","in-progress"];
 const SESSIONS = [
-  {"name":"a Claude Code cloud session","vars":["CLAUDE_CODE_REMOTE"],"equals":"true","lines":["GraphQL, gh pr, gh issue and Projects are unavailable here; use gh api.","The review-gate counter resets with the VM."]},
+  {"name":"a Claude Code cloud session","vars":["CLAUDE_CODE_REMOTE"],"equals":"true","lines":["GraphQL, gh pr, gh issue and Projects are unavailable here; use gh api.","A missing review-gate counter is rebuilt from the run record on this branch."]},
   {"name":"a Copilot cloud agent session","vars":["COPILOT_AGENT_PROMPT"],"lines":["A preToolUse hook that times out fails open.","An ask answer is read as deny.","Hooks run only when the hooks file is on the default branch; this clone's copy is the one loaded."]},
   {"name":"a self-hosted Cursor worker","vars":["CURSOR_AGENT_SOCKET"],"lines":[]},
   {"name":"a CI run","vars":["CI","GITHUB_ACTIONS"],"lines":["No person answers; declared defaults apply."]},
@@ -3112,7 +3122,9 @@ function cardRenderClosed(run, head, ledger, debug, nowMs, k) {
  * dated within CARD_CLOSED_MAX_AGE_DAYS whose record head reads (the closed
  * card); with neither, of the open debug rounds alone, naming no run; else
  * null. On startup, only the newest run in progress whose Branch: line names
- * the branch HEAD names, and never the closed or the debug card. A debug
+ * the branch HEAD names, dated within CARD_CLOSED_MAX_AGE_DAYS as the closed
+ * card is unless its record reads Mode: unattended (REQ-FLOW-105 continues such
+ * a run on its branch whatever its age), and never the closed or the debug card. A debug
  * round's record is never the run: the open ones are listed on
  * the debug line. Lists shrink until the card fits CARD_MAX_CHARS; with every
  * list at zero it always does. A card whose text trips the screen is withheld whole.
@@ -3153,14 +3165,18 @@ function resumeCardLines(rootDir, stateRoot, nowMs, startup) {
   let chosen = null;
   let closed = null;
   for (const run of runs) {
+    const day = run.slice(0, 10);
+    // On startup a run dated before the closed card's cutoff day is picked only when its record
+    // reads Mode: unattended: an attended run abandoned before its close stops greeting every
+    // fresh start, while an unattended one continues on its branch however long after it opened.
+    const stale = startup && day < cutoff;
     const head = cardRecordHead(join(runsDir, run, CARD_RECORD_FILE));
     if (head === null) continue;
-    if (head.inProgress && (!startup || head.branch === branch)) {
+    if (head.inProgress && (!startup || head.branch === branch) && (!stale || head.mode === "unattended")) {
       chosen = { run, head };
       break;
     }
     // A folder dated after today (a clock skew or a hand-made name) is never the closed run.
-    const day = run.slice(0, 10);
     if (closed === null && day >= cutoff && day <= today) closed = { run, head };
   }
   const pick = chosen === null && !startup ? closed : chosen;
@@ -3584,7 +3600,9 @@ exports[`emission goldens — hook scripts > plans three deterministic scripts f
 //
 // After a compaction or a resume (a start whose stdin payload says source
 // "compact" or "resume") it appends the resume card of the run in progress, or
-// of a closed run dated within the last two days: counts and pointers, never finding text.
+// of a closed run dated within the last two days; on a fresh start ("startup")
+// only the card of the run in progress on the branch HEAD names. Counts and
+// pointers, never finding text.
 // In a cloud or CI session it names the session and what is not enforced there.
 //
 // Generated file — regenerate it rather than editing; local edits are overwritten.
@@ -3592,9 +3610,9 @@ exports[`emission goldens — hook scripts > plans three deterministic scripts f
 // Reads outside repo state: the wall clock, which decides whether a learning's
 // review horizon has passed, whether a handoff has expired and whether a closed
 // run is recent enough for the card, and the source field of the stdin payload,
-// which decides whether the resume card is appended, after a compaction or a
-// resume. Same repo, two different days or two different starts, two different
-// banners. The cloud and CI markers in the environment, by presence only.
+// which decides whether the resume card is appended and which one. Same repo,
+// two different days or two different starts, two different banners. The
+// cloud and CI markers in the environment, by presence only.
 
 import { createHash } from "node:crypto";
 import { closeSync, lstatSync, openSync, readFileSync, readSync, readdirSync, statSync } from "node:fs";
@@ -3611,7 +3629,7 @@ const REVIEW_WARNING_DAYS = 14;
 const ORDERING_HEAD_BYTES = 4096;
 const RESUMABLE = ["active","in-progress"];
 const SESSIONS = [
-  {"name":"a Claude Code cloud session","vars":["CLAUDE_CODE_REMOTE"],"equals":"true","lines":["GraphQL, gh pr, gh issue and Projects are unavailable here; use gh api.","The review-gate counter resets with the VM."]},
+  {"name":"a Claude Code cloud session","vars":["CLAUDE_CODE_REMOTE"],"equals":"true","lines":["GraphQL, gh pr, gh issue and Projects are unavailable here; use gh api.","A missing review-gate counter is rebuilt from the run record on this branch."]},
   {"name":"a Copilot cloud agent session","vars":["COPILOT_AGENT_PROMPT"],"lines":["A preToolUse hook that times out fails open.","An ask answer is read as deny.","Hooks run only when the hooks file is on the default branch; this clone's copy is the one loaded."]},
   {"name":"a self-hosted Cursor worker","vars":["CURSOR_AGENT_SOCKET"],"lines":[]},
   {"name":"a CI run","vars":["CI","GITHUB_ACTIONS"],"lines":["No person answers; declared defaults apply."]},
@@ -4579,7 +4597,9 @@ function cardRenderClosed(run, head, ledger, debug, nowMs, k) {
  * dated within CARD_CLOSED_MAX_AGE_DAYS whose record head reads (the closed
  * card); with neither, of the open debug rounds alone, naming no run; else
  * null. On startup, only the newest run in progress whose Branch: line names
- * the branch HEAD names, and never the closed or the debug card. A debug
+ * the branch HEAD names, dated within CARD_CLOSED_MAX_AGE_DAYS as the closed
+ * card is unless its record reads Mode: unattended (REQ-FLOW-105 continues such
+ * a run on its branch whatever its age), and never the closed or the debug card. A debug
  * round's record is never the run: the open ones are listed on
  * the debug line. Lists shrink until the card fits CARD_MAX_CHARS; with every
  * list at zero it always does. A card whose text trips the screen is withheld whole.
@@ -4620,14 +4640,18 @@ function resumeCardLines(rootDir, stateRoot, nowMs, startup) {
   let chosen = null;
   let closed = null;
   for (const run of runs) {
+    const day = run.slice(0, 10);
+    // On startup a run dated before the closed card's cutoff day is picked only when its record
+    // reads Mode: unattended: an attended run abandoned before its close stops greeting every
+    // fresh start, while an unattended one continues on its branch however long after it opened.
+    const stale = startup && day < cutoff;
     const head = cardRecordHead(join(runsDir, run, CARD_RECORD_FILE));
     if (head === null) continue;
-    if (head.inProgress && (!startup || head.branch === branch)) {
+    if (head.inProgress && (!startup || head.branch === branch) && (!stale || head.mode === "unattended")) {
       chosen = { run, head };
       break;
     }
     // A folder dated after today (a clock skew or a hand-made name) is never the closed run.
-    const day = run.slice(0, 10);
     if (closed === null && day >= cutoff && day <= today) closed = { run, head };
   }
   const pick = chosen === null && !startup ? closed : chosen;
@@ -5051,7 +5075,9 @@ exports[`emission goldens — hook scripts > plans three deterministic scripts f
 //
 // After a compaction or a resume (a start whose stdin payload says source
 // "compact" or "resume") it appends the resume card of the run in progress, or
-// of a closed run dated within the last two days: counts and pointers, never finding text.
+// of a closed run dated within the last two days; on a fresh start ("startup")
+// only the card of the run in progress on the branch HEAD names. Counts and
+// pointers, never finding text.
 // In a cloud or CI session it names the session and what is not enforced there.
 //
 // Generated file — regenerate it rather than editing; local edits are overwritten.
@@ -5059,9 +5085,9 @@ exports[`emission goldens — hook scripts > plans three deterministic scripts f
 // Reads outside repo state: the wall clock, which decides whether a learning's
 // review horizon has passed, whether a handoff has expired and whether a closed
 // run is recent enough for the card, and the source field of the stdin payload,
-// which decides whether the resume card is appended, after a compaction or a
-// resume. Same repo, two different days or two different starts, two different
-// banners. The cloud and CI markers in the environment, by presence only.
+// which decides whether the resume card is appended and which one. Same repo,
+// two different days or two different starts, two different banners. The
+// cloud and CI markers in the environment, by presence only.
 
 import { createHash } from "node:crypto";
 import { closeSync, lstatSync, openSync, readFileSync, readSync, readdirSync, statSync } from "node:fs";
@@ -5078,7 +5104,7 @@ const REVIEW_WARNING_DAYS = 14;
 const ORDERING_HEAD_BYTES = 4096;
 const RESUMABLE = ["active","in-progress"];
 const SESSIONS = [
-  {"name":"a Claude Code cloud session","vars":["CLAUDE_CODE_REMOTE"],"equals":"true","lines":["GraphQL, gh pr, gh issue and Projects are unavailable here; use gh api.","The review-gate counter resets with the VM."]},
+  {"name":"a Claude Code cloud session","vars":["CLAUDE_CODE_REMOTE"],"equals":"true","lines":["GraphQL, gh pr, gh issue and Projects are unavailable here; use gh api.","A missing review-gate counter is rebuilt from the run record on this branch."]},
   {"name":"a Copilot cloud agent session","vars":["COPILOT_AGENT_PROMPT"],"lines":["A preToolUse hook that times out fails open.","An ask answer is read as deny.","Hooks run only when the hooks file is on the default branch; this clone's copy is the one loaded."]},
   {"name":"a self-hosted Cursor worker","vars":["CURSOR_AGENT_SOCKET"],"lines":[]},
   {"name":"a CI run","vars":["CI","GITHUB_ACTIONS"],"lines":["No person answers; declared defaults apply."]},
@@ -6046,7 +6072,9 @@ function cardRenderClosed(run, head, ledger, debug, nowMs, k) {
  * dated within CARD_CLOSED_MAX_AGE_DAYS whose record head reads (the closed
  * card); with neither, of the open debug rounds alone, naming no run; else
  * null. On startup, only the newest run in progress whose Branch: line names
- * the branch HEAD names, and never the closed or the debug card. A debug
+ * the branch HEAD names, dated within CARD_CLOSED_MAX_AGE_DAYS as the closed
+ * card is unless its record reads Mode: unattended (REQ-FLOW-105 continues such
+ * a run on its branch whatever its age), and never the closed or the debug card. A debug
  * round's record is never the run: the open ones are listed on
  * the debug line. Lists shrink until the card fits CARD_MAX_CHARS; with every
  * list at zero it always does. A card whose text trips the screen is withheld whole.
@@ -6087,14 +6115,18 @@ function resumeCardLines(rootDir, stateRoot, nowMs, startup) {
   let chosen = null;
   let closed = null;
   for (const run of runs) {
+    const day = run.slice(0, 10);
+    // On startup a run dated before the closed card's cutoff day is picked only when its record
+    // reads Mode: unattended: an attended run abandoned before its close stops greeting every
+    // fresh start, while an unattended one continues on its branch however long after it opened.
+    const stale = startup && day < cutoff;
     const head = cardRecordHead(join(runsDir, run, CARD_RECORD_FILE));
     if (head === null) continue;
-    if (head.inProgress && (!startup || head.branch === branch)) {
+    if (head.inProgress && (!startup || head.branch === branch) && (!stale || head.mode === "unattended")) {
       chosen = { run, head };
       break;
     }
     // A folder dated after today (a clock skew or a hand-made name) is never the closed run.
-    const day = run.slice(0, 10);
     if (closed === null && day >= cutoff && day <= today) closed = { run, head };
   }
   const pick = chosen === null && !startup ? closed : chosen;
