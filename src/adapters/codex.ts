@@ -57,6 +57,7 @@ import { modelMapPath, pickModel } from "../roster/modelDefaults.ts";
 import {
   CLIENT_MODEL_PROJECTION,
   isModelClass,
+  listHoldsPin,
   MODEL_LADDER,
   pinsFor,
   resolveEffortValue,
@@ -1054,9 +1055,32 @@ function classModels(modelClass: ModelClass, opts: ModelOptions): ClassModels {
   };
 }
 
+/** A pin the account's saved list lacked, as the manifest holds it, and the model its class took instead. */
+export interface PinReplacement {
+  pin: string;
+  by: string;
+}
+
+/**
+ * The record a class's map entry carries when the operator's `pin` did not
+ * bind because the saved list `listed` lacked it and the class took `model`
+ * instead (review/118). A checkout with no list of its own reads it
+ * (`../cli/engine/clientModels.ts`) to keep that pick, where a pin with no
+ * record reads as an unsynced edit. None where the pin bound, where no list
+ * was read, or where a re-pick found nothing on the list and kept the pin.
+ */
+function pinReplacement(
+  pin: string | undefined,
+  model: string | undefined,
+  listed: readonly string[] | undefined,
+): PinReplacement | undefined {
+  if (pin === undefined || pin.trim() === "" || model === undefined || listed === undefined) return undefined;
+  return listHoldsPin(listed, pin) || model === pin.trim() ? undefined : { pin, by: model };
+}
+
 /** `.stamity/generated/models/codex.json`: every ladder class's model, and each emitted role's class. */
 export interface CodexModelMap {
-  classes: Record<ModelClass, { model?: string; fallbacks: string[] }>;
+  classes: Record<ModelClass, { model?: string; fallbacks: string[]; pinReplaced?: PinReplacement }>;
   roles: Record<string, ModelClass>;
 }
 
@@ -1065,8 +1089,10 @@ export interface CodexModelMap {
  * `model` on a sub-agent call. Every ladder class is present in the ladder's
  * order, `frontier` included although no agent file declares it, because a
  * flow escalates a role to it on the call; each holds the id the agent files
- * carry and the class's other candidates. `roles` maps each emitted agent's
- * runtime id to its declared class, sorted by id so the bytes are stable.
+ * carry and the class's other candidates, and `pinReplaced` where the saved
+ * list lacked the class's pin ({@link pinReplacement}). `roles` maps each
+ * emitted agent's runtime id to its declared class, sorted by id so the bytes
+ * are stable.
  */
 export function buildCodexModelMap(
   roles: Readonly<Partial<Record<string, ModelClass>>>,
@@ -1075,7 +1101,12 @@ export function buildCodexModelMap(
   const classes = {} as CodexModelMap["classes"];
   for (const { modelClass } of MODEL_LADDER) {
     const { model, fallbacks } = classModels(modelClass, opts);
-    classes[modelClass] = { ...(model === undefined ? {} : { model }), fallbacks: [...fallbacks] };
+    const replaced = pinReplacement(opts.pins?.[modelClass], model, opts.listed);
+    classes[modelClass] = {
+      ...(model === undefined ? {} : { model }),
+      fallbacks: [...fallbacks],
+      ...(replaced === undefined ? {} : { pinReplaced: replaced }),
+    };
   }
   const sorted: Record<string, ModelClass> = {};
   for (const id of Object.keys(roles).toSorted()) {

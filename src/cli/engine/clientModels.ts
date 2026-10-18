@@ -572,11 +572,22 @@ function baseId(value: string): string {
  * list, and only a list holding none of a class's candidates leaves it with no
  * model, which the files alone cannot tell from a hand edit, so a checkout
  * resolves that class from its own list, or with none from the shipped entry 0.
+ *
+ * `replaced` names the classes whose `pinReplaced` record (review/118, the
+ * adapters' `pinReplacement`) names the client's pin for that class as the
+ * manifest holds it now and the class's model as the pick made instead: the
+ * sync that wrote the map could not honour that pin on its account's list. A
+ * record naming another pin or another pick, or of another shape, is none.
  */
-function mapCandidates(text: string, tool: "codex" | "copilot", pins: Readonly<Partial<Record<string, string>>>): string[] | null {
+function mapCandidates(
+  text: string,
+  tool: "codex" | "copilot",
+  pins: Readonly<Partial<Record<string, string>>>,
+): { ids: string[]; replaced: ReadonlySet<string> } | null {
   const parsed: unknown = JSON.parse(text);
   if (!isPlainObject(parsed) || !isPlainObject(parsed["classes"])) return null;
   const candidates: string[] = [];
+  const replaced = new Set<string>();
   for (const [modelClass, entry] of Object.entries(parsed["classes"])) {
     if (!isPlainObject(entry)) continue;
     const model = typeof entry["model"] === "string" ? baseId(entry["model"]) : undefined;
@@ -586,11 +597,13 @@ function mapCandidates(text: string, tool: "codex" | "copilot", pins: Readonly<P
       if (model === undefined ? shipped.length > 0 || pin !== undefined : !shipped.includes(model) && model !== (pin === undefined ? undefined : baseId(pin))) {
         return null;
       }
+      const record = entry["pinReplaced"];
+      if (pin !== undefined && isPlainObject(record) && record["pin"] === pin && record["by"] === entry["model"]) replaced.add(modelClass);
     }
     if (model !== undefined) candidates.push(model);
     if (Array.isArray(entry["fallbacks"])) candidates.push(...entry["fallbacks"].filter((id) => typeof id === "string"));
   }
-  return candidates;
+  return { ids: candidates, replaced };
 }
 
 /** The `model:` value of a Cursor agent file's frontmatter, unquoted, or `null` where it carries none. */
@@ -631,10 +644,16 @@ async function readEmitted(rootDir: string, paths: readonly string[]): Promise<s
  * files carry with no effort group, since a list decides only whether a pin
  * takes one, and a value with a group fails the id shape, so a pin the list
  * held stays bare and one it lacked keeps its group. A file that is not
- * ledgered, is too large or has another shape gives nothing.
+ * ledgered, is too large or has another shape gives nothing. `replaced` holds,
+ * per map client, the classes its map records as having replaced the pin the
+ * manifest holds now ({@link mapCandidates}).
  */
-async function emittedPickLists(rootDir: string, manifest: SetupManifest): Promise<ModelLists> {
+async function emittedPickLists(
+  rootDir: string,
+  manifest: SetupManifest,
+): Promise<{ lists: ModelLists; replaced: Partial<Record<Tool, ReadonlySet<string>>> }> {
   const ledgered = new Set(manifest.ledger.map((row) => row.path));
+  const replaced: Partial<Record<Tool, ReadonlySet<string>>> = {};
   const read = await Promise.all(
     TOOLS_WITH_LISTS.map(async (tool): Promise<[Tool, ListedModels] | null> => {
       const lister = LISTERS[tool];
@@ -643,11 +662,14 @@ async function emittedPickLists(rootDir: string, manifest: SetupManifest): Promi
       if (isMapClient(tool)) {
         if (!ledgered.has(modelMapPath(tool))) return null;
         const [text] = await readEmitted(rootDir, [modelMapPath(tool)]);
+        let fromMap: ReturnType<typeof mapCandidates> = null;
         try {
-          candidates = text === undefined ? null : mapCandidates(text, tool, pinsFor(manifest.models, tool));
+          fromMap = text === undefined ? null : mapCandidates(text, tool, pinsFor(manifest.models, tool));
         } catch {
-          candidates = null;
+          fromMap = null;
         }
+        if (fromMap !== null) replaced[tool] = fromMap.replaced;
+        candidates = fromMap?.ids ?? null;
       } else {
         const agents = manifest.ledger
           .filter((row) => row.adapter === tool && row.artifactType === "agent" && row.path.endsWith(".md"))
@@ -658,27 +680,37 @@ async function emittedPickLists(rootDir: string, manifest: SetupManifest): Promi
       return candidates === null ? null : [tool, { ids: shapedIds(candidates).slice(0, MAX_LISTED_MODELS), source: lister.source }];
     }),
   );
-  return Object.fromEntries(read.filter((entry) => entry !== null));
+  return { lists: Object.fromEntries(read.filter((entry) => entry !== null)), replaced };
 }
 
 /**
  * `emitted` with each Codex and Copilot pin of `manifest` added, as its base id,
- * to that client's list (review/115), where `kept` has no list for the client
- * or holds the pin (`listHoldsPin`, the resolver's own test): a pin then binds
+ * to that client's list (review/115), where `kept` holds the pin
+ * (`listHoldsPin`, the resolver's own test), or has no list for the client and
+ * the map does not record the pin as replaced (review/118): a pin then binds
  * as written, so an unsynced pin edit is drift and a sync with no cache writes
- * it, never a shipped re-pick, while a pin this account's list lacks is
- * re-picked here as `sync` re-picks it. Cursor's list is left as read: a pin
- * added there would always read as listed and lose the effort group its files
- * carry.
+ * it, never a shipped re-pick. A pin this account's list lacks is re-picked
+ * here as `sync` re-picks it, and so, on a checkout with no list, is one the
+ * map records the syncing account's list as lacking, which keeps that sync's
+ * pick until a list holding the pin is read. Cursor's list is left as read: a
+ * pin added there would always read as listed and lose the effort group its
+ * files carry.
  */
-function withPins(emitted: ModelLists, manifest: SetupManifest, kept: ModelLists): ModelLists {
+function withPins(
+  emitted: ModelLists,
+  manifest: SetupManifest,
+  kept: ModelLists,
+  replaced: Partial<Record<Tool, ReadonlySet<string>>>,
+): ModelLists {
   const lists: ModelLists = { ...emitted };
   for (const tool of TOOLS_WITH_LISTS) {
     const entry = emitted[tool];
     if (entry === undefined || !isMapClient(tool)) continue;
     const account = kept[tool]?.ids;
-    const pins = Object.values(pinsFor(manifest.models, tool)).filter((pin) => account === undefined || listHoldsPin(account, pin));
-    lists[tool] = { ...entry, ids: shapedIds([...entry.ids, ...pins.map(baseId)]).slice(0, MAX_LISTED_MODELS) };
+    const pins = Object.entries(pinsFor(manifest.models, tool))
+      .filter(([modelClass, pin]) => pin !== undefined && (account === undefined ? replaced[tool]?.has(modelClass) !== true : listHoldsPin(account, pin)))
+      .map(([, pin]) => baseId(pin ?? ""));
+    lists[tool] = { ...entry, ids: shapedIds([...entry.ids, ...pins]).slice(0, MAX_LISTED_MODELS) };
   }
   return lists;
 }
@@ -737,7 +769,7 @@ export async function resolveModelLists(
         `${savedDefects.map((defect) => defect.replace(/^`listed\./, "`models.listed.")).join("; ")}; the next sync that reads a client keeps its list`;
   const kept = sortedLists({ ...(migrated === null ? saved : {}), ...cache.lists, ...structuredClone(fresh) });
   const unchanged = JSON.stringify(kept) === JSON.stringify(sortedLists(cache.lists));
-  const emitted = withPins(fromFiles, manifest, kept);
+  const emitted = withPins(fromFiles.lists, manifest, kept, fromFiles.replaced);
   const problems = [cache.problem, migrated].filter((problem) => problem !== null);
   return {
     effective: { ...emitted, ...kept },

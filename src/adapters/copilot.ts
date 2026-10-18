@@ -53,6 +53,7 @@ import { MODEL_PRIORITY, modelMapPath, pickModel } from "../roster/modelDefaults
 import {
   CLIENT_MODEL_PROJECTION,
   isModelClass,
+  listHoldsPin,
   MODEL_LADDER,
   pinsFor,
   resolveEffortValue,
@@ -870,9 +871,33 @@ function agentModelLines(
   ];
 }
 
+/** A pin the account's saved list lacked, as the manifest holds it, and the model its class took instead. */
+export interface PinReplacement {
+  pin: string;
+  by: string;
+}
+
+/**
+ * The record a class's map entry carries when the operator's id `pin` did not
+ * bind because the saved list `listed` lacked it and the class took `model`
+ * instead (review/118). A checkout with no list of its own reads it
+ * (`../cli/engine/clientModels.ts`) to keep that pick, where a pin with no
+ * record reads as an unsynced edit. None where the pin bound, where no list
+ * was read, where a re-pick found nothing on the list and kept the pin, or for
+ * a display-name pin, which binds nowhere ({@link idPins}).
+ */
+function pinReplacement(
+  pin: string | undefined,
+  model: string | undefined,
+  listed: readonly string[] | undefined,
+): PinReplacement | undefined {
+  if (pin === undefined || pin.trim() === "" || model === undefined || listed === undefined) return undefined;
+  return listHoldsPin(listed, pin) || model === pin.trim() ? undefined : { pin, by: model };
+}
+
 /** `.stamity/generated/models/copilot.json`: every ladder class's model, and each emitted role's class. */
 export interface CopilotModelMap {
-  classes: Record<ModelClass, { model?: string; fallbacks: string[] }>;
+  classes: Record<ModelClass, { model?: string; fallbacks: string[]; pinReplaced?: PinReplacement }>;
   roles: Record<string, ModelClass>;
 }
 
@@ -881,9 +906,10 @@ export interface CopilotModelMap {
  * `model` on a sub-agent call. Every ladder class is present in the ladder's
  * order, `frontier` included although no agent file declares it, because a
  * flow escalates a role to it on the call; each holds the CLI id the agent
- * files put first in `models` and the candidates behind it. `roles` maps each
- * emitted agent's runtime id to its declared class, sorted by id so the bytes
- * are stable.
+ * files put first in `models` and the candidates behind it, and `pinReplaced`
+ * where the saved list lacked the class's pin ({@link pinReplacement}).
+ * `roles` maps each emitted agent's runtime id to its declared class, sorted
+ * by id so the bytes are stable.
  */
 export function buildCopilotModelMap(
   roles: Readonly<Partial<Record<string, ModelClass>>>,
@@ -892,9 +918,15 @@ export function buildCopilotModelMap(
   listed?: readonly string[],
 ): CopilotModelMap {
   const classes = {} as CopilotModelMap["classes"];
+  const bound = idPins(pins);
   for (const { modelClass } of MODEL_LADDER) {
     const { model, fallbacks } = classModels(modelClass, pins, efforts, listed);
-    classes[modelClass] = { ...(model === undefined ? {} : { model }), fallbacks: [...fallbacks] };
+    const replaced = pinReplacement(bound[modelClass], model, listed);
+    classes[modelClass] = {
+      ...(model === undefined ? {} : { model }),
+      fallbacks: [...fallbacks],
+      ...(replaced === undefined ? {} : { pinReplaced: replaced }),
+    };
   }
   const sorted: Record<string, ModelClass> = {};
   for (const id of Object.keys(roles).toSorted()) {

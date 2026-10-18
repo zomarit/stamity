@@ -4620,6 +4620,56 @@ describe("check — model-pins", () => {
     expect(row(doc, "model-pins").detail).toContain(`codex standard: the pinned model "gpt-9-custom" is not on codex's list`);
   });
 
+  // review/118: the map records the pin a sync could not honour beside the pick it made instead, so
+  // a checkout with no cache (CI, a fresh clone) keeps that replacement, while a pin the map does not
+  // record as replaced still reads as drift, and an account whose list holds the pin writes it.
+  it("reads no drift with no cache on a Codex pin the map records as replaced, and a sync with no cache keeps it", async () => {
+    const root = await seedRepo(getRepo(), { tools: ["claude", "codex"] });
+    await pinCodex(root, { pins: { standard: { codex: "gpt-9-custom" } } });
+    await syncNow(root, OTHER_CODEX);
+    expect((await codexMap(root))["standard"]).toEqual({
+      model: "gpt-6-sol",
+      fallbacks: ["gpt-5.6-terra"],
+      pinReplaced: { pin: "gpt-9-custom", by: "gpt-6-sol" },
+    });
+    await rm(join(root, CACHE));
+
+    const { code, doc } = await runJson(root, { STAMITY_NO_CLIENT_PROBE: "1" });
+
+    expect(doc.drift).toEqual({ clean: true, changes: [], missing: [], reclaimPending: 0, reclaim: [] });
+    expect(code).toBe(0);
+    const before = await readFile(join(root, STATE_DIR, "generated", "models", "codex.json"), "utf8");
+    await syncNow(root);
+    expect(await readFile(join(root, STATE_DIR, "generated", "models", "codex.json"), "utf8")).toBe(before);
+  });
+
+  it("reads an unsynced Codex pin edit as drift with no cache, though the map records another pin as replaced", async () => {
+    const root = await seedRepo(getRepo(), { tools: ["claude", "codex"] });
+    await pinCodex(root, { pins: { standard: { codex: "gpt-9-custom" } } });
+    await syncNow(root, OTHER_CODEX);
+    await rm(join(root, CACHE));
+    await pinCodex(root, { pins: { standard: { codex: "gpt-9-other" } } });
+
+    const { doc } = await runJson(root, { STAMITY_NO_CLIENT_PROBE: "1" });
+
+    expect(doc.drift?.clean).toBe(false);
+    expect(doc.drift?.changes).toContainEqual(expect.objectContaining({ path: `${STATE_DIR}/generated/models/codex.json` }));
+    await syncNow(root);
+    expect((await codexMap(root))["standard"]).toEqual({ model: "gpt-9-other", fallbacks: ["gpt-6-sol", "gpt-5.6-terra"] });
+  });
+
+  it("writes a Codex pin the map records as replaced, dropping the record, on a sync whose list holds the pin", async () => {
+    const root = await seedRepo(getRepo(), { tools: ["claude", "codex"] });
+    await pinCodex(root, { pins: { standard: { codex: "gpt-9-custom" } } });
+    await syncNow(root, OTHER_CODEX);
+    expect((await codexMap(root))["standard"]).toHaveProperty("pinReplaced");
+
+    await syncNow(root, { codex: { ids: [...OTHER_CODEX.codex.ids, "gpt-9-custom"], source: "codex-debug-models" } });
+
+    expect((await codexMap(root))["standard"]).toEqual({ model: "gpt-9-custom", fallbacks: ["gpt-6-sol", "gpt-5.6-terra"] });
+    expect((await runJson(root, { STAMITY_NO_CLIENT_PROBE: "1" })).doc.drift?.clean).toBe(true);
+  });
+
   // review/116: the row works out the emitted model from the committed files' list first, so a
   // model a teammate's sync committed that this account's list lacks warns.
   it("warns on a committed Codex pick this machine's cached list lacks, naming the client and the class", async () => {

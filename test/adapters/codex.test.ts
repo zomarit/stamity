@@ -10,6 +10,7 @@ import {
   CODEX_CONFIG_FILE,
   CODEX_HOOKS_FILE,
   buildAgentToml,
+  buildCodexModelMap,
   buildHooksJson,
   codexConfigTableRendering,
   codexResiduePlanner,
@@ -884,6 +885,31 @@ describe("model allocation", () => {
     );
     expect(codexResiduePlanner.facts.agentsFormat).toContain("`model`");
     expect(codexResiduePlanner.facts.agentsFormat).toContain(".stamity/generated/models/codex.json");
+  });
+
+  // review/118: the map records a pin the saved list lacked beside the pick made instead, so a
+  // checkout with no list can tell that re-pick from an unsynced pin edit.
+  it("records a pin the saved list lacked beside the pick made instead, and none where the list holds it or none was read", () => {
+    const listed = ["gpt-6-sol", "gpt-5.6-terra", "gpt-6-luna"];
+    const pins = { standard: "gpt-9-custom" };
+
+    const lacking = buildCodexModelMap({}, { pins, listed });
+
+    expect(lacking.classes.standard).toEqual({
+      model: "gpt-6-sol",
+      fallbacks: ["gpt-5.6-terra"],
+      pinReplaced: { pin: "gpt-9-custom", by: "gpt-6-sol" },
+    });
+    // An unpinned class carries no record.
+    expect(lacking.classes.economy).toEqual({ model: "gpt-6-luna", fallbacks: [] });
+    // A list holding the pin, and no list read: the pin binds and nothing is recorded.
+    expect(buildCodexModelMap({}, { pins, listed: [...listed, "gpt-9-custom"] }).classes.standard).toEqual({
+      model: "gpt-9-custom",
+      fallbacks: ["gpt-6-sol", "gpt-5.6-terra"],
+    });
+    expect(buildCodexModelMap({}, { pins }).classes.standard).toEqual({ model: "gpt-9-custom", fallbacks: ["gpt-6-sol", "gpt-5.6-terra"] });
+    // A list holding neither the pin nor a candidate keeps the pin, so nothing was replaced.
+    expect(buildCodexModelMap({}, { pins, listed: ["gpt-6-luna"] }).classes.standard).toEqual({ model: "gpt-9-custom", fallbacks: [] });
   });
 
   it("states in its capability facts that the file's model outranks a per-call escalation (build/62)", () => {

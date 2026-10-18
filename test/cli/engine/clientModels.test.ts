@@ -642,6 +642,40 @@ describe("the model list cache", () => {
     ]);
   });
 
+  // review/118: a class the map records as having replaced the manifest's own pin keeps that
+  // replacement where this checkout has no list (the pin stays off the list, so it re-picks as the
+  // syncing account did); a record of another pin, or of another pick, adds the pin as before.
+  it("leaves a pin the map records as replaced off a checkout's list with no cache, and adds one it does not", async () => {
+    const temp = getTemp();
+    const copilotMap = ".stamity/generated/models/copilot.json";
+    const standard = (record: unknown): string =>
+      JSON.stringify({ classes: { standard: { model: "gpt-6-sol", fallbacks: ["gpt-5.6-terra"], pinReplaced: record } }, roles: {} });
+    const pinned = (pin: string): SetupManifest => ({ ...setup(["copilot"], [copilotMap]), models: { pins: { standard: { copilot: pin } } } });
+    await temp.seedFiles({ [copilotMap]: standard({ pin: "gpt-9-custom", by: "gpt-6-sol" }) });
+
+    const recorded = await resolveModelLists(temp.dir, pinned("gpt-9-custom"));
+
+    expect(recorded.emitted).toEqual({ copilot: { ids: ["gpt-6-sol", "gpt-5.6-terra"], source: "copilot-help-config" } });
+    expect(recorded.asEmitted).toEqual(recorded.emitted);
+    // An unsynced pin edit: the record names the pin the last sync could not honour, not this one.
+    expect((await resolveModelLists(temp.dir, pinned("gpt-9-other"))).emitted.copilot?.ids).toEqual([
+      "gpt-6-sol",
+      "gpt-5.6-terra",
+      "gpt-9-other",
+    ]);
+    // A list on this checkout that holds the pin decides, as it does with no record.
+    const holding = await resolveModelLists(temp.dir, pinned("gpt-9-custom"), { copilot: { ids: ["gpt-9-custom"], source: "copilot-help-config" } });
+    expect(holding.emitted.copilot?.ids).toEqual(["gpt-6-sol", "gpt-5.6-terra", "gpt-9-custom"]);
+    // A record whose pick is not the class's model, or of another shape, is no record.
+    /* oxlint-disable no-await-in-loop */
+    for (const record of [{ pin: "gpt-9-custom", by: "gpt-5.6-terra" }, "gpt-9-custom", { pin: 9, by: "gpt-6-sol" }]) {
+      await temp.seedFiles({ [copilotMap]: standard(record) });
+
+      expect((await resolveModelLists(temp.dir, pinned("gpt-9-custom"))).emitted.copilot?.ids, JSON.stringify(record)).toContain("gpt-9-custom");
+    }
+    /* oxlint-enable no-await-in-loop */
+  });
+
   // The reviewer's open question on review/114: a client the setup no longer selects still has its
   // ledgered files proved, so the list they give is read for it too.
   it("reads the list a deselected client's ledgered map gives", async () => {
