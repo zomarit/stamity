@@ -1391,11 +1391,12 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       if (write) restAct(path, shown);
     }
 
-    /** The act of one REST write path below its repository or organisation, the refuse-class readings first (v0a). */
-    function restAct(path: string, shown: string): PersonOnlyVerdict | null {
-      if (/^pulls\/[^/]+\/merge(\/|$)/i.test(path) || /(^|\/)merge-async(\/|$)/i.test(path)) {
-        return deny("pr-merge", `A REST merge (${shown})`);
-      }
+    /**
+     * The acts of one REST write path below its repository or organisation (v0a): every rule the path matches is
+     * collected, so a refuse-class reading of a path decides it even where an ask-class rule matches it too (review/33).
+     */
+    function restAct(path: string, shown: string): void {
+      if (/^pulls\/[^/]+\/merge(-async)?(\/|$)/i.test(path)) deny("pr-merge", `A REST merge (${shown})`);
       // A review created, or a pending one submitted, with the event `APPROVE` (review/210); an event the line shows
       // but cannot place reads as one, and so does a body the line cannot show (review/228), as on GraphQL; no event in
       // a body the line shows whole is the API's pending review.
@@ -1403,65 +1404,80 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         /^pulls\/[^/]+\/reviews(\/[^/]+\/events)?$/i.test(path) &&
         (hiddenBody || fields("event").some((event) => event === null || /^approve$/i.test(event.trim())))
       ) {
-        return deny("pr-merge", `A REST review approval, or a review whose body the line cannot show (${shown})`);
+        deny("pr-merge", `A REST review approval, or a review whose body the line cannot show (${shown})`);
       }
       // A custom property, which a ruleset can target repositories by (pr/80).
       if (/^branches\/.+\/protection(\/|$)/i.test(path) || /^(rulesets|properties)(\/|$)/i.test(path)) {
-        if (method === "DELETE") return deny("protection-delete", `A protection, ruleset or custom property deletion (${shown})`);
-        return deny("protection", `A protection or ruleset write (${shown})`);
+        if (method === "DELETE") deny("protection-delete", `A protection, ruleset or custom property deletion (${shown})`);
+        else deny("protection", `A protection or ruleset write (${shown})`);
+      }
+      // A deployment environment: deleting it deletes its secrets, variables and protection rules with it, so it is
+      // refuse-class; creating or updating it sets its protection rules (review/38).
+      if (/^environments\/[^/]+$/i.test(path)) {
+        if (method === "DELETE") deny("protection-delete", `A deployment environment deletion (${shown})`);
+        else if (method === "PUT") deny("protection", `A deployment environment write (${shown})`);
       }
       // The repository's own path carries its default branch, visibility, name and archived state; DELETE removes it.
       // A body holding `visibility` or `private`, or one the line cannot show, may change the visibility (v0a).
       if (/^(repos\/[^/]+\/[^/]+|repositories\/[^/]+)$/i.test(path) && (method === "PATCH" || method === "DELETE")) {
-        if (method === "DELETE") return deny("repo-delete", `A repository settings write or deletion (${shown})`);
-        if (hiddenBody || fields("visibility").length > 0 || fields("private").length > 0) {
-          return deny("repo-irreversible", `A repository visibility change, or a settings write whose body the line cannot show (${shown})`);
-        }
-        return deny("protection", `A repository settings write or deletion (${shown})`);
+        if (method === "DELETE") deny("repo-delete", `A repository settings write or deletion (${shown})`);
+        else if (hiddenBody || fields("visibility").length > 0 || fields("private").length > 0) {
+          deny("repo-irreversible", `A repository visibility change, or a settings write whose body the line cannot show (${shown})`);
+        } else deny("protection", `A repository settings write or deletion (${shown})`);
       }
-      if (/^branches\/.+\/rename$/i.test(path)) return deny("protection", `A branch rename (${shown})`);
-      if (/^transfer$/i.test(path)) return deny("repo-irreversible", `A repository transfer (${shown})`);
+      if (/^branches\/.+\/rename$/i.test(path)) deny("protection", `A branch rename (${shown})`);
+      if (/^transfer$/i.test(path)) deny("repo-irreversible", `A repository transfer (${shown})`);
       if (/^contents(\/|$)/i.test(path) && landsOnDefault(fields("branch"))) {
-        return deny("push-default", `A REST commit to the default branch (${shown})`);
+        deny("push-default", `A REST commit to the default branch (${shown})`);
       }
       if (
         (/^merges$/i.test(path) && landsOnDefault(fields("base"))) ||
         (/^merge-upstream$/i.test(path) && landsOnDefault(fields("branch")))
       ) {
-        return deny("push-default", `A REST merge into the default branch (${shown})`);
+        deny("push-default", `A REST merge into the default branch (${shown})`);
       }
       if (/^((actions|dependabot|codespaces|agents)|environments\/[^/]+)\/(secrets|variables)(\/|$)/i.test(path)) {
-        if (method === "DELETE") return deny("secrets-delete", `A secret or variable deletion (${shown})`);
-        return deny("secrets", `A secret or variable write (${shown})`);
+        if (method === "DELETE") deny("secrets-delete", `A secret or variable deletion (${shown})`);
+        else deny("secrets", `A secret or variable write (${shown})`);
       }
       if (/^releases(\/|$)/i.test(path)) {
-        return method === "DELETE" ? deny("release-delete", `A release or asset deletion (${shown})`) : deny("release", `A release write (${shown})`);
+        if (method === "DELETE") deny("release-delete", `A release or asset deletion (${shown})`);
+        else deny("release", `A release write (${shown})`);
       }
-      if (/^git\/refs(\/|$)/i.test(path)) {
-        if (method === "DELETE") {
-          if (/^git\/refs\/tags(\/|$)/i.test(path)) return deny("tag-delete", `A REST tag ref deletion (${shown})`);
-          return deny("push-delete", `A REST ref deletion (${shown})`);
-        }
-        // Force is read before tags (v0a): a forced tag move is refuse-class, a tag write ask-class.
-        if (forced(fields("force"))) return deny("force-push", `A forced REST ref update (${shown})`);
-        // A body's `ref` read from the line's text and as the parsed field (pr/1), a JSON body's quote before it among
-        // the spellings; one the line cannot place reads as a tag.
-        const refs = fields("ref");
-        if (
-          /^git\/refs\/tags(\/|$)/i.test(path) ||
-          /(^|[=\s])refs\/tags\//i.test(text) ||
-          refs.some((ref) => ref === null || /^refs\/tags\//i.test(ref))
-        ) {
-          return deny("push-tags", `A REST tag ref write (${shown})`);
-        }
-        // The path's own ref read from the path as routing reads it (review/107); a body's `ref` from the line.
-        const heads = [/^git\/refs\/heads\/(.+)$/i.exec(path)?.[1] ?? "", ...[...text.matchAll(/(?:^|[=\s/])refs\/heads\/(\S+)/gi)].map((match) => match[1] ?? ""),
-          ...refs.map((ref) => /^refs\/heads\/(.+)$/i.exec(ref ?? "")?.[1] ?? "")];
-        if (heads.some((name) => defaults.has(name.toLowerCase()))) {
-          return deny("push-default", `A REST write to the default branch (${shown})`);
-        }
+      if (/^git\/refs(\/|$)/i.test(path)) refAct(path, shown);
+    }
+
+    /** The act of a REST write on a `git/refs` path, the refuse-class readings first (v0a). */
+    function refAct(path: string, shown: string): void {
+      if (method === "DELETE") {
+        if (/^git\/refs\/tags(\/|$)/i.test(path)) deny("tag-delete", `A REST tag ref deletion (${shown})`);
+        else deny("push-delete", `A REST ref deletion (${shown})`);
+        return;
       }
-      return null;
+      // Force is read before tags (v0a): a forced tag move is refuse-class, a tag write ask-class. An update whose body
+      // the line cannot show may set `force`, so it reads as forced, as a hidden GraphQL `afterOid` reads as a
+      // deletion (review/36).
+      if (forced(fields("force")) || (method === "PATCH" && hiddenBody)) {
+        deny("force-push", `A forced REST ref update, or one whose body the line cannot show (${shown})`);
+        return;
+      }
+      // A body's `ref` read from the line's text and as the parsed field (pr/1), a JSON body's quote before it among
+      // the spellings; one the line cannot place reads as a tag.
+      const refs = fields("ref");
+      if (
+        /^git\/refs\/tags(\/|$)/i.test(path) ||
+        /(^|[=\s])refs\/tags\//i.test(text) ||
+        refs.some((ref) => ref === null || /^refs\/tags\//i.test(ref))
+      ) {
+        deny("push-tags", `A REST tag ref write (${shown})`);
+        return;
+      }
+      // The path's own ref read from the path as routing reads it (review/107); a body's `ref` from the line.
+      const heads = [/^git\/refs\/heads\/(.+)$/i.exec(path)?.[1] ?? "", ...[...text.matchAll(/(?:^|[=\s/])refs\/heads\/(\S+)/gi)].map((match) => match[1] ?? ""),
+        ...refs.map((ref) => /^refs\/heads\/(.+)$/i.exec(ref ?? "")?.[1] ?? "")];
+      if (heads.some((name) => defaults.has(name.toLowerCase()))) {
+        deny("push-default", `A REST write to the default branch (${shown})`);
+      }
     }
   }
 
@@ -1510,12 +1526,16 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     );
     // npm's `unpublish` (from its unique prefix `unp`) and `dist-tag rm` withdraw what a publish put out, refuse-class;
     // `dist-tag add` moves a tag, ask-class as a publish (v0a). The prefix and the subcommands' aliases are npm
-    // 10.9.8's (`lib/utils/cmd-list.js`, `lib/commands/dist-tag.js`), read where npm runs them.
+    // 10.9.8's (`lib/utils/cmd-list.js`, `lib/commands/dist-tag.js`), read where npm runs them: pnpm hands both
+    // commands, as written, to npm, and yarn's `npm tag remove` and `npm tag add` are the same acts (review/34,
+    // review/37). No prefix of `dist-tag` resolves in that list (its alias `dist-tags` shares every one).
     for (const positionals of npm ? [positionalsOf(false), positionalsOf(true)] : [positionalsOf(false)]) {
       for (const [index, word] of positionals.entries()) {
-        if (!(index === 0 ? npm : positionals[index - 1] === "npm")) continue;
+        const passed = index === 0 && cmd[0] === "pnpm" && (word === "unpublish" || word === "dist-tag");
+        if (!passed && !(index === 0 ? npm : positionals[index - 1] === "npm")) continue;
         if (/^unp(?:u(?:b(?:l(?:i(?:sh?)?)?)?)?)?$/.test(word)) deny("unpublish", "Withdrawing a package (`npm unpublish`)");
-        const action = word === "dist-tag" || word === "dist-tags" ? (positionals[index + 1] ?? "") : "";
+        const tags = word === "dist-tag" || word === "dist-tags" || (cmd[0] === "yarn" && word === "tag");
+        const action = tags ? (positionals[index + 1] ?? "") : "";
         if (["rm", "r", "del", "d", "remove"].includes(action)) deny("unpublish", "A dist-tag removed (`npm dist-tag rm`)");
         if (["add", "a", "set", "s"].includes(action)) deny("publish", "A dist-tag moved (`npm dist-tag add`)");
       }
@@ -1543,7 +1563,17 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         // refuse-class (v0a).
         const zero = /(^|[^0-9a-f])(0{40}|0{64})([^0-9a-f]|$)/i;
         const [, value = ""] = args.filter((arg, index) => !arg.startsWith("-") && args[index - 1] !== "-m");
-        if (args.includes("-d") || zero.test(value) || (args.includes("--stdin") && (/\bdelete\b/.test(command) || zero.test(command)))) {
+        // `-d` in a short cluster before the reason option (`-dm <reason>`), and a `--stdin` `update` of a tag ref whose
+        // new value is empty, which git reads as the zero value (review/35): the ref not followed by one separator (a
+        // space, or an escape such as `-z`'s NUL) and a value.
+        const word = String.raw`[^\s'"\\|;&<>()]`;
+        const separator = String.raw`(?: |\\(?:x[\da-fA-F]{1,2}|u[\da-fA-F]{1,4}|[0-7]{1,4}))`;
+        const emptied = new RegExp(String.raw`(?<![\w-])update${separator}+refs\/tags\/${word}+(?!${word})(?!${separator}${word})`, "i");
+        if (
+          args.some((arg) => /^-[^-m]*d/.test(arg)) ||
+          zero.test(value) ||
+          (args.includes("--stdin") && (/\bdelete\b/.test(command) || zero.test(command) || emptied.test(command)))
+        ) {
           deny("tag-delete", "A tag ref deleted (`git update-ref`)");
         } else deny("tag", "A tag ref write (`git update-ref`)");
       } else if (sub === "update-ref" && args.includes("--stdin")) {

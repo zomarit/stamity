@@ -1052,6 +1052,38 @@ const CLASSES: readonly (readonly [command: string, rule: string, ask: boolean, 
   ["gh repo unarchive o/r --yes", "protection", true],
   ["gh repo unarchive o/r --yes && gh repo sync o/r --force", "force-push", false],
   ["gh api -X DELETE repos/o/r/pulls/1/merge/../../../git/refs/heads/feat", "push-delete", false],
+  // review/33: one path that a `merge-async` segment once read as an ask-class merge keeps its refuse-class reading.
+  ["gh api -X DELETE repos/o/r/git/refs/heads/x/merge-async", "push-delete", false],
+  ["gh api -X DELETE repos/o/r/git/refs/tags/merge-async", "tag-delete", false],
+  ["gh api -X PATCH repos/o/r/git/refs/heads/merge-async -F force=true -f sha=abc", "force-push", false],
+  ["gh api -X DELETE repos/o/r/branches/merge-async/protection", "protection-delete", false],
+  ["gh api -X DELETE repos/o/r/properties/schema/merge-async", "protection-delete", false],
+  ["gh api -X DELETE repos/o/merge-async", "repo-delete", false],
+  ["gh api -X PATCH repos/o/merge-async -f visibility=public", "repo-irreversible", false],
+  ["gh api -X POST repos/o/r/pulls/3/merge-async", "pr-merge", true],
+  // review/36: a `git/refs` update whose body the line cannot show may set `force`, so it reads as forced.
+  ["gh api -X PATCH repos/o/r/git/refs/heads/main --input b.json", "force-push", false],
+  ["gh api -X PATCH repos/o/r/git/refs/heads/feat --input b.json", "force-push", false],
+  ["curl -X PATCH -d @b.json https://api.github.com/repos/o/r/git/refs/tags/v1", "force-push", false],
+  ["gh api -X PATCH repos/o/r/git/refs/heads/main -f sha=abc", "push-default", true],
+  // review/34, review/37: pnpm hands `unpublish` and `dist-tag` to npm; yarn's `npm tag` removes and adds a dist-tag.
+  ["pnpm unpublish x@1.0.0", "unpublish", false],
+  ["pnpm dist-tag rm x beta", "unpublish", false],
+  ["pnpm --filter x dist-tag add x@1.0.0 latest", "publish", true],
+  ["yarn npm tag remove x beta", "unpublish", false],
+  ["yarn npm tag add x@1.0.0 latest", "publish", true],
+  // review/38: a deployment environment's deletion takes its secrets, variables and protection rules with it.
+  ["gh api -X DELETE repos/o/r/environments/prod", "protection-delete", false],
+  ["curl -X DELETE https://api.github.com/repos/o/r/environments/prod", "protection-delete", false],
+  ["gh api -X PUT repos/o/r/environments/prod --input env.json", "protection", true],
+  // review/35: a local tag deleted through `git update-ref` by a `-d` cluster or a `--stdin` `update` to an empty value.
+  ["git update-ref -dm drop refs/tags/v1", "tag-delete", false],
+  ["printf 'update refs/tags/v1 \\n' | git update-ref --stdin", "tag-delete", false],
+  ["printf 'update refs/tags/v1  abc\\n' | git update-ref --stdin", "tag-delete", false],
+  ["printf 'update refs/tags/v1\\0\\0\\0' | git update-ref -z --stdin", "tag-delete", false],
+  ["printf 'update refs/tags/v1 HEAD\\n' | git update-ref --stdin", "tag", true],
+  ["printf 'update refs/tags/v1\\0HEAD\\0\\0' | git update-ref -z --stdin", "tag", true],
+  ["git update-ref -m drop refs/tags/v1 HEAD", "tag", true],
 ];
 
 describe("personOnlyVerdict — ask or refuse (v0a)", () => {
@@ -1077,6 +1109,12 @@ describe("personOnlyVerdict — ask or refuse (v0a)", () => {
 
   it("allows a dist-tag listing, the read neighbour of its add and rm", () => {
     expect(personOnlyVerdict("npm dist-tag ls x", ON_FEATURE)).toEqual({ deny: false });
+    expect(personOnlyVerdict("pnpm dist-tag ls x", ON_FEATURE)).toEqual({ deny: false });
+    expect(personOnlyVerdict("yarn npm tag list x", ON_FEATURE)).toEqual({ deny: false });
+  });
+
+  it("allows a deployment environment's read, the neighbour of its deletion (review/38)", () => {
+    expect(personOnlyVerdict("gh api repos/o/r/environments/prod", ON_FEATURE)).toEqual({ deny: false });
   });
 });
 
