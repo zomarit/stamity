@@ -10,6 +10,8 @@ import {
   type RestRead,
 } from "../../src/runs/preflight.ts";
 import { USAGE_REVIEW_PATTERN } from "../../src/runs/layout.ts";
+import { usageReviewLines } from "../../src/cli/commands/gate.ts";
+import { useTempDir } from "../support/tempDir.ts";
 
 /**
  * u8-preflight-core (REQ-FLOW-101): the unattended pre-flight's checks as pure functions.
@@ -1026,5 +1028,39 @@ describe("runPreflight — warnings", () => {
     expect(warning?.reason).toContain("merge a pull request without the required review");
     const bound = await runPreflight(greenDeps({ rest: routes("never") }));
     expect(bound.warnings.map((entry) => entry.id)).not.toContain("review-state");
+  });
+});
+
+describe("gate preflight's review-state count reads the run on this branch (REQ-FLOW-106)", () => {
+  const getRoot = useTempDir("preflight-usage");
+
+  /** A record head naming its branch, then `rounds` usage: review lines. */
+  function record(branch: string, rounds: number): string {
+    return [
+      "Status: in progress",
+      `Branch: ${branch}`,
+      "",
+      ...Array.from({ length: rounds }, (_, index) => `- 2026-10-18T0${index + 1}:00Z usage: review r${index + 1} minutes=5 tokens=unreported (claude-code)`),
+      "",
+    ].join("\n");
+  }
+
+  it("counts this branch's run, not a newer run in progress on another branch", async () => {
+    const root = getRoot();
+    await root.seedFiles({
+      ".git/HEAD": "ref: refs/heads/stamity/2026-10-17_night\n",
+      ".stamity/runs/2026-10-17_night/record.md": record("stamity/2026-10-17_night", 2),
+      // Newer by id, so a pick with no branch reads it first.
+      ".stamity/runs/2026-10-18_other/record.md": record("feat/other", 0),
+    });
+    const now = new Date("2026-10-18T12:00:00Z");
+
+    expect(usageReviewLines(root.dir, now)).toBe(2);
+
+    // HEAD on the other branch reads that run's zero, and a detached HEAD names no run at all.
+    await root.seedFiles({ ".git/HEAD": "ref: refs/heads/feat/other\n" });
+    expect(usageReviewLines(root.dir, now)).toBe(0);
+    await root.seedFiles({ ".git/HEAD": "0123456789abcdef0123456789abcdef01234567\n" });
+    expect(usageReviewLines(root.dir, now)).toBe(0);
   });
 });

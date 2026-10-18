@@ -1,6 +1,6 @@
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs";
-import { link, rm, symlink, utimes, writeFile } from "node:fs/promises";
+import { chmod, link, mkdir, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runInNewContext } from "node:vm";
@@ -3694,19 +3694,55 @@ describe("the review gate rebuilds a missing counter from this branch's run reco
     expect(readGateState().runs["fresh-session"]).toMatchObject({ rounds: 1 });
   });
 
-  it("opens and names the read when a matching record is past the read bound", async () => {
+  // Records the rebuild cannot read hold the completion, fail closed: deleting the counter and then making the
+  // records unreadable must not reopen the gate (build/24).
+  it("holds, naming the fault, when a matching record is past the read bound", async () => {
     await seedHead();
     await getRepo().seedFiles({
       ".stamity/runs/2026-10-18_night/record.md": runRecord(BRANCH, 2) + "x".repeat(REPORT_READ_MAX_BYTES),
     });
     const gate = await placeGate();
 
-    const open = run(gate, { cwd: getRepo().dir, input: completion("s") });
+    const held = run(gate, { cwd: getRepo().dir, input: completion("s") });
 
-    expect(open.code).toBe(0);
-    expect(refusal(open)).toMatchObject({ blocked: false, reasonCode: "STATE_ABSENT" });
-    expect(String(refusal(open)["message"])).toContain("RECORD_TOO_LARGE");
+    expect(held.code).toBe(2);
+    expect(refusal(held)).toMatchObject({ blocked: true, reasonCode: "RECORD_TOO_LARGE" });
+    expect(String(refusal(held)["message"])).toContain(join(".stamity", "runs", "2026-10-18_night", "record.md"));
   });
+
+  it("holds, naming the fault, past 2,000 run folders", async () => {
+    await seedHead();
+    await seedRun("2026-10-18_night", BRANCH, 2);
+    const runs = getRepo().path(".stamity/runs");
+    await Promise.all(Array.from({ length: 2_000 }, (_, index) => mkdir(join(runs, `2026-01-01_pad-${index}`))));
+    const gate = await placeGate();
+
+    const held = run(gate, { cwd: getRepo().dir, input: completion("s") });
+
+    expect(held.code).toBe(2);
+    expect(refusal(held)).toMatchObject({ blocked: true, reasonCode: "RUN_FOLDERS_OVER_2000" });
+  });
+
+  // POSIX permissions make the read fail; win32 ignores the mode bits, and root reads through them.
+  it.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
+    "holds, naming the fault, when the runs folder cannot be read",
+    async () => {
+      await seedHead();
+      await seedRun("2026-10-18_night", BRANCH, 2);
+      const runs = getRepo().path(".stamity/runs");
+      const gate = await placeGate();
+      await chmod(runs, 0o000);
+      try {
+        const held = run(gate, { cwd: getRepo().dir, input: completion("s") });
+
+        expect(held.code).toBe(2);
+        expect(refusal(held)).toMatchObject({ blocked: true, reasonCode: "RECORDS_UNREADABLE" });
+        expect(String(refusal(held)["message"])).toContain("EACCES");
+      } finally {
+        await chmod(runs, 0o755);
+      }
+    },
+  );
 
   it("embeds the one usage-line pattern the pre-flight counts by", () => {
     expect(buildReviewGateScript(GATE_OPTIONS)).toContain(JSON.stringify(USAGE_REVIEW_PATTERN.source));

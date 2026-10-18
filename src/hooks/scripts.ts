@@ -198,7 +198,8 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // rounded up to 51,200 / 1,120. Measured 2026-10-18 on base 45fc20f9 around
   // plan 021 file 2's v2-review-gate-rebuild (a missing counter rebuilt from the
   // run record on this branch, REQ-FLOW-106), at the cap of 10: 40,763 / 892
-  // before, 47,838 / 1,040 after; the ceiling holds.
+  // before, 47,838 / 1,040 after, 48,748 / 1,061 with the held read faults;
+  // the ceiling holds.
   [REVIEW_GATE_FILE]: { bytes: 51_200, lines: 1_120 },
   // Measured 2026-10-16 on the u14b lane (base 2a1c5226): 5,711 bytes / 150
   // lines (claude, generated layout; a plugin root renders 4,983 / 129). Its
@@ -2252,7 +2253,11 @@ export interface ReviewGateScriptOptions {
  * `usage: review r<N>` lines ({@link USAGE_REVIEW_PATTERN}), with the last verdict
  * unrecorded. A completion then holds, below the cap and at it, and the next
  * reviewer's round is counted from it; with no such record or line the gate
- * opens, naming the missing counter, as before.
+ * opens, naming the missing counter, as before. Records it cannot read (past
+ * {@link GUARD_RUN_FOLDERS_MAX} folders, a matching record past
+ * {@link REPORT_READ_MAX_BYTES}, a read fault) hold the completion under a
+ * reason code naming the fault, as the guard refuses past the folder bound:
+ * otherwise deleting the counter and then the records' readability reopens it.
  *
  * `failMode` decides only what a refusal DOES, exactly as in the sibling guard:
  * where a client honours a blocking status the completion stops, and where it
@@ -2300,12 +2305,13 @@ export function buildReviewGateScript(opts: ReviewGateScriptOptions): string {
       "committed record stays. The in-progress record whose Branch: names the",
       "branch .git/HEAD names gives the round count, its usage: review lines, with",
       "the last verdict unrecorded, so a completion holds, at the cap too, until a",
-      "review records one. With no such record or line the gate opens.",
+      "review records one. With no such record or line the gate opens; run records",
+      "it cannot read (past the folder or size bound, or a read fault) hold it.",
       "",
-      "Fail-open: a counter file that is oversized, unreadable or unparseable, or",
-      "run records that cannot be read, open the gate and say so on stderr. A gate",
-      "that cannot read its own state must not wedge a run. A run with no recorded",
-      "round is not this gate's to hold either — it exits 0 untouched.",
+      "Fail-open: a counter file that is oversized, unreadable or unparseable opens",
+      "the gate and says so on stderr. A gate that cannot read its own state must",
+      "not wedge a run. A run with no recorded round is not this gate's to hold",
+      "either — it exits 0 untouched.",
       "",
       ...(blocking
         ? [`Blocking client: a refusal exits ${BLOCKING_EXIT_CODE} and the completion stops.`]
@@ -2730,7 +2736,9 @@ function rebuilt(root) {
   } catch (error) {
     if (!error || (error.code !== "ENOENT" && error.code !== "ENOTDIR")) throw error;
   }
-  if (names.length > RUN_FOLDERS_MAX) throw Object.assign(new Error("run folders"), { code: "RUN_FOLDERS_OVER_" + RUN_FOLDERS_MAX });
+  if (names.length > RUN_FOLDERS_MAX) {
+    throw Object.assign(new Error("run folders"), { code: "RUN_FOLDERS_OVER_" + RUN_FOLDERS_MAX, path: runsDir });
+  }
   let found = null;
   for (const name of names) {
     // Under the lock this walk is part of the critical section, so each record re-arms the waiters' idle window.
@@ -2745,7 +2753,7 @@ function rebuilt(root) {
       named ??= BRANCH.exec(line)?.[1] ?? null;
     }
     if (status === null || !IN_PROGRESS.test(status) || named !== branch) continue;
-    if (head.size > RECORD_MAX_BYTES) throw Object.assign(new Error("record"), { code: "RECORD_TOO_LARGE" });
+    if (head.size > RECORD_MAX_BYTES) throw Object.assign(new Error("record"), { code: "RECORD_TOO_LARGE", path });
     const whole = head.size <= HEAD_READ_BYTES ? head : recordText(path, RECORD_MAX_BYTES);
     const rounds = whole === null ? 0 : whole.lines.filter((line) => USAGE_REVIEW.test(line)).length;
     if (rounds > 0 && (found === null || rounds > found.rounds)) {
@@ -2755,13 +2763,20 @@ function rebuilt(root) {
   return found;
 }
 
-/** The entry a missing counter is rebuilt to, or null with the reason the gate opens instead. */
+/**
+ * The entry a missing counter is rebuilt to; or null with the reason the gate
+ * opens; or, when the records cannot be read, the fault that holds it: deleting
+ * the counter and then making the records unreadable must not reopen the gate.
+ */
 function rebuild() {
   try {
     const entry = rebuilt(repoRoot());
-    return { entry, why: entry === null ? "no in-progress run record on this branch has a usage: review line" : "" };
+    return { entry, fault: "", why: entry === null ? "no in-progress run record on this branch has a usage: review line" : "" };
   } catch (error) {
-    return { entry: null, why: "the run records could not be read (" + String((error && error.code) || "a fault") + ")" };
+    const code = String((error && error.code) || "a fault");
+    const fault = code === "RECORD_TOO_LARGE" || code.startsWith("RUN_FOLDERS_OVER_") ? code : "RECORDS_UNREADABLE";
+    const where = error && typeof error.path === "string" ? " at " + error.path : "";
+    return { entry: null, fault, why: "the run records could not be read (" + code + where + ")" };
   }
 }
 
@@ -3141,6 +3156,17 @@ function decide() {
   // A missing counter is rebuilt from this branch's run record rather than opened:
   // deleting the file, or a reclaimed machine losing it, must not release the run.
   const found = state.fault === "STATE_ABSENT" ? rebuild() : null;
+  if (found !== null && found.fault !== "") {
+    return {
+      blocked: BLOCKING,
+      runId,
+      maxRounds: MAX_ROUNDS,
+      reasonCode: found.fault,
+      message:
+        "No review-gate counter at " + STATE_FILE + " and " + found.why + ", so the rounds cannot be rebuilt " +
+        "and completion is held. " + KEYED + " Make the records readable, or record a review round, which writes the counter.",
+    };
+  }
   if (found !== null && found.entry === null) {
     return {
       blocked: false,

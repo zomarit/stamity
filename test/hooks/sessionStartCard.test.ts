@@ -221,7 +221,9 @@ describe("the session-start resume card", () => {
     const sessionLines = [
       "Session: a Claude Code cloud session.",
       "- GraphQL, gh pr, gh issue and Projects are unavailable here; use gh api.",
-      "- The review-gate counter resets with the VM.",
+      // TEST CHANGE (v2-review-gate-rebuild, REQ-FLOW-085/106): a missing review-gate counter is rebuilt
+      // from the run record on this branch now, so Claude Code's cloud line no longer says it resets with the VM.
+      "- A missing review-gate counter is rebuilt from the run record on this branch.",
       "Also detected: a CI run.",
     ];
     expect(session).toBe(`${banner}\n${sessionLines.join("\n")}\n`);

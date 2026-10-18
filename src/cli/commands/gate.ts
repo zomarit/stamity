@@ -38,7 +38,7 @@ import { screenOutbound } from "../../runs/morning.ts";
 import { REQUIRED_FLOORS, runPreflight, type PreflightDeps, type PushUrlFacts, type RestRead } from "../../runs/preflight.ts";
 import { resolveRepo } from "../../runs/pullRequest.ts";
 import { RECORD_FILE, REPORT_READ_MAX_BYTES, runRelPath, USAGE_REVIEW_PATTERN } from "../../runs/layout.ts";
-import { findCardRun } from "../../runs/resumeCard.ts";
+import { findCardRun, readCurrentBranch } from "../../runs/resumeCard.ts";
 import { findPackageRoot } from "../../shared/paths.ts";
 import { bareShapeRefusal, gitDiscoveryMeetsBareShape } from "../../merge/safeWrite.ts";
 import { fileSystemProbe, gitProgramFor, isNodeModulesBin, programNotFound, resolveProgramOnPath, searchPathOf } from "../../shared/programPath.ts";
@@ -1954,9 +1954,14 @@ function floorCopies(root: string, manifest: SetupManifest | null): PreflightDep
     });
 }
 
-/** The in-progress record's `usage: review r<N>` lines ({@link USAGE_REVIEW_PATTERN}), `0` with no run in progress. */
-function usageReviewLines(root: string, now: Date): number {
-  const run = findCardRun(root, now);
+/**
+ * The `usage: review r<N>` lines ({@link USAGE_REVIEW_PATTERN}) of the in-progress run on the branch `.git/HEAD`
+ * names, the run the review gate rebuilds a missing counter from (REQ-FLOW-106); `0` with no such run, or no branch.
+ */
+export function usageReviewLines(root: string, now: Date): number {
+  const currentBranch = readCurrentBranch(root);
+  if (currentBranch === null) return 0;
+  const run = findCardRun(root, now, { currentBranch });
   if (run === null || run.closed) return 0;
   const record = readRegular(join(root, runRelPath(run.runId, RECORD_FILE)), REPORT_READ_MAX_BYTES);
   return record === undefined ? 0 : record.toString("utf8").split(/\r?\n/).filter((line) => USAGE_REVIEW_PATTERN.test(line)).length;
