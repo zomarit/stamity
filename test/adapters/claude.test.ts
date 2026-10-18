@@ -1815,6 +1815,11 @@ describe("the person-only deny rows (u20-hook-emission, REQ-FLOW-102)", () => {
     ["Bash(git push * --delete*)", "git push --tags origin --delete v1", "git push --tags origin v1"],
     ["Bash(git push * -d *)", "git push --tags origin -d v1", "git push --tags origin"],
     ["Bash(git push * +*)", "git push --tags origin +main", "git push --tags origin main"],
+    // review/73, review/74: a local tag moved or deleted behind an ask-class `git tag` prefix.
+    ["Bash(git tag * -f*)", "git tag -a v1 -m x -f", "git tag -a v1 -m x"],
+    ["Bash(git tag * --force*)", "git tag -s v1 -m x --force", "git tag -s v1 -m x"],
+    ["Bash(git tag * -d*)", "git tag -m x -d v1", "git tag -m x v1"],
+    ["Bash(git tag * --delete*)", "git tag --annotate -m x --delete v1", "git tag --annotate -m x v1"],
     ["Bash(gh pr merge * -d*)", "gh pr merge 7 -d", "gh pr merge 7"],
     ["Bash(gh pr merge * --delete-branch*)", "gh pr merge 7 --squash --delete-branch", "gh pr merge 7 --squash"],
     ["Bash(gh pr merge -d*)", "gh pr merge -d 7", "gh pr merge --squash 7"],
@@ -1840,8 +1845,9 @@ describe("the person-only deny rows (u20-hook-emission, REQ-FLOW-102)", () => {
       expect(deny.filter((rule) => ruleMatches(rule, asked)), asked).toEqual([]);
       expect(personOnlyVerdict(asked, ctx), asked).toMatchObject({ deny: true, ask: true });
     }
-    // The cell's four lines an ask prefix row also matches: a deny row matches each too, which the client reads first.
-    for (const line of ["git push --tags --force origin", "gh pr merge 7 -d", "gh release upload v1 a --clobber", "gh repo edit --default-branch x --visibility public"]) {
+    // The cell's four lines an ask prefix row also matches, and a tag force behind `git tag -a` (review/73): a deny row
+    // matches each too, which the client reads first.
+    for (const line of ["git push --tags --force origin", "gh pr merge 7 -d", "gh release upload v1 a --clobber", "gh repo edit --default-branch x --visibility public", "git tag -a v1 -m x -f"]) {
       expect(ask.some((rule) => ruleMatches(rule, line)), line).toBe(true);
       expect(deny.some((rule) => ruleMatches(rule, line)), line).toBe(true);
     }

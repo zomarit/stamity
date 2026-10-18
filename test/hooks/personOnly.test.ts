@@ -1114,6 +1114,10 @@ const CLASSES: readonly (readonly [command: string, rule: string, ask: boolean, 
   ["curl -X DELETE https://api.github.com/repos/o/r/environments/release/eu/variables/FOO", "secrets-delete", false],
   ["gh api -X PUT repos/o/r/environments/release%2Feu/secrets/TOKEN -f encrypted_value=x -f key_id=1", "secrets", true],
   ["gh api -X DELETE repos/o/r/environments/prod/variables/FOO", "secrets-delete", false],
+  // review/76: the user's own Codespaces secrets, the REST twin of `gh secret delete --user` and `gh secret set --user`.
+  ["gh api -X DELETE user/codespaces/secrets/TOKEN", "secrets-delete", false],
+  ["curl -X DELETE -H 'Authorization: Bearer x' https://api.github.com/user/codespaces/secrets/TOKEN", "secrets-delete", false],
+  ["gh api -X PUT /user/codespaces/secrets/TOKEN -f encrypted_value=x -f key_id=1", "secrets", true],
   // review/52: yarn classic's own `tag` command removes and adds a dist-tag, at the start or after `workspace <name>`.
   ["yarn tag remove x beta", "unpublish", false],
   ["yarn tag rm x beta", "unpublish", false],
@@ -1184,6 +1188,12 @@ describe("personOnlyVerdict — ask or refuse (v0a)", () => {
     expect(personOnlyVerdict("gh api -X PATCH repos/o/r/git/refs/heads/environments/release/eu/secrets -f sha=abc", ON_FEATURE)).toEqual({
       deny: false,
     });
+  });
+
+  it("allows a read of the user's Codespaces secrets, the neighbour of their deletion and write (review/76)", () => {
+    expect(personOnlyVerdict("gh api user/codespaces/secrets", ON_FEATURE)).toEqual({ deny: false });
+    expect(personOnlyVerdict("gh api user/codespaces/secrets/public-key", ON_FEATURE)).toEqual({ deny: false });
+    expect(personOnlyVerdict("curl https://api.github.com/user/codespaces/secrets/TOKEN", ON_FEATURE)).toEqual({ deny: false });
   });
 
   it("allows yarn classic's tag listing, and a script named `tag` run through `yarn run` (review/52)", () => {
@@ -1929,6 +1939,18 @@ describe("CLAUDE_DENY_ROWS and CLAUDE_ASK_ROWS", () => {
     expect(CLAUDE_ASK_ROWS).toEqual([...ASK_PREFIX_ROWS, ...ASK_MCP_ROWS]);
     // A row on both lists would be refused, never asked: the client reads a deny row first.
     for (const row of CLAUDE_ASK_ROWS) expect(CLAUDE_DENY_ROWS, row).not.toContain(row);
+  });
+
+  it("denies a tag force or deletion behind each ask-class `git tag` prefix with a mid-pattern row (review/73, review/74)", () => {
+    const tagAsks = ASK_PREFIX_ROWS.filter((row) => row.startsWith("Bash(git tag "));
+    expect(tagAsks).toHaveLength(5);
+    for (const flag of ["-f", "--force", "-d", "--delete"]) {
+      expect(DENY_MID_ROWS, flag).toContain(`Bash(git tag * ${flag}*)`);
+      for (const row of tagAsks) {
+        const line = `${prefixOf(row)} v1 -m x ${flag}`;
+        expect(personOnlyVerdict(line, ON_FEATURE), line).toMatchObject({ deny: true, rule: "tag-delete", ask: false });
+      }
+    }
   });
 
   it("holds unarchiving beside archiving, since both change whether the repository takes writes (pr/96)", () => {

@@ -3386,7 +3386,9 @@ if (told !== null) {
  * The verdict is collected over every place the call's git runs in and both
  * readings of a PowerShell call: one refuse-class act refuses the call, and
  * the call asks only when every act found is ask-class and the mode reads
- * attended. The mode is read for every ask, so a fault reading it refuses. A
+ * attended; a sub-agent's call, or one in Claude Code's `auto` permission mode,
+ * is refused instead (review/72, review/75). The mode is read for every ask, so
+ * a fault reading it refuses. A
  * GitHub MCP tool of {@link GITHUB_MCP_ROWS} is classed by its row the same
  * way, with no shell reading.
  *
@@ -4049,14 +4051,32 @@ function unattendedSentence(act, rule) {
 }
 
 /**
+ * An attended ask-class act's decision: the person is asked, except where a sub-agent runs it (any agent identity the
+ * core guard reads, review/72), since the act is the person's, or in Claude Code's \`auto\` permission mode, where a
+ * classifier may settle the prompt (review/75); both are refused.
+ */
+function attendedAsk(payload, act, rule) {
+  const told = act + " is a person-only act (\`" + rule + "\`) and ";
+  const end = " (REQ-FLOW-102). Give the person the exact command.";
+  const names = ["agent_type", "subagent_type", "agentType", "subagentType", "agent_id", "subagent_id"];
+  if (names.some((name) => Object.hasOwn(payload, name) && typeof payload[name] === "string" && payload[name] !== "")) {
+    return { ask: false, reason: told + "a sub-agent runs it: the act is the person's, so only the main thread may ask for it" + end };
+  }
+  if (payload.permission_mode === "auto") {
+    return { ask: false, reason: told + "this session runs in the \`auto\` permission mode, where a classifier may settle the prompt: it stays the person's to run" + end };
+  }
+  return { ask: true, reason: askSentence(act, rule) };
+}
+
+/**
  * A GitHub MCP row's tool, classed by its row: the refused one refuses, and an ask-class one asks only while the mode
  * reads attended, since a settings ask row would otherwise wait for nobody in an unattended run (REQ-FLOW-120).
  */
-function mcpDecision(tool, ask, root) {
+function mcpDecision(tool, ask, root, payload) {
   const act = "A call to the GitHub MCP server";
   if (!ask) return { ask: false, reason: refuseSentence(act, tool) };
   const why = unattendedBy(root);
-  return why === null ? { ask: true, reason: askSentence(act, tool) } : { ask: false, reason: unattendedSentence(act, tool) + " " + why };
+  return why === null ? attendedAsk(payload, act, tool) : { ask: false, reason: unattendedSentence(act, tool) + " " + why };
 }
 
 /** The decision this call earns: null to allow it, else whether the client asks the person and the reason. */
@@ -4065,7 +4085,7 @@ function decide() {
   const payload = raw.trim() === "" ? {} : JSON.parse(raw);
   if (payload === null || typeof payload !== "object") throw new Error("payload");
   if (typeof payload.tool_name === "string" && MCP_ROWS.has(payload.tool_name)) {
-    return mcpDecision(payload.tool_name, MCP_ROWS.get(payload.tool_name), repoRoot());
+    return mcpDecision(payload.tool_name, MCP_ROWS.get(payload.tool_name), repoRoot(), payload);
   }
   const command = shellCommand(payload);
   if (command === null) return null;
@@ -4091,7 +4111,7 @@ function decide() {
   const run = () => texts.map((text) => unattendedPushVerdict(text)).find((verdict) => verdict.deny);
   if (found.length > 0) {
     const why = unattendedBy(root);
-    if (why === null) return { ask: true, reason: askSentence(found[0].act, found[0].rule) };
+    if (why === null) return attendedAsk(payload, found[0].act, found[0].rule);
     // Unattended, a push keeps the push rule's own reason; any other act goes on the morning list.
     const push = run();
     return { ask: false, reason: (push !== undefined ? push.reason : unattendedSentence(found[0].act, found[0].rule)) + " " + why };

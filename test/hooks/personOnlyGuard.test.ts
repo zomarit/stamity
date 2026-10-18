@@ -410,6 +410,63 @@ describe("each client's answer to a person-only act (v0a2)", () => {
     expect(read("mcp__github__delete_repository")).toMatchObject({ deny: true, reason: expect.stringContaining("(REQ-FLOW-124)") });
     expect(read("mcp__github__get_file_contents")).toEqual({ deny: false });
   });
+
+  /** The sentence an attended ask-class act earns when a sub-agent runs it (review/72). */
+  const bySubAgent = (verdict: { act: string; rule: string }): string =>
+    `${verdict.act} is a person-only act (\`${verdict.rule}\`) and a sub-agent runs it: the act is the person's, so only the main thread may ask for it (REQ-FLOW-102). Give the person the exact command.`;
+  /** The sentence an attended ask-class act earns in Claude Code's `auto` permission mode (review/75). */
+  const inAutoMode = (verdict: { act: string; rule: string }): string =>
+    `${verdict.act} is a person-only act (\`${verdict.rule}\`) and this session runs in the \`auto\` permission mode, where a classifier may settle the prompt: it stays the person's to run (REQ-FLOW-102). Give the person the exact command.`;
+  /** A client's shell-call payload for the merge, with the given fields beside it. */
+  const mergeWith = (tool: Tool, fields: Record<string, string>): string => JSON.stringify({ ...JSON.parse(payload(tool, MERGE)), ...fields });
+
+  it.each(TOOLS)("%s: refuses an attended ask-class act a sub-agent runs, naming the act the person's, while the main thread asks (review/72)", async (tool) => {
+    if (!merge.deny) throw new Error("the merge is no person-only act");
+    const guard = await placeGuard(tool);
+    const read = (fields: Record<string, string>): Decision => clientDecision(tool, run(guard, mergeWith(tool, fields)), JSON.stringify(fields));
+    // Each identity field the core guard reads, the agent's type and its instance alike.
+    for (const fields of [
+      { agent_type: "stamity-test-runner", agent_id: "a1" },
+      { agent_id: "a1" },
+      { subagent_type: "general-purpose" },
+      { agentType: "stamity-fixer" },
+      { subagentType: "x" },
+      { subagent_id: "a2" },
+    ]) {
+      expect(read(fields), JSON.stringify(fields)).toEqual({ deny: true, reason: expect.stringContaining(bySubAgent(merge)) });
+    }
+    // The main thread, its identity fields absent or empty, asks as before.
+    expect(read({})).toEqual(expectedAttended(tool, merge));
+    expect(read({ agent_type: "", agent_id: "" })).toEqual(expectedAttended(tool, merge));
+    // A refuse-class act from a sub-agent keeps the refuse sentence.
+    const forced = personOnlyVerdict("git push --force origin main", ON_FEATURE);
+    if (!forced.deny) throw new Error("the force push is no person-only act");
+    const line = JSON.stringify({ ...JSON.parse(payload(tool, "git push --force origin main")), agent_id: "a1" });
+    expect(clientDecision(tool, run(guard, line), "forced")).toEqual({ deny: true, reason: expect.stringContaining(told(forced)) });
+    // Unattended, the sub-agent's act keeps the morning-list reason.
+    await getRepo().seedFiles(UNATTENDED);
+    expect(read({ agent_id: "a1" })).toEqual({ deny: true, reason: expect.stringContaining(`${morningList(merge)} ${WHY}`) });
+  });
+
+  it.each(TOOLS)("%s: refuses an attended ask-class act in Claude Code's auto permission mode, and asks in the other modes (review/75)", async (tool) => {
+    if (!merge.deny) throw new Error("the merge is no person-only act");
+    const guard = await placeGuard(tool);
+    const read = (mode: string): Decision => clientDecision(tool, run(guard, mergeWith(tool, { permission_mode: mode })), mode);
+    expect(read("auto")).toEqual({ deny: true, reason: expect.stringContaining(inAutoMode(merge)) });
+    for (const mode of ["default", "acceptEdits", "plan", "bypassPermissions", "dontAsk"]) {
+      expect(read(mode), mode).toEqual(expectedAttended(tool, merge));
+    }
+  });
+
+  it("refuses a GitHub MCP merge a sub-agent calls or one in the auto permission mode, and asks for the main thread's (review/72, review/75)", async () => {
+    const guard = await placeGuard("claude");
+    const call = (fields: Record<string, string>): Decision =>
+      clientDecision("claude", run(guard, JSON.stringify({ ...JSON.parse(mcpCall("mcp__github__merge_pull_request")), ...fields })), JSON.stringify(fields));
+    const verdict = { act: "A call to the GitHub MCP server", rule: "mcp__github__merge_pull_request" };
+    expect(call({ agent_type: "stamity-implementer", agent_id: "a1" })).toEqual({ deny: true, reason: expect.stringContaining(bySubAgent(verdict)) });
+    expect(call({ permission_mode: "auto" })).toEqual({ deny: true, reason: expect.stringContaining(inAutoMode(verdict)) });
+    expect(call({ permission_mode: "default" })).toMatchObject({ deny: true, ask: true });
+  });
 });
 
 describe("the nested-command depth limit (pr/58)", () => {

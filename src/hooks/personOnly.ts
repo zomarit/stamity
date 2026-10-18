@@ -245,6 +245,10 @@ export const CLAUDE_DENY_ROWS: readonly string[] = [
   "Bash(git push * --delete*)",
   "Bash(git push * -d *)",
   "Bash(git push * +*)",
+  "Bash(git tag * -f*)",
+  "Bash(git tag * --force*)",
+  "Bash(git tag * -d*)",
+  "Bash(git tag * --delete*)",
   "Bash(gh pr merge * -d*)",
   "Bash(gh pr merge * --delete-branch*)",
   "Bash(gh pr merge -d*)",
@@ -1488,7 +1492,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       ) {
         deny("push-default", `A REST merge into the default branch (${shown})`);
       }
-      if (/^((actions|dependabot|codespaces|agents)|environments\/.+)\/(secrets|variables)(\/|$)/i.test(path)) {
+      // The user's own Codespaces secrets sit at `user/codespaces/secrets`, which no owner cut above reaches (review/76).
+      if (/^((actions|dependabot|codespaces|agents|user\/codespaces)|environments\/.+)\/(secrets|variables)(\/|$)/i.test(path)) {
         if (method === "DELETE") deny("secrets-delete", `A secret or variable deletion (${shown})`);
         else deny("secrets", `A secret or variable write (${shown})`);
       }
