@@ -2374,7 +2374,8 @@ describe("SECURITY.md", () => {
         "a `git remote` write",
         "a `git config` write of a `remote.*` or `url.*` key or section",
         "one of git's program-valued variables",
-        "thirteen rows more deny the GitHub MCP server's tools by name",
+        // MOVED 2026-10-18 (PR #112 round 4): create_pull_request joined the MCP rows, thirteen to fourteen.
+        "fourteen rows more deny the GitHub MCP server's tools by name",
       ]) {
         expect(guard, `the guard's row does not state: ${claim}`).toContain(claim);
       }
@@ -2411,7 +2412,8 @@ describe("SECURITY.md", () => {
     // unattended, a line setting git's program or configuration variables is refused whatever
     // program it runs, `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` joining the set, and
     // `gh pr update-branch` is refused.
-    it("states the thirteen MCP rows, the hooks residual and the any-program variable rule", () => {
+    // MOVED 2026-10-18 (PR #112 round 4): fourteen rows, create_pull_request among them.
+    it("states the fourteen MCP rows, the hooks residual and the any-program variable rule", () => {
       const guard = section("| The main thread of any session", "| An unattended run, or the text that steers one | Pushing a change");
       const residuals = section("### Cloud and unattended runs", "## Standards mapping");
       for (const tool of [
@@ -2427,6 +2429,7 @@ describe("SECURITY.md", () => {
         "update_pull_request",
         "update_pull_request_state",
         "update_pull_request_draft_state",
+        "create_pull_request",
         "delete_repository",
       ]) {
         expect(guard, `the guard's row does not name the MCP tool ${tool}`).toContain(`\`${tool}\``);
@@ -2442,7 +2445,7 @@ describe("SECURITY.md", () => {
         expect(guard, `the guard's row does not state: ${claim}`).toContain(claim);
       }
       for (const residual of [
-        "thirteen `permissions.deny` rows refuse the GitHub MCP server's merge",
+        "fourteen `permissions.deny` rows refuse the GitHub MCP server's merge",
         "a merge, a branch write, a review approval or a ready-for-review mark it makes is a tool call",
         "the rows name a server configured as `github`, the key the engine writes, so the same server configured under another name escapes them",
         "Hooks the run writes.",
@@ -2463,6 +2466,8 @@ describe("SECURITY.md", () => {
       for (const stale of [
         "five rows more deny",
         "five `permissions.deny` rows",
+        "thirteen rows more deny",
+        "thirteen `permissions.deny` rows",
         "and a git call on a line that sets one of git's program-valued variables",
         "PowerShell's `Set-Item env:GIT_CONFIG_COUNT 1` among them, passes",
         "PowerShell's `Set-Item env:GIT_EDITOR …` among them, passes",
@@ -2587,6 +2592,60 @@ describe("SECURITY.md", () => {
       expect(residuals.indexOf("The run folder ceiling.")).toBeGreaterThan(residuals.indexOf("The record head."));
       expect(flat, "SECURITY.md says again that only the newest run folders are read").not.toContain("among the newest run folders");
     });
+
+    // ADDED 2026-10-18 (PR #112 round 4, REQ-FLOW-102, REQ-FLOW-104, REQ-FLOW-120): the guard reads a symbolic-ref
+    // write as a tag or a default-branch push to come, judges each curl request after `--next` alone, refuses the
+    // GraphQL repository-settings, protection, ruleset and custom-property mutations and the custom-property REST
+    // writes as protection, and refuses a call whose method or targets the line hides
+    // (src/hooks/personOnly.ts::personOnlyVerdict); Claude Code denies the GitHub MCP server's create_pull_request
+    // (src/hooks/personOnly.ts::CLAUDE_DENY_ROWS); a worktree policy never carries the run-ended marker
+    // (src/worktree/policy.ts::resolveStrategy, src/worktree/policy.ts::assertRulesAdmissible). What stays open is
+    // named: a symbolic ref on disk, a same-line branch switch, the default curl and wget configuration files, and a
+    // symlink row sharing the marker.
+    it("states round 4's guard readings, the MCP creation row and the marker's worktree rule", () => {
+      const guard = section("| The main thread of any session", "| An unattended run, or the text that steers one | Pushing a change");
+      const residuals = section("### Cloud and unattended runs", "## Standards mapping");
+      for (const claim of [
+        "a secret, variable, protection, ruleset or custom-property write",
+        "A `git symbolic-ref` write is read too: one naming a tag is refused as a tag, and one pointing a name at the default branch as a push of that branch to come",
+        "Each curl request after `--next` (or `-:`) is judged alone, with its own method, body and targets",
+        "the branch protection rule, ruleset and custom-property mutations, and a REST write of a custom property's value or definition",
+        "are refused as protection writes, attended or not",
+        "So is an HTTP call whose method or targets the line hides (`HTTP_TARGET_HIDDEN`)",
+        "a curl write whose target curl's globbing would expand (`{` or `[`) unless `-g` or `--globoff` is set, and a wget write reading its targets from `-i`",
+        "pull-request creation (`create_pull_request`)",
+        "as `gh pr create` does for a new pull request",
+        "a symbolic ref already on disk, a branch switch earlier on the line before a push whose destination is implied, a method, body or URL from curl's or wget's default configuration file",
+      ]) {
+        expect(guard, `the guard's row does not state: ${claim}`).toContain(claim);
+      }
+      for (const residual of [
+        "pull-request-creating, pull-request-update and repository-delete tools by name",
+        "A symbolic ref already on disk.",
+        "`git push origin <name>` then sends the branch the ref points at, and the guard compares only the literal name",
+        "A branch switch before an implied push on the same line.",
+        "`git symbolic-ref HEAD refs/heads/main && git push`",
+        "curl's and wget's default configuration files.",
+        "curl's `.curlrc` (found through `CURL_HOME` or `XDG_CONFIG_HOME`, and skipped when `-q` is the first option)",
+        "the file `WGETRC` names",
+        "A worktree policy never carries the marker into another checkout",
+        "A `symlink` row on `.stamity` still shares it live",
+        "`src/worktree/policy.ts::resolveStrategy`",
+      ]) {
+        expect(residuals, `the cloud section does not name: ${residual}`).toContain(residual);
+      }
+      // Each new residual names the control that holds, and sits beside the attended default-branch gap.
+      for (const [start, end] of [
+        ["A symbolic ref already on disk.", "A branch switch before an implied push on the same line."],
+        ["A branch switch before an implied push on the same line.", "curl's and wget's default configuration files."],
+        ["curl's and wget's default configuration files.", "Respelling."],
+      ] as const) {
+        const body = residuals.slice(residuals.indexOf(start), residuals.indexOf(end));
+        expect(body, `${start} names no control`).toContain("only the remote's own protection stands in front of");
+        expect(body.length, `${start} is out of order`).toBeGreaterThan(start.length);
+      }
+      expect(residuals.indexOf("A symbolic ref already on disk.")).toBeGreaterThan(residuals.indexOf("The default branch's name in a clone no run verb ran in."));
+    });
   });
 
   it("covers the four surfaces the phase claims, and the limits", () => {
@@ -2709,7 +2768,8 @@ describe("docs/security-mapping.md", () => {
       "a merge or a review approval",
       "a `git remote` write and a `git config` write of a `remote.*` or `url.*` key",
       "one of git's program-valued variables",
-      "thirteen rows more deny the GitHub MCP server's merge, branch-content, branch-creation, review-submitting, pull-request-update and repository-delete tools by name",
+      // MOVED 2026-10-18 (PR #112 round 4): create_pull_request joined the MCP rows.
+      "fourteen rows more deny the GitHub MCP server's merge, branch-content, branch-creation, review-submitting, pull-request-creating, pull-request-update and repository-delete tools by name",
       "the GitHub MCP server on the clients that take no per-tool deny",
       "A `git config` write of a `url.*` key is refused beside a `remote.*` one, the run verbs' origin pin the second check",
       "The held set is a glob list, and the origin pin a work-tree file",
@@ -2724,7 +2784,8 @@ describe("docs/security-mapping.md", () => {
   // ADDED 2026-10-16 (plan 021 file 1, the whole-branch round's second page fix): the mapping
   // page carries what SECURITY.md now states: the thirteen MCP rows and the server-name gap, the
   // hooks residual, the any-program variable rule and `gh pr update-branch`.
-  it("states the thirteen MCP rows, the hooks residual and the any-program variable rule", () => {
+  // MOVED 2026-10-18 (PR #112 round 4): fourteen rows.
+  it("states the fourteen MCP rows, the hooks residual and the any-program variable rule", () => {
     const flat = text.replace(/\s+/g, " ");
     for (const claim of [
       "`gh pr update-branch`",
@@ -2738,7 +2799,7 @@ describe("docs/security-mapping.md", () => {
     ]) {
       expect(flat, `the mapping page does not state: ${claim}`).toContain(claim);
     }
-    for (const stale of ["five rows more deny", "and a git call on a line that sets one of git's program-valued variables"]) {
+    for (const stale of ["five rows more deny", "thirteen rows more deny", "and a git call on a line that sets one of git's program-valued variables"]) {
       expect(flat, `the mapping page says again: ${stale}`).not.toContain(stale);
     }
   });
@@ -2779,6 +2840,23 @@ describe("docs/security-mapping.md", () => {
       "`src/cli/commands/run.ts::alignOriginHead`",
       "a push of a default branch named neither `main` nor `master` passes the person-only rule",
       "Past 2,000 run folders the guard refuses every call the unattended rule would read, attended sessions included",
+    ]) {
+      expect(flat, `the mapping page does not state: ${claim}`).toContain(claim);
+    }
+  });
+
+  // ADDED 2026-10-18 (PR #112 round 4): the mapping page carries what SECURITY.md now states of the guard's round 4
+  // readings and the MCP creation row, with the three attended residuals and the controls that hold.
+  it("states round 4's guard readings and residuals as SECURITY.md does", () => {
+    const flat = text.replace(/\s+/g, " ");
+    for (const claim of [
+      "A `git symbolic-ref` write naming a tag is a tag, and one pointing a name at the default branch a push of that branch to come",
+      "each curl request after `--next` is judged alone",
+      "the GraphQL repository-settings, protection, ruleset and custom-property mutations, and a custom-property REST write, are protection writes",
+      "and so is an HTTP call whose method or targets the line hides (`HTTP_TARGET_HIDDEN`)",
+      "as `gh pr create` does for a new pull request",
+      "a symbolic ref already on disk, a branch switch earlier on the line before a push whose destination is implied, and a method, body or URL from curl's or wget's default configuration file",
+      "the remote's own protection the control that holds; unattended, the raw-push refusal holds the first two",
     ]) {
       expect(flat, `the mapping page does not state: ${claim}`).toContain(claim);
     }
