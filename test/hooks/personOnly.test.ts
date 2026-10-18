@@ -583,6 +583,19 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["printf 'symref-create refs/heads/safe refs/heads/%s\\n' \"$B\" | git update-ref --stdin", "push-default"],
   ["printf 'symref-create refs/heads/safe\\0refs/heads/main\\0' | git update-ref -z --stdin", "push-default"],
   ["printf 'symref-create refs/tags/v9 refs/heads/feat\\n' | git update-ref --stdin", "tag"],
+  // PR #112's resolution round 4d. A symref command after another in the same text (pr/82): the line break between them
+  // spelled as an escape (`\n`, `\0` with `-z`, `\x0a`, `\012`, `\x00`), by `echo -e`, in ANSI-C quoting or through a `%b`
+  // placeholder; and the words of one ended by a Unicode or a four-digit octal escape.
+  ["printf 'verify refs/heads/x HEAD\\nsymref-create refs/heads/safe refs/heads/main\\n' | git update-ref --stdin", "push-default"],
+  ["printf 'update refs/heads/x\\0HEAD\\0\\0symref-create refs/heads/safe\\0refs/heads/main\\0' | git update-ref -z --stdin", "push-default"],
+  ["printf 'verify refs/heads/x HEAD\\x0asymref-update refs/heads/safe refs/heads/main\\n' | git update-ref --stdin", "push-default"],
+  ["printf 'verify refs/heads/x HEAD\\012symref-create refs/heads/safe main\\n' | git update-ref --stdin", "push-default"],
+  ["printf 'update refs/heads/x\\x00HEAD\\x00\\x00symref-create refs/heads/safe\\x00refs/heads/main\\x00' | git update-ref -z --stdin", "push-default"],
+  ["echo -e 'verify refs/heads/x HEAD\\nsymref-create refs/heads/safe refs/heads/main' | git update-ref --stdin", "push-default"],
+  ["git update-ref --stdin <<< $'verify refs/heads/x HEAD\\nsymref-create refs/heads/safe refs/heads/main'", "push-default"],
+  ["printf '%bsymref-create refs/heads/safe refs/heads/main\\n' 'verify refs/heads/x HEAD\\n' | git update-ref --stdin", "push-default"],
+  ["printf 'symref-create\\u0020refs/heads/safe\\u0020refs/heads/main\\n' | git update-ref --stdin", "push-default"],
+  ["echo -e 'symref-create\\0040refs/heads/safe\\0040refs/heads/main' | git update-ref --stdin", "push-default"],
 ];
 
 const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
@@ -837,6 +850,12 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
   ["printf 'symref-verify refs/heads/a refs/heads/main\\n' | git update-ref --stdin"],
   ["printf 'symref-delete refs/heads/a\\n' | git update-ref --stdin"],
   ["printf 'update refs/heads/feat/x HEAD\\n' | git update-ref --stdin"],
+  // Their twins in a two-command text (round 4d): a second command pointing a name at another branch or repointing `HEAD`,
+  // in either text format, and words a Unicode escape ends.
+  ["printf 'verify refs/heads/x HEAD\\nsymref-create refs/heads/a refs/heads/feat/x\\n' | git update-ref --stdin"],
+  ["printf 'update refs/heads/x\\0HEAD\\0\\0symref-create refs/heads/a\\0refs/heads/feat/x\\0' | git update-ref -z --stdin"],
+  ["printf 'verify refs/heads/x HEAD\\nsymref-update HEAD refs/heads/main\\n' | git update-ref --stdin"],
+  ["printf 'symref-create\\u0020refs/heads/a\\u0020refs/heads/feat/x\\n' | git update-ref --stdin"],
   // pr/83's twins: a method the line shows.
   ["curl -X GET https://api.github.com/repos/o/r"],
   ["curl -X POST https://example.com/hook"],

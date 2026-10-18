@@ -1325,9 +1325,11 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       } else if (sub === "update-ref" && args.includes("--stdin")) {
         // git 2.46's symref commands in that text (pr/82), by `git symbolic-ref`'s rules: `symref-create` and
         // `symref-update` as `<ref> <target>`, `symref-delete` as `-d <ref>`. A target missing or a printf placeholder
-        // is one the line cannot show; a space, a quote or an escape (`\n`, `\0`, `\x00`) ends a word.
-        const word = String.raw`(?:[\s'"]|\\(?:x[\da-fA-F]{1,2}|[0-7]{1,3}|[a-z]))+([^\s'"\\|;&<>()]+)`;
-        for (const [, op, ref = "", target] of command.matchAll(new RegExp(String.raw`\bsymref-(create|update|delete)${word}(?:${word})?`, "g"))) {
+        // is one the line cannot show; a space, a quote or an escape (`\n`, `\0`, `\x00`, ` `) ends a word. A
+        // command is read wherever it stands: the line break before it may be an escape or a `%b` placeholder ending in a
+        // letter or a digit, and a command read in excess only adds a denial.
+        const word = String.raw`(?:[\s'"]|\\(?:x[\da-fA-F]{1,2}|u[\da-fA-F]{1,4}|U[\da-fA-F]{1,8}|[0-7]{1,4}|[a-z]))+([^\s'"\\|;&<>()]+)`;
+        for (const [, op, ref = "", target] of command.matchAll(new RegExp(String.raw`symref-(create|update|delete)${word}(?:${word})?`, "g"))) {
           const shown = target === undefined || target.includes("%") ? "$" : target;
           verdict ??= symbolicRefVerdict(op === "delete" ? ["-d", ref] : [ref, shown], "git update-ref --stdin");
         }

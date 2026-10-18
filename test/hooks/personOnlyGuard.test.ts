@@ -187,6 +187,9 @@ const MATRIX: readonly (readonly [command: string, rule: string | null])[] = [
   ["printf 'symref-create refs/heads/a refs/heads/feat/x\\n' | git update-ref --stdin", null],
   // A method the line shows, the read neighbour of pr/83's refusal (below, as a call it cannot decide).
   ["curl -X POST https://example.com/hook", null],
+  // PR #112's resolution round 4d, each beside its neighbour: a second symref command after an escaped line break (pr/82).
+  ["printf 'verify refs/heads/x HEAD\\nsymref-create refs/heads/safe refs/heads/main\\n' | git update-ref --stdin", "push-default"],
+  ["printf 'verify refs/heads/x HEAD\\nsymref-create refs/heads/a refs/heads/feat/x\\n' | git update-ref --stdin", null],
 ];
 
 describe("the person-only guard, on every client", () => {
