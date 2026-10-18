@@ -379,8 +379,9 @@ Every gap named in a row above, collected so the list reads without the tables.
     `remote.*` one, the run verbs' origin pin the second check on the push it would move. Attended,
     a directory Claude Code keeps across calls is read from the payload's working directory, which
     was not checked to follow it. Attended, in a clone where `origin/HEAD` is absent or names an
-    older default and no run verb has run since, a push of a default branch named neither `main` nor
-    `master` passes the person-only rule. Past 2,000 run folders the guard refuses every call the
+    older default and no run verb has run since, or where the default's name holds a character the
+    run verbs' push check does not read, so they leave the ref unwritten, a push of a default branch
+    named neither `main` nor `master` passes the person-only rule. Past 2,000 run folders the guard refuses every call the
     unattended rule would read, attended sessions included. Attended, a symbolic ref already on
     disk, a branch switch earlier on the line before a push whose destination is implied, and a
     method, body or URL from curl's or wget's default configuration file pass the person-only

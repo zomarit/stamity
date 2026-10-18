@@ -2579,7 +2579,9 @@ describe("SECURITY.md", () => {
         "It refuses a `gh` group that is not one of gh's built-in commands, an alias or an extension, and `gh alias set` and `gh alias import` too",
         "The default branch's name in a clone no run verb ran in.",
         "a push of a default branch with another name passes the person-only rule",
-        "closes the gap for every clone a run verb has run in",
+        "closes the gap for every clone a run verb has run in, with one exception",
+        // ADDED 2026-10-18 (PR #112 round 4, the pr/71 closure): a default name the push check does not read is left unwritten.
+        "they leave the ref unwritten and say so, and the gap stays open in that clone too",
         "The run folder ceiling.",
         "the guard then refuses every call the unattended rule would have refused, attended sessions included",
         "`src/hooks/scripts.ts::buildUnattendedAskGate`",

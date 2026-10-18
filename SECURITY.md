@@ -420,8 +420,11 @@ refused. What stays open is named here, as accepted risk:
   GitHub's REST API gave the run verbs no answer), a push of a default branch with another name
   passes the person-only rule, and only the remote's own protection stands in front of it.
   `stamity run start`, `run checkpoint` and `run end` point the ref at the branch REST names, which
-  closes the gap for every clone a run verb has run in. In a reftable repository the guard reads no
-  loose ref file, so the written ref does not reach it. Code:
+  closes the gap for every clone a run verb has run in, with one exception: where the default
+  branch's name holds a character outside the letters, digits, `.`, `_`, `/` and `-` the push check
+  reads, or starts with `-`, they leave the ref unwritten and say so, and the gap stays open in that
+  clone too. In a reftable repository the guard reads no loose ref file, so the written ref does not
+  reach it. Code:
   `src/cli/commands/run.ts::alignOriginHead`, `src/hooks/scripts.ts::buildPersonOnlyGuardScript`.
 - **A symbolic ref already on disk.** The guard reads a `git symbolic-ref` write on the line it
   judges. A symbolic ref written before, by a shell redirect, the Write tool or the person, is not
