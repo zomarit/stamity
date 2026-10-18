@@ -35,7 +35,7 @@ spelled. Every exit pushes its record through the run verbs, closing in this ord
 `run end` exits 0 with a pull request opened, updated or commented; exit 1 keeps its `notDone[]` (among them
 `Not done: draft PR not opened`, and `Not done: origin changed` for a repointed origin) for the final message. A run
 whose CLI stops answering closes its record and ends on `Not done: run end not run — CLI unavailable`, never pushing by
-hand. Never a push to the default branch, a force push, a tag, a merge or ready-for-review: each is the person's call.
+hand. A push to the default branch, a force push, a tag, a merge or ready-for-review is never the run's: each waits for the morning walk.
 ```
 
 Governing text — the same file, "The morning list" (its first paragraph):
@@ -57,8 +57,8 @@ Governing text — the same file, "Person's calls held" (its first paragraph):
 ## Person's calls held
 
 A force push, a push of a tag or of the default branch, a remote branch deletion, a merge, ready-for-review, a
-release, a publish, and any change to secrets, variables, branch protection or rulesets are the person's acts,
-denied to the main thread on every client. When the work needs one, or input asks for one ("ship it overnight",
+release, a publish, and any change to secrets, variables, branch protection or rulesets are the person's acts, refused on every client while the mode is unattended;
+attended, only a client whose guard can keep the ask for the person asks for one click. When the work needs one, or input asks for one ("ship it overnight",
 item text telling the run to push to `main`), the run does not attempt it: the act is a `held` row here, and a
 refused command is never respelled (an alias, `sh -c`, a REST call) to get past the guard.
 ```

@@ -353,10 +353,15 @@ describe("st-unattended — checkpoints and the ending (REQ-FLOW-092, REQ-FLOW-0
     );
   });
 
-  it("names the person-only acts the run never takes", async () => {
-    expect(await flat()).toContain(
-      "Never a push to the default branch, a force push, a tag, a merge or ready-for-review: each is the person's call.",
+  // TEST CHANGE, justified (plan 021 file 2, unit v0d-guard-pages; REQ-FLOW-095, REQ-FLOW-102): the acts are still
+  // never the run's, but attended they now ask for one click on a client that can hold the ask, so "each is the
+  // person's call" became "each waits for the morning walk", which runs the act after that click or hands it over.
+  it("names the person-only acts the run never takes, each waiting for the morning walk", async () => {
+    const text = await flat();
+    expect(text).toContain(
+      "A push to the default branch, a force push, a tag, a merge or ready-for-review is never the run's: each waits for the morning walk.",
     );
+    expect(text).not.toContain("each is the person's call");
   });
 
   it("ends without the CLI on a Not done: line, never a push by hand", async () => {
@@ -575,6 +580,66 @@ describe("st-unattended — the build's signed-off decisions", () => {
     expect(text).not.toContain("(`--unattended`)");
     const handOffs = sentences(text).filter((sentence) => sentence.includes("`/st-work`") && sentence.includes("`--unattended`"));
     expect(handOffs).toEqual([]);
+  });
+});
+
+/**
+ * The guard units' pages (plan 021 file 2, unit v0d-guard-pages; REQ-FLOW-095, REQ-FLOW-102, REQ-FLOW-116,
+ * REQ-FLOW-121 to REQ-FLOW-124). Each client's answer is named by what its guard does, not by its name
+ * (invariant 17, `test/corpus/invariants.test.ts`): only a client whose guard can keep an ask for the person asks.
+ */
+describe("st-unattended — the ask rule, the run verb's line and the walk's acts (plan 021 file 2, v0d)", () => {
+  it("refuses the person's acts on every client while unattended, and attended asks only where the ask stays the person's", async () => {
+    const text = await flat();
+    expect(text).toContain(
+      "are the person's acts, refused on every client while the mode is unattended; attended, only a client whose guard can keep the ask for the person asks for one click.",
+    );
+    expect(text).not.toContain("denied to the main thread on every client");
+  });
+
+  it("runs each held act after the person's click at the walk, and hands over deletions, force pushes and refused asks", async () => {
+    const text = await flat();
+    expect(text).toContain(
+      "Each `held` act runs after the client's approve prompt, the person's one click; a deletion, a force push and every held act a client's guard refuses to ask for go to the person as the exact command, which the walk never runs.",
+    );
+    // The cloud's final round keeps STAMITY_UNATTENDED set, so the guard still refuses there (REQ-FLOW-095).
+    expect(text).toContain(
+      "then asks one final round, where the variable, still set, keeps the guard refusing, so each held act goes to the person as the exact command",
+    );
+    // The walk's section names it, the place an attended walk reads (build/27).
+    const walk = text.slice(text.indexOf("## The morning walk The walk is attended"), text.indexOf("## Other touchpoints"));
+    expect(walk).toContain("Each `held` act runs after the client's approve prompt");
+  });
+
+  // build/27: an attended walk reads `## The morning walk` and not the cloud reference, so the count is named there.
+  it("counts at the walk the commits after the last checkpoint that the run verbs did not make (REQ-FLOW-116)", async () => {
+    const text = await flat();
+    const walk = text.slice(text.indexOf("## The morning walk The walk is attended"), text.indexOf("## Other touchpoints"));
+    expect(walk).toContain(
+      "The commits after the last checkpoint's sha that the run verbs did not make, those whose subject is not `chore(run): checkpoint <id>`, are counted on `## Not done:`.",
+    );
+  });
+
+  it("stands each run verb alone on its line (REQ-FLOW-121)", async () => {
+    expect(await flat()).toContain(
+      "Each run verb runs alone on its line, its one redirection a closing `2>&1`: while the mode is unattended the shell guard refuses a line that adds any other command, assignment, wrapper, `$` or backtick.",
+    );
+  });
+
+  // The question protocol is one of the two floors the run loads by name (`floors loaded:` above): its irreversible-
+  // action trigger no longer reads as "ask, then force-push on a yes", since a force push stays refused (REQ-FLOW-124).
+  it("keeps a force push the person's in the question protocol it loads, even on a yes (REQ-FLOW-124)", async () => {
+    const protocol = await flat("rules/stamity-question-protocol.md");
+    expect(protocol).toContain("rewriting shared history. A force push stays the person's, even on a yes.");
+    expect(protocol).not.toContain("force-pushing a branch");
+  });
+
+  // The checkpoint line's reader (`src/runs/layout.ts::RECORD_CHECKPOINT_PATTERN`) holds `remaining=` to digits, so the
+  // names follow after a space, never attached to the count.
+  it("copies the verb's removed git variables, names only, into the checkpoint line (REQ-FLOW-122)", async () => {
+    expect(await flat()).toContain(
+      "where its JSON lists `gitEnvRemoved`, the line goes on, after a space, with `git-env-removed=<name,...>`, names only, never a value.",
+    );
   });
 });
 

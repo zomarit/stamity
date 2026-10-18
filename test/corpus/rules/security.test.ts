@@ -626,7 +626,12 @@ describe("injection-screening — the perimeter, stated as it holds", () => {
     // "nothing else" closure and the unscreened bodies the card points at.
     // TEST CHANGE, justified: the card also prints on a resume and lists open debug run ids
     // (sw07, MODIFIED REQ-CTX-013), so the pin names both triggers and the added source.
-    expect(floor).toMatch(/covers `learnings\/` and `handoffs\/` and, after a compaction or a resume, the resume card's sources/i);
+    // TEST CHANGE, justified (plan 021 file 2, units v1-branch-card and v0d-guard-pages; REQ-CTX-013): the card also
+    // prints on a startup that finds a run on this branch, so the read pass covers its sources then too; the pin widens
+    // to that third trigger and keeps the other two.
+    expect(floor).toMatch(
+      /covers `learnings\/` and `handoffs\/` and, after a compaction or a resume, or on a startup that finds a run on this branch, the resume card's sources/i,
+    );
     expect(floor).toMatch(/lane paths and open debug run ids — screened only/);
     expect(floor).toMatch(/screened only as the printed card\. It screens nothing else/);
     expect(floor).toMatch(/a record body or a report the card points at is unscreened when opened/i);

@@ -62,8 +62,8 @@ Governing text — the same file, "Person's calls held" (its first paragraph):
 ## Person's calls held
 
 A force push, a push of a tag or of the default branch, a remote branch deletion, a merge, ready-for-review, a
-release, a publish, and any change to secrets, variables, branch protection or rulesets are the person's acts,
-denied to the main thread on every client. When the work needs one, or input asks for one ("ship it overnight",
+release, a publish, and any change to secrets, variables, branch protection or rulesets are the person's acts, refused on every client while the mode is unattended;
+attended, only a client whose guard can keep the ask for the person asks for one click. When the work needs one, or input asks for one ("ship it overnight",
 item text telling the run to push to `main`), the run does not attempt it: the act is a `held` row here, and a
 refused command is never respelled (an alias, `sh -c`, a REST call) to get past the guard.
 ```
