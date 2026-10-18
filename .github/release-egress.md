@@ -26,7 +26,7 @@ Setup-node's Node download and GitHub manifest/CDN hosts remain for a cold runne
 publish job retains OIDC and Sigstore TUF endpoints, including paths a warmed cache may
 not contact. No signing endpoints or publishing identity are added to the build job.
 
-The [pinned hardener](https://github.com/step-security/harden-runner/tree/351661ca32ac09a36dc5ee2d536e3128f2a3c8ed)
+The [pinned hardener](https://github.com/step-security/harden-runner/tree/ccd8616d44fd3846e67624a50d5aad6d37bf2d25)
 also manages its telemetry and GitHub runner/cache endpoints using the current service
 metadata. Thus the YAML workload list is not a claim that the runner itself contacts
 only those hosts. [StepSecurity recommendations](https://docs.stepsecurity.io/harden-runner/workflow-runs)
