@@ -942,10 +942,11 @@ function alwaysOnSection(alwaysOn: AlwaysOnDisclosure): string[] {
         `appendix goes to a codex-only root ${code(CODEX_AGENTS_OVERRIDE_FILE)}, which codex reads ` +
         "instead of `AGENTS.md` and no other client reads at all, so the shared root " +
         `\`AGENTS.md\` is ${alwaysOn.sharedBytesWithCodex} bytes with codex selected and ` +
-        `${alwaysOn.sharedBytesWithoutCodex} without it. The override repeats that file — an ` +
-        "operator's own text in it included — and adds the appendix: " +
+        `${alwaysOn.sharedBytesWithoutCodex} without it. The override repeats the charter — an ` +
+        "operator's own text in `AGENTS.md` included — and adds the appendix: " +
         `${alwaysOn.codexOverrideBytes} bytes, ≈${ratio}x the shared file, paid by codex alone. ` +
-        "It is regenerated from `AGENTS.md` as each sync leaves it. Under a `supplement` or " +
+        "It is regenerated from `AGENTS.md` as each sync leaves it, and leaves out the one part " +
+        "of that file it does not repeat, Cursor's cloud block below. Under a `supplement` or " +
         "`skip` import decision the operator's own text in `AGENTS.md` survives, so an edit to " +
         "that text reaches codex at the next sync and `check` reports it as drift on the " +
         "override until then. With no import decision, or `replace`, `AGENTS.md` is " +
@@ -961,7 +962,11 @@ function alwaysOnSection(alwaysOn: AlwaysOnDisclosure): string[] {
         "Node first, the skill paths, the learnings read, the draft pull request and the " +
         `unattended rule — ${alwaysOn.cursorBlockLines} lines counted apart from the line ` +
         `figures above, so the file is ${alwaysOn.sharedBytesWithCursor} bytes with cursor and ` +
-        `${alwaysOn.sharedBytesWithoutCodex} without it. Cursor and copilot read it natively, ` +
+        `${alwaysOn.sharedBytesWithoutCodex} without it. A cursor session therefore loads its ` +
+        `ceiling plus the block, ${alwaysOn.ceilings.cursor} + ${alwaysOn.cursorBlockLines} = ` +
+        `${alwaysOn.ceilings.cursor + alwaysOn.cursorBlockLines} lines, as a claude or copilot ` +
+        "session on a selection with cursor loads its own ceiling plus the block. Cursor and " +
+        "copilot read it natively, " +
         "and claude pays it too, through its `CLAUDE.md`'s `@AGENTS.md` import: on a claude and " +
         "cursor selection a claude session loads the block every time. Codex reads its own " +
         `${code(CODEX_AGENTS_OVERRIDE_FILE)} instead wherever one is emitted, which never carries it, and nested ` +

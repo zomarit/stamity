@@ -1205,6 +1205,32 @@ describe("always-on cost section", () => {
     // Non-degenerate: the live figures render.
     expect(() => renderCapabilityMatrixFrom(LIVE_CAPABILITY_INPUTS)).not.toThrow();
   });
+
+  // REQ-FLOW-114 (review/80): Cursor's cloud block is appended to the shared file with cursor
+  // selected, so a with-cursor figure no larger than the charter's, or an empty block, is a
+  // stale reading the page would otherwise publish.
+  it("refuses a with-cursor shared file no larger than the charter's", () => {
+    const unchanged = {
+      ...LIVE_CAPABILITY_INPUTS,
+      alwaysOn: {
+        ...LIVE_CAPABILITY_INPUTS.alwaysOn,
+        sharedBytesWithCursor: LIVE_CAPABILITY_INPUTS.alwaysOn.sharedBytesWithoutCodex,
+      },
+    };
+    const call = (): string => renderCapabilityMatrixFrom(unchanged);
+    expect(call).toThrowError(EngineError);
+    expect(call).toThrowError(/the block cannot be empty; one is stale/);
+  });
+
+  it("refuses a Cursor cloud block of no lines", () => {
+    const empty = {
+      ...LIVE_CAPABILITY_INPUTS,
+      alwaysOn: { ...LIVE_CAPABILITY_INPUTS.alwaysOn, cursorBlockLines: 0 },
+    };
+    const call = (): string => renderCapabilityMatrixFrom(empty);
+    expect(call).toThrowError(EngineError);
+    expect(call).toThrowError(/the block cannot be empty; one is stale/);
+  });
 });
 
 describe("client section edges the floor holds", () => {
