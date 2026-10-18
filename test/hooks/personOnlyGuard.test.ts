@@ -158,6 +158,13 @@ const MATRIX: readonly (readonly [command: string, rule: string | null])[] = [
   ["npm prune", null],
   ["npm --loglevel silly publish", "publish"],
   ["npm --loglevel silly run publish", null],
+  // A boolean option after a setting, and its twins with `run` (pr/66, pr/68).
+  ["npm --loglevel silly --json publish", "publish"],
+  ["npm --loglevel silly --no-color pub", "publish"],
+  ["npm -loglevel silly publish", "publish"],
+  ["npm --cache run publish", "publish"],
+  ["npm --json run publish", null],
+  ["npm --loglevel silly --json run pub", null],
   ["corepack pnpm@9.1.0 publish", "publish"],
   ["corepack pnpm install", null],
   ["git update-ref refs/tags/v2 HEAD", "tag"],
@@ -747,7 +754,9 @@ describe("the unattended push rule, the mode read from the run records", () => {
       // wget's `-e` wgetrc command (pr/23).
       "wget -e method=PATCH https://api.github.com/repos/o/r/pulls/3",
       // A gh alias or extension and an alias defined (pr/56), and a push behind Corepack (pr/51).
-      "gh land 123", "gh alias set land 'pr merge'", "gh alias import aliases.yml", "corepack pnpm exec git push origin feat/x"];
+      "gh land 123", "gh alias set land 'pr merge'", "gh alias import aliases.yml", "corepack pnpm exec git push origin feat/x",
+      // A group spelled near one of gh's own aliases (pr/67).
+      "gh exts list"];
     for (const command of unattended) {
       const source = unattendedPushVerdict(command);
       expect(source.deny, command).toBe(true);
@@ -778,7 +787,9 @@ describe("the unattended push rule, the mode read from the run records", () => {
       `set -e; echo "$GIT_EXEC_PATH"; ${RUN_END}`, 'for f in GIT_EXEC_PATH GIT_EDITOR; do grep -rn "$f" src; done; npm test',
       `printf '%s\\n' GIT_EXEC_PATH; ${RUN_END}`, "npm -w x exec -- git status", "cmd /c g^it status", "wget --meth=GET https://api.github.com/repos/o/r/pulls/3",
       "wget --me=GET https://api.github.com/repos/o/r/pulls/3", "wget https://api.github.com/repos/o/r/releases",
-      "wget -e method=GET https://api.github.com/repos/o/r/pulls/3", "gh co 3", "gh alias list", "corepack pnpm exec git status"]) {
+      "wget -e method=GET https://api.github.com/repos/o/r/pulls/3", "gh co 3", "gh alias list", "corepack pnpm exec git status",
+      // gh's own aliases of its built-ins (pr/67).
+      "gh ext list", "gh cs list"]) {
       expect(unattendedPushVerdict(command), command).toEqual({ deny: false });
       expect(decide("claude", guard, command).deny, command).toBe(false);
     }

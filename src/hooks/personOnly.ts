@@ -1143,14 +1143,24 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     /**
      * The positional words; with `settings`, npm's own reading of any `--<key> <value>` before its subcommand as a
      * setting (`npm --loglevel silly publish`, pr/50). Both readings are taken, so a boolean option before the
-     * subcommand (`npm --json publish`) still reads the next word as the subcommand.
+     * subcommand (`npm --json publish`) still reads the next word as the subcommand. npm reads a single-dash setting
+     * too (`-loglevel silly`, `-c run`), and the reading never takes `publish` or its prefix as a value (pr/66):
+     * not skipping it only adds a refusal. It keeps `run`, `run-script`, `exec` and `x` only after an option npm reads
+     * with no value (npm 10.9.8's Boolean settings and its loglevel shorthands, pr/68), because a setting that takes a
+     * value takes `run` too (`npm --cache run publish` publishes).
      */
+    const flags = new Set(["--json", "--dry-run", "--force", "--global", "--parseable", "--color", "--no-color",
+      "--silent", "--quiet", "--verbose", "-s", "-q", "-d", "-g", "-f", "-p"]);
+    const kept = (option: string, next: string): boolean =>
+      /^pu(?:b(?:l(?:i(?:sh?)?)?)?)?$/.test(next) ||
+      (flags.has(option.replace(/^-(?=[^-]{2})/, "--")) && ["run", "run-script", "exec", "x"].includes(next));
     const positionalsOf = (settings: boolean): string[] => {
       const positionals: string[] = [];
       for (let k = 1; k < cmd.length; k += 1) {
         const word = cmd[k] ?? "";
+        const next = cmd[k + 1] ?? "-";
         if (valued.has(word)) k += 1;
-        else if (settings && positionals.length === 0 && /^--[^=]+$/.test(word) && !(cmd[k + 1] ?? "-").startsWith("-")) k += 1;
+        else if (settings && positionals.length === 0 && /^-{1,2}[^-=][^=]*$/.test(word) && !next.startsWith("-") && !kept(word, next)) k += 1;
         else if (!word.startsWith("-")) positionals.push(word);
       }
       return positionals;
@@ -1734,12 +1744,15 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
   /**
    * gh's built-in top-level commands (`gh help`, gh 2.102.0), its hidden `help` and `version`, and its default alias
    * `co` (pr/56). Any other group is an alias, which expands to any gh command (`gh land` for `pr merge`), or an
-   * extension, so the line does not show what it runs.
+   * extension, so the line does not show what it runs. gh's own aliases of its built-ins follow, each the ALIASES of
+   * `gh <group> --help` (pr/67): `agent-tasks`, `agent` and `agents` of agent-task, `at` of attestation, `cs` of
+   * codespace, `extensions` and `ext` of extension, `rs` of ruleset, `skills` of skill.
    */
   const GH_BUILTINS = new Set(
     ("agent-task alias api attestation auth browse cache co codespace completion config copilot discussion extension " +
       "gist gpg-key help issue label licenses org pr preview project release repo ruleset run search secret skill " +
-      "ssh-key status variable version workflow").split(" "),
+      "ssh-key status variable version workflow " +
+      "agent-tasks agent agents at cs extensions ext rs skills").split(" "),
   );
   /** git's builtins (`git --list-cmds=builtins`, git 2.52.0), and `subtree`, which this verdict reads. */
   const GIT_BUILTINS = new Set(

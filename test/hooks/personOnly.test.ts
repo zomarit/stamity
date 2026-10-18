@@ -364,6 +364,14 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["npm --loglevel silly publish", "publish"],
   ["npm --loglevel silly pub", "publish"],
   ["npm --json publish", "publish"],
+  // A boolean option after a setting (pr/66): the settings reading never takes `publish` or its prefix as a value. A
+  // single-dash setting npm reads as its long name or as a valued short option, and a setting that takes `run` as its
+  // value, which `--json` does not.
+  ["npm --loglevel silly --json publish", "publish"],
+  ["npm --loglevel silly --no-color pub", "publish"],
+  ["npm -loglevel silly publish", "publish"],
+  ["npm -c run publish", "publish"],
+  ["npm --cache run publish", "publish"],
   // Corepack in front of a package manager, and a manager word carrying its version (pr/51).
   ["corepack pnpm publish", "publish"],
   ["corepack yarn npm publish", "publish"],
@@ -568,6 +576,10 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
   ["npm run pub"],
   ["pnpm pub"],
   ["npm --loglevel silly run publish"],
+  // pr/66's and pr/68's twins: a boolean option before `run`, after a setting too, and npm's short boolean.
+  ["npm --json run publish"],
+  ["npm --loglevel silly --json run pub"],
+  ["npm -s run publish"],
   ["corepack enable"],
   ["corepack pnpm install"],
   ["git update-ref refs/heads/feat/x HEAD"],
@@ -1112,6 +1124,8 @@ describe("unattendedPushVerdict", () => {
     ["gh -R o/r land 123"],
     ["gh alias set land 'pr merge'"],
     ["gh alias import aliases.yml"],
+    // A group spelled near one of gh's own aliases (pr/67).
+    ["gh exts list"],
     // A push behind Corepack's runner (pr/51), and the merge queue's enrolment (pr/57).
     ["corepack pnpm exec git push origin feat/x"],
     ["gh api graphql -f query='mutation { enqueuePullRequest(input: {pullRequestId: \"x\"}) { mergeQueueEntry { id } } }'"],
@@ -1265,6 +1279,16 @@ describe("unattendedPushVerdict", () => {
     ["gh alias list"],
     ["gh alias delete land"],
     ["gh --version"],
+    // pr/67's: gh's own aliases of its built-ins (`gh <group> --help`, gh 2.102.0).
+    ["gh ext list"],
+    ["gh extensions list"],
+    ["gh cs list"],
+    ["gh at verify x.tgz -R o/r"],
+    ["gh rs list"],
+    ["gh agent-tasks list"],
+    ["gh agent list"],
+    ["gh agents list"],
+    ["gh skills list"],
     // pr/51's and pr/57's twins: Corepack running a read, and the merge queue read.
     ["corepack pnpm exec git status"],
     ["gh api graphql -f query='query { repository(owner:\"o\",name:\"r\") { mergeQueue { entries { totalCount } } } }'"],
