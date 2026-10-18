@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   checkClaudeHookShell,
+  checkCloudInstall,
   checkCommand,
   checkModelPins,
   checkNodeVersion,
@@ -3798,6 +3799,88 @@ describe("evaluateExpectations (REQ-PLUGIN-047)", () => {
  * catalogue `sync` reads; Codex with a saved list starts no client, and its bundled read is
  * labelled as such. The claims each case makes are unchanged.
  */
+describe("check — cloud-install (REQ-FLOW-111)", () => {
+  function manifestFor(tools: Tool[]): SetupManifest {
+    return createManifest({
+      tools,
+      selection: { items: { agent: [], skill: [], rule: [], command: [] } },
+      generatorVersion: "1.16.0",
+      now: T0,
+    });
+  }
+
+  const CANONICAL_CALL = { packageName: "@zomarit/stamity", npmChannel: true } as const;
+
+  it("prints no row without Cursor selected", () => {
+    expect(checkCloudInstall(manifestFor(["claude", "copilot", "codex"]), CANONICAL_CALL, ">=22.22.2")).toBeNull();
+    expect(checkCloudInstall(null, CANONICAL_CALL, ">=22.22.2")).toBeNull();
+  });
+
+  it("gives Cursor the install lines at the version the setup was generated with, and never fails", () => {
+    const verdict = checkCloudInstall(manifestFor(["claude", "cursor"]), CANONICAL_CALL, ">=22.22.2");
+
+    expect(verdict?.id).toBe("cloud-install");
+    expect(verdict?.status).toBe("pass");
+    const lines = (verdict?.detail ?? "").split("\n");
+    // The lines a Cursor environment's install step runs, each alone on its own line.
+    expect(lines.slice(1)).toEqual(["node --version", "npm install --global @zomarit/stamity@1.16.0"]);
+    // The hard needs and the Node floor are named, and where the lines go.
+    expect(lines[0]).toContain("gate scan and ledger status");
+    expect(lines[0]).toContain("Node >=22.22.2");
+    expect(lines[0]).toContain("no .cursor/environment.json is written");
+  });
+
+  it("carries a fork's package and registry into the install line", () => {
+    const registry = "https://npm.acme.example/registry";
+    const verdict = checkCloudInstall(
+      manifestFor(["cursor"]),
+      { packageName: "@acme/stamity", npmChannel: true, registry },
+      null,
+    );
+
+    expect(verdict?.detail.split("\n").at(-1)).toBe(`npm install --global --@acme:registry=${registry} @acme/stamity@1.16.0`);
+    // No declared range: no Node floor is invented.
+    expect(verdict?.detail).not.toContain("Node >=");
+  });
+
+  it("names no registry install for a package with no npm channel, and still passes", () => {
+    const verdict = checkCloudInstall(manifestFor(["cursor"]), { packageName: "@acme/stamity", npmChannel: false }, ">=22.22.2");
+
+    expect(verdict?.status).toBe("pass");
+    expect(verdict?.detail).not.toContain("npm install");
+    expect(verdict?.detail).toContain("no npm channel");
+    expect(verdict?.detail.split("\n").slice(1)).toEqual(["node --version"]);
+  });
+
+  it("is a row of check's own run with Cursor selected, before invariants", async () => {
+    const root = await seedRepo(getRepo(), { tools: ["claude", "cursor"] });
+
+    const { code, doc } = await runJson(root);
+
+    expect(code).toBe(0);
+    const verdict = row(doc, "cloud-install");
+    expect(verdict.status).toBe("pass");
+    // This checkout's own identity, so a fork's run reads its own package here.
+    const identity = canonical();
+    expect(verdict.detail).toContain(
+      identity.npmChannel
+        ? npxCommandOf(identity, "").replace(/^npx -y /, "npm install --global ").trimEnd()
+        : "no npm channel",
+    );
+    const ids = doc.doctor.map((entry) => entry.id);
+    expect(ids.indexOf("cloud-install")).toBe(ids.indexOf("model-pins") + 1);
+    expect(ids.indexOf("cloud-install")).toBe(ids.indexOf("invariants") - 1);
+  });
+
+  it("is absent from check's own run without Cursor", async () => {
+    const root = await seedRepo(getRepo(), { tools: ["claude", "copilot"] });
+
+    const { doc } = await runJson(root);
+
+    expect(doc.doctor.map((entry) => entry.id)).not.toContain("cloud-install");
+  });
+});
+
 describe("check — model-pins", () => {
   const CODEX_SAVED = { ids: ["gpt-6-astra", "gpt-6-sol", "gpt-6-luna"], source: "codex-debug-models" } as const;
 

@@ -1649,6 +1649,81 @@ describe("copilot-setup-steps.yml", () => {
     );
     expect(rowAt(first, COPILOT_SETUP_STEPS_PATH).content).toContain("- run: npm ci");
   });
+
+  // ── The pinned CLI (REQ-FLOW-111) ──────────────────────────────
+
+  /** The `run:` commands of an emitted setup workflow, in step order. */
+  function runSteps(yaml: string): string[] {
+    const parsed = parseYaml(yaml) as { jobs: Record<string, { steps: { run?: string }[] }> };
+    return (parsed.jobs["copilot-setup-steps"]?.steps ?? []).flatMap((step) => (step.run === undefined ? [] : [step.run]));
+  }
+
+  /** The residue rows for a context the caller shapes past {@link ctxOf} — a fork's identity. */
+  async function planResidueFor(ctx: EmissionContext): Promise<AdapterOutput[]> {
+    return (await copilotResiduePlanner.planResidue(await buildCoreEmissionPlan(ctx), ctx)).outputs;
+  }
+
+  it("installs the pinned CLI after the project install, at the version the setup is generated with (REQ-FLOW-111)", async () => {
+    const temp = getTemp();
+    await temp.seedFiles({ "repo/package-lock.json": "{}\n", "repo/package.json": '{"name":"x"}\n' });
+
+    const yaml = rowAt(await planResidue({ rootDir: temp.path("repo") }), COPILOT_SETUP_STEPS_PATH).content;
+
+    // The project's own install first, then the CLI the hooks and the flows call, then the
+    // proof that `stamity` resolves from PATH with no registry fetch.
+    expect(runSteps(yaml)).toEqual([
+      "npm ci",
+      `npm install --global @zomarit/stamity@${ENGINE_VERSION}`,
+      "stamity --version",
+    ]);
+    // The hard needs are named where a reader of the workflow meets the step.
+    expect(yaml).toContain("`gate scan` and `ledger status`");
+  });
+
+  it("gives a repository with no package.json the pinned global install (REQ-FLOW-111)", async () => {
+    const yaml = rowAt(await planResidue({ languages: ["python"] }), COPILOT_SETUP_STEPS_PATH).content;
+
+    expect(runSteps(yaml)).toEqual([`npm install --global @zomarit/stamity@${ENGINE_VERSION}`, "stamity --version"]);
+    // Still no install for the stack it cannot see.
+    expect(yaml).toContain("detected: python");
+    expect(yaml).not.toContain("npm ci");
+  });
+
+  it("carries a fork's package and registry into the pinned install line (REQ-FLOW-111)", async () => {
+    const registry = "https://npm.acme.example/registry";
+    const ctx: EmissionContext = { ...ctxOf({ languages: ["python"] }), packageName: "@acme/stamity", npmRegistry: registry };
+
+    const yaml = rowAt(await planResidueFor(ctx), COPILOT_SETUP_STEPS_PATH).content;
+
+    // The registry setting precedes the spec, as on every pinned call, so the scope's
+    // package comes from the fork's registry and nothing else does.
+    expect(runSteps(yaml)).toEqual([
+      `npm install --global --@acme:registry=${registry} @acme/stamity@${ENGINE_VERSION}`,
+      "stamity --version",
+    ]);
+    expect(yaml).not.toContain("@zomarit/stamity");
+  });
+
+  it("installs nothing from a registry for a package with no npm channel, and says why (REQ-FLOW-111)", async () => {
+    const ctx: EmissionContext = { ...ctxOf({ languages: ["python"] }), packageName: "@acme/stamity", npmChannel: false };
+
+    const yaml = rowAt(await planResidueFor(ctx), COPILOT_SETUP_STEPS_PATH).content;
+
+    // A `-y` or global install would fetch whatever a third party published under the
+    // fork's unpublished name; `npx --no` runs an installed copy only.
+    expect(runSteps(yaml)).toEqual([]);
+    expect(yaml).not.toContain("npm install --global");
+    expect(yaml).toContain("has no npm channel");
+    expect(parseYaml(yaml)).toBeTypeOf("object");
+  });
+
+  it("keeps naming the pinned version in the hook entries (inbox row 257, decided in v10)", async () => {
+    // Decided, not changed: the starter's missing-runner remedy is the pinned `sync`, the
+    // version that wrote the file, so an upgrade still rewrites `.github/hooks/stamity.json`.
+    const hooks = rowAt(await planResidue(), COPILOT_HOOKS_PATH).content;
+
+    expect(hooks).toContain(`@zomarit/stamity@${ENGINE_VERSION} sync`);
+  });
 });
 
 // ── Hooks: received, deliberately not emitted ────────────────────

@@ -8,7 +8,8 @@ import semver from "semver";
 import type { App, EngineRegistry } from "../../index.ts";
 import { CLASS_FILE, parseClassFile } from "../../change/classify.ts";
 import { readCharterTemplate } from "../../content/charter.ts";
-import { renderInvariantsVersion } from "../../emit/substitution.ts";
+import { pinnedCliInstall } from "../../adapters/copilot.ts";
+import { renderInvariantsVersion, type CliCallContext } from "../../emit/substitution.ts";
 import { readGates } from "../../manifest/manifest.ts";
 import { OWNED_PATHS } from "../../manifest/ownedPaths.ts";
 import {
@@ -55,7 +56,7 @@ import {
 import { getEmissionPlanner } from "../engine/emission.ts";
 import { readWorkingTreeStatus } from "../engine/gitStatus.ts";
 import { CliFailure, type FailureDoc } from "../kit/output.ts";
-import { packageCommand, packageCommandAt } from "../kit/packageName.ts";
+import { hasNpmChannel, npmRegistry, packageCommand, packageCommandAt, packageName } from "../kit/packageName.ts";
 import { sanitizeLabel } from "../kit/prompts.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import type { Palette } from "../kit/terminal.ts";
@@ -459,7 +460,7 @@ async function checkLearnings(
 /**
  * The repository's class file (REQ-FLOW-061): the change classes and the
  * test-input map `gate classify` reads from a base commit. No row when the file
- * is absent, so a repository without one keeps its fifteen rows. This reads the
+ * is absent, so a repository without one keeps its fourteen rows. This reads the
  * work tree's copy, the one the next pull request lands as a base: it passes
  * when the validator accepts it, and fails naming the first error, since a base
  * holding a refused copy has `gate classify` apply only its raising entries
@@ -1613,6 +1614,49 @@ export async function checkModelPins(
 }
 
 /**
+ * The `cloud-install` row (REQ-FLOW-111), printed only with Cursor selected: the
+ * lines a Cursor cloud environment's install step needs, for a person to set in
+ * Cursor's saved environment. No `.cursor/environment.json` is written — a
+ * repository file overrides every saved environment — so this row is where the
+ * lines live. They pin the version the setup was generated with
+ * (`generatedBy`), the one the committed hooks and bodies call, through
+ * {@link pinnedCliInstall}, the line Copilot's setup workflow runs; a package
+ * with no npm channel gets no registry line. The row passes and never fails: it
+ * informs, and a local session has no install step to judge.
+ */
+export function checkCloudInstall(
+  manifest: SetupManifest | null,
+  cli: Omit<CliCallContext, "version">,
+  nodeRange: string | null,
+): DoctorCheck | null {
+  const id = "cloud-install";
+  if (manifest === null || !manifest.tools.includes("cursor")) return null;
+  const install = pinnedCliInstall({ ...cli, version: manifest.generatedBy });
+  const needs =
+    `a Cursor cloud environment needs ${nodeRange === null ? "Node" : `Node ${nodeRange}`} and the pinned CLI, ` +
+    "or the flows' gate scan and ledger status stop";
+  const written = "these lines (no .cursor/environment.json is written)";
+  return {
+    id,
+    status: "pass",
+    detail: [
+      install === null
+        ? `${needs}; this package has no npm channel, so its saved environment's install step installs ` +
+          `the copy your fork distributes and runs ${written}:`
+        : `${needs}; its saved environment's install step runs ${written}:`,
+      "node --version",
+      ...(install === null ? [] : [install]),
+    ].join("\n"),
+  };
+}
+
+/** This installation's call identity, as every remedy here renders it ({@link packageCommand}). */
+function ownCliCall(): Omit<CliCallContext, "version"> {
+  const registry = npmRegistry();
+  return { packageName: packageName(), npmChannel: hasNpmChannel(), ...(registry === null ? {} : { registry }) };
+}
+
+/**
  * Every doctor probe, in report order.
  *
  * The manifest is read once, up front, because ten probes are conditioned on
@@ -1657,6 +1701,14 @@ export async function runDoctor(
     checkChangeClasses(rootDir),
     guarded("invariants", checkInvariants),
   ]);
+  // A call the shared renderer refuses (an unrunnable own name) warns as a
+  // probe that could not run, never takes the report down.
+  let cloudInstall: DoctorCheck | null;
+  try {
+    cloudInstall = checkCloudInstall(manifest, ownCliCall(), range);
+  } catch (cause) {
+    cloudInstall = { id: "cloud-install", status: "warn", detail: `could not be checked: ${messageOf(cause)}` };
+  }
 
   return [
     checkNodeVersion(process.versions.node, range),
@@ -1679,6 +1731,9 @@ export async function runDoctor(
     // list; it answers about this repository's pins, so it sits with the
     // repository rows.
     modelPins,
+    // Present only with Cursor selected: the install lines its cloud environment
+    // needs. It answers about this repository's clients, beside `model-pins`.
+    ...(cloudInstall === null ? [] : [cloudInstall]),
     // Present only with a class file. It answers about this repository, so it
     // sits with the repository rows, before the one row that reads the corpus.
     ...(changeClasses === null ? [] : [changeClasses]),
@@ -1791,7 +1846,7 @@ type DriftOutcome =
  * them was being reported as "the manifest has to be readable first".
  *
  * Everything else is CAPTURED, not swallowed and not re-thrown. Capturing keeps
- * the doctor's fifteen probes on screen, which a diagnostic command exists to
+ * the doctor's fourteen probes on screen, which a diagnostic command exists to
  * produce, while the message — the engine's own, naming the pack and the cause,
  * the same sentence `sync` prints in this state — becomes the drift verdict and
  * gates the exit. Re-throwing would have replaced the whole report with one
@@ -2576,7 +2631,7 @@ function expectationMismatches(report: ExpectationReport): string[] {
 /**
  * The `expectations` doctor row. Printed only when a flag asked for it, after
  * `invariants` and outside {@link runDoctor}, so a run without the flags keeps
- * its fifteen rows (sixteen with a class file). A manifest that could not be read leaves nothing to compare
+ * its fourteen rows (one more each with Cursor selected and with a class file). A manifest that could not be read leaves nothing to compare
  * against: the row says so, and the `manifest` row above it carries the cause.
  */
 function expectationsRow(report: ExpectationReport, evaluated: boolean): DoctorCheck {

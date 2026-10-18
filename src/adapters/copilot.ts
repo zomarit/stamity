@@ -61,7 +61,7 @@ import {
   type ModelPickSource,
   type ModelPinMap,
 } from "../roster/modelLadder.ts";
-import { pinnedCliCall } from "../shared/cliCall.ts";
+import { pinnedCliCall, pinnedCliPrefix } from "../shared/cliCall.ts";
 import {
   substituteCanonicalPlatformMarker,
   toCopilotToolsFrontmatter,
@@ -444,11 +444,12 @@ export const copilotResiduePlanner: ResiduePlanner = {
       content: `${JSON.stringify(buildCopilotModelMap(roles, pins, efforts, listed), null, 2)}\n`,
       owner: owner("copilot-model-map", "infra"),
     });
-    rows.push({ path: COPILOT_HOOKS_PATH, content: buildCopilotHooksJson(core.hooks.interchangeFor(TOOL), cliCallContextOf(ctx)), owner: owner("copilot-hooks", "infra") });
+    const cli = cliCallContextOf(ctx);
+    rows.push({ path: COPILOT_HOOKS_PATH, content: buildCopilotHooksJson(core.hooks.interchangeFor(TOOL), cli), owner: owner("copilot-hooks", "infra") });
     rows.push({ path: `.stamity/generated/hooks/copilot/${PORTABLE_RUNNER_FILE}`, content: buildPortableHookRunner("copilot"), owner: owner("copilot-portable-hook", "infra") });
     rows.push({
       path: COPILOT_SETUP_STEPS_PATH,
-      content: buildSetupSteps(packageManager, ctx.manifest.detected?.languages ?? [], setupPins),
+      content: buildSetupSteps(packageManager, ctx.manifest.detected?.languages ?? [], setupPins, cli),
       owner: owner(SETUP_STEPS_JOB, "infra"),
     });
     // Placed verbatim: the core rendered these documents and chose their paths,
@@ -949,11 +950,20 @@ function effortLine(item: CatalogItem, efforts: EffortMap): string[] {
  *
  * `check` re-plans live, so a project that moves one of its own pins sees this
  * file reported as drifted until the next sync copies the new pin.
+ *
+ * With `cli` — the planner always passes it — the last steps install the pinned
+ * CLI globally, in both lanes ({@link pinnedCliInstall}), and run
+ * `stamity --version`, so the flows' `gate scan` and `ledger status` find
+ * `stamity` on `PATH` with no registry fetch
+ * (REQ-FLOW-111). A package with no npm channel gets a comment instead of the
+ * install. Without `cli` no CLI step is written, which is what the direct calls
+ * that pin the lanes alone rely on.
  */
 export function buildSetupSteps(
   packageManager: PackageManagerInfo,
   languages: readonly string[],
   pins: SetupStepsPins,
+  cli?: CliCallContext,
 ): string {
   const named = [...languages].map((value) => value.trim()).filter((value) => value !== "");
   const isNode =
@@ -1020,8 +1030,53 @@ export function buildSetupSteps(
     ...refNote,
     `      - uses: ${actionUse("checkout", pins.checkout)}`,
     ...steps,
+    ...(cli === undefined ? [] : cliSteps(cli)),
     "",
   ].join("\n");
+}
+
+/**
+ * The pinned CLI's steps: its global install and the proof that `stamity`
+ * resolves, or, for a package with no npm channel, a comment saying why there
+ * is no install.
+ */
+function cliSteps(cli: CliCallContext): string[] {
+  const install = pinnedCliInstall(cli);
+  if (install === null) {
+    return [
+      "      # This package has no npm channel, so no CLI is installed from a registry here: the flows'",
+      "      # `npx --no` calls run a copy the project installs, and `gate scan` and `ledger status` stop without one.",
+    ];
+  }
+  return [
+    "      # The pinned stamity CLI, at the version this file was generated with: the flows'",
+    "      # `gate scan` and `ledger status` then find `stamity` on PATH with no registry fetch.",
+    `      - run: ${install}`,
+    "      - run: stamity --version",
+  ];
+}
+
+/**
+ * The global install of the pinned CLI — `npm install --global <package>@<version>`,
+ * the scope's registry setting ahead of the spec where the package names one —
+ * or `null` for a package with no npm channel, whose name no registry may be
+ * asked for (`npx --no`, `docs/enterprise-forks.md`).
+ *
+ * Built from {@link pinnedCliPrefix}, the verbless form of the
+ * {@link pinnedCliCall} every hook entry and body runs: its words after
+ * `npx -y` are exactly npm's install arguments, so the install names the one
+ * package, version and registry those calls name, validated by the one rule
+ * (`VALIDATION_ERROR` on an unrunnable name, an unpinned version or a registry
+ * outside the plain-https grammar). Global, because a repository with no
+ * `package.json` has no project to install into, and because the bodies try
+ * `npx --no stamity <verb>` first, which npm answers from a global bin without
+ * asking a registry. `check`'s `cloud-install` row prints the same line for a
+ * Cursor environment.
+ */
+export function pinnedCliInstall(cli: CliCallContext): string | null {
+  if (cli.npmChannel === false) return null;
+  const words = pinnedCliPrefix(cli.packageName, cli.version, cli).split(" ");
+  return ["npm", "install", "--global", ...words.slice(2)].join(" ");
 }
 
 /** The `setup-node` step every lane writes: the project's Node pin, else the current LTS. */
@@ -1581,6 +1636,7 @@ export function copilotMatcherWarnings(rows: readonly HookInterchange[]): string
  */
 export function buildCopilotHooksJson(rows: readonly HookInterchange[], cli?: CliCallContext): string {
   // The walk-up starter (REQ-FLOW-084) names this pinned call when its runner is missing.
+  // Pinned on purpose (inbox row 257, decided in plan 021): an upgrade rewrites this file.
   const starter = cli === undefined ? {} : { syncCall: pinnedCliCall(cli.packageName, cli.version, "sync", cli) };
   const hooks: Record<string, object[]> = {};
   for (const row of rows) {
