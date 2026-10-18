@@ -562,6 +562,13 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		const cmd = [];
 		for (let k = 0; k < expanded.length; k += 1) {
 			const word = expanded[k] ?? "";
+			const lead = tool === "curl" ? /^-([^-:KHouAebcwmxrEdFTXCDPQtyYzU]*)([dFT])([\s\S]*)$/.exec(word) : null;
+			if (lead !== null && word.length > 2) {
+				if (lead[1]) cmd.push(`-${lead[1]}`);
+				cmd.push(`-${lead[2]}`);
+				if (lead[3]) cmd.push(lead[3]);
+				continue;
+			}
 			const own = /^(-[A-Za-z]*e|--execute)$/.test(word);
 			let rc;
 			if (tool === "wget" && k > 0) {
@@ -707,6 +714,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			"PATCH",
 			"DELETE"
 		].includes(verb);
+		if (method !== null && /[$`]/.test(method)) hidden();
 		if (tool === "curl" && (write || body) && !globoff && targets.some((target) => /[{[]/.test(target))) hidden();
 		if (tool === "wget" && write && inputFile) hidden();
 		return {
@@ -887,7 +895,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		}
 		return list || positionals.length === 0 ? null : deny("tag", "A tag created (`git tag <name>`)");
 	}
-	function symbolicRefVerdict(args) {
+	function symbolicRefVerdict(args, via = "git symbolic-ref") {
 		let remove = false;
 		const positionals = [];
 		for (let j = 0; j < args.length; j += 1) {
@@ -908,9 +916,9 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			} else positionals.push(arg);
 		}
 		const [name = "", target] = positionals;
-		if ((remove || target !== void 0) && /^(refs\/)?tags\//i.test(name)) return deny("tag", "A symbolic tag ref written or deleted (`git symbolic-ref`)");
+		if ((remove || target !== void 0) && /^(refs\/)?tags\//i.test(name)) return deny("tag", `A symbolic tag ref written or deleted (\`${via}\`)`);
 		if (remove || target === void 0 || name === "HEAD") return null;
-		if (/[$`]/.test(target) || defaults.has(target.replace(/^(refs\/)?heads\//i, "").toLowerCase())) return deny("push-default", "A symbolic ref pointed at the default branch, or at a branch the line cannot show (`git symbolic-ref`)");
+		if (/[$`]/.test(target) || defaults.has(target.replace(/^(refs\/)?heads\//i, "").toLowerCase())) return deny("push-default", `A symbolic ref pointed at the default branch, or at a branch the line cannot show (\`${via}\`)`);
 		return null;
 	}
 	function ghVerdict(cmd) {
@@ -1155,7 +1163,13 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			else if (sub === "send-pack") verdict = pushVerdict(args, [...config, "push.default=matching"]);
 			else if (sub === "tag") verdict = tagVerdict(args);
 			else if (sub === "update-ref" && (args.some((arg) => /^(refs\/)?tags\//i.test(arg)) || args.includes("--stdin") && /refs\/tags\//i.test(command))) verdict = deny("tag", "A tag ref write (`git update-ref`)");
-			else if (sub === "symbolic-ref") verdict = symbolicRefVerdict(args);
+			else if (sub === "update-ref" && args.includes("--stdin")) {
+				const word = String.raw`(?:[\s'"]|\\(?:x[\da-fA-F]{1,2}|[0-7]{1,3}|[a-z]))+([^\s'"\\|;&<>()]+)`;
+				for (const [, op, ref = "", target] of command.matchAll(new RegExp(String.raw`\bsymref-(create|update|delete)${word}(?:${word})?`, "g"))) {
+					const shown = target === void 0 || target.includes("%") ? "$" : target;
+					verdict ??= symbolicRefVerdict(op === "delete" ? ["-d", ref] : [ref, shown], "git update-ref --stdin");
+				}
+			} else if (sub === "symbolic-ref") verdict = symbolicRefVerdict(args);
 			else if (sub === "subtree") {
 				const valued = /* @__PURE__ */ new Set([
 					"-P",
@@ -1669,6 +1683,13 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 		const cmd = [];
 		for (let k = 0; k < expanded.length; k += 1) {
 			const word = expanded[k] ?? "";
+			const lead = tool === "curl" ? /^-([^-:KHouAebcwmxrEdFTXCDPQtyYzU]*)([dFT])([\s\S]*)$/.exec(word) : null;
+			if (lead !== null && word.length > 2) {
+				if (lead[1]) cmd.push(`-${lead[1]}`);
+				cmd.push(`-${lead[2]}`);
+				if (lead[3]) cmd.push(lead[3]);
+				continue;
+			}
 			const own = /^(-[A-Za-z]*e|--execute)$/.test(word);
 			let rc;
 			if (tool === "wget" && k > 0) {
@@ -1814,6 +1835,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 			"PATCH",
 			"DELETE"
 		].includes(verb);
+		if (method !== null && /[$`]/.test(method)) hidden();
 		if (tool === "curl" && (write || body) && !globoff && targets.some((target) => /[{[]/.test(target))) hidden();
 		if (tool === "wget" && write && inputFile) hidden();
 		return {
