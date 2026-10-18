@@ -3389,6 +3389,7 @@ const WRAPPERS = new Map([
   ["npx", RUNNER],
   ["bunx", RUNNER],
   ["pnpx", RUNNER],
+  ["corepack", []],
 ]);
 const RUNNERS = new Set(["npm exec", "npm x", "pnpm dlx", "pnpm exec", "yarn dlx", "yarn exec", "bun x", "bun exec"]);
 const MANAGERS = new Set(["npm", "pnpm", "yarn", "bun"]);

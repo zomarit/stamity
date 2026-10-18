@@ -152,6 +152,19 @@ const MATRIX: readonly (readonly [command: string, rule: string | null])[] = [
   ["wget -e robots=off https://api.github.com/repos/o/r/releases", null],
   ["git send-pack git@github.com:o/r.git main", "push-default"],
   ["git send-pack git@github.com:o/r.git feat/x", null],
+  // PR #112's resolution round 3, each beside its neighbour: npm's prefix of `publish` and a setting before it (pr/50),
+  // Corepack and a versioned manager word (pr/51), a tag ref through `git update-ref` (pr/53), the merge queue (pr/57).
+  ["npm pub", "publish"],
+  ["npm prune", null],
+  ["npm --loglevel silly publish", "publish"],
+  ["npm --loglevel silly run publish", null],
+  ["corepack pnpm@9.1.0 publish", "publish"],
+  ["corepack pnpm install", null],
+  ["git update-ref refs/tags/v2 HEAD", "tag"],
+  ["printf 'create refs/tags/v2 HEAD\\n' | git update-ref --stdin", "tag"],
+  ["git update-ref refs/heads/feat/y HEAD", null],
+  ["gh api graphql -f query='mutation { enqueuePullRequest(input: {pullRequestId: \"x\"}) { mergeQueueEntry { id } } }'", "pr-merge"],
+  ["gh api graphql -f query='query { repository(owner:\"o\",name:\"r\") { mergeQueue { entries { totalCount } } } }'", null],
 ];
 
 describe("the person-only guard, on every client", () => {
@@ -200,6 +213,26 @@ describe("the person-only guard, on every client", () => {
       return tool === "claude" || tool === "codex" ? result.status : String(result.stdout);
     });
     for (const decision of decisions) expect(decision).toEqual(tool === "claude" || tool === "codex" ? 2 : expect.stringContaining("deny"));
+  });
+});
+
+describe("the nested-command depth limit (pr/58)", () => {
+  /** `line` inside `layers` literal `sh -c` layers, each quoted for the one around it. */
+  const nest = (line: string, layers: number): string => {
+    let text = line;
+    for (let layer = 0; layer < layers; layer += 1) text = `sh -c '${text.replace(/'/g, "'\\''")}'`;
+    return text;
+  };
+
+  it.each(TOOLS)("%s: refuses a line past depth 4 as one it cannot decide, and reads one four layers down", async (tool) => {
+    const guard = await placeGuard(tool);
+    for (const line of ["git push --force origin feat/x", "git status"]) {
+      expect(decide(tool, guard, nest(line, 5)), line).toEqual({ deny: true, reason: expect.stringContaining("could not decide this shell call (NESTING_DEPTH)") });
+    }
+    const forced = personOnlyVerdict(nest("git push --force origin feat/x", 4), ON_FEATURE);
+    expect(forced).toMatchObject({ deny: true, rule: "force-push" });
+    expect(decide(tool, guard, nest("git push --force origin feat/x", 4))).toEqual({ deny: true, reason: expect.stringContaining(forced.deny ? forced.reason : "") });
+    expect(decide(tool, guard, nest("git status", 4)).deny).toBe(false);
   });
 });
 
@@ -704,7 +737,9 @@ describe("the unattended push rule, the mode read from the run records", () => {
       "npm -w x exec -- git push origin feat/x", "cmd /c g^it push origin feat/x", "wget --meth=PATCH https://api.github.com/repos/o/r/pulls/3",
       "wget --me PATCH https://api.github.com/repos/o/r/pulls/3",
       // wget's `-e` wgetrc command (pr/23).
-      "wget -e method=PATCH https://api.github.com/repos/o/r/pulls/3"];
+      "wget -e method=PATCH https://api.github.com/repos/o/r/pulls/3",
+      // A gh alias or extension and an alias defined (pr/56), and a push behind Corepack (pr/51).
+      "gh land 123", "gh alias set land 'pr merge'", "gh alias import aliases.yml", "corepack pnpm exec git push origin feat/x"];
     for (const command of unattended) {
       const source = unattendedPushVerdict(command);
       expect(source.deny, command).toBe(true);
@@ -735,7 +770,7 @@ describe("the unattended push rule, the mode read from the run records", () => {
       `set -e; echo "$GIT_EXEC_PATH"; ${RUN_END}`, 'for f in GIT_EXEC_PATH GIT_EDITOR; do grep -rn "$f" src; done; npm test',
       `printf '%s\\n' GIT_EXEC_PATH; ${RUN_END}`, "npm -w x exec -- git status", "cmd /c g^it status", "wget --meth=GET https://api.github.com/repos/o/r/pulls/3",
       "wget --me=GET https://api.github.com/repos/o/r/pulls/3", "wget https://api.github.com/repos/o/r/releases",
-      "wget -e method=GET https://api.github.com/repos/o/r/pulls/3"]) {
+      "wget -e method=GET https://api.github.com/repos/o/r/pulls/3", "gh co 3", "gh alias list", "corepack pnpm exec git status"]) {
       expect(unattendedPushVerdict(command), command).toEqual({ deny: false });
       expect(decide("claude", guard, command).deny, command).toBe(false);
     }

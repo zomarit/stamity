@@ -27,11 +27,15 @@
  * `test/hooks/personOnly.test.ts` holds the two copies equal.
  *
  * **What the text cannot show.** A command reaches the guard as text, so a
- * respelling the text hides — a git or shell alias, a computed `sh -c "$(…)"`,
+ * respelling the text hides — a git or shell alias, a gh alias or extension
+ * (refused unattended), a computed `sh -c "$(…)"`,
  * a PowerShell `-EncodedCommand` or a line piped into `iex` or a shell,
  * a bare tag name the context's `tags` does not list, a repository's own push
- * configuration, a GraphQL mutation or a REST body read from a file where the
- * API's default is not the default branch — passes. The tests assert
+ * configuration, a `git update-ref --stdin` text read from a file, a GraphQL
+ * mutation or a REST body read from a file where the
+ * API's default is not the default branch — passes. A line nested past four
+ * levels is not read: both verdicts throw a coded `NESTING_DEPTH` error, which
+ * the guard refuses. The tests assert
  * that residual as allowed so it stays written down; `SECURITY.md` names it, and the
  * pre-flight's REST check that the account cannot push to the default branch
  * (REQ-FLOW-101) is the wall behind this guard.
@@ -214,6 +218,9 @@ export const CLAUDE_DENY_ROWS: readonly string[] = [
  * them, a `remote.<name>.push` or `branch.<name>.merge` read as the refspec a
  * bare push takes) skipped before the subcommand.
  *
+ * Throws a coded `NESTING_DEPTH` error for a line nested past four levels (pr/58),
+ * which the guard refuses as a call it cannot decide.
+ *
  * Self-contained, so the emitted guard can carry it as source (see the module
  * comment).
  */
@@ -222,7 +229,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
   const KEYWORDS = new Set(["!", "{", "}", "if", "then", "else", "elif", "fi", "do", "done", "while", "until"]);
   const WRAPPERS = new Set(["env", "command", "builtin", "exec", "nohup", "sudo", "doas", "nice", "timeout", "stdbuf", "time", "xargs",
-    "npx", "bunx", "pnpx"]);
+    "npx", "bunx", "pnpx", "corepack"]);
   /**
    * Package runners spelled as a program and a subcommand; each runs its first positional word as a program, or
    * (`bun exec`, yarn's `exec`) as a shell line.
@@ -262,10 +269,13 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   /** PowerShell's two hosts and `Invoke-Expression`, each running a command string of its own (build/89). */
   const POWERSHELLS = new Set(["pwsh", "powershell", "invoke-expression", "iex"]);
 
-  /** A program word as the shell finds it: its last path part, without case or a Windows suffix. */
+  /**
+   * A program word as the shell finds it: its last path part, without case or a Windows suffix, and without a trailing
+   * `@<version>`, which a runner reads as the version to run (`npx npm@10`, `corepack pnpm@9`, pr/51).
+   */
   function programName(word: string): string {
     const last = word.split(/[\\/]/).pop() ?? "";
-    return last.toLowerCase().replace(/\.(exe|cmd|bat)$/, "");
+    return last.toLowerCase().replace(/^([^@]+)@[\s\S]*$/, "$1").replace(/\.(exe|cmd|bat)$/, "");
   }
 
   /**
@@ -424,9 +434,11 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   /**
    * Each simple command's words, its program word first and normalized; `sh -c` and `eval` text read too. With `pwsh`,
    * the text is PowerShell's: a PowerShell command string or the Windows command interpreter's rest, whose backslash is
-   * a plain character (review/194).
+   * a plain character (review/194). A line nested past four levels throws a coded `NESTING_DEPTH` error (pr/58): the
+   * reading stops there, so the guard refuses the line rather than allow what the fifth level runs.
    */
   function commandsOf(text: string, depth: number, pwsh: boolean): string[][] {
+    if (depth > 4) throw Object.assign(new Error("nesting"), { code: "NESTING_DEPTH" });
     const { segments, nested } = splitLine(text, true, pwsh);
     // A PowerShell line is read with a POSIX shell's escapes too, and a line with a brace with its braces as words too
     // (review/185), so either reading adds denials and never lifts one: `git push origin x} -f` still forces.
@@ -495,23 +507,23 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         } else break;
       }
       if (line !== null) {
-        if (depth < 4) commands.push(...commandsOf(line, depth + 1, pwsh));
+        commands.push(...commandsOf(line, depth + 1, pwsh));
         continue;
       }
       const cmd = words.slice(k);
       if (cmd.length === 0) continue;
       // A program word holding a whole command line (`bun exec 'git push'`) is also read as that line.
-      if (depth < 4 && /\s/.test(cmd[0] ?? "")) commands.push(...commandsOf(cmd.join(" "), depth + 1, pwsh));
+      if (/\s/.test(cmd[0] ?? "")) commands.push(...commandsOf(cmd.join(" "), depth + 1, pwsh));
       cmd[0] = programName(cmd[0] ?? "");
       // git's dashed form (`git-push`, as git's exec path holds it) is git running that subcommand.
       if (/^git-./.test(cmd[0])) cmd.splice(0, 1, "git", cmd[0].slice(4));
-      if (depth < 4 && SHELLS.has(cmd[0] ?? "")) {
+      if (SHELLS.has(cmd[0] ?? "")) {
         const flag = cmd.findIndex((word, index) => index > 0 && /^-[A-Za-z]*c[A-Za-z]*$/.test(word));
         const script = flag === -1 ? undefined : cmd[flag + 1];
         if (script !== undefined) commands.push(...commandsOf(script, depth + 1, false));
-      } else if (depth < 4 && cmd[0] === "eval") {
+      } else if (cmd[0] === "eval") {
         commands.push(...commandsOf(cmd.slice(1).join(" "), depth + 1, false));
-      } else if (depth < 4 && POWERSHELLS.has(cmd[0] ?? "")) {
+      } else if (POWERSHELLS.has(cmd[0] ?? "")) {
         // PowerShell's command string (build/89): the words after `-Command`; with none, the words from the first one
         // that is no option, and each later word holding a blank, a quoted command past an option's value, each read
         // with PowerShell's escape (review/194).
@@ -520,7 +532,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         if (at !== -1) commands.push(...commandsOf([commandFlag(cmd[at] ?? ""), ...cmd.slice(at + 1)].join(" "), depth + 1, true));
         else if (first !== -1) commands.push(...commandsOf(cmd.slice(first).join(" "), depth + 1, true));
         for (const word of first === -1 ? [] : cmd.slice(first + 1)) if (/\s/.test(word)) commands.push(...commandsOf(word, depth + 1, true));
-      } else if (depth < 4 && cmd[0] === "cmd") {
+      } else if (cmd[0] === "cmd") {
         // The Windows command interpreter (review/183): the words after `/c` or `/k`, any letter case, a value attached,
         // read as PowerShell's are, a backslash being a plain character there too (review/194), and read with each
         // caret escape taken off as well (`g^it`, `--for^ce`, pr/10), so that reading only adds denials.
@@ -528,7 +540,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         const rest = at === -1 ? "" : [(cmd[at] ?? "").slice(2), ...cmd.slice(at + 1)].join(" ");
         if (at !== -1) commands.push(...commandsOf(rest, depth + 1, true));
         if (rest.includes("^")) commands.push(...commandsOf(rest.replace(/\^([\s\S])/g, "$1"), depth + 1, true));
-      } else if (depth < 4 && cmd[0] === "git") {
+      } else if (cmd[0] === "git") {
         // Lines a git builtin runs (review/184): each `git rebase --exec` or `-x` line (`--ex`, `--exe` and a cluster
         // as git's option parser reads them), and the command `git bisect run` runs, its words kept as words.
         const { sub, args } = gitParts(cmd);
@@ -556,7 +568,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       }
       commands.push(cmd);
     }
-    if (depth < 4) for (const inner of nested) commands.push(...commandsOf(inner, depth + 1, pwsh));
+    for (const inner of nested) commands.push(...commandsOf(inner, depth + 1, pwsh));
     return commands;
   }
 
@@ -1016,7 +1028,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     for (const path of paths) {
       const shown = `${method} ${path}`;
       if (/^graphql$/i.test(path)) {
-        if (/\b(mergePullRequest|enablePullRequestAutoMerge)\b/.test(text)) return deny("pr-merge", "A GraphQL merge");
+        // A pull request added to the merge queue is merged by the queue later (pr/57).
+        if (/\b(mergePullRequest|enablePullRequestAutoMerge|enqueuePullRequest)\b/.test(text)) return deny("pr-merge", "A GraphQL merge");
         if (/\bmarkPullRequestReadyForReview\b/.test(text)) return deny("pr-ready", "A GraphQL ready-for-review");
         // A review added or submitted with the event `APPROVE` (review/210); an event the line cannot show (a variable,
         // a call it cannot find) reads as one, and a review with no event is the API's pending one.
@@ -1126,20 +1139,35 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   function publishVerdict(cmd: string[]): PersonOnlyVerdict | null {
     const valued = new Set(["--registry", "--workspace", "-w", "--prefix", "-C", "--dir", "--filter", "--userconfig",
       "--cwd", "--tag", "--otp", "--access"]);
-    const positionals: string[] = [];
-    for (let k = 1; k < cmd.length; k += 1) {
-      const word = cmd[k] ?? "";
-      if (valued.has(word)) k += 1;
-      else if (!word.startsWith("-")) positionals.push(word);
-    }
+    const npm = cmd[0] === "npm";
+    /**
+     * The positional words; with `settings`, npm's own reading of any `--<key> <value>` before its subcommand as a
+     * setting (`npm --loglevel silly publish`, pr/50). Both readings are taken, so a boolean option before the
+     * subcommand (`npm --json publish`) still reads the next word as the subcommand.
+     */
+    const positionalsOf = (settings: boolean): string[] => {
+      const positionals: string[] = [];
+      for (let k = 1; k < cmd.length; k += 1) {
+        const word = cmd[k] ?? "";
+        if (valued.has(word)) k += 1;
+        else if (settings && positionals.length === 0 && /^--[^=]+$/.test(word) && !(cmd[k + 1] ?? "-").startsWith("-")) k += 1;
+        else if (!word.startsWith("-")) positionals.push(word);
+      }
+      return positionals;
+    };
     // `publish` as the subcommand, or after a package manager's word (`yarn npm publish`, `npm --workspace x exec --
     // npm publish`) or yarn's `workspace <name>` (pr/3), the forms that run it in place of a script of that name.
-    const publishes = positionals.some(
-      (word, index) =>
-        word === "publish" &&
-        (index === 0 ||
-          ["npm", "pnpm", "yarn", "bun"].includes(positionals[index - 1] ?? "") ||
-          (cmd[0] === "yarn" && index === 2 && positionals[0] === "workspace")),
+    // Where the manager is npm, any unique prefix of it counts (`npm pub`, pr/50): npm runs a command's unique prefix
+    // as the command, and `pu` is the shortest of `publish`'s, `pr…` and `pa…` being prune's and pack's.
+    const publishes = [positionalsOf(false), ...(npm ? [positionalsOf(true)] : [])].some((positionals) =>
+      positionals.some(
+        (word, index) =>
+          (word === "publish" ||
+            ((index === 0 ? npm : positionals[index - 1] === "npm") && /^pu(?:b(?:l(?:i(?:sh?)?)?)?)?$/.test(word))) &&
+          (index === 0 ||
+            ["npm", "pnpm", "yarn", "bun"].includes(positionals[index - 1] ?? "") ||
+            (cmd[0] === "yarn" && index === 2 && positionals[0] === "workspace")),
+      ),
     );
     return publishes ? deny("publish", `Publishing a package (\`${cmd[0]} publish\`)`) : null;
   }
@@ -1154,7 +1182,14 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       if (sub === "push") verdict = pushVerdict(args, config);
       else if (sub === "send-pack") verdict = pushVerdict(args, [...config, "push.default=matching"]);
       else if (sub === "tag") verdict = tagVerdict(args);
-      else if (sub === "subtree") {
+      else if (
+        sub === "update-ref" &&
+        (args.some((arg) => /^(refs\/)?tags\//i.test(arg)) || (args.includes("--stdin") && /refs\/tags\//i.test(command)))
+      ) {
+        // `git update-ref` writes or deletes a ref by name (pr/53): a tag ref named on the line, or in a `--stdin` text
+        // the line itself carries, is a tag created or deleted. A `--stdin` text read from a file is the residual.
+        verdict = deny("tag", "A tag ref write (`git update-ref`)");
+      } else if (sub === "subtree") {
         // `git subtree push <remote> <branch>` runs `git push <remote> <split>:refs/heads/<branch>`.
         const valued = new Set(["-P", "--prefix", "-m", "--message", "-b", "--branch", "--onto"]);
         const words = args.filter((word, index) => !word.startsWith("-") && !valued.has(args[index - 1] ?? ""));
@@ -1182,8 +1217,9 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
  * api`, `curl` or `wget` write (POST, PATCH, PUT, DELETE) on a repository's
  * `pulls` or `pulls/<n>`, on `contents/…`, on `git/` refs or objects, or on
  * `merges`, with their GraphQL twins. A reply on `pulls/<n>/comments` or
- * `issues/<n>/comments` passes. The line is read as {@link personOnlyVerdict}
- * reads it.
+ * `issues/<n>/comments` passes. A `gh` group outside gh's built-in commands (an
+ * alias or an extension) and `gh alias set` or `import` are refused too. The line
+ * is read as {@link personOnlyVerdict} reads it, and throws as it does.
  *
  * Self-contained, so the emitted guard can carry it as source (see the module
  * comment).
@@ -1193,7 +1229,7 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
   const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
   const KEYWORDS = new Set(["!", "{", "}", "if", "then", "else", "elif", "fi", "do", "done", "while", "until"]);
   const WRAPPERS = new Set(["env", "command", "builtin", "exec", "nohup", "sudo", "doas", "nice", "timeout", "stdbuf", "time", "xargs",
-    "npx", "bunx", "pnpx"]);
+    "npx", "bunx", "pnpx", "corepack"]);
   /**
    * Package runners spelled as a program and a subcommand; each runs its first positional word as a program, or
    * (`bun exec`, yarn's `exec`) as a shell line.
@@ -1233,10 +1269,13 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
   /** PowerShell's two hosts and `Invoke-Expression`, each running a command string of its own (build/89). */
   const POWERSHELLS = new Set(["pwsh", "powershell", "invoke-expression", "iex"]);
 
-  /** A program word as the shell finds it: its last path part, without case or a Windows suffix. */
+  /**
+   * A program word as the shell finds it: its last path part, without case or a Windows suffix, and without a trailing
+   * `@<version>`, which a runner reads as the version to run (`npx npm@10`, `corepack pnpm@9`, pr/51).
+   */
   function programName(word: string): string {
     const last = word.split(/[\\/]/).pop() ?? "";
-    return last.toLowerCase().replace(/\.(exe|cmd|bat)$/, "");
+    return last.toLowerCase().replace(/^([^@]+)@[\s\S]*$/, "$1").replace(/\.(exe|cmd|bat)$/, "");
   }
 
   /**
@@ -1395,9 +1434,11 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
   /**
    * Each simple command's words, its program word first and normalized; `sh -c` and `eval` text read too. With `pwsh`,
    * the text is PowerShell's: a PowerShell command string or the Windows command interpreter's rest, whose backslash is
-   * a plain character (review/194).
+   * a plain character (review/194). A line nested past four levels throws a coded `NESTING_DEPTH` error (pr/58): the
+   * reading stops there, so the guard refuses the line rather than allow what the fifth level runs.
    */
   function commandsOf(text: string, depth: number, pwsh: boolean): string[][] {
+    if (depth > 4) throw Object.assign(new Error("nesting"), { code: "NESTING_DEPTH" });
     const { segments, nested } = splitLine(text, true, pwsh);
     // A PowerShell line is read with a POSIX shell's escapes too, and a line with a brace with its braces as words too
     // (review/185), so either reading adds denials and never lifts one: `git push origin x} -f` still forces.
@@ -1466,23 +1507,23 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
         } else break;
       }
       if (line !== null) {
-        if (depth < 4) commands.push(...commandsOf(line, depth + 1, pwsh));
+        commands.push(...commandsOf(line, depth + 1, pwsh));
         continue;
       }
       const cmd = words.slice(k);
       if (cmd.length === 0) continue;
       // A program word holding a whole command line (`bun exec 'git push'`) is also read as that line.
-      if (depth < 4 && /\s/.test(cmd[0] ?? "")) commands.push(...commandsOf(cmd.join(" "), depth + 1, pwsh));
+      if (/\s/.test(cmd[0] ?? "")) commands.push(...commandsOf(cmd.join(" "), depth + 1, pwsh));
       cmd[0] = programName(cmd[0] ?? "");
       // git's dashed form (`git-push`, as git's exec path holds it) is git running that subcommand.
       if (/^git-./.test(cmd[0])) cmd.splice(0, 1, "git", cmd[0].slice(4));
-      if (depth < 4 && SHELLS.has(cmd[0] ?? "")) {
+      if (SHELLS.has(cmd[0] ?? "")) {
         const flag = cmd.findIndex((word, index) => index > 0 && /^-[A-Za-z]*c[A-Za-z]*$/.test(word));
         const script = flag === -1 ? undefined : cmd[flag + 1];
         if (script !== undefined) commands.push(...commandsOf(script, depth + 1, false));
-      } else if (depth < 4 && cmd[0] === "eval") {
+      } else if (cmd[0] === "eval") {
         commands.push(...commandsOf(cmd.slice(1).join(" "), depth + 1, false));
-      } else if (depth < 4 && POWERSHELLS.has(cmd[0] ?? "")) {
+      } else if (POWERSHELLS.has(cmd[0] ?? "")) {
         // PowerShell's command string (build/89): the words after `-Command`; with none, the words from the first one
         // that is no option, and each later word holding a blank, a quoted command past an option's value, each read
         // with PowerShell's escape (review/194).
@@ -1491,7 +1532,7 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
         if (at !== -1) commands.push(...commandsOf([commandFlag(cmd[at] ?? ""), ...cmd.slice(at + 1)].join(" "), depth + 1, true));
         else if (first !== -1) commands.push(...commandsOf(cmd.slice(first).join(" "), depth + 1, true));
         for (const word of first === -1 ? [] : cmd.slice(first + 1)) if (/\s/.test(word)) commands.push(...commandsOf(word, depth + 1, true));
-      } else if (depth < 4 && cmd[0] === "cmd") {
+      } else if (cmd[0] === "cmd") {
         // The Windows command interpreter (review/183): the words after `/c` or `/k`, any letter case, a value attached,
         // read as PowerShell's are, a backslash being a plain character there too (review/194), and read with each
         // caret escape taken off as well (`g^it`, `--for^ce`, pr/10), so that reading only adds denials.
@@ -1499,7 +1540,7 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
         const rest = at === -1 ? "" : [(cmd[at] ?? "").slice(2), ...cmd.slice(at + 1)].join(" ");
         if (at !== -1) commands.push(...commandsOf(rest, depth + 1, true));
         if (rest.includes("^")) commands.push(...commandsOf(rest.replace(/\^([\s\S])/g, "$1"), depth + 1, true));
-      } else if (depth < 4 && cmd[0] === "git") {
+      } else if (cmd[0] === "git") {
         // Lines a git builtin runs (review/184): each `git rebase --exec` or `-x` line (`--ex`, `--exe` and a cluster
         // as git's option parser reads them), and the command `git bisect run` runs, its words kept as words.
         const { sub, args } = gitParts(cmd);
@@ -1527,7 +1568,7 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
       }
       commands.push(cmd);
     }
-    if (depth < 4) for (const inner of nested) commands.push(...commandsOf(inner, depth + 1, pwsh));
+    for (const inner of nested) commands.push(...commandsOf(inner, depth + 1, pwsh));
     return commands;
   }
 
@@ -1689,7 +1730,17 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
     /^branches\/.+\/rename\/?$/i,
   ];
   const GRAPHQL_MOVES =
-    /\b(createPullRequest|updatePullRequest|updatePullRequestBranch|createCommitOnBranch|createRef|updateRef|updateRefs|deleteRef|mergeBranch|mergePullRequest|enablePullRequestAutoMerge)\b/;
+    /\b(createPullRequest|updatePullRequest|updatePullRequestBranch|createCommitOnBranch|createRef|updateRef|updateRefs|deleteRef|mergeBranch|mergePullRequest|enablePullRequestAutoMerge|enqueuePullRequest)\b/;
+  /**
+   * gh's built-in top-level commands (`gh help`, gh 2.102.0), its hidden `help` and `version`, and its default alias
+   * `co` (pr/56). Any other group is an alias, which expands to any gh command (`gh land` for `pr merge`), or an
+   * extension, so the line does not show what it runs.
+   */
+  const GH_BUILTINS = new Set(
+    ("agent-task alias api attestation auth browse cache co codespace completion config copilot discussion extension " +
+      "gist gpg-key help issue label licenses org pr preview project release repo ruleset run search secret skill " +
+      "ssh-key status variable version workflow").split(" "),
+  );
   /** git's builtins (`git --list-cmds=builtins`, git 2.52.0), and `subtree`, which this verdict reads. */
   const GIT_BUILTINS = new Set(
     ("add am annotate apply archive backfill bisect blame branch bugreport bundle cat-file check-attr check-ignore " +
@@ -1884,6 +1935,9 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
     let http = program === "curl" || program === "wget";
     if (program === "gh") {
       const [group, sub] = ghPositionals(cmd);
+      // Unattended, gh runs only a built-in this verdict knows, and defines no alias (pr/56).
+      if (group !== undefined && !GH_BUILTINS.has(group)) return deny("A gh command that is not a built-in this guard knows (an alias or an extension)");
+      if (group === "alias" && (sub === "set" || sub === "import")) return deny(`\`gh alias ${sub}\`, which defines an alias`);
       // Closing and reopening are the REST twin's `PATCH pulls/<n>` (review/213), `update-branch` its `PUT
       // pulls/<n>/update-branch` (review/232).
       if (group === "pr" && ["create", "new", "edit", "close", "reopen", "update-branch"].includes(sub ?? "")) return deny(`\`gh pr ${sub}\``);

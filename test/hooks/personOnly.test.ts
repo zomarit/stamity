@@ -300,6 +300,10 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["git tag --delete v1.0.0", "tag"],
   ["git tag -l -d v1.0.0", "tag"],
   ["git-tag v1.0.0", "tag"],
+  // A tag ref written through `git update-ref` (pr/53): created, deleted, and named in a piped `--stdin` text.
+  ["git update-ref refs/tags/v1 HEAD", "tag"],
+  ["git update-ref -d refs/tags/v1", "tag"],
+  ["printf 'create refs/tags/v1 HEAD\\n' | git update-ref --stdin", "tag"],
   // pr-merge, pr-ready
   ["gh pr merge 3 --squash", "pr-merge"],
   ["gh pr merge --auto --squash", "pr-merge"],
@@ -315,6 +319,8 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["gh api -X POST repos/o/r/pulls/3/merge-async", "pr-merge"],
   ["gh api graphql -f query='mutation { mergePullRequest(input: {pullRequestId: \"x\"}) { clientMutationId } }'", "pr-merge"],
   ["gh api graphql -f query='mutation { enablePullRequestAutoMerge(input: {pullRequestId: \"x\"}) { clientMutationId } }'", "pr-merge"],
+  // A pull request added to the merge queue, which merges it later (pr/57).
+  ["gh api graphql -f query='mutation { enqueuePullRequest(input: {pullRequestId: \"x\"}) { mergeQueueEntry { id } } }'", "pr-merge"],
   ["gh api graphql -f query='mutation { markPullRequestReadyForReview(input: {pullRequestId: \"x\"}) { clientMutationId } }'", "pr-ready"],
   // release
   ["gh release create v1.0.0", "release"],
@@ -348,6 +354,21 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["bun exec 'npm publish --access public'", "publish"],
   ["iex 'npm publish'", "publish"],
   ["pwsh /c 'npm publish'", "publish"],
+  // npm's unique prefixes of `publish` (pr/50), directly and through a runner, and a `--<key> <value>` setting
+  // before the subcommand; a boolean option before it still reads the next word as the subcommand.
+  ["npm pub", "publish"],
+  ["npm pu", "publish"],
+  ["npm publ --access public", "publish"],
+  ["npx npm pub", "publish"],
+  ["npm exec -- npm pub", "publish"],
+  ["npm --loglevel silly publish", "publish"],
+  ["npm --loglevel silly pub", "publish"],
+  ["npm --json publish", "publish"],
+  // Corepack in front of a package manager, and a manager word carrying its version (pr/51).
+  ["corepack pnpm publish", "publish"],
+  ["corepack yarn npm publish", "publish"],
+  ["corepack pnpm@9.1.0 publish", "publish"],
+  ["npx npm@10 publish", "publish"],
   // secrets
   ["gh secret set TOKEN --body x", "secrets"],
   ["gh secret delete TOKEN", "secrets"],
@@ -540,6 +561,17 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
   ["npm test"],
   ["npm run publish-docs"],
   ["npm pack"],
+  // pr/50's twins: npm's other `p` commands, a script named `pub`, another manager's `pub` (a script), and a setting
+  // before `run`. pr/51's: Corepack's own commands and a manager it runs that publishes nothing. pr/53's: a branch ref
+  // written. pr/57's: the merge queue read.
+  ["npm prune"],
+  ["npm run pub"],
+  ["pnpm pub"],
+  ["npm --loglevel silly run publish"],
+  ["corepack enable"],
+  ["corepack pnpm install"],
+  ["git update-ref refs/heads/feat/x HEAD"],
+  ["gh api graphql -f query='query { repository(owner:\"o\",name:\"r\") { mergeQueue { entries { totalCount } } } }'"],
   ["bun run publish"],
   ["bun test"],
   ["npx vitest run"],
@@ -789,8 +821,46 @@ describe("personOnlyVerdict — the respelling residual (named in SECURITY.md by
     // PowerShell's encoded command, and a line another command pipes into `iex` (build/89).
     ["pwsh -EncodedCommand ZwBpAHQAIABwAHUAcwBoACAALQBmAA=="],
     ["echo 'git push -f origin feat/x' | iex"],
+    // A `git update-ref --stdin` text read from a file (pr/53), and a gh alias or extension, which gh expands or runs
+    // where the line shows only its name (pr/56; refused unattended, below).
+    ["git update-ref --stdin < refs.txt"],
+    ["gh land 123"],
   ])("allows %j", (command) => {
     expect(personOnlyVerdict(command, ON_MAIN)).toEqual({ deny: false });
+  });
+});
+
+describe("the nested-command depth limit (pr/58)", () => {
+  /** `line` inside `layers` literal `sh -c` layers, each quoted for the one around it. */
+  const nest = (line: string, layers: number): string => {
+    let text = line;
+    for (let layer = 0; layer < layers; layer += 1) text = `sh -c '${text.replace(/'/g, "'\\''")}'`;
+    return text;
+  };
+  /** The `code` of what `read` throws, or `null` when it returns. */
+  const thrown = (read: () => unknown): unknown => {
+    try {
+      read();
+      return null;
+    } catch (error) {
+      return (error as { code?: unknown }).code;
+    }
+  };
+
+  it("reads a line four layers down as its own", () => {
+    expect(personOnlyVerdict(nest("git push --force origin feat/x", 4), ON_FEATURE)).toMatchObject({ deny: true, rule: "force-push" });
+    expect(unattendedPushVerdict(nest("git push origin feat/x", 4)).deny).toBe(true);
+    expect(personOnlyVerdict(nest("git status", 4), ON_FEATURE)).toEqual({ deny: false });
+    expect(unattendedPushVerdict(nest("git status", 4))).toEqual({ deny: false });
+  });
+
+  it("throws a coded NESTING_DEPTH past depth 4 in both verdicts, whatever the line holds, so the guard refuses it", () => {
+    for (const line of ["git push --force origin feat/x", "git status"]) {
+      expect(thrown(() => personOnlyVerdict(nest(line, 5), ON_FEATURE)), line).toBe("NESTING_DEPTH");
+      expect(thrown(() => unattendedPushVerdict(nest(line, 5))), line).toBe("NESTING_DEPTH");
+    }
+    // A substitution past the limit is a nesting too.
+    expect(thrown(() => personOnlyVerdict(nest("echo \"$(git status)\"", 4), ON_FEATURE))).toBe("NESTING_DEPTH");
   });
 });
 
@@ -1037,6 +1107,14 @@ describe("unattendedPushVerdict", () => {
     // wget's wgetrc commands (pr/23).
     ["wget -e method=PATCH https://api.github.com/repos/o/r/pulls/3"],
     ["wget -e post_data=x https://api.github.com/repos/o/r/pulls"],
+    // A gh group outside gh's built-in commands (an alias or an extension), and an alias defined (pr/56).
+    ["gh land 123"],
+    ["gh -R o/r land 123"],
+    ["gh alias set land 'pr merge'"],
+    ["gh alias import aliases.yml"],
+    // A push behind Corepack's runner (pr/51), and the merge queue's enrolment (pr/57).
+    ["corepack pnpm exec git push origin feat/x"],
+    ["gh api graphql -f query='mutation { enqueuePullRequest(input: {pullRequestId: \"x\"}) { mergeQueueEntry { id } } }'"],
   ])("denies %j, naming the run verbs", (command) => {
     const verdict = unattendedPushVerdict(command);
     expect(verdict.deny).toBe(true);
@@ -1180,6 +1258,16 @@ describe("unattendedPushVerdict", () => {
     ["wget https://api.github.com/repos/o/r/releases"],
     ["wget -e method=GET https://api.github.com/repos/o/r/pulls/3"],
     ["wget -e robots=off https://api.github.com/repos/o/r/pulls/3"],
+    // pr/56's twins: gh's default alias `co`, built-in groups, an alias listed or deleted, and gh with no group.
+    ["gh co 3"],
+    ["gh auth status"],
+    ["gh run list"],
+    ["gh alias list"],
+    ["gh alias delete land"],
+    ["gh --version"],
+    // pr/51's and pr/57's twins: Corepack running a read, and the merge queue read.
+    ["corepack pnpm exec git status"],
+    ["gh api graphql -f query='query { repository(owner:\"o\",name:\"r\") { mergeQueue { entries { totalCount } } } }'"],
   ])("allows %j", (command) => {
     expect(unattendedPushVerdict(command)).toEqual({ deny: false });
   });
