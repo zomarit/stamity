@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runCommand } from "../../../src/cli/commands/run.ts";
 import { PERSON_ONLY_GUARD_FILE, planCoreHookScripts } from "../../../src/hooks/scripts.ts";
 import { RUN_ENDED_MARKER_FILE } from "../../../src/mcp/env.ts";
+import { canonical } from "../../support/identity.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { NO_GIT_CONFIG } from "../../support/repoFixtures.ts";
 import { useTempDir } from "../../support/tempDir.ts";
@@ -473,7 +474,7 @@ describe("stamity run start", () => {
 
     /** The person-only guard's decision on `command` in `repo`, the guard emitted where the engine writes it. */
     async function guardDenies(repo: string, command: string): Promise<string | null> {
-      const guard = planCoreHookScripts("../../agent-tool-policies.json", "claude", { packageName: "@zomarit/stamity", version: "1.0.0-golden", personOnlyGuard: true }).find(
+      const guard = planCoreHookScripts("../../agent-tool-policies.json", "claude", { packageName: canonical().name, version: "1.0.0-golden", personOnlyGuard: true }).find(
         (script) => script.fileName === PERSON_ONLY_GUARD_FILE,
       );
       if (guard === undefined) throw new Error("the plan carried no person-only guard");
