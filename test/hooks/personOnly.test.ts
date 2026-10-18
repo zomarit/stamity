@@ -561,6 +561,17 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["gh api orgs/o/properties/values -F 'repository_names[]=r'", "protection"],
   ["gh api -X DELETE orgs/o/properties/schema/team", "protection"],
   ["curl -X PUT -d '{}' https://api.github.com/enterprises/e/properties/schema/team", "protection"],
+  // curl's body letter with its value attached, or as a short cluster's first value letter, the value attached or the
+  // next word (pr/81): a body, so the default POST, read as the spaced form is.
+  ["curl -d@review.json https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
+  ["curl -d'{\"ref\":\"refs/tags/v1\",\"sha\":\"a\"}' https://api.github.com/repos/o/r/git/refs", "push-tags"],
+  ["curl -d'{\"sha\":\"a\",\"force\":true}' https://api.github.com/repos/o/r/git/refs/heads/main", "force-push"],
+  ["curl -d'{}' https://api.github.com/repos/o/r/pulls/3/merge", "pr-merge"],
+  ["curl -sd@r.json https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
+  ["curl -sdevent=APPROVE https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
+  ["curl -Fevent=APPROVE https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
+  ["curl -Tr.json https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
+  ["curl -d@r.json https://api.github.com/repos/o/r/releases", "release"],
 ];
 
 const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
@@ -804,6 +815,11 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
   ["curl https://api.github.com/repos/o/r"],
   ["wget -i urls.txt"],
   ["wget -qi urls.txt"],
+  // pr/81's twins: the same targets read, an attached header, and an attached body the line shows whole.
+  ["curl -o out.json https://api.github.com/repos/o/r/pulls/3/reviews"],
+  ["curl -s https://api.github.com/repos/o/r/git/refs/heads/main"],
+  ["curl -H'Accept: application/vnd.github+json' https://api.github.com/repos/o/r/pulls/3/merge"],
+  ["curl -d'{\"event\":\"COMMENT\"}' https://api.github.com/repos/o/r/pulls/3/reviews"],
 ];
 
 describe("personOnlyVerdict — the deny matrix", () => {
@@ -1255,6 +1271,9 @@ describe("unattendedPushVerdict", () => {
     // A pull request moved by curl's first request, a later `--next` read setting the method no longer hiding it (pr/72).
     ["curl -X PATCH https://api.github.com/repos/o/r/pulls/3 --next -X GET https://example.com"],
     ["curl -X PATCH https://api.github.com/repos/o/r/pulls/3 -: https://example.com"],
+    // A pull request opened, and a commit written, through curl's attached body (pr/81).
+    ["curl -d'{\"title\":\"x\",\"head\":\"a\",\"base\":\"main\"}' https://api.github.com/repos/o/r/pulls"],
+    ["curl -sd@c.json https://api.github.com/repos/o/r/contents/x"],
   ])("denies %j, naming the run verbs", (command) => {
     const verdict = unattendedPushVerdict(command);
     expect(verdict.deny).toBe(true);
@@ -1422,6 +1441,9 @@ describe("unattendedPushVerdict", () => {
     ["curl https://a.example --next https://b.example"],
     ["wget -i urls.txt"],
     ["git symbolic-ref --short -q HEAD"],
+    // pr/81's twins: the same targets read.
+    ["curl -s https://api.github.com/repos/o/r/pulls"],
+    ["curl -o out.json https://api.github.com/repos/o/r/contents/x"],
   ])("allows %j", (command) => {
     expect(unattendedPushVerdict(command)).toEqual({ deny: false });
   });

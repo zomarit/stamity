@@ -180,6 +180,9 @@ const MATRIX: readonly (readonly [command: string, rule: string | null])[] = [
   ["curl https://a.example --next https://b.example", null],
   ["gh api graphql -f query='mutation { archiveRepository(input: {repositoryId: \"R\"}) { clientMutationId } }'", "protection"],
   ["gh api graphql -f query='query { repository(owner:\"o\",name:\"r\") { isArchived } }'", null],
+  // PR #112's resolution round 4b: curl's attached body (pr/81).
+  ["curl -d@r.json https://api.github.com/repos/o/r/pulls/3/reviews", "pr-merge"],
+  ["curl -o out.json https://api.github.com/repos/o/r/pulls/3/reviews", null],
 ];
 
 describe("the person-only guard, on every client", () => {
@@ -779,8 +782,8 @@ describe("the unattended push rule, the mode read from the run records", () => {
       "wget -e method=PATCH https://api.github.com/repos/o/r/pulls/3",
       // A gh alias or extension and an alias defined (pr/56), and a push behind Corepack (pr/51).
       "gh land 123", "gh alias set land 'pr merge'", "gh alias import aliases.yml", "corepack pnpm exec git push origin feat/x",
-      // A group spelled near one of gh's own aliases (pr/67).
-      "gh exts list"];
+      // A group spelled near one of gh's own aliases (pr/67), and a pull request opened through curl's attached body (pr/81).
+      "gh exts list", "curl -d'{\"title\":\"x\",\"head\":\"a\",\"base\":\"main\"}' https://api.github.com/repos/o/r/pulls"];
     for (const command of unattended) {
       const source = unattendedPushVerdict(command);
       expect(source.deny, command).toBe(true);
@@ -812,8 +815,8 @@ describe("the unattended push rule, the mode read from the run records", () => {
       `printf '%s\\n' GIT_EXEC_PATH; ${RUN_END}`, "npm -w x exec -- git status", "cmd /c g^it status", "wget --meth=GET https://api.github.com/repos/o/r/pulls/3",
       "wget --me=GET https://api.github.com/repos/o/r/pulls/3", "wget https://api.github.com/repos/o/r/releases",
       "wget -e method=GET https://api.github.com/repos/o/r/pulls/3", "gh co 3", "gh alias list", "corepack pnpm exec git status",
-      // gh's own aliases of its built-ins (pr/67).
-      "gh ext list", "gh cs list"]) {
+      // gh's own aliases of its built-ins (pr/67), and a pull request list read (pr/81).
+      "gh ext list", "gh cs list", "curl -s https://api.github.com/repos/o/r/pulls"]) {
       expect(unattendedPushVerdict(command), command).toEqual({ deny: false });
       expect(decide("claude", guard, command).deny, command).toBe(false);
     }

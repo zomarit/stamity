@@ -666,6 +666,15 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     const cmd: string[] = [];
     for (let k = 0; k < expanded.length; k += 1) {
       const word = expanded[k] ?? "";
+      // curl's body letter with its value attached, or a short cluster's first value letter (`-d@b.json`, `-sd{…}`,
+      // `-sT f`, pr/81), read apart: the letters before it, the letter, its value.
+      const lead = tool === "curl" ? /^-([^-:KHouAebcwmxrEdFTXCDPQtyYzU]*)([dFT])([\s\S]*)$/.exec(word) : null;
+      if (lead !== null && word.length > 2) {
+        if (lead[1]) cmd.push(`-${lead[1]}`);
+        cmd.push(`-${lead[2]}`);
+        if (lead[3]) cmd.push(lead[3]);
+        continue;
+      }
       const own = /^(-[A-Za-z]*e|--execute)$/.test(word);
       let rc: string | undefined;
       if (tool === "wget" && k > 0) {
@@ -1755,6 +1764,15 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
     const cmd: string[] = [];
     for (let k = 0; k < expanded.length; k += 1) {
       const word = expanded[k] ?? "";
+      // curl's body letter with its value attached, or a short cluster's first value letter (`-d@b.json`, `-sd{…}`,
+      // `-sT f`, pr/81), read apart: the letters before it, the letter, its value.
+      const lead = tool === "curl" ? /^-([^-:KHouAebcwmxrEdFTXCDPQtyYzU]*)([dFT])([\s\S]*)$/.exec(word) : null;
+      if (lead !== null && word.length > 2) {
+        if (lead[1]) cmd.push(`-${lead[1]}`);
+        cmd.push(`-${lead[2]}`);
+        if (lead[3]) cmd.push(lead[3]);
+        continue;
+      }
       const own = /^(-[A-Za-z]*e|--execute)$/.test(word);
       let rc: string | undefined;
       if (tool === "wget" && k > 0) {
