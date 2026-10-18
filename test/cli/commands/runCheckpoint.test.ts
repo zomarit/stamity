@@ -1,8 +1,8 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, lstatSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync } from "node:fs";
 import { appendFile, chmod, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runCommand } from "../../../src/cli/commands/run.ts";
 import type * as GitWriteModule from "../../../src/cli/engine/gitWrite.ts";
 import type * as PersonOnlyModule from "../../../src/hooks/personOnly.ts";
@@ -1293,6 +1293,107 @@ describe("stamity run checkpoint", () => {
     expect(writes.argv.some((argv) => argv[0] === "add" || argv[0] === "commit")).toBe(false);
     expect(pushes()).toEqual([]);
     expect(remoteHeads(remote)).toEqual(SEEDED);
+  });
+
+  describe("git's program-valued variables, unattended (v0c, REQ-FLOW-122)", () => {
+    /** The three the cell names, each set to a value the line must never print. */
+    const PLANTED = { GIT_EXEC_PATH: "/planted/exec-path", GIT_SSH_COMMAND: "planted-ssh -i /planted/key", GIT_ASKPASS: "/planted/askpass" } as const;
+    const LINE = "removed from git's environment: GIT_SSH_COMMAND, GIT_ASKPASS, GIT_EXEC_PATH";
+
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    /** No program-valued variable from the host's own shell reaches a case, so the line names only what the case sets. */
+    async function withPrograms<T>(set: Record<string, string>, body: () => Promise<T>): Promise<T> {
+      const { GIT_PROGRAM_VARIABLES } = await vi.importActual<typeof GitWriteModule>("../../../src/cli/engine/gitWrite.ts");
+      for (const name of GIT_PROGRAM_VARIABLES) vi.stubEnv(name, undefined);
+      for (const [name, value] of Object.entries(set)) vi.stubEnv(name, value);
+      try {
+        return await body();
+      } finally {
+        // Unstubbed before the case reads the repositories back with the fixtures' own git.
+        vi.unstubAllEnvs();
+      }
+    }
+
+    /**
+     * A stand-in ahead of git on PATH that appends the three variables it was started with (`unset` where absent) to
+     * `log`, then clears them and runs the real git. Mock reason: no real git reports the environment it was started
+     * with, and a real git started with GIT_EXEC_PATH at a folder holding no git programs would fail before the
+     * attended control could show the variables reached it. Windows starts no shebang script, so its cases are POSIX only.
+     */
+    async function standIn(dir: string): Promise<{ path: string; lines: () => string[] }> {
+      const real = execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim();
+      const bin = join(dir, "stand-in");
+      const log = join(dir, "git-env.log");
+      await mkdir(bin, { recursive: true });
+      const fields = Object.keys(PLANTED).map((name) => `\${${name}-unset}`).join("|");
+      const script = `#!/bin/sh\nprintf '%s\\n' "${fields}" >> '${log}'\nunset ${Object.keys(PLANTED).join(" ")}\nexec '${real}' "$@"\n`;
+      await writeFile(join(bin, "git"), script);
+      await chmod(join(bin, "git"), 0o755);
+      return {
+        path: `${bin}:${process.env["PATH"] ?? ""}`,
+        lines: () => (existsSync(log) ? readFileSync(log, "utf8").split("\n").filter((line) => line !== "") : []),
+      };
+    }
+
+    it.skipIf(process.platform === "win32")("unattended, the verb's git runs without them, the line names each by name only, and the GIT_CONFIG_* insteadOf still sends the push", async () => {
+      const { repo, remote } = await seed("unattended");
+      await writeFile(join(repo, "a.txt"), "the unit's change\n");
+      const stand = await standIn(dirname(repo));
+
+      const { code, stdout } = await withPrograms({ ...PLANTED, PATH: stand.path }, () => run(repo, ["checkpoint", "--run", RUN, "--paths", "a.txt"]));
+
+      expect(code).toBe(0);
+      expect(stdout).toContain(`run: ${RUN} (unattended)\nbase: `);
+      expect(stdout).toContain(`\n${LINE}\n`);
+      for (const value of Object.values(PLANTED)) expect(stdout).not.toContain(value);
+      // Non-degenerate: git ran, a push among its calls, and not one call received any of the three.
+      expect(pushes()).toHaveLength(1);
+      expect(stand.lines().length).toBeGreaterThan(0);
+      expect(new Set(stand.lines())).toEqual(new Set(["unset|unset|unset"]));
+      // The spy's GIT_CONFIG_COUNT insteadOf (the push's seam) was kept, so the push landed in the case's remote.
+      expect(remoteHeads(remote)).toEqual([...SEEDED, `refs/heads/${RUN_BRANCH}`]);
+    });
+
+    it.skipIf(process.platform === "win32")("attended, the same variables reach the verb's git, and no line names them", async () => {
+      const { repo, remote } = await seed("attended");
+      await writeFile(join(repo, "a.txt"), "the unit's change\n");
+      const stand = await standIn(dirname(repo));
+
+      const { code, stdout } = await withPrograms({ ...PLANTED, PATH: stand.path }, () => run(repo, ["checkpoint", "--run", RUN, "--paths", "a.txt"]));
+
+      expect(code).toBe(0);
+      expect(stdout).not.toContain("removed from git's environment");
+      expect(stand.lines()).toContain(Object.values(PLANTED).join("|"));
+      expect(remoteHeads(remote)).toEqual([...SEEDED, `refs/heads/${RUN_BRANCH}`]);
+    });
+
+    it("unattended with none of them set, prints no line", async () => {
+      const { repo } = await seed("unattended");
+      await writeFile(join(repo, "a.txt"), "the unit's change\n");
+
+      const { code, stdout } = await withPrograms({}, () => run(repo, ["checkpoint", "--run", RUN, "--paths", "a.txt"]));
+
+      expect(code).toBe(0);
+      expect(stdout).toContain(`run: ${RUN} (unattended)`);
+      expect(stdout).not.toContain("removed from git's environment");
+    });
+
+    it("run start, unattended, names them too, and attended does not", async () => {
+      const unattended = await seed("unattended");
+      const attended = await seed("attended");
+
+      const named = await withPrograms({ GIT_SSH_COMMAND: PLANTED.GIT_SSH_COMMAND, GIT_EDITOR: "" }, () => run(unattended.repo, ["start", "--run", RUN]));
+      const plain = await withPrograms({ GIT_SSH_COMMAND: PLANTED.GIT_SSH_COMMAND, GIT_EDITOR: "" }, () => run(attended.repo, ["start", "--run", RUN]));
+
+      expect(named.code).toBe(0);
+      expect(named.stdout).toContain("removed from git's environment: GIT_EDITOR, GIT_SSH_COMMAND\n");
+      expect(named.stdout).not.toContain(PLANTED.GIT_SSH_COMMAND);
+      expect(plain.code).toBe(0);
+      expect(plain.stdout).not.toContain("removed from git's environment");
+    });
   });
 
   it.each([

@@ -12,7 +12,7 @@ import { ensureDraftPr, HOST_NAME, resolveRepo, type PrOutcome } from "../../run
 import { parseGitDefaultBranch } from "../../workspace/git.ts";
 import { ghApi } from "../engine/ghRunner.ts";
 import { gitCheckRunner, revisionLines } from "../engine/gitStatus.ts";
-import { gitWrite, type GitWriteResult } from "../engine/gitWrite.ts";
+import { gitProgramVariablesIn, gitWrite, type GitWriteResult } from "../engine/gitWrite.ts";
 import { CliFailure } from "../kit/output.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import { sanitizeLabel } from "../kit/prompts.ts";
@@ -270,6 +270,7 @@ function checkRunId(ctx: CliContext, verb: string, run: string): void {
 
 async function runStart(ctx: CliContext, run: string): Promise<CommandResult> {
   checkRunId(ctx, START, run);
+  const removedLine = startVerbGit(startsUnattended(ctx, run));
   const cwd = ctx.app.runtime.cwd;
   const runBranch = `${RUN_BRANCH_PREFIX}${run}`;
 
@@ -300,7 +301,7 @@ async function runStart(ctx: CliContext, run: string): Promise<CommandResult> {
 
   if (current !== null && !onDefault) {
     const pinned = await pinOrigin(ctx, cwd, run);
-    const kept = [`branch: ${sanitizeLabel(current)} (kept: not the default branch)`, `base: ${head}`, pinned, ...(originHead === null ? [] : [originHead])];
+    const kept = [`branch: ${sanitizeLabel(current)} (kept: not the default branch)`, `base: ${head}`, ...removedLine, pinned, ...(originHead === null ? [] : [originHead])];
     ctx.io.out(`${kept.join("\n")}\n`);
     return { exitCode: 0, json: start(run, current, false, head, ctx.dryRun) };
   }
@@ -339,7 +340,7 @@ async function runStart(ctx: CliContext, run: string): Promise<CommandResult> {
   // pr/28: a dry run switched nothing, so an existing branch's pin is read from its tree; pr/27: a refusal after a
   // switch names the branch the checkout is left on.
   const pinned = await pinOrigin(ctx, cwd, run, ctx.dryRun ? { rev: existing ?? remoteTip ?? undefined } : { checkout: runBranch });
-  const lines = [`branch: ${runBranch} (${how})`, `base: ${base}`, pinned];
+  const lines = [`branch: ${runBranch} (${how})`, `base: ${base}`, ...removedLine, pinned];
   if (defaults !== null) lines.push(`default branch read from: ${SOURCE_LABEL[defaults.source]}`);
   if (originHead !== null) lines.push(originHead);
   if (ctx.dryRun) lines.push("Dry run: nothing was switched.");
@@ -521,10 +522,29 @@ function start(run: string, branch: string, created: boolean, base: string, dryR
   return { subcommand: START, run, branch, created, base, ...(dryRun ? { dryRun: true } : {}) };
 }
 
-/** One git call through the write runner; a git that could not start or finish is a failure of the verb. */
+/**
+ * The mode the running verb's git calls start in (REQ-FLOW-122), set by each verb before its first git call
+ * ({@link startVerbGit}): the helpers below that start git are shared by the three verbs and take no mode.
+ */
+const verbGit = { unattended: false };
+
+/**
+ * Sets the mode {@link git} starts git in and returns the verb's line naming, by name only and never by value, the
+ * program-valued variables an unattended run removes from git's environment; no line where it removes none.
+ */
+function startVerbGit(unattended: boolean): string[] {
+  verbGit.unattended = unattended;
+  const removed = unattended ? gitProgramVariablesIn(process.env) : [];
+  return removed.length === 0 ? [] : [`removed from git's environment: ${removed.join(", ")}`];
+}
+
+/**
+ * One git call through the write runner, unattended without git's program-valued variables (REQ-FLOW-122); a git
+ * that could not start or finish is a failure of the verb.
+ */
 async function git(cwd: string, args: readonly string[], verb: string = START, input?: string): Promise<GitWriteResult> {
   try {
-    return await gitWrite(cwd, args, input === undefined ? {} : { input });
+    return await gitWrite(cwd, args, { ...(input === undefined ? {} : { input }), ...(verbGit.unattended ? { unattended: true } : {}) });
   } catch (cause) {
     throw new CliFailure({
       code: "FAILURE",
@@ -714,6 +734,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   }
   const head = resumeCard.readRecordHead(record.text);
   const unattended = readsUnattended(head.mode, ctx.app.runtime.env["STAMITY_UNATTENDED"]);
+  const removedLine = startVerbGit(unattended);
   const recordBase = head.base;
   const base = recordBase === null ? null : await commitAt(cwd, recordBase, verb);
   if (base === null) {
@@ -726,7 +747,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   }
 
   const result: Checkpoint = { branch: null, base, committed: null, pushed: false, held: [], scan: { hits: [], unscanned: [] }, pr: null, notDone: [] };
-  const lines: string[] = [`run: ${run} (${unattended ? "unattended" : "attended"})`, `base: ${base}`];
+  const lines: string[] = [`run: ${run} (${unattended ? "unattended" : "attended"})`, `base: ${base}`, ...removedLine];
   const finish = async (passed: boolean, extra: Record<string, unknown> = {}): Promise<CommandResult> => {
     let ok = passed;
     // pr/37: only the run's last `end`, told so by --final-round, writes the marker the ask gate's final round reads;

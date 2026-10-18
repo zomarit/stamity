@@ -2,8 +2,9 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { gitWrite, gitWriteArgs, gitWriteEnv } from "../../../src/cli/engine/gitWrite.ts";
+import { GIT_PROGRAM_VARIABLES, gitProgramVariablesIn, gitWrite, gitWriteArgs, gitWriteEnv } from "../../../src/cli/engine/gitWrite.ts";
 import { NO_GIT_CONFIG } from "../../support/repoFixtures.ts";
 import { useTempDir } from "../../support/tempDir.ts";
 
@@ -65,6 +66,87 @@ describe("gitWriteEnv", () => {
       GIT_AUTHOR_NAME: "A",
       GIT_TERMINAL_PROMPT: "0",
     });
+  });
+
+  // v0c (REQ-FLOW-122): unattended, git's program-valued variables are removed too, an empty one included.
+  const PROGRAMS = {
+    GIT_EXEC_PATH: "/tmp/planted-exec-path",
+    GIT_SSH_COMMAND: "planted-ssh",
+    GIT_ASKPASS: "/tmp/planted-askpass",
+    git_pager: "planted-pager",
+    GIT_EDITOR: "",
+  };
+  const KEPT = {
+    PATH: "/usr/bin",
+    HOME: "/home/a",
+    XDG_CONFIG_HOME: "/home/a/.config",
+    GH_TOKEN: "t",
+    GIT_AUTHOR_NAME: "A",
+    GIT_CONFIG_COUNT: "1",
+    GIT_CONFIG_KEY_0: "url./tmp/remote.git.insteadOf",
+    GIT_CONFIG_VALUE_0: "https://github.com/o/r.git",
+    GIT_CONFIG_GLOBAL: "/tmp/global",
+    GIT_CONFIG_PARAMETERS: "'core.quotepath'='false'",
+  };
+
+  it("unattended, removes every program-valued variable, an empty one and another case included, and keeps the GIT_CONFIG_* ones, PATH, HOME and XDG_CONFIG_HOME", () => {
+    const env = gitWriteEnv({ ...KEPT, ...PROGRAMS, GIT_DIR: "/elsewhere/.git" }, { unattended: true });
+
+    expect(env).toEqual({ ...KEPT, GIT_TERMINAL_PROMPT: "0" });
+  });
+
+  it("attended, as when the option is omitted, keeps every program-valued variable", () => {
+    const base = { ...KEPT, ...PROGRAMS };
+
+    expect(gitWriteEnv(base, { unattended: false })).toEqual({ ...base, GIT_TERMINAL_PROMPT: "0" });
+    expect(gitWriteEnv(base)).toEqual({ ...base, GIT_TERMINAL_PROMPT: "0" });
+  });
+});
+
+describe("gitProgramVariablesIn", () => {
+  it("names each program-valued variable set, an empty one included, in the list's order, and nothing else", () => {
+    expect(gitProgramVariablesIn({ GIT_CONFIG_COUNT: "1", GIT_EDITOR: "", PATH: "/usr/bin", GIT_EXEC_PATH: "/x", GIT_ASKPASS: "/y" })).toEqual([
+      "GIT_EDITOR",
+      "GIT_ASKPASS",
+      "GIT_EXEC_PATH",
+    ]);
+    expect(gitProgramVariablesIn({ git_ssh: "x" })).toEqual(["git_ssh"]);
+  });
+
+  it("names none where none is set, an unset (undefined) entry included", () => {
+    expect(gitProgramVariablesIn({ PATH: "/usr/bin", GIT_CONFIG_COUNT: "1", GIT_SSH: undefined })).toEqual([]);
+  });
+
+  it("returns names only, never a value", () => {
+    const names = gitProgramVariablesIn({ GIT_SSH_COMMAND: "ssh -i /secret/key" });
+
+    expect(names).toEqual(["GIT_SSH_COMMAND"]);
+    expect(names.join(" ")).not.toContain("secret");
+  });
+});
+
+/** The guard's program-valued variables, as `src/hooks/personOnly.ts` spells them in its own constant. */
+function guardProgramVariables(): string[] {
+  const source = readFileSync(fileURLToPath(new URL("../../../src/hooks/personOnly.ts", import.meta.url)), "utf8");
+  const match = /const PROGRAM_VARIABLES =\s*"([^"]+)"/.exec(source);
+  if (match?.[1] === undefined) throw new Error("src/hooks/personOnly.ts holds no PROGRAM_VARIABLES string constant");
+  return match[1].split("|");
+}
+
+describe("GIT_PROGRAM_VARIABLES", () => {
+  // REQ-FLOW-122: the guard module stays self-contained, so the list is held twice; this keeps the two equal.
+  it("names the same variables as the guard's line-wide rule in src/hooks/personOnly.ts", () => {
+    const guard = guardProgramVariables();
+
+    expect(guard.length).toBeGreaterThan(0);
+    expect(GIT_PROGRAM_VARIABLES.toSorted()).toEqual(guard.toSorted());
+  });
+
+  it("fails the comparison when the two lists differ, either way", () => {
+    const guard = guardProgramVariables().toSorted();
+
+    expect(GIT_PROGRAM_VARIABLES.slice(1).toSorted()).not.toEqual(guard);
+    expect([...GIT_PROGRAM_VARIABLES, "GIT_NEW_PROGRAM"].toSorted()).not.toEqual(guard);
   });
 });
 
@@ -298,6 +380,31 @@ describe.skipIf(!gitAvailable)("gitWrite against real repositories", () => {
 
     await gitWrite(root, ["push", "origin", "HEAD"]);
     expect(readFileSync(log, "utf8")).toBe(started);
+  });
+
+  // v0c (REQ-FLOW-122): the stand-in prints the program-valued variables it was started with, so what the started
+  // process receives is read where it receives it. Mock reason as above: a real git started with GIT_EXEC_PATH at a
+  // folder holding no git programs fails before it could report them. POSIX only, as above.
+  it.skipIf(process.platform === "win32")("unattended, starts git without GIT_EXEC_PATH, GIT_SSH_COMMAND and GIT_ASKPASS, the GIT_CONFIG_* ones kept; attended, they reach it", async () => {
+    const plain = getRoot().path("plain");
+    await mkdir(plain);
+    const bin = getRoot().path("stand-in");
+    const log = getRoot().path("env.log");
+    await mkdir(bin);
+    const fields = ["GIT_EXEC_PATH", "GIT_SSH_COMMAND", "GIT_ASKPASS", "GIT_CONFIG_COUNT"].map((name) => `\${${name}-unset}`).join("|");
+    await writeFile(join(bin, "git"), `#!/bin/sh\nprintf '%s\\n' "${fields}" >> '${log}'\nexit 0\n`, "utf8");
+    await chmod(join(bin, "git"), 0o755);
+    vi.stubEnv("PATH", bin);
+    vi.stubEnv("GIT_EXEC_PATH", getRoot().path("no-git-programs"));
+    vi.stubEnv("GIT_SSH_COMMAND", "planted-ssh");
+    vi.stubEnv("GIT_ASKPASS", "");
+    vi.stubEnv("GIT_CONFIG_COUNT", "0");
+
+    expect(await gitWrite(plain, ["push", "origin", "HEAD"], { unattended: true })).toEqual({ code: 0, stdout: "", stderr: "" });
+    expect(readFileSync(log, "utf8")).toBe("unset|unset|unset|0\n");
+
+    await gitWrite(plain, ["push", "origin", "HEAD"]);
+    expect(readFileSync(log, "utf8")).toBe(`unset|unset|unset|0\n${getRoot().path("no-git-programs")}|planted-ssh||0\n`);
   });
 
   it("rejects with ENOENT, and starts nothing, where no PATH entry holds git", async () => {

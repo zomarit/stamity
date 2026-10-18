@@ -24,12 +24,16 @@ import { gitProgramFor, programNotFound } from "../../shared/programPath.ts";
  * config says; and `GIT_TERMINAL_PROMPT=0`, so a push that needs credentials
  * fails instead of waiting on a prompt nobody answers.
  *
- * Unlike the read runner it keeps the caller's environment, which is where a
- * push finds its credentials (`GIT_ASKPASS`, `GIT_SSH_COMMAND`, a credential
- * helper's own variables), and drops only the variables that would point git
- * at another repository or change how a pathspec is read
- * ({@link gitWriteEnv}). Its stderr is kept, since a
- * refused push says why there.
+ * Unlike the read runner it keeps the caller's environment, which is where an
+ * attended push finds its credentials (`GIT_ASKPASS`, `GIT_SSH_COMMAND`, a
+ * credential helper's own variables), and drops only the variables that would
+ * point git at another repository or change how a pathspec is read
+ * ({@link gitWriteEnv}). An unattended run's write also drops git's
+ * program-valued variables ({@link GIT_PROGRAM_VARIABLES}, REQ-FLOW-122), so
+ * its push rests on the pre-flight's rule instead: an https push URL whose
+ * credential comes from gh's helper, which the configuration, and the
+ * `GIT_CONFIG_*` variables the pre-flight vetted, still name. Its stderr is
+ * kept, since a refused push says why there.
  */
 
 /** What one git write answered. */
@@ -52,6 +56,12 @@ export interface GitWriteOptions {
    * at 32,767 characters (`--stdin`, pr/49).
    */
   input?: string;
+  /**
+   * An unattended run's write: git starts without the program-valued
+   * variables {@link GIT_PROGRAM_VARIABLES} names (REQ-FLOW-122). Omitted or
+   * false, the environment is as for every write.
+   */
+  unattended?: boolean;
 }
 
 /** A push over a slow link is the longest write the run verbs make. */
@@ -88,6 +98,32 @@ const LOCATION_VARIABLES =
  */
 const PATHSPEC_VARIABLES = /^GIT_(?:LITERAL|GLOB|NOGLOB|ICASE)_PATHSPECS$/i;
 
+/**
+ * git's environment variables whose value is a program git runs: the set the
+ * shell guard's line-wide rule names (`PROGRAM_VARIABLES` in
+ * `src/hooks/personOnly.ts`), held here as its own list since the guard module
+ * stays self-contained, and kept equal to it by a parity test. An unattended
+ * write starts git without them (REQ-FLOW-122): set earlier in a shell that
+ * persists, or by the platform, each would run a program inside the run verb's
+ * git. `PATH`, `HOME` and `XDG_CONFIG_HOME` stay, a named residual.
+ */
+export const GIT_PROGRAM_VARIABLES: readonly string[] = [
+  "GIT_EDITOR",
+  "GIT_SEQUENCE_EDITOR",
+  "GIT_SSH_COMMAND",
+  "GIT_SSH",
+  "GIT_EXTERNAL_DIFF",
+  "GIT_ASKPASS",
+  "GIT_PAGER",
+  "GIT_PROXY_COMMAND",
+  "GIT_EXEC_PATH",
+];
+
+/** Whether `key` names one of {@link GIT_PROGRAM_VARIABLES}, in any case, as Windows reads a name. */
+function isProgramVariable(key: string): boolean {
+  return GIT_PROGRAM_VARIABLES.includes(key.toUpperCase());
+}
+
 /** The pathspec magic that makes git read the rest of the argument as a name. */
 const LITERAL_MAGIC = ":(literal)";
 
@@ -113,15 +149,33 @@ export function gitWriteArgs(args: readonly string[]): string[] {
  * The environment a write runs under: `base` (the caller's) without the
  * repository-location variables ({@link LOCATION_VARIABLES}) and the pathspec
  * variables ({@link PATHSPEC_VARIABLES}), credentials and identity kept, and
- * `GIT_TERMINAL_PROMPT=0` whatever `base` says.
+ * `GIT_TERMINAL_PROMPT=0` whatever `base` says. With `unattended`, also without
+ * the program-valued variables ({@link GIT_PROGRAM_VARIABLES}), an empty one
+ * included; the `GIT_CONFIG_*` variables stay, since the pre-flight vetted them.
  */
-export function gitWriteEnv(base: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+export function gitWriteEnv(base: NodeJS.ProcessEnv, opts: { unattended?: boolean } = {}): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {};
   for (const [key, value] of Object.entries(base)) {
-    if (!LOCATION_VARIABLES.test(key) && !PATHSPEC_VARIABLES.test(key)) env[key] = value;
+    if (LOCATION_VARIABLES.test(key) || PATHSPEC_VARIABLES.test(key)) continue;
+    if (opts.unattended === true && isProgramVariable(key)) continue;
+    env[key] = value;
   }
   env["GIT_TERMINAL_PROMPT"] = "0";
   return env;
+}
+
+/**
+ * The names of the program-valued variables `base` sets, an empty value
+ * included, in {@link GIT_PROGRAM_VARIABLES}' order: the ones an unattended
+ * write removes ({@link gitWriteEnv}), for the verb's text. Names only, never
+ * a value.
+ */
+export function gitProgramVariablesIn(base: NodeJS.ProcessEnv): string[] {
+  const rank = (key: string): number => GIT_PROGRAM_VARIABLES.indexOf(key.toUpperCase());
+  return Object.entries(base)
+    .filter(([key, value]) => value !== undefined && isProgramVariable(key))
+    .map(([key]) => key)
+    .toSorted((a, b) => rank(a) - rank(b) || (a < b ? -1 : a > b ? 1 : 0));
 }
 
 /**
@@ -135,7 +189,7 @@ export function gitWriteEnv(base: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
  * finish (the wall time, the output bound).
  */
 export function gitWrite(cwd: string, args: readonly string[], opts: GitWriteOptions = {}): Promise<GitWriteResult> {
-  const env = gitWriteEnv(process.env);
+  const env = gitWriteEnv(process.env, { unattended: opts.unattended === true });
   if (gitDiscoveryMeetsBareShape(cwd, env)) {
     return Promise.resolve({ code: 128, stdout: "", stderr: `${bareShapeRefusal(cwd)}\n`, keptFromGit: true });
   }
