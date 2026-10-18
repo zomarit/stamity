@@ -46,6 +46,12 @@ export interface GitWriteResult {
 export interface GitWriteOptions {
   /** Wall time before the call is stopped; 120 s when omitted. */
   timeoutMs?: number;
+  /**
+   * Text git reads on its stdin, which then ends; omitted, stdin ends at once.
+   * A long list goes here rather than on the command line, which Windows caps
+   * at 32,767 characters (`--stdin`, pr/49).
+   */
+  input?: string;
 }
 
 /** A push over a slow link is the longest write the run verbs make. */
@@ -119,7 +125,7 @@ export function gitWriteEnv(base: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
 }
 
 /**
- * Run `git <args>` in `cwd` as a write.
+ * Run `git <args>` in `cwd` as a write, `opts.input` on its stdin where given.
  *
  * Resolves whenever git ran to its exit, with that exit status, a non-zero
  * one included: a refused push is an answer the caller words. Resolves with
@@ -138,7 +144,7 @@ export function gitWrite(cwd: string, args: readonly string[], opts: GitWriteOpt
   if (git === null) return Promise.reject(programNotFound("git", "spawn", argv));
   const timeout = opts.timeoutMs ?? GIT_WRITE_TIMEOUT_MS;
   return new Promise((resolvePromise, rejectPromise) => {
-    execFile(
+    const child = execFile(
       git,
       argv,
       { cwd, env, encoding: "utf8", timeout, maxBuffer: GIT_WRITE_MAX_BUFFER, windowsHide: true },
@@ -155,6 +161,15 @@ export function gitWrite(cwd: string, args: readonly string[], opts: GitWriteOpt
         }
         rejectPromise(error);
       },
-    ).stdin?.end();
+    );
+    const { input } = opts;
+    if (input === undefined) {
+      child.stdin?.end();
+      return;
+    }
+    // A git that exits before it reads all of `input` closes the pipe: the write's error is not the answer, the
+    // exit status the callback above gets is, so the error is taken here and never thrown as an unhandled event.
+    child.stdin?.on("error", () => undefined);
+    child.stdin?.end(input);
   });
 }

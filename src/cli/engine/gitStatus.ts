@@ -130,6 +130,25 @@ function gitCheckEnv(): NodeJS.ProcessEnv {
   return env;
 }
 
+/**
+ * A {@link GitRunner} that can also hand git text on its stdin (`input`), for a
+ * list too long for the command line, which Windows caps at 32,767 characters
+ * (`--stdin`, pr/49). It is a {@link GitRunner} wherever one is taken; a call
+ * with no `input` gives git no stdin, as a {@link GitRunner} call does.
+ */
+export type GitInputRunner = (args: readonly string[], cwd: string, input?: string) => string;
+
+/**
+ * The stdin of a `--stdin` read of every commit `HEAD` reaches and none of
+ * `tips` does: `HEAD`, then `^<tip>` for each tip, a line each (pr/49). It
+ * stands for `HEAD --not <tips>` on the command line, which a few hundred tips
+ * would take past Windows' 32,767 characters; `--ignore-missing` before
+ * `--stdin` on the command line skips a tip this clone lacks, as it did there.
+ */
+export function revisionLines(tips: readonly string[]): string {
+  return ["HEAD", ...tips.map((tip) => `^${tip}`), ""].join("\n");
+}
+
 /** The bounds one {@link gitCheckRunner} puts on every git call it makes. */
 export interface GitCheckRunnerOptions {
   /** Wall time per call; the two readers here keep the 5-second default. */
@@ -141,7 +160,8 @@ export interface GitCheckRunnerOptions {
 /**
  * The hardened git construction, mirroring `src/workspace/git.ts`: synchronous
  * git, argv only, stdout captured, stdin and stderr discarded (`shortlog` must
- * never fall back to reading stdin), bounded wall time and output — in
+ * never fall back to reading stdin) unless the call gives `input`, which git
+ * then reads on stdin ({@link GitInputRunner}), bounded wall time and output — in
  * {@link gitCheckEnv}, with two options ahead of every command.
  * `safe.bareRepository=explicit` (protected configuration, so honoured from the
  * command line) refuses a committed folder shaped like a bare repository, and
@@ -167,10 +187,10 @@ export interface GitCheckRunnerOptions {
  * `gate` (`../commands/gate.ts`) passes its own wider bounds, since a change's
  * diff can outgrow a status probe.
  */
-export function gitCheckRunner(options: GitCheckRunnerOptions = {}): GitRunner {
+export function gitCheckRunner(options: GitCheckRunnerOptions = {}): GitInputRunner {
   const timeout = options.timeoutMs ?? GIT_FACT_TIMEOUT_MS;
   const { maxBuffer } = options;
-  return (args, cwd) => {
+  return (args, cwd, input) => {
     if (gitDiscoveryMeetsBareShape(cwd)) {
       throw Object.assign(new Error(bareShapeRefusal(cwd)), { status: 128, keptFromGit: true });
     }
@@ -182,7 +202,8 @@ export function gitCheckRunner(options: GitCheckRunnerOptions = {}): GitRunner {
       cwd,
       env,
       encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
+      stdio: [input === undefined ? "ignore" : "pipe", "pipe", "ignore"],
+      ...(input === undefined ? {} : { input }),
       timeout,
       ...(maxBuffer === undefined ? {} : { maxBuffer }),
       windowsHide: true,

@@ -10,6 +10,7 @@ import {
   parseShortlogContributors,
   readHistoryFacts,
   readWorkingTreeStatus,
+  revisionLines,
 } from "../../../src/cli/engine/gitStatus.ts";
 import type { GitRunner } from "../../../src/workspace/git.ts";
 import { NO_GIT_CONFIG } from "../../support/repoFixtures.ts";
@@ -97,6 +98,13 @@ describe("parseShortlogContributors", () => {
 
   it("ignores lines that are not contributor rows", () => {
     expect(parseShortlogContributors("warning: something odd\n     2\tAlice Example\n")).toBe(1);
+  });
+});
+
+describe("revisionLines (pr/49)", () => {
+  it("puts HEAD, then a ^<tip> line per tip, each line ended, and HEAD alone for no tips", () => {
+    expect(revisionLines(["a1", "b2"])).toBe("HEAD\n^a1\n^b2\n");
+    expect(revisionLines([])).toBe("HEAD\n");
   });
 });
 
@@ -312,6 +320,21 @@ describe.skipIf(!gitAvailable)("against a real repository (default runner)", () 
         dirty: true,
         changedCount: 1,
       });
+    });
+  });
+
+  // pr/49: a list too long for the command line goes on stdin; a call without `input` gives git no stdin at all.
+  it("hands `input` to git on stdin, and gives git none without it", async () => {
+    const repo = getRoot().path("repo");
+    await mkdir(repo);
+    git(repo, ["init", "-q"]);
+    commit(repo, "one", ALICE);
+
+    withProcessEnv(await readEnv(getRoot().path("home")), () => {
+      const runner = gitCheckRunner();
+      const head = runner(["rev-parse", "HEAD"], repo);
+      expect(runner(["rev-list", "--stdin"], repo, "HEAD\n")).toBe(head);
+      expect(runner(["rev-list", "--stdin"], repo)).toBe("");
     });
   });
 

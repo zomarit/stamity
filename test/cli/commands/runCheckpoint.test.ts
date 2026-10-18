@@ -36,8 +36,11 @@ vi.mock("../../../src/cli/engine/ghRunner.ts", () => ({
   },
 }));
 
-/** Every argument vector the verb gave the write runner. */
-const writes = vi.hoisted(() => ({ argv: [] as string[][] }));
+/**
+ * Every argument vector the verb gave the write runner, the stdin each call was handed at the same index (pr/49),
+ * and the made-up tag tips a case adds to what `git ls-remote origin` answers.
+ */
+const writes = vi.hoisted(() => ({ argv: [] as string[][], inputs: [] as (string | undefined)[], extraTips: [] as string[] }));
 
 // A spy, not a stand-in: each call is recorded and passed to the real runner,
 // so git still does every write; the record is how the test reads the exact
@@ -48,6 +51,7 @@ vi.mock("../../../src/cli/engine/gitWrite.ts", async (importOriginal) => {
     ...real,
     gitWrite: (cwd: string, args: readonly string[], opts?: Parameters<typeof real.gitWrite>[2]) => {
       writes.argv.push([...args]);
+      writes.inputs.push(opts?.input);
       // TEST CHANGE, justified: review/209 refuses a push URL naming no GitHub repository, so origin's push URL is
       // its GitHub URL; for the push call alone an `insteadOf` in the environment (read once, as the call starts)
       // sends it to the case's bare remote, `remote.git` beside the repository the push runs at the top of, so
@@ -59,7 +63,9 @@ vi.mock("../../../src/cli/engine/gitWrite.ts", async (importOriginal) => {
       const previous = Object.fromEntries(Object.keys(mapping).map((key) => [key, process.env[key]]));
       Object.assign(process.env, mapping);
       try {
-        return real.gitWrite(cwd, args, opts);
+        // pr/49: a case's made-up tips are answered as tags of origin's, as a remote with that many would list them.
+        const rows = writes.extraTips.map((sha, index) => `${sha}\trefs/tags/synthetic-${index}\n`).join("");
+        return real.gitWrite(cwd, args, opts).then((read) => (args[0] === "ls-remote" && read.code === 0 ? { ...read, stdout: `${read.stdout}${rows}` } : read));
       } finally {
         for (const [key, value] of Object.entries(previous)) {
           if (value === undefined) delete process.env[key];
@@ -131,6 +137,8 @@ describe("stamity run checkpoint", () => {
     rest.calls.length = 0;
     rest.routes.clear();
     writes.argv.length = 0;
+    writes.inputs.length = 0;
+    writes.extraTips.length = 0;
     table.denyPush = null;
     table.commands.length = 0;
     rest.routes.set("GET repos/o/r", { status: 200, json: { default_branch: "main" } });
@@ -879,6 +887,37 @@ describe("stamity run checkpoint", () => {
     expect(doc["notDone"]).toEqual([refusal(old)]);
     expect(pushes()).toEqual([]);
     expect(remoteHeads(remote)).toEqual([]);
+  });
+
+  // pr/49: origin's tips reach git on stdin, so 2,000 of them, made-up ones `--ignore-missing` skips, answer as the
+  // seed's tip alone does, on a remote that holds the seed and on an empty one, with a log command line kept short.
+  it.each([
+    ["holds the seed", { code: 0, pushed: true, held: [], notDone: [] }],
+    ["is empty", { code: 1, pushed: false, notDone: ["held path in history (.cursorrules)"] }],
+  ] as const)("reads the history from 2,000 tips handed on stdin as from the remote's own, where origin %s (pr/49)", async (state, expected) => {
+    const madeUp = Array.from({ length: 2000 }, (_, index) => `d${index.toString(16).padStart(39, "0")}`);
+    // One checkpoint on its own seed, the case's made-up tips added to what the remote answers; one runs at a time.
+    const answer = async (extra: readonly string[]): Promise<Record<string, unknown>> => {
+      const { repo, remote } = await seed("unattended");
+      if (state === "is empty") git(remote, ["update-ref", "-d", "refs/heads/main"]);
+      await writeFile(join(repo, "a.txt"), "the unit's change\n");
+      writes.argv.length = 0;
+      writes.inputs.length = 0;
+      writes.extraTips.splice(0, writes.extraTips.length, ...extra);
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+      return { code, pushed: doc["pushed"], held: doc["held"], notDone: doc["notDone"] };
+    };
+
+    const small = await answer([]);
+    const large = await answer(madeUp);
+
+    expect(small).toMatchObject(expected);
+    expect(large).toEqual(small);
+    const log = writes.argv.findIndex((argv) => argv[0] === "log");
+    expect(writes.argv[log]?.slice(-3)).toEqual(["--ignore-missing", "--stdin", "--"]);
+    expect(writes.inputs[log]?.split("\n").filter((line) => line.startsWith("^"))).toHaveLength(state === "is empty" ? 2000 : 2001);
+    expect(Math.max(...writes.argv.map((argv) => argv.join(" ").length))).toBeLessThan(1024);
+    expect(writes.argv.flat().some((arg) => madeUp.includes(arg))).toBe(false);
   });
 
   // pr/46: what origin holds is read from the remote, so a remote that cannot be read holds the push before the commit.

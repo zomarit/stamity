@@ -45,7 +45,7 @@ import { fileSystemProbe, gitProgramFor, isNodeModulesBin, programNotFound, reso
 import type { SetupManifest } from "../../types/manifest.ts";
 import { REVIEW_GATE_STATE_FILE } from "../../types/markers.ts";
 import { ghApi } from "../engine/ghRunner.ts";
-import { gitCheckRunner, keptFromGit } from "../engine/gitStatus.ts";
+import { gitCheckRunner, keptFromGit, revisionLines, type GitInputRunner } from "../engine/gitStatus.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import { sanitizeLabel } from "../kit/prompts.ts";
 import type { GitRunner } from "../../workspace/git.ts";
@@ -228,9 +228,9 @@ class GitReadError extends Error {
   }
 }
 
-function runGit(runner: GitRunner, cwd: string, step: string, args: readonly string[]): string {
+function runGit(runner: GitInputRunner, cwd: string, step: string, args: readonly string[], input?: string): string {
   try {
-    return runner(args, cwd);
+    return runner(args, cwd, input);
   } catch (err) {
     throw new GitReadError(step, err, cwd);
   }
@@ -1480,20 +1480,20 @@ function readTreeDiff(
  * (review/112): a value committed and removed again before the scan stays in
  * the history a push sends. Each commit is one {@link readTreeDiff}. With
  * `remoteTips` (the pushed scope), every commit none of those commits reaches is
- * read too (`HEAD --not <tips>`, `--ignore-missing` for a tip this clone lacks;
- * review/160, build/108, pr/46): a push to `origin` sends those below `base` as
+ * read too (`HEAD` and a `^<tip>` per tip on stdin, pr/49; `--ignore-missing` for
+ * a tip this clone lacks; review/160, build/108, pr/46): a push to `origin` sends those below `base` as
  * well. The tips are origin's own branches and tags as the remote answers
  * (`run`'s `git ls-remote origin`), never a remote-tracking ref, which a run can
  * write and an empty or unfetched remote lacks; an empty list reads all of
  * `HEAD`'s history. This read makes no network call.
  */
-function readHistory(runner: GitRunner, root: ProjectRoot, base: string, windows: boolean, remoteTips?: readonly string[]): HistoryLines {
-  const revList = (range: readonly string[]): string[] =>
-    runGit(runner, root.dir, "rev-list", ["rev-list", "--reverse", "--no-merges", ...range, "--"])
+function readHistory(runner: GitInputRunner, root: ProjectRoot, base: string, windows: boolean, remoteTips?: readonly string[]): HistoryLines {
+  const revList = (range: readonly string[], input?: string): string[] =>
+    runGit(runner, root.dir, "rev-list", ["rev-list", "--reverse", "--no-merges", ...range, "--"], input)
       .split("\n")
       .filter((line) => line !== "");
   const since = revList([`${base}..HEAD`]);
-  const unpushed = remoteTips === undefined ? [] : revList(["--ignore-missing", "HEAD", ...(remoteTips.length === 0 ? [] : ["--not", ...remoteTips])]);
+  const unpushed = remoteTips === undefined ? [] : revList(["--ignore-missing", "--stdin"], revisionLines(remoteTips));
   const commits = [...new Set([...unpushed, ...since])];
   const history: HistoryLines = { files: [], skipped: [], unscanned: [], outside: new Set() };
   for (const commit of commits) readTreeDiff(runner, root, [commit], commit.slice(0, SHORT_COMMIT), windows, history);

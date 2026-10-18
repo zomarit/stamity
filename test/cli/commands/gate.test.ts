@@ -37,6 +37,8 @@ const TOP_MD_GLOB = ["*", "md"].join(".");
  */
 const gitSpy = vi.hoisted(() => ({
   calls: [] as string[][],
+  /** The stdin each recorded call was handed (`input`), at the same index as its argv in `calls` (pr/49). */
+  inputs: [] as (string | undefined)[],
   fault: undefined as { step: string; error: unknown } | undefined,
   rewrite: undefined as { step: string; map: (output: string) => string } | undefined,
 }));
@@ -54,6 +56,7 @@ vi.mock("node:child_process", async (importOriginal) => {
       if (/(?:^|[\\/])git(?:\.exe|\.com)?$/i.test(String(args[0])) && Array.isArray(args[1]) && args[1][1] === "safe.bareRepository=explicit") {
         const argv = args[1].map(String);
         gitSpy.calls.push(argv);
+        gitSpy.inputs.push((args[2] as { input?: string } | undefined)?.input);
         const { fault } = gitSpy;
         if (fault !== undefined && argv.includes(fault.step)) {
           gitSpy.fault = undefined;
@@ -2565,13 +2568,13 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
        * caller read off the remote (`remoteTips`, `run`'s `git ls-remote origin`), no longer from a remote-tracking
        * ref, so the remote is taken to hold the base, as a run's clone's does; `remoteAt` puts it elsewhere.
        */
-      async function scanPushed(cwd: string, base: string | undefined, remoteAt = base): Promise<ReturnType<typeof scanChange>> {
+      async function scanPushed(cwd: string, base: string | undefined, remoteAt = base, more: readonly string[] = []): Promise<ReturnType<typeof scanChange>> {
         const home = getRoot().path("home");
         await mkdir(home, { recursive: true });
         const previous = { HOME: process.env["HOME"], XDG_CONFIG_HOME: process.env["XDG_CONFIG_HOME"] };
         Object.assign(process.env, { HOME: home, XDG_CONFIG_HOME: home });
         try {
-          return scanChange(cwd, base, { scope: "pushed", remoteTips: remoteAt === undefined ? [] : [remoteAt] });
+          return scanChange(cwd, base, { scope: "pushed", remoteTips: [...(remoteAt === undefined ? [] : [remoteAt]), ...more] });
         } finally {
           for (const [key, value] of Object.entries(previous)) {
             if (value === undefined) delete process.env[key];
@@ -2655,6 +2658,39 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
         const outcome = await scanPushed(repo, base, root);
 
         expect(outcome).toMatchObject({ base, scope: "pushed", hits: [{ path: "src/a.ts", line: 2, rule: "github-token", commit: added.slice(0, 12) }] });
+      });
+
+      // pr/49: origin's tips reach git on stdin, so 2,000 of them, made-up ones `--ignore-missing` skips among them,
+      // read the commits the one real tip leaves, while every command line stays as short as the read's own options.
+      it("reads the same commits from 2,000 tips, made-up ones included, handed on stdin, never on the command line (pr/49)", async () => {
+        const repo = await seedRepo("repo", { "src/a.ts": "export {};\n" });
+        const root = git(repo, ["rev-parse", "HEAD"]).trim();
+        await getRoot().seedFiles({ "repo/src/a.ts": `export {};\n${LINE}` });
+        git(repo, ["commit", "-q", "-am", "add"]);
+        await getRoot().seedFiles({ "repo/src/a.ts": "export {};\n" });
+        git(repo, ["commit", "-q", "-am", "remove"]);
+        const base = git(repo, ["rev-parse", "HEAD"]).trim();
+        // 1,999 shas no clone holds, the real root among them: 2,000 tips, 82,000 characters on a command line.
+        const madeUp = Array.from({ length: 1999 }, (_, index) => `e${index.toString(16).padStart(39, "0")}`);
+        const reads = (): string[] => gitSpy.calls.filter((argv) => argv.includes("diff-tree")).map((argv) => argv.join(" "));
+
+        gitSpy.calls.length = 0;
+        gitSpy.inputs.length = 0;
+        const small = await scanPushed(repo, base, root);
+        const smallReads = reads();
+        gitSpy.calls.length = 0;
+        gitSpy.inputs.length = 0;
+        const large = await scanPushed(repo, base, madeUp[0], [...madeUp.slice(1, 1000), root, ...madeUp.slice(1000)]);
+
+        expect(small).toMatchObject({ hits: [{ path: "src/a.ts", line: 2, rule: "github-token" }] });
+        expect(large).toEqual(small);
+        expect(reads()).toEqual(smallReads);
+        const stdinRead = gitSpy.calls.findIndex((argv) => argv.includes("--stdin"));
+        expect(gitSpy.calls[stdinRead]?.slice(4)).toEqual(["rev-list", "--reverse", "--no-merges", "--ignore-missing", "--stdin", "--"]);
+        expect(gitSpy.inputs[stdinRead]?.split("\n")).toHaveLength(2002);
+        expect(gitSpy.inputs[stdinRead]).toContain(`\n^${root}\n`);
+        expect(Math.max(...gitSpy.calls.map((argv) => argv.join(" ").length))).toBeLessThan(1024);
+        expect(gitSpy.calls.flat().some((arg) => madeUp.includes(arg))).toBe(false);
       });
 
       it("stops on a token in a commit only another remote holds, since the push goes to origin (build/108)", async () => {

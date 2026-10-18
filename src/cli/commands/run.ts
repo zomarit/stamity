@@ -11,7 +11,7 @@ import { inferPrerequisites, type PrereqRow } from "../../runs/prerequisites.ts"
 import { ensureDraftPr, HOST_NAME, resolveRepo, type PrOutcome } from "../../runs/pullRequest.ts";
 import { parseGitDefaultBranch } from "../../workspace/git.ts";
 import { ghApi } from "../engine/ghRunner.ts";
-import { gitCheckRunner } from "../engine/gitStatus.ts";
+import { gitCheckRunner, revisionLines } from "../engine/gitStatus.ts";
 import { gitWrite, type GitWriteResult } from "../engine/gitWrite.ts";
 import { CliFailure } from "../kit/output.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
@@ -462,9 +462,9 @@ function start(run: string, branch: string, created: boolean, base: string, dryR
 }
 
 /** One git call through the write runner; a git that could not start or finish is a failure of the verb. */
-async function git(cwd: string, args: readonly string[], verb: string = START): Promise<GitWriteResult> {
+async function git(cwd: string, args: readonly string[], verb: string = START, input?: string): Promise<GitWriteResult> {
   try {
-    return await gitWrite(cwd, args);
+    return await gitWrite(cwd, args, input === undefined ? {} : { input });
   } catch (cause) {
     throw new CliFailure({
       code: "FAILURE",
@@ -484,7 +484,7 @@ async function commitAt(cwd: string, rev: string, verb: string = START): Promise
 
 /** What origin's own refs name, read once a checkpoint from the remote ({@link remoteRefs}). */
 interface RemoteRefs {
-  /** Every commit origin's branches and tags name, once each: the `--not` set of both history reads (pr/46). */
+  /** Every commit origin's branches and tags name, once each: the `^<tip>` set of both history reads (pr/46, pr/49). */
   tips: string[];
   /** The commit origin's `refs/heads/<branch>` names, or `null` where the remote has no such branch (pr/20). */
   branch: string | null;
@@ -986,8 +986,8 @@ async function changedSince(top: string, base: string, side: Side = "work tree")
 
 /**
  * The person-only paths a commit the push would send changes (review/159):
- * every commit none of `tips` reaches (`HEAD --not <tips>`, as the scan reads
- * them, review/160, build/108, pr/46), the tips being origin's branches and
+ * every commit none of `tips` reaches (`HEAD` and a `^<tip>` each on stdin, as the scan reads
+ * them, review/160, build/108, pr/46, pr/49), the tips being origin's branches and
  * tags as the remote answers ({@link remoteRefs}), `--ignore-missing` for one
  * this clone lacks, and all of `HEAD`'s history when the remote names none; a
  * root commit included and a merge by its own resolution (`--cc`), renames
@@ -995,8 +995,8 @@ async function changedSince(top: string, base: string, side: Side = "work tree")
  * (review/200).
  */
 async function heldInHistory(top: string, tips: readonly string[]): Promise<string[]> {
-  const range = ["--ignore-missing", "HEAD", ...(tips.length === 0 ? [] : ["--not", ...tips])];
-  const read = await git(top, ["log", "--root", "--format=", "--raw", "-z", "--cc", ...DIFF_PINS, ...range, "--"], CHECKPOINT);
+  const range = ["--ignore-missing", "--stdin"];
+  const read = await git(top, ["log", "--root", "--format=", "--raw", "-z", "--cc", ...DIFF_PINS, ...range, "--"], CHECKPOINT, revisionLines(tips));
   if (read.code !== 0) {
     throw new CliFailure({
       code: "FAILURE",

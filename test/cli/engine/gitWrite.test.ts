@@ -147,6 +147,22 @@ describe.skipIf(!gitAvailable)("gitWrite against real repositories", () => {
     expect(result.keptFromGit).toBeUndefined();
   });
 
+  // pr/49: a list too long for the command line goes on stdin; without `input` stdin still ends at once.
+  it("hands `input` to git on stdin, ends stdin at once without it, and answers by git's exit where git leaves the input unread", async () => {
+    const repo = await repoWithCommit("repo");
+    const head = git(repo, ["rev-parse", "HEAD"]).trim();
+
+    const fed = await gitWrite(repo, ["rev-list", "--stdin"], { input: "HEAD\n" });
+    const none = await gitWrite(repo, ["rev-list", "--stdin"]);
+    // Far more than a pipe holds, to a git that never reads stdin: the write fails once git exits, git's exit answers.
+    const unread = await gitWrite(repo, ["--version"], { input: "x".repeat(4 * 1024 * 1024) });
+
+    expect(fed).toMatchObject({ code: 0, stdout: `${head}\n` });
+    expect(none).toMatchObject({ code: 0, stdout: "" });
+    expect(unread.code).toBe(0);
+    expect(unread.stdout).toMatch(/^git version /);
+  });
+
   it("writes into the working folder's repository whatever GIT_DIR names", async () => {
     const target = await repoWithCommit("target");
     const other = await repoWithCommit("other");
