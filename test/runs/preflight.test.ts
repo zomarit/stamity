@@ -10,6 +10,7 @@ import {
   type RestRead,
 } from "../../src/runs/preflight.ts";
 import { USAGE_REVIEW_PATTERN } from "../../src/runs/layout.ts";
+import { HOOKS_ACTIVE_ENV } from "../../src/types/markers.ts";
 import { usageReviewLines } from "../../src/cli/commands/gate.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
@@ -590,12 +591,18 @@ describe("runPreflight — the push identity (review/36)", () => {
   // writes the real executable's path and re-running setup-git alone writes the same refused path.
   // TEST CHANGE, justified (pr/42, signed off 17:49Z): the advice replaces the list (`--replace-all`), since a plain
   // set adds gh's helper beside the others, and names the system-level helper the person removes.
+  // TEST CHANGE, justified (v5-claude-readiness, REQ-FLOW-101, pr/44 and pr/45): the advice is now one sequence run
+  // in the repository, an empty entry resetting the list and gh's bare helper after it. The global form left a
+  // shim's URL-scoped pair (pr/44) and the repository form a global helper (pr/45) in the list, so each refused
+  // again; the reset clears every entry read before it, so no --global or --system write is named any more.
+  // `test/cli/commands/gatePreflight.test.ts` runs both texts' commands literally against real git.
   const helperFix =
-    "make gh's helper the only credential helper for origin: replace the list with the bare form the check accepts, " +
-    "`git config --global --replace-all credential.helper '!gh auth git-credential'` (or `git config --replace-all " +
-    "credential.helper '!gh auth git-credential'` in the repository); a system-level helper (Apple's git ships one, " +
-    "and an /etc/gitconfig can name one) stays in the list beside it, so remove that too, the person running " +
-    "`git config --system --unset-all credential.helper`; or re-run `gh auth setup-git` with the gh that is on PATH";
+    "make gh's helper the only credential helper for origin, running in the repository " +
+    "`git config --replace-all credential.helper ''` then `git config --add credential.helper '!gh auth git-credential'`: " +
+    "the empty entry resets the list git built from the system and global configuration (Apple's git ships a helper, " +
+    "and `gh auth setup-git` run through a shim writes a URL-scoped pair), and gh's bare form after it is the one this " +
+    "check accepts; a credential helper entry later in the repository's own configuration is read after them, so these " +
+    "two must come last";
 
   // Changed for pr/8: a helper naming gh by a path now binds only where that path is the gh the REST reads run
   // (`deps.gh`, its path or its realpath), so each row names the resolved gh it is checked against; before, any
@@ -748,6 +755,46 @@ describe("runPreflight — hooks-loaded (a canary, not a wall)", () => {
     const garbled = await runPreflight(greenDeps({ canary: { at: "not a time" } }));
     expect(check(garbled, "hooks-loaded").state).toBe("refuse");
     expect(check(garbled, "hooks-loaded").evidence).not.toContain("not a time");
+  });
+});
+
+describe("runPreflight — hooks-loaded in Claude Code's cloud (REQ-FLOW-112, v5-claude-readiness)", () => {
+  /** Claude Code's cloud marker as the session VM sets it. */
+  const CLOUD = { CLAUDE_CODE_REMOTE: "true" };
+
+  it("refuses with a fresh canary where the readiness hook's variable is unset, naming the env file and one repository per session", async () => {
+    const verdict = await runPreflight(greenDeps({ env: CLOUD }));
+    expect(check(verdict, "hooks-loaded").state).toBe("refuse");
+    expect(verdict.ok).toBe(false);
+    const refused = refusal(verdict, "hooks-loaded");
+    expect(refused?.reason).toContain("hooks did not load");
+    expect(refused?.reason).toContain(HOOKS_ACTIVE_ENV);
+    expect(refused?.reason).toContain("CLAUDE_ENV_FILE");
+    expect(refused?.fix).toContain("one repository per session");
+    expect(refused?.fix).toContain("several repositories");
+    // One fact away: the variable the readiness hook writes passes the same deps.
+    const ready = await runPreflight(greenDeps({ env: { ...CLOUD, [HOOKS_ACTIVE_ENV]: "1" } }));
+    expect(check(ready, "hooks-loaded").state).toBe("pass");
+    expect(ready.ok).toBe(true);
+  });
+
+  it.each([[{}], [{ CLAUDE_CODE_REMOTE: "1" }], [{ CLAUDE_CODE_REMOTE: "false" }]])(
+    "reads the cloud only from `true`, so %j needs no variable",
+    async (env) => {
+      const verdict = await runPreflight(greenDeps({ env }));
+      expect(check(verdict, "hooks-loaded").state).toBe("pass");
+    },
+  );
+
+  it.each([[""], ["0"], ["true"]])("refuses the variable at %j, since only `1` is the hook's", async (value) => {
+    const verdict = await runPreflight(greenDeps({ env: { ...CLOUD, [HOOKS_ACTIVE_ENV]: value } }));
+    expect(check(verdict, "hooks-loaded").state).toBe("refuse");
+  });
+
+  it("still refuses a missing canary where the variable is set", async () => {
+    const noCanary = await runPreflight(greenDeps({ env: { ...CLOUD, [HOOKS_ACTIVE_ENV]: "1" }, canary: null }));
+    expect(check(noCanary, "hooks-loaded").state).toBe("refuse");
+    expect(check(noCanary, "hooks-loaded").evidence).toContain("no hooks canary");
   });
 });
 

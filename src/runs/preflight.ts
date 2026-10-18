@@ -33,6 +33,7 @@
 import semver from "semver";
 import { CANARY_MAX_AGE_MS } from "../mcp/env.ts";
 import { scanValueForSecrets } from "../mcp/secretScan.ts";
+import { HOOKS_ACTIVE_ENV } from "../types/markers.ts";
 import { CLAUDE_PROXY_ORIGIN, hostOf, resolveRepo } from "./pullRequest.ts";
 
 /** One GitHub REST read: the path (`/repos/...`), answered with its HTTP status and parsed body. */
@@ -138,17 +139,22 @@ const PUSH_IDENTITY_FIX = "use an https origin with `gh auth setup-git`";
 /**
  * The helper branch's way out (pr/31): a gh behind a shim (scoop, Chocolatey, mise, asdf, snap) writes its helper
  * with the real executable's path, which is not the `gh` on `PATH`, so re-running setup-git alone writes the same
- * refused path; the bare form, which `PATH` decides, is accepted. pr/42: `--replace-all` makes it the level's only
- * entry, since a plain set adds one beside the rest; a system-level helper (Apple git's osxkeychain) is read first
- * and stays in the list, so the text names its removal too, a write the person runs. It names no helper's value, as
- * the verdict echoes none.
+ * refused path; the bare form, which `PATH` decides, is accepted. One sequence run in the repository (pr/44, pr/45):
+ * git builds the helper list in config order, system, global, then the repository, URL-scoped entries among them,
+ * and an empty value resets it, so a repository-level empty entry clears every entry read before it — a system
+ * helper, a global one and a shim's URL-scoped reset-and-path pair alike — and gh's bare form after it is the list's
+ * only entry. A global `--replace-all` left that URL-scoped pair in place (pr/44), and a repository-level one left
+ * the global helpers ahead of it (pr/45). An entry later in the repository's own config is read after the two, so
+ * the text says they come last. It names no `--global` or `--system` write, and no helper's value, as the verdict
+ * echoes none.
  */
 const GH_HELPER_FIX =
-  "make gh's helper the only credential helper for origin: replace the list with the bare form the check accepts, " +
-  "`git config --global --replace-all credential.helper '!gh auth git-credential'` (or `git config --replace-all " +
-  "credential.helper '!gh auth git-credential'` in the repository); a system-level helper (Apple's git ships one, " +
-  "and an /etc/gitconfig can name one) stays in the list beside it, so remove that too, the person running " +
-  "`git config --system --unset-all credential.helper`; or re-run `gh auth setup-git` with the gh that is on PATH";
+  "make gh's helper the only credential helper for origin, running in the repository " +
+  "`git config --replace-all credential.helper ''` then `git config --add credential.helper '!gh auth git-credential'`: " +
+  "the empty entry resets the list git built from the system and global configuration (Apple's git ships a helper, " +
+  "and `gh auth setup-git` run through a shim writes a URL-scoped pair), and gh's bare form after it is the one this " +
+  "check accepts; a credential helper entry later in the repository's own configuration is read after them, so these " +
+  "two must come last";
 const HEADER_FIX =
   "remove the Authorization http.extraHeader that applies to origin (actions/checkout's persist-credentials: false), " +
   "and use an https origin with `gh auth setup-git`";
@@ -481,10 +487,28 @@ interface CheckResult {
   fix: string;
 }
 
-function hooksLoaded(canary: { at: string } | null, now: Date): CheckResult {
+/**
+ * Whether the repository's hooks loaded. The canary first needs a session whose shell guard ran; in Claude Code's
+ * cloud (`CLAUDE_CODE_REMOTE` reading `true`, REQ-FLOW-112) the shell also needs {@link HOOKS_ACTIVE_ENV} at `1`, which
+ * the readiness hook writes through `$CLAUDE_ENV_FILE` at the session's start (REQ-FLOW-110). A session holding several
+ * repositories loads no repository's hooks, so neither is there; a canary a steered run wrote does not stand in for it.
+ */
+function hooksLoaded(canary: { at: string } | null, now: Date, env: PreflightDeps["env"]): CheckResult {
   const fix =
     "run the pre-flight through the shell tool of a session whose hooks loaded, so the shell guard writes the " +
     "canary first; re-run sync if the guard is not emitted";
+  if (env["CLAUDE_CODE_REMOTE"] === "true" && env[HOOKS_ACTIVE_ENV] !== "1") {
+    return {
+      state: "refuse",
+      evidence:
+        `hooks did not load: this Claude Code cloud session's shell has no ${HOOKS_ACTIVE_ENV}=1, which the readiness ` +
+        "hook writes to $CLAUDE_ENV_FILE when the repository's hooks load",
+      fix:
+        "open the session on this one repository, one repository per session, since a session with several " +
+        "repositories loads no repository's hooks; then run the pre-flight again, and re-run sync if the readiness " +
+        "hook is not emitted",
+    };
+  }
   if (canary === null) return { state: "refuse", evidence: "no hooks canary: the shell guard did not run", fix };
   const at = Date.parse(canary.at);
   if (Number.isNaN(at)) return { state: "refuse", evidence: "the hooks canary carries no readable time", fix };
@@ -856,7 +880,7 @@ function reviewStateReason(state: PreflightDeps["reviewState"], mergeBypass: boo
 export async function runPreflight(deps: PreflightDeps): Promise<PreflightVerdict> {
   const [scan, push, author] = await Promise.all([gateScan(deps.scanRuns), directPush(deps), inputAuthor(deps)]);
   const results: [CheckId, CheckResult][] = [
-    ["hooks-loaded", hooksLoaded(deps.canary, deps.now)],
+    ["hooks-loaded", hooksLoaded(deps.canary, deps.now, deps.env)],
     ["node-engine", nodeEngine(deps.nodeVersion, deps.engines)],
     ["cli-pin", cliPin(deps.pinnedVersion, deps.runningVersion, deps.manifestUnreadable === true)],
     ["gate-scan", scan],

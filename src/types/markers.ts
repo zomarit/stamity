@@ -196,6 +196,16 @@ export const REVIEW_GATE_LOCK_SUFFIX = ".lock";
 export const REVIEW_GATE_TEMP_INFIX = ".tmp-";
 
 /**
+ * The variable Claude Code's cloud readiness hook sets to `1` for the session's
+ * shell commands, through `$CLAUDE_ENV_FILE` (REQ-FLOW-110), and the unattended
+ * pre-flight reads in Claude Code's cloud (REQ-FLOW-112): unset there, the
+ * repository's hooks did not load. Here because the hook builder that writes it
+ * (`../hooks/scripts.ts`) and the pre-flight that reads it (`../runs/preflight.ts`)
+ * may not import each other.
+ */
+export const HOOKS_ACTIVE_ENV = "STAMITY_HOOKS_ACTIVE";
+
+/**
  * Filename prefix on generated content artifacts the operator does not type:
  * agents, rules, hook scripts, carried learnings (`stamity-implementer.md`).
  *

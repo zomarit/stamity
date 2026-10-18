@@ -437,6 +437,110 @@ describe("stamity gate preflight and scan --text", () => {
       expect(evidenceOf(doc, "direct-push")).toContain("credential helper other than gh's alone");
       expect(rest.calls).toEqual([]);
     });
+
+    describe("the helper advice, run literally (REQ-FLOW-101, v5-claude-readiness, pr/44 and pr/45)", () => {
+      /** The helper `gh auth setup-git` writes through a shim: the real executable's path, not the gh on PATH. */
+      const SHIM_HELPER = "!/opt/shims/gh-2.80.0/bin/gh auth git-credential";
+
+      /**
+       * A global config holding a generic helper and the shim's URL-scoped reset-and-helper pair, and a repository
+       * holding no credential entry of its own: the configuration pr/44 and pr/45 found the advice left refusing.
+       */
+      async function shimmedRepo(): Promise<{ repo: string; env: Record<string, string> }> {
+        const repo = await seedRepo();
+        git(repo, ["config", "--unset-all", "credential.helper"]);
+        const global = getRoot().path(`global-${Math.random().toString(36).slice(2, 8)}.gitconfig`);
+        await writeFile(global, "");
+        git(repo, ["config", "--file", global, "--add", "credential.helper", "osxkeychain"]);
+        git(repo, ["config", "--file", global, "--add", "credential.https://github.com.helper", ""]);
+        git(repo, ["config", "--file", global, "--add", "credential.https://github.com.helper", SHIM_HELPER]);
+        protectedRepo();
+        // The host's system config stays out, so the case reads the same on every machine.
+        return { repo, env: { GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: global } };
+      }
+
+      /** The backticked commands of an advice text, each split into words as sh would, a `''` word an empty one. */
+      function commandsOf(text: string): string[][] {
+        return [...text.matchAll(/`(git config [^`]+)`/g)].map((match) =>
+          [...(match[1] ?? "").matchAll(/'([^']*)'|(\S+)/g)].map((word) => word[1] ?? word[2] ?? ""),
+        );
+      }
+
+      /** Runs one advised command where the advice says, the global file the case's own. */
+      function runAdvised(repo: string, env: Record<string, string>, argv: readonly string[]): void {
+        expect(argv[0]).toBe("git");
+        execFileSync("git", argv.slice(1), { cwd: repo, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, ...SEED_ENV, ...env } });
+      }
+
+      const fixOf = (doc: Record<string, unknown>): string =>
+        (doc["refusals"] as { id: string; fix: string }[]).find((entry) => entry.id === "direct-push")?.fix ?? "";
+
+      it("leaves gh's helper alone and passes direct-push, where the advice it replaces still refused", async () => {
+        const { repo, env } = await shimmedRepo();
+        const before = await gate(repo, PREFLIGHT, env);
+        expect(before.code).toBe(1);
+        expect(evidenceOf(before.doc, "direct-push")).toContain("credential helper other than gh's alone");
+        const advice = fixOf(before.doc);
+        const commands = commandsOf(advice);
+        expect(commands).toEqual([
+          ["git", "config", "--replace-all", "credential.helper", ""],
+          ["git", "config", "--add", "credential.helper", "!gh auth git-credential"],
+        ]);
+        expect(advice).not.toMatch(/--global|--system/);
+
+        for (const argv of commands) runAdvised(repo, env, argv);
+        const after = await gate(repo, PREFLIGHT, env);
+
+        expect(stateOf(after.doc, "direct-push")).toBe("pass");
+        expect(after.doc["refusals"]).toEqual([]);
+        expect(after.code).toBe(0);
+        expect((await readPushIdentityWith(repo, env)).pushUrls[0]?.helpers).toEqual(["!gh auth git-credential"]);
+      });
+
+      it.each([
+        // The advice before v5, its global form (pr/44): the shim's URL-scoped pair survives a generic replace.
+        ["its global form (pr/44)", "`git config --global --replace-all credential.helper '!gh auth git-credential'`"],
+        // Its repository form (pr/45): the global helpers are read ahead of the repository's one entry.
+        ["its repository form (pr/45)", "`git config --replace-all credential.helper '!gh auth git-credential'`"],
+      ])("the advice it replaces, %s, still refuses on the same configuration", async (_label, oldAdvice) => {
+        const { repo, env } = await shimmedRepo();
+        for (const argv of commandsOf(oldAdvice)) runAdvised(repo, env, argv);
+
+        const { code, doc } = await gate(repo, PREFLIGHT, env);
+
+        expect(code).toBe(1);
+        expect(evidenceOf(doc, "direct-push")).toContain("credential helper other than gh's alone");
+      });
+
+      it("says the two entries must come last, since a later repository entry is read after them", async () => {
+        const { repo, env } = await shimmedRepo();
+        const advice = fixOf((await gate(repo, PREFLIGHT, env)).doc);
+        expect(advice).toContain("must come last");
+        for (const argv of commandsOf(advice)) runAdvised(repo, env, argv);
+        git(repo, ["config", "--add", "credential.https://github.com.helper", OTHER_HELPER]);
+
+        const { code, doc } = await gate(repo, PREFLIGHT, env);
+
+        expect(code).toBe(1);
+        expect(evidenceOf(doc, "direct-push")).toContain("credential helper other than gh's alone");
+      });
+
+      /** The push facts in the case's own git environment, the host's HOME out of reach. */
+      async function readPushIdentityWith(repo: string, env: Record<string, string>) {
+        const home = getRoot().path("home");
+        await mkdir(home, { recursive: true });
+        const previous = { HOME: process.env["HOME"], XDG_CONFIG_HOME: process.env["XDG_CONFIG_HOME"] };
+        Object.assign(process.env, { HOME: home, XDG_CONFIG_HOME: home });
+        try {
+          return readPushIdentity(repo, env);
+        } finally {
+          for (const [key, value] of Object.entries(previous)) {
+            if (value === undefined) delete process.env[key];
+            else process.env[key] = value;
+          }
+        }
+      }
+    });
   });
 
   describe("the push facts (readPushIdentity)", () => {
