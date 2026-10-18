@@ -161,7 +161,12 @@ function cardOf(stdout: string): string[] {
 }
 
 describe("the session-start resume card", () => {
-  it("prints nothing new on a start that is not a compaction, and nothing when no run is open", async () => {
+  // TEST CHANGE, justified: a fresh start now prints the card of the run in progress on
+  // the branch .git/HEAD names (REQ-CTX-013, plan 021 file 2 v1-branch-card), so the title
+  // no longer says every non-compaction start prints nothing. The fixture has no HEAD and
+  // its record no Branch: line, so every assertion below is unchanged; the startup card
+  // itself is held by the "startup card" block further down.
+  it("prints nothing new on a fresh start with no run on this branch, and nothing when no run is open", async () => {
     const script = await placeScript();
     await seedDemo();
 
@@ -656,6 +661,144 @@ describe("the session-start resume card", () => {
     expect(script).toMatch(/^const INVISIBLE = new RegExp\(/m);
     expect(script).not.toContain("const INVISIBLE =new");
   });
+});
+
+/** A record head that names its branch, as `stamity run start` writes it (REQ-CTX-012). */
+function branchRecord(branch: string, status = "in progress — opened 2026-09-23T08:00Z"): string {
+  return [
+    "# Demo run",
+    "",
+    `Status: ${status}`,
+    "Plan: docs/plans/009-x.md",
+    "Invocation: /st-work docs/plans/009-x.md",
+    `Branch: ${branch}`,
+    "",
+    "## Frame",
+    "",
+  ].join("\n");
+}
+
+const BRANCH = "stamity/2026-09-23_demo";
+
+describe("the startup card for the run on this branch (REQ-CTX-013, REQ-FLOW-105)", () => {
+  it("prints the in-progress run's card on startup when its Branch: names the branch HEAD names", async () => {
+    const script = await placeScript();
+    await seedDemo();
+    await getRepo().seedFiles({ [runFile(RUN, "record.md")]: branchRecord(BRANCH), ".git/HEAD": `ref: refs/heads/${BRANCH}\n` });
+
+    const banner = start(script, "").stdout;
+    const startup = start(script, STARTUP);
+    expect(startup.code).toBe(0);
+    expect(startup.stdout.startsWith(`${banner.slice(0, -1)}\n\n`)).toBe(true);
+    const card = cardOf(startup.stdout);
+    expect(card).toHaveLength(6);
+    expect(card[0]).toMatch(/^stamity resume card — run 2026-09-23_demo \(as of /);
+    // The same card a compaction prints, the stamp aside.
+    expect(card.slice(1)).toEqual(cardOf(start(script, COMPACT).stdout).slice(1));
+  });
+
+  it("prints none on startup for a run on another branch, or a record with no Branch: line", async () => {
+    const script = await placeScript();
+    await seedDemo();
+    const banner = start(script, "").stdout;
+
+    await getRepo().seedFiles({ [runFile(RUN, "record.md")]: branchRecord(BRANCH), ".git/HEAD": "ref: refs/heads/main\n" });
+    expect(start(script, STARTUP).stdout).toBe(banner);
+    // Not a card that cannot print: the same disk prints it after a compaction.
+    expect(cardOf(start(script, COMPACT).stdout)[0]).toMatch(/^stamity resume card — run 2026-09-23_demo /);
+
+    await getRepo().seedFiles({ [runFile(RUN, "record.md")]: record(), ".git/HEAD": `ref: refs/heads/${BRANCH}\n` });
+    expect(start(script, STARTUP).stdout).toBe(banner);
+    expect(cardOf(start(script, RESUME).stdout)[0]).toMatch(/^stamity resume card — run 2026-09-23_demo /);
+  });
+
+  it("never prints the closed card on startup, even for a run closed today on this branch", async () => {
+    const script = await placeScript();
+    await onOneUtcDay(async () => {
+      const done = `${utcDay(0)}_done`;
+      await getRepo().seedFiles({
+        [runFile(done, "record.md")]: branchRecord(BRANCH, "closed — merged"),
+        ".git/HEAD": `ref: refs/heads/${BRANCH}\n`,
+      });
+      expect(start(script, STARTUP).stdout).toBe(start(script, "").stdout);
+      expect(cardOf(start(script, COMPACT).stdout).at(-1)).toBe(CLOSED_NEXT);
+    });
+  });
+
+  it("names the older run on this branch over a newer run in progress on another", async () => {
+    const script = await placeScript();
+    await getRepo().seedFiles({
+      [runFile(RUN, "record.md")]: branchRecord(BRANCH),
+      [runFile("2026-09-24_newer", "record.md")]: branchRecord("stamity/2026-09-24_newer"),
+      ".git/HEAD": `ref: refs/heads/${BRANCH}\n`,
+    });
+    expect(cardOf(start(script, STARTUP).stdout)[0]).toMatch(/^stamity resume card — run 2026-09-23_demo \(as of /);
+    // A compaction keeps today's pick, the newest run in progress whatever its branch.
+    expect(cardOf(start(script, COMPACT).stdout)[0]).toMatch(/^stamity resume card — run 2026-09-24_newer \(as of /);
+  });
+
+  it("reads a linked worktree's HEAD through its gitdir: pointer", async () => {
+    const repo = getRepo();
+    await seedLinkedLayout("0123456789abcdef0123456789abcdef01234567");
+    await repo.seedFiles({
+      [`checkout/${runFile(RUN, "record.md")}`]: branchRecord("self"),
+      [`checkout/${SCRIPT_PATH}`]: buildSessionStartScript(),
+    });
+    const env: NodeJS.ProcessEnv = { ...process.env };
+    delete env["STAMITY_REPO_ROOT"];
+    for (const name of SESSION_MARKERS) delete env[name];
+    const script = repo.path("checkout", SCRIPT_PATH);
+    const run = (input: string): string =>
+      spawnSync(process.execPath, [script], { cwd: repo.path("checkout"), input, env, encoding: "utf8" }).stdout;
+
+    expect(cardOf(run(STARTUP))[0]).toMatch(/^stamity resume card — run 2026-09-23_demo \(as of /);
+    // The main checkout's own HEAD is not the lane's: on a lane named otherwise, none.
+    await repo.seedFiles({ "main/.git/worktrees/self/HEAD": "ref: refs/heads/other\n" });
+    expect(run(STARTUP)).toBe(run(""));
+  });
+
+  it("prints none on startup on a detached HEAD, on reftable's placeholder, or for open debug rounds alone", async () => {
+    const script = await placeScript();
+    const sha = "0123456789abcdef0123456789abcdef01234567";
+    const banner = start(script, "").stdout;
+
+    await getRepo().seedFiles({ [runFile(RUN, "record.md")]: branchRecord(sha), ".git/HEAD": `${sha}\n` });
+    expect(start(script, STARTUP).stdout).toBe(banner);
+
+    // A reftable repository's HEAD names `.invalid`, which no branch may be called.
+    await getRepo().seedFiles({
+      [runFile(RUN, "record.md")]: branchRecord(".invalid"),
+      ".git/HEAD": "ref: refs/heads/.invalid\n",
+      ".git/reftable/tables.list": "",
+    });
+    expect(start(script, STARTUP).stdout).toBe(banner);
+    expect(cardOf(start(script, COMPACT).stdout)[0]).toMatch(/^stamity resume card — run 2026-09-23_demo /);
+
+    rmSync(getRepo().path(".stamity", "runs", RUN), { recursive: true, force: true });
+    await getRepo().seedFiles({
+      [runFile("2026-09-23_debug-x", "record.md")]: branchRecord(BRANCH),
+      ".git/HEAD": `ref: refs/heads/${BRANCH}\n`,
+    });
+    expect(start(script, STARTUP).stdout).toBe(banner);
+    expect(cardOf(start(script, COMPACT).stdout).at(-1)).toBe(DEBUG_NEXT);
+  });
+
+  it.skipIf(WINDOWS || process.getuid?.() === 0)(
+    "prints the banner alone and exits 0 when HEAD cannot be read",
+    async () => {
+      const script = await placeScript();
+      await getRepo().seedFiles({ [runFile(RUN, "record.md")]: branchRecord(BRANCH), ".git/HEAD": `ref: refs/heads/${BRANCH}\n` });
+      const banner = start(script, "").stdout;
+      chmodSync(getRepo().path(".git"), 0o000);
+      try {
+        const startup = start(script, STARTUP);
+        expect(startup.code).toBe(0);
+        expect(startup.stdout).toBe(banner);
+      } finally {
+        chmodSync(getRepo().path(".git"), 0o755);
+      }
+    },
+  );
 });
 
 describe("the resume card's read guards", () => {

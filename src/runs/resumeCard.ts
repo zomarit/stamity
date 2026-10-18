@@ -119,7 +119,15 @@ export interface ResumeCard {
   /** The screen pattern id the card's text matched, or null when it printed. */
   readonly withheld: string | null;
   /**
-   * The screen pattern id the four full lists and the status matched, or
+   * The run record's `Branch:` value, flattened; null when the head names none,
+   * on the card that names no run, and when the lists are withheld (it is
+   * screened with them, {@link listsWithheld}, since no card prints it).
+   */
+  readonly branch: string | null;
+  /** Whether the record's `Branch:` names the branch `.git/HEAD` names ({@link readCurrentBranch}). */
+  readonly onCurrentBranch: boolean;
+  /**
+   * The screen pattern id the four full lists, the status and the branch matched, or
    * null. The card names at most CARD_LIST_MAX items of each list, and the
    * in-progress card never prints the status, so an item past them is screened
    * here, never in `lines`; a caller that echoes the lists or the status checks
@@ -149,6 +157,9 @@ const FINDINGS_OPEN = fenceOpenPattern(FINDINGS_FENCE);
 const GIT_POINTER = /^gitdir:[ \t]*(.+)$/;
 const HEX_HEAD = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i;
 const HEADS_PREFIX = "ref: refs/heads/";
+const HEADS_BRANCH = /^ref: refs\/heads\/(.+)$/;
+/** The branch a reftable repository's `.git/HEAD` names for older readers; no real branch can carry it. */
+const REFTABLE_PLACEHOLDER = ".invalid";
 const REF_PREFIX = "ref: ";
 
 /**
@@ -309,8 +320,14 @@ export interface CardRun {
  * DEBUG_RUN_SEGMENT) is never picked. A linked runs folder, a linked run
  * folder, a name that is not a run id and a record that is a link are all
  * passed over.
+ *
+ * With `currentBranch` (the session start's `startup` pick, REQ-CTX-013), only
+ * a run in progress whose record's `Branch:` equals it, the newest first, and
+ * never the closed card: a run on another branch, or with no `Branch:` line, is
+ * passed over.
  */
-export function findCardRun(rootDir: string, now: Date): CardRun | null {
+export function findCardRun(rootDir: string, now: Date, opts: { readonly currentBranch?: string } = {}): CardRun | null {
+  const { currentBranch } = opts;
   const runsDir = runsDirOf(rootDir);
   // A linked runs folder is not this repo's runs: nothing in it is read.
   if (!realDir(runsDir)) return null;
@@ -328,12 +345,12 @@ export function findCardRun(rootDir: string, now: Date): CardRun | null {
   for (const run of runs) {
     const head = readRecordHeadFile(join(runsDir, run, RECORD_FILE));
     if (head === null) continue;
-    if (head.inProgress) return { runId: run, closed: false };
+    if (head.inProgress && (currentBranch === undefined || head.branch === currentBranch)) return { runId: run, closed: false };
     // A folder dated after today (a clock skew or a hand-made name) is never the closed run.
     const day = run.slice(0, 10);
     if (closed === null && day >= cutoff && day <= today) closed = run;
   }
-  return closed === null ? null : { runId: closed, closed: true };
+  return closed === null || currentBranch !== undefined ? null : { runId: closed, closed: true };
 }
 
 /**
@@ -517,6 +534,33 @@ function branchOf(head: string): string {
   if (head.startsWith(REF_PREFIX)) return head.slice(REF_PREFIX.length);
   if (HEX_HEAD.test(head)) return `detached ${head.slice(0, 7)}`;
   return "unknown";
+}
+
+/**
+ * The branch `.git/HEAD` names, a linked worktree's `gitdir:` pointer followed:
+ * the twin of the hook's `cardCurrentBranch` (`./cardSource.ts`), which the
+ * unattended ask gate embeds too. Read with `node:fs`, never by spawning git.
+ * Null when there is no `.git`, HEAD is detached or names no branch, HEAD holds
+ * reftable's `.invalid` placeholder (no branch name may begin with a dot), or a
+ * read fails: the card host catches what its twin throws, and prints no card.
+ */
+export function readCurrentBranch(rootDir: string): string | null {
+  const dotGit = join(rootDir, ".git");
+  let gitDir = dotGit;
+  let isDirectory: boolean;
+  try {
+    isDirectory = lstatSync(dotGit).isDirectory();
+  } catch {
+    // No .git at all (or none this process may see): no branch.
+    return null;
+  }
+  if (!isDirectory) {
+    const target = GIT_POINTER.exec((gitText(dotGit) ?? "").split(/\r?\n/)[0] ?? "")?.[1]?.trim();
+    if (target === undefined) return null;
+    gitDir = isAbsolute(target) ? target : resolve(rootDir, target);
+  }
+  const branch = HEADS_BRANCH.exec(gitText(join(gitDir, "HEAD")) ?? "")?.[1] ?? null;
+  return branch === REFTABLE_PLACEHOLDER ? null : branch;
 }
 
 /**
@@ -748,17 +792,28 @@ export function screenCard(text: string): string {
  * with one, that run's six-line card whether or not it is in progress, or null
  * when it is not a real run folder under a real runs folder. Every card but the
  * withheld one carries the debug line while a debug round is open.
+ *
+ * With `startup` and no `runId`, the session start's fresh-start pick
+ * (REQ-CTX-013): only the run in progress on the branch `.git/HEAD` names, and
+ * null when HEAD names none, when no such run is, or for what would be the
+ * closed or the debug card.
  */
 export function collectResumeCard(opts: {
   readonly rootDir: string;
   readonly runId?: string;
   readonly now: Date;
+  readonly startup?: boolean;
 }): ResumeCard | null {
   const runsDir = runsDirOf(opts.rootDir);
-  if (!realDir(runsDir)) return null;
-  const picked = opts.runId === undefined ? findCardRun(opts.rootDir, opts.now) : { runId: opts.runId, closed: false };
+  const currentBranch = readCurrentBranch(opts.rootDir);
+  const startup = opts.startup === true && opts.runId === undefined;
+  if ((startup && currentBranch === null) || !realDir(runsDir)) return null;
+  const picked =
+    opts.runId === undefined
+      ? findCardRun(opts.rootDir, opts.now, startup && currentBranch !== null ? { currentBranch } : {})
+      : { runId: opts.runId, closed: false };
   const debugRounds = openDebugRounds(runsDir);
-  if (picked === null) return debugRounds.length === 0 ? null : debugOnlyCard(debugRounds, opts.now);
+  if (picked === null) return debugRounds.length === 0 || startup ? null : debugOnlyCard(debugRounds, opts.now);
   if (!RUN_ID_PATTERN.test(picked.runId)) return null;
   const runId = picked.runId;
   const runDir = join(runsDir, runId);
@@ -810,8 +865,12 @@ export function collectResumeCard(opts: {
   const laneItems = lanes.map(flat);
   const rawStatus = head?.status ?? null;
   const statusText = rawStatus === null ? null : flat(rawStatus);
+  const recordBranch = head?.branch ?? null;
+  const branchText = recordBranch === null ? null : flat(recordBranch);
   const debugItems = debugRounds.map(flat);
-  const listsWithheld = screenCard([...openRowIds, ...reports, ...laneItems, ...debugItems, statusText ?? ""].join("\n"));
+  const listsWithheld = screenCard(
+    [...openRowIds, ...reports, ...laneItems, ...debugItems, statusText ?? "", branchText ?? ""].join("\n"),
+  );
   const { fixed, deferred, rejected, open } = ledger.states;
   const lines = withheld === "" ? card : [withheldLine(`run ${runId}`, withheld)];
   return {
@@ -826,6 +885,8 @@ export function collectResumeCard(opts: {
     debugRounds: debugItems,
     withheld: withheld === "" ? null : withheld,
     listsWithheld: listsWithheld === "" ? null : listsWithheld,
+    branch: listsWithheld === "" ? branchText : null,
+    onCurrentBranch: recordBranch !== null && recordBranch === currentBranch,
     unreadableLedgerLines: ledger.unreadable,
     ledgerUnreadable: ledger.failed,
     ledgerTooLarge: ledger.tooLarge,
@@ -860,6 +921,8 @@ function debugOnlyCard(debugRounds: readonly string[], now: Date): ResumeCard {
     debugRounds: debugItems,
     withheld: withheld === "" ? null : withheld,
     listsWithheld: listsWithheld === "" ? null : listsWithheld,
+    branch: null,
+    onCurrentBranch: false,
     unreadableLedgerLines: 0,
     ledgerUnreadable: false,
     ledgerTooLarge: false,

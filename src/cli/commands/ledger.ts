@@ -636,6 +636,8 @@ const NO_CARD_JSON = {
   run: null,
   inProgress: false,
   status: null,
+  branch: null,
+  onCurrentBranch: false,
   card: null,
   counts: { openRows: 0, unledgeredReports: 0, lanes: 0 },
   ledgerStates: { fixed: 0, deferred: 0, rejected: 0, open: 0 },
@@ -655,6 +657,9 @@ const NO_CARD_JSON = {
  * with the lists (the in-progress card never prints it), so it is null on a hit.
  * The open debug rounds' ids are always a key, for the no-card document's
  * shape, and empty on a hit. `run` is null on the card of open debug rounds alone.
+ * `branch` is the record's `Branch:` value, screened with the lists, and
+ * `onCurrentBranch` whether it names the branch `.git/HEAD` names: the run a
+ * fresh session start on this checkout prints the card of (REQ-CTX-013).
  */
 function statusJson(card: ResumeCard): Record<string, unknown> {
   const echo = card.withheld === null && card.listsWithheld === null;
@@ -662,6 +667,8 @@ function statusJson(card: ResumeCard): Record<string, unknown> {
     run: card.runId,
     inProgress: card.inProgress,
     status: echo ? card.status : null,
+    branch: echo ? card.branch : null,
+    onCurrentBranch: card.onCurrentBranch,
     card: [...card.lines],
     counts: {
       openRows: card.openRowIds.length,

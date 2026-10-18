@@ -86,8 +86,52 @@ function regex(pattern: RegExp): string {
 }
 
 /**
- * The card's source text. Declares `resumeCardLines(rootDir, stateRoot, nowMs)`,
- * which returns the card's lines, or `null` when there is no card to print. Every
+ * The branch reader's source text, shared by the card and the unattended ask
+ * gate: declares `cardCurrentBranch(rootDir)`, the branch `.git/HEAD` names, a
+ * linked worktree's `gitdir:` pointer followed, read with `node:fs` and never
+ * by spawning git. Null when there is no `.git`, HEAD is detached, or HEAD holds
+ * reftable's `.invalid` placeholder (no branch name may begin with a dot). A
+ * read failing past absence throws, so each host decides: the ask gate's fault
+ * path names it, the card prints none. Its host supplies `isAbsolute`, `join`,
+ * `lstatSync`, `readFileSync` and `resolve`; it declares nothing else.
+ */
+export function buildCardBranchSource(): string {
+  return String.raw`/** The branch .git/HEAD names; null when none is named. Throws on a read failing past absence. */
+function cardCurrentBranch(rootDir) {
+  const read = (path) => {
+    let stats;
+    try {
+      stats = lstatSync(path);
+    } catch (error) {
+      if (error && (error.code === "ENOENT" || error.code === "ENOTDIR")) return null;
+      throw error;
+    }
+    return stats.isFile() && stats.size <= ${json(GIT_METADATA_MAX_BYTES)} ? readFileSync(path, "utf8").trim() : null;
+  };
+  const dotGit = join(rootDir, ".git");
+  let gitDir = dotGit;
+  let stats;
+  try {
+    stats = lstatSync(dotGit);
+  } catch (error) {
+    if (error && (error.code === "ENOENT" || error.code === "ENOTDIR")) return null;
+    throw error;
+  }
+  if (!stats.isDirectory()) {
+    const pointer = /^gitdir:[ \t]*(.+)$/.exec((read(dotGit) ?? "").split(/\r?\n/)[0]);
+    if (pointer === null) return null;
+    const target = pointer[1].trim();
+    gitDir = isAbsolute(target) ? target : resolve(rootDir, target);
+  }
+  const branch = /^ref: refs\/heads\/(.+)$/.exec(read(join(gitDir, "HEAD")) ?? "")?.[1] ?? null;
+  return branch === ".invalid" ? null : branch;
+}`;
+}
+
+/**
+ * The card's source text. Declares `resumeCardLines(rootDir, stateRoot, nowMs,
+ * startup)`, which returns the card's lines, or `null` when there is no card to
+ * print, and the branch reader of {@link buildCardBranchSource}. Every
  * top-level name it declares starts with `CARD_` or `card`, so it cannot collide
  * with a name its host declares.
  */
@@ -137,6 +181,8 @@ const CARD_LEDGER_STATES = ${json(CARD_LEDGER_STATES)};
 const CARD_DEBUG_ROUNDS_LABEL = ${json(CARD_DEBUG_ROUNDS_LABEL)};
 const CARD_NO_RUN = ${json(CARD_NO_RUN)};
 const CARD_DEBUG_NEXT_LINE = ${json(CARD_DEBUG_NEXT_LINE)};
+
+${buildCardBranchSource()}
 
 /** A regular file, never through a link. Absent or unreadable reads as not one. */
 function cardRegularFile(path) {
@@ -532,11 +578,22 @@ function cardRenderClosed(run, head, ledger, debug, nowMs, k) {
  * The resume card of the newest run in progress; with none, of the newest run
  * dated within CARD_CLOSED_MAX_AGE_DAYS whose record head reads (the closed
  * card); with neither, of the open debug rounds alone, naming no run; else
- * null. A debug round's record is never the run: the open ones are listed on
+ * null. On startup, only the newest run in progress whose Branch: line names
+ * the branch HEAD names, and never the closed or the debug card. A debug
+ * round's record is never the run: the open ones are listed on
  * the debug line. Lists shrink until the card fits CARD_MAX_CHARS; with every
  * list at zero it always does. A card whose text trips the screen is withheld whole.
  */
-function resumeCardLines(rootDir, stateRoot, nowMs) {
+function resumeCardLines(rootDir, stateRoot, nowMs, startup) {
+  let branch = null;
+  if (startup) {
+    try {
+      branch = cardCurrentBranch(rootDir);
+    } catch {
+      // A HEAD that cannot be read names no branch: a fresh start gets no card.
+    }
+    if (branch === null) return null;
+  }
   const runsDir = join(stateRoot, CARD_RUNS_DIR);
   // A linked runs folder is not this repo's runs: nothing in it is read.
   if (!cardRealDir(runsDir)) return null;
@@ -565,7 +622,7 @@ function resumeCardLines(rootDir, stateRoot, nowMs) {
   for (const run of runs) {
     const head = cardRecordHead(join(runsDir, run, CARD_RECORD_FILE));
     if (head === null) continue;
-    if (head.inProgress) {
+    if (head.inProgress && (!startup || head.branch === branch)) {
       chosen = { run, head };
       break;
     }
@@ -573,8 +630,8 @@ function resumeCardLines(rootDir, stateRoot, nowMs) {
     const day = run.slice(0, 10);
     if (closed === null && day >= cutoff && day <= today) closed = { run, head };
   }
-  const pick = chosen === null ? closed : chosen;
-  if (pick === null && debug.length === 0) return null;
+  const pick = chosen === null && !startup ? closed : chosen;
+  if (pick === null && (startup || debug.length === 0)) return null;
 
   let render;
   if (pick === null) {

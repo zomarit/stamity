@@ -7,7 +7,7 @@ import { runCli } from "../../src/cli/kit/program.ts";
 import { buildSessionStartScript, SESSION_START_SCREEN_PATTERN_IDS } from "../../src/hooks/scripts.ts";
 import { buildResumeCardSource, RESUME_CARD_HOST_NAMES } from "../../src/runs/cardSource.ts";
 import { CARD_MAX_CHARS } from "../../src/runs/layout.ts";
-import { collectResumeCard, readRecordHead, renderResumeCard, screenCard } from "../../src/runs/resumeCard.ts";
+import { collectResumeCard, findCardRun, readRecordHead, renderResumeCard, screenCard } from "../../src/runs/resumeCard.ts";
 import { runInProcess } from "../support/inProcess.ts";
 import { useTempDir, type TempDirHandle } from "../support/tempDir.ts";
 
@@ -891,10 +891,17 @@ const FIXTURES: readonly Fixture[] = [
 ];
 
 interface HookRun {
+  /** A start with no source in its payload: the banner alone, whatever the disk holds. */
+  readonly bare: string;
   readonly startup: string;
   readonly compact: string;
 }
 
+// TEST CHANGE, justified: a `startup` start now prints the card of the run in
+// progress on the branch .git/HEAD names (REQ-CTX-013, plan 021 file 2
+// v1-branch-card), so it is no longer the banner alone. The banner is now read
+// from a start with no source, and the startup output is kept to hold its own
+// parity (`startupCard`); every compaction comparison is unchanged.
 function runHook(root: string): HookRun {
   const env: NodeJS.ProcessEnv = { ...process.env };
   delete env["STAMITY_REPO_ROOT"];
@@ -904,17 +911,28 @@ function runHook(root: string): HookRun {
     expect(result.status, result.stderr).toBe(0);
     return result.stdout;
   };
-  return { startup: run(STARTUP), compact: run(COMPACT) };
+  return { bare: run(""), startup: run(STARTUP), compact: run(COMPACT) };
 }
 
-/** The card lines the hook appended after the banner, or null when it appended none. */
-function hookCard(run: HookRun): string[] | null {
-  if (run.compact === run.startup) return null;
-  const prefix = `${run.startup.slice(0, -1)}\n\n`;
-  expect(run.compact.startsWith(prefix), "the card follows the banner and one blank line").toBe(true);
-  const rest = run.compact.slice(prefix.length);
+/** The card lines `printed` appended after the banner, or null when it appended none. */
+function cardAfterBanner(banner: string, printed: string): string[] | null {
+  if (printed === banner) return null;
+  const prefix = `${banner.slice(0, -1)}\n\n`;
+  expect(printed.startsWith(prefix), "the card follows the banner and one blank line").toBe(true);
+  const rest = printed.slice(prefix.length);
   expect(rest.endsWith("\n")).toBe(true);
   return rest.slice(0, -1).split("\n");
+}
+
+/** The card lines the hook appended after a compaction, or null when it appended none. */
+function hookCard(run: HookRun): string[] | null {
+  // TEST CHANGE, justified: the banner is the start with no source (see runHook), not `startup`.
+  return cardAfterBanner(run.bare, run.compact);
+}
+
+/** The card lines the hook appended on a fresh start, or null when it appended none. */
+function startupCard(run: HookRun): string[] | null {
+  return cardAfterBanner(run.bare, run.startup);
 }
 
 /** The minute the hook printed; a withheld card prints none, and its lines carry no time. */
@@ -962,9 +980,14 @@ async function assertParity(repo: TempDirHandle, rootRel: string | undefined): P
   mkdirSync(join(root, ".stamity", "generated", "hooks", "claude"), { recursive: true });
   writeFileSync(join(root, SCRIPT_PATH), buildSessionStartScript());
 
-  const lines = hookCard(runHook(root));
+  const run = runHook(root);
+  const lines = hookCard(run);
   const twin = collectResumeCard({ rootDir: root, now: printedMinute(lines) });
   expect(twin?.lines ?? null).toEqual(lines);
+  // The fresh start's pick (REQ-CTX-013) agrees too, on every fixture: mostly no card at all.
+  const startup = startupCard(run);
+  const startupTwin = collectResumeCard({ rootDir: root, now: printedMinute(startup), startup: true });
+  expect(startupTwin?.lines ?? null).toEqual(startup);
 
   // Both readers run at the minute the hook printed, so every byte — the stamp
   // included — is compared, and a minute boundary between the prints is not a diff.
@@ -1020,6 +1043,54 @@ describe("the resume card's two twins", () => {
 
     const lines = await assertParity(repo, "main");
     expect(lines?.[4]).toBe(`lanes: 1 (${linked[0]})`);
+  });
+
+  it("print the same startup card for the run in progress on this branch, and none on another", async () => {
+    const repo = getRepo();
+    await seedDemo(repo);
+    await repo.seedFiles({
+      [runFile(RUN, "record.md")]: record({ more: SIX_LINE_MORE }),
+      [runFile("2026-09-24_newer", "record.md")]: record({ more: ["Branch: stamity/2026-09-24_newer"] }),
+      ".git/HEAD": `ref: refs/heads/stamity/${RUN}\n`,
+    });
+    const compact = await assertParity(repo, undefined);
+    // A compaction keeps today's pick, the newest run in progress whatever its branch...
+    expect(compact?.[0]).toMatch(/^stamity resume card — run 2026-09-24_newer \(as of /);
+    // ...and a fresh start names the older run, the one on the branch HEAD names.
+    const startup = startupCard(runHook(repo.dir));
+    expect(startup?.[0]).toMatch(new RegExp(`^stamity resume card — run ${RUN} \\(as of `));
+    expect(startup).toHaveLength(6);
+
+    // A detached HEAD: no startup card, and both twins agree on that.
+    await repo.seedFiles({ ".git/HEAD": `${SHA}\n` });
+    await assertParity(repo, undefined);
+    expect(startupCard(runHook(repo.dir))).toBeNull();
+  });
+
+  it("print the same startup card in a real `git worktree add` lane, HEAD read through its gitdir:", async () => {
+    const repo = getRepo();
+    const main = repo.path("main");
+    mkdirSync(main, { recursive: true });
+    await repo.seedFiles({ "git-config": "" });
+    // A fixture repository: no global or system config reaches it, as in the lane case above.
+    const env: NodeJS.ProcessEnv = { ...process.env, GIT_CONFIG_GLOBAL: repo.path("git-config"), GIT_CONFIG_NOSYSTEM: "1" };
+    const git = (...args: string[]): void => {
+      const result = spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.invalid", ...args], {
+        cwd: main,
+        env,
+        encoding: "utf8",
+        windowsHide: true,
+      });
+      expect(result.status, result.stderr).toBe(0);
+    };
+    git("init", "-q");
+    git("commit", "-q", "--allow-empty", "-m", "init");
+    git("worktree", "add", "-q", "-b", `stamity/${RUN}`, join("..", "lane"));
+    await repo.seedFiles({ [`lane/${runFile(RUN, "record.md")}`]: record({ more: SIX_LINE_MORE }) });
+
+    await assertParity(repo, "lane");
+    const startup = startupCard(runHook(repo.path("lane")));
+    expect(startup?.[0]).toMatch(new RegExp(`^stamity resume card — run ${RUN} \\(as of `));
   });
 
   it("keeps parity when a UTC minute boundary falls between the two prints (build/343)", async () => {
@@ -1537,6 +1608,54 @@ describe("stamity ledger status", () => {
       unknown
     >;
     expect(none).toMatchObject({ ledgerUnreadable: false, notReportNamed: 0 });
+  });
+
+  it("names the record's branch and whether HEAD is on it in --json (REQ-CTX-013)", async () => {
+    const repo = getRepo();
+    await repo.seedFiles({
+      [runFile(RUN, "record.md")]: record({ more: SIX_LINE_MORE }),
+      ".git/HEAD": `ref: refs/heads/stamity/${RUN}\n`,
+    });
+    const status = async (): Promise<Record<string, unknown>> =>
+      JSON.parse((await runInProcess(COMMANDS, ["ledger", "status", "--json"], { cwd: repo.dir })).stdout) as Record<string, unknown>;
+    expect(await status()).toMatchObject({ run: RUN, branch: `stamity/${RUN}`, onCurrentBranch: true });
+
+    // Another branch checked out: the card still prints, the document says it is not this branch's.
+    await repo.seedFiles({ ".git/HEAD": "ref: refs/heads/main\n" });
+    const other = await status();
+    expect(other).toMatchObject({ run: RUN, inProgress: true, branch: `stamity/${RUN}`, onCurrentBranch: false });
+    expect(other["card"]).toHaveLength(6);
+
+    // A detached HEAD: `ledger status` still prints the card.
+    await repo.seedFiles({ ".git/HEAD": `${SHA}\n` });
+    expect(await status()).toMatchObject({ run: RUN, inProgress: true, onCurrentBranch: false });
+
+    // No Branch: line at all.
+    await repo.seedFiles({ [runFile(RUN, "record.md")]: record(), ".git/HEAD": `ref: refs/heads/stamity/${RUN}\n` });
+    expect(await status()).toMatchObject({ run: RUN, branch: null, onCurrentBranch: false });
+
+    // A branch that trips the screen is not echoed, like the status it is screened with.
+    await repo.seedFiles({ [runFile(RUN, "record.md")]: record({ more: ["Branch: stamity/exfiltrate"] }) });
+    const screened = await runInProcess(COMMANDS, ["ledger", "status", "--json"], { cwd: repo.dir });
+    const doc = JSON.parse(screened.stdout) as Record<string, unknown>;
+    expect(doc).toMatchObject({ run: RUN, withheld: null, listsWithheld: "exfiltrate", branch: null, onCurrentBranch: false });
+    expect(screened.stdout).not.toContain("stamity/exfiltrate");
+  });
+
+  it("findCardRun keeps its reading with no option and picks only this branch's run with one", async () => {
+    const repo = getRepo();
+    await repo.seedFiles({
+      [runFile(RUN, "record.md")]: record({ more: SIX_LINE_MORE }),
+      [runFile("2026-09-24_newer", "record.md")]: record({ more: ["Branch: stamity/2026-09-24_newer"] }),
+      [runFile(DONE, "record.md")]: record({ status: "closed — merged", more: ["Branch: main"] }),
+    });
+    const now = new Date();
+    // The pre-flight's caller (src/cli/commands/gate.ts) passes no option: the newest run in progress.
+    expect(findCardRun(repo.dir, now)).toEqual({ runId: "2026-09-24_newer", closed: false });
+    expect(findCardRun(repo.dir, now, { currentBranch: `stamity/${RUN}` })).toEqual({ runId: RUN, closed: false });
+    // With a branch, never the closed card, even for a closed run on that branch.
+    expect(findCardRun(repo.dir, now, { currentBranch: "main" })).toBeNull();
+    expect(findCardRun(repo.dir, now, { currentBranch: "elsewhere" })).toBeNull();
   });
 
   it("emits each --json list item flattened, as the card prints it", async () => {

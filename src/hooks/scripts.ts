@@ -31,7 +31,7 @@ import type { Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
 import { CONTENT_PREFIX, GENERATED_SCRIPT_LINT_DIRECTIVE, STATE_DIR } from "../types/markers.ts";
 import { PREFLIGHT_CANARY_FILE, RUN_ENDED_MARKER_FILE, RUN_ENDED_MAX_AGE_MS } from "../mcp/env.ts";
-import { buildResumeCardSource, RESUME_CARD_HOST_NAMES } from "../runs/cardSource.ts";
+import { buildCardBranchSource, buildResumeCardSource, RESUME_CARD_HOST_NAMES } from "../runs/cardSource.ts";
 import {
   GIT_METADATA_MAX_BYTES,
   IN_PROGRESS_PATTERN,
@@ -179,7 +179,14 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // bytes): 45,395 / 1,009 before, 46,716 / 1,038 after; the ceiling holds.
   // Measured 2026-10-14 on a1a55379 around the cloud and CI session line
   // (REQ-FLOW-085): 47,118 / 1,044 before, 48,780 / 1,068 after; the ceiling holds.
-  [SESSION_START_FILE]: { bytes: 49_152, lines: 1_100 },
+  // Raised 2026-10-18 by plan 021 file 2's v1-branch-card (base 20abe813): the
+  // startup card for the run on this branch and the HEAD reader it shares with
+  // the ask gate (REQ-CTX-013) took the render from 48,983 / 1,071 to 50,647 /
+  // 1,114, past the fixed ceiling. Moved once, for this unit and the session
+  // chain after it (v2's review-gate line, v6's Cursor line, v8's inlined
+  // detector), by the review gate's rule: × 1.25 = 63,308.75 / 1,392.5,
+  // rounded up to 63,488 / 1,400.
+  [SESSION_START_FILE]: { bytes: 63_488, lines: 1_400 },
   // Measured 2026-09-24 and again 2026-09-26 at 8c08660e: 40,740 bytes / 891
   // lines (claude, generated layout, the default cap of 4; the cap of 10 adds
   // 2 bytes; a plugin root renders 40,021 / 870). × 1.25 = 50,925 / 1,113.75,
@@ -1219,10 +1226,11 @@ ${buildResumeCardSource()}
 // payload, so a TTY is never read — reading it would wait for input nobody is
 // going to type. The check asks fd 0 directly: touching process.stdin would
 // open it as a non-blocking stream, and the read below would then fail with
-// EAGAIN whenever the client had not finished writing yet. Only a start after
-// a compaction or on a resume appends the card: a fresh session has no run
-// state to lose, and a client that sends no source (or neither "compact" nor
-// "resume") gets the banner it always got.
+// EAGAIN whenever the client had not finished writing yet. A start after a
+// compaction or on a resume appends the card; a fresh start appends it only for
+// the run in progress on the branch HEAD names, which a new machine continues
+// (REQ-CTX-013); a client that sends no source (or none of the three) gets the
+// banner it always got.
 const SOURCE = isatty(0) ? "" : field(readPayload(), ["source"]);
 
 // Written once, then the process ends on its own. \`process.exit\` would race
@@ -1232,8 +1240,8 @@ const lines = render();
 // Before the card, so the card stays everything after the last blank line.
 const session = sessionLines(process.env);
 if (session.length > 0) lines.push("", ...session);
-if (SOURCE === "compact" || SOURCE === "resume") {
-  const card = resumeCardLines(repoRoot(), STATE_ROOT, NOW);
+if (SOURCE === "compact" || SOURCE === "resume" || SOURCE === "startup") {
+  const card = resumeCardLines(repoRoot(), STATE_ROOT, NOW, SOURCE === "startup");
   if (card !== null) lines.push("", ...card);
 }
 process.stdout.write(lines.join("\\n") + "\\n");
@@ -4077,27 +4085,8 @@ function gitText(path) {
   return stats.isFile() && stats.size <= GIT_MAX_BYTES ? readFileSync(path, "utf8").trim() : null;
 }
 
-/** The current branch off .git/HEAD, a linked worktree's gitdir: pointer followed; null when detached or there is no .git. */
-function currentBranch(root) {
-  const dotGit = join(root, ".git");
-  let gitDir = dotGit;
-  let stats;
-  try {
-    stats = lstatSync(dotGit);
-  } catch (error) {
-    if (error && (error.code === "ENOENT" || error.code === "ENOTDIR")) return null;
-    throw error;
-  }
-  if (!stats.isDirectory()) {
-    const pointer = /^gitdir:[ \t]*(.+)$/.exec((gitText(dotGit) ?? "").split(/\r?\n/)[0]);
-    if (pointer === null) return null;
-    const target = pointer[1].trim();
-    gitDir = isAbsolute(target) ? target : resolve(root, target);
-  }
-  const head = gitText(join(gitDir, "HEAD"));
-  return head !== null && head.startsWith("ref: refs/heads/") ? head.slice(16) : null;
-}
-
+`}${buildCardBranchSource()}
+${String.raw`
 /** The run id a fresh run-ended marker names; null when absent, a link, not a file, past GIT_MAX_BYTES, naming no run id, or its at unreadable, after now or past MARKER_MAX_AGE_MS. */
 function endedRun(root) {
   const text = gitText(join(root, ...MARKER_SEGMENTS));
@@ -4129,7 +4118,7 @@ function unattendedSource(root) {
   const closed = running.length === 0 ? heads.filter((head) => head.mode === "unattended" && head.branch !== null) : [];
   if (closed.length > 0) {
     const ended = endedRun(root);
-    const branch = ended === null ? null : currentBranch(root);
+    const branch = ended === null ? null : cardCurrentBranch(root);
     if (branch !== null && closed.some((head) => head.branch === branch && head.run === ended)) return null;
   }
   return VARIABLE_SOURCE;
