@@ -31,6 +31,89 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **An unattended mode, declared rather than guessed.** `--unattended`, or `STAMITY_UNATTENDED` set
+  in a cloud environment, routine or automation, marks a run unattended; the run record's head
+  carries it as its `Mode:` line, and `/st-board pickup`, `/st-debug` and `/st-rework` pass it on. A
+  cloud session alone never makes a run unattended. An unattended run asks nothing: every ask point
+  takes its declared default and records a `Default applied:` line, and on Claude Code a hook denies
+  the question tool while the mode holds. The `st-unattended` skill, called by name when a record
+  reads `Mode: unattended`, carries the mode's floors, its ending, its cloud rules and the morning
+  walk.
+- **A ready check and a pre-flight before an unattended run starts.** `stamity plan check` refuses a
+  start on a clarification marker, open questions, a Critical risk, a failed mechanical lint, a stale
+  plan or no persisted plan. `stamity gate preflight --unattended` refuses where the hooks did not
+  load, `node` or the pinned CLI cannot be reached, the secret scan cannot run, the input came from
+  an author without write access, or the account could push to the default branch directly; in
+  Claude Code's cloud it also refuses when the hooks' variable is not set.
+- **One ending for every run nobody watches: a pushed branch and one draft pull request.**
+  `stamity run start`, `run checkpoint` and `run end` are an unattended run's only push path. The run
+  works on its own `stamity/<run-id>` branch; a checkpoint stages the run's records and the paths
+  named with `--paths`, never `-A`, holds a change to a person-only path (CI definitions, hooks, the
+  clients' settings, instruction and agent files) as an inert patch in the run folder, scans what
+  the push sends for secrets, and pushes; `run end` opens or updates one draft pull request through
+  GitHub's REST API, its body the run's morning list (`.stamity/runs/<run-id>/morning.md`), and the
+  morning walk reopens the close with a person there. A run verb never merges, tags, marks a pull
+  request ready or pushes the default branch. `stamity gate scan --text` screens each text the run
+  posts, `stamity learn read` reads learnings through the screen, and a committed run contract
+  (`run-contract: 1`) states a run's inputs by reference. Attended, `/st-work`'s close offers commit,
+  push and a draft pull request first and recommended; with no answer it still leaves the change
+  uncommitted.
+- **A long run continues from its branch.** Frame continues an `in progress` record on the current
+  branch, and the session start prints its resume card on `startup` too; a missing review-gate
+  counter is rebuilt from the run record instead of opening the gate; and on a fresh clone
+  `stamity run start --run <run-id>` starts from origin's run branch when its tip descends from the
+  record's `Base:`.
+- **Each cloud gets its entry and its readiness.** Claude Code: a session-start entry readies the
+  cloud machine and sets the hooks' variable. Cursor: the root `AGENTS.md` ends on a cloud block when
+  Cursor is selected, a once-per-conversation `postToolUse` row names a managed cloud agent, and a
+  `stop` hook continues an unattended run while units remain. Copilot: a thin `stamity-run` entry
+  agent for the cloud agent, and the pinned CLI installed in the setup steps. Each client's copy of
+  the question protocol now says what its cloud run does at an ask: Cursor's managed cloud run asks
+  nothing and takes the declared default, and so does Copilot's cloud agent, with no person to
+  answer.
+
+### Changed
+
+- **Attended, a person-only act that can be undone asks for one click on Claude Code, and every
+  deletion and force push is refused everywhere.** The person-only shell guard now reads the main
+  thread's shell calls on every client, not only Stamity's sub-agents'. Attended, a merge, a
+  ready-for-review mark, an approval, a non-forced push of the default branch, a tag, a release, a
+  publish, a secret, variable, protection, ruleset or custom-property write and a repository write
+  get Claude Code's approve prompt, and the agent runs the act on yes; a sub-agent's call and a call
+  in the `auto` permission mode are refused. Copilot CLI, Cursor and Codex refuse those acts and give
+  the person the exact command: Copilot CLI holds an ask, but its tool-call payload names no calling
+  agent, so the guard cannot keep the ask for the person alone; Cursor ran a command despite an ask
+  under `--force`; and Codex's hooks do not honour an ask. A deletion, a force push and an act that
+  cannot be undone (a visibility change, a transfer) are refused on every client, attended or not,
+  with a click or without one, and one refused act on a line refuses the whole call. Unattended,
+  every person-only act is refused and carried on the morning list.
+- **Claude Code's settings always carry the person-only rows.** `.claude/settings.json` gains
+  `permissions.deny` rows for the refused acts, among them a mid-pattern row for each refused flag
+  that can follow an ask-class prefix, and `permissions.ask` rows for the acts that can be undone,
+  thirteen GitHub MCP tools among them, with `delete_repository` denied. The rows are written in
+  every mode, since a settings row cannot read it, and where no hook runs they are the only layer.
+  `sync` appends only the rows a file lacks and keeps every row already there, and `clean` removes
+  none of them, naming those equal to an engine row for the person to remove by hand.
+- **An unattended run verb stands alone on its line.** While a run is unattended the guard refuses a
+  line that runs `stamity run start`, `checkpoint` or `end` beside anything else, and the run verbs'
+  own git runs without git's program-valued variables.
+- **One session detector names the session for the session start and the pre-flight.** The
+  pre-flight's JSON `cloud` field now reads `CLAUDE_CODE_REMOTE` as a cloud session only when it is
+  `true`, so a value of `1` reads `false`.
+- **`sync --dry-run` says the manifest schema "would be migrated"**, where it printed "migrated"
+  while writing nothing.
+
+### Removed
+
+- **The manifest's held `plugin` block.** The `plugin` key a 1.14 setup wrote, held unread through
+  the 1.15 line, is dropped on every read, of any shape, with no migration step and no schema bump: a
+  manifest still carrying it loads in `check`, `sync` and `clean`, the next `sync` writes it without
+  the key and says so once ("would drop" on a dry run), and a second `sync` moves no byte. A 1.15
+  engine still reads what this one writes. `check`'s `plugin-duplicates` row and the leftover-plugin
+  lines of `sync` and `clean` leave with it, and the public `SetupManifest` type loses `plugin`.
+
 ## [1.15.0] - 2026-10-15
 
 ### Upgrading from 1.14.0
