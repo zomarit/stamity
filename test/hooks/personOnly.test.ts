@@ -728,6 +728,8 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
   ["gh release download v1.0.0"],
   ["gh secret list"],
   ["gh variable list"],
+  // A variable read (build/9): `gh variable get` prints a value, writing nothing.
+  ["gh variable get NAME"],
   ["npm test"],
   ["npm run publish-docs"],
   ["npm pack"],

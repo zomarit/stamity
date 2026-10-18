@@ -112,7 +112,7 @@ export const PERSON_ONLY_RULES: readonly PersonOnlyRule[] = [
   { id: "pr-ready", act: "marking a pull request ready for review (`gh pr ready`)", ask: true },
   { id: "release", act: "creating, editing or uploading to a release (`gh release` beyond list, view, download)", ask: true },
   { id: "publish", act: "publishing a package (`npm`, `pnpm`, `yarn`, `bun` publish, `npm dist-tag add`)", ask: true },
-  { id: "secrets", act: "writing a secret or a variable (`gh secret`, `gh variable` beyond list, their REST paths)", ask: true },
+  { id: "secrets", act: "writing a secret or a variable (`gh secret`, `gh variable` beyond list and a variable's get, their REST paths)", ask: true },
   {
     id: "protection",
     act: "writing branch protection, a ruleset or a custom property a ruleset can target by, renaming a branch, or writing the repository's settings (`gh repo edit` but `--visibility`, `gh repo rename`, `gh repo archive` or `gh repo unarchive`, a REST PATCH on the repository)",
@@ -1114,7 +1114,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         deny("release-delete", `A release or asset deletion (\`gh release ${sub}\`)`);
       } else deny("release", "A release write (`gh release`)");
     }
-    if ((group === "secret" || group === "variable") && sub !== undefined && !["list", "ls"].includes(sub)) {
+    // `list` and a variable's `get` are reads (build/9).
+    if ((group === "secret" || group === "variable") && sub !== undefined && !["list", "ls", ...(group === "variable" ? ["get"] : [])].includes(sub)) {
       if (sub === "delete" || sub === "remove") deny("secrets-delete", `A ${group} deletion (\`gh ${group} ${sub}\`)`);
       else deny("secrets", `A ${group} write (\`gh ${group}\`)`);
     }

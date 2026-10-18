@@ -91,7 +91,11 @@ vi.mock("../../../src/hooks/personOnly.ts", async (importOriginal) => {
     ...real,
     personOnlyVerdict: (command: string, ctx: PersonOnlyModule.PersonOnlyContext): PersonOnlyModule.PersonOnlyVerdict => {
       table.commands.push(command);
-      if (table.denyPush !== null && command.startsWith("git push ")) return { deny: true, rule: "push-default", reason: table.denyPush };
+      // TEST CHANGE (v0a, build/10): a person-only verdict now carries the act it names and its class; the stub's
+      // refusal gains both so it stays a well-typed verdict, and the verb still prints only its `reason`.
+      if (table.denyPush !== null && command.startsWith("git push ")) {
+        return { deny: true, rule: "push-default", act: "A push to the default branch", reason: table.denyPush, ask: true };
+      }
       // Mock reason (pr/61): the verb refuses a branch name outside [A-Za-z0-9._/-] before this check, so a name that
       // nests past the verdict's four levels reaches the real verdict only when the spy hands its push line over.
       if (table.pushBranch !== null && command.startsWith("git push ")) {
