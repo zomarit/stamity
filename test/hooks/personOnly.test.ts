@@ -514,6 +514,20 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["git send-pack git@github.com:o/r.git refs/tags/v1", "push-tags"],
   ["git send-pack git@github.com:o/r.git", "push-default"],
   ["git-send-pack -f git@github.com:o/r.git feat/x", "force-push"],
+  // PR #112's resolution round 4. `git symbolic-ref` (pr/70): a tag's name written or deleted, and a ref pointed at
+  // the default branch, named or one the line cannot show, whatever namespace the new name is in, since a push of that
+  // name sends the default branch.
+  ["git symbolic-ref refs/heads/safe refs/heads/main && git push origin safe", "push-default"],
+  ["git symbolic-ref refs/heads/safe main", "push-default"],
+  ["git symbolic-ref -m why refs/heads/safe refs/heads/master", "push-default"],
+  ["git symbolic-ref refs/heads/safe refs/heads/trunk", "push-default", ON_TRUNK],
+  ["git symbolic-ref refs/heads/safe \"refs/heads/$B\"", "push-default"],
+  ["git symbolic-ref refs/heads/safe \"refs/heads/$(git config init.defaultBranch)\"", "push-default"],
+  ["git symbolic-ref refs/remotes/origin/safe refs/heads/main", "push-default"],
+  ["git symbolic-ref refs/tags/v9 refs/heads/feat/x", "tag"],
+  ["git symbolic-ref -d refs/tags/v9", "tag"],
+  ["git symbolic-ref --delete -q refs/tags/v9", "tag"],
+  ["git symbolic-ref -qd refs/tags/v9", "tag"],
 ];
 
 const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
@@ -730,6 +744,15 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
   ["wget -e robots=off https://api.github.com/repos/o/r/releases"],
   ["wget -e method=GET https://api.github.com/repos/o/r/releases/1"],
   ["wget -e 'body_data={\"event\":\"COMMENT\"}' https://api.github.com/repos/o/r/pulls/3/reviews"],
+  // PR #112's resolution round 4's twins. `git symbolic-ref`'s reads, a write of `HEAD`, a ref pointed at another
+  // branch, a branch's symbolic ref deleted, a tag's read, and `-m`'s value (pr/70).
+  ["git symbolic-ref HEAD"],
+  ["git symbolic-ref --short -q HEAD"],
+  ["git symbolic-ref HEAD refs/heads/main"],
+  ["git symbolic-ref refs/heads/a refs/heads/feat/x"],
+  ["git symbolic-ref -d refs/heads/a"],
+  ["git symbolic-ref refs/tags/v9"],
+  ["git symbolic-ref -m refs/tags/v9 HEAD refs/heads/feat/x"],
 ];
 
 describe("personOnlyVerdict — the deny matrix", () => {

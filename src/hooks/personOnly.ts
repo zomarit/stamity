@@ -221,6 +221,12 @@ export const CLAUDE_DENY_ROWS: readonly string[] = [
  * them, a `remote.<name>.push` or `branch.<name>.merge` read as the refspec a
  * bare push takes) skipped before the subcommand.
  *
+ * `git symbolic-ref` (pr/70): a write or deletion of a name under `refs/tags/` is
+ * a tag written; a write of any name but `HEAD` pointed at the default branch
+ * (`refs/heads/<default>` or the bare name), or at a target the line cannot show,
+ * is a push of the default branch to come, since `git push <remote> <name>` sends
+ * the branch the name points at.
+ *
  * Throws a coded `NESTING_DEPTH` error for a line nested past four levels (pr/58),
  * which the guard refuses as a call it cannot decide.
  *
@@ -866,6 +872,40 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     return list || positionals.length === 0 ? null : deny("tag", "A tag created (`git tag <name>`)");
   }
 
+  /** `git symbolic-ref`'s writes (pr/70). */
+  function symbolicRefVerdict(args: string[]): PersonOnlyVerdict | null {
+    let remove = false;
+    const positionals: string[] = [];
+    for (let j = 0; j < args.length; j += 1) {
+      const arg = args[j] ?? "";
+      if (arg === "--") {
+        positionals.push(...args.slice(j + 1));
+        break;
+      }
+      if (arg.startsWith("--")) {
+        const name = (arg.split("=")[0] ?? "").toLowerCase();
+        if (name.length > 2 && "--delete".startsWith(name)) remove = true;
+      } else if (arg.startsWith("-") && arg.length > 1) {
+        for (let c = 1; c < arg.length; c += 1) {
+          if (arg[c] === "d") remove = true;
+          else if (arg[c] === "m") {
+            if (c === arg.length - 1) j += 1;
+            break;
+          }
+        }
+      } else positionals.push(arg);
+    }
+    const [name = "", target] = positionals;
+    if ((remove || target !== undefined) && /^(refs\/)?tags\//i.test(name)) {
+      return deny("tag", "A symbolic tag ref written or deleted (`git symbolic-ref`)");
+    }
+    if (remove || target === undefined || name === "HEAD") return null;
+    if (/[$`]/.test(target) || defaults.has(target.replace(/^(refs\/)?heads\//i, "").toLowerCase())) {
+      return deny("push-default", "A symbolic ref pointed at the default branch, or at a branch the line cannot show (`git symbolic-ref`)");
+    }
+    return null;
+  }
+
   function ghVerdict(cmd: string[]): PersonOnlyVerdict | null {
     const [group, sub] = ghPositionals(cmd);
     /**
@@ -1202,7 +1242,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         // `git update-ref` writes or deletes a ref by name (pr/53): a tag ref named on the line, or in a `--stdin` text
         // the line itself carries, is a tag created or deleted. A `--stdin` text read from a file is the residual.
         verdict = deny("tag", "A tag ref write (`git update-ref`)");
-      } else if (sub === "subtree") {
+      } else if (sub === "symbolic-ref") verdict = symbolicRefVerdict(args);
+      else if (sub === "subtree") {
         // `git subtree push <remote> <branch>` runs `git push <remote> <split>:refs/heads/<branch>`.
         const valued = new Set(["-P", "--prefix", "-m", "--message", "-b", "--branch", "--onto"]);
         const words = args.filter((word, index) => !word.startsWith("-") && !valued.has(args[index - 1] ?? ""));
