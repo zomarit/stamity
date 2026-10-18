@@ -1417,6 +1417,12 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         if (method === "DELETE") deny("protection-delete", `A deployment environment deletion (${shown})`);
         else if (method === "PUT") deny("protection", `A deployment environment write (${shown})`);
       }
+      // An environment's deployment protection rule or branch policy: removing one lowers what gates a deployment to it,
+      // refuse-class as a branch protection deletion is; creating or changing one is ask-class (review/51).
+      if (/^environments\/[^/]+\/(deployment_protection_rules|deployment-branch-policies)(\/|$)/i.test(path)) {
+        if (method === "DELETE") deny("protection-delete", `A deployment protection rule or branch policy deletion (${shown})`);
+        else deny("protection", `A deployment protection rule or branch policy write (${shown})`);
+      }
       // The repository's own path carries its default branch, visibility, name and archived state; DELETE removes it.
       // A body holding `visibility` or `private`, or one the line cannot show, may change the visibility (v0a).
       if (/^(repos\/[^/]+\/[^/]+|repositories\/[^/]+)$/i.test(path) && (method === "PATCH" || method === "DELETE")) {
@@ -1527,12 +1533,15 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     // npm's `unpublish` (from its unique prefix `unp`) and `dist-tag rm` withdraw what a publish put out, refuse-class;
     // `dist-tag add` moves a tag, ask-class as a publish (v0a). The prefix and the subcommands' aliases are npm
     // 10.9.8's (`lib/utils/cmd-list.js`, `lib/commands/dist-tag.js`), read where npm runs them: pnpm hands both
-    // commands, as written, to npm, and yarn's `npm tag remove` and `npm tag add` are the same acts (review/34,
-    // review/37). No prefix of `dist-tag` resolves in that list (its alias `dist-tags` shares every one).
+    // commands, as written, to npm, and yarn's `npm tag remove` and `npm tag add`, and yarn classic's `tag remove` and
+    // `tag add`, are the same acts (review/34, review/37, review/52). No prefix of `dist-tag` resolves in that list (its
+    // alias `dist-tags` shares every one).
     for (const positionals of npm ? [positionalsOf(false), positionalsOf(true)] : [positionalsOf(false)]) {
       for (const [index, word] of positionals.entries()) {
         const passed = index === 0 && cmd[0] === "pnpm" && (word === "unpublish" || word === "dist-tag");
-        if (!passed && !(index === 0 ? npm : positionals[index - 1] === "npm")) continue;
+        // yarn classic's own `tag` command, where yarn reads its command word: first, or after `workspace <name>` (review/52).
+        const own = cmd[0] === "yarn" && word === "tag" && (index === 0 || (index === 2 && positionals[0] === "workspace"));
+        if (!passed && !own && !(index === 0 ? npm : positionals[index - 1] === "npm")) continue;
         if (/^unp(?:u(?:b(?:l(?:i(?:sh?)?)?)?)?)?$/.test(word)) deny("unpublish", "Withdrawing a package (`npm unpublish`)");
         const tags = word === "dist-tag" || word === "dist-tags" || (cmd[0] === "yarn" && word === "tag");
         const action = tags ? (positionals[index + 1] ?? "") : "";
@@ -1568,7 +1577,11 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         // space, or an escape such as `-z`'s NUL) and a value.
         const word = String.raw`[^\s'"\\|;&<>()]`;
         const separator = String.raw`(?: |\\(?:x[\da-fA-F]{1,2}|u[\da-fA-F]{1,4}|[0-7]{1,4}))`;
-        const emptied = new RegExp(String.raw`(?<![\w-])update${separator}+refs\/tags\/${word}+(?!${word})(?!${separator}${word})`, "i");
+        // The `update` stands first, after a character that is no word's, or after an escaped line break (`\n`, `\0`,
+        // `\x0a`, `\012`) or a printf placeholder (`%b`), as the symref reader below reads a command; `symref-update`'s
+        // dash keeps it out (review/35).
+        const before = String.raw`(?<=^|[^\w-]|\\(?:x[\da-fA-F]{1,2}|u[\da-fA-F]{1,4}|U[\da-fA-F]{1,8}|[0-7]{1,4}|[a-zA-Z])|%[-#0+ \d.]*[a-zA-Z])`;
+        const emptied = new RegExp(String.raw`${before}update${separator}+refs\/tags\/${word}+(?!${word})(?!${separator}${word})`, "i");
         if (
           args.some((arg) => /^-[^-m]*d/.test(arg)) ||
           zero.test(value) ||

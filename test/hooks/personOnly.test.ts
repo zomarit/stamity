@@ -1084,6 +1084,28 @@ const CLASSES: readonly (readonly [command: string, rule: string, ask: boolean, 
   ["printf 'update refs/tags/v1 HEAD\\n' | git update-ref --stdin", "tag", true],
   ["printf 'update refs/tags/v1\\0HEAD\\0\\0' | git update-ref -z --stdin", "tag", true],
   ["git update-ref -m drop refs/tags/v1 HEAD", "tag", true],
+  // review/35, round 2: an emptied `update` after an escaped line break; one with a value there still asks.
+  ["printf 'start\\nupdate refs/tags/v1 \\n' | git update-ref --stdin", "tag-delete", false],
+  ["printf 'start\\x0aupdate refs/tags/v1 \\n' | git update-ref --stdin", "tag-delete", false],
+  ["printf 'start\\012update refs/tags/v1 \\n' | git update-ref --stdin", "tag-delete", false],
+  ["printf 'start\\0update refs/tags/v1\\0\\0\\0' | git update-ref -z --stdin", "tag-delete", false],
+  ["printf 'start\\nupdate refs/tags/v1 HEAD\\n' | git update-ref --stdin", "tag", true],
+  ["printf 'start\\nsymref-update refs/tags/v9\\n' | git update-ref --stdin", "tag", true],
+  // review/51: an environment's deployment protection rule or branch policy, removed or written, in each REST spelling.
+  ["gh api -X DELETE repos/o/r/environments/prod/deployment_protection_rules/7", "protection-delete", false],
+  ["gh api --method DELETE repos/o/r/environments/prod/deployment-branch-policies/7", "protection-delete", false],
+  ["curl -X DELETE https://api.github.com/repos/o/r/environments/prod/deployment_protection_rules/7", "protection-delete", false],
+  ["curl --request DELETE https://api.github.com/repos/o/r/environments/prod/deployment-branch-policies/7", "protection-delete", false],
+  ["gh api repos/o/r/environments/prod/deployment_protection_rules -F integration_id=5", "protection", true],
+  ["gh api --method POST repos/o/r/environments/prod/deployment-branch-policies --input p.json", "protection", true],
+  ["gh api -X PUT repos/o/r/environments/prod/deployment-branch-policies/7 -f name=release", "protection", true],
+  ["curl -X POST -d '{\"name\":\"release\"}' https://api.github.com/repos/o/r/environments/prod/deployment-branch-policies", "protection", true],
+  ["curl -X PATCH https://api.github.com/repos/o/r/environments/prod/deployment_protection_rules/7", "protection", true],
+  // review/52: yarn classic's own `tag` command removes and adds a dist-tag, at the start or after `workspace <name>`.
+  ["yarn tag remove x beta", "unpublish", false],
+  ["yarn tag rm x beta", "unpublish", false],
+  ["yarn workspace x tag remove x beta", "unpublish", false],
+  ["yarn tag add x@1.0.0 latest", "publish", true],
 ];
 
 describe("personOnlyVerdict — ask or refuse (v0a)", () => {
@@ -1115,6 +1137,18 @@ describe("personOnlyVerdict — ask or refuse (v0a)", () => {
 
   it("allows a deployment environment's read, the neighbour of its deletion (review/38)", () => {
     expect(personOnlyVerdict("gh api repos/o/r/environments/prod", ON_FEATURE)).toEqual({ deny: false });
+  });
+
+  it("allows a deployment protection rule's or branch policy's read, and a deployment's own write (review/51)", () => {
+    expect(personOnlyVerdict("gh api repos/o/r/environments/prod/deployment_protection_rules", ON_FEATURE)).toEqual({ deny: false });
+    expect(personOnlyVerdict("curl https://api.github.com/repos/o/r/environments/prod/deployment-branch-policies/7", ON_FEATURE)).toEqual({ deny: false });
+    // A deployment created is not a change to what gates one.
+    expect(personOnlyVerdict("gh api -X POST repos/o/r/deployments -f ref=feat", ON_FEATURE)).toEqual({ deny: false });
+  });
+
+  it("allows yarn classic's tag listing, and a script named `tag` run through `yarn run` (review/52)", () => {
+    expect(personOnlyVerdict("yarn tag list x", ON_FEATURE)).toEqual({ deny: false });
+    expect(personOnlyVerdict("yarn run tag remove x beta", ON_FEATURE)).toEqual({ deny: false });
   });
 });
 
