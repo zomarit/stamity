@@ -123,7 +123,25 @@ export interface AlwaysOnPlan {
   charterLines: number;
   /** Every rule the plan emits. Order is irrelevant; the result is a sum. */
   rules: readonly AlwaysOnRule[];
+  /**
+   * Physical lines Cursor's cloud block adds to the root `AGENTS.md`
+   * (`renderCursorCloudBlock` in `../emit/agentsMd.ts`), paid only by a
+   * selection with cursor — see {@link composeAlwaysOnLoad}'s `selection`.
+   * Absent counts as zero.
+   */
+  cursorBlockLines?: number;
 }
+
+/**
+ * Clients that read Codex's root `AGENTS.override.md` INSTEAD of the shared
+ * root `AGENTS.md`, and so never load what is appended to the shared file —
+ * Cursor's cloud block included. Codex alone; the override is built from the
+ * charter render, not from the shared row. It is emitted whenever a rule
+ * reaches codex's root appendix, which the folded floor rules do on every
+ * selection this measurement models; a codex selection with no such rule
+ * would read the shared file, block and all.
+ */
+const SHARED_ROOT_BYPASS_TOOLS: ReadonlySet<Tool> = new Set<Tool>(["codex"]);
 
 /**
  * Per-client ceiling on the composite always-on slice, in physical lines.
@@ -181,6 +199,11 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
   // nothing — its own rule layer already defers a glob-less rule — so the
   // delivery change moves no line here. It is the control for the three below:
   // they now measure the same number for a different reason.
+  // Held at 95 on 2026-10-18 (REQ-FLOW-114): Cursor's cloud block is appended to
+  // the root AGENTS.md with cursor selected, and it is counted APART from this
+  // pin — ALWAYS_ON_CURSOR_BLOCK_LINES below, added by composeAlwaysOnLoad only
+  // for a selection with cursor — so every ceiling in this table stays the
+  // charter-and-rules figure a selection without cursor pays.
   cursor: 95,
   // 240 -> 236 on 2026-09-12: same four charter lines. These two clients pay the
   // charter plus the two glob-less rules, and neither of those grew a line.
@@ -410,9 +433,40 @@ export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_610;
 export const ALWAYS_ON_CODEX_OVERRIDE_BYTES = 25_751;
 
 /**
+ * Physical lines Cursor's cloud block adds to the shared root `AGENTS.md` when
+ * cursor is selected — the blank separating line, the "Cursor Cloud specific
+ * instructions" heading and its body (REQ-FLOW-114). Counted apart from
+ * {@link ALWAYS_ON_BUDGET_LINES}: a selection with cursor pays the ceiling
+ * plus this, on every client that reads that file — cursor and copilot
+ * natively, claude through its `CLAUDE.md`'s `@AGENTS.md` import — and codex,
+ * which reads its own override, pays none of it.
+ *
+ * Pinned like the ceilings: `test/emit/agentsMd.test.ts` holds it to the
+ * render, so a block that grows or shrinks moves this number in the same edit.
+ */
+// 14 on 2026-10-18, v7-cursor-agents-block: the separating blank line, the
+// heading, a blank, one sentence, a blank, and five bullets over nine lines.
+export const ALWAYS_ON_CURSOR_BLOCK_LINES = 14;
+
+/**
+ * Bytes of the shared root `AGENTS.md` when cursor is among the selected tools:
+ * the charter ({@link ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX}) plus Cursor's cloud
+ * block. The same tripwire as that pair, now two figures in the cross-client
+ * golden — this one for every selection with cursor, that one for every
+ * selection without — and the same delivered disclosure on
+ * `docs/capability-matrix.md`. Measured with the golden's pinned engine version,
+ * which the block's `check` call renders; a real init pins a different version
+ * string, so an installed file differs by those bytes.
+ */
+// 6_476 on 2026-10-18, v7-cursor-agents-block: 5_610 of charter plus the
+// block's 866 bytes at the golden's `npx -y @zomarit/stamity@1.0.0-golden`.
+export const ALWAYS_ON_SHARED_BYTES_WITH_CURSOR = 6_476;
+
+/**
  * The composite always-on line count one client pays for a plan under a
  * delivery mode: the charter, plus every rule the client still receives as a
- * rule and cannot attach conditionally.
+ * rule and cannot attach conditionally, plus — for a `selection` with cursor —
+ * Cursor's cloud block on every client that reads the shared root file.
  *
  * Two filters, in this order, because the second only makes sense over what
  * survives the first:
@@ -444,13 +498,18 @@ export const ALWAYS_ON_CODEX_OVERRIDE_BYTES = 25_751;
  *
  * `mode` defaults to {@link RULE_DELIVERY_DEFAULT} so a caller measuring "what
  * a repo gets" needs no argument, and a caller measuring a specific manifest
- * passes that manifest's value.
+ * passes that manifest's value. `selection` defaults to none, which measures
+ * the pinned ceilings — the block is counted apart from them — and a caller
+ * measuring a real selection passes its tools.
  */
 export function composeAlwaysOnLoad(
   tool: Tool,
   plan: AlwaysOnPlan,
   mode: RuleDelivery = RULE_DELIVERY_DEFAULT,
+  selection: readonly Tool[] = [],
 ): number {
+  const block =
+    selection.includes("cursor") && !SHARED_ROOT_BYPASS_TOOLS.has(tool) ? (plan.cursorBlockLines ?? 0) : 0;
   const demoted = demotedRuleIds(tool, plan.rules, mode, SHARED_SKILLS_TREE_READERS);
   const unconditional = plan.rules.filter((rule) => {
     if (demoted.has(rule.id)) return false;
@@ -458,7 +517,7 @@ export function composeAlwaysOnLoad(
     if (DESCRIPTION_PULL_TOOLS.has(tool)) return false;
     return !rule.globScoped;
   });
-  return unconditional.reduce((total, rule) => total + rule.lineCount, plan.charterLines);
+  return unconditional.reduce((total, rule) => total + rule.lineCount, plan.charterLines + block);
 }
 
 /** The loaded charter template, split and measured. */

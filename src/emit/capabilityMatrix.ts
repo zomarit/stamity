@@ -55,8 +55,10 @@ import { cursorResiduePlanner } from "../adapters/cursor.ts";
 import {
   ALWAYS_ON_BUDGET_LINES,
   ALWAYS_ON_CODEX_OVERRIDE_BYTES,
+  ALWAYS_ON_CURSOR_BLOCK_LINES,
   ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX,
   ALWAYS_ON_SHARED_BYTES_WITH_CODEX,
+  ALWAYS_ON_SHARED_BYTES_WITH_CURSOR,
   CHARTER_MAX_LINES,
   DESCRIPTION_PULL_TOOLS,
   RULE_APPENDIX_TOOLS,
@@ -150,6 +152,14 @@ export interface AlwaysOnDisclosure {
   readonly sharedBytesWithCodex: number;
   /** The same file without it — the charter alone. */
   readonly sharedBytesWithoutCodex: number;
+  /**
+   * Bytes of the shared root file with cursor among the selection: the charter
+   * plus Cursor's cloud block, which only a selection with cursor carries. Paid
+   * by every client that reads that file, not by cursor alone.
+   */
+  readonly sharedBytesWithCursor: number;
+  /** Physical lines that block adds, counted apart from {@link ceilings}. */
+  readonly cursorBlockLines: number;
   /**
    * Bytes of the Codex-only root `AGENTS.override.md`: the shared charter plus
    * the codex rules appendix. Codex reads it instead of the shared file, so this
@@ -311,6 +321,8 @@ const LIVE_ALWAYS_ON: AlwaysOnDisclosure = {
   charterCap: CHARTER_MAX_LINES,
   sharedBytesWithCodex: ALWAYS_ON_SHARED_BYTES_WITH_CODEX,
   sharedBytesWithoutCodex: ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX,
+  sharedBytesWithCursor: ALWAYS_ON_SHARED_BYTES_WITH_CURSOR,
+  cursorBlockLines: ALWAYS_ON_CURSOR_BLOCK_LINES,
   codexOverrideBytes: ALWAYS_ON_CODEX_OVERRIDE_BYTES,
   // 8 -> 0 on the `on-demand` flip: what reaches the appendix is now three
   // floor-class rules, which fit the 32 KiB ceiling with room to spare, so the
@@ -469,6 +481,17 @@ function requireAlwaysOnFigures(alwaysOn: AlwaysOnDisclosure): void {
         `${alwaysOn.sharedBytesWithoutCodex} without it. Codex's rules appendix lives in ` +
         `${CODEX_AGENTS_OVERRIDE_FILE}, so the shared file is the same with and without it and ` +
         `one of these two is stale.`,
+    );
+  }
+  // The block adds bytes and lines or it was never appended; a figure at or
+  // under the charter's would publish a cost nobody measured.
+  if (alwaysOn.sharedBytesWithCursor <= alwaysOn.sharedBytesWithoutCodex || alwaysOn.cursorBlockLines <= 0) {
+    fail(
+      `The always-on disclosure puts the shared instruction file at ` +
+        `${alwaysOn.sharedBytesWithCursor} bytes with cursor selected against ` +
+        `${alwaysOn.sharedBytesWithoutCodex} without it, and Cursor's cloud block at ` +
+        `${alwaysOn.cursorBlockLines} lines. The block is appended with cursor selected, so the ` +
+        `file cannot be the same size or smaller and the block cannot be empty; one is stale.`,
     );
   }
   if (alwaysOn.codexOverrideBytes <= alwaysOn.sharedBytesWithoutCodex) {
@@ -930,6 +953,20 @@ function alwaysOnSection(alwaysOn: AlwaysOnDisclosure): string[] {
         "and it never reaches the override. An `AGENTS.md` that is a symbolic or hard link, or " +
         "whose operator text carries a block-severity injection pattern, is not repeated: " +
         "`sync` and `check` report the override as a collision.",
+    ),
+    "",
+    ...paragraph(
+      "**What co-selecting cursor costs every client that reads the shared file.** With cursor " +
+        "selected, the root `AGENTS.md` ends on a `Cursor Cloud specific instructions` block — " +
+        "Node first, the skill paths, the learnings read, the draft pull request and the " +
+        `unattended rule — ${alwaysOn.cursorBlockLines} lines counted apart from the line ` +
+        `figures above, so the file is ${alwaysOn.sharedBytesWithCursor} bytes with cursor and ` +
+        `${alwaysOn.sharedBytesWithoutCodex} without it. Cursor and copilot read it natively, ` +
+        "and claude pays it too, through its `CLAUDE.md`'s `@AGENTS.md` import: on a claude and " +
+        "cursor selection a claude session loads the block every time. Codex reads its own " +
+        `${code(CODEX_AGENTS_OVERRIDE_FILE)} instead wherever one is emitted, which never carries it, and nested ` +
+        "`AGENTS.md` copies do not either. With the root `AGENTS.md` recorded as `skip` the " +
+        "block is not written, and `init` and `sync` say so in their warnings.",
     ),
     "",
     ...paragraph(

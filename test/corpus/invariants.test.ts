@@ -6,7 +6,9 @@ import { describe, expect, it } from "vitest";
 import {
   ALWAYS_ON_BUDGET_LINES,
   ALWAYS_ON_CODEX_OVERRIDE_BYTES,
+  ALWAYS_ON_CURSOR_BLOCK_LINES,
   ALWAYS_ON_SHARED_BYTES_WITH_CODEX,
+  ALWAYS_ON_SHARED_BYTES_WITH_CURSOR,
   ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX,
   CHARTER_MAX_LINES,
   CHARTER_RELATIVE_PATH,
@@ -19,7 +21,8 @@ import { extractToolsFrontmatter, frontmatterField } from "../../src/content/fro
 import { cursorCompanionFrontmatter } from "../../src/content/mdcCompanions.ts";
 import { ruleAnchor } from "../../src/content/ruleDelivery.ts";
 import { isContextTag, isFloorTag } from "../../src/content/tags.ts";
-import { REGENERATE_COMMAND } from "../../src/emit/capabilityMatrix.ts";
+import { renderCursorCloudBlock } from "../../src/emit/agentsMd.ts";
+import { REGENERATE_COMMAND, renderCapabilityMatrix } from "../../src/emit/capabilityMatrix.ts";
 import { REPO_SUBSTITUTION_TOKENS } from "../../src/emit/substitution.ts";
 import { DEFAULT_MAX_REVIEW_ITERATIONS } from "../../src/roster/reviewCaps.ts";
 import { TOOLS } from "../../src/types/core.ts";
@@ -654,6 +657,37 @@ describe("invariant 4 — the charter fits its cap, and the composite always-on 
     expect(composeAlwaysOnLoad("cursor", plan, "always-on")).toBe(plan.charterLines);
   });
 
+  it("a selection with cursor pays the cloud block apart from the pins, on every client but codex", async () => {
+    // ADDED with v7-cursor-agents-block (REQ-FLOW-114). The block is measured
+    // off its own render, like the rules are measured off the corpus, so the
+    // pinned figure cannot drift from what the planner appends.
+    const plan: AlwaysOnPlan = {
+      ...(await alwaysOnPlan()),
+      cursorBlockLines: renderCursorCloudBlock({ engineVersion: "1.0.0-golden" }).lineCount,
+    };
+    expect(plan.cursorBlockLines).toBe(ALWAYS_ON_CURSOR_BLOCK_LINES);
+
+    const withCursor = [...TOOLS];
+    const withoutCursor = TOOLS.filter((tool) => tool !== "cursor");
+    for (const tool of TOOLS) {
+      // No selection, and a selection without cursor, both measure the pin.
+      expect(composeAlwaysOnLoad(tool, plan), tool).toBe(ALWAYS_ON_BUDGET_LINES[tool]);
+      expect(composeAlwaysOnLoad(tool, plan, RULE_DELIVERY_DEFAULT, withoutCursor), tool).toBe(
+        ALWAYS_ON_BUDGET_LINES[tool],
+      );
+    }
+    // Cursor and copilot read the shared root natively, claude through its
+    // `@AGENTS.md` import; codex reads its own override and pays nothing.
+    for (const tool of ["cursor", "copilot", "claude"] as const) {
+      expect(composeAlwaysOnLoad(tool, plan, RULE_DELIVERY_DEFAULT, withCursor), tool).toBe(
+        ALWAYS_ON_BUDGET_LINES[tool] + ALWAYS_ON_CURSOR_BLOCK_LINES,
+      );
+    }
+    expect(composeAlwaysOnLoad("codex", plan, RULE_DELIVERY_DEFAULT, withCursor)).toBe(
+      ALWAYS_ON_BUDGET_LINES.codex,
+    );
+  });
+
   it("fixture: a rule that no client can defer pushes the composite over its ceiling", () => {
     const greedy: AlwaysOnRule = {
       id: "greedy",
@@ -793,16 +827,27 @@ describe("invariant 4 — the charter fits its cap, and the composite always-on 
         ),
       ].toSorted((a, b) => a - b);
 
+    // TEST CHANGE, justified (v7-cursor-agents-block, REQ-FLOW-114): the shared
+    // root AGENTS.md is no longer one figure in every selection. With cursor
+    // selected it ends on Cursor's cloud block, so the golden carries two
+    // figures — the charter alone (claude, codex, copilot) and the charter plus
+    // the block (cursor, all-four) — and each is held to its own constant. The
+    // codex claim is unchanged: codex moves neither figure.
     expect(
       figures("AGENTS.md"),
-      "the shared root AGENTS.md byte figure in the cross-client golden no longer matches the " +
-        "disclosure constants in src/content/charter.ts, or it differs between selections. Update " +
-        "the two constants there to the one measured figure, then regenerate " +
-        "docs/capability-matrix.md — the page publishes it under `## Always-on cost by client`, " +
+      "the shared root AGENTS.md byte figures in the cross-client golden no longer match the " +
+        "disclosure constants in src/content/charter.ts. Update ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX " +
+        "(and its _WITH_CODEX twin) to the figure of the selections without cursor and " +
+        "ALWAYS_ON_SHARED_BYTES_WITH_CURSOR to the figure of those with it, then regenerate " +
+        "docs/capability-matrix.md — the page publishes them under `## Always-on cost by client`, " +
         "so the constants alone are not the whole of the edit (see the doc comment on " +
         "ALWAYS_ON_SHARED_BYTES_WITH_CODEX).",
-    ).toEqual([ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX]);
+    ).toEqual([ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX, ALWAYS_ON_SHARED_BYTES_WITH_CURSOR]);
     expect(ALWAYS_ON_SHARED_BYTES_WITH_CODEX).toBe(ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX);
+    // The with-cursor figure belongs to exactly the two selections carrying cursor.
+    expect(
+      snapshot.match(new RegExp(String.raw`^ {2}"AGENTS\.md": "[0-9a-f]{64} ${ALWAYS_ON_SHARED_BYTES_WITH_CURSOR} bytes",$`, "gm")),
+    ).toHaveLength(2);
 
     // Non-degenerate: the appendix still exists and still costs bytes — in the
     // file only codex reads, once per codex-bearing selection (codex, all-four).
@@ -846,10 +891,15 @@ describe("invariant 4 — the charter fits its cap, and the composite always-on 
     const digits = page.replace(/(?<=\d)[,_](?=\d)/g, "");
     // CHANGED with sw18: the codex-only override's figure joins the two shared
     // ones, which are now equal — the page publishes all three.
+    // CHANGED with v7-cursor-agents-block (REQ-FLOW-114): the with-cursor shared
+    // figure joins them, since the page now discloses what co-selecting cursor
+    // costs every client reading that file; the three earlier figures are held
+    // exactly as before.
     for (const figure of [
       ALWAYS_ON_SHARED_BYTES_WITH_CODEX,
       ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX,
       ALWAYS_ON_CODEX_OVERRIDE_BYTES,
+      ALWAYS_ON_SHARED_BYTES_WITH_CURSOR,
     ]) {
       expect(
         new RegExp(String.raw`(?<!\d)${figure}(?!\d)`).test(digits),
@@ -858,6 +908,22 @@ describe("invariant 4 — the charter fits its cap, and the composite always-on 
           `a client on a stale number: run \`${REGENERATE_COMMAND}\`.`,
       ).toBe(true);
     }
+  });
+
+  it("the live render discloses the cursor block's cost, and that claude pays it through its import", () => {
+    // ADDED with v7-cursor-agents-block (REQ-FLOW-114). Read off the live render
+    // rather than the committed page, so the disclosure is held to the constants
+    // in the same edit that moves them; the page case above holds the committed
+    // copy once it is regenerated.
+    // Whitespace folded: the renderer wraps a paragraph at the page's width.
+    const page = renderCapabilityMatrix().replace(/\s+/g, " ");
+
+    expect(page).toContain(
+      `the file is ${ALWAYS_ON_SHARED_BYTES_WITH_CURSOR} bytes with cursor and ` +
+        `${ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX} without it`,
+    );
+    expect(page).toContain(`${ALWAYS_ON_CURSOR_BLOCK_LINES} lines counted apart from the line figures above`);
+    expect(page).toContain("claude pays it too, through its `CLAUDE.md`'s `@AGENTS.md` import");
   });
 });
 

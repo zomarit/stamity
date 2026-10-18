@@ -6,6 +6,7 @@ import type { SetupManifest } from "../types/manifest.ts";
 import type { Tool } from "../types/core.ts";
 import { planPerPackageOutputs } from "./monorepoPlan.ts";
 import {
+  CLI_TOKEN,
   cliCallContextOf,
   detectionContextFromManifest,
   substituteCharterTokens,
@@ -185,6 +186,88 @@ export async function renderAgentsMd(ctx: AgentsMdEmissionContext): Promise<Agen
         outputPath,
         content,
       })),
+  };
+}
+
+// ── Cursor's cloud block ─────────────────────────────────────────
+
+/**
+ * The section title Cursor recommends for cloud-only instructions in
+ * `AGENTS.md` (https://cursor.com/docs/cloud-agent/setup, accessed 2026-10-18:
+ * "a dedicated section for Cloud-only setup and testing instructions, with a
+ * title such as Cursor Cloud specific instructions"; REQ-FLOW-114).
+ */
+export const CURSOR_CLOUD_BLOCK_HEADING = "## Cursor Cloud specific instructions";
+
+/**
+ * The block's lines, the pinned CLI call left as its token.
+ *
+ * Node comes first because every Stamity hook runs `node` with no prefix: a
+ * POSIX prefix that found or installed one would fail closed on Windows, so a
+ * missing `node` is answered here, in words, before anything else runs. The
+ * learnings line restates invariant 5's screened read for this client's own
+ * script folder, since a cloud agent's first turns may carry no session-start
+ * banner at all.
+ */
+const CURSOR_CLOUD_BLOCK_LINES = [
+  "",
+  CURSOR_CLOUD_BLOCK_HEADING,
+  "",
+  "For a Cursor cloud agent in this repository; the charter above binds it as it binds every session.",
+  "",
+  "- Node first: run `node --version` before anything else, and stop with that fix if it fails: install Node.js",
+  "  on this machine through the repository's Cursor environment, and confirm it with",
+  `  \`${CLI_TOKEN} check\`. Every hook calls \`node\` with no prefix.`,
+  "- `/st-<id>` means: read `.agents/skills/st-<id>/SKILL.md` and follow it.",
+  "- Learnings first: where no session-start banner has printed, run",
+  "  `node .stamity/generated/hooks/cursor/stamity-session-start.mjs` with an empty stdin and open only the files",
+  "  it lists as loaded.",
+  "- Keep the pull request a draft and never mark it ready; a person does that.",
+  "- An unattended run follows the `st-unattended` skill, `.agents/skills/st-unattended/SKILL.md`.",
+] as const;
+
+/** The slice of the emission context the block reads: the pinned CLI call's parts. */
+export type CursorCloudBlockContext = Pick<
+  AgentsMdEmissionContext,
+  "engineVersion" | "packageName" | "npmChannel" | "npmRegistry"
+>;
+
+/** The rendered block, measured the way {@link RenderedAgentsMd} is. */
+export interface RenderedCursorCloudBlock {
+  /**
+   * The bytes appended to the root charter: a leading blank line, then the
+   * block, one trailing newline — so the root file is `charter + content`.
+   */
+  content: string;
+  /** UTF-8 bytes of `content`: what selecting Cursor adds to the shared file. */
+  byteLength: number;
+  /** Physical lines `content` adds to the root file, the separating blank line included. */
+  lineCount: number;
+}
+
+/**
+ * Render the "Cursor Cloud specific instructions" block the emission planner
+ * appends to the ROOT `AGENTS.md` row when Cursor is among the selected tools.
+ *
+ * Apart from the charter on purpose: {@link renderAgentsMd}'s render stays the
+ * charter alone, so the nested copies and Codex's `AGENTS.override.md` — both
+ * built from that render — move no byte when Cursor is selected, and the
+ * charter's own line pin does not count the block (REQ-FLOW-114).
+ */
+export function renderCursorCloudBlock(ctx: CursorCloudBlockContext): RenderedCursorCloudBlock {
+  const content = substituteCliTokens(
+    `${CURSOR_CLOUD_BLOCK_LINES.join("\n")}\n`,
+    cliCallContextOf({
+      engineVersion: ctx.engineVersion ?? UNSTAMPED_ENGINE_VERSION,
+      ...(ctx.packageName === undefined ? {} : { packageName: ctx.packageName }),
+      ...(ctx.npmChannel === undefined ? {} : { npmChannel: ctx.npmChannel }),
+      ...(ctx.npmRegistry === undefined ? {} : { npmRegistry: ctx.npmRegistry }),
+    }),
+  );
+  return {
+    content,
+    byteLength: Buffer.byteLength(content, "utf8"),
+    lineCount: countTerminatedLines(content),
   };
 }
 

@@ -61,7 +61,13 @@
  * randomness.
  */
 
-import { renderAgentsMd, AGENTS_MD_FILE, type AgentsMdPlan } from "./agentsMd.ts";
+import {
+  renderAgentsMd,
+  renderCursorCloudBlock,
+  AGENTS_MD_FILE,
+  CURSOR_CLOUD_BLOCK_HEADING,
+  type AgentsMdPlan,
+} from "./agentsMd.ts";
 import { planHooksInfra, type CoreHooksPlan } from "./hooksInfra.ts";
 import {
   projectSkills,
@@ -1021,10 +1027,16 @@ export function composeEmissionPlanner(
     // Shared core rows — co-owned by ALL selected tools. With no tool
     // selected there is nothing to own, so nothing is emitted at all.
     if (tools.length > 0) {
+      // Cursor's cloud block rides on the ROOT row alone, at its end, and only
+      // with Cursor selected (REQ-FLOW-114). `core.agentsMd.root` stays the
+      // charter: the nested copies and Codex's override are built from it, so
+      // neither moves a byte, and without Cursor this row is the charter alone.
       addRow(
         rows,
         AGENTS_MD_FILE,
-        core.agentsMd.root.content,
+        tools.includes("cursor")
+          ? `${core.agentsMd.root.content}${renderCursorCloudBlock(ctx).content}`
+          : core.agentsMd.root.content,
         sharedOwners(CHARTER_ARTIFACT_ID, "infra"),
       );
       for (const file of core.skills) {
@@ -1110,6 +1122,7 @@ export function composeEmissionPlanner(
     // Last, over the finished row set: the user's pre-existing config files
     // outrank every planner's opinion about the paths they sit on.
     applyImportDecisions(rows, importDecisionsOf(ctx.manifest), ctx.engineVersion);
+    const blockWarnings = cursorBlockSkippedWarnings(tools, rows);
 
     const outputs = [...rows.values()]
       .toSorted((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
@@ -1135,7 +1148,12 @@ export function composeEmissionPlanner(
     // four adapters from each reporting the same narrowing.
     return {
       outputs,
-      warnings: [...core.hooks.warnings, ...effortDisclosures(ctx.manifest), ...residueWarnings],
+      warnings: [
+        ...core.hooks.warnings,
+        ...effortDisclosures(ctx.manifest),
+        ...residueWarnings,
+        ...blockWarnings,
+      ],
       // Judged against the same selection and the same ownership boundary the
       // rows above were built under, so `check` reads the reach of THIS plan.
       packReach: await packReachOf(ctx, packs, tools),
@@ -1345,6 +1363,27 @@ function applyImportDecisions(
   engineVersion: string,
 ): void {
   for (const decision of decisions) applyImportDecision(rows, decision, engineVersion);
+}
+
+/**
+ * The finding a `skip` decision on the root `AGENTS.md` leaves with Cursor
+ * selected: the engine writes nothing there, so Cursor's cloud block is not in
+ * the file a cloud agent reads, and nothing else would say so. Read off the
+ * finished rows rather than the decision list: a `skip` is the one decision
+ * that removes the row ({@link applyImportDecision}), while `supplement`
+ * carries the block inside the managed block and `replace` writes it whole.
+ */
+function cursorBlockSkippedWarnings(
+  tools: readonly Tool[],
+  rows: ReadonlyMap<string, PendingRow>,
+): string[] {
+  if (!tools.includes("cursor") || rows.has(AGENTS_MD_FILE)) return [];
+  return [
+    `cursor: the root ${AGENTS_MD_FILE} is recorded as "skip", so the engine leaves it alone and ` +
+      `its "${CURSOR_CLOUD_BLOCK_HEADING.replace(/^#+ /, "")}" block is not written there; a Cursor ` +
+      `cloud agent reads that file without it. Record "supplement" for ${AGENTS_MD_FILE} in ` +
+      `${STATE_DIR}/${MANIFEST_FILE} to keep your text and carry the block, or copy the section in by hand.`,
+  ];
 }
 
 /** One decision against the row holding its path, if this plan emits that path. */

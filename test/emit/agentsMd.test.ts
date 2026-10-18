@@ -1,8 +1,21 @@
 import { describe, expect, it, vi } from "vitest";
 import { fileURLToPath } from "node:url";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { ADAPTER_REGISTRY } from "../../src/adapters/registry.ts";
+import { CODEX_AGENTS_OVERRIDE_FILE } from "../../src/adapters/codex.ts";
 import type { EmissionContext } from "../../src/cli/engine/emission.ts";
-import { CHARTER_MAX_LINES, CHARTER_RELATIVE_PATH } from "../../src/content/charter.ts";
+import {
+  ALWAYS_ON_CURSOR_BLOCK_LINES,
+  ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX,
+  ALWAYS_ON_SHARED_BYTES_WITH_CURSOR,
+  CHARTER_MAX_LINES,
+  CHARTER_RELATIVE_PATH,
+} from "../../src/content/charter.ts";
+import { composeEmissionPlanner } from "../../src/emit/planner.ts";
+import { createManifest } from "../../src/manifest/manifest.ts";
+import type { Tool } from "../../src/types/core.ts";
+import type { ImportDecision } from "../../src/types/manifest.ts";
 import {
   DEFAULT_GATE_COMMANDS,
   unresolvedGate,
@@ -10,7 +23,9 @@ import {
 } from "../../src/detect/verificationGates.ts";
 import {
   AGENTS_MD_FILE,
+  CURSOR_CLOUD_BLOCK_HEADING,
   renderAgentsMd,
+  renderCursorCloudBlock,
   verificationGatesFromManifest,
   type AgentsMdPlan,
 } from "../../src/emit/agentsMd.ts";
@@ -574,5 +589,139 @@ describe("renderAgentsMd over the shipped corpus template", () => {
       contentRoot: CORPUS_ROOT,
     });
     expect(tiered.root.content).toContain("- Maturity tier: enterprise — seeded from git history");
+  });
+});
+
+describe("Cursor's cloud block (REQ-FLOW-114)", () => {
+  /**
+   * The exact bytes the block renders to at the cross-client golden's engine
+   * version — written out, not rebuilt from the module's own line list, so a
+   * reworded bullet, a lost line or a dropped separator fails here rather than
+   * passing on both sides.
+   */
+  const EXPECTED_BLOCK = [
+    "",
+    "## Cursor Cloud specific instructions",
+    "",
+    "For a Cursor cloud agent in this repository; the charter above binds it as it binds every session.",
+    "",
+    "- Node first: run `node --version` before anything else, and stop with that fix if it fails: install Node.js",
+    "  on this machine through the repository's Cursor environment, and confirm it with",
+    "  `npx -y @zomarit/stamity@1.0.0-golden check`. Every hook calls `node` with no prefix.",
+    "- `/st-<id>` means: read `.agents/skills/st-<id>/SKILL.md` and follow it.",
+    "- Learnings first: where no session-start banner has printed, run",
+    "  `node .stamity/generated/hooks/cursor/stamity-session-start.mjs` with an empty stdin and open only the files",
+    "  it lists as loaded.",
+    "- Keep the pull request a draft and never mark it ready; a person does that.",
+    "- An unattended run follows the `st-unattended` skill, `.agents/skills/st-unattended/SKILL.md`.",
+    "",
+  ].join("\n");
+
+  it("renders the block byte for byte, its line count the pinned figure", () => {
+    const block = renderCursorCloudBlock({ engineVersion: "1.0.0-golden" });
+
+    expect(block.content).toBe(EXPECTED_BLOCK);
+    expect(block.lineCount).toBe(ALWAYS_ON_CURSOR_BLOCK_LINES);
+    // The with-Cursor root figure is the charter's plus exactly this block, so
+    // the two disclosure constants cannot drift apart from the render.
+    expect(block.byteLength).toBe(ALWAYS_ON_SHARED_BYTES_WITH_CURSOR - ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX);
+    expect(block.byteLength).toBe(Buffer.byteLength(EXPECTED_BLOCK, "utf8"));
+  });
+
+  it("pins a fork's package in its check call, never the canonical one", () => {
+    const block = renderCursorCloudBlock({ engineVersion: "2.3.4", packageName: "@acme/stamity-fork" });
+
+    expect(block.content).toContain("@acme/stamity-fork@2.3.4 check`");
+    expect(block.content).not.toContain("@zomarit/stamity");
+    expect(block.lineCount).toBe(ALWAYS_ON_CURSOR_BLOCK_LINES);
+  });
+
+  describe("on the root AGENTS.md row", () => {
+    // The REAL composed planner over the shipped corpus. The root does not
+    // exist: planning is pure, and a missing operator AGENTS.md is the state
+    // every import decision below reads as "no text of the operator's own".
+    const GHOST_ROOT = join(tmpdir(), `stamity-cursor-block-ghost-${process.pid}`);
+    const planner = composeEmissionPlanner(ADAPTER_REGISTRY);
+
+    const planFor = (tools: Tool[], importChoice?: readonly ImportDecision[]) => {
+      const ctx: EmissionContext = {
+        rootDir: GHOST_ROOT,
+        manifest: createManifest({
+          tools,
+          // The three rules codex folds into its override, so the override is
+          // emitted on every codex selection below and its bytes can be compared.
+          selection: {
+            items: { agent: [], skill: [], rule: ["injection-screening", "secrets", "security-patterns"], command: [] },
+          },
+          ...(importChoice === undefined ? {} : { importChoice }),
+          generatorVersion: "1.0.0-golden",
+          now: new Date("2026-10-18T00:00:00.000Z"),
+        }),
+        engineVersion: "1.0.0-golden",
+        facts: { monorepoPackages: [pkg("pkg-a", "packages/a")] },
+      };
+      return planner.planWithWarnings(ctx);
+    };
+    const contentOf = (outputs: readonly { path: string; content: string }[], path: string) =>
+      outputs.find((row) => row.path === path)?.content;
+
+    it("ends on the block with Cursor selected and carries none of it without", async () => {
+      const block = renderCursorCloudBlock({ engineVersion: "1.0.0-golden" }).content;
+      const without = await planFor(["claude", "copilot", "codex"]);
+      const withCursor = await planFor(["claude", "copilot", "codex", "cursor"]);
+      const charter = contentOf(without.outputs, AGENTS_MD_FILE)!;
+
+      expect(charter).not.toContain(CURSOR_CLOUD_BLOCK_HEADING);
+      expect(contentOf(withCursor.outputs, AGENTS_MD_FILE)).toBe(`${charter}${block}`);
+      expect(contentOf(withCursor.outputs, AGENTS_MD_FILE)!.endsWith(block)).toBe(true);
+      // Cursor alone: the same file, so the block is a fact of Cursor's
+      // presence, not of any co-selection.
+      expect(contentOf((await planFor(["cursor"])).outputs, AGENTS_MD_FILE)).toBe(`${charter}${block}`);
+    });
+
+    it("leaves Codex's override and every nested copy byte for byte unchanged", async () => {
+      const without = await planFor(["codex"]);
+      const withCursor = await planFor(["codex", "cursor"]);
+      const override = contentOf(without.outputs, CODEX_AGENTS_OVERRIDE_FILE);
+
+      expect(override).toBeDefined();
+      expect(contentOf(withCursor.outputs, CODEX_AGENTS_OVERRIDE_FILE)).toBe(override);
+      expect(override).not.toContain(CURSOR_CLOUD_BLOCK_HEADING);
+
+      const nested = (outputs: readonly { path: string; content: string }[]) =>
+        outputs.filter((row) => row.path.endsWith(`/${AGENTS_MD_FILE}`));
+      // Non-degenerate: the monorepo layout plans at least one nested copy.
+      expect(nested(withCursor.outputs).length).toBeGreaterThan(0);
+      for (const row of nested(withCursor.outputs)) {
+        expect(row.content, row.path).not.toContain(CURSOR_CLOUD_BLOCK_HEADING);
+      }
+      expect(nested(withCursor.outputs).map((row) => row.content)).toEqual(
+        nested(without.outputs).map((row) => row.content),
+      );
+    });
+
+    it("drops the block with the file under `skip` and says so on the plan's warnings", async () => {
+      const skipped = await planFor(["claude", "cursor"], [{ path: AGENTS_MD_FILE, mode: "skip" }]);
+
+      expect(contentOf(skipped.outputs, AGENTS_MD_FILE)).toBeUndefined();
+      const named = skipped.warnings.filter((line) => line.includes("Cursor Cloud specific instructions"));
+      expect(named).toHaveLength(1);
+      expect(named[0]).toContain('"skip"');
+
+      // Without Cursor the same decision loses no block, so nothing is said.
+      const plain = await planFor(["claude"], [{ path: AGENTS_MD_FILE, mode: "skip" }]);
+      expect(plain.warnings.some((line) => line.includes("Cursor Cloud specific instructions"))).toBe(false);
+    });
+
+    it("carries the block inside the managed block under `supplement`", async () => {
+      const supplemented = await planFor(["claude", "cursor"], [{ path: AGENTS_MD_FILE, mode: "supplement" }]);
+      const content = contentOf(supplemented.outputs, AGENTS_MD_FILE)!;
+      const heading = content.indexOf(CURSOR_CLOUD_BLOCK_HEADING);
+      const end = content.indexOf("<!-- STAMITY:END");
+
+      expect(heading).toBeGreaterThan(0);
+      expect(end).toBeGreaterThan(heading);
+      expect(supplemented.warnings.some((line) => line.includes("Cursor Cloud specific instructions"))).toBe(false);
+    });
   });
 });
