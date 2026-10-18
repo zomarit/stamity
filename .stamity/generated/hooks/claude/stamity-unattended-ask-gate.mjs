@@ -27,7 +27,7 @@ const BRANCH = new RegExp("^branch:\\s*(\\S+)", "i");
 const IN_PROGRESS = new RegExp("\\bin progress\\b", "i");
 const HEAD_LINES = 15;
 const HEAD_READ_BYTES = 65536;
-const RUNS_READ_MAX = 50;
+const RUN_FOLDERS_MAX = 2000;
 const GIT_MAX_BYTES = 4096;
 const MARKER_SEGMENTS = [".stamity","run-ended.json"];
 const MARKER_MAX_AGE_MS = 900000;
@@ -102,7 +102,7 @@ function recordHead(path) {
   return { inProgress: status !== null && IN_PROGRESS.test(status), mode, branch };
 }
 
-/** The heads of the RUNS_READ_MAX newest run folders' records, each with its repo-relative path; no records folder holds none. */
+/** The heads of every run folder's record, each with its repo-relative path; no records folder holds none, more than RUN_FOLDERS_MAX throws. */
 function recordHeads(root) {
   const runsDir = join(root, ...RUNS_SEGMENTS);
   let entries = [];
@@ -111,12 +111,15 @@ function recordHeads(root) {
   } catch (error) {
     if (!error || (error.code !== "ENOENT" && error.code !== "ENOTDIR")) throw error;
   }
+  // Every run folder's head, so no pile of folders named after an open record's pushes it out of the read.
   const names = entries
     .filter((entry) => entry.isDirectory() && RUN_ID.test(entry.name))
     .map((entry) => entry.name)
     .sort()
-    .reverse()
-    .slice(0, RUNS_READ_MAX);
+    .reverse();
+  if (names.length > RUN_FOLDERS_MAX) {
+    throw Object.assign(new Error("run folders"), { code: "RUN_FOLDERS_OVER_" + RUN_FOLDERS_MAX, path: runsDir });
+  }
   const heads = [];
   for (const name of names) {
     const head = recordHead(join(runsDir, name, RECORD_FILE));

@@ -3683,7 +3683,7 @@ function unattendedBy(root) {
   } catch (error) {
     if (!error || (error.code !== "ENOENT" && error.code !== "ENOTDIR")) throw error;
   }
-  // pr/54: every run folder's head, so no pile of folders named after an open record's pushes it out of the read.
+  // Every run folder's head, so no pile of folders named after an open record's pushes it out of the read.
   const names = entries
     .filter((entry) => entry.isDirectory() && RUN_ID.test(entry.name))
     .map((entry) => entry.name)
@@ -4023,7 +4023,7 @@ function recordHeads(root) {
   } catch (error) {
     if (!error || (error.code !== "ENOENT" && error.code !== "ENOTDIR")) throw error;
   }
-  // pr/54: every run folder's head, so no pile of folders named after an open record's pushes it out of the read.
+  // Every run folder's head, so no pile of folders named after an open record's pushes it out of the read.
   const names = entries
     .filter((entry) => entry.isDirectory() && RUN_ID.test(entry.name))
     .map((entry) => entry.name)

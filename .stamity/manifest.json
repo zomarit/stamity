@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "generatedBy": "1.15.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-17T17:57:24.589Z",
+  "updatedAt": "2026-10-18T01:39:54.542Z",
   "tools": [
     "claude"
   ],
@@ -607,7 +607,7 @@
       "adapter": "claude",
       "artifactId": "stamity-person-only-guard",
       "artifactType": "infra",
-      "contentHash": "5d110583f243f796aa945748abe6e9f49866282b07caace544b4945240fc158c",
+      "contentHash": "dd16497efacbb35948e0c4c8e037aaec3c2258de1bd47da330eace6f03889255",
       "path": ".stamity/generated/hooks/claude/stamity-person-only-guard.mjs"
     },
     {
@@ -635,7 +635,7 @@
       "adapter": "claude",
       "artifactId": "claude-ask-gate",
       "artifactType": "infra",
-      "contentHash": "7847c0b71ce5168646b229aa64abe14a4b7835f56b4d9c97e8e2692a9f6ef64f",
+      "contentHash": "f30aaa234cfdcac69eb04e7e0eff302bee7163cf9c268ad4906b6d2a236d6717",
       "path": ".stamity/generated/hooks/claude/stamity-unattended-ask-gate.mjs"
     },
     {

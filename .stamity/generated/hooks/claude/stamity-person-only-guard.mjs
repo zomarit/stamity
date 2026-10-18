@@ -27,7 +27,7 @@ const MODE = new RegExp("^mode:\\s*(attended|unattended)\\b", "i");
 const IN_PROGRESS = new RegExp("\\bin progress\\b", "i");
 const HEAD_LINES = 15;
 const HEAD_READ_BYTES = 65536;
-const RUNS_READ_MAX = 50;
+const RUN_FOLDERS_MAX = 2000;
 const GIT_MAX_BYTES = 4096;
 const TAG_NAMES_MAX = 10000;
 const PACKED_REFS_MAX_BYTES = 8388608;
@@ -106,7 +106,8 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		"xargs",
 		"npx",
 		"bunx",
-		"pnpx"
+		"pnpx",
+		"corepack"
 	]);
 	const RUNNERS = /* @__PURE__ */ new Set([
 		"npm exec",
@@ -256,7 +257,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		"iex"
 	]);
 	function programName(word) {
-		return (word.split(/[\\/]/).pop() ?? "").toLowerCase().replace(/\.(exe|cmd|bat)$/, "");
+		return (word.split(/[\\/]/).pop() ?? "").toLowerCase().replace(/^([^@]+)@[\s\S]*$/, "$1").replace(/\.(exe|cmd|bat)$/, "");
 	}
 	function commandFlag(word) {
 		const match = /^(?:--?|\/)([a-z]+)(?::([\s\S]*))?$/i.exec(word);
@@ -389,6 +390,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 	}
 	const assigned = [];
 	function commandsOf(text, depth, pwsh) {
+		if (depth > 4) throw Object.assign(/* @__PURE__ */ new Error("nesting"), { code: "NESTING_DEPTH" });
 		const { segments, nested } = splitLine(text, true, pwsh);
 		const commands = pwsh ? commandsOf(text, depth, false) : [];
 		for (const words of [...segments, .../[{}]/.test(text) ? splitLine(text, false, pwsh).segments : []]) {
@@ -447,31 +449,31 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				} else break;
 			}
 			if (line !== null) {
-				if (depth < 4) commands.push(...commandsOf(line, depth + 1, pwsh));
+				commands.push(...commandsOf(line, depth + 1, pwsh));
 				continue;
 			}
 			const cmd = words.slice(k);
 			if (cmd.length === 0) continue;
-			if (depth < 4 && /\s/.test(cmd[0] ?? "")) commands.push(...commandsOf(cmd.join(" "), depth + 1, pwsh));
+			if (/\s/.test(cmd[0] ?? "")) commands.push(...commandsOf(cmd.join(" "), depth + 1, pwsh));
 			cmd[0] = programName(cmd[0] ?? "");
 			if (/^git-./.test(cmd[0])) cmd.splice(0, 1, "git", cmd[0].slice(4));
-			if (depth < 4 && SHELLS.has(cmd[0] ?? "")) {
+			if (SHELLS.has(cmd[0] ?? "")) {
 				const flag = cmd.findIndex((word, index) => index > 0 && /^-[A-Za-z]*c[A-Za-z]*$/.test(word));
 				const script = flag === -1 ? void 0 : cmd[flag + 1];
 				if (script !== void 0) commands.push(...commandsOf(script, depth + 1, false));
-			} else if (depth < 4 && cmd[0] === "eval") commands.push(...commandsOf(cmd.slice(1).join(" "), depth + 1, false));
-			else if (depth < 4 && POWERSHELLS.has(cmd[0] ?? "")) {
+			} else if (cmd[0] === "eval") commands.push(...commandsOf(cmd.slice(1).join(" "), depth + 1, false));
+			else if (POWERSHELLS.has(cmd[0] ?? "")) {
 				const at = cmd.findIndex((word, index) => index > 0 && commandFlag(word) !== null);
 				const first = at !== -1 ? -1 : cmd.findIndex((word, index) => index > 0 && !/^-|^\/\w*$/.test(word));
 				if (at !== -1) commands.push(...commandsOf([commandFlag(cmd[at] ?? ""), ...cmd.slice(at + 1)].join(" "), depth + 1, true));
 				else if (first !== -1) commands.push(...commandsOf(cmd.slice(first).join(" "), depth + 1, true));
 				for (const word of first === -1 ? [] : cmd.slice(first + 1)) if (/\s/.test(word)) commands.push(...commandsOf(word, depth + 1, true));
-			} else if (depth < 4 && cmd[0] === "cmd") {
+			} else if (cmd[0] === "cmd") {
 				const at = cmd.findIndex((word, index) => index > 0 && /^\/[ck]/i.test(word));
 				const rest = at === -1 ? "" : [(cmd[at] ?? "").slice(2), ...cmd.slice(at + 1)].join(" ");
 				if (at !== -1) commands.push(...commandsOf(rest, depth + 1, true));
 				if (rest.includes("^")) commands.push(...commandsOf(rest.replace(/\^([\s\S])/g, "$1"), depth + 1, true));
-			} else if (depth < 4 && cmd[0] === "git") {
+			} else if (cmd[0] === "git") {
 				const { sub, args } = gitParts(cmd);
 				const rebase = sub === "rebase" ? args : [];
 				for (let j = 0; j < rebase.length && rebase[j] !== "--"; j += 1) {
@@ -493,7 +495,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			}
 			commands.push(cmd);
 		}
-		if (depth < 4) for (const inner of nested) commands.push(...commandsOf(inner, depth + 1, pwsh));
+		for (const inner of nested) commands.push(...commandsOf(inner, depth + 1, pwsh));
 		return commands;
 	}
 	function gitParts(cmd) {
@@ -980,7 +982,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		for (const path of paths) {
 			const shown = `${method} ${path}`;
 			if (/^graphql$/i.test(path)) {
-				if (/\b(mergePullRequest|enablePullRequestAutoMerge)\b/.test(text)) return deny("pr-merge", "A GraphQL merge");
+				if (/\b(mergePullRequest|enablePullRequestAutoMerge|enqueuePullRequest)\b/.test(text)) return deny("pr-merge", "A GraphQL merge");
 				if (/\bmarkPullRequestReadyForReview\b/.test(text)) return deny("pr-ready", "A GraphQL ready-for-review");
 				if (/\b(addPullRequestReview|submitPullRequestReview)\b/.test(text)) {
 					const reviews = [...calls("addPullRequestReview", "event"), ...calls("submitPullRequestReview", "event")];
@@ -1043,18 +1045,23 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			"--otp",
 			"--access"
 		]);
-		const positionals = [];
-		for (let k = 1; k < cmd.length; k += 1) {
-			const word = cmd[k] ?? "";
-			if (valued.has(word)) k += 1;
-			else if (!word.startsWith("-")) positionals.push(word);
-		}
-		return positionals.some((word, index) => word === "publish" && (index === 0 || [
+		const npm = cmd[0] === "npm";
+		const positionalsOf = (settings) => {
+			const positionals = [];
+			for (let k = 1; k < cmd.length; k += 1) {
+				const word = cmd[k] ?? "";
+				if (valued.has(word)) k += 1;
+				else if (settings && positionals.length === 0 && /^--[^=]+$/.test(word) && !(cmd[k + 1] ?? "-").startsWith("-")) k += 1;
+				else if (!word.startsWith("-")) positionals.push(word);
+			}
+			return positionals;
+		};
+		return [positionalsOf(false), ...npm ? [positionalsOf(true)] : []].some((positionals) => positionals.some((word, index) => (word === "publish" || (index === 0 ? npm : positionals[index - 1] === "npm") && /^pu(?:b(?:l(?:i(?:sh?)?)?)?)?$/.test(word)) && (index === 0 || [
 			"npm",
 			"pnpm",
 			"yarn",
 			"bun"
-		].includes(positionals[index - 1] ?? "") || cmd[0] === "yarn" && index === 2 && positionals[0] === "workspace")) ? deny("publish", `Publishing a package (\`${cmd[0]} publish\`)`) : null;
+		].includes(positionals[index - 1] ?? "") || cmd[0] === "yarn" && index === 2 && positionals[0] === "workspace"))) ? deny("publish", `Publishing a package (\`${cmd[0]} publish\`)`) : null;
 	}
 	for (const cmd of commandsOf(command, 0, false)) {
 		const program = cmd[0] ?? "";
@@ -1064,6 +1071,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			if (sub === "push") verdict = pushVerdict(args, config);
 			else if (sub === "send-pack") verdict = pushVerdict(args, [...config, "push.default=matching"]);
 			else if (sub === "tag") verdict = tagVerdict(args);
+			else if (sub === "update-ref" && (args.some((arg) => /^(refs\/)?tags\//i.test(arg)) || args.includes("--stdin") && /refs\/tags\//i.test(command))) verdict = deny("tag", "A tag ref write (`git update-ref`)");
 			else if (sub === "subtree") {
 				const valued = /* @__PURE__ */ new Set([
 					"-P",
@@ -1121,7 +1129,8 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 		"xargs",
 		"npx",
 		"bunx",
-		"pnpx"
+		"pnpx",
+		"corepack"
 	]);
 	const RUNNERS = /* @__PURE__ */ new Set([
 		"npm exec",
@@ -1271,7 +1280,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 		"iex"
 	]);
 	function programName(word) {
-		return (word.split(/[\\/]/).pop() ?? "").toLowerCase().replace(/\.(exe|cmd|bat)$/, "");
+		return (word.split(/[\\/]/).pop() ?? "").toLowerCase().replace(/^([^@]+)@[\s\S]*$/, "$1").replace(/\.(exe|cmd|bat)$/, "");
 	}
 	function commandFlag(word) {
 		const match = /^(?:--?|\/)([a-z]+)(?::([\s\S]*))?$/i.exec(word);
@@ -1404,6 +1413,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 	}
 	const assigned = [];
 	function commandsOf(text, depth, pwsh) {
+		if (depth > 4) throw Object.assign(/* @__PURE__ */ new Error("nesting"), { code: "NESTING_DEPTH" });
 		const { segments, nested } = splitLine(text, true, pwsh);
 		const commands = pwsh ? commandsOf(text, depth, false) : [];
 		for (const words of [...segments, .../[{}]/.test(text) ? splitLine(text, false, pwsh).segments : []]) {
@@ -1462,31 +1472,31 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 				} else break;
 			}
 			if (line !== null) {
-				if (depth < 4) commands.push(...commandsOf(line, depth + 1, pwsh));
+				commands.push(...commandsOf(line, depth + 1, pwsh));
 				continue;
 			}
 			const cmd = words.slice(k);
 			if (cmd.length === 0) continue;
-			if (depth < 4 && /\s/.test(cmd[0] ?? "")) commands.push(...commandsOf(cmd.join(" "), depth + 1, pwsh));
+			if (/\s/.test(cmd[0] ?? "")) commands.push(...commandsOf(cmd.join(" "), depth + 1, pwsh));
 			cmd[0] = programName(cmd[0] ?? "");
 			if (/^git-./.test(cmd[0])) cmd.splice(0, 1, "git", cmd[0].slice(4));
-			if (depth < 4 && SHELLS.has(cmd[0] ?? "")) {
+			if (SHELLS.has(cmd[0] ?? "")) {
 				const flag = cmd.findIndex((word, index) => index > 0 && /^-[A-Za-z]*c[A-Za-z]*$/.test(word));
 				const script = flag === -1 ? void 0 : cmd[flag + 1];
 				if (script !== void 0) commands.push(...commandsOf(script, depth + 1, false));
-			} else if (depth < 4 && cmd[0] === "eval") commands.push(...commandsOf(cmd.slice(1).join(" "), depth + 1, false));
-			else if (depth < 4 && POWERSHELLS.has(cmd[0] ?? "")) {
+			} else if (cmd[0] === "eval") commands.push(...commandsOf(cmd.slice(1).join(" "), depth + 1, false));
+			else if (POWERSHELLS.has(cmd[0] ?? "")) {
 				const at = cmd.findIndex((word, index) => index > 0 && commandFlag(word) !== null);
 				const first = at !== -1 ? -1 : cmd.findIndex((word, index) => index > 0 && !/^-|^\/\w*$/.test(word));
 				if (at !== -1) commands.push(...commandsOf([commandFlag(cmd[at] ?? ""), ...cmd.slice(at + 1)].join(" "), depth + 1, true));
 				else if (first !== -1) commands.push(...commandsOf(cmd.slice(first).join(" "), depth + 1, true));
 				for (const word of first === -1 ? [] : cmd.slice(first + 1)) if (/\s/.test(word)) commands.push(...commandsOf(word, depth + 1, true));
-			} else if (depth < 4 && cmd[0] === "cmd") {
+			} else if (cmd[0] === "cmd") {
 				const at = cmd.findIndex((word, index) => index > 0 && /^\/[ck]/i.test(word));
 				const rest = at === -1 ? "" : [(cmd[at] ?? "").slice(2), ...cmd.slice(at + 1)].join(" ");
 				if (at !== -1) commands.push(...commandsOf(rest, depth + 1, true));
 				if (rest.includes("^")) commands.push(...commandsOf(rest.replace(/\^([\s\S])/g, "$1"), depth + 1, true));
-			} else if (depth < 4 && cmd[0] === "git") {
+			} else if (cmd[0] === "git") {
 				const { sub, args } = gitParts(cmd);
 				const rebase = sub === "rebase" ? args : [];
 				for (let j = 0; j < rebase.length && rebase[j] !== "--"; j += 1) {
@@ -1508,7 +1518,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 			}
 			commands.push(cmd);
 		}
-		if (depth < 4) for (const inner of nested) commands.push(...commandsOf(inner, depth + 1, pwsh));
+		for (const inner of nested) commands.push(...commandsOf(inner, depth + 1, pwsh));
 		return commands;
 	}
 	function gitParts(cmd) {
@@ -1714,7 +1724,8 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 		/^(merges|merge-upstream)\/?$/i,
 		/^branches\/.+\/rename\/?$/i
 	];
-	const GRAPHQL_MOVES = /\b(createPullRequest|updatePullRequest|updatePullRequestBranch|createCommitOnBranch|createRef|updateRef|updateRefs|deleteRef|mergeBranch|mergePullRequest|enablePullRequestAutoMerge)\b/;
+	const GRAPHQL_MOVES = /\b(createPullRequest|updatePullRequest|updatePullRequestBranch|createCommitOnBranch|createRef|updateRef|updateRefs|deleteRef|mergeBranch|mergePullRequest|enablePullRequestAutoMerge|enqueuePullRequest)\b/;
+	const GH_BUILTINS = new Set("agent-task alias api attestation auth browse cache co codespace completion config copilot discussion extension gist gpg-key help issue label licenses org pr preview project release repo ruleset run search secret skill ssh-key status variable version workflow".split(" "));
 	const GIT_BUILTINS = new Set("add am annotate apply archive backfill bisect blame branch bugreport bundle cat-file check-attr check-ignore check-mailmap check-ref-format checkout checkout--worker checkout-index cherry cherry-pick clean clone column commit commit-graph commit-tree config count-objects credential credential-cache credential-cache--daemon credential-store describe diagnose diff diff-files diff-index diff-pairs diff-tree difftool fast-export fast-import fetch fetch-pack fmt-merge-msg for-each-ref for-each-repo format-patch fsck fsck-objects fsmonitor--daemon gc get-tar-commit-id grep hash-object help hook index-pack init init-db interpret-trailers last-modified log ls-files ls-remote ls-tree mailinfo mailsplit maintenance merge merge-base merge-file merge-index merge-ours merge-recursive merge-recursive-ours merge-recursive-theirs merge-subtree merge-tree mktag mktree multi-pack-index mv name-rev notes pack-objects pack-redundant pack-refs patch-id pickaxe prune prune-packed pull push range-diff read-tree rebase receive-pack reflog refs remote remote-ext remote-fd repack replace replay repo rerere reset restore rev-list rev-parse revert rm send-pack shortlog show show-branch show-index show-ref sparse-checkout stage stash status stripspace submodule--helper switch symbolic-ref tag unpack-file unpack-objects update-index update-ref update-server-info upload-archive upload-archive--writer upload-pack var verify-commit verify-pack verify-tag version whatchanged worktree write-tree subtree".split(" "));
 	const READ_FORMS = /* @__PURE__ */ new Map([["lfs", /* @__PURE__ */ new Set([
 		"fetch",
@@ -1893,6 +1904,8 @@ const unattendedPushVerdict = function unattendedPushVerdict(command) {
 		let http = program === "curl" || program === "wget";
 		if (program === "gh") {
 			const [group, sub] = ghPositionals(cmd);
+			if (group !== void 0 && !GH_BUILTINS.has(group)) return deny("A gh command that is not a built-in this guard knows (an alias or an extension)");
+			if (group === "alias" && (sub === "set" || sub === "import")) return deny(`\`gh alias ${sub}\`, which defines an alias`);
 			if (group === "pr" && [
 				"create",
 				"new",
@@ -1966,7 +1979,7 @@ function gitDirsFrom(start) {
 }
 
 function programName(word) {
-  return (word.split(/[\\/]/).pop() ?? "").toLowerCase().replace(/\.(exe|cmd|bat)$/, "");
+  return (word.split(/[\\/]/).pop() ?? "").toLowerCase().replace(/^([^@]+)@[\s\S]*$/, "$1").replace(/\.(exe|cmd|bat)$/, "");
 }
 
 function commandFlag(word) {
@@ -2096,6 +2109,7 @@ const WRAPPERS = new Map([
   ["npx", RUNNER],
   ["bunx", RUNNER],
   ["pnpx", RUNNER],
+  ["corepack", []],
 ]);
 const RUNNERS = new Set(["npm exec", "npm x", "pnpm dlx", "pnpm exec", "yarn dlx", "yarn exec", "bun x", "bun exec"]);
 const MANAGERS = new Set(["npm", "pnpm", "yarn", "bun"]);
@@ -2382,12 +2396,15 @@ function unattendedBy(root) {
   } catch (error) {
     if (!error || (error.code !== "ENOENT" && error.code !== "ENOTDIR")) throw error;
   }
+  // Every run folder's head, so no pile of folders named after an open record's pushes it out of the read.
   const names = entries
     .filter((entry) => entry.isDirectory() && RUN_ID.test(entry.name))
     .map((entry) => entry.name)
     .sort()
-    .reverse()
-    .slice(0, RUNS_READ_MAX);
+    .reverse();
+  if (names.length > RUN_FOLDERS_MAX) {
+    throw Object.assign(new Error("run folders"), { code: "RUN_FOLDERS_OVER_" + RUN_FOLDERS_MAX, path: runsDir });
+  }
   for (const name of names) {
     const head = recordHead(join(runsDir, name, RECORD_FILE));
     if (head !== null && head.inProgress && head.mode !== null) modes[head.mode] = true;
