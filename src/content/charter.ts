@@ -430,7 +430,11 @@ export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_610;
 // the override carries invariants 2 and 5's +232 bytes (invariants 1.3.0).
 // 25_736 -> 25_751 on 2026-10-14, the f2 fix round (review/11, review/13): the
 // charter half of the override carries the same +15 bytes.
-export const ALWAYS_ON_CODEX_OVERRIDE_BYTES = 25_751;
+// 25_751 -> 25_800 on 2026-10-18, plan 021 file 2 (bc40ab97): the rules
+// appendix carries the injection-screening rule's +49 bytes — its read-pass
+// sentence names the startup card's read on a branch with a run — rewrapped
+// inside the five lines the sentence already had, so no line count moved.
+export const ALWAYS_ON_CODEX_OVERRIDE_BYTES = 25_800;
 
 /**
  * Physical lines Cursor's cloud block adds to the shared root `AGENTS.md` when

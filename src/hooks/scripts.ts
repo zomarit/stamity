@@ -4586,8 +4586,8 @@ function unattendedSentence(act, rule) {
 
 /**
  * An attended ask-class act's decision: the person is asked, except where a sub-agent runs it (any agent identity the
- * core guard reads, review/72), since the act is the person's, or in Claude Code's \`auto\` permission mode, where a
- * classifier may settle the prompt (review/75); both are refused.
+ * core guard reads), since the act is the person's, or in Claude Code's \`auto\` permission mode, where a
+ * classifier may settle the prompt; both are refused.
  */
 function attendedAsk(payload, act, rule) {
   const told = act + " is a person-only act (\`" + rule + "\`) and ";
