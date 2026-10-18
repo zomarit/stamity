@@ -210,6 +210,18 @@ answerer: "@maintainer"
     expect(problems.join("\n")).toContain("`answerer`");
   });
 
+  // pr/48: an entry of spaces names no path, so `scope.in` and `scope.out` refuse it as the text fields do.
+  it("refuses a whitespace-only entry in scope.in and in scope.out", () => {
+    // As `in: [""]` is: the list is refused, and with no entry left `scope.in` names no path either.
+    const inside = problemsOf(FULL.replace("  in: [src/runs, test/runs]\n", '  in: ["   "]\n'));
+    expect(inside).toHaveLength(2);
+    expect(inside.join("\n")).toContain("`scope.in` must be a list of non-empty strings.");
+    expect(inside.join("\n")).toContain("`scope.in` must name at least one path or area.");
+    const outside = problemsOf(FULL.replace("  out: [docs/specs]\n", '  out: [docs/specs, "  "]\n'));
+    expect(outside).toHaveLength(1);
+    expect(outside[0]).toContain("`scope.out` must be a list of non-empty strings.");
+  });
+
   it("returns malformed YAML and a non-map root as a problem, never a throw, by line and column", () => {
     expect(problemsOf("run-contract: 1\nscope: [unclosed\n")).toEqual([
       `${SOURCE}: the file is not valid YAML at line 3, column 1; fix the syntax and re-run.`,

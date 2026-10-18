@@ -336,7 +336,7 @@ function readBase(value: unknown, say: Say): string {
 }
 
 function readStringList(value: unknown, key: string, say: Say): string[] | null {
-  if (Array.isArray(value) && value.every((entry) => typeof entry === "string" && entry !== "")) {
+  if (Array.isArray(value) && value.every((entry) => typeof entry === "string" && entry.trim() !== "")) {
     return value as string[];
   }
   say(`\`${key}\` must be a list of non-empty strings.`);
