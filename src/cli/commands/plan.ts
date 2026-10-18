@@ -35,7 +35,7 @@ import type { GitRunner } from "../../workspace/git.ts";
  *
  * **Exit codes.** 0 every plan ready; 1 a blocker, an unread input, or no git
  * work tree to read from; 2 a usage error, `--chain` without `--since` and
- * `--since` without `--chain` among them. Read-only: nothing is written.
+ * `--since` over several plans without `--chain` among them. Read-only: nothing is written.
  */
 
 const CHECK = "check";
@@ -84,8 +84,8 @@ export const planCommand: CommandModule = {
         if (given["chain"] === true && given["since"] === undefined) {
           command.error("error: --chain needs --since <sha>, the run's base", { exitCode: 2 });
         }
-        if (given["since"] !== undefined && given["chain"] !== true) {
-          command.error("error: --since applies to a chain only; pass --chain", { exitCode: 2 });
+        if (given["since"] !== undefined && given["chain"] !== true && (command.processedArgs[1] as unknown[]).length > 1) {
+          command.error("error: --since over several plans needs --chain; one plan takes it alone", { exitCode: 2 });
         }
         command.setOptionValue(PLANS_KEY, command.processedArgs[1]);
       });
@@ -127,7 +127,7 @@ async function runCheck(ctx: CliContext, planArgs: readonly string[], opts: Reco
     specs: specs ?? [],
     git,
     cwd: root,
-    ...(opts["chain"] === true && typeof opts["since"] === "string" ? { chain: { since: opts["since"] } } : {}),
+    ...(typeof opts["since"] === "string" ? { chain: { since: opts["since"] } } : {}), // one plan: a chain of one
     ...(contract === undefined ? {} : { contract }),
   });
   if (specs === undefined) {

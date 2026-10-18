@@ -251,6 +251,32 @@ describe("stamity plan check", () => {
     expect(between).not.toBe(base);
   });
 
+  // review/60 (signed off, run 2026-10-18_cloud-runs-2): a run continued from its branch re-runs the ready check
+  // over one plan, and its own checkpoint commits move the paths that plan reads; `--since` its record's `Base:`
+  // exempts them for a single plan as for a chain, so the continuation is not refused `stale` by its own work.
+  it("takes --since for a single plan without --chain: a move after the base is exempt, one before it stays stale", async (ctx) => {
+    const { cwd, stamp } = await seeded(() => ctx.skip());
+    await touchAndCommit(cwd, "docs/a.md", "moved between the stamp and the base");
+    const base = await touchAndCommit(cwd, "history.md", "the run's base");
+    await touchAndCommit(cwd, "src/b.ts", "export const fromTheRun = 3;");
+    await put(cwd, PLAN_PATH, cleanPlan(stamp));
+
+    const atBase = await planJson(cwd, ["check", PLAN_PATH, "--since", base]);
+    expect(atBase.code).toBe(1);
+    expect(atBase.doc.plans[0]?.freshness).toMatchObject({ stale: [{ path: "docs/a.md", reason: "moved" }], exempt: ["src/b.ts"] });
+    expect(codes(atBase.doc.plans[0])).toEqual(["stale"]);
+
+    // Every move after the stamp: the run's own commits alone, so the plan is ready again.
+    const atStamp = await planJson(cwd, ["check", PLAN_PATH, "--since", stamp]);
+    expect(atStamp.code).toBe(0);
+    expect(atStamp.doc.plans[0]?.freshness).toMatchObject({ stale: [], exempt: ["docs/a.md", "src/b.ts"] });
+
+    // Without --since both moves count, as before.
+    const bare = await planJson(cwd, ["check", PLAN_PATH]);
+    expect(bare.code).toBe(1);
+    expect(codes(bare.doc.plans[0])).toEqual(["stale", "stale"]);
+  });
+
   it("refuses a version-2 run contract: exit 1 with the contract's problem on every plan", async (ctx) => {
     const { cwd, stamp } = await seeded(() => ctx.skip());
     await put(cwd, PLAN_PATH, cleanPlan(stamp));
@@ -359,7 +385,9 @@ describe("stamity plan check", () => {
 
   it.each([
     ["--chain without --since", ["check", PLAN_PATH, "--chain"]],
-    ["--since without --chain", ["check", PLAN_PATH, "--since", "0123456789abcdef"]],
+    // TEST CHANGE, justified (review/60, signed off): `--since` alone now serves one plan, so the usage error is
+    // `--since` over several plans without `--chain`, which would read them as a chain they were not declared as.
+    ["--since over several plans without --chain", ["check", PLAN_PATH, NEXT_PATH, "--since", "0123456789abcdef"]],
     ["--since that is no commit id", ["check", PLAN_PATH, "--chain", "--since", "HEAD~1"]],
     ["no plan", ["check"]],
     ["an unknown subcommand", ["lint", PLAN_PATH]],
