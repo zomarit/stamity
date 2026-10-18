@@ -225,7 +225,11 @@ export const CLAUDE_DENY_ROWS: readonly string[] = [
  * a tag written; a write of any name but `HEAD` pointed at the default branch
  * (`refs/heads/<default>` or the bare name), or at a target the line cannot show,
  * is a push of the default branch to come, since `git push <remote> <name>` sends
- * the branch the name points at.
+ * the branch the name points at. The GraphQL repository, protection and ruleset
+ * writes (pr/74) are named as GitHub's schema lists them, read on 2026-10-18 by
+ * `gh api graphql -f query='{__schema{mutationType{fields{name}}}}'`: the archive,
+ * `updateRepository` and its `updateRepository…` siblings, and a branch protection
+ * rule's or a repository ruleset's create, update and delete.
  *
  * Throws a coded `NESTING_DEPTH` error for a line nested past four levels (pr/58),
  * which the guard refuses as a call it cannot decide.
@@ -1074,6 +1078,12 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         // A pull request added to the merge queue is merged by the queue later (pr/57).
         if (/\b(mergePullRequest|enablePullRequestAutoMerge|enqueuePullRequest)\b/.test(text)) return deny("pr-merge", "A GraphQL merge");
         if (/\bmarkPullRequestReadyForReview\b/.test(text)) return deny("pr-ready", "A GraphQL ready-for-review");
+        // pr/74, from GitHub's schema read on 2026-10-18.
+        if (
+          /\b(archiveRepository|unarchiveRepository|updateRepository(CustomProperty|Ruleset|WebCommitSignoffSetting)?|(create|update|delete)(BranchProtectionRule|RepositoryRuleset))\b/.test(text)
+        ) {
+          return deny("protection", "A GraphQL repository settings, protection or ruleset write");
+        }
         // A review added or submitted with the event `APPROVE` (review/210); an event the line cannot show (a variable,
         // a call it cannot find) reads as one, and a review with no event is the API's pending one.
         if (/\b(addPullRequestReview|submitPullRequestReview)\b/.test(text)) {

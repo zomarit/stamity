@@ -528,6 +528,24 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["git symbolic-ref -d refs/tags/v9", "tag"],
   ["git symbolic-ref --delete -q refs/tags/v9", "tag"],
   ["git symbolic-ref -qd refs/tags/v9", "tag"],
+  // GraphQL's repository settings, protection and ruleset writes (pr/74), the twins of the REST ones refused above.
+  ...[
+    "archiveRepository",
+    "unarchiveRepository",
+    "updateRepository",
+    "updateRepositoryCustomProperty",
+    "updateRepositoryRuleset",
+    "updateRepositoryWebCommitSignoffSetting",
+    "createBranchProtectionRule",
+    "updateBranchProtectionRule",
+    "deleteBranchProtectionRule",
+    "createRepositoryRuleset",
+    "deleteRepositoryRuleset",
+  ].map((name) => [`gh api graphql -f query='mutation { ${name}(input: {repositoryId: "R"}) { clientMutationId } }'`, "protection"] as const),
+  [
+    "curl -X POST -d '{\"query\":\"mutation { archiveRepository(input: {repositoryId: \\\"R\\\"}) { clientMutationId } }\"}' https://api.github.com/graphql",
+    "protection",
+  ],
 ];
 
 const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
@@ -753,6 +771,8 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
   ["git symbolic-ref -d refs/heads/a"],
   ["git symbolic-ref refs/tags/v9"],
   ["git symbolic-ref -m refs/tags/v9 HEAD refs/heads/feat/x"],
+  // A GraphQL read of the repository (pr/74).
+  ["gh api graphql -f query='query { repository(owner:\"o\",name:\"r\") { isArchived } }'"],
 ];
 
 describe("personOnlyVerdict — the deny matrix", () => {
