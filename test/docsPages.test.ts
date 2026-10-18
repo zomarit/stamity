@@ -2529,6 +2529,64 @@ describe("SECURITY.md", () => {
       expect(shim).toBeGreaterThan(residuals.indexOf("`PATH` decides which `gh`"));
       expect(shim).toBeLessThan(residuals.indexOf("The run verbs' environment."));
     });
+
+    // ADDED 2026-10-18 (PR #112 round 3, REQ-FLOW-102, REQ-FLOW-104, REQ-FLOW-120): the guard reads a tag write through
+    // `git update-ref`, npm's publish prefixes, Corepack and a runner's `@<version>`, refuses the merge queue's
+    // enqueue as a merge, and refuses a line nested past four levels (src/hooks/personOnly.ts::personOnlyVerdict);
+    // unattended it refuses a gh alias or extension (src/hooks/personOnly.ts::unattendedPushVerdict); it reads every
+    // run folder's head under a 2,000-folder ceiling (src/hooks/scripts.ts::buildPersonOnlyGuardScript,
+    // src/hooks/scripts.ts::buildUnattendedAskGate); and the run verbs point origin/HEAD at the default branch REST
+    // names and refuse an unattended run on the fallback (src/cli/commands/run.ts::alignOriginHead,
+    // src/cli/commands/run.ts::runCheckpoint). What stays open is named: the attended gh forms, an update-ref list
+    // read from a file, an attended clone no run verb ran in, and the ceiling's refusal.
+    it("states round 3's guard readings, the run folder ceiling and the run verbs' default-branch write", () => {
+      const guard = section("| The main thread of any session", "| An unattended run, or the text that steers one | Pushing a change");
+      const verbs = section("`stamity run start` puts an unattended run", "| Anyone whose text an unattended run sends out");
+      const residuals = section("### Cloud and unattended runs", "## Standards mapping");
+      for (const claim of [
+        "a tag (a `git update-ref` write on `refs/tags/` among them)",
+        "a publish (npm's unique prefixes of `publish`, such as `npm pub`, and a manager run through Corepack among them)",
+        "wrappers such as `env`, `sudo` and `corepack`",
+        "a program word's trailing `@<version>` cut (`npx npm@10`)",
+        "an in-progress record in any run folder reads `Mode: unattended`",
+        "past 2,000 run folders the read faults, naming `RUN_FOLDERS_OVER_2000`",
+        "a `gh` group that is not one of gh's built-in commands (an alias or an extension), `gh alias set` and `gh alias import`",
+        "The merge queue's GraphQL `enqueuePullRequest` is refused as a merge, attended or not",
+        "a line nested more than four levels deep is one it cannot read (`NESTING_DEPTH`)",
+        "a git, shell or gh alias, a gh extension (the gh forms refused unattended)",
+        "a `git update-ref --stdin` text read from a file",
+      ]) {
+        expect(guard, `the guard's row does not state: ${claim}`).toContain(claim);
+      }
+      for (const claim of [
+        "point that ref at the branch REST names, as `git remote set-head origin -a` would",
+        "nothing is written under `--dry-run`",
+        "Unattended, they refuse when neither source names the default branch, the `main` and `master` fallback: `run start` exits 1",
+        "`run checkpoint` and `run end` refuse the commit before staging",
+        "`src/cli/commands/run.ts::alignOriginHead`",
+        "is not refused at `run start` on the fallback, and its first `run checkpoint` is",
+      ]) {
+        expect(verbs, `the run verbs' row does not state: ${claim}`).toContain(claim);
+      }
+      for (const residual of [
+        "So a git, shell or gh alias, a gh extension, a computed",
+        "a `git update-ref --stdin` text read from a file and a GraphQL mutation read from a file pass the person-only table's patterns",
+        "It refuses a `gh` group that is not one of gh's built-in commands, an alias or an extension, and `gh alias set` and `gh alias import` too",
+        "The default branch's name in a clone no run verb ran in.",
+        "a push of a default branch with another name passes the person-only rule",
+        "closes the gap for every clone a run verb has run in",
+        "The run folder ceiling.",
+        "the guard then refuses every call the unattended rule would have refused, attended sessions included",
+        "`src/hooks/scripts.ts::buildUnattendedAskGate`",
+        "Nested lines are read up to four levels deep: a line nested deeper is one neither verdict can decide",
+      ]) {
+        expect(residuals, `the cloud section does not name: ${residual}`).toContain(residual);
+      }
+      // Each new residual sits beside the one it shares a class with.
+      expect(residuals.indexOf("The default branch's name in a clone no run verb ran in.")).toBeGreaterThan(residuals.indexOf("Claude Code's working directory."));
+      expect(residuals.indexOf("The run folder ceiling.")).toBeGreaterThan(residuals.indexOf("The record head."));
+      expect(flat, "SECURITY.md says again that only the newest run folders are read").not.toContain("among the newest run folders");
+    });
   });
 
   it("covers the four surfaces the phase claims, and the limits", () => {
@@ -2705,6 +2763,24 @@ describe("docs/security-mapping.md", () => {
       "and so does one another builtin sets with allexport off",
     ]) {
       expect(flat, `the mapping page says again: ${stale}`).not.toContain(stale);
+    }
+  });
+
+  // ADDED 2026-10-18 (PR #112 round 3): the mapping page carries what SECURITY.md now states of the guard's round 3
+  // readings, the run folder ceiling and the run verbs' default-branch write, with their residuals.
+  it("states round 3's guard readings, the run folder ceiling and the default-branch write as SECURITY.md does", () => {
+    const flat = text.replace(/\s+/g, " ");
+    for (const claim of [
+      "a `gh` group outside gh's built-in commands (an alias or an extension) and `gh alias set` or `import`",
+      "A tag includes a `git update-ref` write on `refs/tags/`, a publish includes npm's unique prefixes of `publish` and a manager run through Corepack, and the merge queue's `enqueuePullRequest` is a merge",
+      "A shell call it cannot read, a line nested more than four levels deep among them, is refused",
+      "a gh alias or extension attended and a `git update-ref --stdin` text read from a file among them",
+      "point `origin/HEAD` at the default branch GitHub's REST API names, refuse an unattended run when neither REST nor `origin/HEAD` names the default branch (`run start` exits 1, `checkpoint` and `end` refuse the commit)",
+      "`src/cli/commands/run.ts::alignOriginHead`",
+      "a push of a default branch named neither `main` nor `master` passes the person-only rule",
+      "Past 2,000 run folders the guard refuses every call the unattended rule would read, attended sessions included",
+    ]) {
+      expect(flat, `the mapping page does not state: ${claim}`).toContain(claim);
     }
   });
 
