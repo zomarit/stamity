@@ -667,9 +667,15 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     const cmd: string[] = [];
     for (let k = 0; k < expanded.length; k += 1) {
       const word = expanded[k] ?? "";
-      // curl's body letter with its value attached, or a short cluster's first value letter (`-d@<file>`, `-sd{…}`,
-      // `-sT f`, pr/81), read apart: the letters before it, the letter, its value.
-      const lead = tool === "curl" ? /^-([^-:KHouAebcwmxrEdFTXCDPQtyYzU]*)([dFT])([\s\S]*)$/.exec(word) : null;
+      // curl's body or method letter with its value attached, or a short cluster's first value letter (`-d@<file>`,
+      // `-sd{…}`, `-sT f`, pr/81; `-sX$M`, pr/83), and gh's value letter after its one boolean, `-i`, its `=` aside as
+      // gh reads it (`-iXDELETE`, `-X=PUT`), read apart: the letters before it, the letter, its value. A cluster whose
+      // first value letter is another is read as no method and no body, the letters after it being its value (`-oX`,
+      // `-od`), and wget has no short method or body letter.
+      const lead =
+        tool === "curl" ? /^-([^-:KHouAebcwmxrEdFTXCDPQtyYzU]*)([dFTX])([\s\S]*)$/.exec(word)
+        : tool === "gh" ? /^-(i*)([XfFHpqt])=?([\s\S]*)$/.exec(word)
+        : null;
       if (lead !== null && word.length > 2) {
         if (lead[1]) cmd.push(`-${lead[1]}`);
         cmd.push(`-${lead[2]}`);
@@ -736,7 +742,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       }
       if (tool === "curl" && word === "--globoff") globoff = true;
       if (word === "-X" || word === "--method" || word === "--request") {
-        method = cmd[k + 1] ?? "";
+        // A method word the line ends before, an unquoted substitution having cut it, is one it cannot show (pr/83).
+        method = cmd[k + 1] ?? hidden();
         k += 1;
       } else if (name === "--method" || name === "--request") {
         method = word.slice(name.length + 1);
@@ -752,16 +759,6 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         k += 1;
       } else if (valueFlags.includes(word)) {
         k += 1;
-      } else if (/^-[A-Za-z]{2,}$/.test(word) && tool !== "gh") {
-        // A short cluster such as `-sX POST` or `-sd @body.json`.
-        const x = word.indexOf("X");
-        if (x !== -1) {
-          method = x === word.length - 1 ? (cmd[k + 1] ?? "") : word.slice(x + 1);
-          if (x === word.length - 1) k += 1;
-        } else if (/[dFT]/.test(word)) {
-          body = true;
-          if (/[dFT]$/.test(word)) k += 1;
-        }
       } else if (/^-[fF]./.test(word) && tool === "gh") {
         body = true;
       } else if (!word.startsWith("-")) {
@@ -1777,9 +1774,15 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
     const cmd: string[] = [];
     for (let k = 0; k < expanded.length; k += 1) {
       const word = expanded[k] ?? "";
-      // curl's body letter with its value attached, or a short cluster's first value letter (`-d@<file>`, `-sd{…}`,
-      // `-sT f`, pr/81), read apart: the letters before it, the letter, its value.
-      const lead = tool === "curl" ? /^-([^-:KHouAebcwmxrEdFTXCDPQtyYzU]*)([dFT])([\s\S]*)$/.exec(word) : null;
+      // curl's body or method letter with its value attached, or a short cluster's first value letter (`-d@<file>`,
+      // `-sd{…}`, `-sT f`, pr/81; `-sX$M`, pr/83), and gh's value letter after its one boolean, `-i`, its `=` aside as
+      // gh reads it (`-iXDELETE`, `-X=PUT`), read apart: the letters before it, the letter, its value. A cluster whose
+      // first value letter is another is read as no method and no body, the letters after it being its value (`-oX`,
+      // `-od`), and wget has no short method or body letter.
+      const lead =
+        tool === "curl" ? /^-([^-:KHouAebcwmxrEdFTXCDPQtyYzU]*)([dFTX])([\s\S]*)$/.exec(word)
+        : tool === "gh" ? /^-(i*)([XfFHpqt])=?([\s\S]*)$/.exec(word)
+        : null;
       if (lead !== null && word.length > 2) {
         if (lead[1]) cmd.push(`-${lead[1]}`);
         cmd.push(`-${lead[2]}`);
@@ -1846,7 +1849,8 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
       }
       if (tool === "curl" && word === "--globoff") globoff = true;
       if (word === "-X" || word === "--method" || word === "--request") {
-        method = cmd[k + 1] ?? "";
+        // A method word the line ends before, an unquoted substitution having cut it, is one it cannot show (pr/83).
+        method = cmd[k + 1] ?? hidden();
         k += 1;
       } else if (name === "--method" || name === "--request") {
         method = word.slice(name.length + 1);
@@ -1862,16 +1866,6 @@ export function unattendedPushVerdict(command: string): UnattendedPushVerdict {
         k += 1;
       } else if (valueFlags.includes(word)) {
         k += 1;
-      } else if (/^-[A-Za-z]{2,}$/.test(word) && tool !== "gh") {
-        // A short cluster such as `-sX POST` or `-sd @body.json`.
-        const x = word.indexOf("X");
-        if (x !== -1) {
-          method = x === word.length - 1 ? (cmd[k + 1] ?? "") : word.slice(x + 1);
-          if (x === word.length - 1) k += 1;
-        } else if (/[dFT]/.test(word)) {
-          body = true;
-          if (/[dFT]$/.test(word)) k += 1;
-        }
       } else if (/^-[fF]./.test(word) && tool === "gh") {
         body = true;
       } else if (!word.startsWith("-")) {

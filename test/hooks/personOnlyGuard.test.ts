@@ -190,6 +190,9 @@ const MATRIX: readonly (readonly [command: string, rule: string | null])[] = [
   // PR #112's resolution round 4d, each beside its neighbour: a second symref command after an escaped line break (pr/82).
   ["printf 'verify refs/heads/x HEAD\\nsymref-create refs/heads/safe refs/heads/main\\n' | git update-ref --stdin", "push-default"],
   ["printf 'verify refs/heads/x HEAD\\nsymref-create refs/heads/a refs/heads/feat/x\\n' | git update-ref --stdin", null],
+  // gh's `-i` clustered with its method (pr/83).
+  ["gh api -iXDELETE repos/o/r/git/refs/heads/feat", "push-delete"],
+  ["gh api -i repos/o/r/git/refs/heads/feat", null],
 ];
 
 describe("the person-only guard, on every client", () => {
@@ -269,11 +272,13 @@ describe("an HTTP call whose method or target the line cannot show (pr/73, pr/76
       "curl -X PATCH -d x 'https://api.github.com/repos/o/r/git/refs/heads/{a,main}'",
       "wget --method DELETE -i urls.txt",
       "M=DELETE; curl -X \"$M\" https://api.github.com/repos/o/r/git/refs/heads/main",
+      // The same method attached in a short cluster (round 4d).
+      "M=DELETE; curl -sX$M https://api.github.com/repos/o/r/git/refs/heads/main",
     ]) {
       expect(decide(tool, guard, line), line).toEqual({ deny: true, reason: expect.stringContaining("could not decide this shell call (HTTP_TARGET_HIDDEN)") });
     }
     for (const line of ["curl https://api.github.com/repos/o/r", "curl 'https://example.com/p[1-3].html'", "wget -i urls.txt",
-      "curl -X GET https://api.github.com/repos/o/r"]) {
+      "curl -X GET https://api.github.com/repos/o/r", "curl -sXGET https://api.github.com/repos/o/r"]) {
       expect(decide(tool, guard, line).deny, line).toBe(false);
     }
   });
@@ -792,7 +797,9 @@ describe("the unattended push rule, the mode read from the run records", () => {
       // A gh alias or extension and an alias defined (pr/56), and a push behind Corepack (pr/51).
       "gh land 123", "gh alias set land 'pr merge'", "gh alias import aliases.yml", "corepack pnpm exec git push origin feat/x",
       // A group spelled near one of gh's own aliases (pr/67), and a pull request opened through curl's attached body (pr/81).
-      "gh exts list", "curl -d'{\"title\":\"x\",\"head\":\"a\",\"base\":\"main\"}' https://api.github.com/repos/o/r/pulls"];
+      "gh exts list", "curl -d'{\"title\":\"x\",\"head\":\"a\",\"base\":\"main\"}' https://api.github.com/repos/o/r/pulls",
+      // A pull request moved through gh's `-i` clustered with its method (pr/83).
+      "gh api -iXPATCH repos/o/r/pulls/3"];
     for (const command of unattended) {
       const source = unattendedPushVerdict(command);
       expect(source.deny, command).toBe(true);
@@ -825,7 +832,9 @@ describe("the unattended push rule, the mode read from the run records", () => {
       "wget --me=GET https://api.github.com/repos/o/r/pulls/3", "wget https://api.github.com/repos/o/r/releases",
       "wget -e method=GET https://api.github.com/repos/o/r/pulls/3", "gh co 3", "gh alias list", "corepack pnpm exec git status",
       // gh's own aliases of its built-ins (pr/67), and a pull request list read (pr/81).
-      "gh ext list", "gh cs list", "curl -s https://api.github.com/repos/o/r/pulls"]) {
+      "gh ext list", "gh cs list", "curl -s https://api.github.com/repos/o/r/pulls",
+      // The same pull request read through gh's `-i` (pr/83).
+      "gh api -i repos/o/r/pulls/3"]) {
       expect(unattendedPushVerdict(command), command).toEqual({ deny: false });
       expect(decide("claude", guard, command).deny, command).toBe(false);
     }

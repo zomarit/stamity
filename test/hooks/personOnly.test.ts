@@ -596,6 +596,22 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["printf '%bsymref-create refs/heads/safe refs/heads/main\\n' 'verify refs/heads/x HEAD\\n' | git update-ref --stdin", "push-default"],
   ["printf 'symref-create\\u0020refs/heads/safe\\u0020refs/heads/main\\n' | git update-ref --stdin", "push-default"],
   ["echo -e 'symref-create\\0040refs/heads/safe\\0040refs/heads/main' | git update-ref --stdin", "push-default"],
+  // A short cluster's method read whatever it holds (pr/83): curl's output file named `X` is no method, gh's `-i`
+  // clusters with `-X` or a field, and gh's flag parser reads `-X=<method>` and `-F=<field>` as the value after `=`.
+  ["curl -oX -X DELETE https://api.github.com/repos/o/r/git/refs/heads/feat", "push-delete"],
+  ["curl -oX https://api.github.com/repos/o/r/git/refs/heads/feat -X DELETE", "push-delete"],
+  // A body letter after another value letter is that letter's value too, and wget's `-d` (debug) is no body: neither
+  // takes the next word as a body's.
+  ["curl -oXd https://api.github.com/repos/o/r/git/refs/heads/feat -X DELETE", "push-delete"],
+  ["curl -od -X DELETE https://api.github.com/repos/o/r/git/refs/heads/feat", "push-delete"],
+  ["curl -HT -X DELETE https://api.github.com/repos/o/r/git/refs/heads/feat", "push-delete"],
+  ["wget -qd https://api.github.com/repos/o/r/git/refs/heads/feat --method=DELETE", "push-delete"],
+  ["gh api -iXDELETE repos/o/r/git/refs/heads/feat", "push-delete"],
+  ["gh api -iX DELETE repos/o/r/git/refs/heads/feat", "push-delete"],
+  ["gh api -X=DELETE repos/o/r/git/refs/heads/feat", "push-delete"],
+  ["gh api -iX=PUT repos/o/r/pulls/3/merge", "pr-merge"],
+  ["gh api repos/o/r/pulls/3/reviews -iFevent=APPROVE", "pr-merge"],
+  ["gh api repos/o/r/pulls/3/reviews -F=event=APPROVE", "pr-merge"],
 ];
 
 const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
@@ -859,6 +875,15 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
   // pr/83's twins: a method the line shows.
   ["curl -X GET https://api.github.com/repos/o/r"],
   ["curl -X POST https://example.com/hook"],
+  // Round 4d's: curl's output file named `X` on a read, a cluster's method a read, gh's `-i` alone, before a read's
+  // method and before a header, `-X=` naming a read, and a comment's field after `-i`.
+  ["curl -oX https://api.github.com/repos/o/r/git/refs/heads/main"],
+  ["curl -sXGET https://api.github.com/repos/o/r/git/refs/heads/main"],
+  ["gh api -i repos/o/r/git/refs/heads/main"],
+  ["gh api -iX GET repos/o/r/git/refs/heads/main"],
+  ["gh api -X=GET repos/o/r/pulls/3/merge"],
+  ["gh api -iH 'Accept: application/vnd.github+json' repos/o/r/pulls/3/merge"],
+  ["gh api repos/o/r/pulls/3/reviews -iFevent=COMMENT"],
 ];
 
 describe("personOnlyVerdict — the deny matrix", () => {
@@ -1054,6 +1079,18 @@ describe("an HTTP call whose method or target the line cannot show (pr/73, pr/76
     ["curl --request \"$(echo PUT)\" https://api.github.com/repos/o/r/pulls/3/merge"],
     ["wget --method=\"$M\" https://api.github.com/repos/o/r/pulls/3"],
     ["wget -e \"method=$M\" https://api.github.com/repos/o/r/pulls/3"],
+    // A short cluster's method the line cannot show (round 4d): attached after curl's boolean letters, quoted, braced, a
+    // substitution or a backtick, and after gh's `-i`; and a method word the line ends before, an unquoted substitution
+    // having cut it.
+    ["M=DELETE; curl -sX$M https://api.github.com/repos/o/r/git/refs/heads/main"],
+    ["curl -sX\"$M\" https://api.github.com/repos/o/r/git/refs/heads/main"],
+    ["curl -sX${M} https://api.github.com/repos/o/r/git/refs/heads/main"],
+    ["curl -sX\"$(echo PUT)\" https://api.github.com/repos/o/r/pulls/3/merge"],
+    ["curl -sX`echo PUT` https://api.github.com/repos/o/r/pulls/3/merge"],
+    ["curl -gsX$M https://api.github.com/repos/o/r/git/refs/heads/main"],
+    ["curl -X `echo DELETE` https://api.github.com/repos/o/r/git/refs/heads/main"],
+    ["gh api -iX$M repos/o/r/git/refs/heads/main"],
+    ["gh api -iX \"$M\" repos/o/r/git/refs/heads/main"],
   ])("throws a coded HTTP_TARGET_HIDDEN for %j in both verdicts, so the guard refuses it", (command) => {
     expect(thrown(() => personOnlyVerdict(command, ON_FEATURE))).toBe("HTTP_TARGET_HIDDEN");
     expect(thrown(() => unattendedPushVerdict(command))).toBe("HTTP_TARGET_HIDDEN");
@@ -1319,6 +1356,11 @@ describe("unattendedPushVerdict", () => {
     // A pull request opened, and a commit written, through curl's attached body (pr/81).
     ["curl -d'{\"title\":\"x\",\"head\":\"a\",\"base\":\"main\"}' https://api.github.com/repos/o/r/pulls"],
     ["curl -sd@./c.json https://api.github.com/repos/o/r/contents/x"],
+    // A pull request moved through a short cluster's method, gh's among them (pr/83, round 4d).
+    ["curl -oX -X PATCH https://api.github.com/repos/o/r/pulls/3"],
+    ["gh api -iXPATCH repos/o/r/pulls/3"],
+    ["gh api -X=PATCH repos/o/r/pulls/3"],
+    ["wget -qd https://api.github.com/repos/o/r/pulls/3 --method=PATCH"],
   ])("denies %j, naming the run verbs", (command) => {
     const verdict = unattendedPushVerdict(command);
     expect(verdict.deny).toBe(true);
@@ -1489,9 +1531,11 @@ describe("unattendedPushVerdict", () => {
     // pr/81's twins: the same targets read.
     ["curl -s https://api.github.com/repos/o/r/pulls"],
     ["curl -o out.json https://api.github.com/repos/o/r/contents/x"],
-    // pr/83's twins: a method the line shows.
+    // pr/83's twins: a method the line shows, and round 4d's: the same pull request read.
     ["curl -X GET https://api.github.com/repos/o/r"],
     ["curl -X POST https://example.com/hook"],
+    ["curl -oX https://api.github.com/repos/o/r/pulls/3"],
+    ["gh api -i repos/o/r/pulls/3"],
   ])("allows %j", (command) => {
     expect(unattendedPushVerdict(command)).toEqual({ deny: false });
   });
