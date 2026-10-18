@@ -2702,6 +2702,35 @@ describe("SECURITY.md", () => {
         "such a call meets the protection the pre-flight proved there",
       );
     });
+
+    // ADDED 2026-10-18 (PR #112 round 5, REQ-FLOW-102, REQ-FLOW-104, REQ-FLOW-120): both verdicts read a REST path
+    // with its dot segments resolved as well as written, `gh repo sync` onto a named repository is a force push or a
+    // push of the default branch, and `gh repo unarchive` a repository write (src/hooks/personOnly.ts::personOnlyVerdict,
+    // src/hooks/personOnly.ts::unattendedPushVerdict); past the tag ceilings the guard refuses a refspec push, naming
+    // the code, as past the run folder one (src/hooks/scripts.ts::buildPersonOnlyGuardScript).
+    it("states round 5's guard readings and the tag ceiling beside the run folder one", () => {
+      const guard = section("| The main thread of any session", "| An unattended run, or the text that steers one | Pushing a change");
+      const residuals = section("### Cloud and unattended runs", "## Standards mapping");
+      for (const claim of [
+        "Both verdicts read a REST path with its dot segments resolved (`.` and `..`, as curl resolves them before sending) as well as written, so a protected route reached through one is refused as that route",
+        "`gh repo sync` naming a destination repository is read as a push to it: under `--force` a force push, and with no `--branch`, a default branch or a branch the line cannot show a push of the default branch",
+        "while a sync of the local checkout, with no repository named, writes nothing remote and passes when attended",
+        "and so is `gh repo unarchive`, as `gh repo archive` is",
+        "past 10,000 tag names the read faults, naming `TAG_NAMES_OVER_10000`, and past an 8 MiB `packed-refs` file, naming `PACKED_REFS_OVER_8388608`",
+      ]) {
+        expect(guard, `the guard's row does not state: ${claim}`).toContain(claim);
+      }
+      for (const residual of [
+        "The tag ceiling.",
+        "the guard then refuses every push that names a refspec in that repository, attended sessions included, rather than read a cut-off list as whole",
+        "a path with dot segments is read resolved as well as written, so it is refused as the route curl sends it to",
+      ]) {
+        expect(residuals, `the cloud section does not name: ${residual}`).toContain(residual);
+      }
+      // Beside the run folder ceiling it follows.
+      expect(residuals.indexOf("The tag ceiling.")).toBeGreaterThan(residuals.indexOf("The run folder ceiling."));
+      expect(residuals.indexOf("The tag ceiling.")).toBeLessThan(residuals.indexOf("The final round's window."));
+    });
   });
 
   it("covers the four surfaces the phase claims, and the limits", () => {
@@ -2952,6 +2981,21 @@ describe("docs/security-mapping.md", () => {
     expect(flat, "the mapping page names the pre-flight's wall as the third residual's whole control again").not.toContain(
       "can push to the default branch the third",
     );
+  });
+
+  // ADDED 2026-10-18 (PR #112 round 5): the mapping page carries round 5's readings and the tag ceiling as SECURITY.md
+  // does.
+  it("states round 5's guard readings and the tag ceiling as SECURITY.md does", () => {
+    const flat = text.replace(/\s+/g, " ");
+    for (const claim of [
+      "both verdicts read a REST path with its dot segments resolved as well as written",
+      "`gh repo sync` naming a destination repository is a force push under `--force`, and otherwise a push of the default branch unless `--branch` names another branch the line shows",
+      "`gh repo unarchive` is a repository write, as `gh repo archive` is",
+      "as is a push naming a refspec where the local tags pass 10,000 names (`TAG_NAMES_OVER_10000`) or `packed-refs` passes 8 MiB (`PACKED_REFS_OVER_8388608`)",
+      "and past 10,000 local tag names, or a `packed-refs` file past 8 MiB, it refuses every push naming a refspec, attended sessions included",
+    ]) {
+      expect(flat, `the mapping page does not state: ${claim}`).toContain(claim);
+    }
   });
 
   it("pins every catalogue it maps to an edition", () => {
