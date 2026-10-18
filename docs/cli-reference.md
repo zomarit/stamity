@@ -355,7 +355,7 @@ Reads only. Nothing is written, so there is no preview mode to need.
 | Flag | What it does | Default |
 |---|---|---|
 | `--chain` | the plans are one chain: each file's head depends_on names the file before it | — |
-| `--since <sha>` | with --chain, the run's base: a path moved only after it is exempt | — |
+| `--since <sha>` | the run's base: a path moved only after it is exempt; one plan takes it alone, several need --chain | — |
 | `--contract <path>` | the run contract the plans run under | — |
 
 ## `stamity run`
