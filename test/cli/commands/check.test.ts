@@ -4670,6 +4670,35 @@ describe("check — model-pins", () => {
     expect((await runJson(root, { STAMITY_NO_CLIENT_PROBE: "1" })).doc.drift?.clean).toBe(true);
   });
 
+  // review/124: a map class on a custom pin the manifest no longer holds leaves only that class's id
+  // off the list read off the files, never the whole map, so on a checkout with no cache that class
+  // reads as drift until a sync, and the sync keeps every other class's pick the list made.
+  it.each([
+    { change: "changed", pins: { standard: { codex: "gpt-9-other" } }, standard: "gpt-9-other" },
+    { change: "unset", pins: {}, standard: "gpt-6-sol" },
+  ])("keeps every other Codex class's pick with no cache when a bound custom pin is $change", async ({ pins, standard }) => {
+    const root = await seedRepo(getRepo(), { tools: ["claude", "codex"] });
+    await pinCodex(root, { pins: { standard: { codex: "gpt-9-custom" } } });
+    await syncNow(root, { codex: { ids: [...OTHER_CODEX.codex.ids, "gpt-9-custom"], source: "codex-debug-models" } });
+    const bound = await codexMap(root);
+    expect(bound["standard"]?.model).toBe("gpt-9-custom");
+    expect(bound["frontier"]?.model).toBe("gpt-6-sol");
+    await rm(join(root, CACHE));
+    await pinCodex(root, { pins });
+
+    const { doc } = await runJson(root, { STAMITY_NO_CLIENT_PROBE: "1" });
+
+    expect(doc.drift?.clean).toBe(false);
+    expect(doc.drift?.changes).toContainEqual(expect.objectContaining({ path: `${STATE_DIR}/generated/models/codex.json` }));
+    await syncNow(root);
+    const synced = await codexMap(root);
+    expect(synced["standard"]?.model).toBe(standard);
+    for (const modelClass of ["frontier", "advanced", "economy"]) {
+      expect(synced[modelClass], modelClass).toEqual(bound[modelClass]);
+    }
+    expect((await runJson(root, { STAMITY_NO_CLIENT_PROBE: "1" })).doc.drift?.clean).toBe(true);
+  });
+
   // review/116: the row works out the emitted model from the committed files' list first, so a
   // model a teammate's sync committed that this account's list lacks warns.
   it("warns on a committed Codex pick this machine's cached list lacks, naming the client and the class", async () => {

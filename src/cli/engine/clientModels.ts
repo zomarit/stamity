@@ -494,9 +494,12 @@ function cacheDefects(listed: unknown): string[] {
  * not at all. Absent is no problem: a fresh clone has none.
  */
 export async function readModelListCache(rootDir: string): Promise<{ lists: ModelLists; problem: string | null }> {
+  // review/119: a sync with the probe switch set, or with no client CLI on PATH, reads no client.
   const unread = (why: string): { lists: ModelLists; problem: string } => ({
     lists: {},
-    problem: `the model list cache ${CLIENT_MODELS_CACHE_FILE} was not read: ${why}; delete it, and the next sync reads each client again`,
+    problem:
+      `the model list cache ${CLIENT_MODELS_CACHE_FILE} was not read: ${why}; delete it, and a sync that reads a client ` +
+      "restores its list (not one run with STAMITY_NO_CLIENT_PROBE=1 or without that client's CLI on PATH)",
   });
   let text: string | null;
   try {
@@ -564,20 +567,23 @@ function baseId(value: string): string {
 
 /**
  * The ids `text`, `tool`'s model map, records: every class's model, its bracket
- * options dropped, and its fallbacks; `null` for another shape, and `null` when
- * a ladder class it records carries a pick no list could have given
- * (review/109): a model that is neither one of the class's shipped candidates
- * nor the client's pin for it, or no model for a class that has candidates or a
- * pin. A list picks only among the shipped candidates, a pin binds whatever the
- * list, and only a list holding none of a class's candidates leaves it with no
- * model, which the files alone cannot tell from a hand edit, so a checkout
- * resolves that class from its own list, or with none from the shipped entry 0.
+ * options dropped, and its fallbacks; `null` for another shape. A ladder class
+ * whose model no list could have given it (review/109), one that is neither a
+ * shipped candidate for the class nor the client's pin for it now, adds no
+ * model id (review/124): only that class re-picks, from a shipped candidate or
+ * its pin, never that id, so it still reads as drift, while the other classes
+ * keep the map's picks, as they do when a custom pin the map bound is changed
+ * or unset. `null` when a class has no model though it has candidates or a
+ * pin: only a list holding none of its candidates leaves it so, which the files
+ * alone cannot tell from a hand edit, so a checkout resolves that client from
+ * its own list, or with none from the shipped entry 0.
  *
  * `replaced` names the classes whose `pinReplaced` record (review/118, the
  * adapters' `pinReplacement`) names the client's pin for that class as the
  * manifest holds it now and the class's model as the pick made instead: the
  * sync that wrote the map could not honour that pin on its account's list. A
- * record naming another pin or another pick, or of another shape, is none.
+ * record naming another pin or another pick, of another shape, or on a class
+ * whose model no list could have given, is none.
  */
 function mapCandidates(
   text: string,
@@ -590,15 +596,18 @@ function mapCandidates(
   const replaced = new Set<string>();
   for (const [modelClass, entry] of Object.entries(parsed["classes"])) {
     if (!isPlainObject(entry)) continue;
-    const model = typeof entry["model"] === "string" ? baseId(entry["model"]) : undefined;
+    let model = typeof entry["model"] === "string" ? baseId(entry["model"]) : undefined;
     if (isModelClass(modelClass)) {
       const pin = pins[modelClass];
       const shipped = MODEL_PRIORITY[tool][modelClass].map((candidate) => candidate.id);
-      if (model === undefined ? shipped.length > 0 || pin !== undefined : !shipped.includes(model) && model !== (pin === undefined ? undefined : baseId(pin))) {
-        return null;
+      if (model === undefined) {
+        if (shipped.length > 0 || pin !== undefined) return null;
+      } else if (!shipped.includes(model) && model !== (pin === undefined ? undefined : baseId(pin))) {
+        model = undefined;
+      } else {
+        const record = entry["pinReplaced"];
+        if (pin !== undefined && isPlainObject(record) && record["pin"] === pin && record["by"] === entry["model"]) replaced.add(modelClass);
       }
-      const record = entry["pinReplaced"];
-      if (pin !== undefined && isPlainObject(record) && record["pin"] === pin && record["by"] === entry["model"]) replaced.add(modelClass);
     }
     if (model !== undefined) candidates.push(model);
     if (Array.isArray(entry["fallbacks"])) candidates.push(...entry["fallbacks"].filter((id) => typeof id === "string"));
@@ -639,8 +648,9 @@ async function readEmitted(rootDir: string, paths: readonly string[]): Promise<s
  * options dropped, and its fallbacks, which are the shipped candidates the list
  * it was picked from held (the client's pins join it in
  * {@link resolveModelLists}). The resolver picks from it exactly what it picked
- * from that list. A map whose class carries a pick no list gives
- * ({@link mapCandidates}) gives nothing. Cursor: the `model:` values its agent
+ * from that list. A class whose model no list gives adds no id for that class,
+ * and a map with a class left with no model gives nothing
+ * ({@link mapCandidates}). Cursor: the `model:` values its agent
  * files carry with no effort group, since a list decides only whether a pin
  * takes one, and a value with a group fails the id shape, so a pin the list
  * held stays bare and one it lacked keeps its group. A file that is not

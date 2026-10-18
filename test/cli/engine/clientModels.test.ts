@@ -549,6 +549,19 @@ describe("the model list cache", () => {
     expect(read).toEqual({ lists: {}, problem: expect.stringContaining("it is not a regular file") as unknown });
   });
 
+  // review/119: the refusal does not promise lists a sync with the probe off, or with no client CLI
+  // on PATH, never reads.
+  it("names, beside a cache it will not read, which sync restores the lists", async () => {
+    const temp = getTemp();
+    await temp.seedFiles({ [CACHE]: "not json" });
+
+    const { problem } = await readModelListCache(temp.dir);
+
+    expect(problem).toContain("delete it, and a sync that reads a client restores its list");
+    expect(problem).toContain("not one run with STAMITY_NO_CLIENT_PROBE=1 or without that client's CLI on PATH");
+    expect(problem).not.toContain("the next sync reads each client again");
+  });
+
   it("answers a warning, never a throw, when the cache cannot be written", async () => {
     const temp = getTemp();
     await mkdir(temp.path(CACHE), { recursive: true });
@@ -616,12 +629,33 @@ describe("the model list cache", () => {
     const holding = await resolveModelLists(temp.dir, pinned([codexMap]), { codex: { ids: ["gpt-9-custom"], source: "codex-debug-models" } });
     expect(holding.emitted.codex?.ids).toEqual(["gpt-6-sol", "gpt-5.6-terra", "gpt-6-luna", "gpt-9-custom"]);
 
-    // Each of these gives no list: a model off the class's candidates that is not its pin, a
-    // class with candidates and no model, and a pinned class with no model.
+    // TEST CHANGE, justified (review/124): a model off the class's candidates that is not its pin
+    // gave no list for the whole map, which reset every sibling class; it now leaves only that
+    // class's id off the list. The class re-picks a shipped candidate or its pin, never that id, so
+    // it still reads as drift. gpt-6-luna stays: economy's own model carries it.
     /* oxlint-disable no-await-in-loop */
     for (const classes of [
       { ...moved, frontier: { model: "gpt-6-luna", fallbacks: [] } },
       { ...moved, frontier: { model: "gpt-planted", fallbacks: [] } },
+      // A record on such a class is not honoured: the pin joins the list as for any pin.
+      { ...moved, standard: { model: "gpt-planted", fallbacks: ["gpt-5.6-terra"], pinReplaced: { pin: "gpt-9-custom[x=1]", by: "gpt-planted" } } },
+    ]) {
+      await temp.seedFiles({ [codexMap]: map(classes) });
+
+      const read = await resolveModelLists(temp.dir, pinned([codexMap]));
+
+      expect(read.emitted.codex?.ids, JSON.stringify(classes)).toEqual(["gpt-6-sol", "gpt-5.6-terra", "gpt-6-luna", "gpt-9-custom"]);
+    }
+    // The case review/124 names: standard still on a custom pin the manifest changed or unset. That
+    // id leaves the list, and the sibling classes' ids stay, so their picks hold.
+    await temp.seedFiles({ [codexMap]: map({ ...moved, standard: { model: "gpt-9-custom", fallbacks: ["gpt-6-sol", "gpt-5.6-terra"] } }) });
+    const repinned = { ...setup(["codex"], [codexMap]), models: { pins: { standard: { codex: "gpt-9-other" } } } };
+    expect((await resolveModelLists(temp.dir, repinned)).emitted.codex?.ids).toEqual(["gpt-6-sol", "gpt-5.6-terra", "gpt-6-luna", "gpt-9-other"]);
+    expect((await resolveModelLists(temp.dir, setup(["codex"], [codexMap]))).emitted.codex?.ids).toEqual(["gpt-6-sol", "gpt-5.6-terra", "gpt-6-luna"]);
+
+    // Each of these still gives no list: a class with candidates and no model, and a pinned class
+    // with no model, which the files alone cannot tell from a hand edit.
+    for (const classes of [
       { ...moved, advanced: { fallbacks: [] } },
       { ...moved, economy: { fallbacks: [] } },
     ]) {
