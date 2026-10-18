@@ -1,7 +1,8 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runCommand } from "../../../src/cli/commands/run.ts";
 import { PERSON_ONLY_GUARD_FILE, planCoreHookScripts } from "../../../src/hooks/scripts.ts";
@@ -285,6 +286,7 @@ describe("stamity run start", () => {
     /** Git's auto maintenance off before any push or commit, so no detached child outlives a case (runCheckpoint.test.ts, prove/12). */
     const NO_AUTO_MAINTENANCE = "[receive]\n\tautogc = false\n[gc]\n\tauto = 0\n[maintenance]\n\tauto = false\n";
     const RECORD = `.stamity/runs/${RUN}/record.md`;
+    const PIN = `.stamity/runs/${RUN}/origin.json`;
 
     interface Continuation {
       clone: string;
@@ -298,7 +300,9 @@ describe("stamity run start", () => {
      * (`Base:` main's tip, or a side commit the tip does not descend from, or no record at all), and a fresh clone of
      * the remote on `main`, as a cloud machine that came back has: `stamity/<run-id>` only as origin's.
      */
-    async function seedContinuation(opts: { base?: "main" | "side"; record?: boolean } = {}): Promise<Continuation> {
+    async function seedContinuation(
+      opts: { base?: "main" | "side"; record?: boolean | "no Base:" | "link"; recordBase?: string; pin?: string } = {},
+    ): Promise<Continuation> {
       const source = await seedRepo({ url: null });
       await writeFile(join(source, ".git", "config"), NO_AUTO_MAINTENANCE, { flag: "a" });
       const remote = getRoot().path(`remote-${Math.random().toString(36).slice(2, 8)}.git`);
@@ -315,14 +319,27 @@ describe("stamity run start", () => {
         git(source, ["push", "-q", remote, "side"]);
         git(source, ["switch", "-q", "main"]);
       }
+      if (opts.recordBase !== undefined) recordBase = opts.recordBase;
       git(source, ["switch", "-q", "-c", RUN_BRANCH]);
+      const head = `# Run ${RUN}\n\nStatus: in progress\nMode: attended\nBranch: ${RUN_BRANCH}\n`;
       if (opts.record === false) {
         await writeFile(join(source, "c.txt"), "c\n");
         git(source, ["add", "--", "c.txt"]);
+      } else if (opts.record === "link") {
+        // A link at the record's path whose target text is a whole record, committed by its mode alone (no link is
+        // made on disk): only the entry's mode tells it from the record.
+        await writeFile(join(source, "target.txt"), `${head}Base: ${recordBase}\n`);
+        const target = git(source, ["hash-object", "-w", "--", "target.txt"]);
+        git(source, ["update-index", "--add", "--cacheinfo", `120000,${target},${RECORD}`]);
       } else {
         await mkdir(join(source, ".stamity", "runs", RUN), { recursive: true });
-        await writeFile(join(source, RECORD), `# Run ${RUN}\n\nStatus: in progress\nMode: attended\nBranch: ${RUN_BRANCH}\nBase: ${recordBase}\n`);
+        await writeFile(join(source, RECORD), opts.record === "no Base:" ? head : `${head}Base: ${recordBase}\n`);
         git(source, ["add", "--", RECORD]);
+      }
+      if (opts.pin !== undefined) {
+        await mkdir(join(source, ".stamity", "runs", RUN), { recursive: true });
+        await writeFile(join(source, PIN), opts.pin);
+        git(source, ["add", "--", PIN]);
       }
       git(source, ["commit", "-q", "-m", "checkpoint"]);
       const tip = git(source, ["rev-parse", "HEAD"]);
@@ -390,6 +407,109 @@ describe("stamity run start", () => {
       expect(JSON.stringify(doc["error"])).toContain(`origin's ${RUN_BRANCH} at ${tip} carries no run record at ${RECORD}`);
       expect(current(clone)).toBe("main");
       expect(git(clone, ["branch", "--list", RUN_BRANCH])).toBe("");
+    });
+
+    // review/5: each of originRunTip's other refusals, every one before anything is switched.
+    it.each([
+      { shape: "a record that names no Base:", opts: { record: "no Base:" as const }, says: "carries a run record that names no Base:" },
+      {
+        shape: "a record whose Base: names no commit here",
+        opts: { recordBase: "0123456789abcdef0123456789abcdef01234567" },
+        says: "carries a run record whose Base: 0123456789abcdef0123456789abcdef01234567 names no commit here",
+      },
+      { shape: "a link at the record's path", opts: { record: "link" as const }, says: `carries no run record at ${RECORD}` },
+    ])("refuses origin's tip carrying $shape, creating no branch", async ({ opts, says }) => {
+      const { clone, tip } = await seedContinuation(opts);
+
+      const { code, doc } = await run(clone, START);
+
+      expect(code).toBe(1);
+      expect(JSON.stringify(doc["error"])).toContain(`origin's ${RUN_BRANCH} at ${tip} ${says}`);
+      expect(current(clone)).toBe("main");
+      expect(git(clone, ["branch", "--list", RUN_BRANCH])).toBe("");
+    });
+
+    it("refuses origin's tip where git merge-base cannot read the history between it and its Base:, creating no branch", async () => {
+      const { clone } = await seedContinuation();
+      // Origin's tip two commits past Base:, the middle commit's object gone from this clone.
+      const base = git(clone, ["rev-parse", "main"]);
+      git(clone, ["switch", "-q", "-c", "scratch"]);
+      await mkdir(join(clone, ".stamity", "runs", RUN), { recursive: true });
+      await writeFile(join(clone, RECORD), `# Run ${RUN}\n\nStatus: in progress\nMode: attended\nBranch: ${RUN_BRANCH}\nBase: ${base}\n`);
+      git(clone, ["add", "--", RECORD]);
+      git(clone, ["commit", "-q", "-m", "middle"]);
+      const middle = git(clone, ["rev-parse", "HEAD"]);
+      await writeFile(join(clone, "c.txt"), "c\n");
+      git(clone, ["add", "--", "c.txt"]);
+      git(clone, ["commit", "-q", "-m", "tip"]);
+      const tip = git(clone, ["rev-parse", "HEAD"]);
+      git(clone, ["switch", "-q", "main"]);
+      git(clone, ["branch", "-q", "-D", "scratch"]);
+      git(clone, ["update-ref", `refs/remotes/origin/${RUN_BRANCH}`, tip]);
+      await rm(join(clone, ".git", "objects", middle.slice(0, 2), middle.slice(2)));
+
+      const { code, doc } = await run(clone, START);
+
+      expect(code).toBe(1);
+      expect(JSON.stringify(doc["error"])).toContain(`origin's ${RUN_BRANCH} at ${tip} could not be read against its record's Base: ${base} (git merge-base answered`);
+      expect(current(clone)).toBe("main");
+      expect(git(clone, ["branch", "--list", RUN_BRANCH])).toBe("");
+    });
+
+    // review/4: a shallow clone's cut history reads as a tip that does not descend from its Base:; the refusal names a
+    // deeper fetch rather than sending a person to a history that is fine.
+    it("names a deeper fetch where a shallow clone refuses origin's tip as not descending from its Base:", async () => {
+      const { remote, tip, recordBase } = await seedContinuation();
+      const shallow = getRoot().path(`shallow-${Math.random().toString(36).slice(2, 8)}`);
+      git(getRoot().path(), ["clone", "-q", "--depth", "1", "--no-single-branch", pathToFileURL(remote).href, shallow]);
+      await writeFile(join(shallow, ".git", "config"), NO_AUTO_MAINTENANCE, { flag: "a" });
+
+      const { code, doc } = await run(shallow, START);
+
+      expect(code).toBe(1);
+      const error = JSON.stringify(doc["error"]);
+      expect(error).toContain(`origin's ${RUN_BRANCH} at ${tip} does not descend from its record's Base: ${recordBase}`);
+      expect(error).toContain("this clone is shallow");
+      expect(error).toContain("git fetch --unshallow origin");
+      expect(current(shallow)).toBe("main");
+    });
+
+    it("names no deeper fetch where a full clone refuses origin's tip as not descending from its Base:", async () => {
+      const { clone } = await seedContinuation({ base: "side" });
+
+      const { doc } = await run(clone, START);
+
+      expect(JSON.stringify(doc["error"])).not.toContain("--unshallow");
+    });
+
+    // review/5: on a continuation the pin is the one origin's tip commits, read from its tree under --dry-run and from
+    // the checkout after the switch, as for an existing branch (pr/4, pr/28).
+    it("compares origin with the pin origin's tip commits, under --dry-run and after the switch", async () => {
+      const pin = '{"host":"github.com","owner":"o","repo":"r"}\n';
+      const kept = await seedContinuation({ pin });
+      const moved = await seedContinuation({ pin });
+      git(kept.clone, ["remote", "set-url", "origin", "https://github.com/o/r.git"]);
+      git(moved.clone, ["remote", "set-url", "origin", "https://github.com/elsewhere/r.git"]);
+      restDefault("main");
+
+      const preview = await run(kept.clone, ["start", "--run", RUN, "--dry-run"]);
+      const previewMoved = await run(moved.clone, [...START, "--dry-run"]);
+
+      expect(preview.code).toBe(0);
+      expect(preview.stdout).toContain(`origin: github.com/o/r (pinned in ${PIN}, kept)`);
+      expect(previewMoved.code).toBe(1);
+      expect(JSON.stringify(previewMoved.doc["error"])).toContain("pins github.com/o/r, and origin now names github.com/elsewhere/r");
+      expect(JSON.stringify(previewMoved.doc["error"])).not.toContain("the checkout is on");
+      for (const { clone } of [kept, moved]) expect(current(clone)).toBe("main");
+
+      const started = await run(kept.clone, ["start", "--run", RUN]);
+      const refused = await run(moved.clone, START);
+
+      expect(started.code).toBe(0);
+      expect(started.stdout).toContain(`origin: github.com/o/r (pinned in ${PIN}, kept)`);
+      expect(git(kept.clone, ["rev-parse", "HEAD"])).toBe(kept.tip);
+      expect(refused.code).toBe(1);
+      expect(JSON.stringify(refused.doc["error"])).toContain(`pins github.com/o/r, and origin now names github.com/elsewhere/r; the checkout is on ${RUN_BRANCH} now`);
     });
   });
 

@@ -1,4 +1,4 @@
-import { closeSync, fstatSync, lstatSync, mkdtempSync, openSync, readdirSync, readFileSync, readSync, realpathSync, rmSync, unlinkSync } from "node:fs";
+import { closeSync, fstatSync, lstatSync, mkdtempSync, openSync, readdirSync, readFileSync, readlinkSync, readSync, realpathSync, rmSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, posix, relative } from "node:path";
 import { Argument, InvalidArgumentError, type Command } from "commander";
@@ -94,7 +94,9 @@ import { readPushed, scanChange } from "./gate.ts";
  * restores those paths to `Base:` in the index only, after the staging, so a
  * `--paths` entry naming one is held too, and a symbolic link the change adds
  * or retypes at a held path or at a held glob's directory prefix (`.claude`,
- * `.github/workflows`, any `.vscode`) is held the same way (review/200); refuses
+ * `.github/workflows`, any `.vscode`) is held the same way (review/200), and a
+ * patch an earlier checkpoint committed is kept, its paths listed as held, while
+ * the work tree holds no held change (review/6); refuses
  * a path staged outside that list as `commit refused: <path> is staged and not
  * in --paths` (pr/5); commits (`--signoff` adding the DCO
  * line); in an unattended run refuses the push when a commit it would send
@@ -359,24 +361,29 @@ async function originRunTip(ctx: CliContext, cwd: string, run: string, runBranch
   const tip = await commitAt(cwd, `refs/remotes/origin/${runBranch}`);
   if (tip === null) return null;
   const recordRel = `${layout.runRelPath(run)}/${layout.RECORD_FILE}`;
-  const refuse = (why: string): CliFailure =>
-    new CliFailure({
+  // review/4: a refusal read off history names a deeper fetch on a shallow clone, whose cut history reads as a rewrite.
+  const refuse = async (why: string, history = false): Promise<CliFailure> => {
+    const shallow = history && (await git(cwd, ["rev-parse", "--is-shallow-repository"])).stdout.trim() === "true";
+    return new CliFailure({
       code: "FAILURE",
       message: `run start refused: origin's ${runBranch} at ${tip} ${why}`,
       why: "a run continued from origin's branch must carry its record and descend from the commit the run started from",
-      next: "a person reads origin's branch; the run starts again once it holds the run's record on a history from its Base:",
+      next: shallow
+        ? "this clone is shallow, so the history between the two may be cut off: fetch it whole (git fetch --unshallow origin), then run it again; if it still refuses, a person reads origin's branch"
+        : "a person reads origin's branch; the run starts again once it holds the run's record on a history from its Base:",
     });
+  };
   const listed = await git(cwd, ["ls-tree", "-z", tip, "--", recordRel]);
-  if (listed.code !== 0 || !/^100(?:644|755) blob /.test(listed.stdout)) throw refuse(`carries no run record at ${recordRel}`);
+  if (listed.code !== 0 || !/^100(?:644|755) blob /.test(listed.stdout)) throw await refuse(`carries no run record at ${recordRel}`);
   const shown = await git(cwd, ["show", `${tip}:./${recordRel}`]);
-  if (shown.code !== 0) throw refuse(`carries no run record at ${recordRel}`);
+  if (shown.code !== 0) throw await refuse(`carries no run record at ${recordRel}`);
   const recordBase = resumeCard.readRecordHead(shown.stdout.slice(0, layout.RECORD_HEAD_READ_BYTES)).base;
-  if (recordBase === null) throw refuse("carries a run record that names no Base:");
+  if (recordBase === null) throw await refuse("carries a run record that names no Base:");
   const base = await commitAt(cwd, recordBase);
-  if (base === null) throw refuse(`carries a run record whose Base: ${recordBase} names no commit here`);
+  if (base === null) throw await refuse(`carries a run record whose Base: ${recordBase} names no commit here`, true);
   const descends = await git(cwd, ["merge-base", "--is-ancestor", base, tip]);
-  if (descends.code === 1) throw refuse(`does not descend from its record's Base: ${base}`);
-  if (descends.code !== 0) throw refuse(`could not be read against its record's Base: ${base} (git merge-base answered ${descends.code}: ${firstLine(descends.stderr)})`);
+  if (descends.code === 1) throw await refuse(`does not descend from its record's Base: ${base}`, true);
+  if (descends.code !== 0) throw await refuse(`could not be read against its record's Base: ${base} (git merge-base answered ${descends.code}: ${firstLine(descends.stderr)})`, true);
   return tip;
 }
 
@@ -853,6 +860,8 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
 
   // (2) Unattended: the person-only paths' change goes to an inert patch, and those paths back to Base: in the index.
   let unsectioned: string[] = [];
+  // review/6: the held paths a patch an earlier checkpoint committed names, kept and listed while no section is written.
+  let kept: string[] = [];
   // review/156: the index is read too, since the commit takes it: a held change staged or committed and then
   // undone in the work tree alone is still held.
   if (unattended) {
@@ -867,8 +876,16 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
     const bothAbsent = new Set(indexSide.filter((entry) => entry.added && !inTree.has(entry.path)).map((entry) => entry.path));
     const sectioned = held.filter((path) => !bothAbsent.has(path));
     if (sectioned.length === 0) {
-      // A patch an earlier checkpoint wrote names a change the run no longer makes: it leaves the folder and the branch.
-      const stale = await removeStalePatch(cwd, top, heldDir, fromTop(patchRel));
+      // review/6 (signed off): a patch an earlier checkpoint committed is kept and listed until a checkpoint writes a
+      // new one, never dropped because the work tree holds no held change: a run continued on a fresh clone
+      // (REQ-FLOW-105) has its person-only change in that patch alone. One no commit carries leaves the folder.
+      const committed = await committedPatchPaths(top, fromTop(patchRel), verb);
+      if (typeof committed === "string") {
+        result.notDone.push(committed);
+        return finish(false);
+      }
+      if (committed !== null) kept = committed;
+      const stale = committed === null ? await removeStalePatch(cwd, top, heldDir, fromTop(patchRel)) : null;
       if (stale !== null) {
         result.notDone.push(stale);
         return finish(false);
@@ -886,17 +903,29 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
           [[base], sectioned.filter((path) => !inIndex.includes(path))],
           [[], staged],
         ];
-        const written = await Promise.all(
-          sides
+        // review/2: a staged path the index no longer holds (git rm, git rm --cached) while the work tree has a file
+        // there is untracked, so the index-to-work-tree part skips it; its own part adds the work tree's bytes.
+        const readded = await untrackedOf(top, staged, verb);
+        if (typeof readded === "string") {
+          result.notDone.push(readded);
+          return finish(false);
+        }
+        const written = await Promise.all([
+          ...sides
             .filter(([, paths]) => paths.length > 0)
             .map(async ([side, paths], index) => {
               const out = join(scratch, `${index}-${HELD_PATCH}`);
-              return { out, patch: await git(top, ["diff", "--binary", "--full-index", ...DIFF_PINS, `--output=${out}`, ...side, "--", ...paths], verb) };
+              return { out, patch: await git(top, ["diff", "--binary", "--full-index", ...DIFF_PINS, `--output=${out}`, ...side, "--", ...paths], verb), step: "diff" };
             }),
-        );
+          ...readded.map(async (path, index) => {
+            const out = join(scratch, `added-${index}-${HELD_PATCH}`);
+            const part = await workTreeAddition(top, path, out, verb);
+            return { out, patch: part.patch, step: part.step };
+          }),
+        ]);
         const failed = written.find(({ patch }) => patch.code !== 0);
         if (failed !== undefined) {
-          result.notDone.push(`hold failed: git diff answered ${failed.patch.code}: ${firstLine(failed.patch.stderr)}`);
+          result.notDone.push(`hold failed: git ${failed.step} answered ${failed.patch.code}: ${firstLine(failed.patch.stderr)}`);
           return finish(false);
         }
         const parts = written.map(({ out }) => readFileSync(out));
@@ -920,6 +949,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
       result.held = held;
       unsectioned = held.filter((path) => bothAbsent.has(path));
     }
+    if (kept.length > 0) result.held = [...new Set([...kept, ...result.held])].toSorted();
   }
   // Checked before it exists, since check-ignore reads the rules, not the file; named only once it does.
   const written = patches.filter((path) => isRegular(join(top, path)));
@@ -931,7 +961,9 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   lines.push(
     result.held.length === 0
       ? "held: none"
-      : `held (in ${patchRel}; the work tree keeps them): ${list(heldNames)}`,
+      : kept.length > 0
+        ? `held (kept in ${patchRel} from an earlier checkpoint; the work tree holds no held change): ${list(heldNames)}`
+        : `held (in ${patchRel}; the work tree keeps them): ${list(heldNames)}`,
   );
 
   // pr/46: what origin holds, read from the remote once, before the commit; unread, the push is held.
@@ -1074,6 +1106,12 @@ const LINK_MODE = "120000";
 const ABSENT_MODE = "000000";
 
 /**
+ * review/3: both raw reads print whole object ids, so `core.abbrev=6` at any config level cannot print one (the zero
+ * id among them) in six octal-looking digits that {@link rawEntries} would count as a mode.
+ */
+const RAW_IDS = "--no-abbrev";
+
+/**
  * The paths of `git diff --raw -z` or `git log --raw -z` output, each with
  * whether its new side is a link and whether every old side is absent: one
  * `:<modes> <ids> <status>` field (`::…` for a merge's combined form, the
@@ -1129,7 +1167,7 @@ function heldOf(entries: readonly Changed[]): string[] {
 
 /** The top-level-relative paths `side` changes against `base`, committed changes included, each with its new mode's link reading. */
 async function changedSince(top: string, base: string, side: Side = "work tree"): Promise<Changed[]> {
-  const read = await git(top, ["diff", "--raw", "-z", ...DIFF_PINS, ...SIDE_ARGS[side](base), "--"], CHECKPOINT);
+  const read = await git(top, ["diff", "--raw", RAW_IDS, "-z", ...DIFF_PINS, ...SIDE_ARGS[side](base), "--"], CHECKPOINT);
   if (read.code !== 0) {
     throw new CliFailure({
       code: "FAILURE",
@@ -1153,7 +1191,7 @@ async function changedSince(top: string, base: string, side: Side = "work tree")
  */
 async function heldInHistory(top: string, tips: readonly string[]): Promise<string[]> {
   const range = ["--ignore-missing", "--stdin"];
-  const read = await git(top, ["log", "--root", "--format=", "--raw", "-z", "--cc", ...DIFF_PINS, ...range, "--"], CHECKPOINT, revisionLines(tips));
+  const read = await git(top, ["log", "--root", "--format=", "--raw", RAW_IDS, "-z", "--cc", ...DIFF_PINS, ...range, "--"], CHECKPOINT, revisionLines(tips));
   if (read.code !== 0) {
     throw new CliFailure({
       code: "FAILURE",
@@ -1293,6 +1331,75 @@ async function removeStalePatch(cwd: string, top: string, heldDir: string, patch
     return `hold failed: ${patchFromTop} could not be removed (${cause instanceof Error ? cause.message : "remove failed"})`;
   }
   return null;
+}
+
+/**
+ * review/6: the paths the held patch `HEAD` carries names (`git apply --numstat`, which applies nothing), read from
+ * the copy the commit takes: the work tree's where it is a regular file, else `HEAD`'s. `null` where `HEAD` carries
+ * none; else the reason it could not be read, for `notDone`.
+ */
+async function committedPatchPaths(top: string, patchFromTop: string, verb: string): Promise<string[] | string | null> {
+  const listed = await git(top, ["ls-tree", "-z", "HEAD", "--", patchFromTop], verb);
+  if (listed.code !== 0) return `hold failed: git ls-tree answered ${listed.code}: ${firstLine(listed.stderr)}`;
+  const blob = /^100(?:644|755) blob ([0-9a-f]{40,64})\t/.exec(listed.stdout)?.[1];
+  if (blob === undefined) return null;
+  const file = join(top, patchFromTop);
+  let read: GitWriteResult;
+  if (isRegular(file)) {
+    read = await git(top, ["apply", "--numstat", "-z", file], verb);
+  } else {
+    const shown = await git(top, ["cat-file", "blob", blob], verb);
+    if (shown.code !== 0) return `hold failed: git cat-file answered ${shown.code}: ${firstLine(shown.stderr)}`;
+    read = await git(top, ["apply", "--numstat", "-z"], verb, shown.stdout);
+  }
+  if (read.code !== 0) return `hold failed: the kept ${patchFromTop} could not be read (git apply answered ${read.code}: ${firstLine(read.stderr)})`;
+  // One `<added>\t<deleted>\t<path>` record per section, NUL-terminated; a path deleted and added again is named once.
+  const paths = read.stdout.split("\0").flatMap((row) => {
+    const fields = row.replace(/^\n+/, "").split("\t");
+    return fields.length < 3 ? [] : [fields.slice(2).join("\t")];
+  });
+  return [...new Set(paths)].filter((path) => path !== "").toSorted();
+}
+
+/**
+ * review/2: of `paths`, those the index holds no entry for while the work tree has a file there (`git ls-files
+ * --others`, ignored ones included, never past a link), each matched whole; else the reason, for `notDone`.
+ */
+async function untrackedOf(top: string, paths: readonly string[], verb: string): Promise<string[] | string> {
+  if (paths.length === 0) return [];
+  const read = await git(top, ["ls-files", "-z", "--others", "--", ...paths], verb);
+  if (read.code !== 0) return `hold failed: git ls-files answered ${read.code}: ${firstLine(read.stderr)}`;
+  const listed = new Set(read.stdout.split("\0"));
+  return paths.filter((path) => listed.has(path));
+}
+
+/**
+ * review/2: the held patch's part from absent to the work tree's bytes at `path`, written to `out`, the real index
+ * untouched: the file (a link's target text, for a link) goes to the object store as `git add` would read it
+ * (`hash-object` with the path's attributes), under a tree built for it alone (`mktree`), diffed from the empty tree.
+ * The result is the call that failed, or the diff's.
+ */
+async function workTreeAddition(top: string, path: string, out: string, verb: string): Promise<{ patch: GitWriteResult; step: string }> {
+  const full = join(top, path);
+  const link = isLink(full);
+  const blob = link
+    ? await git(top, ["hash-object", "-w", "--stdin"], verb, readlinkSync(full))
+    : await git(top, ["hash-object", "-w", `--path=${path}`, full], verb);
+  if (blob.code !== 0) return { patch: blob, step: "hash-object" };
+  const executable = !link && process.platform !== "win32" && (lstatSync(full).mode & 0o111) !== 0;
+  const segments = path.split("/");
+  // Each folder's tree holds the one below it, from the file's own folder up to the top; each waits on the one below.
+  const nest = async (depth: number, entry: string): Promise<GitWriteResult> => {
+    const tree = await git(top, ["mktree", "-z"], verb, entry);
+    return tree.code !== 0 || depth === 0 ? tree : nest(depth - 1, `040000 tree ${tree.stdout.trim()}\t${segments[depth - 1] ?? ""}\0`);
+  };
+  const mode = link ? LINK_MODE : executable ? "100755" : "100644";
+  const tree = await nest(segments.length - 1, `${mode} blob ${blob.stdout.trim()}\t${segments.at(-1) ?? path}\0`);
+  if (tree.code !== 0) return { patch: tree, step: "mktree" };
+  const empty = await git(top, ["mktree"], verb, "");
+  if (empty.code !== 0) return { patch: empty, step: "mktree" };
+  const diff = await git(top, ["diff", "--binary", "--full-index", ...DIFF_PINS, `--output=${out}`, empty.stdout.trim(), tree.stdout.trim(), "--", path], verb);
+  return { patch: diff, step: "diff" };
 }
 
 /** The repository's local tag names, read through the write runner; `[]` where git names none. */

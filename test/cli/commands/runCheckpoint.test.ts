@@ -393,6 +393,67 @@ describe("stamity run checkpoint", () => {
     expect(await readFile(join(fresh, ".cursorrules"), "utf8")).toBe("edited rules\n");
   });
 
+  // review/2 (REQ-FLOW-093): a held path Base: holds, its deletion staged (git rm --cached keeping the file, git rm and
+  // then written again), is untracked in the work tree, so the index-to-work-tree part skipped it and the patch carried
+  // the deletion alone; it now adds the work tree's bytes too, and the real index ends at Base:'s copy as before.
+  it.each([
+    { how: "git rm --cached, the file kept as it was", rm: ["rm", "-q", "--cached"], text: null },
+    { how: "git rm --cached, the file rewritten", rm: ["rm", "-q", "--cached"], text: "rewritten rules\n" },
+    { how: "git rm, then the file written again", rm: ["rm", "-q"], text: "written again\n" },
+  ])("holds a held path Base: holds whose deletion is staged while the work tree has it ($how), the patch applying on Base: to the work tree's bytes", async ({ rm: removal, text }) => {
+    const { repo, base } = await seed("unattended");
+    git(repo, [...removal, "--", ".cursorrules"]);
+    if (text !== null) await writeFile(join(repo, ".cursorrules"), text);
+    const bytes = await readFile(join(repo, ".cursorrules"), "utf8");
+
+    const { code, doc } = await run(repo, CHECKPOINT);
+
+    expect(code).toBe(0);
+    expect(doc).toMatchObject({ pushed: true, notDone: [], held: [".cursorrules"] });
+    const patch = await readFile(join(repo, PATCH), "utf8");
+    const sections = patch.split(/^(?=diff --git )/m).filter((section) => section.startsWith("diff --git a/.cursorrules "));
+    expect(sections).toHaveLength(2);
+    expect(sections[0]).toContain("deleted file mode");
+    expect(sections[1]).toContain("new file mode 100644");
+    const fresh = join(dirname(repo), "at-base");
+    git(repo, ["worktree", "add", "-q", "--detach", fresh, base]);
+    git(fresh, ["apply", join(repo, PATCH)]);
+    expect(await readFile(join(fresh, ".cursorrules"), "utf8")).toBe(bytes);
+    // The real index was not used to build the part: it ends at Base:'s copy, as every held path's does.
+    expect(git(repo, ["diff", "--cached", "--name-only", base, "--", ".cursorrules"])).toBe("");
+    expect(await readFile(join(repo, ".cursorrules"), "utf8")).toBe(bytes);
+  });
+
+  // review/3: with core.abbrev=6 the raw reads printed six-digit object ids, the zero id among them, which read as modes.
+  it.skipIf(process.platform === "win32")("holds a link added at a held prefix where core.abbrev is 6 (review/3)", async () => {
+    const { repo, remote } = await seed("unattended");
+    git(repo, ["config", "core.abbrev", "6"]);
+    await put(repo, "cfg/settings.json", '{ "hooks": {} }\n');
+    await symlink("cfg", join(repo, ".claude"));
+
+    const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "cfg", ".claude"]);
+
+    expect(code).toBe(0);
+    expect(doc).toMatchObject({ pushed: true, notDone: [], held: [".claude"] });
+    expect(pushedTree(remote)).not.toContain(".claude");
+    expect(await readFile(join(repo, PATCH), "utf8")).toContain("diff --git a/.claude b/.claude\nnew file mode 120000");
+  });
+
+  it("gives a held path staged and then deleted, absent at Base:, no section where core.abbrev is 6 (review/3)", async () => {
+    const { repo, remote } = await seed("unattended");
+    git(repo, ["config", "core.abbrev", "6"]);
+    await put(repo, ".github/workflows/x.yml", "on: push\n");
+    git(repo, ["add", "--", ".github/workflows/x.yml"]);
+    await rm(join(repo, ".github"), { recursive: true });
+
+    const { code, stdout } = await run(repo, ["checkpoint", "--run", RUN]);
+
+    expect(code).toBe(0);
+    expect(stdout).toContain(".github/workflows/x.yml (staged, then deleted: no section)");
+    expect(isFile(join(repo, PATCH))).toBe(false);
+    expect(pushedTree(remote)).not.toContain(PATCH);
+  });
+
   it("refuses the push when a commit it would send changes a held path, rewriting no history (review/159)", async () => {
     const { repo, remote } = await seed("unattended");
     await writeFile(join(repo, ".cursorrules"), "steered rules\n");
@@ -862,21 +923,72 @@ describe("stamity run checkpoint", () => {
     git(repo, ["apply", "--check", "--reverse", PATCH]);
   });
 
-  it("removes a held patch whose change is gone, from the work tree and the pushed branch (build/96)", async () => {
+  // TEST CHANGE, justified (review/6, signed off by the orchestrator): a held patch a commit carries is kept and listed
+  // until a checkpoint writes a new one, never removed because the work tree holds no held change, so build/96's
+  // removal of a committed patch whose change the work tree reverted now keeps it; one no commit carries still goes (below).
+  it("keeps and lists a committed held patch whose change the work tree no longer holds (build/96, review/6)", async () => {
     const { repo, remote } = await seed("unattended");
     await writeFile(join(repo, ".cursorrules"), "steered rules\n");
     expect((await run(repo, CHECKPOINT)).code).toBe(0);
     expect(pushedTree(remote)).toContain(PATCH);
+    const committed = pushedFile(remote, PATCH);
     // The change is reverted: the index already holds Base:'s copy, so restoring from it brings the file back.
     git(repo, ["restore", "--", ".cursorrules"]);
 
     const { code, doc } = await run(repo, CHECKPOINT);
 
     expect(code).toBe(0);
-    expect(doc).toMatchObject({ held: [], pushed: true, notDone: [] });
-    expect(pushedTree(remote)).not.toContain(PATCH);
-    expect(isFile(join(repo, PATCH))).toBe(false);
+    expect(doc).toMatchObject({ held: [".cursorrules"], notDone: [] });
+    expect(pushedTree(remote)).toContain(PATCH);
+    expect(pushedFile(remote, PATCH)).toBe(committed);
+    expect(isFile(join(repo, PATCH))).toBe(true);
     expect(git(repo, ["status", "--porcelain", "--", RUN_DIR])).toBe("");
+  });
+
+  // build/96: a patch no commit carries (a checkpoint that wrote it and then failed) names a change the run no longer
+  // makes, so it leaves the folder.
+  it("removes a held patch no commit carries where no held change is left (build/96)", async () => {
+    const { repo, remote } = await seed("unattended");
+    await put(repo, PATCH, "diff --git a/.cursorrules b/.cursorrules\n");
+
+    const { code, doc } = await run(repo, CHECKPOINT);
+
+    expect(code).toBe(0);
+    expect(doc).toMatchObject({ held: [], notDone: [] });
+    expect(isFile(join(repo, PATCH))).toBe(false);
+    expect(pushedTree(remote)).not.toContain(PATCH);
+  });
+
+  // review/6 (signed off): a run continued on a fresh clone (REQ-FLOW-105) holds Base:'s bytes at every held path, its
+  // person-only change living in the patch the branch carries alone; that patch stays on the branch and is listed.
+  it("keeps and lists the branch's held patch where a fresh clone continues the run with no held change (review/6)", async () => {
+    const { repo, remote } = await seed("unattended");
+    await writeFile(join(repo, ".cursorrules"), "steered rules\n");
+    expect((await run(repo, CHECKPOINT)).code).toBe(0);
+    const committed = pushedFile(remote, PATCH);
+    // The machine that ran it is gone; a clone beside it (so the push still maps to the case's remote) continues the run.
+    const clone = join(dirname(repo), "clone");
+    git(dirname(repo), ["clone", "-q", "--branch", RUN_BRANCH, remote, clone]);
+    await appendFile(join(clone, ".git", "config"), NO_AUTO_MAINTENANCE);
+    git(clone, ["config", "user.name", "Alice Example"]);
+    git(clone, ["config", "user.email", "alice@example.com"]);
+    git(clone, ["remote", "set-url", "origin", "https://github.com/o/r.git"]);
+    expect(await readFile(join(clone, ".cursorrules"), "utf8")).toBe(".cursorrules\n");
+    await writeFile(join(clone, "a.txt"), "the next unit's change\n");
+
+    const { code, doc } = await run(clone, [...CHECKPOINT, "--paths", "a.txt"]);
+
+    expect(code).toBe(0);
+    expect(doc).toMatchObject({ pushed: true, notDone: [], held: [".cursorrules"] });
+    expect(pushedFile(remote, "a.txt")).toBe("the next unit's change");
+    expect(pushedFile(remote, PATCH)).toBe(committed);
+    expect(isFile(join(clone, PATCH))).toBe(true);
+
+    const again = await run(clone, ["checkpoint", "--run", RUN]);
+
+    expect(again.code).toBe(0);
+    expect(again.stdout).toContain(`held (kept in ${PATCH} from an earlier checkpoint; the work tree holds no held change): .cursorrules`);
+    expect(pushedFile(remote, PATCH)).toBe(committed);
   });
 
   it.skipIf(process.platform === "win32")("holds a link added at a held glob's directory prefix, and pushes a link elsewhere (review/200)", async () => {
