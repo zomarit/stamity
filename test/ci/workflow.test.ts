@@ -1533,7 +1533,7 @@ describe("nightly.yml — demoted lanes, none of them merge-blocking", () => {
     // "no secret" moved, since the client legs read one secret per arm and drive step. The headless
     // lane above still holds none. TEST CHANGE, justified (review/46, run 2026-10-18_cloud-runs-2):
     // the per-job loop that stood here read no workflow-level `env:` or `defaults`; the client-leg
-    // suite below now reads the whole file with those two jobs cut out, in any spelling.
+    // suite below now reads the parsed workflow with only those two jobs' steps left out, in any spelling.
   });
 });
 
@@ -1603,21 +1603,82 @@ function secretRefsIn(text: string): string[] {
   return [...text.matchAll(/\bsecrets\b/gi)].map((match) => text.slice(Math.max(0, (match.index ?? 0) - 8), (match.index ?? 0) + 24));
 }
 
-/** nightly.yml's lines with the client-leg jobs and every comment line cut out, and the cut job ids. */
-function nightlyOutsideClientLegs(): { text: string; cut: string[] } {
-  const kept: string[] = [];
-  const cut: string[] = [];
-  let skipping = false;
-  for (const line of nightly.source.split("\n")) {
-    const key = /^ {2}([A-Za-z0-9_-]+):\s*$/.exec(line)?.[1];
-    if (key !== undefined) {
-      skipping = (CLIENT_LEG_JOBS as readonly string[]).includes(key);
-      if (skipping) cut.push(key);
-    }
-    if (!skipping && !/^\s*#/.test(line)) kept.push(line);
+/**
+ * Every secrets-context reference in a parsed workflow where GitHub reads one, each with its path:
+ * - in every key, since a reusable workflow call's `secrets: inherit` passes the whole context through a key;
+ * - in every `if`, an expression with or without its `${{ }}`;
+ * - in every other string that holds a `${{`, read whole, so a `#` line inside a `run:` block, which
+ *   GitHub still expands, is read with the rest of the block.
+ * A string with neither is text GitHub never evaluates, such as hook-fire's display name, which says
+ * "off without secrets".
+ */
+function secretRefsWhereRead(node: unknown, path = ""): string[] {
+  if (node === null || typeof node !== "object") return [];
+  const refs: string[] = [];
+  for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+    const at = `${path}.${key}`;
+    for (const ref of secretRefsIn(key)) refs.push(`${at} (key): ${ref}`);
+    if (typeof value !== "string") refs.push(...secretRefsWhereRead(value, at));
+    else if (key === "if" || value.includes("${{")) for (const ref of secretRefsIn(value)) refs.push(`${at}: ${ref}`);
   }
-  return { text: kept.join("\n"), cut };
+  return refs;
 }
+
+/**
+ * The secrets references in a parsed workflow outside the client-leg jobs' steps, which the per-step
+ * case reads one by one. Everything else is read: the workflow's own keys in any order (an `env:` or
+ * `defaults:` after the jobs block included), every other job, and the client-leg jobs' keys besides
+ * `steps` (`container:`, `services:`, `env:`).
+ */
+function secretRefsOutsideClientLegSteps(workflow: Workflow): string[] {
+  const jobs = Object.fromEntries(
+    Object.entries(workflow.jobs).map(([id, job]): [string, unknown] => {
+      if (!(CLIENT_LEG_JOBS as readonly string[]).includes(id)) return [id, job];
+      const { steps: _steps, ...rest } = job;
+      return [id, rest];
+    }),
+  );
+  return secretRefsWhereRead({ ...workflow, jobs });
+}
+
+/**
+ * ADDED (review/46 round 2, run 2026-10-18_cloud-runs-2): one secret planted in each place a line
+ * cut of the file's text missed. Each plant is applied to a copy of the text in memory; the
+ * committed workflow is never written. `under` is the path where the reference must be found.
+ */
+const PLANTED_SECRETS: readonly { readonly place: string; readonly under: string; readonly plant: (source: string) => string }[] = [
+  {
+    place: "a workflow env: after the jobs block",
+    under: ".env.",
+    plant: (source) => `${source.trimEnd()}\nenv:\n  LEAK: \${{ secrets.ANTHROPIC_API_KEY }}\n`,
+  },
+  {
+    place: "a workflow defaults: after the jobs block",
+    under: ".defaults.",
+    plant: (source) => `${source.trimEnd()}\ndefaults:\n  run: { working-directory: '\${{ secrets.ANTHROPIC_API_KEY }}' }\n`,
+  },
+  {
+    place: "a # line inside another job's run: block",
+    under: ".jobs.macos-smoke.steps.",
+    plant: (source) =>
+      source.replace(/^ {8}run: npm run gate\n/m, () => "        run: |\n          # ${{ secrets.ANTHROPIC_API_KEY }}\n          npm run gate\n"),
+  },
+  {
+    place: "hook-fire's services:",
+    under: ".jobs.hook-fire.services.",
+    plant: (source) =>
+      source.replace(/^ {2}hook-fire:\n/m, (line) => `${line}    services:\n      cache:\n        image: redis:7\n        env:\n          LEAK: \${{ secrets.CURSOR_API_KEY }}\n`),
+  },
+  {
+    place: "release prep's container:",
+    under: ".jobs.release-prep-unattended.container.",
+    plant: (source) =>
+      source.replace(
+        /^ {2}release-prep-unattended:\n/m,
+        (line) => `${line}    container:\n      image: node:24\n      credentials:\n        username: x\n        password: \${{ secrets.ANTHROPIC_API_KEY }}\n`,
+      ),
+  },
+];
 
 /** A `${{ … }}` template rendered as GitHub renders it: a context path's value, else the expression's boolean. */
 function renderTemplate(template: string, context: ExpressionContext): string {
@@ -1683,14 +1744,25 @@ describe("nightly.yml — the client legs, built and off without secrets", () =>
 
   // ADDED (review/46, run 2026-10-18_cloud-runs-2): a secret at the workflow's own `env:` or `defaults`
   // would reach every step of every nightly job, the vendor installers included.
-  it("reads no secret anywhere in the file outside the two client-leg jobs", () => {
-    const { text, cut } = nightlyOutsideClientLegs();
-    expect(cut).toEqual([...CLIENT_LEG_JOBS]);
-    // The cut kept the rest: the other jobs are still read.
-    for (const jobId of Object.keys(nightly.workflow.jobs).filter((id) => !(CLIENT_LEG_JOBS as readonly string[]).includes(id))) {
-      expect(text, jobId).toContain(`  ${jobId}:`);
+  // TEST CHANGE, justified (review/46 round 2, run 2026-10-18_cloud-runs-2): the case read lines cut out
+  // of the file's text, and the cut missed three places:
+  // - a workflow `env:` or `defaults:` written after the jobs block;
+  // - a `#` line inside a `run:` block, which GitHub still expands;
+  // - the client-leg jobs' own `container:` and `services:`.
+  // It now reads the parsed workflow, leaving out only the two client-leg jobs' steps.
+  it("reads no secret anywhere in the parsed workflow outside the two client-leg jobs' steps", () => {
+    expect(secretRefsOutsideClientLegSteps(nightly.workflow)).toEqual([]);
+  });
+
+  // ADDED (review/46 round 2, run 2026-10-18_cloud-runs-2): the case above fails on a secret planted
+  // in each place the line cut missed, and finds it where it was planted.
+  it("finds a secret planted in each place a line cut of the file's text missed", () => {
+    for (const { place, under, plant } of PLANTED_SECRETS) {
+      const planted = plant(nightly.source);
+      expect(planted, `${place}: the plant landed`).not.toBe(nightly.source);
+      const refs = secretRefsOutsideClientLegSteps(parse(planted) as Workflow);
+      expect(refs.map((ref) => ref.startsWith(under)), `${place}: ${refs.join(" | ")}`).toEqual([true]);
     }
-    expect(secretRefsIn(text)).toEqual([]);
   });
 
   // ADDED (review/44, run 2026-10-18_cloud-runs-2): GitHub cancels a whole run, every job in it, when a
