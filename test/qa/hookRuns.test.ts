@@ -117,6 +117,16 @@ describe("CLIENT_RUNNERS — cursor and copilot drive the invocations that were 
       expect(CLIENT_RUNNERS[client].args, client).toContain(PROMPT);
     }
   });
+
+  // ADDED (plan 021 file 2, unit v13-client-legs; REQ-FLOW-113): `claude --bare` skips the project's
+  // hooks, so a row driven with it would measure a client that never loads the emitted wiring, and
+  // the nightly hook-fire job's `--require-observation` would read that as the wiring's failure.
+  it("drives claude without --bare, the flag that skips the project's hooks", () => {
+    expect(CLIENT_RUNNERS.claude.args).toEqual(["-p", PROMPT, "--output-format", "stream-json", "--verbose"]);
+    for (const [client, runner] of Object.entries(CLIENT_RUNNERS) as [string, { args?: readonly string[] }][]) {
+      expect(runner.args ?? [], client).not.toContain("--bare");
+    }
+  });
 });
 
 describe("binaryVersion", () => {

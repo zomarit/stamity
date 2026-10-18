@@ -1442,11 +1442,16 @@ describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the aggregator's lane split,
 // ── nightly.yml ──────────────────────────────────────────────────────────────
 
 describe("nightly.yml — demoted lanes, none of them merge-blocking", () => {
-  it("carries the three demoted legs and no aggregator to require", () => {
+  // TEST CHANGE, justified (plan 021 file 2, unit v13-client-legs; REQ-PROVE-040): two jobs join
+  // after the three demoted legs, the client legs' `hook-fire` and the on-demand
+  // `release-prep-unattended`, both off without a secret; still no aggregator, as below.
+  it("carries the three demoted legs, the two client-leg jobs, and no aggregator to require", () => {
     expect(Object.keys(nightly.workflow.jobs)).toEqual([
       "macos-smoke",
       "node-next",
       "headless-lane",
+      "hook-fire",
+      "release-prep-unattended",
     ]);
     // The absence is the point: an aggregator here would be a name a branch rule could bind, and
     // a nightly failure would then block a merge it has nothing to say about.
@@ -1522,7 +1527,14 @@ describe("nightly.yml — demoted lanes, none of them merge-blocking", () => {
     // The dogfood is what the lane is for; a step that drives a client needs an account, and the
     // nightly holds none now.
     expect(JSON.stringify(job), "the headless lane reads a secret").not.toContain("secrets.");
-    expect(nightly.source, "nightly.yml reads a secret").not.toContain("secrets.");
+    // TEST CHANGE, justified (plan 021 file 2, unit v13-client-legs; REQ-PROVE-040): the file-wide
+    // "no secret" moved, since the client legs read one secret per arm and drive step. The headless
+    // lane above still holds none; every secret the file reads now sits in those two jobs, which the
+    // client-leg suite below pins step by step.
+    for (const [jobId, other] of Object.entries(nightly.workflow.jobs)) {
+      if (jobId === "hook-fire" || jobId === "release-prep-unattended") continue;
+      expect(JSON.stringify(other), `${jobId} reads a secret`).not.toContain("secrets.");
+    }
   });
 });
 
@@ -1566,6 +1578,164 @@ describe("nightly.yml — the canonical repository guard", () => {
 // executed", four cases that ran the nightly's credential check, ci.yml's binary export and the
 // nightly's drive verdict under bash. All three steps left with the plugin route, which 1.15.0
 // deletes.
+
+/**
+ * ADDED by plan 021 file 2, unit v13-client-legs (REQ-PROVE-040, REQ-FLOW-113): the client legs,
+ * built and off. Each client's secret reaches two steps, its arm and its drive; the arm writes a
+ * boolean and nothing else; with no secret every install and drive step is skipped and the job is
+ * green; and nothing merge-blocking reads either job. The arm steps are EXECUTED under `sh`, the
+ * way the DCO job is below, with only the secret's variable and the output channel substituted.
+ */
+const CLIENT_LEGS = [
+  { client: "claude", secret: "ANTHROPIC_API_KEY" },
+  { client: "cursor", secret: "CURSOR_API_KEY" },
+  { client: "copilot", secret: "COPILOT_GITHUB_TOKEN" },
+] as const;
+
+const CLIENT_LEG_JOBS = ["hook-fire", "release-prep-unattended"] as const;
+
+/** The secrets one step names, anywhere in it. */
+function secretsOf(step: WorkflowStep): string[] {
+  return [...JSON.stringify(step).matchAll(/secrets\.([A-Z_][A-Z0-9_]*)/g)].map((match) => match[1] ?? "");
+}
+
+function armed(client: string, value: string): ExpressionContext {
+  return { steps: { [`arm-${client}`]: { outputs: { armed: value } } } };
+}
+
+describe("nightly.yml — the client legs, built and off without secrets", () => {
+  it("arms, installs and drives each client in that order, the install and the drive gated on that client's arm", () => {
+    const steps = jobOf(nightly, "hook-fire").steps;
+    const at = (id: string) => steps.findIndex((step) => step.id === id || step.name === id);
+    for (const { client } of CLIENT_LEGS) {
+      const arm = at(`arm-${client}`);
+      const install = at(`Install (${client})`);
+      const drive = at(`Drive (${client})`);
+      expect(arm, client).toBeGreaterThan(at("Build"));
+      expect(install, client).toBeGreaterThan(arm);
+      expect(drive, client).toBeGreaterThan(install);
+      for (const gated of [steps[install], steps[drive]]) {
+        const condition = gated?.if ?? "";
+        expect(condition, `${client}: ${gated?.name}`).toBe(`steps.arm-${client}.outputs.armed == 'true'`);
+        expect(evaluateWorkflowExpression(condition, armed(client, "true"))).toBe(true);
+        expect(evaluateWorkflowExpression(condition, armed(client, "false"))).toBe(false);
+        // A skipped or missing arm writes nothing, and nothing is not armed.
+        expect(evaluateWorkflowExpression(condition, { steps: {} })).toBe(false);
+      }
+    }
+  });
+
+  it("holds one secret per step: an arm and a drive hold their own client's, every other step none", () => {
+    for (const jobId of CLIENT_LEG_JOBS) {
+      const job = jobOf(nightly, jobId);
+      expect(job.env, jobId).toBeUndefined();
+      expect(job.permissions, jobId).toEqual({ contents: "read" });
+      let holders = 0;
+      for (const step of job.steps) {
+        const held = secretsOf(step);
+        const leg = /^(?:Arm|Drive) \((\w+)\)$/.exec(step.name ?? "")?.[1];
+        if (leg === undefined) {
+          expect(held, `${jobId}: ${step.name}`).toEqual([]);
+          continue;
+        }
+        holders += 1;
+        const secret = CLIENT_LEGS.find((entry) => entry.client === leg)?.secret;
+        // The secret enters through `env:` alone, never a `run:` line or an input.
+        expect(held, `${jobId}: ${step.name}`).toEqual([secret]);
+        expect(step.env?.[secret ?? ""], `${jobId}: ${step.name}`).toBe(`\${{ secrets.${secret} }}`);
+        expect(step.run ?? "", `${jobId}: ${step.name}`).not.toContain("secrets.");
+      }
+      expect(holders, jobId).toBe(jobId === "hook-fire" ? 6 : 2);
+    }
+  });
+
+  it("drives hook-runs.mjs in the image the cloud leg pins, requiring an observation, with no --bare", () => {
+    const steps = jobOf(nightly, "hook-fire").steps;
+    expect(runOf(steps, "Pinned image")).toContain("import('./scripts/ci/cloud-leg.mjs')");
+    for (const { client, secret } of CLIENT_LEGS) {
+      const drive = runOf(steps, `Drive (${client})`);
+      expect(drive).toContain(`node scripts/qa/hook-runs.mjs --clients ${client} --require-observation`);
+      expect(drive).toContain('"$IMAGE"');
+      // The secret passes by name from the step's environment, the checkout and the client read-only.
+      expect(drive).toContain(`-e ${secret} `);
+      expect(drive).toContain('-v "$GITHUB_WORKSPACE:/src:ro"');
+      expect(drive).toContain(`-v "$RUNNER_TEMP/${client}:/opt/client:ro"`);
+      expect(runOf(steps, `Install (${client})`)).toContain(`-v "$RUNNER_TEMP/${client}:/opt/client" "$IMAGE"`);
+    }
+    expect(JSON.stringify(jobOf(nightly, "hook-fire"))).not.toMatch(/docker\.sock|--privileged|container:/);
+  });
+
+  it("runs release prep only on a dispatch that sets release_prep, against a bare remote, with no prompts and no --bare", () => {
+    const on = (nightly.workflow as unknown as Record<string, Record<string, { inputs?: Record<string, Record<string, unknown>> }>>)["on"];
+    expect(on?.["workflow_dispatch"]?.inputs?.["release_prep"]).toMatchObject({ type: "boolean", default: false });
+    const steps = jobOf(nightly, "release-prep-unattended").steps;
+    expect(steps[0]?.id).toBe("arm-claude");
+    expect(steps[0]?.env?.["RELEASE_PREP"]).toBe("${{ inputs.release_prep }}");
+    for (const step of steps.slice(1)) {
+      expect(step.if, step.name).toBe("steps.arm-claude.outputs.armed == 'true'");
+    }
+    const drive = runOf(steps, "Drive (claude)");
+    expect(drive).toContain('git init -q --bare "$REMOTE"');
+    expect(drive).toContain('"$REMOTE/hooks/pre-receive"');
+    expect(drive).toMatch(/claude -p "\/st-work --unattended [^"]+" \\\n\s+--permission-prompts none /);
+  });
+
+  it("keeps --bare off every claude command line in the file", () => {
+    const lines = nightly.source.split("\n").filter((line) => /\bclaude -p\b/.test(line));
+    expect(lines.length).toBeGreaterThan(0);
+    for (const line of lines) expect(line).not.toContain("--bare");
+  });
+
+  it("feeds no aggregator", () => {
+    for (const jobId of CLIENT_LEG_JOBS) {
+      expect(jobOf(nightly, jobId).needs, jobId).toBeUndefined();
+      expect(jobOf(ci, "all-ci-checks").needs, jobId).not.toContain(jobId);
+    }
+  });
+
+  describe.skipIf(process.platform === "win32" || spawnSync("sh", ["-c", "exit 0"]).status !== 0)("the arm steps, executed under sh", () => {
+    const root = mkdtempSync(join(tmpdir(), "stamity-client-legs-"));
+    afterAll(() => rmSync(root, { recursive: true, force: true }));
+
+    /** One arm body under `sh -e`, with an empty environment but the output channel and `env`. */
+    function arm(body: string, env: Readonly<Record<string, string>>): { status: number | null; stdout: string; written: string } {
+      const dir = mkdtempSync(join(root, "arm-"));
+      const output = join(dir, "output");
+      writeFileSync(output, "");
+      const result = spawnSync("sh", ["-e", "-c", body], { cwd: dir, encoding: "utf8", env: { GITHUB_OUTPUT: output, ...env } });
+      return { status: result.status, stdout: result.stdout, written: readFileSync(output, "utf8") };
+    }
+
+    const ARMS = [
+      ...CLIENT_LEGS.map(({ client, secret }) => ({ job: "hook-fire", client, secret, gate: {} })),
+      { job: "release-prep-unattended", client: "claude", secret: "ANTHROPIC_API_KEY", gate: { RELEASE_PREP: "true" } },
+    ];
+
+    for (const { job, client, secret, gate } of ARMS) {
+      const body = runOf(stepsOf(nightly, job), `Arm (${client})`);
+
+      it(`${job} ${client}: no secret → armed=false, exit 0`, () => {
+        const result = arm(body, gate);
+        expect(result.status).toBe(0);
+        expect(result.written).toBe("armed=false\n");
+        expect(result.stdout).toContain("::notice title=");
+      });
+
+      it(`${job} ${client}: the secret set → armed=true, the value written nowhere`, () => {
+        const result = arm(body, { ...gate, [secret]: "sk-not-a-key" });
+        expect(result.status).toBe(0);
+        expect(result.written).toBe("armed=true\n");
+        expect(result.stdout + result.written).not.toContain("sk-not-a-key");
+      });
+    }
+
+    it("release prep stays off with the secret set and no release_prep dispatch", () => {
+      const body = runOf(stepsOf(nightly, "release-prep-unattended"), "Arm (claude)");
+      expect(arm(body, { ANTHROPIC_API_KEY: "sk-not-a-key" }).written).toBe("armed=false\n");
+      expect(arm(body, { ANTHROPIC_API_KEY: "sk-not-a-key", RELEASE_PREP: "false" }).written).toBe("armed=false\n");
+    });
+  });
+});
 
 // ── pr-checks.yml ────────────────────────────────────────────────────────────
 
@@ -3987,6 +4157,12 @@ describe("every workflow — pins, privileges and referenced scripts", () => {
     // let the pull request's own CI start without the approval prompt — both limits of the
     // per-run token, which `upstream-update.yml`'s header states. Its holder is the one job
     // `test/ci/upstreamWorkflow.test.ts` pins.
+    // TEST CHANGE, justified (plan 021 file 2, unit v13-client-legs; REQ-PROVE-040): the decision
+    // that brings client credentials back is that plan's client legs, settled 2026-10-15 as built and
+    // off until secrets exist. ANTHROPIC_API_KEY, CURSOR_API_KEY and COPILOT_GITHUB_TOKEN return, read
+    // only by nightly.yml's `hook-fire` and `release-prep-unattended` jobs, each by one arm step and one
+    // drive step of its own client (the client-leg suite pins both). CODEX_API_KEY stays out: Codex has
+    // no headless hook lane to drive (scripts/qa/hook-runs.mjs).
     // ADDED by plan 010, unit e1-fork-release-workflow: STAMITY_REGISTRY_TOKEN is a fork's
     // credential for a registry other than GitHub Packages, read by `fork-release.yml`'s publish
     // job alone and absent here by design (this repository publishes through OIDC in
@@ -3997,6 +4173,9 @@ describe("every workflow — pins, privileges and referenced scripts", () => {
       ),
     );
     expect([...referenced].toSorted()).toEqual([
+      "ANTHROPIC_API_KEY",
+      "COPILOT_GITHUB_TOKEN",
+      "CURSOR_API_KEY",
       "GITHUB_TOKEN",
       "STAMITY_REGISTRY_TOKEN",
       "STAMITY_UPSTREAM_TOKEN",

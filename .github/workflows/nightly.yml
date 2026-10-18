@@ -18,6 +18,12 @@ on:
   schedule:
     - cron: '0 4 * * *'
   workflow_dispatch:
+    inputs:
+      # Only the release-prep job reads it; the other jobs run on every dispatch as before.
+      release_prep:
+        description: 'Run the release-prep unattended run (needs the ANTHROPIC_API_KEY secret)'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -187,3 +193,252 @@ jobs:
             exit 1
           fi
           echo "Scratch-repo dogfood: init + check + residue present for claude, cursor, copilot, codex"
+
+  # ── the client legs: built, and off until a secret exists ─────────────────────────────────────
+  #
+  # Does each client's headless run load this engine's project hooks at all? scripts/qa/hook-runs.mjs
+  # builds a throwaway repository per client, drives that client's own CLI in it (`claude -p` with no
+  # `--bare`, which would skip the project's hooks; `agent --trust -p`; `copilot -p` with
+  # COPILOT_ALLOW_ALL=true) and reads the hook's own log; `--require-observation` makes a driven client
+  # whose hook recorded nothing red. Three steps per client:
+  #   - Arm holds that client's one secret and writes only `armed=true|false`, never the value.
+  #   - Install runs the vendor's installer in the pinned image (`IMAGE` in scripts/ci/cloud-leg.mjs),
+  #     holding no secret and able to write only that client's own folder under RUNNER_TEMP.
+  #   - Drive runs in the pinned image again with that one secret, the built checkout and the client's
+  #     folder mounted read-only, so no vendor's code reaches another vendor's credential.
+  # With no secret configured, which is this repository's state, every install and drive step is
+  # skipped and the job is green. Nothing reads this job's result: no aggregator, no required check.
+  # One limit, stated: the steps carry the default `success()` condition, so a red leg skips the legs
+  # after it that night.
+  hook-fire:
+    name: hook fire (client CLIs, off without secrets)
+    if: github.repository == 'zomarit/stamity'
+    runs-on: ubuntu-latest
+    # A model turn per client, which nothing here has measured yet; nothing in this file blocks a merge.
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Pinned image
+        run: node --input-type=module -e "const { IMAGE } = await import('./scripts/ci/cloud-leg.mjs'); console.log('IMAGE=' + IMAGE)" >> "$GITHUB_ENV"
+
+      - name: Arm (claude)
+        id: arm-claude
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+            echo "armed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "armed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Client leg off (claude)::No ANTHROPIC_API_KEY secret is configured, so the claude leg is skipped."
+          fi
+
+      # @anthropic-ai/claude-code's one lifecycle script places its platform binary; it is run by
+      # name, and every other script stays ignored.
+      - name: Install (claude)
+        if: steps.arm-claude.outputs.armed == 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/claude"
+          docker run --rm -v "$RUNNER_TEMP/claude:/opt/client" "$IMAGE" sh -ec \
+            'npm install -g --prefix /opt/client --ignore-scripts @anthropic-ai/claude-code && node /opt/client/lib/node_modules/@anthropic-ai/claude-code/install.cjs'
+
+      - name: Drive (claude)
+        if: steps.arm-claude.outputs.armed == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          docker run --rm -e ANTHROPIC_API_KEY -e PATH=/opt/client/bin:/usr/local/bin:/usr/bin:/bin \
+            -v "$GITHUB_WORKSPACE:/src:ro" -v "$RUNNER_TEMP/claude:/opt/client:ro" -w /src "$IMAGE" \
+            node scripts/qa/hook-runs.mjs --clients claude --require-observation
+
+      - name: Arm (cursor)
+        id: arm-cursor
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+        run: |
+          if [ -n "${CURSOR_API_KEY:-}" ]; then
+            echo "armed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "armed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Client leg off (cursor)::No CURSOR_API_KEY secret is configured, so the cursor leg is skipped."
+          fi
+
+      # The vendor's shell installer is the only supported route for this CLI; with HOME set to the
+      # client's folder it lands `agent` and its versions there.
+      - name: Install (cursor)
+        if: steps.arm-cursor.outputs.armed == 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/cursor"
+          docker run --rm -e HOME=/opt/client -v "$RUNNER_TEMP/cursor:/opt/client" "$IMAGE" sh -ec \
+            'curl -fsS https://cursor.com/install -o /tmp/install.sh && bash /tmp/install.sh && test -x /opt/client/.local/bin/agent'
+
+      - name: Drive (cursor)
+        if: steps.arm-cursor.outputs.armed == 'true'
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+        run: |
+          docker run --rm -e CURSOR_API_KEY -e PATH=/opt/client/.local/bin:/usr/local/bin:/usr/bin:/bin \
+            -v "$GITHUB_WORKSPACE:/src:ro" -v "$RUNNER_TEMP/cursor:/opt/client:ro" -w /src "$IMAGE" \
+            node scripts/qa/hook-runs.mjs --clients cursor --require-observation
+
+      - name: Arm (copilot)
+        id: arm-copilot
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+        run: |
+          if [ -n "${COPILOT_GITHUB_TOKEN:-}" ]; then
+            echo "armed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "armed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Client leg off (copilot)::No COPILOT_GITHUB_TOKEN secret is configured, so the copilot leg is skipped."
+          fi
+
+      - name: Install (copilot)
+        if: steps.arm-copilot.outputs.armed == 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/copilot"
+          docker run --rm -v "$RUNNER_TEMP/copilot:/opt/client" "$IMAGE" sh -ec \
+            'npm install -g --prefix /opt/client --ignore-scripts @github/copilot'
+
+      # COPILOT_GITHUB_TOKEN is the one of Copilot's three token variables that means Copilot alone.
+      - name: Drive (copilot)
+        if: steps.arm-copilot.outputs.armed == 'true'
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+        run: |
+          docker run --rm -e COPILOT_GITHUB_TOKEN -e PATH=/opt/client/bin:/usr/local/bin:/usr/bin:/bin \
+            -v "$GITHUB_WORKSPACE:/src:ro" -v "$RUNNER_TEMP/copilot:/opt/client:ro" -w /src "$IMAGE" \
+            node scripts/qa/hook-runs.mjs --clients copilot --require-observation
+
+  # A light unattended `/st-work` before a release, on demand: a dispatch with `release_prep` set and
+  # the ANTHROPIC_API_KEY secret configured, else every step after the arm is skipped and the job is
+  # green. It runs the cloud check's one-unit plan and run contract (scripts/qa/cloud-check.mjs) in a
+  # scratch repository whose origin is a bare remote with a cloud's push rules (no tag, no deletion, no
+  # push to `main`), with `--permission-prompts none` and no `--bare`, and is red unless a run branch
+  # reached the remote while `main` and the tags stayed as they were. `gh` is a stub that refuses, so
+  # the run's draft pull request is reported not opened rather than attempted against GitHub.
+  release-prep-unattended:
+    name: release prep (an unattended run, on demand, off without a secret)
+    if: github.repository == 'zomarit/stamity'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - name: Arm (claude)
+        id: arm-claude
+        env:
+          RELEASE_PREP: ${{ inputs.release_prep }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ "${RELEASE_PREP:-}" = "true" ] && [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+            echo "armed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "armed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Release prep off::It runs on a dispatch with release_prep set and the ANTHROPIC_API_KEY secret configured."
+          fi
+
+      - name: Checkout
+        if: steps.arm-claude.outputs.armed == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        if: steps.arm-claude.outputs.armed == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install
+        if: steps.arm-claude.outputs.armed == 'true'
+        run: npm ci
+
+      - name: Build
+        if: steps.arm-claude.outputs.armed == 'true'
+        run: npm run build
+
+      - name: Install (claude)
+        if: steps.arm-claude.outputs.armed == 'true'
+        run: |
+          npm install -g --prefix "$RUNNER_TEMP/claude" --ignore-scripts @anthropic-ai/claude-code
+          node "$RUNNER_TEMP/claude/lib/node_modules/@anthropic-ai/claude-code/install.cjs"
+
+      - name: Drive (claude)
+        if: steps.arm-claude.outputs.armed == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -eu
+          WORK="$RUNNER_TEMP/release-prep"
+          REPO="$WORK/repo"
+          REMOTE="$WORK/remote.git"
+          mkdir -p "$WORK/bin"
+          printf '#!/bin/sh\nexec node %s/dist/cli.js "$@"\n' "$GITHUB_WORKSPACE" > "$WORK/bin/stamity"
+          printf '#!/bin/sh\necho "gh is not available in the release-prep run" >&2\nexit 1\n' > "$WORK/bin/gh"
+          chmod +x "$WORK/bin/stamity" "$WORK/bin/gh"
+          export PATH="$WORK/bin:$RUNNER_TEMP/claude/bin:$PATH"
+
+          git init -q --initial-branch main "$REPO"
+          cd "$REPO"
+          git config user.email release-prep@invalid.local
+          git config user.name "stamity release prep"
+          printf '{"name":"release-prep","private":true,"type":"module","scripts":{"test":"node --test"}}\n' > package.json
+          stamity init -y --tools claude
+          git add -A
+          git commit -qm "release prep: the stamity setup"
+          node --input-type=module -e '
+            const [workspace, base] = process.argv.slice(1)
+            const { mkdirSync, writeFileSync } = await import("node:fs")
+            const check = await import(workspace + "/scripts/qa/cloud-check.mjs")
+            const now = new Date()
+            const stopBy = new Date(now.getTime() + 864e5).toISOString().replace(/\.\d{3}Z$/, "Z")
+            mkdirSync("docs/plans", { recursive: true })
+            writeFileSync(check.PLAN_PATH, check.planText({ stamp: base, date: now.toISOString().slice(0, 10) }))
+            writeFileSync(check.CONTRACT_PATH, check.contractText({ base, stopBy, answerer: "release-prep" }))
+          ' "$GITHUB_WORKSPACE" "$(git rev-parse HEAD)"
+          git add -A
+          git commit -qm "release prep: the plan and the run contract"
+          MAIN="$(git rev-parse HEAD)"
+
+          # The bare remote takes `main` once, then gets a cloud's push rules.
+          git init -q --bare "$REMOTE"
+          git push -q "$REMOTE" main
+          printf '%s\n' '#!/bin/sh' \
+            'zero=0000000000000000000000000000000000000000' \
+            'while read -r old new ref; do' \
+            '  case "$ref" in refs/tags/*|refs/heads/main) echo "refused: $ref" >&2; exit 1 ;; esac' \
+            '  if [ "$new" = "$zero" ]; then echo "refused: deleting $ref" >&2; exit 1; fi' \
+            'done' > "$REMOTE/hooks/pre-receive"
+          chmod +x "$REMOTE/hooks/pre-receive"
+          git remote add origin https://github.com/o/r.git
+          git config "url.$REMOTE.insteadOf" https://github.com/o/r.git
+
+          status=0
+          claude -p "/st-work --unattended docs/plans/001-cloud-check.md (run contract: run-contract.yml)" \
+            --permission-prompts none --output-format stream-json --verbose > "$WORK/transcript.jsonl" || status=$?
+          test "$status" -eq 0 || { echo "::error title=Release prep::claude -p exited $status"; exit 1; }
+          test "$(git -C "$REMOTE" rev-parse refs/heads/main)" = "$MAIN" || { echo "::error title=Release prep::main moved on the remote"; exit 1; }
+          test -z "$(git -C "$REMOTE" tag --list)" || { echo "::error title=Release prep::a tag reached the remote"; exit 1; }
+          branches="$(git -C "$REMOTE" for-each-ref --format='%(refname:short)' refs/heads/ | grep -vx main || true)"
+          test -n "$branches" || { echo "::error title=Release prep::no run branch reached the remote"; exit 1; }
+          echo "Release prep: run branch(es) $branches on the remote; main and the tags unchanged"
