@@ -2,11 +2,14 @@
 /* eslint-disable */
 // stamity — person-only shell guard.
 //
-// Refuses the person-only acts (a force push, a push of a tag or of the default
-// branch, a tag, a merge, a release, a publish, a secret or protection write) on
-// every shell call, and while a run is unattended any push that steps around
-// `stamity run checkpoint` and `stamity run end`. `curl` and `wget` appear below
-// only as command words it reads; it runs none.
+// Reads every shell call and GitHub MCP write for the person-only acts. Attended,
+// one that can be undone (a push of a tag or of the default branch, a tag, a
+// merge, a release, a publish, a secret or protection write) asks the person for
+// one click where the client can ask; a deletion, a force push or an act that
+// cannot be undone is refused on every client. While a run is unattended every
+// person-only act is refused, and any push that steps around `stamity run
+// checkpoint` and `stamity run end`. `curl` and `wget` appear below only as
+// command words it reads; it runs none.
 //
 // Generated file — regenerate it rather than editing; local edits are overwritten.
 // Trust posture: exec form, repo-committed, no dynamic evaluation, no network reach.
@@ -34,6 +37,8 @@ const PACKED_REFS_MAX_BYTES = 8388608;
 const PLACES_MAX = 32;
 const CANARY_SEGMENTS = [".stamity","preflight-canary.json"];
 const SHELL_TOOLS = new Set(["Bash", "PowerShell", "Shell", "bash", "powershell", "shell"]);
+// The GitHub MCP server's person-only tools and whether each is ask-class (personOnly.ts, GITHUB_MCP_ROWS).
+const MCP_ROWS = new Map([["mcp__github__merge_pull_request",true],["mcp__github__push_files",true],["mcp__github__create_or_update_file",true],["mcp__github__delete_file",true],["mcp__github__update_pull_request_branch",true],["mcp__github__pull_request_review_write",true],["mcp__github__create_pull_request_review",true],["mcp__github__submit_pending_pull_request_review",true],["mcp__github__update_pull_request",true],["mcp__github__update_pull_request_state",true],["mcp__github__update_pull_request_draft_state",true],["mcp__github__create_branch",true],["mcp__github__delete_repository",false],["mcp__github__create_pull_request",true]]);
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ANCHOR_SEGMENTS = ["hooks","generated",".stamity"];
@@ -1225,41 +1230,59 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			if (write) restAct(path, shown);
 		}
 		function restAct(path, shown) {
-			if (/^pulls\/[^/]+\/merge(\/|$)/i.test(path) || /(^|\/)merge-async(\/|$)/i.test(path)) return deny("pr-merge", `A REST merge (${shown})`);
-			if (/^pulls\/[^/]+\/reviews(\/[^/]+\/events)?$/i.test(path) && (hiddenBody || fields("event").some((event) => event === null || /^approve$/i.test(event.trim())))) return deny("pr-merge", `A REST review approval, or a review whose body the line cannot show (${shown})`);
+			if (/^pulls\/[^/]+\/merge(-async)?(\/|$)/i.test(path)) deny("pr-merge", `A REST merge (${shown})`);
+			if (/^pulls\/[^/]+\/reviews(\/[^/]+\/events)?$/i.test(path) && (hiddenBody || fields("event").some((event) => event === null || /^approve$/i.test(event.trim())))) deny("pr-merge", `A REST review approval, or a review whose body the line cannot show (${shown})`);
 			if (/^branches\/.+\/protection(\/|$)/i.test(path) || /^(rulesets|properties)(\/|$)/i.test(path)) {
-				if (method === "DELETE") return deny("protection-delete", `A protection, ruleset or custom property deletion (${shown})`);
-				return deny("protection", `A protection or ruleset write (${shown})`);
+				if (method === "DELETE") deny("protection-delete", `A protection, ruleset or custom property deletion (${shown})`);
+				else deny("protection", `A protection or ruleset write (${shown})`);
+			}
+			if (/^environments\/(?!.+\/(deployment_protection_rules|deployment-branch-policies|secrets|variables)(\/|$)).+$/i.test(path)) {
+				if (method === "DELETE") deny("protection-delete", `A deployment environment deletion (${shown})`);
+				else if (method === "PUT") deny("protection", `A deployment environment write (${shown})`);
+			}
+			if (/^environments\/.+\/(deployment_protection_rules|deployment-branch-policies)(\/|$)/i.test(path)) {
+				if (method === "DELETE") deny("protection-delete", `A deployment protection rule or branch policy deletion (${shown})`);
+				else deny("protection", `A deployment protection rule or branch policy write (${shown})`);
 			}
 			if (/^(repos\/[^/]+\/[^/]+|repositories\/[^/]+)$/i.test(path) && (method === "PATCH" || method === "DELETE")) {
-				if (method === "DELETE") return deny("repo-delete", `A repository settings write or deletion (${shown})`);
-				if (hiddenBody || fields("visibility").length > 0 || fields("private").length > 0) return deny("repo-irreversible", `A repository visibility change, or a settings write whose body the line cannot show (${shown})`);
-				return deny("protection", `A repository settings write or deletion (${shown})`);
+				if (method === "DELETE") deny("repo-delete", `A repository settings write or deletion (${shown})`);
+				else if (hiddenBody || fields("visibility").length > 0 || fields("private").length > 0) deny("repo-irreversible", `A repository visibility change, or a settings write whose body the line cannot show (${shown})`);
+				else deny("protection", `A repository settings write or deletion (${shown})`);
 			}
-			if (/^branches\/.+\/rename$/i.test(path)) return deny("protection", `A branch rename (${shown})`);
-			if (/^transfer$/i.test(path)) return deny("repo-irreversible", `A repository transfer (${shown})`);
-			if (/^contents(\/|$)/i.test(path) && landsOnDefault(fields("branch"))) return deny("push-default", `A REST commit to the default branch (${shown})`);
-			if (/^merges$/i.test(path) && landsOnDefault(fields("base")) || /^merge-upstream$/i.test(path) && landsOnDefault(fields("branch"))) return deny("push-default", `A REST merge into the default branch (${shown})`);
-			if (/^((actions|dependabot|codespaces|agents)|environments\/[^/]+)\/(secrets|variables)(\/|$)/i.test(path)) {
-				if (method === "DELETE") return deny("secrets-delete", `A secret or variable deletion (${shown})`);
-				return deny("secrets", `A secret or variable write (${shown})`);
+			if (/^branches\/.+\/rename$/i.test(path)) deny("protection", `A branch rename (${shown})`);
+			if (/^transfer$/i.test(path)) deny("repo-irreversible", `A repository transfer (${shown})`);
+			if (/^contents(\/|$)/i.test(path) && landsOnDefault(fields("branch"))) deny("push-default", `A REST commit to the default branch (${shown})`);
+			if (/^merges$/i.test(path) && landsOnDefault(fields("base")) || /^merge-upstream$/i.test(path) && landsOnDefault(fields("branch"))) deny("push-default", `A REST merge into the default branch (${shown})`);
+			if (/^((actions|dependabot|codespaces|agents)|environments\/.+)\/(secrets|variables)(\/|$)/i.test(path)) {
+				if (method === "DELETE") deny("secrets-delete", `A secret or variable deletion (${shown})`);
+				else deny("secrets", `A secret or variable write (${shown})`);
 			}
-			if (/^releases(\/|$)/i.test(path)) return method === "DELETE" ? deny("release-delete", `A release or asset deletion (${shown})`) : deny("release", `A release write (${shown})`);
-			if (/^git\/refs(\/|$)/i.test(path)) {
-				if (method === "DELETE") {
-					if (/^git\/refs\/tags(\/|$)/i.test(path)) return deny("tag-delete", `A REST tag ref deletion (${shown})`);
-					return deny("push-delete", `A REST ref deletion (${shown})`);
-				}
-				if (forced(fields("force"))) return deny("force-push", `A forced REST ref update (${shown})`);
-				const refs = fields("ref");
-				if (/^git\/refs\/tags(\/|$)/i.test(path) || /(^|[=\s])refs\/tags\//i.test(text) || refs.some((ref) => ref === null || /^refs\/tags\//i.test(ref))) return deny("push-tags", `A REST tag ref write (${shown})`);
-				if ([
-					/^git\/refs\/heads\/(.+)$/i.exec(path)?.[1] ?? "",
-					...[...text.matchAll(/(?:^|[=\s/])refs\/heads\/(\S+)/gi)].map((match) => match[1] ?? ""),
-					...refs.map((ref) => /^refs\/heads\/(.+)$/i.exec(ref ?? "")?.[1] ?? "")
-				].some((name) => defaults.has(name.toLowerCase()))) return deny("push-default", `A REST write to the default branch (${shown})`);
+			if (/^releases(\/|$)/i.test(path)) {
+				if (method === "DELETE") deny("release-delete", `A release or asset deletion (${shown})`);
+				else deny("release", `A release write (${shown})`);
 			}
-			return null;
+			if (/^git\/refs(\/|$)/i.test(path)) refAct(path, shown);
+		}
+		function refAct(path, shown) {
+			if (method === "DELETE") {
+				if (/^git\/refs\/tags(\/|$)/i.test(path)) deny("tag-delete", `A REST tag ref deletion (${shown})`);
+				else deny("push-delete", `A REST ref deletion (${shown})`);
+				return;
+			}
+			if (forced(fields("force")) || method === "PATCH" && hiddenBody) {
+				deny("force-push", `A forced REST ref update, or one whose body the line cannot show (${shown})`);
+				return;
+			}
+			const refs = fields("ref");
+			if (/^git\/refs\/tags(\/|$)/i.test(path) || /(^|[=\s])refs\/tags\//i.test(text) || refs.some((ref) => ref === null || /^refs\/tags\//i.test(ref))) {
+				deny("push-tags", `A REST tag ref write (${shown})`);
+				return;
+			}
+			if ([
+				/^git\/refs\/heads\/(.+)$/i.exec(path)?.[1] ?? "",
+				...[...text.matchAll(/(?:^|[=\s/])refs\/heads\/(\S+)/gi)].map((match) => match[1] ?? ""),
+				...refs.map((ref) => /^refs\/heads\/(.+)$/i.exec(ref ?? "")?.[1] ?? "")
+			].some((name) => defaults.has(name.toLowerCase()))) deny("push-default", `A REST write to the default branch (${shown})`);
 		}
 	}
 	function publishVerdict(cmd) {
@@ -1320,9 +1343,11 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			"bun"
 		].includes(positionals[index - 1] ?? "") || cmd[0] === "yarn" && index === 2 && positionals[0] === "workspace")));
 		for (const positionals of npm ? [positionalsOf(false), positionalsOf(true)] : [positionalsOf(false)]) for (const [index, word] of positionals.entries()) {
-			if (!(index === 0 ? npm : positionals[index - 1] === "npm")) continue;
+			const passed = index === 0 && cmd[0] === "pnpm" && (word === "unpublish" || word === "dist-tag");
+			const own = cmd[0] === "yarn" && word === "tag" && (index === 0 || index === 2 && positionals[0] === "workspace");
+			if (!passed && !own && !(index === 0 ? npm : positionals[index - 1] === "npm")) continue;
 			if (/^unp(?:u(?:b(?:l(?:i(?:sh?)?)?)?)?)?$/.test(word)) deny("unpublish", "Withdrawing a package (`npm unpublish`)");
-			const action = word === "dist-tag" || word === "dist-tags" ? positionals[index + 1] ?? "" : "";
+			const action = word === "dist-tag" || word === "dist-tags" || cmd[0] === "yarn" && word === "tag" ? positionals[index + 1] ?? "" : "";
 			if ([
 				"rm",
 				"r",
@@ -1349,7 +1374,11 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			else if (sub === "update-ref" && (args.some((arg) => /^(refs\/)?tags\//i.test(arg)) || args.includes("--stdin") && /refs\/tags\//i.test(command))) {
 				const zero = /(^|[^0-9a-f])(0{40}|0{64})([^0-9a-f]|$)/i;
 				const [, value = ""] = args.filter((arg, index) => !arg.startsWith("-") && args[index - 1] !== "-m");
-				if (args.includes("-d") || zero.test(value) || args.includes("--stdin") && (/\bdelete\b/.test(command) || zero.test(command))) deny("tag-delete", "A tag ref deleted (`git update-ref`)");
+				const word = String.raw`[^\s'"\\|;&<>()]`;
+				const separator = String.raw`(?: |\\(?:x[\da-fA-F]{1,2}|u[\da-fA-F]{1,4}|[0-7]{1,4}))`;
+				const before = String.raw`(?<=^|[^\w-]|\\(?:x[\da-fA-F]{1,2}|u[\da-fA-F]{1,4}|U[\da-fA-F]{1,8}|[0-7]{1,4}|[a-zA-Z])|%[-#0+ \d.]*[a-zA-Z])`;
+				const emptied = new RegExp(String.raw`${before}update${separator}+refs\/tags\/${word}+(?!${word})(?!${separator}${word})`, "i");
+				if (args.some((arg) => /^-[^-m]*d/.test(arg)) || zero.test(value) || args.includes("--stdin") && (/\bdelete\b/.test(command) || zero.test(command) || emptied.test(command))) deny("tag-delete", "A tag ref deleted (`git update-ref`)");
 				else deny("tag", "A tag ref write (`git update-ref`)");
 			} else if (sub === "update-ref" && args.includes("--stdin")) {
 				const word = String.raw`(?:[\s'"]|\\(?:x[\da-fA-F]{1,2}|u[\da-fA-F]{1,4}|U[\da-fA-F]{1,8}|[0-7]{1,4}|[a-z]))+([^\s'"\\|;&<>()]+)`;
@@ -2812,11 +2841,36 @@ function writeCanary(root) {
   }
 }
 
-/** The refusal this call earns, or null. */
+/** The sentences a person-only act earns (REQ-FLOW-102, REQ-FLOW-124), the act printed as the verdict's own text. */
+function askSentence(act, rule) {
+  return act + " is a person-only act (\`" + rule + "\`): approve it to let the agent run it once (REQ-FLOW-102).";
+}
+function refuseSentence(act, rule) {
+  return act + " deletes, force-pushes or cannot be undone (\`" + rule + "\`): it stays the person's to run, even with approval (REQ-FLOW-124). Give the person the exact command.";
+}
+function unattendedSentence(act, rule) {
+  return act + " is a person-only act (\`" + rule + "\`) and this run is unattended: list it on the morning list, whose walk runs it after one click.";
+}
+
+/**
+ * A GitHub MCP row's tool, classed by its row: the refused one refuses, and an ask-class one asks only while the mode
+ * reads attended, since a settings ask row would otherwise wait for nobody in an unattended run (REQ-FLOW-120).
+ */
+function mcpDecision(tool, ask, root) {
+  const act = "A call to the GitHub MCP server";
+  if (!ask) return { ask: false, reason: refuseSentence(act, tool) };
+  const why = unattendedBy(root);
+  return why === null ? { ask: true, reason: askSentence(act, tool) } : { ask: false, reason: unattendedSentence(act, tool) + " " + why };
+}
+
+/** The decision this call earns: null to allow it, else whether the client asks the person and the reason. */
 function decide() {
   const raw = readFileSync(0, "utf8");
   const payload = raw.trim() === "" ? {} : JSON.parse(raw);
   if (payload === null || typeof payload !== "object") throw new Error("payload");
+  if (typeof payload.tool_name === "string" && MCP_ROWS.has(payload.tool_name)) {
+    return mcpDecision(payload.tool_name, MCP_ROWS.get(payload.tool_name), repoRoot());
+  }
   const command = shellCommand(payload);
   if (command === null) return null;
   const root = repoRoot();
@@ -2825,31 +2879,47 @@ function decide() {
   // The PowerShell tool's text is PowerShell's command string, so the verdicts read it as one too, its backslash a
   // plain character and its backtick the escape, beside the text as it stands.
   const texts = /^powershell$/i.test(payload.tool_name ?? "") ? [command, "pwsh -Command '" + command.replaceAll("'", "'\\''") + "'"] : [command];
+  // Every place and every reading (REQ-FLOW-124): one refuse-class act refuses the call, so a deletion never rides an
+  // approval another reading or place would ask for.
+  const found = [];
   for (const ctx of contextsOf(command, cwd)) {
     for (const text of texts) {
       const always = personOnlyVerdict(text, ctx);
-      if (always.deny) return always.reason;
+      if (always.deny) found.push(always);
     }
   }
-  // The mode is read only for a call the unattended rule would refuse, so an unreadable record refuses no other call.
-  const run = texts.map((text) => unattendedPushVerdict(text)).find((verdict) => verdict.deny) ?? { deny: false };
-  if (run.deny) {
+  const refused = found.find((verdict) => !verdict.ask);
+  if (refused !== undefined) return { ask: false, reason: refuseSentence(refused.act, refused.rule) };
+  // The mode is read for every ask and for a call the unattended rule would refuse, so an unreadable record refuses
+  // those and no other call.
+  const run = () => texts.map((text) => unattendedPushVerdict(text)).find((verdict) => verdict.deny);
+  if (found.length > 0) {
     const why = unattendedBy(root);
-    if (why !== null) return run.reason + " " + why;
+    if (why === null) return { ask: true, reason: askSentence(found[0].act, found[0].rule) };
+    // Unattended, a push keeps the push rule's own reason; any other act goes on the morning list.
+    const push = run();
+    return { ask: false, reason: (push !== undefined ? push.reason : unattendedSentence(found[0].act, found[0].rule)) + " " + why };
+  }
+  const push = run();
+  if (push !== undefined) {
+    const why = unattendedBy(root);
+    if (why !== null) return { ask: false, reason: push.reason + " " + why };
   }
   if (/(?:^|[^\w-])gate\s+preflight(?![\w-])/.test(command)) writeCanary(root);
   return null;
 }
 
-let reason = null;
+let decision = null;
 try {
-  reason = decide();
+  decision = decide();
 } catch (error) {
-  // Fail closed: a shell call this guard could not read is not one it allows.
+  // Fail closed: a shell call this guard could not read is not one it allows, nor one it asks the person about.
   const what = error instanceof SyntaxError ? "an unreadable payload" : error && error.code ? error.code + (typeof error.path === "string" ? " on " + error.path : "") : "an internal fault";
-  reason = "The person-only guard could not decide this shell call (" + what + "), so it is refused (REQ-FLOW-102).";
+  decision = { ask: false, reason: "The person-only guard could not decide this shell call (" + what + "), so it is refused (REQ-FLOW-102)." };
 }
-if (reason !== null) {
-  process.stderr.write("stamity person-only guard: " + reason + "\n");
+if (decision !== null && decision.ask) {
+  process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "ask", permissionDecisionReason: decision.reason } }) + "\n");
+} else if (decision !== null) {
+  process.stderr.write("stamity person-only guard: " + decision.reason + "\n");
   process.exitCode = 2;
 }
