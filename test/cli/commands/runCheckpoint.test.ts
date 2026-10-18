@@ -714,6 +714,54 @@ describe("stamity run checkpoint", () => {
     });
   });
 
+  // review/84: a --paths entry whose deletion is already staged (git rm) is neither in the work tree nor in the index,
+  // so it was dropped as "no such file" and then refused as staged outside --paths; it is now committed as staged.
+  describe("a --paths entry whose deletion is already staged (review/84)", () => {
+    const committedChanges = (repo: string): string[] =>
+      git(repo, ["show", "--name-status", "--format=", "--no-renames", "HEAD"]).split("\n").filter((row) => row !== "");
+
+    it("commits and pushes a file's and a folder's deletion staged beforehand with git rm", async () => {
+      const { repo, remote } = await seed("attended");
+      await put(repo, "docs/x.md", "x\n");
+      git(repo, ["add", "--", "docs/x.md"]);
+      git(repo, ["commit", "-q", "-m", "docs"]);
+      git(repo, ["rm", "-q", "--", "b.txt"]);
+      git(repo, ["rm", "-q", "-r", "--", "docs"]);
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "b.txt", "docs"]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [] });
+      expect(committedChanges(repo)).toEqual(expect.arrayContaining(["D\tb.txt", "D\tdocs/x.md"]));
+      expect(pushedTree(remote)).not.toContain("b.txt");
+      expect(pushedTree(remote)).not.toContain("docs/x.md");
+    });
+
+    it("keeps today's reading of a deletion not yet staged, and of a path no layer holds", async () => {
+      const { repo, remote } = await seed("attended");
+      await rm(join(repo, "b.txt"));
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "b.txt", "nowhere.txt"]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: ["not staged: nowhere.txt (no such file)"] });
+      expect(committedChanges(repo)).toEqual(expect.arrayContaining(["D\tb.txt"]));
+      expect(pushedTree(remote)).not.toContain("b.txt");
+    });
+
+    it("still holds a held path whose deletion is staged, the pushed branch keeping Base:'s copy", async () => {
+      const { repo, remote, base } = await seed("unattended");
+      git(repo, ["rm", "-q", "--", ".cursorrules"]);
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", ".cursorrules"]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [], held: [".cursorrules"] });
+      expect(pushedFile(remote, ".cursorrules")).toBe(git(repo, ["show", `${base}:.cursorrules`]));
+      expect(await readFile(join(repo, PATCH), "utf8")).toContain("diff --git a/.cursorrules b/.cursorrules\ndeleted file mode");
+    });
+  });
+
   // pr/7: an unread code file does not hold the push, and notDone says the scan left it out.
   it("names a pushed code file the scan could not read in notDone, and still pushes with exit 0", async () => {
     const { repo, remote } = await seed("attended");

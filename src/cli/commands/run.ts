@@ -849,7 +849,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   const heldDir = `${runDir}/${HELD_DIR}`;
   const patchRel = `${heldDir}/${HELD_PATCH}`;
   const patches = [...new Set([patchRel, ...listPatches(join(cwd, heldDir)).map((name) => `${heldDir}/${name}`)])].map(fromTop);
-  const named = await namedPaths(top, cwd, prefix, (opts["paths"] ?? []) as string[], result.notDone);
+  const { paths: named, deleted: namedDeleted } = await namedPaths(top, cwd, prefix, (opts["paths"] ?? []) as string[], result.notDone);
   const ignored = await ignoredPaths(top, [...own, ...named, ...patches]);
   if (ignored === null) {
     result.notDone.push("stage failed: git check-ignore could not read the ignore rules");
@@ -871,7 +871,8 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
     lines.push(`would stage: ${list(stage)}`, `would hold: ${list(result.held)}`, "Dry run: nothing was staged, written, committed or pushed.");
     return finish(true, { dryRun: true });
   }
-  if (!(await add(top, stage, result.notDone))) return finish(false);
+  // review/84: a --paths deletion already staged is committed as it stands; git add refuses a path no layer holds.
+  if (!(await add(top, stage.filter((path) => !namedDeleted.includes(path)), result.notDone))) return finish(false);
 
   // (2) Unattended: the person-only paths' change goes to an inert patch, and those paths back to Base: in the index.
   let unsectioned: string[] = [];
@@ -1230,10 +1231,12 @@ function readsUnattended(mode: "attended" | "unattended" | null, flag: string | 
 
 /**
  * `--paths` as top-level-relative paths: one that leaves the repository or
- * names the whole project, or that neither the work tree nor the index holds,
- * is left out and named in `notDone`.
+ * names the whole project, or that neither the work tree nor the index holds
+ * and whose deletion is not already staged, is left out and named in `notDone`.
+ * `deleted` lists the kept ones whose deletion is already staged (review/84):
+ * `git add` refuses a path no layer holds, so they are committed as staged.
  */
-async function namedPaths(top: string, cwd: string, prefix: string, given: readonly string[], notDone: string[]): Promise<string[]> {
+async function namedPaths(top: string, cwd: string, prefix: string, given: readonly string[], notDone: string[]): Promise<{ paths: string[]; deleted: string[] }> {
   const kept: string[] = [];
   const missing: string[] = [];
   const project = prefix.replace(/\/$/, "");
@@ -1245,14 +1248,35 @@ async function namedPaths(top: string, cwd: string, prefix: string, given: reado
     else if (exists(join(top, path))) kept.push(path);
     else missing.push(path);
   }
-  if (missing.length === 0) return kept;
+  if (missing.length === 0) return { paths: kept, deleted: [] };
   // A path the work tree no longer holds still stages as a deletion where the index tracks it.
   const tracked = await indexTracked(top, missing);
+  const deleted = await stagedDeletions(top, missing.filter((path) => !tracked.has(path)));
   for (const path of missing) {
-    if (tracked.has(path)) kept.push(path);
+    if (tracked.has(path) || deleted.has(path)) kept.push(path);
     else notDone.push(`not staged: ${path} (no such file)`);
   }
-  return kept;
+  return { paths: kept, deleted: [...deleted] };
+}
+
+/**
+ * The top-relative `paths` whose deletion the index already holds against `HEAD`
+ * (`git rm`), as a file or as a folder holding one (review/84). None where git could not answer.
+ */
+async function stagedDeletions(top: string, paths: readonly string[]): Promise<Set<string>> {
+  if (paths.length === 0) return new Set();
+  const read = await git(top, ["diff", "--cached", "--name-only", "-z", "--diff-filter=D", ...DIFF_PINS, "HEAD", "--", ...paths], CHECKPOINT);
+  return namedIn(paths, read.code === 0 ? read.stdout.split("\0").filter((name) => name !== "") : []);
+}
+
+/** The `paths` that name one of `names` exactly, or a folder holding one. */
+function namedIn(paths: readonly string[], names: readonly string[]): Set<string> {
+  const found = new Set<string>();
+  for (const path of paths) {
+    const under = path.endsWith("/") ? path : `${path}/`;
+    if (names.some((name) => name === path || name.startsWith(under))) found.add(path);
+  }
+  return found;
 }
 
 /**
@@ -1261,15 +1285,9 @@ async function namedPaths(top: string, cwd: string, prefix: string, given: reado
  * its deletion when it is one of these. None where git could not answer.
  */
 async function indexTracked(top: string, paths: readonly string[]): Promise<Set<string>> {
-  const found = new Set<string>();
-  if (paths.length === 0) return found;
+  if (paths.length === 0) return new Set();
   const read = await git(top, ["ls-files", "-z", "--cached", "--", ...paths], CHECKPOINT);
-  const names = read.code === 0 ? read.stdout.split("\0").filter((name) => name !== "") : [];
-  for (const path of paths) {
-    const under = path.endsWith("/") ? path : `${path}/`;
-    if (names.some((name) => name === path || name.startsWith(under))) found.add(path);
-  }
-  return found;
+  return namedIn(paths, read.code === 0 ? read.stdout.split("\0").filter((name) => name !== "") : []);
 }
 
 /**
