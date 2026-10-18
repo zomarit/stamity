@@ -155,6 +155,12 @@ export interface ClientCloudFact {
    * of the session it prints in.
    */
   readonly sessionStart?: string;
+  /**
+   * The person check that ran this fact against the vendor's cloud, and its
+   * ISO date (REQ-PROVE-044). Absent until one has: the capability matrix then
+   * reads "not run", so a fact is never taken for one a person saw happen.
+   */
+  readonly run?: { record: string; date: string };
 }
 
 /**
@@ -208,6 +214,58 @@ export const CLIENT_CLOUD_FACTS: readonly ClientCloudFact[] = [
     status: "documented",
     citation: { url: "https://code.claude.com/docs/en/cloud-environments", accessDate: "2026-10-15" },
     sessionStart: "A missing review-gate counter is rebuilt from the run record on this branch.",
+  },
+  {
+    tool: "claude",
+    subject: "Draft pull request",
+    fact:
+      "The GitHub proxy refuses a tag push and a branch deletion but no branch push, the default " +
+      "branch's included, so a run opens its draft pull request over `gh api` (REST) and only branch " +
+      "protection or a ruleset keeps it off the default branch.",
+    status: "documented",
+    citation: { url: "https://code.claude.com/docs/en/cloud-environments", accessDate: "2026-10-18" },
+  },
+  {
+    tool: "claude",
+    subject: "Questions",
+    fact:
+      "A question Claude asks holds the session idle until a person answers it, up to the " +
+      "environment's expiry, and the session continues from the answer; with nobody there, an " +
+      "unattended run takes its declared default instead of asking.",
+    status: "documented",
+    citation: { url: "https://code.claude.com/docs/en/claude-code-on-the-web", accessDate: "2026-10-18" },
+  },
+  {
+    tool: "claude",
+    subject: "GitHub Action job cap",
+    fact:
+      "The GitHub Action runs as a GitHub Actions job, and a job on a GitHub-hosted runner is stopped " +
+      "and failed at 6 hours of execution time: a surface for a short task, never an overnight surface.",
+    status: "documented",
+    citation: { url: "https://docs.github.com/en/actions/reference/limits", accessDate: "2026-10-18" },
+  },
+  {
+    tool: "claude",
+    subject: "GitHub Action questions",
+    fact:
+      "The Action's page names no question tool among the tools a run is given by default, and nobody " +
+      "sits in the job to answer one; that it has none rests on that silence, so a run there takes " +
+      "its declared defaults.",
+    status: "unverified",
+    citation: { url: "https://code.claude.com/docs/en/github-actions", accessDate: "2026-10-18" },
+  },
+  {
+    tool: "claude",
+    subject: "GitHub Action configuration",
+    fact:
+      "On a pull request the Action restores `.claude/`, `CLAUDE.md` and the other Claude configuration " +
+      "paths from the base branch before Claude starts, keeping the pull request's copies under " +
+      "`.claude-pr/` for reference, so the hooks that run are the base branch's.",
+    status: "documented",
+    citation: {
+      url: "https://github.com/anthropics/claude-code-action/blob/main/docs/security.md",
+      accessDate: "2026-10-18",
+    },
   },
   {
     tool: "copilot",
@@ -267,6 +325,44 @@ export const CLIENT_CLOUD_FACTS: readonly ClientCloudFact[] = [
     citation: { url: "https://docs.github.com/en/copilot/reference/hooks-reference", accessDate: "2026-10-15" },
   },
   {
+    tool: "copilot",
+    subject: "Draft pull request",
+    fact:
+      "The cloud agent pushes to one branch and opens a draft pull request, and cannot mark it ready " +
+      "for review, approve it or merge it. GitHub Actions workflows on it wait for a write-access " +
+      "person's approval unless the repository lets them run automatically.",
+    status: "documented",
+    citation: {
+      url: "https://docs.github.com/en/copilot/concepts/security-governance-and-network-settings/risks-and-mitigations",
+      accessDate: "2026-10-18",
+    },
+  },
+  {
+    tool: "copilot",
+    subject: "Session limit",
+    fact:
+      "Each cloud agent session stops at 59 minutes, a limit that cannot be extended, so a long run is " +
+      "a chain of sessions, each ending in a pushed checkpoint.",
+    status: "documented",
+    citation: {
+      url: "https://docs.github.com/en/copilot/concepts/copilot-surfaces/copilot-on-github",
+      accessDate: "2026-10-18",
+    },
+  },
+  {
+    tool: "copilot",
+    subject: "Next session",
+    fact:
+      "A write-access person's `@copilot` comment on the pull request starts a new session there, " +
+      "which remembers the earlier sessions on that pull request; the agent answers no comment from " +
+      "anyone without write access.",
+    status: "documented",
+    citation: {
+      url: "https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/use-cloud-agent-on-github",
+      accessDate: "2026-10-18",
+    },
+  },
+  {
     tool: "cursor",
     subject: "Project hooks",
     fact:
@@ -313,6 +409,26 @@ export const CLIENT_CLOUD_FACTS: readonly ClientCloudFact[] = [
       "claims nothing about it.",
     status: "unverified",
     citation: { url: "https://cursor.com/docs/hooks", accessDate: "2026-10-15" },
+  },
+  {
+    tool: "cursor",
+    subject: "Draft pull request",
+    fact:
+      "A cloud agent opens pull requests and tries to fix CI failures on the ones it creates. Whether " +
+      "such a pull request is a draft the page does not say, so a run opens its own draft through the " +
+      "run verbs and never marks it ready.",
+    status: "not documented",
+    citation: { url: "https://cursor.com/docs/cloud-agent/capabilities", accessDate: "2026-10-18" },
+  },
+  {
+    tool: "cursor",
+    subject: "Questions",
+    fact:
+      "A cloud agent waits on a person only through a subscription its prompt describes, such as " +
+      "asking in Slack and continuing once someone replies. The page says nothing of a question asked " +
+      "without one, so an unattended run asks nothing and takes its declared default.",
+    status: "not documented",
+    citation: { url: "https://cursor.com/docs/cloud-agent/capabilities", accessDate: "2026-10-18" },
   },
   {
     tool: "codex",

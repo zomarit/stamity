@@ -443,6 +443,12 @@ function resolveCloudGlance(cloud: readonly ClientCloudFact[]): Readonly<Record<
     if (subjects.has(key)) fail(`${label} is declared twice.`);
     subjects.add(key);
     requireDatedSource(label, row.citation);
+    if (row.run !== undefined) {
+      if (row.run.record.trim() === "") fail(`${label} names a person check with no record.`);
+      if (!ISO_DATE.test(row.run.date)) {
+        fail(`${label} dates its person check "${row.run.date}", which is not an ISO calendar date (YYYY-MM-DD).`);
+      }
+    }
     if (row.glance === undefined) continue;
     if (glance[row.tool] !== undefined) fail(`The cloud-facts table gives \`${row.tool}\` two glance rows.`);
     glance[row.tool] = `${row.glance} — read ${row.citation.accessDate}`;
@@ -776,6 +782,11 @@ function cloudStatusCell(row: ClientCloudFact): string {
   return row.status === "not documented" ? `not documented, read ${row.citation.accessDate}` : row.status;
 }
 
+/** The person check behind a fact, or "not run": a vendor's word is not a run (REQ-PROVE-044). */
+function cloudRunCell(row: ClientCloudFact): string {
+  return row.run === undefined ? "not run" : `${row.run.record}, run ${row.run.date}`;
+}
+
 function cloudSection(cloud: readonly ClientCloudFact[]): string[] {
   return [
     "## Cloud sessions",
@@ -785,11 +796,12 @@ function cloudSection(cloud: readonly ClientCloudFact[]): string[] {
         "enforce there, one dated fact a row. The session-start hook names a detected cloud " +
         "session and prints the session line each of that client's rows carries. A row marked `not documented` " +
         "states the assumption made where the cited page is silent; one marked `unverified` " +
-        "names the part no page read on its date supports.",
+        "names the part no page read on its date supports. The person check column names the run " +
+        "that saw a fact happen in that cloud, and reads `not run` where none has.",
     ),
     "",
     ...table(
-      ["Client", "Subject", "Fact", "Session start prints", "Status", "Source"],
+      ["Client", "Subject", "Fact", "Session start prints", "Status", "Source", "Person check"],
       TOOLS.flatMap((tool) =>
         cloud
           .filter((row) => row.tool === tool)
@@ -800,6 +812,7 @@ function cloudSection(cloud: readonly ClientCloudFact[]): string[] {
             row.sessionStart === undefined ? "—" : row.sessionStart,
             cloudStatusCell(row),
             `<${row.citation.url}> — accessed ${row.citation.accessDate}`,
+            cloudRunCell(row),
           ]),
       ),
     ),
@@ -1045,7 +1058,8 @@ function coverageSection(coverage: readonly AdapterAllowlistCoverage[]): string[
  *
  * Throws `EngineError` (`ADAPTER_ERROR`) when a data set does not cover the
  * clients exactly once, when a client's facts carry no dated citation, when a
- * cloud fact is undated, blank or repeated or a client has no one glance row, when a
+ * cloud fact is undated, blank or repeated, names a person check with no record or
+ * an undated one, or a client has no one glance row, when a
  * revisit trigger is half-stated or watches a client with no facts here, or when
  * the always-on disclosure is missing a client's ceiling or carries the two
  * shared-byte figures the wrong way round.

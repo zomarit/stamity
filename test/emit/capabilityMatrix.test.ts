@@ -725,6 +725,100 @@ describe("the cloud column and the Cloud sessions section", () => {
     expect(row.citation.url).toBe("https://docs.github.com/en/copilot/reference/hooks-reference");
   });
 
+  /** The person-check cell of a Cloud sessions row: the column after Source. */
+  const personCheck = (doc: string, tool: Tool, subject: string): string | undefined => {
+    const line = tableRows(section(doc, "## Cloud sessions")).find(
+      (row) => cells(row)[0] === `\`${tool}\`` && cells(row)[1] === subject,
+    );
+    return line === undefined ? undefined : cells(line)[6];
+  };
+
+  it("names each fact's person check, reading \"not run\" where a fact carries none (REQ-PROVE-044)", () => {
+    expect(tableRows(section(page, "## Cloud sessions")).length).toBeGreaterThan(1);
+    // No person check has run against a cloud yet: every live row reads "not run".
+    for (const fact of CLIENT_CLOUD_FACTS) {
+      expect(fact.run, `${fact.tool} ${fact.subject}`).toBeUndefined();
+      expect(personCheck(page, fact.tool, fact.subject), `${fact.tool} ${fact.subject}`).toBe("not run");
+    }
+    // Activated: one fact carrying a run names its check and date, and only that row moves.
+    const ran = cloudFact("claude", "Draft pull request");
+    const withRun = renderCapabilityMatrixFrom(
+      withCloud(
+        CLIENT_CLOUD_FACTS.map((row) => (row === ran ? { ...row, run: { record: "P1 cloud check", date: "2026-10-20" } } : row)),
+      ),
+    );
+    expect(personCheck(withRun, "claude", "Draft pull request")).toBe("P1 cloud check, run 2026-10-20");
+    expect(personCheck(withRun, "claude", "Questions")).toBe("not run");
+    expect(personCheck(withRun, "copilot", "Session limit")).toBe("not run");
+  });
+
+  it("refuses a person check with no record or an undated one, naming the fact", () => {
+    const ran = cloudFact("cursor", "Questions");
+    const call = (run: { record: string; date: string }): string =>
+      renderCapabilityMatrixFrom(withCloud(CLIENT_CLOUD_FACTS.map((row) => (row === ran ? { ...row, run } : row))));
+    expect(() => call({ record: " ", date: "2026-10-20" })).toThrowError(EngineError);
+    expect(() => call({ record: " ", date: "2026-10-20" })).toThrowError(
+      /`cursor` cloud fact "Questions" names a person check with no record/,
+    );
+    expect(() => call({ record: "P2 cloud check", date: "last night" })).toThrowError(
+      /`cursor` cloud fact "Questions" dates its person check "last night", which is not an ISO calendar date/,
+    );
+  });
+
+  it("states Claude Code's GitHub Action as a six-hour job with no question tool by default (REQ-FLOW-113)", () => {
+    const cap = cloudFact("claude", "GitHub Action job cap");
+    expect(cap.status).toBe("documented");
+    expect(cap.fact).toContain("6 hours");
+    expect(cap.fact).toContain("never an overnight surface");
+    expect(cap.citation).toEqual({ url: "https://docs.github.com/en/actions/reference/limits", accessDate: "2026-10-18" });
+
+    const questions = cloudFact("claude", "GitHub Action questions");
+    expect(questions.status).toBe("unverified");
+    expect(questions.fact).toContain("declared default");
+
+    const config = cloudFact("claude", "GitHub Action configuration");
+    expect(config.status).toBe("documented");
+    expect(config.fact).toContain("`.claude/`");
+    expect(config.fact).toContain("base branch");
+    expect(config.citation.url).toBe("https://github.com/anthropics/claude-code-action/blob/main/docs/security.md");
+
+    // The Action's job prints no session line: no row of it carries one.
+    for (const row of [cap, questions, config]) {
+      expect(row.sessionStart, row.subject).toBeUndefined();
+      expect(personCheck(page, "claude", row.subject), row.subject).toBe("not run");
+    }
+  });
+
+  it("gives each cloud its unattended rows: the draft-PR ending, questions, and Copilot's chained sessions (REQ-PROVE-044)", () => {
+    const UNATTENDED: Readonly<Partial<Record<Tool, readonly string[]>>> = {
+      claude: ["Draft pull request", "Questions"],
+      copilot: ["Draft pull request", "Ask decisions", "Session limit", "Next session"],
+      cursor: ["Draft pull request", "Questions"],
+    };
+    for (const [tool, subjects] of Object.entries(UNATTENDED) as [Tool, readonly string[]][]) {
+      for (const subject of subjects) {
+        const fact = cloudFact(tool, subject);
+        expect(fact.sessionStart === undefined || fact.status === "documented", `${tool} ${subject}`).toBe(true);
+        const row = rows.find((line) => cells(line)[0] === `\`${tool}\`` && cells(line)[1] === subject);
+        expect(row, `${tool} ${subject}`).toBeDefined();
+      }
+    }
+    // Copilot's unattended rows read documented, not run: no Copilot cloud-agent account exists.
+    for (const subject of UNATTENDED.copilot ?? []) {
+      const row = rows.find((line) => cells(line)[0] === "`copilot`" && cells(line)[1] === subject) ?? "";
+      expect([cells(row)[4], cells(row)[6]], subject).toEqual(["documented", "not run"]);
+    }
+    expect(cloudFact("copilot", "Session limit").fact).toContain("59 minutes");
+    expect(cloudFact("copilot", "Next session").fact).toContain("`@copilot`");
+    expect(cloudFact("copilot", "Draft pull request").fact).toContain("cannot mark it ready for review");
+    expect(cloudFact("claude", "Draft pull request").fact).toContain("refuses a tag push");
+    expect(cloudFact("claude", "Questions").fact).toContain("until a person answers");
+    // Cursor's pages are silent on whether its pull request is a draft and on a question
+    // asked with no subscription, so those rows state the assumption and are dated as such.
+    expect(cloudFact("cursor", "Draft pull request").status).toBe("not documented");
+    expect(cloudFact("cursor", "Questions").status).toBe("not documented");
+  });
+
   it("holds the session start's cloud lines equal to the table's, marker and order included", () => {
     const block = /^const SESSIONS = \[\n([\s\S]*?)\n\];$/m.exec(buildSessionStartScript())?.[1] ?? "";
     const sessions = block
