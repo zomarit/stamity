@@ -10,7 +10,7 @@
  * so a gate that denied every question, or none, fails.
  */
 import { spawnSync } from "node:child_process";
-import { chmodSync } from "node:fs";
+import { chmodSync, mkdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   buildUnattendedAskGate,
@@ -298,6 +298,28 @@ describe("which record the gate reads", () => {
       ".stamity/runs/zzzz/record.md": record("in progress", "attended"),
     });
     expect(denies(gate)).toBe(true);
+  });
+
+  it("reads every run folder's head: 50 newer closed records or empty future-dated folders hide no open one (pr/54)", async () => {
+    const files: Record<string, string> = { ".stamity/runs/2026-01-01_old/record.md": record("in progress", "unattended") };
+    for (let day = 1; day <= 50; day += 1) {
+      files[`.stamity/runs/2026-09-${String(day).padStart(2, "0")}_r${day}/record.md`] = record("done", "unattended");
+    }
+    const gate = await placeGate(files);
+    expect(refusal(gate)).toBe(byRecord("2026-01-01_old"));
+    for (let n = 1; n <= 50; n += 1) mkdirSync(getRepo().path(".stamity", "runs", `9999-12-31_x${n}`), { recursive: true });
+    expect(refusal(gate)).toBe(byRecord("2026-01-01_old"));
+    // One fact away: the old record closed, and nothing else in progress, lets the question through.
+    await getRepo().seedFiles({ ".stamity/runs/2026-01-01_old/record.md": record("done", "unattended") });
+    expect(denies(gate)).toBe(false);
+  });
+
+  it("fails open past the run-folder ceiling, naming the folder and the code, and refuses at it (pr/54)", async () => {
+    const gate = await placeGate({ ".stamity/runs/2026-10-16_night/record.md": record("in progress", "unattended") });
+    for (let n = 1; n <= 1_999; n += 1) mkdirSync(getRepo().path(".stamity", "runs", `2026-10-16_r${n}`), { recursive: true });
+    expect(refusal(gate)).toBe(byRecord("2026-10-16_night"));
+    mkdirSync(getRepo().path(".stamity", "runs", "2026-10-16_r2000"));
+    expect(run(gate, payload())).toEqual({ status: 0, stdout: "", stderr: faultNote(getRepo().path(".stamity", "runs"), "RUN_FOLDERS_OVER_2000") });
   });
 
   it("resolves the repository from the working directory in a plugin root's layout", async () => {

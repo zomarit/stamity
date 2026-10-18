@@ -3075,8 +3075,12 @@ if (outcome !== null) {
 
 // ── 5. Person-only shell guard ───────────────────────────────────
 
-/** Run folders whose record heads the guard reads, newest by name first. */
-const GUARD_RUNS_READ_MAX = 50;
+/**
+ * The most run folders the guard and the ask gate read: each one's record head is read, none skipped for its name's
+ * place in the sort (pr/54), and past this many the read faults, which the guard refuses on and the ask gate lets
+ * the question through on.
+ */
+const GUARD_RUN_FOLDERS_MAX = 2_000;
 
 /** Ceilings on the tag names the guard collects and the `packed-refs` file it reads. */
 const GUARD_TAG_NAMES_MAX = 10_000;
@@ -3126,10 +3130,12 @@ function guardDecisionOutput(tool: Tool): string {
  * `HEAD` cannot be read (a reftable repository's placeholder among it), an implied destination
  * counts as the default branch; `main` and `master` always count. The mode comes
  * off the run records, read only for a call the unattended rule would refuse:
- * unattended when any of the {@link GUARD_RUNS_READ_MAX} newest run folders,
- * debug rounds included, holds an in-progress record reading `Mode:
+ * unattended when any run folder, debug rounds included, holds an
+ * in-progress record reading `Mode:
  * unattended`, or when `STAMITY_UNATTENDED` is set (not "", "false", "0") and
- * none reads `Mode: attended`; the refusal names which.
+ * none reads `Mode: attended`; the refusal names which. Every run folder's head
+ * is read (pr/54); more than {@link GUARD_RUN_FOLDERS_MAX} of them is a fault,
+ * so that call is refused.
  *
  * A command naming `gate preflight` that the guard allows writes
  * `{ "at": <ISO> }` to {@link PREFLIGHT_CANARY_FILE}, the pre-flight's proof
@@ -3169,7 +3175,7 @@ const MODE = ${regex(RECORD_MODE_PATTERN)};
 const IN_PROGRESS = ${regex(IN_PROGRESS_PATTERN)};
 const HEAD_LINES = ${RECORD_HEAD_LINES};
 const HEAD_READ_BYTES = ${RECORD_HEAD_READ_BYTES};
-const RUNS_READ_MAX = ${GUARD_RUNS_READ_MAX};
+const RUN_FOLDERS_MAX = ${GUARD_RUN_FOLDERS_MAX};
 const GIT_MAX_BYTES = ${GIT_METADATA_MAX_BYTES};
 const TAG_NAMES_MAX = ${GUARD_TAG_NAMES_MAX};
 const PACKED_REFS_MAX_BYTES = ${GUARD_PACKED_REFS_MAX_BYTES};
@@ -3676,12 +3682,15 @@ function unattendedBy(root) {
   } catch (error) {
     if (!error || (error.code !== "ENOENT" && error.code !== "ENOTDIR")) throw error;
   }
+  // pr/54: every run folder's head, so no pile of folders named after an open record's pushes it out of the read.
   const names = entries
     .filter((entry) => entry.isDirectory() && RUN_ID.test(entry.name))
     .map((entry) => entry.name)
     .sort()
-    .reverse()
-    .slice(0, RUNS_READ_MAX);
+    .reverse();
+  if (names.length > RUN_FOLDERS_MAX) {
+    throw Object.assign(new Error("run folders"), { code: "RUN_FOLDERS_OVER_" + RUN_FOLDERS_MAX, path: runsDir });
+  }
   for (const name of names) {
     const head = recordHead(join(runsDir, name, RECORD_FILE));
     if (head !== null && head.inProgress && head.mode !== null) modes[head.mode] = true;
@@ -3906,8 +3915,8 @@ const ASK_TOOL_NAME = "AskUserQuestion";
  * Until that adapter asks for it, nothing renders it.
  *
  * The mode comes off the run records the way {@link buildPersonOnlyGuardScript}
- * reads them — the {@link GUARD_RUNS_READ_MAX} newest run folders by name, debug
- * rounds included, each record's head only — and, like the guard, it reads no
+ * reads them — every run folder, debug rounds included, each record's head
+ * only, more than {@link GUARD_RUN_FOLDERS_MAX} of them a fault (pr/54) — and, like the guard, it reads no
  * order among them: a run id carries only the UTC date, so two runs of one day
  * would rank by slug (review/101). Any in-progress record reading `Mode:
  * unattended` refuses. Otherwise an in-progress record reading `Mode: attended`
@@ -3962,7 +3971,7 @@ const BRANCH = ${regex(RECORD_BRANCH_PATTERN)};
 const IN_PROGRESS = ${regex(IN_PROGRESS_PATTERN)};
 const HEAD_LINES = ${RECORD_HEAD_LINES};
 const HEAD_READ_BYTES = ${RECORD_HEAD_READ_BYTES};
-const RUNS_READ_MAX = ${GUARD_RUNS_READ_MAX};
+const RUN_FOLDERS_MAX = ${GUARD_RUN_FOLDERS_MAX};
 const GIT_MAX_BYTES = ${GIT_METADATA_MAX_BYTES};
 const MARKER_SEGMENTS = ${json(RUN_ENDED_MARKER_FILE.split("/"))};
 const MARKER_MAX_AGE_MS = ${RUN_ENDED_MAX_AGE_MS};
@@ -4004,7 +4013,7 @@ function recordHead(path) {
   return { inProgress: status !== null && IN_PROGRESS.test(status), mode, branch };
 }
 
-/** The heads of the RUNS_READ_MAX newest run folders' records, each with its repo-relative path; no records folder holds none. */
+/** The heads of every run folder's record, each with its repo-relative path; no records folder holds none, more than RUN_FOLDERS_MAX throws. */
 function recordHeads(root) {
   const runsDir = join(root, ...RUNS_SEGMENTS);
   let entries = [];
@@ -4013,12 +4022,15 @@ function recordHeads(root) {
   } catch (error) {
     if (!error || (error.code !== "ENOENT" && error.code !== "ENOTDIR")) throw error;
   }
+  // pr/54: every run folder's head, so no pile of folders named after an open record's pushes it out of the read.
   const names = entries
     .filter((entry) => entry.isDirectory() && RUN_ID.test(entry.name))
     .map((entry) => entry.name)
     .sort()
-    .reverse()
-    .slice(0, RUNS_READ_MAX);
+    .reverse();
+  if (names.length > RUN_FOLDERS_MAX) {
+    throw Object.assign(new Error("run folders"), { code: "RUN_FOLDERS_OVER_" + RUN_FOLDERS_MAX, path: runsDir });
+  }
   const heads = [];
   for (const name of names) {
     const head = recordHead(join(runsDir, name, RECORD_FILE));

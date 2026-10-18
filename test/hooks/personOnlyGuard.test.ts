@@ -13,7 +13,7 @@
  * everything, or nothing, fails.
  */
 import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, readFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { gitignoreLine } from "../../src/cli/commands/init/panel.ts";
 import { PREFLIGHT_CANARY_FILE, REQUIRED_GITIGNORE_ENTRIES } from "../../src/mcp/env.ts";
@@ -793,15 +793,36 @@ describe("the unattended push rule, the mode read from the run records", () => {
     expect(decide("claude", guard, RAW_PUSH).deny).toBe(false);
   });
 
-  it("reads the 50 newest run folders only", async () => {
+  it("reads every run folder's head, so 50 newer folders hide no open unattended record (pr/54)", async () => {
     const files: Record<string, string> = { ".stamity/runs/2026-01-01_old/record.md": record("in progress", "unattended") };
     for (let day = 1; day <= 50; day += 1) {
       files[`.stamity/runs/2026-09-${String(day).padStart(2, "0")}_r${day}/record.md`] = record("done", "unattended");
     }
     const guard = await placeGuard("claude", files);
+    // TEST CHANGE, justified: pr/54 drops the 50-newest cut, which read none of this old open record's head, so the
+    // push the old cut let through is now refused, the record named.
+    expect(decide("claude", guard, RAW_PUSH)).toEqual({ deny: true, reason: expect.stringContaining(".stamity/runs/2026-01-01_old/record.md reads") });
+    await getRepo().seedFiles({ ".stamity/runs/2026-01-01_old/record.md": record("done", "unattended") });
     expect(decide("claude", guard, RAW_PUSH).deny).toBe(false);
-    await getRepo().seedFiles({ ".stamity/runs/2026-09-01_r1/record.md": record("in progress", "unattended") });
-    expect(decide("claude", guard, RAW_PUSH).deny).toBe(true);
+  });
+
+  it("refuses a raw push behind 50 empty future-dated folders beside today's open unattended record (pr/54)", async () => {
+    const guard = await placeGuard("claude", { ".stamity/runs/2026-10-16_x/record.md": record("in progress", "unattended") });
+    for (let n = 1; n <= 50; n += 1) mkdirSync(getRepo().path(".stamity", "runs", `9999-12-31_x${n}`), { recursive: true });
+    expect(decide("claude", guard, RAW_PUSH)).toEqual({ deny: true, reason: expect.stringContaining(".stamity/runs/2026-10-16_x/record.md reads") });
+    // The twin: the same folders beside a closed record refuse nothing.
+    await getRepo().seedFiles({ ".stamity/runs/2026-10-16_x/record.md": record("done", "unattended") });
+    expect(decide("claude", guard, RAW_PUSH).deny).toBe(false);
+  });
+
+  it("refuses a raw push past the run-folder ceiling, naming the code, and no call the unattended rule allows (pr/54)", async () => {
+    const guard = await placeGuard("claude");
+    // At the ceiling every head is read, and none is open.
+    for (let n = 1; n <= 2_000; n += 1) mkdirSync(getRepo().path(".stamity", "runs", `2026-10-16_r${n}`), { recursive: true });
+    expect(decide("claude", guard, RAW_PUSH).deny).toBe(false);
+    mkdirSync(getRepo().path(".stamity", "runs", "2026-10-16_r2001"));
+    expect(decide("claude", guard, RAW_PUSH)).toEqual({ deny: true, reason: expect.stringMatching(/RUN_FOLDERS_OVER_2000 on .*runs/) });
+    for (const command of ["npm test", RUN_END]) expect(decide("claude", guard, command).deny, command).toBe(false);
   });
 
   it("lets STAMITY_UNATTENDED govern a run with no Mode: line, and never an attended one", async () => {
