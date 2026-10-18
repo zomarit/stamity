@@ -1407,8 +1407,6 @@ type ScanOutcome =
       unscanned: string[];
       /** Why the scan is incomplete: the added lines past its hard cap, named (review/135). */
       incomplete?: string;
-      /** How the history read was scoped, where it was not the usual range (review/201). */
-      note?: string;
     }
   | { base: string | null; scope: ScanScope; failed: string };
 
@@ -1422,12 +1420,7 @@ interface HistoryLines {
   unscanned: string[];
   /** Top-level-relative names outside the project the read met. */
   outside: Set<string>;
-  /** How the history read was scoped where it was not the usual range (review/201). */
-  note?: string;
 }
-
-/** The pushed history read's note where `origin` has no remote-tracking ref (review/201). */
-const NO_ORIGIN_REFS_NOTE = "origin has no remote-tracking ref, so the commits since the base were read as the ones the push sends";
 
 /**
  * The added lines of one `diff-tree` read (`revs`: a commit against its
@@ -1486,28 +1479,23 @@ function readTreeDiff(
  * The added lines of every commit since `base`, merges left out, oldest first
  * (review/112): a value committed and removed again before the scan stays in
  * the history a push sends. Each commit is one {@link readTreeDiff}. With
- * `pushed`, every commit no `origin` remote-tracking ref holds is read too
- * (`HEAD --not --remotes=origin`, review/160, build/108): a push to `origin`
- * sends those below `base` as well, a commit only another remote holds among them.
- * Where `origin` has no remote-tracking ref at all (a remote added and never
- * fetched), that range is the whole history, so the read falls back to
- * `base..HEAD` and says so in `note` (review/201).
+ * `remoteTips` (the pushed scope), every commit none of those commits reaches is
+ * read too (`HEAD --not <tips>`, `--ignore-missing` for a tip this clone lacks;
+ * review/160, build/108, pr/46): a push to `origin` sends those below `base` as
+ * well. The tips are origin's own branches and tags as the remote answers
+ * (`run`'s `git ls-remote origin`), never a remote-tracking ref, which a run can
+ * write and an empty or unfetched remote lacks; an empty list reads all of
+ * `HEAD`'s history. This read makes no network call.
  */
-function readHistory(runner: GitRunner, root: ProjectRoot, base: string, windows: boolean, pushed = false): HistoryLines {
+function readHistory(runner: GitRunner, root: ProjectRoot, base: string, windows: boolean, remoteTips?: readonly string[]): HistoryLines {
   const revList = (range: readonly string[]): string[] =>
     runGit(runner, root.dir, "rev-list", ["rev-list", "--reverse", "--no-merges", ...range, "--"])
       .split("\n")
       .filter((line) => line !== "");
   const since = revList([`${base}..HEAD`]);
-  const tracked = pushed && runGit(runner, root.dir, "for-each-ref", ["for-each-ref", "--count=1", "--format=%(refname)", "refs/remotes/origin/"]).trim() !== "";
-  const commits = tracked ? [...new Set([...revList(["HEAD", "--not", "--remotes=origin"]), ...since])] : since;
-  const history: HistoryLines = {
-    files: [],
-    skipped: [],
-    unscanned: [],
-    outside: new Set(),
-    ...(pushed && !tracked ? { note: NO_ORIGIN_REFS_NOTE } : {}),
-  };
+  const unpushed = remoteTips === undefined ? [] : revList(["--ignore-missing", "HEAD", ...(remoteTips.length === 0 ? [] : ["--not", ...remoteTips])]);
+  const commits = [...new Set([...unpushed, ...since])];
+  const history: HistoryLines = { files: [], skipped: [], unscanned: [], outside: new Set() };
   for (const commit of commits) readTreeDiff(runner, root, [commit], commit.slice(0, SHORT_COMMIT), windows, history);
   return history;
 }
@@ -1539,10 +1527,12 @@ export function readPushed(runner: GitRunner, root: ProjectRoot, base: string, w
  * of `HEAD` sends and nothing else: `HEAD`'s tree against the base ({@link
  * readPushed}) stands in for the change, so an uncommitted or untracked file
  * the push leaves behind is not read, and the history read covers every commit
- * `origin` lacks, those below the base included (review/160, build/108). It needs a
- * base; without one it fails.
+ * `origin` lacks, those below the base included (review/160, build/108): every
+ * commit none of `remoteTips` reaches, the commits origin's branches and tags
+ * name as the caller read them from the remote (pr/46). No tips, or none
+ * given, reads all of `HEAD`'s history. It needs a base; without one it fails.
  */
-export function scanChange(cwd: string, ref: string | undefined, options: { scope?: "pushed" } = {}): ScanOutcome {
+export function scanChange(cwd: string, ref: string | undefined, options: { scope?: "pushed"; remoteTips?: readonly string[] } = {}): ScanOutcome {
   const pushed = options.scope === "pushed";
   const scope: ScanScope = pushed ? "pushed" : ref === undefined ? "uncommitted" : "since-base";
   if (pushed && ref === undefined) return { base: null, scope, failed: "the pushed scope reads the commits since a base, and none was given" };
@@ -1578,7 +1568,7 @@ export function scanChange(cwd: string, ref: string | undefined, options: { scop
     }
     let history: HistoryLines = { files: [], skipped: [], unscanned: [], outside: new Set() };
     try {
-      if (commit !== null) history = readHistory(runner, root, commit, windows, pushed);
+      if (commit !== null) history = readHistory(runner, root, commit, windows, pushed ? (options.remoteTips ?? []) : undefined);
     } catch (err) {
       if (!(err instanceof GitReadError) && !(err instanceof PatchError)) throw err;
       const why = err instanceof GitReadError ? describeGitFailure(err) : err.message;
@@ -1595,7 +1585,6 @@ export function scanChange(cwd: string, ref: string | undefined, options: { scop
     const unread = linesPastCap(files).map((at) => `${at.path}:${at.line}${at.commit === undefined ? "" : ` (commit ${at.commit})`}`);
     const one = unread.length === 1;
     return {
-      ...(history.note === undefined ? {} : { note: history.note }),
       ...(unread.length === 0
         ? {}
         : {

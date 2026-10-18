@@ -2561,17 +2561,17 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
     describe("the pushed scope (build/94)", () => {
       /**
        * `scanChange` with the pushed scope, under `gateIn`'s isolation: `HOME` at an empty folder. TEST CHANGE,
-       * justified: review/160 reads every commit no remote-tracking ref holds, so the remote is taken to hold the
-       * base (`refs/remotes/origin/main`), as a run's clone does; `remoteAt` puts it elsewhere.
+       * justified: review/160 reads every commit the remote lacks, and pr/46 takes what it holds from the tips the
+       * caller read off the remote (`remoteTips`, `run`'s `git ls-remote origin`), no longer from a remote-tracking
+       * ref, so the remote is taken to hold the base, as a run's clone's does; `remoteAt` puts it elsewhere.
        */
       async function scanPushed(cwd: string, base: string | undefined, remoteAt = base): Promise<ReturnType<typeof scanChange>> {
-        if (remoteAt !== undefined) git(cwd, ["update-ref", "refs/remotes/origin/main", remoteAt]);
         const home = getRoot().path("home");
         await mkdir(home, { recursive: true });
         const previous = { HOME: process.env["HOME"], XDG_CONFIG_HOME: process.env["XDG_CONFIG_HOME"] };
         Object.assign(process.env, { HOME: home, XDG_CONFIG_HOME: home });
         try {
-          return scanChange(cwd, base, { scope: "pushed" });
+          return scanChange(cwd, base, { scope: "pushed", remoteTips: remoteAt === undefined ? [] : [remoteAt] });
         } finally {
           for (const [key, value] of Object.entries(previous)) {
             if (value === undefined) delete process.env[key];

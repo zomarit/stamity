@@ -171,6 +171,10 @@ describe("stamity run checkpoint", () => {
     // TEST CHANGE, justified: review/159 and review/160 read every commit no remote-tracking ref holds, so the
     // seed is fetched as origin/main, as a run's clone has it; with none, the seed (.cursorrules) would be unpushed.
     git(repo, ["update-ref", "refs/remotes/origin/main", base]);
+    // TEST CHANGE, justified: pr/46 reads what origin holds from the remote itself (`git ls-remote origin`), not from
+    // the remote-tracking ref above, so the bare remote holds the seed as origin's main, as a run's clone's remote does;
+    // with an empty remote the seed (.cursorrules) would be unpushed. "Nothing pushed" is now that main alone.
+    git(repo, ["push", "-q", remote, "HEAD:refs/heads/main"]);
     const branch = opts.branch ?? RUN_BRANCH;
     if (branch !== "main") git(repo, ["switch", "-q", "-c", branch]);
     if (opts.pin === "untracked") await put(repo, ORIGIN_PIN, PIN_TEXT);
@@ -214,6 +218,9 @@ describe("stamity run checkpoint", () => {
     git(remote, ["ls-tree", "-r", "--name-only", `refs/heads/${branch}`]).split("\n");
   const pushedFile = (remote: string, path: string): string => git(remote, ["show", `refs/heads/${RUN_BRANCH}:${path}`]);
   const pushes = (): string[][] => writes.argv.filter((argv) => argv[0] === "push");
+  /** The branches the bare remote holds: the seed's main alone until a push lands (pr/46). */
+  const remoteHeads = (remote: string): string[] => git(remote, ["for-each-ref", "--format=%(refname)", "refs/heads/"]).split("\n").filter((ref) => ref !== "");
+  const SEEDED = ["refs/heads/main"];
   /** The body of the one pull request the verb created. */
   const created = (): { title: string; body: string } => {
     const call = rest.calls.find((entry) => entry.method === "POST" && entry.path === "repos/o/r/pulls");
@@ -323,7 +330,7 @@ describe("stamity run checkpoint", () => {
     expect(stdout).toContain("held path in history (.cursorrules)");
     expect(git(repo, ["rev-parse", "HEAD~1"])).toBe(own);
     expect(pushes()).toEqual([]);
-    expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
+    expect(remoteHeads(remote)).toEqual(SEEDED);
   });
 
   it("refuses the push when a commit only another remote holds changes a held path, since the push goes to origin (build/108)", async () => {
@@ -340,7 +347,7 @@ describe("stamity run checkpoint", () => {
     expect(code).toBe(1);
     expect(doc).toMatchObject({ pushed: false, notDone: ["held path in history (.cursorrules)"] });
     expect(pushes()).toEqual([]);
-    expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
+    expect(remoteHeads(remote)).toEqual(SEEDED);
   });
 
   it("refuses the push when HEAD's tree still changes a held path after the commit, a hook having staged it (review/156)", async () => {
@@ -356,7 +363,7 @@ describe("stamity run checkpoint", () => {
     expect(code).toBe(1);
     expect(doc).toMatchObject({ pushed: false, held: [".cursorrules"], notDone: ["held path in the pushed tree (.cursorrules)"] });
     expect(pushes()).toEqual([]);
-    expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
+    expect(remoteHeads(remote)).toEqual(SEEDED);
   });
 
   it("holds as unattended a record with no Mode: line while STAMITY_UNATTENDED is set, and not one reading Mode: attended (review/162)", async () => {
@@ -502,7 +509,7 @@ describe("stamity run checkpoint", () => {
     expect(doc).toMatchObject({ committed: null, pushed: false, notDone: ["commit refused: b.txt is staged and not in --paths"] });
     expect(git(repo, ["rev-parse", "HEAD"])).toBe(base);
     expect(pushes()).toEqual([]);
-    expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
+    expect(remoteHeads(remote)).toEqual(SEEDED);
   });
 
   it("commits a path staged beforehand under a --paths folder", async () => {
@@ -543,7 +550,7 @@ describe("stamity run checkpoint", () => {
     expect(doc).toMatchObject({ pushed: false, notDone: ["push refused by a hook"] });
     expect(pushes()).toHaveLength(1);
     expect(writes.argv.some((argv) => argv.includes("--no-verify"))).toBe(false);
-    expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
+    expect(remoteHeads(remote)).toEqual(SEEDED);
   });
 
   it("names a missing identity as commit failed (identity)", async () => {
@@ -571,7 +578,7 @@ describe("stamity run checkpoint", () => {
     expect(stdout).not.toContain(TOKEN.slice(4, 12));
     expect(pushes()).toEqual([]);
     expect(rest.calls.filter((call) => call.method !== "GET")).toEqual([]);
-    expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
+    expect(remoteHeads(remote)).toEqual(SEEDED);
   });
 
   it("opens an attended run's draft pull request with the short fixed body, no morning list asked for", async () => {
@@ -710,7 +717,7 @@ describe("stamity run checkpoint", () => {
     expect(code).toBe(1);
     expect(doc["notDone"]).toEqual(["push held: secret scan hit at b.txt:1 (github-token)"]);
     expect(pushes()).toEqual([]);
-    expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
+    expect(remoteHeads(remote)).toEqual(SEEDED);
   });
 
   it("writes the held patch as bytes, so a held file in Latin-1 applies again from it (build/95)", async () => {
@@ -800,58 +807,94 @@ describe("stamity run checkpoint", () => {
     expect(code).toBe(1);
     expect(doc).toMatchObject({ pushed: false, notDone: ["held path in history (pkg/.vscode)"] });
     expect(pushes()).toEqual([]);
-    expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
+    expect(remoteHeads(remote)).toEqual(SEEDED);
   });
 
-  it("reads Base..HEAD as the pushed history where origin has no remote-tracking ref, and says so (review/201)", async () => {
+  // TEST CHANGE, justified: pr/46 (signed off 2026-10-17) reads what origin holds with `git ls-remote origin` and drops
+  // review/201's Base..HEAD fallback and its note, so this case pins the half of review/201 that stays: a remote that
+  // holds the seed, with no remote-tracking ref here, reads only what it lacks.
+  it("reads only what origin lacks where the remote holds the seed and no remote-tracking ref is left (review/201, pr/46)", async () => {
     const { repo, remote } = await seed("unattended");
-    // The seed commit changes .cursorrules, a held path; with no remote-tracking ref every commit would read as unpushed.
+    // The seed commit changes .cursorrules, a held path; read from the tracking refs alone, every commit would be unpushed.
     git(repo, ["update-ref", "-d", "refs/remotes/origin/main"]);
-    await writeFile(join(repo, "a.txt"), "the unit's change\n");
-
-    const json = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
-
-    expect(json.code).toBe(0);
-    expect(json.doc).toMatchObject({ pushed: true, held: [], notDone: [] });
-    expect(pushedTree(remote)).toContain("a.txt");
-
-    await writeFile(join(repo, "b.txt"), "a second change\n");
-    const text = await run(repo, ["checkpoint", "--run", RUN, "--paths", "b.txt"]);
-    // The first push left refs/remotes/origin/<branch>, so this one reads the usual range again.
-    expect(text.code).toBe(0);
-    expect(text.stdout).not.toContain("remote-tracking");
-  });
-
-  it("scans only Base..HEAD where origin has no remote-tracking ref, so a token removed below Base: holds nothing (review/201)", async () => {
-    const { repo, remote } = await seed("unattended");
-    git(repo, ["update-ref", "-d", "refs/remotes/origin/main"]);
-    // History the run did not write: a token committed and removed again, both below the run's Base:.
-    await put(repo, "c.txt", `the key is ${TOKEN}\n`);
-    git(repo, ["add", "--", "c.txt"]);
-    git(repo, ["commit", "-q", "-m", "old"]);
-    git(repo, ["rm", "-q", "--", "c.txt"]);
-    git(repo, ["commit", "-q", "-m", "older fix"]);
-    const base = git(repo, ["rev-parse", "HEAD"]);
-    await put(repo, `${RUN_DIR}/record.md`, `# Run ${RUN}\n\nStatus: in progress\nMode: unattended\nBranch: ${RUN_BRANCH}\nBase: ${base}\n`);
     await writeFile(join(repo, "a.txt"), "the unit's change\n");
 
     const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
 
     expect(code).toBe(0);
-    expect(doc).toMatchObject({ pushed: true, notDone: [], scan: { hits: [] } });
+    expect(doc).toMatchObject({ pushed: true, held: [], notDone: [] });
     expect(pushedTree(remote)).toContain("a.txt");
   });
 
-  it("names the Base..HEAD fallback in the text where origin has no remote-tracking ref (review/201)", async () => {
-    const { repo } = await seed("unattended");
+  // TEST CHANGE, justified: pr/46 (signed off 2026-10-17) reads the pushed history against origin's own branches and
+  // tags, so on an empty remote a token committed and removed below Base: is in what the push sends and holds it,
+  // where review/201's fallback read Base..HEAD alone and pushed it unscanned.
+  it("holds the push on a token removed below Base: where origin is empty and no remote-tracking ref is left (pr/46)", async () => {
+    const { repo, remote } = await seed("attended");
     git(repo, ["update-ref", "-d", "refs/remotes/origin/main"]);
+    git(remote, ["update-ref", "-d", "refs/heads/main"]);
+    // History the run did not write: a token committed and removed again, both below the run's Base:.
+    await put(repo, "c.txt", `the key is ${TOKEN}\n`);
+    git(repo, ["add", "--", "c.txt"]);
+    git(repo, ["commit", "-q", "-m", "old"]);
+    const old = git(repo, ["rev-parse", "HEAD"]);
+    git(repo, ["rm", "-q", "--", "c.txt"]);
+    git(repo, ["commit", "-q", "-m", "older fix"]);
+    const base = git(repo, ["rev-parse", "HEAD"]);
+    await put(repo, `${RUN_DIR}/record.md`, `# Run ${RUN}\n\nStatus: in progress\nMode: attended\nBranch: ${RUN_BRANCH}\nBase: ${base}\n`);
     await writeFile(join(repo, "a.txt"), "the unit's change\n");
 
-    const { code, stdout } = await run(repo, ["checkpoint", "--run", RUN, "--paths", "a.txt"]);
+    const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
 
-    expect(code).toBe(0);
-    expect(stdout).toContain("history: origin has no remote-tracking ref, so the commits since Base: were read as the ones the push sends");
-    expect(stdout).toContain("scan history: origin has no remote-tracking ref, so the commits since the base were read as the ones the push sends");
+    expect(code).toBe(1);
+    expect(doc).toMatchObject({ pushed: false });
+    expect(doc["notDone"]).toEqual([`push held: secret scan hit at c.txt:1 (commit ${old.slice(0, 12)}) (github-token)`]);
+    expect(pushes()).toEqual([]);
+    expect(remoteHeads(remote)).toEqual([]);
+  });
+
+  // pr/46: a remote-tracking ref is local state a run can write, so one naming Base: on an empty remote changes nothing
+  // the push sends: the scan still reads the token below it, and unattended the seed's .cursorrules is still held.
+  it.each([
+    ["attended", (old: string) => `push held: secret scan hit at c.txt:1 (commit ${old.slice(0, 12)}) (github-token)`],
+    ["unattended", () => "held path in history (.cursorrules)"],
+  ] as const)("holds the %s push where a written remote-tracking ref names Base: and origin is empty (pr/46)", async (mode, refusal) => {
+    const { repo, remote } = await seed(mode);
+    git(remote, ["update-ref", "-d", "refs/heads/main"]);
+    await put(repo, "c.txt", `the key is ${TOKEN}\n`);
+    git(repo, ["add", "--", "c.txt"]);
+    git(repo, ["commit", "-q", "-m", "old"]);
+    const old = git(repo, ["rev-parse", "HEAD"]);
+    git(repo, ["rm", "-q", "--", "c.txt"]);
+    git(repo, ["commit", "-q", "-m", "older fix"]);
+    const base = git(repo, ["rev-parse", "HEAD"]);
+    git(repo, ["update-ref", "refs/remotes/origin/main", base]);
+    await put(repo, `${RUN_DIR}/record.md`, `# Run ${RUN}\n\nStatus: in progress\nMode: ${mode}\nBranch: ${RUN_BRANCH}\nBase: ${base}\n`);
+    await writeFile(join(repo, "a.txt"), "the unit's change\n");
+
+    const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+    expect(code).toBe(1);
+    expect(doc).toMatchObject({ pushed: false });
+    expect(doc["notDone"]).toEqual([refusal(old)]);
+    expect(pushes()).toEqual([]);
+    expect(remoteHeads(remote)).toEqual([]);
+  });
+
+  // pr/46: what origin holds is read from the remote, so a remote that cannot be read holds the push before the commit.
+  it("holds the push, committing nothing, where git ls-remote cannot read origin (pr/46)", async () => {
+    const { repo, remote, base } = await seed("attended");
+    await rm(remote, { recursive: true, force: true });
+    await mkdir(remote);
+    await writeFile(join(repo, "a.txt"), "changed\n");
+
+    const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+    expect(code).toBe(1);
+    expect(doc).toMatchObject({ committed: null, pushed: false });
+    expect(doc["notDone"]).toEqual([expect.stringMatching(/^push held: origin's branches and tags could not be read \(git ls-remote origin answered 128: /)]);
+    expect(git(repo, ["rev-parse", "HEAD"])).toBe(base);
+    expect(pushes()).toEqual([]);
   });
 
   it("refuses as origin changed where origin names another repository than the pin, staging and pushing nothing (review/209)", async () => {
@@ -869,7 +912,7 @@ describe("stamity run checkpoint", () => {
     expect(doc).toMatchObject({ committed: null, pushed: false });
     expect(git(repo, ["rev-parse", "HEAD"])).toBe(head);
     expect(pushes()).toEqual([]);
-    expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
+    expect(remoteHeads(remote)).toEqual(SEEDED);
   });
 
   it("refuses as Not done: origin changed where a pushInsteadOf set after run start moves origin's push (review/209)", async () => {
@@ -891,7 +934,7 @@ describe("stamity run checkpoint", () => {
     expect(text.code).toBe(1);
     expect(text.stdout).toContain(`Not done:\n  - origin changed: ${ORIGIN_PIN} pins github.com/o/r`);
     expect(pushes()).toEqual([]);
-    expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
+    expect(remoteHeads(remote)).toEqual(SEEDED);
   });
 
   it("refuses as origin changed where a pushInsteadOf sends origin's push off GitHub (review/209)", async () => {
@@ -948,7 +991,7 @@ describe("stamity run checkpoint", () => {
     // The check read the exact command the push would have run.
     expect(table.commands).toEqual([`git push origin HEAD:refs/heads/${RUN_BRANCH}`]);
     expect(pushes()).toEqual([]);
-    expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
+    expect(remoteHeads(remote)).toEqual(SEEDED);
   });
 
   it("refuses a commit at a detached HEAD, staging, committing and pushing nothing (review/212)", async () => {
@@ -966,7 +1009,7 @@ describe("stamity run checkpoint", () => {
     expect(git(repo, ["diff", "--cached", "--name-only"])).toBe("");
     expect(writes.argv.some((argv) => argv[0] === "add" || argv[0] === "commit")).toBe(false);
     expect(pushes()).toEqual([]);
-    expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
+    expect(remoteHeads(remote)).toEqual(SEEDED);
   });
 
   it.each([

@@ -89,7 +89,9 @@ import { readPushed, scanChange } from "./gate.ts";
  * changes a person-only path, or `HEAD`'s tree still does (`held path in
  * history (…)`, never a history rewrite); scans the commits the remote lacks
  * and `Base..HEAD`'s, the work tree and the index left out (a hit, a
- * failed or an incomplete scan holds the push); pushes `HEAD` to the branch,
+ * failed or an incomplete scan holds the push), both history reads taking what
+ * the remote lacks from origin's branches and tags as `git ls-remote origin`
+ * answers, read once, a remote it cannot read holding the push (pr/46); pushes `HEAD` to the branch,
  * the command checked by the shell guard's own person-only table first; and
  * with `--pr` opens or updates the run's draft pull request. Exit 0 when the
  * remote branch holds `HEAD` (pushed now, or already there with nothing
@@ -479,19 +481,34 @@ async function commitAt(cwd: string, rev: string, verb: string = START): Promise
   return read.code === 0 && /^[0-9a-f]{40,64}$/.test(sha) ? sha : null;
 }
 
+/** What origin's own refs name, read once a checkpoint from the remote ({@link remoteRefs}). */
+interface RemoteRefs {
+  /** Every commit origin's branches and tags name, once each: the `--not` set of both history reads (pr/46). */
+  tips: string[];
+  /** The commit origin's `refs/heads/<branch>` names, or `null` where the remote has no such branch (pr/20). */
+  branch: string | null;
+}
+
 /**
- * The commit origin's own `refs/heads/<branch>` names, read from the remote
- * (`git ls-remote --exit-code`, pr/20) rather than off a remote-tracking ref a
- * deletion or a move on the remote leaves stale; `null` where the remote has no
- * such branch or could not be read, so the push runs and says what it found.
+ * Origin's branches and tags as the remote answers them (`git ls-remote
+ * origin`, pr/20, pr/46), never a remote-tracking ref: a deletion or a move on
+ * the remote leaves one stale, a run can write one, and an empty or unfetched
+ * remote has none. A string, for `notDone`, where the remote could not be read.
  */
-async function remoteTip(top: string, branch: string, verb: string): Promise<string | null> {
-  const ref = `refs/heads/${branch}`;
-  const read = await git(top, ["ls-remote", "--exit-code", "origin", ref], verb);
-  if (read.code !== 0) return null;
-  const row = read.stdout.split(/\r?\n/).find((line) => line.endsWith(`\t${ref}`));
-  const sha = row?.slice(0, row.indexOf("\t")) ?? "";
-  return /^[0-9a-f]{40,64}$/.test(sha) ? sha : null;
+async function remoteRefs(top: string, branch: string, verb: string): Promise<RemoteRefs | string> {
+  const read = await git(top, ["ls-remote", "origin"], verb);
+  if (read.code !== 0) return `git ls-remote origin answered ${read.code}: ${firstLine(read.stderr)}`;
+  const tips = new Set<string>();
+  let tip: string | null = null;
+  for (const row of read.stdout.split(/\r?\n/)) {
+    const tab = row.indexOf("\t");
+    const sha = row.slice(0, tab);
+    const ref = row.slice(tab + 1);
+    if (tab === -1 || !/^[0-9a-f]{40,64}$/.test(sha) || !(ref.startsWith("refs/heads/") || ref.startsWith("refs/tags/"))) continue;
+    tips.add(sha);
+    if (ref === `refs/heads/${branch}`) tip = sha;
+  }
+  return { tips: [...tips], branch: tip };
 }
 
 /** The branch `HEAD` is on, or `null` at a detached `HEAD`. */
@@ -769,10 +786,14 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
       : `held (in ${patchRel}; the work tree keeps them): ${list(result.held)}`,
   );
 
+  // pr/46: what origin holds, read from the remote once, before the commit; unread, the push is held.
+  const remote = await remoteRefs(top, current, verb);
+  if (typeof remote === "string") {
+    result.notDone.push(`push held: origin's branches and tags could not be read (${remote})`);
+    return finish(false);
+  }
   // review/159: the commits the push would send, read before the checkpoint's own, which puts held paths back to Base: only.
-  const history = unattended ? await heldInHistory(top, base) : { held: [], note: null };
-  const inHistory = history.held;
-  if (history.note !== null) lines.push(`history: ${history.note}`);
+  const inHistory = unattended ? await heldInHistory(top, remote.tips) : [];
 
   // pr/5: the commit takes the whole index, so a path staged before the verb ran and not in its own list refuses it.
   const stray = await strayStaged(top, [...stage, ...patches, ...result.held], named);
@@ -812,8 +833,8 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
     }
   }
 
-  // (5) The secret scan over Base..HEAD, what the push sends and no more (build/94): a hit, a failure or an unread line holds the push.
-  const outcome = scanChange(cwd, base, { scope: "pushed" });
+  // (5) The secret scan over what the push sends and no more (build/94, pr/46): a hit, a failure or an unread line holds the push.
+  const outcome = scanChange(cwd, base, { scope: "pushed", remoteTips: remote.tips });
   if ("failed" in outcome) {
     result.notDone.push(`push held: the secret scan failed (${outcome.failed})`);
     return finish(false);
@@ -831,13 +852,12 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
     result.notDone.push(`secret scan: ${result.scan.unscanned.length} files unscanned (${result.scan.unscanned.join(", ")})`);
   }
   lines.push(`scan: ${result.scan.hits.length === 0 ? "no hits" : `${result.scan.hits.length} hit(s)`}; unscanned: ${list(result.scan.unscanned)}`);
-  if (outcome.note !== undefined) lines.push(`scan history: ${outcome.note}`);
   if (result.scan.hits.length > 0 || outcome.incomplete !== undefined) return finish(false);
 
   // (6) The push, its command checked by the shell guard's own table before it runs.
   const refspec = `HEAD:refs/heads/${current}`;
   const tip = await commitAt(top, "HEAD", verb);
-  if (tip !== null && tip === (await remoteTip(top, current, verb))) {
+  if (tip !== null && tip === remote.branch) {
     lines.push(`push: nothing ahead of origin/${current}`);
   } else {
     const verdict = personOnlyVerdict(`git push origin ${refspec}`, {
@@ -963,18 +983,16 @@ async function changedSince(top: string, base: string, side: Side = "work tree")
 
 /**
  * The person-only paths a commit the push would send changes (review/159):
- * every commit no `origin` remote-tracking ref holds (`HEAD --not
- * --remotes=origin`, as the scan reads them, review/160, build/108: the push
- * goes to `origin`, so a commit only another remote holds is still read), a
+ * every commit none of `tips` reaches (`HEAD --not <tips>`, as the scan reads
+ * them, review/160, build/108, pr/46), the tips being origin's branches and
+ * tags as the remote answers ({@link remoteRefs}), `--ignore-missing` for one
+ * this clone lacks, and all of `HEAD`'s history when the remote names none; a
  * root commit included and a merge by its own resolution (`--cc`), renames
  * read as a deletion and an addition, a link at a held glob's prefix included
- * (review/200). Where `origin` has no remote-tracking ref at all, that range is
- * the whole history, so the read is `base..HEAD` and `note` says so (review/201).
+ * (review/200).
  */
-async function heldInHistory(top: string, base: string): Promise<{ held: string[]; note: string | null }> {
-  const refs = await git(top, ["for-each-ref", "--count=1", "--format=%(refname)", "refs/remotes/origin/"], CHECKPOINT);
-  const tracked = refs.code !== 0 || refs.stdout.trim() !== "";
-  const range = tracked ? ["HEAD", "--not", "--remotes=origin"] : ["HEAD", "--not", base];
+async function heldInHistory(top: string, tips: readonly string[]): Promise<string[]> {
+  const range = ["--ignore-missing", "HEAD", ...(tips.length === 0 ? [] : ["--not", ...tips])];
   const read = await git(top, ["log", "--root", "--format=", "--raw", "-z", "--cc", ...DIFF_PINS, ...range, "--"], CHECKPOINT);
   if (read.code !== 0) {
     throw new CliFailure({
@@ -984,8 +1002,7 @@ async function heldInHistory(top: string, base: string): Promise<{ held: string[
       next: "run it inside the repository's work tree",
     });
   }
-  const note = tracked ? null : "origin has no remote-tracking ref, so the commits since Base: were read as the ones the push sends";
-  return { held: heldOf(rawEntries(read.stdout)), note };
+  return heldOf(rawEntries(read.stdout));
 }
 
 /**
