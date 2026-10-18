@@ -126,7 +126,7 @@ export interface PersonOnlyContext {
  * never disagree on what is the person's.
  *
  * The last rows are the GitHub MCP server's merge, branch-write, review-submit,
- * pull-request-update and repository-delete tools, by name, in
+ * pull-request-update, repository-delete and pull-request-create tools, by name, in
  * Claude Code's MCP rule form (`mcp__<server>__<tool>`, the server under the `github` key
  * the engine writes to `.mcp.json`): a merge or a push made as a tool call is no shell
  * call, so neither the prefix rows nor the shell guard see it (review/214, review/226).
@@ -200,6 +200,9 @@ export const CLAUDE_DENY_ROWS: readonly string[] = [
   "mcp__github__update_pull_request_draft_state",
   "mcp__github__create_branch",
   "mcp__github__delete_repository",
+  // pr/78: a pull request opened as a tool call skips the run verbs' draft and their title and body screen. A row
+  // cannot read the run's mode, so attended sessions lose it too; there `gh pr create` through the shell stays the route.
+  "mcp__github__create_pull_request",
 ];
 
 /**

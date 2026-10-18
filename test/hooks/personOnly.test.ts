@@ -1323,6 +1323,9 @@ describe("CLAUDE_DENY_ROWS", () => {
       "mcp__github__update_pull_request_draft_state",
       "mcp__github__create_branch",
       "mcp__github__delete_repository",
+      // pr/78: a pull request opened as a tool call skips the run verbs' draft and their title and body screen; the row
+      // cannot read the mode, so it refuses attended sessions too, where `gh pr create` through the shell is the route.
+      "mcp__github__create_pull_request",
     ]);
     expect(CLAUDE_DENY_ROWS.slice(BASH_ROWS.length)).toEqual(MCP_ROWS);
   });
