@@ -240,6 +240,33 @@ describe("REQ-FINISH-003 — structural spec/plan coverage", () => {
   });
 });
 
+describe("REQ-FLOW-091 — a cycle reported once and the bare shorthand, through the skill's command", () => {
+  const units = (rows: string[]) => rows.map((row) => {
+    const [id, dependsOn] = row.split(": ");
+    return `### ${id}\n- **requirements**: spec carries no ids.\n- **depends_on**: ${dependsOn}.\n`;
+  }).join("\n");
+  const covered = (requirements: string) =>
+    `## Spec delta\n\nADDED REQ-DEMO-001, REQ-DEMO-002.\n\n## Units\n\n### U1 — guard\n- **requirements**: ${requirements}.\n- **depends_on**: none.\n`;
+
+  it("reports one dependency-cycle from the unit found on the stack, whatever leads into it", () => {
+    const result = check(`## Spec delta\n\nNone.\n\n## Units\n\n${units(["a: b", "b: a", "x: a", "y: x, b"])}`);
+    expect(result.status).toBe("fail");
+    expect(result.findings).toEqual([expect.objectContaining({ code: "dependency-cycle", message: "Dependency cycle: a -> b -> a." })]);
+  });
+  it("reads `REQ-DEMO-001, 002` in a unit's requirements as covering REQ-DEMO-002", () => {
+    // Read as REQ-DEMO-001 alone, U1 would leave REQ-DEMO-002 uncovered.
+    expect(check(covered("REQ-DEMO-001, 002"))).toMatchObject({ status: "pass", findings: [] });
+    expect(check(covered("REQ-DEMO-001, 002, 009")).findings).toEqual([expect.objectContaining({ code: "dangling-requirement",
+      message: expect.stringContaining("REQ-DEMO-009") })]);
+  });
+  it("reads a number in delta prose, and a negative measurement after a comma, as today", () => {
+    expect(check(covered("REQ-DEMO-001, REQ-DEMO-002").replace("ADDED REQ-DEMO-001, REQ-DEMO-002.", "ADDED REQ-DEMO-001, 002 cases.")))
+      .toMatchObject({ status: "pass", scope: ["REQ-DEMO-001"] });
+    expect(check(plan.replace("ADDED REQ-DEMO-001, REQ-DEMO-002.", "ADDED REQ-DEMO-001, REQ-DEMO-002. A budget of 300ms, -50ms.")).findings)
+      .toEqual([expect.objectContaining({ code: "invalid-reference", message: "Malformed requirement reference: -50ms" })]);
+  });
+});
+
 // REQ-FLOW-070 — plan-lint L5. The size codes are advisory: each one names a unit or a delta entry
 // and its line, and none of them turns the status to `fail`.
 describe("REQ-FLOW-070 — plan size, advisory (L5)", () => {

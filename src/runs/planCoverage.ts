@@ -121,6 +121,12 @@ const AREA = "[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z][A-Za-z0-9]*)*";
 const VALID_TOKEN = new RegExp(`^REQ-${AREA}-\\d{3,}(?:[–-](?:REQ-${AREA}-)?\\d{3,})?$`);
 /** One ID, or the `, -002` shorthand, which needs a comma or the line start in front of it. */
 const ID_SCAN = new RegExp(`REQ-(${AREA})-(\\d{3,})|(?:^|(?<=,\\s))-(\\d{3,})`, "gm");
+/**
+ * {@link ID_SCAN} plus the bare `, 002` shorthand, read in a unit's requirements only: a number after `, `, ending where
+ * a token ends or a range opens. {@link references} keeps it only where that comma directly follows an ID it read, so a
+ * number in a sentence (`the rest, 300 cases`) is never taken for an ID, and Spec delta prose reads as before.
+ */
+const BARE_ID_SCAN = new RegExp(`${ID_SCAN.source}|(?<=,\\s)(\\d{3,})(?![^\\s,;|.)\\]:(–-])`, "gm");
 /** Every shorthand-shaped word, valid or not: a `-` and a digit where {@link ID_SCAN} reads shorthand. */
 const SHORTHAND_SCAN = /(?:^|(?<=,\s))-\d[^\s,;|.)\]:(]*/gm;
 const VALID_SHORTHAND = new RegExp(`^-\\d{3,}(?:[–-](?:REQ-${AREA}-)?\\d{3,})?$`);
@@ -132,10 +138,11 @@ const pad = (value: number): string => String(value).padStart(3, "0");
 
 /**
  * Expand explicit IDs, the `REQ-AREA-001, -002–004` shorthand, and a prose range between two IDs of
- * the same area. `report` receives non-fatal findings (`partial-scope`); a reference the checker
- * cannot read at all throws, and the caller turns that into `invalid-reference`.
+ * the same area; with `bare`, a unit's requirements, also `REQ-AREA-001, 002`. `report` receives non-fatal
+ * findings (`partial-scope`); a reference the checker cannot read at all throws, and the caller turns that
+ * into `invalid-reference`.
  */
-function references(text: string, report: (code: string, message: string) => void = () => {}): string[] {
+function references(text: string, report: (code: string, message: string) => void = () => {}, bare = false): string[] {
   for (const [token] of text.matchAll(TOKEN_SCAN)) {
     if (!VALID_TOKEN.test(token)) throw new Error(`Malformed requirement reference: ${token}`);
   }
@@ -144,12 +151,15 @@ function references(text: string, report: (code: string, message: string) => voi
   }
   const ids: string[] = [];
   let prefix: string | undefined;
-  const scan = new RegExp(ID_SCAN.source, ID_SCAN.flags);
+  // Where the last ID read ends, its range included: a bare number is shorthand only right after its `, `.
+  let end = -1;
+  const scan = new RegExp((bare ? BARE_ID_SCAN : ID_SCAN).source, ID_SCAN.flags);
   let match: RegExpExecArray | null;
   while ((match = scan.exec(text)) !== null) {
+    if (match[4] !== undefined && match.index - 2 !== end) continue;
     if (match[1]) prefix = match[1];
     if (!prefix) throw new Error(`Requirement shorthand has no area: ${match[0]}`);
-    const from = Number(match[2] ?? match[3]);
+    const from = Number(match[2] ?? match[3] ?? match[4]);
     const rest = text.slice(match.index + match[0].length);
     const range = RANGE_SUFFIX.exec(rest);
     const closingArea = range?.[1] ?? range?.[3];
@@ -162,8 +172,9 @@ function references(text: string, report: (code: string, message: string) => voi
       report("partial-scope", `The range opening at REQ-${prefix}-${pad(from)} names no closing ID, so only that ID is in scope; spell both endpoints.`);
     }
     for (let value = from; value <= to; value += 1) ids.push(`REQ-${prefix}-${pad(value)}`);
+    end = match.index + match[0].length + (range?.[0].length ?? 0);
     // Past the closing ID: a range's endpoint is already expanded and must not be counted twice.
-    if (range) scan.lastIndex = match.index + match[0].length + range[0].length;
+    if (range) scan.lastIndex = end;
   }
   return ids;
 }
@@ -276,9 +287,9 @@ export function checkCoverage(plan: CoverageDoc, specs: readonly CoverageDoc[], 
   }
   // `quiet` suppresses a second report of findings the caller has already raised over the same
   // text — the removed branch re-reads the disposition-free half of a line it has already read.
-  const refs = (text: string, path: string, line: number, quiet = false): string[] => {
+  const refs = (text: string, path: string, line: number, quiet = false, bare = false): string[] => {
     try {
-      return references(clean(text), (code, message) => { if (!quiet) add(code, path, line, message); });
+      return references(clean(text), (code, message) => { if (!quiet) add(code, path, line, message); }, bare);
     } catch (error) {
       if (!quiet) add("invalid-reference", path, line, (error as Error).message);
       return [];
@@ -369,7 +380,7 @@ export function checkCoverage(plan: CoverageDoc, specs: readonly CoverageDoc[], 
   for (const item of units) {
     const requirement = item.fields.get("requirements");
     const requirementLine = requirement?.line ?? item.line;
-    const ids = refs(requirement?.text ?? "", plan.path, requirementLine);
+    const ids = refs(requirement?.text ?? "", plan.path, requirementLine, false, true);
     if (!ids.length && !/^spec carries no ids\b/i.test(requirement?.text ?? "")) {
       add("missing-requirements", plan.path, item.line, `${item.id} needs requirement IDs or the literal spec carries no ids.`);
     }
@@ -401,17 +412,20 @@ export function checkCoverage(plan: CoverageDoc, specs: readonly CoverageDoc[], 
     if (!covered.has(id) && !removed.has(id)) add("missing-coverage", plan.path, 1, `${id} is in the spec delta but no unit covers it.`);
   }
   for (const id of removed) if (!definitions.has(id)) add("dangling-requirement", plan.path, 1, `Retired ${id} must retain a definition and disposition in its spec.`);
-  // A unit whose walk added no finding reaches no cycle, so a later walk through it adds none either:
-  // skipping it keeps the findings and their order, and keeps a dense acyclic graph linear, not one call per path.
-  const acyclic = new Set<string>();
-  const visit = (id: string, trail: string[]): void => {
-    if (trail.includes(id)) { add("dependency-cycle", plan.path, 1, `Dependency cycle: ${[...trail, id].join(" -> ")}.`); return; }
-    if (acyclic.has(id)) return;
-    const before = findings.length;
-    for (const target of graph.get(id) ?? []) visit(target, [...trail, id]);
-    if (findings.length === before) acyclic.add(id);
+  // A three-colour walk: a unit on the stack is being walked, a done unit is never walked again whatever its walk
+  // found. Each unit and each edge is walked once, and a cycle is reported once, as the trail from the unit found on
+  // the stack, however many units lead into it.
+  const stack: string[] = [];
+  const onStack = new Set<string>();
+  const done = new Set<string>();
+  const visit = (id: string): void => {
+    if (onStack.has(id)) { add("dependency-cycle", plan.path, 1, `Dependency cycle: ${[...stack.slice(stack.indexOf(id)), id].join(" -> ")}.`); return; }
+    if (done.has(id)) return;
+    stack.push(id); onStack.add(id);
+    for (const target of graph.get(id) ?? []) visit(target);
+    stack.pop(); onStack.delete(id); done.add(id);
   };
-  for (const id of graph.keys()) visit(id, []);
+  for (const id of graph.keys()) visit(id);
   for (const item of units) {
     let size = item.rows.length;
     while (size > 1 && !item.rows[size - 1]?.raw.trim()) size -= 1;
@@ -448,7 +462,7 @@ export function parsePlanUnits(text: string): PlanUnit[] {
     for (const [key, value] of unit.fields) if (!tableFrame.has(value.line)) fields[key] = value.text;
     let requirements: string[];
     try {
-      requirements = references(fields.requirements ?? "");
+      requirements = references(fields.requirements ?? "", undefined, true);
     } catch {
       // The check reports an unreadable reference as `invalid-reference`; this reader only lists what parses.
       requirements = [];

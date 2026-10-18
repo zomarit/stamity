@@ -44,6 +44,14 @@ const quoted = (count: number) => plan.replace("- **depends_on**: none.\n",
 const deltaEntry = (heading: string, cited: string, count: number) => `## Spec delta\n\n### ${heading}\n${
   Array.from({ length: count }, (_, n) => `Given value ${n}, Then it holds.`).join("\n\n")
 }\n\n## Units\n### U1\n- **requirements**: ${cited}.\n- **depends_on**: none.\n`;
+/** The two-requirement plan covered by one unit whose requirements field is `requirements`. */
+const bare = (requirements: string) =>
+  `## Spec delta\n\nADDED REQ-DEMO-001, REQ-DEMO-002.\n\n## Units\n\n### U1 — guard\n- **requirements**: ${requirements}.\n- **depends_on**: none.\n`;
+/** Units written `id: depends_on`, each carrying no ids. */
+const chained = (rows: string[]) => rows.map((row) => {
+  const [id, dependsOn] = row.split(": ");
+  return `### ${id}\n- **requirements**: spec carries no ids.\n- **depends_on**: ${dependsOn}.\n`;
+});
 /** A path a dependency may name that the injected `exists` reports present, so the activated look is in the set. */
 const PRESENT = "docs/present.md";
 
@@ -112,6 +120,16 @@ const FIXTURES: Fixture[] = [
   fx("unit with neither field", plan + "\n### U3 — bare\nA unit with no requirements and no depends_on.\n"),
   fx("empty fields", plan.replace("- **requirements**: REQ-DEMO-002.", "- **requirements**:").replace("- **depends_on**: U1.", "- **depends_on**:")),
   fx("no units, long notes", `## Spec delta\n\nNone.\n\n## Notes\n### N1\n${Array.from({ length: 70 }, (_, n) => `Note ${n}.`).join("\n")}\n\`\`\`\nx\n\`\`\`\n`),
+  // REQ-FLOW-091: a bare number after `, ` that follows an id reads as that id's area, in a unit's requirements only.
+  fx("bare shorthand", bare("REQ-DEMO-001, 002")),
+  fx("bare shorthand chained", bare("REQ-DEMO-001, 002, 003"), wideSpec),
+  fx("bare shorthand range", bare("REQ-DEMO-001, 002–003"), wideSpec),
+  fx("bare shorthand, undefined id", bare("REQ-DEMO-001, 002, 009")),
+  fx("bare number not after an id", bare("REQ-DEMO-001 (the guard), 002")),
+  fx("bare number with a unit", bare("REQ-DEMO-001, 002ms")),
+  fx("bare number in delta prose", plan.replace("ADDED REQ-DEMO-001, REQ-DEMO-002.", "ADDED REQ-DEMO-001, 002 cases.")),
+  fx("negative measurement after a comma", plan.replace("ADDED REQ-DEMO-001, REQ-DEMO-002.", "ADDED REQ-DEMO-001, REQ-DEMO-002. A budget of 300ms, -50ms.")),
+  fx("negative measurement in requirements", bare("REQ-DEMO-001, REQ-DEMO-002, 300ms, -50ms")),
 ];
 
 /** The same recorded `exists` for both twins; `cwd` pinned so the resolved paths do not depend on where vitest runs. */
@@ -156,7 +174,39 @@ describe("REQ-FLOW-091 — the engine's coverage check equals the skill's copy",
       "- **requirements**: REQ-DEMO-002.\n- **requirements**: REQ-DEMO-002.");
     const { port, copy } = both(fx("cycle", cycle));
     expect(port).toEqual(copy);
-    expect(port.findings.map((row) => row.code)).toEqual(["duplicate-field", "dependency-cycle", "dependency-cycle"]);
+    // TEST CHANGE, justified (2026-10-18, v22-plan-check, REQ-FLOW-091): the one U1 <-> U2 cycle was reported twice,
+    // once per unit the walk started from; the three-colour walk reports a cycle once, from the unit found on the stack.
+    expect(port.findings.map((row) => row.code)).toEqual(["duplicate-field", "dependency-cycle"]);
+    expect(port.findings[1]?.message).toBe("Dependency cycle: U1 -> U2 -> U1.");
+  });
+
+  it("reports a cycle once, from the unit found on the stack, however many units lead into it", () => {
+    const leading = `## Spec delta\n\nNone.\n\n## Units\n\n${chained(["u0: lead", "lead: c1", "c1: c2", "c2: c1"]).join("\n")}`;
+    const { port, copy } = both(fx("cycle behind a unit leading into it", leading));
+    expect(port).toEqual(copy);
+    expect(port.status).toBe("fail");
+    expect(port.findings).toEqual([{ code: "dependency-cycle", path: "plan.md", line: 1, message: "Dependency cycle: c1 -> c2 -> c1." }]);
+  });
+
+  it("reads a bare number after an id's comma in a unit's requirements as that id's area, and nowhere else", () => {
+    const result = (name: string) => both(FIXTURES.find((fixture) => fixture.name === name) as Fixture).port;
+    // Read as REQ-DEMO-001 alone, U1 would leave REQ-DEMO-002 uncovered: the pass is the shorthand's reading.
+    expect(result("bare shorthand")).toMatchObject({ status: "pass", findings: [] });
+    expect(result("bare shorthand chained").findings).toEqual([]);
+    expect(result("bare shorthand range").findings).toEqual([]);
+    expect(result("bare shorthand, undefined id").findings).toEqual([expect.objectContaining({ code: "dangling-requirement",
+      message: "U1 cites undefined REQ-DEMO-009; supply its spec or correct the ID." })]);
+    for (const name of ["bare number not after an id", "bare number with a unit"]) {
+      expect(result(name).findings, name).toEqual([expect.objectContaining({ code: "missing-coverage",
+        message: "REQ-DEMO-002 is in the spec delta but no unit covers it." })]);
+    }
+    // Delta prose reads as today: the number after the comma is no id, so only REQ-DEMO-001 is in scope.
+    expect(result("bare number in delta prose")).toMatchObject({ status: "pass", scope: ["REQ-DEMO-001"] });
+    // A negative measurement after a comma reads as today: still a malformed shorthand.
+    for (const name of ["negative measurement after a comma", "negative measurement in requirements"]) {
+      expect(result(name).findings, name).toContainEqual(expect.objectContaining({ code: "invalid-reference",
+        message: "Malformed requirement reference: -50ms" }));
+    }
   });
 
   it("refuses a malformed shorthand beside a valid ID instead of reading the valid ID alone", () => {
@@ -187,6 +237,30 @@ describe("REQ-FLOW-091 — the engine's coverage check equals the skill's copy",
     expect(port).toEqual(copy);
     expect(port).toMatchObject({ status: "pass", findings: [] });
     expect(port.units).toHaveLength(60);
+  }, 20_000);
+
+  // The acyclic memo above skipped only a unit whose walk found nothing, so a chain leading into a cycle was walked
+  // once per path again, about fib(60) calls; the same child process and kill bound the three-colour walk.
+  it("checks the 60-unit chain leading into a two-unit cycle, in both twins, within a short bound and with one finding", () => {
+    const units = Array.from({ length: 60 }, (_, k) => {
+      const dependsOn = k === 0 ? "lead" : k === 1 ? "u0" : `u${k - 1}, u${k - 2}`;
+      return `### u${k}\n- **requirements**: spec carries no ids.\n- **depends_on**: ${dependsOn}.\n`;
+    });
+    const dense = `## Spec delta\n\nNone.\n\n## Units\n\n${[...units, ...chained(["lead: c1", "c1: c2", "c2: c1"])].join("\n")}`;
+    const program = [
+      'import { readFileSync } from "node:fs";',
+      `const { checkCoverage } = await import(${JSON.stringify(pathToFileURL(resolve("src/runs/planCoverage.ts")).href)});`,
+      `const { checkCoverage: copy } = await import(${JSON.stringify(pathToFileURL(resolve("content/skills/st-verify/scripts/spec-plan-coverage.mjs")).href)});`,
+      'const doc = { path: "plan.md", text: readFileSync(0, "utf8") };',
+      'const options = { exists: () => false, cwd: "/repo" };',
+      "process.stdout.write(JSON.stringify({ port: checkCoverage(doc, [], options), copy: copy(doc, [], options) }));",
+    ].join("\n");
+    const output = execFileSync(process.execPath, ["--input-type=module", "-e", program], { input: dense, encoding: "utf8", timeout: 10_000 });
+    const { port, copy } = JSON.parse(output) as { port: CoverageResult; copy: CoverageResult };
+    expect(port).toEqual(copy);
+    expect(port.status).toBe("fail");
+    expect(port.findings).toEqual([{ code: "dependency-cycle", path: "plan.md", line: 1, message: "Dependency cycle: c1 -> c2 -> c1." }]);
+    expect(port.units).toHaveLength(63);
   }, 20_000);
 
   it("reads CRLF line endings exactly as LF, in both twins", () => {
@@ -246,6 +320,11 @@ describe("parsePlanUnits — each unit's fields, read as the coverage check read
 
   it("reads CRLF line endings exactly as LF", () => {
     expect(parsePlanUnits(units.replaceAll("\n", "\r\n"))).toEqual(parsePlanUnits(units));
+  });
+
+  it("reads the bare shorthand in a unit's requirements as the coverage check does", () => {
+    const [unit] = parsePlanUnits("## Units\n### U1\n- **requirements**: REQ-DEMO-001, 002, 004–005.\n- **depends_on**: none.\n");
+    expect(unit?.requirements).toEqual(["REQ-DEMO-001", "REQ-DEMO-002", "REQ-DEMO-004", "REQ-DEMO-005"]);
   });
 
   it("reads a requirement it cannot parse as no requirement, and no units section as no unit", () => {
