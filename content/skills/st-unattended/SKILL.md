@@ -168,3 +168,4 @@ comment answers (unreadable counts as none); another's answers are not applied, 
 ## Chains
 
 A chain, `stamity plan check a b c --chain --since <Base> --json`, runs only as `references/chains.md` states.
+A run in a cloud session or continued from its branch, and the morning walk's late commits, follow `references/cloud.md`.

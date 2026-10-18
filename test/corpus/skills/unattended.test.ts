@@ -29,8 +29,17 @@ const REL_PATH = "skills/st-unattended/SKILL.md";
 /** The chain runs, moved out of the body under its cap; the body's `## Chains` line points here. */
 const CHAINS_REL_PATH = "skills/st-unattended/references/chains.md";
 
-/** The plan's ceiling for this body. */
-const BODY_CAP = 160;
+/** The cloud-session rules, moved out of the body as the chain runs were; the body's `## Chains` section points here. */
+const CLOUD_REL_PATH = "skills/st-unattended/references/cloud.md";
+
+/**
+ * The plan's ceiling for this body.
+ *
+ * TEST CHANGE, justified (plan 021 file 2, unit v3-cloud-skill, REQ-FLOW-107): the cap rises by the one
+ * pointer line to `references/cloud.md`, placed after `## Chains` so no eval case's `source:` line range
+ * moves (`test/evals/locators.test.ts`); a rewrap above it would have shifted every range below the rewrap.
+ */
+const BODY_CAP = 161;
 
 /** The sections, in the order the plan's unit u9 lists them. */
 const SECTIONS: readonly string[] = [
@@ -602,6 +611,18 @@ describe("st-unattended — the other touchpoints and chains (REQ-FLOW-096, REQ-
     expect(text).toContain("a path a commit between the stamp and the base moved stays stale");
   });
 
+  it("points the body's Chains section at the cloud reference, on the body's last line", async () => {
+    const pointer =
+      "A run in a cloud session or continued from its branch, and the morning walk's late commits, follow `references/cloud.md`.";
+    expect(await flat()).toContain(pointer);
+    // After `## Chains`, the body's last section, so no eval `source:` range above it moves.
+    const lines = (await load()).parsed.body.replace(/\r?\n$/, "").split(/\r?\n/);
+    expect(lines.at(-1)).toBe(pointer);
+    expect(lines.at(-2)).toBe(
+      "A chain, `stamity plan check a b c --chain --since <Base> --json`, runs only as `references/chains.md` states.",
+    );
+  });
+
   // pr/25: the ask gate's final round opens on run end's marker, so only the chain's last file may leave one.
   // TEST CHANGE, justified (pr/37, signed off 12:41Z): the flag inverts, so only the chain's final round passes
   // --final-round and every other file's plain run end leaves no marker; --chain-next is gone.
@@ -612,5 +633,120 @@ describe("st-unattended — the other touchpoints and chains (REQ-FLOW-096, REQ-
     );
     expect(text).toContain("Every other file's `run end` takes no flag, so it writes no run-ended marker and removes one left there");
     expect(text).not.toContain("--chain-next");
+  });
+});
+
+/**
+ * The cloud-session reference (plan 021 file 2, unit v3-cloud-skill; REQ-LADDER-002, REQ-FLOW-105 to
+ * REQ-FLOW-108, REQ-FLOW-112 and REQ-FLOW-116 to REQ-FLOW-119). Each rule the unit's cell lists is pinned by
+ * the phrase the reference states it in, so a later edit cannot drop one without this suite naming it.
+ */
+describe("st-unattended — the cloud reference (plan 021 file 2, v3-cloud-skill)", () => {
+  it("is a reference of the skill, clean of fences, person-only acts and client names", async () => {
+    const reference = await load(CLOUD_REL_PATH);
+    expect(frontmatterField(reference.parsed, "id")).toBe("cloud");
+    requireLoadClass(reference, ["reference"]);
+    requireObsoleteWhen(reference);
+    expect(() => assertDenyClean(reference)).not.toThrow();
+    const text = await flat(CLOUD_REL_PATH);
+    expect(actsTold(text)).toEqual([]);
+    expect(reference.parsed.body).not.toMatch(/^\s*(?:```|~~~)/m);
+    for (const command of ["gh pr merge", "gh pr ready", "git tag", "gh release", "npm publish", "--force", "git push"]) {
+      expect(text).not.toContain(command);
+    }
+  });
+
+  // REQ-LADDER-002 (MODIFIED by plan 021 file 2): in a cloud session a limit with a reset waits for nothing.
+  it("checkpoints, refreshes the draft's body and returns BLOCKED_DEPENDENCY at a limit with a reset, waiting for nothing", async () => {
+    const text = await flat(CLOUD_REL_PATH);
+    expect(text).toContain("`stamity run checkpoint --run <id> --paths <p...> --pr --title <t> --json`");
+    expect(text).toContain("`- <UTC> capacity: <role> limit-reset → BLOCKED_DEPENDENCY`");
+    expect(text).toContain("returns `BLOCKED_DEPENDENCY` naming the reset time");
+    expect(text).toContain("Nothing waits inside the machine, however near the reset: a reset five minutes away still returns.");
+    expect(text).toContain("a checkpoint that does not push adds a `Not done:` line naming the branch");
+    expect(text).toContain("The record stays in progress, so the next session on the branch continues it.");
+    // The record line is written before the checkpoint, so it rides the commit the checkpoint pushes.
+    expect(text.indexOf("`- <UTC> capacity: <role> limit-reset → BLOCKED_DEPENDENCY`")).toBeLessThan(
+      text.indexOf("`stamity run checkpoint --run <id> --paths <p...> --pr --title <t> --json`"),
+    );
+    // The edge case: a local or attended run keeps `/st-work`'s capacity rung and its 12-hour wait.
+    expect(text).toContain("a local unattended run and an attended one keep `/st-work`'s capacity rung, its 12-hour wait included");
+  });
+
+  it("paces a night with no loop, wakeup or agent team, and at most two implementers at once (REQ-FLOW-107)", async () => {
+    const text = await flat(CLOUD_REL_PATH);
+    expect(text).toContain("The run uses no `/loop`, no wakeup and no agent team to pace itself");
+    expect(text).toContain("runs at most two implementers at once");
+  });
+
+  // REQ-FLOW-107: the Shell paragraph's words stay byte for byte in every bound body
+  // (`test/corpus/agents/shellDiscipline.test.ts` pins them); this is the one exception, stated here only.
+  it("runs the full gate as one background command under a stated timeout, the Shell paragraph's one exception", async () => {
+    const text = await flat(CLOUD_REL_PATH);
+    expect(text).toContain("The full gate runs as one background command under a stated timeout");
+    expect(text).toContain("never polled with `sleep`");
+    expect(text).toContain("the one exception to the bound agents' Shell paragraph, whose words stand unchanged");
+    expect(text).toContain("the brief that dispatches it names this exception");
+  });
+
+  // REQ-FLOW-106, ledger row review/56: the review gate rebuilds a lost counter only from the record the
+  // branch carries, so a round's usage line that never reached the branch is a round the rebuild cannot see.
+  it("checkpoints after each review round so the round's usage line reaches the branch before a reclaim", async () => {
+    const text = await flat(CLOUD_REL_PATH);
+    expect(text).toContain(
+      "A checkpoint runs after each review round, so the round's `usage: review rN` line reaches the branch before the machine is reclaimed",
+    );
+    expect(text).toContain("the review gate rebuilds a lost counter only from the record the branch carries");
+  });
+
+  it("runs lanes in the client's own isolation or one at a time, never the sibling worktree folder (REQ-FLOW-108)", async () => {
+    const text = await flat(CLOUD_REL_PATH);
+    expect(text).toContain("each in the client's own isolation, or one at a time");
+    expect(text).toContain("never in the sibling folder `stamity worktree setup` makes, so no folder appears under `<parent>/.stamity-worktrees/`");
+    expect(text).toContain("Each lane is committed and folded into the run branch before every checkpoint.");
+  });
+
+  it("refuses a session holding several repositories with hooks did not load first (REQ-FLOW-112)", async () => {
+    const text = await flat(CLOUD_REL_PATH);
+    expect(text).toContain("A cloud session that holds several repositories loads none of their hooks");
+    expect(text).toContain("refuses with `hooks did not load` first");
+    expect(text).toContain("one repository per session");
+  });
+
+  it("continues the in-progress record on this branch at Frame, and runs run start first on a fresh clone (REQ-FLOW-105)", async () => {
+    const text = await flat(CLOUD_REL_PATH);
+    expect(text).toContain(
+      "Frame in an unattended run continues the in-progress record whose `Branch:` names the checked-out branch",
+    );
+    expect(text).toContain("instead of opening a new record");
+    expect(text).toContain("`stamity ledger status` where no hook ran");
+    expect(text).toContain("it runs `stamity run start --run <id> --json` first");
+    expect(text).toContain("A record naming another branch, a detached HEAD, or no `Branch:` line opens a new record.");
+  });
+
+  it("counts the commits after the last checkpoint on Not done:, never covered by the proof block (REQ-FLOW-116)", async () => {
+    const text = await flat(CLOUD_REL_PATH);
+    expect(text).toContain("as `git rev-list <sha>..HEAD` lists them");
+    expect(text).toContain("`Not done: <n> commits after checkpoint <sha>, not covered by the proof block's gates`");
+    expect(text).toContain("The proof block's gate results are never read as covering them.");
+  });
+
+  it("runs a long plan on a session-capped cloud agent as a chain of sessions (REQ-FLOW-117, REQ-FLOW-118)", async () => {
+    const text = await flat(CLOUD_REL_PATH);
+    expect(text).toContain("units are sized to one session");
+    expect(text).toContain("each session runs a checkpoint before about minute 45 to 50");
+    expect(text).toContain("`@<agent> continue`");
+    expect(text).toContain("resumes from the committed record on the same pull request");
+    expect(text).toContain("Where no sub-agent tool exists, the roles run in line in their order, and the proof block says so.");
+  });
+
+  it("reads CI awaiting approval as not run, and lists the second approver and the entry agent as prerequisites (REQ-FLOW-118, REQ-FLOW-119)", async () => {
+    const text = await flat(CLOUD_REL_PATH);
+    expect(text).toContain("The gates run in the agent's sandbox");
+    expect(text).toContain("the proof block reads `CI not run: awaiting approval`, never green");
+    expect(text).toContain("under required reviews, a second approver is a `## Prerequisites` row");
+    expect(text).toContain(
+      "When `.github/agents/stamity-run.agent.md` is not yet on the default branch, the run writes a declared `## Prerequisites` row naming it",
+    );
   });
 });
