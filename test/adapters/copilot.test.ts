@@ -11,16 +11,19 @@ import {
   COPILOT_DIALECT_FACTS,
   COPILOT_EVENT_NAMES,
   COPILOT_HOOKS_PATH,
+  COPILOT_RUN_AGENT_PATH,
   COPILOT_SETUP_STEPS_PATH,
   buildAgentFile,
   buildCopilotHooksJson,
   buildInstructionsFile,
   buildPromptFile,
+  buildRunAgentFile,
   buildSetupSteps,
   copilotResiduePlanner,
   engineRangeFloor,
   NO_SETUP_STEPS_PINS,
   readSetupStepsPins,
+  runAgentRows,
   copilotMatcherWarnings,
   translateCopilotMatcher,
 } from "../../src/adapters/copilot.ts";
@@ -32,6 +35,7 @@ import { buildCoreEmissionPlan, composeEmissionPlanner, type EmissionContext } f
 import { CLIENT_HOOK_GUARANTEES } from "../../src/hooks/model.ts";
 import { sanitizeLabel } from "../../src/cli/kit/prompts.ts";
 import { createManifest } from "../../src/manifest/manifest.ts";
+import { ownedPathKind } from "../../src/manifest/ownedPaths.ts";
 import { ledgerHashIndex, ledgerPathSet, safeWriteFile } from "../../src/merge/safeWrite.ts";
 import { resolveAgentGrant, type ResolvedAgentGrant } from "../../src/roster/agentGrants.ts";
 import type { GrantableToolCategory } from "../../src/roster/agentPolicies.ts";
@@ -532,8 +536,12 @@ describe("agents → .github/agents", () => {
       expect(row.owner).toEqual({ adapter: "copilot", artifactId: id, artifactType: "agent" });
     }
 
+    // TEST CHANGE, justified (2026-10-18, v9-copilot-entry, REQ-FLOW-118): the count gains one,
+    // the cloud agent's entry `stamity-run.agent.md`, emitted beside the work prompt and with no
+    // corpus file or roster row; its own frontmatter is pinned in "Copilot's entry agent" below.
+    // Every corpus agent above is still held to its roster grant, one file each.
     expect(pathsOf(plan).filter((path) => path.endsWith(".agent.md"))).toHaveLength(
-      CORPUS_AGENT_IDS.length,
+      CORPUS_AGENT_IDS.length + 1,
     );
   });
 
@@ -541,7 +549,10 @@ describe("agents → .github/agents", () => {
     const plan = await planResidue({ pins: { advanced: { all: "some-vendor/frontier-1" } } });
 
     const agents = plan.filter((row) => row.path.endsWith(".agent.md"));
-    expect(agents).toHaveLength(CORPUS_AGENT_IDS.length);
+    // TEST CHANGE, justified (2026-10-18, v9-copilot-entry, REQ-FLOW-118): the count gains the
+    // cloud agent's entry `stamity-run.agent.md`, which the loop below holds to the same opt-in
+    // and key order as the ten corpus agents.
+    expect(agents).toHaveLength(CORPUS_AGENT_IDS.length + 1);
     for (const row of agents) {
       const keys = frontmatterLines(row.content).map((line) => line.split(":")[0]);
       expect(frontmatterValue(row.content, "include-custom-instructions"), row.path).toBe("true");
@@ -762,11 +773,134 @@ describe("agents → .github/agents", () => {
     const plan = await planResidue();
     const agents = plan.filter((row) => row.path.endsWith(".agent.md"));
 
-    expect(agents).toHaveLength(CORPUS_AGENT_IDS.length);
+    // TEST CHANGE, justified (2026-10-18, v9-copilot-entry, REQ-FLOW-118): the count gains the
+    // cloud agent's entry, which the loop below holds to the same cap as the corpus agents.
+    expect(agents).toHaveLength(CORPUS_AGENT_IDS.length + 1);
     for (const row of agents) {
       const prompt = row.content.replace(/^---\n[\s\S]*?\n---\n\n/, "");
       expect(prompt.length, row.path).toBeLessThanOrEqual(COPILOT_AGENT_PROMPT_CAP);
     }
+  });
+});
+
+// ── The cloud agent's entry ──────────────────────────────────────
+
+describe("Copilot's entry agent (REQ-FLOW-117, REQ-FLOW-118)", () => {
+  const WORK_PROMPT = ".github/prompts/st-work.prompt.md";
+
+  /** The markdown below the frontmatter: what the platform measures against its cap. */
+  const promptOf = (content: string): string => content.replace(/^---\n[\s\S]*?\n---\n\n/, "");
+
+  it("is emitted with Copilot selected, beside the work prompt it names, owned as an agent row the bound admits", async () => {
+    const plan = await planResidue();
+    const row = rowAt(plan, COPILOT_RUN_AGENT_PATH);
+
+    expect(COPILOT_RUN_AGENT_PATH).toBe(".github/agents/stamity-run.agent.md");
+    expect(pathsOf(plan)).toContain(WORK_PROMPT);
+    // Every tool (`["*"]`: the entry runs the whole flow, MCP servers included) and no model
+    // line (the cloud agent picks its model when the task starts), nor any roster grant.
+    expect(frontmatterLines(row.content)).toEqual([
+      "name: stamity-run",
+      `description: ${frontmatterValue(row.content, "description")}`,
+      "target: github-copilot",
+      "include-custom-instructions: true",
+      'tools: ["*"]',
+    ]);
+    expect(frontmatterValue(row.content, "description")).toMatch(/^".+"$/);
+    expect(row.owner).toEqual({ adapter: "copilot", artifactId: "run", artifactType: "agent" });
+    // The manifest refuses a row outside the owned-path bound; an `infra` row here would be one.
+    expect(ownedPathKind({ path: row.path, adapter: row.owner.adapter, artifactType: row.owner.artifactType })).toBe(
+      "content",
+    );
+  });
+
+  it("names the prompt file and the plan, points an unattended run at its skill, and never inlines the prompt", async () => {
+    const plan = await planResidue();
+    const prompt = promptOf(rowAt(plan, COPILOT_RUN_AGENT_PATH).content);
+    const work = promptOf(rowAt(plan, WORK_PROMPT).content);
+
+    expect(prompt).toContain(`\`${WORK_PROMPT}\``);
+    expect(prompt).toContain("the plan file the issue names");
+    expect(prompt).toContain("`Mode: unattended`");
+    expect(prompt).toContain("`st-unattended` skill");
+    // Non-degenerate: the work prompt is far over the entry's budget, so a copy of it, or of
+    // its first phase, would show in both the size and the text.
+    expect(work.length).toBeGreaterThan(COPILOT_AGENT_PROMPT_CAP);
+    expect(work).toContain("## Phase 0 — Frame");
+    expect(prompt).not.toContain("## Phase 0 — Frame");
+    expect(prompt.length).toBeLessThan(2_000);
+    expect(prompt.length * 10).toBeLessThan(COPILOT_AGENT_PROMPT_CAP);
+  });
+
+  it("states the chain of sessions and the roles run in line where no sub-agent tool exists", () => {
+    const prompt = promptOf(buildRunAgentFile().content);
+
+    expect(prompt).toContain("59 minutes");
+    expect(prompt).toContain("before about minute 45");
+    expect(prompt).toContain("`stamity run checkpoint`");
+    expect(prompt).toContain("`@copilot continue`");
+    expect(prompt).toContain("resumes from the committed record");
+    expect(prompt).toContain("run the flow's roles in line, one at a time in their order");
+    expect(prompt).toContain("the proof block says so");
+    // Built once, byte-stable: a second sync writes the same file.
+    expect(buildRunAgentFile().content).toBe(buildRunAgentFile().content);
+  });
+
+  it("is not emitted without the work prompt it names, and is with it", async () => {
+    const without = await planResidue({
+      selection: { items: { agent: [], skill: [], rule: [], command: ["cmd-ask"] } },
+    });
+    const withWork = await planResidue({
+      selection: { items: { agent: [], skill: [], rule: [], command: ["cmd-work"] } },
+    });
+
+    expect(pathsOf(without)).toContain(".github/prompts/st-ask.prompt.md");
+    expect(pathsOf(without)).not.toContain(WORK_PROMPT);
+    expect(pathsOf(without)).not.toContain(COPILOT_RUN_AGENT_PATH);
+    expect(pathsOf(withWork)).toContain(WORK_PROMPT);
+    expect(pathsOf(withWork)).toContain(COPILOT_RUN_AGENT_PATH);
+  });
+
+  it("is not emitted when Copilot is not selected", async () => {
+    const claudeOnly = await planComposed({ tools: ["claude"] });
+    const withCopilot = await planComposed({ tools: ["claude", "copilot"] });
+
+    expect(pathsOf(claudeOnly).length).toBeGreaterThan(0);
+    expect(pathsOf(claudeOnly)).not.toContain(COPILOT_RUN_AGENT_PATH);
+    expect(pathsOf(withCopilot)).toContain(COPILOT_RUN_AGENT_PATH);
+  });
+
+  it("refuses an agent whose emitted name collides with the entry, naming the path", () => {
+    const work: AdapterOutput = {
+      path: WORK_PROMPT,
+      content: "---\ndescription: \"w\"\n---\n\nbody\n",
+      owner: { adapter: "copilot", artifactId: "cmd-work", artifactType: "command" },
+    };
+    const clash: AdapterOutput = {
+      path: COPILOT_RUN_AGENT_PATH,
+      content: "---\nname: stamity-run\n---\n\npack agent\n",
+      owner: { adapter: "copilot", artifactId: "run", artifactType: "agent" },
+    };
+
+    expect(runAgentRows([work])).toHaveLength(1);
+    expect(runAgentRows([])).toEqual([]);
+    let thrown: unknown;
+    try {
+      runAgentRows([work, clash]);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(EngineError);
+    expect((thrown as EngineError).code).toBe("VALIDATION_ERROR");
+    expect((thrown as EngineError).message).toContain(COPILOT_RUN_AGENT_PATH);
+  });
+
+  it("adds no roster row: the shipped agent policies stay the ten corpus agents", () => {
+    const ids = AGENT_POLICY_ROSTER.map((row) => row.agentId);
+
+    expect(ids).toHaveLength(CORPUS_AGENT_IDS.length);
+    expect(ids).not.toContain("stamity-run");
+    expect(ids.toSorted()).toEqual(CORPUS_AGENT_IDS.map((id) => `stamity-${id}`).toSorted());
   });
 });
 
@@ -1282,6 +1416,20 @@ describe("copilot-setup-steps.yml", () => {
     expect(Object.keys(parsed.jobs)).toEqual(["copilot-setup-steps"]);
     expect(parsed.jobs["copilot-setup-steps"]?.steps.length).toBeGreaterThan(1);
     expect(yaml.endsWith("\n")).toBe(true);
+  });
+
+  it("bounds the job with timeout-minutes, under the platform's 59 on every lane (REQ-FLOW-117)", () => {
+    for (const yaml of [
+      buildSetupSteps(packageManagerOf({ lockfile: "package-lock.json" }), ["typescript"], NO_SETUP_STEPS_PINS),
+      buildSetupSteps(packageManagerOf({}), ["python"], NO_SETUP_STEPS_PINS),
+    ]) {
+      const parsed = parseYaml(yaml) as { jobs: Record<string, { "timeout-minutes"?: unknown }> };
+      const timeout = parsed.jobs["copilot-setup-steps"]?.["timeout-minutes"];
+
+      expect(typeof timeout).toBe("number");
+      expect(timeout as number).toBeGreaterThan(0);
+      expect(timeout as number).toBeLessThanOrEqual(59);
+    }
   });
 
   it("installs frozen only when a lockfile is actually present", () => {

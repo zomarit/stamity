@@ -98,6 +98,18 @@ export const COPILOT_HOOKS_PATH = ".github/hooks/stamity.json";
 export const COPILOT_PROMPTS_DIR = ".github/prompts";
 const PROMPTS_DIR = COPILOT_PROMPTS_DIR;
 
+/** The `/st-work` prompt file: the flow the cloud agent's entry points at. */
+const WORK_PROMPT_PATH = `${PROMPTS_DIR}/st-work.prompt.md`;
+
+/**
+ * The cloud agent's entry (REQ-FLOW-118). A prompt file is not run by name on
+ * Copilot's cloud agent, and the work prompt is over the agent prompt cap, so a
+ * thin agent names the file instead of carrying it. Adapter-emitted with no
+ * corpus file and no roster row; the `stamity-` stem keeps it apart from a
+ * hand-written agent (REQ-FLOW-038).
+ */
+export const COPILOT_RUN_AGENT_PATH = `${AGENTS_DIR}/stamity-run.agent.md`;
+
 /**
  * The coding agent's environment-preparation workflow. Both the path and the
  * job name inside it are fixed by the platform: the agent looks for a job
@@ -107,6 +119,14 @@ export const COPILOT_SETUP_STEPS_PATH = ".github/workflows/copilot-setup-steps.y
 
 /** Job name the coding agent runs. Not a convention — the platform matches on it. */
 const SETUP_STEPS_JOB = "copilot-setup-steps";
+
+/**
+ * The setup job's `timeout-minutes` (REQ-FLOW-117). The environment page cited
+ * in {@link COPILOT_DIALECT_FACTS} lists the key among the job's customizable
+ * settings with a maximum of 59; half that bounds an install that hangs, well
+ * above what a dependency install takes.
+ */
+const SETUP_STEPS_TIMEOUT_MINUTES = 30;
 
 /**
  * Documented character cap on the markdown BELOW an agent file's frontmatter —
@@ -371,8 +391,9 @@ export const COPILOT_DIALECT_FACTS: AdapterDialectFacts = {
  * Plan Copilot's per-client rows over the core plan.
  *
  * Order is class order (agents, rules, commands, as the catalog walks them),
- * then the setup workflow, then the MCP documents — deterministic, though the
- * composer sorts by path before anything is written.
+ * then the cloud agent's entry, then the setup workflow, then the MCP
+ * documents — deterministic, though the composer sorts by path before anything
+ * is written.
  */
 export const copilotResiduePlanner: ResiduePlanner = {
   tool: TOOL,
@@ -416,6 +437,7 @@ export const copilotResiduePlanner: ResiduePlanner = {
           return [buildPromptFile(item, render, pins, listed)];
       }
     });
+    rows.push(...runAgentRows(rows));
 
     rows.push({
       path: modelMapPath(TOOL),
@@ -610,6 +632,74 @@ export function buildPromptFile(
       bodyOf(render(item.body)),
     ),
     owner: owner(item.id, item.type),
+  };
+}
+
+/**
+ * The cloud agent's entry rows: the entry when the work prompt it names is
+ * planned, else none — an entry naming a deselected prompt would point at
+ * nothing. An agent already planned at the entry's path (a pack agent with the
+ * id `run`) is refused by name, rather than left to the composer's
+ * two-contents refusal, which would name this adapter twice.
+ */
+export function runAgentRows(rows: readonly AdapterOutput[]): AdapterOutput[] {
+  if (!rows.some((row) => row.path === WORK_PROMPT_PATH)) return [];
+  if (rows.some((row) => row.path === COPILOT_RUN_AGENT_PATH)) {
+    throw new EngineError(
+      `An agent is planned at ${COPILOT_RUN_AGENT_PATH}, the path of Copilot's cloud entry agent. ` +
+        `Rename the agent whose id is "run", or deselect it.`,
+      { code: "VALIDATION_ERROR" },
+    );
+  }
+  return [buildRunAgentFile()];
+}
+
+/**
+ * The cloud agent's entry as a custom agent (REQ-FLOW-117, REQ-FLOW-118).
+ *
+ * A thin pointer, never the flow: it names {@link WORK_PROMPT_PATH} and the
+ * plan the issue names, so the flow has one copy. `target` and
+ * `include-custom-instructions` follow {@link buildAgentFile}'s reasons, the
+ * charter reaching the session either way. `tools: ["*"]` is the custom-agents
+ * reference's spelling for every available tool, the repository's MCP servers
+ * included (its Tools section, read 2026-10-18 for this claim alone; unset
+ * means the same): the entry runs the whole flow as the default agent would,
+ * and no roster grant exists for it (Copilot's guards are identity-free).
+ * `model:` is unset: the cloud agent picks its model when the task starts.
+ *
+ * The 59-minute session cap, `@copilot continue`, and the prompt-file rule are
+ * vendor-documented and not run here, with no cloud-agent account.
+ */
+export function buildRunAgentFile(): AdapterOutput {
+  const prompt = [
+    "# Run a planned change",
+    "",
+    "A prompt file is not run by name on this agent, so this file is the entry point. It carries no copy of the flow.",
+    "",
+    `1. Read \`${WORK_PROMPT_PATH}\` whole and follow it as your instructions.`,
+    "2. Read the plan file the issue names, and work it through that flow. An issue that names no plan is itself the request.",
+    "3. When the run record reads `Mode: unattended`, follow the `st-unattended` skill as well.",
+    "4. A session here stops at 59 minutes. Size each unit to one session, and commit and push a checkpoint " +
+      "before about minute 45 (in an unattended run, through `stamity run checkpoint`). The next session starts " +
+      "on a person's `@copilot continue` on the same pull request and resumes from the committed record.",
+    "5. Where no sub-agent tool is available, run the flow's roles in line, one at a time in their order, " +
+      "and the proof block says so.",
+  ].join("\n");
+  return {
+    path: COPILOT_RUN_AGENT_PATH,
+    content: frontmatterDocument(
+      [
+        "name: stamity-run",
+        `description: ${yamlScalar(
+          "Starts a planned stamity run on the cloud agent: reads the /st-work prompt file and the plan the issue names, then follows them.",
+        )}`,
+        "target: github-copilot",
+        "include-custom-instructions: true",
+        'tools: ["*"]',
+      ],
+      prompt,
+    ),
+    owner: owner("run", "agent"),
   };
 }
 
@@ -922,6 +1012,8 @@ export function buildSetupSteps(
     "jobs:",
     `  ${SETUP_STEPS_JOB}:`,
     "    runs-on: ubuntu-latest",
+    "    # The platform accepts at most 59 here; a stuck install stops at this bound.",
+    `    timeout-minutes: ${SETUP_STEPS_TIMEOUT_MINUTES}`,
     "    permissions:",
     "      contents: read",
     "    steps:",
