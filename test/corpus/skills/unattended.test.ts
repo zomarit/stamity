@@ -722,7 +722,14 @@ describe("st-unattended — the cloud reference (plan 021 file 2, v3-cloud-skill
     expect(text).toContain(
       "its change is applied to the run's work tree alone, as `git diff --binary <run-branch>...<lane> | git apply` applies it, never to the index, where a deletion already staged refuses the checkpoint",
     );
-    expect(text).toContain("that checkpoint's `--paths` names every path `git diff --name-only <run-branch>...<lane>` lists");
+    // TEST CHANGE, justified (review/88, signed off): the path list is read with rename detection off, as the
+    // checkpoint's own reads are (`src/cli/commands/run.ts` DIFF_PINS), so a lane's rename names its old path too and
+    // the checkpoint stages that deletion; with renames paired, `--name-only` prints only the new path, and the pushed
+    // tree keeps the old file beside the new one.
+    expect(text).toContain(
+      "that checkpoint's `--paths` names every path `git diff --name-only --no-renames <run-branch>...<lane>` lists",
+    );
+    expect(text).not.toContain("`git diff --name-only <run-branch>");
     expect(text).toContain(
       "The checkpoint reads every held path itself, from no list in this text: it moves any held part into `held/person-only.patch`, restored in the index only, and commits the rest",
     );

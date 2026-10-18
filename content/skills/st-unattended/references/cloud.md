@@ -39,11 +39,11 @@ Units that could run in parallel run each in the client's own isolation, or one 
 isolation and is folded once, when its agent returns and before the next checkpoint: its change is applied to the run's
 work tree alone, as `git diff --binary <run-branch>...<lane> | git apply` applies it, never to the index, where a
 deletion already staged refuses the checkpoint; that checkpoint's `--paths` names every path
-`git diff --name-only <run-branch>...<lane>` lists. The checkpoint reads every held path itself, from no list in this
-text: it moves any held part into `held/person-only.patch`, restored in the index only, and commits the rest, so no held
-path enters the run branch's history and nothing a lane did stays only on the machine. A lane's commit never lands on
-the run branch itself: one carrying a held path refuses every later `run checkpoint` and `run end`, which never rewrite
-history.
+`git diff --name-only --no-renames <run-branch>...<lane>` lists. The checkpoint reads every held path itself, from no
+list in this text: it moves any held part into `held/person-only.patch`, restored in the index only, and commits the
+rest, so no held path enters the run branch's history and nothing a lane did stays only on the machine. A lane's commit
+never lands on the run branch itself: one carrying a held path refuses every later `run checkpoint` and `run end`, which
+never rewrite history.
 
 ## Hooks
 
