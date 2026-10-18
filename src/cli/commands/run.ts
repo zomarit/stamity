@@ -925,11 +925,17 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   if (tip !== null && tip === remote.branch) {
     lines.push(`push: nothing ahead of origin/${current}`);
   } else {
-    const verdict = personOnlyVerdict(`git push origin ${refspec}`, {
-      defaultBranches: defaults.names,
-      currentBranch: current,
-      tags: await localTags(top),
-    });
+    const context = { defaultBranches: defaults.names, currentBranch: current, tags: await localTags(top) };
+    let verdict: ReturnType<typeof personOnlyVerdict>;
+    try {
+      verdict = personOnlyVerdict(`git push origin ${refspec}`, context);
+    } catch (error) {
+      // pr/61: a git-legal branch name can nest command substitutions past the verdict's four levels, and the verdict
+      // throws there rather than decide; the push is refused as the guard refuses that line.
+      if ((error as { code?: unknown } | null)?.code !== "NESTING_DEPTH") throw error;
+      result.notDone.push("push refused: the shell guard's table could not decide this push, its branch name nesting past four levels (NESTING_DEPTH)");
+      return finish(false);
+    }
     if (verdict.deny) {
       result.notDone.push(`push refused: ${verdict.reason}`);
       return finish(false);

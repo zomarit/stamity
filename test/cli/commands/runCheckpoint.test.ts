@@ -76,8 +76,11 @@ vi.mock("../../../src/cli/engine/gitWrite.ts", async (importOriginal) => {
   };
 });
 
-/** The push check's stand-in state (review/211): a reason to deny every `git push` with, and each command it read. */
-const table = vi.hoisted(() => ({ denyPush: null as string | null, commands: [] as string[] }));
+/**
+ * The push check's stand-in state (review/211): a reason to deny every `git push` with, each command it read, and a
+ * branch name (pr/61) whose push line the real verdict is handed in place of the verb's own.
+ */
+const table = vi.hoisted(() => ({ denyPush: null as string | null, commands: [] as string[], pushBranch: null as string | null }));
 
 // A spy over the real table: every command still gets the real verdict, unless a case sets `denyPush`, which makes
 // the push command's check refuse. Mock reason: after the verb's own branch refusals no branch it can push makes the
@@ -89,6 +92,11 @@ vi.mock("../../../src/hooks/personOnly.ts", async (importOriginal) => {
     personOnlyVerdict: (command: string, ctx: PersonOnlyModule.PersonOnlyContext): PersonOnlyModule.PersonOnlyVerdict => {
       table.commands.push(command);
       if (table.denyPush !== null && command.startsWith("git push ")) return { deny: true, rule: "push-default", reason: table.denyPush };
+      // Mock reason (pr/61): the verb refuses a branch name outside [A-Za-z0-9._/-] before this check, so a name that
+      // nests past the verdict's four levels reaches the real verdict only when the spy hands its push line over.
+      if (table.pushBranch !== null && command.startsWith("git push ")) {
+        return real.personOnlyVerdict(`git push origin HEAD:refs/heads/${table.pushBranch}`, { ...ctx, currentBranch: table.pushBranch });
+      }
       return real.personOnlyVerdict(command, ctx);
     },
   };
@@ -141,6 +149,7 @@ describe("stamity run checkpoint", () => {
     writes.extraTips.length = 0;
     table.denyPush = null;
     table.commands.length = 0;
+    table.pushBranch = null;
     rest.routes.set("GET repos/o/r", { status: 200, json: { default_branch: "main" } });
     rest.routes.set("GET repos/o/r/pulls", { status: 200, json: [] });
     rest.routes.set("POST repos/o/r/pulls", { status: 201, json: { number: 7, html_url: "https://github.com/o/r/pull/7" } });
@@ -1050,6 +1059,51 @@ describe("stamity run checkpoint", () => {
     expect(table.commands).toEqual([`git push origin HEAD:refs/heads/${RUN_BRANCH}`]);
     expect(pushes()).toEqual([]);
     expect(remoteHeads(remote)).toEqual(SEEDED);
+  });
+
+  describe("a branch name nesting past the verdict's four levels (pr/61)", () => {
+    /** git accepts it (`git check-ref-format --branch`), and the real verdict throws NESTING_DEPTH on its push line. */
+    const NESTED = `stamity/x${'"$('.repeat(5)}y`;
+    const REFUSED = "push refused: the shell guard's table could not decide this push, its branch name nesting past four levels (NESTING_DEPTH)";
+
+    it("refuses the push with exit 1 when the verdict throws NESTING_DEPTH, committing first and pushing nothing", async () => {
+      const { repo, remote } = await seed("attended");
+      await writeFile(join(repo, "a.txt"), "changed\n");
+      table.pushBranch = NESTED;
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      expect(code).toBe(1);
+      expect(doc["notDone"]).toEqual([REFUSED]);
+      expect(doc).toMatchObject({ pushed: false });
+      expect(doc["committed"]).toMatch(/^[0-9a-f]{40}$/);
+      expect(pushes()).toEqual([]);
+      expect(remoteHeads(remote)).toEqual(SEEDED);
+    });
+
+    it("pushes where the name nests four levels, which the verdict decides (the twin)", async () => {
+      const { repo } = await seed("attended");
+      await writeFile(join(repo, "a.txt"), "changed\n");
+      table.pushBranch = `stamity/x${'"$('.repeat(4)}y`;
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [] });
+    });
+
+    it("on a checkout of that branch, refuses the commit by its name before the verdict runs", async () => {
+      const { repo, remote } = await seed("attended", { branch: NESTED });
+      await writeFile(join(repo, "a.txt"), "changed\n");
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      expect(code).toBe(1);
+      expect(doc["notDone"]).toEqual([`commit refused: the branch name ${NESTED} holds characters the push check does not read`]);
+      expect(table.commands).toEqual([]);
+      expect(pushes()).toEqual([]);
+      expect(remoteHeads(remote)).toEqual(SEEDED);
+    });
   });
 
   describe("the default branch's sources (pr/55)", () => {
