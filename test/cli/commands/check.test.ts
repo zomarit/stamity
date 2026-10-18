@@ -4516,6 +4516,30 @@ describe("check — model-pins", () => {
     });
   });
 
+  // W-1 of the unit's first round: Cursor's map drops the effort group a list decides, so its
+  // agent files, which the ledger names, are what keep a listed pin bare in a fresh clone.
+  it("reads a fresh clone with no cache as no drift for a Cursor pin that came from a list", async () => {
+    const handle = getRepo();
+    await handle.seedFiles({
+      "corpus/agents/stamity-creator.md": await readFile(fileURLToPath(new URL("../../../content/agents/stamity-creator.md", import.meta.url)), "utf8"),
+    });
+    const root = await seedRepo(handle, { tools: ["claude", "cursor"] });
+    await pinCodex(root, { pins: { standard: { cursor: "composer-9" } } });
+    const engineVersion = createApp().version;
+    const plan = await planSync(root, engineVersion, {
+      listedOverlay: { cursor: { ids: ["composer-9", "composer-8"], source: "cursor-agent-models" } },
+    });
+    await applySync(root, plan, { engineVersion, force: false, dryRun: false, now: T0 });
+    // The list held the pin, so the agent carries it bare; with no list it would take an effort group.
+    expect(await readFile(join(root, ".cursor", "agents", "stamity-creator.md"), "utf8")).toMatch(/^model: composer-9$/m);
+
+    await rm(join(root, CACHE));
+    const { code, doc } = await runJson(root, { STAMITY_NO_CLIENT_PROBE: "1" });
+
+    expect(doc.drift).toEqual({ clean: true, changes: [], missing: [], reclaimPending: 0, reclaim: [] });
+    expect(code).toBe(0);
+  });
+
   it("warns, naming the client and the class, on a cache another account's list filled, and still exits 0", async () => {
     const root = await seedRepo(getRepo(), { tools: ["claude", "codex"] });
     await pinCodex(root, { pins: { standard: { codex: "gpt-6-sol" } } });

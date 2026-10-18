@@ -333,7 +333,7 @@ function readPin(manifest: SetupManifest, modelClass: ModelClass): string | null
 /**
  * The setup manifest, carrying in memory the model lists the pick reads
  * (REQ-LADDER-009): the git-ignored cache's, a 1.15.0 manifest's own, else the
- * list the emitted model map gives. `writeManifest` never writes them.
+ * list the files already emitted give. `writeManifest` never writes them.
  */
 async function readConfigManifest(ctx: CliContext, rootDir: string): Promise<SetupManifest> {
   const manifest = await requireSetupManifest(ctx, rootDir);

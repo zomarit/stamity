@@ -550,16 +550,16 @@ export async function planSync(
      * Client model lists read fresh by the caller (`sync` reads them before
      * it plans, REQ-LADDER-006), laid client by client over the lists the
      * git-ignored cache keeps (REQ-LADDER-009); a client absent here keeps its
-     * cached list, and one with no list at all keeps the pick its emitted
-     * model map records (`../../engine/clientModels.ts::resolveModelLists`).
+     * cached list, and one with no list at all keeps the pick its files
+     * already carry (`../../engine/clientModels.ts::resolveModelLists`).
      * The plan's manifest carries the result in memory, a live apply keeps it
      * in the cache ({@link SyncPlan.modelListCache}), and a dry run writes
      * nothing. Planning itself never starts a client.
      */
     listedOverlay?: Partial<Record<Tool, ListedModels>>;
     /**
-     * Resolve each client's models with the list its emitted model map
-     * records ahead of any kept list (REQ-LADDER-009): `check`'s drift gate,
+     * Resolve each client's models with the list its emitted files give
+     * ahead of any kept list (REQ-LADDER-009): `check`'s drift gate,
      * for which an account's list moving a pick is the `model-pins` row's
      * warning, not drift. `sync` itself leaves it off.
      */

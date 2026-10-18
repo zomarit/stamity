@@ -596,6 +596,31 @@ describe("the model list cache", () => {
     expect(kept.asEmitted).toEqual({ codex: CODEX, copilot: fromMap, cursor: CURSOR_FRESH });
   });
 
+  it("reads Cursor's ledgered agent files for the bare model values a list kept, leaving a value with an effort group out", async () => {
+    const temp = getTemp();
+    const agent = (model: string): string => `---\ndescription: An agent.\nmodel: ${model}\n---\nBody.\n`;
+    await temp.seedFiles({
+      ".cursor/agents/stamity-a.md": agent("composer-9"),
+      ".cursor/agents/stamity-b.md": agent("composer-8[effort=high]"),
+      ".cursor/agents/stamity-c.md": agent("claude-opus-5-5-high"),
+      // Not ledgered, so not read.
+      ".cursor/agents/stamity-planted.md": agent("composer-planted"),
+    });
+    const manifest = setup(["cursor"], []);
+    manifest.ledger = ["stamity-a", "stamity-b", "stamity-c"].map((id) => ({
+      path: `.cursor/agents/${id}.md`,
+      adapter: "cursor" as const,
+      artifactId: id,
+      artifactType: "agent" as const,
+    }));
+
+    const lists = await resolveModelLists(temp.dir, manifest);
+
+    expect(lists.effective).toEqual({ cursor: { ids: ["composer-9", "claude-opus-5-5-high"], source: "cursor-agent-models" } });
+    expect(lists.kept).toEqual({});
+    expect(lists.toWrite).toBeNull();
+  });
+
   it("leaves `models.listed` out of the in-memory copy when no list is given, and drops an emptied block", () => {
     const manifest = setup(["cursor"], [], { cursor: { ...CURSOR_OLD, ids: [...CURSOR_OLD.ids] } });
 

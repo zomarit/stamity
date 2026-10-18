@@ -1092,6 +1092,8 @@ function createBridge(
     });
     // An append to a file the operator owns is named, as the member's own sync names it.
     outcome.gitignoreAdded = [...(applied.gitignoreAdded ?? [])];
+    // A model list cache the member's sync could not write is named, as `sync` names it (REQ-LADDER-009).
+    if (applied.modelListCacheWarning !== undefined) ctx.io.err(`warning: ${repo.path}: ${applied.modelListCacheWarning}\n`);
     if (applied.refused.length > 0) throw refusedPaths(repo.path, plan, applied.refused);
   };
 }

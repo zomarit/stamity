@@ -201,7 +201,8 @@ history committed before then still holds them. The cache is read with the manif
 planted cache can only choose among the shipped candidates and the pins, and `check`'s `model-pins`
 row warns on a pick the live list lacks, never fails. With no cache, a fresh clone among them, the
 pick already emitted is kept, read from the ledgered `.stamity/generated/models/` maps of Codex and
-Copilot, and `model-pins` reads as unverified. With `STAMITY_NO_CLIENT_PROBE=1` set, no list is
+Copilot and from the `model:` lines of Cursor's ledgered agent files, and `model-pins` reads as
+unverified. With `STAMITY_NO_CLIENT_PROBE=1` set, no list is
 read; delete the cache to drop the lists already kept.
 
 **Board writes are the touchpoints' own, not the engine's.** `/st-board` and `/st-pr-resolve` call

@@ -1829,9 +1829,36 @@ describe("workspace sync — each member's client model lists (REQ-LADDER-006)",
 
     expect(await runSyncWith(root, { PATH: bin })).toBe(0);
 
-    expect((await readManifest(api))?.models?.listed).toEqual({
-      codex: { ids: ["gpt-6-sol", "gpt-6-luna"], source: "codex-debug-models" },
+    // TEST CHANGE, justified (v17-model-list-cache, REQ-LADDER-009): the member's list is kept in its
+    // git-ignored cache, never in its committed manifest, so the case reads it there and the manifest holds none.
+    expect(JSON.parse(await readFile(join(api, ".stamity", "client-models.json"), "utf8"))).toEqual({
+      listed: { codex: { ids: ["gpt-6-sol", "gpt-6-luna"], source: "codex-debug-models" } },
     });
+    expect((await readManifest(api))?.models?.listed).toBeUndefined();
+  });
+
+  // REQ-LADDER-009: a member whose cache cannot be written keeps the list for the run, and the
+  // cascade names it on stderr as the member's own sync does.
+  it.skipIf(WINDOWS)("names a member's model list cache it could not write, and the member still syncs", async () => {
+    const temp = getTemp();
+    await seedCorpus(temp);
+    const bin = await seedFakeCodex(temp);
+    const root = await seedWorkspace(temp, manifestOf([{ path: "apps/api" }], { defaults: { tools: ["codex"] } }));
+    const api = await seedSyncMember(root, "apps/api", { tools: ["codex"] });
+    await mkdir(join(api, ".stamity", "client-models.json"), { recursive: true });
+    const err: string[] = [];
+    const io: CommandIo = { out: () => undefined, err: (text) => err.push(text) };
+
+    const code = await runCli(["workspace", "sync"], [workspaceCommand], {
+      cwd: root,
+      env: { NO_COLOR: "1", PATH: bin },
+      io,
+      clock: { now: () => T0 },
+    });
+
+    expect(code).toBe(0);
+    expect(err.join("")).toContain("warning: apps/api: the client model lists could not be kept in .stamity/client-models.json");
+    expect((await readManifest(api))?.models?.listed).toBeUndefined();
   });
 
   // review/92: the tree the lister refuses programs from is the whole workspace, not the

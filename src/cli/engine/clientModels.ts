@@ -541,41 +541,84 @@ export async function writeModelListCache(rootDir: string, lists: ModelLists): P
   }
 }
 
-/** The clients whose model map holds every id a list moved their pick to; Cursor's map drops the effort group a list decides. */
-const WITNESS_CLIENTS: readonly Tool[] = ["codex", "copilot"];
+/** The clients a list is read for, in the order the lists are laid out. */
+const TOOLS_WITH_LISTS: readonly Tool[] = ["codex", "copilot", "cursor"];
+
+/** The clients whose model map holds every id a list moved their pick to; Cursor's drops the effort group a list decides. */
+const MAP_CLIENTS: ReadonlySet<Tool> = new Set<Tool>(["codex", "copilot"]);
+
+/** The ids `text` (a model map) records: every class's model, its bracket options dropped, and its fallbacks; `null` for another shape. */
+function mapCandidates(text: string): string[] | null {
+  const parsed: unknown = JSON.parse(text);
+  if (!isPlainObject(parsed) || !isPlainObject(parsed["classes"])) return null;
+  const candidates: string[] = [];
+  for (const entry of Object.values(parsed["classes"])) {
+    if (!isPlainObject(entry)) continue;
+    if (typeof entry["model"] === "string") candidates.push(entry["model"].trim().split("[")[0] ?? "");
+    if (Array.isArray(entry["fallbacks"])) candidates.push(...entry["fallbacks"].filter((id) => typeof id === "string"));
+  }
+  return candidates;
+}
+
+/** The `model:` value of a Cursor agent file's frontmatter, unquoted, or `null` where it carries none. */
+function agentModel(text: string): string | null {
+  const head = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)?.[1];
+  const raw = head === undefined ? undefined : /^model: (.*)$/m.exec(head)?.[1]?.trim();
+  if (raw === undefined) return null;
+  if (!raw.startsWith('"')) return raw;
+  try {
+    const value: unknown = JSON.parse(raw);
+    return typeof value === "string" ? value : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
- * For each of Codex and Copilot that `manifest` selects, a list read off the
- * model map the last emission wrote (`.stamity/generated/models/<client>.json`,
- * ledgered): every class's model, its bracket options dropped, and its
- * fallbacks, which are the shipped candidates the list it was picked from held.
- * The resolver picks from it exactly what it picked from that list, so a
- * checkout with no cached list keeps the pick already emitted, and a fresh
- * clone's drift gate reports none. A map that is not ledgered, is too large or
- * has another shape gives nothing.
+ * The text of each of `paths` under `rootDir` that reads, in order; a path
+ * that is absent, too large, not a regular file or unreadable is left out.
+ */
+async function readEmitted(rootDir: string, paths: readonly string[]): Promise<string[]> {
+  const texts = await Promise.all(paths.map((path) => readListFile(join(rootDir, path)).catch(() => null)));
+  return texts.filter((text) => text !== null);
+}
+
+/**
+ * For each listing client that `manifest` selects, a list read off the files
+ * the last emission wrote and the ledger names, so a checkout with no cached
+ * list keeps the pick already emitted and a fresh clone's drift gate reports
+ * none. Codex and Copilot: their model map (`.stamity/generated/models/<client>.json`),
+ * every class's model, its bracket options dropped, and its fallbacks, which are
+ * the shipped candidates the list it was picked from held; the resolver picks
+ * from it exactly what it picked from that list. Cursor: the `model:` values its
+ * agent files carry with no effort group, since a list decides only whether a
+ * pin takes one, and a value with a group fails the id shape, so a pin the list
+ * held stays bare and one it lacked keeps its group. A file that is not
+ * ledgered, is too large or has another shape gives nothing.
  */
 async function emittedPickLists(rootDir: string, manifest: SetupManifest): Promise<ModelLists> {
+  const ledgered = new Set(manifest.ledger.map((row) => row.path));
   const read = await Promise.all(
-    WITNESS_CLIENTS.map(async (tool): Promise<[Tool, ListedModels] | null> => {
-      const path = modelMapPath(tool);
+    TOOLS_WITH_LISTS.map(async (tool): Promise<[Tool, ListedModels] | null> => {
       const lister = LISTERS[tool];
-      if (lister === undefined || !manifest.tools.includes(tool) || !manifest.ledger.some((row) => row.path === path)) {
-        return null;
+      if (lister === undefined || !manifest.tools.includes(tool)) return null;
+      let candidates: string[] | null = null;
+      if (MAP_CLIENTS.has(tool)) {
+        if (!ledgered.has(modelMapPath(tool))) return null;
+        const [text] = await readEmitted(rootDir, [modelMapPath(tool)]);
+        try {
+          candidates = text === undefined ? null : mapCandidates(text);
+        } catch {
+          candidates = null;
+        }
+      } else {
+        const agents = manifest.ledger
+          .filter((row) => row.adapter === tool && row.artifactType === "agent" && row.path.endsWith(".md"))
+          .map((row) => row.path);
+        if (agents.length === 0) return null;
+        candidates = (await readEmitted(rootDir, [...new Set(agents)])).map(agentModel).filter((model) => model !== null);
       }
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse((await readListFile(join(rootDir, path))) ?? "null");
-      } catch {
-        return null;
-      }
-      if (!isPlainObject(parsed) || !isPlainObject(parsed["classes"])) return null;
-      const candidates: string[] = [];
-      for (const entry of Object.values(parsed["classes"])) {
-        if (!isPlainObject(entry)) continue;
-        if (typeof entry["model"] === "string") candidates.push(entry["model"].trim().split("[")[0] ?? "");
-        if (Array.isArray(entry["fallbacks"])) candidates.push(...entry["fallbacks"].filter((id) => typeof id === "string"));
-      }
-      return [tool, { ids: shapedIds(candidates).slice(0, MAX_LISTED_MODELS), source: lister.source }];
+      return candidates === null ? null : [tool, { ids: shapedIds(candidates).slice(0, MAX_LISTED_MODELS), source: lister.source }];
     }),
   );
   return Object.fromEntries(read.filter((entry) => entry !== null));
@@ -586,15 +629,15 @@ export interface ResolvedModelLists {
   /**
    * The lists a plan resolves with, client by client: the one read fresh, else
    * the cached one, else the one a 1.15.0 manifest still saved, else the one
-   * read off the emitted model map.
+   * read off the files already emitted ({@link emittedPickLists}).
    */
   readonly effective: ModelLists;
   /**
-   * The lists that reproduce the files already emitted: the emitted model
-   * map's first, then {@link effective}'s. What the drift gate plans with.
+   * The lists that reproduce the files already emitted: the ones read off
+   * them first, then {@link effective}'s. What the drift gate plans with.
    */
   readonly asEmitted: ModelLists;
-  /** The account's lists without the map's: what a live run keeps in the cache. */
+  /** The account's lists without those read off the files: what a live run keeps in the cache. */
   readonly kept: ModelLists;
   /** {@link kept} where it differs from what the cache holds, so a live run writes it; else `null`. */
   readonly toWrite: ModelLists | null;
@@ -607,7 +650,7 @@ export interface ResolvedModelLists {
  * `init` or `sync` read from the clients this run) over the cache, over the
  * lists a 1.15.0 `manifest` still carries under `models.listed`, which move to
  * the cache at the next live run, and, for a client with none of those, over
- * the list its emitted model map gives. Reads only; never starts a client.
+ * the list the files already emitted give. Reads only; never starts a client.
  */
 export async function resolveModelLists(
   rootDir: string,

@@ -1813,8 +1813,8 @@ export async function runDoctor(
  *   longer exists;
  * - a pending reclaim candidate — a file queued for removal on the next sync.
  *
- * The plan keeps the model each emitted model map records
- * (`keepEmittedPicks`, REQ-LADDER-009): which models an account's list holds
+ * The plan keeps the model the emitted files carry (`keepEmittedPicks`,
+ * REQ-LADDER-009): which models an account's list holds
  * is the `model-pins` row's to warn on, never drift, so a fresh clone with no
  * cached list, or a cache another account's list filled, reads no change here.
  *
