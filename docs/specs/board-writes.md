@@ -121,10 +121,10 @@ names every write made, with its item id and event id, and the preview's answer 
   from a preview answered in the same session is `review/25`. The tick's author rule is the re-plan's; plan 015 ticked
   every verified criterion the body lists as a task.
 - **Proof:** `test/corpus/commands/board.test.ts`; the eval case `board-write-back-four-channels`; QA rows R2 and R3.
-- **Amended 2026-10-16** (plan 021 file 1, run `2026-10-15_cloud-runs`, unit `u10-board`; read at `4daeb214`): the
-  pickup hand-off. Given pickup step 5, Then its payload carries `run-mode: attended | unattended` beside `move:` and
-  `preview:`, with the item's readiness verdict and its source link for the run (`content/commands/st-board.md:126-129`);
-  a hand-off read from disk carries `run-mode: attended`, as it carries `preview: stop` (`:347-349`). Unattended, a
+- **Amended 2026-10-16** (plan 021 file 1, run `2026-10-15_cloud-runs`, unit `u10-board`; read at `4daeb214`; its skill
+  citation re-pointed on 2026-10-19 at `96e5b3ac`): the pickup hand-off. Given pickup step 5, Then its payload carries
+  `run-mode: attended | unattended` beside `move:` and `preview:`, with the item's readiness verdict and its source
+  link for the run (`content/commands/st-board.md:126-129`); a hand-off read from disk carries `run-mode: attended`, as it carries `preview: stop` (`:347-349`). Unattended, a
   pickup keeps `preview: stop` and `move: off` (`:349-350`), and each board write it would make lands as a morning-list
   row (`content/skills/st-unattended/SKILL.md:167-168`). The field is not `mode`, which the return block names for the
   board mode; the session's `run-mode: unattended` comes only from `--unattended`, or `STAMITY_UNATTENDED` set to any

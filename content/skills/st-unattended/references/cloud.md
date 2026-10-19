@@ -85,6 +85,10 @@ exits that open or update no draft pull request, beside a held path, a scan hit,
 and it pushes nothing: the record and the morning list stay in the run folder, and its final message carries the
 `## Not done:` lines.
 
+The verb reads the marker before it stages anything, so its refusal leaves the index and the held patch as that commit
+left them. A checkpoint that reports `commit not made` is not this case: its commit was stopped at the time limit and
+none landed, so the verb removed its own marker, and the next `run checkpoint` or `run end` runs as usual.
+
 ## A session-capped cloud agent
 
 On a cloud agent whose session ends near an hour and whose next session starts from a pull request comment, a long

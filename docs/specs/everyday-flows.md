@@ -124,8 +124,9 @@ date, re-pointed or added a citation; the run's last citation pass re-read each 
 page round re-read them on `aa7a3e5b` with its own edits to `SECURITY.md`, `evals/SET-v7.md` and the unattended skill,
 re-pointing each one whose text had moved; the run's final derived pass, and the pull-request rounds' after it,
 re-pointed each one a later commit moved, mapped through git's diff from the commit it was read at, and every one
-reads at `02c2af6d`, a pin named beside a citation included. Two units
-were not on `4daeb214`: `u19-run-end` (`stamity run end`) and
+reads at `02c2af6d`, a pin named beside a citation included, and on 2026-10-19 plan 021's second file re-pointed
+each citation of `content/skills/st-unattended/SKILL.md` that the two lines its unit `n1-eval-ending` added moved,
+and those read at `96e5b3ac`. Two units were not on `4daeb214`: `u19-run-end` (`stamity run end`) and
 `u21-security-page` (`SECURITY.md`'s cloud section); the fix round cites both at `bc12cfc3`. REQ-FLOW-105 to
 REQ-FLOW-119 were held for plan 021's second file, which allocated them on 2026-10-18 (the next paragraph; amended
 2026-10-18, it read "are held for plan 021's second file"). The text dated 2026-10-16 is unreleased at this merge; the
@@ -135,7 +136,8 @@ REQ-FLOW-105 to REQ-FLOW-119 and REQ-FLOW-121 to REQ-FLOW-124, and the text date
 of `docs/plans/021-cloud-runs-02.md` (plan 021 file 2, run `2026-10-18_cloud-runs-2`), in its amended form, merged
 once by its unit `v20-spec-merge`. Where the units' and fixers' reports declared a clause the delta is silent on, the
 text adds it under a line headed "As built"; where they differ, the delta's decided wording stands and the "As built"
-line says what the code holds. Every `path:line` in that text reads at the integration head `e64bc09f`. Citations
+line says what the code holds. Every `path:line` in that text reads at the integration head `e64bc09f`, but for the
+citations of `content/skills/st-unattended/SKILL.md` re-pointed on 2026-10-19, which read at `96e5b3ac`. Citations
 into `src/hooks/personOnly.ts`, `src/hooks/scripts.ts` and the other modules the run rewrote by hundreds of lines name
 the file and the symbol, as the plan's own cells anchor them; a citation of a content file, a page, a test case or a
 small module names its lines. The text dated 2026-10-18 is unreleased at this merge; the plan cuts it as 1.16.0.
@@ -3748,6 +3750,18 @@ the default branch, read by REST; `run start` leaves it for a branch of the run'
   `src/cli/commands/run.ts`). The skill's cloud reference, which the body's last line names for every unattended run, has the run copy the refusal into the record and `## Not done:` and stop: it
   never removes the marker or resets the run branch, since the refusal's remedy is a person's
   (`content/skills/st-unattended/references/cloud.md`, "A checkpoint marker"; `SKILL.md`'s last line).
+- **Amended 2026-10-19** (plan 021 file 2, units `n1-eval-ending` and `n2-pending-marker`; written by
+  `n6-night-pages`). The paths `run end` commits are its `--paths` and its own: `--paths` names the files the run
+  changed, every unit's files named again though each was committed at its checkpoint, and each learning file the close
+  captured. The run folder's files (`record.md`, `ledger.jsonl`, `plan.md`, `morning.md`, the origin pin) and
+  `.stamity/inbox.md` are staged by the verb itself (`RUN_FILES` and `runOwned`, `src/cli/commands/run.ts`;
+  `content/skills/st-unattended/SKILL.md:101-102`). A `--paths` entry naming a path the run already committed is
+  harmless: an unchanged file stages nothing and adds no `notDone` line, and a path neither the work tree nor the index
+  holds that a commit since `Base:` touched (a deletion an earlier checkpoint committed, or a file the run created and
+  later deleted) is left out silently; a path never tracked keeps `not staged: <path> (no such file)` (`namedPaths` and
+  `committedDeletions`, `src/cli/commands/run.ts`).
+  - Proof: `test/cli/commands/runEnd.test.ts` (the describe for a `--paths` entry an earlier checkpoint committed),
+    `test/corpus/skills/unattended.test.ts` ("says what run end's --paths names and what the verb stages itself").
 - **Proof:** `test/runs/pullRequest.test.ts`, `test/cli/commands/run.test.ts`, `test/cli/commands/runCheckpoint.test.ts`,
   `test/cli/commands/runEnd.test.ts`, `test/cli/surface.e2e.test.ts`, `test/corpus/skills/unattended.test.ts`
   ("st-unattended — checkpoints and the ending").
@@ -3826,6 +3840,23 @@ stray check `:872`, the index read `indexTracked`, `:1129-1139`, which `--paths`
     the branch is ahead" holds only with no marker. Commits made outside the run verbs push as before (`hookWidened`,
     `undoCommit`, `markerPath`, `takeMarker`, `dropMarker` and `markerRefusal`, `src/cli/commands/run.ts`).
   - Proof: `test/cli/commands/runCheckpoint.test.ts`, `test/cli/commands/runEnd.test.ts`.
+- **Amended 2026-10-19** (plan 021 file 2, unit `n2-pending-marker` and its fix round, ledger rows `review/148` and
+  `review/176` to `review/180`; written by `n6-night-pages`). The marker is read before any write: once the
+  repository's top level is resolved, before any `git add`, held-patch write or index restore, a marker at its path, or
+  a link or a folder there, refuses the call as `markerRefusal` does, so the index and `held/person-only.patch` stay as
+  the unchecked commit left them; a dry run reads none. Given a commit that does not finish, Then off Windows the
+  commit's git runs as the leader of a process group of its own, which the wall time stops, a `SIGTERM` and then a
+  `SIGKILL` after a grace, and waits for (`processGroup`, `gitWrite`, `src/cli/engine/gitWrite.ts`); where that group is
+  gone, `<git-dir>/index.lock` is absent and `HEAD` still names `before` on the run branch, each at the time it was read,
+  no commit landed: the verb removes the marker, adds `commit not made: <cause>`, exits 1 and pushes nothing, so the
+  next call runs. Every other case keeps the marker and reports `commit not checked`: Windows, an output past the
+  runner's buffer cap, and a stop by a signal the runner did not send; an interrupt that stops the verb but not git's
+  group keeps it too, while git and its hooks run on with no wall time (`groupGone` and the commit's catch,
+  `src/cli/commands/run.ts`). A hook that detaches its own child, or starts its own process group, leaves the group, so
+  that child can land a commit after the clear, and the next checkpoint pushes it without the hook-widening check; an
+  unattended run's held paths and the secret scan still read that push (`SECURITY.md`, "Hooks the run writes").
+  - Proof: `test/cli/commands/runCheckpoint.test.ts` ("answers a commit whose whole process group was stopped and is
+    gone: …"), `test/cli/commands/runEnd.test.ts`, `test/cli/engine/gitWrite.test.ts`.
 - **Proof:** `test/cli/commands/runCheckpoint.test.ts`, `test/cli/commands/run.test.ts`,
   `test/corpus/skills/unattended.test.ts`.
 
@@ -4113,6 +4144,13 @@ off the pushed tree as an inert patch, listed (`PERSON_ONLY_PATHS` and `heldPath
   as a helper's. Copilot CLI's check asks for its main agent's act (REQ-FLOW-123), so the first paragraph's
   "Copilot's … `preToolUse` checks refuse it" reads, for an act that can be undone, as that requirement gives it
   (`GUARD_HELPER_FIELDS` and `attendedAsk`, `src/hooks/scripts.ts`).
+- **Amended 2026-10-19** (plan 021 file 2, unit `n4-held-claude-hooks`, ledger row `review/166`; written by
+  `n6-night-pages`). The person-only paths gain `.claude/hooks/**`: the scripts Claude Code's hooks run, the engine's
+  copies under `.claude/hooks/stamity/` and a person's own, held beside Claude Code's held settings as
+  `.cursor/hooks/**` is beside `.cursor/hooks.json`, so an unattended run's change to one is an inert patch, listed and
+  never pushed (`PERSON_ONLY_PATHS`, `src/change/personOnlyPaths.ts`; the run verbs' held prefixes derive from it,
+  `HELD_PREFIXES`, `src/cli/commands/run.ts`).
+  - Proof: `test/change/personOnlyPaths.test.ts`.
 - **Proof:** `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`, `test/change/personOnlyPaths.test.ts`,
   `test/cli/commands/runCheckpoint.test.ts` (the held patch; the refused push, "refuses the push when a commit it would
   send changes a held path, rewriting no history"), `test/adapters/claude.test.ts`,
@@ -4801,6 +4839,25 @@ act lands on the morning list.
   - Proof: `test/hooks/personOnlyCopilotAsk.test.ts`, `test/hooks/personOnlyGuard.test.ts`,
     `test/cloud/containerLeg.test.ts`, `test/qa/hookRunsCli.test.ts`, `test/docsPages.test.ts` ("states Copilot CLI's
     ask, its facts and residuals, and Cursor's and Codex's refusals on REQ-FLOW-123").
+- **Amended 2026-10-19** (plan 021 file 2, units `n5-copilot-record-lock` and `n3-copilot-remeasure`, ledger rows
+  `review/151` and `review/170`; written by `n6-night-pages`). Copilot's session start reads, merges and renames the
+  record under an exclusive lock beside it, `stamity/copilot-main-sessions.lock`, created `wx` and owner-only and
+  holding a token: it waits up to 2 seconds for another holder with a synchronous sleep, breaks a lock older than 10
+  seconds once, re-reads its token just before the rename, and removes the lock in a `finally` while it still holds
+  that token. A lock it cannot take (the wait run out, a link or a folder at its path) leaves the record as it was, and
+  the guard refuses that session's asks; the guard's read is unchanged, a rename being atomic (`COPILOT_RECORD_SOURCE`,
+  `COPILOT_MAIN_SESSIONS_LOCK_WAIT_MS` and `COPILOT_MAIN_SESSIONS_LOCK_STALE_MS`, `src/hooks/scripts.ts`). The residual
+  (`build/92`): the token check and the rename are two steps, and so are the stale break's age read and unlink, so two
+  starts that both break one dead holder's lock can leave one main session's id unrecorded, and that session's asks are
+  refused, fail closed; no id is added. The release re-measurement also checks, for Copilot CLI, the three facts this
+  ask rests on, read from its hook's log (key names and session ids, no other value): a main-agent call carries none of
+  the helper fields; a helper's call carries one and a session id of its own, the prompt handing one trivial step to a
+  helper so it can be seen; and `sessionStart` fires once, for the main session alone. Each reads `held`, `changed` or
+  `not-observed`, and a `changed` fact, or a `not-observed` one under `--require-observation`, exits 1, holds the tag
+  and moves Copilot CLI to refusing (`copilotFacts` and `ASK_HELPER_FIELDS`, `scripts/qa/hook-runs.mjs`; REQ-PROVE-042).
+  - Proof: `test/hooks/personOnlyCopilotAsk.test.ts` ("Copilot's session start updates the record under a lock
+    (n5-copilot-record-lock, REQ-FLOW-123)"), `test/qa/hookRuns.test.ts` ("copilotFacts — the three facts Copilot
+    CLI's ask rests on"), `test/qa/hookRunsCli.test.ts` ("hook-runs --ask — the facts Copilot CLI's ask rests on").
 - **Proof:** `test/hooks/personOnlyGuard.test.ts` ("each client's answer to a person-only act (v0a2)", the sub-agent,
   `auto`-mode and Copilot byte-for-byte cases), `test/hooks/personOnlyGuardDist.e2e.test.ts`,
   `test/cloud/containerLeg.test.ts` (each client's answer to an ask act), `test/qa/hookRunsCli.test.ts`.

@@ -553,7 +553,8 @@ still writes the head, and the requirement does not change.
 
 Amended 2026-10-16 (plan 021 file 1, run `2026-10-15_cloud-runs`, units `u1-record-head`, `u10b-debug-quick`,
 `u11-rework-pr-resolve` and `u15-work-text`; merged by its unit `u23-spec-merge`, every `path:line` read at the
-integration head `4daeb214`). The head names the plan, the invocation, the branch and the mode. Given Frame, Then the
+integration head `4daeb214`; the skill citation in its As built line re-pointed on 2026-10-19 at `96e5b3ac`). The head
+names the plan, the invocation, the branch and the mode. Given Frame, Then the
 first 15 lines of `record.md` carry `Status:`, `Plan:`, `Base:`, `Branch: <the run's branch>`, `Invocation:` and
 `Mode: attended | unattended`, each bare at column 0 (`content/commands/st-work.md:405-410`); `readRecordHead`
 returns `mode`, `branch` and `base` (`src/runs/resumeCard.ts:73-82`, `:225-253`), and a missing `Mode:` line or any

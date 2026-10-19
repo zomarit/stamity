@@ -53,19 +53,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **One ending for every run nobody watches: a pushed branch and one draft pull request.**
   `stamity run start`, `run checkpoint` and `run end` are an unattended run's only push path. The run
   works on its own `stamity/<run-id>` branch; a checkpoint stages the run's records and the paths
-  named with `--paths`, never `-A`, holds a change to a person-only path (CI definitions, hooks, the
-  clients' settings, instruction and agent files) as an inert patch in the run folder, scans what
-  the push sends for secrets, and pushes. The repository's own pre-commit hooks still run inside a
-  run verb's commit, so the verb then reads that commit: one a hook widened past the paths the verb
-  staged, or made of its own, is undone by moving the run branch back to the commit read before,
-  naming each outside path, and nothing is pushed. A commit whose check cannot finish, or whose undo
-  fails, leaves a pending marker, `stamity/checkpoint-pending` in the work tree's git directory, and
-  every later `run checkpoint` and `run end` refuses, committing and pushing nothing, until a person
-  reviews the commits and removes it. `run end` opens or updates one draft pull request through
-  GitHub's REST API, its body the run's morning list (`.stamity/runs/<run-id>/morning.md`), and the
-  morning walk reopens the close with a person there. A run verb never merges, tags, marks a pull
-  request ready or pushes the default branch. `stamity gate scan --text` screens each text the run
-  posts, `stamity learn read` reads learnings through the screen, and a committed run contract
+  named with `--paths`, never `-A`, holds a change to a person-only path (CI definitions, hooks and the
+  scripts Claude Code's and Cursor's hooks run, the clients' settings, instruction and agent files) as
+  an inert patch in the run folder, scans what the push sends for secrets, and pushes. The
+  repository's own pre-commit hooks still run inside a run verb's commit, so the verb then reads that
+  commit: one a hook widened past the paths the verb staged, or made of its own, is undone by moving
+  the run branch back to the commit read before, naming each outside path, and nothing is pushed. A
+  commit whose check cannot finish, or whose undo fails, leaves a pending marker,
+  `stamity/checkpoint-pending` in the work tree's git directory, and every later `run checkpoint` and
+  `run end` refuses, committing and pushing nothing, until a person reviews the commits and removes
+  it. The verbs read that marker before they stage anything, so a refusal leaves the index as the
+  unchecked commit did. On Linux and macOS a commit stopped at its time limit clears the marker once
+  git and the hooks in its process group are gone, no index lock is left and the branch still names
+  the commit before it, and that call reports `commit not made`. `run end`'s `--paths` names every
+  file the run changed, those its checkpoints already committed included, and naming one again stages
+  nothing and reports nothing. `run end` opens or updates one draft pull request through GitHub's REST
+  API, its body the run's morning list (`.stamity/runs/<run-id>/morning.md`), and the morning walk
+  reopens the close with a person there. A run verb never merges, tags, marks a pull request ready or
+  pushes the default branch. `stamity gate scan --text` screens each text the run posts,
+  `stamity learn read` reads learnings through the screen, and a committed run contract
   (`run-contract: 1`) states a run's inputs by reference. Attended, `/st-work`'s close offers commit,
   push and a draft pull request first and recommended; with no answer it still leaves the change
   uncommitted.
@@ -99,15 +105,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   repository write get Claude Code's approve prompt, and the agent runs the act on yes; a sub-agent's
   call and a call in the `auto` permission mode are refused. Copilot CLI asks for its main agent's
   call alone: one that carries no helper-agent field and whose session id Copilot's session start
-  recorded under the repository's git directory. A helper's call, and every call where that record
-  is missing or unreadable, is refused with the exact command. An ask holds only while the client
-  honours it, and Copilot CLI's experimental assisted mode hands the ask to an LLM judge that may
-  approve it without the person. Cursor and Codex refuse those acts and give the person the exact
-  command: Cursor ran a command despite an ask under `--force`, and Codex's hooks do not honour an
-  ask. A deletion, a force push and an act that cannot be undone (a visibility change, a transfer)
-  are refused on every client, attended or not, with a click or without one, and one refused act on
-  a line refuses the whole call. Unattended, every person-only act is refused and carried on the
-  morning list.
+  recorded under the repository's git directory, under a lock, so two sessions starting together are
+  both recorded. A helper's call, and every call where that record is missing or unreadable, is
+  refused with the exact command. An ask holds only while the client honours it, and Copilot CLI's
+  experimental assisted mode hands the ask to an LLM judge that may approve it without the person.
+  Cursor and Codex refuse those acts and give the person the exact command: Cursor ran a command
+  despite an ask under `--force`, and Codex's hooks do not honour an ask. A deletion, a force push
+  and an act that cannot be undone (a visibility change, a transfer) are refused on every client,
+  attended or not, with a click or without one, and one refused act on a line refuses the whole call.
+  Unattended, every person-only act is refused and carried on the morning list.
 - **Claude Code's settings always carry the person-only rows.** `.claude/settings.json` gains
   `permissions.deny` rows for the refused acts, among them a mid-pattern row for each refused flag
   that can follow an ask-class prefix, and `permissions.ask` rows for the acts that can be undone,
@@ -123,7 +129,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   word, so an option written before the verb no longer takes the line past the rule; a verb written
   after option words is refused with its own reason, since the accepted line keeps the verb next to
   `run`. Read as PowerShell, the line is also refused for a blank other than a space or a tab, an
-  unquoted `@` after the program, and the stop-parsing `--%` spelled with typographic dashes.
+  unquoted `@` in a word after `run`, and the stop-parsing `--%` spelled with typographic dashes.
 - **Claude Code's hooks run copies under `.claude/hooks/stamity/`.** Each engine entry in
   `.claude/settings.json` now runs a copy of its script there, and the guard reads the copy of the
   agent tool policy document beside them. The copies under `.stamity/generated/hooks/claude/` are

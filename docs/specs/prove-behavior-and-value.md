@@ -1953,20 +1953,29 @@ Package 25's end (amended 2026-10-19, ledger row `review/127`; it read "the hook
 where its secrets exist", where no release-prep job runs it). `test/docsPages.test.ts` pins the line.
 
 - **As built, beyond the delta:** the vendor-pages line (`.github/release-controls-checklist.md:336-342`) and a second
-  further line carrying `Runs when:` (`:344-364`), which runs `node scripts/qa/hook-runs.mjs --ask --require-observation`
+  further line carrying `Runs when:` (`:344-372`), which runs `node scripts/qa/hook-runs.mjs --ask --require-observation`
   under the machine lock and never during an eval run, names its four statuses, `held`, `ran`, `not-run` and
   `not-installed`, and Claude Code and Copilot CLI as the ask-class clients it measures (amended 2026-10-19, units
   `w4-copilot-ask` and `w5-ask-pages`; it read "Claude Code as the one ask-class client"): `held` keeps the one-click
   ask, a client whose ask ran moves to refusing before the tag, and `not-run` or `not-installed` holds the tag until a
   run on a machine with both clients reads `held` or `ran` for each (REQ-FLOW-123 in `docs/specs/everyday-flows.md`).
   Its runs are headless, so `held` means the asked command did not run, not that a person was asked; a third further
-  line carrying `Runs when:` (`:366-384`, added 2026-10-19, ledger row `review/125`) is a person's one-minute check in
+  line carrying `Runs when:` (`:374-392`, added 2026-10-19, ledger row `review/125`) is a person's one-minute check in
   an interactive Claude Code session in bypass-permissions mode, where a lightweight tag asked for must show Claude
   Code's own approve prompt, declined, and, since the same day, in an interactive Copilot CLI session with Allow All
   on, in a throwaway folder set up for Copilot, where the same tag must show its hook permission request; a command
   that runs without the prompt holds the tag and moves that client to refusing. All three take no ordinal.
+  The ask line also checks, for Copilot CLI, the three facts its guard's ask rests on (amended 2026-10-19, unit
+  `n3-copilot-remeasure`, ledger row `review/151`, whose text moved the two lines' ranges above), read from
+  its hook's log, key names and session ids and no other value: a main-agent call carries none of the guard's helper
+  fields; a helper's call carries one and a session id other than the main session's, seen through a trivial helper
+  step in the prompt; and `sessionStart` fires once, for the main session alone. Each reads `held`, `changed` or
+  `not-observed`, and a `changed` fact, or a `not-observed` one under `--require-observation`, exits 1, holds the tag
+  and moves Copilot CLI to refusing (`copilotFacts` and `ASK_HELPER_FIELDS`, `scripts/qa/hook-runs.mjs`).
 - **Proof:** `test/docsPages.test.ts` ("puts the cloud cadence on the release checklist: the vendor pages re-read, each
-  client's ask re-measured"), `test/ci/workflow.test.ts` (the leg in the aggregator), `test/qa/hookRunsCli.test.ts`.
+  client's ask re-measured"), `test/ci/workflow.test.ts` (the leg in the aggregator), `test/qa/hookRunsCli.test.ts`
+  ("hook-runs --ask — the facts Copilot CLI's ask rests on"), `test/qa/hookRuns.test.ts` ("copilotFacts — the three
+  facts Copilot CLI's ask rests on", "ASK_HELPER_FIELDS — the guard's helper fields, restated").
 
 ### REQ-PROVE-043 — The cloud page
 
