@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "generatedBy": "1.15.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-19T19:30:02.029Z",
+  "updatedAt": "2026-10-19T23:35:15.109Z",
   "tools": [
     "claude"
   ],
@@ -551,7 +551,7 @@
       "adapter": "claude",
       "artifactId": "unattended",
       "artifactType": "skill",
-      "contentHash": "0573b6916dcebcac62f1860c1950068db3989773887eea17a08316e3ba909587",
+      "contentHash": "c1bf61d6219ca0c0741c05a8f9f5e8d55603d73b35a5aaaecb66369e032911c9",
       "path": ".claude/skills/st-unattended/SKILL.md"
     },
     {
