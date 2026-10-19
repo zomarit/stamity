@@ -1953,16 +1953,18 @@ Package 25's end (amended 2026-10-19, ledger row `review/127`; it read "the hook
 where its secrets exist", where no release-prep job runs it). `test/docsPages.test.ts` pins the line.
 
 - **As built, beyond the delta:** the vendor-pages line (`.github/release-controls-checklist.md:336-342`) and a second
-  further line carrying `Runs when:` (`:344-361`), which runs `node scripts/qa/hook-runs.mjs --ask --require-observation`
+  further line carrying `Runs when:` (`:344-364`), which runs `node scripts/qa/hook-runs.mjs --ask --require-observation`
   under the machine lock and never during an eval run, names its four statuses, `held`, `ran`, `not-run` and
-  `not-installed`, and Claude Code as the one ask-class client it measures: `held` keeps the one-click ask, a client
-  whose ask ran moves to refusing before the tag, and `not-run` or `not-installed` holds the tag until a run on a machine
-  with Claude Code reads `held` or `ran` (REQ-FLOW-123 in `docs/specs/everyday-flows.md`). Its run is headless, so
-  `held` means the asked command did not run, not that a person was asked; a third further line carrying `Runs when:`
-  (`:363-375`, added 2026-10-19, ledger row `review/125`) is a person's one-minute check in an interactive Claude Code
-  session in bypass-permissions mode, where a lightweight tag asked for must show Claude Code's own approve prompt,
-  declined, and a command that runs without it holds the tag and moves Claude Code to refusing. All three take no
-  ordinal.
+  `not-installed`, and Claude Code and Copilot CLI as the ask-class clients it measures (amended 2026-10-19, units
+  `w4-copilot-ask` and `w5-ask-pages`; it read "Claude Code as the one ask-class client"): `held` keeps the one-click
+  ask, a client whose ask ran moves to refusing before the tag, and `not-run` or `not-installed` holds the tag until a
+  run on a machine with both clients reads `held` or `ran` for each (REQ-FLOW-123 in `docs/specs/everyday-flows.md`).
+  Its runs are headless, so `held` means the asked command did not run, not that a person was asked; a third further
+  line carrying `Runs when:` (`:366-384`, added 2026-10-19, ledger row `review/125`) is a person's one-minute check in
+  an interactive Claude Code session in bypass-permissions mode, where a lightweight tag asked for must show Claude
+  Code's own approve prompt, declined, and, since the same day, in an interactive Copilot CLI session with Allow All
+  on, in a throwaway folder set up for Copilot, where the same tag must show its hook permission request; a command
+  that runs without the prompt holds the tag and moves that client to refusing. All three take no ordinal.
 - **Proof:** `test/docsPages.test.ts` ("puts the cloud cadence on the release checklist: the vendor pages re-read, each
   client's ask re-measured"), `test/ci/workflow.test.ts` (the leg in the aggregator), `test/qa/hookRunsCli.test.ts`.
 
@@ -1976,9 +1978,10 @@ the secrets, starting a contract run and the morning walk; its run-contract sect
 or board item, base, acceptance, scope, prerequisites, budget and who answers, the fixed `preview: stop` and
 `move: off`, the outputs and the failure modes. `test/docsPages.test.ts` pins it.
 
-- **As built, beyond the delta:** the page also states who asks and who refuses (Claude Code asks for one click;
-  Copilot CLI, Cursor and Codex refuse, Copilot CLI because its payload names no calling agent; every deletion and force
-  push refused everywhere; an unattended run asks nothing and pushes only through the run verbs), the identity half of
+- **As built, beyond the delta:** the page also states who asks and who refuses (Claude Code asks for one click, and
+  Copilot CLI for the person's own agent alone, with its assisted mode's LLM judge named, amended 2026-10-19 by unit
+  `w5-ask-pages`, where it read that Copilot CLI refuses because its payload names no calling agent; Cursor and Codex
+  refuse; every deletion and force push refused everywhere; an unattended run asks nothing and pushes only through the run verbs), the identity half of
   the protection prerequisite (a signed-in `gh` that is origin's only credential helper), Codex Cloud as refused at the
   pre-flight's `hooks-loaded`, Claude Code's GitHub Action as a six-hour surface whose pull request still supplies the
   hook scripts and the `AGENTS.md` the base branch imports (REQ-FLOW-113), and an opening that promises a night with

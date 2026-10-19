@@ -36,10 +36,14 @@ set to any value but empty, `false` or `0`. A cloud's own marker means "cloud", 
   merge, a push of a tag or of the default branch, a ready-for-review mark, a release, a publish, or
   a secret or protection write, and the agent runs it on yes. It refuses instead where a sub-agent
   runs the act, and in Claude Code's `auto` permission mode.
-- **Copilot CLI, Cursor and Codex refuse** that act and hand you the exact command. Copilot CLI
-  holds an ask, but its tool-call payload names no calling agent, so the guard cannot keep the ask
-  for you alone; Cursor ran a command despite an ask under `--force`; Codex's hooks page says an ask
-  is not honoured.
+- **Attended, Copilot CLI asks too, for your own agent alone.** The guard asks only for a call that
+  carries no helper agent's fields and whose session id Copilot's session start recorded; a helper's
+  call is refused. Copilot CLI 1.0.98 showed its hook permission dialog and waited for the person
+  (measured 2026-10-19). Its experimental assisted mode can hand the ask to an LLM judge, which may
+  approve it without you, and a hook cannot see that mode, so leave it off if the click must be yours.
+- **Cursor and Codex refuse** that act and hand you the exact command. Cursor ran a command despite
+  an ask under `--force`, and its hooks page says the ask is not enforced; Codex's hooks page says an
+  ask is not honoured.
 - **Every deletion and every force push is refused on every client**, attended or not, with a click
   or without one.
 
@@ -194,8 +198,8 @@ has run them, for want of a Copilot cloud-agent account.
 
 Answer in one comment on the pull request, `@copilot answers: Q1→2, Q3→1`. Only a `write` or
 `admin` author's comment answers; anyone else's is listed on the next morning list, not applied.
-Copilot's guard refuses every person-only act rather than asking, so each held act comes to you as
-the exact command.
+Copilot's documentation says its cloud agent denies a hook's ask, since nobody is there to click it,
+so each held act comes to you as the exact command.
 
 ## Codex Cloud
 

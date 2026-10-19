@@ -676,9 +676,13 @@ describe("st-unattended — the other touchpoints and chains (REQ-FLOW-096, REQ-
     expect(text).toContain("a path a commit between the stamp and the base moved stays stale");
   });
 
+  // TEST CHANGE, justified (plan 021 file 2, unit w5-ask-pages, ledger row review/149): the pointer also sends a run
+  // whose checkpoint the marker refuses to the reference, and says in the body itself that the run never removes the
+  // marker, since `run checkpoint`'s refusal line names the removal as a person's remedy (src/cli/commands/run.ts,
+  // markerRefusal). The line stays the body's last, inside the cap, so no eval `source:` range moves.
   it("points the body's Chains section at the cloud reference, on the body's last line", async () => {
     const pointer =
-      "A run in a cloud session or continued from its branch, and the morning walk's late commits, follow `references/cloud.md`.";
+      "A run in a cloud session or continued from its branch, the morning walk's late commits, and a checkpoint marker, which the run never removes, follow `references/cloud.md`.";
     expect(await flat()).toContain(pointer);
     // After `## Chains`, the body's last section, so no eval `source:` range above it moves.
     const lines = (await load()).parsed.body.replace(/\r?\n$/, "").split(/\r?\n/);
@@ -852,6 +856,26 @@ describe("st-unattended — the cloud reference (plan 021 file 2, v3-cloud-skill
     expect(text).not.toContain("git rev-list");
     expect(text).toContain("`Not done: <n> commits after checkpoint <sha>, not covered by the proof block's gates`");
     expect(text).toContain("The proof block's gate results are never read as covering them.");
+  });
+
+  // ADDED 2026-10-19 (plan 021 file 2, unit w5-ask-pages, ledger row review/149; REQ-FLOW-092, REQ-FLOW-093): while
+  // the checkpoint marker stands, every later `run checkpoint` and `run end` refuses (src/cli/commands/run.ts,
+  // markerRefusal), and the refusal names the removal as a person's remedy. The run never takes it, never moves the
+  // branch, and states the one exit that opens no draft pull request; the rule binds every unattended run.
+  it("never removes the checkpoint marker or moves the run branch, and names the exit that opens no draft", async () => {
+    const text = await flat(CLOUD_REL_PATH);
+    expect(text).toContain("## A checkpoint marker");
+    expect(text).toContain("This section binds every unattended run, local or in a cloud.");
+    expect(text).toContain("leaves `stamity/checkpoint-pending` in the work tree's git directory");
+    expect(text).toContain("every later `run checkpoint` and `run end` refuses while it is there");
+    expect(text).toContain(
+      "The run never removes that marker, never resets, rewinds or rewrites the run branch, and never takes the refusal's remedy, which is a person's",
+    );
+    expect(text).toContain("it copies the refusal into the record and the morning list's `## Not done:`, first, and stops");
+    expect(text).toContain(
+      "the one exit that pushes nothing and opens or updates no draft pull request, against the skill's one draft pull request at every exit",
+    );
+    expect(text).toContain("its final message carries the `## Not done:` lines");
   });
 
   it("runs a long plan on a session-capped cloud agent as a chain of sessions (REQ-FLOW-117, REQ-FLOW-118)", async () => {

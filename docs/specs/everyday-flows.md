@@ -3735,6 +3735,14 @@ the default branch, read by REST; `run start` leaves it for a branch of the run'
   `src/cli/commands/run.ts:430-477`, called at `:298`, `:332` and `:740`). A refused open names its cause,
   `draft PR not opened (<branch>): <cause>`, by class and never in `gh`'s or GitHub's own words (`ensureDraftPr`,
   `src/runs/pullRequest.ts:241-245`; `ghFailure` and `rejection`, `:196-219`).
+- **Amended 2026-10-19** (plan 021 file 2, units `w1-checkpoint-hook-paths`, with its two fix rounds, and
+  `w5-ask-pages`; ledger row `review/149`). Given a checkpoint marker left in the work tree's git directory
+  (REQ-FLOW-093), Then `run end` refuses before its commit, its scan, its push and its pull-request step, so that exit
+  opens or updates no draft pull request, the one exception to this requirement's draft at every exit
+  (`runCheckpoint`, the marker's refusal, `src/cli/commands/run.ts`). The skill's cloud reference, which the body's last
+  line names for every unattended run, has the run copy the refusal into the record and `## Not done:` and stop: it
+  never removes the marker or resets the run branch, since the refusal's remedy is a person's
+  (`content/skills/st-unattended/references/cloud.md`, "A checkpoint marker"; `SKILL.md`'s last line).
 - **Proof:** `test/runs/pullRequest.test.ts`, `test/cli/commands/run.test.ts`, `test/cli/commands/runCheckpoint.test.ts`,
   `test/cli/commands/runEnd.test.ts`, `test/cli/surface.e2e.test.ts`, `test/corpus/skills/unattended.test.ts`
   ("st-unattended — checkpoints and the ending").
@@ -3791,6 +3799,28 @@ stray check `:872`, the index read `indexTracked`, `:1129-1139`, which `--paths`
   - Proof: `test/cli/commands/runCheckpoint.test.ts` (the staged-then-deleted case, the three re-added cases, the
     `core.abbrev 6` cases, the kept patch on a fresh clone, and the describe "a --paths entry whose deletion is already
     staged").
+- **Amended 2026-10-19** (plan 021 file 2, unit `w1-checkpoint-hook-paths` and its two fix rounds, ledger rows `pr/1`,
+  `review/136` to `review/139`, `review/142` and `review/143`; written by `w5-ask-pages`). Given a checkpoint or `run end`
+  with something staged, When the repository's pre-commit hooks run inside its commit, Then the verb reads `HEAD` before
+  the commit and, after it, needs `HEAD^` to be that commit and every path of `git diff --name-only <before> HEAD` to be
+  in the set the stray check allows (the run files, the inbox, `--paths` and the folders it names, the deletions, the
+  held patches and the held paths). Otherwise it rewinds the run branch by name with a compare-and-swap,
+  `git update-ref refs/heads/<run-branch> <before> <the commit it checked>`, refusing where `HEAD` has left that
+  branch; reports `committed: null`; adds `commit refused: <path> was staged by a hook and is not in --paths (commit
+  undone)` for each such path, or `commit refused: a hook made a commit of its own (commit undone)`, and the line
+  `commit: undone (…)`; and exits 1 before the scan and the push. Attended and unattended alike; held paths stay in the
+  allowed set, so a hook that stages a held path keeps REQ-FLOW-102's refused push. The `Checkpoint` JSON shape is
+  unchanged.
+  - Before the commit the verb creates `stamity/checkpoint-pending` exclusively under the work tree's own git directory
+    (`git rev-parse --git-dir`), holding the `HEAD` it read, and removes it once its commit reads clean, before the scan
+    and the push, or once an undo succeeds. A check that cannot finish, a failed undo
+    (`commit not undone: …; HEAD holds <sha>, reset target <before>`) or a throw (`commit not checked: …`) leaves it,
+    adding `checkpoint marker left: <path> records <before>, …`, and exits 1 with no push. While it exists, every later
+    `run checkpoint` and `run end` refuses, a call with nothing staged included, as `commit and push refused: <path>
+    records <before>, …`, committing and pushing nothing; so "with nothing staged commits nothing and pushes only when
+    the branch is ahead" holds only with no marker. Commits made outside the run verbs push as before (`hookWidened`,
+    `undoCommit`, `markerPath`, `takeMarker`, `dropMarker` and `markerRefusal`, `src/cli/commands/run.ts`).
+  - Proof: `test/cli/commands/runCheckpoint.test.ts`, `test/cli/commands/runEnd.test.ts`.
 - **Proof:** `test/cli/commands/runCheckpoint.test.ts`, `test/cli/commands/run.test.ts`,
   `test/corpus/skills/unattended.test.ts`.
 
@@ -4067,6 +4097,17 @@ off the pushed tree as an inert patch, listed (`PERSON_ONLY_PATHS` and `heldPath
     reads it, with its value; PowerShell's typographic quotes open and close quotes.
   - Proof: `test/hooks/personOnly.test.ts` (each DENY row's class, and the `CLASSES` conformance rows),
     `test/hooks/personOnlyGuard.test.ts`, `test/cli/commands/runCheckpoint.test.ts` (the push stub's verdict).
+- **Amended 2026-10-19** (plan 021 file 2, units `w1-checkpoint-hook-paths`, `w4-copilot-ask` and `w5-ask-pages`).
+  The run verbs still rewrite no pushed history, and the held-path refusal above still rewrites none; the one rewind
+  they make is of their own commit, unpushed, that a pre-commit hook widened: they move the run branch by name from the
+  commit they checked back to the `HEAD` read before it, a compare-and-swap (`git update-ref`), never whatever `HEAD`
+  then names, and refuse where `HEAD` has left the branch (REQ-FLOW-093; `undoCommit`, `src/cli/commands/run.ts`). A
+  sub-agent is now also read from `agentId`, `parentAgentId`, `parent_agent_id` and `parent_tool_call_id`, ten fields
+  in all, an own non-empty string in any of them refusing an ask as a sub-agent's on every client, and on Copilot CLI
+  the field's presence alone, so a Claude Code payload holding only `agentId`, or only `parent_tool_call_id`, now reads
+  as a helper's. Copilot CLI's check asks for its main agent's act (REQ-FLOW-123), so the first paragraph's
+  "Copilot's … `preToolUse` checks refuse it" reads, for an act that can be undone, as that requirement gives it
+  (`GUARD_HELPER_FIELDS` and `attendedAsk`, `src/hooks/scripts.ts`).
 - **Proof:** `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`, `test/change/personOnlyPaths.test.ts`,
   `test/cli/commands/runCheckpoint.test.ts` (the held patch; the refused push, "refuses the push when a commit it would
   send changes a held path, rewriting no history"), `test/adapters/claude.test.ts`,
@@ -4159,7 +4200,9 @@ named network exceptions, and the run verbs on the git-hardening row.
   ask." (`:408-417`), "Where no hook runs." (`:418-426`) and the MCP bullet (`:427-438`) follow it.
 - **As built, beyond the delta:** the page also names, each with its control: Cursor 2026.10.14 running a command
   despite an ask under `--force` and Codex letting an ask through, measured or read 2026-10-18; Copilot CLI refusing
-  because its tool-call payload names no calling agent; a sub-agent's ask-class act and one in Claude Code's `auto`
+  because its tool-call payload names no calling agent (amended 2026-10-19 by unit `w5-ask-pages`: Copilot CLI now asks
+  for its main agent alone, and the page names its assisted mode's LLM judge and a line written into its session
+  record as residuals, REQ-FLOW-123); a sub-agent's ask-class act and one in Claude Code's `auto`
   permission mode refused by the guard, while where no hook runs the settings' ask rows still reach `auto` mode's
   classifier; a colon-refspec deletion behind an ask prefix, which no settings row can name; the readiness hook's
   `npm ci`, whose install scripts inherit `$CLAUDE_ENV_FILE` and so could write lines that run before every later shell
@@ -4620,12 +4663,13 @@ are unaffected, and a PowerShell tool call is read as PowerShell, not through it
   `st` command the verb is any word after `run`'s option words and their values. A form the parse does not normalize
   (the CLI file started by `node`, a launcher it does not unwrap) is read over each parsed command's decoded words,
   joined, beside the package, an escaped or quoted dash reading as a dash; there a first word after `run` that the
-  reading cannot settle (an expansion, a glob, a brace or a splat) counts as an option word, so an unsure line is read
-  as running a verb. The raw-text backstop finds the verb after option words that open on a dash and hold no `;`, `|`,
+  reading cannot settle (an expansion, a glob, a brace or a splat) counts as an option word, so a verb written after it
+  is still found (`review/146`: a line whose word after `run` is unsure and names no verb passes). The raw-text backstop finds the verb after option words that open on a dash and hold no `;`, `|`,
   `&` or line break, in place of the `\brun\W+(start|checkpoint|end)\b` stated above. The accepted shape still keeps
   the verb next to `run`: unattended, a verb written after option words is refused with its own reason, words between
   `run` and its verb. In the PowerShell reading the shape also refuses a blank other than a space or a tab, which
-  PowerShell splits words on; an unquoted `@` after the program, which PowerShell reads as a splat; and the
+  PowerShell splits words on; an unquoted `@` in a word after `run`, which PowerShell reads as a splat, so npx's
+  `--@<scope>:registry=<url>` and `<pkg>@<semver>` words pass (`review/147`); and the
   stop-parsing `--%` spelled with typographic dashes (an en dash, an em dash or a horizontal bar, which PowerShell reads
   as `-`). Attended lines are unaffected (`namesVerb`, `namesVerbInWords` and `verbShape` in `unattendedPushVerdict`,
   `src/hooks/personOnly.ts`). Proof: `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`,
@@ -4667,7 +4711,8 @@ Added 2026-10-18 (plan 021 file 2, unit `v0a2-ask-emission` and its three fix ro
 measurement).
 
 Given an attended act that can be undone (REQ-FLOW-102), Then Claude Code asks through the guard's `"ask"` and the
-settings' `permissions.ask` rows; Copilot CLI, Cursor and Codex refuse: Copilot CLI holds an ask, but its tool-call
+settings' `permissions.ask` rows; Copilot CLI, Cursor and Codex refuse (Copilot CLI asks for its main agent since
+2026-10-19, amended below): Copilot CLI holds an ask, but its tool-call
 payload names no calling agent, so the guard cannot keep the ask for the person alone, Cursor ran a command despite an
 ask under `--force` (measured 2026-10-18) and Codex lets an ask through. The ask is the person's only: an ask-class act a
 sub-agent runs is refused, and so is one in Claude Code's `auto` permission mode, where a classifier may settle a prompt.
@@ -4683,18 +4728,47 @@ act lands on the morning list.
     `GUARD_CANNOT_ASK` ("This client cannot ask the person for a click, so the guard refuses it: give the person the
     exact command."), and Copilot prints `deny` with `GUARD_NO_CALLER` ("Copilot CLI names no calling agent in its
     tool-call payload, so the guard cannot keep the ask for the person alone and refuses it: give the person the exact
-    command."), never `ask` (`guardDecisionOutput`, `src/hooks/scripts.ts`).
+    command."), never `ask` (`guardDecisionOutput`, `src/hooks/scripts.ts`; Copilot's answer and the sentence are
+    amended 2026-10-19, below).
   - The guard's decision collects the verdict over every place it reads and both readings of a PowerShell call, and
     asks only when every verdict is ask-class and the mode reads attended; every coded throw stays a refusal. A
     sub-agent is read from `agent_type`, `subagent_type`, `agentType`, `subagentType`, `agent_id` or `subagent_id`, an
-    own non-empty string; Claude Code also sets `agent_type` on the main thread of a session started with `--agent`,
+    own non-empty string (four fields more since 2026-10-19, REQ-FLOW-102); Claude Code also sets `agent_type` on the main thread of a session started with `--agent`,
     whose asks are therefore refused, the safe direction. `auto` is read from the payload's `permission_mode`
     (`attendedAsk`, the same file). Unattended, an act other than a push reads "… and this run is unattended: list it
     on the morning list, whose walk runs it after one click."
   - The release re-measurement is `node scripts/qa/hook-runs.mjs --ask`, which measures each installed client's answer
     to a hook's `ask` in its permissive mode in a throwaway folder outside the checkout and reports `held`, `ran`,
     `not-run` or `not-installed`; Claude Code is the one ask-class client it fails on (`ASK_CLASS_CLIENTS` and
-    `verdictForAsk`, `scripts/qa/hook-runs.mjs`; REQ-PROVE-042).
+    `verdictForAsk`, `scripts/qa/hook-runs.mjs`; REQ-PROVE-042; Copilot CLI joins it since 2026-10-19, below).
+- **Amended 2026-10-19** (plan 021 file 2, units `w4-copilot-ask` and `w5-ask-pages`, by the walk's answer at 08:46Z).
+  Given an attended ask-class act on Copilot CLI, Then the guard answers `permissionDecision: "ask"` with the act's reason
+  when the payload carries none of the ten helper fields (REQ-FLOW-102), whatever their value, and its session id
+  (`sessionId`, or `session_id` after the portable runner's renaming) is a whole line of
+  `stamity/copilot-main-sessions` under the repository's common git directory, which Copilot's session start appends
+  to, created owner-only and kept to its last 200 lines. Otherwise, and wherever the record is missing, a link,
+  unreadable, past 64 KiB or malformed, it answers `deny` with the reason and `GUARD_NO_CALLER`, which now reads
+  "Copilot CLI could not show that this call comes from the person's own agent (a helper agent's call, or a session its
+  session start did not record), so the guard refuses it: give the person the exact command." Unattended, `deny` as
+  before. Claude Code's answers keep their bytes; Cursor and Codex keep `deny` with `GUARD_CANNOT_ASK`. So the first
+  paragraph reads "Claude Code asks …; Copilot CLI asks for the person's own agent; Cursor and Codex refuse", and the
+  release re-measurement's ask-class clients are Claude Code and Copilot CLI, a Copilot row reading `ran` or `not-run`,
+  or `not-installed` under `--require-observation`, exiting 1 (`attendedAsk` and `guardDecisionOutput`,
+  `src/hooks/scripts.ts`; `ASK_CLASS_CLIENTS`, `scripts/qa/hook-runs.mjs`).
+  - The facts, measured on Copilot CLI 1.0.98 on 2026-10-19 in throwaway folders: headless runs and autopilot deny an
+    ask; the interactive client shows its hook permission dialog and waits; a helper's tool call carries `agentId`,
+    `agentType` and `parentAgentId` and a session id of its own; the session start fires for the main agent only. The
+    residuals: Copilot's experimental assisted mode (`/allow-all auto`, `--assisted-approval`) sends the ask to an LLM
+    judge, which may approve it without the person, and a hook cannot see that mode; and a line written into the record
+    by anything but the session start reads as a main session's id, whose ask still waits for the person's click.
+  - Cursor keeps refusing: its staff say an ask on a shell hook is enforced on no path, its hooks page says
+    `preToolUse`'s ask is not enforced, a hook cannot see the run mode, and a measurement on 2026-10-18 saw a command run
+    despite an ask. Codex keeps refusing: its hooks page says an ask fails open, a helper's hook shares the parent's
+    session id, and an auto-review agent can settle a rules prompt (read 2026-10-19). `SECURITY.md`, the security
+    mapping, `docs/cloud.md` and the release checklist state the same.
+  - Proof: `test/hooks/personOnlyCopilotAsk.test.ts`, `test/hooks/personOnlyGuard.test.ts`,
+    `test/cloud/containerLeg.test.ts`, `test/qa/hookRunsCli.test.ts`, `test/docsPages.test.ts` ("states Copilot CLI's
+    ask, its facts and residuals, and Cursor's and Codex's refusals on REQ-FLOW-123").
 - **Proof:** `test/hooks/personOnlyGuard.test.ts` ("each client's answer to a person-only act (v0a2)", the sub-agent,
   `auto`-mode and Copilot byte-for-byte cases), `test/hooks/personOnlyGuardDist.e2e.test.ts`,
   `test/cloud/containerLeg.test.ts` (each client's answer to an ask act), `test/qa/hookRunsCli.test.ts`.

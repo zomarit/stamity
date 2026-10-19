@@ -2836,8 +2836,12 @@ describe("SECURITY.md", () => {
         "A deletion, a force push or an act that cannot be undone is refused on every client, attended or not",
         "Attended, an act that can be undone asks on Claude Code for one click, the hook's `ask` answer, and the agent runs it on yes",
         "it is refused instead where a sub-agent runs it (any agent identity the payload names), since the act is the person's, and in Claude Code's `auto` permission mode",
-        "Copilot CLI holds an ask (1.0.89 under `-p --allow-all-tools`, measured 2026-10-18",
-        "but its tool-call payload names no calling agent, so the guard cannot keep the ask for the person alone",
+        // TEST CHANGE, justified (plan 021 file 2, units w4-copilot-ask and w5-ask-pages; REQ-FLOW-123): Copilot CLI
+        // now asks for the person's own agent (src/hooks/scripts.ts, attendedAsk's Copilot copy), so the row's two
+        // phrases saying it refuses for want of a calling agent move to the sentences stating the ask; the case below,
+        // "states Copilot CLI's ask for the person's own agent", pins the rest and that the old phrase is gone.
+        "Copilot CLI asks too, for the person's own agent alone",
+        "Measured on Copilot CLI 1.0.98 on 2026-10-19: the interactive client shows its hook permission dialog and waits for the person, a headless run and autopilot deny an ask",
         "Cursor 2026.10.14 ran the command despite a `beforeShellExecution` ask under `--force` (measured 2026-10-18)",
         "Codex's hooks page says an ask is parsed and not honoured",
         "so one refuse-class act refuses the whole call and a deletion never rides an approval",
@@ -2895,7 +2899,10 @@ describe("SECURITY.md", () => {
       expect(guard, `the guard's row does not state: ${pinned}`).toContain(pinned);
       const claims = [
         "The verb is found anywhere after `run`'s option words and their values, in each parsed command and in each parsed command's decoded words, joined, beside the package",
-        "a first word after `run` that the reading cannot settle (an expansion, a glob, a brace or a splat) counts as an option word, so an unsure line is read as running a verb",
+        // TEST CHANGE, justified (plan 021 file 2, unit w5-ask-pages, ledger row review/146): the unsure first word
+        // opens the option words, but the code still needs a verb word after it (src/hooks/personOnly.ts,
+        // namesVerbInWords), so `stamity run $V` passes; the row said an unsure line reads as running a verb.
+        "a first word after `run` that the reading cannot settle (an expansion, a glob, a brace or a splat) counts as an option word, so a verb written after it is still found",
         "a verb written after option words is refused with its own reason, words between `run` and its verb",
       ];
       for (const claim of claims) {
@@ -2904,6 +2911,75 @@ describe("SECURITY.md", () => {
         expect(guard.indexOf(claim), `the guard's row states "${claim.slice(0, 40)}…" before the shape`).toBeGreaterThan(
           guard.indexOf(pinned),
         );
+      }
+      expect(guard, "the guard's row says again that an unsure line reads as running a verb").not.toContain(
+        "so an unsure line is read as running a verb",
+      );
+    });
+
+    // ADDED 2026-10-19 (plan 021 file 2, units w4-copilot-ask and w5-ask-pages; REQ-FLOW-123, REQ-FLOW-102): Copilot
+    // CLI asks for the person's own agent alone, a call with no helper field whose session id its session start
+    // recorded (src/hooks/scripts.ts::buildPersonOnlyGuardScript, attendedAsk's Copilot copy; the record's writer in
+    // src/hooks/scripts.ts::buildSessionStartScript), measured on 1.0.98 (reports/w4-measure-r1.md); Cursor and Codex
+    // keep refusing, each for the reasons the walk's research read on 2026-10-19.
+    it("states Copilot CLI's ask for the person's own agent, its residuals, and why Cursor and Codex keep refusing", () => {
+      const guard = section("| The main thread of any session", "| An unattended run, or the text that steers one | Pushing a change");
+      const residuals = section("### Cloud and unattended runs", "## Standards mapping");
+      for (const claim of [
+        "Copilot CLI asks too, for the person's own agent alone: the call's payload must carry none of the ten helper fields the guard reads (`agentId`, `agentType` and `parentAgentId`, the three a Copilot helper's call carries, among them)",
+        "its session id must be a whole line of the record Copilot's session start keeps, `stamity/copilot-main-sessions` under the repository's common git directory, outside the working tree",
+        "every call where that record is missing, unreadable, past 64 KiB or malformed, is refused, the reason saying the call could not be shown to come from the person's own agent",
+        "a helper's tool call carries `agentId`, `agentType` and `parentAgentId` and a session id of its own, and the session start fires for the main agent alone",
+        "Cursor and Codex refuse it, the reason telling the agent to give the person the exact command",
+        "its staff say an ask on a shell hook is enforced on no path, its hooks page says `preToolUse`'s ask is not enforced, and a hook cannot see its run mode (read 2026-10-19)",
+        "a helper's hook shares its parent's session id, and an auto-review agent can settle a rules prompt (read 2026-10-19)",
+        "An attended ask holds only while the client honours it, and Copilot CLI's experimental assisted mode hands it to an LLM judge",
+      ]) {
+        expect(guard, `the guard's row does not state: ${claim}`).toContain(claim);
+      }
+      expect(guard, "the guard's row says again that Copilot's payload names no calling agent").not.toContain("names no calling agent");
+      expect(guard, "the guard's row says again that Copilot CLI refuses").not.toContain("Copilot CLI, Cursor and Codex refuse");
+      for (const residual of [
+        "asks for one click on a person-only act that can be undone on Claude Code, and on Copilot CLI for the person's own agent, and refuses it on Cursor and Codex",
+        "so an unmeasured Claude Code or Copilot CLI holds the tag",
+        "Copilot CLI 1.0.98 holds the guard's ask the same way (measured on 2026-10-19 in throwaway folders)",
+        "its one-minute check is an interactive Copilot CLI session with Allow All on, in a throwaway folder set up for Copilot",
+        "Its experimental assisted mode (`/allow-all auto`, `--assisted-approval`) sends a hook's ask to an LLM judge that may approve it without the person, and a hook cannot see that mode",
+        "a line written there by anything else, a steered agent included, reads as a main session's id",
+        "Cursor and Codex refuse every ask-class act, for the reasons the guard's row above gives",
+      ]) {
+        expect(residuals, `the cloud section does not name: ${residual}`).toContain(residual);
+      }
+      expect(residuals, "the cloud section says again that Copilot CLI refuses every ask-class act").not.toContain(
+        "Copilot CLI, Cursor and Codex refuse every ask-class act",
+      );
+    });
+
+    // ADDED 2026-10-19 (plan 021 file 2, units w1-checkpoint-hook-paths and w5-ask-pages; REQ-FLOW-093, REQ-FLOW-102,
+    // ledger rows pr/1, review/136 to review/139, review/142, review/143 and review/149): the run verbs read their own
+    // commit's paths after the repository's hooks ran and undo a widened commit by a compare-and-swap, and a checkpoint
+    // marker holds an unchecked commit (src/cli/commands/run.ts::hookWidened, src/cli/commands/run.ts::undoCommit,
+    // src/cli/commands/run.ts::markerPath). The hooks residual keeps its pinned phrases and names the marker's two
+    // residuals: its removal is a person's act in text only, and it belongs to one work tree.
+    it("states the run verbs' check of a hook-widened commit and the checkpoint marker's two residuals", () => {
+      const residuals = section("### Cloud and unattended runs", "## Standards mapping");
+      const hooks = residuals.slice(residuals.indexOf("Hooks the run writes."), residuals.indexOf("The environment."));
+      for (const claim of [
+        "The run verbs keep the repository's hooks",
+        "a hook a run writes runs when `run checkpoint` or `run end` commits or pushes",
+        "The control that holds is the pre-flight's refusal of an account that can push to the default branch",
+        "A hook cannot widen a run verb's own commit, attended or not",
+        "needs `HEAD^` to be that commit and every path the commit changes to be one the verb itself staged",
+        "rewinds the run branch by name to the `HEAD` it read, a compare-and-swap with `git update-ref` that refuses where `HEAD` has left the branch",
+        "`stamity/checkpoint-pending` under the work tree's own git directory",
+        "every later `run checkpoint` and `run end` refuses, committing and pushing nothing, until a person resolves it",
+        "`src/cli/commands/run.ts::hookWidened`",
+        "Its removal is a person's act in text only",
+        "a run or a hook that deletes it gets the next checkpoint to push the unchecked commit",
+        "it belongs to one work tree",
+        "Commits made outside the run verbs push as before.",
+      ]) {
+        expect(hooks, `the hooks residual does not state: ${claim}`).toContain(claim);
       }
     });
   });
@@ -2979,13 +3055,119 @@ describe("docs/specs/everyday-flows.md, amended for w2 and v0b's fix", () => {
       "the verb is any word after `run`'s option words and their values",
       "each parsed command's decoded words, joined, beside the package",
       "a first word after `run` that the reading cannot settle (an expansion, a glob, a brace or a splat) counts as an option word",
+      // TEST CHANGE, justified (plan 021 file 2, unit w5-ask-pages, ledger rows review/146 and review/147): the unsure
+      // word still needs a verb word after it (src/hooks/personOnly.ts, namesVerbInWords), and PowerShell's shape
+      // refuses an unquoted `@` only in a word after `run` (verbShape's `ats` read past `run`'s index), so npx's
+      // `--@<scope>:registry=<url>` and `<pkg>@<semver>` words pass; the bullet said "after the program".
+      "counts as an option word, so a verb written after it is still found",
       "refused with its own reason, words between `run` and its verb",
       "a blank other than a space or a tab",
-      "an unquoted `@` after the program, which PowerShell reads as a splat",
+      "an unquoted `@` in a word after `run`, which PowerShell reads as a splat",
       "the stop-parsing `--%` spelled with typographic dashes",
     ]) {
       expect(bullet, `REQ-FLOW-121's 2026-10-19 bullet does not state: ${claim}`).toContain(claim);
     }
+    for (const stale of ["so an unsure line is read as running a verb", "an unquoted `@` after the program"]) {
+      expect(bullet, `REQ-FLOW-121's 2026-10-19 bullet says again: ${stale}`).not.toContain(stale);
+    }
+  });
+
+  // ADDED 2026-10-19 (plan 021 file 2, unit w5-ask-pages, for w1-checkpoint-hook-paths and its two fix rounds;
+  // REQ-FLOW-092, REQ-FLOW-093): the verb's check of its own commit after the repository's hooks, the compare-and-swap
+  // undo and the checkpoint marker (src/cli/commands/run.ts: hookWidened, undoCommit, markerPath, markerRefusal), and
+  // the marker's exception to the draft pull request at every exit.
+  it("states w1's check of a hook-widened commit and the checkpoint marker on REQ-FLOW-093", () => {
+    const bullet = amendment("REQ-FLOW-093");
+    for (const claim of [
+      "unit `w1-checkpoint-hook-paths`",
+      "the verb reads `HEAD` before the commit and, after it, needs `HEAD^` to be that commit",
+      "`git update-ref refs/heads/<run-branch> <before> <the commit it checked>`",
+      "refusing where `HEAD` has left that branch",
+      "`commit refused: <path> was staged by a hook and is not in --paths (commit undone)`",
+      "`commit refused: a hook made a commit of its own (commit undone)`",
+      "exits 1 before the scan and the push. Attended and unattended alike",
+      "`stamity/checkpoint-pending` exclusively under the work tree's own git directory",
+      "`commit not undone: …; HEAD holds <sha>, reset target <before>`",
+      "every later `run checkpoint` and `run end` refuses, a call with nothing staged included",
+      "\"with nothing staged commits nothing and pushes only when the branch is ahead\" holds only with no marker",
+      "Commits made outside the run verbs push as before",
+    ]) {
+      expect(bullet, `REQ-FLOW-093's 2026-10-19 bullet does not state: ${claim}`).toContain(claim);
+    }
+  });
+
+  it("states the checkpoint marker's exception to the draft pull request on REQ-FLOW-092", () => {
+    const bullet = amendment("REQ-FLOW-092");
+    for (const claim of [
+      "Given a checkpoint marker left in the work tree's git directory (REQ-FLOW-093)",
+      "`run end` refuses before its commit, its scan, its push and its pull-request step, so that exit opens or updates no draft pull request",
+      "never removes the marker or resets the run branch",
+    ]) {
+      expect(bullet, `REQ-FLOW-092's 2026-10-19 bullet does not state: ${claim}`).toContain(claim);
+    }
+  });
+
+  // ADDED 2026-10-19 (plan 021 file 2, units w1-checkpoint-hook-paths, w4-copilot-ask and w5-ask-pages; REQ-FLOW-102):
+  // the verbs' one rewind, of their own unpushed commit, and the helper fields every client now reads
+  // (src/hooks/scripts.ts, GUARD_HELPER_FIELDS).
+  it("states the verbs' one rewind and the wider helper fields on REQ-FLOW-102", () => {
+    const bullet = amendment("REQ-FLOW-102");
+    for (const claim of [
+      "the one rewind they make is of their own commit, unpushed, that a pre-commit hook widened",
+      "a compare-and-swap (`git update-ref`), never whatever `HEAD` then names",
+      "`agentId`, `parentAgentId`, `parent_agent_id` and `parent_tool_call_id`",
+      "on Copilot CLI the field's presence alone",
+    ]) {
+      expect(bullet, `REQ-FLOW-102's 2026-10-19 bullet does not state: ${claim}`).toContain(claim);
+    }
+  });
+
+  // ADDED 2026-10-19 (plan 021 file 2, units w4-copilot-ask and w5-ask-pages; REQ-FLOW-123): Copilot CLI's ask for its
+  // main agent (src/hooks/scripts.ts: attendedAsk, GUARD_NO_CALLER, the session start's record), the facts measured on
+  // 1.0.98 (reports/w4-measure-r1.md), its residuals, and Cursor's and Codex's reasons for refusing.
+  it("states Copilot CLI's ask, its facts and residuals, and Cursor's and Codex's refusals on REQ-FLOW-123", () => {
+    const bullet = amendment("REQ-FLOW-123");
+    for (const claim of [
+      "units `w4-copilot-ask` and `w5-ask-pages`",
+      "the guard answers `permissionDecision: \"ask\"` with the act's reason when the payload carries none of the ten helper fields",
+      "a whole line of `stamity/copilot-main-sessions` under the repository's common git directory",
+      "created owner-only and kept to its last 200 lines",
+      "\"Copilot CLI could not show that this call comes from the person's own agent (a helper agent's call, or a session its session start did not record), so the guard refuses it: give the person the exact command.\"",
+      "Claude Code's answers keep their bytes; Cursor and Codex keep `deny` with `GUARD_CANNOT_ASK`",
+      "the release re-measurement's ask-class clients are Claude Code and Copilot CLI",
+      "measured on Copilot CLI 1.0.98 on 2026-10-19",
+      "headless runs and autopilot deny an ask; the interactive client shows its hook permission dialog and waits",
+      "Copilot's experimental assisted mode (`/allow-all auto`, `--assisted-approval`) sends the ask to an LLM judge",
+      "Cursor keeps refusing: its staff say an ask on a shell hook is enforced on no path",
+      "Codex keeps refusing: its hooks page says an ask fails open, a helper's hook shares the parent's session id",
+    ]) {
+      expect(bullet, `REQ-FLOW-123's 2026-10-19 bullet does not state: ${claim}`).toContain(claim);
+    }
+  });
+});
+
+// ADDED 2026-10-19 (plan 021 file 2, unit w5-ask-pages; REQ-PROVE-042, REQ-PROVE-043): the proof spec's cadence and
+// cloud-page requirements name Copilot CLI's ask beside Claude Code's, as `ASK_CLASS_CLIENTS` in
+// scripts/qa/hook-runs.mjs and the release checklist now do.
+describe("docs/specs/prove-behavior-and-value.md, amended for Copilot CLI's ask", () => {
+  const spec = flowed(read("docs/specs/prove-behavior-and-value.md"));
+  const requirement = (id: string): string => {
+    const from = spec.indexOf(`### ${id} `);
+    expect(from, `the proof spec has no ${id} heading`).toBeGreaterThanOrEqual(0);
+    return spec.slice(from, spec.indexOf("### REQ-", from + 1));
+  };
+
+  it("names Claude Code and Copilot CLI as the ask-class clients on REQ-PROVE-042", () => {
+    const text = requirement("REQ-PROVE-042");
+    expect(text).toContain("and Claude Code and Copilot CLI as the ask-class clients it measures");
+    expect(text).toContain("until a run on a machine with both clients reads `held` or `ran` for each");
+    expect(text).toContain("in an interactive Copilot CLI session with Allow All on, in a throwaway folder set up for Copilot");
+  });
+
+  it("states Copilot CLI's ask on the cloud page's requirement, REQ-PROVE-043", () => {
+    const text = requirement("REQ-PROVE-043");
+    expect(text).toContain("Claude Code asks for one click, and Copilot CLI for the person's own agent alone");
+    expect(text).toContain("Cursor and Codex refuse");
   });
 });
 
@@ -3254,7 +3436,12 @@ describe("docs/security-mapping.md", () => {
     for (const claim of [
       "a deletion, a force push or an act that cannot be undone is refused on every client, attended or not, and one such act on a line refuses the whole call",
       "attended, an act that can be undone asks on Claude Code for one click, refused where a sub-agent runs it or in Claude Code's `auto` permission mode",
-      "Copilot CLI, whose tool-call payload names no calling agent, Cursor, which ran a command despite a `beforeShellExecution` ask under `--force` (measured 2026-10-18), and Codex, whose hooks page says an ask is not honoured, refuse it",
+      // TEST CHANGE, justified (plan 021 file 2, units w4-copilot-ask and w5-ask-pages; REQ-FLOW-123): Copilot CLI now
+      // asks for the person's own agent (src/hooks/scripts.ts, attendedAsk's Copilot copy), so it leaves the list of
+      // clients that refuse, and Cursor's hooks page joins its measurement as a reason.
+      "and on Copilot CLI for the person's own agent alone, a call with no helper field whose session id Copilot's session start recorded (measured on 1.0.98, 2026-10-19)",
+      "while Cursor, which ran a command despite a `beforeShellExecution` ask under `--force` (measured 2026-10-18) and whose hooks page says `preToolUse`'s ask is not enforced, and Codex, whose hooks page says an ask is not honoured, refuse it",
+      "Copilot CLI's on 1.0.98, whose experimental assisted mode may hand the ask to an LLM judge a hook cannot see",
       "`gh extension exec`",
       "and a line that runs `stamity run start`, `checkpoint` or `end` unless the verb stands alone on it as one simple command",
       "An attended ask holds only while the client honours it",
@@ -3269,6 +3456,9 @@ describe("docs/security-mapping.md", () => {
     }
     expect(flat, "the mapping page says again that the guard refuses every person-only act").not.toContain(
       "refuses a person-only act on every client, naming the rule",
+    );
+    expect(flat, "the mapping page says again that Copilot's payload names no calling agent").not.toContain(
+      "names no calling agent",
     );
   });
 
@@ -4468,8 +4658,16 @@ describe("docs/cloud.md", () => {
     const section = flowed(sectionOf(cloudPage(), "## What asks, and what refuses"));
     expect(section, `${CLOUD} has no "## What asks, and what refuses" section`).not.toBe("");
     expect(section).toMatch(/Claude Code asks for one click/);
-    expect(section).toMatch(/Copilot CLI, Cursor and Codex refuse/);
-    expect(section).toMatch(/names no calling agent/);
+    // TEST CHANGE, justified (plan 021 file 2, units w4-copilot-ask and w5-ask-pages; REQ-FLOW-123): Copilot CLI asks
+    // for the person's own agent since w4 (src/hooks/scripts.ts, attendedAsk's Copilot copy), so the page names it
+    // beside Claude Code, with its assisted-mode residual, and Cursor and Codex refuse; the phrases that said Copilot
+    // CLI refuses for want of a calling agent are gone.
+    expect(section).toMatch(/Attended, Copilot CLI asks too, for your own agent alone/);
+    expect(section).toMatch(/Copilot CLI 1\.0\.98 showed its hook permission dialog and waited for the person \(measured 2026-10-19\)/);
+    expect(section).toMatch(/assisted mode can hand the ask to an LLM judge, which may approve it without you/);
+    expect(section).toMatch(/Cursor and Codex refuse/);
+    expect(section).not.toMatch(/Copilot CLI, Cursor and Codex refuse/);
+    expect(section).not.toMatch(/names no calling agent/);
     expect(section).toMatch(/every deletion and every force push is refused on every client/i);
     expect(section).toMatch(/asks nothing/);
     expect(section).toContain("`stamity run checkpoint`");
@@ -4516,10 +4714,39 @@ describe("docs/cloud.md", () => {
       expect(askText, `the ask line does not name the status ${status}`).toContain(status);
     }
     expect(askText).toContain("machine lock");
-    // The one ask-class client the script measures, read from the script itself.
-    expect(ASK_CLASS_CLIENTS).toEqual(["claude"]);
-    expect(askText).toMatch(/Claude Code is the one ask-class client it measures/);
+    // TEST CHANGE, justified (plan 021 file 2, units w4-copilot-ask and w5-ask-pages, ledger rows build/82 and
+    // review/150): w4 made Copilot CLI ask-class again (`ASK_CLASS_CLIENTS` in scripts/qa/hook-runs.mjs), so the
+    // pin and the checklist's sentence name both clients, and the line states that `--require-observation`, which
+    // it passes, makes a missing Copilot CLI hold the tag as a missing Claude Code does.
+    // The ask-class clients the script measures, read from the script itself.
+    expect(ASK_CLASS_CLIENTS).toEqual(["claude", "copilot"]);
+    expect(askText).toMatch(/Claude Code and Copilot CLI are the ask-class clients it measures/);
+    expect(askText).not.toMatch(/Claude Code is the one ask-class client/);
     expect(askText).toMatch(/moves to refusing before the tag/);
     expect(askText).toMatch(/`not-run`[^.]*`not-installed`[^.]*each exit 1 and hold the tag/);
+    expect(askText).toContain(
+      "`not-installed`, no Claude Code or no Copilot CLI on the machine (red under `--require-observation`, which this line passes)",
+    );
+    // The person's interactive check covers each ask-class client: Claude Code's approve prompt and Copilot CLI's
+    // hook permission request, each declined (reports/w4-measure-r1.md, P3a-a).
+    const interactive = further.find((line) => /one-minute check/.test(collapsed(line)));
+    expect(interactive, `${RELEASE_CHECKLIST} has no one-minute interactive check line`).toBeDefined();
+    const interactiveText = collapsed(interactive ?? "");
+    expect(interactiveText).toContain("for each ask-class client");
+    expect(interactiveText).toContain("see Claude Code's own approve prompt appear; decline it");
+    expect(interactiveText).toContain("`node <the cut's checkout>/dist/cli.js init --tools copilot --yes`");
+    expect(interactiveText).toContain("open an interactive Copilot CLI session with Allow All on (`copilot --yolo`)");
+    expect(interactiveText).toContain("see its hook permission request appear; decline it");
+    expect(interactiveText).toContain("moves that client to refusing");
+    expect(interactiveText).toContain("Runs when:");
+  });
+
+  // ADDED 2026-10-19 (plan 021 file 2, unit w5-ask-pages; REQ-FLOW-123): the Copilot cloud agent's morning walk says
+  // why each held act comes as the exact command now that Copilot CLI's guard can ask: the cloud agent denies an ask,
+  // as the research read Copilot's documentation on 2026-10-19 (the run record's 08:23Z entry).
+  it("says why a held act on Copilot's cloud agent comes to the person as the exact command", () => {
+    const walk = flowed(sectionOf(sectionOf(cloudPage(), "## Copilot's cloud agent"), "### The morning walk"));
+    expect(walk).toContain("Copilot's documentation says its cloud agent denies a hook's ask, since nobody is there to click it");
+    expect(walk).not.toContain("Copilot's guard refuses every person-only act rather than asking");
   });
 });
