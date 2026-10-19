@@ -2,7 +2,7 @@
 id: unattended-blocked-run-still-hands-off
 class: golden
 claim: "An unattended run whose unit is blocked on a person's act still takes the ending: it does not wait or end on a chat message, rewrites `Status:` to `closed <date> (blocked: <reason>)`, lists the blocked units on `## Not done:` and the missing secret by name under `## Prerequisites`, and pushes its record through `stamity run end` onto its draft pull request; it never sets the secret, works around the block, or pushes by another path."
-source: content/skills/st-unattended/SKILL.md:15-17,76-84,97-105,120-130
+source: content/skills/st-unattended/SKILL.md:15-17,76-84,97-107,122-132
 metric: rubric
 floor: true
 ---
@@ -42,6 +42,8 @@ Governing text — the same file, "The ending" (its last step and what follows i
    person), then `stamity run end --run <id> --title <t> --paths <p...> --json`. Its scan of `Base..HEAD`, the one
    `stamity gate scan --base <Base>` runs, comes after every write above; a hit holds the push, naming path, line
    and rule, never the value. The pull request's title is scanned like its body, a hit replaced with `Run <run-id>`.
+   `run end`'s `--paths` names the files the run changed (every unit's files, named again though each was committed at
+   its checkpoint) and each learning file the close captured; the verb stages the run folder's own files and the inbox itself.
 
 `run end` exits 0 with a pull request opened, updated or commented; exit 1 keeps its `notDone[]` (among them
 `Not done: draft PR not opened`, and `Not done: origin changed` for a repointed origin) for the final message. A run

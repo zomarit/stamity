@@ -126,7 +126,7 @@ names every write made, with its item id and event id, and the preview's answer 
   `preview:`, with the item's readiness verdict and its source link for the run (`content/commands/st-board.md:126-129`);
   a hand-off read from disk carries `run-mode: attended`, as it carries `preview: stop` (`:347-349`). Unattended, a
   pickup keeps `preview: stop` and `move: off` (`:349-350`), and each board write it would make lands as a morning-list
-  row (`content/skills/st-unattended/SKILL.md:165-166`). The field is not `mode`, which the return block names for the
+  row (`content/skills/st-unattended/SKILL.md:167-168`). The field is not `mode`, which the return block names for the
   board mode; the session's `run-mode: unattended` comes only from `--unattended`, or `STAMITY_UNATTENDED` set to any
   value but empty, `false` or `0`, without `--attended` (`content/commands/st-board.md:366`). As built: step 5's
   payload names the source link; the readiness verdict is pickup's own gate (step 4), and the unattended skill refuses

@@ -568,7 +568,7 @@ card's printed lines do not change.
 - **As built, where the delta differed:** `readRecordHead` returns `mode: null` for a missing line or any other value,
   which reads attended where `STAMITY_UNATTENDED` is unset and lets the variable decide where it is set, as above; it
   also returns `resumes`, the `Resumes: <run-id>` line a morning walk's record carries
-  (`content/skills/st-unattended/SKILL.md:140-142`), so the hook twin reads seven head lines where it read three.
+  (`content/skills/st-unattended/SKILL.md:142-144`), so the hook twin reads seven head lines where it read three.
 - **Proof:** `test/runs/recordHead.test.ts` ("the record head's mode, branch, base and resumes lines (REQ-CTX-012)"),
   `test/runs/resumeCardParity.test.ts` ("the hook twin's record head (REQ-CTX-012)"), `test/corpus/commands/work.test.ts`,
   `test/corpus/commands/lightTrio.test.ts`, `test/corpus/commands/feedbackPair.test.ts`.

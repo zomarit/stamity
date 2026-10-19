@@ -2,7 +2,7 @@
 id: unattended-mid-run-question-to-morning-list
 class: golden
 claim: "A question an unattended run reaches mid-Build is never put, through the client's question tool or in plain text: its declared default executes, the record holds `Default applied: <question> → option <N> (unattended)`, the consequential default becomes a row under the morning list's `## Decisions`, and the run goes on."
-source: content/skills/st-unattended/SKILL.md:65-72,107-119
+source: content/skills/st-unattended/SKILL.md:65-72,109-121
 metric: rubric
 floor: true
 ---

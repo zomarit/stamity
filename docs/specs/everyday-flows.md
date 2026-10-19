@@ -3313,7 +3313,7 @@ Amended 2026-10-16 (plan 021 file 1, unit `u15-work-text`): the `/st-work` bulle
 bullet reads: the close's parts as REQ-FLOW-019 states (amended 2026-10-16), the commit part's three numbered options
 among them, the answers taking effect together after the last round (`content/commands/st-work.md:297-309`); under
 `Mode: unattended` there is no walk: each part takes its declared default by REQ-FLOW-075, and the morning list
-carries what the walk would have asked (REQ-FLOW-094; `content/skills/st-unattended/SKILL.md:67-69`, `:116-119`).
+carries what the walk would have asked (REQ-FLOW-094; `content/skills/st-unattended/SKILL.md:67-69`, `:118-121`).
 
 Amended 2026-10-18 (plan 021 file 2, units `v8-detect-translator` and `v19-eval-cut-prep`). Given the question-tool map
 (`ASK_USER_TOOLS`), Then a row may carry an optional `cloud` note of one sentence, rendered as its own column; Cursor's
@@ -3723,7 +3723,7 @@ branch into the default branch, its body replaced only when it ends with this ru
 `POST …/pulls` with `draft: true`, else on a 422 a normal one titled `[DRAFT]`, else `Not done: draft PR not opened`,
 exit 1 (0 with a pull request). No call runs `gh pr create`, `gh pr ready`, a merge, a force push, a tag or a push to
 the default branch, read by REST; `run start` leaves it for a branch of the run's own
-(`content/skills/st-unattended/SKILL.md:76-77`, `:86-105`). The pull request's marker is `runMarker` and its ladder
+(`content/skills/st-unattended/SKILL.md:76-77`, `:86-107`). The pull request's marker is `runMarker` and its ladder
 `ensureDraftPr` (`src/runs/pullRequest.ts:82`, `:241`), which `run end` and `run checkpoint --pr` take through
 `draftPr` (`src/cli/commands/run.ts:1269-1313`). `run end` runs the checkpoint's commit, scan and push
 (`src/cli/commands/run.ts:250`), then the pull-request step on every `end` that reaches it, `--refused` giving the
@@ -3838,7 +3838,7 @@ regenerated from it, ending `<!-- stamity:run <run-id> -->`, after a secret scan
 (`## Refused`); the person's QA rows (at most three) and the proven line; decisions (consequential defaults applied,
 `decision-waiting` leftovers, the spec delta merge, board proposals); prerequisites, each kind · name · read where · set
 by · blocks merge, deploy or run · verified yes or no, never a value, a row found in the diff marked `inferred`; person's
-calls held; `Not done:`. A section with no rows reads `none` (`content/skills/st-unattended/SKILL.md:109-122`;
+calls held; `Not done:`. A section with no rows reads `none` (`content/skills/st-unattended/SKILL.md:111-124`;
 `MORNING_SECTIONS`, `parseMorning` and `prBodyFrom`, `src/runs/morning.ts`; `inferPrerequisites`,
 `src/runs/prerequisites.ts`).
 
@@ -3854,10 +3854,10 @@ Then it reopens the close under a record of its own reading `Mode: attended`, wh
 citing the first run, walks the morning list through the client's question tool in rounds, applies the answers on the
 same branch, pushes and refreshes the pull request body; an invocation that itself declares the start unattended
 (`--unattended`, a hand-off's `run-mode: unattended`, or a chain's next file) takes the unattended entry on that branch,
-never the walk (`content/commands/st-work.md:412-415`, `content/skills/st-unattended/SKILL.md:140-145`); on a run still
+never the walk (`content/commands/st-work.md:412-415`, `content/skills/st-unattended/SKILL.md:142-147`); on a run still
 in progress `--resume` refuses, naming the continuation. In Claude Code's cloud the run closes its record, ends on
 `run end --final-round`, then asks one final round (REQ-FLOW-090); on Cursor, follow-ups on its pull request's comments; on Copilot, one
-`@copilot answers: Q1→2, Q3→1` comment; locally, the touchpoint (`content/skills/st-unattended/SKILL.md:147-151`).
+`@copilot answers: Q1→2, Q3→1` comment; locally, the touchpoint (`content/skills/st-unattended/SKILL.md:149-153`).
 
 - **As built, where the delta differed:** the skill names no client in that last sentence: it names each way back by
   what the client does (a session that stays open, a cloud agent taking follow-ups on its pull request's comments, one
@@ -3871,7 +3871,7 @@ in progress `--resume` refuses, naming the continuation. In Claude Code's cloud 
   are unchanged. As built: the skill names the clients by what their guard does, never by name, "a deletion, a force
   push and every held act a client's guard refuses to ask for go to the person as the exact command", and its walk
   section also counts the commits after the last checkpoint on `## Not done:` (REQ-FLOW-116), since an attended walk
-  reads that section and not the cloud reference (`content/skills/st-unattended/SKILL.md:139-145`); the final round's
+  reads that section and not the cloud reference (`content/skills/st-unattended/SKILL.md:141-147`); the final round's
   sentence says the variable, still set, keeps the guard refusing (`:147-151`). Proof:
   `test/corpus/skills/unattended.test.ts` ("the ask rule, the run verb's line and the walk's held acts"), and the five
   unattended eval briefs re-quoted at the lines that moved (`test/evals/locators.test.ts`).
@@ -3915,7 +3915,7 @@ pushes its record, the ranked hypotheses and the failing test when one was writt
 as `needs a planned run`; a user-route stop strips its instrumentation, takes the skill's ending and returns
 `BLOCKED_DEPENDENCY` (`content/commands/st-debug.md:134-136`, `:108-115`).
 `/st-rework` passes the mode to `/st-work`; `/st-board pickup` carries it, keeps `preview: stop`, its board writes land
-as morning-list rows (`content/skills/st-unattended/SKILL.md:153-166`).
+as morning-list rows (`content/skills/st-unattended/SKILL.md:155-168`).
 
 - **As built, where the delta differed:** the delta had `/st-pr-resolve` run no `run start`, so no origin pin would be
   written and its every checkpoint and `run end` would refuse as `origin not pinned`. Its Unattended row runs
@@ -4020,7 +4020,7 @@ shell guard, Cursor's fail-closed `beforeShellExecution`, and Copilot's and Code
 `SHELL_GUARD_MATCHERS`, `src/emit/hooksInfra.ts:156`). Unattended, a change to CI, hook or guard configuration
 (`.stamity/generated/`, the manifest), the class file, CODEOWNERS, the charter or the rule and instruction files is held
 off the pushed tree as an inert patch, listed (`PERSON_ONLY_PATHS` and `heldPaths`, `src/change/personOnlyPaths.ts:26`,
-`:103`; `content/skills/st-unattended/SKILL.md:132-136`).
+`:103`; `content/skills/st-unattended/SKILL.md:134-138`).
 
 - **As built, where the delta differed:** the patch holds a held path only where the run's change touches it in the
   work tree or the index. Where a commit the push would send (one `origin` lacks) changes a held path, or `HEAD`'s tree
@@ -4257,7 +4257,7 @@ chain file passes the chain's first record's `Base:`, as the chain rules do.
     `resumeCardLines`, `src/runs/cardSource.ts`; `readCurrentBranch` and `findCardRun`, `src/runs/resumeCard.ts`); an
     attended record prints on startup only within the closed card's two-day age, an unattended one at any age.
   - Frame's continuation is the skill's text, `content/skills/st-unattended/references/cloud.md:53-67`, which the
-    skill's body points at in its last line (`content/skills/st-unattended/SKILL.md:171`): the session runs
+    skill's body points at in its last line (`content/skills/st-unattended/SKILL.md:173`): the session runs
     `stamity run start --run <id> --json` first, `<id>` the record's folder name, and with no in-progress record on the
     branch it was given, as on a clone given the default branch or a platform's own, it opens a new run.
   - `run start` with no local `stamity/<id>` reads `refs/remotes/origin/stamity/<id>`; where the run's record at that
@@ -4549,7 +4549,7 @@ not read as covering them; the run's own closing commit is never counted.
 - **As built:** the count is the subjects `git log --format=%s <sha>..HEAD` lists, less each reading
   `chore(run): checkpoint <id>`, on one row, `Not done: <n> commits after checkpoint <sha>, not covered by the proof
   block's gates` (`content/skills/st-unattended/references/cloud.md:69-75`); the skill's morning walk section says the
-  same (`content/skills/st-unattended/SKILL.md:139-145`). It is text the run follows: no engine code counts the commits.
+  same (`content/skills/st-unattended/SKILL.md:141-147`). It is text the run follows: no engine code counts the commits.
 - **Proof:** `test/corpus/skills/unattended.test.ts`.
 
 ### REQ-FLOW-117 — Copilot runs a long plan as a chain of sessions

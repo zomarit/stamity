@@ -38,8 +38,12 @@ const CLOUD_REL_PATH = "skills/st-unattended/references/cloud.md";
  * TEST CHANGE, justified (plan 021 file 2, unit v3-cloud-skill, REQ-FLOW-107): the cap rises by the one
  * pointer line to `references/cloud.md`, placed after `## Chains` so no eval case's `source:` line range
  * moves (`test/evals/locators.test.ts`); a rewrap above it would have shifted every range below the rewrap.
+ *
+ * TEST CHANGE, justified (plan 021 file 2, unit n1-eval-ending, REQ-FLOW-092): the cap rises by the two lines
+ * that close "The ending"'s step 3 with what `run end`'s `--paths` names, appended so steps 1 to 3 keep their wrap;
+ * every eval case's `source:` range below them moves by two and is re-pinned in the same change.
  */
-const BODY_CAP = 161;
+const BODY_CAP = 163;
 
 /** The sections, in the order the plan's unit u9 lists them. */
 const SECTIONS: readonly string[] = [
@@ -351,6 +355,20 @@ describe("st-unattended — checkpoints and the ending (REQ-FLOW-092, REQ-FLOW-0
     expect(text.indexOf("each learning file it captured named in step 3's `--paths`")).toBeLessThan(
       text.indexOf("`stamity run end --run <id> --title <t> --paths <p...> --json`"),
     );
+  });
+
+  // Added 2026-10-19 (plan 021 file 2, unit n1-eval-ending; REQ-FLOW-092, REQ-FLOW-075): eval run 48's two floor cases
+  // showed the ending never said what `--paths` carries, so step 3 names it: every changed file again, though each was
+  // committed at its checkpoint, and the close's learning files; the run folder and the inbox the verb stages itself.
+  it("says what run end's --paths names and what the verb stages itself", async () => {
+    const text = await flat();
+    const sentence =
+      "`run end`'s `--paths` names the files the run changed (every unit's files, named again though each was committed at its checkpoint) and each learning file the close captured; the verb stages the run folder's own files and the inbox itself.";
+    expect(text).toContain(sentence);
+    expect(text.indexOf("`stamity run end --run <id> --title <t> --paths <p...> --json`")).toBeLessThan(
+      text.indexOf(sentence),
+    );
+    expect(text.indexOf(sentence)).toBeLessThan(text.indexOf("`run end` exits 0 with a pull request opened"));
   });
 
   // TEST CHANGE, justified (plan 021 file 2, unit v0d-guard-pages; REQ-FLOW-095, REQ-FLOW-102): the acts are still
