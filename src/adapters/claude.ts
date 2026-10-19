@@ -248,9 +248,12 @@ export const CLAUDE_CLOUD_READINESS_PATH = `${HOOKS_GENERATED_DIR}/${TOOL}/${CLO
  * The copies the hook entries RUN (REQ-FLOW-113, REQ-FLOW-104), under
  * `.claude/hooks/stamity/` ({@link CLAUDE_HOOKS_DIR}). The Claude Code GitHub
  * Action, on a pull request, replaces the whole `.claude/` tree with the base
- * branch's copy before the CLI starts, so on the Action's run every script a
- * hook entry starts, and the policy document the guard reads beside them, are
- * the base branch's: a pull request cannot rewrite them for its own run. The
+ * branch's copy before the CLI starts, so on the Action's run every script
+ * Stamity's own hook entries start, and the policy document the guard reads
+ * beside them, are the base branch's: a pull request cannot rewrite them for its
+ * own run. A user hook's or a pack hook's entry is restored too, but its script
+ * stays at its own path outside `.claude/` (`anchorScriptArgument` anchors
+ * it on the project folder), so the pull request supplies that script. The
  * core's four copies are planned by `../emit/hooksInfra.ts`; these are the
  * adapter's three, each rendered for that folder (the `claude` placement), and
  * the policy document's copy. The generated copies above are still placed, byte

@@ -783,12 +783,26 @@ describe("the cloud column and the Cloud sessions section", () => {
     // TEST CHANGE, justified (w6-claude-hooks-in-claude-dir, REQ-FLOW-113, REQ-FLOW-104): the hook entries now
     // run the copies under `.claude/hooks/stamity/`, beside the policy document's copy, so the restore covers the
     // scripts the hooks run too; the generated copies are still written and no entry runs them.
+    // TEST CHANGE, justified (w6 security lens, round 1, review/158): the restore covers only the scripts of
+    // Stamity's own entries. A user hook's or a pack hook's script stays at its own path outside `.claude/`,
+    // so the pull request supplies it and the Action runs it; the unqualified "the scripts the hooks run are
+    // the base branch's too" was a guarantee that does not hold for those entries, and the row now names
+    // that residual.
     const config = cloudFact("claude", "GitHub Action configuration");
     expect(config.status).toBe("documented");
     expect(config.fact).toContain("`.claude/`");
     expect(config.fact).toContain("hook entries are the base branch's");
     expect(config.fact).toContain("`.claude/hooks/stamity/`");
-    expect(config.fact).toContain("the scripts the hooks run are the base branch's too");
+    expect(config.fact).toContain("The scripts Stamity's own entries start");
+    expect(config.fact).not.toContain("the scripts the hooks run are the base branch's too");
+    expect(config.fact).toContain(
+      "A user hook or a pack hook keeps its script at its own path outside `.claude/`, so on a pull request " +
+        "that script is the pull request's, and the Action runs it.",
+    );
+    // The reverted-change limit is stated in the Action's source, not on the cited security page
+    // (checked at claude-code-action 5eb090f3), so the row names where it is stated.
+    expect(config.fact).not.toContain("the Action's own named limit");
+    expect(config.fact).toContain("`src/github/operations/restore-config.ts`");
     expect(config.fact).not.toContain("come from the pull request, so a pull request can change what the guard runs");
     expect(config.citation.url).toBe("https://github.com/anthropics/claude-code-action/blob/main/docs/security.md");
 

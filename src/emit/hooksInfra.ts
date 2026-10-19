@@ -139,7 +139,10 @@ export const CLAUDE_HOOK_POLICIES_FILE = `${CONTENT_PREFIX}${AGENT_TOOL_POLICIES
  * The Claude Code GitHub Action, on a pull request, replaces the whole
  * `.claude/` tree with the base branch's copy before the CLI starts, so a script
  * there is the base branch's on the Action's run, and a pull request cannot
- * rewrite what the guard runs for its own run. The guard copy reads the policy
+ * rewrite what the guard runs for its own run. Only the core's copies sit there:
+ * the user-hook and pack-hook rows this plan adds keep their scripts at their
+ * own paths outside `.claude/`, so on the Action's run those scripts are the
+ * pull request's. The guard copy reads the policy
  * document's copy beside it (the sibling name), which the Claude adapter places
  * there for the same reason (`../adapters/claude.ts`), and every copy names its
  * repository from the hook folder's parents (`claude` placement,
