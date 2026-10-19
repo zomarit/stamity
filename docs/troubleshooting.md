@@ -416,7 +416,7 @@ The emitted command anchors the script on the client's own project root and turn
 launch into a block:
 
 ```json
-"command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs\" || { s=$?; [ \"$s\" -eq 2 ] && exit 2; echo 'stamity: the pre-tool-use guard could not run; run `stamity sync` where the CLI is installed, else `npx -y @zomarit/stamity@<version> sync`, which needs the npm registry' >&2; exit 2; }"
+"command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/stamity/stamity-pre-tool-use-guard.mjs\" || { s=$?; [ \"$s\" -eq 2 ] && exit 2; echo 'stamity: the pre-tool-use guard could not run; run `stamity sync` where the CLI is installed, else `npx -y @zomarit/stamity@<version> sync`, which needs the npm registry' >&2; exit 2; }"
 ```
 
 `<version>` is the stamity version the setup was generated with, and a renamed fork's package stands
@@ -426,8 +426,13 @@ and no registry clause, because that call fetches nothing. A fork that names its
 mapping still fetches the fork's build, and its clause reads "which needs the registry it names". A
 sandbox with no route to that registry, as a cloud session can be, fails the `npx` call.
 
-Two things reach that branch. The generated tree is gone — `clean` removed it, a fresh checkout
-has not synced, or the file was deleted by hand:
+The entry runs the copy under `.claude/hooks/stamity/`, not the one under
+`.stamity/generated/hooks/claude/`, which is still written for the session start you run by hand
+where no hook ran. Claude Code's GitHub Action restores `.claude/` from the base branch on a pull
+request, so the copy there is the base branch's ([Cloud runs](cloud.md)).
+
+Two things reach that branch. The copy is gone — `clean` removed it, a fresh checkout has not
+synced, or the file was deleted by hand:
 
 ```sh
 npx @zomarit/stamity sync
@@ -436,8 +441,8 @@ npx @zomarit/stamity check
 
 Or the session carries no `CLAUDE_PROJECT_DIR`. The client sets it to the project root the session
 started in, so an empty value means the hook process did not inherit the client's environment — a
-wrapper, a launcher or a CI step that scrubs it. With it empty the path resolves to `/.stamity/…`,
-where nothing is.
+wrapper, a launcher or a CI step that scrubs it. With it empty the path resolves to
+`/.claude/hooks/stamity/…`, where nothing is.
 
 Why it blocks rather than warns: the command used to be repository-relative, and a hook handler
 runs in the session's current directory, which a `cd` in the Bash tool moves. Once it left the

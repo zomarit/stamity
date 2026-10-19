@@ -215,13 +215,29 @@ a run is given by default, and nobody sits in the job to answer one. That it has
 page's silence (not documented), so a run there takes its declared defaults.
 
 On a pull request, the Action restores `.claude/`, `CLAUDE.md` and the other Claude configuration
-paths from the base branch before Claude starts (documented). Two things this setup keeps elsewhere
-are not restored. The hook scripts the restored `.claude/settings.json` entries start live under
-`.stamity/generated/hooks/`, and they come from the pull request, so a pull request can change what
-the guard runs on the Action's run on it. And the base branch's `CLAUDE.md` imports `AGENTS.md`,
-which the restore does not cover, so the agent on that run reads that pull request's `AGENTS.md`.
-Run the Action on a pull request only when you would let its author change the guard and the
-charter.
+paths from the base branch before Claude starts (documented). Stamity's own entries in the restored
+`.claude/settings.json` run copies of its hook scripts under `.claude/hooks/stamity/`, beside the
+copy of the agent tool policy document the guard reads, so the restore covers them too: on that run
+Stamity's own hooks run the base branch's scripts, and a pull request cannot change what the guard
+runs on its own Action run. The copies under `.stamity/generated/hooks/claude/` are still written,
+for the session start the charter has a session run by hand where no hook ran; no hook entry runs
+them. That holds only until the base branch carries a `sync` that writes those copies. Before it, the base branch's
+entries run the scripts under `.stamity/generated/hooks/claude/`, and those come from the pull
+request.
+
+What the restore does not cover still comes from the pull request. The base branch's `CLAUDE.md`
+imports `AGENTS.md`, which the restore does not cover, so the agent on that run reads that pull
+request's `AGENTS.md`. What the hook scripts read from the rest of the checkout, the run records
+and the learnings under `.stamity/`, are that pull request's too. And hooks of your own and hooks a
+pack supplies are wired into the same settings but run scripts outside `.claude/`, at their own
+paths, so those scripts come from the pull request, and the Action runs them with its token. Run the
+Action on a pull request only when you would let its author change the charter. Before you run it on
+pull requests from outside, keep such scripts under `.claude/`, or drop them.
+
+The restore has one limit the Action names as its own, in its source rather than its documentation
+(read 2026-10-19). A pull request that changes `.claude/` sees that change reverted on the Action's
+run, so its new hooks and settings do not run there. And when the agent on that run commits with
+`git add -A`, the revert goes into that commit, onto the pull request's branch.
 
 ## The run contract
 

@@ -161,8 +161,9 @@ and report honestly, records say what happened, and the person is asked only wha
 
 Every script that setup emits into a user's repository starts with a file-level lint-disable directive,
 `/* eslint-disable */`: on line 2 after a shebang, on line 1 where the script has none. This covers the core hook
-scripts under `.stamity/generated/hooks/<tool>/`, the portable runners, Cursor's hook scripts and the `st-verify`
-skill scripts, the three copies of the coverage checker included.
+scripts under `.stamity/generated/hooks/<tool>/` and the copies Claude Code's hook entries run under
+`.claude/hooks/stamity/` (since plan 021 file 2's `w6-claude-hooks-in-claude-dir`), the portable runners, Cursor's
+hook scripts and the `st-verify` skill scripts, the three copies of the coverage checker included.
 
 - **As built:** the directive is `GENERATED_SCRIPT_LINT_DIRECTIVE` (`src/types/markers.ts:14-25`), whose three writers
   are `src/hooks/scripts.ts`, `src/hooks/portableRunner.ts` and `src/adapters/cursor.ts` (`:21-23`). The checker's
@@ -2358,7 +2359,9 @@ From the spec delta of run `2026-10-08_product-core`, as landed by the units `p4
   `effort: not settable` (`content/commands/st-work.md:316-317`).
 - **Expand/contract:** the default moves from 4 to 3; a cap an operator configured within 1..10 still applies. The
   generated review-gate hook reads the engine cap (`.stamity/generated/hooks/claude/stamity-review-gate.mjs:52`).
-  Rollback is a re-sync at the prior version.
+  Since plan 021 file 2's `w6-claude-hooks-in-claude-dir`, Claude Code's hook entry runs the copy
+  `.claude/hooks/stamity/stamity-review-gate.mjs`, which reads the same cap; the generated copy is still written and
+  no hook entry runs it. Rollback is a re-sync at the prior version.
 - **Proof:** `test/roster/roster.test.ts`, `test/roster/modelLadder.test.ts`, `test/corpus/invariants.test.ts`
   (invariant 16), `test/corpus/commands/work.test.ts`, `test/corpus/agents/spine.test.ts`; QA.
 
@@ -3577,7 +3580,9 @@ from `review/27`). Charter invariant 5 reads: "Read `.stamity/learnings/` before
 the session-start banner or, where no hook ran, `node .stamity/generated/hooks/<client>/stamity-session-start.mjs` run
 with an empty stdin, opening only the files it lists as loaded; repeating a recorded failure is a process defect."
 (`content/charter/stamity-charter.md:55-57`). The command names no glob and no `/dev/null`, so it reads the same under
-every shell.
+every shell. Since plan 021 file 2's `w6-claude-hooks-in-claude-dir`, Claude Code's hook entries run the copy under
+`.claude/hooks/stamity/`; the generated copy the invariant names is still written, so the command holds for Claude Code
+as for the other clients.
 
 - **Amended 2026-10-16** (plan 021 file 1, units `u7-learn-read` and `u9-unattended-skill`). Given a session where no
   session-start hook ran, Then learnings are read through the screen, by the committed script run with an empty stdin
@@ -4214,6 +4219,18 @@ named network exceptions, and the run verbs on the git-hardening row.
   security mapping's rows and gaps follow each (`docs/security-mapping.md`). Proof: `test/docsPages.test.ts` ("states
   file 2's ask rule, each client's answer, the run verb's line and the residuals REQ-FLOW-104 names", and its mapping
   twin), `test/corpus/rules/security.test.ts`.
+- **Amended 2026-10-19** (plan 021 file 2, units `w6-claude-hooks-in-claude-dir` and `w7-action-pages`). The engine's
+  own Claude Code hook entries run copies of its scripts under `.claude/hooks/stamity/`, beside the policy document's
+  copy the guard reads (`CLAUDE_HOOKS_DIR`, `src/hooks/model.ts`), and the Claude Code GitHub Action replaces `.claude/`
+  with the base branch's copy on a pull request, so the Action residual narrows to what the restore leaves: the
+  `AGENTS.md` the base branch's `CLAUDE.md` imports, which is not among the paths the Action restores (its
+  `SENSITIVE_PATHS`, read 2026-10-19); the run records and learnings under `.stamity/` the scripts read; the user and
+  pack hook scripts outside `.claude/` that the settings also run, at their own paths, with the Action's token, which a
+  person running the Action on outside pull requests keeps under `.claude/` or drops; a base branch that predates the
+  copies, whose entries still run the scripts under `.stamity/generated/hooks/claude/` from the pull request; and the
+  Action's own named limit, a pull request's change to `.claude/` reverted on its Action run, and committed onto its
+  branch by an agent there that runs `git add -A` (`SECURITY.md`, "Claude Code's GitHub Action on a pull request.").
+  Proof: `test/docsPages.test.ts` ("the Action's restore covering Claude Code's hook copies (w7-action-pages)").
 - **Proof:** `test/docsPages.test.ts` ("cloud and unattended runs (REQ-FLOW-104)": the section's place, every risk
   and gap named above, the retired bullet gone, the control table's pointers, the settings row and the network
   exception); `judgment: reviewer` for the wording around them.
@@ -4454,6 +4471,21 @@ tool call and no hook fired.
   section adds the `AGENTS.md` the base branch's `CLAUDE.md` imports, which comes from the pull request too. The
   hook-fire failure is `--require-observation`, which turns an empty observation log red (`main`,
   `scripts/qa/hook-runs.mjs`).
+- **Amended 2026-10-19** (plan 021 file 2, units `w6-claude-hooks-in-claude-dir` and `w7-action-pages`). The engine's
+  own Claude Code hook entries run copies of the core and adapter scripts under `.claude/hooks/stamity/`, beside
+  `stamity-agent-tool-policies.json`, the policy document's copy the guard reads (`CLAUDE_HOOKS_DIR`,
+  `src/hooks/model.ts`; `CLAUDE_COPY_PLACEMENT`, `src/emit/hooksInfra.ts`). The Action replaces `.claude/` with the base
+  branch's copy on a pull request, so the engine's own hook scripts are the base branch's there, and a pull request no
+  longer changes what the guard runs on its own Action run. The copies under `.stamity/generated/hooks/claude/` are
+  still written, for the session start invariant 5 has a session run by hand (REQ-FLOW-088); no hook entry runs them.
+  The configuration row says so, and `docs/cloud.md`'s Action section adds the base branch that predates the copies, the
+  records the scripts read, the user and pack hook scripts outside `.claude/` the settings also run, which come from the
+  pull request (kept under `.claude/` or dropped where the Action runs on outside pull requests), and the Action's own
+  named limit: a pull request's change to `.claude/` is reverted on its Action run, and an agent there that commits with
+  `git add -A` puts the revert onto the pull request's branch (read in the Action's source 2026-10-19; its documentation
+  does not state it). Proof: `test/emit/capabilityMatrix.test.ts` (the configuration row), `test/docsPages.test.ts`
+  ("names the GitHub Action a short surface, and what a pull request still changes there", and "the Action's restore
+  covering Claude Code's hook copies (w7-action-pages)").
 - **Proof:** `test/emit/capabilityMatrix.test.ts` ("states Claude Code's GitHub Action as a six-hour job with no
   question tool by default (REQ-FLOW-113)"), `test/qa/hookRuns.test.ts` ("drives claude without --bare"),
   `test/qa/hookRunsCli.test.ts`, `test/docsPages.test.ts` ("names the GitHub Action a short surface, and what a pull
@@ -5955,6 +5987,11 @@ above.
 
 - GIVEN the matrix THEN the Action's three rows render with their statuses and no session line; GIVEN Claude's runner
   arguments THEN no `--bare`. *(test: `test/emit/capabilityMatrix.test.ts`, `test/qa/hookRuns.test.ts`)*
+- GIVEN `docs/cloud.md`, `SECURITY.md` and the spec (amended 2026-10-19) THEN each names the engine's own copies
+  under `.claude/hooks/stamity/` inside the Action's restore, the generated copies no hook entry runs, `AGENTS.md`,
+  the records the scripts read and the user and pack hook scripts outside `.claude/` as the pull request's, and the
+  Action's own named limit; no page says every script the hooks run is the base branch's. *(test:
+  `test/docsPages.test.ts`)*
 
 **REQ-FLOW-114** (added 2026-10-18)
 

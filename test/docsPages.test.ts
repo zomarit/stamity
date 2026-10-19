@@ -29,7 +29,7 @@ import {
 import { TRUST_TIERS } from "../src/pack/trust.ts";
 import { packReinstallSteps } from "../src/pack/verifyInstalled.ts";
 import { CONTENT_CLASSES } from "../src/types/content.ts";
-import { CLIENT_CLOUD_FACTS } from "../src/hooks/model.ts";
+import { CLAUDE_HOOKS_DIR, CLIENT_CLOUD_FACTS } from "../src/hooks/model.ts";
 import { parseRunContract } from "../src/runs/runContract.ts";
 import { CORPUS_ROOT, loadCorpusIndex } from "./corpus/harness.ts";
 import { GATE_RUN_TIMEOUT_MS, leakGateFailureDetail, runLeakGateOnce } from "./support/leakGateRun.ts";
@@ -4646,12 +4646,31 @@ describe("docs/cloud.md", () => {
     expect(section, "the Action's question fact does not carry the table's status").toContain(
       `(${questions.status})`,
     );
-    // The base-branch restore covers `.claude/`, not the scripts its entries start nor the charter
-    // `CLAUDE.md` imports, so the page says what a pull request still changes on its own run.
-    expect(section).toContain("`.stamity/generated/hooks/`");
-    expect(section).toMatch(/a pull request can change what the guard runs/);
+    // TEST CHANGE, justified (plan 021 file 2, units w6-claude-hooks-in-claude-dir and w7-action-pages;
+    // REQ-FLOW-113, REQ-FLOW-104): Claude Code's hook entries run copies under `.claude/hooks/stamity/`
+    // since w6 (`CLAUDE_HOOKS_DIR`, src/hooks/model.ts), inside the base-branch restore, so the page no
+    // longer says a pull request can change what the guard runs; it says which copy the hooks run, what
+    // the restore still leaves to the pull request (the `AGENTS.md` the base's `CLAUDE.md` imports, which
+    // the Action's restore list omits, and the records the scripts read), the base that predates the
+    // copies, and the Action's own named limit.
+    expect(section).toContain(`\`${CLAUDE_HOOKS_DIR}/\``);
+    expect(section).toMatch(/a pull request cannot change what the guard runs on its own Action run/);
+    expect(section).not.toMatch(/a pull request can change what the guard runs/);
+    expect(section).toMatch(
+      /The copies under `\.stamity\/generated\/hooks\/claude\/` are still written, for the session start[^.]*; no hook entry runs them\./,
+    );
+    expect(section).toMatch(/until the base branch carries a `sync` that writes those copies/);
     expect(section).toContain("`AGENTS.md`");
     expect(section).toMatch(/that pull request's `AGENTS\.md`/);
+    expect(section).toMatch(/the run records and the learnings under `\.stamity\/`, are that pull request's too/);
+    expect(section).toMatch(/A pull request that changes `\.claude\/` sees that change reverted on the Action's run/);
+    expect(section).toContain("`git add -A`");
+    // w6's security lens (10:09Z): the restore covers Stamity's own hook scripts alone; user and pack hook rows run
+    // scripts at their own paths outside `.claude/` (src/emit/hooksInfra.ts, the user and pack lanes).
+    expect(section).toMatch(/Stamity's own hooks run the base branch's scripts/);
+    expect(section, "a page says every hook script is the base branch's, user and pack hooks included").not.toMatch(/the scripts the hooks run are the base branch's/);
+    expect(section).toMatch(/hooks of your own and hooks a pack supplies[^.]*run scripts outside `\.claude\/`[^.]*come from the pull request/);
+    expect(section).toMatch(/keep such scripts under `\.claude\/`, or drop them/);
   });
 
   it("states each client's answer to a person-only act, as the guard gives it", () => {
@@ -4748,5 +4767,119 @@ describe("docs/cloud.md", () => {
     const walk = flowed(sectionOf(sectionOf(cloudPage(), "## Copilot's cloud agent"), "### The morning walk"));
     expect(walk).toContain("Copilot's documentation says its cloud agent denies a hook's ask, since nobody is there to click it");
     expect(walk).not.toContain("Copilot's guard refuses every person-only act rather than asking");
+  });
+});
+
+// ADDED 2026-10-19 (plan 021 file 2, unit w7-action-pages; REQ-FLOW-113, REQ-FLOW-104). Since w6 Claude Code's hook
+// entries run copies under `.claude/hooks/stamity/` (`CLAUDE_HOOKS_DIR`), which the Claude Code GitHub Action replaces
+// with the base branch's copy on a pull request; the generated copies under `.stamity/generated/hooks/claude/` stay
+// for the manual session start. Each page line that names Claude's hook folder says which copy the hooks run, and the
+// security page's Action residual narrows to what the restore leaves: `AGENTS.md`, which the Action's restore list
+// (`SENSITIVE_PATHS`, read at the Action's commit 5eb090f3 on 2026-10-19) omits, the records the scripts read, a base
+// that predates the copies, and the Action's own named limit. The folder is read from the source, not restated.
+describe("the Action's restore covering Claude Code's hook copies (w7-action-pages)", () => {
+  const copies = `\`${CLAUDE_HOOKS_DIR}/\``;
+  /** One `- **<title>**` bullet of a page, flowed, up to the next bullet or heading. */
+  const bulletOf = (text: string, title: string): string => {
+    const from = text.indexOf(`- **${title}**`);
+    expect(from, `no "${title}" bullet`).toBeGreaterThanOrEqual(0);
+    const rest = text.slice(from + 1);
+    const ends = [rest.indexOf("\n- **"), rest.indexOf("\n#")].filter((at) => at >= 0);
+    return flowed(rest.slice(0, ends.length === 0 ? undefined : Math.min(...ends)));
+  };
+
+  it("SECURITY.md's Action residual names the copies inside the restore and what stays with the pull request", () => {
+    const bullet = bulletOf(read(SECURITY), "Claude Code's GitHub Action on a pull request.");
+    expect(bullet).toContain(copies);
+    expect(bullet).toContain("`src/hooks/model.ts::CLAUDE_HOOKS_DIR`");
+    expect(bullet).toMatch(/a pull request cannot change what the guard runs on its own Action run/);
+    expect(bullet, "the bullet still says the pull request supplies the hook scripts").not.toMatch(
+      /the hook scripts those settings start, under `\.stamity\/generated\/hooks\/`, and the `AGENTS\.md`/,
+    );
+    expect(bullet).toMatch(/`AGENTS\.md` that `CLAUDE\.md` imports is not among the paths the Action restores/);
+    expect(bullet).toMatch(/run records and learnings under `\.stamity\/` that those scripts read/);
+    expect(bullet).toMatch(
+      /until the base branch carries a `sync` that writes the copies, its hook entries run the scripts under `\.stamity\/generated\/hooks\/claude\/`, which come from the pull request/,
+    );
+    expect(bullet).toMatch(/a pull request that changes `\.claude\/` sees that change reverted on its Action run/);
+    expect(bullet).toContain("`git add -A`");
+    expect(bullet).toMatch(/the engine's own hook scripts are the base branch's/);
+    expect(bullet, "a page says every hook script is the base branch's, user and pack hooks included").not.toMatch(/the scripts the hooks run are the base branch's/);
+    expect(bullet).toMatch(/user and pack hook scripts the settings run from outside `\.claude\/` come from the pull request/);
+    expect(bullet).toMatch(/keeps such scripts under `\.claude\/` or drops them/);
+  });
+
+  it("SECURITY.md's hook execution row names the folder Claude Code's hooks run from", () => {
+    const row = bulletOf(read(SECURITY), "Hook and MCP execution.");
+    expect(row).toMatch(
+      new RegExp(`Reading \`\\.stamity/generated/hooks/\` and \`${CLAUDE_HOOKS_DIR.replaceAll(".", "\\.")}/\``),
+    );
+    expect(row).toMatch(/where the copies Claude Code's hook entries run live/);
+  });
+
+  it("troubleshooting shows the guard command Claude Code runs, at the copy", () => {
+    const page = read(TROUBLESHOOTING);
+    const commands = page.split("\n").filter((line) => line.startsWith('"command": "node'));
+    expect(commands, "the troubleshooting guide shows no guard command").toHaveLength(1);
+    expect(commands[0]).toContain(`\${CLAUDE_PROJECT_DIR}/${CLAUDE_HOOKS_DIR}/stamity-pre-tool-use-guard.mjs`);
+    expect(flowed(page)).toContain(`With it empty the path resolves to \`/${CLAUDE_HOOKS_DIR}/…\``);
+    expect(flowed(page)).toMatch(
+      /The entry runs the copy under `\.claude\/hooks\/stamity\/`, not the one under `\.stamity\/generated\/hooks\/claude\/`/,
+    );
+  });
+
+  it("the hook-latency line names the guard copy the hooks run, and why the generated guard still times it", () => {
+    const line = read(RELEASE_CHECKLIST)
+      .split("\n")
+      .find((text) => text.includes("`node scripts/hook-latency.mjs`"));
+    expect(line, `${RELEASE_CHECKLIST} has no hook-latency line`).toBeDefined();
+    expect(line).toContain(`\`${CLAUDE_HOOKS_DIR}/stamity-pre-tool-use-guard.mjs\``);
+    expect(line).toMatch(/differs from it only in where it finds the repository root and the policy document/);
+  });
+
+  describe("docs/specs/everyday-flows.md", () => {
+    const SPEC = "docs/specs/everyday-flows.md";
+    const spec = read(SPEC);
+    const requirement = (id: string): string => {
+      const from = spec.indexOf(`### ${id} `);
+      expect(from, `${SPEC} has no ${id} heading`).toBeGreaterThanOrEqual(0);
+      const to = spec.indexOf("\n### REQ-", from + 1);
+      return flowed(spec.slice(from, to === -1 ? undefined : to));
+    };
+    /** The flowed `Amended 2026-10-19 (... w7-action-pages ...)` bullet, which must sit before the Proof line. */
+    const w7Amendment = (id: string): string => {
+      const text = requirement(id);
+      const from = text.indexOf("- **Amended 2026-10-19** (plan 021 file 2, units `w6-claude-hooks-in-claude-dir`");
+      expect(from, `${id} has no w6/w7 "Amended 2026-10-19" bullet`).toBeGreaterThanOrEqual(0);
+      const proof = text.indexOf("- **Proof:**", from);
+      expect(proof, `${id}'s w6/w7 bullet does not come before its Proof line`).toBeGreaterThan(from);
+      return text.slice(from, proof);
+    };
+
+    it("REQ-FLOW-113 states the copies inside the restore and the Action's own limit", () => {
+      const bullet = w7Amendment("REQ-FLOW-113");
+      expect(bullet).toContain(copies);
+      expect(bullet).toMatch(/no hook entry runs them/);
+      expect(bullet).toMatch(/a pull request no longer changes what the guard runs on its own Action run/);
+      expect(bullet).toContain("`git add -A`");
+      expect(bullet).toMatch(/user and pack hook scripts outside `\.claude\/`/);
+    });
+
+    it("REQ-FLOW-104 narrows the Action residual to what the restore leaves", () => {
+      const bullet = w7Amendment("REQ-FLOW-104");
+      expect(bullet).toMatch(/`AGENTS\.md`/);
+      expect(bullet).toMatch(/run records and learnings/);
+      expect(bullet).toMatch(/a base branch that predates the copies/);
+      expect(bullet).toContain("`git add -A`");
+      expect(bullet).toMatch(/user and pack hook scripts outside `\.claude\/`/);
+    });
+
+    it("the lines naming Claude Code's hook folder say which copy the hooks run", () => {
+      expect(requirement("REQ-FLOW-001")).toContain(`the copies Claude Code's hook entries run under ${copies}`);
+      expect(requirement("REQ-FLOW-088")).toMatch(
+        /Claude Code's hook entries run the copy under `\.claude\/hooks\/stamity\/`; the generated copy the invariant names is still written/,
+      );
+      expect(requirement("REQ-FLOW-064")).toContain(`\`${CLAUDE_HOOKS_DIR}/stamity-review-gate.mjs\``);
+    });
   });
 });

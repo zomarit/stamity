@@ -319,9 +319,10 @@ where it depends on it.
   none of the others, so read the file first, as the getting-started page says (checked with npm
   10.9.8).
 - **Hook and MCP execution.** The engine writes hook scripts and hook CONFIG. Your AI client runs
-  them, with your privileges. Reading `.stamity/generated/hooks/` covers only the scripts this engine
-  generates. What decides whether a command runs at all is the client's own config. There are four
-  of those: `.claude/settings.json`, `.cursor/hooks.json`, `.github/hooks/stamity.json` and
+  them, with your privileges. Reading `.stamity/generated/hooks/` and `.claude/hooks/stamity/`, where
+  the copies Claude Code's hook entries run live, covers only the scripts this engine generates. What
+  decides whether a command runs at all is the client's own config. There are four of those:
+  `.claude/settings.json`, `.cursor/hooks.json`, `.github/hooks/stamity.json` and
   `.codex/hooks.json`. A hook a PACK supplies lands in one of them, never under
   `.stamity/generated/`. On Codex, three things decide it rather than one. The first is the
   `hooks` feature in `.codex/config.toml`. The engine writes `[features]` with `hooks = true`, but
@@ -599,10 +600,20 @@ refused. What stays open is named here, as accepted risk:
   session holds included. The pre-flight's `token-env` warning names credential-shaped variables, by
   name only, and removes none.
 - **Claude Code's GitHub Action on a pull request.** On a pull request, the Action restores `.claude/`
-  and `CLAUDE.md` from the base branch, but the hook scripts those settings start, under
-  `.stamity/generated/hooks/`, and the `AGENTS.md` that `CLAUDE.md` imports come from the pull
-  request, so a pull request can change what the guard runs and what the agent reads on its own
-  Action run.
+  and `CLAUDE.md` from the base branch. The engine's own Claude Code hook entries run copies of its
+  scripts under `.claude/hooks/stamity/`, beside the copy of the policy document the guard reads
+  (`src/hooks/model.ts::CLAUDE_HOOKS_DIR`), so on that run the engine's own hook scripts are the base
+  branch's, and a pull request cannot change what the guard runs on its own Action run. Four things
+  stay with the pull request. The `AGENTS.md` that `CLAUDE.md` imports is not among the paths the
+  Action restores, so the agent reads the pull request's. The run records and learnings under
+  `.stamity/` that those scripts read are the pull request's. The user and pack hook scripts the
+  settings run from outside `.claude/` come from the pull request, at their own paths, and the Action
+  runs them with its token, so a person who runs the Action on pull requests from outside keeps such
+  scripts under `.claude/` or drops them. And until the base branch carries a `sync` that writes the
+  copies, its hook entries run the scripts under `.stamity/generated/hooks/claude/`, which come from
+  the pull request. The restore has a limit the Action's source names as its own: a pull request that
+  changes `.claude/` sees that change reverted on its Action run, and an agent there that commits with
+  `git add -A` puts the revert onto the pull request's branch.
 - **The record head.** The guard reads whether a run is unattended off the run records, so a run
   that rewrites its own record head escapes the unattended push rule: a record rewritten to read
   `Mode: attended`, or closed while `STAMITY_UNATTENDED` is unset, no longer makes the session
