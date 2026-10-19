@@ -48,7 +48,12 @@ const writes = vi.hoisted(() => ({
    * review/136, review/137: a case's stand-in answer for the calls it matches, handed the real call to run first or
    * not at all; unset, every call goes to the real runner.
    */
-  override: null as ((args: readonly string[], real: () => Promise<GitWriteModule.GitWriteResult>) => Promise<GitWriteModule.GitWriteResult> | undefined) | null,
+  override: null as
+    | ((
+        args: readonly string[],
+        real: (extra?: GitWriteModule.GitWriteOptions) => Promise<GitWriteModule.GitWriteResult>,
+      ) => Promise<GitWriteModule.GitWriteResult> | undefined)
+    | null,
 }));
 
 // A spy, not a stand-in: each call is recorded and passed to the real runner,
@@ -63,7 +68,9 @@ vi.mock("../../../src/cli/engine/gitWrite.ts", async (importOriginal) => {
       writes.inputs.push(opts?.input);
       // Mock reason (review/136, review/137): git's wall time (120 s) and a path read git refuses after a commit
       // cannot be brought about in a unit test's time, so a case answers the one call it names in their place.
-      const answered = writes.override?.(args, () => real.gitWrite(cwd, args, opts));
+      // TEST CHANGE, justified (review/148): the real call takes a case's own options too, so a case can run git for
+      // real under a wall time it makes small, and the runner's own kill stops it, rather than a made-up rejection.
+      const answered = writes.override?.(args, (extra) => real.gitWrite(cwd, args, { ...opts, ...extra }));
       if (answered !== undefined) return answered;
       // TEST CHANGE, justified: review/209 refuses a push URL naming no GitHub repository, so origin's push URL is
       // its GitHub URL; for the push call alone an `insteadOf` in the environment (read once, as the call starts)
@@ -981,6 +988,121 @@ describe("stamity run checkpoint", () => {
       expect(code).toBe(1);
       expect(doc).toMatchObject({ base: widened, committed: null, pushed: false, notDone: [markerRefusal(repo, base)] });
       expect(git(repo, ["rev-parse", "HEAD"])).toBe(widened);
+      expect(pushes()).toEqual([]);
+      expect(remoteHeads(remote)).toEqual(SEEDED);
+    });
+
+    /** The bytes of the index, the held patch and every work tree file a case changes, read before and after a call. */
+    const snapshot = (repo: string): Record<string, string> =>
+      Object.fromEntries(
+        [".git/index", PATCH, "a.txt", "b.txt", ".cursorrules", `${RUN_DIR}/record.md`].map((path) => [path, readFileSync(join(repo, path)).toString("base64")]),
+      );
+
+    // pr/4 (signed off): an earlier checkpoint's marker is read as soon as the top level is resolved, so a call refuses
+    // before any `git add`, held-patch write or index restore, and leaves the uncertain commit's state as it found it.
+    it.each(process.platform === "win32" ? (["file", "folder"] as const) : (["file", "link", "folder"] as const))(
+      "refuses before any staging, held-patch or index write while a marker (a %s) is there, the index, the patch and the work tree byte-identical (pr/4)",
+      async (kind) => {
+        const { repo, remote, base } = await seed("unattended");
+        // The state an uncertain earlier commit leaves: a staged change, a held patch, a held change and an unstaged one.
+        await writeFile(join(repo, "a.txt"), "staged by the earlier call\n");
+        git(repo, ["add", "--", "a.txt"]);
+        await put(repo, PATCH, "the earlier call's patch\n");
+        await writeFile(join(repo, ".cursorrules"), "steered rules\n");
+        await writeFile(join(repo, "b.txt"), "changed\n");
+        const marker = markerAt(repo);
+        await mkdir(dirname(marker), { recursive: true });
+        if (kind === "file") await writeFile(marker, `${base}\n`);
+        else if (kind === "link") await symlink("nowhere", marker);
+        else await mkdir(marker);
+        const before = snapshot(repo);
+
+        const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt", "b.txt"]);
+
+        expect(code).toBe(1);
+        expect(doc).toMatchObject({ committed: null, pushed: false, held: [], notDone: [markerRefusal(repo, kind === "file" ? base : "an unread commit")] });
+        expect(snapshot(repo)).toEqual(before);
+        expect(writes.argv.filter((argv) => ["add", "restore", "rm", "diff", "commit", "push"].includes(argv[0] ?? ""))).toEqual([]);
+        expect(git(repo, ["rev-parse", "HEAD"])).toBe(base);
+        expect(remoteHeads(remote)).toEqual(SEEDED);
+      },
+    );
+
+    /**
+     * A pre- or post-commit hook that outlasts a small wall time: it lets go of git's output at once, so the call ends
+     * when git does, then waits (30 s at most) for the case's release file, and once that is there it returns at once.
+     */
+    const WAITING_HOOK =
+      '[ -e .git/stamity-release ] && exit 0\nexec >/dev/null 2>&1\ni=0\nwhile [ ! -e .git/stamity-release ] && [ "$i" -lt 300 ]; do sleep 0.1; i=$((i+1)); done\n';
+    /** The wall time a case gives the verb's commit alone, through the spy's real call. */
+    const SMALL_WALL_TIME = (args: readonly string[], real: (extra?: GitWriteModule.GitWriteOptions) => Promise<GitWriteModule.GitWriteResult>) =>
+      args[0] === "commit" ? real({ timeoutMs: 500 }) : undefined;
+
+    // review/148 (signed off): a commit the runner's wall time stopped, whose git has exited with HEAD still at the
+    // commit read before it on the run branch, made no commit, so the marker goes and the next call commits. Skipped on
+    // Windows, where the verb leaves the marker (the program the runner stops may be a launcher whose git outlives it).
+    it.skipIf(process.platform === "win32")("clears the marker when a pre-commit hook outlasts the wall time and HEAD still names the commit before, so the next call commits (review/148)", async () => {
+      const { repo, remote, base } = await seed("unattended");
+      await writeFile(join(repo, "a.txt"), "changed\n");
+      await hook(repo, "pre-commit", WAITING_HOOK);
+      writes.override = SMALL_WALL_TIME;
+
+      const first = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+      await writeFile(join(repo, ".git", "stamity-release"), "");
+      writes.override = null;
+
+      expect(first.code).toBe(1);
+      expect(first.doc).toMatchObject({ committed: null, pushed: false });
+      const notDone = first.doc["notDone"] as string[];
+      expect(notDone).toHaveLength(1);
+      expect(notDone[0]).toMatch(/^commit not made: run checkpoint could not run git commit \(.+\)$/);
+      expect(existsSync(markerAt(repo))).toBe(false);
+      expect(git(repo, ["rev-parse", "HEAD"])).toBe(base);
+      expect(pushes()).toEqual([]);
+      expect(remoteHeads(remote)).toEqual(SEEDED);
+
+      const second = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      expect(second.code).toBe(0);
+      expect(second.doc).toMatchObject({ pushed: true, notDone: [] });
+      expect(git(repo, ["rev-parse", "HEAD^"])).toBe(base);
+      expect(pushedFile(remote, "a.txt")).toBe("changed");
+    });
+
+    it.skipIf(process.platform === "win32")("names the commit not made in the human report", async () => {
+      const { repo, base } = await seed("attended");
+      await writeFile(join(repo, "a.txt"), "changed\n");
+      await hook(repo, "pre-commit", WAITING_HOOK);
+      writes.override = SMALL_WALL_TIME;
+
+      const { code, stdout } = await run(repo, ["checkpoint", "--run", RUN, "--paths", "a.txt"]);
+      await writeFile(join(repo, ".git", "stamity-release"), "");
+
+      expect(code).toBe(1);
+      expect(stdout).toContain(`\ncommit: not made (HEAD still ${base})\n`);
+      expect(stdout).toContain("  - commit not made: run checkpoint could not run git commit (");
+      expect(stdout).not.toContain("checkpoint marker left");
+    });
+
+    // review/148: a commit that lands and is then stopped (a post-commit hook past the wall time) moved HEAD, so the
+    // marker stays, as before. Skipped on Windows for the waiting hook's sake; the marker stays there in every case.
+    it.skipIf(process.platform === "win32")("leaves the marker when the commit lands and its call is then stopped by the wall time (review/148)", async () => {
+      const { repo, remote, base } = await seed("unattended");
+      await writeFile(join(repo, "a.txt"), "changed\n");
+      await hook(repo, "post-commit", WAITING_HOOK);
+      writes.override = SMALL_WALL_TIME;
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+      await writeFile(join(repo, ".git", "stamity-release"), "");
+
+      const left = git(repo, ["rev-parse", "HEAD"]);
+      expect(code).toBe(1);
+      expect(left).not.toBe(base);
+      expect(git(repo, ["rev-parse", "HEAD^"])).toBe(base);
+      const notDone = doc["notDone"] as string[];
+      expect(notDone.at(-2)).toMatch(new RegExp(`^commit not checked: run checkpoint could not run git commit \\(.+\\); HEAD holds ${left}, reset target ${base}$`));
+      expect(notDone.at(-1)).toBe(markerLeft(repo, base));
+      expect(readFileSync(markerAt(repo), "utf8")).toBe(`${base}\n`);
       expect(pushes()).toEqual([]);
       expect(remoteHeads(remote)).toEqual(SEEDED);
     });

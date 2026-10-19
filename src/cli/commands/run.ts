@@ -568,13 +568,41 @@ async function git(cwd: string, args: readonly string[], verb: string = START, i
   try {
     return await gitWrite(cwd, args, { ...(input === undefined ? {} : { input }), ...(verbGit.unattended ? { unattended: true } : {}) });
   } catch (cause) {
-    throw new CliFailure({
-      code: "FAILURE",
-      message: `run ${verb} could not run git ${args[0] ?? ""}`.trimEnd(),
-      why: cause instanceof Error ? sanitizeLabel(cause.message) : "git did not start or did not finish",
-      next: "put git on PATH, then run it again",
-    });
+    throw new GitStopped(
+      {
+        code: "FAILURE",
+        message: `run ${verb} could not run git ${args[0] ?? ""}`.trimEnd(),
+        why: cause instanceof Error ? sanitizeLabel(cause.message) : "git did not start or did not finish",
+        next: "put git on PATH, then run it again",
+      },
+      exitedBySignal(cause),
+    );
   }
+}
+
+/**
+ * review/148: a git call that did not finish, and whether the program the runner started has provably exited. The
+ * write runner answers a wall-time or output-bound stop only once the child has closed, after its exit, and Node's
+ * error then names the signal it exited by; an error naming none (git never started, a kill that threw) proves nothing.
+ */
+class GitStopped extends CliFailure {
+  readonly exited: boolean;
+
+  constructor(doc: CliFailure["doc"], exited: boolean) {
+    super(doc);
+    this.exited = exited;
+  }
+}
+
+/**
+ * Whether a runner's rejection shows the started program exited, by the signal it names (review/148). Never on
+ * Windows: there the program on `PATH` may be Git for Windows' launcher, and stopping it does not show that the git it
+ * started has ended.
+ */
+function exitedBySignal(cause: unknown): boolean {
+  if (process.platform === "win32" || !(cause instanceof Error)) return false;
+  const signal = (cause as Error & { signal?: unknown }).signal;
+  return typeof signal === "string" && signal !== "";
 }
 
 /** The full commit id `rev` names, or `null` where it names none. */
@@ -836,6 +864,17 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   const prefix = (await git(cwd, ["rev-parse", "--show-prefix"], verb)).stdout.replace(/\r?\n$/, "");
   const fromTop = (projectPath: string): string => posix.normalize(`${prefix}${projectPath}`);
 
+  // pr/4: an earlier checkpoint's marker (a link or a folder at its path too) refuses before any `git add`, held-patch
+  // write or index restore, so the index and the held patch stay as the uncertain commit left them. A dry run reads none.
+  const marker = ctx.dryRun ? "" : await markerPath(top, verb);
+  if (!ctx.dryRun) {
+    const present = markerPresent(marker);
+    if (present !== false) {
+      result.notDone.push(present === true ? await markerRefusal(top, marker, verb) : `commit and push refused: the checkpoint marker ${marker} could not be read (${present})`);
+      return finish(false);
+    }
+  }
+
   // (3) What is staged: the run folder's files, the inbox and --paths; never -A, never -f.
   // pr/79: a run-owned path the work tree no longer holds stages as its deletion where the index tracks it, as a
   // --paths entry does; one whose deletion is already staged is the run's own too. A link stays out, as before.
@@ -849,7 +888,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   const heldDir = `${runDir}/${HELD_DIR}`;
   const patchRel = `${heldDir}/${HELD_PATCH}`;
   const patches = [...new Set([patchRel, ...listPatches(join(cwd, heldDir)).map((name) => `${heldDir}/${name}`)])].map(fromTop);
-  const { paths: named, deleted: namedDeleted } = await namedPaths(top, cwd, prefix, (opts["paths"] ?? []) as string[], result.notDone);
+  const { paths: named, deleted: namedDeleted } = await namedPaths(top, cwd, prefix, base, (opts["paths"] ?? []) as string[], result.notDone);
   // review/84: a deletion already staged is no ignored record, though check-ignore reads its path as untracked now.
   const ignored = await ignoredPaths(top, [...own, ...named.filter((path) => !namedDeleted.includes(path)), ...patches]);
   if (ignored === null) {
@@ -1006,8 +1045,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
 
   // (4) The commit, only when something is staged.
   // review/142, review/143: a commit whose check did not read clean leaves the checkpoint marker, and every later call
-  // refuses while it is there, whatever Base: its record names and whatever --paths it is given.
-  const marker = await markerPath(top, verb);
+  // refuses while it is there, whatever Base: its record names and whatever --paths it is given (read above, pr/4).
   const staged = await git(top, ["diff", "--cached", "--quiet", "--no-ext-diff", "--ignore-submodules=none"], verb);
   if (staged.code === 1) {
     // pr/1: the repository's hooks run inside the commit, after the check above, so HEAD is read before it and the
@@ -1025,8 +1063,15 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
     // review/136: a commit, path read or undo that does not finish (the write runner's wall time) fails closed here,
     // naming the commit HEAD holds and the reset target, and leaves the marker, so every later call refuses.
     let commit: GitWriteResult;
+    // review/148: the commit's own git was stopped and has provably exited (GitStopped), so its catch may read HEAD.
+    let exited = false;
     try {
-      commit = await git(top, ["commit", "--quiet", `--message=chore(run): checkpoint ${run}`, ...(opts["signoff"] === true ? ["--signoff"] : [])], verb);
+      commit = await git(top, ["commit", "--quiet", `--message=chore(run): checkpoint ${run}`, ...(opts["signoff"] === true ? ["--signoff"] : [])], verb).catch(
+        (stop: unknown) => {
+          exited = stop instanceof GitStopped && stop.exited;
+          throw stop;
+        },
+      );
       const widened = await hookWidened(top, before, commit.code === 0, isOwn, verb);
       if (widened !== null) {
         const failure = await undoCommit(top, current, before, widened.head, verb);
@@ -1051,6 +1096,14 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
       }
     } catch (cause) {
       if (!(cause instanceof CliFailure)) throw cause;
+      // review/148 (signed off): a commit whose git has exited while HEAD still names `before` on the run branch made
+      // no commit, so the marker goes and the next call can run; HEAD moved or unread, it stays, as below.
+      if (exited && (await stillAt(top, current, before, verb))) {
+        const dropped = dropMarker(marker);
+        result.notDone.push(`commit not made: ${cause.doc.message} (${cause.doc.why ?? "no reason given"})`, ...(dropped === null ? [] : [dropped]));
+        lines.push(`commit: not made (HEAD still ${before})`);
+        return finish(false);
+      }
       const held = await commitAt(top, "HEAD", verb).catch(() => null);
       result.notDone.push(
         `commit not checked: ${cause.doc.message} (${cause.doc.why ?? "no reason given"}); HEAD holds ${held ?? "an unread commit"}, reset target ${before}`,
@@ -1294,11 +1347,20 @@ function readsUnattended(mode: "attended" | "unattended" | null, flag: string | 
 /**
  * `--paths` as top-level-relative paths: one that leaves the repository or
  * names the whole project, or that neither the work tree nor the index holds
- * and whose deletion is not already staged, is left out and named in `notDone`.
+ * and whose deletion is not already staged, is left out and named in `notDone`;
+ * one whose deletion `HEAD` already holds against `base` (an earlier
+ * checkpoint committed it, S141) is left out silently, as there is nothing to stage.
  * `deleted` lists the kept ones whose deletion is already staged (review/84):
  * `git add` refuses a path no layer holds, so they are committed as staged.
  */
-async function namedPaths(top: string, cwd: string, prefix: string, given: readonly string[], notDone: string[]): Promise<{ paths: string[]; deleted: string[] }> {
+async function namedPaths(
+  top: string,
+  cwd: string,
+  prefix: string,
+  base: string,
+  given: readonly string[],
+  notDone: string[],
+): Promise<{ paths: string[]; deleted: string[] }> {
   const kept: string[] = [];
   const missing: string[] = [];
   const project = prefix.replace(/\/$/, "");
@@ -1314,11 +1376,22 @@ async function namedPaths(top: string, cwd: string, prefix: string, given: reado
   // A path the work tree no longer holds still stages as a deletion where the index tracks it.
   const tracked = await indexTracked(top, missing);
   const deleted = await stagedDeletions(top, missing.filter((path) => !tracked.has(path)));
+  const committed = await committedDeletions(top, base, missing.filter((path) => !tracked.has(path) && !deleted.has(path)));
   for (const path of missing) {
     if (tracked.has(path) || deleted.has(path)) kept.push(path);
-    else notDone.push(`not staged: ${path} (no such file)`);
+    else if (!committed.has(path)) notDone.push(`not staged: ${path} (no such file)`);
   }
   return { paths: kept, deleted: [...deleted] };
+}
+
+/**
+ * S141: the top-relative `paths` whose deletion `HEAD` already holds against `base`, as a file or as a folder that held
+ * one: a run's ending names again what its checkpoints committed. None where git could not answer.
+ */
+async function committedDeletions(top: string, base: string, paths: readonly string[]): Promise<Set<string>> {
+  if (paths.length === 0) return new Set();
+  const read = await git(top, ["diff", "--name-only", "-z", "--diff-filter=D", ...DIFF_PINS, base, "HEAD", "--", ...paths], CHECKPOINT);
+  return namedIn(paths, read.code === 0 ? read.stdout.split("\0").filter((name) => name !== "") : []);
 }
 
 /**
@@ -1494,6 +1567,30 @@ function takeMarker(marker: string, before: string): true | string | null {
   } catch (cause) {
     if ((cause as NodeJS.ErrnoException).code === "EEXIST" && exists(marker)) return true;
     return cause instanceof Error ? cause.message : "the write failed";
+  }
+}
+
+/**
+ * pr/4: whether anything sits at the marker's path, a link or a folder included: `false` where nothing does (its
+ * folder missing, or a file in the folder's place), `true` where something does, else why it could not be read.
+ */
+function markerPresent(marker: string): boolean | string {
+  try {
+    lstatSync(marker);
+    return true;
+  } catch (cause) {
+    const code = (cause as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "ENOTDIR") return false;
+    return cause instanceof Error ? cause.message : "the read failed";
+  }
+}
+
+/** review/148: whether `HEAD` is still on `branch` and names `before`; a read that fails or does not finish is a no. */
+async function stillAt(top: string, branch: string, before: string, verb: string): Promise<boolean> {
+  try {
+    return (await currentBranch(top, verb)) === branch && (await commitAt(top, "HEAD", verb)) === before;
+  } catch {
+    return false;
   }
 }
 

@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -602,6 +602,82 @@ describe("stamity run end", () => {
     expect(pushes()).toEqual([]);
     expect(writesToGitHub()).toEqual([]);
     expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
+  });
+
+  // pr/4 (signed off): end reads the checkpoint marker before any write too, so the index and the work tree stay as the
+  // uncertain commit left them, and no pull request is opened.
+  it("refuses before any staging while a checkpoint marker is there, the index and the work tree byte-identical (pr/4)", async () => {
+    const { repo, remote, base } = await seed("attended");
+    await writeFile(join(repo, "a.txt"), "staged by the earlier call\n");
+    git(repo, ["add", "--", "a.txt"]);
+    await writeFile(join(repo, "b.txt"), "changed\n");
+    const marker = join(git(repo, ["rev-parse", "--absolute-git-dir"]), "stamity", "checkpoint-pending");
+    await mkdir(dirname(marker), { recursive: true });
+    await writeFile(marker, `${base}\n`);
+    const snapshot = (): string[] => [".git/index", "a.txt", "b.txt", `${RUN_DIR}/record.md`].map((path) => readFileSync(join(repo, path)).toString("base64"));
+    const before = snapshot();
+
+    const { code, doc } = await run(repo, [...END("feat: x"), "--paths", "a.txt", "b.txt"]);
+
+    expect(code).toBe(1);
+    expect(doc).toMatchObject({
+      subcommand: "end",
+      committed: null,
+      pushed: false,
+      pr: null,
+      notDone: [
+        `commit and push refused: ${marker} records ${base}, left by a checkpoint whose commit was not checked or not undone, ` +
+          `and HEAD holds ${base}; a person reviews the commits after ${base}, resets the branch to it if one carries a path outside --paths, then removes ${marker}`,
+      ],
+    });
+    expect(snapshot()).toEqual(before);
+    expect(writes.argv.filter((argv) => argv[0] === "add" || argv[0] === "commit")).toEqual([]);
+    expect(pushes()).toEqual([]);
+    expect(writesToGitHub()).toEqual([]);
+    expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
+  });
+
+  // The eval fix's code fact (S141): the unattended ending names every file the run changed in --paths, each already
+  // committed at its checkpoint, so a path committed earlier is harmless there.
+  describe("a --paths entry an earlier checkpoint committed (S141)", () => {
+    const CHECKPOINT = ["checkpoint", "--run", RUN, "--json"];
+
+    it("names a file committed earlier and unchanged since: exit 0, and no notDone line for it", async () => {
+      const { repo, remote } = await seed("attended");
+      await writeFile(join(repo, "a.txt"), "changed\n");
+      expect((await run(repo, [...CHECKPOINT, "--paths", "a.txt"])).code).toBe(0);
+      const committed = git(repo, ["rev-parse", "HEAD"]);
+
+      const { code, doc } = await run(repo, [...END("feat: x"), "--paths", "a.txt"]);
+
+      expect(code).toBe(0);
+      // The checkpoint pushed the branch already, so end has nothing new to push.
+      expect(doc).toMatchObject({ committed: null, pushed: false, notDone: [] });
+      expect(git(repo, ["rev-parse", "HEAD"])).toBe(committed);
+      expect(git(remote, ["show", `refs/heads/${RUN_BRANCH}:a.txt`])).toBe("changed");
+    });
+
+    it("names a deletion committed earlier: exit 0, and no not staged line", async () => {
+      const { repo, remote } = await seed("attended");
+      await rm(join(repo, "b.txt"));
+      expect((await run(repo, [...CHECKPOINT, "--paths", "b.txt"])).code).toBe(0);
+
+      const { code, doc } = await run(repo, [...END("feat: x"), "--paths", "b.txt"]);
+
+      expect(code).toBe(0);
+      // The checkpoint pushed the branch already, so end has nothing new to push.
+      expect(doc).toMatchObject({ committed: null, pushed: false, notDone: [] });
+      expect(git(remote, ["ls-tree", "-r", "--name-only", `refs/heads/${RUN_BRANCH}`]).split("\n")).not.toContain("b.txt");
+    });
+
+    it("still names a path never tracked as not staged", async () => {
+      const { repo } = await seed("attended");
+      await writeFile(join(repo, "a.txt"), "changed\n");
+
+      const { doc } = await run(repo, [...END("feat: x"), "--paths", "a.txt", "ghost.txt"]);
+
+      expect(doc["notDone"]).toContain("not staged: ghost.txt (no such file)");
+    });
   });
 
   describe("the morning walk's body (review/164)", () => {
