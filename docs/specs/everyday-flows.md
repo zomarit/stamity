@@ -3872,7 +3872,7 @@ in progress `--resume` refuses, naming the continuation. In Claude Code's cloud 
   push and every held act a client's guard refuses to ask for go to the person as the exact command", and its walk
   section also counts the commits after the last checkpoint on `## Not done:` (REQ-FLOW-116), since an attended walk
   reads that section and not the cloud reference (`content/skills/st-unattended/SKILL.md:141-147`); the final round's
-  sentence says the variable, still set, keeps the guard refusing (`:147-151`). Proof:
+  sentence says the variable, still set, keeps the guard refusing (`:149-153`). Proof:
   `test/corpus/skills/unattended.test.ts` ("the ask rule, the run verb's line and the walk's held acts"), and the five
   unattended eval briefs re-quoted at the lines that moved (`test/evals/locators.test.ts`).
 - **Proof:** `test/corpus/skills/unattended.test.ts`, `test/corpus/commands/work.test.ts`,
@@ -4129,7 +4129,7 @@ a morning list, a comment or a reply, Then `stamity gate scan --text <file> --la
 `scanAddedLines` and exits 1 on a hit or a line past the cap, naming label, line and rule and no part of the value, and
 the text posts only from the scanned file (`content/skills/st-unattended/SKILL.md:93-100`; `src/cli/commands/gate.ts`,
 the `--text` scan; `OUTBOUND_LINE_PAST_CAP` and `screenOutbound`, `src/runs/morning.ts:61`, `:517`). A new or bumped
-dependency is a morning-list row (`SKILL.md:118-119`).
+dependency is a morning-list row (`SKILL.md:120-121`).
 
 - **Proof:** `test/cli/commands/gatePreflight.test.ts` (`gate scan --text`), `test/cli/commands/runCheckpoint.test.ts`,
   `test/runs/morning.test.ts`, `test/corpus/commands/feedbackPair.test.ts`, `test/corpus/skills/unattended.test.ts`
