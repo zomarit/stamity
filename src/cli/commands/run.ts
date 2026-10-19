@@ -12,7 +12,7 @@ import { ensureDraftPr, HOST_NAME, resolveRepo, type PrOutcome } from "../../run
 import { parseGitDefaultBranch } from "../../workspace/git.ts";
 import { ghApi } from "../engine/ghRunner.ts";
 import { gitCheckRunner, revisionLines } from "../engine/gitStatus.ts";
-import { gitProgramVariablesIn, gitWrite, type GitWriteResult } from "../engine/gitWrite.ts";
+import { GitWriteGroupStopped, gitProgramVariablesIn, gitWrite, type GitWriteResult } from "../engine/gitWrite.ts";
 import { CliFailure } from "../kit/output.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import { sanitizeLabel } from "../kit/prompts.ts";
@@ -562,11 +562,16 @@ function removedKey(removed: readonly string[]): { gitEnvRemoved?: string[] } {
 
 /**
  * One git call through the write runner, unattended without git's program-valued variables (REQ-FLOW-122); a git
- * that could not start or finish is a failure of the verb.
+ * that could not start or finish is a failure of the verb. `processGroup` (review/179) is the checkpoint's commit's
+ * alone: on POSIX its git runs in a process group of its own, which the wall time stops and waits for as a whole.
  */
-async function git(cwd: string, args: readonly string[], verb: string = START, input?: string): Promise<GitWriteResult> {
+async function git(cwd: string, args: readonly string[], verb: string = START, input?: string, processGroup = false): Promise<GitWriteResult> {
   try {
-    return await gitWrite(cwd, args, { ...(input === undefined ? {} : { input }), ...(verbGit.unattended ? { unattended: true } : {}) });
+    return await gitWrite(cwd, args, {
+      ...(input === undefined ? {} : { input }),
+      ...(verbGit.unattended ? { unattended: true } : {}),
+      ...(processGroup ? { processGroup: true } : {}),
+    });
   } catch (cause) {
     throw new GitStopped(
       {
@@ -575,15 +580,16 @@ async function git(cwd: string, args: readonly string[], verb: string = START, i
         why: cause instanceof Error ? sanitizeLabel(cause.message) : "git did not start or did not finish",
         next: "put git on PATH, then run it again",
       },
-      exitedBySignal(cause),
+      groupGone(cause),
     );
   }
 }
 
 /**
- * review/148: a git call that did not finish, and whether the program the runner started has provably exited. The
- * write runner answers a wall-time or output-bound stop only once the child has closed, after its exit, and Node's
- * error then names the signal it exited by; an error naming none (git never started, a kill that threw) proves nothing.
+ * review/148, review/179: a git call that did not finish, and whether everything it started is gone: `exited` is true
+ * only for a {@link GitWriteGroupStopped} whose group the runner stopped at the wall time and saw gone. An output past
+ * the runner's buffer cap leaves it false whatever the group did (review/180), so that commit keeps the marker (fail
+ * closed); so does every other rejection (git never started, a stop by a signal the runner did not send).
  */
 class GitStopped extends CliFailure {
   readonly exited: boolean;
@@ -595,14 +601,13 @@ class GitStopped extends CliFailure {
 }
 
 /**
- * Whether a runner's rejection shows the started program exited, by the signal it names (review/148). Never on
- * Windows: there the program on `PATH` may be Git for Windows' launcher, and stopping it does not show that the git it
- * started has ended.
+ * Whether a runner's rejection shows the stopped call's whole process group gone (review/179): a POSIX wrapper's own
+ * git and a hook's children are in that group, so a stop of the program on `PATH` alone no longer counts. Never on
+ * Windows: there the program on `PATH` may be Git for Windows' launcher, the runner starts no group, and stopping the
+ * launcher does not show that the git it started has ended.
  */
-function exitedBySignal(cause: unknown): boolean {
-  if (process.platform === "win32" || !(cause instanceof Error)) return false;
-  const signal = (cause as Error & { signal?: unknown }).signal;
-  return typeof signal === "string" && signal !== "";
+function groupGone(cause: unknown): boolean {
+  return process.platform !== "win32" && cause instanceof GitWriteGroupStopped && cause.groupGone;
 }
 
 /** The full commit id `rev` names, or `null` where it names none. */
@@ -1063,10 +1068,12 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
     // review/136: a commit, path read or undo that does not finish (the write runner's wall time) fails closed here,
     // naming the commit HEAD holds and the reset target, and leaves the marker, so every later call refuses.
     let commit: GitWriteResult;
-    // review/148: the commit's own git was stopped and has provably exited (GitStopped), so its catch may read HEAD.
+    // review/148, review/179: the commit's own git, in a group of its own, was stopped and its whole group is gone
+    // (GitStopped), so its catch may read the index lock and HEAD.
     let exited = false;
     try {
-      commit = await git(top, ["commit", "--quiet", `--message=chore(run): checkpoint ${run}`, ...(opts["signoff"] === true ? ["--signoff"] : [])], verb).catch(
+      const message = `--message=chore(run): checkpoint ${run}`;
+      commit = await git(top, ["commit", "--quiet", message, ...(opts["signoff"] === true ? ["--signoff"] : [])], verb, undefined, true).catch(
         (stop: unknown) => {
           exited = stop instanceof GitStopped && stop.exited;
           throw stop;
@@ -1096,9 +1103,11 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
       }
     } catch (cause) {
       if (!(cause instanceof CliFailure)) throw cause;
-      // review/148 (signed off): a commit whose git has exited while HEAD still names `before` on the run branch made
-      // no commit, so the marker goes and the next call can run; HEAD moved or unread, it stays, as below.
-      if (exited && (await stillAt(top, current, before, verb))) {
+      // review/148, review/179 (signed off): a commit whose whole process group is gone, with no index lock left and
+      // HEAD still naming `before` on the run branch, made no commit, so the marker goes and the next call can run; a
+      // lock there (review/178), or HEAD moved or unread, it stays, as below. A hook's child that left the group on
+      // purpose is the residual SECURITY.md names: these reads hold at the time they were made.
+      if (exited && markerPresent(indexLockBeside(marker)) === false && (await stillAt(top, current, before, verb))) {
         const dropped = dropMarker(marker);
         result.notDone.push(`commit not made: ${cause.doc.message} (${cause.doc.why ?? "no reason given"})`, ...(dropped === null ? [] : [dropped]));
         lines.push(`commit: not made (HEAD still ${before})`);
@@ -1348,8 +1357,9 @@ function readsUnattended(mode: "attended" | "unattended" | null, flag: string | 
  * `--paths` as top-level-relative paths: one that leaves the repository or
  * names the whole project, or that neither the work tree nor the index holds
  * and whose deletion is not already staged, is left out and named in `notDone`;
- * one whose deletion `HEAD` already holds against `base` (an earlier
- * checkpoint committed it, S141) is left out silently, as there is nothing to stage.
+ * one a commit since `base` touched (an earlier checkpoint committed its
+ * deletion, S141, or created and later deleted it, review/177) is left out
+ * silently, as there is nothing to stage.
  * `deleted` lists the kept ones whose deletion is already staged (review/84):
  * `git add` refuses a path no layer holds, so they are committed as staged.
  */
@@ -1385,12 +1395,14 @@ async function namedPaths(
 }
 
 /**
- * S141: the top-relative `paths` whose deletion `HEAD` already holds against `base`, as a file or as a folder that held
- * one: a run's ending names again what its checkpoints committed. None where git could not answer.
+ * S141, review/177: of `paths`, which neither the work tree nor the index holds, the top-relative ones a commit in
+ * `base..HEAD` touched, as a file or as a folder that held one: `HEAD` then holds their absence as the run committed
+ * it, a deletion of a file `base` held or a file the run created and later deleted, and a run's ending names again
+ * what its checkpoints committed. None where git could not answer.
  */
 async function committedDeletions(top: string, base: string, paths: readonly string[]): Promise<Set<string>> {
   if (paths.length === 0) return new Set();
-  const read = await git(top, ["diff", "--name-only", "-z", "--diff-filter=D", ...DIFF_PINS, base, "HEAD", "--", ...paths], CHECKPOINT);
+  const read = await git(top, ["log", "--format=", "--name-only", "-z", "--no-show-signature", ...DIFF_PINS, `${base}..HEAD`, "--", ...paths], CHECKPOINT);
   return namedIn(paths, read.code === 0 ? read.stdout.split("\0").filter((name) => name !== "") : []);
 }
 
@@ -1583,6 +1595,15 @@ function markerPresent(marker: string): boolean | string {
     if (code === "ENOENT" || code === "ENOTDIR") return false;
     return cause instanceof Error ? cause.message : "the read failed";
   }
+}
+
+/**
+ * review/178: git's index lock in the work tree's own git directory, the one {@link markerPath} puts the marker under
+ * (`<git-dir>/stamity/checkpoint-pending`): a commit holds it while its hooks run, and a git stopped by a signal
+ * removes it, so one still there is a commit still under way or a lock nothing removed.
+ */
+function indexLockBeside(marker: string): string {
+  return resolve(dirname(marker), "..", "index.lock");
 }
 
 /** review/148: whether `HEAD` is still on `branch` and names `before`; a read that fails or does not finish is a no. */

@@ -1,4 +1,5 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
+import { setTimeout as sleepFor } from "node:timers/promises";
 import { bareShapeRefusal, gitDiscoveryMeetsBareShape } from "../../merge/safeWrite.ts";
 import { gitProgramFor, programNotFound } from "../../shared/programPath.ts";
 
@@ -62,6 +63,34 @@ export interface GitWriteOptions {
    * false, the environment is as for every write.
    */
   unattended?: boolean;
+  /**
+   * review/179: on POSIX, git starts as the leader of a process group of its own (a new session), and the wall time
+   * stops the whole group, its hooks and their children included, a stop then a kill after
+   * {@link GROUP_STOP_GRACE_MS}, and waits for it to be gone before the call rejects with
+   * {@link GitWriteGroupStopped}. Only the checkpoint's commit passes it. Ignored on Windows, where the call runs as
+   * when it is omitted.
+   */
+  processGroup?: boolean;
+}
+
+/**
+ * review/179: a {@link GitWriteOptions.processGroup} write the wall time or the output bound stopped, once its group
+ * was signalled and waited for. `groupGone` is true only when the wall time stopped it and no process was left in
+ * the group by the end of the wait ({@link GROUP_GONE_WAIT_MS}); an output past the bound sets it false whatever the
+ * group did, so a caller that clears state on it fails closed there. A process that left the group on purpose (its
+ * own `setsid`) is outside what the group shows.
+ */
+export class GitWriteGroupStopped extends Error {
+  /** As Node's own wall-time error names it: the call was stopped, not answered. */
+  readonly killed = true;
+  readonly signal: NodeJS.Signals = "SIGTERM";
+  readonly groupGone: boolean;
+
+  constructor(message: string, groupGone: boolean) {
+    super(message);
+    this.name = "GitWriteGroupStopped";
+    this.groupGone = groupGone;
+  }
 }
 
 /** A push over a slow link is the longest write the run verbs make. */
@@ -69,6 +98,15 @@ const GIT_WRITE_TIMEOUT_MS = 120_000;
 
 /** Output a write may print before the call fails; a status or a diff of a large change stays under it. */
 const GIT_WRITE_MAX_BUFFER = 32 * 1024 * 1024;
+
+/** review/179: how long a stopped group is given after the stop before the kill. */
+const GROUP_STOP_GRACE_MS = 2_000;
+
+/** review/179: how long, after the kill, the runner waits for the group to be gone before it answers that it is not. */
+const GROUP_GONE_WAIT_MS = 10_000;
+
+/** review/179: how often the runner asks whether the group is still there. */
+const GROUP_POLL_MS = 25;
 
 /** The options ahead of every command, in this order. */
 const PINNED_OPTIONS: readonly string[] = [
@@ -208,6 +246,7 @@ export function gitWrite(cwd: string, args: readonly string[], opts: GitWriteOpt
   const git = gitProgramFor(cwd, env);
   if (git === null) return Promise.reject(programNotFound("git", "spawn", argv));
   const timeout = opts.timeoutMs ?? GIT_WRITE_TIMEOUT_MS;
+  if (opts.processGroup === true && process.platform !== "win32") return gitWriteInGroup(git, argv, cwd, env, timeout, opts.input);
   return new Promise((resolvePromise, rejectPromise) => {
     const child = execFile(
       git,
@@ -236,5 +275,106 @@ export function gitWrite(cwd: string, args: readonly string[], opts: GitWriteOpt
     // exit status the callback above gets is, so the error is taken here and never thrown as an unhandled event.
     child.stdin?.on("error", () => undefined);
     child.stdin?.end(input);
+  });
+}
+
+/** Signals every process in the group `pid` leads; a group already gone is no error. */
+function signalGroup(pid: number, signal: NodeJS.Signals): void {
+  try {
+    process.kill(-pid, signal);
+  } catch {
+    // ESRCH: nothing is left in the group. EPERM: a member is not ours to signal; the wait below reports it.
+  }
+}
+
+/** Whether any process is still in the group `pid` leads; one the runner may not signal still counts. */
+function groupAlive(pid: number): boolean {
+  try {
+    process.kill(-pid, 0);
+    return true;
+  } catch (cause) {
+    return (cause as NodeJS.ErrnoException).code !== "ESRCH";
+  }
+}
+
+/** Waits until the group `pid` leads is gone or `ms` has passed: whether it is gone. */
+async function groupGoneWithin(pid: number, ms: number): Promise<boolean> {
+  const deadline = Date.now() + ms;
+  while (groupAlive(pid)) {
+    if (Date.now() >= deadline) return false;
+    // oxlint-disable-next-line no-await-in-loop -- a poll: each ask waits on the one before
+    await sleepFor(GROUP_POLL_MS);
+  }
+  return true;
+}
+
+/** Stops the group `pid` leads, a stop then a kill after the grace, and answers whether it is gone (review/179). */
+async function stopGroup(pid: number): Promise<boolean> {
+  signalGroup(pid, "SIGTERM");
+  if (await groupGoneWithin(pid, GROUP_STOP_GRACE_MS)) return true;
+  signalGroup(pid, "SIGKILL");
+  return groupGoneWithin(pid, GROUP_GONE_WAIT_MS);
+}
+
+/**
+ * review/179: {@link gitWrite} with {@link GitWriteOptions.processGroup} on POSIX. Node's `execFile` passes no
+ * `detached` to the program it starts and stops only that program, so this starts git with `spawn` as a group leader
+ * and holds the wall time and the output bound itself, with the same answers: git's exit status, a non-zero one
+ * included; a rejection when git could not start; and, when the wall time or the output bound stopped it, a
+ * {@link GitWriteGroupStopped} once the whole group was stopped and waited for.
+ */
+function gitWriteInGroup(git: string, argv: readonly string[], cwd: string, env: NodeJS.ProcessEnv, timeout: number, input: string | undefined): Promise<GitWriteResult> {
+  return new Promise((resolvePromise, rejectPromise) => {
+    const child = spawn(git, argv, { cwd, env, detached: true, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+    const out: Buffer[] = [];
+    const err: Buffer[] = [];
+    const sizes = { out: 0, err: 0 };
+    let settled = false;
+    /** Set once the call is stopped: why, and the group's stop, which `close` waits for before it answers. */
+    let stopped: { why: string; gone: Promise<boolean>; overBound: boolean } | null = null;
+    const stop = (why: string, overBound: boolean): void => {
+      if (stopped !== null) return;
+      const { pid } = child;
+      stopped = { why, gone: pid === undefined ? Promise.resolve(false) : stopGroup(pid), overBound };
+      // As Node's own kill does: git's ends of the pipes are let go, so `close` follows git's exit even where a
+      // process outside the group still holds them.
+      child.stdout.destroy();
+      child.stderr.destroy();
+    };
+    const timer = setTimeout(() => stop(`git did not finish within ${timeout} ms; its process group was stopped`, false), timeout);
+    const collect = (into: Buffer[], key: "out" | "err") => (chunk: Buffer) => {
+      sizes[key] += chunk.length;
+      if (sizes[key] > GIT_WRITE_MAX_BUFFER) stop(`git's ${key === "out" ? "stdout" : "stderr"} passed ${GIT_WRITE_MAX_BUFFER} bytes; its process group was stopped`, true);
+      else into.push(chunk);
+    };
+    child.stdout.on("data", collect(out, "out"));
+    child.stderr.on("data", collect(err, "err"));
+    child.on("error", (cause) => {
+      // Git could not start (no exit follows), or a signal could not be sent; only the first answer counts.
+      if (stopped !== null || settled) return;
+      settled = true;
+      clearTimeout(timer);
+      rejectPromise(cause);
+    });
+    child.on("close", (code, signal) => {
+      clearTimeout(timer);
+      if (settled) return;
+      settled = true;
+      if (stopped !== null) {
+        const { why, gone, overBound } = stopped;
+        // An output past the bound never reads as gone: the commit may have been cut off at any point (fail closed).
+        void gone.then((isGone) => rejectPromise(new GitWriteGroupStopped(why, isGone && !overBound)));
+        return;
+      }
+      if (typeof code === "number") {
+        resolvePromise({ code, stdout: Buffer.concat(out).toString("utf8"), stderr: Buffer.concat(err).toString("utf8") });
+        return;
+      }
+      // Stopped by a signal the runner did not send: git did not finish, and nothing says what its group did.
+      rejectPromise(Object.assign(new Error(`git was stopped by ${signal ?? "a signal"}`), { signal }));
+    });
+    // A git that exits before it reads all of `input` closes the pipe: as in gitWrite, the exit status is the answer.
+    child.stdin.on("error", () => undefined);
+    child.stdin.end(input);
   });
 }

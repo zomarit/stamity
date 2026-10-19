@@ -1,10 +1,10 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { chmod, mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { GIT_PROGRAM_VARIABLES, gitProgramVariablesIn, gitWrite, gitWriteArgs, gitWriteEnv } from "../../../src/cli/engine/gitWrite.ts";
+import { GIT_PROGRAM_VARIABLES, GitWriteGroupStopped, gitProgramVariablesIn, gitWrite, gitWriteArgs, gitWriteEnv } from "../../../src/cli/engine/gitWrite.ts";
 import { NO_GIT_CONFIG } from "../../support/repoFixtures.ts";
 import { useTempDir } from "../../support/tempDir.ts";
 
@@ -477,5 +477,79 @@ describe.skipIf(!gitAvailable)("gitWrite against real repositories", () => {
     vi.stubEnv("PATH", empty);
 
     await expect(gitWrite(repo, ["status"])).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  /** Whether a process `pid` names is still there to signal. */
+  function alive(pid: number): boolean {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch (cause) {
+      return (cause as NodeJS.ErrnoException).code !== "ESRCH";
+    }
+  }
+
+  // review/179: the option changes nothing about an answered call, on every leg (Windows ignores it).
+  it("with processGroup, answers a call git finishes as without it: its exit status, a non-zero one included, and its output", async () => {
+    const repo = await repoWithCommit("repo");
+    const head = git(repo, ["rev-parse", "HEAD"]).trim();
+
+    const read = await gitWrite(repo, ["rev-parse", "HEAD"], { processGroup: true });
+    const refused = await gitWrite(repo, ["rev-parse", "--verify", "--quiet", "refs/heads/nope"], { processGroup: true });
+    const given = await gitWrite(repo, ["hash-object", "--stdin"], { processGroup: true, input: "x\n" });
+
+    expect(read).toEqual({ code: 0, stdout: `${head}\n`, stderr: "" });
+    expect(refused.code).toBe(1);
+    expect(given.code).toBe(0);
+    expect(given.stdout).toMatch(/^[0-9a-f]{40,64}\n$/);
+  });
+
+  // review/179: the scenario the finding names. The `git` on PATH is a wrapper that runs the real git as its child
+  // (no `exec`), and the pre-commit hook outlasts the wall time and ignores the stop. The wall time ends the wrapper,
+  // the real git and the hook alike, the hook by the kill after the grace, and the call answers only once all are gone.
+  it.skipIf(process.platform === "win32")("with processGroup, stops a non-exec wrapper's own git and a hook that ignores the stop, and answers once the whole group is gone", async () => {
+    const repo = await repoWithCommit("repo");
+    const head = git(repo, ["rev-parse", "HEAD"]).trim();
+    const real = execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim();
+    const bin = getRoot().path("wrapper-bin");
+    await mkdir(bin);
+    await writeFile(join(bin, "git"), `#!/bin/sh\n'${real}' "$@"\n`, "utf8");
+    await chmod(join(bin, "git"), 0o755);
+    vi.stubEnv("PATH", `${bin}${delimiter}${process.env["PATH"] ?? ""}`);
+    const pids = getRoot().path("hook.pids");
+    // The hook names itself and its parent (the real git), ignores the stop, and waits 30 s at most.
+    const hook = `#!/bin/sh\ntrap '' TERM\necho "$$ $PPID" > '${pids}'\ni=0\nwhile [ "$i" -lt 600 ]; do sleep 0.05; i=$((i+1)); done\n`;
+    await writeFile(join(repo, ".git", "hooks", "pre-commit"), hook, "utf8");
+    await chmod(join(repo, ".git", "hooks", "pre-commit"), 0o755);
+    await writeFile(join(repo, "a.txt"), "a\n", "utf8");
+    git(repo, ["add", "--", "a.txt"]);
+
+    const stopped = await gitWrite(repo, ["commit", "-q", "-m", "late"], { processGroup: true, timeoutMs: 500 }).then(
+      () => null,
+      (cause: unknown) => cause,
+    );
+
+    expect(stopped).toBeInstanceOf(GitWriteGroupStopped);
+    expect(stopped).toMatchObject({ groupGone: true, killed: true, signal: "SIGTERM" });
+    const [hookPid, realGitPid] = readFileSync(pids, "utf8").trim().split(" ").map(Number);
+    expect(alive(hookPid ?? 0)).toBe(false);
+    expect(alive(realGitPid ?? 0)).toBe(false);
+    expect(git(repo, ["rev-parse", "HEAD"]).trim()).toBe(head);
+    // The real git took the stop and removed its lock as it went; only the hook needed the kill.
+    expect(existsSync(join(repo, ".git", "index.lock"))).toBe(false);
+  });
+
+  // review/180: an output past the bound is a stop whose group is never read as gone, so a caller fails closed on it.
+  it.skipIf(process.platform === "win32")("with processGroup, answers an output past the bound as a stop with groupGone false", async () => {
+    const repo = await repoWithCommit("repo");
+    const big = getRoot().path("big.bin");
+    await writeFile(big, Buffer.alloc(33 * 1024 * 1024, 0x61));
+    const blob = git(repo, ["hash-object", "-w", "--", big]).trim();
+
+    await expect(gitWrite(repo, ["cat-file", "blob", blob], { processGroup: true })).rejects.toMatchObject({
+      name: "GitWriteGroupStopped",
+      groupGone: false,
+      message: expect.stringContaining("stdout passed") as unknown,
+    });
   });
 });

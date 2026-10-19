@@ -670,6 +670,21 @@ describe("stamity run end", () => {
       expect(git(remote, ["ls-tree", "-r", "--name-only", `refs/heads/${RUN_BRANCH}`]).split("\n")).not.toContain("b.txt");
     });
 
+    // review/177: absent from Base: and from HEAD alike, so no deletion shows against Base:, yet the run committed it.
+    it("names a file one checkpoint created and a later one deleted: exit 0, and no not staged line", async () => {
+      const { repo, remote } = await seed("attended");
+      await writeFile(join(repo, "c.txt"), "made by the run\n");
+      expect((await run(repo, [...CHECKPOINT, "--paths", "c.txt"])).code).toBe(0);
+      await rm(join(repo, "c.txt"));
+      expect((await run(repo, [...CHECKPOINT, "--paths", "c.txt"])).code).toBe(0);
+
+      const { code, doc } = await run(repo, [...END("feat: x"), "--paths", "c.txt"]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ committed: null, pushed: false, notDone: [] });
+      expect(git(remote, ["ls-tree", "-r", "--name-only", `refs/heads/${RUN_BRANCH}`]).split("\n")).not.toContain("c.txt");
+    });
+
     it("still names a path never tracked as not staged", async () => {
       const { repo } = await seed("attended");
       await writeFile(join(repo, "a.txt"), "changed\n");

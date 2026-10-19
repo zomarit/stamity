@@ -4,6 +4,7 @@ import { appendFile, chmod, mkdir, readFile, rm, symlink, writeFile } from "node
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runCommand } from "../../../src/cli/commands/run.ts";
+import { GitWriteGroupStopped } from "../../../src/cli/engine/gitWrite.ts";
 import type * as GitWriteModule from "../../../src/cli/engine/gitWrite.ts";
 import type * as PersonOnlyModule from "../../../src/hooks/personOnly.ts";
 import { runInProcess } from "../../support/inProcess.ts";
@@ -43,6 +44,8 @@ vi.mock("../../../src/cli/engine/ghRunner.ts", () => ({
 const writes = vi.hoisted(() => ({
   argv: [] as string[][],
   inputs: [] as (string | undefined)[],
+  /** review/179: whether each call, at the same index, asked for a process group of its own. */
+  groups: [] as boolean[],
   extraTips: [] as string[],
   /**
    * review/136, review/137: a case's stand-in answer for the calls it matches, handed the real call to run first or
@@ -66,6 +69,7 @@ vi.mock("../../../src/cli/engine/gitWrite.ts", async (importOriginal) => {
     gitWrite: (cwd: string, args: readonly string[], opts?: Parameters<typeof real.gitWrite>[2]) => {
       writes.argv.push([...args]);
       writes.inputs.push(opts?.input);
+      writes.groups.push(opts?.processGroup === true);
       // Mock reason (review/136, review/137): git's wall time (120 s) and a path read git refuses after a commit
       // cannot be brought about in a unit test's time, so a case answers the one call it names in their place.
       // TEST CHANGE, justified (review/148): the real call takes a case's own options too, so a case can run git for
@@ -180,6 +184,7 @@ describe("stamity run checkpoint", () => {
     rest.routes.clear();
     writes.argv.length = 0;
     writes.inputs.length = 0;
+    writes.groups.length = 0;
     writes.extraTips.length = 0;
     writes.override = null;
     table.denyPush = null;
@@ -1038,9 +1043,10 @@ describe("stamity run checkpoint", () => {
     const SMALL_WALL_TIME = (args: readonly string[], real: (extra?: GitWriteModule.GitWriteOptions) => Promise<GitWriteModule.GitWriteResult>) =>
       args[0] === "commit" ? real({ timeoutMs: 500 }) : undefined;
 
-    // review/148 (signed off): a commit the runner's wall time stopped, whose git has exited with HEAD still at the
-    // commit read before it on the run branch, made no commit, so the marker goes and the next call commits. Skipped on
-    // Windows, where the verb leaves the marker (the program the runner stops may be a launcher whose git outlives it).
+    // review/148, review/179 (signed off): a commit the runner's wall time stopped, its whole process group (git and the
+    // waiting hook) gone, no index lock left and HEAD still at the commit read before it on the run branch, made no
+    // commit, so the marker goes and the next call commits. Skipped on Windows, where the runner starts no group and the
+    // verb leaves the marker; the injected-stop case below pins both branches on every leg (review/176).
     it.skipIf(process.platform === "win32")("clears the marker when a pre-commit hook outlasts the wall time and HEAD still names the commit before, so the next call commits (review/148)", async () => {
       const { repo, remote, base } = await seed("unattended");
       await writeFile(join(repo, "a.txt"), "changed\n");
@@ -1102,6 +1108,62 @@ describe("stamity run checkpoint", () => {
       const notDone = doc["notDone"] as string[];
       expect(notDone.at(-2)).toMatch(new RegExp(`^commit not checked: run checkpoint could not run git commit \\(.+\\); HEAD holds ${left}, reset target ${base}$`));
       expect(notDone.at(-1)).toBe(markerLeft(repo, base));
+      expect(readFileSync(markerAt(repo), "utf8")).toBe(`${base}\n`);
+      expect(pushes()).toEqual([]);
+      expect(remoteHeads(remote)).toEqual(SEEDED);
+    });
+
+    /** review/179: the runner's answer once the commit's process group was stopped, gone or not, in place of git's. */
+    const GROUP_STOP = "git did not finish within 500 ms; its process group was stopped";
+    const groupStop = (gone: boolean): Promise<GitWriteModule.GitWriteResult> => Promise.reject(new GitWriteGroupStopped(GROUP_STOP, gone));
+
+    // review/176, review/179 (signed off): on every leg, a commit whose whole process group the runner stopped and saw
+    // gone, with HEAD still at the commit before, clears the marker on POSIX; on Windows, where the runner starts no
+    // group and the program it stops may be a launcher, the marker stays. The commit's call alone asks for the group.
+    it("answers a commit whose whole process group was stopped and is gone: not made and no marker on POSIX, not checked and the marker on Windows (review/176, review/179)", async () => {
+      const { repo, remote, base } = await seed("unattended");
+      await writeFile(join(repo, "a.txt"), "changed\n");
+      writes.override = (args) => (args[0] === "commit" ? groupStop(true) : undefined);
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      const why = `run checkpoint could not run git commit (${GROUP_STOP})`;
+      expect(code).toBe(1);
+      expect(doc).toMatchObject({ committed: null, pushed: false });
+      if (process.platform === "win32") {
+        expect(doc["notDone"]).toEqual([`commit not checked: ${why}; HEAD holds ${base}, reset target ${base}`, markerLeft(repo, base)]);
+        expect(readFileSync(markerAt(repo), "utf8")).toBe(`${base}\n`);
+      } else {
+        expect(doc["notDone"]).toEqual([`commit not made: ${why}`]);
+        expect(existsSync(markerAt(repo))).toBe(false);
+      }
+      expect(writes.groups.filter((group, index) => group !== (writes.argv[index]?.[0] === "commit"))).toEqual([]);
+      expect(writes.groups.filter(Boolean)).toHaveLength(1);
+      expect(git(repo, ["rev-parse", "HEAD"])).toBe(base);
+      expect(pushes()).toEqual([]);
+      expect(remoteHeads(remote)).toEqual(SEEDED);
+    });
+
+    // review/178, review/180 (signed off): an index lock still there after the group is gone, or a stop the runner made
+    // for an output past its bound (never read as gone), keeps the marker on every leg.
+    it.each([
+      ["an index lock is left", true, true],
+      ["the output passed the runner's bound", false, false],
+    ] as const)("leaves the marker when the commit's group was stopped and %s (review/178, review/180)", async (_case, gone, lock) => {
+      const { repo, remote, base } = await seed("unattended");
+      await writeFile(join(repo, "a.txt"), "changed\n");
+      const indexLock = join(repo, ".git", "index.lock");
+      writes.override = (args) => (args[0] === "commit" ? (lock ? writeFile(indexLock, "") : Promise.resolve()).then(() => groupStop(gone)) : undefined);
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+      await rm(indexLock, { force: true });
+
+      expect(code).toBe(1);
+      expect(doc).toMatchObject({ committed: null, pushed: false });
+      expect(doc["notDone"]).toEqual([
+        `commit not checked: run checkpoint could not run git commit (${GROUP_STOP}); HEAD holds ${base}, reset target ${base}`,
+        markerLeft(repo, base),
+      ]);
       expect(readFileSync(markerAt(repo), "utf8")).toBe(`${base}\n`);
       expect(pushes()).toEqual([]);
       expect(remoteHeads(remote)).toEqual(SEEDED);
