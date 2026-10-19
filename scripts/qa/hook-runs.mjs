@@ -532,6 +532,37 @@ const shellWord = (text) => `'${text.replaceAll("'", "'\\''")}'`
  */
 export const ASK_CLASS_CLIENTS = Object.freeze(['claude', 'copilot'])
 
+/**
+ * The payload fields that name a helper agent, restated from the guard's `GUARD_HELPER_FIELDS`
+ * (`src/hooks/scripts.ts`), since this tool imports nothing from the engine; `test/qa/hookRuns.test.ts`
+ * holds the two lists equal by reading that source. On Copilot CLI a field's presence alone marks a
+ * helper's call.
+ */
+export const ASK_HELPER_FIELDS = Object.freeze([
+  'agent_type',
+  'subagent_type',
+  'agentType',
+  'subagentType',
+  'agent_id',
+  'subagent_id',
+  'agentId',
+  'parentAgentId',
+  'parent_agent_id',
+  'parent_tool_call_id',
+])
+
+/**
+ * The three facts Copilot CLI's ask rests on (REQ-FLOW-123), measured on 1.0.98 on 2026-10-19
+ * (`.stamity/runs/2026-10-18_cloud-runs-2/reports/w4-measure-r1.md`, F1 to F3). The guard asks only for a
+ * call with no helper field whose session id Copilot's session start recorded, so a release where any of
+ * these moved can let a helper's ask reach the person's prompt (n3-copilot-remeasure, review/151).
+ */
+export const COPILOT_FACTS = Object.freeze([
+  Object.freeze({ id: 1, name: 'a main-agent call carries no helper field' }),
+  Object.freeze({ id: 2, name: "a helper's call carries a helper field and its own session id" }),
+  Object.freeze({ id: 3, name: 'sessionStart fires once, for the main session alone' }),
+])
+
 /** The file the harmless marked command creates: its presence after a run is the whole answer. */
 export const ASK_MARKER = 'qa-ask-ran.txt'
 
@@ -540,6 +571,15 @@ export const ASK_COMMAND = `touch ${ASK_MARKER}`
 
 /** One prompt for every client, so a difference between rows is the client and not the ask. */
 export const ASK_PROMPT = `Run this shell command once, exactly as written, then reply with one word: ${ASK_COMMAND}`
+
+/**
+ * Copilot CLI's prompt: one trivial step handed to a helper first, so its hook log shows a helper's call
+ * (fact 2 of {@link COPILOT_FACTS}), then the same ask. The helper's step names no marker: a main-agent
+ * `task` call whose arguments carry it is asked about itself (w4-measure-r1.md, p2e).
+ */
+export const ASK_COPILOT_PROMPT =
+  "Do these two steps in order. 1) Use the task tool to have the 'task' agent run the shell command 'echo qa-helper', " +
+  `and wait for it to finish. 2) ${ASK_PROMPT}`
 
 /** The hook script and its append-only log, both at the throwaway folder's root. */
 export const ASK_HOOK_FILE = 'qa-ask-hook.mjs'
@@ -568,7 +608,7 @@ export const ASK_RUNNERS = {
   copilot: {
     binary: 'copilot',
     mode: 'allow-all',
-    args: ['-p', ASK_PROMPT, '--allow-all-tools'],
+    args: ['-p', ASK_COPILOT_PROMPT, '--allow-all-tools'],
     env: { COPILOT_ALLOW_ALL: 'true' },
   },
   codex: {
@@ -595,10 +635,23 @@ function askAnswer(client) {
  * shell call, answers ask on the one that carries the marker, and lets every other call through
  * (Cursor is told so out loud; the others read silence as no opinion). A shell call is Claude Code's
  * `Bash` (`tool_name`), Copilot's `bash` or `powershell` (`toolName`), or Cursor's pre-shell event,
- * whose payload names no tool and carries the `command` itself.
+ * whose payload names no tool and carries the `command` itself. Copilot's hook is also wired for
+ * `sessionStart`, the event named after the hook's path, and its log line adds the event, the payload's
+ * top-level key names and its session id, and no other value from the payload ({@link copilotFacts});
+ * a session start is never answered.
  */
 function askHookScript(client) {
   const pass = client === 'cursor' ? { permission: 'allow' } : null
+  const facts =
+    client === 'copilot'
+      ? `const event = String(process.argv[2] ?? '')
+const record = payload !== null && typeof payload === 'object' && !Array.isArray(payload) ? payload : {}
+const id = record.sessionId ?? record.session_id
+const extra = { event, keys: Object.keys(record), sessionId: typeof id === 'string' ? id : null }
+`
+      : `const event = ''
+const extra = {}
+`
   return `#!/usr/bin/env node
 // QA instrument, written by scripts/qa/hook-runs.mjs --ask. Not a product hook.
 import { appendFileSync, readFileSync } from 'node:fs'
@@ -620,8 +673,8 @@ try {
 const tool = payload?.tool_name ?? payload?.toolName ?? (typeof payload?.command === 'string' ? 'shell' : '')
 const shell = /^(?:bash|shell|powershell)$/i.test(String(tool))
 const marked = raw.includes(${JSON.stringify(ASK_MARKER)})
-appendFileSync(LOG, JSON.stringify({ at: new Date().toISOString(), marked, shell }) + '\\n')
-const answer = marked ? ${JSON.stringify(askAnswer(client))} : ${JSON.stringify(pass)}
+${facts}appendFileSync(LOG, JSON.stringify({ at: new Date().toISOString(), marked, shell, ...extra }) + '\\n')
+const answer = marked && event !== 'sessionStart' ? ${JSON.stringify(askAnswer(client))} : ${JSON.stringify(pass)}
 if (answer !== null) process.stdout.write(JSON.stringify(answer) + '\\n')
 `
 }
@@ -635,7 +688,8 @@ if (answer !== null) process.stdout.write(JSON.stringify(answer) + '\\n')
 function askHookConfig(client, command) {
   if (client === 'claude') return { hooks: { PreToolUse: [{ matcher: '*', hooks: [{ type: 'command', command }] }] } }
   if (client === 'cursor') return { version: 1, hooks: { beforeShellExecution: [{ command }] } }
-  return { version: 1, hooks: { preToolUse: [{ type: 'command', bash: command, timeoutSec: 30 }] } }
+  const entry = (event) => [{ type: 'command', bash: `${command} ${event}`, timeoutSec: 30 }]
+  return { version: 1, hooks: { sessionStart: entry('sessionStart'), preToolUse: entry('preToolUse') } }
 }
 
 /**
@@ -664,6 +718,81 @@ export function verdictForAsk({ markerCreated, observations }) {
     reason: 'the hook was never asked about the marked shell call and nothing ran, so nothing about the ask was measured',
   }
 }
+
+/**
+ * Copilot CLI's three facts ({@link COPILOT_FACTS}) from its hook log, each `held`, `changed` or
+ * `not-observed`, with a detail built only from counts and {@link ASK_HELPER_FIELDS}' own names: no
+ * session id, key name or other value the log holds is ever echoed. Pure.
+ *
+ * The main session is the id each `sessionStart` line recorded; a main call is a `preToolUse` line under
+ * one of those ids, and a helper's call is one carrying a helper field or under any other id. A line that
+ * is not JSON, or not in the hook's shape, is counted and turns every fact that would read `held`
+ * `not-observed`: what it held is unknown, so it is never a pass.
+ */
+export function copilotFacts(observations) {
+  const isRow = (row) =>
+    row !== null &&
+    typeof row === 'object' &&
+    (row.event === 'sessionStart' || row.event === 'preToolUse') &&
+    Array.isArray(row.keys) &&
+    row.keys.every((key) => typeof key === 'string') &&
+    (row.sessionId === null || typeof row.sessionId === 'string')
+  const rows = observations.filter(isRow)
+  const unreadable = observations.length - rows.length
+  const idOf = (row) => (row.sessionId === '' ? null : row.sessionId)
+  const helperFields = (row) => ASK_HELPER_FIELDS.filter((field) => row.keys.includes(field))
+  const starts = rows.filter((row) => row.event === 'sessionStart')
+  const calls = rows.filter((row) => row.event === 'preToolUse')
+  const mainIds = new Set(starts.map(idOf).filter((id) => id !== null))
+  const fieldsNamed = (list) => [...new Set(list.flatMap(helperFields))].join(', ')
+
+  const fact1 = (() => {
+    if (mainIds.size === 0) return ['not-observed', 'no sessionStart recorded a main session id']
+    const mainCalls = calls.filter((row) => mainIds.has(idOf(row)))
+    if (mainCalls.length === 0) return ['not-observed', 'no main-session call was recorded']
+    const carrying = mainCalls.filter((row) => helperFields(row).length > 0)
+    if (carrying.length > 0) return ['changed', `${carrying.length} of ${mainCalls.length} main-session call(s) carried ${fieldsNamed(carrying)}`]
+    return ['held', `${mainCalls.length} main-session call(s), none carrying a helper field`]
+  })()
+
+  const fact2 = (() => {
+    if (mainIds.size === 0) return ['not-observed', "no sessionStart recorded a main session id to set a helper's against"]
+    const helpers = calls.filter((row) => helperFields(row).length > 0 || !mainIds.has(idOf(row)))
+    if (helpers.length === 0) return ['not-observed', "no helper's call was recorded"]
+    const bare = helpers.filter((row) => helperFields(row).length === 0).length
+    const shared = helpers.filter((row) => idOf(row) === null || mainIds.has(idOf(row))).length
+    if (bare > 0 || shared > 0) {
+      const parts = [
+        bare > 0 ? `${bare} call(s) outside the main session carried no helper field` : '',
+        shared > 0 ? `${shared} helper call(s) carried the main session's id or none` : '',
+      ].filter((part) => part !== '')
+      return ['changed', parts.join('; ')]
+    }
+    return ['held', `${helpers.length} helper call(s), each with a helper field and its own session id`]
+  })()
+
+  const fact3 = (() => {
+    if (starts.length === 0) {
+      return calls.length === 0 ? ['not-observed', 'no sessionStart and no tool call recorded'] : ['changed', `sessionStart never fired beside ${calls.length} tool call(s)`]
+    }
+    if (starts.length > 1) return ['changed', `sessionStart fired ${starts.length} times`]
+    const id = idOf(starts[0])
+    if (id === null) return ['changed', 'sessionStart carried no session id']
+    if (calls.some((row) => helperFields(row).length > 0 && idOf(row) === id)) return ['changed', "sessionStart carried a helper call's session id"]
+    return ['held', 'sessionStart fired once']
+  })()
+
+  return COPILOT_FACTS.map(({ id, name }, index) => {
+    const [status, detail] = [fact1, fact2, fact3][index]
+    if (unreadable > 0 && status === 'held') {
+      return { id, name, status: 'not-observed', detail: `${detail}, but ${unreadable} log line(s) could not be read` }
+    }
+    return { id, name, status, detail: unreadable > 0 ? `${detail}; ${unreadable} log line(s) could not be read` : detail }
+  })
+}
+
+/** One fact as the row's reason names it. */
+const factLine = (fact) => `fact ${fact.id} ${fact.status} (${fact.name}: ${fact.detail})`
 
 /**
  * Measure one client: a throwaway folder outside this checkout holding the hook and the client's
@@ -701,9 +830,16 @@ export function measureAsk({ client, runners = ASK_RUNNERS, baseDir = tmpdir(), 
   })
   const { observations, error } = readObservations(join(dir, ASK_OBSERVATIONS_FILE))
   const verdict = verdictForAsk({ markerCreated: existsSync(join(dir, ASK_MARKER)), observations })
+  // Copilot's ask rests on three facts its own log shows (n3-copilot-remeasure); an unreadable log reads
+  // every fact `not-observed`, never `held`.
+  const facts =
+    client === 'copilot'
+      ? copilotFacts(error === undefined ? observations : [{ decision: 'malformed' }])
+      : undefined
   const notes = [
     error === undefined ? '' : `; the hook's log could not be read: ${error}`,
     result.error === undefined || result.error === null ? '' : `; the client process reported: ${result.error.message}`,
+    facts === undefined ? '' : `; ${facts.map(factLine).join('; ')}`,
   ].join('')
   return {
     client,
@@ -715,6 +851,7 @@ export function measureAsk({ client, runners = ASK_RUNNERS, baseDir = tmpdir(), 
     signal: result.signal ?? null,
     status: verdict.status,
     reason: redactLane(`${verdict.reason}${notes}`, { repoRoot, fixturesDir: parent }),
+    ...(facts === undefined ? {} : { facts }),
   }
 }
 
@@ -762,9 +899,10 @@ function hookRowForOut(row) {
 
 /**
  * The command. Returns the exit code: 2 on a usage error; else 1 when an installed ask-class client
- * ran the asked command or measured nothing (`--ask`: `ran` or `not-run`), or a hook row `failed`;
- * and under `--require-observation` also when an ask-class client is not installed (`--ask`), or a
- * client this module drives left an empty hook log.
+ * ran the asked command or measured nothing (`--ask`: `ran` or `not-run`), or one of Copilot's facts
+ * reads `changed`, or a hook row `failed`; and under `--require-observation` also when an ask-class
+ * client is not installed or one of Copilot's facts reads `not-observed` (`--ask`), or a client this
+ * module drives left an empty hook log.
  */
 export function main(argv, deps = {}) {
   const print = deps.print ?? ((line) => process.stdout.write(`${line}\n`))
@@ -789,7 +927,9 @@ export function main(argv, deps = {}) {
     writeOut('ask', rows)
     const askClass = (row) => ASK_CLASS_CLIENTS.includes(row.client)
     const unmeasured = (row) => row.status === 'not-run' || (options.requireObservation && row.status === 'not-installed')
-    const red = rows.filter((row) => askClass(row) && (row.status === 'ran' || unmeasured(row)))
+    const factMoved = (row) =>
+      (row.facts ?? []).some((fact) => fact.status === 'changed' || (options.requireObservation && fact.status === 'not-observed'))
+    const red = rows.filter((row) => askClass(row) && (row.status === 'ran' || unmeasured(row) || factMoved(row)))
     return red.length > 0 ? 1 : 0
   }
 

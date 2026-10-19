@@ -358,8 +358,16 @@ ran past the ask) moves to refusing before the tag, in a `main` commit to the gu
 `not-run`, nothing about the ask measured, and `not-installed`, no Claude Code or no Copilot CLI on
 the machine (red under `--require-observation`, which this line passes), each exit 1 and hold the
 tag until a re-run on a machine with both clients reads `held` or `ran` for each: the attended
-one-click ask rests on that measurement. The release record carries the rows (added 2026-10-18,
-REQ-PROVE-042; Copilot CLI added 2026-10-19, when the guard began asking on it).
+one-click ask rests on that measurement. Copilot CLI's run also checks the three facts its guard's
+ask rests on, read from its hook's log (key names and session ids, no other value): a main-agent
+tool call carries none of the guard's helper fields; a helper's call carries one and a session id
+other than the main session's (the prompt hands one trivial step to a helper so this can be seen);
+and `sessionStart` fires once, for the main session alone. Each fact reads `held`, `changed` or
+`not-observed` on Copilot's row, and a `changed` fact, or a `not-observed` one under
+`--require-observation`, exits 1, holds the tag and moves Copilot CLI to refusing before the tag, in a
+`main` commit to the guard and its pages, as a `ran` row does. The release record carries the rows
+(added 2026-10-18, REQ-PROVE-042; Copilot CLI added 2026-10-19, when the guard began asking on it;
+its three facts the same day, ledger row `2026-10-18_cloud-runs-2/review/151`).
 Runs when: every release, a patch included — a client's own update changes its answer, and no diff
 here shows it.
 

@@ -1,9 +1,9 @@
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
-import { CLIENT_RUNNERS, PROMPT, WINDOWS_PROBE_LIMIT, binaryVersion, exitDescription, runClient, verdictFor } from "../../scripts/qa/hook-runs.mjs";
+import { ASK_HELPER_FIELDS, CLIENT_RUNNERS, PROMPT, WINDOWS_PROBE_LIMIT, binaryVersion, copilotFacts, exitDescription, runClient, verdictFor } from "../../scripts/qa/hook-runs.mjs";
 
 /**
  * W6: `cursor` and `copilot` used to carry a constant, never-probed "not on PATH" reason. This
@@ -557,4 +557,98 @@ describe("runClient — an observation log the run cannot read", () => {
     },
     30_000,
   );
+});
+
+/**
+ * n3-copilot-remeasure (REQ-FLOW-123, REQ-PROVE-042; ledger rows review/151 and review/165): the release
+ * re-measure reads, from Copilot CLI's hook log, the three facts the guard's ask rests on. Canned log rows,
+ * in the shape the `--ask` hook writes them (event, top-level key names, session id) and `readObservations`
+ * parses them, the measured 1.0.98 payloads (reports/w4-measure-r1.md, F1 to F3) as the held baseline.
+ */
+describe("copilotFacts — the three facts Copilot CLI's ask rests on", () => {
+  const MAIN = "8177e220-main";
+  const HELPER = "05f04540-helper";
+  const BASE = ["sessionId", "timestamp", "cwd", "toolName", "toolArgs"];
+  const start = (sessionId: string | null = MAIN) => ({ event: "sessionStart", keys: ["sessionId", "timestamp", "cwd", "source", "initialPrompt"], sessionId });
+  const mainCall = (keys: string[] = BASE, sessionId: string | null = MAIN) => ({ event: "preToolUse", keys, sessionId, marked: false, shell: true });
+  const helperCall = (keys: string[] = [...BASE, "agentId", "agentType", "parentAgentId"], sessionId: string | null = HELPER) => ({
+    event: "preToolUse",
+    keys,
+    sessionId,
+    marked: false,
+    shell: true,
+  });
+  const measured = () => [start(), mainCall(), helperCall(), { ...mainCall(), marked: true }];
+  const statuses = (rows: unknown[]) => (copilotFacts(rows) as { id: number; status: string }[]).map((fact) => `${fact.id} ${fact.status}`);
+
+  it("reads every fact held on the measured 1.0.98 shape", () => {
+    expect(statuses(measured())).toEqual(["1 held", "2 held", "3 held"]);
+  });
+
+  it("reads fact 1 changed when a main-session call carries a helper field", () => {
+    for (const field of ["agentId", "parent_tool_call_id", "agent_type"]) {
+      const facts = copilotFacts([start(), mainCall([...BASE, field]), helperCall()]) as { id: number; status: string; detail: string }[];
+      expect(facts[0]?.status, field).toBe("changed");
+      expect(facts[0]?.detail, field).toContain(field);
+    }
+  });
+
+  it("reads fact 2 changed when a helper's call carries no helper field, or the main session's id", () => {
+    // A call outside the main session with no helper field: the guard would read it as the main agent's by fields.
+    expect(statuses([start(), mainCall(), helperCall(BASE)])[1]).toBe("2 changed");
+    // A helper's call under the main session's id: the guard's recorded-id check no longer tells them apart.
+    expect(statuses([start(), mainCall(), helperCall(undefined, MAIN)])[1]).toBe("2 changed");
+  });
+
+  it("reads fact 3 changed on a second sessionStart, on one with a helper's id, or on none beside tool calls", () => {
+    expect(statuses([...measured(), start("a-second-session")])[2]).toBe("3 changed");
+    expect(statuses([start(HELPER), mainCall(undefined, HELPER), helperCall()])[2]).toBe("3 changed");
+    expect(statuses([start(null), mainCall(), helperCall()])[2]).toBe("3 changed");
+    expect(statuses([mainCall(), helperCall()])[2]).toBe("3 changed");
+  });
+
+  it("reads fact 2 not-observed when no helper's call was recorded, the others still held", () => {
+    expect(statuses([start(), mainCall(), { ...mainCall(), marked: true }])).toEqual(["1 held", "2 not-observed", "3 held"]);
+  });
+
+  it("reads every fact not-observed on an empty log", () => {
+    expect(statuses([])).toEqual(["1 not-observed", "2 not-observed", "3 not-observed"]);
+  });
+
+  it("counts a log line that is not JSON and never reads held beside it, printing none of it", () => {
+    const facts = copilotFacts([...measured(), { decision: "malformed", raw: '{"sessionId":"secret-value-7' }]) as { status: string; detail: string }[];
+    expect(facts.map((fact) => fact.status)).toEqual(["not-observed", "not-observed", "not-observed"]);
+    for (const fact of facts) {
+      expect(fact.detail).toContain("1 log line(s)");
+      expect(fact.detail).not.toContain("secret-value-7");
+    }
+    // A changed fact stays changed beside an unreadable line: the move was seen.
+    expect(statuses([start(), mainCall([...BASE, "agentId"]), helperCall(), { decision: "malformed", raw: "x" }])[0]).toBe("1 changed");
+  });
+
+  it("names only the guard's own field names, never a value or another key the log holds", () => {
+    const leaky = [
+      start(),
+      { ...mainCall([...BASE, "agentId", "secretKeyName"]), toolArgs: "secret-value-9" },
+      helperCall(undefined, "secret-session-id"),
+    ];
+    const text = JSON.stringify(copilotFacts(leaky));
+    expect(text).toContain("agentId");
+    for (const value of ["secretKeyName", "secret-value-9", "secret-session-id", MAIN]) expect(text).not.toContain(value);
+  });
+});
+
+/**
+ * The tool restates the guard's helper-field list, since it imports nothing from the engine; this case holds the
+ * two equal by reading the guard's source text, so either list moving alone turns it red.
+ */
+describe("ASK_HELPER_FIELDS — the guard's helper fields, restated", () => {
+  it("equals GUARD_HELPER_FIELDS in src/hooks/scripts.ts", () => {
+    const source = readFileSync(join(import.meta.dirname, "../../src/hooks/scripts.ts"), "utf8");
+    const literal = /const GUARD_HELPER_FIELDS: readonly string\[\] = \[([^\]]*)\];/.exec(source);
+    expect(literal, "GUARD_HELPER_FIELDS is no longer a string-array literal in src/hooks/scripts.ts").not.toBeNull();
+    const guard = [...(literal?.[1] ?? "").matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+    expect(guard.length).toBeGreaterThan(0);
+    expect((ASK_HELPER_FIELDS as string[]).toSorted()).toEqual(guard.toSorted());
+  });
 });

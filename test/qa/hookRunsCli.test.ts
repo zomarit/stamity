@@ -47,21 +47,47 @@ interface FakeRun {
   answer: string | undefined;
 }
 
+/** The main session's id and a helper's, as Copilot CLI 1.0.98 sent them (reports/w4-measure-r1.md, P1). */
+const MAIN_SESSION = "8177e220-main";
+const HELPER_SESSION = "05f04540-helper";
+
+/** A Copilot CLI tool-call payload, its keys as measured on 1.0.98 for the main agent. */
+function copilotCall(toolName: string, toolArgs: unknown, extra: Record<string, unknown> = {}): string {
+  return JSON.stringify({ sessionId: MAIN_SESSION, timestamp: 1, cwd: ".", toolName, toolArgs: JSON.stringify(toolArgs), ...extra });
+}
+
 /** The payload each client hands its pre-shell hook, carrying the marked command. */
 function payloadFor(client: string): string {
   const command = hookRuns.ASK_COMMAND as string;
   if (client === "claude") return JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command } });
   if (client === "cursor") return JSON.stringify({ hook_event_name: "beforeShellExecution", command, cwd: "." });
-  return JSON.stringify({ toolName: "bash", toolArgs: JSON.stringify({ command }) });
+  return copilotCall("bash", { command });
 }
 
 /** A file-tool call writing the marker, in each client's payload; Cursor's pre-shell hook sees no file tool. */
 function writePayloadFor(client: string): string | undefined {
   const file = hookRuns.ASK_MARKER as string;
   if (client === "claude") return JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Write", tool_input: { file_path: file, content: "" } });
-  if (client === "copilot") return JSON.stringify({ toolName: "create", toolArgs: JSON.stringify({ path: file }) });
+  if (client === "copilot") return copilotCall("create", { path: file });
   return undefined;
 }
+
+/** One hook call a fake Copilot makes before the marked one: the event the hook is wired for and its payload. */
+type CopilotStep = readonly [event: "sessionStart" | "preToolUse", payload: string];
+
+/**
+ * What Copilot CLI 1.0.98 hands its hooks before the marked call when the prompt has one step go to a helper
+ * (reports/w4-measure-r1.md, F1 to F3): one `sessionStart` for the main session, the main agent's `task` call, and
+ * the helper's shell call carrying `agentId`, `agentType` and `parentAgentId` under its own session id.
+ */
+const MEASURED_COPILOT: readonly CopilotStep[] = [
+  ["sessionStart", JSON.stringify({ sessionId: MAIN_SESSION, timestamp: 1, cwd: ".", source: "new", initialPrompt: hookRuns.ASK_COPILOT_PROMPT })],
+  ["preToolUse", copilotCall("task", { agent_type: "task", prompt: "echo qa-helper" })],
+  [
+    "preToolUse",
+    copilotCall("bash", { command: "echo qa-helper" }, { sessionId: HELPER_SESSION, agentId: HELPER_SESSION, agentType: "task", parentAgentId: MAIN_SESSION }),
+  ],
+];
 
 /** Whether the client's configuration sends a file-tool call to the hook: Claude Code by its matcher, Copilot always. */
 function hooksFileTool(client: string, config: string): boolean {
@@ -87,9 +113,10 @@ function decisionOf(client: string, stdout: string): string | undefined {
  * with `ignores` it runs it whatever the hook said, and `silent` never consults the hook and runs nothing.
  * `elsewhere` holds the asked shell call, then writes the marker with a file tool: through the hook,
  * holding an ask, where the configuration hooks that tool, else unseen. `unseen` writes the marker
- * and never consults the hook.
+ * and never consults the hook. A fake Copilot first hands its hooks `copilotSteps` (n3-copilot-remeasure:
+ * by default the measured session start, main call and helper call), each through the entry wired for its event.
  */
-function fakeClient(client: string, behaviour: Behaviour, runs: FakeRun[]) {
+function fakeClient(client: string, behaviour: Behaviour, runs: FakeRun[], copilotSteps: readonly CopilotStep[] = MEASURED_COPILOT) {
   return (binary: string, args: readonly string[], options: { cwd: string; env: Record<string, string | undefined> }) => {
     const run: FakeRun = { cwd: options.cwd, binary, args, env: options.env, answer: undefined };
     runs.push(run);
@@ -101,11 +128,23 @@ function fakeClient(client: string, behaviour: Behaviour, runs: FakeRun[]) {
     }
     const config = readFileSync(join(options.cwd, hookRuns.ASK_CONFIG_PATHS[client] as string), "utf8");
     expect(config, "the client's config names the hook the module wrote").toContain(hookRuns.ASK_HOOK_FILE);
-    const consult = (input: string): string | undefined => {
-      const hook = spawnSync(process.execPath, [join(options.cwd, hookRuns.ASK_HOOK_FILE as string)], { cwd: options.cwd, input, encoding: "utf8" });
+    // Copilot's entries name the event after the hook's path, as the module wires them; the others pass none.
+    const consult = (input: string, event?: string): string | undefined => {
+      if (client === "copilot") {
+        const entries = (JSON.parse(config) as { hooks: Record<string, { bash: string }[]> }).hooks[event ?? "preToolUse"];
+        expect(entries?.[0]?.bash, `Copilot's ${event ?? "preToolUse"} entry`).toMatch(new RegExp(` ${event ?? "preToolUse"}$`));
+      }
+      const argv = [join(options.cwd, hookRuns.ASK_HOOK_FILE as string), ...(client === "copilot" ? [event ?? "preToolUse"] : [])];
+      const hook = spawnSync(process.execPath, argv, { cwd: options.cwd, input, encoding: "utf8" });
       expect(hook.status, hook.stderr).toBe(0);
       return decisionOf(client, hook.stdout);
     };
+    if (client === "copilot") {
+      for (const [event, payload] of copilotSteps) {
+        // A session start or an unmarked call is never asked about.
+        expect(consult(payload, event), event).toBeUndefined();
+      }
+    }
     run.answer = consult(payloadFor(client));
     if (behaviour === "elsewhere") {
       const write = writePayloadFor(client);
@@ -122,9 +161,15 @@ const present = () => ({ present: true, version: "fake 1.0.0" });
 
 const notOnPath = (binary: string) => ({ present: false, reason: `${binary}: not on PATH (ENOENT)` });
 
-function measureWith(behaviour: Behaviour, runs: FakeRun[], baseDir = scratch(), probe: (binary: string) => unknown = present) {
+function measureWith(
+  behaviour: Behaviour,
+  runs: FakeRun[],
+  baseDir = scratch(),
+  probe: (binary: string) => unknown = present,
+  copilotSteps: readonly CopilotStep[] = MEASURED_COPILOT,
+) {
   return ({ client }: { client: string }) =>
-    hookRuns.measureAsk({ client, baseDir, spawn: fakeClient(client, behaviour, runs), probe });
+    hookRuns.measureAsk({ client, baseDir, spawn: fakeClient(client, behaviour, runs, copilotSteps), probe });
 }
 
 function mainWith(argv: readonly string[], deps: Record<string, unknown>): { code: number; lines: string[] } {
@@ -202,8 +247,14 @@ describe("hook-runs --ask — each client's answer, measured in a throwaway fold
     expect(cursor?.args).toEqual(expect.arrayContaining(["--trust", "-p", "--force"]));
     expect(copilot?.args).toEqual(expect.arrayContaining(["-p", "--allow-all-tools"]));
     expect(copilot?.env["COPILOT_ALLOW_ALL"]).toBe("true");
+    // TEST CHANGE, justified (n3-copilot-remeasure, REQ-PROVE-042): Copilot's prompt now hands one trivial step to a
+    // helper before the ask, so the re-measure can see a helper's call; the asked command's sentence is unchanged
+    // and ends Copilot's prompt, which is what this case now holds for it.
+    expect(copilot?.args).toContain(hookRuns.ASK_COPILOT_PROMPT);
+    expect(hookRuns.ASK_COPILOT_PROMPT).toMatch(new RegExp(`${hookRuns.ASK_PROMPT}$`));
+    expect(hookRuns.ASK_COPILOT_PROMPT.split(hookRuns.ASK_MARKER as string), "the helper's step names no marker").toHaveLength(2);
     for (const run of runs) {
-      expect(run.args, run.binary).toContain(hookRuns.ASK_PROMPT);
+      expect(run.args, run.binary).toContain(run === copilot ? hookRuns.ASK_COPILOT_PROMPT : hookRuns.ASK_PROMPT);
       expect(run.args, run.binary).not.toContain("--bare");
       // Outside this checkout, by the script's own rule: across drives (Windows) `relative()` answers an absolute path.
       const rel = relative(REPO_ROOT, run.cwd);
@@ -297,6 +348,81 @@ describe("hook-runs --ask — each client's answer, measured in a throwaway fold
     const written = JSON.parse(readFileSync(out, "utf8")) as { mode: string; rows: { client: string; status: string }[] };
     expect(written.mode).toBe("ask");
     expect(written.rows.map((row) => `${row.client} ${row.status}`)).toEqual(["claude held", "copilot held"]);
+  });
+});
+
+/**
+ * n3-copilot-remeasure (REQ-FLOW-123, REQ-PROVE-042; ledger rows review/151 and review/165): Copilot's row also
+ * reads the three facts the guard's ask rests on from the hook's own log. The hook the module wrote is run with
+ * each payload, so the log, its key names and session ids, and the verdict are all real.
+ */
+describe("hook-runs --ask — the facts Copilot CLI's ask rests on", () => {
+  const facts = (line: string | undefined) => (line ?? "").match(/fact \d \S+/g);
+
+  it("reads the three facts held on the measured shape, and exits 0 with and without --require-observation", () => {
+    for (const argv of [["--ask", "--clients", "copilot"], ["--ask", "--clients", "copilot", "--require-observation"]]) {
+      const { code, lines } = mainWith(argv, { measureAsk: measureWith("honours", []) });
+      expect(lines[0]).toMatch(/^hook-runs --ask: copilot \(allow-all\) held — /);
+      expect(facts(lines[0])).toEqual(["fact 1 held", "fact 2 held", "fact 3 held"]);
+      expect(code, argv.join(" ")).toBe(0);
+    }
+  });
+
+  it("turns red on a main call carrying a helper field, the fact named, with or without the flag", () => {
+    const steps: CopilotStep[] = [MEASURED_COPILOT[0]!, ["preToolUse", copilotCall("task", {}, { agentId: MAIN_SESSION })], MEASURED_COPILOT[2]!];
+    for (const argv of [["--ask", "--clients", "copilot"], ["--ask", "--clients", "copilot", "--require-observation"]]) {
+      const { code, lines } = mainWith(argv, { measureAsk: measureWith("honours", [], scratch(), present, steps) });
+      expect(facts(lines[0])).toContain("fact 1 changed");
+      expect(lines[0]).toContain("agentId");
+      expect(code, argv.join(" ")).toBe(1);
+    }
+  });
+
+  it("turns red on a helper's call under the main session's id", () => {
+    const steps: CopilotStep[] = [
+      MEASURED_COPILOT[0]!,
+      ["preToolUse", copilotCall("bash", { command: "echo qa-helper" }, { agentId: HELPER_SESSION, agentType: "task", parentAgentId: MAIN_SESSION })],
+    ];
+    const { code, lines } = mainWith(["--ask", "--clients", "copilot"], { measureAsk: measureWith("honours", [], scratch(), present, steps) });
+    expect(facts(lines[0])).toContain("fact 2 changed");
+    expect(code).toBe(1);
+  });
+
+  it("reads no helper's call as fact 2 not-observed, red only under --require-observation", () => {
+    const steps = MEASURED_COPILOT.slice(0, 2);
+    const plain = mainWith(["--ask", "--clients", "copilot"], { measureAsk: measureWith("honours", [], scratch(), present, steps) });
+    expect(facts(plain.lines[0])).toEqual(["fact 1 held", "fact 2 not-observed", "fact 3 held"]);
+    expect(plain.code).toBe(0);
+    const required = mainWith(["--ask", "--clients", "copilot", "--require-observation"], { measureAsk: measureWith("honours", [], scratch(), present, steps) });
+    expect(required.code).toBe(1);
+  });
+
+  it("logs key names and session ids alone, and never prints a payload value, on the line or in --out", () => {
+    const secret = "qa-secret-value-31";
+    const steps: CopilotStep[] = [
+      ["sessionStart", JSON.stringify({ sessionId: MAIN_SESSION, source: "new", initialPrompt: secret })],
+      ["preToolUse", copilotCall("task", { prompt: secret })],
+      MEASURED_COPILOT[2]!,
+    ];
+    const runs: FakeRun[] = [];
+    const out = join(scratch(), "ask.json");
+    const { lines } = mainWith(["--ask", "--clients", "copilot", "--out", out], { measureAsk: measureWith("honours", runs, scratch(), present, steps) });
+    const log = readFileSync(join(runs[0]!.cwd, "qa-ask-observations.jsonl"), "utf8");
+    expect(log).toContain('"agentId"');
+    expect(log).toContain(HELPER_SESSION);
+    expect(log).not.toContain(secret);
+    expect(log, "a tool's arguments are a value, not a key").not.toContain("echo qa-helper");
+    const written = readFileSync(out, "utf8");
+    expect(written).toContain('"facts"');
+    for (const text of [lines.join("\n"), written]) {
+      expect(text).not.toContain(secret);
+      expect(text, "no session id is printed").not.toContain(MAIN_SESSION);
+    }
+  });
+
+  it("reads no facts for Claude Code, whose row is unchanged", () => {
+    const { lines } = mainWith(["--ask", "--clients", "claude"], { measureAsk: measureWith("honours", []) });
+    expect(lines[0]).not.toMatch(/fact \d/);
   });
 });
 
