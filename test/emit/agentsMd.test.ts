@@ -636,6 +636,19 @@ describe("Cursor's cloud block (REQ-FLOW-114)", () => {
     expect(block.lineCount).toBe(ALWAYS_ON_CURSOR_BLOCK_LINES);
   });
 
+  it("pins the unstamped 0.0.0 in its check call when the caller names no engine version, never latest", () => {
+    // Only a harness calling the renderer directly reaches this: the planner
+    // always passes the engine version. A 0.0.0 pin names no published
+    // release, so a copied call fails at npx instead of running `latest`.
+    const block = renderCursorCloudBlock({});
+
+    expect(block.content).toBe(EXPECTED_BLOCK.replace("@1.0.0-golden check`", "@0.0.0 check`"));
+    expect(block.content).toContain("`npx -y @zomarit/stamity@0.0.0 check`");
+    expect(block.content).not.toContain("@latest");
+    expect(block.lineCount).toBe(ALWAYS_ON_CURSOR_BLOCK_LINES);
+    expect(block.byteLength).toBe(Buffer.byteLength(block.content, "utf8"));
+  });
+
   describe("on the root AGENTS.md row", () => {
     // The REAL composed planner over the shipped corpus. The root does not
     // exist: planning is pure, and a missing operator AGENTS.md is the state
