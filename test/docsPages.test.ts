@@ -3380,6 +3380,14 @@ describe("the night units' pages (n2, n3, n4, n5)", () => {
       "hooks, the scripts under `.claude/hooks/` and `.cursor/hooks/`, the installed packs, and the scripts and repository-path launchers the hook declarations at the run's base name",
     );
     expect(changelog).toContain("A hook declaration the verbs cannot read cleanly at the base refuses the push");
+    // review/196, review/197, review/199, build/104: every file a declaration names, present or not, no folder, and the widened residual.
+    expect(changelog).toContain(
+      "Every other file such a declaration names, an option's value or an argument word, is held too, whether or not it is present at the base; a folder it names is not held.",
+    );
+    expect(changelog).toContain(
+      "and anything a held script reads or loads beyond the files its declaration names, the contents of a folder it names included, are not held.",
+    );
+    expect(changelog).not.toContain("a module a held script loads from outside");
     expect(changelog).not.toContain("hooks and the scripts Claude Code's and Cursor's hooks run");
     expect(changelog).toContain("under a lock, so two sessions starting together are both recorded");
     // review/164: the PowerShell refusal reads an unquoted `@` in a word after `run`, as review/147 corrected the spec.

@@ -57,9 +57,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scripts under `.claude/hooks/` and `.cursor/hooks/`, the installed packs, and the scripts and
   repository-path launchers the hook declarations at the run's base name, the clients' settings,
   instruction and agent files) as an inert patch in the run folder, scans what the push sends for
-  secrets, and pushes. A hook declaration the verbs cannot read cleanly at the base refuses the push;
-  a hook written by hand into a client's settings file whose script lies outside those folders, and a
-  module a held script loads from outside them, are not held. The
+  secrets, and pushes. A hook declaration the verbs cannot read cleanly at the base refuses the push.
+  Every other file such a declaration names, an option's value or an argument word, is held too,
+  whether or not it is present at the base; a folder it names is not held. A hook written by hand
+  into a client's settings file whose script lies outside those folders, and anything a held script
+  reads or loads beyond the files its declaration names, the contents of a folder it names included,
+  are not held. The
   repository's own pre-commit hooks still run inside a run verb's commit, so the verb then reads that
   commit: one a hook widened past the paths the verb staged, or made of its own, is undone by moving
   the run branch back to the commit read before, naming each outside path, and nothing is pushed. A
