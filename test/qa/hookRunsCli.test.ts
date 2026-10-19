@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
 import * as hookRuns from "../../scripts/qa/hook-runs.mjs";
@@ -207,7 +207,9 @@ describe("hook-runs --ask — each client's answer, measured in a throwaway fold
     for (const run of runs) {
       expect(run.args, run.binary).toContain(hookRuns.ASK_PROMPT);
       expect(run.args, run.binary).not.toContain("--bare");
-      expect(relative(REPO_ROOT, run.cwd).startsWith(".."), run.cwd).toBe(true);
+      // Outside this checkout, by the script's own rule: across drives (Windows) `relative()` answers an absolute path.
+      const rel = relative(REPO_ROOT, run.cwd);
+      expect(rel.startsWith("..") || isAbsolute(rel), run.cwd).toBe(true);
       // The answer is read off the marker the command creates, so the folder starts without it.
       expect(existsSync(join(run.cwd, hookRuns.ASK_HOOK_FILE as string))).toBe(true);
     }
