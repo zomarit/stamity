@@ -3618,7 +3618,7 @@ exports[`emission goldens — hook scripts > plans three deterministic scripts f
 // stamity — session-start context load.
 //
 // Prints the learnings index and the resumable handoffs for this repo by
-// reading the state directory directly: no agent is spawned and nothing is
+// reading the state directory directly: no agent is spawned and nothing else is
 // written. Every file clears a size, injection, integrity and review screen
 // before it is LISTED; a file that fails one is named in a skip line with its
 // reason, and every field printed — the file name included — is flattened to
@@ -3631,6 +3631,10 @@ exports[`emission goldens — hook scripts > plans three deterministic scripts f
 // pointers, never finding text.
 // In a cloud or CI session it names the session and what is not enforced there.
 //
+// On Copilot CLI it writes one record: the payload's session id, appended to
+// stamity/copilot-main-sessions under the common git directory, owner-only and
+// kept to its last 200 lines, which the person-only guard reads before it asks.
+//
 // Generated file — regenerate it rather than editing; local edits are overwritten.
 // Trust posture: exec form, repo-committed, no dynamic evaluation, no network reach.
 // Reads outside repo state: the wall clock, which decides whether a learning's
@@ -3641,7 +3645,7 @@ exports[`emission goldens — hook scripts > plans three deterministic scripts f
 // cloud and CI markers in the environment, by presence only.
 
 import { createHash } from "node:crypto";
-import { closeSync, lstatSync, openSync, readFileSync, readSync, readdirSync, statSync } from "node:fs";
+import { closeSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { isatty } from "node:tty";
 import { fileURLToPath } from "node:url";
@@ -4725,6 +4729,61 @@ function resumeCardLines(rootDir, stateRoot, nowMs, startup) {
   return lines;
 }
 
+const MAIN_SESSIONS_SEGMENTS = ["stamity","copilot-main-sessions"];
+const MAIN_SESSIONS_MAX_LINES = 200;
+const MAIN_SESSIONS_MAX_BYTES = 65536;
+const SESSION_ID = new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$");
+
+/** Copilot's session id for this payload; null when it names none, two, or one the record cannot hold. */
+function copilotSessionId(payload) {
+  const ids = ["sessionId", "session_id"].filter((key) => Object.hasOwn(payload, key)).map((key) => payload[key]);
+  const id = ids[0];
+  return typeof id === "string" && SESSION_ID.test(id) && ids.every((other) => other === id) ? id : null;
+}
+
+/** The record's well-formed lines: [] when absent or past the bound, null when something other than a file sits there. */
+function mainSessionLines(path) {
+  let stats;
+  try {
+    stats = lstatSync(path);
+  } catch (error) {
+    if (error && error.code === "ENOENT") return [];
+    return null;
+  }
+  if (!stats.isFile()) return null;
+  if (stats.size > MAIN_SESSIONS_MAX_BYTES) return [];
+  return readFileSync(path, "utf8").split("\\n").filter((line) => SESSION_ID.test(line));
+}
+
+/** Records the main session's id for the person-only guard; writes nothing when the payload names none. */
+function recordMainSession(payload) {
+  const id = copilotSessionId(payload);
+  const common = id === null ? null : cardCommonDir(repoRoot());
+  if (common === null) return;
+  const dir = join(common, MAIN_SESSIONS_SEGMENTS[0]);
+  const path = join(dir, MAIN_SESSIONS_SEGMENTS[1]);
+  try {
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+    if (!lstatSync(dir).isDirectory()) return;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const kept = mainSessionLines(path);
+      if (kept === null) return;
+      const lines = [...kept.filter((line) => line !== id), id].slice(-MAIN_SESSIONS_MAX_LINES);
+      const temp = path + "." + process.pid + "." + Date.now() + "." + attempt;
+      writeFileSync(temp, lines.join("\\n") + "\\n", { flag: "wx", mode: 0o600 });
+      try {
+        renameSync(temp, path);
+      } catch (error) {
+        unlinkSync(temp);
+        throw error;
+      }
+      if ((mainSessionLines(path) ?? []).includes(id)) return;
+    }
+  } catch {
+    // Not recorded: the person-only guard then refuses this session's asks, and the person runs the act.
+  }
+}
+
 // Which start this is. A person running the script at a terminal sends no
 // payload, so a TTY is never read — reading it would wait for input nobody is
 // going to type. The check asks fd 0 directly: touching process.stdin would
@@ -4734,7 +4793,10 @@ function resumeCardLines(rootDir, stateRoot, nowMs, startup) {
 // the run in progress on the branch HEAD names, which a new machine continues
 // (REQ-CTX-013); a client that sends no source (or none of the three) gets the
 // banner it always got.
-const SOURCE = isatty(0) ? "" : field(readPayload(), ["source"]);
+const PAYLOAD = isatty(0) ? {} : readPayload();
+const SOURCE = field(PAYLOAD, ["source"]);
+// Copilot CLI: this start is the main thread's, so its id goes on the record the person-only guard reads (REQ-FLOW-123).
+recordMainSession(PAYLOAD);
 
 // Written once, then the process ends on its own. \`process.exit\` would race
 // the write: stdout is asynchronous when it is a pipe on macOS and the BSDs,
