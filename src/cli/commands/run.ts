@@ -1014,25 +1014,36 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
       result.notDone.push("commit refused: HEAD names no commit, so the commit's own paths could not be read against it");
       return finish(false);
     }
-    const commit = await git(top, ["commit", "--quiet", `--message=chore(run): checkpoint ${run}`, ...(opts["signoff"] === true ? ["--signoff"] : [])], verb);
-    const widened = await hookWidened(top, before, commit.code === 0, isOwn, verb);
-    if (widened !== null) {
-      const reset = await git(top, ["reset", "--soft", "--quiet", before], verb);
-      const undone = reset.code === 0 ? " (commit undone)" : "";
-      result.notDone.push(
-        ...(widened.ownCommit ? [`commit refused: a hook made a commit of its own${undone}`] : []),
-        ...widened.outside.map((path) => `commit refused: ${path} was staged by a hook and is not in --paths${undone}`),
-        ...(widened.unread === null ? [] : [`commit refused: ${widened.unread}${undone}`]),
-        ...(commit.code === 0 ? [] : [`commit failed: ${firstLine(`${commit.stderr}\n${commit.stdout}`)}`]),
-      );
-      if (reset.code !== 0) {
-        if (commit.code === 0) result.committed = await commitAt(top, "HEAD", verb);
-        result.notDone.push(`commit not undone: git reset answered ${reset.code}: ${firstLine(reset.stderr)}`);
-        lines.push(`commit: ${result.committed ?? "none"} (not undone)`);
+    // review/136: a commit, path read or undo that does not finish (the write runner's wall time) fails closed here,
+    // naming the commit HEAD holds and the reset target; the history read below keeps refusing it on later calls.
+    let commit: GitWriteResult;
+    try {
+      commit = await git(top, ["commit", "--quiet", `--message=chore(run): checkpoint ${run}`, ...(opts["signoff"] === true ? ["--signoff"] : [])], verb);
+      const widened = await hookWidened(top, before, commit.code === 0, isOwn, verb);
+      if (widened !== null) {
+        const failure = await undoCommit(top, current, before, widened.head, verb);
+        const undone = failure === null ? " (commit undone)" : "";
+        result.notDone.push(
+          ...(widened.ownCommit ? [`commit refused: a hook made a commit of its own${undone}`] : []),
+          ...widened.outside.map((path) => `commit refused: ${path} was staged by a hook and is not in --paths${undone}`),
+          ...(widened.unread === null ? [] : [`commit refused: ${widened.unread}${undone}`]),
+          ...(commit.code === 0 ? [] : [`commit failed: ${firstLine(`${commit.stderr}\n${commit.stdout}`)}`]),
+        );
+        if (failure !== null) {
+          if (commit.code === 0) result.committed = widened.head;
+          result.notDone.push(`commit not undone: ${failure}; HEAD holds ${widened.head ?? "an unread commit"}, reset target ${before}`);
+          lines.push(`commit: ${widened.head ?? "unread"} (not undone; reset target ${before})`);
+          return finish(false);
+        }
+        const why = widened.outside.length > 0 ? "a hook staged paths outside the list" : widened.ownCommit ? "a hook made a commit of its own" : "its paths could not be read";
+        lines.push(`commit: undone (${why})`);
         return finish(false);
       }
-      const why = widened.outside.length > 0 ? "a hook staged paths outside the list" : widened.ownCommit ? "a hook made a commit of its own" : "its paths could not be read";
-      lines.push(`commit: undone (${why})`);
+    } catch (cause) {
+      if (!(cause instanceof CliFailure)) throw cause;
+      const held = await commitAt(top, "HEAD", verb).catch(() => null);
+      result.notDone.push(`commit not checked: ${cause.doc.message} (${cause.doc.why ?? "no reason given"}); HEAD holds ${held ?? "an unread commit"}, reset target ${before}`);
+      lines.push(`commit: ${held ?? "unread"} (not checked; reset target ${before})`);
       return finish(false);
     }
     if (commit.code !== 0) {
@@ -1078,6 +1089,21 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   }
   lines.push(`scan: ${result.scan.hits.length === 0 ? "no hits" : `${result.scan.hits.length} hit(s)`}; unscanned: ${list(result.scan.unscanned)}`);
   if (result.scan.hits.length > 0 || outcome.incomplete !== undefined) return finish(false);
+
+  // review/136, review/139: every commit since the last one a checkpoint read clean, not only this call's, is read
+  // against the same set, so a commit an earlier call could not undo or check is refused on every later push.
+  const unchecked = await outsideSince(top, current, base, remote, isOwn, verb);
+  if (typeof unchecked === "string") {
+    result.notDone.push(`push held: ${unchecked}`);
+    return finish(false);
+  }
+  if (unchecked.outside.length > 0) {
+    result.notDone.push(...unchecked.outside.map((path) => `push refused: ${path} is not in --paths, in a commit after ${unchecked.from} that no checkpoint read clean`));
+    lines.push("push: refused (an unchecked commit carries paths outside the list)");
+    return finish(false);
+  }
+  const marked = await git(top, ["update-ref", "--no-deref", `${CHECKED_REF}${current}`, unchecked.head], verb);
+  if (marked.code !== 0) result.notDone.push(`checked point not moved: git update-ref answered ${marked.code}: ${firstLine(marked.stderr)}`);
 
   // (6) The push, its command checked by the shell guard's own table before it runs.
   const refspec = `HEAD:refs/heads/${current}`;
@@ -1384,6 +1410,8 @@ interface HookWidening {
   ownCommit: boolean;
   /** Why the commit's paths could not be read, or `null` where they were. */
   unread: string | null;
+  /** The commit `HEAD` named when the check read it, the one the undo swaps out (review/138); `null` where unread. */
+  head: string | null;
 }
 
 /**
@@ -1397,12 +1425,70 @@ async function hookWidened(top: string, before: string, committed: boolean, isOw
   if (!committed && head === before) return null;
   const ownCommit = (committed ? await commitAt(top, "HEAD^", verb) : head) !== before;
   const read = await git(top, ["diff", "--name-only", "-z", ...DIFF_PINS, before, "HEAD", "--"], verb);
-  if (read.code !== 0) return { outside: [], ownCommit, unread: `git diff answered ${read.code}: ${firstLine(read.stderr)}` };
+  if (read.code !== 0) return { outside: [], ownCommit, unread: `git diff answered ${read.code}: ${firstLine(read.stderr)}`, head };
   const outside = read.stdout
     .split("\0")
     .filter((path) => path !== "" && !isOwn(path))
     .toSorted();
-  return outside.length === 0 && !ownCommit ? null : { outside, ownCommit, unread: null };
+  return outside.length === 0 && !ownCommit ? null : { outside, ownCommit, unread: null, head };
+}
+
+/**
+ * review/138: undoes the commit {@link hookWidened} read by rewinding the run
+ * branch by name from `checked` to `before`, a compare-and-swap (`git
+ * update-ref`), never whatever `HEAD` then names; the index stays, as a soft
+ * reset leaves it. `null` once rewound; else why not, for `notDone`: `HEAD`
+ * has left the run branch (a hook switched it), the check read no commit, or
+ * git refused the swap.
+ */
+async function undoCommit(top: string, branch: string, before: string, checked: string | null, verb: string): Promise<string | null> {
+  const on = await currentBranch(top, verb);
+  if (on !== branch) {
+    const tip = await commitAt(top, `refs/heads/${branch}`, verb);
+    return `HEAD has left ${branch} (at ${tip ?? "an unread commit"}) for ${on ?? "a detached HEAD"}, so neither branch was rewound`;
+  }
+  if (checked === null) return "the commit HEAD holds could not be read";
+  const swapped = await git(top, ["update-ref", `refs/heads/${branch}`, before, checked], verb);
+  return swapped.code === 0 ? null : `git update-ref answered ${swapped.code}: ${firstLine(swapped.stderr)}`;
+}
+
+/** review/139: where a checkpoint keeps, per run branch, the last commit whose history it read clean. */
+const CHECKED_REF = "refs/stamity/checked/";
+
+/** What {@link outsideSince} read. */
+interface Unchecked {
+  /** The commit read, the one the checked ref moves to once its history is clean. */
+  head: string;
+  /** Where the read started, for `notDone`. */
+  from: string;
+  /** The paths outside the verb's set that a commit read changes. */
+  outside: string[];
+}
+
+/**
+ * review/136, review/139: the paths outside the verb's set (`isOwn`, as
+ * {@link hookWidened} reads it) that a commit `HEAD` holds changes, read over
+ * every commit after the last one a checkpoint read clean
+ * ({@link CHECKED_REF}`<branch>`, where it is an ancestor of `HEAD`), else
+ * after origin's own branch tip, never one `Base:` or a tip origin holds
+ * reaches; a merge by its own resolution (`--cc`), renames read as a deletion
+ * and an addition, as {@link heldInHistory} reads them. A string, for
+ * `notDone`, where the history could not be read.
+ */
+async function outsideSince(top: string, branch: string, base: string, remote: RemoteRefs, isOwn: (path: string) => boolean, verb: string): Promise<Unchecked | string> {
+  const head = await commitAt(top, "HEAD", verb);
+  if (head === null) return "HEAD names no commit, so the commits the push would send could not be read";
+  const ancestor = async (rev: string | null): Promise<boolean> =>
+    rev !== null && (await git(top, ["merge-base", "--is-ancestor", rev, head], verb)).code === 0;
+  const checked = await commitAt(top, `${CHECKED_REF}${branch}`, verb);
+  const within = await ancestor(checked);
+  const from = within ? `the last checked commit ${checked ?? ""}` : (await ancestor(remote.branch)) ? `origin's ${branch} ${remote.branch ?? ""}` : `Base: ${base}`;
+  const exclude = [...remote.tips, base, ...(within && checked !== null ? [checked] : [])];
+  const input = [head, ...exclude.map((rev) => `^${rev}`), ""].join("\n");
+  const read = await git(top, ["log", "--root", "--format=", "--raw", RAW_IDS, "-z", "--cc", ...DIFF_PINS, "--ignore-missing", "--stdin", "--"], verb, input);
+  if (read.code !== 0) return `the paths of the commits after ${from} could not be read (git log answered ${read.code}: ${firstLine(read.stderr)})`;
+  const outside = [...new Set(rawEntries(read.stdout).map((entry) => entry.path))].filter((path) => !isOwn(path)).toSorted();
+  return { head, from, outside };
 }
 
 /**

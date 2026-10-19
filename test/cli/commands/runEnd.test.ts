@@ -562,6 +562,29 @@ describe("stamity run end", () => {
     expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
   });
 
+  // review/139: end reads every commit no checkpoint read clean, as checkpoint does, so a commit an earlier call could
+  // not undo (stood in for here by a commit made outside the verbs) is pushed by no end either.
+  it("pushes nothing and opens no pull request while a commit no checkpoint read clean carries a path outside --paths", async () => {
+    const { repo, remote, base } = await seed("unattended");
+    await writeFile(join(repo, "a.txt"), "changed\n");
+    await writeFile(join(repo, "b.txt"), "a hook's change\n");
+    git(repo, ["add", "--", "a.txt", "b.txt"]);
+    git(repo, ["commit", "-q", "-m", "left by a failed undo"]);
+
+    const { code, doc } = await run(repo, [...END("feat: x"), "--paths", "a.txt"]);
+
+    expect(code).toBe(1);
+    expect(doc).toMatchObject({
+      subcommand: "end",
+      pushed: false,
+      pr: null,
+      notDone: [`push refused: b.txt is not in --paths, in a commit after Base: ${base} that no checkpoint read clean`],
+    });
+    expect(pushes()).toEqual([]);
+    expect(writesToGitHub()).toEqual([]);
+    expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
+  });
+
   describe("the morning walk's body (review/164)", () => {
     const WALK_END = (title: string): string[] => ["end", "--run", WALK, "--title", title, "--json"];
     const WALK_RECORD = `${WALK_DIR}/record.md`;

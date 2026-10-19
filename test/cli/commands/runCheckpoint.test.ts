@@ -40,7 +40,16 @@ vi.mock("../../../src/cli/engine/ghRunner.ts", () => ({
  * Every argument vector the verb gave the write runner, the stdin each call was handed at the same index (pr/49),
  * and the made-up tag tips a case adds to what `git ls-remote origin` answers.
  */
-const writes = vi.hoisted(() => ({ argv: [] as string[][], inputs: [] as (string | undefined)[], extraTips: [] as string[] }));
+const writes = vi.hoisted(() => ({
+  argv: [] as string[][],
+  inputs: [] as (string | undefined)[],
+  extraTips: [] as string[],
+  /**
+   * review/136, review/137: a case's stand-in answer for the calls it matches, handed the real call to run first or
+   * not at all; unset, every call goes to the real runner.
+   */
+  override: null as ((args: readonly string[], real: () => Promise<GitWriteModule.GitWriteResult>) => Promise<GitWriteModule.GitWriteResult> | undefined) | null,
+}));
 
 // A spy, not a stand-in: each call is recorded and passed to the real runner,
 // so git still does every write; the record is how the test reads the exact
@@ -52,6 +61,10 @@ vi.mock("../../../src/cli/engine/gitWrite.ts", async (importOriginal) => {
     gitWrite: (cwd: string, args: readonly string[], opts?: Parameters<typeof real.gitWrite>[2]) => {
       writes.argv.push([...args]);
       writes.inputs.push(opts?.input);
+      // Mock reason (review/136, review/137): git's wall time (120 s) and a path read git refuses after a commit
+      // cannot be brought about in a unit test's time, so a case answers the one call it names in their place.
+      const answered = writes.override?.(args, () => real.gitWrite(cwd, args, opts));
+      if (answered !== undefined) return answered;
       // TEST CHANGE, justified: review/209 refuses a push URL naming no GitHub repository, so origin's push URL is
       // its GitHub URL; for the push call alone an `insteadOf` in the environment (read once, as the call starts)
       // sends it to the case's bare remote, `remote.git` beside the repository the push runs at the top of, so
@@ -161,6 +174,7 @@ describe("stamity run checkpoint", () => {
     writes.argv.length = 0;
     writes.inputs.length = 0;
     writes.extraTips.length = 0;
+    writes.override = null;
     table.denyPush = null;
     table.commands.length = 0;
     table.pushBranch = null;
@@ -733,23 +747,172 @@ describe("stamity run checkpoint", () => {
       expect(git(repo, ["rev-parse", "HEAD"])).toBe(base);
     });
 
-    it("says the commit was not undone, pushing nothing, when the reset fails", async () => {
-      const { repo, remote, base } = await seed("attended");
+    /** The refusal a later call gives a commit that carries `path` and that no checkpoint read clean (review/139). */
+    const unchecked = (path: string, base: string): string => `push refused: ${path} is not in --paths, in a commit after Base: ${base} that no checkpoint read clean`;
+
+    // TEST CHANGE, justified (review/136, review/138): the undo is now a compare-and-swap on the run branch by name, so
+    // git's refusal reads `git update-ref`, and the line names the commit left and the reset target; the case goes on
+    // to the later calls, which must push nothing while the widened commit is on the branch.
+    it("says the commit was not undone, naming it and the reset target, and no later call pushes it (review/136, review/139)", async () => {
+      const { repo, remote, base } = await seed("unattended");
       await writeFile(join(repo, "a.txt"), "changed\n");
       await writeFile(join(repo, "b.txt"), "a hook's change\n");
       await hook(repo, "pre-commit", "git add -- b.txt\n");
-      // The branch's ref lock, taken once the commit has moved the branch, makes the reset's ref update fail.
+      // The branch's ref lock, taken once the commit has moved the branch, makes the undo's ref update fail.
+      const lock = join(repo, ".git", "refs", "heads", `${RUN_BRANCH}.lock`);
       await hook(repo, "post-commit", `: > "$(git rev-parse --git-dir)/refs/heads/${RUN_BRANCH}.lock"\n`);
+
+      const first = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      const left = git(repo, ["rev-parse", "HEAD"]);
+      expect(first.code).toBe(1);
+      expect(first.doc["pushed"]).toBe(false);
+      const notDone = first.doc["notDone"] as string[];
+      expect(notDone).toContain("commit refused: b.txt was staged by a hook and is not in --paths");
+      expect(notDone.at(-1)).toMatch(new RegExp(`^commit not undone: git update-ref answered \\d+: .*; HEAD holds ${left}, reset target ${base}$`));
+      expect(first.doc["committed"]).toBe(left);
+      expect(git(repo, ["rev-parse", "HEAD^"])).toBe(base);
+
+      // The lock and the hooks gone, two later calls, with and without a change of their own, still push nothing.
+      await rm(lock);
+      await rm(join(repo, ".git", "hooks", "pre-commit"));
+      await rm(join(repo, ".git", "hooks", "post-commit"));
+      const second = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+      await writeFile(join(repo, "a.txt"), "changed again\n");
+      const third = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      expect(second.code).toBe(1);
+      expect(second.doc).toMatchObject({ committed: null, pushed: false, notDone: [unchecked("b.txt", base)] });
+      expect(third.code).toBe(1);
+      expect(third.doc).toMatchObject({ pushed: false, notDone: [unchecked("b.txt", base)] });
+      expect(pushes()).toEqual([]);
+      expect(remoteHeads(remote)).toEqual(SEEDED);
+      expect(() => git(repo, ["rev-parse", "--verify", "--quiet", `refs/stamity/checked/${RUN_BRANCH}`])).toThrow();
+    });
+
+    it("names the commit left and the reset target in the human report when the undo fails", async () => {
+      const { repo, base } = await seed("attended");
+      await writeFile(join(repo, "a.txt"), "changed\n");
+      await writeFile(join(repo, "b.txt"), "a hook's change\n");
+      await hook(repo, "pre-commit", "git add -- b.txt\n");
+      await hook(repo, "post-commit", `: > "$(git rev-parse --git-dir)/refs/heads/${RUN_BRANCH}.lock"\n`);
+
+      const { code, stdout } = await run(repo, ["checkpoint", "--run", RUN, "--paths", "a.txt"]);
+
+      expect(code).toBe(1);
+      expect(stdout).toContain(`\ncommit: ${git(repo, ["rev-parse", "HEAD"])} (not undone; reset target ${base})\n`);
+      expect(stdout).not.toContain("push:");
+    });
+
+    // review/136: a call the write runner's wall time stops rejects, which the verb's git helper throws; the commit,
+    // the path read and the undo each fail closed, naming HEAD's commit and the reset target, and the next call refuses.
+    it.each([
+      ["commit", (args: readonly string[]) => args[0] === "commit"],
+      ["diff", (args: readonly string[]) => args[0] === "diff" && args.includes("--name-only") && !args.includes("--cached")],
+      ["update-ref", (args: readonly string[]) => args[0] === "update-ref" && (args[1] ?? "").startsWith("refs/heads/")],
+    ] as const)("fails closed when git %s does not finish after the commit, and the next call pushes nothing (review/136)", async (step, matches) => {
+      const { repo, remote, base } = await seed("unattended");
+      await writeFile(join(repo, "a.txt"), "changed\n");
+      await writeFile(join(repo, "b.txt"), "a hook's change\n");
+      await hook(repo, "pre-commit", "git add -- b.txt\n");
+      // The commit itself lands before its call is stopped, as a post-commit hook past the wall time leaves it.
+      writes.override = (args, real) => (matches(args) ? (step === "commit" ? real() : Promise.resolve()).then(() => Promise.reject(new Error("killed by the wall time"))) : undefined);
+
+      const first = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      const left = git(repo, ["rev-parse", "HEAD"]);
+      expect(left).not.toBe(base);
+      expect(first.code).toBe(1);
+      expect(first.doc).toMatchObject({ committed: null, pushed: false });
+      expect((first.doc["notDone"] as string[]).at(-1)).toBe(`commit not checked: run checkpoint could not run git ${step} (killed by the wall time); HEAD holds ${left}, reset target ${base}`);
+
+      writes.override = null;
+      await rm(join(repo, ".git", "hooks", "pre-commit"));
+      const second = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      expect(second.code).toBe(1);
+      expect(second.doc).toMatchObject({ pushed: false, notDone: [unchecked("b.txt", base)] });
+      expect(pushes()).toEqual([]);
+      expect(remoteHeads(remote)).toEqual(SEEDED);
+    });
+
+    // review/137: the commit's paths unread is a refusal and an undo, never a pass.
+    it("undoes the commit and pushes nothing when its path list cannot be read (review/137)", async () => {
+      const { repo, remote, base } = await seed("attended");
+      await writeFile(join(repo, "a.txt"), "changed\n");
+      writes.override = (args) =>
+        args[0] === "diff" && args.includes("--name-only") && !args.includes("--cached") ? Promise.resolve({ code: 128, stdout: "", stderr: "fatal: bad object\n" }) : undefined;
 
       const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
 
       expect(code).toBe(1);
+      expect(doc).toMatchObject({ committed: null, pushed: false, notDone: ["commit refused: git diff answered 128: fatal: bad object (commit undone)"] });
+      expect(git(repo, ["rev-parse", "HEAD"])).toBe(base);
+      expect(pushes()).toEqual([]);
+      expect(remoteHeads(remote)).toEqual(SEEDED);
+    });
+
+    // review/138: a post-commit hook that switches branches leaves HEAD on another branch; the undo never rewinds it.
+    it("refuses without rewinding either branch when a hook moved HEAD off the run branch (review/138)", async () => {
+      const { repo, remote, base } = await seed("attended");
+      git(repo, ["switch", "-q", "-c", "other"]);
+      await writeFile(join(repo, "c.txt"), "another branch's file\n");
+      git(repo, ["add", "--", "c.txt"]);
+      git(repo, ["commit", "-q", "-m", "other's work"]);
+      const other = git(repo, ["rev-parse", "HEAD"]);
+      git(repo, ["switch", "-q", RUN_BRANCH]);
+      await writeFile(join(repo, "a.txt"), "changed\n");
+      await hook(repo, "post-commit", "git checkout -q other\n");
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      const verbCommit = git(repo, ["rev-parse", RUN_BRANCH]);
+      expect(code).toBe(1);
       expect(doc["pushed"]).toBe(false);
-      const notDone = doc["notDone"] as string[];
-      expect(notDone).toContain("commit refused: b.txt was staged by a hook and is not in --paths");
-      expect(notDone.at(-1)).toMatch(/^commit not undone: git reset answered \d+: /);
-      expect(doc["committed"]).toBe(git(repo, ["rev-parse", "HEAD"]));
-      expect(git(repo, ["rev-parse", "HEAD^"])).toBe(base);
+      expect((doc["notDone"] as string[]).at(-1)).toBe(
+        `commit not undone: HEAD has left ${RUN_BRANCH} (at ${verbCommit}) for other, so neither branch was rewound; HEAD holds ${other}, reset target ${base}`,
+      );
+      expect(git(repo, ["rev-parse", "other"])).toBe(other);
+      expect(git(repo, ["rev-parse", `${RUN_BRANCH}^`])).toBe(base);
+      expect(pushes()).toEqual([]);
+      expect(remoteHeads(remote)).toEqual(SEEDED);
+    });
+
+    // review/139: the checked ref moves only after a clean read, and a commit read clean is not read again.
+    it("moves the checked ref after a clean read, and does not read that commit again (review/139)", async () => {
+      const { repo, remote } = await seed("attended");
+      await writeFile(join(repo, "a.txt"), "changed\n");
+      table.denyPush = "push refused by a stand-in";
+      const first = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+      table.denyPush = null;
+
+      expect(first.code).toBe(1);
+      expect(git(repo, ["rev-parse", `refs/stamity/checked/${RUN_BRANCH}`])).toBe(first.doc["committed"]);
+
+      // The next call names another path; the commit read clean above is not read against it.
+      await writeFile(join(repo, "c.txt"), "the next unit\n");
+      const second = await run(repo, [...CHECKPOINT, "--paths", "c.txt"]);
+
+      expect(second.code).toBe(0);
+      expect(second.doc).toMatchObject({ pushed: true, notDone: [] });
+      expect(pushedTree(remote)).toEqual(expect.arrayContaining(["a.txt", "c.txt"]));
+      expect(git(repo, ["rev-parse", `refs/stamity/checked/${RUN_BRANCH}`])).toBe(second.doc["committed"]);
+    });
+
+    it("reads every commit since Base: where the checked ref is not an ancestor of HEAD (review/139)", async () => {
+      const { repo, remote, base } = await seed("attended");
+      await writeFile(join(repo, "b.txt"), "an unchecked change\n");
+      git(repo, ["commit", "-q", "-am", "unchecked"]);
+      await writeFile(join(repo, "a.txt"), "changed\n");
+      git(repo, ["commit", "-q", "-am", "dropped"]);
+      // The ref names a commit the branch no longer holds, whose history holds the unchecked one.
+      git(repo, ["update-ref", `refs/stamity/checked/${RUN_BRANCH}`, "HEAD"]);
+      git(repo, ["reset", "-q", "--soft", "HEAD^"]);
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      expect(code).toBe(1);
+      expect(doc).toMatchObject({ pushed: false, notDone: [unchecked("b.txt", base)] });
       expect(pushes()).toEqual([]);
       expect(remoteHeads(remote)).toEqual(SEEDED);
     });
@@ -857,7 +1020,9 @@ describe("stamity run checkpoint", () => {
       git(repo, ["commit", "-q", "-m", "a tracked log"]);
       git(repo, ["rm", "-q", "--", "kept.log"]);
 
-      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "kept.log"]);
+      // TEST CHANGE, justified (review/139): the push now reads every commit no checkpoint read clean against the
+      // explicit path set, so the hand commit's .gitignore is named in --paths, as a run names the files its units changed.
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "kept.log", ".gitignore"]);
 
       expect(code).toBe(0);
       expect(doc).toMatchObject({ pushed: true, notDone: [] });
