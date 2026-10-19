@@ -77,7 +77,7 @@ export const PERSON_ONLY_PATHS: readonly string[] = [
   "**/.vscode/mcp.json",
   // Agent, command and skill definitions are the instructions later runs follow: every tree the four clients read
   // (Stamity's emitted content roots, `src/manifest/ownedPaths.ts`, and the trees the clients read beside them),
-  // and Cursor's guard scripts beside its held `hooks.json`.
+  // and Cursor's and Claude Code's hook scripts beside their held hook settings.
   ".claude/agents/**",
   ".claude/commands/**",
   ".claude/skills/**",
@@ -86,6 +86,9 @@ export const PERSON_ONLY_PATHS: readonly string[] = [
   ".cursor/commands/**",
   ".cursor/skills/**",
   ".cursor/hooks/**",
+  // The scripts Claude Code's hooks run (the engine's copies under `.claude/hooks/stamity/`, and a person's own),
+  // held beside its held settings as Cursor's are beside its `hooks.json` (review/166).
+  ".claude/hooks/**",
   ".codex/agents/**",
   ".codex/skills/**",
   ".github/agents/**",

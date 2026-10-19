@@ -78,6 +78,13 @@ describe("heldPaths", () => {
     ".cursor/commands/deploy.md",
     ".cursor/skills/st-work/SKILL.md",
     ".cursor/hooks/stamity-subagent-guard.mjs",
+    // The scripts Claude Code's hooks run, beside its held settings (review/166): the engine's copies and a
+    // person's own, in any letter case.
+    ".claude/hooks/stamity/stamity-pre-tool-use-guard.mjs",
+    ".claude/hooks/stamity/agent-tool-policy.json",
+    ".claude/hooks/own.sh",
+    ".Claude/Hooks/Own.sh",
+    ".claude\\hooks\\stamity\\stamity-session-start.mjs",
     ".codex/agents/reviewer.toml",
     ".codex/skills/x/SKILL.md",
     ".github/agents/reviewer.agent.md",
@@ -126,6 +133,9 @@ describe("heldPaths", () => {
     ".github/dependabot.yml",
     ".github/workflow.md",
     ".claude/agent-notes.md",
+    // A look-alike of Claude Code's hook folder, and a file named like it beside the settings (review/166).
+    ".claude/hooksx/a",
+    ".claude/hooks.json",
     ".stamity/runs/2026-10-16_x/record.md",
     ".stamity/inbox.md",
     "src/.cursorrules",
@@ -212,6 +222,8 @@ describe("heldPaths", () => {
       ".cursor/commands/**",
       ".cursor/skills/**",
       ".cursor/hooks/**",
+      // review/166: Claude Code's hook scripts joined the list beside Cursor's, so the pinned list gains the glob.
+      ".claude/hooks/**",
       ".codex/agents/**",
       ".codex/skills/**",
       ".github/agents/**",
