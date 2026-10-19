@@ -1230,6 +1230,16 @@ describe("a run verb alone on its line, unattended, on every client (v0b, REQ-FL
     if (verdict.deny) expect(decide(tool, guard, command)).toEqual({ deny: true, reason: expect.stringContaining(verdict.reason) });
   });
 
+  it.each(TOOLS)("on %s, refuses the CLI file's verb after a quoted value holding a separator, behind a prefix assignment (review/130)", async (tool) => {
+    const command = "PATH=/tmp/bin node dist/cli.js run --title 'a;b' end --run x";
+    const guard = await placeGuard(tool);
+    expect(decide(tool, guard, command)).toEqual({ deny: false });
+    await getRepo().seedFiles({ ".stamity/runs/2026-10-18_x/record.md": record("in progress", "unattended") });
+    const verdict = unattendedPushVerdict(command);
+    expect(verdict.deny).toBe(true);
+    if (verdict.deny) expect(decide(tool, guard, command)).toEqual({ deny: true, reason: expect.stringContaining(verdict.reason) });
+  });
+
   it.each(["claude", "copilot"] as const)(
     "on %s, refuses a PowerShell splat after the verb and lets a quoted `@` pass (review/131)",
     async (tool) => {

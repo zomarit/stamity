@@ -2493,9 +2493,27 @@ export function unattendedPushVerdict(command: string, powershell = false): Unat
    * their values that open on a dash and hold no `;`, `|`, `&` or line break (review/130).
    */
   const RUN_VERBS = new Set(["start", "checkpoint", "end"]);
+  const PACKAGE = /stamity|\bst\b|\bcli\.m?js\b|@\d+\.\d+\.\d+/i;
   const namesVerb = (text: string): boolean =>
-    /\brun(?:\W+|[^\w\s]*\s+[^\w\s-]*-[^;|&\r\n]*?\W)(?:start|checkpoint|end)\b/i.test(text) &&
-    /stamity|\bst\b|\bcli\.m?js\b|@\d+\.\d+\.\d+/i.test(text);
+    /\brun(?:\W+|[^\w\s]*\s+[^\w\s-]*-[^;|&\r\n]*?\W)(?:start|checkpoint|end)\b/i.test(text) && PACKAGE.test(text);
+  /**
+   * The same over one parsed command's decoded words, joined (review/130, round 3), for a form the parse does not
+   * normalize (the CLI file started by `node`, a launcher it does not unwrap). Inside one simple command a separator
+   * sits only in a quoted word, so none ends the option words; the decoding reads an escaped or quoted dash as a dash.
+   * A first word after `run` whose value the reading cannot settle (an expansion, a glob, a brace or a splat) may be an
+   * option word, so it opens them too: unsure is refused. The first `run` that opens option words decides, since any
+   * verb after a later one is after it too.
+   */
+  const namesVerbInWords = (words: readonly string[]): boolean => {
+    const text = words.join(" ");
+    if (!PACKAGE.test(text)) return false;
+    for (const open of text.matchAll(/\brun[^\w\s]*\s+([^\w\s]*)/gi)) {
+      const rest = text.slice((open.index ?? 0) + open[0].length);
+      if (/^(?:start|checkpoint|end)\b/i.test(rest)) return true;
+      if (/[-$`@*?[{]/.test(open[1] ?? "")) return /(?:^|\W)(?:start|checkpoint|end)\b/i.test(rest);
+    }
+    return false;
+  };
   /** npm's per-scope registry URL, as `REGISTRY_URL` in `src/shared/cliCall.ts` reads one. */
   const REGISTRY_URL = /^https:\/\/[A-Za-z0-9.-]+(?::(?:[1-9]\d{0,3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-5]))?(?:\/[A-Za-z0-9._~/-]*)?$/;
   /** A pinned package: a runnable npm name, then `@` and a semver-shaped version (`src/shared/cliCall.ts`). */
@@ -2672,12 +2690,14 @@ export function unattendedPushVerdict(command: string, powershell = false): Unat
   // cannot show, the text or a decoded word naming one beside the package. Any form that sets the verb's environment
   // (a setter, allexport, a wrapper, a nested shell, PowerShell's `env:` drive) needs more on the line than the verb.
   // commander takes `run`'s options before its subcommand, and a valued option's value is a word of its own, so the
-  // verb is any word after `run` (review/130); the program's own options take no value.
+  // verb is any word after `run` (review/130); the program's own options take no value. A form the parse does not
+  // normalize is read over its decoded words, joined, and the raw text stays the backstop for what the parse cannot read.
   const runsVerb =
     commands.some((cmd) => {
       const at = cmd.findIndex((word, index) => index > 0 && !word.startsWith("-"));
       return (cmd[0] === "stamity" || cmd[0] === "st") && cmd[at] === "run" && cmd.slice(at + 1).some((word) => RUN_VERBS.has(word));
     }) ||
+    [...commands, ...assigned.map((word) => [word])].some(namesVerbInWords) ||
     namesVerb(command) ||
     [...assigned, ...commands.flat()].some(namesVerb);
   const broke = runsVerb ? verbShape(command) : null;

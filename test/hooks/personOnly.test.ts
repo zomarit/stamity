@@ -1654,6 +1654,45 @@ describe("unattendedPushVerdict — a run verb stands alone on its line (v0b, RE
     expectRefused(unattendedPushVerdict(command, true), broke);
   });
 
+  // review/130, round 3: forms the parse does not normalize (the CLI file started by `node`, a launcher it does not
+  // unwrap) are found over each parsed command's decoded words, joined, so a quoted value holding a separator does not
+  // end the option words early, an escaped dash reads as a dash, and a first word the reading cannot settle counts.
+  it.each([
+    ["PATH=/tmp/bin node dist/cli.js run --title 'a;b' end --run x", "a first word other than `stamity`, `st` or `npx`"],
+    ["HOME=/tmp/h node dist/cli.js run --title 'a|b' checkpoint --run x", "a first word other than `stamity`, `st` or `npx`"],
+    ["XDG_CONFIG_HOME=/tmp/c node dist/cli.js run --title 'a&b' end --run x", "a first word other than `stamity`, `st` or `npx`"],
+    ["PATH=/tmp/bin node dist/cli.js run --title 'a\nb' end --run x", "a line break"],
+    ["PATH=/tmp/bin node dist/cli.js run $'\\x2d-run' x end", "an unquoted `$`"],
+    ["PATH=/tmp/bin node dist/cli.js run $'\\055-run' x end", "an unquoted `$`"],
+    ["parallel st run --title 'a;b' end --run x", "a first word other than `stamity`, `st` or `npx`"],
+    ["watch 'node dist/cli.js run --title \"a;b\" end --run x'", "a first word other than `stamity`, `st` or `npx`"],
+    // Unsure: an expansion after `run` may be an option word, so the verb after it counts.
+    ["PATH=/tmp/bin node dist/cli.js run \"$OPT\" end --run x", "inside double quotes"],
+    ["PATH=/tmp/bin node dist/cli.js run $OPT end --run x", "an unquoted `$`"],
+  ])("refuses %j, a run verb after option words only the decoded words show (review/130)", (command, broke) => {
+    expectRefused(unattendedPushVerdict(command), broke);
+    expect(personOnlyVerdict(command, ON_FEATURE)).toEqual({ deny: false });
+  });
+
+  it.each([
+    ["node dist/cli.js run --title 'a;b' end --run x", "a first word other than `stamity`, `st` or `npx`"],
+    ["node dist/cli.js run @opts end --run x", "a first word other than `stamity`, `st` or `npx`"],
+  ])("refuses the PowerShell line %j, a run verb after option words only the decoded words show (review/130)", (command, broke) => {
+    expectRefused(unattendedPushVerdict(command, true), broke);
+  });
+
+  it.each([
+    // Non-degenerate twins: the word after `run` is a plain one, no verb follows the options, or prose names the words.
+    ["node dist/cli.js run --title 'a;b' end", "node dist/cli.js run lint end"],
+    ["node dist/cli.js run --title 'a;b' end", "node dist/cli.js run --title 'a;b'"],
+    ["git commit -m x; node dist/cli.js run --title 'a;b' end", "git commit -m 'stamity: run the tests; then end'"],
+  ])("refuses %j and lets %j pass, in both readings (review/130)", (refused, passes) => {
+    for (const powershell of [false, true]) {
+      expect(unattendedPushVerdict(refused, powershell).deny, refused).toBe(true);
+      expect(unattendedPushVerdict(passes, powershell), passes).toEqual({ deny: false });
+    }
+  });
+
   // review/131: PowerShell splats `@name` into a native command's arguments and splits words on blanks other than a
   // space or a tab, so a stop-parsing token set off by one, or spelled with its typographic dashes, is still one.
   const BLANKS = [0x0b, 0x0c, 0x85, 0xa0, 0x2002, 0x3000].map((code) => String.fromCharCode(code));
