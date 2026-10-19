@@ -535,6 +535,33 @@ describe("stamity run end", () => {
     expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
   });
 
+  // pr/1 (REQ-FLOW-093): end commits through checkpoint's steps, so a pre-commit hook's staged path undoes it there too.
+  it("undoes a commit a pre-commit hook staged a path outside --paths into, pushing nothing and opening no pull request", async () => {
+    const { repo, remote, base } = await seed("unattended");
+    await writeFile(join(repo, "a.txt"), "changed\n");
+    await writeFile(join(repo, "b.txt"), "a hook's change\n");
+    const hook = join(repo, ".git", "hooks", "pre-commit");
+    await writeFile(hook, "#!/bin/sh\ngit add -- b.txt\n");
+    await chmod(hook, 0o755);
+
+    const { code, doc } = await run(repo, [...END("feat: x"), "--paths", "a.txt"]);
+
+    expect(code).toBe(1);
+    expect(doc).toMatchObject({
+      subcommand: "end",
+      committed: null,
+      pushed: false,
+      pr: null,
+      inferred: [],
+      notDone: ["commit refused: b.txt was staged by a hook and is not in --paths (commit undone)"],
+    });
+    expect(git(repo, ["rev-parse", "HEAD"])).toBe(base);
+    expect(git(repo, ["diff", "--cached", "--name-only", "--", "b.txt"])).toBe("b.txt");
+    expect(pushes()).toEqual([]);
+    expect(writesToGitHub()).toEqual([]);
+    expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
+  });
+
   describe("the morning walk's body (review/164)", () => {
     const WALK_END = (title: string): string[] => ["end", "--run", WALK, "--title", title, "--json"];
     const WALK_RECORD = `${WALK_DIR}/record.md`;

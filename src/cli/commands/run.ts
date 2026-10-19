@@ -993,7 +993,8 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   const inHistory = unattended ? await heldInHistory(top, remote.tips) : [];
 
   // pr/5: the commit takes the whole index, so a path staged before the verb ran and not in its own list refuses it.
-  const stray = await strayStaged(top, [...stage, ...gone, ...patches, ...result.held], named);
+  const isOwn = ownPath([...stage, ...gone, ...patches, ...result.held], named);
+  const stray = await strayStaged(top, isOwn);
   if (stray === null) {
     result.notDone.push("commit failed: git diff --cached could not list the staged paths");
     return finish(false);
@@ -1006,7 +1007,34 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   // (4) The commit, only when something is staged.
   const staged = await git(top, ["diff", "--cached", "--quiet", "--no-ext-diff", "--ignore-submodules=none"], verb);
   if (staged.code === 1) {
+    // pr/1: the repository's hooks run inside the commit, after the check above, so HEAD is read before it and the
+    // commit's own paths after it; a hook's path outside the list, or a commit of its own, undoes the commit.
+    const before = await commitAt(top, "HEAD", verb);
+    if (before === null) {
+      result.notDone.push("commit refused: HEAD names no commit, so the commit's own paths could not be read against it");
+      return finish(false);
+    }
     const commit = await git(top, ["commit", "--quiet", `--message=chore(run): checkpoint ${run}`, ...(opts["signoff"] === true ? ["--signoff"] : [])], verb);
+    const widened = await hookWidened(top, before, commit.code === 0, isOwn, verb);
+    if (widened !== null) {
+      const reset = await git(top, ["reset", "--soft", "--quiet", before], verb);
+      const undone = reset.code === 0 ? " (commit undone)" : "";
+      result.notDone.push(
+        ...(widened.ownCommit ? [`commit refused: a hook made a commit of its own${undone}`] : []),
+        ...widened.outside.map((path) => `commit refused: ${path} was staged by a hook and is not in --paths${undone}`),
+        ...(widened.unread === null ? [] : [`commit refused: ${widened.unread}${undone}`]),
+        ...(commit.code === 0 ? [] : [`commit failed: ${firstLine(`${commit.stderr}\n${commit.stdout}`)}`]),
+      );
+      if (reset.code !== 0) {
+        if (commit.code === 0) result.committed = await commitAt(top, "HEAD", verb);
+        result.notDone.push(`commit not undone: git reset answered ${reset.code}: ${firstLine(reset.stderr)}`);
+        lines.push(`commit: ${result.committed ?? "none"} (not undone)`);
+        return finish(false);
+      }
+      const why = widened.outside.length > 0 ? "a hook staged paths outside the list" : widened.ownCommit ? "a hook made a commit of its own" : "its paths could not be read";
+      lines.push(`commit: undone (${why})`);
+      return finish(false);
+    }
     if (commit.code !== 0) {
       const why = `${commit.stderr}\n${commit.stdout}`;
       result.notDone.push(IDENTITY_REFUSAL.test(why) ? "commit failed (identity)" : `commit failed: ${firstLine(why)}`);
@@ -1325,20 +1353,56 @@ async function add(top: string, paths: readonly string[], notDone: string[]): Pr
 }
 
 /**
- * The staged paths (the index against `HEAD`, what the commit takes) that are
- * neither one of `own` (the run files, the inbox, `--paths`, the held patches,
- * the held paths) nor under a `--paths` folder (pr/5); `null` when git could
- * not list them.
+ * Whether a top-relative path is the verb's own to commit: one of `own` (the
+ * run files, the inbox, `--paths`, deletions, the held patches, the held
+ * paths) or under a `--paths` folder of `named` (pr/5, pr/1).
  */
-async function strayStaged(top: string, own: readonly string[], named: readonly string[]): Promise<string[] | null> {
-  const read = await git(top, ["diff", "--cached", "--name-only", "-z", ...DIFF_PINS, "HEAD", "--"], CHECKPOINT);
-  if (read.code !== 0) return null;
+function ownPath(own: readonly string[], named: readonly string[]): (path: string) => boolean {
   const exact = new Set(own);
   const folders = named.map((path) => `${path.replace(/\/+$/, "")}/`);
+  return (path) => exact.has(path) || folders.some((folder) => path.startsWith(folder));
+}
+
+/**
+ * The staged paths (the index against `HEAD`, what the commit takes) that are
+ * not the verb's own (`isOwn`, pr/5); `null` when git could not list them.
+ */
+async function strayStaged(top: string, isOwn: (path: string) => boolean): Promise<string[] | null> {
+  const read = await git(top, ["diff", "--cached", "--name-only", "-z", ...DIFF_PINS, "HEAD", "--"], CHECKPOINT);
+  if (read.code !== 0) return null;
   return read.stdout
     .split("\0")
-    .filter((path) => path !== "" && !exact.has(path) && !folders.some((folder) => path.startsWith(folder)))
+    .filter((path) => path !== "" && !isOwn(path))
     .toSorted();
+}
+
+/** pr/1: what the repository's hooks did to the verb's commit, read after it. */
+interface HookWidening {
+  /** The paths between the HEAD before the commit and the HEAD after it that are not the verb's own. */
+  outside: string[];
+  /** HEAD moved past the commit the verb made, or moved where the verb's own commit failed. */
+  ownCommit: boolean;
+  /** Why the commit's paths could not be read, or `null` where they were. */
+  unread: string | null;
+}
+
+/**
+ * pr/1: reads, after the verb's commit, whether a hook widened it: the commit's
+ * parent must be `before` (where the commit failed, HEAD must still be it), and
+ * every path of `before..HEAD` must be the verb's own. `null` where neither was
+ * crossed and HEAD holds nothing the verb did not commit.
+ */
+async function hookWidened(top: string, before: string, committed: boolean, isOwn: (path: string) => boolean, verb: string): Promise<HookWidening | null> {
+  const head = await commitAt(top, "HEAD", verb);
+  if (!committed && head === before) return null;
+  const ownCommit = (committed ? await commitAt(top, "HEAD^", verb) : head) !== before;
+  const read = await git(top, ["diff", "--name-only", "-z", ...DIFF_PINS, before, "HEAD", "--"], verb);
+  if (read.code !== 0) return { outside: [], ownCommit, unread: `git diff answered ${read.code}: ${firstLine(read.stderr)}` };
+  const outside = read.stdout
+    .split("\0")
+    .filter((path) => path !== "" && !isOwn(path))
+    .toSorted();
+  return outside.length === 0 && !ownCommit ? null : { outside, ownCommit, unread: null };
 }
 
 /**

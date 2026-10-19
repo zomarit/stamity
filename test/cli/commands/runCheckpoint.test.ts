@@ -656,6 +656,118 @@ describe("stamity run checkpoint", () => {
     expect(remoteHeads(remote)).toEqual(SEEDED);
   });
 
+  // pr/1 (REQ-FLOW-093): the hooks run inside the commit, after the staged-path check, so the commit's own paths are
+  // read after it, and a commit carrying a path outside the list, or a commit a hook made, is undone before any push.
+  describe("a commit a hook widened (pr/1)", () => {
+    /** Writes `name` into the repository's hooks as an executable shell script. */
+    async function hook(repo: string, name: string, body: string): Promise<void> {
+      const file = join(repo, ".git", "hooks", name);
+      await writeFile(file, `#!/bin/sh\n${body}`);
+      await chmod(file, 0o755);
+    }
+
+    it.each(["attended", "unattended"] as const)("%s: undoes a commit a pre-commit hook staged a path outside --paths into, the path still staged, pushing nothing", async (mode) => {
+      const { repo, remote, base } = await seed(mode);
+      await writeFile(join(repo, "a.txt"), "changed\n");
+      await writeFile(join(repo, "b.txt"), "a hook's change\n");
+      await hook(repo, "pre-commit", "git add -- b.txt\n");
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      expect(code).toBe(1);
+      expect(doc).toMatchObject({ committed: null, pushed: false, held: [], notDone: ["commit refused: b.txt was staged by a hook and is not in --paths (commit undone)"] });
+      expect(git(repo, ["rev-parse", "HEAD"])).toBe(base);
+      expect(git(repo, ["diff", "--cached", "--name-only"]).split("\n")).toEqual([`${RUN_DIR}/record.md`, "a.txt", "b.txt"]);
+      expect(pushes()).toEqual([]);
+      expect(remoteHeads(remote)).toEqual(SEEDED);
+    });
+
+    it("undoes a commit a pre-commit hook made of its own, which the verb's commit then failed on, pushing nothing", async () => {
+      const { repo, remote, base } = await seed("attended");
+      await writeFile(join(repo, "a.txt"), "changed\n");
+      await writeFile(join(repo, "b.txt"), "a hook's change\n");
+      await hook(repo, "pre-commit", "git commit -q --no-verify -m 'a hook commit' -- b.txt\n");
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      expect(code).toBe(1);
+      expect(doc).toMatchObject({ committed: null, pushed: false });
+      expect(doc["notDone"]).toEqual(
+        expect.arrayContaining([
+          "commit refused: a hook made a commit of its own (commit undone)",
+          "commit refused: b.txt was staged by a hook and is not in --paths (commit undone)",
+        ]),
+      );
+      expect(git(repo, ["rev-parse", "HEAD"])).toBe(base);
+      expect(pushes()).toEqual([]);
+      expect(remoteHeads(remote)).toEqual(SEEDED);
+    });
+
+    it("undoes a commit a post-commit hook stacked on the verb's own, though it changes only a listed path", async () => {
+      const { repo, remote, base } = await seed("unattended");
+      await writeFile(join(repo, "a.txt"), "changed\n");
+      // The guard keeps the hook's own commit from starting the hook again.
+      await hook(repo, "post-commit", '[ -n "$INNER" ] && exit 0\necho more >> a.txt\nINNER=1 git commit -q -m \'a hook commit\' -- a.txt\n');
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      expect(code).toBe(1);
+      expect(doc).toMatchObject({ committed: null, pushed: false, notDone: ["commit refused: a hook made a commit of its own (commit undone)"] });
+      expect(git(repo, ["rev-parse", "HEAD"])).toBe(base);
+      expect(pushes()).toEqual([]);
+      expect(remoteHeads(remote)).toEqual(SEEDED);
+    });
+
+    it("names the undone commit and each path in the human report", async () => {
+      const { repo, base } = await seed("attended");
+      await writeFile(join(repo, "a.txt"), "changed\n");
+      await writeFile(join(repo, "b.txt"), "a hook's change\n");
+      await hook(repo, "pre-commit", "git add -- b.txt\n");
+
+      const { code, stdout } = await run(repo, ["checkpoint", "--run", RUN, "--paths", "a.txt"]);
+
+      expect(code).toBe(1);
+      expect(stdout).toContain("\ncommit: undone (a hook staged paths outside the list)\n");
+      expect(stdout).toContain("  - commit refused: b.txt was staged by a hook and is not in --paths (commit undone)");
+      expect(stdout).not.toContain("push:");
+      expect(git(repo, ["rev-parse", "HEAD"])).toBe(base);
+    });
+
+    it("says the commit was not undone, pushing nothing, when the reset fails", async () => {
+      const { repo, remote, base } = await seed("attended");
+      await writeFile(join(repo, "a.txt"), "changed\n");
+      await writeFile(join(repo, "b.txt"), "a hook's change\n");
+      await hook(repo, "pre-commit", "git add -- b.txt\n");
+      // The branch's ref lock, taken once the commit has moved the branch, makes the reset's ref update fail.
+      await hook(repo, "post-commit", `: > "$(git rev-parse --git-dir)/refs/heads/${RUN_BRANCH}.lock"\n`);
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      expect(code).toBe(1);
+      expect(doc["pushed"]).toBe(false);
+      const notDone = doc["notDone"] as string[];
+      expect(notDone).toContain("commit refused: b.txt was staged by a hook and is not in --paths");
+      expect(notDone.at(-1)).toMatch(/^commit not undone: git reset answered \d+: /);
+      expect(doc["committed"]).toBe(git(repo, ["rev-parse", "HEAD"]));
+      expect(git(repo, ["rev-parse", "HEAD^"])).toBe(base);
+      expect(pushes()).toEqual([]);
+      expect(remoteHeads(remote)).toEqual(SEEDED);
+    });
+
+    it("commits and pushes as before where the pre-commit hook stages nothing outside the list", async () => {
+      const { repo, remote } = await seed("attended");
+      await writeFile(join(repo, "a.txt"), "changed\n");
+      await hook(repo, "pre-commit", "git add -- a.txt\n");
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [] });
+      expect(doc["committed"]).toBe(git(repo, ["rev-parse", "HEAD"]));
+      expect(pushedTree(remote)).toContain("a.txt");
+    });
+  });
+
   it("commits a path staged beforehand under a --paths folder", async () => {
     const { repo, remote } = await seed("attended");
     await put(repo, "src/x.ts", "export const x = 1;\n");
