@@ -208,7 +208,7 @@ describe("stamity run checkpoint", () => {
    */
   async function seed(
     mode: "attended" | "unattended" | null,
-    opts: { branch?: string; pin?: "base" | "untracked" | "none"; files?: Record<string, string> } = {},
+    opts: { branch?: string; pin?: "base" | "untracked" | "none"; files?: Record<string, string>; links?: Record<string, string> } = {},
   ): Promise<Seeded> {
     const dir = getRoot().path(`case-${Math.random().toString(36).slice(2, 8)}`);
     const repo = join(dir, "repo");
@@ -230,6 +230,12 @@ describe("stamity run checkpoint", () => {
     // review/175: a case's own files in Base:, hook declarations and the scripts they name among them.
     await Promise.all(Object.entries(opts.files ?? {}).map(([path, text]) => put(repo, path, text)));
     git(repo, ["add", "-A"]);
+    // review/185: a case's links in Base:, written to the index alone, so Base: holds each as a link on every platform
+    // (Windows included, where a checkout may write no link); the work tree lacks them, and each case refuses before staging.
+    for (const [path, target] of Object.entries(opts.links ?? {})) {
+      const blob = execFileSync("git", ["hash-object", "-w", "--stdin"], { cwd: repo, input: target, encoding: "utf8", env: { ...process.env, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: NO_GIT_CONFIG } }).trim();
+      git(repo, ["update-index", "--add", "--cacheinfo", `120000,${blob},${path}`]);
+    }
     git(repo, ["commit", "-q", "-m", "seed"]);
     git(repo, ["remote", "add", "origin", "https://github.com/o/r.git"]);
     const base = git(repo, ["rev-parse", "HEAD"]);
@@ -702,6 +708,125 @@ describe("stamity run checkpoint", () => {
       expect(git(repo, ["diff", "--cached", "--name-only"])).toBe("");
       expect(pushes()).toEqual([]);
       expect(remoteHeads(remote)).toEqual(SEEDED);
+    });
+
+    describe("the hold fails closed on anything it cannot resolve cleanly at Base: (review/182-/189)", () => {
+      const refused = (path: string, why: string): string =>
+        `hold refused: ${path} at Base: ${why}, so the hook scripts it names are unknown and the run pushes nothing`;
+      const manifestNaming = (folder: string): string => `${JSON.stringify({ hooks: { userHooksDir: folder } })}\n`;
+      const GUARD = { "tools/guard.mjs": "base guard\n" };
+
+      it("holds the whole folder Base:'s manifest names: a declaration the run edits there, and one it adds, stay out of the push (review/182, review/184)", async () => {
+        const { repo, remote } = await seed("unattended", { files: { ".stamity/manifest.json": manifestNaming("hooks"), "hooks/guard.json": declaring("tools/guard.mjs"), ...GUARD } });
+        await writeFile(join(repo, "hooks/guard.json"), declaring("tools/other.mjs"));
+        await put(repo, "hooks/new.json", declaring("tools/new.mjs"));
+        await put(repo, "tools/new.mjs", "added by the run\n");
+        await writeFile(join(repo, "a.txt"), "the unit's change\n");
+
+        const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt", "hooks/guard.json", "hooks/new.json", "tools/new.mjs"]);
+
+        expect(code).toBe(0);
+        expect(doc).toMatchObject({ pushed: true, notDone: [], held: ["hooks/guard.json", "hooks/new.json"] });
+        expect(pushedFile(remote, "hooks/guard.json")).toBe(declaring("tools/guard.mjs").trimEnd());
+        expect(pushedTree(remote)).not.toContain("hooks/new.json");
+        expect(pushedFile(remote, "a.txt")).toBe("the unit's change");
+      });
+
+      it("holds a script a declaration at Base: spells with backslashes, on every platform (review/183, review/186)", async () => {
+        const { repo, remote } = await seed("unattended", { files: { ".stamity/hooks/guard.json": declaring("tools\\guard.mjs"), ...GUARD } });
+        await writeFile(join(repo, "tools/guard.mjs"), "steered guard\n");
+
+        const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "tools/guard.mjs"]);
+
+        expect(code).toBe(0);
+        expect(doc).toMatchObject({ pushed: true, notDone: [], held: ["tools/guard.mjs"] });
+        expect(pushedFile(remote, "tools/guard.mjs")).toBe("base guard");
+      });
+
+      it("reads a manifest and a declaration at Base: that open with a byte-order mark, as the manifest reader does (review/188)", async () => {
+        const { repo, remote } = await seed("unattended", {
+          files: { ".stamity/manifest.json": `﻿${manifestNaming("hooks")}`, "hooks/guard.json": `﻿${declaring("tools/guard.mjs")}`, ...GUARD },
+        });
+        await writeFile(join(repo, "tools/guard.mjs"), "steered guard\n");
+
+        const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "tools/guard.mjs"]);
+
+        expect(code).toBe(0);
+        expect(doc).toMatchObject({ pushed: true, notDone: [], held: ["tools/guard.mjs"] });
+        expect(pushedFile(remote, "tools/guard.mjs")).toBe("base guard");
+      });
+
+      const PACK_DECLARATION = declaring("tools/guard.mjs");
+      it.each([
+        {
+          layout: "a link above the folder Base:'s manifest names (review/185)",
+          files: { ".stamity/manifest.json": manifestNaming("cfg/hooks"), "elsewhere/hooks/guard.json": declaring("tools/guard.mjs") },
+          links: { cfg: "elsewhere" },
+          line: refused("cfg/hooks", "passes through a link (cfg)"),
+        },
+        {
+          layout: "the packs folder is a link (review/185)",
+          files: { "elsewhere/packs/acme__guard/hooks/pre.json": PACK_DECLARATION },
+          links: { ".stamity/packs": "../elsewhere/packs" },
+          line: refused(".stamity/packs", "passes through a link (.stamity/packs)"),
+        },
+        {
+          layout: "a pack root is a link (review/185)",
+          files: { "elsewhere/acme/hooks/pre.json": PACK_DECLARATION },
+          links: { ".stamity/packs/acme__guard": "../../elsewhere/acme" },
+          line: refused(".stamity/packs/acme__guard/hooks", "passes through a link (.stamity/packs/acme__guard)"),
+        },
+        {
+          layout: "the manifest names its hooks folder in another letter case than the tree (review/185)",
+          files: { ".stamity/manifest.json": manifestNaming("Hooks"), "hooks/guard.json": declaring("tools/guard.mjs") },
+          links: {},
+          line: refused("Hooks", "is spelled in another letter case than the tree's hooks"),
+        },
+        {
+          layout: "the tree holds the default hooks folder in another letter case (review/185)",
+          files: { ".stamity/Hooks/guard.json": declaring("tools/guard.mjs") },
+          links: {},
+          line: refused(".stamity/hooks", "is spelled in another letter case than the tree's .stamity/Hooks"),
+        },
+        {
+          layout: "a declared script's path passes through a link (review/185)",
+          files: { ".stamity/hooks/guard.json": declaring("lnk/guard.mjs") },
+          links: { lnk: "tools" },
+          line: refused(".stamity/hooks/guard.json", "names lnk/guard.mjs, which passes through a link (lnk)"),
+        },
+        {
+          layout: "a declared script's path holds a .. segment (review/186)",
+          files: { ".stamity/hooks/guard.json": declaring("tools/../tools/guard.mjs") },
+          links: {},
+          line: refused(".stamity/hooks/guard.json", "names tools/../tools/guard.mjs, which holds a .. segment"),
+        },
+        {
+          layout: "a declared script's path leaves the repository (review/186)",
+          files: { ".stamity/hooks/guard.json": declaring("../guard.mjs") },
+          links: {},
+          line: refused(".stamity/hooks/guard.json", "names a path outside the repository"),
+        },
+        {
+          // A hook naming tools/guard.mjs, and another naming a path under it, which leaves no file to stand in its place.
+          layout: "a declared script's stand-in cannot land (review/189)",
+          files: {
+            ".stamity/hooks/guard.json": `${JSON.stringify({ hooks: [{ event: "pre_tool_use", command: ["node", "tools/guard.mjs"] }, { event: "pre_tool_use", command: ["node", "tools/guard.mjs/x.mjs"] }] })}\n`,
+          },
+          links: {},
+          line: refused(".stamity/hooks/guard.json", "names a script the hold could not stand in for"),
+        },
+      ])("refuses before staging when $layout, naming it, and pushes nothing", async ({ files, links, line }) => {
+        const { repo, remote } = await seed("unattended", { files: { ...files, ...GUARD }, links });
+        await writeFile(join(repo, "tools/guard.mjs"), "steered guard\n");
+
+        const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "tools/guard.mjs"]);
+
+        expect(code).toBe(1);
+        expect(doc).toMatchObject({ pushed: false, committed: null, held: [], notDone: [line] });
+        expect(git(repo, ["diff", "--cached", "--name-only"])).toBe("");
+        expect(pushes()).toEqual([]);
+        expect(remoteHeads(remote)).toEqual(SEEDED);
+      });
     });
   });
 

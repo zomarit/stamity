@@ -372,6 +372,23 @@ describe("stamity run end", () => {
     expect(git(remote, ["show", `refs/heads/${RUN_BRANCH}:tools/guard.mjs`])).toBe("base guard");
   });
 
+  it("holds the whole hooks folder Base:'s manifest names, a declaration the run adds there included, out of an unattended end's push (review/182)", async () => {
+    const declaring = (script: string): string => `${JSON.stringify({ hooks: [{ event: "pre_tool_use", command: ["node", script] }] })}\n`;
+    const manifest = `${JSON.stringify({ hooks: { userHooksDir: "hooks" } })}\n`;
+    const { repo, remote, base } = await seed("unattended", { files: { ".stamity/manifest.json": manifest, "hooks/guard.json": declaring("tools/guard.mjs"), "tools/guard.mjs": "base guard\n" } });
+    // Origin holds Base:, as a run's clone's does, so the held files Base: carries are not in a commit the push sends.
+    git(repo, ["push", "-q", remote, `${base}:refs/heads/main`]);
+    git(repo, ["update-ref", "refs/remotes/origin/main", base]);
+    await writeFile(join(repo, "hooks/new.json"), declaring("tools/new.mjs"));
+    await writeFile(join(repo, "tools/new.mjs"), "added by the run\n");
+
+    const { code, doc } = await run(repo, [...END("feat: x"), "--paths", "hooks/new.json", "tools/new.mjs"]);
+
+    expect(code).toBe(0);
+    expect(doc).toMatchObject({ subcommand: "end", pushed: true, held: ["hooks/new.json"], notDone: ["morning list missing"] });
+    expect(git(remote, ["ls-tree", "-r", "--name-only", `refs/heads/${RUN_BRANCH}`]).split("\n")).not.toContain("hooks/new.json");
+  });
+
   it("opens no pull request when the secret scan holds the push, the reason in notDone", async () => {
     const { repo, remote } = await seed("attended");
     await writeFile(join(repo, "a.txt"), `the key is ${TOKEN}\n`);

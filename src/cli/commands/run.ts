@@ -871,16 +871,17 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   const top = (await git(cwd, ["rev-parse", "--show-toplevel"], verb)).stdout.replace(/\r?\n$/, "");
   const prefix = (await git(cwd, ["rev-parse", "--show-prefix"], verb)).stdout.replace(/\r?\n$/, "");
   const fromTop = (projectPath: string): string => posix.normalize(`${prefix}${projectPath}`);
-  // review/175 (signed off): unattended, the script each hook declaration at Base: names is held as a person-only path
-  // is, read before anything is staged; a declaration Base: holds that does not read refuses the run's push.
-  let scripts: string[] = [];
+  // review/175, review/182-/189 (signed off): unattended, the hook files and folders Base: holds and the script each
+  // declaration there names are held as person-only paths are, read before anything is staged; anything the hold
+  // cannot resolve cleanly at Base: refuses the run's push.
+  let hookPaths: string[] = [];
   if (unattended) {
-    const read = await hookScriptsAt(top, prefix, base, verb);
+    const read = await hookPathsAt(top, prefix, base, verb);
     if (typeof read === "string") {
       result.notDone.push(read);
       return finish(false);
     }
-    scripts = read;
+    hookPaths = read;
   }
 
   // pr/4: an earlier checkpoint's marker (a link or a folder at its path too) refuses before any `git add`, held-patch
@@ -925,7 +926,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   if (ctx.dryRun) {
     if (unattended) {
       const wouldStage = stage.map((path) => ({ path, link: isLink(join(top, path)), added: false }));
-      result.held = heldOf([...(await changedSince(top, base)), ...(await changedSince(top, base, "index")), ...wouldStage], scripts);
+      result.held = heldOf([...(await changedSince(top, base)), ...(await changedSince(top, base, "index")), ...wouldStage], hookPaths);
     }
     lines.push(`would stage: ${list(stage)}`, `would hold: ${list(result.held)}`, "Dry run: nothing was staged, written, committed or pushed.");
     return finish(true, { dryRun: true });
@@ -942,8 +943,8 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   if (unattended) {
     const indexSide = await changedSince(top, base, "index");
     const treeSide = await changedSince(top, base);
-    const inIndex = heldOf(indexSide, scripts);
-    const held = heldOf([...treeSide, ...indexSide], scripts);
+    const inIndex = heldOf(indexSide, hookPaths);
+    const held = heldOf([...treeSide, ...indexSide], hookPaths);
     // v21 (pr/39): a held path absent at Base: and absent from the work tree, staged and then deleted, gets no
     // section: its two layers would add and delete it, and a patch applied part by part would create a file the run
     // deleted. Absent at Base:, a path the work tree held would show on the work tree's side, so one missing there is gone.
@@ -1048,7 +1049,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
     return finish(false);
   }
   // review/159: the commits the push would send, read before the checkpoint's own, which puts held paths back to Base: only.
-  const inHistory = unattended ? await heldInHistory(top, remote.tips, scripts) : [];
+  const inHistory = unattended ? await heldInHistory(top, remote.tips, hookPaths) : [];
 
   // pr/5: the commit takes the whole index, so a path staged before the verb ran and not in its own list refuses it.
   const isOwn = ownPath([...stage, ...gone, ...patches, ...result.held], named);
@@ -1159,7 +1160,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   // review/159, review/156: a held path in a pushed commit, or still changed in HEAD's tree (a hook that staged it
   // again), refuses the push; the verb never rewrites history.
   if (unattended) {
-    const atTip = heldOf(await changedSince(top, base, "HEAD"), scripts).filter((path) => !inHistory.includes(path));
+    const atTip = heldOf(await changedSince(top, base, "HEAD"), hookPaths).filter((path) => !inHistory.includes(path));
     result.notDone.push(...inHistory.map((path) => `held path in history (${path})`), ...atTip.map((path) => `held path in the pushed tree (${path})`));
     if (inHistory.length + atTip.length > 0) {
       lines.push("push: refused (a held path would be pushed)");
@@ -1312,23 +1313,25 @@ function heldLink(path: string): boolean {
 }
 
 /**
- * The held paths of `entries`, sorted and once each: a person-only path, a hook script `scripts` names
- * ({@link hookScriptsAt}, review/175), or a link at a held glob's prefix or at a folder above such a script. A script
+ * The held paths of `entries`, sorted and once each: a person-only path, a path at or under one of `hookPaths` (the
+ * hook files and folders the hold reads at `Base:`, and the scripts their declarations name: {@link hookPathsAt},
+ * review/175, review/182), or a link at a held glob's prefix or at a folder above one of `hookPaths`. A hook path
  * matches without case and over the Windows reading of a path, as the globs do.
  */
-function heldOf(entries: readonly Changed[], scripts: readonly string[]): string[] {
+function heldOf(entries: readonly Changed[], hookPaths: readonly string[]): string[] {
   const paths = [...new Set(entries.map((entry) => entry.path))];
   const links = new Set(entries.filter((entry) => entry.link).map((entry) => entry.path));
   const byGlob = new Set(heldPaths(paths));
-  const named = new Set(scripts.map(foldPath));
+  const roots = hookPaths.map(foldPath);
   const above = new Set(
-    scripts.flatMap((script) => {
-      const segments = foldPath(script).split("/");
+    roots.flatMap((root) => {
+      const segments = root.split("/");
       return segments.slice(1).map((_, end) => segments.slice(0, end + 1).join("/"));
     }),
   );
+  const under = (folded: string): boolean => roots.some((root) => folded === root || folded.startsWith(`${root}/`));
   const held = (path: string): boolean =>
-    byGlob.has(path) || named.has(foldPath(path)) || (links.has(path) && (heldLink(path) || above.has(foldPath(path))));
+    byGlob.has(path) || under(foldPath(path)) || (links.has(path) && (heldLink(path) || above.has(foldPath(path))));
   return paths.filter(held).toSorted();
 }
 
@@ -1342,88 +1345,174 @@ const MANIFEST_PATH = ".stamity/manifest.json";
 const USER_HOOKS_DIR = ".stamity/hooks";
 const PACKS_DIR = ".stamity/packs";
 
-/** One `git ls-tree -z` row: its object id, and whether it is a regular file (a link, a folder or a submodule is not). */
-interface TreeRow {
+/** UTF-8's byte-order mark, which the manifest reader drops before it parses (`src/manifest/manifest.ts`, review/188). */
+const BOM = "﻿";
+
+/** One entry of a folder at `Base:`, as `git ls-tree -z` lists it: its name, its object id and what it is. */
+interface TreeEntry {
+  name: string;
   id: string;
-  regular: boolean;
+  kind: "folder" | "file" | "link" | "submodule";
+}
+
+/** A path read at `Base:`: its top-relative spelling and what it names there (a missing name has no id), or why it does not resolve cleanly. */
+type AtBase = { path: string; kind: "folder" | "file" | "missing"; id: string } | { refused: string };
+
+/** The reads {@link baseReader} offers: a project-relative path, a top-relative path's segments, and one folder's entries. */
+interface BaseReader {
+  resolve: (path: string) => Promise<AtBase>;
+  walk: (segments: readonly string[]) => Promise<AtBase>;
+  list: (tree: string) => Promise<TreeEntry[] | string>;
 }
 
 /**
- * review/175 (signed off): the script each hook declaration at `base` names, top-relative and sorted. The declarations
- * are the repository's own, in the folder `base`'s manifest names (`.stamity/hooks` by default), and the installed
- * packs', under `.stamity/packs/<pack>/hooks/`; both are read through the engine's own reader
- * ({@link readHookDefinitions}, with {@link checkLauncherArgv}'s one script argument), so a declaration emission refuses
- * for its shape names nothing held. They are read at `Base:`, never from the work tree, so a run cannot unhold a script
- * by editing or deleting its declaration. The reader runs over a scratch copy of those declarations in which every path
- * an argument names stands as an empty file: whether the script exists is not judged, since emission on a checkout
- * where it was there but uncommitted wired it, and a run that then adds it must not push it. A declaration, a hook
- * folder or the manifest `base` holds that does not read leaves its scripts unknown: the reason, for `notDone`.
- * A hook written by hand into a client's settings file is not read here (a residual the pages name).
+ * review/185, review/186 (signed off): the one resolver the hold reads `Base:` through. It walks `base`'s tree objects
+ * from the root, one listing per folder, never a work tree and never a path git resolves. A project-relative path reads
+ * its backslashes as separators and drops its `.` segments; a `..` segment, an absolute path or one naming a drive or a
+ * scheme, and the project root itself do not resolve cleanly. Nor does a segment that is a link or a submodule at
+ * `Base:`, or one the tree spells in another letter case or holds twice by letter case, since a checkout that follows
+ * the link or folds the case reads another file there. A path that meets a missing name, or a file where a folder
+ * goes, names nothing at `Base:`, cleanly.
  */
-async function hookScriptsAt(top: string, prefix: string, base: string, verb: string): Promise<string[] | string> {
-  const fromTop = (projectPath: string): string => posix.normalize(`${prefix}${projectPath}`);
+function baseReader(top: string, base: string, prefix: string, verb: string): BaseReader {
+  const listings = new Map<string, Promise<TreeEntry[] | string>>();
+  const entriesOf = (tree: string): Promise<TreeEntry[] | string> => {
+    const known = listings.get(tree);
+    if (known !== undefined) return known;
+    const listing = listTree(top, tree, verb);
+    listings.set(tree, listing);
+    return listing;
+  };
+  const fold = (name: string): string => name.normalize("NFC").toLowerCase();
+  const walk = async (segments: readonly string[]): Promise<AtBase> => {
+    const path = segments.join("/");
+    let tree = base;
+    for (const [index, segment] of segments.entries()) {
+      // oxlint-disable-next-line no-await-in-loop -- the walk's next folder is the entry this listing finds
+      const entries = await entriesOf(tree);
+      if (typeof entries === "string") return { refused: entries };
+      const like = entries.filter((entry) => fold(entry.name) === fold(segment));
+      const spelled = like.map((entry) => [...segments.slice(0, index), entry.name].join("/")).join(", ");
+      const [entry] = like;
+      if (entry === undefined) return { path, kind: "missing", id: "" };
+      if (like.length > 1) return { refused: `is ambiguous by letter case in the tree (${spelled})` };
+      if (entry.name !== segment) return { refused: `is spelled in another letter case than the tree's ${spelled}` };
+      if (entry.kind === "link" || entry.kind === "submodule") return { refused: `passes through a ${entry.kind} (${spelled})` };
+      if (index === segments.length - 1) return { path, kind: entry.kind, id: entry.id };
+      if (entry.kind === "file") return { path, kind: "missing", id: "" };
+      tree = entry.id;
+    }
+    return { refused: "names the project root" };
+  };
+  const resolvePath = async (path: string): Promise<AtBase> => {
+    const unified = path.replaceAll("\\", "/");
+    if (unified.startsWith("/") || /^[A-Za-z][A-Za-z0-9+.-]*:/.test(unified)) return { refused: "is absolute or names a drive or a scheme" };
+    const named = unified.split("/").filter((segment) => segment !== "" && segment !== ".");
+    if (named.includes("..")) return { refused: "holds a .. segment" };
+    if (named.length === 0) return { refused: "names the project root" };
+    return walk([...prefix.split("/").filter((segment) => segment !== ""), ...named]);
+  };
+  return { resolve: resolvePath, walk, list: entriesOf };
+}
+
+/** The entries of the tree `tree` names (a commit names its root tree), or why they could not be listed, for `notDone`. */
+async function listTree(top: string, tree: string, verb: string): Promise<TreeEntry[] | string> {
+  const read = await git(top, ["ls-tree", "-z", tree], verb);
+  if (read.code !== 0) return `could not be listed (git ls-tree answered ${read.code}: ${firstLine(read.stderr)})`;
+  return read.stdout.split("\0").flatMap((line): TreeEntry[] => {
+    const [, mode, type, id, name] = /^(\d{6}) (\w+) ([0-9a-f]{40,64})\t([^]+)$/.exec(line) ?? [];
+    if (mode === undefined || type === undefined || id === undefined || name === undefined) return [];
+    return [{ name, id, kind: type === "tree" ? "folder" : type !== "blob" ? "submodule" : mode === LINK_MODE ? "link" : "file" }];
+  });
+}
+
+/**
+ * review/175, review/182-/189 (signed off): what the hold holds from the hook declarations at `base`, top-relative and
+ * sorted. First the files it reads there, each held whole wherever it lies: the manifest, the folder of the
+ * repository's own declarations the manifest names (`.stamity/hooks` by default), and the installed packs' folder,
+ * whose `<pack>/hooks/` folders hold theirs. Then the script each declaration names, held whether or not it exists at
+ * `base`. The declarations are read at `Base:`, never from the work tree, so a run cannot unhold a script by editing or
+ * deleting its declaration, and through the engine's own reader ({@link readHookDefinitions}, with
+ * {@link checkLauncherArgv}'s one script argument), so a declaration emission refuses for its shape names nothing held.
+ * The reader runs over a scratch copy of them whose arguments read backslashes as separators, as a Windows checkout
+ * reads them, and in which every path an argument names stands as an empty file: whether the script exists is not
+ * judged, since emission on a checkout where it was there but uncommitted wired it, and a run that then adds it must
+ * not push it.
+ *
+ * The hold fails closed on anything it cannot resolve cleanly at `Base:`. Every path it reads and every script a
+ * declaration names goes through {@link baseReader}'s one resolver, and a file that does not read or parse, a folder
+ * that is a file, a script whose stand-in did not land (the reader then reads it as missing), and an argument the
+ * reader reads as leaving the repository refuse too: the reason, for `notDone`. Residuals the pages name: a hook
+ * written by hand into a client's settings file; modules a held script loads from outside the held folders
+ * (review/187); a run that rewrites its own record head's `Base:`, as it can its `Mode:`.
+ */
+async function hookPathsAt(top: string, prefix: string, base: string, verb: string): Promise<string[] | string> {
+  const at = baseReader(top, base, prefix, verb);
   const unknown = (path: string, why: string): string =>
     `hold refused: ${path} at Base: ${why}, so the hook scripts it names are unknown and the run pushes nothing`;
-  const manifestTop = fromTop(MANIFEST_PATH);
-  const packsTop = fromTop(PACKS_DIR);
-  const rows = await treeRowsAt(top, base, [manifestTop, packsTop, fromTop(USER_HOOKS_DIR)], verb);
-  if (typeof rows === "string") return rows;
-
-  // The folder the repository's own declarations sit in, as `base`'s manifest names it.
-  let hooksDir = USER_HOOKS_DIR;
-  const manifest = rows.get(manifestTop);
-  if (manifest !== undefined) {
-    const read = manifest.regular ? await git(top, ["cat-file", "blob", manifest.id], verb) : null;
-    if (read === null || read.code !== 0) return unknown(manifestTop, read === null ? "is not a regular file" : `could not be read (git cat-file answered ${read.code})`);
-    let document: unknown;
+  const json = async (path: string, id: string): Promise<{ document: unknown } | { refused: string }> => {
+    const read = await git(top, ["cat-file", "blob", id], verb);
+    if (read.code !== 0) return { refused: unknown(path, `could not be read (git cat-file answered ${read.code})`) };
     try {
-      document = parseJsonStrict(read.stdout, manifestTop);
+      return { document: parseJsonStrict(read.stdout.startsWith(BOM) ? read.stdout.slice(BOM.length) : read.stdout, path) };
     } catch {
-      return unknown(manifestTop, "does not parse");
+      return { refused: unknown(path, "does not parse") };
     }
-    const hooks = isPlainObject(document) ? (document["hooks"] ?? {}) : null;
-    if (!isPlainObject(hooks)) return unknown(manifestTop, "names no hooks folder the engine reads");
-    const named = hooks["userHooksDir"];
-    if (named !== undefined) {
-      const dir = typeof named === "string" ? posix.normalize(named.replaceAll("\\", "/")).replace(/\/+$/, "") : "";
-      if (dir === "" || dir === "." || dir === ".." || dir.startsWith("../") || dir.startsWith("/") || /^[A-Za-z][A-Za-z0-9+.-]*:/.test(dir)) {
-        return unknown(manifestTop, "names a hooks folder outside the project");
-      }
-      hooksDir = dir;
-    }
-  }
-  const hooksTop = fromTop(hooksDir);
-  if (hooksDir !== USER_HOOKS_DIR) {
-    const more = await treeRowsAt(top, base, [hooksTop], verb);
-    if (typeof more === "string") return more;
-    for (const [path, row] of more) rows.set(path, row);
+  };
+
+  // The manifest, and the folder of the repository's own declarations it names.
+  const manifest = await at.resolve(MANIFEST_PATH);
+  if ("refused" in manifest) return unknown(`${prefix}${MANIFEST_PATH}`, manifest.refused);
+  if (manifest.kind === "folder") return unknown(manifest.path, "is a folder where the manifest goes");
+  let hooksDir = USER_HOOKS_DIR;
+  if (manifest.kind === "file") {
+    const read = await json(manifest.path, manifest.id);
+    if ("refused" in read) return read.refused;
+    const hooks = isPlainObject(read.document) ? (read.document["hooks"] ?? {}) : null;
+    const folder = isPlainObject(hooks) ? hooks["userHooksDir"] : null;
+    if (folder !== undefined && typeof folder !== "string") return unknown(manifest.path, "names no hooks folder the engine reads");
+    if (folder !== undefined) hooksDir = folder;
   }
 
-  // The declaration files the reader takes: a folder's own `.json` files, regular ones (it refuses a link).
-  const packHooks = (path: string): boolean => {
-    const rest = path.startsWith(`${packsTop}/`) ? path.slice(packsTop.length + 1).split("/") : [];
-    return rest.length === 3 && rest[1] === "hooks";
-  };
-  const notFolder = [...rows.keys()].find((path) => path === hooksTop || packHooks(`${path}/x`));
-  if (notFolder !== undefined) return unknown(notFolder, "is a link or a file where a hook folder goes");
-  const declarations = [...rows].filter(
-    ([path, row]) => row.regular && path.endsWith(".json") && (posix.dirname(path) === hooksTop || packHooks(path)),
+  // The declaration folders: that one, and each installed pack's `hooks/`.
+  const hooksFolder = await at.resolve(hooksDir);
+  if ("refused" in hooksFolder) return unknown(`${prefix}${hooksDir}`, hooksFolder.refused);
+  const packs = await at.resolve(PACKS_DIR);
+  if ("refused" in packs) return unknown(`${prefix}${PACKS_DIR}`, packs.refused);
+  if (packs.kind === "file") return unknown(packs.path, "is a file where the packs folder goes");
+  const roots = packs.kind === "folder" ? await at.list(packs.id) : [];
+  if (typeof roots === "string") return unknown(packs.path, roots);
+  const packHooks = await Promise.all(
+    roots.map(async (root) => ({ subject: `${packs.path}/${root.name}/hooks`, folder: await at.walk([...packs.path.split("/"), root.name, "hooks"]) })),
   );
+  const candidates: { subject: string; folder: AtBase }[] = [{ subject: hooksFolder.path, folder: hooksFolder }, ...packHooks];
+  const folders: { path: string; id: string }[] = [];
+  for (const { subject, folder } of candidates) {
+    if ("refused" in folder) return unknown(subject, folder.refused);
+    if (folder.kind === "file") return unknown(folder.path, "is a file where a hook folder goes");
+    if (folder.kind === "folder" && !folders.some((known) => known.path === folder.path)) folders.push(folder);
+  }
+  const held = new Set([manifest.path, hooksFolder.path, packs.path]);
+
+  // The declaration files the reader takes: each folder's own regular `.json` files (it refuses a link and skips the rest).
+  const listed = await Promise.all(folders.map(async (folder) => ({ folder, entries: await at.list(folder.id) })));
+  const declarations: { path: string; id: string }[] = [];
+  for (const { folder, entries } of listed) {
+    if (typeof entries === "string") return unknown(folder.path, entries);
+    for (const entry of entries) {
+      if (entry.kind === "file" && entry.name.endsWith(".json")) declarations.push({ path: `${folder.path}/${entry.name}`, id: entry.id });
+    }
+  }
   const texts: { path: string; text: string }[] = [];
   const named = new Set<string>();
-  const reads = await Promise.all(declarations.map(async ([path, row]) => ({ path, read: await git(top, ["cat-file", "blob", row.id], verb) })));
+  const reads = await Promise.all(declarations.map(async ({ path, id }) => ({ path, read: await json(path, id) })));
   for (const { path, read } of reads) {
-    if (read.code !== 0) return unknown(path, `could not be read (git cat-file answered ${read.code})`);
-    let document: unknown;
-    try {
-      document = parseJsonStrict(read.stdout, path);
-    } catch {
-      return unknown(path, "does not parse");
-    }
-    texts.push({ path, text: read.stdout });
-    for (const argument of declaredArguments(document)) named.add(argument);
+    if ("refused" in read) return read.refused;
+    const copy = separatorsRead(read.document);
+    texts.push({ path, text: `${JSON.stringify(copy)}\n` });
+    for (const argument of declaredArguments(copy)) named.add(argument);
   }
-  if (texts.length === 0) return [];
+  if (texts.length === 0) return [...held].toSorted();
 
   // Every contained path an argument names stands as an empty file, short of one another's folders and the declarations'.
   const project = (path: string): string => path.slice(prefix.length);
@@ -1442,18 +1531,35 @@ async function hookScriptsAt(top: string, prefix: string, base: string, verb: st
       try {
         place(path, "");
       } catch {
-        // A name this file system cannot hold (a `*` on Windows) names no script that could run here.
+        // review/189: a stand-in that cannot land (a name this file system cannot hold, or one a case-insensitive
+        // scratch folder already holds as a folder) leaves its path missing to the reader, which refuses a hook that
+        // names it as the code it runs as MISSING_SCRIPT, and that refuses the hold below rather than dropping a script.
       }
     }
     for (const { path, text } of texts) place(project(path), text);
     const dirs = [...new Set(occupied.map((path) => posix.dirname(path)))];
     const definitions = await Promise.all(dirs.map((dir) => readHookDefinitions(join(scratch, ...dir.split("/")), scratch)));
-    const scripts = new Set<string>();
-    for (const hook of definitions.flatMap((read) => read.hooks)) {
-      const verdict = checkLauncherArgv(hook.command, scratch);
-      if (verdict.ok) scripts.add(fromTop(posix.normalize(verdict.script.replaceAll("\\", "/"))));
+    // The copy holds no link, so the reader's two path verdicts mean a stand-in that did not land, or a path it reads
+    // as leaving the repository: either refuses, naming the declaration (review/186, review/189).
+    const unread = definitions.flatMap((read) => read.errors).find((error) => error.code === "MISSING_SCRIPT" || error.code === "UNSAFE_PATH");
+    if (unread !== undefined) {
+      return unknown(`${prefix}${unread.file}`, unread.code === "MISSING_SCRIPT" ? "names a script the hold could not stand in for" : "names a path outside the repository");
     }
-    return [...scripts].toSorted();
+    const scripts = await Promise.all(
+      definitions
+        .flatMap((read) => read.hooks)
+        .map(async (hook) => {
+          const verdict = checkLauncherArgv(hook.command, scratch);
+          if (!verdict.ok) return { path: null };
+          const script = await at.resolve(verdict.script);
+          return "refused" in script ? { refused: unknown(`${prefix}${hook.sourceFile}`, `names ${verdict.script}, which ${script.refused}`) } : { path: script.path };
+        }),
+    );
+    for (const script of scripts) {
+      if ("refused" in script) return script.refused;
+      if (script.path !== null) held.add(script.path);
+    }
+    return [...held].toSorted();
   } catch (cause) {
     return `hold refused: the hook declarations at Base: could not be read (${cause instanceof Error ? firstLine(cause.message) : "read failed"}), so the hook scripts they name are unknown and the run pushes nothing`;
   } finally {
@@ -1461,19 +1567,16 @@ async function hookScriptsAt(top: string, prefix: string, base: string, verb: st
   }
 }
 
-/** Each `git ls-tree -r -z` row at `base` for `paths` (each a file, or a folder read whole), by top-relative path; else the reason, for `notDone`. */
-async function treeRowsAt(top: string, base: string, paths: readonly string[], verb: string): Promise<Map<string, TreeRow> | string> {
-  const read = await git(top, ["ls-tree", "-r", "-z", base, "--", ...paths], verb);
-  if (read.code !== 0) return `hold refused: the hook declarations at Base: could not be listed (git ls-tree answered ${read.code}: ${firstLine(read.stderr)})`;
-  const rows = new Map<string, TreeRow>();
-  for (const line of read.stdout.split("\0")) {
-    const match = /^(\d{6}) (\w+) ([0-9a-f]{40,64})\t([^]+)$/.exec(line);
-    const [, mode, type, id, path] = match ?? [];
-    if (mode !== undefined && type !== undefined && id !== undefined && path !== undefined) {
-      rows.set(path, { id, regular: type === "blob" && (mode === "100644" || mode === "100755") });
-    }
-  }
-  return rows;
+/** review/183, review/186: a declaration's copy whose hook arguments read backslashes as separators, as a Windows checkout reads them. */
+function separatorsRead(document: unknown): unknown {
+  const hooks = isPlainObject(document) ? document["hooks"] : undefined;
+  if (!isPlainObject(document) || !Array.isArray(hooks)) return document;
+  const read = (hook: unknown): unknown => {
+    const command = isPlainObject(hook) ? hook["command"] : undefined;
+    if (!isPlainObject(hook) || !Array.isArray(command)) return hook;
+    return { ...hook, command: command.map((argument: unknown) => (typeof argument === "string" ? argument.replaceAll("\\", "/") : argument)) };
+  };
+  return { ...document, hooks: hooks.map(read) };
 }
 
 /**
@@ -1523,7 +1626,7 @@ async function changedSince(top: string, base: string, side: Side = "work tree")
  * read as a deletion and an addition, a link at a held glob's prefix included
  * (review/200).
  */
-async function heldInHistory(top: string, tips: readonly string[], scripts: readonly string[]): Promise<string[]> {
+async function heldInHistory(top: string, tips: readonly string[], hookPaths: readonly string[]): Promise<string[]> {
   const range = ["--ignore-missing", "--stdin"];
   const read = await git(top, ["log", "--root", "--format=", "--raw", RAW_IDS, "-z", "--cc", ...DIFF_PINS, ...range, "--"], CHECKPOINT, revisionLines(tips));
   if (read.code !== 0) {
@@ -1534,7 +1637,7 @@ async function heldInHistory(top: string, tips: readonly string[], scripts: read
       next: "run it inside the repository's work tree",
     });
   }
-  return heldOf(rawEntries(read.stdout), scripts);
+  return heldOf(rawEntries(read.stdout), hookPaths);
 }
 
 /**
