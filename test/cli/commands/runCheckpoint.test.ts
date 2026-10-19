@@ -206,7 +206,10 @@ describe("stamity run checkpoint", () => {
    * identity in its config, `origin` naming GitHub and pushing to a bare
    * remote, then on the run's branch with a record reading `mode` (no `Mode:` line for `null`).
    */
-  async function seed(mode: "attended" | "unattended" | null, opts: { branch?: string; pin?: "base" | "untracked" | "none" } = {}): Promise<Seeded> {
+  async function seed(
+    mode: "attended" | "unattended" | null,
+    opts: { branch?: string; pin?: "base" | "untracked" | "none"; files?: Record<string, string> } = {},
+  ): Promise<Seeded> {
     const dir = getRoot().path(`case-${Math.random().toString(36).slice(2, 8)}`);
     const repo = join(dir, "repo");
     const remote = join(dir, "remote.git");
@@ -224,6 +227,8 @@ describe("stamity run checkpoint", () => {
     // or pushed set changes. A case about the pin itself rewrites or removes it.
     // `untracked` leaves it out of the base, as a run whose folder git ignores has it; `none` writes no pin.
     if ((opts.pin ?? "base") === "base") await put(repo, ORIGIN_PIN, PIN_TEXT);
+    // review/175: a case's own files in Base:, hook declarations and the scripts they name among them.
+    await Promise.all(Object.entries(opts.files ?? {}).map(([path, text]) => put(repo, path, text)));
     git(repo, ["add", "-A"]);
     git(repo, ["commit", "-q", "-m", "seed"]);
     git(repo, ["remote", "add", "origin", "https://github.com/o/r.git"]);
@@ -562,6 +567,142 @@ describe("stamity run checkpoint", () => {
     expect(doc).toMatchObject({ pushed: true, held: [] });
     expect(pushedTree(remote)).toContain(".github/workflows/x.yml");
     expect(pushedTree(remote)).not.toContain(PATCH);
+  });
+
+  describe("the scripts the hook declarations at Base: name (review/175)", () => {
+    /** A hook file declaring one hook, run as `node <script>`. */
+    const declaring = (script: string): string => `${JSON.stringify({ hooks: [{ event: "pre_tool_use", command: ["node", script] }] })}\n`;
+    const USER_HOOKS = { ".stamity/hooks/guard.json": declaring("tools/guard.mjs"), "tools/guard.mjs": "base guard\n", "tools/other.mjs": "base other\n" };
+
+    it("holds a user hook's script outside the held folders, edited by an unattended run, out of the push and in the patch", async () => {
+      const { repo, remote } = await seed("unattended", { files: USER_HOOKS });
+      await writeFile(join(repo, "tools/guard.mjs"), "steered guard\n");
+      await writeFile(join(repo, "a.txt"), "the unit's change\n");
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt", "tools/guard.mjs"]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [], held: ["tools/guard.mjs"] });
+      expect(pushedFile(remote, "tools/guard.mjs")).toBe("base guard");
+      expect(pushedFile(remote, "a.txt")).toBe("the unit's change");
+      expect(pushedFile(remote, PATCH)).toContain("+steered guard");
+      expect(await readFile(join(repo, "tools/guard.mjs"), "utf8")).toBe("steered guard\n");
+    });
+
+    it("pushes a script no declaration at Base: names as before, and holds nothing for an attended run", async () => {
+      const unattended = await seed("unattended", { files: USER_HOOKS });
+      const attended = await seed("attended", { files: USER_HOOKS });
+      await writeFile(join(unattended.repo, "tools/other.mjs"), "the unit's change\n");
+      await writeFile(join(attended.repo, "tools/guard.mjs"), "the person's change\n");
+
+      const other = await run(unattended.repo, [...CHECKPOINT, "--paths", "tools/other.mjs"]);
+      const own = await run(attended.repo, [...CHECKPOINT, "--paths", "tools/guard.mjs"]);
+
+      expect(other.code).toBe(0);
+      expect(other.doc).toMatchObject({ pushed: true, notDone: [], held: [] });
+      expect(pushedFile(unattended.remote, "tools/other.mjs")).toBe("the unit's change");
+      expect(own.code).toBe(0);
+      expect(own.doc).toMatchObject({ pushed: true, notDone: [], held: [] });
+      expect(pushedFile(attended.remote, "tools/guard.mjs")).toBe("the person's change");
+    });
+
+    it("still holds the script when the run edits its declaration to drop it, the declaration held too", async () => {
+      const { repo, remote } = await seed("unattended", { files: USER_HOOKS });
+      await writeFile(join(repo, ".stamity/hooks/guard.json"), declaring("tools/other.mjs"));
+      await writeFile(join(repo, "tools/guard.mjs"), "steered guard\n");
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "tools/guard.mjs"]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [], held: [".stamity/hooks/guard.json", "tools/guard.mjs"] });
+      expect(pushedFile(remote, "tools/guard.mjs")).toBe("base guard");
+      expect(pushedFile(remote, ".stamity/hooks/guard.json")).toBe(declaring("tools/guard.mjs").trimEnd());
+    });
+
+    it("holds a script a declaration at Base: names though Base: lacks it, the run adding it", async () => {
+      const { repo, remote } = await seed("unattended", { files: { ".stamity/hooks/guard.json": declaring("tools/new.mjs") } });
+      await put(repo, "tools/new.mjs", "added by the run\n");
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "tools/new.mjs"]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [], held: ["tools/new.mjs"] });
+      expect(pushedTree(remote)).not.toContain("tools/new.mjs");
+    });
+
+    it.skipIf(process.platform === "win32")("holds a link the run adds at a folder above such a script", async () => {
+      const { repo, remote } = await seed("unattended", { files: { ".stamity/hooks/guard.json": declaring("tools/guard.mjs") } });
+      await put(repo, "elsewhere/guard.mjs", "steered guard\n");
+      await symlink("elsewhere", join(repo, "tools"));
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "elsewhere", "tools"]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [], held: ["tools"] });
+      expect(pushedTree(remote)).not.toContain("tools");
+      expect(pushedTree(remote)).toContain("elsewhere/guard.mjs");
+    });
+
+    it("holds an installed pack's hook declaration and the script it names", async () => {
+      const declaration = ".stamity/packs/acme__guard/hooks/pre.json";
+      const { repo, remote } = await seed("unattended", { files: { [declaration]: declaring("scripts/pack-guard.mjs"), "scripts/pack-guard.mjs": "base pack guard\n" } });
+      await writeFile(join(repo, declaration), declaring("scripts/elsewhere.mjs"));
+      await writeFile(join(repo, "scripts/pack-guard.mjs"), "steered pack guard\n");
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "scripts/pack-guard.mjs"]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [], held: [declaration, "scripts/pack-guard.mjs"] });
+      expect(pushedFile(remote, "scripts/pack-guard.mjs")).toBe("base pack guard");
+      expect(pushedFile(remote, declaration)).toBe(declaring("scripts/pack-guard.mjs").trimEnd());
+    });
+
+    it("reads the declarations in the folder Base:'s manifest names", async () => {
+      const manifest = `${JSON.stringify({ hooks: { userHooksDir: "hooks" } })}\n`;
+      const { repo, remote } = await seed("unattended", { files: { ".stamity/manifest.json": manifest, "hooks/guard.json": declaring("tools/guard.mjs"), "tools/guard.mjs": "base guard\n" } });
+      await writeFile(join(repo, "tools/guard.mjs"), "steered guard\n");
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "tools/guard.mjs"]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [], held: ["tools/guard.mjs"] });
+      expect(pushedFile(remote, "tools/guard.mjs")).toBe("base guard");
+    });
+
+    it("refuses the push when a commit it would send changes such a script", async () => {
+      const { repo, remote } = await seed("unattended", { files: USER_HOOKS });
+      await writeFile(join(repo, "tools/guard.mjs"), "steered guard\n");
+      git(repo, ["commit", "-q", "-am", "run's own commit"]);
+      await writeFile(join(repo, "tools/guard.mjs"), "base guard\n");
+      await writeFile(join(repo, "a.txt"), "changed\n");
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      expect(code).toBe(1);
+      expect(doc).toMatchObject({ pushed: false, notDone: ["held path in history (tools/guard.mjs)"] });
+      expect(pushes()).toEqual([]);
+      expect(remoteHeads(remote)).toEqual(SEEDED);
+    });
+
+    it("refuses before staging when a hook file at Base: does not parse, naming it, and pushes nothing", async () => {
+      const { repo, remote } = await seed("unattended", { files: { ".stamity/hooks/broken.json": "{ not json\n", "tools/guard.mjs": "base guard\n" } });
+      await writeFile(join(repo, "tools/guard.mjs"), "steered guard\n");
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "tools/guard.mjs"]);
+
+      expect(code).toBe(1);
+      expect(doc).toMatchObject({
+        pushed: false,
+        committed: null,
+        held: [],
+        notDone: [
+          "hold refused: .stamity/hooks/broken.json at Base: does not parse, so the hook scripts it names are unknown and the run pushes nothing",
+        ],
+      });
+      expect(git(repo, ["diff", "--cached", "--name-only"])).toBe("");
+      expect(pushes()).toEqual([]);
+      expect(remoteHeads(remote)).toEqual(SEEDED);
+    });
   });
 
   it("pushes HEAD to the run's branch alone: no main, --force, --tags or -- in the push argv", async () => {

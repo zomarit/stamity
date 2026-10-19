@@ -138,7 +138,10 @@ describe("stamity run end", () => {
    * `origin` naming GitHub and pushing to a bare remote, then on the run's
    * branch with a record reading `mode` (no `Mode:` line for `null`).
    */
-  async function seed(mode: "attended" | "unattended" | null, opts: { branch?: string; pin?: "base" | "untracked" | "none" } = {}): Promise<Seeded> {
+  async function seed(
+    mode: "attended" | "unattended" | null,
+    opts: { branch?: string; pin?: "base" | "untracked" | "none"; files?: Record<string, string> } = {},
+  ): Promise<Seeded> {
     const dir = getRoot().path(`case-${Math.random().toString(36).slice(2, 8)}`);
     const repo = join(dir, "repo");
     const remote = join(dir, "remote.git");
@@ -153,6 +156,8 @@ describe("stamity run end", () => {
     // or pushed set changes. A case about the pin itself rewrites or removes it.
     // `untracked` leaves it out of the base, as a run whose folder git ignores has it; `none` writes no pin.
     if ((opts.pin ?? "base") === "base") await put(repo, ORIGIN_PIN, PIN_TEXT);
+    // review/175: a case's own files in Base:, hook declarations and the scripts they name among them.
+    await Promise.all(Object.entries(opts.files ?? {}).map(([path, text]) => put(repo, path, text)));
     git(repo, ["add", "-A"]);
     git(repo, ["commit", "-q", "-m", "seed"]);
     git(repo, ["remote", "add", "origin", "https://github.com/o/r.git"]);
@@ -350,6 +355,21 @@ describe("stamity run end", () => {
     expect(code).toBe(0);
     expect(doc).toMatchObject({ pr: { how: "created" }, notDone: ["morning list missing"] });
     expect(created().body).toBe(`Run \`${RUN}\`: no morning list was posted. Its record: \`${RUN_DIR}/record.md\`.\n\n${MARKER}`);
+  });
+
+  it("holds the script a user hook declaration at Base: names out of an unattended end's push (review/175)", async () => {
+    const declaration = `${JSON.stringify({ hooks: [{ event: "pre_tool_use", command: ["node", "tools/guard.mjs"] }] })}\n`;
+    const { repo, remote, base } = await seed("unattended", { files: { ".stamity/hooks/guard.json": declaration, "tools/guard.mjs": "base guard\n" } });
+    // Origin holds Base:, as a run's clone's does, so the held declaration Base: carries is not a commit the push sends.
+    git(repo, ["push", "-q", remote, `${base}:refs/heads/main`]);
+    git(repo, ["update-ref", "refs/remotes/origin/main", base]);
+    await writeFile(join(repo, "tools/guard.mjs"), "steered guard\n");
+
+    const { code, doc } = await run(repo, [...END("feat: x"), "--paths", "tools/guard.mjs"]);
+
+    expect(code).toBe(0);
+    expect(doc).toMatchObject({ subcommand: "end", pushed: true, held: ["tools/guard.mjs"], notDone: ["morning list missing"] });
+    expect(git(remote, ["show", `refs/heads/${RUN_BRANCH}:tools/guard.mjs`])).toBe("base guard");
   });
 
   it("opens no pull request when the secret scan holds the push, the reason in notDone", async () => {

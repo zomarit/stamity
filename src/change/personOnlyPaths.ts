@@ -55,6 +55,9 @@ export const PERSON_ONLY_PATHS: readonly string[] = [
   "**/*.code-workspace",
   "**/.vscode/tasks.json",
   ".stamity/generated/**",
+  // The installed packs' bytes, their hook declarations among them, which a later sync wires into the clients' settings
+  // (review/175). The scripts those declarations and the repository's own name are held by the run verbs from `Base:`.
+  ".stamity/packs/**",
   ".stamity/hooks/**",
   ".stamity/manifest.json",
   ".stamity/change-classes.json",

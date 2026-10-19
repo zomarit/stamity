@@ -39,6 +39,10 @@ describe("heldPaths", () => {
     ".codex/hooks.json",
     ".codex/config.toml",
     ".stamity/hooks/user.mjs",
+    // An installed pack's hook declaration and any byte beside it (review/175), in any letter case.
+    ".stamity/packs/acme__guard/hooks/pre.json",
+    ".stamity/packs/acme__guard/rules/r.md",
+    ".Stamity/Packs/x/hooks/pre.json",
     ".stamity/change-classes.json",
     ".github/CODEOWNERS",
     "docs/CODEOWNERS",
@@ -138,6 +142,9 @@ describe("heldPaths", () => {
     ".claude/hooks.json",
     ".stamity/runs/2026-10-16_x/record.md",
     ".stamity/inbox.md",
+    // A look-alike of the packs folder (review/175).
+    ".stamity/packsx/a.json",
+    ".stamity/packs.json",
     "src/.cursorrules",
     // Root-only names, and look-alikes of the CI and MCP files.
     "pkg/.mcp.json",
@@ -197,6 +204,8 @@ describe("heldPaths", () => {
       "**/*.code-workspace",
       "**/.vscode/tasks.json",
       ".stamity/generated/**",
+      // review/175: the installed packs' bytes joined the list beside the generated tree, so the pinned list gains the glob.
+      ".stamity/packs/**",
       ".stamity/hooks/**",
       ".stamity/manifest.json",
       ".stamity/change-classes.json",
