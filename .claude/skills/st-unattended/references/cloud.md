@@ -54,7 +54,9 @@ by the pre-flight's `hooks-loaded` check, and its fix is one repository per sess
 
 Frame in an unattended run continues the in-progress record whose `Branch:` names the checked-out branch — the run
 the session start's resume card names, or `stamity ledger status` where no hook ran — from its record and ledger,
-instead of opening a new record; its head lines stand as written. A session continues only a record on the branch
+instead of opening a new record; its head lines stand as written. Wherever no session-start hook printed the resume
+card, the run reads `stamity ledger status` first, whether another hook ran or not: a cloud agent with no session start
+may run a context-once hook, which prints the index, never the card. A session continues only a record on the branch
 it was given: it runs `stamity run start --run <id> --json` first, `<id>` that record's folder name, and its ready
 check passes the record's `Base:` as `--since`, `stamity plan check <plan> --since <Base> --json`, so a `reads` path
 only the run's own commits moved is exempt and one moved between the stamp and the base stays stale. A chain file's
