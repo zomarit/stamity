@@ -1249,6 +1249,12 @@ export const COPILOT_MAIN_SESSIONS_MAX_LINES = 200;
 /** The record's byte bound: past 64 KiB the guard refuses, and the session start starts it afresh. */
 export const COPILOT_MAIN_SESSIONS_MAX_BYTES = 65_536;
 
+/** How long Copilot's session start waits for the record's lock another start holds (n5-copilot-record-lock). */
+export const COPILOT_MAIN_SESSIONS_LOCK_WAIT_MS = 2_000;
+
+/** The age past which the record's lock belonged to a start that died holding it, and is broken once. */
+export const COPILOT_MAIN_SESSIONS_LOCK_STALE_MS = 10_000;
+
 /** A session id the record holds: one word of id characters, never a blank, a separator or a line break. */
 const COPILOT_SESSION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 
@@ -1277,11 +1283,22 @@ function copilotSessionId(payload) {
  * directory (the card's own `cardCommonDir`), the record kept to its last
  * {@link COPILOT_MAIN_SESSIONS_MAX_LINES} well-formed lines and the id moved to
  * the end when it is there already. Written whole to an owner-only temp file and
- * renamed over the record, so a link at the record's path is replaced, never
- * followed; a link or a folder there is left alone, and the guard then refuses.
- * Read back after the rename and written again, at most three times, when a
- * session starting at the same moment replaced it first. Every failure leaves
- * the record as it was: the guard then refuses this session's asks.
+ * renamed over the record, so the guard's read sees the old record or the new
+ * one, never half of either; a link or a folder at the record's path is left
+ * alone, and the guard then refuses.
+ *
+ * The read, the merge and the rename run under an exclusive lock beside the
+ * record (`copilot-main-sessions.lock`, created `wx` and owner-only, its token
+ * inside, removed after while it still holds that token), so two main sessions
+ * starting at once cannot each read the old record and the later rename drop the
+ * earlier id. The start waits up to {@link COPILOT_MAIN_SESSIONS_LOCK_WAIT_MS}
+ * for another holder, with a synchronous sleep; it breaks a lock older than
+ * {@link COPILOT_MAIN_SESSIONS_LOCK_STALE_MS} once (a start that died holding
+ * it); and it renames only while the lock still holds its token. A link or a
+ * folder at the lock's path, a wait run out, or any other failure leaves the
+ * record as it was: the guard then refuses this session's asks. The helpers are
+ * declared inside the writer, so the record's top-level names stay the four
+ * every other client's copy is cut by.
  */
 const COPILOT_RECORD_SOURCE = String.raw`${COPILOT_SESSION_SOURCE}
 
@@ -1301,30 +1318,86 @@ function mainSessionLines(path) {
 
 /** Records the main session's id for the person-only guard; writes nothing when the payload names none. */
 function recordMainSession(payload) {
+  const WAIT_MS = ${COPILOT_MAIN_SESSIONS_LOCK_WAIT_MS};
+  const STALE_MS = ${COPILOT_MAIN_SESSIONS_LOCK_STALE_MS};
+  const POLL_MS = 25;
+  /** A Windows sharing fault: the name held a moment by a holder's delete still pending, no answer either way. */
+  const momentary = (error) =>
+    process.platform === "win32" && !!error && (error.code === "EPERM" || error.code === "EACCES" || error.code === "EBUSY");
+  /** The lock's token when this start created it, else null: the wait ran out, or something else sits at the path. */
+  function takeLock(lock, token) {
+    const deadline = Date.now() + WAIT_MS;
+    let broken = false;
+    for (;;) {
+      try {
+        writeFileSync(lock, token, { flag: "wx", mode: 0o600 });
+        return token;
+      } catch (error) {
+        if (!error || (error.code !== "EEXIST" && !momentary(error))) return null;
+      }
+      let stats = null;
+      try {
+        stats = lstatSync(lock);
+      } catch (error) {
+        if (!error || (error.code !== "ENOENT" && !momentary(error))) return null;
+      }
+      // A link or a folder is no lock any start made: not recorded, and left alone.
+      if (stats !== null && !stats.isFile()) return null;
+      if (stats !== null && !broken && Date.now() - stats.mtimeMs > STALE_MS) {
+        broken = true;
+        try {
+          unlinkSync(lock);
+        } catch {
+          // Another start broke it first; the next create decides.
+        }
+        continue;
+      }
+      if (Date.now() >= deadline) return null;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, POLL_MS);
+    }
+  }
+  /** Whether the lock still holds this start's token: false once another start broke it. */
+  function holds(lock, token) {
+    try {
+      return lstatSync(lock).isFile() && readFileSync(lock, "utf8") === token;
+    } catch {
+      return false;
+    }
+  }
   const id = copilotSessionId(payload);
   const common = id === null ? null : cardCommonDir(repoRoot());
   if (common === null) return;
   const dir = join(common, MAIN_SESSIONS_SEGMENTS[0]);
   const path = join(dir, MAIN_SESSIONS_SEGMENTS[1]);
+  const lock = path + ".lock";
+  let token = null;
   try {
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     if (!lstatSync(dir).isDirectory()) return;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const kept = mainSessionLines(path);
-      if (kept === null) return;
-      const lines = [...kept.filter((line) => line !== id), id].slice(-MAIN_SESSIONS_MAX_LINES);
-      const temp = path + "." + process.pid + "." + Date.now() + "." + attempt;
-      writeFileSync(temp, lines.join("\n") + "\n", { flag: "wx", mode: 0o600 });
-      try {
-        renameSync(temp, path);
-      } catch (error) {
-        unlinkSync(temp);
-        throw error;
-      }
-      if ((mainSessionLines(path) ?? []).includes(id)) return;
+    token = takeLock(lock, process.pid + "." + process.hrtime.bigint() + "\n");
+    if (token === null) return;
+    const kept = mainSessionLines(path);
+    if (kept === null) return;
+    const lines = [...kept.filter((line) => line !== id), id].slice(-MAIN_SESSIONS_MAX_LINES);
+    const temp = path + "." + process.pid + "." + Date.now();
+    writeFileSync(temp, lines.join("\n") + "\n", { flag: "wx", mode: 0o600 });
+    try {
+      if (!holds(lock, token)) throw new Error("the record's lock changed hands");
+      renameSync(temp, path);
+    } catch (error) {
+      unlinkSync(temp);
+      throw error;
     }
   } catch {
     // Not recorded: the person-only guard then refuses this session's asks, and the person runs the act.
+  } finally {
+    if (token !== null && holds(lock, token)) {
+      try {
+        unlinkSync(lock);
+      } catch {
+        // Left for the stale age to break.
+      }
+    }
   }
 }`;
 

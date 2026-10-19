@@ -11,8 +11,20 @@
  * payload on stdin, the scripts where emission writes them. No double stands in for anything: the git metadata, the
  * record and the run records are real files. Every ask has a refusal one fact away (the record, the id, a field).
  */
-import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import {
+  chmodSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { personOnlyVerdict } from "../../src/hooks/personOnly.ts";
@@ -34,6 +46,10 @@ const ROOT_USER = typeof process.getuid === "function" && process.getuid() === 0
 const RECORD = ["stamity", "copilot-main-sessions"] as const;
 const RECORD_MAX_LINES = 200;
 const RECORD_MAX_BYTES = 64 * 1024;
+/** The lock beside the record, and its stated bounds: the session start waits 2 s, and breaks a lock older than 10 s. */
+const LOCK = ["stamity", "copilot-main-sessions.lock"] as const;
+const LOCK_WAIT_MS = 2_000;
+const LOCK_STALE_MS = 10_000;
 
 /** The reworded sentence Copilot adds to an ask the guard does not give it (w4, REQ-FLOW-123). */
 const NO_CALLER =
@@ -60,12 +76,27 @@ async function place(tool: Tool, root = ""): Promise<{ guard: string; start: str
   return { guard: at(PERSON_ONLY_GUARD_FILE), start: at(SESSION_START) };
 }
 
-/** Runs one script as a client does, the payload on stdin, the variables it reads under the test's control. */
-function run(script: string, input: unknown): ReturnType<typeof spawnSync> {
+/** The environment a script runs under: the test's own, less the variables the scripts read. */
+function hookEnv(): NodeJS.ProcessEnv {
   const env = { ...process.env };
   delete env.STAMITY_UNATTENDED;
   delete env.STAMITY_REPO_ROOT;
-  return spawnSync(process.execPath, [script], { input: JSON.stringify(input), encoding: "utf8", env });
+  return env;
+}
+
+/** Runs one script as a client does, the payload on stdin, the variables it reads under the test's control. */
+function run(script: string, input: unknown): ReturnType<typeof spawnSync> {
+  return spawnSync(process.execPath, [script], { input: JSON.stringify(input), encoding: "utf8", env: hookEnv() });
+}
+
+/** The same run without waiting for it: its exit code and the moment it closed, once it has. */
+function runLater(script: string, input: unknown): Promise<{ status: number | null; closedAt: number }> {
+  return new Promise((resolveRun, rejectRun) => {
+    const child = spawn(process.execPath, [script], { env: hookEnv(), stdio: ["pipe", "ignore", "ignore"] });
+    child.on("error", rejectRun);
+    child.on("close", (status) => resolveRun({ status, closedAt: Date.now() }));
+    child.stdin.end(JSON.stringify(input));
+  });
 }
 
 /**
@@ -94,6 +125,14 @@ function copilotStart(id: string): Record<string, unknown> {
 
 /** The record's path under the scratch repository's own `.git`. */
 const recordPath = (gitDir = ".git"): string => getRepo().path(gitDir, ...RECORD);
+/** The lock's path beside it. */
+const lockPath = (): string => getRepo().path(".git", ...LOCK);
+
+/** The lock as another session start holds it: its own token inside. */
+function holdLock(token = "4242.1\n"): void {
+  mkdirSync(getRepo().path(".git", LOCK[0]), { recursive: true });
+  writeFileSync(lockPath(), token, { flag: "wx", mode: 0o600 });
+}
 
 /** The record, its lines written as the session start writes them. */
 function writeRecord(lines: readonly string[], gitDir = ".git"): void {
@@ -350,6 +389,94 @@ describe("Copilot's session start keeps the record (w4-copilot-ask)", () => {
     expect(existsSync(getRepo().path(".git", RECORD[0]))).toBe(false);
     // Non-degenerate: Copilot's, in the same repository with the same payload, does write one.
     expect(run((await place("copilot")).start, copilotStart(MAIN)).status).toBe(0);
+    expect(readFileSync(recordPath(), "utf8")).toBe(`${MAIN}\n`);
+  });
+});
+
+describe("Copilot's session start updates the record under a lock (n5-copilot-record-lock, REQ-FLOW-123)", () => {
+  it("waits while another session start holds the lock, and records once it is released", async () => {
+    const { start } = await place("copilot");
+    holdLock();
+    const started = Date.now();
+    const finished = runLater(start, copilotStart(MAIN));
+    // Held well inside the wait: the start has not recorded while the other writer holds the lock.
+    await new Promise((resolveWait) => setTimeout(resolveWait, 500));
+    expect(existsSync(recordPath())).toBe(false);
+    const released = Date.now();
+    rmSync(lockPath());
+    const { status, closedAt } = await finished;
+    expect(status).toBe(0);
+    expect(closedAt).toBeGreaterThanOrEqual(released);
+    expect(closedAt - started).toBeLessThan(LOCK_WAIT_MS + 5_000);
+    expect(readFileSync(recordPath(), "utf8")).toBe(`${MAIN}\n`);
+    // Its own lock is gone after it, and no temp file stays beside the record.
+    expect(readdirSync(getRepo().path(".git", RECORD[0]))).toEqual([RECORD[1]]);
+  });
+
+  it("leaves the record as it was when the lock stays held past the wait", async () => {
+    const { start } = await place("copilot");
+    const earlier = "c948cf37-1111-4111-8111-111111111111";
+    writeRecord([earlier]);
+    holdLock();
+    const started = Date.now();
+    expect(run(start, copilotStart(MAIN)).status).toBe(0);
+    expect(Date.now() - started).toBeGreaterThanOrEqual(LOCK_WAIT_MS);
+    expect(readFileSync(recordPath(), "utf8")).toBe(`${earlier}\n`);
+    // The other writer's lock is neither broken nor removed: it is younger than the stale age.
+    expect(readFileSync(lockPath(), "utf8")).toBe("4242.1\n");
+    // Non-degenerate: released, the same start records.
+    rmSync(lockPath());
+    expect(run(start, copilotStart(MAIN)).status).toBe(0);
+    expect(readFileSync(recordPath(), "utf8")).toBe(`${earlier}\n${MAIN}\n`);
+  });
+
+  it("breaks a lock older than the stale age, a start that died holding it, and records", async () => {
+    const { start } = await place("copilot");
+    holdLock();
+    const dead = new Date(Date.now() - LOCK_STALE_MS - 60_000);
+    utimesSync(lockPath(), dead, dead);
+    const started = Date.now();
+    expect(run(start, copilotStart(MAIN)).status).toBe(0);
+    expect(Date.now() - started).toBeLessThan(LOCK_WAIT_MS);
+    expect(readFileSync(recordPath(), "utf8")).toBe(`${MAIN}\n`);
+    expect(existsSync(lockPath())).toBe(false);
+  });
+
+  it("records both ids when two session starts run at once, every time", async () => {
+    const { start } = await place("copilot");
+    const ids = ["c948cf37-1111-4111-8111-111111111111", "9cef4f65-2222-4222-8222-222222222222"] as const;
+    for (let round = 0; round < 12; round += 1) {
+      rmSync(getRepo().path(".git", RECORD[0]), { recursive: true, force: true });
+      // oxlint-disable-next-line no-await-in-loop -- each round starts over the record the previous one was read from
+      const results = await Promise.all(ids.map((id) => runLater(start, copilotStart(id))));
+      expect(results.map((result) => result.status), `round ${round}`).toEqual([0, 0]);
+      const lines = readFileSync(recordPath(), "utf8").split("\n").filter((line) => line !== "");
+      expect(lines.toSorted(), `round ${round}`).toEqual(ids.toSorted());
+      expect(readdirSync(getRepo().path(".git", RECORD[0])), `round ${round}`).toEqual([RECORD[1]]);
+    }
+  });
+
+  it("records nothing with a folder or a link at the lock's path, and leaves both alone", async () => {
+    const { start } = await place("copilot");
+    mkdirSync(lockPath(), { recursive: true });
+    expect(run(start, copilotStart(MAIN)).status).toBe(0);
+    expect(existsSync(recordPath())).toBe(false);
+    expect(lstatSync(lockPath()).isDirectory()).toBe(true);
+    if (WINDOWS) return;
+    rmSync(lockPath(), { recursive: true });
+    await getRepo().seedFiles({ "elsewhere/target": "kept\n" });
+    symlinkSync(getRepo().path("elsewhere", "target"), lockPath());
+    expect(run(start, copilotStart(MAIN)).status).toBe(0);
+    expect(existsSync(recordPath())).toBe(false);
+    expect(lstatSync(lockPath()).isSymbolicLink()).toBe(true);
+    expect(readFileSync(getRepo().path("elsewhere", "target"), "utf8")).toBe("kept\n");
+    // A dangling link is no free path either.
+    rmSync(getRepo().path("elsewhere", "target"));
+    expect(run(start, copilotStart(MAIN)).status).toBe(0);
+    expect(existsSync(recordPath())).toBe(false);
+    // Non-degenerate: the path cleared, the same start records.
+    rmSync(lockPath());
+    expect(run(start, copilotStart(MAIN)).status).toBe(0);
     expect(readFileSync(recordPath(), "utf8")).toBe(`${MAIN}\n`);
   });
 });
