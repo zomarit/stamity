@@ -872,8 +872,12 @@ describe("st-unattended — the cloud reference (plan 021 file 2, v3-cloud-skill
       "The run never removes that marker, never resets, rewinds or rewrites the run branch, and never takes the refusal's remedy, which is a person's",
     );
     expect(text).toContain("it copies the refusal into the record and the morning list's `## Not done:`, first, and stops");
+    // TEST CHANGE, justified (ledger row review/155): "the one exit" contradicted REQ-FLOW-092's own other exits (a
+    // held path, a scan hit, a refused push, a changed origin) and the skill's (no CLI, a refusal before the branch),
+    // none of which opens a draft either; the marker's exit is pinned as one more of them.
+    expect(text).not.toContain("the one exit that pushes nothing");
     expect(text).toContain(
-      "the one exit that pushes nothing and opens or updates no draft pull request, against the skill's one draft pull request at every exit",
+      "That is one more of the exits that open or update no draft pull request, beside a held path, a scan hit, a refused push and a changed origin",
     );
     expect(text).toContain("its final message carries the `## Not done:` lines");
   });

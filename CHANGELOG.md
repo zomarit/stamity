@@ -43,16 +43,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   walk.
 - **A ready check and a pre-flight before an unattended run starts.** `stamity plan check` refuses a
   start on a clarification marker, open questions, a Critical risk, a failed mechanical lint, a stale
-  plan or no persisted plan. `stamity gate preflight --unattended` refuses where the hooks did not
-  load, `node` or the pinned CLI cannot be reached, the secret scan cannot run, the input came from
-  an author without write access, or the account could push to the default branch directly; in
-  Claude Code's cloud it also refuses when the hooks' variable is not set.
+  plan or no persisted plan. A plan whose head `reads:` list is empty is refused, and so is a read
+  path whose history git's count cannot measure: a symbolic link, a path under one or a folder
+  holding one at `HEAD`, a path not in git's plain form, or a path git does not track at `HEAD`,
+  each named at the `reads:` line with its fix. `stamity gate preflight --unattended` refuses where
+  the hooks did not load, `node` or the pinned CLI cannot be reached, the secret scan cannot run,
+  the input came from an author without write access, or the account could push to the default
+  branch directly; in Claude Code's cloud it also refuses when the hooks' variable is not set.
 - **One ending for every run nobody watches: a pushed branch and one draft pull request.**
   `stamity run start`, `run checkpoint` and `run end` are an unattended run's only push path. The run
   works on its own `stamity/<run-id>` branch; a checkpoint stages the run's records and the paths
   named with `--paths`, never `-A`, holds a change to a person-only path (CI definitions, hooks, the
   clients' settings, instruction and agent files) as an inert patch in the run folder, scans what
-  the push sends for secrets, and pushes; `run end` opens or updates one draft pull request through
+  the push sends for secrets, and pushes. The repository's own pre-commit hooks still run inside a
+  run verb's commit, so the verb then reads that commit: one a hook widened past the paths the verb
+  staged, or made of its own, is undone by moving the run branch back to the commit read before,
+  naming each outside path, and nothing is pushed. A commit whose check cannot finish, or whose undo
+  fails, leaves a pending marker, `stamity/checkpoint-pending` in the work tree's git directory, and
+  every later `run checkpoint` and `run end` refuses, committing and pushing nothing, until a person
+  reviews the commits and removes it. `run end` opens or updates one draft pull request through
   GitHub's REST API, its body the run's morning list (`.stamity/runs/<run-id>/morning.md`), and the
   morning walk reopens the close with a person there. A run verb never merges, tags, marks a pull
   request ready or pushes the default branch. `stamity gate scan --text` screens each text the run
@@ -82,19 +91,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Attended, a person-only act that can be undone asks for one click on Claude Code, and every
-  deletion and force push is refused everywhere.** The person-only shell guard now reads the main
-  thread's shell calls on every client, not only Stamity's sub-agents'. Attended, a merge, a
-  ready-for-review mark, an approval, a non-forced push of the default branch, a tag, a release, a
-  publish, a secret, variable, protection, ruleset or custom-property write and a repository write
-  get Claude Code's approve prompt, and the agent runs the act on yes; a sub-agent's call and a call
-  in the `auto` permission mode are refused. Copilot CLI, Cursor and Codex refuse those acts and give
-  the person the exact command: Copilot CLI holds an ask, but its tool-call payload names no calling
-  agent, so the guard cannot keep the ask for the person alone; Cursor ran a command despite an ask
-  under `--force`; and Codex's hooks do not honour an ask. A deletion, a force push and an act that
-  cannot be undone (a visibility change, a transfer) are refused on every client, attended or not,
-  with a click or without one, and one refused act on a line refuses the whole call. Unattended,
-  every person-only act is refused and carried on the morning list.
+- **Attended, a person-only act that can be undone asks for one click on Claude Code and Copilot
+  CLI, and every deletion and force push is refused everywhere.** The person-only shell guard now
+  reads the main thread's shell calls on every client, not only Stamity's sub-agents'. Attended, a
+  merge, a ready-for-review mark, an approval, a non-forced push of the default branch, a tag, a
+  release, a publish, a secret, variable, protection, ruleset or custom-property write and a
+  repository write get Claude Code's approve prompt, and the agent runs the act on yes; a sub-agent's
+  call and a call in the `auto` permission mode are refused. Copilot CLI asks for its main agent's
+  call alone: one that carries no helper-agent field and whose session id Copilot's session start
+  recorded under the repository's git directory. A helper's call, and every call where that record
+  is missing or unreadable, is refused with the exact command. An ask holds only while the client
+  honours it, and Copilot CLI's experimental assisted mode hands the ask to an LLM judge that may
+  approve it without the person. Cursor and Codex refuse those acts and give the person the exact
+  command: Cursor ran a command despite an ask under `--force`, and Codex's hooks do not honour an
+  ask. A deletion, a force push and an act that cannot be undone (a visibility change, a transfer)
+  are refused on every client, attended or not, with a click or without one, and one refused act on
+  a line refuses the whole call. Unattended, every person-only act is refused and carried on the
+  morning list.
 - **Claude Code's settings always carry the person-only rows.** `.claude/settings.json` gains
   `permissions.deny` rows for the refused acts, among them a mid-pattern row for each refused flag
   that can follow an ask-class prefix, and `permissions.ask` rows for the acts that can be undone,
@@ -104,7 +117,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   none of them, naming those equal to an engine row for the person to remove by hand.
 - **An unattended run verb stands alone on its line.** While a run is unattended the guard refuses a
   line that runs `stamity run start`, `checkpoint` or `end` beside anything else, and the run verbs'
-  own git runs without git's program-valued variables.
+  own git runs without git's program-valued variables. The guard finds the verb anywhere after
+  `run`'s option words and their values, in each parsed command and in its decoded words, and counts
+  a first word after `run` it cannot settle (an expansion, a glob, a brace or a splat) as an option
+  word, so an option written before the verb no longer takes the line past the rule; a verb written
+  after option words is refused with its own reason, since the accepted line keeps the verb next to
+  `run`. Read as PowerShell, the line is also refused for a blank other than a space or a tab, an
+  unquoted `@` after the program, and the stop-parsing `--%` spelled with typographic dashes.
+- **Claude Code's hooks run copies under `.claude/hooks/stamity/`.** Each engine entry in
+  `.claude/settings.json` now runs a copy of its script there, and the guard reads the copy of the
+  agent tool policy document beside them. The copies under `.stamity/generated/hooks/claude/` are
+  still written, for the session start a person runs by hand where no hook ran, and no entry runs
+  them. The Claude Code GitHub Action restores `.claude/` from the base branch on a pull request, so
+  on that run the engine's own hooks run the base branch's scripts, and a pull request no longer
+  changes what the guard runs on its own Action run, once the base branch carries a `sync` that
+  writes the copies. The `AGENTS.md` that `CLAUDE.md` imports, the run records, learnings and
+  resumable handoffs the scripts read, and user and pack hook scripts outside `.claude/` that the
+  settings also run still come from the pull request. With Claude Code selected, a 1.15 engine refuses the manifest this
+  release writes: its rows under `.claude/hooks/stamity/` lie outside the paths 1.15 writes (the
+  owned-path bound moves to version 3), so 1.15's `check` fails its `manifest` row naming each row,
+  and its `sync` and `clean` stop with `CONFIG_ERROR` before they touch a file. A team on mixed
+  versions upgrades together. That refusal is read from 1.15.0's bound, not walked on a 1.15.0
+  install.
 - **One session detector names the session for the session start and the pre-flight.** The
   pre-flight's JSON `cloud` field now reads `CLAUDE_CODE_REMOTE` as a cloud session only when it is
   `true`, so a value of `1` reads `false`.
@@ -122,9 +156,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The manifest's held `plugin` block.** The `plugin` key a 1.14 setup wrote, held unread through
   the 1.15 line, is dropped on every read, of any shape, with no migration step and no schema bump: a
   manifest still carrying it loads in `check`, `sync` and `clean`, the next `sync` writes it without
-  the key and says so once ("would drop" on a dry run), and a second `sync` moves no byte. A 1.15
-  engine still reads what this one writes. `check`'s `plugin-duplicates` row and the leftover-plugin
-  lines of `sync` and `clean` leave with it, and the public `SetupManifest` type loses `plugin`.
+  the key and says so once ("would drop" on a dry run), and a second `sync` moves no byte. The drop
+  alone leaves a manifest a 1.15 engine reads; the rows of Claude Code's hook copies do not (under
+  Changed). `check`'s `plugin-duplicates` row and the leftover-plugin lines of `sync` and `clean`
+  leave with it, and the public `SetupManifest` type loses `plugin`.
 
 ## [1.15.0] - 2026-10-15
 

@@ -4659,10 +4659,16 @@ describe("docs/cloud.md", () => {
     expect(section).toMatch(
       /The copies under `\.stamity\/generated\/hooks\/claude\/` are still written, for the session start[^.]*; no hook entry runs them\./,
     );
-    expect(section).toMatch(/until the base branch carries a `sync` that writes those copies/);
+    // TEST CHANGE, justified (ledger row review/162): "holds only until the base branch carries a `sync`" had the
+    // timing backwards; the restore covers Stamity's hooks only once the base carries that sync, and before it the
+    // base's entries run the copies outside `.claude/` (SECURITY.md's Action residual). The pin refuses "until".
+    expect(section).not.toMatch(/holds only until the base branch carries a `sync`/);
+    expect(section).toMatch(/That holds only once the base branch carries a `sync` that writes those copies\. Before it, the base branch's entries run the scripts under `\.stamity\/generated\/hooks\/claude\/`/);
     expect(section).toContain("`AGENTS.md`");
     expect(section).toMatch(/that pull request's `AGENTS\.md`/);
-    expect(section).toMatch(/the run records and the learnings under `\.stamity\/`, are that pull request's too/);
+    // TEST CHANGE, justified (ledger row review/163): the session start also reads the resumable handoffs under
+    // `.stamity/handoffs/` (src/hooks/scripts.ts, `handoffsDir`), which the restore leaves to the pull request too.
+    expect(section).toMatch(/the run records, the learnings and the resumable handoffs under `\.stamity\/`, are that pull request's too/);
     expect(section).toMatch(/A pull request that changes `\.claude\/` sees that change reverted on the Action's run/);
     expect(section).toContain("`git add -A`");
     // w6's security lens (10:09Z): the restore covers Stamity's own hook scripts alone; user and pack hook rows run
@@ -4763,10 +4769,30 @@ describe("docs/cloud.md", () => {
   // ADDED 2026-10-19 (plan 021 file 2, unit w5-ask-pages; REQ-FLOW-123): the Copilot cloud agent's morning walk says
   // why each held act comes as the exact command now that Copilot CLI's guard can ask: the cloud agent denies an ask,
   // as the research read Copilot's documentation on 2026-10-19 (the run record's 08:23Z entry).
-  it("says why a held act on Copilot's cloud agent comes to the person as the exact command", () => {
+  // TEST CHANGE, justified (plan 021 file 2, unit w5-ask-pages, ledger row review/156): the walk promised each held act
+  // as the exact command, but a client-denied ask carries only the ask's text (`askSentence`, src/hooks/scripts.ts),
+  // which names no command; only the guard's refusal (`GUARD_NO_CALLER`) tells the agent to give one. The page now says
+  // what the person gets in each case.
+  it("says what a held act on Copilot's cloud agent brings the person: the ask's text, or the refusal's exact command", () => {
     const walk = flowed(sectionOf(sectionOf(cloudPage(), "## Copilot's cloud agent"), "### The morning walk"));
     expect(walk).toContain("Copilot's documentation says its cloud agent denies a hook's ask, since nobody is there to click it");
     expect(walk).not.toContain("Copilot's guard refuses every person-only act rather than asking");
+    expect(walk).not.toContain("so each held act comes to you as the exact command");
+    expect(walk).toContain("so an act the guard asks for does not run there");
+    expect(walk).toContain("The denied ask tells the agent only that the act is yours to approve, not to give you the command");
+    expect(walk).toContain(
+      "Where the guard refuses instead (a helper agent's call, or a session Copilot's session start did not record), the refusal tells the agent to give you the exact command",
+    );
+  });
+
+  // ADDED 2026-10-19 (plan 021 file 2, unit w5-ask-pages, ledger row review/157): the release checklist's interactive
+  // check runs for each ask-class client, Copilot CLI included, so the page's currency section names both sessions.
+  it("names each ask-class client's one-minute interactive check in how the page stays current", () => {
+    const current = flowed(sectionOf(cloudPage(), "## How this page stays current"));
+    expect(current).toContain(
+      "with a person's one-minute check of each ask-class client's interactive ask beside it, in an interactive Claude Code session and an interactive Copilot CLI session",
+    );
+    expect(current).not.toContain("one-minute check in an interactive Claude Code session beside it");
   });
 });
 
@@ -4797,7 +4823,8 @@ describe("the Action's restore covering Claude Code's hook copies (w7-action-pag
       /the hook scripts those settings start, under `\.stamity\/generated\/hooks\/`, and the `AGENTS\.md`/,
     );
     expect(bullet).toMatch(/`AGENTS\.md` that `CLAUDE\.md` imports is not among the paths the Action restores/);
-    expect(bullet).toMatch(/run records and learnings under `\.stamity\/` that those scripts read/);
+    // TEST CHANGE, justified (ledger row review/163): the resumable handoffs the session start reads join the list.
+    expect(bullet).toMatch(/run records, learnings and resumable handoffs under `\.stamity\/` that those scripts read/);
     expect(bullet).toMatch(
       /until the base branch carries a `sync` that writes the copies, its hook entries run the scripts under `\.stamity\/generated\/hooks\/claude\/`, which come from the pull request/,
     );

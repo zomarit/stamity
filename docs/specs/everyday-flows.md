@@ -3743,9 +3743,9 @@ the default branch, read by REST; `run start` leaves it for a branch of the run'
 - **Amended 2026-10-19** (plan 021 file 2, units `w1-checkpoint-hook-paths`, with its two fix rounds, and
   `w5-ask-pages`; ledger row `review/149`). Given a checkpoint marker left in the work tree's git directory
   (REQ-FLOW-093), Then `run end` refuses before its commit, its scan, its push and its pull-request step, so that exit
-  opens or updates no draft pull request, the one exception to this requirement's draft at every exit
-  (`runCheckpoint`, the marker's refusal, `src/cli/commands/run.ts`). The skill's cloud reference, which the body's last
-  line names for every unattended run, has the run copy the refusal into the record and `## Not done:` and stop: it
+  opens or updates no draft pull request, one more of the exits that open none, beside the held path, scan hit,
+  refused push and changed origin the bullet above names (`runCheckpoint`, the marker's refusal,
+  `src/cli/commands/run.ts`). The skill's cloud reference, which the body's last line names for every unattended run, has the run copy the refusal into the record and `## Not done:` and stop: it
   never removes the marker or resets the run branch, since the refusal's remedy is a person's
   (`content/skills/st-unattended/references/cloud.md`, "A checkpoint marker"; `SKILL.md`'s last line).
 - **Proof:** `test/runs/pullRequest.test.ts`, `test/cli/commands/run.test.ts`, `test/cli/commands/runCheckpoint.test.ts`,

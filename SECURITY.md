@@ -605,8 +605,8 @@ refused. What stays open is named here, as accepted risk:
   (`src/hooks/model.ts::CLAUDE_HOOKS_DIR`), so on that run the engine's own hook scripts are the base
   branch's, and a pull request cannot change what the guard runs on its own Action run. Four things
   stay with the pull request. The `AGENTS.md` that `CLAUDE.md` imports is not among the paths the
-  Action restores, so the agent reads the pull request's. The run records and learnings under
-  `.stamity/` that those scripts read are the pull request's. The user and pack hook scripts the
+  Action restores, so the agent reads the pull request's. The run records, learnings and resumable
+  handoffs under `.stamity/` that those scripts read are the pull request's. The user and pack hook scripts the
   settings run from outside `.claude/` come from the pull request, at their own paths, and the Action
   runs them with its token, so a person who runs the Action on pull requests from outside keeps such
   scripts under `.claude/` or drops them. And until the base branch carries a `sync` that writes the

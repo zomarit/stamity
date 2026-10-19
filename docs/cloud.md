@@ -199,7 +199,11 @@ has run them, for want of a Copilot cloud-agent account.
 Answer in one comment on the pull request, `@copilot answers: Q1→2, Q3→1`. Only a `write` or
 `admin` author's comment answers; anyone else's is listed on the next morning list, not applied.
 Copilot's documentation says its cloud agent denies a hook's ask, since nobody is there to click it,
-so each held act comes to you as the exact command.
+so an act the guard asks for does not run there. The denied ask tells the agent only that the act is
+yours to approve, not to give you the command, so whether its reply names the command is up to the
+agent: ask it for the command and run it yourself. Where the guard refuses instead (a helper agent's
+call, or a session Copilot's session start did not record), the refusal tells the agent to give you
+the exact command.
 
 ## Codex Cloud
 
@@ -221,14 +225,14 @@ copy of the agent tool policy document the guard reads, so the restore covers th
 Stamity's own hooks run the base branch's scripts, and a pull request cannot change what the guard
 runs on its own Action run. The copies under `.stamity/generated/hooks/claude/` are still written,
 for the session start the charter has a session run by hand where no hook ran; no hook entry runs
-them. That holds only until the base branch carries a `sync` that writes those copies. Before it, the base branch's
-entries run the scripts under `.stamity/generated/hooks/claude/`, and those come from the pull
-request.
+them. That holds only once the base branch carries a `sync` that writes those copies. Before it,
+the base branch's entries run the scripts under `.stamity/generated/hooks/claude/`, and those come
+from the pull request.
 
 What the restore does not cover still comes from the pull request. The base branch's `CLAUDE.md`
 imports `AGENTS.md`, which the restore does not cover, so the agent on that run reads that pull
-request's `AGENTS.md`. What the hook scripts read from the rest of the checkout, the run records
-and the learnings under `.stamity/`, are that pull request's too. And hooks of your own and hooks a
+request's `AGENTS.md`. What the hook scripts read from the rest of the checkout, the run records,
+the learnings and the resumable handoffs under `.stamity/`, are that pull request's too. And hooks of your own and hooks a
 pack supplies are wired into the same settings but run scripts outside `.claude/`, at their own
 paths, so those scripts come from the pull request, and the Action runs them with its token. Run the
 Action on a pull request only when you would let its author change the charter. Before you run it on
@@ -316,7 +320,8 @@ Each release re-reads the vendor pages the capability matrix's cloud table cites
 changed since its read date re-owes that cloud's person check at the next release. The container
 leg, CI's `cloud-container` job, runs on every full CI run. The hook-fire check runs nightly where
 its secrets exist; no release-prep job runs it. At release prep the release checklist runs
-`scripts/qa/hook-runs.mjs --ask` by hand, with a person's one-minute check in an interactive
-Claude Code session beside it. The person checks, one unattended run per cloud in a scratch
+`scripts/qa/hook-runs.mjs --ask` by hand, with a person's one-minute check of each ask-class
+client's interactive ask beside it, in an interactive Claude Code session and an interactive Copilot
+CLI session. The person checks, one unattended run per cloud in a scratch
 repository, run with `scripts/qa/cloud-check.mjs`, and the capability matrix reads "not run" for a
 fact no person check has run.
