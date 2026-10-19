@@ -2489,11 +2489,13 @@ export function unattendedPushVerdict(command: string, powershell = false): Unat
 
   /**
    * The run verbs, and a text naming one beside the package: either bin `package.json` declares (`stamity`, and `st` as
-   * a word, review/93), the CLI file, a pinned `@<semver>`.
+   * a word, review/93), the CLI file, a pinned `@<semver>`. The verb follows `run` directly, or after option words and
+   * their values that open on a dash and hold no `;`, `|`, `&` or line break (review/130).
    */
   const RUN_VERBS = new Set(["start", "checkpoint", "end"]);
   const namesVerb = (text: string): boolean =>
-    /\brun\W+(?:start|checkpoint|end)\b/i.test(text) && /stamity|\bst\b|\bcli\.m?js\b|@\d+\.\d+\.\d+/i.test(text);
+    /\brun(?:\W+|[^\w\s]*\s+[^\w\s-]*-[^;|&\r\n]*?\W)(?:start|checkpoint|end)\b/i.test(text) &&
+    /stamity|\bst\b|\bcli\.m?js\b|@\d+\.\d+\.\d+/i.test(text);
   /** npm's per-scope registry URL, as `REGISTRY_URL` in `src/shared/cliCall.ts` reads one. */
   const REGISTRY_URL = /^https:\/\/[A-Za-z0-9.-]+(?::(?:[1-9]\d{0,3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-5]))?(?:\/[A-Za-z0-9._~/-]*)?$/;
   /** A pinned package: a runnable npm name, then `@` and a semver-shaped version (`src/shared/cliCall.ts`). */
@@ -2506,7 +2508,8 @@ export function unattendedPushVerdict(command: string, powershell = false): Unat
    * `--@<scope>:registry=<url>` and then `stamity` or `<pkg>@<semver>`; then `run <verb>` and literal words, at most one
    * closing `2>&1`. Single quotes are literal; double quotes hold no `$`, backtick or backslash; nothing else on the
    * line expands, redirects, joins or nests a command. With `powershell` the same, and no typographic quote, which
-   * PowerShell reads as a quote, and no stop-parsing `--%`.
+   * PowerShell reads as a quote, no blank but a space or a tab, no stop-parsing `--%` (its dashes typographic too), and
+   * no unquoted `@` after the program, which PowerShell reads as a splat (review/131).
    */
   function verbShape(line: string): string | null {
     const text = line.replace(/[ \t]+2>&1[ \t]*$/, "");
@@ -2514,7 +2517,11 @@ export function unattendedPushVerdict(command: string, powershell = false): Unat
     // Anywhere, inside a quote too: PowerShell closes a `'` with a typographic one (U+2018 to U+201E).
     const typographic = [...text].some((ch) => ch.charCodeAt(0) >= 0x2018 && ch.charCodeAt(0) <= 0x201e);
     if (powershell && typographic) return "a typographic quote, which PowerShell reads as a quote";
+    // PowerShell splits words on more blanks than the two this reading splits on (review/131).
+    if (powershell && /[^\S \t]|\u0085/.test(text)) return "a blank other than a space or a tab, which PowerShell splits words on";
     const words: string[] = [];
+    /** The index of each word holding an unquoted `@`. */
+    const ats: number[] = [];
     let word: string | null = null;
     for (let i = 0; i < text.length; i += 1) {
       const ch = text[i] ?? "";
@@ -2530,10 +2537,14 @@ export function unattendedPushVerdict(command: string, powershell = false): Unat
         word = null;
       } else if ("$`\\(){};|&<>#".includes(ch)) {
         return ch === "`" ? "an unquoted backtick" : `an unquoted \`${ch}\``;
-      } else word = (word ?? "") + ch;
+      } else {
+        if (ch === "@") ats.push(words.length);
+        word = (word ?? "") + ch;
+      }
     }
     if (word !== null) words.push(word);
-    if (powershell && words.includes("--%")) return "PowerShell's stop-parsing `--%`";
+    // PowerShell reads an en dash, an em dash and a horizontal bar as `-`.
+    if (powershell && words.some((each) => /^[-–-―]{2}%$/.test(each))) return "PowerShell's stop-parsing `--%`";
     let at = 1;
     if (words[0] === "npx") {
       if (!["-y", "--yes", "--no", "--no-yes"].includes(words[1] ?? "")) return "an `npx` call whose first word is not `-y`, `--yes`, `--no` or `--no-yes`";
@@ -2547,7 +2558,10 @@ export function unattendedPushVerdict(command: string, powershell = false): Unat
     } else if (words[0] !== "stamity" && words[0] !== "st") {
       return "a first word other than `stamity`, `st` or `npx`: a prefix, a wrapper or another program";
     }
-    if (words[at] !== "run" || !RUN_VERBS.has(words[at + 1] ?? "")) return "words between the program and `run <verb>`";
+    if (words[at] !== "run") return "words between the program and `run <verb>`";
+    if (!RUN_VERBS.has(words[at + 1] ?? "")) return "words between `run` and its verb";
+    // The program, the npx flag, the registry and the package are pinned above, so only the option words can splat.
+    if (powershell && ats.some((index) => index > at)) return "an unquoted `@` after the program, which PowerShell reads as a splat";
     return null;
   }
 
@@ -2657,10 +2671,12 @@ export function unattendedPushVerdict(command: string, powershell = false): Unat
   // A run verb alone on its line (REQ-FLOW-121): a parsed command at any depth running one, or, for what the reading
   // cannot show, the text or a decoded word naming one beside the package. Any form that sets the verb's environment
   // (a setter, allexport, a wrapper, a nested shell, PowerShell's `env:` drive) needs more on the line than the verb.
+  // commander takes `run`'s options before its subcommand, and a valued option's value is a word of its own, so the
+  // verb is any word after `run` (review/130); the program's own options take no value.
   const runsVerb =
     commands.some((cmd) => {
-      const positionals = cmd.slice(1).filter((word) => !word.startsWith("-"));
-      return (cmd[0] === "stamity" || cmd[0] === "st") && positionals[0] === "run" && RUN_VERBS.has(positionals[1] ?? "");
+      const at = cmd.findIndex((word, index) => index > 0 && !word.startsWith("-"));
+      return (cmd[0] === "stamity" || cmd[0] === "st") && cmd[at] === "run" && cmd.slice(at + 1).some((word) => RUN_VERBS.has(word));
     }) ||
     namesVerb(command) ||
     [...assigned, ...commands.flat()].some(namesVerb);

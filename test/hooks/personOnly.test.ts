@@ -1628,6 +1628,67 @@ describe("unattendedPushVerdict — a run verb stands alone on its line (v0b, RE
     expect(unattendedPushVerdict(command, true)).toEqual({ deny: false });
   });
 
+  // review/130: commander takes `run`'s options before its subcommand (`src/cli/commands/run.ts`), so a valued option
+  // written as two words between `run` and the verb word still runs the verb. The trigger finds the verb after any
+  // option words and their values, in the parse and in the text backstop, and the shape keeps the verb next to `run`.
+  it.each([
+    ["HOME=/tmp/h stamity run --run x end", "a first word other than `stamity`, `st` or `npx`"],
+    ["PATH=/tmp/bin npx --no stamity run --title t checkpoint --run x", "a first word other than `stamity`, `st` or `npx`"],
+    ["sh -c 'st run --run x end'", "a first word other than `stamity`, `st` or `npx`"],
+    ["npx --no stamity run --run x --title 'a b' end; npm test", "an unquoted `;`"],
+    ["env -u GIT_EXEC_PATH npx --no stamity run --paths a --run x checkpoint", "a first word other than `stamity`, `st` or `npx`"],
+    // Launchers the reading does not unwrap: only the text backstop names the verb, after the option words.
+    ["watch stamity run --run x end", "a first word other than `stamity`, `st` or `npx`"],
+    ["parallel st run --title 'a b' --run x end", "a first word other than `stamity`, `st` or `npx`"],
+    // The verb alone but after an option: outside the accepted shape, so refused, naming what broke it.
+    ["npx --no stamity run --run x end", "words between `run` and its verb"],
+  ])("refuses %j, a run verb after a valued option, naming what broke the shape (review/130)", (command, broke) => {
+    expectRefused(unattendedPushVerdict(command), broke);
+    expect(personOnlyVerdict(command, ON_FEATURE)).toEqual({ deny: false });
+  });
+
+  it.each([
+    ["$env:HOME = 'C:/h'; npx --no stamity run --run x end", "an unquoted `$`"],
+    ["Set-Content env:GIT_CONFIG_GLOBAL C:/c; st run --title t end --run x", "an unquoted `;`"],
+  ])("refuses the PowerShell line %j, a run verb after a valued option (review/130)", (command, broke) => {
+    expectRefused(unattendedPushVerdict(command, true), broke);
+  });
+
+  // review/131: PowerShell splats `@name` into a native command's arguments and splits words on blanks other than a
+  // space or a tab, so a stop-parsing token set off by one, or spelled with its typographic dashes, is still one.
+  const BLANKS = [0x0b, 0x0c, 0x85, 0xa0, 0x2002, 0x3000].map((code) => String.fromCharCode(code));
+  const DASHES = [0x2013, 0x2014, 0x2015].map((code) => String.fromCharCode(code));
+  it.each([
+    [VERB + " @rest", "an unquoted `@`"],
+    [VERB + " --title a,@rest", "an unquoted `@`"],
+    ...BLANKS.map((blank) => [VERB + blank + "--% --title %T%", "a blank other than a space or a tab"]),
+    ...DASHES.map((dash) => [VERB + " " + dash + dash + "% --title %T%", "stop-parsing"]),
+    [VERB + " -" + DASHES[0] + "% --title %T%", "stop-parsing"],
+  ])("refuses the PowerShell line %j, whose words the guard does not read as PowerShell does (review/131)", (command, broke) => {
+    expectRefused(unattendedPushVerdict(command, true), broke);
+  });
+
+  it("refuses an unquoted `@` after the verb in PowerShell, and lets a quoted one and the package's own pass (review/131)", () => {
+    expectRefused(unattendedPushVerdict(VERB + " --title @rest", true), "an unquoted `@`");
+    // Non-degenerate twins: single and double quotes keep `@` literal, and the pinned package and its registry keep
+    // theirs, in both readings.
+    for (const command of [
+      VERB + " --title '@rest'",
+      VERB + ' --title "a@b"',
+      "npx --yes --@zomarit:registry=https://npm.example.com @zomarit/stamity@1.15.0 run end --run x",
+    ]) {
+      expect(unattendedPushVerdict(command), command).toEqual({ deny: false });
+      expect(unattendedPushVerdict(command, true), command).toEqual({ deny: false });
+    }
+  });
+
+  it("reads `@` and the other blanks as literals in the shell reading, and refuses them in PowerShell's (review/131)", () => {
+    for (const command of [VERB + " --title a@b", VERB + " --title a" + String.fromCharCode(0xa0) + "b"]) {
+      expect(unattendedPushVerdict(command), command).toEqual({ deny: false });
+      expect(unattendedPushVerdict(command, true).deny, command).toBe(true);
+    }
+  });
+
   it("refuses `gh extension exec` under each of its names, and lets the group's reads pass (pr/64)", () => {
     for (const command of ["gh ext exec x", "gh extension exec x", "gh extensions exec my-ext --flag"]) {
       const verdict = unattendedPushVerdict(command);

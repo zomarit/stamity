@@ -1220,6 +1220,30 @@ describe("a run verb alone on its line, unattended, on every client (v0b, REQ-FL
     expect(decide(tool, guard, RUN_END)).toEqual({ deny: false });
   });
 
+  it.each(TOOLS)("on %s, refuses the verb written after a valued option behind a prefix assignment (review/130)", async (tool) => {
+    const command = "HOME=/tmp/h npx --no stamity run --run x end";
+    const guard = await placeGuard(tool);
+    expect(decide(tool, guard, command)).toEqual({ deny: false });
+    await getRepo().seedFiles({ ".stamity/runs/2026-10-18_x/record.md": record("in progress", "unattended") });
+    const verdict = unattendedPushVerdict(command);
+    expect(verdict.deny).toBe(true);
+    if (verdict.deny) expect(decide(tool, guard, command)).toEqual({ deny: true, reason: expect.stringContaining(verdict.reason) });
+  });
+
+  it.each(["claude", "copilot"] as const)(
+    "on %s, refuses a PowerShell splat after the verb and lets a quoted `@` pass (review/131)",
+    async (tool) => {
+      const guard = await placeGuard(tool, { ".stamity/runs/2026-10-18_x/record.md": record("in progress", "unattended") });
+      const splat = `${RUN_END} --title @rest`;
+      const verdict = unattendedPushVerdict(splat, true);
+      expect(verdict.deny).toBe(true);
+      if (verdict.deny) {
+        expect(decide(tool, guard, splat, undefined, undefined, "PowerShell")).toEqual({ deny: true, reason: expect.stringContaining(verdict.reason) });
+      }
+      expect(decide(tool, guard, `${RUN_END} --title '@rest'`, undefined, undefined, "PowerShell")).toEqual({ deny: false });
+    },
+  );
+
   it.each(["claude", "copilot"] as const)(
     "on %s, reads the PowerShell tool's text as PowerShell: the verb alone passes, a line before it or the agent's own pwsh -Command does not",
     async (tool) => {
