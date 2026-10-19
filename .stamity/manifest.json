@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "generatedBy": "1.15.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-19T00:13:34.311Z",
+  "updatedAt": "2026-10-19T10:07:59.654Z",
   "tools": [
     "claude"
   ],
@@ -196,6 +196,62 @@
     },
     {
       "adapter": "claude",
+      "artifactId": "claude-hook-agent-tool-policies",
+      "artifactType": "infra",
+      "contentHash": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3",
+      "path": ".claude/hooks/stamity/stamity-agent-tool-policies.json"
+    },
+    {
+      "adapter": "claude",
+      "artifactId": "claude-hook-cloud-readiness",
+      "artifactType": "infra",
+      "contentHash": "3e0cb4f05778cd276826e9cec1907b69cfaabf142d66d5585d7e685c68dd175e",
+      "path": ".claude/hooks/stamity/stamity-cloud-readiness.mjs"
+    },
+    {
+      "adapter": "claude",
+      "artifactId": "stamity-config-tamper-notice",
+      "artifactType": "infra",
+      "contentHash": "71fa9065ca2f291d53a86d0e620844821833dd8ff3f5ea7c9a8389bc3504306e",
+      "path": ".claude/hooks/stamity/stamity-config-tamper-notice.mjs"
+    },
+    {
+      "adapter": "claude",
+      "artifactId": "stamity-person-only-guard",
+      "artifactType": "infra",
+      "contentHash": "0aa56e86c15ca1f300478a1dbd3a7783e5c0bf7603bc6d28f59cdf602e635307",
+      "path": ".claude/hooks/stamity/stamity-person-only-guard.mjs"
+    },
+    {
+      "adapter": "claude",
+      "artifactId": "stamity-pre-tool-use-guard",
+      "artifactType": "infra",
+      "contentHash": "752f24a46db0da9f933bcb313a00ef8f6b12b8a655241b9257e40f64d9776965",
+      "path": ".claude/hooks/stamity/stamity-pre-tool-use-guard.mjs"
+    },
+    {
+      "adapter": "claude",
+      "artifactId": "claude-hook-review-gate",
+      "artifactType": "infra",
+      "contentHash": "a410def5d44fde83869b3c2c98db318d470b68a54101e1b20eddfb026f8077b1",
+      "path": ".claude/hooks/stamity/stamity-review-gate.mjs"
+    },
+    {
+      "adapter": "claude",
+      "artifactId": "stamity-session-start",
+      "artifactType": "infra",
+      "contentHash": "c807b92eeff34b3e194a0f7ae843c2945d5663d56cdb937786454a6402df3f31",
+      "path": ".claude/hooks/stamity/stamity-session-start.mjs"
+    },
+    {
+      "adapter": "claude",
+      "artifactId": "claude-hook-ask-gate",
+      "artifactType": "infra",
+      "contentHash": "40a135c2b3bc84ada8c91863156c26be3197f2492bb7214c016d6d3104d92b4c",
+      "path": ".claude/hooks/stamity/stamity-unattended-ask-gate.mjs"
+    },
+    {
+      "adapter": "claude",
       "artifactId": "api-versioning",
       "artifactType": "rule",
       "contentHash": "ed3a351d0ff5c6e76547267a3d79a69bd0267af96b659dc91398160921253391",
@@ -272,24 +328,24 @@
         "createdFile": true,
         "elements": {
           "/hooks/ConfigChange": [
-            "588865d5395a500b52bcee89672997464979560bc96ad2f543ea5996dd3a80f9"
+            "242925ec7f7b2a4898a0b7157d96f529525f9bb236b66d876049fbc2643223fe"
           ],
           "/hooks/PreToolUse": [
-            "8a35022a505fb160852ff808854bed9e2473a24a8b967d0f6e84fb584c970921",
-            "601f6171e8c6174e843a9f438b49e298987ae772e880fa8a8234965c8dd9da8f",
-            "9a81f1565e479519d7ed34b8eb7f0ebf61a34e459e1d6b47599fc16f0a9e1a78",
-            "3bfbe172320eb8a65365c02f998a49eaedc041084219f0173be626ac2d8a9ea8"
+            "8cf26b4706d691599cb57cf4cccbe987007d38bf1443f2f5ca9ff29596f88dfb",
+            "ae76b0a9335096a2ecc2832d28d259e03b2aff83814c3a5b1fff898e3ee7dd92",
+            "7116ff1c12b274d4580c1710f1a401287b40f00f0bfcea09c9dd7503a6ad9f3b",
+            "743b328997643d059bf4bcc1fe908849155eda38712ef81d57adfdb35b3a83d8"
           ],
           "/hooks/SessionStart": [
-            "bb394fc4a890f086038cb792f485b5d9c294eb1ce696c4d83f9cd251980a39ae",
-            "588865d5395a500b52bcee89672997464979560bc96ad2f543ea5996dd3a80f9",
-            "f319a534768af0cd66dda98d7e5a406d9c9a498a19a9029caa5c874836679141"
+            "e49db8343a3a390290586dd9dc1a9a3b7f60e1678d5da09370ea6bd981ef374b",
+            "242925ec7f7b2a4898a0b7157d96f529525f9bb236b66d876049fbc2643223fe",
+            "0887a0314dbd97d70ede91167aa20d42f3b23252514eb6a6d323eba42e749092"
           ],
           "/hooks/SubagentStop": [
-            "35ec54ce50236a85b71978686daf6f1c01ba3ef049692edb9b99d1f17a37a8d7"
+            "c27496945412cb174751fafa4a1a045c8f3cffde7b635278dfcceba631129711"
           ],
           "/hooks/TaskCompleted": [
-            "35ec54ce50236a85b71978686daf6f1c01ba3ef049692edb9b99d1f17a37a8d7"
+            "c27496945412cb174751fafa4a1a045c8f3cffde7b635278dfcceba631129711"
           ],
           "/permissions/ask": [
             "ca84366a30fd7f1bc883e0465ab636c2144b963dca815129fe0dbb12ea5834dd",
@@ -383,7 +439,7 @@
           ]
         }
       },
-      "contentHash": "ca377fc25712bb6d447373deadbd3f55e8e22ace1feb2cefda5d9499151b8a9c",
+      "contentHash": "506ab704248e459405798fcc4fd7a63ff9845d97bad5a02ef5b365c06ecbe36c",
       "path": ".claude/settings.json"
     },
     {
@@ -495,7 +551,7 @@
       "adapter": "claude",
       "artifactId": "unattended",
       "artifactType": "skill",
-      "contentHash": "c802d532b55aa9e8fb0d91244e006f2f077994d1e421fdff2070cac22f5966aa",
+      "contentHash": "5bcef28357f4c489a36c70e08e4b03c7b890bcbd1b66afef56e099f48bcd449d",
       "path": ".claude/skills/st-unattended/SKILL.md"
     },
     {
@@ -516,7 +572,7 @@
       "adapter": "claude",
       "artifactId": "unattended",
       "artifactType": "skill",
-      "contentHash": "5eb14c2539b97f4c8164bc57b929fe49fb84dc2a113a43a81b629c38002e15cf",
+      "contentHash": "77cfb7a370d3e1c3a8561c7bef6f2cc95e4dfc06299adbcdbf489064d9f03b28",
       "path": ".claude/skills/st-unattended/references/cloud.md"
     },
     {
@@ -649,7 +705,7 @@
       "adapter": "claude",
       "artifactId": "stamity-person-only-guard",
       "artifactType": "infra",
-      "contentHash": "d964797bcc18be28804000d2d1cd2c6a99248d8a4166ec0fc3cb924b23e4dad3",
+      "contentHash": "a5922d7c23fea7aa654edc9d743c1ff973d3cd6fe8aeeeb7b99ca1f18d0a6bce",
       "path": ".stamity/generated/hooks/claude/stamity-person-only-guard.mjs"
     },
     {

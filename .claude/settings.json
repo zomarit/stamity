@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-session-start.mjs\"",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/stamity/stamity-session-start.mjs\"",
             "timeout": 30
           }
         ]
@@ -14,7 +14,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs\"",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/stamity/stamity-config-tamper-notice.mjs\"",
             "timeout": 30
           }
         ]
@@ -24,7 +24,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-cloud-readiness.mjs\"",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/stamity/stamity-cloud-readiness.mjs\"",
             "timeout": 300
           }
         ]
@@ -35,7 +35,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs\" || { s=$?; [ \"$s\" -eq 2 ] && exit 2; echo 'stamity: the pre-tool-use guard could not run; run `stamity sync` where the CLI is installed, else `npx -y @zomarit/stamity@1.15.0 sync`, which needs the npm registry' >&2; exit 2; }"
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/stamity/stamity-pre-tool-use-guard.mjs\" || { s=$?; [ \"$s\" -eq 2 ] && exit 2; echo 'stamity: the pre-tool-use guard could not run; run `stamity sync` where the CLI is installed, else `npx -y @zomarit/stamity@1.15.0 sync`, which needs the npm registry' >&2; exit 2; }"
           }
         ]
       },
@@ -44,7 +44,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-person-only-guard.mjs\" || { s=$?; [ \"$s\" -eq 2 ] && exit 2; echo 'stamity: the pre-tool-use guard could not run; run `stamity sync` where the CLI is installed, else `npx -y @zomarit/stamity@1.15.0 sync`, which needs the npm registry' >&2; exit 2; }"
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/stamity/stamity-person-only-guard.mjs\" || { s=$?; [ \"$s\" -eq 2 ] && exit 2; echo 'stamity: the pre-tool-use guard could not run; run `stamity sync` where the CLI is installed, else `npx -y @zomarit/stamity@1.15.0 sync`, which needs the npm registry' >&2; exit 2; }"
           }
         ]
       },
@@ -53,7 +53,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-unattended-ask-gate.mjs\""
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/stamity/stamity-unattended-ask-gate.mjs\""
           }
         ]
       },
@@ -62,7 +62,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-person-only-guard.mjs\" || { s=$?; [ \"$s\" -eq 2 ] && exit 2; echo 'stamity: the pre-tool-use guard could not run; run `stamity sync` where the CLI is installed, else `npx -y @zomarit/stamity@1.15.0 sync`, which needs the npm registry' >&2; exit 2; }"
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/stamity/stamity-person-only-guard.mjs\" || { s=$?; [ \"$s\" -eq 2 ] && exit 2; echo 'stamity: the pre-tool-use guard could not run; run `stamity sync` where the CLI is installed, else `npx -y @zomarit/stamity@1.15.0 sync`, which needs the npm registry' >&2; exit 2; }"
           }
         ]
       }
@@ -72,7 +72,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs\"",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/stamity/stamity-config-tamper-notice.mjs\"",
             "timeout": 30
           }
         ]
@@ -83,7 +83,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-review-gate.mjs\""
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/stamity/stamity-review-gate.mjs\""
           }
         ]
       }
@@ -93,7 +93,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-review-gate.mjs\""
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/stamity/stamity-review-gate.mjs\""
           }
         ]
       }

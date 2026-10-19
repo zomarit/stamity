@@ -74,6 +74,16 @@ The run's closing commit is never counted; a cloud's CI autofix or a person's pu
 `Not done: <n> commits after checkpoint <sha>, not covered by the proof block's gates`. The proof block's gate results
 are never read as covering them.
 
+## A checkpoint marker
+
+This section binds every unattended run, local or in a cloud. A checkpoint whose commit was not checked, or whose undo
+failed, leaves `stamity/checkpoint-pending` in the work tree's git directory, and every later `run checkpoint` and
+`run end` refuses while it is there, naming it, committing nothing and pushing nothing. The run never removes that
+marker, never resets, rewinds or rewrites the run branch, and never takes the refusal's remedy, which is a person's:
+it copies the refusal into the record and the morning list's `## Not done:`, first, and stops. That is the one exit
+that pushes nothing and opens or updates no draft pull request, against the skill's one draft pull request at every
+exit: the record and the morning list stay in the run folder, and its final message carries the `## Not done:` lines.
+
 ## A session-capped cloud agent
 
 On a cloud agent whose session ends near an hour and whose next session starts from a pull request comment, a long

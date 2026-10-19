@@ -5,7 +5,8 @@
 // Reads every shell call and GitHub MCP write for the person-only acts. Attended,
 // one that can be undone (a push of a tag or of the default branch, a tag, a
 // merge, a release, a publish, a secret or protection write) asks the person for
-// one click on Claude Code's main thread and is refused elsewhere; a deletion, a
+// one click on Claude Code's main thread and Copilot CLI's main agent and is
+// refused elsewhere; a deletion, a
 // force push or an act that cannot be undone is refused on every client. While a
 // run is unattended every person-only act is refused, and any push that steps
 // around `stamity run checkpoint` and `stamity run end`. `curl` and `wget` appear
@@ -2298,7 +2299,18 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 		"checkpoint",
 		"end"
 	]);
-	const namesVerb = (text) => /\brun\W+(?:start|checkpoint|end)\b/i.test(text) && /stamity|\bst\b|\bcli\.m?js\b|@\d+\.\d+\.\d+/i.test(text);
+	const PACKAGE = /stamity|\bst\b|\bcli\.m?js\b|@\d+\.\d+\.\d+/i;
+	const namesVerb = (text) => /\brun(?:\W+|[^\w\s]*\s+[^\w\s-]*-[^;|&\r\n]*?\W)(?:start|checkpoint|end)\b/i.test(text) && PACKAGE.test(text);
+	const namesVerbInWords = (words) => {
+		const text = words.join(" ");
+		if (!PACKAGE.test(text)) return false;
+		for (const open of text.matchAll(/\brun[^\w\s]*\s+([^\w\s]*)/gi)) {
+			const rest = text.slice((open.index ?? 0) + open[0].length);
+			if (/^(?:start|checkpoint|end)\b/i.test(rest)) return true;
+			if (/[-$`@*?[{]/.test(open[1] ?? "")) return /(?:^|\W)(?:start|checkpoint|end)\b/i.test(rest);
+		}
+		return false;
+	};
 	const REGISTRY_URL = /^https:\/\/[A-Za-z0-9.-]+(?::(?:[1-9]\d{0,3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-5]))?(?:\/[A-Za-z0-9._~/-]*)?$/;
 	const PINNED_PACKAGE = /^(?:@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*@(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 	function verbShape(line) {
@@ -2306,7 +2318,9 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 		if (/[\r\n]/.test(text)) return "a line break";
 		const typographic = [...text].some((ch) => ch.charCodeAt(0) >= 8216 && ch.charCodeAt(0) <= 8222);
 		if (powershell && typographic) return "a typographic quote, which PowerShell reads as a quote";
+		if (powershell && /[^\S \t]|\u0085/.test(text)) return "a blank other than a space or a tab, which PowerShell splits words on";
 		const words = [];
+		const ats = [];
 		let word = null;
 		for (let i = 0; i < text.length; i += 1) {
 			const ch = text[i] ?? "";
@@ -2321,10 +2335,13 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 				if (word !== null) words.push(word);
 				word = null;
 			} else if ("$`\\(){};|&<>#".includes(ch)) return ch === "`" ? "an unquoted backtick" : `an unquoted \`${ch}\``;
-			else word = (word ?? "") + ch;
+			else {
+				if (ch === "@") ats.push(words.length);
+				word = (word ?? "") + ch;
+			}
 		}
 		if (word !== null) words.push(word);
-		if (powershell && words.includes("--%")) return "PowerShell's stop-parsing `--%`";
+		if (powershell && words.some((each) => /^[-–-―]{2}%$/.test(each))) return "PowerShell's stop-parsing `--%`";
 		let at = 1;
 		if (words[0] === "npx") {
 			if (![
@@ -2341,7 +2358,9 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 			if (spec !== "stamity" && !PINNED_PACKAGE.test(spec)) return "an `npx` option or package other than `stamity` or `<pkg>@<semver>`";
 			at += 1;
 		} else if (words[0] !== "stamity" && words[0] !== "st") return "a first word other than `stamity`, `st` or `npx`: a prefix, a wrapper or another program";
-		if (words[at] !== "run" || !RUN_VERBS.has(words[at + 1] ?? "")) return "words between the program and `run <verb>`";
+		if (words[at] !== "run") return "words between the program and `run <verb>`";
+		if (!RUN_VERBS.has(words[at + 1] ?? "")) return "words between `run` and its verb";
+		if (powershell && ats.some((index) => index > at)) return "an unquoted `@` after the program, which PowerShell reads as a splat";
 		return null;
 	}
 	const commands = commandsOf(command, 0, powershell);
@@ -2417,9 +2436,9 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 		return SETTERS.has(cmd[0] ?? "") && cmd.slice(1).some((word) => SETS_WORD.test(word) && (exports || word.includes("=")));
 	}) || SETS_TEXT.test(command) || allexport && (NAMES_VARIABLE.test(command) || [...assigned, ...commands.flat()].some((word) => NAMES_VARIABLE.test(word)))) return deny("A line that sets one of git's program or configuration variables (`GIT_EXEC_PATH`, `GIT_EDITOR`, `GIT_CONFIG_COUNT`, …), which the run verbs' own git reads,");
 	const broke = commands.some((cmd) => {
-		const positionals = cmd.slice(1).filter((word) => !word.startsWith("-"));
-		return (cmd[0] === "stamity" || cmd[0] === "st") && positionals[0] === "run" && RUN_VERBS.has(positionals[1] ?? "");
-	}) || namesVerb(command) || [...assigned, ...commands.flat()].some(namesVerb) ? verbShape(command) : null;
+		const at = cmd.findIndex((word, index) => index > 0 && !word.startsWith("-"));
+		return (cmd[0] === "stamity" || cmd[0] === "st") && cmd[at] === "run" && cmd.slice(at + 1).some((word) => RUN_VERBS.has(word));
+	}) || [...commands, ...assigned.map((word) => [word])].some(namesVerbInWords) || namesVerb(command) || [...assigned, ...commands.flat()].some(namesVerb) ? verbShape(command) : null;
 	if (broke !== null) return deny(`A run verb (\`stamity run start\`, \`checkpoint\` or \`end\`) on a line that is more than the verb (${broke}; REQ-FLOW-121)`);
 	return { deny: false };
 };
@@ -2978,12 +2997,13 @@ function unattendedSentence(act, rule) {
 function attendedAsk(payload, act, rule) {
   const told = act + " is a person-only act (\`" + rule + "\`) and ";
   const end = " (REQ-FLOW-102). Give the person the exact command.";
-  const names = ["agent_type", "subagent_type", "agentType", "subagentType", "agent_id", "subagent_id"];
+  const names = ["agent_type","subagent_type","agentType","subagentType","agent_id","subagent_id","agentId","parentAgentId","parent_agent_id","parent_tool_call_id"];
+  const held = (reason) => ({ ask: false, reason });
   if (names.some((name) => Object.hasOwn(payload, name) && typeof payload[name] === "string" && payload[name] !== "")) {
-    return { ask: false, reason: told + "a sub-agent runs it: the act is the person's, so only the main thread may ask for it" + end };
+    return held(told + "a sub-agent runs it: the act is the person's, so only the main thread may ask for it" + end);
   }
   if (payload.permission_mode === "auto") {
-    return { ask: false, reason: told + "this session runs in the \`auto\` permission mode, where a classifier may settle the prompt: it stays the person's to run" + end };
+    return held(told + "this session runs in the \`auto\` permission mode, where a classifier may settle the prompt: it stays the person's to run" + end);
   }
   return { ask: true, reason: askSentence(act, rule) };
 }
