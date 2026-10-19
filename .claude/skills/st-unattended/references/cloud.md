@@ -80,9 +80,10 @@ This section binds every unattended run, local or in a cloud. A checkpoint whose
 failed, leaves `stamity/checkpoint-pending` in the work tree's git directory, and every later `run checkpoint` and
 `run end` refuses while it is there, naming it, committing nothing and pushing nothing. The run never removes that
 marker, never resets, rewinds or rewrites the run branch, and never takes the refusal's remedy, which is a person's:
-it copies the refusal into the record and the morning list's `## Not done:`, first, and stops. That is the one exit
-that pushes nothing and opens or updates no draft pull request, against the skill's one draft pull request at every
-exit: the record and the morning list stay in the run folder, and its final message carries the `## Not done:` lines.
+it copies the refusal into the record and the morning list's `## Not done:`, first, and stops. That is one more of the
+exits that open or update no draft pull request, beside a held path, a scan hit, a refused push and a changed origin,
+and it pushes nothing: the record and the morning list stay in the run folder, and its final message carries the
+`## Not done:` lines.
 
 ## A session-capped cloud agent
 
