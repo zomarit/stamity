@@ -362,7 +362,7 @@ describe("checkPlans", () => {
     expect(result.ready).toBe(false);
     expect(blockersOf(result, "stale")).toEqual([{ code: "stale", line: lineOf(text, "reads:") }]);
     expect(result.plans[0]?.blockers[0]?.message).toBe(
-      "`docs/link.md` is a symbolic link, or under one; name the file it points to in reads and re-stamp the plan.",
+      "`docs/link.md` is a symbolic link, lies under one, or is a folder holding one at HEAD; list the files the plan read instead, and re-stamp the plan.",
     );
     expect(result.plans[0]?.freshness).toMatchObject({ verdict: "stale", stale: [{ path: "docs/link.md", reason: "link" }] });
   });
