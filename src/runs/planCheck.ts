@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { parseFrontmatter } from "../content/frontmatter.ts";
 import type { GitRunner } from "../workspace/git.ts";
-import { type FreshnessResult, freshness } from "./freshness.ts";
+import { type FreshnessResult, type StaleReason, freshness } from "./freshness.ts";
 import { checkCoverage, parsePlanUnits } from "./planCoverage.ts";
 import { PREREQUISITE_OPEN, parseRunContract } from "./runContract.ts";
 
@@ -443,6 +443,13 @@ function checkPrerequisiteRow(text: string, line: number, blockers: PlanBlocker[
 
 const cleanCell = (cell: string): string => cell.replaceAll("`", "").replaceAll("**", "").trim();
 
+/** The stale reasons that name their own fix, each message following the path in backticks. */
+const OWN_STALE_MESSAGE: Partial<Record<StaleReason, string>> = {
+  link: "is a symbolic link, or under one; name the file it points to in reads and re-stamp the plan.",
+  spelling: "is not a plain repository path; write it as git lists it and re-stamp the plan.",
+  untracked: "is not tracked by git at HEAD, so its history cannot be measured; commit it or drop it from reads, and re-stamp the plan.",
+};
+
 async function measureFreshness(
   plan: PlanCheckDoc,
   head: PlanHead,
@@ -474,9 +481,9 @@ async function measureFreshness(
     blockers.push({ code: "stamp-unresolved", line: stampLine, message: `The stamp ${head.stamp.sha} names no commit HEAD descends from; re-stamp the plan after re-reading what it reads.` });
   }
   for (const stale of result.stale) {
-    if (stale.reason === "link") {
-      const message = `\`${stale.path}\` is a symbolic link, or under one; name the file it points to in reads and re-stamp the plan.`;
-      blockers.push({ code: "stale", line: readsLine, message });
+    const own = OWN_STALE_MESSAGE[stale.reason];
+    if (own !== undefined) {
+      blockers.push({ code: "stale", line: readsLine, message: `\`${stale.path}\` ${own}` });
       continue;
     }
     const why = stale.reason === "missing" ? "is not on disk" : "moved since the stamp";

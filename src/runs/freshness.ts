@@ -1,5 +1,5 @@
 import { lstat } from "node:fs/promises";
-import { join, sep } from "node:path";
+import { join, posix, win32 } from "node:path";
 import type { GitRunner } from "../workspace/git.ts";
 
 /**
@@ -8,13 +8,26 @@ import type { GitRunner } from "../workspace/git.ts";
  *
  * A `reads` path is fresh when `git rev-list --count <stamp>..HEAD -- <path>`
  * is 0, stale `moved` when a commit since the stamp touched it, and stale
- * `missing` when it is not on disk. A path that is a symbolic link, or lies
- * under one, is stale `link`: git counts the link's own history, never its
- * target's, so a count over it cannot see the target move. Each path is
- * walked segment by segment from `cwd` with `lstat`, and the link is decided
- * before any history count; no chain base exempts it. A stamp that names no commit, or a commit
- * HEAD does not descend from (a stamp rebased away), is `unresolved` and the
- * verdict is stale: nothing can be measured from it.
+ * `missing` when it is not on disk. Three refusals come before any history
+ * count, and no chain base exempts them:
+ *
+ * - `spelling`: a path not in git's plain form (an empty, `.` or `..` segment,
+ *   a leading or trailing separator, an absolute path, a backslash). The walk
+ *   and the count would judge two spellings, and git reads a trailing
+ *   separator as "folders only", so a count over it is 0 for a file.
+ * - `link`: a path that is a symbolic link, lies under one, or names a folder
+ *   whose tree at HEAD holds one. Git counts the link's own history, never its
+ *   target's, so a count over it cannot see the target move. The link is found
+ *   by an `lstat` walk from `cwd`, segment by segment, and by the tree mode at
+ *   HEAD (120000), so a checkout that stores links as plain files
+ *   (`core.symlinks=false`) is caught too.
+ * - `untracked`: a path on disk that HEAD's tree holds as no file, folder or
+ *   gitlink (an untracked or ignored file, a path inside a submodule, another
+ *   letter case on a case-insensitive disk). Git counts 0 for it forever.
+ *
+ * A stamp that names no commit, or a commit HEAD does not descend from (a
+ * stamp rebased away), is `unresolved` and the verdict is stale: nothing can
+ * be measured from it.
  *
  * A plan chain passes `exemptSince`, the chain's run base (`Base:`), never the
  * plans' stamp. A moved path is then exempt only when
@@ -44,7 +57,7 @@ import type { GitRunner } from "../workspace/git.ts";
  */
 
 /** Why a read path is stale. */
-export type StaleReason = "moved" | "missing" | "link";
+export type StaleReason = "moved" | "missing" | "link" | "spelling" | "untracked";
 
 /** One stale read path. */
 export interface StalePath {
@@ -67,11 +80,15 @@ export interface FreshnessResult {
 /** A full or abbreviated object name; sha-256 repositories included. */
 const OBJECT_NAME = /^[0-9a-f]{7,64}$/i;
 
-/** What `lstat` finds along a read path: the path itself, a missing segment, or a link on the way. */
-type DiskState = "present" | "missing" | "link";
+/** What the walk finds along a read path: the path itself, a missing segment, a link on the way, or a spelling it never walks. */
+type DiskState = "present" | "missing" | "link" | "spelling";
 
-/** A read path's segment separators: `/` everywhere, and `\` too where the platform reads it as one. */
-const SEGMENT = sep === "\\" ? /[\\/]/ : /\//;
+/** What HEAD's tree holds at a read path: a file, a folder or a gitlink; a link at, above or below it; or nothing. */
+type TreeState = "tracked" | "link" | "absent";
+
+const LINK_MODE = "120000";
+const TREE_MODE = "040000";
+const GITLINK_MODE = "160000";
 
 /**
  * Check `reads` against `stamp` in the repository at `cwd`.
@@ -83,11 +100,11 @@ export async function freshness(
   reads: string[],
   opts?: { exemptSince?: string },
 ): Promise<FreshnessResult> {
-  const onDisk = await Promise.all(reads.map(async (path) => diskState(cwd, path)));
+  const onDisk = await Promise.all(reads.map(async (path): Promise<DiskState> => (plainPath(path) ? diskState(cwd, path) : "spelling")));
   const diskOnly = (): StalePath[] =>
     reads.flatMap((path, index) => {
       const state = onDisk[index];
-      return state === "link" || state === "missing" ? [{ path, reason: state }] : [];
+      return state === undefined || state === "present" ? [] : [{ path, reason: state }];
     });
 
   try {
@@ -104,8 +121,13 @@ export async function freshness(
     const exempt: string[] = [];
     reads.forEach((path, index) => {
       const state = onDisk[index];
-      if (state === "link") {
-        stale.push({ path, reason: "link" });
+      if (state === "spelling" || state === "link") {
+        stale.push({ path, reason: state });
+        return;
+      }
+      const tree = treeState(git, cwd, path);
+      if (tree === "link" || (tree === "absent" && state === "present")) {
+        stale.push({ path, reason: tree === "link" ? "link" : "untracked" });
         return;
       }
       const missing = state !== "present";
@@ -169,14 +191,58 @@ function runGit(git: GitRunner, cwd: string, args: readonly string[], noOnStatus
  * one absent makes it `missing`.
  */
 async function diskState(cwd: string, path: string): Promise<DiskState> {
-  const segments = path.split(SEGMENT).filter((segment) => segment !== "");
-  const prefixes = segments.length === 0 ? [cwd] : segments.map((_, index) => join(cwd, ...segments.slice(0, index + 1)));
+  const segments = path.split("/");
+  const prefixes = segments.map((_, index) => join(cwd, ...segments.slice(0, index + 1)));
   const stats = await Promise.all(prefixes.map(async (prefix) => lstat(prefix).catch(() => null)));
   for (const stat of stats) {
     if (stat === null) return "missing";
     if (stat.isSymbolicLink()) return "link";
   }
   return "present";
+}
+
+/**
+ * Whether `path` is in git's plain form, as `git ls-files` prints it: `/`-separated, relative, no
+ * backslash, and no empty, `.` or `..` segment (which also refuses a leading or trailing separator).
+ */
+function plainPath(path: string): boolean {
+  if (path.includes("\\") || posix.isAbsolute(path) || win32.isAbsolute(path)) return false;
+  return path.split("/").every((segment) => segment !== "" && segment !== "." && segment !== "..");
+}
+
+/**
+ * Read HEAD's tree at a plain `path`: one recursive listing gives the folders above it, the entry
+ * itself and, for a folder, every entry below it. Where the entry is absent, the first segment the
+ * listing does not reach as a folder is looked up alone, since a link above the path hides it.
+ */
+function treeState(git: GitRunner, cwd: string, path: string): TreeState {
+  const entries = listTree(git, cwd, ["-r", "-t"], path);
+  const mode = entries.get(path);
+  if (mode === LINK_MODE) return "link";
+  if (mode === TREE_MODE) {
+    for (const [name, entryMode] of entries) if (entryMode === LINK_MODE && name.startsWith(`${path}/`)) return "link";
+    return "tracked";
+  }
+  if (mode === GITLINK_MODE || mode?.startsWith("100") === true) return "tracked";
+  if (mode !== undefined) return "absent";
+  const segments = path.split("/");
+  for (let index = 1; index < segments.length; index += 1) {
+    const prefix = segments.slice(0, index).join("/");
+    if (entries.get(prefix) === TREE_MODE) continue;
+    return listTree(git, cwd, [], prefix).get(prefix) === LINK_MODE ? "link" : "absent";
+  }
+  return "absent";
+}
+
+/** `git ls-tree -z HEAD -- <path>` with `flags`, read literally, as a map from each listed name to its mode. */
+function listTree(git: GitRunner, cwd: string, flags: readonly string[], path: string): Map<string, string> {
+  const output = runGit(git, cwd, ["--literal-pathspecs", "ls-tree", ...flags, "-z", "HEAD", "--", path], false) ?? "";
+  const entries = new Map<string, string>();
+  for (const record of output.split("\0")) {
+    const tab = record.indexOf("\t");
+    if (tab !== -1) entries.set(record.slice(tab + 1), record.slice(0, record.indexOf(" ")));
+  }
+  return entries;
 }
 
 /** The full sha `name` resolves to as a commit, or null when it names none (`--quiet` exits 1). */

@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import { lstat, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { gitCheckRunner } from "../../src/cli/engine/gitStatus.ts";
@@ -61,6 +61,27 @@ async function linkAndCommit(cwd: string, path: string, target: string): Promise
   await symlink(target, join(cwd, path));
   writeGit(cwd, ["add", "--", path]);
   writeGit(cwd, ["-c", "commit.gpgsign=false", "commit", "--quiet", "-m", `link ${path}`]);
+  return head(cwd);
+}
+
+/**
+ * Record `path` in HEAD's tree with `mode`, its blob holding `content`, while the disk holds a plain
+ * file with the same content: a link (120000) as a checkout with `core.symlinks=false` stores it, or a
+ * gitlink (160000) naming `content` as its commit. No file-system link, so it runs on every platform.
+ * Commits it alone and returns the new HEAD.
+ */
+async function treeEntryAndCommit(cwd: string, path: string, mode: "120000" | "160000", content: string): Promise<string> {
+  let object = content;
+  if (mode === "120000") {
+    const target = join(cwd, path);
+    await mkdir(dirname(target), { recursive: true });
+    await writeFile(target, content, "utf8");
+    object = writeGit(cwd, ["hash-object", "-w", "--", path]).trim();
+  } else {
+    await mkdir(join(cwd, path), { recursive: true });
+  }
+  writeGit(cwd, ["update-index", "--add", "--cacheinfo", `${mode},${object},${path}`]);
+  writeGit(cwd, ["-c", "commit.gpgsign=false", "commit", "--quiet", "-m", `tree entry ${path}`]);
   return head(cwd);
 }
 
@@ -155,6 +176,113 @@ describe("freshness", () => {
     const counted = seen.filter((args) => args.includes("rev-list")).map((args) => args.at(-1));
     expect(counted).not.toContain("docs/link.md");
     expect(counted).toContain("src/b.ts");
+  });
+
+  it("reads a link HEAD's tree records as stale, though the disk holds it as a plain file", async (ctx) => {
+    await seededRepo(() => ctx.skip());
+    const cwd = tempDir().dir;
+    const stamp = await treeEntryAndCommit(cwd, "docs/link.md", "120000", "a.md");
+    await touchAndCommit(cwd, "docs/a.md", "the target moved");
+
+    // The disk walk alone sees a regular file, and the link's own history is untouched since the stamp.
+    expect((await lstat(join(cwd, "docs/link.md"))).isSymbolicLink()).toBe(false);
+    expect(writeGit(cwd, ["rev-list", "--count", `${stamp}..HEAD`, "--", "docs/link.md"]).trim()).toBe("0");
+    expect(await freshness(git, cwd, stamp, ["docs/link.md", "src/b.ts"])).toEqual({
+      verdict: "stale",
+      stale: [{ path: "docs/link.md", reason: "link" }],
+      exempt: [],
+      unresolved: false,
+    });
+  });
+
+  it("reads a folder whose tree at HEAD holds a link as stale, and counts a folder without one as before", async (ctx) => {
+    await seededRepo(() => ctx.skip());
+    const cwd = tempDir().dir;
+    const stamp = await treeEntryAndCommit(cwd, "docs/deep/up.md", "120000", "../../src/b.ts");
+    await touchAndCommit(cwd, "src/b.ts", "the target moved");
+
+    // The folder's own history is untouched since the stamp, so a history count alone reads it fresh.
+    expect(writeGit(cwd, ["rev-list", "--count", `${stamp}..HEAD`, "--", "docs"]).trim()).toBe("0");
+    expect(await freshness(git, cwd, stamp, ["docs"])).toEqual({
+      verdict: "stale",
+      stale: [{ path: "docs", reason: "link" }],
+      exempt: [],
+      unresolved: false,
+    });
+    // Non-degenerate: a folder holding no link is judged by its history, moved or not.
+    expect(await freshness(git, cwd, stamp, ["src", "notes with space"])).toEqual({
+      verdict: "stale",
+      stale: [{ path: "src", reason: "moved" }],
+      exempt: [],
+      unresolved: false,
+    });
+  });
+
+  it("refuses a read path not in git's plain form before any walk or count", async (ctx) => {
+    await seededRepo(() => ctx.skip());
+    const cwd = tempDir().dir;
+    const stamp = head(cwd);
+    await touchAndCommit(cwd, "docs/a.md", "moved after the stamp");
+    const seen: string[][] = [];
+    // A recording wrapper around the real runner, so the paths git was given can be read.
+    const recording: GitRunner = (args, dir) => {
+      seen.push([...args]);
+      return git(args, dir);
+    };
+    const spellings = [
+      "docs/a.md/",
+      "/docs/a.md",
+      "docs//a.md",
+      "./docs/a.md",
+      "docs/./a.md",
+      "docs/../docs/a.md",
+      "docs/a.md/.",
+      "..",
+      "docs\\a.md",
+      "C:/docs/a.md",
+      "",
+    ];
+
+    expect(await freshness(recording, cwd, stamp, spellings)).toEqual({
+      verdict: "stale",
+      stale: spellings.map((path) => ({ path, reason: "spelling" })),
+      exempt: [],
+      unresolved: false,
+    });
+    const handed = seen.filter((args) => args.includes("--")).flatMap((args) => args.slice(args.indexOf("--") + 1));
+    expect(handed.filter((path) => spellings.includes(path))).toEqual([]);
+    // An unresolved stamp still names the spelling, which needs no git to decide.
+    expect(await freshness(git, cwd, "0000000deadbeef", ["docs/a.md/"])).toEqual({
+      verdict: "stale",
+      stale: [{ path: "docs/a.md/", reason: "spelling" }],
+      exempt: [],
+      unresolved: true,
+    });
+    // Non-degenerate: the plain spelling of the same file reads moved.
+    expect(await freshness(git, cwd, stamp, ["docs/a.md"])).toMatchObject({ stale: [{ path: "docs/a.md", reason: "moved" }] });
+  });
+
+  it("reads a path on disk that HEAD's tree does not hold as untracked, and passes a gitlink", async (ctx) => {
+    await seededRepo(() => ctx.skip());
+    const cwd = tempDir().dir;
+    const stamp = await treeEntryAndCommit(cwd, "vendor/sub", "160000", head(cwd));
+    await writeFile(join(cwd, "docs/new.md"), "never committed\n", "utf8");
+    await writeFile(join(cwd, "vendor/sub/inside.md"), "the submodule's own file\n", "utf8");
+    await writeFile(join(cwd, ".gitignore"), "ignored.md\n", "utf8");
+    await writeFile(join(cwd, "ignored.md"), "ignored\n", "utf8");
+
+    expect(await freshness(git, cwd, stamp, ["docs/new.md", "vendor/sub/inside.md", "ignored.md", "vendor/sub", "docs/a.md"])).toEqual({
+      verdict: "stale",
+      stale: [
+        { path: "docs/new.md", reason: "untracked" },
+        { path: "vendor/sub/inside.md", reason: "untracked" },
+        { path: "ignored.md", reason: "untracked" },
+      ],
+      exempt: [],
+      unresolved: false,
+    });
+    // Non-degenerate: a path missing from disk and from HEAD stays `missing`.
+    expect(await freshness(git, cwd, stamp, ["docs/gone.md"])).toMatchObject({ stale: [{ path: "docs/gone.md", reason: "missing" }] });
   });
 
   it("reads a deleted path as missing, committed or not", async (ctx) => {

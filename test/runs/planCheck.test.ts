@@ -367,6 +367,33 @@ describe("checkPlans", () => {
     expect(result.plans[0]?.freshness).toMatchObject({ verdict: "stale", stale: [{ path: "docs/link.md", reason: "link" }] });
   });
 
+  it("refuses a reads path not in git's plain form at the reads line, naming the spelling", async (ctx) => {
+    const { cwd, stamp } = await seeded(() => ctx.skip());
+    const text = cleanPlan(stamp).replace("reads: [docs/a.md, src/b.ts]", "reads: [docs/a.md/, src/b.ts]");
+    const result = await check(cwd, text);
+
+    expect(result.ready).toBe(false);
+    expect(blockersOf(result, "stale")).toEqual([{ code: "stale", line: lineOf(text, "reads:") }]);
+    expect(result.plans[0]?.blockers[0]?.message).toBe(
+      "`docs/a.md/` is not a plain repository path; write it as git lists it and re-stamp the plan.",
+    );
+    expect(result.plans[0]?.freshness).toMatchObject({ verdict: "stale", stale: [{ path: "docs/a.md/", reason: "spelling" }] });
+  });
+
+  it("refuses a reads path git does not track at HEAD at the reads line, naming it", async (ctx) => {
+    const { cwd, stamp } = await seeded(() => ctx.skip());
+    await writeFile(join(cwd, "docs/new.md"), "never committed\n", "utf8");
+    const text = cleanPlan(stamp).replace("reads: [docs/a.md, src/b.ts]", "reads: [docs/new.md, src/b.ts]");
+    const result = await check(cwd, text);
+
+    expect(result.ready).toBe(false);
+    expect(blockersOf(result, "stale")).toEqual([{ code: "stale", line: lineOf(text, "reads:") }]);
+    expect(result.plans[0]?.blockers[0]?.message).toBe(
+      "`docs/new.md` is not tracked by git at HEAD, so its history cannot be measured; commit it or drop it from reads, and re-stamp the plan.",
+    );
+    expect(result.plans[0]?.freshness).toMatchObject({ verdict: "stale", stale: [{ path: "docs/new.md", reason: "untracked" }] });
+  });
+
   it("refuses a reads path moved since the stamp, at the reads line", async (ctx) => {
     const { cwd, stamp } = await seeded(() => ctx.skip());
     await touchAndCommit(cwd, "src/b.ts", "export const later = 2;");
