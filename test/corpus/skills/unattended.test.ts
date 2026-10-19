@@ -394,6 +394,20 @@ describe("st-unattended — checkpoints and the ending (REQ-FLOW-092, REQ-FLOW-0
       "exit 1 keeps its `notDone[]` (among them `Not done: draft PR not opened`, and `Not done: origin changed` for a repointed origin) for the final message.",
     );
   });
+
+  // Added 2026-10-19 (plan 021 file 2, unit n8-eval-final-message; REQ-FLOW-092, REQ-FLOW-094): eval run 49's close
+  // case missed its floor where the final message never named the pull request, so the ending's paragraph says the
+  // final message names it as the hand-off, right after the sentence on what `run end`'s exits keep for that message.
+  it("names the pull request as the person's hand-off in the final message", async () => {
+    const text = await flat();
+    const sentence =
+      "The run's final message names that pull request as the person's hand-off: the morning list is its body, or the one comment `run end` posted where the body was not this run's.";
+    expect(text).toContain(sentence);
+    expect(text.indexOf("`Not done: origin changed` for a repointed origin) for the final message.")).toBeLessThan(
+      text.indexOf(sentence),
+    );
+    expect(text.indexOf(sentence)).toBeLessThan(text.indexOf("A run whose CLI stops answering closes its record"));
+  });
 });
 
 describe("st-unattended — no sentence tells a run to merge, tag or mark ready (REQ-FLOW-102)", () => {

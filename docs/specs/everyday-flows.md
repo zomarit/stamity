@@ -3762,6 +3762,12 @@ the default branch, read by REST; `run start` leaves it for a branch of the run'
   `committedDeletions`, `src/cli/commands/run.ts`).
   - Proof: `test/cli/commands/runEnd.test.ts` (the describe for a `--paths` entry an earlier checkpoint committed),
     `test/corpus/skills/unattended.test.ts` ("says what run end's --paths names and what the verb stages itself").
+- **Amended 2026-10-19** (plan 021 file 2, unit `n8-eval-final-message`; eval run 49's close case). The run's final
+  message names the draft pull request as the person's hand-off: the morning list is its body, or the one comment
+  `run end` posted where the body was not this run's. The sentence follows the one on what an exit 1 of `run end`
+  keeps for the final message (`content/skills/st-unattended/SKILL.md:104-107`, the sentence at `:105-106`).
+  - Proof: `test/corpus/skills/unattended.test.ts` ("names the pull request as the person's hand-off in the final
+    message").
 - **Proof:** `test/runs/pullRequest.test.ts`, `test/cli/commands/run.test.ts`, `test/cli/commands/runCheckpoint.test.ts`,
   `test/cli/commands/runEnd.test.ts`, `test/cli/surface.e2e.test.ts`, `test/corpus/skills/unattended.test.ts`
   ("st-unattended — checkpoints and the ending").

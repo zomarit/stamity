@@ -47,10 +47,10 @@ spelled. Every exit pushes its record through the run verbs, closing in this ord
    `run end`'s `--paths` names the files the run changed (every unit's files, named again though each was committed at
    its checkpoint) and each learning file the close captured; the verb stages the run folder's own files and the inbox itself.
 
-`run end` exits 0 with a pull request opened, updated or commented; exit 1 keeps its `notDone[]` (among them
-`Not done: draft PR not opened`, and `Not done: origin changed` for a repointed origin) for the final message. A run
-whose CLI stops answering closes its record and ends on `Not done: run end not run — CLI unavailable`, never pushing by
-hand. A push to the default branch, a force push, a tag, a merge or ready-for-review is never the run's: each waits for the morning walk.
+`run end` exits 0 with a pull request opened, updated or commented; exit 1 keeps its `notDone[]` (among them `Not done: draft PR not opened`, and `Not done: origin changed`
+for a repointed origin) for the final message. The run's final message names that pull request as the person's hand-off: the morning list is its body, or the
+one comment `run end` posted where the body was not this run's. A run whose CLI stops answering closes its record and ends on `Not done: run end not run — CLI unavailable`,
+never pushing by hand. A push to the default branch, a force push, a tag, a merge or ready-for-review is never the run's: each waits for the morning walk.
 ```
 
 Governing text — the same file, "The morning list" (its opening paragraph and its first two sections):
