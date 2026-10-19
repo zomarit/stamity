@@ -397,7 +397,6 @@ describe("Copilot's session start updates the record under a lock (n5-copilot-re
   it("waits while another session start holds the lock, and records once it is released", async () => {
     const { start } = await place("copilot");
     holdLock();
-    const started = Date.now();
     const finished = runLater(start, copilotStart(MAIN));
     // Held well inside the wait: the start has not recorded while the other writer holds the lock.
     await new Promise((resolveWait) => setTimeout(resolveWait, 500));
@@ -407,7 +406,6 @@ describe("Copilot's session start updates the record under a lock (n5-copilot-re
     const { status, closedAt } = await finished;
     expect(status).toBe(0);
     expect(closedAt).toBeGreaterThanOrEqual(released);
-    expect(closedAt - started).toBeLessThan(LOCK_WAIT_MS + 5_000);
     expect(readFileSync(recordPath(), "utf8")).toBe(`${MAIN}\n`);
     // Its own lock is gone after it, and no temp file stays beside the record.
     expect(readdirSync(getRepo().path(".git", RECORD[0]))).toEqual([RECORD[1]]);
@@ -435,9 +433,9 @@ describe("Copilot's session start updates the record under a lock (n5-copilot-re
     holdLock();
     const dead = new Date(Date.now() - LOCK_STALE_MS - 60_000);
     utimesSync(lockPath(), dead, dead);
-    const started = Date.now();
+    // No wall-clock bound around the spawn: a starved runner can take seconds to start node. Without the break the
+    // wait runs out and nothing is recorded, so the record below proves the break.
     expect(run(start, copilotStart(MAIN)).status).toBe(0);
-    expect(Date.now() - started).toBeLessThan(LOCK_WAIT_MS);
     expect(readFileSync(recordPath(), "utf8")).toBe(`${MAIN}\n`);
     expect(existsSync(lockPath())).toBe(false);
   });

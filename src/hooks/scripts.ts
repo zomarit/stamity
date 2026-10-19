@@ -1294,9 +1294,16 @@ function copilotSessionId(payload) {
  * earlier id. The start waits up to {@link COPILOT_MAIN_SESSIONS_LOCK_WAIT_MS}
  * for another holder, with a synchronous sleep; it breaks a lock older than
  * {@link COPILOT_MAIN_SESSIONS_LOCK_STALE_MS} once (a start that died holding
- * it); and it renames only while the lock still holds its token. A link or a
- * folder at the lock's path, a wait run out, or any other failure leaves the
- * record as it was: the guard then refuses this session's asks. The helpers are
+ * it); and it re-reads its token just before the rename, so a start whose lock
+ * another start has taken does not rename. That check and the rename are two
+ * steps, not one, and the stale break's age read and unlink are two as well, so
+ * a race stays (build/92): two starts that both break one dead holder's lock can
+ * have the later break remove the earlier start's fresh lock, and the earlier
+ * start then records nothing, or, when the break lands between its check and
+ * its rename, the later rename drops its id. Either way one main session's id
+ * is missing and the guard refuses its asks, fail closed; no id is added. A
+ * link or a folder at the lock's path, a wait run out, or any other failure
+ * leaves the record as it was: the guard then refuses this session's asks. The helpers are
  * declared inside the writer, so the record's top-level names stay the four
  * every other client's copy is cut by.
  */
