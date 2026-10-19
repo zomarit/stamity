@@ -591,7 +591,7 @@ describe("a co-owned-shape refusal of a ledgered settings file (review/40)", () 
 
   // TEST CHANGE, justified (w6-claude-hooks-in-claude-dir, REQ-FLOW-113): the file the sweep leaves in place now
   // runs the copies under `.claude/hooks/stamity/`, so those are the scripts kept and named; the generated copies
-  // it no longer runs leave, and with no script under `.stamity/` still wired, `.stamity/` goes as on any clean.
+  // it no longer runs leave.
   it("clean keeps every engine hook script the settings file it leaves in place still names, reports each kept naming the file (S17's settings case)", async () => {
     const root = await freshRepo();
     await init(root);
@@ -610,6 +610,37 @@ describe("a co-owned-shape refusal of a ledgered settings file (review/40)", () 
     }
     expect(existsSync(join(root, ".stamity", "generated", "hooks", "claude"))).toBe(false);
     expect(cleaned.stdout).not.toContain("Kept .stamity/: .claude/settings.json still runs a hook script under it");
+    // TEST CHANGE, justified (w6 review, round 1, review/159): removing `.stamity/` here took the ledger, so the
+    // re-run the sweep asks for found nothing to clean and the copies it held stayed for good. A held copy under
+    // `.claude/hooks/stamity/` now keeps `.stamity/`, as a held script under `.stamity/` always did.
+    expect(existsSync(join(root, ".stamity", "manifest.json"))).toBe(true);
+    expect(cleaned.stdout).toContain(
+      "Kept .stamity/: .claude/settings.json still runs the engine's hook scripts under .claude/hooks/stamity/, " +
+        "and the ledger in .stamity/ is what lets a re-run remove them. Remove that wiring, then re-run stamity clean.",
+    );
+  });
+
+  it("a second clean, once the person fixes the settings file the first one held, removes the copies under .claude/hooks/stamity/ (review/159)", async () => {
+    const root = await freshRepo();
+    await init(root);
+    const raw = await readSettings(root);
+    const scripts = [...new Set([...raw.matchAll(/\.claude\/hooks\/stamity\/[A-Za-z0-9._-]+/g)].map((match) => match[0]))];
+    expect(scripts.length).toBeGreaterThan(0);
+    await writeFile(SETTINGS_ABS(root), `${raw}}`, "utf8");
+
+    const first = await clean(root);
+    expect(first.code).toBe(0);
+    for (const script of scripts) expect(existsSync(join(root, ...script.split("/"))), script).toBe(true);
+
+    // The person repairs the file, as the first run told them to, and runs clean again.
+    await writeFile(SETTINGS_ABS(root), raw, "utf8");
+    const second = await clean(root);
+
+    expect(second.code).toBe(0);
+    expect(second.stdout).not.toContain("Nothing to clean");
+    for (const script of scripts) expect(existsSync(join(root, ...script.split("/"))), script).toBe(false);
+    expect(existsSync(join(root, ".claude", "hooks", "stamity"))).toBe(false);
+    expect(existsSync(join(root, ".stamity"))).toBe(false);
   });
 
   it("clean names the real remedy when the settings file it keeps is a link it may not read (review/49)", async () => {

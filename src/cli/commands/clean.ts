@@ -15,7 +15,7 @@ import { planPackRemoval } from "../../pack/install.ts";
 import { packDirRelPath } from "../../pack/receipt.ts";
 import { discoverInstalledPacks, packMcpServers } from "../../pack/projection.ts";
 import { trustedInfraPaths, type ReclaimCandidate } from "../../manifest/ledger.ts";
-import { needsRenderingProof } from "../../manifest/ownedPaths.ts";
+import { OWNED_PATHS, needsRenderingProof } from "../../manifest/ownedPaths.ts";
 import {
   PACK_OWNER_PREFIX,
   isPackOwner,
@@ -97,7 +97,10 @@ import { confirm, promptGate } from "../kit/prompts.ts";
  * One exception keeps the state directory (S17): a hooks document the sweep
  * leaves in place — an owner's entries kept in it, or a file it cannot read —
  * that still runs a hook script under `.stamity/` holds that script back, and
- * deleting the directory would take it anyway. The run says so, names the
+ * deleting the directory would take it anyway. One that still runs a copy
+ * under Claude Code's hook folder (`.claude/hooks/stamity/`) keeps it too,
+ * since the ledger in it is what lets a re-run remove that copy (review/159).
+ * The run says so, names the
  * document, and `--json` lists the held scripts as `stateDirKept`.
  */
 
@@ -1024,10 +1027,14 @@ export const cleanCommand: CommandModule = {
     // would take the script with it (S17, `../../merge/reclaim.ts::hookDocumentsLeftInPlace`).
     // A document that runs only scripts elsewhere (Cursor's guards) keeps those
     // alone. Until file 01's `u1-clean-keeps-state` prunes around them, the
-    // whole directory stays.
+    // whole directory stays. A held copy under Claude Code's hook folder
+    // (`OWNED_PATHS.hookRoots`) keeps it too: the ledger in it is the only
+    // record a re-run can remove that copy by (review/159).
     const underStateDir = (path: string): boolean => path.startsWith(`${STATE_DIR}/`);
-    const wiringKept = (report.wiringKept ?? []).filter((doc) => doc.scripts.some(underStateDir));
-    const stateDirKept = [...new Set(wiringKept.flatMap((doc) => doc.scripts.filter(underStateDir)))];
+    const underHookRoot = (path: string): boolean => OWNED_PATHS.hookRoots.some((root) => path.startsWith(root));
+    const keepsState = (path: string): boolean => underStateDir(path) || underHookRoot(path);
+    const wiringKept = (report.wiringKept ?? []).filter((doc) => doc.scripts.some(keepsState));
+    const stateDirKept = [...new Set(wiringKept.flatMap((doc) => doc.scripts.filter(keepsState)))];
     const stateDirRemoved = ctx.dryRun || stateDirKept.length > 0 ? false : await removeStateDir(rootDir);
 
     const formatted = formatReclaimReport(report);
@@ -1038,8 +1045,12 @@ export const cleanCommand: CommandModule = {
           ? `Kept ${STATE_DIR}/: ${doc.path} could not be read (a link, a hard link, or a file it cannot open), so ` +
               `nothing proves it no longer runs a hook script under it. Replace it with a regular file (or delete it), ` +
               `then re-run stamity clean.\n`
-          : `Kept ${STATE_DIR}/: ${doc.path} still runs a hook script under it, so deleting it would leave that hook ` +
-              `pointing at nothing. Remove that wiring, then re-run stamity clean.\n`,
+          : doc.scripts.some(underStateDir)
+            ? `Kept ${STATE_DIR}/: ${doc.path} still runs a hook script under it, so deleting it would leave that hook ` +
+                `pointing at nothing. Remove that wiring, then re-run stamity clean.\n`
+            : `Kept ${STATE_DIR}/: ${doc.path} still runs the engine's hook scripts under ` +
+                `${OWNED_PATHS.hookRoots.filter((root) => doc.scripts.some((script) => script.startsWith(root))).join(", ")}, ` +
+                `and the ledger in ${STATE_DIR}/ is what lets a re-run remove them. Remove that wiring, then re-run stamity clean.\n`,
       );
     }
 
