@@ -1346,7 +1346,7 @@ const USER_HOOKS_DIR = ".stamity/hooks";
 const PACKS_DIR = ".stamity/packs";
 
 /** UTF-8's byte-order mark, which the manifest reader drops before it parses (`src/manifest/manifest.ts`, review/188). */
-const BOM = "﻿";
+const BOM = "\uFEFF";
 
 /** One entry of a folder at `Base:`, as `git ls-tree -z` lists it: its name, its object id and what it is. */
 interface TreeEntry {
