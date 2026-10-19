@@ -1947,15 +1947,22 @@ Added 2026-10-18 (plan 021 file 2, units `v15-cloud-page` and its fix round, `v1
 
 Given the release checklist, Then one line carrying `Runs when:` re-reads the vendor pages the capability matrix's cloud
 column cites, and a page changed since its read date re-owes that cloud's person row at the next release; the container
-leg runs on every full CI run, the hook-fire check nightly and at release prep where its secrets exist, and the person
-rows once, at Package 25's end. `test/docsPages.test.ts` pins the line.
+leg runs on every full CI run, the hook-fire check nightly where its secrets exist, the checklist's
+`hook-runs.mjs --ask` run and the person's interactive ask check by hand at release prep, and the person rows once, at
+Package 25's end (amended 2026-10-19, ledger row `review/127`; it read "the hook-fire check nightly and at release prep
+where its secrets exist", where no release-prep job runs it). `test/docsPages.test.ts` pins the line.
 
 - **As built, beyond the delta:** the vendor-pages line (`.github/release-controls-checklist.md:336-342`) and a second
-  further line carrying `Runs when:` (`:344-357`), which runs `node scripts/qa/hook-runs.mjs --ask --require-observation`
+  further line carrying `Runs when:` (`:344-361`), which runs `node scripts/qa/hook-runs.mjs --ask --require-observation`
   under the machine lock and never during an eval run, names its four statuses, `held`, `ran`, `not-run` and
   `not-installed`, and Claude Code as the one ask-class client it measures: `held` keeps the one-click ask, a client
   whose ask ran moves to refusing before the tag, and `not-run` or `not-installed` holds the tag until a run on a machine
-  with Claude Code reads `held` or `ran` (REQ-FLOW-123 in `docs/specs/everyday-flows.md`). Both take no ordinal.
+  with Claude Code reads `held` or `ran` (REQ-FLOW-123 in `docs/specs/everyday-flows.md`). Its run is headless, so
+  `held` means the asked command did not run, not that a person was asked; a third further line carrying `Runs when:`
+  (`:363-375`, added 2026-10-19, ledger row `review/125`) is a person's one-minute check in an interactive Claude Code
+  session in bypass-permissions mode, where a lightweight tag asked for must show Claude Code's own approve prompt,
+  declined, and a command that runs without it holds the tag and moves Claude Code to refusing. All three take no
+  ordinal.
 - **Proof:** `test/docsPages.test.ts` ("puts the cloud cadence on the release checklist: the vendor pages re-read, each
   client's ask re-measured"), `test/ci/workflow.test.ts` (the leg in the aggregator), `test/qa/hookRunsCli.test.ts`.
 

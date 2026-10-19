@@ -294,7 +294,9 @@ text, and the draft pull request's diff is where you check them.
 
 Each release re-reads the vendor pages the capability matrix's cloud table cites, and a page that
 changed since its read date re-owes that cloud's person check at the next release. The container
-leg, CI's `cloud-container` job, runs on every full CI run. The hook-fire check runs nightly and at
-release prep where its secrets exist. The person checks, one unattended run per cloud in a scratch
+leg, CI's `cloud-container` job, runs on every full CI run. The hook-fire check runs nightly where
+its secrets exist; no release-prep job runs it. At release prep the release checklist runs
+`scripts/qa/hook-runs.mjs --ask` by hand, with a person's one-minute check in an interactive
+Claude Code session beside it. The person checks, one unattended run per cloud in a scratch
 repository, run with `scripts/qa/cloud-check.mjs`, and the capability matrix reads "not run" for a
 fact no person check has run.

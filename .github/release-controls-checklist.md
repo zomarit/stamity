@@ -347,14 +347,32 @@ which measures how each installed client answers a hook's `ask` in its permissiv
 each client's row as `held`, `ran`, `not-run` or `not-installed`. Claude Code is the one ask-class
 client it measures, the only client whose guard asks for one click on a person-only act; the others
 are reported and refuse already, and their rows never fail the command. Claude Code's row decides
-the line. `held`, the ask held the command until a person answered, keeps the one-click ask, and the
-command exits 0. A client whose ask ran (`ran`, the command ran past the ask) moves to refusing
-before the tag, in a `main` commit to the guard and its pages. `not-run`, nothing about the ask
-measured, and `not-installed`, no Claude Code on the machine, each exit 1 and hold the tag until a
-re-run on a machine with Claude Code reads `held` or `ran`: the attended one-click ask rests on that
-measurement. The release record carries the rows (added 2026-10-18, REQ-PROVE-042).
+the line. The run is headless (`claude -p`), and a `-p` run denies a hook's ask for want of a
+person, so `held` means the headless client did not run the asked command: its ask was not ignored.
+It does not mean a person was asked or answered; whether an interactive session shows the person
+its prompt is the next line's check, which no headless run can make. `held` keeps the one-click ask
+as far as this line reaches, and the command exits 0. A client whose ask ran (`ran`, the command ran
+past the ask) moves to refusing before the tag, in a `main` commit to the guard and its pages.
+`not-run`, nothing about the ask measured, and `not-installed`, no Claude Code on the machine, each
+exit 1 and hold the tag until a re-run on a machine with Claude Code reads `held` or `ran`: the
+attended one-click ask rests on that measurement. The release record carries the rows (added
+2026-10-18, REQ-PROVE-042).
 Runs when: every release, a patch included — a client's own update changes its answer, and no diff
 here shows it.
+
+A further line rides the cut, before the tag, and takes no ordinal: a person's one-minute check of
+the interactive ask the headless run above cannot see. In a scratch checkout (a throwaway clone of
+this repository at the cut's commit, so its `.claude/settings.json` wires the guard), open an
+interactive Claude Code session in its bypass-permissions mode, ask it to create a lightweight tag,
+`git tag qa-check` (a person-only act that can be undone, and one no settings `ask` row names, so the
+guard's hook is what asks), and see Claude Code's own approve prompt appear; decline it. The prompt
+appearing keeps the one-click ask. A run where the command runs without the prompt holds the tag
+and moves Claude Code to refusing, in a `main` commit to the guard and its pages, before the tag.
+The release record states the Claude Code version checked and whether the prompt appeared (added
+2026-10-19, REQ-PROVE-042, ledger row `2026-10-18_cloud-runs-2/review/125`, when the headless run was
+found to measure only that the asked command did not run). Runs when: every release, a patch
+included — Claude Code's own update can change how an interactive session answers a hook's ask, and
+no diff here shows it.
 
 A seventh line is the tag itself, cut last, after every line above has landed: an annotated tag
 whose message names the records commit the release is gated on, as one line `records: <sha>`,

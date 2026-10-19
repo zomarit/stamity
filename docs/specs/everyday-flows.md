@@ -4176,7 +4176,7 @@ chain file passes the chain's first record's `Base:`, as the chain rules do.
     one reader the ask gate embeds too, which follows a linked worktree's `gitdir:` (`buildCardBranchSource` and
     `resumeCardLines`, `src/runs/cardSource.ts`; `readCurrentBranch` and `findCardRun`, `src/runs/resumeCard.ts`); an
     attended record prints on startup only within the closed card's two-day age, an unattended one at any age.
-  - Frame's continuation is the skill's text, `content/skills/st-unattended/references/cloud.md:53-65`, which the
+  - Frame's continuation is the skill's text, `content/skills/st-unattended/references/cloud.md:53-67`, which the
     skill's body points at in its last line (`content/skills/st-unattended/SKILL.md:171`): the session runs
     `stamity run start --run <id> --json` first, `<id>` the record's folder name, and with no in-progress record on the
     branch it was given, as on a clone given the default branch or a platform's own, it opens a new run.
@@ -4298,9 +4298,11 @@ vendor-documented, re-checked at build.
 Added 2026-10-18 (plan 021 file 2, unit `v5-claude-readiness` and its fix round).
 
 Given Claude Code selected, Then `.claude/settings.json` gains its own `SessionStart` entry, matcher `startup|resume`,
-running an adapter-placed script that does nothing unless `CLAUDE_CODE_REMOTE` is `true`; there it checks `node`
-against `engines`, runs `npm ci` when `node_modules` is missing and a lockfile exists, pre-warms the pinned CLI and
-appends `STAMITY_HOOKS_ACTIVE=1` to `$CLAUDE_ENV_FILE`; offline, or with that variable unset, it says so and exits 0. Its
+running an adapter-placed script that does nothing unless `CLAUDE_CODE_REMOTE` is `true`; there it first appends
+`STAMITY_HOOKS_ACTIVE=1` to `$CLAUDE_ENV_FILE`, then checks `node` against `engines`, runs `npm ci` when `node_modules`
+is missing and a lockfile exists, and pre-warms the pinned CLI; offline, or with that variable unset, it says so and
+exits 0 (amended 2026-10-19, ledger row `review/128`; it read "checks `node` against `engines`, runs `npm ci` …,
+pre-warms the pinned CLI and appends `STAMITY_HOOKS_ACTIVE=1`", the variable last, where the code writes it first). Its
 budget is the one REQ-CTX-016 declares; that the file reaches shell commands only is vendor-documented, re-checked at
 build.
 
@@ -4451,7 +4453,7 @@ not read as covering them; the run's own closing commit is never counted.
 
 - **As built:** the count is the subjects `git log --format=%s <sha>..HEAD` lists, less each reading
   `chore(run): checkpoint <id>`, on one row, `Not done: <n> commits after checkpoint <sha>, not covered by the proof
-  block's gates` (`content/skills/st-unattended/references/cloud.md:67-73`); the skill's morning walk section says the
+  block's gates` (`content/skills/st-unattended/references/cloud.md:69-75`); the skill's morning walk section says the
   same (`content/skills/st-unattended/SKILL.md:139-145`). It is text the run follows: no engine code counts the commits.
 - **Proof:** `test/corpus/skills/unattended.test.ts`.
 
@@ -4466,7 +4468,7 @@ there on Claude Code and Cursor only. The 59-minute cap and the continuation are
 Copilot cloud-agent account.
 
 - **As built:** the skill names the agent by what it does, "a cloud agent whose session ends near an hour"
-  (`content/skills/st-unattended/references/cloud.md:75-81`), and the entry agent states the chain (REQ-FLOW-118). The
+  (`content/skills/st-unattended/references/cloud.md:77-83`), and the entry agent states the chain (REQ-FLOW-118). The
   setup job is bounded at `timeout-minutes: 30` (`SETUP_STEPS_TIMEOUT_MINUTES`, `src/adapters/copilot.ts`). The cloud
   page's opening says Copilot's cloud agent runs as a chain a person continues, so it is no night with nobody there.
 - **Proof:** `test/adapters/copilot.test.ts` ("bounds the job with timeout-minutes, under the platform's 59 on every
@@ -4489,7 +4491,7 @@ vendor-documented, not run.
   the Copilot adapter's `agent` row with no roster row; an agent already planned at its path is refused by name with
   `VALIDATION_ERROR` (`COPILOT_RUN_AGENT_PATH` and `buildRunAgentFile`, the same file). It is 1,100 bytes and never
   inlines the prompt. Where the file is not yet on the default branch, the run writes a declared `## Prerequisites` row
-  naming it (`content/skills/st-unattended/references/cloud.md:85-86`). The entry also loads on Copilot CLI and states
+  naming it (`content/skills/st-unattended/references/cloud.md:87-88`). The entry also loads on Copilot CLI and states
   cloud-only rules, open as a Minor.
 - **Proof:** `test/adapters/copilot.test.ts` ("Copilot's entry agent (REQ-FLOW-117, REQ-FLOW-118)"),
   `test/roster/agentPolicies.test.ts` (the roster unchanged), `test/corpus/skills/unattended.test.ts`.
@@ -4503,7 +4505,7 @@ run workflows" the proof block reads `CI not run: awaiting approval`, never gree
 setup row and, under required reviews, the prerequisite of a second approver. Detection stays `COPILOT_AGENT_PROMPT`
 and the hooks file camelCase, as today; the approval step and the second approver are vendor-documented, not run.
 
-- **As built:** `content/skills/st-unattended/references/cloud.md:83-86`, the second approver a `## Prerequisites` row.
+- **As built:** `content/skills/st-unattended/references/cloud.md:85-88`, the second approver a `## Prerequisites` row.
 - **Proof:** `test/corpus/skills/unattended.test.ts`.
 
 ### REQ-FLOW-120 — An unattended run pushes only through the run verbs
@@ -6197,8 +6199,9 @@ above.
 - REQ-FLOW-105 to REQ-FLOW-124 and the text dated 2026-10-18 — what plan 021 file 2's units and fixers recorded as
   open, as merged:
   - **Attended safety rests on one client holding an ask.** Claude Code's hook `ask` in bypass mode is measured, not
-    documented; `hook-runs.mjs --ask` re-measures it at each release, and a client whose ask ran moves to refusing
-    (REQ-FLOW-123, REQ-PROVE-042).
+    documented; at each release `hook-runs.mjs --ask` re-measures its headless half (a `-p` run's `held` shows only
+    that the asked command did not run) and a person's interactive check on the release checklist sees the approve
+    prompt appear, and a client whose ask ran moves to refusing (REQ-FLOW-123, REQ-PROVE-042).
   - **The stand-alone rule is a layer, not a wall.** A launcher its text reading does not unwrap, or a verb name split
     by quotes or built by an expression, skips it, and an environment set earlier then reaches the verbs' git
     (REQ-FLOW-104, REQ-FLOW-121). Matching `st` as a word refuses more unattended lines than needed, the safe direction.

@@ -432,7 +432,13 @@ refused. What stays open is named here, as accepted risk:
   documented to prompt in every mode. That reading is re-measured before each release with
   `node scripts/qa/hook-runs.mjs --ask`, which the release checklist runs with
   `--require-observation`, so an unmeasured Claude Code holds the tag, per installed client, and a
-  client whose ask lets the command run moves to refusing. Copilot CLI, Cursor and Codex refuse every ask-class act, for the
+  client whose ask lets the command run moves to refusing. That run is headless (`-p`), so its
+  `held` shows only that the client did not run the asked command, its ask not ignored; it cannot
+  show that a person is asked. The interactive half is a person's one-minute check on the same
+  checklist: in a scratch checkout, an interactive Claude Code session in bypass-permissions mode is
+  asked for `git tag qa-check`, a person-only act that can be undone and that no settings `ask` row
+  names, and the person sees Claude Code's own approve prompt appear and declines it; a run where the
+  command runs without the prompt holds the tag and moves Claude Code to refusing. Copilot CLI, Cursor and Codex refuse every ask-class act, for the
   reasons the guard's row above gives, so on them a person runs the act from the exact command.
   Code: `src/hooks/scripts.ts::buildPersonOnlyGuardScript`.
 - **Where no hook runs.** On Claude Code with no hook loaded, the settings rows are the only layer,
