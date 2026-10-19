@@ -1449,9 +1449,10 @@ async function listTree(top: string, tree: string, verb: string): Promise<TreeEn
  * sorted. First the files it reads there, each held whole wherever it lies: the manifest, the folder of the
  * repository's own declarations the manifest names (`.stamity/hooks` by default), and the installed packs' folder,
  * whose `<pack>/hooks/` folders hold theirs. Then the script each declaration names, and every other argument that
- * names a repository file (its launcher where that is a path rather than a name on PATH, build/98, and an option's
- * value), held whether or not it exists at `base` where it is written as a path. All of them resolve from the project
- * root the manifest sits in. The declarations are read at `Base:`, never from the work tree, so a run cannot unhold a script by editing or
+ * names a repository file (its launcher where that is a path rather than a name on PATH, build/98, an option's value and
+ * an argument word, bare or written as a path), held whether or not it exists at `base` (review/196, review/199); a
+ * folder an argument names is not held (review/197), nor a value with a URL-like scheme (review/198). All of them
+ * resolve from the project root the manifest sits in. The declarations are read at `Base:`, never from the work tree, so a run cannot unhold a script by editing or
  * deleting its declaration, and through the engine's own reader ({@link readHookDefinitions}, with
  * {@link checkLauncherArgv}'s one script argument), so a declaration emission refuses for its shape names nothing held.
  * The reader runs over a scratch copy of them whose arguments read backslashes as separators, as a Windows checkout
@@ -1463,8 +1464,8 @@ async function listTree(top: string, tree: string, verb: string): Promise<TreeEn
  * declaration names goes through {@link baseReader}'s one resolver, and a file that does not read or parse, a folder
  * that is a file, a script whose stand-in did not land (the reader then reads it as missing), and an argument the
  * reader reads as leaving the repository refuse too: the reason, for `notDone`. Residuals the pages name: a hook
- * written by hand into a client's settings file; modules a held script loads from outside the held folders
- * (review/187); a run that rewrites its own record head's `Base:`, as it can its `Mode:`.
+ * written by hand into a client's settings file; anything a held script reads or loads beyond the files its
+ * declaration names (review/187, review/197); a run that rewrites its own record head's `Base:`, as it can its `Mode:`.
  */
 async function hookPathsAt(top: string, prefix: string, base: string, verb: string): Promise<string[] | string> {
   const at = baseReader(top, base, prefix, verb);
@@ -1566,12 +1567,16 @@ async function hookPathsAt(top: string, prefix: string, base: string, verb: stri
       return unknown(`${prefix}${unread.file}`, unread.code === "MISSING_SCRIPT" ? "names a script the hold could not stand in for" : "names a path outside the repository");
     }
     // build/98 and the option-value question: every argument that names a repository file is code the hook runs or a
-    // file it reads, so it is held beside the script, through the same resolver. One written as a path (a separator in
-    // it, a flag's `=` value read as the launcher check reads it, the launcher's own included) is held whether or not
-    // Base: holds it, and refuses where it does not resolve cleanly; one naming the project root names no file. A bare
-    // name past the launcher is held where Base: holds a file of that name, or holds it in a way the resolver refuses
-    // (as written then, since a held path matches without case), and left alone where Base: holds a folder or nothing
-    // there: a subcommand or a word. A bare launcher is looked up on PATH, never in the repository.
+    // file it reads, so it is held beside the script, through the same resolver, whether or not Base: holds it
+    // (review/196, review/199): a run that adds a file a declaration names reaches the next session's hook. One written
+    // as a path (a separator in it, a flag's `=` value read as the launcher check reads it, the launcher's own
+    // included) refuses where it does not resolve cleanly; one naming the project root names no file. A bare name past
+    // the launcher is held too, a subcommand or a word alike, since it reads as a file of that name; where the resolver
+    // refuses it, it is held as written, as a held path matches without case. A folder an argument names is not held (review/197): holding it would hold every
+    // change under it, and what a held script reads there is the pages' named residual; the script and a path-written
+    // launcher stay held whatever Base: holds there, as before. A value with a URL-like scheme, two characters or more
+    // before its colon, names no repository file and is neither held nor refused (review/198); a drive letter is no
+    // such scheme, so a drive path stays absolute and refuses. A bare launcher is looked up on PATH, never here.
     const executed = definitions.flatMap((read) =>
       read.hooks.flatMap((hook) => {
         const verdict = checkLauncherArgv(hook.command, scratch);
@@ -1580,16 +1585,17 @@ async function hookPathsAt(top: string, prefix: string, base: string, verb: stri
           const path = !argument.startsWith("-") ? argument : argument.includes("=") ? argument.slice(argument.indexOf("=") + 1) : "";
           const bare = !path.includes("/");
           if ((bare && (index === 0 || path === "" || path === "." || path === "..")) || (!bare && path.split("/").every((segment) => segment === "" || segment === "."))) return [];
-          return [{ path, declaration, bare }];
+          if (/^[A-Za-z][A-Za-z0-9+.-]+:/.test(path)) return [];
+          return [{ path, declaration, bare, code: index === 0 }];
         });
-        return [...(verdict.ok ? [{ path: verdict.script, declaration, bare: false }] : []), ...values];
+        return [...(verdict.ok ? [{ path: verdict.script, declaration, bare: false, code: true }] : []), ...values];
       }),
     );
     const scripts = await Promise.all(
-      executed.map(async ({ path, declaration, bare }) => {
+      executed.map(async ({ path, declaration, bare, code }) => {
         const script = await at.resolve(path);
-        if (bare) return "refused" in script ? { path: `${prefix}${path}` } : script.kind === "file" ? { path: script.path } : null;
-        return "refused" in script ? { refused: unknown(declaration, `names ${path}, which ${script.refused}`) } : { path: script.path };
+        if ("refused" in script) return bare ? { path: `${prefix}${path}` } : { refused: unknown(declaration, `names ${path}, which ${script.refused}`) };
+        return script.kind === "folder" && !code ? null : { path: script.path };
       }),
     );
     for (const script of scripts) {

@@ -4161,6 +4161,11 @@ off the pushed tree as an inert patch, listed (`PERSON_ONLY_PATHS` and `heldPath
     run, the index and work tree, the history read and the pushed tree), whether or not it exists at `Base:`; a link
     the run adds at a folder above one is held too. Reading at `Base:` means a run cannot unhold a script by editing
     or deleting its declaration. Attended, the verbs read nothing new and hold nothing.
+  - Every other file an accepted declaration names is held the same way, present at `Base:` or not: an option's `=`
+    value and an argument word past the launcher, bare or written as a path (unit `n7-held-below-top`, `review/196`,
+    `review/199`). A folder it names is not held (`review/197`), and a value with a URL-like scheme, two characters
+    or more before its colon (`unix:`, `npm:`), is not a path, neither held nor refused, while a value naming a drive
+    path stays absolute and refuses (`review/198`).
   - The hold fails closed on anything it cannot resolve cleanly at `Base:`: one resolver walks `Base:`'s trees, reads
     backslashes as separators and refuses a `..` segment, an absolute path or one naming a drive or a scheme, a
     segment that is a link or a submodule there, and one the tree spells in another letter case or holds twice by
@@ -4170,8 +4175,9 @@ off the pushed tree as an inert patch, listed (`PERSON_ONLY_PATHS` and `heldPath
     exit 1, as `hold refused: <path> at Base: <why>, so the hook scripts it names are unknown and the run pushes
     nothing`, committing and pushing nothing (`hookPathsAt`, `baseReader` and `heldOf`, `src/cli/commands/run.ts`).
   - Residuals, named in `SECURITY.md`: a hook written by hand into a client's settings file whose script lies outside
-    the held folders; modules a held script loads from outside the held folders (`review/187`); and a run that
-    rewrites its own record head's `Base:`, as it can its `Mode:`, which moves the commit the hold reads.
+    the held folders; anything a held script reads or loads beyond the files its declaration names (`review/187`,
+    `review/197`); and a run that rewrites its own record head's `Base:`, as it can its `Mode:`, which moves the
+    commit the hold reads.
   - Proof: `test/change/personOnlyPaths.test.ts`, `test/cli/commands/runCheckpoint.test.ts` ("the scripts the hook
     declarations at Base: name (review/175)" and its nested describe of the fail-closed reads),
     `test/cli/commands/runEnd.test.ts`.

@@ -3242,7 +3242,10 @@ describe("the night units' pages (n2, n3, n4, n5)", () => {
       "a path that passes through a link or a submodule there, one spelled in another letter case than the tree's or ambiguous by case, a `..` segment, a path that is absolute or leaves the repository, and a script the hold could not stand in for",
       "a byte-order mark is read as the manifest reader reads it",
       "`src/cli/commands/run.ts::hookPathsAt`",
-      "The hook hold reads the declarations at `Base:` alone, so a hook written by hand into a client's settings file whose script lies outside the held folders, and a module a held script loads from outside them, are pushed as any other file, and a run that rewrites its record head's `Base:` moves the commit the hold reads",
+      // review/197: the residual widens from modules loaded outside the held folders to all a held script reads or loads.
+      "The hook hold reads the declarations at `Base:` alone, so a hook written by hand into a client's settings file whose script lies outside the held folders, and anything a held script reads or loads beyond the files its declaration names, the contents of a folder it names included, are pushed as any other file, and a run that rewrites its record head's `Base:` moves the commit the hold reads",
+      // review/196, review/197, review/198, review/199: every file a declaration names, present or not, and no folder.
+      "The hold covers every other file such a declaration names the same way, an option's value or an argument word past the launcher, bare or written as a path, present at `Base:` or not; a folder it names is not held, a value with a URL-like scheme (`unix:`, `npm:`) is not a path and is neither held nor refused, and a value naming a drive path is absolute and refuses.",
     ]) {
       expect(verbs, `the run verbs' row does not state: ${claim}`).toContain(claim);
     }
@@ -3253,14 +3256,18 @@ describe("the night units' pages (n2, n3, n4, n5)", () => {
     expect(residuals).toContain(
       "**Hook code outside the held folders.** The hook hold follows the declarations the engine reads at `Base:`, the repository's own and the installed packs', and no other:",
     );
-    expect(residuals).toContain("a module a held script loads from outside the held folders");
+    expect(residuals).toContain("anything a held script reads or loads beyond the files its declaration names, the contents of a folder it names included");
     const mapping = flowed(read(SECURITY_MAPPING));
     for (const claim of [
       "hold `.stamity/packs/`, the hooks folder `Base:`'s manifest names and each script and repository-path launcher a hook declaration at `Base:` names the same way, refusing before they stage on anything they cannot resolve cleanly there",
-      "The hook hold reads the declarations at `Base:` alone: a hook written by hand into a client's settings file whose script lies outside the held folders, a module a held script loads from outside them, and a run that rewrites its record head's `Base:` stay open.",
+      "and every other file such a declaration names, an option's value or an argument word, present at `Base:` or not, but no folder it names and no value with a URL-like scheme,",
+      "The hook hold reads the declarations at `Base:` alone: a hook written by hand into a client's settings file whose script lies outside the held folders, anything a held script reads or loads beyond the files its declaration names, and a run that rewrites its record head's `Base:` stay open.",
     ]) {
       expect(mapping, `the mapping page does not state: ${claim}`).toContain(claim);
     }
+    // review/197: neither page keeps the narrower residual, in the row or in the residual list.
+    expect(mapping).not.toContain("a module a held script loads from outside");
+    expect(security).not.toContain("a module a held script loads from outside");
   });
 
   it("states Copilot's record lock and its race on SECURITY.md", () => {
@@ -3316,7 +3323,9 @@ describe("the night units' pages (n2, n3, n4, n5)", () => {
       "and each launcher it names as a repository file rather than a name on `PATH` (`build/98`)",
       "refuses the call before anything is staged, exit 1, as `hold refused: <path> at Base: <why>, so the hook scripts it names are unknown and the run pushes nothing`",
       "a hook written by hand into a client's settings file whose script lies outside the held folders",
-      "modules a held script loads from outside the held folders (`review/187`)",
+      "anything a held script reads or loads beyond the files its declaration names (`review/187`, `review/197`)",
+      "Every other file an accepted declaration names is held the same way, present at `Base:` or not: an option's `=` value and an argument word past the launcher, bare or written as a path (unit `n7-held-below-top`, `review/196`, `review/199`).",
+      "A folder it names is not held (`review/197`), and a value with a URL-like scheme, two characters or more before its colon (`unix:`, `npm:`), is not a path, neither held nor refused, while a value naming a drive path stays absolute and refuses (`review/198`).",
       "a run that rewrites its own record head's `Base:`",
     ]) {
       expect(bullet, `REQ-FLOW-102's n6 bullet does not state: ${claim}`).toContain(claim);

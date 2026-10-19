@@ -845,6 +845,62 @@ describe("stamity run checkpoint", () => {
         expect(pushedFile(remote, "src/a.ts")).toBe("the unit's change");
       });
 
+      it("holds a bare option value and a bare argument word naming a file Base: lacks, the run adding both (review/196, review/199)", async () => {
+        const declaration = `${JSON.stringify({
+          hooks: [{ event: "pre_tool_use", command: ["node", "tools/guard.mjs", "--table=table.json", "policy.json"] }],
+        })}\n`;
+        const { repo, remote } = await seed("unattended", { files: { ".stamity/hooks/guard.json": declaration, ...GUARD } });
+        await put(repo, "table.json", "added table\n");
+        await put(repo, "policy.json", "added policy\n");
+        await writeFile(join(repo, "a.txt"), "the unit's change\n");
+
+        const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt", "table.json", "policy.json"]);
+
+        expect(code).toBe(0);
+        expect(doc).toMatchObject({ pushed: true, notDone: [], held: ["policy.json", "table.json"] });
+        expect(pushedTree(remote)).not.toContain("table.json");
+        expect(pushedTree(remote)).not.toContain("policy.json");
+        expect(pushedFile(remote, PATCH)).toContain("+added table");
+        expect(pushedFile(remote, "a.txt")).toBe("the unit's change");
+      });
+
+      it("leaves a folder a declaration at Base: names alone, written as a path or bare, so the unit's work under it is pushed (review/197)", async () => {
+        const declaration = `${JSON.stringify({
+          hooks: [{ event: "pre_tool_use", command: ["node", "tools/guard.mjs", "--cwd=./src", "--include=lib/", "packages/app", "--dir=docs"] }],
+        })}\n`;
+        const { repo, remote } = await seed("unattended", {
+          files: {
+            ".stamity/hooks/guard.json": declaration,
+            "src/a.ts": "base source\n",
+            "lib/b.ts": "base lib\n",
+            "packages/app/c.ts": "base app\n",
+            "docs/d.md": "base docs\n",
+            ...GUARD,
+          },
+        });
+        await Promise.all(["src/a.ts", "lib/b.ts", "packages/app/c.ts", "docs/d.md"].map((path) => writeFile(join(repo, path), `the unit's ${path}\n`)));
+
+        const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "src/a.ts", "lib/b.ts", "packages/app/c.ts", "docs/d.md"]);
+
+        expect(code).toBe(0);
+        expect(doc).toMatchObject({ pushed: true, notDone: [], held: [] });
+        for (const path of ["src/a.ts", "lib/b.ts", "packages/app/c.ts", "docs/d.md"]) expect(pushedFile(remote, path)).toBe(`the unit's ${path}`);
+      });
+
+      it("neither holds nor refuses a value with a URL-like scheme, which names no repository file (review/198)", async () => {
+        const declaration = `${JSON.stringify({
+          hooks: [{ event: "pre_tool_use", command: ["node", "tools/guard.mjs", "--endpoint=unix:/tmp/hook.sock", "--registry=npm:@scope/pkg", "--socket=unix:hook.sock"] }],
+        })}\n`;
+        const { repo, remote } = await seed("unattended", { files: { ".stamity/hooks/guard.json": declaration, ...GUARD } });
+        await writeFile(join(repo, "a.txt"), "the unit's change\n");
+
+        const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+        expect(code).toBe(0);
+        expect(doc).toMatchObject({ pushed: true, notDone: [], held: [] });
+        expect(pushedFile(remote, "a.txt")).toBe("the unit's change");
+      });
+
       const PACK_DECLARATION = declaring("tools/guard.mjs");
       it.each([
         {
@@ -912,6 +968,13 @@ describe("stamity run checkpoint", () => {
           files: { ".stamity/hooks/guard.json": `${JSON.stringify({ hooks: [{ event: "pre_tool_use", command: ["node", "tools/guard.mjs", "--config=lnk/policy.json"] }] })}\n`, "cfg/policy.json": "base policy\n" },
           links: { lnk: "cfg" },
           line: refused(".stamity/hooks/guard.json", "names lnk/policy.json, which passes through a link (lnk)"),
+        },
+        {
+          // review/198: a drive letter is no URL-like scheme, so a value naming a drive path stays absolute and refuses.
+          layout: "a declared option value names a drive path (review/198)",
+          files: { ".stamity/hooks/guard.json": `${JSON.stringify({ hooks: [{ event: "pre_tool_use", command: ["node", "tools/guard.mjs", "--out=C:\\tmp\\out.json"] }] })}\n` },
+          links: {},
+          line: refused(".stamity/hooks/guard.json", "names a path outside the repository"),
         },
         {
           // A hook naming tools/guard.mjs, and another naming a path under it, which leaves no file to stand in its place.
