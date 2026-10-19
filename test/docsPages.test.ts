@@ -3173,13 +3173,16 @@ describe("docs/specs/prove-behavior-and-value.md, amended for Copilot CLI's ask"
 
 // ADDED 2026-10-19 (plan 021 file 2, unit n6-night-pages; REQ-FLOW-092, REQ-FLOW-093, REQ-FLOW-102, REQ-FLOW-123,
 // REQ-PROVE-042): the pages state what the night units landed, read from the code at the integration head. n2: the
-// checkpoint marker is read before any write, and a commit whose process group the wall time stopped and saw gone, with
-// no index lock and HEAD unmoved, clears it (src/cli/commands/run.ts, groupGone and the commit's catch;
+// checkpoint marker is read before anything is staged, and a commit whose process group the wall time stopped and saw
+// gone, with no index lock and HEAD unmoved, clears it (src/cli/commands/run.ts, groupGone and the commit's catch;
 // src/cli/engine/gitWrite.ts, gitWriteInGroup), a hook's child that leaves the group the named residual; a `--paths`
 // entry naming a committed path is harmless (namedPaths, committedDeletions). n4: `.claude/hooks/**` is held
-// (PERSON_ONLY_PATHS). n5: Copilot's session start updates its record under a lock (COPILOT_RECORD_SOURCE), build/92
-// the residual. n3: the release re-measure's three facts and the checklist's moved ranges. The pages say "at the time
-// it was read", never "provably".
+// (PERSON_ONLY_PATHS), and, pass 2, with n4's fix and cap rounds at cee46ac1, `.stamity/packs/**`, the hooks folder
+// Base:'s manifest names and each script and repository-path launcher a hook declaration at Base: names, the hold
+// refusing on what it cannot resolve cleanly there (run.ts, hookPathsAt and baseReader), with three named residuals.
+// n5: Copilot's session start updates its record under a lock (COPILOT_RECORD_SOURCE), build/92 the residual. n3: the
+// release re-measure's three facts and the checklist's moved ranges. The pages say "at the time it was read", never
+// "provably".
 describe("the night units' pages (n2, n3, n4, n5)", () => {
   const security = flowed(read(SECURITY));
   const between = (text: string, start: string, end: string): string => {
@@ -3206,12 +3209,12 @@ describe("the night units' pages (n2, n3, n4, n5)", () => {
     return text.slice(start, proof);
   };
 
-  it("states on SECURITY.md that the marker is read before any write, when it clears, and the hook residual", () => {
+  it("states on SECURITY.md that the marker is read before anything is staged, when it clears, and the hook residual", () => {
     const hooks = between(security, "Hooks the run writes.", "The environment.");
     for (const claim of [
       "The verb reads the marker before it stages anything, writes a held patch or restores the index, so a refusal leaves them as the unchecked commit did.",
-      "Off Windows the commit's git runs in a process group of its own, which the wall time stops, a stop and then a kill, and waits for",
-      "where that group is gone, git's `index.lock` is absent and `HEAD` still names the commit read before, each at the time it was read, no commit landed, so the verb removes the marker and reports `commit not made`",
+      "Off Windows the commit's git runs in a process group of its own, which the wall time stops, a stop and, where the group outlives a grace, a kill, and waits for",
+      "where that group is gone, git's `index.lock` is absent and `HEAD` still names, on the run branch, the commit read before, each at the time it was read, no commit landed, so the verb removes the marker and reports `commit not made`",
       "Every other stop keeps it: on Windows, an output past the runner's buffer cap, a stop by a signal the runner did not send, and an interrupt that stops the verb but not git's group, which runs on with no wall time.",
       "Three residuals stay with the marker.",
       "A hook that detaches its own child, or starts its own process group, leaves the group the verb stops, so that child can still land a commit after the clear, and the next checkpoint pushes it without the check of a hook-widened commit; an unattended run's held paths and the secret scan still read that push.",
@@ -3228,6 +3231,36 @@ describe("the night units' pages (n2, n3, n4, n5)", () => {
     expect(flowed(read(SECURITY_MAPPING))).toContain(
       "move the change under the person-only paths, Claude Code's and Cursor's hook scripts under `.claude/hooks/` and `.cursor/hooks/` among them, and a symbolic link at a held glob's folder, into an inert patch",
     );
+  });
+
+  it("states the hook hold, its fail-closed reads and its residuals on SECURITY.md and the mapping page", () => {
+    const verbs = between(security, "`stamity run start` puts an unattended run", "| Anyone whose text an unattended run sends out");
+    for (const claim of [
+      "The same hold covers the hook code later sessions run: `.stamity/packs/`, the folder of hook declarations `Base:`'s manifest names (`.stamity/hooks/` by default), held whole wherever it lies, and each script, and each launcher given as a repository path rather than a name on `PATH`, that a user or pack hook declaration at `Base:` names",
+      "read at `Base:` through the engine's own hook reader, so a run cannot unhold one by editing its declaration, and held whether or not it exists there",
+      "Anything that hold cannot resolve cleanly at `Base:` refuses the call before it stages, naming its cause, and nothing is pushed",
+      "a path that passes through a link or a submodule there, one spelled in another letter case than the tree's or ambiguous by case, a `..` segment, a path that is absolute or leaves the repository, and a script the hold could not stand in for",
+      "a byte-order mark is read as the manifest reader reads it",
+      "`src/cli/commands/run.ts::hookPathsAt`",
+      "The hook hold reads the declarations at `Base:` alone, so a hook written by hand into a client's settings file whose script lies outside the held folders, and a module a held script loads from outside them, are pushed as any other file, and a run that rewrites its record head's `Base:` moves the commit the hold reads",
+    ]) {
+      expect(verbs, `the run verbs' row does not state: ${claim}`).toContain(claim);
+    }
+    const residuals = between(security, "### Cloud and unattended runs", "## Standards mapping");
+    expect(residuals).toContain(
+      "A head rewritten to name another `Base:` moves the commit the hook hold reads its declarations at, so a script only the true base's declarations name is pushed as any other file.",
+    );
+    expect(residuals).toContain(
+      "**Hook code outside the held folders.** The hook hold follows the declarations the engine reads at `Base:`, the repository's own and the installed packs', and no other:",
+    );
+    expect(residuals).toContain("a module a held script loads from outside the held folders");
+    const mapping = flowed(read(SECURITY_MAPPING));
+    for (const claim of [
+      "hold `.stamity/packs/`, the hooks folder `Base:`'s manifest names and each script and repository-path launcher a hook declaration at `Base:` names the same way, refusing before they stage on anything they cannot resolve cleanly there",
+      "The hook hold reads the declarations at `Base:` alone: a hook written by hand into a client's settings file whose script lies outside the held folders, a module a held script loads from outside them, and a run that rewrites its record head's `Base:` stay open.",
+    ]) {
+      expect(mapping, `the mapping page does not state: ${claim}`).toContain(claim);
+    }
   });
 
   it("states Copilot's record lock and its race on SECURITY.md", () => {
@@ -3258,7 +3291,9 @@ describe("the night units' pages (n2, n3, n4, n5)", () => {
     const bullet = nightBullet("REQ-FLOW-093");
     for (const claim of [
       "unit `n2-pending-marker` and its fix round",
+      "The marker is read before anything is staged:",
       "before any `git add`, held-patch write or index restore",
+      "a `SIGTERM` and, where the group outlives a grace, a `SIGKILL`",
       "the commit's git runs as the leader of a process group of its own",
       "each at the time it was read, no commit landed: the verb removes the marker, adds `commit not made: <cause>`, exits 1 and pushes nothing",
       "Every other case keeps the marker and reports `commit not checked`",
@@ -3267,12 +3302,25 @@ describe("the night units' pages (n2, n3, n4, n5)", () => {
       expect(bullet, `REQ-FLOW-093's n6 bullet does not state: ${claim}`).toContain(claim);
     }
     expect(bullet).not.toMatch(/provabl/i);
+    // review/191: alignOriginHead may write origin/HEAD before the marker read, so the bullet says "staged", not "write".
+    expect(bullet).not.toContain("The marker is read before any write");
   });
 
-  it("holds `.claude/hooks/**` on REQ-FLOW-102", () => {
+  it("holds `.claude/hooks/**`, the packs and the declared hook code on REQ-FLOW-102", () => {
     const bullet = nightBullet("REQ-FLOW-102");
-    expect(bullet).toContain("unit `n4-held-claude-hooks`");
-    expect(bullet).toContain("The person-only paths gain `.claude/hooks/**`");
+    for (const claim of [
+      "unit `n4-held-claude-hooks`, with its fix round and its cap round",
+      "The person-only paths gain `.claude/hooks/**`",
+      "and `.stamity/packs/**`",
+      "the folder of hook declarations `Base:`'s manifest names, `.stamity/hooks` by default, held whole wherever it lies",
+      "and each launcher it names as a repository file rather than a name on `PATH` (`build/98`)",
+      "refuses the call before anything is staged, exit 1, as `hold refused: <path> at Base: <why>, so the hook scripts it names are unknown and the run pushes nothing`",
+      "a hook written by hand into a client's settings file whose script lies outside the held folders",
+      "modules a held script loads from outside the held folders (`review/187`)",
+      "a run that rewrites its own record head's `Base:`",
+    ]) {
+      expect(bullet, `REQ-FLOW-102's n6 bullet does not state: ${claim}`).toContain(claim);
+    }
   });
 
   it("states Copilot's record lock, its race and the re-measured facts on REQ-FLOW-123", () => {
@@ -3295,6 +3343,8 @@ describe("the night units' pages (n2, n3, n4, n5)", () => {
     expect(text).toContain("(`:374-392`, added 2026-10-19");
     expect(text).not.toContain("`:344-364`");
     expect(text).toContain("also checks, for Copilot CLI, the three facts its guard's ask rests on");
+    // review/192: the provenance paragraph names the sha those two ranges read at.
+    expect(proof).toContain("but for REQ-PROVE-042's two release-checklist ranges, re-pointed on 2026-10-19, which read at `96e5b3ac`");
   });
 
   it("dates the night's re-pointed skill citations beside each provenance sentence (review/173)", () => {
@@ -3310,10 +3360,18 @@ describe("the night units' pages (n2, n3, n4, n5)", () => {
     const cloud = flowed(read("content/skills/st-unattended/references/cloud.md"));
     expect(cloud).toContain("The verb reads the marker before it stages anything, so its refusal leaves the index and the held patch as that commit left them.");
     expect(cloud).toContain("A checkpoint that reports `commit not made` is not this case");
+    // review/190: the clear rests on reads made at one time, so the reference says so.
+    expect(cloud).toContain("none had landed at the time it was read");
+    expect(cloud).not.toContain("and none landed,");
     const changelog = flowed(read("CHANGELOG.md"));
     expect(changelog).toContain("The verbs read that marker before they stage anything");
     expect(changelog).toContain("that call reports `commit not made`");
-    expect(changelog).toContain("hooks and the scripts Claude Code's and Cursor's hooks run");
+    // The held hook code, no wider than the code holds it (n4 with its fix and cap rounds).
+    expect(changelog).toContain(
+      "hooks, the scripts under `.claude/hooks/` and `.cursor/hooks/`, the installed packs, and the scripts and repository-path launchers the hook declarations at the run's base name",
+    );
+    expect(changelog).toContain("A hook declaration the verbs cannot read cleanly at the base refuses the push");
+    expect(changelog).not.toContain("hooks and the scripts Claude Code's and Cursor's hooks run");
     expect(changelog).toContain("under a lock, so two sessions starting together are both recorded");
     // review/164: the PowerShell refusal reads an unquoted `@` in a word after `run`, as review/147 corrected the spec.
     expect(changelog).toContain("an unquoted `@` in a word after `run`");

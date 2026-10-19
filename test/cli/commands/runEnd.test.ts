@@ -674,9 +674,11 @@ describe("stamity run end", () => {
     expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
   });
 
-  // The eval fix's code fact (S141): the unattended ending names every file the run changed in --paths, each already
+  // The eval fix's code fact: the unattended ending names every file the run changed in --paths, each already
   // committed at its checkpoint, so a path committed earlier is harmless there.
-  describe("a --paths entry an earlier checkpoint committed (S141)", () => {
+  // TEST CHANGE, justified (review/193): the describe's name and this comment named an outside reference no reader of
+  // this public file can resolve; they now say what it means. No case, input or assertion moved.
+  describe("a --paths entry an earlier checkpoint committed (the eval fix's code fact)", () => {
     const CHECKPOINT = ["checkpoint", "--run", RUN, "--json"];
 
     it("names a file committed earlier and unchanged since: exit 0, and no notDone line for it", async () => {

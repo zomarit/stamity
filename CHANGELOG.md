@@ -53,9 +53,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **One ending for every run nobody watches: a pushed branch and one draft pull request.**
   `stamity run start`, `run checkpoint` and `run end` are an unattended run's only push path. The run
   works on its own `stamity/<run-id>` branch; a checkpoint stages the run's records and the paths
-  named with `--paths`, never `-A`, holds a change to a person-only path (CI definitions, hooks and the
-  scripts Claude Code's and Cursor's hooks run, the clients' settings, instruction and agent files) as
-  an inert patch in the run folder, scans what the push sends for secrets, and pushes. The
+  named with `--paths`, never `-A`, holds a change to a person-only path (CI definitions, hooks, the
+  scripts under `.claude/hooks/` and `.cursor/hooks/`, the installed packs, and the scripts and
+  repository-path launchers the hook declarations at the run's base name, the clients' settings,
+  instruction and agent files) as an inert patch in the run folder, scans what the push sends for
+  secrets, and pushes. A hook declaration the verbs cannot read cleanly at the base refuses the push;
+  a hook written by hand into a client's settings file whose script lies outside those folders, and a
+  module a held script loads from outside them, are not held. The
   repository's own pre-commit hooks still run inside a run verb's commit, so the verb then reads that
   commit: one a hook widened past the paths the verb staged, or made of its own, is undone by moving
   the run branch back to the commit read before, naming each outside path, and nothing is pushed. A

@@ -87,7 +87,8 @@ and it pushes nothing: the record and the morning list stay in the run folder, a
 
 The verb reads the marker before it stages anything, so its refusal leaves the index and the held patch as that commit
 left them. A checkpoint that reports `commit not made` is not this case: its commit was stopped at the time limit and
-none landed, so the verb removed its own marker, and the next `run checkpoint` or `run end` runs as usual.
+none had landed at the time it was read, so the verb removed its own marker, and the next `run checkpoint` or
+`run end` runs as usual.
 
 ## A session-capped cloud agent
 

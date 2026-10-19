@@ -1661,8 +1661,8 @@ function readsUnattended(mode: "attended" | "unattended" | null, flag: string | 
  * names the whole project, or that neither the work tree nor the index holds
  * and whose deletion is not already staged, is left out and named in `notDone`;
  * one a commit since `base` touched (an earlier checkpoint committed its
- * deletion, S141, or created and later deleted it, review/177) is left out
- * silently, as there is nothing to stage.
+ * deletion, the eval fix's code fact, or created and later deleted it,
+ * review/177) is left out silently, as there is nothing to stage.
  * `deleted` lists the kept ones whose deletion is already staged (review/84):
  * `git add` refuses a path no layer holds, so they are committed as staged.
  */
@@ -1698,10 +1698,10 @@ async function namedPaths(
 }
 
 /**
- * S141, review/177: of `paths`, which neither the work tree nor the index holds, the top-relative ones a commit in
- * `base..HEAD` touched, as a file or as a folder that held one: `HEAD` then holds their absence as the run committed
- * it, a deletion of a file `base` held or a file the run created and later deleted, and a run's ending names again
- * what its checkpoints committed. None where git could not answer.
+ * The eval fix's code fact, review/177: of `paths`, which neither the work tree nor the index holds, the top-relative
+ * ones a commit in `base..HEAD` touched, as a file or as a folder that held one: `HEAD` then holds their absence as
+ * the run committed it, a deletion of a file `base` held or a file the run created and later deleted, and a run's
+ * ending names again what its checkpoints committed. None where git could not answer.
  */
 async function committedDeletions(top: string, base: string, paths: readonly string[]): Promise<Set<string>> {
   if (paths.length === 0) return new Set();

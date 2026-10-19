@@ -3841,15 +3841,16 @@ stray check `:872`, the index read `indexTracked`, `:1129-1139`, which `--paths`
     `undoCommit`, `markerPath`, `takeMarker`, `dropMarker` and `markerRefusal`, `src/cli/commands/run.ts`).
   - Proof: `test/cli/commands/runCheckpoint.test.ts`, `test/cli/commands/runEnd.test.ts`.
 - **Amended 2026-10-19** (plan 021 file 2, unit `n2-pending-marker` and its fix round, ledger rows `review/148` and
-  `review/176` to `review/180`; written by `n6-night-pages`). The marker is read before any write: once the
+  `review/176` to `review/180`; written by `n6-night-pages`). The marker is read before anything is staged: after the
   repository's top level is resolved, before any `git add`, held-patch write or index restore, a marker at its path, or
   a link or a folder there, refuses the call as `markerRefusal` does, so the index and `held/person-only.patch` stay as
-  the unchecked commit left them; a dry run reads none. Given a commit that does not finish, Then off Windows the
-  commit's git runs as the leader of a process group of its own, which the wall time stops, a `SIGTERM` and then a
-  `SIGKILL` after a grace, and waits for (`processGroup`, `gitWrite`, `src/cli/engine/gitWrite.ts`); where that group is
-  gone, `<git-dir>/index.lock` is absent and `HEAD` still names `before` on the run branch, each at the time it was read,
-  no commit landed: the verb removes the marker, adds `commit not made: <cause>`, exits 1 and pushes nothing, so the
-  next call runs. Every other case keeps the marker and reports `commit not checked`: Windows, an output past the
+  the unchecked commit left them; a dry run reads none. The verb's earlier steps still run, `refs/remotes/origin/HEAD`
+  pointed at the default branch REST names among them (`alignOriginHead`). Given a commit that does not finish, Then
+  off Windows the commit's git runs as the leader of a process group of its own, which the wall time stops, a `SIGTERM`
+  and, where the group outlives a grace, a `SIGKILL`, and waits for (`processGroup`, `gitWrite`,
+  `src/cli/engine/gitWrite.ts`); where that group is gone, `<git-dir>/index.lock` is absent and `HEAD` still names
+  `before` on the run branch, each at the time it was read, no commit landed: the verb removes the marker, adds
+  `commit not made: <cause>`, exits 1 and pushes nothing, so the next call runs. Every other case keeps the marker and reports `commit not checked`: Windows, an output past the
   runner's buffer cap, and a stop by a signal the runner did not send; an interrupt that stops the verb but not git's
   group keeps it too, while git and its hooks run on with no wall time (`groupGone` and the commit's catch,
   `src/cli/commands/run.ts`). A hook that detaches its own child, or starts its own process group, leaves the group, so
@@ -4144,13 +4145,36 @@ off the pushed tree as an inert patch, listed (`PERSON_ONLY_PATHS` and `heldPath
   as a helper's. Copilot CLI's check asks for its main agent's act (REQ-FLOW-123), so the first paragraph's
   "Copilot's … `preToolUse` checks refuse it" reads, for an act that can be undone, as that requirement gives it
   (`GUARD_HELPER_FIELDS` and `attendedAsk`, `src/hooks/scripts.ts`).
-- **Amended 2026-10-19** (plan 021 file 2, unit `n4-held-claude-hooks`, ledger row `review/166`; written by
-  `n6-night-pages`). The person-only paths gain `.claude/hooks/**`: the scripts Claude Code's hooks run, the engine's
-  copies under `.claude/hooks/stamity/` and a person's own, held beside Claude Code's held settings as
-  `.cursor/hooks/**` is beside `.cursor/hooks.json`, so an unattended run's change to one is an inert patch, listed and
-  never pushed (`PERSON_ONLY_PATHS`, `src/change/personOnlyPaths.ts`; the run verbs' held prefixes derive from it,
-  `HELD_PREFIXES`, `src/cli/commands/run.ts`).
-  - Proof: `test/change/personOnlyPaths.test.ts`.
+- **Amended 2026-10-19** (plan 021 file 2, unit `n4-held-claude-hooks`, with its fix round and its cap round, ledger
+  rows `review/166`, `review/175`, `review/182` to `review/189` and `build/98`; written by `n6-night-pages`). The
+  person-only paths gain `.claude/hooks/**`: the scripts Claude Code's hooks run, the engine's copies under
+  `.claude/hooks/stamity/` and a person's own, held beside Claude Code's held settings as `.cursor/hooks/**` is beside
+  `.cursor/hooks.json`, and `.stamity/packs/**`, beside `.stamity/generated/**`; so an unattended run's change to one
+  is an inert patch, listed and never pushed (`PERSON_ONLY_PATHS`, `src/change/personOnlyPaths.ts`; the run verbs' held
+  prefixes derive from it, `HELD_PREFIXES`, `src/cli/commands/run.ts`).
+  - Given an unattended `run checkpoint` or `run end`, Then before anything is staged the verb reads, at the record's
+    `Base:` and never from the work tree, the manifest; the folder of hook declarations `Base:`'s manifest names,
+    `.stamity/hooks` by default, held whole wherever it lies; the packs folder and each pack's `hooks/` folder; and,
+    through the engine's own reader (`readHookDefinitions`, with `checkLauncherArgv`'s one script argument), each
+    script an accepted declaration names, and each launcher it names as a repository file rather than a name on
+    `PATH` (`build/98`). Each such path is held as a person-only path is, at all four places the verbs hold (the dry
+    run, the index and work tree, the history read and the pushed tree), whether or not it exists at `Base:`; a link
+    the run adds at a folder above one is held too. Reading at `Base:` means a run cannot unhold a script by editing
+    or deleting its declaration. Attended, the verbs read nothing new and hold nothing.
+  - The hold fails closed on anything it cannot resolve cleanly at `Base:`: one resolver walks `Base:`'s trees, reads
+    backslashes as separators and refuses a `..` segment, an absolute path or one naming a drive or a scheme, a
+    segment that is a link or a submodule there, and one the tree spells in another letter case or holds twice by
+    letter case; a manifest or declaration that does not parse, a folder that is a file, a script the hold could not
+    stand in for and an argument that leaves the repository refuse too. A manifest or declaration that opens with a
+    byte-order mark is read as the manifest reader reads it. A refusal refuses the call before anything is staged,
+    exit 1, as `hold refused: <path> at Base: <why>, so the hook scripts it names are unknown and the run pushes
+    nothing`, committing and pushing nothing (`hookPathsAt`, `baseReader` and `heldOf`, `src/cli/commands/run.ts`).
+  - Residuals, named in `SECURITY.md`: a hook written by hand into a client's settings file whose script lies outside
+    the held folders; modules a held script loads from outside the held folders (`review/187`); and a run that
+    rewrites its own record head's `Base:`, as it can its `Mode:`, which moves the commit the hold reads.
+  - Proof: `test/change/personOnlyPaths.test.ts`, `test/cli/commands/runCheckpoint.test.ts` ("the scripts the hook
+    declarations at Base: name (review/175)" and its nested describe of the fail-closed reads),
+    `test/cli/commands/runEnd.test.ts`.
 - **Proof:** `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`, `test/change/personOnlyPaths.test.ts`,
   `test/cli/commands/runCheckpoint.test.ts` (the held patch; the refused push, "refuses the push when a commit it would
   send changes a held path, rewriting no history"), `test/adapters/claude.test.ts`,

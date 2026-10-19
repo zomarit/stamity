@@ -89,7 +89,8 @@ REQ-PROVE-039 to REQ-PROVE-045, and the text dated 2026-10-18 under REQ-PROVE-00
 REQ-PROVE-021 and REQ-PROVE-037, come from the spec delta of `docs/plans/021-cloud-runs-02.md` (plan 021 file 2, run
 `2026-10-18_cloud-runs-2`), in its amended form, merged by its unit `v20-spec-merge`, with the clauses its units' and
 fixers' reports declared where the delta is silent, under a line headed "As built". Every `path:line` in that text reads
-at the integration head `e64bc09f`; a module that run rewrote is cited by file and symbol. It is unreleased at this
+at the integration head `e64bc09f`, but for REQ-PROVE-042's two release-checklist ranges, re-pointed on 2026-10-19,
+which read at `96e5b3ac`; a module that run rewrote is cited by file and symbol. It is unreleased at this
 merge; the plan cuts it as 1.16.0.
 
 ## Intent
