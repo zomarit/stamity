@@ -1,8 +1,9 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { planCommand } from "../../src/cli/commands/plan.ts";
 import { gitCheckRunner } from "../../src/cli/engine/gitStatus.ts";
 import {
   COVERAGE_CODE_CLASS,
@@ -12,6 +13,7 @@ import {
   checkPlans,
 } from "../../src/runs/planCheck.ts";
 import type { GitRunner } from "../../src/workspace/git.ts";
+import { runInProcess } from "../support/inProcess.ts";
 import { NO_GIT_CONFIG, seedGitRepo } from "../support/repoFixtures.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
@@ -548,5 +550,37 @@ describe("checkPlans", () => {
     }
     // No row for a code the script no longer raises.
     expect(Object.keys(COVERAGE_CODE_CLASS).toSorted()).toEqual([...codes].toSorted());
+  });
+});
+
+describe("stamity plan check over a working directory git spells otherwise", () => {
+  /**
+   * prove/1: git answers its top level in the file system's own spelling, so the working directory
+   * and each input must be resolved the same way. A folder named in another letter case (or, on
+   * Windows, through an 8.3 short name such as `RUNNER~1`) is the same folder; the check reads it
+   * as the repository, never as "outside the repository". The flipped spelling exists only on a
+   * case-insensitive disk, so a case-sensitive one skips.
+   */
+  it("reads a plan when the working directory names the repository folder in flipped case", async (ctx) => {
+    const handle = tempDir();
+    const folder = "Plan-Check-Repo";
+    const flipped = join(handle.dir, "pLAN-cHECK-rEPO");
+    await handle.seedFiles({ [`${folder}/docs/a.md`]: "a\n", [`${folder}/src/b.ts`]: "export const b = 1;\n" });
+    if (!existsSync(flipped)) ctx.skip();
+    const cwd = join(handle.dir, folder);
+    try {
+      await seedGitRepo(cwd);
+    } catch (error) {
+      if (error instanceof Error && error.name === "GitUnavailableError") ctx.skip();
+      throw error;
+    }
+    const stamp = headSha(cwd);
+    await handle.seedFiles({ [`${folder}/${PLAN_PATH}`]: cleanPlan(stamp), [`${folder}/${SPECS[0]!.path}`]: SPECS[0]!.text });
+
+    const run = await runInProcess([planCommand], ["plan", "check", PLAN_PATH, "--json"], { cwd: flipped });
+    expect(run.code, `${run.stdout}\n${run.stderr}`).toBe(0);
+    const doc = JSON.parse(run.stdout) as { ready: boolean; plans: { path: string }[] };
+    expect(doc.ready).toBe(true);
+    expect(doc.plans.map((report) => report.path)).toEqual([PLAN_PATH]);
   });
 });

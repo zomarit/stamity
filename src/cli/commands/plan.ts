@@ -99,7 +99,9 @@ export const planCommand: CommandModule = {
 };
 
 async function runCheck(ctx: CliContext, planArgs: readonly string[], opts: Record<string, unknown>): Promise<CommandResult> {
-  const cwd = realpathSync(ctx.app.runtime.cwd);
+  // Every side in the file system's own spelling (prove/1): git answers its top level that way, while the JS
+  // realpath keeps the spelling it was given, so a letter case or a Windows 8.3 name (`RUNNER~1`) read as outside.
+  const cwd = realpathSync.native(ctx.app.runtime.cwd);
   const git = gitCheckRunner();
   const root = repositoryRoot(git, cwd);
 
@@ -140,7 +142,7 @@ async function runCheck(ctx: CliContext, planArgs: readonly string[], opts: Reco
 /** The git top-level holding `cwd`, symlinks resolved; outside a work tree there is nothing to measure from. */
 function repositoryRoot(git: GitRunner, cwd: string): string {
   try {
-    return realpathSync(git(["rev-parse", "--show-toplevel"], cwd).trim());
+    return realpathSync.native(git(["rev-parse", "--show-toplevel"], cwd).trim());
   } catch (cause) {
     throw new CliFailure({
       code: "FAILURE",
@@ -167,7 +169,7 @@ function readInput(root: string, cwd: string, given: string): PlanCheckDoc | str
   const absolute = resolve(cwd, given);
   let real: string;
   try {
-    real = realpathSync(absolute);
+    real = realpathSync.native(absolute);
   } catch {
     return "does not exist, so it was not read";
   }
