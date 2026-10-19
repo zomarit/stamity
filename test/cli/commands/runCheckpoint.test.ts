@@ -1610,17 +1610,26 @@ describe("stamity run checkpoint", () => {
       expect(stdout).not.toContain("checkpoint marker left");
     });
 
+    /** review/206: the wall time the landed-commit case gives the commit, long enough that only its held hook reaches it. */
+    const LANDED_WALL_MS = 5_000;
+
     // review/148: a commit that lands and is then stopped (a post-commit hook past the wall time) moved HEAD, so the
     // marker stays, as before. Skipped on Windows for the waiting hook's sake; the marker stays there in every case.
+    // TEST CHANGE, justified (review/206): under a 500 ms wall a starved runner could stop git before the commit
+    // landed, so HEAD never moved and the case went red for timing alone. The post-commit hook now marks that it ran
+    // (the commit has landed by then) before it holds until the case releases it, the wall is long enough that only
+    // that held hook reaches it, and the case first checks the hook ran, so the stop it reads always came after the
+    // commit landed; every assertion below keeps its meaning.
     it.skipIf(process.platform === "win32")("leaves the marker when the commit lands and its call is then stopped by the wall time (review/148)", async () => {
       const { repo, remote, base } = await seed("unattended");
       await writeFile(join(repo, "a.txt"), "changed\n");
-      await hook(repo, "post-commit", WAITING_HOOK);
-      writes.override = SMALL_WALL_TIME;
+      await hook(repo, "post-commit", `: > .git/stamity-landed\n${WAITING_HOOK}`);
+      writes.override = (args, real) => (args[0] === "commit" ? real({ timeoutMs: LANDED_WALL_MS }) : undefined);
 
       const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
       await writeFile(join(repo, ".git", "stamity-release"), "");
 
+      expect(existsSync(join(repo, ".git", "stamity-landed"))).toBe(true);
       const left = git(repo, ["rev-parse", "HEAD"]);
       expect(code).toBe(1);
       expect(left).not.toBe(base);
@@ -1631,7 +1640,8 @@ describe("stamity run checkpoint", () => {
       expect(readFileSync(markerAt(repo), "utf8")).toBe(`${base}\n`);
       expect(pushes()).toEqual([]);
       expect(remoteHeads(remote)).toEqual(SEEDED);
-    });
+      // The case always waits out its wall time, so it gets room beyond the 20 s default on a starved runner.
+    }, 60_000);
 
     /** review/179: the runner's answer once the commit's process group was stopped, gone or not, in place of git's. */
     const GROUP_STOP = "git did not finish within 500 ms; its process group was stopped";
