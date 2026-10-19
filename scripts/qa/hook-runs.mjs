@@ -522,12 +522,15 @@ const shellWord = (text) => `'${text.replaceAll("'", "'\\''")}'`
  * Measured 2026-10-18 in throwaway folders: Claude Code 2.1.302 held a hook's ask in bypass mode (a
  * `-p` run denies it for want of a person); Cursor 2026.10.14 ran the command under `--force`, and
  * Codex's hooks page says an ask is parsed and not honoured, so those two refuse instead. Copilot CLI
- * 1.0.89 held it under `-p --allow-all-tools`, but its tool-call payload names no calling agent, so
- * the guard refuses there too (review/89) and its row is reported, never red, as Cursor's is.
+ * asks again (w4-copilot-ask): the guard gives its main agent the ask (a payload with no helper field
+ * and a session id its session start recorded). Measured on 1.0.98 on 2026-10-19: a headless
+ * `-p --allow-all-tools` run denies a hook's ask ("unable to ask user for confirmation") and the
+ * command does not run, which reads `held`. So a Copilot whose command runs despite the ask is
+ * `ran`, and one whose hook was never asked is `not-run`; both are red, as Claude Code's are.
  * Restated from plan 021 file 2's decision, since this contributor tool imports nothing from the
  * engine.
  */
-export const ASK_CLASS_CLIENTS = Object.freeze(['claude'])
+export const ASK_CLASS_CLIENTS = Object.freeze(['claude', 'copilot'])
 
 /** The file the harmless marked command creates: its presence after a run is the whole answer. */
 export const ASK_MARKER = 'qa-ask-ran.txt'

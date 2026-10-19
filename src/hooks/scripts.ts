@@ -791,6 +791,12 @@ export interface SessionStartScriptOptions {
    * the one emission chose.
    */
   layout?: HookScriptLayout;
+  /**
+   * The client this copy runs for. Copilot CLI's copy also records the main
+   * session's id for the person-only guard ({@link COPILOT_MAIN_SESSIONS_SEGMENTS});
+   * every other client's, and a copy with none named, writes nothing.
+   */
+  tool?: Tool;
 }
 
 /** The lines a client's cloud session prints: its `sessionStart` rows in {@link CLIENT_CLOUD_FACTS}, in order. */
@@ -1206,6 +1212,102 @@ function sessionLines(env) {
 }
 
 /**
+ * Where Copilot CLI's session start records the main session's id, under the
+ * repository's common git directory (REQ-FLOW-123): outside the working tree, so
+ * no commit or pull request carries it, and shared by every worktree of the
+ * repository. The person-only guard asks on Copilot only for a call whose session
+ * id is a whole line of it ({@link buildPersonOnlyGuardScript}). Measured on
+ * Copilot CLI 1.0.98 (2026-10-19): `sessionStart` fires once, for the main thread
+ * alone, and a helper's tool call carries a session id of its own.
+ */
+export const COPILOT_MAIN_SESSIONS_SEGMENTS: readonly string[] = ["stamity", "copilot-main-sessions"];
+
+/** The record's line cap: the session start keeps its last 200 ids. */
+export const COPILOT_MAIN_SESSIONS_MAX_LINES = 200;
+
+/** The record's byte bound: past 64 KiB the guard refuses, and the session start starts it afresh. */
+export const COPILOT_MAIN_SESSIONS_MAX_BYTES = 65_536;
+
+/** A session id the record holds: one word of id characters, never a blank, a separator or a line break. */
+const COPILOT_SESSION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+
+/**
+ * The record's constants and the session id reader, as source text, carried by
+ * Copilot's session start, which writes the record, and its person-only guard,
+ * which reads it, so the two copies hold one id rule. The id is the payload's
+ * `sessionId`, Copilot's own spelling, or `session_id`, the portable runner's
+ * copy of it; both present and different, or one not an id, reads as none.
+ */
+const COPILOT_SESSION_SOURCE = String.raw`const MAIN_SESSIONS_SEGMENTS = ${JSON.stringify(COPILOT_MAIN_SESSIONS_SEGMENTS)};
+const MAIN_SESSIONS_MAX_LINES = ${COPILOT_MAIN_SESSIONS_MAX_LINES};
+const MAIN_SESSIONS_MAX_BYTES = ${COPILOT_MAIN_SESSIONS_MAX_BYTES};
+const SESSION_ID = new RegExp(${JSON.stringify(COPILOT_SESSION_ID_PATTERN.source)});
+
+/** Copilot's session id for this payload; null when it names none, two, or one the record cannot hold. */
+function copilotSessionId(payload) {
+  const ids = ["sessionId", "session_id"].filter((key) => Object.hasOwn(payload, key)).map((key) => payload[key]);
+  const id = ids[0];
+  return typeof id === "string" && SESSION_ID.test(id) && ids.every((other) => other === id) ? id : null;
+}`;
+
+/**
+ * Copilot's session start's one write (REQ-FLOW-123): the main session's id,
+ * appended to {@link COPILOT_MAIN_SESSIONS_SEGMENTS} under the common git
+ * directory (the card's own `cardCommonDir`), the record kept to its last
+ * {@link COPILOT_MAIN_SESSIONS_MAX_LINES} well-formed lines and the id moved to
+ * the end when it is there already. Written whole to an owner-only temp file and
+ * renamed over the record, so a link at the record's path is replaced, never
+ * followed; a link or a folder there is left alone, and the guard then refuses.
+ * Read back after the rename and written again, at most three times, when a
+ * session starting at the same moment replaced it first. Every failure leaves
+ * the record as it was: the guard then refuses this session's asks.
+ */
+const COPILOT_RECORD_SOURCE = String.raw`${COPILOT_SESSION_SOURCE}
+
+/** The record's well-formed lines: [] when absent or past the bound, null when something other than a file sits there. */
+function mainSessionLines(path) {
+  let stats;
+  try {
+    stats = lstatSync(path);
+  } catch (error) {
+    if (error && error.code === "ENOENT") return [];
+    return null;
+  }
+  if (!stats.isFile()) return null;
+  if (stats.size > MAIN_SESSIONS_MAX_BYTES) return [];
+  return readFileSync(path, "utf8").split("\n").filter((line) => SESSION_ID.test(line));
+}
+
+/** Records the main session's id for the person-only guard; writes nothing when the payload names none. */
+function recordMainSession(payload) {
+  const id = copilotSessionId(payload);
+  const common = id === null ? null : cardCommonDir(repoRoot());
+  if (common === null) return;
+  const dir = join(common, MAIN_SESSIONS_SEGMENTS[0]);
+  const path = join(dir, MAIN_SESSIONS_SEGMENTS[1]);
+  try {
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+    if (!lstatSync(dir).isDirectory()) return;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const kept = mainSessionLines(path);
+      if (kept === null) return;
+      const lines = [...kept.filter((line) => line !== id), id].slice(-MAIN_SESSIONS_MAX_LINES);
+      const temp = path + "." + process.pid + "." + Date.now() + "." + attempt;
+      writeFileSync(temp, lines.join("\n") + "\n", { flag: "wx", mode: 0o600 });
+      try {
+        renameSync(temp, path);
+      } catch (error) {
+        unlinkSync(temp);
+        throw error;
+      }
+      if ((mainSessionLines(path) ?? []).includes(id)) return;
+    }
+  } catch {
+    // Not recorded: the person-only guard then refuses this session's asks, and the person runs the act.
+  }
+}`;
+
+/**
  * The session-start context load: prints the learnings index and the
  * resumable handoffs for the repo the session opened in — and, on a start
  * whose payload says `source: "compact"` or `source: "resume"`, the resume
@@ -1245,13 +1347,15 @@ function sessionLines(env) {
 export function buildSessionStartScript(opts: SessionStartScriptOptions = {}): string {
   const source = sessionIndexSource(opts);
   const extra = repoRootImports(opts.layout ?? "generated");
+  // Copilot CLI's copy alone records the main session's id (REQ-FLOW-123); every other copy keeps its bytes.
+  const copilot = opts.tool === "copilot";
 
   return `${header(
     [
       "stamity — session-start context load.",
       "",
       "Prints the learnings index and the resumable handoffs for this repo by",
-      "reading the state directory directly: no agent is spawned and nothing is",
+      `reading the state directory directly: no agent is spawned and nothing${copilot ? " else" : ""} is`,
       "written. Every file clears a size, injection, integrity and review screen",
       "before it is LISTED; a file that fails one is named in a skip line with its",
       "reason, and every field printed — the file name included — is flattened to",
@@ -1263,6 +1367,14 @@ export function buildSessionStartScript(opts: SessionStartScriptOptions = {}): s
       "only the card of the run in progress on the branch HEAD names. Counts and",
       "pointers, never finding text.",
       "In a cloud or CI session it names the session and what is not enforced there.",
+      ...(copilot
+        ? [
+            "",
+            "On Copilot CLI it writes one record: the payload's session id, appended to",
+            "stamity/copilot-main-sessions under the common git directory, owner-only and",
+            "kept to its last 200 lines, which the person-only guard reads before it asks.",
+          ]
+        : []),
     ],
     [
       "Reads outside repo state: the wall clock, which decides whether a learning's",
@@ -1275,7 +1387,7 @@ export function buildSessionStartScript(opts: SessionStartScriptOptions = {}): s
   )}
 
 import { createHash } from "node:crypto";
-${namedImport(["readFileSync", "readdirSync", "statSync", ...RESUME_CARD_HOST_NAMES.fs], "node:fs")}
+${namedImport(["readFileSync", "readdirSync", "statSync", ...RESUME_CARD_HOST_NAMES.fs, ...(copilot ? ["mkdirSync", "renameSync", "unlinkSync", "writeFileSync"] : [])], "node:fs")}
 ${namedImport(["join", "resolve", "sep", ...extra.path, ...RESUME_CARD_HOST_NAMES.path], "node:path")}
 import { isatty } from "node:tty";
 ${extra.url}
@@ -1288,7 +1400,7 @@ ${READ_STDIN}
 ${READ_FIELD}
 
 ${buildResumeCardSource()}
-
+${copilot ? `\n${COPILOT_RECORD_SOURCE}\n` : ""}
 // Which start this is. A person running the script at a terminal sends no
 // payload, so a TTY is never read — reading it would wait for input nobody is
 // going to type. The check asks fd 0 directly: touching process.stdin would
@@ -1298,7 +1410,14 @@ ${buildResumeCardSource()}
 // the run in progress on the branch HEAD names, which a new machine continues
 // (REQ-CTX-013); a client that sends no source (or none of the three) gets the
 // banner it always got.
-const SOURCE = isatty(0) ? "" : field(readPayload(), ["source"]);
+${
+  copilot
+    ? `const PAYLOAD = isatty(0) ? {} : readPayload();
+const SOURCE = field(PAYLOAD, ["source"]);
+// Copilot CLI: this start is the main thread's, so its id goes on the record the person-only guard reads (REQ-FLOW-123).
+recordMainSession(PAYLOAD);`
+    : `const SOURCE = isatty(0) ? "" : field(readPayload(), ["source"]);`
+}
 
 // Written once, then the process ends on its own. \`process.exit\` would race
 // the write: stdout is asynchronous when it is a pipe on macOS and the BSDs,
@@ -3865,31 +3984,125 @@ const GUARD_CANNOT_ASK =
   "This client cannot ask the person for a click, so the guard refuses it: give the person the exact command.";
 
 /**
- * What the guard adds to an ask on Copilot CLI (REQ-FLOW-123, review/89): it holds an ask, but its tool-call payload
- * names no calling agent ({@link IDENTITY_FREE_PRE_TOOL_USE_PAYLOADS}), so a custom agent's act would reach the person's
- * approve prompt as the main thread's would.
+ * What the guard adds to an ask on Copilot CLI it does not give (REQ-FLOW-123): Copilot holds an ask, and the guard
+ * asks only for a call it can show comes from the person's own agent, its payload carrying no helper field and its
+ * session id one Copilot's session start recorded ({@link COPILOT_MAIN_SESSIONS_SEGMENTS}). Every other ask, a helper's
+ * or one from a session the record does not hold, is refused with this sentence.
  */
 const GUARD_NO_CALLER =
-  "Copilot CLI names no calling agent in its tool-call payload, so the guard cannot keep the ask for the person alone and refuses it: give the person the exact command.";
+  "Copilot CLI could not show that this call comes from the person's own agent (a helper agent's call, or a session its session start did not record), so the guard refuses it: give the person the exact command.";
+
+/**
+ * The payload fields that name a helper agent (REQ-FLOW-102, REQ-FLOW-123): Claude Code's `agent_id` and `agent_type`
+ * and its earlier `subagent_*` spellings, the camelCase forms, and the parent fields a helper's call carries,
+ * `parentAgentId` as Copilot CLI 1.0.98 sends it (measured 2026-10-19) beside `parent_agent_id` and
+ * `parent_tool_call_id`. On every client a non-empty string in any of them refuses the ask as a sub-agent's; on Copilot
+ * the field's presence alone does.
+ */
+const GUARD_HELPER_FIELDS: readonly string[] = [
+  "agent_type",
+  "subagent_type",
+  "agentType",
+  "subagentType",
+  "agent_id",
+  "subagent_id",
+  "agentId",
+  "parentAgentId",
+  "parent_agent_id",
+  "parent_tool_call_id",
+];
+
+/**
+ * The guard's `attendedAsk(payload, act, rule)` for one client, as source text: an attended ask-class act's decision.
+ * The person is asked, except where a sub-agent runs it ({@link GUARD_HELPER_FIELDS}), since the act is the person's,
+ * or in Claude Code's `auto` permission mode, where a classifier may settle the prompt; both are refused.
+ *
+ * Copilot CLI's copy asks only for its main agent's call (REQ-FLOW-123): no helper field present, whatever its value,
+ * and the session id a whole line of the record its session start keeps under the common git directory, read through
+ * the git-directory resolution the guard does for tags, never through a link, at most
+ * {@link COPILOT_MAIN_SESSIONS_MAX_BYTES} and every line an id. A missing, unreadable, oversized or malformed record
+ * refuses. Every refusal there, the sub-agent's and the `auto` mode's among them, carries {@link GUARD_NO_CALLER}.
+ */
+function attendedAskSource(tool: Tool): string {
+  const copilot = tool === "copilot";
+  const held = copilot ? `({ ask: false, reason: reason + " " + ${json(GUARD_NO_CALLER)} })` : "({ ask: false, reason })";
+  const record = String.raw`${COPILOT_SESSION_SOURCE}
+
+/**
+ * Whether Copilot's call comes from a main session its session start recorded: the payload's session id a whole line of
+ * the record under the common git directory. A missing, linked, unreadable, oversized or malformed record reads false.
+ */
+function recordedMainSession(payload) {
+  const id = copilotSessionId(payload);
+  const dirs = id === null ? null : gitDirsFrom(repoRoot());
+  if (dirs === null) return false;
+  try {
+    if (!lstatSync(join(dirs.commonDir, MAIN_SESSIONS_SEGMENTS[0])).isDirectory()) return false;
+    const path = join(dirs.commonDir, ...MAIN_SESSIONS_SEGMENTS);
+    if (!lstatSync(path).isFile()) return false;
+    const fd = openSync(path, "r");
+    let text = "";
+    try {
+      const buffer = Buffer.alloc(MAIN_SESSIONS_MAX_BYTES + 1);
+      const read = readSync(fd, buffer, 0, buffer.length, 0);
+      if (read > MAIN_SESSIONS_MAX_BYTES) return false;
+      text = buffer.toString("utf8", 0, read);
+    } finally {
+      closeSync(fd);
+    }
+    const lines = text.split("\n");
+    if (lines.pop() !== "" || !lines.every((line) => SESSION_ID.test(line))) return false;
+    return lines.includes(id);
+  } catch {
+    return false;
+  }
+}
+
+`;
+  const main = String.raw`
+  // Copilot CLI: a helper's call carries a helper field, and its session id is its own, never one the main session's start
+  // recorded (measured on 1.0.98, 2026-10-19), so only the person's own agent reaches the ask.
+  if (names.some((name) => Object.hasOwn(payload, name)) || !recordedMainSession(payload)) return held(askSentence(act, rule));`;
+  return String.raw`${copilot ? record : ""}/**
+ * An attended ask-class act's decision: the person is asked, except where a sub-agent runs it (any agent identity the
+ * core guard reads), since the act is the person's, or in Claude Code's \`auto\` permission mode, where a
+ * classifier may settle the prompt; both are refused.${copilot ? " On Copilot CLI the call must also come from a main session its session start recorded." : ""}
+ */
+function attendedAsk(payload, act, rule) {
+  const told = act + " is a person-only act (\`" + rule + "\`) and ";
+  const end = " (REQ-FLOW-102). Give the person the exact command.";
+  const names = ${json(GUARD_HELPER_FIELDS)};
+  const held = (reason) => ${held};
+  if (names.some((name) => Object.hasOwn(payload, name) && typeof payload[name] === "string" && payload[name] !== "")) {
+    return held(told + "a sub-agent runs it: the act is the person's, so only the main thread may ask for it" + end);
+  }
+  if (payload.permission_mode === "auto") {
+    return held(told + "this session runs in the \`auto\` permission mode, where a classifier may settle the prompt: it stays the person's to run" + end);
+  }${copilot ? main : ""}
+  return { ask: true, reason: askSentence(act, rule) };
+}
+`;
+}
 
 /**
  * How a client hears the guard's decision (`decision`: null to allow, else `{ ask, reason }`), rendered for that
  * client alone (REQ-FLOW-123): Claude Code asks with its `hookSpecificOutput` ask on stdout and exit 0, and refuses on
- * exit 2 with the reason on stderr; Copilot reads `permissionDecision` `deny` on stdout, through the runner or not;
- * Codex (through the portable runner) refuses on exit 2 with the reason on stderr; Cursor's `beforeShellExecution` reads
- * `permission`, and its `failClosed` counts silence as a failure, so it is told to allow out loud. Copilot, Cursor and
- * Codex refuse an ask, the reason saying why ({@link GUARD_NO_CALLER}, {@link GUARD_CANNOT_ASK}).
+ * exit 2 with the reason on stderr; Copilot reads `permissionDecision` `ask` or `deny` on stdout, through the runner or
+ * not, its decision already holding {@link GUARD_NO_CALLER} where the guard does not give it the ask
+ * ({@link attendedAskSource}); Codex (through the portable runner) refuses on exit 2 with the reason on stderr; Cursor's
+ * `beforeShellExecution` reads `permission`, and its `failClosed` counts silence as a failure, so it is told to allow
+ * out loud. Cursor and Codex refuse an ask, the reason saying why ({@link GUARD_CANNOT_ASK}).
  */
 function guardDecisionOutput(tool: Tool): string {
-  const why = tool === "copilot" ? GUARD_NO_CALLER : GUARD_CANNOT_ASK;
-  const told = String.raw`const told = decision === null ? null : decision.ask ? decision.reason + " " + ${json(why)} : decision.reason;`;
+  const told = String.raw`const told = decision === null ? null : decision.ask ? decision.reason + " " + ${json(GUARD_CANNOT_ASK)} : decision.reason;`;
   if (tool === "cursor") {
     return String.raw`${told}
 process.stdout.write(JSON.stringify(told === null ? { permission: "allow" } : { permission: "deny", user_message: told, agent_message: told }) + "\n");`;
   }
   if (tool === "copilot") {
-    return String.raw`${told}
-if (told !== null) process.stdout.write(JSON.stringify({ permissionDecision: "deny", permissionDecisionReason: told }) + "\n");`;
+    return String.raw`if (decision !== null) {
+  process.stdout.write(JSON.stringify({ permissionDecision: decision.ask ? "ask" : "deny", permissionDecisionReason: decision.reason }) + "\n");
+}`;
   }
   if (tool === "claude") {
     return String.raw`if (decision !== null && decision.ask) {
@@ -3909,9 +4122,10 @@ if (told !== null) {
 /**
  * The person-only shell guard (REQ-FLOW-102, REQ-FLOW-120, REQ-FLOW-123,
  * REQ-FLOW-124): attended, it asks the person for one click on a person-only
- * act that can be undone on Claude Code, and refuses it on Copilot, whose
- * payload names no calling agent (review/89), and where the client cannot ask
- * (Cursor, Codex); it refuses every
+ * act that can be undone on Claude Code, and on Copilot CLI for its main
+ * agent's call alone, shown by no helper field and a session id its session
+ * start recorded ({@link attendedAskSource}); it refuses it where the client
+ * cannot ask (Cursor, Codex); it refuses every
  * deletion, force push and act that cannot be undone on every client; and
  * while a run is unattended it refuses every person-only act and any push
  * that steps around the run verbs.
@@ -3966,7 +4180,8 @@ export function buildPersonOnlyGuardScript(opts: { tool: Tool; layout: HookScrip
       "Reads every shell call and GitHub MCP write for the person-only acts. Attended,",
       "one that can be undone (a push of a tag or of the default branch, a tag, a",
       "merge, a release, a publish, a secret or protection write) asks the person for",
-      "one click on Claude Code's main thread and is refused elsewhere; a deletion, a",
+      "one click on Claude Code's main thread and Copilot CLI's main agent and is",
+      "refused elsewhere; a deletion, a",
       "force push or an act that cannot be undone is refused on every client. While a",
       "run is unattended every person-only act is refused, and any push that steps",
       "around `stamity run checkpoint` and `stamity run end`. `curl` and `wget` appear",
@@ -3976,6 +4191,7 @@ export function buildPersonOnlyGuardScript(opts: { tool: Tool; layout: HookScrip
       "Reads outside repo state: the pending call's payload on stdin and the",
       "STAMITY_UNATTENDED and STAMITY_REPO_ROOT variables. Reads the git metadata and",
       "the run records' heads; writes only the pre-flight canary.",
+      ...(opts.tool === "copilot" ? ["On Copilot CLI it reads the session start's main-session record under the", "common git directory before it asks."] : []),
     ],
   )}
 
@@ -4584,24 +4800,7 @@ function unattendedSentence(act, rule) {
   return act + " is a person-only act (\`" + rule + "\`) and this run is unattended: list it on the morning list, whose walk runs it after one click.";
 }
 
-/**
- * An attended ask-class act's decision: the person is asked, except where a sub-agent runs it (any agent identity the
- * core guard reads), since the act is the person's, or in Claude Code's \`auto\` permission mode, where a
- * classifier may settle the prompt; both are refused.
- */
-function attendedAsk(payload, act, rule) {
-  const told = act + " is a person-only act (\`" + rule + "\`) and ";
-  const end = " (REQ-FLOW-102). Give the person the exact command.";
-  const names = ["agent_type", "subagent_type", "agentType", "subagentType", "agent_id", "subagent_id"];
-  if (names.some((name) => Object.hasOwn(payload, name) && typeof payload[name] === "string" && payload[name] !== "")) {
-    return { ask: false, reason: told + "a sub-agent runs it: the act is the person's, so only the main thread may ask for it" + end };
-  }
-  if (payload.permission_mode === "auto") {
-    return { ask: false, reason: told + "this session runs in the \`auto\` permission mode, where a classifier may settle the prompt: it stays the person's to run" + end };
-  }
-  return { ask: true, reason: askSentence(act, rule) };
-}
-
+`}${attendedAskSource(opts.tool)}${String.raw`
 /**
  * A GitHub MCP row's tool, classed by its row: the refused one refuses, and an ask-class one asks only while the mode
  * reads attended, since a settings ask row would otherwise wait for nobody in an unattended run (REQ-FLOW-120).
@@ -4728,7 +4927,7 @@ export function planCoreHookScripts(
   return [
     {
       fileName: SESSION_START_FILE,
-      content: buildSessionStartScript({ layout: layoutFor(policiesJsonPath) }),
+      content: buildSessionStartScript({ layout: layoutFor(policiesJsonPath), tool }),
       event: "session_start",
     },
     {

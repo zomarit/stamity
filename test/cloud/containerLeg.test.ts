@@ -99,9 +99,13 @@ const MERGE = personOnlyVerdict(ASK_SHELL, { defaultBranches: [], currentBranch:
 const ASK_REASON = MERGE.deny ? `${MERGE.act} is a person-only act (\`${MERGE.rule}\`): approve it to let the agent run it once (REQ-FLOW-102).` : "";
 /** What Cursor and Codex add to an ask they cannot hold. */
 const CANNOT_ASK = "This client cannot ask the person for a click, so the guard refuses it: give the person the exact command.";
-/** What Copilot adds to an ask the guard does not give it, its payload naming no calling agent (review/89). */
+/**
+ * What Copilot adds to an ask the guard does not give it (review/89). TEST CHANGE, justified (w4-copilot-ask,
+ * REQ-FLOW-123): the sentence is reworded. The guard refuses when it cannot show that the call comes from the person's
+ * own agent, and these payloads carry no session id Copilot's session start recorded.
+ */
 const NO_CALLER =
-  "Copilot CLI names no calling agent in its tool-call payload, so the guard cannot keep the ask for the person alone and refuses it: give the person the exact command.";
+  "Copilot CLI could not show that this call comes from the person's own agent (a helper agent's call, or a session its session start did not record), so the guard refuses it: give the person the exact command.";
 
 /** The fields every payload carries: its event, the session, and the folder it runs in. */
 function basePayload(row: HookRow, cwd: string): Record<string, unknown> {
@@ -128,7 +132,12 @@ function shellCall(row: HookRow, cwd: string, command: string): Record<string, u
  */
 const PROBES = [
   { id: "person-only act", payload: (row: HookRow, cwd: string) => shellCall(row, cwd, PERSON_ONLY_SHELL) },
-  { id: "ask act", payload: (row: HookRow, cwd: string) => shellCall(row, cwd, ASK_SHELL) },
+  // TEST CHANGE, justified (w4-copilot-ask, REQ-FLOW-123): Copilot's session start now records its session id, and
+  // the guard asks for a call from a recorded session. The grid runs those starts beside this probe under the shared
+  // id, so whichever ran first would decide the verdict. The ask probe therefore carries an id no start records, and
+  // Copilot's answer to it is the refusal every time. The ask for a recorded id is
+  // test/hooks/personOnlyCopilotAsk.test.ts's.
+  { id: "ask act", payload: (row: HookRow, cwd: string) => ({ ...shellCall(row, cwd, ASK_SHELL), session_id: "cloud-leg-unrecorded" }) },
   { id: "no command", payload: (row: HookRow, cwd: string) => ({ ...basePayload(row, cwd), source: "startup" }) },
 ] as const;
 
@@ -312,8 +321,8 @@ function probeOf(probe: (typeof PROBES)[number]["id"], marker: string, folder: s
  * exit code alone says nothing on Cursor or Copilot, whose refusal also exits 0. TEST CHANGE, justified (v0a2,
  * REQ-FLOW-123): Claude Code's guard also asks, its `hookSpecificOutput` ask on stdout with exit 0, read as an ask
  * (`ask: true`) instead of failing the empty-stdout expectation. TEST CHANGE, justified (review/89, REQ-FLOW-123):
- * Copilot's `permissionDecision` no longer reads `ask`, its payload naming no calling agent, so a Copilot ask now fails
- * the deny-only expectation where it was read as an ask.
+ * Copilot's `permissionDecision` reads `deny` here, so a Copilot ask fails the deny-only expectation. The probes carry
+ * no session id Copilot's session start recorded (w4-copilot-ask), so that still holds.
  */
 function guardVerdict(client: Client, result: CliRunResult, label: string): { deny: false } | { deny: true; reason: string; ask?: true } {
   const stdout = result.stdout.trim();
@@ -513,6 +522,9 @@ describe("a cloud machine, imitated: every emitted hook command (REQ-PROVE-037)"
 
   it("runs every command with node present, and the guards decide from every folder", () => {
     expect(FORCED).toMatchObject({ deny: true, rule: "force-push" });
+    // ADDED (w4-copilot-ask, REQ-FLOW-123): Copilot's emitted session start, run through its own command, recorded the
+    // grid's session id once, under the clone's common git directory and outside the tree.
+    expect(readFileSync(join(root, ".git", "stamity", "copilot-main-sessions"), "utf8")).toBe("cloud-leg\n");
     for (const marker of MARKERS) {
       for (const folder of FOLDERS) {
         for (const [index, row] of rows.entries()) {
@@ -549,7 +561,9 @@ describe("a cloud machine, imitated: every emitted hook command (REQ-PROVE-037)"
             });
             // v0a2 (REQ-FLOW-123): each client's ask shape, from every folder under every marker: Claude Code asks,
             // Cursor and Codex refuse, saying they cannot ask for a click. TEST CHANGE, justified (review/89,
-            // REQ-FLOW-123): Copilot asked here; it now refuses, saying its payload names no calling agent.
+            // REQ-FLOW-123): Copilot asked here; it now refuses. TEST CHANGE, justified (w4-copilot-ask, REQ-FLOW-123):
+            // Copilot asks only for a session id its session start recorded, and no session start runs in this grid,
+            // so it refuses with the reworded sentence.
             expect(MERGE).toMatchObject({ deny: true, rule: "pr-merge", ask: true });
             const asked = guardVerdict(client, probeOf("ask act", marker.id, folder, index), `${label}: ${ASK_SHELL}`);
             expect(asked, `${label}: ${ASK_SHELL}`).toEqual(

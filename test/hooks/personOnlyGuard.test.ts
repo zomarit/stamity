@@ -78,8 +78,10 @@ function run(guard: string, input: string, env: Record<string, string> = {}): Re
  * The decision a client's output carries: exit 2 and stderr, or the client's own JSON. TEST CHANGE, justified (v0a2,
  * REQ-FLOW-123): Claude Code's guard now also answers ask, its `hookSpecificOutput` on stdout with exit 0, read as an
  * ask instead of failing the empty-stdout expectation. TEST CHANGE, justified (review/89, REQ-FLOW-123): Copilot's
- * `permissionDecision` no longer reads `ask`, since its payload names no calling agent, so a Copilot ask now fails the
- * deny-only expectation where it was read as an ask.
+ * `permissionDecision` reads `deny` in these cases, so a Copilot ask fails the deny-only expectation. TEST CHANGE,
+ * justified (w4-copilot-ask, REQ-FLOW-123): Copilot now asks for its main agent's call when Copilot's session start
+ * recorded the session id. No payload in this file carries a recorded id, so Copilot still refuses here, and
+ * `test/hooks/personOnlyCopilotAsk.test.ts` reads its ask.
  */
 function clientDecision(tool: Tool, result: ReturnType<typeof spawnSync>, label: string): Decision {
   const stdout = String(result.stdout).trim();
@@ -111,15 +113,20 @@ function decide(tool: Tool, guard: string, command: string, env?: Record<string,
 }
 
 /**
- * The clients the guard asks on (REQ-FLOW-123); Copilot, Cursor and Codex refuse an ask, saying why. TEST CHANGE,
- * justified (review/89, REQ-FLOW-123): Copilot left the set, since its tool-call payload names no calling agent, so the
- * guard cannot keep the ask for the person alone.
+ * The clients the guard asks on here (REQ-FLOW-123); Copilot, Cursor and Codex refuse an ask, saying why. TEST CHANGE,
+ * justified (review/89, REQ-FLOW-123): Copilot left the set. TEST CHANGE, justified (w4-copilot-ask, REQ-FLOW-123):
+ * Copilot asks only for a call whose session id its session start recorded, and no payload in this file carries one,
+ * so it stays out of the set here; `test/hooks/personOnlyCopilotAsk.test.ts` covers its ask.
  */
 const ASKS = new Set<Tool>(["claude"]);
 const CANNOT_ASK = "This client cannot ask the person for a click, so the guard refuses it: give the person the exact command.";
-/** What Copilot adds to an ask it is not given (review/89). */
+/**
+ * What Copilot adds to an ask it is not given (review/89). TEST CHANGE, justified (w4-copilot-ask, REQ-FLOW-123): the
+ * sentence is reworded, since Copilot's helper calls do carry agent fields (measured on 1.0.98): the guard refuses when
+ * it cannot show that the call comes from the person's own agent.
+ */
 const NO_CALLER =
-  "Copilot CLI names no calling agent in its tool-call payload, so the guard cannot keep the ask for the person alone and refuses it: give the person the exact command.";
+  "Copilot CLI could not show that this call comes from the person's own agent (a helper agent's call, or a session its session start did not record), so the guard refuses it: give the person the exact command.";
 /** What a client the guard does not ask on adds to an ask-class act's sentence. */
 const refusedAsk = (tool: Tool): string => (tool === "copilot" ? NO_CALLER : CANNOT_ASK);
 
@@ -355,9 +362,10 @@ describe("each client's answer to a person-only act (v0a2)", () => {
     expect(String(result.stdout)).toBe(`${JSON.stringify(shape)}\n`);
   });
 
-  // ADDED (review/89): Copilot's tool-call payload names no calling agent, so a custom agent's merge would reach the
-  // person's approve prompt; the guard refuses the attended merge there, saying why and handing the person the command.
-  it("copilot: refuses an attended merge byte for byte, saying its payload names no calling agent (review/89)", async () => {
+  // ADDED (review/89): the guard refuses Copilot's attended merge, saying why and handing the person the command.
+  // TEST CHANGE, justified (w4-copilot-ask, REQ-FLOW-123): the reason is reworded, and the title now says the merge comes
+  // from a session Copilot's session start did not record, the case this payload is.
+  it("copilot: refuses an attended merge byte for byte from a session its session start did not record (review/89, w4)", async () => {
     if (!merge.deny) throw new Error("the merge is no person-only act");
     const result = run(await placeGuard("copilot"), payload("copilot", MERGE));
     expect(result.status).toBe(0);
