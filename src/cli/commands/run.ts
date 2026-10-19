@@ -1430,8 +1430,8 @@ async function listTree(top: string, tree: string, verb: string): Promise<TreeEn
  * review/175, review/182-/189 (signed off): what the hold holds from the hook declarations at `base`, top-relative and
  * sorted. First the files it reads there, each held whole wherever it lies: the manifest, the folder of the
  * repository's own declarations the manifest names (`.stamity/hooks` by default), and the installed packs' folder,
- * whose `<pack>/hooks/` folders hold theirs. Then the script each declaration names, held whether or not it exists at
- * `base`. The declarations are read at `Base:`, never from the work tree, so a run cannot unhold a script by editing or
+ * whose `<pack>/hooks/` folders hold theirs. Then the script each declaration names, and its launcher where that names
+ * a repository file rather than a name on PATH (build/98), held whether or not it exists at `base`. The declarations are read at `Base:`, never from the work tree, so a run cannot unhold a script by editing or
  * deleting its declaration, and through the engine's own reader ({@link readHookDefinitions}, with
  * {@link checkLauncherArgv}'s one script argument), so a declaration emission refuses for its shape names nothing held.
  * The reader runs over a scratch copy of them whose arguments read backslashes as separators, as a Windows checkout
@@ -1545,19 +1545,25 @@ async function hookPathsAt(top: string, prefix: string, base: string, verb: stri
     if (unread !== undefined) {
       return unknown(`${prefix}${unread.file}`, unread.code === "MISSING_SCRIPT" ? "names a script the hold could not stand in for" : "names a path outside the repository");
     }
+    // build/98: a launcher the declaration names as a repository file (a path, never a bare name looked up on PATH) is
+    // code the hook runs too, so it is held beside the script, through the same resolver.
+    const executed = definitions.flatMap((read) =>
+      read.hooks.flatMap((hook) => {
+        const verdict = checkLauncherArgv(hook.command, scratch);
+        const launcher = hook.command[0] ?? "";
+        const paths = !verdict.ok ? [] : launcher.includes("/") ? [verdict.script, launcher] : [verdict.script];
+        return paths.map((path) => ({ path, declaration: `${prefix}${hook.sourceFile}` }));
+      }),
+    );
     const scripts = await Promise.all(
-      definitions
-        .flatMap((read) => read.hooks)
-        .map(async (hook) => {
-          const verdict = checkLauncherArgv(hook.command, scratch);
-          if (!verdict.ok) return { path: null };
-          const script = await at.resolve(verdict.script);
-          return "refused" in script ? { refused: unknown(`${prefix}${hook.sourceFile}`, `names ${verdict.script}, which ${script.refused}`) } : { path: script.path };
-        }),
+      executed.map(async ({ path, declaration }) => {
+        const script = await at.resolve(path);
+        return "refused" in script ? { refused: unknown(declaration, `names ${path}, which ${script.refused}`) } : { path: script.path };
+      }),
     );
     for (const script of scripts) {
       if ("refused" in script) return script.refused;
-      if (script.path !== null) held.add(script.path);
+      held.add(script.path);
     }
     return [...held].toSorted();
   } catch (cause) {

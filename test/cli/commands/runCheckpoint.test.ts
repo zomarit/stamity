@@ -732,6 +732,27 @@ describe("stamity run checkpoint", () => {
         expect(pushedFile(remote, "a.txt")).toBe("the unit's change");
       });
 
+      it("holds a launcher a declaration at Base: names as a repository file, and leaves a bare launcher name to PATH (build/98)", async () => {
+        const declaration = `${JSON.stringify({
+          hooks: [
+            { event: "pre_tool_use", command: ["./tools/node", "tools/guard.mjs"] },
+            { event: "pre_tool_use", command: ["node", "tools/other.mjs"] },
+          ],
+        })}\n`;
+        const { repo, remote } = await seed("unattended", {
+          files: { ".stamity/hooks/guard.json": declaration, "tools/node": "base launcher\n", node: "a file named like the bare launcher\n", ...GUARD },
+        });
+        await writeFile(join(repo, "tools/node"), "steered launcher\n");
+        await writeFile(join(repo, "node"), "the unit's change\n");
+
+        const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "tools/node", "node"]);
+
+        expect(code).toBe(0);
+        expect(doc).toMatchObject({ pushed: true, notDone: [], held: ["tools/node"] });
+        expect(pushedFile(remote, "tools/node")).toBe("base launcher");
+        expect(pushedFile(remote, "node")).toBe("the unit's change");
+      });
+
       it("holds a script a declaration at Base: spells with backslashes, on every platform (review/183, review/186)", async () => {
         const { repo, remote } = await seed("unattended", { files: { ".stamity/hooks/guard.json": declaring("tools\\guard.mjs"), ...GUARD } });
         await writeFile(join(repo, "tools/guard.mjs"), "steered guard\n");
@@ -793,6 +814,18 @@ describe("stamity run checkpoint", () => {
           files: { ".stamity/hooks/guard.json": declaring("lnk/guard.mjs") },
           links: { lnk: "tools" },
           line: refused(".stamity/hooks/guard.json", "names lnk/guard.mjs, which passes through a link (lnk)"),
+        },
+        {
+          layout: "a declared launcher's path passes through a link (build/98)",
+          files: { ".stamity/hooks/guard.json": `${JSON.stringify({ hooks: [{ event: "pre_tool_use", command: ["lnk/node", "tools/guard.mjs"] }] })}\n`, "bin/node": "base launcher\n" },
+          links: { lnk: "bin" },
+          line: refused(".stamity/hooks/guard.json", "names lnk/node, which passes through a link (lnk)"),
+        },
+        {
+          layout: "a declared launcher's path holds a .. segment (build/98)",
+          files: { ".stamity/hooks/guard.json": `${JSON.stringify({ hooks: [{ event: "pre_tool_use", command: ["bin/../bin/node", "tools/guard.mjs"] }] })}\n`, "bin/node": "base launcher\n" },
+          links: {},
+          line: refused(".stamity/hooks/guard.json", "names bin/../bin/node, which holds a .. segment"),
         },
         {
           layout: "a declared script's path holds a .. segment (review/186)",
