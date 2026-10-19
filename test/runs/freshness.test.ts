@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { gitCheckRunner } from "../../src/cli/engine/gitStatus.ts";
@@ -20,6 +20,9 @@ const tempDir = useTempDir("freshness");
 const git: GitRunner = gitCheckRunner();
 
 const SPACED = "notes with space/c.md";
+
+/** Symbolic links need a privilege Windows runners do not grant by default; CI's Windows legs run the rest. */
+const WINDOWS = process.platform === "win32";
 
 /** Sync git for writing history only, the host's global and system config cut off. */
 function writeGit(cwd: string, args: readonly string[]): string {
@@ -50,6 +53,14 @@ async function touchAndCommit(cwd: string, path: string, line: string): Promise<
   await writeFile(target, `${line}\n`, { encoding: "utf8", flag: "a" });
   writeGit(cwd, ["add", "--", path]);
   writeGit(cwd, ["-c", "commit.gpgsign=false", "commit", "--quiet", "-m", `touch ${path}`]);
+  return head(cwd);
+}
+
+/** Plant a symbolic link at `path` pointing at `target`, commit it alone, and return the new HEAD as the stamp. */
+async function linkAndCommit(cwd: string, path: string, target: string): Promise<string> {
+  await symlink(target, join(cwd, path));
+  writeGit(cwd, ["add", "--", path]);
+  writeGit(cwd, ["-c", "commit.gpgsign=false", "commit", "--quiet", "-m", `link ${path}`]);
   return head(cwd);
 }
 
@@ -88,6 +99,62 @@ describe("freshness", () => {
       exempt: [],
       unresolved: false,
     });
+  });
+
+  it.skipIf(WINDOWS)("reads a linked read path as stale, though only its target moved since the stamp", async (ctx) => {
+    await seededRepo(() => ctx.skip());
+    const cwd = tempDir().dir;
+    const stamp = await linkAndCommit(cwd, "docs/link.md", "a.md");
+    await touchAndCommit(cwd, "docs/a.md", "the target moved");
+
+    // The link's own history is untouched since the stamp, so a history count alone reads it fresh.
+    expect(writeGit(cwd, ["rev-list", "--count", `${stamp}..HEAD`, "--", "docs/link.md"]).trim()).toBe("0");
+    expect(await freshness(git, cwd, stamp, ["docs/link.md"])).toEqual({
+      verdict: "stale",
+      stale: [{ path: "docs/link.md", reason: "link" }],
+      exempt: [],
+      unresolved: false,
+    });
+  });
+
+  it.skipIf(WINDOWS)("reads a path under a linked folder as stale, and leaves the real path beside it to history", async (ctx) => {
+    await seededRepo(() => ctx.skip());
+    const cwd = tempDir().dir;
+    const stamp = await linkAndCommit(cwd, "linkdir", "docs");
+    await touchAndCommit(cwd, "docs/a.md", "the target moved");
+
+    expect(await freshness(git, cwd, stamp, ["linkdir/a.md", "src/b.ts"])).toEqual({
+      verdict: "stale",
+      stale: [{ path: "linkdir/a.md", reason: "link" }],
+      exempt: [],
+      unresolved: false,
+    });
+    // Non-degenerate: the path the link points to is judged by its own history.
+    expect(await freshness(git, cwd, stamp, ["docs/a.md"])).toMatchObject({ stale: [{ path: "docs/a.md", reason: "moved" }] });
+  });
+
+  it.skipIf(WINDOWS)("decides a link before any history count, and no chain base exempts it", async (ctx) => {
+    await seededRepo(() => ctx.skip());
+    const cwd = tempDir().dir;
+    const stamp = await linkAndCommit(cwd, "docs/link.md", "a.md");
+    const base = await touchAndCommit(cwd, "history.md", "the chain's run base");
+    await touchAndCommit(cwd, "src/b.ts", "the chain's first file");
+    const seen: string[][] = [];
+    // A recording wrapper around the real runner, so the paths git counted can be read.
+    const recording: GitRunner = (args, dir) => {
+      seen.push([...args]);
+      return git(args, dir);
+    };
+
+    expect(await freshness(recording, cwd, stamp, ["docs/link.md", "src/b.ts"], { exemptSince: base })).toEqual({
+      verdict: "stale",
+      stale: [{ path: "docs/link.md", reason: "link" }],
+      exempt: ["src/b.ts"],
+      unresolved: false,
+    });
+    const counted = seen.filter((args) => args.includes("rev-list")).map((args) => args.at(-1));
+    expect(counted).not.toContain("docs/link.md");
+    expect(counted).toContain("src/b.ts");
   });
 
   it("reads a deleted path as missing, committed or not", async (ctx) => {

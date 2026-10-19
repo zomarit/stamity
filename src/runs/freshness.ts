@@ -1,5 +1,5 @@
 import { lstat } from "node:fs/promises";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import type { GitRunner } from "../workspace/git.ts";
 
 /**
@@ -8,7 +8,11 @@ import type { GitRunner } from "../workspace/git.ts";
  *
  * A `reads` path is fresh when `git rev-list --count <stamp>..HEAD -- <path>`
  * is 0, stale `moved` when a commit since the stamp touched it, and stale
- * `missing` when it is not on disk. A stamp that names no commit, or a commit
+ * `missing` when it is not on disk. A path that is a symbolic link, or lies
+ * under one, is stale `link`: git counts the link's own history, never its
+ * target's, so a count over it cannot see the target move. Each path is
+ * walked segment by segment from `cwd` with `lstat`, and the link is decided
+ * before any history count; no chain base exempts it. A stamp that names no commit, or a commit
  * HEAD does not descend from (a stamp rebased away), is `unresolved` and the
  * verdict is stale: nothing can be measured from it.
  *
@@ -40,7 +44,7 @@ import type { GitRunner } from "../workspace/git.ts";
  */
 
 /** Why a read path is stale. */
-export type StaleReason = "moved" | "missing";
+export type StaleReason = "moved" | "missing" | "link";
 
 /** One stale read path. */
 export interface StalePath {
@@ -63,6 +67,12 @@ export interface FreshnessResult {
 /** A full or abbreviated object name; sha-256 repositories included. */
 const OBJECT_NAME = /^[0-9a-f]{7,64}$/i;
 
+/** What `lstat` finds along a read path: the path itself, a missing segment, or a link on the way. */
+type DiskState = "present" | "missing" | "link";
+
+/** A read path's segment separators: `/` everywhere, and `\` too where the platform reads it as one. */
+const SEGMENT = sep === "\\" ? /[\\/]/ : /\//;
+
 /**
  * Check `reads` against `stamp` in the repository at `cwd`.
  */
@@ -73,9 +83,12 @@ export async function freshness(
   reads: string[],
   opts?: { exemptSince?: string },
 ): Promise<FreshnessResult> {
-  const onDisk = await Promise.all(reads.map(async (path) => exists(join(cwd, path))));
-  const missingOnly = (): StalePath[] =>
-    reads.flatMap((path, index) => (onDisk[index] === true ? [] : [{ path, reason: "missing" as const }]));
+  const onDisk = await Promise.all(reads.map(async (path) => diskState(cwd, path)));
+  const diskOnly = (): StalePath[] =>
+    reads.flatMap((path, index) => {
+      const state = onDisk[index];
+      return state === "link" || state === "missing" ? [{ path, reason: state }] : [];
+    });
 
   try {
     const stampSha = resolveCommit(git, cwd, stamp);
@@ -83,14 +96,19 @@ export async function freshness(
       if (OBJECT_NAME.test(stamp) && isShallow(git, cwd)) {
         throw new GitFailure("the repository is a shallow clone, so the stamp may lie past its fetched history");
       }
-      return { verdict: "stale", stale: missingOnly(), exempt: [], unresolved: true };
+      return { verdict: "stale", stale: diskOnly(), exempt: [], unresolved: true };
     }
 
     const baseSha = exemptionBase(git, cwd, stampSha, opts?.exemptSince);
     const stale: StalePath[] = [];
     const exempt: string[] = [];
     reads.forEach((path, index) => {
-      const missing = onDisk[index] !== true;
+      const state = onDisk[index];
+      if (state === "link") {
+        stale.push({ path, reason: "link" });
+        return;
+      }
+      const missing = state !== "present";
       if (countCommits(git, cwd, `${stampSha}..HEAD`, path) === 0) {
         if (missing) stale.push({ path, reason: "missing" });
         return;
@@ -105,7 +123,7 @@ export async function freshness(
     return { verdict: stale.length === 0 ? "fresh" : "stale", stale, exempt, unresolved: false };
   } catch (error) {
     if (!(error instanceof GitFailure)) throw error;
-    return { verdict: "stale", stale: missingOnly(), exempt: [], unresolved: false, error: error.message };
+    return { verdict: "stale", stale: diskOnly(), exempt: [], unresolved: false, error: error.message };
   }
 }
 
@@ -145,13 +163,20 @@ function runGit(git: GitRunner, cwd: string, args: readonly string[], noOnStatus
   }
 }
 
-async function exists(path: string): Promise<boolean> {
-  try {
-    await lstat(path);
-    return true;
-  } catch {
-    return false;
+/**
+ * Walk `path` from `cwd` one segment at a time with `lstat`, which never follows
+ * a link: the first segment that is a symbolic link makes it `link`, the first
+ * one absent makes it `missing`.
+ */
+async function diskState(cwd: string, path: string): Promise<DiskState> {
+  const segments = path.split(SEGMENT).filter((segment) => segment !== "");
+  const prefixes = segments.length === 0 ? [cwd] : segments.map((_, index) => join(cwd, ...segments.slice(0, index + 1)));
+  const stats = await Promise.all(prefixes.map(async (prefix) => lstat(prefix).catch(() => null)));
+  for (const stat of stats) {
+    if (stat === null) return "missing";
+    if (stat.isSymbolicLink()) return "link";
   }
+  return "present";
 }
 
 /** The full sha `name` resolves to as a commit, or null when it names none (`--quiet` exits 1). */

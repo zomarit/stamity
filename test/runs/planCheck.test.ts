@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, symlink, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { planCommand } from "../../src/cli/commands/plan.ts";
@@ -31,6 +31,9 @@ const git: GitRunner = gitCheckRunner();
 
 const PLAN_PATH = "docs/plans/001-demo.md";
 const NEXT_PATH = "docs/plans/002-demo.md";
+
+/** Symbolic links need a privilege Windows runners do not grant by default; CI's Windows legs run the rest. */
+const WINDOWS = process.platform === "win32";
 
 const SPECS: PlanCheckDoc[] = [
   {
@@ -330,6 +333,38 @@ describe("checkPlans", () => {
     const third = await check(cwd, noHead);
     expect(blockersOf(third, "head-key-missing")).toEqual([{ code: "head-key-missing", line: 1 }]);
     expect(third.plans[0]?.freshness).toBeNull();
+  });
+
+  it("refuses an empty reads list at the reads line, and keeps the list message for a non-list", async (ctx) => {
+    const { cwd, stamp } = await seeded(() => ctx.skip());
+    const empty = cleanPlan(stamp).replace("reads: [docs/a.md, src/b.ts]", "reads: []");
+    const scalar = cleanPlan(stamp).replace("reads: [docs/a.md, src/b.ts]", "reads: docs/a.md");
+
+    const first = await check(cwd, empty);
+    expect(first.ready).toBe(false);
+    expect(blockersOf(first, "head-key-missing")).toEqual([{ code: "head-key-missing", line: lineOf(empty, "reads:") }]);
+    expect(first.plans[0]?.blockers[0]?.message).toBe("The head's `reads` must list at least one path.");
+
+    const second = await check(cwd, scalar);
+    expect(second.plans[0]?.blockers[0]?.message).toBe("The head's `reads` must be a list of paths.");
+  });
+
+  it.skipIf(WINDOWS)("refuses a linked reads path at the reads line, naming the link, though only its target moved", async (ctx) => {
+    const { cwd } = await seeded(() => ctx.skip());
+    await symlink("a.md", join(cwd, "docs/link.md"));
+    writeGit(cwd, ["add", "--", "docs/link.md"]);
+    writeGit(cwd, ["-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "link docs/link.md"]);
+    const stamp = headSha(cwd);
+    await touchAndCommit(cwd, "docs/a.md", "the target moved");
+    const text = cleanPlan(stamp).replace("reads: [docs/a.md, src/b.ts]", "reads: [docs/link.md, src/b.ts]");
+    const result = await check(cwd, text);
+
+    expect(result.ready).toBe(false);
+    expect(blockersOf(result, "stale")).toEqual([{ code: "stale", line: lineOf(text, "reads:") }]);
+    expect(result.plans[0]?.blockers[0]?.message).toBe(
+      "`docs/link.md` is a symbolic link, or under one; name the file it points to in reads and re-stamp the plan.",
+    );
+    expect(result.plans[0]?.freshness).toMatchObject({ verdict: "stale", stale: [{ path: "docs/link.md", reason: "link" }] });
   });
 
   it("refuses a reads path moved since the stamp, at the reads line", async (ctx) => {

@@ -302,6 +302,7 @@ function readHead(plan: PlanCheckDoc, lines: readonly string[], blockers: PlanBl
 
   const reads = value("reads");
   if (reads === undefined) missing("reads", "is missing");
+  else if (Array.isArray(reads) && reads.length === 0) missing("reads", "must list at least one path");
   else if (Array.isArray(reads) && reads.every((entry) => typeof entry === "string" && entry.trim() !== "")) {
     head.reads = reads.map((entry: string) => entry.trim());
   } else missing("reads", "must be a list of paths");
@@ -473,6 +474,11 @@ async function measureFreshness(
     blockers.push({ code: "stamp-unresolved", line: stampLine, message: `The stamp ${head.stamp.sha} names no commit HEAD descends from; re-stamp the plan after re-reading what it reads.` });
   }
   for (const stale of result.stale) {
+    if (stale.reason === "link") {
+      const message = `\`${stale.path}\` is a symbolic link, or under one; name the file it points to in reads and re-stamp the plan.`;
+      blockers.push({ code: "stale", line: readsLine, message });
+      continue;
+    }
     const why = stale.reason === "missing" ? "is not on disk" : "moved since the stamp";
     blockers.push({ code: "stale", line: readsLine, message: `${stale.path} ${why}; re-read it and re-stamp the plan.` });
   }
