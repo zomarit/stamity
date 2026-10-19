@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, posix, relative, resolve } from "node:path";
 import { Argument, InvalidArgumentError, type Command } from "commander";
 import { matchGlob } from "../../change/classify.ts";
-import { heldPaths, PERSON_ONLY_PATHS } from "../../change/personOnlyPaths.ts";
+import { fromProjectRoot, heldPaths, PERSON_ONLY_PATHS } from "../../change/personOnlyPaths.ts";
 import { isPlainObject, parseJsonStrict } from "../../config/parse.ts";
 import { personOnlyVerdict } from "../../hooks/personOnly.ts";
 import { readHookDefinitions } from "../../hooks/userHooks.ts";
@@ -926,7 +926,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   if (ctx.dryRun) {
     if (unattended) {
       const wouldStage = stage.map((path) => ({ path, link: isLink(join(top, path)), added: false }));
-      result.held = heldOf([...(await changedSince(top, base)), ...(await changedSince(top, base, "index")), ...wouldStage], hookPaths);
+      result.held = heldOf([...(await changedSince(top, base)), ...(await changedSince(top, base, "index")), ...wouldStage], hookPaths, prefix);
     }
     lines.push(`would stage: ${list(stage)}`, `would hold: ${list(result.held)}`, "Dry run: nothing was staged, written, committed or pushed.");
     return finish(true, { dryRun: true });
@@ -943,8 +943,8 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   if (unattended) {
     const indexSide = await changedSince(top, base, "index");
     const treeSide = await changedSince(top, base);
-    const inIndex = heldOf(indexSide, hookPaths);
-    const held = heldOf([...treeSide, ...indexSide], hookPaths);
+    const inIndex = heldOf(indexSide, hookPaths, prefix);
+    const held = heldOf([...treeSide, ...indexSide], hookPaths, prefix);
     // v21 (pr/39): a held path absent at Base: and absent from the work tree, staged and then deleted, gets no
     // section: its two layers would add and delete it, and a patch applied part by part would create a file the run
     // deleted. Absent at Base:, a path the work tree held would show on the work tree's side, so one missing there is gone.
@@ -1049,7 +1049,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
     return finish(false);
   }
   // review/159: the commits the push would send, read before the checkpoint's own, which puts held paths back to Base: only.
-  const inHistory = unattended ? await heldInHistory(top, remote.tips, hookPaths) : [];
+  const inHistory = unattended ? await heldInHistory(top, remote.tips, hookPaths, prefix) : [];
 
   // pr/5: the commit takes the whole index, so a path staged before the verb ran and not in its own list refuses it.
   const isOwn = ownPath([...stage, ...gone, ...patches, ...result.held], named);
@@ -1160,7 +1160,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   // review/159, review/156: a held path in a pushed commit, or still changed in HEAD's tree (a hook that staged it
   // again), refuses the push; the verb never rewrites history.
   if (unattended) {
-    const atTip = heldOf(await changedSince(top, base, "HEAD"), hookPaths).filter((path) => !inHistory.includes(path));
+    const atTip = heldOf(await changedSince(top, base, "HEAD"), hookPaths, prefix).filter((path) => !inHistory.includes(path));
     result.notDone.push(...inHistory.map((path) => `held path in history (${path})`), ...atTip.map((path) => `held path in the pushed tree (${path})`));
     if (inHistory.length + atTip.length > 0) {
       lines.push("push: refused (a held path would be pushed)");
@@ -1246,7 +1246,11 @@ const SIDE_ARGS: Readonly<Record<Side, (base: string) => string[]>> = {
   HEAD: (base) => [base, "HEAD"],
 };
 
-/** One changed path, whether its new side is a symbolic link (mode `120000`), and whether its old side is absent. */
+/**
+ * One changed path, whether its new side puts a tree of another's choosing there (a symbolic link, mode `120000`, or,
+ * review/195, a submodule's commit, mode `160000`, which a person's `git submodule update` fills), and whether its old
+ * side is absent.
+ */
 interface Changed {
   path: string;
   link: boolean;
@@ -1256,6 +1260,9 @@ interface Changed {
 
 /** Git's mode for a symbolic link. */
 const LINK_MODE = "120000";
+
+/** Git's mode for a submodule's commit (a gitlink). */
+const GITLINK_MODE = "160000";
 
 /** Git's mode for a path one side does not hold. */
 const ABSENT_MODE = "000000";
@@ -1283,7 +1290,8 @@ function rawEntries(stdout: string): Changed[] {
     index += 1;
     if (path === "") continue;
     const modes = field.replace(/^:+/, "").split(" ").filter((part) => /^[0-7]{6}$/.test(part));
-    entries.push({ path, link: modes.at(-1) === LINK_MODE, added: modes.length > 1 && modes.slice(0, -1).every((mode) => mode === ABSENT_MODE) });
+    const result = modes.at(-1);
+    entries.push({ path, link: result === LINK_MODE || result === GITLINK_MODE, added: modes.length > 1 && modes.slice(0, -1).every((mode) => mode === ABSENT_MODE) });
   }
   return entries;
 }
@@ -1307,21 +1315,28 @@ const HELD_PREFIXES: readonly string[] = [
   ),
 ];
 
-/** Whether a link at `path` is held: at a held glob's directory prefix (its own match is {@link heldPaths}'). */
-function heldLink(path: string): boolean {
-  return HELD_PREFIXES.some((prefix) => matchGlob(path, prefix, { foldCase: true }));
+/**
+ * Whether a link at `path` is held: at a held glob's directory prefix (its own match is {@link heldPaths}'), as
+ * written from the git top or, for a project below it (build/99), from the project root `projectPrefix` names.
+ */
+function heldLink(path: string, projectPrefix: string): boolean {
+  const fromProject = fromProjectRoot(path, projectPrefix);
+  const at = (read: string): boolean => HELD_PREFIXES.some((prefix) => matchGlob(read, prefix, { foldCase: true }));
+  return at(path) || (fromProject !== null && at(fromProject));
 }
 
 /**
  * The held paths of `entries`, sorted and once each: a person-only path, a path at or under one of `hookPaths` (the
  * hook files and folders the hold reads at `Base:`, and the scripts their declarations name: {@link hookPathsAt},
- * review/175, review/182), or a link at a held glob's prefix or at a folder above one of `hookPaths`. A hook path
- * matches without case and over the Windows reading of a path, as the globs do.
+ * review/175, review/182), or a link or a submodule at a held glob's prefix or at a folder above one of `hookPaths`
+ * (review/195). A hook path matches without case, in one Unicode normalization form (review/194) and over the Windows
+ * reading of a path, as the globs and the `Base:` walk read names. `prefix` is the project's folder below the git top
+ * (build/99): the globs and their prefixes match from the project root too; the hook paths already carry it.
  */
-function heldOf(entries: readonly Changed[], hookPaths: readonly string[]): string[] {
+function heldOf(entries: readonly Changed[], hookPaths: readonly string[], prefix: string): string[] {
   const paths = [...new Set(entries.map((entry) => entry.path))];
   const links = new Set(entries.filter((entry) => entry.link).map((entry) => entry.path));
-  const byGlob = new Set(heldPaths(paths));
+  const byGlob = new Set(heldPaths(paths, prefix));
   const roots = hookPaths.map(foldPath);
   const above = new Set(
     roots.flatMap((root) => {
@@ -1331,13 +1346,16 @@ function heldOf(entries: readonly Changed[], hookPaths: readonly string[]): stri
   );
   const under = (folded: string): boolean => roots.some((root) => folded === root || folded.startsWith(`${root}/`));
   const held = (path: string): boolean =>
-    byGlob.has(path) || under(foldPath(path)) || (links.has(path) && (heldLink(path) || above.has(foldPath(path))));
+    byGlob.has(path) || under(foldPath(path)) || (links.has(path) && (heldLink(path, prefix) || above.has(foldPath(path))));
   return paths.filter(held).toSorted();
 }
 
-/** A path as a case-insensitive checkout on Windows reads it: forward slashes, one letter case. */
+/**
+ * A path as a case-insensitive, normalization-insensitive checkout reads it: forward slashes, one Unicode
+ * normalization form (review/194, the form {@link baseReader}'s walk compares names in), one letter case.
+ */
 function foldPath(path: string): string {
-  return path.replaceAll("\\", "/").toLowerCase();
+  return path.replaceAll("\\", "/").normalize("NFC").toLowerCase();
 }
 
 /** review/175: the manifest, the default folder of the repository's own hook declarations, and the installed packs' folder. */
@@ -1430,8 +1448,10 @@ async function listTree(top: string, tree: string, verb: string): Promise<TreeEn
  * review/175, review/182-/189 (signed off): what the hold holds from the hook declarations at `base`, top-relative and
  * sorted. First the files it reads there, each held whole wherever it lies: the manifest, the folder of the
  * repository's own declarations the manifest names (`.stamity/hooks` by default), and the installed packs' folder,
- * whose `<pack>/hooks/` folders hold theirs. Then the script each declaration names, and its launcher where that names
- * a repository file rather than a name on PATH (build/98), held whether or not it exists at `base`. The declarations are read at `Base:`, never from the work tree, so a run cannot unhold a script by editing or
+ * whose `<pack>/hooks/` folders hold theirs. Then the script each declaration names, and every other argument that
+ * names a repository file (its launcher where that is a path rather than a name on PATH, build/98, and an option's
+ * value), held whether or not it exists at `base` where it is written as a path. All of them resolve from the project
+ * root the manifest sits in. The declarations are read at `Base:`, never from the work tree, so a run cannot unhold a script by editing or
  * deleting its declaration, and through the engine's own reader ({@link readHookDefinitions}, with
  * {@link checkLauncherArgv}'s one script argument), so a declaration emission refuses for its shape names nothing held.
  * The reader runs over a scratch copy of them whose arguments read backslashes as separators, as a Windows checkout
@@ -1545,23 +1565,35 @@ async function hookPathsAt(top: string, prefix: string, base: string, verb: stri
     if (unread !== undefined) {
       return unknown(`${prefix}${unread.file}`, unread.code === "MISSING_SCRIPT" ? "names a script the hold could not stand in for" : "names a path outside the repository");
     }
-    // build/98: a launcher the declaration names as a repository file (a path, never a bare name looked up on PATH) is
-    // code the hook runs too, so it is held beside the script, through the same resolver.
+    // build/98 and the option-value question: every argument that names a repository file is code the hook runs or a
+    // file it reads, so it is held beside the script, through the same resolver. One written as a path (a separator in
+    // it, a flag's `=` value read as the launcher check reads it, the launcher's own included) is held whether or not
+    // Base: holds it, and refuses where it does not resolve cleanly; one naming the project root names no file. A bare
+    // name past the launcher is held where Base: holds a file of that name, or holds it in a way the resolver refuses
+    // (as written then, since a held path matches without case), and left alone where Base: holds a folder or nothing
+    // there: a subcommand or a word. A bare launcher is looked up on PATH, never in the repository.
     const executed = definitions.flatMap((read) =>
       read.hooks.flatMap((hook) => {
         const verdict = checkLauncherArgv(hook.command, scratch);
-        const launcher = hook.command[0] ?? "";
-        const paths = !verdict.ok ? [] : launcher.includes("/") ? [verdict.script, launcher] : [verdict.script];
-        return paths.map((path) => ({ path, declaration: `${prefix}${hook.sourceFile}` }));
+        const declaration = `${prefix}${hook.sourceFile}`;
+        const values = hook.command.flatMap((argument, index) => {
+          const path = !argument.startsWith("-") ? argument : argument.includes("=") ? argument.slice(argument.indexOf("=") + 1) : "";
+          const bare = !path.includes("/");
+          if ((bare && (index === 0 || path === "" || path === "." || path === "..")) || (!bare && path.split("/").every((segment) => segment === "" || segment === "."))) return [];
+          return [{ path, declaration, bare }];
+        });
+        return [...(verdict.ok ? [{ path: verdict.script, declaration, bare: false }] : []), ...values];
       }),
     );
     const scripts = await Promise.all(
-      executed.map(async ({ path, declaration }) => {
+      executed.map(async ({ path, declaration, bare }) => {
         const script = await at.resolve(path);
+        if (bare) return "refused" in script ? { path: `${prefix}${path}` } : script.kind === "file" ? { path: script.path } : null;
         return "refused" in script ? { refused: unknown(declaration, `names ${path}, which ${script.refused}`) } : { path: script.path };
       }),
     );
     for (const script of scripts) {
+      if (script === null) continue;
       if ("refused" in script) return script.refused;
       held.add(script.path);
     }
@@ -1629,10 +1661,11 @@ async function changedSince(top: string, base: string, side: Side = "work tree")
  * tags as the remote answers ({@link remoteRefs}), `--ignore-missing` for one
  * this clone lacks, and all of `HEAD`'s history when the remote names none; a
  * root commit included and a merge by its own resolution (`--cc`), renames
- * read as a deletion and an addition, a link at a held glob's prefix included
- * (review/200).
+ * read as a deletion and an addition, a link or a submodule at a held glob's
+ * prefix included (review/200, review/195), every glob read from the project
+ * root too where the project lies below the git top (build/99).
  */
-async function heldInHistory(top: string, tips: readonly string[], hookPaths: readonly string[]): Promise<string[]> {
+async function heldInHistory(top: string, tips: readonly string[], hookPaths: readonly string[], prefix: string): Promise<string[]> {
   const range = ["--ignore-missing", "--stdin"];
   const read = await git(top, ["log", "--root", "--format=", "--raw", RAW_IDS, "-z", "--cc", ...DIFF_PINS, ...range, "--"], CHECKPOINT, revisionLines(tips));
   if (read.code !== 0) {
@@ -1643,7 +1676,7 @@ async function heldInHistory(top: string, tips: readonly string[], hookPaths: re
       next: "run it inside the repository's work tree",
     });
   }
-  return heldOf(rawEntries(read.stdout), hookPaths);
+  return heldOf(rawEntries(read.stdout), hookPaths, prefix);
 }
 
 /**

@@ -105,7 +105,29 @@ export const PERSON_ONLY_PATHS: readonly string[] = [
   ".devcontainer/**",
 ];
 
-/** The paths of `paths` a person-only glob matches, in input order. */
-export function heldPaths(paths: readonly string[]): string[] {
-  return paths.filter((path) => PERSON_ONLY_PATHS.some((glob) => matchGlob(path, glob, { foldCase: true })));
+/**
+ * The paths of `paths` a person-only glob matches, in input order (build/99): as written from the git top, or, for a
+ * project below it, as written from the project root where the path lies under `prefix` (its folder as
+ * `git rev-parse --show-prefix` prints it). So `<prefix>/.claude/settings.json` is held, and `.github/workflows/**`
+ * still holds at the top. An empty `prefix`, a project at the git top, answers as the globs alone do.
+ */
+export function heldPaths(paths: readonly string[], prefix = ""): string[] {
+  const held = (path: string): boolean => PERSON_ONLY_PATHS.some((glob) => matchGlob(path, glob, { foldCase: true }));
+  return paths.filter((path) => {
+    const fromProject = fromProjectRoot(path, prefix);
+    return held(path) || (fromProject !== null && held(fromProject));
+  });
+}
+
+/**
+ * `path`, written from the git top, as written from the project root `prefix` names, or `null` where it does not lie
+ * under that folder or the prefix is empty. The prefix's segments compare as the globs and the run verbs' `Base:` walk
+ * read names: without case, in one Unicode normalization form, and over the Windows reading of a path.
+ */
+export function fromProjectRoot(path: string, prefix: string): string | null {
+  const fold = (segment: string): string => segment.normalize("NFC").toLowerCase();
+  const folders = prefix.replaceAll("\\", "/").split("/").filter((segment) => segment !== "");
+  const segments = path.replaceAll("\\", "/").split("/");
+  if (folders.length === 0 || segments.length <= folders.length) return null;
+  return folders.every((folder, index) => fold(folder) === fold(segments[index] ?? "")) ? segments.slice(folders.length).join("/") : null;
 }

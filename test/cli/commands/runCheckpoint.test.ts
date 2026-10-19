@@ -199,17 +199,22 @@ describe("stamity run checkpoint", () => {
     repo: string;
     remote: string;
     base: string;
+    /** The project root the verb runs from: the repository's top, or the `project` folder below it (build/99). */
+    project: string;
   }
 
   /**
    * A repository on `main` (a.txt, b.txt, `[ab].txt`, .cursorrules), its own
    * identity in its config, `origin` naming GitHub and pushing to a bare
    * remote, then on the run's branch with a record reading `mode` (no `Mode:` line for `null`).
+   * TEST CHANGE, justified (build/99): `project` names a folder below the git top the project lives in, its run
+   * folder (the pin and the record) written there; left out, they sit at the top as before, so no other case moves.
    */
   async function seed(
     mode: "attended" | "unattended" | null,
-    opts: { branch?: string; pin?: "base" | "untracked" | "none"; files?: Record<string, string>; links?: Record<string, string> } = {},
+    opts: { branch?: string; pin?: "base" | "untracked" | "none"; files?: Record<string, string>; links?: Record<string, string>; project?: string } = {},
   ): Promise<Seeded> {
+    const inProject = (path: string): string => (opts.project === undefined ? path : `${opts.project}/${path}`);
     const dir = getRoot().path(`case-${Math.random().toString(36).slice(2, 8)}`);
     const repo = join(dir, "repo");
     const remote = join(dir, "remote.git");
@@ -226,7 +231,7 @@ describe("stamity run checkpoint", () => {
     // the seed carries the pin `start` would write for origin's repository, in the base commit so no case's staged
     // or pushed set changes. A case about the pin itself rewrites or removes it.
     // `untracked` leaves it out of the base, as a run whose folder git ignores has it; `none` writes no pin.
-    if ((opts.pin ?? "base") === "base") await put(repo, ORIGIN_PIN, PIN_TEXT);
+    if ((opts.pin ?? "base") === "base") await put(repo, inProject(ORIGIN_PIN), PIN_TEXT);
     // review/175: a case's own files in Base:, hook declarations and the scripts they name among them.
     await Promise.all(Object.entries(opts.files ?? {}).map(([path, text]) => put(repo, path, text)));
     git(repo, ["add", "-A"]);
@@ -248,10 +253,10 @@ describe("stamity run checkpoint", () => {
     git(repo, ["push", "-q", remote, "HEAD:refs/heads/main"]);
     const branch = opts.branch ?? RUN_BRANCH;
     if (branch !== "main") git(repo, ["switch", "-q", "-c", branch]);
-    if (opts.pin === "untracked") await put(repo, ORIGIN_PIN, PIN_TEXT);
+    if (opts.pin === "untracked") await put(repo, inProject(ORIGIN_PIN), PIN_TEXT);
     const modeLine = mode === null ? "" : `Mode: ${mode}\n`;
-    await put(repo, `${RUN_DIR}/record.md`, `# Run ${RUN}\n\nStatus: in progress\n${modeLine}Branch: ${branch}\nBase: ${base}\n`);
-    return { repo, remote, base };
+    await put(repo, inProject(`${RUN_DIR}/record.md`), `# Run ${RUN}\n\nStatus: in progress\n${modeLine}Branch: ${branch}\nBase: ${base}\n`);
+    return { repo, remote, base, project: opts.project === undefined ? repo : join(repo, ...opts.project.split("/")) };
   }
 
   async function put(repo: string, path: string, text: string): Promise<void> {
@@ -777,6 +782,69 @@ describe("stamity run checkpoint", () => {
         expect(pushedFile(remote, "tools/guard.mjs")).toBe("base guard");
       });
 
+      it("holds a path a run spells in the other Unicode normalization form than the declaration at Base: names it (review/194)", async () => {
+        // The declaration names the script decomposed and Base: lacks it; the run adds it composed, which a
+        // normalization-insensitive checkout opens at the declared spelling.
+        const { repo, remote } = await seed("unattended", { files: { ".stamity/hooks/guard.json": declaring("tools/cafe\u0301.mjs") } });
+        await put(repo, "tools/caf\u00e9.mjs", "added by the run\n");
+        await writeFile(join(repo, "a.txt"), "the unit's change\n");
+
+        const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt", "tools/caf\u00e9.mjs"]);
+
+        expect(code).toBe(0);
+        expect(doc).toMatchObject({ pushed: true, notDone: [] });
+        expect((doc["held"] as string[]).map((path) => path.normalize("NFC"))).toEqual(["tools/caf\u00e9.mjs"]);
+        expect(pushedTree(remote).map((path) => path.normalize("NFC"))).not.toContain("tools/caf\u00e9.mjs");
+        expect(pushedFile(remote, "a.txt")).toBe("the unit's change");
+      });
+
+      it.each([
+        { layout: "at a folder above a declared script Base: lacks (review/195)", at: "tools" },
+        { layout: "at a held glob's directory prefix, as a link there is", at: ".claude" },
+      ])("refuses the push when a commit it would send adds a submodule $layout", async ({ at }) => {
+        const { repo, remote, base } = await seed("unattended", { files: { ".stamity/hooks/guard.json": declaring("tools/guard.mjs") } });
+        // Written to the index alone, as `git submodule add` records it: a gitlink to a commit of the run's choosing.
+        git(repo, ["update-index", "--add", "--cacheinfo", `160000,${base},${at}`]);
+        git(repo, ["commit", "-q", "-m", "a submodule"]);
+        await writeFile(join(repo, "a.txt"), "changed\n");
+
+        const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+        expect(code).toBe(1);
+        expect(doc).toMatchObject({ pushed: false, notDone: [`held path in history (${at})`] });
+        expect(pushes()).toEqual([]);
+        expect(remoteHeads(remote)).toEqual(SEEDED);
+      });
+
+      it("holds each repository file a declaration at Base: names as an option's value, and leaves a word naming a folder alone (the option-value question)", async () => {
+        const declaration = `${JSON.stringify({
+          hooks: [{ event: "pre_tool_use", command: ["node", "tools/guard.mjs", "--config=cfg/policy.json", "--rules", "rules/r.yml", "--table=table.json", "--dir=src"] }],
+        })}\n`;
+        const { repo, remote } = await seed("unattended", {
+          files: {
+            ".stamity/hooks/guard.json": declaration,
+            "cfg/policy.json": "base policy\n",
+            "rules/r.yml": "base rules\n",
+            "table.json": "base table\n",
+            "src/a.ts": "base source\n",
+            ...GUARD,
+          },
+        });
+        await writeFile(join(repo, "cfg/policy.json"), "steered policy\n");
+        await writeFile(join(repo, "rules/r.yml"), "steered rules\n");
+        await writeFile(join(repo, "table.json"), "steered table\n");
+        await writeFile(join(repo, "src/a.ts"), "the unit's change\n");
+
+        const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "cfg/policy.json", "rules/r.yml", "table.json", "src/a.ts"]);
+
+        expect(code).toBe(0);
+        expect(doc).toMatchObject({ pushed: true, notDone: [], held: ["cfg/policy.json", "rules/r.yml", "table.json"] });
+        expect(pushedFile(remote, "cfg/policy.json")).toBe("base policy");
+        expect(pushedFile(remote, "rules/r.yml")).toBe("base rules");
+        expect(pushedFile(remote, "table.json")).toBe("base table");
+        expect(pushedFile(remote, "src/a.ts")).toBe("the unit's change");
+      });
+
       const PACK_DECLARATION = declaring("tools/guard.mjs");
       it.each([
         {
@@ -840,6 +908,12 @@ describe("stamity run checkpoint", () => {
           line: refused(".stamity/hooks/guard.json", "names a path outside the repository"),
         },
         {
+          layout: "a declared option value's path passes through a link (the option-value question)",
+          files: { ".stamity/hooks/guard.json": `${JSON.stringify({ hooks: [{ event: "pre_tool_use", command: ["node", "tools/guard.mjs", "--config=lnk/policy.json"] }] })}\n`, "cfg/policy.json": "base policy\n" },
+          links: { lnk: "cfg" },
+          line: refused(".stamity/hooks/guard.json", "names lnk/policy.json, which passes through a link (lnk)"),
+        },
+        {
           // A hook naming tools/guard.mjs, and another naming a path under it, which leaves no file to stand in its place.
           layout: "a declared script's stand-in cannot land (review/189)",
           files: {
@@ -860,6 +934,90 @@ describe("stamity run checkpoint", () => {
         expect(pushes()).toEqual([]);
         expect(remoteHeads(remote)).toEqual(SEEDED);
       });
+    });
+  });
+
+  describe("a project below the git top (build/99)", () => {
+    const PROJECT = "apps/web";
+
+    it("holds the project's client settings, hook script and generated file and the top's workflow out of an unattended push, and pushes the rest", async () => {
+      const { repo, remote, project } = await seed("unattended", { project: PROJECT });
+      await put(repo, `${PROJECT}/.claude/settings.json`, '{ "hooks": {} }\n');
+      await put(repo, `${PROJECT}/.claude/hooks/x.mjs`, "steered hook\n");
+      await put(repo, `${PROJECT}/.stamity/generated/y`, "steered policy\n");
+      await put(repo, ".github/workflows/ci.yml", "on: push\n");
+      await put(repo, "docs/notes.md", "outside the project\n");
+      await put(repo, `${PROJECT}/a.txt`, "the unit's change\n");
+
+      const { code, doc } = await run(project, [
+        ...CHECKPOINT,
+        "--paths",
+        "a.txt",
+        ".claude/settings.json",
+        ".claude/hooks/x.mjs",
+        ".stamity/generated/y",
+        "../../.github/workflows/ci.yml",
+        "../../docs/notes.md",
+      ]);
+
+      const held = [".github/workflows/ci.yml", `${PROJECT}/.claude/hooks/x.mjs`, `${PROJECT}/.claude/settings.json`, `${PROJECT}/.stamity/generated/y`];
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [] });
+      expect(doc["held"]).toEqual(held);
+      const tree = pushedTree(remote);
+      for (const path of held) expect(tree).not.toContain(path);
+      expect(tree).toContain(`${PROJECT}/${PATCH}`);
+      expect(pushedFile(remote, "docs/notes.md")).toBe("outside the project");
+      expect(pushedFile(remote, `${PROJECT}/a.txt`)).toBe("the unit's change");
+      expect(pushedFile(remote, `${PROJECT}/${PATCH}`)).toContain("+steered hook");
+    });
+
+    it("holds the script a declaration in the project's hooks folder at Base: names, read from the project root", async () => {
+      const declaration = `${JSON.stringify({ hooks: [{ event: "pre_tool_use", command: ["node", "tools/guard.mjs"] }] })}\n`;
+      const { repo, remote, project } = await seed("unattended", {
+        project: PROJECT,
+        files: { [`${PROJECT}/.stamity/hooks/guard.json`]: declaration, [`${PROJECT}/tools/guard.mjs`]: "base guard\n", "tools/guard.mjs": "the top's own file\n" },
+      });
+      await writeFile(join(repo, PROJECT, "tools/guard.mjs"), "steered guard\n");
+      await writeFile(join(repo, "tools/guard.mjs"), "the unit's change\n");
+
+      const { code, doc } = await run(project, [...CHECKPOINT, "--paths", "tools/guard.mjs", "../../tools/guard.mjs"]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [], held: [`${PROJECT}/tools/guard.mjs`] });
+      expect(pushedFile(remote, `${PROJECT}/tools/guard.mjs`)).toBe("base guard");
+      expect(pushedFile(remote, "tools/guard.mjs")).toBe("the unit's change");
+    });
+
+    it.skipIf(process.platform === "win32")("holds a link the run adds at the project's .claude, and pushes a link elsewhere", async () => {
+      const { repo, remote, project } = await seed("unattended", { project: PROJECT });
+      await put(repo, `${PROJECT}/cfg/settings.json`, '{ "hooks": {} }\n');
+      await symlink("cfg", join(project, ".claude"));
+      await symlink("cfg", join(project, "notes"));
+
+      const { code, doc } = await run(project, [...CHECKPOINT, "--paths", "cfg", ".claude", "notes"]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [] });
+      expect(doc["held"]).toEqual([`${PROJECT}/.claude`]);
+      const tree = pushedTree(remote);
+      expect(tree).not.toContain(`${PROJECT}/.claude`);
+      expect(tree).toEqual(expect.arrayContaining([`${PROJECT}/cfg/settings.json`, `${PROJECT}/notes`]));
+    });
+
+    it("refuses the push when a commit it would send changes the project's client settings", async () => {
+      const { repo, remote, project } = await seed("unattended", { project: PROJECT });
+      await put(repo, `${PROJECT}/.claude/settings.json`, '{ "hooks": {} }\n');
+      git(repo, ["add", "--", `${PROJECT}/.claude/settings.json`]);
+      git(repo, ["commit", "-q", "-m", "run's own commit"]);
+      await put(repo, `${PROJECT}/a.txt`, "changed\n");
+
+      const { code, doc } = await run(project, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      expect(code).toBe(1);
+      expect(doc).toMatchObject({ pushed: false, notDone: [`held path in history (${PROJECT}/.claude/settings.json)`] });
+      expect(pushes()).toEqual([]);
+      expect(remoteHeads(remote)).toEqual(SEEDED);
     });
   });
 

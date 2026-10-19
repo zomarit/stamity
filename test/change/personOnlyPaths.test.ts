@@ -177,6 +177,54 @@ describe("heldPaths", () => {
     expect(heldPaths([])).toEqual([]);
   });
 
+  describe("a project below the git top (build/99)", () => {
+    // The project's folder as `git rev-parse --show-prefix` prints it; the paths are written from the git top.
+    const PREFIX = "apps/web/";
+
+    it.each([
+      // The project's own client settings, hook scripts and generated tree, as written from the project root.
+      "apps/web/.claude/settings.json",
+      "apps/web/.claude/hooks/x.mjs",
+      "apps/web/.stamity/generated/y",
+      "apps/web/.cursor/hooks.json",
+      "apps/web/.mcp.json",
+      // The top-level patterns still hold at the top.
+      ".github/workflows/ci.yml",
+      ".claude/settings.json",
+      // The prefix matches as the globs do: in another letter case, and over the Windows reading of a path.
+      "Apps/WEB/.claude/settings.json",
+      "apps\\web\\.claude\\hooks\\x.mjs",
+    ])("holds %s", (path) => {
+      expect(heldPaths(["apps/web/src/a.ts", path], PREFIX)).toEqual([path]);
+    });
+
+    it.each([
+      // Outside the project and outside every pattern as written from the top.
+      "docs/notes.md",
+      "apps/api/.claude/settings.json",
+      // A folder named like the prefix's start, and one the prefix only begins.
+      "apps/webx/.claude/settings.json",
+      "apps/.claude/settings.json",
+      // Inside the project and outside every pattern.
+      "apps/web/src/a.ts",
+      "apps/web/.claude/hooksx/a",
+    ])("does not hold %s", (path) => {
+      expect(heldPaths([path, "CODEOWNERS"], PREFIX)).toEqual(["CODEOWNERS"]);
+    });
+
+    it("matches a prefix spelled in the other Unicode normalization form, as the Base: walk reads names", () => {
+      const composed = "caf\u00e9/";
+      const decomposed = "cafe\u0301/.claude/settings.json";
+      expect(heldPaths([decomposed, "src/a.ts"], composed)).toEqual([decomposed]);
+    });
+
+    it("answers as without a prefix for a project at the git top", () => {
+      const paths = ["src/a.ts", ".claude/settings.json", "apps/web/.claude/settings.json", ".github/workflows/ci.yml", "a/CLAUDE.md"];
+      expect(heldPaths(paths, "")).toEqual(heldPaths(paths));
+      expect(heldPaths(paths)).toEqual([".claude/settings.json", ".github/workflows/ci.yml", "a/CLAUDE.md"]);
+    });
+  });
+
   it("names every glob the plan's table lists", () => {
     expect(PERSON_ONLY_PATHS).toEqual([
       ".github/workflows/**",
