@@ -12,7 +12,12 @@ import {
   type PackAgentDeclaration,
 } from "../../src/emit/hooksInfra.ts";
 import { CANONICAL_HOOK_EVENTS, CLAUDE_HOOKS_DIR, HOOK_SESSION_START_TIMEOUT_MS } from "../../src/hooks/model.ts";
-import { CLOUD_READINESS_FILE, CLOUD_READINESS_TIMEOUT_MS, MAX_POLICY_FILE_BYTES } from "../../src/hooks/scripts.ts";
+import {
+  CLOUD_READINESS_FILE,
+  CLOUD_READINESS_TIMEOUT_MS,
+  COPILOT_MAIN_SESSIONS_SEGMENTS,
+  MAX_POLICY_FILE_BYTES,
+} from "../../src/hooks/scripts.ts";
 import { AGENT_POLICY_ROSTER } from "../../src/roster/agentPolicies.ts";
 import { AGENT_TOOL_POLICIES_SCHEMA } from "../../src/tools/allowlist.ts";
 import type { Tool } from "../../src/types/core.ts";
@@ -106,6 +111,89 @@ function withoutPathScopedWrite(body: string): string[] {
     if (rest.includes(name)) throw new Error(`the path-scoped name ${name} survived the cut`);
   }
   return out;
+}
+
+/** The `node:fs` names only Copilot's session start imports: its main-session record's write and the swap into place. */
+const MAIN_SESSION_RECORD_IMPORTS = new Set(["mkdirSync", "renameSync", "unlinkSync", "writeFileSync"]);
+
+/**
+ * Copilot's session start with its main-session record write taken out (w4-copilot-ask, REQ-FLOW-123): the header's
+ * "else" and its four record lines, the four imported names, the record's declarations, and the payload read that
+ * feeds the write. Each region is named by the text it renders and must be present exactly once, so a cut that stops
+ * matching throws here instead of quietly stripping nothing.
+ */
+function withoutMainSessionRecord(body: string): string {
+  /** `text` with its one occurrence of `from` replaced by `to`; throws on none and on more than one. */
+  const once = (region: string, text: string, from: string, to: string): string => {
+    const parts = text.split(from);
+    if (parts.length !== 2) throw new Error(`the main-session ${region} appears ${parts.length - 1} times, not once`);
+    return parts.join(to);
+  };
+  let out = once(
+    "header wording",
+    body,
+    "// reading the state directory directly: no agent is spawned and nothing else is\n",
+    "// reading the state directory directly: no agent is spawned and nothing is\n",
+  );
+  out = once(
+    "header lines",
+    out,
+    [
+      "//",
+      "// On Copilot CLI it writes one record: the payload's session id, appended to",
+      "// stamity/copilot-main-sessions under the common git directory, owner-only and",
+      "// kept to its last 200 lines, which the person-only guard reads before it asks.",
+      "",
+    ].join("\n"),
+    "",
+  );
+  out = once(
+    "payload read",
+    out,
+    [
+      "const PAYLOAD = isatty(0) ? {} : readPayload();",
+      'const SOURCE = field(PAYLOAD, ["source"]);',
+      "// Copilot CLI: this start is the main thread's, so its id goes on the record the person-only guard reads (REQ-FLOW-123).",
+      "recordMainSession(PAYLOAD);",
+    ].join("\n"),
+    'const SOURCE = isatty(0) ? "" : field(readPayload(), ["source"]);',
+  );
+  const lines = out.split("\n");
+  // The record: its first constant through the close of `recordMainSession`, and the blank line after it.
+  const first = `const MAIN_SESSIONS_SEGMENTS = ${JSON.stringify(COPILOT_MAIN_SESSIONS_SEGMENTS)};`;
+  const start = lines.indexOf(first);
+  if (start === -1 || lines.lastIndexOf(first) !== start) throw new Error("the main-session record does not start once");
+  const writer = lines.indexOf("function recordMainSession(payload) {", start);
+  if (writer === -1) throw new Error("the main-session record carries no writer");
+  const end = lines.indexOf("}", writer);
+  if (end === -1 || lines[end + 1] !== "") throw new Error("the main-session record's writer does not close");
+  const declared = lines.slice(start, end + 1).flatMap((line) => /^(?:const|function) (\w+)/.exec(line)?.[1] ?? []);
+  expect(declared).toEqual([
+    "MAIN_SESSIONS_SEGMENTS",
+    "MAIN_SESSIONS_MAX_LINES",
+    "MAIN_SESSIONS_MAX_BYTES",
+    "SESSION_ID",
+    "copilotSessionId",
+    "mainSessionLines",
+    "recordMainSession",
+  ]);
+  lines.splice(start, end + 2 - start);
+  let narrowed = 0;
+  const rest = lines
+    .map((line) => {
+      const match = /^import \{ (.+) \} from "node:fs";$/.exec(line);
+      if (match === null) return line;
+      const names = match[1]!.split(", ");
+      const kept = names.filter((name) => !MAIN_SESSION_RECORD_IMPORTS.has(name));
+      narrowed += names.length - kept.length;
+      return `import { ${kept.join(", ")} } from "node:fs";`;
+    })
+    .join("\n");
+  if (narrowed !== MAIN_SESSION_RECORD_IMPORTS.size) throw new Error(`the record's imports narrowed ${narrowed} names, not 4`);
+  for (const name of ["recordMainSession", "copilotSessionId", "mainSessionLines", "MAIN_SESSIONS_", "PAYLOAD"]) {
+    if (rest.includes(name)) throw new Error(`the main-session name ${name} survived the cut`);
+  }
+  return rest;
 }
 
 const TAMPER = "stamity-config-tamper-notice.mjs";
@@ -298,7 +386,12 @@ describe("core script rows", () => {
 
     // The tool-independent bodies never fork per tool.
     expect(scriptContent(p, "cursor", SESSION_START)).toBe(scriptContent(p, "claude", SESSION_START));
-    expect(scriptContent(p, "copilot", SESSION_START)).toBe(scriptContent(p, "claude", SESSION_START));
+    // TEST CHANGE, justified (w4-copilot-ask, REQ-FLOW-123): Copilot's session start writes its main-session record,
+    // which the person-only guard reads before it asks; with that write taken out it is the shared body, byte for byte.
+    const copilotStart = scriptContent(p, "copilot", SESSION_START);
+    expect(copilotStart).toContain("\nrecordMainSession(PAYLOAD);\n");
+    expect(withoutMainSessionRecord(copilotStart)).toBe(scriptContent(p, "claude", SESSION_START));
+    expect(scriptContent(p, "claude", SESSION_START)).not.toContain("recordMainSession");
     expect(scriptContent(p, "cursor", TAMPER)).toBe(scriptContent(p, "claude", TAMPER));
     expect(scriptContent(p, "copilot", TAMPER)).toBe(scriptContent(p, "claude", TAMPER));
   });
@@ -663,8 +756,10 @@ describe("interchange rows", () => {
     const guardRows = (tool: Tool) => p.interchangeFor(tool).filter((row) => row.command[1]?.endsWith(`/${PERSON_ONLY}`));
 
     // The client's shell tools, in the Claude names the interchange speaks; Copilot's adapter translates them.
+    // TEST CHANGE, justified (w6-claude-hooks-in-claude-dir, REQ-FLOW-113): Claude's row runs the copy under
+    // `.claude/hooks/stamity/`, which the Claude Code GitHub Action restores from the base branch.
     expect(guardRows("claude")).toEqual([
-      { event: "pre_tool_use", command: ["node", `${HOOKS_ROOT}/claude/${PERSON_ONLY}`], matcher: "Bash|PowerShell" },
+      { event: "pre_tool_use", command: ["node", `${CLAUDE_HOOKS_DIR}/${PERSON_ONLY}`], matcher: "Bash|PowerShell" },
     ]);
     expect(guardRows("copilot")).toEqual([
       { event: "pre_tool_use", command: ["node", `${HOOKS_ROOT}/copilot/${PERSON_ONLY}`], matcher: "Bash|PowerShell" },
@@ -680,8 +775,24 @@ describe("interchange rows", () => {
     // Each copy carries its own client's deny output: Cursor's permission document, Copilot's JSON deny,
     // and exit 2 on Claude Code and Codex.
     expect(scriptContent(p, "cursor", PERSON_ONLY)).toContain('permission: "deny"');
-    expect(scriptContent(p, "copilot", PERSON_ONLY)).toContain('permissionDecision: "deny"');
     for (const tool of ["claude", "codex"] as const) expect(scriptContent(p, tool, PERSON_ONLY), tool).toContain("process.exitCode = 2");
+    // TEST CHANGE, justified (w4-copilot-ask, REQ-FLOW-123): Copilot's copy answers an ask as well as a deny, and gives
+    // the ask only to a call carrying no helper field whose session id its session start recorded; the check comes
+    // before the copy's one ask, and no other client's copy reads the record.
+    const copilotGuard = scriptContent(p, "copilot", PERSON_ONLY);
+    expect(copilotGuard).toContain(
+      'process.stdout.write(JSON.stringify({ permissionDecision: decision.ask ? "ask" : "deny", permissionDecisionReason: decision.reason }) + "\\n");',
+    );
+    const mainOnly =
+      "  if (names.some((name) => Object.hasOwn(payload, name)) || !recordedMainSession(payload)) return held(askSentence(act, rule));";
+    const ask = "  return { ask: true, reason: askSentence(act, rule) };";
+    expect(copilotGuard.split(mainOnly)).toHaveLength(2);
+    expect(copilotGuard.split(ask)).toHaveLength(2);
+    expect(copilotGuard.indexOf(mainOnly)).toBeLessThan(copilotGuard.indexOf(ask));
+    expect(copilotGuard).toContain("function recordedMainSession(payload) {");
+    for (const tool of ["claude", "cursor", "codex"] as const) {
+      expect(scriptContent(p, tool, PERSON_ONLY), tool).not.toContain("recordedMainSession");
+    }
   });
 
   it("places no shell guard for a client the selection leaves out", async () => {
