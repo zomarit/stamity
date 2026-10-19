@@ -2883,6 +2883,29 @@ describe("SECURITY.md", () => {
         expect(flat, `SECURITY.md says again: ${stale}`).not.toContain(stale);
       }
     });
+
+    // ADDED 2026-10-19 (plan 021 file 2, unit w3-pages; REQ-FLOW-121): v0b's fix of review/130 finds a run verb after
+    // `run`'s option words, in each parsed command's decoded words too, reads a first word after `run` it cannot settle
+    // as an option word, and refuses a verb written after option words with its own reason
+    // (src/hooks/personOnly.ts::unattendedPushVerdict). The guard's row states that reading after the pinned
+    // stand-alone phrase, which stays word for word.
+    it("states where the stand-alone rule finds a run verb, and the refusal of one after option words", () => {
+      const guard = section("| The main thread of any session", "| An unattended run, or the text that steers one | Pushing a change");
+      const pinned = "unless the verb stands alone on it as one simple command";
+      expect(guard, `the guard's row does not state: ${pinned}`).toContain(pinned);
+      const claims = [
+        "The verb is found anywhere after `run`'s option words and their values, in each parsed command and in each parsed command's decoded words, joined, beside the package",
+        "a first word after `run` that the reading cannot settle (an expansion, a glob, a brace or a splat) counts as an option word, so an unsure line is read as running a verb",
+        "a verb written after option words is refused with its own reason, words between `run` and its verb",
+      ];
+      for (const claim of claims) {
+        expect(guard, `the guard's row does not state: ${claim}`).toContain(claim);
+        // The reading qualifies the stand-alone shape, so it follows the pinned phrase.
+        expect(guard.indexOf(claim), `the guard's row states "${claim.slice(0, 40)}…" before the shape`).toBeGreaterThan(
+          guard.indexOf(pinned),
+        );
+      }
+    });
   });
 
   it("covers the four surfaces the phase claims, and the limits", () => {
@@ -2902,6 +2925,66 @@ describe("SECURITY.md", () => {
     expect(body.length, `${page} read as empty`).toBeGreaterThan(500);
     for (const token of ["checkPluginRuntime", "compatibilityOf", "--expect-mode", "plugin setup", "apm-route"]) {
       expect(body, `${page} still cites \`${token}\``).not.toContain(token);
+    }
+  });
+});
+
+// ADDED 2026-10-19 (plan 021 file 2, unit w3-pages; REQ-FLOW-091, REQ-FLOW-121): the spec states the landed
+// behaviour of w2 (the stale reasons `spelling`, `link` and `untracked`, each with its own message, and an empty
+// `reads:` list that blocks; src/runs/freshness.ts, src/runs/planCheck.ts) and of v0b's fix of review/130 and /131
+// (src/hooks/personOnly.ts::unattendedPushVerdict), each as an `Amended 2026-10-19` bullet before its requirement's
+// Proof line.
+describe("docs/specs/everyday-flows.md, amended for w2 and v0b's fix", () => {
+  const SPEC = "docs/specs/everyday-flows.md";
+  const spec = read(SPEC);
+  /** One requirement's flowed text, from its heading to the next requirement's. */
+  const requirement = (id: string): string => {
+    const from = spec.indexOf(`### ${id} `);
+    expect(from, `${SPEC} has no ${id} heading`).toBeGreaterThanOrEqual(0);
+    const to = spec.indexOf("\n### REQ-", from + 1);
+    return flowed(spec.slice(from, to === -1 ? undefined : to));
+  };
+  /** The flowed `Amended 2026-10-19` bullet of one requirement, which must sit before its Proof line. */
+  const amendment = (id: string): string => {
+    const text = requirement(id);
+    const from = text.indexOf("- **Amended 2026-10-19**");
+    expect(from, `${id} has no "Amended 2026-10-19" bullet`).toBeGreaterThanOrEqual(0);
+    const proof = text.indexOf("- **Proof:**", from);
+    expect(proof, `${id}'s 2026-10-19 bullet does not come before its Proof line`).toBeGreaterThan(from);
+    return text.slice(from, proof);
+  };
+
+  it("states w2's stale reasons, their messages and the empty reads list on REQ-FLOW-091", () => {
+    const bullet = amendment("REQ-FLOW-091");
+    for (const claim of [
+      "unit `w2-plan-reads`",
+      "stale `spelling`",
+      "stale `link`",
+      "stale `untracked`",
+      "before any history count, and no chain base exempts them",
+      "is not a plain repository path; write it as git lists it and re-stamp the plan.",
+      "is a symbolic link, lies under one, or is a folder holding one at HEAD; list the files the plan read instead, and re-stamp the plan.",
+      "is not tracked by git at HEAD, so its history cannot be measured; commit it or drop it from reads, and re-stamp the plan.",
+      "A head `reads: []` is `head-key-missing` at the `reads:` line: \"The head's `reads` must list at least one path.\"",
+      "`freshness([])`, the engine's call, is unchanged",
+    ]) {
+      expect(bullet, `REQ-FLOW-091's 2026-10-19 bullet does not state: ${claim}`).toContain(claim);
+    }
+  });
+
+  it("states v0b's reading of a run verb after run's option words on REQ-FLOW-121", () => {
+    const bullet = amendment("REQ-FLOW-121");
+    for (const claim of [
+      "unit `v0b-run-verb-alone`",
+      "the verb is any word after `run`'s option words and their values",
+      "each parsed command's decoded words, joined, beside the package",
+      "a first word after `run` that the reading cannot settle (an expansion, a glob, a brace or a splat) counts as an option word",
+      "refused with its own reason, words between `run` and its verb",
+      "a blank other than a space or a tab",
+      "an unquoted `@` after the program, which PowerShell reads as a splat",
+      "the stop-parsing `--%` spelled with typographic dashes",
+    ]) {
+      expect(bullet, `REQ-FLOW-121's 2026-10-19 bullet does not state: ${claim}`).toContain(claim);
     }
   });
 });

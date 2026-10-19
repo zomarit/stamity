@@ -3682,6 +3682,26 @@ and a draft pull request titled `Refused:` where a branch can be pushed, else th
   plans without `--chain` exits 2 (`src/cli/commands/plan.ts:79`, `:87-88`, `:130`; REQ-FLOW-105). Proof:
   `test/runs/planCoverageParity.test.ts` (the 60-unit chain into a cycle, inside the 10-second kill),
   `test/authoring/specPlanCoverage.test.ts` (its `REQ-FLOW-091` describe), `test/cli/commands/plan.test.ts`.
+- **Amended 2026-10-19** (plan 021 file 2, unit `w2-plan-reads`, with its fix rounds). Given a plan's head `reads:`
+  list, When `stamity plan check` measures its freshness, Then three refusals come before any history count, and no
+  chain base exempts them. A path not in git's plain form (an empty, `.` or `..` segment, a leading or trailing
+  separator, an absolute path, a backslash) is stale `spelling`, since git reads a trailing separator as "folders only"
+  and would count 0 for a file. A path that is a symbolic link, lies under one, or names a folder whose tree at `HEAD`
+  holds one is stale `link`, found by an `lstat` walk from the repository root, segment by segment, and by the tree mode
+  at `HEAD` (120000), so a checkout that stores links as plain files is caught too: git counts a link's own history,
+  never its target's. A path on disk that `HEAD`'s tree holds as no file, folder or gitlink (an untracked or ignored
+  file, a path inside a submodule, another letter case on a case-insensitive disk) is stale `untracked`, since git
+  counts 0 for it forever. Each is a `stale` blocker at the `reads:` line, its message the path in backticks and then
+  its own fix: "is not a plain repository path; write it as git lists it and re-stamp the plan.", "is a symbolic link,
+  lies under one, or is a folder holding one at HEAD; list the files the plan read instead, and re-stamp the plan." and
+  "is not tracked by git at HEAD, so its history cannot be measured; commit it or drop it from reads, and re-stamp the
+  plan.". A head `reads: []` is `head-key-missing` at the `reads:` line: "The head's `reads` must list at least one
+  path."; any other value that is not a list of paths keeps "must be a list of paths". `freshness([])`, the engine's
+  call, is unchanged, and the report's `freshness.stale[].reason` gains `link`, `spelling` and `untracked`; `moved` and
+  `missing` read as before (`StaleReason` and `freshness`, `src/runs/freshness.ts`; `OWN_STALE_MESSAGE` and the head's
+  `reads` check, `src/runs/planCheck.ts`). Proof: `test/runs/freshness.test.ts` (the disk-walk link cases skip on Windows, the tree-mode ones run there),
+  `test/runs/planCheck.test.ts`, `test/docsPages.test.ts` ("states w2's stale reasons, their messages and the empty
+  reads list on REQ-FLOW-091").
 - **Proof:** `test/cli/commands/plan.test.ts`, `test/runs/planCoverageParity.test.ts` (the engine's coverage check equals
   the skill's copy), `test/cli/surface.e2e.test.ts`, `test/corpus/cliCallForm.test.ts`,
   `test/corpus/skills/unattended.test.ts` (one case per blocker code), `test/corpus/commands/board.test.ts` ("gates
@@ -4594,6 +4614,22 @@ are unaffected, and a PowerShell tool call is read as PowerShell, not through it
     the run can write. The skill states the line rule (`content/skills/st-unattended/SKILL.md:83-84`).
   - A launcher the text reading does not unwrap, or a verb name split by quotes or built by an expression, skips the
     rule; that is the residual REQ-FLOW-104 names.
+- **Amended 2026-10-19** (plan 021 file 2, unit `v0b-run-verb-alone`'s fixes of `review/130` and `review/131`). Given
+  an unattended run, When a shell line runs a run verb, Then the rule finds the verb wherever commander would: `run`
+  takes its options before its subcommand and a valued option's value is a word of its own, so in a parsed `stamity` or
+  `st` command the verb is any word after `run`'s option words and their values. A form the parse does not normalize
+  (the CLI file started by `node`, a launcher it does not unwrap) is read over each parsed command's decoded words,
+  joined, beside the package, an escaped or quoted dash reading as a dash; there a first word after `run` that the
+  reading cannot settle (an expansion, a glob, a brace or a splat) counts as an option word, so an unsure line is read
+  as running a verb. The raw-text backstop finds the verb after option words that open on a dash and hold no `;`, `|`,
+  `&` or line break, in place of the `\brun\W+(start|checkpoint|end)\b` stated above. The accepted shape still keeps
+  the verb next to `run`: unattended, a verb written after option words is refused with its own reason, words between
+  `run` and its verb. In the PowerShell reading the shape also refuses a blank other than a space or a tab, which
+  PowerShell splits words on; an unquoted `@` after the program, which PowerShell reads as a splat; and the
+  stop-parsing `--%` spelled with typographic dashes (an en dash, an em dash or a horizontal bar, which PowerShell reads
+  as `-`). Attended lines are unaffected (`namesVerb`, `namesVerbInWords` and `verbShape` in `unattendedPushVerdict`,
+  `src/hooks/personOnly.ts`). Proof: `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`,
+  `test/docsPages.test.ts` ("states v0b's reading of a run verb after run's option words on REQ-FLOW-121").
 - **Proof:** `test/hooks/personOnly.test.ts` (the stand-alone rule's denies and allows, POSIX and PowerShell, and the
   `st` twins of every launch route), `test/hooks/personOnlyGuard.test.ts` (the unattended block on every client),
   `test/hooks/personOnlyGuardDist.e2e.test.ts`, `test/corpus/skills/unattended.test.ts`.
