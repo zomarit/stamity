@@ -170,8 +170,10 @@ async function editSettingsRecord(root: string, edit: (record: CoOwnership | und
   await writeManifest(root, { ...manifest, ledger }, { now: T1 });
 }
 
+// TEST CHANGE, justified (w6-claude-hooks-in-claude-dir, REQ-FLOW-113): the engine's entries run the copies under
+// `.claude/hooks/stamity/`, so an engine group is read by that folder now; an owner's group names neither.
 const isEngineGroup = (group: unknown): boolean =>
-  JSON.stringify(group).includes(".stamity/generated/hooks/");
+  JSON.stringify(group).includes(".claude/hooks/stamity/");
 
 // ── The first fixture: merge, never a collision ─────────────────
 
@@ -587,11 +589,14 @@ describe("a co-owned-shape refusal of a ledgered settings file (review/40)", () 
     expect(await readSettings(root)).toBe(FIRST_AFTER_CLEAN);
   });
 
-  it("clean keeps every engine hook script the settings file it leaves in place still names, reports each kept naming the file, and keeps .stamity/ (S17's settings case)", async () => {
+  // TEST CHANGE, justified (w6-claude-hooks-in-claude-dir, REQ-FLOW-113): the file the sweep leaves in place now
+  // runs the copies under `.claude/hooks/stamity/`, so those are the scripts kept and named; the generated copies
+  // it no longer runs leave, and with no script under `.stamity/` still wired, `.stamity/` goes as on any clean.
+  it("clean keeps every engine hook script the settings file it leaves in place still names, reports each kept naming the file (S17's settings case)", async () => {
     const root = await freshRepo();
     await init(root);
     const raw = await readSettings(root);
-    const scripts = [...new Set([...raw.matchAll(/\.stamity\/generated\/hooks\/claude\/[A-Za-z0-9._-]+/g)].map((match) => match[0]))];
+    const scripts = [...new Set([...raw.matchAll(/\.claude\/hooks\/stamity\/[A-Za-z0-9._-]+/g)].map((match) => match[0]))];
     expect(scripts.length).toBeGreaterThan(0);
     // The owner breaks the file: the sweep cannot read which entries are the engine's, so it leaves it whole.
     await writeFile(SETTINGS_ABS(root), `${raw}}`, "utf8");
@@ -603,8 +608,8 @@ describe("a co-owned-shape refusal of a ledgered settings file (review/40)", () 
       expect(existsSync(join(root, ...script.split("/"))), script).toBe(true);
       expect(cleaned.stdout).toMatch(new RegExp(`skipped-user-content  ${script.replaceAll(".", "\\.")} — Kept: \\.claude/settings\\.json`));
     }
-    expect(existsSync(join(root, ".stamity"))).toBe(true);
-    expect(cleaned.stdout).toContain("Kept .stamity/: .claude/settings.json still runs a hook script under it");
+    expect(existsSync(join(root, ".stamity", "generated", "hooks", "claude"))).toBe(false);
+    expect(cleaned.stdout).not.toContain("Kept .stamity/: .claude/settings.json still runs a hook script under it");
   });
 
   it("clean names the real remedy when the settings file it keeps is a link it may not read (review/49)", async () => {

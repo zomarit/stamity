@@ -36,7 +36,8 @@
  * when it lies inside what the engine can prove it wrote by path: an allow row
  * a release rendered ({@link ENGINE_PERMISSION_ROWS}), or a hook entry whose
  * every command executes one of the engine's own scripts — under
- * `.stamity/generated/hooks/` or an installed pack's `.stamity/packs/<id>/`,
+ * `.stamity/generated/hooks/`, `.claude/hooks/stamity/` (the copies the entries
+ * run, REQ-FLOW-113) or an installed pack's `.stamity/packs/<id>/`,
  * never the user's `.stamity/hooks/` (`./coOwnedJson.ts::commandRunsStateScript`).
  * A recorded allow row outside
  * that bound is the owner's whatever the record says; a recorded hook entry
@@ -71,6 +72,7 @@ import { isPlainObject } from "../config/parse.ts";
 import { CLAUDE_ASK_ROWS, CLAUDE_DENY_ROWS } from "../hooks/personOnly.ts";
 import type { CoOwnedReducer, CoOwnedReduction } from "../types/content.ts";
 import type { CoOwnership } from "../types/manifest.ts";
+import { CLAUDE_HOOKS_DIR } from "../hooks/model.ts";
 import { HOOKS_GENERATED_DIR } from "../types/markers.ts";
 import {
   commandRunsStateScript,
@@ -113,13 +115,18 @@ function commandsOf(element: unknown): string[] | null {
 
 /**
  * True for a hook entry some command of which runs a script under the
- * engine's generated hooks directory. Only the engine writes there. Not a
- * proof of authorship — only the licence to touch the entry behind a backup.
+ * engine's generated hooks directory, or under the folder Claude Code's hook
+ * entries run the engine's copies from (`.claude/hooks/stamity/`). Only the
+ * engine writes there. Not a proof of authorship — only the licence to touch
+ * the entry behind a backup.
  */
 export function isEngineHookGroup(element: unknown): boolean {
   if (!isPlainObject(element) || !Array.isArray(element["hooks"])) return false;
   return element["hooks"].some(
-    (hook) => isPlainObject(hook) && typeof hook["command"] === "string" && hook["command"].includes(`${HOOKS_GENERATED_DIR}/`),
+    (hook) =>
+      isPlainObject(hook) &&
+      typeof hook["command"] === "string" &&
+      (hook["command"].includes(`${HOOKS_GENERATED_DIR}/`) || hook["command"].includes(`${CLAUDE_HOOKS_DIR}/`)),
   );
 }
 

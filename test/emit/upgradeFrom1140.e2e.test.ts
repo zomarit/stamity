@@ -162,6 +162,21 @@ const CONTEXT_ONCE_IGNORE_LINE = ".stamity/context-once/";
 /** The client model list cache's ignore line, appended after the context-once folder's; structural, as the canary's. */
 const MODEL_CACHE_IGNORE_LINE = ".stamity/client-models.json";
 
+/** Claude Code's hook folder; structural, never imported from src/ (cliHarness lane discipline). */
+const CLAUDE_HOOKS_FOLDER = ".claude/hooks/stamity";
+
+/** The copies Claude Code's hooks run, and the policy copy, that the upgrade adds; structural, as the folder. */
+const CLAUDE_HOOK_COPIES: readonly string[] = [
+  "stamity-session-start.mjs",
+  "stamity-pre-tool-use-guard.mjs",
+  "stamity-config-tamper-notice.mjs",
+  "stamity-person-only-guard.mjs",
+  "stamity-review-gate.mjs",
+  "stamity-unattended-ask-gate.mjs",
+  "stamity-cloud-readiness.mjs",
+  "stamity-agent-tool-policies.json",
+].map((file) => `${CLAUDE_HOOKS_FOLDER}/${file}`);
+
 /** Repo-relative manifest path; structural, never imported from src/ (cliHarness lane discipline). */
 const MANIFEST_REL = ".stamity/manifest.json";
 
@@ -430,6 +445,25 @@ describe("a 1.14.0 tree upgrades through the current sync and check (node dist/c
       for (const path of afterFirst.keys()) {
         if (before.has(path) || path === MANIFEST_REL) continue;
         expect(ownedAfter.has(path), `sync created ${path}, which no ledger row owns`).toBe(true);
+      }
+      // w6-claude-hooks-in-claude-dir (REQ-FLOW-113, REQ-FLOW-104): the upgrade adds the copies Claude Code's hooks
+      // run under `.claude/hooks/stamity/`, the policy copy beside them, and re-renders every engine entry in the
+      // settings document to run a copy; the 1.14.0 generated scripts stay (EXPECTED_RECLAIMS is empty).
+      for (const path of CLAUDE_HOOK_COPIES) {
+        expect(before.has(path), `${path} was already in the 1.14.0 tree`).toBe(false);
+        expect(afterFirst.has(path), `the upgrade did not write ${path}`).toBe(true);
+        expect(ownedAfter.has(path), `${path} is not owned after the upgrade`).toBe(true);
+      }
+      const settings = JSON.parse(await readFile(inRepo(fixture.repoDir, ".claude/settings.json"), "utf8")) as {
+        hooks: Record<string, { hooks: { command: string }[] }[]>;
+      };
+      const engineCommands = Object.values(settings.hooks)
+        .flatMap((entries) => entries.flatMap((entry) => entry.hooks.map((hook) => hook.command)))
+        .filter((command) => command.includes("stamity-"));
+      expect(engineCommands.length).toBeGreaterThan(8);
+      for (const command of engineCommands) {
+        expect(command, command).toContain(`/${CLAUDE_HOOKS_FOLDER}/stamity-`);
+        expect(command, command).not.toContain(".stamity/generated/hooks/");
       }
       await expectUserContent(fixture.repoDir, "after the first sync");
 

@@ -717,6 +717,18 @@ describe("referencedHookScripts", () => {
     );
   });
 
+  // w6-claude-hooks-in-claude-dir (REQ-FLOW-113): a document running a copy under Claude Code's hook folder
+  // holds that script, so the sweep keeps it while the document still runs it (S17).
+  it("reads a copy under Claude Code's hook folder as an engine hook script the document runs", () => {
+    const text = JSON.stringify({ hooks: { SessionStart: [{ hooks: [{ command: 'node "${CLAUDE_PROJECT_DIR}/.claude/hooks/stamity/stamity-session-start.mjs"' }] }] } });
+    expect([...referencedHookScripts(text)]).toEqual([".claude/hooks/stamity/stamity-session-start.mjs"]);
+    const reader = hookScriptReader(GUARDS);
+    expect(reader.isHookScript(".claude/hooks/stamity/stamity-session-start.mjs")).toBe(true);
+    expect(reader.isHookScript(".claude/hooks/stamity/stamity-agent-tool-policies.json")).toBe(true);
+    expect(reader.isHookScript(".claude/hooks/mine.mjs")).toBe(false);
+    expect(reader.runs(text, ".claude/hooks/stamity/stamity-session-start.mjs")).toBe(true);
+  });
+
   it("finds none of the engine's in a document holding only owner entries", () => {
     const owner = `${JSON.stringify({ version: 1, hooks: { afterFileEdit: [{ command: "node scripts/fmt.mjs" }] } }, null, 2)}\n`;
     expect([...referencedHookScripts(owner)]).toEqual([]);

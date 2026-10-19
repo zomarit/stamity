@@ -13,7 +13,7 @@ import {
 } from "../../src/denyscan/denyScan.ts";
 import { computeHandoffIntegrity } from "../../src/handoffs/validation.ts";
 import { HOOKS_GENERATED_DIR } from "../../src/emit/hooksInfra.ts";
-import { CLIENT_HOOK_GUARANTEES } from "../../src/hooks/model.ts";
+import { CLAUDE_HOOKS_DIR, CLIENT_HOOK_GUARANTEES } from "../../src/hooks/model.ts";
 import {
   buildConfigTamperNoticeScript,
   buildPreToolUseGuardScript,
@@ -1641,6 +1641,53 @@ describe("the guard's path-scoped report write", () => {
       }),
       "no-root",
     );
+  });
+
+  // w6-claude-hooks-in-claude-dir (REQ-FLOW-113, plan/31): Claude Code's hooks run the guard's copy under
+  // `.claude/hooks/stamity/`, which reads the policy document's copy beside it and names the repository from
+  // the hook folder, so a pull request's own document under `.stamity/generated/` decides nothing there.
+  it("roots a claude-placed guard on the hook folder and reads the policy copy beside it", async () => {
+    await getRepo().seedFiles({
+      [`repo/${CLAUDE_HOOKS_DIR}/${POLICY_FILE}`]: buildAgentToolPoliciesJson(WRITE_ROSTER),
+      "repo/src/app.ts": "export {};\n",
+    });
+    const guard = await place(
+      `repo/${CLAUDE_HOOKS_DIR}/guard.mjs`,
+      buildPreToolUseGuardScript({ policiesJsonPath: POLICY_FILE, failMode: "fail-closed", layout: "claude" }),
+    );
+
+    expect(run(guard, { input: writeTo("stamity-reviewer", getRepo().path(...REPORT)) })).toEqual({
+      code: 0,
+      stdout: "",
+      stderr: "",
+    });
+    expectWriteDenied(
+      run(guard, { input: writeTo("stamity-reviewer", getRepo().path("repo", "src", "app.ts")) }),
+      "no-pattern-match",
+    );
+  });
+
+  it("refuses through a claude-placed guard when only the generated document is there, never reading it", async () => {
+    await getRepo().seedFiles({ [`repo/${DOCUMENT}`]: buildAgentToolPoliciesJson(WRITE_ROSTER) });
+    const guard = await place(
+      `repo/${CLAUDE_HOOKS_DIR}/guard.mjs`,
+      buildPreToolUseGuardScript({ policiesJsonPath: POLICY_FILE, failMode: "fail-closed", layout: "claude" }),
+    );
+
+    const result = run(guard, { input: writeTo("stamity-reviewer", getRepo().path(...REPORT)) });
+
+    expect(result.code).toBe(2);
+    expect(refusal(result)).toMatchObject({ blocked: true, reasonCode: "POLICY_UNREADABLE" });
+  });
+
+  it("anchors a claude-placed guard on the hook folder's parents, segment for segment", () => {
+    const guard = buildPreToolUseGuardScript({ policiesJsonPath: POLICY_FILE, failMode: "fail-closed", layout: "claude" });
+    const parents = CLAUDE_HOOKS_DIR.split("/").slice(0, -1);
+
+    expect(parents).toEqual([".claude", "hooks"]);
+    expect(guard).toContain(`const ANCHOR_SEGMENTS = ${JSON.stringify(parents.toReversed())};`);
+    expect(guard).toContain('const WRITE_TOOL = "Write";');
+    expect(guard).toContain(`const POLICY_FILE = join(dirname(fileURLToPath(import.meta.url)), ${JSON.stringify(POLICY_FILE)});`);
   });
 
   it("anchors on the directory the emitter writes, and says what it reads to do so", () => {
@@ -4414,6 +4461,68 @@ describe("the emitted scripts' own repository root", () => {
     );
     expect(buildReviewGateScript(GATE_OPTIONS)).toContain(
       `const ANCHOR_SEGMENTS = ${JSON.stringify(segments.toReversed())};`,
+    );
+  });
+
+  // w6-claude-hooks-in-claude-dir (REQ-FLOW-113): the copies Claude Code's hooks run sit under
+  // `.claude/hooks/stamity/`, and they name the repository from there as the generated copies do from theirs.
+  it("reads the repository's learnings from a claude-placed copy when the session sits in a sub-directory", async () => {
+    await getRepo().seedFiles({
+      ".stamity/learnings/cache-warmup.md": learning(),
+      "sub/deep/.stamity/learnings/planted.md": learning({ id: "planted" }),
+    });
+    const script = await place(
+      `${CLAUDE_HOOKS_DIR}/stamity-session-start.mjs`,
+      buildSessionStartScript({ layout: "claude", tool: "claude" }),
+    );
+
+    const printed = run(script, { cwd: getRepo().path("sub", "deep") }).stdout;
+
+    expect(printed).toContain("- [high] cache-warmup —");
+    expect(printed).not.toContain("planted");
+  });
+
+  it("keeps a claude-placed review gate's counter under the repository", async () => {
+    await getRepo().seedFiles({ "sub/deep/.keep": "" });
+    const gate = await place(
+      `${CLAUDE_HOOKS_DIR}/stamity-review-gate.mjs`,
+      buildReviewGateScript({ ...GATE_OPTIONS, layout: "claude" }),
+    );
+
+    const result = run(gate, { cwd: getRepo().path("sub", "deep"), input: reviewerStop("run-claude", "request-changes") });
+
+    expect(result.code).toBe(0);
+    expect(readGateState().runs["run-claude"]?.rounds).toBe(1);
+    expect(existsSync(getRepo().path("sub", "deep", ".stamity"))).toBe(false);
+  });
+
+  it("declines a claude-placed copy's root anywhere but the hook folder", async () => {
+    await getRepo().seedFiles({
+      ".stamity/learnings/cache-warmup.md": learning(),
+      "cwd-repo/.stamity/learnings/planted.md": learning({ id: "planted" }),
+    });
+    // The claude anchor placed in the generated layout: `generated/hooks` is not `.claude/hooks`.
+    const script = await place(
+      `${GENERATED_DIR}/stamity-session-start.mjs`,
+      buildSessionStartScript({ layout: "claude", tool: "claude" }),
+    );
+
+    expect(run(script, { cwd: getRepo().path("cwd-repo") }).stdout).toContain("- [high] planted —");
+  });
+
+  it("anchors a claude-placed copy on the hook folder's parents, and leaves the generated copy's bytes alone", () => {
+    const parents = CLAUDE_HOOKS_DIR.split("/").slice(0, -1);
+    for (const body of [
+      buildSessionStartScript({ layout: "claude" }),
+      buildReviewGateScript({ ...GATE_OPTIONS, layout: "claude" }),
+    ]) {
+      expect(body).toContain(`const ANCHOR_SEGMENTS = ${JSON.stringify(parents.toReversed())};`);
+    }
+    // Only the anchor line differs between the two placements.
+    const generated = buildSessionStartScript({ layout: "generated" });
+    const claude = buildSessionStartScript({ layout: "claude" });
+    expect(claude.replace(JSON.stringify(parents.toReversed()), JSON.stringify(HOOKS_GENERATED_DIR.split("/").toReversed()))).toBe(
+      generated,
     );
   });
 

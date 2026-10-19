@@ -47,6 +47,7 @@
 
 import { createHash } from "node:crypto";
 import { isPlainObject } from "../config/parse.ts";
+import { CLAUDE_HOOKS_DIR } from "../hooks/model.ts";
 import { HOOKS_GENERATED_DIR, STATE_DIR } from "../types/markers.ts";
 import { argvExecutedScript, executedScript, isPackScriptPath, printableName, type CoOwnedJsonSpec } from "./coOwnedJson.ts";
 import { memberHash } from "./jsonMembers.ts";
@@ -665,7 +666,7 @@ function runnerRows(rendering: Record<string, unknown>): DirectHookRow[] {
 // ── S17: the scripts a hooks document runs ───────────────────────────────
 
 /** A repo-relative script path the engine writes and a hooks document may name. */
-const SCRIPT_PATH = /(?:\.stamity\/[A-Za-z0-9._/-]+|\.cursor\/hooks\/[A-Za-z0-9._-]+)\.(?:mjs|cjs|js|sh|py)\b/gu;
+const SCRIPT_PATH = /(?:\.stamity\/[A-Za-z0-9._/-]+|\.cursor\/hooks\/[A-Za-z0-9._-]+|\.claude\/hooks\/stamity\/[A-Za-z0-9._-]+)\.(?:mjs|cjs|js|sh|py)\b/gu;
 
 /**
  * A run of path separators, either spelling: a kept document may name a script
@@ -708,7 +709,7 @@ function encodedRowScripts(encoded: string): string[] {
 
 /**
  * The repo-relative scripts a hooks document runs (S17): every path under
- * `.stamity/` or `.cursor/hooks/` with a script extension its text names, plus
+ * `.stamity/`, `.cursor/hooks/` or `.claude/hooks/stamity/` with a script extension its text names, plus
  * each relative path in the `command` argv of a portable runner's encoded row,
  * which names the script the runner launches and carries it only base64url
  * encoded. A document that parses is read value by value, so a JSON escape
@@ -735,8 +736,9 @@ export function referencedHookScripts(text: string): Set<string> {
 /**
  * How the reclaim sweep reads a hooks document it keeps
  * (`../merge/reclaim.ts::HookScriptReader`): which candidate paths are engine
- * hook scripts — under the generated hooks folder, an installed pack's folder,
- * or one of `guardPaths` — and whether a kept document's text runs one. Each
+ * hook scripts — under the generated hooks folder, Claude Code's hook folder
+ * (`.claude/hooks/stamity/`), an installed pack's folder, or one of
+ * `guardPaths` — and whether a kept document's text runs one. Each
  * document's references are read once, however the calls interleave.
  */
 export function hookScriptReader(guardPaths: readonly string[]): {
@@ -747,7 +749,11 @@ export function hookScriptReader(guardPaths: readonly string[]): {
   // One entry per document text, so a sweep alternating between documents parses each once.
   const read = new Map<string, { scripts: Set<string>; flat: string }>();
   return {
-    isHookScript: (path) => path.startsWith(`${HOOKS_GENERATED_DIR}/`) || path.startsWith(`${STATE_DIR}/packs/`) || guards.has(path),
+    isHookScript: (path) =>
+      path.startsWith(`${HOOKS_GENERATED_DIR}/`) ||
+      path.startsWith(`${CLAUDE_HOOKS_DIR}/`) ||
+      path.startsWith(`${STATE_DIR}/packs/`) ||
+      guards.has(path),
     runs: (text, path) => {
       let entry = read.get(text);
       if (entry === undefined) {

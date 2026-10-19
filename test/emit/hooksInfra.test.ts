@@ -11,7 +11,7 @@ import {
   type HooksPlanContext,
   type PackAgentDeclaration,
 } from "../../src/emit/hooksInfra.ts";
-import { CANONICAL_HOOK_EVENTS, HOOK_SESSION_START_TIMEOUT_MS } from "../../src/hooks/model.ts";
+import { CANONICAL_HOOK_EVENTS, CLAUDE_HOOKS_DIR, HOOK_SESSION_START_TIMEOUT_MS } from "../../src/hooks/model.ts";
 import { CLOUD_READINESS_FILE, CLOUD_READINESS_TIMEOUT_MS, MAX_POLICY_FILE_BYTES } from "../../src/hooks/scripts.ts";
 import { AGENT_POLICY_ROSTER } from "../../src/roster/agentPolicies.ts";
 import { AGENT_TOOL_POLICIES_SCHEMA } from "../../src/tools/allowlist.ts";
@@ -217,17 +217,27 @@ describe("core script rows", () => {
     // canonical tool order, so selection spelling never changes the bytes.
     const p = await plan(["cursor", "claude"]);
 
+    // TEST CHANGE, justified (w6-claude-hooks-in-claude-dir, REQ-FLOW-113): Claude's set is planned twice, the
+    // generated copies first and unchanged, then the copies its hook entries run under `.claude/hooks/stamity/`.
     expect(p.scripts.map((s) => s.path)).toEqual([
       `${HOOKS_ROOT}/claude/${SESSION_START}`,
       `${HOOKS_ROOT}/claude/${GUARD}`,
       `${HOOKS_ROOT}/claude/${TAMPER}`,
       `${HOOKS_ROOT}/claude/${PERSON_ONLY}`,
+      `${CLAUDE_HOOKS_DIR}/${SESSION_START}`,
+      `${CLAUDE_HOOKS_DIR}/${GUARD}`,
+      `${CLAUDE_HOOKS_DIR}/${TAMPER}`,
+      `${CLAUDE_HOOKS_DIR}/${PERSON_ONLY}`,
       `${HOOKS_ROOT}/cursor/${SESSION_START}`,
       `${HOOKS_ROOT}/cursor/${GUARD}`,
       `${HOOKS_ROOT}/cursor/${TAMPER}`,
       `${HOOKS_ROOT}/cursor/${PERSON_ONLY}`,
     ]);
     expect(p.scripts.map((s) => s.tool)).toEqual([
+      "claude",
+      "claude",
+      "claude",
+      "claude",
       "claude",
       "claude",
       "claude",
@@ -304,6 +314,46 @@ describe("core script rows", () => {
       const banned = script.path.endsWith(`/${PERSON_ONLY}`) ? /https?:\/\/|\bfetch\(/i : /https?:\/\/|\bcurl\b|\bwget\b|\bfetch\(/i;
       expect(script.content, script.path).not.toMatch(banned);
       expect(script.content.startsWith("#!/usr/bin/env node\n"), script.path).toBe(true);
+    }
+  });
+});
+
+// w6-claude-hooks-in-claude-dir (REQ-FLOW-113, REQ-FLOW-104): the Claude Code GitHub Action restores `.claude/`
+// from the base branch on a pull request, so Claude's hook entries run copies there; the generated copies stay.
+describe("Claude's hook copies under .claude/hooks/stamity", () => {
+  it("renders the copies for their own folder: the hook folder's anchor and the policy copy beside the guard", async () => {
+    const p = await plan(["claude"]);
+    const copy = (file: string): string => {
+      const row = p.scripts.find((s) => s.path === `${CLAUDE_HOOKS_DIR}/${file}`);
+      expect(row, file).toBeDefined();
+      expect(row!.tool).toBe("claude");
+      return row!.content;
+    };
+
+    expect(policyFileSegments(copy(GUARD))).toEqual(["stamity-agent-tool-policies.json"]);
+    expect(policyFileSegments(scriptContent(p, "claude", GUARD))).toEqual(["..", "..", "agent-tool-policies.json"]);
+    for (const file of [SESSION_START, GUARD, PERSON_ONLY]) {
+      expect(copy(file), file).toContain('const ANCHOR_SEGMENTS = ["hooks",".claude"];');
+      expect(scriptContent(p, "claude", file), file).toContain('const ANCHOR_SEGMENTS = ["hooks","generated",".stamity"];');
+    }
+    // The guard copy keeps the path-scoped report Write, since its folder names the repository too.
+    expect(copy(GUARD)).toContain("const WRITE_TOOL = ");
+    expect(copy(TAMPER)).toBe(scriptContent(p, "claude", TAMPER));
+  });
+
+  it("points Claude's portable rows at the copies, and leaves the other clients' rows where they were", async () => {
+    const p = await plan(["claude", "cursor", "copilot", "codex"]);
+
+    const claude = p.interchangeFor("claude").map((row) => row.command[1]);
+    expect(claude).toEqual([
+      `${CLAUDE_HOOKS_DIR}/${SESSION_START}`,
+      `${CLAUDE_HOOKS_DIR}/${GUARD}`,
+      `${CLAUDE_HOOKS_DIR}/${TAMPER}`,
+      `${CLAUDE_HOOKS_DIR}/${PERSON_ONLY}`,
+    ]);
+    for (const tool of ["cursor", "copilot", "codex"] as const) {
+      for (const row of p.interchangeFor(tool)) expect(row.command[1], tool).toMatch(new RegExp(`^${HOOKS_ROOT}/${tool}/`));
+      for (const script of p.scripts.filter((s) => s.tool === tool)) expect(script.path, tool).toMatch(new RegExp(`^${HOOKS_ROOT}/${tool}/`));
     }
   });
 });
@@ -569,11 +619,13 @@ describe("interchange rows", () => {
     const rows = p.interchangeFor("claude");
 
     expect(rows.map((row) => row.event)).toEqual(["session_start", "pre_tool_use", "session_start", "pre_tool_use"]);
+    // TEST CHANGE, justified (w6-claude-hooks-in-claude-dir, REQ-FLOW-113): Claude's rows run the copies under
+    // `.claude/hooks/stamity/`, which the Claude Code GitHub Action restores from the base branch; same order.
     expect(rows.map((row) => row.command)).toEqual([
-      ["node", `${HOOKS_ROOT}/claude/${SESSION_START}`],
-      ["node", `${HOOKS_ROOT}/claude/${GUARD}`],
-      ["node", `${HOOKS_ROOT}/claude/${TAMPER}`],
-      ["node", `${HOOKS_ROOT}/claude/${PERSON_ONLY}`],
+      ["node", `${CLAUDE_HOOKS_DIR}/${SESSION_START}`],
+      ["node", `${CLAUDE_HOOKS_DIR}/${GUARD}`],
+      ["node", `${CLAUDE_HOOKS_DIR}/${TAMPER}`],
+      ["node", `${CLAUDE_HOOKS_DIR}/${PERSON_ONLY}`],
     ]);
     expect(p.interchangeFor("cursor").map((row) => row.command[1])).toEqual([
       `${HOOKS_ROOT}/cursor/${SESSION_START}`,
@@ -634,8 +686,11 @@ describe("interchange rows", () => {
 
   it("places no shell guard for a client the selection leaves out", async () => {
     const p = await plan(["claude"]);
+    // TEST CHANGE, justified (w6-claude-hooks-in-claude-dir, REQ-FLOW-113): Claude's guard is placed twice, the
+    // generated copy and the copy its hook entries run; still none for the clients left out.
     expect(p.scripts.filter((s) => s.path.endsWith(`/${PERSON_ONLY}`)).map((s) => s.path)).toEqual([
       `${HOOKS_ROOT}/claude/${PERSON_ONLY}`,
+      `${CLAUDE_HOOKS_DIR}/${PERSON_ONLY}`,
     ]);
     expect(p.interchangeFor("cursor")).toEqual([]);
   });
@@ -1059,7 +1114,9 @@ describe("determinism and purity", () => {
     const ghost = repo.path("ghost");
     const ghostPlan = await planHooksInfra(ctxFor(ghost, ["claude", "cursor"]));
     // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102, build/44): four core scripts per tool.
-    expect(ghostPlan.scripts).toHaveLength(8);
+    // TEST CHANGE, justified (w6-claude-hooks-in-claude-dir, REQ-FLOW-113): and Claude's four copies under
+    // `.claude/hooks/stamity/` beside its generated four.
+    expect(ghostPlan.scripts).toHaveLength(12);
     expect(ghostPlan.warnings).toEqual([]);
     expect(existsSync(ghost)).toBe(false);
   });
@@ -1079,7 +1136,12 @@ describe("hookScriptsRoot: the client-visible root the plugin emission needs", (
     // where the repository writes them — same paths, same bytes. Only the
     // command a client executes changes, because only the client's view of the
     // filesystem moved.
-    expect(plugin.scripts.map((s) => s.path)).toEqual(repo.scripts.map((s) => s.path));
+    // TEST CHANGE, justified (w6-claude-hooks-in-claude-dir, REQ-FLOW-113): the repository plan also carries the
+    // copies Claude's hook entries run under `.claude/hooks/stamity/`, which a container has no use for (its
+    // scripts already sit together under its own root), so the comparison is over the generated rows.
+    expect(plugin.scripts.map((s) => s.path)).toEqual(
+      repo.scripts.filter((s) => s.path.startsWith(`${HOOKS_ROOT}/`)).map((s) => s.path),
+    );
     // TEST CHANGE (SEC3-W1): the two bodies that read no policy document are
     // still byte-identical, and the GUARD deliberately is not — its single
     // policy-document candidate is chosen at emission, so the container guard

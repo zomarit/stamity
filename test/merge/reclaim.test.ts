@@ -393,6 +393,11 @@ describe("sweepReclaimCandidates — containment", () => {
     [".stamity/generated", ".stamity/learnings", ".stamity/generated/keep-me.md", ".stamity/learnings/keep-me.md"],
     [".stamity", "owner-state", ".stamity/mcp/keep-me.md", "owner-state/mcp/keep-me.md"],
     [".stamity/packs/acme__ops", "docs", `${OWNED_PATHS.packRoot}acme__ops/keep-me.md`, "docs/keep-me.md"],
+    // w6-claude-hooks-in-claude-dir (REQ-FLOW-113): the hook folder Claude Code's hooks run from is the engine's
+    // own too, and so is every folder above it, so a link at any of them refuses as a state folder's does.
+    [".claude/hooks/stamity", "docs", ".claude/hooks/stamity/keep-me.md", "docs/keep-me.md"],
+    [".claude/hooks", "owner-hooks", ".claude/hooks/stamity/keep-me.md", "owner-hooks/stamity/keep-me.md"],
+    [".claude", "owner-claude", ".claude/hooks/stamity/keep-me.md", "owner-claude/hooks/stamity/keep-me.md"],
   ])("refuses a hashed row under %j when that folder is itself a link", async (linked, target, rowPath, ownerFile) => {
     const temp = tempDir();
     const root = temp.path("repo");
@@ -1036,6 +1041,35 @@ describe("sweepReclaimCandidates — recorded-hash ownership", () => {
     expect(entry.action).toBe("deleted");
     expect(entry.detail).toContain("still hash to what the ledger recorded");
     expect(await snapshot(root)).toEqual({ ".stamity/": "" });
+  });
+
+  // w6-claude-hooks-in-claude-dir (REQ-FLOW-113): a hash alone proves a delete in the hook folder, as in a state
+  // folder, and an owner's own hook beside that folder keeps its bytes and its folders.
+  it("deletes a hook-folder script whose bytes match the recorded hash, and keeps an owner's hook beside it", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    const script = ".claude/hooks/stamity/stamity-session-start.mjs";
+    const body = "#!/usr/bin/env node\nprocess.exit(0);\n";
+    await temp.seedFiles({ [`repo/${script}`]: body, "repo/.claude/hooks/mine.sh": "echo mine\n" });
+
+    const report = await sweepReclaimCandidates([hashedCandidate(script, body)], { rootDir: root, consent: true });
+
+    const entry = onlyEntry(report);
+    expect(entry.action).toBe("deleted");
+    expect(entry.detail).toContain("still hash to what the ledger recorded");
+    expect(await snapshot(root)).toEqual({ ".claude/": "", ".claude/hooks/": "", ".claude/hooks/mine.sh": "echo mine\n" });
+  });
+
+  it("keeps a hook-folder script whose bytes drifted from the recorded hash", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    const script = ".claude/hooks/stamity/stamity-session-start.mjs";
+    await temp.seedFiles({ [`repo/${script}`]: "edited by hand\n" });
+
+    const report = await sweepReclaimCandidates([hashedCandidate(script, "the engine's bytes\n")], { rootDir: root, consent: true });
+
+    expect(onlyEntry(report).action).toBe("skipped-user-content");
+    expect(await readFile(join(root, script), "utf-8")).toBe("edited by hand\n");
   });
 
   it("keeps a state-dir file whose bytes drifted from the recorded hash", async () => {

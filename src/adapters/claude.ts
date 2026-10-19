@@ -116,7 +116,7 @@ import type {
   ResidueEmission,
   ResiduePlanner,
 } from "../emit/planner.ts";
-import { HOOKS_GENERATED_DIR } from "../emit/hooksInfra.ts";
+import { CLAUDE_HOOK_POLICIES_FILE, HOOKS_GENERATED_DIR } from "../emit/hooksInfra.ts";
 import { NATIVE_SKILL_DIRS, nativeSkillRows } from "../emit/skillsProjection.ts";
 import {
   cliCallContextOf,
@@ -129,6 +129,7 @@ import {
 import {
   CANONICAL_HOOK_EVENTS,
   CLAUDE_EVENT_NAMES,
+  CLAUDE_HOOKS_DIR,
   CLIENT_EXTENSION_EVENTS,
   CLIENT_HOOK_GUARANTEES,
   type HookInterchange,
@@ -145,6 +146,7 @@ import {
   buildCloudReadinessScript,
   buildReviewGateScript,
   buildUnattendedAskGate,
+  type HookScriptLayout,
 } from "../hooks/scripts.ts";
 import { readReviewCap } from "../manifest/manifest.ts";
 import type { McpEmission } from "../mcp/emit.ts";
@@ -242,6 +244,37 @@ export const CLAUDE_ASK_GATE_PATH = `${HOOKS_GENERATED_DIR}/${TOOL}/${UNATTENDED
  */
 export const CLAUDE_CLOUD_READINESS_PATH = `${HOOKS_GENERATED_DIR}/${TOOL}/${CLOUD_READINESS_FILE}`;
 
+/*
+ * The copies the hook entries RUN (REQ-FLOW-113, REQ-FLOW-104), under
+ * `.claude/hooks/stamity/` ({@link CLAUDE_HOOKS_DIR}). The Claude Code GitHub
+ * Action, on a pull request, replaces the whole `.claude/` tree with the base
+ * branch's copy before the CLI starts, so on the Action's run every script a
+ * hook entry starts, and the policy document the guard reads beside them, are
+ * the base branch's: a pull request cannot rewrite them for its own run. The
+ * core's four copies are planned by `../emit/hooksInfra.ts`; these are the
+ * adapter's three, each rendered for that folder (the `claude` placement), and
+ * the policy document's copy. The generated copies above are still placed, byte
+ * for byte, for the manual session-start run the charter names; no entry runs
+ * them.
+ */
+
+/** The review gate's copy the `TaskCompleted` and `SubagentStop` entries run. */
+export const CLAUDE_HOOK_REVIEW_GATE_PATH = `${CLAUDE_HOOKS_DIR}/${REVIEW_GATE_FILE}`;
+
+/** The ask gate's copy the question-tool entry runs. */
+export const CLAUDE_HOOK_ASK_GATE_PATH = `${CLAUDE_HOOKS_DIR}/${UNATTENDED_ASK_GATE_FILE}`;
+
+/** The cloud readiness hook's copy the `startup|resume` entry runs. */
+export const CLAUDE_HOOK_CLOUD_READINESS_PATH = `${CLAUDE_HOOKS_DIR}/${CLOUD_READINESS_FILE}`;
+
+/**
+ * The policy document's copy the guard copy beside it reads (its sibling name,
+ * `stamity-agent-tool-policies.json`, `../emit/hooksInfra.ts`): the core's document byte for byte, owned by this
+ * adapter alone, so a pull request's own `.stamity/generated/` document decides
+ * nothing on the Action's run.
+ */
+export const CLAUDE_HOOK_POLICIES_PATH = `${CLAUDE_HOOKS_DIR}/${CLAUDE_HOOK_POLICIES_FILE}`;
+
 /**
  * The session sources the readiness hook runs on: a new session and a resumed
  * one, the two that may start on a fresh cloud machine. Not `clear` or
@@ -317,18 +350,18 @@ const PRE_TOOL_USE_GUARD_SCRIPT_FILE = "stamity-pre-tool-use-guard.mjs";
 /**
  * The repository path of the core guard, i.e. exactly the script argument
  * `planHooksInfra` puts on this client's `pre_tool_use` row in repository mode
- * (`../emit/hooksInfra.ts`). A plugin-mode row carries
+ * (`../emit/hooksInfra.ts`): the copy under {@link CLAUDE_HOOKS_DIR}. A plugin-mode row carries
  * `${CLAUDE_PLUGIN_ROOT}/hooks/<file>` instead and therefore does not equal it,
  * which is how {@link failsClosedOnLaunchFailure} tells the two apart.
  */
-const CLAUDE_GUARD_PATH = `${HOOKS_GENERATED_DIR}/${TOOL}/${PRE_TOOL_USE_GUARD_SCRIPT_FILE}`;
+const CLAUDE_GUARD_PATH = `${CLAUDE_HOOKS_DIR}/${PRE_TOOL_USE_GUARD_SCRIPT_FILE}`;
 
 /**
  * The repository path of the person-only shell guard (REQ-FLOW-102), the
  * second row {@link failsClosedOnLaunchFailure} picks: a shell guard that
  * cannot launch would otherwise let a force push through.
  */
-const CLAUDE_PERSON_ONLY_GUARD_PATH = `${HOOKS_GENERATED_DIR}/${TOOL}/${PERSON_ONLY_GUARD_FILE}`;
+const CLAUDE_PERSON_ONLY_GUARD_PATH = `${CLAUDE_HOOKS_DIR}/${PERSON_ONLY_GUARD_FILE}`;
 
 /**
  * The client's own name for the repository root: "the project root where the
@@ -574,23 +607,25 @@ export const claudeResiduePlanner: ResiduePlanner = {
       content: buildSettingsJson(core, cliCallContextOf(ctx), ctx.facts.hookScriptsRoot),
       owner: owner("claude-settings", "infra"),
     });
-    rows.push(buildReviewGate(ctx));
-    rows.push({
-      path: CLAUDE_ASK_GATE_PATH,
-      // The layout decided as the review gate's is: the repository copy finds
-      // the root from its own location, a plugin copy keeps the cwd resolver.
-      content: buildUnattendedAskGate({ layout: ctx.facts.hookScriptsRoot === undefined ? "generated" : "container" }),
-      owner: owner("claude-ask-gate", "infra"),
-    });
-    rows.push({
-      path: CLAUDE_CLOUD_READINESS_PATH,
-      // The layout decided as the ask gate's is; the CLI it resolves is the pin every emitted hint names.
-      content: buildCloudReadinessScript({
-        cli: cliCallContextOf(ctx),
-        layout: ctx.facts.hookScriptsRoot === undefined ? "generated" : "container",
-      }),
-      owner: owner("claude-cloud-readiness", "infra"),
-    });
+    // The generated copies, then (repository layout only) the copies the
+    // entries run under `.claude/hooks/stamity/` and the policy document's copy.
+    const generated = ctx.facts.hookScriptsRoot === undefined ? "generated" : "container";
+    rows.push(...adapterScripts(ctx, generated, { review: CLAUDE_REVIEW_GATE_PATH, ask: CLAUDE_ASK_GATE_PATH, readiness: CLAUDE_CLOUD_READINESS_PATH }, ""));
+    if (ctx.facts.hookScriptsRoot === undefined) {
+      rows.push(
+        ...adapterScripts(
+          ctx,
+          "claude",
+          { review: CLAUDE_HOOK_REVIEW_GATE_PATH, ask: CLAUDE_HOOK_ASK_GATE_PATH, readiness: CLAUDE_HOOK_CLOUD_READINESS_PATH },
+          "hook-",
+        ),
+      );
+      rows.push({
+        path: CLAUDE_HOOK_POLICIES_PATH,
+        content: core.hooks.policyDocument.content,
+        owner: owner("claude-hook-agent-tool-policies", "infra"),
+      });
+    }
     rows.push({
       path: modelMapPath(TOOL),
       content: `${JSON.stringify(buildClaudeModelMap(roles, ctx), null, 2)}\n`,
@@ -842,6 +877,31 @@ function buildCommandFile(item: CatalogItem, render: (raw: string) => string): A
 }
 
 /**
+ * The adapter's three scripts for one placement: the review gate, the ask gate
+ * and the cloud readiness hook, at `paths`, each rendered for `layout` — the
+ * repository copy finds the root from its own location, a plugin copy keeps the
+ * cwd resolver — and owned under `claude-<idInfix><name>` (`""` for the
+ * generated copies, `"hook-"` for the copies the entries run).
+ */
+function adapterScripts(
+  ctx: EmissionContext,
+  layout: HookScriptLayout,
+  paths: { review: string; ask: string; readiness: string },
+  idInfix: string,
+): AdapterOutput[] {
+  return [
+    buildReviewGate(ctx, paths.review, layout, `claude-${idInfix}review-gate`),
+    { path: paths.ask, content: buildUnattendedAskGate({ layout }), owner: owner(`claude-${idInfix}ask-gate`, "infra") },
+    {
+      path: paths.readiness,
+      // The CLI it resolves is the pin every emitted hint names.
+      content: buildCloudReadinessScript({ cli: cliCallContextOf(ctx), layout }),
+      owner: owner(`claude-${idInfix}cloud-readiness`, "infra"),
+    },
+  ];
+}
+
+/**
  * The work-scoped review gate script, carrying this repo's clamped round cap
  * and this client's honest blocking strength.
  *
@@ -851,21 +911,22 @@ function buildCommandFile(item: CatalogItem, render: (raw: string) => string): A
  * falls back to blocking: an exit status a client ignores costs nothing, while
  * assuming it ignores one would silently disarm the gate.
  */
-function buildReviewGate(ctx: EmissionContext): AdapterOutput {
+function buildReviewGate(ctx: EmissionContext, path: string, layout: HookScriptLayout, artifactId: string): AdapterOutput {
   return {
-    path: CLAUDE_REVIEW_GATE_PATH,
+    path,
     content: buildReviewGateScript({
       statePath: REVIEW_GATE_STATE_FILE,
       maxIterations: readReviewCap(ctx.manifest),
       failMode: HOOK_GUARANTEE?.failMode ?? "fail-closed",
-      // The gate's own repo-root resolver, decided here because this is where
-      // the placement is known: in repository mode the file lands at
-      // `.stamity/generated/hooks/claude/` and its own location identifies the
-      // root, and under a plugin root the vendor's own `hooks/` directory names
-      // no repository, so that body keeps the cwd-and-environment resolver.
-      layout: ctx.facts.hookScriptsRoot === undefined ? "generated" : "container",
+      // The gate's own repo-root resolver, decided by the caller because that is
+      // where the placement is known: in repository mode the file lands under
+      // `.stamity/generated/hooks/claude/` or `.claude/hooks/stamity/` and its own
+      // location identifies the root, and under a plugin root the vendor's own
+      // `hooks/` directory names no repository, so that body keeps the
+      // cwd-and-environment resolver.
+      layout,
     }),
-    owner: owner("claude-review-gate", "infra"),
+    owner: owner(artifactId, "infra"),
   };
 }
 
@@ -928,22 +989,22 @@ function buildSettingsJson(
 ): string {
   const rows = core.hooks.interchangeFor(TOOL);
   // The core's rows already carry the client's view of their own scripts
-  // (`../emit/hooksInfra.ts`). This one does not: the review gate rides two
-  // events only this client fires, so this adapter places the script AND wires
-  // it, and its command is the one place a plugin's configuration could keep a
-  // repository path. The script ROW keeps `CLAUDE_REVIEW_GATE_PATH` either way
-  // — that is where this repository writes the bytes.
+  // (`../emit/hooksInfra.ts`), the copies under `.claude/hooks/stamity/`. These
+  // three do not: they ride events or tools only this client has, so this
+  // adapter places the scripts AND wires them, running the copies it placed
+  // under the same folder (REQ-FLOW-113), and their commands are the one place a
+  // plugin's configuration could keep a repository path.
   const reviewGate =
     hookScriptsRoot === undefined
-      ? CLAUDE_REVIEW_GATE_PATH
+      ? CLAUDE_HOOK_REVIEW_GATE_PATH
       : `${hookScriptsRoot}/${REVIEW_GATE_FILE}`;
   const askGate =
     hookScriptsRoot === undefined
-      ? CLAUDE_ASK_GATE_PATH
+      ? CLAUDE_HOOK_ASK_GATE_PATH
       : `${hookScriptsRoot}/${UNATTENDED_ASK_GATE_FILE}`;
   const readiness =
     hookScriptsRoot === undefined
-      ? CLAUDE_CLOUD_READINESS_PATH
+      ? CLAUDE_HOOK_CLOUD_READINESS_PATH
       : `${hookScriptsRoot}/${CLOUD_READINESS_FILE}`;
 
   const hooks: Record<string, ClaudeHookEntry[]> = {};

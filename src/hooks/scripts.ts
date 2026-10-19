@@ -52,6 +52,7 @@ import {
 import { cliCallHint, pinnedCliCall } from "../shared/cliCall.ts";
 import { MATCH_SESSIONS_SOURCE, SESSION_MARKERS, type SessionMarkerRow } from "../session/detect.ts";
 import {
+  CLAUDE_HOOKS_DIR,
   CLIENT_CLOUD_FACTS,
   CLIENT_HOOK_GUARANTEES,
   type CanonicalHookEvent,
@@ -618,7 +619,10 @@ function header(summary: readonly string[], posture: readonly string[]): string 
  *
  * `generated` is this repository's own layout —
  * `<root>/.stamity/generated/hooks/<tool>/<script>` — where the script's own
- * location identifies the repository. `container` is a vendor plugin root, where
+ * location identifies the repository. `claude` is the copy Claude Code's hook
+ * entries run — `<root>/.claude/hooks/stamity/<script>` ({@link CLAUDE_HOOKS_DIR},
+ * REQ-FLOW-113) — which identifies the repository the same way from its own
+ * folder's parents. `container` is a vendor plugin root, where
  * every script is a sibling in one `hooks/` directory and the repository the
  * session opened is not derivable from the script's path at all.
  *
@@ -628,7 +632,7 @@ function header(summary: readonly string[], posture: readonly string[]): string 
  * that probed its surroundings at run time would let whatever tree it happens to
  * sit in answer the question.
  */
-export type HookScriptLayout = "generated" | "container";
+export type HookScriptLayout = "generated" | "claude" | "container";
 
 /**
  * The three parent segments a `generated` script's directory sits under, innermost
@@ -645,6 +649,23 @@ export type HookScriptLayout = "generated" | "container";
  * would have bought.
  */
 const GENERATED_ANCHOR_SEGMENTS = [".stamity", "generated", "hooks"] as const;
+
+/**
+ * The parent segments a `claude` copy's directory sits under, innermost last:
+ * `.claude/hooks`, above the `stamity` folder that holds the copy, exactly as
+ * {@link GENERATED_ANCHOR_SEGMENTS} stops above the per-tool folder. Derived from
+ * {@link CLAUDE_HOOKS_DIR}, which this module can import.
+ */
+const CLAUDE_ANCHOR_SEGMENTS: readonly string[] = CLAUDE_HOOKS_DIR.split("/").slice(0, -1);
+
+/**
+ * The anchor a non-container layout renders, read up from the script's
+ * directory's parent: the only part of a body that differs between the
+ * `generated` and the `claude` placement.
+ */
+function anchorSegments(layout: Exclude<HookScriptLayout, "container">): readonly string[] {
+  return layout === "claude" ? CLAUDE_ANCHOR_SEGMENTS : GENERATED_ANCHOR_SEGMENTS;
+}
 
 /**
  * The repo-root resolver every script that reads the state directory shares, in
@@ -711,7 +732,7 @@ function derivedRoot() {
     layout === "container"
       ? ""
       : `const HERE = dirname(fileURLToPath(import.meta.url));
-const ANCHOR_SEGMENTS = ${json(GENERATED_ANCHOR_SEGMENTS.toReversed())};
+const ANCHOR_SEGMENTS = ${json(anchorSegments(layout).toReversed())};
 
 `
   }${helper}function repoRoot() {
@@ -1673,9 +1694,9 @@ export interface GuardScriptOptions {
   /**
    * Where this copy will sit ({@link HookScriptLayout}). Defaults to the layout
    * `policiesJsonPath` implies, the same derivation `planCoreHookScripts`
-   * passes. Only an identity-bearing guard in the `generated` layout renders the
-   * path-scoped report `Write`, because only there does the script's own
-   * location name the repository root a `writePaths` pattern is relative to; a
+   * passes. Only an identity-bearing guard in the `generated` or `claude` layout
+   * renders the path-scoped report `Write`, because only there does the script's
+   * own location name the repository root a `writePaths` pattern is relative to; a
    * container guard, and a guard that cannot name its caller, keep refusing that
    * `Write` through the category.
    */
@@ -1687,12 +1708,13 @@ const MAX_WRITE_FILE_PATH_CHARS = 1024;
 
 /**
  * The rendered half of the path-scoped report `Write`: the constants and helpers
- * the identity-bearing guard of the `generated` layout carries, and no other
- * body. Text, because the guard is a standalone module with nothing to import.
+ * the identity-bearing guard of the `generated` or `claude` layout carries, and
+ * no other body. Text, because the guard is a standalone module with nothing to
+ * import. The two layouts differ only in the anchor ({@link anchorSegments}).
  *
  * The decision is fail-closed at every step, each refusal naming its step:
  *
- * 1. **The root is the script's own.** {@link GENERATED_ANCHOR_SEGMENTS} is
+ * 1. **The root is the script's own.** The layout's {@link anchorSegments} are
  *    walked up from the script exactly as `derivedRoot` does for the other
  *    bodies — a copy, not a call, because `resolveRepoRoot` also consults an
  *    environment variable and the cwd, and neither may name the tree a write
@@ -1739,10 +1761,10 @@ const MAX_WRITE_FILE_PATH_CHARS = 1024;
  * `printable` helper both branches' refusals share, so the path-scoped block
  * runs from `WRITE_TOOL` to that helper as one piece.
  */
-function pathScopedWriteHelpers(): string {
+function pathScopedWriteHelpers(layout: Exclude<HookScriptLayout, "container">): string {
   return `const WRITE_TOOL = ${json(CLAUDE_REPORT_WRITE_TOOL)};
 const HERE = dirname(fileURLToPath(import.meta.url));
-const ANCHOR_SEGMENTS = ${json(GENERATED_ANCHOR_SEGMENTS.toReversed())};
+const ANCHOR_SEGMENTS = ${json(anchorSegments(layout).toReversed())};
 const MAX_PATH_CHARS = ${MAX_WRITE_FILE_PATH_CHARS};
 const MAX_PATTERN_CHARS = 200;
 const MAX_PATTERN_SEGMENTS = 16;
@@ -1996,7 +2018,7 @@ const GIT_DENIED_OPTION_PREFIXES = [
 /**
  * The rendered half of read-only git (REQ-CTX-017), rendered inside
  * {@link pathScopedWriteHelpers} and so carried by the same body: the
- * identity-bearing guard of the `generated` layout. A command is read-only git when it (a) is at most
+ * identity-bearing guard of the `generated` or `claude` layout. A command is read-only git when it (a) is at most
  * {@link MAX_GIT_COMMAND_CHARS} characters, (b) uses only
  * {@link GIT_COMMAND_CHARS}, (c) splits on single spaces into `git`, then one of
  * {@link READ_ONLY_GIT_SUBCOMMANDS} — so a top-level `-c`, `-p`, `--paginate`
@@ -2094,7 +2116,7 @@ const READ_ONLY_GIT_BRANCH = `    // Read-only git for a role without execute: B
  * withholds `edit` but carries `writePaths` may use the single-file `Write` on a
  * regular file under the repository root that matches one of them — and nothing
  * else. It is rendered only into the identity-bearing guard of the `generated`
- * layout, see {@link pathScopedWriteHelpers}; every other body stays
+ * or `claude` layout, see {@link pathScopedWriteHelpers}; every other body stays
  * byte-identical to the guard before the field existed. A second exception
  * rides the same body: a row that withholds `execute` but carries
  * `readOnlyGit: true` may use `Bash` for a read-only git command, and any other
@@ -2109,7 +2131,9 @@ export function buildPreToolUseGuardScript(opts: GuardScriptOptions): string {
   // Both conditions again: a guard that cannot name its caller has no row to
   // read `writePaths` from, and a container guard names no repository root the
   // patterns could be relative to.
-  const pathScoped = identityBearing && (opts.layout ?? layoutFor(opts.policiesJsonPath)) === "generated";
+  const layout = opts.layout ?? layoutFor(opts.policiesJsonPath);
+  const scopedLayout = identityBearing && layout !== "container" ? layout : null;
+  const pathScoped = scopedLayout !== null;
   const categories = Object.entries(unionToolCategoryMap())
     .map(([name, category]) => `  ${json(name)}: ${json(category)},`)
     .join("\n");
@@ -2164,7 +2188,7 @@ const MAX_POLICY_BYTES = ${MAX_POLICY_FILE_BYTES};
 const GOVERNED_PREFIX = ${json(CONTENT_PREFIX)};
 const BLOCKING = ${blocking};
 const BLOCK_EXIT = ${BLOCKING_EXIT_CODE};
-const MCP_PREFIX = ${json(MCP_TOOL_PREFIX)};${pathScoped ? `\n${pathScopedWriteHelpers()}` : ""}
+const MCP_PREFIX = ${json(MCP_TOOL_PREFIX)};${scopedLayout === null ? "" : `\n${pathScopedWriteHelpers(scopedLayout)}`}
 
 /**
  * The policy document THIS run reads — fixed when this script was RENDERED.
@@ -4904,12 +4928,24 @@ try {
  * renamed fork's notice names the fork, plus its `npmChannel` (absent: `-y`;
  * `false`: `--no`) and its scope's `registry` (absent: none named). Throws
  * `VALIDATION_ERROR` when either cannot be pinned (`../shared/cliCall.ts`).
+ * `opts.layout` names the placement outright where the policy path cannot say
+ * it: the `claude` copies under {@link CLAUDE_HOOKS_DIR} read a sibling document,
+ * the same spelling a container's guard reads, and still name their repository.
+ * Absent, the placement is read off `policiesJsonPath` ({@link layoutFor}).
  */
 export function planCoreHookScripts(
   policiesJsonPath: string,
   tool: Tool,
-  opts: { packageName: string; version: string; npmChannel?: boolean; registry?: string; personOnlyGuard?: boolean },
+  opts: {
+    packageName: string;
+    version: string;
+    npmChannel?: boolean;
+    registry?: string;
+    personOnlyGuard?: boolean;
+    layout?: HookScriptLayout;
+  },
 ): GeneratedHookScript[] {
+  const layout = opts.layout ?? layoutFor(policiesJsonPath);
   const failMode =
     CLIENT_HOOK_GUARANTEES.find((guarantee) => guarantee.tool === tool)?.failMode ?? "fail-closed";
   // Asked for by emission once it wires the guard on the client's shell tools;
@@ -4919,7 +4955,7 @@ export function planCoreHookScripts(
       ? [
           {
             fileName: PERSON_ONLY_GUARD_FILE,
-            content: buildPersonOnlyGuardScript({ tool, layout: layoutFor(policiesJsonPath) }),
+            content: buildPersonOnlyGuardScript({ tool, layout }),
             event: "pre_tool_use",
           },
         ]
@@ -4927,7 +4963,7 @@ export function planCoreHookScripts(
   return [
     {
       fileName: SESSION_START_FILE,
-      content: buildSessionStartScript({ layout: layoutFor(policiesJsonPath), tool }),
+      content: buildSessionStartScript({ layout, tool }),
       event: "session_start",
     },
     {
@@ -4936,7 +4972,7 @@ export function planCoreHookScripts(
         policiesJsonPath,
         failMode,
         identityBearing: !IDENTITY_FREE_PRE_TOOL_USE_PAYLOADS.has(tool),
-        layout: layoutFor(policiesJsonPath),
+        layout,
       }),
       event: "pre_tool_use",
     },
@@ -4962,9 +4998,9 @@ export function planCoreHookScripts(
  * this function already receives carries the mode, and one decision is made in
  * one place instead of two that can disagree.
  *
- * A first-class parameter threaded from `planHooksInfra` would say it more
- * directly; that module is outside this change's file set, and the derivation is
- * exact for both of its call shapes.
+ * The derivation is exact for the two shapes it reads; the third placement,
+ * `claude`, is named outright by `planHooksInfra` (`opts.layout` above), since
+ * its sibling document reads like a container's.
  */
 function layoutFor(policiesJsonPath: string): HookScriptLayout {
   return policiesJsonPath.startsWith("../") ? "generated" : "container";

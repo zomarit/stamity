@@ -6,6 +6,7 @@ import {
   bytesShowEngineOutput,
   carriesEngineMintedPrefix,
   hasEngineMintedName,
+  OWNED_PATHS,
   ownedFolderOf,
   ownedPathKind,
   provenByRendering,
@@ -238,9 +239,9 @@ export interface HookScriptReader {
   runs(text: string, path: string): boolean;
 }
 
-/** The reader when none is handed in: the generated hooks folder, named in the text. */
+/** The reader when none is handed in: the generated hooks folder and the hook folders, named in the text. */
 const DEFAULT_HOOK_SCRIPTS: HookScriptReader = {
-  isHookScript: (path) => path.startsWith(`${HOOKS_GENERATED_DIR}/`),
+  isHookScript: (path) => path.startsWith(`${HOOKS_GENERATED_DIR}/`) || OWNED_PATHS.hookRoots.some((root) => path.startsWith(root)),
   runs: (text, path) => text.includes(path),
 };
 
@@ -437,7 +438,8 @@ const ENGINE_PREFIX_LIST = ENGINE_CONTENT_PREFIXES.map((prefix) => `\`${prefix}\
  * The bound is what keeps a hash from proving more than the place it sits. It
  * used to be admitted anywhere under `.stamity/`, so a hand-added row hashing
  * an operator's learning or override deleted it; it is now admitted only in
- * the two state folders the engine writes and in a pack's own folder. A content
+ * the two state folders the engine writes, in the hook folder Claude Code's
+ * hooks run from (`.claude/hooks/stamity/`), and in a pack's own folder. A content
  * folder is not here at all: there the engine's name has to stand beside the
  * hash (gate 4), because owners keep their own files in those folders too.
  *
@@ -453,6 +455,7 @@ function isHashProvable(group: CandidateGroup, trusted: ReadonlySet<string>): bo
   return [...group.kinds].every(
     (kind) =>
       kind === "state" ||
+      kind === "hook" ||
       kind === "pack" ||
       ((kind === "exact" || kind === "charter") && trusted.has(group.path)),
   );
@@ -794,13 +797,16 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
   // content root that is itself an in-repo alias (`.cursor/rules -> shared/rules`)
   // reclaim through the alias.
   const folder = ownedFolderOf(path);
-  // The engine's own folders — `.stamity/`, a state folder, a pack's folder —
+  // The engine's own folders — `.stamity/`, a state folder, a pack's folder,
+  // the hook folder and every folder above it (`.claude/`, `.claude/hooks/`) —
   // are never links, and a hash alone proves a delete there, so a link anywhere
   // on that chain would aim the proof at whatever it points to. Each segment is
   // read with `lstat`; a content root keeps its in-repo alias, which the check
   // above already holds the parent inside.
   const engineChain =
-    folder !== null && folder.startsWith(`${STATE_DIR}/`) ? folder.slice(0, -1).split("/") : [];
+    folder !== null && (folder.startsWith(`${STATE_DIR}/`) || OWNED_PATHS.hookRoots.includes(folder))
+      ? folder.slice(0, -1).split("/")
+      : [];
   let parentReal: string;
   let parentIdentity: DirectoryIdentity;
   let folderReal: string | null = null;
@@ -831,7 +837,7 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
   if (linkedSegment !== null) {
     return skip(
       "skipped-unsafe-path",
-      `\`${linkedSegment}\` is a symbolic link. The engine's own state and pack folders are never links, so a row under one cannot name a file the engine wrote.`,
+      `\`${linkedSegment}\` is a symbolic link. The engine's own state, hook and pack folders are never links, so a row under one cannot name a file the engine wrote.`,
     );
   }
   if (folderReal !== null && !isWithin(parentReal, folderReal)) {

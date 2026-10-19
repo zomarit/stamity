@@ -21,6 +21,23 @@ import type { Tool } from "../types/core.ts";
  */
 
 /**
+ * Where Claude Code's hook entries find the scripts they run, repo-relative and
+ * without a trailing slash (REQ-FLOW-113, REQ-FLOW-104).
+ *
+ * Under `.claude/` because the Claude Code GitHub Action, on a pull request,
+ * replaces the whole `.claude/` tree with the base branch's copy before the CLI
+ * starts, so on the Action's run every script a hook entry starts, and the agent
+ * tool policy document the guard reads beside them, are the base branch's rather
+ * than the pull request's. The copies under `.stamity/generated/hooks/claude/`
+ * are still emitted, byte for byte, for the manual session-start run the charter
+ * names; no hook entry runs them. Here rather than beside the generated hooks
+ * folder in `../types/markers.ts` because the hooks model is where every reader
+ * of the placement (emission, the settings bounds, the script bodies) can reach
+ * it; `../manifest/ownedPaths.ts` restates it as data and a test binds the two.
+ */
+export const CLAUDE_HOOKS_DIR = ".claude/hooks/stamity";
+
+/**
  * The six-intent core: lifecycle events present on every client. Blocking and
  * context injection remain event- and client-specific.
  * Canonical ids are snake_case; the wire names live in
@@ -260,10 +277,11 @@ export const CLIENT_CLOUD_FACTS: readonly ClientCloudFact[] = [
     fact:
       "On a pull request the Action restores `.claude/`, `CLAUDE.md` and the other Claude configuration " +
       "paths from the base branch before Claude starts, keeping the pull request's copies under " +
-      "`.claude-pr/` for reference, so the hook entries are the base branch's. The page's word ends " +
-      "there: the hook scripts those entries start live under `.stamity/generated/hooks/`, which the " +
-      "restore does not cover, and come from the pull request, so a pull request can change what the " +
-      "guard runs on the Action's run on it.",
+      "`.claude-pr/` for reference, so the hook entries are the base branch's. The scripts those entries " +
+      "start, and the agent tool policy document the guard reads, are copies under `.claude/hooks/stamity/`, " +
+      "inside the restore, so the scripts the hooks run are the base branch's too. A pull request that " +
+      "legitimately changes `.claude/` sees that change reverted on the Action's run, the Action's own " +
+      "named limit.",
     status: "documented",
     citation: {
       url: "https://github.com/anthropics/claude-code-action/blob/main/docs/security.md",

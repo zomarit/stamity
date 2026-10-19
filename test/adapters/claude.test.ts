@@ -7,6 +7,10 @@ import {
   CLAUDE_ASK_GATE_PATH,
   CLAUDE_CLOUD_READINESS_PATH,
   CLAUDE_COMMANDS_DIR,
+  CLAUDE_HOOK_ASK_GATE_PATH,
+  CLAUDE_HOOK_CLOUD_READINESS_PATH,
+  CLAUDE_HOOK_POLICIES_PATH,
+  CLAUDE_HOOK_REVIEW_GATE_PATH,
   CLAUDE_DIALECT_FACTS,
   CLAUDE_MD_PATH,
   CLAUDE_REVIEW_GATE_PATH,
@@ -28,7 +32,7 @@ import { ADAPTER_REGISTRY } from "../../src/adapters/registry.ts";
 import { LIVE_CAPABILITY_INPUTS } from "../../src/emit/capabilityMatrix.ts";
 import { NATIVE_SKILL_DIRS, SKILLS_PROJECTION_DIR } from "../../src/emit/skillsProjection.ts";
 import { TOOLS, type Tool } from "../../src/types/core.ts";
-import { CLIENT_EXTENSION_EVENTS } from "../../src/hooks/model.ts";
+import { CLAUDE_HOOKS_DIR, CLIENT_EXTENSION_EVENTS } from "../../src/hooks/model.ts";
 import { CLAUDE_ASK_ROWS, CLAUDE_DENY_ROWS, GITHUB_MCP_ROWS, personOnlyVerdict } from "../../src/hooks/personOnly.ts";
 import {
   CLOUD_READINESS_FILE,
@@ -164,12 +168,17 @@ const GUARD_REPAIR_LINE =
  * the pre-tool-use guard alone also carries {@link GUARD_TAIL}. Still four
  * literals rather than a derivation: every other assertion in this file reads
  * through them, so they are the pin.
+ *
+ * TEST CHANGE, justified (w6-claude-hooks-in-claude-dir, REQ-FLOW-113, REQ-FLOW-104): every command runs the
+ * copy under `.claude/hooks/stamity/`, which the Claude Code GitHub Action restores from the base branch on a
+ * pull request, so a pull request cannot rewrite what its own Action run's hooks start. The anchor, the quoting
+ * and the tails are unchanged; the generated copies stay emitted and no entry runs them.
  */
 const HOOK_COMMANDS = {
   sessionStart:
-    'node "${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-session-start.mjs"',
+    'node "${CLAUDE_PROJECT_DIR}/.claude/hooks/stamity/stamity-session-start.mjs"',
   guard:
-    'node "${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs" ' +
+    'node "${CLAUDE_PROJECT_DIR}/.claude/hooks/stamity/stamity-pre-tool-use-guard.mjs" ' +
     '|| { s=$?; [ "$s" -eq 2 ] && exit 2; ' +
     // TEST CHANGE (sw26-engine-cli-call-form): the repair's pinned spelling, as GUARD_REPAIR_LINE.
     // TEST CHANGE (e10-cloud-docs-matrix): the registry clause, as GUARD_TAIL.
@@ -177,22 +186,22 @@ const HOOK_COMMANDS = {
     "`stamity sync` where the CLI is installed, else `npx -y @zomarit/stamity@0.0.0-test sync`, " +
     "which needs the npm registry' >&2; exit 2; }",
   tamper:
-    'node "${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs"',
+    'node "${CLAUDE_PROJECT_DIR}/.claude/hooks/stamity/stamity-config-tamper-notice.mjs"',
   reviewGate:
-    'node "${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-review-gate.mjs"',
+    'node "${CLAUDE_PROJECT_DIR}/.claude/hooks/stamity/stamity-review-gate.mjs"',
   // u20-hook-emission (REQ-FLOW-102): the person-only shell guard, anchored and carrying the same
   // fail-closed tail as the core guard, and the ask gate (REQ-FLOW-090), which carries none.
   personOnlyGuard:
-    'node "${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-person-only-guard.mjs" ' +
+    'node "${CLAUDE_PROJECT_DIR}/.claude/hooks/stamity/stamity-person-only-guard.mjs" ' +
     '|| { s=$?; [ "$s" -eq 2 ] && exit 2; ' +
     "echo 'stamity: the pre-tool-use guard could not run; run " +
     "`stamity sync` where the CLI is installed, else `npx -y @zomarit/stamity@0.0.0-test sync`, " +
     "which needs the npm registry' >&2; exit 2; }",
   askGate:
-    'node "${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-unattended-ask-gate.mjs"',
+    'node "${CLAUDE_PROJECT_DIR}/.claude/hooks/stamity/stamity-unattended-ask-gate.mjs"',
   // v5-claude-readiness (REQ-FLOW-110): the cloud readiness hook, anchored like every core row, with no tail.
   readiness:
-    'node "${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-cloud-readiness.mjs"',
+    'node "${CLAUDE_PROJECT_DIR}/.claude/hooks/stamity/stamity-cloud-readiness.mjs"',
 } as const;
 
 /**
@@ -203,8 +212,11 @@ const HOOK_COMMANDS = {
  */
 const USER_HOOK_COMMAND = 'node "${CLAUDE_PROJECT_DIR}/.stamity/hooks/run.mjs"';
 
-/** The core guard's repository path — the previous rendering, and the control below. */
-const GUARD_RELATIVE = ".stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs";
+/**
+ * The core guard's repository path — the previous rendering, and the control below.
+ * TEST CHANGE, justified (w6-claude-hooks-in-claude-dir, REQ-FLOW-113): the copy the hook entry runs.
+ */
+const GUARD_RELATIVE = ".claude/hooks/stamity/stamity-pre-tool-use-guard.mjs";
 
 /**
  * The shell the client hands a hook command to: `sh -c` on macOS and Linux, Git
@@ -955,6 +967,61 @@ describe("claude residue over the real corpus", () => {
   });
 });
 
+// w6-claude-hooks-in-claude-dir (REQ-FLOW-113, REQ-FLOW-104, plan/31): the Claude Code GitHub Action restores
+// `.claude/` from the base branch on a pull request, so the scripts the hook entries run, and the policy document
+// the guard reads, are placed there; the generated copies stay, byte for byte, for invariant 5's manual run.
+describe("the hook copies under .claude/hooks/stamity", () => {
+  it("places the adapter's three scripts in both folders, each rendered for its own, and the policy copy", async () => {
+    const { rows, core } = await planned();
+    const paths = byPath(rows);
+
+    expect(CLAUDE_HOOK_REVIEW_GATE_PATH).toBe(`${CLAUDE_HOOKS_DIR}/${REVIEW_GATE_FILE}`);
+    expect(CLAUDE_HOOK_ASK_GATE_PATH).toBe(`${CLAUDE_HOOKS_DIR}/${UNATTENDED_ASK_GATE_FILE}`);
+    expect(CLAUDE_HOOK_CLOUD_READINESS_PATH).toBe(`${CLAUDE_HOOKS_DIR}/${CLOUD_READINESS_FILE}`);
+    expect(CLAUDE_HOOK_POLICIES_PATH).toBe(`${CLAUDE_HOOKS_DIR}/stamity-agent-tool-policies.json`);
+
+    expect(paths.get(CLAUDE_HOOK_REVIEW_GATE_PATH)?.content).toBe(
+      buildReviewGateScript({
+        statePath: REVIEW_GATE_STATE_FILE,
+        maxIterations: DEFAULT_MAX_REVIEW_ITERATIONS,
+        failMode: "fail-closed",
+        layout: "claude",
+      }),
+    );
+    expect(paths.get(CLAUDE_HOOK_ASK_GATE_PATH)?.content).toBe(buildUnattendedAskGate({ layout: "claude" }));
+    expect(paths.get(CLAUDE_HOOK_CLOUD_READINESS_PATH)?.content).toBe(
+      buildCloudReadinessScript({ cli: { packageName: "@zomarit/stamity", version: ENGINE_VERSION }, layout: "claude" }),
+    );
+    // The generated copies keep the bytes the generated layout renders.
+    expect(paths.get(CLAUDE_ASK_GATE_PATH)?.content).toBe(buildUnattendedAskGate());
+    expect(paths.get(CLAUDE_HOOK_ASK_GATE_PATH)?.content).not.toBe(paths.get(CLAUDE_ASK_GATE_PATH)?.content);
+    // The policy copy is the core's document, byte for byte, owned by this adapter alone.
+    const policy = paths.get(CLAUDE_HOOK_POLICIES_PATH);
+    expect(policy?.content).toBe(core.hooks.policyDocument.content);
+    expect(policy?.owner).toEqual({ adapter: "claude", artifactId: "claude-hook-agent-tool-policies", artifactType: "infra" });
+    for (const [path, artifactId] of [
+      [CLAUDE_HOOK_REVIEW_GATE_PATH, "claude-hook-review-gate"],
+      [CLAUDE_HOOK_ASK_GATE_PATH, "claude-hook-ask-gate"],
+      [CLAUDE_HOOK_CLOUD_READINESS_PATH, "claude-hook-cloud-readiness"],
+    ] as const) {
+      expect(paths.get(path)?.owner, path).toEqual({ adapter: "claude", artifactId, artifactType: "infra" });
+    }
+  });
+
+  it("runs only the copies: every settings command names the hook folder, none the generated one", async () => {
+    const { rows } = await planned();
+    const commands = Object.values(settingsOf(rows).hooks).flatMap((entries) =>
+      entries.flatMap((entry) => entry.hooks.map((hook) => hook.command)),
+    );
+
+    expect(commands.length).toBeGreaterThan(8);
+    for (const command of commands) {
+      expect(executedScript(command), command).toMatch(new RegExp(`^${CLAUDE_HOOKS_DIR}/stamity-[a-z-]+\\.mjs$`));
+      expect(command, command).not.toContain(".stamity/generated/hooks/");
+    }
+  });
+});
+
 describe("the work-scoped review gate", () => {
   it("emits the script once, beside the core set, under the per-tool hooks directory", async () => {
     const { rows } = await planned();
@@ -1602,6 +1669,11 @@ describe("the project-directory anchor", () => {
     for (const script of core.hooks.scripts) {
       files[join("anchored", script.path)] = script.content;
     }
+    // TEST CHANGE, justified (w6-claude-hooks-in-claude-dir, REQ-FLOW-113, plan/31): the guard copy reads the
+    // policy copy the adapter places beside it, so the adapter's rows under the hook folder are seeded too.
+    for (const row of rows.filter((output) => output.path.startsWith(`${CLAUDE_HOOKS_DIR}/`))) {
+      files[join("anchored", row.path)] = row.content;
+    }
     await temp.seedFiles(files);
     return {
       root,
@@ -1752,7 +1824,8 @@ describe("the project-directory anchor", () => {
     "blocks a shell call with the repair when the shell guard script is missing (u20)",
     async () => {
       const { root, command } = await emittedShellGuard();
-      rmSync(join(root, ".stamity", "generated", "hooks", "claude", "stamity-person-only-guard.mjs"));
+      // TEST CHANGE, justified (w6-claude-hooks-in-claude-dir, REQ-FLOW-113): the copy the entry runs is removed.
+      rmSync(join(root, ...CLAUDE_HOOKS_DIR.split("/"), "stamity-person-only-guard.mjs"));
 
       const result = shell(command, join(root, "sub", "dir"), bashCall("git status"), root);
 

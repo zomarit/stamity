@@ -1020,4 +1020,17 @@ describe("claudeSettingsSpec", () => {
     expect(isEngineHookGroup(null)).toBe(false);
     expect(isEngineHookGroup({ hooks: [null, { command: 3 }] })).toBe(false);
   });
+
+  // w6-claude-hooks-in-claude-dir (REQ-FLOW-113, REQ-FLOW-036): the entries run the copies under
+  // `.claude/hooks/stamity/`, so an entry running one is the engine's to recognise and in the bound, and an
+  // owner's own hook beside that folder stays the owner's.
+  it("bounds and recognises an entry running a copy under the hook folder, and leaves an owner's hook beside it alone", () => {
+    const [, hooks] = claudeSettingsSpec().elements;
+    const copy = { hooks: [{ type: "command", command: 'node "${CLAUDE_PROJECT_DIR}/.claude/hooks/stamity/stamity-session-start.mjs"', timeout: 30 }] };
+    const owner = { hooks: [{ type: "command", command: 'node "${CLAUDE_PROJECT_DIR}/.claude/hooks/mine.mjs"' }] };
+    expect(hooks?.inBound(copy)).toBe(true);
+    expect(isEngineHookGroup(copy)).toBe(true);
+    expect(hooks?.inBound(owner)).toBe(false);
+    expect(isEngineHookGroup(owner)).toBe(false);
+  });
 });

@@ -43,6 +43,15 @@ export interface OwnedPathBound {
   readonly contentRoots: readonly string[];
   /** The engine's own state folders under `.stamity/`. */
   readonly stateRoots: readonly string[];
+  /**
+   * The folders the engine writes the scripts a client's hook entries run into,
+   * outside `.stamity/`: Claude Code's `.claude/hooks/stamity/`, which the
+   * Claude Code GitHub Action restores from the base branch on a pull request
+   * (`../hooks/model.ts::CLAUDE_HOOKS_DIR`). Engine folders as the state
+   * folders are: a recorded hash alone proves a delete there, and no folder on
+   * the way down may be a link.
+   */
+  readonly hookRoots: readonly string[];
   /** The folder installed packs live in, one sub-folder per pack. */
   readonly packRoot: string;
   /** The instruction files `init` imports. */
@@ -68,11 +77,12 @@ export const IMPORT_TARGET = Object.freeze({
  * (`.cursor/hooks/mcp-guard.mjs`, `.cursor/hooks/subagent-guard.mjs`, which
  * became `stamity-mcp-guard.mjs` and `stamity-subagent-guard.mjs` in version 2,
  * REQ-FLOW-038): their rows must validate for the first sync after an upgrade
- * to reclaim them. A unit that adds an emitted path extends this value and
- * raises `version`.
+ * to reclaim them. Version 3 adds the hook folder Claude Code's hooks run from
+ * ({@link OwnedPathBound.hookRoots}, REQ-FLOW-113). A unit that adds an emitted
+ * path extends this value and raises `version`.
  */
 export const OWNED_PATHS: OwnedPathBound = Object.freeze({
-  version: 2,
+  version: 3,
   exact: Object.freeze([
     "AGENTS.md",
     "AGENTS.override.md",
@@ -107,6 +117,9 @@ export const OWNED_PATHS: OwnedPathBound = Object.freeze({
     ".github/prompts/",
   ]),
   stateRoots: Object.freeze([`${STATE_DIR}/generated/`, `${STATE_DIR}/mcp/`]),
+  // `../hooks/model.ts::CLAUDE_HOOKS_DIR` with its slash, restated as data (the
+  // module header says why); `test/manifest/ownedPaths.test.ts` holds the two equal.
+  hookRoots: Object.freeze([".claude/hooks/stamity/"]),
   packRoot: `${STATE_DIR}/packs/`,
   importTargets: Object.freeze([
     IMPORT_TARGET.agentsMd,
@@ -117,7 +130,7 @@ export const OWNED_PATHS: OwnedPathBound = Object.freeze({
 });
 
 /** Which part of the bound a ledger row falls in. */
-export type OwnedPathKind = "exact" | "charter" | "content" | "state" | "pack";
+export type OwnedPathKind = "exact" | "charter" | "content" | "state" | "hook" | "pack";
 
 /** The three ledger fields the bound reads. Structurally a `LedgerEntry`. */
 export interface OwnedPathRow {
@@ -161,7 +174,8 @@ function isStrictlyUnder(path: string, root: string): boolean {
  *
  * - A `pack:<id>` owner: an `infra` row under its own pack folder.
  * - A tool owner with `infra`: a platform file ({@link OwnedPathBound.exact}),
- *   a charter below the root, or a path under a state folder.
+ *   a charter below the root, a path under a state folder, or a path under a
+ *   hook folder ({@link OwnedPathBound.hookRoots}).
  * - A tool owner with `agent`, `skill`, `rule` or `command`: a path strictly
  *   under a content root.
  */
@@ -178,7 +192,8 @@ export function ownedPathKind(row: OwnedPathRow): OwnedPathKind | null {
     if (path.includes("/") && path.slice(path.lastIndexOf("/") + 1) === OWNED_PATHS.charterFileName) {
       return "charter";
     }
-    return OWNED_PATHS.stateRoots.some((root) => isStrictlyUnder(path, root)) ? "state" : null;
+    if (OWNED_PATHS.stateRoots.some((root) => isStrictlyUnder(path, root))) return "state";
+    return OWNED_PATHS.hookRoots.some((root) => isStrictlyUnder(path, root)) ? "hook" : null;
   }
   if (!CONTENT_ARTIFACT_TYPES.has(artifactType)) return null;
   return OWNED_PATHS.contentRoots.some((root) => isStrictlyUnder(path, root)) ? "content" : null;
@@ -186,7 +201,7 @@ export function ownedPathKind(row: OwnedPathRow): OwnedPathKind | null {
 
 /**
  * The bound's folder a path sits under — the content root, the state folder,
- * or the installed pack's own folder — or `null` for a path the bound names by
+ * the hook folder, or the installed pack's own folder — or `null` for a path the bound names by
  * itself (a platform file, a charter). The folders are disjoint, so the path
  * alone decides.
  *
@@ -196,7 +211,7 @@ export function ownedPathKind(row: OwnedPathRow): OwnedPathKind | null {
  * delete into `.stamity/learnings/`.
  */
 export function ownedFolderOf(path: string): string | null {
-  const root = [...OWNED_PATHS.contentRoots, ...OWNED_PATHS.stateRoots].find((folder) =>
+  const root = [...OWNED_PATHS.contentRoots, ...OWNED_PATHS.stateRoots, ...OWNED_PATHS.hookRoots].find((folder) =>
     isStrictlyUnder(path, folder),
   );
   if (root !== undefined) return root;

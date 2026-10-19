@@ -45,12 +45,16 @@ interface Rendered {
 }
 
 /**
- * The policy path each placement hands `planCoreHookScripts`, the same two
- * shapes `policiesPathFor` in `src/emit/hooksInfra.ts` produces: a climb in the
- * repository layout, a sibling name inside a plugin root.
+ * The policy path each placement hands `planCoreHookScripts`, the same shapes
+ * `src/emit/hooksInfra.ts` produces: a climb in the repository layout, a sibling
+ * name inside a plugin root, and a sibling name beside the copies Claude Code's
+ * hooks run under `.claude/hooks/stamity/`.
+ * TEST CHANGE, justified (w6-claude-hooks-in-claude-dir, REQ-FLOW-113): the third placement is measured against
+ * the same budgets as the other two; no budget row moves.
  */
 const POLICY_PATH_BY_LAYOUT: Readonly<Record<HookScriptLayout, string>> = {
   generated: `../../${AGENT_TOOL_POLICIES_FILE}`,
+  claude: AGENT_TOOL_POLICIES_FILE,
   container: AGENT_TOOL_POLICIES_FILE,
 };
 
@@ -104,7 +108,7 @@ function lineCount(content: string): number {
  */
 function renderAll(tool: Tool, layout: HookScriptLayout): Rendered[] {
   // The person-only shell guard is rendered on request (emission asks for it), so it is asked for here.
-  const core = planCoreHookScripts(POLICY_PATH_BY_LAYOUT[layout], tool, { ...CLI_PIN, personOnlyGuard: true }).map((script) => ({
+  const core = planCoreHookScripts(POLICY_PATH_BY_LAYOUT[layout], tool, { ...CLI_PIN, personOnlyGuard: true, layout }).map((script) => ({
     tool,
     fileName: script.fileName,
     content: script.content,

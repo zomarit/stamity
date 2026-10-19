@@ -26,6 +26,7 @@ import {
   renderingProofClass,
   type OwnedPathRow,
 } from "../../src/manifest/ownedPaths.ts";
+import { CLAUDE_HOOKS_DIR } from "../../src/hooks/model.ts";
 import { packDirRelPath } from "../../src/pack/receipt.ts";
 import { outputOwners, type AdapterOutput } from "../../src/types/content.ts";
 import { TOOLS, type Tool } from "../../src/types/core.ts";
@@ -61,21 +62,25 @@ const RELEASED = JSON.parse(
 describe("OWNED_PATHS", () => {
   it("is frozen all the way down, so no caller can widen the bound at runtime", () => {
     expect(Object.isFrozen(OWNED_PATHS)).toBe(true);
-    for (const list of [OWNED_PATHS.exact, OWNED_PATHS.contentRoots, OWNED_PATHS.stateRoots, OWNED_PATHS.importTargets]) {
+    for (const list of [OWNED_PATHS.exact, OWNED_PATHS.contentRoots, OWNED_PATHS.stateRoots, OWNED_PATHS.hookRoots, OWNED_PATHS.importTargets]) {
       expect(Object.isFrozen(list)).toBe(true);
     }
   });
 
   // TEST CHANGE, justified: REQ-FLOW-038 — the guards carry the stamity- prefix: the bound adds
   // the two new guard names (version 1 -> 2) and keeps the 1.11.0 names so their rows validate.
-  it("lists the sixteen platform files, the twelve content folders and the two state folders", () => {
-    expect(OWNED_PATHS.version).toBe(2);
+  // TEST CHANGE, justified (w6-claude-hooks-in-claude-dir, REQ-FLOW-113): Claude Code's hooks run copies under
+  // `.claude/hooks/stamity/`, so the bound gains that hook folder as a root kind of its own (version 2 -> 3).
+  it("lists the sixteen platform files, the twelve content folders, the two state folders and the one hook folder", () => {
+    expect(OWNED_PATHS.version).toBe(3);
     expect(OWNED_PATHS.exact).toHaveLength(16);
     expect(OWNED_PATHS.contentRoots).toHaveLength(12);
     expect(OWNED_PATHS.stateRoots).toEqual([".stamity/generated/", ".stamity/mcp/"]);
+    expect(OWNED_PATHS.hookRoots).toEqual([`${CLAUDE_HOOKS_DIR}/`]);
+    expect(OWNED_PATHS.hookRoots).toEqual([".claude/hooks/stamity/"]);
     expect(OWNED_PATHS.packRoot).toBe(".stamity/packs/");
     expect(OWNED_PATHS.charterFileName).toBe("AGENTS.md");
-    for (const root of [...OWNED_PATHS.contentRoots, ...OWNED_PATHS.stateRoots]) expect(root.endsWith("/")).toBe(true);
+    for (const root of [...OWNED_PATHS.contentRoots, ...OWNED_PATHS.stateRoots, ...OWNED_PATHS.hookRoots]) expect(root.endsWith("/")).toBe(true);
   });
 });
 
@@ -97,6 +102,9 @@ describe("ownedPathKind", () => {
     expect(ownedPathKind(tool("src/api/AGENTS.md", "infra", "codex"))).toBe("charter");
     expect(ownedPathKind(tool(".stamity/generated/hooks/claude/stamity-x.mjs"))).toBe("state");
     expect(ownedPathKind(tool(".stamity/mcp/copilot-repo-settings.env", "infra", "copilot"))).toBe("state");
+    // w6-claude-hooks-in-claude-dir: the scripts Claude Code's hooks run, and the policy copy beside them.
+    expect(ownedPathKind(tool(".claude/hooks/stamity/stamity-session-start.mjs"))).toBe("hook");
+    expect(ownedPathKind(tool(".claude/hooks/stamity/stamity-agent-tool-policies.json"))).toBe("hook");
     for (const type of ["agent", "skill", "rule", "command"]) {
       expect(ownedPathKind(tool(".agents/skills/my-skill/SKILL.md", type))).toBe("content");
     }
@@ -108,6 +116,9 @@ describe("ownedPathKind", () => {
     ["an infra row in a content folder", tool(".claude/agents/stamity-x.md")],
     ["an infra row in another state folder", tool(".stamity/learnings/keep-me.md")],
     ["an infra row at a state folder itself", tool(".stamity/generated/")],
+    ["an infra row at the hook folder itself", tool(".claude/hooks/stamity/")],
+    ["an infra row beside the hook folder, an owner's own hook", tool(".claude/hooks/mine.sh")],
+    ["a content row in the hook folder", tool(".claude/hooks/stamity/x.md", "rule")],
     ["a root-level name the engine does not write", tool("GEMINI.md")],
     ["a content row outside every content folder", tool("notes/st-owner.md", "rule")],
     ["a content row at a content folder itself", tool(".claude/agents/", "agent")],
@@ -143,6 +154,8 @@ describe("ownedFolderOf", () => {
     [".stamity/mcp/servers.json", ".stamity/mcp/"],
     [".stamity/packs/acme__ops/agents/reviewer.md", ".stamity/packs/acme__ops/"],
     [".stamity/packs/stray.md", ".stamity/packs/"],
+    [".claude/hooks/stamity/stamity-session-start.mjs", ".claude/hooks/stamity/"],
+    [".claude/hooks/mine.sh", null],
     [".claude/settings.json", null],
     ["AGENTS.md", null],
     ["docs/AGENTS.md", null],

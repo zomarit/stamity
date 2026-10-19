@@ -1243,6 +1243,13 @@ describe("commandRunsStateScript", () => {
     ["node my.stamity/generated/hooks/x.mjs", false],
     ["node .stamityx/x.mjs", false],
     ["node scripts/.stamity", false],
+    // w6-claude-hooks-in-claude-dir (REQ-FLOW-113): the copies Claude Code's hooks run, in their own folder only.
+    ['node "${CLAUDE_PROJECT_DIR}/.claude/hooks/stamity/stamity-session-start.mjs"', true],
+    ["node .claude/hooks/stamity/x.mjs", true],
+    ["node .claude/hooks/stamity/", false],
+    ["node .claude/hooks/mine.sh", false],
+    ["node .claude/hooks/other/x.mjs", false],
+    ["node .claude/stamity/x.mjs", false],
   ] as const)("%j → %s", (cmd, expected) => {
     expect(commandRunsStateScript(cmd)).toBe(expected);
   });

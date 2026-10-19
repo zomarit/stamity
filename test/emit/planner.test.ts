@@ -234,11 +234,14 @@ describe("composeEmissionPlanner({}) — core rows only", () => {
 
     const plan = await composeEmissionPlanner({}).plan(ctx);
 
+    // TEST CHANGE, justified (w6-claude-hooks-in-claude-dir, REQ-FLOW-113): Claude's core set is also planned
+    // under `.claude/hooks/stamity/`, the copies its hook entries run, owned by claude alone like the generated set.
     expect(plan.map((output) => output.path)).toEqual([
       P.skillMain,
       P.skillRef,
       P.policyDoc,
       ...HOOK_FILES.map((file) => `${P.hooksRoot}/claude/${file}`),
+      ...HOOK_FILES.map((file) => `.claude/hooks/stamity/${file}`),
       ...HOOK_FILES.map((file) => `${P.hooksRoot}/codex/${file}`),
       P.agentsMd,
       "packages/a/AGENTS.md",

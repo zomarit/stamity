@@ -95,6 +95,7 @@ import { backupBeforeOverwrite, displayPath, hasLedgerDrift, toLedgerKey } from 
 import type { CoOwnedReduction, MergeResult } from "../types/content.ts";
 import { EngineError } from "../types/errors.ts";
 import type { CoOwnership } from "../types/manifest.ts";
+import { CLAUDE_HOOKS_DIR } from "../hooks/model.ts";
 import { HOOKS_GENERATED_DIR, STATE_DIR } from "../types/markers.ts";
 import {
   ENGINE_JSON_STYLE,
@@ -230,7 +231,8 @@ export interface CoOwnedMergeResult extends MergeResult {
 /**
  * True when the script `command` EXECUTES is one of the engine's own (S11,
  * narrowed in the safe direction): under `.stamity/generated/hooks/`, which
- * only the engine writes, or an installed pack's `.stamity/packs/<id>/`
+ * only the engine writes, under `.claude/hooks/stamity/`, where Claude Code's
+ * hook entries run the engine's copies (REQ-FLOW-113), or an installed pack's `.stamity/packs/<id>/`
  * (`../pack/receipt.ts::packDirRelPath`). The user's `.stamity/hooks/` and
  * the rest of `.stamity/` are the owner's, so an entry running a script there
  * leaves only behind a backup. The executed script is the program itself, or the first argument after an allowed launcher
@@ -309,15 +311,20 @@ const ROOT_VARIABLES = ["${CLAUDE_PROJECT_DIR}", "$CLAUDE_PROJECT_DIR"] as const
 /** The engine's generated hook scripts, as path segments. */
 const GENERATED_HOOK_SEGMENTS: readonly string[] = HOOKS_GENERATED_DIR.split("/");
 
+/** The folder Claude Code's hook entries run the engine's copies from, as path segments. */
+const CLAUDE_HOOK_SEGMENTS: readonly string[] = CLAUDE_HOOKS_DIR.split("/");
+
 /**
  * True for a repo-relative path ({@link executedScript}'s) that names a file
- * below the engine's generated hooks folder or below one installed pack's
- * folder (`.stamity/packs/<id>/…`).
+ * below the engine's generated hooks folder, below Claude Code's hook folder
+ * (`.claude/hooks/stamity/`, never `.claude/hooks/` itself, where an owner keeps
+ * hooks of their own), or below one installed pack's folder (`.stamity/packs/<id>/…`).
  */
 function isStateScriptPath(path: string): boolean {
   const segments = path.split("/");
   const under = (root: readonly string[]): boolean => root.every((segment, index) => segments[index] === segment);
   if (under(GENERATED_HOOK_SEGMENTS)) return segments.length > GENERATED_HOOK_SEGMENTS.length;
+  if (under(CLAUDE_HOOK_SEGMENTS)) return segments.length > CLAUDE_HOOK_SEGMENTS.length;
   return isPackScriptPath(path);
 }
 

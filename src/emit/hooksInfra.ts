@@ -13,7 +13,10 @@
  *    per-tool because the guard body bakes the client's honest fail mode from
  *    `CLIENT_HOOK_GUARANTEES`; tools whose guarantees agree produce identical
  *    bytes, and the layout still keeps them apart so a future divergence is a
- *    content change, not a path migration.
+ *    content change, not a path migration. Claude Code's set is planned twice:
+ *    the generated copies, byte for byte as before, and the copies its hook
+ *    entries run under {@link CLAUDE_HOOKS_DIR} (REQ-FLOW-113), rendered for
+ *    that folder ({@link CLAUDE_COPY_PLACEMENT}).
  * 2. **The policy document** — one `agent-tool-policies.json` serialized from
  *    the shipped roster PLUS a row per installed-pack agent handed in as
  *    {@link HooksPlanContext.packAgents}, placed beside the per-tool script
@@ -61,8 +64,8 @@
  */
 
 import { resolve } from "node:path";
-import { HOOK_SESSION_START_TIMEOUT_MS, type HookInterchange } from "../hooks/model.ts";
-import { MAX_POLICY_FILE_BYTES, PERSON_ONLY_GUARD_FILE, planCoreHookScripts } from "../hooks/scripts.ts";
+import { CLAUDE_HOOKS_DIR, HOOK_SESSION_START_TIMEOUT_MS, type HookInterchange } from "../hooks/model.ts";
+import { MAX_POLICY_FILE_BYTES, PERSON_ONLY_GUARD_FILE, planCoreHookScripts, type HookScriptLayout } from "../hooks/scripts.ts";
 import { readHookDefinitions, type ReadHooksResult } from "../hooks/userHooks.ts";
 import { resolveAgentGrant } from "../roster/agentGrants.ts";
 import { AGENT_POLICY_ROSTER, type GrantableToolCategory } from "../roster/agentPolicies.ts";
@@ -74,7 +77,7 @@ import {
 } from "../tools/allowlist.ts";
 import { TOOLS, type Tool } from "../types/core.ts";
 import type { SetupManifest } from "../types/manifest.ts";
-import { GENERATED_DIR, HOOKS_GENERATED_DIR, STATE_DIR } from "../types/markers.ts";
+import { CONTENT_PREFIX, GENERATED_DIR, HOOKS_GENERATED_DIR, STATE_DIR } from "../types/markers.ts";
 import { cliCallContextOf } from "./substitution.ts";
 
 // ── Layout ───────────────────────────────────────────────────────
@@ -122,6 +125,36 @@ function policiesPathFor(hookScriptsRoot: string | undefined): string {
 }
 
 /**
+ * The name of the policy document's copy beside Claude Code's hook copies: the
+ * engine's prefix on the shared document's name, as every engine file outside
+ * `.stamity/` carries it (REQ-FLOW-038). The Claude adapter places the copy
+ * (`../adapters/claude.ts`); the guard copy reads it as its sibling.
+ */
+export const CLAUDE_HOOK_POLICIES_FILE = `${CONTENT_PREFIX}${AGENT_TOOL_POLICIES_FILE}`;
+
+/**
+ * Where Claude Code's hook entries run their scripts from, and how those copies
+ * are rendered (REQ-FLOW-113, REQ-FLOW-104).
+ *
+ * The Claude Code GitHub Action, on a pull request, replaces the whole
+ * `.claude/` tree with the base branch's copy before the CLI starts, so a script
+ * there is the base branch's on the Action's run, and a pull request cannot
+ * rewrite what the guard runs for its own run. The guard copy reads the policy
+ * document's copy beside it (the sibling name), which the Claude adapter places
+ * there for the same reason (`../adapters/claude.ts`), and every copy names its
+ * repository from the hook folder's parents (`claude` placement,
+ * `../hooks/scripts.ts`). The generated copies under
+ * `.stamity/generated/hooks/claude/` are still planned, byte for byte, for the
+ * manual session-start run the charter's invariant 5 names; no hook entry runs
+ * them.
+ *
+ * Only in the repository layout: a container (`hookScriptsRoot` set) already
+ * keeps its scripts beside one another under its own root.
+ */
+const CLAUDE_COPY_PLACEMENT: { readonly dir: string; readonly policiesPath: string; readonly layout: HookScriptLayout } =
+  Object.freeze({ dir: CLAUDE_HOOKS_DIR, policiesPath: CLAUDE_HOOK_POLICIES_FILE, layout: "claude" });
+
+/**
  * Default user hooks directory when the manifest does not configure one — the
  * state directory's `hooks/` folder. It is a default, not a required shape:
  * the manifest accepts any repo-relative directory, which is why the reader is
@@ -166,7 +199,10 @@ const SHELL_GUARD_MATCHERS: Readonly<Partial<Record<Tool, string>>> = Object.fre
 
 /** One planned per-tool script copy. */
 export interface PlannedHookScript {
-  /** Repo-relative POSIX path under {@link HOOKS_GENERATED_DIR}. */
+  /**
+   * Repo-relative POSIX path under {@link HOOKS_GENERATED_DIR}, or, for the
+   * copies Claude Code's hooks run, under {@link CLAUDE_HOOKS_DIR}.
+   */
   path: string;
   /** Full generated script body. */
   content: string;
@@ -465,9 +501,17 @@ export async function planHooksInfra(ctx: HooksPlanContext): Promise<CoreHooksPl
       ...cliCallContextOf(ctx),
       personOnlyGuard: true,
     });
-    for (const script of planned) {
-      const path = `${HOOKS_GENERATED_DIR}/${tool}/${script.fileName}`;
-      scripts.push({ path, content: script.content, tool });
+    for (const script of planned) scripts.push({ path: `${HOOKS_GENERATED_DIR}/${tool}/${script.fileName}`, content: script.content, tool });
+    // Claude Code's hook entries run the copies under `.claude/hooks/stamity/`
+    // (CLAUDE_COPY_PLACEMENT); every other client runs its generated set.
+    const copy = tool === "claude" && ctx.hookScriptsRoot === undefined ? CLAUDE_COPY_PLACEMENT : undefined;
+    const run =
+      copy === undefined
+        ? planned
+        : planCoreHookScripts(copy.policiesPath, tool, { ...cliCallContextOf(ctx), personOnlyGuard: true, layout: copy.layout });
+    for (const script of run) {
+      const path = copy === undefined ? `${HOOKS_GENERATED_DIR}/${tool}/${script.fileName}` : `${copy.dir}/${script.fileName}`;
+      if (copy !== undefined) scripts.push({ path, content: script.content, tool });
       const shellGuard = script.fileName === PERSON_ONLY_GUARD_FILE;
       const matcher = shellGuard ? SHELL_GUARD_MATCHERS[tool] : undefined;
       // Cursor's copy is placed but carries no portable row (see the table).
