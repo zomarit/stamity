@@ -1,6 +1,6 @@
-import { closeSync, fstatSync, lstatSync, mkdtempSync, openSync, readdirSync, readFileSync, readlinkSync, readSync, realpathSync, rmSync, unlinkSync } from "node:fs";
+import { closeSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, readlinkSync, readSync, realpathSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { isAbsolute, join, posix, relative } from "node:path";
+import { dirname, isAbsolute, join, posix, relative, resolve } from "node:path";
 import { Argument, InvalidArgumentError, type Command } from "commander";
 import { matchGlob } from "../../change/classify.ts";
 import { heldPaths, PERSON_ONLY_PATHS } from "../../change/personOnlyPaths.ts";
@@ -1005,6 +1005,9 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   }
 
   // (4) The commit, only when something is staged.
+  // review/142, review/143: a commit whose check did not read clean leaves the checkpoint marker, and every later call
+  // refuses while it is there, whatever Base: its record names and whatever --paths it is given.
+  const marker = await markerPath(top, verb);
   const staged = await git(top, ["diff", "--cached", "--quiet", "--no-ext-diff", "--ignore-submodules=none"], verb);
   if (staged.code === 1) {
     // pr/1: the repository's hooks run inside the commit, after the check above, so HEAD is read before it and the
@@ -1014,8 +1017,13 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
       result.notDone.push("commit refused: HEAD names no commit, so the commit's own paths could not be read against it");
       return finish(false);
     }
+    const taken = takeMarker(marker, before);
+    if (taken !== null) {
+      result.notDone.push(taken === true ? await markerRefusal(top, marker, verb) : `commit refused: the checkpoint marker ${marker} could not be created (${taken})`);
+      return finish(false);
+    }
     // review/136: a commit, path read or undo that does not finish (the write runner's wall time) fails closed here,
-    // naming the commit HEAD holds and the reset target; the history read below keeps refusing it on later calls.
+    // naming the commit HEAD holds and the reset target, and leaves the marker, so every later call refuses.
     let commit: GitWriteResult;
     try {
       commit = await git(top, ["commit", "--quiet", `--message=chore(run): checkpoint ${run}`, ...(opts["signoff"] === true ? ["--signoff"] : [])], verb);
@@ -1031,10 +1039,12 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
         );
         if (failure !== null) {
           if (commit.code === 0) result.committed = widened.head;
-          result.notDone.push(`commit not undone: ${failure}; HEAD holds ${widened.head ?? "an unread commit"}, reset target ${before}`);
+          result.notDone.push(`commit not undone: ${failure}; HEAD holds ${widened.head ?? "an unread commit"}, reset target ${before}`, markerLeft(marker, before));
           lines.push(`commit: ${widened.head ?? "unread"} (not undone; reset target ${before})`);
           return finish(false);
         }
+        const dropped = dropMarker(marker);
+        if (dropped !== null) result.notDone.push(dropped);
         const why = widened.outside.length > 0 ? "a hook staged paths outside the list" : widened.ownCommit ? "a hook made a commit of its own" : "its paths could not be read";
         lines.push(`commit: undone (${why})`);
         return finish(false);
@@ -1042,18 +1052,30 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
     } catch (cause) {
       if (!(cause instanceof CliFailure)) throw cause;
       const held = await commitAt(top, "HEAD", verb).catch(() => null);
-      result.notDone.push(`commit not checked: ${cause.doc.message} (${cause.doc.why ?? "no reason given"}); HEAD holds ${held ?? "an unread commit"}, reset target ${before}`);
+      result.notDone.push(
+        `commit not checked: ${cause.doc.message} (${cause.doc.why ?? "no reason given"}); HEAD holds ${held ?? "an unread commit"}, reset target ${before}`,
+        markerLeft(marker, before),
+      );
       lines.push(`commit: ${held ?? "unread"} (not checked; reset target ${before})`);
       return finish(false);
     }
+    // review/142: the commit read clean, so the marker goes now, before the scan and the push; a later stop leaves none.
+    const dropped = dropMarker(marker);
     if (commit.code !== 0) {
       const why = `${commit.stderr}\n${commit.stdout}`;
-      result.notDone.push(IDENTITY_REFUSAL.test(why) ? "commit failed (identity)" : `commit failed: ${firstLine(why)}`);
+      result.notDone.push(IDENTITY_REFUSAL.test(why) ? "commit failed (identity)" : `commit failed: ${firstLine(why)}`, ...(dropped === null ? [] : [dropped]));
       return finish(false);
     }
     result.committed = await commitAt(top, "HEAD", verb);
+    if (dropped !== null) {
+      result.notDone.push(dropped);
+      return finish(false);
+    }
   } else if (staged.code !== 0) {
     result.notDone.push(`commit failed: git diff --cached answered ${staged.code}: ${firstLine(staged.stderr)}`);
+    return finish(false);
+  } else if (exists(marker)) {
+    result.notDone.push(await markerRefusal(top, marker, verb));
     return finish(false);
   }
   lines.push(`commit: ${result.committed ?? "nothing to commit"}`);
@@ -1089,21 +1111,6 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   }
   lines.push(`scan: ${result.scan.hits.length === 0 ? "no hits" : `${result.scan.hits.length} hit(s)`}; unscanned: ${list(result.scan.unscanned)}`);
   if (result.scan.hits.length > 0 || outcome.incomplete !== undefined) return finish(false);
-
-  // review/136, review/139: every commit since the last one a checkpoint read clean, not only this call's, is read
-  // against the same set, so a commit an earlier call could not undo or check is refused on every later push.
-  const unchecked = await outsideSince(top, current, base, remote, isOwn, verb);
-  if (typeof unchecked === "string") {
-    result.notDone.push(`push held: ${unchecked}`);
-    return finish(false);
-  }
-  if (unchecked.outside.length > 0) {
-    result.notDone.push(...unchecked.outside.map((path) => `push refused: ${path} is not in --paths, in a commit after ${unchecked.from} that no checkpoint read clean`));
-    lines.push("push: refused (an unchecked commit carries paths outside the list)");
-    return finish(false);
-  }
-  const marked = await git(top, ["update-ref", "--no-deref", `${CHECKED_REF}${current}`, unchecked.head], verb);
-  if (marked.code !== 0) result.notDone.push(`checked point not moved: git update-ref answered ${marked.code}: ${firstLine(marked.stderr)}`);
 
   // (6) The push, its command checked by the shell guard's own table before it runs.
   const refspec = `HEAD:refs/heads/${current}`;
@@ -1452,43 +1459,70 @@ async function undoCommit(top: string, branch: string, before: string, checked: 
   return swapped.code === 0 ? null : `git update-ref answered ${swapped.code}: ${firstLine(swapped.stderr)}`;
 }
 
-/** review/139: where a checkpoint keeps, per run branch, the last commit whose history it read clean. */
-const CHECKED_REF = "refs/stamity/checked/";
-
-/** What {@link outsideSince} read. */
-interface Unchecked {
-  /** The commit read, the one the checked ref moves to once its history is clean. */
-  head: string;
-  /** Where the read started, for `notDone`. */
-  from: string;
-  /** The paths outside the verb's set that a commit read changes. */
-  outside: string[];
-}
+/** The checkpoint marker's place under the work tree's own git directory ({@link markerPath}). */
+const PENDING_MARKER = "stamity/checkpoint-pending";
 
 /**
- * review/136, review/139: the paths outside the verb's set (`isOwn`, as
- * {@link hookWidened} reads it) that a commit `HEAD` holds changes, read over
- * every commit after the last one a checkpoint read clean
- * ({@link CHECKED_REF}`<branch>`, where it is an ancestor of `HEAD`), else
- * after origin's own branch tip, never one `Base:` or a tip origin holds
- * reaches; a merge by its own resolution (`--cc`), renames read as a deletion
- * and an addition, as {@link heldInHistory} reads them. A string, for
- * `notDone`, where the history could not be read.
+ * review/142, review/143: the checkpoint marker, {@link PENDING_MARKER} under
+ * this work tree's own git directory (`git rev-parse --git-dir`, a linked work
+ * tree's own), so no commit or push carries it and a parallel work tree keeps
+ * its own. It holds the `HEAD` read before a checkpoint's commit, from before
+ * the commit until the commit's check reads clean or its undo succeeds; one
+ * still there means a commit was left unchecked or not undone, so every later
+ * `checkpoint` and `end` refuses until a person removes it.
  */
-async function outsideSince(top: string, branch: string, base: string, remote: RemoteRefs, isOwn: (path: string) => boolean, verb: string): Promise<Unchecked | string> {
+async function markerPath(top: string, verb: string): Promise<string> {
+  const read = await git(top, ["rev-parse", "--git-dir"], verb);
+  const dir = read.stdout.replace(/\r?\n$/, "");
+  if (read.code !== 0 || dir === "") {
+    throw new CliFailure({
+      code: "FAILURE",
+      message: `run ${verb} could not read the work tree's git directory`,
+      why: `git rev-parse answered ${read.code}: ${firstLine(read.stderr)}`,
+      next: "run it inside the repository's work tree",
+    });
+  }
+  return join(resolve(top, dir), PENDING_MARKER);
+}
+
+/** Creates the marker exclusively, holding `before`: `null` once created, `true` where one is already there, else why not. */
+function takeMarker(marker: string, before: string): true | string | null {
+  try {
+    mkdirSync(dirname(marker), { recursive: true });
+    writeFileSync(marker, `${before}\n`, { flag: "wx" });
+    return null;
+  } catch (cause) {
+    if ((cause as NodeJS.ErrnoException).code === "EEXIST" && exists(marker)) return true;
+    return cause instanceof Error ? cause.message : "the write failed";
+  }
+}
+
+/** Removes the marker, a link itself where one is there: `null` once gone, else the `notDone` line. */
+function dropMarker(marker: string): string | null {
+  try {
+    unlinkSync(marker);
+    return null;
+  } catch (cause) {
+    if ((cause as NodeJS.ErrnoException).code === "ENOENT") return null;
+    return `checkpoint marker not removed: ${marker} (${cause instanceof Error ? cause.message : "the remove failed"}), so every later call refuses until a person removes it`;
+  }
+}
+
+/** The `notDone` line naming the marker a call leaves where its commit was not checked or not undone. */
+function markerLeft(marker: string, before: string): string {
+  return `checkpoint marker left: ${marker} records ${before}, so every later checkpoint and end refuses until a person resolves it`;
+}
+
+/** The refusal while a marker is there: what it records, what `HEAD` holds, and what a person does before removing it. */
+async function markerRefusal(top: string, marker: string, verb: string): Promise<string> {
+  const recorded = readCapped(marker, 128)?.text.trim() ?? "";
+  const before = /^[0-9a-f]{40,64}$/.test(recorded) ? recorded : "an unread commit";
   const head = await commitAt(top, "HEAD", verb);
-  if (head === null) return "HEAD names no commit, so the commits the push would send could not be read";
-  const ancestor = async (rev: string | null): Promise<boolean> =>
-    rev !== null && (await git(top, ["merge-base", "--is-ancestor", rev, head], verb)).code === 0;
-  const checked = await commitAt(top, `${CHECKED_REF}${branch}`, verb);
-  const within = await ancestor(checked);
-  const from = within ? `the last checked commit ${checked ?? ""}` : (await ancestor(remote.branch)) ? `origin's ${branch} ${remote.branch ?? ""}` : `Base: ${base}`;
-  const exclude = [...remote.tips, base, ...(within && checked !== null ? [checked] : [])];
-  const input = [head, ...exclude.map((rev) => `^${rev}`), ""].join("\n");
-  const read = await git(top, ["log", "--root", "--format=", "--raw", RAW_IDS, "-z", "--cc", ...DIFF_PINS, "--ignore-missing", "--stdin", "--"], verb, input);
-  if (read.code !== 0) return `the paths of the commits after ${from} could not be read (git log answered ${read.code}: ${firstLine(read.stderr)})`;
-  const outside = [...new Set(rawEntries(read.stdout).map((entry) => entry.path))].filter((path) => !isOwn(path)).toSorted();
-  return { head, from, outside };
+  return (
+    `commit and push refused: ${marker} records ${before}, left by a checkpoint whose commit was not checked or not undone, ` +
+    `and HEAD holds ${head ?? "an unread commit"}; a person reviews the commits after ${before}, resets the branch to it ` +
+    `if one carries a path outside --paths, then removes ${marker}`
+  );
 }
 
 /**

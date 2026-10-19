@@ -1,6 +1,6 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runCommand } from "../../../src/cli/commands/run.ts";
@@ -562,23 +562,42 @@ describe("stamity run end", () => {
     expect(git(remote, ["for-each-ref", "refs/heads/"])).toBe("");
   });
 
-  // review/139: end reads every commit no checkpoint read clean, as checkpoint does, so a commit an earlier call could
-  // not undo (stood in for here by a commit made outside the verbs) is pushed by no end either.
-  it("pushes nothing and opens no pull request while a commit no checkpoint read clean carries a path outside --paths", async () => {
+  // review/136, review/139: end commits through checkpoint's steps, so an undo that fails there leaves the checkpoint
+  // marker too, and a later end, the lock and the hooks gone, pushes nothing and opens no pull request while it is there.
+  it("leaves the checkpoint marker where its undo fails, and a later end pushes nothing and opens no pull request", async () => {
     const { repo, remote, base } = await seed("unattended");
     await writeFile(join(repo, "a.txt"), "changed\n");
     await writeFile(join(repo, "b.txt"), "a hook's change\n");
-    git(repo, ["add", "--", "a.txt", "b.txt"]);
-    git(repo, ["commit", "-q", "-m", "left by a failed undo"]);
+    const hooks = join(repo, ".git", "hooks");
+    await writeFile(join(hooks, "pre-commit"), "#!/bin/sh\ngit add -- b.txt\n");
+    // The branch's ref lock, taken once the commit has moved the branch, makes the undo's ref update fail.
+    await writeFile(join(hooks, "post-commit"), `#!/bin/sh\n: > "$(git rev-parse --git-dir)/refs/heads/${RUN_BRANCH}.lock"\n`);
+    await chmod(join(hooks, "pre-commit"), 0o755);
+    await chmod(join(hooks, "post-commit"), 0o755);
 
-    const { code, doc } = await run(repo, [...END("feat: x"), "--paths", "a.txt"]);
+    const first = await run(repo, [...END("feat: x"), "--paths", "a.txt"]);
 
-    expect(code).toBe(1);
-    expect(doc).toMatchObject({
+    const marker = join(git(repo, ["rev-parse", "--absolute-git-dir"]), "stamity", "checkpoint-pending");
+    const left = git(repo, ["rev-parse", "HEAD"]);
+    expect(first.code).toBe(1);
+    expect(first.doc).toMatchObject({ subcommand: "end", committed: left, pushed: false, pr: null });
+    expect((first.doc["notDone"] as string[]).at(-1)).toBe(`checkpoint marker left: ${marker} records ${base}, so every later checkpoint and end refuses until a person resolves it`);
+
+    await rm(join(repo, ".git", "refs", "heads", `${RUN_BRANCH}.lock`));
+    await rm(join(hooks, "pre-commit"));
+    await rm(join(hooks, "post-commit"));
+    const second = await run(repo, [...END("feat: x"), "--paths", "a.txt"]);
+
+    expect(second.code).toBe(1);
+    expect(second.doc).toMatchObject({
       subcommand: "end",
+      committed: null,
       pushed: false,
       pr: null,
-      notDone: [`push refused: b.txt is not in --paths, in a commit after Base: ${base} that no checkpoint read clean`],
+      notDone: [
+        `commit and push refused: ${marker} records ${base}, left by a checkpoint whose commit was not checked or not undone, ` +
+          `and HEAD holds ${left}; a person reviews the commits after ${base}, resets the branch to it if one carries a path outside --paths, then removes ${marker}`,
+      ],
     });
     expect(pushes()).toEqual([]);
     expect(writesToGitHub()).toEqual([]);
