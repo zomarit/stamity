@@ -1222,7 +1222,9 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   // (7) The draft pull request: `end` opens it every time, `checkpoint` only with --pr.
   if (verb !== END && opts["pr"] !== true) return finish(true);
   // --refused names the title before the screen reads it, so a hit still gives `Run <run-id>`.
-  const title = verb === END && opts["refused"] === true ? `Refused: ${String(opts["title"])}` : String(opts["title"]);
+  // n10: a title already reading `Refused:` (leading white space set aside) is used as given, so it is never doubled.
+  const given = String(opts["title"]);
+  const title = verb === END && opts["refused"] === true && !given.trimStart().startsWith("Refused:") ? `Refused: ${given}` : given;
   const step = await draftPr(ctx, { run, runDir, recordRel, top, cwd, base, branch: current, defaults, unattended, resumes: head.resumes, title });
   result.pr = step.pr;
   result.notDone.push(...step.notDone);

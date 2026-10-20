@@ -312,6 +312,24 @@ describe("stamity run end", () => {
     expect(created().title).toBe("Refused: plan 021 not ready");
   });
 
+  // n10-refused-title: a title that already begins with the verb's own `Refused:` (leading white space set aside) is
+  // used as given, so a cloud agent's own `Refused: …` title is not read `Refused: Refused: …`; any other is prefixed.
+  it.each([
+    ["Refused: cloud check", "Refused: cloud check"],
+    ["Refused:cloud check", "Refused:cloud check"],
+    ["  Refused: cloud check", "  Refused: cloud check"],
+    ["Refused:", "Refused:"],
+    ["refused: cloud check", "Refused: refused: cloud check"],
+  ])("titles a refused run's pull request %j as %j, prefixing Refused: once", async (given, title) => {
+    const { repo } = await seed("unattended");
+    await put(repo, `${RUN_DIR}/morning.md`, morningList("refused at the cloud check"));
+
+    const { code } = await run(repo, [...END(given), "--refused"]);
+
+    expect(code).toBe(0);
+    expect(created().title).toBe(title);
+  });
+
   it("gives a refused title the outbound screen matches as Run <run-id>", async () => {
     const { repo } = await seed("attended");
 
