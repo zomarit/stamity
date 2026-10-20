@@ -247,7 +247,8 @@ benign-twin false refusals 0/8, trigger probes 30/30, and calibration 5 of 5 in 
 golden miss is `reviewer-shallow-wrapper-pass-through`, 0 of 3, each sample failing B1, B2 and B3,
 carried from run 50. Run 51 is the run of record. The PASS is the composed run's and not the full
 run's: run 50's FAIL stays as recorded, a pass on the twin is a change in the case as much as in
-the model, and no threshold, floor tag or roster count moved. Run 50 retained thirteen invalid
+the model, and no threshold, floor tag or roster count moved after run 51's scores were known.
+Run 50 retained thirteen invalid
 judge attempts, one call exhausting its three, and run 51 redid no call; no admitted grade was
 re-rolled. Run 51's results file says itself that case text may have moved after the scores it
 carries were known (its § 11), so no note sits beside it. Runs 48 and 49 were earlier full
@@ -342,7 +343,15 @@ A fourth line rides the same cut, before the tag: every hand page — the whole 
 the candidate tree and restamped `verified against the tree at the X.Y.Z release cut (DATE)`,
 and `RELEASE_CUT_DATE` in that suite moves with it; a stale stamp is a currency defect the
 suite catches, a stale claim under a fresh stamp is the one a person catches. (Added
-2026-09-15, when the sweep found stamps from 1.5.0 under 1.7.0.) Runs when: a minor or a major
+2026-09-15, when the sweep found stamps from 1.5.0 under 1.7.0.) The same pass re-dates every
+"known residual" or "known residuals" label on `SECURITY.md` and `docs/security-mapping.md` that
+still names the previous version and whose residual still holds at the candidate tree, each checked
+against the code or tracking row it names, to the version being cut; history lines (what a version
+closed, what has held since one) stay as they are, and the release record states how many labels
+moved on each page. (Added 2026-10-20: the 1.15.0 cut re-dated those labels only because a review
+raised it, ledger row `2026-10-14_cli-native/build/72`, and the 1.16.0 cut found eighteen still
+naming 1.15.0 after its push, ledger row `2026-10-18_cloud-runs-2/prove/8`, re-dated in
+`b9b39755`.) Runs when: a minor or a major
 release; on a patch, when the diff since the last release touches a hand page or a surface one
 states — a CLI verb, flag or config key, or an emitted file.
 
