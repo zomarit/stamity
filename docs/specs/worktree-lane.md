@@ -1,6 +1,6 @@
 ---
 id: worktree-lane
-# A design document, authored outside the spec command, amended from docs/plans/013-optimization-sweep-02.md on 2026-09-30, amended in run 2026-10-11_release-1-14-0 on 2026-10-12, one citation re-pointed in run 2026-10-14_cli-native on 2026-10-14, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, and excluded from the site build.
+# A design document, authored outside the spec command, amended from docs/plans/013-optimization-sweep-02.md on 2026-09-30, amended in run 2026-10-11_release-1-14-0 on 2026-10-12, one citation re-pointed in run 2026-10-14_cli-native on 2026-10-14, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18 and 2026-10-20, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.16.0
 obsolete_when: the managed worktree lane ships and the CLI reference plus the working-with page carry its behaviour, or a decision cuts the surface
@@ -1278,7 +1278,7 @@ trigger nobody will trust the next time.
 
 ## Acceptance criteria
 
-One set per requirement. Ninety-two criteria; each is machine-checkable unless
+One set per requirement. Ninety-five criteria; each is machine-checkable unless
 tagged otherwise. (The count read "forty-seven" while the list held sixty-six,
 and the riders of the build rounds then took it to eighty-seven: a hand-kept
 number over a list several rounds have appended to. Restated here against the
@@ -1287,7 +1287,10 @@ was derived, and is the check worth running the next time this section grows
 rather than counting by eye. Amended 2026-10-12: it read "Eighty-seven" while
 the list held eighty-eight, the criterion added 2026-09-30 under
 REQ-WORKTREE-003 having moved no number, and the four added 2026-10-12 under
-REQ-WORKTREE-001 take it to ninety-two.)
+REQ-WORKTREE-001 take it to ninety-two. Amended 2026-10-20 (run
+`2026-10-18_cloud-runs-2`, ledger `build/105`): it read "Ninety-two" while the
+list held ninety-five, the three criteria plan 021 added under REQ-WORKTREE-003
+having moved no number.)
 
 **REQ-WORKTREE-001**
 
