@@ -52,9 +52,10 @@ import { readPushed, scanChange } from "./gate.ts";
  * `refs/remotes/origin/<named>` when it is absent or names another branch,
  * said in the text and skipped under `--dry-run` (pr/55). Unattended, all
  * three refuse where only the `main`/`master` fallback answered: `start` (its
- * record's `Mode:` where one is there, else the variable) exits 1, and
- * `checkpoint` and `end` refuse the commit after the origin check, before
- * they stage.
+ * record's `Mode:` where the work tree holds one, else the one the run's branch
+ * carries, `refs/heads/stamity/<run-id>` then origin's, else the variable; n14)
+ * exits 1, and `checkpoint` and `end` refuse the commit after the origin check,
+ * before they stage. That one reading also sets `start`'s git hardening.
  *
  * **Every git call goes through the write runner** (`../engine/gitWrite.ts`),
  * reads included, so the run verbs share one hardened git: the pinned options,
@@ -278,9 +279,11 @@ function checkRunId(ctx: CliContext, verb: string, run: string): void {
 
 async function runStart(ctx: CliContext, run: string): Promise<CommandResult> {
   checkRunId(ctx, START, run);
-  const removed = startVerbGit(startsUnattended(ctx, run));
   const cwd = ctx.app.runtime.cwd;
   const runBranch = `${RUN_BRANCH_PREFIX}${run}`;
+  // n14 (P1): the mode is decided once, before any other git call, and sets both the hardening and the refusal below.
+  const unattended = await startsUnattended(ctx, run, runBranch);
+  const removed = startVerbGit(unattended);
 
   const head = await commitAt(cwd, "HEAD");
   if (head === null) {
@@ -296,7 +299,7 @@ async function runStart(ctx: CliContext, run: string): Promise<CommandResult> {
   const current = await currentBranch(cwd);
   const defaults = current === null ? null : await defaultBranches(ctx, cwd);
   // pr/55: unattended, main and master alone would let a run keep, and push, a default branch of another name.
-  if (defaults !== null && defaults.source === "fallback" && startsUnattended(ctx, run)) {
+  if (defaults !== null && defaults.source === "fallback" && unattended) {
     throw new CliFailure({
       code: "FAILURE",
       message: `run start refused: ${FALLBACK_REFUSAL}`,
@@ -379,11 +382,9 @@ async function originRunTip(ctx: CliContext, cwd: string, run: string, runBranch
         : "a person reads origin's branch; the run starts again once it holds the run's record on a history from its Base:",
     });
   };
-  const listed = await git(cwd, ["ls-tree", "-z", tip, "--", recordRel]);
-  if (listed.code !== 0 || !/^100(?:644|755) blob /.test(listed.stdout)) throw await refuse(`carries no run record at ${recordRel}`);
-  const shown = await git(cwd, ["show", `${tip}:./${recordRel}`]);
-  if (shown.code !== 0) throw await refuse(`carries no run record at ${recordRel}`);
-  const recordBase = resumeCard.readRecordHead(shown.stdout.slice(0, layout.RECORD_HEAD_READ_BYTES)).base;
+  const record = await recordHeadAt(ctx, cwd, tip, recordRel);
+  if (record === null) throw await refuse(`carries no run record at ${recordRel}`);
+  const recordBase = resumeCard.readRecordHead(record).base;
   if (recordBase === null) throw await refuse("carries a run record that names no Base:");
   const base = await commitAt(cwd, recordBase);
   if (base === null) throw await refuse(`carries a run record whose Base: ${recordBase} names no commit here`, true);
@@ -716,11 +717,40 @@ async function alignOriginHead(ctx: CliContext, cwd: string, defaults: DefaultBr
   return `origin/HEAD: pointed at ${target} (was ${was}), ${counts}`;
 }
 
-/** Whether `run start` starts an unattended run: its record's `Mode:` where one is there yet, else the variable. */
-function startsUnattended(ctx: CliContext, run: string): boolean {
+/**
+ * Whether `run start` starts an unattended run: its record's `Mode:` where the work tree holds the record, as before;
+ * else (n14, P1) the record head the run's branch carries, `refs/heads/<runBranch>` first, then
+ * `refs/remotes/origin/<runBranch>`, so a continuation on a fresh clone, whose record is on the branch alone, starts in
+ * the mode it ran in; else the variable. Those reads run with git hardened, since the mode is not known yet.
+ */
+async function startsUnattended(ctx: CliContext, run: string, runBranch: string): Promise<boolean> {
   const { layout, resumeCard } = ctx.engine.runs;
-  const record = readCapped(join(ctx.app.runtime.cwd, `${layout.runRelPath(run)}/${layout.RECORD_FILE}`), layout.RECORD_HEAD_READ_BYTES);
-  return readsUnattended(record === null ? null : resumeCard.readRecordHead(record.text).mode, ctx.app.runtime.env["STAMITY_UNATTENDED"]);
+  const cwd = ctx.app.runtime.cwd;
+  const flag = ctx.app.runtime.env["STAMITY_UNATTENDED"];
+  const recordRel = `${layout.runRelPath(run)}/${layout.RECORD_FILE}`;
+  const record = readCapped(join(cwd, recordRel), layout.RECORD_HEAD_READ_BYTES);
+  if (record !== null) return readsUnattended(resumeCard.readRecordHead(record.text).mode, flag);
+  startVerbGit(true);
+  const heads = await Promise.all(
+    [`refs/heads/${runBranch}`, `refs/remotes/origin/${runBranch}`].map(async (ref) => {
+      const tip = await commitAt(cwd, ref);
+      return tip === null ? null : recordHeadAt(ctx, cwd, tip, recordRel);
+    }),
+  );
+  const text = heads.find((head) => head !== null);
+  return readsUnattended(text === undefined || text === null ? null : resumeCard.readRecordHead(text).mode, flag);
+}
+
+/**
+ * The head of the run's record as commit `rev`'s tree holds it, a regular file (a link or a folder at its path is
+ * none), or `null` where it holds none: the one read `start`'s mode ({@link startsUnattended}) and origin's tip
+ * ({@link originRunTip}) share.
+ */
+async function recordHeadAt(ctx: CliContext, cwd: string, rev: string, recordRel: string): Promise<string | null> {
+  const listed = await git(cwd, ["ls-tree", "-z", rev, "--", recordRel]);
+  if (listed.code !== 0 || !/^100(?:644|755) blob /.test(listed.stdout)) return null;
+  const shown = await git(cwd, ["show", `${rev}:./${recordRel}`]);
+  return shown.code === 0 ? shown.stdout.slice(0, ctx.engine.runs.layout.RECORD_HEAD_READ_BYTES) : null;
 }
 
 /**

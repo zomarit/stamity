@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runCommand } from "../../../src/cli/commands/run.ts";
+import { GIT_PROGRAM_VARIABLES } from "../../../src/cli/engine/gitWrite.ts";
 import { PERSON_ONLY_GUARD_FILE, planCoreHookScripts } from "../../../src/hooks/scripts.ts";
 import { RUN_ENDED_MARKER_FILE } from "../../../src/mcp/env.ts";
 import { canonical } from "../../support/identity.ts";
@@ -301,7 +302,7 @@ describe("stamity run start", () => {
      * the remote on `main`, as a cloud machine that came back has: `stamity/<run-id>` only as origin's.
      */
     async function seedContinuation(
-      opts: { base?: "main" | "side"; record?: boolean | "no Base:" | "link"; recordBase?: string; pin?: string } = {},
+      opts: { base?: "main" | "side"; record?: boolean | "no Base:" | "link"; recordBase?: string; pin?: string; mode?: "attended" | "unattended" } = {},
     ): Promise<Continuation> {
       const source = await seedRepo({ url: null });
       await writeFile(join(source, ".git", "config"), NO_AUTO_MAINTENANCE, { flag: "a" });
@@ -321,7 +322,7 @@ describe("stamity run start", () => {
       }
       if (opts.recordBase !== undefined) recordBase = opts.recordBase;
       git(source, ["switch", "-q", "-c", RUN_BRANCH]);
-      const head = `# Run ${RUN}\n\nStatus: in progress\nMode: attended\nBranch: ${RUN_BRANCH}\n`;
+      const head = `# Run ${RUN}\n\nStatus: in progress\nMode: ${opts.mode ?? "attended"}\nBranch: ${RUN_BRANCH}\n`;
       if (opts.record === false) {
         await writeFile(join(source, "c.txt"), "c\n");
         git(source, ["add", "--", "c.txt"]);
@@ -510,6 +511,76 @@ describe("stamity run start", () => {
       expect(git(kept.clone, ["rev-parse", "HEAD"])).toBe(kept.tip);
       expect(refused.code).toBe(1);
       expect(JSON.stringify(refused.doc["error"])).toContain(`pins github.com/o/r, and origin now names github.com/elsewhere/r; the checkout is on ${RUN_BRANCH} now`);
+    });
+
+    describe("the mode a continuation starts in, read from the run's branch where the work tree holds no record (n14 P1, REQ-FLOW-122)", () => {
+      /** Two of git's program-valued variables, each planted with a value the verb must never print. */
+      const PLANTED = { GIT_EDITOR: "planted-editor", GIT_SSH_COMMAND: "planted-ssh -i /planted/key" } as const;
+
+      /** Runs `body` with only `set` among git's program-valued variables, so the host's own shell adds none. */
+      async function withPrograms<T>(set: Record<string, string>, body: () => Promise<T>): Promise<T> {
+        for (const name of GIT_PROGRAM_VARIABLES) vi.stubEnv(name, undefined);
+        for (const [name, value] of Object.entries(set)) vi.stubEnv(name, value);
+        try {
+          return await body();
+        } finally {
+          vi.unstubAllEnvs();
+        }
+      }
+
+      /** Origin's branch alone, as a fresh clone has it, or a local branch alone, as an earlier start on this clone left it. */
+      async function continuation(where: "origin's branch" | "a local branch"): Promise<Continuation> {
+        const seeded = await seedContinuation({ mode: "unattended" });
+        if (where === "a local branch") {
+          git(seeded.clone, ["branch", RUN_BRANCH, `refs/remotes/origin/${RUN_BRANCH}`]);
+          git(seeded.clone, ["update-ref", "-d", `refs/remotes/origin/${RUN_BRANCH}`]);
+        }
+        return seeded;
+      }
+
+      it.each(["origin's branch", "a local branch"] as const)(
+        "starts unattended from the record on %s with STAMITY_UNATTENDED unset: git's program-valued variables go, named in gitEnvRemoved",
+        async (where) => {
+          const { clone, tip } = await continuation(where);
+          expect(existsSync(join(clone, RECORD))).toBe(false);
+
+          const { code, doc, stdout } = await withPrograms(PLANTED, () => run(clone, START));
+
+          expect(code).toBe(0);
+          expect(doc).toMatchObject({ subcommand: "start", branch: RUN_BRANCH, base: tip, gitEnvRemoved: ["GIT_EDITOR", "GIT_SSH_COMMAND"] });
+          for (const value of Object.values(PLANTED)) expect(stdout).not.toContain(value);
+          expect(current(clone)).toBe(RUN_BRANCH);
+        },
+      );
+
+      it.each(["origin's branch", "a local branch"] as const)(
+        "refuses as unattended where only the main/master fallback answered, the record on %s, switching nothing",
+        async (where) => {
+          const { clone } = await continuation(where);
+          git(clone, ["remote", "set-head", "origin", "-d"]);
+          const branches = git(clone, ["branch", "--list", RUN_BRANCH]);
+
+          const { code, doc } = await run(clone, START);
+
+          expect(code).toBe(1);
+          expect(JSON.stringify(doc["error"])).toContain("run start refused: no source named the default branch");
+          expect(current(clone)).toBe("main");
+          expect(git(clone, ["branch", "--list", RUN_BRANCH])).toBe(branches);
+          expect(branches === "").toBe(where === "origin's branch");
+        },
+      );
+
+      it("reads a record the work tree holds as before, the run's branch left unread: Mode: attended keeps the variables", async () => {
+        const { clone, tip } = await continuation("origin's branch");
+        await mkdir(join(clone, ".stamity", "runs", RUN), { recursive: true });
+        await writeFile(join(clone, RECORD), `# Run ${RUN}\n\nStatus: in progress\nMode: attended\nBranch: ${RUN_BRANCH}\nBase: ${tip}\n`);
+
+        const { code, doc } = await withPrograms(PLANTED, () => run(clone, [...START, "--dry-run"]));
+
+        expect(code).toBe(0);
+        expect(doc).toMatchObject({ subcommand: "start", branch: RUN_BRANCH, dryRun: true });
+        expect(doc).not.toHaveProperty("gitEnvRemoved");
+      });
     });
   });
 
