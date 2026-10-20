@@ -3891,7 +3891,9 @@ stray check `:872`, the index read `indexTracked`, `:1129-1139`, which `--paths`
   which fails the checkpoint as `hold failed: …` where a text read cannot carry its bytes whole. It fails the same way
   where a section carries more than one file patch (a `---`/`+++` pair after its hunks gets no split point, so a path
   past its first would ride unlisted), and where a section names a path the hold does not hold, read with the
-  section's new-side mode as a link is read, so neither joins `held` nor the commit's own paths. The held line then
+  section's new-side mode as a link is read, so neither joins `held` nor the commit's own paths. It fails the same way
+  where a section's headers mark a rename or a copy, since `git apply --numstat -z` names only its new path, so the
+  path it moves or reads from would ride unlisted; the verb's own diffs pin renames off. The held line then
   reads `held (in <patch>; the work tree keeps them, save <paths>, whose sections are kept from an earlier checkpoint):
   …` (`carriedSections` and `sectionStarts`, called from the hold, `src/cli/commands/run.ts`).
   - Proof: `test/cli/commands/runCheckpoint.test.ts` (the describe "a fresh clone that holds a new change keeps the

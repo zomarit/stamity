@@ -2139,6 +2139,9 @@ function sectionStarts(patch: Buffer): number[] {
  * pair after its hunks needs no `diff --git` header, so it gets no split point), whose paths past its first would ride
  * unlisted. Refused (review/250): a section naming a path `isHeld` does not hold, read with the section's new-side
  * mode as {@link rawEntries} reads a link, so no path the hold does not hold joins `held` and the commit's own paths.
+ * Refused (review/251): a section whose headers mark a rename or a copy (`rename from`/`to`, `copy from`/`to`,
+ * `similarity index`), since `git apply --numstat -z` names only its new path and the path it moves or reads from
+ * would ride unlisted; the verb's own diffs pin renames off, so only a steered patch carries one.
  * Else the reason, for `notDone`.
  */
 async function carriedSections(
@@ -2167,11 +2170,15 @@ async function carriedSections(
   const sections = starts.map((from, index) => patch.subarray(from, starts[index + 1] ?? patch.length));
   const mapped = await Promise.all(
     sections.map(async (section, index): Promise<string[] | string> => {
+      if (/^(?:rename from|rename to|copy from|copy to|similarity index) /m.test(section.toString("latin1"))) {
+        return `hold failed: a section of the kept ${patchFromTop} renames or copies a path, and git apply --numstat names only its new one, so the path it moves or reads from would be carried unlisted`;
+      }
       const out = join(scratch, `carried-${index}.patch`);
       writeFileSync(out, section);
       const read = await git(top, ["apply", "--numstat", "-z", out], verb);
       if (read.code !== 0) return `hold failed: the kept ${patchFromTop} could not be read (git apply answered ${read.code}: ${firstLine(read.stderr)})`;
-      // One `<added>\t<deleted>\t<path>` record per file patch, NUL-terminated; a rename's path field is empty, its two paths after it.
+      // One `<added>\t<deleted>\t<path>` record per file patch, NUL-terminated (a rename's or copy's new path only,
+      // review/251, so those are refused above); an empty path field is read as git diff's two-path form, defensively.
       const tokens = read.stdout.split("\0");
       const records: string[][] = [];
       for (let at = 0; at < tokens.length; at += 1) {

@@ -2245,12 +2245,14 @@ describe("stamity run checkpoint", () => {
      * A clone whose work-tree patch, which a steered run can write, has `extra` appended after its one section's hunks,
      * and which holds a new change to the workflow; the checkpoint's result and `HEAD` before it.
      */
-    async function steeredClone(extra: string): Promise<{ clone: string; before: string; outcome: Awaited<ReturnType<typeof run>> }> {
+    async function steeredClone(extra: string, commit = false): Promise<{ clone: string; before: string; outcome: Awaited<ReturnType<typeof run>> }> {
       const { repo, remote } = await seed("unattended");
       await writeFile(join(repo, ".cursorrules"), "steered rules\n");
       expect((await run(repo, CHECKPOINT)).code).toBe(0);
       const clone = await cloneRun(repo, remote);
       await appendFile(join(clone, PATCH), extra);
+      // `commit`: the steered patch is committed too, so HEAD's copy carries `extra` as well as the work tree's.
+      if (commit) git(clone, ["commit", "-q", "-m", "steered patch", "--", PATCH]);
       await put(clone, ".github/workflows/x.yml", "on: push\n");
       const before = git(clone, ["rev-parse", "HEAD"]);
       const outcome = await run(clone, [...CHECKPOINT, "--paths", ".github/workflows/x.yml"]);
@@ -2292,6 +2294,38 @@ describe("stamity run checkpoint", () => {
       expect(outcome.doc).toMatchObject({
         pushed: false,
         notDone: [`hold failed: a section of the kept ${PATCH} names a.txt, which the hold does not hold`],
+      });
+      expect(git(clone, ["rev-parse", "HEAD"])).toBe(before);
+    });
+
+    /** A section that renames or copies the unheld `a.txt` to the held `.github/workflows/y.yml`, with no hunks. */
+    const moved = (kind: "rename" | "copy"): string =>
+      `diff --git a/a.txt b/.github/workflows/y.yml\nsimilarity index 100%\n${kind} from a.txt\n${kind} to .github/workflows/y.yml\n`;
+
+    // review/251 (W-1), measured rather than assumed: `git apply --numstat -z` prints one record per file patch, naming
+    // a rename's or a copy's new path only, so the path it moves or reads from never reaches the hold's checks.
+    it.each(["rename", "copy"] as const)("pins that git apply --numstat -z names only a %s section's new path (review/251)", async (kind) => {
+      const dir = getRoot().path(`numstat-${kind}`);
+      await mkdir(dir, { recursive: true });
+      await writeFile(join(dir, "moved.patch"), moved(kind));
+
+      const records = git(dir, ["apply", "--numstat", "-z", "moved.patch"]).split("\0");
+
+      expect(records.filter((record) => record !== "")).toEqual(["0\t0\t.github/workflows/y.yml"]);
+      expect(records.join("\n")).not.toContain("a.txt");
+    });
+
+    // review/251 (W-1): a rename section from an unheld path to a held one was carried by its held new path alone, so
+    // the hand-off deleted the source with no row in held or the morning list; a copy read a path the hold never checked.
+    it.each(["rename", "copy"] as const)("refuses a committed patch's %s section from an unheld path to a held one (review/251)", async (kind) => {
+      const { clone, before, outcome } = await steeredClone(moved(kind), true);
+
+      expect(outcome.code).toBe(1);
+      expect(outcome.doc).toMatchObject({
+        pushed: false,
+        notDone: [
+          `hold failed: a section of the kept ${PATCH} renames or copies a path, and git apply --numstat names only its new one, so the path it moves or reads from would be carried unlisted`,
+        ],
       });
       expect(git(clone, ["rev-parse", "HEAD"])).toBe(before);
     });
