@@ -3881,6 +3881,18 @@ stray check `:872`, the index read `indexTracked`, `:1129-1139`, which `--paths`
   unattended run's held paths and the secret scan still read that push (`SECURITY.md`, "Hooks the run writes").
   - Proof: `test/cli/commands/runCheckpoint.test.ts` ("answers a commit whose whole process group was stopped and is
     gone: …"), `test/cli/commands/runEnd.test.ts`, `test/cli/engine/gitWrite.test.ts`.
+- **Amended 2026-10-20** (plan 021 file 2, unit `n14-bot-round-2`, PR #113 review round 2, P3). Given an unattended
+  checkpoint that holds a new change while the branch already carries a held patch, Then the new patch keeps that
+  patch's sections for paths not held now, in their order, before its own, and their paths join `held`; a path held
+  again takes the current diff, its earlier sections dropped, so on a fresh clone (REQ-FLOW-105) the earlier
+  person-only change is no longer lost from the patch. The sections run from one line-start `diff --git ` header to the
+  next, a binary section kept whole, and each is mapped to its paths by `git apply --numstat -z` over its own bytes.
+  The patch is read as `committedPatchPaths` reads it, the work tree's copy where it is a regular file, else `HEAD`'s,
+  which fails the checkpoint as `hold failed: …` where a text read cannot carry its bytes whole. The held line then
+  reads `held (in <patch>; the work tree keeps them, save <paths>, whose sections are kept from an earlier checkpoint):
+  …` (`carriedSections` and `sectionStarts`, called from the hold, `src/cli/commands/run.ts`).
+  - Proof: `test/cli/commands/runCheckpoint.test.ts` (the describe "a fresh clone that holds a new change keeps the
+    branch's earlier sections (n14 P3, REQ-FLOW-105)").
 - **Proof:** `test/cli/commands/runCheckpoint.test.ts`, `test/cli/commands/run.test.ts`,
   `test/corpus/skills/unattended.test.ts`.
 
@@ -4357,6 +4369,17 @@ chain file passes the chain's first record's `Base:`, as the chain rules do.
     with no `Base:`, a `Base:` that names no commit here, or a tip that does not descend from it is refused, exit 1,
     naming both commits, and on a shallow clone the refusal names `git fetch --unshallow origin` (`originRunTip`,
     `src/cli/commands/run.ts`). A clone that never fetched the branch keeps today's start, a named residual.
+- **Amended 2026-10-20** (plan 021 file 2, unit `n14-bot-round-2`, PR #113 review round 2, P1 and P2). Given `run
+  start` with no local `stamity/<id>` and `refs/remotes/origin/stamity/<id>` naming a commit, Then it asks origin
+  first (`git ls-remote origin`, the read `remoteRefs` makes for a checkpoint) and uses that ref only where origin names
+  the same commit for the branch: a branch origin no longer has refuses, exit 1, naming the stale ref and
+  `git fetch --prune origin`; another tip on origin refuses with `fetch origin first`; a remote it cannot read refuses;
+  each in either mode, before anything is switched or created (`originRunTip`, `src/cli/commands/run.ts`). And where
+  the work tree holds no run record, the continuation's mode is read from the record head the run's branch carries,
+  `refs/heads/stamity/<id>` first, then `refs/remotes/origin/stamity/<id>`, so a run that ran unattended continues
+  unattended with `STAMITY_UNATTENDED` unset (REQ-FLOW-122's amendment).
+  - Proof: `test/cli/commands/run.test.ts` (the describes "origin's run branch as origin answers it, never the
+    remote-tracking ref alone (n14 P2)" and "the mode a continuation starts in, … (n14 P1, REQ-FLOW-122)").
 - **Proof:** `test/hooks/sessionStartCard.test.ts` ("the startup card for the run on this branch"),
   `test/runs/resumeCardParity.test.ts`, `test/cli/commands/run.test.ts` (the fresh-clone continuation cases and the
   refusals), `test/cli/commands/plan.test.ts` ("takes --since for a single plan without --chain: a move after the base
@@ -4824,6 +4847,16 @@ variable by name only, never its value; an attended run starts git as today.
     only, absent when nothing was removed (`gitProgramVariablesIn`, `:184`; the verbs, `src/cli/commands/run.ts`). The
     skill has the checkpoint's record line go on, after a space, with `git-env-removed=<name,...>`
     (`content/skills/st-unattended/SKILL.md:79-80`), the space keeping REQ-FLOW-109's reader of `remaining=` to digits.
+- **Amended 2026-10-20** (plan 021 file 2, unit `n14-bot-round-2`, PR #113 review round 2, P1). `run start` decides
+  its mode once, before its other git calls: the record's `Mode:` where the work tree holds the record, as before; else
+  the `Mode:` of the record head the run's branch carries, read with git already hardened from
+  `refs/heads/stamity/<id>`, then from `refs/remotes/origin/stamity/<id>`, through the one regular-file read
+  `originRunTip` also uses; else `STAMITY_UNATTENDED`. That one reading sets both the start's git environment and its
+  refusal where only the `main`/`master` fallback named the default branch, so a fresh-clone continuation of an
+  unattended run removes the variables and names them in `gitEnvRemoved` with `STAMITY_UNATTENDED` unset
+  (`startsUnattended` and `recordHeadAt`, `src/cli/commands/run.ts`).
+  - Proof: `test/cli/commands/run.test.ts` (the describe "the mode a continuation starts in, read from the run's
+    branch where the work tree holds no record (n14 P1, REQ-FLOW-122)").
 - **Proof:** `test/cli/engine/gitWrite.test.ts` (the unattended and attended environments, the real-git `SSH_ASKPASS`
   case, the parity case), `test/cli/commands/runCheckpoint.test.ts` ("git's program-valued variables, unattended (v0c,
   REQ-FLOW-122)").
