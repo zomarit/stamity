@@ -1232,14 +1232,18 @@ describe("check — advisory warnings", () => {
     expect(git.status).toBe("warn");
     expect(git.detail).not.toContain("Nothing in stamity requires it");
     expect(git.detail).toContain("or git was only slow to answer this check");
-    expect(git.detail).toContain("Two verbs need git");
+    // TEST CHANGE, justified (run 2026-10-18_cloud-runs-2, review/245, review/247): the row named two verbs;
+    // `plan check` and the `run` verbs exit 1 with no git work tree too (`src/cli/commands/plan.ts`
+    // repositoryRoot, `src/cli/commands/run.ts`), so it names four, as README and getting-started do.
+    expect(git.detail).toContain("Four verbs need git");
+    expect(git.detail).toContain("plan and run exit 1 without it");
     expect(git.detail).toContain("worktree refuses without it");
     // TEST CHANGE, justified: the clause read "so with no git or no repository gate scan exits 1".
     // On this text the engine has found a git binary, so the loss is conditional on the
     // repository alone; a git the engine did not find has the row's third text, the next case's.
     expect(git.detail).toContain("so with no repository gate scan exits 1");
     expect(git.detail).toContain("/st-quick and /st-work list `secret scan: not run` under `Not done:`");
-    expect(git.detail).toContain("where git was only slow, both verbs may still run");
+    expect(git.detail).toContain("where git was only slow, all four may still run");
     // The sentence the row already carried stays: what `sync` loses without git.
     expect(git.detail).toContain("sync's dirty-tree warning simply stays silent while git does not answer");
     // review/61: the row said "git status here tells which". This text also prints where git itself
@@ -1270,9 +1274,9 @@ describe("check — advisory warnings", () => {
         "repository, or git was only slow to answer this check. To tell which with no git " +
         "command: a .git entry in this folder or in a folder above it, found by name, shows " +
         "whether a repository is. " +
-        "Two verbs need git: worktree refuses without it, and gate reads every change from it, " +
+        "Four verbs need git: worktree refuses without it, plan and run exit 1 without it, and gate reads every change from it, " +
         "so with no repository gate scan exits 1 and /st-quick and /st-work list " +
-        "`secret scan: not run` under `Not done:`; where git was only slow, both verbs may still run. " +
+        "`secret scan: not run` under `Not done:`; where git was only slow, all four may still run. " +
         "sync's dirty-tree warning simply stays silent while git does not answer.",
     );
   });
@@ -1327,7 +1331,7 @@ describe("check — advisory warnings", () => {
         "git did not answer here — the engine found no git to start. It takes git only from a PATH " +
           "entry that is a full path to a folder other than this one, and no such entry holds a git " +
           "binary: install git, or put the folder that holds it on PATH by its full path. " +
-          "Two verbs need git: worktree refuses without it, and gate reads every change from it, " +
+          "Four verbs need git: worktree refuses without it, plan and run exit 1 without it, and gate reads every change from it, " +
           "so here gate scan exits 1 and /st-quick and /st-work list " +
           "`secret scan: not run` under `Not done:`. " +
           "sync's dirty-tree warning simply stays silent while git does not answer.",
@@ -1369,7 +1373,11 @@ describe("check — advisory warnings", () => {
     expect(git.detail).not.toContain("no binary on PATH");
     expect(git.detail).not.toContain("slow to answer");
     // What follows from git not answering stays, in the row's own words.
-    expect(git.detail).toContain("Two verbs need git");
+    // TEST CHANGE, justified (run 2026-10-18_cloud-runs-2, review/245, review/247): the row named two verbs;
+    // `plan check` and the `run` verbs exit 1 with no git work tree too (`src/cli/commands/plan.ts`
+    // repositoryRoot, `src/cli/commands/run.ts`), so it names four, as README and getting-started do.
+    expect(git.detail).toContain("Four verbs need git");
+    expect(git.detail).toContain("plan and run exit 1 without it");
     expect(git.detail).toContain("worktree refuses without it");
     expect(git.detail).toContain("gate scan exits 1");
     // TEST CHANGE, justified (run 2026-10-14_cli-native, reattest/9): the row said the flows list
@@ -1392,7 +1400,7 @@ describe("check — advisory warnings", () => {
         "git stops at, so the engine did not hand it to git. Look at the entries of this folder " +
         "and of each folder above it by name to find that folder, and do not run git in it or in " +
         "any folder under it, this one included. " +
-        "Two verbs need git: worktree refuses without it, and gate reads every change from it, " +
+        "Four verbs need git: worktree refuses without it, plan and run exit 1 without it, and gate reads every change from it, " +
         "so here gate scan exits 1 saying git was not started, and on that reason " +
         "/st-work stops the run as BLOCKED_DEPENDENCY and /st-quick stops the batch. " +
         "That stop comes at the gate call, and the git a flow's session and its sub-agents start " +

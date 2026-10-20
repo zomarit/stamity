@@ -256,14 +256,15 @@ export function checkNodeVersion(nodeVersion: string, range: string | null): Doc
 }
 
 /**
- * Git availability. A repository without git is legal — only `worktree` and
- * `gate` need it — so absence is a warn that says what is lost, never a failure.
+ * Git availability. A repository without git is legal — only `worktree`,
+ * `gate`, `plan` and `run` need it — so absence is a warn that says what is
+ * lost, never a failure.
  *
  * An absent git has words of its own. The engine takes git only from a `PATH`
  * entry that is a full path to a folder other than the one git runs in
  * (`../../shared/programPath.ts::gitProgramFor`), and it knows whether that
  * walk found one. Where it found none the row says so, says which entries it
- * takes git from, and states what the two verbs lose outright. That is the
+ * takes git from, and states what the four verbs lose outright. That is the
  * cause whether no git is installed or the only git is behind an entry the
  * walk skips, which a git typed at a prompt would still find.
  *
@@ -309,7 +310,8 @@ function checkGit(rootDir: string): DoctorCheck {
         "git stops at, so the engine did not hand it to git. Look at the entries of this folder " +
         "and of each folder above it by name to find that folder, and do not run git in it or in " +
         "any folder under it, this one included. " +
-        "Two verbs need git: worktree refuses without it, and gate reads every change from it, " +
+        "Four verbs need git: worktree refuses without it, plan and run exit 1 without it, " +
+        "and gate reads every change from it, " +
         "so here gate scan exits 1 saying git was not started, and on that reason " +
         "/st-work stops the run as BLOCKED_DEPENDENCY and /st-quick stops the batch. " +
         "That stop comes at the gate call, and the git a flow's session and its sub-agents start " +
@@ -328,7 +330,8 @@ function checkGit(rootDir: string): DoctorCheck {
         "git did not answer here — the engine found no git to start. It takes git only from a PATH " +
         "entry that is a full path to a folder other than this one, and no such entry holds a git " +
         "binary: install git, or put the folder that holds it on PATH by its full path. " +
-        "Two verbs need git: worktree refuses without it, and gate reads every change from it, " +
+        "Four verbs need git: worktree refuses without it, plan and run exit 1 without it, " +
+        "and gate reads every change from it, " +
         "so here gate scan exits 1 and /st-quick and /st-work list " +
         "`secret scan: not run` under `Not done:`. " +
         "sync's dirty-tree warning simply stays silent while git does not answer.",
@@ -343,9 +346,10 @@ function checkGit(rootDir: string): DoctorCheck {
         "repository, or git was only slow to answer this check. To tell which with no git " +
         "command: a .git entry in this folder or in a folder above it, found by name, shows " +
         "whether a repository is. " +
-        "Two verbs need git: worktree refuses without it, and gate reads every change from it, " +
+        "Four verbs need git: worktree refuses without it, plan and run exit 1 without it, " +
+        "and gate reads every change from it, " +
         "so with no repository gate scan exits 1 and /st-quick and /st-work list " +
-        "`secret scan: not run` under `Not done:`; where git was only slow, both verbs may still run. " +
+        "`secret scan: not run` under `Not done:`; where git was only slow, all four may still run. " +
         "sync's dirty-tree warning simply stays silent while git does not answer.",
     };
   }

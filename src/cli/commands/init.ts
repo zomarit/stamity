@@ -340,9 +340,9 @@ async function askProceedWithoutGit(
  * under the `PATH` the read itself walked, and handed to every text of the run
  * that words this state) and has a text for each answer. Where the walk found
  * none the note says so, says which `PATH` entries git is taken from, and
- * states what the two verbs lose outright. Where it found one, the note says
+ * states what the four verbs lose outright. Where it found one, the note says
  * that, which leaves a missing repository or a git that was only slow, so what
- * the two verbs lose is worded on the repository being absent. Neither names a
+ * the four verbs lose is worded on the repository being absent. Neither names a
  * git command to type: a git typed at a prompt is found by the shell's rules,
  * not by the engine's walk, so the note says what the engine found where it
  * once said to type `git init`.
@@ -367,8 +367,9 @@ function noGitNote(dryRun: boolean, reason: WorkingTreeStatus["reason"], gitFoun
       `objects and refs, or beside commondir), met before any .git that git stops at, so the engine ` +
       `did not hand it to git. Look at the entries of this folder and of each folder above it by ` +
       `name to find that folder, and do not run git in it or in any folder under it, this one ` +
-      `included. Two verbs need git: worktree refuses without it, and gate reads every change from ` +
-      `it, so here gate scan exits 1 saying git was not started, and on that reason /st-work ` +
+      `included. Four verbs need git: worktree refuses without it, plan and run exit 1 without it, ` +
+      `and gate reads every change from it, so here gate scan exits 1 saying git was not started, ` +
+      `and on that reason /st-work ` +
       `stops the run as BLOCKED_DEPENDENCY and /st-quick stops the batch. That stop comes at the ` +
       `gate call, and the git a flow's session and its sub-agents start before it is not set to ` +
       `refuse such a folder as the engine's is, so start no flow here until that folder is moved ` +
@@ -380,16 +381,17 @@ function noGitNote(dryRun: boolean, reason: WorkingTreeStatus["reason"], gitFoun
       `git did not answer here, so the files that ${tense} have no revert path: the engine found ` +
       `no git to start. It takes git only from a PATH entry that is a full path to a folder other ` +
       `than this one, and no such entry holds a git binary: install git, or put the folder that ` +
-      `holds it on PATH by its full path. Two verbs need git: worktree refuses without it, and ` +
-      `gate reads every change from it, so here gate scan exits 1 and /st-quick and /st-work list ` +
+      `holds it on PATH by its full path. Four verbs need git: worktree refuses without it, plan ` +
+      `and run exit 1 without it, and gate reads every change from it, so here gate scan exits 1 and /st-quick and /st-work list ` +
       `\`secret scan: not run\` under \`Not done:\`.`
     );
   }
   return (
     `no git repository: git did not answer in this directory, so the files that ${tense} have ` +
     `no revert path. The engine found a git binary on PATH, so this directory is not a ` +
-    `repository, or git was only slow to answer. Two verbs need git: worktree refuses without ` +
-    `it, and gate reads every change from it, so with no repository gate scan exits 1 and ` +
+    `repository, or git was only slow to answer. Four verbs need git: worktree refuses without ` +
+    `it, plan and run exit 1 without it, and gate reads every change from it, so with no ` +
+    `repository gate scan exits 1 and ` +
     `/st-quick and /st-work list \`secret scan: not run\` under \`Not done:\`.`
   );
 }

@@ -1233,7 +1233,10 @@ describe("init — the no-git note", () => {
     }
     expect(note).not.toContain("Nothing in stamity requires git");
     expect(note).not.toContain("not undoable");
-    expect(note).toContain("Two verbs need git");
+    // TEST CHANGE, justified (run 2026-10-18_cloud-runs-2, review/245): the note named two verbs, as
+    // `check`'s row did; `plan check` and the `run` verbs exit 1 with no git work tree too, so it names four.
+    expect(note).toContain("Four verbs need git");
+    expect(note).toContain("plan and run exit 1 without it");
     expect(note).toContain("worktree refuses without it");
     expect(note).toContain("gate reads every change from it");
     // TEST CHANGE, justified: the clause read "so with no git or no repository gate scan exits 1".
@@ -1244,8 +1247,9 @@ describe("init — the no-git note", () => {
     expect(note.trimStart()).toBe(
       `no git repository: git did not answer in this directory, so the files that ${tense} have ` +
         "no revert path. The engine found a git binary on PATH, so this directory is not a " +
-        "repository, or git was only slow to answer. Two verbs need git: worktree refuses without " +
-        "it, and gate reads every change from it, so with no repository gate scan exits 1 and " +
+        "repository, or git was only slow to answer. Four verbs need git: worktree refuses without " +
+        "it, plan and run exit 1 without it, and gate reads every change from it, so with no " +
+        "repository gate scan exits 1 and " +
         "/st-quick and /st-work list `secret scan: not run` under `Not done:`.",
     );
   });
@@ -1306,8 +1310,8 @@ describe("init — the no-git note", () => {
           `git did not answer here, so the files that ${tense} have no revert path: the engine found ` +
             "no git to start. It takes git only from a PATH entry that is a full path to a folder other " +
             "than this one, and no such entry holds a git binary: install git, or put the folder that " +
-            "holds it on PATH by its full path. Two verbs need git: worktree refuses without it, and " +
-            "gate reads every change from it, so here gate scan exits 1 and /st-quick and /st-work list " +
+            "holds it on PATH by its full path. Four verbs need git: worktree refuses without it, plan " +
+            "and run exit 1 without it, and gate reads every change from it, so here gate scan exits 1 and /st-quick and /st-work list " +
             "`secret scan: not run` under `Not done:`.",
         );
       }
@@ -1351,7 +1355,10 @@ describe("init — the no-git note", () => {
       expect(note, `the note names ${call}`).not.toContain(call);
     }
     // What follows from git not answering stays, in `check`'s words for such a folder.
-    expect(note).toContain("Two verbs need git");
+    // TEST CHANGE, justified (run 2026-10-18_cloud-runs-2, review/245): the note named two verbs, as
+    // `check`'s row did; `plan check` and the `run` verbs exit 1 with no git work tree too, so it names four.
+    expect(note).toContain("Four verbs need git");
+    expect(note).toContain("plan and run exit 1 without it");
     expect(note).toContain("worktree refuses without it");
     expect(note).toContain("gate reads every change from it");
     expect(note).toContain("so here gate scan exits 1");
@@ -1622,8 +1629,8 @@ describe("init — the no-git note", () => {
     "objects and refs, or beside commondir), met before any .git that git stops at, so the engine " +
     "did not hand it to git. Look at the entries of this folder and of each folder above it by " +
     "name to find that folder, and do not run git in it or in any folder under it, this one " +
-    "included. Two verbs need git: worktree refuses without it, and gate reads every change from " +
-    "it, so here gate scan exits 1 saying git was not started, and on that reason /st-work stops " +
+    "included. Four verbs need git: worktree refuses without it, plan and run exit 1 without it, " +
+    "and gate reads every change from it, so here gate scan exits 1 saying git was not started, and on that reason /st-work stops " +
     "the run as BLOCKED_DEPENDENCY and /st-quick stops the batch. That stop comes at the gate " +
     "call, and the git a flow's session and its sub-agents start before it is not set to refuse " +
     "such a folder as the engine's is, so start no flow here until that folder is moved off this " +
@@ -1636,8 +1643,9 @@ describe("init — the no-git note", () => {
   const PLAIN_NOTE =
     "no git repository: git did not answer in this directory, so the files that were written have " +
     "no revert path. The engine found a git binary on PATH, so this directory is not a " +
-    "repository, or git was only slow to answer. Two verbs need git: worktree refuses without " +
-    "it, and gate reads every change from it, so with no repository gate scan exits 1 and " +
+    "repository, or git was only slow to answer. Four verbs need git: worktree refuses without " +
+    "it, plan and run exit 1 without it, and gate reads every change from it, so with no " +
+    "repository gate scan exits 1 and " +
     "/st-quick and /st-work list `secret scan: not run` under `Not done:`.";
 
   /** The numbered rows the panel prints last, without their numbers. */
