@@ -76,6 +76,7 @@ import {
   runMcpAdd,
   runMcpList,
   runMcpRemove,
+  writeSetupManifest,
 } from "./config/mcp.ts";
 import { runPolicy } from "./config/policy.ts";
 
@@ -1276,7 +1277,7 @@ async function applyKeyValue(
     };
   }
 
-  await ctx.engine.manifest.manifest.writeManifest(rootDir, next);
+  await writeSetupManifest(ctx, rootDir, next);
   ctx.io.out(`set ${diff}\n`);
   if (notice !== null) ctx.io.out(`${notice}\n`);
   ctx.io.out(`${NEXT_SYNC_LINE}\n`);
@@ -1354,7 +1355,7 @@ async function runDetect(ctx: CliContext, rootDir: string): Promise<CommandResul
     };
   }
 
-  await ctx.engine.manifest.manifest.writeManifest(rootDir, {
+  await writeSetupManifest(ctx, rootDir, {
     ...manifest,
     ...(platform === undefined ? {} : { platform }),
     detected,

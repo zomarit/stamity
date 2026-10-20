@@ -12,6 +12,7 @@ import type { OrgPolicyDecision } from "../../pack/orgPolicy.ts";
 import type { CatalogPin, TrustTier } from "../../pack/trust.ts";
 import { MANIFEST_FILE, type SetupManifest } from "../../types/manifest.ts";
 import { STATE_DIR } from "../../types/markers.ts";
+import { keepSavedModelLists } from "../engine/clientModels.ts";
 import { CliFailure, renderFailureHuman, type FailureDoc } from "../kit/output.ts";
 import { packageCommand } from "../kit/packageName.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
@@ -900,7 +901,10 @@ export const addCommand: CommandModule = {
 
     // Rows and files land together: the engine folded this pack's ownership
     // rows into the returned manifest (replacing any previous install's), and
-    // persisting it is what makes the written files reclaimable later.
+    // persisting it is what makes the written files reclaimable later. A 1.15.0
+    // manifest's saved model lists move to the cache first, as `sync` moves
+    // them, since the write leaves `models.listed` out (REQ-LADDER-009).
+    for (const warning of await keepSavedModelLists(rootDir)) ctx.io.err(`warning: ${warning}\n`);
     await manifestStore.writeManifest(rootDir, applied.manifest, {
       now: ctx.app.runtime.clock.now(),
     });

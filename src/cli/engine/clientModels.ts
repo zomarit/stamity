@@ -3,7 +3,7 @@ import { lstat, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { isPlainObject } from "../../config/parse.ts";
-import { MANIFEST_REPO_PATH, collectListedErrors, withoutListedModels } from "../../manifest/manifest.ts";
+import { MANIFEST_REPO_PATH, collectListedErrors, readManifest, withoutListedModels } from "../../manifest/manifest.ts";
 import { CLIENT_MODELS_CACHE_FILE } from "../../mcp/env.ts";
 import { atomicWriteFile } from "../../merge/atomicWrite.ts";
 import { MODEL_PRIORITY, modelMapPath } from "../../roster/modelDefaults.ts";
@@ -789,6 +789,23 @@ export async function resolveModelLists(
     toWrite: unchanged || Object.keys(kept).length === 0 ? null : kept,
     problem: problems.length === 0 ? null : problems.join("\n"),
   };
+}
+
+/**
+ * Move the lists the manifest on disk under `rootDir` still saves under
+ * `models.listed` (a 1.15.0 manifest) to the cache, ahead of a verb's manifest
+ * write that leaves the key out (REQ-LADDER-009), as `sync` moves them: the
+ * same resolution ({@link resolveModelLists}, with no client read) and the same
+ * cache writer. Answers the warning lines the run prints: a cache not read, a
+ * saved list not moved, a cache not written; none when the manifest saves no
+ * list, which leaves the cache untouched. The caller's write proceeds either way.
+ */
+export async function keepSavedModelLists(rootDir: string): Promise<string[]> {
+  const onDisk = await readManifest(rootDir);
+  if (onDisk?.models?.listed === undefined) return [];
+  const lists = await resolveModelLists(rootDir, onDisk);
+  const failed = lists.toWrite === null ? null : await writeModelListCache(rootDir, lists.toWrite);
+  return [...(lists.problem === null ? [] : lists.problem.split("\n")), ...(failed === null ? [] : [failed])];
 }
 
 /**

@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { CliFailure } from "../../kit/output.ts";
 import type { CliContext, CommandResult } from "../../kit/program.ts";
 import type { McpServerMeta, PackSuppliedServer } from "../../../mcp/catalog.ts";
+import { keepSavedModelLists } from "../../engine/clientModels.ts";
 import { discoverInstalledPacks, packMcpServers } from "../../../pack/projection.ts";
 import type { SetupManifest } from "../../../types/manifest.ts";
 
@@ -14,11 +15,12 @@ import type { SetupManifest } from "../../../types/manifest.ts";
  * Engine access rule for this file: everything goes through `ctx.engine`, the
  * typed composition root. No MCP behaviour is re-implemented — the catalog
  * decides which ids exist, `ensureEnvMcp` owns the credential file, and
- * `writeManifest` owns validation, atomicity, and the write lock. The one
- * direct engine import is `../../../pack/projection.ts`, which the composition
- * registry does not yet carry a field for; it is imported like the pure
- * helpers `config.ts` reaches for, and moving it onto `ctx.engine.pack` is a
- * registry edit that belongs to whoever owns that file.
+ * `writeManifest` owns validation, atomicity, and the write lock. The two
+ * direct engine imports are `../../../pack/projection.ts` and
+ * `../../engine/clientModels.ts` (the model list cache, as `config.ts` imports
+ * it), which the composition registry does not yet carry a field for; they are
+ * imported like the pure helpers `config.ts` reaches for, and moving them onto
+ * `ctx.engine` is a registry edit that belongs to whoever owns that file.
  *
  * **Which ids exist is a two-part answer.** The curated catalog is one half;
  * an installed pack's `mcp_servers/` supply is the other, resolved here from
@@ -28,9 +30,9 @@ import type { SetupManifest } from "../../../types/manifest.ts";
  * not exist.
  *
  * Division of labour with the parent module: `config.ts` imports this file, so
- * the two helpers both halves need — {@link requireSetupManifest} and
- * {@link NEXT_SYNC_LINE} — live HERE. The reverse edge (child importing parent)
- * would be an import cycle.
+ * the helpers both halves need — {@link requireSetupManifest},
+ * {@link writeSetupManifest} and {@link NEXT_SYNC_LINE} — live HERE. The
+ * reverse edge (child importing parent) would be an import cycle.
  *
  * Credential posture: `.env.mcp` is the operator's file. `add` extends it with
  * placeholder names and never rewrites a filled-in value; `remove` does not
@@ -80,6 +82,18 @@ export async function requireSetupManifest(
     why: `${ctx.engine.manifest.manifest.manifestPath(rootDir)} does not exist`,
     next: "run stamity init to create one",
   });
+}
+
+/**
+ * Persist `manifest` through `writeManifest`, moving the model lists a 1.15.0
+ * manifest on disk still saves to the cache first and naming each warning on
+ * stderr, as `sync` does (REQ-LADDER-009): the write leaves `models.listed`
+ * out, and a list it drops before reaching the cache is gone. The one write
+ * path of `config set`, `config detect` and `config mcp add | remove`.
+ */
+export async function writeSetupManifest(ctx: CliContext, rootDir: string, manifest: SetupManifest): Promise<void> {
+  for (const warning of await keepSavedModelLists(rootDir)) ctx.io.err(`warning: ${warning}\n`);
+  await ctx.engine.manifest.manifest.writeManifest(rootDir, manifest);
 }
 
 /** Selected server ids, in selection order. Absent `mcp` reads as none selected. */
@@ -463,7 +477,7 @@ export async function runMcpAdd(
   // credentials were never provisioned.
   await ctx.engine.mcp.env.ensureEnvMcp(rootDir, servers, packServers);
   await ctx.engine.mcp.env.ensureGitignoreEntry(rootDir);
-  await ctx.engine.manifest.manifest.writeManifest(rootDir, {
+  await writeSetupManifest(ctx, rootDir, {
     ...manifest,
     mcp: { ...manifest.mcp, servers },
   });
@@ -531,7 +545,7 @@ export async function runMcpRemove(
     return { exitCode: 0, json: { id, removed: false, dryRun: true, servers } };
   }
 
-  await ctx.engine.manifest.manifest.writeManifest(rootDir, {
+  await writeSetupManifest(ctx, rootDir, {
     ...manifest,
     mcp: { ...manifest.mcp, servers },
   });

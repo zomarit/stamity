@@ -1659,6 +1659,57 @@ describe("config mcp", () => {
   });
 });
 
+// n13 (REQ-LADDER-009, review/237): every `config` write leaves `models.listed` out, so a 1.15.0
+// manifest's saved lists move to the git-ignored cache first, as `sync` moves them.
+describe("config writes keep a 1.15.0 manifest's saved model lists", () => {
+  const saved: NonNullable<NonNullable<SetupManifest["models"]>["listed"]> = {
+    codex: { ids: ["gpt-6-sol", "gpt-6-luna"], source: "codex-debug-models" },
+  };
+  const tsRepo = { "package.json": `${JSON.stringify({ name: "fixture", private: true })}\n`, "tsconfig.json": "{}\n" };
+  const verbs: { name: string; args: readonly string[]; seed: Partial<SetupManifest>; files?: Record<string, string> }[] = [
+    { name: "set", args: ["set", "maturityTier", "team"], seed: {} },
+    { name: "detect", args: ["detect"], seed: { detected: { languages: [], linters: [], testFrameworks: [], ciProviders: [] } }, files: tsRepo },
+    { name: "mcp add", args: ["mcp", "add", "brave-search"], seed: {} },
+    { name: "mcp remove", args: ["mcp", "remove", "context7"], seed: { mcp: { servers: ["context7"] } } },
+  ];
+
+  it.each(verbs)("config $name moves them to the cache, and the manifest no longer carries the key", async ({ args, seed, files }) => {
+    const handle = tempDir();
+    if (files !== undefined) await handle.seedFiles(files);
+    await seedManifest(handle, { ...seed, models: { listed: saved } });
+
+    const result = await run(handle, args);
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(JSON.parse((await readOrNull(handle, `${STATE_DIR}/client-models.json`)) ?? "null")).toEqual({ listed: saved });
+    expect(await manifestBytes(handle)).not.toContain('"listed"');
+  });
+
+  it("names a cache it could not write, as sync names it, and still persists the value", async () => {
+    const handle = tempDir();
+    await seedManifest(handle, { models: { listed: saved } });
+    await mkdir(join(handle.dir, STATE_DIR, "client-models.json"), { recursive: true });
+
+    const result = await run(handle, ["set", "maturityTier", "team"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stderr).toContain("warning: the client model lists could not be kept in .stamity/client-models.json");
+    expect((await readManifest(handle.dir))?.maturityTier).toBe("team");
+    expect(await manifestBytes(handle)).not.toContain('"listed"');
+  });
+
+  it("moves nothing under --dry-run", async () => {
+    const handle = tempDir();
+    await seedManifest(handle, { models: { listed: saved } });
+    const before = await manifestBytes(handle);
+
+    expect((await run(handle, ["set", "maturityTier", "team", "--dry-run"])).code).toBe(0);
+
+    expect(await manifestBytes(handle)).toBe(before);
+    expect(await readOrNull(handle, `${STATE_DIR}/client-models.json`)).toBeNull();
+  });
+});
+
 describe("config on an uninitialised repo", () => {
   const invocations: readonly (readonly string[])[] = [
     [],

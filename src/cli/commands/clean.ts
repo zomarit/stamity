@@ -37,7 +37,7 @@ import {
   type LegacyCursorIdentity,
   type RenderingProof,
 } from "../engine/emissionWrite.ts";
-import { resolveModelLists, withModelLists } from "../engine/clientModels.ts";
+import { keepSavedModelLists, resolveModelLists, withModelLists } from "../engine/clientModels.ts";
 import { getEmissionPlanner } from "../engine/emission.ts";
 import { CliFailure } from "../kit/output.ts";
 import { hasNpmChannel, packageCommand, packageName, registryOption } from "../kit/packageName.ts";
@@ -849,6 +849,9 @@ async function runScopedClean(
             ...manifest.mcp,
             servers: manifest.mcp.servers.filter((id) => !mcp.deselected.includes(id)),
           };
+    // A 1.15.0 manifest's saved model lists move to the cache first, as `sync`
+    // moves them: the write leaves `models.listed` out (REQ-LADDER-009).
+    for (const warning of await keepSavedModelLists(rootDir)) ctx.io.err(`warning: ${warning}\n`);
     await writeManifest(
       rootDir,
       { ...manifest, ledger, ...(mcpConfig === undefined ? {} : { mcp: mcpConfig }) },

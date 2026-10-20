@@ -10,6 +10,7 @@ import {
   selectMany,
   type PromptGate,
 } from "../kit/prompts.ts";
+import { keepSavedModelLists } from "../engine/clientModels.ts";
 import { readClientModelLists } from "./init/apply.ts";
 import { applySync, planSync, refusalRemedyLines, type SyncPlan } from "./sync/engine.ts";
 import { TOOLS, VALID_TOOLS, type Tool } from "../../types/core.ts";
@@ -1063,6 +1064,10 @@ function createBridge(
     outcomes.set(repo.path, outcome);
 
     if (fields.length > 0 && !ctx.dryRun) {
+      // A 1.15.0 member's saved model lists move to its cache first, as its own
+      // sync moves them: the write below leaves `models.listed` out, and the plan
+      // then reads the member with no lists (REQ-LADDER-009).
+      for (const warning of await keepSavedModelLists(memberDir)) ctx.io.err(`warning: ${repo.path}: ${warning}\n`);
       // `writeManifest` validates before persisting and writes atomically, so a
       // bad patch never reaches disk at all.
       await ctx.engine.manifest.manifest.writeManifest(

@@ -669,6 +669,24 @@ describe("clean --pack — scoped removal", () => {
       [],
     );
   });
+
+  // n13 (REQ-LADDER-009, review/237): the scoped write leaves `models.listed` out, so a 1.15.0
+  // manifest's saved lists move to the git-ignored cache first, as `sync` moves them.
+  it("moves a 1.15.0 manifest's saved model lists to the cache before it writes the shrunk manifest", async () => {
+    const temp = tempDir();
+    const root = await seedScopedRepo(temp);
+    const manifestFile = join(root, STATE_DIR, "manifest.json");
+    const saved = { codex: { ids: ["gpt-6-sol", "gpt-6-luna"], source: "codex-debug-models" } };
+    const onDisk = JSON.parse(await readFile(manifestFile, "utf-8")) as Record<string, unknown>;
+    await writeFile(manifestFile, `${JSON.stringify({ ...onDisk, models: { listed: saved } }, null, 2)}\n`);
+
+    const result = await runClean(root, ["--pack", OPS_ID, "-y"]);
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(JSON.parse(await readFile(join(root, STATE_DIR, "client-models.json"), "utf-8"))).toEqual({ listed: saved });
+    expect(await readFile(manifestFile, "utf-8")).not.toContain('"listed"');
+    expect(rowsOwnedBy(await readLedgerOnDisk(root), "pack:@acme/ops")).toEqual([]);
+  });
 });
 
 describe("clean --pack — unknown id and missing manifest", () => {

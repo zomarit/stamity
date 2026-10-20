@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { lstat, readFile, readdir, rm } from "node:fs/promises";
+import { lstat, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -524,6 +524,24 @@ describe("add — install", () => {
     expect(result.stdout).toMatch(/declaredTools\s+pass/);
     expect(result.stdout).toContain("also targets cursor");
     expect(await pathExists(getProject().path(PACK_DIR, "rules", "cursor-only.md"))).toBe(true);
+  });
+
+  // n13 (REQ-LADDER-009, review/237): the install's manifest write leaves `models.listed` out, so a
+  // 1.15.0 manifest's saved lists move to the git-ignored cache first, as `sync` moves them.
+  it("moves a 1.15.0 manifest's saved model lists to the cache before it records the pack", async () => {
+    await initProject();
+    const manifestFile = getProject().path(".stamity", "manifest.json");
+    const saved = { codex: { ids: ["gpt-6-sol", "gpt-6-luna"], source: "codex-debug-models" } };
+    const onDisk = JSON.parse(await readFile(manifestFile, "utf8")) as Record<string, unknown>;
+    await writeFile(manifestFile, `${JSON.stringify({ ...onDisk, models: { listed: saved } }, null, 2)}\n`);
+    await seedPack();
+
+    const result = await run(installArgs());
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(JSON.parse(await readFile(getProject().path(".stamity", "client-models.json"), "utf8"))).toEqual({ listed: saved });
+    expect(await readFile(manifestFile, "utf8")).not.toContain('"listed"');
+    expect(packRows(await readProjectManifest()).length).toBeGreaterThan(0);
   });
 });
 

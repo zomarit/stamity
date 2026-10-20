@@ -1887,4 +1887,87 @@ describe("workspace sync — each member's client model lists (REQ-LADDER-006)",
 
     expect((await readManifest(api))?.models).toBeUndefined();
   });
+
+  /** Lays `listed` into the member's manifest as a 1.15.0 manifest saved it: the writer leaves the key out, so the bytes are written by hand. */
+  async function seedSavedLists(memberDir: string, listed: Record<string, unknown>): Promise<void> {
+    const onDisk = JSON.parse(await manifestBytes(memberDir)) as Record<string, unknown>;
+    await writeFile(join(memberDir, STATE_DIR, MANIFEST_FILE), `${JSON.stringify({ ...onDisk, models: { listed } }, null, 2)}\n`);
+  }
+
+  // n13 (REQ-LADDER-009, review/237): the cascade writes a patched member manifest before the member's
+  // sync plans, and that write leaves `models.listed` out, so the saved lists move to the cache first.
+  it("moves a 1.15.0 member's saved lists to its cache before the patch write, with no client read", async () => {
+    const temp = getTemp();
+    await seedCorpus(temp);
+    const root = await seedWorkspace(temp, manifestOf([{ path: "apps/api" }], { defaults: { tools: ["claude", "codex"] } }));
+    const api = await seedSyncMember(root, "apps/api", { tools: ["claude"] });
+    const saved = { codex: { ids: ["gpt-6-sol", "gpt-6-luna"], source: "codex-debug-models" } };
+    await seedSavedLists(api, saved);
+
+    expect(await runSyncWith(root, { STAMITY_NO_CLIENT_PROBE: "1" })).toBe(0);
+
+    expect((await readManifest(api))?.tools).toEqual(["claude", "codex"]);
+    expect(JSON.parse(await readFile(join(api, ".stamity", "client-models.json"), "utf8"))).toEqual({ listed: saved });
+    expect(await manifestBytes(api)).not.toContain('"listed"');
+  });
+
+  // n13, edge: a list the cache already holds wins over the saved one for its client, as `sync` resolves it.
+  it("keeps the cache's own list over a saved one for the same client, and moves the rest", async () => {
+    const temp = getTemp();
+    await seedCorpus(temp);
+    const root = await seedWorkspace(temp, manifestOf([{ path: "apps/api" }], { defaults: { tools: ["claude", "codex"] } }));
+    const api = await seedSyncMember(root, "apps/api", { tools: ["claude"] });
+    await seedSavedLists(api, {
+      codex: { ids: ["gpt-6-sol"], source: "codex-debug-models" },
+      cursor: { ids: ["claude-opus-5-high"], source: "cursor-agent-models" },
+    });
+    const newer = { ids: ["gpt-6-luna"], source: "codex-debug-models" };
+    await writeFile(join(api, ".stamity", "client-models.json"), `${JSON.stringify({ listed: { codex: newer } })}\n`);
+
+    expect(await runSyncWith(root, { STAMITY_NO_CLIENT_PROBE: "1" })).toBe(0);
+
+    expect(JSON.parse(await readFile(join(api, ".stamity", "client-models.json"), "utf8"))).toEqual({
+      listed: { codex: newer, cursor: { ids: ["claude-opus-5-high"], source: "cursor-agent-models" } },
+    });
+    expect(await manifestBytes(api)).not.toContain('"listed"');
+  });
+
+  // n13, edge: a cache that cannot be written gives `sync`'s own warning, and the patch write still lands.
+  it("names a cache it could not move a member's saved lists to, and still writes the patch", async () => {
+    const temp = getTemp();
+    await seedCorpus(temp);
+    const root = await seedWorkspace(temp, manifestOf([{ path: "apps/api" }], { defaults: { tools: ["claude", "codex"] } }));
+    const api = await seedSyncMember(root, "apps/api", { tools: ["claude"] });
+    await seedSavedLists(api, { codex: { ids: ["gpt-6-sol"], source: "codex-debug-models" } });
+    await mkdir(join(api, ".stamity", "client-models.json"), { recursive: true });
+    const err: string[] = [];
+    const io: CommandIo = { out: () => undefined, err: (text) => err.push(text) };
+
+    const code = await runCli(["workspace", "sync"], [workspaceCommand], {
+      cwd: root,
+      env: { NO_COLOR: "1", STAMITY_NO_CLIENT_PROBE: "1" },
+      io,
+      clock: { now: () => T0 },
+    });
+
+    expect(code).toBe(0);
+    expect(err.join("")).toContain("warning: apps/api: the client model lists could not be kept in .stamity/client-models.json");
+    expect((await readManifest(api))?.tools).toEqual(["claude", "codex"]);
+    expect(await manifestBytes(api)).not.toContain('"listed"');
+  });
+
+  // n13, edge: `--dry-run` moves nothing; the saved lists stay where they are.
+  it("leaves a member's saved lists and cache alone under --dry-run", async () => {
+    const temp = getTemp();
+    await seedCorpus(temp);
+    const root = await seedWorkspace(temp, manifestOf([{ path: "apps/api" }], { defaults: { tools: ["claude", "codex"] } }));
+    const api = await seedSyncMember(root, "apps/api", { tools: ["claude"] });
+    await seedSavedLists(api, { codex: { ids: ["gpt-6-sol"], source: "codex-debug-models" } });
+    const before = await manifestBytes(api);
+
+    expect((await runSync(root, ["--dry-run"])).code).toBe(0);
+
+    expect(await manifestBytes(api)).toBe(before);
+    expect(await exists(join(api, ".stamity", "client-models.json"))).toBe(false);
+  });
 });
