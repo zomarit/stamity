@@ -71,7 +71,8 @@ moves them only with `--move`. `/st-work`'s close walk recommends `run checkpoin
 You author the corpus in `content/` once; the core plans standards-first `AGENTS.md` and the skills
 projection under `.agents/skills/`. Cursor, Copilot and Codex read those where they land (Codex reads
 the root `AGENTS.override.md` instead where it has a rules appendix: `AGENTS.md` as sync writes it,
-plus the appendix). Claude Code reads the managed block in `CLAUDE.md` and takes a skills copy.
+plus the appendix, less Cursor's cloud block where Cursor is selected). Claude Code reads the
+managed block in `CLAUDE.md` and takes a skills copy.
 
 Four adapters add what a client cannot read without help: agents, rules, MCP documents, hook wiring and a
 command surface. Hook wiring and a command surface both reach all four clients. Codex and Cursor share the
