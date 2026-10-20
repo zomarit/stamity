@@ -1708,6 +1708,44 @@ describe("config writes keep a 1.15.0 manifest's saved model lists", () => {
     expect(await manifestBytes(handle)).toBe(before);
     expect(await readOrNull(handle, `${STATE_DIR}/client-models.json`)).toBeNull();
   });
+
+  // review/244: a 1.15.0 `.gitignore` has no rule for the cache, and `config set` writes it before any
+  // `sync` adds one, so the rule lands first, as `sync` orders them, or a `git add -A` tracks one account's list.
+  it("adds the cache's ignore rule before it writes the cache, on a 1.15.0 tree", async () => {
+    const handle = tempDir();
+    const ignored115 = [".env.mcp", ".stamity/review-gate.json", ".stamity/review-gate.json.lock", ".stamity/review-gate.json.tmp-*"];
+    await handle.seedFiles({ ".gitignore": `${ignored115.join("\n")}\n` });
+    await seedManifest(handle, { models: { listed: saved } });
+    const git = (args: readonly string[]): string =>
+      execFileSync("git", [...args], {
+        cwd: handle.dir,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+        env: { ...process.env, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: NO_GIT_CONFIG, GIT_CONFIG_SYSTEM: NO_GIT_CONFIG },
+        windowsHide: true,
+      });
+    git(["init", "-q"]);
+
+    const result = await run(handle, ["set", "maturityTier", "team"]);
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(await readOrNull(handle, `${STATE_DIR}/client-models.json`)).not.toBeNull();
+    expect((await readOrNull(handle, ".gitignore"))?.split("\n")).toContain(`${STATE_DIR}/client-models.json`);
+    expect(git(["status", "--porcelain", "--untracked-files=all"])).not.toContain("client-models.json");
+  });
+
+  it("writes no cache when its ignore rule cannot be added, names why, and still persists the value", async () => {
+    const handle = tempDir();
+    await seedManifest(handle, { models: { listed: saved } });
+    await mkdir(join(handle.dir, ".gitignore"), { recursive: true });
+
+    const result = await run(handle, ["set", "maturityTier", "team"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stderr).toContain("its ignore rule could not be added to .gitignore (EISDIR)");
+    expect(await readOrNull(handle, `${STATE_DIR}/client-models.json`)).toBeNull();
+    expect((await readManifest(handle.dir))?.maturityTier).toBe("team");
+  });
 });
 
 describe("config on an uninitialised repo", () => {

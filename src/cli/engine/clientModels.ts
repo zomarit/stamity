@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { isPlainObject } from "../../config/parse.ts";
 import { MANIFEST_REPO_PATH, collectListedErrors, readManifest, withoutListedModels } from "../../manifest/manifest.ts";
-import { CLIENT_MODELS_CACHE_FILE } from "../../mcp/env.ts";
+import { CLIENT_MODELS_CACHE_FILE, ensureGitignoreEntry } from "../../mcp/env.ts";
 import { atomicWriteFile } from "../../merge/atomicWrite.ts";
 import { MODEL_PRIORITY, modelMapPath } from "../../roster/modelDefaults.ts";
 import { isModelClass, listHoldsPin, pinsFor } from "../../roster/modelLadder.ts";
@@ -799,13 +799,32 @@ export async function resolveModelLists(
  * cache writer. Answers the warning lines the run prints: a cache not read, a
  * saved list not moved, a cache not written; none when the manifest saves no
  * list, which leaves the cache untouched. The caller's write proceeds either way.
+ * The ignore rules land before the cache does, as `sync` orders them (review/244):
+ * a 1.15.0 `.gitignore` has no rule for the cache, and a cache written without
+ * one is a file `git add -A` commits. A rule that cannot be added keeps the
+ * cache unwritten, named as a cache not written.
  */
 export async function keepSavedModelLists(rootDir: string): Promise<string[]> {
   const onDisk = await readManifest(rootDir);
   if (onDisk?.models?.listed === undefined) return [];
   const lists = await resolveModelLists(rootDir, onDisk);
-  const failed = lists.toWrite === null ? null : await writeModelListCache(rootDir, lists.toWrite);
+  const failed = lists.toWrite === null ? null : await writeIgnoredModelListCache(rootDir, lists.toWrite);
   return [...(lists.problem === null ? [] : lists.problem.split("\n")), ...(failed === null ? [] : [failed])];
+}
+
+/** {@link writeModelListCache} behind the engine's ignore rules; the warning line when either step fails, else `null`. */
+async function writeIgnoredModelListCache(rootDir: string, lists: ModelLists): Promise<string | null> {
+  try {
+    await ensureGitignoreEntry(rootDir);
+  } catch (cause) {
+    const code = (cause as NodeJS.ErrnoException | null)?.code;
+    return (
+      `the client model lists were not kept in ${CLIENT_MODELS_CACHE_FILE}: its ignore rule could not be added to .gitignore` +
+      `${typeof code === "string" ? ` (${code})` : ""}, so they held for this run only and were dropped, a 1.15.0 ` +
+      "manifest's lists among them; once .gitignore takes the rule, the next sync that reads a client keeps its list again"
+    );
+  }
+  return writeModelListCache(rootDir, lists);
 }
 
 /**
