@@ -2,7 +2,7 @@
 id: board-writes
 # A design document, authored from docs/plans/015-board-writes.md on 2026-10-01; its requirement text merged on 2026-10-12 at the Prove phase of run 2026-10-12_board-writes, by its unit s1-spec-merge against the integration head 3415e721, amended in run 2026-10-14_cli-native on 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
-status: shipped-with-1.15.0
+status: shipped-with-1.16.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the command reference carries it, or a decision row cuts the surface
 ---
 # Board writes
@@ -12,7 +12,10 @@ As built on the branch `board-writes`, the command writes to a linked board by d
 files each ready item with the labels the repository already has, a missing label staying a proposal; changes where an
 item stands only with `--move`; and keeps a fixed list of writes it never makes (`content/commands/st-board.md:13-16`,
 `:248-330`; the label rule `:96-98` and `:276-278`, read at `0b3f8bd3`). The change shipped with 1.15.0, which set
-`status: shipped-with-1.15.0`.
+`status: shipped-with-1.15.0`. Plan 021's first file, `docs/plans/021-cloud-runs-01.md` (pull request #112), amended
+REQ-BOARD-002 and REQ-BOARD-005 on 2026-10-16, and its second, `docs/plans/021-cloud-runs-02.md` (pull request #113),
+re-pointed one citation of REQ-BOARD-002's amendment on 2026-10-19; both shipped with 1.16.0, which set
+`status: shipped-with-1.16.0`.
 
 The requirement text comes from the `## Spec delta` of `docs/plans/015-board-writes.md` (`:101-347`), as the run's
 in-flow re-plan, `.stamity/runs/2026-10-12_board-writes/plan.md` (pass r2), amended it, and from the run's sign-offs

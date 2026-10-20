@@ -2,7 +2,7 @@
 id: model-ladder
 # A design document, authored from docs/plans/008-plugin-lifecycle-02.md on 2026-09-17, extended from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
-status: shipped-with-1.15.0
+status: shipped-with-1.16.0
 obsolete_when: every supported client publishes one effort scale the ladder can name without a per-client table and resumes, waits out and reports a sub-agent's capacity stop on its own, or a decision row cuts the surface
 ---
 # Model ladder
@@ -43,7 +43,8 @@ REQ-LADDER-009, and the paragraphs dated 2026-10-18 under REQ-LADDER-002, REQ-LA
 the spec delta of `docs/plans/021-cloud-runs-02.md` (plan 021 file 2, run `2026-10-18_cloud-runs-2`), in its amended
 form, merged by its unit `v20-spec-merge`, with the clauses its units' and fixers' reports declared where the delta is
 silent. Every `path:line` in that text reads at the integration head `e64bc09f`; a module that run rewrote is cited by
-file and symbol. It is unreleased at this merge; the plan cuts it as 1.16.0.
+file and symbol. It reached `main` through pull request #113 and shipped with 1.16.0, which set `status` to
+`shipped-with-1.16.0`; plan 021's first file, `docs/plans/021-cloud-runs-01.md` (pull request #112), moved nothing here.
 
 ## Intent
 

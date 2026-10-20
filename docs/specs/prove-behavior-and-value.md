@@ -2,7 +2,7 @@
 id: prove-behavior-and-value
 # A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-11_release-1-14-0 on 2026-10-11 and 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023).
-status: shipped-with-1.15.0
+status: shipped-with-1.16.0
 obsolete_when: the measurement page, the security mapping and the QA evidence file are all generated from live data by the engine itself, or a decision row cuts the surface
 ---
 # Prove behavior and value
@@ -82,16 +82,16 @@ REQ-PROVE-038 comes from the spec delta of `docs/plans/021-cloud-runs-01.md` (pl
 `2026-10-15_cloud-runs`), merged by its unit `u23-spec-merge` before the run's whole-branch review. It cites the
 integration head `4daeb214`; each whole-branch page round re-read its `evals/SET-v7.md` citations with its own edit of
 that file. REQ-PROVE-039 to REQ-PROVE-045 were held for plan 021's second file, which allocated them on 2026-10-18
-(the next paragraph; amended 2026-10-18, it read "are held for plan 021's second file"). It is unreleased at this
-merge; the plan cuts it as 1.16.0.
+(the next paragraph; amended 2026-10-18, it read "are held for plan 021's second file"). It reached `main` through
+pull request #112 and shipped with 1.16.0, which set `status: shipped-with-1.16.0`.
 
 REQ-PROVE-039 to REQ-PROVE-045, and the text dated 2026-10-18 under REQ-PROVE-003, REQ-PROVE-005, REQ-PROVE-018,
 REQ-PROVE-021 and REQ-PROVE-037, come from the spec delta of `docs/plans/021-cloud-runs-02.md` (plan 021 file 2, run
 `2026-10-18_cloud-runs-2`), in its amended form, merged by its unit `v20-spec-merge`, with the clauses its units' and
 fixers' reports declared where the delta is silent, under a line headed "As built". Every `path:line` in that text reads
 at the integration head `e64bc09f`, but for REQ-PROVE-042's two release-checklist ranges, re-pointed on 2026-10-19,
-which read at `96e5b3ac`; a module that run rewrote is cited by file and symbol. It is unreleased at this
-merge; the plan cuts it as 1.16.0.
+which read at `96e5b3ac`; a module that run rewrote is cited by file and symbol. They reached `main` through pull
+request #113 and shipped with 1.16.0, which set `status: shipped-with-1.16.0`.
 
 ## Intent
 

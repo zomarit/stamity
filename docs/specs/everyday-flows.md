@@ -2,7 +2,7 @@
 id: everyday-flows
 # A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-12_board-writes on 2026-10-12, one citation re-pointed in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
-status: shipped-with-1.15.0
+status: shipped-with-1.16.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the command reference carries it, or a decision row cuts the surface
 ---
 # Everyday flows
@@ -129,8 +129,8 @@ each citation of `content/skills/st-unattended/SKILL.md` that the two lines its 
 and those read at `96e5b3ac`. Two units were not on `4daeb214`: `u19-run-end` (`stamity run end`) and
 `u21-security-page` (`SECURITY.md`'s cloud section); the fix round cites both at `bc12cfc3`. REQ-FLOW-105 to
 REQ-FLOW-119 were held for plan 021's second file, which allocated them on 2026-10-18 (the next paragraph; amended
-2026-10-18, it read "are held for plan 021's second file"). The text dated 2026-10-16 is unreleased at this merge; the
-plan cuts it as 1.16.0.
+2026-10-18, it read "are held for plan 021's second file"). The text dated 2026-10-16 reached `main` through pull
+request #112 and shipped with 1.16.0, which set `status: shipped-with-1.16.0`.
 
 REQ-FLOW-105 to REQ-FLOW-119 and REQ-FLOW-121 to REQ-FLOW-124, and the text dated 2026-10-18, come from the spec delta
 of `docs/plans/021-cloud-runs-02.md` (plan 021 file 2, run `2026-10-18_cloud-runs-2`), in its amended form, merged
@@ -140,7 +140,8 @@ line says what the code holds. Every `path:line` in that text reads at the integ
 citations of `content/skills/st-unattended/SKILL.md` re-pointed on 2026-10-19, which read at `96e5b3ac`. Citations
 into `src/hooks/personOnly.ts`, `src/hooks/scripts.ts` and the other modules the run rewrote by hundreds of lines name
 the file and the symbol, as the plan's own cells anchor them; a citation of a content file, a page, a test case or a
-small module names its lines. The text dated 2026-10-18 is unreleased at this merge; the plan cuts it as 1.16.0.
+small module names its lines. The text dated 2026-10-18 reached `main` through pull request #113 and shipped with
+1.16.0, which set `status: shipped-with-1.16.0`.
 
 ## Intent
 
