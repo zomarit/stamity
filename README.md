@@ -52,15 +52,18 @@ npx @zomarit/stamity init
 `workspace`, `clean` and `add` work from. `validate` runs with or without one; `learn`, `handoff`
 and `ledger` want only `.stamity/`. Node `>= 22.22.2` is the only prerequisite; nothing installs globally.
 
-Two verbs need git: `worktree` refuses without it, and `gate` reads every change from it, so without git `gate scan`
-exits 1 and `/st-quick` and `/st-work` list `secret scan: not run` under `Not done:`. The engine reaches the network
-in three places, all in [`SECURITY.md`'s "Network and data handling"](SECURITY.md): `add` fetches the Sigstore trust
-root for a signed pack, `worktree setup` fetches your own `origin` for a branch with no local copy, and a startup
-notice asks npm about newer versions until you switch it off. The client programs it starts to read a model list may
-make network calls of their own: `init`, `sync`, `workspace sync` and `check` start each selected client's own CLI but
-Claude Code's, under your account; `STAMITY_NO_CLIENT_PROBE=1` starts none. Two touchpoints go further, through the
-authenticated GitHub CLI, `gh`: `/st-pr-resolve`, and `/st-board`, which once a board is linked files, edits and
-comments on its items by default behind one preview, and moves them only with `--move`.
+Four verbs need git: `worktree` refuses without it, `plan` and `run` exit 1 without it, and `gate` reads every change
+from it, so without git `gate scan` exits 1 and `/st-quick` and `/st-work` list `secret scan: not run` under
+`Not done:`. The engine reaches the network in four places, all in [`SECURITY.md`'s "Network and data
+handling"](SECURITY.md): `add` fetches the Sigstore trust root for a signed pack, `worktree setup` fetches your own
+`origin` for a branch with no local copy, a startup notice asks npm about newer versions until you switch it off, and
+an unattended run's pre-flight and `run` verbs call GitHub's REST API through `gh` under your login, `run checkpoint`
+and `run end` reading `origin` with `git ls-remote` and pushing the run's branch to it under your git credentials. The
+client programs it starts to read a model list may make network calls of their own: `init`, `sync`, `workspace sync`
+and `check` start each selected client's own CLI but Claude Code's, under your account; `STAMITY_NO_CLIENT_PROBE=1`
+starts none. Two touchpoints go further, through the authenticated GitHub CLI, `gh`: `/st-pr-resolve`, and
+`/st-board`, which once a board is linked files, edits and comments on its items by default behind one preview, and
+moves them only with `--move`. `/st-work`'s close walk recommends `run checkpoint --pr`.
 [Getting started](docs/getting-started.md) has the prerequisites, and what `init` asks and writes per client.
 
 ## How it works
@@ -78,8 +81,8 @@ Your setup state lives in `.stamity/`: a manifest, a per-file ledger, learnings 
 ## Commands
 
 `init` · `sync` · `check` · `validate` · `add` · `config` · `workspace` · `worktree` ·
-`clean` — nine verbs. Behind them are four plumbing verbs an agent calls and nobody
-types, `learn`, `handoff`, `ledger` and `gate`. What each verb does, every flag it takes and every
+`clean` — nine verbs. Behind them are six plumbing verbs an agent calls and nobody
+types, `learn`, `handoff`, `ledger`, `gate`, `plan` and `run`. What each verb does, every flag it takes and every
 status it exits with is [the CLI reference](docs/cli-reference.md)'s to state. That page renders
 from the program itself, so it cannot describe a verb the CLI does not have, or miss one it does.
 
@@ -131,12 +134,14 @@ Each entry below is the one home for its subject. This page links; it does not r
 | [`docs/security-mapping.md`](docs/security-mapping.md) | The version-pinned crosswalk from this repository's controls to the OWASP, joint-guidance and NIST AI RMF catalogues — seven surfaces, their residuals, and the gaps. |
 | [`docs/cloud.md`](docs/cloud.md) | Running a planned change in a vendor's cloud with nobody watching — each cloud's setup, branch protection, secrets, contract start and morning walk, the GitHub Action's limits, and the run contract. |
 
-Hook scripts are not in that corpus row, because they are not corpus content. The three portable bodies are generated
-from `src/hooks/scripts.ts` for every selected client, and Claude Code takes a fourth, the review gate, from its own
-adapter. Cursor's adapter adds three: its sub-agent and MCP guards, and the model-fill hook `stamity-model-pins.mjs`,
-run before each sub-agent call. Six rows above are marked Generated, written by two generators, and
-[CONTRIBUTING.md](CONTRIBUTING.md) maps each generated path to the command that rewrites it. Every link on this page is
-repo-relative, except the links into the `records` branch, which holds the run records and the eval evidence.
+Hook scripts are not in that corpus row, because they are not corpus content. The four portable bodies, the
+person-only shell guard among them, are generated from `src/hooks/scripts.ts` for every selected client. Claude Code
+runs its copies from `.claude/hooks/stamity/`, and its adapter adds the review gate, the unattended ask gate and the
+cloud readiness hook. Cursor's adapter adds five: its sub-agent and MCP guards, the model-fill hook
+`stamity-model-pins.mjs`, run before each sub-agent call, a `stop` hook that keeps an unattended run going for up to
+50 follow-ups, and the context-once hook. Six rows above are marked Generated, written by two generators, and
+[CONTRIBUTING.md](CONTRIBUTING.md) maps each generated path to the command that rewrites it. Every link on this page
+is repo-relative, except the links into the `records` branch, which holds the run records and the eval evidence.
 
 ## What the tests cover
 

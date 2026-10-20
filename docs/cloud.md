@@ -64,9 +64,15 @@ set to any value but empty, `false` or `0`. A cloud's own marker means "cloud", 
   https with gh's credential helper the only helper for origin and no `Authorization` extra header,
   or through Claude Code's cloud proxy. Otherwise the check does not pass, and its fix names the git
   configuration to set. For an account without admin, an active ruleset or classic protection that
-  requires a pull request, with no direct-push bypass for that account, counts. For an account that
-  administers the repository, only an organization ruleset counts. An account with no push right
-  at all is refused too, since the run could not push its own branch.
+  requires a pull request, with no direct-push bypass for that account, counts; a classic
+  pull-request bypass that lists any team or app does not, since nothing proves the account is not
+  in it. For an account that administers the repository, only an active organization ruleset
+  counts, only one whose branch target is `~ALL` or the default branch by its own name, with no
+  exclude that could match it, and whose repository target is this repository's id or every
+  repository by name (not `~DEFAULT_BRANCH`, a name pattern or a property), and only while the
+  account is a plain member of the organization, never an owner. A refusal's evidence names the
+  rulesets and protection it read and why none counted. An account with no push right at all is
+  refused too, since the run could not push its own branch.
 - **A plan the ready check passes.** `stamity plan check` must exit 0 on the plan and the contract
   before the run frames anything.
 
@@ -300,13 +306,17 @@ text, and the draft pull request's diff is where you check them.
 
 ### What a run leaves
 
-- A branch, `stamity/<run-id>`, whose commits the run verbs made, each subject
-  `chore(run): checkpoint <run-id>`.
+- A branch whose commits the run verbs made, each subject `chore(run): checkpoint <run-id>`:
+  `stamity/<run-id>` where the run started on the default branch or a detached `HEAD`, and
+  otherwise the branch the session was given, a platform's own (`claude/…`, `cursor/…`,
+  `copilot/…`) included. The pull request's head names it.
 - The record, `.stamity/runs/<run-id>/record.md`, opening on `Mode: unattended`, `Branch:` and
   `Base:`.
 - One draft pull request whose body is `.stamity/runs/<run-id>/morning.md`: `## For you to check`,
   `## Decisions`, `## Prerequisites`, `## Person's calls held`, `## Not done:` and
-  `## How to answer`.
+  `## How to answer`. Where the repository takes no drafts, it is a normal pull request titled
+  `[DRAFT] <title>`. Where a pull request this run did not open is already open from the branch
+  into the base, a person's or the platform's, the run posts the body on it as one comment.
 - A change to a held path, such as a CI workflow, the hook configuration or the charter, never
   reaches the pushed tree. It waits in `.stamity/runs/<run-id>/held/person-only.patch` as a row of
   `## Person's calls held`.

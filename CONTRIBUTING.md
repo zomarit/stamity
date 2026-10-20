@@ -98,9 +98,11 @@ steps you already ran, it adds four things:
   and growth past the file budgets.
 
 The `cloud-container` job runs beside the matrix, on the same side of the split. It imitates a cloud
-agent's machine: inside a Linux container (`node:24-bookworm`, pinned by digest) with an empty home
-folder and no client account, it runs `test/cloud/`, which drives every hook command `init` emits
-from the repository root and from below it, with `node` on PATH and without it.
+agent's machine: `scripts/ci/cloud-leg.mjs` builds the tree on the runner, then runs `test/cloud/` in
+a Linux container (`node:24-bookworm`, pinned by digest) with no client account four times, once per
+cloud profile (Claude Code's and Cursor's with an empty home folder, Copilot's with `/root`) and once
+more with no network, and a failing step names its profile. The suite drives every hook command
+`init` emits from the repository root and from below it, with `node` on PATH and without it.
 
 A change whose every path falls in a lane takes the `lanes` job instead of the check matrix and the
 `cloud-container` job.
@@ -153,7 +155,7 @@ passed in this repository, skipped in a fork.
 `all-pr-checks` (`.github/workflows/pr-checks.yml`) runs on pull requests only. It carries the three
 gates only a pull request can be asked. They are the DCO trailer on every commit, the
 conventional-commit title, and the dual size budget over the built `dist/`. Bundled logic is capped
-at 2 MiB and the staged corpus at 1.5 MiB. Both numbers are read from `tsdown.config.mjs`, so the
+at 2.375 MiB and the staged corpus at 1.5 MiB. Both numbers are read from `tsdown.config.mjs`, so the
 gate and the build cannot disagree.
 
 `npm run check` does not run that budget separately. `npm run build` already evaluates it in its own
@@ -173,9 +175,10 @@ One runner, Vitest, and three lanes:
    The suites are `test/emit/crossClientGoldens.test.ts` and `test/corpus/emissionGoldens.test.ts`.
    The snapshots sit under `test/emit/__snapshots__/` and `test/corpus/__snapshots__/`.
 3. **Child-process end-to-end.** The real CLI spawned against a pseudo-home and a scratch
-   repository, serialized. These are `test/cli/*.e2e.test.ts`, `test/pack/*.e2e.test.ts` and
-   `test/authoring/onboardingRecovery.e2e.test.ts`, five files running through
-   `test/support/cliHarness.ts`. The sixth `.e2e.test.ts` file,
+   repository, serialized. These are `test/cli/*.e2e.test.ts`, `test/pack/*.e2e.test.ts`,
+   `test/authoring/onboardingRecovery.e2e.test.ts`, `test/hooks/personOnlyGuardDist.e2e.test.ts` and
+   `test/emit/upgradeFrom1140.e2e.test.ts`, seven files running through
+   `test/support/cliHarness.ts`. The eighth `.e2e.test.ts` file,
    `test/emit/syncDriftProof.e2e.test.ts`, spawns nothing. It is an in-process sync-loop proof over
    the golden fixture, with the git seam stubbed.
 

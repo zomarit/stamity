@@ -178,7 +178,7 @@ few kilobytes, and the limit refuses rather than truncates, because half a bundl
 ### The one network call an install makes
 
 **Verifying a signed pack is the only network access a pack install performs.** It is also one of
-the two the engine performs while it works. Verification fetches the Sigstore trust root over TUF.
+the three the engine performs while it works. Verification fetches the Sigstore trust root over TUF.
 The transparency-log proofs travel inside the bundle. `init`, `sync`, `check`, and installing any
 pack that declares no signature do not even load the Sigstore client. The trust metadata is cached
 under your user cache directory, never inside the repository. A host that cannot reach the mirror
@@ -195,6 +195,11 @@ repository has an `origin` remote, it runs `git fetch origin <branch>` against y
 own remote (`src/worktree/git.ts::fetchBranch`). A transport failure refuses with `NETWORK_ERROR`,
 and a `--dry-run` never runs the fetch at all.
 
+The third is an unattended run's. `stamity gate preflight --unattended` and `run start`,
+`run checkpoint` and `run end` call GitHub's REST API through `gh api`, under your `gh` login, and
+`run checkpoint` and `run end` read `origin` with `git ls-remote`, push the run's branch to it under
+your git credentials, and open or update its draft pull request. None of it fetches pack content.
+
 One further path is network-capable and is no part of any command's work. The startup update
 notice asks the npm registry the running package publishes to — the public one for
 `@zomarit/stamity`, and for a fork made with `scripts/fork-identity.mjs --registry` that registry and
@@ -207,7 +212,7 @@ The client programs the engine starts to read a model list may make network call
 selected client's own CLI but Claude Code's, under your account and sign-in, and that program's
 listing call may reach its vendor. `STAMITY_NO_CLIENT_PROBE=1` in the environment starts none of
 them. [`SECURITY.md`'s "Network and data handling"](../SECURITY.md) states this boundary as a
-control: both exceptions, the update notice, and the client programs.
+control: every exception, the update notice, and the client programs.
 
 ### Nothing waives a failed signature check
 

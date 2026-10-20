@@ -104,7 +104,7 @@ run at all warns instead, saying `could not be checked:` and why. Every other ro
 | `preserved-duplicate` | Warns when a managed file repeats its own managed block below the `STAMITY:END` marker. Your repository then loads that content twice. Delete the copy at the line the row names. The block itself is regenerated on every sync. |
 | `pack-integrity` | **Can fail.** An installed pack's bytes no longer match what was recorded at install. Re-install that pack: move any edited file the row names out of the pack's directory or delete it first — `clean --pack` keeps an edited pack file rather than deleting it, so the edit is not lost, and `add` would refuse it as a file the pack does not own; then run `clean --pack <id>`, then delete by hand each client copy it keeps and names, unless it is yours, then `sync`, then `add <source>`, then `sync`, where `<source>` is the catalog id, local path or package name its install receipt records, as the row's finding line for that pack prints it; when the receipt is missing or unreadable, the line says so, and you add the pack again from the source you installed it from. Do **not** run `sync` first: it would carry the edited bytes into your emitted setup. `clean --pack` removes the pack's client copies while the pack is still installed, and keeps and names a copy it cannot prove the engine wrote: delete each kept copy by hand unless it is yours, then run `sync`. |
 | `pack-reach` | **Can fail.** An installed pack none of whose artifacts reaches a client this repository targets: each artifact's own `tools:` list names no targeted client, so the pack installs, syncs and does nothing. Pack skills always reach. The row names the pack, each artifact and why. Remove the pack with `clean --pack <id>`, or, where its `tools:` list names a client, add that client with `config set tools <list>`, then `sync`. A pack MCP server reaches a client only once `config mcp add <id>` selects it, so a pack whose only remaining delivery is an unselected server **warns** instead, naming that command. It **warns** on a pack the organisation's trust policy denies, which is installed and projects nothing. It also **warns** for a pack that ships nothing a client loads — every hook row it ships rejected, which `sync` explains. It passes when no pack is installed or every pack reaches a client, and names any artifact that reaches none. When the plan cannot be built it warns `not evaluated:` and leaves the failure to the drift gate, which prints the cause. |
-| `model-pins` | Warns, and never fails, when a model this repository pins or emits for a class is not on the client's own model list for your account, and an id the account does not offer fails the sub-agent's start on Cursor. For each targeted client that can list its models (Cursor, Copilot, Codex; Claude Code runs on its family aliases), the row reads the list the client's CLI prints now and, where the CLI is not on `PATH`, does not answer within 10 s or prints no list, the list the last `sync` saved in `.stamity/manifest.json`. For Codex the saved list is used whenever there is one, and only without one does the row read Codex's bundled catalogue, with no network call; the row says which list it compared with. With `STAMITY_NO_CLIENT_PROBE=1` set it starts no client and reads the saved list only. Each warning names the client, the class and the model. For a pinned model, pin one the list holds with `config set model.<class>.<client> <id>`. For an emitted model, run `sync`, which reads the list again and picks again. On Copilot it also warns, naming both models, when the live list would make `sync` write a different model than the files carry, whether or not a list was saved. On Cursor only a pin is written, as typed, so the row checks pins alone there, and a pin the list holds reads `unverified`: Cursor checks a sub-agent's model against a narrower list that no command prints, so it may still refuse that pin. When a client has neither a CLI that answers nor a saved list, the row passes and says `unverified` and why. |
+| `model-pins` | Warns, and never fails, when a model this repository pins or emits for a class is not on the client's own model list for your account, and an id the account does not offer fails the sub-agent's start on Cursor. For each targeted client that can list its models (Cursor, Copilot, Codex; Claude Code runs on its family aliases), the row reads the list the client's CLI prints now and, where the CLI is not on `PATH`, does not answer within 10 s or prints no list, the list the last `sync` saved in the git-ignored cache `.stamity/client-models.json` (or, on a 1.15.0 manifest, under its `models.listed`), never in the committed manifest. The model emission wrote is read from the committed files first. A cache that is there but cannot be read warns, naming it. For Codex the saved list is used whenever there is one, and only without one does the row read Codex's bundled catalogue, with no network call; the row says which list it compared with. With `STAMITY_NO_CLIENT_PROBE=1` set it starts no client and reads the saved list only. Each warning names the client, the class and the model. For a pinned model, pin one the list holds with `config set model.<class>.<client> <id>`. For an emitted model, run `sync`, which reads the list again and picks again. On Copilot it also warns, naming both models, when the live list would make `sync` write a different model than the files carry, whether or not a list was saved. On Cursor only a pin is written, as typed, so the row checks pins alone there, and a pin the list holds reads `unverified`: Cursor checks a sub-agent's model against a narrower list that no command prints, so it may still refuse that pin. When a client has neither a CLI that answers nor a saved list, as on a fresh clone, which holds no cache until its own `sync` writes one, the row passes and says `unverified` and why. |
 | `cloud-install` | Passes, or warns, and never fails. Printed only when this repository targets Cursor. It prints the lines a Cursor cloud environment's install step needs: `node --version`, then the global install of the CLI at the version that generated this setup (the manifest's `generatedBy`), `npm install --global <package>@<version>`, with a registry fork's `--@<scope>:registry=<url>` ahead of the package. Without the CLI the flows' `gate scan` and `ledger status` calls fail in that machine. Set the lines in the install step of the environment you saved in Cursor: `init` and `sync` write no `.cursor/environment.json`, because a repository file replaces every environment saved there. A package with no npm channel gets no install line, since a registry install would fetch whatever another publisher holds under its name; the row says to install the copy your fork distributes instead. It warns when the manifest records the root `AGENTS.md` as `skip`: `sync` then leaves that file alone, so the "Cursor Cloud specific instructions" section the engine adds to it for Cursor is missing from the file a Cursor cloud agent reads. Record `supplement` for `AGENTS.md` in `.stamity/manifest.json` to keep your text and carry the section, or copy the section in by hand. Copilot needs no such row: its `copilot-setup-steps.yml` runs the same install. |
 | `change-classes` | **Can fail.** Printed only when `.stamity/change-classes.json` exists. That file holds this repository's own change classes and test-input map, which `gate classify` reads from a pull request's base commit, never from the change itself. It passes when the file is valid. It fails naming the first error: text that is not a JSON object, a key that is not `classes` or `testInputs`, a name that is not a change class, an empty glob, a glob longer than 200 characters or holding more than four `**` (in `classes` and in `testInputs` alike), a glob under a class weaker than `product` that matches every path shape — a name, a dotted name, a dotfile, one and two folders deep — (such as `"records": ["**"]`), a `records` or `docs` glob whose extension holds a wildcard (such as `**/*.*` or `notes/*.m*`), which no extension list can bound, a `records` or `docs` glob whose last segment holds a `*` but ends in no concrete extension — a folder glob, a name wildcard or a wildcard folder, such as `notes/**`, `**/README*` or `*` (name the extension, as in `notes/**/*.md`, or the file), or a test entry that is not a plain repository-relative file path (one starting with `-`, holding a space or a glob character, absolute, or climbing out with `..`). Some entries the row accepts are bounded when `gate classify` applies them: a code file, a config-format file (`.json`, `.yml`, `.toml`, `.env` and the like) or an extensionless file other than a doc name such as `LICENSE` never lands in `records` or `docs`, except that a config-format file under the engine's own record paths (`.stamity/runs/`, `.stamity/handoffs/`, `.stamity/inbox.md`) stays `records`; and a code file lands in `tests` only when a built-in test glob (`test/`, `tests/`, `__tests__/`, `*.test.*`, `*.spec.*`) matches it too. While a base commit holds a copy this row fails on, `gate classify` applies only that copy's `product`, `public-contract` and `security-sensitive` entries, no lowering entry, and gives every change at least `product`, so the full gates run. Fix the entry the row names, then re-run `check`. |
 | `invariants` | States which version of the charter's floor invariants the installed engine would write — the version, its ratification date, and its last amendment. Warns when the installed charter declares no version at all. That means an old package: upgrade, then sync. |
@@ -144,7 +144,8 @@ row is refused
 The ledger in `.stamity/manifest.json` tells `sync` and `clean` which files they may delete or
 overwrite, and it is committed, so a row can be added by hand or by a pull request. No stamity
 release writes a row outside its own paths — the platform files it writes, a charter
-`AGENTS.md`, its state folders `.stamity/generated/` and `.stamity/mcp/`, an installed pack's
+`AGENTS.md`, its state folders `.stamity/generated/` and `.stamity/mcp/`, the hook folder
+`.claude/hooks/stamity/` Claude Code's hooks run from, an installed pack's
 own folder and the folders it writes agents, skills, rules and commands into. So such a row
 refuses the whole manifest rather than being acted on. Remove each row the message names, then
 re-run the command. `check --json` lists the paths a release writes under `ownedPaths`.
@@ -155,8 +156,8 @@ block spans the file, and the place proves the rest. A row with no content hash 
 unless a managed block spans it, and an overwrite of one takes a verified `.bak` first. So does
 removing the engine's keys from a shared settings or MCP document such a row names.
 
-**What a delete needs.** Under `.stamity/generated/`, `.stamity/mcp/` or a pack's own folder, the
-hash is enough. In an agent, skill, rule or command folder the name must be engine-minted (`st-`
+**What a delete needs.** Under `.stamity/generated/`, `.stamity/mcp/`, `.claude/hooks/stamity/`
+or a pack's own folder, the hash is enough. In an agent, skill, rule or command folder the name must be engine-minted (`st-`
 or `stamity-`), and the name and the hash together are still not enough: the bytes must also hash
 to a rendering the running engine produces at that path for the clients the setup wrote for. The
 same holds at an `AGENTS.md` in any folder, `AGENTS.override.md`, `CLAUDE.md`, the Copilot setup
@@ -225,7 +226,9 @@ runs once. An entry that differs from that rendering stays yours.
 `clean` does not delete a hook script that a hooks file it keeps still runs. That covers a file it
 cannot read, and Copilot's `.github/hooks/stamity.json` when you edited it. Each kept script is
 reported as kept, naming the file. When such a script lives under `.stamity/`, `clean` keeps
-`.stamity/` and says so, and `clean --json` lists those scripts as `stateDirKept`. Remove the
+`.stamity/` and says so, and `clean --json` lists those scripts as `stateDirKept`. It keeps
+`.stamity/` too when the kept file runs a copy under `.claude/hooks/stamity/`, saying the ledger
+there is what lets a re-run remove that copy, and lists the copy the same way. Remove the
 wiring from the named file, or fix or delete the file, then run `clean` again.
 
 **`check` fails on an entry Cursor rejects.** Cursor accepts 21 event names in `.cursor/hooks.json`
@@ -287,9 +290,13 @@ npx @zomarit/stamity sync --force
 depends on whose content matters, and `sync` cannot know that.
 
 `.claude/settings.json` is different: it is merged entry by entry, never overwritten, and
-`--force` does not apply to it. The engine owns only the hook entries it wrote there, and it
-pre-approves no tool: it writes no `permissions` rows. Your `deny` and `ask` rules, your own rows
-and hook entries, the client's `enabledPlugins` and your `model` or `env` stay whatever you run.
+`--force` does not apply to it. The engine owns the hook entries it wrote there, and it writes
+`permissions.deny` and `permissions.ask` rows for the person-only acts, such as a force push, a
+merge or a publish; it pre-approves no tool, so it writes no `allow` row. Those two lists only
+grow: `sync` keeps every row in them byte for byte and appends each engine row a list lacks, so an
+engine row you delete comes back on the next `sync`, and `clean` removes none of them, naming each
+row equal to an engine row for you to remove by hand. Your own rows and hook entries, the client's
+`enabledPlugins` and your `model` or `env` stay whatever you run.
 The `Read`, `Grep` and `Glob` allow rows a release up to 1.12.0 wrote leave on the next `sync`.
 Where the ledger records each row (a 1.12.0 setup), they leave with no backup, and an equal row it
 does not record is yours and stays. A ledger from 1.11.0 or older records no row, so every bare
@@ -299,8 +306,8 @@ changed since. A scoped row such as `Read(./src/**)` is never the engine's and s
 the engine does not take — one kept after a lost ledger, for example — pre-approves reads outside
 the project; the engine leaves it alone, so delete it yourself if you did not add it on purpose.
 The file collides only when it is not a JSON object, or a member the engine writes into, or a
-release up to 1.12.0 wrote into, has another type — `permissions` not an object, `allow` not an
-array, `hooks` not an object, an event not an array. The message names the member: make it the
+release up to 1.12.0 wrote into, has another type — `permissions` not an object, `allow`, `deny`
+or `ask` not an array, `hooks` not an object, an event not an array. The message names the member: make it the
 type it names (or remove it), or fix or delete the file, and re-run `sync`.
 An engine hook entry you edited by hand is put back on the next `sync` behind a verified `.bak`
 holding your edit, with a warning naming the entry. Keep a hook of your own in an entry of its
@@ -406,8 +413,11 @@ enforced there.
 ### Claude Code blocks every tool call with "the pre-tool-use guard could not run"
 
 That line is the guard failing CLOSED, and it says the guard could not LAUNCH — not that a call was
-refused. The two never arrive together: a refusal names the agent and what it denied — a tool by
-name, a write outside its report path, or a shell command that is not read-only git — and never that
+refused. Two entries carry it: the pre-tool-use guard's, and the person-only shell guard's on
+`Bash|PowerShell` and on the GitHub MCP write tools, whose command ends on the same tail. The two
+never arrive together: a refusal names the agent and what it denied — a tool by name, a write
+outside its report path, or a shell command that is not read-only git — or, from the person-only
+guard, the act it refused as `… is a person-only act`, and never that
 line, because the tail below re-raises the guard's own exit 2 in silence and prints only when the
 status is neither 0 nor 2. If you see both, the emitted command is not the one this version writes —
 re-sync and compare.
@@ -456,8 +466,9 @@ in the two shells the client's own hooks documentation names first. On a Windows
 Bash the client falls back to PowerShell, and there nothing about the line works: PowerShell
 parses none of that syntax, and `${CLAUDE_PROJECT_DIR}` is its own VARIABLE syntax rather than an
 environment lookup (which would be `$env:CLAUDE_PROJECT_DIR`), so the path expands empty. That
-affects every anchored command (six entries over four scripts), not just the guard — the
-session-start and tamper notices and the review gate too — so on such a host the anchoring may be
+affects every anchored command (ten entries over seven scripts), not just the guard — the
+session-start and tamper notices, the cloud readiness hook, the person-only shell guard, the
+unattended ask gate and the review gate too — so on such a host the anchoring may be
 a REGRESSION: a hook that used to run while the session sat at the repository root may now never
 launch at all. This is unmeasured; no run on such a host has been made. `stamity check` says so on
 that host: its `claude-hook-shell` row fails when Claude is targeted with repository-emitted hooks

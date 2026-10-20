@@ -379,7 +379,8 @@ it out of the tree. Or skip the sweep and remove the leftovers by hand with `git
 ### The previous setup's hooks stay beside this one's
 
 If hatch3r's `.claude/settings.json` was already there at init, stamity merged into it: its own
-hook entries were added beside hatch3r's, it added no allow row, and every entry hatch3r wrote was
+hook entries and its `permissions.deny` and `permissions.ask` rows for the person-only acts were
+added beside hatch3r's, it added no allow row, and every entry hatch3r wrote was
 kept — the engine owns only the entries it wrote. The init notice counts the entries it kept,
 member by member; for a file holding one allow row and one `PreToolUse` hook entry it reads:
 
@@ -390,7 +391,9 @@ member by member; for a file holding one allow row and one `PreToolUse` hook ent
 hatch3r's hook entries keep firing beside this setup's, and its allow rows stay too. A bare
 `Read`, `Grep` or `Glob` row among them pre-approves reads outside the project, and the engine
 leaves it alone. Remove the entries and rows you no longer want by hand, then run `sync`; there
-is no `--force` for this file, and none is needed.
+is no `--force` for this file, and none is needed. The engine's own deny and ask rows are the
+exception: `sync` appends any of them a list lacks, so one you remove comes back, and `clean`
+leaves them, naming each for you to remove by hand.
 
 ### In a monorepo, handle each package
 

@@ -380,8 +380,18 @@ const MAX_LINES = 150;
  * time. `docs/cloud.md` is a new hand page (plan 021 file 2, unit v15-cloud-page), so the map owes
  * it a row. The `llms.txt` row's guide count moved from eleven to twelve IN PLACE and paid for
  * nothing. So the budget moves by exactly the row.
+ *
+ * TEST CHANGE, justified: 160 to 165, the cost of two corrections the 1.16.0 cut's re-attestation
+ * found (run 2026-10-18_cloud-runs-2, ledger review/210 and review/211), on the reasoning of the
+ * first move above. The git-and-network paragraph now names `plan` and `run` among the verbs that
+ * need git, the unattended pre-flight and the run verbs among the places the engine reaches the
+ * network, and `/st-work`'s close walk among the GitHub writes: three lines. The hook-script
+ * paragraph now names four portable bodies, Claude Code's three adapter scripts and its copies
+ * under `.claude/hooks/stamity/`, and Cursor's five: two lines. Both paragraphs were rewrapped
+ * inside themselves and the plumbing-verb sentence moved in place, so the budget moves by exactly
+ * those five lines.
  */
-const README_MAX_LINES = 160;
+const README_MAX_LINES = 165;
 
 /**
  * The product, its installable package, and the owner the pages name.

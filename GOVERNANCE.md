@@ -52,8 +52,10 @@ check has one stable name, so a required check does not rotate when the matrix d
 
 `all-ci-checks` is the aggregator job in `.github/workflows/ci.yml`, and it runs on every event.
 A full run passes when the check matrix and the `cloud-container` job both pass. That job runs the
-suite under `test/cloud/` inside a Linux container pinned by digest, with an empty home folder and
-no client account, as a cloud agent's machine would run the hooks this setup emits.
+suite under `test/cloud/` in a Linux container pinned by digest, with no client account, four
+times: once per cloud profile (Claude Code's and Cursor's with an empty home folder, Copilot's with
+`/root`) and once more with no network, as a cloud agent's machine would run the hooks this setup
+emits.
 
 The check matrix runs four legs: the pinned Node floor, the current LTS, and Windows in two
 shards, each shard running half of the test suite. Which step runs on which leg is not uniform.

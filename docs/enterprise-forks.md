@@ -170,7 +170,11 @@ from `package.json`.
 
 The CLI calls your setup writes follow the same split. `init` and `sync` pin every call they write
 into `AGENTS.md`, the generated bodies, the hook hints, the guard messages and `.codex/hooks.json` to your package at the version that wrote it, and the CLI's own remedies
-do the same. A touchpoint body tries `npx --no stamity <verb>` first — the `stamity` bin of a copy
+do the same. Two places install it rather than call it: Copilot's `copilot-setup-steps.yml` runs
+`npm install --global <your package>@<version>`, with `--@<scope>:registry=<url>` ahead of the
+package under `--registry`, and `check`'s `cloud-install` row prints that line for a Cursor cloud
+environment. Where your registry needs a credential to install from, as GitHub Packages does, the
+cloud agent's environment needs one too. A touchpoint body tries `npx --no stamity <verb>` first — the `stamity` bin of a copy
 the project already has installed, whatever package name that copy carries, and never a download —
 and falls back to the pinned call only where npm refuses because no copy is installed. With
 `--registry` the call is `npx -y --@<scope>:registry=<url> @<scope>/stamity@<version> <verb>`.

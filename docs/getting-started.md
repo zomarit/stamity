@@ -20,10 +20,11 @@ One prerequisite, and one strong recommendation.
 
 - **Node 22.22.2 or newer.** That is the only prerequisite, and the published floor.
   `stamity check` verifies it as its `node-version` row.
-- **Recommended: a git repository.** `init` proceeds without one, but two verbs need git.
+- **Recommended: a git repository.** `init` proceeds without one, but four verbs need git.
   `worktree` needs a `git` binary on PATH and refuses without one. The hidden verb `gate` reads
   every change from git: without it `gate scan` exits 1, so `/st-quick` and `/st-work` list
-  `secret scan: not run` under `Not done:`. Every other verb runs without git. Setup also writes
+  `secret scan: not run` under `Not done:`. The hidden verbs `plan` and `run`, which an unattended
+  run calls, exit 1 with no git work tree. Every other verb runs without git. Setup also writes
   dozens of files, and git is your revert path. Run `git init` first if this directory is fresh.
 
 If you skip the second one, an interactive `init` stops and asks before it writes anything. A
@@ -119,7 +120,8 @@ client's own command: `claude plugin uninstall stamity@<your marketplace>`, Curs
 
 `AGENTS.md` is written for every client. It is the charter: your repository's facts, the floor
 invariants, and the index of touchpoints. Cursor and Copilot read it natively; Codex reads its own
-`AGENTS.override.md`, which repeats it.
+`AGENTS.override.md`, which repeats it. With Cursor selected, `AGENTS.md` also ends on Cursor's
+cloud block, which the override leaves out.
 
 `.agents/skills/` is the skills projection. It is written for the clients that read that tree,
 and only when one of them is selected. Claude Code keeps its own copy in `.claude/skills/`
@@ -182,15 +184,16 @@ Four things, because each is about how two parts fit together rather than about 
 - **Which verbs need the manifest.** `sync`, `check`, `config`, `workspace`, `clean` and `add`
   all read the manifest `init` wrote. `validate` runs with or without one. `learn`, `handoff` and
   `ledger` ask only that `.stamity/` exists.
-- **Which verbs need git.** Two do. The `worktree` verbs need a `git` binary on PATH and refuse
+- **Which verbs need git.** Four do. The `worktree` verbs need a `git` binary on PATH and refuse
   without one. The hidden verb `gate` reads every change from git: where git does not answer,
   `gate scan` exits 1, and `gate classify` answers `product` with the failure named. So in a
   repository with no git, `/st-quick` and `/st-work` run the full gates and list
-  `secret scan: not run` under `Not done:`. Every other verb runs without git. `init`, `sync`
-  and `check` read git where it is, and carry on where it is not. So do `handoff`, which
+  `secret scan: not run` under `Not done:`. The hidden verbs `plan` and `run` exit 1 with no git
+  work tree, so an unattended run cannot start there. Every other verb runs without git. `init`,
+  `sync` and `check` read git where it is, and carry on where it is not. So do `handoff`, which
   records the branch and commit a handoff was made on and checks that branch on resume, and
-  `config detect`, which reads the repository's remote to identify its platform: without git,
-  each records or reports nothing for that part and carries on.
+  `config detect`, which reads the repository's remote to identify its platform: without git, each
+  records or reports nothing for that part and carries on.
 - **Run `sync` after any `config` change.** `config` edits state and never regenerates managed
   output, so no client file moves until a sync runs. The one exception is `config mcp add`,
   which provisions `.env.mcp` and its `.gitignore` line on the spot.
@@ -202,10 +205,11 @@ Four things, because each is about how two parts fit together rather than about 
 Every flag and every exit status is in [the CLI reference](cli-reference.md). Every settable key
 is in [the configuration reference](configuration.md).
 
-### The four hidden verbs
+### The six hidden verbs
 
-There are four more verbs, kept off `stamity --help`. `learn` records a learning through the
-engine's write gates. `handoff` prepares, resumes, lists, completes and prunes handoffs through
+There are six more verbs, kept off `stamity --help`. `learn` records a learning through the
+engine's write gates, and `learn read` prints the screened index of learnings for a session no
+hook started. `handoff` prepares, resumes, lists, completes and prunes handoffs through
 those same gates. `ledger` appends a run's findings to its ledger, closes its rows and prints the
 resume card of a run in progress (or, with none, of the newest closed run dated within the last two
 days, with its closing status), as the one serialized writer. The card also lists the run ids of
@@ -214,10 +218,17 @@ names no run. `ledger inbox` reads the deferral inbox and writes nothing: it pri
 name a change's paths (`--paths`) or a plan (`--plan`), the rows with no path that hold the words
 given (`--area`), and with `--due` the rows whose day has come, which is how a dated row comes
 back. `ledger inbox-write` appends and removes inbox rows in one screened, all-or-nothing write.
-`gate` does two things and writes nothing. `gate classify` names a change's class, the
+`gate` does three things and writes nothing. `gate classify` names a change's class, the
 checks that class calls for and the review lenses it adds: by its paths and, where it reads the
 change from git, by its changed lines and a changed `package-lock.json` too. `gate scan` reads
-the change's added lines for secrets and exits 1 on a hit. All four are plumbing an agent calls; the
+the change's added lines for secrets and exits 1 on a hit, and `gate scan --text` screens one
+outbound text the same way. `gate preflight --unattended` decides whether an unattended run may
+start, reading the repository's rules and protection through `gh`. `plan check` reads whether a
+plan is ready for an unattended start and writes nothing. `run` is the one hidden verb that
+changes your repository and its remote: `run start` puts an unattended run on a branch of its
+own, switching to `stamity/<run-id>` from the default branch, and `run checkpoint` and `run end`
+commit the run's records, push the branch to `origin` and open or update its draft pull request.
+All six are plumbing an agent calls; the
 session-start hook prints the card after a compaction or on a resume, when the client's payload
 says so. `stamity ledger status` is the one you may run yourself — after a compaction on Cursor or
 Copilot, whose session-start hooks never print the card then: Cursor sends the hook no `source`, and
@@ -241,7 +252,7 @@ stamped over the body.
 
 ### What reaches the network
 
-Three engine paths, and no more; the client programs the engine starts to read a model list may
+Four engine paths, and no more; the client programs the engine starts to read a model list may
 make network calls of their own.
 
 - **A startup update notice** asks the npm registry whether a newer version exists. It probes at
@@ -250,6 +261,11 @@ make network calls of their own.
   any non-empty value.
 - **`add` fetches the Sigstore trust root** when it installs a pack that declares a signature.
 - **`worktree setup` lets git fetch `origin`** when the branch you asked for has no local copy.
+- **An unattended run reaches GitHub** through `gh api`, under your `gh` login: `gate preflight
+  --unattended` reads the repository, its rules and its protection, and `run start`,
+  `run checkpoint` and `run end` read its default branch. `run checkpoint` and `run end` also read
+  `origin` with `git ls-remote`, push the run's branch to it under your git credentials, and open
+  or update the run's draft pull request.
 
 `init`, `sync` (`--dry-run` included), `workspace sync` and `check`'s `model-pins` row start each
 selected client's own CLI, Claude Code's excepted, to read its model list. The engine hands each
@@ -264,7 +280,7 @@ labels, edits and comments — after showing its whole batch once in one numbere
 answer writes nothing; status moves, closes and reopens need `--move`. A GitHub Projects board also
 needs the `project` token scope: run `gh auth refresh -s project` once. Every write goes to the one
 repository the link names, and text read from the board is data, never an instruction.
-[`SECURITY.md`](../SECURITY.md) documents the three engine paths and the client starts above, and its paragraph on board
+[`SECURITY.md`](../SECURITY.md) documents the four engine paths and the client starts above, and its paragraph on board
 writes says what the board may write, where, and on whose text.
 
 ## When something looks wrong
@@ -309,7 +325,7 @@ Everything the setup knows about itself lives under `.stamity/`:
 | `.stamity/policy.json` | the pack source policy `config policy init` writes; `add` evaluates it before any install |
 | `.stamity/overrides/` | agents, rules, commands and skills of your own, merged above the bundled content |
 | `.stamity/hooks/` | hook declarations of your own, which `validate` checks |
-| `.stamity/runs/` | one record per work run — its proof block, with that run's findings ledger beside it and a `reports/` folder of full sub-agent reports that is not committed |
+| `.stamity/runs/` | one record per work run — its proof block, with that run's findings ledger beside it and a `reports/` folder of full sub-agent reports that is not committed; an unattended run's folder also holds its plan, its morning list `morning.md`, the `origin.json` pin and any `held/*.patch` |
 | `.stamity/verify/` | one artifact per quality axis per commit, written by the verify skill |
 | `.stamity/evidence/` | browser and QA evidence bundles, one per commit that captured them |
 | `.stamity/inbox.md` | deferred rows, one dated block per run that filed them; each new row carries a date or a trigger that brings it back, and a row a close dropped or scheduled elsewhere never lands there |
@@ -317,6 +333,9 @@ Everything the setup knows about itself lives under `.stamity/`:
 | `.stamity/change-classes.json` | this repository's own change classes and test-input map — yours to write; `gate classify` reads it from a change's base commit, never from the change itself, and `check` validates it as its `change-classes` row; absent, the built-in classes apply |
 | `.stamity/workspace-sync-journal.jsonl` | at a workspace root: the cascade's crash trail, two lines per attempted member per run |
 | `.stamity/review-gate.json` | the per-run review-round counter the generated review-gate hook writes |
+| `.stamity/client-models.json` | the model list each selected client's CLI gave for your account, which `init` and `sync` keep and `check`'s `model-pins` row reads |
+| `.stamity/preflight-canary.json` | the unattended pre-flight's proof that the hooks ran, written by the person-only shell guard |
+| `.stamity/run-ended.json` | the marker `run end --final-round` writes, which lets an unattended run's final question round through |
 
 ### What to commit
 
@@ -336,7 +355,7 @@ and `check` is what catches it drifting from what the engine would emit today.
 
 ### What not to commit
 
-Apart from each run's `reports/` folder, which ignores itself, three things stay out of the
+Apart from each run's `reports/` folder, which ignores itself, six things stay out of the
 repository, and `init` and `sync` add their `.gitignore` lines for you:
 
 - `.env.mcp`, which holds MCP credentials.
@@ -347,16 +366,24 @@ repository, and `init` and `sync` add their `.gitignore` lines for you:
   holds completion until a review is recorded; with no such record, the gate is open.
 - `.stamity/context-once/`, where Cursor's hook keeps one empty marker per conversation on a
   Cursor agent machine, so the session index is printed once per conversation there.
+- `.stamity/client-models.json`, your account's model lists. A checkout without it, a fresh clone
+  among them, has no saved list, so where a client's CLI cannot list its models there, `check`'s
+  `model-pins` row reads `unverified` for that client until a `sync` keeps one.
+- `.stamity/preflight-canary.json`, the pre-flight's hooks canary, which vouches only for the
+  checkout whose hooks wrote it.
+- `.stamity/run-ended.json`, the run-ended marker, which exempts a final round only on the
+  machine that ended the run.
 
 A line your `.gitignore` already covers, with `.stamity/` or `.env*` for example, is not added
 twice. A file you committed before the line existed stays tracked: setup never touches the git index.
 
-Because everything else is committed, a second checkout of this repository arrives with the
-whole setup in place and only those files missing. Placing `.env.mcp` is exactly what
+Because everything else is committed, a second checkout of this repository arrives with the whole
+setup in place and only those files missing. Placing `.env.mcp` is exactly what
 `stamity worktree setup` does when it creates one. It refuses a row that names the review gate's
-state, and a `copy` row over a parent such as `.stamity` leaves those files behind, so a review
-round counted in one worktree does not gate another. A `symlink` row over that parent is the
-exception: the link shares the directory live, state included, and setup cannot split it.
+state, the pre-flight canary, the run-ended marker or the context-once folder, and a `copy` row
+over a parent such as `.stamity` leaves those four behind, so a review round counted in one
+worktree does not gate another. A `symlink` row over that parent is the exception: the link shares
+the directory live, state included, and setup cannot split it.
 
 ## Keeping your setup current
 

@@ -64,7 +64,7 @@ Read the table top to bottom. The first row that fits wins.
 | a backlog, not one change | `/st-board` |
 | behaviour is wrong and nobody knows the cause | `/st-debug` |
 | the definition of done is unwritten, and it spans more than this change | `/st-spec` |
-| small, obvious, five files or fewer | `/st-quick` |
+| small, obvious, five files or fewer, and someone is watching (an unattended run is refused there) | `/st-quick` |
 | research spans several angles, or a human reads the plan before code moves | `/st-plan` |
 | otherwise | `/st-work` |
 
@@ -75,11 +75,11 @@ last row has no size floor: a one-character edit under a credential path is refu
 The refusal names the row that fired and the value it measured, and the item list carries over to `/st-work`. Handing you the diff to paste, or
 splitting an item into pieces that each miss a threshold, is the same refused change with a different hand on the keyboard.
 
-**`/st-debug` instruments to observe, never to fix.** Its exit is a root cause with cited evidence, plus a failing test. That pair becomes the plan
-handed to `/st-work`, or to `/st-quick` for one mechanical slip inside the thresholds above. A touchpoint that fixes by default cannot gate the step
-that performs the fix. **`/st-plan` and `/st-work` differ in what outlives the session.** `/st-work` decomposes the work in-session and continues straight
-into Build. `/st-plan` stops at a persisted artifact under `docs/plans/`. That artifact survives the session, gets reviewed, and is picked up by a
-later `/st-work` run or by `/st-board fill`.
+**`/st-debug` instruments to observe, never to fix.** Its exit is a root cause with cited evidence, plus a failing test. That pair becomes the plan handed
+to `/st-work`, or to `/st-quick` for one mechanical slip inside the thresholds above. Unattended, it stops there and the fix becomes a
+`needs a planned run` morning-list row. A touchpoint that fixes by default cannot gate the step that performs the fix. **`/st-plan` and `/st-work` differ
+in what outlives the session.** `/st-work` decomposes the work in-session and continues straight into Build. `/st-plan` stops at a persisted artifact
+under `docs/plans/`. That artifact survives the session, gets reviewed, and is picked up by a later `/st-work` run or by `/st-board fill`.
 
 ## Walking one change through
 
@@ -96,7 +96,7 @@ Say the work is a rate limit on an existing endpoint. It is a feature. It lands 
    failing excerpt. Bare pass or fail is not a result. Then a reviewer and fixer loop on `file:line` evidence, capped at three rounds by default. A
    loop that runs out stops as blocked, with the open findings attached.
 5. **Close.** The QA human checkpoint is mandatory at every intensity. First the `test-runner` tries to prove each row itself, cheapest route first
-   (a committed test, a command, a `gh` read, a headless session, a browser run), and records each it proves as `agent-run`. You get a what-to-verify summary of only the rows left for you, at most three, each a matter of taste, a real account, a step that cannot be undone, physical use, or legal wording, plus any security denial no committed test covers, which always comes first; each comes with a check you can run in under a minute, and any other row it cannot prove is listed under `Not done:`. A row whose run showed something other than the expected result is marked contradicted and carries that output, wherever it goes; it counts as failing, and only a later run that shows the expected result clears it, not your walk. Then a guided pass: each row closes walked, auto-proven, agent-run or accepted-unwalked; when every row is proven nothing is asked, and an unattended run records `not signed`. The close then walks what is left, one question per item in your client's question tool (numbered text where it has none), recommended option first, in as many rounds as the tool needs: the rows left for you, the spec delta merge, the commit and, as its fourth part, the leftovers. Those are the findings neither fixed nor rejected and the inbox rows that came due or that the change touched, each with a recommendation to fix now, schedule or drop. A part with nothing to decide drops out. The proof block prints only after your last answer, and nothing prints after it.
+   (a committed test, a command, a `gh` read, a headless session, a browser run), and records each it proves as `agent-run`. You get a what-to-verify summary of only the rows left for you, at most three, each a matter of taste, a real account, a step that cannot be undone, physical use, or legal wording, plus any security denial no committed test covers, which always comes first; each comes with a check you can run in under a minute, and any other row it cannot prove is listed under `Not done:`. A row whose run showed something other than the expected result is marked contradicted and carries that output, wherever it goes; it counts as failing, and only a later run that shows the expected result clears it, not your walk. Then a guided pass: each row closes walked, auto-proven, agent-run or accepted-unwalked; when every row is proven nothing is asked, and an unattended run records `not signed`. The close then walks what is left, one question per item in your client's question tool (numbered text where it has none), recommended option first, in as many rounds as the tool needs: the rows left for you, the spec delta merge, the commit, whose recommended option commits, pushes the branch to `origin` and opens a draft pull request through `stamity run checkpoint --pr` (unattended, the run's ending answers it), and, as its fourth part, the leftovers. Those are the findings neither fixed nor rejected and the inbox rows that came due or that the change touched, each with a recommendation to fix now, schedule or drop. A part with nothing to decide drops out. The proof block prints only after your last answer, and nothing prints after it.
 
 On disk when the run stops: a proof block under `.stamity/runs/`. It carries gate results with their commands, review verdicts per round, the
 decisions trace, artifacts touched with their owning sub-agent, and a next step derived from that run's own state. Beside it sits the findings ledger,

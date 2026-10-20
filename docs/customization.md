@@ -210,7 +210,7 @@ dropped.
 It lands in `.agents/skills/` whenever a selected client reads that tree. Cursor, Copilot and
 Codex each declare that they do. (Where Codex has a rules appendix it reads the root
 `AGENTS.override.md` instead of `AGENTS.md`: that file repeats `AGENTS.md` as sync writes it, plus
-the appendix.) Claude Code reads `AGENTS.md` only through the bridge import, and
+the appendix, less Cursor's cloud block where Cursor is selected.) Claude Code reads `AGENTS.md` only through the bridge import, and
 never reads that tree (its memory page, accessed 2026-09-30), so it also
 gets one client-native copy at `.claude/skills/`, re-targeted from those same rendered bytes. A
 Claude-only setup carries the native copy alone and no `.agents/skills/` tree at all.

@@ -136,9 +136,10 @@ What the project does not do is published beside what it does.
   a folder git was not started in, which stops the batch, for the items a batch applied before it
   moved to `/st-work`, which stay ungated, and for each refused or deferred item and each
   pre-existing failure its close walk leaves there.
-  Debug and pr-resolve each name a `not done` line for one exit apiece. Debug's is
-  instrumentation left in place under a capture-later agreement. Pr-resolve's is a reply that
-  failed to post.
+  Debug and pr-resolve name a `not done` line for a few exits each. Debug's are
+  instrumentation left in place under a capture-later agreement and, unattended, a defect only a
+  person can reproduce (`a person reproduces`). Pr-resolve's are a reply that failed to post and,
+  unattended, a reply the outbound scan held and a round with no CLI (`Not done: CLI unavailable`).
 - The other touchpoints close on a typed open-gap block of their own, and quick keeps its
   per-item dispositions beside that list. Those blocks carry
   unanswerable and blocked items, `open` rows, open questions carried forward, per-item
@@ -181,8 +182,10 @@ and copilot get those same rules projected as skills instead, opened on descript
 fourth. It has no per-rule attach mechanism, so it loads the charter plus the rules that have to
 stay unconditional, and the rest reach it as skills too. That slice is a Codex-only root
 `AGENTS.override.md`; the shared `AGENTS.md` stays the charter alone whether or not Codex is
-selected. The ceiling counts whatever the client is handed, because a rule silently dropped is a
-floor that stopped binding.
+selected. Selecting Cursor is the exception: the shared `AGENTS.md` then ends on Cursor's 14-line
+cloud block, which a Cursor, Claude or Copilot session pays on top of its ceiling and Codex, on
+its override, does not. The ceiling counts whatever the client is handed, because a rule
+silently dropped is a floor that stopped binding.
 
 Do not read the figures off this page. `ALWAYS_ON_BUDGET_LINES` in
 [`src/content/charter.ts`](../src/content/charter.ts) holds the per-client ceilings. The corpus
