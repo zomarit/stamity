@@ -1,6 +1,6 @@
 ---
 id: model-ladder
-# A design document, authored from docs/plans/008-plugin-lifecycle-02.md on 2026-09-17, extended from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, and excluded from the site build.
+# A design document, authored from docs/plans/008-plugin-lifecycle-02.md on 2026-09-17, extended from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18 and 2026-10-20, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.16.0
 obsolete_when: every supported client publishes one effort scale the ladder can name without a per-client table and resumes, waits out and reports a sub-agent's capacity stop on its own, or a decision row cuts the surface
@@ -662,6 +662,31 @@ them.
   and the list kept in memory; GIVEN `git check-ignore` THEN the cache is ignored (`test/cli/commands/sync.test.ts`,
   `test/cli/engine/clientModels.test.ts`, `test/manifest/manifest.test.ts`, `test/cli/commands/workspace.test.ts`,
   `test/emit/upgradeFrom1140.e2e.test.ts`).
+- **Amended 2026-10-20** (run `2026-10-18_cloud-runs-2`: unit `n13-model-lists-survive-every-write`'s spec delta, its
+  fix round for `review/244`, and the cut's follow-ups round for `build/107`; read at `e47470f3`). The Given clause on a
+  manifest still holding `models.listed` now reads: Then it loads, and the next verb that writes the manifest moves its
+  lists to the cache, as `sync` moves them, and writes the manifest without the key. This replaces "and `sync` moves its
+  lists to the cache" above. It also replaces the As built sentence above that names `sync` and `workspace sync` as the
+  only verbs that move the lists, with another writer run first leaving the key out without moving it. As built: every
+  verb that writes the manifest moves a 1.15.0 manifest's lists first, with `sync`'s resolution, checks and warnings.
+  These are `sync` and `workspace sync`, the cascade's patch write included (`src/cli/commands/workspace.ts:1066-1070`).
+  They are also `config set` and `config detect` (`src/cli/commands/config.ts:1280`, `:1358`), and `config mcp add |
+  remove` (`src/cli/commands/config/mcp.ts:480`, `:548`), all four through `writeSetupManifest` (`:94-97`), plus `add`
+  (`src/cli/commands/add.ts:907`) and `clean --pack` (`src/cli/commands/clean.ts:854`). Each calls `keepSavedModelLists`
+  (`src/cli/engine/clientModels.ts:807-813`), which reads the manifest on disk, resolves with no client read
+  (`resolveModelLists`) and touches nothing where no list is saved. `init --force` puts the lists of the manifest it
+  replaces (`readPreviousManifest`) into its own resolution, under the cache and the fresh read
+  (`src/cli/commands/init/apply.ts:284-286`), so its write moves them. `--dry-run` moves nothing. The ignore rule
+  lands before the cache, in the order `applySync` uses (`ensureGitignoreEntry` at `src/cli/commands/sync/engine.ts:1201`
+  before the cache write at `:1362`). The helper writes through `writeIgnoredModelListCache`
+  (`src/cli/engine/clientModels.ts:815-828`), and `init` writes after its own `ensureGitignoreEntry`
+  (`src/cli/commands/init/apply.ts:531`, `:534`). A rule that cannot be added leaves the cache unwritten: the run warns
+  that the lists held for this run only, and the caller's manifest write goes ahead. A cache that cannot be written also
+  warns on stderr from `config`, `add` and `clean --pack`, as from `sync` and `workspace sync`. Proof:
+  `test/cli/commands/config.test.ts` (the describe "config writes keep a 1.15.0 manifest's saved model lists"), the
+  member cases in `test/cli/commands/workspace.test.ts`, `test/cli/commands/add.test.ts`,
+  `test/cli/commands/clean.test.ts`, and `test/cli/commands/initApply.test.ts` (the describe "over a 1.15.0 manifest
+  that saves its lists, under --force").
 
 ## References
 
