@@ -3888,7 +3888,10 @@ stray check `:872`, the index read `indexTracked`, `:1129-1139`, which `--paths`
   person-only change is no longer lost from the patch. The sections run from one line-start `diff --git ` header to the
   next, a binary section kept whole, and each is mapped to its paths by `git apply --numstat -z` over its own bytes.
   The patch is read as `committedPatchPaths` reads it, the work tree's copy where it is a regular file, else `HEAD`'s,
-  which fails the checkpoint as `hold failed: …` where a text read cannot carry its bytes whole. The held line then
+  which fails the checkpoint as `hold failed: …` where a text read cannot carry its bytes whole. It fails the same way
+  where a section carries more than one file patch (a `---`/`+++` pair after its hunks gets no split point, so a path
+  past its first would ride unlisted), and where a section names a path the hold does not hold, read with the
+  section's new-side mode as a link is read, so neither joins `held` nor the commit's own paths. The held line then
   reads `held (in <patch>; the work tree keeps them, save <paths>, whose sections are kept from an earlier checkpoint):
   …` (`carriedSections` and `sectionStarts`, called from the hold, `src/cli/commands/run.ts`).
   - Proof: `test/cli/commands/runCheckpoint.test.ts` (the describe "a fresh clone that holds a new change keeps the

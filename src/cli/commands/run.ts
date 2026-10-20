@@ -1074,7 +1074,8 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
         }
         // n14 (P3): a run continued on a fresh clone holds the earlier person-only change in the branch's patch alone,
         // so a new patch keeps that patch's sections for paths not held now, in their order, before its own.
-        const earlier = await carriedSections(top, fromTop(patchRel), held, scratch, verb);
+        const isHeld = (path: string, link: boolean): boolean => heldOf([{ path, link, added: false }], hookPaths, prefix).length > 0;
+        const earlier = await carriedSections(top, fromTop(patchRel), held, isHeld, scratch, verb);
         if (typeof earlier === "string") {
           result.notDone.push(earlier);
           return finish(false);
@@ -2134,12 +2135,17 @@ function sectionStarts(patch: Buffer): number[] {
  * decode and so is refused where that decode is not whole. A section runs from one line-start `diff --git ` header to
  * the next (a binary section's base85 lines hold no space, so it is kept whole), and `git apply --numstat -z`, which
  * applies nothing, names its paths from its own bytes, written to `scratch`. A path held now takes the current diff,
- * so its earlier sections go. Else the reason, for `notDone`.
+ * so its earlier sections go. Refused (review/249): a section git reads as more than one file patch (a `---`/`+++`
+ * pair after its hunks needs no `diff --git` header, so it gets no split point), whose paths past its first would ride
+ * unlisted. Refused (review/250): a section naming a path `isHeld` does not hold, read with the section's new-side
+ * mode as {@link rawEntries} reads a link, so no path the hold does not hold joins `held` and the commit's own paths.
+ * Else the reason, for `notDone`.
  */
 async function carriedSections(
   top: string,
   patchFromTop: string,
   heldNow: readonly string[],
+  isHeld: (path: string, link: boolean) => boolean,
   scratch: string,
   verb: string,
 ): Promise<{ sections: Buffer[]; paths: string[] } | string> {
@@ -2165,11 +2171,22 @@ async function carriedSections(
       writeFileSync(out, section);
       const read = await git(top, ["apply", "--numstat", "-z", out], verb);
       if (read.code !== 0) return `hold failed: the kept ${patchFromTop} could not be read (git apply answered ${read.code}: ${firstLine(read.stderr)})`;
-      // One `<added>\t<deleted>\t<path>` record, NUL-terminated; a rename's path field is empty, its two paths after it.
-      const [record = "", ...rest] = read.stdout.replace(/^\n+/, "").split("\0");
-      const named = record.split("\t").slice(2).join("\t");
-      const sectionPaths = (named === "" ? rest.slice(0, 2) : [named]).filter((path) => path !== "");
-      return sectionPaths.length === 0 ? `hold failed: a section of the kept ${patchFromTop} names no path` : sectionPaths;
+      // One `<added>\t<deleted>\t<path>` record per file patch, NUL-terminated; a rename's path field is empty, its two paths after it.
+      const tokens = read.stdout.split("\0");
+      const records: string[][] = [];
+      for (let at = 0; at < tokens.length; at += 1) {
+        const fields = (tokens[at] ?? "").replace(/^\n+/, "").split("\t");
+        if (fields.length < 3) continue;
+        const named = fields.slice(2).join("\t");
+        records.push(named === "" ? tokens.slice(at + 1, at + 3) : [named]);
+        if (named === "") at += 2;
+      }
+      if (records.length > 1) return `hold failed: a section of the kept ${patchFromTop} carries more than one file patch, so a path past its first would be carried unlisted`;
+      const sectionPaths = (records[0] ?? []).filter((path) => path !== "");
+      if (sectionPaths.length === 0) return `hold failed: a section of the kept ${patchFromTop} names no path`;
+      const link = sectionLink(section);
+      const outside = sectionPaths.find((path) => !isHeld(path, link));
+      return outside === undefined ? sectionPaths : `hold failed: a section of the kept ${patchFromTop} names ${sanitizeLabel(outside)}, which the hold does not hold`;
     }),
   );
   const failed = mapped.find((paths) => typeof paths === "string");
@@ -2179,6 +2196,22 @@ async function carriedSections(
     sections: sections.filter((_, index) => keep[index] === true),
     paths: [...new Set(mapped.flatMap((paths, index) => (keep[index] === true && typeof paths !== "string" ? paths : [])))].toSorted(),
   };
+}
+
+/**
+ * review/250: whether a held patch section's new side is a link or a submodule, as {@link rawEntries} reads a path's
+ * result mode: the last mode its extended header names (`new file mode`, `new mode`, or the `index` line's), read
+ * before its first `--- `, `@@` or binary line. A deletion's side names none, so it reads as no link, as there.
+ */
+function sectionLink(section: Buffer): boolean {
+  const lines = section.toString("latin1").split("\n").slice(1);
+  const end = lines.findIndex((line) => /^(?:--- |@@|GIT binary patch|Binary files )/.test(line));
+  const modes = (end === -1 ? lines : lines.slice(0, end)).flatMap((line) => {
+    const mode = /^(?:new file mode|new mode) ([0-7]{6})$/.exec(line)?.[1] ?? /^index [0-9a-f]+\.\.[0-9a-f]+ ([0-7]{6})$/.exec(line)?.[1];
+    return mode === undefined ? [] : [mode];
+  });
+  const mode = modes.at(-1);
+  return mode === LINK_MODE || mode === GITLINK_MODE;
 }
 
 /**

@@ -2240,6 +2240,77 @@ describe("stamity run checkpoint", () => {
       expect((await readFile(join(fresh, ".github/workflows/blob.bin"))).equals(binary)).toBe(true);
       expect(await readFile(join(fresh, ".cursorrules"), "utf8")).toBe("steered again\n");
     });
+
+    /**
+     * A clone whose work-tree patch, which a steered run can write, has `extra` appended after its one section's hunks,
+     * and which holds a new change to the workflow; the checkpoint's result and `HEAD` before it.
+     */
+    async function steeredClone(extra: string): Promise<{ clone: string; before: string; outcome: Awaited<ReturnType<typeof run>> }> {
+      const { repo, remote } = await seed("unattended");
+      await writeFile(join(repo, ".cursorrules"), "steered rules\n");
+      expect((await run(repo, CHECKPOINT)).code).toBe(0);
+      const clone = await cloneRun(repo, remote);
+      await appendFile(join(clone, PATCH), extra);
+      await put(clone, ".github/workflows/x.yml", "on: push\n");
+      const before = git(clone, ["rev-parse", "HEAD"]);
+      const outcome = await run(clone, [...CHECKPOINT, "--paths", ".github/workflows/x.yml"]);
+      return { clone, before, outcome };
+    }
+
+    // review/249 (W-1): git apply reads a `---`/`+++` pair after a section's hunks as a further file patch with no
+    // `diff --git` header, so it never gets a split point; mapped by its first record only, its path rode unlisted.
+    it("refuses a section that carries a second file patch after its hunks (review/249)", async () => {
+      const { clone, before, outcome } = await steeredClone("--- /dev/null\n+++ b/.github/workflows/y.yml\n@@ -0,0 +1 @@\n+on: push\n");
+
+      expect(outcome.code).toBe(1);
+      expect(outcome.doc).toMatchObject({
+        pushed: false,
+        notDone: [`hold failed: a section of the kept ${PATCH} carries more than one file patch, so a path past its first would be carried unlisted`],
+      });
+      expect(git(clone, ["rev-parse", "HEAD"])).toBe(before);
+    });
+
+    // review/249 (W-1): a stale section for a path held now, hidden inside another section, was not dropped, so the new
+    // patch carried two sections for that path against Base: and the person's apply of the hand-off failed.
+    it("refuses a stale section for a path held now hidden inside another section, so only the current diff could stand for it (review/249)", async () => {
+      const { clone, before, outcome } = await steeredClone("--- /dev/null\n+++ b/.github/workflows/x.yml\n@@ -0,0 +1 @@\n+on: stale\n");
+
+      expect(outcome.code).toBe(1);
+      expect(outcome.doc).toMatchObject({
+        pushed: false,
+        notDone: [`hold failed: a section of the kept ${PATCH} carries more than one file patch, so a path past its first would be carried unlisted`],
+      });
+      expect(git(clone, ["rev-parse", "HEAD"])).toBe(before);
+    });
+
+    // review/250 (M-1): a carried path joined held and the commit's own-path set unchecked, so a path no person-only
+    // glob holds passed the stray and hook checks and was pushed while the held line listed it as held.
+    it("refuses a section naming a path the hold does not hold (review/250)", async () => {
+      const { clone, before, outcome } = await steeredClone("diff --git a/a.txt b/a.txt\nnew file mode 100644\n--- /dev/null\n+++ b/a.txt\n@@ -0,0 +1 @@\n+x\n");
+
+      expect(outcome.code).toBe(1);
+      expect(outcome.doc).toMatchObject({
+        pushed: false,
+        notDone: [`hold failed: a section of the kept ${PATCH} names a.txt, which the hold does not hold`],
+      });
+      expect(git(clone, ["rev-parse", "HEAD"])).toBe(before);
+    });
+
+    // review/250: a held link (one at a held glob's directory prefix, review/200) is held by its mode, so its carried
+    // section is still kept and listed.
+    it.skipIf(process.platform === "win32")("keeps a carried section for a held link (review/250, review/200)", async () => {
+      const { repo, remote } = await seed("unattended");
+      await put(repo, "cfg/settings.json", '{ "hooks": {} }\n');
+      await symlink("cfg", join(repo, ".claude"));
+      expect((await run(repo, [...CHECKPOINT, "--paths", "cfg", ".claude"])).code).toBe(0);
+      const clone = await cloneRun(repo, remote);
+      await put(clone, ".github/workflows/x.yml", "on: push\n");
+
+      const { code, doc } = await run(clone, [...CHECKPOINT, "--paths", ".github/workflows/x.yml"]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [], held: [".claude", ".github/workflows/x.yml"] });
+    });
   });
 
   it.skipIf(process.platform === "win32")("holds a link added at a held glob's directory prefix, and pushes a link elsewhere (review/200)", async () => {
