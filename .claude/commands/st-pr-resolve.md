@@ -287,7 +287,7 @@ round's only output. Unattended, that commit and push are one
 `stamity run checkpoint --run <its id> --paths <the changed files>` to the record's `Branch:`, never
 a new branch, and the head read after the push still gates the `Implemented in` reply.
 
-**Running the CLI.** Every `stamity <verb>` call in this file runs as `npx --no stamity <verb>`, which runs an installed copy — a `stamity` bin the project's own `package.json` declares, one in `node_modules/.bin` here or in a parent folder, or a global one — and never downloads a package; where npm refuses because no copy is installed, the call runs as `npx -y @zomarit/stamity@1.15.0 <verb>`, the version this setup was generated with. Never `@latest`, and never `stamity <verb>` typed bare at the shell.
+**Running the CLI.** Every `stamity <verb>` call in this file runs as `npx --no stamity <verb>`, which runs an installed copy — a `stamity` bin the project's own `package.json` declares, one in `node_modules/.bin` here or in a parent folder, or a global one — and never downloads a package; where npm refuses because no copy is installed, the call runs as `npx -y @zomarit/stamity@1.16.0 <verb>`, the version this setup was generated with. Never `@latest`, and never `stamity <verb>` typed bare at the shell.
 When neither form runs, an unattended round fetches, pushes and posts nothing and closes `Not done: CLI unavailable`; an attended round runs no verb.
 
 ## 5. Replies — one per decision

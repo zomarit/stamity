@@ -19,7 +19,7 @@ An unattended run asks nothing, pushes only its own branch, and ends every exit 
 refused — on one draft pull request whose body is the morning list. Each floor below is charter invariant 1: none
 is skipped for a missing tool; the run refuses or reports `Not done:` instead.
 
-**Running the CLI.** Every `stamity <verb>` call in this file runs as `npx --no stamity <verb>`, which runs an installed copy — a `stamity` bin the project's own `package.json` declares, one in `node_modules/.bin` here or in a parent folder, or a global one — and never downloads a package; where npm refuses because no copy is installed, the call runs as `npx -y @zomarit/stamity@1.15.0 <verb>`, the version this setup was generated with. Never `@latest`, and never `stamity <verb>` typed bare at the shell.
+**Running the CLI.** Every `stamity <verb>` call in this file runs as `npx --no stamity <verb>`, which runs an installed copy — a `stamity` bin the project's own `package.json` declares, one in `node_modules/.bin` here or in a parent folder, or a global one — and never downloads a package; where npm refuses because no copy is installed, the call runs as `npx -y @zomarit/stamity@1.16.0 <verb>`, the version this setup was generated with. Never `@latest`, and never `stamity <verb>` typed bare at the shell.
 When neither form runs, the run does not start: it replies on its start surface `Refused: the stamity CLI is not reachable`, and it never stands in for a verb with raw git, `gh` or a file write.
 
 ## The declaration

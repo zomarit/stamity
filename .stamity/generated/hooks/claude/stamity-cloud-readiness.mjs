@@ -27,7 +27,7 @@ const LOCKFILES = ["npm-shrinkwrap.json", "package-lock.json"];
 const MAX_FILE_BYTES = 1048576;
 const INSTALL_TIMEOUT_MS = 240000;
 const CLI_TIMEOUT_MS = 45000;
-const CLI_CALL = ["npx","-y","@zomarit/stamity@1.15.0","help"];
+const CLI_CALL = ["npx","-y","@zomarit/stamity@1.16.0","help"];
 const PREFIX = "stamity cloud readiness: ";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
