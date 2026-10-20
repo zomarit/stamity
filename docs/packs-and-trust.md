@@ -198,7 +198,10 @@ and a `--dry-run` never runs the fetch at all.
 The third is an unattended run's. `stamity gate preflight --unattended` and `run start`,
 `run checkpoint` and `run end` call GitHub's REST API through `gh api`, under your `gh` login, and
 `run checkpoint` and `run end` read `origin` with `git ls-remote`, push the run's branch to it under
-your git credentials, and open or update its draft pull request. None of it fetches pack content.
+your git credentials, and open or update its draft pull request. `run start`, attended or not, reads
+`origin` with `git ls-remote` when it continues a run whose branch the clone holds only as
+`origin`'s, and refuses when `origin` cannot be read or no longer has that branch at the fetched
+commit. None of it fetches pack content.
 
 One further path is network-capable and is no part of any command's work. The startup update
 notice asks the npm registry the running package publishes to — the public one for

@@ -56,14 +56,14 @@ Four verbs need git: `worktree` refuses without it, `plan` and `run` exit 1 with
 from it, so without git `gate scan` exits 1 and `/st-quick` and `/st-work` list `secret scan: not run` under
 `Not done:`. The engine reaches the network in four places, all in [`SECURITY.md`'s "Network and data
 handling"](SECURITY.md): `add` fetches the Sigstore trust root for a signed pack, `worktree setup` fetches your own
-`origin` for a branch with no local copy, a startup notice asks npm about newer versions until you switch it off, and
-an unattended run's pre-flight and `run` verbs call GitHub's REST API through `gh` under your login, `run checkpoint`
-and `run end` reading `origin` with `git ls-remote` and pushing the run's branch to it under your git credentials. The
-client programs it starts to read a model list may make network calls of their own: `init`, `sync`, `workspace sync`
-and `check` start each selected client's own CLI but Claude Code's, under your account; `STAMITY_NO_CLIENT_PROBE=1`
-starts none. Two touchpoints go further, through the authenticated GitHub CLI, `gh`: `/st-pr-resolve`, and
-`/st-board`, which once a board is linked files, edits and comments on its items by default behind one preview, and
-moves them only with `--move`. `/st-work`'s close walk recommends `run checkpoint --pr`.
+`origin` for a branch with no local copy, a startup notice asks npm about newer versions until you switch it off, and an
+unattended run's pre-flight and `run` verbs call GitHub's REST API through `gh` under your login, `run start` continuing
+origin's run branch, `run checkpoint` and `run end` reading `origin` with `git ls-remote`, the last two pushing the
+run's branch to it under your git credentials. The client programs it starts to read a model list may make network calls
+of their own: `init`, `sync`, `workspace sync` and `check` start each selected client's own CLI but Claude Code's, under
+your account; `STAMITY_NO_CLIENT_PROBE=1` starts none. Two touchpoints go further, through the authenticated GitHub CLI,
+`gh`: `/st-pr-resolve`, and `/st-board`, which once a board is linked files, edits and comments on its items by default
+behind one preview, and moves them only with `--move`. `/st-work`'s close walk recommends `run checkpoint --pr`.
 [Getting started](docs/getting-started.md) has the prerequisites, and what `init` asks and writes per client.
 
 ## How it works

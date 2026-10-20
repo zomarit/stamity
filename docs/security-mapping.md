@@ -428,9 +428,11 @@ paths. One is a signed-metadata fetch at verification time. Another is a `git fe
 remote the repository already had. The third is the startup update notice, a fixed query to the
 npm registry, at most once a day. The fourth is `gh api`, which the unattended pre-flight and the
 run verbs start under the operator's own `gh` login, on REST paths in a closed alphabet, never a
-URL, at the host the repository's `origin` names. The fifth is the run verbs' `git ls-remote
-origin`, which `run checkpoint` and `run end` run once before they commit, even where the push is
-then held. The sixth is their `git push` of the run's branch to that `origin`.
+URL, at the host the repository's `origin` names. The fifth is the run verbs'
+`git ls-remote origin`, which `run checkpoint` and `run end` run once before they commit, even where
+the push is then held, and `run start` runs, in either mode, when it continues a run whose branch
+the clone holds only as origin's, refusing when origin cannot be read. The sixth is their `git push`
+of the run's branch to that `origin`.
 
 **A09 Security Logging and Monitoring Failures.** There is no logging or monitoring surface, by
 design. No telemetry is collected and nothing is uploaded, so the category's controls have nothing

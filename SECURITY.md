@@ -174,9 +174,12 @@ residual (1) of the row on how git is started says for git. Beside the door, `ch
 read origin's branches and tags with `git ls-remote origin` once, before they commit and even where
 the push is then held, and push the run's branch to `origin`, once origin still names the
 repository `run start` pinned, with git (`src/cli/engine/gitWrite.ts::gitWrite`), under the
-operator's own git credentials, and the text a pull request carries is screened before it posts,
-as the outbound-text row above states. No other verb starts `gh`, and none of these calls is made by
-`init`, `sync`, `check` or the other `gate` subcommands.
+operator's own git credentials, and the text a pull request carries is screened before it posts, as
+the outbound-text row above states. `run start` makes the same `git ls-remote origin` read, in
+either mode, when it continues a run whose branch the clone holds only as origin's, and refuses
+before it switches anything when origin cannot be read or no longer names that branch at the fetched
+tip. No other verb starts `gh`, and none of these calls is made by `init`, `sync`, `check` or the
+other `gate` subcommands.
 
 **Reading a client's model list starts that client's own CLI.** `init`, `sync` (`--dry-run`
 included) and `workspace sync` read the model list of each selected client but Claude Code, and

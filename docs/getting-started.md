@@ -264,8 +264,10 @@ make network calls of their own.
 - **An unattended run reaches GitHub** through `gh api`, under your `gh` login: `gate preflight
   --unattended` reads the repository, its rules and its protection, and `run start`,
   `run checkpoint` and `run end` read its default branch. `run checkpoint` and `run end` also read
-  `origin` with `git ls-remote`, push the run's branch to it under your git credentials, and open
-  or update the run's draft pull request.
+  `origin` with `git ls-remote`, push the run's branch to it under your git credentials, and open or
+  update the run's draft pull request. `run start`, attended or not, reads `origin` the same way
+  when it continues a run whose branch your clone has only as `origin`'s, and refuses if `origin`
+  cannot be read or no longer has that branch at the commit your clone fetched.
 
 `init`, `sync` (`--dry-run` included), `workspace sync` and `check`'s `model-pins` row start each
 selected client's own CLI, Claude Code's excepted, to read its model list. The engine hands each
