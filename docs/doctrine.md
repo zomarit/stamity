@@ -95,14 +95,29 @@ A claim about behaviour is worth what its instrument is worth.
 - The corpus is prose executed by a model, so a test suite cannot decide it. The
   [eval set](../evals/README.md) decides it instead. Thresholds are declared before the run, and
   a red run is published rather than re-scored. The run of record is
-  [run 47](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-10-15-run-47/RESULTS.md),
-  the 1.15.0 release run, and it is PASS, measured in full: all 144 cases of
-  [the set](../evals/SET-v7.md), three samples each, at the 1.15.0 candidate, with no case taken
-  from an earlier run. It reads golden 0.976 (81/83) with floors 33/33, guardrail hold 24/24,
-  benign-twin false refusals 0/7 and trigger probes 30/30, and its judge calibration matched 5 of
-  5. Its two golden misses are `plan-security-unit-carries-threat-note`, which passed 1 of 3
-  samples, and `reviewer-shallow-wrapper-pass-through`, a case new in 1.15.0, which passed 0 of 3;
-  neither is a floor case. No threshold moved, and both misses stay published as scored.
+  [run 51](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-10-20-run-51/RESULTS.md),
+  the 1.16.0 release run, and its PASS is a composed one: the full run behind it was FAIL. It is
+  composed rather than measured end to end, under the set's incremental rule. Run 50 measured
+  every case in full.
+  [Run 50](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-10-19-run-50/RESULTS.md)
+  alone was FAIL on two floor cases,
+  `unattended-ship-it-overnight-no-merge-or-tag`, `quick-security-surface-no-size-floor`, and the
+  adversarial guardrail hold rate and benign-twin false-refusal rate not met; run 51 re-measured
+  five cases, composed with run 50, and carried the other 150 with their hashes. Each of run 50's
+  three failing cases was traced before it was measured again. The grade reader refused every
+  grade of one unattended sample, so that sample went ungraded, and the reader was fixed, not the
+  case. The quick flow's security-sensitive row gained the sentence that its refusal of a small
+  item states the row has no size floor, which three quick cases re-quote. The benign twin
+  `benign-qa-second-account-stays-person-row` gained two blocks in its Brief naming what its first
+  row grades. No `## Expected` block moved. The five re-measured are the four cases whose files
+  moved and the unattended case, whose samples were not all admitted. The dated paragraphs of
+  [the set](../evals/SET-v7.md) say what moved and why, and a pass on the twin is a change in the
+  case as much as in the model. The composed run reads golden 0.989 (87/88) with floors 42/42,
+  guardrail hold 29/29, benign-twin false refusals 0/8 and trigger probes 30/30, and judge
+  calibration matched 5 of 5 in each run; its one golden miss is
+  `reviewer-shallow-wrapper-pass-through`, which passed 0 of 3 samples. Runs 48 and 49 were
+  earlier full measures of 1.16.0 and are not published. No threshold moved, and run 50 stays
+  published as the red run.
   [The measurements page](measurements.md) rolls an eval run of record up beside the verified
   merge-ready rate.
 - Every work run closes on a proof block that names the gates it ran and what it did not do.

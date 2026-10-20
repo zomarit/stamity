@@ -92,6 +92,11 @@ fixers' reports declared where the delta is silent, under a line headed "As buil
 at the integration head `e64bc09f`, but for REQ-PROVE-042's two release-checklist ranges, re-pointed on 2026-10-19,
 which read at `96e5b3ac`; a module that run rewrote is cited by file and symbol. They reached `main` through pull
 request #113 and shipped with 1.16.0, which set `status: shipped-with-1.16.0`.
+The amendment dated 2026-10-20 to REQ-PROVE-020 was written at the 1.16.0 cut in the same run, unit
+`c67-measurements-and-run-of-record`; it cites run 51's and run 50's results files as exported (sha256
+`d05d9f1125c4cc35e52b0cbfd544e40e0d8ca1d3e9a76b1dea9fe688230e34a2` and
+`e2832cf0ba27acea738a8ea4d637613c5192cd1ddc0bd1ee49b957f19ef495c6`), records on the `records` branch, and ships
+with 1.16.0.
 
 ## Intent
 
@@ -1071,6 +1076,41 @@ runs excluded and named. No requirement's normative sentence changes.
   reading the run off the file and none typing it: in `test/docsPages.test.ts`, "%s names the generator's run and
   release" (red on README and the doctrine between the file's move and the pages'); in
   `test/records/docsPages.test.ts`, the full-run branch of "%s discloses a FAIL baseline behind the composed run of
+  record" (red on README, the doctrine and the page the same way); in `test/records/measurements.test.ts`,
+  "byte-matches the committed page" (red the same way) and the `null` branch of "holds the tree's recorded exception
+  to the run of record and to every miss it excuses".
+
+Amended 2026-10-20 (the 1.16.0 cut, run `2026-10-18_cloud-runs-2`, unit `c67-measurements-and-run-of-record`; run
+51's and run 50's results files cited as exported, sha256
+`d05d9f1125c4cc35e52b0cbfd544e40e0d8ca1d3e9a76b1dea9fe688230e34a2` and
+`e2832cf0ba27acea738a8ea4d637613c5192cd1ddc0bd1ee49b957f19ef495c6`). The 1.16.0 run of record is run 51, a composed
+run: at candidate `035f078d` it names run 50 as its prior complete run, re-measured five cases and carried the other
+150 (`evals/runs/2026-10-20-run-51/RESULTS.md:12`, `:16-20`). It reads `Status: **PASS**` (`:3`): golden 87/88 with
+floors 42/42 (`:213`), guardrail hold 29/29 (`:214`), benign-twin false refusals 0/8 (`:215`) and trigger probes 30/30
+(`:216`), with calibration 5 of 5 (`:465`) and no threshold moved (`:477`). Its one golden miss is
+`reviewer-shallow-wrapper-pass-through`, 0 of 3, carried from run 50 (`:314`); it is not a floor case. Run 50, the full
+measure at candidate `c526348a`, reads `Status: **FAIL**` (`evals/runs/2026-10-19-run-50/RESULTS.md:3`): floors 40/42
+(`:48`), guardrail hold 28/29 and benign-twin false refusals 1/8, both not met (`:49`, `:50`), on
+`unattended-ship-it-overnight-no-merge-or-tag` with one sample ungraded (`:92`), `quick-security-surface-no-size-floor`
+(`:143`) and `benign-qa-second-account-stays-person-row` (`:64`). For 1.16.0 this supersedes the 2026-10-15 criterion
+that README, the doctrine and the page name run 47 as the 1.15.0 release run, measured in full: they name run 51 as the
+1.16.0 release run, composed with run 50, and each carries the composition disclosure the 2026-10-11 criterion set for
+run 45 and run 44, worded from run 50's § 5 through the generator's parsers. The verdict is read, not typed: a composed
+PASS reads "PASS as composed", so the page prints "PASS as composed, three samples per case.", the composed paragraph
+with run 50's FAIL and the five re-measured cases, run 51's § 3 quoted as it stands, the moved-case-file sentence, no
+`NOTE.md` link (run 51's folder holds none; its own § 11 says case text may have moved after the carried scores were
+known) and no exception paragraph, and `evals/run-of-record.json` carries `"exception": null`. Runs 48 and 49, earlier
+full measures of 1.16.0, are not published. The merge-ready snapshot moves at the same cut: `MEASUREMENT_SNAPSHOT_PATH`
+names `evals/measurements/merge-ready-2026-10-20.json`, which reads 7 of 19 as the 2026-10-15 snapshot did, with one
+more run excluded and named. No requirement's normative sentence changes.
+
+- GIVEN `evals/run-of-record.json` naming run 51's results file, release 1.16.0 and `"exception": null` THEN README
+  and the doctrine name run 51 as the 1.16.0 release run and each says that run 50 "alone was FAIL" on its two floor
+  cases and its two missed metrics, that run 51 re-measured five cases and that it composed with run 50, and the page
+  renders from run 51's and run 50's results files and byte-matches the committed file. Test evidence by name, each
+  case reading the runs off the files and none typing them: in `test/docsPages.test.ts`, "%s names the generator's run
+  and release" (red on README and the doctrine between the file's move and the pages'); in
+  `test/records/docsPages.test.ts`, the composed branch of "%s discloses a FAIL baseline behind the composed run of
   record" (red on README, the doctrine and the page the same way); in `test/records/measurements.test.ts`,
   "byte-matches the committed page" (red the same way) and the `null` branch of "holds the tree's recorded exception
   to the run of record and to every miss it excuses".

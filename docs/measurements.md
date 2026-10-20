@@ -169,23 +169,31 @@ Three consequences worth stating, because they are what make the number worth re
 ## Corpus behaviour: run of record
 
 The corpus is measured by an eval set, not by inspection. The run of record is
-[run 47](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-10-15-run-47/RESULTS.md) — the 1.15.0 release run —
-PASS, three samples per case.
+[run 51](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-10-20-run-51/RESULTS.md) — the 1.16.0 release run —
+PASS as composed, three samples per case.
 
-That run is a full baseline: its results file names no prior complete run, so no case is
-carried from an earlier run.
-Run 47 measured every case in full on its own candidate. The set is SET-v7.
+That run is composed rather than measured end to end, under SET-v7's incremental rule: one
+full baseline run per release, and a later run on another candidate re-measures only the cases
+whose inputs moved and carries the rest with provenance.
+Run 50 measured every case in full.
+[Run 50](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-10-19-run-50/RESULTS.md) alone was FAIL on two floor cases, `unattended-ship-it-overnight-no-merge-or-tag`, `quick-security-surface-no-size-floor`, and the adversarial guardrail hold rate and benign-twin false-refusal rate not met; run 51 re-measured five cases, composed with run 50, and carried the other 150 from it.
+The re-measured cases are `benign-qa-second-account-stays-person-row` (case file bytes moved), `quick-refusal-under-social-pressure` (case file bytes moved), `quick-string-rename-on-auth-path-refused` (case file bytes moved), `unattended-ship-it-overnight-no-merge-or-tag` (prior samples not all admitted) and `quick-security-surface-no-size-floor` (case file bytes moved).
+Each carried case is named in the composed artifact with its case-file hash and the source
+ranges found identical at both candidates. The set is SET-v7.
 
-Run 47's results file states why the run happened, in its § 3, quoted as it stands:
+Run 51's results file states why the run happened, in its § 3, quoted as it stands:
 
-> The 1.15.0 release run (plan 020 file 4, D23; SET-v7 'Which releases run the set'): since run 45's candidate d8a76416 the release changes content/**, the case set (three removed, seven added, forty moved; 141 -> 144 cases), the set file, evals/README.md, both eval-run skill copies, scripts/eval/run.mjs and the emitted client files. A full baseline of the 144-case roster.
+> Package 25 file 2's head after the fix for run 50's misses (unit n9-eval-run-50) and the morning's follow-ups, composed with run 50, before the 1.16.0 cut
 
-The scoring rule is SET-v6, which is what run 47's own score table is headed with.
+A case file that moved between run 50 and run 51 was changed after run 50's scores were known,
+and the dated paragraphs of [`evals/SET-v7.md`](../evals/SET-v7.md) say what each change is and what it admits.
+
+The scoring rule is SET-v6, which is what run 51's own score table is headed with.
 The figures below score that whole set:
 
-- Golden rubric pass rate **0.976** (81/83); every floor case passed, 33/33.
-- Adversarial guardrail hold rate **1.000** (24/24).
-- Benign-twin false-refusal rate **0.000** (0/7).
+- Golden rubric pass rate **0.989** (87/88); every floor case passed, 42/42.
+- Adversarial guardrail hold rate **1.000** (29/29).
+- Benign-twin false-refusal rate **0.000** (0/8).
 - Trigger-probe accuracy **1.000** (30/30).
 
 Each figure is the retained artifact's own, and the suite holds these lines to that file. The
