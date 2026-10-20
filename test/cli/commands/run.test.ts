@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runCommand } from "../../../src/cli/commands/run.ts";
 import { GIT_PROGRAM_VARIABLES } from "../../../src/cli/engine/gitWrite.ts";
+import type * as GitWriteModule from "../../../src/cli/engine/gitWrite.ts";
 import { PERSON_ONLY_GUARD_FILE, planCoreHookScripts } from "../../../src/hooks/scripts.ts";
 import { RUN_ENDED_MARKER_FILE } from "../../../src/mcp/env.ts";
 import { canonical } from "../../support/identity.ts";
@@ -39,6 +40,35 @@ vi.mock("../../../src/cli/engine/ghRunner.ts", () => ({
   },
 }));
 
+/** n14 (P2): the bare remote a clone's `git ls-remote origin` reads, by the clone's folder, where a case's origin names GitHub. */
+const lsRemote = vi.hoisted(() => ({ to: new Map<string, { url: string; remote: string }>() }));
+
+// A spy, not a stand-in: every call goes to the real write runner. Mock reason (n14 P2): a case whose origin names a
+// GitHub URL, so the pin and the REST read have one to match, cannot let `git ls-remote origin` reach GitHub, and an
+// insteadOf in the repository's config would also rewrite the URL `git remote get-url` reports to the pin. So for
+// that one call alone an insteadOf in the environment (read as the call starts) sends it to the case's bare remote.
+vi.mock("../../../src/cli/engine/gitWrite.ts", async (importOriginal) => {
+  const real = await importOriginal<typeof GitWriteModule>();
+  return {
+    ...real,
+    gitWrite: (cwd: string, args: readonly string[], opts?: Parameters<typeof real.gitWrite>[2]) => {
+      const mapped = args[0] === "ls-remote" ? lsRemote.to.get(cwd) : undefined;
+      if (mapped === undefined) return real.gitWrite(cwd, args, opts);
+      const mapping = { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: `url.${mapped.remote}.insteadOf`, GIT_CONFIG_VALUE_0: mapped.url };
+      const previous = Object.fromEntries(Object.keys(mapping).map((key) => [key, process.env[key]]));
+      Object.assign(process.env, mapping);
+      try {
+        return real.gitWrite(cwd, args, opts);
+      } finally {
+        for (const [key, value] of Object.entries(previous)) {
+          if (value === undefined) delete process.env[key];
+          else process.env[key] = value;
+        }
+      }
+    },
+  };
+});
+
 const SEED_ENV = {
   GIT_CONFIG_NOSYSTEM: "1",
   GIT_CONFIG_GLOBAL: NO_GIT_CONFIG,
@@ -61,6 +91,7 @@ describe("stamity run start", () => {
   beforeEach(() => {
     rest.calls.length = 0;
     rest.routes.clear();
+    lsRemote.to.clear();
   });
 
   /** A repository with two commits on `branch`, and `origin` at `url` unless it is null. */
@@ -431,7 +462,7 @@ describe("stamity run start", () => {
     });
 
     it("refuses origin's tip where git merge-base cannot read the history between it and its Base:, creating no branch", async () => {
-      const { clone } = await seedContinuation();
+      const { clone, remote } = await seedContinuation();
       // Origin's tip two commits past Base:, the middle commit's object gone from this clone.
       const base = git(clone, ["rev-parse", "main"]);
       git(clone, ["switch", "-q", "-c", "scratch"]);
@@ -447,6 +478,9 @@ describe("stamity run start", () => {
       git(clone, ["switch", "-q", "main"]);
       git(clone, ["branch", "-q", "-D", "scratch"]);
       git(clone, ["update-ref", `refs/remotes/origin/${RUN_BRANCH}`, tip]);
+      // TEST CHANGE, justified (n14 P2): start now asks origin for the branch before it trusts the remote-tracking ref,
+      // and refuses a tip origin does not name, so origin holds this tip too, as it would after the push that made it.
+      git(clone, ["push", "-q", "--force", remote, `${tip}:refs/heads/${RUN_BRANCH}`]);
       await rm(join(clone, ".git", "objects", middle.slice(0, 2), middle.slice(2)));
 
       const { code, doc } = await run(clone, START);
@@ -491,6 +525,10 @@ describe("stamity run start", () => {
       const moved = await seedContinuation({ pin });
       git(kept.clone, ["remote", "set-url", "origin", "https://github.com/o/r.git"]);
       git(moved.clone, ["remote", "set-url", "origin", "https://github.com/elsewhere/r.git"]);
+      // TEST CHANGE, justified (n14 P2): start now reads origin's branch with git ls-remote origin before it trusts the
+      // remote-tracking ref, so that one read of each clone goes to the case's bare remote (the spy above).
+      lsRemote.to.set(kept.clone, { url: "https://github.com/o/r.git", remote: kept.remote });
+      lsRemote.to.set(moved.clone, { url: "https://github.com/elsewhere/r.git", remote: moved.remote });
       restDefault("main");
 
       const preview = await run(kept.clone, ["start", "--run", RUN, "--dry-run"]);
@@ -511,6 +549,53 @@ describe("stamity run start", () => {
       expect(git(kept.clone, ["rev-parse", "HEAD"])).toBe(kept.tip);
       expect(refused.code).toBe(1);
       expect(JSON.stringify(refused.doc["error"])).toContain(`pins github.com/o/r, and origin now names github.com/elsewhere/r; the checkout is on ${RUN_BRANCH} now`);
+    });
+
+    describe("origin's run branch as origin answers it, never the remote-tracking ref alone (n14 P2)", () => {
+      const remoteBranch = (remote: string): string => git(remote, ["for-each-ref", "--format=%(objectname)", `refs/heads/${RUN_BRANCH}`]);
+
+      it("refuses a branch origin no longer has, naming the stale ref and the prune, switching and creating nothing", async () => {
+        const { clone, remote, tip } = await seedContinuation();
+        git(remote, ["update-ref", "-d", `refs/heads/${RUN_BRANCH}`]);
+
+        const { code, doc } = await run(clone, START);
+
+        expect(code).toBe(1);
+        const error = JSON.stringify(doc["error"]);
+        expect(error).toContain(`run start refused: refs/remotes/origin/${RUN_BRANCH} names ${tip}, and origin no longer has ${RUN_BRANCH}`);
+        expect(error).toContain("git fetch --prune origin");
+        expect(current(clone)).toBe("main");
+        expect(git(clone, ["branch", "--list", RUN_BRANCH])).toBe("");
+        expect(remoteBranch(remote)).toBe("");
+      });
+
+      it("refuses a branch origin has moved past the fetched tip, naming both and asking for a fetch first", async () => {
+        const { clone, remote, tip } = await seedContinuation();
+        const moved = git(remote, ["commit-tree", `${tip}^{tree}`, "-p", tip, "-m", "moved on"]);
+        git(remote, ["update-ref", `refs/heads/${RUN_BRANCH}`, moved]);
+
+        const { code, doc } = await run(clone, START);
+
+        expect(code).toBe(1);
+        const error = JSON.stringify(doc["error"]);
+        expect(error).toContain(`run start refused: origin's ${RUN_BRANCH} is at ${moved}, not at the ${tip} refs/remotes/origin/${RUN_BRANCH} names`);
+        expect(error).toContain("fetch origin first");
+        expect(current(clone)).toBe("main");
+        expect(git(clone, ["branch", "--list", RUN_BRANCH])).toBe("");
+        expect(remoteBranch(remote)).toBe(moved);
+      });
+
+      it("refuses where origin cannot be read, attended too, switching and creating nothing", async () => {
+        const { clone } = await seedContinuation();
+        git(clone, ["remote", "set-url", "origin", getRoot().path("no-such-remote.git")]);
+
+        const { code, doc } = await run(clone, START);
+
+        expect(code).toBe(1);
+        expect(JSON.stringify(doc["error"])).toContain(`run start refused: origin's ${RUN_BRANCH} could not be read from origin (git ls-remote origin answered`);
+        expect(current(clone)).toBe("main");
+        expect(git(clone, ["branch", "--list", RUN_BRANCH])).toBe("");
+      });
     });
 
     describe("the mode a continuation starts in, read from the run's branch where the work tree holds no record (n14 P1, REQ-FLOW-122)", () => {

@@ -34,8 +34,11 @@ import { readPushed, scanChange } from "./gate.ts";
  * it at `HEAD` where no local branch of that name exists and checking the one
  * that does out, never recreating it. Where only `refs/remotes/origin/stamity/<run-id>`
  * names a commit (a run continued on a fresh clone, v21), the branch is created
- * at that tip instead, once the run's record there names a `Base:` the tip
- * descends from; a tip that does not, or carries no record, refuses. Any other branch, a platform's own
+ * at that tip instead, once `git ls-remote origin` names the same tip for the
+ * branch (n14: a branch origin no longer has, another tip there, or a remote
+ * it cannot read refuses, in either mode) and the run's record there names a
+ * `Base:` the tip descends from; a tip that does not, or carries no record,
+ * refuses. Any other branch, a platform's own
  * (`claude/…`, `cursor/…`, `copilot/…`) included, is kept. Uncommitted work
  * rides the switch, as `git switch` carries it; a switch git refuses (a local
  * change the target would overwrite) fails the verb and leaves the checkout
@@ -74,8 +77,9 @@ import { readPushed, scanChange } from "./gate.ts";
  * repository pins nothing, said in the text.
  *
  * **`start`'s exit codes.** 0 the run is on its branch; 1 a refused run id, no
- * commit to base the run on, origin changed, origin's run branch refused (no
- * record, or not from its `Base:`), or a git call that failed; 2 a usage error, no
+ * commit to base the run on, origin changed, origin's run branch refused (gone
+ * or moved on origin, origin unread, no record, or not from its `Base:`), or a
+ * git call that failed; 2 a usage error, no
  * `--run` among them. The JSON is `{ subcommand, run, branch, created, base }`,
  * `base` the full commit id at `HEAD` once the run is on its branch, for the
  * record's `Base:`; `dryRun: true` joins it under `--dry-run`, which switches
@@ -362,13 +366,42 @@ async function runStart(ctx: CliContext, run: string): Promise<CommandResult> {
 /**
  * v21: the commit `refs/remotes/origin/<runBranch>` names, for a run continued on a machine whose clone has the run's
  * branch only as origin's; `null` where that ref names no commit (a clone that never fetched it among them), so the
- * run starts as before. The run's record at that tip, a regular file, must name a `Base:` that is a commit here and
- * that the tip descends from; anything else refuses, naming the tip, before anything is switched.
+ * run starts as before. n14 (P2): that ref is used only where origin itself names the same commit for the branch
+ * ({@link remoteRefs}), since a branch deleted or moved on the server leaves it stale; a branch origin no longer
+ * has, another tip there, or a remote that cannot be read refuses, in either mode. The run's record at that tip, a
+ * regular file, must name a `Base:` that is a commit here and that the tip descends from; anything else refuses,
+ * naming the tip, before anything is switched.
  */
 async function originRunTip(ctx: CliContext, cwd: string, run: string, runBranch: string): Promise<string | null> {
   const { layout, resumeCard } = ctx.engine.runs;
-  const tip = await commitAt(cwd, `refs/remotes/origin/${runBranch}`);
+  const tracking = `refs/remotes/origin/${runBranch}`;
+  const tip = await commitAt(cwd, tracking);
   if (tip === null) return null;
+  const remote = await remoteRefs(cwd, runBranch, START);
+  if (typeof remote === "string") {
+    throw new CliFailure({
+      code: "FAILURE",
+      message: `run start refused: origin's ${runBranch} could not be read from origin (${remote})`,
+      why: `${tracking} names ${tip}, and only origin shows whether the branch is still there at that commit`,
+      next: "make origin readable (its URL, the network, the login), then run it again",
+    });
+  }
+  if (remote.branch === null) {
+    throw new CliFailure({
+      code: "FAILURE",
+      message: `run start refused: ${tracking} names ${tip}, and origin no longer has ${runBranch}`,
+      why: "the remote-tracking ref is stale: a branch deleted on origin would be created again from it and pushed back",
+      next: `a person reads why origin's ${runBranch} is gone; git fetch --prune origin drops the stale ref, and the run then starts again`,
+    });
+  }
+  if (remote.branch !== tip) {
+    throw new CliFailure({
+      code: "FAILURE",
+      message: `run start refused: origin's ${runBranch} is at ${remote.branch}, not at the ${tip} ${tracking} names`,
+      why: "the run would start from a tip origin has moved off, and its next push would not land on origin's branch",
+      next: "fetch origin first (git fetch origin), then run it again",
+    });
+  }
   const recordRel = `${layout.runRelPath(run)}/${layout.RECORD_FILE}`;
   // review/4: a refusal read off history names a deeper fetch on a shallow clone, whose cut history reads as a rewrite.
   const refuse = async (why: string, history = false): Promise<CliFailure> => {
@@ -621,7 +654,7 @@ async function commitAt(cwd: string, rev: string, verb: string = START): Promise
   return read.code === 0 && /^[0-9a-f]{40,64}$/.test(sha) ? sha : null;
 }
 
-/** What origin's own refs name, read once a checkpoint from the remote ({@link remoteRefs}). */
+/** What origin's own refs name, read from the remote once a checkpoint, and by `start` for a continued run's branch (n14) ({@link remoteRefs}). */
 interface RemoteRefs {
   /** Every commit origin's branches and tags name, once each: the `^<tip>` set of both history reads (pr/46, pr/49). */
   tips: string[];
