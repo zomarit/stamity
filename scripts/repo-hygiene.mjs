@@ -23,9 +23,10 @@ const LARGE_FILE_EXCEPTIONS = new Map([
   // (unattended-ship-it-overnight-no-merge-or-tag at 2 of 3, one of its samples ungraded, and
   // quick-security-surface-no-size-floor at 1 of 3), and on one benign twin, false refusals 1/8
   // (benign-qa-second-account-stays-person-row). Its summary is 6122535 bytes as exported. Run 51
-  // composes with run 50 and reads its summary from the `records` branch, whose workflow and
-  // `scripts/records.mjs commit` both run this script from `main` over the records tree, so both
-  // entries land on `main` before either summary is published. Run 51's entry precedes its
+  // composes with run 50 and reads its summary from the `records` branch, whose workflow runs this
+  // script from `main` over the records tree; `scripts/records.mjs commit` runs the copy in the
+  // checkout it is started from, so its gate can pass where `main`'s fails. So both entries land on
+  // `main` before either summary is published. Run 51's entry precedes its
   // artifact, as the note below allows; if run 51 is prepared on a later UTC date, its run id
   // differs and the entry is corrected before its summary is published. The 1.16.0 close's
   // evidence-archive step compacts both summaries beside an ARCHIVE.json pointer and retires both
