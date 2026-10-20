@@ -2,7 +2,7 @@
 title: Getting started
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.15.0 release cut (2026-10-15). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.16.0 release cut (2026-10-20). -->
 <!-- Re-open when: init's prompt budget changes, a client's first-run line changes, a verb joins
      or leaves the CLI, a probe joins or leaves `check`, or a path joins or leaves `.stamity/`.
      `test/docsPages.test.ts` holds this page to the hand-page contract; the generated
