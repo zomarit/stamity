@@ -28,7 +28,7 @@ Every figure below comes from a committed artifact, so you can check it instead 
 Its final gate table is all passes. Its last review verdict is an approval at or above the
 confidence gate that record states. Its findings ledger leaves no row open. Self-declared wording
 never counts. The frozen snapshot is
-[`evals/measurements/merge-ready-2026-10-15.json`](https://github.com/zomarit/stamity/blob/records/evals/measurements/merge-ready-2026-10-15.json),
+[`evals/measurements/merge-ready-2026-10-20.json`](https://github.com/zomarit/stamity/blob/records/evals/measurements/merge-ready-2026-10-20.json),
 and [Measurements](docs/measurements.md) shows the working and names every run left out.
 
 **Eval run of record: [run 47](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-10-15-run-47/RESULTS.md), the 1.15.0 release run: PASS, measured in full.**
