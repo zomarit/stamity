@@ -2330,6 +2330,217 @@ describe("stamity run checkpoint", () => {
       expect(git(clone, ["rev-parse", "HEAD"])).toBe(before);
     });
 
+    /** Each section's header as git wrote it: its lines up to its first hunk or binary line, that line kept, ids masked. */
+    const headers = (parts: Buffer[]): string[][] =>
+      parts.map((part) => {
+        const lines = part.toString("latin1").split("\n");
+        const body = lines.findIndex((line) => line.startsWith("@@ ") || line === "GIT binary patch");
+        return lines.slice(0, body === -1 ? lines.length - 1 : body + 1).map((line) => line.replace(/\b[0-9a-f]{40,64}\b/g, "<id>"));
+      });
+
+    // review/251, measured rather than assumed: the header lines the verb's own diffs write, renames pinned off, for each
+    // kind of section it holds; the carried read's allowlist is these, and each such section is still carried whole.
+    it("pins the header lines its own diffs write for each kind of section it holds, and carries each one whole (review/251)", async () => {
+      const { repo, remote, base } = await seed("unattended", {
+        files: {
+          ".github/workflows/blob.bin": "\u0000\u0001\u0002",
+          ".github/workflows/old.yml": "on: pull_request\n",
+          ".github/workflows/run.sh": "echo run\n",
+          ".github/workflows/sp ace.yml": "on: pull_request\n",
+          ".github/workflows/ø.yml": "on: pull_request\n",
+        },
+      });
+      const binary = Buffer.from([0x00, 0x03, 0xff, 0x0a]);
+      await writeFile(join(repo, ".cursorrules"), "steered rules\n");
+      await writeFile(join(repo, ".github/workflows/blob.bin"), binary);
+      await put(repo, ".github/workflows/new.yml", "on: push\n");
+      await rm(join(repo, ".github/workflows/old.yml"));
+      await writeFile(join(repo, ".github/workflows/sp ace.yml"), "on: push\n");
+      await writeFile(join(repo, ".github/workflows/ø.yml"), "on: push\n");
+      // Staged as well, so git reads the mode change where the file system keeps no executable bit (Windows) too.
+      await chmod(join(repo, ".github/workflows/run.sh"), 0o755);
+      git(repo, ["update-index", "--chmod=+x", "--", ".github/workflows/run.sh"]);
+      expect((await run(repo, [...CHECKPOINT, "--paths", ".github/workflows/new.yml"])).code).toBe(0);
+      const earlier = sections(pushedBytes(remote));
+
+      expect(headers(earlier)).toEqual([
+        [
+          "diff --git a/.github/workflows/new.yml b/.github/workflows/new.yml",
+          "new file mode 100644",
+          "index <id>..<id>",
+          "--- /dev/null",
+          "+++ b/.github/workflows/new.yml",
+          "@@ -0,0 +1 @@",
+        ],
+        ["diff --git a/.github/workflows/run.sh b/.github/workflows/run.sh", "old mode 100644", "new mode 100755"],
+        ["diff --git a/.cursorrules b/.cursorrules", "index <id>..<id> 100644", "--- a/.cursorrules", "+++ b/.cursorrules", "@@ -1 +1 @@"],
+        ["diff --git a/.github/workflows/blob.bin b/.github/workflows/blob.bin", "index <id>..<id> 100644", "GIT binary patch"],
+        [
+          "diff --git a/.github/workflows/old.yml b/.github/workflows/old.yml",
+          "deleted file mode 100644",
+          "index <id>..<id>",
+          "--- a/.github/workflows/old.yml",
+          "+++ /dev/null",
+          "@@ -1 +0,0 @@",
+        ],
+        // A name with a space: git ends its ---/+++ label with a tab.
+        [
+          "diff --git a/.github/workflows/sp ace.yml b/.github/workflows/sp ace.yml",
+          "index <id>..<id> 100644",
+          "--- a/.github/workflows/sp ace.yml\t",
+          "+++ b/.github/workflows/sp ace.yml\t",
+          "@@ -1 +1 @@",
+        ],
+        // A name past ASCII: git C-quotes it, on its diff --git line and its labels alike.
+        [
+          'diff --git "a/.github/workflows/\\303\\270.yml" "b/.github/workflows/\\303\\270.yml"',
+          "index <id>..<id> 100644",
+          '--- "a/.github/workflows/\\303\\270.yml"',
+          '+++ "b/.github/workflows/\\303\\270.yml"',
+          "@@ -1 +1 @@",
+        ],
+      ]);
+      const clone = await cloneRun(repo, remote);
+      await put(clone, ".github/workflows/x.yml", "on: push\n");
+
+      const { code, doc } = await run(clone, [...CHECKPOINT, "--paths", ".github/workflows/x.yml"]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({
+        pushed: true,
+        notDone: [],
+        held: [
+          ".cursorrules",
+          ".github/workflows/blob.bin",
+          ".github/workflows/new.yml",
+          ".github/workflows/old.yml",
+          ".github/workflows/run.sh",
+          ".github/workflows/sp ace.yml",
+          ".github/workflows/x.yml",
+          ".github/workflows/ø.yml",
+        ],
+      });
+      const parts = sections(pushedBytes(remote));
+      expect(parts).toHaveLength(earlier.length + 1);
+      expect(earlier.every((part, index) => parts[index]?.equals(part) === true)).toBe(true);
+      const fresh = applyOnBase(repo, base, join(clone, PATCH));
+      expect((await readFile(join(fresh, ".github/workflows/blob.bin"))).equals(binary)).toBe(true);
+      expect(isFile(join(fresh, ".github/workflows/old.yml"))).toBe(false);
+      expect(await readFile(join(fresh, ".github/workflows/new.yml"), "utf8")).toBe("on: push\n");
+      expect(await readFile(join(fresh, ".github/workflows/ø.yml"), "utf8")).toBe("on: push\n");
+    });
+
+    // review/251: the verb pins no diff prefix, so a repository's diff.mnemonicPrefix writes c/, i/ and w/ in place of
+    // a/ and b/; git apply sets each name's first component aside, and so does the carried read.
+    it("carries a section its diffs wrote with diff.mnemonicPrefix's prefixes (review/251)", async () => {
+      const { repo, remote } = await seed("unattended");
+      git(repo, ["config", "diff.mnemonicPrefix", "true"]);
+      await writeFile(join(repo, ".cursorrules"), "steered rules\n");
+      expect((await run(repo, CHECKPOINT)).code).toBe(0);
+      expect(headers(sections(pushedBytes(remote)))[0]).toEqual([
+        "diff --git c/.cursorrules w/.cursorrules",
+        "index <id>..<id> 100644",
+        "--- c/.cursorrules",
+        "+++ w/.cursorrules",
+        "@@ -1 +1 @@",
+      ]);
+      const clone = await cloneRun(repo, remote);
+      await put(clone, ".github/workflows/x.yml", "on: push\n");
+
+      const { code, doc } = await run(clone, [...CHECKPOINT, "--paths", ".github/workflows/x.yml"]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [], held: [".cursorrules", ".github/workflows/x.yml"] });
+    });
+
+    // review/251: a checkout under core.autocrlf (Git for Windows' default) leaves the work tree's copy of the committed
+    // patch with CRLF line ends, which the verb's git add turns back to LF; the header read takes CR LF as a line end.
+    it("carries a section whose work-tree copy has CRLF line ends, as an autocrlf checkout leaves it (review/251)", async () => {
+      const { repo, remote } = await seed("unattended");
+      await writeFile(join(repo, ".cursorrules"), "steered rules\n");
+      expect((await run(repo, CHECKPOINT)).code).toBe(0);
+      const clone = await cloneRun(repo, remote);
+      await writeFile(join(clone, PATCH), (await readFile(join(clone, PATCH), "utf8")).replaceAll("\n", "\r\n"));
+      await put(clone, ".github/workflows/x.yml", "on: push\n");
+
+      const { code, doc } = await run(clone, [...CHECKPOINT, "--paths", ".github/workflows/x.yml"]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [], held: [".cursorrules", ".github/workflows/x.yml"] });
+    });
+
+    /**
+     * review/251, round 3: sections that move the unheld `a.txt` (Base: holds `a.txt\n`) to the held
+     * `.github/workflows/y.yml` with no header line the round-2 refusal named, each with the refusal it now gets.
+     */
+    const forged = [
+      {
+        route: "the older rename old/rename new pair, with no similarity line",
+        section: "diff --git a/a.txt b/.github/workflows/y.yml\nrename old a.txt\nrename new .github/workflows/y.yml\n",
+        refusal: "renames or copies a path, and git apply --numstat names only its new one, so the path it moves or reads from would be carried unlisted",
+      },
+      {
+        route: "two paths on its diff --git line, its ---/+++ pair naming them",
+        section: "diff --git a/a.txt b/.github/workflows/y.yml\n--- a/a.txt\n+++ b/.github/workflows/y.yml\n@@ -1 +1 @@\n-a.txt\n+on: push\n",
+        refusal: "does not name one path twice on its diff --git line, as every section this verb writes does, so a path git apply moves there would be carried unlisted",
+      },
+      {
+        route: "no rename header, its --- and +++ lines naming different paths",
+        section: "diff --git a/.github/workflows/y.yml b/.github/workflows/y.yml\n--- a/a.txt\n+++ b/.github/workflows/y.yml\n@@ -1 +1 @@\n-a.txt\n+on: push\n",
+        refusal:
+          "has a --- or +++ line that does not name its diff --git line's path (or /dev/null where it adds or deletes the file), so a path git apply moves there would be carried unlisted",
+      },
+    ];
+
+    // Measured rather than assumed: git apply moves a.txt for each, while --numstat names the held new path alone.
+    it.each(forged)("pins that git apply moves a.txt and --numstat names only the new path for $route (review/251)", async ({ section }) => {
+      const dir = getRoot().path(`forged-${Math.random().toString(36).slice(2, 8)}`);
+      await mkdir(dir, { recursive: true });
+      git(dir, ["-c", "init.defaultBranch=main", "init", "-q"]);
+      await writeFile(join(dir, "a.txt"), "a.txt\n");
+      await writeFile(join(dir, "forged.patch"), section);
+
+      const records = git(dir, ["apply", "--numstat", "-z", "forged.patch"]).split("\0");
+      git(dir, ["apply", "forged.patch"]);
+
+      expect(records.filter((record) => record !== "")).toEqual([expect.stringMatching(/^\d+\t\d+\t\.github\/workflows\/y\.yml$/)]);
+      expect(records.join("\n")).not.toContain("a.txt");
+      expect(isFile(join(dir, "a.txt"))).toBe(false);
+      expect(isFile(join(dir, ".github/workflows/y.yml"))).toBe(true);
+    });
+
+    // review/251 (round 3): the round-2 refusal listed five header spellings, so each of these passed it and was carried
+    // by its held new path alone, the hand-off moving a.txt with no row in held or the morning list.
+    it.each(forged)("refuses a committed patch's section with $route (review/251)", async ({ section, refusal }) => {
+      const { clone, before, outcome } = await steeredClone(section, true);
+
+      expect(outcome.code).toBe(1);
+      expect(outcome.doc).toMatchObject({ pushed: false, notDone: [`hold failed: a section of the kept ${PATCH} ${refusal}`] });
+      expect(git(clone, ["rev-parse", "HEAD"])).toBe(before);
+    });
+
+    // review/251: the allowlist refuses any header line the verb's own diffs never write, not the renames alone; git
+    // reads both of these, the second because a section's header runs past its +++ line up to its first hunk.
+    it.each([
+      {
+        line: "a dissimilarity index line",
+        section: "diff --git a/.github/workflows/y.yml b/.github/workflows/y.yml\ndissimilarity index 100%\nnew file mode 100644\n--- /dev/null\n+++ b/.github/workflows/y.yml\n@@ -0,0 +1 @@\n+on: push\n",
+      },
+      {
+        line: "a mode line after its +++ line",
+        section: "diff --git a/.github/workflows/y.yml b/.github/workflows/y.yml\nnew file mode 100644\n--- /dev/null\n+++ b/.github/workflows/y.yml\nnew mode 100755\n@@ -0,0 +1 @@\n+on: push\n",
+      },
+    ])("refuses a committed patch's section with $line, which its own diffs never write (review/251)", async ({ section }) => {
+      const { clone, before, outcome } = await steeredClone(section, true);
+
+      expect(outcome.code).toBe(1);
+      expect(outcome.doc).toMatchObject({
+        pushed: false,
+        notDone: [`hold failed: a section of the kept ${PATCH} has a header line this verb's own diffs never write, so what git apply does with it would be carried unchecked`],
+      });
+      expect(git(clone, ["rev-parse", "HEAD"])).toBe(before);
+    });
+
     // review/250: a held link (one at a held glob's directory prefix, review/200) is held by its mode, so its carried
     // section is still kept and listed.
     it.skipIf(process.platform === "win32")("keeps a carried section for a held link (review/250, review/200)", async () => {

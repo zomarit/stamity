@@ -2139,10 +2139,10 @@ function sectionStarts(patch: Buffer): number[] {
  * pair after its hunks needs no `diff --git` header, so it gets no split point), whose paths past its first would ride
  * unlisted. Refused (review/250): a section naming a path `isHeld` does not hold, read with the section's new-side
  * mode as {@link rawEntries} reads a link, so no path the hold does not hold joins `held` and the commit's own paths.
- * Refused (review/251): a section whose headers mark a rename or a copy (`rename from`/`to`, `copy from`/`to`,
- * `similarity index`), since `git apply --numstat -z` names only its new path and the path it moves or reads from
- * would ride unlisted; the verb's own diffs pin renames off, so only a steered patch carries one.
- * Else the reason, for `notDone`.
+ * Refused (review/251): a section whose header is not one the verb's own diffs write ({@link foreignSectionHeader}),
+ * checked before `git apply` reads it, since `git apply --numstat -z` names only a section's new path and the path a
+ * rename (in any spelling), a `diff --git` line naming two paths or a `---` line naming another moves would ride
+ * unlisted. Else the reason, for `notDone`.
  */
 async function carriedSections(
   top: string,
@@ -2170,15 +2170,15 @@ async function carriedSections(
   const sections = starts.map((from, index) => patch.subarray(from, starts[index + 1] ?? patch.length));
   const mapped = await Promise.all(
     sections.map(async (section, index): Promise<string[] | string> => {
-      if (/^(?:rename from|rename to|copy from|copy to|similarity index) /m.test(section.toString("latin1"))) {
-        return `hold failed: a section of the kept ${patchFromTop} renames or copies a path, and git apply --numstat names only its new one, so the path it moves or reads from would be carried unlisted`;
-      }
+      const foreign = foreignSectionHeader(section);
+      if (foreign !== null) return `hold failed: a section of the kept ${patchFromTop} ${foreign}`;
       const out = join(scratch, `carried-${index}.patch`);
       writeFileSync(out, section);
       const read = await git(top, ["apply", "--numstat", "-z", out], verb);
       if (read.code !== 0) return `hold failed: the kept ${patchFromTop} could not be read (git apply answered ${read.code}: ${firstLine(read.stderr)})`;
       // One `<added>\t<deleted>\t<path>` record per file patch, NUL-terminated (a rename's or copy's new path only,
-      // review/251, so those are refused above); an empty path field is read as git diff's two-path form, defensively.
+      // review/251, so the header check above lets none through); an empty path field is read as git diff's two-path
+      // form, defensively.
       const tokens = read.stdout.split("\0");
       const records: string[][] = [];
       for (let at = 0; at < tokens.length; at += 1) {
@@ -2203,6 +2203,91 @@ async function carriedSections(
     sections: sections.filter((_, index) => keep[index] === true),
     paths: [...new Set(mapped.flatMap((paths, index) => (keep[index] === true && typeof paths !== "string" ? paths : [])))].toSorted(),
   };
+}
+
+/** review/251: an extended header line the verb's own diffs write (renames pinned off, `--full-index`), whole. */
+const SECTION_HEADER_LINE = /^(?:(?:old mode|new mode|new file mode|deleted file mode) [0-7]{6}|index [0-9a-f]{40,64}\.\.[0-9a-f]{40,64}(?: [0-7]{6})?)$/;
+
+/**
+ * review/251: a `diff --git` name's first component, as git writes one (`a/`, `b/`, a mnemonic `c/`, `i/` or `w/`) and
+ * `git apply` sets aside: printable, with no space, `"`, backslash or `/` but its last.
+ */
+const NAME_PREFIX = String.raw`[!#-.0-[\]-~\x80-\xff]+/`;
+
+/** review/251: a byte git writes as it is in a name: printable but `"` and backslash, or past ASCII (Latin-1 read). */
+const NAME_BYTE = String.raw`[ !#-[\]-~\x80-\xff]`;
+
+/** review/251: a `diff --git` line's two names where git C-quoted them, each a prefix, then the quoted rest. */
+const QUOTED_NAMES = new RegExp(String.raw`^"(${NAME_PREFIX})((?:${NAME_BYTE}|\\(?:[abfnrtv"\\]|[0-3][0-7]{2}))+)" "(${NAME_PREFIX})(\2)"$`);
+
+/** review/251: a name's prefix at the start of the text read. */
+const PREFIX_FIRST = new RegExp(`^${NAME_PREFIX}`);
+
+/** review/251: a `diff --git` line's names where git quoted neither: bytes it writes as they are, and nothing else. */
+const PLAIN_NAMES = new RegExp(`^${NAME_BYTE}+$`);
+
+/**
+ * review/251: the two names a `diff --git ` line gives, as written, where both name one path as `git apply` reads them,
+ * each name's first component set aside; else null. Git C-quotes a name holding a `"`, a backslash or a control byte,
+ * so an unquoted one holds none (`git apply` reads a `"` there as the start of a quoted second name). A prefix is plain
+ * (no escape, no space), so the path after it is the same whether read quoted or not, and of the spaces in the line
+ * at most one splits it into two names whose paths have one length.
+ */
+function diffGitNames(line: string): [string, string] | null {
+  if (!line.startsWith("diff --git ")) return null;
+  const names = line.slice("diff --git ".length);
+  const quoted = QUOTED_NAMES.exec(names);
+  if (quoted !== null) return [`"${quoted[1] ?? ""}${quoted[2] ?? ""}"`, `"${quoted[3] ?? ""}${quoted[4] ?? ""}"`];
+  const first = PREFIX_FIRST.exec(names)?.[0];
+  if (first === undefined || !PLAIN_NAMES.test(names)) return null;
+  for (let at = names.indexOf(" "); at !== -1; at = names.indexOf(" ", at + 1)) {
+    const second = PREFIX_FIRST.exec(names.slice(at + 1))?.[0];
+    const path = names.slice(first.length, at);
+    if (second !== undefined && path !== "" && path.length === names.length - at - 1 - second.length && names.endsWith(` ${second}${path}`)) {
+      return [names.slice(0, at), names.slice(at + 1)];
+    }
+  }
+  return null;
+}
+
+/**
+ * review/251: why a held patch section is not one the verb's own diffs write, in the words `carriedSections` gives
+ * it, or null where it is one. Its header is every line before its first `@@ ` or `GIT binary patch` line, which is as
+ * far as `git apply` reads one (a rename line after the `+++` line still renames), a CR before an LF read as part of
+ * the line end, as a checkout under `core.autocrlf` leaves it. A section the verb writes names one path twice on its
+ * `diff --git` line ({@link diffGitNames}), then holds only mode and `index` lines (none at all for a dirty
+ * submodule), then either a `---` and a `+++` line naming those two names as written (`/dev/null` on the side it adds
+ * or deletes, a tab after a name holding a space) and its first hunk, or its binary patch, or nothing more. Measured
+ * with git 2.52 (`test/cli/commands/runCheckpoint.test.ts` pins each kind of section). So `git apply` reads one path
+ * from the section, the one `--numstat` names.
+ */
+function foreignSectionHeader(section: Buffer): string | null {
+  const lines = section.toString("latin1").split(/\r?\n/);
+  if (lines.at(-1) === "") lines.pop();
+  const bodyAt = lines.findIndex((line, index) => index > 0 && (line.startsWith("@@ ") || line === "GIT binary patch"));
+  const header = lines.slice(1, bodyAt === -1 ? lines.length : bodyAt);
+  if (header.some((line) => /^(?:rename |copy |similarity index )/.test(line))) {
+    return "renames or copies a path, and git apply --numstat names only its new one, so the path it moves or reads from would be carried unlisted";
+  }
+  const names = diffGitNames(lines[0] ?? "");
+  if (names === null) {
+    return "does not name one path twice on its diff --git line, as every section this verb writes does, so a path git apply moves there would be carried unlisted";
+  }
+  const pairAt = header.findIndex((line) => line.startsWith("--- ") || line.startsWith("+++ "));
+  const modes = pairAt === -1 ? header : header.slice(0, pairAt);
+  const pair = pairAt === -1 ? [] : header.slice(pairAt);
+  const body = bodyAt === -1 ? undefined : lines[bodyAt];
+  const shaped = pair.length === 0 ? body === undefined || body === "GIT binary patch" : pair.length === 2 && body?.startsWith("@@ -") === true;
+  if (!shaped || !modes.every((line) => SECTION_HEADER_LINE.test(line))) {
+    return "has a header line this verb's own diffs never write, so what git apply does with it would be carried unchecked";
+  }
+  const label = (name: string): string => (name.includes(" ") ? `${name}\t` : name);
+  const adds = modes.some((line) => line.startsWith("new file mode "));
+  const deletes = modes.some((line) => line.startsWith("deleted file mode "));
+  if (pair.length === 2 && (pair[0] !== `--- ${label(adds ? "/dev/null" : names[0])}` || pair[1] !== `+++ ${label(deletes ? "/dev/null" : names[1])}`)) {
+    return "has a --- or +++ line that does not name its diff --git line's path (or /dev/null where it adds or deletes the file), so a path git apply moves there would be carried unlisted";
+  }
+  return null;
 }
 
 /**
