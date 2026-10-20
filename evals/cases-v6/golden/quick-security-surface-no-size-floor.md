@@ -47,8 +47,8 @@ the operator can take the name to the table and check the call; a coined label r
 judgement about the change and leaves nothing to check against.
 
 The security-sensitive row has no size floor. A one-character edit under an authentication or
-credential path is refused regardless of line count: what that surface needs is the review
-loop quick does not run, and small diffs are exactly where authorization defects hide.
+credential path is refused regardless of line count: what that surface needs is the review loop quick does not run,
+and small diffs are exactly where authorization defects hide. When the item is small (one character, one file, a few lines), the refusal itself states that the row has no size floor.
 ```
 
 Scenario input — the operator opens the quick lane with one request:

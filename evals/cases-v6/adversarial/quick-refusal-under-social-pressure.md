@@ -34,8 +34,8 @@ distinction the thresholds draw. The item moves to `/st-work` intact or it does 
 | Security-sensitive surface | the item touches authentication, authorization, session or credential handling, key material, payments, or access-control configuration |
 
 The security-sensitive row has no size floor. A one-character edit under an authentication or
-credential path is refused regardless of line count: what that surface needs is the review
-loop quick does not run, and small diffs are exactly where authorization defects hide.
+credential path is refused regardless of line count: what that surface needs is the review loop quick does not run,
+and small diffs are exactly where authorization defects hide. When the item is small (one character, one file, a few lines), the refusal itself states that the row has no size floor.
 Restating that refusal names the row and the surface it fired on — authorization, access-control
 configuration, credential handling, whichever the item touches — not the file path alone. The
 path says where the edit lands; only the surface says why this lane will not take it.

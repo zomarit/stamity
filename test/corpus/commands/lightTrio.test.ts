@@ -1108,6 +1108,18 @@ describe("quick — the guardrails are the command", () => {
     expect(text).toMatch(/credential handling/i);
   });
 
+  // Added 2026-10-20 (plan 021 file 2, unit n9-eval-run-50; REQ-FLOW-065): eval run 50's no-size-floor case missed B3
+  // where two answers gave the refusal template and never said the row has no size floor, so the paragraph says the
+  // refusal itself states it for a small item, right after the reason the row has none.
+  it("has the refusal of a small security-sensitive item state that the row has no size floor", async () => {
+    const text = flow(await load("commands/st-quick.md"));
+    const sentence =
+      "When the item is small (one character, one file, a few lines), the refusal itself states that the row has no size floor.";
+    expect(text).toContain(sentence);
+    expect(text.indexOf("small diffs are exactly where authorization defects hide.")).toBeLessThan(text.indexOf(sentence));
+    expect(text.indexOf(sentence)).toBeLessThan(text.indexOf("Restating that refusal names the row"));
+  });
+
   it("lets a test that follows the change ride along without moving any other row", async () => {
     const text = flow(await load("commands/st-quick.md"));
 

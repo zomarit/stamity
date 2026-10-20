@@ -2462,6 +2462,12 @@ rounds.
   file, and each repository's class file names the code that reads state back, here `src/merge/**`,
   `src/manifest/**`, `src/runs/ledgerStore.ts` and `src/cli/engine/gitStatus.ts` (`src/change/classify.ts:640-653`;
   `.stamity/change-classes.json:3-12`).
+- **Amended 2026-10-20** (plan 021 file 2, unit `n9-eval-run-50`; eval run 50's no-size-floor case). When the item is
+  small (one character, one file, a few lines), the refusal itself states that the `Security-sensitive surface` row
+  has no size floor. The sentence follows the reason the row has none, and the refusal template and its "measurement,
+  not a verdict" rule are unchanged (`content/commands/st-quick.md:86-91`, the sentence at `:88`).
+  - Proof: `test/corpus/commands/lightTrio.test.ts` ("has the refusal of a small security-sensitive item state that
+    the row has no size floor").
 - **Proof:** `test/change/classify.test.ts`, `test/cli/commands/gate.test.ts`, `test/roster/roster.test.ts`,
   `test/corpus/agents/specialists.test.ts`, `test/corpus/commands/work.test.ts`,
   `test/corpus/commands/lightTrio.test.ts`; QA.
