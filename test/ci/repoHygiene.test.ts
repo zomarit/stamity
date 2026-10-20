@@ -281,12 +281,23 @@ describe("repository hygiene over the Git index", () => {
   // again, as after the 1.9.0, 1.10.0, 1.11.0, 1.12.0 and 1.14.0 closes. The retirement proof grows
   // by one: run 47's summary joins the retired paths, staged over budget beside its same-directory
   // neighbour, and both must be refused. exemptedPaths still throws if the declaration moves.
-  it("names no size exception and refuses the retired run summaries like any other file", () => {
+  //
+  // TEST CHANGE, justified (2026-10-20, the 1.16.0 release): the 1.16.0 window opens two entries.
+  // Run 50 is the full 1.16.0 measure on the claude profile at candidate c526348a, FAIL on two floor
+  // cases (one of them an ungraded sample) and one benign twin; its exported summary is 6122535
+  // bytes, over the budget, and run 51, composed with it, reads it from the `records` branch, whose
+  // push runs this script from `main`. Run 51's entry precedes its artifact, which the map's comment
+  // allows. So the expected list is those two paths, and the case exercises both as the 1.14.0
+  // window's opening did: each exempted path passes over budget while its same-directory neighbour
+  // is refused. Only the expected list, its message and the title moved; the body already reads the
+  // exempt paths. The retirement proof is unchanged: every retired summary and its neighbour is
+  // still staged over budget and must be refused like any other file.
+  it("exempts exactly the run 50 and run 51 summaries and refuses their neighbours and the retired run summaries", () => {
     const exempt = exemptedPaths();
-    expect(
-      exempt,
-      "the size-exception map names a path; the 1.15.0 close retired the run 47 summary entry",
-    ).toEqual([]);
+    expect(exempt, "the size-exception map's paths are not the 1.16.0 window's run 50 and run 51 summaries").toEqual([
+      "evals/runs/2026-10-19-run-50/summary.json",
+      "evals/runs/2026-10-20-run-51/summary.json",
+    ]);
 
     const root = fixture();
     const retired = [
