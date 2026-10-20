@@ -2116,6 +2116,132 @@ describe("stamity run checkpoint", () => {
     expect(pushedFile(remote, PATCH)).toBe(committed);
   });
 
+  describe("a fresh clone that holds a new change keeps the branch's earlier sections (n14 P3, REQ-FLOW-105)", () => {
+    /** A clone of the run's branch beside the repository, so its push still maps to the case's remote, as review/6's case makes it. */
+    async function cloneRun(repo: string, remote: string): Promise<string> {
+      const clone = join(dirname(repo), "clone");
+      git(dirname(repo), ["clone", "-q", "--branch", RUN_BRANCH, remote, clone]);
+      await appendFile(join(clone, ".git", "config"), NO_AUTO_MAINTENANCE);
+      git(clone, ["config", "user.name", "Alice Example"]);
+      git(clone, ["config", "user.email", "alice@example.com"]);
+      git(clone, ["remote", "set-url", "origin", "https://github.com/o/r.git"]);
+      return clone;
+    }
+
+    /** The patch's sections, split at line-start `diff --git ` headers, as bytes. */
+    const sections = (patch: Buffer): Buffer[] => {
+      const text = patch.toString("latin1");
+      const starts = [...text.matchAll(/^diff --git /gm)].map((match) => match.index);
+      return starts.map((start, index) => patch.subarray(start, starts[index + 1] ?? patch.length));
+    };
+    const pushedBytes = (remote: string): Buffer =>
+      execFileSync("git", ["show", `refs/heads/${RUN_BRANCH}:${PATCH}`], { cwd: remote, stdio: ["ignore", "pipe", "pipe"] });
+
+    /** Applies `patch` to a checkout of `base`, after a `git apply --check` there, and returns that checkout. */
+    function applyOnBase(repo: string, base: string, patch: string): string {
+      const fresh = getRoot().path(`base-${Math.random().toString(36).slice(2, 8)}`);
+      git(repo, ["worktree", "add", "-q", "--detach", fresh, base]);
+      git(fresh, ["apply", "--check", patch]);
+      git(fresh, ["apply", patch]);
+      return fresh;
+    }
+
+    it("pushes a patch carrying the earlier section and the new one, in that order, held listing both, that applies on Base:", async () => {
+      const { repo, remote, base } = await seed("unattended");
+      await writeFile(join(repo, ".cursorrules"), "steered rules\n");
+      expect((await run(repo, CHECKPOINT)).code).toBe(0);
+      const [earlier] = sections(pushedBytes(remote));
+      const clone = await cloneRun(repo, remote);
+      await put(clone, ".github/workflows/x.yml", "on: push\n");
+
+      const { code, doc } = await run(clone, [...CHECKPOINT, "--paths", ".github/workflows/x.yml"]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [], held: [".cursorrules", ".github/workflows/x.yml"] });
+      const pushed = pushedBytes(remote);
+      expect((await readFile(join(clone, PATCH))).equals(pushed)).toBe(true);
+      const parts = sections(pushed);
+      expect(parts.map((part) => part.toString("utf8").split("\n")[0])).toEqual([
+        "diff --git a/.cursorrules b/.cursorrules",
+        "diff --git a/.github/workflows/x.yml b/.github/workflows/x.yml",
+      ]);
+      expect(earlier !== undefined && parts[0]?.equals(earlier)).toBe(true);
+      expect(pushedTree(remote)).not.toContain(".github/workflows/x.yml");
+      const fresh = applyOnBase(repo, base, join(clone, PATCH));
+      expect(await readFile(join(fresh, ".cursorrules"), "utf8")).toBe("steered rules\n");
+      expect(await readFile(join(fresh, ".github/workflows/x.yml"), "utf8")).toBe("on: push\n");
+
+      // Again on the same clone, the workflow named again: the patch it wrote is the one HEAD carries now, and comes out the same.
+      const again = await run(clone, ["checkpoint", "--run", RUN, "--paths", ".github/workflows/x.yml"]);
+
+      expect(again.code).toBe(0);
+      expect(again.stdout).toContain(
+        `held (in ${PATCH}; the work tree keeps them, save .cursorrules, whose sections are kept from an earlier checkpoint): .cursorrules, .github/workflows/x.yml\n`,
+      );
+      expect(pushedBytes(remote).equals(pushed)).toBe(true);
+    });
+
+    it("reads the earlier sections from HEAD's copy where the work tree's patch is gone, and refuses one a text read cannot carry whole", async () => {
+      const utf8 = await seed("unattended");
+      const latin1 = await seed("unattended");
+      await writeFile(join(utf8.repo, ".cursorrules"), "steered rules\n");
+      // "café" in Latin-1: its 0xE9 byte is no UTF-8, so HEAD's copy cannot pass the text read whole.
+      await writeFile(join(latin1.repo, ".cursorrules"), Buffer.from([0x63, 0x61, 0x66, 0xe9, 0x0a]));
+      // One at a time: each run swaps HOME and the identity variables in this process for its length.
+      expect((await run(utf8.repo, CHECKPOINT)).code).toBe(0);
+      expect((await run(latin1.repo, CHECKPOINT)).code).toBe(0);
+      const clones = await Promise.all([utf8, latin1].map(({ repo, remote }) => cloneRun(repo, remote)));
+      await Promise.all(clones.map(async (clone) => Promise.all([rm(join(clone, PATCH)), put(clone, ".github/workflows/x.yml", "on: push\n")])));
+      const [read, refused] = clones as [string, string];
+      const before = git(refused, ["rev-parse", "HEAD"]);
+
+      const kept = await run(read, [...CHECKPOINT, "--paths", ".github/workflows/x.yml"]);
+      const held = await run(refused, [...CHECKPOINT, "--paths", ".github/workflows/x.yml"]);
+
+      expect(kept.code).toBe(0);
+      expect(kept.doc).toMatchObject({ pushed: true, notDone: [], held: [".cursorrules", ".github/workflows/x.yml"] });
+      expect(sections(pushedBytes(utf8.remote)).map((part) => part.toString("utf8").split("\n")[0])).toEqual([
+        "diff --git a/.cursorrules b/.cursorrules",
+        "diff --git a/.github/workflows/x.yml b/.github/workflows/x.yml",
+      ]);
+      expect(held.code).toBe(1);
+      expect(held.doc).toMatchObject({
+        pushed: false,
+        notDone: [`hold failed: the kept ${PATCH} is not in the work tree, and HEAD's copy holds bytes this verb cannot read whole`],
+      });
+      expect(git(refused, ["rev-parse", "HEAD"])).toBe(before);
+    });
+
+    it("keeps a binary section whole, and a path held again takes the current diff in place of its earlier section", async () => {
+      const { repo, remote, base } = await seed("unattended");
+      // NUL bytes make git write the file as a base85 `GIT binary patch` section.
+      const binary = Buffer.from([0x00, 0x01, 0x02, 0xff, 0x00, 0x7f, 0x0a, 0x00, 0x10]);
+      await writeFile(join(repo, ".cursorrules"), "steered rules\n");
+      await mkdir(join(repo, ".github", "workflows"), { recursive: true });
+      await writeFile(join(repo, ".github/workflows/blob.bin"), binary);
+      expect((await run(repo, [...CHECKPOINT, "--paths", ".github/workflows/blob.bin"])).code).toBe(0);
+      const earlier = sections(pushedBytes(remote)).find((part) => part.toString("latin1").startsWith("diff --git a/.github/workflows/blob.bin "));
+      expect(earlier?.toString("latin1")).toContain("GIT binary patch");
+      const clone = await cloneRun(repo, remote);
+      await writeFile(join(clone, ".cursorrules"), "steered again\n");
+
+      const { code, doc } = await run(clone, CHECKPOINT);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [], held: [".cursorrules", ".github/workflows/blob.bin"] });
+      const parts = sections(pushedBytes(remote));
+      expect(parts).toHaveLength(2);
+      expect(earlier !== undefined && parts[0]?.equals(earlier)).toBe(true);
+      const rules = parts[1]?.toString("utf8") ?? "";
+      expect(rules.startsWith("diff --git a/.cursorrules b/.cursorrules\n")).toBe(true);
+      expect(rules).toContain("+steered again");
+      expect(rules).not.toContain("+steered rules");
+      const fresh = applyOnBase(repo, base, join(clone, PATCH));
+      expect((await readFile(join(fresh, ".github/workflows/blob.bin"))).equals(binary)).toBe(true);
+      expect(await readFile(join(fresh, ".cursorrules"), "utf8")).toBe("steered again\n");
+    });
+  });
+
   it.skipIf(process.platform === "win32")("holds a link added at a held glob's directory prefix, and pushes a link elsewhere (review/200)", async () => {
     const { repo, remote } = await seed("unattended");
     // A folder no glob holds, with the settings a client would read through `.claude`.

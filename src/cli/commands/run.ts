@@ -106,7 +106,9 @@ import { readPushed, scanChange } from "./gate.ts";
  * or retypes at a held path or at a held glob's directory prefix (`.claude`,
  * `.github/workflows`, any `.vscode`) is held the same way (review/200), and a
  * patch an earlier checkpoint committed is kept, its paths listed as held, while
- * the work tree holds no held change (review/6); refuses
+ * the work tree holds no held change (review/6), and where it does, that patch's
+ * sections for paths not held now are kept in order before the new ones, their
+ * paths listed as held, a path held again taking the current diff (n14); refuses
  * a path staged outside that list as `commit refused: <path> is staged and not
  * in --paths` (pr/5); commits (`--signoff` adding the DCO
  * line); in an unattended run refuses the push when a commit it would send
@@ -1001,6 +1003,8 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   let unsectioned: string[] = [];
   // review/6: the held paths a patch an earlier checkpoint committed names, kept and listed while no section is written.
   let kept: string[] = [];
+  // n14 (P3): the paths whose sections a patch the branch carries is kept for beside a new one, none held now.
+  let carried: string[] = [];
   // review/156: the index is read too, since the commit takes it: a held change staged or committed and then
   // undone in the work tree alone is still held.
   if (unattended) {
@@ -1016,8 +1020,9 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
     const sectioned = held.filter((path) => !bothAbsent.has(path));
     if (sectioned.length === 0) {
       // review/6 (signed off): a patch an earlier checkpoint committed is kept and listed until a checkpoint writes a
-      // new one, never dropped because the work tree holds no held change: a run continued on a fresh clone
-      // (REQ-FLOW-105) has its person-only change in that patch alone. One no commit carries leaves the folder.
+      // new one (which keeps its sections for paths not held then, n14), never dropped because the work tree holds no
+      // held change: a run continued on a fresh clone (REQ-FLOW-105) has its person-only change in that patch alone.
+      // One no commit carries leaves the folder.
       const committed = await committedPatchPaths(top, fromTop(patchRel), verb);
       if (typeof committed === "string") {
         result.notDone.push(committed);
@@ -1067,7 +1072,15 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
           result.notDone.push(`hold failed: git ${failed.step} answered ${failed.patch.code}: ${firstLine(failed.patch.stderr)}`);
           return finish(false);
         }
-        const parts = written.map(({ out }) => readFileSync(out));
+        // n14 (P3): a run continued on a fresh clone holds the earlier person-only change in the branch's patch alone,
+        // so a new patch keeps that patch's sections for paths not held now, in their order, before its own.
+        const earlier = await carriedSections(top, fromTop(patchRel), held, scratch, verb);
+        if (typeof earlier === "string") {
+          result.notDone.push(earlier);
+          return finish(false);
+        }
+        carried = earlier.paths;
+        const parts = [...earlier.sections, ...written.map(({ out }) => readFileSync(out))];
         try {
           await ctx.engine.merge.atomicWrite.atomicWriteFile(join(cwd, patchRel), Buffer.concat(parts), { boundaryDir: cwd });
         } catch (cause) {
@@ -1088,7 +1101,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
       result.held = held;
       unsectioned = held.filter((path) => bothAbsent.has(path));
     }
-    if (kept.length > 0) result.held = [...new Set([...kept, ...result.held])].toSorted();
+    if (kept.length > 0 || carried.length > 0) result.held = [...new Set([...kept, ...carried, ...result.held])].toSorted();
   }
   // Checked before it exists, since check-ignore reads the rules, not the file; named only once it does.
   const written = patches.filter((path) => isRegular(join(top, path)));
@@ -1102,7 +1115,9 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
       ? "held: none"
       : kept.length > 0
         ? `held (kept in ${patchRel} from an earlier checkpoint; the work tree holds no held change): ${list(heldNames)}`
-        : `held (in ${patchRel}; the work tree keeps them): ${list(heldNames)}`,
+        : carried.length > 0
+          ? `held (in ${patchRel}; the work tree keeps them, save ${list(carried)}, whose sections are kept from an earlier checkpoint): ${list(heldNames)}`
+          : `held (in ${patchRel}; the work tree keeps them): ${list(heldNames)}`,
   );
 
   // pr/46: what origin holds, read from the remote once, before the commit; unread, the push is held.
@@ -2102,6 +2117,68 @@ async function committedPatchPaths(top: string, patchFromTop: string, verb: stri
     return fields.length < 3 ? [] : [fields.slice(2).join("\t")];
   });
   return [...new Set(paths)].filter((path) => path !== "").toSorted();
+}
+
+/** Where each section of a patch starts: its offset, at a line-start `diff --git ` header. */
+function sectionStarts(patch: Buffer): number[] {
+  const header = Buffer.from("diff --git ");
+  const starts: number[] = patch.subarray(0, header.length).equals(header) ? [0] : [];
+  for (let at = patch.indexOf(`\n${header.toString()}`); at !== -1; at = patch.indexOf(`\n${header.toString()}`, at + 1)) starts.push(at + 1);
+  return starts;
+}
+
+/**
+ * n14 (P3): the sections of the held patch `HEAD` carries whose paths are none of `heldNow`, as bytes in the patch's
+ * order, and those paths; none where `HEAD` carries no patch. The patch is read from the copy the commit takes, as
+ * {@link committedPatchPaths} reads it: the work tree's where it is a regular file, else `HEAD`'s, which passes a text
+ * decode and so is refused where that decode is not whole. A section runs from one line-start `diff --git ` header to
+ * the next (a binary section's base85 lines hold no space, so it is kept whole), and `git apply --numstat -z`, which
+ * applies nothing, names its paths from its own bytes, written to `scratch`. A path held now takes the current diff,
+ * so its earlier sections go. Else the reason, for `notDone`.
+ */
+async function carriedSections(
+  top: string,
+  patchFromTop: string,
+  heldNow: readonly string[],
+  scratch: string,
+  verb: string,
+): Promise<{ sections: Buffer[]; paths: string[] } | string> {
+  const listed = await git(top, ["ls-tree", "-z", "HEAD", "--", patchFromTop], verb);
+  if (listed.code !== 0) return `hold failed: git ls-tree answered ${listed.code}: ${firstLine(listed.stderr)}`;
+  const blob = /^100(?:644|755) blob ([0-9a-f]{40,64})\t/.exec(listed.stdout)?.[1];
+  if (blob === undefined) return { sections: [], paths: [] };
+  const file = join(top, patchFromTop);
+  let patch: Buffer;
+  if (isRegular(file)) {
+    patch = readFileSync(file);
+  } else {
+    const shown = await git(top, ["cat-file", "blob", blob], verb);
+    if (shown.code !== 0) return `hold failed: git cat-file answered ${shown.code}: ${firstLine(shown.stderr)}`;
+    if (shown.stdout.includes("\uFFFD")) return `hold failed: the kept ${patchFromTop} is not in the work tree, and HEAD's copy holds bytes this verb cannot read whole`;
+    patch = Buffer.from(shown.stdout, "utf8");
+  }
+  const starts = sectionStarts(patch);
+  const sections = starts.map((from, index) => patch.subarray(from, starts[index + 1] ?? patch.length));
+  const mapped = await Promise.all(
+    sections.map(async (section, index): Promise<string[] | string> => {
+      const out = join(scratch, `carried-${index}.patch`);
+      writeFileSync(out, section);
+      const read = await git(top, ["apply", "--numstat", "-z", out], verb);
+      if (read.code !== 0) return `hold failed: the kept ${patchFromTop} could not be read (git apply answered ${read.code}: ${firstLine(read.stderr)})`;
+      // One `<added>\t<deleted>\t<path>` record, NUL-terminated; a rename's path field is empty, its two paths after it.
+      const [record = "", ...rest] = read.stdout.replace(/^\n+/, "").split("\0");
+      const named = record.split("\t").slice(2).join("\t");
+      const sectionPaths = (named === "" ? rest.slice(0, 2) : [named]).filter((path) => path !== "");
+      return sectionPaths.length === 0 ? `hold failed: a section of the kept ${patchFromTop} names no path` : sectionPaths;
+    }),
+  );
+  const failed = mapped.find((paths) => typeof paths === "string");
+  if (typeof failed === "string") return failed;
+  const keep = mapped.map((paths) => typeof paths !== "string" && !paths.some((path) => heldNow.includes(path)));
+  return {
+    sections: sections.filter((_, index) => keep[index] === true),
+    paths: [...new Set(mapped.flatMap((paths, index) => (keep[index] === true && typeof paths !== "string" ? paths : [])))].toSorted(),
+  };
 }
 
 /**
