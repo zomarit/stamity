@@ -292,12 +292,20 @@ describe("repository hygiene over the Git index", () => {
   // is refused. Only the expected list, its message and the title moved; the body already reads the
   // exempt paths. The retirement proof is unchanged: every retired summary and its neighbour is
   // still staged over budget and must be refused like any other file.
-  it("exempts exactly the run 50 and run 51 summaries and refuses their neighbours and the retired run summaries", () => {
+  //
+  // TEST CHANGE, justified (2026-10-20, the 1.16.0 close): the case asserted the 1.16.0 window's
+  // two entries, run 50's and run 51's summaries; the 1.16.0 close archived both into
+  // evidence-archive-2026-10-20 and compacted them on the `records` branch, so the entries retired
+  // and the expected list is empty again, as after the 1.9.0, 1.10.0, 1.11.0, 1.12.0, 1.14.0 and
+  // 1.15.0 closes. The retirement proof grows by two: both summaries join the retired paths, each
+  // staged over budget beside its same-directory neighbour, and all must be refused. exemptedPaths
+  // still throws if the declaration moves.
+  it("names no size exception and refuses the retired run summaries like any other file", () => {
     const exempt = exemptedPaths();
-    expect(exempt, "the size-exception map's paths are not the 1.16.0 window's run 50 and run 51 summaries").toEqual([
-      "evals/runs/2026-10-19-run-50/summary.json",
-      "evals/runs/2026-10-20-run-51/summary.json",
-    ]);
+    expect(
+      exempt,
+      "the size-exception map names a path; the 1.16.0 close retired the run 50 and run 51 summary entries",
+    ).toEqual([]);
 
     const root = fixture();
     const retired = [
@@ -314,6 +322,8 @@ describe("repository hygiene over the Git index", () => {
       "evals/runs/2026-10-11-run-45/summary.json",
       "evals/runs/2026-10-12-run-46/summary.json",
       "evals/runs/2026-10-15-run-47/summary.json",
+      "evals/runs/2026-10-19-run-50/summary.json",
+      "evals/runs/2026-10-20-run-51/summary.json",
     ];
     const neighbours = [...exempt, ...retired].map((path) => path.replace(/[^/]+$/, "inputs.json"));
     const refused = [...retired, ...neighbours];
