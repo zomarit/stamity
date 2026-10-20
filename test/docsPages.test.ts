@@ -5019,6 +5019,34 @@ describe("docs/cloud.md", () => {
     );
     expect(current).not.toContain("one-minute check in an interactive Claude Code session beside it");
   });
+
+  // ADDED 2026-10-20 (plan 021 file 2, unit n11-cloud-setup-page; REQ-PROVE-043): the first cloud checks, on
+  // 2026-10-19 (the run record's 23:15Z entry), stopped at the pre-flight. Claude Code on the web ran Node 22.22.0,
+  // below the engines floor (`node-engine`), and its git pushed over https with no credential helper (`direct-push`);
+  // Cursor's origin push URL carried its own credentials (`direct-push`). Each cloud's "Set it up" names what its
+  // environment needs. The floor the page names is read off `package.json`, so an engines move fails here.
+  it("names what each cloud's setup needed at the first cloud checks: the Node floor, gh's helper, a plain origin", () => {
+    const pkg = JSON.parse(read("package.json")) as { engines?: { node?: string } };
+    const floor = /^>=\s*(\d+\.\d+\.\d+)$/.exec(pkg.engines?.node ?? "")?.[1];
+    expect(floor, `package.json's engines.node is not a >= floor: ${pkg.engines?.node ?? "absent"}`).toBeDefined();
+    const claude = flowed(sectionOf(sectionOf(cloudPage(), "## Claude Code on the web"), "### Set it up"));
+    expect(claude).toContain(`The environment needs a Node of at least the CLI's engines floor, ${floor ?? ""}`);
+    expect(claude).toContain(
+      "on 2026-10-19 the cloud's own Node was 22.22.0, and the pre-flight's `node-engine` check refused it",
+    );
+    expect(claude).toContain(
+      "run `gh auth setup-git` in the cloud environment before the run starts, so that `gh` is origin's credential helper",
+    );
+    expect(claude).toContain("by default git pushed origin over https with no credential helper, and `direct-push` refused");
+    const cursor = flowed(sectionOf(sectionOf(cloudPage(), "## Cursor's cloud agents"), "### Set it up"));
+    expect(cursor).toContain("The saved environment's origin URL must not carry credentials");
+    expect(cursor).toContain(
+      "set origin's URL, and its push URL where one is set, to the repository's plain https URL, then run `gh auth setup-git`",
+    );
+    expect(cursor).toContain(
+      "on 2026-10-19 Cursor's origin push URL carried its own credentials, which cannot be tied to `gh`'s identity, and `direct-push` refused",
+    );
+  });
 });
 
 // ADDED 2026-10-19 (plan 021 file 2, unit w7-action-pages; REQ-FLOW-113, REQ-FLOW-104). Since w6 Claude Code's hook

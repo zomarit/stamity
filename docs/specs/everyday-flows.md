@@ -3775,6 +3775,14 @@ the default branch, read by REST; `run start` leaves it for a branch of the run'
   `:105-106`).
   - Proof: `test/corpus/skills/unattended.test.ts` ("names the pull request as the person's hand-off in the final
     message").
+- **Amended 2026-10-20** (plan 021 file 2, unit `n10-refused-title`; written by `n11-cloud-setup-page`; the cloud
+  checks of 2026-10-19, where Cursor's draft pull request read `Refused: Refused: …`). With `--refused`, `stamity run
+  end` prefixes the draft pull request's title with `Refused: ` only when the title does not already begin with
+  `Refused:` once leading white space is set aside, so a title the agent already wrote as `Refused: …` is used as given
+  and never reads `Refused: Refused: …`; a lower-case `refused:` is still prefixed. The title screen reads the final
+  title as before, and a pull request already open keeps its own title as before (`src/cli/commands/run.ts:1225-1227`).
+  - Proof: `test/cli/commands/runEnd.test.ts` ("titles a refused run's pull request %j as %j, prefixing Refused:
+    once", five titles).
 - **Proof:** `test/runs/pullRequest.test.ts`, `test/cli/commands/run.test.ts`, `test/cli/commands/runCheckpoint.test.ts`,
   `test/cli/commands/runEnd.test.ts`, `test/cli/surface.e2e.test.ts`, `test/corpus/skills/unattended.test.ts`
   ("st-unattended — checkpoints and the ending").

@@ -83,6 +83,12 @@ lockfile is there. Locally it does nothing. The GitHub proxy refuses GraphQL, so
 that was reclaimed comes back fresh, and the review gate rebuilds its round counter from the run
 record on the branch.
 
+The environment needs a Node of at least the CLI's engines floor, 22.22.2: on 2026-10-19 the
+cloud's own Node was 22.22.0, and the pre-flight's `node-engine` check refused it. Also run
+`gh auth setup-git` in the cloud environment before the run starts, so that `gh` is origin's
+credential helper: by default git pushed origin over https with no credential helper, and
+`direct-push` refused.
+
 ### Protect the default branch
 
 The proxy refuses a tag push and a branch deletion, but not a branch push, the default branch's
@@ -124,8 +130,12 @@ units. `stamity check`'s `cloud-install` row prints the install lines, `node --v
 the CLI's global install at the version that generated the setup. Put them in the install step of
 the environment you saved in Cursor, with `STAMITY_UNATTENDED=1`, and give that environment a `gh`
 that is signed in and is origin's only credential helper, which the pre-flight's `direct-push`
-check needs. `init` and `sync` write no
-`.cursor/environment.json`, because a repository file replaces every environment saved there.
+check needs. The saved environment's origin URL must not carry credentials: in that install step,
+set origin's URL, and its push URL where one is set, to the repository's plain https URL, then run
+`gh auth setup-git`. The first check showed why: on 2026-10-19 Cursor's origin push URL carried its
+own credentials, which cannot be tied to `gh`'s identity, and `direct-push` refused. `init` and
+`sync` write no `.cursor/environment.json`, because a repository file replaces every environment
+saved there.
 
 ### Protect the default branch
 
