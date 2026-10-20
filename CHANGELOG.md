@@ -31,6 +31,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.16.0] - 2026-10-20
+
+### Upgrading from 1.15.0
+
+Take the update with the new release's `sync`, then `check`; add `--dry-run` to the `sync` first to
+read what it will write. Commit the setup before that `sync`: the upgrade is one-way, and git is
+where the previous files stay. The items below were read on 2026-10-20 from this release's `sync`,
+`check` and `clean --dry-run` on a project set up by the published 1.15.0 for all four clients and
+committed, and on one set up for Cursor, Copilot and Codex alone, with `STAMITY_NO_CLIENT_PROBE=1`
+set, and, for the way back, from 1.15.0's own `check`, `sync` and `clean --dry-run` after them. That
+run read no client's model list and opened no client session; an item that rests on either says it
+was not walked.
+
+- **Claude Code's hooks move under `.claude/hooks/stamity/`, and 1.15.0 then refuses the
+  manifest.** With Claude Code selected, the first `sync` writes eight files there, the seven hook
+  scripts and the agent tool policy document, and points every entry of `.claude/settings.json` at
+  them; the copies under `.stamity/generated/hooks/claude/` are still written, and no entry runs
+  them (under Changed). From then on 1.15.0's `check` exits 1, its `manifest` row failing with one
+  clause per file there, each "`ledger[…].path` \".claude/hooks/stamity/…\" lies outside the paths
+  a stamity release writes for infra rows (owner claude) — a ledger row authorises sync and clean
+  to delete or overwrite its path, so the row is refused", and its `next:` step offers `init`,
+  which you do not need; 1.15.0's `sync` and `clean --dry-run` exit 1 with `CONFIG_ERROR` and write
+  nothing. Without Claude Code, 1.15.0 still reads the manifest, and its `check` exits 1 on drift
+  (36 files would change and 18 are queued for reclaim on the setup walked), so a 1.15.0 `sync`
+  there would write its own files back. A team on mixed versions upgrades together.
+- **`.claude/settings.json` gains the person-only rows, with no notice and no `.bak`.** The `sync`
+  adds a `permissions` member to the file 1.15.0 wrote with hooks alone: 48 `deny` rows and 38
+  `ask` rows (under Changed). A row of yours is kept, as the item under Changed says; the walked
+  file had none. `clean --dry-run` removes the engine's hook entries and keeps every row, naming
+  those equal to an engine row ("It left the rows equal to the engine's in permissions.deny …") for
+  you to remove by hand. After the upgrade, attended, a merge, a tag or a publish asks for one
+  click on Claude Code, and a deletion or a force push is refused on every client (under Changed);
+  that was not walked in a client session.
+- **Every client's hook file changes, and Codex asks for a fresh review.** Cursor's
+  `.cursor/hooks.json` gains a `beforeShellExecution` entry for the person-only guard, a
+  `postToolUse` entry and a `stop` entry; Copilot's `.github/hooks/stamity.json` gains a second
+  `preToolUse` entry, on `bash|powershell`; Codex's `.codex/hooks.json` gains a `PreToolUse` entry
+  on `Bash`, and each command names the release (`@zomarit/stamity@1.16.0`). Codex trusts a hooks
+  file by its hash, so expect it to ask once in `/hooks` for a fresh review and to run none of the
+  file's hooks, the engine's guards included, until you give it; that is expected, not verified in
+  a Codex session.
+- **What the first `sync` writes.** On the four-client setup it created 25 files and updated 54:
+  the `st-unattended` skill in `.agents/skills/` and `.claude/skills/`, Copilot's `stamity-run`
+  entry agent (`.github/agents/stamity-run.agent.md`), Claude Code's hook copies, and the
+  person-only guard, Cursor's `stamity-context-once.mjs` and `stamity-cursor-continue.mjs` and
+  Claude Code's `stamity-cloud-readiness.mjs` and `stamity-unattended-ask-gate.mjs` under
+  `.stamity/generated/hooks/`. It overwrote four tracked files with no `.bak`, naming each in a
+  notice ("Overwrote AGENTS.md: git tracks the file with no uncommitted change, so its previous
+  content is in git history and the change shows in git status; no .bak was taken."): `AGENTS.md`,
+  `AGENTS.override.md` (with Codex selected), `.github/hooks/stamity.json` and
+  `.github/workflows/copilot-setup-steps.yml`. `CLAUDE.md` is rewritten with no notice, its
+  managed-block marker moving from `v1.15.0` to `v1.16.0`. The charter stays at invariants 1.3.0;
+  with Cursor selected `AGENTS.md` now ends on a `## Cursor Cloud specific instructions` block.
+  Copilot's setup steps gain `timeout-minutes: 30` and install the pinned CLI with
+  `npm install --global @zomarit/stamity@1.16.0`, so that workflow now reaches the npm registry.
+  `.gitignore` gains four lines, and the `sync` says so: `.stamity/preflight-canary.json`,
+  `.stamity/run-ended.json`, `.stamity/context-once/` and `.stamity/client-models.json`.
+- **What `check` prints after the upgrade.** It ends on
+  `drift: clean — every generated file matches what a sync would write`. The `plugin-duplicates`
+  row is gone (under Removed), and with Cursor selected a `cloud-install` row passes, naming the
+  two lines a Cursor cloud environment's install step runs: `node --version` and
+  `npm install --global @zomarit/stamity@1.16.0`.
+- **The way back to 1.15.0 is the commit taken before the upgrade, the whole tree.** With the
+  upgrade not committed, `git reset --hard` to that commit removes no file the upgrade created,
+  since git does not track them: on the four-client setup that left 25, and 1.15.0's `check` then
+  passed with them there. List them with `git status --untracked-files=all` and delete the ones the
+  upgrade created; `git clean` would delete untracked files of yours too. Restoring
+  `.stamity/manifest.json` alone is no way back: 1.15.0's `sync` then rewrites 54 files and leaves a
+  `.bak` beside 52 of them, but `.claude/settings.json` keeps the permission rows and gains
+  1.15.0's hook entries beside this release's, so with the copies under `.claude/hooks/stamity/`
+  still on disk every Claude Code hook 1.15.0 also writes runs twice, and 1.15.0's `check` passes,
+  naming none of it.
+- **Two moves of the manifest were not walked.** A 1.15.0 manifest that holds a client's model
+  list moves it to `.stamity/client-models.json` at the first `sync` (under Changed), and one that
+  still holds a `plugin` key loses it (under Removed). The walked setups held neither: no list was
+  read, and 1.15.0 writes no `plugin` key.
+
 ### Added
 
 - **An unattended mode, declared rather than guessed.** `--unattended`, or `STAMITY_UNATTENDED` set
@@ -163,6 +240,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its committed agent files carry, and its `check` reads no drift from them.
 - **`sync --dry-run` says the manifest schema "would be migrated"**, where it printed "migrated"
   while writing nothing.
+- **The 1.16.0 release eval run.** The release rule calls for a measure of the set: its cases moved,
+  and so did the model-facing text and the files the engine emits for each client. The run's id,
+  its status and its numbers land here with the run of record's move.
 
 ### Removed
 
@@ -2894,7 +2974,8 @@ as its item below says.
   emission (Claude, Cursor, Copilot, and Codex); the first-party packs; and the documentation
   site.
 
-[Unreleased]: https://github.com/zomarit/stamity/compare/v1.15.0...HEAD
+[Unreleased]: https://github.com/zomarit/stamity/compare/v1.16.0...HEAD
+[1.16.0]: https://github.com/zomarit/stamity/compare/v1.15.0...v1.16.0
 [1.15.0]: https://github.com/zomarit/stamity/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/zomarit/stamity/compare/v1.12.0...v1.14.0
 [1.12.0]: https://github.com/zomarit/stamity/compare/v1.11.0...v1.12.0
