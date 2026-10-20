@@ -227,8 +227,9 @@ was not walked.
   release writes: its rows under `.claude/hooks/stamity/` lie outside the paths 1.15 writes (the
   owned-path bound moves to version 3), so 1.15's `check` fails its `manifest` row naming each row,
   and its `sync` and `clean` stop with `CONFIG_ERROR` before they touch a file. A team on mixed
-  versions upgrades together. That refusal is read from 1.15.0's bound, not walked on a 1.15.0
-  install.
+  versions upgrades together. That refusal was walked on 2026-10-20 with 1.15.0's own `check`,
+  `sync` and `clean --dry-run`, as Upgrading from 1.15.0 reports; a 1.15.0 `clean` without
+  `--dry-run` was not run.
 - **One session detector names the session for the session start and the pre-flight.** The
   pre-flight's JSON `cloud` field now reads `CLAUDE_CODE_REMOTE` as a cloud session only when it is
   `true`, so a value of `1` reads `false`.
