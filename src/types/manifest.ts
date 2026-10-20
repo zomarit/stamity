@@ -205,8 +205,9 @@ export interface ModelConfig {
    * in memory only (REQ-LADDER-009): a verb fills it from the git-ignored cache
    * `.stamity/client-models.json` (`../cli/engine/clientModels.ts`) before it
    * plans, and `writeManifest` never writes it. A 1.15.0 manifest that still
-   * holds the key loads, and `sync` moves its lists to the cache. Emission and
-   * the drift gate read this copy and never spawn a client.
+   * holds the key loads, and every verb that writes the manifest moves its
+   * lists to the cache first. Emission and the drift gate read this copy and
+   * never spawn a client.
    */
   listed?: Partial<Record<Tool, ListedModels>>;
 }

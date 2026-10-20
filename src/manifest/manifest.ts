@@ -1217,8 +1217,9 @@ export async function writeManifest(
  * account's model lists live in the git-ignored cache
  * (`../cli/engine/clientModels.ts`), so {@link writeManifest} never writes the
  * key, whatever a caller carries in memory. A `models` block left empty is
- * dropped with it. A 1.15.0 manifest that still holds the key loads; `sync`
- * moves its lists to the cache before its write leaves them out.
+ * dropped with it. A 1.15.0 manifest that still holds the key loads; every
+ * verb that writes the manifest moves its lists to the cache before its write
+ * leaves them out.
  */
 export function withoutListedModels(manifest: SetupManifest): SetupManifest {
   if (manifest.models?.listed === undefined) return manifest;

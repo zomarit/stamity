@@ -680,9 +680,13 @@ them.
   lands before the cache, in the order `applySync` uses (`ensureGitignoreEntry` at `src/cli/commands/sync/engine.ts:1201`
   before the cache write at `:1362`). The helper writes through `writeIgnoredModelListCache`
   (`src/cli/engine/clientModels.ts:815-828`), and `init` writes after its own `ensureGitignoreEntry`
-  (`src/cli/commands/init/apply.ts:531`, `:534`). A rule that cannot be added leaves the cache unwritten: the run warns
-  that the lists held for this run only, and the caller's manifest write goes ahead. A cache that cannot be written also
-  warns on stderr from `config`, `add` and `clean --pack`, as from `sync` and `workspace sync`. Proof:
+  (`src/cli/commands/init/apply.ts:531`, `:534`). A rule that cannot be added leaves the cache unwritten (read again at
+  `b2351347`). `init`, `sync` and `config mcp add` add the rule themselves, with no catch
+  (`src/cli/commands/init/apply.ts:531`, `src/cli/commands/sync/engine.ts:1201`, `src/cli/commands/config/mcp.ts:479`),
+  so there the verb stops with the error and writes neither the cache nor the manifest. The helper's other callers
+  (`workspace sync`'s patch write, `config set`, `config detect`, `config mcp remove`, `add` and `clean --pack`) warn
+  that the lists held for this run only, and their manifest write goes ahead. A cache that cannot be written also warns
+  on stderr from `config`, `add` and `clean --pack`, as from `sync` and `workspace sync`. Proof:
   `test/cli/commands/config.test.ts` (the describe "config writes keep a 1.15.0 manifest's saved model lists"), the
   member cases in `test/cli/commands/workspace.test.ts`, `test/cli/commands/add.test.ts`,
   `test/cli/commands/clean.test.ts`, and `test/cli/commands/initApply.test.ts` (the describe "over a 1.15.0 manifest

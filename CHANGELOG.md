@@ -236,9 +236,9 @@ was not walked.
 - **The account's model lists leave the committed manifest for a git-ignored cache.** `init` and
   `sync` keep each client's model list in `.stamity/client-models.json`, which setup git-ignores, so
   one person's account no longer lands in the committed `.stamity/manifest.json`. A 1.15.0 manifest
-  that still holds its lists loads as before, and its next `sync` moves them to the cache and leaves
-  them out of the manifest, with no schema bump. A fresh clone, with no cache, keeps the model picks
-  its committed agent files carry, and its `check` reads no drift from them.
+  that still holds its lists loads as before, and the next verb that writes its manifest moves them
+  to the cache and leaves them out of it, with no schema bump. A fresh clone, with no cache, keeps
+  the model picks its committed agent files carry, and its `check` reads no drift from them.
 - **`sync --dry-run` says the manifest schema "would be migrated"**, where it printed "migrated"
   while writing nothing.
 - **Run 51 is the 1.16.0 release run, composed with run 50 on the `claude` profile: a composed

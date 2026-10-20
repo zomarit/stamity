@@ -91,7 +91,7 @@ restated per client. Claude Code maps every rung onto its own family aliases, th
 `fable`. Copilot and Codex take the first model of a priority list Stamity ships that the
 account's own model list holds: `init` and `sync` read that list from the client's CLI and
 keep it in `.stamity/client-models.json`, which setup git-ignores, so the manifest names no
-account's models (a 1.15.0 setup used to save it under `models.listed`, and the next `sync`
+account's models (a 1.15.0 setup used to save it under `models.listed`, and the next manifest write
 moves it). A client that does not answer keeps its cached list, and a checkout with none, a
 fresh clone among them, keeps the model its files already carry; `STAMITY_NO_CLIENT_PROBE=1` in
 the environment skips every read. With no list read, Copilot and Codex take the first model of
