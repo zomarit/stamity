@@ -962,6 +962,66 @@ describe("applyInit — the client model lists (REQ-LADDER-006)", () => {
     expect((await readManifest(root))?.models).toBeUndefined();
   });
 
+  // build/107: `init --force` over a 1.15.0 manifest resolved its lists from the manifest it composes,
+  // so a list the 1.15.0 manifest saved for a client not read this run was dropped, not moved, and
+  // `model-pins` read `unverified` until a `sync` read that client. It now moves them as `sync` does.
+  describe("over a 1.15.0 manifest that saves its lists, under --force", () => {
+    const saved = { codex: { ids: ["gpt-6-sol", "gpt-6-luna"], source: "codex-debug-models" } };
+    const cacheFile = join(".stamity", "client-models.json");
+    const manifestFile = join(".stamity", "manifest.json");
+
+    /** A setup init wrote, its manifest then given back the `models.listed` a 1.15.0 manifest saved. */
+    async function seed115(): Promise<string> {
+      const root = await makeRepo();
+      const options = { decisions: decisionsFor(root, { tools: ["codex"], toolsSource: "flag" as const }), env: { STAMITY_NO_CLIENT_PROBE: "1" } };
+      await applyInit(optionsFor(root, options));
+      const manifest = JSON.parse(await readFile(join(root, manifestFile), "utf8")) as Record<string, unknown>;
+      await writeFile(join(root, manifestFile), `${JSON.stringify({ ...manifest, models: { listed: saved } }, null, 2)}\n`);
+      expect((await readManifest(root))?.models?.listed).toEqual(saved);
+      return root;
+    }
+
+    it("moves them to the cache, ignore rule first, and writes the manifest without the key, with no client read", async () => {
+      const root = await seed115();
+      await writeFile(join(root, ".gitignore"), ".env.mcp\n");
+      const { lister, asked } = tableLister({});
+
+      const report = await applyInit(
+        optionsFor(root, {
+          decisions: decisionsFor(root, { tools: ["codex"], toolsSource: "flag" }),
+          env: { STAMITY_NO_CLIENT_PROBE: "1" },
+          listModels: lister,
+          force: true,
+          now: LATER_NOW,
+        }),
+      );
+
+      expect(asked).toEqual([]);
+      expect(JSON.parse(await readFile(join(root, cacheFile), "utf8"))).toEqual({ listed: saved });
+      expect((await readFile(join(root, ".gitignore"), "utf8")).split("\n")).toContain(".stamity/client-models.json");
+      expect(await readFile(join(root, manifestFile), "utf8")).not.toContain('"listed"');
+      expect(report.warnings.filter((line) => line.includes("client-models.json"))).toEqual([]);
+    });
+
+    it("moves nothing under --dry-run", async () => {
+      const root = await seed115();
+      const before = await readFile(join(root, manifestFile), "utf8");
+
+      await applyInit(
+        optionsFor(root, {
+          decisions: decisionsFor(root, { tools: ["codex"], toolsSource: "flag" }),
+          env: { STAMITY_NO_CLIENT_PROBE: "1" },
+          force: true,
+          dryRun: true,
+          now: LATER_NOW,
+        }),
+      );
+
+      expect(await readFile(join(root, manifestFile), "utf8")).toBe(before);
+      expect(existsSync(join(root, cacheFile))).toBe(false);
+    });
+  });
+
   it("caps a flooded listing and drops every id without a model id's shape", async () => {
     const flood = Array.from({ length: 500 }, (_, index) => `model-${index}`);
     const hostile = ["a\nb", "two words", "", "-leading-dash", "x".repeat(101), 'quote"d', "model-0"];

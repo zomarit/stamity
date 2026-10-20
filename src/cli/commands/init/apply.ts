@@ -274,18 +274,22 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
     await listerTreeRoot(rootDir),
     opts.listModels,
   );
-  const modelLists = await resolveModelLists(rootDir, composed, fresh);
+  // The previous manifest is read once, here: its pack rows are carried below,
+  // its co-owned rows say what the engine owns inside each co-owned document,
+  // so a re-init keeps an owner's entries the way a sync does (REQ-FLOW-036),
+  // and the lists a 1.15.0 manifest still saves under `models.listed` are
+  // resolved under the cache and the fresh read as `sync` resolves them, so
+  // they move to the cache with this run's write rather than being dropped
+  // with the manifest it replaces (build/107).
+  const previous = force ? await readPreviousManifest(rootDir) : null;
+  const saved = previous?.models?.listed;
+  const modelLists = await resolveModelLists(rootDir, saved === undefined ? composed : withModelLists(composed, saved), fresh);
   const manifest = withModelLists(composed, modelLists.effective);
 
   // Installed packs survive a re-init, so their ledger rows must too. Seeded
   // BEFORE the emission plan below, because every consumer downstream reads the
   // packs off this ledger: the planner projects their content, and the MCP
   // ownership question at `packServers` resolves their servers.
-  //
-  // The previous manifest is read once, here: its pack rows are carried, and its
-  // co-owned rows say what the engine owns inside each co-owned document, so a
-  // re-init keeps an owner's entries the way a sync does (REQ-FLOW-036).
-  const previous = force ? await readPreviousManifest(rootDir) : null;
   if (force) manifest.ledger = [...manifest.ledger, ...(await carriedPackRows(rootDir, previous))];
 
   // State directories: probe first so the report lists only what this run adds.
