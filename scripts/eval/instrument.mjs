@@ -156,18 +156,25 @@ export function parseRubric(raw, historicalCases) {
 const word = character => /[\p{L}\p{N}]/u.test(character ?? '')
 const apostrophe = (text, at) => /['’]/.test(text[at]) && word(text[at - 1]) && word(text[at + 1])
 
-function quotedPhrases(text) {
+// `backslashCloses` is the second reading: a backslash right before a closing mark is the
+// span's last character (a shell line's continuation), not an escape. It reads nothing
+// when it leaves a mark unclosed, so it never stretches an escaped quote into a prefix.
+function quotedPhrases(text, backslashCloses = false) {
   const phrases = [], closing = { '"': '"', '“': '”', "'": "'", '‘': '’', '`': '`' }
   for (let start = 0; start < text.length; start++) {
     const endMark = closing[text[start]]
     if (!endMark || apostrophe(text, start) || text[start - 1] === '\\') continue
+    let closed = false
     for (let end = start + 1; end < text.length; end++) {
-      if (text[end] !== endMark || apostrophe(text, end) || text[end - 1] === '\\') continue
+      if (text[end] !== endMark || apostrophe(text, end)) continue
+      if (text[end - 1] === '\\' && !(backslashCloses && text.slice(start + 1, end - 1).trim())) continue
       if (text.slice(start + 1, end).trim()) phrases.push({ text: text.slice(start + 1, end), start: start + 1, end,
         code: text[start] === '`' })
       start = end
+      closed = true
       break
     }
+    if (backslashCloses && !closed) return null
   }
   return phrases
 }
@@ -741,8 +748,16 @@ function orderedSpans(citation, phrases, transcript, source, normalized) {
     presentationChanges: [...new Set(located.flatMap(evidence => evidence.presentationChanges ?? []))] }
 }
 
+/** The escape reading first, so nothing it admits reads differently; only when it locates
+ *  nothing is a backslash before a closing mark read as the span's own last character. */
 export function locateCitation(citation, transcript, verdict) {
-  const phrases = quotedPhrases(citation)
+  const evidence = locateReading(citation, transcript, verdict, quotedPhrases(citation))
+  if (evidence || !/\\["”'’`]/.test(citation)) return evidence
+  const closing = quotedPhrases(citation, true)
+  return closing && locateReading(citation, transcript, verdict, closing)
+}
+
+function locateReading(citation, transcript, verdict, phrases) {
   // Rubric v7 form 2 quotes the terms that were searched for, so a citation that *opens* with
   // the search — the whole claim being the search and its negative result — is read as the
   // search it is, before its terms are read as a quotation of the transcript. A citation that
@@ -805,7 +820,7 @@ export function locateCitation(citation, transcript, verdict) {
   // the line reference, as the fallback for a citation that quotes nothing locatable.
   if (searchVerb.test(citation) && negativeResult.test(citation))
     return { kind: 'reported-negative-search', citationSha256: sha256(citation), transcriptSha256: sha256(transcript),
-      termsPresent: quotedPhrases(citation).map(phrase => phrase.text).filter(text => transcript.includes(text)) }
+      termsPresent: phrases.map(phrase => phrase.text).filter(text => transcript.includes(text)) }
   if (verdict === 'fail' && reportedSilence.test(citation))
     return { kind: 'reported-silence', citationSha256: sha256(citation), transcriptSha256: sha256(transcript) }
   // Last, and only for a citation that quotes nothing: a failed quotation is a failed
