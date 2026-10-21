@@ -4426,9 +4426,9 @@ describe("the guides", () => {
     // prints the card only with its hooks enabled and trusted, and no measured `codex exec` run
     // has ever run a project hook: none on codex-cli 0.154.0 (2026-09-15) and none in 3 of 3
     // runs on 0.155.1 (2026-09-30), the cause not isolated, since the project was trusted only
-    // through a per-invocation override (learning codex-hooks-default-on-and-codex-exec-ran-none,
-    // which replaced codex-hooks-need-the-features-flag-and-exec-runs-none). All three loading
-    // steps are named, since a reply naming only the flag is the half-answer that learning
+    // through a per-invocation override (the measurement src/adapters/codex.ts's hook-enforcement
+    // cap and docs/troubleshooting.md's "Your Codex hook never runs" carry). All three loading
+    // steps are named, since a reply naming only the flag is the half-answer that measurement
     // records.
     const text = read(GETTING_STARTED).replace(/\s+/g, " ");
     expect(text).toContain("Run it on Codex too when its hooks are not running");

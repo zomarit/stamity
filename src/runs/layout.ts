@@ -46,8 +46,8 @@ export const REPORT_ROLES = [
  * A persisted report's file name: `<pass>-<role>-r<N>.md`.
  *
  * The negative lookahead is not style. Claude Code refuses a sub-agent's write
- * whose basename starts with one of those four words (learning
- * `claude-code-refuses-sub-agent-report-file-names`), so a name the pattern
+ * whose basename starts with one of those four words (the refusal
+ * `src/runs/ledgerStore.ts`'s report check names), so a name the pattern
  * admitted but the client refused would be a report nobody could write.
  */
 export const REPORT_NAME_PATTERN: RegExp = new RegExp(

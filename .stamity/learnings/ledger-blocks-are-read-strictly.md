@@ -3,7 +3,7 @@ id: ledger-blocks-are-read-strictly
 title: ledger blocks are read strictly
 date: 2026-10-11
 confidence: high
-summary: ledger append refuses a findings block for one summary over 300 characters; ledger close --report refuses any key but ledger_id, status, rationale, an id not handed in, and a report name with a suffix
+summary: ledger append refuses a findings block for one summary over 300 characters; ledger close --report refuses unknown keys, ids not handed in, suffixed report names
 reviewBy: 2027-01-11
 validatedAgainst: "src/runs/blocks.ts (the 300-character summary cap; the closures keys ledger_id, status and an optional non-empty rationale) and src/runs/ledgerStore.ts (the handed-ids refusal) read at ec6eddcf; the refusals in the record of run 2026-10-10_next-tier (search it for the word refused): summaries of 305, 320 and 345 characters, one closures block with unknown keys, one report named with a suffix"
 integrity: sha256:dedc04c54ab08d160aaa173f579ae3162d1904cb7d9d6ae12fb10e916dc72320

@@ -3,7 +3,7 @@ id: plain-node-imports-of-src-need-erasable-syntax
 title: plain-node imports of src need erasable syntax
 date: 2026-10-11
 confidence: high
-summary: scripts/ci/records-only.mjs loads src/change by Node type stripping; since 2026-10-10 erasableSyntaxOnly makes typecheck refuse an enum or parameter property, and one closure test runs the import
+summary: scripts/ci/records-only.mjs loads src/change by Node type stripping, so erasableSyntaxOnly refuses an enum or parameter property; one closure test runs it
 reviewBy: 2027-01-11
 validatedAgainst: "tsconfig.json:20 (erasableSyntaxOnly), scripts/ci/records-only.mjs:38 (the import of src/change/classify.ts) and the closure run in test/ci/recordsOnly.test.ts, read at ec6eddcf; the three TS1294 errors and the two planted cases of unit f1-erasable-guard in run 2026-10-10_next-tier (commit 8dd39af0)"
 integrity: sha256:bb172e623c03e1dc2b831212f4adf8c377b1e5fe612b28d90cd060ab965ad118
