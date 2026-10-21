@@ -13,8 +13,10 @@ import {
 
 /**
  * The second half of the verify axis set — scalability, performance,
- * maintainability, enhancability, product-spec — plus the three standalone
- * tool skills: browser-evidence, design-system-detect, dep-audit.
+ * maintainability, enhancability, product-spec — plus the standalone tool
+ * skill dep-audit. browser-evidence and design-system-detect, the other two
+ * tool skills this suite held, moved to the `frontend` pack (plan 018,
+ * u13-frontend-move), and their blocks to `test/packs/frontend.test.ts`.
  *
  * What this suite binds:
  *
@@ -28,10 +30,9 @@ import {
  *     descriptions competing over one domain is a routing defect, not a style
  *     one. Distinctive nouns are declared per skill and asserted in both
  *     directions: each description carries its own and none of its siblings'.
- *   - **The refusals.** For these three skills the refusal IS the skill —
- *     browser-evidence not installing, dep-audit not applying,
- *     design-system-detect not electing a token source. Deleting the sentence
- *     deletes the behavior, so the sentences are asserted.
+ *   - **The refusals.** For dep-audit the refusal IS the skill — dep-audit
+ *     not applying. Deleting the sentence deletes the behavior, so the
+ *     sentences are asserted.
  *
  * Prose assertions run against a whitespace-flattened view ({@link flow}) so a
  * reflowed paragraph is not a failure; structural assertions (headings, ids,
@@ -120,19 +121,11 @@ interface ToolSkill {
   distinctive: string[];
 }
 
+// TEST CHANGE, justified (u13-frontend-move, plan 018, REQ-PACK-007): browser-evidence and
+// design-system-detect left the core for the frontend pack, so their rows, and the two blocks
+// that read their bodies, moved to test/packs/frontend.test.ts, which also holds their nouns
+// and dep-audit's apart in both directions.
 const SKILLS: readonly ToolSkill[] = [
-  {
-    id: "browser-evidence",
-    relPath: "skills/st-browser-evidence/SKILL.md",
-    tags: ["review"],
-    distinctive: ["browser", "screenshot", "accessibility"],
-  },
-  {
-    id: "design-system-detect",
-    relPath: "skills/st-design-system-detect/SKILL.md",
-    tags: ["maintenance"],
-    distinctive: ["design", "tokens", "theming", "inventory"],
-  },
   {
     id: "dep-audit",
     relPath: "skills/st-dep-audit/SKILL.md",
@@ -144,7 +137,7 @@ const SKILLS: readonly ToolSkill[] = [
 /**
  * The verify skill's own distinctive trigger nouns. The verify `SKILL.md` is a
  * sibling unit's file, so the constant is declared here and locked to the file
- * below once it exists — the assertion that these three skills stay clear of
+ * below once it exists — the assertion that these skills stay clear of
  * verify's domain must hold whether or not that file has landed yet.
  */
 const VERIFY_DISTINCTIVE: readonly string[] = ["axis", "gate", "judgment"];
@@ -329,9 +322,9 @@ describe("tool skills — anti-shadowing on the trigger surface", () => {
     }
   });
 
-  it("keeps the verify skill clear of these three domains", async () => {
+  it("keeps the verify skill clear of the tool skills' domains", async () => {
     const verify = await optional(VERIFY_SKILL_PATH);
-    // Sibling unit's file. Absent, the assertion above still holds these three
+    // Sibling unit's file. Absent, the assertion above still holds these
     // clear of verify's nouns; present, this locks the constant to the corpus.
     if (verify === undefined) return;
 
@@ -561,187 +554,6 @@ describe("product-spec axis — spec tree as the subject", () => {
     expect(text).toContain("/st-spec");
     expect(text).toContain("`create`");
     expect(text).toMatch(/a starting condition, not a failure of this axis/i);
-  });
-});
-
-describe("browser-evidence — harness, not gate", () => {
-  it("stops and reports on a missing harness without an install instruction", async () => {
-    const file = await load("skills/st-browser-evidence/SKILL.md");
-    const text = flow(file);
-
-    expect(text).toMatch(/a missing harness stops the run/i);
-    expect(text).toContain("BLOCKED_DEPENDENCY");
-    expect(text).toMatch(/naming the absent package and the probe that found it absent/i);
-    expect(text).toMatch(/this skill adds no dependency and downloads no browser/i);
-    // The dependency manifest is the operator's file: a body carrying an install
-    // command would read as authorization to run it.
-    expect(file.parsed.body).not.toMatch(
-      /\b(?:npm|yarn|pnpm|bun|pip|poetry)\s+(?:install|add|i)\b|\bnpx\s+\S+\s+install\b/i,
-    );
-  });
-
-  it("gives every preflight probe a disposition and records a blocked one in the bundle", async () => {
-    const file = await load("skills/st-browser-evidence/SKILL.md");
-    const preflight = section(file, "Step 1 — Preflight");
-    const rows = preflight
-      .split("\n")
-      .filter((line) => line.startsWith("|"))
-      .map((line) => line.replace(/^\||\|$/g, "").split("|").map((cell) => cell.trim()));
-    const [header, separator, ...probes] = rows;
-
-    // Five probes, two dispositions: a run with a harness and no browser binary
-    // read as fine through Step 2 and reached Step 3 with nothing to drive.
-    expect(header).toEqual(["Probe", "Looks for", "Absent"]);
-    expect(separator?.[0]).toMatch(/^-+$/);
-    expect(probes).toHaveLength(5);
-    for (const probe of probes) {
-      expect(probe[2], `probe "${probe[0]}" states no disposition`).not.toBe("");
-    }
-    expect(probes.map((probe) => [probe[0], probe[2]])).toEqual([
-      ["Harness", "stops the run"],
-      ["Accessibility scanner", "Step 5 only"],
-      ["Serving path", "stops the run"],
-      ["Browser build", "stops the run"],
-      ["Surface", "no web surface"],
-    ]);
-
-    const text = flow(file);
-    // The recovery the skill forecloses is stated as foreclosed, for the binary
-    // as well as the package — and the block is auditable in the bundle rather
-    // than only in a token the operator never sees.
-    expect(text).toMatch(/An absent serving path and an absent browser build stop it the same way/i);
-    expect(text).toMatch(/A stopped preflight still writes the bundle/i);
-    expect(text).toMatch(/every probe lands in `probes\[\]`/i);
-    expect(text).toMatch(/the one that stopped the run carries `not-applicable`/i);
-    expect(text).toMatch(/leaves no record that the run happened/i);
-    // An absent surface is a different outcome from a blocked dependency.
-    expect(text).toMatch(/An absent surface is the "no web surface" case below, not a blocked dependency/i);
-  });
-
-  it("derives scenarios from acceptance criteria and refuses unanchored ones", async () => {
-    const text = flow(await load("skills/st-browser-evidence/SKILL.md"));
-
-    expect(text).toContain("docs/specs/");
-    expect(text).toMatch(/one scenario per given\/when\/then criterion/i);
-    expect(text).toMatch(/recording the requirement id it proves/i);
-    expect(text).toMatch(/a scenario with neither origin is not run/i);
-  });
-
-  it("reads failures only and keeps bulk output on disk", async () => {
-    const text = flow(await load("skills/st-browser-evidence/SKILL.md"));
-
-    expect(text).toMatch(/run against the built artifact rather than a development server/i);
-    expect(text).toMatch(/on a pass, read the summary count and nothing else/i);
-    expect(text).toMatch(/enter the bundle as paths/i);
-  });
-
-  it("reports a repo with no web surface as not-applicable, never a fabricated capture", async () => {
-    const file = await load("skills/st-browser-evidence/SKILL.md");
-    const text = flow(file);
-
-    // Edge case: nothing to drive. The probes are the evidence, and the bundle is
-    // still written so an absent surface is a recorded outcome.
-    expect(text).toMatch(/a repo with no runnable web surface reports `not-applicable`/i);
-    expect(text).toMatch(/lists every probe from step 1 with what it found/i);
-    expect(text).toMatch(/an absent surface is a recorded outcome, not a blank/i);
-    expect(text).toMatch(
-      /never describe a screenshot that was not captured, a scenario that was not run, or a violation count that was not measured/i,
-    );
-    expect(text).toMatch(/a row with no artifact path is deleted rather than narrated/i);
-  });
-
-  it("writes one sha-keyed bundle and hands interpretation back", async () => {
-    const output = section(
-      await load("skills/st-browser-evidence/SKILL.md"),
-      "Output artifact",
-    ).replace(/\s+/g, " ");
-
-    expect(output).toContain(".stamity/evidence/browser-<sha>.json");
-    expect(output).toMatch(/`-dirty` suffix on an unclean worktree/i);
-    expect(output).toContain("`probes[]`");
-    expect(output).toMatch(/two runs on one sha overwrite the same path/i);
-    expect(flow(await load("skills/st-browser-evidence/SKILL.md"))).toMatch(
-      /a harness, not a gate/i,
-    );
-  });
-});
-
-describe("design-system-detect — detection only", () => {
-  it("declares itself read-only and refuses generation", async () => {
-    const text = flow(await load("skills/st-design-system-detect/SKILL.md"));
-
-    expect(text).toMatch(/read-only detection/i);
-    expect(text).toMatch(/it writes no tokens, no components, and no themes/i);
-    expect(text).toMatch(/a detector that also generates cannot be trusted to report what it found/i);
-  });
-
-  it("lists three competing token sources, flags the conflict, and picks none", async () => {
-    const conflict = section(
-      await load("skills/st-design-system-detect/SKILL.md"),
-      "Competing token sources",
-    ).replace(/\s+/g, " ");
-
-    // Edge case: three sources. All three are recorded with evidence; electing a
-    // canonical one needs facts the detector cannot see.
-    expect(conflict).toMatch(/lists all three with `file:line`/i);
-    expect(conflict).toMatch(/marks the conflict, and picks none/i);
-    expect(conflict).toMatch(/electing a canonical source is an operator decision/i);
-    expect(conflict).toContain("blocked: competing token sources");
-  });
-
-  it("states one overlap-count rule instead of two answers for the multi-source case", async () => {
-    const file = await load("skills/st-design-system-detect/SKILL.md");
-    const conflict = section(file, "Competing token sources").replace(/\s+/g, " ");
-    const step2 = section(file, "Step 2 — Token source").replace(/\s+/g, " ");
-
-    // Step 2 said "first match wins" while this section said "picks none"; the
-    // boundary was drawn at three sources with no rule for exactly two, and
-    // every source still had to be marked canonical or conflicting.
-    expect(step2).not.toMatch(/first match wins/i);
-    expect(step2).toMatch(/The order is the reporting order, not an election/i);
-    expect(step2).toMatch(/a later match is never discarded for arriving second/i);
-
-    expect(conflict).toMatch(/One rule, keyed on how many sources define the SAME value category/);
-    expect(conflict).toMatch(/\*\*One source defines a category\*\* — that source is `canonical`/);
-    expect(conflict).toMatch(/\*\*Two or more define it\*\* — every one of them is marked `conflicting`/);
-    // The two-source case, which the three-source wording left unanswered.
-    expect(conflict).toMatch(/Two overlapping sources block exactly as five do/i);
-    expect(conflict).toMatch(/Several sources is not by itself a conflict/i);
-  });
-
-  it("lists the blocked verdict in the Step 5 table, not only seventeen lines later", async () => {
-    const file = await load("skills/st-design-system-detect/SKILL.md");
-    const verdicts = section(file, "Step 5 — Emit the inventory")
-      .split("\n")
-      .filter((line) => line.startsWith("|"))
-      .slice(2)
-      .map((line) => line.replace(/^\||\|$/g, "").split("|")[0]?.trim());
-
-    // Step 5 declared the verdict "one of" three rows; the Output section lists
-    // four and the pack consumer routes on four. The omitted row is the one
-    // that stops an irreversible write, so it is in the table a reader uses.
-    expect(verdicts).toEqual(["`reuse`", "`extend`", "`create`", "`blocked`"]);
-    expect(flow(file)).toMatch(/it is the row that stops an irreversible write/i);
-    expect(flow(file)).toMatch(/mints the parallel system this skill exists to prevent/i);
-  });
-
-  it("separates a negative probe from an absent probe", async () => {
-    const text = flow(await load("skills/st-design-system-detect/SKILL.md"));
-
-    expect(text).toMatch(/no dependency manifest does not mean no design system/i);
-    expect(text).toMatch(/looked and found nothing.*did not look/i);
-  });
-
-  it("emits one regenerated inventory at a stable path with a verdict", async () => {
-    const output = section(
-      await load("skills/st-design-system-detect/SKILL.md"),
-      "Output artifact",
-    ).replace(/\s+/g, " ");
-
-    expect(output).toContain(".stamity/design-system-inventory.md");
-    expect(output).toMatch(/regenerated in place rather than accumulating per-run copies/i);
-    expect(output).toMatch(/`reuse`, `extend`, `create`, or `blocked`/);
-    expect(output).toMatch(/records the commit it was generated from/i);
   });
 });
 

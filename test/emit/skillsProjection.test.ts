@@ -49,10 +49,10 @@ const FIXED_NOW = new Date("2026-08-13T12:00:00.000Z");
 const GHOST_ROOT = join(tmpdir(), `stamity-p4u02-ghost-${process.pid}`);
 
 /** Every shipped skill id, as authored in the bundled corpus's frontmatter. */
+// TEST CHANGE, justified (u13-frontend-move, plan 018): browser-evidence and design-system-detect
+// moved to the frontend pack (REQ-PACK-008), so the bundled corpus projects six of these, not eight.
 const ALL_SKILL_IDS = [
-  "browser-evidence",
   "dep-audit",
-  "design-system-detect",
   "handoff",
   "learn",
   "onboard",
@@ -116,7 +116,7 @@ async function projectFixture(
 // ── Real bundled corpus ──────────────────────────────────────────
 
 describe("projectSkills over the bundled corpus", () => {
-  it("projects all 8 skills under .agents/skills, st-verify with its full references subtree, path-sorted", async () => {
+  it("projects all 6 skills under .agents/skills, st-verify with its full references subtree, path-sorted", async () => {
     const rows = await projectSkills(contextOf(ALL_SKILL_IDS));
     const paths = pathsOf(rows);
 
@@ -1215,7 +1215,7 @@ describe("retargetProjection", () => {
     const source = await projectSkills(contextOf(ALL_SKILL_IDS));
     const native = retargetProjection(source, NATIVE_DIR);
 
-    // Non-degenerate: 8 skills, and `st-verify` alone contributes 11 rows.
+    // Non-degenerate: 6 skills, and `st-verify` alone contributes 11 rows.
     expect(source.length).toBeGreaterThan(ALL_SKILL_IDS.length);
     expect(native).toHaveLength(source.length);
 

@@ -163,15 +163,16 @@ describe("st-unattended — the head and the anatomy", () => {
     const description = String(frontmatterField(file.parsed, "description"));
     expect(description).toContain("Called by name from a flow whose record reads `Mode: unattended`");
     expect(description).toContain("never selected on its own");
-    // The eight shipped skills' exclusive trigger phrases (`flow.test.ts` TRIGGER_DOMAINS): borrowing
+    // The six other shipped skills' exclusive trigger phrases (`flow.test.ts` TRIGGER_DOMAINS): borrowing
     // one would make this skill compete for another's trigger.
+    // TEST CHANGE, justified (u13-frontend-move, plan 018): browser-evidence and design-system-detect
+    // moved to the frontend pack (REQ-PACK-008); their phrases are held clear of every core
+    // description, this one included, by test/packs/frontend.test.ts.
     for (const borrowed of [
       /first proven change/i,
       /handoff/i,
       /walk-through/i,
       /content-quality axis/i,
-      /browser/i,
-      /design system/i,
       /dependency audit/i,
       /learnings/i,
     ]) {

@@ -938,8 +938,8 @@ const singular = (noun: string): string => (noun.endsWith("s") ? noun.slice(0, -
  *
  * Counted through the engine's own catalog walk, not by listing files: the
  * catalog is what decides an artifact IS one. A skill is its directory, so
- * `content/skills/` holds 8 skills across 18 markdown files, and a raw file
- * count would state 18. The charter is the one piece of corpus content the
+ * `content/skills/` holds 7 skills across 19 markdown files, and a raw file
+ * count would state 19. The charter is the one piece of corpus content the
  * catalog does not index — it is not an addressable class — so it is counted
  * off disk to keep it in the same map.
  */

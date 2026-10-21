@@ -151,7 +151,7 @@ const SKILLS: readonly FlowSkill[] = [
 ];
 
 /**
- * The trigger domain each of the NINE shipped skills owns exclusively — one
+ * The trigger domain each of the SEVEN shipped skills owns exclusively — one
  * phrase per skill that appears in its own description and in no other's.
  *
  * The four-skill cases below hold the flow lane apart; this table is the wider
@@ -166,16 +166,6 @@ const TRIGGER_DOMAINS: readonly { id: string; relPath: string; phrase: RegExp }[
   { id: "handoff", relPath: "skills/st-handoff/SKILL.md", phrase: /handoff/i },
   { id: "qa", relPath: "skills/st-qa/SKILL.md", phrase: /walk-through/i },
   { id: "verify", relPath: "skills/st-verify/SKILL.md", phrase: /content-quality axis/i },
-  {
-    id: "browser-evidence",
-    relPath: "skills/st-browser-evidence/SKILL.md",
-    phrase: /browser/i,
-  },
-  {
-    id: "design-system-detect",
-    relPath: "skills/st-design-system-detect/SKILL.md",
-    phrase: /design system/i,
-  },
   { id: "dep-audit", relPath: "skills/st-dep-audit/SKILL.md", phrase: /dependency audit/i },
   { id: "learn", relPath: "skills/st-learn/SKILL.md", phrase: /learnings/i },
   // Added 2026-10-15 (u9-unattended-skill): the ninth skill, called by name from a run whose
@@ -282,7 +272,11 @@ describe("flow skills — frontmatter contract", () => {
 
 // TEST CHANGE, justified (u9-unattended-skill, 2026-10-15): the roster holds nine skills now;
 // the titles' count word follows TRIGGER_DOMAINS, whose rows are what the cases read.
-describe("skill roster — anti-shadowing across all nine descriptions", () => {
+// TEST CHANGE, justified (u13-frontend-move, plan 018): browser-evidence and
+// design-system-detect left the core for the frontend pack (REQ-PACK-008), so the roster
+// holds seven; their two rows, checked against every core description, moved to
+// test/packs/frontend.test.ts.
+describe("skill roster — anti-shadowing across all seven descriptions", () => {
   it("gives every skill an exclusive trigger domain", async () => {
     const files = await Promise.all(TRIGGER_DOMAINS.map((row) => load(row.relPath)));
     const descriptions = files.map(description);
@@ -301,7 +295,7 @@ describe("skill roster — anti-shadowing across all nine descriptions", () => {
     }
   });
 
-  it("opens all nine on different verbs", async () => {
+  it("opens all seven on different verbs", async () => {
     const files = await Promise.all(TRIGGER_DOMAINS.map((row) => load(row.relPath)));
     const leading = files.map((file) => description(file).split(/\s+/)[0]!.toLowerCase());
 

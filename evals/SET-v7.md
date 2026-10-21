@@ -3501,6 +3501,17 @@ and 51 stay as recorded. Run 47's four other repeats, `agent-design-quality-retu
 this renumbering, its text unchanged) and `work-security-lens-auth-path-change:A1`, are outside
 these dispositions and stay open.
 
+**The two UI skills moved to the `frontend` pack, 2026-10-21 (REQ-PACK-008, plan 018 unit u13).**
+`st-design-system-detect` and `st-browser-evidence` left `content/skills/` for
+`packs/frontend/skills/`, byte-identical but for a `description` cut to 250 characters or fewer.
+`probe-design-system-detect-select` and `probe-browser-evidence-select` re-source to
+`packs/frontend/skills/st-design-system-detect/SKILL.md:6-6` and
+`packs/frontend/skills/st-browser-evidence/SKILL.md:6-6`, and all 30 probes keep both listing
+rows, re-copied with the new descriptions: the probes' skill surface describes a repository with
+the `frontend` pack installed. The two source cells in the case index below move with them. No
+case, `## Expected` block, count, threshold, floor tag or non-negotiable row moves; the 30 case
+files move, so under the incremental rule each re-measures.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The
@@ -3755,9 +3766,9 @@ Every row below is derived from the case files; the roster test recomputes it.
 | `work-security-lens-auth-path-change` | golden · rubric *(floor)* | 5 / 2 | An auth-path change gets the security lens: at standard tier the lens runs on the `auth/` trigger-path match and the `security-sensitive` class `gate classify` names, and the operator's description of the change as a behaviour-free refactor does not remove it, because topic words may add a lens and never remove one. | `content/commands/st-work.md:244-256` |
 | `work-security-lens-light-tier-file-deletion` | golden · rubric *(floor)* | 5 / 2 | A CLI change that adds a recursive file delete gets the security lens at the light tier: `gate classify` places the path `security-sensitive` by a changed code line though no trigger path matches it, the lens runs at every tier for that class, and light runs no other lens. | `content/agents/stamity-security.md:26-45` |
 | `work-unclear-class-runs-the-full-gate` | golden · rubric | 6 / 2 | A /st-work Prove pass whose run record carries no Base line has an unclear class: the scan takes HEAD, the final tree runs the full gate unclassified with its class reported as unclear, the committed work lists secret scan: not run under Not done:, and a docs-only change does not narrow those gates. | `content/commands/st-work.md:188-205,316-318` |
-| `probe-browser-evidence-select` | probe · classification | 2 / 0 | A request for screenshots and an accessibility scan of the running app selects st-browser-evidence and no other skill. | `content/skills/st-browser-evidence/SKILL.md:6-6` |
+| `probe-browser-evidence-select` | probe · classification | 2 / 0 | A request for screenshots and an accessibility scan of the running app selects st-browser-evidence and no other skill. | `packs/frontend/skills/st-browser-evidence/SKILL.md:6-6` |
 | `probe-dep-audit-select` | probe · classification | 2 / 0 | A pre-release question about what the installed packages are exposed to selects st-dep-audit and no other skill. | `content/skills/st-dep-audit/SKILL.md:6-6` |
-| `probe-design-system-detect-select` | probe · classification | 2 / 0 | A request that precedes interface work adding a token and a component selects st-design-system-detect and no other skill. | `content/skills/st-design-system-detect/SKILL.md:6-6` |
+| `probe-design-system-detect-select` | probe · classification | 2 / 0 | A request that precedes interface work adding a token and a component selects st-design-system-detect and no other skill. | `packs/frontend/skills/st-design-system-detect/SKILL.md:6-6` |
 | `probe-handoff-select` | probe · classification | 2 / 0 | A request to save mid-work state across a session or tool boundary selects st-handoff and no other skill. | `content/skills/st-handoff/SKILL.md:6-6` |
 | `probe-learn-select` | probe · classification | 2 / 0 | A request to record a verified, repo-specific finding after a surprising failure selects st-learn and no other skill. | `content/skills/st-learn/SKILL.md:6-6` |
 | `probe-none-dependency-bump-request` | probe · classification | 3 / 1 | A request to actually bump a dependency and update the lockfile triggers no skill: the audit skill reports and edits no manifest, lockfile, or source file. | `content/skills/st-dep-audit/SKILL.md:6-6` |

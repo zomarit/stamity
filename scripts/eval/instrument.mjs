@@ -1086,7 +1086,8 @@ export function aggregate(cases, samples) {
   const floors = rows.filter(row => row.floor).map(row => ({ caseId: row.caseId, pass: row.pass }))
   // Probe recall is per skill the probe selects: one case each, correct when the case passed. A probe whose
   // answer is that NOTHING is selected names no skill, so it carries no recall row — `probe-none-*` for the
-  // eight shipped skills, `probe-rule-none-*` for the nine rules delivered on demand.
+  // eight skills a probe's listing carries (six core and the `frontend` pack's two), `probe-rule-none-*` for the
+  // nine rules delivered on demand.
   const perSkillRecall = rows.filter(row => row.group === 'probe' && !/^probe-(?:none|rule-none)-/.test(row.caseId))
     .map(row => {
       const skill = recallLabel(row.source)

@@ -2465,12 +2465,16 @@ describe("the shipped Codex emission under ruleDelivery: on-demand", () => {
       .map((row) => row.path.split("/").at(-2) ?? "");
     expect(touchpointDirs).toHaveLength(9);
     expect(new Set(dirs).size).toBe(dirs.length);
-    // What the client shows: the 17 rows of the 2026-10-03 measurement, no touchpoint
+    // What the client shows: the 15 rows of the full selection, no touchpoint
     // among them, and a total strictly below the whole tree's.
+    // TEST CHANGE, justified (u13-frontend-move, plan 018): design-system-detect and
+    // browser-evidence left the core for the frontend pack (REQ-PACK-008), so the core
+    // ships 6 shown skills beside the 9 rule-skills, 15 rows where the 2026-10-03
+    // measurement read 17.
     const shownDirs = shown
       .filter((row) => row.path.endsWith("/SKILL.md"))
       .map((row) => row.path.split("/").at(-2) ?? "");
-    expect(shownDirs).toHaveLength(17);
+    expect(shownDirs).toHaveLength(15);
     for (const dir of touchpointDirs) expect(shownDirs, dir).not.toContain(dir);
     expect(total).toBeLessThan(skillsListCharacters(listed));
 

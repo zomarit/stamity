@@ -17,6 +17,7 @@ import {
   verifyIntegrityMap,
   type PackManifest,
 } from "../../src/pack/manifest.ts";
+import { listBundledPackIds } from "../../src/pack/curated.ts";
 import { checkPermissions } from "../../src/pack/permissions.ts";
 import {
   assertDenyClean,
@@ -87,6 +88,10 @@ const VERIFY_SEAM = /\.stamity\/verify\/[a-z-]+-<sha>\.json/;
 
 const packFiles: Promise<CorpusFile[]> = walkAllMarkdown(PACK_ROOT);
 const corpusFiles: Promise<CorpusFile[]> = walkAllMarkdown();
+/** Every bundled pack's markdown, this one's included: a cross-reference may resolve into any pack. */
+const bundledPackFiles: Promise<CorpusFile[]> = Promise.all(
+  listBundledPackIds(join(REPO_ROOT, "packs")).map((id) => walkAllMarkdown(join(REPO_ROOT, "packs", id))),
+).then((perPack) => perPack.flat());
 
 const manifestRaw: Promise<string> = readFile(join(PACK_ROOT, PACK_MANIFEST_FILE), "utf8");
 const manifest: Promise<PackManifest> = manifestRaw.then((raw) =>
@@ -563,8 +568,9 @@ describe("scaffold pack — generator contract", () => {
     const body = bodyOf(await packFiles, "design-system-create");
 
     expect(body).toMatch(/\.stamity\/design-system-inventory\.md/);
-    // Contract change: the detect skill is core, so its live id is
-    // `st-design-system-detect`.
+    // Contract change: the detect skill's live id is `st-design-system-detect`;
+    // it ships in the `frontend` pack since plan 018 (u13-frontend-move), not in
+    // the core.
     expect(body).toMatch(/st-design-system-detect/);
     expect(body).toMatch(/performs no detection of its own/);
     // Verdict routing is consumed, not re-derived.
@@ -572,7 +578,7 @@ describe("scaffold pack — generator contract", () => {
       expect(body).toMatch(new RegExp(`\`${verdict}\``));
     }
 
-    // Detection-procedure vocabulary from the core detector: none of it may
+    // Detection-procedure vocabulary from the frontend pack's detector: none of it may
     // reappear here, or the pack would own a second, divergent detector.
     const detectionMarkers = [
       /detection order/i,
@@ -727,9 +733,15 @@ describe("scaffold pack — generator contract", () => {
 
 describe("scaffold pack — reference hygiene", () => {
   it("every cross-reference resolves to a live core or pack artifact", async () => {
+    // TEST CHANGE, justified (u13-frontend-move, plan 018): st-design-system-detect, which
+    // design-system-create names, moved from the core to the frontend pack (REQ-PACK-008), so the
+    // resolver reads the core and every bundled pack, not the core and this pack alone.
+    const everyPack = await bundledPackFiles;
+    expect(everyPack.some((file) => file.relPath === "skills/st-design-system-detect/SKILL.md")).toBe(true);
     const known = new Set([
       ...(await corpusFiles).filter((file) => file.parsed.hadFrontmatter).map(declaredId),
       ...(await packFiles).map(declaredId),
+      ...everyPack.filter((file) => file.parsed.hadFrontmatter).map(declaredId),
     ]);
     const commandIds = new Set([
       ...(await corpusFiles)

@@ -3,6 +3,7 @@ import { appendFile, cp, readdir, readFile, rename, writeFile } from "node:fs/pr
 import { join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it, type TestContext } from "vitest";
+import { MOVED_CORE_SKILLS, MOVED_SKILL_FOLDERS, movedCoreSkill, movedRenderingAt } from "../../src/pack/moved.ts";
 import { makeCliFixture, type CliFixture } from "../support/cliHarness.ts";
 import { ensureDistBuilt } from "../support/distBuild.ts";
 import { seedGitRepo } from "../support/repoFixtures.ts";
@@ -84,13 +85,26 @@ const ENCODED_ROOTS: readonly string[] = [
 ];
 
 /**
- * The 1.14.0-owned paths this engine is expected to delete on the upgrade, each with why. Empty:
- * this engine retires no artifact a CLI-mode 1.14.0 setup emitted, so every path that tree owned
- * must still be on disk and owned after `sync`. An engine that drops an artifact on purpose names
- * its path here, with the reason, in the change that drops it; any other missing path (a client's
- * tree, the charter, a guard hook) fails the case.
+ * The 1.14.0-owned paths this engine is expected to delete on the upgrade, each with why. An engine
+ * that drops an artifact on purpose names its path here, with the reason, in the change that drops
+ * it; any other missing path (a client's tree, the charter, a guard hook) fails the case.
+ *
+ * TEST CHANGE, justified (u13-frontend-move, plan 018, REQ-PACK-008): design-system-detect and
+ * browser-evidence left the core for the `frontend` pack, so the core no longer renders them and
+ * the upgrade reclaims their eight core copies (two files each, under `.agents/skills/` and
+ * `.claude/skills/`). The paths come from `src/pack/moved.ts`, the table whose frozen digests are
+ * the reclaim's proof; the case below also holds each reclaimed file's 1.14.0 bytes to that digest.
  */
-const EXPECTED_RECLAIMS: ReadonlyMap<string, string> = new Map<string, string>();
+const EXPECTED_RECLAIMS: ReadonlyMap<string, string> = new Map<string, string>(
+  MOVED_CORE_SKILLS.flatMap((skill) =>
+    MOVED_SKILL_FOLDERS.flatMap((folder) =>
+      Object.keys(skill.renderings).map((file): [string, string] => [
+        `${folder}/st-${skill.id}/${file}`,
+        `moved from the core to the ${skill.pack} pack in ${skill.since}; its bytes are the frozen core rendering`,
+      ]),
+    ),
+  ),
+);
 
 /**
  * One user element inside a co-owned JSON file, as an operator adds it after a 1.14.0 init:
@@ -442,13 +456,27 @@ describe("a 1.14.0 tree upgrades through the current sync and check (node dist/c
       for (const path of reclaimed) {
         expect(ownedAfter.has(path), `${path} was reclaimed yet is still in the ledger`).toBe(false);
       }
+      // TEST CHANGE, justified (u13-frontend-move): the reclaims are the two moved skills' eight core
+      // copies, four per client folder, and each one's 1.14.0 bytes are the frozen rendering
+      // `src/pack/moved.ts` holds for it, the bytes the reclaim's proof reads.
+      expect(reclaimed).toHaveLength(8);
+      for (const folder of MOVED_SKILL_FOLDERS) {
+        expect(reclaimed.filter((path) => path.startsWith(`${folder}/`)), folder).toHaveLength(4);
+      }
+      for (const path of reclaimed) {
+        const skill = movedCoreSkill(path.split("/")[2]?.replace(/^st-/, "") ?? "");
+        expect(skill, `${path} is no moved skill's copy`).toBeDefined();
+        expect(before.get(path), `${path} is not the frozen core rendering`).toBe(
+          movedRenderingAt(skill!, path),
+        );
+      }
       for (const path of afterFirst.keys()) {
         if (before.has(path) || path === MANIFEST_REL) continue;
         expect(ownedAfter.has(path), `sync created ${path}, which no ledger row owns`).toBe(true);
       }
       // w6-claude-hooks-in-claude-dir (REQ-FLOW-113, REQ-FLOW-104): the upgrade adds the copies Claude Code's hooks
       // run under `.claude/hooks/stamity/`, the policy copy beside them, and re-renders every engine entry in the
-      // settings document to run a copy; the 1.14.0 generated scripts stay (EXPECTED_RECLAIMS is empty).
+      // settings document to run a copy; the 1.14.0 generated scripts stay (EXPECTED_RECLAIMS names none).
       for (const path of CLAUDE_HOOK_COPIES) {
         expect(before.has(path), `${path} was already in the 1.14.0 tree`).toBe(false);
         expect(afterFirst.has(path), `the upgrade did not write ${path}`).toBe(true);
