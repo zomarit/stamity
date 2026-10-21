@@ -31,6 +31,98 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Upgrading from 1.16.0
+
+The items below are read from the code and the tests on the branch that carries them. No upgrade of a setup the
+published 1.16.0 wrote has been walked yet; the release cut walks one and restates what it reads.
+
+- **Two skills leave the core for the new `frontend` pack.** `st-design-system-detect` and `st-browser-evidence` ship
+  in the `frontend` pack now, not in the core corpus. To keep them, run `stamity add frontend`; with the pack installed,
+  its copies stand at the same paths. Without it, the first `sync` deletes each copy under `.claude/skills/` and
+  `.agents/skills/` whose bytes are still the core rendering 1.9.0 through 1.16.0 wrote, keeps a copy you edited, and
+  prints one `moved:` line per skill naming what it removed or kept and `stamity add frontend`. This repository's own
+  `sync` printed that line for both skills and removed their four copies.
+- **An overlay of either skill is refused.** A `.customize.yaml` or `.customize.md` under
+  `.stamity/overrides/skills/design-system-detect/` or `.stamity/overrides/skills/browser-evidence/` stops `sync`,
+  `check`'s drift gate and `validate` with `VALIDATION_ERROR`, naming the move and `stamity add frontend`, with the
+  pack installed or not, since overlays on pack skills are not applied. Fold the change into a full override under
+  another id, or remove the file. A full override of either id still projects, and `sync` warns that it now stands
+  alone; with the pack installed, it collides with the pack's copy and `sync` refuses it. `check`'s new `moved-skills`
+  row names each case.
+- **A skill head that wrote `user-invocable` or `disable-model-invocation` as a string now stops `sync`.** Both keys
+  pass through to the emitted head as top-level keys, where they were hoisted under `metadata`, and a value that is not
+  `true` or `false`, `"false"` included, is refused with `VALIDATION_ERROR` naming the file and the key. Write the
+  boolean.
+- **Each rule-skill's head gains one line.** Every rule delivered as a skill now carries `user-invocable: false`, so
+  the first `sync` rewrites each `stamity-<rule>/SKILL.md` it emits by that line.
+
+### Added
+
+- **The pack catalog is the packs folder.** Every `packs/<id>/` holding a `pack.json` named `<id>`, with a description
+  and a generated pin, is in the bundled catalog, so a fork adds a pack by adding the folder and running
+  `node scripts/generate-pack-manifests.mjs`, with no code edit. A folder that breaks one of those rules fails the
+  catalog's read with every defect listed. The build writes the package's version into each shipped
+  `dist/packs/*/pack.json`, and the generator's `--write` sets each source manifest's `version` to it.
+- **The `frontend` pack.** `stamity add frontend` installs `st-design-system-detect` and `st-browser-evidence`, moved
+  from the core (Upgrading from 1.16.0). `init` suggests it where it detects Next.js, React, Vue, Svelte, SvelteKit,
+  Nuxt, Angular, Astro, Remix, SolidStart, TanStack Start or Qwik: once, on the first row of its stack block, with the
+  pinned `add frontend` line, and never once the ledger records the pack installed. `init` installs nothing itself.
+- **`add` refuses before it writes in three more cases.** With Codex selected, a pack that would take Codex's skills
+  list past 8,000 characters is refused, `--dry-run` included, naming the pack's share and the total, measured by the
+  same count `sync`'s refusal makes for that setup, and naming `clean --pack <id>` first where another installed pack
+  already fills the list; `add --json`'s `planned.fit` carries the measure. A pack artifact whose name or
+  id another layer already holds in the same class (the core, selected or not, the fork, an override or another
+  installed pack) is refused, where it passed `add` and failed at `sync`; an id another layer holds prints under its
+  own `id collisions` part. And a retired pack id, once a release retires one, is refused naming where its parts went
+  and `add <successor>`, with `add ./node_modules/<id>` as the way to install an npm package of that name on purpose;
+  no release has retired one yet.
+- **Two `check` rows.** `pack-catalog` warns on an installed catalog pack whose content is not the copy this release
+  bundles, naming `add <id>`, and on a first-party copy of a retired pack, naming the replace order; it never fails.
+  `moved-skills` fails on an overlay of a skill that moved to a pack, and warns on a full override of one or on a core
+  copy still recorded. Both sit after `pack-reach`, and [`docs/troubleshooting.md`](docs/troubleshooting.md) lists
+  them.
+- **Two client keys pass through a skill's head.** `user-invocable` and `disable-model-invocation`, as booleans, reach
+  the emitted `SKILL.md` as top-level keys. A skill that sets `disable-model-invocation: true` beside an
+  `agents/openai.yaml` setting `policy.allow_implicit_invocation: false` stays out of Codex's skills list and its count.
+- **The pull request body carries the change's blast radius.** Every approving review writes a `blast radius:` line,
+  `contained`, `moderate` or `wide` with its reason, and `/st-work` keeps the run record's `## Blast radius` section
+  after the Frame section, rewritten from the last approval. `stamity run checkpoint --pr` and `run end` copy that
+  section into the draft pull request's body before the run's marker, attended and unattended, screened as the body is
+  and inside its 60,000-character fit. A record without the section gives the body as before, and `morning.md` gains no
+  section.
+- **Three working habits for the flows.** An implementer's return names its choices, each approach tried, dropped or
+  reverted with a pointer, and `/st-work` records each as a `choice:` line the unit's reviewer reads as a lead, never as
+  evidence; every approval names, on a `rests on:` line, the one fact the change's safety rests on and how far it was
+  proven (`cited`, `walked`, `run` or `reproduced`); and the question protocol counts a deploy and a message sent
+  outside the repository, the run's own pull request aside, among the irreversible actions it asks about. The habits
+  come from pstack, a public set of agent skills in the cursor/plugins repository (MIT); the text here is written fresh.
+- **The packs reference lists each pack's skills and commands** with their descriptions, under its class counts
+  ([`docs/reference/packs.md`](docs/reference/packs.md)).
+
+### Changed
+
+- **Rule-skills leave the `/` menu where a client allows.** Every rule delivered as a skill carries
+  `user-invocable: false`, so Claude Code, VS Code and Copilot CLI keep it out of their `/` menu while the model still
+  loads it, and a Claude-only setup's menu lists the nine commands and seven skills. Cursor's `/` menu and Codex's `$`
+  list do not read the key and still list them.
+- **The core readers work without the `frontend` pack.** `/st-work`'s QA step and the qa skill offer a browser run only
+  where the browser-evidence skill is installed, and record browser evidence as not installed otherwise; the
+  design-quality agent, the UI-states rule and the verify skill's `ui-token-usage` check read the stylesheet layer's
+  token source where no design-system inventory exists, and say the inventory is absent.
+- **Codex's skills list sits at 4,759 of 8,000 characters**, over 15 shown skills, where it read 5,570 over 17, with
+  the two interface skills in the `frontend` pack ([`docs/capability-matrix.md`](docs/capability-matrix.md)).
+- **`add`'s name-clash refusal names each clash's mechanism**: two commands of one name are one command on every
+  client, where it said for every clash that the skill hides the command.
+- **`sync`'s Codex skills-list refusal no longer advises narrowing the content selection**, which `sync` never honoured,
+  since it plans the full corpus every run. It names `clean --pack <id>` where an installed pack holds a share, then
+  `ruleDelivery: "always-on"`.
+
+### Deprecated
+
+- **`createEngine().pack.curated.CURATED_PACKS`.** The constant left `src/pack/curated.ts`; the registry keeps the
+  member as a getter that derives the catalog from the packs folder on its first read, and a broken packs folder makes
+  that read throw `CONFIG_ERROR`. Call `createEngine().pack.curated.curatedPacks()` instead.
+
 ## [1.16.0] - 2026-10-20
 
 ### Upgrading from 1.15.0
