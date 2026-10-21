@@ -101,7 +101,7 @@ Run before returning, over the unit's surface:
   sets.
 - `DONE` carries files changed, tests added or modified (with justifications), gate
   results, the spec delta, and deferrals. A deferral is a finding the unit leaves open,
-  with its consequence, never a note.
+  with its consequence, never a note. `DONE` also carries its choices: each approach tried, dropped or reverted, one line each with its pointer (a commit, a `path:line`, a report line).
 - `BLOCKED_*` carries what was attempted, what blocks it, and the smallest unblocking
   input; work completed before the block is listed file by file so nothing is silently
   half-applied.
@@ -123,7 +123,7 @@ Run before returning, over the unit's surface:
   one labelled line each: `status:`; `report:` with the path; `findings:` every `Critical` and
   `Warning` raised as `<id> <locator> — <summary>`, then the `Minor` count with its ids and
   locators, ending `notes left out: <n>`; `security:` every security-relevant finding in full,
-  or `none`; `contract delta:` the census rows in full, or `none`; then at most 1,500
+  or `none`; `contract delta:` the census rows in full, or `none`; `choices:` the choice lines, or `none`; then at most 1,500
   characters of prose naming the files changed and each gate's result. The written report lists
   every note left out, one line each with its locator, and the digest keeps the count alone.
   With no report path, or a write refused, the full result is returned inline and a refused

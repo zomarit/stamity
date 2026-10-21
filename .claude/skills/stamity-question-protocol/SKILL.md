@@ -30,8 +30,8 @@ before the first write means ask.
    different artifacts.
 2. **Multiple valid interpretations** — two or more approaches differ materially
    in cost, blast radius, or scope, and the request does not pick one.
-3. **Irreversible action** — deleting data, dropping a column, renaming a public
-   identifier, rewriting shared history. A force push stays the person's, even on a yes.
+3. **Irreversible action** — deleting data, dropping a column, renaming a public identifier, a deploy,
+   a message sent outside the repository (the run's own pull request aside), rewriting shared history. A force push stays the person's, even on a yes.
 4. **Missing acceptance criteria** — no testable definition of done for the
    change requested.
 5. **Unattested product decision** — the change moves user-visible behaviour or
