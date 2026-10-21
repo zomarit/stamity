@@ -22,8 +22,9 @@ import { useTempDir } from "../support/tempDir.ts";
  * Two head rules beside them: a skill that is explicit-only (`disable-model-invocation: true`)
  * ships the Codex companion that hides it from the model, and the reverse, so Codex's skills list
  * and the other clients agree about it (REQ-PACK-006); and a pack skill's description holds to
- * 250 characters. `ops`, `product-audit` and `scaffold` are retiring (Package 22 file 2) and
- * exempt from the cap by name, each exemption going red once its directory is gone.
+ * 250 characters. `ops` and `product-audit` are retiring (Package 22 file 2) and exempt from
+ * the cap by name (REQ-PACK-011), each exemption going red once its directory is gone;
+ * `scaffold`, retiring too, ships no skill and takes no exemption.
  *
  * Every rule is a function from one file to its problems, run over the real packs (expected
  * clean) and over a made-up pack that breaks it (expected to name the break), so no rule here is
@@ -34,7 +35,7 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const PACKS_ROOT = join(REPO_ROOT, "packs");
 
 /** Retiring packs, exempt from the description cap while their directories exist. */
-const RETIRING_PACKS: readonly string[] = ["ops", "product-audit", "scaffold"];
+const RETIRING_PACKS: readonly string[] = ["ops", "product-audit"];
 
 /** REQ-PACK-011: a pack skill's description holds to 250 characters. */
 const DESCRIPTION_MAX = 250;

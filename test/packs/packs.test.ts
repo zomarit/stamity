@@ -439,6 +439,14 @@ function retiredProblems(ids: readonly string[], map?: readonly RetiredPack[]): 
     .map((id) => `${id}: a retired pack id is a pack directory again`);
 }
 
+/** Pack directories the catalog does not list, and catalog ids with no pack directory. */
+function enumerationProblems(dirIds: readonly string[], catalogIds: readonly string[]): string[] {
+  return [
+    ...dirIds.filter((id) => !catalogIds.includes(id)).map((id) => `${id}: a pack directory the catalog does not list`),
+    ...catalogIds.filter((id) => !dirIds.includes(id)).map((id) => `${id}: catalogued with no pack directory`),
+  ];
+}
+
 // ── The real packs ────────────────────────────────────────────────────────
 
 const corePromise: Promise<CorpusFile[]> = walkAllMarkdown();
@@ -463,7 +471,7 @@ describe("every pack — enumeration", () => {
   it("enumerates the packs from packs/*/pack.json, equal to the catalog's ids", () => {
     // Non-degenerate: the four first-party packs this file was written against are all here.
     expect(PACK_IDS).toEqual(expect.arrayContaining(["frontend", "ops", "product-audit", "scaffold"]));
-    expect(curatedPacks().map((entry) => entry.id).toSorted()).toEqual([...PACK_IDS]);
+    expect(enumerationProblems(PACK_IDS, curatedPacks().map((entry) => entry.id))).toEqual([]);
   });
 
   it("holds no retired id among the pack directories", () => {
@@ -473,7 +481,7 @@ describe("every pack — enumeration", () => {
   it.each(RETIRING_PACKS)("the class exemption for %s holds only while its directory exists", (id) => {
     expect(
       PACK_IDS,
-      `packs/${id} is gone: drop "${id}" from RETIRING_PACKS in test/packs/packs.test.ts and lint.test.ts`,
+      `packs/${id} is gone: drop "${id}" from RETIRING_PACKS in test/packs/packs.test.ts, and from lint.test.ts's list if it is there`,
     ).toContain(id);
   });
 });
@@ -702,8 +710,14 @@ describe("every pack — each static probe red on a made-up pack", () => {
     expect(deriveCatalog(root, { "acme-fork": computeAggregateContentSha(integrity) }).map((entry) => entry.id)).toEqual([
       "acme-fork",
     ]);
-    // Red against the bundled catalog: the fork's folder is not one of its ids.
-    expect(packIdsUnder(root)).not.toEqual(curatedPacks().map((entry) => entry.id).toSorted());
+    // Red: the equality probe, run over the fork's packs root against the bundled catalog, names
+    // the fork's directory as uncatalogued and every bundled id as having no directory there.
+    const bundled = curatedPacks().map((entry) => entry.id);
+    expect(bundled.length).toBeGreaterThan(0);
+    expect(enumerationProblems(packIdsUnder(root), bundled)).toEqual([
+      "acme-fork: a pack directory the catalog does not list",
+      ...bundled.map((id) => `${id}: catalogued with no pack directory`),
+    ]);
   });
 });
 
