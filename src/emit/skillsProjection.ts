@@ -26,11 +26,17 @@
  *   authoring vocabulary verbatim therefore did not "stay spec-conformant as
  *   authored"; it produced files that fail packaging on the very paths the
  *   portability promise is about. The engine keys are not dropped — they move
- *   into `metadata`, the spec's own escape hatch for exactly this. One lane
- *   is the exception: a touchpoint skill ({@link buildTouchpointSkill}) adds a
- *   seventh key, `disable-model-invocation: true`, so the clients that read it
- *   list the touchpoint as invoked-by-name only. It is still one render for
- *   every reader, not a per-tool branch.
+ *   into `metadata`, the spec's own escape hatch for exactly this. The ceiling
+ *   is the spec's six keys plus two client keys, `user-invocable` and
+ *   `disable-model-invocation` ({@link PASSTHROUGH_KEYS}): Claude Code and
+ *   Cursor read them at the top level, so a declared boolean passes through
+ *   there instead of under `metadata`, and every demoted rule's head carries
+ *   `user-invocable: false`. A touchpoint skill ({@link buildTouchpointSkill})
+ *   writes `disable-model-invocation: true`, so the clients that read it list
+ *   the touchpoint as invoked-by-name only. The cost is named: claude.ai
+ *   uploads, the Skills API and `package_skill.py` validate the six keys
+ *   alone and reject a file carrying either client key. It is still one
+ *   render for every reader, not a per-tool branch.
  * - **`SKILL.md` bodies** get emission-time token substitution (repo detection
  *   facts + verification-gate commands, from the manifest) so a skill that
  *   says "run the tests" names this repository's real command.
@@ -378,9 +384,13 @@ export async function projectSkills(
  * it arrives through: a description-triggered skill file the client loads when
  * the description matches, instead of instruction text every session pays for.
  * The frontmatter is therefore the skills spec's shape with the engine's own
- * vocabulary under `metadata.stamity` — the same six-key ceiling every other
- * file in this tree is held to, since the strict validator that rejects an
- * unexpected top-level key does not care which class the content came from.
+ * vocabulary under `metadata.stamity` — the same ceiling every other file in
+ * this tree is held to, the spec's six keys plus the two client keys
+ * ({@link PASSTHROUGH_KEYS}). The head writes one of those two:
+ * `user-invocable: false`, after `description`, because a demoted rule is
+ * guidance its description triggers, never a command the operator types, so
+ * Claude Code keeps it out of the slash menu. No `content/` line carries it;
+ * this lane derives it, so an operator's override of a rule gets it too.
  *
  * `tools` names the clients that demoted it, which is the one fact a reader of
  * the emitted file cannot derive: the same rule can be delivered here for codex
@@ -399,6 +409,7 @@ function projectRuleAsSkill(
   const head: Record<string, unknown> = {
     name: skillDir.toLowerCase().replaceAll(SPEC_NAME_PATTERN, "-").slice(0, 64),
     description: item.description,
+    "user-invocable": false,
     metadata: {
       stamity: {
         id: item.id,
@@ -650,6 +661,7 @@ export function frontmatterScalar(value: string): string {
  * § "Using skill frontmatter outside Claude Code", accessed 2026-08-16).
  * `name` and `description` are the two this projection ever produces from
  * canonical content; the other four pass through when an author declares them.
+ * The emitted ceiling is these six plus {@link PASSTHROUGH_KEYS}.
  */
 const SPEC_FRONTMATTER_KEYS = [
   "name",
@@ -660,22 +672,37 @@ const SPEC_FRONTMATTER_KEYS = [
   "metadata",
 ] as const;
 
+/**
+ * The two client keys above the spec's six. Claude Code reads both at the top
+ * level (`user-invocable: false` hides a skill from the slash menu,
+ * `disable-model-invocation: true` makes it invoked-by-name only), and Cursor
+ * reads the second, so a declaration hoisted under `metadata` would be read by
+ * no client. They pass through as booleans only. claude.ai uploads, the Skills
+ * API and `package_skill.py` reject a file carrying either, which is the price
+ * of the explicit-only and hidden skills these keys exist for.
+ */
+const PASSTHROUGH_KEYS = ["user-invocable", "disable-model-invocation"] as const;
+
 /** Spec `name` grammar: lowercase alphanumerics and hyphens, at most 64 chars. */
 const SPEC_NAME_PATTERN = /[^a-z0-9-]+/g;
 
 /**
- * Rewrite an authored head into the spec's six-key intersection.
+ * Rewrite an authored head into the spec's six keys plus the two client keys.
  *
- * Two moves, and the second is what keeps the transform lossless:
+ * Three moves, and the third is what keeps the transform lossless:
  *
  * 1. `name` is synthesized from the skill's DIRECTORY, which is also the name
  *    the client derives a command from — so the declared name and the invoked
  *    name cannot disagree.
- * 2. Every key outside the six is hoisted into `metadata`, the spec's own
- *    free-form map for tooling-owned data. Nothing the corpus authored is lost;
- *    it simply stops occupying a top-level slot the validator has an opinion
- *    about. An author-declared `metadata` map is merged under, so their keys
- *    win over the hoisted ones.
+ * 2. A declared {@link PASSTHROUGH_KEYS} key stays top-level, after
+ *    `description`, when its value is a boolean; any other value refuses with
+ *    `VALIDATION_ERROR` naming the file and the key, since a client that read
+ *    `"no"` as truthy would invert what the author meant.
+ * 3. Every other key outside the six is hoisted into `metadata`, the spec's
+ *    own free-form map for tooling-owned data. Nothing the corpus authored is
+ *    lost; it simply stops occupying a top-level slot the validator has an
+ *    opinion about. An author-declared `metadata` map is merged under, so
+ *    their keys win over the hoisted ones.
  *
  * A document with no frontmatter is returned untouched: inventing a head for a
  * file that declares none would be an authoring decision, not a projection.
@@ -684,7 +711,7 @@ const SPEC_NAME_PATTERN = /[^a-z0-9-]+/g;
  * `.agents/skills/` tree and lands under the same strict validator
  * (`../pack/projection.ts` → `projectOnePackSkill`). That lane reuses this
  * transform rather than carrying its own: a second implementation is how the
- * two trees would come to disagree about the spec's six keys. It is the ONLY
+ * two trees would come to disagree about the head's keys. It is the ONLY
  * render step the pack lane borrows — pack bodies stay byte-verbatim there.
  */
 export function toSpecFrontmatter(raw: string, skillDir: string, source: string): string {
@@ -695,16 +722,29 @@ export function toSpecFrontmatter(raw: string, skillDir: string, source: string)
   const head: Record<string, unknown> = {
     name: skillDir.toLowerCase().replaceAll(SPEC_NAME_PATTERN, "-").slice(0, 64),
   };
-  for (const key of SPEC_FRONTMATTER_KEYS) {
-    if (key !== "name" && key !== "metadata" && authored[key] !== undefined) {
-      head[key] = authored[key];
+  if (authored["description"] !== undefined) head["description"] = authored["description"];
+  for (const key of PASSTHROUGH_KEYS) {
+    const value = authored[key];
+    if (value === undefined) continue;
+    if (typeof value !== "boolean") {
+      throw new EngineError(
+        `${source}: \`${key}\` must be true or false, got ${JSON.stringify(value)}. ` +
+          "It passes through to the top level of the emitted SKILL.md, where clients read it as a boolean.",
+        { code: "VALIDATION_ERROR" },
+      );
     }
+    head[key] = value;
+  }
+  for (const key of SPEC_FRONTMATTER_KEYS) {
+    if (key === "name" || key === "description" || key === "metadata") continue;
+    if (authored[key] !== undefined) head[key] = authored[key];
   }
 
   const authoredMetadata = authored["metadata"];
   const hoisted: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(authored)) {
     if ((SPEC_FRONTMATTER_KEYS as readonly string[]).includes(key)) continue;
+    if ((PASSTHROUGH_KEYS as readonly string[]).includes(key)) continue;
     hoisted[key] = value;
   }
   const metadata = {
@@ -720,7 +760,7 @@ export function toSpecFrontmatter(raw: string, skillDir: string, source: string)
 
 /**
  * Resolve one `SKILL.md` document for emission: the head becomes the spec's
- * six-key shape ({@link toSpecFrontmatter}), then the body takes emission-time
+ * shape plus the client keys ({@link toSpecFrontmatter}), then the body takes emission-time
  * substitution. The token grammar is anchored (`${STAMITY:UPPER_SNAKE}`), so
  * prose that merely mentions the prefix passes through unchanged, and
  * replacement values are never rescanned.

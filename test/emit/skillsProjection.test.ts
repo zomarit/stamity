@@ -376,6 +376,76 @@ describe("projectSkills transforms", () => {
         expect(metadata["id"]).toBe("alpha");
       });
     });
+
+    /**
+     * Two client keys sit above the spec's six: `user-invocable` and
+     * `disable-model-invocation`. Claude Code and Cursor read them at the top
+     * level (an explicit-only skill, a skill hidden from the slash menu), so a
+     * declaration hoisted under `metadata` would be read by nobody. They pass
+     * through as booleans only; any other value is an authoring defect the
+     * projection refuses rather than emits.
+     */
+    describe("the two client keys", () => {
+      async function projectAlpha(declaration: string): Promise<string> {
+        const rows = await projectFixture(
+          {
+            "skills/stamity-alpha/SKILL.md": artifact(
+              `id: alpha\ntype: skill\ndescription: Fixture.\ntags: [review]${declaration}`,
+              "Body.\n",
+            ),
+          },
+          contextOf(["alpha"]),
+        );
+        const skill = rows.find((row) => row.path.endsWith("/SKILL.md"));
+        expect(skill, "fixture skill must project").toBeDefined();
+        return skill!.content;
+      }
+
+      it("emits a declared disable-model-invocation: true top-level, not hoisted under metadata", async () => {
+        const content = await projectAlpha("\ndisable-model-invocation: true");
+        const head = parse(/^---\n([\s\S]*?)\n---\n/.exec(content)![1]!) as Record<string, unknown>;
+
+        expect(head["disable-model-invocation"]).toBe(true);
+        expect(head["metadata"]).toEqual({ id: "alpha", type: "skill", tags: ["review"] });
+        expect(head["metadata"]).not.toHaveProperty("disable-model-invocation");
+        // Placed straight after `description`, ahead of the spec's free-form map.
+        expect(Object.keys(head)).toEqual([
+          "description",
+          "name",
+          "disable-model-invocation",
+          "metadata",
+        ]);
+      });
+
+      it("emits a declared user-invocable: false top-level, keeping the boolean", async () => {
+        const content = await projectAlpha("\nuser-invocable: false");
+        const head = parse(/^---\n([\s\S]*?)\n---\n/.exec(content)![1]!) as Record<string, unknown>;
+
+        expect(head["user-invocable"]).toBe(false);
+        expect(head["metadata"]).not.toHaveProperty("user-invocable");
+      });
+
+      it('refuses user-invocable: "no" with VALIDATION_ERROR naming the file and the key', async () => {
+        const failure = await projectAlpha('\nuser-invocable: "no"').then(
+          () => undefined,
+          (error: unknown) => error,
+        );
+
+        expect(failure).toBeInstanceOf(EngineError);
+        expect((failure as EngineError).code).toBe("VALIDATION_ERROR");
+        expect((failure as EngineError).message).toContain("skills/stamity-alpha/SKILL.md");
+        expect((failure as EngineError).message).toContain("user-invocable");
+      });
+
+      it("emits today's bytes for a skill that declares neither key", async () => {
+        // A literal, not a recomputation: the head every existing skill emits
+        // must not move by a byte when the pass-through lands.
+        expect(await projectAlpha("")).toBe(
+          "---\ndescription: Fixture.\nname: stamity-alpha\nmetadata:\n  id: alpha\n  type: skill\n" +
+            "  tags:\n    - review\n---\nBody.\n",
+        );
+      });
+    });
   });
 
 });
@@ -1402,8 +1472,18 @@ describe("projectSkills over demoted rules", () => {
         tools: ["claude", "codex"],
       },
     });
-    // The head is the SIX-key spec shape: no authored key leaks to the top level.
-    expect(Object.keys(head).toSorted()).toEqual(["description", "metadata", "name"]);
+    // TEST CHANGE, justified: the rule-skill head gains `user-invocable: false`
+    // (plan 018 u6, REQ-PACK-006). A demoted rule is description-triggered
+    // guidance, not something an operator invokes, so Claude Code hides it from
+    // the slash menu. The bar is the spec's six keys plus that one client key;
+    // no authored key leaks to the top level.
+    expect(Object.keys(head).toSorted()).toEqual([
+      "description",
+      "metadata",
+      "name",
+      "user-invocable",
+    ]);
+    expect(head["user-invocable"]).toBe(false);
     // The rule's body ships whole, under its own title.
     expect(row!.content).toContain("# Question Protocol");
     expect(row!.artifactType).toBe("rule");

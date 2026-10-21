@@ -115,6 +115,13 @@ const RUNBOOK_NOTES = "Reference notes for the runbook.\n";
  * skill frontmatter outside Claude Code", accessed 2026-08-16). Held here as
  * the pack lane's own copy of the bar, so this suite fails if the projection
  * ever widens the head rather than following it silently.
+ *
+ * TEST CHANGE, justified: the bar admits the two client keys the projection
+ * now passes through when a skill declares them as booleans,
+ * `user-invocable` and `disable-model-invocation` (plan 018 u6,
+ * REQ-PACK-006). The pack lane borrows `toSpecFrontmatter`, so a pack skill
+ * that marks itself explicit-only keeps the key at the top level, where its
+ * readers look for it.
  */
 const SPEC_FRONTMATTER_KEYS = new Set([
   "name",
@@ -123,6 +130,8 @@ const SPEC_FRONTMATTER_KEYS = new Set([
   "compatibility",
   "allowed-tools",
   "metadata",
+  "user-invocable",
+  "disable-model-invocation",
 ]);
 
 /** Distinctive argv token, so the hook-liveness assertions cannot false-positive. */
