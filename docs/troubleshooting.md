@@ -450,8 +450,10 @@ removes each old copy still as it wrote it, and keeps and names one you edited. 
 you run by hand where no hook ran is the copy under `.claude/hooks/stamity/` too. Claude Code's
 GitHub Action restores `.claude/` from the base branch on a pull request, so the copy there is the
 base branch's ([Cloud runs](cloud.md)), and on an upgrade pull request whose base predates 1.16.0 the
-base's entry names the removed old copy, so it refuses every tool call on that run until the upgrade
-merges.
+base's entry names the removed old copy. From a 1.9.0 to 1.15.x base it refuses every tool call on
+that run until the upgrade merges; before 1.9.0 it has no fail-closed tail, so the guard does not run
+on that run. For a base older than 1.9.0, upgrade through 1.16.0 first, whose settings already name
+the copy under `.claude/hooks/stamity/`, or keep the Action off that one upgrade pull request.
 
 Two things reach that branch. The copy is gone — `clean` removed it, a fresh checkout has not
 synced, or the file was deleted by hand:

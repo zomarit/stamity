@@ -246,9 +246,12 @@ edited, and a session run by hand where no hook ran starts
 a `sync` that writes the copies under `.claude/hooks/stamity/`. Before it, the base branch's entries
 run the scripts under `.stamity/generated/hooks/claude/`, and those come from the pull request. That
 leaves a window on the upgrade itself: on a pull request whose base predates 1.16.0, the base's
-entries name the scripts that pull request's `sync` removed, so those hooks cannot start, and the
-guard's entry, failing closed, refuses every tool call on that Action run. The next run after the
-upgrade merges reads the new entries.
+entries name the scripts that pull request's `sync` removed, so those hooks cannot start. From a
+1.9.0 to 1.15.x base, the guard's entry, failing closed, refuses every tool call on that Action run.
+Before 1.9.0 the guard's entry has no fail-closed tail, so the guard does not run on that Action run
+and its tool calls go through unchecked. For a base older than 1.9.0, upgrade through 1.16.0 first,
+whose settings already name the copies under `.claude/hooks/stamity/`, which stay, or keep the Action
+off that one upgrade pull request. The next run after the upgrade merges reads the new entries.
 
 What the restore does not cover still comes from the pull request. The base branch's `CLAUDE.md`
 imports `AGENTS.md`, which the restore does not cover, so the agent on that run reads that pull

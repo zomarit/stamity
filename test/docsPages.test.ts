@@ -4918,8 +4918,15 @@ describe("docs/cloud.md", () => {
     expect(section).not.toMatch(/are still written/);
     expect(section).toMatch(/The older copies under `\.stamity\/generated\/hooks\/claude\/` are no longer written: the upgrade's `sync` removes each one still as it wrote it and keeps and names one you edited/);
     expect(section).toMatch(/a session run by hand where no hook ran starts `\.claude\/hooks\/stamity\/stamity-session-start\.mjs`/);
+    // TEST CHANGE, justified (ledger row 2026-10-21_packs-rebuilt-02/review/9, the maintainer's decision
+    // "Correct the docs, add one step"): the fail-closed tail exists only from 1.9.0 (SECURITY.md's guard row;
+    // v1.8.0's and v1.9.0's test/adapters/claude.test.ts pins), so the window is stated by base version and a
+    // base older than 1.9.0 gets the one upgrade step.
     expect(section).toMatch(
-      /on a pull request whose base predates 1\.16\.0, the base's entries name the scripts that pull request's `sync` removed, so those hooks cannot start, and the guard's entry, failing closed, refuses every tool call on that Action run/,
+      /on a pull request whose base predates 1\.16\.0, the base's entries name the scripts that pull request's `sync` removed, so those hooks cannot start\. From a 1\.9\.0 to 1\.15\.x base, the guard's entry, failing closed, refuses every tool call on that Action run\. Before 1\.9\.0 the guard's entry has no fail-closed tail, so the guard does not run on that Action run/,
+    );
+    expect(section).toMatch(
+      /For a base older than 1\.9\.0, upgrade through 1\.16\.0 first, whose settings already name the copies under `\.claude\/hooks\/stamity\/`, which stay, or keep the Action off that one upgrade pull request/,
     );
     // TEST CHANGE, justified (ledger row review/162): "holds only until the base branch carries a `sync`" had the
     // timing backwards; the restore covers Stamity's hooks only once the base carries that sync, and before it the
@@ -5124,8 +5131,14 @@ describe("the Action's restore covering Claude Code's hook copies (w7-action-pag
     );
     // ADDED (u5-hook-copies, REQ-FLOW-113): the old copies leave on the upgrade's `sync`, and the window that opens.
     expect(bullet).toMatch(/Those old copies are gone after the upgrade's `sync`, which no longer writes them/);
+    // TEST CHANGE, justified (ledger row 2026-10-21_packs-rebuilt-02/review/9, the maintainer's decision): the
+    // window is exact by base version, since releases before 1.9.0 wrote the guard entry with no fail-closed
+    // tail, and a base older than 1.9.0 gets the one upgrade step.
     expect(bullet).toMatch(
-      /on an upgrade pull request whose base predates 1\.16\.0 the base's entries name scripts that pull request removed: those hooks cannot start, and the guard's entry, failing closed, refuses every tool call on its Action run until it merges/,
+      /on an upgrade pull request whose base predates 1\.16\.0 the base's entries name scripts that pull request removed, so those hooks cannot start\. From a 1\.9\.0 to 1\.15\.x base, the guard's entry, failing closed, refuses every tool call on its Action run until it merges\. Before 1\.9\.0 the guard's entry has no fail-closed tail, so the guard does not run on that Action run and its tool calls go through unchecked/,
+    );
+    expect(bullet).toMatch(
+      /a base older than 1\.9\.0 upgrades through 1\.16\.0 first, whose settings already name the copies under `\.claude\/hooks\/stamity\/`, which stay, or keeps the Action off that one upgrade pull request/,
     );
     expect(bullet).toMatch(/a pull request that changes `\.claude\/` sees that change reverted on its Action run/);
     expect(bullet).toContain("`git add -A`");
@@ -5156,6 +5169,15 @@ describe("the Action's restore covering Claude Code's hook copies (w7-action-pag
     expect(flowed(page)).toMatch(/`\.stamity\/generated\/hooks\/claude\/`, which is no longer written/);
     expect(flowed(page)).not.toMatch(/which is still written for the session start/);
     expect(flowed(page)).toMatch(/The session start you run by hand where no hook ran is the copy under `\.claude\/hooks\/stamity\/` too/);
+    // ADDED (ledger row 2026-10-21_packs-rebuilt-02/review/9, the maintainer's decision): the upgrade window is
+    // stated by base version, and a base older than 1.9.0 gets the one upgrade step.
+    expect(flowed(page)).toMatch(
+      /From a 1\.9\.0 to 1\.15\.x base it refuses every tool call on that run until the upgrade merges; before 1\.9\.0 it has no fail-closed tail, so the guard does not run on that run/,
+    );
+    expect(flowed(page)).toMatch(/For a base older than 1\.9\.0, upgrade through 1\.16\.0 first/);
+    expect(flowed(page), "the page says every pre-1.16.0 base fails closed").not.toMatch(
+      /predates 1\.16\.0 the base's entry names the removed old copy, so it refuses every tool call/,
+    );
   });
 
   // TEST CHANGE, justified (u5-hook-copies, REQ-FLOW-088): the generated Claude guard is no longer written, so the

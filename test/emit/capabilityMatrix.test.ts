@@ -812,7 +812,18 @@ describe("the cloud column and the Cloud sessions section", () => {
     );
     expect(config.fact).toContain("a session run by hand starts `.claude/hooks/stamity/stamity-session-start.mjs`");
     expect(config.fact).toMatch(/An upgrade pull request whose base predates 1\.16\.0 runs that base's entries, which name the removed scripts/);
-    expect(config.fact).toContain("the guard's entry, failing closed, refuses every tool call until the upgrade merges");
+    // TEST CHANGE, justified (ledger row 2026-10-21_packs-rebuilt-02/review/9, the maintainer's decision "Correct
+    // the docs, add one step"): releases before 1.9.0 wrote the guard entry with no fail-closed tail, so the row
+    // states the window by base version and names the one upgrade step for a base older than 1.9.0.
+    expect(config.fact).toContain(
+      "From a 1.9.0 to 1.15.x base the guard's entry, failing closed, refuses every tool call until the upgrade merges",
+    );
+    expect(config.fact).toContain("before 1.9.0 the entry has no fail-closed tail, so the guard does not run on that run");
+    expect(config.fact).toContain(
+      "A base older than 1.9.0 upgrades through 1.16.0 first, whose settings already name `.claude/hooks/stamity/`, " +
+        "or keeps the Action off that one upgrade pull request.",
+    );
+    expect(config.fact).not.toMatch(/cannot start and the guard's entry, failing closed/);
     expect(config.fact).not.toMatch(/are still (written|emitted)/);
     expect(config.citation.url).toBe("https://github.com/anthropics/claude-code-action/blob/main/docs/security.md");
 
