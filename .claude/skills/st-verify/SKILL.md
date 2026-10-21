@@ -116,10 +116,10 @@ fields, not to this body's wording:
 - **The qa skill's auto-prove pass**, at the QA checkpoint — matches an artifact
   that already exists against the walk-through row restating the same criterion,
   and moves that row to the appendix with the artifact as its pointer.
-- **Installed packs** — the product-audit pack (`product-audit`, `benchmark`,
-  `perf-audit`) reads the rows as finding evidence; the scaffold pack
-  (`auth-scaffold`, `design-system-create`, `slo-scaffold`) reads them as the
-  floor its generated code is graded against. A pack whose own steps name this
+- **Installed packs** — the production pack's readiness review
+  (`production-review`) reads the rows as finding evidence; the frontend pack's
+  screen review (`ui-review`) reads the `ui` and `ux` rows as evidence beside
+  its browser bundle. A pack whose own steps name this
   skill runs it for the axis when the current sha has no artifact; there, an
   absent or stale artifact is a refresh trigger, not a pass. A pack that reads
   without refreshing reports the artifact as absent instead of substituting a

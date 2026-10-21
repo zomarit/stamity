@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "generatedBy": "1.16.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-21T16:05:10.100Z",
+  "updatedAt": "2026-10-21T18:22:47.934Z",
   "tools": [
     "claude"
   ],
@@ -52,6 +52,7 @@
         "handoff",
         "learn",
         "onboard",
+        "plain",
         "qa",
         "unattended",
         "verify"
@@ -505,6 +506,20 @@
     },
     {
       "adapter": "claude",
+      "artifactId": "plain",
+      "artifactType": "skill",
+      "contentHash": "53d97f501a61b8668eaf079e8afb4753ffed642294db4199bc4717923cda2480",
+      "path": ".claude/skills/st-plain/SKILL.md"
+    },
+    {
+      "adapter": "claude",
+      "artifactId": "plain",
+      "artifactType": "skill",
+      "contentHash": "5689b5eeb9529ec28af36bfc3fe2af7d6c537bb323abe63cb9be9df53113d951",
+      "path": ".claude/skills/st-plain/agents/openai.yaml"
+    },
+    {
+      "adapter": "claude",
       "artifactId": "qa",
       "artifactType": "skill",
       "contentHash": "17e6676258a6d6a1064f4f3ba30f683e0e3c3450886e28aeec97f372ae4b6cae",
@@ -549,7 +564,7 @@
       "adapter": "claude",
       "artifactId": "verify",
       "artifactType": "skill",
-      "contentHash": "75897507e02d19730f510134ba001062e460ba3411e4833703a212a57354b9fc",
+      "contentHash": "89c1308ce78b6bf6f7b11aca91e2ae618368d10a1603c1e1ee74407927922f16",
       "path": ".claude/skills/st-verify/SKILL.md"
     },
     {
