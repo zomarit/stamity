@@ -781,6 +781,23 @@ function describeAgentGrants(
   });
 }
 
+/** The clause every id-collision line ends with ({@link isIdCollision}). */
+const ID_SHADOW_CLAUSE = "installing it would shadow content this repo already has";
+
+/**
+ * Is this {@link PackInstallPlan.collisions} line an id collision — a pack
+ * artifact taking an id another layer already holds (the core, the fork, an
+ * override or another installed pack, recorded in the ledger or not) — rather
+ * than a path one? `add` refuses the two kinds with different remedies: a path,
+ * or an id only a client copy's row still claims, is cleared by `sync` and by
+ * moving what stands in the way; an id another layer holds only by renaming
+ * one side. The clause is fixed text after every pack-supplied part of the
+ * line, so no path can end a line with it.
+ */
+export function isIdCollision(reason: string): boolean {
+  return reason.endsWith(`; ${ID_SHADOW_CLAUSE}`);
+}
+
 /**
  * Every reason this install may not proceed, in write-set order:
  *
@@ -839,20 +856,26 @@ async function collectCollisions(
     }
     const catalogKey = plannedIds.get(entry.relPath);
     const idOwner = catalogKey === undefined ? undefined : claimedIds.get(catalogKey);
+    const holder = catalogKey === undefined ? undefined : heldIdOwnerOf(layers, catalogKey);
     if (catalogKey !== undefined && idOwner !== undefined) {
       const [type = "", id = ""] = splitKey(catalogKey);
+      // A row whose id no existing layer holds is a client copy only — left by
+      // an earlier `sync` or `clean --pack`, or projected from this pack's own
+      // installed copy — and `sync` settles it, so its line takes the paths
+      // remedy rather than the id one ({@link isIdCollision}).
       collisions.add(
-        `${entry.relPath}: ${type} id "${id}" is already owned by ${idOwner.artifactId} at ` +
-          `${idOwner.path}; installing it would shadow content this repo already has`,
+        holder === undefined
+          ? `${entry.relPath}: ${type} id "${id}" is still claimed by the client copy ` +
+              `${idOwner.artifactId} at ${idOwner.path}, which no other layer supplies`
+          : `${entry.relPath}: ${type} id "${id}" is already owned by ${idOwner.artifactId} at ` +
+              `${idOwner.path}; ${ID_SHADOW_CLAUSE}`,
       );
     }
-    const holder =
-      catalogKey === undefined || idOwner !== undefined ? undefined : heldIdOwnerOf(layers, catalogKey);
-    if (catalogKey !== undefined && holder !== undefined) {
+    if (catalogKey !== undefined && idOwner === undefined && holder !== undefined) {
       const [type = "", id = ""] = splitKey(catalogKey);
       collisions.add(
         `${entry.relPath}: ${type} id "${withoutControlCharacters(id)}" is already held by ` +
-          `${holder}; installing it would shadow content this repo already has`,
+          `${holder}; ${ID_SHADOW_CLAUSE}`,
       );
     }
     if (strays[index] === true) {

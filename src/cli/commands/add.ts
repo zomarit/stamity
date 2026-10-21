@@ -557,6 +557,28 @@ function collisionPart(
 }
 
 /**
+ * Id-collision part: a pack artifact takes a catalog id another layer already
+ * holds — the core, the fork, an override or another installed pack, recorded
+ * in the ledger or not ({@link PackInstallPlan.collisions}, told apart by
+ * `isIdCollision`). No path is in the way, so neither moving a file nor
+ * `sync` clears it: `sync` records the core's id and the next `add` refuses
+ * again. Only renaming one side does.
+ */
+function idCollisionPart(packId: string, reasons: readonly string[]): RefusalPart {
+  return {
+    message: `${reasons.length} id(s) it would claim are already held`,
+    why:
+      "a pack artifact takes an id another layer already holds, and a pack never shadows " +
+      "content this repo already has",
+    next:
+      `rename the listed artifact's id in the incoming pack's source (pack "${packId}"), or ` +
+      "remove the other layer's copy where it is yours (an override, or another installed " +
+      "pack you mean to replace), then re-run; the core and the fork layer ship with this " +
+      "package and cannot move here",
+  };
+}
+
+/**
  * Name-clash part: a command and a skill (or a rule delivered as one) that
  * would install under one name. Here every path is free and the NAME is taken,
  * so the remedy depends on who the other owner is — the per-owner table the
@@ -870,9 +892,19 @@ export const addCommand: CommandModule = {
     const installed =
       packEngine.install.planPackRemoval(projectManifest, plan.manifest.name).length > 0;
     const parts: RefusalPart[] = [];
-    if (plan.collisions.length > 0) {
-      renderReasons(ctx, plan.collisions);
-      parts.push(collisionPart(plan.manifest.name, spec, installed, plan.collisions));
+    // An id collision is cleared by renaming one side, never by `sync` or by
+    // moving a file, so it is refused as a kind of its own.
+    const idCollisions = plan.collisions.filter(packEngine.install.isIdCollision);
+    const pathCollisions = plan.collisions.filter(
+      (reason) => !packEngine.install.isIdCollision(reason),
+    );
+    if (pathCollisions.length > 0) {
+      renderReasons(ctx, pathCollisions);
+      parts.push(collisionPart(plan.manifest.name, spec, installed, pathCollisions));
+    }
+    if (idCollisions.length > 0) {
+      renderReasons(ctx, idCollisions, "id collisions");
+      parts.push(idCollisionPart(plan.manifest.name, idCollisions));
     }
     if (nameClashes.length > 0) {
       renderReasons(ctx, nameClashLines, "name clashes");

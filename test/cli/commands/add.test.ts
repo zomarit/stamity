@@ -1458,6 +1458,84 @@ describe("add — collisions", () => {
     expect(result.stderr).toContain(`pack "${PACK_ID}" is not installed`);
     expect(result.stderr).toContain("move it out of the way or delete it, then re-run");
   });
+
+  it("refuses an id the core holds as an id collision of its own, never advising sync then add", async () => {
+    // fix/1 (2026-10-20_packs-rebuilt/u5): an id line rode the paths refusal,
+    // whose remedy runs sync, then add — and sync records the core's id, so
+    // the next add refused again. No path is in the way here: the ledger is
+    // empty and the agent declares the core agent's id.
+    await initProject();
+    await seedPack({
+      content: { "agents/stamity-reviewer.md": "---\nid: reviewer\ntype: agent\n---\nReview it.\n" },
+    });
+
+    const human = await run(installArgs());
+
+    expect(human.code).toBe(1);
+    expect(human.stdout).toContain("id collisions");
+    expect(human.stdout).toContain(
+      'agents/stamity-reviewer.md: agent id "reviewer" is already held by the core agent ' +
+        '"reviewer" (agents/stamity-reviewer.md); installing it would shadow content this repo ' +
+        "already has",
+    );
+    expect(human.stderr).not.toContain("path(s) it would write are not free");
+
+    const machine = await run(installArgs("--json"));
+
+    expect(machine.code).toBe(1);
+    const doc = parseDoc(machine.stdout);
+    // The line still rides `planned.collisions`; only the refusal tells it apart.
+    expect((doc.planned as { collisions: string[] }).collisions).toHaveLength(1);
+    const error = errorOf(doc) as { message: string; why?: string; next?: string };
+    expect(error.message).toBe(`pack "${PACK_ID}" was not installed: 1 id(s) it would claim are already held`);
+    expect(error.why).toBe(
+      "a pack artifact takes an id another layer already holds, and a pack never shadows " +
+        "content this repo already has",
+    );
+    expect(error.next).toContain(
+      `rename the listed artifact's id in the incoming pack's source (pack "${PACK_ID}")`,
+    );
+    expect(error.next).not.toContain("sync");
+    expect(writtenOf(doc)).toEqual([]);
+    expect(packRows(await readProjectManifest())).toEqual([]);
+  });
+
+  it("refuses a core id the ledger records as an id collision too — sync would not clear it", async () => {
+    // The loop fix/1 names: once `sync` has recorded the core agent, the id
+    // line names the ledger row, and the paths remedy ran sync, then add again.
+    await initProject();
+    const manifest = await readProjectManifest();
+    await writeManifest(
+      getProject().dir,
+      {
+        ...manifest,
+        ledger: [
+          {
+            path: ".claude/agents/stamity-reviewer.md",
+            adapter: "claude",
+            artifactId: "reviewer",
+            artifactType: "agent",
+          },
+        ],
+      },
+      { now: FIXED_NOW },
+    );
+    await seedPack({
+      content: { "agents/stamity-reviewer.md": "---\nid: reviewer\ntype: agent\n---\nReview it.\n" },
+    });
+
+    const result = await run(installArgs("--json"));
+
+    expect(result.code).toBe(1);
+    const doc = parseDoc(result.stdout);
+    expect((doc.planned as { collisions: string[] }).collisions).toEqual([
+      'agents/stamity-reviewer.md: agent id "reviewer" is already owned by reviewer at ' +
+        ".claude/agents/stamity-reviewer.md; installing it would shadow content this repo already has",
+    ]);
+    const error = errorOf(doc);
+    expect(error.message).toBe(`pack "${PACK_ID}" was not installed: 1 id(s) it would claim are already held`);
+    expect(error.next).not.toContain("sync");
+  });
 });
 
 describe("add — name clashes", () => {
