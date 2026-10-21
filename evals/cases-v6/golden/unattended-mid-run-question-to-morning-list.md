@@ -37,7 +37,7 @@ its own scan, ending `<!-- stamity:run <run-id> -->`. It opens `# Morning list â
 on a refusal, and then first), `## For you to check`, `## Decisions`, `## Prerequisites`, `## Person's calls held`,
 `## Not done:`, `## How to answer`, and a fenced `stamity-morning` block holding one JSON object a line, its keys
 `id` (`Q<n>`), `kind` (`qa`, `decision`, `prerequisite` or `held`), `question`, `options` (2 to 9 strings),
-`default` (an option's number, from 1, never its text) and `source`. A section with no rows reads `none`.
+`default` (an option's number, from 1, never its text) and `source`. A section with no rows reads `none`. `question`, `source` and each option are one line each, at most 500, 300 and 200 characters.
 
 - **For you to check**: at most three person QA rows, then the proven line; where the branch's CI waits for a
   person's approval, it reads `CI not run: awaiting approval`.

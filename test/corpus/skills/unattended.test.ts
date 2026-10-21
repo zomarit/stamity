@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { frontmatterField } from "../../../src/content/frontmatter.ts";
+import { MORNING_EMPTY, MORNING_FENCE, MORNING_SECTIONS, parseMorning } from "../../../src/runs/morning.ts";
 import {
   assertDenyClean,
   assertLineCap,
@@ -371,6 +372,17 @@ describe("st-unattended — checkpoints and the ending (REQ-FLOW-092, REQ-FLOW-0
     expect(text.indexOf(sentence)).toBeLessThan(text.indexOf("`run end` exits 0 with a pull request opened"));
   });
 
+  // Added 2026-10-21 (plan 018-packs-rebuilt-01, unit u7-unattended-rows, inbox row pr/43; REQ-FLOW-095): the ending's
+  // step 3 named a plain `run end`, while `## How to answer` puts `--final-round` on a cloud session's final round, so
+  // the step names the flag where it applies and points at the section; a chain's earlier file keeps the plain verb.
+  it("puts --final-round on the ending's run end only for a session that stays open for a final round", async () => {
+    const text = await flat();
+    const clause =
+      "A cloud session that stays open for a final round adds `--final-round` to this end (`## How to answer`).";
+    expect(text).toContain(`the verb stages the run folder's own files and the inbox itself. ${clause}`);
+    expect(text.indexOf(clause)).toBeLessThan(text.indexOf("`run end` exits 0 with a pull request opened"));
+  });
+
   // TEST CHANGE, justified (plan 021 file 2, unit v0d-guard-pages; REQ-FLOW-095, REQ-FLOW-102): the acts are still
   // never the run's, but attended they now ask for one click on a client that can hold the ask, so "each is the
   // person's call" became "each waits for the morning walk", which runs the act after that click or hands it over.
@@ -450,6 +462,35 @@ describe("st-unattended — the morning list and the walk (REQ-FLOW-094, REQ-FLO
     expect(text).toContain("at most three person QA rows");
     expect(text).toContain("`CI not run: awaiting approval`");
     expect(text).toContain("Never a value: a secret, token or setting value never appears in any row.");
+  });
+
+  // Added 2026-10-21 (plan 018-packs-rebuilt-01, unit u7-unattended-rows, inbox row build/55; REQ-FLOW-094): the skill
+  // names the per-field caps `parseMorning` refuses past (`src/runs/morning.ts:99`, `TEXT_CAPS`), so a run writes a
+  // block that parses. The numbers are literals here; the engine half below makes this pin fail when they and
+  // `TEXT_CAPS` part, since the constant is module-private and is read through the parser that enforces it.
+  const MORNING_CAPS = { question: 500, source: 300, option: 200 } as const;
+  it("states the morning block's per-field caps, as the parser enforces them", async () => {
+    expect(await flat()).toContain(
+      `A section with no rows reads \`none\`. \`question\`, \`source\` and each option are one line each, at most ${MORNING_CAPS.question}, ${MORNING_CAPS.source} and ${MORNING_CAPS.option} characters.`,
+    );
+    const list = (fields: { question: string; source: string; option: string }): string =>
+      [
+        "# Morning list — 2026-10-21_caps-pin",
+        "",
+        ...MORNING_SECTIONS.flatMap((name) => [`## ${name}`, "", name === "How to answer" ? "Answer in one comment." : MORNING_EMPTY, ""]),
+        "```" + MORNING_FENCE,
+        JSON.stringify({ id: "Q1", kind: "decision", question: fields.question, options: [fields.option, "change it"], default: 1, source: fields.source }),
+        "```",
+        "",
+      ].join("\n");
+    const atCap = { question: "q".repeat(MORNING_CAPS.question), source: "s".repeat(MORNING_CAPS.source), option: "o".repeat(MORNING_CAPS.option) };
+    expect(parseMorning(list(atCap)).ok).toBe(true);
+    for (const key of ["question", "source", "option"] as const) {
+      const over = parseMorning(list({ ...atCap, [key]: atCap[key] + key.charAt(0) }));
+      expect(over.ok, `${key} one character over its cap`).toBe(false);
+      expect(over.ok ? [] : over.problems.join("\n")).toContain(`over the ${MORNING_CAPS[key]}-character cap`);
+    }
+    expect(parseMorning(list({ ...atCap, question: "first line\nsecond line" })).ok).toBe(false);
   });
 
   it("opens the walk attended, on a closed record only, per client", async () => {
