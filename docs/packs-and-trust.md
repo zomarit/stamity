@@ -348,6 +348,16 @@ owner:
   client copy it keeps and names, unless it is yours, then `stamity sync`, then add the incoming
   pack, then `stamity sync`.
 
+Four more refusals come before any write. A name another artifact of the same class already takes
+prints under `name clashes`, with the remedies above. An id another layer already holds prints
+under `id collisions`: rename that id in the incoming pack's source, or remove the other layer's
+copy where it is yours, then add again; no `sync` step comes first. With Codex selected, a pack
+that would take Codex's skills list past 8,000 characters is refused with its share and the
+total: shorten its skill descriptions, mark a skill explicit-only, remove another installed pack
+with `stamity clean --pack <id>`, or set `ruleDelivery: "always-on"`. A retired pack name is
+refused with where each of its parts went: add the successor pack it names, or run
+`stamity add ./node_modules/<id>` to install a package of that name on purpose.
+
 A clash can also arise after a pack is installed. The pack may come from an earlier version that
 never ran that check, or a later core upgrade, a new override or a fork-layer artifact may take one
 of its names. `sync` refuses any of these, and so do `check` and `init`, which plan

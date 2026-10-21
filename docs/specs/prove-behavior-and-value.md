@@ -101,8 +101,9 @@ with 1.16.0.
 The text dated 2026-10-21 under REQ-PROVE-002, REQ-PROVE-004 and REQ-PROVE-033 comes from the spec delta of
 `docs/plans/018-packs-rebuilt-01.md` (plan 018 file 1, run `2026-10-20_packs-rebuilt`), merged by its unit
 `u18-spec-docs`, with the clauses its units' reports declared under a line headed "As built". It reads at the
-integration head `936350cb`, but for the unit `u4-pack-fit`, cited at its lane head `164b31d1`; its REQ-PACK ids are
-in `docs/specs/packs.md`. It is not in a release yet.
+integration head `936350cb`, but for the unit `u4-pack-fit`, which landed on its own lane and is cited by file and
+symbol, since the integration lane's cherry-pick gives its commits new shas; its REQ-PACK ids are in
+`docs/specs/packs.md`. It is not in a release yet.
 
 ## Intent
 
@@ -287,8 +288,9 @@ nine touchpoints hidden, nothing shortened (`.stamity/runs/2026-10-03_pack-engin
   setup caps it at 8000`, then names the core selection's share, `Of that, the core selection takes N characters
   (k skills)`, and, when an installed pack holds a share, `; installed packs add: <pack> N characters (k skills), …`,
   largest first, ties broken by pack id. The remedies follow: `` `stamity clean --pack <id>` `` first, only when a pack
-  holds a share, then narrowing the content selection, then `ruleDelivery: "always-on"` (`skillsListRefusal`,
-  `src/adapters/codex.ts:699-747`). A row is a pack's when the catalog item it was rendered from, matched by class and
+  holds a share, then `ruleDelivery: "always-on"` (`skillsListRefusal`, `src/adapters/codex.ts:699-747`); the step
+  narrowing the content selection, named between them until 2026-10-21, is gone (amended 2026-10-21, `build/26`,
+  `review/34`; the amendment below). A row is a pack's when the catalog item it was rendered from, matched by class and
   artifact id, carries pack provenance (`packOf`, `:845-853`); corpus, fork and override rows are the core's share.
   The planner's `ADAPTER_ERROR` re-wrap above is unchanged.
 - **The figure.** `codexSkillsListChars` reads 5,570 characters over the 17 shown skills, the 8 content skills and the
@@ -317,7 +319,7 @@ nine touchpoints hidden, nothing shortened (`.stamity/runs/2026-10-03_pack-engin
   display-only and malformed companions").
 
 Amended 2026-10-21 (plan 018 file 1, run `2026-10-20_packs-rebuilt`, units `u13-frontend-move`, read at `936350cb`,
-and `u4-pack-fit` with its fix round, read at its lane head `164b31d1`). The figure: with the two interface skills in
+and `u4-pack-fit` with its fix round, cited by file and symbol). The figure: with the two interface skills in
 the `frontend` pack, `codexSkillsListChars` reads 4,759 characters over 15 shown skills, the 6 content skills and the
 9 projected rules, where it read 5,570 over 17, and the full-selection pin moves with it. The count is one function,
 `measureCodexSkillsList`, which `sync`'s refusal and `add`'s fit check (REQ-PACK-004 in `docs/specs/packs.md`) share;
@@ -333,13 +335,13 @@ the cap and the shown-rows rule are unchanged.
   cap, the core's share and each pack's, counting `SKILL.md` rows only so the shares sum to the total;
   `skillsListRefusal` renders from it. The residue planner and `add`'s fit check both reach it through one private
   body, the shown rows (touchpoints included) and the pack attribution taken from the adapter's own selected items, and
-  `measureCodexSkillsListFor(core, ctx)` exports that body for the fit check (`src/adapters/codex.ts` at `164b31d1`).
+  `measureCodexSkillsListFor(core, ctx)` exports that body for the fit check (`src/adapters/codex.ts`).
 - GIVEN the full selection's real emission THEN Codex shows 15 rows totalling 4,759 characters
   (`test/adapters/codex.test.ts`; added 2026-10-21); GIVEN the two-pack plan of the refusal case THEN
   `measureCodexSkillsList`'s shares equal the shares the refusal prints, the refusal names `clean --pack <id>` then
   `ruleDelivery`, and neither it nor the core-only refusal names narrowing the content selection; GIVEN a pack
   installed past the cap THEN `add`'s measure and `sync`'s refusal read the same total and shares
-  (`test/adapters/codex.test.ts` and `test/cli/engine/packFit.test.ts` at `164b31d1`; added 2026-10-21).
+  (`test/adapters/codex.test.ts` and `test/cli/engine/packFit.test.ts`, from `u4-pack-fit`; added 2026-10-21).
 
 ### REQ-PROVE-005 — Always-on composite re-measured
 

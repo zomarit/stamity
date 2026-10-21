@@ -18,14 +18,13 @@ a clause the delta is silent on, a line headed "As built" adds it; where the lan
 requirement states the code and the "As built" line says what moved. A ledger id (`review/12`, `build/3`) is that
 run's own.
 
-Every citation reads at the integration head `936350cb` unless it names another commit. Three units landed beside the
-merge, on their own lanes, and are cited at their lane heads: `u4-pack-fit` at `164b31d1`, its fix round (branch `p22/u4`),
-`u15-moved-customizations` at `3bd36771` (branch `p22/u15`) and `u16-frontend-suggestion` at `017834e1` (branch
-`p22/u16`); the reference page's skill-count fix (`integrate/2`) at `c87ad244`. `u17-pack-suite` had not run when this
-merge ran: the requirements it carries (REQ-PACK-011, REQ-PACK-012, and REQ-PACK-006's lint) name the suites it lands,
-`test/packs/packs.test.ts` and `test/packs/lint.test.ts`, as its cell declares them. Citations into the modules the
-run rewrote name the file and the symbol, as the plan's own cells anchor them; a citation of a content file names its
-lines.
+Every citation reads at the integration head `936350cb` unless it names a unit. Five changes landed beside the merge,
+on their own lanes, and are cited by the unit and by file and symbol, never by a lane commit, since the integration
+lane's cherry-pick gives each commit a new sha: `u4-pack-fit` with its fix round, `u15-moved-customizations`,
+`u16-frontend-suggestion`, `u17-pack-suite` (`test/packs/packs.test.ts` and `test/packs/lint.test.ts`), and the
+reference page's skill-count fix (`integrate/2`). Their code reads at the integrated branch's head. Citations into the
+modules the run rewrote name the file and the symbol, as the plan's own cells anchor them; a citation of a content file
+names its lines.
 
 ## Intent
 
@@ -71,7 +70,7 @@ and no pin moves.
 - **Proof:** `test/pack/curated.test.ts`, `test/ci/tarballStaging.test.ts`, `test/support/support.test.ts` (the
   `stampPackVersions` cases), `test/composition/root.test.ts` (the lazy getter), `test/cli/commands/check.test.ts`
   ("still fails a tampered catalog-installed pack when the bundled catalog cannot be derived"); `test/packs/packs.test.ts`
-  holds every pack at the release version (lands in `u17-pack-suite`).
+  holds every pack at the release version (`u17-pack-suite`).
 - **Source:** `src/pack/curated.ts`, `scripts/generate-pack-manifests.mjs`, `tsdown.config.mjs`.
 
 ### REQ-PACK-002 — Retired pack names point at their successors and are never reused
@@ -119,13 +118,15 @@ Given Codex selected, When `stamity add <spec>` plans a pack, Then before any wr
 the list Codex would show with the pack in it, an installed copy of the same id replaced, through the one function
 `sync`'s refusal counts with (`measureCodexSkillsList`), and past 8,000 characters refuses with `VALIDATION_ERROR`,
 exit 1, naming the pack, its share and the total; a pack whose skills each ship `allow_implicit_invocation: false` adds
-nothing, a setup without Codex is not measured, and the receipt and `sync`'s refusal text are unchanged.
+nothing, a setup without Codex is not measured, and the receipt is unchanged; `sync`'s refusal keeps its total, cap and
+share sentences and no longer advises narrowing the content selection, as REQ-PROVE-004 states.
 
-- **As built (`164b31d1`):** the refusal is a fourth part beside collisions, name clashes and left-behind files,
+- **As built (`u4-pack-fit`):** the refusal is a fourth part beside collisions, name clashes and left-behind files,
   reading `pack "<id>" does not fit Codex's skills list: its <k> skill(s) add <n> characters, <t> of 8,000`, digits
   grouped (`src/cli/commands/add.ts`). Its next shortens the pack's descriptions, marks a skill explicit-only, or sets
-  `ruleDelivery: "always-on"`, and where another installed pack already holds a share it names
-  `clean --pack <that pack>` first, the largest; neither `add`'s refusal nor `sync`'s advises narrowing the content
+  `ruleDelivery: "always-on"`; where another installed pack holds a share it also names `clean --pack <that pack>`, the
+  largest, first where the setup is past the cap without the incoming pack and otherwise after the pack's own remedies
+  (`fitPart`, `src/cli/commands/add.ts`); neither `add`'s refusal nor `sync`'s advises narrowing the content
   selection any more, since `sync` plans the full corpus every run (`review/32`, `build/26`). The plan stages the pack
   in place of an installed copy of its id (`StagedPack` and `resolveInstalledPackContent`'s `opts.staged`,
   `src/pack/projection.ts`), and `add` and `sync`'s residue planner measure through one helper, the same shown rows
@@ -133,11 +134,11 @@ nothing, a setup without Codex is not measured, and the receipt and `sync`'s ref
   `src/cli/engine/packFit.ts`, given `sync`'s selection and installation identity; `review/31`, `review/33`).
   `add --json`'s `planned.fit` carries the measure, `{ codex: { applies: false } }` without Codex, and is `null` only
   where another part already refuses and the staged emission cannot be planned.
-- **Proof (`164b31d1`):** `test/cli/engine/packFit.test.ts` (among its cases, "measures the total, the core's share and
-  the pack's that sync's refusal prints for the same setup"), `test/cli/commands/add.test.ts` ("add — the Codex
-  skills-list fit (REQ-PACK-004)", and "names removing the installed pack first when another pack already takes the
-  list past 8,000"), `test/adapters/codex.test.ts` (the `measureCodexSkillsList` pin, and the refusal pins with no
-  narrowing step), `test/pack/packEngineDefects.test.ts` (C2 through `installBypassingAdd`, C3).
+- **Proof (`u4-pack-fit`):** `test/cli/engine/packFit.test.ts` (among its cases, "measures the total, the core's share
+  and the pack's that sync's refusal prints for the same setup"), `test/cli/commands/add.test.ts` ("add — the Codex
+  skills-list fit (REQ-PACK-004)", and "names removing the installed pack first when another pack already takes the list
+  past 8,000"), `test/adapters/codex.test.ts` (the `measureCodexSkillsList` pin, and the refusal pins with no narrowing
+  step), `test/pack/packEngineDefects.test.ts` (C2 through `installBypassingAdd`, C3).
 - **Source:** `src/cli/engine/packFit.ts`, `src/adapters/codex.ts` (`measureCodexSkillsList`), `src/pack/projection.ts`.
 
 ### REQ-PACK-005 — `add` refuses a pack name that collides in its own class
@@ -176,7 +177,7 @@ so a Claude-only setup's `/` menu lists 16 Stamity entries, the 9 commands and 7
   same way (`src/pack/projection.ts`). An override or pack skill that wrote either key as a string, which emitted before,
   now stops `sync` (`build/2`).
 - **Proof:** `test/emit/skillsProjection.test.ts` ("the two client keys", and the rule-skill head case),
-  `test/pack/projection.test.ts`, `test/corpus/census.test.ts` (seven core skills); the lint lands in
+  `test/pack/projection.test.ts`, `test/corpus/census.test.ts` (seven core skills); the lint is
   `test/packs/lint.test.ts` (`u17-pack-suite`).
 - **Source:** `src/emit/skillsProjection.ts`.
 
@@ -232,18 +233,20 @@ frontend`, with or without the pack (REQ-OVERLAY-009); a full override warns on 
 stands alone, and with the pack installed the planner's refusal names the move. A `moved-skills` row of `check` reads
 `fail` for such an overlay, `warn` for a full override or a moved id's core ledger row, and `pass` otherwise.
 
-- **As built (`3bd36771`):** the refusal reads `skill "<id>" moved from the core to the <pack> pack in <since>, and
-  overlays on pack skills are not applied. Fold your change into a full override under another id, or remove <path>;
-  to keep the shipped skill, stamity add <pack>.`, each half named by its POSIX path (`refuseMovedSkillOverlay`,
-  `src/content/catalog.ts`); a skill of a moved id supplied by another pack keeps the pack-skill text, and a fork-stage
-  patch of a moved skill stays a skip, its reason naming the move and the pack (`forkMovedSkillSkipReason`). The
-  warning reads `your override <path> replaced a core skill that moved to the <pack> pack; it now stands alone and
-  tracks no shipped copy. Keep it, or remove it and stamity add <pack>.` (`movedSkillOverrideWarnings`,
-  `src/emit/planner.ts`). `checkMovedSkills` sits after `pack-catalog`, reads the override folder and the ledger
-  directly so it answers when the plan throws, finds a full override by the id it declares, as the index does, and with
-  the pack installed names the collision and `clean --pack <pack>` (`src/cli/commands/check.ts`).
-- **Proof (`3bd36771`):** `test/content/catalog.test.ts`, `test/emit/plannerOverlay.test.ts`,
-  `test/cli/commands/check.test.ts` ("check — moved-skills"), `test/cli/commands/validate.test.ts`.
+- **As built (`u15-moved-customizations`):** the refusal reads `skill "<id>" moved from the core to the <pack> pack in
+  <since>, and overlays on pack skills are not applied. Fold your change into a full override under another id, or
+  remove <path>; to keep the shipped skill, stamity add <pack>.`, each half named by its POSIX path
+  (`refuseMovedSkillOverlay`, `src/content/catalog.ts`); a skill of a moved id supplied by another pack keeps the
+  pack-skill text, and a fork-stage patch of a moved skill stays a skip, its reason naming the move and the pack
+  (`forkMovedSkillSkipReason`). The warning reads `your override <path> replaced a core skill that moved to the <pack>
+  pack; it now stands alone and tracks no shipped copy. Keep it, or remove it and stamity add <pack>.`
+  (`movedSkillOverrideWarnings`, `src/emit/planner.ts`). `checkMovedSkills` sits after `pack-catalog`, reads the
+  override folder and the ledger directly so it answers when the plan throws, finds a full override by the id it
+  declares, as the index does, and with the pack installed names the collision and `clean --pack <pack>`
+  (`src/cli/commands/check.ts`).
+- **Proof (`u15-moved-customizations`):** `test/content/catalog.test.ts` (its `validate` case is "REQ-PACK-009 —
+  `validate` carries the moved-skill refusal unchanged"), `test/emit/plannerOverlay.test.ts`,
+  `test/cli/commands/check.test.ts` ("check — moved-skills").
 - **Source:** `src/content/catalog.ts`, `src/emit/planner.ts`, `src/cli/commands/check.ts`.
 
 ### REQ-PACK-010 — `init` suggests the `frontend` pack where a front-end framework is detected
@@ -253,16 +256,16 @@ Qwik stack, When `init` prints its stack suggestions, Then a row names the `fron
 `add frontend` line, once however many of those stacks are detected; a pack id `add` cannot resolve is never offered,
 no row offers a pack the ledger already records as installed, and `init` installs nothing.
 
-- **As built (`017834e1`):** `STACK_PACK_CATALOG` maps the twelve subjects, read from `FRAMEWORK_SUBJECTS`, to
-  `frontend`, and `resolvableStackPacks` keeps the ids the catalog resolves that no `pack:<id>` ledger owner holds
-  (`src/detect/stackSupport.ts`; `offeredStackPacks`, `src/cli/commands/init.ts`). The first row offering a pack leads
-  the block, so the panel's three-row cap never cuts it, and reads `<subject> (framework) — Install the frontend pack:
-  <pinned call> add frontend`; a later row naming the same pack reads "covered by the frontend pack above"
-  (`stackSuggestionLines`, `src/cli/commands/init/panel.ts`). A catalog or manifest that cannot be read after the
-  writes offers no pack and `init` still exits 0.
-- **Proof (`017834e1`):** `test/detect/stackSupport.test.ts` ("STACK_PACK_CATALOG and resolvableStackPacks
-  (REQ-PACK-010)"), `test/cli/commands/initPanel.test.ts` ("renderInitPanel — the frontend pack suggestion
-  (REQ-PACK-010)"), `test/cli/commands/init.test.ts`.
+- **As built (`u16-frontend-suggestion`):** `STACK_PACK_CATALOG` maps the twelve subjects, read from
+  `FRAMEWORK_SUBJECTS`, to `frontend`, and `resolvableStackPacks` keeps the ids the catalog resolves that no `pack:<id>`
+  ledger owner holds (`src/detect/stackSupport.ts`; `offeredStackPacks`, `src/cli/commands/init.ts`). The first row
+  offering a pack leads the block, so the panel's three-row cap never cuts it, and reads `<subject> (framework) —
+  Install the frontend pack: <pinned call> add frontend`; a later row naming the same pack reads "covered by the
+  frontend pack above" (`stackSuggestionLines`, `src/cli/commands/init/panel.ts`). A catalog or manifest that cannot be
+  read after the writes offers no pack and `init` still exits 0.
+- **Proof (`u16-frontend-suggestion`):** `test/detect/stackSupport.test.ts` ("STACK_PACK_CATALOG and
+  resolvableStackPacks (REQ-PACK-010)"), `test/cli/commands/initPanel.test.ts` ("renderInitPanel — the frontend pack
+  suggestion (REQ-PACK-010)"), `test/cli/commands/init.test.ts`.
 - **Source:** `src/detect/stackSupport.ts`, `src/cli/commands/init.ts`, `src/cli/commands/init/panel.ts`.
 
 ### REQ-PACK-011 — The pack lint
@@ -273,7 +276,13 @@ well-formed or not, and on a CLI call (`npx … stamity`, `@zomarit/stamity`, a 
 every pack skill's description to at most 250 characters, `ops` and `product-audit` exempt through an entry that fails
 once that pack's folder is gone.
 
-- **Proof:** `test/packs/lint.test.ts` (lands in `u17-pack-suite`; each probe with a made-up pack that makes it fail).
+- **As built:** the lint holds REQ-PACK-006's companion rule in both directions: a skill declaring
+  `disable-model-invocation: true` ships an `agents/openai.yaml` setting `policy.allow_implicit_invocation: false`, and
+  an `agents/openai.yaml` setting `policy.allow_implicit_invocation: false` sits only beside a skill declaring
+  `disable-model-invocation: true`, so Codex's list and the other clients agree (`explicitOnlyCompanions`,
+  `test/packs/lint.test.ts`). The cap's exemption list is `RETIRING_PACKS`, each entry with a case that goes red once
+  its folder is gone.
+- **Proof:** `test/packs/lint.test.ts` (`u17-pack-suite`; each probe with a made-up pack that makes it fail).
 - **Source:** `test/support/packFixtures.ts` (the shared made-up-pack helper `u17-pack-suite` extends).
 
 ### REQ-PACK-012 — One per-pack suite proves every pack
@@ -283,11 +292,20 @@ in-process holds each to a valid manifest at the release version, its integrity 
 ingress gates, the frontmatter contract, names unique across the core and every pack, and cross-references resolved
 against the core and every pack, the scaffold suite's resolver widened the same way; then `add <id>` by catalog id,
 `sync` and `check` exit 0 on the five client sets and with every pack on all four clients, each check shown red on a
-made-up pack first. The three per-pack suites stay until their packs leave.
+made-up pack first. The per-pack suites stay beside it: `test/packs/ops.test.ts`, `test/packs/product-audit.test.ts`
+and `test/packs/scaffold.test.ts` until their packs leave, and `test/packs/frontend.test.ts`, whose pack is not
+retiring, for good.
 
 - **As built, before the suite:** the scaffold suite's cross-reference resolver already reads every bundled pack
   (`listBundledPackIds`, `test/packs/scaffold.test.ts`; unit `u13-frontend-move`).
-- **Proof:** `test/packs/packs.test.ts` (lands in `u17-pack-suite`), `test/packs/scaffold.test.ts`.
+- **As built:** the suite's static checks hold four rules more, each red on a made-up pack: a first-party pack ships
+  only commands and skills, the retiring packs exempt by name while their folders exist, each exemption red once its
+  folder is gone (`classProblems`, `RETIRING_PACKS`; `ops` ships agents, `product-audit` a rule); no artifact head and
+  no manifest carries a `floor:` tag or marker (`floorProblems`); no path or byte a pack ships matches one of the leak
+  gate's reserved-name rules, read from the gate (`reservedNameProblems`); and no pack folder takes a retired id
+  (`lookupRetiredPack`). Its frontmatter check also fails a description that addresses the reader
+  (`test/packs/packs.test.ts`).
+- **Proof:** `test/packs/packs.test.ts` (`u17-pack-suite`), `test/packs/scaffold.test.ts`.
 - **Source:** `test/support/packFixtures.ts`.
 
 ### REQ-PACK-013 — The eval surface takes in `packs/`
@@ -318,7 +336,7 @@ count and their classes from `packs/` rather than from a typed list; the page is
 - **As built:** the lines read ``- `st-<id>` — <description>`` under `Skills:` and ``- `/st-<id>` — <description>`` under
   `Commands:`, after the field list; an item with no `id` or `description` refuses, naming its file (`readPacks` and
   `packBlock`, `src/cli/docs/referencePages.ts`). A skill counts by its `SKILL.md`, so a support file such as
-  `agents/openai.yaml` is not a skill (`c87ad244`, `integrate/2`).
+  `agents/openai.yaml` is not a skill (`isSkillItemFile`, `integrate/2`).
 - **Proof:** `test/cli/docs/referencePages.test.ts`.
 - **Source:** `src/cli/docs/referencePages.ts`.
 
@@ -359,11 +377,11 @@ exists, it is the normative record for that requirement.
   `VALIDATION_ERROR` naming the pack, its share and the total, and the tree and ledger are unchanged; GIVEN a pack whose
   skills set `allow_implicit_invocation: false` THEN its share is 0; GIVEN a re-add THEN the installed copy is measured
   once; GIVEN no Codex THEN `fit` reads `applies: false`; GIVEN another installed pack already past the cap THEN the
-  refusal's next opens on removing that pack with `clean --pack`. *(test, at `164b31d1`:
+  refusal's next opens on removing that pack with `clean --pack`. *(test, `u4-pack-fit`:
   `test/cli/engine/packFit.test.ts`, `test/cli/commands/add.test.ts`)*
 - GIVEN the same over-cap pack installed past `add` WHEN `sync` runs THEN it refuses, and the total, the core's share and
   the pack's share it prints equal the ones `add`'s measure reads for that setup; neither refusal names narrowing the
-  content selection. *(test, at `164b31d1`: `test/cli/engine/packFit.test.ts`, `test/pack/packEngineDefects.test.ts` C2,
+  content selection. *(test, `u4-pack-fit`: `test/cli/engine/packFit.test.ts`, `test/pack/packEngineDefects.test.ts` C2,
   `test/adapters/codex.test.ts`)*
 
 **REQ-PACK-005**
@@ -383,7 +401,7 @@ exists, it is the normative record for that requirement.
   declaring neither THEN its bytes are unchanged; GIVEN a rule-skill THEN its head keys are exactly `description`,
   `metadata`, `name` and `user-invocable`, the last `false`. *(test: `test/emit/skillsProjection.test.ts`)*
 - GIVEN a pack skill declaring `disable-model-invocation: true` with no `agents/openai.yaml` setting
-  `policy.allow_implicit_invocation: false` THEN the lint fails. *(test: `test/packs/lint.test.ts`, lands in
+  `policy.allow_implicit_invocation: false` THEN the lint fails. *(test: `test/packs/lint.test.ts`,
   `u17-pack-suite`)*
 - GIVEN a Claude-only scratch setup WHEN its `/` menu is opened THEN it lists 16 Stamity entries, the 9 commands and 7
   skills. *(judgment: the maintainer, at plan 018 file 2's close, where the menu takes its final shape)*
@@ -413,32 +431,34 @@ exists, it is the normative record for that requirement.
 - GIVEN an overlay of a moved skill, with the pack absent and installed THEN the walk refuses with the one text; GIVEN a
   full override with the pack absent THEN it projects and the plan carries the stands-alone warning; GIVEN it with the
   pack installed THEN the planner refuses, naming the move; GIVEN `validate` THEN it exits 1 with the walk's text.
-  *(test, at `3bd36771`: `test/content/catalog.test.ts`, `test/emit/plannerOverlay.test.ts`)*
+  *(test, `u15-moved-customizations`: `test/content/catalog.test.ts`, `test/emit/plannerOverlay.test.ts`)*
 - GIVEN no customization THEN `moved-skills` reads `pass`; an overlay THEN `fail`, through `check --json` with the
   drift gate failed; a full override, in its own folder or under another declaring the moved id, or a moved id's core
-  ledger row THEN `warn`. *(test, at `3bd36771`: `test/cli/commands/check.test.ts`)*
+  ledger row THEN `warn`. *(test, `u15-moved-customizations`: `test/cli/commands/check.test.ts`)*
 
 **REQ-PACK-010**
 
 - GIVEN a Next.js repository WHEN `init` prints its panel THEN the `next (framework)` row carries the pinned
   `add frontend` call once; GIVEN Next.js and React THEN the call prints once and the second row reads covered; GIVEN
   `frontend` installed, or a backend repository THEN no install line; GIVEN a catalog read that throws after the writes
-  THEN no install line and exit 0. *(test, at `017834e1`: `test/cli/commands/initPanel.test.ts`,
+  THEN no install line and exit 0. *(test, `u16-frontend-suggestion`: `test/cli/commands/initPanel.test.ts`,
   `test/cli/commands/init.test.ts`, `test/detect/stackSupport.test.ts`)*
 
 **REQ-PACK-011**
 
 - GIVEN a made-up pack carrying `${STAMITY:`, an `npx … stamity` call, a fenced line opening `stamity `, a registered
   verb, or a skill description of 251 characters THEN the lint fails on each; GIVEN a `.stamity/` path or a
-  `stamity-<id>` name THEN it passes; GIVEN the `ops` or `product-audit` folder gone THEN its exemption fails.
-  *(test: `test/packs/lint.test.ts`, lands in `u17-pack-suite`)*
+  `stamity-<id>` name THEN it passes; GIVEN the `ops` or `product-audit` folder gone THEN its exemption fails; GIVEN a
+  made-up skill declaring `disable-model-invocation: true` with no hiding companion, or a hiding companion beside a
+  skill that does not declare it THEN the lint fails on each. *(test: `test/packs/lint.test.ts`, `u17-pack-suite`)*
 
 **REQ-PACK-012**
 
 - GIVEN the packs folder THEN the suite's pack ids equal `curatedPacks()`'s, and each pack passes the static checks
   and `add <id>`, `sync` and `check` at exit 0 on `["claude"]`, `["cursor"]`, `["codex"]`, `["copilot"]` and all four,
-  every pack together on all four; GIVEN a made-up pack breaking each check THEN that check fails. *(test:
-  `test/packs/packs.test.ts`, lands in `u17-pack-suite`)*
+  every pack together on all four; GIVEN a made-up pack breaking each check THEN that check fails, the class rule, the
+  `floor:` rule, the reserved-name rule and the retired-id rule among them. *(test: `test/packs/packs.test.ts`,
+  `u17-pack-suite`)*
 
 **REQ-PACK-013**
 
@@ -461,10 +481,11 @@ exists, it is the normative record for that requirement.
 - `test`: each requirement names its suites above; once a test exists it is the normative record.
 - `source`: `src/pack/curated.ts`, `src/pack/retired.ts`, `src/pack/moved.ts`, `src/pack/install.ts`,
   `src/pack/projection.ts`, `src/cli/commands/add.ts`, `src/cli/commands/check.ts`, `src/cli/engine/emissionWrite.ts`,
-  `src/cli/engine/packFit.ts` and `src/adapters/codex.ts` (at `164b31d1`), `src/cli/commands/sync/report.ts`, `src/emit/skillsProjection.ts`,
-  `src/emit/planner.ts` and `src/content/catalog.ts` (at `3bd36771`), `src/detect/stackSupport.ts` and
-  `src/cli/commands/init/panel.ts` (at `017834e1`), `src/cli/docs/referencePages.ts`, `tsdown.config.mjs`,
-  `scripts/generate-pack-manifests.mjs`, `scripts/eval/instrument.mjs`, `packs/frontend/`.
+  `src/cli/engine/packFit.ts` and `src/adapters/codex.ts` (`u4-pack-fit`), `src/cli/commands/sync/report.ts`,
+  `src/emit/skillsProjection.ts`, `src/emit/planner.ts` and `src/content/catalog.ts` (`u15-moved-customizations`),
+  `src/detect/stackSupport.ts` and `src/cli/commands/init/panel.ts` (`u16-frontend-suggestion`),
+  `src/cli/docs/referencePages.ts`, `tsdown.config.mjs`, `scripts/generate-pack-manifests.mjs`,
+  `scripts/eval/instrument.mjs`, `packs/frontend/`.
 - Pages: `docs/troubleshooting.md` (the `pack-catalog` and `moved-skills` rows), `docs/customization.md` (a moved
   skill's overlay and override), `docs/packs-and-trust.md`, `docs/reference/packs.md`.
 
@@ -488,7 +509,6 @@ exists, it is the normative record for that requirement.
   is private to `src/emit/planner.ts`; the equality case goes red if the two diverge (`u4-pack-fit`'s fixer report,
   its deferral). The dropped-rules warning in `src/adapters/codex.ts` still advises narrowing the content selection,
   which `sync` does not honour (that report's M-1, decision needed).
-- REQ-PACK-011 and REQ-PACK-012 name suites `u17-pack-suite` lands; until then their criteria have no test, and the
-  frontend pack's install is covered by `test/packs/frontend.test.ts` and a manual `add frontend` then `sync`
-  (`u13-frontend-move`'s report), not by the install smoke, which lists three packs (`build/23`, to file 2).
+- The frontend pack's install is covered in-process by `test/packs/packs.test.ts`'s `add`, `sync` and `check` cases and
+  by `test/packs/frontend.test.ts`, not by the install smoke, which lists three packs (`build/23`, to file 2).
 </content>

@@ -147,9 +147,10 @@ REQ-FLOW-125 to REQ-FLOW-128, and the text dated 2026-10-21, come from the spec 
 `docs/plans/018-packs-rebuilt-01.md` (plan 018 file 1, Package 22, run `2026-10-20_packs-rebuilt`), merged once by its
 unit `u18-spec-docs`; the same delta writes the packs spec, `docs/specs/packs.md`, whose REQ-PACK ids the text here
 cites. Where a unit's or fixer's report declared a clause the delta is silent on, a line headed "As built" adds it.
-Every `path:line` in that text reads at the integration head `936350cb`, but for the units `u15-moved-customizations`,
-cited at its lane head `3bd36771`, and `u4-pack-fit`, at `164b31d1`. That text is not in a release yet; it ships with
-the next minor after 1.16.0.
+Every `path:line` in that text reads at the integration head `936350cb`, but for the units `u15-moved-customizations`
+and `u4-pack-fit`, which landed on their own lanes and are cited by unit, file and symbol: the integration lane's
+cherry-pick gives each lane commit a new sha. That text is not in a release yet; it ships with the next minor after
+1.16.0.
 
 ## Intent
 
@@ -1440,7 +1441,7 @@ each client's command.
   `test/cli/commands/clean.test.ts`; added 2026-10-18).
 
 Amended 2026-10-21 (plan 018 file 1, run `2026-10-20_packs-rebuilt`, units `u3-retired-names`, read at `936350cb`, and
-`u15-moved-customizations`, read at its lane head `3bd36771`). The doctor rows of the 2026-10-18 amendment: `check`
+`u15-moved-customizations`, cited by file and symbol). The doctor rows of the 2026-10-18 amendment: `check`
 prints sixteen environment probes where it read fourteen, `pack-catalog` (REQ-PACK-003 in `docs/specs/packs.md`) and
 `moved-skills` (REQ-PACK-009) after `pack-reach` and before `model-pins`, every other row in place, and
 `docs/troubleshooting.md` lists both; the literal row-order pin in `test/cli/commands/check.test.ts` gains them with its
@@ -6483,7 +6484,7 @@ above.
 - `source` (added 2026-10-21): `content/agents/stamity-implementer.md`, `content/agents/stamity-reviewer.md`,
   `content/rules/stamity-question-protocol.md`, `src/runs/morning.ts` (`blastRadiusSection`, `withBlastRadius`),
   `src/cli/commands/run.ts` (`draftPr`, `screenedBlastRadius`), `src/cli/commands/check.ts` (`checkPackCatalog`, and
-  `checkMovedSkills` at `3bd36771`).
+  `checkMovedSkills`, from `u15-moved-customizations`).
 - `test` (added 2026-10-21): `test/corpus/agents/verdictReturns.test.ts`, `test/corpus/agents/executionReturns.test.ts`,
   `test/hooks/scripts.test.ts`, `test/corpus/rules/protocol.test.ts`, and the suites each requirement names.
 

@@ -23,8 +23,8 @@ the tree at `eb4f0727` and shipped with 1.12.0.
 The paragraph headed "Amended 2026-10-21", its table row and the criterion marked
 "added 2026-10-21" come from the spec delta of `docs/plans/018-packs-rebuilt-01.md`
 (run `2026-10-20_packs-rebuilt`), merged by its unit `u18-spec-docs`. They cite
-the unit `u15-moved-customizations` at its lane head `3bd36771` and are not in a
-release yet.
+the unit `u15-moved-customizations` by file and symbol, since the integration
+lane's cherry-pick gives its commits new shas, and are not in a release yet.
 
 ## Intent
 
@@ -528,7 +528,7 @@ REQ-FORK-004 gives; `validate` prints its reason as a warning at exit 0
 `:749-751`).
 
 **Amended 2026-10-21 (run `2026-10-20_packs-rebuilt`, unit
-`u15-moved-customizations` and its fix round; cited at `3bd36771`).** The table
+`u15-moved-customizations` and its fix round).** The table
 gains the moved-skill row: the overlay's base is a skill that moved from the core
 to a pack (`design-system-detect` and `browser-evidence`, to `frontend`; REQ-PACK-009
 in `docs/specs/packs.md`), named by the overlay's absolute path, the skill, the pack
@@ -867,7 +867,7 @@ thirty-nine.
   walk throws `VALIDATION_ERROR` with the one moved-skill text naming the overlay's
   POSIX path and `stamity add frontend`, and WHEN `validate --json` runs THEN it
   exits 1 with that text against the overlay file (added 2026-10-21;
-  `test/content/catalog.test.ts` at `3bd36771`).
+  `test/content/catalog.test.ts`).
 
 **REQ-OVERLAY-010**
 
