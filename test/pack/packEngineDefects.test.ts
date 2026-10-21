@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { cp, mkdir, writeFile } from "node:fs/promises";
+import { cp, mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { COMMANDS } from "../../src/cli.ts";
@@ -471,7 +471,154 @@ describe("B — defect 1 (cross-class name clash): refused at add and at sync, n
     },
     CASE_TIMEOUT,
   );
+
+  // B6-B9: the same-class half of the name check (REQ-PACK-005). Until it, the
+  // add-time check reported a name only when owners of two classes held it, and
+  // the ledger gate caught a same-class id only where a ledger row already
+  // recorded it, so these packs passed `add` and were refused at `sync`.
+  describe.each(SETS)("tools=%s", (_, tools) => {
+    it(
+      "B6: add refuses a pack skill taking the id of a core skill this setup has not synced yet, naming the core owner",
+      async () => {
+        const repo = await freshRepo(tools);
+        await withoutSyncedCoreSkill(repo, "handoff");
+        const pack = await writePack("acme-demo", {
+          "skills/st-handoff/SKILL.md": artifact("handoff", "skill", "Acme shift handoff steps."),
+        });
+        const before = await treeDigest(repo);
+
+        const added = await addPack(repo, pack);
+
+        expect(
+          added.code,
+          `same-class name clash: add must refuse a pack skill "handoff", the id the core skill holds even where no ledger row records it — ${said(added)}`,
+        ).not.toBe(0);
+        expect(
+          linesWith(added.output, /st-handoff/, /\bcore\b/i, /acme-demo/),
+          `same-class name clash: the refusal must name st-handoff, the core owner and the pack acme-demo — ${said(added)}`,
+        ).not.toEqual([]);
+        expect(
+          await treeDigest(repo),
+          "same-class name clash: a refused add must leave the repository tree unchanged",
+        ).toBe(before);
+      },
+      CASE_TIMEOUT,
+    );
+  });
+
+  it(
+    "B7 (tools=cursor): add refuses a pack skill in folder st-verify under another id — it emits st-verify, a core skill",
+    async () => {
+      const repo = await freshRepo(["cursor"]);
+      const pack = await writePack("acme-demo", {
+        "skills/st-verify/SKILL.md": artifact("acme-verify", "skill", "Acme verification steps."),
+      });
+      const before = await treeDigest(repo);
+
+      const added = await addPack(repo, pack);
+
+      expect(
+        added.code,
+        `same-class name clash: add must refuse a pack skill whose folder emits st-verify, the core skill's folder — ${said(added)}`,
+      ).not.toBe(0);
+      expect(
+        linesWith(added.output, /st-verify/, /\bcore\b/i, /acme-verify/),
+        `same-class name clash: the refusal must name st-verify, the core owner and the pack skill acme-verify — ${said(added)}`,
+      ).not.toEqual([]);
+      expect(
+        await treeDigest(repo),
+        "same-class name clash: a refused add must leave the repository tree unchanged",
+      ).toBe(before);
+    },
+    CASE_TIMEOUT,
+  );
+
+  it(
+    "B8 (tools=cursor): acme-two's skill folder st-shared is refused against acme-one's, under different ids",
+    async () => {
+      const repo = await freshRepo(["cursor"]);
+      const first = await writePack("acme-one", {
+        "skills/st-shared/SKILL.md": artifact("one-shared", "skill", "The acme-one shared skill."),
+      });
+      const second = await writePack("acme-two", {
+        "skills/st-shared/SKILL.md": artifact("two-shared", "skill", "The acme-two shared skill."),
+      });
+      const one = await addPack(repo, first);
+      expect(one.code, `fixture: acme-one must install — ${said(one)}`).toBe(0);
+      const before = await treeDigest(repo);
+
+      const two = await addPack(repo, second);
+
+      expect(
+        two.code,
+        `same-class name clash: add acme-two must refuse — its skill emits st-shared, acme-one's skill folder — ${said(two)}`,
+      ).not.toBe(0);
+      expect(
+        linesWith(two.output, /st-shared/, /acme-one/, /acme-two/),
+        `same-class name clash: the refusal must name st-shared and both packs as its owners — ${said(two)}`,
+      ).not.toEqual([]);
+      expect(
+        await treeDigest(repo),
+        "same-class name clash: the refused second add must leave the tree unchanged",
+      ).toBe(before);
+    },
+    CASE_TIMEOUT,
+  );
+
+  it(
+    "B9 (tools=cursor): re-adding the same pack replaces its own skill, never a clash",
+    async () => {
+      const repo = await freshRepo(["cursor"]);
+      const pack = await writePack("acme-demo", {
+        "skills/st-acme-lint/SKILL.md": artifact("acme-lint", "skill", "The acme lint skill."),
+      });
+      const first = await addPack(repo, pack);
+      expect(first.code, `fixture: acme-demo must install — ${said(first)}`).toBe(0);
+
+      const again = await addPack(repo, pack);
+
+      expect(
+        again.code,
+        `same-class name clash: a re-add of acme-demo must not count its own installed st-acme-lint as a clash — ${said(again)}`,
+      ).toBe(0);
+    },
+    CASE_TIMEOUT,
+  );
 });
+
+/**
+ * Makes `repo` a setup that has not synced the core skill `id` yet, as one
+ * does right after an engine upgrade adds that skill: no selection entry, no
+ * ledger row and no client copy. The bundled corpus still ships it, so the core
+ * holds the id and its folder name whether or not this setup records it.
+ *
+ * Why the manifest is edited rather than reached by a verb: `sync` refreshes
+ * the selection to the full corpus (`fullCorpusSelection`,
+ * `src/cli/engine/emissionWrite.ts`), and no verb unselects one core skill.
+ */
+async function withoutSyncedCoreSkill(repo: string, id: string): Promise<void> {
+  const manifest = await readManifest(repo);
+  if (manifest === null) throw new Error("withoutSyncedCoreSkill: the repository has no manifest");
+  const folder = `st-${id}`;
+  const dropped = manifest.ledger.filter((entry) => entry.path.split("/").includes(folder));
+  if (dropped.length === 0) {
+    throw new Error(`withoutSyncedCoreSkill: no ledger row holds a ${folder}/ folder`);
+  }
+  await Promise.all(
+    dropped.map(async (entry) => await rm(join(repo, ...entry.path.split("/")), { force: true })),
+  );
+  await writeManifest(repo, {
+    ...manifest,
+    selection: {
+      ...manifest.selection,
+      items: {
+        ...manifest.selection.items,
+        skill: manifest.selection.items.skill.filter((skill) => skill !== id),
+      },
+    },
+    ledger: manifest.ledger.filter((entry) => !dropped.includes(entry)),
+  });
+}
 
 // ── C: defect 2, the Codex skills list ─────────────────────────────────────
 

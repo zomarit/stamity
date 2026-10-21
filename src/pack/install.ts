@@ -199,9 +199,9 @@ export interface PackInstallPlan {
   /** Reasons this install may not proceed; a non-empty list refuses the apply. */
   collisions: string[];
   /**
-   * Every invocable name this pack would install under that an artifact of
-   * ANOTHER class already takes — or that two of the pack's own artifacts of
-   * different classes share — across every layer the next `sync` projects:
+   * Every invocable name this pack would install under that another artifact
+   * already takes, of another class or of the same one — or that two of the
+   * pack's own artifacts share — across every layer the next `sync` projects:
    * the corpus, the fork layer, the repo's overrides and the installed packs
    * (`../content/catalog.ts` → `findInvocableNameClashes`). Only clashes with
    * an owner from this pack are listed. A non-empty list refuses the install
@@ -869,6 +869,11 @@ async function collectCollisions(
  * ({@link catalogIdOf}), so a pack id the walk would refuse — a same-class
  * shadow — still reaches the operator as the ledger gate's collision line
  * rather than as a walk error thrown ahead of it.
+ *
+ * A same-class name is a clash here too when one of its owners is the
+ * incoming pack's own item (`sameClassFrom`, REQ-PACK-005): the core skill
+ * whose folder a pack skill takes is refused whether or not this setup's
+ * ledger records it yet, which the ledger gate alone cannot see.
  */
 async function collectNameClashes(
   rootDir: string,
@@ -940,8 +945,15 @@ async function collectNameClashes(
     const holder = shipped.byKey.get(typeIdKey(item.type, item.id));
     if (holder !== undefined) replaced.set(item, replacedClaimantOf(shipped, holder) ?? holder);
   }
+  // Same-class names count here as well as cross-class ones, through the
+  // incoming pack's own items: the ledger gate sees an id only where a ledger
+  // row records it, and a skill is named by its folder rather than its id, so
+  // a pack skill could take a core skill's folder (or a fork's, an override's,
+  // another pack's) and pass here, to be refused by `sync`'s walk after it.
+  const incomingItems = new Set<object>(incoming);
   return findInvocableNameClashes([...existing, ...incoming], {
     replacedOf: (item) => replaced.get(item),
+    sameClassFrom: (item) => incomingItems.has(item),
   }).filter((clash) =>
     clash.owners.some((claimant) => claimant.layer === "pack" && claimant.packId === packId),
   );

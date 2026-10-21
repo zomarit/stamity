@@ -692,10 +692,17 @@ function compareInvocableNameOwners(a: InvocableNameOwner, b: InvocableNameOwner
  * skill silently hides the command. Nothing per class can see that, so this
  * check reads every class at once.
  *
- * A name claimed twice within ONE class is not reported here: that is a
- * same-class duplicate, which the walk already reports or refuses (and the
- * pack install gate names as a shadow). Pure: items in, groups out, nothing
- * read — the caller decides which layers to pass and what a clash means.
+ * A name claimed twice within ONE class is not reported by default: that is a
+ * same-class duplicate, which the walk reports or refuses once it meets both
+ * items, as it does at `sync`. `options.sameClassFrom` widens the check for a
+ * caller judging items the walk has not met yet: a name that two owners of one
+ * class hold is reported too when one of those two satisfies it. `add` passes
+ * "the incoming pack's own item" (`../pack/install.ts` → `collectNameClashes`),
+ * so a pack skill whose folder the core (recorded in this setup's ledger or
+ * not), the fork, the overrides or another installed pack already holds is
+ * refused before any write rather than by the walk after it. Pure: items in,
+ * groups out, nothing read — the caller decides which layers to pass and what
+ * a clash means.
  *
  * `options.replacedOf` answers the shipped claimant a customizing item
  * replaced — over a resolved index, `(item) => replacedClaimantOf(index, item)`
@@ -717,9 +724,12 @@ export function findInvocableNameClashes(
     replacedOf?: (
       item: Pick<CatalogItem, "type" | "id" | "relativePath" | "filePath" | "origin" | "provenance">,
     ) => Pick<CatalogItem, "relativePath"> | undefined;
+    sameClassFrom?: (
+      item: Pick<CatalogItem, "type" | "id" | "relativePath" | "filePath" | "origin" | "provenance">,
+    ) => boolean;
   } = {},
 ): InvocableNameClash[] {
-  const ownersByName = new Map<string, { name: string; owner: InvocableNameOwner }[]>();
+  const ownersByName = new Map<string, InvocableNameClaim[]>();
   for (const item of items) {
     const name = invocableNameOf(item, options.replacedOf?.(item));
     const kind = INVOCABLE_KIND_OF[item.type];
@@ -738,15 +748,40 @@ export function findInvocableNameClashes(
       path: toPosixDisplayPath(item.filePath),
     };
     const folded = foldInvocableName(name);
-    ownersByName.set(folded, [...(ownersByName.get(folded) ?? []), { name, owner }]);
+    const judged = options.sameClassFrom?.(item) === true;
+    ownersByName.set(folded, [...(ownersByName.get(folded) ?? []), { name, owner, judged }]);
   }
   return [...ownersByName.entries()]
-    .filter(([, claims]) => new Set(claims.map((claim) => claim.owner.kind)).size > 1)
+    .filter(
+      ([, claims]) =>
+        new Set(claims.map((claim) => claim.owner.kind)).size > 1 ||
+        holdsSameClassThroughJudged(claims),
+    )
     .map(([folded, claims]) => {
       const sorted = claims.toSorted((a, b) => compareInvocableNameOwners(a.owner, b.owner));
       return { name: sorted.at(0)?.name ?? folded, owners: sorted.map((claim) => claim.owner) };
     })
     .toSorted((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+}
+
+/** One owner's claim on a name, and whether `sameClassFrom` judged its item. */
+interface InvocableNameClaim {
+  name: string;
+  owner: InvocableNameOwner;
+  judged: boolean;
+}
+
+/**
+ * Do two claims of one class hold this name, one of them judged? A pair of
+ * unjudged items (the core and the fork, two installed packs) stays the walk's
+ * to report, so a caller widening the check sees only its own items' clashes.
+ */
+function holdsSameClassThroughJudged(claims: readonly InvocableNameClaim[]): boolean {
+  return claims.some(
+    (claim, index) =>
+      claim.judged &&
+      claims.some((other, at) => at !== index && other.owner.kind === claim.owner.kind),
+  );
 }
 
 /**
@@ -797,9 +832,13 @@ export function describeInvocableNameClash(clash: InvocableNameClash): string {
       : `${owners.slice(0, -1).join(", ")} and ${owners.at(-1) ?? ""}`;
   const verb = owners.length === 2 ? "both install" : "all install";
   const kinds = new Set(clash.owners.map((owner) => owner.kind));
-  const where = kinds.has("command")
-    ? "one folder on Cursor and Codex; on Claude the skill hides the command"
-    : "one skill folder on every client";
+  // Two commands of one name (a same-class clash, `sameClassFrom`) are one
+  // command on every client, with no skill to hide either of them.
+  const where = !kinds.has("command")
+    ? "one skill folder on every client"
+    : kinds.size === 1
+      ? "one command on every client"
+      : "one folder on Cursor and Codex; on Claude the skill hides the command";
   return `${name} — ${listed} ${verb} as ${name} (${where})`;
 }
 
