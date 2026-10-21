@@ -8,6 +8,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { PLATFORM_TOOL_MARKER, substituteCanonicalPlatformMarker } from "../../src/tools/translator.ts";
 import { CASES_DIR, REPO_ROOT, caseFiles, parseSource } from "./support.ts";
 
 /** The frontmatter contract: five required keys, one optional, nothing else. */
@@ -57,7 +58,7 @@ const governingBlocks = (bodyLines: readonly string[], sourcePath: string): Gove
       cursor -= 1;
     }
     const headingText = heading.join(" ");
-    const named = /`(content\/[^`]+\.md)`/.exec(headingText);
+    const named = /`((?:content|packs)\/[^`]+\.md)`/.exec(headingText);
     let target: string | null = null;
     if (named) target = named[1] ?? null;
     else if (/Governing text\s+—\s+the same file/.test(headingText)) target = sourcePath;
@@ -462,6 +463,46 @@ describe("eval case locators — the verbatim check is not vacuous", () => {
     // A lone template interpolation renders to text the file does not hold: it reads as a break.
     expect(quotePool([[...at(0), "${discovery}", ...at(4)]])).toEqual([...at(0), "", ...at(4)]);
     expect(quoteBreak([...at(0), "", "stamity gate", "", ...at(4)], joined)).toBeNull();
+  });
+});
+
+describe("eval case locators — a block naming a pack file is a governing block", () => {
+  it("reads a pack path out of the heading, as it reads a content path", () => {
+    const body = (path: string): string[] =>
+      [`Governing text — \`${path}\`:`, "", "```text", "Demo body.", "```"];
+    const pack = "packs/demo/skills/st-demo/SKILL.md";
+    expect(governingBlocks(body(pack), "content/commands/st-work.md").map((block) => block.target)).toEqual([pack]);
+    expect(governingBlocks(body(pack), pack)[0]?.restricted).toBe(true);
+    expect(governingBlocks(body("content/commands/st-work.md"), pack).map((block) => block.target)).toEqual([
+      "content/commands/st-work.md",
+    ]);
+    // A path under neither root is no corpus quote: the fence is a scenario fixture.
+    expect(governingBlocks(body("docs/specs/packs.md"), pack)).toEqual([]);
+  });
+});
+
+/**
+ * Inbox row build/70: the Cursor cloud case quotes the platform note Cursor's copy of the question
+ * protocol renders, and that note is not in the corpus file — the translator writes it in place of
+ * the marker. So the verbatim gate cannot hold it; this case holds the quoted lines to the
+ * translator's own rendering, and a reworded note turns it red.
+ */
+describe("eval case cursor-cloud-question-takes-default — Cursor's rendered note", () => {
+  it("quotes the note the translator renders for Cursor, word for word", () => {
+    const file = cases.find((entry) => entry.basename === "cursor-cloud-question-takes-default");
+    expect(file, "the Cursor cloud case is in the set").toBeDefined();
+    const lines = file?.bodyLines ?? [];
+    const lead = lines.findIndex((line) => line.includes("Cursor's copy, the one you hold, renders it as:"));
+    expect(lead, "the case introduces Cursor's rendering").toBeGreaterThan(-1);
+    let index = lead + 1;
+    while (index < lines.length && (lines[index] ?? "").trim() === "") index += 1;
+    const quoted: string[] = [];
+    while (index < lines.length && (lines[index] ?? "").startsWith(">")) {
+      quoted.push((lines[index] ?? "").replace(/^> ?/, ""));
+      index += 1;
+    }
+    expect(quoted.length, "the rendering is a blockquote after the lead").toBeGreaterThan(0);
+    expect(quoted.join(" ")).toBe(substituteCanonicalPlatformMarker(PLATFORM_TOOL_MARKER, "cursor"));
   });
 });
 

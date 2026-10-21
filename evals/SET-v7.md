@@ -35,9 +35,13 @@ governs runs declared after it.
 ## Scope
 
 The model-executed corpus under content/charter, commands, agents, skills and rules
-remains the measurement surface. Deterministic engine behavior belongs to its tests.
-Every artifact is now sourced by a case; `coverage-exemptions-v6.md` is empty by
-design. New artifacts still need a case or an explicit reviewed exemption.
+remains the measurement surface, and since 2026-10-21 (REQ-PACK-013) so does every pack's:
+the commands, agents, rules and each skill's SKILL.md of every `packs/<id>/` folder that holds a
+`pack.json`. Deterministic engine behavior belongs to its tests. Every `content/` artifact is
+sourced by a case; `coverage-exemptions-v6.md` holds one dated row for each of the sixteen
+artifacts of the three retiring packs (`ops`, `product-audit`, `scaffold`), which no case ever
+measured and whose rows leave with their folders. New artifacts still need a case or an explicit
+reviewed exemption.
 
 ## Versioned inputs
 
@@ -235,7 +239,9 @@ number: the one carried form admitted, while "carried to X.Y.Z" in any wording, 
 from run N" without that suffix, stay retired. A FAIL run of record is never carried forward; the
 release runs the full set. Its exception covered its own release alone. Editing this file is itself
 an eval-set change, so the release that ships this paragraph runs the full set. No count, threshold,
-scoring rule, case or `## Expected` block moves with it.
+scoring rule, case or `## Expected` block moves with it. Since 2026-10-21 (REQ-PACK-013) a case may
+source a pack file, under `packs/**`, and the rule holds there unchanged: a release whose diff
+touches a pack file a case's `source:` names runs the full set.
 
 ## What v7 adds
 
@@ -3782,14 +3788,20 @@ Every row below is derived from the case files; the roster test recomputes it.
 
 ## Coverage
 
-All corpus artifacts are covered; the seven former rule exemptions now have
-sealed scenarios. The existing coverage gate derives this assertion from case
-sources and `coverage-exemptions-v6.md`, never from a hand-maintained count.
-No case is governed outside that surface. The two `st-setup` cases that sourced
+All `content/` artifacts are covered; the seven former rule exemptions now have
+sealed scenarios. Since 2026-10-21 the surface also enumerates every pack's
+artifacts under `packs/` (REQ-PACK-013), and the sixteen of the three retiring
+packs carry dated exemption rows that fail once their folders are deleted. The
+existing coverage gate derives this assertion from case sources and
+`coverage-exemptions-v6.md`, never from a hand-maintained count. No case is
+governed outside that surface. The two `st-setup` cases that sourced
 `scripts/plugins/setupCommand.mjs`, the module that rendered the plugin root's
 generated `st-setup` body, left the set with the plugin route on 2026-10-14, and
-the gate pins its list of cases governed outside `content/` empty, so a case
-sourced elsewhere arrives as a red test rather than as a quiet exemption.
+the gate pins its list of cases governed outside `content/` and `packs/` empty,
+so a case sourced elsewhere arrives as a red test rather than as a quiet exemption.
+The runner admits a case sourced under either root, holds `packs` to its clean
+tree beside `content`, and labels a probe sourced at
+`packs/<id>/skills/<dir>/SKILL.md` with `<dir>` for its recall row.
 
 ## Running v7
 

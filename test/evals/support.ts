@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -20,31 +20,59 @@ export const readRepoFile = (relPath: string): string =>
 
 const isDirectory = (absPath: string): boolean => statSync(absPath).isDirectory();
 
+const isFile = (absPath: string): boolean => {
+  try {
+    return statSync(absPath).isFile();
+  } catch {
+    return false;
+  }
+};
+
 /**
- * The five artifact globs the set declares as its coverage surface, enumerated
- * rather than matched: the charter file, the nine command files, the ten agent
- * files, each skill directory's SKILL.md, and the rule files.
- * Returns repo-relative POSIX paths, sorted.
+ * One root's artifacts: each flat class directory's `*.md` files and each skill directory's
+ * SKILL.md, as `<prefix>/<dir>/<entry>` paths. A class directory the root does not carry throws
+ * when `required`, since a core glob that stopped matching would silently exempt a whole class; a
+ * pack carries only the classes it ships, so for a pack a missing directory is none of that class.
  */
-export const contentArtifacts = (): string[] => {
+const rootArtifacts = (absRoot: string, prefix: string, flat: readonly string[], required: boolean): string[] => {
   const found: string[] = [];
-  for (const dir of ["charter", "commands", "agents", "rules"]) {
-    const abs = join(REPO_ROOT, "content", dir);
+  const present = (abs: string): boolean => required || (existsSync(abs) && isDirectory(abs));
+  for (const dir of flat) {
+    const abs = join(absRoot, dir);
+    if (!present(abs)) continue;
     for (const entry of readdirSync(abs)) {
-      if (entry.endsWith(".md")) found.push(`content/${dir}/${entry}`);
+      if (entry.endsWith(".md")) found.push(`${prefix}/${dir}/${entry}`);
     }
   }
-  const skillsRoot = join(REPO_ROOT, "content", "skills");
+  const skillsRoot = join(absRoot, "skills");
+  if (!present(skillsRoot)) return found;
   for (const entry of readdirSync(skillsRoot)) {
-    const abs = join(skillsRoot, entry);
-    if (!isDirectory(abs)) continue;
-    const skillFile = join(abs, "SKILL.md");
-    try {
-      if (statSync(skillFile).isFile()) found.push(`content/skills/${entry}/SKILL.md`);
-    } catch {
-      // A skill directory with no SKILL.md is not an artifact of this surface; the
-      // corpus suites own that shape, and swallowing it here keeps this gate to
-      // coverage rather than duplicating their contract.
+    if (!isDirectory(join(skillsRoot, entry))) continue;
+    // A skill directory with no SKILL.md is not an artifact of this surface; the corpus suites
+    // own that shape, and skipping it here keeps this gate to coverage rather than duplicating
+    // their contract.
+    if (isFile(join(skillsRoot, entry, "SKILL.md"))) found.push(`${prefix}/skills/${entry}/SKILL.md`);
+  }
+  return found;
+};
+
+/**
+ * The coverage surface the set declares, enumerated rather than matched: under `content/`, the
+ * charter file, the command files, the agent files, each skill directory's SKILL.md and the rule
+ * files; and under `packs/`, for every directory holding a `pack.json`, the same four classes a
+ * pack may ship — its commands, agents and rules and each skill directory's SKILL.md
+ * (REQ-PACK-013). A directory under `packs/` with no `pack.json` is no pack and contributes
+ * nothing. `root` defaults to this repository; a test hands a temp tree.
+ * Returns repo-relative POSIX paths, sorted.
+ */
+export const contentArtifacts = (root: string = REPO_ROOT): string[] => {
+  const found = rootArtifacts(join(root, "content"), "content", ["charter", "commands", "agents", "rules"], true);
+  const packsRoot = join(root, "packs");
+  if (existsSync(packsRoot)) {
+    for (const id of readdirSync(packsRoot)) {
+      const packRoot = join(packsRoot, id);
+      if (!isDirectory(packRoot) || !isFile(join(packRoot, "pack.json"))) continue;
+      found.push(...rootArtifacts(packRoot, `packs/${id}`, ["commands", "agents", "rules"], false));
     }
   }
   return found.toSorted();
@@ -113,8 +141,12 @@ export interface ParsedSource {
   readonly ranges: ReadonlyArray<readonly [number, number]>;
 }
 
-/** True when a source path is one of the `content/**` artifacts the coverage sum accounts for. */
-export const isCorpusSource = (path: string): boolean => path.startsWith("content/");
+/**
+ * True when a source path sits under one of the surface's two roots, `content/` or `packs/`, whose
+ * artifacts the coverage sum accounts for. The runner's `case-source` admission is the same rule
+ * (`isSurfaceSource` in `scripts/eval/instrument.mjs`); `coverage.test.ts` holds the two equal.
+ */
+export const isSurfaceSource = (path: string): boolean => path.startsWith("content/") || path.startsWith("packs/");
 
 /**
  * `path/to/file.md:12-30` or `path/to/file.md:12-30,44-51`. Returns null on any shape the
@@ -134,16 +166,16 @@ export const parseSource = (value: string): ParsedSource | null => {
 };
 
 /**
- * The CORPUS artifact path each case's `source:` names, deduplicated. A case governed outside
- * `content/**` contributes nothing here: the sum compares sourced ∪ exempted against the five
- * globs' artifact count, and folding a rendered template in would inflate it by a file no glob
- * produces. `coverage.test.ts` lists those cases as governed outside `content/` instead.
+ * The surface artifact path each case's `source:` names, deduplicated. A case governed outside
+ * `content/**` and `packs/**` contributes nothing here: the sum compares sourced ∪ exempted against
+ * the surface's artifact count, and folding another file in would inflate it by a file no
+ * enumeration produces. `coverage.test.ts` lists those cases as governed outside both instead.
  */
 export const sourcedArtifacts = (cases: readonly CaseFile[]): Set<string> => {
   const out = new Set<string>();
   for (const file of cases) {
     const parsed = parseSource(file.frontmatter.get("source") ?? "");
-    if (parsed && isCorpusSource(parsed.path)) out.add(parsed.path);
+    if (parsed && isSurfaceSource(parsed.path)) out.add(parsed.path);
   }
   return out;
 };

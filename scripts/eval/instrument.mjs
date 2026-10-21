@@ -1007,15 +1007,24 @@ export function nonNegotiableRows(scenario) {
   return scenario.binding.flatMap((text, index) => text.includes('must NOT') ? [`B${index + 1}`] : [])
 }
 
+/** REQ-PACK-013. True when a case's `source:` path sits under one of the eval surface's two roots, `content/`
+ *  or `packs/`: the runner's `case-source` admission. `test/evals/support.ts` carries the gate's copy of the
+ *  rule, and `test/evals/coverage.test.ts` holds the two equal. */
+export function isSurfaceSource(source) {
+  return typeof source === 'string' && (source.startsWith('content/') || source.startsWith('packs/'))
+}
+
 /** REQ-PROVE-010. The per-skill recall label of a probe, read off its `source:` path rather than off its id.
- *  A probe sourced to `content/skills/<dir>/SKILL.md` measures the skill that directory ships; one sourced to
+ *  A probe sourced to `content/skills/<dir>/SKILL.md` measures the skill that directory ships, and so does one
+ *  sourced to a pack's `packs/<id>/skills/<dir>/SKILL.md` (REQ-PACK-013); one sourced to
  *  `content/rules/stamity-<id>.md` measures the rule delivered on demand as `.agents/skills/stamity-<id>/`.
  *  The id pattern cannot answer this: `probe-rule-testing-select` under the old `probe-` → `st-` rewrite would
  *  have been labelled `st-rule-testing`, a skill that does not exist, so the recall row would have been reported
  *  against nothing. Returns null when the source names neither surface — the caller refuses rather than dropping
  *  the row, because a probe with no locatable skill is a case nobody is measuring. */
 export function recallLabel(source) {
-  const skill = /^content\/skills\/([A-Za-z0-9._-]+)\/[^/]+$/.exec(source ?? '')
+  const skill = /^content\/skills\/([A-Za-z0-9._-]+)\/[^/]+$/.exec(source ?? '') ??
+    /^packs\/[^/]+\/skills\/([A-Za-z0-9._-]+)\/SKILL\.md$/.exec(source ?? '')
   if (skill) return skill[1]
   const rule = /^content\/rules\/stamity-([a-z0-9-]+)\.md$/.exec(source ?? '')
   return rule ? `stamity-${rule[1]}` : null

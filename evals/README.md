@@ -401,13 +401,16 @@ two instruments over two different rosters, not two versions of the product.
 
 Every artifact the engine emits as model-executed prose — `content/charter/*.md`,
 `content/commands/*.md`, `content/agents/*.md`, `content/skills/*/SKILL.md`,
-`content/rules/*.md` — is named by at least one case's `source:` field, or listed with a
-written reason in `coverage-exemptions-v6.md`. `test/evals/coverage.test.ts` derives both
+`content/rules/*.md`, and since 2026-10-21 the same classes of every pack, `packs/<id>/commands/*.md`,
+`packs/<id>/agents/*.md`, `packs/<id>/rules/*.md` and `packs/<id>/skills/*/SKILL.md` for each
+`packs/<id>/` folder holding a `pack.json` — is named by at least one case's `source:` field, or
+listed with a written reason in `coverage-exemptions-v6.md`, which holds a dated row for each of
+the sixteen artifacts of the three retiring packs. `test/evals/coverage.test.ts` derives both
 sides from the files and fails when an artifact is in neither column, and also when an
-exemption row names an artifact a case now covers, so the list cannot go stale in either
-direction. `test/evals/locators.test.ts` holds the other half: a case's `source:` range must
-exist, and every non-elided line of its inlined governing text must be verbatim in the file
-its heading names.
+exemption row names an artifact a case now covers or a file that no longer exists, so the list
+cannot go stale in either direction. `test/evals/locators.test.ts` holds the other half: a
+case's `source:` range must exist, and every non-elided line of its inlined governing text must
+be verbatim in the `content/` or `packs/` file its heading names.
 
 ## Manual execution, by decision
 

@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { aggregate, calibrationMatches, EvalBlocked, headings, judgeBlocks, parseCase, parseGrade, parseRubric, requireEvidence, sha256 } from './instrument.mjs'
+import { aggregate, calibrationMatches, EvalBlocked, headings, isSurfaceSource, judgeBlocks, parseCase, parseGrade, parseRubric, requireEvidence, sha256 } from './instrument.mjs'
 import { boundedMap, callWithRetries, CONTROLS, HARNESS, makeRequest, responsesTransport } from './transport.mjs'
 
 const PROFILE_PATH = 'evals/model-profiles-v1.json'
@@ -49,15 +49,15 @@ export function loadInputs(root, profileName) {
   // `find evals/cases-v6 -name '*.md' | wc -l` — and move `SET-v7.md`'s counts in the same change.
   requireEvidence(cases.length === 155 && new Set(cases.map(item => item.id)).size === 155, 'set-roster')
   for (const scenario of cases) {
-    // A case's governing file is a committed input of the run, and it is a `content/` artifact: the
-    // one other shape, the `scripts/plugins/` module that rendered the plugin root's generated
-    // `st-setup` body, left with the plugin route on 2026-10-14. `test/evals/coverage.test.ts`
-    // pins the list of cases governed outside `content/` empty.
-    requireEvidence(scenario.source?.startsWith('content/'), 'case-source')
+    // A case's governing file is a committed input of the run, and it is a `content/` or a `packs/`
+    // artifact (REQ-PACK-013): the one other shape, the `scripts/plugins/` module that rendered the
+    // plugin root's generated `st-setup` body, left with the plugin route on 2026-10-14.
+    // `test/evals/coverage.test.ts` pins the list of cases governed outside both roots empty.
+    requireEvidence(isSurfaceSource(scenario.source), 'case-source')
     read(scenario.source)
   }
   const rubric = parseRubric(read(profile.rubric), historical)
-  const dirty = git(root, ['status', '--porcelain', '--untracked-files=all', '--', 'src', 'content', 'scripts', 'package.json', 'package-lock.json'])
+  const dirty = git(root, ['status', '--porcelain', '--untracked-files=all', '--', 'src', 'content', 'packs', 'scripts', 'package.json', 'package-lock.json'])
   requireEvidence(dirty === '', 'candidate-source-not-committed')
   const configuration = { profile: selected, roles: profile, profilePath: PROFILE_PATH,
     profileSchemaVersion: profiles.schemaVersion, set: CURRENT_SET, harness: HARNESS,
