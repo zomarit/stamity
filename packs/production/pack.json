@@ -29,10 +29,10 @@
   },
   "maxFootprintBytes": 262144,
   "integrity": {
-    "commands/st-production-review.md": "25e1b2d75954d66b415fe6da37cb289fbd1fe9cf32ae4b8030edc35d96e23c62",
-    "skills/st-incident/SKILL.md": "db5b07138261197b3d353c3352947caaf9cd4db1b3ee2b678521a20ed419d754",
+    "commands/st-production-review.md": "b129ea14d9bb67c869d056d7565dc451e3c8ce1d71443fbf339d327ec35e93fd",
+    "skills/st-incident/SKILL.md": "fd7550d44d9ba93e1be68c1570e72111def582cddfa3b82392a3b7601b9082d5",
     "skills/st-incident/agents/openai.yaml": "2219eda7f9eef6ae17bea41c0e5bff4dc9fc373516d23b98a84069b8448bc30e",
-    "skills/st-release/SKILL.md": "6b6263495a1ed6c65a832fcb89af2b3a3a2e6232ac6cc3a0713d375e74cbd18a",
+    "skills/st-release/SKILL.md": "b8f440852b09c67c19bb5036fdd2dd099a711e69db56084abb78f4b0e41c9f6c",
     "skills/st-release/agents/openai.yaml": "ec73b090082e0504de376fa04382f9657c5b3007a458fbb46450b4b4df5a569b"
   }
 }

@@ -33,8 +33,8 @@ import {
  *   - **Waivers and the policy file:** proposed, never written; an expired or self-approved one
  *     clears nothing; no policy file asks once with a declared default.
  *
- * The release and incident skills (u11, u12) add their files and their own suites; this suite
- * pins the roster as this unit ships it.
+ * The release and incident skills (u11, u12) carry their own suites; this suite pins the pack's
+ * whole roster, the command and both skills with their companions.
  *
  * Prose assertions run against a whitespace-flattened view ({@link flow}) so a reflowed paragraph
  * is not a failure; the table is parsed from the raw body. No mocks: every read is a real file.
@@ -54,8 +54,17 @@ const REVIEW_DESCRIPTION =
 
 const REVIEW = "commands/st-production-review.md";
 
-/** What this unit ships; u11 and u12 add the two skills beside it. */
-const SHIPPED_FILES: readonly string[] = [REVIEW];
+// TEST CHANGE, justified: build/12. u11 and u12 landed the release and incident skills beside the
+// command, so the roster grows by their four files; a list naming the command alone turned the
+// roster case red on the integrated pack.
+/** What the pack ships: the review command, and each skill with its Codex companion. */
+const SHIPPED_FILES: readonly string[] = [
+  REVIEW,
+  "skills/st-incident/SKILL.md",
+  "skills/st-incident/agents/openai.yaml",
+  "skills/st-release/SKILL.md",
+  "skills/st-release/agents/openai.yaml",
+];
 
 /**
  * The write surface the plan cell declares for the whole pack (the release and incident paths
@@ -455,6 +464,11 @@ describe("/st-production-review — files, waivers and routes", () => {
     expect(policy).toMatch(/with no policy file, the 19 checks run as shipped/i);
     expect(flow(file)).toMatch(/one batched question/i);
     expect(flow(file)).toMatch(/default-if-no-response is `not named`/i);
+    // TEST CHANGE, justified: review/30 (signed off). The escalation contact is the incident and
+    // reporting contact `st-incident` escalates to; a readiness gap goes to the approval of record.
+    expect(policy).toMatch(
+      /\*\*`Escalation contact`\*\*: the incident and reporting contact, the one the pack's incident skill `st-incident` escalates to\. This review sends it nothing: an open blocking gap stays on the Ready line and goes to the approval of record/,
+    );
   });
 
   it("proposes waivers and writes none; an expired or self-approved one clears nothing", async () => {
@@ -499,11 +513,14 @@ describe("/st-production-review — what a file can and cannot make the review d
     // TEST CHANGE, justified: review/41 limits a control's evidence path to a tracked file inside
     // the repository, so the old "a file path the researchers read" wording is replaced by the
     // tracked-only clause, and a control naming any other path is pinned as skipped, never read.
+    // review/44 narrows it to a tracked regular file: `git ls-files` lists a symlink and a read
+    // follows it out of the tree, so the clause names the regular-file modes and the symlink as
+    // another path that is never read.
     expect(policy).toMatch(
-      /\*\*Decided by\*\* names evidence only: a tracked file inside the repository \(one `git ls-files` lists\), which the researchers read, or one of this review's shipped probes/i,
+      /\*\*Decided by\*\* names evidence only: a tracked regular file inside the repository, not a symlink \(one `git ls-files -s` lists with mode `100644` or `100755`\), which the researchers read, or one of this review's shipped probes/i,
     );
     expect(policy).toMatch(
-      /a control that names any other path \(an ignored or untracked file, or a path outside the repository\) is never read; its row is `skipped` and the report names the control/i,
+      /a control that names any other path \(an ignored or untracked file, a symlink, or a path outside the repository\) is never read; its row is `skipped` and the report names the control/i,
     );
     expect(policy).toMatch(/a control that names a command, a script or an address to run is not run/i);
   });

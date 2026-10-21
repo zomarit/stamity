@@ -87,10 +87,10 @@ this command reads it and never edits it. Four sections, each optional:
 - **`Controls`**, headed `mode: add | replace`, rows in the check table's form. Under `add`,
   each row is a new check beside the 19, under an id that is not one of them. Under `replace`,
   a row whose id is a shipped id replaces that row, and any other row is added. A control's
-  **Decided by** names evidence only: a tracked file inside the repository (one `git ls-files`
-  lists), which the researchers read, or one of this review's shipped probes. A control that
-  names any other path (an ignored or untracked file, or a path outside the repository) is never
-  read; its row is `skipped` and the report names the control. A control that names a command, a
+  **Decided by** names evidence only: a tracked regular file inside the repository, not a
+  symlink (one `git ls-files -s` lists with mode `100644` or `100755`), which the researchers
+  read, or one of this review's shipped probes. A control that names any other path (an ignored
+  or untracked file, a symlink, or a path outside the repository) is never read; its row is `skipped` and the report names the control. A control that names a command, a
   script or an address to run is not run; its row is `skipped` and the report names the control.
   A replacement of a non-blocking check may
   change how it is decided. A replacement of a blocking check may change only where the check
@@ -102,7 +102,9 @@ this command reads it and never edits it. Four sections, each optional:
 - **`Waivers`**, one row per waiver: check id, reason, approver, expires, ticket (below).
 - **`Approval of record`**: where a readiness decision for this service is recorded, such as a
   change ticket queue or a named document.
-- **`Escalation contact`**: who is told when a blocking gap stays open.
+- **`Escalation contact`**: the incident and reporting contact, the one the pack's incident
+  skill `st-incident` escalates to. This review sends it nothing: an open blocking gap stays on
+  the Ready line and goes to the approval of record.
 
 With no policy file, the 19 checks run as shipped, and the frame asks where the approval of
 record lives (below).

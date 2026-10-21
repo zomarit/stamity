@@ -55,7 +55,10 @@ Most incidents start when something changed, so the window from the last known g
 detection bounds the search. Read, over that window: `git log` on the service's paths, `git diff`
 from the last good commit to each suspect, the release tags cut inside it, and the CI runs that
 deployed or failed in it. List each change with its commit, its time and whether it touches the
-failing path. A config or flag change made outside the repository is asked for, never assumed.
+failing path. For an exposure, the change that carried the credential is listed by its commit and
+file only, read with `git diff --stat`, never by its diff body, which holds the value: Step 5's
+rule binds from here. A config or flag change made outside the repository is asked for, never
+assumed.
 
 ## Step 3 — Topology and severity
 

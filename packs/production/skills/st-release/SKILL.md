@@ -99,10 +99,11 @@ an unsuspecting install cannot land on it.
 
 This skill writes both, because they must agree:
 
-- The version in the project manifest (`package.json` or the stack's equivalent), with the
-  lockfile it owns (`package-lock.json`, `pnpm-lock.yaml` or `yarn.lock`) refreshed through the
-  package manager, never by hand. The lockfile is staged with the manifest: a bumped manifest
-  beside a stale lockfile installs the previous version.
+- The version in `package.json`, with the lockfile it owns (`package-lock.json`,
+  `pnpm-lock.yaml` or `yarn.lock`) refreshed through the package manager, never by hand. The
+  lockfile is staged with the manifest: a bumped manifest beside a stale lockfile installs the
+  previous version. These are the only manifests the pack's install scope declares: a version
+  kept in another stack's manifest is printed as the edit for the person to make, never written.
 - One dated section in `CHANGELOG.md`, entries grouped as added, changed, deprecated, removed,
   fixed and security, each naming the change and its merge reference. Every change in the set
   appears or is listed as deliberately unlisted. A MAJOR release carries migration notes: what
@@ -123,8 +124,9 @@ to the failing selector proves only that the selector passes.
 One SBOM and one provenance reference, or a named absence for each. An absence is a line, never
 a silence, and the record is written either way.
 
-- **SBOM.** Generate it beside the build output, for example `npm sbom --sbom-format=cyclonedx
-  --sbom-type=application`, or the stack's own generator; the record names its path and digest.
+- **SBOM.** Generate it into `.stamity/production/releases/<version | sha>.sbom.json`, beside
+  the record, for example with `npm sbom --sbom-format=cyclonedx --sbom-type=application`, or the
+  stack's own generator; the record names its path and digest.
   With no generator available: `SBOM: absent — <why>`.
 - **Provenance.** Produced by the build job that publishes, for example `npm publish
   --provenance`, or by the build system's attestation generator pinned by full commit sha; the
@@ -161,8 +163,8 @@ a form a change ticket takes as it is.
 The record names variables, files and locations, never a secret value. An answer carrying a
 credential, such as a connection string with its password or a webhook address with its key, is
 refused, not recorded, citing the secrets floor (`stamity-secrets.md`, items 1 and 4): the
-refusal names the field and never the value, says the pasted value now counts as exposed under
-that floor, and asks again for the variable or location that holds it.
+refusal names the field and never the value, says the pasted value now counts as exposed, whose
+rotation is that floor's item 6, and asks again for the variable or location that holds it.
 
 In release mode the record, the bump and the changelog are committed together on the release
 branch with the project's commit conventions; nothing is pushed. In deploy mode the record stays
@@ -195,7 +197,7 @@ unpublished: deprecate it and publish a fixed patch, or revert on the default br
 new patch line, with the reason in the changelog. A regression after a deploy is answered by the
 rollback first and the diagnosis second, and that rollback is proposed with its command and its
 undo for the person to run; this skill takes no automatic rollback. A live production impact
-leaves for the pack's incident procedure, and this run ends where it stopped.
+leaves for the pack's incident skill, `st-incident`, and this run ends where it stopped.
 
 ## What the run hands back
 
