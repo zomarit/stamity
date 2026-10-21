@@ -285,10 +285,10 @@ The mandatory closing checkpoint, human-facing, at every intensity:
 3. When the change has a user-facing surface and the browser-evidence skill is installed,
    offer a run; captured screenshots and console output attach to the proof block.
 
-On a change with no user-facing surface, mark browser evidence not applicable
-and continue the other checkpoint steps. An ordinary skip of that inapplicable
-offer needs no refusal, invariant language, or hypothetical warning about a
-different change. Human QA sign-off still comes from the guided pass.
+On a change with no user-facing surface, or with the browser-evidence skill not installed, mark
+browser evidence not applicable or not installed and continue the other checkpoint steps. An
+ordinary skip of that inapplicable offer needs no refusal, invariant language, or hypothetical
+warning about a different change. Human QA sign-off still comes from the guided pass.
 
 The checkpoint covers what automation cannot.
 

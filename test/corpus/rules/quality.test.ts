@@ -405,7 +405,15 @@ describe("ui-states — the four-state contract", () => {
     // the pin read "where detection reports no token source". What moved: the inventory's
     // detector ships in the `frontend` pack, so the rule names the case with no inventory at all
     // beside the one whose inventory reports no token source; the old wording is asserted gone.
-    expect(text).toMatch(/where no inventory exists or it reports no\s+token source/i);
+    // TEST CHANGE, justified (2026-10-21, fixer round 1 of u14-core-readers;
+    // 2026-10-20_packs-rebuilt/review/18, signed off): the pin read "where no inventory exists or it
+    // reports no token source", which sent a repo with stylesheet tokens and no inventory to the
+    // files around it while design-quality, `ui-token-usage` and this rule's Gates judge its literals
+    // against those tokens. What moved: with no inventory the tokens come from the stylesheet layer's
+    // token source, and only with no token source at all does the surface follow the files around it.
+    expect(text).toMatch(/with no inventory, the tokens come from the\s+stylesheet layer's token source/i);
+    expect(text).toMatch(/only where no token source exists at all does the surface\s+follow the files around it/i);
+    expect(text).not.toMatch(/where no inventory exists or it reports no\s+token source/i);
     expect(text).not.toMatch(/where detection reports no\s+token source/i);
     expect(text).toMatch(/plural and gender variants carried inside the message/i);
   });

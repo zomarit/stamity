@@ -1652,6 +1652,13 @@ describe("/st-work — Prove", () => {
       "3. When the change has a user-facing surface and the browser-evidence skill is installed,\n   offer a run; captured screenshots and console output attach to the proof block.\n",
     );
     expect(raw).not.toContain("offer a browser-evidence skill\n   run;");
+    // Added 2026-10-21 (fixer round 1 of u14-core-readers; 2026-10-20_packs-rebuilt/review/19, signed
+    // off): a UI change with the skill absent gets no offer, so the paragraph after step 3 records
+    // browser evidence as not installed, and the proof block tells a missing skill from a skipped offer.
+    expect(qa).toContain(
+      "On a change with no user-facing surface, or with the browser-evidence skill not installed, mark browser evidence not applicable or not installed and continue the other checkpoint steps.",
+    );
+    expect(qa).not.toContain("On a change with no user-facing surface, mark browser evidence not applicable");
 
     const proof = collapse(section(await body(), "### Proof block"));
     expect(proof).toContain(
