@@ -226,6 +226,12 @@ describe("st-incident — investigates read-only and applies nothing", () => {
 
     expect(text).toMatch(/investigates read-only/i);
     for (const source of ["git log", "git diff", "release tags", "CI runs"]) expect(text).toContain(source);
+    // TEST CHANGE, justified: review/40. Step 2's `git diff` runs before Step 5's rule, so for an
+    // exposure the change is listed by commit and file only and its diff body, which holds the
+    // value, never reaches the reply.
+    expect(text).toMatch(
+      /For an exposure, the change that carried the credential is listed by its commit and file only, read with `git diff --stat`, never by its diff body/,
+    );
     expect(text).toMatch(/one topology line/i);
     expect(text).toMatch(/severity sets who is told; it never opens an apply/i);
   });

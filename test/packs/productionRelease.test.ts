@@ -290,8 +290,34 @@ describe("st-release — the change record", () => {
     expect(supply).toMatch(/the record is written either way/i);
   });
 
+  // TEST CHANGE, justified: review/38. The pack's install scope is what `add` shows before install,
+  // so every manifest the bump writes and the SBOM's path must fall inside it; the skill now names
+  // the declared manifests only and writes the SBOM beside the record, under a declared glob.
+  it("writes the bump and the SBOM only inside the pack's declared install scope", async () => {
+    const file = await skill();
+    const manifest = JSON.parse(await readFile(join(PACK_ROOT, "pack.json"), "utf8")) as {
+      permissions: { touchedPaths: string[] };
+    };
+    const scope = manifest.permissions.touchedPaths;
+    const bump = flowSection(file, "Step 4 — Bump and changelog (release mode)");
+    const written = [...bump.matchAll(/`([\w.-]+\.(?:json|yaml|lock))`/g)].map((match) => match[1]!);
+
+    expect(written.toSorted()).toEqual(["package-lock.json", "package.json", "pnpm-lock.yaml", "yarn.lock"]);
+    for (const path of written) expect(scope, `${path} is outside touchedPaths`).toContain(path);
+    expect(bump).toMatch(/a version kept in another stack's manifest is printed as the edit for the person to make, never written/);
+    expect(flowSection(file, "Step 6 — Supply-chain references")).toContain(
+      "Generate it into `.stamity/production/releases/<version | sha>.sbom.json`, beside the record",
+    );
+    expect(scope).toContain(".stamity/production/**");
+  });
+
   it("keeps secret values out of the record and refuses a pasted credential, citing the secrets floor", async () => {
     expect(flowSection(await skill(), "Step 7 — The change record")).toContain(SECRETS_RULE);
+    // TEST CHANGE, justified: the u11 r2 suppressed Minor. Items 1 and 4 cover the refusal, but the
+    // steps for a value that counts as exposed are the floor's item 6, so that part cites item 6.
+    expect(flowSection(await skill(), "Step 7 — The change record")).toMatch(
+      /counts as exposed, whose rotation is that floor's item 6/,
+    );
   });
 
   it("counts an approver equal to the requester as no approver", async () => {
@@ -359,6 +385,9 @@ describe("st-release — the boundaries carried from ops", () => {
     expect(text).toMatch(/\*\*Identity, not stored credentials:\*\*/);
     expect(text).toMatch(/An infrastructure apply, a cluster rollout by hand, a resource deletion or a write to a protected branch is never run by this skill, even after `DEPLOY`/);
     expect(text).toMatch(/this skill takes no automatic rollback/);
+    // TEST CHANGE, justified: u11's note. With `st-incident` shipped beside it, the live-impact
+    // hand-off names the skill instead of "the pack's incident procedure".
+    expect(text).toMatch(/A live production impact leaves for the pack's incident skill, `st-incident`/);
   });
 
   it("stops the cut on a red gate row and fixes nothing inside the run", async () => {
