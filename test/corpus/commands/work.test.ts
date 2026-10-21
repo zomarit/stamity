@@ -1627,7 +1627,7 @@ describe("/st-work — Prove", () => {
   // what-to-verify summary waits for the prover and shrinks to the rows it leaves for a person, and
   // the proof block's QA line folds the proven rows, the prover's `agent-run` among them. Step 3's
   // browser line stays word for word: a later package moves it, and it must rebase cleanly.
-  it("summarises only the rows the prover leaves, folds proven rows, and keeps step 3 as it is (REQ-FLOW-081)", async () => {
+  it("summarises only the rows the prover leaves, folds proven rows, and offers step 3 only where its skill is installed (REQ-FLOW-081)", async () => {
     const raw = (await workFile).raw;
     const qa = collapse(section(await body(), "### QA checkpoint"));
     // TEST CHANGE, justified (2026-10-14, fixer round 1 of f7-prove-before-asking;
@@ -1644,10 +1644,14 @@ describe("/st-work — Prove", () => {
     );
     expect(qa).not.toContain("only the rows it leaves for a person");
     expect(qa).not.toContain("each observable behavior this change added or altered");
-    // Step 3 and its two lines are unchanged.
+    // TEST CHANGE, justified (2026-10-21, plan 018 file 1, unit u14-core-readers; REQ-PACK-007,
+    // REQ-FLOW-081): the pin read step 3 as an unconditional browser-evidence offer. What moved:
+    // that skill ships in the `frontend` pack, so the step offers a run only where it is
+    // installed; the step keeps its two lines, so no eval case's `source:` range moves.
     expect(raw).toContain(
-      "3. When the change has a user-facing surface, offer a browser-evidence skill\n   run; captured screenshots and console output attach to the proof block.\n",
+      "3. When the change has a user-facing surface and the browser-evidence skill is installed,\n   offer a run; captured screenshots and console output attach to the proof block.\n",
     );
+    expect(raw).not.toContain("offer a browser-evidence skill\n   run;");
 
     const proof = collapse(section(await body(), "### Proof block"));
     expect(proof).toContain(

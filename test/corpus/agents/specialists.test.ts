@@ -464,8 +464,28 @@ describe("design-quality — merged lens, deepened rather than duplicated", () =
     expect(beyond).toMatch(/WCAG 2\.2 AA criterion/i);
     expect(beyond).toContain("1.4.3");
     expect(beyond).toContain("4.1.2");
-    expect(beyond).toMatch(/token source named by the design-system inventory is the authority/i);
+    // TEST CHANGE, justified (2026-10-21, plan 018 file 1, unit u14-core-readers; REQ-PACK-007):
+    // the pin read "token source named by the design-system inventory is the authority". What
+    // moved: the inventory's detector ships in the `frontend` pack, so the inventory is the
+    // authority only where one exists, and with none the agent reads the stylesheet layer and
+    // says the inventory is absent; the old unconditional wording is asserted gone.
+    expect(beyond).toMatch(/token source the design-system inventory names is the authority where one exists/i);
+    expect(beyond).toMatch(/the detector ships in the `frontend` pack/i);
+    expect(beyond).toMatch(
+      /with no inventory, the token source is read from the stylesheet layer and the inventory's absence is said/i,
+    );
+    expect(beyond).not.toMatch(/token source named by the design-system inventory is the authority\./i);
     expect(beyond).toMatch(/four-state contract/i);
+  });
+
+  // Added 2026-10-21 (plan 018 file 1, unit u14-core-readers; REQ-PACK-007): the agent's
+  // `ui-token-usage` check lives in the UI axis it loads, so that check states the same
+  // no-inventory read; an agent and an axis that disagree here give two answers to one finding.
+  it("reads the token source from the stylesheet layer in its UI axis where no inventory exists", async () => {
+    const axis = flow(await load("skills/st-verify/references/ui.md"));
+    expect(axis).toContain(
+      "read the token source named by the design-system inventory, or, where none exists, the token source found in the stylesheet layer, recorded as found without the inventory;",
+    );
   });
 });
 

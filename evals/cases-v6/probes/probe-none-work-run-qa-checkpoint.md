@@ -43,8 +43,8 @@ Scenario state — given to you as fact:
 >    the command already running, not to a trigger match: a request arriving
 >    here — "what should I check by hand?" — is what this checkpoint answers,
 >    and stays with this command.
-> 3. When the change has a user-facing surface, offer a browser-evidence skill
->    run; captured screenshots and console output attach to the proof block.
+> 3. When the change has a user-facing surface and the browser-evidence skill is installed,
+>    offer a run; captured screenshots and console output attach to the proof block.
 > ```
 
 Scenario input — the operator's message at that point in the run:

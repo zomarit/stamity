@@ -51,7 +51,7 @@ each is built rather than inherited.
    by concatenation cannot be translated, because word order is not universal.
 5. **Styling comes from the token system where the repo has one.** Colour,
    spacing, and type read from the tokens the design-system inventory reports;
-   a literal with a token equivalent is a finding. Where detection reports no
+   a literal with a token equivalent is a finding. Where no inventory exists or it reports no
    token source, the surface follows the conventions of the files around it and
    the absence is reported rather than answered with a new parallel system.
 6. **The accessibility floor is not deferred to a later pass.** Every control

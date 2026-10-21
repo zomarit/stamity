@@ -401,7 +401,12 @@ describe("ui-states — the four-state contract", () => {
 
     expect(text).toMatch(/strings come from the localisation layer where the repo has one/i);
     expect(text).toMatch(/styling comes from the token system where the repo has one/i);
-    expect(text).toMatch(/where detection reports no\s+token source/i);
+    // TEST CHANGE, justified (2026-10-21, plan 018 file 1, unit u14-core-readers; REQ-PACK-007):
+    // the pin read "where detection reports no token source". What moved: the inventory's
+    // detector ships in the `frontend` pack, so the rule names the case with no inventory at all
+    // beside the one whose inventory reports no token source; the old wording is asserted gone.
+    expect(text).toMatch(/where no inventory exists or it reports no\s+token source/i);
+    expect(text).not.toMatch(/where detection reports no\s+token source/i);
     expect(text).toMatch(/plural and gender variants carried inside the message/i);
   });
 

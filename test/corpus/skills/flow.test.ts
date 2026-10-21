@@ -932,6 +932,16 @@ describe("qa — the human checkpoint", () => {
     );
   });
 
+  // Added 2026-10-21 (plan 018 file 1, unit u14-core-readers; REQ-PACK-007, REQ-FLOW-081): the
+  // browser-evidence skill ships in the `frontend` pack, so the walk runs a browser capture first
+  // only where that skill is installed, and a UI row with no bundle stays the person's either way.
+  it("runs a browser capture before the table only where the browser-evidence skill is installed", async () => {
+    const text = flow(await load("skills/st-qa/SKILL.md"));
+    expect(text).toContain(
+      "the browser run happens before this table is built where the browser-evidence skill is installed. A UI row with no bundle stays on the human path.",
+    );
+  });
+
   // TEST CHANGE, justified (2026-09-30): the checkpoint no longer asks when every row
   // auto-proved (plan 013-02, unit work-qa-states). REQ-FLOW-018 moves the behaviour this
   // case pinned: a fully auto-proven table closes on its pointers with no question, a bare
