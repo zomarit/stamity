@@ -162,7 +162,6 @@
         "test/pack/installSmoke.e2e.test.ts",
         "test/pack/manifest.test.ts",
         "test/pack/permissions.test.ts",
-        "test/packs/ops.test.ts",
         "test/records/docsPages.test.ts",
         "test/records/measurements.test.ts",
         "test/resilience/adapterTimeout.test.ts",

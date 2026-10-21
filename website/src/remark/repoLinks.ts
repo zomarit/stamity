@@ -7,7 +7,7 @@ import {dirname, relative, resolve, sep} from 'node:path';
  * THE COLLISION THIS RESOLVES. Every page in `docs/` is written to be read in the repository
  * first — that is the architecture, and the hand-page contract in `test/docsPages.test.ts`
  * requires repo-relative links for it. Some of those links point UP and OUT of the docs tree:
- * `../SECURITY.md`, `../packs/ops/`. Inside the tree they are correct. On the site they resolve
+ * `../SECURITY.md`, `../packs/frontend/`. Inside the tree they are correct. On the site they resolve
  * to `/SECURITY.md`, a route that does not exist and never will, because publishing a second
  * copy of the repository is exactly the duplication this site is arranged to avoid.
  *

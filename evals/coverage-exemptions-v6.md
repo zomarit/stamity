@@ -10,101 +10,20 @@ A future exemption uses a `###` heading containing the backticked artifact path,
 its evidence-based reason, and a dated or observable trigger. The coverage gate
 continues to reject an unsourced artifact and an exemption whose case now exists.
 
-**Sixteen rows today**, added 2026-10-21 by plan `docs/plans/018-packs-rebuilt-01.md`, unit
-`u10-eval-surface`, when the surface took in `packs/` beside `content/` (REQ-PACK-013). They are the
-artifacts of the three packs that have shipped since 0.1.0, `ops` (nine), `product-audit` (four)
-and `scaffold` (three). Each is a retiring pack's file: no case was ever written for it, and plan
-018's file 2 deletes it with its pack, as Package 22 replaces the three with `production` and
-`frontend`. Writing
-cases for text due to leave would measure nothing the next release ships, so the rows stand until
-then.
+Sixteen rows, added 2026-10-21 by plan `docs/plans/018-packs-rebuilt-01.md`, unit
+`u10-eval-surface`, when the surface took in `packs/` beside `content/` (REQ-PACK-013), covered the
+artifacts of the three packs that had shipped since 0.1.0: `ops` (nine), `product-audit` (four) and
+`scaffold` (three). No case was ever written for them. They left on 2026-10-21 with their folders,
+in the change of plan `docs/plans/018-packs-rebuilt-02.md`, unit `u8-retire-old-packs`, that
+deleted the three packs; no row names a file under `packs/ops/`, `packs/product-audit/` or
+`packs/scaffold/`.
 
-**The trigger is the deletion.** The coverage gate's "no exemption outlives its gap" block refuses a
-row whose path no longer exists, so the change that deletes a pack's directory fails until it
-deletes that pack's rows here in the same change; a case that sources one of these files first
-fails the same block until its row goes.
+**A row added while its cases are pending** names the plan and unit that added the artifact, and
+the unit whose cases source it and remove the row. The coverage gate's "no exemption outlives its
+gap" block refuses a row whose path no longer exists, and a row whose path a case now sources, so
+such a row leaves in the change that lands its cases.
 
 ---
-
-### `packs/ops/agents/stamity-devops.md`
-
-A retiring pack; no case was ever written; plan 018 file 2 deletes it. Trigger: the deletion of
-`packs/ops/`.
-
-### `packs/ops/agents/stamity-incident-responder.md`
-
-A retiring pack; no case was ever written; plan 018 file 2 deletes it. Trigger: the deletion of
-`packs/ops/`.
-
-### `packs/ops/commands/st-incident-response.md`
-
-A retiring pack; no case was ever written; plan 018 file 2 deletes it. Trigger: the deletion of
-`packs/ops/`.
-
-### `packs/ops/commands/st-release.md`
-
-A retiring pack; no case was ever written; plan 018 file 2 deletes it. Trigger: the deletion of
-`packs/ops/`.
-
-### `packs/ops/skills/st-ci-pipeline/SKILL.md`
-
-A retiring pack; no case was ever written; plan 018 file 2 deletes it. Trigger: the deletion of
-`packs/ops/`.
-
-### `packs/ops/skills/st-containerize/SKILL.md`
-
-A retiring pack; no case was ever written; plan 018 file 2 deletes it. Trigger: the deletion of
-`packs/ops/`.
-
-### `packs/ops/skills/st-gh-agentic-workflows/SKILL.md`
-
-A retiring pack; no case was ever written; plan 018 file 2 deletes it. Trigger: the deletion of
-`packs/ops/`.
-
-### `packs/ops/skills/st-incident-runbook/SKILL.md`
-
-A retiring pack; no case was ever written; plan 018 file 2 deletes it. Trigger: the deletion of
-`packs/ops/`.
-
-### `packs/ops/skills/st-release-runbook/SKILL.md`
-
-A retiring pack; no case was ever written; plan 018 file 2 deletes it. Trigger: the deletion of
-`packs/ops/`.
-
-### `packs/product-audit/commands/st-benchmark.md`
-
-A retiring pack; no case was ever written; plan 018 file 2 deletes it. Trigger: the deletion of
-`packs/product-audit/`.
-
-### `packs/product-audit/commands/st-product-audit.md`
-
-A retiring pack; no case was ever written; plan 018 file 2 deletes it. Trigger: the deletion of
-`packs/product-audit/`.
-
-### `packs/product-audit/rules/stamity-epic-audit-frame.md`
-
-A retiring pack; no case was ever written; plan 018 file 2 deletes it. Trigger: the deletion of
-`packs/product-audit/`.
-
-### `packs/product-audit/skills/st-perf-audit/SKILL.md`
-
-A retiring pack; no case was ever written; plan 018 file 2 deletes it. Trigger: the deletion of
-`packs/product-audit/`.
-
-### `packs/scaffold/commands/st-auth-scaffold.md`
-
-A retiring pack; no case was ever written; plan 018 file 2 deletes it. Trigger: the deletion of
-`packs/scaffold/`.
-
-### `packs/scaffold/commands/st-design-system-create.md`
-
-A retiring pack; no case was ever written; plan 018 file 2 deletes it. Trigger: the deletion of
-`packs/scaffold/`.
-
-### `packs/scaffold/commands/st-slo-scaffold.md`
-
-A retiring pack; no case was ever written; plan 018 file 2 deletes it. Trigger: the deletion of
-`packs/scaffold/`.
 
 ### `packs/frontend/commands/st-ui-review.md`
 

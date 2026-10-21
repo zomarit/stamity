@@ -58,9 +58,9 @@ import { makeTempDir, type TempDirHandle } from "../support/tempDir.ts";
  * an input that could trip it. Made-up packs live in a temp tree: the checkout's `packs/` is never
  * written, since the install-smoke lane digests it.
  *
- * `ops`, `product-audit` and `scaffold` retire in Package 22 file 2; `ops` ships agents and
- * `product-audit` a rule, so the three are exempt from the class rule by name while their
- * directories exist, each exemption going red once its directory is gone.
+ * `ops`, `product-audit` and `scaffold` left in Package 22 file 2 (plan 018 file 2,
+ * u8-retire-old-packs), and with them the class rule's exemption by name: every pack under
+ * `packs/` now ships commands and skills only, with no exemption.
  *
  * No mocks: the CLI runs in-process over real temp repositories, one template per client set
  * built on first use and copied per case.
@@ -69,9 +69,6 @@ import { makeTempDir, type TempDirHandle } from "../support/tempDir.ts";
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const PACKS_ROOT = join(REPO_ROOT, "packs");
 const GATE_SCRIPT = join(REPO_ROOT, "scripts", "leak-gate.mjs");
-
-/** Retiring packs, exempt from the first-party class rule while their directories exist. */
-const RETIRING_PACKS: readonly string[] = ["ops", "product-audit", "scaffold"];
 
 /** The content classes a first-party pack ships. */
 const FIRST_PARTY_CLASSES: ReadonlySet<string> = new Set(["commands", "skills"]);
@@ -308,7 +305,7 @@ function frontmatterProblems(pack: LoadedPack): string[] {
 }
 
 /** Content classes outside commands and skills, unless the pack is exempt by name. */
-async function classProblems(pack: LoadedPack, exempt: readonly string[]): Promise<string[]> {
+async function classProblems(pack: LoadedPack, exempt: readonly string[] = []): Promise<string[]> {
   if (exempt.includes(pack.id)) return [];
   const classes = new Set((await enumeratePackContent(pack.root)).map((file) => file.contentClass));
   return [...classes]
@@ -380,7 +377,7 @@ function stripFencedBlocks(body: string): string {
 
 /**
  * Every `/st-<id>` mention resolves to a command, and every bare `st-<id>` or `stamity-<id>` to
- * an artifact, in the core or any pack (the scaffold suite's resolver, widened the same way).
+ * an artifact, in the core or any pack (the retired scaffold suite's resolver, widened the same way).
  */
 function crossReferenceProblems(
   pack: LoadedPack,
@@ -469,20 +466,15 @@ async function realPack(id: string): Promise<LoadedPack> {
 
 describe("every pack — enumeration", () => {
   it("enumerates the packs from packs/*/pack.json, equal to the catalog's ids", () => {
-    // Non-degenerate: the four first-party packs this file was written against are all here.
-    expect(PACK_IDS).toEqual(expect.arrayContaining(["frontend", "ops", "product-audit", "scaffold"]));
+    // TEST CHANGE, justified: `ops`, `product-audit` and `scaffold` were deleted in plan 018 file 2
+    // (u8-retire-old-packs), so the first-party set is `frontend` alone until u10 adds `production`;
+    // an exact list, so a pack folder added or left behind turns this red.
+    expect(PACK_IDS).toEqual(["frontend"]);
     expect(enumerationProblems(PACK_IDS, curatedPacks().map((entry) => entry.id))).toEqual([]);
   });
 
   it("holds no retired id among the pack directories", () => {
     expect(retiredProblems(PACK_IDS)).toEqual([]);
-  });
-
-  it.each(RETIRING_PACKS)("the class exemption for %s holds only while its directory exists", (id) => {
-    expect(
-      PACK_IDS,
-      `packs/${id} is gone: drop "${id}" from RETIRING_PACKS in test/packs/packs.test.ts, and from lint.test.ts's list if it is there`,
-    ).toContain(id);
   });
 });
 
@@ -505,8 +497,11 @@ describe.each(PACK_IDS)("pack %s — static", (id) => {
     expect(frontmatterProblems(pack)).toEqual([]);
   });
 
-  it("ships first-party classes only, the retiring packs exempt", async () => {
-    expect(await classProblems(await realPack(id), RETIRING_PACKS)).toEqual([]);
+  // TEST CHANGE, justified: the retiring packs' exemption left with their folders (plan 018 file 2,
+  // u8-retire-old-packs); every pack is now held to the class rule with no exemption, which also
+  // carries the dropped "needs the class exemption only for the retiring packs" case.
+  it("ships first-party classes only, with no pack exempt", async () => {
+    expect(await classProblems(await realPack(id))).toEqual([]);
   });
 
   it("resolves every cross-reference against the core and every pack", async () => {
@@ -533,13 +528,6 @@ describe("every pack — names", () => {
     expect(artifacts.filter((artifact) => artifact.owner === "core" && artifact.cls === "commands")).toHaveLength(9);
     for (const id of PACK_IDS) expect(artifacts.some((artifact) => artifact.owner === `pack ${id}`), id).toBe(true);
     expect(nameClashes(artifacts)).toEqual([]);
-  });
-
-  it("needs the class exemption only for the retiring packs", async () => {
-    const flagged = await Promise.all(
-      (await packsPromise).map(async (pack) => ((await classProblems(pack, [])).length > 0 ? pack.id : null)),
-    );
-    expect(flagged.filter((id) => id !== null && !RETIRING_PACKS.includes(id))).toEqual([]);
   });
 });
 
@@ -634,7 +622,9 @@ describe("every pack — each static probe red on a made-up pack", () => {
       "agents/stamity-acme.md": madeUpArtifact("acme", "agent", "Acme agent."),
     });
 
-    expect(await classProblems(pack, RETIRING_PACKS)).toEqual([
+    // TEST CHANGE, justified: no retiring-pack list remains to pass (u8-retire-old-packs); the
+    // default, no exemption, is the call the real packs now make.
+    expect(await classProblems(pack)).toEqual([
       expect.stringMatching(/acme-demo: ships agents, outside the first-party classes/),
     ]);
     expect(await classProblems(pack, ["acme-demo"])).toEqual([]);

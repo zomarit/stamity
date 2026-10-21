@@ -22,9 +22,9 @@ import { useTempDir } from "../support/tempDir.ts";
  * Two head rules beside them: a skill that is explicit-only (`disable-model-invocation: true`)
  * ships the Codex companion that hides it from the model, and the reverse, so Codex's skills list
  * and the other clients agree about it (REQ-PACK-006); and a pack skill's description holds to
- * 250 characters. `ops` and `product-audit` are retiring (Package 22 file 2) and exempt from
- * the cap by name (REQ-PACK-011), each exemption going red once its directory is gone;
- * `scaffold`, retiring too, ships no skill and takes no exemption.
+ * 250 characters, every pack held to it (REQ-PACK-011): the exemption `ops` and `product-audit`
+ * held by name left with their folders in Package 22 file 2 (plan 018 file 2, u8-retire-old-packs).
+ * The cap keeps an exemption parameter, empty by default, proven only on a made-up pack.
  *
  * Every rule is a function from one file to its problems, run over the real packs (expected
  * clean) and over a made-up pack that breaks it (expected to name the break), so no rule here is
@@ -33,9 +33,6 @@ import { useTempDir } from "../support/tempDir.ts";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const PACKS_ROOT = join(REPO_ROOT, "packs");
-
-/** Retiring packs, exempt from the description cap while their directories exist. */
-const RETIRING_PACKS: readonly string[] = ["ops", "product-audit"];
 
 /** REQ-PACK-011: a pack skill's description holds to 250 characters. */
 const DESCRIPTION_MAX = 250;
@@ -178,7 +175,7 @@ function descriptionCap(file: PackFile, exempt: readonly string[]): string[] {
 }
 
 /** Every per-file rule's problems over `files`, plus the companion rule over the set. */
-function lint(files: readonly PackFile[], exempt: readonly string[] = RETIRING_PACKS): string[] {
+function lint(files: readonly PackFile[], exempt: readonly string[] = []): string[] {
   return [
     ...files.flatMap((file) => [
       ...substitutionTokens(file),
@@ -196,9 +193,11 @@ const realFiles: Promise<PackFile[]> = Promise.all(
 ).then((perPack) => perPack.flat());
 
 describe("pack lint — every file under packs/", () => {
-  it("reads every pack, the four first-party ones among them, and each one's files", async () => {
+  it("reads every pack, the first-party one among them, and each one's files", async () => {
     // Non-degenerate: the lint below runs over real text in every pack, not over an empty set.
-    expect(PACK_IDS).toEqual(expect.arrayContaining(["frontend", "ops", "product-audit", "scaffold"]));
+    // TEST CHANGE, justified: `ops`, `product-audit` and `scaffold` were deleted in plan 018 file 2
+    // (u8-retire-old-packs); `frontend` is the one first-party pack until u10 adds `production`.
+    expect(PACK_IDS).toEqual(["frontend"]);
     const files = await realFiles;
     for (const id of PACK_IDS) {
       expect(files.filter((file) => file.pack === id).length, id).toBeGreaterThan(1);
@@ -213,25 +212,14 @@ describe("pack lint — every file under packs/", () => {
     ]).toEqual([]);
   });
 
-  it("holds every pack skill's description to 250 characters, the retiring packs exempt", async () => {
-    expect((await realFiles).flatMap((file) => descriptionCap(file, RETIRING_PACKS))).toEqual([]);
-    // Without the exemption, every skill over the cap is a retiring pack's: nothing else leans on it.
-    const unexempted = (await realFiles).flatMap((file) =>
-      descriptionCap(file, []).length > 0 ? [file.pack] : [],
-    );
-    expect(unexempted.filter((pack) => !RETIRING_PACKS.includes(pack))).toEqual([]);
+  // TEST CHANGE, justified: the retiring packs' exemption and its expiry cases left with their
+  // folders (plan 018 file 2, u8-retire-old-packs); every real pack skill is held to the cap with
+  // no exemption, and the files read are shown to include skills, so the check is not vacuous.
+  it("holds every pack skill's description to 250 characters, with no pack exempt", async () => {
+    const files = await realFiles;
+    expect(files.some((file) => /^skills\/[^/]+\/SKILL\.md$/.test(file.relPath))).toBe(true);
+    expect(files.flatMap((file) => descriptionCap(file, []))).toEqual([]);
   });
-
-  it.each(RETIRING_PACKS)(
-    "the exemption for %s holds only while its directory exists",
-    (id) => {
-      // Red once file 2 deletes the pack: the exemption goes with the directory, never outlives it.
-      expect(
-        PACK_IDS,
-        `packs/${id} is gone: drop "${id}" from RETIRING_PACKS in test/packs/lint.test.ts and packs.test.ts`,
-      ).toContain(id);
-    },
-  );
 });
 
 // ── Made-up packs: each rule shown red ────────────────────────────────────
@@ -334,12 +322,14 @@ describe("pack lint — each rule red on a made-up pack", () => {
     expect(lint(at)).toEqual([]);
   });
 
-  it("exempts a retiring pack from the cap by its name, and nothing else", async () => {
+  it("exempts a pack from the cap only by its name, and none by default", async () => {
     const files = await madeUp("acme-retiring", {
       [SKILL]: madeUpArtifact("acme-lint", "skill", "a".repeat(DESCRIPTION_MAX + 1)),
     });
 
     expect(lint(files, ["acme-retiring"])).toEqual([]);
-    expect(lint(files, RETIRING_PACKS)).toHaveLength(1);
+    // TEST CHANGE, justified: the retiring-pack list this passed is gone (u8-retire-old-packs);
+    // the empty default is what every real pack now runs with.
+    expect(lint(files)).toHaveLength(1);
   });
 });

@@ -157,7 +157,7 @@ May write when it runs, so `--dry-run` previews any change without making it.
 
 | Argument | What it is |
 |---|---|
-| `<pack-spec>` | catalog id (ops), pack directory (./packs/ops), or an installed package name (@acme/ops) |
+| `<pack-spec>` | catalog id (frontend), pack directory (./packs/frontend), or an installed package name (@acme/ops) |
 
 | Flag | What it does | Default |
 |---|---|---|
