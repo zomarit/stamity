@@ -387,6 +387,10 @@ in 3 of 3 runs. Both measurements trusted the project through a per-invocation `
 may leave the project `.codex/` layer unloaded, and on 0.155.1 a project-file `hooks = false` did
 not turn the feature off under it. So the cause is not isolated: `exec` itself, or a layer that
 never loaded. A run with the project trusted in your home `~/.codex/config.toml` is unmeasured.
+Those runs read a hook's firing from its own output alone: a PreToolUse hook appended one line per
+call to `qa-observations.jsonl`, so no such file after a run meant no hook fired, whatever the
+model's reply said, while the `codex.hooks.run` metrics line in a `RUST_LOG=debug` log appeared
+with the feature off too, so it is no evidence that a hook ran.
 Treat a Codex hook as enforcement in the interactive client, and as nothing measured in the headless
 one.
 

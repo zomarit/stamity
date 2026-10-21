@@ -49,6 +49,12 @@ export const REPORT_ROLES = [
  * whose basename starts with one of those four words (the refusal
  * `src/runs/ledgerStore.ts`'s report check names), so a name the pattern
  * admitted but the client refused would be a report nobody could write.
+ * Measured 2026-09-23 on Claude Code 2.1.278 (six refused writes) and 2.1.280
+ * (one more, and the rule read from the client binary's `Write` input check,
+ * any folder, case-insensitive); bypass mode does not lift it, and a retry
+ * under the same name fails the same way. Re-check on the next client minor:
+ * if the rule is gone or its words changed, move this lookahead and that
+ * message with it.
  */
 export const REPORT_NAME_PATTERN: RegExp = new RegExp(
   `^(?!(?:report|summary|findings|analysis))[a-z0-9][a-z0-9-]*-(?:${REPORT_ROLES.join("|")})-r[1-9][0-9]*\\.md$`,
