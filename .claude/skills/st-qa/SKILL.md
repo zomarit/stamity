@@ -101,9 +101,9 @@ A row is auto-proven only by an artifact that already exists for this change:
 | a verification artifact under `.stamity/verify/` | the axis criteria that row restates |
 | a browser-evidence capture at `.stamity/evidence/browser-<sha>.json` — spec run, screenshot, console output | UI rows |
 
-A browser capture is an input to this walk, not a step inside it: where a UI row
-needs one and no bundle exists for the current sha, the browser run happens
-before this table is built. A UI row with no bundle stays on the human path.
+A browser capture is an input to this walk, not a step inside it: where a UI row needs one and no
+bundle exists for the current sha, the browser run happens before this table is built where the
+browser-evidence skill is installed. A UI row with no bundle stays on the human path.
 
 Three rules make the pass honest:
 

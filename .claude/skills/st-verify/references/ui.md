@@ -25,11 +25,11 @@ Each row: what it establishes · how to run it from detection facts · threshold
   How: enumerate components under the detected component root; for each, list
   declared states (variant props, fixtures, stories) and match them to render
   branches. Threshold: 0 declared states with no branch.
-- **`ui-token-usage`** — color, spacing, and type values come from the design
-  system rather than literals. How: read the token source named by the
-  design-system inventory; count literal values in component files that have a
-  token equivalent. Threshold: 0 such literals; an exception carries an inline
-  reason on the line.
+- **`ui-token-usage`** — color, spacing, and type values come from the design system rather than
+  literals. How: read the token source named by the design-system inventory, or, where none exists,
+  the token source found in the stylesheet layer, recorded as found without the inventory; count
+  literal values in component files that have a token equivalent. Threshold: 0 such literals; an
+  exception carries an inline reason on the line.
 - **`ui-visual-baseline`** — a visual regression would be caught. How: detect the
   visual-regression harness (baseline directory, snapshot config); confirm
   committed baselines for each top-level surface, and that baselines are not

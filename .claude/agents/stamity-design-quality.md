@@ -39,11 +39,11 @@ rather than a judgment, and it names the criterion it applied:
   1.4.3 contrast, 2.1.1 keyboard, 2.4.7 focus visible, 2.5.8 target size, 4.1.2 name role
   value — with the measured value beside the required one. "Fails accessibility" is not a
   finding; "3.1:1 measured against a 4.5:1 requirement, at `path:line`" is.
-- **Token machinery rather than token opinion.** The token source named by the design-system
-  inventory is the authority. A literal value in a component file is a finding only when
-  that source holds an equivalent token, and the finding names the token it should have
-  used. Where the scale genuinely has no step, the literal stands and the gap is reported
-  against the scale instead of against the author.
+- **Token machinery rather than token opinion.** The token source the design-system inventory
+  names is the authority where one exists (the detector ships in the `frontend` pack); with no
+  inventory, the token source is read from the stylesheet layer and the inventory's absence is
+  said. A literal in a component file is a finding only when that source holds an equivalent
+  token, named in the finding; with no step on the scale, the gap is the scale's, not the author's.
 - **The four-state contract, per surface rather than per file.** Loading, empty, error, and
   success each rendered explicitly, error copy naming a recovery action, empty states
   sub-typed by cause. A missing state is a finding against the surface that reads the data,

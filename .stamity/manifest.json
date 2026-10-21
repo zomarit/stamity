@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "generatedBy": "1.16.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-21T01:25:03.606Z",
+  "updatedAt": "2026-10-21T01:35:07.448Z",
   "tools": [
     "claude"
   ],
@@ -72,7 +72,7 @@
       "adapter": "claude",
       "artifactId": "design-quality",
       "artifactType": "agent",
-      "contentHash": "31ae607e2661ae3d5f0070592b3fb19e283f6c07c946a91c8040eeef2b49bd2e",
+      "contentHash": "6794f9664b873514389a2b0ef6266585325dac69d86d7f34d33537d47745783d",
       "path": ".claude/agents/stamity-design-quality.md"
     },
     {
@@ -191,7 +191,7 @@
       "adapter": "claude",
       "artifactId": "cmd-work",
       "artifactType": "command",
-      "contentHash": "877bc65bfb3b55517ff529b4a343182f1353d7560601f312fccaf3a81392104a",
+      "contentHash": "c626c101c3933c761d44e7afb86e969df7410839e36f38b83a4306a35aeb1ece",
       "path": ".claude/commands/st-work.md"
     },
     {
@@ -317,7 +317,7 @@
       "adapter": "claude",
       "artifactId": "ui-states",
       "artifactType": "rule",
-      "contentHash": "07974fae66dbff2fff850084ff17447faa1cc3ce0a79fd128fbac77d47e69306",
+      "contentHash": "3a141312dd4c2d687e14750eae0c22648e28422f0ce0279148c79e69b861cd90",
       "path": ".claude/rules/stamity-ui-states.md"
     },
     {
@@ -537,7 +537,7 @@
       "adapter": "claude",
       "artifactId": "qa",
       "artifactType": "skill",
-      "contentHash": "eeddea1470277a88d24b5d2fd30e1e691806e3d7d36df0ca0b37f11575c04395",
+      "contentHash": "17e6676258a6d6a1064f4f3ba30f683e0e3c3450886e28aeec97f372ae4b6cae",
       "path": ".claude/skills/st-qa/SKILL.md"
     },
     {
@@ -649,7 +649,7 @@
       "adapter": "claude",
       "artifactId": "verify",
       "artifactType": "skill",
-      "contentHash": "738e557b1541bf4e2db3713e2deb4b9ffcfee9ecfb3fa5af87258466f185c2d1",
+      "contentHash": "74854b4aa98ba9708d6bfe4a270077b59f71c81b84840555fb9e9e6a49968875",
       "path": ".claude/skills/st-verify/references/ui.md"
     },
     {
