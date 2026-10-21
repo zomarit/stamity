@@ -920,14 +920,15 @@ describe("clean --pack — salvage and convergence", () => {
 // REQ-PACK-012, REQ-PACK-023): the cases below installed the first-party `ops` pack from the
 // catalog, for the agent and the skills it projects into the clients, and `scaffold` beside it.
 // Both packs retire in this package, and `frontend`, the one first-party pack left, ships no agent.
-// So the pack under test is this made-up one, one agent and one skill, added from a path with
-// `--allow-untrusted` (a path spec carries no trust basis); the other installed pack is the
-// catalog's `frontend`. What each case asserts on the copies, their rows and the refusals is
-// unchanged.
+// So the pack under test is this made-up one, added from a path with `--allow-untrusted` (a path
+// spec carries no trust basis); the other installed pack is the catalog's `frontend`. It ships a
+// command, agents and a skill, so its copies span the classes `ops`'s did, and what each case
+// asserts on the copies, their rows and the refusals is unchanged.
 /** The made-up pack's id: its owner is `pack:acme-ship`, its folder `.stamity/packs/acme-ship`. */
 const SHIP_ID = "acme-ship";
 const SHIP_AGENT_REL = "agents/stamity-acme-deployer.md";
 const SHIP_SKILL_REL = "skills/st-acme-pipeline/SKILL.md";
+const SHIP_COMMAND_REL = "commands/st-acme-ship.md";
 /**
  * The deployer's `model_class` is `advanced`, the class a moved Codex list re-picks below. A second
  * agent keeps the pack's `agents/` folder from emptying when a case moves the deployer out by hand,
@@ -940,6 +941,7 @@ const SHIP_FILES: Readonly<Record<string, string>> = {
   ),
   "agents/stamity-acme-watcher.md": madeUpArtifact("acme-watcher", "agent", "Watches the acme service."),
   [SHIP_SKILL_REL]: madeUpArtifact("acme-pipeline", "skill", "Designs the acme pipeline."),
+  [SHIP_COMMAND_REL]: madeUpArtifact("acme-ship", "command", "Ships the acme service."),
 };
 
 /** Writes the made-up pack into `dir` and returns the `add` argv that installs it. */
@@ -1011,10 +1013,12 @@ describe("clean --pack — the pack's projected copies", () => {
 
   const EDITED_COPY = ".claude/skills/st-acme-pipeline/SKILL.md";
   const AGENT_COPY = ".claude/agents/stamity-acme-deployer.md";
+  const COMMAND_COPY = ".claude/commands/st-acme-ship.md";
 
-  it("the fixture: the made-up pack projects its skill and its agent into .claude/", () => {
+  it("the fixture: the made-up pack projects its skill, its agent and its command into .claude/", () => {
     expect(shipCopies).toContain(AGENT_COPY);
     expect(shipCopies).toContain(EDITED_COPY);
+    expect(shipCopies).toContain(COMMAND_COPY);
     expect(frontendCopies.length).toBeGreaterThan(0);
   });
 
@@ -1245,8 +1249,6 @@ describe("clean --pack — the pack's projected copies", () => {
       const ownedBytes = "---\nname: st-local\ndescription: the owner's own skill\n---\n\nOurs.\n";
       const ownedToo = ".claude/agents/stamity-ours.md";
       const ownedTooBytes = "---\nname: stamity-ours\ndescription: the owner's own agent\n---\n\nOurs.\n";
-      // The made-up pack ships no command, so its commands folder is made here.
-      await mkdir(join(root, STATE_DIR, "packs", SHIP_ID, "commands"), { recursive: true });
       await writeFile(join(root, STATE_DIR, "packs", SHIP_ID, ...clashRel.split("/")), clashBytes, "utf-8");
       await writeFile(join(root, retired), retiredBytes, "utf-8");
       await mkdir(join(root, ".claude", "skills", "st-local"), { recursive: true });
@@ -1305,8 +1307,6 @@ describe("clean --pack — the pack's projected copies", () => {
       const root = await copyOf(shipSynced);
       const clashRel = "commands/st-acme-pipeline.md";
       const clashBytes = "---\ndescription: Run the CI pipeline.\n---\n\nRun the pipeline.\n";
-      // The made-up pack ships no command, so its commands folder is made here.
-      await mkdir(join(root, STATE_DIR, "packs", SHIP_ID, "commands"), { recursive: true });
       await writeFile(join(root, STATE_DIR, "packs", SHIP_ID, ...clashRel.split("/")), clashBytes, "utf-8");
       const manifestFile = join(root, STATE_DIR, "manifest.json");
       const manifest = JSON.parse(await readFile(manifestFile, "utf-8")) as SetupManifest;
