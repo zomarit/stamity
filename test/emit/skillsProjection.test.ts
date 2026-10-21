@@ -1,7 +1,8 @@
 import { parse } from "yaml";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { EmissionContext } from "../../src/cli/engine/emission.ts";
 import { createManifest } from "../../src/manifest/manifest.ts";
@@ -18,7 +19,7 @@ import {
   type ProjectedFile,
   type ProjectSkillsOptions,
 } from "../../src/emit/skillsProjection.ts";
-import { buildContentIndex, type CatalogItem } from "../../src/content/catalog.ts";
+import { buildContentIndex, originOf, type CatalogItem } from "../../src/content/catalog.ts";
 import { NO_DEMOTED_RULES, SHARED_SKILLS_TREE_READERS } from "../../src/content/ruleDelivery.ts";
 import { PLATFORM_TOOL_MARKER, buildAskUserPlatformTable } from "../../src/tools/translator.ts";
 import type { ContentSelection } from "../../src/types/content.ts";
@@ -48,17 +49,21 @@ const FIXED_NOW = new Date("2026-08-13T12:00:00.000Z");
 /** A rootDir that must not exist before, during, or after planning. */
 const GHOST_ROOT = join(tmpdir(), `stamity-p4u02-ghost-${process.pid}`);
 
-/** Every shipped skill id, as authored in the bundled corpus's frontmatter. */
-// TEST CHANGE, justified (u13-frontend-move, plan 018): browser-evidence and design-system-detect
-// moved to the frontend pack (REQ-PACK-007), so the bundled corpus projects six of these, not eight.
-const ALL_SKILL_IDS = [
-  "dep-audit",
-  "handoff",
-  "learn",
-  "onboard",
-  "qa",
-  "verify",
-] as const;
+/** The core skill folders the bundled corpus ships. */
+const CORE_SKILLS_DIR = fileURLToPath(new URL("../../content/skills/", import.meta.url));
+
+/** Skill ids under `dir`: every folder holding a `SKILL.md`, the `st-` prefix stripped, sorted. */
+function skillIdsUnder(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && existsSync(join(dir, entry.name, "SKILL.md")))
+    .map((entry) => entry.name.replace(/^st-/, ""))
+    .toSorted();
+}
+
+/** Every shipped skill id, read from the core skill folders so a new skill is projected here unedited. */
+// TEST CHANGE, justified (u7-skill-id-lists, plan 018-02): the typed list had drifted from the corpus
+// (st-unattended was never projected or token-checked here), so it is derived from content/skills/.
+const ALL_SKILL_IDS: readonly string[] = skillIdsUnder(CORE_SKILLS_DIR);
 
 /** The `st-verify` directory: SKILL.md plus its ten axis references. */
 const VERIFY_FILES = [
@@ -116,7 +121,7 @@ async function projectFixture(
 // ── Real bundled corpus ──────────────────────────────────────────
 
 describe("projectSkills over the bundled corpus", () => {
-  it("projects all 6 skills under .agents/skills, st-verify with its full references subtree, path-sorted", async () => {
+  it(`projects all ${ALL_SKILL_IDS.length} skills under .agents/skills, st-verify with its full references subtree, path-sorted`, async () => {
     const rows = await projectSkills(contextOf(ALL_SKILL_IDS));
     const paths = pathsOf(rows);
 
@@ -130,6 +135,35 @@ describe("projectSkills over the bundled corpus", () => {
     // One deterministic order: sorted by path, duplicates impossible.
     expect(paths).toEqual([...paths].toSorted());
     expect(new Set(paths).size).toBe(paths.length);
+  });
+
+  it("the id list equals the core skill folders", async () => {
+    // Held against the catalog's own read of the corpus (frontmatter ids), a source independent of
+    // the folder walk the list is derived from, so a skill the list drops shows here by name.
+    const index = await buildContentIndex();
+    const catalogIds = index.items
+      .filter((item) => item.type === "skill" && originOf(item) === "corpus")
+      .map((item) => item.id)
+      .toSorted();
+
+    expect(catalogIds.length).toBeGreaterThan(1);
+    expect([...ALL_SKILL_IDS]).toEqual(catalogIds);
+  });
+
+  it("derives the id list only from folders holding a SKILL.md", () => {
+    const root = mkdtempSync(join(tmpdir(), "stamity-u7-skill-ids-"));
+    try {
+      for (const name of ["st-beta", "st-alpha", "st-draft"]) mkdirSync(join(root, name));
+      writeFileSync(join(root, "st-beta", "SKILL.md"), "beta");
+      writeFileSync(join(root, "st-alpha", "SKILL.md"), "alpha");
+      // A folder with support files but no SKILL.md, and a loose file, are not skills.
+      writeFileSync(join(root, "st-draft", "notes.md"), "draft");
+      writeFileSync(join(root, "SKILL.md"), "loose");
+
+      expect(skillIdsUnder(root)).toEqual(["alpha", "beta"]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it("narrowed selection projects exactly the named skill directories and nothing else", async () => {
@@ -1215,7 +1249,7 @@ describe("retargetProjection", () => {
     const source = await projectSkills(contextOf(ALL_SKILL_IDS));
     const native = retargetProjection(source, NATIVE_DIR);
 
-    // Non-degenerate: 6 skills, and `st-verify` alone contributes 11 rows.
+    // Non-degenerate: every core skill, and `st-verify` alone contributes its whole subtree.
     expect(source.length).toBeGreaterThan(ALL_SKILL_IDS.length);
     expect(native).toHaveLength(source.length);
 
