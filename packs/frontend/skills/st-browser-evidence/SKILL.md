@@ -126,7 +126,11 @@ file on disk; a row with no artifact path is deleted rather than narrated.
 ## Output artifact
 
 One bundle per run at `.stamity/evidence/browser-<sha>.json`, where `<sha>` is
-the short HEAD sha with a `-dirty` suffix on an unclean worktree. Fields:
+the short HEAD sha with a `-dirty` suffix on an unclean worktree. A caller may name an
+optional suffix of lowercase letters, digits and hyphens; the bundle then lands at
+`.stamity/evidence/browser-<sha>-<suffix>.json`, the suffix after any `-dirty`. With no suffix
+the name is the one above, and that unsuffixed bundle is the one the QA checkpoint reads.
+Fields:
 
 | Field | Value |
 |---|---|
@@ -142,4 +146,5 @@ the short HEAD sha with a `-dirty` suffix on an unclean worktree. Fields:
 `status` is `pass`, `fail`, `skipped`, or `not-applicable` — the same four words
 the rest of the corpus uses, so a QA row and a bundle row read alike. The QA
 checkpoint reads this file; the proof block cites its path. Two runs on one sha
-overwrite the same path.
+overwrite the same path, so a caller whose bundle must not replace the one a proof block
+cites names a suffix.

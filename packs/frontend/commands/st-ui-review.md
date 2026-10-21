@@ -34,8 +34,11 @@ on their own.
    its recorded commit is behind the head, `st-design-system-detect` runs first and the review
    reads what it writes. Its `Status` row decides whether token findings are raised at all.
 2. **Browser evidence.** `st-browser-evidence` runs with the flow's steps stated as observable
-   behaviour, one scenario per step. Its bundle is the evidence for every criterion only a
-   render decides; when its preflight stops, the bundle still names the probe that stopped it.
+   behaviour, one scenario per step, and the suffix `ui-review`, so its bundle lands at
+   `.stamity/evidence/browser-<sha>-ui-review.json` and the unsuffixed bundle a `/st-work`
+   proof block cites on the same sha is left as it was. The review's own bundle is the evidence for every
+   criterion only a render decides; when its preflight stops, the bundle still names the probe
+   that stopped it.
 3. **The verify artifacts** for the current sha, `.stamity/verify/ui-<sha>.json` and
    `.stamity/verify/ux-<sha>.json`, read where they exist and never regenerated here: a stale
    or absent artifact is reported, not refreshed.

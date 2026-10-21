@@ -468,6 +468,22 @@ describe("browser-evidence — harness, not gate", () => {
       /a harness, not a gate/i,
     );
   });
+
+  // Plan 018 file 2, u3-frontend-set (review/4): `/st-ui-review` is a second caller on the
+  // same sha, so the skill takes an optional suffix and the review passes one, leaving the
+  // unsuffixed bundle a `/st-work` proof block cites untouched.
+  it("takes an optional caller suffix, and /st-ui-review passes `ui-review`", async () => {
+    const output = section(
+      await load("skills/st-browser-evidence/SKILL.md"),
+      "Output artifact",
+    ).replace(/\s+/g, " ");
+
+    expect(output).toContain(".stamity/evidence/browser-<sha>-<suffix>.json");
+    expect(output).toMatch(/with no suffix the name is the one above/i);
+    expect(flow(await load(UI_REVIEW))).toContain(
+      ".stamity/evidence/browser-<sha>-ui-review.json",
+    );
+  });
 });
 
 describe("design-system-detect — detection only", () => {
