@@ -547,12 +547,14 @@ describe("init — fresh repo", () => {
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("detected stacks with no dedicated guidance yet:");
     expect(result.stdout).toContain("next (framework)");
-    // Suggestions, never an install instruction while the pack catalog is empty.
+    // Suggestions only: init names the frontend pack with its pinned call and installs nothing.
     const block = result.stdout.slice(
       result.stdout.indexOf("detected stacks with no dedicated"),
       result.stdout.indexOf("next steps:"),
     );
-    expect(block.toLowerCase()).not.toContain("install");
+    // TEST CHANGE, justified (u16-frontend-suggestion, REQ-PACK-010): this asserted no install line while the catalog held no stack pack; a Next.js repository is now offered `frontend`, and the call appears exactly once.
+    expect(block).toContain(`  next (framework) — Install the frontend pack: ${npxCommand("add frontend")}\n`);
+    expect(block.split(npxCommand("add frontend"))).toHaveLength(2);
     expect(result.stdout.indexOf("detected stacks")).toBeLessThan(
       result.stdout.indexOf("next steps:"),
     );
