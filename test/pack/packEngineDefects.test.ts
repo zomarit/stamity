@@ -696,6 +696,14 @@ async function withoutSyncedCore(
 
 // ── C: defect 2, the Codex skills list ─────────────────────────────────────
 
+/** Four skills at 900 characters: the core's list plus these is past 8,000 on Codex. */
+const OVER_CAP_SKILLS: Record<string, string> = Object.fromEntries(
+  [1, 2, 3, 4].map((n) => [
+    `skills/st-acme-skill-${n}/SKILL.md`,
+    artifact(`acme-skill-${n}`, "skill", prose(900, `skill ${n}`)),
+  ]),
+);
+
 describe("C — defect 2 (Codex skills list): count only the rows Codex shows its model", () => {
   describe.each(SETS.filter(([, tools]) => tools.includes("codex")))("tools=%s", (_, tools) => {
     it(
@@ -731,16 +739,13 @@ describe("C — defect 2 (Codex skills list): count only the rows Codex shows it
       "C2: a skills pack that pushes the shown rows past 8,000 is refused, naming the pack and the size",
       async () => {
         const repo = await freshRepo(tools);
+        // TEST CHANGE, justified (2026-10-21, 2026-10-20_packs-rebuilt/u4-pack-fit): `add` now
+        // refuses this pack before it writes (REQ-PACK-004, case C3 below), so the fixture
+        // installs it the way an engine without the fit check left it, through
+        // `installBypassingAdd`; `sync`'s refusal is still what this case proves, unchanged.
         // Four skills at 900 characters (each under 1,000) add about 3,670 shown
-        // characters to the core's 5,570: over 8,000 under either way of counting.
-        const files = Object.fromEntries(
-          [1, 2, 3, 4].map((n) => [
-            `skills/st-acme-skill-${n}/SKILL.md`,
-            artifact(`acme-skill-${n}`, "skill", prose(900, `skill ${n}`)),
-          ]),
-        );
-        const added = await addPack(repo, await writePack("acme-demo", files));
-        expect(added.code, `fixture: the skills pack must install — ${said(added)}`).toBe(0);
+        // characters to the core's 4,759: over 8,000 under either way of counting.
+        await installBypassingAdd(repo, "acme-demo", OVER_CAP_SKILLS);
 
         const synced = await cli(repo, ["sync"]);
 
@@ -756,6 +761,27 @@ describe("C — defect 2 (Codex skills list): count only the rows Codex shows it
           synced.output,
           `defect 2 (Codex skills list): the refusal must name the pack that pushed the list over, acme-demo — ${said(synced)}`,
         ).toContain("acme-demo");
+      },
+      CASE_TIMEOUT,
+    );
+
+    it(
+      "C3: add refuses the same over-cap skills pack before it writes, naming the pack and both sizes",
+      async () => {
+        const repo = await freshRepo(tools);
+        const before = await readManifest(repo);
+
+        const added = await addPack(repo, await writePack("acme-demo", OVER_CAP_SKILLS));
+
+        expect(
+          added.code,
+          `REQ-PACK-004: add must refuse a pack the next sync would refuse for the skills list — ${said(added)}`,
+        ).toBe(1);
+        expect(
+          linesWith(added.output, /pack "acme-demo" does not fit Codex's skills list/, /\d[\d,]* of 8,000/),
+          `REQ-PACK-004: the refusal names the pack, its share and the total in one statement — ${said(added)}`,
+        ).not.toEqual([]);
+        expect(await readManifest(repo), "REQ-PACK-004: the refusal writes nothing").toEqual(before);
       },
       CASE_TIMEOUT,
     );

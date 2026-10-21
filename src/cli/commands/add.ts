@@ -27,6 +27,7 @@ import {
 } from "../../types/manifest.ts";
 import { STATE_DIR } from "../../types/markers.ts";
 import { keepSavedModelLists } from "../engine/clientModels.ts";
+import { planPackFit, type PackFitReport } from "../engine/packFit.ts";
 import { CliFailure, renderFailureHuman, type FailureDoc } from "../kit/output.ts";
 import { packageCommand } from "../kit/packageName.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
@@ -143,6 +144,13 @@ interface AddPayload {
      * and on a re-add that replaces every file.
      */
     leftBehind: string[];
+    /**
+     * Whether the pack fits each client's fixed listing budget, measured with
+     * it staged (`../engine/packFit.ts`, REQ-PACK-004). `null` when it was not
+     * measured: another part already refuses the plan, and the emission with
+     * this pack in it could not be planned.
+     */
+    fit: FitPayload | null;
   };
   trustTier: TrustTier;
   tierBasis: string;
@@ -161,6 +169,42 @@ interface AddPayload {
   executes: ExecutableLine[];
   /** `--preview` only: full file bodies keyed by target path. */
   preview?: Record<string, string>;
+}
+
+/** {@link PackFitReport} as the JSON document carries it: the per-pack shares as an object. */
+interface FitPayload {
+  codex:
+    | { applies: false }
+    | {
+        applies: true;
+        fits: boolean;
+        total: number;
+        cap: number;
+        packShare: ShareOf;
+        core: ShareOf;
+        packs: Record<string, ShareOf>;
+      };
+}
+
+/** One party's part of a listing: its characters and the skills that carry them. */
+type ShareOf = Extract<PackFitReport["codex"], { applies: true }>["packShare"];
+
+/** The report with its share map spelled as an object, which `JSON.stringify` keeps. */
+function fitPayloadOf(report: PackFitReport): FitPayload {
+  const { codex } = report;
+  if (!codex.applies) return { codex };
+  const { measure } = codex;
+  return {
+    codex: {
+      applies: true,
+      fits: codex.fits,
+      total: measure.total,
+      cap: measure.cap,
+      packShare: codex.packShare,
+      core: measure.core,
+      packs: Object.fromEntries(measure.packs),
+    },
+  };
 }
 
 // ── Catalog resolution ─────────────────────────────────────────
@@ -745,6 +789,50 @@ function leftBehindPart(packId: string, spec: string, paths: readonly string[]):
   };
 }
 
+/** A count with its thousands grouped, as the cap is written (`8,000`). */
+function grouped(count: number): string {
+  return count.toLocaleString("en-US");
+}
+
+/**
+ * Fit part (REQ-PACK-004): with the pack in it, the skills list Codex would
+ * show its model is past the cap `sync` refuses at, so the install would land
+ * and the next `sync` would fail. The message names the pack's own share and
+ * the total, so a setup already over the cap reads as that, and a pack whose
+ * skills add nothing is not blamed for it.
+ */
+function fitPart(packId: string, packShare: ShareOf, total: number, cap: number): RefusalPart {
+  return {
+    message:
+      `pack "${packId}" does not fit Codex's skills list: its ${packShare.skills} skill(s) add ` +
+      `${grouped(packShare.characters)} characters, ${grouped(total)} of ${grouped(cap)}`,
+    why:
+      "Codex holds the name and description of every skill it shows its model for the whole " +
+      `session, and sync refuses a list past ${grouped(cap)} characters`,
+    next:
+      "shorten the pack's skill descriptions, or mark a skill explicit-only " +
+      "(`disable-model-invocation: true` in its head, with an `agents/openai.yaml` beside it " +
+      "setting `policy.allow_implicit_invocation: false`), or narrow the content selection, or " +
+      'set `ruleDelivery: "always-on"` to deliver rules as instruction text instead of as ' +
+      "skills, then re-run",
+  };
+}
+
+/** The listing behind a fit part: the total, then who spends it, the incoming pack first. */
+function fitLines(packId: string, report: Extract<PackFitReport["codex"], { applies: true }>): string[] {
+  const share = (label: string, part: ShareOf): string =>
+    `${label} ${grouped(part.characters)} characters (${part.skills} skill(s))`;
+  const others = [...report.measure.packs]
+    .filter(([pack]) => pack !== packId)
+    .map(([pack, part]) => share(`pack "${withoutControlCharacters(pack)}"`, part));
+  return [
+    `${grouped(report.measure.total)} of ${grouped(report.measure.cap)} characters with this pack in it`,
+    share(`pack "${withoutControlCharacters(packId)}"`, report.packShare),
+    share("the core selection", report.measure.core),
+    ...others,
+  ];
+}
+
 /**
  * The refusal for a retired id (REQ-PACK-002): where each part went, then the
  * steps, and `add ./node_modules/<id>` as the way to install an npm package of
@@ -902,6 +990,30 @@ function collisionRefusal(
   return planRefusal(packId, [collisionPart(packId, spec, installed, reasons)]);
 }
 
+/**
+ * {@link planPackFit}, or `null` when another part already refuses and the
+ * measure cannot be taken: it plans the emission with the pack staged, and an
+ * id the pack shares with other content stops that plan the way it stops
+ * `sync`. With no other part, a failure to plan is the answer the next `sync`
+ * would give, so it propagates rather than letting the pack install.
+ */
+async function measurePackFit(
+  rootDir: string,
+  manifest: SetupManifest,
+  plan: PackInstallPlan,
+  engineVersion: string,
+  otherwiseRefused: boolean,
+): Promise<PackFitReport | null> {
+  if (!otherwiseRefused) return planPackFit(rootDir, manifest, plan, engineVersion);
+  try {
+    return await planPackFit(rootDir, manifest, plan, engineVersion);
+  } catch {
+    // reason: not silent — the plan is refused by the parts already found, and
+    // the payload's `fit: null` says this one was not measured.
+    return null;
+  }
+}
+
 // ── Command ────────────────────────────────────────────────────
 
 export const addCommand: CommandModule = {
@@ -1032,6 +1144,15 @@ export const addCommand: CommandModule = {
     const nameClashLines = nameClashes.map((clash) =>
       ctx.engine.content.catalog.describeInvocableNameClash(clash),
     );
+    // Measured before the dry-run exit as well as before the write: a pack
+    // this refuses would install and then fail the next `sync`.
+    const fit = await measurePackFit(
+      rootDir,
+      projectManifest,
+      plan,
+      ctx.app.version,
+      plan.collisions.length > 0 || nameClashes.length > 0 || leftBehind.length > 0,
+    );
 
     const payload: AddPayload = {
       packId: plan.manifest.name,
@@ -1041,6 +1162,7 @@ export const addCommand: CommandModule = {
         collisions: plan.collisions,
         nameClashes: nameClashLines,
         leftBehind,
+        fit: fit === null ? null : fitPayloadOf(fit),
       },
       trustTier: plan.trustTier,
       tierBasis: plan.tierBasis,
@@ -1095,6 +1217,12 @@ export const addCommand: CommandModule = {
       // Pack-supplied path segments: printed as the clash lines are.
       renderReasons(ctx, leftBehind.map(withoutControlCharacters), "left behind by this version");
       parts.push(leftBehindPart(plan.manifest.name, spec, leftBehind));
+    }
+    if (fit !== null && fit.codex.applies && !fit.codex.fits) {
+      renderReasons(ctx, fitLines(plan.manifest.name, fit.codex), "codex skills list");
+      parts.push(
+        fitPart(plan.manifest.name, fit.codex.packShare, fit.codex.measure.total, fit.codex.measure.cap),
+      );
     }
     if (parts.length > 0) return refuse(ctx, payload, planRefusal(plan.manifest.name, parts));
 

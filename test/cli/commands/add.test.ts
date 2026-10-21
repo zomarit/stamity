@@ -2208,3 +2208,184 @@ describe("add — retired pack names", () => {
     expect(parseDoc(result.stdout).installed).toBe(true);
   });
 });
+
+describe("add — the Codex skills-list fit (REQ-PACK-004)", () => {
+  /** A pack skill whose description is `length` characters, in its own folder `st-<id>`. */
+  const fitSkill = (id: string, length: number): string =>
+    `---\nid: ${id}\ntype: skill\ndescription: "${"d".repeat(length)}"\n---\nFixture body.\n`;
+
+  /** `count` skills `st-acme-skill-<n>` at `length` characters, optionally hidden from Codex's model. */
+  function fitSkills(count: number, length: number, hidden = false): Record<string, string> {
+    const files: Record<string, string> = {};
+    for (let n = 1; n <= count; n += 1) {
+      files[`skills/st-acme-skill-${n}/SKILL.md`] = fitSkill(`acme-skill-${n}`, length);
+      if (hidden) {
+        files[`skills/st-acme-skill-${n}/agents/openai.yaml`] =
+          "policy:\n  allow_implicit_invocation: false\n";
+      }
+    }
+    return files;
+  }
+
+  /** One shown row: the folder `st-acme-skill-<n>` (15), the description, and 3 separators. */
+  const ROW = (length: number): number => "st-acme-skill-1".length + length + 3;
+
+  interface CodexFit {
+    applies: boolean;
+    fits?: boolean;
+    total?: number;
+    cap?: number;
+    packShare?: { characters: number; skills: number };
+    core?: { characters: number; skills: number };
+  }
+
+  const fitOf = (doc: Record<string, unknown>): { codex: CodexFit } | null =>
+    (doc.planned as { fit: { codex: CodexFit } | null }).fit;
+
+  it("refuses a pack that takes the list past 8,000 before any write, naming the pack and both numbers", async () => {
+    await initProject(["codex"]);
+    await seedPack({ content: fitSkills(4, 900), declaredTools: ["codex"] });
+    const project = getProject();
+    const treeBefore = await listTree(project.dir);
+
+    const machine = await run(installArgs("--json"));
+
+    expect(machine.code).toBe(1);
+    const doc = parseDoc(machine.stdout);
+    const fit = fitOf(doc)?.codex;
+    expect(fit?.applies).toBe(true);
+    expect(fit?.fits).toBe(false);
+    expect(fit?.packShare).toEqual({ characters: 4 * ROW(900), skills: 4 });
+    const total = fit?.total ?? 0;
+    // Non-degenerate: the core lists skills of its own, and the pack's share is what tips it.
+    expect(fit?.core?.characters).toBeGreaterThan(0);
+    expect(total).toBe((fit?.core?.characters ?? 0) + 4 * ROW(900));
+    expect(total - 4 * ROW(900)).toBeLessThanOrEqual(8_000);
+    expect(total).toBeGreaterThan(8_000);
+    expect(errorOf(doc).code).toBe("VALIDATION_ERROR");
+    expect(errorOf(doc).message).toBe(
+      `pack "${PACK_ID}" was not installed: pack "${PACK_ID}" does not fit Codex's skills list: ` +
+        `its 4 skill(s) add ${(4 * ROW(900)).toLocaleString("en-US")} characters, ` +
+        `${total.toLocaleString("en-US")} of 8,000`,
+    );
+    expect(errorOf(doc).next).toContain("disable-model-invocation: true");
+    expect(errorOf(doc).next).toContain("policy.allow_implicit_invocation: false");
+    expect(writtenOf(doc)).toEqual([]);
+
+    const human = await run(installArgs());
+
+    expect(human.code).toBe(1);
+    expect(human.stdout).toContain("codex skills list");
+    expect(human.stdout).toContain(`${total.toLocaleString("en-US")} of 8,000 characters with this pack in it`);
+    expect(human.stderr).toContain("does not fit Codex's skills list");
+    expect(await listTree(project.dir)).toEqual(treeBefore);
+    expect(packRows(await readProjectManifest())).toEqual([]);
+  });
+
+  it("refuses it under --dry-run too, with exit 1", async () => {
+    await initProject(["codex"]);
+    await seedPack({ content: fitSkills(4, 900), declaredTools: ["codex"] });
+    const treeBefore = await listTree(getProject().dir);
+
+    const result = await run(installArgs("--dry-run", "--json"));
+
+    expect(result.code).toBe(1);
+    const doc = parseDoc(result.stdout);
+    expect(doc.dryRun).toBeUndefined();
+    expect(errorOf(doc).message).toContain("does not fit Codex's skills list");
+    expect(await listTree(getProject().dir)).toEqual(treeBefore);
+  });
+
+  it("installs a pack under the cap, recording the fit it measured", async () => {
+    await initProject(["codex"]);
+    await seedPack({ content: fitSkills(2, 200), declaredTools: ["codex"] });
+
+    const result = await run(installArgs("--json"));
+
+    expect(result.code).toBe(0);
+    const doc = parseDoc(result.stdout);
+    expect(doc.installed).toBe(true);
+    const fit = fitOf(doc)?.codex;
+    expect(fit?.fits).toBe(true);
+    expect(fit?.packShare).toEqual({ characters: 2 * ROW(200), skills: 2 });
+  });
+
+  it("adds nothing for a pack whose skills each ship allow_implicit_invocation: false", async () => {
+    await initProject(["codex"]);
+    // The same four skills that refuse above, each hidden from the model.
+    await seedPack({ content: fitSkills(4, 900, true), declaredTools: ["codex"] });
+
+    const result = await run(installArgs("--json"));
+
+    expect(result.code).toBe(0);
+    const fit = fitOf(parseDoc(result.stdout))?.codex;
+    expect(fit?.fits).toBe(true);
+    expect(fit?.packShare).toEqual({ characters: 0, skills: 0 });
+    expect(fit?.total).toBe(fit?.core?.characters);
+  });
+
+  it("measures a re-add with the installed copy replaced, not counted twice", async () => {
+    await initProject(["codex"]);
+    await seedPack({ content: fitSkills(3, 900), declaredTools: ["codex"] });
+    expect((await run(installArgs())).code).toBe(0);
+
+    const result = await run(installArgs("--json"));
+
+    expect(result.code).toBe(0);
+    const fit = fitOf(parseDoc(result.stdout))?.codex;
+    expect(fit?.packShare).toEqual({ characters: 3 * ROW(900), skills: 3 });
+    // Counted twice, the same pack would take the list past the cap and refuse.
+    expect((fit?.core?.characters ?? 0) + 2 * 3 * ROW(900)).toBeGreaterThan(8_000);
+    expect(fit?.total).toBe((fit?.core?.characters ?? 0) + 3 * ROW(900));
+  });
+
+  it("skips the check in a repository without Codex", async () => {
+    await initProject(["claude"]);
+    await seedPack({ content: fitSkills(4, 900) });
+
+    const result = await run(installArgs("--json"));
+
+    expect(result.code).toBe(0);
+    expect(fitOf(parseDoc(result.stdout))).toEqual({ codex: { applies: false } });
+  });
+
+  it("lists the fit beside a name clash in one refusal", async () => {
+    await initProject(["codex"]);
+    await seedPack({
+      content: {
+        ...fitSkills(4, 900),
+        "commands/st-acme-skill-1.md": "---\nid: acme-skill-1\ntype: command\n---\nRun it.\n",
+      },
+      declaredTools: ["codex"],
+    });
+
+    const result = await run(installArgs("--json"));
+
+    expect(result.code).toBe(1);
+    const doc = parseDoc(result.stdout);
+    expect(fitOf(doc)?.codex.fits).toBe(false);
+    expect(errorOf(doc).message).toMatch(
+      new RegExp(`name\\(s\\) it would emit are taken; pack "${PACK_ID}" does not fit Codex's skills list`),
+    );
+  });
+
+  it("refuses an id collision as before when the pack cannot be planned, leaving the fit unmeasured", async () => {
+    await initProject(["codex"]);
+    await seedPack({
+      content: {
+        ...fitSkills(4, 900),
+        "agents/stamity-reviewer.md": "---\nid: reviewer\ntype: agent\n---\nReview it.\n",
+      },
+      declaredTools: ["codex"],
+    });
+
+    const result = await run(installArgs("--json"));
+
+    expect(result.code).toBe(1);
+    const doc = parseDoc(result.stdout);
+    expect(errorOf(doc).message).toBe(
+      `pack "${PACK_ID}" was not installed: 1 id(s) it would claim are already held`,
+    );
+    expect(fitOf(doc)).toBeNull();
+  });
+});

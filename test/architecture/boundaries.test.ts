@@ -605,6 +605,11 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // other engine seams of the CLI layer, below the wave-14 `init` and `sync`
   // that read the lists before planning.
   "src/cli/engine/clientModels.ts": { unit: "e2-model-defaults-lister", wave: 13 },
+  // `add`'s fit check (REQ-PACK-004): plans the wave-9 core emission with the
+  // incoming pack staged through the wave-8 projection and counts it with the
+  // wave-10 Codex measure. Wave 13 below the wave-14 `add`, its only caller, and
+  // outside the composition root, which wires engine modules and not this one.
+  "src/cli/engine/packFit.ts": { unit: "u4-pack-fit", wave: 13 },
   "src/migration/detect.ts": { unit: "p2-04", wave: 13 },
   "src/migration/carry.ts": { unit: "p2-04", wave: 13 },
   // wave 14 (P2 wave 1) — command engines and the leaf commands

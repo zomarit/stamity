@@ -498,13 +498,25 @@ export function withoutPolicyWarningPrint<T>(plan: () => Promise<T>): Promise<T>
  *
  * `corpusRoot` pins the corpus half of the merged walk; production callers
  * leave it absent and get the bundled corpus.
+ *
+ * `opts.staged` is a pack not installed yet, resolved as if it were: `add`'s
+ * fit check (`../cli/engine/packFit.ts`, REQ-PACK-004) plans the emission with
+ * the incoming pack in it before anything is written. It takes the place of an
+ * installed pack of the same id, so a re-add measures the new version once
+ * rather than both, and joins the sorted list otherwise. The org policy is not
+ * consulted for it: `planPackInstall` judged that source before the plan the
+ * staged pack comes from existed.
  */
 export async function resolveInstalledPackContent(
   rootDir: string,
   manifest: SetupManifest,
   corpusRoot?: string,
+  opts: { staged?: StagedPack } = {},
 ): Promise<ResolvedPackContent> {
-  const { packs, denied } = await discoverInstalledPacksWithPolicy(rootDir, manifest);
+  const discovered = await discoverInstalledPacksWithPolicy(rootDir, manifest);
+  const { denied } = discovered;
+  const packs =
+    opts.staged === undefined ? discovered.packs : withStaged(discovered.packs, opts.staged);
   const packRoots = packContentRoots(packs);
   const policyWarnings = describeDeniedPacks(denied);
   // Surfaced here rather than swallowed: a repo that adopted a policy after
@@ -534,6 +546,28 @@ export async function resolveInstalledPackContent(
     };
   }
   return { packs, packRoots, ...canonical, mcpServers, policyWarnings };
+}
+
+/**
+ * A pack resolved before it is installed ({@link resolveInstalledPackContent}'s
+ * `opts.staged`): the {@link InstalledPack} fields, read from an install plan
+ * rather than from ledger rows and a receipt. `root` is the pack's source
+ * directory, which holds the same class layout the install copies.
+ */
+export interface StagedPack {
+  id: string;
+  root: string;
+  classesPresent: string[];
+  declaredTools: readonly string[];
+}
+
+/** `packs` with `staged` in place of the installed pack of its id, sorted by id. */
+function withStaged(packs: readonly InstalledPack[], staged: StagedPack): InstalledPack[] {
+  const { id, root, classesPresent, declaredTools } = staged;
+  return [
+    ...packs.filter((pack) => pack.id !== id),
+    { id, root, classesPresent, declaredTools },
+  ].toSorted((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 
 /** The merged corpus+packs walk and the projections it feeds. */
@@ -618,10 +652,12 @@ async function projectPackSkills(items: readonly CatalogItem[]): Promise<Project
  * `.agents/skills/` tree as a corpus skill and is re-targeted into
  * `.claude/skills/` from those same bytes, so it meets the same strict
  * validator — the spec permits six top-level keys and rejects the whole file
- * on any other. Pack `SKILL.md` files are authored in the engine's own
- * vocabulary (`id`, `type`, `tags`), which is precisely the shape that
- * validator refuses, so projecting the head verbatim shipped installed packs
- * that fail packaging on the paths portability is about.
+ * on any other, and the projector's ceiling is those six plus the two client
+ * keys it passes through as booleans, `user-invocable` and
+ * `disable-model-invocation`. Pack `SKILL.md` files are authored in the
+ * engine's own vocabulary (`id`, `type`, `tags`), which is precisely the shape
+ * that validator refuses, so projecting the head verbatim shipped installed
+ * packs that fail packaging on the paths portability is about.
  *
  * This is a shape transform, not a content one: the projector reshapes only
  * keys the pack itself authored (hoisting the non-spec ones under `metadata`,
@@ -642,11 +678,12 @@ async function projectOnePackSkill(item: CatalogItem): Promise<ProjectedFile[]> 
       const raw = await readFile(join(sourceDir, ...relative.split("/")), "utf8");
       const content =
         relative === SKILL_FILE ? toSpecFrontmatter(raw, skillDir, item.relativePath) : raw;
-      // `origin: "pack"` is what the two plugin-mode exemptions read — the
-      // shared tree's (`../emit/planner.ts`) and Claude's native copy
-      // (`../adapters/claude.ts`). Without it every pack skill row looked like
-      // a core skill row, so a plugin carrying the skill class took its owners
-      // away and the installed skill reached no client at all.
+      // `origin: "pack"` labels the row as installed supply. No reader
+      // branches on it today: the two plugin-mode exemptions that read it
+      // left with the plugin route in 1.15.0, and the merge's customization
+      // test (`../emit/planner.ts` → `isCustomizingRow`) is asked of the core
+      // lane's rows only. Who supplied a row is read from its catalog item's
+      // provenance (`provenance.pack`), never from this field.
       return {
         path: posix.join(SKILLS_PROJECTION_DIR, skillDir, relative),
         content,
