@@ -1288,7 +1288,7 @@ export async function checkPackCatalog(
  *   installed, its own copies stand at those paths.
  * - `pass` — none of these.
  */
-export async function checkMovedSkills(
+async function checkMovedSkills(
   rootDir: string,
   manifest: SetupManifest | null,
 ): Promise<DoctorCheck> {
