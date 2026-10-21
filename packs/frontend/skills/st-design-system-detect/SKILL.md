@@ -13,7 +13,7 @@ obsolete_when: design-system inventory is a client-native detection
 
 Read-only detection. It reports the design system this repo already has, so the
 next interface change reuses it instead of minting a parallel one. It writes no
-tokens, no components, and no themes: generation belongs to a generator pack,
+tokens, no components, and no themes: a missing token set is proposed as text,
 and a detector that also generates cannot be trusted to report what it found.
 
 ## Quick Start
@@ -22,7 +22,7 @@ and a detector that also generates cannot be trusted to report what it found.
 2. Locate the token source, in detection order (Step 2).
 3. Inventory the existing components (Step 3).
 4. Classify theming and responsive strategy (Step 4).
-5. Write the inventory and state the reuse verdict (Step 5).
+5. Write the inventory with its status, and hand back the reuse verdict (Step 5).
 
 ## Step 1 — Library signals
 
@@ -74,7 +74,10 @@ container-scoped is not extended with viewport-only additions.
 
 ## Step 5 — Emit the inventory
 
-Write the inventory, state the verdict, and stop. The verdict is one of:
+Write the inventory, its table ending in the `Status` row (Output artifact), and
+stop. Every later request reads that file, so it holds repo facts and no verdict
+for one request: the verdict goes in the hand-back, naming the need it answers.
+The verdict is one of:
 
 | Verdict | Meaning |
 |---|---|
@@ -94,22 +97,44 @@ One rule, keyed on how many sources define the SAME value category:
 
 - **One source defines a category** — that source is `canonical` for it.
 - **Two or more define it** — every one of them is marked `conflicting` for that
-  category, none is elected, and the verdict is
+  category, none is elected, and the `Status` row reads
   `blocked: competing token sources`. Two overlapping sources block exactly as
   five do; the count past two changes nothing.
 - **Sources whose categories do not overlap** — each is `canonical` for its own,
-  and the verdict is unaffected. Several sources is not by itself a conflict.
+  and the status is unaffected. Several sources is not by itself a conflict.
+- **A source that only refers** — a source whose every value in a category
+  refers to another source's token is recorded `alias of <path>` for it, does
+  not define that category, and the pair counts as one system. One literal value
+  makes it a definer again, and the count above applies.
 
 Three sources all declaring the same colour ramp is the case this skill exists
 for. The inventory lists all three with `file:line` for the declaration in each,
 marks the conflict, and picks none. Electing a canonical source is an operator
 decision with consequences the detector cannot see — which one the design team
-maintains, which one a build step generates, which one is dead. The verdict
-field reads `blocked: competing token sources` until the operator names the
+maintains, which one a build step generates, which one is dead. The `Status`
+row reads `blocked: competing token sources` until the operator names the
 winner, and any interface work that would add a token waits for that answer.
 
 Overlap is reported per value category, so "three sources, no overlap" and
 "three sources, all defining the same colour ramp" are distinguishable.
+
+## No token source — the Proposal
+
+With no token source found in Step 2, the inventory carries a `Proposal` section
+as text: a minimal token set the operator can take or change, never a file this
+skill writes. It names:
+
+- semantic roles (surface, text, accent, border, and each state) over raw values;
+- a spacing scale, a type scale, and radius steps;
+- a focus ring at 3:1 against the colours beside it;
+- motion durations with a reduced-motion variant;
+- light and dark with identical keys;
+- text pairs at 4.5:1 and 3:1, body text and large text;
+- one authored source, at the repo's location convention, else `tokens/`.
+
+The brand hue is left to the operator: the proposal names its slot and picks no
+colour. Writing the set is routed to `/st-work`, and the next run detects it as
+the one source.
 
 ## Non-JavaScript stacks and missing manifests
 
@@ -128,12 +153,14 @@ and a stale copy is worse than none. Sections, in order:
 | Section | Content |
 |---|---|
 | Libraries | dependency, resolved version, role |
-| Token sources | path, format, categories covered, colour notation, canonical or conflicting |
+| Token sources | path, format, categories covered, colour notation, canonical, conflicting or `alias of <path>` |
 | Components | name, path, origin |
 | Theming | selection mechanism, variants |
 | Responsive | strategy, breakpoint values |
 | Probes | what was looked for and what each probe found |
-| Verdict | `reuse`, `extend`, `create`, or `blocked` with its reason |
+| Proposal | the minimal token set as text, only when no token source was found |
+| Status | `clear` or `blocked: competing token sources` |
 
+The file carries no per-request verdict: that goes in each hand-back (Step 5).
 The file records the commit it was generated from. A consumer that finds the
 recorded commit far behind the current head regenerates rather than trusting it.

@@ -363,6 +363,31 @@ describe("verdict roles and the spec-author — they read the change through rea
     }
   });
 
+  // Plan 018 file 2, u3-frontend-set (REQ-CTX-017): `/st-ui-review` briefs design-quality on a
+  // named surface with no change behind it, so the agent takes a commit with the surface's paths
+  // as a third form, and only a brief with none of the three blocks.
+  it("design-quality also takes a whole-surface brief, a commit with the surface's paths", async () => {
+    const section = collapse(
+      sectionOf(await load("agents/stamity-design-quality.md"), "Reading the change") ?? "",
+    );
+
+    expect(section).toContain("A whole-surface brief's commit and paths stand in for the range");
+    expect(section).toContain("read with `git show <commit>:<path>`");
+    expect(section).toContain('the surface for "the change", exclusions included');
+    expect(section).toContain(
+      "a brief with no range, no hunks and no commit with paths returns `BLOCKED_DEPENDENCY` naming the missing diff",
+    );
+    expect(section).not.toContain("A brief carrying neither a range nor hunks");
+    // The other verdict roles keep the two forms: the third is design-quality's alone.
+    const others = VERDICT_ROLES.filter((candidate) => candidate.id !== "design-quality");
+    const files = await Promise.all(others.map((role) => load(role.relPath)));
+    expect(files).toHaveLength(3);
+    for (const [index, file] of files.entries()) {
+      const other = collapse(sectionOf(file, "Reading the change") ?? "");
+      expect(other, others[index]?.id).not.toContain("whole-surface brief");
+    }
+  });
+
   it("the spec-author's section carries no BLOCKED_DEPENDENCY exit", async () => {
     const section = collapse(
       sectionOf(await load("agents/stamity-spec-author.md"), "Reading the change") ?? "",
