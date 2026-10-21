@@ -1,6 +1,6 @@
 import { countSelectionItems } from "../../../content/selection.ts";
 import { formatReclaimReport } from "../../../merge/reclaim.ts";
-import { MOVED_CORE_SKILLS, movedCoreSkill } from "../../../pack/moved.ts";
+import { MOVED_CORE_SKILLS, movedCoreSkill, movedRenderingAt } from "../../../pack/moved.ts";
 import {
   PACK_OWNER_PREFIX,
   isPackOwner,
@@ -215,29 +215,48 @@ function pluginBlockDropLines(plan: SyncPlan, report: SyncApplyReport): string[]
   return [`  manifest: ${verb} the \`plugin\` key a 1.14 setup recorded; nothing has read it since 1.15.0`];
 }
 
-/** One moved skill's outcome on this run: the copies the sweep removed, and the ones it kept. */
+/**
+ * One moved skill's outcome on this run: the copies the sweep removed, the ones
+ * it kept because their bytes are not the frozen rendering (`kept`), and the
+ * ones it refused to touch as unsafe — a symlinked folder, an entry spelled
+ * with another case (`skipped`).
+ */
 export interface MovedSkillOutcome {
   id: string;
   pack: string;
   removed: string[];
   kept: string[];
+  skipped?: string[];
 }
 
 /**
  * The notice for the skills a release moved out of the core into a pack
  * (`../../../pack/moved.ts`, REQ-PACK-008): one line per skill, naming the
- * pack, the release, the copies removed and the copies kept, and the command
- * that brings the skill back. A skill with nothing removed or kept prints
- * nothing.
+ * pack, the release, the copies removed, the copies kept, the copies the sweep
+ * refused as unsafe, and the command that brings the skill back. A skill with
+ * none of the three prints nothing.
+ *
+ * Only a kept copy carries the instruction to delete by hand. A refused copy is
+ * named without one (review/9, review/10): deleting through the link or the
+ * other spelling reaches the very file the sweep refused to touch.
  */
 export function movedSkillLines(moved: readonly MovedSkillOutcome[]): string[] {
   const lines: string[] = [];
   for (const skill of moved) {
-    if (skill.removed.length === 0 && skill.kept.length === 0) continue;
+    const skipped = skill.skipped ?? [];
+    if (skill.removed.length === 0 && skill.kept.length === 0 && skipped.length === 0) continue;
     const since = movedCoreSkill(skill.id)?.since;
     const outcomes = [
       ...(skill.removed.length === 0 ? [] : [`removed: ${skill.removed.join(", ")}`]),
-      ...(skill.kept.length === 0 ? [] : [`kept — edited since sync wrote them; delete by hand: ${skill.kept.join(", ")}`]),
+      ...(skill.kept.length === 0
+        ? []
+        : [`kept — edited since sync wrote ${skill.kept.length === 1 ? "it" : "them"}; delete by hand: ${skill.kept.join(", ")}`]),
+      ...(skipped.length === 0
+        ? []
+        : [
+            `left in place — the sweep refused ${skipped.length === 1 ? "the path" : "each path"} as unsafe to touch, ` +
+              `for the reason the reclaim report gives: ${skipped.join(", ")}`,
+          ]),
     ];
     lines.push(
       `  moved: skill st-${skill.id} left the core for the ${skill.pack} pack${since === undefined ? "" : ` in ${since}`}; ` +
@@ -253,8 +272,8 @@ export function movedSkillLines(moved: readonly MovedSkillOutcome[]): string[] {
  * running corpus no longer holds (the plan's selection is the whole corpus,
  * `./engine.ts::planSync`), whose ledger rows a client owns, and whose pack owns
  * no row — with the pack installed, its rows stand at those paths. Live runs
- * only, since a dry run removed nothing. A removed or kept copy's rows leave the
- * ledger on this run, so the next run finds none and prints nothing.
+ * only, since a dry run removed nothing. A removed, kept or refused copy's rows
+ * leave the ledger on this run, so the next run finds none and prints nothing.
  */
 function movedSkillOutcomes(plan: SyncPlan, report: SyncApplyReport): MovedSkillOutcome[] {
   const reclaimed = report.reclaimed;
@@ -265,23 +284,37 @@ function movedSkillOutcomes(plan: SyncPlan, report: SyncApplyReport): MovedSkill
   for (const skill of MOVED_CORE_SKILLS) {
     if (plan.manifest.selection.items.skill.includes(skill.id)) continue;
     if (ledger.some((row) => row.adapter === `${PACK_OWNER_PREFIX}${skill.pack}`)) continue;
+    // Only the engine paths the frozen table proves (review/9, review/10): a
+    // row naming the moved id at any other path is not a core copy of it, and
+    // the notice says nothing about that file.
     const paths = new Set(
       ledger
-        .filter((row) => !isPackOwner(row.adapter) && row.artifactType === "skill" && row.artifactId === skill.id)
+        .filter(
+          (row) =>
+            !isPackOwner(row.adapter) &&
+            row.artifactType === "skill" &&
+            row.artifactId === skill.id &&
+            movedRenderingAt(skill, row.path) !== undefined,
+        )
         .map((row) => row.path),
     );
     if (paths.size === 0) continue;
     carried ??= carriedPaths(plan, report);
     const stays = carried;
+    // A kept copy whose row this run carries (unproven: the renderings could
+    // not be built) is not named: the next sync judges it, and names it then.
+    const named = (action: "skipped-user-content" | "skipped-unsafe-path"): string[] =>
+      reclaimed.entries
+        .filter((entry) => entry.action === action && paths.has(entry.path) && !stays.has(entry.path))
+        .map((entry) => entry.path);
     outcomes.push({
       id: skill.id,
       pack: skill.pack,
       removed: reclaimed.entries
         .filter((entry) => paths.has(entry.path) && entry.action === "deleted")
         .map((entry) => entry.path),
-      // A kept copy whose row this run carries (unproven: the renderings could
-      // not be built) is not named: the next sync judges it, and names it then.
-      kept: salvagedEntries(report).filter((path) => paths.has(path) && !stays.has(path)),
+      kept: named("skipped-user-content"),
+      skipped: named("skipped-unsafe-path"),
     });
   }
   return outcomes;
