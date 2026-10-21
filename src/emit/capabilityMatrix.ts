@@ -340,7 +340,7 @@ const LIVE_ALWAYS_ON: AlwaysOnDisclosure = {
   // list nothing (codex-cli 0.160.0's listing, the measurement the adapter's
   // budget comment dates) — measured against the real emission by
   // `test/adapters/codex.test.ts`, which fails when this number stops matching it.
-  // About 70% of the ceiling, and the remainder is the headroom a repository
+  // About 60% of the ceiling, and the remainder is the headroom a repository
   // adding its own skills, or a pack adding its own, spends into.
   codexSkillsListChars: 4_759,
   codexSkillsListCap: CODEX_SKILLS_LIST_BUDGET_CHARS,
