@@ -45,5 +45,8 @@ sourcing it and removes this row.
 ### `packs/production/skills/st-release/SKILL.md`
 
 Added 2026-10-21 by plan 018 file 2, unit `u11-release-skill`, with the skill; its cases land in
+### `packs/production/skills/st-incident/SKILL.md`
+
+Added 2026-10-21 by plan 018 file 2, unit `u12-incident-skill`, with the skill; its cases land in
 a later wave of the same plan. Trigger: unit `u14-production-cases` adds the cases sourcing it
 and removes this row.
