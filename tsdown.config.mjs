@@ -95,8 +95,17 @@ import { defineConfig } from "tsdown";
  * bundled in by accident; the ceiling still catches bytes arriving by accident
  * and is not a ration. The pre-strip figure above stays under this ceiling
  * too, so the JSDoc test is still the strip's guard.
+ *
+ * Raised 2026-10-21 from 2.375 MiB to 2.5 MiB (2,621,440 bytes), with its own
+ * reason: plan 018's pack engine (the derived catalog, the retired-names and
+ * moved-skills tables, the fit check, two `check` rows, the moved-skill proof
+ * and the pull-request section copy). The build before this change printed
+ * 2,486,055 bytes (the `[size]` line of a fresh `npm run build` on
+ * `b4c82354`). Those modules are the feature, not something bundled in by
+ * accident; the pre-strip figure above stays under this ceiling too, so the
+ * JSDoc test is still the strip's guard.
  */
-export const LOGIC_BUDGET_BYTES = 2.375 * 1024 * 1024;
+export const LOGIC_BUDGET_BYTES = 2.5 * 1024 * 1024;
 
 /**
  * The staged corpus half — `dist/content` plus `dist/packs`, plus `dist/fork` in

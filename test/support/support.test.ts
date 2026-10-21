@@ -743,7 +743,8 @@ describe("build size budgets", () => {
     // Raised from 2 MiB for plan 021's unattended-run modules, wired by u16
     // (about 115 KB measured); the reason sits beside the constant (build/72).
     // TEST CHANGE, justified (build/29): raised again for plan 021 file 2's hook scripts, about 40 KB; the reason sits beside the constant.
-    expect(LOGIC_BUDGET_BYTES).toBe(2.375 * 1024 * 1024);
+    // TEST CHANGE, justified (2026-10-20_packs-rebuilt/build/1): raised to 2.5 MiB for plan 018's pack engine; the reason sits beside the constant.
+    expect(LOGIC_BUDGET_BYTES).toBe(2.5 * 1024 * 1024);
     expect(CORPUS_BUDGET_BYTES).toBe(1536 * 1024);
 
     const config = await readFile(
