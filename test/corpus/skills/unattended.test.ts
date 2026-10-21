@@ -374,11 +374,13 @@ describe("st-unattended — checkpoints and the ending (REQ-FLOW-092, REQ-FLOW-0
 
   // Added 2026-10-21 (plan 018-packs-rebuilt-01, unit u7-unattended-rows, inbox row pr/43; REQ-FLOW-095): the ending's
   // step 3 named a plain `run end`, while `## How to answer` puts `--final-round` on a cloud session's final round, so
-  // the step names the flag where it applies and points at the section; a chain's earlier file keeps the plain verb.
-  it("puts --final-round on the ending's run end only for a session that stays open for a final round", async () => {
+  // the step names the flag where it applies and points at the section; a chain's earlier file keeps the plain verb,
+  // and the step says so, naming `references/chains.md` (review/11).
+  it("puts --final-round on the ending's run end only for a final round, and in a chain on its last file", async () => {
     const text = await flat();
     const clause =
-      "A cloud session that stays open for a final round adds `--final-round` to this end (`## How to answer`).";
+      "A cloud session that stays open for a final round adds `--final-round` to this end (`## How to answer`), " +
+      "the chain's last file only (`references/chains.md`).";
     expect(text).toContain(`the verb stages the run folder's own files and the inbox itself. ${clause}`);
     expect(text.indexOf(clause)).toBeLessThan(text.indexOf("`run end` exits 0 with a pull request opened"));
   });

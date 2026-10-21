@@ -45,7 +45,7 @@ spelled. Every exit pushes its record through the run verbs, closing in this ord
    `stamity gate scan --base <Base>` runs, comes after every write above; a hit holds the push, naming path, line
    and rule, never the value. The pull request's title is scanned like its body, a hit replaced with `Run <run-id>`.
    `run end`'s `--paths` names the files the run changed (every unit's files, named again though each was committed at
-   its checkpoint) and each learning file the close captured; the verb stages the run folder's own files and the inbox itself. A cloud session that stays open for a final round adds `--final-round` to this end (`## How to answer`).
+   its checkpoint) and each learning file the close captured; the verb stages the run folder's own files and the inbox itself. A cloud session that stays open for a final round adds `--final-round` to this end (`## How to answer`), the chain's last file only (`references/chains.md`).
 ```
 
 Governing text — the same file, "The morning list" (its shape and its first two sections):
