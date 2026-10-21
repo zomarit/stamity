@@ -408,8 +408,8 @@ Three fork outcomes are about your repository rather than about the fork.
   skipped and reported as a warning naming the overlay, the pack and the skill. A pack's skill is
   never patched, and the fork layer must not break `sync` in a repository that installed the
   pack. Your own patch of that skill is an error. A fork patch of a skill that moved from the
-  core to a pack is skipped the same way, with the pack installed or not; your own patch of it is
-  the error that names the move.
+  core to a pack is skipped too, with the pack installed or not, and its warning names the move
+  and the pack; your own patch of it is the error that names the move.
 
 Everything on this page is a CLI consumer override. A fork's maintainer customizes `content/` or the
 bundled `fork/` layer instead, and [Enterprise forks](enterprise-forks.md) covers that layer, the

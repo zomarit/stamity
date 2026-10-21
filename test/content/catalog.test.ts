@@ -1371,16 +1371,58 @@ describe("the overlay layer", () => {
       expect(refusal.message).not.toContain("moved from the core");
     });
 
-    it("keeps the fork stage's skip for a fork patch of a moved skill", async () => {
+    // TEST CHANGE, justified (2026-10-21, 2026-10-20_packs-rebuilt u15-moved-customizations round 1,
+    // build/28, REQ-PACK-009): the fork stage still skips, but its reason now names the move and the
+    // pack instead of the generic "no installed layer" text, which told a fork maintainer nothing
+    // about where the skill their patch targeted went.
+    const forkMovedText =
+      'patches skill "design-system-detect", which moved from the core to the frontend pack in 1.17.0, ' +
+      "and overlays on pack skills are not applied, so this fork patch is skipped and nothing in it " +
+      "reaches emission. Fold the change into a fork skill under another id, or remove the file; to " +
+      "keep the shipped skill, stamity add frontend.";
+
+    it("keeps the fork stage's skip for a fork patch of a moved skill, naming the move", async () => {
       // The fork layer is package-global (the overlay-layer header): refusing
       // here would break `sync` in every consumer repository over a file in
-      // its `node_modules`, so the move changes the user stage alone.
+      // its `node_modules`, so the fork stage skips and reports.
       const { index } = await forkIndexOf(CORPUS, {
         "skills/design-system-detect/SKILL.customize.md": "Fork step.\n",
       });
 
+      expect(index.skipped?.map((entry) => entry.reason)).toEqual([forkMovedText]);
+    });
+
+    it("names the move in the same skip text with the frontend pack installed", async () => {
+      const { index } = await forkIndexOf(
+        CORPUS,
+        { "skills/design-system-detect/SKILL.customize.md": "Fork step.\n" },
+        {},
+        { frontend: FRONTEND },
+      );
+
+      expect(index.skipped?.map((entry) => entry.reason)).toEqual([forkMovedText]);
+    });
+
+    it("keeps the pack-skill skip text for a fork patch when another pack supplies a moved id", async () => {
+      const { index } = await forkIndexOf(
+        CORPUS,
+        { "skills/design-system-detect/SKILL.customize.md": "Fork step.\n" },
+        {},
+        { acme: FRONTEND },
+      );
+
       expect(index.skipped?.map((entry) => entry.reason)).toEqual([
-        expect.stringContaining('neither the corpus, an installed pack nor the fork layer holds skill "design-system-detect"'),
+        expect.stringContaining('patches pack "acme" skill "design-system-detect"'),
+      ]);
+    });
+
+    it("keeps the generic skip text for a fork patch of a skill that was never in the core", async () => {
+      const { index } = await forkIndexOf(CORPUS, {
+        "skills/never-shipped/SKILL.customize.md": "Fork step.\n",
+      });
+
+      expect(index.skipped?.map((entry) => entry.reason)).toEqual([
+        expect.stringContaining('neither the corpus, an installed pack nor the fork layer holds skill "never-shipped"'),
       ]);
     });
   });

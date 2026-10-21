@@ -5142,6 +5142,36 @@ describe("check — moved-skills", () => {
     });
   });
 
+  it("warns on a full override filed under another folder whose SKILL.md declares a moved id", async () => {
+    // The index takes the declared id over the folder name (`buildItem`), so
+    // this file replaces `design-system-detect` exactly as one in its own
+    // folder would, and the planner warns about it; the row must agree.
+    const elsewhere = `${STATE_DIR}/overrides/skills/house-detector`;
+    const root = await seedRepo(getRepo(), { files: { [`${elsewhere}/SKILL.md`]: OVERRIDE_SKILL } });
+
+    expect(await doctorRow(root, "moved-skills")).toEqual({
+      id: "moved-skills",
+      status: "warn",
+      detail:
+        `override ${elsewhere}/SKILL.md: skill "design-system-detect" moved from the core to the ` +
+        "frontend pack in 1.17.0, so the override now stands alone and tracks no shipped copy. Keep " +
+        `it, or remove it and run \`${npxCommand("add frontend")}\`.`,
+    });
+  });
+
+  it("passes on a SKILL.md in a moved id's folder that declares another id", async () => {
+    // Non-degenerate control for the declared-id read: the folder name alone
+    // is not the identity, so this override replaces `house-detector`, not
+    // the moved skill.
+    const root = await seedRepo(getRepo(), {
+      files: {
+        [`${OVERRIDE_DIR}/SKILL.md`]: OVERRIDE_SKILL.replace("id: design-system-detect", "id: house-detector"),
+      },
+    });
+
+    expect((await doctorRow(root, "moved-skills")).status).toBe("pass");
+  });
+
   it("warns on a core ledger row of a moved skill at its engine path, and on no other path", async () => {
     const coreRow = (path: string): LedgerEntry => ({
       path,

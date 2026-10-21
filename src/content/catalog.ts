@@ -1618,8 +1618,9 @@ function refusePackSkillOverlay(
  * the skill used to be the core's. Neither tells the author what happened to
  * the patch they wrote, so both give way to this one for a moved id, and the
  * posture is theirs: `VALIDATION_ERROR`, every half named by its POSIX path
- * (how `validate` attributes it). The fork stage is untouched: it skips and
- * reports, for the reason the overlay-layer header gives.
+ * (how `validate` attributes it). The fork stage still skips and reports, for
+ * the reason the overlay-layer header gives, with the move named
+ * ({@link forkMovedSkillSkipReason}).
  */
 function refuseMovedSkillOverlay(paths: readonly string[], moved: MovedCoreSkill): never {
   throw new EngineError(
@@ -1628,6 +1629,25 @@ function refuseMovedSkillOverlay(paths: readonly string[], moved: MovedCoreSkill
       `remove ${paths.map(toPosixDisplayPath).join(" and ")}; to keep the shipped skill, ` +
       `stamity add ${moved.pack}.`,
     { code: "VALIDATION_ERROR" },
+  );
+}
+
+/**
+ * Why a FORK-stage overlay of a skill that moved from the core to a pack was
+ * passed over — the fork stage's answer to {@link refuseMovedSkillOverlay}, in
+ * one text whether or not that pack is installed, as the user stage's is.
+ * Skipped and reported, never thrown, for the reason {@link forkOrphanSkipReason}
+ * is; without it the fork maintainer whose patch targeted the old core skill
+ * read only that no layer holds it, or that an anonymous pack skill is not
+ * patched. Phrased after the file path, so `stamity validate` prints it
+ * verbatim as a warning.
+ */
+function forkMovedSkillSkipReason(moved: MovedCoreSkill): string {
+  return (
+    `patches skill "${moved.id}", which moved from the core to the ${moved.pack} pack in ` +
+    `${moved.since}, and overlays on pack skills are not applied, so this fork patch is skipped ` +
+    `and nothing in it reaches emission. Fold the change into a fork skill under another id, or ` +
+    `remove the file; to keep the shipped skill, stamity add ${moved.pack}.`
   );
 }
 
@@ -1905,7 +1925,9 @@ async function applyOverlays(
         if (moved !== undefined) refuseMovedSkillOverlay(overlayPaths, moved);
         refuseOrphanOverlay(overlayPaths, overlay.type, id);
       }
-      const reason = forkOrphanSkipReason(overlay.type, id);
+      const movedFork = overlay.type === "skill" ? movedCoreSkill(id) : undefined;
+      const reason =
+        movedFork === undefined ? forkOrphanSkipReason(overlay.type, id) : forkMovedSkillSkipReason(movedFork);
       skipped.push(...overlayPaths.map((filePath) => ({ type: overlay.type, filePath, reason })));
       continue;
     }
@@ -1927,14 +1949,16 @@ async function applyOverlays(
     // beside the patch is still told as that defect.
     if (base.type === "skill" && originOf(base) === "pack") {
       const packId = base.provenance?.pack;
+      // The move is a fact about the pack the skill went to; the same id
+      // from any other pack is that pack's own skill.
+      const moved = movedCoreSkill(base.id);
+      const movedHere = moved !== undefined && moved.pack === packId ? moved : undefined;
       if (layer === "user") {
-        // The move is a fact about the pack the skill went to; the same id
-        // from any other pack is that pack's own skill.
-        const moved = movedCoreSkill(base.id);
-        if (moved !== undefined && moved.pack === packId) refuseMovedSkillOverlay(overlayPaths, moved);
+        if (movedHere !== undefined) refuseMovedSkillOverlay(overlayPaths, movedHere);
         refusePackSkillOverlay(overlayPaths, packId, base.id);
       }
-      const reason = forkPackSkillSkipReason(packId, base.id);
+      const reason =
+        movedHere === undefined ? forkPackSkillSkipReason(packId, base.id) : forkMovedSkillSkipReason(movedHere);
       skipped.push(...overlayPaths.map((filePath) => ({ type: overlay.type, filePath, reason })));
       continue;
     }

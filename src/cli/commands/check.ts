@@ -1,12 +1,14 @@
 import { accessSync, constants as fsConstants, existsSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { delimiter, dirname, join, relative, resolve, sep } from "node:path";
+import { basename, delimiter, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Command } from "commander";
 import semver from "semver";
 import type { App, EngineRegistry } from "../../index.ts";
 import { CLASS_FILE, parseClassFile } from "../../change/classify.ts";
 import { readCharterTemplate } from "../../content/charter.ts";
+import { slugOf } from "../../content/catalog.ts";
+import { discoverUserContent } from "../../content/userContent.ts";
 import { pinnedCliInstall } from "../../adapters/copilot.ts";
 import { AGENTS_MD_FILE, CURSOR_CLOUD_BLOCK_HEADING } from "../../emit/agentsMd.ts";
 import { renderInvariantsVersion, type CliCallContext } from "../../emit/substitution.ts";
@@ -1273,17 +1275,36 @@ export async function checkPackCatalog(
  *
  * - `fail` — an overlay (`SKILL.customize.yaml` or `.md`) of a moved id under
  *   `.stamity/overrides/skills/<id>/`: `sync` refuses it, pack or no pack.
- * - `warn` — a full override (`SKILL.md`) there, which no longer replaces a
+ * - `warn` — a full override of a moved id, which no longer replaces a
  *   core skill and tracks no shipped copy, or, with the pack installed,
- *   collides with the pack's copy; and a client-owned ledger row of a
+ *   collides with the pack's copy. The id is read as the content index reads
+ *   it (`../../content/catalog.ts`, `buildItem`): the `SKILL.md`'s declared
+ *   `id` wins over its folder name, so an override filed under another folder
+ *   that declares a moved id counts, and one in the moved id's folder that
+ *   declares another id does not; a `SKILL.md` with no frontmatter is not an
+ *   artifact. And a client-owned ledger row of a
  *   moved id at the engine path the core wrote it to
  *   ({@link movedRenderingAt}), with no `pack:<pack>` row — with the pack
  *   installed, its own copies stand at those paths.
  * - `pass` — none of these.
  */
-export function checkMovedSkills(rootDir: string, manifest: SetupManifest | null): DoctorCheck {
+export async function checkMovedSkills(
+  rootDir: string,
+  manifest: SetupManifest | null,
+): Promise<DoctorCheck> {
   const id = "moved-skills";
   const root = resolve(rootDir);
+  // Full overrides keyed by the id the index gives them. The discovery is
+  // tolerant of a head that does not parse, so the row still answers when that
+  // is what makes the plan throw.
+  const overrideSkills = (await discoverUserContent(root)).flatMap((artifact) => {
+    if (artifact.type !== "skill" || artifact.frontmatterText === undefined) return [];
+    const declared = artifact.frontmatter.id;
+    const folder = basename(dirname(artifact.filePath));
+    const bareId = typeof declared === "string" && declared.trim() !== "" ? declared.trim() : slugOf(folder);
+    // The folder name is the author's, so it is display-sanitized like a pack id.
+    return [{ bareId, path: `${STATE_DIR}/overrides/skills/${sanitizeLabel(folder)}/SKILL.md` }];
+  });
   const failures: string[] = [];
   const warnings: string[] = [];
   const addPack = (pack: string): string => `\`${packageCommand(`add ${shellWord(pack)}`)}\``;
@@ -1300,15 +1321,16 @@ export function checkMovedSkills(rootDir: string, manifest: SetupManifest | null
     }
     const packInstalled =
       manifest?.ledger.some((row) => row.adapter === `${PACK_OWNER_PREFIX}${skill.pack}`) ?? false;
-    if (existsSync(join(root, ...dir.split("/"), "SKILL.md"))) {
+    for (const override of overrideSkills) {
+      if (override.bareId !== skill.id) continue;
       // With the pack installed the override does not stand alone: it takes
       // the pack skill's id, and the planner refuses the collision.
       warnings.push(
         packInstalled
-          ? `override ${dir}/SKILL.md: ${moved}, and the override collides with the installed pack's ` +
+          ? `override ${override.path}: ${moved}, and the override collides with the installed pack's ` +
               `copy, so sync refuses it. Remove or rename it, or remove the pack ` +
               `(\`${packageCommand(`clean --pack ${shellWord(skill.pack)}`)}\`).`
-          : `override ${dir}/SKILL.md: ${moved}, so the override now stands alone and tracks no shipped ` +
+          : `override ${override.path}: ${moved}, so the override now stands alone and tracks no shipped ` +
               `copy. Keep it, or remove it and run ${addPack(skill.pack)}.`,
       );
     }
@@ -1935,7 +1957,7 @@ export async function runDoctor(
     guarded("pack-catalog", () =>
       checkPackCatalog(rootDir, manifest, engine.pack.retired.RETIRED_PACKS),
     ),
-    guarded("moved-skills", async () => checkMovedSkills(rootDir, manifest)),
+    guarded("moved-skills", () => checkMovedSkills(rootDir, manifest)),
     guarded("model-pins", async () => modelPinsRow(rootDir, manifest, app.runtime.env)),
     checkChangeClasses(rootDir),
     guarded("invariants", checkInvariants),
