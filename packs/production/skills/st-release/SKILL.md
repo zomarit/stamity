@@ -53,21 +53,28 @@ Halt with an actionable message rather than working around a row:
 
 | Probe | Requirement | On failure |
 |---|---|---|
-| `git status --porcelain` | empty | halt naming the dirty paths; the person commits them |
+| `git status --porcelain` | empty, skipping the pack's own record paths (`.stamity/production/**`) | halt naming the dirty paths; the person commits them |
 | current branch (release mode) | a `release/*` branch, never the default branch | halt and print `git switch -c release/<version>` |
 | current branch (deploy mode) | the default branch, at the head the remote holds | halt naming the difference |
 | change set | the log since the last tag (`git describe --tags --abbrev=0`), or since the last deploy's record in deploy mode | halt when nothing changed: there is nothing to ship |
 
-Keep the change set. The version decision, the changelog and the record's reason all read it,
+With no earlier deploy record or tag, a first deploy or release, the change set's base is the
+repository's root commit (`git rev-list --max-parents=0 HEAD`), and the run says so. Keep the
+change set. The version decision, the changelog and the record's reason all read it,
 and deriving it three times invites three answers.
 
 ## Step 2 — The readiness read
 
-Read `.stamity/production/<service>-<HEAD sha>.json`, the report `/st-production-review` writes,
-and its `ready.value`. The readiness review is read as a warning and never stops the release.
+Read `.stamity/production/<service>-<sha>.json`, the report `/st-production-review` writes,
+and its `ready.value`, named as the review names it: `<service>` in lower case, `[a-z0-9-]`
+only, and `<sha>` the short sha its frame shows. The report read is the service's newest whose
+sha is HEAD or an ancestor of HEAD, the review's own range rule, so committing the review does
+not lose it. The readiness review is read as a warning and never stops the release.
 
-- **Absent**, or present only at another sha: one line, `readiness: no review at <short sha>;
-  the record names it`.
+- **Absent**, no review at HEAD or an ancestor: one line, `readiness: no review for <service>
+  at or before <short sha>; the record names it`.
+- **At an ancestor**: the value's line names the review's sha and whether the commits since it
+  touch anything outside `.stamity/`; when they do, it reads stale.
 - **`NO`** or **`not signed`**: one line naming the value and the open blocking checks it lists.
 - **`YES`**: one line naming the approval of record it cites.
 
@@ -139,7 +146,7 @@ Write `.stamity/production/releases/<version | sha>.md`, one row per field, befo
 | Security impact | the changes that touch a security surface, and the readiness line from Step 2 |
 | Test evidence | the gate rows from Step 5: command and exit code each |
 | Requester | the person who invoked the skill |
-| Approver | a named person who is not the requester, in their words |
+| Approver | a named person who is not the requester, written as `<name>, named by the requester, not confirmed by this skill` |
 | Rollback path | the way back for this release, migrations included, written before any deploy |
 | Emergency route | the policy file's `Escalation contact`, or the person's answer |
 | SBOM | its path and digest, or `absent — <why>` |
@@ -148,8 +155,14 @@ Write `.stamity/production/releases/<version | sha>.md`, one row per field, befo
 The approver, the rollback path and the emergency route are asked in one batched question when
 the record cannot fill them, read first from `.stamity/production/policy.md`; each default is
 `not named`. An approver equal to the requester is recorded as such and counts as no approver.
-The record ends in a ticket-ready block: title, target, approver, rollback path, in a form a
-change ticket takes as it is.
+The record ends in a ticket-ready block: title, target, approver as recorded, rollback path, in
+a form a change ticket takes as it is.
+
+The record names variables, files and locations, never a secret value. An answer carrying a
+credential, such as a connection string with its password or a webhook address with its key, is
+refused, not recorded, citing the secrets floor (`stamity-secrets.md`, items 1 and 4): the
+refusal names the field and never the value, says the pasted value now counts as exposed under
+that floor, and asks again for the variable or location that holds it.
 
 In release mode the record, the bump and the changelog are committed together on the release
 branch with the project's commit conventions; nothing is pushed. In deploy mode the record stays
@@ -157,19 +170,23 @@ in the tree, uncommitted, and the run says so.
 
 ## Step 8 — The stop
 
-Print each remaining command verbatim, labelled by reversibility, then ask once:
+Show the record's approver line, `named by the requester, not confirmed by this skill`, then
+print each remaining command verbatim, labelled by reversibility, then ask once. The typed
+token is the person's confirmation that the named approver approved.
 
 | Command | Reversible? | Opens on |
 |---|---|---|
 | `git tag -a v<version> -m "v<version>"` | yes: `git tag -d v<version>` | the typed `v<version>`, with the push |
 | `git push origin v<version>` | no: the tag is public at once | the typed `v<version>` |
-| the hosting platform's release creation, such as `gh release create v<version>` | no | the typed `v<version>` |
+| the hosting platform's release creation, such as `gh release create v<version> --verify-tag`, which never creates a tag | no | the typed `v<version>` |
 | the registry publish, run by the build job on the pushed tag | no: a version number cannot be reused | the typed `v<version>` |
-| the project's deploy command, staging smoke tests passed | no | the typed `DEPLOY` |
+| the project's deploy command | no | the typed `DEPLOY` |
 
-No stop opens while the approver reads `not named` or equals the requester, or, for `DEPLOY`,
-while the rollback path is empty: the run says which field holds it and ends held. Running a
-command personally is always an acceptable answer.
+After the token, the opened commands run in table order, each once, and the run stops at the
+first non-zero exit: no later command runs, and the run ends held, naming each command that ran
+with its exit code. No stop opens while the approver reads `not named` or equals the requester,
+or, for `DEPLOY`, while the rollback path reads `not named` or is empty: the run says which
+field holds it and ends held. Running a command personally is always an acceptable answer.
 
 ## Rollback
 
