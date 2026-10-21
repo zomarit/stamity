@@ -544,7 +544,7 @@ export const codexResiduePlanner: ResiduePlanner = {
       const overrideBytes = Buffer.byteLength(downConverted.rootReplacement, "utf8");
       if (overrideBytes > CODEX_AGENTS_MD_BUDGET_BYTES) warnings.push(overrideOverBudgetWarning(overrideBytes));
     }
-    if (downConverted.dropped.length > 0) warnings.push(droppedRulesWarning(downConverted.dropped));
+    if (downConverted.dropped.length > 0) warnings.push(droppedRulesWarning(downConverted.dropped, cliCallContextOf(ctx)));
 
     return { outputs: rows.toSorted((a, b) => compareText(a.path, b.path)), warnings };
   },
@@ -625,13 +625,35 @@ function joinedText(parts: readonly string[]): string {
  * so. The in-file notice stays — it is the record for a reader of that file —
  * and this is the same fact on the run's own warning channel.
  */
-function droppedRulesWarning(dropped: readonly string[]): string {
+function droppedRulesWarning(dropped: readonly string[], cli: CliCallContext): string {
+  const clean = pinnedCliCall(cli.packageName, cli.version, "clean --pack <id>", cli);
   return (
     `rules budget [${TOOL}]: ${dropped.length} rule(s) did not fit this client's ` +
     `${CODEX_AGENTS_MD_BUDGET_BYTES}-byte instruction budget and were dropped, lowest risk ` +
     `first: ${dropped.join(", ")}. They are named again in the emitted file that dropped them ` +
     `(the root ${CODEX_AGENTS_OVERRIDE_FILE} or a nested ${AGENTS_MD_FILE}). ` +
-    `Narrow the content selection to bring them back.`
+    droppedRulesRemedies(`\`${clean}\``)
+  );
+}
+
+/**
+ * What brings a budget-dropped rule back, said once for the run's warning and
+ * the in-file notice alike. Each remedy frees room in the file that dropped
+ * the rule, and each names the case it applies to, because none applies to
+ * every setup.
+ *
+ * No "narrow the content selection": `sync` plans the full corpus on every run
+ * (`../cli/engine/emissionWrite.ts` → `fullCorpusSelection`, not yet a filter),
+ * so a narrowed selection drops the same rules again.
+ */
+function droppedRulesRemedies(cleanCall?: string): string {
+  return (
+    `To bring them back, remove an installed pack whose rules share that file` +
+    (cleanCall === undefined ? "" : ` (${cleanCall})`) +
+    `, shorten the operator text the root ${CODEX_AGENTS_OVERRIDE_FILE} repeats from ` +
+    `${AGENTS_MD_FILE}, or, under \`ruleDelivery: "always-on"\`, set ` +
+    `\`ruleDelivery: "on-demand"\` so the rules that are not critical, floor-tagged or ` +
+    `anchored reach Codex as skills instead.`
   );
 }
 
@@ -1749,8 +1771,8 @@ function renderDroppedNotice(
       `this setup shapes each instruction file to that ceiling on its own. These rules did not ` +
       `fit THIS file and were dropped, lowest risk first — rules marked critical are kept ` +
       `longest, then floor-tagged rules, then by declared precedence, then by id: ` +
-      `${dropped.map((id) => droppedRuleLabel(id, onDemandIds)).join(", ")}. Narrow the ` +
-      `content selection to bring them back.`,
+      `${dropped.map((id) => droppedRuleLabel(id, onDemandIds)).join(", ")}. ` +
+      droppedRulesRemedies(),
     `**Per-file shaping only — the aggregate is not enforced.** The ceiling applies to the ` +
       `CONCATENATION a session loads: the root ${CODEX_AGENTS_OVERRIDE_FILE} (read instead of the ` +
       `root ${AGENTS_MD_FILE}) plus every nested ${AGENTS_MD_FILE} down to the working directory. ` +

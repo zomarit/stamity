@@ -1925,7 +1925,13 @@ describe("the omission notice scopes its claim to the file it shaped", () => {
     expect(root).toContain(`Omitted for the ${CODEX_AGENTS_MD_BUDGET_BYTES}-byte budget`);
     expect(root).toContain("lowest risk first");
     expect(root).toContain("`ai-evals`");
-    expect(root).toContain("Narrow the content selection to bring them back.");
+    // TEST CHANGE, justified (2026-10-21, 2026-10-20_packs-rebuilt/u4-pack-fit, ledger fix/4): the
+    // notice advised "Narrow the content selection to bring them back", but `sync` plans the full
+    // corpus on every run, so narrowing drops the same rules again; it now names the remedies that
+    // free room in the file.
+    expect(root).not.toContain("arrow the content selection");
+    expect(root).toContain("To bring them back, remove an installed pack whose rules share that file, ");
+    expect(root).toContain('set `ruleDelivery: "on-demand"`');
   });
 });
 
@@ -2171,6 +2177,14 @@ describe("residue planning", () => {
     const over = await planned("skip");
     expect(over.bytes).toBeGreaterThan(CODEX_AGENTS_MD_BUDGET_BYTES);
     expect(over.warnings.filter((line) => line.includes(`${CODEX_AGENTS_OVERRIDE_FILE} is ${over.bytes} bytes`))).toHaveLength(1);
+    // ADDED (2026-10-21, 2026-10-20_packs-rebuilt/u4-pack-fit, ledger fix/4): the dropped-rules
+    // warning names remedies that work, the pack one as the pinned call, and no longer advises
+    // narrowing the selection `sync` never narrows.
+    const dropped = over.warnings.filter((line) => line.startsWith("rules budget [codex]: ") && line.includes("were dropped"));
+    expect(dropped).toHaveLength(1);
+    expect(dropped[0]).toContain(`(\`npx -y @zomarit/stamity@${ENGINE_VERSION} clean --pack <id>\`)`);
+    expect(dropped[0]).toContain(`shorten the operator text the root ${CODEX_AGENTS_OVERRIDE_FILE} repeats`);
+    expect(dropped[0]).not.toContain("arrow the content selection");
 
     // Non-degenerate: the same corpus with the file unread stays under budget and says nothing.
     const under = await planned();
