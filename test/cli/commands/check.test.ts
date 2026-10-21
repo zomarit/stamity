@@ -5002,9 +5002,31 @@ describe("check — pack-catalog", () => {
       detail:
         'pack "gone" was retired after 1.16.0: st-gone-cmd → production st-ship; ' +
         "st-older → dropped (superseded by st-debug) — fix in order: " +
-        `\`${npxCommand("clean --pack gone")}\`, then \`${npxCommand("add production")}\`, ` +
-        `then \`${npxCommand("sync")}\`.`,
+        `run \`${npxCommand("clean --pack gone")}\`, then delete by hand each client copy it keeps ` +
+        `and names, unless it is yours, then \`${npxCommand("sync")}\`, then ` +
+        `\`${npxCommand("add production")}\`, then \`${npxCommand("sync")}\`.`,
     });
+  });
+
+  it("reads the retired map through the engine registry when run as a doctor row", async () => {
+    // The seam `runDoctor` reads (`engine.pack.retired`), swapped for a made-up
+    // map with no module mock: the shipped map is empty, so a warn here comes
+    // only from the registry's map reaching the row.
+    const handle = getRepo();
+    const root = await seedRepo(handle);
+    const aggregate = await installAs(handle, root, "gone", { "commands/st-gone-cmd.md": PACK_CMD });
+    const engine = createEngine();
+    const withMap = {
+      ...engine,
+      pack: { ...engine.pack, retired: { ...engine.pack.retired, RETIRED_PACKS: [goneEntry([aggregate])] } },
+    };
+
+    const doctor = await runDoctor(root, withMap, createApp({ cwd: root, env: {} }));
+    const found = doctor.find((entry) => entry.id === "pack-catalog");
+
+    expect(found?.status).toBe("warn");
+    expect(found?.detail).toContain('pack "gone" was retired after 1.16.0');
+    expect((await doctorRow(root, "pack-catalog")).status).toBe("pass");
   });
 
   it("does not judge a pack of a retired name whose content was never a first-party copy", async () => {

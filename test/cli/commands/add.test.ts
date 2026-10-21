@@ -5,9 +5,10 @@ import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { addCommand, resolveSpecThroughCatalog, retiredPackRefusal } from "../../../src/cli/commands/add.ts";
 import { cleanCommand } from "../../../src/cli/commands/clean.ts";
+import type { CommandModule } from "../../../src/cli/kit/program.ts";
 import { estimateTokens } from "../../../src/guard/tokenEstimate.ts";
 import { createManifest, readManifest, writeManifest } from "../../../src/manifest/manifest.ts";
-import { applyPackInstall, planPackInstall, planPackRemoval } from "../../../src/pack/install.ts";
+import { applyPackInstall, planPackInstall } from "../../../src/pack/install.ts";
 import { PACK_MANIFEST_FILE } from "../../../src/pack/manifest.ts";
 import type { RetiredPack } from "../../../src/pack/retired.ts";
 import { computeAggregateContentSha, type TrustTier } from "../../../src/pack/trust.ts";
@@ -2028,8 +2029,9 @@ describe("add — a re-add that would leave the installed copy's files behind", 
 /**
  * Retired pack names (REQ-PACK-002, 2026-10-20_packs-rebuilt/u3-retired-names).
  * The shipped map is empty until a release retires a pack, so the cases pass
- * a made-up map to `resolveSpecThroughCatalog` and build the refusal the
- * command throws from it; the catalog lookup goes through the mocked seam
+ * a made-up map to `resolveSpecThroughCatalog` and `retiredPackRefusal`, and
+ * the command-level cases run `add` with the engine registry's map swapped
+ * for one (`addWithRetired`); the catalog lookup goes through the mocked seam
  * above, the same contract `add` consumes.
  */
 describe("add — retired pack names", () => {
@@ -2081,21 +2083,115 @@ describe("add — retired pack names", () => {
     });
   });
 
-  it("puts clean --pack first when a copy of the retired pack is installed", async () => {
+  /**
+   * `add` with the engine registry's retired map swapped for `map`: the seam
+   * the handler reads (`ctx.engine.pack.retired`), with no module mock.
+   * `planned` records each engine call that would start a plan, so a case
+   * proves the refusal came before any.
+   */
+  function addWithRetired(map: readonly RetiredPack[], planned: string[]): CommandModule {
+    return {
+      ...addCommand,
+      run: (ctx, opts, args) => {
+        const pack = ctx.engine.pack;
+        const engine = {
+          ...ctx.engine,
+          pack: {
+            ...pack,
+            retired: { ...pack.retired, RETIRED_PACKS: map },
+            manifest: {
+              ...pack.manifest,
+              resolvePackSource: (...call: Parameters<typeof pack.manifest.resolvePackSource>) => {
+                planned.push("resolvePackSource");
+                return pack.manifest.resolvePackSource(...call);
+              },
+            },
+            install: {
+              ...pack.install,
+              planPackInstall: (...call: Parameters<typeof pack.install.planPackInstall>) => {
+                planned.push("planPackInstall");
+                return pack.install.planPackInstall(...call);
+              },
+            },
+          },
+        };
+        return addCommand.run({ ...ctx, engine }, opts, args);
+      },
+    };
+  }
+
+  const runRetired = async (
+    map: readonly RetiredPack[],
+    argv: readonly string[],
+  ): Promise<{ result: InProcessResult; planned: string[] }> => {
+    const planned: string[] = [];
+    const result = await runInProcess([addWithRetired(map, planned)], ["add", ...argv], {
+      cwd: getProject().dir,
+    });
+    return { result, planned };
+  };
+
+  /** The repo's replace order for retired `ops`, its two successors re-added. */
+  const replaceOps =
+    `run \`${npxCommand("clean --pack ops")}\`, then delete by hand each client copy it keeps and ` +
+    `names, unless it is yours, then \`${npxCommand("sync")}\`, then \`${npxCommand("add production")}\`, ` +
+    `then \`${npxCommand("add frontend")}\`, then \`${npxCommand("sync")}\``;
+
+  const successorsOnly = `run \`${npxCommand("add production")}\`, then \`${npxCommand("add frontend")}\``;
+
+  it("refuses `add <retired>` at the command before any plan, reading the registry's map", async () => {
+    await initProject();
+
+    const { result, planned } = await runRetired([RETIRED_OPS], ["ops", "--json"]);
+
+    expect(result.code).not.toBe(0);
+    const doc = parseDoc(result.stdout);
+    expect(errorOf(doc).code).toBe("VALIDATION_ERROR");
+    expect(errorOf(doc).message).toContain('pack "ops" was retired after 1.16.0');
+    expect(errorOf(doc).next).toBe(`${successorsOnly}; ${npmRoute}`);
+    expect(planned).toEqual([]);
+    expect(doc["planned"]).toBeUndefined();
+  });
+
+  it("puts the repo's replace order first when a catalog copy of the retired pack is installed", async () => {
     // A real install of the catalog's `ops`, then a release whose catalog no
-    // longer lists it: the ledger's `pack:ops` rows are what `add` reads.
+    // longer lists it: its receipt records the catalog tier.
     await initProject();
     await seedCatalogPack();
     expect((await run(["ops"])).code).toBe(0);
     catalogSeam.entries.clear();
 
-    const resolved = resolveSpecThroughCatalog("ops", [RETIRED_OPS]);
-    expect(resolved.retired).toBe(RETIRED_OPS);
-    const installed = planPackRemoval(await readProjectManifest(), "ops").length > 0;
-    expect(installed).toBe(true);
-    expect(retiredPackRefusal(RETIRED_OPS, installed).next).toBe(
-      `run \`${npxCommand("clean --pack ops")}\`, then \`${npxCommand("add production")}\`, ` +
-        `then \`${npxCommand("add frontend")}\`; ${npmRoute}`,
+    const { result, planned } = await runRetired([RETIRED_OPS], ["ops", "--json"]);
+
+    expect(result.code).not.toBe(0);
+    expect(errorOf(parseDoc(result.stdout)).next).toBe(`${replaceOps}; ${npmRoute}`);
+    expect(planned).toEqual([]);
+  });
+
+  it("leaves `clean --pack` out for the user's own pack under a retired name unless its content is first-party", async () => {
+    // Installed from a path at the unsigned floor: the user's own pack named
+    // `ops`, judged by its content as `check`'s pack-catalog row judges it.
+    await initProject();
+    await seedCatalogPack();
+    catalogSeam.entries.clear();
+    expect((await run(["./bundled/ops", "--allow-untrusted"])).code).toBe(0);
+    const aggregate = computeAggregateContentSha(
+      Object.fromEntries(Object.entries(CATALOG_CONTENT).map(([rel, text]) => [rel, digest(text)])),
+    );
+
+    const own = await runRetired([RETIRED_OPS], ["ops", "--json"]);
+    expect(errorOf(parseDoc(own.result.stdout)).next).toBe(`${successorsOnly}; ${npmRoute}`);
+
+    const vendored = await runRetired([{ ...RETIRED_OPS, pins: [aggregate] }], ["ops", "--json"]);
+    expect(errorOf(parseDoc(vendored.result.stdout)).next).toBe(`${replaceOps}; ${npmRoute}`);
+    expect([...own.planned, ...vendored.planned]).toEqual([]);
+  });
+
+  it("ends the replace order at the first sync for an installed pack whose parts were all dropped", () => {
+    const dropped: RetiredPack = { ...RETIRED_OPS, parts: [{ part: "st-old", movedTo: null }] };
+    expect(retiredPackRefusal(dropped, true).next).toBe(
+      `run \`${npxCommand("clean --pack ops")}\`, then delete by hand each client copy it keeps and ` +
+        `names, unless it is yours, then \`${npxCommand("sync")}\`; ${npmRoute}`,
     );
   });
 

@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { accessSync, constants as fsConstants, existsSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { delimiter, dirname, join, relative, resolve, sep } from "node:path";
@@ -24,7 +23,6 @@ import {
   discoverInstalledPacksWithPolicy,
   withoutPolicyWarningPrint,
 } from "../../pack/projection.ts";
-import { packDirRelPath, receiptRelPath } from "../../pack/receipt.ts";
 import {
   describeRetiredPack,
   lookupRetiredPack,
@@ -32,7 +30,6 @@ import {
   retiredSuccessorPacks,
   type RetiredPack,
 } from "../../pack/retired.ts";
-import { computeAggregateContentSha } from "../../pack/trust.ts";
 import { UNICODE_TAG_CHARS, UNPRINTABLE_CHARS } from "../../runs/layout.ts";
 import { findPackageRoot } from "../../shared/paths.ts";
 import { gitProgramFor } from "../../shared/programPath.ts";
@@ -73,6 +70,13 @@ import { sanitizeLabel } from "../kit/prompts.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import type { Palette } from "../kit/terminal.ts";
 import type { ReclaimActionEntry, ReclaimProof } from "../../merge/reclaim.ts";
+import {
+  CATALOG_TIERS,
+  installedCopyOf,
+  isFirstPartyRetiredCopy,
+  readVerifiedReceipt,
+  replaceSteps,
+} from "./add.ts";
 import { planSync, previewReclaim, type SyncPlanEntry } from "./sync/engine.ts";
 import { provenanceFromManifest, type ProvenanceRollup } from "./sync/report.ts";
 
@@ -1096,9 +1100,6 @@ async function withReAddArgs(
   for (const finding of findings) finding.reAdd = reAdds.get(finding.packId) ?? null;
 }
 
-/** The tiers only a verified catalog pin grants (`../../pack/trust.ts`). */
-const CATALOG_TIERS: ReadonlySet<string> = new Set(["curator-verified", "scanned"]);
-
 /**
  * `packId`'s re-add arguments, read from its install receipt — or `null` when
  * the receipt cannot be trusted to name them: absent, unreadable, not the
@@ -1112,45 +1113,6 @@ async function readReAddArgs(
 ): Promise<string | null> {
   const read = await readVerifiedReceipt(root, packId, rows);
   return read.ok ? reAddArgsOf(packId, read.receipt) : null;
-}
-
-/** A pack's parsed install receipt, or why it was not read. */
-type VerifiedReceipt =
-  | { readonly ok: true; readonly receipt: unknown }
-  | { readonly ok: false; readonly reason: string };
-
-/**
- * `packId`'s install receipt, parsed only when its bytes are the ones its own
- * ledger row recorded: an edited receipt could otherwise name any source or
- * any file hash. `rows` are the pack-owned rows carrying a recorded hash.
- */
-async function readVerifiedReceipt(
-  root: string,
-  packId: string,
-  rows: readonly LedgerEntry[],
-): Promise<VerifiedReceipt> {
-  let rel: string;
-  try {
-    rel = receiptRelPath(packId);
-  } catch {
-    return { ok: false, reason: "its id names no receipt path" };
-  }
-  const row = rows.find((entry) => entry.path === rel);
-  if (row === undefined) return { ok: false, reason: "no ledger row records its receipt" };
-  let text: Buffer;
-  try {
-    text = await readFile(join(root, ...rel.split("/")));
-  } catch {
-    return { ok: false, reason: "its receipt cannot be read" };
-  }
-  if (createHash("sha256").update(text).digest("hex") !== row.contentHash?.toLowerCase()) {
-    return { ok: false, reason: "its receipt's bytes do not match its ledger row" };
-  }
-  try {
-    return { ok: true, receipt: JSON.parse(text.toString("utf8")) as unknown };
-  } catch {
-    return { ok: false, reason: "its receipt is not JSON" };
-  }
 }
 
 /**
@@ -1204,16 +1166,20 @@ function shellWord(word: string): string {
  * Judged from content, never from the version: the receipt's file hashes,
  * read only when the receipt's bytes match its ledger row, rebuild the
  * integrity map the install verified, and its aggregate
- * ({@link computeAggregateContentSha}) is compared with the catalog pin.
+ * (`computeAggregateContentSha`, `../../pack/trust.ts`) is compared with the
+ * catalog pin.
  *
  * - `warn` — a catalog-tier copy of a catalog id whose content is not the
  *   bundled copy (the release moved it on), naming `add <id>`; and a
  *   first-party copy of a retired id (installed at a catalog tier, or whose
- *   content is one of the entry's `pins`), naming where its parts went and
- *   the fix in order: `clean --pack <id>`, `add <successor>`, `sync`.
+ *   content is one of the entry's `pins`, {@link isFirstPartyRetiredCopy}),
+ *   naming where its parts went and the fix in `replaceSteps`' order:
+ *   `clean --pack <id>`, each kept client copy deleted, `sync`,
+ *   `add <successor>`, `sync`.
  * - `pass` — no pack installed, or every catalog-tier pack matching its pin.
- *   A pack installed from a path or from npm is not judged, and a receipt
- *   that cannot be trusted skips the comparison with the reason named.
+ *   A pack from a path or npm is judged only when its content is one a
+ *   retired release shipped, and a receipt that cannot be trusted skips the
+ *   comparison with the reason named.
  *
  * The row never fails: a stale or retired copy still works as installed, and
  * `pack-integrity` is the row that fails on edited bytes, the receipt's too.
@@ -1276,13 +1242,12 @@ export async function checkPackCatalog(
             `update: \`${packageCommand(`add ${shellWord(packId)}`)}\`.`,
         );
       }
-    } else if (gone !== undefined && (copy.fromCatalog || gone.pins.includes(copy.aggregate))) {
-      const steps = [
-        `clean --pack ${shellWord(packId)}`,
-        ...retiredSuccessorPacks(gone).map((pack) => `add ${shellWord(pack)}`),
-        "sync",
-      ].map((step) => `\`${packageCommand(step)}\``);
-      findings.push(`${describeRetiredPack(gone)} — fix in order: ${steps.join(", then ")}.`);
+    } else if (gone !== undefined && isFirstPartyRetiredCopy(gone, copy)) {
+      // The repo's replace order (`add`'s `replaceSteps`), with each successor
+      // pack as the re-add: a part moves under its own name, so a client copy
+      // `clean --pack` keeps would collide with the successor's `sync`.
+      const steps = replaceSteps(shellWord(packId), ...retiredSuccessorPacks(gone).map(shellWord));
+      findings.push(`${describeRetiredPack(gone)} — fix in order: ${steps}.`);
     } else unjudged += 1;
   }
   const notCompared =
@@ -1295,42 +1260,6 @@ export async function checkPackCatalog(
     ...(unjudged === 0 ? [] : [`${unjudged} pack(s) from a path or npm not judged`]),
   ].join("; ");
   return { id, status: "pass", detail: [`${counts}.`, ...notCompared].join(" ") };
-}
-
-/**
- * What a verified receipt says the install was: the aggregate of its file
- * hashes, keyed as the pack's integrity map is (relative to the pack's own
- * directory), and whether a catalog pin granted its tier — `null` when the
- * receipt names no file this can key.
- */
-function installedCopyOf(
-  packId: string,
-  receipt: unknown,
-): { aggregate: string; fromCatalog: boolean } | null {
-  if (typeof receipt !== "object" || receipt === null) return null;
-  const { files, source, trustTier } = receipt as {
-    files?: unknown;
-    source?: unknown;
-    trustTier?: unknown;
-  };
-  if (!Array.isArray(files) || files.length === 0) return null;
-  const prefix = `${packDirRelPath(packId)}/`;
-  const integrity: Record<string, string> = {};
-  for (const file of files as unknown[]) {
-    if (typeof file !== "object" || file === null) return null;
-    const { path, sha256 } = file as { path?: unknown; sha256?: unknown };
-    if (typeof path !== "string" || typeof sha256 !== "string" || !path.startsWith(prefix)) {
-      return null;
-    }
-    integrity[path.slice(prefix.length)] = sha256;
-  }
-  const kind =
-    typeof source === "object" && source !== null ? (source as { kind?: unknown }).kind : undefined;
-  return {
-    aggregate: computeAggregateContentSha(integrity),
-    fromCatalog:
-      (typeof trustTier === "string" && CATALOG_TIERS.has(trustTier)) || kind === "catalog-pinned",
-  };
 }
 
 /**
@@ -1926,7 +1855,9 @@ export async function runDoctor(
     guarded("preserved-duplicate", () => checkPreservedDuplicate(rootDir, manifest)),
     guarded("pack-integrity", () => checkPackIntegrity(rootDir, manifest)),
     guarded("pack-reach", () => checkPackReach(rootDir, manifest, app.version)),
-    guarded("pack-catalog", () => checkPackCatalog(rootDir, manifest)),
+    guarded("pack-catalog", () =>
+      checkPackCatalog(rootDir, manifest, engine.pack.retired.RETIRED_PACKS),
+    ),
     guarded("model-pins", async () => modelPinsRow(rootDir, manifest, app.runtime.env)),
     checkChangeClasses(rootDir),
     guarded("invariants", checkInvariants),

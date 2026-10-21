@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import pLimit from "p-limit";
@@ -9,6 +10,7 @@ import {
 import { lookupCatalogEntry, resolveBundledPackRoot, type CatalogEntry } from "../../pack/curated.ts";
 import type { PackInstallPlan, PackWriteSetEntry } from "../../pack/install.ts";
 import type { OrgPolicyDecision } from "../../pack/orgPolicy.ts";
+import { packDirRelPath, receiptRelPath } from "../../pack/receipt.ts";
 import {
   describeRetiredPack,
   lookupRetiredPack,
@@ -16,8 +18,13 @@ import {
   retiredSuccessorPacks,
   type RetiredPack,
 } from "../../pack/retired.ts";
-import type { CatalogPin, TrustTier } from "../../pack/trust.ts";
-import { MANIFEST_FILE, type SetupManifest } from "../../types/manifest.ts";
+import { computeAggregateContentSha, type CatalogPin, type TrustTier } from "../../pack/trust.ts";
+import {
+  isPackOwner,
+  MANIFEST_FILE,
+  type LedgerEntry,
+  type SetupManifest,
+} from "../../types/manifest.ts";
 import { STATE_DIR } from "../../types/markers.ts";
 import { keepSavedModelLists } from "../engine/clientModels.ts";
 import { CliFailure, renderFailureHuman, type FailureDoc } from "../kit/output.ts";
@@ -705,12 +712,17 @@ function nameClashRemedyOf(
  * refuses) is kept, named and disowned, and left on disk it collides with the
  * copy the re-added pack's `sync` writes, so it is deleted by hand first. Then
  * `sync`, `add`, and `sync` to project what it installed.
+ *
+ * `specs` are added in order, one `add` each; a retired pack replaced by
+ * several successors passes them all, and one whose parts were all dropped
+ * passes none, so the steps end at the first `sync`.
  */
-function replaceSteps(removed: string, spec: string): string {
+export function replaceSteps(removed: string, ...specs: readonly string[]): string {
+  const adds = specs.map((spec) => `, then \`${packageCommand(`add ${spec}`)}\``).join("");
   return (
     `run \`${packageCommand(`clean --pack ${removed}`)}\`, then delete by hand each client ` +
-    `copy it keeps and names, unless it is yours, then \`${packageCommand("sync")}\`, then ` +
-    `\`${packageCommand(`add ${spec}`)}\`, then \`${packageCommand("sync")}\``
+    `copy it keeps and names, unless it is yours, then \`${packageCommand("sync")}\`` +
+    (specs.length === 0 ? "" : `${adds}, then \`${packageCommand("sync")}\``)
   );
 }
 
@@ -735,16 +747,20 @@ function leftBehindPart(packId: string, spec: string, paths: readonly string[]):
 
 /**
  * The refusal for a retired id (REQ-PACK-002): where each part went, then the
- * steps — `clean --pack <id>` first when a copy is installed (`installed`, read
- * from its `pack:<id>` rows), `add <successor>` per successor pack, and
- * `add ./node_modules/<id>` as the way to install an npm package of that name
- * on purpose, since the bare id no longer resolves to one.
+ * steps, and `add ./node_modules/<id>` as the way to install an npm package of
+ * that name on purpose, since the bare id no longer resolves to one. With a
+ * first-party copy installed (`installed`, judged by
+ * {@link installedFirstPartyCopy}) the steps are {@link replaceSteps}' order
+ * with each successor pack as the re-add; otherwise `add <successor>` per
+ * successor pack.
  */
 export function retiredPackRefusal(entry: RetiredPack, installed: boolean): FailureDoc {
-  const steps = [
-    ...(installed ? [packageCommand(`clean --pack ${entry.id}`)] : []),
-    ...retiredSuccessorPacks(entry).map((pack) => packageCommand(`add ${pack}`)),
-  ].map((step) => `\`${step}\``);
+  const successors = retiredSuccessorPacks(entry);
+  const steps = installed
+    ? replaceSteps(entry.id, ...successors)
+    : successors.length === 0
+      ? null
+      : `run ${successors.map((pack) => `\`${packageCommand(`add ${pack}`)}\``).join(", then ")}`;
   const onPurpose =
     `to install an npm package named "${entry.id}" on purpose, run ` +
     `\`${packageCommand(`add ./node_modules/${entry.id}`)}\``;
@@ -752,8 +768,117 @@ export function retiredPackRefusal(entry: RetiredPack, installed: boolean): Fail
     code: "VALIDATION_ERROR",
     message: describeRetiredPack(entry),
     why: "a retired name is never reused",
-    next: steps.length === 0 ? onPurpose : `run ${steps.join(", then ")}; ${onPurpose}`,
+    next: steps === null ? onPurpose : `${steps}; ${onPurpose}`,
   };
+}
+
+/** The tiers only a verified catalog pin grants (`../../pack/trust.ts`). */
+export const CATALOG_TIERS: ReadonlySet<string> = new Set(["curator-verified", "scanned"]);
+
+/** A pack's parsed install receipt, or why it was not read. */
+export type VerifiedReceipt =
+  | { readonly ok: true; readonly receipt: unknown }
+  | { readonly ok: false; readonly reason: string };
+
+/**
+ * `packId`'s install receipt, parsed only when its bytes are the ones its own
+ * ledger row recorded: an edited receipt could otherwise name any source or
+ * any file hash. `rows` are the pack-owned rows carrying a recorded hash.
+ */
+export async function readVerifiedReceipt(
+  root: string,
+  packId: string,
+  rows: readonly LedgerEntry[],
+): Promise<VerifiedReceipt> {
+  let rel: string;
+  try {
+    rel = receiptRelPath(packId);
+  } catch {
+    return { ok: false, reason: "its id names no receipt path" };
+  }
+  const row = rows.find((entry) => entry.path === rel);
+  if (row === undefined) return { ok: false, reason: "no ledger row records its receipt" };
+  let text: Buffer;
+  try {
+    text = await readFile(join(root, ...rel.split("/")));
+  } catch {
+    return { ok: false, reason: "its receipt cannot be read" };
+  }
+  if (createHash("sha256").update(text).digest("hex") !== row.contentHash?.toLowerCase()) {
+    return { ok: false, reason: "its receipt's bytes do not match its ledger row" };
+  }
+  try {
+    return { ok: true, receipt: JSON.parse(text.toString("utf8")) as unknown };
+  } catch {
+    return { ok: false, reason: "its receipt is not JSON" };
+  }
+}
+
+/**
+ * What a verified receipt says the install was: the aggregate of its file
+ * hashes, keyed as the pack's integrity map is (relative to the pack's own
+ * directory), and whether a catalog pin granted its tier — `null` when the
+ * receipt names no file this can key.
+ */
+export function installedCopyOf(
+  packId: string,
+  receipt: unknown,
+): { aggregate: string; fromCatalog: boolean } | null {
+  if (typeof receipt !== "object" || receipt === null) return null;
+  const { files, source, trustTier } = receipt as {
+    files?: unknown;
+    source?: unknown;
+    trustTier?: unknown;
+  };
+  if (!Array.isArray(files) || files.length === 0) return null;
+  const prefix = `${packDirRelPath(packId)}/`;
+  const integrity: Record<string, string> = {};
+  for (const file of files as unknown[]) {
+    if (typeof file !== "object" || file === null) return null;
+    const { path, sha256 } = file as { path?: unknown; sha256?: unknown };
+    if (typeof path !== "string" || typeof sha256 !== "string" || !path.startsWith(prefix)) {
+      return null;
+    }
+    integrity[path.slice(prefix.length)] = sha256;
+  }
+  const kind =
+    typeof source === "object" && source !== null ? (source as { kind?: unknown }).kind : undefined;
+  return {
+    aggregate: computeAggregateContentSha(integrity),
+    fromCatalog:
+      (typeof trustTier === "string" && CATALOG_TIERS.has(trustTier)) || kind === "catalog-pinned",
+  };
+}
+
+/**
+ * Whether `copy` is a first-party copy of retired `entry`: installed at a
+ * catalog tier, or with content one of `entry`'s `pins` names. A pack of that
+ * name from a path or npm with other content is the user's own, never judged.
+ */
+export function isFirstPartyRetiredCopy(
+  entry: RetiredPack,
+  copy: { readonly aggregate: string; readonly fromCatalog: boolean },
+): boolean {
+  return copy.fromCatalog || entry.pins.includes(copy.aggregate);
+}
+
+/**
+ * Whether `manifest` records a first-party copy of retired `entry`, by the
+ * rule `check`'s `pack-catalog` row applies: a receipt read only when its
+ * bytes match its ledger row, judged by {@link isFirstPartyRetiredCopy}. A
+ * receipt that cannot be trusted judges nothing, as there.
+ */
+export async function installedFirstPartyCopy(
+  rootDir: string,
+  manifest: SetupManifest,
+  entry: RetiredPack,
+): Promise<boolean> {
+  const rows = manifest.ledger.filter(
+    (row) => isPackOwner(row.adapter) && row.contentHash !== undefined,
+  );
+  const read = await readVerifiedReceipt(rootDir, entry.id, rows);
+  const copy = read.ok ? installedCopyOf(entry.id, read.receipt) : null;
+  return copy !== null && isFirstPartyRetiredCopy(entry, copy);
 }
 
 /** One error document over every part, in the order the parts are listed. */
@@ -830,13 +955,16 @@ export const addCommand: CommandModule = {
       });
     }
 
-    const resolved = resolveSpecThroughCatalog(spec);
+    // The retired-names map is read through the engine registry, the seam a
+    // command-level test injects a made-up map through.
+    const resolved = resolveSpecThroughCatalog(spec, packEngine.retired.RETIRED_PACKS);
     if (resolved.retired !== undefined) {
       // Before the pack's own manifest is read or anything planned: the id
       // names no pack this release ships, and the steps say where it went.
-      const retiredInstalled =
-        packEngine.install.planPackRemoval(projectManifest, resolved.retired.id).length > 0;
-      throw new CliFailure(retiredPackRefusal(resolved.retired, retiredInstalled));
+      // `clean --pack` leads only for a first-party copy, never for the
+      // user's own pack under that name.
+      const firstParty = await installedFirstPartyCopy(rootDir, projectManifest, resolved.retired);
+      throw new CliFailure(retiredPackRefusal(resolved.retired, firstParty));
     }
     const pinGrantsTrust =
       resolved.catalogPin !== undefined &&
