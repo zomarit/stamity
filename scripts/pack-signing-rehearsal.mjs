@@ -16,6 +16,33 @@ export const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex'
 const json = async (path, value) => writeFile(path, `${JSON.stringify(value, null, 2)}\n`)
 const readJson = async (path) => JSON.parse(await readFile(path, 'utf8'))
 
+// [STAMITY-DEBUG 2026-10-21_debug-signing-rehearsal] probe state and print filters: fixed names, integers and
+// allowlisted identifier codes only; no error message, body, URL or header text is ever stored or printed.
+const PROBE_TAG = '[STAMITY-DEBUG 2026-10-21_debug-signing-rehearsal]'
+const PROBE_HOSTS = new Map([['fulcio.sigstore.dev', 'fulcio'], ['rekor.sigstore.dev', 'rekor'], ['tuf-repo-cdn.sigstore.dev', 'tuf']])
+const PROBE_ATTEMPT = /^(?:GET|POST|PUT|PATCH|DELETE) https:\/\/([a-z0-9.-]+)(?:[/?]\S*)? attempt (\d{1,3}) failed with (.*)$/s
+const probe = { revision: undefined, stage: undefined, startedAt: undefined, attempts: [], provider: undefined }
+const safeCode = (v) => {
+  if (v === undefined || v === null) return '-'
+  return typeof v === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(v) ? v : 'unprintable'
+}
+const safeStatus = (v) => (Number.isInteger(v) && v >= 100 && v <= 599 ? v : '-')
+const hostLabel = (host) => PROBE_HOSTS.get(host) ?? 'other'
+const providerFacts = (error) => ({
+  code: safeCode(error?.code), causeCode: safeCode(error?.cause?.code),
+  causeStatus: safeStatus(error?.cause?.statusCode ?? error?.statusCode),
+})
+const probeAttempts = () => (probe.attempts.length === 0 ? 'none'
+  : probe.attempts.map(({ host, attempt, outcome, atMs }) => `${host}:${attempt}:${outcome}@${atMs}`).join(','))
+const probeElapsed = () => (probe.startedAt === undefined ? '-' : Math.round(performance.now() - probe.startedAt))
+const probeLog = (level, ...args) => {
+  if (level !== 'http' || args[0] !== 'fetch' || typeof args[1] !== 'string') return
+  const m = PROBE_ATTEMPT.exec(args[1])
+  if (m === null) return
+  probe.attempts.push({ host: hostLabel(m[1]), attempt: Number(m[2]), outcome: /^\d{3}$/.test(m[3]) ? m[3] : 'network',
+    atMs: probe.startedAt === undefined ? 0 : Math.round(performance.now() - probe.startedAt) })
+}
+
 /**
  * The rehearsal signs the commit it runs on, so its proof witnesses the code that ships.
  * SIGNING_SOURCE_SHA remains readable for a run that must witness an earlier reviewed commit;
@@ -63,19 +90,68 @@ async function prepare(root, context) {
 }
 
 async function sign(root, context) {
+  // [STAMITY-DEBUG 2026-10-21_debug-signing-rehearsal] stage marker
+  probe.stage = 'context'
   assert.deepEqual(await readJson(join(root, 'context.json')), context)
+  // [STAMITY-DEBUG 2026-10-21_debug-signing-rehearsal] stage marker
+  probe.stage = 'import'
   const { signPack } = await import('../src/pack/sign.ts')
-  const results = []
-  /* oxlint-disable no-await-in-loop -- Persist each completed signing result before starting the next external signing operation. */
-  for (const revision of ['revision1', 'revision2']) {
-    const pack = join(root, 'packs', revision)
-    // No substitute signing service, verifier, identity token or trust root.
-    const result = await signPack(pack)
-    results.push({ revision, ...result, bundleSha256: sha256(await readFile(join(pack, result.bundlePath))) })
-    await json(join(root, 'signing.json'), { ...context, complete: results.length === 2, results })
+  // [STAMITY-DEBUG 2026-10-21_debug-signing-rehearsal] real-client wrappers: each loads the same sigstore function
+  // signPack and verifySigstoreBundle load by default, calls it with unchanged arguments, records the stage and the
+  // allowlisted error codes, and rethrows the same error unchanged.
+  const signFn = async (payload) => {
+    probe.stage = 'sign-call'
+    const { sign: realSign } = await import('sigstore')
+    try {
+      const bundle = await realSign(payload)
+      probe.stage = 'after-sign-call'
+      return bundle
+    } catch (error) {
+      probe.provider = providerFacts(error)
+      throw error
+    }
   }
-  /* oxlint-enable no-await-in-loop */
-  assert.notEqual(results[0].aggregateSha, results[1].aggregateSha)
+  const verifyFn = async (bundle, payload, options) => {
+    probe.stage = 'verify-call'
+    const { verify: realVerify } = await import('sigstore')
+    try {
+      const signer = await realVerify(bundle, payload, options)
+      probe.stage = 'after-verify'
+      return signer
+    } catch (error) {
+      probe.provider = providerFacts(error)
+      throw error
+    }
+  }
+  // [STAMITY-DEBUG 2026-10-21_debug-signing-rehearsal] failed-attempt listener, removed in the finally below
+  process.on('log', probeLog)
+  try {
+    const results = []
+    /* oxlint-disable no-await-in-loop -- Persist each completed signing result before starting the next external signing operation. */
+    for (const revision of ['revision1', 'revision2']) {
+      // [STAMITY-DEBUG 2026-10-21_debug-signing-rehearsal] per-revision reset
+      Object.assign(probe, { revision, stage: 'sign-pack', startedAt: performance.now(), attempts: [], provider: undefined })
+      const pack = join(root, 'packs', revision)
+      // No substitute signing service, verifier, identity token or trust root.
+      // [STAMITY-DEBUG 2026-10-21_debug-signing-rehearsal] signFn and verifyFn call the real client with unchanged arguments.
+      const result = await signPack(pack, { signFn, verifyFn })
+      // [STAMITY-DEBUG 2026-10-21_debug-signing-rehearsal] stage marker
+      probe.stage = 'bundle-digest'
+      results.push({ revision, ...result, bundleSha256: sha256(await readFile(join(pack, result.bundlePath))) })
+      // [STAMITY-DEBUG 2026-10-21_debug-signing-rehearsal] stage marker
+      probe.stage = 'signing-record'
+      await json(join(root, 'signing.json'), { ...context, complete: results.length === 2, results })
+      // [STAMITY-DEBUG 2026-10-21_debug-signing-rehearsal] per-revision success line
+      console.error(`${PROBE_TAG} scripts/pack-signing-rehearsal.mjs:145 sign-revision-ok sign ${revision} ok elapsedMs=${probeElapsed()} attempts=${probeAttempts()}`)
+    }
+    /* oxlint-enable no-await-in-loop */
+    // [STAMITY-DEBUG 2026-10-21_debug-signing-rehearsal] stage marker
+    probe.stage = 'final-compare'
+    assert.notEqual(results[0].aggregateSha, results[1].aggregateSha)
+  } finally {
+    // [STAMITY-DEBUG 2026-10-21_debug-signing-rehearsal] listener removal
+    process.off('log', probeLog)
+  }
 }
 
 /** Uses the actual planning API; never applies a negative plan. */
@@ -153,7 +229,12 @@ if (prepareNativeTypescriptCli(import.meta.url, { label: 'signing rehearsal' }))
     assert.equal(typeof action, 'function')
     await action(root, context)
     console.log(`pack-signing-rehearsal: ${process.argv[2]} passed`)
-  } catch {
+  } catch (error) {
+    // [STAMITY-DEBUG 2026-10-21_debug-signing-rehearsal] failure line: closed-list names, integers, allowlisted codes
+    const probeAction = ['prepare', 'sign', 'verify'].includes(process.argv[2]) ? process.argv[2] : 'unknown'
+    const probeStage = probeAction === 'sign' ? (probe.stage ?? '-') : probeAction
+    const facts = probe.provider ?? { code: '-', causeCode: '-', causeStatus: '-' }
+    console.error(`${PROBE_TAG} scripts/pack-signing-rehearsal.mjs:237 rehearsal-failed ${probeAction} failed revision=${probe.revision ?? '-'} stage=${probeStage} elapsedMs=${probeElapsed()} code=${facts.code} causeCode=${facts.causeCode} causeStatus=${facts.causeStatus} repoCode=${safeCode(error?.code)} attempts=${probeAttempts()}`)
     // Provider exception text may carry tokens; preserve only nonsecret receipts.
     console.error('pack-signing-rehearsal: failed; inspect the retained nonsecret inputs and stage receipts.')
     process.exitCode = 1
