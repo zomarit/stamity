@@ -102,7 +102,7 @@ spelled. Every exit pushes its record through the run verbs, closing in this ord
    `stamity gate scan --base <Base>` runs, comes after every write above; a hit holds the push, naming path, line
    and rule, never the value. The pull request's title is scanned like its body, a hit replaced with `Run <run-id>`.
    `run end`'s `--paths` names the files the run changed (every unit's files, named again though each was committed at
-   its checkpoint) and each learning file the close captured; the verb stages the run folder's own files and the inbox itself.
+   its checkpoint) and each learning file the close captured; the verb stages the run folder's own files and the inbox itself. A cloud session that stays open for a final round adds `--final-round` to this end (`## How to answer`), the chain's last file only (`references/chains.md`).
 
 `run end` exits 0 with a pull request opened, updated or commented; exit 1 keeps its `notDone[]` (among them `Not done: draft PR not opened`, and `Not done: origin changed`
 for a repointed origin) for the final message. The run's final message names that pull request as the person's hand-off: the morning list is its body, or the
@@ -116,7 +116,7 @@ its own scan, ending `<!-- stamity:run <run-id> -->`. It opens `# Morning list â
 on a refusal, and then first), `## For you to check`, `## Decisions`, `## Prerequisites`, `## Person's calls held`,
 `## Not done:`, `## How to answer`, and a fenced `stamity-morning` block holding one JSON object a line, its keys
 `id` (`Q<n>`), `kind` (`qa`, `decision`, `prerequisite` or `held`), `question`, `options` (2 to 9 strings),
-`default` (an option's number, from 1, never its text) and `source`. A section with no rows reads `none`.
+`default` (an option's number, from 1, never its text) and `source`. A section with no rows reads `none`. `question`, `source` and each option are one line each, at most 500, 300 and 200 characters.
 
 - **For you to check**: at most three person QA rows, then the proven line; where the branch's CI waits for a
   person's approval, it reads `CI not run: awaiting approval`.

@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "generatedBy": "1.16.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-20T10:09:06.327Z",
+  "updatedAt": "2026-10-21T01:01:54.551Z",
   "tools": [
     "claude"
   ],
@@ -551,7 +551,7 @@
       "adapter": "claude",
       "artifactId": "unattended",
       "artifactType": "skill",
-      "contentHash": "2d611295d77d576d35a7b6f895d0c24b087afe46915876dfeaa8f800dad5a08e",
+      "contentHash": "17e0b9b873fbf786bf1047f5b870bd119d4e00c872d89d8d3117333ba525359f",
       "path": ".claude/skills/st-unattended/SKILL.md"
     },
     {
@@ -670,14 +670,14 @@
       "adapter": "claude",
       "artifactId": "ai-evals",
       "artifactType": "rule",
-      "contentHash": "803c4a405842094e687a311c73b7754089cdd50496b0427080cd59a63fc17968",
+      "contentHash": "dc65fca7b620871bbf1997264d29eded3e024d50957e0df571dc7999b22ea285",
       "path": ".claude/skills/stamity-ai-evals/SKILL.md"
     },
     {
       "adapter": "claude",
       "artifactId": "question-protocol",
       "artifactType": "rule",
-      "contentHash": "e7d2c88fe5dbb92ccd0cfc8fac67e968df27c438af9171360ffc4562caabc8f4",
+      "contentHash": "4a0a4d7ccdc7d8783d7b6639fa79024f5d76385ff2e9c0222dbe8f048b3bb312",
       "path": ".claude/skills/stamity-question-protocol/SKILL.md"
     },
     {
