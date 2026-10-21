@@ -359,7 +359,16 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
 // with an empty stdin, inside its three, +15 bytes. 1.3.0 is unreleased, so the
 // same version carries the words. The same +15 lands below and in
 // ALWAYS_ON_CODEX_OVERRIDE_BYTES.
-export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 5_610;
+// 5_610 -> 5_682 on 2026-10-21, plan 018 file 2, unit u4-charter (invariants
+// 1.3.1): the opening paragraph gains two lines asking for plain words, stated
+// confidence and a no said first; invariant 5 names the client's own script in
+// its client folder, else the generated one, on four lines; the maturity line
+// names the default beside git history; and three Conditional-layer bullets are
+// each cut by one line, which pays for the three new lines, so the charter holds
+// at 95 (the version line and the amended date keep their widths). Net +72
+// bytes. The same +72 lands in the charter-alone figure below, in
+// ALWAYS_ON_CODEX_OVERRIDE_BYTES and in ALWAYS_ON_SHARED_BYTES_WITH_CURSOR.
+export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 5_682;
 
 /**
  * Bytes of the same shared file when codex is NOT selected — the charter alone.
@@ -394,7 +403,10 @@ export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 5_610;
 // (invariants 1.3.0), the same +232 as above.
 // 5_595 -> 5_610 on 2026-10-14, the f2 fix round (review/11, review/13): the
 // same +15 as above.
-export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_610;
+// 5_610 -> 5_682 on 2026-10-21, unit u4-charter: the plain-words lines,
+// invariant 5's four lines (invariants 1.3.1), the maturity line and the three
+// trims, the same +72 as above and the whole of the change here.
+export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_682;
 
 /**
  * Bytes of the Codex-only root `AGENTS.override.md` on the golden selection —
@@ -434,7 +446,10 @@ export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_610;
 // appendix carries the injection-screening rule's +49 bytes — its read-pass
 // sentence names the startup card's read on a branch with a run — rewrapped
 // inside the five lines the sentence already had, so no line count moved.
-export const ALWAYS_ON_CODEX_OVERRIDE_BYTES = 25_800;
+// 25_800 -> 25_872 on 2026-10-21, unit u4-charter: the charter half of the
+// override carries the same +72 bytes (invariants 1.3.1); the line count holds
+// at 407, the charter's three new lines paid by its three trims.
+export const ALWAYS_ON_CODEX_OVERRIDE_BYTES = 25_872;
 
 /**
  * Physical lines Cursor's cloud block adds to the shared root `AGENTS.md` when
@@ -464,7 +479,9 @@ export const ALWAYS_ON_CURSOR_BLOCK_LINES = 14;
  */
 // 6_476 on 2026-10-18, v7-cursor-agents-block: 5_610 of charter plus the
 // block's 866 bytes at the golden's `npx -y @zomarit/stamity@1.0.0-golden`.
-export const ALWAYS_ON_SHARED_BYTES_WITH_CURSOR = 6_476;
+// 6_476 -> 6_548 on 2026-10-21, unit u4-charter: the charter's +72 bytes
+// (invariants 1.3.1), now 5_682 of charter plus the unchanged 866 of the block.
+export const ALWAYS_ON_SHARED_BYTES_WITH_CURSOR = 6_548;
 
 /**
  * The composite always-on line count one client pays for a plan under a

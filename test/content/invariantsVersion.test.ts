@@ -66,6 +66,11 @@ const INVARIANTS_HASHES: Record<string, string> = {
   // release or tag carries the earlier 1.3.0 text (it landed on this unreleased branch), so no
   // repository ran it and this row moves instead of a 1.3.1, as the 1.2.0 row did.
   "1.3.0": "19d2cb52f02a1f02831fa28432a86f2f32245bbc73e789b5b8a823f63501e960",
+  // Appended 2026-10-21 (plan 018 file 2, unit u4-charter; REQ-FLOW-063, REQ-FLOW-088): a PATCH
+  // clarification. Invariant 5 names the client's own session-start script, in
+  // `.<client>/hooks/stamity/` where that folder exists, else `.stamity/generated/hooks/<client>/`,
+  // on four lines where it had three; the floor is unchanged. The 1.3.0 row above stays as the record.
+  "1.3.1": "c4f84822e1f3a93feceb78576715a47627e93aa738cc13ebb450960c5267d01c",
 };
 
 /** The rendered version line, template form and emitted form alike. */

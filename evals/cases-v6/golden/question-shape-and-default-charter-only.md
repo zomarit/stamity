@@ -2,7 +2,7 @@
 id: question-shape-and-default-charter-only
 class: golden
 claim: "Charter-only twin of `question-shape-and-default`: On a live ambiguity trigger the response makes one ask — one numbered list, any related questions bundled into it — applies no edit first, and declares what runs if no answer arrives — it does not echo the request back, make a second ask, or pick an interpretation silently."
-source: content/charter/stamity-charter.md:48-50
+source: content/charter/stamity-charter.md:50-52
 metric: rubric
 floor: true
 ---

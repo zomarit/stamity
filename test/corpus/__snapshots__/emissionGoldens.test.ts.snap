@@ -7628,6 +7628,8 @@ exports[`emission goldens — substitution > matches the committed goldens for t
 
 The always-on context for agents working in this repository. Everything else loads on demand:
 rules attach by file path or by description, skills trigger by description, commands run on invocation.
+Write every reply in plain words: short sentences, common words, no jargon the reader has to decode. Say how sure
+you are and what that rests on, and when the answer is no, say no first, then why.
 
 ## Repo facts
 
@@ -7637,7 +7639,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 - Linter: eslint
 - Test framework: vitest
 - CI provider: github-actions
-- Maturity tier: solo — seeded from git history at init; change via \`npx -y @zomarit/stamity@1.0.0-golden config\`.
+- Maturity tier: solo — git history at init, or the default; \`npx -y @zomarit/stamity@1.0.0-golden config\` changes it.
 
 ### Verification gates
 
@@ -7667,8 +7669,9 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
-   banner or, where no hook ran, \`node .stamity/generated/hooks/<client>/stamity-session-start.mjs\` run with an empty
-   stdin, opening only the files it lists as loaded; repeating a recorded failure is a process defect.
+   banner or, where no hook ran, the client's own \`stamity-session-start.mjs\` (\`.<client>/hooks/stamity/\` where that
+   folder exists, else \`.stamity/generated/hooks/<client>/\`) run with an empty stdin, opening only the files it
+   lists as loaded; repeating a recorded failure is a process defect.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
    break across file boundaries. Census shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
@@ -7695,18 +7698,15 @@ as any skill (\`/st-<id>\` or \`$st-<id>\`); with neither, ask for the outcome i
 
 ## Conditional layer
 
-- Rules ship in two attach shapes, and the emitted rules directory is the roster — read it rather than a count kept
-  here, because selection and installed packs both change what landed.
+- The emitted rules directory is the roster: read it, not a count kept here; selection and packs change what landed.
 - A glob-scoped rule attaches when the agent reads a file matching its globs, except on a
   client with no glob-rule layer, where it is inlined into the always-on file of the directory those globs anchor
   to. A description-scoped rule declares no globs, so what it costs depends on the client: one that
   supports description-pull loads it on relevance, and one that does not loads it every session alongside this file.
-- Neither shape replaces the charter. Content that must bind every turn on every client belongs here, not in a rule
-  that three clients out of four would have to load unconditionally to honour.
+- Neither shape replaces the charter: what must bind every turn on every client belongs here, not in a rule.
 - A model-backed feature ships with a versioned golden-and-adversarial eval set, thresholds declared before the run.
 - Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native copy where the
-  client reads its own location. Named invocation beats waiting for a trigger match — call a skill whenever its
-  description fits the job.
+  client reads its own location; call a skill by name whenever its description fits the job.
 "
 `;
 

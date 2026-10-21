@@ -164,6 +164,10 @@ What the project does not do is published beside what it does.
   much. The latest full run states its verdict against each declared threshold. No red baseline is
   re-run to make it look better. The [eval set README](../evals/README.md) carries the baselines
   and the rule that they stay put.
+- The charter asks every reply for plain words, for how sure the agent is and what that rests on,
+  and for a no said first when the answer is no. The plain-words half follows ISO 24495-1, the
+  plain language standard. The habit comes from pstack, a public set of agent skills in the
+  cursor/plugins repository (MIT); the text here is written fresh.
 
 ## How does an artifact get deleted?
 
@@ -233,6 +237,7 @@ bump and a row below.
 | 1.1.0 | 2026-09-27 | 2 | MINOR | ask exactly one question, and make no second request in the same turn; a repository picks it up on its next `stamity sync`, and one that never re-syncs keeps the 1.0.0 wording, which left a second request unnamed |
 | 1.2.0 | 2026-10-09 | 4 | MINOR | done names the gates `gate classify` names for the change, and a change it did not classify runs all of them, so a class a session assigns itself never narrows them; the `Not done:` line is unchanged; a repository that never re-syncs keeps the 1.1.0 wording, which runs every gate on every change, a superset of the new floor |
 | 1.3.0 | 2026-10-14 | 2, 5 | MINOR | invariant 2 allows rounds: one ask per turn (one question-tool call of related questions, else one numbered list) until none is undecided, and keeps every 1.2.0 floor clause, a sub-agent still not asking and returning `BLOCKED_AMBIGUITY` naming the readings; invariant 5 reads learnings only through the session-start screen, running `node .stamity/generated/hooks/<client>/stamity-session-start.mjs` with an empty stdin where no hook ran and opening only the files it lists as loaded; invariant 6 is rewrapped with its words unchanged; a repository that never re-syncs keeps the 1.2.0 wording, which asks exactly one question and leaves a session with no hook reading learnings unscreened |
+| 1.3.1 | 2026-10-21 | 5 | PATCH | invariant 5 names the client's own `stamity-session-start.mjs` where no hook ran, in `.<client>/hooks/stamity/` where that folder exists, else `.stamity/generated/hooks/<client>/`, still run with an empty stdin and opening only the files it lists as loaded; the floor is unchanged, only where the script lives is clarified; a repository that never re-syncs keeps the 1.3.0 wording, whose one generated path names a folder a client with its own hook folder no longer receives |
 
 The block ratified at 1.0.0 is the 2026-08-31 text plus the four unversioned amendments above.
 Nothing was reworded to ratify it, which is why the first version records no diff of its own.

@@ -236,9 +236,13 @@ describe("corpus charter", () => {
     );
     expect(rendered).not.toContain("${STAMITY:");
     // The maturity line names the pinned call, never a bare `stamity`.
+    // TEST CHANGE, justified (2026-10-21, plan 018 file 2, unit u4-charter; inbox row 174): the
+    // line said the tier was "seeded from git history", which reads as always measured; a repo with
+    // too little history takes the default. The line now names both sources; the pinned call holds.
     expect(rendered).toContain(
-      "- Maturity tier: solo — seeded from git history at init; change via `npx -y @zomarit/stamity@1.11.0 config`.",
+      "- Maturity tier: solo — git history at init, or the default; `npx -y @zomarit/stamity@1.11.0 config` changes it.",
     );
+    expect(rendered).not.toContain("seeded from git history");
     expect(rendered).not.toMatch(/(?<![\w@/.-])stamity config/);
     expect(rendered).toContain("`npm test`");
     expect(rendered).toContain("Linter: eslint");
@@ -251,8 +255,11 @@ describe("corpus charter", () => {
     // TEST CHANGE, justified (2026-10-14, plan 020 file 3, unit f2-protocol-charter): 1.2.0 ->
     // 1.3.0, amended 2026-10-09 -> 2026-10-14. Invariants 2 (rounds of one ask per turn) and 5 (the
     // screened learnings read) moved; the version line keeps its width. Only the shipped values move.
+    // TEST CHANGE, justified (2026-10-21, plan 018 file 2, unit u4-charter; REQ-FLOW-063): 1.3.0 ->
+    // 1.3.1, amended 2026-10-14 -> 2026-10-21. Invariant 5's wording names the script's place per
+    // client (a PATCH clarification); the version line keeps its width. Only the shipped values move.
     expect(rendered).toContain(
-      "## Invariants\nInvariants version 1.3.0 · ratified 2026-08-31 · last amended 2026-10-14\n",
+      "## Invariants\nInvariants version 1.3.1 · ratified 2026-08-31 · last amended 2026-10-21\n",
     );
   });
 
@@ -323,19 +330,34 @@ describe("corpus charter", () => {
     expect(two.text).not.toMatch(/exactly one/);
   });
 
-  it("holds invariant 5's screened read, every clause on its three lines", async () => {
+  // TEST CHANGE, justified (2026-10-21, plan 018 file 2, unit u4-charter; REQ-FLOW-088, invariants
+  // 1.3.1): the case read "every clause on its three lines" and pinned the one script path
+  // `node .stamity/generated/hooks/<client>/stamity-session-start.mjs`. Since the Claude Code copies
+  // stop being emitted there (u5), that path exists for three clients only, so invariant 5 names
+  // the client's own script in its client folder, else the generated folder, on four lines (the
+  // fourth paid by a Conditional-layer trim). The clauses the old pins held are all still pinned.
+  it("holds invariant 5's screened read, every clause on its four lines", async () => {
     const { body } = await readCharterTemplate(CORPUS_ROOT);
     const five = invariantText(body, 5);
 
-    expect(five.lines).toHaveLength(3);
+    // The maintainer's wording, line for line (plan 018 file 2, Decisions).
+    expect(five.lines).toEqual([
+      "5. **Learnings first.** Read `.stamity/learnings/` before project-specific work, only through the session-start",
+      "   banner or, where no hook ran, the client's own `stamity-session-start.mjs` (`.<client>/hooks/stamity/` where that",
+      "   folder exists, else `.stamity/generated/hooks/<client>/`) run with an empty stdin, opening only the files it",
+      "   lists as loaded; repeating a recorded failure is a process defect.",
+    ]);
     expect(five.text).toContain("Read `.stamity/learnings/` before project-specific work");
     expect(five.text).toContain("only through the session-start banner");
     // TEST CHANGE, justified (2026-10-14, the f2 fix round, review/13): the pin read a glob
     // (`hooks/*/`) and stdin from `/dev/null`, which PowerShell and cmd cannot run. The command
     // now names the client folder and an empty stdin, which every shell can supply.
     expect(five.text).toContain(
-      "where no hook ran, `node .stamity/generated/hooks/<client>/stamity-session-start.mjs` run with an empty stdin",
+      "where no hook ran, the client's own `stamity-session-start.mjs` (`.<client>/hooks/stamity/` where that " +
+        "folder exists, else `.stamity/generated/hooks/<client>/`) run with an empty stdin",
     );
+    // The single generated path the 1.3.0 wording gave is gone: it no longer holds for every client.
+    expect(five.text).not.toContain("`node .stamity/generated/hooks/<client>/stamity-session-start.mjs`");
     expect(five.text).not.toContain("/dev/null");
     expect(five.text).not.toContain("hooks/*/");
     expect(five.text).toContain("opening only the files it lists as loaded");
@@ -380,10 +402,13 @@ describe("corpus charter", () => {
     // TEST CHANGE, justified (2026-10-14, plan 020 file 3, unit f2-protocol-charter): 1.2.0 ->
     // 1.3.0, amended 2026-10-09 -> 2026-10-14. Invariants 2 and 5 moved (invariants 1.3.0); the
     // ratification date still does not move.
+    // TEST CHANGE, justified (2026-10-21, plan 018 file 2, unit u4-charter): 1.3.0 -> 1.3.1, amended
+    // 2026-10-14 -> 2026-10-21. Invariant 5's wording moved (a PATCH clarification); the
+    // ratification date still does not move.
     expect(invariants).toEqual({
-      version: "1.3.0",
+      version: "1.3.1",
       ratified: "2026-08-31",
-      amended: "2026-10-14",
+      amended: "2026-10-21",
     });
     // The typed read and the raw map agree — no second spelling of the keys.
     expect(charter.frontmatter["invariants_version"]).toBe(invariants.version);
@@ -572,6 +597,42 @@ describe("corpus charter", () => {
 
     expect(opening).toMatch(/rules attach by file path or by description/i);
     expect(opening).not.toMatch(/rules attach by file path,\s+skills/i);
+  });
+
+  // Added 2026-10-21 (plan 018 file 2, unit u4-charter; REQ-FLOW-130): the opening paragraph asks
+  // for plain words, stated confidence and a no said first. It lies outside the invariants block,
+  // so the hash gate does not see it; this case is its pin. Three one-line Conditional-layer trims
+  // pay for its two lines and invariant 5's fourth, so the file stays 95 lines.
+  it("asks in its opening paragraph for plain words, stated confidence and a no said first", async () => {
+    const [{ body, lineCount }, raw] = await Promise.all([
+      readCharterTemplate(CORPUS_ROOT),
+      readFile(CHARTER_FILE, "utf8"),
+    ]);
+    const opening = body.slice(0, body.indexOf("## Repo facts"));
+
+    // Inside the opening paragraph, joined to it with no blank line between.
+    expect(opening).toContain(
+      "commands run on invocation.\n" +
+        "Write every reply in plain words: short sentences, common words, no jargon the reader has to decode. Say how sure\n" +
+        "you are and what that rests on, and when the answer is no, say no first, then why.\n",
+    );
+    // Outside the invariants block: the floors' hash does not move for these lines.
+    expect(sectionOf(body, "Invariants")).not.toContain("plain words: short sentences");
+
+    // The three trims, each one physical line, the pinned phrases kept.
+    const conditional = sectionOf(body, "Conditional layer");
+    expect(conditional).toContain(
+      "- The emitted rules directory is the roster: read it, not a count kept here; selection and packs change what landed.\n",
+    );
+    expect(conditional).toContain(
+      "- Neither shape replaces the charter: what must bind every turn on every client belongs here, not in a rule.\n",
+    );
+    expect(conditional).toContain(
+      "  client reads its own location; call a skill by name whenever its description fits the job.",
+    );
+    expect(raw).not.toContain("three clients out of four");
+    expect(raw).not.toContain("Named invocation beats");
+    expect(lineCount).toBe(95);
   });
 
   it("advertises only the board sources a mode can actually discover", async () => {
