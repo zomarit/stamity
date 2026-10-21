@@ -1,6 +1,6 @@
 ---
 id: orchestrator-context
-# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, amended on 2026-09-29 by the maintainer's decision to retire the replay, amended from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, its citations re-pointed in run 2026-10-12_board-writes on 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, and excluded from the site build.
+# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, amended on 2026-09-29 by the maintainer's decision to retire the replay, amended from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, its citations re-pointed in run 2026-10-12_board-writes on 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, and excluded from the site build.
 # The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.16.0
@@ -98,6 +98,10 @@ The paragraphs and criteria dated 2026-10-16 under REQ-CTX-012 come from plan 02
 REQ-CTX-013 and REQ-CTX-016 from its second, `docs/plans/021-cloud-runs-02.md` (run `2026-10-18_cloud-runs-2`, pull
 request #113); each paragraph names its units and the head its citations read at. They shipped with 1.16.0, which set
 `status: shipped-with-1.16.0`.
+
+The paragraph and criterion dated 2026-10-21 under REQ-CTX-017 come from the spec delta of
+`docs/plans/018-packs-rebuilt-01.md` (plan 018 file 1, run `2026-10-20_packs-rebuilt`), merged by its unit
+`u18-spec-docs` and read at the integration head `936350cb`. They are not in a release yet.
 
 The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
 
@@ -250,6 +254,8 @@ The replay's files were deleted on 2026-09-30; every path below reads at tag `re
   `src/cli/docs/measurements.ts` (the table reader).
 - `docs/plans/021-cloud-runs-01.md`, with `.stamity/runs/2026-10-15_cloud-runs/` (REQ-CTX-012 amended), added
   2026-10-16; `test/runs/recordHead.test.ts` (the head's new lines).
+- `docs/plans/018-packs-rebuilt-01.md`, with `.stamity/runs/2026-10-20_packs-rebuilt/` (REQ-CTX-017 amended), added
+  2026-10-21; `test/corpus/agents/verdictReturns.test.ts` (the reviewer's reading of the `choice:` lines).
 
 ## Requirements
 
@@ -1138,6 +1144,18 @@ integration, and the citations are re-pointed to its new lines then, not by this
   a repository layout (`test/tools/translator.test.ts`, the coverage-row pin and its read-only-git sibling; added
   2026-10-15).
 
+Amended 2026-10-21 (plan 018 file 1, run `2026-10-20_packs-rebuilt`, unit `u8-work-lessons`; read at `936350cb`). The
+brief bullet: the brief still never carries the implementer's or fixer's account. A reviewer also reads the run
+record's `choice:` lines (REQ-FLOW-125 in `docs/specs/everyday-flows.md`), its unit's, or every unit's on a `branch`
+pass, from the run's `record.md`, as leads to check against the diff, never as evidence: a line names an approach
+tried, dropped or reverted and claims nothing about what works (`content/agents/stamity-reviewer.md:211`, the
+sentence after "never evidence."). The grant, the guard and the prose are unchanged.
+
+- GIVEN the reviewer's `## Reading the change` THEN it names the run record's `choice:` lines, its unit's or every
+  unit's on a `branch` pass, as leads that claim nothing about what works, after the sentence that calls a brief's
+  summary no evidence (`test/corpus/agents/verdictReturns.test.ts`, "reads the run record's choice lines as leads,
+  never as evidence"; added 2026-10-21).
+
 **Expand/contract:** the grant is additive, and rollback is a re-sync at the prior version. The consumer is the policy
 document, whose schema id is unchanged (`src/tools/allowlist.ts`). A guard suite proves the grant stays read-only.
 
@@ -1234,8 +1252,11 @@ not in `/st-work`'s paragraph (`review/49`); the delta defined neither.
 
 ## Acceptance criteria
 
-One set per requirement, plus one for the invariants. There are one hundred and forty-five
-criteria: `grep -c "^- GIVEN" docs/specs/orchestrator-context.md` returns 145 (amended
+One set per requirement, plus one for the invariants. There are one hundred and forty-nine
+criteria: `grep -c "^- GIVEN" docs/specs/orchestrator-context.md` returns 149 (amended
+2026-10-21, when REQ-CTX-017's amendment of that day added one, beside its requirement; the sentence read 145 while
+the three criteria plan 021 added on 2026-10-16 and 2026-10-18, under REQ-CTX-012, REQ-CTX-013 and REQ-CTX-016, had
+made it 148, counted from the `- GIVEN` lines `git diff v1.15.0..936350cb` adds to this file; amended
 2026-10-15, when REQ-CTX-017's amendment of that day added one, beside its requirement; it read 144, amended
 2026-10-10, when REQ-CTX-019 and REQ-CTX-020 added seven; it read 137, amended 2026-09-30, where
 it read 111, while the command already returned 119 before that merge, ledger `build/5` of run

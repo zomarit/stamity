@@ -1,6 +1,6 @@
 ---
 id: enterprise-upstream-lane
-# A design document, authored outside the spec command, amended in run 2026-10-14_cli-native on 2026-10-14, and excluded from the site build.
+# A design document, authored outside the spec command, amended in run 2026-10-14_cli-native on 2026-10-14, one locator amended in run 2026-10-20_packs-rebuilt on 2026-10-21, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md).
 status: shipped-with-1.4.0
 obsolete_when: the lane's behaviour moves into the CLI reference and the enterprise-forks guide carries every requirement below, or a decision cuts the surface
@@ -75,6 +75,11 @@ source and its `.claude/` copy; the rule that generated paths regenerate rather 
 - **Packs** are the additive channel: `packs/<id>/pack.json` plus content directories,
   bundled into the package (`tsdown.config.mjs:257-260`), discovered through the curated
   list (`src/pack/curated.ts:150`), pinned by a generator (`scripts/generate-pack-manifests.mjs`).
+  (Amended 2026-10-21, run `2026-10-20_packs-rebuilt`, unit `u18-spec-docs`, read at `936350cb`:
+  the list is no longer typed. The catalog is derived from every `packs/<id>/` folder holding a
+  `pack.json` named `<id>` and a pin, so a fork adds a pack with the folder and the regenerated
+  pins and no code edit (`deriveCatalog` and `curatedPacks`, `src/pack/curated.ts`; REQ-PACK-001 in
+  `docs/specs/packs.md`). The `:150` citation reads at `a42b45d`.)
 - **Everything else is a direct edit**: `content/**` (declared framework territory in
   `docs/customization.md:19-22`), defaults such as `DEFAULT_MATURITY_TIER`
   (`src/types/core.ts:41`), the roster and grants under `src/roster/`, the MCP catalog

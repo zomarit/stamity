@@ -1,6 +1,6 @@
 ---
 id: everyday-flows
-# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-12_board-writes on 2026-10-12, one citation re-pointed in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, and excluded from the site build.
+# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-12_board-writes on 2026-10-12, one citation re-pointed in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.16.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the command reference carries it, or a decision row cuts the surface
@@ -142,6 +142,14 @@ into `src/hooks/personOnly.ts`, `src/hooks/scripts.ts` and the other modules the
 the file and the symbol, as the plan's own cells anchor them; a citation of a content file, a page, a test case or a
 small module names its lines. The text dated 2026-10-18 reached `main` through pull request #113 and shipped with
 1.16.0, which set `status: shipped-with-1.16.0`.
+
+REQ-FLOW-125 to REQ-FLOW-128, and the text dated 2026-10-21, come from the spec delta of
+`docs/plans/018-packs-rebuilt-01.md` (plan 018 file 1, Package 22, run `2026-10-20_packs-rebuilt`), merged once by its
+unit `u18-spec-docs`; the same delta writes the packs spec, `docs/specs/packs.md`, whose REQ-PACK ids the text here
+cites. Where a unit's or fixer's report declared a clause the delta is silent on, a line headed "As built" adds it.
+Every `path:line` in that text reads at the integration head `936350cb`, but for the units `u15-moved-customizations`,
+cited at its lane head `3bd36771`, and `u4-pack-fit`, at `164b31d1`. That text is not in a release yet; it ships with
+the next minor after 1.16.0.
 
 ## Intent
 
@@ -605,6 +613,16 @@ sign-off or `not signed` (`content/commands/st-work.md:318-319`).
   or GitHub's own text, and an `origin` naming no GitHub repository reads `draft PR not opened (origin names no GitHub
   repository gh reaches)`, naming the reason in the branch's place (`draftPr`, `src/cli/commands/run.ts:1269-1313`;
   `ensureDraftPr`, `src/runs/pullRequest.ts:241-245`, its causes `ghFailure` and `rejection`, `:196-219`).
+- **Amended 2026-10-21** (plan 018 file 1, run `2026-10-20_packs-rebuilt`, units `u8-work-lessons` and
+  `u9-blast-radius-body`; read at `936350cb`): the commit part's option 1. The draft pull request's "short fixed body
+  naming the run id and its record's path" reads that line, then the record's `## Blast radius` section where the record
+  carries one, before the marker (REQ-FLOW-127); with no such section the body is the fixed line as before. The options,
+  the default and the `Not done:` lines are unchanged (`content/commands/st-work.md:297-304`, `:431`).
+  - As built: the fixed line and the section together fit 60,000 characters, the section cut first and the marker
+    last; a section the outbound screen matches is left out and named in `notDone` and on stderr
+    (`withBlastRadius` and `blastRadiusSection`, `src/runs/morning.ts`; `screenedBlastRadius`, `src/cli/commands/run.ts`).
+  - Proof: `test/cli/commands/runCheckpoint.test.ts` (the attended one-liner, then the section, then the marker; the
+    exact-body pin of a record without the section unchanged), `test/runs/morning.test.ts`.
 - **Proof:** `test/corpus/commands/work.test.ts`; census `probe-none-work-run-qa-checkpoint` and
   `work-proof-block-fields`; must-holds `question-shape-and-default`, its charter-only twin and
   `unattended-run-applies-declared-default`; new case `work-persisted-plan-asks-once`; QA.
@@ -1420,6 +1438,22 @@ each client's command.
 - GIVEN a 1.14 block and `enabledPlugins` WHEN `check`, `sync` or `clean` runs THEN no row and no line names a leftover
   plugin, and `enabledPlugins` is kept (`test/cli/commands/check.test.ts`, "check — the dropped plugin block";
   `test/cli/commands/clean.test.ts`; added 2026-10-18).
+
+Amended 2026-10-21 (plan 018 file 1, run `2026-10-20_packs-rebuilt`, units `u3-retired-names`, read at `936350cb`, and
+`u15-moved-customizations`, read at its lane head `3bd36771`). The doctor rows of the 2026-10-18 amendment: `check`
+prints sixteen environment probes where it read fourteen, `pack-catalog` (REQ-PACK-003 in `docs/specs/packs.md`) and
+`moved-skills` (REQ-PACK-009) after `pack-reach` and before `model-pins`, every other row in place, and
+`docs/troubleshooting.md` lists both; the literal row-order pin in `test/cli/commands/check.test.ts` gains them with its
+justified-change note. `pack-reach`'s states are unchanged.
+
+- **As built:** `pack-catalog` never fails; `moved-skills` reads `fail` for an overlay of a moved skill, so the rows that
+  can fail number eight on the troubleshooting page where they read seven (`checkPackCatalog` and `checkMovedSkills`,
+  registered in `runDoctor`, `src/cli/commands/check.ts`).
+- GIVEN `check` on any setup THEN its doctor rows read `pack-reach`, `pack-catalog`, `moved-skills`, `model-pins` in that
+  order, the row count moving by two and no other row moving; GIVEN `docs/troubleshooting.md` THEN its doctor table's
+  row set equals the probe ids `check.ts` declares and its doctor sample equals a real run (`test/cli/commands/check.test.ts`,
+  the row-order array and the sample case; `test/docsPages.test.ts`, "troubleshooting documents the doctor rows check
+  prints, and only those"; added 2026-10-21).
 
 ### REQ-PLUGIN-017 — Explicit gates beat detection
 
@@ -3389,6 +3423,19 @@ unattended run proves the same way (`content/skills/st-qa/SKILL.md:41-46`).
 - **As built, where the delta differed:** the delta's first form had three states and no person-row exception; the
   exception, the `contradicted` state, the confinement and the redaction were added by the unit's reviews and amended
   into the delta before this merge (`review/63`).
+- **Amended 2026-10-21** (plan 018 file 1, run `2026-10-20_packs-rebuilt`, unit `u14-core-readers` and its two fix
+  rounds; read at `936350cb`). The `/st-work` summary bullet's "its step 3, the browser-evidence offer, is unchanged,
+  and the core step does not need that skill" reads: step 3 offers a browser run only where the browser-evidence skill
+  is installed, a `frontend` pack skill since this change (REQ-PACK-007 in `docs/specs/packs.md`), and its lines in
+  `/st-work` keep their number (`content/commands/st-work.md:285-286`; the summary's own citation above, `:278-279`,
+  still holds). The prover's routes, the cap of three and the guards are unchanged.
+  - As built: the not-applicable paragraph after step 3 now also covers a user-facing change with the skill not
+    installed, marking browser evidence "not installed", rewrapped in its four lines (`:288-291`; `review/19`); the qa
+    skill runs the browser capture before its table only where the skill is installed
+    (`content/skills/st-qa/SKILL.md:101-103`).
+  - Proof: `test/corpus/commands/work.test.ts` (the step-3 and not-applicable pins, the old wording asserted gone),
+    `test/corpus/skills/flow.test.ts`; the re-quoted cases `probe-none-work-run-qa-checkpoint` and
+    `benign-optional-step-skipped-proceeds`.
 - **Proof:** `test/corpus/agents/quality.test.ts` ("test-runner — row proving"), `test/corpus/skills/flow.test.ts`,
   `test/corpus/commands/work.test.ts`; new cases `qa-prove-before-asking`, its benign twin
   `benign-qa-second-account-stays-person-row`, and `qa-contradicted-row-fails-security-row-first`;
@@ -3918,6 +3965,21 @@ calls held; `Not done:`. A section with no rows reads `none` (`content/skills/st
 `MORNING_SECTIONS`, `parseMorning` and `prBodyFrom`, `src/runs/morning.ts`; `inferPrerequisites`,
 `src/runs/prerequisites.ts`).
 
+- **Amended 2026-10-21** (plan 018 file 1, run `2026-10-20_packs-rebuilt`, unit `u9-blast-radius-body` and its fix
+  round; read at `936350cb`). "The pull request body is regenerated from it" reads: the body is regenerated from
+  `morning.md`, and the record's `## Blast radius` section (REQ-FLOW-127), where one exists, is copied in before the
+  marker inside the body's 60,000-character fit; `MORNING_SECTIONS`, the parser's known sections and the skill's
+  section list are unchanged, so `morning.md` carries no such section. The sections, their order and the scan are
+  unchanged.
+  - As built: inside the fit the list's rows are placed first and the section takes the room left, so it is the first
+    part cut, and a cut body's pointer also names the run's `record.md` (`prBodyFrom`'s `opts.blastRadius`,
+    `src/runs/morning.ts`). The fixed bodies, where no morning list exists or the screen replaced it, carry the section
+    after their line too (`withBlastRadius`). On the morning walk the section is read from the walk's own record, else
+    from the record its `Resumes:` names; a walk section the screen refused does not fall back to the older one
+    (`draftPr`, `src/cli/commands/run.ts`).
+  - Proof: `test/runs/morning.test.ts` (`blastRadiusSection`, `prBodyFrom` with the section, `withBlastRadius`),
+    `test/cli/commands/runEnd.test.ts` (the walk's four cases, the exact-body pins of a record without the section
+    unchanged), `test/cli/commands/runCheckpoint.test.ts` (the unattended order).
 - **Proof:** `test/runs/morning.test.ts`, `test/runs/prerequisites.test.ts`, `test/corpus/skills/unattended.test.ts`
   ("st-unattended — the morning list and the walk").
 
@@ -4997,6 +5059,88 @@ command stay refused.
 - **Proof:** `test/hooks/personOnly.test.ts` (the `CLASSES` conformance rows, and "CLAUDE_DENY_ROWS and
   CLAUDE_ASK_ROWS"), `test/adapters/claude.test.ts` (`MID_PATTERN`, each row against a line it must match and an ask
   line it must not), `test/hooks/personOnlyGuard.test.ts`.
+
+### REQ-FLOW-125 — A unit's choices reach its reviewer as leads
+
+Added 2026-10-21 (plan 018 file 1, unit `u8-work-lessons` and its fix round).
+
+Given an implementer's return, Then its `DONE` and its digest name its choices, each approach tried, dropped or
+reverted, one line with a pointer (a commit, a `path:line`, a report line); `/st-work` appends one
+`- <UTC> choice: <unit> <tried | dropped | reverted> <approach> — <pointer>` line per choice to the run record as the
+digest returns, its own text extended in place with no line added; the unit's reviewer reads that unit's lines and the
+whole-branch pass every unit's, as leads to check against the diff, never as evidence (REQ-CTX-017 in
+`docs/specs/orchestrator-context.md`).
+
+- **As built:** the implementer's `DONE` bullet and its digest's `choices:` label, after `contract delta:`
+  (`content/agents/stamity-implementer.md:107`, `:129`); `/st-work`'s decisions trace promises the line "per choice a
+  unit's digest names", the fixer carrying no `choices:` label (`content/commands/st-work.md:323`; `build/12`, signed
+  off the lean reading); the reviewer's Reading the change reads "the run record's `choice:` lines, its unit's or, on a
+  `branch` pass, every unit's, read from `record.md` beside the report folder: each names an approach tried, dropped or
+  reverted and claims nothing about what works" (`content/agents/stamity-reviewer.md:211`). Every edit replaced its
+  line in place, so no case's `source:` range moved.
+- **Proof:** `test/corpus/agents/executionReturns.test.ts` ("names its choices in DONE and in the digest, each with its
+  pointer"), `test/corpus/agents/verdictReturns.test.ts` ("reads the run record's choice lines as leads, never as
+  evidence", "has /st-work carry each line to its reader"); the re-quoted cases `agent-implementer-return-contract`,
+  `work-proof-block-fields` and `reviewer-brief-is-diff-and-criteria`.
+
+### REQ-FLOW-126 — Every approval names the fact its safety rests on
+
+Added 2026-10-21 (plan 018 file 1, unit `u8-work-lessons`).
+
+Given a reviewer's `approve`, first pass or re-review, Then its report and digest carry `rests on: <the one fact> —
+cited | walked | run | reproduced`: cited, a `path:line` read; walked, a path traced through the code; run, a gate or
+test result that covers it; reproduced, a test that fails without the change and passes with it; the proof block lists
+each approval's line. The label sets and caps no confidence, is never a findings-block key, and its value holds neither
+`verdict` nor `confidence`, so the review gate still reads one verdict.
+
+- **As built:** the reviewer's evidence paragraph states both lines of an `approve` and that "Neither line's value holds
+  the word verdict or confidence, which the review gate reads as labels" (`content/agents/stamity-reviewer.md:119`);
+  the digest (`:190`) and a re-review's labelled lines (`:155`) carry both labels; `/st-work`'s proof-block review
+  bullet ends "each approval's `rests on:` line" (`content/commands/st-work.md:320`). The review gate needed no change.
+- **Proof:** `test/corpus/agents/verdictReturns.test.ts` ("reviewer — an approval names what it rests on and how far it
+  reaches"), `test/hooks/scripts.test.ts` ("reads one verdict beside an approval's rests on: and blast radius: lines
+  (REQ-FLOW-126)", a second verdict in the value reading as unrecorded); the re-quoted cases
+  `agent-reviewer-return-contract`, `reviewer-light-pass-catches-logic-defect`, `re-review-closures-fresh-reviewer`,
+  `reviewer-minor-worded-as-note-recorded` and `digest-security-finding-carried-in-full`.
+
+### REQ-FLOW-127 — The pull request body carries the change's blast radius
+
+Added 2026-10-21 (plan 018 file 1, units `u8-work-lessons` and `u9-blast-radius-body`, with their fix rounds).
+
+Given an approving review, Then it writes a `blast radius:` line naming what the change can reach beyond its diff and
+the cheapest check that would catch its failure, and `/st-work` rewrites the record's `## Blast radius` from it, so the
+section holds the last approval's; When `stamity run checkpoint --pr` or `run end` writes the draft pull request's body,
+attended or unattended, Then that section is copied in before the run's marker, screened as the body is and inside its
+cap, the marker still last; a record with no such section gives today's body, and `morning.md` gains no section.
+
+- **As built:** the reviewer rates `blast radius: <rating> — <reason>`, `contained`, `moderate` or `wide`
+  (`content/agents/stamity-reviewer.md:119`). `/st-work` keeps the section "after the Frame section, before the next
+  heading", rewritten in place from each approval's `blast radius:` and `rests on:` lines, since the record is an append
+  log the next heading bounds (`content/commands/st-work.md:431`; `review/16`). The section copied is the text from the
+  first line that is exactly `## Blast radius` up to the next line starting `## `, trailing blank lines trimmed, each
+  line put through the body's own clean-up so the text screened is the text posted; a `### Blast radius` heading is not
+  read (`blastRadiusSection`, `src/runs/morning.ts`). It is screened alone with `screenOutbound(…, "pr-body")`; a hit
+  leaves it out and names it in `notDone` and on stderr, by line and rule only, and a record over 4 MiB is not read for
+  it (`screenedBlastRadius` and `RECORD_READ_MAX_BYTES`, `src/cli/commands/run.ts`). The attended one-liner takes the
+  section through `withBlastRadius`, cut to 60,000 characters with an open fence closed and the marker last.
+- **Proof:** `test/runs/morning.test.ts`, `test/cli/commands/runCheckpoint.test.ts`, `test/cli/commands/runEnd.test.ts`
+  (a 70,000-character section cut with the marker last, a token-bearing section left out with no fragment printed),
+  `test/corpus/agents/verdictReturns.test.ts` (the `## Blast radius` maintenance sentence).
+
+### REQ-FLOW-128 — A deploy and a message sent outside the repository need the person's yes
+
+Added 2026-10-21 (plan 018 file 1, unit `u8-work-lessons` and its fix round).
+
+Given the question protocol's trigger 3, "Irreversible action", Then it lists a deploy and a message sent outside the
+repository, the run's own pull request aside, beside deleting data, dropping a column, renaming a public identifier and
+rewriting shared history, rewrapped in place so no line of the rule moves and its pinned ranges and hash hold;
+unattended, the declared default is the reversible one, so nothing deploys or sends. The guard's tables are unchanged.
+
+- **As built:** trigger 3 reads "deleting data, dropping a column, renaming a public identifier, a deploy, a message
+  sent outside the repository (the run's own pull request aside), rewriting shared history", in its two lines
+  (`content/rules/stamity-question-protocol.md:26-27`).
+- **Proof:** `test/corpus/rules/protocol.test.ts` ("names a deploy and an outside message, the run's own pull request
+  aside, in trigger 3 (REQ-FLOW-128)", and the hashed ranges unchanged), `test/corpus/skills/unattended.test.ts`.
 
 ## Acceptance criteria
 
@@ -6216,6 +6360,34 @@ above.
   `gh pr merge 1 && git push origin :feat` THEN `ask: false`; GIVEN each mid-pattern deny row THEN it matches its
   refused line and no ask line. *(test: `test/hooks/personOnly.test.ts`, `test/adapters/claude.test.ts`)*
 
+**REQ-FLOW-125** (added 2026-10-21)
+
+- GIVEN the implementer's body THEN its `DONE` names its choices with a pointer each and its digest carries `choices:`;
+  GIVEN `/st-work` THEN its decisions trace appends one `choice:` record line per choice a unit's digest names; GIVEN
+  the reviewer's body THEN it reads those lines as leads, never as evidence. *(corpus:
+  `test/corpus/agents/executionReturns.test.ts`, `test/corpus/agents/verdictReturns.test.ts`)*
+
+**REQ-FLOW-126** (added 2026-10-21)
+
+- GIVEN the reviewer's body THEN an `approve` carries `rests on:` with one of `cited`, `walked`, `run` or `reproduced`,
+  in its report, its digest and a re-review's labelled lines; GIVEN a digest carrying `rests on: … — run` beside one
+  `verdict:` line THEN the review gate records that one verdict, and GIVEN a second verdict inside the value THEN it
+  reads as unrecorded. *(test: `test/corpus/agents/verdictReturns.test.ts`, `test/hooks/scripts.test.ts`)*
+
+**REQ-FLOW-127** (added 2026-10-21)
+
+- GIVEN an attended checkpoint whose record holds `## Blast radius` THEN the body is the one-liner, the section, then
+  the marker; unattended THEN the morning list, the section, then the marker; GIVEN a record without the section THEN
+  the bodies are byte-identical to before; GIVEN a 70,000-character section THEN the body fits and the marker is last;
+  GIVEN a section the screen refuses THEN it is left out and named on stderr. *(test:
+  `test/cli/commands/runCheckpoint.test.ts`, `test/cli/commands/runEnd.test.ts`, `test/runs/morning.test.ts`)*
+
+**REQ-FLOW-128** (added 2026-10-21)
+
+- GIVEN the question protocol THEN trigger 3 names "a deploy," and "a message sent outside the repository (the run's own
+  pull request aside), rewriting shared history.", and its hashed ranges and their hash are unchanged. *(corpus:
+  `test/corpus/rules/protocol.test.ts`)*
+
 ## References
 
 - `docs/plans/013-optimization-sweep-01.md` — the measures and the method that found these items.
@@ -6304,6 +6476,16 @@ above.
 - `test` (added 2026-10-18): `test/hooks/cursorContinue.test.ts`, `test/hooks/contextOnce.test.ts`,
   `test/hooks/cloudReadiness.test.ts`, `test/session/detect.test.ts`, `test/qa/hookRunsCli.test.ts`, and the suites
   each requirement names; the eval case `evals/cases-v6/golden/cursor-cloud-question-takes-default.md`.
+- `docs/plans/018-packs-rebuilt-01.md`, with `.stamity/runs/2026-10-20_packs-rebuilt/` (its record and its units' and
+  fixers' reports) — the spec delta the text dated 2026-10-21 merges (REQ-FLOW-125 to REQ-FLOW-128; REQ-FLOW-019,
+  REQ-FLOW-081, REQ-FLOW-094 and REQ-PLUGIN-016 amended), added 2026-10-21; its REQ-PACK ids in
+  `docs/specs/packs.md`.
+- `source` (added 2026-10-21): `content/agents/stamity-implementer.md`, `content/agents/stamity-reviewer.md`,
+  `content/rules/stamity-question-protocol.md`, `src/runs/morning.ts` (`blastRadiusSection`, `withBlastRadius`),
+  `src/cli/commands/run.ts` (`draftPr`, `screenedBlastRadius`), `src/cli/commands/check.ts` (`checkPackCatalog`, and
+  `checkMovedSkills` at `3bd36771`).
+- `test` (added 2026-10-21): `test/corpus/agents/verdictReturns.test.ts`, `test/corpus/agents/executionReturns.test.ts`,
+  `test/hooks/scripts.test.ts`, `test/corpus/rules/protocol.test.ts`, and the suites each requirement names.
 
 ## Risks
 

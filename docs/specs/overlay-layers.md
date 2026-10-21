@@ -1,6 +1,6 @@
 ---
 id: overlay-layers
-# A design document, authored outside the spec command, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, and excluded from the site build.
+# A design document, authored outside the spec command, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, and excluded from the site build.
 status: shipped-with-1.1.0
 obsolete_when: the published customization page stops carrying the overlay behaviour this spec designed, or a decision cuts the surface
 ---
@@ -19,6 +19,12 @@ Paragraphs headed "Amended 2026-10-06", the table row and the criteria marked
 "added 2026-10-06" come from the spec delta the unit `u5a-overlay-refusal`
 declared in run `2026-10-03_pack-engine-defects`, merged at its close. They cite
 the tree at `eb4f0727` and shipped with 1.12.0.
+
+The paragraph headed "Amended 2026-10-21", its table row and the criterion marked
+"added 2026-10-21" come from the spec delta of `docs/plans/018-packs-rebuilt-01.md`
+(run `2026-10-20_packs-rebuilt`), merged by its unit `u18-spec-docs`. They cite
+the unit `u15-moved-customizations` at its lane head `3bd36771` and are not in a
+release yet.
 
 ## Intent
 
@@ -498,6 +504,7 @@ reports `drift: not evaluated` — decision-13 parity — for each of:
 | the overlay is an orphan | absolute path, the id looked for |
 | the merged artifact fails any `buildItem` check | composite label, the field |
 | the overlay's base is a pack skill (user stage; added 2026-10-06) | every half's absolute path in POSIX form, the pack, the skill |
+| the overlay's base is a skill that moved from the core to a pack (user stage; added 2026-10-21) | every half's absolute path in POSIX form, the skill, the pack, `stamity add <pack>` |
 
 The ceiling row is the one addition this table took after the design was
 settled, and it earned its place at the walk rather than only at `validate`:
@@ -519,6 +526,23 @@ stage the same pair is a skip, not a refusal, for the package-global reason
 REQ-FORK-004 gives; `validate` prints its reason as a warning at exit 0
 (`classifyForkOverlays`, `src/cli/commands/validate.ts:700-753`, the warning mapping at
 `:749-751`).
+
+**Amended 2026-10-21 (run `2026-10-20_packs-rebuilt`, unit
+`u15-moved-customizations` and its fix round; cited at `3bd36771`).** The table
+gains the moved-skill row: the overlay's base is a skill that moved from the core
+to a pack (`design-system-detect` and `browser-evidence`, to `frontend`; REQ-PACK-009
+in `docs/specs/packs.md`), named by the overlay's absolute path, the skill, the pack
+and `stamity add <pack>`. For such an id it replaces the orphan row's message with
+the pack absent and the pack-skill row's with it installed; the refusal stays
+`VALIDATION_ERROR`, `sync` stops, `check` reads `drift: not evaluated` and
+`validate` exits 1. As built: one text serves both cases, `skill "<id>" moved from
+the core to the <pack> pack in <since>, and overlays on pack skills are not applied.
+Fold your change into a full override under another id, or remove <path>; to keep
+the shipped skill, stamity add <pack>.`, each half named by its POSIX path inside
+"remove <path>" (`refuseMovedSkillOverlay`, `src/content/catalog.ts`); a skill of a
+moved id supplied by another pack keeps the pack-skill row's text, and a never-core
+id the orphan row's. At the fork stage the pair stays a skip, its reason naming the
+move and the pack (`forkMovedSkillSkipReason`, the same file).
 
 **Rationale.** Parity with the settled posture for a malformed override, and
 with the reason it was settled: a walk that carries on past a defective artifact
@@ -728,7 +752,8 @@ One set per requirement. Thirty-four criteria; each is machine-checkable unless
 tagged otherwise. The count moved by two when the ceiling joined the
 REQ-OVERLAY-009 table. Amended 2026-10-06: the four criteria tagged "added
 2026-10-06" make it thirty-eight, recounted as the `- GIVEN` lines under this
-heading.
+heading. Amended 2026-10-21: the criterion tagged "added 2026-10-21" makes it
+thirty-nine.
 
 **REQ-OVERLAY-001**
 
@@ -837,6 +862,12 @@ heading.
   REQ-OVERLAY-012, which is where the ceiling is stated as a rule; these two
   criteria sit here because the ceiling is a row in the REQ-OVERLAY-009 refusal
   table. One behaviour, two requirements that need it — not a drift.
+- GIVEN `skills/design-system-detect/SKILL.customize.md` in the override tree, with
+  the `frontend` pack absent and with it installed, WHEN the index is built THEN the
+  walk throws `VALIDATION_ERROR` with the one moved-skill text naming the overlay's
+  POSIX path and `stamity add frontend`, and WHEN `validate --json` runs THEN it
+  exits 1 with that text against the overlay file (added 2026-10-21;
+  `test/content/catalog.test.ts` at `3bd36771`).
 
 **REQ-OVERLAY-010**
 

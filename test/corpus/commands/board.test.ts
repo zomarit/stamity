@@ -333,8 +333,8 @@ describe("st-board — write-back contract", () => {
     // item. Creating the label is the write never made; the item still files.
     expect(never).toMatch(/creating a label \(the item still files, without it\)/);
     expect(never).toMatch(/a `status:\*` label where the board has a status field/);
-    // `test/packs/product-audit.test.ts` reads this phrase with nothing between
-    // the closing backtick and "rather".
+    // Nothing stands between the closing backtick and "rather": the phrase is
+    // REQ-BOARD-004's proof, held here alone since 2026-10-21 (plan 018 file 1).
     expect(never).toContain("`BLOCKED_DEPENDENCY` rather than improvising one");
     expect(never).toMatch(/for that item alone/);
     // The refusal is reported, not swallowed: the other writes go on, and the run's

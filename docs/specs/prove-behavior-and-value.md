@@ -1,6 +1,6 @@
 ---
 id: prove-behavior-and-value
-# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-11_release-1-14-0 on 2026-10-11 and 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, and excluded from the site build.
+# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-11_release-1-14-0 on 2026-10-11 and 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023).
 status: shipped-with-1.16.0
 obsolete_when: the measurement page, the security mapping and the QA evidence file are all generated from live data by the engine itself, or a decision row cuts the surface
@@ -98,6 +98,12 @@ The amendment dated 2026-10-20 to REQ-PROVE-020 was written at the 1.16.0 cut in
 `e2832cf0ba27acea738a8ea4d637613c5192cd1ddc0bd1ee49b957f19ef495c6`), records on the `records` branch, and ships
 with 1.16.0.
 
+The text dated 2026-10-21 under REQ-PROVE-002, REQ-PROVE-004 and REQ-PROVE-033 comes from the spec delta of
+`docs/plans/018-packs-rebuilt-01.md` (plan 018 file 1, run `2026-10-20_packs-rebuilt`), merged by its unit
+`u18-spec-docs`, with the clauses its units' reports declared under a line headed "As built". It reads at the
+integration head `936350cb`, but for the unit `u4-pack-fit`, cited at its lane head `164b31d1`; its REQ-PACK ids are
+in `docs/specs/packs.md`. It is not in a release yet.
+
 ## Intent
 
 Stop shipping claims this repository cannot show. Three were open at 1.7.0: an always-on context
@@ -142,6 +148,18 @@ selected clients. Cursor keeps `.mdc` (`…cursor.ts:356`); the `st-` surface ga
   claude's native copy (`…skillsProjection.ts:115-117`) holds only what claude itself demotes (route clause
   dropped 1.15.0: the clause on how the APM distribution read that predicate, citing its generator and its suite,
   both deleted with the APM route).
+
+Amended 2026-10-21 (plan 018 file 1, run `2026-10-20_packs-rebuilt`, unit `u6-frontmatter-passthrough`; read at
+`936350cb`). A rule-skill's head carries `user-invocable: false` beside `name`, `description` and `metadata.stamity`, set
+from the class on every client the skill reaches (REQ-PACK-006 in `docs/specs/packs.md`), so the clients that document
+the key (Claude Code, VS Code, Copilot CLI) keep it out of their `/` menu while the model still loads it; no rule file
+gains a line, and the head's other keys and the tree's union are unchanged. As built: `projectRuleAsSkill` writes the
+key after `description` (`src/emit/skillsProjection.ts`); Cursor's `/` menu and Codex's `$` list do not honour it, so
+they keep listing rule-skills.
+
+- GIVEN a rule-skill's emitted head THEN its keys, sorted, are exactly `description`, `metadata`, `name` and
+  `user-invocable`, the last `false`, and no `content/rules/` file changed (`test/emit/skillsProjection.test.ts`, the
+  rule-head case; added 2026-10-21).
 
 ### REQ-PROVE-003 — Codex folds only floors
 
@@ -297,6 +315,31 @@ nine touchpoints hidden, nothing shortened (`.stamity/runs/2026-10-03_pack-engin
 - GIVEN companions that hide, carry display fields only, do not parse, or set `true` WHEN `shownSkillRows` runs THEN
   only the hiding folder's rows drop (`codex.test.ts`, "drops a folder whose agents/openai.yaml hides it, and keeps
   display-only and malformed companions").
+
+Amended 2026-10-21 (plan 018 file 1, run `2026-10-20_packs-rebuilt`, units `u13-frontend-move`, read at `936350cb`,
+and `u4-pack-fit` with its fix round, read at its lane head `164b31d1`). The figure: with the two interface skills in
+the `frontend` pack, `codexSkillsListChars` reads 4,759 characters over 15 shown skills, the 6 content skills and the
+9 projected rules, where it read 5,570 over 17, and the full-selection pin moves with it. The count is one function,
+`measureCodexSkillsList`, which `sync`'s refusal and `add`'s fit check (REQ-PACK-004 in `docs/specs/packs.md`) share;
+the cap and the shown-rows rule are unchanged.
+
+- **As built, where the delta differed:** the delta kept the refusal's text unchanged; the fix round removed its
+  "narrow the content selection" step, since `sync` plans the full corpus every run and narrowing changes nothing
+  (`build/26`). With no pack share the remedy reads ``Set `ruleDelivery: "always-on"` to deliver rules as instruction
+  text instead of as skills.``; with one, ``Remove a pack with `<pinned> clean --pack <id>`, or set
+  `ruleDelivery: "always-on"` …``. The pinned total-and-cap substring and the share sentences are unchanged.
+- **As built:** the comment beside the constant says the list sits at about 60% of the ceiling
+  (`src/emit/capabilityMatrix.ts`, `LIVE_ALWAYS_ON`). `measureCodexSkillsList(shown, packOf)` returns the total, the
+  cap, the core's share and each pack's, counting `SKILL.md` rows only so the shares sum to the total;
+  `skillsListRefusal` renders from it. The residue planner and `add`'s fit check both reach it through one private
+  body, the shown rows (touchpoints included) and the pack attribution taken from the adapter's own selected items, and
+  `measureCodexSkillsListFor(core, ctx)` exports that body for the fit check (`src/adapters/codex.ts` at `164b31d1`).
+- GIVEN the full selection's real emission THEN Codex shows 15 rows totalling 4,759 characters
+  (`test/adapters/codex.test.ts`; added 2026-10-21); GIVEN the two-pack plan of the refusal case THEN
+  `measureCodexSkillsList`'s shares equal the shares the refusal prints, the refusal names `clean --pack <id>` then
+  `ruleDelivery`, and neither it nor the core-only refusal names narrowing the content selection; GIVEN a pack
+  installed past the cap THEN `add`'s measure and `sync`'s refusal read the same total and shares
+  (`test/adapters/codex.test.ts` and `test/cli/engine/packFit.test.ts` at `164b31d1`; added 2026-10-21).
 
 ### REQ-PROVE-005 — Always-on composite re-measured
 
@@ -1723,6 +1766,21 @@ record hashes as an input…", "names every file a case's `source:` names…" an
 the run of record records" — moved to `test/records/docsPages.test.ts`, which `npm run test:records` runs, since that
 file is a record (REQ-PROVE-025); the trigger, runner-files, skill, roster, carried-form and per-release cases stay in
 `test/docsPages.test.ts`. The test evidence above read `test/docsPages.test.ts` alone.
+
+Amended 2026-10-21 (plan 018 file 1, run `2026-10-20_packs-rebuilt`, units `u10-eval-surface` and `u13-frontend-move`;
+read at `936350cb`). The first criterion's note, "no case's `source:` names a file outside `content/` since", reads: a
+case may source a pack file (REQ-PACK-013 in `docs/specs/packs.md`), and the rule holds there unchanged, so a release
+that edits a file under `packs/` that a case's `source:` names runs the full set. The rule and the other criteria are
+unchanged. As built: the two moved skills' select probes source `packs/frontend/skills/<dir>/SKILL.md:6-6`; the
+coverage gate's block on sources outside the surface now measures against both roots and is still pinned empty
+(`test/evals/coverage.test.ts`, "eval coverage — a pack is part of the surface" beside it); SET-v7's rule span is byte-identical, a sentence naming
+`packs/**` following it in its Incremental section; the release checklist's eval line names `packs/**` beside
+`content/**` (`.github/release-controls-checklist.md:180-181`).
+
+- GIVEN a case sourced at a file under `packs/` THEN the gate and the runner admit it, and GIVEN the checklist's eval
+  line and SET-v7's incremental section THEN each still names every case's `source:` file, `packs/**` among them
+  (`test/evals/coverage.test.ts`, "a pack is part of the surface"; `test/records/docsPages.test.ts`, "names every file
+  a case's `source:` names"; added 2026-10-21).
 
 ### REQ-PROVE-034 — A patch takes the patch lane
 

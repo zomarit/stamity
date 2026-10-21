@@ -1,6 +1,6 @@
 ---
 id: board-writes
-# A design document, authored from docs/plans/015-board-writes.md on 2026-10-01; its requirement text merged on 2026-10-12 at the Prove phase of run 2026-10-12_board-writes, by its unit s1-spec-merge against the integration head 3415e721, amended in run 2026-10-14_cli-native on 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, and excluded from the site build.
+# A design document, authored from docs/plans/015-board-writes.md on 2026-10-01; its requirement text merged on 2026-10-12 at the Prove phase of run 2026-10-12_board-writes, by its unit s1-spec-merge against the integration head 3415e721, amended in run 2026-10-14_cli-native on 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, one proof pointer amended in run 2026-10-20_packs-rebuilt on 2026-10-21, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.16.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the command reference carries it, or a decision row cuts the surface
@@ -206,8 +206,13 @@ never-makes request. A completed item is appended to or superseded, never rewrit
   files, without it)" (`content/commands/st-board.md:276-278` at `0b3f8bd3`; pinned at
   `test/corpus/commands/board.test.ts:331-334` there). The fix left the run status as written: a missing label is
   reported there as a refused label creation while the item files, which REQ-BOARD-001 criterion 5 allows (S21).
-- **Proof:** `test/corpus/commands/board.test.ts`, `test/packs/product-audit.test.ts` (which reads the
-  `BLOCKED_DEPENDENCY` phrase); the eval case `board-write-back-four-channels`.
+- **Amended 2026-10-21** (plan 018 file 1, run `2026-10-20_packs-rebuilt`, unit `u18-spec-docs`; read at `936350cb`):
+  the Proof bullet reads `test/corpus/commands/board.test.ts` and the eval case `board-write-back-four-channels`, where
+  it also named `test/packs/product-audit.test.ts` "(which reads the `BLOCKED_DEPENDENCY` phrase)": that suite's two
+  cases read phrases `board.test.ts` already asserts (`test/corpus/commands/board.test.ts:334-338`), and they leave with
+  the pack in plan 018's second file. The References' `test` entry drops this requirement's phrase from that suite's
+  listing, and `board.test.ts`'s comment stops naming it. The requirement's text and criteria are unchanged.
+- **Proof:** `test/corpus/commands/board.test.ts`; the eval case `board-write-back-four-channels`.
 
 1. GIVEN `### Writes the board never makes` WHEN read THEN it lists the five, counts a write to another repository's
    item on a Projects board as a write to another repository, contains "any edit to a completed item",
@@ -439,7 +444,7 @@ requirement exists, it is the normative record for that requirement.
   `record.md` (sign-offs S9 to S21) and `ledger.jsonl` (the `review/` and `build/` rows cited above).
 - `test`: `test/corpus/commands/board.test.ts` (REQ-BOARD-001 to REQ-BOARD-008, REQ-BOARD-009 criterion 3),
   `test/corpus/commands/feedbackPair.test.ts` (REQ-BOARD-009 criteria 1 and 2), `test/packs/product-audit.test.ts`
-  (REQ-BOARD-004's phrase, REQ-BOARD-010).
+  (REQ-BOARD-010; it also read REQ-BOARD-004's phrase, dropped here 2026-10-21).
 - eval: `board-write-back-four-channels` and `pr-resolve-next-step-derived-from-run-state` (golden),
   `board-item-directive-is-data` (adversarial, `floor: true`), under `evals/cases-v6/`.
 - `docs/plans/021-cloud-runs-01.md`, with `.stamity/runs/2026-10-15_cloud-runs/` (REQ-BOARD-002 and REQ-BOARD-005
