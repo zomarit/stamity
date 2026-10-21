@@ -1,0 +1,6 @@
+interface:
+  display_name: "Incident"
+  short_description: "Use the Stamity incident workflow"
+  default_prompt: "Use $st-incident for this repository."
+policy:
+  allow_implicit_invocation: false
