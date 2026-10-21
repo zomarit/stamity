@@ -37,6 +37,7 @@ exports[`emission goldens — catalog > indexes the corpus to sorted, collision-
   "skill:handoff -> skills/st-handoff/SKILL.md",
   "skill:learn -> skills/st-learn/SKILL.md",
   "skill:onboard -> skills/st-onboard/SKILL.md",
+  "skill:plain -> skills/st-plain/SKILL.md",
   "skill:qa -> skills/st-qa/SKILL.md",
   "skill:unattended -> skills/st-unattended/SKILL.md",
   "skill:verify -> skills/st-verify/SKILL.md",

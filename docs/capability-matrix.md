@@ -106,7 +106,7 @@ skills directory carries only the rules it demoted itself.
 
 That trade is paid in a second budget, so it is measured too. The client holds every skill's
 name and description for the whole session in order to decide when to open one, and caps that
-list at 8000 characters when the context window is unknown. The full selection measures 4759 —
+list at 8000 characters when the context window is unknown. The full selection measures 5015 —
 the shipped skills and the projected rules, the rows the client shows its model; a touchpoint
 is left out of that list by its `agents/openai.yaml` policy and counts for nothing — and
 emission refuses outright rather than truncating past the cap, the same way it refuses an

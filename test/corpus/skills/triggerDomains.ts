@@ -1,5 +1,5 @@
 /**
- * The trigger domain each of the SEVEN shipped core skills owns exclusively — one
+ * The trigger domain each of the EIGHT shipped core skills owns exclusively — one
  * phrase per skill that appears in its own description and in no other's.
  *
  * The four-skill cases in `flow.test.ts` hold the flow lane apart; this table is the wider
@@ -23,4 +23,8 @@ export const TRIGGER_DOMAINS: readonly { id: string; relPath: string; phrase: Re
   // Added 2026-10-15 (u9-unattended-skill): the ninth skill, called by name from a run whose
   // record reads `Mode: unattended`; no other description may name an unattended run.
   { id: "unattended", relPath: "skills/st-unattended/SKILL.md", phrase: /unattended/i },
+  // Added in plan 018 file 2 (u9-st-plain, REQ-FLOW-129): the eighth core skill, model-invocable,
+  // so its phrase sits in Codex's shown list beside every other; no other description may ask for
+  // plain words.
+  { id: "plain", relPath: "skills/st-plain/SKILL.md", phrase: /plain words/i },
 ];

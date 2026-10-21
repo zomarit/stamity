@@ -2486,10 +2486,14 @@ describe("the shipped Codex emission under ruleDelivery: on-demand", () => {
     // browser-evidence left the core for the frontend pack (REQ-PACK-007), so the core
     // ships 6 shown skills beside the 9 rule-skills, 15 rows where the 2026-10-03
     // measurement read 17.
+    // TEST CHANGE, justified (u9-st-plain, plan 018 file 2): the core gained `plain`, a
+    // model-invocable skill with no `policy` block (REQ-FLOW-129, REQ-PROVE-004), so Codex
+    // shows 7 shipped skills beside the 9 rule-skills, 16 rows; `st-plain` is asserted among them.
     const shownDirs = shown
       .filter((row) => row.path.endsWith("/SKILL.md"))
       .map((row) => row.path.split("/").at(-2) ?? "");
-    expect(shownDirs).toHaveLength(15);
+    expect(shownDirs).toHaveLength(16);
+    expect(shownDirs).toContain("st-plain");
     for (const dir of touchpointDirs) expect(shownDirs, dir).not.toContain(dir);
     expect(total).toBeLessThan(skillsListCharacters(listed));
 

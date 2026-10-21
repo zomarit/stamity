@@ -334,15 +334,15 @@ const LIVE_ALWAYS_ON: AlwaysOnDisclosure = {
   ruleDelivery: RULE_DELIVERY_DEFAULT,
   codexFoldedRuleIds: ["injection-screening", "secrets", "security-patterns"],
   codexRuleSkillCount: 9,
-  // 4_759 characters over the 15 skills of the full selection that Codex shows
-  // its model — the 6 shipped skills and the 9 projected rules; the touchpoints
+  // 5_015 characters over the 16 skills of the full selection that Codex shows
+  // its model — the 7 shipped skills and the 9 projected rules; the touchpoints
   // in the same tree are hidden by their `agents/openai.yaml` policy and cost the
   // list nothing (codex-cli 0.160.0's listing, the measurement the adapter's
   // budget comment dates) — measured against the real emission by
   // `test/adapters/codex.test.ts`, which fails when this number stops matching it.
-  // About 60% of the ceiling, and the remainder is the headroom a repository
+  // About 63% of the ceiling, and the remainder is the headroom a repository
   // adding its own skills, or a pack adding its own, spends into.
-  codexSkillsListChars: 4_759,
+  codexSkillsListChars: 5_015,
   codexSkillsListCap: CODEX_SKILLS_LIST_BUDGET_CHARS,
   // Measured on the full four-client selection. `cursor` demotes nothing of its
   // own, so all nine rule-skills in the shared tree duplicate an `.mdc` rule it

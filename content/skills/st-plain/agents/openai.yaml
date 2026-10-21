@@ -1,0 +1,4 @@
+interface:
+  display_name: "Plain"
+  short_description: "Use the Stamity plain workflow"
+  default_prompt: "Use $st-plain for this repository."

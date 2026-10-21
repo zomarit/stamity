@@ -30,3 +30,9 @@ such a row leaves in the change that lands its cases.
 Added 2026-10-21 by plan 018 file 2, unit `u3-frontend-set`, with the command; its cases land in
 a later wave of the same plan. Trigger: unit `u15-frontend-plain-cases` adds the cases sourcing
 it and removes this row.
+
+### `content/skills/st-plain/SKILL.md`
+
+Added 2026-10-21 by plan 018 file 2, unit `u9-st-plain`, with the skill; its cases land in a
+later wave of the same plan. Trigger: unit `u15-frontend-plain-cases` adds the cases sourcing it
+and removes this row.
