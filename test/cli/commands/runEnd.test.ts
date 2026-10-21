@@ -887,6 +887,25 @@ describe("stamity run end", () => {
         expect(doc["notDone"]).toEqual([`pull request body not refreshed: the morning list of ${RUN} is missing`]);
         expect(sent()).toBe(`Run \`${WALK}\`, attended. Its record: \`${WALK_RECORD}\`.\n\n${section("- contained — the overnight approval").join("\n")}\n\n<!-- stamity:run ${WALK} -->`);
       });
+
+      it("appends the section to the fixed body that replaces a list the outbound screen matches (review/8)", async () => {
+        const { repo } = await walk(RUN);
+        // Not staged by the walk, so the push scan leaves it out; the outbound screen still reads it.
+        await put(repo, `${RUN_DIR}/morning.md`, morningList(`the key is ${TOKEN}`));
+        await withSection(repo, `${RUN_DIR}/record.md`, "- contained — the overnight approval");
+
+        const { code, doc, stdout, stderr } = await run(repo, WALK_END("Morning walk"));
+
+        expect(code).toBe(0);
+        expect(doc["notDone"]).toEqual(["pull request body replaced: the outbound screen matched line 9 (github-token)"]);
+        expect(sent()).toBe(
+          `Run \`${RUN}\`: the body made from \`${RUN_DIR}/morning.md\` was not posted, because the outbound screen matched its line 9 (github-token). Read the morning list on the branch.\n\n${section("- contained — the overnight approval").join("\n")}\n\n${MARKER}`,
+        );
+        const fragment = TOKEN.slice(4, 16);
+        expect(stdout).not.toContain(fragment);
+        expect(stderr).not.toContain(fragment);
+        expect(JSON.stringify(rest.calls)).not.toContain(fragment);
+      });
     });
 
     it("reads the prerequisites since the walk's own Base: where the resumed record names none, saying so", async () => {
