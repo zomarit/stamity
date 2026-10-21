@@ -28,10 +28,11 @@ import { makeTempDir, type TempDirHandle } from "../support/tempDir.ts";
  * Failing tests for the 1.11.0 pack-engine defects (run 2026-10-03_debug-pack-defects,
  * gate 2). Every case drives the real CLI in-process over real temp repositories,
  * against the bundled corpus (no content-root pin: two of the clashes are with core
- * ids, and the regression itself is the real `ops` pack), and states the defect it
+ * ids, and the regression adds a real catalog pack), and states the defect it
  * reproduces in its assertion messages, so a red run names the defect.
  *
- * - A: the reported regression — `add ops` then `sync` fails on Cursor and Codex.
+ * - A: the reported regression — `add ops` then `sync` failed on Cursor and Codex;
+ *   `ops` is retired, so the case adds the catalog pack the package keeps.
  * - B: defect 1 — a command `st-<x>` and a skill `st-<x>` land in one
  *   `.agents/skills/st-<x>/` folder (Cursor, Codex) or silently shadow (Claude); the
  *   clash must be refused at `add` and at `sync`, naming both owners.
@@ -262,19 +263,25 @@ const SETS = CLIENT_SETS.map((tools) => [tools.join(","), tools] as const);
 
 // ── A: the reported regression ─────────────────────────────────────────────
 
-describe("A — the reported regression: add ops, then sync, on Cursor and Codex", () => {
+// TEST CHANGE, justified (2026-10-21_packs-rebuilt-02/u1-refixture-pack-tests): the group added
+// the bundled `ops` pack, which the package retires (REQ-PACK-023). It adds `frontend`, the
+// first-party pack the package keeps; the clash and the Codex cap the regression came from are
+// held by groups B and C on made-up packs.
+const CATALOG_PACK = "frontend";
+
+describe("A — the reported regression: add a catalog pack, then sync, on Cursor and Codex", () => {
   it.each([["cursor"], ["codex"]] as const)(
-    "tools=%s: sync and check both exit 0 after `add ops -y`",
+    `tools=%s: sync and check both exit 0 after \`add ${CATALOG_PACK} -y\``,
     async (tool) => {
       const repo = await freshRepo([tool]);
 
-      const added = await cli(repo, ["add", "ops", "-y"]);
-      expect(added.code, `fixture: add ops must install on ${tool} — ${said(added)}`).toBe(0);
+      const added = await cli(repo, ["add", CATALOG_PACK, "-y"]);
+      expect(added.code, `fixture: add ${CATALOG_PACK} must install on ${tool} — ${said(added)}`).toBe(0);
 
       const synced = await cli(repo, ["sync"]);
       expect(
         synced.code,
-        `regression (defects 1 and 2): sync after \`add ops -y\` on ${tool} must exit 0 — ${said(synced)}`,
+        `regression (defects 1 and 2): sync after \`add ${CATALOG_PACK} -y\` on ${tool} must exit 0 — ${said(synced)}`,
       ).toBe(0);
 
       const checked = await cli(repo, ["check"]);

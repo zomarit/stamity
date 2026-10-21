@@ -45,7 +45,9 @@ function expectEngineError(run: () => unknown, code: EngineError["code"]): Engin
 
 describe("readPermissions", () => {
   it("reads an absent block as undefined — the pack declares nothing", () => {
-    expect(readPermissions({ name: "ops", version: "1.0.0" })).toBeUndefined();
+    // TEST CHANGE, justified (2026-10-21_packs-rebuilt-02/u1-refixture-pack-tests): the
+    // in-memory name was the retired `ops` (REQ-PACK-023); any name serves.
+    expect(readPermissions({ name: "acme", version: "1.0.0" })).toBeUndefined();
   });
 
   it("accepts an empty block as a valid, inert declaration", () => {
@@ -116,8 +118,10 @@ describe("readPermissions", () => {
   });
 
   it("keeps a trailing /** glob verbatim on a touched path", () => {
-    const permissions = readPermissions({ permissions: { touchedPaths: ["packs/ops/**"] } });
-    expect(permissions?.touchedPaths).toEqual(["packs/ops/**"]);
+    // TEST CHANGE, justified (2026-10-21_packs-rebuilt-02/u1-refixture-pack-tests): the glob
+    // named the retired `ops` pack's folder (REQ-PACK-023); any trailing `/**` glob serves.
+    const permissions = readPermissions({ permissions: { touchedPaths: ["docs/runbooks/**"] } });
+    expect(permissions?.touchedPaths).toEqual(["docs/runbooks/**"]);
   });
 
   it.each([
@@ -200,16 +204,20 @@ describe("assertSafePackRelPath (canonical home)", () => {
 });
 
 /**
- * The shipped ops pack's own footprint, delegation included — the real ceiling shape.
+ * An orchestrating pack's footprint, delegation included — the real ceiling shape.
  *
  * TEST CHANGE, justified: `network` left this list because it left the
  * shipped manifest. The pack disclosed a reach no agent in it claimed and none of
  * its bodies used, and a footprint is what the operator accepts at install — so it
  * narrowed to what the pack actually needs. The literal is kept rather than read
- * from disk because these cases are pure parsing over an in-memory document; the
- * case below pins it against the shipped manifest so a drifted copy fails here.
+ * from disk because these cases are pure parsing over an in-memory document.
+ *
+ * TEST CHANGE, justified (2026-10-21_packs-rebuilt-02/u1-refixture-pack-tests): this was
+ * `OPS_PERMISSIONS`, the shipped `ops` pack's footprint, pinned against its manifest by the
+ * census case below. `ops` is retired (REQ-PACK-023), so the literal is the made-up agent
+ * pack's footprint instead ({@link MADE_UP_AGENT_PACK}), and the census holds that pack.
  */
-const OPS_PERMISSIONS: PackPermissions = {
+const ORCHESTRATOR_PERMISSIONS: PackPermissions = {
   toolFootprint: ["read", "edit", "execute", "spawn"],
 };
 
@@ -253,6 +261,48 @@ async function shippedPacks(): Promise<ShippedPack[]> {
   );
 }
 
+/** The agent file the made-up pack ships, as bytes the frontmatter parser reads. */
+const MADE_UP_AGENT_BODY = [
+  "---",
+  "id: deployer",
+  "type: agent",
+  'description: "Made-up pack agent for the capability census."',
+  "tags: [devops]",
+  "load: on-demand",
+  "capabilities: [read, edit, execute]",
+  "---",
+  "",
+  "# Deployer",
+  "",
+].join("\n");
+
+/**
+ * A made-up pack declaring one agent, beside the shipped packs in the census.
+ * Its manifest and agent are parsed by the same `readPermissions` and
+ * `parseFrontmatter` calls {@link shippedPacks} makes.
+ *
+ * TEST CHANGE, justified (2026-10-21_packs-rebuilt-02/u1-refixture-pack-tests): the
+ * census found its agents only in the shipped `ops` pack, which the package retires
+ * (REQ-PACK-023), and no pack it keeps ships an agent; without this pack the "a checked
+ * agent exists" floor would fail, or pass over nothing.
+ */
+const MADE_UP_AGENT_PACK: ShippedPack = {
+  id: "acme-agents",
+  permissions: readPermissions({ permissions: { ...ORCHESTRATOR_PERMISSIONS } }),
+  agents: [
+    {
+      relPath: "agents/stamity-deployer.md",
+      frontmatter: parseFrontmatter(MADE_UP_AGENT_BODY, "acme-agents/agents/stamity-deployer.md")
+        .frontmatter,
+    },
+  ],
+};
+
+/** The shipped packs plus {@link MADE_UP_AGENT_PACK}: what the census cases walk. */
+async function censusPacks(): Promise<ShippedPack[]> {
+  return [...(await shippedPacks()), MADE_UP_AGENT_PACK];
+}
+
 /** One in-memory pack file; `capabilities` omitted means the field is absent. */
 function file(
   relPath: string,
@@ -276,17 +326,17 @@ describe("checkAgentCapabilities", () => {
           file("agents/stamity-devops.md", ["read", "edit", "execute"]),
           file("agents/stamity-incident-responder.md", ["read", "execute"]),
         ],
-        OPS_PERMISSIONS,
+        ORCHESTRATOR_PERMISSIONS,
       ),
     ).toBe("pass");
   });
 
   it("passes an agent that declares no capabilities — an absent field is a real empty grant", () => {
-    expect(checkAgentCapabilities([file("agents/stamity-devops.md")], OPS_PERMISSIONS)).toBe("pass");
+    expect(checkAgentCapabilities([file("agents/stamity-devops.md")], ORCHESTRATOR_PERMISSIONS)).toBe("pass");
   });
 
   it("passes a pack with no agents at all", () => {
-    expect(checkAgentCapabilities([], OPS_PERMISSIONS)).toBe("pass");
+    expect(checkAgentCapabilities([], ORCHESTRATOR_PERMISSIONS)).toBe("pass");
   });
 
   it("refuses a capability outside the footprint, naming the file, the capability and the footprint", () => {
@@ -317,16 +367,16 @@ describe("checkAgentCapabilities", () => {
   });
 
   it("refuses delegation outright, even when the pack's own footprint declares it", () => {
-    // The ops pack's footprint really does carry `spawn` — its commands
+    // An orchestrating pack's footprint really does carry `spawn` — its commands
     // orchestrate. That covers the pack's workflows, never an agent's grant: a
     // spawned agent carries its own, so the footprint cannot bound it.
-    expect(OPS_PERMISSIONS.toolFootprint).toContain("spawn");
+    expect(ORCHESTRATOR_PERMISSIONS.toolFootprint).toContain("spawn");
 
     const error = expectEngineError(
       () =>
         checkAgentCapabilities(
           [file("agents/stamity-devops.md", ["read", "spawn"])],
-          OPS_PERMISSIONS,
+          ORCHESTRATOR_PERMISSIONS,
         ),
       "VALIDATION_ERROR",
     );
@@ -341,7 +391,7 @@ describe("checkAgentCapabilities", () => {
       () =>
         checkAgentCapabilities(
           [file("agents/stamity-devops.md", ["filesystem"])],
-          OPS_PERMISSIONS,
+          ORCHESTRATOR_PERMISSIONS,
         ),
       "VALIDATION_ERROR",
     );
@@ -374,7 +424,7 @@ describe("checkAgentCapabilities", () => {
         () =>
           checkAgentCapabilities(
             [file("agents/stamity-devops.md", capabilities)],
-            OPS_PERMISSIONS,
+            ORCHESTRATOR_PERMISSIONS,
           ),
         "VALIDATION_ERROR",
       );
@@ -469,9 +519,12 @@ describe("checkAgentCapabilities", () => {
     expect(FUNCTIONAL_TOOL_CATEGORIES.length).toBeGreaterThan(RESERVED_TOOL_CATEGORIES.length);
   });
 
+  // TEST CHANGE, justified (2026-10-21_packs-rebuilt-02/u1-refixture-pack-tests): the walk
+  // also holds MADE_UP_AGENT_PACK, since the shipped agents were all `ops`'s, which is retired
+  // (REQ-PACK-023); every shipped pack is still run through the gate.
   it("passes every first-party pack shipped in this repo", async () => {
-    const packs = await shippedPacks();
-    expect(packs.length).toBeGreaterThan(0);
+    const packs = await censusPacks();
+    expect(packs.length).toBeGreaterThan(1);
 
     let checkedAgents = 0;
     for (const pack of packs) {
@@ -484,8 +537,8 @@ describe("checkAgentCapabilities", () => {
   });
 
   it("every shipped pack agent declares a capability set inside its pack's footprint", async () => {
-    const packs = await shippedPacks();
-    expect(packs.length).toBeGreaterThan(0);
+    const packs = await censusPacks();
+    expect(packs.length).toBeGreaterThan(1);
 
     // The subset relation stated directly, not only through the gate: a pack that
     // declares a reach no agent claims over-states what the operator accepts at
@@ -513,21 +566,20 @@ describe("checkAgentCapabilities", () => {
     expect(problems).toEqual([]);
     expect(checked).toBeGreaterThan(0);
 
-    // Named: the incident responder's grant and the ops footprint agree, and
-    // neither carries `network` — telemetry is read through the project's own CLI
-    // tooling under `execute`, which is what the agent body states.
-    const ops = packs.find((pack) => pack.id === "ops");
-    const responder = ops?.agents.find((agent) => agent.relPath.includes("incident-responder"));
-    expect(responder?.frontmatter["capabilities"]).toEqual(["read", "edit", "execute"]);
-    expect(ops?.permissions?.toolFootprint).toEqual(OPS_PERMISSIONS.toolFootprint);
-    expect(ops?.permissions?.toolFootprint).not.toContain("network");
+    // TEST CHANGE, justified (2026-10-21_packs-rebuilt-02/u1-refixture-pack-tests): this block
+    // named `ops`'s incident responder and footprint, which leave with the retired pack
+    // (REQ-PACK-023). It now proves the walk read a parsed capability list, not an empty one,
+    // so the subset loop above ran over real entries.
+    const madeUp = packs.find((pack) => pack.id === MADE_UP_AGENT_PACK.id);
+    expect(madeUp?.agents[0]?.frontmatter["capabilities"]).toEqual(["read", "edit", "execute"]);
+    expect(madeUp?.permissions?.toolFootprint).toEqual(ORCHESTRATOR_PERMISSIONS.toolFootprint);
   });
 
   it("fixture: an agent reaching past its pack's footprint is reported by file and capability", () => {
     const error = expectEngineError(
       () =>
         checkAgentCapabilities([file("agents/stamity-incident-responder.md", ["read", "network"])], {
-          toolFootprint: [...(OPS_PERMISSIONS.toolFootprint ?? [])],
+          toolFootprint: [...(ORCHESTRATOR_PERMISSIONS.toolFootprint ?? [])],
         }),
       "VALIDATION_ERROR",
     );
