@@ -49,9 +49,10 @@ At the sentence level:
   its first use it gets a few plain words of explanation.
 - Active voice, with the actor named: "the test failed", not "a failure was observed".
 - Short sentences. Three or more items side by side become a list.
-- Numbers as digits, with their unit.
-- Filler hedges go ("it would appear that", "perhaps"). A word that states how sure the text is
-  stays, because it is a confidence label, not filler.
+- Numbers as digits; a unit only where the input gave one.
+- Filler goes ("upon further investigation", "at this juncture"). A word that states how sure
+  the text is, or how firm its advice is ("may", "perhaps", "advisable"), is a certainty word,
+  not filler: it stays, or becomes a plain word just as unsure. A doubled hedge can become one.
 
 ## What stays word for word
 
@@ -86,12 +87,14 @@ Before:
 
 After:
 
-> Do not deploy yet. The migration may have failed in some environments.
+> It may be best not to deploy yet. The migration may have failed in some environments.
 > Confidence: medium, based on the staging logs.
 > Not done: the smoke check in `scripts/smoke.sh` was not run.
 
-The no comes first and stays a no. "May" stays "may", the confidence label and what it rests on
-are kept, and the `Not done:` line is copied as it stood.
+The advice comes first and stays advice: "perhaps advisable" becomes "may be best", never "do
+not deploy", because the input suggested and did not refuse. "It would appear that … may"
+becomes one "may". The confidence label and what it rests on are kept, and the `Not done:` line
+is copied as it stood. Had the input said "do not deploy", the rewrite would say so as firmly.
 
 ## Output
 
