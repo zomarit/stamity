@@ -1,17 +1,21 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { planPackFit, type PackFitReport } from "../../../src/cli/engine/packFit.ts";
+import { planSync } from "../../../src/cli/commands/sync/engine.ts";
+import { fullCorpusSelection } from "../../../src/cli/engine/emissionWrite.ts";
+import { planPackFit, type PackFitPlanning, type PackFitReport } from "../../../src/cli/engine/packFit.ts";
+import { hasNpmChannel, packageName, registryOption } from "../../../src/cli/kit/packageName.ts";
 import { createManifest, readManifest, writeManifest } from "../../../src/manifest/manifest.ts";
 import { applyPackInstall, planPackInstall, type PackInstallPlan } from "../../../src/pack/install.ts";
 import { PACK_MANIFEST_FILE } from "../../../src/pack/manifest.ts";
 import type { Tool } from "../../../src/types/core.ts";
+import { EngineError } from "../../../src/types/errors.ts";
 import type { SetupManifest } from "../../../src/types/manifest.ts";
 import { useTempDir } from "../../support/tempDir.ts";
 
 /**
  * u4-pack-fit (REQ-PACK-004): `add`'s fit check measures the skills list Codex
- * would show with the incoming pack staged, by the measure `sync`'s refusal
- * reads (`measureCodexSkillsList`).
+ * would show with the incoming pack staged, through the count `sync`'s refusal
+ * reads (`measureCodexSkillsListFor`).
  *
  * Real temp repositories, the real install planner and the bundled corpus, no
  * mocks: the subject is the measure the next `sync` would take, so the core's
@@ -23,6 +27,12 @@ import { useTempDir } from "../../support/tempDir.ts";
 const ENGINE_VERSION = "1.17.0";
 const NOW = new Date("2026-10-21T00:00:00.000Z");
 const getProject = useTempDir("pack-fit");
+
+/** What `add` injects (`src/cli/commands/add.ts` → `measurePackFit`): `sync`'s selection rule and identity. */
+const PLANNING: PackFitPlanning = {
+  selection: fullCorpusSelection,
+  identity: { packageName: packageName(), npmChannel: hasNpmChannel(), ...registryOption({}) },
+};
 
 /** One corpus-shaped artifact: the frontmatter keys the catalog walk requires. */
 function artifact(id: string, type: "skill" | "command" | "rule", description: string): string {
@@ -116,7 +126,7 @@ async function install(spec: string): Promise<void> {
 type Measured = Extract<PackFitReport["codex"], { applies: true }>;
 
 async function measured(spec: string): Promise<Measured> {
-  const report = await planPackFit(getProject().dir, await currentManifest(), await plan(spec), ENGINE_VERSION);
+  const report = await planPackFit(getProject().dir, await currentManifest(), await plan(spec), ENGINE_VERSION, PLANNING);
   if (!report.codex.applies) throw new Error("expected the fit check to measure a codex setup");
   return report.codex;
 }
@@ -241,8 +251,40 @@ describe("planPackFit — the Codex skills list with the pack staged", () => {
     await initProject(["claude", "cursor"]);
     const spec = await seedPack("big", "acme-demo", skills("acme-skill", 4, 900));
 
-    const report = await planPackFit(getProject().dir, await currentManifest(), await plan(spec), ENGINE_VERSION);
+    const report = await planPackFit(
+      getProject().dir,
+      await currentManifest(),
+      await plan(spec),
+      ENGINE_VERSION,
+      PLANNING,
+    );
 
     expect(report).toEqual({ codex: { applies: false } });
+  });
+
+  it("measures the total, the core's share and the pack's that sync's refusal prints for the same setup", async () => {
+    // review/31: `add` and `sync` read one count. The setup is a made-up pack
+    // installed by the engine alone (past the cap, so `sync`'s residue planner
+    // prints its measure), and the fit measures the re-add of that same pack,
+    // whose staged copy replaces the installed one: one setup, measured twice.
+    await initProject(["codex"]);
+    const spec = await seedPack("big", "acme-demo", skills("acme-skill", 4, 900));
+    await install(spec);
+
+    const refusal = await planSync(getProject().dir, ENGINE_VERSION, { runner: () => "" }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    const fit = await measured(spec);
+
+    expect(refusal, "fixture: sync refuses the over-cap setup").toBeInstanceOf(EngineError);
+    const message = (refusal as EngineError).message;
+    expect(fit.fits).toBe(false);
+    expect(message).toContain(`codex skills list is ${fit.measure.total} characters;`);
+    expect(message).toContain(
+      `the core selection takes ${fit.measure.core.characters} characters (${fit.measure.core.skills} skills)`,
+    );
+    expect(message).toContain(`installed packs add: acme-demo ${fit.packShare.characters} characters (4 skills).`);
+    expect(fit.packShare).toEqual({ characters: 4 * rowShare("st-acme-skill-1", 900), skills: 4 });
   });
 });

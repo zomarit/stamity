@@ -27,9 +27,10 @@ import {
 } from "../../types/manifest.ts";
 import { STATE_DIR } from "../../types/markers.ts";
 import { keepSavedModelLists } from "../engine/clientModels.ts";
-import { planPackFit, type PackFitReport } from "../engine/packFit.ts";
+import { fullCorpusSelection } from "../engine/emissionWrite.ts";
+import { planPackFit, type PackFitPlanning, type PackFitReport } from "../engine/packFit.ts";
 import { CliFailure, renderFailureHuman, type FailureDoc } from "../kit/output.ts";
-import { packageCommand } from "../kit/packageName.ts";
+import { hasNpmChannel, packageCommand, packageName, registryOption } from "../kit/packageName.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 
 /**
@@ -800,8 +801,31 @@ function grouped(count: number): string {
  * and the next `sync` would fail. The message names the pack's own share and
  * the total, so a setup already over the cap reads as that, and a pack whose
  * skills add nothing is not blamed for it.
+ *
+ * When another installed pack holds a share, `next` names its removal, as
+ * `sync`'s refusal does: the largest such pack, and first when the setup is
+ * over the cap without the incoming pack. No step narrows the content
+ * selection: `sync` plans the full corpus on every run
+ * (`../engine/emissionWrite.ts` → `fullCorpusSelection`), so a narrowed
+ * selection would not change the list.
  */
-function fitPart(packId: string, packShare: ShareOf, total: number, cap: number): RefusalPart {
+function fitPart(packId: string, report: Extract<PackFitReport["codex"], { applies: true }>): RefusalPart {
+  const { packShare, measure } = report;
+  const { total, cap } = measure;
+  const largestOther = [...measure.packs]
+    .filter(([pack, part]) => pack !== packId && part.characters > 0)
+    .toSorted(([a, x], [b, y]) => y.characters - x.characters || (a < b ? -1 : a > b ? 1 : 0))[0]?.[0];
+  const own =
+    "shorten the pack's skill descriptions, or mark a skill explicit-only " +
+    "(`disable-model-invocation: true` in its head, with an `agents/openai.yaml` beside it " +
+    "setting `policy.allow_implicit_invocation: false`)";
+  const steps: string[] = [own];
+  if (largestOther !== undefined) {
+    const shown = withoutControlCharacters(largestOther);
+    const remove = `remove the installed pack "${shown}" with \`${packageCommand(`clean --pack ${shown}`)}\``;
+    if (total - packShare.characters > cap) steps.unshift(remove);
+    else steps.push(remove);
+  }
   return {
     message:
       `pack "${packId}" does not fit Codex's skills list: its ${packShare.skills} skill(s) add ` +
@@ -810,11 +834,8 @@ function fitPart(packId: string, packShare: ShareOf, total: number, cap: number)
       "Codex holds the name and description of every skill it shows its model for the whole " +
       `session, and sync refuses a list past ${grouped(cap)} characters`,
     next:
-      "shorten the pack's skill descriptions, or mark a skill explicit-only " +
-      "(`disable-model-invocation: true` in its head, with an `agents/openai.yaml` beside it " +
-      "setting `policy.allow_implicit_invocation: false`), or narrow the content selection, or " +
-      'set `ruleDelivery: "always-on"` to deliver rules as instruction text instead of as ' +
-      "skills, then re-run",
+      `${steps.join(", or ")}, or set \`ruleDelivery: "always-on"\` to deliver rules as ` +
+      "instruction text instead of as skills, then re-run",
   };
 }
 
@@ -1004,9 +1025,15 @@ async function measurePackFit(
   engineVersion: string,
   otherwiseRefused: boolean,
 ): Promise<PackFitReport | null> {
-  if (!otherwiseRefused) return planPackFit(rootDir, manifest, plan, engineVersion);
+  // `sync`'s own inputs, from the modules `sync` reads them from
+  // (`../engine/packFit.ts` → `PackFitPlanning`).
+  const planning: PackFitPlanning = {
+    selection: fullCorpusSelection,
+    identity: { packageName: packageName(), npmChannel: hasNpmChannel(), ...registryOption({}) },
+  };
+  if (!otherwiseRefused) return planPackFit(rootDir, manifest, plan, engineVersion, planning);
   try {
-    return await planPackFit(rootDir, manifest, plan, engineVersion);
+    return await planPackFit(rootDir, manifest, plan, engineVersion, planning);
   } catch {
     // reason: not silent — the plan is refused by the parts already found, and
     // the payload's `fit: null` says this one was not measured.
@@ -1220,9 +1247,7 @@ export const addCommand: CommandModule = {
     }
     if (fit !== null && fit.codex.applies && !fit.codex.fits) {
       renderReasons(ctx, fitLines(plan.manifest.name, fit.codex), "codex skills list");
-      parts.push(
-        fitPart(plan.manifest.name, fit.codex.packShare, fit.codex.measure.total, fit.codex.measure.cap),
-      );
+      parts.push(fitPart(plan.manifest.name, fit.codex));
     }
     if (parts.length > 0) return refuse(ctx, payload, planRefusal(plan.manifest.name, parts));
 

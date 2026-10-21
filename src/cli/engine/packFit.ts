@@ -1,17 +1,21 @@
 import {
-  measureCodexSkillsList,
-  shownSkillRows,
+  measureCodexSkillsListFor,
   type CodexSkillsListMeasure,
   type CodexSkillsListShare,
 } from "../../adapters/codex.ts";
-import { buildContentIndex, typeIdKey } from "../../content/catalog.ts";
+import { buildContentIndex, type ContentIndex } from "../../content/catalog.ts";
 import { userContentRoot } from "../../content/userContent.ts";
-import { buildCoreEmissionPlan } from "../../emit/planner.ts";
+import { analyzeRepo, summarizeDetection } from "../../detect/repoAnalyzer.ts";
+import { buildCoreEmissionPlan, type EmissionContext } from "../../emit/planner.ts";
 import type { PackInstallPlan } from "../../pack/install.ts";
 import { PACK_CONTENT_CLASSES } from "../../pack/manifest.ts";
-import { resolveInstalledPackContent, type StagedPack } from "../../pack/projection.ts";
+import {
+  resolveInstalledPackContent,
+  selectionWithInstalledPacks,
+  type StagedPack,
+} from "../../pack/projection.ts";
 import { grantableFootprint } from "../../roster/agentGrants.ts";
-import type { ContentClass, ContentSelection } from "../../types/content.ts";
+import type { ContentSelection } from "../../types/content.ts";
 import type { SetupManifest } from "../../types/manifest.ts";
 
 /**
@@ -23,8 +27,9 @@ import type { SetupManifest } from "../../types/manifest.ts";
  * list past {@link CodexSkillsListMeasure.cap} (`../../adapters/codex.ts`). A
  * pack `add` admitted could therefore install cleanly and fail the very next
  * `sync`. The check plans the core emission with the incoming pack staged in
- * place of any installed copy, and counts it with `measureCodexSkillsList`,
- * the one function `sync`'s refusal reads, so the two cannot disagree.
+ * place of any installed copy, and counts it with `measureCodexSkillsListFor`,
+ * the one path to the count `sync`'s refusal reads: the same shown rows,
+ * touchpoints included, attributed the same way.
  *
  * A CLI-layer module, not an engine-registry one: `add` is its only caller,
  * so `src/composition/root.ts` does not import it.
@@ -51,53 +56,74 @@ export interface PackFitReport {
 const LISTED_CLASSES: ReadonlySet<string> = new Set(["agents", "skills", "rules", "commands"]);
 
 /**
+ * What `add` hands the fit check so it plans with `sync`'s own inputs rather
+ * than a copy of them: the selection rule (`./emissionWrite.ts` →
+ * `fullCorpusSelection`) and this installation's package identity
+ * (`../kit/packageName.ts`), which the pinned CLI call renders from in any
+ * skill head that carries the token. Injected, not imported: the layering
+ * keeps this module apart from both wave-13 modules of other units
+ * (`test/architecture`), and `add` sits above them, as `EmissionPlanFor`
+ * (`./emissionWrite.ts`) is supplied by its callers.
+ */
+export interface PackFitPlanning {
+  /** The selection `sync` plans with, from the bundled content index. */
+  selection: (index: ContentIndex) => ContentSelection;
+  /** The package every pinned call names, as `sync` passes it. */
+  identity: Pick<EmissionContext, "packageName" | "npmChannel" | "npmRegistry">;
+}
+
+/**
  * The fit of `plan`'s pack in the setup `manifest` records, as the next `sync`
  * would measure it. Only a setup that selects Codex is measured.
  *
  * The emission is planned the way `sync` plans its own
  * (`../commands/sync/engine.ts` → `planSync`): the repository's override tree
- * as the top content root, and the selection set to every artifact of the
- * bundled content, the rule `./emissionWrite.ts` → `fullCorpusSelection`
- * states. That rule is restated here rather than imported because the
- * layering keeps two wave-13 modules of different units apart
- * (`test/architecture`), as `sync` and `clean` each build their own planner
- * call. The package identity a `sync` passes is left out: it renders only
- * the `${STAMITY:CLI}` token in bodies, and the list reads names and
- * descriptions.
+ * as the top content root, `planning`'s selection and identity, detection
+ * read fresh as `sync` reads it (repo tokens render in a skill's head), and the
+ * residue context the composer hands each client (`../../emit/planner.ts` →
+ * `residueContext`): the pack roots joined to the content roots and the pack
+ * items to the selection. The count itself is the adapter's
+ * (`measureCodexSkillsListFor`). `test/cli/engine/packFit.test.ts` holds this
+ * total equal to the one `sync`'s refusal prints for the same setup.
  */
 export async function planPackFit(
   rootDir: string,
   manifest: SetupManifest,
   plan: PackInstallPlan,
   engineVersion: string,
+  planning: PackFitPlanning,
 ): Promise<PackFitReport> {
   if (!manifest.tools.includes("codex")) return { codex: { applies: false } };
 
   const staged = stagedPackOf(plan);
-  const [index, packs] = await Promise.all([
+  const [index, repoInfo, packs] = await Promise.all([
     buildContentIndex(),
+    analyzeRepo(rootDir),
     resolveInstalledPackContent(rootDir, manifest, undefined, { staged }),
   ]);
-  const core = await buildCoreEmissionPlan(
-    {
-      rootDir,
-      manifest: { ...manifest, selection: everyItemOf(index.items) },
-      engineVersion,
-      facts: { monorepoPackages: [] },
-      contentRoot: { overrideRoot: userContentRoot(rootDir) },
+  const overrideRoot = userContentRoot(rootDir);
+  const ctx: EmissionContext = {
+    rootDir,
+    manifest: {
+      ...manifest,
+      selection: planning.selection(index),
+      detected: summarizeDetection(repoInfo),
     },
-    packs,
-  );
-
-  // Which pack supplied each item, keyed by class and id, as the adapter's own
-  // attribution reads it (`../../adapters/codex.ts` → `selectedItems`).
-  const packOf = new Map<string, string>();
-  for (const item of packs.items) {
-    if (item.provenance !== undefined) {
-      packOf.set(typeIdKey(item.type, item.id), item.provenance.pack);
-    }
-  }
-  const measure = measureCodexSkillsList(shownSkillRows(core.skills), packOf);
+    engineVersion,
+    ...planning.identity,
+    facts: { monorepoPackages: repoInfo.monorepoPackages },
+    contentRoot: { packRoots: [], overrideRoot },
+  };
+  const core = await buildCoreEmissionPlan(ctx, packs);
+  const residueCtx: EmissionContext =
+    packs.items.length === 0
+      ? ctx
+      : {
+          ...ctx,
+          contentRoot: { packRoots: packs.packRoots, overrideRoot },
+          manifest: selectionWithInstalledPacks(ctx.manifest, packs.items),
+        };
+  const measure = await measureCodexSkillsListFor(core, residueCtx);
   return {
     codex: {
       applies: true,
@@ -123,11 +149,4 @@ function stagedPackOf(plan: PackInstallPlan): StagedPack {
     ),
     declaredTools: grantableFootprint(plan.manifest.permissions?.toolFootprint),
   };
-}
-
-/** Every artifact id of `items`, per class: the selection `sync` plans with. */
-function everyItemOf(items: readonly { type: ContentClass; id: string }[]): ContentSelection {
-  const selected: Record<ContentClass, string[]> = { agent: [], skill: [], rule: [], command: [] };
-  for (const item of items) selected[item.type].push(item.id);
-  return { items: selected };
 }

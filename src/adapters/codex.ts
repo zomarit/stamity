@@ -441,14 +441,11 @@ export const codexResiduePlanner: ResiduePlanner = {
     // tree, but each one's `agents/openai.yaml` turns implicit invocation off and
     // the client leaves it out of the listing, so it costs the list nothing. The
     // same policy shipped by a pack skill hides that skill too.
-    const { agents, rules, commands, packOf } = await selectedItems(ctx);
-    const touchpoints = projectTouchpointSkills(commands, ctx);
-    // `add`'s fit check (`../cli/engine/packFit.ts`, REQ-PACK-004) counts with
-    // the same measure, so a pack it admits is one this refusal admits too.
-    const measure = measureCodexSkillsList(
-      shownSkillRows([...core.skills, ...touchpoints]),
-      packOf,
-    );
+    //
+    // `add`'s fit check (`../cli/engine/packFit.ts`, REQ-PACK-004) measures
+    // through the same function, so a pack it admits is one this refusal
+    // admits too.
+    const { agents, rules, touchpoints, measure } = await skillsListOf(core, ctx);
     if (measure.total > measure.cap) {
       throw new EngineError(skillsListRefusal(measure, cliCallContextOf(ctx)), {
         code: "VALIDATION_ERROR",
@@ -796,6 +793,40 @@ export function measureCodexSkillsList(
 }
 
 /**
+ * The skills list the residue planner measures for `core` under `ctx`, the
+ * context the composer hands it: the shown rows (the core's skills and this
+ * client's touchpoint skills), attributed to the reachable claimant of each
+ * item. `add`'s fit check (`../cli/engine/packFit.ts`, REQ-PACK-004) reads it
+ * so that no input of the count is restated outside this adapter.
+ */
+export async function measureCodexSkillsListFor(
+  core: CoreEmissionPlan,
+  ctx: EmissionContext,
+): Promise<CodexSkillsListMeasure> {
+  return (await skillsListOf(core, ctx)).measure;
+}
+
+/**
+ * {@link selectedItems}, this client's touchpoint skills, and the measure over
+ * them: the one path to the count, for {@link codexResiduePlanner} and
+ * {@link measureCodexSkillsListFor} alike.
+ */
+async function skillsListOf(
+  core: CoreEmissionPlan,
+  ctx: EmissionContext,
+): Promise<{
+  agents: CatalogItem[];
+  rules: CatalogItem[];
+  touchpoints: ReturnType<typeof projectTouchpointSkills>;
+  measure: CodexSkillsListMeasure;
+}> {
+  const { agents, rules, commands, packOf } = await selectedItems(ctx);
+  const touchpoints = projectTouchpointSkills(commands, ctx);
+  const measure = measureCodexSkillsList(shownSkillRows([...core.skills, ...touchpoints]), packOf);
+  return { agents, rules, touchpoints, measure };
+}
+
+/**
  * The refusal past {@link CODEX_SKILLS_LIST_BUDGET_CHARS}, rendered from
  * {@link measureCodexSkillsList}: the measured total, then who spent it — the
  * core selection's share and each installed pack's, largest first, with its
@@ -815,11 +846,14 @@ function skillsListRefusal(measure: CodexSkillsListMeasure, cli: CliCallContext)
   const shares =
     `Of that, the core selection takes ${core.characters} characters (${count(core.skills)})` +
     (packShares.length === 0 ? "." : `; installed packs add: ${packShares.join(", ")}.`);
+  // No "narrow the content selection": `sync` plans the full corpus on every
+  // run (`../cli/engine/emissionWrite.ts` → `fullCorpusSelection`, not yet a
+  // filter), so a narrowed selection meets this same refusal again.
   const remedies =
     packShares.length === 0
-      ? `Narrow the content selection, or set`
+      ? `Set`
       : `Remove a pack with \`${pinnedCliCall(cli.packageName, cli.version, "clean --pack <id>", cli)}\`, ` +
-        `narrow the content selection, or set`;
+        `or set`;
   return (
     `codex skills list is ${total} characters; this setup caps it at ` +
     `${CODEX_SKILLS_LIST_BUDGET_CHARS}. Codex holds the name and description of every skill ` +

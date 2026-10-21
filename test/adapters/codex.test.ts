@@ -2717,7 +2717,10 @@ describe("the skills-list budget", () => {
     // names the pinned call from the adapter's own CLI context, as every other remedy does.
     expect(message).toContain(`\`npx -y @zomarit/stamity@${ENGINE_VERSION} clean --pack <id>\``);
     expect(message).not.toContain("`stamity clean");
-    expect(message).toContain('`ruleDelivery: "always-on"`');
+    // TEST CHANGE, justified (2026-10-21, 2026-10-20_packs-rebuilt/u4-pack-fit, ledger build/26):
+    // "narrow the content selection" left the pack remedies; `sync` always plans the full corpus.
+    expect(message).toContain(`clean --pack <id>\`, or set \`ruleDelivery: "always-on"\``);
+    expect(message).not.toContain("narrow the content selection");
 
     // A registry fork's context carries its registry into the same remedy.
     const forked = await codexResiduePlanner
@@ -2779,7 +2782,12 @@ describe("the skills-list budget", () => {
     expect(message).toContain(`the core selection takes ${total} characters (20 skills)`);
     expect(message).not.toContain("installed packs add");
     expect(message).not.toContain("clean --pack");
-    expect(message).toContain("Narrow the content selection");
+    // TEST CHANGE, justified (2026-10-21, 2026-10-20_packs-rebuilt/u4-pack-fit, ledger build/26):
+    // the refusal named "Narrow the content selection", but `sync` plans the full corpus on every
+    // run (`fullCorpusSelection`, not yet a filter), so that advice met the same refusal again; the
+    // remedy left is the rule delivery.
+    expect(message).not.toContain("arrow the content selection");
+    expect(message).toContain('Set `ruleDelivery: "always-on"`');
   });
 
   it("does not count a pack skill that ships its own hiding policy, nor a pack's commands", async () => {

@@ -2282,6 +2282,51 @@ describe("add — the Codex skills-list fit (REQ-PACK-004)", () => {
     expect(packRows(await readProjectManifest())).toEqual([]);
   });
 
+  it("names removing the installed pack first when another pack already takes the list past 8,000", async () => {
+    // review/32: an engine-only install (the state an earlier release left) puts
+    // the setup over the cap before this pack; `next` names that pack's removal,
+    // as sync's refusal does, ahead of the incoming pack's descriptions.
+    await initProject(["codex"]);
+    const project = getProject();
+    const bulky: Record<string, string> = {};
+    for (let n = 1; n <= 4; n += 1) {
+      bulky[`skills/st-bulky-skill-${n}/SKILL.md`] = fitSkill(`bulky-skill-${n}`, 900);
+    }
+    await project.seedFiles({
+      ...Object.fromEntries(Object.entries(bulky).map(([rel, text]) => [`bulky/${rel}`, text])),
+      [`bulky/${PACK_MANIFEST_FILE}`]: JSON.stringify({
+        name: "acme-bulky",
+        version: "1.0.0",
+        integrity: Object.fromEntries(Object.entries(bulky).map(([rel, text]) => [rel, digest(text)])),
+        declaredTools: ["codex"],
+      }),
+    });
+    const installed = await applyPackInstall(
+      project.dir,
+      await planPackInstall(project.dir, "./bulky", { allowUntrusted: true }),
+      await readProjectManifest(),
+      { now: FIXED_NOW },
+    );
+    expect(installed.result.installed, "fixture: the bulky pack installs through the engine").toBe(true);
+    await writeManifest(project.dir, installed.manifest, { now: FIXED_NOW });
+    await seedPack({ content: fitSkills(1, 100), declaredTools: ["codex"] });
+
+    const result = await run(installArgs("--json"));
+
+    expect(result.code).toBe(1);
+    const doc = parseDoc(result.stdout);
+    const fit = fitOf(doc)?.codex;
+    expect(fit?.packShare).toEqual({ characters: ROW(100), skills: 1 });
+    expect((fit?.total ?? 0) - ROW(100), "non-degenerate: over the cap before this pack").toBeGreaterThan(8_000);
+    const next = errorOf(doc).next ?? "";
+    expect(next.startsWith(`remove the installed pack "acme-bulky" with \`${npxCommand("clean --pack acme-bulky")}\``)).toBe(
+      true,
+    );
+    expect(next).toContain("shorten the pack's skill descriptions");
+    // ledger build/26: sync plans the full corpus on every run, so narrowing the selection changes nothing.
+    expect(next).not.toContain("narrow the content selection");
+  });
+
   it("refuses it under --dry-run too, with exit 1", async () => {
     await initProject(["codex"]);
     await seedPack({ content: fitSkills(4, 900), declaredTools: ["codex"] });
@@ -2351,10 +2396,15 @@ describe("add — the Codex skills-list fit (REQ-PACK-004)", () => {
 
   it("lists the fit beside a name clash in one refusal", async () => {
     await initProject(["codex"]);
+    // TEST CHANGE, justified (2026-10-21, 2026-10-20_packs-rebuilt/u4-pack-fit, ledger review/31):
+    // the fit now counts through the residue planner's own rows, touchpoints included, and a
+    // command's touchpoint companion hides the skill folder it shares, as it would at `sync`. The
+    // clash moved to a pair of its own, so the four counted skills stay past the cap.
     await seedPack({
       content: {
         ...fitSkills(4, 900),
-        "commands/st-acme-skill-1.md": "---\nid: acme-skill-1\ntype: command\n---\nRun it.\n",
+        "skills/st-acme-clash/SKILL.md": fitSkill("acme-clash", 10),
+        "commands/st-acme-clash.md": "---\nid: acme-clash\ntype: command\n---\nRun it.\n",
       },
       declaredTools: ["codex"],
     });
