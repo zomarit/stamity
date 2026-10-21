@@ -277,7 +277,11 @@ describe("st-unattended — before Frame (REQ-FLOW-091, REQ-FLOW-098 to REQ-FLOW
   it("reads learnings only through the screen, never with the file tools (REQ-FLOW-099, REQ-FLOW-088)", async () => {
     const text = await flat();
     expect(text).toContain("`stamity learn read` (`--body <id>` for one body) beside `stamity handoff list`");
-    expect(text).toContain("`node .stamity/generated/hooks/<client>/stamity-session-start.mjs` with an empty stdin");
+    // TEST CHANGE, justified (2026-10-21, plan 018 file 2, unit u4-charter; REQ-FLOW-088): charter
+    // invariant 5 (1.3.1) now names the script's place per client, so the skill points at it
+    // instead of restating the one `.stamity/generated/hooks/<client>/` path the old wording gave.
+    expect(text).toContain("the session-start script run by hand as charter invariant 5 names it, with an empty stdin");
+    expect(text).not.toContain("`node .stamity/generated/hooks/<client>/stamity-session-start.mjs`");
     expect(text).toContain("A file under `.stamity/learnings/` or `.stamity/handoffs/` is never opened with the file tools.");
   });
 

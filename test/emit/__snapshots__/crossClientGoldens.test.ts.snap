@@ -8079,6 +8079,8 @@ COPILOT_MCP_GITHUB={"type":"local","command":"npx","args":["-y","mcp-remote@0.1.
 
 The always-on context for agents working in this repository. Everything else loads on demand:
 rules attach by file path or by description, skills trigger by description, commands run on invocation.
+Write every reply in plain words: short sentences, common words, no jargon the reader has to decode. Say how sure
+you are and what that rests on, and when the answer is no, say no first, then why.
 
 ## Repo facts
 
@@ -8088,7 +8090,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 - Linter: eslint
 - Test framework: vitest
 - CI provider: github-actions
-- Maturity tier: team — seeded from git history at init; change via \`npx -y @zomarit/stamity@1.0.0-golden config\`.
+- Maturity tier: team — git history at init, or the default; \`npx -y @zomarit/stamity@1.0.0-golden config\` changes it.
 
 ### Verification gates
 
@@ -8100,7 +8102,7 @@ Run before declaring any change done; invariant 4 says which of them.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.3.0 · ratified 2026-08-31 · last amended 2026-10-14
+Invariants version 1.3.1 · ratified 2026-08-31 · last amended 2026-10-21
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -8118,8 +8120,9 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
-   banner or, where no hook ran, \`node .stamity/generated/hooks/<client>/stamity-session-start.mjs\` run with an empty
-   stdin, opening only the files it lists as loaded; repeating a recorded failure is a process defect.
+   banner or, where no hook ran, the client's own \`stamity-session-start.mjs\` (\`.<client>/hooks/stamity/\` where that
+   folder exists, else \`.stamity/generated/hooks/<client>/\`) run with an empty stdin, opening only the files it
+   lists as loaded; repeating a recorded failure is a process defect.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
    break across file boundaries. Census shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
@@ -8146,18 +8149,15 @@ as any skill (\`/st-<id>\` or \`$st-<id>\`); with neither, ask for the outcome i
 
 ## Conditional layer
 
-- Rules ship in two attach shapes, and the emitted rules directory is the roster — read it rather than a count kept
-  here, because selection and installed packs both change what landed.
+- The emitted rules directory is the roster: read it, not a count kept here; selection and packs change what landed.
 - A glob-scoped rule attaches when the agent reads a file matching its globs, except on a
   client with no glob-rule layer, where it is inlined into the always-on file of the directory those globs anchor
   to. A description-scoped rule declares no globs, so what it costs depends on the client: one that
   supports description-pull loads it on relevance, and one that does not loads it every session alongside this file.
-- Neither shape replaces the charter. Content that must bind every turn on every client belongs here, not in a rule
-  that three clients out of four would have to load unconditionally to honour.
+- Neither shape replaces the charter: what must bind every turn on every client belongs here, not in a rule.
 - A model-backed feature ships with a versioned golden-and-adversarial eval set, thresholds declared before the run.
 - Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native copy where the
-  client reads its own location. Named invocation beats waiting for a trigger match — call a skill whenever its
-  description fits the job.
+  client reads its own location; call a skill by name whenever its description fits the job.
 
 ## Cursor Cloud specific instructions
 
@@ -8178,6 +8178,8 @@ For a Cursor cloud agent in this repository; the charter above binds it as it bi
 
 The always-on context for agents working in this repository. Everything else loads on demand:
 rules attach by file path or by description, skills trigger by description, commands run on invocation.
+Write every reply in plain words: short sentences, common words, no jargon the reader has to decode. Say how sure
+you are and what that rests on, and when the answer is no, say no first, then why.
 
 ## Repo facts
 
@@ -8187,7 +8189,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 - Linter: eslint
 - Test framework: vitest
 - CI provider: github-actions
-- Maturity tier: team — seeded from git history at init; change via \`npx -y @zomarit/stamity@1.0.0-golden config\`.
+- Maturity tier: team — git history at init, or the default; \`npx -y @zomarit/stamity@1.0.0-golden config\` changes it.
 
 ### Verification gates
 
@@ -8199,7 +8201,7 @@ Run before declaring any change done; invariant 4 says which of them.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.3.0 · ratified 2026-08-31 · last amended 2026-10-14
+Invariants version 1.3.1 · ratified 2026-08-31 · last amended 2026-10-21
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -8217,8 +8219,9 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
-   banner or, where no hook ran, \`node .stamity/generated/hooks/<client>/stamity-session-start.mjs\` run with an empty
-   stdin, opening only the files it lists as loaded; repeating a recorded failure is a process defect.
+   banner or, where no hook ran, the client's own \`stamity-session-start.mjs\` (\`.<client>/hooks/stamity/\` where that
+   folder exists, else \`.stamity/generated/hooks/<client>/\`) run with an empty stdin, opening only the files it
+   lists as loaded; repeating a recorded failure is a process defect.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
    break across file boundaries. Census shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
@@ -8245,18 +8248,15 @@ as any skill (\`/st-<id>\` or \`$st-<id>\`); with neither, ask for the outcome i
 
 ## Conditional layer
 
-- Rules ship in two attach shapes, and the emitted rules directory is the roster — read it rather than a count kept
-  here, because selection and installed packs both change what landed.
+- The emitted rules directory is the roster: read it, not a count kept here; selection and packs change what landed.
 - A glob-scoped rule attaches when the agent reads a file matching its globs, except on a
   client with no glob-rule layer, where it is inlined into the always-on file of the directory those globs anchor
   to. A description-scoped rule declares no globs, so what it costs depends on the client: one that
   supports description-pull loads it on relevance, and one that does not loads it every session alongside this file.
-- Neither shape replaces the charter. Content that must bind every turn on every client belongs here, not in a rule
-  that three clients out of four would have to load unconditionally to honour.
+- Neither shape replaces the charter: what must bind every turn on every client belongs here, not in a rule.
 - A model-backed feature ships with a versioned golden-and-adversarial eval set, thresholds declared before the run.
 - Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native copy where the
-  client reads its own location. Named invocation beats waiting for a trigger match — call a skill whenever its
-  description fits the job.
+  client reads its own location; call a skill by name whenever its description fits the job.
 
 ## Conditional rules (Codex down-conversion)
 
@@ -8558,6 +8558,8 @@ Credential handling is the secrets rule's subject and is not restated here.
 
 The always-on context for agents working in this repository. Everything else loads on demand:
 rules attach by file path or by description, skills trigger by description, commands run on invocation.
+Write every reply in plain words: short sentences, common words, no jargon the reader has to decode. Say how sure
+you are and what that rests on, and when the answer is no, say no first, then why.
 
 ## Repo facts
 
@@ -8567,7 +8569,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 - Linter: eslint
 - Test framework: vitest
 - CI provider: github-actions
-- Maturity tier: team — seeded from git history at init; change via \`npx -y @zomarit/stamity@1.0.0-golden config\`.
+- Maturity tier: team — git history at init, or the default; \`npx -y @zomarit/stamity@1.0.0-golden config\` changes it.
 
 ### Verification gates
 
@@ -8579,7 +8581,7 @@ Run before declaring any change done; invariant 4 says which of them.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.3.0 · ratified 2026-08-31 · last amended 2026-10-14
+Invariants version 1.3.1 · ratified 2026-08-31 · last amended 2026-10-21
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -8597,8 +8599,9 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
-   banner or, where no hook ran, \`node .stamity/generated/hooks/<client>/stamity-session-start.mjs\` run with an empty
-   stdin, opening only the files it lists as loaded; repeating a recorded failure is a process defect.
+   banner or, where no hook ran, the client's own \`stamity-session-start.mjs\` (\`.<client>/hooks/stamity/\` where that
+   folder exists, else \`.stamity/generated/hooks/<client>/\`) run with an empty stdin, opening only the files it
+   lists as loaded; repeating a recorded failure is a process defect.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
    break across file boundaries. Census shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
@@ -8625,24 +8628,23 @@ as any skill (\`/st-<id>\` or \`$st-<id>\`); with neither, ask for the outcome i
 
 ## Conditional layer
 
-- Rules ship in two attach shapes, and the emitted rules directory is the roster — read it rather than a count kept
-  here, because selection and installed packs both change what landed.
+- The emitted rules directory is the roster: read it, not a count kept here; selection and packs change what landed.
 - A glob-scoped rule attaches when the agent reads a file matching its globs, except on a
   client with no glob-rule layer, where it is inlined into the always-on file of the directory those globs anchor
   to. A description-scoped rule declares no globs, so what it costs depends on the client: one that
   supports description-pull loads it on relevance, and one that does not loads it every session alongside this file.
-- Neither shape replaces the charter. Content that must bind every turn on every client belongs here, not in a rule
-  that three clients out of four would have to load unconditionally to honour.
+- Neither shape replaces the charter: what must bind every turn on every client belongs here, not in a rule.
 - A model-backed feature ships with a versioned golden-and-adversarial eval set, thresholds declared before the run.
 - Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native copy where the
-  client reads its own location. Named invocation beats waiting for a trigger match — call a skill whenever its
-  description fits the job.
+  client reads its own location; call a skill by name whenever its description fits the job.
 ",
   "packages/beta/AGENTS.md": "
 # Charter
 
 The always-on context for agents working in this repository. Everything else loads on demand:
 rules attach by file path or by description, skills trigger by description, commands run on invocation.
+Write every reply in plain words: short sentences, common words, no jargon the reader has to decode. Say how sure
+you are and what that rests on, and when the answer is no, say no first, then why.
 
 ## Repo facts
 
@@ -8652,7 +8654,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 - Linter: eslint
 - Test framework: vitest
 - CI provider: github-actions
-- Maturity tier: team — seeded from git history at init; change via \`npx -y @zomarit/stamity@1.0.0-golden config\`.
+- Maturity tier: team — git history at init, or the default; \`npx -y @zomarit/stamity@1.0.0-golden config\` changes it.
 
 ### Verification gates
 
@@ -8664,7 +8666,7 @@ Run before declaring any change done; invariant 4 says which of them.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.3.0 · ratified 2026-08-31 · last amended 2026-10-14
+Invariants version 1.3.1 · ratified 2026-08-31 · last amended 2026-10-21
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -8682,8 +8684,9 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
-   banner or, where no hook ran, \`node .stamity/generated/hooks/<client>/stamity-session-start.mjs\` run with an empty
-   stdin, opening only the files it lists as loaded; repeating a recorded failure is a process defect.
+   banner or, where no hook ran, the client's own \`stamity-session-start.mjs\` (\`.<client>/hooks/stamity/\` where that
+   folder exists, else \`.stamity/generated/hooks/<client>/\`) run with an empty stdin, opening only the files it
+   lists as loaded; repeating a recorded failure is a process defect.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
    break across file boundaries. Census shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
@@ -8710,18 +8713,15 @@ as any skill (\`/st-<id>\` or \`$st-<id>\`); with neither, ask for the outcome i
 
 ## Conditional layer
 
-- Rules ship in two attach shapes, and the emitted rules directory is the roster — read it rather than a count kept
-  here, because selection and installed packs both change what landed.
+- The emitted rules directory is the roster: read it, not a count kept here; selection and packs change what landed.
 - A glob-scoped rule attaches when the agent reads a file matching its globs, except on a
   client with no glob-rule layer, where it is inlined into the always-on file of the directory those globs anchor
   to. A description-scoped rule declares no globs, so what it costs depends on the client: one that
   supports description-pull loads it on relevance, and one that does not loads it every session alongside this file.
-- Neither shape replaces the charter. Content that must bind every turn on every client belongs here, not in a rule
-  that three clients out of four would have to load unconditionally to honour.
+- Neither shape replaces the charter: what must bind every turn on every client belongs here, not in a rule.
 - A model-backed feature ships with a versioned golden-and-adversarial eval set, thresholds declared before the run.
 - Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native copy where the
-  client reads its own location. Named invocation beats waiting for a trigger match — call a skill whenever its
-  description fits the job.
+  client reads its own location; call a skill by name whenever its description fits the job.
 ",
 }
 `;
@@ -8754,7 +8754,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".agents/skills/st-rework/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
   ".agents/skills/st-spec/SKILL.md": "b5770c6320d8fd6357e55645b0c8b7708ccc14faf73e5c6c6a476bfb52923e50 18992 bytes",
   ".agents/skills/st-spec/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
-  ".agents/skills/st-unattended/SKILL.md": "38cb73fedf94c4f3837cf9ea3707e00e67c86ff2363a486680ff68d1588758c2 16799 bytes",
+  ".agents/skills/st-unattended/SKILL.md": "0dc97d84a3fb1efe9fbc899b1777c25dc8d7fff54ce1e1cb045fde79aca04f0b 16764 bytes",
   ".agents/skills/st-unattended/agents/openai.yaml": "09cd1ea5e109f80be04b19f1b1e43602b6aad4972fc6e248d6e355a1c6e72df1 202 bytes",
   ".agents/skills/st-unattended/references/chains.md": "36f0a28346c24a899d0f27e6f39070964cc25f2ebce886d0b21b99cc8d277d8d 1479 bytes",
   ".agents/skills/st-unattended/references/cloud.md": "773c59f47098b1f9a609b69fddf57d8e4e30c387625a4c494dd622f30dc7c62c 7843 bytes",
@@ -8830,7 +8830,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".claude/skills/st-onboard/agents/openai.yaml": "5bc57a6fd27440d5f4a4460065a831d281365b8e80cd0ae412e0488a7ace9351 150 bytes",
   ".claude/skills/st-qa/SKILL.md": "17e6676258a6d6a1064f4f3ba30f683e0e3c3450886e28aeec97f372ae4b6cae 10192 bytes",
   ".claude/skills/st-qa/agents/openai.yaml": "3757a9476321ed7a8e1ea39a8ea0d51eb0bd7ea7f67969c54f545099d5be20e1 135 bytes",
-  ".claude/skills/st-unattended/SKILL.md": "38cb73fedf94c4f3837cf9ea3707e00e67c86ff2363a486680ff68d1588758c2 16799 bytes",
+  ".claude/skills/st-unattended/SKILL.md": "0dc97d84a3fb1efe9fbc899b1777c25dc8d7fff54ce1e1cb045fde79aca04f0b 16764 bytes",
   ".claude/skills/st-unattended/agents/openai.yaml": "09cd1ea5e109f80be04b19f1b1e43602b6aad4972fc6e248d6e355a1c6e72df1 202 bytes",
   ".claude/skills/st-unattended/references/chains.md": "36f0a28346c24a899d0f27e6f39070964cc25f2ebce886d0b21b99cc8d277d8d 1479 bytes",
   ".claude/skills/st-unattended/references/cloud.md": "773c59f47098b1f9a609b69fddf57d8e4e30c387625a4c494dd622f30dc7c62c 7843 bytes",
@@ -8956,18 +8956,18 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "67a8941db6ee267fda22576c40dae7aa842a592ef7d773639a9e2ab0988b6fa9 94283 bytes",
+  ".stamity/manifest.json": "68984cc9f918d50711af1c194f48b61e6345bd3056db301116fae1e519e1daef 94283 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
-  "AGENTS.md": "c88cdd0009ebee3b8c5ddd7081e24728535d318d1635badd552610d55e7cb5a1 6476 bytes",
-  "AGENTS.override.md": "76f5c52aa0aaaa91bf4d1d283c50c931865af90b3c6c75b8d45701e0650c1388 25800 bytes",
+  "AGENTS.md": "52317d9689d91726e861c18f197185053f6a796402694fbb58a77c98be7a9edc 6548 bytes",
+  "AGENTS.override.md": "59f3a8d80630df9a63213670a8550049141d2194398a23dbe9fa8cc55438d4a8 25872 bytes",
   "CLAUDE.md": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
-  "packages/alpha/AGENTS.md": "b551629ca410622b5f86526a3fdfd0a186206f9ea9b50895c9ac7ca2dab99d22 5610 bytes",
+  "packages/alpha/AGENTS.md": "27fbe8f89af583a7ecca9468f772454f6b6f91f5c5d38923b3c3c0a1e78f430b 5682 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
   "packages/alpha/src/index.ts": "861f47677ae6211aa1c061e4539af4aec5ece3ad7cd009963cf22d3274a9ba5a 27 bytes",
-  "packages/beta/AGENTS.md": "b551629ca410622b5f86526a3fdfd0a186206f9ea9b50895c9ac7ca2dab99d22 5610 bytes",
+  "packages/beta/AGENTS.md": "27fbe8f89af583a7ecca9468f772454f6b6f91f5c5d38923b3c3c0a1e78f430b 5682 bytes",
   "packages/beta/package.json": "3e2d6efbc58f695353eaf34b6b1f3a65e3cd5093da2ac0a315f088fad21eddd1 70 bytes",
   "packages/beta/src/index.ts": "00fbaec0f27cf6037ed8001f2340a515175b1c48686ee94d6acd2513254a05b5 26 bytes",
   "pnpm-lock.yaml": "f0bcde463fa201480015b9caa7db2017d3c1b6ca9c7e133df955038c54333d48 23 bytes",
@@ -16343,6 +16343,8 @@ if (refusal !== null) {
 
 The always-on context for agents working in this repository. Everything else loads on demand:
 rules attach by file path or by description, skills trigger by description, commands run on invocation.
+Write every reply in plain words: short sentences, common words, no jargon the reader has to decode. Say how sure
+you are and what that rests on, and when the answer is no, say no first, then why.
 
 ## Repo facts
 
@@ -16352,7 +16354,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 - Linter: eslint
 - Test framework: vitest
 - CI provider: github-actions
-- Maturity tier: team — seeded from git history at init; change via \`npx -y @zomarit/stamity@1.0.0-golden config\`.
+- Maturity tier: team — git history at init, or the default; \`npx -y @zomarit/stamity@1.0.0-golden config\` changes it.
 
 ### Verification gates
 
@@ -16364,7 +16366,7 @@ Run before declaring any change done; invariant 4 says which of them.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.3.0 · ratified 2026-08-31 · last amended 2026-10-14
+Invariants version 1.3.1 · ratified 2026-08-31 · last amended 2026-10-21
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -16382,8 +16384,9 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
-   banner or, where no hook ran, \`node .stamity/generated/hooks/<client>/stamity-session-start.mjs\` run with an empty
-   stdin, opening only the files it lists as loaded; repeating a recorded failure is a process defect.
+   banner or, where no hook ran, the client's own \`stamity-session-start.mjs\` (\`.<client>/hooks/stamity/\` where that
+   folder exists, else \`.stamity/generated/hooks/<client>/\`) run with an empty stdin, opening only the files it
+   lists as loaded; repeating a recorded failure is a process defect.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
    break across file boundaries. Census shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
@@ -16410,18 +16413,15 @@ as any skill (\`/st-<id>\` or \`$st-<id>\`); with neither, ask for the outcome i
 
 ## Conditional layer
 
-- Rules ship in two attach shapes, and the emitted rules directory is the roster — read it rather than a count kept
-  here, because selection and installed packs both change what landed.
+- The emitted rules directory is the roster: read it, not a count kept here; selection and packs change what landed.
 - A glob-scoped rule attaches when the agent reads a file matching its globs, except on a
   client with no glob-rule layer, where it is inlined into the always-on file of the directory those globs anchor
   to. A description-scoped rule declares no globs, so what it costs depends on the client: one that
   supports description-pull loads it on relevance, and one that does not loads it every session alongside this file.
-- Neither shape replaces the charter. Content that must bind every turn on every client belongs here, not in a rule
-  that three clients out of four would have to load unconditionally to honour.
+- Neither shape replaces the charter: what must bind every turn on every client belongs here, not in a rule.
 - A model-backed feature ships with a versioned golden-and-adversarial eval set, thresholds declared before the run.
 - Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native copy where the
-  client reads its own location. Named invocation beats waiting for a trigger match — call a skill whenever its
-  description fits the job.
+  client reads its own location; call a skill by name whenever its description fits the job.
 ",
   "CLAUDE.md": "<!-- STAMITY:BEGIN v1.0.0-golden -->
 @AGENTS.md
@@ -16480,7 +16480,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".claude/skills/st-onboard/agents/openai.yaml": "5bc57a6fd27440d5f4a4460065a831d281365b8e80cd0ae412e0488a7ace9351 150 bytes",
   ".claude/skills/st-qa/SKILL.md": "17e6676258a6d6a1064f4f3ba30f683e0e3c3450886e28aeec97f372ae4b6cae 10192 bytes",
   ".claude/skills/st-qa/agents/openai.yaml": "3757a9476321ed7a8e1ea39a8ea0d51eb0bd7ea7f67969c54f545099d5be20e1 135 bytes",
-  ".claude/skills/st-unattended/SKILL.md": "38cb73fedf94c4f3837cf9ea3707e00e67c86ff2363a486680ff68d1588758c2 16799 bytes",
+  ".claude/skills/st-unattended/SKILL.md": "0dc97d84a3fb1efe9fbc899b1777c25dc8d7fff54ce1e1cb045fde79aca04f0b 16764 bytes",
   ".claude/skills/st-unattended/agents/openai.yaml": "09cd1ea5e109f80be04b19f1b1e43602b6aad4972fc6e248d6e355a1c6e72df1 202 bytes",
   ".claude/skills/st-unattended/references/chains.md": "36f0a28346c24a899d0f27e6f39070964cc25f2ebce886d0b21b99cc8d277d8d 1479 bytes",
   ".claude/skills/st-unattended/references/cloud.md": "773c59f47098b1f9a609b69fddf57d8e4e30c387625a4c494dd622f30dc7c62c 7843 bytes",
@@ -16515,8 +16515,8 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "1b1e4c72bdb61f5ceaa720ed3f9627ebc9a33dd7a8eb342528fa0b55ab736a2e 29802 bytes",
-  "AGENTS.md": "b551629ca410622b5f86526a3fdfd0a186206f9ea9b50895c9ac7ca2dab99d22 5610 bytes",
+  ".stamity/manifest.json": "c95c2b98752878d9b0842876edf04d2e50cc56b54f243a443806c57419926d00 29802 bytes",
+  "AGENTS.md": "27fbe8f89af583a7ecca9468f772454f6b6f91f5c5d38923b3c3c0a1e78f430b 5682 bytes",
   "CLAUDE.md": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
@@ -16674,6 +16674,8 @@ env_vars = ["GITHUB_PAT"]
 
 The always-on context for agents working in this repository. Everything else loads on demand:
 rules attach by file path or by description, skills trigger by description, commands run on invocation.
+Write every reply in plain words: short sentences, common words, no jargon the reader has to decode. Say how sure
+you are and what that rests on, and when the answer is no, say no first, then why.
 
 ## Repo facts
 
@@ -16683,7 +16685,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 - Linter: eslint
 - Test framework: vitest
 - CI provider: github-actions
-- Maturity tier: team — seeded from git history at init; change via \`npx -y @zomarit/stamity@1.0.0-golden config\`.
+- Maturity tier: team — git history at init, or the default; \`npx -y @zomarit/stamity@1.0.0-golden config\` changes it.
 
 ### Verification gates
 
@@ -16695,7 +16697,7 @@ Run before declaring any change done; invariant 4 says which of them.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.3.0 · ratified 2026-08-31 · last amended 2026-10-14
+Invariants version 1.3.1 · ratified 2026-08-31 · last amended 2026-10-21
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -16713,8 +16715,9 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
-   banner or, where no hook ran, \`node .stamity/generated/hooks/<client>/stamity-session-start.mjs\` run with an empty
-   stdin, opening only the files it lists as loaded; repeating a recorded failure is a process defect.
+   banner or, where no hook ran, the client's own \`stamity-session-start.mjs\` (\`.<client>/hooks/stamity/\` where that
+   folder exists, else \`.stamity/generated/hooks/<client>/\`) run with an empty stdin, opening only the files it
+   lists as loaded; repeating a recorded failure is a process defect.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
    break across file boundaries. Census shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
@@ -16741,24 +16744,23 @@ as any skill (\`/st-<id>\` or \`$st-<id>\`); with neither, ask for the outcome i
 
 ## Conditional layer
 
-- Rules ship in two attach shapes, and the emitted rules directory is the roster — read it rather than a count kept
-  here, because selection and installed packs both change what landed.
+- The emitted rules directory is the roster: read it, not a count kept here; selection and packs change what landed.
 - A glob-scoped rule attaches when the agent reads a file matching its globs, except on a
   client with no glob-rule layer, where it is inlined into the always-on file of the directory those globs anchor
   to. A description-scoped rule declares no globs, so what it costs depends on the client: one that
   supports description-pull loads it on relevance, and one that does not loads it every session alongside this file.
-- Neither shape replaces the charter. Content that must bind every turn on every client belongs here, not in a rule
-  that three clients out of four would have to load unconditionally to honour.
+- Neither shape replaces the charter: what must bind every turn on every client belongs here, not in a rule.
 - A model-backed feature ships with a versioned golden-and-adversarial eval set, thresholds declared before the run.
 - Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native copy where the
-  client reads its own location. Named invocation beats waiting for a trigger match — call a skill whenever its
-  description fits the job.
+  client reads its own location; call a skill by name whenever its description fits the job.
 ",
   "AGENTS.override.md": "
 # Charter
 
 The always-on context for agents working in this repository. Everything else loads on demand:
 rules attach by file path or by description, skills trigger by description, commands run on invocation.
+Write every reply in plain words: short sentences, common words, no jargon the reader has to decode. Say how sure
+you are and what that rests on, and when the answer is no, say no first, then why.
 
 ## Repo facts
 
@@ -16768,7 +16770,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 - Linter: eslint
 - Test framework: vitest
 - CI provider: github-actions
-- Maturity tier: team — seeded from git history at init; change via \`npx -y @zomarit/stamity@1.0.0-golden config\`.
+- Maturity tier: team — git history at init, or the default; \`npx -y @zomarit/stamity@1.0.0-golden config\` changes it.
 
 ### Verification gates
 
@@ -16780,7 +16782,7 @@ Run before declaring any change done; invariant 4 says which of them.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.3.0 · ratified 2026-08-31 · last amended 2026-10-14
+Invariants version 1.3.1 · ratified 2026-08-31 · last amended 2026-10-21
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -16798,8 +16800,9 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
-   banner or, where no hook ran, \`node .stamity/generated/hooks/<client>/stamity-session-start.mjs\` run with an empty
-   stdin, opening only the files it lists as loaded; repeating a recorded failure is a process defect.
+   banner or, where no hook ran, the client's own \`stamity-session-start.mjs\` (\`.<client>/hooks/stamity/\` where that
+   folder exists, else \`.stamity/generated/hooks/<client>/\`) run with an empty stdin, opening only the files it
+   lists as loaded; repeating a recorded failure is a process defect.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
    break across file boundaries. Census shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
@@ -16826,18 +16829,15 @@ as any skill (\`/st-<id>\` or \`$st-<id>\`); with neither, ask for the outcome i
 
 ## Conditional layer
 
-- Rules ship in two attach shapes, and the emitted rules directory is the roster — read it rather than a count kept
-  here, because selection and installed packs both change what landed.
+- The emitted rules directory is the roster: read it, not a count kept here; selection and packs change what landed.
 - A glob-scoped rule attaches when the agent reads a file matching its globs, except on a
   client with no glob-rule layer, where it is inlined into the always-on file of the directory those globs anchor
   to. A description-scoped rule declares no globs, so what it costs depends on the client: one that
   supports description-pull loads it on relevance, and one that does not loads it every session alongside this file.
-- Neither shape replaces the charter. Content that must bind every turn on every client belongs here, not in a rule
-  that three clients out of four would have to load unconditionally to honour.
+- Neither shape replaces the charter: what must bind every turn on every client belongs here, not in a rule.
 - A model-backed feature ships with a versioned golden-and-adversarial eval set, thresholds declared before the run.
 - Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native copy where the
-  client reads its own location. Named invocation beats waiting for a trigger match — call a skill whenever its
-  description fits the job.
+  client reads its own location; call a skill by name whenever its description fits the job.
 
 ## Conditional rules (Codex down-conversion)
 
@@ -17135,6 +17135,8 @@ Credential handling is the secrets rule's subject and is not restated here.
 
 The always-on context for agents working in this repository. Everything else loads on demand:
 rules attach by file path or by description, skills trigger by description, commands run on invocation.
+Write every reply in plain words: short sentences, common words, no jargon the reader has to decode. Say how sure
+you are and what that rests on, and when the answer is no, say no first, then why.
 
 ## Repo facts
 
@@ -17144,7 +17146,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 - Linter: eslint
 - Test framework: vitest
 - CI provider: github-actions
-- Maturity tier: team — seeded from git history at init; change via \`npx -y @zomarit/stamity@1.0.0-golden config\`.
+- Maturity tier: team — git history at init, or the default; \`npx -y @zomarit/stamity@1.0.0-golden config\` changes it.
 
 ### Verification gates
 
@@ -17156,7 +17158,7 @@ Run before declaring any change done; invariant 4 says which of them.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.3.0 · ratified 2026-08-31 · last amended 2026-10-14
+Invariants version 1.3.1 · ratified 2026-08-31 · last amended 2026-10-21
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -17174,8 +17176,9 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
-   banner or, where no hook ran, \`node .stamity/generated/hooks/<client>/stamity-session-start.mjs\` run with an empty
-   stdin, opening only the files it lists as loaded; repeating a recorded failure is a process defect.
+   banner or, where no hook ran, the client's own \`stamity-session-start.mjs\` (\`.<client>/hooks/stamity/\` where that
+   folder exists, else \`.stamity/generated/hooks/<client>/\`) run with an empty stdin, opening only the files it
+   lists as loaded; repeating a recorded failure is a process defect.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
    break across file boundaries. Census shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
@@ -17202,24 +17205,23 @@ as any skill (\`/st-<id>\` or \`$st-<id>\`); with neither, ask for the outcome i
 
 ## Conditional layer
 
-- Rules ship in two attach shapes, and the emitted rules directory is the roster — read it rather than a count kept
-  here, because selection and installed packs both change what landed.
+- The emitted rules directory is the roster: read it, not a count kept here; selection and packs change what landed.
 - A glob-scoped rule attaches when the agent reads a file matching its globs, except on a
   client with no glob-rule layer, where it is inlined into the always-on file of the directory those globs anchor
   to. A description-scoped rule declares no globs, so what it costs depends on the client: one that
   supports description-pull loads it on relevance, and one that does not loads it every session alongside this file.
-- Neither shape replaces the charter. Content that must bind every turn on every client belongs here, not in a rule
-  that three clients out of four would have to load unconditionally to honour.
+- Neither shape replaces the charter: what must bind every turn on every client belongs here, not in a rule.
 - A model-backed feature ships with a versioned golden-and-adversarial eval set, thresholds declared before the run.
 - Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native copy where the
-  client reads its own location. Named invocation beats waiting for a trigger match — call a skill whenever its
-  description fits the job.
+  client reads its own location; call a skill by name whenever its description fits the job.
 ",
   "packages/beta/AGENTS.md": "
 # Charter
 
 The always-on context for agents working in this repository. Everything else loads on demand:
 rules attach by file path or by description, skills trigger by description, commands run on invocation.
+Write every reply in plain words: short sentences, common words, no jargon the reader has to decode. Say how sure
+you are and what that rests on, and when the answer is no, say no first, then why.
 
 ## Repo facts
 
@@ -17229,7 +17231,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 - Linter: eslint
 - Test framework: vitest
 - CI provider: github-actions
-- Maturity tier: team — seeded from git history at init; change via \`npx -y @zomarit/stamity@1.0.0-golden config\`.
+- Maturity tier: team — git history at init, or the default; \`npx -y @zomarit/stamity@1.0.0-golden config\` changes it.
 
 ### Verification gates
 
@@ -17241,7 +17243,7 @@ Run before declaring any change done; invariant 4 says which of them.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.3.0 · ratified 2026-08-31 · last amended 2026-10-14
+Invariants version 1.3.1 · ratified 2026-08-31 · last amended 2026-10-21
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -17259,8 +17261,9 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
-   banner or, where no hook ran, \`node .stamity/generated/hooks/<client>/stamity-session-start.mjs\` run with an empty
-   stdin, opening only the files it lists as loaded; repeating a recorded failure is a process defect.
+   banner or, where no hook ran, the client's own \`stamity-session-start.mjs\` (\`.<client>/hooks/stamity/\` where that
+   folder exists, else \`.stamity/generated/hooks/<client>/\`) run with an empty stdin, opening only the files it
+   lists as loaded; repeating a recorded failure is a process defect.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
    break across file boundaries. Census shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
@@ -17287,18 +17290,15 @@ as any skill (\`/st-<id>\` or \`$st-<id>\`); with neither, ask for the outcome i
 
 ## Conditional layer
 
-- Rules ship in two attach shapes, and the emitted rules directory is the roster — read it rather than a count kept
-  here, because selection and installed packs both change what landed.
+- The emitted rules directory is the roster: read it, not a count kept here; selection and packs change what landed.
 - A glob-scoped rule attaches when the agent reads a file matching its globs, except on a
   client with no glob-rule layer, where it is inlined into the always-on file of the directory those globs anchor
   to. A description-scoped rule declares no globs, so what it costs depends on the client: one that
   supports description-pull loads it on relevance, and one that does not loads it every session alongside this file.
-- Neither shape replaces the charter. Content that must bind every turn on every client belongs here, not in a rule
-  that three clients out of four would have to load unconditionally to honour.
+- Neither shape replaces the charter: what must bind every turn on every client belongs here, not in a rule.
 - A model-backed feature ships with a versioned golden-and-adversarial eval set, thresholds declared before the run.
 - Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native copy where the
-  client reads its own location. Named invocation beats waiting for a trigger match — call a skill whenever its
-  description fits the job.
+  client reads its own location; call a skill by name whenever its description fits the job.
 ",
 }
 `;
@@ -17331,7 +17331,7 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".agents/skills/st-rework/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
   ".agents/skills/st-spec/SKILL.md": "b5770c6320d8fd6357e55645b0c8b7708ccc14faf73e5c6c6a476bfb52923e50 18992 bytes",
   ".agents/skills/st-spec/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
-  ".agents/skills/st-unattended/SKILL.md": "38cb73fedf94c4f3837cf9ea3707e00e67c86ff2363a486680ff68d1588758c2 16799 bytes",
+  ".agents/skills/st-unattended/SKILL.md": "0dc97d84a3fb1efe9fbc899b1777c25dc8d7fff54ce1e1cb045fde79aca04f0b 16764 bytes",
   ".agents/skills/st-unattended/agents/openai.yaml": "09cd1ea5e109f80be04b19f1b1e43602b6aad4972fc6e248d6e355a1c6e72df1 202 bytes",
   ".agents/skills/st-unattended/references/chains.md": "36f0a28346c24a899d0f27e6f39070964cc25f2ebce886d0b21b99cc8d277d8d 1479 bytes",
   ".agents/skills/st-unattended/references/cloud.md": "773c59f47098b1f9a609b69fddf57d8e4e30c387625a4c494dd622f30dc7c62c 7843 bytes",
@@ -17384,15 +17384,15 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "f9851b358a6d45153833acfe4c46d30e3e9e6c39cc28b6e4749b2543db93314d 21655 bytes",
-  "AGENTS.md": "b551629ca410622b5f86526a3fdfd0a186206f9ea9b50895c9ac7ca2dab99d22 5610 bytes",
-  "AGENTS.override.md": "76f5c52aa0aaaa91bf4d1d283c50c931865af90b3c6c75b8d45701e0650c1388 25800 bytes",
+  ".stamity/manifest.json": "1b5e951f8565a8538ae1a510631e7aa0c309c81f32b474e93f5dfb5a5e6951d8 21655 bytes",
+  "AGENTS.md": "27fbe8f89af583a7ecca9468f772454f6b6f91f5c5d38923b3c3c0a1e78f430b 5682 bytes",
+  "AGENTS.override.md": "59f3a8d80630df9a63213670a8550049141d2194398a23dbe9fa8cc55438d4a8 25872 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
-  "packages/alpha/AGENTS.md": "b551629ca410622b5f86526a3fdfd0a186206f9ea9b50895c9ac7ca2dab99d22 5610 bytes",
+  "packages/alpha/AGENTS.md": "27fbe8f89af583a7ecca9468f772454f6b6f91f5c5d38923b3c3c0a1e78f430b 5682 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
   "packages/alpha/src/index.ts": "861f47677ae6211aa1c061e4539af4aec5ece3ad7cd009963cf22d3274a9ba5a 27 bytes",
-  "packages/beta/AGENTS.md": "b551629ca410622b5f86526a3fdfd0a186206f9ea9b50895c9ac7ca2dab99d22 5610 bytes",
+  "packages/beta/AGENTS.md": "27fbe8f89af583a7ecca9468f772454f6b6f91f5c5d38923b3c3c0a1e78f430b 5682 bytes",
   "packages/beta/package.json": "3e2d6efbc58f695353eaf34b6b1f3a65e3cd5093da2ac0a315f088fad21eddd1 70 bytes",
   "packages/beta/src/index.ts": "00fbaec0f27cf6037ed8001f2340a515175b1c48686ee94d6acd2513254a05b5 26 bytes",
   "pnpm-lock.yaml": "f0bcde463fa201480015b9caa7db2017d3c1b6ca9c7e133df955038c54333d48 23 bytes",
@@ -17573,6 +17573,8 @@ COPILOT_MCP_GITHUB={"type":"local","command":"npx","args":["-y","mcp-remote@0.1.
 
 The always-on context for agents working in this repository. Everything else loads on demand:
 rules attach by file path or by description, skills trigger by description, commands run on invocation.
+Write every reply in plain words: short sentences, common words, no jargon the reader has to decode. Say how sure
+you are and what that rests on, and when the answer is no, say no first, then why.
 
 ## Repo facts
 
@@ -17582,7 +17584,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 - Linter: eslint
 - Test framework: vitest
 - CI provider: github-actions
-- Maturity tier: team — seeded from git history at init; change via \`npx -y @zomarit/stamity@1.0.0-golden config\`.
+- Maturity tier: team — git history at init, or the default; \`npx -y @zomarit/stamity@1.0.0-golden config\` changes it.
 
 ### Verification gates
 
@@ -17594,7 +17596,7 @@ Run before declaring any change done; invariant 4 says which of them.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.3.0 · ratified 2026-08-31 · last amended 2026-10-14
+Invariants version 1.3.1 · ratified 2026-08-31 · last amended 2026-10-21
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -17612,8 +17614,9 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
-   banner or, where no hook ran, \`node .stamity/generated/hooks/<client>/stamity-session-start.mjs\` run with an empty
-   stdin, opening only the files it lists as loaded; repeating a recorded failure is a process defect.
+   banner or, where no hook ran, the client's own \`stamity-session-start.mjs\` (\`.<client>/hooks/stamity/\` where that
+   folder exists, else \`.stamity/generated/hooks/<client>/\`) run with an empty stdin, opening only the files it
+   lists as loaded; repeating a recorded failure is a process defect.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
    break across file boundaries. Census shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
@@ -17640,18 +17643,15 @@ as any skill (\`/st-<id>\` or \`$st-<id>\`); with neither, ask for the outcome i
 
 ## Conditional layer
 
-- Rules ship in two attach shapes, and the emitted rules directory is the roster — read it rather than a count kept
-  here, because selection and installed packs both change what landed.
+- The emitted rules directory is the roster: read it, not a count kept here; selection and packs change what landed.
 - A glob-scoped rule attaches when the agent reads a file matching its globs, except on a
   client with no glob-rule layer, where it is inlined into the always-on file of the directory those globs anchor
   to. A description-scoped rule declares no globs, so what it costs depends on the client: one that
   supports description-pull loads it on relevance, and one that does not loads it every session alongside this file.
-- Neither shape replaces the charter. Content that must bind every turn on every client belongs here, not in a rule
-  that three clients out of four would have to load unconditionally to honour.
+- Neither shape replaces the charter: what must bind every turn on every client belongs here, not in a rule.
 - A model-backed feature ships with a versioned golden-and-adversarial eval set, thresholds declared before the run.
 - Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native copy where the
-  client reads its own location. Named invocation beats waiting for a trigger match — call a skill whenever its
-  description fits the job.
+  client reads its own location; call a skill by name whenever its description fits the job.
 ",
 }
 `;
@@ -17668,7 +17668,7 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".agents/skills/st-onboard/agents/openai.yaml": "5bc57a6fd27440d5f4a4460065a831d281365b8e80cd0ae412e0488a7ace9351 150 bytes",
   ".agents/skills/st-qa/SKILL.md": "17e6676258a6d6a1064f4f3ba30f683e0e3c3450886e28aeec97f372ae4b6cae 10192 bytes",
   ".agents/skills/st-qa/agents/openai.yaml": "3757a9476321ed7a8e1ea39a8ea0d51eb0bd7ea7f67969c54f545099d5be20e1 135 bytes",
-  ".agents/skills/st-unattended/SKILL.md": "38cb73fedf94c4f3837cf9ea3707e00e67c86ff2363a486680ff68d1588758c2 16799 bytes",
+  ".agents/skills/st-unattended/SKILL.md": "0dc97d84a3fb1efe9fbc899b1777c25dc8d7fff54ce1e1cb045fde79aca04f0b 16764 bytes",
   ".agents/skills/st-unattended/agents/openai.yaml": "09cd1ea5e109f80be04b19f1b1e43602b6aad4972fc6e248d6e355a1c6e72df1 202 bytes",
   ".agents/skills/st-unattended/references/chains.md": "36f0a28346c24a899d0f27e6f39070964cc25f2ebce886d0b21b99cc8d277d8d 1479 bytes",
   ".agents/skills/st-unattended/references/cloud.md": "773c59f47098b1f9a609b69fddf57d8e4e30c387625a4c494dd622f30dc7c62c 7843 bytes",
@@ -17732,10 +17732,10 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "31d7cd48c0eb5a7c933c4596498afd7b07351016cb6795c26cb2586628a99eef 19752 bytes",
+  ".stamity/manifest.json": "a7846ba9f63f92b43aac6b469599c08d94dd4da3b9e2babcdcf65164b0d7578e 19752 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
-  "AGENTS.md": "b551629ca410622b5f86526a3fdfd0a186206f9ea9b50895c9ac7ca2dab99d22 5610 bytes",
+  "AGENTS.md": "27fbe8f89af583a7ecca9468f772454f6b6f91f5c5d38923b3c3c0a1e78f430b 5682 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
@@ -18169,6 +18169,8 @@ if (agentId === "") {
 
 The always-on context for agents working in this repository. Everything else loads on demand:
 rules attach by file path or by description, skills trigger by description, commands run on invocation.
+Write every reply in plain words: short sentences, common words, no jargon the reader has to decode. Say how sure
+you are and what that rests on, and when the answer is no, say no first, then why.
 
 ## Repo facts
 
@@ -18178,7 +18180,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 - Linter: eslint
 - Test framework: vitest
 - CI provider: github-actions
-- Maturity tier: team — seeded from git history at init; change via \`npx -y @zomarit/stamity@1.0.0-golden config\`.
+- Maturity tier: team — git history at init, or the default; \`npx -y @zomarit/stamity@1.0.0-golden config\` changes it.
 
 ### Verification gates
 
@@ -18190,7 +18192,7 @@ Run before declaring any change done; invariant 4 says which of them.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.3.0 · ratified 2026-08-31 · last amended 2026-10-14
+Invariants version 1.3.1 · ratified 2026-08-31 · last amended 2026-10-21
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -18208,8 +18210,9 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
-   banner or, where no hook ran, \`node .stamity/generated/hooks/<client>/stamity-session-start.mjs\` run with an empty
-   stdin, opening only the files it lists as loaded; repeating a recorded failure is a process defect.
+   banner or, where no hook ran, the client's own \`stamity-session-start.mjs\` (\`.<client>/hooks/stamity/\` where that
+   folder exists, else \`.stamity/generated/hooks/<client>/\`) run with an empty stdin, opening only the files it
+   lists as loaded; repeating a recorded failure is a process defect.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
    break across file boundaries. Census shared contracts before parallel edits touch them.
 7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
@@ -18236,18 +18239,15 @@ as any skill (\`/st-<id>\` or \`$st-<id>\`); with neither, ask for the outcome i
 
 ## Conditional layer
 
-- Rules ship in two attach shapes, and the emitted rules directory is the roster — read it rather than a count kept
-  here, because selection and installed packs both change what landed.
+- The emitted rules directory is the roster: read it, not a count kept here; selection and packs change what landed.
 - A glob-scoped rule attaches when the agent reads a file matching its globs, except on a
   client with no glob-rule layer, where it is inlined into the always-on file of the directory those globs anchor
   to. A description-scoped rule declares no globs, so what it costs depends on the client: one that
   supports description-pull loads it on relevance, and one that does not loads it every session alongside this file.
-- Neither shape replaces the charter. Content that must bind every turn on every client belongs here, not in a rule
-  that three clients out of four would have to load unconditionally to honour.
+- Neither shape replaces the charter: what must bind every turn on every client belongs here, not in a rule.
 - A model-backed feature ships with a versioned golden-and-adversarial eval set, thresholds declared before the run.
 - Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native copy where the
-  client reads its own location. Named invocation beats waiting for a trigger match — call a skill whenever its
-  description fits the job.
+  client reads its own location; call a skill by name whenever its description fits the job.
 
 ## Cursor Cloud specific instructions
 
@@ -18294,7 +18294,7 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".agents/skills/st-rework/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
   ".agents/skills/st-spec/SKILL.md": "b5770c6320d8fd6357e55645b0c8b7708ccc14faf73e5c6c6a476bfb52923e50 18992 bytes",
   ".agents/skills/st-spec/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
-  ".agents/skills/st-unattended/SKILL.md": "38cb73fedf94c4f3837cf9ea3707e00e67c86ff2363a486680ff68d1588758c2 16799 bytes",
+  ".agents/skills/st-unattended/SKILL.md": "0dc97d84a3fb1efe9fbc899b1777c25dc8d7fff54ce1e1cb045fde79aca04f0b 16764 bytes",
   ".agents/skills/st-unattended/agents/openai.yaml": "09cd1ea5e109f80be04b19f1b1e43602b6aad4972fc6e248d6e355a1c6e72df1 202 bytes",
   ".agents/skills/st-unattended/references/chains.md": "36f0a28346c24a899d0f27e6f39070964cc25f2ebce886d0b21b99cc8d277d8d 1479 bytes",
   ".agents/skills/st-unattended/references/cloud.md": "773c59f47098b1f9a609b69fddf57d8e4e30c387625a4c494dd622f30dc7c62c 7843 bytes",
@@ -18355,8 +18355,8 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "a10a5893d4f9ee060c1bf9b5746ff76a80cc27811cd05a8e583cb86d35cb3b67 23598 bytes",
-  "AGENTS.md": "c88cdd0009ebee3b8c5ddd7081e24728535d318d1635badd552610d55e7cb5a1 6476 bytes",
+  ".stamity/manifest.json": "abd83be1658fb22d2ccb8ff9e58750993b4e4f186e678b500155d37312e17a2a 23598 bytes",
+  "AGENTS.md": "52317d9689d91726e861c18f197185053f6a796402694fbb58a77c98be7a9edc 6548 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",

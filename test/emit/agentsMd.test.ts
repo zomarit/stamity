@@ -580,7 +580,10 @@ describe("renderAgentsMd over the shipped corpus template", () => {
 
     expect(dialless.root.content.match(WELL_FORMED_TOKEN)).toBeNull();
     expect(dialless.root.content).not.toContain("${STAMITY:");
-    expect(dialless.root.content).toContain("- Maturity tier: solo — seeded from git history");
+    // TEST CHANGE, justified (2026-10-21, plan 018 file 2, unit u4-charter; inbox row 174): the
+    // charter's maturity line names the default beside git history, since a repo with too little
+    // history takes the default rather than a measured tier. The token still resolves per manifest.
+    expect(dialless.root.content).toContain("- Maturity tier: solo — git history at init, or the default;");
     expect(dialless.root.content.startsWith("---")).toBe(false);
 
     const tiered = await renderAgentsMd({
@@ -588,7 +591,7 @@ describe("renderAgentsMd over the shipped corpus template", () => {
       facts: { monorepoPackages: [] },
       contentRoot: CORPUS_ROOT,
     });
-    expect(tiered.root.content).toContain("- Maturity tier: enterprise — seeded from git history");
+    expect(tiered.root.content).toContain("- Maturity tier: enterprise — git history at init, or the default;");
   });
 });
 
