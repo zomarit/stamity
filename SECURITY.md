@@ -53,8 +53,8 @@ own sync runs inside it. A cascade that is not a `--dry-run` preview also append
 Three sources install a PACK, and no more. Nothing on any of them is fetched over the network.
 
 1. **Bundled first-party packs** shipped inside this package. They resolve through the curated
-   catalog by bare id (`stamity add ops`).
-2. **A local directory** named by a path-shaped spec (`stamity add ./packs/ops`). An explicit path
+   catalog by bare id (`stamity add frontend`).
+2. **A local directory** named by a path-shaped spec (`stamity add ./packs/frontend`). An explicit path
    always means the directory, even when a catalog entry shares its name.
 3. **A package already present under `node_modules/`**, named by its package name
    (`stamity add @acme/ops`). This one is a real route, not a footnote. The default refusal coaches
@@ -634,7 +634,11 @@ refused. What stays open is named here, as accepted risk:
   runs them with its token, so a person who runs the Action on pull requests from outside keeps such
   scripts under `.claude/` or drops them. And until the base branch carries a `sync` that writes the
   copies, its hook entries run the scripts under `.stamity/generated/hooks/claude/`, which come from
-  the pull request. The restore has a limit the Action's source names as its own: a pull request that
+  the pull request. Those old copies are gone after the upgrade's `sync`, which no longer writes them
+  and removes each one still as it wrote it, so on an upgrade pull request whose base predates
+  1.16.0 the base's entries name scripts that pull request removed: those hooks cannot start, and the
+  guard's entry, failing closed, refuses every tool call on its Action run until it merges. The
+  restore has a limit the Action's source names as its own: a pull request that
   changes `.claude/` sees that change reverted on its Action run, and an agent there that commits with
   `git add -A` puts the revert onto the pull request's branch.
 - **The record head.** The guard reads whether a run is unattended off the run records, so a run

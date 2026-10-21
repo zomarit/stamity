@@ -4912,14 +4912,22 @@ describe("docs/cloud.md", () => {
     expect(section).toContain(`\`${CLAUDE_HOOKS_DIR}/\``);
     expect(section).toMatch(/a pull request cannot change what the guard runs on its own Action run/);
     expect(section).not.toMatch(/a pull request can change what the guard runs/);
+    // TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-113, REQ-FLOW-088): the generated copies
+    // are no longer written, so the page says the upgrade's `sync` removes them (keeping an edited one), which copy
+    // a session run by hand starts, and the window an upgrade pull request on a base older than 1.16.0 opens.
+    expect(section).not.toMatch(/are still written/);
+    expect(section).toMatch(/The older copies under `\.stamity\/generated\/hooks\/claude\/` are no longer written: the upgrade's `sync` removes each one still as it wrote it and keeps and names one you edited/);
+    expect(section).toMatch(/a session run by hand where no hook ran starts `\.claude\/hooks\/stamity\/stamity-session-start\.mjs`/);
     expect(section).toMatch(
-      /The copies under `\.stamity\/generated\/hooks\/claude\/` are still written, for the session start[^.]*; no hook entry runs them\./,
+      /on a pull request whose base predates 1\.16\.0, the base's entries name the scripts that pull request's `sync` removed, so those hooks cannot start, and the guard's entry, failing closed, refuses every tool call on that Action run/,
     );
     // TEST CHANGE, justified (ledger row review/162): "holds only until the base branch carries a `sync`" had the
     // timing backwards; the restore covers Stamity's hooks only once the base carries that sync, and before it the
     // base's entries run the copies outside `.claude/` (SECURITY.md's Action residual). The pin refuses "until".
     expect(section).not.toMatch(/holds only until the base branch carries a `sync`/);
-    expect(section).toMatch(/That holds only once the base branch carries a `sync` that writes those copies\. Before it, the base branch's entries run the scripts under `\.stamity\/generated\/hooks\/claude\/`/);
+    // TEST CHANGE, justified (u5-hook-copies): the sentence names the copies by their folder, the generated ones
+    // being gone; the timing it pins is unchanged.
+    expect(section).toMatch(/All of this holds only once the base branch carries a `sync` that writes the copies under `\.claude\/hooks\/stamity\/`\. Before it, the base branch's entries run the scripts under `\.stamity\/generated\/hooks\/claude\/`/);
     expect(section).toContain("`AGENTS.md`");
     expect(section).toMatch(/that pull request's `AGENTS\.md`/);
     // TEST CHANGE, justified (ledger row review/163): the session start also reads the resumable handoffs under
@@ -5082,8 +5090,10 @@ describe("docs/cloud.md", () => {
 
 // ADDED 2026-10-19 (plan 021 file 2, unit w7-action-pages; REQ-FLOW-113, REQ-FLOW-104). Since w6 Claude Code's hook
 // entries run copies under `.claude/hooks/stamity/` (`CLAUDE_HOOKS_DIR`), which the Claude Code GitHub Action replaces
-// with the base branch's copy on a pull request; the generated copies under `.stamity/generated/hooks/claude/` stay
-// for the manual session start. Each page line that names Claude's hook folder says which copy the hooks run, and the
+// with the base branch's copy on a pull request. TEST CHANGE, justified (u5-hook-copies, plan 018 file 2,
+// REQ-FLOW-088): the generated copies under `.stamity/generated/hooks/claude/` are no longer written, the manual
+// session start running the copy, so the pages say they leave on the upgrade's `sync` and name the window an upgrade
+// pull request on a base older than 1.16.0 opens. Each page line that names Claude's hook folder says which copy the hooks run, and the
 // security page's Action residual narrows to what the restore leaves: `AGENTS.md`, which the Action's restore list
 // (`SENSITIVE_PATHS`, read at the Action's commit 5eb090f3 on 2026-10-19) omits, the records the scripts read, a base
 // that predates the copies, and the Action's own named limit. The folder is read from the source, not restated.
@@ -5112,6 +5122,11 @@ describe("the Action's restore covering Claude Code's hook copies (w7-action-pag
     expect(bullet).toMatch(
       /until the base branch carries a `sync` that writes the copies, its hook entries run the scripts under `\.stamity\/generated\/hooks\/claude\/`, which come from the pull request/,
     );
+    // ADDED (u5-hook-copies, REQ-FLOW-113): the old copies leave on the upgrade's `sync`, and the window that opens.
+    expect(bullet).toMatch(/Those old copies are gone after the upgrade's `sync`, which no longer writes them/);
+    expect(bullet).toMatch(
+      /on an upgrade pull request whose base predates 1\.16\.0 the base's entries name scripts that pull request removed: those hooks cannot start, and the guard's entry, failing closed, refuses every tool call on its Action run until it merges/,
+    );
     expect(bullet).toMatch(/a pull request that changes `\.claude\/` sees that change reverted on its Action run/);
     expect(bullet).toContain("`git add -A`");
     expect(bullet).toMatch(/the engine's own hook scripts are the base branch's/);
@@ -5137,15 +5152,22 @@ describe("the Action's restore covering Claude Code's hook copies (w7-action-pag
     expect(flowed(page)).toMatch(
       /The entry runs the copy under `\.claude\/hooks\/stamity\/`, not the one under `\.stamity\/generated\/hooks\/claude\/`/,
     );
+    // ADDED (u5-hook-copies, REQ-FLOW-088): the old copy is no longer written, and the hand-run session start is the copy.
+    expect(flowed(page)).toMatch(/`\.stamity\/generated\/hooks\/claude\/`, which is no longer written/);
+    expect(flowed(page)).not.toMatch(/which is still written for the session start/);
+    expect(flowed(page)).toMatch(/The session start you run by hand where no hook ran is the copy under `\.claude\/hooks\/stamity\/` too/);
   });
 
-  it("the hook-latency line names the guard copy the hooks run, and why the generated guard still times it", () => {
+  // TEST CHANGE, justified (u5-hook-copies, REQ-FLOW-088): the generated Claude guard is no longer written, so the
+  // line names the copy as the guard the script times rather than as a twin of the generated one.
+  it("the hook-latency line names the guard copy the hooks run as the guard it times", () => {
     const line = read(RELEASE_CHECKLIST)
       .split("\n")
       .find((text) => text.includes("`node scripts/hook-latency.mjs`"));
     expect(line, `${RELEASE_CHECKLIST} has no hook-latency line`).toBeDefined();
-    expect(line).toContain(`\`${CLAUDE_HOOKS_DIR}/stamity-pre-tool-use-guard.mjs\``);
-    expect(line).toMatch(/differs from it only in where it finds the repository root and the policy document/);
+    expect(line).toContain(`the guard the script times (\`${CLAUDE_HOOKS_DIR}/stamity-pre-tool-use-guard.mjs\`, the copy Claude Code's hook entries run`);
+    expect(line).toMatch(/the generated Claude guard, which `sync` no longer writes/);
+    expect(line).not.toMatch(/differs from it only/);
   });
 
   describe("docs/specs/everyday-flows.md", () => {
