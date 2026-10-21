@@ -17,6 +17,7 @@ import {
   RESERVED_TOOL_CATEGORIES,
 } from "../../src/tools/categories.ts";
 import { EngineError } from "../../src/types/errors.ts";
+import { makeTempDir } from "../support/tempDir.ts";
 
 /**
  * The permission manifest is pure parsing over an in-memory document — no
@@ -228,13 +229,15 @@ interface ShippedPack {
   agents: { relPath: string; frontmatter: Record<string, unknown> }[];
 }
 
+/** This repository's `packs/` folder. */
+const SHIPPED_PACKS_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "packs");
+
 /**
- * Every pack under `<repo>/packs/`, read from disk. Hoisted out of the
+ * Every pack under `packsRoot` (default `<repo>/packs/`), read from disk. Hoisted out of the
  * install-every-pack case so the footprint cases below assert over the same
  * bytes the installer would read, rather than a second copy of the walk.
  */
-async function shippedPacks(): Promise<ShippedPack[]> {
-  const packsRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "packs");
+async function shippedPacks(packsRoot: string = SHIPPED_PACKS_ROOT): Promise<ShippedPack[]> {
   const packIds = (await readdir(packsRoot, { withFileTypes: true }))
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name);
@@ -277,30 +280,47 @@ const MADE_UP_AGENT_BODY = [
 ].join("\n");
 
 /**
- * A made-up pack declaring one agent, beside the shipped packs in the census.
- * Its manifest and agent are parsed by the same `readPermissions` and
- * `parseFrontmatter` calls {@link shippedPacks} makes.
+ * A made-up pack declaring one agent, beside the shipped packs in the census. Its
+ * files are written to a temp `packs/` folder that {@link shippedPacks} walks, so its
+ * manifest and agent reach the census through the same `readdir`, `readFile`,
+ * `readPermissions` and `parseFrontmatter` calls a shipped pack's do.
  *
  * TEST CHANGE, justified (2026-10-21_packs-rebuilt-02/u1-refixture-pack-tests): the
  * census found its agents only in the shipped `ops` pack, which the package retires
  * (REQ-PACK-023), and no pack it keeps ships an agent; without this pack the "a checked
  * agent exists" floor would fail, or pass over nothing.
  */
-const MADE_UP_AGENT_PACK: ShippedPack = {
+const MADE_UP_AGENT_PACK = {
   id: "acme-agents",
-  permissions: readPermissions({ permissions: { ...ORCHESTRATOR_PERMISSIONS } }),
-  agents: [
-    {
-      relPath: "agents/stamity-deployer.md",
-      frontmatter: parseFrontmatter(MADE_UP_AGENT_BODY, "acme-agents/agents/stamity-deployer.md")
-        .frontmatter,
-    },
-  ],
-};
+  files: {
+    "pack.json": `${JSON.stringify(
+      { name: "acme-agents", version: "1.0.0", permissions: { ...ORCHESTRATOR_PERMISSIONS } },
+      null,
+      2,
+    )}\n`,
+    "agents/stamity-deployer.md": MADE_UP_AGENT_BODY,
+  },
+} as const;
 
-/** The shipped packs plus {@link MADE_UP_AGENT_PACK}: what the census cases walk. */
+/**
+ * The shipped packs plus {@link MADE_UP_AGENT_PACK}, each read by the {@link shippedPacks}
+ * walk: what the census cases check.
+ */
 async function censusPacks(): Promise<ShippedPack[]> {
-  return [...(await shippedPacks()), MADE_UP_AGENT_PACK];
+  const scratch = await makeTempDir("permissions-census");
+  try {
+    await scratch.seedFiles(
+      Object.fromEntries(
+        Object.entries(MADE_UP_AGENT_PACK.files).map(([rel, body]) => [
+          `packs/${MADE_UP_AGENT_PACK.id}/${rel}`,
+          body,
+        ]),
+      ),
+    );
+    return [...(await shippedPacks()), ...(await shippedPacks(scratch.path("packs")))];
+  } finally {
+    await scratch.cleanup();
+  }
 }
 
 /** One in-memory pack file; `capabilities` omitted means the field is absent. */
@@ -568,8 +588,9 @@ describe("checkAgentCapabilities", () => {
 
     // TEST CHANGE, justified (2026-10-21_packs-rebuilt-02/u1-refixture-pack-tests): this block
     // named `ops`'s incident responder and footprint, which leave with the retired pack
-    // (REQ-PACK-023). It now proves the walk read a parsed capability list, not an empty one,
-    // so the subset loop above ran over real entries.
+    // (REQ-PACK-023). It now proves the walk read the made-up pack from disk: the capability
+    // list parsed from its agent file and the footprint parsed from its `pack.json`, not empty
+    // ones, so the subset loop above ran over real entries.
     const madeUp = packs.find((pack) => pack.id === MADE_UP_AGENT_PACK.id);
     expect(madeUp?.agents[0]?.frontmatter["capabilities"]).toEqual(["read", "edit", "execute"]);
     expect(madeUp?.permissions?.toolFootprint).toEqual(ORCHESTRATOR_PERMISSIONS.toolFootprint);
