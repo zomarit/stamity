@@ -1667,6 +1667,47 @@ describe("add — name clashes", () => {
     expect(next).not.toContain("remove it first");
     expect(packRows(await readProjectManifest(), "acme-two")).toEqual([]);
   });
+
+  it("says two commands of one name are one command on every client, with no skill to hide either", async () => {
+    // A same-class clash (REQ-PACK-005, review/7): the incoming pack's command
+    // takes the name an installed pack's command holds. Nothing here is a
+    // skill, so neither the clash line nor the refusal's why may say one hides.
+    await initProject();
+    await seedPack({
+      content: { "commands/st-shared.md": "---\nid: shared\ntype: command\n---\nShared.\n" },
+    });
+    expect((await run(installArgs())).code).toBe(0);
+    const command = "---\nid: shared\ntype: command\n---\nOur shared.\n";
+    await getProject().seedFiles({
+      "packs/two/commands/st-shared.md": command,
+      [`packs/two/${PACK_MANIFEST_FILE}`]: JSON.stringify({
+        name: "acme-two",
+        version: "1.0.0",
+        integrity: { "commands/st-shared.md": digest(command) },
+        declaredTools: ["claude"],
+      }),
+    });
+
+    const result = await runInProcess(
+      [addCommand],
+      ["add", "./packs/two", "--allow-untrusted", "--json"],
+      { cwd: getProject().dir },
+    );
+
+    expect(result.code).toBe(1);
+    const doc = parseDoc(result.stdout);
+    expect((doc.planned as { nameClashes: string[] }).nameClashes).toEqual([
+      `st-shared — pack "${PACK_ID}" command "shared" and pack "acme-two" command "shared" both ` +
+        "install as st-shared (one command on every client)",
+    ]);
+    const why = (errorOf(doc) as { why?: string }).why ?? "";
+    expect(why).toContain(
+      "two commands of one name install as one command on every client, and there they " +
+        "overwrite each other's files",
+    );
+    expect(why).not.toContain("the skill hides the command");
+    expect(packRows(await readProjectManifest(), "acme-two")).toEqual([]);
+  });
 });
 
 describe("add — per-owner remedies for a name clash", () => {

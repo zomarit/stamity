@@ -576,20 +576,34 @@ function nameClashPart(
       ),
     ),
   ];
-  // The fixed text has to fit every clash it carries: a skill against a rule
-  // delivered as a skill involves no command, so nothing is hidden on Claude.
-  const hidesCommand = clashes.some((clash) =>
-    clash.owners.some((owner) => owner.kind === "command"),
-  );
   return {
     message: `${clashes.length} name(s) it would emit are taken`,
-    why: hidesCommand
-      ? "a command and a skill of one name install into one folder — on Cursor and Codex they " +
-        "overwrite each other's files, and on Claude the skill hides the command"
-      : "artifacts of one name share one skill folder wherever they are delivered as skills, " +
-        "and there they overwrite each other's files",
+    // One mechanism per kind of clash carried, so the text fits each of them.
+    why: [...new Set(clashes.map(nameClashMechanismOf))].join("; "),
     next: remedies.join("; "),
   };
+}
+
+/**
+ * How one clash's owners collide, by the classes among them: a command and a
+ * skill share one folder (and on Claude the skill hides the command); two
+ * commands of one name (a same-class clash, REQ-PACK-005) are one command on
+ * every client, with no skill to hide either; with no command involved, every
+ * owner is delivered as a skill and they share one skill folder.
+ */
+function nameClashMechanismOf(clash: InvocableNameClash): string {
+  const kinds = new Set(clash.owners.map((owner) => owner.kind));
+  if (!kinds.has("command")) {
+    return (
+      "artifacts of one name share one skill folder wherever they are delivered as skills, " +
+      "and there they overwrite each other's files"
+    );
+  }
+  return kinds.size === 1
+    ? "two commands of one name install as one command on every client, and there they " +
+        "overwrite each other's files"
+    : "a command and a skill of one name install into one folder — on Cursor and Codex they " +
+        "overwrite each other's files, and on Claude the skill hides the command";
 }
 
 /**
