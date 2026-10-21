@@ -48,19 +48,20 @@ evidence could not run. It is never graded from source and never guessed.
 
 1. **Frame.** One line: `surface: <target> · sha: <short sha> · inventory: clear | blocked |
    regenerated · browser: available | not measured · output: findings`.
-2. **Detector and browser, in parallel.** The detector runs only when the inventory needs it;
-   the browser evidence runs either way. Neither reads the other's output.
-3. **Map the files.** One researcher per step of the flow, or one for a route or component,
-   dispatched as one parallel batch: each returns the files that render its step, with
-   `path:line` for the branch of each state. Researchers read only.
-4. **Review.** One design-quality spawn on a whole-surface brief: the head commit and the
+2. **Detector, browser and file map, in parallel.** The detector runs only when the inventory
+   needs it; the browser evidence runs either way; one researcher per step of the flow, or one
+   for a route or component, returns the files that render its step, with `path:line` for the
+   branch of each state. All go out as one batch: none reads another's output. Researchers
+   read only.
+3. **Review.** One design-quality spawn on a whole-surface brief: the head commit and the
    surface's paths the researchers mapped, in place of a diff range; the criteria (the
-   inventory's tokens, the four states, WCAG 2.2 AA); the inventory and evidence bundle paths;
-   and the report path. The agent reads each file with `git show <commit>:<path>`, and the
-   named surface stands in for "the change" in its exclusions.
-5. **Merge.** This command is the single writer of the result. It passes design-quality's
-   findings block through unchanged and adds the criteria the evidence could not reach as
-   `not measured`, each with the probe that stopped it.
+   inventory's tokens, the four states, WCAG 2.2 AA); and the inventory and evidence bundle
+   paths. The brief names no report path, so the agent returns its full result inline. It
+   reads each file with `git show <commit>:<path>`, and the named surface stands in for "the
+   change" in its exclusions.
+4. **Merge.** This command assembles the result it returns; it writes no file. It passes
+   design-quality's findings block through unchanged and adds the criteria the evidence could
+   not reach as `not measured`, each with the probe that stopped it.
 
 ## Findings
 
@@ -80,7 +81,8 @@ evidence could not run. It is never graded from source and never guessed.
 - **Spawn set.** `researcher` and `design-quality`, both read-only. No implementer and no
   fixer: no path in this command reaches a role that edits.
 - **Write set.** The command writes nothing itself. The two skills it runs write their own
-  evidence: the inventory and the browser bundle, and nothing else.
+  evidence: the inventory and the browser bundle, and nothing else. No spawn is handed a
+  report path, so no agent writes one either.
 - **Routing.** A one-line fix is still a finding. It leaves as a row with its route, and
   `/st-work` applies it under its own gates.
 
