@@ -7,7 +7,8 @@
 // Usage: node scripts/hook-latency.mjs [--runs <n>] [--guard <path>] [--budget <ms>]
 //        --runs   timed runs per case, after one untimed warm-up round. Default 7.
 //        --guard  the guard script to time. Default: this checkout's
-//                 .stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs
+//                 .claude/hooks/stamity/stamity-pre-tool-use-guard.mjs, the copy Claude Code's
+//                 hook entries run (the generated Claude copy is no longer written)
 //        --budget the overhead allowed per case, in ms. Default 15; the release uses the default.
 //
 // Exit codes: 0 every overhead within the budget, 1 one or more over it, 2 the check could not
@@ -27,17 +28,20 @@
 // one Write the guard admits after walking the path's ancestors. The path is the one the
 // batch-sync-3 measurement used when that report is in this checkout (reports are git-ignored,
 // so a fresh clone falls back); otherwise a report path under `.stamity/runs/hook-latency/`.
-// Either way it sits under the guard's own repository root, four levels above the guard.
+// Either way it sits under the guard's own repository root: three levels above a guard in
+// `.claude/hooks/stamity/`, four above one in `.stamity/generated/hooks/<client>/`.
 
 import { spawnSync } from 'node:child_process'
 import { readFileSync, statSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { isMain } from './native-typescript.mjs'
 
 const REPO_ROOT = resolve(fileURLToPath(import.meta.url), '..', '..')
-const DEFAULT_GUARD = join(REPO_ROOT, '.stamity', 'generated', 'hooks', 'claude', 'stamity-pre-tool-use-guard.mjs')
+const DEFAULT_GUARD = join(REPO_ROOT, '.claude', 'hooks', 'stamity', 'stamity-pre-tool-use-guard.mjs')
+/** The folder Claude Code's hook copies sit in, as path segments (`src/hooks/model.ts::CLAUDE_HOOKS_DIR`). */
+const CLAUDE_HOOKS_SEGMENTS = ['.claude', 'hooks', 'stamity']
 const MEASUREMENT_REPORT = join(
   REPO_ROOT,
   '.stamity',
@@ -56,7 +60,7 @@ export const SPAWN_TIMEOUT_MS = 30_000
 
 const USAGE = `Usage: node scripts/hook-latency.mjs [--runs <n>] [--guard <path>] [--budget <ms>]
   --runs   timed runs per case after one warm-up round (default ${DEFAULT_RUNS})
-  --guard  the guard to time (default .stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs)
+  --guard  the guard to time (default .claude/hooks/stamity/stamity-pre-tool-use-guard.mjs)
   --budget the overhead allowed per case in ms (default ${BUDGET_MS})`
 
 class CannotRun extends Error {}
@@ -93,11 +97,22 @@ export function writePayload(root, reportText) {
   }
 }
 
+/**
+ * The repository root a guard at `guard` anchors on, read from its placement: the third
+ * directory above a copy in `<root>/.claude/hooks/stamity/`, the fourth above a generated one
+ * in `<root>/.stamity/generated/hooks/<client>/`.
+ */
+export function guardRoot(guard) {
+  const folder = dirname(resolve(guard))
+  const tail = folder.split(sep).slice(-CLAUDE_HOOKS_SEGMENTS.length)
+  const climb = tail.join('/') === CLAUDE_HOOKS_SEGMENTS.join('/') ? 3 : 4
+  return resolve(folder, ...Array(climb).fill('..'))
+}
+
 /** The two timed payloads for `guard`, each as the stdin text the guard reads. */
 export function payloads(guard) {
-  // The guard anchors its repository at the fourth directory above itself
-  // (<root>/.stamity/generated/hooks/<client>/guard), so the Write lands under that root.
-  const root = resolve(dirname(guard), '..', '..', '..', '..')
+  // The Write lands under the root the guard anchors on.
+  const root = guardRoot(guard)
   let reportText
   try {
     reportText = readFileSync(MEASUREMENT_REPORT, 'utf8')

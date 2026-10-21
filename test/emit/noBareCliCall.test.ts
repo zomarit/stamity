@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MCP_GUARD_PATH, SUBAGENT_GUARD_PATH } from "../../src/adapters/cursor.ts";
 import { applyInit } from "../../src/cli/commands/init/apply.ts";
 import { buildInitDecisions } from "../../src/cli/commands/init/plan.ts";
+import { CLAUDE_HOOKS_DIR } from "../../src/hooks/model.ts";
 import { buildConfigTamperNoticeScript } from "../../src/hooks/scripts.ts";
 import { cliCallHint, pinnedCliCall } from "../../src/shared/cliCall.ts";
 import { TOOLS } from "../../src/types/core.ts";
@@ -39,6 +40,11 @@ const BARE_CALL =
 const HINT_SENTENCE = /`stamity [^`]+` where the CLI is installed, else `npx -y [^`\s]+@[^`\s]+ [^`]+`/g;
 
 /** `path:line: text` for every bare call left once the hint sentences are removed. */
+/** The folder a client's hook scripts sit in: Claude Code's copies (REQ-FLOW-088), else the client's generated set. */
+function hookScriptsFolder(tool: (typeof TOOLS)[number]): string {
+  return tool === "claude" ? CLAUDE_HOOKS_DIR : `.stamity/generated/hooks/${tool}`;
+}
+
 function bareCalls(path: string, content: string): string[] {
   return content
     .split("\n")
@@ -136,7 +142,8 @@ describe("an all-four-client emission", () => {
         // TEST CHANGE, justified: REQ-FLOW-038 — the guards carry the stamity- prefix
         ".cursor/hooks/stamity-mcp-guard.mjs",
         ".cursor/hooks/stamity-subagent-guard.mjs",
-        ".stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs",
+        // TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088): Claude's scripts are the copies.
+        ".claude/hooks/stamity/stamity-config-tamper-notice.mjs",
       ]),
     );
     const hits = scanned.flatMap((path) => bareCalls(path, tree[path] ?? ""));
@@ -145,7 +152,8 @@ describe("an all-four-client emission", () => {
 
   it("pins the golden engine version into the tamper notice of every client", () => {
     for (const tool of TOOLS) {
-      const notice = tree[`.stamity/generated/hooks/${tool}/stamity-config-tamper-notice.mjs`];
+      // TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088): Claude's notice is the copy.
+      const notice = tree[`${hookScriptsFolder(tool)}/stamity-config-tamper-notice.mjs`];
       expect(notice, tool).toContain("npx -y @zomarit/stamity@1.0.0-golden check");
     }
   });
@@ -256,14 +264,17 @@ describe("a registry fork's four-client emission", () => {
         "AGENTS.override.md",
         ".claude/settings.json",
         ".codex/hooks.json",
-        ...TOOLS.map((tool) => `.stamity/generated/hooks/${tool}/stamity-config-tamper-notice.mjs`),
+        // TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088): Claude's notice is the copy.
+        ...TOOLS.map((tool) => `${hookScriptsFolder(tool)}/stamity-config-tamper-notice.mjs`),
       ]),
     );
     // Both of Cursor's guards, by the names they carry since REQ-FLOW-038, so the
     // registry-bound call is proven in the files Cursor runs, not in any `.mjs` there.
     expect([...counts.keys()]).toEqual(expect.arrayContaining([SUBAGENT_GUARD_PATH, MCP_GUARD_PATH]));
     // And the readiness hook, so the array form is proven in the file that carries it (build/58).
-    expect([...counts.keys()]).toContain(".stamity/generated/hooks/claude/stamity-cloud-readiness.mjs");
+    // TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088): the hook is the copy Claude Code's entry runs.
+    expect([...counts.keys()]).toContain(".claude/hooks/stamity/stamity-cloud-readiness.mjs");
+    expect([...counts.keys()].filter((path) => path.startsWith(".stamity/generated/hooks/claude/"))).toEqual([]);
     const bare: string[] = [];
     for (const [path] of counts) {
       const content = tree[path] ?? "";

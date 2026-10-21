@@ -95,7 +95,7 @@ const ENCODED_ROOTS: readonly string[] = [
  * `.claude/skills/`). The paths come from `src/pack/moved.ts`, the table whose frozen digests are
  * the reclaim's proof; the case below also holds each reclaimed file's 1.14.0 bytes to that digest.
  */
-const EXPECTED_RECLAIMS: ReadonlyMap<string, string> = new Map<string, string>(
+const MOVED_SKILL_RECLAIMS: ReadonlyMap<string, string> = new Map<string, string>(
   MOVED_CORE_SKILLS.flatMap((skill) =>
     MOVED_SKILL_FOLDERS.flatMap((folder) =>
       Object.keys(skill.renderings).map((file): [string, string] => [
@@ -105,6 +105,29 @@ const EXPECTED_RECLAIMS: ReadonlyMap<string, string> = new Map<string, string>(
     ),
   ),
 );
+
+/**
+ * TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088): Claude Code's generated scripts are no
+ * longer written, its hook entries and the manual session start running the copies under `.claude/hooks/stamity/`,
+ * so the upgrade reclaims the four 1.14.0 wrote under `.stamity/generated/hooks/claude/`, each by the hash its
+ * ledger row recorded (the fixture leaves them unedited).
+ */
+const OLD_CLAUDE_HOOK_RECLAIMS: ReadonlyMap<string, string> = new Map<string, string>(
+  [
+    "stamity-config-tamper-notice.mjs",
+    "stamity-pre-tool-use-guard.mjs",
+    "stamity-review-gate.mjs",
+    "stamity-session-start.mjs",
+  ].map((file): [string, string] => [
+    `.stamity/generated/hooks/claude/${file}`,
+    "no longer written; Claude Code's hooks and the manual session start run the copy under .claude/hooks/stamity/",
+  ]),
+);
+
+const EXPECTED_RECLAIMS: ReadonlyMap<string, string> = new Map<string, string>([
+  ...MOVED_SKILL_RECLAIMS,
+  ...OLD_CLAUDE_HOOK_RECLAIMS,
+]);
 
 /**
  * One user element inside a co-owned JSON file, as an operator adds it after a 1.14.0 init:
@@ -399,7 +422,8 @@ describe("a 1.14.0 tree upgrades through the current sync and check (node dist/c
       await expectUserContent(fixture.repoDir, "before sync", false);
       const before = await treeHashMap(fixture.repoDir);
       const gitignoreBefore = await readFile(inRepo(fixture.repoDir, ".gitignore"), "utf8");
-      const ownedBefore = ledgerPaths(await readManifest(fixture.repoDir));
+      const manifestBefore = await readManifest(fixture.repoDir);
+      const ownedBefore = ledgerPaths(manifestBefore);
       // The fixture is the four-client tree, not an empty one: the walk below has work to do.
       expect(ownedBefore.size).toBeGreaterThan(100);
 
@@ -459,11 +483,20 @@ describe("a 1.14.0 tree upgrades through the current sync and check (node dist/c
       // TEST CHANGE, justified (u13-frontend-move): the reclaims are the two moved skills' eight core
       // copies, four per client folder, and each one's 1.14.0 bytes are the frozen rendering
       // `src/pack/moved.ts` holds for it, the bytes the reclaim's proof reads.
-      expect(reclaimed).toHaveLength(8);
+      // TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088): and the four old generated Claude
+      // scripts, 8 → 12, each one's 1.14.0 bytes the hash its ledger row recorded.
+      expect(reclaimed).toHaveLength(12);
       for (const folder of MOVED_SKILL_FOLDERS) {
         expect(reclaimed.filter((path) => path.startsWith(`${folder}/`)), folder).toHaveLength(4);
       }
-      for (const path of reclaimed) {
+      const ledgerBefore = new Map(
+        (manifestBefore.ledger as { path: string; contentHash?: string }[]).map((row) => [row.path, row.contentHash]),
+      );
+      for (const path of OLD_CLAUDE_HOOK_RECLAIMS.keys()) {
+        expect(reclaimed, path).toContain(path);
+        expect(before.get(path), `${path} was edited, yet reclaimed`).toBe(ledgerBefore.get(path));
+      }
+      for (const path of reclaimed.filter((candidate) => MOVED_SKILL_RECLAIMS.has(candidate))) {
         const skill = movedCoreSkill(path.split("/")[2]?.replace(/^st-/, "") ?? "");
         expect(skill, `${path} is no moved skill's copy`).toBeDefined();
         expect(before.get(path), `${path} is not the frozen core rendering`).toBe(
@@ -476,7 +509,8 @@ describe("a 1.14.0 tree upgrades through the current sync and check (node dist/c
       }
       // w6-claude-hooks-in-claude-dir (REQ-FLOW-113, REQ-FLOW-104): the upgrade adds the copies Claude Code's hooks
       // run under `.claude/hooks/stamity/`, the policy copy beside them, and re-renders every engine entry in the
-      // settings document to run a copy; the 1.14.0 generated scripts stay (EXPECTED_RECLAIMS names none).
+      // settings document to run a copy. TEST CHANGE, justified (u5-hook-copies, REQ-FLOW-088): the 1.14.0 generated
+      // Claude scripts no longer stay; EXPECTED_RECLAIMS names the four.
       for (const path of CLAUDE_HOOK_COPIES) {
         expect(before.has(path), `${path} was already in the 1.14.0 tree`).toBe(false);
         expect(afterFirst.has(path), `the upgrade did not write ${path}`).toBe(true);

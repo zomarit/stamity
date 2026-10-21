@@ -23,8 +23,12 @@ import { tsRepoFiles } from "../support/repoFixtures.ts";
 /** Per-case budget: one cold dist `init` over a one-client tree, plus two guard spawns. */
 const CASE_TIMEOUT_MS = 120_000;
 
-/** Where emission writes Claude Code's guard, relative to the repository. */
-const GUARD_PATH = [".stamity", "generated", "hooks", "claude", "stamity-person-only-guard.mjs"];
+/**
+ * Where emission writes Claude Code's guard, relative to the repository.
+ * TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088): the copy under `.claude/hooks/stamity/`,
+ * the one Claude Code's hook entries run; the generated Claude folder is no longer written.
+ */
+const GUARD_PATH = [".claude", "hooks", "stamity", "stamity-person-only-guard.mjs"];
 
 /** Claude Code's PreToolUse payload for a Bash call. */
 function payload(command: string): string {
