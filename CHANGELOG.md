@@ -116,6 +116,10 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
 - **`sync`'s Codex skills-list refusal no longer advises narrowing the content selection**, which `sync` never honoured,
   since it plans the full corpus every run. It names `clean --pack <id>` where an installed pack holds a share, then
   `ruleDelivery: "always-on"`.
+- **Codex's dropped-rules warning and the notice in the file that dropped the rules name working remedies**: remove an
+  installed pack whose rules share that file (the warning gives the `clean --pack <id>` call), shorten the operator
+  text the root `AGENTS.override.md` repeats, or set `ruleDelivery: "on-demand"`, where they advised a content
+  selection `sync` never honoured.
 
 ### Deprecated
 

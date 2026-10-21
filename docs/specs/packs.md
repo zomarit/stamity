@@ -507,8 +507,11 @@ exists, it is the normative record for that requirement.
   file 2 fills it, so the first real retired id is that file's to prove end to end.
 - REQ-PACK-004's fit check mirrors the residue planner's context-widening rather than calling it, since that function
   is private to `src/emit/planner.ts`; the equality case goes red if the two diverge (`u4-pack-fit`'s fixer report,
-  its deferral). The dropped-rules warning in `src/adapters/codex.ts` still advises narrowing the content selection,
-  which `sync` does not honour (that report's M-1, decision needed).
+  its deferral).
+- **As built (`u4-pack-fit`, `fix/4`):** Codex's dropped-rules warning and the in-file notice in the file that dropped
+  the rules name only working remedies (`droppedRulesRemedies`, `src/adapters/codex.ts`): remove an installed pack
+  whose rules share that file (the warning adds the pinned `clean --pack <id>` call), shorten the operator text the
+  root `AGENTS.override.md` repeats, or move from `ruleDelivery: "always-on"` to `"on-demand"`.
 - The frontend pack's install is covered in-process by `test/packs/packs.test.ts`'s `add`, `sync` and `check` cases and
   by `test/packs/frontend.test.ts`, not by the install smoke, which lists three packs (`build/23`, to file 2).
 </content>
