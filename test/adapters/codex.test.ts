@@ -16,10 +16,11 @@ import {
   codexResiduePlanner,
   composeConfigToml,
   downConvertRules,
+  measureCodexSkillsList,
   shownSkillRows,
   skillsListCharacters,
 } from "../../src/adapters/codex.ts";
-import { buildContentIndex, type CatalogItem } from "../../src/content/catalog.ts";
+import { buildContentIndex, typeIdKey, type CatalogItem } from "../../src/content/catalog.ts";
 import { NO_DEMOTED_RULES } from "../../src/content/ruleDelivery.ts";
 import { resolveBundledContentRoot } from "../../src/content/contentRoot.ts";
 import { LIVE_CAPABILITY_INPUTS } from "../../src/emit/capabilityMatrix.ts";
@@ -2728,6 +2729,39 @@ describe("the skills-list budget", () => {
     expect((forked as EngineError).message).toContain(
       `\`npx -y --@acme:registry=https://npm.pkg.github.com @acme/stamity@${ENGINE_VERSION} clean --pack <id>\``,
     );
+  });
+
+  it("measures the shares the refusal prints, through the one function add's fit check reads", async () => {
+    // u4-pack-fit (REQ-PACK-004): the count moved out of the refusal into
+    // `measureCodexSkillsList`, so `add` and `sync` cannot disagree. The shares
+    // here are the ones the pinned refusal above prints for the same plan.
+    const { core } = await packedPlan(
+      { "acme-demo": packSkills("acme-skill", 8), "beta-tools": packSkills("beta-skill", 1) },
+      {
+        skills: [
+          ...Array.from({ length: 8 }, (_, index) => `acme-skill-${index + 1}`),
+          "beta-skill-1",
+        ],
+      },
+    );
+    const packOf = new Map<string, string>([
+      ...Array.from({ length: 8 }, (_, index) => [typeIdKey("skill", `acme-skill-${index + 1}`), "acme-demo"] as const),
+      [typeIdKey("skill", "beta-skill-1"), "beta-tools"],
+    ]);
+    const shown = shownSkillRows(core.skills);
+
+    const measure = measureCodexSkillsList(shown, packOf);
+
+    expect(measure.total).toBe(skillsListCharacters(shown));
+    expect(measure.cap).toBe(CODEX_SKILLS_LIST_BUDGET_CHARS);
+    expect(measure.core).toEqual({ characters: 11 + 100 + 3, skills: 1 });
+    expect(measure.packs.get("acme-demo")).toEqual({ characters: 8 * (15 + 900 + 3), skills: 8 });
+    expect(measure.packs.get("beta-tools")).toEqual({ characters: 15 + 900 + 3, skills: 1 });
+    expect([...measure.packs.keys()].toSorted()).toEqual(["acme-demo", "beta-tools"]);
+    // With no attribution, every shown row is the core's and the total holds.
+    const unattributed = measureCodexSkillsList(shown, new Map());
+    expect(unattributed.core).toEqual({ characters: measure.total, skills: 10 });
+    expect(unattributed.packs.size).toBe(0);
   });
 
   it("names the core's share only when no pack is installed", async () => {

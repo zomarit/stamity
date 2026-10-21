@@ -443,10 +443,14 @@ export const codexResiduePlanner: ResiduePlanner = {
     // same policy shipped by a pack skill hides that skill too.
     const { agents, rules, commands, packOf } = await selectedItems(ctx);
     const touchpoints = projectTouchpointSkills(commands, ctx);
-    const shown = shownSkillRows([...core.skills, ...touchpoints]);
-    const skillsListChars = skillsListCharacters(shown);
-    if (skillsListChars > CODEX_SKILLS_LIST_BUDGET_CHARS) {
-      throw new EngineError(skillsListRefusal(skillsListChars, shown, packOf, cliCallContextOf(ctx)), {
+    // `add`'s fit check (`../cli/engine/packFit.ts`, REQ-PACK-004) counts with
+    // the same measure, so a pack it admits is one this refusal admits too.
+    const measure = measureCodexSkillsList(
+      shownSkillRows([...core.skills, ...touchpoints]),
+      packOf,
+    );
+    if (measure.total > measure.cap) {
+      throw new EngineError(skillsListRefusal(measure, cliCallContextOf(ctx)), {
         code: "VALIDATION_ERROR",
       });
     }
@@ -671,8 +675,9 @@ function droppedRuleLabel(id: string, onDemandIds: ReadonlySet<string>): string 
  * rather than throwing: this is a budget measurement, and the frontmatter
  * validity of a skill is the projection's refusal to make, not this one's.
  *
- * It sums whatever rows it is handed. The emission hands it
- * {@link shownSkillRows}' answer, the rows Codex shows its model.
+ * It sums whatever rows it is handed. {@link measureCodexSkillsList}, which
+ * the emission's refusal and `add`'s fit check read, totals the same rows'
+ * shares over {@link shownSkillRows}' answer, the rows Codex shows its model.
  */
 export function skillsListCharacters(skills: readonly { path: string; content: string }[]): number {
   let total = 0;
@@ -735,26 +740,45 @@ function hidesFromModel(content: string, source: string): boolean {
   return isPlainObject(policy) && policy["allow_implicit_invocation"] === false;
 }
 
+/** One party's part of the skills list: its characters and the skills that carry them. */
+export interface CodexSkillsListShare {
+  characters: number;
+  skills: number;
+}
+
 /**
- * The refusal past {@link CODEX_SKILLS_LIST_BUDGET_CHARS}: the measured total,
- * then who spent it — the core selection's share and each installed pack's,
- * largest first, with its skill count — then the remedies.
- *
- * A row belongs to a pack when the catalog item it was rendered from (matched
- * by class and artifact id) carries pack provenance; everything else, corpus,
- * fork and override content, is the core selection. The pack remedy is named
- * only when a pack holds a share, so a setup with none is not told to remove
- * one. It is the pinned call from the adapter's own CLI context, as every other
- * remedy is, so a fork's names the fork and a registry fork's its registry.
+ * The skills list Codex would show its model, measured and attributed: the
+ * total against the cap, the core selection's share, and each installed pack's.
  */
-function skillsListRefusal(
-  total: number,
+export interface CodexSkillsListMeasure {
+  /** {@link skillsListCharacters} over the shown rows. */
+  total: number;
+  /** {@link CODEX_SKILLS_LIST_BUDGET_CHARS}. */
+  cap: number;
+  /** Corpus, fork and override rows: everything no installed pack supplied. */
+  core: CodexSkillsListShare;
+  /** Per pack id, in first-seen row order; a pack with no shown row is absent. */
+  packs: ReadonlyMap<string, CodexSkillsListShare>;
+}
+
+/**
+ * The one count of the skills list: `sync`'s refusal ({@link skillsListRefusal})
+ * and `add`'s fit check (REQ-PACK-004) both read it, so the two cannot disagree
+ * about whether a setup fits.
+ *
+ * `shown` is {@link shownSkillRows}' answer. A row belongs to a pack when the
+ * catalog item it was rendered from (matched by class and artifact id, the
+ * `packOf` key) carries pack provenance; everything else, corpus, fork and
+ * override content, is the core selection. Only `SKILL.md` rows count, as in
+ * {@link skillsListCharacters}, so the shares always sum to the total.
+ */
+export function measureCodexSkillsList(
   shown: readonly Pick<ProjectedFile, "path" | "content" | "artifactId" | "artifactType">[],
   packOf: ReadonlyMap<string, string>,
-  cli: CliCallContext,
-): string {
-  const core = { characters: 0, skills: 0 };
-  const packs = new Map<string, { characters: number; skills: number }>();
+): CodexSkillsListMeasure {
+  const core: CodexSkillsListShare = { characters: 0, skills: 0 };
+  const packs = new Map<string, CodexSkillsListShare>();
+  let total = 0;
   for (const row of shown) {
     if (!row.path.endsWith(`/${SKILL_FILE}`)) continue;
     const pack =
@@ -762,10 +786,28 @@ function skillsListRefusal(
         ? undefined
         : packOf.get(typeIdKey(row.artifactType, row.artifactId));
     const share = pack === undefined ? core : (packs.get(pack) ?? { characters: 0, skills: 0 });
-    share.characters += listedCharacters(row);
+    const characters = listedCharacters(row);
+    share.characters += characters;
     share.skills += 1;
+    total += characters;
     if (pack !== undefined) packs.set(pack, share);
   }
+  return { total, cap: CODEX_SKILLS_LIST_BUDGET_CHARS, core, packs };
+}
+
+/**
+ * The refusal past {@link CODEX_SKILLS_LIST_BUDGET_CHARS}, rendered from
+ * {@link measureCodexSkillsList}: the measured total, then who spent it — the
+ * core selection's share and each installed pack's, largest first, with its
+ * skill count — then the remedies.
+ *
+ * The pack remedy is named only when a pack holds a share, so a setup with
+ * none is not told to remove one. It is the pinned call from the adapter's own
+ * CLI context, as every other remedy is, so a fork's names the fork and a
+ * registry fork's its registry.
+ */
+function skillsListRefusal(measure: CodexSkillsListMeasure, cli: CliCallContext): string {
+  const { total, core, packs } = measure;
   const count = (skills: number): string => `${skills} skill${skills === 1 ? "" : "s"}`;
   const packShares = [...packs]
     .toSorted(([a, x], [b, y]) => y.characters - x.characters || (a < b ? -1 : a > b ? 1 : 0))
