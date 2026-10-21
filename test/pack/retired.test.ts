@@ -12,10 +12,14 @@ import {
 } from "../../src/pack/retired.ts";
 
 /**
- * The retired-names map (REQ-PACK-002). The shipped map is empty until a
- * release retires a pack, so every property is proved twice: over the real
- * map, and over a made-up one passed in, which shows the check finds what it
- * looks for and does not pass on an empty list alone.
+ * The retired-names map (REQ-PACK-002). Every property is proved twice: over
+ * the real map, and over a made-up one passed in, which shows the check finds
+ * what it looks for and does not pass on the real map alone.
+ *
+ * TEST CHANGE, justified (2026-10-21_packs-rebuilt-02/u13-retired-map, REQ-PACK-002,
+ * REQ-PACK-023): the header said the shipped map is empty until a release retires a
+ * pack; it now holds `ops`, `product-audit` and `scaffold`, and the cases at the end
+ * pin their parts, their notes, their pins and their successors' artifacts.
  */
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -33,6 +37,66 @@ const GONE: RetiredPack = {
     { part: "st-also", movedTo: { pack: "production", name: "st-also" } },
   ],
 };
+
+/**
+ * Every file each retired pack's 1.16.0 `pack.json` listed in its integrity map,
+ * frozen: the last release that shipped them, and the parts the map must cover.
+ */
+const SHIPPED_1_16_0: Readonly<Record<string, readonly string[]>> = {
+  ops: [
+    "agents/stamity-devops.md",
+    "agents/stamity-incident-responder.md",
+    "commands/st-incident-response.md",
+    "commands/st-release.md",
+    "skills/st-ci-pipeline/SKILL.md",
+    "skills/st-containerize/SKILL.md",
+    "skills/st-gh-agentic-workflows/SKILL.md",
+    "skills/st-incident-runbook/SKILL.md",
+    "skills/st-release-runbook/SKILL.md",
+  ],
+  "product-audit": [
+    "commands/st-benchmark.md",
+    "commands/st-product-audit.md",
+    "rules/stamity-epic-audit-frame.md",
+    "skills/st-perf-audit/SKILL.md",
+  ],
+  scaffold: [
+    "commands/st-auth-scaffold.md",
+    "commands/st-design-system-create.md",
+    "commands/st-slo-scaffold.md",
+  ],
+};
+
+/** A shipped file as the map names its part: a command as `/<name>`, anything else by its id. */
+function partOf(rel: string): string {
+  const [kind = "", name = ""] = rel.split("/");
+  if (kind === "commands") return `/${name.replace(/\.md$/u, "")}`;
+  return name.replace(/\.md$/u, "");
+}
+
+/**
+ * Where an artifact named as the map names it lives under `root` (a pack's
+ * folder, or the corpus for a move into the core): `/<name>` a command, any
+ * other name a skill, an agent or a rule.
+ */
+function artifactPaths(root: string, name: string): string[] {
+  return name.startsWith("/")
+    ? [join(root, "commands", `${name.slice(1)}.md`)]
+    : [join(root, "skills", name, "SKILL.md"), join(root, "agents", `${name}.md`), join(root, "rules", `${name}.md`)];
+}
+
+/** Each moved part of `map` whose `movedTo.name` its destination does not ship, as `<id>: <part> → <name>`. */
+function unresolvedMoves(map: readonly RetiredPack[]): string[] {
+  return map.flatMap((entry) =>
+    entry.parts.flatMap(({ part, movedTo }) => {
+      if (movedTo === null) return [];
+      const root = movedTo.pack === undefined ? join(REPO_ROOT, "content") : join(REPO_ROOT, "packs", movedTo.pack);
+      return artifactPaths(root, movedTo.name).some((path) => existsSync(path))
+        ? []
+        : [`${entry.id}: ${part} → ${movedTo.name}`];
+    }),
+  );
+}
 
 /** Each `movedTo.pack` of `map` that is not a catalog id, as `<id>: <pack>`. */
 function successorsOutsideCatalog(
@@ -119,5 +183,51 @@ describe("the shipped map", () => {
 
   it("is frozen, so no reader can add a name at run time", () => {
     expect(Object.isFrozen(RETIRED_PACKS)).toBe(true);
+  });
+
+  it("retires ops, product-audit and scaffold, each last shipped in 1.16.0", () => {
+    expect(RETIRED_PACKS.map((entry) => entry.id)).toEqual(["ops", "product-audit", "scaffold"]);
+    for (const entry of RETIRED_PACKS) expect(entry.lastShippedIn, entry.id).toBe("1.16.0");
+  });
+
+  it("maps every part its 1.16.0 manifest listed, once each", () => {
+    for (const entry of RETIRED_PACKS) {
+      const shipped = (SHIPPED_1_16_0[entry.id] ?? []).map(partOf).toSorted();
+      expect(shipped.length, entry.id).toBeGreaterThan(0);
+      expect(entry.parts.map(({ part }) => part).toSorted(), entry.id).toEqual(shipped);
+    }
+  });
+
+  it("gives every dropped part a note saying why", () => {
+    const bare = RETIRED_PACKS.flatMap((entry) =>
+      entry.parts.filter(({ movedTo, note }) => movedTo === null && (note ?? "").trim() === ""),
+    );
+    expect(RETIRED_PACKS.some((entry) => entry.parts.some(({ movedTo }) => movedTo === null))).toBe(true);
+    expect(bare).toEqual([]);
+  });
+
+  it("names each part's new home by an artifact its successor ships", () => {
+    const mistyped: RetiredPack = {
+      ...GONE,
+      parts: [
+        { part: "/st-release", movedTo: { pack: "production", name: "st-relase" } },
+        { part: "st-release-runbook", movedTo: { pack: "production", name: "/st-release" } },
+        { part: "st-incident-runbook", movedTo: { pack: "production", name: "st-incident" } },
+      ],
+    };
+    expect(unresolvedMoves([mistyped])).toEqual([
+      "gone: /st-release → st-relase",
+      "gone: st-release-runbook → /st-release",
+    ]);
+    expect(RETIRED_PACKS.some((entry) => entry.parts.some(({ movedTo }) => movedTo !== null))).toBe(true);
+    expect(unresolvedMoves(RETIRED_PACKS)).toEqual([]);
+  });
+
+  it("pins each id's first-party copies by full, distinct aggregate SHAs", () => {
+    for (const entry of RETIRED_PACKS) {
+      expect(entry.pins.length, entry.id).toBeGreaterThan(0);
+      expect(new Set(entry.pins).size, entry.id).toBe(entry.pins.length);
+      for (const pin of entry.pins) expect(pin, entry.id).toMatch(/^[0-9a-f]{64}$/u);
+    }
   });
 });

@@ -1134,4 +1134,34 @@ describe("pack install smoke (real bin, pseudo-home)", () => {
       expect(after.find((row) => row.path === editedRel)?.contentHash).toBe(recorded);
     },
   );
+
+  // The retired-names map end to end (REQ-PACK-002, 2026-10-21_packs-rebuilt-02/u13-retired-map):
+  // `add` on each retired id refuses before any plan, through the real bin and the real map,
+  // naming the successor and the on-purpose route for an npm package of that name, and writes
+  // nothing.
+  it.each([
+    ["ops", "production"],
+    ["product-audit", "production"],
+    ["scaffold", "frontend"],
+  ])(
+    "refuses add %s, a retired id, naming add %s, and writes nothing",
+    { timeout: 240_000 },
+    async (packId, successor) => {
+      const fixture = getFixture();
+      await initRepo(fixture);
+      const before = await treeDigest(fixture.repoDir);
+
+      const { result, doc } = await runAddJson(fixture, [packId]);
+
+      expect(result.code, result.stderr).toBe(1);
+      const refusal = doc as unknown as FailureEnvelope;
+      expect(refusal.error.code).toBe("VALIDATION_ERROR");
+      expect(refusal.error.message.startsWith(`pack "${packId}" was retired after 1.16.0`), refusal.error.message).toBe(
+        true,
+      );
+      expect(refusal.error.next).toContain(`add ${successor}\``);
+      expect(refusal.error.next).toContain(`add ./node_modules/${packId}\``);
+      expect(await treeDigest(fixture.repoDir), "a retired id must write nothing").toBe(before);
+    },
+  );
 });

@@ -29,8 +29,8 @@ import { AGENTS_MD_FILE } from "../../../src/emit/agentsMd.ts";
 import { createApp, createEngine } from "../../../src/index.ts";
 import { applyPackInstall, planPackInstall } from "../../../src/pack/install.ts";
 import { lookupCatalogEntry, resolveBundledPackRoot } from "../../../src/pack/curated.ts";
-import { receiptRelPath } from "../../../src/pack/receipt.ts";
-import type { RetiredPack } from "../../../src/pack/retired.ts";
+import { packDirRelPath, receiptRelPath } from "../../../src/pack/receipt.ts";
+import { describeRetiredPack, lookupRetiredPack, type RetiredPack } from "../../../src/pack/retired.ts";
 import { computeAggregateContentSha } from "../../../src/pack/trust.ts";
 import {
   createManifest,
@@ -4884,8 +4884,8 @@ describe("check — model-pins", () => {
  * `pack-catalog` (REQ-PACK-003, 2026-10-20_packs-rebuilt/u3-retired-names): an
  * installed pack held against the catalog this release bundles and against the
  * retired-names map, from the receipt's file hashes, never the version. The
- * shipped map is empty until a release retires a pack, so the retired cases
- * pass a made-up map in; the catalog cases install this checkout's own
+ * retired cases pass a made-up map in, and the last one reads the real map's
+ * three retired packs; the catalog cases install this checkout's own
  * `frontend` through its real pin, and a made-up copy under that id.
  *
  * TEST CHANGE, justified (2026-10-21, plan 018-packs-rebuilt-02, unit u2-refixture-cli-tests,
@@ -5031,7 +5031,7 @@ describe("check — pack-catalog", () => {
 
   it("reads the retired map through the engine registry when run as a doctor row", async () => {
     // The seam `runDoctor` reads (`engine.pack.retired`), swapped for a made-up
-    // map with no module mock: the shipped map is empty, so a warn here comes
+    // map with no module mock: the shipped map has no `gone`, so a warn here comes
     // only from the registry's map reaching the row.
     const handle = getRepo();
     const root = await seedRepo(handle);
@@ -5081,6 +5081,194 @@ describe("check — pack-catalog", () => {
         `pack "gone" (its receipt's bytes do not match its ledger row).`,
     });
   });
+
+  /**
+   * Every first-party copy of the three retired packs a release tag shipped: the
+   * integrity map its `pack.json` held, frozen from `git show <tag>:packs/<id>/pack.json`
+   * at the first tag that carried it (REQ-PACK-003, 2026-10-21_packs-rebuilt-02/u13-retired-map).
+   * The map's `pins` must be exactly these maps' aggregates, and each such copy installed must
+   * read `warn` — the real map, with nothing passed in.
+   */
+  const SHIPPED_COPIES: readonly { id: string; tag: string; integrity: Record<string, string> }[] = [
+    {
+      id: "ops",
+      tag: "v1.0.0",
+      integrity: {
+        "agents/stamity-devops.md": "36a418a9f02d6a5fb88077ca4f50c0693caddf52e8f8398c881523321043c660",
+        "agents/stamity-incident-responder.md": "e307dbf3edbf21b5cc44a766b33cdfb1a20c2ab14031360079c1affeb5abed89",
+        "commands/stamity-incident-response.md": "75108e32ffaf6576555796e3c04888cdf688cbadc7c709bb3c1118464f42f92e",
+        "commands/stamity-release.md": "38458ccb6a6c8f89313c531a105ea2935fc32021da3047b17fcdffa30e55d8c3",
+        "skills/stamity-ci-pipeline/SKILL.md": "98f4e09c664f0af53ba72468496afc638c69e3108bc2f073472c720930eb8fcb",
+        "skills/stamity-containerize/SKILL.md": "f4d30400fb29eafe928103239969a92ba337e52ba38b4b7a7cb86a8ec39c78a1",
+        "skills/stamity-gh-agentic-workflows/SKILL.md": "abb9c4312303a4fff2b29510f5ca34826e30ec8366f722a34e21f65ef3189999",
+        "skills/stamity-incident-response/SKILL.md": "f11ab78cc3b3ca58f9a2a1789234f317372a1c5742f56350511f40fcda648c23",
+        "skills/stamity-release/SKILL.md": "28a383903a8c56e005a52959f7b26913ccfc7d55e0cec530f8b2105c3630ce53",
+      },
+    },
+    {
+      id: "ops",
+      tag: "v1.0.1",
+      integrity: {
+        "agents/stamity-devops.md": "36a418a9f02d6a5fb88077ca4f50c0693caddf52e8f8398c881523321043c660",
+        "agents/stamity-incident-responder.md": "e307dbf3edbf21b5cc44a766b33cdfb1a20c2ab14031360079c1affeb5abed89",
+        "commands/st-incident-response.md": "b956e1768097952a5ea4510d4b31f1adda3fa885f85878796c2caa30bc861715",
+        "commands/st-release.md": "6238536637c5a70da5d0e7e3f74e3f44222718f7b81e8401d947c66969f6d0fb",
+        "skills/st-ci-pipeline/SKILL.md": "98f4e09c664f0af53ba72468496afc638c69e3108bc2f073472c720930eb8fcb",
+        "skills/st-containerize/SKILL.md": "f4d30400fb29eafe928103239969a92ba337e52ba38b4b7a7cb86a8ec39c78a1",
+        "skills/st-gh-agentic-workflows/SKILL.md": "abb9c4312303a4fff2b29510f5ca34826e30ec8366f722a34e21f65ef3189999",
+        "skills/st-incident-response/SKILL.md": "f11ab78cc3b3ca58f9a2a1789234f317372a1c5742f56350511f40fcda648c23",
+        "skills/st-release/SKILL.md": "b4c893c582108ed73d3b01873db3852b0b5e0394a69be9fd2a7e1c8d4fd8a3f5",
+      },
+    },
+    {
+      id: "ops",
+      tag: "v1.12.0",
+      integrity: {
+        "agents/stamity-devops.md": "36a418a9f02d6a5fb88077ca4f50c0693caddf52e8f8398c881523321043c660",
+        "agents/stamity-incident-responder.md": "40c8aab41d287e36b669ea5b06b3537069b542cd23b9b930e2dd4bb9ecd031ff",
+        "commands/st-incident-response.md": "b956e1768097952a5ea4510d4b31f1adda3fa885f85878796c2caa30bc861715",
+        "commands/st-release.md": "b80fa78533f63cc78dce7a28c71b3c788a326811e422900d39421edbba78c188",
+        "skills/st-ci-pipeline/SKILL.md": "98f4e09c664f0af53ba72468496afc638c69e3108bc2f073472c720930eb8fcb",
+        "skills/st-containerize/SKILL.md": "f4d30400fb29eafe928103239969a92ba337e52ba38b4b7a7cb86a8ec39c78a1",
+        "skills/st-gh-agentic-workflows/SKILL.md": "abb9c4312303a4fff2b29510f5ca34826e30ec8366f722a34e21f65ef3189999",
+        "skills/st-incident-runbook/SKILL.md": "59ae946f7c0d3fb17b0f62c2b5644da70ddc0b45d025a9566ded4115c38d5e7c",
+        "skills/st-release-runbook/SKILL.md": "fc12ab74c51b13b3e26bd9ea30cf5f45dd84d7fa4a5eaa4a7cb017bfcbc53fe5",
+      },
+    },
+    {
+      id: "product-audit",
+      tag: "v1.0.0",
+      integrity: {
+        "commands/stamity-benchmark.md": "3362bf6c8a922918a1b7785bfcc3506b43629686ad98cfd3035db71d8205bc1d",
+        "commands/stamity-product-audit.md": "261576912cd7d44added12b176ba7811614135938f6a4366f529d3066dd677bc",
+        "rules/stamity-epic-audit-frame.md": "92163a1a0f5b9ecc7456dc2128c3f69cdc8dc3339f665fbff46a9e99a19a3d65",
+        "skills/stamity-perf-audit/SKILL.md": "57e8a6392af3e7563a0eaae975719cf0d4b1efde26c19329c5c60ae97dbb8980",
+      },
+    },
+    {
+      id: "product-audit",
+      tag: "v1.0.1",
+      integrity: {
+        "commands/st-benchmark.md": "71b37f32fa8b5c87d856c99d551a2064af9b6f485a8430484e9af18f84ffd910",
+        "commands/st-product-audit.md": "1c2b31c4881228f7ebe1e3b4878235bf3b24fa443f362273e1fd25514955e8dd",
+        "rules/stamity-epic-audit-frame.md": "92163a1a0f5b9ecc7456dc2128c3f69cdc8dc3339f665fbff46a9e99a19a3d65",
+        "skills/st-perf-audit/SKILL.md": "57e8a6392af3e7563a0eaae975719cf0d4b1efde26c19329c5c60ae97dbb8980",
+      },
+    },
+    {
+      id: "product-audit",
+      tag: "v1.2.0",
+      integrity: {
+        "commands/st-benchmark.md": "7628a756321e9a0ec0c746125d1326c49c4c78241361adb39373ecf799d830df",
+        "commands/st-product-audit.md": "8a838d835bc41bef974240d59fdd0502ab41d1566084e7e46384b91d3a9b3067",
+        "rules/stamity-epic-audit-frame.md": "8ffbf357990ca19c20b3ca495caeb98e13a8928cf484c31fc623118e395f9996",
+        "skills/st-perf-audit/SKILL.md": "57e8a6392af3e7563a0eaae975719cf0d4b1efde26c19329c5c60ae97dbb8980",
+      },
+    },
+    {
+      id: "product-audit",
+      tag: "v1.15.0",
+      integrity: {
+        "commands/st-benchmark.md": "a4ab1696117ffcb0e5f004d79fbb8a0090e5f29d4fdedca44f6f04d465623882",
+        "commands/st-product-audit.md": "349cd7919482dd3e445cfab13d3cfe7cd47002f80cccac839966331284811e8c",
+        "rules/stamity-epic-audit-frame.md": "c9808ac8f483619146601a75d6cb2215a36b1a9aacdf76805aa86e4e03a243a6",
+        "skills/st-perf-audit/SKILL.md": "57e8a6392af3e7563a0eaae975719cf0d4b1efde26c19329c5c60ae97dbb8980",
+      },
+    },
+    {
+      id: "scaffold",
+      tag: "v1.0.0",
+      integrity: {
+        "commands/stamity-auth-scaffold.md": "88545986d07c9009182ea8098d9af6f3341522d2df9ef81c98781230a45bb4c6",
+        "commands/stamity-design-system-create.md": "7e0dc58abeff11c5ccef6464b5d906294404b90e0270c8a9cf5d960736a14614",
+        "commands/stamity-slo-scaffold.md": "520a30155380397c35f3c2a19bada8fbeec6ebe988244a3e5e1a7adbce5af500",
+      },
+    },
+    {
+      id: "scaffold",
+      tag: "v1.0.1",
+      integrity: {
+        "commands/st-auth-scaffold.md": "8ffa680375b07221c7d426cd30ef5c852636e497822e5bc360c63d9ca7b96cd1",
+        "commands/st-design-system-create.md": "3f3e9b0a9945708657cbac8f10c761bec9d80a9def1324bd6ec949a16879251e",
+        "commands/st-slo-scaffold.md": "9efbec1c028a144495b7f2219d1fcafea2f7924636d12b69c7566881e36c1ebb",
+      },
+    },
+  ];
+
+  /** The one pack each retired id's parts moved to, as the replace order re-adds it. */
+  const SUCCESSOR: Readonly<Record<string, string>> = {
+    ops: "production",
+    "product-audit": "production",
+    scaffold: "frontend",
+  };
+
+  /** One part move per retired id, spelled out, so the line is read and not only rebuilt. */
+  const MOVED_PART: Readonly<Record<string, string>> = {
+    ops: "/st-release → production st-release",
+    "product-audit": "/st-product-audit → production /st-production-review",
+    scaffold: "/st-design-system-create → frontend st-design-system-detect",
+  };
+
+  /**
+   * Make the installed `packId` read as the copy `integrity` describes: its receipt's
+   * file list rewritten to those paths and hashes, and the receipt's ledger row moved to
+   * the new bytes, so `pack-catalog` trusts it. The row judges the receipt alone; the
+   * shipped bodies themselves are history this checkout no longer holds.
+   */
+  async function recordShippedCopy(root: string, packId: string, integrity: Record<string, string>): Promise<void> {
+    const rel = receiptRelPath(packId);
+    const path = join(root, ...rel.split("/"));
+    const receipt = JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
+    const files = Object.entries(integrity).map(([file, sha256]) => ({
+      path: `${packDirRelPath(packId)}/${file}`,
+      class: file.split("/")[0],
+      sha256,
+      bytes: 1,
+      tokens: 1,
+    }));
+    const text = `${JSON.stringify({ ...receipt, files }, null, 2)}\n`;
+    await writeFile(path, text, "utf8");
+    const manifest = await manifestOf(root);
+    const receiptRow = manifest.ledger.find((entry) => entry.path === rel);
+    if (receiptRow === undefined) throw new Error(`fixture: no ledger row records ${rel}`);
+    receiptRow.contentHash = createHash("sha256").update(text, "utf8").digest("hex");
+    await writeManifest(root, manifest, { now: T0 });
+  }
+
+  it.each(["ops", "product-audit", "scaffold"])(
+    "warns on every first-party copy of retired %s a release shipped, with the real map",
+    async (packId) => {
+      const entry = lookupRetiredPack(packId);
+      expect(entry, `the shipped map retires ${packId}`).toBeDefined();
+      const copies = SHIPPED_COPIES.filter((copy) => copy.id === packId);
+      // The pins are exactly the shipped copies' aggregates: none missing, none made up.
+      expect([...(entry?.pins ?? [])].toSorted()).toEqual(
+        copies.map((copy) => computeAggregateContentSha(copy.integrity)).toSorted(),
+      );
+      const handle = getRepo();
+      const root = await seedRepo(handle);
+      // Installed from a path at the unsigned floor, so only the pin match makes it first-party.
+      await installAs(handle, root, packId, { "commands/st-gone-cmd.md": PACK_CMD });
+      const successor = SUCCESSOR[packId] ?? "";
+      for (const copy of copies) {
+        // oxlint-disable-next-line no-await-in-loop -- one receipt, rewritten per shipped copy in turn
+        await recordShippedCopy(root, packId, copy.integrity);
+        // oxlint-disable-next-line no-await-in-loop -- reads the receipt the line above wrote
+        const found = await doctorRow(root, "pack-catalog");
+        expect(found, `${packId} as shipped in ${copy.tag}`).toEqual({
+          id: "pack-catalog",
+          status: "warn",
+          detail:
+            `${entry === undefined ? "" : describeRetiredPack(entry)} — fix in order: ` +
+            `run \`${npxCommand(`clean --pack ${packId}`)}\`, then delete by hand each client copy it keeps ` +
+            `and names, unless it is yours, then \`${npxCommand("sync")}\`, then ` +
+            `\`${npxCommand(`add ${successor}`)}\`, then \`${npxCommand("sync")}\`.`,
+        });
+        expect(found.detail).toContain(`pack "${packId}" was retired after 1.16.0: `);
+        expect(found.detail).toContain(MOVED_PART[packId] ?? "<no part named>");
+      }
+    },
+  );
 });
 
 /**
