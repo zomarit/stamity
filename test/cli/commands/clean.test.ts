@@ -13,6 +13,7 @@ import { MANIFEST_VERSION, type LedgerEntry, type SetupManifest } from "../../..
 import { STATE_DIR } from "../../../src/types/markers.ts";
 import { npxCommand } from "../../support/identity.ts";
 import { runInProcess } from "../../support/inProcess.ts";
+import { madeUpArtifact, writeMadeUpPack } from "../../support/packFixtures.ts";
 import { seedGitRepo } from "../../support/repoFixtures.ts";
 import { makeTempDir, useTempDir, type TempDirHandle } from "../../support/tempDir.ts";
 /**
@@ -915,19 +916,50 @@ describe("clean --pack — salvage and convergence", () => {
 // fixture has to be one the real planner renders — `init --tools claude`,
 // `add`, `sync`. Each template is built once per describe and copied per case.
 
+// TEST CHANGE, justified (2026-10-21, plan 018-packs-rebuilt-02, unit u2-refixture-cli-tests,
+// REQ-PACK-012, REQ-PACK-023): the cases below installed the first-party `ops` pack from the
+// catalog, for the agent and the skills it projects into the clients, and `scaffold` beside it.
+// Both packs retire in this package, and `frontend`, the one first-party pack left, ships no agent.
+// So the pack under test is this made-up one, one agent and one skill, added from a path with
+// `--allow-untrusted` (a path spec carries no trust basis); the other installed pack is the
+// catalog's `frontend`. What each case asserts on the copies, their rows and the refusals is
+// unchanged.
+/** The made-up pack's id: its owner is `pack:acme-ship`, its folder `.stamity/packs/acme-ship`. */
+const SHIP_ID = "acme-ship";
+const SHIP_AGENT_REL = "agents/stamity-acme-deployer.md";
+const SHIP_SKILL_REL = "skills/st-acme-pipeline/SKILL.md";
+/**
+ * The deployer's `model_class` is `advanced`, the class a moved Codex list re-picks below. A second
+ * agent keeps the pack's `agents/` folder from emptying when a case moves the deployer out by hand,
+ * as `ops`'s two agents did, so `clean --pack` still prunes the pack's whole folder there.
+ */
+const SHIP_FILES: Readonly<Record<string, string>> = {
+  [SHIP_AGENT_REL]: madeUpArtifact("acme-deployer", "agent", "Deploys the acme service.").replace(
+    "load: on-demand\n",
+    "load: on-demand\nmodel_class: advanced\n",
+  ),
+  "agents/stamity-acme-watcher.md": madeUpArtifact("acme-watcher", "agent", "Watches the acme service."),
+  [SHIP_SKILL_REL]: madeUpArtifact("acme-pipeline", "skill", "Designs the acme pipeline."),
+};
+
+/** Writes the made-up pack into `dir` and returns the `add` argv that installs it. */
+async function shipPackArgs(dir: string): Promise<string[]> {
+  return ["add", await writeMadeUpPack(dir, SHIP_ID, { ...SHIP_FILES }), "--allow-untrusted", "-y"];
+}
+
 describe("clean --pack — the pack's projected copies", () => {
   type Row = LedgerEntry;
   type Entry = ReportEntry & { proof?: string };
 
   let templates: TempDirHandle;
-  /** `init -y --tools claude`, `add ops -y`, `sync`. */
-  let opsSynced: string;
-  /** The same, with `scaffold` added and synced too. */
+  /** `init -y --tools claude`, `add <the made-up pack> --allow-untrusted -y`, `sync`. */
+  let shipSynced: string;
+  /** The same, with the catalog's `frontend` added and synced too. */
   let twoPacksSynced: string;
-  /** The claude rows `add ops` + `sync` added under `.claude/`: the pack's copies. */
-  let opsCopies: string[];
-  /** The claude rows `add scaffold` + `sync` added under `.claude/`. */
-  let scaffoldCopies: string[];
+  /** The claude rows the made-up pack's `add` + `sync` added under `.claude/`: the pack's copies. */
+  let shipCopies: string[];
+  /** The claude rows `add frontend` + `sync` added under `.claude/`. */
+  let frontendCopies: string[];
 
   async function run(cwd: string, argv: readonly string[]): Promise<Awaited<ReturnType<typeof runInProcess>>> {
     const result = await runInProcess(COMMANDS, argv, { cwd });
@@ -935,9 +967,9 @@ describe("clean --pack — the pack's projected copies", () => {
     return result;
   }
 
-  async function addAndSync(repo: string, pack: string): Promise<string[]> {
+  async function addAndSync(repo: string, addArgv: readonly string[]): Promise<string[]> {
     const before = new Set((await readLedgerOnDisk(repo)).map((row) => row.path));
-    await run(repo, ["add", pack, "-y"]);
+    await run(repo, addArgv);
     await run(repo, ["sync"]);
     return (await readLedgerOnDisk(repo))
       .filter((row) => row.adapter === "claude" && row.path.startsWith(".claude/") && !before.has(row.path))
@@ -946,14 +978,14 @@ describe("clean --pack — the pack's projected copies", () => {
 
   beforeAll(async () => {
     templates = await makeTempDir("stamity-clean-copies");
-    opsSynced = templates.path("ops");
-    await mkdir(opsSynced, { recursive: true });
-    await seedGitRepo(opsSynced);
-    await run(opsSynced, ["init", "-y", "--tools", "claude"]);
-    opsCopies = await addAndSync(opsSynced, "ops");
+    shipSynced = templates.path("ship");
+    await mkdir(shipSynced, { recursive: true });
+    await seedGitRepo(shipSynced);
+    await run(shipSynced, ["init", "-y", "--tools", "claude"]);
+    shipCopies = await addAndSync(shipSynced, await shipPackArgs(templates.path("packs")));
     twoPacksSynced = templates.path("two");
-    await cp(opsSynced, twoPacksSynced, { recursive: true });
-    scaffoldCopies = await addAndSync(twoPacksSynced, "scaffold");
+    await cp(shipSynced, twoPacksSynced, { recursive: true });
+    frontendCopies = await addAndSync(twoPacksSynced, ["add", "frontend", "-y"]);
   }, 180_000);
 
   afterAll(async () => {
@@ -967,7 +999,7 @@ describe("clean --pack — the pack's projected copies", () => {
   }
 
   function cleanJson(root: string, extra: readonly string[] = []): Promise<Record<string, unknown>> {
-    return runClean(root, ["--pack", "ops", "--json", "-y", ...extra]).then((result) => {
+    return runClean(root, ["--pack", SHIP_ID, "--json", "-y", ...extra]).then((result) => {
       expect(result.code, result.stderr).toBe(0);
       return parseSingleDoc(result.stdout);
     });
@@ -977,32 +1009,33 @@ describe("clean --pack — the pack's projected copies", () => {
     return (entriesOf(doc) as Entry[]).find((entry) => entry.path === path);
   }
 
-  const EDITED_COPY = ".claude/skills/st-ci-pipeline/SKILL.md";
+  const EDITED_COPY = ".claude/skills/st-acme-pipeline/SKILL.md";
+  const AGENT_COPY = ".claude/agents/stamity-acme-deployer.md";
 
-  it("the fixture: ops projects skills and an agent into .claude/", () => {
-    expect(opsCopies).toContain(".claude/agents/stamity-devops.md");
-    expect(opsCopies).toContain(EDITED_COPY);
-    expect(scaffoldCopies.length).toBeGreaterThan(0);
+  it("the fixture: the made-up pack projects its skill and its agent into .claude/", () => {
+    expect(shipCopies).toContain(AGENT_COPY);
+    expect(shipCopies).toContain(EDITED_COPY);
+    expect(frontendCopies.length).toBeGreaterThan(0);
   });
 
   it(
     "deletes every .claude/ copy of the pack with proof hash, drops its rows, and moves no row of the corpus",
     async () => {
-      const root = await copyOf(opsSynced);
+      const root = await copyOf(shipSynced);
       const before = await readLedgerOnDisk(root);
 
       const doc = await cleanJson(root);
 
-      for (const copy of opsCopies) {
+      for (const copy of shipCopies) {
         expect(entryAt(doc, copy), copy).toMatchObject({ action: "deleted", proof: "hash" });
         expect(existsSync(join(root, copy)), copy).toBe(false);
       }
       const after = await readLedgerOnDisk(root);
-      for (const copy of opsCopies) expect(after.map((row) => row.path), copy).not.toContain(copy);
-      expect(rowsOwnedBy(after, "pack:ops")).toEqual([]);
+      for (const copy of shipCopies) expect(after.map((row) => row.path), copy).not.toContain(copy);
+      expect(rowsOwnedBy(after, `pack:${SHIP_ID}`)).toEqual([]);
       // Every other row is byte-unchanged: the corpus's own content did not move.
       const untouched = (rows: readonly Row[]): Row[] =>
-        rows.filter((row) => row.adapter !== "pack:ops" && !opsCopies.includes(row.path));
+        rows.filter((row) => row.adapter !== `pack:${SHIP_ID}` && !shipCopies.includes(row.path));
       expect(after).toEqual(untouched(before));
       expect(doc["removedRows"]).toBe(before.length - after.length);
     },
@@ -1012,18 +1045,18 @@ describe("clean --pack — the pack's projected copies", () => {
   it(
     "keeps a copy its owner edited, names it, and still drops its row",
     async () => {
-      const root = await copyOf(opsSynced);
+      const root = await copyOf(shipSynced);
       const edited = `${await readFile(join(root, EDITED_COPY), "utf-8")}\nOur own step.\n`;
       await writeFile(join(root, EDITED_COPY), edited, "utf-8");
 
-      const result = await runClean(root, ["--pack", "ops", "-y"]);
+      const result = await runClean(root, ["--pack", SHIP_ID, "-y"]);
 
       expect(result.code, result.stderr).toBe(0);
       expect(await readFile(join(root, EDITED_COPY), "utf-8")).toBe(edited);
       expect(result.stdout).toContain(`skipped-user-content  ${EDITED_COPY}`);
       expect((await readLedgerOnDisk(root)).map((row) => row.path)).not.toContain(EDITED_COPY);
       // The unedited copies still leave.
-      expect(existsSync(join(root, ".claude/agents/stamity-devops.md"))).toBe(false);
+      expect(existsSync(join(root, AGENT_COPY))).toBe(false);
     },
     60_000,
   );
@@ -1031,8 +1064,8 @@ describe("clean --pack — the pack's projected copies", () => {
   it(
     "refuses, keeping an owner's own file at a copy's name under a forged claude row hashing it",
     async () => {
-      const root = await copyOf(opsSynced);
-      const ownerBytes = "---\nname: st-ci-pipeline\ndescription: our own pipeline notes\n---\n\nOurs.\n";
+      const root = await copyOf(shipSynced);
+      const ownerBytes = "---\nname: st-acme-pipeline\ndescription: our own pipeline notes\n---\n\nOurs.\n";
       await writeFile(join(root, EDITED_COPY), ownerBytes, "utf-8");
       const manifestFile = join(root, STATE_DIR, "manifest.json");
       const manifest = JSON.parse(await readFile(manifestFile, "utf-8")) as SetupManifest;
@@ -1046,7 +1079,7 @@ describe("clean --pack — the pack's projected copies", () => {
       // setup and the bytes hash to the recorded hash, so `clean --pack` now
       // refuses before touching anything, with CLEAN_ERROR naming the path. The
       // owner's file stays, as before, and so does every row.
-      const result = await runClean(root, ["--pack", "ops", "--json", "-y"]);
+      const result = await runClean(root, ["--pack", SHIP_ID, "--json", "-y"]);
 
       expect(result.code).toBe(1);
       const error = parseSingleDoc(result.stdout)["error"] as { code: string; message: string; why: string };
@@ -1070,15 +1103,15 @@ describe("clean --pack — the pack's projected copies", () => {
   it(
     "refuses over the copy of an edited pack file, and its next step keeps that pack away from sync",
     async () => {
-      const root = await copyOf(opsSynced);
-      const packAgent = `${STATE_DIR}/packs/ops/agents/stamity-devops.md`;
-      const agentCopy = ".claude/agents/stamity-devops.md";
+      const root = await copyOf(shipSynced);
+      const packAgent = `${STATE_DIR}/packs/${SHIP_ID}/${SHIP_AGENT_REL}`;
+      const agentCopy = AGENT_COPY;
       const copyBefore = await readFile(join(root, agentCopy), "utf-8");
       const edited = `${await readFile(join(root, packAgent), "utf-8")}\nA line added after install.\n`;
       await writeFile(join(root, packAgent), edited, "utf-8");
 
       const forms = [
-        { argv: ["--pack", "ops", "--json", "-y"], rerun: "clean --pack ops" },
+        { argv: ["--pack", SHIP_ID, "--json", "-y"], rerun: `clean --pack ${SHIP_ID}` },
         { argv: ["--json", "--dry-run"], rerun: "clean -y" },
       ];
       for (const { argv, rerun } of forms) {
@@ -1105,17 +1138,17 @@ describe("clean --pack — the pack's projected copies", () => {
       // Refused twice, and the edit reached no client file.
       expect(await readFile(join(root, agentCopy), "utf-8")).toBe(copyBefore);
 
-      await rename(join(root, packAgent), join(root, "stamity-devops.edited.md"));
+      await rename(join(root, packAgent), join(root, "stamity-acme-deployer.edited.md"));
 
       const fullPreview = await runClean(root, ["--dry-run"]);
       expect(fullPreview.code, fullPreview.stderr).toBe(0);
-      const scoped = await runClean(root, ["--pack", "ops", "-y"]);
+      const scoped = await runClean(root, ["--pack", SHIP_ID, "-y"]);
       expect(scoped.code, scoped.stderr).toBe(0);
       // The moved file's own copy is kept and named; it never held the edit.
       expect(scoped.stdout).toContain(`skipped-user-content  ${agentCopy}`);
       expect(await readFile(join(root, agentCopy), "utf-8")).toBe(copyBefore);
-      expect(existsSync(join(root, STATE_DIR, "packs", "ops"))).toBe(false);
-      expect(rowsOwnedBy(await readLedgerOnDisk(root), "pack:ops")).toEqual([]);
+      expect(existsSync(join(root, STATE_DIR, "packs", SHIP_ID))).toBe(false);
+      expect(rowsOwnedBy(await readLedgerOnDisk(root), `pack:${SHIP_ID}`)).toEqual([]);
       // The copies of the pack's unedited files left with it.
       expect(existsSync(join(root, EDITED_COPY))).toBe(false);
     },
@@ -1125,14 +1158,14 @@ describe("clean --pack — the pack's projected copies", () => {
   it(
     "lists each copy as dry-run, counts it, and writes nothing",
     async () => {
-      const root = await copyOf(opsSynced);
+      const root = await copyOf(shipSynced);
       const before = await snapshot(root);
 
-      const result = await runClean(root, ["--pack", "ops", "--dry-run"]);
+      const result = await runClean(root, ["--pack", SHIP_ID, "--dry-run"]);
 
       expect(result.code, result.stderr).toBe(0);
-      for (const copy of opsCopies) expect(result.stdout).toContain(`dry-run  ${copy}`);
-      expect(result.stdout).toContain(`the rows of its ${opsCopies.length} client copy(ies)`);
+      for (const copy of shipCopies) expect(result.stdout).toContain(`dry-run  ${copy}`);
+      expect(result.stdout).toContain(`the rows of its ${shipCopies.length} client copy(ies)`);
       expect(await snapshot(root)).toEqual(before);
     },
     60_000,
@@ -1147,14 +1180,14 @@ describe("clean --pack — the pack's projected copies", () => {
       const doc = await cleanJson(root);
 
       const after = await readLedgerOnDisk(root);
-      for (const copy of scaffoldCopies) {
+      for (const copy of frontendCopies) {
         expect(entryAt(doc, copy), copy).toBeUndefined();
         expect(existsSync(join(root, copy)), copy).toBe(true);
       }
-      const scaffoldRows = (rows: readonly Row[]): Row[] =>
-        rows.filter((row) => row.adapter === "pack:scaffold" || scaffoldCopies.includes(row.path));
-      expect(scaffoldRows(after)).toEqual(scaffoldRows(before));
-      for (const copy of opsCopies) expect(existsSync(join(root, copy)), copy).toBe(false);
+      const frontendRows = (rows: readonly Row[]): Row[] =>
+        rows.filter((row) => row.adapter === "pack:frontend" || frontendCopies.includes(row.path));
+      expect(frontendRows(after)).toEqual(frontendRows(before));
+      for (const copy of shipCopies) expect(existsSync(join(root, copy)), copy).toBe(false);
     },
     60_000,
   );
@@ -1162,7 +1195,7 @@ describe("clean --pack — the pack's projected copies", () => {
   it(
     "finds the copies of a pack the org policy denies, and removes them",
     async () => {
-      const root = await copyOf(opsSynced);
+      const root = await copyOf(shipSynced);
       await writeFile(
         join(root, ORG_POLICY_REL_PATH),
         `${JSON.stringify({ version: 1, packs: { deny: ["*"] } }, null, 2)}\n`,
@@ -1171,7 +1204,7 @@ describe("clean --pack — the pack's projected copies", () => {
 
       const doc = await cleanJson(root);
 
-      for (const copy of opsCopies) {
+      for (const copy of shipCopies) {
         expect(entryAt(doc, copy), copy).toMatchObject({ action: "deleted", proof: "hash" });
         expect(existsSync(join(root, copy)), copy).toBe(false);
       }
@@ -1182,9 +1215,9 @@ describe("clean --pack — the pack's projected copies", () => {
   it(
     "ends on the pinned sync that regenerates the clients' files without the pack",
     async () => {
-      const root = await copyOf(opsSynced);
+      const root = await copyOf(shipSynced);
 
-      const result = await runClean(root, ["--pack", "ops", "-y"]);
+      const result = await runClean(root, ["--pack", SHIP_ID, "-y"]);
 
       expect(result.stdout).toContain(`regenerate the clients' files without the pack: ${npxCommand("sync")}`);
     },
@@ -1201,10 +1234,10 @@ describe("clean --pack — the pack's projected copies", () => {
   it(
     "keeps an unplannable pack's copies with their rows, and takes nothing that is not the pack's",
     async () => {
-      const root = await copyOf(opsSynced);
+      const root = await copyOf(shipSynced);
       // A command under the name of the pack's own skill: the planner refuses
       // the pack, as it refuses 1.11.0's ops.
-      const clashRel = "commands/st-ci-pipeline.md";
+      const clashRel = "commands/st-acme-pipeline.md";
       const clashBytes = "---\ndescription: Run the CI pipeline.\n---\n\nRun the pipeline.\n";
       const retired = ".claude/agents/stamity-retired.md";
       const retiredBytes = "---\nname: stamity-retired\ndescription: an agent an earlier release shipped\n---\n\nRetired.\n";
@@ -1212,7 +1245,9 @@ describe("clean --pack — the pack's projected copies", () => {
       const ownedBytes = "---\nname: st-local\ndescription: the owner's own skill\n---\n\nOurs.\n";
       const ownedToo = ".claude/agents/stamity-ours.md";
       const ownedTooBytes = "---\nname: stamity-ours\ndescription: the owner's own agent\n---\n\nOurs.\n";
-      await writeFile(join(root, STATE_DIR, "packs", "ops", ...clashRel.split("/")), clashBytes, "utf-8");
+      // The made-up pack ships no command, so its commands folder is made here.
+      await mkdir(join(root, STATE_DIR, "packs", SHIP_ID, "commands"), { recursive: true });
+      await writeFile(join(root, STATE_DIR, "packs", SHIP_ID, ...clashRel.split("/")), clashBytes, "utf-8");
       await writeFile(join(root, retired), retiredBytes, "utf-8");
       await mkdir(join(root, ".claude", "skills", "st-local"), { recursive: true });
       await writeFile(join(root, owned), ownedBytes, "utf-8");
@@ -1221,26 +1256,26 @@ describe("clean --pack — the pack's projected copies", () => {
       const manifest = JSON.parse(await readFile(manifestFile, "utf-8")) as SetupManifest;
       manifest.ledger.push(
         {
-          path: `${STATE_DIR}/packs/ops/${clashRel}`,
-          adapter: "pack:ops",
-          artifactId: `ops/${clashRel}`,
+          path: `${STATE_DIR}/packs/${SHIP_ID}/${clashRel}`,
+          adapter: `pack:${SHIP_ID}`,
+          artifactId: `${SHIP_ID}/${clashRel}`,
           artifactType: "infra",
           contentHash: sha256(clashBytes),
         },
         { path: retired, adapter: "claude", artifactId: "retired", artifactType: "agent", contentHash: sha256(retiredBytes) },
         // Forged: an owner's skill under its own name, and an owner's agent under a row naming the pack's agent.
         { path: owned, adapter: "claude", artifactId: "local", artifactType: "skill", contentHash: sha256(ownedBytes) },
-        { path: ownedToo, adapter: "claude", artifactId: "devops", artifactType: "agent", contentHash: sha256(ownedTooBytes) },
+        { path: ownedToo, adapter: "claude", artifactId: "acme-deployer", artifactType: "agent", contentHash: sha256(ownedTooBytes) },
       );
       await writeFile(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`, "utf-8");
 
-      const result = await runClean(root, ["--pack", "ops", "-y"]);
+      const result = await runClean(root, ["--pack", SHIP_ID, "-y"]);
 
       expect(result.code, result.stderr).toBe(0);
-      expect(result.stdout).toContain('Pack "ops" could not be planned as installed');
+      expect(result.stdout).toContain(`Pack "${SHIP_ID}" could not be planned as installed`);
       const after = await readLedgerOnDisk(root);
-      expect(rowsOwnedBy(after, "pack:ops")).toEqual([]);
-      for (const copy of opsCopies) {
+      expect(rowsOwnedBy(after, `pack:${SHIP_ID}`)).toEqual([]);
+      for (const copy of shipCopies) {
         expect(existsSync(join(root, copy)), copy).toBe(true);
         expect(after.some((row) => row.path === copy && row.adapter === "claude"), `the row of ${copy} stays`).toBe(true);
       }
@@ -1267,16 +1302,18 @@ describe("clean --pack — the pack's projected copies", () => {
   it(
     "says which of an unplannable pack's copies keep their rows: an edited copy loses its row",
     async () => {
-      const root = await copyOf(opsSynced);
-      const clashRel = "commands/st-ci-pipeline.md";
+      const root = await copyOf(shipSynced);
+      const clashRel = "commands/st-acme-pipeline.md";
       const clashBytes = "---\ndescription: Run the CI pipeline.\n---\n\nRun the pipeline.\n";
-      await writeFile(join(root, STATE_DIR, "packs", "ops", ...clashRel.split("/")), clashBytes, "utf-8");
+      // The made-up pack ships no command, so its commands folder is made here.
+      await mkdir(join(root, STATE_DIR, "packs", SHIP_ID, "commands"), { recursive: true });
+      await writeFile(join(root, STATE_DIR, "packs", SHIP_ID, ...clashRel.split("/")), clashBytes, "utf-8");
       const manifestFile = join(root, STATE_DIR, "manifest.json");
       const manifest = JSON.parse(await readFile(manifestFile, "utf-8")) as SetupManifest;
       manifest.ledger.push({
-        path: `${STATE_DIR}/packs/ops/${clashRel}`,
-        adapter: "pack:ops",
-        artifactId: `ops/${clashRel}`,
+        path: `${STATE_DIR}/packs/${SHIP_ID}/${clashRel}`,
+        adapter: `pack:${SHIP_ID}`,
+        artifactId: `${SHIP_ID}/${clashRel}`,
         artifactType: "infra",
         contentHash: sha256(clashBytes),
       });
@@ -1284,18 +1321,18 @@ describe("clean --pack — the pack's projected copies", () => {
       const edited = `${await readFile(join(root, EDITED_COPY), "utf-8")}\nOur own step.\n`;
       await writeFile(join(root, EDITED_COPY), edited, "utf-8");
 
-      const result = await runClean(root, ["--pack", "ops", "-y"]);
+      const result = await runClean(root, ["--pack", SHIP_ID, "-y"]);
 
       expect(result.code, result.stderr).toBe(0);
       const after = await readLedgerOnDisk(root);
       expect(await readFile(join(root, EDITED_COPY), "utf-8")).toBe(edited);
       expect(after.map((row) => row.path)).not.toContain(EDITED_COPY);
-      for (const copy of opsCopies.filter((path) => path !== EDITED_COPY)) {
+      for (const copy of shipCopies.filter((path) => path !== EDITED_COPY)) {
         expect(after.some((row) => row.path === copy && row.adapter === "claude"), `the row of ${copy} stays`).toBe(true);
       }
       expect(result.stdout).not.toContain("each is kept with its ledger row");
       expect(result.stdout).toContain(
-        `${opsCopies.length - 1} of them, unedited since their recorded hash, keep their ledger rows`,
+        `${shipCopies.length - 1} of them, unedited since their recorded hash, keep their ledger rows`,
       );
       expect(result.stdout).toContain("a copy you edited, or one whose row records no content hash, loses its row");
     },
@@ -1309,23 +1346,23 @@ describe("clean --pack — the pack's projected copies", () => {
   it(
     "takes no copy when the setup cannot be planned without the pack, keeps their rows, and says why",
     async () => {
-      const root = await copyOf(opsSynced);
+      const root = await copyOf(shipSynced);
       await mkdir(join(root, STATE_DIR, "overrides", "agents"), { recursive: true });
-      await writeFile(join(root, STATE_DIR, "overrides", "agents", "devops.customize.md"), "Our own closing step.\n", "utf-8");
+      await writeFile(join(root, STATE_DIR, "overrides", "agents", "acme-deployer.customize.md"), "Our own closing step.\n", "utf-8");
       const before = await readLedgerOnDisk(root);
       const copyBytes = Object.fromEntries(
-        await Promise.all(opsCopies.map(async (copy) => [copy, await readFile(join(root, copy), "utf-8")] as const)),
+        await Promise.all(shipCopies.map(async (copy) => [copy, await readFile(join(root, copy), "utf-8")] as const)),
       );
 
-      const result = await runClean(root, ["--pack", "ops", "-y"]);
+      const result = await runClean(root, ["--pack", SHIP_ID, "-y"]);
 
       expect(result.code, `${result.stdout}\n${result.stderr}`).toBe(0);
-      expect(result.stdout).toContain('The setup could not be planned without pack "ops" (');
+      expect(result.stdout).toContain(`The setup could not be planned without pack "${SHIP_ID}" (`);
       expect(result.stdout).toContain("so its client copies were not looked for: their rows stay.");
       expect(result.stdout).not.toContain("delete by hand each client copy kept above");
       const after = await readLedgerOnDisk(root);
-      expect(rowsOwnedBy(after, "pack:ops")).toEqual([]);
-      for (const copy of opsCopies) {
+      expect(rowsOwnedBy(after, `pack:${SHIP_ID}`)).toEqual([]);
+      for (const copy of shipCopies) {
         expect(await readFile(join(root, copy), "utf-8"), copy).toBe(copyBytes[copy]);
         expect(after.find((row) => row.path === copy), `the row of ${copy} stays`).toEqual(
           before.find((row) => row.path === copy),
@@ -1473,20 +1510,23 @@ describe("clean — a setup whose model list moved a Codex pick", () => {
   /** An account's Codex list lacking the shipped entry 0 of frontier, advanced and economy. */
   const OTHER_CODEX = { codex: { ids: ["gpt-5.6-terra", "gpt-6-sol", "gpt-5.6-luna"], source: "codex-debug-models" as const } };
   const REVIEWER = ".codex/agents/stamity-reviewer.toml";
-  const RESPONDER = ".codex/agents/stamity-incident-responder.toml";
+  // TEST CHANGE, justified (2026-10-21, plan 018-packs-rebuilt-02, unit u2-refixture-cli-tests,
+  // REQ-PACK-023): the pack agent was `ops`'s incident responder, from the catalog; `ops` retires in
+  // this package, so it is the made-up pack's `advanced` agent (SHIP_FILES above), added from a path.
+  const RESPONDER = ".codex/agents/stamity-acme-deployer.toml";
 
   async function run(cwd: string, argv: readonly string[]): Promise<void> {
     const result = await runInProcess(COMMANDS, argv, { cwd });
     expect(result.code, `${argv.join(" ")}: ${result.stdout}\n${result.stderr}`).toBe(0);
   }
 
-  /** `init -y --tools claude,codex`, `add ops -y` with `pack`, then a sync whose Codex list moves the advanced pick. */
+  /** `init -y --tools claude,codex`, `add <the made-up pack> --allow-untrusted -y` with `pack`, then a sync whose Codex list moves the advanced pick. */
   async function listMoved(pack: boolean): Promise<string> {
     const root = tempDir().path("repo");
     await mkdir(root, { recursive: true });
     await seedGitRepo(root);
     await run(root, ["init", "-y", "--tools", "claude,codex"]);
-    if (pack) await run(root, ["add", "ops", "-y"]);
+    if (pack) await run(root, await shipPackArgs(tempDir().path("packs")));
     const engineVersion = createApp().version;
     const plan = await planSync(root, engineVersion, { listedOverlay: structuredClone(OTHER_CODEX) });
     await applySync(root, plan, { engineVersion, force: false, dryRun: false, now: new Date() });
@@ -1509,7 +1549,7 @@ describe("clean — a setup whose model list moved a Codex pick", () => {
     const root = await listMoved(true);
     expect(await readFile(join(root, RESPONDER), "utf-8")).toMatch(/^model = "gpt-6-sol"$/m);
 
-    const result = await runClean(root, ["--pack", "ops", "-y"]);
+    const result = await runClean(root, ["--pack", SHIP_ID, "-y"]);
 
     expect(result.code, `${result.stdout}\n${result.stderr}`).toBe(0);
     expect(existsSync(join(root, RESPONDER))).toBe(false);

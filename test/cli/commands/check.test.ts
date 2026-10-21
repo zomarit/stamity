@@ -4886,7 +4886,12 @@ describe("check — model-pins", () => {
  * retired-names map, from the receipt's file hashes, never the version. The
  * shipped map is empty until a release retires a pack, so the retired cases
  * pass a made-up map in; the catalog cases install this checkout's own
- * `scaffold` through its real pin, and a made-up copy under that id.
+ * `frontend` through its real pin, and a made-up copy under that id.
+ *
+ * TEST CHANGE, justified (2026-10-21, plan 018-packs-rebuilt-02, unit u2-refixture-cli-tests,
+ * REQ-PACK-023): the catalog cases installed `scaffold`, which retires in this package; once the
+ * retired-names map fills, a `scaffold` copy reads as retired, not as a catalog pack. They install
+ * `frontend`, the catalog pack left, and assert the same rows and remedy under its id.
  */
 describe("check — pack-catalog", () => {
   const PACK_CMD = COMMAND_FIXTURE.replace("id: cmd-work", "id: gone-cmd");
@@ -4955,9 +4960,9 @@ describe("check — pack-catalog", () => {
   it("passes a catalog pack installed through its bundled pin", async () => {
     const handle = getRepo();
     const root = await seedRepo(handle);
-    const entry = lookupCatalogEntry("scaffold");
-    if (entry === undefined) throw new Error("this checkout's catalog has no scaffold pack");
-    const plan = await planPackInstall(root, resolveBundledPackRoot("scaffold"), { catalogPin: entry.pin });
+    const entry = lookupCatalogEntry("frontend");
+    if (entry === undefined) throw new Error("this checkout's catalog has no frontend pack");
+    const plan = await planPackInstall(root, resolveBundledPackRoot("frontend"), { catalogPin: entry.pin });
     const installed = await applyPackInstall(root, plan, await manifestOf(root), {
       engineVersion: createApp().version,
       now: T0,
@@ -4977,7 +4982,7 @@ describe("check — pack-catalog", () => {
     const root = await seedRepo(handle);
     // An earlier release's pin over other content: the tier is the catalog's,
     // the content is not this release's copy.
-    await installAs(handle, root, "scaffold", { "commands/st-gone-cmd.md": PACK_CMD }, "scanned");
+    await installAs(handle, root, "frontend", { "commands/st-gone-cmd.md": PACK_CMD }, "scanned");
     // Projected, so the drift gate reads clean and the exit code is this row's alone.
     await resyncAt(root);
 
@@ -4987,8 +4992,8 @@ describe("check — pack-catalog", () => {
       id: "pack-catalog",
       status: "warn",
       detail:
-        'pack "scaffold": its installed content is not the copy this release bundles — re-add to ' +
-        `update: \`${npxCommand("add scaffold")}\`.`,
+        'pack "frontend": its installed content is not the copy this release bundles — re-add to ' +
+        `update: \`${npxCommand("add frontend")}\`.`,
     });
     expect(code).toBe(0);
   });
@@ -4996,7 +5001,7 @@ describe("check — pack-catalog", () => {
   it("does not judge a pack installed from a path under a catalog id", async () => {
     const handle = getRepo();
     const root = await seedRepo(handle);
-    await installAs(handle, root, "scaffold", { "commands/st-gone-cmd.md": PACK_CMD });
+    await installAs(handle, root, "frontend", { "commands/st-gone-cmd.md": PACK_CMD });
 
     expect(await doctorRow(root, "pack-catalog")).toEqual({
       id: "pack-catalog",
