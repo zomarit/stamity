@@ -78,6 +78,7 @@ import * as packCurated from "../pack/curated.ts";
 import * as packCatalogPins from "../pack/catalogPins.ts";
 import * as packVerifyInstalled from "../pack/verifyInstalled.ts";
 import * as packMoved from "../pack/moved.ts";
+import * as packRetired from "../pack/retired.ts";
 import * as workspaceModel from "../workspace/model.ts";
 import * as workspaceGit from "../workspace/git.ts";
 import * as workspaceDetect from "../workspace/detect.ts";
@@ -226,6 +227,7 @@ export interface EngineRegistry {
     readonly catalogPins: typeof packCatalogPins;
     readonly verifyInstalled: typeof packVerifyInstalled;
     readonly moved: typeof packMoved;
+    readonly retired: typeof packRetired;
   };
   readonly workspace: {
     readonly model: typeof workspaceModel;
@@ -473,6 +475,7 @@ export function createEngine(): EngineRegistry {
       catalogPins: packCatalogPins,
       verifyInstalled: packVerifyInstalled,
       moved: packMoved,
+      retired: packRetired,
     },
     workspace: {
       model: workspaceModel,

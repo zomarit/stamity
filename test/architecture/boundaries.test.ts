@@ -297,6 +297,10 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // (REQ-PACK-008): zero imports, read by the wave-13 rendering proof and the
   // wave-14 sync report, so it sits at its true depth with the other pin data.
   "src/pack/moved.ts": { unit: "u12-moved-prune", wave: 1 },
+  // The retired pack ids and where their parts went (REQ-PACK-002): zero
+  // imports, read by the wave-14 `add` refusal and the wave-15 `pack-catalog`
+  // row, so it sits at its true depth beside the other pin data.
+  "src/pack/retired.ts": { unit: "u3-retired-names", wave: 1 },
   // A work run's on-disk shape: constants and two helpers over the markers and
   // the error type, nothing else — so it sits at kernel depth, below every
   // reader of a run folder.

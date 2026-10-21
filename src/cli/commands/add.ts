@@ -9,6 +9,13 @@ import {
 import { lookupCatalogEntry, resolveBundledPackRoot, type CatalogEntry } from "../../pack/curated.ts";
 import type { PackInstallPlan, PackWriteSetEntry } from "../../pack/install.ts";
 import type { OrgPolicyDecision } from "../../pack/orgPolicy.ts";
+import {
+  describeRetiredPack,
+  lookupRetiredPack,
+  RETIRED_PACKS,
+  retiredSuccessorPacks,
+  type RetiredPack,
+} from "../../pack/retired.ts";
 import type { CatalogPin, TrustTier } from "../../pack/trust.ts";
 import { MANIFEST_FILE, type SetupManifest } from "../../types/manifest.ts";
 import { STATE_DIR } from "../../types/markers.ts";
@@ -157,6 +164,8 @@ interface ResolvedSpec {
   planSpec: string;
   catalogPin?: CatalogPin;
   catalogEntry?: CatalogEntry;
+  /** A bare id the catalog lacks and a release retired: refused before any plan. */
+  retired?: RetiredPack;
 }
 
 /**
@@ -176,15 +185,29 @@ function isPathSpec(spec: string): boolean {
 }
 
 /**
- * Resolution order: explicit path -> curated catalog -> untouched fallback
- * (the engine's local-path/npm resolution). A catalog hit becomes the bundled
- * root (an absolute path the engine resolves like any other directory) or the
- * entry's npm package name, plus the pin that grants the entry's tier.
+ * Resolution order: explicit path -> curated catalog -> retired names ->
+ * untouched fallback (the engine's local-path/npm resolution). A catalog hit
+ * becomes the bundled root (an absolute path the engine resolves like any
+ * other directory) or the entry's npm package name, plus the pin that grants
+ * the entry's tier.
+ *
+ * The retired-names map (REQ-PACK-002) is read only after a catalog miss, so a
+ * fork that keeps its own directory under a retired name resolves it, and only
+ * for an unscoped spec: a path or a scoped npm name never consults it. A hit
+ * carries the entry, which the caller refuses before any plan with
+ * {@link retiredPackRefusal}; `./node_modules/<id>` stays the way to install
+ * an npm package of that name on purpose.
  */
-function resolveSpecThroughCatalog(spec: string): ResolvedSpec {
+export function resolveSpecThroughCatalog(
+  spec: string,
+  retired: readonly RetiredPack[] = RETIRED_PACKS,
+): ResolvedSpec {
   if (isPathSpec(spec)) return { planSpec: spec };
   const entry = lookupCatalogEntry(spec);
-  if (entry === undefined) return { planSpec: spec };
+  if (entry === undefined) {
+    const gone = spec.startsWith("@") ? undefined : lookupRetiredPack(spec, retired);
+    return gone === undefined ? { planSpec: spec } : { planSpec: spec, retired: gone };
+  }
   const planSpec =
     entry.source.kind === "bundled" ? resolveBundledPackRoot(entry.id) : entry.source.package;
   return { planSpec, catalogPin: entry.pin, catalogEntry: entry };
@@ -710,6 +733,29 @@ function leftBehindPart(packId: string, spec: string, paths: readonly string[]):
   };
 }
 
+/**
+ * The refusal for a retired id (REQ-PACK-002): where each part went, then the
+ * steps — `clean --pack <id>` first when a copy is installed (`installed`, read
+ * from its `pack:<id>` rows), `add <successor>` per successor pack, and
+ * `add ./node_modules/<id>` as the way to install an npm package of that name
+ * on purpose, since the bare id no longer resolves to one.
+ */
+export function retiredPackRefusal(entry: RetiredPack, installed: boolean): FailureDoc {
+  const steps = [
+    ...(installed ? [packageCommand(`clean --pack ${entry.id}`)] : []),
+    ...retiredSuccessorPacks(entry).map((pack) => packageCommand(`add ${pack}`)),
+  ].map((step) => `\`${step}\``);
+  const onPurpose =
+    `to install an npm package named "${entry.id}" on purpose, run ` +
+    `\`${packageCommand(`add ./node_modules/${entry.id}`)}\``;
+  return {
+    code: "VALIDATION_ERROR",
+    message: describeRetiredPack(entry),
+    why: "a retired name is never reused",
+    next: steps.length === 0 ? onPurpose : `run ${steps.join(", then ")}; ${onPurpose}`,
+  };
+}
+
 /** One error document over every part, in the order the parts are listed. */
 function planRefusal(packId: string, parts: readonly RefusalPart[]): FailureDoc {
   const each = (pick: (part: RefusalPart) => string): string => parts.map(pick).join("; ");
@@ -785,6 +831,13 @@ export const addCommand: CommandModule = {
     }
 
     const resolved = resolveSpecThroughCatalog(spec);
+    if (resolved.retired !== undefined) {
+      // Before the pack's own manifest is read or anything planned: the id
+      // names no pack this release ships, and the steps say where it went.
+      const retiredInstalled =
+        packEngine.install.planPackRemoval(projectManifest, resolved.retired.id).length > 0;
+      throw new CliFailure(retiredPackRefusal(resolved.retired, retiredInstalled));
+    }
     const pinGrantsTrust =
       resolved.catalogPin !== undefined &&
       (resolved.catalogPin.tier === "scanned" || resolved.catalogPin.tier === "curator-verified");

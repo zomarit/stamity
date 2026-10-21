@@ -11,6 +11,7 @@ import {
   checkCommand,
   checkModelPins,
   checkNodeVersion,
+  checkPackCatalog,
   evaluateExpectations,
   resolveCharterGates,
   runDoctor,
@@ -27,7 +28,10 @@ import { applySync, planSync } from "../../../src/cli/commands/sync/engine.ts";
 import { AGENTS_MD_FILE } from "../../../src/emit/agentsMd.ts";
 import { createApp, createEngine } from "../../../src/index.ts";
 import { applyPackInstall, planPackInstall } from "../../../src/pack/install.ts";
+import { lookupCatalogEntry, resolveBundledPackRoot } from "../../../src/pack/curated.ts";
 import { receiptRelPath } from "../../../src/pack/receipt.ts";
+import type { RetiredPack } from "../../../src/pack/retired.ts";
+import { computeAggregateContentSha } from "../../../src/pack/trust.ts";
 import {
   createManifest,
   manifestPath,
@@ -524,7 +528,9 @@ describe("check — a healthy repository", () => {
   // REQ-LADDER-008): fourteen to fifteen with the `model-pins` row below.
   // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-016): fifteen to fourteen —
   // the `plugin-duplicates` row left with the held `plugin` block it warned about.
-  it("returns the fourteen doctor rows in a fixed order", async () => {
+  // TEST CHANGE, justified (2026-10-21, 2026-10-20_packs-rebuilt/u3-retired-names,
+  // REQ-PACK-003): fourteen to fifteen with the `pack-catalog` row below.
+  it("returns the fifteen doctor rows in a fixed order", async () => {
     const root = await seedRepo(getRepo());
 
     const doctor = await runDoctor(root, createEngine(), createApp({ cwd: root, env: {} }));
@@ -575,6 +581,12 @@ describe("check — a healthy repository", () => {
       // this repository, so it sits before `invariants`, which alone reads the installed corpus.
       // No other row moved.
       "pack-reach",
+      // TEST CHANGE, justified (2026-10-21, 2026-10-20_packs-rebuilt/u3-retired-names,
+      // REQ-PACK-003, REQ-PLUGIN-016): `pack-catalog` joined after `pack-reach`. It judges the
+      // same installed packs from their receipts — a retired id, or a catalog pack whose content
+      // is not the copy this release bundles — so it sits beside `pack-reach`, before
+      // `model-pins`. No other row moved.
+      "pack-catalog",
       // TEST CHANGE, justified (2026-10-14, plan 020 file 2, unit e4-check-model-row,
       // REQ-LADDER-008): `model-pins` joined after `pack-reach`. It answers about this
       // repository's pins against the account's model list, so it sits with the repository
@@ -3348,11 +3360,12 @@ describe("check — the caller's expectations (REQ-PLUGIN-047)", () => {
       status: "pass",
       detail: `release ${RUNNING} — as expected`,
     });
-    // Outside `runDoctor`: the fifteenth row exists only because a flag asked for it.
+    // Outside `runDoctor`: the sixteenth row exists only because a flag asked for it.
     // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): one row fewer — `plugin-runtime` left with the plugin route.
     // TEST CHANGE, justified (2026-10-14, plan 020 file 2, unit e4-check-model-row): one row more — `model-pins` joined the doctor.
     // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-016): one row fewer — `plugin-duplicates` left.
-    expect(doc.doctor.map((entry) => entry.id).indexOf("expectations")).toBe(14);
+    // TEST CHANGE, justified (2026-10-21, u3-retired-names, REQ-PACK-003): one row more — `pack-catalog` joined the doctor.
+    expect(doc.doctor.map((entry) => entry.id).indexOf("expectations")).toBe(15);
   });
 
   it("fails another --expect-version naming the running release and generatedBy", async () => {
@@ -3719,7 +3732,8 @@ describe("check — the caller's expectations (REQ-PLUGIN-047)", () => {
     // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): one row fewer — `plugin-runtime` left with the plugin route.
     // TEST CHANGE, justified (2026-10-14, plan 020 file 2, unit e4-check-model-row): one row more — `model-pins` joined the doctor.
     // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-016): one row fewer — `plugin-duplicates` left.
-    expect(doc.doctor).toHaveLength(14);
+    // TEST CHANGE, justified (2026-10-21, u3-retired-names, REQ-PACK-003): one row more — `pack-catalog` joined the doctor.
+    expect(doc.doctor).toHaveLength(15);
     expect(human.stdout).not.toContain("expectations");
   });
 });
@@ -3736,13 +3750,15 @@ describe("check — change-classes (p2a-class-file, REQ-FLOW-061)", () => {
     // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): one row fewer — `plugin-runtime` left with the plugin route.
     // TEST CHANGE, justified (2026-10-14, plan 020 file 2, unit e4-check-model-row): one row more — `model-pins` joined the doctor.
     // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-016): one row fewer — `plugin-duplicates` left.
-    expect(doc.doctor).toHaveLength(14);
+    // TEST CHANGE, justified (2026-10-21, u3-retired-names, REQ-PACK-003): one row more — `pack-catalog` joined the doctor.
+    expect(doc.doctor).toHaveLength(15);
   });
 
   // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): one row fewer — `plugin-runtime` left with the plugin route.
   // TEST CHANGE, justified (2026-10-14, plan 020 file 2, unit e4-check-model-row): one row more — `model-pins` joined the doctor.
   // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-016): one row fewer — `plugin-duplicates` left.
-  it("passes a valid class file, as the fifteenth row before invariants", async () => {
+  // TEST CHANGE, justified (2026-10-21, u3-retired-names, REQ-PACK-003): one row more — `pack-catalog` joined the doctor.
+  it("passes a valid class file, as the sixteenth row before invariants", async () => {
     const root = await seedRepo(getRepo(), {
       files: {
         [CLASS_FILE]: JSON.stringify({
@@ -3762,7 +3778,7 @@ describe("check — change-classes (p2a-class-file, REQ-FLOW-061)", () => {
       detail: `${CLASS_FILE} is valid: 3 glob(s) across 2 class(es), 1 test-input entry(ies)`,
     });
     const ids = doc.doctor.map((entry) => entry.id);
-    expect(ids).toHaveLength(15);
+    expect(ids).toHaveLength(16);
     expect(ids.indexOf("change-classes")).toBe(ids.indexOf("invariants") - 1);
   });
 
@@ -4481,7 +4497,11 @@ describe("check — model-pins", () => {
     const { doc } = await runJson(root, env);
 
     const ids = doc.doctor.map((entry) => entry.id);
-    expect(ids.indexOf("model-pins")).toBe(ids.indexOf("pack-reach") + 1);
+    // TEST CHANGE, justified (2026-10-21, u3-retired-names, REQ-PACK-003, REQ-PLUGIN-016):
+    // `pack-catalog` now sits between `pack-reach` and `model-pins`, so the row directly
+    // before `model-pins` is `pack-catalog`; both still follow `pack-reach`.
+    expect(ids.indexOf("pack-catalog")).toBe(ids.indexOf("pack-reach") + 1);
+    expect(ids.indexOf("model-pins")).toBe(ids.indexOf("pack-catalog") + 1);
     const verdict = row(doc, "model-pins");
     expect(verdict.status).toBe("warn");
     expect(verdict.detail).toContain(
@@ -4841,5 +4861,181 @@ describe("check — model-pins", () => {
 
     expect(existsSync(agent)).toBe(false);
     expect((await readManifest(root))?.ledger.some((entry) => entry.adapter === "codex")).toBe(false);
+  });
+});
+
+/**
+ * `pack-catalog` (REQ-PACK-003, 2026-10-20_packs-rebuilt/u3-retired-names): an
+ * installed pack held against the catalog this release bundles and against the
+ * retired-names map, from the receipt's file hashes, never the version. The
+ * shipped map is empty until a release retires a pack, so the retired cases
+ * pass a made-up map in; the catalog cases install this checkout's own
+ * `scaffold` through its real pin, and a made-up copy under that id.
+ */
+describe("check — pack-catalog", () => {
+  const PACK_CMD = COMMAND_FIXTURE.replace("id: cmd-work", "id: gone-cmd");
+
+  /**
+   * Install `files` as pack `name` from `pack-src/<name>/` through the engine's
+   * plan/apply path, at the catalog tier `catalogTier` names (a pin over the
+   * pack's own content) or at the unsigned floor; returns its aggregate.
+   */
+  async function installAs(
+    handle: TempDirHandle,
+    root: string,
+    name: string,
+    files: Record<string, string>,
+    catalogTier?: "scanned",
+  ): Promise<string> {
+    const integrity = Object.fromEntries(
+      Object.entries(files).map(([rel, body]) => [rel, createHash("sha256").update(body, "utf8").digest("hex")]),
+    );
+    await handle.seedFiles({
+      ...Object.fromEntries(Object.entries(files).map(([rel, body]) => [`pack-src/${name}/${rel}`, body])),
+      [`pack-src/${name}/pack.json`]: `${JSON.stringify({ name, version: "1.0.0", integrity })}\n`,
+    });
+    const aggregate = computeAggregateContentSha(integrity);
+    const plan = await planPackInstall(
+      root,
+      handle.path(`pack-src/${name}`),
+      catalogTier === undefined ? { allowUntrusted: true } : { catalogPin: { sha256: aggregate, tier: catalogTier } },
+    );
+    expect(plan.collisions).toEqual([]);
+    const seeded = await readManifest(root);
+    if (seeded === null) throw new Error("fixture lost its manifest");
+    const installed = await applyPackInstall(root, plan, seeded, { engineVersion: createApp().version, now: T0 });
+    expect(installed.result.installed).toBe(true);
+    await writeManifest(root, installed.manifest, { now: T0 });
+    return aggregate;
+  }
+
+  /** A made-up retired `gone` whose first-party copies are `pins`. */
+  const goneEntry = (pins: readonly string[]): RetiredPack => ({
+    id: "gone",
+    lastShippedIn: "1.16.0",
+    pins,
+    parts: [
+      { part: "st-gone-cmd", movedTo: { pack: "production", name: "st-ship" } },
+      { part: "st-older", movedTo: null, note: "superseded by st-debug" },
+    ],
+  });
+
+  const manifestOf = async (root: string): Promise<SetupManifest> => {
+    const manifest = await readManifest(root);
+    if (manifest === null) throw new Error("fixture lost its manifest");
+    return manifest;
+  };
+
+  it("passes with no pack installed", async () => {
+    const root = await seedRepo(getRepo());
+
+    expect(await doctorRow(root, "pack-catalog")).toEqual({
+      id: "pack-catalog",
+      status: "pass",
+      detail: "no installed pack is recorded in the ledger",
+    });
+  });
+
+  it("passes a catalog pack installed through its bundled pin", async () => {
+    const handle = getRepo();
+    const root = await seedRepo(handle);
+    const entry = lookupCatalogEntry("scaffold");
+    if (entry === undefined) throw new Error("this checkout's catalog has no scaffold pack");
+    const plan = await planPackInstall(root, resolveBundledPackRoot("scaffold"), { catalogPin: entry.pin });
+    const installed = await applyPackInstall(root, plan, await manifestOf(root), {
+      engineVersion: createApp().version,
+      now: T0,
+    });
+    expect(installed.result.installed).toBe(true);
+    await writeManifest(root, installed.manifest, { now: T0 });
+
+    expect(await doctorRow(root, "pack-catalog")).toEqual({
+      id: "pack-catalog",
+      status: "pass",
+      detail: "1 catalog pack(s) match the copy this release bundles.",
+    });
+  });
+
+  it("warns on a catalog-tier copy whose content is not the bundled one, naming the re-add", async () => {
+    const handle = getRepo();
+    const root = await seedRepo(handle);
+    // An earlier release's pin over other content: the tier is the catalog's,
+    // the content is not this release's copy.
+    await installAs(handle, root, "scaffold", { "commands/st-gone-cmd.md": PACK_CMD }, "scanned");
+    // Projected, so the drift gate reads clean and the exit code is this row's alone.
+    await resyncAt(root);
+
+    const { code, doc } = await runJson(root);
+
+    expect(row(doc, "pack-catalog")).toEqual({
+      id: "pack-catalog",
+      status: "warn",
+      detail:
+        'pack "scaffold": its installed content is not the copy this release bundles — re-add to ' +
+        `update: \`${npxCommand("add scaffold")}\`.`,
+    });
+    expect(code).toBe(0);
+  });
+
+  it("does not judge a pack installed from a path under a catalog id", async () => {
+    const handle = getRepo();
+    const root = await seedRepo(handle);
+    await installAs(handle, root, "scaffold", { "commands/st-gone-cmd.md": PACK_CMD });
+
+    expect(await doctorRow(root, "pack-catalog")).toEqual({
+      id: "pack-catalog",
+      status: "pass",
+      detail: "0 catalog pack(s) match the copy this release bundles; 1 pack(s) from a path or npm not judged.",
+    });
+  });
+
+  it("warns on a first-party copy of a retired pack, naming its parts and the fix in order", async () => {
+    const handle = getRepo();
+    const root = await seedRepo(handle);
+    const aggregate = await installAs(handle, root, "gone", { "commands/st-gone-cmd.md": PACK_CMD });
+
+    const result = await checkPackCatalog(root, await manifestOf(root), [goneEntry([aggregate])]);
+
+    expect(result).toEqual({
+      id: "pack-catalog",
+      status: "warn",
+      detail:
+        'pack "gone" was retired after 1.16.0: st-gone-cmd → production st-ship; ' +
+        "st-older → dropped (superseded by st-debug) — fix in order: " +
+        `\`${npxCommand("clean --pack gone")}\`, then \`${npxCommand("add production")}\`, ` +
+        `then \`${npxCommand("sync")}\`.`,
+    });
+  });
+
+  it("does not judge a pack of a retired name whose content was never a first-party copy", async () => {
+    const handle = getRepo();
+    const root = await seedRepo(handle);
+    await installAs(handle, root, "gone", { "commands/st-gone-cmd.md": PACK_CMD });
+
+    const result = await checkPackCatalog(root, await manifestOf(root), [goneEntry(["b".repeat(64)])]);
+
+    expect(result).toEqual({
+      id: "pack-catalog",
+      status: "pass",
+      detail: "0 catalog pack(s) match the copy this release bundles; 1 pack(s) from a path or npm not judged.",
+    });
+  });
+
+  it("skips the comparison when the receipt's bytes do not match its ledger row, and says so", async () => {
+    const handle = getRepo();
+    const root = await seedRepo(handle);
+    const aggregate = await installAs(handle, root, "gone", { "commands/st-gone-cmd.md": PACK_CMD });
+    const receipt = join(root, ...receiptRelPath("gone").split("/"));
+    await writeFile(receipt, `${(await readFile(receipt, "utf8")).trimEnd()}\n\n`);
+
+    const result = await checkPackCatalog(root, await manifestOf(root), [goneEntry([aggregate])]);
+
+    expect(result).toEqual({
+      id: "pack-catalog",
+      status: "pass",
+      detail:
+        "0 catalog pack(s) match the copy this release bundles. Content not compared for " +
+        `pack "gone" (its receipt's bytes do not match its ledger row).`,
+    });
   });
 });

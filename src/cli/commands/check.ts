@@ -24,7 +24,15 @@ import {
   discoverInstalledPacksWithPolicy,
   withoutPolicyWarningPrint,
 } from "../../pack/projection.ts";
-import { receiptRelPath } from "../../pack/receipt.ts";
+import { packDirRelPath, receiptRelPath } from "../../pack/receipt.ts";
+import {
+  describeRetiredPack,
+  lookupRetiredPack,
+  RETIRED_PACKS,
+  retiredSuccessorPacks,
+  type RetiredPack,
+} from "../../pack/retired.ts";
+import { computeAggregateContentSha } from "../../pack/trust.ts";
 import { UNICODE_TAG_CHARS, UNPRINTABLE_CHARS } from "../../runs/layout.ts";
 import { findPackageRoot } from "../../shared/paths.ts";
 import { gitProgramFor } from "../../shared/programPath.ts";
@@ -468,7 +476,7 @@ async function checkLearnings(
 /**
  * The repository's class file (REQ-FLOW-061): the change classes and the
  * test-input map `gate classify` reads from a base commit. No row when the file
- * is absent, so a repository without one keeps its fourteen rows. This reads the
+ * is absent, so a repository without one keeps its fifteen rows. This reads the
  * work tree's copy, the one the next pull request lands as a base: it passes
  * when the validator accepts it, and fails naming the first error, since a base
  * holding a refused copy has `gate classify` apply only its raising entries
@@ -1102,30 +1110,47 @@ async function readReAddArgs(
   packId: string,
   rows: readonly LedgerEntry[],
 ): Promise<string | null> {
+  const read = await readVerifiedReceipt(root, packId, rows);
+  return read.ok ? reAddArgsOf(packId, read.receipt) : null;
+}
+
+/** A pack's parsed install receipt, or why it was not read. */
+type VerifiedReceipt =
+  | { readonly ok: true; readonly receipt: unknown }
+  | { readonly ok: false; readonly reason: string };
+
+/**
+ * `packId`'s install receipt, parsed only when its bytes are the ones its own
+ * ledger row recorded: an edited receipt could otherwise name any source or
+ * any file hash. `rows` are the pack-owned rows carrying a recorded hash.
+ */
+async function readVerifiedReceipt(
+  root: string,
+  packId: string,
+  rows: readonly LedgerEntry[],
+): Promise<VerifiedReceipt> {
   let rel: string;
   try {
     rel = receiptRelPath(packId);
   } catch {
-    return null;
+    return { ok: false, reason: "its id names no receipt path" };
   }
   const row = rows.find((entry) => entry.path === rel);
-  if (row === undefined) return null;
+  if (row === undefined) return { ok: false, reason: "no ledger row records its receipt" };
   let text: Buffer;
   try {
     text = await readFile(join(root, ...rel.split("/")));
   } catch {
-    return null;
+    return { ok: false, reason: "its receipt cannot be read" };
   }
   if (createHash("sha256").update(text).digest("hex") !== row.contentHash?.toLowerCase()) {
-    return null;
+    return { ok: false, reason: "its receipt's bytes do not match its ledger row" };
   }
-  let receipt: unknown;
   try {
-    receipt = JSON.parse(text.toString("utf8"));
+    return { ok: true, receipt: JSON.parse(text.toString("utf8")) as unknown };
   } catch {
-    return null;
+    return { ok: false, reason: "its receipt is not JSON" };
   }
-  return reAddArgsOf(packId, receipt);
 }
 
 /**
@@ -1170,6 +1195,142 @@ function shellWord(word: string): string {
   // oxlint-disable-next-line no-control-regex -- stripping control characters is the point
   const clean = word.replace(/[\u0000-\u001f\u007f-\u009f]/g, "");
   return /^[A-Za-z0-9@%+=:,./_-]+$/.test(clean) ? clean : `'${clean.replace(/'/g, "'\\''")}'`;
+}
+
+/**
+ * Installed packs held against the catalog this release bundles and against
+ * the retired-names map (REQ-PACK-003).
+ *
+ * Judged from content, never from the version: the receipt's file hashes,
+ * read only when the receipt's bytes match its ledger row, rebuild the
+ * integrity map the install verified, and its aggregate
+ * ({@link computeAggregateContentSha}) is compared with the catalog pin.
+ *
+ * - `warn` — a catalog-tier copy of a catalog id whose content is not the
+ *   bundled copy (the release moved it on), naming `add <id>`; and a
+ *   first-party copy of a retired id (installed at a catalog tier, or whose
+ *   content is one of the entry's `pins`), naming where its parts went and
+ *   the fix in order: `clean --pack <id>`, `add <successor>`, `sync`.
+ * - `pass` — no pack installed, or every catalog-tier pack matching its pin.
+ *   A pack installed from a path or from npm is not judged, and a receipt
+ *   that cannot be trusted skips the comparison with the reason named.
+ *
+ * The row never fails: a stale or retired copy still works as installed, and
+ * `pack-integrity` is the row that fails on edited bytes, the receipt's too.
+ */
+export async function checkPackCatalog(
+  rootDir: string,
+  manifest: SetupManifest | null,
+  retired: readonly RetiredPack[] = RETIRED_PACKS,
+): Promise<DoctorCheck> {
+  const id = "pack-catalog";
+  if (manifest === null) {
+    return { id, status: "pass", detail: "no readable manifest, so no installed pack to judge" };
+  }
+  const packIds = [
+    ...new Set(
+      manifest.ledger
+        .filter((row) => isPackOwner(row.adapter))
+        .map((row) => row.adapter.slice(PACK_OWNER_PREFIX.length)),
+    ),
+  ].toSorted();
+  if (packIds.length === 0) {
+    return { id, status: "pass", detail: "no installed pack is recorded in the ledger" };
+  }
+  const root = resolve(rootDir);
+  const rows = manifest.ledger.filter(
+    (entry) => isPackOwner(entry.adapter) && entry.contentHash !== undefined,
+  );
+  // Only an id the catalog or the retired map knows is judged, so only those
+  // receipts are read.
+  const known = packIds.map((packId) => {
+    const entry = lookupCatalogEntry(packId);
+    return { packId, entry, gone: entry === undefined ? lookupRetiredPack(packId, retired) : undefined };
+  });
+  const judged = await Promise.all(
+    known
+      .filter(({ entry, gone }) => entry !== undefined || gone !== undefined)
+      .map(async ({ packId, entry, gone }) => ({
+        packId,
+        entry,
+        gone,
+        read: await readVerifiedReceipt(root, packId, rows),
+      })),
+  );
+  const findings: string[] = [];
+  const skipped: string[] = [];
+  let matching = 0;
+  let unjudged = known.length - judged.length;
+  for (const { packId, entry, gone, read } of judged) {
+    const label = sanitizeLabel(packId);
+    const copy = read.ok ? installedCopyOf(packId, read.receipt) : null;
+    if (copy === null) {
+      skipped.push(`pack "${label}" (${read.ok ? "its receipt names no file hashes" : read.reason})`);
+      continue;
+    }
+    if (entry !== undefined && copy.fromCatalog) {
+      if (copy.aggregate === entry.pin.sha256.toLowerCase()) matching += 1;
+      else {
+        findings.push(
+          `pack "${label}": its installed content is not the copy this release bundles — re-add to ` +
+            `update: \`${packageCommand(`add ${shellWord(packId)}`)}\`.`,
+        );
+      }
+    } else if (gone !== undefined && (copy.fromCatalog || gone.pins.includes(copy.aggregate))) {
+      const steps = [
+        `clean --pack ${shellWord(packId)}`,
+        ...retiredSuccessorPacks(gone).map((pack) => `add ${shellWord(pack)}`),
+        "sync",
+      ].map((step) => `\`${packageCommand(step)}\``);
+      findings.push(`${describeRetiredPack(gone)} — fix in order: ${steps.join(", then ")}.`);
+    } else unjudged += 1;
+  }
+  const notCompared =
+    skipped.length === 0 ? [] : [`Content not compared for ${skipped.join(", ")}.`];
+  if (findings.length > 0) {
+    return { id, status: "warn", detail: [...findings, ...notCompared].join(" ") };
+  }
+  const counts = [
+    `${matching} catalog pack(s) match the copy this release bundles`,
+    ...(unjudged === 0 ? [] : [`${unjudged} pack(s) from a path or npm not judged`]),
+  ].join("; ");
+  return { id, status: "pass", detail: [`${counts}.`, ...notCompared].join(" ") };
+}
+
+/**
+ * What a verified receipt says the install was: the aggregate of its file
+ * hashes, keyed as the pack's integrity map is (relative to the pack's own
+ * directory), and whether a catalog pin granted its tier — `null` when the
+ * receipt names no file this can key.
+ */
+function installedCopyOf(
+  packId: string,
+  receipt: unknown,
+): { aggregate: string; fromCatalog: boolean } | null {
+  if (typeof receipt !== "object" || receipt === null) return null;
+  const { files, source, trustTier } = receipt as {
+    files?: unknown;
+    source?: unknown;
+    trustTier?: unknown;
+  };
+  if (!Array.isArray(files) || files.length === 0) return null;
+  const prefix = `${packDirRelPath(packId)}/`;
+  const integrity: Record<string, string> = {};
+  for (const file of files as unknown[]) {
+    if (typeof file !== "object" || file === null) return null;
+    const { path, sha256 } = file as { path?: unknown; sha256?: unknown };
+    if (typeof path !== "string" || typeof sha256 !== "string" || !path.startsWith(prefix)) {
+      return null;
+    }
+    integrity[path.slice(prefix.length)] = sha256;
+  }
+  const kind =
+    typeof source === "object" && source !== null ? (source as { kind?: unknown }).kind : undefined;
+  return {
+    aggregate: computeAggregateContentSha(integrity),
+    fromCatalog:
+      (typeof trustTier === "string" && CATALOG_TIERS.has(trustTier)) || kind === "catalog-pinned",
+  };
 }
 
 /**
@@ -1753,6 +1914,7 @@ export async function runDoctor(
     preservedDuplicate,
     packIntegrity,
     packReach,
+    packCatalog,
     modelPins,
     changeClasses,
     invariants,
@@ -1764,6 +1926,7 @@ export async function runDoctor(
     guarded("preserved-duplicate", () => checkPreservedDuplicate(rootDir, manifest)),
     guarded("pack-integrity", () => checkPackIntegrity(rootDir, manifest)),
     guarded("pack-reach", () => checkPackReach(rootDir, manifest, app.version)),
+    guarded("pack-catalog", () => checkPackCatalog(rootDir, manifest)),
     guarded("model-pins", async () => modelPinsRow(rootDir, manifest, app.runtime.env)),
     checkChangeClasses(rootDir),
     guarded("invariants", checkInvariants),
@@ -1794,6 +1957,9 @@ export async function runDoctor(
     packIntegrity,
     // What an installed pack ships that no selected client receives.
     packReach,
+    // Whether an installed pack is a retired one, or a catalog pack this
+    // release bundles a different copy of; it reads the same receipts.
+    packCatalog,
     // Whether each client's pinned and emitted models are on the account's own
     // list; it answers about this repository's pins, so it sits with the
     // repository rows.
@@ -1924,7 +2090,7 @@ type DriftOutcome =
  * them was being reported as "the manifest has to be readable first".
  *
  * Everything else is CAPTURED, not swallowed and not re-thrown. Capturing keeps
- * the doctor's fourteen probes on screen, which a diagnostic command exists to
+ * the doctor's fifteen probes on screen, which a diagnostic command exists to
  * produce, while the message — the engine's own, naming the pack and the cause,
  * the same sentence `sync` prints in this state — becomes the drift verdict and
  * gates the exit. Re-throwing would have replaced the whole report with one
@@ -2709,7 +2875,7 @@ function expectationMismatches(report: ExpectationReport): string[] {
 /**
  * The `expectations` doctor row. Printed only when a flag asked for it, after
  * `invariants` and outside {@link runDoctor}, so a run without the flags keeps
- * its fourteen rows (one more each with Cursor selected and with a class file). A manifest that could not be read leaves nothing to compare
+ * its fifteen rows (one more each with Cursor selected and with a class file). A manifest that could not be read leaves nothing to compare
  * against: the row says so, and the `manifest` row above it carries the cause.
  */
 function expectationsRow(report: ExpectationReport, evaluated: boolean): DoctorCheck {

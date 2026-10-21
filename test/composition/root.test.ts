@@ -245,6 +245,11 @@ describe("createEngine", () => {
       "permissions",
       "projection",
       "receipt",
+      // TEST CHANGE, justified (u3-retired-names, REQ-PACK-002): the pack lane gained the
+      // retired-names map (`src/pack/retired.ts`), which `add`'s refusal and `check`'s
+      // `pack-catalog` row read; the derived completeness check above requires it wired,
+      // so this pinned list names it too.
+      "retired",
       // Author signing is now part of the reachable pack API.
       "sign",
       "sigstoreVerifier",

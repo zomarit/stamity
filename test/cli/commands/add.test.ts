@@ -3,12 +3,13 @@ import { lstat, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { addCommand } from "../../../src/cli/commands/add.ts";
+import { addCommand, resolveSpecThroughCatalog, retiredPackRefusal } from "../../../src/cli/commands/add.ts";
 import { cleanCommand } from "../../../src/cli/commands/clean.ts";
 import { estimateTokens } from "../../../src/guard/tokenEstimate.ts";
 import { createManifest, readManifest, writeManifest } from "../../../src/manifest/manifest.ts";
-import { applyPackInstall, planPackInstall } from "../../../src/pack/install.ts";
+import { applyPackInstall, planPackInstall, planPackRemoval } from "../../../src/pack/install.ts";
 import { PACK_MANIFEST_FILE } from "../../../src/pack/manifest.ts";
+import type { RetiredPack } from "../../../src/pack/retired.ts";
 import { computeAggregateContentSha, type TrustTier } from "../../../src/pack/trust.ts";
 import type { Tool } from "../../../src/types/core.ts";
 import { packOwner, type LedgerEntry, type SetupManifest } from "../../../src/types/manifest.ts";
@@ -2021,5 +2022,93 @@ describe("add — a re-add that would leave the installed copy's files behind", 
       await pathExists(project.path(".stamity", "packs", "ops", "skills", "st-incident-response")),
     ).toBe(false);
     expect(await pathExists(project.path(".stamity", "packs", "ops", "skills", "st-release-runbook"))).toBe(true);
+  });
+});
+
+/**
+ * Retired pack names (REQ-PACK-002, 2026-10-20_packs-rebuilt/u3-retired-names).
+ * The shipped map is empty until a release retires a pack, so the cases pass
+ * a made-up map to `resolveSpecThroughCatalog` and build the refusal the
+ * command throws from it; the catalog lookup goes through the mocked seam
+ * above, the same contract `add` consumes.
+ */
+describe("add — retired pack names", () => {
+  const RETIRED_OPS: RetiredPack = {
+    id: "ops",
+    lastShippedIn: "1.16.0",
+    pins: [],
+    parts: [
+      { part: "st-release", movedTo: { pack: "production", name: "st-release" } },
+      { part: "st-incident", movedTo: { pack: "production", name: "st-incident" } },
+      { part: "st-look", movedTo: { pack: "frontend", name: "st-look" } },
+      { part: "st-old", movedTo: null, note: "superseded by st-debug" },
+    ],
+  };
+  const npmRoute = `to install an npm package named "ops" on purpose, run \`${npxCommand("add ./node_modules/ops")}\``;
+
+  it("resolves a bare retired id the catalog lacks to its entry, reading nothing from disk", () => {
+    expect(resolveSpecThroughCatalog("ops", [RETIRED_OPS])).toEqual({ planSpec: "ops", retired: RETIRED_OPS });
+  });
+
+  it("reads the catalog first, so a fork's own pack of that name resolves", async () => {
+    await initProject();
+    await seedCatalogPack();
+    const resolved = resolveSpecThroughCatalog("ops", [RETIRED_OPS]);
+    expect(resolved.retired).toBeUndefined();
+    expect(resolved.catalogEntry?.id).toBe("ops");
+    expect(resolved.planSpec).toBe(getProject().path("bundled", "ops"));
+  });
+
+  it("never consults the map for a path or a scoped npm spec", () => {
+    const scoped: RetiredPack = { ...RETIRED_OPS, id: "@acme/ops" };
+    expect(resolveSpecThroughCatalog("./packs/ops", [RETIRED_OPS])).toEqual({ planSpec: "./packs/ops" });
+    expect(resolveSpecThroughCatalog("./node_modules/ops", [RETIRED_OPS])).toEqual({
+      planSpec: "./node_modules/ops",
+    });
+    expect(resolveSpecThroughCatalog("@acme/ops", [scoped])).toEqual({ planSpec: "@acme/ops" });
+    expect(resolveSpecThroughCatalog("ops", [])).toEqual({ planSpec: "ops" });
+  });
+
+  it("refuses naming where each part went, each successor once, and the on-purpose npm route", () => {
+    expect(retiredPackRefusal(RETIRED_OPS, false)).toEqual({
+      code: "VALIDATION_ERROR",
+      message:
+        'pack "ops" was retired after 1.16.0: st-release → production st-release; ' +
+        "st-incident → production st-incident; st-look → frontend st-look; " +
+        "st-old → dropped (superseded by st-debug)",
+      why: "a retired name is never reused",
+      next: `run \`${npxCommand("add production")}\`, then \`${npxCommand("add frontend")}\`; ${npmRoute}`,
+    });
+  });
+
+  it("puts clean --pack first when a copy of the retired pack is installed", async () => {
+    // A real install of the catalog's `ops`, then a release whose catalog no
+    // longer lists it: the ledger's `pack:ops` rows are what `add` reads.
+    await initProject();
+    await seedCatalogPack();
+    expect((await run(["ops"])).code).toBe(0);
+    catalogSeam.entries.clear();
+
+    const resolved = resolveSpecThroughCatalog("ops", [RETIRED_OPS]);
+    expect(resolved.retired).toBe(RETIRED_OPS);
+    const installed = planPackRemoval(await readProjectManifest(), "ops").length > 0;
+    expect(installed).toBe(true);
+    expect(retiredPackRefusal(RETIRED_OPS, installed).next).toBe(
+      `run \`${npxCommand("clean --pack ops")}\`, then \`${npxCommand("add production")}\`, ` +
+        `then \`${npxCommand("add frontend")}\`; ${npmRoute}`,
+    );
+  });
+
+  it("names only the npm route for a pack whose parts were all dropped and that is not installed", () => {
+    const dropped: RetiredPack = { ...RETIRED_OPS, parts: [{ part: "st-old", movedTo: null }] };
+    expect(retiredPackRefusal(dropped, false).next).toBe(npmRoute);
+  });
+
+  it("leaves `add ./packs/<name>` of a local pack installing as before under the shipped map", async () => {
+    await initProject();
+    await seedPack();
+    const result = await run(installArgs("--json"));
+    expect(result.code).toBe(0);
+    expect(parseDoc(result.stdout).installed).toBe(true);
   });
 });
