@@ -303,12 +303,14 @@ describe("sync prunes a moved skill's core copies on the frozen proof", () => {
     expect(await readFile(`${root}/${target.path}`, "utf8")).toBe(owners);
     const entry = first.report.reclaimed?.entries.find((candidate) => candidate.path === target.path);
     expect(entry?.action).toBe("skipped-user-content");
-    // TEST CHANGE, justified (review/9, review/10): the row stands at the
-    // table's own engine path and the bytes are not the frozen rendering, so the
-    // copy is named as kept, now in the signed-off singular "wrote it".
+    // TEST CHANGE, justified (review/10): the row records the hash of the
+    // owner's bytes, not the frozen digest, so nothing was edited since sync
+    // wrote it. The notice carries the sweep's own hedge, "if it is yours", and
+    // never the false "edited" reason with a bare instruction to delete.
     expect(movedLines(first.text)).toEqual([
-      `  moved: skill st-browser-evidence left the core for the frontend pack in 1.17.0; its copies were kept — edited since sync wrote it; delete by hand: ${target.path}. To keep it: stamity add frontend`,
+      `  moved: skill st-browser-evidence left the core for the frontend pack in 1.17.0; its copies were kept — its ledger row does not record the last core rendering; delete it by hand only if it is yours to remove: ${target.path}. To keep it: stamity add frontend`,
     ]);
+    expect(movedLines(first.text).join("\n")).not.toContain("edited since sync");
   });
 
   it("deletes a CRLF copy of the frozen bytes, whichever line endings its row recorded", async () => {
@@ -471,5 +473,21 @@ describe("movedSkillLines", () => {
       "  moved: skill st-browser-evidence left the core for the frontend pack in 1.17.0; its copies were kept — edited since sync wrote them; delete by hand: a/SKILL.md, b/SKILL.md; left in place — the sweep refused each path as unsafe to touch, for the reason the reclaim report gives: c/SKILL.md, d/SKILL.md. To keep it: stamity add frontend",
     );
     expect(movedSkillLines([{ id: "browser-evidence", pack: "frontend", removed: [], kept: [], skipped: [] }])).toEqual([]);
+  });
+
+  it("names kept copies whose rows do not record the frozen digest with the sweep's hedge, apart from edited ones", () => {
+    const [line] = movedSkillLines([
+      {
+        id: "browser-evidence",
+        pack: "frontend",
+        removed: [],
+        kept: ["a/SKILL.md"],
+        keptForeign: ["b/SKILL.md", "c/SKILL.md"],
+      },
+    ]);
+    expect(line).toBe(
+      "  moved: skill st-browser-evidence left the core for the frontend pack in 1.17.0; its copies were kept — edited since sync wrote it; delete by hand: a/SKILL.md; kept — their ledger rows do not record the last core rendering; delete each by hand only if it is yours to remove: b/SKILL.md, c/SKILL.md. To keep it: stamity add frontend",
+    );
+    expect(movedSkillLines([{ id: "browser-evidence", pack: "frontend", removed: [], kept: [], keptForeign: [] }])).toEqual([]);
   });
 });

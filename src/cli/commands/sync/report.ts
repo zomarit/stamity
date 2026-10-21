@@ -217,15 +217,18 @@ function pluginBlockDropLines(plan: SyncPlan, report: SyncApplyReport): string[]
 
 /**
  * One moved skill's outcome on this run: the copies the sweep removed, the ones
- * it kept because their bytes are not the frozen rendering (`kept`), and the
- * ones it refused to touch as unsafe — a symlinked folder, an entry spelled
- * with another case (`skipped`).
+ * it kept whose row records the frozen digest, so sync wrote the frozen bytes
+ * and the file was edited since (`kept`), the ones it kept whose row records
+ * any other hash — an older release's rendering, or a row nobody can vouch for
+ * (`keptForeign`) — and the ones it refused to touch as unsafe — a symlinked
+ * folder, an entry spelled with another case (`skipped`).
  */
 export interface MovedSkillOutcome {
   id: string;
   pack: string;
   removed: string[];
   kept: string[];
+  keptForeign?: string[];
   skipped?: string[];
 }
 
@@ -236,21 +239,32 @@ export interface MovedSkillOutcome {
  * refused as unsafe, and the command that brings the skill back. A skill with
  * none of the three prints nothing.
  *
- * Only a kept copy carries the instruction to delete by hand. A refused copy is
- * named without one (review/9, review/10): deleting through the link or the
- * other spelling reaches the very file the sweep refused to touch.
+ * Only a kept copy carries the instruction to delete by hand, and only one
+ * whose row records the frozen digest is called edited. Any other kept copy
+ * gets the sweep's own hedge, "if it is yours to remove": its bytes may be
+ * exactly what its row records, and the row may be the owner's (review/9,
+ * review/10). A refused copy is named with no instruction: deleting through
+ * the link or the other spelling reaches the very file the sweep refused to
+ * touch.
  */
 export function movedSkillLines(moved: readonly MovedSkillOutcome[]): string[] {
   const lines: string[] = [];
   for (const skill of moved) {
     const skipped = skill.skipped ?? [];
-    if (skill.removed.length === 0 && skill.kept.length === 0 && skipped.length === 0) continue;
+    const foreign = skill.keptForeign ?? [];
+    if (skill.removed.length === 0 && skill.kept.length === 0 && foreign.length === 0 && skipped.length === 0) continue;
     const since = movedCoreSkill(skill.id)?.since;
     const outcomes = [
       ...(skill.removed.length === 0 ? [] : [`removed: ${skill.removed.join(", ")}`]),
       ...(skill.kept.length === 0
         ? []
         : [`kept — edited since sync wrote ${skill.kept.length === 1 ? "it" : "them"}; delete by hand: ${skill.kept.join(", ")}`]),
+      ...(foreign.length === 0
+        ? []
+        : [
+            `kept — ${foreign.length === 1 ? "its ledger row does" : "their ledger rows do"} not record the last core rendering; ` +
+              `delete ${foreign.length === 1 ? "it" : "each"} by hand only if it is yours to remove: ${foreign.join(", ")}`,
+          ]),
       ...(skipped.length === 0
         ? []
         : [
@@ -307,13 +321,29 @@ function movedSkillOutcomes(plan: SyncPlan, report: SyncApplyReport): MovedSkill
       reclaimed.entries
         .filter((entry) => entry.action === action && paths.has(entry.path) && !stays.has(entry.path))
         .map((entry) => entry.path);
+    // "Edited since sync wrote it" holds only where every row at the path
+    // records the frozen digest (review/9, review/10). Any other recorded hash
+    // is an older rendering or a forged row whose hash may match the owner's
+    // bytes, and the sweep kept that file saying "if it is yours"
+    // (`../../../merge/reclaim.ts::renderingRefusal`).
+    const recordsFrozen = (path: string): boolean =>
+      ledger.every(
+        (row) =>
+          row.path !== path ||
+          isPackOwner(row.adapter) ||
+          row.artifactType !== "skill" ||
+          row.artifactId !== skill.id ||
+          row.contentHash === movedRenderingAt(skill, path),
+      );
+    const kept = named("skipped-user-content");
     outcomes.push({
       id: skill.id,
       pack: skill.pack,
       removed: reclaimed.entries
         .filter((entry) => paths.has(entry.path) && entry.action === "deleted")
         .map((entry) => entry.path),
-      kept: named("skipped-user-content"),
+      kept: kept.filter(recordsFrozen),
+      keptForeign: kept.filter((path) => !recordsFrozen(path)),
       skipped: named("skipped-unsafe-path"),
     });
   }
