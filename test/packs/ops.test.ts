@@ -618,7 +618,9 @@ describe("ops pack — anti-shadowing", () => {
       .map((item) => ({ name: `core:${item.id}`, description: item.description }));
 
     expect(packSkills).toHaveLength(5);
-    expect(coreSkills.length).toBeGreaterThanOrEqual(8);
+    // TEST CHANGE, justified (u13-frontend-move, REQ-PACK-007): design-system-detect and
+    // browser-evidence moved to the frontend pack, so the core ships seven skills, not eight.
+    expect(coreSkills.length).toBeGreaterThanOrEqual(7);
     expect(collisions([...packSkills, ...coreSkills])).toEqual([]);
   });
 

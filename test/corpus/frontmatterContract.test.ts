@@ -448,8 +448,10 @@ describe("frontmatter contract — defect detection", () => {
     );
 
     // Data-driven, so a skill authored later inherits the contract without an
-    // edit here. Non-degenerate: the corpus ships eight entry points.
-    expect(entryPoints.length).toBeGreaterThanOrEqual(8);
+    // edit here. Non-degenerate: the corpus ships seven entry points.
+    // TEST CHANGE, justified (u13-frontend-move, REQ-PACK-007): design-system-detect and
+    // browser-evidence moved to the frontend pack, so the core ships seven skills, not eight.
+    expect(entryPoints.length).toBeGreaterThanOrEqual(7);
     for (const file of entryPoints) {
       const description = String(frontmatterField(file.parsed, "description"));
       expect(description.trim(), `${file.relPath} opens on a non-third-person word`).toMatch(
