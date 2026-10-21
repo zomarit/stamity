@@ -15,6 +15,7 @@ import { EngineError } from "../../types/errors.ts";
 import type { SetupManifest } from "../../types/manifest.ts";
 import { STATE_DIR } from "../../types/markers.ts";
 import { OVERRIDE_EMITTING_CLASSES } from "../engine/emission.ts";
+import { packageCommand } from "../kit/packageName.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 
 /**
@@ -593,13 +594,18 @@ async function collectCustomization(
   // walk applies them in, and the order the rows below come out in.
   const overlays = [...inputs.forkOverlays, ...inputs.overlays];
   try {
-    const index = await catalog.buildContentIndex({
-      overrideRoot: userContent.userContentRoot(rootDir),
-      packRoots,
-      // Named rather than left to the walk's default, so the rows below spell
-      // fork paths against the same root the walk read them from.
-      ...(inputs.forkRoot === undefined ? {} : { forkRoot: inputs.forkRoot }),
-    });
+    const index = await catalog.buildContentIndex(
+      {
+        overrideRoot: userContent.userContentRoot(rootDir),
+        packRoots,
+        // Named rather than left to the walk's default, so the rows below spell
+        // fork paths against the same root the walk read them from.
+        ...(inputs.forkRoot === undefined ? {} : { forkRoot: inputs.forkRoot }),
+      },
+      // A moved skill's remedy names the pinned call, spelled as `sync`'s
+      // planner and `check`'s `moved-skills` row spell it.
+      { remedyCall: (verb) => `\`${packageCommand(verb)}\`` },
+    );
     const forkOutcomes = classifyForkOverlays(engine, index, inputs.forkOverlays, display);
     const patched = await Promise.all([
       ...forkOutcomes.judgeable.map((overlay) =>

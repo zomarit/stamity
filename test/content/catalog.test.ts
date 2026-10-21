@@ -32,6 +32,7 @@ import {
 } from "../../src/content/contentRoot.ts";
 import { MAX_USER_CONTENT_LENGTH } from "../../src/guard/promptGuard.ts";
 import { EngineError } from "../../src/types/errors.ts";
+import { npxCommand } from "../support/identity.ts";
 import { runInProcess } from "../support/inProcess.ts";
 import { useTempDir } from "../support/tempDir.ts";
 import { makeVolume } from "../support/vfs.ts";
@@ -1458,10 +1459,14 @@ describe("the overlay layer", () => {
         source: "user-content",
         path: ".stamity/overrides/skills/design-system-detect/SKILL.customize.md",
       });
+      // TEST CHANGE, justified (2026-10-21, 2026-10-20_packs-rebuilt branch fix round 1b, fix/5):
+      // `validate` printed a bare `stamity add frontend`, a binary a fork's install does not have
+      // and the documented `npx` setup never puts on PATH; it now names the pinned call `sync` and
+      // `check`'s `moved-skills` row print, spelled from this checkout's identity.
       expect(found?.message).toBe(
         'skill "design-system-detect" moved from the core to the frontend pack in 1.17.0, and overlays ' +
           "on pack skills are not applied. Fold your change into a full override under another id, or " +
-          `remove ${toPosixDisplayPath(overlay)}; to keep the shipped skill, stamity add frontend.`,
+          `remove ${toPosixDisplayPath(overlay)}; to keep the shipped skill, \`${npxCommand("add frontend")}\`.`,
       );
     });
   });

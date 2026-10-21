@@ -234,7 +234,7 @@ is kept.
   owns at a path the pack's projection writes, so that last `sync` writes every other copy, refuses that file by name
   and exits 1; once it is gone, the next `sync` writes the pack's copy. The change log's Upgrading block states the same
   order.
-- **Proof:** `test/cli/engine/movedPrune.test.ts` (fifteen cases, the forged-row and symlinked-folder cases among them,
+- **Proof:** `test/cli/engine/movedPrune.test.ts` (seventeen cases, the forged-row and symlinked-folder cases among them,
   and "the upgrade order from 1.16.0", which runs `add`, `sync`, `add`, `sync`, `sync` through the commands over the
   four `.claude/skills/` rows 1.16.0 wrote, one copy edited), `test/emit/upgradeFrom1140.e2e.test.ts` (eight reclaims
   from the 1.14.0 tree).
@@ -252,12 +252,13 @@ reads `fail` for such an overlay, `warn` for a full override or a moved id's cor
   <since>, and overlays on pack skills are not applied. Fold your change into a full override under another id, or
   remove <path>; to keep the shipped skill, <remedy>.`, each half named by its POSIX path
   (`refuseMovedSkillOverlay`, `src/content/catalog.ts`); `<remedy>` is the pinned call in backticks, `` `<pinned call>
-  add <pack>` ``, where the planner builds the index (`sync`, `check`'s drift gate), and `stamity add <pack>` where a
-  caller passes no CLI context (`validate`; `BuildContentIndexOptions.remedyCall`, `review/47`). A skill of a moved id
-  supplied by another pack keeps the pack-skill text, and a fork-stage patch of a moved skill stays a skip, its reason
-  naming the move, the pack and the same `<remedy>` (`forkMovedSkillSkipReason`). The warning reads `` your override
-  <path> replaced a core skill that moved to the <pack> pack; it now stands alone and tracks no shipped copy. Keep it,
-  or remove it and run `<pinned call> add <pack>`. `` (`movedSkillOverrideWarnings`, `src/emit/planner.ts`).
+  add <pack>` ``, which the planner (`sync`, `check`'s drift gate) and `validate` pass to the index build
+  (`BuildContentIndexOptions.remedyCall`, `review/47`), and `stamity add <pack>` only where a caller passes none. A
+  skill of a moved id supplied by another pack keeps the pack-skill text, and a fork-stage patch of a moved skill stays
+  a skip, its reason naming the move, the pack and the same `<remedy>` (`forkMovedSkillSkipReason`). The warning reads
+  `` your override <path> replaced a core skill that moved to the <pack> pack; it now stands alone and tracks no
+  shipped copy. Keep it, or remove it and run `<pinned call> add <pack>`. `` (`movedSkillOverrideWarnings`,
+  `src/emit/planner.ts`).
   `checkMovedSkills` sits after `pack-catalog`, reads the override folder and the ledger directly so it answers when
   the plan throws, finds a full override by the id it declares, as the index does, and with the pack installed names
   the collision and `clean --pack <pack>` (`src/cli/commands/check.ts`).
