@@ -1,0 +1,34 @@
+{
+  "name": "production",
+  "version": "1.16.0",
+  "description": "Take a service to production and keep it there: a readiness review graded apart from its evidence, a release that stops before anything irreversible, and an incident procedure that proposes and never applies.",
+  "declaredTools": [
+    "claude",
+    "cursor",
+    "copilot",
+    "codex"
+  ],
+  "permissions": {
+    "toolFootprint": [
+      "read",
+      "edit",
+      "execute",
+      "network",
+      "spawn"
+    ],
+    "touchedPaths": [
+      ".stamity/production/**",
+      ".stamity/verify/**",
+      "CHANGELOG.md",
+      "package.json",
+      "package-lock.json",
+      "pnpm-lock.yaml",
+      "yarn.lock",
+      "docs/incidents/**"
+    ]
+  },
+  "maxFootprintBytes": 262144,
+  "integrity": {
+    "commands/st-production-review.md": "23dee2b6880308a90f8fbcc9370ec5759743916122f613c8e7944e838ddd61c4"
+  }
+}

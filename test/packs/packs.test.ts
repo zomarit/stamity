@@ -467,9 +467,10 @@ async function realPack(id: string): Promise<LoadedPack> {
 describe("every pack — enumeration", () => {
   it("enumerates the packs from packs/*/pack.json, equal to the catalog's ids", () => {
     // TEST CHANGE, justified: `ops`, `product-audit` and `scaffold` were deleted in plan 018 file 2
-    // (u8-retire-old-packs), so the first-party set is `frontend` alone until u10 adds `production`;
-    // an exact list, so a pack folder added or left behind turns this red.
-    expect(PACK_IDS).toEqual(["frontend"]);
+    // (u8-retire-old-packs), and u10-production-review adds `production` (REQ-PACK-015), so the
+    // first-party set is `frontend` and `production`; an exact list, so a pack folder added or left
+    // behind turns this red.
+    expect(PACK_IDS).toEqual(["frontend", "production"]);
     expect(enumerationProblems(PACK_IDS, curatedPacks().map((entry) => entry.id))).toEqual([]);
   });
 

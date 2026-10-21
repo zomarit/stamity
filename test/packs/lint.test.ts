@@ -196,8 +196,9 @@ describe("pack lint — every file under packs/", () => {
   it("reads every pack, the first-party one among them, and each one's files", async () => {
     // Non-degenerate: the lint below runs over real text in every pack, not over an empty set.
     // TEST CHANGE, justified: `ops`, `product-audit` and `scaffold` were deleted in plan 018 file 2
-    // (u8-retire-old-packs); `frontend` is the one first-party pack until u10 adds `production`.
-    expect(PACK_IDS).toEqual(["frontend"]);
+    // (u8-retire-old-packs), and u10-production-review adds `production` (REQ-PACK-015): the two
+    // first-party packs.
+    expect(PACK_IDS).toEqual(["frontend", "production"]);
     const files = await realFiles;
     for (const id of PACK_IDS) {
       expect(files.filter((file) => file.pack === id).length, id).toBeGreaterThan(1);
