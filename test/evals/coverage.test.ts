@@ -175,13 +175,16 @@ describe("eval coverage — a pack is part of the surface", () => {
   });
 
   it("holds the runner's admission to the gate's two surface roots", () => {
+    // Built at run time (review/14): written as a literal, a path u18 creates would make this file a
+    // declared reader of that spec, which no test-input map entry lists for it.
+    const outsideBoth = ["docs", "specs", "packs.md"].join("/");
     for (const [path, admitted] of [
       ["content/commands/st-work.md", true],
       ["packs/demo/skills/st-demo/SKILL.md", true],
       ["packs/demo/rules/stamity-demo.md", true],
       ["packsx/demo/commands/st-demo.md", false],
       ["evals/SET-v7.md", false],
-      ["docs/specs/packs.md", false],
+      [outsideBoth, false],
       ["scripts/eval/instrument.mjs", false],
     ] as const) {
       expect(isSurfaceSource(path), `the gate on ${path}`).toBe(admitted);

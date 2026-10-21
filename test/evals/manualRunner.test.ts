@@ -9,7 +9,7 @@ import { aggregate, calibrationMatches, EvalBlocked, headings, judgeBlocks, loca
 // @ts-expect-error — native ESM contributor tool.
 import { admitRequest, admitResponse, boundedMap, callWithRetries, CONTROLS, ENDPOINT, HARNESS, makeRequest, responsesTransport } from "../../scripts/eval/transport.mjs";
 // @ts-expect-error — native ESM contributor tool.
-import { advisoryRepeats, comparatorKey, createArtifacts, loadInputs, previousRun, runEvaluation, undisposedRepeats } from "../../scripts/eval/run.mjs";
+import { advisoryRepeats, CLEAN_TREE_PATHS, comparatorKey, createArtifacts, loadInputs, previousRun, runEvaluation, undisposedRepeats } from "../../scripts/eval/run.mjs";
 import { CASES_DIR, REPO_ROOT, RUNNER_SKILL_FILE, caseFiles } from "./support.ts";
 
 const read = (path: string) => readFileSync(join(REPO_ROOT, path), "utf8");
@@ -1752,6 +1752,13 @@ describe("committed inputs and manual entry point", () => {
     expect(imported.status, imported.stderr).toBe(0); expect(imported.stdout).toBe("imported\n");
     const help = spawnSync(process.execPath, [script, "--help"], { encoding: "utf8" });
     expect(help.status, help.stderr).toBe(0); expect(help.stdout).toContain("Default profile stays claude");
+  });
+  it("holds every surface root to the clean tree a run starts from (candidate-source-not-committed)", () => {
+    // Review/15, build/11: an uncommitted edit under a root missing here starts a run whose recorded
+    // candidate sha does not match the tree it read; a case-sourced file is also held by
+    // `input-working-tree-mismatch`, an unsourced one only by this pathspec. Pinned, not run: the
+    // behavioural form repeats the full `loadInputs` traversal above, hundreds of Git launches on Windows.
+    expect(CLEAN_TREE_PATHS).toEqual(expect.arrayContaining(["src", "content", "packs", "scripts"]));
   });
   it("requires committed bytes for every current and calibration input, then detects midrun edits", () => {
     const root = temp();

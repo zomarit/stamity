@@ -9,6 +9,9 @@ const CURRENT_SET = 'evals/SET-v7.md'
 // Exported so the docs tests hold the release rule's trigger list to the files this runner hashes.
 export const RUNNER_FILES = ['scripts/eval-run.mjs', 'scripts/eval/instrument.mjs', 'scripts/eval/transport.mjs',
   'scripts/eval/run.mjs', 'scripts/native-typescript.mjs', '.stamity/overrides/skills/st-eval-run/SKILL.md']
+// Exported so `test/evals/manualRunner.test.ts` holds the `candidate-source-not-committed` pathspec:
+// a root leaving it lets a run start on an uncommitted edit and record the candidate sha as clean.
+export const CLEAN_TREE_PATHS = ['src', 'content', 'packs', 'scripts', 'package.json', 'package-lock.json']
 const git = (root, args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
 
 export function loadInputs(root, profileName) {
@@ -57,7 +60,7 @@ export function loadInputs(root, profileName) {
     read(scenario.source)
   }
   const rubric = parseRubric(read(profile.rubric), historical)
-  const dirty = git(root, ['status', '--porcelain', '--untracked-files=all', '--', 'src', 'content', 'packs', 'scripts', 'package.json', 'package-lock.json'])
+  const dirty = git(root, ['status', '--porcelain', '--untracked-files=all', '--', ...CLEAN_TREE_PATHS])
   requireEvidence(dirty === '', 'candidate-source-not-committed')
   const configuration = { profile: selected, roles: profile, profilePath: PROFILE_PATH,
     profileSchemaVersion: profiles.schemaVersion, set: CURRENT_SET, harness: HARNESS,

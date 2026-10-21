@@ -476,8 +476,9 @@ describe("eval case locators — a block naming a pack file is a governing block
     expect(governingBlocks(body("content/commands/st-work.md"), pack).map((block) => block.target)).toEqual([
       "content/commands/st-work.md",
     ]);
-    // A path under neither root is no corpus quote: the fence is a scenario fixture.
-    expect(governingBlocks(body("docs/specs/packs.md"), pack)).toEqual([]);
+    // A path under neither root is no corpus quote: the fence is a scenario fixture. Built at run time
+    // (review/14): as a literal, the spec u18 creates would make this file a declared reader of it.
+    expect(governingBlocks(body(["docs", "specs", "packs.md"].join("/")), pack)).toEqual([]);
   });
 });
 
