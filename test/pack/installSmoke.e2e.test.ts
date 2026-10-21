@@ -568,6 +568,9 @@ describe("pack install smoke (real bin, pseudo-home)", () => {
       });
       const bystander = await runAddJson(fixture, [bystanderPack, "--allow-untrusted"]);
       expect(bystander.result.code, bystander.result.stderr).toBe(0);
+      // A later install leaves an earlier pack's ledger rows exact — the every-pack case's
+      // "all coexist" check, which proves nothing while the catalog holds one pack.
+      await expectLedgerMatchesReceipt(fixture, CATALOG_PACK, receiptBefore);
 
       // Projection liveness: sync emits installed pack content into the live
       // surfaces — a pack skill lands in the skills tree beside the corpus
