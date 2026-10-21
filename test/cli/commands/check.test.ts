@@ -530,7 +530,9 @@ describe("check — a healthy repository", () => {
   // the `plugin-duplicates` row left with the held `plugin` block it warned about.
   // TEST CHANGE, justified (2026-10-21, 2026-10-20_packs-rebuilt/u3-retired-names,
   // REQ-PACK-003): fourteen to fifteen with the `pack-catalog` row below.
-  it("returns the fifteen doctor rows in a fixed order", async () => {
+  // TEST CHANGE, justified (2026-10-21, 2026-10-20_packs-rebuilt/u15-moved-customizations,
+  // REQ-PACK-009, REQ-PLUGIN-016): fifteen to sixteen with the `moved-skills` row below.
+  it("returns the sixteen doctor rows in a fixed order", async () => {
     const root = await seedRepo(getRepo());
 
     const doctor = await runDoctor(root, createEngine(), createApp({ cwd: root, env: {} }));
@@ -587,6 +589,12 @@ describe("check — a healthy repository", () => {
       // is not the copy this release bundles — so it sits beside `pack-reach`, before
       // `model-pins`. No other row moved.
       "pack-catalog",
+      // TEST CHANGE, justified (2026-10-21, 2026-10-20_packs-rebuilt/u15-moved-customizations,
+      // REQ-PACK-009, REQ-PLUGIN-016): `moved-skills` joined after `pack-catalog`. It answers
+      // about the same release boundary from the customization side — an override, an overlay
+      // or a core ledger row of a skill that moved into a pack — so it sits beside the pack rows,
+      // before `model-pins`. No other row moved.
+      "moved-skills",
       // TEST CHANGE, justified (2026-10-14, plan 020 file 2, unit e4-check-model-row,
       // REQ-LADDER-008): `model-pins` joined after `pack-reach`. It answers about this
       // repository's pins against the account's model list, so it sits with the repository
@@ -3360,12 +3368,13 @@ describe("check — the caller's expectations (REQ-PLUGIN-047)", () => {
       status: "pass",
       detail: `release ${RUNNING} — as expected`,
     });
-    // Outside `runDoctor`: the sixteenth row exists only because a flag asked for it.
+    // Outside `runDoctor`: the seventeenth row exists only because a flag asked for it.
     // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): one row fewer — `plugin-runtime` left with the plugin route.
     // TEST CHANGE, justified (2026-10-14, plan 020 file 2, unit e4-check-model-row): one row more — `model-pins` joined the doctor.
     // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-016): one row fewer — `plugin-duplicates` left.
     // TEST CHANGE, justified (2026-10-21, u3-retired-names, REQ-PACK-003): one row more — `pack-catalog` joined the doctor.
-    expect(doc.doctor.map((entry) => entry.id).indexOf("expectations")).toBe(15);
+    // TEST CHANGE, justified (2026-10-21, u15-moved-customizations, REQ-PACK-009): one row more — `moved-skills` joined the doctor.
+    expect(doc.doctor.map((entry) => entry.id).indexOf("expectations")).toBe(16);
   });
 
   it("fails another --expect-version naming the running release and generatedBy", async () => {
@@ -3733,7 +3742,8 @@ describe("check — the caller's expectations (REQ-PLUGIN-047)", () => {
     // TEST CHANGE, justified (2026-10-14, plan 020 file 2, unit e4-check-model-row): one row more — `model-pins` joined the doctor.
     // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-016): one row fewer — `plugin-duplicates` left.
     // TEST CHANGE, justified (2026-10-21, u3-retired-names, REQ-PACK-003): one row more — `pack-catalog` joined the doctor.
-    expect(doc.doctor).toHaveLength(15);
+    // TEST CHANGE, justified (2026-10-21, u15-moved-customizations, REQ-PACK-009): one row more — `moved-skills` joined the doctor.
+    expect(doc.doctor).toHaveLength(16);
     expect(human.stdout).not.toContain("expectations");
   });
 });
@@ -3751,14 +3761,16 @@ describe("check — change-classes (p2a-class-file, REQ-FLOW-061)", () => {
     // TEST CHANGE, justified (2026-10-14, plan 020 file 2, unit e4-check-model-row): one row more — `model-pins` joined the doctor.
     // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-016): one row fewer — `plugin-duplicates` left.
     // TEST CHANGE, justified (2026-10-21, u3-retired-names, REQ-PACK-003): one row more — `pack-catalog` joined the doctor.
-    expect(doc.doctor).toHaveLength(15);
+    // TEST CHANGE, justified (2026-10-21, u15-moved-customizations, REQ-PACK-009): one row more — `moved-skills` joined the doctor.
+    expect(doc.doctor).toHaveLength(16);
   });
 
   // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): one row fewer — `plugin-runtime` left with the plugin route.
   // TEST CHANGE, justified (2026-10-14, plan 020 file 2, unit e4-check-model-row): one row more — `model-pins` joined the doctor.
   // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-016): one row fewer — `plugin-duplicates` left.
   // TEST CHANGE, justified (2026-10-21, u3-retired-names, REQ-PACK-003): one row more — `pack-catalog` joined the doctor.
-  it("passes a valid class file, as the sixteenth row before invariants", async () => {
+  // TEST CHANGE, justified (2026-10-21, u15-moved-customizations, REQ-PACK-009): one row more — `moved-skills` joined the doctor.
+  it("passes a valid class file, as the seventeenth row before invariants", async () => {
     const root = await seedRepo(getRepo(), {
       files: {
         [CLASS_FILE]: JSON.stringify({
@@ -3778,7 +3790,7 @@ describe("check — change-classes (p2a-class-file, REQ-FLOW-061)", () => {
       detail: `${CLASS_FILE} is valid: 3 glob(s) across 2 class(es), 1 test-input entry(ies)`,
     });
     const ids = doc.doctor.map((entry) => entry.id);
-    expect(ids).toHaveLength(16);
+    expect(ids).toHaveLength(17);
     expect(ids.indexOf("change-classes")).toBe(ids.indexOf("invariants") - 1);
   });
 
@@ -4500,8 +4512,12 @@ describe("check — model-pins", () => {
     // TEST CHANGE, justified (2026-10-21, u3-retired-names, REQ-PACK-003, REQ-PLUGIN-016):
     // `pack-catalog` now sits between `pack-reach` and `model-pins`, so the row directly
     // before `model-pins` is `pack-catalog`; both still follow `pack-reach`.
+    // TEST CHANGE, justified (2026-10-21, u15-moved-customizations, REQ-PACK-009, REQ-PLUGIN-016):
+    // `moved-skills` now sits between `pack-catalog` and `model-pins`, so the row directly
+    // before `model-pins` is `moved-skills`; all three still follow `pack-reach` in that order.
     expect(ids.indexOf("pack-catalog")).toBe(ids.indexOf("pack-reach") + 1);
-    expect(ids.indexOf("model-pins")).toBe(ids.indexOf("pack-catalog") + 1);
+    expect(ids.indexOf("moved-skills")).toBe(ids.indexOf("pack-catalog") + 1);
+    expect(ids.indexOf("model-pins")).toBe(ids.indexOf("moved-skills") + 1);
     const verdict = row(doc, "model-pins");
     expect(verdict.status).toBe("warn");
     expect(verdict.detail).toContain(
@@ -5059,5 +5075,137 @@ describe("check — pack-catalog", () => {
         "0 catalog pack(s) match the copy this release bundles. Content not compared for " +
         `pack "gone" (its receipt's bytes do not match its ledger row).`,
     });
+  });
+});
+
+/**
+ * `moved-skills` (REQ-PACK-009, 2026-10-20_packs-rebuilt/u15-moved-customizations):
+ * a customization or a core copy of a skill that left the core for a pack
+ * (`src/pack/moved.ts`). Read from the override tree and the ledger directly,
+ * never from the plan, so it answers on exactly the repository whose plan an
+ * overlay of a moved skill makes throw.
+ */
+describe("check — moved-skills", () => {
+  const OVERRIDE_DIR = `${STATE_DIR}/overrides/skills/design-system-detect`;
+  const OVERRIDE_SKILL = [
+    "---",
+    "id: design-system-detect",
+    "type: skill",
+    "description: The house version of the detector.",
+    "---",
+    "",
+    "House body.",
+    "",
+  ].join("\n");
+
+  it("passes on a repository with no customization or core copy of a moved skill", async () => {
+    const root = await seedRepo(getRepo());
+
+    expect(await doctorRow(root, "moved-skills")).toEqual({
+      id: "moved-skills",
+      status: "pass",
+      detail: "no override, overlay or core copy of a skill that moved to a pack",
+    });
+  });
+
+  it("fails on an overlay of a moved skill, and answers while the plan cannot be built", async () => {
+    const root = await seedRepo(getRepo(), {
+      files: { [`${OVERRIDE_DIR}/SKILL.customize.md`]: "House step.\n" },
+    });
+
+    const { code, doc } = await runJson(root);
+
+    // The walk refuses the overlay, so drift is not evaluated; this row still reads.
+    expect(doc.driftStatus).toBe("failed");
+    expect(code).toBe(1);
+    expect(row(doc, "moved-skills")).toEqual({
+      id: "moved-skills",
+      status: "fail",
+      detail:
+        `overlay ${OVERRIDE_DIR}/SKILL.customize.md: skill "design-system-detect" moved from the core ` +
+        "to the frontend pack in 1.17.0, and overlays on pack skills are not applied, so sync refuses " +
+        "it. Fold the change into a full override under another id, or remove the file; to keep the " +
+        `shipped skill: \`${npxCommand("add frontend")}\`.`,
+    });
+  });
+
+  it("warns on a full override of a moved skill, which now stands alone", async () => {
+    const root = await seedRepo(getRepo(), { files: { [`${OVERRIDE_DIR}/SKILL.md`]: OVERRIDE_SKILL } });
+
+    expect(await doctorRow(root, "moved-skills")).toEqual({
+      id: "moved-skills",
+      status: "warn",
+      detail:
+        `override ${OVERRIDE_DIR}/SKILL.md: skill "design-system-detect" moved from the core to the ` +
+        "frontend pack in 1.17.0, so the override now stands alone and tracks no shipped copy. Keep " +
+        `it, or remove it and run \`${npxCommand("add frontend")}\`.`,
+    });
+  });
+
+  it("warns on a core ledger row of a moved skill at its engine path, and on no other path", async () => {
+    const coreRow = (path: string): LedgerEntry => ({
+      path,
+      adapter: "claude",
+      artifactId: "browser-evidence",
+      artifactType: "skill",
+      contentHash: "a4a40651590d8e03ae621c8a5ee7f71e904aeb87e54cff23ae1b2a4d26fd21c7",
+    });
+    const root = await seedRepo(getRepo(), {
+      ledger: [
+        coreRow(".claude/skills/st-browser-evidence/SKILL.md"),
+        coreRow(".agents/skills/st-browser-evidence/SKILL.md"),
+        // A row naming the moved id at a path the core never wrote it to is
+        // not a core copy (the frozen table names two folders only).
+        coreRow(".claude/skills/house-evidence/SKILL.md"),
+      ],
+    });
+
+    expect(await doctorRow(root, "moved-skills")).toEqual({
+      id: "moved-skills",
+      status: "warn",
+      detail:
+        "the ledger still records core copies of skill st-browser-evidence, which moved from the core " +
+        "to the frontend pack in 1.17.0: .agents/skills/st-browser-evidence/SKILL.md, " +
+        `.claude/skills/st-browser-evidence/SKILL.md. \`${npxCommand("sync")}\` removes an unedited ` +
+        `copy and names an edited one it keeps; to keep the skill: \`${npxCommand("add frontend")}\`.`,
+    });
+  });
+
+  it("fails on the overlay and warns on the override in one line when both are present", async () => {
+    const root = await seedRepo(getRepo(), {
+      files: {
+        [`${STATE_DIR}/overrides/skills/browser-evidence/SKILL.customize.yaml`]: "description: Ours.\n",
+        [`${OVERRIDE_DIR}/SKILL.md`]: OVERRIDE_SKILL,
+      },
+    });
+
+    const found = await doctorRow(root, "moved-skills");
+
+    expect(found.status).toBe("fail");
+    expect(found.detail).toContain(`overlay ${STATE_DIR}/overrides/skills/browser-evidence/SKILL.customize.yaml:`);
+    expect(found.detail).toContain(`override ${OVERRIDE_DIR}/SKILL.md:`);
+  });
+
+  it("passes with the frontend pack installed, whose client copies carry the moved ids", async () => {
+    const root = await seedRepo(getRepo());
+    const entry = lookupCatalogEntry("frontend");
+    if (entry === undefined) throw new Error("this checkout's catalog has no frontend pack");
+    const plan = await planPackInstall(root, resolveBundledPackRoot("frontend"), { catalogPin: entry.pin });
+    const seeded = await readManifest(root);
+    if (seeded === null) throw new Error("fixture lost its manifest");
+    const installed = await applyPackInstall(root, plan, seeded, { engineVersion: createApp().version, now: T0 });
+    expect(installed.result.installed).toBe(true);
+    await writeManifest(root, installed.manifest, { now: T0 });
+    await resyncAt(root);
+    const ledger = (await readManifest(root))?.ledger ?? [];
+    // Non-degenerate: the pack's copies are client-owned rows under the moved
+    // id at the very engine path a core copy had.
+    expect(
+      ledger.some(
+        (owned) => owned.adapter === "claude" && owned.path === ".claude/skills/st-design-system-detect/SKILL.md",
+      ),
+    ).toBe(true);
+
+    expect((await doctorRow(root, "moved-skills")).status).toBe("pass");
   });
 });

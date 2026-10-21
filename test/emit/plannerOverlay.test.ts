@@ -12,6 +12,7 @@ import {
   type ResiduePlanner,
 } from "../../src/emit/planner.ts";
 import { createManifest } from "../../src/manifest/manifest.ts";
+import { resolveBundledPackRoot } from "../../src/pack/curated.ts";
 import { applyPackInstall, planPackInstall } from "../../src/pack/install.ts";
 import type { AdapterOutput } from "../../src/types/content.ts";
 import type { Tool } from "../../src/types/core.ts";
@@ -701,6 +702,90 @@ describe("the fork layer through the composed planner", () => {
     // walk's own default is what supplies the bundled one, never this seam.
     await planner.plan(ctxOf(manifest));
     expect(contentRootsOf(seen.at(-1)).forkRoot).toBeUndefined();
+  });
+});
+
+// ── A full override of a skill that moved to a pack ──────────────
+
+/**
+ * REQ-PACK-009: `design-system-detect` left the core for the `frontend` pack
+ * (`src/pack/moved.ts`). A full override of it, with the pack absent, no longer
+ * replaces anything: it stands alone, and the plan says so in a warning. With
+ * the pack installed the override collides with the pack's copy, and the
+ * refusal names the move. The pack is this checkout's own, through the
+ * catalog's resolver, so the case reads the copy `add frontend` installs.
+ */
+describe("a full override of a skill that moved from the core to a pack", () => {
+  const MOVED_ID = "design-system-detect";
+
+  /** The repo's own `SKILL.md` for `id`, under the bare override directory. */
+  function overrideSkill(id: string): Record<string, string> {
+    return {
+      [`.stamity/overrides/skills/${id}/SKILL.md`]: [
+        "---",
+        `id: ${id}`,
+        "type: skill",
+        "description: The house version of this skill.",
+        "tags:",
+        "  - implementation",
+        "load: on-demand",
+        "obsolete_when: the house runbook covers it",
+        "---",
+        "",
+        USER_MARKER,
+        "",
+      ].join("\n"),
+    };
+  }
+
+  const warningText =
+    `your override .stamity/overrides/skills/${MOVED_ID}/SKILL.md replaced a core skill that moved ` +
+    "to the frontend pack; it now stands alone and tracks no shipped copy. Keep it, or remove it " +
+    "and stamity add frontend.";
+
+  it("plans the override with the pack absent and warns once that it now stands alone", async () => {
+    await getRepo().seedFiles(overrideSkill(MOVED_ID));
+
+    const plan = await composeEmissionPlanner(ADAPTER_REGISTRY).planWithWarnings(
+      ctxOf(manifestFor(["claude", "cursor"]), { overrideRoot: overrideRootOf() }),
+    );
+
+    // Two trees carry the skill; the warning is about the one file the author wrote.
+    expect(pathsCarrying(plan.outputs, USER_MARKER).length).toBeGreaterThanOrEqual(2);
+    expect(plan.warnings?.filter((warning) => warning.includes("replaced a core skill"))).toEqual([
+      warningText,
+    ]);
+  });
+
+  it("does not warn on a full override of a skill that never left the core", async () => {
+    await getRepo().seedFiles(overrideSkill("house-review"));
+
+    const plan = await composeEmissionPlanner(ADAPTER_REGISTRY).planWithWarnings(
+      ctxOf(manifestFor(["claude", "cursor"]), { overrideRoot: overrideRootOf() }),
+    );
+
+    expect(pathsCarrying(plan.outputs, USER_MARKER).length).toBeGreaterThanOrEqual(2);
+    expect(plan.warnings?.filter((warning) => warning.includes("replaced a core skill"))).toEqual([]);
+  });
+
+  it("refuses the override with the frontend pack installed, naming the move", async () => {
+    // Pack first: `add` itself refuses a pack whose skill id an override
+    // already holds, so the state is reached by writing the override after.
+    const manifest = await installPack(resolveBundledPackRoot("frontend"), manifestFor(["cursor"]));
+    await getRepo().seedFiles(overrideSkill(MOVED_ID));
+
+    const planning = composeEmissionPlanner(ADAPTER_REGISTRY).planWithWarnings(
+      ctxOf(manifest, { overrideRoot: overrideRootOf() }),
+    );
+
+    await expect(planning).rejects.toThrow(/Pack-skill overrides are unsupported today/);
+    await expect(planning).rejects.toThrow(
+      new RegExp(
+        `skill "${MOVED_ID}" moved from the core to the frontend pack in 1\\.17\\.0, so the override ` +
+          "that replaced the core skill now collides with the pack's copy",
+      ),
+    );
+    await expect(planning).rejects.toThrow(/clean --pack frontend/);
   });
 });
 

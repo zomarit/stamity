@@ -3,6 +3,8 @@
 import { symlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { validateCommand, type ValidateFinding } from "../../src/cli/commands/validate.ts";
+import { createManifest, writeManifest } from "../../src/manifest/manifest.ts";
 import {
   COMMAND_ID_PREFIX,
   applyCommandPrefix,
@@ -30,6 +32,7 @@ import {
 } from "../../src/content/contentRoot.ts";
 import { MAX_USER_CONTENT_LENGTH } from "../../src/guard/promptGuard.ts";
 import { EngineError } from "../../src/types/errors.ts";
+import { runInProcess } from "../support/inProcess.ts";
 import { useTempDir } from "../support/tempDir.ts";
 import { makeVolume } from "../support/vfs.ts";
 
@@ -1278,6 +1281,146 @@ describe("the overlay layer", () => {
 
       expect(refusal.message).toContain("overrides/skills/recipe/SKILL.md");
       expect(refusal.message).toContain("overrides/skills/recipe/SKILL.customize.yaml");
+    });
+  });
+
+  describe("REQ-PACK-009, REQ-OVERLAY-009 — an overlay of a skill that moved from the core to a pack", () => {
+    /**
+     * `design-system-detect` left the core for the `frontend` pack
+     * (`src/pack/moved.ts`). An overlay of it is refused, fail closed, with the
+     * move named whether or not the pack is installed: without the pack the id
+     * would otherwise read as a typo, and with it as an anonymous pack skill.
+     */
+    const MOVED_SKILL = artifact(
+      "id: design-system-detect\ntype: skill\ndescription: Detects the design system.",
+      "Pack body.\n",
+    );
+    const FRONTEND = { "skills/st-design-system-detect/SKILL.md": MOVED_SKILL };
+    const posixOverlay = (overrideRoot: string, ...halves: string[]): string =>
+      halves
+        .map((half) => toPosixDisplayPath(join(overrideRoot, "skills", "design-system-detect", half)))
+        .join(" and ");
+    const movedText = (paths: string): string =>
+      'skill "design-system-detect" moved from the core to the frontend pack in 1.17.0, and overlays ' +
+      "on pack skills are not applied. Fold your change into a full override under another id, or " +
+      `remove ${paths}; to keep the shipped skill, stamity add frontend.`;
+
+    it.each([
+      ["the body half", ["SKILL.customize.md"]],
+      ["the frontmatter half", ["SKILL.customize.yaml"]],
+      ["both halves", ["SKILL.customize.yaml", "SKILL.customize.md"]],
+    ])("names the move with the pack absent: %s", async (_, halves) => {
+      const overrides = Object.fromEntries(
+        halves.map((half) => [
+          `skills/design-system-detect/${half}`,
+          half.endsWith(".yaml") ? "description: Ours.\n" : "House step.\n",
+        ]),
+      );
+      const overrideRoot = join(makeVolume().root, "overrides");
+
+      const refusal = await expectRejection(() => overlayIndexOf(CORPUS, overrides), "VALIDATION_ERROR");
+
+      expect(refusal.message).toBe(movedText(posixOverlay(overrideRoot, ...halves)));
+      // Not the typo text: the filename is right, the base left the core.
+      expect(refusal.message).not.toContain("usually a typo");
+    });
+
+    it("names the move in the same words with the frontend pack installed", async () => {
+      const refusal = await expectRejection(
+        () =>
+          forkIndexOf(
+            CORPUS,
+            {},
+            { "skills/design-system-detect/SKILL.customize.md": "House step.\n" },
+            { frontend: FRONTEND },
+          ),
+        "VALIDATION_ERROR",
+      );
+      const overrideRoot = join(makeVolume().root, "overrides");
+
+      expect(refusal.message).toBe(movedText(posixOverlay(overrideRoot, "SKILL.customize.md")));
+      expect(refusal.message).not.toContain("whose files ship byte-for-byte");
+    });
+
+    it("keeps the pack-skill text when another pack supplies a skill under a moved id", async () => {
+      // The move is a fact about the `frontend` pack: a skill of that id from
+      // any other pack is not the one that left the core.
+      const refusal = await expectRejection(
+        () =>
+          forkIndexOf(
+            CORPUS,
+            {},
+            { "skills/design-system-detect/SKILL.customize.md": "House step.\n" },
+            { acme: FRONTEND },
+          ),
+        "VALIDATION_ERROR",
+      );
+
+      expect(refusal.message).toContain('patches pack "acme" skill "design-system-detect"');
+      expect(refusal.message).not.toContain("moved from the core");
+    });
+
+    it("keeps today's typo text for an overlay of a skill that was never in the core", async () => {
+      const refusal = await expectRejection(
+        () => overlayIndexOf(CORPUS, { "skills/never-shipped/SKILL.customize.md": "House step.\n" }),
+        "VALIDATION_ERROR",
+      );
+
+      expect(refusal.message).toContain('patches skill "never-shipped", but no artifact of that id exists');
+      expect(refusal.message).toContain("usually a typo");
+      expect(refusal.message).not.toContain("moved from the core");
+    });
+
+    it("keeps the fork stage's skip for a fork patch of a moved skill", async () => {
+      // The fork layer is package-global (the overlay-layer header): refusing
+      // here would break `sync` in every consumer repository over a file in
+      // its `node_modules`, so the move changes the user stage alone.
+      const { index } = await forkIndexOf(CORPUS, {
+        "skills/design-system-detect/SKILL.customize.md": "Fork step.\n",
+      });
+
+      expect(index.skipped?.map((entry) => entry.reason)).toEqual([
+        expect.stringContaining('neither the corpus, an installed pack nor the fork layer holds skill "design-system-detect"'),
+      ]);
+    });
+  });
+
+  describe("REQ-PACK-009 — `validate` carries the moved-skill refusal unchanged", () => {
+    afterEach(() => __resetContentRootCacheForTests());
+    const getRepo = useTempDir("catalog-moved-skill-validate");
+
+    it("reports the overlay as an error under its own path, in the walk's words, and exits 1", async () => {
+      // The bundled corpus, not a fixture: the move is this checkout's own
+      // (`content/skills/` no longer holds the skill), so the case reads the
+      // tree a real `validate` reads.
+      const repo = getRepo();
+      await repo.seedFiles({
+        ".stamity/overrides/skills/design-system-detect/SKILL.customize.md": "House step.\n",
+      });
+      await writeManifest(
+        repo.dir,
+        createManifest({
+          tools: ["claude"],
+          selection: { items: { agent: [], skill: [], rule: [], command: [] } },
+          generatorVersion: "0.0.0",
+        }),
+      );
+      const overlay = repo.path(".stamity", "overrides", "skills", "design-system-detect", "SKILL.customize.md");
+
+      const result = await runInProcess([validateCommand], ["validate", "--json"], { cwd: repo.dir });
+
+      expect(result.code).toBe(1);
+      const doc = JSON.parse(result.stdout.trim()) as { findings: ValidateFinding[] };
+      const found = doc.findings.find((entry) => entry.severity === "error");
+      expect(found).toMatchObject({
+        source: "user-content",
+        path: ".stamity/overrides/skills/design-system-detect/SKILL.customize.md",
+      });
+      expect(found?.message).toBe(
+        'skill "design-system-detect" moved from the core to the frontend pack in 1.17.0, and overlays ' +
+          "on pack skills are not applied. Fold your change into a full override under another id, or " +
+          `remove ${toPosixDisplayPath(overlay)}; to keep the shipped skill, stamity add frontend.`,
+      );
     });
   });
 

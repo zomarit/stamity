@@ -82,6 +82,7 @@ import {
   emittedIdFor,
   findInvocableNameClashes,
   layerRankOf,
+  originOf,
   replacedClaimantOf,
   typeIdKey,
   type CatalogItem,
@@ -106,6 +107,7 @@ import {
   selectionWithInstalledPacks,
   type ResolvedPackContent,
 } from "../pack/projection.ts";
+import { movedCoreSkill } from "../pack/moved.ts";
 import { hasManagedBlock, wrapInManagedBlock } from "../merge/managedBlocks.ts";
 import { pinnedCliCall, scopeRegistryArg } from "../shared/cliCall.ts";
 import { cliCallContextOf, type CliCallContext } from "./substitution.ts";
@@ -664,9 +666,17 @@ function mergeSkillProjections(
               packId === undefined ? "an installed pack" : `installed pack "${packId}"`
             }'s skill, and so projects into that skill's directory`
           : `shares its directory with the pack skill "${row.artifactId}"'s`;
+      // A skill the core used to ship (REQ-PACK-009): the customization was
+      // legal until the release moved its base into this pack, so say so.
+      const moved = movedCoreSkill(row.artifactId);
+      const move =
+        moved !== undefined && moved.pack === packId
+          ? ` The skill "${moved.id}" moved from the core to the ${moved.pack} pack in ${moved.since}, ` +
+            `so the ${noun} that replaced the core skill now collides with the pack's copy.`
+          : "";
       throw new EngineError(
         `Pack-skill overrides are unsupported today: the ${noun} at "${overridePath}" ${shape} ` +
-          `(both would project to the client). Remove or rename ${overridePath}, or remove ` +
+          `(both would project to the client).${move} Remove or rename ${overridePath}, or remove ` +
           `the pack (\`clean --pack ${packId ?? "<pack-id>"}\`).`,
         { code: "VALIDATION_ERROR" },
       );
@@ -792,6 +802,36 @@ function customizingSkillFilePath(row: ProjectedSkillFile): string {
   return row.origin === "fork"
     ? `fork/${row.artifactPath}`
     : `${STATE_DIR}/overrides/${row.artifactPath}`;
+}
+
+/**
+ * One warning per full override of a skill that moved from the core to a pack
+ * (`../pack/moved.ts`, REQ-PACK-009), read off the composed index.
+ *
+ * With the pack absent the override replaces nothing any more: the corpus no
+ * longer holds the id, so the override is a skill of its own that no shipped
+ * copy will ever update, and nothing else on any surface says so. It still
+ * plans, so this is a planning finding on `EmissionPlan.warnings`, printed by
+ * `sync` with or without `--dry-run`. With the pack installed the override
+ * collides with the pack's copy and {@link mergeSkillProjections} refuses it,
+ * naming the move, before any warning is returned. A fork skill is the fork
+ * maintainer's to answer for, not this repository's, so only the override
+ * tree is read; the path is the repo-relative file the author wrote, spelled
+ * as {@link customizingSkillFilePath} spells it.
+ */
+function movedSkillOverrideWarnings(index: ContentIndex): string[] {
+  const warnings: string[] = [];
+  for (const item of index.items) {
+    if (item.type !== "skill" || originOf(item) !== "user") continue;
+    const moved = movedCoreSkill(item.id);
+    if (moved === undefined) continue;
+    warnings.push(
+      `your override ${STATE_DIR}/overrides/${item.relativePath} replaced a core skill that moved to ` +
+        `the ${moved.pack} pack; it now stands alone and tracks no shipped copy. Keep it, or remove it ` +
+        `and stamity add ${moved.pack}.`,
+    );
+  }
+  return warnings;
 }
 
 /**
@@ -988,7 +1028,8 @@ export function composeEmissionPlanner(
     // Before any row exists: a cross-class name clash is refused with its
     // owners named, rather than reaching the single-writer check below as two
     // planners writing one path (or, on Claude, as nothing at all).
-    refuseInvocableNameClashes(await buildContentIndex(residueCtx.contentRoot), cliCallContextOf(ctx));
+    const contentIndex = await buildContentIndex(residueCtx.contentRoot);
+    refuseInvocableNameClashes(contentIndex, cliCallContextOf(ctx));
     const core = await buildCoreEmissionPlan(ctx, packs);
     const tools = TOOLS.filter((tool) => ctx.manifest.tools.includes(tool));
 
@@ -1150,6 +1191,7 @@ export function composeEmissionPlanner(
       outputs,
       warnings: [
         ...core.hooks.warnings,
+        ...movedSkillOverrideWarnings(contentIndex),
         ...effortDisclosures(ctx.manifest),
         ...residueWarnings,
         ...blockWarnings,

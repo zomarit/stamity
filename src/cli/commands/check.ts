@@ -18,6 +18,7 @@ import {
   splitAtManagedBlock,
 } from "../../merge/managedBlocks.ts";
 import { lookupCatalogEntry, type CatalogEntry } from "../../pack/curated.ts";
+import { MOVED_CORE_SKILLS, movedRenderingAt } from "../../pack/moved.ts";
 import { ORG_POLICY_REL_PATH } from "../../pack/orgPolicy.ts";
 import {
   discoverInstalledPacksWithPolicy,
@@ -1263,6 +1264,73 @@ export async function checkPackCatalog(
 }
 
 /**
+ * Customizations and core copies of a skill that moved from the core corpus to
+ * a pack (`../../pack/moved.ts`, REQ-PACK-009).
+ *
+ * Read from the override tree and the manifest's ledger directly, never from
+ * the emission plan: an overlay of a moved skill is exactly what makes the plan
+ * throw (`../../content/catalog.ts`), and this row has to answer then.
+ *
+ * - `fail` — an overlay (`SKILL.customize.yaml` or `.md`) of a moved id under
+ *   `.stamity/overrides/skills/<id>/`: `sync` refuses it, pack or no pack.
+ * - `warn` — a full override (`SKILL.md`) there, which no longer replaces a
+ *   core skill and tracks no shipped copy; and a client-owned ledger row of a
+ *   moved id at the engine path the core wrote it to
+ *   ({@link movedRenderingAt}), with no `pack:<pack>` row — with the pack
+ *   installed, its own copies stand at those paths.
+ * - `pass` — none of these.
+ */
+export function checkMovedSkills(rootDir: string, manifest: SetupManifest | null): DoctorCheck {
+  const id = "moved-skills";
+  const root = resolve(rootDir);
+  const failures: string[] = [];
+  const warnings: string[] = [];
+  const addPack = (pack: string): string => `\`${packageCommand(`add ${shellWord(pack)}`)}\``;
+  for (const skill of MOVED_CORE_SKILLS) {
+    const moved = `skill "${skill.id}" moved from the core to the ${skill.pack} pack in ${skill.since}`;
+    const dir = `${STATE_DIR}/overrides/skills/${skill.id}`;
+    for (const half of ["SKILL.customize.yaml", "SKILL.customize.md"]) {
+      if (!existsSync(join(root, ...dir.split("/"), half))) continue;
+      failures.push(
+        `overlay ${dir}/${half}: ${moved}, and overlays on pack skills are not applied, so sync ` +
+          `refuses it. Fold the change into a full override under another id, or remove the file; ` +
+          `to keep the shipped skill: ${addPack(skill.pack)}.`,
+      );
+    }
+    if (existsSync(join(root, ...dir.split("/"), "SKILL.md"))) {
+      warnings.push(
+        `override ${dir}/SKILL.md: ${moved}, so the override now stands alone and tracks no shipped ` +
+          `copy. Keep it, or remove it and run ${addPack(skill.pack)}.`,
+      );
+    }
+    if (manifest === null) continue;
+    if (manifest.ledger.some((row) => row.adapter === `${PACK_OWNER_PREFIX}${skill.pack}`)) continue;
+    const copies = [
+      ...new Set(
+        manifest.ledger
+          .filter(
+            (row) =>
+              !isPackOwner(row.adapter) &&
+              row.artifactType === "skill" &&
+              row.artifactId === skill.id &&
+              movedRenderingAt(skill, row.path) !== undefined,
+          )
+          .map((row) => row.path),
+      ),
+    ].toSorted();
+    if (copies.length === 0) continue;
+    warnings.push(
+      `the ledger still records core copies of skill st-${skill.id}, which moved from the core to the ` +
+        `${skill.pack} pack in ${skill.since}: ${copies.join(", ")}. \`${packageCommand("sync")}\` removes ` +
+        `an unedited copy and names an edited one it keeps; to keep the skill: ${addPack(skill.pack)}.`,
+    );
+  }
+  if (failures.length > 0) return { id, status: "fail", detail: [...failures, ...warnings].join(" ") };
+  if (warnings.length > 0) return { id, status: "warn", detail: warnings.join(" ") };
+  return { id, status: "pass", detail: "no override, overlay or core copy of a skill that moved to a pack" };
+}
+
+/**
  * Which version of the floor invariants this install's corpus carries.
  *
  * A `pass` row with no failing case of its own: the values are validated at
@@ -1844,6 +1912,7 @@ export async function runDoctor(
     packIntegrity,
     packReach,
     packCatalog,
+    movedSkills,
     modelPins,
     changeClasses,
     invariants,
@@ -1858,6 +1927,7 @@ export async function runDoctor(
     guarded("pack-catalog", () =>
       checkPackCatalog(rootDir, manifest, engine.pack.retired.RETIRED_PACKS),
     ),
+    guarded("moved-skills", async () => checkMovedSkills(rootDir, manifest)),
     guarded("model-pins", async () => modelPinsRow(rootDir, manifest, app.runtime.env)),
     checkChangeClasses(rootDir),
     guarded("invariants", checkInvariants),
@@ -1891,6 +1961,9 @@ export async function runDoctor(
     // Whether an installed pack is a retired one, or a catalog pack this
     // release bundles a different copy of; it reads the same receipts.
     packCatalog,
+    // Whether a skill that moved from the core to a pack is still overlaid,
+    // overridden or recorded as a core copy here; read without the plan.
+    movedSkills,
     // Whether each client's pinned and emitted models are on the account's own
     // list; it answers about this repository's pins, so it sits with the
     // repository rows.

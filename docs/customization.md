@@ -238,7 +238,9 @@ supplies it, so your patch survives an upstream rewrite of everything it did not
 the whole body cannot do that, because it stops tracking the original the moment it is taken.
 A pack's agents, commands and rules can be patched this way. A pack's skills cannot: their files
 ship byte-for-byte from the installed pack, so an overlay on one is refused, and so is a full
-override. Neither is dropped in silence.
+override. Neither is dropped in silence. That includes the two skills that moved from the core
+to the `frontend` pack in 1.17.0, `design-system-detect` and `browser-evidence`, whether or not
+the pack is installed (see below).
 [Overlay customization layers](specs/overlay-layers.md) is the design reference behind what
 follows: what was decided, what was dropped, and why.
 
@@ -261,7 +263,8 @@ shadowing — 1 overlay patches a bundled id
 ```
 
 The parenthesis names where the base came from: the corpus, the fork layer, or the pack's id. A
-pack's skill never gets this line, because an overlay on one is refused (see below).
+pack's skill never gets this line, because an overlay on one is refused (see below). Nor does a
+skill that moved from the core to a pack.
 
 `<slug>` addresses the base artifact's **declared** `id`, with stamity's internal `cmd-` prefix
 off for a command. It is not the bundled file's name. The two agree for every artifact this
@@ -308,6 +311,14 @@ An overlay defect stops the sync and names the file and the offending field or c
   change to that skill belongs in the pack's own source. Removing the pack does not help: the
   overlay then patches nothing and is refused as a typo. A pack's agents, commands and rules are
   patched as usual.
+- A slug naming a skill that moved from the core to a pack: `design-system-detect` and
+  `browser-evidence`, which moved to the `frontend` pack in 1.17.0. The refusal names the move
+  and the overlay, and reads the same with the pack installed or not. Fold your change into a full
+  override under another id, or remove the overlay; `stamity add frontend` keeps the shipped
+  skill. A full override of either id is not refused while the pack is absent: `sync` warns, dry
+  run included, that it now stands alone and tracks no shipped copy. With the pack installed the
+  override collides with the pack's copy and is refused, naming the move. `check`'s
+  `moved-skills` row reports each of these.
 - A body patch over the 250 000-character ceiling on user-authored content.
 - An overlay filename spelled with stamity's `stamity-` or `st-` prefix. The same applies to a
   skill's carrier directory. Use the bare slug the save gate already reserves, such as
@@ -396,7 +407,9 @@ Three fork outcomes are about your repository rather than about the fork.
 - A fork patch of a skill a pack supplies does not apply even once the pack is installed. It is
   skipped and reported as a warning naming the overlay, the pack and the skill. A pack's skill is
   never patched, and the fork layer must not break `sync` in a repository that installed the
-  pack. Your own patch of that skill is an error.
+  pack. Your own patch of that skill is an error. A fork patch of a skill that moved from the
+  core to a pack is skipped the same way, with the pack installed or not; your own patch of it is
+  the error that names the move.
 
 Everything on this page is a CLI consumer override. A fork's maintainer customizes `content/` or the
 bundled `fork/` layer instead, and [Enterprise forks](enterprise-forks.md) covers that layer, the

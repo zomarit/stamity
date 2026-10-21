@@ -8,6 +8,7 @@ import { CONTENT_CLASSES, type ContentClass, type RulePrecedence } from "../type
 import type { Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
 import { MAX_USER_CONTENT_LENGTH } from "../guard/promptGuard.ts";
+import { movedCoreSkill, type MovedCoreSkill } from "../pack/moved.ts";
 import {
   carriesEngineContentPrefix,
   contentPrefixFor,
@@ -1607,6 +1608,30 @@ function refusePackSkillOverlay(
 }
 
 /**
+ * A USER-stage overlay of a skill that moved from the core corpus to a pack
+ * (`../pack/moved.ts`, REQ-PACK-009, REQ-OVERLAY-009), in one text whether or
+ * not that pack is installed.
+ *
+ * Without the pack the id resolves nowhere, so {@link refuseOrphanOverlay}
+ * would call a filename that was right until the release a typo; with it the
+ * base is a pack skill, and {@link refusePackSkillOverlay} would leave out that
+ * the skill used to be the core's. Neither tells the author what happened to
+ * the patch they wrote, so both give way to this one for a moved id, and the
+ * posture is theirs: `VALIDATION_ERROR`, every half named by its POSIX path
+ * (how `validate` attributes it). The fork stage is untouched: it skips and
+ * reports, for the reason the overlay-layer header gives.
+ */
+function refuseMovedSkillOverlay(paths: readonly string[], moved: MovedCoreSkill): never {
+  throw new EngineError(
+    `skill "${moved.id}" moved from the core to the ${moved.pack} pack in ${moved.since}, and overlays ` +
+      `on pack skills are not applied. Fold your change into a full override under another id, or ` +
+      `remove ${paths.map(toPosixDisplayPath).join(" and ")}; to keep the shipped skill, ` +
+      `stamity add ${moved.pack}.`,
+    { code: "VALIDATION_ERROR" },
+  );
+}
+
+/**
  * Why a FORK-stage overlay whose base is a pack skill was passed over — the
  * fork stage's answer to {@link refusePackSkillOverlay}, skipped and reported
  * for the reason {@link forkOrphanSkipReason} is: the fork layer is
@@ -1874,7 +1899,12 @@ async function applyOverlays(
       // the fork stage skips and reports. Refused AFTER the exclusivity check
       // above on purpose — a fork replacement beside a fork patch of one id is
       // the fork author's own defect whether or not a base exists.
-      if (layer === "user") refuseOrphanOverlay(overlayPaths, overlay.type, id);
+      if (layer === "user") {
+        // A skill the core used to ship is not a typo: name where it went.
+        const moved = overlay.type === "skill" ? movedCoreSkill(id) : undefined;
+        if (moved !== undefined) refuseMovedSkillOverlay(overlayPaths, moved);
+        refuseOrphanOverlay(overlayPaths, overlay.type, id);
+      }
       const reason = forkOrphanSkipReason(overlay.type, id);
       skipped.push(...overlayPaths.map((filePath) => ({ type: overlay.type, filePath, reason })));
       continue;
@@ -1897,7 +1927,13 @@ async function applyOverlays(
     // beside the patch is still told as that defect.
     if (base.type === "skill" && originOf(base) === "pack") {
       const packId = base.provenance?.pack;
-      if (layer === "user") refusePackSkillOverlay(overlayPaths, packId, base.id);
+      if (layer === "user") {
+        // The move is a fact about the pack the skill went to; the same id
+        // from any other pack is that pack's own skill.
+        const moved = movedCoreSkill(base.id);
+        if (moved !== undefined && moved.pack === packId) refuseMovedSkillOverlay(overlayPaths, moved);
+        refusePackSkillOverlay(overlayPaths, packId, base.id);
+      }
       const reason = forkPackSkillSkipReason(packId, base.id);
       skipped.push(...overlayPaths.map((filePath) => ({ type: overlay.type, filePath, reason })));
       continue;
