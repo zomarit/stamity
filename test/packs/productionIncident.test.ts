@@ -29,7 +29,8 @@ import {
  *   - **The leaked-credential case cites the secrets rule and restates none of it.** The steps are
  *     read from the rule's own item, so a reworded rule keeps the probe honest, and the probe is
  *     shown red on a made-up body that copies them.
- *   - **No clock.** No hour or day deadline anywhere; the regex is shown red on a made-up line.
+ *   - **No clock.** No minute, hour, day or week deadline anywhere, a spelled-out or "business"
+ *     count included; the probe is shown red on made-up lines of each shape.
  *
  * Prose assertions run against a whitespace-flattened view ({@link flow}) so a reflowed paragraph
  * is not a failure. No mocks: every read is a real file.
@@ -49,8 +50,21 @@ const BODY_CAP = 170;
 
 const SECOND_PERSON = /\b(?:you|your|yours|yourself)\b/i;
 
-/** The deadline shape the plan forbids: a number of hours or days. */
-const DEADLINE = /\b\d+\s*(h|hours|days)\b/;
+/** A count, in digits or spelled out, as a deadline states it. */
+const COUNT = String.raw`(?:\d+(?:[.,]\d+)?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|twenty-four|forty-eight|seventy-two)`;
+
+/**
+ * The deadline shape the plan forbids, widened past its `/\b\d+\s*(h|hours|days)\b/`: a count of
+ * minutes, hours, days or weeks, singular or plural, abbreviated, hyphenated ("72-hour") or
+ * qualified ("4 business days"), so the old ops clock ("within 5 minutes") cannot come back green.
+ */
+const DEADLINE = new RegExp(
+  String.raw`\b${COUNT}[\s-]*(?:(?:business|working|calendar)\s+)?(?:h|hrs?|hours?|min|mins|minutes?|d|days?|wks?|weeks?)\b`,
+  "i",
+);
+
+/** The escalation's scope, as each section that mentions it states it: P0 or P1, and every exposure. */
+const ESCALATION_SCOPE = /P0 or P1,? and every exposure/;
 
 /** Protocol sections the anatomy keeps in the charter and the rules, never per artifact. */
 const BANNED_SECTION = /^#{2,}\s.*\b(?:B1|B2|error handling|definition of done)\b/im;
@@ -252,14 +266,21 @@ describe("st-incident — the leaked-credential case", () => {
     const section = flowSection(file, "Step 5 — A leaked credential");
     const steps = await rotationSteps();
 
-    // Cited by the file name the rule installs under, never by `content/rules/…`: an installed repo
-    // holds no `content/`, and the pack suite reads a slash before `stamity-` as a command mention.
-    expect(section).toContain("`stamity-secrets.md`, item 6");
+    // Cited by the rule's name and item title, never by a path: Claude Code keeps a
+    // `stamity-secrets.md` file, Codex folds the rule into `AGENTS.override.md`, and an installed repo
+    // holds no `content/`; the pack suite also reads a slash before `stamity-` as a command mention.
+    expect(section).toContain("the secrets rule (`stamity-secrets`), item 6");
     expect(section).toMatch(/Exposure opens a rotation, not a deletion/);
+    expect(section).toMatch(/wherever this client keeps its rules/);
+    expect(section).not.toMatch(/rules folder|stamity-secrets\.md/);
     expect(section).toMatch(/cited, never restated/i);
     // The cited item number holds in the rule itself, so a renumbered rule turns this red.
     expect(await readFile(SECRETS_RULE, "utf8")).toMatch(/^6\. \*\*Exposure opens a rotation, not a deletion\.\*\*/m);
     expect(section).toMatch(/every use/i);
+    // Finding each use never types the live value: no search by the literal, nothing printed.
+    expect(section).toMatch(/variable or key name, the file that held it, or a non-reversible fingerprint/);
+    expect(section).toMatch(/never by the literal value/);
+    expect(section).toMatch(/never typed or printed/);
     expect(section).toMatch(/history rewrite stay the person's/i);
     // Non-degenerate: the rule's item yields its five steps, so the absence below means something.
     expect(steps).toHaveLength(5);
@@ -286,12 +307,38 @@ describe("st-incident — escalation, no clock, and the review", () => {
     expect(text).toMatch(/no clock table/i);
   });
 
-  it("states no hour or day deadline anywhere, and the probe is red on one", async () => {
+  it("scopes the escalation the same way in the Quick Start, Step 6 and the output artifact", async () => {
+    const file = await skill();
+
+    for (const heading of ["Quick Start", "Step 6 — Escalate", "Output artifact"]) {
+      const section = flowSection(file, heading);
+      expect(section, heading).toMatch(ESCALATION_SCOPE);
+      expect(section, heading).not.toMatch(/every incident takes/i);
+    }
+  });
+
+  it("states no minute, hour, day or week deadline anywhere, and the probe is red on each shape", async () => {
     const file = await skill();
 
     expect(file.raw).not.toMatch(DEADLINE);
-    expect("notify the regulator within 72 hours").toMatch(DEADLINE);
-    expect("page on-call in 24h").toMatch(DEADLINE);
+    for (const line of [
+      "notify the regulator within 72 hours",
+      "page on-call in 24h",
+      "P0 pages on-call within 5 minutes",
+      "acknowledge within 1 hour",
+      "file the report within 1 day",
+      "send the notice within 4 business days",
+      "close the review in three working days",
+      "a 72-hour reporting window",
+      "update the status page every 30 min",
+      "publish the review within 2 weeks",
+    ]) {
+      expect(line, line).toMatch(DEADLINE);
+    }
+    // Not so wide that it trips on the skill's own numbering.
+    for (const line of ["Step 6 — Escalate", "item 6", "P0 and P3 alike", "at P0 or P1"]) {
+      expect(line, line).not.toMatch(DEADLINE);
+    }
   });
 
   it("writes the review at docs/incidents/ with a path:line code root cause, its commit and confidence", async () => {
