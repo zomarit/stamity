@@ -2060,7 +2060,7 @@ units and five engine units. It now runs as **two sessions, one pull request eac
 6. **The eval case that moves:** `u1-clean-keeps-state` rewrites the generated `st-setup` body and moves the adversarial
    case `evals/cases-v6/adversarial/st-setup-refuses-generated-setup.md` (and any case whose `source:` range the edit
    shifts), recorded in `evals/SET-v7.md`; file 3's release run measures it. Every unit that adds an import between
-   `src/` modules runs `test/architecture` in its narrow set (learning `a-new-import-runs-the-architecture-test`).
+   `src/` modules runs `test/architecture` in its narrow set (learning `a-narrow-verify-run-misses-whole-tree-guards`).
 7. **The Prove phase** (`/st-work`) of each session merges the spec-delta entries of the units that session landed.
 8. **The gates, per session:** `npm run lint && npm run typecheck && npm run test`, then `npm test -- --coverage` and
    `npm run check`, and `node scripts/ci/fork-probe.mjs` once `u1-fork-ci-job` lands; CI's coverage, Windows and
