@@ -411,7 +411,11 @@ describe("ui-states — the four-state contract", () => {
     // files around it while design-quality, `ui-token-usage` and this rule's Gates judge its literals
     // against those tokens. What moved: with no inventory the tokens come from the stylesheet layer's
     // token source, and only with no token source at all does the surface follow the files around it.
-    expect(text).toMatch(/with no inventory, the tokens come from the\s+stylesheet layer's token source/i);
+    // TEST CHANGE, justified (2026-10-21, fixer round 2 of u14-core-readers;
+    // 2026-10-20_packs-rebuilt/review/20, signed off): the pin held the stylesheet token source
+    // alone, so the rule could drop REQ-PACK-007's "say it is absent" with no inventory and stay
+    // green. What moved: the pin now holds the inventory's absence being said beside the source.
+    expect(text).toMatch(/with no inventory, the tokens come from the\s+stylesheet layer's token source\s+and the inventory's absence is said/i);
     expect(text).toMatch(/only where no token source exists at all does the surface\s+follow the files around it/i);
     expect(text).not.toMatch(/where no inventory exists or it reports no\s+token source/i);
     expect(text).not.toMatch(/where detection reports no\s+token source/i);
