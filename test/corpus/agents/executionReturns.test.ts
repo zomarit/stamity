@@ -92,6 +92,16 @@ describe("implementer — unresolvable cell, census closure, report and digest",
     expect(contract).toContain("at most 1,500 characters of prose");
     expect(contract).toContain("a refused write says so");
   });
+
+  // REQ-FLOW-125: the approaches a unit tried, dropped or reverted reach its reviewer as leads,
+  // through `/st-work`'s `choice:` record lines, so both the full result and the digest carry them.
+  it("names its choices in DONE and in the digest, each with its pointer", async () => {
+    const contract = section(await load(IMPLEMENTER), "Return contract");
+    expect(contract).toContain(
+      "`DONE` also carries its choices: each approach tried, dropped or reverted, one line each with its pointer (a commit, a `path:line`, a report line)",
+    );
+    expect(contract).toMatch(/`contract delta:` the census rows in full, or `none`; `choices:` [^;]*, or `none`; then at most 1,500/);
+  });
 });
 
 describe("fixer — ledger ids, sign-off, report and digest", () => {

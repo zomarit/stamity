@@ -44,7 +44,7 @@ digest):
 ```text
 - **Report and digest.** When the dispatch names a report path and this client grants the
   write, the full result goes to that exact path and nowhere else, and the final message is the
-  digest, one labelled line each: `status:`; `verdict:`; `confidence:` with its basis word;
+  digest, one labelled line each: `status:`; `verdict:`; `confidence:` with its basis word; on an `approve`, `rests on:` with its proof word and `blast radius:` with its rating;
   `report:` with the path; `findings:` every `Critical` and `Warning` as
   `<id> <locator> — <summary>`, then the `Minor` count with its ids and locators, ending
   `notes left out: <n>`; `security:` every security-relevant finding in full, or `none`;

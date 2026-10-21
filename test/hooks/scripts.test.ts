@@ -2780,6 +2780,43 @@ describe("buildReviewGateScript", () => {
     }
   });
 
+  it("reads one verdict beside an approval's rests on: and blast radius: lines (REQ-FLOW-126)", async () => {
+    const gate = await placeGate();
+
+    // The digest an approving reviewer returns since REQ-FLOW-126 and REQ-FLOW-127: two more
+    // labelled lines between the verdict and the report. Their values name neither label word, so
+    // the scan still finds the one verdict and the one confidence.
+    const digest = [
+      "status: DONE",
+      "verdict: approve",
+      "confidence: high — direct evidence",
+      "rests on: the guard refuses the write before the file opens (src/hooks/scripts.ts:3532) — run",
+      "blast radius: contained — one hook script, no shared contract; the cheapest catch is the gate's refusal test",
+      "report: .stamity/runs/r/reports/build-reviewer-r1.md",
+    ].join("\n");
+    run(gate, {
+      cwd: getRepo().dir,
+      input: subagentStop("rests-on", "stamity-reviewer", { last_assistant_message: digest }),
+    });
+
+    expect(readGateState().runs["rests-on"]).toMatchObject({ verdict: "approve", confidence: "high" });
+    expect(run(gate, { cwd: getRepo().dir, input: completion("rests-on") })).toEqual({
+      code: 0,
+      stdout: "",
+      stderr: "",
+    });
+
+    // The same lines are inside the scan: a value that named a second verdict would leave the
+    // text with none, which is why the reviewer contract keeps both words out of the values.
+    const named = digest.replace("— run", "— run; an earlier verdict: request-changes");
+    expect(named).not.toBe(digest);
+    run(gate, {
+      cwd: getRepo().dir,
+      input: subagentStop("rests-on-named", "stamity-reviewer", { last_assistant_message: named }),
+    });
+    expect(readGateState().runs["rests-on-named"]).toMatchObject({ verdict: "" });
+  });
+
   it("prefers a structured payload field over the text, where a client carries one", async () => {
     const gate = await placeGate();
 

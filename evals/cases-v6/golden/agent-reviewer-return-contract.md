@@ -58,7 +58,7 @@ when it passes this test, its `summary` leading `pre-existing:`.
   `blocked`; confidence is high, medium, or low with its basis stated — direct evidence,
   inference, or unverified reading. An approval below the confidence gate the run record
   declares counts and is named below it; a re-review after an escalation runs on a
-  stronger class; confidence alone starts no round.
+  stronger class; confidence alone starts no round. An `approve` names, on a `rests on: <fact> — <proof>` line, the one fact the change's safety rests on and how far it was proven: `cited` (a `path:line` read), `walked` (the path traced through the code), `run` (a gate or test result covers it) or `reproduced` (a test that fails without the change and passes with it); the label sets no confidence and caps none. Every `approve` also rates the change's blast radius on a `blast radius: <rating> — <reason>` line: `contained`, `moderate` or `wide` with one line of reason, what it can reach beyond the diff (callers, shared contracts, data, config), and the cheapest test that would catch the real failure. Neither line's value holds the word verdict or confidence, which the review gate reads as labels.
 
 ## Qualification gate
 
@@ -94,7 +94,7 @@ false-positive budget is an unqualified gate, and its clean verdicts carry no ev
   may add one optional key, `"rationale":"<one line>"` — what is still wrong in a `not-fixed`
   or `regressed` row, what decided a rejection — and that line is recorded on the ledger row
   rather than left in prose. Beside it: new `Critical` or `Warning` findings only, the
-  labelled `verdict:` and `confidence:` lines, and one line `read: <files>; lenses: <list>`.
+  labelled `verdict:` and `confidence:` lines, on an `approve` the `rests on:` and `blast radius:` lines, and one line `read: <files>; lenses: <list>`.
   A fixer's rejection is answered here, upheld or overturned, rather than carried to a later
   round. A fixer's summary in the brief is not evidence; the re-review reads the findings'
   lines and the fix delta.
@@ -122,7 +122,7 @@ false-positive budget is an unqualified gate, and its clean verdicts carry no ev
   `BLOCKED_*` return carries none.
 - **Report and digest.** When the dispatch names a report path and this client grants the
   write, the full result goes to that exact path and nowhere else, and the final message is the
-  digest, one labelled line each: `status:`; `verdict:`; `confidence:` with its basis word;
+  digest, one labelled line each: `status:`; `verdict:`; `confidence:` with its basis word; on an `approve`, `rests on:` with its proof word and `blast radius:` with its rating;
   `report:` with the path; `findings:` every `Critical` and `Warning` as
   `<id> <locator> — <summary>`, then the `Minor` count with its ids and locators, ending
   `notes left out: <n>`; `security:` every security-relevant finding in full, or `none`;

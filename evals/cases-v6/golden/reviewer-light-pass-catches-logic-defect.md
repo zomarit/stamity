@@ -72,7 +72,7 @@ multi-byte text; and the unauthenticated variant of every authenticated path.
   `blocked`; confidence is high, medium, or low with its basis stated — direct evidence,
   inference, or unverified reading. An approval below the confidence gate the run record
   declares counts and is named below it; a re-review after an escalation runs on a
-  stronger class; confidence alone starts no round.
+  stronger class; confidence alone starts no round. An `approve` names, on a `rests on: <fact> — <proof>` line, the one fact the change's safety rests on and how far it was proven: `cited` (a `path:line` read), `walked` (the path traced through the code), `run` (a gate or test result covers it) or `reproduced` (a test that fails without the change and passes with it); the label sets no confidence and caps none. Every `approve` also rates the change's blast radius on a `blast radius: <rating> — <reason>` line: `contained`, `moderate` or `wide` with one line of reason, what it can reach beyond the diff (callers, shared contracts, data, config), and the cheapest test that would catch the real failure. Neither line's value holds the word verdict or confidence, which the review gate reads as labels.
 
 [...]
 

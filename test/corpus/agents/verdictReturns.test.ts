@@ -217,6 +217,67 @@ describe("reviewer — a re-review answers every prior id", () => {
 });
 
 /**
+ * The two lines an approval carries (REQ-FLOW-126, REQ-FLOW-127) and the run record's `choice:`
+ * lines a reviewer reads as leads (REQ-FLOW-125, REQ-CTX-017). Each has a writer in one file and a
+ * reader in another, so both ends are read here: the reviewer states the line, and `/st-work`
+ * carries it to the proof block, to the record's `## Blast radius` section, or to the record.
+ */
+describe("reviewer — an approval names what it rests on and how far it reaches", () => {
+  it("asks both lines of an approve, with the four proof words and the three ratings", async () => {
+    const gates = collapse(
+      sectionOf(await load("agents/stamity-reviewer.md"), "Evidence and posting gates") ?? "",
+    );
+
+    expect(gates).toContain("An `approve` names, on a `rests on: <fact> — <proof>` line, the one fact");
+    for (const word of ["`cited`", "`walked`", "`run`", "`reproduced`"]) {
+      expect(gates, `proof word ${word}`).toContain(word);
+    }
+    expect(gates).toContain("the label sets no confidence and caps none");
+    expect(gates).toContain("Every `approve` also rates the change's blast radius on a `blast radius: <rating> — <reason>` line");
+    expect(gates).toMatch(/`contained`, `moderate` or `wide` with one line of reason/);
+    expect(gates).toContain("the cheapest test that would catch the real failure");
+    // The review gate reads `verdict` and `confidence` as labels anywhere in the reviewer's text
+    // (`src/hooks/scripts.ts`, VERDICT_LABEL and CONFIDENCE_LABEL), so the two values keep out of
+    // both words; the gate's own fixture proves the scan reads one verdict beside them.
+    expect(gates).toContain("Neither line's value holds the word verdict or confidence");
+  });
+
+  it("names both labels in the digest and in a re-review's labelled lines", async () => {
+    const file = await load("agents/stamity-reviewer.md");
+    const contract = collapse(sectionOf(file, "Return contract") ?? "");
+    const digest = contract.slice(contract.indexOf("**Report and digest.**"));
+    const nit = collapse(sectionOf(file, "Nit policy") ?? "");
+
+    expect(digest).toMatch(/`confidence:` with its basis word; on an `approve`, `rests on:` [^;]*and `blast radius:` [^;]*; `report:`/);
+    expect(nit).toMatch(/labelled `verdict:` and `confidence:` lines, on an `approve` the `rests on:` and `blast radius:` lines, and one line `read:/);
+  });
+
+  it("reads the run record's choice lines as leads, never as evidence", async () => {
+    const reading = collapse(sectionOf(await load("agents/stamity-reviewer.md"), "Reading the change") ?? "");
+
+    expect(reading).toMatch(
+      /a lead to check against the diff, never evidence\. So are the run record's `choice:` lines, [^.]*read from `record\.md` beside the report folder/,
+    );
+    expect(reading).toContain("claims nothing about what works");
+  });
+
+  it("has /st-work carry each line to its reader", async () => {
+    const work = collapse((await load("commands/st-work.md")).parsed.body);
+
+    // The proof block lists each approval's fact; the record keeps one line per choice a digest
+    // names; the pull request body's section is rewritten from the last approval, never appended.
+    expect(work).toContain("and each escalation's effort step or `effort: not settable`; each approval's `rests on:` line");
+    expect(work).toContain(
+      "one `- <UTC> choice: <unit> tried | dropped | reverted <approach> — <pointer>` record line per choice",
+    );
+    expect(work).toContain("which that unit's reviewer and the whole-branch pass read");
+    expect(work).toContain(
+      "the record's `## Blast radius` section, which the run keeps directly after `## Frame` and rewrites in place from each approval's `blast radius:` and `rests on:` lines",
+    );
+  });
+});
+
+/**
  * The five roles that read the change themselves through read-only git (REQ-CTX-017): the
  * four verdict roles plus the spec-author. Each carries a `## Reading the change` section.
  */

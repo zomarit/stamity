@@ -52,14 +52,14 @@ Governing text — the same file, "Nit policy" and "Return contract" (report and
   may add one optional key, `"rationale":"<one line>"` — what is still wrong in a `not-fixed`
   or `regressed` row, what decided a rejection — and that line is recorded on the ledger row
   rather than left in prose. Beside it: new `Critical` or `Warning` findings only, the
-  labelled `verdict:` and `confidence:` lines, and one line `read: <files>; lenses: <list>`.
+  labelled `verdict:` and `confidence:` lines, on an `approve` the `rests on:` and `blast radius:` lines, and one line `read: <files>; lenses: <list>`.
   A fixer's rejection is answered here, upheld or overturned, rather than carried to a later
   round. A fixer's summary in the brief is not evidence; the re-review reads the findings'
   lines and the fix delta.
 [...]
 - **Report and digest.** When the dispatch names a report path and this client grants the
   write, the full result goes to that exact path and nowhere else, and the final message is the
-  digest, one labelled line each: `status:`; `verdict:`; `confidence:` with its basis word;
+  digest, one labelled line each: `status:`; `verdict:`; `confidence:` with its basis word; on an `approve`, `rests on:` with its proof word and `blast radius:` with its rating;
   `report:` with the path; `findings:` every `Critical` and `Warning` as
   `<id> <locator> — <summary>`, then the `Minor` count with its ids and locators, ending
   `notes left out: <n>`; `security:` every security-relevant finding in full, or `none`;
