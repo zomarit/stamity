@@ -8,7 +8,7 @@ title: Skills
 
 A skill is a procedure an agent runs when the work calls for it. Its `description` is the trigger a client matches against the task at hand — it is the only part always in context, so it carries the whole activation claim. Authored in `content/skills/st-<id>/SKILL.md`. Each heading is the name the skill is emitted and invoked under: the frontmatter `id` behind the `st-` prefix the invocable classes carry — the same prefix the path above spells out. The bare id is the `id:` line inside that `SKILL.md`.
 
-7 skills.
+8 skills.
 
 ## `st-dep-audit`
 
@@ -41,6 +41,14 @@ Guides the first real change in a repository this setup was just installed into 
 - **Tags:** `planning`
 - **Load:** `on-demand`
 - **Obsolete when:** clients walk a newcomer through a proven change on their own code at session start, leaving no guided first run to script
+
+## `st-plain`
+
+Rewrites a given text in plain words, or restates the last reply plainly when no text is given, keeping every fact, number, path, command and caveat. Triggers when someone asks for plain words, a simpler version, or the last answer said plainly.
+
+- **Tags:** `maintenance`
+- **Load:** `on-demand`
+- **Obsolete when:** every target client restates a text plainly on request while keeping each fact, locator, command, open gap and refusal as it stood
 
 ## `st-qa`
 

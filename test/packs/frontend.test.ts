@@ -36,7 +36,7 @@ import { TRIGGER_DOMAINS } from "../corpus/skills/triggerDomains.ts";
  *     core's. Distinctive nouns are declared per skill and asserted in both directions, each
  *     pack skill's trigger phrase appears in no core skill's description, each core trigger
  *     phrase (`test/corpus/skills/triggerDomains.ts`, the table the core roster reads) appears
- *     in neither pack description, and the nine descriptions open on nine different verbs.
+ *     in neither pack description, and the ten descriptions open on ten different verbs.
  *
  * Plan 018 file 2 (u3-frontend-set; REQ-PACK-021, REQ-PACK-022) adds `/st-ui-review`, the pack's
  * one command, which reviews a named screen or flow through the core design-quality agent and
@@ -128,6 +128,9 @@ const SKILLS: readonly ToolSkill[] = [
 const CORE_NEIGHBOURS: readonly { relPath: string; distinctive: string[] }[] = [
   { relPath: "skills/st-dep-audit/SKILL.md", distinctive: ["dependency", "advisories", "licenses"] },
   { relPath: "skills/st-verify/SKILL.md", distinctive: ["axis", "gate", "judgment"] },
+  // Added in plan 018 file 2 (u9-st-plain): the core's writing skill, whose nouns stay out of both
+  // pack descriptions and theirs out of its own, the two directions the cases below assert.
+  { relPath: "skills/st-plain/SKILL.md", distinctive: ["plain", "reply", "simpler"] },
 ];
 
 /** One walk of the pack and one of the core; neither changes under the suite. */
@@ -307,7 +310,9 @@ describe("frontend skills — anti-shadowing on the trigger surface", () => {
     }
   });
 
-  it("keeps dep-audit and verify on their own nouns and clear of these two domains", async () => {
+  // TEST CHANGE, justified (u9-st-plain, plan 018 file 2): CORE_NEIGHBOURS gained plain, so the
+  // title names the three neighbours the loop now reads; the loop is unchanged.
+  it("keeps dep-audit, verify and plain on their own nouns and clear of these two domains", async () => {
     const files = await Promise.all(CORE_NEIGHBOURS.map((neighbour) => loadCore(neighbour.relPath)));
     for (const [index, neighbour] of CORE_NEIGHBOURS.entries()) {
       const text = description(files[index]!).toLowerCase();
@@ -322,8 +327,9 @@ describe("frontend skills — anti-shadowing on the trigger surface", () => {
 
   it("names each pack skill's trigger phrase in no core skill's description", async () => {
     const coreSkills = (await coreFiles).filter((file) => /^skills\/[^/]+\/SKILL\.md$/.test(file.relPath));
-    // Non-degenerate: the core's seven skills, each read.
-    expect(coreSkills).toHaveLength(7);
+    // Non-degenerate: the core's eight skills, each read.
+    // TEST CHANGE, justified (u9-st-plain, plan 018 file 2): `plain` joined the core (REQ-FLOW-129).
+    expect(coreSkills).toHaveLength(8);
 
     const own = await Promise.all(SKILLS.map((skill) => load(skill.relPath)));
     for (const [index, skill] of SKILLS.entries()) {
@@ -354,7 +360,9 @@ describe("frontend skills — anti-shadowing on the trigger surface", () => {
     }
   });
 
-  it("opens the seven core and two pack descriptions on nine different verbs", async () => {
+  // TEST CHANGE, justified (u9-st-plain, plan 018 file 2): the core holds eight skills, so the
+  // title's counts move; the assertions read TRIGGER_DOMAINS and are unchanged.
+  it("opens the eight core and two pack descriptions on ten different verbs", async () => {
     const files = [
       ...(await Promise.all(TRIGGER_DOMAINS.map((row) => loadCore(row.relPath)))),
       ...(await Promise.all(SKILLS.map((skill) => load(skill.relPath)))),

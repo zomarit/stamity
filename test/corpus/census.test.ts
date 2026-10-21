@@ -22,7 +22,7 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
 
 /**
  * The final census: the shipped corpus holds EXACTLY the rosters below —
- * 1 charter, 9 commands, 10 agents, 7 skills, 12 rules, 3 core hook scripts —
+ * 1 charter, 9 commands, 10 agents, 8 skills, 12 rules, 3 core hook scripts —
  * and nothing the engine cannot address. This is framework CI for canonical
  * content (`stamity validate` deliberately checks user content only, so the
  * corpus is validated here, where it is authored).
@@ -67,11 +67,12 @@ const AGENT_CENSUS: readonly string[] = [
 ];
 
 /**
- * The seven skills. `unattended` joined 2026-10-15 (plan 021-cloud-runs-01, unit
+ * The eight skills. `unattended` joined 2026-10-15 (plan 021-cloud-runs-01, unit
  * u9-unattended-skill): the skill an unattended run is sent to by name, so the
  * roster, its count word and the length assertion below move together.
  * `browser-evidence` and `design-system-detect` left for the `frontend` pack
- * (plan 018, u13-frontend-move, REQ-PACK-007), nine to seven.
+ * (plan 018, u13-frontend-move, REQ-PACK-007), nine to seven. `plain` joined in plan
+ * 018 file 2 (u9-st-plain, REQ-FLOW-129), seven to eight.
  */
 const SKILL_CENSUS: readonly string[] = [
   "onboard",
@@ -81,6 +82,7 @@ const SKILL_CENSUS: readonly string[] = [
   "dep-audit",
   "learn",
   "unattended",
+  "plain",
 ];
 
 /** The twelve rules. */
@@ -194,10 +196,12 @@ describe("census — shipped corpus", () => {
   // TEST CHANGE, justified (u13-frontend-move, plan 018): browser-evidence and
   // design-system-detect moved to the frontend pack (REQ-PACK-007), so the core
   // roster is seven; the title's count word and the length move with it.
-  it("skills: exactly the seven procedures", async () => {
+  // TEST CHANGE, justified (u9-st-plain, plan 018 file 2): the core gained `plain`
+  // (REQ-FLOW-129), so the roster is eight; the title's count word and the length move with it.
+  it("skills: exactly the eight procedures", async () => {
     const ids = await idsOf("skill");
 
-    expect(ids).toHaveLength(7);
+    expect(ids).toHaveLength(8);
     expectExactRoster("skill", ids, SKILL_CENSUS);
   });
 

@@ -151,7 +151,7 @@ const SKILLS: readonly FlowSkill[] = [
   },
 ];
 
-// TRIGGER_DOMAINS, the seven core skills' exclusive trigger phrases, lives in ./triggerDomains.ts,
+// TRIGGER_DOMAINS, the eight core skills' exclusive trigger phrases, lives in ./triggerDomains.ts,
 // which test/packs/frontend.test.ts reads too (u13-frontend-move, review/25).
 
 /**
@@ -258,7 +258,9 @@ describe("flow skills — frontmatter contract", () => {
 // holds seven; their two rows moved to test/packs/frontend.test.ts, which keeps both
 // directions: each pack phrase out of every core description, each phrase of this table out
 // of both pack descriptions, and the seven core verbs and the two pack verbs all different.
-describe("skill roster — anti-shadowing across all seven descriptions", () => {
+// TEST CHANGE, justified (u9-st-plain, plan 018 file 2): `plain` joined the core (REQ-FLOW-129),
+// so the roster holds eight; the titles' count word follows TRIGGER_DOMAINS again.
+describe("skill roster — anti-shadowing across all eight descriptions", () => {
   it("gives every skill an exclusive trigger domain", async () => {
     const files = await Promise.all(TRIGGER_DOMAINS.map((row) => load(row.relPath)));
     const descriptions = files.map(description);
@@ -277,7 +279,7 @@ describe("skill roster — anti-shadowing across all seven descriptions", () => 
     }
   });
 
-  it("opens all seven on different verbs", async () => {
+  it("opens all eight on different verbs", async () => {
     const files = await Promise.all(TRIGGER_DOMAINS.map((row) => load(row.relPath)));
     const leading = files.map((file) => description(file).split(/\s+/)[0]!.toLowerCase());
 
