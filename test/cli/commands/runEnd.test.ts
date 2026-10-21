@@ -819,6 +819,76 @@ describe("stamity run end", () => {
       expect(JSON.stringify(rest.calls)).not.toContain(fragment);
     });
 
+    describe("the record's blast radius (u9, REQ-FLOW-127)", () => {
+      const section = (row: string): string[] => ["## Blast radius", "", row];
+      const withSection = async (repo: string, rel: string, row: string): Promise<void> => {
+        await writeFile(join(repo, rel), `${readFileSync(join(repo, rel), "utf8")}\n${section(row).join("\n")}\n`);
+      };
+
+      it("keeps the overnight run's section when the walk's own record has none", async () => {
+        const { repo } = await walk(RUN);
+        await put(repo, `${RUN_DIR}/morning.md`, morningList("the delta, answered Q1→1"));
+        await withSection(repo, `${RUN_DIR}/record.md`, "- contained — the overnight approval");
+
+        const { code, doc } = await run(repo, WALK_END("Morning walk"));
+
+        expect(code).toBe(0);
+        expect(doc["notDone"]).toEqual([]);
+        const lines = sent().split("\n");
+        const at = lines.indexOf("## Blast radius");
+        expect(at).toBeGreaterThan(lines.indexOf("## How to answer"));
+        expect(lines.slice(at)).toEqual([...section("- contained — the overnight approval"), "", MARKER]);
+      });
+
+      it("takes the walk's own section over the overnight one", async () => {
+        const { repo } = await walk(RUN);
+        await put(repo, `${RUN_DIR}/morning.md`, morningList("the delta, answered Q1→1"));
+        await withSection(repo, `${RUN_DIR}/record.md`, "- contained — the overnight approval");
+        await withSection(repo, WALK_RECORD, "- wide — the walk's own approval");
+
+        const { code } = await run(repo, WALK_END("Morning walk"));
+
+        expect(code).toBe(0);
+        const body = sent();
+        expect(body).toContain("- wide — the walk's own approval");
+        expect(body).not.toContain("the overnight approval");
+        expect(body.split("\n").at(-1)).toBe(MARKER);
+      });
+
+      it("leaves out a section the outbound screen matches, naming it on stderr and in notDone, none of its value", async () => {
+        const { repo } = await walk(RUN);
+        await put(repo, `${RUN_DIR}/morning.md`, morningList("the delta, answered Q1→1"));
+        // Not staged by the walk, so the push scan leaves it out; the outbound screen still reads it.
+        await withSection(repo, `${RUN_DIR}/record.md`, `- contained — the key is ${TOKEN}`);
+
+        const { code, doc, stdout, stderr } = await run(repo, WALK_END("Morning walk"));
+
+        expect(code).toBe(0);
+        const why = `blast radius not posted: the outbound screen matched ${RUN_DIR}/record.md's section at its line 3 (github-token)`;
+        expect(doc["notDone"]).toEqual([why]);
+        expect(stderr).toContain(why);
+        const body = sent();
+        expect(body).not.toContain("## Blast radius");
+        expect(body.startsWith(`# Morning list — ${RUN}`)).toBe(true);
+        expect(body.split("\n").at(-1)).toBe(MARKER);
+        const fragment = TOKEN.slice(4, 16);
+        expect(stdout).not.toContain(fragment);
+        expect(stderr).not.toContain(fragment);
+        expect(JSON.stringify(rest.calls)).not.toContain(fragment);
+      });
+
+      it("appends the overnight section to the walk's fixed body when the resumed list is missing", async () => {
+        const { repo } = await walk(RUN);
+        await withSection(repo, `${RUN_DIR}/record.md`, "- contained — the overnight approval");
+
+        const { code, doc } = await run(repo, WALK_END("Morning walk"));
+
+        expect(code).toBe(0);
+        expect(doc["notDone"]).toEqual([`pull request body not refreshed: the morning list of ${RUN} is missing`]);
+        expect(sent()).toBe(`Run \`${WALK}\`, attended. Its record: \`${WALK_RECORD}\`.\n\n${section("- contained — the overnight approval").join("\n")}\n\n<!-- stamity:run ${WALK} -->`);
+      });
+    });
+
     it("reads the prerequisites since the walk's own Base: where the resumed record names none, saying so", async () => {
       const { repo } = await walk(RUN, { firstBase: false });
       await put(repo, `${RUN_DIR}/morning.md`, morningList("the delta"));

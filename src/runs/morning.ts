@@ -61,6 +61,8 @@ export const PR_BODY_MIN_CHARS = 1_000;
 export const OUTBOUND_LINE_PAST_CAP = "line-past-cap";
 /** At most this many `qa` questions: the person's QA rows (REQ-FLOW-094). */
 export const MORNING_QA_MAX = 3;
+/** The run record's section a pull request body carries after the list (REQ-FLOW-127), as its heading names it. */
+export const BLAST_RADIUS = "Blast radius";
 
 export type MorningKind = "qa" | "decision" | "prerequisite" | "held";
 
@@ -320,34 +322,95 @@ function names(text: string, name: string): boolean {
 }
 
 /**
+ * The run record's `## Blast radius` section (REQ-FLOW-127), the text a pull
+ * request body carries after the list: from the first line that is exactly
+ * `## Blast radius`, that heading included, up to the next `## ` heading
+ * (a `### Blast radius` subheading is not one), trailing blank lines trimmed.
+ * Each line is cleaned as the body prints it (control and bidi characters and
+ * the Unicode tag block dropped), so the text a caller screens is the text
+ * that posts. `null` when the record has no such heading, or nothing but
+ * blank lines under it.
+ */
+export function blastRadiusSection(record: string): string | null {
+  const lines = record.split(/\r?\n/);
+  const at = lines.indexOf(`## ${BLAST_RADIUS}`);
+  if (at === -1) return null;
+  const next = lines.findIndex((line, index) => index > at && line.startsWith("## "));
+  const section = lines.slice(at, next === -1 ? lines.length : next).map(bodyText);
+  while (section.length > 1 && (section.at(-1) ?? "").trim() === "") section.pop();
+  return section.length === 1 ? null : section.join("\n");
+}
+
+/** The `## Blast radius` section given as text, as {@link fitBody} renders a section: its heading set aside, every line cleaned; `null` when no row is left. */
+function blastRadiusRows(section: string | null | undefined): { readonly name: string; readonly lines: readonly string[] } | null {
+  if (section === undefined || section === null) return null;
+  const lines = section.split(/\r?\n/);
+  if (lines[0] === `## ${BLAST_RADIUS}`) lines.shift();
+  const rows: string[] = lines.map(bodyText);
+  while (rows.length > 0 && (rows[0] ?? "").trim() === "") rows.shift();
+  while (rows.length > 0 && (rows.at(-1) ?? "").trim() === "") rows.pop();
+  return rows.length === 0 ? null : { name: BLAST_RADIUS, lines: rows };
+}
+
+/** The pointer a cut body names when it carries the run record's section. */
+const RECORD_POINTER = "the whole `## Blast radius` section is the run's `record.md`";
+
+/**
+ * A body with no morning list behind it (an attended run's one-liner, or the
+ * fixed body a missing or refused list leaves) followed by the run record's
+ * `## Blast radius` section, then `<!-- stamity:run <run-id> -->` last: inside
+ * `maxChars` ({@link PR_BODY_MAX_CHARS} by default), the section cut to its
+ * first rows as {@link prBodyFrom} cuts one, so the marker stays last. With no
+ * section, `lead` is returned unchanged. Not screened here, as `prBodyFrom` is not.
+ *
+ * Throws when `runId` is not a run id or `maxChars` is under {@link PR_BODY_MIN_CHARS}.
+ */
+export function withBlastRadius(lead: string, runId: string, section: string | null, opts: { maxChars?: number } = {}): string {
+  runRelPath(runId); // throws on a value that is not a run id, so no text can close the marker early
+  const maxChars = checkedMaxChars(opts.maxChars);
+  const rows = blastRadiusRows(section);
+  if (rows === null) return lead;
+  return fitBody(lead, [rows], runMarker(runId), `_Cut to fit ${maxChars} characters: ${RECORD_POINTER}._`, maxChars, 1);
+}
+
+/** `maxChars` as given, else {@link PR_BODY_MAX_CHARS}; throws when it is under {@link PR_BODY_MIN_CHARS}. */
+function checkedMaxChars(given: number | undefined): number {
+  const maxChars = given ?? PR_BODY_MAX_CHARS;
+  if (!Number.isInteger(maxChars) || maxChars < PR_BODY_MIN_CHARS) {
+    throw new EngineError(`maxChars ${maxChars} is under ${PR_BODY_MIN_CHARS}`, {
+      code: "VALIDATION_ERROR",
+      why: "the body must hold the title, every heading, the pointer to the whole text and the marker",
+    });
+  }
+  return maxChars;
+}
+
+/**
  * The pull request body made from a morning list: the title, each section (a
  * section with no rows reading `none`), the inferred prerequisite rows the
- * section does not already name, the questions with their option numbers, and
+ * section does not already name, the questions with their option numbers,
+ * the run record's `## Blast radius` section when `opts.blastRadius` carries
+ * one ({@link blastRadiusSection}'s text), and
  * `<!-- stamity:run <run-id> -->` as the last line, so a later run recognises
  * its own body (u4's marker rule, u4's {@link runMarker}). Control and bidi
  * characters and the Unicode tag block are dropped.
  *
  * Past `maxChars` ({@link PR_BODY_MAX_CHARS} by default) the body keeps the
  * title, every heading, `## Refused` and `## Not done:` first, then the other
- * sections' first rows, one row of each a round, and names `morning.md` for
- * the rest; a cut section closes any fence its kept rows left open, then ends
- * on `…`, and the marker stays
+ * sections' first rows, one row of each a round, then the blast radius rows
+ * the rest leaves room for (so that section is the first cut), and names
+ * `morning.md` for the rest; a cut section closes any fence its kept rows
+ * left open, then ends on `…`, and the marker stays
  * last. A list that does not parse, or that names another run, becomes a
  * `## Not done:` body naming its problems, so a run still hands off. The body
  * is not screened here: the caller runs {@link screenOutbound} on it.
  *
  * Throws when `runId` is not a run id or `maxChars` is under {@link PR_BODY_MIN_CHARS}.
  */
-export function prBodyFrom(text: string, runId: string, opts: { inferred?: readonly PrereqRow[]; maxChars?: number } = {}): string {
+export function prBodyFrom(text: string, runId: string, opts: { inferred?: readonly PrereqRow[]; maxChars?: number; blastRadius?: string } = {}): string {
   const path = runRelPath(runId, MORNING_FILE); // throws on a value that is not a run id, so no text can close the marker early
   const marker = runMarker(runId);
-  const maxChars = opts.maxChars ?? PR_BODY_MAX_CHARS;
-  if (!Number.isInteger(maxChars) || maxChars < PR_BODY_MIN_CHARS) {
-    throw new EngineError(`maxChars ${maxChars} is under ${PR_BODY_MIN_CHARS}`, {
-      code: "VALIDATION_ERROR",
-      why: "the body must hold the title, every heading, the pointer to morning.md and the marker",
-    });
-  }
+  const maxChars = checkedMaxChars(opts.maxChars);
   const title = `# Morning list — ${runId}`;
   const parsed = parseMorning(text);
   const problems = !parsed.ok
@@ -374,16 +437,23 @@ export function prBodyFrom(text: string, runId: string, opts: { inferred?: reado
       sections.push({ name, lines: (lines.length === 0 ? [MORNING_EMPTY] : lines).map(bodyText) });
     }
   }
-  return fitBody(title, sections, marker, `_Cut to fit ${maxChars} characters: the whole list is \`${path}\`._`, maxChars);
+  const blast = blastRadiusRows(opts.blastRadius);
+  if (blast === null) return fitBody(title, sections, marker, `_Cut to fit ${maxChars} characters: the whole list is \`${path}\`._`, maxChars);
+  return fitBody(title, [...sections, blast], marker, `_Cut to fit ${maxChars} characters: the whole list is \`${path}\`; ${RECORD_POINTER}._`, maxChars, 1);
 }
 
-/** The body whole when it fits, else cut as {@link prBodyFrom} names. */
+/**
+ * The body whole when it fits, else cut as {@link prBodyFrom} names; the last
+ * `tail` sections are filled only after every other section's rows, so they
+ * are the first cut.
+ */
 function fitBody(
   title: string,
   sections: readonly { readonly name: string; readonly lines: readonly string[] }[],
   marker: string,
   pointer: string,
   maxChars: number,
+  tail = 0,
 ): string {
   const render = (kept: readonly (readonly string[])[], cut: readonly boolean[], cutAny: boolean): string => {
     const out = [title, ""];
@@ -446,12 +516,21 @@ function fitBody(
     }
   }
   // Then the other sections' first rows, one row of each section a round, so every section keeps its head.
-  const rest = sections.flatMap((_section, at) => (first.includes(at) ? [] : [at]));
+  const tailFrom = sections.length - tail;
+  const rest = sections.flatMap((_section, at) => (first.includes(at) || at >= tailFrom ? [] : [at]));
   for (let row = 0; rest.some((at) => cut[at] !== true && row < (sections[at]?.lines.length ?? 0)); row += 1) {
     for (const at of rest) {
       const line = sections[at]?.lines[row];
       if (line === undefined || cut[at] === true) continue;
       if (!take(at, line)) cutAt(at);
+    }
+  }
+  // Last the tail sections, each in order with what the rest left, so they are the first cut.
+  for (let at = tailFrom; at < sections.length; at += 1) {
+    for (const line of sections[at]?.lines ?? []) {
+      if (take(at, line)) continue;
+      cutAt(at);
+      break;
     }
   }
   return render(kept, cut, true);

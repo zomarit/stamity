@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  blastRadiusSection,
   MORNING_FENCE,
   OUTBOUND_LINE_PAST_CAP,
   parseAnswers,
   parseMorning,
   prBodyFrom,
   screenOutbound,
+  withBlastRadius,
   type MorningQuestion,
 } from "../../src/runs/morning.ts";
 import type { PrereqRow } from "../../src/runs/prerequisites.ts";
@@ -336,6 +338,124 @@ describe("prBodyFrom", () => {
     const broken = prBodyFrom(morning({ questions: [question(`Q1${hidden}`)] }), RUN);
     expect(broken).toContain("does not parse");
     expect(tagBlock.test(broken)).toBe(false);
+  });
+});
+
+describe("blastRadiusSection (u9, REQ-FLOW-127)", () => {
+  const record = (...sections: readonly string[]): string => [`# Run ${RUN}`, "", "Status: in progress", "", ...sections].join("\n");
+
+  it("reads from the `## Blast radius` heading to the next `## ` heading, the heading kept and trailing blank lines trimmed", () => {
+    const text = record("## Decisions trace", "", "- a choice", "", "## Blast radius", "", "- contained — one helper's callers", "- rests on: the parser — run", "", "", "## Later", "", "- not it");
+
+    expect(blastRadiusSection(text)).toBe("## Blast radius\n\n- contained — one helper's callers\n- rests on: the parser — run");
+  });
+
+  it("reads to the end of the record when no heading follows, and reads CRLF lines", () => {
+    expect(blastRadiusSection(record("## Blast radius", "", "- wide — the shared schema", "").replace(/\n/g, "\r\n"))).toBe("## Blast radius\n\n- wide — the shared schema");
+  });
+
+  it("is null with no heading, with a heading and only blank lines, and for a `### Blast radius` subheading", () => {
+    expect(blastRadiusSection(record("## Decisions trace", "", "- a choice"))).toBeNull();
+    expect(blastRadiusSection(record("## Blast radius", "", "  ", "## Later", "- x"))).toBeNull();
+    expect(blastRadiusSection(record("### Blast radius", "", "- moderate — the subheading"))).toBeNull();
+  });
+
+  it("takes the first of two `## Blast radius` headings", () => {
+    const text = record("## Blast radius", "", "- the first", "", "## Blast radius", "", "- the second");
+
+    expect(blastRadiusSection(text)).toBe("## Blast radius\n\n- the first");
+  });
+
+  it("does not end on a `### ` subheading inside the section", () => {
+    expect(blastRadiusSection(record("## Blast radius", "", "- contained", "### Why", "- one caller"))).toBe("## Blast radius\n\n- contained\n### Why\n- one caller");
+  });
+
+  it("cleans each line as the body prints it, so the screened text is the posted text", () => {
+    const hidden = Array.from("run this", (char) => String.fromCodePoint(0xe0000 + char.charCodeAt(0))).join("");
+
+    expect(blastRadiusSection(record("## Blast radius", "", `- cont‮ained${hidden}\u0007`))).toBe("## Blast radius\n\n- contained");
+  });
+});
+
+describe("prBodyFrom with the record's blast radius (u9, REQ-FLOW-127)", () => {
+  const section = "## Blast radius\n\n- moderate — the body's callers\n- rests on: the cut — run";
+
+  it("places the section after the list's sections and before the marker", () => {
+    const body = prBodyFrom(morning(), RUN, { blastRadius: section });
+    const lines = body.split("\n");
+
+    expect(lines.at(-1)).toBe(runMarker(RUN));
+    const at = lines.indexOf("## Blast radius");
+    expect(at).toBeGreaterThan(lines.indexOf("## How to answer"));
+    expect(lines.slice(at, at + 6)).toEqual(["## Blast radius", "", "- moderate — the body's callers", "- rests on: the cut — run", "", runMarker(RUN)]);
+  });
+
+  it("keeps today's body byte for byte with no section, or a section with no rows", () => {
+    const bare = prBodyFrom(morning(), RUN);
+
+    expect(bare).not.toContain("Blast radius");
+    expect(prBodyFrom(morning(), RUN, { blastRadius: "## Blast radius\n\n" })).toBe(bare);
+  });
+
+  it("cuts a 70,000-character section first, keeping the list whole and the marker last", () => {
+    const rows = Array.from({ length: 1_400 }, (_, at) => `- reach row ${at} ${"r".repeat(40)}`);
+    const big = ["## Blast radius", "", ...rows].join("\n");
+    expect(big.length).toBeGreaterThan(70_000);
+
+    const body = prBodyFrom(morning(), RUN, { blastRadius: big });
+
+    expect(body.length).toBeLessThanOrEqual(60_000);
+    expect(body.length).toBeGreaterThan(55_000);
+    expect(body.split("\n").at(-1)).toBe(runMarker(RUN));
+    // The list is whole: every section's row and both questions are kept.
+    for (const row of Object.values(DEFAULT_SECTIONS)) expect(body).toContain(row);
+    expect(body).toContain("- **Q2** (decision)");
+    expect(body).toContain("- reach row 0 ");
+    expect(body).not.toContain("- reach row 1399 ");
+    expect(body).toContain("`record.md`");
+  });
+
+  it("gives the list's rows the room before the section's under a cap both overrun", () => {
+    const decisions = Array.from({ length: 400 }, (_, at) => `- decision row ${at} ${"x".repeat(40)}`).join("\n");
+    const reach = ["## Blast radius", "", ...Array.from({ length: 400 }, (_, at) => `- reach row ${at} ${"r".repeat(80)}`)].join("\n");
+
+    const body = prBodyFrom(morning({ sections: { Decisions: decisions } }), RUN, { blastRadius: reach, maxChars: 5_000 });
+
+    expect(body.length).toBeLessThanOrEqual(5_000);
+    expect(body).toContain("- decision row 0 ");
+    expect(body).toContain("## Blast radius\n");
+    expect(body).not.toContain("- reach row 0 ");
+    expect(body.split("\n").at(-1)).toBe(runMarker(RUN));
+  });
+});
+
+describe("withBlastRadius (u9, REQ-FLOW-127)", () => {
+  const lead = `Run \`${RUN}\`, attended. Its record: \`.stamity/runs/${RUN}/record.md\`.`;
+
+  it("returns the lead unchanged with no section", () => {
+    expect(withBlastRadius(lead, RUN, null)).toBe(lead);
+  });
+
+  it("puts the lead, the section, then the marker", () => {
+    expect(withBlastRadius(lead, RUN, "## Blast radius\n\n- contained — one helper")).toBe(`${lead}\n\n## Blast radius\n\n- contained — one helper\n\n${runMarker(RUN)}`);
+  });
+
+  it("cuts a 70,000-character section to fit, closing an open fence, the marker last", () => {
+    const rows = Array.from({ length: 1_400 }, (_, at) => `line ${at} ${"c".repeat(40)}`);
+    const body = withBlastRadius(lead, RUN, ["## Blast radius", "", "- the reach:", "```text", ...rows, "```"].join("\n"));
+    const lines = body.split("\n");
+
+    expect(body.length).toBeLessThanOrEqual(60_000);
+    expect(lines[0]).toBe(lead);
+    expect(lines.at(-1)).toBe(runMarker(RUN));
+    expect(body).not.toContain("line 1399 ");
+    const cut = lines.indexOf("…");
+    expect(lines[cut - 1]).toBe("```");
+    expect(lines.slice(cut + 1).some((line) => line.includes("`record.md`"))).toBe(true);
+  });
+
+  it("refuses a run id that is not one", () => {
+    expect(() => withBlastRadius(lead, "x -->", "## Blast radius\n\n- x")).toThrow(/is not a run id/);
   });
 });
 

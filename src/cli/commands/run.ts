@@ -8,7 +8,7 @@ import { isPlainObject, parseJsonStrict } from "../../config/parse.ts";
 import { personOnlyVerdict } from "../../hooks/personOnly.ts";
 import { readHookDefinitions } from "../../hooks/userHooks.ts";
 import { RUN_ENDED_MARKER_FILE } from "../../mcp/env.ts";
-import { MORNING_FILE, prBodyFrom, screenOutbound } from "../../runs/morning.ts";
+import { blastRadiusSection, MORNING_FILE, prBodyFrom, screenOutbound, withBlastRadius } from "../../runs/morning.ts";
 import { inferPrerequisites, type PrereqRow } from "../../runs/prerequisites.ts";
 import { ensureDraftPr, HOST_NAME, resolveRepo, type PrOutcome } from "../../runs/pullRequest.ts";
 import { checkLauncherArgv } from "../../shared/launcherAllowlist.ts";
@@ -192,6 +192,8 @@ const PUSHABLE_BRANCH = /^(?!-)[A-Za-z0-9._/-]+$/;
 
 /** The most of a morning list read for the pull request body; a larger one is not posted. */
 const MORNING_READ_MAX_BYTES = 1_048_576;
+/** The most of a run record read for its `## Blast radius` section; a larger record's section is not posted. */
+const RECORD_READ_MAX_BYTES = 4_194_304;
 
 /** Git's refusals of a commit for a missing author or committer identity. */
 const IDENTITY_REFUSAL = /please tell me who you are|unable to auto-detect|no email was given|empty ident name|identity unknown/i;
@@ -2397,7 +2399,12 @@ interface ListSource {
  * pull request's body is replaced, not commented on; a `Resumes:` that names
  * no such run, or a list that cannot be read, keeps the fixed body, with a
  * `notDone` entry. The title passes the screen too, a hit replacing it with
- * `Run <run-id>`.
+ * `Run <run-id>`. The record's `## Blast radius` section (REQ-FLOW-127),
+ * screened on its own, follows the body before the marker: passed to
+ * `prBodyFrom`, else appended to the fixed body by `withBlastRadius`; on the
+ * walk it is the walk's own record's, else the resumed run's, so a walk with
+ * no new approval keeps the overnight one. A record with none keeps the
+ * body as it was.
  */
 async function draftPr(ctx: CliContext, at: PrInputs): Promise<PrStep> {
   const env: NodeJS.ProcessEnv = { ...ctx.app.runtime.env };
@@ -2414,7 +2421,11 @@ async function draftPr(ctx: CliContext, at: PrInputs): Promise<PrStep> {
   let inferred: PrereqRow[] = [];
   let body = `Run \`${at.run}\`, attended. Its record: \`${at.recordRel}\`.`;
   let marked = at.run;
+  let listed = false; // whether `body` is prBodyFrom's, which places the section itself
   const source = at.unattended ? { run: at.run, base: at.base } : await resumedList(ctx, at, notDone);
+  // REQ-FLOW-127: the record's `## Blast radius` section follows the body; on the walk, the walk's own, else the resumed run's.
+  const resumedRecord = !at.unattended && source !== null ? `${ctx.engine.runs.layout.runRelPath(source.run)}/${ctx.engine.runs.layout.RECORD_FILE}` : null;
+  const blastRadius = screenedBlastRadius(ctx, at.cwd, [at.recordRel, ...(resumedRecord === null ? [] : [resumedRecord])], notDone);
   if (source !== null) {
     const morningRel = `${ctx.engine.runs.layout.runRelPath(source.run)}/${MORNING_FILE}`;
     const morning = readCapped(join(at.cwd, morningRel), MORNING_READ_MAX_BYTES);
@@ -2429,20 +2440,53 @@ async function draftPr(ctx: CliContext, at: PrInputs): Promise<PrStep> {
     } else {
       marked = source.run;
       inferred = inferredFrom(at.top, source.base);
-      const made = prBodyFrom(morning.text, source.run, { inferred });
+      const made = prBodyFrom(morning.text, source.run, { inferred, ...(blastRadius === null ? {} : { blastRadius }) });
       const screen = screenOutbound(made, "pr-body");
       body = made;
+      listed = true;
       if (!screen.ok) {
         const where = screen.hits.map((hit) => `line ${hit.line} (${hit.rule})`).join(", ");
         notDone.push(`pull request body replaced: the outbound screen matched ${where}`);
         body = `Run \`${source.run}\`: the body made from \`${morningRel}\` was not posted, because the outbound screen matched its ${where}. Read the morning list on the branch.`;
+        listed = false;
       }
     }
   }
+  if (!listed) body = withBlastRadius(body, marked, blastRadius);
   const gh = (request: Parameters<typeof ghApi>[0]) => ghApi(request, { cwd: at.top, env });
   const outcome: PrOutcome = await ensureDraftPr(gh, { host: repo.host, owner: repo.owner, repo: repo.repo, head: at.branch, base: target, title, body, runId: marked });
   if ("notDone" in outcome) return { pr: null, inferred, notDone: [...notDone, outcome.notDone] };
   return { pr: { number: outcome.number, url: outcome.url, how: outcome.how }, inferred, notDone };
+}
+
+/**
+ * The `## Blast radius` section of the first record in `records` that holds
+ * one (REQ-FLOW-127), screened as the body is (`screenOutbound`, `pr-body`);
+ * `null` when none holds one. A record over {@link RECORD_READ_MAX_BYTES}
+ * is not read, and a section the screen matches is left out, each named in
+ * `notDone` and on stderr by line and rule, never by any part of the text.
+ */
+function screenedBlastRadius(ctx: CliContext, cwd: string, records: readonly string[], notDone: string[]): string | null {
+  for (const rel of records) {
+    const record = readCapped(join(cwd, rel), RECORD_READ_MAX_BYTES);
+    if (record === null) continue;
+    if (record.truncated) {
+      const why = `blast radius not posted: ${rel} is over ${RECORD_READ_MAX_BYTES} bytes, so its section was not read`;
+      notDone.push(why);
+      ctx.io.err(`warning: ${why}\n`);
+      return null;
+    }
+    const section = blastRadiusSection(record.text);
+    if (section === null) continue;
+    const screen = screenOutbound(section, "pr-body");
+    if (screen.ok) return section;
+    const where = screen.hits.map((hit) => `line ${hit.line} (${hit.rule})`).join(", ");
+    const why = `blast radius not posted: the outbound screen matched ${rel}'s section at its ${where}`;
+    notDone.push(why);
+    ctx.io.err(`warning: ${why}\n`);
+    return null;
+  }
+  return null;
 }
 
 /**

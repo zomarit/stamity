@@ -1909,6 +1909,62 @@ describe("stamity run checkpoint", () => {
     });
   });
 
+  describe("the record's blast radius in the body (u9, REQ-FLOW-127)", () => {
+    const SECTION = ["## Blast radius", "", "- moderate — the body's two callers", "- rests on: the cut keeps the marker last — run"];
+
+    it("posts an attended run's one-liner, the record's section, then the marker", async () => {
+      const { repo } = await seed("attended");
+      await appendFile(join(repo, RUN_DIR, "record.md"), ["", "## Decisions trace", "", "- a choice", "", ...SECTION, "", "## Later", "", "- not in it", ""].join("\n"));
+      await writeFile(join(repo, "a.txt"), "changed\n");
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt", "--pr", "--title", "feat: the change"]);
+
+      expect(code).toBe(0);
+      expect(doc["notDone"]).toEqual([]);
+      expect(created().body).toBe(`Run \`${RUN}\`, attended. Its record: \`${RUN_DIR}/record.md\`.\n\n${SECTION.join("\n")}\n\n${MARKER}`);
+    });
+
+    it("posts an unattended run's morning list, then the section, then the marker", async () => {
+      const { repo } = await seed("unattended");
+      await appendFile(join(repo, RUN_DIR, "record.md"), ["", ...SECTION, ""].join("\n"));
+      const question = JSON.stringify({ id: "Q1", kind: "decision", question: "Merge the delta?", options: ["yes", "no"], default: 2, source: "record" });
+      await put(
+        repo,
+        `${RUN_DIR}/morning.md`,
+        [`# Morning list — ${RUN}`, "", "## For you to check", "", "none", "", "## Decisions", "", "- the delta", "", "## Prerequisites", "", "none", "",
+          "## Person's calls held", "", "none", "", "## Not done:", "", "none", "", "## How to answer", "", "Answer `Q1→1`.", "",
+          "```stamity-morning", question, "```", ""].join("\n"),
+      );
+      await writeFile(join(repo, "a.txt"), "changed\n");
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt", "--pr", "--title", "feat: x"]);
+
+      expect(code).toBe(0);
+      expect(doc["notDone"]).toEqual([]);
+      const lines = created().body.split("\n");
+      expect(lines[0]).toBe(`# Morning list — ${RUN}`);
+      const at = lines.indexOf("## Blast radius");
+      expect(at).toBeGreaterThan(lines.indexOf("## How to answer"));
+      expect(lines.slice(at)).toEqual([...SECTION, "", MARKER]);
+    });
+
+    it("cuts a 70,000-character section to fit an attended body, the marker last", async () => {
+      const { repo } = await seed("attended");
+      const rows = Array.from({ length: 1_400 }, (_, at) => `- reach row ${at} ${"r".repeat(40)}`);
+      await appendFile(join(repo, RUN_DIR, "record.md"), ["", "## Blast radius", "", ...rows, ""].join("\n"));
+      await writeFile(join(repo, "a.txt"), "changed\n");
+
+      const { code } = await run(repo, [...CHECKPOINT, "--paths", "a.txt", "--pr", "--title", "feat: the change"]);
+
+      expect(code).toBe(0);
+      const { body } = created();
+      expect(body.length).toBeLessThanOrEqual(60_000);
+      expect(body).toContain("- reach row 0 ");
+      expect(body).not.toContain("- reach row 1399 ");
+      expect(body.split("\n").at(-1)).toBe(MARKER);
+    });
+  });
+
   it("opens an unattended run's pull request from its morning list, with the prerequisites the change implies", async () => {
     const { repo } = await seed("unattended");
     await put(repo, "src/client.ts", "export const url = process.env.SERVICE_URL;\n");
