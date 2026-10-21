@@ -1047,7 +1047,23 @@ describe("renderInitPanel — the frontend pack suggestion (REQ-PACK-010)", () =
       `  next (framework) — Install the frontend pack: ${installCall}`,
     ]);
     // The second front-end row still names the pack, without a second call.
-    expect(rows[1]).toBe("  react (framework) — Install the frontend pack");
+    // TEST CHANGE, justified (u16-frontend-suggestion review round 1): the row read
+    // "Install the frontend pack" with no command; it now points at the call above.
+    expect(rows[1]).toBe("  react (framework) — covered by the frontend pack above");
+  });
+
+  it("lifts the row offering a pack above rows the cap would otherwise keep", () => {
+    // Detection order for a root holding manage.py, config/routes.rb, artisan
+    // and a React dependency: the config-file frameworks come first.
+    const rows = live({ frameworks: ["django", "rails", "laravel", "react", "vue"], languages: [] });
+
+    expect(rows[0]).toBe(`  react (framework) — Install the frontend pack: ${installCall}`);
+    expect(rows.slice(1, MAX_STACK_SUGGESTION_ROWS).map((row) => row.split(" (")[0]?.trim())).toEqual([
+      "django",
+      "rails",
+    ]);
+    // Only the first row per pack is lifted; vue keeps its place past the cap.
+    expect(rows.join("\n")).not.toContain("vue (framework)");
   });
 
   it("offers nothing once the ledger records frontend as installed", () => {

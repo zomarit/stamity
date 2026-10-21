@@ -17,7 +17,9 @@ import {
   __setContentRootForTests,
 } from "../../../src/content/contentRoot.ts";
 import { createManifest, readManifest, writeManifest } from "../../../src/manifest/manifest.ts";
+import type * as CuratedModule from "../../../src/pack/curated.ts";
 import type { Tool } from "../../../src/types/core.ts";
+import { EngineError } from "../../../src/types/errors.ts";
 import { STATE_DIR } from "../../../src/types/markers.ts";
 import { readWorkspaceManifest } from "../../../src/workspace/manifest.ts";
 import { WORKSPACE_MANIFEST_FILE } from "../../../src/workspace/model.ts";
@@ -28,11 +30,31 @@ import { carriedProcessEnv, NO_GIT_CONFIG, seedGitRepo } from "../../support/rep
 import { useTempDir } from "../../support/tempDir.ts";
 
 /**
+ * The catalog lookup init reads after its writes (REQ-PACK-010). It passes
+ * through to the real lookup over this checkout's `packs/` folder unless a case
+ * stages a failure — the one way to reach init's fail-soft branch without
+ * breaking the shared packs folder every other suite reads.
+ */
+const catalogSeam = vi.hoisted(() => ({ failure: null as Error | null }));
+
+vi.mock("../../../src/pack/curated.ts", async (importOriginal) => {
+  const real = await importOriginal<typeof CuratedModule>();
+  return {
+    ...real,
+    lookupCatalogEntry: (idOrName: string) => {
+      if (catalogSeam.failure !== null) throw catalogSeam.failure;
+      return real.lookupCatalogEntry(idOrName);
+    },
+  };
+});
+
+/**
  * Command-layer suite for `stamity init`, run through the in-process CLI funnel
  * against real temp repos: the prompt gates (TTY / -y / --json), the two-prompt
  * ceiling, the migration moment, the disclosure panel, the dry-run report, and
  * the exit codes are all asserted through the same seams production uses — no
- * mocks, including the emission planner: `beforeEach` seeds a minimal
+ * mocks bar one pass-through on the catalog lookup ({@link catalogSeam}), and
+ * none of the emission planner: `beforeEach` seeds a minimal
  * charter-bearing corpus at the pinned content root, so every run drives the
  * real composed planner end to end and actually writes files.
  *
@@ -94,6 +116,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   __resetContentRootCacheForTests();
+  catalogSeam.failure = null;
 });
 
 // ── Predecessor fixtures (fragment-assembled) ──────────────────────
@@ -557,6 +580,66 @@ describe("init — fresh repo", () => {
     expect(block.split(npxCommand("add frontend"))).toHaveLength(2);
     expect(result.stdout.indexOf("detected stacks")).toBeLessThan(
       result.stdout.indexOf("next steps:"),
+    );
+  });
+
+  it("offers no pack and still exits 0 when the catalog cannot be read after the writes (review/28)", async () => {
+    await getTemp().seedFiles({
+      "repo/package.json": `${JSON.stringify({ dependencies: { next: "15.0.0" } })}\n`,
+    });
+    const root = await makeRepo();
+    catalogSeam.failure = new EngineError("Cannot read the packs directory.", { code: "CONFIG_ERROR" });
+
+    const result = await runInit(root, ["-y"]);
+
+    expect(result.code).toBe(0);
+    expect(await readManifest(root)).not.toBeNull();
+    expect(result.stdout).toContain("detected stacks with no dedicated guidance yet:");
+    expect(result.stdout).toContain("next (framework)");
+    expect(result.stdout).not.toContain("add frontend");
+  });
+
+  it("offers no install line on init --force in a repository whose ledger holds frontend (review/29)", async () => {
+    await getTemp().seedFiles({
+      "repo/package.json": `${JSON.stringify({ dependencies: { next: "15.0.0" } })}\n`,
+    });
+    const root = await makeRepo();
+    expect((await runInit(root, ["-y"])).code).toBe(0);
+    const manifest = await readManifest(root);
+    if (manifest === null) throw new Error("init wrote no manifest");
+    // init --force carries a pack's rows only while its directory is on disk.
+    await getTemp().seedFiles({ "repo/.stamity/packs/frontend/receipt.json": "{}\n" });
+    await writeManifest(root, {
+      ...manifest,
+      ledger: [
+        ...manifest.ledger,
+        { path: ".stamity/packs/frontend/receipt.json", adapter: "pack:frontend", artifactId: "receipt", artifactType: "infra" },
+      ],
+    });
+
+    const forced = await runInit(root, ["--force", "-y"]);
+
+    expect(forced.code).toBe(0);
+    // The row is read from the manifest init --force left, the `pack:` prefix stripped.
+    expect((await readManifest(root))?.ledger.some((row) => row.adapter === "pack:frontend")).toBe(true);
+    expect(forced.stdout).toContain("next (framework)");
+    expect(forced.stdout).not.toContain("add frontend");
+  });
+
+  it("keeps the frontend row under the cap behind three config-file frameworks", async () => {
+    await getTemp().seedFiles({
+      "repo/manage.py": "",
+      "repo/config/routes.rb": "",
+      "repo/artisan": "",
+      "repo/package.json": `${JSON.stringify({ dependencies: { react: "19.0.0" } })}\n`,
+    });
+    const root = await makeRepo();
+
+    const result = await runInit(root, ["-y"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain(
+      `  react (framework) — Install the frontend pack: ${npxCommand("add frontend")}\n`,
     );
   });
 

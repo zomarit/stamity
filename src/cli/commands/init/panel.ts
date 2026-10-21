@@ -840,12 +840,26 @@ function credentialLine(mcpServers: readonly string[]): string {
  * and a language-first input would push every framework row past the cap. The
  * suggestion API already returns this order; re-establishing it here is what
  * lets the cap belong to the panel without depending on a caller's sort.
+ *
+ * The first row offering each pack leads, because it is the row that carries
+ * the install call: detection lists config-file frameworks (Django's
+ * `manage.py`, Rails' `config/routes.rb`, Laravel's `artisan`) before
+ * dependency-only ones, so a root holding those three and a React dependency
+ * would otherwise cut the `frontend` row behind the cap. Only that first row is
+ * lifted; the later rows naming the same pack keep their place.
  */
 function mostSpecificFirst(suggestions: readonly StackSuggestion[]): StackSuggestion[] {
-  return [
+  const byKind = [
     ...suggestions.filter((row) => row.kind === "framework"),
     ...suggestions.filter((row) => row.kind !== "framework"),
   ];
+  const offered = new Set<string>();
+  const leads = byKind.filter((row) => {
+    if (row.packId === undefined || offered.has(row.packId)) return false;
+    offered.add(row.packId);
+    return true;
+  });
+  return [...leads, ...byKind.filter((row) => !leads.includes(row))];
 }
 
 /**
@@ -857,7 +871,8 @@ function mostSpecificFirst(suggestions: readonly StackSuggestion[]): StackSugges
  * computed, which names a pack id only when the curated catalog actually
  * carries one — and only then, on the first row naming that pack, does the row
  * append the install call, pinned like every other remedy on this panel
- * ({@link packageCommand}). Empty input
+ * ({@link packageCommand}); a later row naming it reads as covered by that
+ * call. Empty input
  * prints nothing at all, which is the state a repo whose stacks are all
  * covered reaches.
  */
@@ -873,14 +888,18 @@ function stackSuggestionLines(
 
   const lines = [palette.bold("detected stacks with no dedicated guidance yet:")];
   // One install call per pack id, on the first row naming it: one pack answers
-  // every front-end subject, and Next.js on React would otherwise print the
-  // same command twice.
+  // every front-end subject, and Astro with React would otherwise print the
+  // same command twice. A later row naming that pack points at the call.
   const called = new Set<string>();
   for (const row of shown) {
-    const first = row.packId !== undefined && !called.has(row.packId);
-    if (row.packId !== undefined) called.add(row.packId);
-    const install = first ? `: ${packageCommand(`add ${row.packId}`)}` : "";
-    lines.push(`  ${row.name} (${row.kind}) — ${row.action}${install}`);
+    let action = row.action;
+    if (row.packId !== undefined) {
+      action = called.has(row.packId)
+        ? `covered by the ${row.packId} pack above`
+        : `${row.action}: ${packageCommand(`add ${row.packId}`)}`;
+      called.add(row.packId);
+    }
+    lines.push(`  ${row.name} (${row.kind}) — ${action}`);
   }
   if (omitted > 0) {
     lines.push(palette.dim(`  … and ${omitted} more in the same position.`));
