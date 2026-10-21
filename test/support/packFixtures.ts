@@ -16,7 +16,9 @@ import type { CliFixture } from "./cliHarness.ts";
 /**
  * Pack fixtures for the child-process install-smoke lane: stage a repo pack
  * into a fixture-local directory, tamper a named file, write an org trust
- * policy, and read the install receipt / ownership ledger back off disk.
+ * policy, and read the install receipt / ownership ledger back off disk. The
+ * made-up-pack writers ({@link writeMadeUpPack}, {@link madeUpArtifact},
+ * {@link prose}) serve the in-process pack suites as well.
  *
  * Lane discipline: like cliHarness.ts, this module imports nothing from
  * `src/` — every document is read structurally, exactly as a user inspecting
@@ -109,6 +111,73 @@ export async function stageSyntheticPack(
     }),
   );
   return staged;
+}
+
+/**
+ * Write a made-up pack into `join(dir, name)`: `files` (pack-relative POSIX
+ * paths) plus a `pack.json` carrying `name`, version `1.0.0` and a sha256
+ * integrity map over every one of them. Returns the pack's directory, usable
+ * as an `add` path spec. The directory is named after the pack, as the derived
+ * catalog requires of a folder under `packs/` (REQ-PACK-001).
+ *
+ * `dir` is the caller's: a temp tree, never the checkout's `packs/`, which the
+ * install-smoke lane digests as its read-only supply. Unlike
+ * {@link stageSyntheticPack} this takes no {@link CliFixture}, so the
+ * in-process suites (`test/pack/packEngineDefects.test.ts`,
+ * `test/packs/packs.test.ts`, `test/packs/lint.test.ts`) write theirs too.
+ */
+export async function writeMadeUpPack(
+  dir: string,
+  name: string,
+  files: Record<string, string>,
+): Promise<string> {
+  assertPlainPackId(name);
+  const packDir = join(dir, name);
+  const integrity: Record<string, string> = {};
+  for (const [rel, body] of Object.entries(files)) {
+    integrity[rel] = createHash("sha256").update(body, "utf8").digest("hex");
+  }
+  await Promise.all(
+    Object.entries(files).map(async ([rel, body]) => {
+      const abs = join(packDir, ...rel.split("/"));
+      await mkdir(dirname(abs), { recursive: true });
+      await writeFile(abs, body, "utf8");
+    }),
+  );
+  await writeFile(
+    join(packDir, "pack.json"),
+    `${JSON.stringify({ name, version: "1.0.0", integrity }, null, 2)}\n`,
+    "utf8",
+  );
+  return packDir;
+}
+
+/** One corpus-shaped artifact for a made-up pack: the frontmatter keys the catalog walk requires. */
+export function madeUpArtifact(id: string, type: string, description: string): string {
+  return [
+    "---",
+    `id: ${id}`,
+    `type: ${type}`,
+    `description: ${JSON.stringify(description)}`,
+    "tags: [orchestration]",
+    "load: on-demand",
+    `obsolete_when: fixture ${id} trigger`,
+    "---",
+    "",
+    `# ${id}`,
+    "",
+    "Fixture body for a made-up pack.",
+    "",
+  ].join("\n");
+}
+
+/** Plain prose of `length` characters, for descriptions sized against a budget. */
+export function prose(length: number, seed: string): string {
+  const sentence = `Acme ${seed} guidance keeps the demo pack listing honest about its size. `;
+  return sentence
+    .repeat(Math.ceil(length / sentence.length) + 1)
+    .slice(0, length - 1)
+    .concat(".");
 }
 
 /**

@@ -15,7 +15,12 @@ import {
 import type { Tool } from "../../src/types/core.ts";
 import { packOwner, type LedgerEntry } from "../../src/types/manifest.ts";
 import { runInProcess, type InProcessResult } from "../support/inProcess.ts";
-import { treeDigest } from "../support/packFixtures.ts";
+import {
+  madeUpArtifact as artifact,
+  prose,
+  treeDigest,
+  writeMadeUpPack,
+} from "../support/packFixtures.ts";
 import { seedGitRepo } from "../support/repoFixtures.ts";
 import { makeTempDir, type TempDirHandle } from "../support/tempDir.ts";
 
@@ -80,59 +85,14 @@ function said(result: { code: number; output: string }): string {
   return `exit ${result.code}; output: ${result.output.slice(0, 1200)}`;
 }
 
-/** One corpus-shaped artifact: the frontmatter keys the catalog walk requires. */
-function artifact(id: string, type: string, description: string): string {
-  return [
-    "---",
-    `id: ${id}`,
-    `type: ${type}`,
-    `description: ${JSON.stringify(description)}`,
-    "tags: [orchestration]",
-    "load: on-demand",
-    `obsolete_when: fixture ${id} trigger`,
-    "---",
-    "",
-    `# ${id}`,
-    "",
-    "Fixture body for the pack-engine defect suite.",
-    "",
-  ].join("\n");
-}
-
-/** Plain prose of `length` characters, for descriptions sized against a budget. */
-function prose(length: number, seed: string): string {
-  const sentence = `Acme ${seed} guidance keeps the demo pack listing honest about its size. `;
-  return sentence
-    .repeat(Math.ceil(length / sentence.length) + 1)
-    .slice(0, length - 1)
-    .concat(".");
-}
-
 /**
- * Writes a made-up pack OUTSIDE every repository: its files plus a `pack.json`
- * whose sha256 integrity map covers every shipped file. Returns the directory,
- * usable as an `add` path spec.
+ * Writes a made-up pack OUTSIDE every repository, one directory per call, through the shared
+ * writer (`writeMadeUpPack`: its files plus a `pack.json` whose sha256 integrity map covers
+ * every shipped file). Returns the directory, usable as an `add` path spec.
  */
 async function writePack(name: string, files: Record<string, string>): Promise<string> {
   caseCounter += 1;
-  const dir = suite.path("packs", String(caseCounter), name);
-  const integrity: Record<string, string> = {};
-  for (const [rel, body] of Object.entries(files)) {
-    integrity[rel] = createHash("sha256").update(body, "utf8").digest("hex");
-  }
-  await Promise.all(
-    Object.entries(files).map(async ([rel, body]) => {
-      const abs = join(dir, ...rel.split("/"));
-      await mkdir(dirname(abs), { recursive: true });
-      await writeFile(abs, body, "utf8");
-    }),
-  );
-  await writeFile(
-    join(dir, "pack.json"),
-    `${JSON.stringify({ name, version: "1.0.0", integrity }, null, 2)}\n`,
-    "utf8",
-  );
-  return dir;
+  return writeMadeUpPack(suite.path("packs", String(caseCounter)), name, files);
 }
 
 /** `add <dir> --allow-untrusted -y`: the made-up packs carry no trust basis. */
