@@ -5207,5 +5207,19 @@ describe("check — moved-skills", () => {
     ).toBe(true);
 
     expect((await doctorRow(root, "moved-skills")).status).toBe("pass");
+
+    // The same repository with a full override written after the install: it
+    // does not stand alone, it collides with the pack's copy, and says so.
+    await mkdir(join(root, ...OVERRIDE_DIR.split("/")), { recursive: true });
+    await writeFile(join(root, ...OVERRIDE_DIR.split("/"), "SKILL.md"), OVERRIDE_SKILL);
+    expect(await doctorRow(root, "moved-skills")).toEqual({
+      id: "moved-skills",
+      status: "warn",
+      detail:
+        `override ${OVERRIDE_DIR}/SKILL.md: skill "design-system-detect" moved from the core to the ` +
+        "frontend pack in 1.17.0, and the override collides with the installed pack's copy, so sync " +
+        "refuses it. Remove or rename it, or remove the pack " +
+        `(\`${npxCommand("clean --pack frontend")}\`).`,
+    });
   });
 });

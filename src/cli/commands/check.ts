@@ -1274,7 +1274,8 @@ export async function checkPackCatalog(
  * - `fail` — an overlay (`SKILL.customize.yaml` or `.md`) of a moved id under
  *   `.stamity/overrides/skills/<id>/`: `sync` refuses it, pack or no pack.
  * - `warn` — a full override (`SKILL.md`) there, which no longer replaces a
- *   core skill and tracks no shipped copy; and a client-owned ledger row of a
+ *   core skill and tracks no shipped copy, or, with the pack installed,
+ *   collides with the pack's copy; and a client-owned ledger row of a
  *   moved id at the engine path the core wrote it to
  *   ({@link movedRenderingAt}), with no `pack:<pack>` row — with the pack
  *   installed, its own copies stand at those paths.
@@ -1297,14 +1298,21 @@ export function checkMovedSkills(rootDir: string, manifest: SetupManifest | null
           `to keep the shipped skill: ${addPack(skill.pack)}.`,
       );
     }
+    const packInstalled =
+      manifest?.ledger.some((row) => row.adapter === `${PACK_OWNER_PREFIX}${skill.pack}`) ?? false;
     if (existsSync(join(root, ...dir.split("/"), "SKILL.md"))) {
+      // With the pack installed the override does not stand alone: it takes
+      // the pack skill's id, and the planner refuses the collision.
       warnings.push(
-        `override ${dir}/SKILL.md: ${moved}, so the override now stands alone and tracks no shipped ` +
-          `copy. Keep it, or remove it and run ${addPack(skill.pack)}.`,
+        packInstalled
+          ? `override ${dir}/SKILL.md: ${moved}, and the override collides with the installed pack's ` +
+              `copy, so sync refuses it. Remove or rename it, or remove the pack ` +
+              `(\`${packageCommand(`clean --pack ${shellWord(skill.pack)}`)}\`).`
+          : `override ${dir}/SKILL.md: ${moved}, so the override now stands alone and tracks no shipped ` +
+              `copy. Keep it, or remove it and run ${addPack(skill.pack)}.`,
       );
     }
-    if (manifest === null) continue;
-    if (manifest.ledger.some((row) => row.adapter === `${PACK_OWNER_PREFIX}${skill.pack}`)) continue;
+    if (manifest === null || packInstalled) continue;
     const copies = [
       ...new Set(
         manifest.ledger
