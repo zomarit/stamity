@@ -545,7 +545,7 @@ no flag removes the whole setup, packs included.
 
 ## Author your own pack
 
-Read [`packs/ops/`](../packs/ops/) as the worked example. It is a `pack.json` manifest beside
+Read [`packs/frontend/`](../packs/frontend/) as the worked example. It is a `pack.json` manifest beside
 class directories such as `agents/`, `skills/` and `commands/`, which hold the content itself. The
 manifest declares the pack's name, version, description, an integrity map with a digest per file,
 and its declared scope: the `declaredTools` and `permissions` fields, which `add` prints under
