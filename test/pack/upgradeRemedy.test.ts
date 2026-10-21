@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { cp, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
-import { dirname, join, relative } from "node:path";
+import { cp, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { COMMANDS } from "../../src/cli.ts";
@@ -18,6 +18,7 @@ import { describePackIntegrityFinding } from "../../src/pack/verifyInstalled.ts"
 import { packOwner, type LedgerEntry } from "../../src/types/manifest.ts";
 import { npxCommand } from "../support/identity.ts";
 import { runInProcess, type InProcessResult } from "../support/inProcess.ts";
+import { madeUpArtifact } from "../support/packFixtures.ts";
 import { seedGitRepo } from "../support/repoFixtures.ts";
 import { makeTempDir, type TempDirHandle } from "../support/tempDir.ts";
 
@@ -30,26 +31,74 @@ import { makeTempDir, type TempDirHandle } from "../support/tempDir.ts";
  * step by step, in the order printed, must reach a repository `check` passes.
  *
  * The three-step order the remedy printed first (`clean --pack`, `add`, `sync`)
- * failed at `add`: `clean --pack` removes only `.stamity/packs/ops/`, the copies
+ * failed at `add`: `clean --pack` removes only `.stamity/packs/<id>/`, the copies
  * the earlier `sync` projected stay ledgered, and `add` finds their paths
  * "already owned". The remedy now runs `sync` between `clean --pack` and `add`.
  *
- * No mocks. The installed 1.11.0 pack is written from the installer's record
+ * No mocks. The installed earlier copy is written from the installer's record
  * formats, bypassing `add` (whose gates now refuse it), as
  * `packEngineDefects.test.ts`'s B5 does. Its projected copies are produced by
  * this engine's own `sync` in two scratch repositories — one holding the old
  * pack without its two clashing skills, one without its two clashing commands,
  * neither of which clashes — and then carried, files and ledger rows, into the
  * repository under test, which is the state 1.11.0's single `sync` left.
+ *
+ * TEST CHANGE, justified (2026-10-21_packs-rebuilt-02/u1-refixture-pack-tests): the
+ * earlier copy was derived from the shipped `ops` folder, with its renames undone; `ops`
+ * is retired (REQ-PACK-023). The shape is frozen inline as a made-up earlier release of
+ * the catalog pack the package keeps ({@link EARLIER_RELEASE}). It is installed under a
+ * catalog id because the printed remedy re-adds the pack by its id
+ * (`src/emit/planner.ts` → `remedyOf`), so only a catalog id makes that step runnable;
+ * and it shares one skill id with the shipped pack, so `add` meets the client copy that
+ * claims it, as `add ops` met 1.11.0's.
  */
 
 const CASE_TIMEOUT = 120_000;
 
-/** The shipped `ops` pack, which the 1.11.0 shape is derived from. */
-const OPS_ROOT = fileURLToPath(new URL("../../packs/ops", import.meta.url));
+/** The catalog pack the earlier copy is installed as, and the integrity cases install. */
+const PACK = "frontend";
 
-/** The two names 1.11.0's `ops` gave both a command and a skill. */
-const CLASHING = ["st-release", "st-incident-response"] as const;
+/** The shipped pack's folder, which the local-path and scoped integrity cases vendor. */
+const PACK_ROOT = fileURLToPath(new URL(`../../packs/${PACK}`, import.meta.url));
+
+/**
+ * One skill the shipped pack carries, pack-relative, and where `sync` projects it
+ * for Claude. The earlier release carries a skill of the same id.
+ */
+const SHARED_SKILL = "skills/st-browser-evidence/SKILL.md";
+const SHARED_SKILL_COPY = ".claude/skills/st-browser-evidence/SKILL.md";
+
+/** The two names the earlier release gave both a command and a skill. */
+const CLASHING = ["st-screen-check", "st-token-audit"] as const;
+
+/**
+ * The earlier release, frozen: an agent, the two clashing command-and-skill pairs,
+ * and a skill under the id the shipped pack still uses. Every body is made up.
+ */
+const EARLIER_RELEASE: Readonly<Record<string, string>> = {
+  "agents/stamity-ui-auditor.md": madeUpArtifact(
+    "ui-auditor",
+    "agent",
+    "Audits one acme screen against its design tokens.",
+  ).replace("load: on-demand", "load: on-demand\ncapabilities: [read, edit, execute]"),
+  "commands/st-screen-check.md": madeUpArtifact("screen-check", "command", "Checks one acme screen end to end."),
+  "commands/st-token-audit.md": madeUpArtifact("token-audit", "command", "Audits the acme design tokens."),
+  "skills/st-screen-check/SKILL.md": madeUpArtifact(
+    "screen-check",
+    "skill",
+    "Steps for one acme screen check. Triggers when a screen changes.",
+  ),
+  "skills/st-token-audit/SKILL.md": madeUpArtifact(
+    "token-audit",
+    "skill",
+    "Steps for one acme token audit. Triggers when a token changes.",
+  ),
+  [SHARED_SKILL]: madeUpArtifact(
+    "browser-evidence",
+    "skill",
+    "Captures acme browser evidence. Triggers when a rendered surface changes.",
+  ),
+};
 
 let suite: TempDirHandle;
 
@@ -72,44 +121,19 @@ function said(result: CliResult): string {
   return `exit ${result.code}; output: ${result.output.slice(0, 2000)}`;
 }
 
-async function filesUnder(root: string): Promise<string[]> {
-  const entries = await readdir(root, { recursive: true, withFileTypes: true });
-  return entries
-    .filter((entry) => entry.isFile())
-    .map((entry) => relative(root, join(entry.parentPath, entry.name)).split("\\").join("/"));
-}
-
 /**
- * The `ops` pack as 1.11.0 shipped it: today's files with the two renames and
- * the two cross-references undone (`git diff v1.11.0 -- packs/ops`).
+ * The earlier release, after checking the shipped pack still carries the shared
+ * skill: without it `add` would meet no client copy and the refusals below would
+ * test nothing.
  */
-async function opsAt1110(): Promise<Record<string, string>> {
-  const rels = (await filesUnder(OPS_ROOT)).filter((rel) => rel !== "pack.json");
-  const files: Record<string, string> = Object.fromEntries(
-    await Promise.all(
-      rels.map(async (rel) => [rel, await readFile(join(OPS_ROOT, rel), "utf8")] as const),
-    ),
-  );
-  const renamed = (from: string, to: string, id: string): void => {
-    const body = files[`skills/${from}/SKILL.md`];
-    if (body === undefined) throw new Error(`fixture: the shipped ops has no skills/${from}/`);
-    delete files[`skills/${from}/SKILL.md`];
-    files[`skills/${to}/SKILL.md`] = body.replace(/^id: .*$/m, `id: ${id}`);
+async function earlierRelease(): Promise<Record<string, string>> {
+  const shipped = JSON.parse(await readFile(join(PACK_ROOT, "pack.json"), "utf8")) as {
+    integrity?: Record<string, string>;
   };
-  renamed("st-release-runbook", "st-release", "release");
-  renamed("st-incident-runbook", "st-incident-response", "incident-response");
-  const swap = (rel: string, from: string, to: string): void => {
-    const body = files[rel];
-    if (body?.includes(from) !== true) throw new Error(`fixture: ${rel} no longer names ${from}`);
-    files[rel] = body.replace(from, to);
-  };
-  swap("commands/st-release.md", "`st-release-runbook` skill", "`st-release` skill");
-  swap(
-    "agents/stamity-incident-responder.md",
-    "`st-incident-runbook` skill",
-    "`stamity-incident-response` skill",
-  );
-  return files;
+  if (shipped.integrity?.[SHARED_SKILL] === undefined) {
+    throw new Error(`fixture: the shipped ${PACK} pack no longer carries ${SHARED_SKILL}`);
+  }
+  return { ...EARLIER_RELEASE };
 }
 
 function without(
@@ -207,12 +231,12 @@ async function claudeRepo(name: string): Promise<string> {
 }
 
 /**
- * The repository a 1.11.0 user has after `init --tools claude`, `add ops` and
- * `sync`: the old pack installed, and every one of its artifacts projected
- * into `.claude/` — the clashing commands AND the clashing skills.
+ * The repository a 1.11.0 user has after `init --tools claude`, an `add` of the
+ * earlier release and `sync`: the old pack installed, and every one of its
+ * artifacts projected into `.claude/` — the clashing commands AND the clashing skills.
  */
 async function syncedAt1110(name: string): Promise<string> {
-  const old = await opsAt1110();
+  const old = await earlierRelease();
   const isClashingSkill = (rel: string): boolean =>
     CLASHING.some((dir) => rel.startsWith(`skills/${dir}/`));
   const isClashingCommand = (rel: string): boolean =>
@@ -220,14 +244,14 @@ async function syncedAt1110(name: string): Promise<string> {
 
   // The repository under test: the old pack minus its clashing skills, synced.
   const repo = await claudeRepo(name);
-  await installBypassingAdd(repo, "ops", without(old, isClashingSkill));
+  await installBypassingAdd(repo, PACK, without(old, isClashingSkill));
   const first = await cli(repo, ["sync"]);
   if (first.code !== 0) throw new Error(`fixture: the commands half failed to sync — ${said(first)}`);
 
   // A scratch twin: the old pack minus its clashing commands, synced, so the
   // two skills get the projected copies 1.11.0 wrote for them.
   const twin = await claudeRepo(`${name}-twin`);
-  await installBypassingAdd(twin, "ops", without(old, isClashingCommand));
+  await installBypassingAdd(twin, PACK, without(old, isClashingCommand));
   const second = await cli(twin, ["sync"]);
   if (second.code !== 0) throw new Error(`fixture: the skills half failed to sync — ${said(second)}`);
   const twinManifest = await readManifest(twin);
@@ -255,7 +279,7 @@ async function syncedAt1110(name: string): Promise<string> {
   });
 
   // Then the whole old pack, clashing pairs included, as 1.11.0 installed it.
-  await installBypassingAdd(repo, "ops", old);
+  await installBypassingAdd(repo, PACK, old);
   return repo;
 }
 
@@ -342,26 +366,27 @@ async function runStepsDeletingKept(repo: string, steps: readonly string[]): Pro
   return deleted;
 }
 
-/** The 1.11.0 copies the clash leaves unprovable: each must be among those `clean --pack` keeps and names. */
+/**
+ * The 1.11.0 copies the clash leaves unprovable: each must be among those `clean --pack` keeps and names.
+ *
+ * TEST CHANGE, justified (2026-10-21_packs-rebuilt-02/u1-refixture-pack-tests): these were
+ * `ops`'s agent, command and skill copies; the earlier release is now made up
+ * ({@link EARLIER_RELEASE}), so they are its copies — one per class, and the shared skill's.
+ */
 const UNPROVABLE = [
-  ".claude/agents/stamity-devops.md",
-  ".claude/commands/st-release.md",
-  ".claude/skills/st-release/SKILL.md",
-  ".claude/skills/st-ci-pipeline/SKILL.md",
+  ".claude/agents/stamity-ui-auditor.md",
+  ".claude/commands/st-screen-check.md",
+  ".claude/skills/st-screen-check/SKILL.md",
+  SHARED_SKILL_COPY,
 ] as const;
 
-describe("the 1.11.0 ops upgrade on Claude, by the remedy the sync refusal prints", () => {
+describe("the 1.11.0 pack upgrade on Claude, by the remedy the sync refusal prints", () => {
   it(
     "sync refuses the installed clash, and the printed steps, run in order, each exit 0 and leave check green",
     async () => {
       const repo = await syncedAt1110("synced");
       const installed = await readManifest(repo);
-      for (const path of [
-        ".claude/commands/st-release.md",
-        ".claude/skills/st-release/SKILL.md",
-        ".claude/agents/stamity-devops.md",
-        ".claude/skills/st-ci-pipeline/SKILL.md",
-      ]) {
+      for (const path of UNPROVABLE) {
         expect(
           installed?.ledger.some((row) => row.path === path && row.adapter === "claude"),
           `fixture: the 1.11.0 sync's copy ${path} must be ledgered`,
@@ -374,11 +399,11 @@ describe("the 1.11.0 ops upgrade on Claude, by the remedy the sync refusal print
         expect(refused.output, `the refusal must name ${name}`).toContain(name);
       }
 
-      const steps = remedyVerbs(refused.output, "ops");
-      expect(steps, `the printed remedy for pack "ops" — ${said(refused)}`).toEqual([
-        "clean --pack ops",
+      const steps = remedyVerbs(refused.output, PACK);
+      expect(steps, `the printed remedy for pack "${PACK}" — ${said(refused)}`).toEqual([
+        `clean --pack ${PACK}`,
         "sync",
-        "add ops",
+        `add ${PACK}`,
         "sync",
       ]);
 
@@ -397,9 +422,11 @@ describe("the 1.11.0 ops upgrade on Claude, by the remedy the sync refusal print
       expect(checked.code, `check after the remedy must exit 0 — ${said(checked)}`).toBe(0);
       const manifest = await readManifest(repo);
       const paths = new Set(manifest?.ledger.map((row) => row.path));
-      expect(paths.has(".claude/skills/st-release-runbook/SKILL.md")).toBe(true);
-      expect(paths.has(".claude/skills/st-release/SKILL.md")).toBe(false);
-      expect(paths.has(".claude/skills/st-incident-response/SKILL.md")).toBe(false);
+      // TEST CHANGE, justified (2026-10-21_packs-rebuilt-02/u1-refixture-pack-tests): the
+      // re-added pack's projection was `ops`'s renamed `st-release-runbook`; it is the shipped
+      // pack's own skill, and neither clashing skill keeps a row.
+      expect(paths.has(SHARED_SKILL_COPY)).toBe(true);
+      for (const name of CLASHING) expect(paths.has(`.claude/skills/${name}/SKILL.md`), name).toBe(false);
     },
     CASE_TIMEOUT,
   );
@@ -420,18 +447,18 @@ describe("the 1.11.0 ops upgrade on Claude, by the remedy the sync refusal print
     async () => {
       const repo = await syncedAt1110("collision");
 
-      const cleaned = await cli(repo, ["clean", "--pack", "ops", "-y"]);
-      expect(cleaned.code, `clean --pack ops must exit 0 — ${said(cleaned)}`).toBe(0);
-      expect(cleaned.output).toContain('Pack "ops" could not be planned as installed');
+      const cleaned = await cli(repo, ["clean", "--pack", PACK, "-y"]);
+      expect(cleaned.code, `clean --pack ${PACK} must exit 0 — ${said(cleaned)}`).toBe(0);
+      expect(cleaned.output).toContain(`Pack "${PACK}" could not be planned as installed`);
       const kept = keptCopies(cleaned.output);
       for (const path of UNPROVABLE) expect(kept, `kept and named: ${path}`).toContain(path);
       const rows = new Set((await readManifest(repo))?.ledger.map((row) => row.path));
       for (const path of kept) expect(rows.has(path), `the row of ${path} stays`).toBe(true);
 
-      const refused = await cli(repo, ["add", "ops", "-y"]);
+      const refused = await cli(repo, ["add", PACK, "-y"]);
       expect(refused.code, `add right after clean --pack must refuse the claimed copies — ${said(refused)}`).toBe(1);
-      expect(refused.output).toContain('pack "ops" is not installed');
-      expect(collisionVerbs(refused.output, "ops")).toEqual(["sync", "add ops", "sync"]);
+      expect(refused.output).toContain(`pack "${PACK}" is not installed`);
+      expect(collisionVerbs(refused.output, PACK)).toEqual(["sync", `add ${PACK}`, "sync"]);
       expect(refused.output).toContain("then delete by hand each client copy it keeps and names, unless it is yours");
 
       // The printed steps: `sync`, the step by hand over what it keeps and names, `add`, `sync`.
@@ -439,7 +466,7 @@ describe("the 1.11.0 ops upgrade on Claude, by the remedy the sync refusal print
       expect(synced.code, `remedy step \`sync\` must exit 0 — ${said(synced)}`).toBe(0);
       for (const path of kept) expect(synced.output, `sync names ${path}`).toContain(path);
       await Promise.all(kept.map((path) => rm(join(repo, ...path.split("/")))));
-      await runSteps(repo, ["add ops", "sync"]);
+      await runSteps(repo, [`add ${PACK}`, "sync"]);
 
       const checked = await cli(repo, ["check"]);
       expect(checked.code, `check after the remedy must exit 0 — ${said(checked)}`).toBe(0);
@@ -448,20 +475,20 @@ describe("the 1.11.0 ops upgrade on Claude, by the remedy the sync refusal print
   );
 
   it(
-    "add over the installed 1.11.0 ops is refused on its client copies, and the installed-state remedy runs to exit 0 (review/57)",
+    "add over the installed 1.11.0 pack is refused on its client copies, and the installed-state remedy runs to exit 0 (review/57)",
     async () => {
       const repo = await syncedAt1110("collision-installed");
 
-      const refused = await cli(repo, ["add", "ops", "-y"]);
+      const refused = await cli(repo, ["add", PACK, "-y"]);
       expect(refused.code, `add over the synced old pack must refuse — ${said(refused)}`).toBe(1);
       expect(refused.output).toContain("path(s) it would write are not free");
-      expect(refused.output).toContain('pack "ops" is installed: to replace it');
+      expect(refused.output).toContain(`pack "${PACK}" is installed: to replace it`);
 
-      const steps = collisionVerbs(refused.output, "ops");
+      const steps = collisionVerbs(refused.output, PACK);
       expect(steps, `the collision refusal's printed remedy — ${said(refused)}`).toEqual([
-        "clean --pack ops",
+        `clean --pack ${PACK}`,
         "sync",
-        "add ops",
+        `add ${PACK}`,
         "sync",
       ]);
       // TEST CHANGE, justified (2026-10-08, unit d1a2-clean-pack-copies; the declared
@@ -490,6 +517,11 @@ describe("the 1.11.0 ops upgrade on Claude, by the remedy the sync refusal print
  * that names the source the receipt recorded — `addStep` — while the
  * next-steps block prints the same order. Following it, the edited file moved
  * out first, exits 0 at each step and leaves `check` green.
+ *
+ * TEST CHANGE, justified (2026-10-21_packs-rebuilt-02/u1-refixture-pack-tests): the pack
+ * was `ops` and the edited file its devops agent; `ops` is retired (REQ-PACK-023), so the
+ * pack is {@link PACK} and the edited file its {@link SHARED_SKILL}, whose client copy is
+ * {@link SHARED_SKILL_COPY}. Any installed file with a client copy serves.
  */
 async function integrityRemedyRuns(
   name: string,
@@ -497,7 +529,7 @@ async function integrityRemedyRuns(
   addStep: string,
   before?: (repo: string) => Promise<void>,
   syncAfterEdit = false,
-  packId = "ops",
+  packId = PACK,
 ): Promise<void> {
   const repo = await claudeRepo(name);
   await before?.(repo);
@@ -506,7 +538,7 @@ async function integrityRemedyRuns(
   const synced = await cli(repo, ["sync"]);
   expect(synced.code, `fixture: sync — ${said(synced)}`).toBe(0);
 
-  const edited = `${packDirRelPath(packId)}/agents/stamity-devops.md`;
+  const edited = `${packDirRelPath(packId)}/${SHARED_SKILL}`;
   const editedAbs = join(repo, ...edited.split("/"));
   const body = `${await readFile(editedAbs, "utf8")}\nA local edit.\n`;
   await writeFile(editedAbs, body, "utf8");
@@ -514,7 +546,7 @@ async function integrityRemedyRuns(
     // The usual case: a `sync` ran before `check` and carried the edit into the client copy.
     const carried = await cli(repo, ["sync"]);
     expect(carried.code, `fixture: sync over the edit — ${said(carried)}`).toBe(0);
-    expect(await readFile(join(repo, ".claude", "agents", "stamity-devops.md"), "utf8")).toContain("A local edit.");
+    expect(await readFile(join(repo, ...SHARED_SKILL_COPY.split("/")), "utf8")).toContain("A local edit.");
   }
 
   const json = await cli(repo, ["check", "--json"]);
@@ -548,10 +580,10 @@ async function integrityRemedyRuns(
   );
 
   // The printed first step, by hand: move the edited file out of the pack.
-  const keep = join(repo, "kept-devops.md");
+  const keep = join(repo, "kept-skill.md");
   await rename(editedAbs, keep);
   const deleted = await runStepsDeletingKept(repo, steps);
-  expect(deleted, "clean --pack names the moved file's client copy").toContain(".claude/agents/stamity-devops.md");
+  expect(deleted, "clean --pack names the moved file's client copy").toContain(SHARED_SKILL_COPY);
 
   const checked = await cli(repo, ["check"]);
   expect(checked.code, `check after the remedy must exit 0 — ${said(checked)}`).toBe(0);
@@ -563,7 +595,7 @@ describe("an edited pack file, by the remedy check's pack-integrity row prints",
   it(
     "a catalog pack: the step re-adds it by its catalog id, and the printed order runs to exit 0 (review/56, review/58, review/59)",
     async () => {
-      await integrityRemedyRuns("integrity-catalog", ["add", "ops"], "add ops");
+      await integrityRemedyRuns("integrity-catalog", ["add", PACK], `add ${PACK}`);
     },
     CASE_TIMEOUT,
   );
@@ -573,10 +605,10 @@ describe("an edited pack file, by the remedy check's pack-integrity row prints",
     async () => {
       await integrityRemedyRuns(
         "integrity-local",
-        ["add", "./vendor/ops", "--allow-untrusted"],
-        "add ./vendor/ops --allow-untrusted",
+        ["add", `./vendor/${PACK}`, "--allow-untrusted"],
+        `add ./vendor/${PACK} --allow-untrusted`,
         async (repo) => {
-          await cp(OPS_ROOT, join(repo, "vendor", "ops"), { recursive: true });
+          await cp(PACK_ROOT, join(repo, "vendor", PACK), { recursive: true });
         },
       );
     },
@@ -589,28 +621,28 @@ describe("an edited pack file, by the remedy check's pack-integrity row prints",
   it(
     "an edit a sync already carried into the client copy: the printed order, its step by hand included, runs to a green check (review/71)",
     async () => {
-      await integrityRemedyRuns("integrity-synced-edit", ["add", "ops"], "add ops", undefined, true);
+      await integrityRemedyRuns("integrity-synced-edit", ["add", PACK], `add ${PACK}`, undefined, true);
     },
     CASE_TIMEOUT,
   );
 
-  // review/86: a scoped pack's ledger rows carry `@acme/ops/<path>`, so the moved file's copy is
+  // review/86: a scoped pack's ledger rows carry `@acme/<name>/<path>`, so the moved file's copy is
   // the pack's by its row only when the row is read past the whole id, not past its first `/`.
   it(
     "a scoped pack, with an edit a sync already carried: the printed order, its step by hand included, runs to a green check (review/86)",
     async () => {
       await integrityRemedyRuns(
         "integrity-scoped",
-        ["add", "./vendor/acme-ops", "--allow-untrusted"],
-        "add ./vendor/acme-ops --allow-untrusted",
+        ["add", `./vendor/acme-${PACK}`, "--allow-untrusted"],
+        `add ./vendor/acme-${PACK} --allow-untrusted`,
         async (repo) => {
-          const vendored = join(repo, "vendor", "acme-ops");
-          await cp(OPS_ROOT, vendored, { recursive: true });
+          const vendored = join(repo, "vendor", `acme-${PACK}`);
+          await cp(PACK_ROOT, vendored, { recursive: true });
           const manifest = JSON.parse(await readFile(join(vendored, "pack.json"), "utf8")) as { name: string };
-          await writeFile(join(vendored, "pack.json"), JSON.stringify({ ...manifest, name: "@acme/ops" }, null, 2), "utf8");
+          await writeFile(join(vendored, "pack.json"), JSON.stringify({ ...manifest, name: `@acme/${PACK}` }, null, 2), "utf8");
         },
         true,
-        "@acme/ops",
+        `@acme/${PACK}`,
       );
     },
     CASE_TIMEOUT,
@@ -623,10 +655,12 @@ describe("the re-add source a pack's receipt records (review/59)", () => {
     trustTier,
   });
 
+  // TEST CHANGE, justified (2026-10-21_packs-rebuilt-02/u1-refixture-pack-tests): the catalog id
+  // was `ops`, which the package retires (REQ-PACK-023); the lookup needs an id the catalog holds.
   it("names a catalog pack by its catalog id, whatever resolved path the receipt holds", () => {
     expect(
-      reAddArgsOf("ops", receipt("local-path", "/somewhere/packs/ops", "curator-verified")),
-    ).toBe("ops");
+      reAddArgsOf(PACK, receipt("local-path", `/somewhere/packs/${PACK}`, "curator-verified")),
+    ).toBe(PACK);
   });
 
   it("names an npm package by its name, with --allow-untrusted only at the unsigned floor", () => {

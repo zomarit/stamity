@@ -1,3 +1,4 @@
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -6,6 +7,7 @@ import type { GrantableToolCategory } from "../../src/roster/agentPolicies.ts";
 import { useCliFixture, type CliFixture, type CliRunResult } from "../support/cliHarness.ts";
 import {
   fileSha256,
+  madeUpArtifact,
   packInstallDir,
   readLedgerRows,
   readReceipt,
@@ -57,12 +59,49 @@ import {
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
-/** The three first-party packs and the content classes each one ships. */
-const FIRST_PARTY = [
-  { id: "ops", classes: ["agents", "commands", "skills"] },
-  { id: "product-audit", classes: ["commands", "rules", "skills"] },
-  { id: "scaffold", classes: ["commands"] },
-] as const;
+/**
+ * The first-party packs and the content classes each one ships, read from the
+ * checkout: every folder under `packs/` holding a `pack.json`, sorted, each
+ * with the sorted first segments of its `integrity` keys.
+ *
+ * TEST CHANGE, justified (2026-10-21_packs-rebuilt-02/u1-refixture-pack-tests):
+ * this was a typed list of `ops`, `product-audit` and `scaffold`, three packs
+ * the package retires (REQ-PACK-023); a typed list also never held `frontend`.
+ * Derived, the smoke installs whatever the catalog ships, before and after the
+ * deletion — the form `test/pack/curated.test.ts` reads its ids in.
+ */
+const FIRST_PARTY: readonly { id: string; classes: readonly string[] }[] = readdirSync(
+  join(REPO_ROOT, "packs"),
+  { withFileTypes: true },
+)
+  .filter((entry) => entry.isDirectory() && existsSync(join(REPO_ROOT, "packs", entry.name, "pack.json")))
+  .map((entry) => entry.name)
+  .toSorted()
+  .map((id) => {
+    const manifest = JSON.parse(readFileSync(join(REPO_ROOT, "packs", id, "pack.json"), "utf8")) as {
+      integrity?: Record<string, string>;
+    };
+    const classes = new Set(Object.keys(manifest.integrity ?? {}).map((rel) => rel.split("/")[0] ?? ""));
+    return { id, classes: [...classes].toSorted() };
+  });
+
+/**
+ * The catalog pack the single-pack scenarios install. `frontend` is the one
+ * first-party pack the package keeps; it ships skills only, which every
+ * scenario below that needs a projected file reads.
+ */
+const CATALOG_PACK = "frontend";
+
+/** Its content classes, as FIRST_PARTY reads them (empty when the folder is gone, which fails loudly). */
+const CATALOG_PACK_CLASSES: readonly string[] =
+  FIRST_PARTY.find((pack) => pack.id === CATALOG_PACK)?.classes ?? [];
+
+/** One of its skills, pack-relative, and where `sync` projects it for Claude. */
+const CATALOG_SKILL = "skills/st-browser-evidence/SKILL.md";
+const CATALOG_SKILL_COPY = ".claude/skills/st-browser-evidence/SKILL.md";
+
+/** A made-up pack installed beside it where a scenario needs a second installed pack. */
+const BYSTANDER_PACK = "acme-bystander";
 
 /**
  * Distinctive argv token for the synthetic hook pack, so "did the pack's hook
@@ -146,14 +185,38 @@ interface PolicyDocument {
 }
 
 /**
- * The ops pack's declared tool footprint, read from the checkout's own supply
- * rather than restated: the grant asserted below is the intersection with THIS
- * list, so a copy that drifted would assert against a footprint nobody ships.
+ * The tool footprint the made-up agent pack below declares — the shape an
+ * orchestrating pack takes: three grantable categories plus `spawn`, which
+ * covers the pack's workflows and is never handed to an agent.
  */
-async function opsFootprint(): Promise<GrantableToolCategory[]> {
-  const raw = await readFile(join(REPO_ROOT, "packs", "ops", "pack.json"), "utf8");
-  const manifest = JSON.parse(raw) as { permissions?: { toolFootprint?: GrantableToolCategory[] } };
-  return manifest.permissions?.toolFootprint ?? [];
+const AGENT_PACK_FOOTPRINT: readonly GrantableToolCategory[] = ["read", "edit", "execute"];
+
+/** The made-up pack's id. */
+const AGENT_PACK = "acme-agents";
+
+/**
+ * Stage a made-up pack that declares `permissions.toolFootprint` (with
+ * `spawn`) and ships the given agents, through {@link stageSyntheticPack}.
+ * The footprint is added to the staged `pack.json` after the fact: the
+ * integrity map covers the pack's files, never its manifest, so the stage
+ * still verifies.
+ *
+ * TEST CHANGE, justified (2026-10-21_packs-rebuilt-02/u1-refixture-pack-tests):
+ * the grant scenarios read the agents of the bundled `ops` pack, which the
+ * package retires (REQ-PACK-023), and no pack it keeps ships an agent. A
+ * made-up pack declaring one exercises the same two enforcement points.
+ */
+async function stageAgentPack(
+  fixture: CliFixture,
+  packId: string,
+  agents: Record<string, string>,
+): Promise<string> {
+  const staged = await stageSyntheticPack(fixture, packId, agents);
+  const manifestPath = join(staged, "pack.json");
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as Record<string, unknown>;
+  const permissions = { toolFootprint: [...AGENT_PACK_FOOTPRINT, "spawn"] };
+  await writeFile(manifestPath, `${JSON.stringify({ ...manifest, permissions }, null, 2)}\n`, "utf8");
+  return staged;
 }
 
 // ── Observed JSON envelope shapes (structural — never imported from src/) ──
@@ -376,8 +439,21 @@ describe("pack install smoke (real bin, pseudo-home)", () => {
     ).toBe(corpusSupplyDigest);
   });
 
+  it("lists every pack folder the checkout ships, each with the classes its integrity map names", () => {
+    const folders = readdirSync(join(REPO_ROOT, "packs"), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .toSorted();
+    expect(folders.length).toBeGreaterThan(0);
+    expect(FIRST_PARTY.map((pack) => pack.id)).toEqual(folders);
+    for (const pack of FIRST_PARTY) expect(pack.classes.length, pack.id).toBeGreaterThan(0);
+  });
+
+  // TEST CHANGE, justified (2026-10-21_packs-rebuilt-02/u1-refixture-pack-tests): the case
+  // installed the three typed packs the package retires (REQ-PACK-023) and re-installed `ops`.
+  // It installs every folder FIRST_PARTY lists and re-installs the first; the title said "all 3".
   it(
-    "installs all 3 first-party packs via catalog id, and a second install replaces rather than duplicates",
+    "installs every first-party pack via catalog id, and a second install replaces rather than duplicates",
     { timeout: 240_000 },
     async () => {
       const fixture = getFixture();
@@ -385,32 +461,34 @@ describe("pack install smoke (real bin, pseudo-home)", () => {
 
       const receipts: ObservedReceipt[] = [];
       // Awaited in a loop on purpose: each add mutates the one manifest, so
-      // the three installs are a dependency chain, not parallel work.
+      // the installs are a dependency chain, not parallel work.
       for (const pack of FIRST_PARTY) {
         // oxlint-disable-next-line no-await-in-loop -- serialized installs against one manifest
         receipts.push(await installViaCatalog(fixture, pack.id, pack.classes));
       }
-      const opsReceipt = receipts[0];
-      expect(opsReceipt).toBeDefined();
-      if (opsReceipt === undefined) return;
+      const firstPack = FIRST_PARTY[0];
+      const firstReceipt = receipts[0];
+      expect(firstPack).toBeDefined();
+      expect(firstReceipt).toBeDefined();
+      if (firstPack === undefined || firstReceipt === undefined) return;
 
-      // All three coexist: per-pack rows stayed exact under later installs.
-      await expectLedgerMatchesReceipt(fixture, "ops", opsReceipt);
+      // All coexist: per-pack rows stayed exact under later installs.
+      await expectLedgerMatchesReceipt(fixture, firstPack.id, firstReceipt);
 
       // Update path = re-install: every gate re-runs (hashes re-verified) and
       // the pack's ledger rows are REPLACED, never appended.
-      const rowsBefore = await readLedgerRows(fixture, "pack:ops");
-      const second = await runAddJson(fixture, ["ops"]);
+      const rowsBefore = await readLedgerRows(fixture, `pack:${firstPack.id}`);
+      const second = await runAddJson(fixture, [firstPack.id]);
       expect(second.result.code, second.result.stderr).toBe(0);
       const envelope = second.doc as unknown as AddEnvelope;
       expect(envelope.installed).toBe(true);
       expect(envelope.planned.checks["integrityMap"]).toBe("pass");
 
-      const rowsAfter = await readLedgerRows(fixture, "pack:ops");
+      const rowsAfter = await readLedgerRows(fixture, `pack:${firstPack.id}`);
       expect(rowsAfter.length).toBe(rowsBefore.length);
-      const reReceipt = await readReceipt(fixture, "ops");
-      expect(contentHashes(reReceipt)).toEqual(contentHashes(opsReceipt));
-      await expectLedgerMatchesReceipt(fixture, "ops", reReceipt);
+      const reReceipt = await readReceipt(fixture, firstPack.id);
+      expect(contentHashes(reReceipt)).toEqual(contentHashes(firstReceipt));
+      await expectLedgerMatchesReceipt(fixture, firstPack.id, reReceipt);
     },
   );
 
@@ -423,12 +501,14 @@ describe("pack install smoke (real bin, pseudo-home)", () => {
 
       // Catalog lane first, then clear it so the stage installs into a repo
       // with no prior claim on the paths.
-      const catalogReceipt = await installViaCatalog(fixture, "scaffold", ["commands"]);
-      const clean = await fixture.run(["clean", "--pack", "scaffold", "-y"]);
+      // TEST CHANGE, justified (2026-10-21_packs-rebuilt-02/u1-refixture-pack-tests): the pack
+      // was `scaffold`, which the package retires (REQ-PACK-023); `frontend` stays.
+      const catalogReceipt = await installViaCatalog(fixture, CATALOG_PACK, CATALOG_PACK_CLASSES);
+      const clean = await fixture.run(["clean", "--pack", CATALOG_PACK, "-y"]);
       expect(clean.code, clean.stderr).toBe(0);
-      expect(await exists(repoPath(fixture, packInstallDir("scaffold")))).toBe(false);
+      expect(await exists(repoPath(fixture, packInstallDir(CATALOG_PACK)))).toBe(false);
 
-      const staged = await stagePack(fixture, "scaffold");
+      const staged = await stagePack(fixture, CATALOG_PACK);
 
       // A path spec never consults the catalog, so the stage has no trust
       // basis — refused by default, with the waiver named as the way out.
@@ -438,7 +518,7 @@ describe("pack install smoke (real bin, pseudo-home)", () => {
       expect(refusal.ok).toBe(false);
       expect(refusal.error.code).toBe("INTEGRITY_ERROR");
       expect(refusal.error.next).toContain("--allow-untrusted");
-      expect(await exists(repoPath(fixture, packInstallDir("scaffold")))).toBe(false);
+      expect(await exists(repoPath(fixture, packInstallDir(CATALOG_PACK)))).toBe(false);
 
       const waived = await runAddJson(fixture, [staged, "--allow-untrusted"]);
       expect(waived.result.code, waived.result.stderr).toBe(0);
@@ -446,10 +526,10 @@ describe("pack install smoke (real bin, pseudo-home)", () => {
 
       // Identical write sets across the two source lanes: same paths, same
       // classes, same bytes (SHA), same sizes and token estimates.
-      const localReceipt = await readReceipt(fixture, "scaffold");
+      const localReceipt = await readReceipt(fixture, CATALOG_PACK);
       expect(localReceipt.files).toEqual(catalogReceipt.files);
       await expectReceiptMatchesDisk(fixture, localReceipt);
-      await expectLedgerMatchesReceipt(fixture, "scaffold", localReceipt);
+      await expectLedgerMatchesReceipt(fixture, CATALOG_PACK, localReceipt);
 
       // Receipt provenance differs per source. The engine's resolved-source
       // vocabulary is {local-path, npm-package} and a catalog id resolves to
@@ -474,12 +554,19 @@ describe("pack install smoke (real bin, pseudo-home)", () => {
       const fixture = getFixture();
       await initRepo(fixture);
 
-      const first = await runAddJson(fixture, ["ops"]);
+      // TEST CHANGE, justified (2026-10-21_packs-rebuilt-02/u1-refixture-pack-tests): the
+      // installed pack was `ops` and the bystander `scaffold`, both retired by the package
+      // (REQ-PACK-023). The pack is `frontend`; the bystander a made-up pack installed under
+      // the waiver, since no second catalog pack is certain once the three leave.
+      const first = await runAddJson(fixture, [CATALOG_PACK]);
       expect(first.result.code, first.result.stderr).toBe(0);
-      const receiptBefore = await readReceipt(fixture, "ops");
+      const receiptBefore = await readReceipt(fixture, CATALOG_PACK);
       // A second installed pack + the adapter surfaces stand as bystanders
       // that the scoped uninstall must leave intact.
-      const bystander = await runAddJson(fixture, ["scaffold"]);
+      const bystanderPack = await stageSyntheticPack(fixture, BYSTANDER_PACK, {
+        "commands/st-bystander.md": madeUpArtifact("bystander", "command", "Runs the acme bystander check."),
+      });
+      const bystander = await runAddJson(fixture, [bystanderPack, "--allow-untrusted"]);
       expect(bystander.result.code, bystander.result.stderr).toBe(0);
 
       // Projection liveness: sync emits installed pack content into the live
@@ -495,7 +582,7 @@ describe("pack install smoke (real bin, pseudo-home)", () => {
       // the surface asserted is now the one this client actually reads.
       const syncAfterInstall = await fixture.run(["sync"]);
       expect(syncAfterInstall.code, syncAfterInstall.stderr).toBe(0);
-      const projectedSkill = repoPath(fixture, ".claude/skills/st-ci-pipeline/SKILL.md");
+      const projectedSkill = repoPath(fixture, CATALOG_SKILL_COPY);
       const corpusSkill = repoPath(fixture, ".claude/skills/st-qa/SKILL.md");
       expect(await exists(repoPath(fixture, ".agents/skills"))).toBe(false);
       expect(await exists(projectedSkill), "pack skill projected after install+sync").toBe(true);
@@ -504,20 +591,20 @@ describe("pack install smoke (real bin, pseudo-home)", () => {
       // Ledger-driven uninstall: files gone, rows gone, everything else intact.
       // `clean --pack` also removes the copies `sync` projected from the pack
       // into the clients' folders, the skill above included (REQ-PLUGIN-046).
-      const clean = await fixture.run(["clean", "--pack", "ops", "-y"]);
+      const clean = await fixture.run(["clean", "--pack", CATALOG_PACK, "-y"]);
       expect(clean.code, clean.stderr).toBe(0);
-      expect(clean.stdout).toContain('Pack "ops" removed');
-      expect(await exists(repoPath(fixture, packInstallDir("ops")))).toBe(false);
+      expect(clean.stdout).toContain(`Pack "${CATALOG_PACK}" removed`);
+      expect(await exists(repoPath(fixture, packInstallDir(CATALOG_PACK)))).toBe(false);
       // TEST CHANGE, justified (2026-10-08, row 2026-10-08_maintainer-tooling/build/68):
       // the projected copy is checked right after `clean --pack`, before any sync.
       expect(await exists(projectedSkill), "pack copy removed by clean --pack itself").toBe(false);
       expect(await exists(corpusSkill), "corpus skill survives the scoped clean").toBe(true);
-      expect(await readLedgerRows(fixture, "pack:ops")).toEqual([]);
+      expect(await readLedgerRows(fixture, `pack:${CATALOG_PACK}`)).toEqual([]);
       expect(
-        await exists(repoPath(fixture, `${packInstallDir("scaffold")}/receipt.json`)),
+        await exists(repoPath(fixture, `${packInstallDir(BYSTANDER_PACK)}/receipt.json`)),
         "the other installed pack survives a scoped clean",
       ).toBe(true);
-      expect((await readLedgerRows(fixture, "pack:scaffold")).length).toBeGreaterThan(0);
+      expect((await readLedgerRows(fixture, `pack:${BYSTANDER_PACK}`)).length).toBeGreaterThan(0);
       expect(await exists(repoPath(fixture, "AGENTS.md")), "adapter files survive").toBe(true);
 
       // After the scoped clean, sync renders no copy of the removed pack and
@@ -529,12 +616,12 @@ describe("pack install smoke (real bin, pseudo-home)", () => {
 
       // Converged state: re-install after clean succeeds and is byte-identical
       // per the receipt hashes.
-      const again = await runAddJson(fixture, ["ops"]);
+      const again = await runAddJson(fixture, [CATALOG_PACK]);
       expect(again.result.code, again.result.stderr).toBe(0);
-      const receiptAfter = await readReceipt(fixture, "ops");
+      const receiptAfter = await readReceipt(fixture, CATALOG_PACK);
       expect(contentHashes(receiptAfter)).toEqual(contentHashes(receiptBefore));
       await expectReceiptMatchesDisk(fixture, receiptAfter);
-      await expectLedgerMatchesReceipt(fixture, "ops", receiptAfter);
+      await expectLedgerMatchesReceipt(fixture, CATALOG_PACK, receiptAfter);
     },
   );
 
@@ -546,9 +633,11 @@ describe("pack install smoke (real bin, pseudo-home)", () => {
       await initRepo(fixture);
 
       // Deny by pack id: refused naming the matched rule, nothing written.
-      await writeOrgPolicy(fixture, { version: 1, packs: { deny: ["ops"] } });
+      // TEST CHANGE, justified (2026-10-21_packs-rebuilt-02/u1-refixture-pack-tests): the
+      // pack denied and added was `ops`, which the package retires (REQ-PACK-023).
+      await writeOrgPolicy(fixture, { version: 1, packs: { deny: [CATALOG_PACK] } });
       const beforeDeny = await treeDigest(fixture.repoDir);
-      const denied = await runAddJson(fixture, ["ops"]);
+      const denied = await runAddJson(fixture, [CATALOG_PACK]);
       expect(denied.result.code).toBe(1);
       // parseOneJsonDoc inside runAddJson already held stdout to exactly one
       // JSON document — the --json deny-case contract.
@@ -557,14 +646,14 @@ describe("pack install smoke (real bin, pseudo-home)", () => {
       expect(denyDoc.command).toBe("add");
       expect(denyDoc.error.code).toBe("INTEGRITY_ERROR");
       expect(denyDoc.error.message).toContain("denied by the org trust policy");
-      expect(denyDoc.error.message).toContain('matched rule: "ops"');
+      expect(denyDoc.error.message).toContain(`matched rule: "${CATALOG_PACK}"`);
       expect(await treeDigest(fixture.repoDir), "deny must write nothing").toBe(beforeDeny);
       expect(await readLedgerRows(fixture, "pack:")).toEqual([]);
 
       // Malformed by shape (deny is not an array): fail-closed, named as such.
-      await writeOrgPolicy(fixture, { version: 1, packs: { deny: "ops" } });
+      await writeOrgPolicy(fixture, { version: 1, packs: { deny: CATALOG_PACK } });
       const beforeShape = await treeDigest(fixture.repoDir);
-      const shape = await runAddJson(fixture, ["ops"]);
+      const shape = await runAddJson(fixture, [CATALOG_PACK]);
       expect(shape.result.code).toBe(1);
       const shapeDoc = shape.doc as unknown as FailureEnvelope;
       expect(shapeDoc.error.code).toBe("CONFIG_ERROR");
@@ -576,7 +665,7 @@ describe("pack install smoke (real bin, pseudo-home)", () => {
       // Malformed by syntax (not JSON at all): same fail-closed refusal class.
       await writeOrgPolicy(fixture, "not json {");
       const beforeSyntax = await treeDigest(fixture.repoDir);
-      const syntax = await runAddJson(fixture, ["ops"]);
+      const syntax = await runAddJson(fixture, [CATALOG_PACK]);
       expect(syntax.result.code).toBe(1);
       expect((syntax.doc as unknown as FailureEnvelope).error.code).toBe("CONFIG_ERROR");
       expect(await treeDigest(fixture.repoDir), "broken policy must write nothing").toBe(
@@ -739,10 +828,21 @@ describe("pack install smoke (real bin, pseudo-home)", () => {
       expect(failure.error.message).toContain('"network"');
       expect(await treeDigest(fixture.repoDir), "a refused pack must write nothing").toBe(before);
 
-      // The bundled ops pack passes the same gate, and its receipt records it.
-      await installViaCatalog(fixture, "ops", ["agents", "commands", "skills"]);
-      const receipt = await readReceipt(fixture, "ops");
+      // A pack whose agents stay inside its footprint passes the same gate, and
+      // its receipt records it.
+      // TEST CHANGE, justified (2026-10-21_packs-rebuilt-02/u1-refixture-pack-tests): this was
+      // the bundled `ops` pack's two agents, through the catalog; `ops` is retired
+      // (REQ-PACK-023) and no pack the package keeps ships an agent, so a made-up pack declares
+      // two, one with a narrower grant than the other, installed under the waiver.
+      const agentPack = await stageAgentPack(fixture, AGENT_PACK, {
+        "agents/stamity-deployer.md": packAgentFixture("deployer", ["read", "edit", "execute"]),
+        "agents/stamity-responder.md": packAgentFixture("responder", ["read", "execute"]),
+      });
+      const installed = await runAddJson(fixture, [agentPack, "--allow-untrusted"]);
+      expect(installed.result.code, installed.result.stderr).toBe(0);
+      const receipt = await readReceipt(fixture, AGENT_PACK);
       expect(receipt.checks["agentCapabilities"]).toBe("pass");
+      expect(receipt.files.map((file) => file.class)).toEqual(["agents", "agents"]);
 
       const synced = await fixture.run(["sync"]);
       expect(synced.code, synced.stderr).toBe(0);
@@ -758,22 +858,25 @@ describe("pack install smoke (real bin, pseudo-home)", () => {
       // composer's hand-off was parked; it is wired now, so the assertion is
       // against the real file — which is the only version that proves the
       // generated guard will find these rows.
-      const footprint = await opsFootprint();
-      for (const runtimeId of ["stamity-devops", "stamity-incident-responder"]) {
+      const expected: Record<string, readonly string[]> = {
+        "stamity-deployer": ["read", "edit", "execute"],
+        "stamity-responder": ["read", "execute"],
+      };
+      for (const [runtimeId, allow] of Object.entries(expected)) {
         const row = document.policies.find((candidate) => candidate.agentId === runtimeId);
-        expect(row?.allow, runtimeId).toEqual(["read", "edit", "execute"]);
-        expect(row?.source, runtimeId).toEqual({ kind: "pack", packId: "ops" });
+        expect(row?.allow, runtimeId).toEqual(allow);
+        expect(row?.source, runtimeId).toEqual({ kind: "pack", packId: AGENT_PACK });
         // Every granted category is one the pack disclosed: emission grants the
         // intersection the install preview showed, never a wider re-reading of
         // the agent's own frontmatter.
-        for (const category of row?.allow ?? []) expect(footprint).toContain(category);
+        for (const category of row?.allow ?? []) expect(AGENT_PACK_FOOTPRINT).toContain(category);
       }
 
       // The agent files the clients read agree with the document: a policy row
       // the guard admits plus an empty `tools:` on the emitted sub-agent would
       // still be an inert install, one enforcement point short.
       const emittedAgent = await readFile(
-        repoPath(fixture, ".claude/agents/stamity-devops.md"),
+        repoPath(fixture, ".claude/agents/stamity-deployer.md"),
         "utf8",
       );
       expect(emittedAgent).toMatch(/^tools: \S/m);
@@ -789,17 +892,18 @@ describe("pack install smoke (real bin, pseudo-home)", () => {
 
       // A stage of the bundled pack with one file corrupted after its
       // integrity map was written — the pinned-or-refuse tamper case.
-      const staged = await stagePack(fixture, "product-audit");
-      await tamperFile(staged, "rules/stamity-epic-audit-frame.md");
+      // TEST CHANGE, justified (2026-10-21_packs-rebuilt-02/u1-refixture-pack-tests): the stage
+      // was `product-audit` with its rule tampered; that pack is retired (REQ-PACK-023), so the
+      // stage is `frontend` with one of its skills tampered.
+      const staged = await stagePack(fixture, CATALOG_PACK);
+      await tamperFile(staged, CATALOG_SKILL);
 
       const before = await treeDigest(fixture.repoDir);
       const { result, doc } = await runAddJson(fixture, [staged, "--allow-untrusted"]);
       expect(result.code).toBe(1);
       const failure = doc as unknown as FailureEnvelope;
       expect(failure.error.code).toBe("INTEGRITY_ERROR");
-      expect(failure.error.message).toContain(
-        "rules/stamity-epic-audit-frame.md does not match its digest",
-      );
+      expect(failure.error.message).toContain(`${CATALOG_SKILL} does not match its digest`);
 
       // Nothing installed and no partial directory: the integrity gate
       // refuses at plan time, before any write — and the apply stage re-hashes
@@ -807,7 +911,7 @@ describe("pack install smoke (real bin, pseudo-home)", () => {
       // plan/apply race and its rollback are unit-covered in
       // test/pack/install.test.ts; through the bin the observable is exactly
       // this: no .stamity/packs/<id> residue).
-      expect(await exists(repoPath(fixture, packInstallDir("product-audit")))).toBe(false);
+      expect(await exists(repoPath(fixture, packInstallDir(CATALOG_PACK)))).toBe(false);
       expect(await treeDigest(fixture.repoDir), "refused install must write nothing").toBe(before);
       expect(await readLedgerRows(fixture, "pack:")).toEqual([]);
     },
@@ -962,15 +1066,16 @@ describe("pack install smoke (real bin, pseudo-home)", () => {
       // kept reaching the emitted setup.
       const fixture = getFixture();
       await initRepo(fixture);
-      await installViaCatalog(fixture, "ops", ["agents", "commands", "skills"]);
+      // TEST CHANGE, justified (2026-10-21_packs-rebuilt-02/u1-refixture-pack-tests): the pack
+      // was `ops` and the projected skill its `st-release-runbook`; `ops` is retired
+      // (REQ-PACK-023), so the pack is `frontend` and the skill one of its own.
+      await installViaCatalog(fixture, CATALOG_PACK, CATALOG_PACK_CLASSES);
 
       const synced = await fixture.run(["sync"]);
       expect(synced.code, synced.stderr).toBe(0);
       // Claude-only fixture, so the live skills surface is this client's
       // own native root rather than the vendor-neutral tree it does not read.
-      // TEST CHANGE, justified: ops's release skill folder was renamed to st-release-runbook
-      // so it no longer shares the st-release name with the pack's command.
-      const packSkill = ".claude/skills/st-release-runbook/SKILL.md";
+      const packSkill = CATALOG_SKILL_COPY;
       expect(await exists(repoPath(fixture, packSkill))).toBe(true);
 
       await writeOrgPolicy(fixture, { version: 1, packs: { deny: ["*"] } });
@@ -978,12 +1083,12 @@ describe("pack install smoke (real bin, pseudo-home)", () => {
       // Degrades to a warning plus zero projection, never an unrecoverable sync.
       expect(denied.code, denied.stderr).toBe(0);
       expect(`${denied.stdout}${denied.stderr}`).toContain("denied by the org trust policy");
-      expect(`${denied.stdout}${denied.stderr}`).toContain("ops");
+      expect(`${denied.stdout}${denied.stderr}`).toContain(CATALOG_PACK);
       expect(await exists(repoPath(fixture, packSkill))).toBe(false);
 
       // The pack's own files and ledger rows are untouched, so re-allowing the
       // source restores it with no re-install.
-      expect(await readLedgerRows(fixture, "pack:ops")).not.toEqual([]);
+      expect(await readLedgerRows(fixture, `pack:${CATALOG_PACK}`)).not.toEqual([]);
       await writeOrgPolicy(fixture, { version: 1, packs: {} });
       const restored = await fixture.run(["sync"]);
       expect(restored.code, restored.stderr).toBe(0);
@@ -1006,21 +1111,24 @@ describe("pack install smoke (real bin, pseudo-home)", () => {
       // hash after an ordinary edit, which is the input that row reads.
       const fixture = getFixture();
       await initRepo(fixture);
-      await installViaCatalog(fixture, "ops", ["agents", "commands", "skills"]);
+      // TEST CHANGE, justified (2026-10-21_packs-rebuilt-02/u1-refixture-pack-tests): the pack
+      // was `ops` and the edited file its devops agent; `ops` is retired (REQ-PACK-023), so the
+      // pack is `frontend` and the edited file one of its skills — any installed file serves.
+      await installViaCatalog(fixture, CATALOG_PACK, CATALOG_PACK_CLASSES);
 
-      const agentRel = `${packInstallDir("ops")}/agents/stamity-devops.md`;
-      const rows = await readLedgerRows(fixture, "pack:ops");
-      const recorded = rows.find((row) => row.path === agentRel)?.contentHash;
+      const editedRel = `${packInstallDir(CATALOG_PACK)}/${CATALOG_SKILL}`;
+      const rows = await readLedgerRows(fixture, `pack:${CATALOG_PACK}`);
+      const recorded = rows.find((row) => row.path === editedRel)?.contentHash;
       expect(recorded, "the install records a hash for every byte it lands").toBeDefined();
 
-      const agentPath = repoPath(fixture, agentRel);
-      await writeFile(agentPath, `${await readFile(agentPath, "utf8")}\nAppended after install.\n`, "utf8");
+      const editedPath = repoPath(fixture, editedRel);
+      await writeFile(editedPath, `${await readFile(editedPath, "utf8")}\nAppended after install.\n`, "utf8");
 
-      expect(await fileSha256(agentPath)).not.toBe(recorded);
+      expect(await fileSha256(editedPath)).not.toBe(recorded);
       // The ledger row is NOT rewritten by the edit — which is what makes the
       // disagreement detectable at all.
-      const after = await readLedgerRows(fixture, "pack:ops");
-      expect(after.find((row) => row.path === agentRel)?.contentHash).toBe(recorded);
+      const after = await readLedgerRows(fixture, `pack:${CATALOG_PACK}`);
+      expect(after.find((row) => row.path === editedRel)?.contentHash).toBe(recorded);
     },
   );
 });

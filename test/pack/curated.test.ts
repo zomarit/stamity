@@ -40,7 +40,13 @@ const FIRST_PARTY_IDS: readonly string[] = readdirSync(join(REPO_ROOT, "packs"),
   .map((entry) => entry.name)
   .toSorted();
 
-const PACKAGE_VERSION = (JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")) as { version: string })
+// TEST CHANGE, justified (2026-10-21_packs-rebuilt-02/u1-refixture-pack-tests): the staged
+// tamper, version and pin cases below read `ops`, which the package retires (REQ-PACK-023);
+// they read `frontend`, the first-party pack it keeps, and one of its skills.
+const STAGED_PACK = "frontend";
+const STAGED_FILE = ["skills", "st-browser-evidence", "SKILL.md"] as const;
+
+const PACKAGE_VERSION =(JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")) as { version: string })
   .version;
 
 const sha256 = (bytes: Buffer): string => createHash("sha256").update(bytes).digest("hex");
@@ -134,8 +140,8 @@ describe("pins-in-sync gate", () => {
 
   it("aggregate recompute over a tampered staged pack differs from its pin", async () => {
     const { packsDir } = await stagePacks(getTemp());
-    const root = join(packsDir, "ops");
-    await tamperFile(join(root, "commands", "st-release.md"));
+    const root = join(packsDir, STAGED_PACK);
+    await tamperFile(join(root, ...STAGED_FILE));
 
     const manifest = await readPackManifest(root);
     const recomputed = Object.fromEntries(
@@ -149,8 +155,8 @@ describe("pins-in-sync gate", () => {
 
     // The declared map still matches the pin — the mismatch below is the
     // tampered bytes, not an incidental difference in the recompute.
-    expect(computeAggregateContentSha(manifest.integrity)).toBe(pinOf("ops"));
-    expect(computeAggregateContentSha(recomputed)).not.toBe(pinOf("ops"));
+    expect(computeAggregateContentSha(manifest.integrity)).toBe(pinOf(STAGED_PACK));
+    expect(computeAggregateContentSha(recomputed)).not.toBe(pinOf(STAGED_PACK));
   });
 });
 
@@ -485,7 +491,7 @@ describe("generate-pack-manifests.mjs", () => {
 
   it("--write sets each version to package.json's and keeps every other field in its order", async () => {
     const { packsDir, pinsPath } = await stagePacks(getTemp());
-    const manifestPath = join(packsDir, "ops", PACK_MANIFEST_FILE);
+    const manifestPath = join(packsDir, STAGED_PACK, PACK_MANIFEST_FILE);
     const source = JSON.parse(await readFile(manifestPath, "utf8")) as Record<string, unknown>;
     await writeFile(manifestPath, `${JSON.stringify({ ...source, version: "0.0.9" }, null, 2)}\n`, "utf8");
 
@@ -498,7 +504,7 @@ describe("generate-pack-manifests.mjs", () => {
       expect(JSON.stringify(written[key]), key).toBe(JSON.stringify(source[key]));
     }
     // No pin moves: the version is outside the integrity map the pin covers.
-    expect(await readFile(pinsPath, "utf8")).toContain(`"ops": "${pinOf("ops")}"`);
+    expect(await readFile(pinsPath, "utf8")).toContain(`"${STAGED_PACK}": "${pinOf(STAGED_PACK)}"`);
   });
 
   it("a tampered staged pack fails --check with an integrity refusal naming the pack", async () => {
@@ -506,10 +512,10 @@ describe("generate-pack-manifests.mjs", () => {
     const seeded = runGenerator(["--packs-dir", packsDir, "--pins", pinsPath]);
     expect(seeded.status, seeded.output).toBe(0);
 
-    await tamperFile(join(packsDir, "ops", "commands", "st-release.md"));
+    await tamperFile(join(packsDir, STAGED_PACK, ...STAGED_FILE));
     const run = runGenerator(["--check", "--packs-dir", packsDir, "--pins", pinsPath]);
     expect(run.status).toBe(1);
-    expect(run.output).toContain("ops");
+    expect(run.output).toContain(STAGED_PACK);
     expect(run.output).toMatch(/integrity/i);
   });
 
@@ -519,11 +525,11 @@ describe("generate-pack-manifests.mjs", () => {
     expect(seeded.status, seeded.output).toBe(0);
 
     const pins = await readFile(pinsPath, "utf8");
-    await writeFile(pinsPath, pins.replace(pinOf("ops"), "0".repeat(64)), "utf8");
+    await writeFile(pinsPath, pins.replace(pinOf(STAGED_PACK), "0".repeat(64)), "utf8");
 
     const run = runGenerator(["--check", "--packs-dir", packsDir, "--pins", pinsPath]);
     expect(run.status).toBe(1);
-    expect(run.output).toContain('"ops"');
+    expect(run.output).toContain(`"${STAGED_PACK}"`);
     expect(run.output).toContain("generate-pack-manifests");
   });
 
