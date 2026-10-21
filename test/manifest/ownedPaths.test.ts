@@ -32,6 +32,7 @@ import { outputOwners, type AdapterOutput } from "../../src/types/content.ts";
 import { TOOLS, type Tool } from "../../src/types/core.ts";
 import type { SetupManifest } from "../../src/types/manifest.ts";
 import { runInProcess } from "../support/inProcess.ts";
+import { madeUpArtifact, writeMadeUpPack } from "../support/packFixtures.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
 /**
@@ -111,6 +112,8 @@ describe("ownedPathKind", () => {
     expect(ownedPathKind({ path: ".stamity/packs/acme__ops/x.md", adapter: "pack:@acme/ops", artifactType: "infra" })).toBe("pack");
   });
 
+  // The pack id `ops` in the rows below is a made-up string, never a read of the retired
+  // first-party `ops` pack: these cases judge a path and an owner, not a pack's files.
   it.each([
     ["an infra row elsewhere", tool("docs/owner.md")],
     ["an infra row in a content folder", tool(".claude/agents/stamity-x.md")],
@@ -166,6 +169,7 @@ describe("ownedFolderOf", () => {
 });
 
 describe("packDirName", () => {
+  // Made-up ids: `ops` is a string here, never the retired first-party pack's files.
   it.each(["ops", "@acme/ops", "acme.tools"])("agrees with the installer's folder for %j", (packId) => {
     expect(packDirName(packId)).toBe(packDirRelPath(packId).split("/").at(-1));
   });
@@ -235,6 +239,10 @@ const REPO_FILES: Readonly<Record<string, string>> = {
   ".stamity/overrides/skills/my-skill/SKILL.md": "---\nid: my-skill\ntype: skill\ndescription: A team skill for doing a thing well.\n---\n\n# My skill\n\nDo it.\n",
 };
 
+/** The made-up pack the "installed pack" scenario adds, and the agent row it must plan. */
+const PACK_ID = "acme-ship";
+const PACK_AGENT_ROW = { path: ".claude/agents/stamity-acme-deployer.md", adapter: "claude", artifactType: "agent" };
+
 async function plannedOutputs(scenario: Scenario, sub: string): Promise<AdapterOutput[]> {
   const root = getTemp().path(sub);
   for (const [path, content] of Object.entries(REPO_FILES)) {
@@ -253,7 +261,16 @@ async function plannedOutputs(scenario: Scenario, sub: string): Promise<AdapterO
   };
   await writeManifest(root, manifest, { now: T0 });
   if (scenario.pack === true) {
-    const added = await runInProcess([addCommand], ["add", "ops", "-y"], { cwd: root });
+    // TEST CHANGE, justified (2026-10-21, plan 018-packs-rebuilt-02, unit u2-refixture-cli-tests,
+    // REQ-PACK-023): the installed pack was the catalog's `ops`, whose agents put agent rows in the
+    // plan; `ops` retires in this package and `frontend` ships no agent, so the pack is a made-up one
+    // with one agent and one skill, added from a path with `--allow-untrusted` (no trust basis), and
+    // the scenario below now asserts the agent row it plans instead of counting on one.
+    const packDir = await writeMadeUpPack(getTemp().path(`${sub}-pack`), PACK_ID, {
+      "agents/stamity-acme-deployer.md": madeUpArtifact("acme-deployer", "agent", "Deploys the acme service."),
+      "skills/st-acme-pipeline/SKILL.md": madeUpArtifact("acme-pipeline", "skill", "Designs the acme pipeline."),
+    });
+    const added = await runInProcess([addCommand], ["add", packDir, "--allow-untrusted", "-y"], { cwd: root });
     expect(added.code, added.stderr).toBe(0);
   }
   const plan = await planSync(root, ENGINE_VERSION, { runner: () => "" });
@@ -284,6 +301,8 @@ describe("every row the head's planner plans lies in the bound", () => {
       const rows = await plannedRows(scenario, `repo-${index}`);
       expect(rows.length).toBeGreaterThan(0);
       expect(rows.filter((row) => ownedPathKind(row) === null)).toEqual([]);
+      // The installed pack's agent is planned, so its row is one the bound is held to.
+      if (scenario.pack === true) expect(rows).toContainEqual(PACK_AGENT_ROW);
     },
     60_000,
   );

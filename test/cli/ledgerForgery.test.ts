@@ -223,12 +223,15 @@ describe("a committed ledger row outside the owned-path bound refuses the manife
 
   it("clean -y --pack acts on nothing either", async () => {
     const root = await initialisedRepo();
-    const added = await runInProcess([addCommand], ["add", "ops", "-y"], { cwd: root });
+    // TEST CHANGE, justified (2026-10-21, plan 018-packs-rebuilt-02, unit u2-refixture-cli-tests,
+    // REQ-PACK-023): the installed pack was the catalog's `ops`, which retires in this package; it is
+    // the catalog's `frontend`, the first-party pack left. The forged row and the refusal are unchanged.
+    const added = await runInProcess([addCommand], ["add", "frontend", "-y"], { cwd: root });
     expect(added.code).toBe(0);
     await forgeRows(root, [hashedInfraRow("docs/owner.md", OWNER_FILES["docs/owner.md"] as string)]);
     const before = await snapshot(root);
 
-    const clean = await runJson(cleanCommand, root, ["clean", "-y", "--pack", "ops"]);
+    const clean = await runJson(cleanCommand, root, ["clean", "-y", "--pack", "frontend"]);
 
     expect(clean.code).toBe(1);
     expect(clean.doc.error?.code).toBe("CONFIG_ERROR");
@@ -700,20 +703,24 @@ describe("a pack the org policy denies leaves the clients' folders", () => {
     reclaim: { entries: { path: string; action: string; detail: string; proof?: string }[] };
   };
 
-  /** A Claude setup with `ops` installed and synced; its copies are the claude rows the install added. */
-  async function opsProjected(): Promise<{ root: string; copies: string[] }> {
+  // TEST CHANGE, justified (2026-10-21, plan 018-packs-rebuilt-02, unit u2-refixture-cli-tests,
+  // REQ-PACK-023): the denied pack was the catalog's `ops`, read for its `st-release-runbook` copy;
+  // `ops` retires in this package, so it is the catalog's `frontend` and its `st-browser-evidence`
+  // copy. Every assertion on the denied pack's copies, rows and discovery is unchanged.
+  /** A Claude setup with `frontend` installed and synced; its copies are the claude rows the install added. */
+  async function frontendProjected(): Promise<{ root: string; copies: string[] }> {
     const root = await initialisedRepo(["claude"]);
     const rowsOf = async (): Promise<LedgerEntry[]> =>
       (JSON.parse(await readFile(join(root, ".stamity", "manifest.json"), "utf8")) as { ledger: LedgerEntry[] }).ledger;
     const before = new Set((await rowsOf()).map((row) => row.path));
-    const added = await runInProcess([addCommand], ["add", "ops", "-y"], { cwd: root });
+    const added = await runInProcess([addCommand], ["add", "frontend", "-y"], { cwd: root });
     expect(added.code, added.stderr).toBe(0);
     const synced = await runInProcess([syncCommand], ["sync", "-y"], { cwd: root });
     expect(synced.code, synced.stderr).toBe(0);
     const copies = (await rowsOf())
       .filter((row) => row.adapter === "claude" && !before.has(row.path) && row.path.startsWith(".claude/"))
       .map((row) => row.path);
-    expect(copies).toContain(".claude/skills/st-release-runbook/SKILL.md");
+    expect(copies).toContain(".claude/skills/st-browser-evidence/SKILL.md");
     return { root, copies };
   }
 
@@ -722,7 +729,7 @@ describe("a pack the org policy denies leaves the clients' folders", () => {
   }
 
   it("sync -y proves and removes the denied pack's copies, and writes none of them", async () => {
-    const { root, copies } = await opsProjected();
+    const { root, copies } = await frontendProjected();
     await denyEveryPack(root);
 
     const sync = await runInProcess([syncCommand], ["sync", "-y", "--json"], { cwd: root });
@@ -736,14 +743,14 @@ describe("a pack the org policy denies leaves the clients' folders", () => {
       expect(doc.wrote.map((row) => row.path), copy).not.toContain(copy);
     }
     const ledger = (JSON.parse(await readFile(join(root, ".stamity", "manifest.json"), "utf8")) as { ledger: LedgerEntry[] }).ledger;
-    expect(ledger.some((row) => row.adapter === "pack:ops")).toBe(true);
+    expect(ledger.some((row) => row.adapter === "pack:frontend")).toBe(true);
     for (const copy of copies) expect(ledger.map((row) => row.path), copy).not.toContain(copy);
   }, 60_000); // TEST CHANGE, timeout only (2026-10-11, row 2026-10-11_release-1-14-0/fix/12): the file's explicit budget; the 20 s default times out under load.
 
   it("keeps an owner's own file at one of those names under a forged row hashing it", async () => {
-    const { root } = await opsProjected();
-    const copy = ".claude/skills/st-release-runbook/SKILL.md";
-    const ownerBytes = "---\nname: st-release-runbook\ndescription: our own runbook\n---\n\nOur release steps.\n";
+    const { root } = await frontendProjected();
+    const copy = ".claude/skills/st-browser-evidence/SKILL.md";
+    const ownerBytes = "---\nname: st-browser-evidence\ndescription: our own evidence notes\n---\n\nOur evidence steps.\n";
     await writeFile(join(root, copy), ownerBytes, "utf8");
     const manifestFile = join(root, ".stamity", "manifest.json");
     const manifest = JSON.parse(await readFile(manifestFile, "utf8")) as { ledger: LedgerEntry[] };
@@ -766,9 +773,9 @@ describe("a pack the org policy denies leaves the clients' folders", () => {
   // for the next sync to try again, and its entry names why the rendering
   // could not be built instead of calling it an owner's file.
   it("keeps the copies and their rows when the proof cannot be built, naming why", async () => {
-    const { root, copies } = await opsProjected();
+    const { root, copies } = await frontendProjected();
     await denyEveryPack(root);
-    await rm(join(root, ".stamity", "packs", "ops"), { recursive: true, force: true });
+    await rm(join(root, ".stamity", "packs", "frontend"), { recursive: true, force: true });
 
     const sync = await runInProcess([syncCommand], ["sync", "-y", "--json"], { cwd: root });
 
@@ -780,7 +787,7 @@ describe("a pack the org policy denies leaves the clients' folders", () => {
         | undefined;
       expect(entry, copy).toMatchObject({ action: "skipped-user-content", unproven: true });
       expect(entry?.detail, copy).toContain("could not be built (");
-      expect(entry?.detail, copy).toContain("ops");
+      expect(entry?.detail, copy).toContain("frontend");
       expect(entry?.detail, copy).not.toContain("an owner's file");
       expect(existsSync(join(root, copy)), copy).toBe(true);
     }
@@ -794,9 +801,9 @@ describe("a pack the org policy denies leaves the clients' folders", () => {
   // row and no later sync outlive it. A copy the proof could not judge is kept, and its entry
   // says so and asks for the delete by hand, unless the file is the operator's.
   it("clean -y keeps the copies when the proof cannot be built, and promises no retry it removes", async () => {
-    const { root, copies } = await opsProjected();
+    const { root, copies } = await frontendProjected();
     await denyEveryPack(root);
-    await rm(join(root, ".stamity", "packs", "ops"), { recursive: true, force: true });
+    await rm(join(root, ".stamity", "packs", "frontend"), { recursive: true, force: true });
 
     const clean = await runInProcess([cleanCommand], ["clean", "-y", "--json"], { cwd: root });
 
@@ -819,20 +826,20 @@ describe("a pack the org policy denies leaves the clients' folders", () => {
   }, 60_000); // TEST CHANGE, timeout only (2026-10-11, row 2026-10-11_release-1-14-0/fix/12): the file's explicit budget; the 20 s default times out under load.
 
   it("admits a denied pack to discovery only inside the proof's opt-out", async () => {
-    const { root } = await opsProjected();
+    const { root } = await frontendProjected();
     await denyEveryPack(root);
     const manifest = JSON.parse(await readFile(join(root, ".stamity", "manifest.json"), "utf8")) as SetupManifest;
 
     const honoured = await discoverInstalledPacksWithPolicy(root, manifest);
-    expect(honoured.packs.map((pack) => pack.id)).not.toContain("ops");
-    expect(honoured.denied.map((pack) => pack.id)).toEqual(["ops"]);
+    expect(honoured.packs.map((pack) => pack.id)).not.toContain("frontend");
+    expect(honoured.denied.map((pack) => pack.id)).toEqual(["frontend"]);
 
     const forProof = await ignoringPolicyDenialForProof(() => discoverInstalledPacksWithPolicy(root, manifest));
-    expect(forProof.packs.map((pack) => pack.id)).toContain("ops");
+    expect(forProof.packs.map((pack) => pack.id)).toContain("frontend");
     expect(forProof.denied).toEqual([]);
 
     // Scoped to the call: the next discovery honours the policy again.
-    expect((await discoverInstalledPacksWithPolicy(root, manifest)).denied.map((pack) => pack.id)).toEqual(["ops"]);
+    expect((await discoverInstalledPacksWithPolicy(root, manifest)).denied.map((pack) => pack.id)).toEqual(["frontend"]);
   }, 60_000); // TEST CHANGE, timeout only (2026-10-11, row 2026-10-11_release-1-14-0/fix/12): the file's explicit budget; the 20 s default times out under load.
 });
 

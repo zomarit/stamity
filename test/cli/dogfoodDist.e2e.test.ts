@@ -36,8 +36,14 @@ import { tsRepoFiles } from "../support/repoFixtures.ts";
  * GitUnavailableError -> ctx.skip().
  */
 
-/** The one pack the journey installs, staged from the checkout's supply. */
-const PACK_ID = "ops";
+/**
+ * The one pack the journey installs, staged from the checkout's supply.
+ *
+ * TEST CHANGE, justified (2026-10-21, plan 018-packs-rebuilt-02, unit u2-refixture-cli-tests,
+ * REQ-PACK-023): the staged pack was `ops`, which retires in this package; it is `frontend`, the
+ * first-party pack left. The journey and every assertion on it are unchanged.
+ */
+const PACK_ID = "frontend";
 
 /**
  * The local-dir spec, RELATIVE to the fixture repo cwd: stagePack lands the

@@ -289,7 +289,10 @@ describe("createEngine", () => {
       const catalog = engine.pack.curated.CURATED_PACKS;
       expect(packRootWalks).toBeGreaterThan(0);
       expect(catalog).toBe(freshCatalog.curatedPacks());
-      expect(catalog.map((entry) => entry.id)).toContain("ops");
+      // TEST CHANGE, justified (2026-10-21, plan 018-packs-rebuilt-02, unit u2-refixture-cli-tests,
+      // REQ-PACK-023): the catalog was read for `ops`, which retires in this package; it is read for
+      // `frontend`, a folder under `packs/` that stays, so the read is still proven non-empty.
+      expect(catalog.map((entry) => entry.id)).toContain("frontend");
       expect(spread).not.toHaveProperty("CURATED_PACKS");
     } finally {
       vi.doUnmock("../../src/shared/paths.ts");

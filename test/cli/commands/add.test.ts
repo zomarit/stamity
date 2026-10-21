@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import { lstat, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { addCommand, resolveSpecThroughCatalog, retiredPackRefusal } from "../../../src/cli/commands/add.ts";
 import { cleanCommand } from "../../../src/cli/commands/clean.ts";
@@ -101,6 +100,8 @@ beforeEach(() => {
   sigstoreSeam.signer = null;
 });
 
+// A made-up pack seeded inside each temp project (`seedPack`), never this checkout's retired
+// `packs/ops`; the catalog id `ops` below is likewise a made-up entry on the mocked seam.
 const PACK_SPEC = "./packs/ops";
 const PACK_ID = "@acme/ops";
 /** The scoped id flattened to one directory segment (engine packLedgerRelPath). */
@@ -1967,19 +1968,19 @@ describe("add — a re-add that would leave the installed copy's files behind", 
     });
     await writeManifest(project.dir, installed.manifest, { now: FIXED_NOW });
 
-    // The renamed ops this package ships, through the catalog seam at its pin.
-    const opsRoot = fileURLToPath(new URL("../../../packs/ops", import.meta.url));
-    const shipped = JSON.parse(await readFile(join(opsRoot, PACK_MANIFEST_FILE), "utf8")) as {
-      integrity: Record<string, string>;
-    };
-    catalogSeam.bundledRoots.set("ops", opsRoot);
-    catalogSeam.entries.set("ops", {
-      id: "ops",
-      description: "first-party ops pack",
-      source: { kind: "bundled" },
-      pin: { sha256: computeAggregateContentSha(shipped.integrity), tier: "curator-verified" },
-      notAudited: false,
-      disclaimer: "",
+    // TEST CHANGE, justified (2026-10-21, plan 018-packs-rebuilt-02, unit u2-refixture-cli-tests,
+    // REQ-PACK-023): the renamed version was read from this checkout's `packs/ops`, which this
+    // package deletes. Its renamed shape is frozen here instead, the parts this case reads: the two
+    // commands kept, the two skills renamed to `st-release-runbook` and `st-incident-runbook`.
+    // `ops` is a made-up catalog id on the mocked seam, as in `seedCatalogPack`; the refusal, the
+    // remedy and the clean-then-add loop are asserted as before.
+    await seedCatalogPack({
+      content: {
+        "commands/st-release.md": old["commands/st-release.md"] as string,
+        "commands/st-incident-response.md": old["commands/st-incident-response.md"] as string,
+        "skills/st-release-runbook/SKILL.md": "---\nid: release-runbook\ntype: skill\n---\nRelease steps.\n",
+        "skills/st-incident-runbook/SKILL.md": "---\nid: incident-runbook\ntype: skill\n---\nIncident steps.\n",
+      },
     });
     const before = await readProjectManifest();
 
