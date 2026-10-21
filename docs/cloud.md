@@ -239,11 +239,16 @@ paths from the base branch before Claude starts (documented). Stamity's own entr
 `.claude/settings.json` run copies of its hook scripts under `.claude/hooks/stamity/`, beside the
 copy of the agent tool policy document the guard reads, so the restore covers them too: on that run
 Stamity's own hooks run the base branch's scripts, and a pull request cannot change what the guard
-runs on its own Action run. The copies under `.stamity/generated/hooks/claude/` are still written,
-for the session start the charter has a session run by hand where no hook ran; no hook entry runs
-them. That holds only once the base branch carries a `sync` that writes those copies. Before it,
-the base branch's entries run the scripts under `.stamity/generated/hooks/claude/`, and those come
-from the pull request.
+runs on its own Action run. The older copies under `.stamity/generated/hooks/claude/` are no longer
+written: the upgrade's `sync` removes each one still as it wrote it and keeps and names one you
+edited, and a session run by hand where no hook ran starts
+`.claude/hooks/stamity/stamity-session-start.mjs`. All of this holds only once the base branch carries
+a `sync` that writes the copies under `.claude/hooks/stamity/`. Before it, the base branch's entries
+run the scripts under `.stamity/generated/hooks/claude/`, and those come from the pull request. That
+leaves a window on the upgrade itself: on a pull request whose base predates 1.16.0, the base's
+entries name the scripts that pull request's `sync` removed, so those hooks cannot start, and the
+guard's entry, failing closed, refuses every tool call on that Action run. The next run after the
+upgrade merges reads the new entries.
 
 What the restore does not cover still comes from the pull request. The base branch's `CLAUDE.md`
 imports `AGENTS.md`, which the restore does not cover, so the agent on that run reads that pull

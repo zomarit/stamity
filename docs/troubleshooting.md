@@ -42,7 +42,7 @@ doctor
   ok    pack-catalog         no installed pack is recorded in the ledger
   ok    moved-skills         no override, overlay or core copy of a skill that moved to a pack
   ok    model-pins           no selected client lists its models (claude runs on its family aliases)
-  ok    invariants           invariants 1.3.0 · ratified 2026-08-31 · last amended 2026-10-14
+  ok    invariants           invariants 1.3.1 · ratified 2026-08-31 · last amended 2026-10-21
 
 drift: clean — every generated file matches what a sync would write
 
@@ -445,9 +445,13 @@ mapping still fetches the fork's build, and its clause reads "which needs the re
 sandbox with no route to that registry, as a cloud session can be, fails the `npx` call.
 
 The entry runs the copy under `.claude/hooks/stamity/`, not the one under
-`.stamity/generated/hooks/claude/`, which is still written for the session start you run by hand
-where no hook ran. Claude Code's GitHub Action restores `.claude/` from the base branch on a pull
-request, so the copy there is the base branch's ([Cloud runs](cloud.md)).
+`.stamity/generated/hooks/claude/`, which is no longer written: the `sync` that upgrades a setup
+removes each old copy still as it wrote it, and keeps and names one you edited. The session start
+you run by hand where no hook ran is the copy under `.claude/hooks/stamity/` too. Claude Code's
+GitHub Action restores `.claude/` from the base branch on a pull request, so the copy there is the
+base branch's ([Cloud runs](cloud.md)), and on an upgrade pull request whose base predates 1.16.0 the
+base's entry names the removed old copy, so it refuses every tool call on that run until the upgrade
+merges.
 
 Two things reach that branch. The copy is gone — `clean` removed it, a fresh checkout has not
 synced, or the file was deleted by hand:
