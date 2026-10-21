@@ -397,6 +397,14 @@ export interface BuildContentIndexOptions {
    * one pack id claiming two different roots is refused.
    */
   packRoots?: readonly PackContentRoot[];
+  /**
+   * Renders the command a moved-skill overlay's remedy names (`add <pack>`) as
+   * the caller's pinned CLI call — the planner passes its own (`../emit/planner.ts`
+   * → `remedyCall`), so `sync` and `check` print the call `check`'s
+   * `moved-skills` row prints. Absent, the remedy keeps `stamity <verb>`: this
+   * layer holds no package identity to pin.
+   */
+  remedyCall?: (verb: string) => string;
 }
 
 /** Prefix that keeps command ids from shadowing a skill or agent of the same name. */
@@ -1000,7 +1008,8 @@ export async function buildContentIndex(
   // with no base here is skipped and reported, never thrown (the overlay-layer
   // header): the base may be a pack this repository has not installed.
   resolveLayerInto({ byKey, holders, duplicates, shadowedKeys }, [...shippedItems, ...forkItems]);
-  const forkPatched = await applyOverlays(fs, forkOverlays, byKey, "fork");
+  const remedyCall = options.remedyCall ?? bareRemedyCall;
+  const forkPatched = await applyOverlays(fs, forkOverlays, byKey, "fork", remedyCall);
 
   // Stage two: the repo's override tree over whatever stage one produced —
   // a fork replacement, a fork-patched item, or the untouched original — and
@@ -1012,7 +1021,7 @@ export async function buildContentIndex(
   // within its own layer (an overlay over a full override is refused), so the
   // shadow rows below read `holders`, which a patch never moves.
   resolveLayerInto({ byKey, holders, duplicates, shadowedKeys }, userItems);
-  const userPatched = await applyOverlays(fs, userOverlays, byKey, "user");
+  const userPatched = await applyOverlays(fs, userOverlays, byKey, "user", remedyCall);
 
   for (const [key, paths] of duplicates) collisions.push({ key, paths, kind: "duplicate-id" });
 
@@ -1622,12 +1631,16 @@ function refusePackSkillOverlay(
  * the reason the overlay-layer header gives, with the move named
  * ({@link forkMovedSkillSkipReason}).
  */
-function refuseMovedSkillOverlay(paths: readonly string[], moved: MovedCoreSkill): never {
+function refuseMovedSkillOverlay(
+  paths: readonly string[],
+  moved: MovedCoreSkill,
+  remedyCall: (verb: string) => string,
+): never {
   throw new EngineError(
     `skill "${moved.id}" moved from the core to the ${moved.pack} pack in ${moved.since}, and overlays ` +
       `on pack skills are not applied. Fold your change into a full override under another id, or ` +
       `remove ${paths.map(toPosixDisplayPath).join(" and ")}; to keep the shipped skill, ` +
-      `stamity add ${moved.pack}.`,
+      `${remedyCall(`add ${moved.pack}`)}.`,
     { code: "VALIDATION_ERROR" },
   );
 }
@@ -1642,13 +1655,18 @@ function refuseMovedSkillOverlay(paths: readonly string[], moved: MovedCoreSkill
  * patched. Phrased after the file path, so `stamity validate` prints it
  * verbatim as a warning.
  */
-function forkMovedSkillSkipReason(moved: MovedCoreSkill): string {
+function forkMovedSkillSkipReason(moved: MovedCoreSkill, remedyCall: (verb: string) => string): string {
   return (
     `patches skill "${moved.id}", which moved from the core to the ${moved.pack} pack in ` +
     `${moved.since}, and overlays on pack skills are not applied, so this fork patch is skipped ` +
     `and nothing in it reaches emission. Fold the change into a fork skill under another id, or ` +
-    `remove the file; to keep the shipped skill, stamity add ${moved.pack}.`
+    `remove the file; to keep the shipped skill, ${remedyCall(`add ${moved.pack}`)}.`
   );
+}
+
+/** The remedy call with no CLI context to pin it ({@link BuildContentIndexOptions.remedyCall}). */
+function bareRemedyCall(verb: string): string {
+  return `stamity ${verb}`;
 }
 
 /**
@@ -1894,6 +1912,7 @@ async function applyOverlays(
   overlays: readonly DiscoveredOverlay[],
   byKey: Map<string, CatalogItem>,
   layer: CustomizingOrigin,
+  remedyCall: (verb: string) => string,
 ): Promise<{ patched: Map<CatalogItem, CatalogItem>; skipped: SkippedUserEntry[] }> {
   const patched = new Map<CatalogItem, CatalogItem>();
   const skipped: SkippedUserEntry[] = [];
@@ -1922,12 +1941,14 @@ async function applyOverlays(
       if (layer === "user") {
         // A skill the core used to ship is not a typo: name where it went.
         const moved = overlay.type === "skill" ? movedCoreSkill(id) : undefined;
-        if (moved !== undefined) refuseMovedSkillOverlay(overlayPaths, moved);
+        if (moved !== undefined) refuseMovedSkillOverlay(overlayPaths, moved, remedyCall);
         refuseOrphanOverlay(overlayPaths, overlay.type, id);
       }
       const movedFork = overlay.type === "skill" ? movedCoreSkill(id) : undefined;
       const reason =
-        movedFork === undefined ? forkOrphanSkipReason(overlay.type, id) : forkMovedSkillSkipReason(movedFork);
+        movedFork === undefined
+          ? forkOrphanSkipReason(overlay.type, id)
+          : forkMovedSkillSkipReason(movedFork, remedyCall);
       skipped.push(...overlayPaths.map((filePath) => ({ type: overlay.type, filePath, reason })));
       continue;
     }
@@ -1954,11 +1975,13 @@ async function applyOverlays(
       const moved = movedCoreSkill(base.id);
       const movedHere = moved !== undefined && moved.pack === packId ? moved : undefined;
       if (layer === "user") {
-        if (movedHere !== undefined) refuseMovedSkillOverlay(overlayPaths, movedHere);
+        if (movedHere !== undefined) refuseMovedSkillOverlay(overlayPaths, movedHere, remedyCall);
         refusePackSkillOverlay(overlayPaths, packId, base.id);
       }
       const reason =
-        movedHere === undefined ? forkPackSkillSkipReason(packId, base.id) : forkMovedSkillSkipReason(movedHere);
+        movedHere === undefined
+          ? forkPackSkillSkipReason(packId, base.id)
+          : forkMovedSkillSkipReason(movedHere, remedyCall);
       skipped.push(...overlayPaths.map((filePath) => ({ type: overlay.type, filePath, reason })));
       continue;
     }

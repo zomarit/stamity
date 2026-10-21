@@ -738,10 +738,30 @@ describe("a full override of a skill that moved from the core to a pack", () => 
     };
   }
 
+  // TEST CHANGE, justified (2026-10-21, 2026-10-20_packs-rebuilt branch review round 1, M-1): the
+  // remedy was a bare `stamity add frontend`, a binary a fork's install does not have and the
+  // documented `npx` setup never puts on PATH; it is now the pinned call `check`'s `moved-skills`
+  // row prints for the same remedy, spelled out here from this context's package and version.
+  const PINNED_ADD = `\`npx -y @zomarit/stamity@${ENGINE_VERSION} add frontend\``;
   const warningText =
     `your override .stamity/overrides/skills/${MOVED_ID}/SKILL.md replaced a core skill that moved ` +
     "to the frontend pack; it now stands alone and tracks no shipped copy. Keep it, or remove it " +
-    "and stamity add frontend.";
+    `and run ${PINNED_ADD}.`;
+
+  it("refuses an overlay of the moved skill through the planner, naming the pinned add call", async () => {
+    await getRepo().seedFiles({
+      [`.stamity/overrides/skills/${MOVED_ID}/SKILL.customize.md`]: "House step.\n",
+    });
+
+    const planning = composeEmissionPlanner(ADAPTER_REGISTRY).planWithWarnings(
+      ctxOf(manifestFor(["claude", "cursor"]), { overrideRoot: overrideRootOf() }),
+    );
+
+    await expect(planning).rejects.toThrow(
+      `moved from the core to the frontend pack in 1.17.0, and overlays on pack skills are not applied`,
+    );
+    await expect(planning).rejects.toThrow(`; to keep the shipped skill, ${PINNED_ADD}.`);
+  });
 
   it("plans the override with the pack absent and warns once that it now stands alone", async () => {
     await getRepo().seedFiles(overrideSkill(MOVED_ID));

@@ -17,6 +17,7 @@ import {
 } from "../content/catalog.ts";
 import { parseFrontmatter } from "../content/frontmatter.ts";
 import { userContentRoot } from "../content/userContent.ts";
+import { assertPassthroughKeys } from "../emit/skillsProjection.ts";
 import { CONTENT_CLASSES, type ContentClass } from "../types/content.ts";
 import { estimateTokens } from "../guard/tokenEstimate.ts";
 import { readHookDefinitions } from "../hooks/userHooks.ts";
@@ -684,12 +685,20 @@ async function readPackArtifacts(
     // No frontmatter block is not an artifact, exactly as the content walk
     // reads it: a README under a class directory claims no id.
     const declared = parsed.hadFrontmatter ? parsed.frontmatter["id"] : undefined;
+    const catalogKey = parsed.hadFrontmatter
+      ? catalogIdOf(file.relPath, typeof declared === "string" ? declared : undefined)
+      : null;
+    // A skill's head reaches the emitted SKILL.md through `toSpecFrontmatter`,
+    // which refuses a non-boolean pass-through key; the same check runs here,
+    // naming the same pack-relative path, so `add` never installs what `sync`
+    // would refuse.
+    if (catalogKey !== null && CLASS_OF_PACK_DIR[file.contentClass] === "skill") {
+      assertPassthroughKeys(parsed.frontmatter, file.relPath);
+    }
     return {
       relPath: file.relPath,
       contentClass: file.contentClass,
-      catalogKey: parsed.hadFrontmatter
-        ? catalogIdOf(file.relPath, typeof declared === "string" ? declared : undefined)
-        : null,
+      catalogKey,
       frontmatter: parsed.frontmatter,
     };
   });

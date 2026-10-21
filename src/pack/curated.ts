@@ -185,7 +185,10 @@ export function bundledPacksRoot(): string | null {
  * sorted. A plain file beside them (a README) is not a pack and is ignored; a
  * directory with no `pack.json` refuses with `CONFIG_ERROR` naming the path it
  * expected, since a folder in the packs root that is not a pack is a defect
- * every reader of the root would otherwise disagree about.
+ * every reader of the root would otherwise disagree about. A symbolic link
+ * refuses the same way, naming it: its `Dirent` is not a directory, so it would
+ * otherwise drop out of the catalog with nothing said while
+ * {@link resolveBundledPackRoot} followed it.
  */
 export function listBundledPackIds(packsRoot: string): string[] {
   let entries;
@@ -196,6 +199,18 @@ export function listBundledPackIds(packsRoot: string): string[] {
       code: "CONFIG_ERROR",
       cause,
     });
+  }
+  const links = entries
+    .filter((entry) => entry.isSymbolicLink())
+    .map((entry) => join(packsRoot, entry.name))
+    .toSorted();
+  if (links.length > 0) {
+    throw new EngineError(
+      `The packs folder reads real directories only, and ${String(links.length)} ` +
+        `${links.length === 1 ? "entry is a symbolic link" : "entries are symbolic links"}: ` +
+        `${links.join(", ")}. Replace the link with the pack folder itself or move it out of ${packsRoot}.`,
+      { code: "CONFIG_ERROR" },
+    );
   }
   const ids = entries
     .filter((entry) => entry.isDirectory())

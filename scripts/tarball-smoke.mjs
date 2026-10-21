@@ -44,10 +44,14 @@ const REQUIRED_CONTENT_DIRS = ['agents', 'skills', 'rules', 'commands', 'charter
  * The packs the installed artifact must carry: every directory under the source `packs/` that
  * holds a `pack.json`, sorted — the rule the catalog derives its entries by
  * (`listBundledPackIds`, src/pack/curated.ts), so a pack added as a folder is required here with
- * no edit. A directory with no `pack.json` throws, as that walk refuses one.
+ * no edit. A directory with no `pack.json` throws, and so does a symbolic link, as that walk
+ * refuses both.
  */
 export function requiredPackDirs(packsRoot) {
-  const dirs = readdirSync(packsRoot, { withFileTypes: true })
+  const entries = readdirSync(packsRoot, { withFileTypes: true })
+  const links = entries.filter((entry) => entry.isSymbolicLink()).map((entry) => entry.name).toSorted()
+  if (links.length > 0) throw new Error(`${packsRoot} holds symbolic links, not pack folders: ${links.join(', ')}`)
+  const dirs = entries
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
     .toSorted()

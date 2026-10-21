@@ -118,6 +118,22 @@ describe("the tarball smoke's pack checks", () => {
     expect(() => requiredPackDirs(fixture.path("packs"))).toThrow(/no pack\.json: stray/);
   });
 
+  // Plan 018 branch review, M-2: the catalog's walk refuses a symlinked pack
+  // folder by name, and this mirror of it refuses the same one.
+  it("refuses a symlinked pack folder by name, as the catalog's walk does", async () => {
+    const fixture = getPacks();
+    await fixture.seedFiles({
+      "packs/alpha/pack.json": '{"version":"1.0.0"}',
+      "elsewhere/linked/pack.json": '{"version":"1.0.0"}',
+    });
+    await symlink(
+      fixture.path("elsewhere", "linked"),
+      fixture.path("packs", "linked"),
+      process.platform === "win32" ? "junction" : "dir",
+    );
+    expect(() => requiredPackDirs(fixture.path("packs"))).toThrow(/symbolic links, not pack folders: linked/);
+  });
+
   it("names each installed pack whose pack.json misses the package version", async () => {
     const fixture = getPacks();
     await fixture.seedFiles({

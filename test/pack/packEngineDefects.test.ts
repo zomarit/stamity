@@ -803,3 +803,48 @@ describe("E — defect 4 (overlay on a pack skill): refused loudly by sync and v
     );
   });
 });
+
+// ── F: the two pass-through keys, refused at add as sync refuses them ──────
+
+/**
+ * `sync` emits `user-invocable` and `disable-model-invocation` top-level as
+ * booleans and refuses any other value with `VALIDATION_ERROR` naming the file
+ * and the key (`toSpecFrontmatter`, `src/emit/skillsProjection.ts`). `add` read
+ * a pack skill's `id` alone, so on a client set without Codex's fit planning a
+ * pack writing either key as a string installed, and the next `sync`, `check`
+ * and `init` then refused the whole setup (plan 018 branch review, W-2). Claude,
+ * because there no other gate plans the emission at `add`.
+ */
+describe("F — a pack skill head the emitted SKILL.md would refuse: refused at add", () => {
+  it.each([
+    ["user-invocable", '"false"'],
+    ["disable-model-invocation", '"true"'],
+  ])(
+    "add refuses a pack skill declaring `%s: %s`, with sync's VALIDATION_ERROR naming the file and the key",
+    async (key, value) => {
+      const repo = await freshRepo(["claude"]);
+      const head = artifact("acme-lint", "skill", "The acme lint skill.").replace(
+        "load: on-demand",
+        `load: on-demand\n${key}: ${value}`,
+      );
+      const pack = await writePack("acme-demo", { "skills/st-acme-lint/SKILL.md": head });
+
+      const added = await cli(repo, ["add", pack, "--allow-untrusted", "-y", "--json"]);
+
+      expect(added.code, `add must refuse the string-valued ${key} — ${said(added)}`).not.toBe(0);
+      const doc = parseJson(added.stdout.trim()) as { error?: { code?: string; message?: string } } | null;
+      expect(doc?.error?.code, `the refusal is sync's VALIDATION_ERROR — ${said(added)}`).toBe("VALIDATION_ERROR");
+      expect(doc?.error?.message, `the refusal names the file — ${said(added)}`).toContain(
+        "skills/st-acme-lint/SKILL.md",
+      );
+      expect(doc?.error?.message, `the refusal names the key — ${said(added)}`).toContain(`\`${key}\``);
+      expect(doc?.error?.message, `one text, sync's — ${said(added)}`).toContain("must be true or false");
+      const manifest = await readManifest(repo);
+      expect(
+        manifest?.ledger.some((entry) => entry.adapter === packOwner("acme-demo")) ?? false,
+        "nothing of the refused pack is recorded",
+      ).toBe(false);
+    },
+    CASE_TIMEOUT,
+  );
+});

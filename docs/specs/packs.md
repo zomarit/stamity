@@ -59,6 +59,7 @@ and no pin moves.
 - **As built:** the catalog is `curatedPacks()`, `deriveCatalog(bundledPacksRoot(), CATALOG_PINS)` read on first use
   and memoized, never at import; `deriveCatalog` lists every defect in one `CONFIG_ERROR`, a pin naming no folder
   among them, and a `null` root yields an empty catalog; `listBundledPackIds` refuses a folder with no `pack.json` and
+  a symbolic link, each with `CONFIG_ERROR` naming it (the tarball smoke's walk refuses the same, `review/48`), and
   ignores a plain file; `resolveBundledPackRoot` resolves under the one root the catalog read, so a stale
   `dist/packs/<id>` in a source checkout never resolves (`src/pack/curated.ts`). `CURATED_PACKS` left the module; the
   registry keeps `createEngine().pack.curated.CURATED_PACKS` as a non-enumerable getter that reads `curatedPacks()`
@@ -171,15 +172,17 @@ line moving; the Claude touchpoint commands carry no `disable-model-invocation` 
 so a Claude-only setup's `/` menu lists 16 Stamity entries, the 9 commands and 7 skills.
 
 - **As built:** `PASSTHROUGH_KEYS` keeps the two keys after `description` when their value is a boolean; any other value
-  throws `VALIDATION_ERROR` reading `` <file>: `<key>` must be true or false, got <json>. `` (`toSpecFrontmatter`,
-  `src/emit/skillsProjection.ts`). `projectRuleAsSkill` writes `user-invocable: false` in every rule-skill head. A head
-  declaring neither key emits the bytes it did. The pack lane borrows the same function, so a pack skill is held the
-  same way (`src/pack/projection.ts`). An override or pack skill that wrote either key as a string, which emitted before,
-  now stops `sync` (`build/2`).
+  throws `VALIDATION_ERROR` reading `` <file>: `<key>` must be true or false, got <json>. `` (`assertPassthroughKeys`,
+  called by `toSpecFrontmatter`, `src/emit/skillsProjection.ts`). `projectRuleAsSkill` writes `user-invocable: false` in
+  every rule-skill head. A head declaring neither key emits the bytes it did. The pack lane borrows the same function,
+  so a pack skill is held the same way (`src/pack/projection.ts`). An override or pack skill that wrote either key as a
+  string, which emitted before, now stops `sync` (`build/2`). `add` runs the same check on each pack `SKILL.md` it
+  reads (`readPackArtifacts`, `src/pack/install.ts`), naming the same pack-relative path, so it never installs a pack
+  skill head that `sync` would refuse (`review/46`).
 - **Proof:** `test/emit/skillsProjection.test.ts` ("the two client keys", and the rule-skill head case),
-  `test/pack/projection.test.ts`, `test/corpus/census.test.ts` (seven core skills); the lint is
-  `test/packs/lint.test.ts` (`u17-pack-suite`).
-- **Source:** `src/emit/skillsProjection.ts`.
+  `test/pack/projection.test.ts`, `test/corpus/census.test.ts` (seven core skills); `add`'s refusal is
+  `test/pack/packEngineDefects.test.ts` (group F); the lint is `test/packs/lint.test.ts` (`u17-pack-suite`).
+- **Source:** `src/emit/skillsProjection.ts`, `src/pack/install.ts`.
 
 ### REQ-PACK-007 — The `frontend` pack holds the two interface skills, and the core reads them where installed
 
@@ -207,45 +210,60 @@ Given a setup an earlier release synced, its ledger holding `st-design-system-de
 When `sync` runs, Then each copy under `.claude/skills/` or `.agents/skills/` whose bytes match its recorded hash and a
 frozen 1.16.0 rendering of that file (`SKILL.md`, `agents/openai.yaml`; byte-identical since 1.9.0) is deleted on that
 proof, an edited copy is kept and named, and one notice, printed once, names both skills, the `frontend` pack, what it
-removed or kept and `stamity add frontend`; with `frontend` installed its copies stand at those paths and none is kept.
+removed or kept and the pinned `add frontend` call; with `frontend` installed its copies stand at those paths and none
+is kept.
 
 - **As built:** the frozen digests are `MOVED_CORE_SKILLS`, each moved skill `pack: "frontend"`, `since: "1.17.0"`, read
   at exactly `<folder>/st-<id>/<file>` for `.agents/skills` and `.claude/skills` (`movedRenderingAt`,
   `src/pack/moved.ts:47-86`); `engineRenderingsFor` adds them only for a client-owned skill row of a moved id the
   running corpus no longer holds (`src/cli/engine/emissionWrite.ts`). The notice is one line per skill,
-  `moved: skill st-<id> left the core for the frontend pack in 1.17.0; its copies were <outcomes>. To keep it: stamity
-  add frontend`, its outcomes `removed: <paths>`; `kept — edited since sync wrote it; delete by hand: <paths>` (a copy
-  whose every row records the frozen digest); `kept — its ledger row does not record the last core rendering; delete it
-  by hand only if it is yours to remove: <paths>`; and `left in place — the sweep refused the path as unsafe to touch,
+  `` moved: skill st-<id> left the core for the frontend pack in 1.17.0; its copies were <outcomes>. To keep it:
+  `<pinned call> add frontend` ``, the call pinned as `check`'s `moved-skills` row pins it (`packageCommand`,
+  `review/47`), its outcomes `removed: <paths>`; `kept — edited since sync wrote it; delete by hand: <paths>` (a copy
+  whose every row records the frozen digest); `kept — its ledger row does not record the last core rendering; delete
+  it by hand only if it is yours to remove: <paths>`; and `left in place — the sweep refused the path as unsafe to touch,
   for the reason the reclaim report gives: <paths>` (`movedSkillLines`, `src/cli/commands/sync/report.ts`; `review/9`,
   `review/10`). It prints on a live run only, and a removed or kept copy's row leaves the ledger, so the next `sync`
   prints nothing. This repository's own `sync` at `936350cb` printed the notice for both skills and removed their four
   tracked copies.
-- **Proof:** `test/cli/engine/movedPrune.test.ts` (fifteen cases, the forged-row and symlinked-folder cases among them),
-  `test/emit/upgradeFrom1140.e2e.test.ts` (eight reclaims from the 1.14.0 tree).
+- **The upgrade order, as built (`review/45`):** on a setup 1.16.0 synced, `add frontend` before the first `sync` is
+  refused: the client rows of the moved ids still claim them and no layer supplies them, so `collectCollisions`
+  (`src/pack/install.ts`) gives the paths kind and `collisionPart` (`src/cli/commands/add.ts`) names the order. The
+  order is `sync`; delete by hand each copy a `moved:` line names as kept, unless it is yours, then move it aside; `add
+  frontend`; `sync`. The pack's copies then stand at those paths. A kept copy left in place is a file no ledger row
+  owns at a path the pack's projection writes, so that last `sync` writes every other copy, refuses that file by name
+  and exits 1; once it is gone, the next `sync` writes the pack's copy. The change log's Upgrading block states the same
+  order.
+- **Proof:** `test/cli/engine/movedPrune.test.ts` (fifteen cases, the forged-row and symlinked-folder cases among them,
+  and "the upgrade order from 1.16.0", which runs `add`, `sync`, `add`, `sync`, `sync` through the commands over the
+  four `.claude/skills/` rows 1.16.0 wrote, one copy edited), `test/emit/upgradeFrom1140.e2e.test.ts` (eight reclaims
+  from the 1.14.0 tree).
 - **Source:** `src/pack/moved.ts`, `src/cli/engine/emissionWrite.ts`, `src/cli/commands/sync/report.ts`.
 
 ### REQ-PACK-009 — An override or overlay of a moved skill is named, and `check` reports it
 
 Given an overlay of `design-system-detect` or `browser-evidence` under `.stamity/overrides/skills/`, Then `sync`,
-`check`'s drift gate and `validate` refuse it with `VALIDATION_ERROR` whose text names the move and `stamity add
-frontend`, with or without the pack (REQ-OVERLAY-009); a full override warns on `sync`, dry run included, that it now
-stands alone, and with the pack installed the planner's refusal names the move. A `moved-skills` row of `check` reads
-`fail` for such an overlay, `warn` for a full override or a moved id's core ledger row, and `pass` otherwise.
+`check`'s drift gate and `validate` refuse it with `VALIDATION_ERROR` whose text names the move and the
+`add frontend` call, with or without the pack (REQ-OVERLAY-009); a full override warns on `sync`, dry run included, that
+it now stands alone, and with the pack installed the planner's refusal names the move. A `moved-skills` row of `check`
+reads `fail` for such an overlay, `warn` for a full override or a moved id's core ledger row, and `pass` otherwise.
 
 - **As built (`u15-moved-customizations`):** the refusal reads `skill "<id>" moved from the core to the <pack> pack in
   <since>, and overlays on pack skills are not applied. Fold your change into a full override under another id, or
-  remove <path>; to keep the shipped skill, stamity add <pack>.`, each half named by its POSIX path
-  (`refuseMovedSkillOverlay`, `src/content/catalog.ts`); a skill of a moved id supplied by another pack keeps the
-  pack-skill text, and a fork-stage patch of a moved skill stays a skip, its reason naming the move and the pack
-  (`forkMovedSkillSkipReason`). The warning reads `your override <path> replaced a core skill that moved to the <pack>
-  pack; it now stands alone and tracks no shipped copy. Keep it, or remove it and stamity add <pack>.`
-  (`movedSkillOverrideWarnings`, `src/emit/planner.ts`). `checkMovedSkills` sits after `pack-catalog`, reads the
-  override folder and the ledger directly so it answers when the plan throws, finds a full override by the id it
-  declares, as the index does, and with the pack installed names the collision and `clean --pack <pack>`
-  (`src/cli/commands/check.ts`).
+  remove <path>; to keep the shipped skill, <remedy>.`, each half named by its POSIX path
+  (`refuseMovedSkillOverlay`, `src/content/catalog.ts`); `<remedy>` is the pinned call in backticks, `` `<pinned call>
+  add <pack>` ``, where the planner builds the index (`sync`, `check`'s drift gate), and `stamity add <pack>` where a
+  caller passes no CLI context (`validate`; `BuildContentIndexOptions.remedyCall`, `review/47`). A skill of a moved id
+  supplied by another pack keeps the pack-skill text, and a fork-stage patch of a moved skill stays a skip, its reason
+  naming the move, the pack and the same `<remedy>` (`forkMovedSkillSkipReason`). The warning reads `` your override
+  <path> replaced a core skill that moved to the <pack> pack; it now stands alone and tracks no shipped copy. Keep it,
+  or remove it and run `<pinned call> add <pack>`. `` (`movedSkillOverrideWarnings`, `src/emit/planner.ts`).
+  `checkMovedSkills` sits after `pack-catalog`, reads the override folder and the ledger directly so it answers when
+  the plan throws, finds a full override by the id it declares, as the index does, and with the pack installed names
+  the collision and `clean --pack <pack>` (`src/cli/commands/check.ts`).
 - **Proof (`u15-moved-customizations`):** `test/content/catalog.test.ts` (its `validate` case is "REQ-PACK-009 —
-  `validate` carries the moved-skill refusal unchanged"), `test/emit/plannerOverlay.test.ts`,
+  `validate` carries the moved-skill refusal unchanged"), `test/emit/plannerOverlay.test.ts` (the planner's refusal
+  with the pinned call, `review/47`),
   `test/cli/commands/check.test.ts` ("check — moved-skills").
 - **Source:** `src/content/catalog.ts`, `src/emit/planner.ts`, `src/cli/commands/check.ts`.
 

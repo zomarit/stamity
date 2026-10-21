@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { lstat, mkdir, readFile, symlink } from "node:fs/promises";
+import { lstat, mkdir, readFile, rm, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
+import { COMMANDS } from "../../../src/cli.ts";
 import { applySync, planSync } from "../../../src/cli/commands/sync/engine.ts";
 import { movedSkillLines, renderSyncReport } from "../../../src/cli/commands/sync/report.ts";
 import { engineRenderingsFor, type EmissionPlanFor } from "../../../src/cli/engine/emissionWrite.ts";
@@ -13,6 +14,8 @@ import { createManifest, readManifest, writeManifest } from "../../../src/manife
 import { MOVED_CORE_SKILLS, MOVED_SKILL_FOLDERS, movedCoreSkill, movedRenderingAt } from "../../../src/pack/moved.ts";
 import type { Tool } from "../../../src/types/core.ts";
 import type { LedgerEntry, SetupManifest } from "../../../src/types/manifest.ts";
+import { npxCommand } from "../../support/identity.ts";
+import { runInProcess } from "../../support/inProcess.ts";
 import { useTempDir, type TempDirHandle } from "../../support/tempDir.ts";
 
 /**
@@ -35,6 +38,12 @@ const ENGINE_VERSION = "1.17.0";
 const T0 = new Date("2026-10-20T00:00:00.000Z");
 const T1 = new Date("2026-10-21T00:00:00.000Z");
 const plainPalette = makePalette(false);
+
+// TEST CHANGE, justified (2026-10-21, 2026-10-20_packs-rebuilt branch review round 1, M-1): the
+// notice's remedy was a bare `stamity add frontend`, a binary a fork's install does not have and
+// the documented `npx` setup never puts on PATH; it is now the pinned call `check`'s
+// `moved-skills` row prints, spelled from this checkout's identity rather than the helper.
+const KEEP_IT = `To keep it: \`${npxCommand("add frontend")}\``;
 
 const RELEASE_TREE = fileURLToPath(new URL("../../fixtures/release-1-14-0-tree", import.meta.url));
 
@@ -107,13 +116,14 @@ function rowFor(copy: FrozenCopy, contentHash = sha256(copy.bytes)): LedgerEntry
 async function seedRepo(
   handle: TempDirHandle,
   ledger: readonly LedgerEntry[],
+  tools: Tool[] = ["claude", "codex"],
 ): Promise<string> {
   __setContentRootForTests(handle.path("corpus"));
   await handle.seedFiles({ "corpus/charter/stamity-charter.md": CHARTER_FIXTURE });
   const root = handle.path("repo");
   const manifest: SetupManifest = {
     ...createManifest({
-      tools: ["claude", "codex"],
+      tools,
       selection: { items: { agent: [], skill: [], rule: [], command: [] } },
       generatorVersion: "1.16.0",
       now: T0,
@@ -243,7 +253,7 @@ describe("sync prunes a moved skill's core copies on the frozen proof", () => {
       const line = notice.find((candidate) => candidate.includes(`skill st-${skill.id} `));
       expect(line, skill.id).toBeDefined();
       expect(line).toContain("left the core for the frontend pack in 1.17.0; its copies were removed: ");
-      expect(line).toContain("To keep it: stamity add frontend");
+      expect(line).toContain(KEEP_IT);
       expect(line).not.toContain("kept");
       for (const copy of copies.filter((candidate) => candidate.id === skill.id)) expect(line).toContain(copy.path);
     }
@@ -308,7 +318,7 @@ describe("sync prunes a moved skill's core copies on the frozen proof", () => {
     // wrote it. The notice carries the sweep's own hedge, "if it is yours", and
     // never the false "edited" reason with a bare instruction to delete.
     expect(movedLines(first.text)).toEqual([
-      `  moved: skill st-browser-evidence left the core for the frontend pack in 1.17.0; its copies were kept — its ledger row does not record the last core rendering; delete it by hand only if it is yours to remove: ${target.path}. To keep it: stamity add frontend`,
+      `  moved: skill st-browser-evidence left the core for the frontend pack in 1.17.0; its copies were kept — its ledger row does not record the last core rendering; delete it by hand only if it is yours to remove: ${target.path}. ${KEEP_IT}`,
     ]);
     expect(movedLines(first.text).join("\n")).not.toContain("edited since sync");
   });
@@ -335,7 +345,7 @@ describe("sync prunes a moved skill's core copies on the frozen proof", () => {
     expect(existsSync(`${root}/${lfRecorded.path}`)).toBe(false);
     expect(existsSync(`${root}/${crlfRecorded.path}`)).toBe(false);
     expect(movedLines(first.text)).toEqual([
-      `  moved: skill st-browser-evidence left the core for the frontend pack in 1.17.0; its copies were removed: ${lfRecorded.path}, ${crlfRecorded.path}. To keep it: stamity add frontend`,
+      `  moved: skill st-browser-evidence left the core for the frontend pack in 1.17.0; its copies were removed: ${lfRecorded.path}, ${crlfRecorded.path}. ${KEEP_IT}`,
     ]);
   });
 
@@ -376,7 +386,7 @@ describe("sync prunes a moved skill's core copies on the frozen proof", () => {
     const entry = first.report.reclaimed?.entries.find((candidate) => candidate.path === target.path);
     expect(entry?.action).toBe("skipped-unsafe-path");
     expect(movedLines(first.text)).toEqual([
-      `  moved: skill st-browser-evidence left the core for the frontend pack in 1.17.0; its copies were left in place — the sweep refused the path as unsafe to touch, for the reason the reclaim report gives: ${target.path}. To keep it: stamity add frontend`,
+      `  moved: skill st-browser-evidence left the core for the frontend pack in 1.17.0; its copies were left in place — the sweep refused the path as unsafe to touch, for the reason the reclaim report gives: ${target.path}. ${KEEP_IT}`,
     ]);
   });
 
@@ -444,6 +454,92 @@ describe("sync prunes a moved skill's core copies on the frozen proof", () => {
   });
 });
 
+/**
+ * The upgrade order the change log and REQ-PACK-008 state (plan 018 branch
+ * review, W-1), through the commands themselves: on a setup 1.16.0 synced,
+ * `add frontend` first is refused — the client rows of the moved ids still
+ * claim them and no layer supplies them — and its remedy names `sync` first;
+ * `sync`, `add frontend`, `sync` then installs the pack over the copies the
+ * first `sync` removed. The copy that `sync` kept because it was edited stays
+ * in the way: the last `sync` writes every other pack copy, refuses that one
+ * by name and exits 1, and once the copy is deleted by hand, as the `moved:`
+ * line asks, the next `sync` writes it. Claude Code alone: the four copies
+ * 1.16.0 wrote under `.claude/skills/`, one of them edited.
+ */
+describe("the upgrade order from 1.16.0: sync, then add frontend, then sync", () => {
+  const cli = (root: string, argv: readonly string[]) => runInProcess(COMMANDS, argv, { cwd: root });
+  const sync = npxCommand("sync");
+  const addFrontend = npxCommand("add frontend");
+
+  it("refuses add frontend before the first sync, naming sync first; the stated order installs the pack", async () => {
+    const handle = tempDir();
+    const copies = (await frozenCopies()).filter((copy) => copy.path.startsWith(".claude/skills/"));
+    expect(copies).toHaveLength(4);
+    const root = await seedRepo(
+      handle,
+      copies.map((copy) => rowFor(copy)),
+      ["claude"],
+    );
+    const edited = copies.find((copy) => copy.path === ".claude/skills/st-design-system-detect/SKILL.md");
+    if (edited === undefined) throw new Error("no SKILL.md copy");
+    await handle.seedFiles(
+      Object.fromEntries(
+        copies.map((copy) => [`repo/${copy.path}`, copy === edited ? `${copy.bytes}\nHouse note.\n` : copy.bytes]),
+      ),
+    );
+
+    const packRoot = join(root, ".stamity", "packs", "frontend");
+    const said = (result: { code: number; stdout: string; stderr: string }): string =>
+      `exit ${result.code}; ${result.stdout}\n${result.stderr}`.slice(0, 2000);
+
+    // 1. `add frontend` first: refused, nothing installed, and the remedy runs `sync` before `add`.
+    const early = await cli(root, ["add", "frontend", "-y", "--json"]);
+    expect(early.code, said(early)).toBe(1);
+    const refusal = (JSON.parse(early.stdout.trim()) as { error: { code: string; next: string } }).error;
+    expect(refusal.code).toBe("VALIDATION_ERROR");
+    expect(refusal.next).toContain(`run \`${sync}\`, then delete by hand each client copy it keeps and names`);
+    expect(refusal.next.indexOf(`\`${sync}\``)).toBeLessThan(refusal.next.indexOf(`\`${addFrontend}\``));
+    expect(existsSync(packRoot)).toBe(false);
+
+    // 2. `sync`: the three unedited copies go, the edited one is kept and named.
+    const first = await cli(root, ["sync"]);
+    expect(first.code, said(first)).toBe(0);
+    for (const copy of copies) expect(existsSync(join(root, copy.path)), copy.path).toBe(copy === edited);
+    expect(movedLines(first.stdout)).toEqual([
+      `  moved: skill st-design-system-detect left the core for the frontend pack in 1.17.0; its copies were ` +
+        `removed: .claude/skills/st-design-system-detect/agents/openai.yaml; kept — edited since sync wrote it; ` +
+        `delete by hand: ${edited.path}. ${KEEP_IT}`,
+      `  moved: skill st-browser-evidence left the core for the frontend pack in 1.17.0; its copies were ` +
+        `removed: .claude/skills/st-browser-evidence/SKILL.md, .claude/skills/st-browser-evidence/agents/openai.yaml. ` +
+        KEEP_IT,
+    ]);
+
+    // 3. `add frontend`: installs.
+    const added = await cli(root, ["add", "frontend", "-y"]);
+    expect(added.code, said(added)).toBe(0);
+    expect(existsSync(join(packRoot, "receipt.json"))).toBe(true);
+
+    // 4. `sync`: every pack copy but the one the kept file holds; that one is refused by name.
+    const second = await cli(root, ["sync"]);
+    expect(second.code, said(second)).toBe(1);
+    expect(second.stdout).toContain(`existing file(s) would collide with generated output: ${edited.path}`);
+    for (const copy of copies) expect(existsSync(join(root, copy.path)), copy.path).toBe(true);
+    expect(await readFile(join(root, edited.path), "utf8")).toBe(`${edited.bytes}\nHouse note.\n`);
+
+    // 5. The kept copy deleted by hand, as its `moved:` line said: the next `sync` writes the pack's.
+    await rm(join(root, edited.path));
+    const third = await cli(root, ["sync"]);
+    expect(third.code, said(third)).toBe(0);
+    const projected = await readFile(join(root, edited.path), "utf8");
+    expect(projected).not.toContain("House note.");
+    expect(projected).toContain("name: st-design-system-detect");
+    const ledger = (await readManifest(root))?.ledger ?? [];
+    for (const copy of copies) {
+      expect(ledger.filter((row) => row.path === copy.path).map((row) => row.artifactId), copy.path).toEqual([copy.id]);
+    }
+  });
+});
+
 describe("movedSkillLines", () => {
   it("prints one line per skill with copies removed or kept, and nothing for a skill with neither", () => {
     expect(
@@ -454,7 +550,7 @@ describe("movedSkillLines", () => {
     ).toEqual([
       // TEST CHANGE, justified (review/9, review/10): one kept copy reads
       // "wrote it", the signed-off wording.
-      "  moved: skill st-design-system-detect left the core for the frontend pack in 1.17.0; its copies were removed: a/SKILL.md, b/SKILL.md; kept — edited since sync wrote it; delete by hand: c/SKILL.md. To keep it: stamity add frontend",
+      "  moved: skill st-design-system-detect left the core for the frontend pack in 1.17.0; its copies were removed: a/SKILL.md, b/SKILL.md; kept — edited since sync wrote it; delete by hand: c/SKILL.md. " + KEEP_IT,
     ]);
     expect(movedSkillLines([])).toEqual([]);
   });
@@ -470,7 +566,7 @@ describe("movedSkillLines", () => {
       },
     ]);
     expect(line).toBe(
-      "  moved: skill st-browser-evidence left the core for the frontend pack in 1.17.0; its copies were kept — edited since sync wrote them; delete by hand: a/SKILL.md, b/SKILL.md; left in place — the sweep refused each path as unsafe to touch, for the reason the reclaim report gives: c/SKILL.md, d/SKILL.md. To keep it: stamity add frontend",
+      "  moved: skill st-browser-evidence left the core for the frontend pack in 1.17.0; its copies were kept — edited since sync wrote them; delete by hand: a/SKILL.md, b/SKILL.md; left in place — the sweep refused each path as unsafe to touch, for the reason the reclaim report gives: c/SKILL.md, d/SKILL.md. " + KEEP_IT,
     );
     expect(movedSkillLines([{ id: "browser-evidence", pack: "frontend", removed: [], kept: [], skipped: [] }])).toEqual([]);
   });
@@ -486,7 +582,7 @@ describe("movedSkillLines", () => {
       },
     ]);
     expect(line).toBe(
-      "  moved: skill st-browser-evidence left the core for the frontend pack in 1.17.0; its copies were kept — edited since sync wrote it; delete by hand: a/SKILL.md; kept — their ledger rows do not record the last core rendering; delete each by hand only if it is yours to remove: b/SKILL.md, c/SKILL.md. To keep it: stamity add frontend",
+      "  moved: skill st-browser-evidence left the core for the frontend pack in 1.17.0; its copies were kept — edited since sync wrote it; delete by hand: a/SKILL.md; kept — their ledger rows do not record the last core rendering; delete each by hand only if it is yours to remove: b/SKILL.md, c/SKILL.md. " + KEEP_IT,
     );
     expect(movedSkillLines([{ id: "browser-evidence", pack: "frontend", removed: [], kept: [], keptForeign: [] }])).toEqual([]);
   });

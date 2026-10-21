@@ -37,22 +37,27 @@ The items below are read from the code and the tests on the branch that carries 
 published 1.16.0 wrote has been walked yet; the release cut walks one and restates what it reads.
 
 - **Two skills leave the core for the new `frontend` pack.** `st-design-system-detect` and `st-browser-evidence` ship
-  in the `frontend` pack now, not in the core corpus. To keep them, run `stamity add frontend`; with the pack installed,
-  its copies stand at the same paths. Without it, the first `sync` deletes each copy under `.claude/skills/` and
+  in the `frontend` pack now, not in the core corpus. The first `sync` deletes each copy under `.claude/skills/` and
   `.agents/skills/` whose bytes are still the core rendering 1.9.0 through 1.16.0 wrote, keeps a copy you edited, and
-  prints one `moved:` line per skill naming what it removed or kept and `stamity add frontend`. This repository's own
-  `sync` printed that line for both skills and removed their four copies.
+  prints one `moved:` line per skill naming what it removed or kept and the pinned `add frontend` call. To keep the
+  skills, work in this order: `sync`; delete by hand each copy a `moved:` line names as kept, unless it is yours, in
+  which case move it aside; `stamity add frontend`; `sync`. The pack's copies then stand at the same paths. Running
+  `add frontend` before that first `sync` is refused, because the ledger rows 1.16.0 wrote still claim both skill ids,
+  and the refusal names this order. A kept copy left in place makes the last `sync` refuse that one file by name and
+  exit 1 after writing the rest; once the copy is gone, the next `sync` writes it. This repository's own `sync`
+  printed the `moved:` line for both skills and removed their four copies.
 - **An overlay of either skill is refused.** A `.customize.yaml` or `.customize.md` under
   `.stamity/overrides/skills/design-system-detect/` or `.stamity/overrides/skills/browser-evidence/` stops `sync`,
-  `check`'s drift gate and `validate` with `VALIDATION_ERROR`, naming the move and `stamity add frontend`, with the
+  `check`'s drift gate and `validate` with `VALIDATION_ERROR`, naming the move and `add frontend`, with the
   pack installed or not, since overlays on pack skills are not applied. Fold the change into a full override under
   another id, or remove the file. A full override of either id still projects, and `sync` warns that it now stands
   alone; with the pack installed, it collides with the pack's copy and `sync` refuses it. `check`'s new `moved-skills`
   row names each case.
 - **A skill head that wrote `user-invocable` or `disable-model-invocation` as a string now stops `sync`.** Both keys
   pass through to the emitted head as top-level keys, where they were hoisted under `metadata`, and a value that is not
-  `true` or `false`, `"false"` included, is refused with `VALIDATION_ERROR` naming the file and the key. Write the
-  boolean.
+  `true` or `false`, `"false"` included, is refused with `VALIDATION_ERROR` naming the file and the key. `add`
+  refuses a pack skill that carries one with the same error, so a pack that would stop `sync` is not installed. Write
+  the boolean.
 - **Each rule-skill's head gains one line.** Every rule delivered as a skill now carries `user-invocable: false`, so
   the first `sync` rewrites each `stamity-<rule>/SKILL.md` it emits by that line.
 

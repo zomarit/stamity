@@ -441,6 +441,7 @@ export async function buildCoreEmissionPlan(
             contentRoot: skillsRoots,
             ruleItems: delivery.ruleItems,
             demotedRules: delivery.demotedRules,
+            remedyCall: pinnedRemedyOf(cliCallContextOf(ctx)),
           },
         ),
       };
@@ -540,7 +541,7 @@ async function planRuleDelivery(
   const mode = readRuleDelivery(ctx.manifest);
   if (mode === "always-on") return { ruleItems: [], demotedRules: NO_DEMOTED_RULES };
 
-  const index = await buildContentIndex(contentRoot);
+  const index = await buildContentIndex(contentRoot, { remedyCall: pinnedRemedyOf(cliCallContextOf(ctx)) });
   const allowlist = buildSelectionAllowlist(ctx.manifest.selection);
   const ruleItems = index.items.filter(
     (item) =>
@@ -817,9 +818,10 @@ function customizingSkillFilePath(row: ProjectedSkillFile): string {
  * naming the move, before any warning is returned. A fork skill is the fork
  * maintainer's to answer for, not this repository's, so only the override
  * tree is read; the path is the repo-relative file the author wrote, spelled
- * as {@link customizingSkillFilePath} spells it.
+ * as {@link customizingSkillFilePath} spells it. The remedy is the pinned call
+ * ({@link pinnedRemedyOf}), as `check`'s `moved-skills` row prints it.
  */
-function movedSkillOverrideWarnings(index: ContentIndex): string[] {
+function movedSkillOverrideWarnings(index: ContentIndex, cli: CliCallContext): string[] {
   const warnings: string[] = [];
   for (const item of index.items) {
     if (item.type !== "skill" || originOf(item) !== "user") continue;
@@ -828,10 +830,19 @@ function movedSkillOverrideWarnings(index: ContentIndex): string[] {
     warnings.push(
       `your override ${STATE_DIR}/overrides/${item.relativePath} replaced a core skill that moved to ` +
         `the ${moved.pack} pack; it now stands alone and tracks no shipped copy. Keep it, or remove it ` +
-        `and stamity add ${moved.pack}.`,
+        `and run ${pinnedRemedyOf(cli)(`add ${moved.pack}`)}.`,
     );
   }
   return warnings;
+}
+
+/**
+ * {@link remedyCall} as the index's moved-skill remedies take it
+ * (`BuildContentIndexOptions.remedyCall`, `../content/catalog.ts`): the pinned
+ * call in backticks, the spelling `check`'s `moved-skills` row prints.
+ */
+function pinnedRemedyOf(cli: CliCallContext): (verb: string) => string {
+  return (verb) => `\`${remedyCall(cli, verb)}\``;
 }
 
 /**
@@ -1028,8 +1039,11 @@ export function composeEmissionPlanner(
     // Before any row exists: a cross-class name clash is refused with its
     // owners named, rather than reaching the single-writer check below as two
     // planners writing one path (or, on Claude, as nothing at all).
-    const contentIndex = await buildContentIndex(residueCtx.contentRoot);
-    refuseInvocableNameClashes(contentIndex, cliCallContextOf(ctx));
+    const cli = cliCallContextOf(ctx);
+    const contentIndex = await buildContentIndex(residueCtx.contentRoot, {
+      remedyCall: pinnedRemedyOf(cli),
+    });
+    refuseInvocableNameClashes(contentIndex, cli);
     const core = await buildCoreEmissionPlan(ctx, packs);
     const tools = TOOLS.filter((tool) => ctx.manifest.tools.includes(tool));
 
@@ -1191,7 +1205,7 @@ export function composeEmissionPlanner(
       outputs,
       warnings: [
         ...core.hooks.warnings,
-        ...movedSkillOverrideWarnings(contentIndex),
+        ...movedSkillOverrideWarnings(contentIndex, cli),
         ...effortDisclosures(ctx.manifest),
         ...residueWarnings,
         ...blockWarnings,

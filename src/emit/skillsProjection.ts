@@ -248,6 +248,12 @@ export interface ProjectSkillsOptions {
   /** Filesystem override for corpus reads; defaults to `node:fs/promises`. */
   fs?: CatalogFs;
   /**
+   * The pinned call a moved-skill overlay's remedy names, handed to the index
+   * build (`BuildContentIndexOptions.remedyCall`, `../content/catalog.ts`).
+   * The core plan passes its own; absent, the index keeps its bare spelling.
+   */
+  remedyCall?: (verb: string) => string;
+  /**
    * The selected RULES, for the delivery option: a rule demoted on at least one
    * selected client is projected here as a skill instead of being carried as
    * that client's always-on rule text (`../content/ruleDelivery.ts`).
@@ -306,7 +312,10 @@ export async function projectSkills(
   options: ProjectSkillsOptions = {},
 ): Promise<ProjectedSkillFile[]> {
   const fs = options.fs ?? defaultFs;
-  const index = await buildContentIndex(options.contentRoot, { fs });
+  const index = await buildContentIndex(options.contentRoot, {
+    fs,
+    ...(options.remedyCall === undefined ? {} : { remedyCall: options.remedyCall }),
+  });
 
   const allowlist = buildSelectionAllowlist(ctx.manifest.selection);
   const admitted = index.items.filter(
@@ -683,6 +692,25 @@ const SPEC_FRONTMATTER_KEYS = [
  */
 const PASSTHROUGH_KEYS = ["user-invocable", "disable-model-invocation"] as const;
 
+/**
+ * Refuse a declared {@link PASSTHROUGH_KEYS} key whose value is not a boolean,
+ * with `VALIDATION_ERROR` naming `source` and the key. The one check behind
+ * both gates: {@link toSpecFrontmatter} at emission, and `add`'s artifact read
+ * (`../pack/install.ts` → `readPackArtifacts`), so `add` never installs a pack
+ * skill head that `sync` would then refuse.
+ */
+export function assertPassthroughKeys(frontmatter: Readonly<Record<string, unknown>>, source: string): void {
+  for (const key of PASSTHROUGH_KEYS) {
+    const value = frontmatter[key];
+    if (value === undefined || typeof value === "boolean") continue;
+    throw new EngineError(
+      `${source}: \`${key}\` must be true or false, got ${JSON.stringify(value)}. ` +
+        "It passes through to the top level of the emitted SKILL.md, where clients read it as a boolean.",
+      { code: "VALIDATION_ERROR" },
+    );
+  }
+}
+
 /** Spec `name` grammar: lowercase alphanumerics and hyphens, at most 64 chars. */
 const SPEC_NAME_PATTERN = /[^a-z0-9-]+/g;
 
@@ -723,17 +751,10 @@ export function toSpecFrontmatter(raw: string, skillDir: string, source: string)
     name: skillDir.toLowerCase().replaceAll(SPEC_NAME_PATTERN, "-").slice(0, 64),
   };
   if (authored["description"] !== undefined) head["description"] = authored["description"];
+  assertPassthroughKeys(authored, source);
   for (const key of PASSTHROUGH_KEYS) {
     const value = authored[key];
-    if (value === undefined) continue;
-    if (typeof value !== "boolean") {
-      throw new EngineError(
-        `${source}: \`${key}\` must be true or false, got ${JSON.stringify(value)}. ` +
-          "It passes through to the top level of the emitted SKILL.md, where clients read it as a boolean.",
-        { code: "VALIDATION_ERROR" },
-      );
-    }
-    head[key] = value;
+    if (value !== undefined) head[key] = value;
   }
   for (const key of SPEC_FRONTMATTER_KEYS) {
     if (key === "name" || key === "description" || key === "metadata") continue;

@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, symlinkSync } from "node:fs";
 import { cp, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -338,6 +338,25 @@ describe("listBundledPackIds", () => {
     const error = expectEngineError(() => listBundledPackIds(temp.path("packs")), "CONFIG_ERROR");
     expect(error.message).toContain(join(temp.path("packs"), "stray", PACK_MANIFEST_FILE));
     expect(error.message).not.toContain(join("alpha", PACK_MANIFEST_FILE));
+  });
+
+  // Plan 018 branch review, M-2: a `Dirent` for a link is not a directory, so a
+  // symlinked pack folder dropped out of the catalog with nothing said while
+  // `resolveBundledPackRoot` would follow it. The walk refuses it by name.
+  it("refuses a symlinked pack folder, naming it, rather than dropping it silently", async () => {
+    const temp = getTemp();
+    await temp.seedFiles({
+      "packs/alpha/pack.json": madeUpManifest("alpha"),
+      "elsewhere/linked/pack.json": madeUpManifest("linked"),
+    });
+    symlinkSync(
+      temp.path("elsewhere", "linked"),
+      temp.path("packs", "linked"),
+      process.platform === "win32" ? "junction" : "dir",
+    );
+    const error = expectEngineError(() => listBundledPackIds(temp.path("packs")), "CONFIG_ERROR");
+    expect(error.message).toContain(join(temp.path("packs"), "linked"));
+    expect(error.message).not.toContain(join(temp.path("packs"), "alpha"));
   });
 });
 

@@ -8,6 +8,7 @@ import {
   type SetupManifest,
 } from "../../../types/manifest.ts";
 import { coOwnedReclaimReducers, rowsCarriedThroughSweep } from "../../engine/emissionWrite.ts";
+import { packageCommand } from "../../kit/packageName.ts";
 import type { Palette } from "../../kit/terminal.ts";
 import type { SyncApplyReport, SyncPlan, SyncPlanEntry } from "./engine.ts";
 
@@ -236,7 +237,8 @@ export interface MovedSkillOutcome {
  * The notice for the skills a release moved out of the core into a pack
  * (`../../../pack/moved.ts`, REQ-PACK-008): one line per skill, naming the
  * pack, the release, the copies removed, the copies kept, the copies the sweep
- * refused as unsafe, and the command that brings the skill back. A skill with
+ * refused as unsafe, and the command that brings the skill back, pinned as
+ * `check`'s `moved-skills` row pins it (`packageCommand`). A skill with
  * none of the three prints nothing.
  *
  * Only a kept copy carries the instruction to delete by hand, and only one
@@ -274,7 +276,7 @@ export function movedSkillLines(moved: readonly MovedSkillOutcome[]): string[] {
     ];
     lines.push(
       `  moved: skill st-${skill.id} left the core for the ${skill.pack} pack${since === undefined ? "" : ` in ${since}`}; ` +
-        `its copies were ${outcomes.join("; ")}. To keep it: stamity add ${skill.pack}`,
+        `its copies were ${outcomes.join("; ")}. To keep it: \`${packageCommand(`add ${skill.pack}`)}\``,
     );
   }
   return lines;
