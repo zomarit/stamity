@@ -320,7 +320,7 @@ it; machine- and human-readable, it doubles as an audit record:
   and each escalation's effort step or `effort: not settable`; each approval's `rests on:` line
 - QA rows — the proven rows (`auto-proven`, `agent-run`) folded into one line with their pointers; each row not proven
   or over the cap with its reason, each `contradicted` row with its excerpt; per person row `walked` or `accepted-unwalked` with its input hash; then the sign-off, or `not signed`
-- decisions trace — every gate decision, ASK outcome, and deferral with its rationale; and one `- <UTC> choice: <unit> tried | dropped | reverted <approach> — <pointer>` record line per choice a unit's or fix's digest names, appended as it returns, which that unit's reviewer and the whole-branch pass read
+- decisions trace — every gate decision, ASK outcome, and deferral with its rationale; and one `- <UTC> choice: <unit> tried | dropped | reverted <approach> — <pointer>` record line per choice a unit's digest names, appended as it returns, which that unit's reviewer and the whole-branch pass read
 - artifacts touched — path + owning sub-agent
 - per-action attribution — agent identity, tool used, outcome
 - recommended next step — derived from this run's own state, never a generic
@@ -428,7 +428,7 @@ Run after gates pass; each lands in the run report:
 - **Pull-request emission.** Where a platform is linked and the change sits on a branch, only the
   close walk's option 1 opens that branch's draft pull request, as its own `run checkpoint --pr`
   step — or updates the one already open — and the close emits `pr.linked` carrying the link. With
-  no linked platform the step is a no-op, and the run names the branch it left. Its body carries the record's `## Blast radius` section, which the run keeps directly after `## Frame` and rewrites in place from each approval's `blast radius:` and `rests on:` lines as it returns, so it holds the last one and the next heading bounds it.
+  no linked platform the step is a no-op, and the run names the branch it left. Its body carries the record's `## Blast radius` section, which the run keeps after the Frame section, before the next heading, and rewrites in place from each approval's `blast radius:` and `rests on:` lines as it returns, so it holds the last one and the next heading bounds it.
 - **Board progress events.** Emit idempotent progress events — phase transition, acceptance-criterion
   done, PR link, terminal state — with zero platform knowledge; the board layer maps them. When no
   board source is linked, emission is a silent no-op; events publish only when a linked source exists.

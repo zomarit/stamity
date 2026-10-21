@@ -27,7 +27,7 @@ it; machine- and human-readable, it doubles as an audit record:
   and each escalation's effort step or `effort: not settable`; each approval's `rests on:` line
 - QA rows — the proven rows (`auto-proven`, `agent-run`) folded into one line with their pointers; each row not proven
   or over the cap with its reason, each `contradicted` row with its excerpt; per person row `walked` or `accepted-unwalked` with its input hash; then the sign-off, or `not signed`
-- decisions trace — every gate decision, ASK outcome, and deferral with its rationale; and one `- <UTC> choice: <unit> tried | dropped | reverted <approach> — <pointer>` record line per choice a unit's or fix's digest names, appended as it returns, which that unit's reviewer and the whole-branch pass read
+- decisions trace — every gate decision, ASK outcome, and deferral with its rationale; and one `- <UTC> choice: <unit> tried | dropped | reverted <approach> — <pointer>` record line per choice a unit's digest names, appended as it returns, which that unit's reviewer and the whole-branch pass read
 - artifacts touched — path + owning sub-agent
 - per-action attribution — agent identity, tool used, outcome
 - recommended next step — derived from this run's own state, never a generic

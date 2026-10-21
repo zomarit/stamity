@@ -318,6 +318,21 @@ describe("question-protocol — the five triggers and the ask shape", () => {
     );
   });
 
+  // Added 2026-10-21 (REQ-FLOW-128, plan 018 file 1 unit u8, build/13): trigger 3 names a deploy
+  // and a message sent outside the repository, the run's own pull request aside. Item 3 sits on
+  // :26-27, outside the ranges the eval cases quote, so the range hash below does not hold it.
+  it("names a deploy and an outside message, the run's own pull request aside, in trigger 3 (REQ-FLOW-128)", async () => {
+    const floor = section(await load("rules/stamity-question-protocol.md"), "Floor");
+    const start = floor.indexOf("3. **Irreversible action**");
+    expect(start, "trigger 3 is missing from Floor").toBeGreaterThanOrEqual(0);
+    const item3 = flatten(floor.slice(start, floor.indexOf("4. **", start)));
+
+    expect(item3).toContain("renaming a public identifier, a deploy,");
+    expect(item3).toContain(
+      "a message sent outside the repository (the run's own pull request aside), rewriting shared history.",
+    );
+  });
+
   it("blocks writes while a trigger is unresolved and refuses manufactured questions", async () => {
     const file = await load("rules/stamity-question-protocol.md");
 

@@ -268,11 +268,11 @@ describe("reviewer — an approval names what it rests on and how far it reaches
     // names; the pull request body's section is rewritten from the last approval, never appended.
     expect(work).toContain("and each escalation's effort step or `effort: not settable`; each approval's `rests on:` line");
     expect(work).toContain(
-      "one `- <UTC> choice: <unit> tried | dropped | reverted <approach> — <pointer>` record line per choice",
+      "one `- <UTC> choice: <unit> tried | dropped | reverted <approach> — <pointer>` record line per choice a unit's digest names",
     );
     expect(work).toContain("which that unit's reviewer and the whole-branch pass read");
     expect(work).toContain(
-      "the record's `## Blast radius` section, which the run keeps directly after `## Frame` and rewrites in place from each approval's `blast radius:` and `rests on:` lines",
+      "the record's `## Blast radius` section, which the run keeps after the Frame section, before the next heading, and rewrites in place from each approval's `blast radius:` and `rests on:` lines",
     );
   });
 });
