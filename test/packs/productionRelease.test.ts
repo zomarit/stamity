@@ -63,6 +63,13 @@ const RECORD_FIELDS: readonly string[] = [
 /** The corpus pin REQ-PACK-024 names: the readiness review stays a warning to the release. */
 const READINESS_WARNING = "The readiness review is read as a warning and never stops the release.";
 
+/** The secrets sentence: a change record holds names and locations, and a pasted credential is refused. */
+const SECRETS_RULE =
+  "The record names variables, files and locations, never a secret value. An answer carrying a credential, such as a connection string with its password or a webhook address with its key, is refused, not recorded, citing the secrets floor (`stamity-secrets.md`, items 1 and 4)";
+
+/** The approver as the record writes it: the requester's claim, never shown as a confirmed approval. */
+const APPROVER_CLAIM = "named by the requester, not confirmed by this skill";
+
 /** The nine touchpoints and the pack's one command: every `/st-*` mention must resolve to one. */
 const COMMAND_IDS: readonly string[] = [
   "spec",
@@ -199,6 +206,17 @@ describe("st-release — anatomy", () => {
     }
   });
 
+  it("skips the pack's own records in the clean-tree probe and falls back to the root commit with no earlier base", async () => {
+    const file = await skill();
+    const preflight = section(file, "Step 1 — Preflight, read-only");
+    const porcelain = tableRows(preflight).find((row) => row[0] === "`git status --porcelain`");
+
+    expect(porcelain?.[1]).toContain("skipping the pack's own record paths (`.stamity/production/**`)");
+    expect(preflight.replace(/\s+/g, " ")).toMatch(
+      /With no earlier deploy record or tag, a first deploy or release, the change set's base is the repository's root commit \(`git rev-list --max-parents=0 HEAD`\), and the run says so/,
+    );
+  });
+
   it("runs in two modes, the deploy mode with no release-branch or tag preflight", async () => {
     const file = await skill();
     const modes = tableRows(section(file, "Two modes"));
@@ -214,14 +232,24 @@ describe("st-release — the readiness read", () => {
     const text = flowSection(await skill(), "Step 2 — The readiness read");
 
     expect(text).toContain(READINESS_WARNING);
-    expect(text).toContain(".stamity/production/<service>-<HEAD sha>.json");
+    expect(text).toContain(".stamity/production/<service>-<sha>.json");
     expect(text).toContain("`ready.value`");
+  });
+
+  it("reads the review under the review's own name and range rule, so a committed review is still found", async () => {
+    const text = flowSection(await skill(), "Step 2 — The readiness read");
+
+    // The review's file name: the service lower-cased to [a-z0-9-], the short sha its frame shows.
+    expect(text).toMatch(/`<service>` in lower case, `\[a-z0-9-\]` only, and `<sha>` the short sha its frame shows/);
+    // The review's range rule: the newest report at HEAD or an ancestor, never HEAD alone.
+    expect(text).toMatch(/the service's newest whose sha is HEAD or an ancestor of HEAD, the review's own range rule/);
+    expect(text).toMatch(/\*\*At an ancestor\*\*: the value's line names the review's sha/);
   });
 
   it("reads absent, stale, NO, not signed and YES as one line each, and no value stops it", async () => {
     const text = flowSection(await skill(), "Step 2 — The readiness read");
 
-    expect(text).toMatch(/\*\*Absent\*\*, or present only at another sha: one line/);
+    expect(text).toMatch(/\*\*Absent\*\*, no review at HEAD or an ancestor: one line/);
     expect(text).toMatch(/\*\*`NO`\*\* or \*\*`not signed`\*\*: one line/);
     expect(text).toMatch(/\*\*`YES`\*\*: one line/);
     expect(text).toMatch(/the warning is the whole of its effect here/i);
@@ -245,6 +273,7 @@ describe("st-release — the change record", () => {
 
     expect(rows.get("Test evidence")).toMatch(/command and exit code/);
     expect(rows.get("Approver")).toMatch(/not the requester/);
+    expect(rows.get("Approver")).toContain(APPROVER_CLAIM);
     expect(rows.get("Emergency route")).toMatch(/`Escalation contact`/);
     expect(rows.get("Rollback path")).toMatch(/before any deploy/);
   });
@@ -259,6 +288,10 @@ describe("st-release — the change record", () => {
     expect(supply).toContain("`SBOM: absent — <why>`");
     expect(supply).toContain("`provenance: absent — <why>`");
     expect(supply).toMatch(/the record is written either way/i);
+  });
+
+  it("keeps secret values out of the record and refuses a pasted credential, citing the secrets floor", async () => {
+    expect(flowSection(await skill(), "Step 7 — The change record")).toContain(SECRETS_RULE);
   });
 
   it("counts an approver equal to the requester as no approver", async () => {
@@ -281,6 +314,23 @@ describe("st-release — the stop", () => {
     // Every row but the local tag is labelled irreversible.
     expect(rows.filter((row) => row[1]!.startsWith("no")).map((row) => row[0])).toHaveLength(4);
     expect(opensOn(/git tag -a/)).toMatch(/typed `v<version>`/);
+    // The release creation never makes a tag of its own, so a failed push cannot leave it tagging the default branch.
+    expect(rows.find((row) => /release creation/.test(row[0]!))?.[0]).toContain("`gh release create v<version> --verify-tag`");
+  });
+
+  it("runs the opened commands in order and stops at the first non-zero exit, ending held", async () => {
+    const text = flowSection(await skill(), "Step 8 — The stop");
+
+    expect(text).toContain(
+      "After the token, the opened commands run in table order, each once, and the run stops at the first non-zero exit: no later command runs, and the run ends held, naming each command that ran with its exit code.",
+    );
+  });
+
+  it("shows the approver as the requester's claim before asking, the typed token being the confirmation", async () => {
+    const text = flowSection(await skill(), "Step 8 — The stop");
+
+    expect(text).toMatch(/^ ?Show the record's approver line, `named by the requester, not confirmed by this skill`, then print each remaining command/);
+    expect(text).toContain("The typed token is the person's confirmation that the named approver approved.");
   });
 
   it("opens nothing on a free-text yes, and holds on silence", async () => {
@@ -295,7 +345,7 @@ describe("st-release — the stop", () => {
     const text = flowSection(await skill(), "Step 8 — The stop");
 
     expect(text).toMatch(/No stop opens while the approver reads `not named` or equals the requester/);
-    expect(text).toMatch(/for `DEPLOY`, while the rollback path is empty/);
+    expect(text).toMatch(/for `DEPLOY`, while the rollback path reads `not named` or is empty/);
   });
 });
 

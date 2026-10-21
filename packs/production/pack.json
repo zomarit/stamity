@@ -30,7 +30,7 @@
   "maxFootprintBytes": 262144,
   "integrity": {
     "commands/st-production-review.md": "23dee2b6880308a90f8fbcc9370ec5759743916122f613c8e7944e838ddd61c4",
-    "skills/st-release/SKILL.md": "7eda97aa261791cb4526e6c194f4be59a585a8f498b23d460e259f96db12afe2",
+    "skills/st-release/SKILL.md": "6b6263495a1ed6c65a832fcb89af2b3a3a2e6232ac6cc3a0713d375e74cbd18a",
     "skills/st-release/agents/openai.yaml": "ec73b090082e0504de376fa04382f9657c5b3007a458fbb46450b4b4df5a569b"
   }
 }
