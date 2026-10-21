@@ -288,16 +288,14 @@ function bulletCount(text: string): number {
 const OWNED_FILES: readonly string[] = [SKILL_PATH, ...OWNED_AXES.map(referencePath)];
 
 /** Every shipped skill id, so the projection case runs over the whole tree. */
-// TEST CHANGE, justified (u13-frontend-move, plan 018): browser-evidence and design-system-detect
-// moved to the frontend pack (REQ-PACK-007) and are no longer core skills, eight ids to six.
-const PROJECTED_SKILL_IDS: readonly string[] = [
-  "dep-audit",
-  "handoff",
-  "learn",
-  "onboard",
-  "qa",
-  "verify",
-];
+// TEST CHANGE, justified (u7-skill-id-lists, plan 018-02): read from the core skill folders (each holding a
+// SKILL.md, `st-` stripped) instead of typed, which had left st-unattended out of the token check.
+const { existsSync, readdirSync } = await import("node:fs");
+const SKILLS_DIR = join(CORPUS_ROOT, "skills");
+const PROJECTED_SKILL_IDS: readonly string[] = readdirSync(SKILLS_DIR, { withFileTypes: true })
+  .filter((entry) => entry.isDirectory() && existsSync(join(SKILLS_DIR, entry.name, "SKILL.md")))
+  .map((entry) => entry.name.replace(/^st-/, ""))
+  .toSorted();
 
 describe("verify skill — frontmatter contract", () => {
   it("declares the skill identity head, on-demand load class, and deletion trigger", async () => {
