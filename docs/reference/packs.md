@@ -17,13 +17,17 @@ A pack is content installed on top of the corpus behind the trust ladder. Packs 
 Interface work that reuses the design system a repo already has and captures browser evidence for the accessibility floor.
 
 - **Version:** `1.16.0`
-- **Ships:** `skills` (2)
+- **Ships:** `skills` (2), `commands` (1)
 - **Install:** `stamity add frontend`
 
 Skills:
 
 - `st-browser-evidence` — Drives a real browser against the built app and returns the evidence bundle a QA checkpoint cites. Triggers when a change touches a rendered surface and needs captured evidence, or when someone asks for a screenshot comparison or accessibility scan.
 - `st-design-system-detect` — Detects the design system a repo already has — tokens, components, theming — and writes the inventory interface work reuses. Triggers before interface work that would add a token or a component, or when a recorded inventory falls behind the head.
+
+Commands:
+
+- `/st-ui-review` — Reviews a named screen or flow against the design system, the UI states and WCAG 2.2 AA through the design-quality agent and browser evidence, returning findings with path:line and never editing.
 
 ## `ops`
 
