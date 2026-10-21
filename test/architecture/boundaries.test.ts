@@ -293,6 +293,10 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // above: kept at its true depth so a future consumer of the pins is not
   // forced above the catalog reader that ships with it.
   "src/pack/catalogPins.ts": { unit: "p5-curated-catalog", wave: 1 },
+  // The skills that left the core for a pack and their frozen renderings
+  // (REQ-PACK-008): zero imports, read by the wave-13 rendering proof and the
+  // wave-14 sync report, so it sits at its true depth with the other pin data.
+  "src/pack/moved.ts": { unit: "u12-moved-prune", wave: 1 },
   // A work run's on-disk shape: constants and two helpers over the markers and
   // the error type, nothing else — so it sits at kernel depth, below every
   // reader of a run folder.

@@ -77,6 +77,7 @@ import * as packProjection from "../pack/projection.ts";
 import * as packCurated from "../pack/curated.ts";
 import * as packCatalogPins from "../pack/catalogPins.ts";
 import * as packVerifyInstalled from "../pack/verifyInstalled.ts";
+import * as packMoved from "../pack/moved.ts";
 import * as workspaceModel from "../workspace/model.ts";
 import * as workspaceGit from "../workspace/git.ts";
 import * as workspaceDetect from "../workspace/detect.ts";
@@ -224,6 +225,7 @@ export interface EngineRegistry {
     readonly curated: typeof packCurated;
     readonly catalogPins: typeof packCatalogPins;
     readonly verifyInstalled: typeof packVerifyInstalled;
+    readonly moved: typeof packMoved;
   };
   readonly workspace: {
     readonly model: typeof workspaceModel;
@@ -440,6 +442,7 @@ export function createEngine(): EngineRegistry {
       curated: packCurated,
       catalogPins: packCatalogPins,
       verifyInstalled: packVerifyInstalled,
+      moved: packMoved,
     },
     workspace: {
       model: workspaceModel,

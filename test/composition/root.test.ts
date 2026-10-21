@@ -235,6 +235,11 @@ describe("createEngine", () => {
       "curated",
       "install",
       "manifest",
+      // TEST CHANGE, justified (u12-moved-prune, REQ-PACK-008): the pack lane
+      // gained the moved-skills table (`src/pack/moved.ts`), which the
+      // rendering proof and the sync report read; the derived completeness
+      // check above requires it wired, so this pinned list names it too.
+      "moved",
       "orgPolicy",
       "permissions",
       "projection",

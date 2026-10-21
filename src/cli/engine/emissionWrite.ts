@@ -51,6 +51,7 @@ import type { PackSuppliedServer } from "../../mcp/catalog.ts";
 import { engineOwnedServerIds, mcpReclaimReducers } from "../../mcp/emit.ts";
 import type { HookScriptReader, ReclaimActionEntry, ReclaimReport } from "../../merge/reclaim.ts";
 import { displayPath, type SafeWriteFileOptions } from "../../merge/safeWrite.ts";
+import { movedCoreSkill, movedRenderingAt } from "../../pack/moved.ts";
 import {
   discoverInstalledPacks,
   ignoringPolicyDenialForProof,
@@ -68,7 +69,7 @@ import {
 import { TOOLS, VALID_TOOLS, type Tool } from "../../types/core.ts";
 import type { PackageEntry } from "../../types/detect.ts";
 import { STATE_DIR } from "../../types/markers.ts";
-import type { CoOwnership, LedgerEntry, SetupManifest } from "../../types/manifest.ts";
+import { isPackOwner, type CoOwnership, type LedgerEntry, type SetupManifest } from "../../types/manifest.ts";
 
 /**
  * The write-side rules the two regeneration verbs must apply IDENTICALLY.
@@ -999,6 +1000,11 @@ export interface RenderingProof {
  * engine's to remove (REQ-PLUGIN-046). The root charter is read off the plan,
  * never off disk, and as rendered before an import decision on the root: when
  * one is recorded, off a second plan without it.
+ *
+ * At a skill a release moved out of the core into a pack
+ * (`../../pack/moved.ts`, REQ-PACK-008) the rendering is the frozen one the
+ * core last wrote, once the running corpus no longer holds the skill
+ * ({@link movedSkillRenderings}).
  */
 export async function engineRenderingsFor(
   rootDir: string,
@@ -1026,8 +1032,10 @@ export async function engineRenderingsFor(
     : [];
   let outputs: readonly AdapterOutput[];
   let charter: AdapterOutput | undefined;
+  let index: ContentIndex;
   try {
-    const [index, repoInfo] = await Promise.all([buildContentIndex(), analyzeRepo(rootDir)]);
+    const [built, repoInfo] = await Promise.all([buildContentIndex(), analyzeRepo(rootDir)]);
+    index = built;
     const setupClients = structuredClone(manifest);
     setupClients.tools = clients;
     setupClients.selection = fullCorpusSelection(index);
@@ -1068,7 +1076,39 @@ export async function engineRenderingsFor(
   if (charter !== undefined) {
     for (const path of nestedCharters) add(path, charter.content);
   }
+  for (const [path, digest] of movedSkillRenderings(manifest.ledger, wanted, index)) {
+    const hashes = renderings.get(path) ?? new Set<string>();
+    hashes.add(digest);
+    renderings.set(path, hashes);
+  }
   return { renderings };
+}
+
+/**
+ * The frozen core renderings at the `wanted` paths a moved skill's client rows
+ * name (`../../pack/moved.ts`, REQ-PACK-008): for each row a client owns (a
+ * `pack:` owner is the pack's own copy, never a core one) whose artifact is a
+ * skill the running corpus `index` no longer holds, the digest the core last
+ * rendered at exactly that path. A row naming a moved id anywhere else — under
+ * another folder, another skill's folder, or a file the skill never had —
+ * yields nothing, so the sweep keeps that file. The row only selects the
+ * digest; the delete still needs the bytes to hash to it (`../../merge/reclaim.ts`).
+ */
+function movedSkillRenderings(
+  ledger: readonly LedgerEntry[],
+  wanted: ReadonlySet<string>,
+  index: ContentIndex,
+): [string, string][] {
+  const found: [string, string][] = [];
+  for (const row of ledger) {
+    if (!wanted.has(row.path) || isPackOwner(row.adapter) || row.artifactType !== "skill") continue;
+    const moved = movedCoreSkill(row.artifactId);
+    if (moved === undefined) continue;
+    if (index.items.some((item) => item.type === "skill" && item.id === moved.id)) continue;
+    const digest = movedRenderingAt(moved, row.path);
+    if (digest !== undefined) found.push([row.path, digest]);
+  }
+  return found;
 }
 
 /**

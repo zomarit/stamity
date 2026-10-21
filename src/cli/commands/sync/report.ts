@@ -1,5 +1,6 @@
 import { countSelectionItems } from "../../../content/selection.ts";
 import { formatReclaimReport } from "../../../merge/reclaim.ts";
+import { MOVED_CORE_SKILLS, movedCoreSkill } from "../../../pack/moved.ts";
 import {
   PACK_OWNER_PREFIX,
   isPackOwner,
@@ -214,6 +215,78 @@ function pluginBlockDropLines(plan: SyncPlan, report: SyncApplyReport): string[]
   return [`  manifest: ${verb} the \`plugin\` key a 1.14 setup recorded; nothing has read it since 1.15.0`];
 }
 
+/** One moved skill's outcome on this run: the copies the sweep removed, and the ones it kept. */
+export interface MovedSkillOutcome {
+  id: string;
+  pack: string;
+  removed: string[];
+  kept: string[];
+}
+
+/**
+ * The notice for the skills a release moved out of the core into a pack
+ * (`../../../pack/moved.ts`, REQ-PACK-008): one line per skill, naming the
+ * pack, the release, the copies removed and the copies kept, and the command
+ * that brings the skill back. A skill with nothing removed or kept prints
+ * nothing.
+ */
+export function movedSkillLines(moved: readonly MovedSkillOutcome[]): string[] {
+  const lines: string[] = [];
+  for (const skill of moved) {
+    if (skill.removed.length === 0 && skill.kept.length === 0) continue;
+    const since = movedCoreSkill(skill.id)?.since;
+    const outcomes = [
+      ...(skill.removed.length === 0 ? [] : [`removed: ${skill.removed.join(", ")}`]),
+      ...(skill.kept.length === 0 ? [] : [`kept — edited since sync wrote them; delete by hand: ${skill.kept.join(", ")}`]),
+    ];
+    lines.push(
+      `  moved: skill st-${skill.id} left the core for the ${skill.pack} pack${since === undefined ? "" : ` in ${since}`}; ` +
+        `its copies were ${outcomes.join("; ")}. To keep it: stamity add ${skill.pack}`,
+    );
+  }
+  return lines;
+}
+
+/**
+ * What this run did with each moved skill's core copies ({@link movedSkillLines}),
+ * read off the plan's pre-run ledger and the sweep's report: for a skill the
+ * running corpus no longer holds (the plan's selection is the whole corpus,
+ * `./engine.ts::planSync`), whose ledger rows a client owns, and whose pack owns
+ * no row — with the pack installed, its rows stand at those paths. Live runs
+ * only, since a dry run removed nothing. A removed or kept copy's rows leave the
+ * ledger on this run, so the next run finds none and prints nothing.
+ */
+function movedSkillOutcomes(plan: SyncPlan, report: SyncApplyReport): MovedSkillOutcome[] {
+  const reclaimed = report.reclaimed;
+  if (report.dryRun || reclaimed === null) return [];
+  const ledger = plan.manifest.ledger;
+  const outcomes: MovedSkillOutcome[] = [];
+  let carried: ReadonlySet<string> | undefined;
+  for (const skill of MOVED_CORE_SKILLS) {
+    if (plan.manifest.selection.items.skill.includes(skill.id)) continue;
+    if (ledger.some((row) => row.adapter === `${PACK_OWNER_PREFIX}${skill.pack}`)) continue;
+    const paths = new Set(
+      ledger
+        .filter((row) => !isPackOwner(row.adapter) && row.artifactType === "skill" && row.artifactId === skill.id)
+        .map((row) => row.path),
+    );
+    if (paths.size === 0) continue;
+    carried ??= carriedPaths(plan, report);
+    const stays = carried;
+    outcomes.push({
+      id: skill.id,
+      pack: skill.pack,
+      removed: reclaimed.entries
+        .filter((entry) => paths.has(entry.path) && entry.action === "deleted")
+        .map((entry) => entry.path),
+      // A kept copy whose row this run carries (unproven: the renderings could
+      // not be built) is not named: the next sync judges it, and names it then.
+      kept: salvagedEntries(report).filter((path) => paths.has(path) && !stays.has(path)),
+    });
+  }
+  return outcomes;
+}
+
 function provenanceLines(rollup: ProvenanceRollup, palette: Palette): string[] {
   const lines = [
     palette.dim(
@@ -326,6 +399,7 @@ export function renderSyncReport(
   }
 
   lines.push(...pluginBlockDropLines(plan, report));
+  lines.push(...movedSkillLines(movedSkillOutcomes(plan, report)));
   lines.push(...provenanceLines(provenanceFromManifest(provenanceSource(plan, report)), palette));
   return lines.join("\n");
 }
