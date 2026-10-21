@@ -1111,7 +1111,8 @@ function splitKey(key: string): [string, string] {
  *   support file) claims no id. Reading the filename slug there instead made
  *   pack A's `agents/x.md` declaring `y` refuse pack B's `x`, a refusal no
  *   layer backs and `sync` does not clear. A pack whose directory is gone has
- *   no file to read, so its id is re-derived from the path's slug.
+ *   no file to read, so its id is re-derived from the path's slug
+ *   ({@link packRelPathOf}).
  */
 function claimedCatalogIds(
   foreign: readonly LedgerEntry[],
@@ -1139,12 +1140,31 @@ function claimedCatalogIds(
       if (key !== undefined) claimed.set(key, entry);
       continue;
     }
-    const slash = entry.artifactId.indexOf("/");
-    if (slash === -1) continue;
-    const key = catalogIdOf(entry.artifactId.slice(slash + 1));
+    const rel = packRelPathOf(entry);
+    if (rel === null) continue;
+    const key = catalogIdOf(rel);
     if (key !== null) claimed.set(key, entry);
   }
   return claimed;
+}
+
+/**
+ * The pack-relative path a foreign pack row names, or `null` when it names none.
+ *
+ * A pack row's `artifactId` is `<pack id>/<pack-relative path>`, and a scoped
+ * pack id (`@acme/other`) holds a `/` of its own, so the path is read past the
+ * whole owner id, the prefix rule `clean` and the projection already use.
+ * Splitting at the first slash read `other/agents/x.md` for `@acme/other`, a
+ * path no class folder starts, and the scoped pack's id claimed nothing. A row
+ * whose id does not start with its owner's keeps the first-slash split.
+ */
+function packRelPathOf(entry: LedgerEntry): string | null {
+  if (isPackOwner(entry.adapter)) {
+    const prefix = `${entry.adapter.slice(PACK_OWNER_PREFIX.length)}/`;
+    if (entry.artifactId.startsWith(prefix)) return entry.artifactId.slice(prefix.length);
+  }
+  const slash = entry.artifactId.indexOf("/");
+  return slash === -1 ? null : entry.artifactId.slice(slash + 1);
 }
 
 // ── Hook ingress ───────────────────────────────────────────────
