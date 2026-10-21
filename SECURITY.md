@@ -636,8 +636,12 @@ refused. What stays open is named here, as accepted risk:
   copies, its hook entries run the scripts under `.stamity/generated/hooks/claude/`, which come from
   the pull request. Those old copies are gone after the upgrade's `sync`, which no longer writes them
   and removes each one still as it wrote it, so on an upgrade pull request whose base predates
-  1.16.0 the base's entries name scripts that pull request removed: those hooks cannot start, and the
-  guard's entry, failing closed, refuses every tool call on its Action run until it merges. The
+  1.16.0 the base's entries name scripts that pull request removed, so those hooks cannot start. From
+  a 1.9.0 to 1.15.x base, the guard's entry, failing closed, refuses every tool call on its Action run
+  until it merges. Before 1.9.0 the guard's entry has no fail-closed tail, so the guard does not run on
+  that Action run and its tool calls go through unchecked: a base older than 1.9.0 upgrades through
+  1.16.0 first, whose settings already name the copies under `.claude/hooks/stamity/`, which stay, or
+  keeps the Action off that one upgrade pull request. The
   restore has a limit the Action's source names as its own: a pull request that
   changes `.claude/` sees that change reverted on its Action run, and an agent there that commits with
   `git add -A` puts the revert onto the pull request's branch.

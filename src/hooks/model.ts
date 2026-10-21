@@ -287,8 +287,10 @@ export const CLIENT_CLOUD_FACTS: readonly ClientCloudFact[] = [
       "copies under `.stamity/generated/hooks/claude/` are no longer written and the upgrade's `sync` removes " +
       "them, so a session run by hand starts `.claude/hooks/stamity/stamity-session-start.mjs`. An upgrade pull " +
       "request whose base predates 1.16.0 runs that base's entries, which name the removed scripts, so on its " +
-      "run those hooks cannot start and the guard's entry, failing closed, refuses every tool call until the " +
-      "upgrade merges. A user hook " +
+      "run those hooks cannot start. From a 1.9.0 to 1.15.x base the guard's entry, failing closed, refuses " +
+      "every tool call until the upgrade merges; before 1.9.0 the entry has no fail-closed tail, so the guard " +
+      "does not run on that run. A base older than 1.9.0 upgrades through 1.16.0 first, whose settings already " +
+      "name `.claude/hooks/stamity/`, or keeps the Action off that one upgrade pull request. A user hook " +
       "or a pack hook keeps its script at its own path outside `.claude/`, so on a pull request that script " +
       "is the pull request's, and the Action runs it. A pull request that " +
       "legitimately changes `.claude/` sees that change reverted on the Action's run, a limit the Action " +
