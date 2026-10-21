@@ -1,7 +1,7 @@
 import { readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import * as publicApi from "../../src/index.ts";
 import type {
   ClassPins,
@@ -14,6 +14,7 @@ import type {
   ModelClass,
 } from "../../src/index.ts";
 import { createApp, createEngine, VERSION } from "../../src/composition/root.ts";
+import type * as PathsApi from "../../src/shared/paths.ts";
 
 /**
  * The registry's expected shape is DERIVED from the tree, not declared here.
@@ -250,6 +251,45 @@ describe("createEngine", () => {
       "trust",
       "verifyInstalled",
     ]);
+  });
+
+  it("keeps pack.curated.CURATED_PACKS as a lazy read of the derived catalog, and reads no packs folder at import", async () => {
+    // review/13: `CURATED_PACKS` left `src/pack/curated.ts` when the catalog
+    // became derived on first use, and `createEngine().pack.curated` is package
+    // API. The registry keeps the member as a getter over `curatedPacks()`. The
+    // catalog's only way to the packs folder is its package-root walk, so a
+    // fresh module graph with that walk counted shows whether importing and
+    // composing the registry reached the folder.
+    const packDir = path.join("src", "pack");
+    let packRootWalks = 0;
+    vi.resetModules();
+    vi.doMock("../../src/shared/paths.ts", async (importOriginal) => {
+      const actual = await importOriginal<typeof PathsApi>();
+      return {
+        ...actual,
+        findPackageRoot: (from: string): string => {
+          if (from.endsWith(packDir)) packRootWalks += 1;
+          return actual.findPackageRoot(from);
+        },
+      };
+    });
+    try {
+      const fresh = await import("../../src/composition/root.ts");
+      const engine = fresh.createEngine();
+      const spread = { ...engine.pack.curated };
+      expect(Object.keys(engine.pack.curated)).not.toContain("CURATED_PACKS");
+      expect(packRootWalks, "importing or composing the registry read the packs folder").toBe(0);
+
+      const freshCatalog = await import("../../src/pack/curated.ts");
+      const catalog = engine.pack.curated.CURATED_PACKS;
+      expect(packRootWalks).toBeGreaterThan(0);
+      expect(catalog).toBe(freshCatalog.curatedPacks());
+      expect(catalog.map((entry) => entry.id)).toContain("ops");
+      expect(spread).not.toHaveProperty("CURATED_PACKS");
+    } finally {
+      vi.doUnmock("../../src/shared/paths.ts");
+      vi.resetModules();
+    }
   });
 });
 

@@ -222,7 +222,7 @@ export interface EngineRegistry {
     readonly orgPolicy: typeof packOrgPolicy;
     readonly receipt: typeof packReceipt;
     readonly projection: typeof packProjection;
-    readonly curated: typeof packCurated;
+    readonly curated: PackCuratedRegistryEntry;
     readonly catalogPins: typeof packCatalogPins;
     readonly verifyInstalled: typeof packVerifyInstalled;
     readonly moved: typeof packMoved;
@@ -388,6 +388,36 @@ export interface EngineRegistry {
   };
 }
 
+/**
+ * `../pack/curated.ts` as the registry exposes it: the module's own exports,
+ * plus `CURATED_PACKS`, the member the module carried until the catalog became
+ * derived. A consumer of `createEngine()` that reads it keeps working
+ * (review/13); the module itself no longer exports it.
+ */
+type PackCuratedRegistryEntry = typeof packCurated & {
+  /**
+   * The bundled catalog, as `curatedPacks()` returns it.
+   *
+   * @deprecated Call `curatedPacks()` instead. This is a getter over that call:
+   * it reads the packs folder when it is read, never when the registry is
+   * imported or composed, and throws the derivation's `CONFIG_ERROR` on a
+   * broken packs folder exactly as `curatedPacks()` does.
+   */
+  readonly CURATED_PACKS: readonly packCurated.CatalogEntry[];
+};
+
+/**
+ * Built once, at import, with no catalog read: `CURATED_PACKS` is a getter,
+ * and non-enumerable, so a spread or a key walk of the registry never reads
+ * the packs folder either.
+ */
+const packCuratedEntry: PackCuratedRegistryEntry = Object.freeze(
+  Object.defineProperty({ ...packCurated }, "CURATED_PACKS", {
+    get: (): readonly packCurated.CatalogEntry[] => packCurated.curatedPacks(),
+    enumerable: false,
+  }) as PackCuratedRegistryEntry,
+);
+
 /** Composes the full module registry. Pure: a fresh, frozen object per call. */
 export function createEngine(): EngineRegistry {
   return Object.freeze({
@@ -439,7 +469,7 @@ export function createEngine(): EngineRegistry {
       orgPolicy: packOrgPolicy,
       receipt: packReceipt,
       projection: packProjection,
-      curated: packCurated,
+      curated: packCuratedEntry,
       catalogPins: packCatalogPins,
       verifyInstalled: packVerifyInstalled,
       moved: packMoved,
