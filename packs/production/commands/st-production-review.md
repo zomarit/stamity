@@ -87,9 +87,12 @@ this command reads it and never edits it. Four sections, each optional:
 - **`Controls`**, headed `mode: add | replace`, rows in the check table's form. Under `add`,
   each row is a new check beside the 19, under an id that is not one of them. Under `replace`,
   a row whose id is a shipped id replaces that row, and any other row is added. A control's
-  **Decided by** names evidence only: a file path the researchers read, or one of this review's
-  shipped probes. A control that names a command, a script or an address to run is not run; its
-  row is `skipped` and the report names the control. A replacement of a non-blocking check may
+  **Decided by** names evidence only: a tracked file inside the repository (one `git ls-files`
+  lists), which the researchers read, or one of this review's shipped probes. A control that
+  names any other path (an ignored or untracked file, or a path outside the repository) is never
+  read; its row is `skipped` and the report names the control. A control that names a command, a
+  script or an address to run is not run; its row is `skipped` and the report names the control.
+  A replacement of a non-blocking check may
   change how it is decided. A replacement of a blocking check may change only where the check
   finds its evidence (another file, another shipped probe), never its pass condition, its
   **Blocks** `yes` or its **Attest** mark. Clearing a blocking check is a waiver's job, with an
@@ -196,8 +199,10 @@ in the policy file. A waiver row there names the check id, the reason, the appro
 expires and the ticket. A row missing its approver or its expiry is invalid and clears nothing.
 
 The requesters are the authors of every commit that touched the row, read with `git log -L`
-over the row's lines (or `git blame`). A row not yet committed has no requester and clears
-nothing. The approver must differ from every requester, compared by name and by email; an
+over the row's lines only, which lists every commit that changed them; the report lists all of
+these requesters for the person who signs. A row not yet committed has no requester and clears
+nothing, and a row whose working-tree text differs from its text at `HEAD` counts as not yet
+committed and clears nothing: an uncommitted edit keeps no waiver alive. The approver must differ from every requester, compared by name and by email; an
 approver the review cannot tell apart from one of them counts as the same person. So an edit
 to the row (an expiry pushed out, an approver changed) makes its author a requester too and
 needs fresh approval. A waiver approved by its own requester, any one of them, or read on a day past its `expires`
