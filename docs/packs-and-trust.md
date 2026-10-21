@@ -94,7 +94,7 @@ A catalog id resolves to content shipped inside this package. A path is a direct
 A scoped name is a package you already installed yourself. There is no download step and no
 background update check.
 
-The three first-party packs, and what each one ships, are on
+The four first-party packs, and what each one ships, are on
 [the packs reference](reference/packs.md). That page renders from their manifests.
 
 ### Update a pack by adding it again
@@ -547,8 +547,9 @@ unless the pack declares a tighter one of its own. Installed file count is cappe
 is bounded content, not an open-ended payload.
 
 Regenerate the first-party manifests after editing a pack. The plain invocation verifies each pack
-against its existing map and fails on the drift an edit just introduced. Rewriting a map is the
-maintenance mode, and that split is deliberate:
+against its existing map and fails on the drift an edit just introduced. Rewriting a map, and
+setting each manifest's `version` to the package's, is the maintenance mode, and that split is
+deliberate:
 
 ```sh
 node scripts/generate-pack-manifests.mjs --write

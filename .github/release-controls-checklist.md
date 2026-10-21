@@ -177,8 +177,8 @@ patch included.
 
 A second line rides the same cut and lands *before* the tag rather than after it: the eval set is
 measured per the change-aware release rule of `evals/SET-v7.md` (REQ-PROVE-033). Runs when: the
-release's diff since the run of record touches `content/**` or another file a case's `source:`
-names; the emitted client files (the cross-client goldens);
+release's diff since the run of record touches `content/**`, `packs/**` or another file a case's
+`source:` names; the emitted client files (the cross-client goldens);
 the eval set's files (`evals/SET-v7.md`, `evals/README.md`, `evals/coverage-exemptions-v6.md`, the
 selected rubric `evals/rubric-v7.md`, the model profiles `evals/model-profiles-v1.json` and
 `evals/MODEL-PROFILES-v1.md`); the case sets old and new (`evals/cases-v6/**`,

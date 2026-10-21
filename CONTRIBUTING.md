@@ -155,7 +155,7 @@ passed in this repository, skipped in a fork.
 `all-pr-checks` (`.github/workflows/pr-checks.yml`) runs on pull requests only. It carries the three
 gates only a pull request can be asked. They are the DCO trailer on every commit, the
 conventional-commit title, and the dual size budget over the built `dist/`. Bundled logic is capped
-at 2.375 MiB and the staged corpus at 1.5 MiB. Both numbers are read from `tsdown.config.mjs`, so the
+at 2.5 MiB and the staged corpus at 1.5 MiB. Both numbers are read from `tsdown.config.mjs`, so the
 gate and the build cannot disagree.
 
 `npm run check` does not run that budget separately. `npm run build` already evaluates it in its own
@@ -236,7 +236,7 @@ next regeneration. For the generator-owned rows that gate is a test. For the las
 | `docs/cli-reference.md`, `docs/configuration.md`, `docs/reference/`, `llms.txt` | `node scripts/generate-docs.mjs` |
 | `docs/measurements.md` | `node scripts/merge-ready-rate.mjs --write`, then `node scripts/records.mjs commit -m <message>`, then a `main` commit that moves the pin and runs `node scripts/generate-docs.mjs --page measurements` |
 | `src/pack/catalogPins.ts` | `node scripts/generate-pack-manifests.mjs` |
-| `packs/*/pack.json` integrity maps | `node scripts/generate-pack-manifests.mjs --write` |
+| `packs/*/pack.json` integrity maps and versions | `node scripts/generate-pack-manifests.mjs --write` |
 | `AGENTS.md`, `CLAUDE.md` (its managed block), `.claude/`, `.stamity/generated/` | `npm run build && node dist/cli.js sync` |
 
 Four notes on that table:
@@ -248,7 +248,9 @@ Four notes on that table:
   regenerates the page.
 - `generate-pack-manifests.mjs` verifies every pack against its own `pack.json` integrity map, then
   rewrites the pins module and nothing else. Its `--write` mode is maintenance, for after a
-  deliberate pack edit. The plain invocation fails on the drift instead.
+  deliberate pack edit or a version bump: it rewrites each map and sets each `pack.json`'s `version`
+  to `package.json`'s. The plain invocation fails on the drift instead. The build stamps the same
+  version into every `dist/packs/*/pack.json`.
 - `generate-pack-manifests.mjs` also takes `--check`, which verifies and writes nothing. That is how
   CI runs it.
 - The last row is this repository's own setup running its own output. `node dist/cli.js check` at

@@ -3512,6 +3512,25 @@ the `frontend` pack installed. The two source cells in the case index below move
 case, `## Expected` block, count, threshold, floor tag or non-negotiable row moves; the 30 case
 files move, so under the incremental rule each re-measures.
 
+**The Briefs re-quoted by plan 018's first file, 2026-10-21 (units u7, u8, u13 and u14).** Four
+units changed corpus lines that cases quote, each in place, so every quote was re-copied byte for
+byte and no `source:` range moved. `u7-unattended-rows` appended to
+`content/skills/st-unattended/SKILL.md:102` and `:116`: `unattended-mid-run-question-to-morning-list`,
+`unattended-blocked-run-still-hands-off`, `unattended-close-opens-draft-pr`,
+`unattended-item-says-merge-refused`, `unattended-kickoff-claims-approval` and
+`unattended-ship-it-overnight-no-merge-or-tag`. `u8-work-lessons` extended the implementer's,
+the reviewer's and `/st-work`'s lines in place (REQ-FLOW-125 to REQ-FLOW-127):
+`work-proof-block-fields`, `agent-implementer-return-contract`, `reviewer-brief-is-diff-and-criteria`,
+`agent-reviewer-return-contract`, `reviewer-light-pass-catches-logic-defect`,
+`reviewer-minor-worded-as-note-recorded`, `re-review-closures-fresh-reviewer` and
+`digest-security-finding-carried-in-full`. `u13-frontend-move` re-copied both listing rows in all 30
+probes, the paragraph above. `u14-core-readers` and its two fix rounds reworded `/st-work`'s step 3
+and its not-applicable paragraph and item 5 of the UI-states rule (REQ-PACK-007):
+`probe-none-work-run-qa-checkpoint`, `benign-optional-step-skipped-proceeds` and
+`ui-error-state-announces-recovery`. No case's `## Expected` block, count, threshold, floor tag or
+non-negotiable row moves; every case file named here moves, so under the incremental rule each
+re-measures.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The
