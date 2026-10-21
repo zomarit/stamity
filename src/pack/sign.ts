@@ -13,6 +13,14 @@ export interface SignPackOptions {
   verifyFn?: SigstoreVerifyFn;
 }
 
+/**
+ * Per-request timeout for the signing client's Fulcio and Rekor calls. The client's
+ * 5,000 ms default aborts a slow Rekor upload that Rekor still accepts and resends it;
+ * the identical resend is answered 409, which the sign path does not recover
+ * (TLOG_CREATE_ENTRY_ERROR, CI run 39606298770). The retry count stays the client's.
+ */
+const SIGSTORE_REQUEST_TIMEOUT_MS = 30_000;
+
 /** Cross-platform reservations are independent of the author's current filesystem. */
 function foldedPath(path: string): string {
   return path.normalize("NFC").toLowerCase();
@@ -91,7 +99,11 @@ export async function signPack(packRoot: string, options: SignPackOptions = {}):
   const payload = sigstoreSignedPayload(aggregateSha);
   let bundle: Bundle;
   try {
-    const sign = options.signFn ?? (await import("sigstore")).sign;
+    let sign = options.signFn;
+    if (sign === undefined) {
+      const sigstore = await import("sigstore");
+      sign = (input) => sigstore.sign(input, { timeout: SIGSTORE_REQUEST_TIMEOUT_MS });
+    }
     bundle = await sign(payload);
   } catch {
     // Provider failures can include identity tokens or request bodies. Do not

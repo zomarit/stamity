@@ -132,6 +132,12 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   member as a getter that derives the catalog from the packs folder on its first read, and a broken packs folder makes
   that read throw `CONFIG_ERROR`. Call `createEngine().pack.curated.curatedPacks()` instead.
 
+### Fixed
+
+- **Pack signing gives the transparency log 30 s per request.** The engine's `pack.sign` handed the signing client
+  its 5 s default, so a Rekor upload slower than that was aborted and sent again after it had landed, and the second
+  upload was answered with a conflict that failed signing. A slow upload no longer fails signing with a conflict.
+
 ## [1.16.0] - 2026-10-20
 
 ### Upgrading from 1.15.0
