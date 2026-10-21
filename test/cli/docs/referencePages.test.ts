@@ -422,6 +422,12 @@ describe("pack inventory", () => {
         join(fixture.packsRoot, "probe-pack", "commands", "st-probe-run.md"),
         artifact({ id: "probe-run", type: "command", description: "Runs the probe." }),
       );
+      // A skill's support file ships with it but is not a skill: the count stays at one item.
+      await mkdir(join(fixture.packsRoot, "probe-pack", "skills", "st-probing", "agents"), { recursive: true });
+      await writeFile(
+        join(fixture.packsRoot, "probe-pack", "skills", "st-probing", "agents", "openai.yaml"),
+        "interface:\n  display_name: Probing\n",
+      );
       const render = async (): Promise<string> =>
         (await renderReferencePages({ contentRoot: fixture.contentRoot, packsRoot: fixture.packsRoot })).get(
           "docs/reference/packs.md",

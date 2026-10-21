@@ -411,6 +411,16 @@ interface PackInventory {
 }
 
 /**
+ * Whether `file` is the one file that makes a skill an item: its folder's own
+ * `skills/<name>/SKILL.md`. A skill's support files (`agents/openai.yaml`, say)
+ * ship with it but are not skills of their own.
+ */
+function isSkillItemFile(file: PackContentFile): boolean {
+  return file.contentClass === "skills" && file.relPath.split("/").length === 3 &&
+    file.relPath.endsWith("/SKILL.md");
+}
+
+/**
  * The skills and commands a pack ships, each read from its own file's
  * frontmatter: a skill's `SKILL.md` (its companions are not items) and every
  * command file. Named as the class pages name them ({@link invokedName}), so a
@@ -420,12 +430,7 @@ async function readPackItems(
   packName: string,
   files: readonly PackContentFile[],
 ): Promise<{ skills: PackItem[]; commands: PackItem[] }> {
-  const itemFiles = files.filter(
-    (file) =>
-      file.contentClass === "commands" ||
-      (file.contentClass === "skills" && file.relPath.split("/").length === 3 &&
-        file.relPath.endsWith("/SKILL.md")),
-  );
+  const itemFiles = files.filter((file) => file.contentClass === "commands" || isSkillItemFile(file));
   const read = await Promise.all(
     itemFiles.map(async (file) => {
       const source = `${PACKS_DIR}/${packName}/${file.relPath}`;
@@ -498,10 +503,17 @@ async function isDirectory(path: string): Promise<boolean> {
   );
 }
 
-/** `agents (2), skills (5)` — the classes a pack ships, with counts. */
+/**
+ * `agents (2), skills (5)` — the classes a pack ships, with counts of items:
+ * a skill is its folder's `SKILL.md` ({@link isSkillItemFile}), so its support
+ * files do not count; every other class counts its artifact files.
+ */
 function shippedClasses(files: readonly PackContentFile[]): string {
   const counts = new Map<string, number>();
-  for (const file of files) counts.set(file.contentClass, (counts.get(file.contentClass) ?? 0) + 1);
+  for (const file of files) {
+    if (file.contentClass === "skills" && !isSkillItemFile(file)) continue;
+    counts.set(file.contentClass, (counts.get(file.contentClass) ?? 0) + 1);
+  }
   if (counts.size === 0) return "none — this pack ships no content";
   return [...counts]
     .map(([contentClass, count]) => `${tick(contentClass)} (${String(count)})`)

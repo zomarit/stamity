@@ -17,7 +17,7 @@ A pack is content installed on top of the corpus behind the trust ladder. Packs 
 Interface work that reuses the design system a repo already has and captures browser evidence for the accessibility floor.
 
 - **Version:** `1.16.0`
-- **Ships:** `skills` (4)
+- **Ships:** `skills` (2)
 - **Install:** `stamity add frontend`
 
 Skills:
