@@ -18,7 +18,7 @@ import {
   hasManagedBlock,
   splitAtManagedBlock,
 } from "../../merge/managedBlocks.ts";
-import { lookupCatalogEntry } from "../../pack/curated.ts";
+import { lookupCatalogEntry, type CatalogEntry } from "../../pack/curated.ts";
 import { ORG_POLICY_REL_PATH } from "../../pack/orgPolicy.ts";
 import {
   discoverInstalledPacksWithPolicy,
@@ -1134,7 +1134,10 @@ async function readReAddArgs(
  *
  * - A catalog-granted tier came through the curated catalog, whose receipt
  *   spec is the resolved bundled directory or package — so the step names the
- *   catalog id, which re-applies the pin.
+ *   catalog id, which re-applies the pin. A catalog that cannot be read (a
+ *   packs folder that fails its derivation) names no source: `null`, never a
+ *   throw, because the caller is the integrity row and an exception there
+ *   would turn its `fail` into `check`'s guarded `warn` (review/12).
  * - A local path or an npm package is re-added by the spec the operator typed;
  *   at the unsigned floor `add` refuses without `--allow-untrusted`, so the
  *   step carries it, as the original install had to.
@@ -1146,7 +1149,12 @@ export function reAddArgsOf(packId: string, receipt: unknown): string | null {
   const { kind, spec } = source as { kind?: unknown; spec?: unknown };
   if (typeof kind !== "string" || typeof spec !== "string" || spec === "") return null;
   if (CATALOG_TIERS.has(trustTier) || kind === "catalog-pinned") {
-    const entry = lookupCatalogEntry(packId) ?? lookupCatalogEntry(spec);
+    let entry: CatalogEntry | undefined;
+    try {
+      entry = lookupCatalogEntry(packId) ?? lookupCatalogEntry(spec);
+    } catch {
+      return null;
+    }
     return entry === undefined ? null : shellWord(entry.id);
   }
   if (kind !== "local-path" && kind !== "npm-package") return null;

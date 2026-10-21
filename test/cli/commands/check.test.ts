@@ -27,6 +27,7 @@ import { applySync, planSync } from "../../../src/cli/commands/sync/engine.ts";
 import { AGENTS_MD_FILE } from "../../../src/emit/agentsMd.ts";
 import { createApp, createEngine } from "../../../src/index.ts";
 import { applyPackInstall, planPackInstall } from "../../../src/pack/install.ts";
+import { receiptRelPath } from "../../../src/pack/receipt.ts";
 import {
   createManifest,
   manifestPath,
@@ -1783,6 +1784,81 @@ describe("check — installed pack integrity", () => {
     expect(code).toBe(1);
     expect(row(doc, "pack-integrity").status).toBe("fail");
     expect(row(doc, "pack-integrity").detail).toContain("is missing from the repo");
+  });
+
+  it("still fails a tampered catalog-installed pack when the bundled catalog cannot be derived", async () => {
+    // review/12: the row reads the catalog after it has found the tampering, to
+    // name the re-add source. The catalog is derived on first use, so a packs
+    // folder that fails its derivation throws there; the row must still fail,
+    // naming no source, rather than letting `guarded` turn it into a `warn`
+    // and `check` exit 0 on tampered bytes.
+    const handle = getRepo();
+    const relPath = `${STATE_DIR}/packs/demo/agents/stamity-demo.md`;
+    const receiptPath = receiptRelPath("demo");
+    const receiptBody = `${JSON.stringify({
+      source: { kind: "catalog-pinned", spec: "demo" },
+      trustTier: "curator-verified",
+    })}\n`;
+    const body = "# demo agent\n";
+    const hashOf = (text: string): string => createHash("sha256").update(text).digest("hex");
+    const root = await seedRepo(handle, {
+      ledger: [relPath, receiptPath].map((path) => ({
+        path,
+        adapter: packOwner("demo"),
+        artifactId: "demo",
+        artifactType: "infra" as const,
+        contentHash: hashOf(path === relPath ? body : receiptBody),
+      })),
+      files: { [relPath]: body, [receiptPath]: receiptBody },
+    });
+    await writeFile(join(root, relPath), `${body}plus something nobody installed\n`, "utf8");
+
+    // A pseudo package whose packs folder holds a pack with no pin, so the
+    // catalog's derivation refuses. Only the catalog's own package-root walk is
+    // redirected; a fresh module graph means no catalog was memoized before.
+    const pseudoInstall = handle.path("pseudo-install");
+    await mkdir(join(pseudoInstall, "packs", "unpinned"), { recursive: true });
+    await writeFile(
+      join(pseudoInstall, "packs", "unpinned", "pack.json"),
+      `${JSON.stringify({
+        name: "unpinned",
+        version: "0.0.1",
+        description: "no pin",
+        integrity: {},
+      })}\n`,
+    );
+    const packDir = join("src", "pack");
+    vi.resetModules();
+    vi.doMock("../../../src/shared/paths.ts", async (importOriginal) => {
+      const actual = await importOriginal<typeof PathsApi>();
+      return {
+        ...actual,
+        findPackageRoot: (from: string): string =>
+          from.endsWith(packDir) ? pseudoInstall : actual.findPackageRoot(from),
+      };
+    });
+    try {
+      const fresh = await import("../../../src/cli/commands/check.ts");
+      const freshCatalog = await import("../../../src/pack/curated.ts");
+      const { __setContentRootForTests: pinFreshCorpus } = await import(
+        "../../../src/content/contentRoot.ts"
+      );
+      pinFreshCorpus(handle.path("corpus"));
+      // The fixture is the broken catalog it claims to be.
+      expect(() => freshCatalog.lookupCatalogEntry("demo")).toThrow(/no pin in catalogPins/);
+
+      const result = await runInProcess([fresh.checkCommand], ["check", "--json"], { cwd: root });
+
+      expect(result.code).toBe(1);
+      const doc = JSON.parse(result.stdout.trim()) as Envelope;
+      expect(doc.ok).toBe(false);
+      const integrity = row(doc, "pack-integrity");
+      expect(integrity.status).toBe("fail");
+      expect(integrity.detail).toContain(relPath);
+    } finally {
+      vi.doUnmock("../../../src/shared/paths.ts");
+      vi.resetModules();
+    }
   });
 
   it("does no work, and says so, when nothing is installed", async () => {
