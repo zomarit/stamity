@@ -85,7 +85,7 @@ import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts
  * and carries the entry's pin into the plan, so a first-party pack installs at
  * its catalog-granted tier with no waiver. Pinned-or-refuse holds at add AND
  * at re-install (the update path re-runs every gate): content that does not
- * hash to the pin refuses. A path-shaped spec (`./ops`) never consults the
+ * hash to the pin refuses. A path-shaped spec (`./frontend`) never consults the
  * catalog — an explicit path always means the directory — and a name the
  * catalog does not know falls through to the existing local-path/npm
  * resolution untouched. The org trust policy stays the first gate after the
@@ -104,7 +104,7 @@ import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts
  * never to overrule the check.
  *
  * **No network.** The spec is a catalog id resolving to content shipped with
- * this package, a local directory (`./packs/ops`), or the name of a package
+ * this package, a local directory (`./packs/frontend`), or the name of a package
  * the operator already installed under `node_modules/`. Nothing fetches.
  *
  * Installed content is written once, not regenerated — but written is not
@@ -223,8 +223,8 @@ interface ResolvedSpec {
 /**
  * A spec that names a place on disk. Mirrors the engine's own path detection
  * (`resolvePackSource`) so the two surfaces split path-vs-name identically —
- * which is what makes the precedence documentable: `./ops` is always the
- * directory, even when a catalog entry `ops` exists.
+ * which is what makes the precedence documentable: `./frontend` is always the
+ * directory, even when a catalog entry `frontend` exists.
  */
 function isPathSpec(spec: string): boolean {
   return (
@@ -1056,7 +1056,7 @@ export const addCommand: CommandModule = {
     {
       name: "pack-spec",
       description:
-        "catalog id (ops), pack directory (./packs/ops), or an installed package name (@acme/ops)",
+        "catalog id (frontend), pack directory (./packs/frontend), or an installed package name (@acme/ops)",
       required: true,
     },
   ],

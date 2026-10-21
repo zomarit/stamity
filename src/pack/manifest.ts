@@ -599,7 +599,7 @@ export async function resolvePackSource(
   const trimmed = spec.trim();
   if (trimmed === "") {
     throw new EngineError(
-      "Empty pack spec. Pass a pack directory (./packs/ops) or the name of an installed pack package.",
+      "Empty pack spec. Pass a pack directory (./packs/frontend) or the name of an installed pack package.",
       { code: "VALIDATION_ERROR" },
     );
   }
@@ -617,7 +617,7 @@ export async function resolvePackSource(
 
   if (!PACK_NAME_PATTERN.test(trimmed)) {
     throw new EngineError(
-      `Invalid pack spec ${JSON.stringify(trimmed)}. Expected a directory path (./packs/ops) ` +
+      `Invalid pack spec ${JSON.stringify(trimmed)}. Expected a directory path (./packs/frontend) ` +
         `or a lower-case package name (optionally @scope/name).`,
       { code: "VALIDATION_ERROR" },
     );

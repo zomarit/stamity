@@ -89,11 +89,11 @@ const KINDS: readonly string[] = ["runnable", "judgment"];
 
 /**
  * The six objective-shape rows the reliability axis publishes. CQ4's SLO
- * criteria used to live only inside the scaffold pack, which both denied
- * defining a floor and defined one — so a repo without that pack installed had
- * no objective criteria at all, and the pack graded its own output against
- * rules nothing else could read. The ids are fixed here, in the core axis; the
- * pack cites them and defines none.
+ * criteria used to live only inside the scaffold pack (retired in Package 22),
+ * which both denied defining a floor and defined one — so a repo without that
+ * pack installed had no objective criteria at all, and the pack graded its own
+ * output against rules nothing else could read. The ids are fixed here, in the
+ * core axis; a pack cites them and defines none.
  */
 const SLO_OBJECTIVE_IDS = [
   "rel-slo-objective",
@@ -443,15 +443,18 @@ describe("verify skill — artifact seam", () => {
     expect(consumers).not.toMatch(/\bProve\b/);
     // Fourth row, and the reason the count moved from 3: the roster was drawn from a
     // `content/`-scoped grep, so the pack consumers of the same path were invisible to
-    // it. `grep -rn "\.stamity/verify" packs/` reaches both — the product-audit pack
-    // (`commands/st-product-audit.md`, `commands/st-benchmark.md`,
-    // `skills/st-perf-audit/SKILL.md`) and the scaffold pack
-    // (`commands/stamity-{auth-scaffold,design-system-create,slo-scaffold}.md`), each
-    // declaring `.stamity/verify/**` in its `pack.json` touchedPaths. Both names are
-    // asserted so a `checks[]` / `summary` schema change meets its full consumer set
-    // here rather than in an installed repo.
-    expect(consumers).toMatch(/product-audit pack/i);
-    expect(consumers).toMatch(/scaffold pack/i);
+    // it. `grep -rn "\.stamity/verify" packs/` reaches them: the frontend pack's
+    // `commands/st-ui-review.md` reads the `ui` and `ux` artifacts, and the production
+    // pack's `/st-production-review` (plan 018 file 2, u10) refreshes and reads its axes.
+    // Both names are asserted so a `checks[]` / `summary` schema change meets its full
+    // consumer set here rather than in an installed repo.
+    // TEST CHANGE, justified: the product-audit and scaffold packs this row named were
+    // deleted in plan 018 file 2 (u8-retire-old-packs); the bullet now names their
+    // successors, and the old names are asserted absent so the deleted packs cannot
+    // return to the roster by paste.
+    expect(consumers).toMatch(/production pack's readiness review/i);
+    expect(consumers).toMatch(/frontend pack's\s+screen review/i);
+    expect(consumers).not.toMatch(/product-audit|scaffold/i);
     // The seam's read protocol, shared by both packs: a missing artifact sends them
     // back to this skill; it never reads as a passing axis.
     expect(consumers).toMatch(/refresh\s*trigger, not a pass/i);

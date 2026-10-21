@@ -38,10 +38,10 @@ The model-executed corpus under content/charter, commands, agents, skills and ru
 remains the measurement surface, and since 2026-10-21 (REQ-PACK-013) so does every pack's:
 the commands, agents, rules and each skill's SKILL.md of every `packs/<id>/` folder that holds a
 `pack.json`. Deterministic engine behavior belongs to its tests. Every `content/` artifact is
-sourced by a case; `coverage-exemptions-v6.md` holds one dated row for each of the sixteen
-artifacts of the three retiring packs (`ops`, `product-audit`, `scaffold`), which no case ever
-measured and whose rows leave with their folders. New artifacts still need a case or an explicit
-reviewed exemption.
+sourced by a case; the sixteen dated rows `coverage-exemptions-v6.md` held for the three packs no
+case ever measured (`ops`, `product-audit`, `scaffold`) left with their folders on 2026-10-21, and
+a pack artifact whose cases are pending carries a dated row naming the unit that removes it. New
+artifacts still need a case or an explicit reviewed exemption.
 
 ## Versioned inputs
 
@@ -3820,8 +3820,8 @@ Every row below is derived from the case files; the roster test recomputes it.
 
 All `content/` artifacts are covered; the seven former rule exemptions now have
 sealed scenarios. Since 2026-10-21 the surface also enumerates every pack's
-artifacts under `packs/` (REQ-PACK-013), and the sixteen of the three retiring
-packs carry dated exemption rows that fail once their folders are deleted. The
+artifacts under `packs/` (REQ-PACK-013); the sixteen exemption rows of the three
+retired packs left with their folders on 2026-10-21. The
 existing coverage gate derives this assertion from case sources and
 `coverage-exemptions-v6.md`, never from a hand-maintained count. No case is
 governed outside that surface. The two `st-setup` cases that sourced

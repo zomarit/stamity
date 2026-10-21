@@ -80,7 +80,7 @@ export interface ResolvedAgentGrant {
 
 /** Everything the resolver rules on. No handle, path, or manifest — see the module header. */
 export interface ResolveAgentGrantInput {
-  /** Runtime (prefixed) agent id, e.g. `stamity-devops`. Matched exactly against the roster. */
+  /** Runtime (prefixed) agent id, e.g. `stamity-reviewer`. Matched exactly against the roster. */
   readonly runtimeId: string;
   /** The agent file's parsed frontmatter. Only `capabilities:` is read. */
   readonly frontmatter: Readonly<Record<string, unknown>>;
