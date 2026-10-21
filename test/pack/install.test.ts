@@ -502,6 +502,84 @@ describe("planPackInstall", () => {
     expect(result.collisions[0]).toContain("other/agents/stamity-reviewer.md");
   });
 
+  it("refuses a pack whose id another installed SCOPED pack claims, its folder gone", async () => {
+    // A scoped pack id holds a `/` of its own, so the row's pack-relative path
+    // is what follows the whole `@acme/other/` prefix, not the first slash. The
+    // core layer holds `reviewer` too and would refuse it on its own, so the
+    // row's locator in the line is what proves the row was read.
+    const project = getProject();
+    await seedPack({ content: { "agents/reviewer.md": CORE_ID_AGENT_BODY } });
+    await writeManifest(
+      project.dir,
+      projectManifest([
+        {
+          path: ".stamity/packs/acme__other/agents/stamity-reviewer.md",
+          adapter: packOwner("@acme/other"),
+          artifactId: "@acme/other/agents/stamity-reviewer.md",
+          artifactType: "infra",
+        },
+      ]),
+      { now: FIXED_NOW },
+    );
+
+    const result = await plan();
+
+    expect(result.collisions).toHaveLength(1);
+    expect(result.collisions[0]).toContain('agent id "reviewer"');
+    expect(result.collisions[0]).toContain("@acme/other/agents/stamity-reviewer.md");
+  });
+
+  it("reads a scoped pack row's id when no other layer holds it", async () => {
+    // A non-core id: only the scoped row can claim it, so before the prefix
+    // rule this install drew no collision at all.
+    const project = getProject();
+    await seedPack();
+    await writeManifest(
+      project.dir,
+      projectManifest([
+        {
+          path: ".stamity/packs/acme__other/agents/stamity-acme-reviewer.md",
+          adapter: packOwner("@acme/other"),
+          artifactId: "@acme/other/agents/stamity-acme-reviewer.md",
+          artifactType: "infra",
+        },
+      ]),
+      { now: FIXED_NOW },
+    );
+
+    const result = await plan();
+
+    expect(result.collisions).toHaveLength(1);
+    expect(result.collisions[0]).toContain('agent id "acme-reviewer"');
+    expect(result.collisions[0]).toContain("@acme/other/agents/stamity-acme-reviewer.md");
+  });
+
+  it("reads a pack row whose artifact id lacks its owner's prefix by the first slash", async () => {
+    // The owner is `@acme/other`, the id is spelled `legacy/…`: the prefix rule
+    // does not apply, so the path after the first slash names the id. The id is
+    // not a core one, so only the row can raise the collision.
+    const project = getProject();
+    await seedPack();
+    await writeManifest(
+      project.dir,
+      projectManifest([
+        {
+          path: ".stamity/packs/acme__other/agents/stamity-acme-reviewer.md",
+          adapter: packOwner("@acme/other"),
+          artifactId: "legacy/agents/stamity-acme-reviewer.md",
+          artifactType: "infra",
+        },
+      ]),
+      { now: FIXED_NOW },
+    );
+
+    const result = await plan();
+
+    expect(result.collisions).toHaveLength(1);
+    expect(result.collisions[0]).toContain('agent id "acme-reviewer"');
+    expect(result.collisions[0]).toContain("legacy/agents/stamity-acme-reviewer.md");
+  });
+
   describe("another installed pack whose directory is on disk", () => {
     // Pack `other` ships `agents/x.md` declaring `id: y`. Its catalog id is
     // `agent:y`, the id `sync`'s walk registers it under; the file name's slug
