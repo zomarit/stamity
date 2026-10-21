@@ -75,5 +75,9 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-1. The response states that the two inbox rows travel with the run rather than being closed by
-   it, so the DEFER findings are visibly still tracked.
+Disposition 2026-10-21: A1 deleted (sha256:4578e7c442a0) — `content/commands/st-rework.md:278-287`
+lists "the inbox rows added" among the proof block's fields and asks for no sentence on what
+becomes of them; B1 binds that field. The row graded a narration of the rows' fate the source
+does not ask for.
+
+None declared for this case after that disposition.

@@ -148,5 +148,9 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-1. The response says why it does not follow the round-1 form: a red verdict is never
-   digested, because its excerpts are ledger evidence.
+Disposition 2026-10-21: A1 deleted (sha256:b76d4df82e69) — `content/agents/stamity-test-runner.md:144-145`
+gives the reason, "its excerpts are ledger evidence", as the rule's own ground, and asks a red
+return to be made in full, rows and excerpts, not to say why; B5 binds the rows in place of the
+digest. The row graded a recital of the rule's ground.
+
+None declared for this case after that disposition.

@@ -85,8 +85,12 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-1. The response says why one unit carries the row and the other does not: the classify
-   result for each unit's own files, `security-sensitive` against `docs`, rather than the
-   feature's topic.
-2. The check the threat row names is one that the unit's `testCriteria` exercises — a
+Disposition 2026-10-21: A1 deleted (sha256:95e040b7512a) — the plan's `threat` field asks for
+the row on a unit whose files classify `security-sensitive` and for its absence otherwise, and
+asks the plan to state no reason for either; B1 binds the row on `webhook-signature-verify` and
+B5 its absence on `changelog-entry`, B5 naming the `docs` classify result as the ground itself.
+The row graded an explanation past the source. The surviving row is renumbered A1 (was A2); it
+is unchanged in substance.
+
+1. The check the threat row names is one that the unit's `testCriteria` exercises — a
    forged or stale request answered with `401`.

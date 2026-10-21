@@ -128,5 +128,10 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-1. The response says step 2's instrumentation does not run on this route, because the
-   failing test alone separates the hypotheses.
+Disposition 2026-10-21: A1 deleted (sha256:3965942485bc) — `content/commands/st-debug.md:77-79`
+states when step 2 runs on the in-process route, "only when the failing test alone cannot
+separate the hypotheses", as a condition the run acts on, and asks for no sentence saying the
+step did not run; what the run does on this route, B2 to B5 bind. The row graded a narration the
+source does not ask for.
+
+None declared for this case after that disposition.

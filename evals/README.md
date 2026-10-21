@@ -9,8 +9,8 @@ under a declared threshold.
 `cases-v5/`, `cases-v4/` and rubrics v4 to v6. The v1 to v6 set documents and the other
 superseded inputs left `main` on 2026-10-13 and read at tag `evals-retired-2026-10-13`; the
 line under the path table names them. v7 keeps v6's scoring rule, criteria, floors and metric
-numbers; what moves is the corpus: `cases-v6/` carries v5's 78 cases, 55 of them with their `##
-Expected` block byte-identical and 23 moved by seven reviewed dispositions, five amendments and
+numbers; what moves is the corpus: `cases-v6/` carries v5's 78 cases, 54 of them with their `##
+Expected` block byte-identical and 24 moved by eight reviewed dispositions, five amendments and
 eleven re-syncs to the landed corpus, plus the cases v7 adds. Each moved block carries a row, with its reason, in `EXPECTED_MOVES` in `test/evals/successorInputs.test.ts`, and a dated paragraph in `SET-v7.md`. Eight
 carried Briefs and `source:` ranges moved with the corpus on the same night, named in
 `SET-v7.md` under "What v7 adds".
@@ -28,7 +28,7 @@ carried Briefs and `source:` ranges moved with the corpus on the same night, nam
 | `cases-v6/golden/` | Cases pinning the behaviour the corpus promises. |
 | `cases-v6/adversarial/` | Cases pinning the guardrails it claims, plus the benign twins that keep a guardrail from turning into a refusal reflex. |
 | `cases-v6/probes/` | Skill-selection classification cases: the ones that should trigger a skill, and the near misses that should not. |
-| `cases-v5/**` | **Retained baseline, do not edit.** The roster runs 19–24 were scored over; `cases-v6/` carries every one of those files, 55 with the `## Expected` block byte-identical and 23 moved by seven reviewed dispositions, five amendments and eleven re-syncs to the landed corpus (eight also moved `source:` range and/or Brief text, named in `SET-v7.md`). |
+| `cases-v5/**` | **Retained baseline, do not edit.** The roster runs 19–24 were scored over; `cases-v6/` carries every one of those files, 54 with the `## Expected` block byte-identical and 24 moved by eight reviewed dispositions, five amendments and eleven re-syncs to the landed corpus (eight also moved `source:` range and/or Brief text, named in `SET-v7.md`). |
 | `coverage-exemptions-v6.md` | The written exemption list the coverage gate reads: every content artifact with no case, its reason, and the trigger under which a case must land. |
 | `cases-v4/**` | **Retained baseline, do not edit.** Includes the original calibration case inputs. |
 | [`runs/2026-09-11-run-24/PROTOCOL.md`](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-09-11-run-24/PROTOCOL.md) | **The route of record, `stamity-claude-cli-v1`** — one fresh `claude -p` subprocess per scenario, judge and calibration call, started by a private deterministic driver from the committed bytes; the exact model ids (`claude-opus-5` for scenarios, `claude-fable-5-1` for judges and calibration) proved at the CLI init, in the assistant metadata and in the captured provider request; the harness tools removed; ambient context fingerprinted per role. Runs 15–24 were produced through it. |
@@ -53,8 +53,8 @@ The retained documents that name one of them (`rubric-v4.md`…`rubric-v7.md`, `
 
 v7 keeps v6's scoring rule, its four metrics and their declared thresholds; the rule itself
 keeps the name SET-v6, because that name is how a scored run says which rule decided it. What
-moves is the corpus and the pointers into it: `cases-v6/` carries v5's 78 cases, 55 with the
-`## Expected` block byte-identical and 23 moved by seven reviewed dispositions, five amendments and
+moves is the corpus and the pointers into it: `cases-v6/` carries v5's 78 cases, 54 with the
+`## Expected` block byte-identical and 24 moved by eight reviewed dispositions, five amendments and
 eleven re-syncs to the landed corpus (eight carried Briefs and `source:` ranges moved with the corpus) plus the cases v7 adds — those additions, and every count they move, are documented in
 `SET-v7.md` under "What v7 adds". The coverage gate reads `coverage-exemptions-v6.md`, and the
 default `claude` profile selects `rubric-v7.md`.

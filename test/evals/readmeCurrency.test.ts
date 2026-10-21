@@ -136,7 +136,13 @@ describe("evals README currency — the carried Expected blocks", () => {
     ).toBeGreaterThan(0);
     // The moved count, in either spelling the page may use for it. Both forms are built from
     // the derived number, so neither is a literal this file would have to chase.
-    const movedSpelling = new RegExp(`\\b(?:${String(moved)}|${NUMBER_WORDS[moved] ?? ""}) moved\\b`);
+    // TEST CHANGE, justified (2026-10-21, plan 018 unit u1-advisory-dispositions; inbox row 210): past
+    // ten `NUMBER_WORDS` has no word, and the empty alternative left `\b(?:24|) moved\b`, which any
+    // count before " moved" met, so "25 moved" passed. A count with no word now reads as its digits.
+    const movedWord = NUMBER_WORDS[moved];
+    const movedSpelling = new RegExp(
+      `\\b(?:${movedWord === undefined ? String(moved) : `${String(moved)}|${movedWord}`}) moved\\b`,
+    );
     for (const sentence of sentences) {
       expect(
         movedSpelling.test(sentence),

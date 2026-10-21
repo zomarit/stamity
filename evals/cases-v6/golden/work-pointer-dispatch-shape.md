@@ -94,6 +94,9 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-1. The dispatch carries its fields in the order the contract lists them: role, class and
-   run id; plan path and unit id; worktree, branch and base; report path; verify; files;
-   learnings; the return.
+Disposition 2026-10-21: A1 deleted (sha256:96d67b75e72c) — `content/commands/st-work.md:134-143`
+names what a pointer dispatch carries and caps it at 15 lines, and states no order for its
+fields; B1 to B6 bind the cap and each field. The row graded an ordering the source does not
+require.
+
+None declared for this case after that disposition.

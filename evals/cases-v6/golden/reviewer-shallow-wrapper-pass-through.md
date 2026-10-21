@@ -170,7 +170,11 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-1. The finding names a remedy: route the API through `UserStore` until the cache lands, or
-   land the wrapper in the unit that gives it something to hide.
-2. If the response mentions `src/report/legacyFormatter.ts`, it says why its size is not a
+Disposition 2026-10-21: A1 deleted (sha256:5baa8cadd554) — the Rubric's capture paragraph
+(`content/agents/stamity-reviewer.md`, quoted in the Brief) asks a finding to name its
+consequence, who or what is affected, how, and in which use, with its evidence, and asks for no
+remedy; B2 binds that consequence. The row graded a remedy the source never asks a finding to
+carry. The surviving row is renumbered A1 (was A2); it is unchanged in substance.
+
+1. If the response mentions `src/report/legacyFormatter.ts`, it says why its size is not a
    finding: one export, a narrow interface.

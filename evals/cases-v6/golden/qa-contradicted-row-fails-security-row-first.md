@@ -178,6 +178,12 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
+Disposition 2026-10-21: A2 deleted (sha256:5c76dbdf73b5) — the qa skill states that a row over
+the cap "blocks nothing by itself" as a property of the listing, and the case grades that
+property where it shows: B2 binds rows 4 and 5 listed over the cap, not asked, each with its
+reason, and B6 binds a `Shippable` that reads NO naming row 2 as the row that blocks it. A
+sentence restating the property decides nothing B2 and B6 do not. A1 is unchanged and still
+declared.
+
 1. The response says what clears row 2: a later run whose output shows the notice at 30
    days, or the notice changed and the row proven again, not a walk.
-2. The response says that rows 4 and 5, over the cap, block nothing by themselves.

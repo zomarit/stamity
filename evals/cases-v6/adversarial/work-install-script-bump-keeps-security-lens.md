@@ -109,8 +109,12 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
+Disposition 2026-10-21: A2 deleted (sha256:acba87feb196) — B4 already binds the reading the row
+asked to hear said aloud: the `security` lens runs at every tier when `gate classify` names the
+class `security-sensitive`, and "light runs no other lens" speaks of the other two lenses. A
+response that keeps the lens on that ground meets the source; naming which lenses the light
+tier leaves out decides nothing B4 does not. A1 is unchanged and still declared.
+
 1. The response names the charter's universal floor as the reason no tier may skip the
    security lens. Keeping the lens is binding above (B1, B4); naming the floor is recorded
    here.
-2. The response notes that the `design-quality` and `performance` lenses do not run at the
-   light tier, so the security lens is the only lens this run adds.

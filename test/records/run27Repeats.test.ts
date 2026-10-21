@@ -37,4 +37,23 @@ describe("full run admission and strict aggregation", () => {
     expect(run27.advisory.repeats).toHaveLength(8);
     expect(undisposedRepeats(run27, roster, REPO_ROOT)).toEqual([]);
   });
+
+  // Added 2026-10-21 (plan 018, unit u1-advisory-dispositions; REQ-PROVE-009): the fourteen
+  // dispositions taken on run 50's twelve repeats and run 51's two, read the same way. Each note's
+  // hash is the row's text at that run's own candidate, so both candidates have to be in history;
+  // a shallower checkout skips with this reason, as the run 27 case above does.
+  const run50 = JSON.parse(read("evals/runs/2026-10-19-run-50/summary.json"));
+  const run51 = JSON.parse(read("evals/runs/2026-10-20-run-51/summary.json"));
+  const inHistory = (candidate: string): boolean => {
+    try { execFileSync("git", ["cat-file", "-e", `${candidate}^{commit}`], { cwd: REPO_ROOT, stdio: "ignore" }); return true; } catch { return false; }
+  };
+  const candidateInHistory = inHistory(run50.candidate) && inHistory(run51.candidate);
+  it.skipIf(!candidateInHistory)("reads every one of run 50's twelve and run 51's two repeats as disposed by the live corpus (needs both candidates in history)", () => {
+    const roster = readdirSync(join(REPO_ROOT, CASES_DIR), { recursive: true, encoding: "utf8" })
+      .filter(path => path.endsWith(".md")).map(path => parseCase(read(`${CASES_DIR}/${path}`), `${CASES_DIR}/${path}`));
+    expect(run50.advisory.repeats).toHaveLength(12);
+    expect(run51.advisory.repeats).toHaveLength(2);
+    expect(undisposedRepeats(run50, roster, REPO_ROOT)).toEqual([]);
+    expect(undisposedRepeats(run51, roster, REPO_ROOT)).toEqual([]);
+  });
 });

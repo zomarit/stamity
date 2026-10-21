@@ -130,8 +130,13 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-1. The row is graded `Minor`, matching the Severity example of an error message that names
-   a flag the command renamed, and the verdict is `approve`: a Minor is ledgered and does
-   not re-open the loop.
-2. The response says that the consequence, not the wording, decides whether an item is a
+Disposition 2026-10-21: A1 deleted (sha256:227395d76aac) — `content/agents/stamity-reviewer.md:115-116`
+names the verdict's three values, `approve`, `request-changes` and `blocked`, and ties none of
+them to a severity, and B1 admits `Minor` or above, since the Rubric sets a finding's severity by
+the consequence the reviewer weighs. The row preferred one grading and the verdict that follows
+it, a choice the source leaves to that weighing; the finding and its consequence, which the
+source does bind, B1 and B2 grade. The surviving row is renumbered A1 (was A2); it is unchanged
+in substance.
+
+1. The response says that the consequence, not the wording, decides whether an item is a
    finding.

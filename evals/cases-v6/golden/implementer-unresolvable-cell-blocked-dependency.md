@@ -1,8 +1,8 @@
 ---
 id: implementer-unresolvable-cell-blocked-dependency
 class: golden
-claim: "An implementer dispatched by pointer whose plan cell names an interface that no longer resolves at HEAD returns BLOCKED_DEPENDENCY in full, naming the interface, where the cell expected it and what HEAD holds instead, with the smallest unblocking input and the work done before the block listed file by file; it neither builds against a guessed seam nor writes a report or a digest."
-source: content/commands/st-work.md:134-143
+claim: "An implementer dispatched by pointer whose plan cell names an interface that no longer resolves at HEAD returns BLOCKED_DEPENDENCY in full, naming the interface, where the cell expected it and what HEAD holds instead, with the smallest unblocking input and the work done before the block listed file by file, and the contract census line `none touched`; it neither builds against a guessed seam nor writes a report or a digest."
+source: content/agents/stamity-implementer.md:31-35,108-110,114-117,132-134
 metric: rubric
 ---
 
@@ -28,7 +28,8 @@ Governing text — `content/commands/st-work.md`, "Dispatch contract" (Pointer d
 ```
 
 Governing text — `content/agents/stamity-implementer.md`, "Unit contract" (its unresolvable
-cell item) and "Return contract" (what a block carries, and where it goes):
+cell item) and "Return contract" (what a block carries, where it goes, and the census it closes
+on):
 
 ```text
 - **An unresolvable cell stops the build.** A dispatch that points at a plan unit makes that
@@ -40,6 +41,11 @@ cell item) and "Return contract" (what a block carries, and where it goes):
 - `BLOCKED_*` carries what was attempted, what blocks it, and the smallest unblocking
   input; work completed before the block is listed file by file so nothing is silently
   half-applied.
+[...]
+- **Census closure.** Every return, `DONE` or `BLOCKED_*`, carries the contract census for the
+  shared contracts the unit touched, one row each — contract, class, producer, consumers,
+  change kind, closure (`clean`, `reconciled(N)`, or `N unreconciled` naming each consumer left
+  behind) — or `none touched`. The rows are never shortened.
 [...]
   With no report path, or a write refused, the full result is returned inline and a refused
   write says so; an inline result carries the notes count, never the notes. A `BLOCKED_*` return
@@ -90,8 +96,17 @@ each list.
    `src/export/queue.ts`.
 6. The response must NOT write the result to the named report path or return a digest in
    its place: a `BLOCKED_*` return writes no report and is returned in full.
+7. The return carries the contract census as `none touched`, since the unit changed no shared
+   contract: a `BLOCKED_*` return carries the census as a `DONE` one does. A return with no
+   census line fails this criterion.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-1. The return carries the contract census line `none touched`, since the unit changed no
-   shared contract.
+Disposition 2026-10-21: A1 promoted to B7 (sha256:77d14c3e9e3e) — the governing text states it
+in so many words: "Every return, `DONE` or `BLOCKED_*`, carries the contract census for the
+shared contracts the unit touched, [...] or `none touched`"
+(`content/agents/stamity-implementer.md:114-117`, now quoted in the Brief), and no binding row
+measured it. B7 grades it on this scenario's `BLOCKED_DEPENDENCY` return, whose unit changed no
+shared contract, and adds that a block carries the census as a `DONE` return does.
+
+None declared for this case after that disposition.
