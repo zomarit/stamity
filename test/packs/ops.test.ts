@@ -257,7 +257,10 @@ describe("ops pack — manifest", () => {
     const manifest = await packManifest;
 
     expect(manifest.name).toBe("ops");
-    expect(manifest.version).toBe("0.1.0");
+    // TEST CHANGE, justified (2026-10-20_packs-rebuilt/u2-pack-catalog, REQ-PACK-001): a bundled
+    // pack now carries the release version, so the pin reads package.json's instead of "0.1.0".
+    const packageJson = JSON.parse(await readFile(join(REPO_ROOT, "package.json"), "utf8")) as { version: string };
+    expect(manifest.version).toBe(packageJson.version);
     expect(manifest.description).toBe(PACK_IDENTITY);
     expect(manifest.declaredTools).toEqual([...TOOLS]);
   });
