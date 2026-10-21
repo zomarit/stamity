@@ -39,6 +39,7 @@ doctor
   ok    preserved-duplicate  1 managed file(s) carry their block once
   ok    pack-integrity       no installed pack content is recorded in the ledger
   ok    pack-reach           no installed pack is recorded in the ledger
+  ok    pack-catalog         no installed pack is recorded in the ledger
   ok    model-pins           no selected client lists its models (claude runs on its family aliases)
   ok    invariants           invariants 1.3.0 · ratified 2026-08-31 · last amended 2026-10-14
 
