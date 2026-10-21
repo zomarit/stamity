@@ -481,7 +481,7 @@ describe("B — defect 1 (cross-class name clash): refused at add and at sync, n
       "B6: add refuses a pack skill taking the id of a core skill this setup has not synced yet, naming the core owner",
       async () => {
         const repo = await freshRepo(tools);
-        await withoutSyncedCoreSkill(repo, "handoff");
+        await withoutSyncedCore(repo, "skill", "handoff");
         const pack = await writePack("acme-demo", {
           "skills/st-handoff/SKILL.md": artifact("handoff", "skill", "Acme shift handoff steps."),
         });
@@ -584,25 +584,99 @@ describe("B — defect 1 (cross-class name clash): refused at add and at sync, n
     },
     CASE_TIMEOUT,
   );
+
+  // B10-B12: the same-class half of the ID check (REQ-PACK-005, review/6). The
+  // ledger gate compared a pack's catalog ids with ledger rows alone, and the
+  // name check names an agent and a pack rule not at all and a skill by its
+  // folder, so a pack taking the id of a core artifact this setup has not
+  // synced yet passed `add` and was refused by `sync`'s walk after its files
+  // and rows were written.
+  const unsyncedCoreIdCases = [
+    {
+      label: "B10 (tools=cursor): a pack agent declaring id: reviewer, the core agent's",
+      type: "agent",
+      id: "reviewer",
+      relPath: "agents/acme-reviewer.md",
+      file: /agents\/acme-reviewer\.md/,
+      core: /agents\/stamity-reviewer\.md/,
+    },
+    {
+      label: "B11 (tools=cursor): a pack skill in skills/st-acme/ declaring id: handoff, the core skill's",
+      type: "skill",
+      id: "handoff",
+      relPath: "skills/st-acme/SKILL.md",
+      file: /skills\/st-acme\/<file>/,
+      core: /skills\/st-handoff\/<file>/,
+    },
+    {
+      label: "B12 (tools=cursor): a pack rule declaring id: question-protocol, the core rule's",
+      type: "rule",
+      id: "question-protocol",
+      relPath: "rules/acme-protocol.md",
+      file: /rules\/acme-protocol\.md/,
+      core: /rules\/stamity-question-protocol\.md/,
+    },
+  ] as const;
+  for (const shape of unsyncedCoreIdCases) {
+    it(
+      `${shape.label}: add refuses it while no ledger row records the core id, naming the core owner`,
+      async () => {
+        const repo = await freshRepo(["cursor"]);
+        await withoutSyncedCore(repo, shape.type, shape.id);
+        const pack = await writePack("acme-demo", {
+          [shape.relPath]: artifact(shape.id, shape.type, "Acme fixture artifact."),
+        });
+        const before = await treeDigest(repo);
+
+        const added = await addPack(repo, pack);
+
+        expect(
+          added.code,
+          `same-class id clash: add must refuse a pack ${shape.type} taking the core id "${shape.id}" even where no ledger row records it — ${said(added)}`,
+        ).not.toBe(0);
+        expect(
+          linesWith(
+            added.output,
+            shape.file,
+            new RegExp(`${shape.type} id "${shape.id}"`),
+            /\bcore\b/i,
+            shape.core,
+          ),
+          `same-class id clash: one refusal line must name the pack file, the id and the core owner's file — ${said(added)}`,
+        ).not.toEqual([]);
+        expect(
+          await treeDigest(repo),
+          "same-class id clash: a refused add must leave the repository tree unchanged",
+        ).toBe(before);
+      },
+      CASE_TIMEOUT,
+    );
+  }
 });
 
 /**
- * Makes `repo` a setup that has not synced the core skill `id` yet, as one
- * does right after an engine upgrade adds that skill: no selection entry, no
+ * Makes `repo` a setup that has not synced the core artifact `type`/`id` yet,
+ * as one does right after an engine upgrade adds it: no selection entry, no
  * ledger row and no client copy. The bundled corpus still ships it, so the core
- * holds the id and its folder name whether or not this setup records it.
+ * holds the id (and, for a skill, its folder name) whether or not this setup
+ * records it.
  *
  * Why the manifest is edited rather than reached by a verb: `sync` refreshes
  * the selection to the full corpus (`fullCorpusSelection`,
- * `src/cli/engine/emissionWrite.ts`), and no verb unselects one core skill.
+ * `src/cli/engine/emissionWrite.ts`), and no verb unselects one core artifact.
  */
-async function withoutSyncedCoreSkill(repo: string, id: string): Promise<void> {
+async function withoutSyncedCore(
+  repo: string,
+  type: "agent" | "rule" | "skill",
+  id: string,
+): Promise<void> {
   const manifest = await readManifest(repo);
-  if (manifest === null) throw new Error("withoutSyncedCoreSkill: the repository has no manifest");
-  const folder = `st-${id}`;
-  const dropped = manifest.ledger.filter((entry) => entry.path.split("/").includes(folder));
+  if (manifest === null) throw new Error("withoutSyncedCore: the repository has no manifest");
+  const dropped = manifest.ledger.filter(
+    (entry) => entry.artifactType === type && entry.artifactId === id,
+  );
   if (dropped.length === 0) {
-    throw new Error(`withoutSyncedCoreSkill: no ledger row holds a ${folder}/ folder`);
+    throw new Error(`withoutSyncedCore: no ledger row records the core ${type} "${id}"`);
   }
   await Promise.all(
     dropped.map(async (entry) => await rm(join(repo, ...entry.path.split("/")), { force: true })),
@@ -613,7 +687,7 @@ async function withoutSyncedCoreSkill(repo: string, id: string): Promise<void> {
       ...manifest.selection,
       items: {
         ...manifest.selection.items,
-        skill: manifest.selection.items.skill.filter((skill) => skill !== id),
+        [type]: manifest.selection.items[type].filter((held) => held !== id),
       },
     },
     ledger: manifest.ledger.filter((entry) => !dropped.includes(entry)),

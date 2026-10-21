@@ -8,8 +8,11 @@ import {
   findInvocableNameClashes,
   replacedClaimantOf,
   slugOf,
+  toPosixDisplayPath,
   typeIdKey,
+  withoutControlCharacters,
   type CatalogItem,
+  type ContentIndex,
   type InvocableNameClash,
 } from "../content/catalog.ts";
 import { parseFrontmatter } from "../content/frontmatter.ts";
@@ -784,6 +787,13 @@ function describeAgentGrants(
  * - the target path is already claimed in the ledger by another owner;
  * - the content id the file would introduce is already owned by another row,
  *   so installing it would shadow an artifact the project already has;
+ * - that id is held by another layer no ledger row records it for yet — the
+ *   core (selected or not), the fork, the repo's overrides or another
+ *   installed pack, read from {@link ExistingLayers} (REQ-PACK-005). `sync`'s
+ *   walk refuses a pack sharing an id with the core, the fork or another pack
+ *   whether or not the ledger records it (`../content/catalog.ts` →
+ *   `resolveLayerInto`), and an override's id is a ledger row after the next
+ *   `sync`, so reading the rows alone let such a pack through until then;
  * - something exists at the target that no ledger row of this pack owns —
  *   a stray file the apply would otherwise overwrite.
  *
@@ -796,6 +806,7 @@ async function collectCollisions(
   writeSet: readonly PackWriteSetEntry[],
   ledger: readonly LedgerEntry[],
   artifacts: readonly PackArtifactFile[],
+  layers: ExistingLayers,
 ): Promise<string[]> {
   const owner = packOwner(packId);
   const foreign = ledger.filter((entry) => !isOwnedByPack(entry, owner));
@@ -835,6 +846,15 @@ async function collectCollisions(
           `${idOwner.path}; installing it would shadow content this repo already has`,
       );
     }
+    const holder =
+      catalogKey === undefined || idOwner !== undefined ? undefined : heldIdOwnerOf(layers, catalogKey);
+    if (catalogKey !== undefined && holder !== undefined) {
+      const [type = "", id = ""] = splitKey(catalogKey);
+      collisions.add(
+        `${entry.relPath}: ${type} id "${withoutControlCharacters(id)}" is already held by ` +
+          `${holder}; installing it would shadow content this repo already has`,
+      );
+    }
     if (strays[index] === true) {
       collisions.add(
         `${entry.targetPath}: a file already exists there that pack "${packId}" does not own`,
@@ -845,43 +865,43 @@ async function collectCollisions(
 }
 
 /**
- * The invocable-name clashes installing this pack would create
- * ({@link PackInstallPlan.nameClashes}).
- *
- * The layers already in the repo are indexed by the catalog walk `sync` runs:
- * the bundled corpus and the fork layer beside it, the repo's override tree,
- * and every other installed pack the ledger records — never this pack's own
- * rows, so a re-install is judged against everything but the copy it replaces.
- * That is sound because a re-install replaces the whole copy or is refused:
- * one that would leave any of the copy's files behind is
- * {@link PackInstallPlan.leftBehind}, refused before any write.
- * The installed packs are read from their directories, so a command whose
- * declared `id:` differs from its filename is named by the id it emits under.
- * A recorded pack whose directory is gone is skipped rather than refused: that
- * is a pruned install `sync` already refuses by name (`./projection.ts` →
- * `discoverInstalledPacks`), and its ids are still covered here by the ledger
- * gate ({@link collectCollisions}). Packs the org policy denies are walked too
- * — re-allowing the source restores them with no re-install, and their names
- * come back with them.
- *
- * The incoming pack is NOT walked a second time. Its items come from the
- * artifacts the plan already read, keyed by the catalog's own rule
- * ({@link catalogIdOf}), so a pack id the walk would refuse — a same-class
- * shadow — still reaches the operator as the ledger gate's collision line
- * rather than as a walk error thrown ahead of it.
- *
- * A same-class name is a clash here too when one of its owners is the
- * incoming pack's own item (`sameClassFrom`, REQ-PACK-005): the core skill
- * whose folder a pack skill takes is refused whether or not this setup's
- * ledger records it yet, which the ledger gate alone cannot see.
+ * The layers already in the repo, as the two `add` checks that read them see
+ * them: the id half of {@link collectCollisions} and {@link collectNameClashes}.
  */
-async function collectNameClashes(
+interface ExistingLayers {
+  /** The bundled corpus, the fork layer and every other installed pack, resolved. */
+  shipped: ContentIndex;
+  /**
+   * The repo's override tree, walked as a pinned root, so its items say
+   * `corpus` until {@link collectNameClashes} restamps them.
+   */
+  overrides: ContentIndex;
+}
+
+/**
+ * Index the layers already in the repo ({@link ExistingLayers}) once, for both
+ * checks that read them.
+ *
+ * They are indexed by the catalog walk `sync` runs: the bundled corpus and the
+ * fork layer beside it, the repo's override tree, and every other installed
+ * pack the ledger records — never this pack's own rows, so a re-install is
+ * judged against everything but the copy it replaces. That is sound because a
+ * re-install replaces the whole copy or is refused: one that would leave any of
+ * the copy's files behind is {@link PackInstallPlan.leftBehind}, refused before
+ * any write. The installed packs are read from their directories, so a command
+ * whose declared `id:` differs from its filename is named by the id it emits
+ * under. A recorded pack whose directory is gone is skipped rather than
+ * refused: that is a pruned install `sync` already refuses by name
+ * (`./projection.ts` → `discoverInstalledPacks`), and its ids are still covered
+ * by the ledger gate ({@link collectCollisions}). Packs the org policy denies
+ * are walked too — re-allowing the source restores them with no re-install,
+ * and their names come back with them.
+ */
+async function readExistingLayers(
   rootDir: string,
   packId: string,
-  packRoot: string,
-  artifacts: readonly PackArtifactFile[],
   projectManifest: SetupManifest | null,
-): Promise<InvocableNameClash[]> {
+): Promise<ExistingLayers> {
   const owner = packOwner(packId);
   const otherIds = [
     ...new Set(
@@ -902,12 +922,61 @@ async function collectNameClashes(
   // override tree's overlays, and an overlay authored ahead of this install
   // for one of the incoming pack's artifacts would be refused there as an
   // orphan. An overlay patches and never names, so the override tree is read
-  // for its full artifacts alone (a pinned root walks no overlay), and each
-  // one replaces the shipped item of its class and id, as the user stage does.
+  // for its full artifacts alone (a pinned root walks no overlay).
   const [shipped, overrides] = await Promise.all([
     buildContentIndex({ packRoots: others }),
     buildContentIndex({ root: userContentRoot(rootDir) }),
   ]);
+  return { shipped, overrides };
+}
+
+/**
+ * Who already holds the catalog id `key` among the existing layers, as a
+ * collision line names it, or `undefined` when none does. The shipped layers
+ * are read first: those are the ids `sync`'s walk refuses a pack on contact.
+ * Every name and path is printed without control characters, as the clash
+ * lines are.
+ */
+function heldIdOwnerOf(layers: ExistingLayers, key: string): string | undefined {
+  const shipped = layers.shipped.byKey.get(key);
+  if (shipped !== undefined) {
+    const at = withoutControlCharacters(shipped.relativePath);
+    if (shipped.provenance !== undefined) {
+      return `installed pack "${withoutControlCharacters(shipped.provenance.pack)}" (${at})`;
+    }
+    return shipped.origin === "fork"
+      ? `the fork-layer ${shipped.type} at fork/${at}`
+      : `the core ${shipped.type} "${withoutControlCharacters(shipped.id)}" (${at})`;
+  }
+  const override = layers.overrides.byKey.get(key);
+  return override === undefined
+    ? undefined
+    : `your override at ${withoutControlCharacters(toPosixDisplayPath(override.filePath))}`;
+}
+
+/**
+ * The invocable-name clashes installing this pack would create
+ * ({@link PackInstallPlan.nameClashes}), judged against the layers
+ * {@link readExistingLayers} indexed. Each override replaces the shipped item
+ * of its class and id, as the user stage does.
+ *
+ * The incoming pack is NOT walked a second time. Its items come from the
+ * artifacts the plan already read, keyed by the catalog's own rule
+ * ({@link catalogIdOf}), so a pack id the walk would refuse — a same-class
+ * shadow — still reaches the operator as the ledger gate's collision line
+ * rather than as a walk error thrown ahead of it.
+ *
+ * A same-class name is a clash here too when one of its owners is the
+ * incoming pack's own item (`sameClassFrom`, REQ-PACK-005): the core skill
+ * whose folder a pack skill takes is refused whether or not this setup's
+ * ledger records it yet, which the ledger gate alone cannot see.
+ */
+function collectNameClashes(
+  packId: string,
+  packRoot: string,
+  artifacts: readonly PackArtifactFile[],
+  { shipped, overrides }: ExistingLayers,
+): InvocableNameClash[] {
   const overridden = new Set(overrides.items.map((item) => typeIdKey(item.type, item.id)));
   const existing = [
     ...shipped.items.filter((item) => !overridden.has(typeIdKey(item.type, item.id))),
@@ -1224,20 +1293,16 @@ export async function planPackInstall(
   }
 
   const projectManifest = await readManifest(rootDir);
+  const layers = await readExistingLayers(rootDir, packManifest.name, projectManifest);
   const collisions = await collectCollisions(
     rootDir,
     packManifest.name,
     writeSet,
     projectManifest?.ledger ?? [],
     artifacts,
+    layers,
   );
-  const nameClashes = await collectNameClashes(
-    rootDir,
-    packManifest.name,
-    source.packRoot,
-    artifacts,
-    projectManifest,
-  );
+  const nameClashes = collectNameClashes(packManifest.name, source.packRoot, artifacts, layers);
   const leftBehind = await collectLeftBehind(
     rootDir,
     packManifest.name,

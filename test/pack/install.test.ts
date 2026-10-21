@@ -60,7 +60,23 @@ const FIXED_NOW = new Date("2026-01-01T00:00:00.000Z");
 
 const digest = (text: string): string => createHash("sha256").update(text, "utf8").digest("hex");
 
+// TEST CHANGE, justified (2026-10-21, 2026-10-20_packs-rebuilt/u5, review/6, build/3): the
+// default fixture's agent declared `id: reviewer`, the core agent's id, into a setup whose
+// ledger records nothing — the very shadow `sync`'s walk refuses and `add` now refuses too
+// (REQ-PACK-005). It declares a non-core id; its file name and every path stay. The
+// ledger-gate cases that pin `agent id "reviewer"` against a recorded row ship
+// CORE_ID_AGENT_BODY by name.
 const AGENT_BODY = `---
+id: acme-reviewer
+type: agent
+tools:
+  - claude
+---
+Review the change and report findings.
+`;
+
+/** An agent taking the core agent's id, for the cases that judge exactly that. */
+const CORE_ID_AGENT_BODY = `---
 id: reviewer
 type: agent
 tools:
@@ -362,7 +378,7 @@ describe("planPackInstall", () => {
   // the collisions the old rule could never see.
   it("reports a content id the ledger already assigns to another owner", async () => {
     const project = getProject();
-    await seedPack();
+    await seedPack({ content: { "agents/reviewer.md": CORE_ID_AGENT_BODY } });
     await writeManifest(project.dir, projectManifest([foreignRow]), { now: FIXED_NOW });
 
     const result = await plan();
@@ -380,7 +396,7 @@ describe("planPackInstall", () => {
     // shipped pack could ever collide. The catalog strips the prefix before
     // registering an artifact, so this file claims `agent:reviewer`.
     const project = getProject();
-    await seedPack({ content: { "agents/stamity-reviewer.md": AGENT_BODY } });
+    await seedPack({ content: { "agents/stamity-reviewer.md": CORE_ID_AGENT_BODY } });
     await writeManifest(project.dir, projectManifest([foreignRow]), { now: FIXED_NOW });
 
     const result = await plan();
@@ -448,7 +464,12 @@ describe("planPackInstall", () => {
     await writeManifest(
       project.dir,
       projectManifest([
-        { ...foreignRow, path: ".claude/commands/reviewer.md", artifactType: "command" },
+        {
+          ...foreignRow,
+          path: ".claude/commands/acme-reviewer.md",
+          artifactId: "acme-reviewer",
+          artifactType: "command",
+        },
       ]),
       { now: FIXED_NOW },
     );
@@ -460,7 +481,7 @@ describe("planPackInstall", () => {
     // Another pack's rows are `pack:<id>` owners carrying `<id>/<rel path>`, so
     // the id is re-derived from that path by the same rule.
     const project = getProject();
-    await seedPack();
+    await seedPack({ content: { "agents/reviewer.md": CORE_ID_AGENT_BODY } });
     await writeManifest(
       project.dir,
       projectManifest([
@@ -630,10 +651,11 @@ describe("planPackInstall agent capability gate", () => {
   });
 
   it("shows a core-id agent the grant this setup's own policy gives it, not the pack's", async () => {
-    // The default fixture ships `agents/reviewer.md`, whose runtime id is a
-    // rostered one. The preview must state the grant the operator will get —
-    // the roster's — rather than echoing a declaration nothing will honour.
-    await seedPack();
+    // `agents/reviewer.md` under the core id has a rostered runtime id. The
+    // preview must state the grant the operator would get — the roster's —
+    // rather than echoing a declaration nothing will honour; the same plan
+    // refuses the install on the id (`collisions`).
+    await seedPack({ content: { "agents/reviewer.md": CORE_ID_AGENT_BODY } });
 
     const result = await plan();
 
@@ -1519,7 +1541,7 @@ describe("applyPackInstall", () => {
 
   it("refuses while the plan carries collisions and writes nothing", async () => {
     const project = getProject();
-    await seedPack();
+    await seedPack({ content: { "agents/reviewer.md": CORE_ID_AGENT_BODY } });
     await writeManifest(project.dir, projectManifest([foreignRow]), { now: FIXED_NOW });
     const collided = await plan();
     expect(collided.collisions).not.toEqual([]);

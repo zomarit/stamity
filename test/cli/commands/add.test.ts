@@ -140,8 +140,12 @@ const GATE_OUTCOMES: Record<string, "pass" | "n/a"> = {
 
 const digest = (text: string): string => createHash("sha256").update(text, "utf8").digest("hex");
 
+// TEST CHANGE, justified (2026-10-21, 2026-10-20_packs-rebuilt/u5, review/6, build/3): the
+// default fixture's agent declared `id: reviewer`, the core agent's id, into a setup whose
+// ledger records nothing — the very shadow `sync`'s walk refuses and `add` now refuses too
+// (REQ-PACK-005). It declares a non-core id; its file name and every path stay.
 const AGENT_BODY = `---
-id: reviewer
+id: acme-reviewer
 type: agent
 tools:
   - claude
