@@ -41,7 +41,7 @@
  * a filename change alone cannot reshuffle a page.
  */
 
-import { readdir } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -50,13 +50,14 @@ import {
   type CatalogItem,
   type ContentIndex,
 } from "../../content/catalog.ts";
+import { parseFrontmatter } from "../../content/frontmatter.ts";
 import {
   CATALOG_VERIFIED_ON,
   CURATED_MCP_SERVERS,
   pinnedPackageSpec,
   type McpServerMeta,
 } from "../../mcp/catalog.ts";
-import { lookupCatalogEntry } from "../../pack/curated.ts";
+import { listBundledPackIds, lookupCatalogEntry } from "../../pack/curated.ts";
 import {
   PACK_MANIFEST_FILE,
   enumeratePackContent,
@@ -329,7 +330,7 @@ function tick(value: string): string {
  * shared helper carries means an id authored with its prefix already on it
  * renders once rather than doubled.
  */
-function invokedName(item: CatalogItem): string {
+function invokedName(item: Pick<CatalogItem, "id" | "type">): string {
   const spelled = emittedIdFor(item);
   return item.type === "command" ? `/${spelled}` : spelled;
 }
@@ -395,44 +396,105 @@ function renderClassPage(spec: ReferencePageSpec, index: ContentIndex): string {
 
 // ── Pack page ────────────────────────────────────────────────────
 
-/** One pack as the page renders it: its manifest and the content it ships. */
+/** One invocable item a pack ships: the name it is invoked by and its trigger. */
+interface PackItem {
+  readonly name: string;
+  readonly description: string;
+}
+
+/** One pack as the page renders it: its manifest, the content it ships, and its listed items. */
 interface PackInventory {
   readonly manifest: PackManifest;
   readonly files: readonly PackContentFile[];
+  readonly skills: readonly PackItem[];
+  readonly commands: readonly PackItem[];
 }
 
 /**
- * Every pack directory under `packsRoot`, read through the engine's own pack
- * readers so the page and the installer agree on what a pack is. A directory
- * with no `pack.json` refuses through `readPackManifest`, whose message
- * already names the exact path — restating it here would give one defect two
- * different wordings.
+ * The skills and commands a pack ships, each read from its own file's
+ * frontmatter: a skill's `SKILL.md` (its companions are not items) and every
+ * command file. Named as the class pages name them ({@link invokedName}), so a
+ * pack's line and the name an install lands agree; sorted by that name.
+ */
+async function readPackItems(
+  packName: string,
+  files: readonly PackContentFile[],
+): Promise<{ skills: PackItem[]; commands: PackItem[] }> {
+  const itemFiles = files.filter(
+    (file) =>
+      file.contentClass === "commands" ||
+      (file.contentClass === "skills" && file.relPath.split("/").length === 3 &&
+        file.relPath.endsWith("/SKILL.md")),
+  );
+  const read = await Promise.all(
+    itemFiles.map(async (file) => {
+      const source = `${PACKS_DIR}/${packName}/${file.relPath}`;
+      const { frontmatter } = parseFrontmatter(await readFile(file.absPath, "utf8"), source);
+      const id = frontmatter["id"];
+      const description = frontmatter["description"];
+      if (typeof id !== "string" || id.trim() === "" || typeof description !== "string" || description.trim() === "") {
+        fail(
+          `${source} declares no \`id\` or no \`description\`, so the pack's inventory entry ` +
+            `would list it with nothing to say about it. Add both to its frontmatter.`,
+        );
+      }
+      const type = file.contentClass === "commands" ? "command" : "skill";
+      return {
+        type,
+        item: {
+          name: invokedName({ id: id.trim(), type }),
+          description: description.trim().replace(/\s*\r?\n\s*/g, " "),
+        },
+      };
+    }),
+  );
+  const of = (type: string): PackItem[] =>
+    read
+      .filter((entry) => entry.type === type)
+      .map((entry) => entry.item)
+      .toSorted((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  return { skills: of("skill"), commands: of("command") };
+}
+
+/**
+ * Every pack under `packsRoot`, by the catalog's own walk
+ * ({@link listBundledPackIds}: the directories holding a `pack.json`), read
+ * through the engine's own pack readers so the page, the catalog and the
+ * installer agree on what a pack is. A directory with no `pack.json` refuses
+ * through that walk, whose message already names the exact path — restating
+ * it here would give one defect two different wordings.
  */
 async function readPacks(packsRoot: string): Promise<PackInventory[]> {
-  let entries;
+  let ids: string[];
   try {
-    entries = await readdir(packsRoot, { withFileTypes: true });
+    ids = listBundledPackIds(packsRoot);
   } catch (cause) {
-    fail(
-      `Cannot read the pack directory ${packsRoot}, so ${PACKS_PAGE.path} would claim this ` +
-        `repository ships no packs. Run the generator from a source checkout. (${String(cause)})`,
-    );
+    if (!(await isDirectory(packsRoot))) {
+      fail(
+        `Cannot read the pack directory ${packsRoot}, so ${PACKS_PAGE.path} would claim this ` +
+          `repository ships no packs. Run the generator from a source checkout. (${String(cause)})`,
+      );
+    }
+    throw cause;
   }
 
-  const dirs = entries
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .toSorted();
-
   return await Promise.all(
-    dirs.map(async (name): Promise<PackInventory> => {
+    ids.map(async (name): Promise<PackInventory> => {
       const packRoot = join(packsRoot, name);
       const [manifest, files] = await Promise.all([
         readPackManifest(packRoot),
         enumeratePackContent(packRoot),
       ]);
-      return { manifest, files };
+      const { skills, commands } = await readPackItems(name, files);
+      return { manifest, files, skills, commands };
     }),
+  );
+}
+
+async function isDirectory(path: string): Promise<boolean> {
+  return await stat(path).then(
+    (entry) => entry.isDirectory(),
+    () => false,
   );
 }
 
@@ -470,7 +532,20 @@ function installLine(packName: string): string {
     : tick(`stamity add ${packName}`);
 }
 
-/** One pack's block, blank-line separated like {@link artifactBlock}. */
+/**
+ * One labelled list of a pack's items, `- \`name\` — description` per line;
+ * nothing when the pack ships none of that class.
+ */
+function itemList(label: string, items: readonly PackItem[]): string[] {
+  if (items.length === 0) return [];
+  return ["", `${label}:`, "", ...items.map((item) => `- ${tick(item.name)} — ${item.description}`)];
+}
+
+/**
+ * One pack's block, blank-line separated like {@link artifactBlock}: its
+ * fields, then its skills and its commands by name with their descriptions, so
+ * a reader sees what `add` brings without opening the pack.
+ */
 function packBlock(pack: PackInventory): string[] {
   const { manifest, files } = pack;
   const description = manifest.description?.trim() ?? "";
@@ -489,6 +564,8 @@ function packBlock(pack: PackInventory): string[] {
     `- **Version:** ${tick(manifest.version)}`,
     `- **Ships:** ${shippedClasses(files)}`,
     `- **Install:** ${installLine(manifest.name)}`,
+    ...itemList("Skills", pack.skills),
+    ...itemList("Commands", pack.commands),
   ];
 }
 

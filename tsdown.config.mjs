@@ -1,4 +1,4 @@
-import { statSync } from "node:fs";
+import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
@@ -177,6 +177,63 @@ export function classifyDistEntry(relPath) {
   return "other";
 }
 
+/**
+ * Stamp the package's version into every staged `pack.json` under
+ * `distPacksRoot`, so a built pack names the release that shipped it. Returns
+ * the paths it rewrote; one whose `version` already reads `version` is left
+ * untouched.
+ *
+ * Rewrites the `version` field ALONE. The catalog pin covers a pack's
+ * integrity map and nothing else, so a build step that touched any other field
+ * — `permissions`, `declaredTools` — would widen a shipped manifest outside
+ * every check. The rewrite replaces that one value in the parsed object and
+ * writes it back; `test/support/support.test.ts` holds a stamped manifest to
+ * its source field by field, and `test/ci/tarballStaging.test.ts` holds every
+ * `pack.json` built under `dist/packs` to its `packs/` source the same way.
+ * Field order and the two-space layout the generator writes are kept.
+ *
+ * A directory under the root with no `pack.json` fails the build, as the
+ * catalog's own walk refuses one; a plain file beside the packs is ignored.
+ *
+ * @param {string} distPacksRoot the staged packs folder, `dist/packs`
+ * @param {string} version the version to stamp, `package.json`'s
+ * @returns {string[]}
+ */
+export function stampPackVersions(distPacksRoot, version) {
+  if (typeof version !== "string" || version.trim() === "") {
+    throw new Error(`stampPackVersions: no version to stamp (${JSON.stringify(version)}).`);
+  }
+  const rewritten = [];
+  const dirs = readdirSync(distPacksRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .toSorted();
+  for (const dir of dirs) {
+    const manifestPath = join(distPacksRoot, dir, "pack.json");
+    let source;
+    try {
+      source = readFileSync(manifestPath, "utf8");
+    } catch (cause) {
+      throw new Error(`stampPackVersions: ${manifestPath} is missing or unreadable.`, { cause });
+    }
+    const parsed = JSON.parse(source);
+    if (parsed === null || typeof parsed !== "object" || typeof parsed.version !== "string") {
+      throw new Error(`stampPackVersions: ${manifestPath} declares no string \`version\`.`);
+    }
+    if (parsed.version === version) continue;
+    // The spread keeps every key in place, `version` included, and replaces
+    // that one value; nothing else in the object is read or written.
+    writeFileSync(manifestPath, `${JSON.stringify({ ...parsed, version }, null, 2)}\n`);
+    rewritten.push(manifestPath);
+  }
+  return rewritten;
+}
+
+/** The version this checkout's `package.json` declares — what a built pack is stamped with. */
+function packageVersion() {
+  return JSON.parse(readFileSync(fileURLToPath(new URL("./package.json", import.meta.url)), "utf8")).version;
+}
+
 /** Whether `<repoRoot>/fork` exists as a directory — the fork layer's source, when a fork has one. */
 function forkDirectoryPresent() {
   const forkDir = fileURLToPath(new URL("./fork", import.meta.url));
@@ -327,6 +384,10 @@ export default defineConfig({
         "--outDir", join(ctx.options.outDir, "types")], {
         stdio: "inherit",
       });
+      // After the copy (tsdown runs build:done once `copy` has staged dist/packs),
+      // and before the size walk, so the budget measures the bytes that ship.
+      const stamped = stampPackVersions(join(ctx.options.outDir, "packs"), packageVersion());
+      if (stamped.length > 0) console.info(`[packs] stamped the release version into ${stamped.length} pack.json file(s)`);
       await reportSizeBudgets(ctx.options.outDir);
     },
   },

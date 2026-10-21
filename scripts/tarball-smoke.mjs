@@ -37,9 +37,42 @@ const GATE = join(ROOT, 'scripts', 'leak-gate.mjs')
 // every fork. `npm pack` works on a private manifest — only publishing is blocked.
 const PACKAGE_NAME = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).name
 
-/** Content classes and packs the installed artifact must be able to serve. */
+/** Content classes the installed artifact must be able to serve. */
 const REQUIRED_CONTENT_DIRS = ['agents', 'skills', 'rules', 'commands', 'charter']
-const REQUIRED_PACK_DIRS = ['ops', 'product-audit', 'scaffold']
+
+/**
+ * The packs the installed artifact must carry: every directory under the source `packs/` that
+ * holds a `pack.json`, sorted — the rule the catalog derives its entries by
+ * (`listBundledPackIds`, src/pack/curated.ts), so a pack added as a folder is required here with
+ * no edit. A directory with no `pack.json` throws, as that walk refuses one.
+ */
+export function requiredPackDirs(packsRoot) {
+  const dirs = readdirSync(packsRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .toSorted()
+  const bare = dirs.filter((dir) => !existsSync(join(packsRoot, dir, 'pack.json')))
+  if (bare.length > 0) throw new Error(`${packsRoot} holds directories with no pack.json: ${bare.join(', ')}`)
+  return dirs
+}
+
+/**
+ * The installed packs whose `pack.json` does not read `version` — the build stamps the package's
+ * version into each one (`stampPackVersions`, tsdown.config.mjs), so any line here is a package
+ * that ships a pack under a release it did not come from. One line per pack.
+ */
+export function packVersionMismatches(installedPacksRoot, ids, version) {
+  return ids.flatMap((id) => {
+    const manifestPath = join(installedPacksRoot, id, 'pack.json')
+    let declared
+    try {
+      declared = JSON.parse(readFileSync(manifestPath, 'utf8')).version
+    } catch (error) {
+      return [`${id}: ${manifestPath} is unreadable (${error.message})`]
+    }
+    return declared === version ? [] : [`${id}: pack.json reads ${JSON.stringify(declared)}, the package is ${version}`]
+  })
+}
 
 function run(command, args, options = {}) {
   return execFileSync(command, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...options })
@@ -98,15 +131,24 @@ function main() {
     //    staging failure this gate exists to catch, on every run, whether or not staging
     //    is broken. An unscoped name splits to one segment and still resolves.
     const installed = join(project, 'node_modules', ...PACKAGE_NAME.split('/'))
+    const packDirs = requiredPackDirs(join(ROOT, 'packs'))
     const missing = [
       ...REQUIRED_CONTENT_DIRS.filter((dir) => !existsSync(join(installed, 'dist', 'content', dir))),
-      ...REQUIRED_PACK_DIRS.filter((dir) => !existsSync(join(installed, 'dist', 'packs', dir))),
+      ...packDirs.filter((dir) => !existsSync(join(installed, 'dist', 'packs', dir))),
     ]
     if (missing.length > 0) {
       return fail(
         `the packed tarball is missing ${missing.length} bundled director(y|ies): ${missing.join(', ')}`,
         `Staged content lives under dist/ (tsdown.config.mjs "copy"); package.json "files" only ships dist.\n` +
           `Present under dist/: ${readdirSync(join(installed, 'dist')).join(', ')}`,
+      )
+    }
+    const packageVersion = JSON.parse(readFileSync(join(installed, 'package.json'), 'utf8')).version
+    const unstamped = packVersionMismatches(join(installed, 'dist', 'packs'), packDirs, packageVersion)
+    if (unstamped.length > 0) {
+      return fail(
+        `${unstamped.length} installed pack(s) do not carry the package version ${packageVersion}`,
+        `${unstamped.join('\n')}\nThe build stamps it (stampPackVersions in tsdown.config.mjs build:done).`,
       )
     }
 
@@ -177,7 +219,7 @@ export type { Reachable };
 
     console.log(
       `tarball-smoke: PASS - ${filename} installs, carries ${REQUIRED_CONTENT_DIRS.length} content ` +
-        `class(es) and ${REQUIRED_PACK_DIRS.length} pack(s) under dist/, passes the leak gate ` +
+        `class(es) and ${packDirs.length} pack(s) at version ${packageVersion} under dist/, passes the leak gate ` +
         `over the packed tree, compiles its external TypeScript consumer, preserves JavaScript imports, and completes init + check`,
     )
     return 0

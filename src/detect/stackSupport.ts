@@ -61,10 +61,11 @@ export const STACK_GUIDANCE_INVENTORY: ReadonlySet<string> = new Set<string>();
  * Curated stack packs by subject — the installable half of the answer, and the
  * only thing that lets a suggestion name a pack.
  *
- * EMPTY for the same reason: the curated catalog ships `ops`, `product-audit`,
- * and `scaffold`, none of which is a stack pack. Held as data so the day one
- * lands, naming it in the init panel is a row here rather than a code change —
- * and so no suggestion can ever print an id `stamity add` could not resolve.
+ * EMPTY for the same reason: the curated catalog, derived from the bundled
+ * `packs/` folder (`curatedPacks()` in `../pack/curated.ts`), holds no stack
+ * pack. Held as data so the day one lands, naming it in the init panel is a
+ * row here rather than a code change — and so no suggestion can ever print an
+ * id `stamity add` could not resolve.
  */
 const STACK_PACK_CATALOG: ReadonlyMap<string, string> = new Map<string, string>();
 

@@ -3,12 +3,12 @@ import { symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { CURATED_PACKS } from "../../src/pack/curated.ts";
+import { curatedPacks } from "../../src/pack/curated.ts";
 import { CONTENT_CLASSES } from "../../src/types/content.ts";
 import { PREDECESSOR_CONTENT_PREFIX } from "../../src/migration/detect.ts";
 import { useTempDir } from "../support/tempDir.ts";
 // @ts-expect-error — the smoke remains a native ESM source-checkout script.
-import { scanPackedArtifact } from "../../scripts/tarball-smoke.mjs";
+import { packVersionMismatches, requiredPackDirs, scanPackedArtifact } from "../../scripts/tarball-smoke.mjs";
 
 /**
  * READER coverage over the published artifact's shape.
@@ -51,8 +51,10 @@ describe("bundled-content staging covers every reader", () => {
   });
 
   it("keeps a source directory for every curated pack the resolver can be asked for", () => {
+    // TEST CHANGE, justified (2026-10-20_packs-rebuilt/u2-pack-catalog): `CURATED_PACKS` left the module; the
+    // same catalog is `curatedPacks()`, derived from the packs folder (REQ-PACK-001).
     // A bundled entry's id doubles as its directory name under `packs/`.
-    for (const entry of CURATED_PACKS) {
+    for (const entry of curatedPacks()) {
       expect(existsSync(join(REPO_ROOT, "packs", entry.id)), entry.id).toBe(true);
     }
   });
@@ -69,11 +71,64 @@ describe("bundled-content staging covers every reader", () => {
       for (const dir of [...CLASS_DIRS, "charter"]) {
         expect(existsSync(join(DIST, "content", dir)), `dist/content/${dir}`).toBe(true);
       }
-      for (const entry of CURATED_PACKS) {
+      // TEST CHANGE, justified (2026-10-20_packs-rebuilt/u2-pack-catalog): `CURATED_PACKS` left the module; the
+      // same catalog is `curatedPacks()`, derived from the packs folder (REQ-PACK-001).
+      for (const entry of curatedPacks()) {
         expect(existsSync(join(DIST, "packs", entry.id)), `dist/packs/${entry.id}`).toBe(true);
       }
     },
   );
+
+  it.skipIf(!existsSync(join(DIST, "packs")))(
+    "ships every built pack.json at the package version, every other field as its source has it",
+    () => {
+      // The build rewrites the staged manifests (stampPackVersions); the pin
+      // covers only the integrity map, so this is the check that the rewrite
+      // widened nothing else — permissions, declaredTools — on the way out.
+      const version = (JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")) as { version: string })
+        .version;
+      const ids = requiredPackDirs(join(REPO_ROOT, "packs")) as string[];
+      expect(ids.length).toBeGreaterThan(0);
+      expect(packVersionMismatches(join(DIST, "packs"), ids, version)).toEqual([]);
+      for (const id of ids) {
+        const source = JSON.parse(readFileSync(join(REPO_ROOT, "packs", id, "pack.json"), "utf8")) as Record<string, unknown>;
+        const built = JSON.parse(readFileSync(join(DIST, "packs", id, "pack.json"), "utf8")) as Record<string, unknown>;
+        expect(Object.keys(built), id).toEqual(Object.keys(source));
+        for (const key of Object.keys(source).filter((field) => field !== "version")) {
+          expect(JSON.stringify(built[key]), `dist/packs/${id}/pack.json ${key}`).toBe(JSON.stringify(source[key]));
+        }
+      }
+    },
+  );
+});
+
+describe("the tarball smoke's pack checks", () => {
+  const getPacks = useTempDir("smoke-packs");
+
+  it("requires every source folder holding a pack.json, and refuses one without", async () => {
+    const fixture = getPacks();
+    await fixture.seedFiles({
+      "packs/zeta/pack.json": '{"version":"1.0.0"}',
+      "packs/alpha/pack.json": '{"version":"1.0.0"}',
+      "packs/README.md": "not a pack\n",
+    });
+    expect(requiredPackDirs(fixture.path("packs"))).toEqual(["alpha", "zeta"]);
+
+    await fixture.seedFiles({ "packs/stray/notes.md": "not a pack\n" });
+    expect(() => requiredPackDirs(fixture.path("packs"))).toThrow(/no pack\.json: stray/);
+  });
+
+  it("names each installed pack whose pack.json misses the package version", async () => {
+    const fixture = getPacks();
+    await fixture.seedFiles({
+      "dist/packs/alpha/pack.json": '{"version":"2.0.0"}',
+      "dist/packs/beta/pack.json": '{"version":"0.1.0"}',
+    });
+    expect(packVersionMismatches(fixture.path("dist", "packs"), ["alpha", "beta", "gone"], "2.0.0")).toEqual([
+      'beta: pack.json reads "0.1.0", the package is 2.0.0',
+      expect.stringMatching(/^gone: .*pack\.json is unreadable/),
+    ]);
+  });
 });
 
 /**

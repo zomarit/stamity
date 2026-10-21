@@ -1,12 +1,16 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { cp, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { CATALOG_PINS } from "../../src/pack/catalogPins.ts";
 import {
-  CURATED_PACKS,
+  bundledPacksRoot,
+  curatedPacks,
+  deriveCatalog,
+  listBundledPackIds,
   lookupCatalogEntry,
   resolveBundledPackRoot,
   validateCatalogFormat,
@@ -28,7 +32,16 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const GENERATOR = join(REPO_ROOT, "scripts", "generate-pack-manifests.mjs");
 const GENERATOR_HINT = "node scripts/generate-pack-manifests.mjs";
 
-const FIRST_PARTY_IDS = ["ops", "product-audit", "scaffold"] as const;
+// TEST CHANGE, justified (2026-10-20_packs-rebuilt/u2-pack-catalog): the catalog is derived
+// from the packs folder now (REQ-PACK-001), so the ids are read from it with this test's own
+// walk instead of a typed three-id list that a fork's added folder would contradict.
+const FIRST_PARTY_IDS: readonly string[] = readdirSync(join(REPO_ROOT, "packs"), { withFileTypes: true })
+  .filter((entry) => entry.isDirectory() && existsSync(join(REPO_ROOT, "packs", entry.name, PACK_MANIFEST_FILE)))
+  .map((entry) => entry.name)
+  .toSorted();
+
+const PACKAGE_VERSION = (JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")) as { version: string })
+  .version;
 
 const sha256 = (bytes: Buffer): string => createHash("sha256").update(bytes).digest("hex");
 
@@ -75,9 +88,11 @@ function expectEngineError(run: () => unknown, code: EngineError["code"]): Engin
 // ── Pins-in-sync gate ──────────────────────────────────────────
 
 describe("pins-in-sync gate", () => {
+  // TEST CHANGE, justified (2026-10-20_packs-rebuilt/u2-pack-catalog): `CURATED_PACKS` left the module; the
+  // same catalog is `curatedPacks()`, derived on first use from the packs folder (REQ-PACK-001).
   it("every curated pack's per-file digests match disk and its aggregate matches CATALOG_PINS", async () => {
     await Promise.all(
-      CURATED_PACKS.map(async (entry) => {
+      curatedPacks().map(async (entry) => {
         const root = resolveBundledPackRoot(entry.id);
         const manifest = await readPackManifest(root);
 
@@ -107,8 +122,10 @@ describe("pins-in-sync gate", () => {
     );
   });
 
+  // TEST CHANGE, justified (2026-10-20_packs-rebuilt/u2-pack-catalog): `CURATED_PACKS` left the module; the
+  // same catalog is `curatedPacks()`, derived on first use from the packs folder (REQ-PACK-001).
   it("CATALOG_PINS covers exactly the bundled catalog ids", () => {
-    const bundled = CURATED_PACKS.filter((entry) => entry.source.kind === "bundled")
+    const bundled = curatedPacks().filter((entry) => entry.source.kind === "bundled")
       .map((entry) => entry.id)
       .toSorted();
     expect(Object.keys(CATALOG_PINS).toSorted()).toEqual(bundled);
@@ -157,9 +174,11 @@ describe("lookupCatalogEntry", () => {
     expect(lookupCatalogEntry("")).toBeUndefined();
   });
 
+  // TEST CHANGE, justified (2026-10-20_packs-rebuilt/u2-pack-catalog): `CURATED_PACKS` left the module; the
+  // same catalog is `curatedPacks()`, derived on first use from the packs folder (REQ-PACK-001).
   it("the validated catalog is frozen", () => {
-    expect(Object.isFrozen(CURATED_PACKS)).toBe(true);
-    for (const entry of CURATED_PACKS) expect(Object.isFrozen(entry)).toBe(true);
+    expect(Object.isFrozen(curatedPacks())).toBe(true);
+    for (const entry of curatedPacks()) expect(Object.isFrozen(entry)).toBe(true);
   });
 });
 
@@ -186,15 +205,166 @@ describe("resolveBundledPackRoot", () => {
     expectEngineError(() => resolveBundledPackRoot("../ops"), "VALIDATION_ERROR");
     expectEngineError(() => resolveBundledPackRoot("a/b"), "VALIDATION_ERROR");
   });
+
+  it("resolves under the one root the catalog reads, the source layout first", () => {
+    // A source checkout: `<repo>/packs` exists, so it is the root, and a stale
+    // `dist/packs/<id>` from an older build is never what resolves.
+    expect(bundledPacksRoot()).toBe(join(REPO_ROOT, "packs"));
+    for (const id of FIRST_PARTY_IDS) {
+      expect(resolveBundledPackRoot(id)).toBe(join(REPO_ROOT, "packs", id));
+    }
+  });
+});
+
+// ── The catalog derived from a packs folder ────────────────────
+
+/** A pack.json for a made-up pack; `fields` overrides or removes (`undefined`) keys. */
+function madeUpManifest(name: string, fields: Record<string, unknown> = {}): string {
+  const manifest: Record<string, unknown> = {
+    name,
+    version: "0.0.1",
+    description: `The ${name} pack.`,
+    integrity: {},
+    ...fields,
+  };
+  for (const [key, value] of Object.entries(manifest)) if (value === undefined) delete manifest[key];
+  return `${JSON.stringify(manifest, null, 2)}\n`;
+}
+
+const COMMAND_BODY = "---\nid: acme\ntype: command\ndescription: Does the acme thing.\n---\n\n# acme\n";
+
+describe("deriveCatalog", () => {
+  it("lists a made-up pack folder with a regenerated pin, with no code edit", async () => {
+    // What a fork does: add `packs/<id>/`, run the generator, nothing else.
+    const temp = getTemp();
+    await temp.seedFiles({
+      "packs/acme-demo/pack.json": madeUpManifest("acme-demo"),
+      "packs/acme-demo/commands/st-acme.md": COMMAND_BODY,
+    });
+    const packsDir = temp.path("packs");
+    const pinsPath = temp.path("catalogPins.ts");
+    const generated = runGenerator(["--write", "--packs-dir", packsDir, "--pins", pinsPath]);
+    expect(generated.status, generated.output).toBe(0);
+    const pin = /"acme-demo": "([0-9a-f]{64})"/.exec(await readFile(pinsPath, "utf8"))?.[1];
+    expect(pin, "the generator wrote a pin for the folder").toBeDefined();
+
+    const catalog = deriveCatalog(packsDir, { "acme-demo": pin ?? "" });
+    expect(catalog.map((entry) => entry.id)).toEqual(["acme-demo"]);
+    expect(catalog[0]).toMatchObject({
+      // --write set the version to package.json's.
+      version: PACKAGE_VERSION,
+      description: "The acme-demo pack.",
+      source: { kind: "bundled" },
+      pin: { sha256: pin, tier: "curator-verified" },
+      notAudited: false,
+    });
+    expect(Object.isFrozen(catalog)).toBe(true);
+  });
+
+  it("refuses a wrong name, a missing description, no pin and a stale pin, all in one error", async () => {
+    const temp = getTemp();
+    const integrity = { "commands/st-acme.md": sha256(Buffer.from(COMMAND_BODY)) };
+    await temp.seedFiles({
+      "packs/misnamed/pack.json": madeUpManifest("other-name", { integrity }),
+      "packs/misnamed/commands/st-acme.md": COMMAND_BODY,
+      "packs/no-description/pack.json": madeUpManifest("no-description", { description: undefined, integrity }),
+      "packs/no-description/commands/st-acme.md": COMMAND_BODY,
+      "packs/no-pin/pack.json": madeUpManifest("no-pin", { integrity }),
+      "packs/no-pin/commands/st-acme.md": COMMAND_BODY,
+      "packs/stale-pin/pack.json": madeUpManifest("stale-pin", { integrity }),
+      "packs/stale-pin/commands/st-acme.md": COMMAND_BODY,
+    });
+    const good = computeAggregateContentSha(integrity);
+    const pins = { misnamed: good, "no-description": good, "stale-pin": "f".repeat(64) };
+
+    const error = expectEngineError(() => deriveCatalog(temp.path("packs"), pins), "CONFIG_ERROR");
+    expect(error.message).toMatch(/packs\/misnamed: .*"other-name" must equal the directory name/);
+    expect(error.message).toMatch(/packs\/no-description: .*declares no `description`/);
+    expect(error.message).toMatch(/packs\/no-pin: no pin in catalogPins\.ts/);
+    expect(error.message).toMatch(/packs\/stale-pin: pin ffffffffffff… is stale/);
+    expect(error.message).toContain("generate-pack-manifests");
+  });
+
+  it("refuses a pack whose integrity map was widened after its pin was generated", async () => {
+    // The pin covers the integrity map: a manifest listing one more file than
+    // the map the pin was taken over no longer aggregates to that pin.
+    const temp = getTemp();
+    const integrity = { "commands/st-acme.md": sha256(Buffer.from(COMMAND_BODY)) };
+    const pin = computeAggregateContentSha(integrity);
+    const widened = { ...integrity, "commands/st-extra.md": sha256(Buffer.from("extra")) };
+    await temp.seedFiles({ "packs/acme/pack.json": madeUpManifest("acme", { integrity: widened }) });
+
+    expect(deriveCatalog(temp.path("packs"), { acme: computeAggregateContentSha(widened) })).toHaveLength(1);
+    const error = expectEngineError(() => deriveCatalog(temp.path("packs"), { acme: pin }), "CONFIG_ERROR");
+    expect(error.message).toContain("packs/acme: pin");
+    expect(error.message).toContain("is stale");
+  });
+
+  it("refuses a pin that names no pack folder", async () => {
+    const temp = getTemp();
+    await temp.seedFiles({ "packs/acme/pack.json": madeUpManifest("acme") });
+    const pins = { acme: computeAggregateContentSha({}), ghost: SHA_A };
+    const error = expectEngineError(() => deriveCatalog(temp.path("packs"), pins), "CONFIG_ERROR");
+    expect(error.message).toContain('pin "ghost" names no directory');
+  });
+
+  it("a null root yields an empty catalog", () => {
+    expect(deriveCatalog(null, CATALOG_PINS)).toEqual([]);
+  });
+
+  it("derives the repository's own catalog from its packs folder", () => {
+    expect(curatedPacks().map((entry) => entry.id)).toEqual([...FIRST_PARTY_IDS]);
+    expect(deriveCatalog(join(REPO_ROOT, "packs"), CATALOG_PINS)).toEqual(curatedPacks());
+  });
+});
+
+describe("listBundledPackIds", () => {
+  it("lists the directories holding a pack.json, sorted, and ignores a plain file", async () => {
+    const temp = getTemp();
+    await temp.seedFiles({
+      "packs/zeta/pack.json": madeUpManifest("zeta"),
+      "packs/alpha/pack.json": madeUpManifest("alpha"),
+      "packs/README.md": "Not a pack.\n",
+    });
+    expect(listBundledPackIds(temp.path("packs"))).toEqual(["alpha", "zeta"]);
+  });
+
+  it("refuses a directory with no pack.json, naming the path it expected", async () => {
+    const temp = getTemp();
+    await temp.seedFiles({
+      "packs/alpha/pack.json": madeUpManifest("alpha"),
+      "packs/stray/notes.md": "Not a pack.\n",
+    });
+    const error = expectEngineError(() => listBundledPackIds(temp.path("packs")), "CONFIG_ERROR");
+    expect(error.message).toContain(join(temp.path("packs"), "stray", PACK_MANIFEST_FILE));
+    expect(error.message).not.toContain(join("alpha", PACK_MANIFEST_FILE));
+  });
+});
+
+describe("the bundled packs' version", () => {
+  it("every source pack.json reads package.json's version", async () => {
+    // The build stamps the same value into dist/packs (tsdown.config.mjs);
+    // holding the source to it keeps a checkout's install and a built one alike.
+    const manifests = await Promise.all(
+      FIRST_PARTY_IDS.map(async (id) => ({ id, manifest: await readPackManifest(join(REPO_ROOT, "packs", id)) })),
+    );
+    for (const { id, manifest } of manifests) {
+      expect(manifest.version, `packs/${id}/pack.json — run ${GENERATOR_HINT} --write`).toBe(PACKAGE_VERSION);
+      expect(lookupCatalogEntry(id)?.version).toBe(PACKAGE_VERSION);
+    }
+  });
 });
 
 // ── Format self-check ──────────────────────────────────────────
 
 const SHA_A = "a".repeat(64);
 
+// TEST CHANGE, justified (2026-10-20_packs-rebuilt/u2-pack-catalog): `CatalogEntry` gained `version`, so a
+// hand-built entry states one; nothing the cases assert reads it.
 function bundledEntry(id: string, overrides: Partial<CatalogEntry> = {}): CatalogEntry {
   return {
     id,
+    version: "1.0.0",
     description: "Test pack.",
     source: { kind: "bundled" },
     pin: { sha256: SHA_A, tier: "curator-verified" },
@@ -214,8 +384,10 @@ describe("validateCatalogFormat (module-load self-check)", () => {
   });
 
   it("an npm-sourced entry shape validates — the format-verified forward slot", () => {
+    // TEST CHANGE, justified (2026-10-20_packs-rebuilt/u2-pack-catalog): `version` is a required field now.
     const entry: CatalogEntry = {
       id: "@acme/audit",
+      version: "1.0.0",
       description: "Third-party audit pack.",
       source: { kind: "npm", package: "@acme/audit-pack" },
       pin: { sha256: SHA_A, tier: "scanned" },
@@ -290,6 +462,24 @@ describe("generate-pack-manifests.mjs", () => {
     for (const id of FIRST_PARTY_IDS) {
       expect(pinsModule).toContain(`"${id}": "${pinOf(id)}"`);
     }
+  });
+
+  it("--write sets each version to package.json's and keeps every other field in its order", async () => {
+    const { packsDir, pinsPath } = await stagePacks(getTemp());
+    const manifestPath = join(packsDir, "ops", PACK_MANIFEST_FILE);
+    const source = JSON.parse(await readFile(manifestPath, "utf8")) as Record<string, unknown>;
+    await writeFile(manifestPath, `${JSON.stringify({ ...source, version: "0.0.9" }, null, 2)}\n`, "utf8");
+
+    const run = runGenerator(["--write", "--packs-dir", packsDir, "--pins", pinsPath]);
+    expect(run.status, run.output).toBe(0);
+    const written = JSON.parse(await readFile(manifestPath, "utf8")) as Record<string, unknown>;
+    expect(written["version"]).toBe(PACKAGE_VERSION);
+    expect(Object.keys(written)).toEqual(Object.keys(source));
+    for (const key of Object.keys(source).filter((field) => field !== "version")) {
+      expect(JSON.stringify(written[key]), key).toBe(JSON.stringify(source[key]));
+    }
+    // No pin moves: the version is outside the integrity map the pin covers.
+    expect(await readFile(pinsPath, "utf8")).toContain(`"ops": "${pinOf("ops")}"`);
   });
 
   it("a tampered staged pack fails --check with an integrity refusal naming the pack", async () => {

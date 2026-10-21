@@ -1,6 +1,6 @@
 {
   "name": "product-audit",
-  "version": "0.1.0",
+  "version": "1.16.0",
   "description": "Point-in-time whole-product assessment — proposes an epic set and writes a report; assesses, never modifies.",
   "integrity": {
     "commands/st-benchmark.md": "a4ab1696117ffcb0e5f004d79fbb8a0090e5f29d4fdedca44f6f04d465623882",

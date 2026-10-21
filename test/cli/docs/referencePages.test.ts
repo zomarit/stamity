@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -24,6 +24,7 @@ import {
   buildContentIndex,
   type CatalogItem,
 } from "../../../src/content/catalog.ts";
+import { parseFrontmatter } from "../../../src/content/frontmatter.ts";
 import { lookupCatalogEntry } from "../../../src/pack/curated.ts";
 import { CONTENT_CLASSES } from "../../../src/types/content.ts";
 import { EngineError } from "../../../src/types/errors.ts";
@@ -47,6 +48,45 @@ const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const MODULE_SOURCE_PATH = join(REPO_ROOT, "src/cli/docs/referencePages.ts");
 const SCRIPT_PATH = join(REPO_ROOT, "scripts/generate-docs.mjs");
 const REAL_PACKS_ROOT = join(REPO_ROOT, "packs");
+
+/** The pack ids, read from `packs/` with this suite's own walk: each folder holding a pack.json. */
+const PACK_IDS: readonly string[] = readdirSync(REAL_PACKS_ROOT, { withFileTypes: true })
+  .filter((entry) => entry.isDirectory() && existsSync(join(REAL_PACKS_ROOT, entry.name, "pack.json")))
+  .map((entry) => entry.name)
+  .toSorted();
+
+/** One pack's block on the page: from its heading to the next pack heading. */
+function packBlockOf(page: string, id: string): string {
+  const start = page.indexOf(`## \`${id}\``);
+  expect(start, `no block for ${id}`).toBeGreaterThanOrEqual(0);
+  const next = page.indexOf("\n## ", start + 1);
+  return page.slice(start, next === -1 ? undefined : next);
+}
+
+/** Files under `dir`, at any depth; 0 when the folder is absent. */
+function countFiles(dir: string): number {
+  if (!existsSync(dir)) return 0;
+  return readdirSync(dir, { recursive: true, withFileTypes: true }).filter((entry) => entry.isFile()).length;
+}
+
+/** A pack's skills (`skills/<name>/SKILL.md`) and commands (`commands/<name>.md`), named as invoked. */
+function packItemsOnDisk(id: string): { name: string; description: string }[] {
+  const read = (path: string): string => {
+    const { frontmatter } = parseFrontmatter(readFileSync(path, "utf-8"), path);
+    return String(frontmatter["description"]).trim().replace(/\s*\r?\n\s*/g, " ");
+  };
+  const skillsDir = join(REAL_PACKS_ROOT, id, "skills");
+  const commandsDir = join(REAL_PACKS_ROOT, id, "commands");
+  const skills = existsSync(skillsDir)
+    ? readdirSync(skillsDir).map((name) => ({ name, description: read(join(skillsDir, name, "SKILL.md")) }))
+    : [];
+  const commands = existsSync(commandsDir)
+    ? readdirSync(commandsDir)
+        .filter((file) => file.endsWith(".md"))
+        .map((file) => ({ name: `/${file.slice(0, -3)}`, description: read(join(commandsDir, file)) }))
+    : [];
+  return [...skills, ...commands];
+}
 
 const staleMessage = (page: string): string =>
   `${page} is stale — the render no longer matches the committed page. ` +
@@ -319,7 +359,12 @@ describe("frontmatter projection", () => {
 describe("pack inventory", () => {
   it("lists every first-party pack with its version and an install line the binary accepts", async () => {
     const packs = (await live()).get("docs/reference/packs.md") ?? "";
-    for (const id of ["ops", "product-audit", "scaffold"]) {
+    // TEST CHANGE, justified (2026-10-20_packs-rebuilt/u2-pack-catalog): the ids and the count
+    // are read from `packs/` (REQ-PACK-014) instead of a typed three-id list and a typed "3 packs.",
+    // so a folder added or retired moves the expectation with it.
+    const ids = PACK_IDS;
+    expect(ids.length).toBeGreaterThan(0);
+    for (const id of ids) {
       expect(packs, `packs page omits ${id}`).toContain(`## \`${id}\``);
       // Changed line (not a weakening): the page printed
       // `stamity add ./packs/<id>` for all three, and `add` REFUSES that — a
@@ -331,8 +376,69 @@ describe("pack inventory", () => {
       expect(packs).toContain(`- **Install:** \`stamity add ${id}\``);
       expect(packs).not.toContain(`stamity add ./packs/${id}\``);
     }
-    expect(packs).toContain("3 packs.");
-    expect(packs).toMatch(/- \*\*Ships:\*\* `agents` \(\d+\)/);
+    expect(packs).toContain(ids.length === 1 ? "1 pack." : `${String(ids.length)} packs.`);
+  });
+
+  it("shows an agents count only on a pack that ships agents", async () => {
+    // TEST CHANGE, justified (2026-10-20_packs-rebuilt/u2-pack-catalog): the old case asserted that
+    // SOME block shows `agents` (n), which held only because `ops` ships agents; read per pack from
+    // its own folder, it now says a pack that ships agents shows its count, and one that ships none
+    // shows no agents entry.
+    const packs = (await live()).get("docs/reference/packs.md") ?? "";
+    for (const id of PACK_IDS) {
+      const ships = /^- \*\*Ships:\*\* (.*)$/m.exec(packBlockOf(packs, id))?.[1] ?? "";
+      const agents = countFiles(join(REAL_PACKS_ROOT, id, "agents"));
+      if (agents > 0) expect(ships, id).toContain(`\`agents\` (${String(agents)})`);
+      else expect(ships, id).not.toContain("`agents`");
+    }
+  });
+
+  it("lists each pack's skills and commands by name with the description its file declares", async () => {
+    // REQ-PACK-014. The expected line is built from the file, not from the
+    // renderer: the name from the path (a skill's folder, a command's file
+    // stem, after a slash), the description from that file's frontmatter.
+    const packs = (await live()).get("docs/reference/packs.md") ?? "";
+    let listed = 0;
+    for (const id of PACK_IDS) {
+      const block = packBlockOf(packs, id);
+      for (const item of packItemsOnDisk(id)) {
+        expect(block, `${id} omits ${item.name}`).toContain(`- \`${item.name}\` — ${item.description}`);
+        listed += 1;
+      }
+    }
+    expect(listed, "the packs ship at least one skill or command between them").toBeGreaterThan(0);
+  });
+
+  it("lists a made-up pack's items in its block, and refuses an item with no description", async () => {
+    const fixture = await seed(VALID_AGENT);
+    try {
+      await mkdir(join(fixture.packsRoot, "probe-pack", "skills", "st-probing"), { recursive: true });
+      await mkdir(join(fixture.packsRoot, "probe-pack", "commands"), { recursive: true });
+      await writeFile(
+        join(fixture.packsRoot, "probe-pack", "skills", "st-probing", "SKILL.md"),
+        artifact({ id: "probing", type: "skill", description: "Probes\n  across two lines." }),
+      );
+      await writeFile(
+        join(fixture.packsRoot, "probe-pack", "commands", "st-probe-run.md"),
+        artifact({ id: "probe-run", type: "command", description: "Runs the probe." }),
+      );
+      const render = async (): Promise<string> =>
+        (await renderReferencePages({ contentRoot: fixture.contentRoot, packsRoot: fixture.packsRoot })).get(
+          "docs/reference/packs.md",
+        ) ?? "";
+      const page = await render();
+      expect(page).toContain("- **Ships:** `skills` (1), `commands` (1)");
+      expect(page).toContain("Skills:\n\n- `st-probing` — Probes across two lines.");
+      expect(page).toContain("Commands:\n\n- `/st-probe-run` — Runs the probe.");
+
+      await writeFile(
+        join(fixture.packsRoot, "probe-pack", "commands", "st-probe-run.md"),
+        artifact({ id: "probe-run", type: "command" }),
+      );
+      await expect(render()).rejects.toThrowError(/st-probe-run\.md declares no `id` or no `description`/);
+    } finally {
+      fixture.cleanup();
+    }
   });
 
   it("renders the directory form with --allow-untrusted for an uncatalogued pack", async () => {
@@ -680,9 +786,11 @@ describe("scripts/generate-docs.mjs --page reference", () => {
   });
 
   it("reads the real packs root by default", () => {
-    expect(readFileSync(join(workspace, "docs/reference/packs.md"), "utf-8")).toContain(
-      "## `ops`",
-    );
+    // TEST CHANGE, justified (2026-10-20_packs-rebuilt/u2-pack-catalog): every pack read from
+    // `packs/` heads a block on the written page, rather than the one typed id `ops`; the
+    // root-path check stays.
+    const written = readFileSync(join(workspace, "docs/reference/packs.md"), "utf-8");
+    for (const id of PACK_IDS) expect(written).toContain(`## \`${id}\``);
     expect(REAL_PACKS_ROOT.endsWith("packs")).toBe(true);
   });
 });

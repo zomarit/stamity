@@ -30,6 +30,7 @@ interface BuildConfigModule {
   CORPUS_BUDGET_BYTES: number;
   classifyDistEntry(relPath: string): "logic" | "corpus" | "other";
   copyTargets(forkPresent: boolean): { from: string; to: string; flatten: boolean }[];
+  stampPackVersions(distPacksRoot: string, version: string): string[];
   checkSizeBudgets(files: readonly DistEntry[]): {
     logic: number;
     corpus: number;
@@ -769,5 +770,64 @@ describe("build size budgets", () => {
     // two ways it goes: the option deleted, or a tsdown/rolldown upgrade
     // changing what `comments` defaults to (package.json pins tsdown by caret).
     expect(buildConfig.outputOptions?.comments?.jsdoc).toBe(false);
+  });
+});
+
+describe("build pack version stamp", () => {
+  const { stampPackVersions } = buildConfigModule as BuildConfigModule;
+  const getStage = useTempDir("pack-stamp");
+
+  /** A staged manifest with the fields a pin does not cover, in the generator's layout. */
+  const manifest = (name: string, version: string): string =>
+    `${JSON.stringify(
+      {
+        name,
+        version,
+        description: `The ${name} pack — with a dash.`,
+        declaredTools: ["claude", "codex"],
+        permissions: { toolFootprint: ["read", "edit"], touchedPaths: ["generated-out/**"] },
+        integrity: { "commands/st-x.md": "a".repeat(64) },
+      },
+      null,
+      2,
+    )}\n`;
+
+  it("rewrites the version alone, every other field byte for byte and in its order", async () => {
+    const stage = getStage();
+    const sources = { "alpha/pack.json": manifest("alpha", "0.1.0"), "beta/pack.json": manifest("beta", "0.2.0") };
+    await stage.seedFiles({ ...sources, "notes.txt": "not a pack\n" });
+
+    const rewritten = stampPackVersions(stage.dir, "9.9.9");
+
+    expect(rewritten.map((path) => basename(join(path, "..")))).toEqual(["alpha", "beta"]);
+    const read = await Promise.all(
+      Object.entries(sources).map(async ([relPath, source]) => ({
+        relPath,
+        source,
+        stamped: await readFile(stage.path(relPath), "utf8"),
+      })),
+    );
+    for (const { relPath, source, stamped } of read) {
+      const before = JSON.parse(source) as Record<string, unknown>;
+      const after = JSON.parse(stamped) as Record<string, unknown>;
+      expect(after["version"]).toBe("9.9.9");
+      expect(Object.keys(after)).toEqual(Object.keys(before));
+      for (const key of Object.keys(before).filter((field) => field !== "version")) {
+        expect(JSON.stringify(after[key], null, 2), `${relPath} ${key}`).toBe(JSON.stringify(before[key], null, 2));
+      }
+      // The whole file is the source with the one version line changed.
+      expect(stamped).toBe(source.replace(/"version": "[^"]*"/, '"version": "9.9.9"'));
+    }
+    expect(await readFile(stage.path("notes.txt"), "utf8")).toBe("not a pack\n");
+  });
+
+  it("leaves a manifest that already reads the version untouched, and refuses a folder with no pack.json", async () => {
+    const stage = getStage();
+    await stage.seedFiles({ "alpha/pack.json": manifest("alpha", "9.9.9") });
+    expect(stampPackVersions(stage.dir, "9.9.9")).toEqual([]);
+
+    await stage.seedFiles({ "stray/notes.md": "not a pack\n" });
+    expect(() => stampPackVersions(stage.dir, "9.9.9")).toThrow(/stray[\\/]pack\.json is missing/);
+    expect(() => stampPackVersions(stage.dir, "")).toThrow(/no version to stamp/);
   });
 });

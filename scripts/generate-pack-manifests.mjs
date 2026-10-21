@@ -15,17 +15,22 @@
 //                  recomputed aggregates; writes nothing (CI-able drift gate).
 //   --write        maintenance mode for future pack edits: additionally
 //                  rewrite each pack.json integrity map from the bytes on
-//                  disk. Pack bodies and manifests are owned by their pack
-//                  units, so run this against a staged copy (--packs-dir)
-//                  unless the pack edit itself is deliberate.
+//                  disk, and set its `version` to package.json's (the
+//                  release a bundled pack ships in; the build stamps the same
+//                  value into dist/packs, and no pin covers it). Pack bodies
+//                  and manifests are owned by their pack units, so run this
+//                  against a staged copy (--packs-dir) unless the pack edit
+//                  itself is deliberate.
 //   --packs-dir    packs root (default <repo>/packs). Requires an explicit
 //                  --pins, so a staged run can never touch the repo pins.
 //   --pins         pins module path (default <repo>/src/pack/catalogPins.ts).
 //
 // Thin by design: the aggregate SHA algorithm, the manifest schema, the
-// content walk and the integrity verification are all imported from
-// src/pack/trust.ts and src/pack/manifest.ts — this script re-implements
-// none of them, so it cannot drift from what `add` verifies at install time.
+// content walk, the integrity verification and the list of pack directories
+// are all imported from src/pack/trust.ts, src/pack/manifest.ts and
+// src/pack/curated.ts — this script re-implements none of them, so it cannot
+// drift from what `add` verifies at install time or from the catalog `add`
+// reads.
 //
 // The imports are TypeScript and there is no build step here on purpose — a
 // generator that needs `npm run build` first goes stale the moment someone
@@ -42,7 +47,7 @@
 
 import { prepareNativeTypescriptCli } from './native-typescript.mjs'
 import { createHash } from 'node:crypto'
-import { readFile, readdir } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -127,6 +132,15 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
   const pinsPath = pinsArg === null ? resolve(ROOT, 'src', 'pack', 'catalogPins.ts') : resolve(pinsArg)
 
   const { computeAggregateContentSha } = await import('../src/pack/trust.ts')
+  // curated.ts imports the pins module this script rewrites, so a pins module
+  // that no longer parses (a conflicted merge) stops the import; say which file
+  // and how to get it back instead of printing a bare SyntaxError.
+  const { listBundledPackIds } = await import('../src/pack/curated.ts').catch((error) =>
+    fail(
+      `Cannot load src/pack/curated.ts, which imports src/pack/catalogPins.ts: ${error.message}\n` +
+        'If catalogPins.ts is the broken file, restore it (git checkout -- src/pack/catalogPins.ts) and re-run.',
+    ),
+  )
   const { PACK_MANIFEST_FILE, enumeratePackContent, readPackManifest, verifyIntegrityMap } =
     await import('../src/pack/manifest.ts')
   const { atomicWriteFile } = await import('../src/merge/atomicWrite.ts')
@@ -140,21 +154,23 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
     }
   }
 
-  /** Pack ids = the subdirectory names under the packs root, sorted. */
-  async function listPackIds(dir) {
-    let entries
+  /**
+   * Pack ids = the directories holding a pack.json under the packs root,
+   * sorted, by the catalog's own walk; a directory without one refuses there.
+   */
+  function listPackIds(dir) {
+    let ids
     try {
-      entries = await readdir(dir, { withFileTypes: true })
-    } catch {
-      fail(`No packs directory at ${dir}.`)
+      ids = listBundledPackIds(dir)
+    } catch (error) {
+      fail(`No usable packs directory at ${dir}: ${error.message}`)
     }
-    const ids = entries
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name)
-      .toSorted()
     if (ids.length === 0) fail(`No pack directories under ${dir}.`)
     return ids
   }
+
+  const packageVersion = JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8')).version
+  if (typeof packageVersion !== 'string' || packageVersion === '') fail('package.json declares no version.')
 
   /**
    * Rebuild a pack's integrity map from the bytes on disk: every enumerated
@@ -189,12 +205,14 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
   }
 
   /**
-   * Rewrite only the `integrity` field, preserving the manifest's other fields
-   * and their authored order: the pack unit owns the prose of its manifest, the
-   * generator owns the digests.
+   * Rewrite only the `integrity` and `version` fields, preserving the
+   * manifest's other fields and their authored order: the pack unit owns the
+   * prose of its manifest, the generator owns the digests and the release
+   * version.
    */
   async function writeManifestIntegrity(manifestPath, integrity) {
     const raw = JSON.parse(await readFile(manifestPath, 'utf8'))
+    raw.version = packageVersion
     raw.integrity = integrity
     await atomicWriteFile(manifestPath, `${JSON.stringify(raw, null, 2)}\n`)
   }
@@ -244,7 +262,7 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
     return drift
   }
 
-  const ids = await listPackIds(packsDir)
+  const ids = listPackIds(packsDir)
 
   // Packs are independent of each other; verify them concurrently and report
   // every failure in one run rather than one per invocation.

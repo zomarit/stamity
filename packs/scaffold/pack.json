@@ -1,6 +1,6 @@
 {
   "name": "scaffold",
-  "version": "0.1.0",
+  "version": "1.16.0",
   "description": "Greenfield generators built to the repo's quality floor — the implementer writes, a specialist lens gates, and a failed gate buys exactly one regeneration.",
   "integrity": {
     "commands/st-auth-scaffold.md": "8ffa680375b07221c7d426cd30ef5c852636e497822e5bc360c63d9ca7b96cd1",
