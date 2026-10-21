@@ -12,6 +12,7 @@
  * Verify only: node scripts/generate-pack-manifests.mjs --check
  */
 export const CATALOG_PINS: Record<string, string> = {
+  "frontend": "e56d65941fa991ce21a5a6ed83b448a7a6d3a076347b93f755831a7d038e0358",
   "ops": "3e11beecbb12f97448ce5ef7c2fb55850654c7e369c52231219f43a45a76db20",
   "product-audit": "d70744e72c7d98c0a448e08ee6307a7207a9020464cd51b3325f616492f1a726",
   "scaffold": "85016f7438a0fee7502593879155558a6514f425382d835d438701d9fddd6eba",

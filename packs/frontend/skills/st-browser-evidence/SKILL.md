@@ -3,7 +3,7 @@ license: MIT
 compatibility: Requires a supported coding client, repository access, and the project verification tools.
 id: browser-evidence
 type: skill
-description: "Drives a real browser against the built artifact and returns the evidence bundle a QA checkpoint cites — spec-derived scenario runs, screenshot diffs, and accessibility scan output. Triggers when a change touches a rendered surface and the checkpoint needs captured evidence, or when someone asks for a screenshot comparison or an accessibility scan of the running app."
+description: "Drives a real browser against the built app and returns the evidence bundle a QA checkpoint cites. Triggers when a change touches a rendered surface and needs captured evidence, or when someone asks for a screenshot comparison or accessibility scan."
 tags: [review]
 load: on-demand
 obsolete_when: clients natively capture browser-run QA evidence bundles

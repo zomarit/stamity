@@ -3,7 +3,7 @@ license: MIT
 compatibility: Requires a supported coding client, repository access, and the project verification tools.
 id: design-system-detect
 type: skill
-description: "Detects the design system a repo already has — design tokens, components, theming, responsive strategy — and writes the inventory the next interface change reuses instead of minting a parallel one. Triggers before interface work that would add a token or a component, when it is unclear whether a repo has a design system at all, or when a recorded inventory has fallen behind the current head."
+description: "Detects the design system a repo already has — tokens, components, theming — and writes the inventory interface work reuses. Triggers before interface work that would add a token or a component, or when a recorded inventory falls behind the head."
 tags: [maintenance]
 load: on-demand
 obsolete_when: design-system inventory is a client-native detection
