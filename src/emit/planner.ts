@@ -107,7 +107,9 @@ import {
   selectionWithInstalledPacks,
   type ResolvedPackContent,
 } from "../pack/projection.ts";
+import { lookupCatalogEntry } from "../pack/curated.ts";
 import { movedCoreSkill } from "../pack/moved.ts";
+import { lookupRetiredPack, retiredSuccessorPacks } from "../pack/retired.ts";
 import { hasManagedBlock, wrapInManagedBlock } from "../merge/managedBlocks.ts";
 import { pinnedCliCall, scopeRegistryArg } from "../shared/cliCall.ts";
 import { cliCallContextOf, type CliCallContext } from "./substitution.ts";
@@ -947,8 +949,7 @@ function remedyOf(owner: InvocableNameOwner, cli: CliCallContext): string[] {
       return [
         `pack "${packId}": run \`${remedyCall(cli, `clean --pack ${packId}`)}\`, then delete by ` +
           `hand each client copy it keeps and names, unless it is yours, then ` +
-          `\`${remedyCall(cli, "sync")}\`, then ` +
-          `\`${remedyCall(cli, `add ${packId}`)}\` once the pack ships distinct names, then ` +
+          `\`${remedyCall(cli, "sync")}\`, then ${reAddStep(packId, cli)}, then ` +
           `\`${remedyCall(cli, "sync")}\``,
       ];
     }
@@ -962,6 +963,54 @@ function remedyOf(owner: InvocableNameOwner, cli: CliCallContext): string[] {
       ];
     default:
       return [];
+  }
+}
+
+/**
+ * The re-add step of a pack's remedy, by what its id resolves to; `add <id>`
+ * re-adds only a catalog pack or an npm package of that name (REQ-PACK-023):
+ *
+ * - a catalog id keeps `add <id>`, the catalog read first as `add` reads it,
+ *   so a fork that keeps its own `packs/<retired id>` is re-added as before;
+ * - a retired id (`../pack/retired.ts`) names `add <successor>` per successor
+ *   pack for the copy this package shipped, or re-adding a pack of one's own
+ *   by its path, since `add` refuses the bare id (REQ-PACK-002);
+ * - any other id, a pack added from a folder or an npm package, names
+ *   re-adding it by its folder or package path.
+ *
+ * No receipt is read: the refusal names both routes where the id alone
+ * cannot tell them apart.
+ */
+function reAddStep(packId: string, cli: CliCallContext): string {
+  const ownPath = `\`${remedyCall(cli, "add <its folder or package path>")}\``;
+  if (isCatalogId(packId)) {
+    return `\`${remedyCall(cli, `add ${packId}`)}\` once the pack ships distinct names`;
+  }
+  const retired = lookupRetiredPack(packId);
+  const successors = retired === undefined ? [] : retiredSuccessorPacks(retired);
+  if (successors.length > 0) {
+    const shipped = successors.map((pack) => `\`${remedyCall(cli, `add ${pack}`)}\``).join(", then ");
+    return (
+      `${shipped} for the copy this package shipped, or ${ownPath} once a pack of your own under ` +
+      `that id ships distinct names`
+    );
+  }
+  return (
+    `${ownPath} once the pack ships distinct names (a bare id re-adds only a catalog pack or an ` +
+    `npm package of that name)`
+  );
+}
+
+/**
+ * Whether `packId` is a catalog id. A catalog that cannot be read answers yes,
+ * keeping the `add <id>` step the remedy always printed: the refusal prints on
+ * an error path, and the catalog's own error would replace its diagnosis.
+ */
+function isCatalogId(packId: string): boolean {
+  try {
+    return lookupCatalogEntry(packId) !== undefined;
+  } catch {
+    return true;
   }
 }
 

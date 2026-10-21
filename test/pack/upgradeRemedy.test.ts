@@ -2,8 +2,9 @@ import { createHash } from "node:crypto";
 import { cp, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { COMMANDS } from "../../src/cli.ts";
+import type * as CuratedApi from "../../src/pack/curated.ts";
 import { readManifest, writeManifest } from "../../src/manifest/manifest.ts";
 import type { PackContentClass } from "../../src/pack/manifest.ts";
 import {
@@ -702,4 +703,110 @@ describe("the re-add source a pack's receipt records (review/59)", () => {
       "sync",
     ]);
   });
+});
+
+/**
+ * `sync`'s clash remedy names a re-add that can run (REQ-PACK-023, REQ-PACK-005,
+ * 2026-10-21_packs-rebuilt-02/u13-retired-map): `add <id>` re-adds only a catalog pack
+ * or an npm package of that name, and `add` refuses a retired id outright
+ * (REQ-PACK-002). So a catalog id keeps `add <id>`; a retired id names its successor's
+ * `add` for the copy the package shipped, and re-adding a pack of one's own by its path;
+ * any other id names re-adding by its folder or package path. Each owner is installed
+ * as an earlier engine left it, a command and a skill of one name, and `sync` refuses.
+ */
+describe("the clash remedy's re-add step, by what the owner's id resolves to", () => {
+  /** A command and a skill that both install as st-drill. */
+  const CLASH_PAIR: Readonly<Record<string, string>> = {
+    "commands/st-drill.md": madeUpArtifact("drill", "command", "Runs one acme drill end to end."),
+    "skills/st-drill/SKILL.md": madeUpArtifact("drill", "skill", "Steps for one acme drill. Triggers when a drill runs."),
+  };
+
+  /** A Claude repository with `packId` installed holding {@link CLASH_PAIR}, and `sync`'s refusal. */
+  async function refusedSync(name: string, packId: string, commands = COMMANDS): Promise<CliResult> {
+    const repo = await claudeRepo(name);
+    await installBypassingAdd(repo, packId, { ...CLASH_PAIR });
+    const result = await runInProcess(commands, ["sync"], { cwd: repo });
+    const refused = { ...result, output: `${result.stdout}\n${result.stderr}` };
+    expect(refused.code, `sync must refuse the clash — ${said(refused)}`).not.toBe(0);
+    expect(refused.output).toContain("st-drill");
+    return refused;
+  }
+
+  it(
+    "names the successor's add and the own-path route for an installed retired pack, never its bare id",
+    async () => {
+      const refused = await refusedSync("clash-retired", "ops");
+
+      const steps = remedyVerbs(refused.output, "ops");
+      expect(steps, said(refused)).toEqual([
+        "clean --pack ops",
+        "sync",
+        "add production",
+        "add <its folder or package path>",
+        "sync",
+      ]);
+      expect(steps).not.toContain("add ops");
+      expect(refused.output).toContain("for the copy this package shipped");
+      expect(refused.output).toContain("a pack of your own under that id");
+    },
+    CASE_TIMEOUT,
+  );
+
+  it(
+    "names re-adding by folder or package path for a pack that is neither a catalog nor a retired id",
+    async () => {
+      const refused = await refusedSync("clash-local", "acme-local");
+
+      const steps = remedyVerbs(refused.output, "acme-local");
+      expect(steps, said(refused)).toEqual([
+        "clean --pack acme-local",
+        "sync",
+        "add <its folder or package path>",
+        "sync",
+      ]);
+      expect(steps).not.toContain("add acme-local");
+      expect(refused.output).toContain("a bare id re-adds only a catalog pack or an npm package of that name");
+    },
+    CASE_TIMEOUT,
+  );
+
+  it(
+    "keeps add <id> for a catalog id, even one the retired map names (a fork's own packs/ops)",
+    async () => {
+      // Mocked: the bundled catalog is derived from this checkout's own `packs/` and pinned in
+      // `src/pack/catalogPins.ts`, so a fork's `packs/ops` can only be staged by writing into the
+      // checkout every parallel suite reads (and the install smoke's isolation guard digests).
+      // Only `lookupCatalogEntry` is redirected, and only for `ops`, in a fresh module graph
+      // loaded for this case alone; every other read keeps the real catalog.
+      vi.resetModules();
+      vi.doMock("../../src/pack/curated.ts", async (importOriginal) => {
+        const actual = await importOriginal<typeof CuratedApi>();
+        return {
+          ...actual,
+          lookupCatalogEntry: (idOrName: string) => {
+            const found = actual.lookupCatalogEntry(idOrName);
+            if (found !== undefined || idOrName !== "ops") return found;
+            const kept = actual.lookupCatalogEntry(PACK);
+            return kept === undefined ? undefined : { ...kept, id: "ops" };
+          },
+        };
+      });
+      try {
+        const forked = await import("../../src/cli.ts");
+        const refused = await refusedSync("clash-fork", "ops", forked.COMMANDS);
+
+        expect(remedyVerbs(refused.output, "ops"), said(refused)).toEqual([
+          "clean --pack ops",
+          "sync",
+          "add ops",
+          "sync",
+        ]);
+        expect(refused.output).not.toContain("add production");
+      } finally {
+        vi.doUnmock("../../src/pack/curated.ts");
+        vi.resetModules();
+      }
+    },
+    CASE_TIMEOUT,
+  );
 });
