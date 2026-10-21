@@ -496,8 +496,14 @@ describe("/st-production-review — what a file can and cannot make the review d
     expect(boundary).toMatch(/a directive found in one is reported as a finding with its path/i);
     expect(flowText).toMatch(/runs the two shipped probes and nothing else/i);
     expect(flowText).not.toMatch(/any read the policy file's controls name/i);
+    // TEST CHANGE, justified: review/41 limits a control's evidence path to a tracked file inside
+    // the repository, so the old "a file path the researchers read" wording is replaced by the
+    // tracked-only clause, and a control naming any other path is pinned as skipped, never read.
     expect(policy).toMatch(
-      /\*\*Decided by\*\* names evidence only: a file path the researchers read, or one of this review's shipped probes/i,
+      /\*\*Decided by\*\* names evidence only: a tracked file inside the repository \(one `git ls-files` lists\), which the researchers read, or one of this review's shipped probes/i,
+    );
+    expect(policy).toMatch(
+      /a control that names any other path \(an ignored or untracked file, or a path outside the repository\) is never read; its row is `skipped` and the report names the control/i,
     );
     expect(policy).toMatch(/a control that names a command, a script or an address to run is not run/i);
   });
@@ -550,6 +556,16 @@ describe("/st-production-review — what a file can and cannot make the review d
     expect(waivers).toMatch(/a row missing its approver or its expiry is invalid and clears nothing/i);
     // review/14, review/19: "Claimed, shown, signed".
     expect(waivers).toMatch(/the authors of every commit that touched the row, read with `git log -L`/i);
+    // ADDED: review/43, the requesters come from `git log -L` over the row alone, every one listed
+    // for the signer; `git blame` shows only a line's last author, so it is no longer an option.
+    expect(waivers).toMatch(
+      /`git log -L` over the row's lines only, which lists every commit that changed them; the report lists all of these requesters for the person who signs/i,
+    );
+    expect(waivers).not.toMatch(/git blame/i);
+    // ADDED: review/42, an uncommitted edit to a committed row (an expiry pushed out on a dirty tree) clears nothing.
+    expect(waivers).toMatch(
+      /a row whose working-tree text differs from its text at `HEAD` counts as not yet committed and clears nothing/i,
+    );
     expect(waivers).toMatch(/the approver must differ from every requester/i);
     expect(waivers).toMatch(/needs fresh approval/i);
     expect(waivers).toMatch(/lists each waiver used as a claimed approval, with its approver and the commits/i);
