@@ -3,7 +3,11 @@
 import { isAbsolute, join, relative, sep } from "node:path";
 import { Option, type Command } from "commander";
 import { CLAUDE_SETTINGS_PATH } from "../../adapters/claude.ts";
-import { suggestStackPacks } from "../../detect/stackSupport.ts";
+import {
+  resolvableStackPacks,
+  STACK_PACK_CATALOG,
+  suggestStackPacks,
+} from "../../detect/stackSupport.ts";
 import { readManifest } from "../../manifest/manifest.ts";
 import { REQUIRED_GITIGNORE_ENTRIES } from "../../mcp/env.ts";
 import {
@@ -13,9 +17,10 @@ import {
   type PredecessorDefaults,
 } from "../../migration/carry.ts";
 import { detectPredecessorState, type PredecessorState } from "../../migration/detect.ts";
+import { lookupCatalogEntry } from "../../pack/curated.ts";
 import { gitProgramFor } from "../../shared/programPath.ts";
 import type { MergeResult } from "../../types/content.ts";
-import type { ImportDecision } from "../../types/manifest.ts";
+import { isPackOwner, PACK_OWNER_PREFIX, type ImportDecision } from "../../types/manifest.ts";
 import {
   DEFAULT_IMPORT_MODE,
   IMPORT_MODES,
@@ -530,6 +535,29 @@ async function workspaceMemberTools(memberDir: string): Promise<readonly Tool[]>
     return (await readManifest(memberDir))?.tools ?? [];
   } catch {
     return [];
+  }
+}
+
+/**
+ * The stack packs this run's panel may name (REQ-PACK-010): the shipped subject
+ * map, kept to the ids the catalog resolves and the ledger does not already
+ * record. Read after `applyInit`, so the ledger is the one this run left.
+ *
+ * Init suggests and never installs. A catalog or manifest that cannot be read
+ * offers no pack rather than failing an init whose writes already landed: `add`
+ * would refuse the same id, so naming it would send the operator after a call
+ * that fails.
+ */
+async function offeredStackPacks(rootDir: string): Promise<ReadonlyMap<string, string>> {
+  try {
+    const installed = new Set(
+      ((await readManifest(rootDir))?.ledger ?? [])
+        .filter((row) => isPackOwner(row.adapter))
+        .map((row) => row.adapter.slice(PACK_OWNER_PREFIX.length)),
+    );
+    return resolvableStackPacks(STACK_PACK_CATALOG, lookupCatalogEntry, installed);
+  } catch {
+    return new Map();
   }
 }
 
@@ -1277,6 +1305,7 @@ export const initCommand: CommandModule = {
           : { columns: ctx.terminal.stdoutColumns }),
       });
       if (welcome !== "") ctx.io.out(`${welcome}\n`);
+      const stackPacks = await offeredStackPacks(rootDir);
       ctx.io.out(
         renderInitPanel({
           decisions: effective,
@@ -1293,7 +1322,8 @@ export const initCommand: CommandModule = {
           // the stacks nothing ships dedicated guidance for. Suggestions only —
           // stack packs are never auto-installed — and an all-covered repo
           // yields an empty list, which the panel renders as no block at all.
-          stackSuggestions: suggestStackPacks(effective.repoInfo),
+          // A row names a pack only when `offeredStackPacks` kept it.
+          stackSuggestions: suggestStackPacks(effective.repoInfo, stackPacks),
         }),
       );
     }

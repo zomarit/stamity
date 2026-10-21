@@ -21,7 +21,13 @@ import { REQUIRED_GITIGNORE_ENTRIES } from "../../../src/mcp/env.ts";
 import { npxCommand } from "../../support/identity.ts";
 import type { InitDecisions } from "../../../src/cli/commands/init/plan.ts";
 import { makePalette } from "../../../src/cli/kit/terminal.ts";
-import { suggestStackPacks, type StackSuggestion } from "../../../src/detect/stackSupport.ts";
+import {
+  resolvableStackPacks,
+  STACK_PACK_CATALOG,
+  suggestStackPacks,
+  type StackSuggestion,
+} from "../../../src/detect/stackSupport.ts";
+import { lookupCatalogEntry } from "../../../src/pack/curated.ts";
 import { NATIVE_SKILL_DIRS, SKILLS_PROJECTION_DIR } from "../../../src/emit/skillsProjection.ts";
 import type { CarryReport } from "../../../src/migration/carry.ts";
 import { TOOLS } from "../../../src/types/core.ts";
@@ -967,10 +973,15 @@ describe("renderInitPanel — stack suggestions", () => {
   });
 
   it("never phrases a row as an install instruction while no pack is installable", () => {
-    // The real production entry against the shipped (empty) pack catalog —
-    // no fixture catalog, so this asserts what a user actually reads today.
+    // TEST CHANGE, justified (u16-frontend-suggestion, REQ-PACK-010): this case
+    // ran the production entry against the shipped catalog, which was empty.
+    // The shipped catalog now maps the front-end subjects to `frontend`, so the
+    // "no pack installable" state is a catalog that resolves none of them — a
+    // fork whose packs folder lacks `frontend`. Same claim, same assertions,
+    // reached through the filter init now applies.
     const live = suggestStackPacks(
       repoInfoFixture({ frameworks: ["next", "react"], languages: ["typescript", "python"] }),
+      resolvableStackPacks(STACK_PACK_CATALOG, () => undefined, new Set()),
     );
     expect(live.length).toBeGreaterThan(0);
     expect(live.every((row) => row.packId === undefined)).toBe(true);
@@ -1002,6 +1013,59 @@ describe("renderInitPanel — stack suggestions", () => {
     expect(output.indexOf("detected stacks with no dedicated")).toBeLessThan(
       output.indexOf("next steps:"),
     );
+  });
+});
+
+describe("renderInitPanel — the frontend pack suggestion (REQ-PACK-010)", () => {
+  // The production path init takes: the shipped subject map, filtered through
+  // the real catalog lookup over this checkout's `packs/` folder, so these
+  // cases read what a user of this build reads.
+  const live = (info: Partial<RepoInfo>, installed: ReadonlySet<string> = new Set()): string[] =>
+    suggestionBlock(
+      renderInitPanel(
+        panelInput({
+          stackSuggestions: suggestStackPacks(
+            repoInfoFixture(info),
+            resolvableStackPacks(STACK_PACK_CATALOG, lookupCatalogEntry, installed),
+          ),
+        }),
+      ),
+    );
+  const installCall = npxCommand("add frontend");
+
+  it("names the frontend pack with its pinned install call for a Next.js repository", () => {
+    const rows = live({ frameworks: ["next"], languages: ["typescript"] });
+
+    expect(rows[0]).toBe(`  next (framework) — Install the frontend pack: ${installCall}`);
+    expect(rows.filter((row) => row.includes(installCall))).toHaveLength(1);
+  });
+
+  it("prints the install call once for Next.js and React together", () => {
+    const rows = live({ frameworks: ["next", "react"], languages: ["typescript"] });
+
+    expect(rows.filter((row) => row.includes(installCall))).toEqual([
+      `  next (framework) — Install the frontend pack: ${installCall}`,
+    ]);
+    // The second front-end row still names the pack, without a second call.
+    expect(rows[1]).toBe("  react (framework) — Install the frontend pack");
+  });
+
+  it("offers nothing once the ledger records frontend as installed", () => {
+    const rows = live({ frameworks: ["next", "react"], languages: ["typescript"] }, new Set(["frontend"]));
+
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(row.toLowerCase(), row).not.toContain("install");
+    }
+  });
+
+  it("prints no pack line for a backend repository", () => {
+    const rows = live({ frameworks: ["express"], languages: ["typescript", "python"] });
+
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(row.toLowerCase(), row).not.toContain("install");
+    }
   });
 });
 

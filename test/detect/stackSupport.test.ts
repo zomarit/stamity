@@ -4,11 +4,13 @@ import {
   FRAMEWORK_SUPPORT,
   LANGUAGE_SUPPORT,
   STACK_GUIDANCE_INVENTORY,
+  STACK_PACK_CATALOG,
   classifyDetectedStacks,
   classifyFramework,
   classifyLanguage,
   classifyStacksAgainst,
   deriveStackSupport,
+  resolvableStackPacks,
   suggestStackPacks,
 } from "../../src/detect/stackSupport.ts";
 import type { Framework, RepoInfo } from "../../src/types/detect.ts";
@@ -356,5 +358,105 @@ describe("suggestStackPacks", () => {
       // TEST CHANGE (sw26-engine-cli-call-form): the pack, without a bare call.
       expect(suggestion.action, suggestion.name).toBe("Install the python-stack pack");
     }
+  });
+});
+
+describe("STACK_PACK_CATALOG and resolvableStackPacks (REQ-PACK-010)", () => {
+  // The twelve subjects REQ-PACK-010 names, written out here rather than read
+  // back from the source map, so a subject dropped from the map goes red.
+  const FRONTEND_SUBJECTS = [
+    "Next.js",
+    "React",
+    "Vue",
+    "Svelte",
+    "SvelteKit",
+    "Nuxt",
+    "Angular",
+    "Astro",
+    "Remix",
+    "SolidStart",
+    "TanStack Start",
+    "Qwik",
+  ];
+  // A stand-in for `lookupCatalogEntry`, which this wave-3 module may not
+  // import: the lookup is the function's own parameter, so a closure over a
+  // set of ids is the real input shape, not a mock of a dependency.
+  const resolving =
+    (...ids: string[]) =>
+    (id: string): unknown =>
+      ids.includes(id) ? { id } : undefined;
+
+  it("maps exactly the twelve front-end subjects to the frontend pack", () => {
+    expect([...STACK_PACK_CATALOG.keys()].toSorted()).toEqual(FRONTEND_SUBJECTS.toSorted());
+    expect(new Set(STACK_PACK_CATALOG.values())).toEqual(new Set(["frontend"]));
+    // Every key is a subject a framework row is classified under, so each one
+    // can actually be reached from detection.
+    const reachable = new Set(ALL_FRAMEWORKS.map((framework) => classifyFramework(framework).notes));
+    for (const subject of STACK_PACK_CATALOG.keys()) {
+      expect(
+        [...reachable].some((note) => note.includes(`No ${subject} idiom`)),
+        subject,
+      ).toBe(true);
+    }
+  });
+
+  it("keeps only the pack ids the catalog resolves", () => {
+    const map = new Map([
+      ["Next.js", "frontend"],
+      ["React", "frontend"],
+      ["Python", "python-stack"],
+    ]);
+
+    const kept = resolvableStackPacks(map, resolving("frontend"), new Set());
+
+    expect([...kept]).toEqual([
+      ["Next.js", "frontend"],
+      ["React", "frontend"],
+    ]);
+  });
+
+  it("drops a pack the ledger already records as installed", () => {
+    const map = new Map([
+      ["Next.js", "frontend"],
+      ["Python", "python-stack"],
+    ]);
+
+    const kept = resolvableStackPacks(map, resolving("frontend", "python-stack"), new Set(["frontend"]));
+
+    expect([...kept]).toEqual([["Python", "python-stack"]]);
+  });
+
+  it("offers frontend to every front-end row and none to a backend row", () => {
+    const catalog = resolvableStackPacks(STACK_PACK_CATALOG, resolving("frontend"), new Set());
+    const suggestions = suggestStackPacks(
+      repoInfo({ frameworks: ["next", "react", "express"], languages: ["typescript"] }),
+      catalog,
+    );
+
+    expect(suggestions.map((row) => [row.name, row.packId])).toEqual([
+      ["next", "frontend"],
+      ["react", "frontend"],
+      ["express", undefined],
+      ["typescript", undefined],
+    ]);
+    expect(suggestions[0]?.action).toBe("Install the frontend pack");
+    expect(suggestions[2]?.action).toBe(classifyFramework("express").notes);
+  });
+
+  it("keeps the guidance note when the packs folder lacks frontend (a fork)", () => {
+    const catalog = resolvableStackPacks(STACK_PACK_CATALOG, resolving(), new Set());
+    const [next] = suggestStackPacks(repoInfo({ frameworks: ["next"] }), catalog);
+
+    expect(catalog.size).toBe(0);
+    expect(next?.packId).toBeUndefined();
+    expect(next?.action).toBe(classifyFramework("next").notes);
+  });
+
+  it("offers no pack when the caller passes no resolved catalog", () => {
+    // The default is the empty map, never the unfiltered catalog: a caller
+    // that has not checked what `add` resolves can never name a pack.
+    const [next] = suggestStackPacks(repoInfo({ frameworks: ["next"] }));
+
+    expect(next?.packId).toBeUndefined();
   });
 });

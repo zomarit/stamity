@@ -855,8 +855,9 @@ function mostSpecificFirst(suggestions: readonly StackSuggestion[]): StackSugges
  * Suggestions only — stack packs are never auto-installed, and no row here
  * invents an install instruction: the row prints the action the suggestion API
  * computed, which names a pack id only when the curated catalog actually
- * carries one — and only then does the row append the install call, pinned
- * like every other remedy on this panel ({@link packageCommand}). Empty input
+ * carries one — and only then, on the first row naming that pack, does the row
+ * append the install call, pinned like every other remedy on this panel
+ * ({@link packageCommand}). Empty input
  * prints nothing at all, which is the state a repo whose stacks are all
  * covered reaches.
  */
@@ -871,8 +872,14 @@ function stackSuggestionLines(
   const omitted = ordered.length - shown.length;
 
   const lines = [palette.bold("detected stacks with no dedicated guidance yet:")];
+  // One install call per pack id, on the first row naming it: one pack answers
+  // every front-end subject, and Next.js on React would otherwise print the
+  // same command twice.
+  const called = new Set<string>();
   for (const row of shown) {
-    const install = row.packId === undefined ? "" : `: ${packageCommand(`add ${row.packId}`)}`;
+    const first = row.packId !== undefined && !called.has(row.packId);
+    if (row.packId !== undefined) called.add(row.packId);
+    const install = first ? `: ${packageCommand(`add ${row.packId}`)}` : "";
     lines.push(`  ${row.name} (${row.kind}) — ${row.action}${install}`);
   }
   if (omitted > 0) {

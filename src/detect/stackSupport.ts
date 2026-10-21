@@ -45,9 +45,10 @@ export interface StackSupport {
  *
  * EMPTY, and that is the accurate state rather than a stub: the corpus ships a
  * charter and twelve glob-scoped rules written against concerns (testing,
- * migrations, secrets, API versioning), not one stack-idiom file, and the
- * curated catalog carries no stack pack to install one from. Adding a subject
- * here is the whole act of shipping stack support.
+ * migrations, secrets, API versioning), not one stack-idiom file, and the one
+ * pack {@link STACK_PACK_CATALOG} offers (`frontend`) ships front-end skills,
+ * not a framework's idioms. Adding a subject here is the whole act of shipping
+ * stack support.
  *
  * Keyed by SUBJECT rather than by stack name because guidance is authored per
  * subject: one Python guidance file answers `python`, `django`, `flask`, and
@@ -56,18 +57,6 @@ export interface StackSupport {
  * subject can never read `full` while the language still reads `partial`.
  */
 export const STACK_GUIDANCE_INVENTORY: ReadonlySet<string> = new Set<string>();
-
-/**
- * Curated stack packs by subject — the installable half of the answer, and the
- * only thing that lets a suggestion name a pack.
- *
- * EMPTY for the same reason: the curated catalog, derived from the bundled
- * `packs/` folder (`curatedPacks()` in `../pack/curated.ts`), holds no stack
- * pack. Held as data so the day one lands, naming it in the init panel is a
- * row here rather than a code change — and so no suggestion can ever print an
- * id `stamity add` could not resolve.
- */
-const STACK_PACK_CATALOG: ReadonlyMap<string, string> = new Map<string, string>();
 
 /** The claim sentence — the one place anything is said to ship for a stack. */
 const full = (subject: string): StackSupport => ({
@@ -147,6 +136,61 @@ const FRAMEWORK_SUBJECTS: Record<Framework, string> = {
   spring: "Spring",
   phoenix: "Phoenix",
 };
+
+/** The detected frameworks the `frontend` pack answers, by detection id. */
+const FRONTEND_FRAMEWORKS = [
+  "next",
+  "react",
+  "vue",
+  "svelte",
+  "sveltekit",
+  "nuxt",
+  "angular",
+  "astro",
+  "remix",
+  "solid-start",
+  "tanstack-start",
+  "qwik",
+] as const satisfies readonly Framework[];
+
+/**
+ * Stack packs by subject — the installable half of the answer, and the only
+ * thing that lets a suggestion name a pack.
+ *
+ * The twelve front-end subjects map to the `frontend` pack (REQ-PACK-010). The
+ * keys are read from {@link FRAMEWORK_SUBJECTS} rather than retyped, so a
+ * renamed subject cannot leave a key no detected row reaches.
+ *
+ * This map is what the source offers, not what an install can resolve: a
+ * fork's packs folder may lack an id, and a repository may already have it.
+ * This module cannot read the catalog (it sits below `../pack/curated.ts`), so
+ * the caller filters it through {@link resolvableStackPacks} before passing it
+ * to {@link suggestStackPacks} — which, given nothing, offers no pack at all.
+ */
+export const STACK_PACK_CATALOG: ReadonlyMap<string, string> = new Map(
+  FRONTEND_FRAMEWORKS.map((framework) => [FRAMEWORK_SUBJECTS[framework], "frontend"]),
+);
+
+/**
+ * The rows of `map` whose pack id `lookup` resolves and `installed` does not
+ * hold: the only pack ids a suggestion may name. `lookup` is the catalog's
+ * (`lookupCatalogEntry` in `../pack/curated.ts`), passed in because this module
+ * may not import it; any non-`undefined` result counts as resolved.
+ */
+export function resolvableStackPacks(
+  map: ReadonlyMap<string, string>,
+  lookup: (id: string) => unknown,
+  installed: ReadonlySet<string>,
+): ReadonlyMap<string, string> {
+  const resolved = new Map<string, boolean>();
+  const kept = new Map<string, string>();
+  for (const [subject, packId] of map) {
+    if (installed.has(packId)) continue;
+    if (!resolved.has(packId)) resolved.set(packId, lookup(packId) !== undefined);
+    if (resolved.get(packId) === true) kept.set(subject, packId);
+  }
+  return kept;
+}
 
 /**
  * Language → the guidance subject its row is classified under. Keyed by the
@@ -308,7 +352,7 @@ export interface StackSuggestion {
    * the subject — the only parts that differed — were computed and dropped.
    */
   readonly action: string;
-  /** Curated pack id when one exists for this subject; undefined today. */
+  /** The pack id offered for this subject, from the caller's filtered catalog; undefined when none is. */
   readonly packId?: string;
 }
 
@@ -319,18 +363,23 @@ function subjectOf(stack: UnsupportedStack): string | undefined {
   return subjects[stack.name];
 }
 
+/** {@link suggestStackPacks}'s default catalog: no pack, until a caller passes a filtered one. */
+const NO_STACK_PACKS: ReadonlyMap<string, string> = new Map<string, string>();
+
 /**
  * What the init panel offers for the detected stacks nothing ships for:
  * suggestions, and nothing more. Stack packs are suggested by detection and
  * never auto-installed, so every row here is a sentence, not an action taken.
  *
- * The action is bound to what exists. With no stack pack in the curated
- * catalog, the only truthful next step is the row's OWN support note — which
- * names its subject and its tier, and for the `none` tier is exactly "write the
- * rules and set the gates". Carrying that note through is what stops the block
- * printing one identical sentence per row: both inventories are empty by
- * design, so every install today produces this branch, and a constant here made
- * an N-stack repo read the same instruction N times while the per-tier and
+ * The action is bound to what exists. `catalog` is the subject → pack map
+ * already filtered to what `add` resolves ({@link resolvableStackPacks}); it
+ * defaults to the empty map, so a caller that has not filtered can never offer
+ * a pack. With no pack for a row's subject, the only truthful next step is the
+ * row's OWN support note — which names its subject and its tier, and for the
+ * `none` tier is exactly "write the rules and set the gates". Carrying that
+ * note through is what stops the block printing one identical sentence per
+ * row: every row outside the front-end subjects takes this branch, and a
+ * constant here made an N-stack repo read the same instruction N times while the per-tier and
  * per-subject wording was computed and thrown away one line later. A subject
  * the catalog does carry is named by its pack id instead, and the panel turns
  * that id into the pinned install call, so the suggestion becomes
@@ -343,7 +392,7 @@ function subjectOf(stack: UnsupportedStack): string | undefined {
  */
 export function suggestStackPacks(
   info: RepoInfo,
-  catalog: ReadonlyMap<string, string> = STACK_PACK_CATALOG,
+  catalog: ReadonlyMap<string, string> = NO_STACK_PACKS,
 ): StackSuggestion[] {
   return classifyDetectedStacks(info).map((stack) => {
     const subject = subjectOf(stack);
