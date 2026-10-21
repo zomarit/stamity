@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "generatedBy": "1.16.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-21T01:35:07.448Z",
+  "updatedAt": "2026-10-21T02:21:21.763Z",
   "tools": [
     "claude"
   ],
@@ -48,9 +48,7 @@
         "ui-states"
       ],
       "skill": [
-        "browser-evidence",
         "dep-audit",
-        "design-system-detect",
         "handoff",
         "learn",
         "onboard",
@@ -444,20 +442,6 @@
     },
     {
       "adapter": "claude",
-      "artifactId": "browser-evidence",
-      "artifactType": "skill",
-      "contentHash": "a4a40651590d8e03ae621c8a5ee7f71e904aeb87e54cff23ae1b2a4d26fd21c7",
-      "path": ".claude/skills/st-browser-evidence/SKILL.md"
-    },
-    {
-      "adapter": "claude",
-      "artifactId": "browser-evidence",
-      "artifactType": "skill",
-      "contentHash": "b448baafcaa2f1b0d6c396b1ba98d733fd4424c546b545797ade81ab87efe760",
-      "path": ".claude/skills/st-browser-evidence/agents/openai.yaml"
-    },
-    {
-      "adapter": "claude",
       "artifactId": "dep-audit",
       "artifactType": "skill",
       "contentHash": "631e9365176633f718682b9049c3315ce5f3457af993f92c7e77442192130ba0",
@@ -469,20 +453,6 @@
       "artifactType": "skill",
       "contentHash": "03b9f0b720a98145fda8584c40f0a54f56ae18c213ca7d42e9801dcac5c0abde",
       "path": ".claude/skills/st-dep-audit/agents/openai.yaml"
-    },
-    {
-      "adapter": "claude",
-      "artifactId": "design-system-detect",
-      "artifactType": "skill",
-      "contentHash": "797494d53ab3a5cfb0f866ed14c7cf4002a8fb4a943004f425b57ae845e3a000",
-      "path": ".claude/skills/st-design-system-detect/SKILL.md"
-    },
-    {
-      "adapter": "claude",
-      "artifactId": "design-system-detect",
-      "artifactType": "skill",
-      "contentHash": "91065c090283437485a15f7575527d1b64972caf0432026f5ede3b7621a24573",
-      "path": ".claude/skills/st-design-system-detect/agents/openai.yaml"
     },
     {
       "adapter": "claude",

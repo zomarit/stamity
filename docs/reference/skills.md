@@ -8,15 +8,7 @@ title: Skills
 
 A skill is a procedure an agent runs when the work calls for it. Its `description` is the trigger a client matches against the task at hand — it is the only part always in context, so it carries the whole activation claim. Authored in `content/skills/st-<id>/SKILL.md`. Each heading is the name the skill is emitted and invoked under: the frontmatter `id` behind the `st-` prefix the invocable classes carry — the same prefix the path above spells out. The bare id is the `id:` line inside that `SKILL.md`.
 
-9 skills.
-
-## `st-browser-evidence`
-
-Drives a real browser against the built artifact and returns the evidence bundle a QA checkpoint cites — spec-derived scenario runs, screenshot diffs, and accessibility scan output. Triggers when a change touches a rendered surface and the checkpoint needs captured evidence, or when someone asks for a screenshot comparison or an accessibility scan of the running app.
-
-- **Tags:** `review`
-- **Load:** `on-demand`
-- **Obsolete when:** clients natively capture browser-run QA evidence bundles
+7 skills.
 
 ## `st-dep-audit`
 
@@ -25,14 +17,6 @@ Produces a standalone dependency audit over the installed graph — advisories, 
 - **Tags:** `maintenance`, `devops`
 - **Load:** `on-demand`
 - **Obsolete when:** a target client documents native reporting of advisories, licenses, and update-risk classes over the lockfile-resolved graph
-
-## `st-design-system-detect`
-
-Detects the design system a repo already has — design tokens, components, theming, responsive strategy — and writes the inventory the next interface change reuses instead of minting a parallel one. Triggers before interface work that would add a token or a component, when it is unclear whether a repo has a design system at all, or when a recorded inventory has fallen behind the current head.
-
-- **Tags:** `maintenance`
-- **Load:** `on-demand`
-- **Obsolete when:** design-system inventory is a client-native detection
 
 ## `st-handoff`
 
