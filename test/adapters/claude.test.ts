@@ -172,7 +172,8 @@ const GUARD_REPAIR_LINE =
  * TEST CHANGE, justified (w6-claude-hooks-in-claude-dir, REQ-FLOW-113, REQ-FLOW-104): every command runs the
  * copy under `.claude/hooks/stamity/`, which the Claude Code GitHub Action restores from the base branch on a
  * pull request, so a pull request cannot rewrite what its own Action run's hooks start. The anchor, the quoting
- * and the tails are unchanged; the generated copies stay emitted and no entry runs them.
+ * and the tails are unchanged; the generated copies stayed emitted then, and since u5-hook-copies (REQ-FLOW-088)
+ * they are no longer written.
  */
 const HOOK_COMMANDS = {
   sessionStart:
@@ -821,7 +822,10 @@ describe("claude residue over the real corpus", () => {
     // Infrastructure is unconditional...
     expect(paths).toContain(CLAUDE_SETTINGS_PATH);
     expect(paths).toContain(CLAUDE_MD_PATH);
-    expect(paths).toContain(CLAUDE_REVIEW_GATE_PATH);
+    // TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088): the gate is the copy under `.claude/hooks/stamity/`; the
+    // generated one is no longer written in the repository layout.
+    expect(paths).toContain(CLAUDE_HOOK_REVIEW_GATE_PATH);
+    expect(paths).not.toContain(CLAUDE_REVIEW_GATE_PATH);
     // ...and so is the floor. An empty selection is the hand-edited-manifest
     // case the `floor:*` mechanism exists for: the five spine agents, the
     // security agent, and the security rules survive it, and nothing else does.
@@ -872,14 +876,13 @@ describe("claude residue over the real corpus", () => {
       // (REQ-LADDER-007), a claude-owned row; no other path is admitted.
       // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-090): and the ask gate, placed as the
       // review gate is, a claude-owned row.
+      // TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088): the review gate, the ask gate and the
+      // cloud readiness hook are placed under `.claude/` alone in the repository layout, so their generated paths
+      // leave the surface.
       expect(
         row.path === CLAUDE_MD_PATH ||
           row.path.startsWith(".claude/") ||
           row.path === ".mcp.json" ||
-          row.path === CLAUDE_REVIEW_GATE_PATH ||
-          row.path === CLAUDE_ASK_GATE_PATH ||
-          // TEST CHANGE, justified (v5-claude-readiness, REQ-FLOW-110): and the cloud readiness hook, placed as the ask gate is.
-          row.path === CLAUDE_CLOUD_READINESS_PATH ||
           row.path === CLAUDE_MODEL_MAP_PATH,
         row.path,
       ).toBe(true);
@@ -896,9 +899,9 @@ describe("claude residue over the real corpus", () => {
     // second adapter-owned row there (REQ-LADDER-007).
     // TEST CHANGE, justified (u20-hook-emission): and the ask gate, the third.
     // TEST CHANGE, justified (v5-claude-readiness, REQ-FLOW-110): and the cloud readiness hook, the fourth.
-    expect(paths.filter((path) => path.startsWith(".stamity/")).toSorted()).toEqual(
-      [CLAUDE_REVIEW_GATE_PATH, CLAUDE_ASK_GATE_PATH, CLAUDE_CLOUD_READINESS_PATH, CLAUDE_MODEL_MAP_PATH].toSorted(),
-    );
+    // TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088): the three scripts left for `.claude/hooks/stamity/`, so
+    // the model map is the one adapter-owned row left there.
+    expect(paths.filter((path) => path.startsWith(".stamity/")).toSorted()).toEqual([CLAUDE_MODEL_MAP_PATH]);
   });
 
   it("plans byte-identically across two runs over identical input", async () => {
@@ -969,9 +972,11 @@ describe("claude residue over the real corpus", () => {
 
 // w6-claude-hooks-in-claude-dir (REQ-FLOW-113, REQ-FLOW-104, plan/31): the Claude Code GitHub Action restores
 // `.claude/` from the base branch on a pull request, so the scripts the hook entries run, and the policy document
-// the guard reads, are placed there; the generated copies stay, byte for byte, for invariant 5's manual run.
+// the guard reads, are placed there. TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088): they are
+// the only copies, invariant 5's manual run starting the session start there.
 describe("the hook copies under .claude/hooks/stamity", () => {
-  it("places the adapter's three scripts in both folders, each rendered for its own, and the policy copy", async () => {
+  // TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088): the three are placed in the hook folder alone.
+  it("places the adapter's three scripts in the hook folder alone, rendered for it, and the policy copy", async () => {
     const { rows, core } = await planned();
     const paths = byPath(rows);
 
@@ -992,9 +997,11 @@ describe("the hook copies under .claude/hooks/stamity", () => {
     expect(paths.get(CLAUDE_HOOK_CLOUD_READINESS_PATH)?.content).toBe(
       buildCloudReadinessScript({ cli: { packageName: "@zomarit/stamity", version: ENGINE_VERSION }, layout: "claude" }),
     );
-    // The generated copies keep the bytes the generated layout renders.
-    expect(paths.get(CLAUDE_ASK_GATE_PATH)?.content).toBe(buildUnattendedAskGate());
-    expect(paths.get(CLAUDE_HOOK_ASK_GATE_PATH)?.content).not.toBe(paths.get(CLAUDE_ASK_GATE_PATH)?.content);
+    // No generated copy is placed beside them, and the copy is not the generated layout's bytes.
+    for (const path of [CLAUDE_REVIEW_GATE_PATH, CLAUDE_ASK_GATE_PATH, CLAUDE_CLOUD_READINESS_PATH]) {
+      expect(paths.has(path), path).toBe(false);
+    }
+    expect(paths.get(CLAUDE_HOOK_ASK_GATE_PATH)?.content).not.toBe(buildUnattendedAskGate());
     // The policy copy is the core's document, byte for byte, owned by this adapter alone.
     const policy = paths.get(CLAUDE_HOOK_POLICIES_PATH);
     expect(policy?.content).toBe(core.hooks.policyDocument.content);
@@ -1023,15 +1030,18 @@ describe("the hook copies under .claude/hooks/stamity", () => {
 });
 
 describe("the work-scoped review gate", () => {
-  it("emits the script once, beside the core set, under the per-tool hooks directory", async () => {
+  // TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088): in the repository layout the script is
+  // placed once, as the copy under `.claude/hooks/stamity/`; the generated path is the container layout's alone.
+  it("emits the script once, beside the core set, under the hook folder", async () => {
     const { rows } = await planned();
 
     expect(CLAUDE_REVIEW_GATE_PATH).toBe(`${HOOKS_GENERATED_DIR}/claude/${REVIEW_GATE_FILE}`);
-    const gateRows = rows.filter((row) => row.path === CLAUDE_REVIEW_GATE_PATH);
-    expect(gateRows).toHaveLength(1);
+    expect(rows.filter((row) => row.path === CLAUDE_REVIEW_GATE_PATH)).toEqual([]);
+    const gateRows = rows.filter((row) => row.path.endsWith(`/${REVIEW_GATE_FILE}`));
+    expect(gateRows.map((row) => row.path)).toEqual([CLAUDE_HOOK_REVIEW_GATE_PATH]);
     expect(gateRows[0]!.owner).toEqual({
       adapter: "claude",
-      artifactId: "claude-review-gate",
+      artifactId: "claude-hook-review-gate",
       artifactType: "infra",
     });
     // The cap and the fail mode are the engine's, not this adapter's: the body
@@ -1041,13 +1051,15 @@ describe("the work-scoped review gate", () => {
         statePath: REVIEW_GATE_STATE_FILE,
         maxIterations: DEFAULT_MAX_REVIEW_ITERATIONS,
         failMode: "fail-closed",
+        layout: "claude",
       }),
     );
   });
 
   it("carries the operator's clamped cap into the emitted script", async () => {
     const { rows } = await planned({ models: { reviewCap: 99 } });
-    const gate = byPath(rows).get(CLAUDE_REVIEW_GATE_PATH);
+    // TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088): the gate the entries run is the copy.
+    const gate = byPath(rows).get(CLAUDE_HOOK_REVIEW_GATE_PATH);
 
     expect(gate).toBeDefined();
     // 99 is outside the band, so the one clamp every consumer shares applies:
@@ -1952,13 +1964,16 @@ describe("the person-only deny rows (u20-hook-emission, REQ-FLOW-102)", () => {
 });
 
 describe("the unattended ask gate's placement (u20-hook-emission, REQ-FLOW-090)", () => {
+  // TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088): in the repository layout the gate is the
+  // copy under `.claude/hooks/stamity/` alone; its generated path is the container layout's.
   it("places the gate beside the review gate as an adapter-owned row, in the repository layout", async () => {
     const { rows } = await planned({ selection: EMPTY_SELECTION });
-    const row = byPath(rows).get(CLAUDE_ASK_GATE_PATH);
+    const row = byPath(rows).get(CLAUDE_HOOK_ASK_GATE_PATH);
 
     expect(CLAUDE_ASK_GATE_PATH).toBe(`${HOOKS_GENERATED_DIR}/claude/${UNATTENDED_ASK_GATE_FILE}`);
-    expect(row?.content).toBe(buildUnattendedAskGate({ layout: "generated" }));
-    expect(row?.owner).toEqual({ adapter: "claude", artifactId: "claude-ask-gate", artifactType: "infra" });
+    expect(byPath(rows).has(CLAUDE_ASK_GATE_PATH)).toBe(false);
+    expect(row?.content).toBe(buildUnattendedAskGate({ layout: "claude" }));
+    expect(row?.owner).toEqual({ adapter: "claude", artifactId: "claude-hook-ask-gate", artifactType: "infra" });
     const askEntries = settingsOf(rows).hooks["PreToolUse"]?.filter((entry) => entry.matcher === "AskUserQuestion") ?? [];
     // One entry, the gate alone, and no fail-closed tail: a question that reaches nobody is the safe failure.
     expect(askEntries).toEqual([{ matcher: "AskUserQuestion", hooks: [{ type: "command", command: HOOK_COMMANDS.askGate }] }]);
@@ -1977,15 +1992,18 @@ describe("the unattended ask gate's placement (u20-hook-emission, REQ-FLOW-090)"
 
 describe("the cloud readiness hook's placement (v5-claude-readiness, REQ-FLOW-110, REQ-CTX-016)", () => {
   it("places the hook beside the ask gate as an adapter-owned row, wired on startup and resume with its own timeout", async () => {
+    // TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088): in the repository layout the hook is the
+    // copy under `.claude/hooks/stamity/` alone; its generated path is the container layout's.
     const { rows, ctx } = await planned({ selection: EMPTY_SELECTION });
-    const row = byPath(rows).get(CLAUDE_CLOUD_READINESS_PATH);
+    const row = byPath(rows).get(CLAUDE_HOOK_CLOUD_READINESS_PATH);
 
     expect(CLAUDE_CLOUD_READINESS_PATH).toBe(`${HOOKS_GENERATED_DIR}/claude/${CLOUD_READINESS_FILE}`);
+    expect(byPath(rows).has(CLAUDE_CLOUD_READINESS_PATH)).toBe(false);
     // The pin it resolves is the emission's own: this package at the engine version the setup is generated with.
     expect(row?.content).toBe(
-      buildCloudReadinessScript({ cli: { packageName: "@zomarit/stamity", version: ctx.engineVersion }, layout: "generated" }),
+      buildCloudReadinessScript({ cli: { packageName: "@zomarit/stamity", version: ctx.engineVersion }, layout: "claude" }),
     );
-    expect(row?.owner).toEqual({ adapter: "claude", artifactId: "claude-cloud-readiness", artifactType: "infra" });
+    expect(row?.owner).toEqual({ adapter: "claude", artifactId: "claude-hook-cloud-readiness", artifactType: "infra" });
     const entries = settingsOf(rows).hooks["SessionStart"]?.filter((entry) => entry.matcher === "startup|resume") ?? [];
     // One entry, the hook alone, in seconds as the client reads them, apart from the session start's 30 s.
     expect(entries).toEqual([

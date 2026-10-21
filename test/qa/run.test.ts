@@ -397,9 +397,17 @@ describe("hashFixtureInputs — H1 label shape", () => {
     mkdirSync(join(dir, "qa-hooks"), { recursive: true });
     writeFileSync(join(dir, "qa-hooks", "decision.mjs"), "// fixture\n");
     writeFileSync(join(dir, "qa-hooks", "decision.json"), "{}\n");
-    const generatedDir = join(dir, ".stamity", "generated", "hooks", client);
-    mkdirSync(generatedDir, { recursive: true });
-    writeFileSync(join(generatedDir, "session-start.mjs"), "// fixture hook\n");
+    // TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088): Claude Code's hook scripts are the
+    // copies under `.claude/hooks/stamity/`, its generated folder no longer written; a claude fixture also keeps a
+    // leftover script in that old folder, which the hash must not take for a script the entries run.
+    const scriptsDir = client === "claude" ? join(dir, ".claude", "hooks", "stamity") : join(dir, ".stamity", "generated", "hooks", client);
+    mkdirSync(scriptsDir, { recursive: true });
+    writeFileSync(join(scriptsDir, "session-start.mjs"), "// fixture hook\n");
+    if (client === "claude") {
+      const leftover = join(dir, ".stamity", "generated", "hooks", "claude");
+      mkdirSync(leftover, { recursive: true });
+      writeFileSync(join(leftover, "session-start.mjs"), "// a leftover from an older release\n");
+    }
     // `hashFixtureInputs` discovers generated hook scripts via `git ls-files` inside `fixtureDir`
     // (`scripts/qa/run.mjs`), mirroring the real fixture `scripts/qa/fixtures.mjs` builds as a
     // disposable git repository — a fixture that is not a git repo yields no generated entries.
@@ -414,7 +422,7 @@ describe("hashFixtureInputs — H1 label shape", () => {
     return dir;
   }
 
-  it("labels every input fixture/<relative path>, carrying the client's own generated/hooks/<client>/ segment", async () => {
+  it("labels every input fixture/<relative path>, carrying the folder the client's entries run scripts from", async () => {
     // @ts-expect-error — native ESM contributor tool, outside the product package.
     const { hashFixtureInputs } = await import("../../scripts/qa/run.mjs");
     const dir = clientFixture("claude");
@@ -427,9 +435,8 @@ describe("hashFixtureInputs — H1 label shape", () => {
     for (const input of inputs) {
       expect(input.path.startsWith("fixture/"), input.path).toBe(true);
     }
-    expect(inputs.some((input) => input.path.includes(".stamity/generated/hooks/claude/"))).toBe(
-      true,
-    );
+    expect(inputs.some((input) => input.path.includes(".claude/hooks/stamity/"))).toBe(true);
+    expect(inputs.some((input) => input.path.includes(".stamity/generated/hooks/claude/"))).toBe(false);
   });
 
   it("never produces the same label set for two different clients' fixtures", async () => {
@@ -451,9 +458,7 @@ describe("hashFixtureInputs — H1 label shape", () => {
     const codexLabels = new Set(codex.inputs.map((input) => input.path));
 
     expect(claudeLabels).not.toEqual(codexLabels);
-    expect(
-      [...claudeLabels].some((label) => label.includes(".stamity/generated/hooks/claude/")),
-    ).toBe(true);
+    expect([...claudeLabels].some((label) => label.includes(".claude/hooks/stamity/"))).toBe(true);
     expect(
       [...codexLabels].some((label) => label.includes(".stamity/generated/hooks/codex/")),
     ).toBe(true);

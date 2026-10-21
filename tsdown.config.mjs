@@ -46,9 +46,9 @@ import { defineConfig } from "tsdown";
  * effects rather than a comment measurement: the strip recovered the space, and
  * this tree's own shipped code moved the other way over the same interval — the
  * emitted review-gate script alone is several kilobytes larger here than at
- * b2d51a6, which `wc -c` on
- * `.stamity/generated/hooks/claude/stamity-review-gate.mjs` against that tree's
- * copy checks in one command, and it keeps moving. A hand-copied after-figure
+ * b2d51a6, which `wc -c` on this tree's
+ * `.claude/hooks/stamity/stamity-review-gate.mjs` against that tree's
+ * `.stamity/generated/hooks/claude/` copy checks, and it keeps moving. A hand-copied after-figure
  * is what left this file, and the test that pins the strip, quoting three
  * different numbers for one measurement.
  * JavaScript and declaration output both count against this logic budget.

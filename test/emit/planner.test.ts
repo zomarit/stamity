@@ -236,11 +236,12 @@ describe("composeEmissionPlanner({}) — core rows only", () => {
 
     // TEST CHANGE, justified (w6-claude-hooks-in-claude-dir, REQ-FLOW-113): Claude's core set is also planned
     // under `.claude/hooks/stamity/`, the copies its hook entries run, owned by claude alone like the generated set.
+    // TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088): Claude's core set is planned only
+    // as those copies; its generated four are no longer written.
     expect(plan.map((output) => output.path)).toEqual([
       P.skillMain,
       P.skillRef,
       P.policyDoc,
-      ...HOOK_FILES.map((file) => `${P.hooksRoot}/claude/${file}`),
       ...HOOK_FILES.map((file) => `.claude/hooks/stamity/${file}`),
       ...HOOK_FILES.map((file) => `${P.hooksRoot}/codex/${file}`),
       P.agentsMd,
@@ -297,9 +298,12 @@ describe("composeEmissionPlanner({}) — core rows only", () => {
     expect(policy.owner.artifactId).toBe(POLICY_DOCUMENT_ARTIFACT_ID);
 
     // Hook script copies: owned singly by their tool, ids from the file name.
+    // TEST CHANGE, justified (u5-hook-copies, REQ-FLOW-088): claude's are the copies under `.claude/hooks/stamity/`.
     for (const tool of ["claude", "codex"] as const) {
       for (const file of HOOK_FILES) {
-        const row = rows.get(`${P.hooksRoot}/${tool}/${file}`)!;
+        const path = tool === "claude" ? `.claude/hooks/stamity/${file}` : `${P.hooksRoot}/${tool}/${file}`;
+        const row = rows.get(path)!;
+        expect(row, path).toBeDefined();
         expect(adaptersOf(row)).toEqual([tool]);
         expect(row.owner).toEqual(ownerOf(tool, file.replace(/\.mjs$/, ""), "infra"));
         expect(row.coOwners).toBeUndefined();
@@ -433,9 +437,14 @@ describe("the shared skills projection and the hook copies", () => {
     const plan = await composeEmissionPlanner(residuesFor(tools)).plan(ctxOf(tools, corpus));
 
     expect(adaptersOf(byPath(plan).get(P.skillMain)!)).toEqual(tools);
-    expect(plan.map((output) => output.path).filter((path) => path.startsWith(`${P.hooksRoot}/claude/`))).toHaveLength(
-      HOOK_FILES.length,
-    );
+    // TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088): claude's hook copies are the ones
+    // under `.claude/hooks/stamity/`, the core's four among them; nothing is planned under its generated folder.
+    const paths = plan.map((output) => output.path);
+    expect(paths.filter((path) => path.startsWith(`${P.hooksRoot}/claude/`))).toEqual([]);
+    for (const file of HOOK_FILES) expect(paths, file).toContain(`.claude/hooks/stamity/${file}`);
+    for (const tool of ["cursor", "copilot", "codex"] as const) {
+      for (const file of HOOK_FILES) expect(paths, `${tool}/${file}`).toContain(`${P.hooksRoot}/${tool}/${file}`);
+    }
   });
 
   it("plans a repo with its own hooks and no \"hook wiring\" disclosure", async () => {

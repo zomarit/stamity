@@ -1,11 +1,11 @@
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it, vi } from "vitest";
 // @ts-expect-error — the script is a native ESM source-checkout tool with no declaration file.
-import { BUDGET_MS, cli, median, payloads, reportWritePath, timeOnce, VERDICT_AGENT, writePayload } from "../../scripts/hook-latency.mjs";
+import { BUDGET_MS, cli, guardRoot, median, payloads, reportWritePath, timeOnce, VERDICT_AGENT, writePayload } from "../../scripts/hook-latency.mjs";
 
 /**
  * `scripts/hook-latency.mjs` (REQ-CTX-016, plan 010 D2): the guard's latency over node's own start,
@@ -22,7 +22,9 @@ import { BUDGET_MS, cli, median, payloads, reportWritePath, timeOnce, VERDICT_AG
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const SCRIPT = join(REPO_ROOT, "scripts", "hook-latency.mjs");
-const REAL_GUARD = join(REPO_ROOT, ".stamity", "generated", "hooks", "claude", "stamity-pre-tool-use-guard.mjs");
+// TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088): the generated Claude guard is no longer
+// emitted, so the real guard these cases run is the copy Claude Code's hook entries run, the script's new default.
+const REAL_GUARD = join(REPO_ROOT, ".claude", "hooks", "stamity", "stamity-pre-tool-use-guard.mjs");
 
 // Each timed run is 3 cases × (1 warm-up + 7 runs) = 24 node starts; a Windows runner starts node
 // several times slower than a POSIX host, so the budget is set per case rather than relying on the
@@ -235,6 +237,15 @@ describe("hook-latency: the payloads", () => {
     expect(fallback).toMatchObject({ hook_event_name: "PreToolUse", agent_type: VERDICT_AGENT, tool_name: "Write" });
   });
 
+  // ADDED (u5-hook-copies): the default guard moved to `.claude/hooks/stamity/`, three levels below the root where
+  // the generated one sat four below, so the root the payloads aim at is read from the guard's placement.
+  it("anchors the root three levels above a copy in .claude/hooks/stamity and four above a generated guard", () => {
+    const root = join(work, "anchor");
+    expect(guardRoot(join(root, ".claude", "hooks", "stamity", "stamity-pre-tool-use-guard.mjs"))).toBe(root);
+    expect(guardRoot(join(root, ".stamity", "generated", "hooks", "codex", "stamity-pre-tool-use-guard.mjs"))).toBe(root);
+    expect(guardRoot(REAL_GUARD)).toBe(resolve(REPO_ROOT));
+  });
+
   it("the median of an odd and an even count", () => {
     expect(median([5, 1, 3])).toBe(3);
     expect(median([4, 1, 3, 2])).toBe(2.5);
@@ -250,6 +261,9 @@ describe("hook-latency: the release checklist", () => {
     expect(lines[0]).toMatch(/release record/);
     // ADDED 2026-10-08 (review/30): the line runs when the bytes it times moved, and the guard is
     // generated from more modules than `src/hooks/**`, so its trigger names the generated file.
-    expect(lines[0]).toContain("`.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs`");
+    // TEST CHANGE, justified (u5-hook-copies, REQ-FLOW-088): the file it times is now the copy under
+    // `.claude/hooks/stamity/`, the one Claude Code's hook entries run; the generated Claude copy is gone.
+    expect(lines[0]).toContain("`.claude/hooks/stamity/stamity-pre-tool-use-guard.mjs`");
+    expect(lines[0]).not.toContain("`.stamity/generated/hooks/claude/");
   });
 });

@@ -804,6 +804,16 @@ describe("the cloud column and the Cloud sessions section", () => {
     expect(config.fact).not.toContain("the Action's own named limit");
     expect(config.fact).toContain("`src/github/operations/restore-config.ts`");
     expect(config.fact).not.toContain("come from the pull request, so a pull request can change what the guard runs");
+    // TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-113, REQ-FLOW-088): the generated copies
+    // are no longer written, so the row says they leave on the upgrade's `sync`, which copy a session run by hand
+    // starts, and the window an upgrade pull request on a base older than 1.16.0 opens.
+    expect(config.fact).toContain(
+      "The older copies under `.stamity/generated/hooks/claude/` are no longer written and the upgrade's `sync` removes them",
+    );
+    expect(config.fact).toContain("a session run by hand starts `.claude/hooks/stamity/stamity-session-start.mjs`");
+    expect(config.fact).toMatch(/An upgrade pull request whose base predates 1\.16\.0 runs that base's entries, which name the removed scripts/);
+    expect(config.fact).toContain("the guard's entry, failing closed, refuses every tool call until the upgrade merges");
+    expect(config.fact).not.toMatch(/are still (written|emitted)/);
     expect(config.citation.url).toBe("https://github.com/anthropics/claude-code-action/blob/main/docs/security.md");
 
     // The Action's job prints no session line: no row of it carries one.

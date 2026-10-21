@@ -31,9 +31,10 @@ import type { Tool } from "../types/core.ts";
  * branch's rather than the pull request's. A user hook's or a pack hook's script
  * is not copied here: it stays at its own path outside `.claude/`, so on the
  * Action's run it is the pull request's (the residual the GitHub Action
- * configuration fact below names). The copies under `.stamity/generated/hooks/claude/`
- * are still emitted, byte for byte, for the manual session-start run the charter
- * names; no hook entry runs them. Here rather than beside the generated hooks
+ * configuration fact below names). These are Claude Code's only copies: the ones
+ * under `.stamity/generated/hooks/claude/` are no longer emitted (REQ-FLOW-088),
+ * and the manual session-start run the charter names runs the copy here. Here
+ * rather than beside the generated hooks
  * folder in `../types/markers.ts` because the hooks model is where every reader
  * of the placement (emission, the settings bounds, the script bodies) can reach
  * it; `../manifest/ownedPaths.ts` restates it as data and a test binds the two.
@@ -282,7 +283,12 @@ export const CLIENT_CLOUD_FACTS: readonly ClientCloudFact[] = [
       "paths from the base branch before Claude starts, keeping the pull request's copies under " +
       "`.claude-pr/` for reference, so the hook entries are the base branch's. The scripts Stamity's own " +
       "entries start, and the agent tool policy document the guard reads, are copies under " +
-      "`.claude/hooks/stamity/`, inside the restore, so those scripts are the base branch's too. A user hook " +
+      "`.claude/hooks/stamity/`, inside the restore, so those scripts are the base branch's too. The older " +
+      "copies under `.stamity/generated/hooks/claude/` are no longer written and the upgrade's `sync` removes " +
+      "them, so a session run by hand starts `.claude/hooks/stamity/stamity-session-start.mjs`. An upgrade pull " +
+      "request whose base predates 1.16.0 runs that base's entries, which name the removed scripts, so on its " +
+      "run those hooks cannot start and the guard's entry, failing closed, refuses every tool call until the " +
+      "upgrade merges. A user hook " +
       "or a pack hook keeps its script at its own path outside `.claude/`, so on a pull request that script " +
       "is the pull request's, and the Action runs it. A pull request that " +
       "legitimately changes `.claude/` sees that change reverted on the Action's run, a limit the Action " +

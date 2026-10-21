@@ -309,6 +309,15 @@ function hashEntries(entries) {
 }
 
 /**
+ * The folder holding the hook scripts a client's entries run: Claude Code's copies under
+ * `.claude/hooks/stamity/` (`src/hooks/model.ts::CLAUDE_HOOKS_DIR`; the generated Claude folder
+ * is no longer written), every other client's generated set under `.stamity/generated/hooks/<client>/`.
+ */
+function hookScriptsFolder(client) {
+  return client === 'claude' ? '.claude/hooks/stamity/' : `.stamity/generated/hooks/${client}/`
+}
+
+/**
  * Hash the fixture files that decide a hook row, under fixture-relative labels.
  *
  * The label is `fixture/<path within the fixture>` — never the fixture's own absolute directory,
@@ -336,7 +345,7 @@ export function hashFixtureInputs(client, fixtureDir) {
       encoding: 'utf8',
     })
       .split('\n')
-      .filter((path) => path.startsWith(`.stamity/generated/hooks/${client}/`))
+      .filter((path) => path.startsWith(hookScriptsFolder(client)))
   } catch {
     // A fixture that is not a readable repository still hashes its client config and instrument;
     // the generated scripts are then absent from the row's inputs, which the reason records.

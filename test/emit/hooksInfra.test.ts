@@ -1,11 +1,11 @@
 import { existsSync } from "node:fs";
-import { readdir, readFile } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import { basename, posix, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { beforeAll, describe, expect, it } from "vitest";
-import { parseFrontmatter } from "../../src/content/frontmatter.ts";
+import { describe, expect, it } from "vitest";
 import {
   AGENT_TOOL_POLICIES_PATH,
+  CLAUDE_HOOK_POLICIES_FILE,
   planHooksInfra,
   type CoreHooksPlan,
   type HooksPlanContext,
@@ -42,6 +42,17 @@ function guardBody(p: CoreHooksPlan): string {
   const row = p.scripts.find((s) => s.path.endsWith(`/${GUARD}`));
   if (row === undefined) throw new Error("the plan carried no guard script");
   return row.content;
+}
+
+/**
+ * A script copy rendered for `.claude/hooks/stamity/`, with its one layout line put back in the generated
+ * layout: the folder segments its repository root is read from.
+ * (TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088): Claude's set is only the copies.)
+ */
+function asGenerated(body: string): string {
+  const claude = 'const ANCHOR_SEGMENTS = ["hooks",".claude"];';
+  expect(body.split(claude), "the copy carries no Claude anchor line").toHaveLength(2);
+  return body.replace(claude, 'const ANCHOR_SEGMENTS = ["hooks","generated",".stamity"];');
 }
 
 /**
@@ -214,38 +225,33 @@ interface PolicyDocument {
 }
 
 /**
- * The bundled ops pack's declared tool footprint, verbatim from
- * `packs/ops/pack.json`. `spawn` is in it deliberately: the footprint is what
- * bounds a grant, and neither ops agent declares `spawn`, so no emitted row may
- * carry it either.
+ * A made-up pack's declared tool footprint. `spawn` is in it deliberately: the
+ * footprint is what bounds a grant, and neither of its agents declares
+ * `spawn`, so no emitted row may carry it either.
+ *
+ * TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-PACK-023): the two agents
+ * were read from `packs/ops/agents/`, which retires with the `ops` pack. They are
+ * made up here in the shape the composer receives (`ResolvedPackContent.agents`):
+ * a runtime id, the pack id, the parsed frontmatter's `capabilities:` (the one key
+ * the grant reads) and the pack's footprint, the values the ops pair declared.
  */
-const OPS_FOOTPRINT = ["read", "edit", "execute", "network", "spawn"] as const;
+const MADE_UP_FOOTPRINT = ["read", "edit", "execute", "network", "spawn"] as const;
 
-/** Repo root, for reading the real first-party pack this suite composes rows from. */
+/** Repo root, for the cases that read a shipped file. */
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
-/**
- * The two ops-pack agents as the composer would hand them over: real files,
- * real frontmatter, real footprint. Reading the shipped pack rather than
- * inventing a fixture is what makes the grants asserted below the grants an
- * operator actually gets.
- */
-let opsAgents: PackAgentDeclaration[] = [];
+/** The made-up pack the two agents below come from. */
+const MADE_UP_PACK = "made-up-delivery";
 
-beforeAll(async () => {
-  opsAgents = await Promise.all(
-    ["stamity-devops", "stamity-incident-responder"].map(async (runtimeId) => {
-      const relPath = `packs/ops/agents/${runtimeId}.md`;
-      const raw = await readFile(`${REPO_ROOT}${relPath}`, "utf8");
-      return {
-        runtimeId,
-        packId: "ops",
-        frontmatter: parseFrontmatter(raw, relPath).frontmatter,
-        declaredTools: [...OPS_FOOTPRINT],
-      };
-    }),
-  );
-});
+/** Two agents of a made-up pack, as the composer would hand them over. */
+const madeUpAgents: readonly PackAgentDeclaration[] = ["stamity-made-up-deployer", "stamity-made-up-responder"].map(
+  (runtimeId) => ({
+    runtimeId,
+    packId: MADE_UP_PACK,
+    frontmatter: { id: runtimeId.slice("stamity-".length), type: "agent", capabilities: ["read", "edit", "execute"] },
+    declaredTools: [...MADE_UP_FOOTPRINT],
+  }),
+);
 
 /** One declaration literal, for the cases a synthetic pack expresses better than ops does. */
 function packAgent(
@@ -307,11 +313,9 @@ describe("core script rows", () => {
 
     // TEST CHANGE, justified (w6-claude-hooks-in-claude-dir, REQ-FLOW-113): Claude's set is planned twice, the
     // generated copies first and unchanged, then the copies its hook entries run under `.claude/hooks/stamity/`.
+    // TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088): Claude's set is planned once, as
+    // the copies under `.claude/hooks/stamity/`; its generated four are gone.
     expect(p.scripts.map((s) => s.path)).toEqual([
-      `${HOOKS_ROOT}/claude/${SESSION_START}`,
-      `${HOOKS_ROOT}/claude/${GUARD}`,
-      `${HOOKS_ROOT}/claude/${TAMPER}`,
-      `${HOOKS_ROOT}/claude/${PERSON_ONLY}`,
       `${CLAUDE_HOOKS_DIR}/${SESSION_START}`,
       `${CLAUDE_HOOKS_DIR}/${GUARD}`,
       `${CLAUDE_HOOKS_DIR}/${TAMPER}`,
@@ -322,10 +326,6 @@ describe("core script rows", () => {
       `${HOOKS_ROOT}/cursor/${PERSON_ONLY}`,
     ]);
     expect(p.scripts.map((s) => s.tool)).toEqual([
-      "claude",
-      "claude",
-      "claude",
-      "claude",
       "claude",
       "claude",
       "claude",
@@ -385,12 +385,16 @@ describe("core script rows", () => {
     expect(cursorGuard).toContain("carries no calling-agent");
 
     // The tool-independent bodies never fork per tool.
-    expect(scriptContent(p, "cursor", SESSION_START)).toBe(scriptContent(p, "claude", SESSION_START));
+    // TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088): Claude's session start is only the
+    // copy under `.claude/hooks/stamity/`, whose one difference is the folder its root is read from, so the copy
+    // with that line put back in the generated layout is the shared body, byte for byte.
+    expect(scriptContent(p, "cursor", SESSION_START)).toBe(asGenerated(scriptContent(p, "claude", SESSION_START)));
+    expect(scriptContent(p, "claude", SESSION_START)).not.toBe(scriptContent(p, "cursor", SESSION_START));
     // TEST CHANGE, justified (w4-copilot-ask, REQ-FLOW-123): Copilot's session start writes its main-session record,
     // which the person-only guard reads before it asks; with that write taken out it is the shared body, byte for byte.
     const copilotStart = scriptContent(p, "copilot", SESSION_START);
     expect(copilotStart).toContain("\nrecordMainSession(PAYLOAD);\n");
-    expect(withoutMainSessionRecord(copilotStart)).toBe(scriptContent(p, "claude", SESSION_START));
+    expect(withoutMainSessionRecord(copilotStart)).toBe(scriptContent(p, "cursor", SESSION_START));
     expect(scriptContent(p, "claude", SESSION_START)).not.toContain("recordMainSession");
     expect(scriptContent(p, "cursor", TAMPER)).toBe(scriptContent(p, "claude", TAMPER));
     expect(scriptContent(p, "copilot", TAMPER)).toBe(scriptContent(p, "claude", TAMPER));
@@ -412,10 +416,11 @@ describe("core script rows", () => {
 });
 
 // w6-claude-hooks-in-claude-dir (REQ-FLOW-113, REQ-FLOW-104): the Claude Code GitHub Action restores `.claude/`
-// from the base branch on a pull request, so Claude's hook entries run copies there; the generated copies stay.
+// from the base branch on a pull request, so Claude's hook entries run copies there. TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088):
+// they are Claude's only set; the generated layout they are compared against is another client's.
 describe("Claude's hook copies under .claude/hooks/stamity", () => {
   it("renders the copies for their own folder: the hook folder's anchor and the policy copy beside the guard", async () => {
-    const p = await plan(["claude"]);
+    const p = await plan(["claude", "codex"]);
     const copy = (file: string): string => {
       const row = p.scripts.find((s) => s.path === `${CLAUDE_HOOKS_DIR}/${file}`);
       expect(row, file).toBeDefined();
@@ -423,15 +428,20 @@ describe("Claude's hook copies under .claude/hooks/stamity", () => {
       return row!.content;
     };
 
+    expect(p.scripts.filter((s) => s.path.startsWith(`${HOOKS_ROOT}/claude/`))).toEqual([]);
     expect(policyFileSegments(copy(GUARD))).toEqual(["stamity-agent-tool-policies.json"]);
-    expect(policyFileSegments(scriptContent(p, "claude", GUARD))).toEqual(["..", "..", "agent-tool-policies.json"]);
+    expect(policyFileSegments(scriptContent(p, "codex", GUARD))).toEqual(["..", "..", "agent-tool-policies.json"]);
     for (const file of [SESSION_START, GUARD, PERSON_ONLY]) {
       expect(copy(file), file).toContain('const ANCHOR_SEGMENTS = ["hooks",".claude"];');
-      expect(scriptContent(p, "claude", file), file).toContain('const ANCHOR_SEGMENTS = ["hooks","generated",".stamity"];');
+    }
+    // A generated guard of a client whose payload names no agent renders no anchor (it has no path-scoped Write
+    // to scope), so the generated anchor is read off the two bodies every client's set carries it in.
+    for (const file of [SESSION_START, PERSON_ONLY]) {
+      expect(scriptContent(p, "codex", file), file).toContain('const ANCHOR_SEGMENTS = ["hooks","generated",".stamity"];');
     }
     // The guard copy keeps the path-scoped report Write, since its folder names the repository too.
     expect(copy(GUARD)).toContain("const WRITE_TOOL = ");
-    expect(copy(TAMPER)).toBe(scriptContent(p, "claude", TAMPER));
+    expect(copy(TAMPER)).toBe(scriptContent(p, "codex", TAMPER));
   });
 
   it("points Claude's portable rows at the copies, and leaves the other clients' rows where they were", async () => {
@@ -491,9 +501,17 @@ describe("policy document", () => {
     // places the document absolutely. Re-derive the climb from the emitted
     // bytes and walk it from the script's planned location — moving either
     // side without the other fails here.
-    const p = await plan(["claude", "codex"]);
+    // TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088): Claude's guard is only the copy,
+    // which reads the document's copy beside it (placed by the Claude adapter), so Claude's walk ends there.
+    const p = await plan(["claude", "codex", "cursor"]);
+    const expected: Record<Tool, string> = {
+      claude: `${CLAUDE_HOOKS_DIR}/${CLAUDE_HOOK_POLICIES_FILE}`,
+      codex: p.policyDocument.path,
+      cursor: p.policyDocument.path,
+      copilot: p.policyDocument.path,
+    };
 
-    for (const tool of ["claude", "codex"] as const) {
+    for (const tool of ["claude", "codex", "cursor"] as const) {
       const guardRow = p.scripts.find((s) => s.tool === tool && s.path.endsWith(`/${GUARD}`))!;
       const match =
         /^const POLICY_FILE = join\(dirname\(fileURLToPath\(import\.meta\.url\)\), (.+)\);$/m.exec(
@@ -503,7 +521,7 @@ describe("policy document", () => {
 
       const segments = JSON.parse(`[${match![1]!}]`) as string[];
       const resolved = posix.normalize(posix.join(posix.dirname(guardRow.path), ...segments));
-      expect(resolved, tool).toBe(p.policyDocument.path);
+      expect(resolved, tool).toBe(expected[tool]);
     }
   });
 
@@ -521,7 +539,9 @@ describe("policy document", () => {
     });
     expect(policyFileSegments(guardBody(plugin))).toEqual(["agent-tool-policies.json"]);
 
-    expect(policyFileSegments(guardBody(await plan(["claude"])))).toEqual([
+    // TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088): the repository climb is read off a
+    // generated guard, Claude's own repository guard being the copy that reads its sibling document.
+    expect(policyFileSegments(guardBody(await plan(["codex"])))).toEqual([
       "..",
       "..",
       "agent-tool-policies.json",
@@ -537,19 +557,19 @@ describe("policy document: installed-pack agent rows", () => {
     return planHooksInfra({ ...ctxFor(getRepo().dir, ["claude"]), packAgents });
   }
 
-  it("carries a row per ops-pack agent with the grant its frontmatter and footprint agree on", async () => {
+  it("carries a row per pack agent with the grant its frontmatter and footprint agree on", async () => {
     // Grant resolution, the emission half: without these rows the generated guard answers
-    // NO_POLICY for every agent the ops pack installed, and /st-release and
-    // /st-incident-response are inert on a repo that installed it cleanly.
-    const p = await planWithPackAgents(opsAgents);
+    // NO_POLICY for every agent the pack installed, and the pack's own commands are inert
+    // on a repo that installed it cleanly.
+    const p = await planWithPackAgents(madeUpAgents);
     const document = policyDoc(p);
 
-    for (const runtimeId of ["stamity-devops", "stamity-incident-responder"]) {
+    for (const runtimeId of ["stamity-made-up-deployer", "stamity-made-up-responder"]) {
       const row = document.policies.find((candidate) => candidate.agentId === runtimeId);
       expect(row, runtimeId).toBeDefined();
       expect(row?.allow, runtimeId).toEqual(["read", "edit", "execute"]);
-      expect(row?.source, runtimeId).toEqual({ kind: "pack", packId: "ops" });
-      expect(row?.rationale, runtimeId).toContain("ops");
+      expect(row?.source, runtimeId).toEqual({ kind: "pack", packId: MADE_UP_PACK });
+      expect(row?.rationale, runtimeId).toContain(MADE_UP_PACK);
     }
     expect(document.policies).toHaveLength(AGENT_POLICY_ROSTER.length + 2);
     expect(p.warnings).toEqual([]);
@@ -557,7 +577,7 @@ describe("policy document: installed-pack agent rows", () => {
 
   it("leaves every core row byte-identical when pack rows join the document", async () => {
     const withoutPacks = await plan(["claude"]);
-    const withPacks = await planWithPackAgents(opsAgents);
+    const withPacks = await planWithPackAgents(madeUpAgents);
 
     const core = policyDoc(withoutPacks).policies;
     const composed = policyDoc(withPacks).policies;
@@ -607,7 +627,7 @@ describe("policy document: installed-pack agent rows", () => {
     // becomes order-dependent. The pack's wider declaration is ignored and said
     // to be ignored.
     const p = await planWithPackAgents([
-      packAgent("stamity-reviewer", ["read", "edit", "execute"], ["read", "edit", "execute"], "ops"),
+      packAgent("stamity-reviewer", ["read", "edit", "execute"], ["read", "edit", "execute"], MADE_UP_PACK),
     ]);
     const document = policyDoc(p);
 
@@ -647,12 +667,12 @@ describe("policy document: installed-pack agent rows", () => {
     // A stale grant surviving uninstall is privilege that outlives its consent.
     // The composer stops handing the declaration over; the document reverts to
     // bytes identical to a repo that never installed the pack.
-    const installed = await planWithPackAgents(opsAgents);
+    const installed = await planWithPackAgents(madeUpAgents);
     const uninstalled = await planWithPackAgents([]);
     const neverInstalled = await plan(["claude"]);
 
-    expect(installed.policyDocument.content).toContain("stamity-devops");
-    expect(uninstalled.policyDocument.content).not.toContain("stamity-devops");
+    expect(installed.policyDocument.content).toContain("stamity-made-up-deployer");
+    expect(uninstalled.policyDocument.content).not.toContain("stamity-made-up-deployer");
     expect(uninstalled.policyDocument.content).toBe(neverInstalled.policyDocument.content);
   });
 
@@ -693,11 +713,11 @@ describe("policy document: installed-pack agent rows", () => {
   });
 
   it("is deterministic and order-independent across pack agent orderings", async () => {
-    const forward = await planWithPackAgents(opsAgents);
-    const reversed = await planWithPackAgents([...opsAgents].toReversed());
+    const forward = await planWithPackAgents(madeUpAgents);
+    const reversed = await planWithPackAgents([...madeUpAgents].toReversed());
 
     expect(reversed.policyDocument.content).toBe(forward.policyDocument.content);
-    expect(await planWithPackAgents(opsAgents)).toEqual(
+    expect(await planWithPackAgents(madeUpAgents)).toEqual(
       expect.objectContaining({ policyDocument: forward.policyDocument }),
     );
   });
@@ -799,8 +819,8 @@ describe("interchange rows", () => {
     const p = await plan(["claude"]);
     // TEST CHANGE, justified (w6-claude-hooks-in-claude-dir, REQ-FLOW-113): Claude's guard is placed twice, the
     // generated copy and the copy its hook entries run; still none for the clients left out.
+    // TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088): once, as the copy.
     expect(p.scripts.filter((s) => s.path.endsWith(`/${PERSON_ONLY}`)).map((s) => s.path)).toEqual([
-      `${HOOKS_ROOT}/claude/${PERSON_ONLY}`,
       `${CLAUDE_HOOKS_DIR}/${PERSON_ONLY}`,
     ]);
     expect(p.interchangeFor("cursor")).toEqual([]);
@@ -860,7 +880,8 @@ describe("interchange rows", () => {
     const p = await planHooksInfra({
       ...ctxFor(repo.dir, ["claude", "cursor"]),
       packHooks: {
-        hooks: [{ ...packRow, sourceFile: ".stamity/packs/ops/hooks/hooks.json" }],
+        // TEST CHANGE, justified (u5-hook-copies, REQ-PACK-023): an inline path, renamed off the retiring ops pack; no file is read.
+        hooks: [{ ...packRow, sourceFile: ".stamity/packs/made-up/hooks/hooks.json" }],
         errors: [],
       },
     });
@@ -1016,8 +1037,9 @@ describe("interchange rows", () => {
       packHooks: {
         hooks: [],
         errors: [
+          // TEST CHANGE, justified (u5-hook-copies, REQ-PACK-023): an inline path, renamed off the retiring ops pack; no file is read.
           {
-            file: ".stamity/packs/ops/hooks/hooks.json",
+            file: ".stamity/packs/made-up/hooks/hooks.json",
             code: "SHELL_FORM_COMMAND",
             message: "hooks[0]: command must be exec-form argv",
           },
@@ -1026,7 +1048,7 @@ describe("interchange rows", () => {
     });
 
     expect(p.warnings).toEqual([
-      "pack hook .stamity/packs/ops/hooks/hooks.json [SHELL_FORM_COMMAND]: " +
+      "pack hook .stamity/packs/made-up/hooks/hooks.json [SHELL_FORM_COMMAND]: " +
         "hooks[0]: command must be exec-form argv",
     ]);
     // A defective pack hook costs itself: the core rows still plan.
@@ -1227,7 +1249,8 @@ describe("determinism and purity", () => {
     // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102, build/44): four core scripts per tool.
     // TEST CHANGE, justified (w6-claude-hooks-in-claude-dir, REQ-FLOW-113): and Claude's four copies under
     // `.claude/hooks/stamity/` beside its generated four.
-    expect(ghostPlan.scripts).toHaveLength(12);
+    // TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088): Claude's four are the copies alone.
+    expect(ghostPlan.scripts).toHaveLength(8);
     expect(ghostPlan.warnings).toEqual([]);
     expect(existsSync(ghost)).toBe(false);
   });
@@ -1250,8 +1273,12 @@ describe("hookScriptsRoot: the client-visible root the plugin emission needs", (
     // TEST CHANGE, justified (w6-claude-hooks-in-claude-dir, REQ-FLOW-113): the repository plan also carries the
     // copies Claude's hook entries run under `.claude/hooks/stamity/`, which a container has no use for (its
     // scripts already sit together under its own root), so the comparison is over the generated rows.
+    // TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088): the repository plan carries Claude's
+    // set only as those copies, so the container's rows sit at the generated paths of the same file names, in
+    // the same order, where the plugin emitter copies them from.
+    expect(repo.scripts.every((s) => s.path.startsWith(`${CLAUDE_HOOKS_DIR}/`))).toBe(true);
     expect(plugin.scripts.map((s) => s.path)).toEqual(
-      repo.scripts.filter((s) => s.path.startsWith(`${HOOKS_ROOT}/`)).map((s) => s.path),
+      repo.scripts.map((s) => `${HOOKS_ROOT}/claude/${basename(s.path)}`),
     );
     // TEST CHANGE (SEC3-W1): the two bodies that read no policy document are
     // still byte-identical, and the GUARD deliberately is not — its single
@@ -1275,7 +1302,9 @@ describe("hookScriptsRoot: the client-visible root the plugin emission needs", (
     expect(pluginSession).not.toContain("import.meta.url");
     expect(repoSession).toContain("function derivedRoot()");
     expect(policyFileSegments(pluginGuard!)).toEqual(["agent-tool-policies.json"]);
-    expect(policyFileSegments(repoGuard!)).toEqual(["..", "..", "agent-tool-policies.json"]);
+    // TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088): the repository guard is the copy,
+    // which reads the document's copy beside it rather than climbing to the shared one.
+    expect(policyFileSegments(repoGuard!)).toEqual(["stamity-agent-tool-policies.json"]);
     // TEST CHANGE 2026-09-24 (the path-scoped report Write), justified: the
     // repository guard now also renders the path-scoped report `Write` — its
     // header lines, imported names, helpers and branch — and the container

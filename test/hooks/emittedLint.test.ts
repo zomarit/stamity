@@ -116,7 +116,10 @@ describe("emitted scripts pass the project's own lint gate (REQ-FLOW-001)", () =
     // present, so a builder that stopped emitting would shrink a group to zero
     // rather than slip past a typed total.
     for (const tool of TOOLS) {
-      const hookScripts = scripts.filter((path) => path.startsWith(`.stamity/generated/hooks/${tool}/`));
+      // TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088): Claude Code's scripts are the copies
+      // under `.claude/hooks/stamity/`; its generated folder is no longer written.
+      const folder = tool === "claude" ? ".claude/hooks/stamity/" : `.stamity/generated/hooks/${tool}/`;
+      const hookScripts = scripts.filter((path) => path.startsWith(folder));
       expect(hookScripts.length, tool).toBeGreaterThanOrEqual(4);
     }
     expect(scripts.filter((path) => path.startsWith(".cursor/hooks/")).length).toBeGreaterThanOrEqual(2);

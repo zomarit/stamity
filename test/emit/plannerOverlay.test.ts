@@ -60,7 +60,13 @@ const ENGINE_VERSION = "0.0.0-test";
 
 /** Core rows the cases below read out of a plan. */
 const POLICY_DOC = ".stamity/generated/agent-tool-policies.json";
-const CLAUDE_GUARD = ".stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs";
+/**
+ * TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088): Claude Code's guard is only the copy
+ * under `.claude/hooks/stamity/`, which reads the document's copy beside it. The Claude adapter places that copy,
+ * the core document byte for byte, so the cases that run the guard compose with the adapters.
+ */
+const CLAUDE_GUARD = ".claude/hooks/stamity/stamity-pre-tool-use-guard.mjs";
+const CLAUDE_GUARD_POLICY = ".claude/hooks/stamity/stamity-agent-tool-policies.json";
 
 /** A bundled rule every client emits with no `tools:` limit — the override takes its id. */
 const SHADOWED_RULE_ID = "testing";
@@ -225,7 +231,7 @@ async function placeAndRunGuard(
 ): Promise<GuardResult> {
   const repo = getRepo();
   await Promise.all(
-    [POLICY_DOC, CLAUDE_GUARD].map(async (path) => {
+    [CLAUDE_GUARD_POLICY, CLAUDE_GUARD].map(async (path) => {
       const target = join(repo.dir, path);
       await mkdir(dirname(target), { recursive: true });
       await writeFile(target, contentOf(plan, path), "utf8");
@@ -260,10 +266,12 @@ describe("pack agents in the emitted policy document", () => {
     );
     const manifest = await installPack(packDir, manifestFor(["claude"]));
 
-    // Core-only composition: the policy document is a shared CORE row, so no
-    // adapter participates in producing it.
-    const plan = await composeEmissionPlanner({}).plan(ctxOf(manifest));
+    // The policy document is a shared CORE row, so no adapter participates in
+    // producing it. TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088): the plan is composed
+    // with the adapters, whose Claude half places the copy the guard reads, the same bytes.
+    const plan = await composeEmissionPlanner(ADAPTER_REGISTRY).plan(ctxOf(manifest));
     const document = JSON.parse(contentOf(plan, POLICY_DOC)) as PolicyDocument;
+    expect(contentOf(plan, CLAUDE_GUARD_POLICY)).toBe(contentOf(plan, POLICY_DOC));
 
     const row = document.policies.find((entry) => entry.agentId === AGENT_ID);
     expect(row?.allow, AGENT_ID).toEqual(["read", "execute"]);
@@ -321,8 +329,10 @@ describe("pack agents in the emitted policy document", () => {
   it("emits the shipped roster alone when no pack is installed", async () => {
     // The other half of the pairing: the hand-off adds rows for installs and
     // invents none, so a pack-free repo's document is exactly the roster.
-    const plan = await composeEmissionPlanner({}).plan(ctxOf(manifestFor(["claude"])));
+    // TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088): composed with the adapters, as above.
+    const plan = await composeEmissionPlanner(ADAPTER_REGISTRY).plan(ctxOf(manifestFor(["claude"])));
     const document = JSON.parse(contentOf(plan, POLICY_DOC)) as PolicyDocument;
+    expect(contentOf(plan, CLAUDE_GUARD_POLICY)).toBe(contentOf(plan, POLICY_DOC));
 
     expect(document.policies.some((entry) => entry.source !== undefined)).toBe(false);
     expect(document.policies.map((entry) => entry.agentId)).toContain("stamity-reviewer");

@@ -462,7 +462,8 @@ describe("a renamed fork's emission", () => {
         [
           "AGENTS.md",
           ".codex/hooks.json",
-          ".stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs",
+          // TEST CHANGE, justified (u5-hook-copies, REQ-FLOW-088): Claude's notice is the copy under `.claude/hooks/stamity/`.
+          ".claude/hooks/stamity/stamity-config-tamper-notice.mjs",
           ".claude/settings.json",
           // TEST CHANGE, justified: REQ-FLOW-038 — the guards carry the stamity- prefix
           ".cursor/hooks/stamity-mcp-guard.mjs",

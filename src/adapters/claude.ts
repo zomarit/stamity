@@ -65,13 +65,15 @@
  *    engine one among them, …) is kept as it is. A `permissions` that is not an
  *    object, or an `allow`, `deny` or `ask` that is not an array, collides on both
  *    routes (`../manifest/claudeSettings.ts`).
- * 7. **The work-scoped review gate** ({@link CLAUDE_REVIEW_GATE_PATH}) and the
- *    **unattended ask gate** ({@link CLAUDE_ASK_GATE_PATH}) beside the core hook
- *    scripts. Adapter-owned rather than core, because the review gate rides two
- *    events only this client fires ({@link REVIEW_GATE_EVENTS}) and the ask
- *    gate this client's question tool; and the **cloud readiness hook**
- *    ({@link CLAUDE_CLOUD_READINESS_PATH}), which rides this client's
- *    `SessionStart` with a source matcher and a timeout of its own.
+ * 7. **The work-scoped review gate** ({@link CLAUDE_HOOK_REVIEW_GATE_PATH}) and
+ *    the **unattended ask gate** ({@link CLAUDE_HOOK_ASK_GATE_PATH}) beside the
+ *    core hook scripts. Adapter-owned rather than core, because the review gate
+ *    rides two events only this client fires ({@link REVIEW_GATE_EVENTS}) and
+ *    the ask gate this client's question tool; and the **cloud readiness hook**
+ *    ({@link CLAUDE_HOOK_CLOUD_READINESS_PATH}), which rides this client's
+ *    `SessionStart` with a source matcher and a timeout of its own. In a
+ *    container (`hookScriptsRoot` set) the three are placed at their generated
+ *    paths ({@link CLAUDE_REVIEW_GATE_PATH} and its two siblings) instead.
  * 8. **The MCP documents the core planned for this client**, placed verbatim.
  *
  * **No tool is pre-approved.** The settings document's `permissions` member
@@ -222,25 +224,31 @@ export const CLAUDE_COMMANDS_DIR = ".claude/commands";
 export const CLAUDE_SETTINGS_PATH = ".claude/settings.json";
 
 /**
- * The work-scoped review gate, placed beside the three core hook scripts under
- * the per-tool generated hooks directory. Adapter-owned: `planCoreHookScripts`
- * deliberately does not return it, because it rides events only this client
- * fires, so the client that wires those events is the one that places it.
+ * The work-scoped review gate's generated path, under the per-tool generated
+ * hooks directory: written only in the container layout (`hookScriptsRoot`
+ * set), where the vendor container copies it from here. The repository layout
+ * places {@link CLAUDE_HOOK_REVIEW_GATE_PATH} alone (REQ-FLOW-088), and a copy
+ * a release up to 1.16.0 wrote here leaves through `sync`'s reclaim sweep.
+ * Adapter-owned: `planCoreHookScripts` deliberately does not return it, because
+ * it rides events only this client fires, so the client that wires those
+ * events is the one that places it.
  */
 export const CLAUDE_REVIEW_GATE_PATH = `${HOOKS_GENERATED_DIR}/${TOOL}/${REVIEW_GATE_FILE}`;
 
 /**
- * The unattended ask gate (REQ-FLOW-090), placed beside the review gate and for
- * the same reason: it rides this client's question tool alone, so the adapter
- * that wires it places it (`planCoreHookScripts` does not return it).
+ * The unattended ask gate's generated path (REQ-FLOW-090), beside the review
+ * gate's, written in the container layout alone and for the same reason: it
+ * rides this client's question tool alone, so the adapter that wires it places
+ * it (`planCoreHookScripts` does not return it).
  */
 export const CLAUDE_ASK_GATE_PATH = `${HOOKS_GENERATED_DIR}/${TOOL}/${UNATTENDED_ASK_GATE_FILE}`;
 
 /**
- * Claude Code's cloud readiness hook (REQ-FLOW-110), placed beside the ask gate
- * and for the same reason: it rides this client's `SessionStart` with a source
- * matcher and a budget of its own, so the adapter that wires it places it
- * (`planCoreHookScripts` does not return it).
+ * Claude Code's cloud readiness hook's generated path (REQ-FLOW-110), beside the
+ * ask gate's, written in the container layout alone and for the same reason: it
+ * rides this client's `SessionStart` with a source matcher and a budget of its
+ * own, so the adapter that wires it places it (`planCoreHookScripts` does not
+ * return it).
  */
 export const CLAUDE_CLOUD_READINESS_PATH = `${HOOKS_GENERATED_DIR}/${TOOL}/${CLOUD_READINESS_FILE}`;
 
@@ -256,9 +264,9 @@ export const CLAUDE_CLOUD_READINESS_PATH = `${HOOKS_GENERATED_DIR}/${TOOL}/${CLO
  * it on the project folder), so the pull request supplies that script. The
  * core's four copies are planned by `../emit/hooksInfra.ts`; these are the
  * adapter's three, each rendered for that folder (the `claude` placement), and
- * the policy document's copy. The generated copies above are still placed, byte
- * for byte, for the manual session-start run the charter names; no entry runs
- * them.
+ * the policy document's copy. In the repository layout they are the only copies
+ * (REQ-FLOW-088): the manual session-start run the charter's invariant 5 names
+ * runs the copy here, so the generated paths above are no longer written there.
  */
 
 /** The review gate's copy the `TaskCompleted` and `SubagentStop` entries run. */
@@ -610,11 +618,13 @@ export const claudeResiduePlanner: ResiduePlanner = {
       content: buildSettingsJson(core, cliCallContextOf(ctx), ctx.facts.hookScriptsRoot),
       owner: owner("claude-settings", "infra"),
     });
-    // The generated copies, then (repository layout only) the copies the
-    // entries run under `.claude/hooks/stamity/` and the policy document's copy.
-    const generated = ctx.facts.hookScriptsRoot === undefined ? "generated" : "container";
-    rows.push(...adapterScripts(ctx, generated, { review: CLAUDE_REVIEW_GATE_PATH, ask: CLAUDE_ASK_GATE_PATH, readiness: CLAUDE_CLOUD_READINESS_PATH }, ""));
-    if (ctx.facts.hookScriptsRoot === undefined) {
+    // A container keeps the three at their generated paths, for the container
+    // to copy; the repository layout writes only the copies the entries run
+    // under `.claude/hooks/stamity/` and the policy document's copy
+    // (REQ-FLOW-088): an old generated copy leaves through the reclaim sweep.
+    if (ctx.facts.hookScriptsRoot !== undefined) {
+      rows.push(...adapterScripts(ctx, "container", { review: CLAUDE_REVIEW_GATE_PATH, ask: CLAUDE_ASK_GATE_PATH, readiness: CLAUDE_CLOUD_READINESS_PATH }, ""));
+    } else {
       rows.push(
         ...adapterScripts(
           ctx,
@@ -923,8 +933,8 @@ function buildReviewGate(ctx: EmissionContext, path: string, layout: HookScriptL
       failMode: HOOK_GUARANTEE?.failMode ?? "fail-closed",
       // The gate's own repo-root resolver, decided by the caller because that is
       // where the placement is known: in repository mode the file lands under
-      // `.stamity/generated/hooks/claude/` or `.claude/hooks/stamity/` and its own
-      // location identifies the root, and under a plugin root the vendor's own
+      // `.claude/hooks/stamity/` and its own location identifies the root, and
+      // under a plugin root the vendor's own
       // `hooks/` directory names no repository, so that body keeps the
       // cwd-and-environment resolver.
       layout,

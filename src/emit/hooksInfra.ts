@@ -13,10 +13,11 @@
  *    per-tool because the guard body bakes the client's honest fail mode from
  *    `CLIENT_HOOK_GUARANTEES`; tools whose guarantees agree produce identical
  *    bytes, and the layout still keeps them apart so a future divergence is a
- *    content change, not a path migration. Claude Code's set is planned twice:
- *    the generated copies, byte for byte as before, and the copies its hook
+ *    content change, not a path migration. Claude Code's set is the exception
+ *    in the repository layout: it is planned only as the copies its hook
  *    entries run under {@link CLAUDE_HOOKS_DIR} (REQ-FLOW-113), rendered for
- *    that folder ({@link CLAUDE_COPY_PLACEMENT}).
+ *    that folder ({@link CLAUDE_COPY_PLACEMENT}), and no longer under
+ *    {@link HOOKS_GENERATED_DIR} (REQ-FLOW-088).
  * 2. **The policy document** — one `agent-tool-policies.json` serialized from
  *    the shipped roster PLUS a row per installed-pack agent handed in as
  *    {@link HooksPlanContext.packAgents}, placed beside the per-tool script
@@ -146,10 +147,12 @@ export const CLAUDE_HOOK_POLICIES_FILE = `${CONTENT_PREFIX}${AGENT_TOOL_POLICIES
  * document's copy beside it (the sibling name), which the Claude adapter places
  * there for the same reason (`../adapters/claude.ts`), and every copy names its
  * repository from the hook folder's parents (`claude` placement,
- * `../hooks/scripts.ts`). The generated copies under
- * `.stamity/generated/hooks/claude/` are still planned, byte for byte, for the
- * manual session-start run the charter's invariant 5 names; no hook entry runs
- * them.
+ * `../hooks/scripts.ts`). These are the only copies of Claude Code's set in
+ * that layout (REQ-FLOW-088): the generated ones under
+ * `.stamity/generated/hooks/claude/` are no longer planned, since the manual
+ * session-start run the charter's invariant 5 names runs the client's own copy
+ * here, and the stopped ledger rows leave through `sync`'s reclaim sweep (an
+ * unedited copy removed by its recorded hash, an edited one kept and named).
  *
  * Only in the repository layout: a container (`hookScriptsRoot` set) already
  * keeps its scripts beside one another under its own root.
@@ -500,21 +503,17 @@ export async function planHooksInfra(ctx: HooksPlanContext): Promise<CoreHooksPl
     const rows: HookInterchange[] = [];
     // The person-only guard is asked for on every selected client, with no
     // switch: it is the floor an unattended run's pushes stand on (build/44).
-    const planned = planCoreHookScripts(policiesPathFor(ctx.hookScriptsRoot), tool, {
-      ...cliCallContextOf(ctx),
-      personOnlyGuard: true,
-    });
-    for (const script of planned) scripts.push({ path: `${HOOKS_GENERATED_DIR}/${tool}/${script.fileName}`, content: script.content, tool });
     // Claude Code's hook entries run the copies under `.claude/hooks/stamity/`
-    // (CLAUDE_COPY_PLACEMENT); every other client runs its generated set.
+    // (CLAUDE_COPY_PLACEMENT), its only set in the repository layout; every
+    // other client, and every client in a container, runs its generated set.
     const copy = tool === "claude" && ctx.hookScriptsRoot === undefined ? CLAUDE_COPY_PLACEMENT : undefined;
     const run =
       copy === undefined
-        ? planned
+        ? planCoreHookScripts(policiesPathFor(ctx.hookScriptsRoot), tool, { ...cliCallContextOf(ctx), personOnlyGuard: true })
         : planCoreHookScripts(copy.policiesPath, tool, { ...cliCallContextOf(ctx), personOnlyGuard: true, layout: copy.layout });
     for (const script of run) {
       const path = copy === undefined ? `${HOOKS_GENERATED_DIR}/${tool}/${script.fileName}` : `${copy.dir}/${script.fileName}`;
-      if (copy !== undefined) scripts.push({ path, content: script.content, tool });
+      scripts.push({ path, content: script.content, tool });
       const shellGuard = script.fileName === PERSON_ONLY_GUARD_FILE;
       const matcher = shellGuard ? SHELL_GUARD_MATCHERS[tool] : undefined;
       // Cursor's copy is placed but carries no portable row (see the table).
