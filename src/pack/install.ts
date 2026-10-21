@@ -828,7 +828,7 @@ async function collectCollisions(
   const owner = packOwner(packId);
   const foreign = ledger.filter((entry) => !isOwnedByPack(entry, owner));
   const claimedPaths = new Map(foreign.map((entry) => [entry.path, entry]));
-  const claimedIds = claimedCatalogIds(foreign);
+  const claimedIds = claimedCatalogIds(foreign, layers);
   const plannedIds = new Map(
     artifacts
       .filter((artifact) => artifact.catalogKey !== null)
@@ -899,6 +899,8 @@ interface ExistingLayers {
    * `corpus` until {@link collectNameClashes} restamps them.
    */
   overrides: ContentIndex;
+  /** The other installed packs whose directories `shipped` walked, by pack id. */
+  indexedPacks: ReadonlySet<string>;
 }
 
 /**
@@ -950,7 +952,7 @@ async function readExistingLayers(
     buildContentIndex({ packRoots: others }),
     buildContentIndex({ root: userContentRoot(rootDir) }),
   ]);
-  return { shipped, overrides };
+  return { shipped, overrides, indexedPacks: new Set(others.map((other) => other.pack)) };
 }
 
 /**
@@ -1093,19 +1095,39 @@ function splitKey(key: string): [string, string] {
  *   the predecessor could never match: it compared them against a PREFIXED
  *   filename stem, and no corpus row is spelled that way.
  * - **Another installed pack's content.** Those rows are `artifactType:
- *   "infra"` with `artifactId: "<pack id>/<pack-relative path>"`, so the id is
- *   re-derived from the path. The declared `id:` inside that pack's file is not
- *   read — it is another pack's bytes, and reading them to answer this question
- *   would put an unbounded read behind every install. The filename slug is what
- *   the vast majority of packs declare anyway, and the content walk refuses the
- *   remainder on contact (`../content/catalog.ts`), so the residue is a
- *   refusal one step later rather than a silent shadow.
+ *   "infra"` with `artifactId: "<pack id>/<pack-relative path>"`. When that
+ *   pack's directory is one {@link readExistingLayers} walked, the id is the
+ *   one the walk registered the file under — its declared `id:`, as `sync`
+ *   reads it — and a file the walk registered nothing for (a README, a skill's
+ *   support file) claims no id. Reading the filename slug there instead made
+ *   pack A's `agents/x.md` declaring `y` refuse pack B's `x`, a refusal no
+ *   layer backs and `sync` does not clear. A pack whose directory is gone has
+ *   no file to read, so its id is re-derived from the path's slug.
  */
-function claimedCatalogIds(foreign: readonly LedgerEntry[]): Map<string, LedgerEntry> {
+function claimedCatalogIds(
+  foreign: readonly LedgerEntry[],
+  layers: ExistingLayers,
+): Map<string, LedgerEntry> {
+  const indexedIds = new Map<string, string>();
+  for (const item of layers.shipped.items) {
+    if (item.provenance === undefined) continue;
+    indexedIds.set(
+      packArtifactId(item.provenance.pack, item.relativePath),
+      typeIdKey(item.type, item.id),
+    );
+  }
   const claimed = new Map<string, LedgerEntry>();
   for (const entry of foreign) {
     if ((CONTENT_CLASSES as readonly string[]).includes(entry.artifactType)) {
       claimed.set(typeIdKey(entry.artifactType as ContentClass, entry.artifactId), entry);
+      continue;
+    }
+    if (
+      isPackOwner(entry.adapter) &&
+      layers.indexedPacks.has(entry.adapter.slice(PACK_OWNER_PREFIX.length))
+    ) {
+      const key = indexedIds.get(entry.artifactId);
+      if (key !== undefined) claimed.set(key, entry);
       continue;
     }
     const slash = entry.artifactId.indexOf("/");

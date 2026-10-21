@@ -502,6 +502,43 @@ describe("planPackInstall", () => {
     expect(result.collisions[0]).toContain("other/agents/stamity-reviewer.md");
   });
 
+  describe("another installed pack whose directory is on disk", () => {
+    // Pack `other` ships `agents/x.md` declaring `id: y`. Its catalog id is
+    // `agent:y`, the id `sync`'s walk registers it under; the file name's slug
+    // `x` is not an id that pack holds.
+    const otherRow: LedgerEntry = {
+      path: ".stamity/packs/other/agents/x.md",
+      adapter: packOwner("other"),
+      artifactId: "other/agents/x.md",
+      artifactType: "infra",
+    };
+
+    async function seedOther(): Promise<void> {
+      const project = getProject();
+      await project.seedFiles({
+        [otherRow.path]: `---\nid: y\ntype: agent\n---\nThe other pack's agent.\n`,
+      });
+      await writeManifest(project.dir, projectManifest([otherRow]), { now: FIXED_NOW });
+    }
+
+    it("does not refuse an id matching only the other file's name", async () => {
+      await seedOther();
+      await seedPack({ content: { "agents/x.md": `---\nid: x\ntype: agent\n---\nBody.\n` } });
+
+      expect((await plan()).collisions).toEqual([]);
+    });
+
+    it("refuses the id the other file declares, as an id collision", async () => {
+      await seedOther();
+      await seedPack({ content: { "agents/z.md": `---\nid: y\ntype: agent\n---\nBody.\n` } });
+
+      expect((await plan()).collisions).toEqual([
+        `agents/z.md: agent id "y" is already owned by other/agents/x.md at ` +
+          `.stamity/packs/other/agents/x.md; installing it would shadow content this repo already has`,
+      ]);
+    });
+  });
+
   it("reports a stray file at a target path no ledger row of the pack owns", async () => {
     const project = getProject();
     await seedPack();
