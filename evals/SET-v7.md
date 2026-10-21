@@ -3501,7 +3501,7 @@ and 51 stay as recorded. Run 47's four other repeats, `agent-design-quality-retu
 this renumbering, its text unchanged) and `work-security-lens-auth-path-change:A1`, are outside
 these dispositions and stay open.
 
-**The two UI skills moved to the `frontend` pack, 2026-10-21 (REQ-PACK-008, plan 018 unit u13).**
+**The two UI skills moved to the `frontend` pack, 2026-10-21 (REQ-PACK-007; the probe re-source REQ-PACK-013; plan 018 unit u13).**
 `st-design-system-detect` and `st-browser-evidence` left `content/skills/` for
 `packs/frontend/skills/`, byte-identical but for a `description` cut to 250 characters or fewer.
 `probe-design-system-detect-select` and `probe-browser-evidence-select` re-source to

@@ -71,7 +71,7 @@ const AGENT_CENSUS: readonly string[] = [
  * u9-unattended-skill): the skill an unattended run is sent to by name, so the
  * roster, its count word and the length assertion below move together.
  * `browser-evidence` and `design-system-detect` left for the `frontend` pack
- * (plan 018, u13-frontend-move, REQ-PACK-008), nine to seven.
+ * (plan 018, u13-frontend-move, REQ-PACK-007), nine to seven.
  */
 const SKILL_CENSUS: readonly string[] = [
   "onboard",
@@ -192,7 +192,7 @@ describe("census — shipped corpus", () => {
   // TEST CHANGE, justified (u9-unattended-skill, 2026-10-15): the roster gained the
   // ninth skill, `unattended`; the title's count word and the length move with it.
   // TEST CHANGE, justified (u13-frontend-move, plan 018): browser-evidence and
-  // design-system-detect moved to the frontend pack (REQ-PACK-008), so the core
+  // design-system-detect moved to the frontend pack (REQ-PACK-007), so the core
   // roster is seven; the title's count word and the length move with it.
   it("skills: exactly the seven procedures", async () => {
     const ids = await idsOf("skill");

@@ -2468,7 +2468,7 @@ describe("the shipped Codex emission under ruleDelivery: on-demand", () => {
     // What the client shows: the 15 rows of the full selection, no touchpoint
     // among them, and a total strictly below the whole tree's.
     // TEST CHANGE, justified (u13-frontend-move, plan 018): design-system-detect and
-    // browser-evidence left the core for the frontend pack (REQ-PACK-008), so the core
+    // browser-evidence left the core for the frontend pack (REQ-PACK-007), so the core
     // ships 6 shown skills beside the 9 rule-skills, 15 rows where the 2026-10-03
     // measurement read 17.
     const shownDirs = shown

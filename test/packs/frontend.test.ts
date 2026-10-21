@@ -17,6 +17,7 @@ import {
   walkAllMarkdown,
   type CorpusFile,
 } from "../corpus/harness.ts";
+import { TRIGGER_DOMAINS } from "../corpus/skills/triggerDomains.ts";
 
 /**
  * The `frontend` pack (plan 018, u13-frontend-move; REQ-PACK-007): the two interface skills,
@@ -32,8 +33,10 @@ import {
  *     installing, design-system-detect not electing a token source. Deleting the sentence deletes
  *     the behavior, so the sentences are asserted.
  *   - **Anti-shadowing.** With the pack installed, its descriptions sit in one list with the
- *     core's. Distinctive nouns are declared per skill and asserted in both directions, and each
- *     pack skill's trigger phrase appears in no core skill's description.
+ *     core's. Distinctive nouns are declared per skill and asserted in both directions, each
+ *     pack skill's trigger phrase appears in no core skill's description, each core trigger
+ *     phrase (`test/corpus/skills/triggerDomains.ts`, the table the core roster reads) appears
+ *     in neither pack description, and the nine descriptions open on nine different verbs.
  *
  * Prose assertions run against a whitespace-flattened view ({@link flow}) so a reflowed paragraph
  * is not a failure; structural assertions (headings, caps) run against the raw body.
@@ -321,6 +324,37 @@ describe("frontend skills — anti-shadowing on the trigger surface", () => {
         );
       }
     }
+  });
+
+  // review/25: the reverse direction the moved roster rows carried in flow.test.ts.
+  it("names no core skill's trigger phrase in either pack description", async () => {
+    const coreSkills = (await coreFiles).filter((file) => /^skills\/[^/]+\/SKILL\.md$/.test(file.relPath));
+    // Non-degenerate and drift-proof: the table names exactly the core's skills, so a new core
+    // skill without a row fails here before it can share a trigger with a pack skill.
+    expect(TRIGGER_DOMAINS.map((row) => row.relPath).toSorted()).toEqual(
+      coreSkills.map((file) => file.relPath).toSorted(),
+    );
+
+    const own = await Promise.all(SKILLS.map((skill) => load(skill.relPath)));
+    for (const [index, skill] of SKILLS.entries()) {
+      const text = description(own[index]!);
+      for (const row of TRIGGER_DOMAINS) {
+        expect(text, `${skill.id} borrows ${row.id}'s trigger domain`).not.toMatch(row.phrase);
+      }
+    }
+  });
+
+  it("opens the seven core and two pack descriptions on nine different verbs", async () => {
+    const files = [
+      ...(await Promise.all(TRIGGER_DOMAINS.map((row) => loadCore(row.relPath)))),
+      ...(await Promise.all(SKILLS.map((skill) => load(skill.relPath)))),
+    ];
+    const leading = files.map((file) => description(file).split(/\s+/)[0]!.toLowerCase());
+
+    // The word a matcher reads first. Two skills opening on one verb compete for the same
+    // trigger, and only one of them ever wins.
+    expect(leading).toHaveLength(TRIGGER_DOMAINS.length + SKILLS.length);
+    expect(new Set(leading).size, `shared opening verb in ${leading.join(", ")}`).toBe(leading.length);
   });
 });
 

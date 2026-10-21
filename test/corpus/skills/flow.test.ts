@@ -43,6 +43,7 @@ import {
   type CorpusFile,
 } from "../harness.ts";
 import { useTempDir } from "../../support/tempDir.ts";
+import { TRIGGER_DOMAINS } from "./triggerDomains.ts";
 
 /** Repo root, for the engine sources this suite reads as prose. */
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
@@ -150,28 +151,8 @@ const SKILLS: readonly FlowSkill[] = [
   },
 ];
 
-/**
- * The trigger domain each of the SEVEN shipped skills owns exclusively — one
- * phrase per skill that appears in its own description and in no other's.
- *
- * The four-skill cases below hold the flow lane apart; this table is the wider
- * anti-shadowing property, and it is the one the redesigned onboard has to
- * clear: its trigger domain is "the first run in a repo that was just set up",
- * which sits next to the work touchpoint and the QA lane and must not overlap
- * either. A phrase that leaks into a second description makes the two skills
- * compete for one trigger, and the loser is silently never invoked.
- */
-const TRIGGER_DOMAINS: readonly { id: string; relPath: string; phrase: RegExp }[] = [
-  { id: "onboard", relPath: "skills/st-onboard/SKILL.md", phrase: /first proven change/i },
-  { id: "handoff", relPath: "skills/st-handoff/SKILL.md", phrase: /handoff/i },
-  { id: "qa", relPath: "skills/st-qa/SKILL.md", phrase: /walk-through/i },
-  { id: "verify", relPath: "skills/st-verify/SKILL.md", phrase: /content-quality axis/i },
-  { id: "dep-audit", relPath: "skills/st-dep-audit/SKILL.md", phrase: /dependency audit/i },
-  { id: "learn", relPath: "skills/st-learn/SKILL.md", phrase: /learnings/i },
-  // Added 2026-10-15 (u9-unattended-skill): the ninth skill, called by name from a run whose
-  // record reads `Mode: unattended`; no other description may name an unattended run.
-  { id: "unattended", relPath: "skills/st-unattended/SKILL.md", phrase: /unattended/i },
-];
+// TRIGGER_DOMAINS, the seven core skills' exclusive trigger phrases, lives in ./triggerDomains.ts,
+// which test/packs/frontend.test.ts reads too (u13-frontend-move, review/25).
 
 /**
  * Literal verification commands a body must never hard-code. A pinned runner
@@ -273,9 +254,10 @@ describe("flow skills — frontmatter contract", () => {
 // TEST CHANGE, justified (u9-unattended-skill, 2026-10-15): the roster holds nine skills now;
 // the titles' count word follows TRIGGER_DOMAINS, whose rows are what the cases read.
 // TEST CHANGE, justified (u13-frontend-move, plan 018): browser-evidence and
-// design-system-detect left the core for the frontend pack (REQ-PACK-008), so the roster
-// holds seven; their two rows, checked against every core description, moved to
-// test/packs/frontend.test.ts.
+// design-system-detect left the core for the frontend pack (REQ-PACK-007), so the roster
+// holds seven; their two rows moved to test/packs/frontend.test.ts, which keeps both
+// directions: each pack phrase out of every core description, each phrase of this table out
+// of both pack descriptions, and the seven core verbs and the two pack verbs all different.
 describe("skill roster — anti-shadowing across all seven descriptions", () => {
   it("gives every skill an exclusive trigger domain", async () => {
     const files = await Promise.all(TRIGGER_DOMAINS.map((row) => load(row.relPath)));

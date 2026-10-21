@@ -50,7 +50,7 @@ const GHOST_ROOT = join(tmpdir(), `stamity-p4u02-ghost-${process.pid}`);
 
 /** Every shipped skill id, as authored in the bundled corpus's frontmatter. */
 // TEST CHANGE, justified (u13-frontend-move, plan 018): browser-evidence and design-system-detect
-// moved to the frontend pack (REQ-PACK-008), so the bundled corpus projects six of these, not eight.
+// moved to the frontend pack (REQ-PACK-007), so the bundled corpus projects six of these, not eight.
 const ALL_SKILL_IDS = [
   "dep-audit",
   "handoff",

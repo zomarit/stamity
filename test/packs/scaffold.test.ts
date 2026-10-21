@@ -734,7 +734,7 @@ describe("scaffold pack — generator contract", () => {
 describe("scaffold pack — reference hygiene", () => {
   it("every cross-reference resolves to a live core or pack artifact", async () => {
     // TEST CHANGE, justified (u13-frontend-move, plan 018): st-design-system-detect, which
-    // design-system-create names, moved from the core to the frontend pack (REQ-PACK-008), so the
+    // design-system-create names, moved from the core to the frontend pack (REQ-PACK-007), so the
     // resolver reads the core and every bundled pack, not the core and this pack alone.
     const everyPack = await bundledPackFiles;
     expect(everyPack.some((file) => file.relPath === "skills/st-design-system-detect/SKILL.md")).toBe(true);

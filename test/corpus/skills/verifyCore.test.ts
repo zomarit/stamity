@@ -289,7 +289,7 @@ const OWNED_FILES: readonly string[] = [SKILL_PATH, ...OWNED_AXES.map(referenceP
 
 /** Every shipped skill id, so the projection case runs over the whole tree. */
 // TEST CHANGE, justified (u13-frontend-move, plan 018): browser-evidence and design-system-detect
-// moved to the frontend pack (REQ-PACK-008) and are no longer core skills, eight ids to six.
+// moved to the frontend pack (REQ-PACK-007) and are no longer core skills, eight ids to six.
 const PROJECTED_SKILL_IDS: readonly string[] = [
   "dep-audit",
   "handoff",
