@@ -105,3 +105,9 @@ A retiring pack; no case was ever written; plan 018 file 2 deletes it. Trigger: 
 
 A retiring pack; no case was ever written; plan 018 file 2 deletes it. Trigger: the deletion of
 `packs/scaffold/`.
+
+### `packs/frontend/commands/st-ui-review.md`
+
+Added 2026-10-21 by plan 018 file 2, unit `u3-frontend-set`, with the command; its cases land in
+a later wave of the same plan. Trigger: unit `u15-frontend-plain-cases` adds the cases sourcing
+it and removes this row.

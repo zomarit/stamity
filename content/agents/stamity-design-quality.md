@@ -158,19 +158,19 @@ run.
 
 ## Reading the change
 
-The brief names a diff range (`<base>..<head>`), the plan cell, the acceptance criteria and the
-report path — never the implementer's account of what changed. The change is read from the
-range itself with read-only git: `git diff <range>`, `git show <commit>`, `git log <range>`,
-`git rev-list <range>` and `git merge-base <a> <b>`, in portable POSIX `sh`, one plain
-invocation per read. No other command runs: nothing that writes the working tree, the index, a
-ref, a stash or a remote, no option that writes a file or runs a configured external program
-(`-c <key>=<value>`, `--ext-diff`, `--textconv`, a configured pager), and no gate — gate
-evidence is the test-runner's. A summary in the brief is a lead to check against the diff, never
-evidence. Where the client grants no shell, the change is read from the hunks the brief carries
-and the result names that basis. A range that does not resolve — a shallow clone, an unfetched
-base — is never fetched: the result reports it and reads the hunks the brief carries, or returns
-`BLOCKED_DEPENDENCY` naming the unresolved range. A brief carrying neither a range nor hunks
-returns `BLOCKED_DEPENDENCY` naming the missing diff.
+The brief names a diff range (`<base>..<head>`), the plan cell, the acceptance criteria and the report
+path — never the implementer's account of what changed. The change is read from the range itself with
+read-only git: `git diff <range>`, `git show <commit>`, `git log <range>`, `git rev-list <range>` and `git
+merge-base <a> <b>`, in portable POSIX `sh`, one plain invocation per read. No other command runs: nothing
+that writes the working tree, the index, a ref, a stash or a remote, no option that writes a file or runs
+a configured external program (`-c <key>=<value>`, `--ext-diff`, `--textconv`, a configured pager), and no
+gate — gate evidence is the test-runner's. A summary in the brief is a lead to check against the diff,
+never evidence. Where the client grants no shell, the change is read from the hunks the brief carries and
+the result names that basis. A range that does not resolve — a shallow clone, an unfetched base — is never
+fetched: the result reports it and reads the hunks the brief carries, or returns `BLOCKED_DEPENDENCY`
+naming the unresolved range. A whole-surface brief's commit and paths stand in for the range, read with
+`git show <commit>:<path>`, the surface for "the change", exclusions included; a brief with no range, no
+hunks and no commit with paths returns `BLOCKED_DEPENDENCY` naming the missing diff.
 
 ## Severity
 

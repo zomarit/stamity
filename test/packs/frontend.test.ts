@@ -38,6 +38,12 @@ import { TRIGGER_DOMAINS } from "../corpus/skills/triggerDomains.ts";
  *     phrase (`test/corpus/skills/triggerDomains.ts`, the table the core roster reads) appears
  *     in neither pack description, and the nine descriptions open on nine different verbs.
  *
+ * Plan 018 file 2 (u3-frontend-set; REQ-PACK-021, REQ-PACK-022) adds `/st-ui-review`, the pack's
+ * one command, which reviews a named screen or flow through the core design-quality agent and
+ * never edits, and changes the detector's inventory: a `Status` row in place of the per-request
+ * verdict, an alias source counted with the source it refers to, and a token-set proposal when no
+ * source is found.
+ *
  * Prose assertions run against a whitespace-flattened view ({@link flow}) so a reflowed paragraph
  * is not a failure; structural assertions (headings, caps) run against the raw body.
  */
@@ -49,8 +55,9 @@ const PACK_ROOT = join(REPO_ROOT, "packs", "frontend");
 const PACK_IDENTITY =
   "Interface work that reuses the design system a repo already has and captures browser evidence for the accessibility floor.";
 
-/** Exactly what this pack ships: two skills, each a SKILL.md and its Codex companion. */
+/** Exactly what this pack ships: one command, and two skills, each a SKILL.md and its Codex companion. */
 const SHIPPED_FILES: readonly string[] = [
+  "commands/st-ui-review.md",
   "skills/st-browser-evidence/SKILL.md",
   "skills/st-browser-evidence/agents/openai.yaml",
   "skills/st-design-system-detect/SKILL.md",
@@ -173,8 +180,11 @@ describe("frontend pack — manifest and catalog", () => {
     expect(manifest.version).toBe(packageJson.version);
     expect(manifest.description).toBe(PACK_IDENTITY);
     expect(manifest.declaredTools).toEqual([...TOOLS]);
-    // Neither skill delegates, so the footprint carries no `spawn`.
-    expect(manifest.permissions?.toolFootprint).toEqual(["read", "edit", "execute"]);
+    // TEST CHANGE, justified (2026-10-21, plan 018 file 2, unit u3-frontend-set; REQ-PACK-021):
+    // the pin read ["read", "edit", "execute"] because neither skill delegated. What moved:
+    // `/st-ui-review` spawns researchers and the core design-quality agent, so the footprint
+    // discloses `spawn`; the command writes nothing, so `touchedPaths` is unchanged.
+    expect(manifest.permissions?.toolFootprint).toEqual(["read", "edit", "execute", "spawn"]);
     expect(manifest.permissions?.touchedPaths).toEqual([
       ".stamity/design-system-inventory.md",
       ".stamity/evidence/**",
@@ -526,15 +536,145 @@ describe("design-system-detect — detection only", () => {
     expect(text).toMatch(/looked and found nothing.*did not look/i);
   });
 
-  it("emits one regenerated inventory at a stable path with a verdict", async () => {
-    const output = section(
-      await load("skills/st-design-system-detect/SKILL.md"),
-      "Output artifact",
-    ).replace(/\s+/g, " ");
+  it("emits one regenerated inventory at a stable path with a status row, the verdict handed back", async () => {
+    const file = await load("skills/st-design-system-detect/SKILL.md");
+    const output = section(file, "Output artifact").replace(/\s+/g, " ");
 
     expect(output).toContain(".stamity/design-system-inventory.md");
     expect(output).toMatch(/regenerated in place rather than accumulating per-run copies/i);
-    expect(output).toMatch(/`reuse`, `extend`, `create`, or `blocked`/);
+    // TEST CHANGE, justified (2026-10-21, plan 018 file 2, unit u3-frontend-set; REQ-PACK-022):
+    // the pin read "`reuse`, `extend`, `create`, or `blocked`" among the file's sections. What
+    // moved: every later request reads the file, so it keeps repo facts and a `Status` row, and
+    // the per-request verdict leaves it for the hand-back; the old row is asserted gone.
+    expect(output).not.toMatch(/`reuse`, `extend`, `create`, or `blocked`/);
+    expect(output).toMatch(/\| Status \| `clear` or `blocked: competing token sources` \|/);
+    expect(output).toMatch(/no per-request verdict/i);
     expect(output).toMatch(/records the commit it was generated from/i);
+    const step5 = section(file, "Step 5 — Emit the inventory").replace(/\s+/g, " ");
+    expect(step5).toMatch(/the verdict goes in the hand-back, naming the need it answers/i);
+  });
+
+  it("counts an alias source as one system with the source it refers to", async () => {
+    const conflict = section(
+      await load("skills/st-design-system-detect/SKILL.md"),
+      "Competing token sources",
+    ).replace(/\s+/g, " ");
+
+    // Edge case: a theme block whose every colour refers to the token file's colours is not a
+    // second system, and reading it as one blocks every request on a choice with no stakes.
+    expect(conflict).toContain("alias of <path>");
+    expect(conflict).toMatch(/every value in a category refers to another source's token/i);
+    expect(conflict).toMatch(/does not define that category, and the pair counts as one system/i);
+    expect(conflict).toMatch(/one literal value makes it a definer again/i);
+  });
+
+  it("proposes a minimal token set as text when no token source is found", async () => {
+    const file = await load("skills/st-design-system-detect/SKILL.md");
+    const proposal = section(file, "No token source — the Proposal").replace(/\s+/g, " ");
+    const output = section(file, "Output artifact");
+
+    expect(proposal).toMatch(/carries a `Proposal` section as text/i);
+    expect(proposal).toMatch(/focus ring at 3:1/i);
+    expect(proposal).toMatch(/reduced-motion variant/i);
+    expect(proposal).toMatch(/light and dark with identical keys/i);
+    expect(proposal).toMatch(/4\.5:1 and 3:1/);
+    expect(proposal).toMatch(/brand hue is left to the operator/i);
+    expect(proposal).toContain("/st-work");
+    expect(output).toMatch(/^\| Proposal \|/m);
+    // Still a detector: the proposal is text in the inventory, never a token file.
+    expect(flow(file)).toMatch(/it writes no tokens, no components, and no themes/i);
+    expect(flow(file)).not.toMatch(/generation belongs to a generator pack/i);
+  });
+});
+
+/** The pack's one command: reviews a named screen or flow, never edits (REQ-PACK-021). */
+const UI_REVIEW = "commands/st-ui-review.md";
+
+/** The command head the plan cell fixes, word for word. */
+const UI_REVIEW_DESCRIPTION =
+  "Reviews a named screen or flow against the design system, the UI states and WCAG 2.2 AA through the design-quality agent and browser evidence, returning findings with path:line and never editing.";
+
+describe("/st-ui-review — reviews a named surface, never edits", () => {
+  it("carries the command head: id, type, read-only, and a spawn set with no writer", async () => {
+    const file = await load(UI_REVIEW);
+
+    expect(frontmatterField(file.parsed, "id")).toBe("ui-review");
+    expect(filenameSlug(file.relPath)).toBe("ui-review");
+    expect(frontmatterField(file.parsed, "type")).toBe("command");
+    expect(frontmatterField(file.parsed, "description")).toBe(UI_REVIEW_DESCRIPTION);
+    expect(frontmatterField(file.parsed, "tags")).toEqual(["review"]);
+    expect(frontmatterField(file.parsed, "readonly")).toBe(true);
+    // The spawn set is the guarantee: no role on the far end holds an edit grant.
+    expect(frontmatterField(file.parsed, "spawns")).toEqual(["researcher", "design-quality"]);
+    requireLoadClass(file, ["on-demand"]);
+    requireObsoleteWhen(file);
+  });
+
+  it("stays inside the design target and scans clean", async () => {
+    const file = await load(UI_REVIEW);
+
+    assertLineCap(file, SKILL_DESIGN_TARGET);
+    assertDenyClean(file);
+    expect(file.parsed.body).not.toMatch(BANNED_SECTION);
+  });
+
+  it("states the read-only boundary, the not-measured rule and the blocked exits", async () => {
+    const file = await load(UI_REVIEW);
+    const text = flow(file);
+
+    expect(text).toMatch(/reviews, never edits/i);
+    expect(text).toContain("never edit");
+    expect(text).toContain("not measured");
+    expect(text).toContain("BLOCKED_DEPENDENCY");
+    expect(text).toMatch(/no implementer and no fixer/i);
+    // A pack carries no CLI call: a pinned call is the engine's to render.
+    expect(file.parsed.body).not.toMatch(/(?<![\w./-])stamity\s+[a-z]/);
+    expect(file.parsed.body).not.toMatch(/\bnpx\b/);
+  });
+
+  it("runs the detector first when the inventory is absent or behind, and raises no token finding over a blocked one", async () => {
+    const text = flow(await load(UI_REVIEW));
+
+    expect(text).toContain("st-design-system-detect");
+    expect(text).toMatch(/absent or its recorded commit is behind the head/i);
+    expect(text).toContain("st-browser-evidence");
+    expect(text).toMatch(/whole-surface brief/i);
+    expect(text).toMatch(/raises no token finding/i);
+    expect(text).toMatch(/contested categories/i);
+  });
+
+  it("routes fixes out and refuses a fix request in one line, with no diff handed over", async () => {
+    const file = await load(UI_REVIEW);
+    const refusals = section(file, "Refusals");
+    const text = flow(file);
+
+    expect(text).toContain("/st-work");
+    expect(text).toContain("/st-plan");
+    expect(refusals).toMatch(/one-line refusal/i);
+    expect(refusals.replace(/\s+/g, " ")).toMatch(/no patch, no diff/i);
+    // Every situation the cell lists has its row.
+    for (const situation of [/no target/i, /resolves to no file/i, /design-quality/i, /browser/i, /blocked/i, /fix/i]) {
+      expect(refusals).toMatch(situation);
+    }
+  });
+
+  it("mentions only commands that exist: the nine touchpoints and itself", async () => {
+    const file = await load(UI_REVIEW);
+    const mentioned = [...file.parsed.body.matchAll(/\/st-([a-z][a-z-]*)/g)].map((match) => match[1]);
+
+    expect(mentioned.length).toBeGreaterThan(0);
+    for (const id of new Set(mentioned)) {
+      expect([...COMMAND_IDS, "ui-review"], `${file.relPath}: /st-${id} is not a command`).toContain(id);
+    }
+  });
+
+  it("returns DONE with the surface, sha, inventory state and criteria, and BLOCKED_* in the standard form", async () => {
+    const contract = section(await load(UI_REVIEW), "Return contract").replace(/\s+/g, " ");
+
+    expect(contract).toContain("`DONE` | `BLOCKED_AMBIGUITY` | `BLOCKED_DEPENDENCY` | `BLOCKED_FAILURE`");
+    for (const field of [/surface/i, /sha/i, /inventory/i, /not applicable/i, /not measured/i, /count/i]) {
+      expect(contract).toMatch(field);
+    }
+    expect(contract).toMatch(/smallest unblocking input/i);
   });
 });

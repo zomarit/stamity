@@ -12,7 +12,8 @@
     "toolFootprint": [
       "read",
       "edit",
-      "execute"
+      "execute",
+      "spawn"
     ],
     "touchedPaths": [
       ".stamity/design-system-inventory.md",
@@ -21,9 +22,10 @@
   },
   "maxFootprintBytes": 262144,
   "integrity": {
+    "commands/st-ui-review.md": "121ca4e0d635e426e53d6bac0132d27f0651d18ce741159886bf15f42f940eb2",
     "skills/st-browser-evidence/SKILL.md": "de298f1d6a826471a18e0e57ab978aa8066701c54bd60238cb6030ac5a9574cd",
     "skills/st-browser-evidence/agents/openai.yaml": "b448baafcaa2f1b0d6c396b1ba98d733fd4424c546b545797ade81ab87efe760",
-    "skills/st-design-system-detect/SKILL.md": "73dabf0eeab92ac7578e5a1a65c2ac8ceeae410ab256a9940d497a929554f85f",
+    "skills/st-design-system-detect/SKILL.md": "a71b44bbcab0fe38871d26b99c64f49b48eada54886d37abba7907fa568a9083",
     "skills/st-design-system-detect/agents/openai.yaml": "91065c090283437485a15f7575527d1b64972caf0432026f5ede3b7621a24573"
   }
 }
