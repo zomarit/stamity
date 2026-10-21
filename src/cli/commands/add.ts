@@ -868,7 +868,7 @@ export function isFirstPartyRetiredCopy(
  * bytes match its ledger row, judged by {@link isFirstPartyRetiredCopy}. A
  * receipt that cannot be trusted judges nothing, as there.
  */
-export async function installedFirstPartyCopy(
+async function installedFirstPartyCopy(
   rootDir: string,
   manifest: SetupManifest,
   entry: RetiredPack,
