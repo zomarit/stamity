@@ -74,16 +74,16 @@ Governing text — the same file, "Waivers", "Routing" and "The Ready line":
 The review proposes a waiver and writes none. A proposed waiver is a row in the report, in the policy file's form, for a
 person to add and an approver to sign; it clears nothing until it is in the policy file. A waiver row there names the
 check id, the reason, the approver, the date it expires and the ticket. A row missing its approver or its expiry is
-invalid and clears nothing, and so is one whose ticket is missing or holds a character outside `[A-Za-z0-9._/:@~=+,-]`.
+invalid and clears nothing, and so is one whose ticket is missing or holds a character outside `[A-Za-z0-9._/:@~=,-]`.
 
 The requesters are the authors of every commit that touched the row: those `git log -L` lists over the row's lines,
-unioned with those `git log -S<ticket> -- <policy file>` lists for the row's ticket, a fixed string, so a moved or
-re-sorted row keeps the commit that added its ticket. A row whose ticket id changed is a new row, and the author of the
-commit that changed it is its requester too. The report lists all of these requesters for the person who signs. A row
-not yet committed has no requester and clears nothing, and a row whose working-tree text differs from its text at `HEAD`
-counts as not yet committed and clears nothing. The approver must differ from every requester, compared by name and by
-email; an approver the review cannot tell apart from one of them counts as the same person. So an edit to the row (an
-expiry pushed out, an approver changed) makes its author a requester too and needs fresh approval. A waiver that is
+unioned with those `git log --text -G<ticket> -- <policy file>` lists, the ticket unquoted; `-G` finds the commit that
+added the row, every in-place edit and both halves of a move. A row whose ticket id changed is a new row, and the author
+of the commit that changed it is its requester too. The report lists all of these requesters for the person who signs. A
+row not yet committed has no requester and clears nothing, and a row whose working-tree text differs from its text at
+`HEAD` counts as not yet committed and clears nothing. The approver must differ from every requester, compared by name
+and by email; an approver the review cannot tell apart from one of them counts as the same person. So an edit to the row
+(an expiry pushed out, an approver changed) makes its author a requester too and needs fresh approval. A waiver that is
 invalid, approved by its own requester, any one of them, read on a day past its `expires` date, or whose ticket read
 cannot run as written, clears nothing: its gap stands as graded and the report names why the waiver did not count.
 
@@ -141,8 +141,8 @@ Scenario state — the run so far, given to you as fact:
 > The policy file holds no `Controls` rows and one committed `Waivers` row:
 > `pr-sup-02 | the release job needs to push its own tag | Sam Ortiz <sam.ortiz@example.com> | 2026-09-30 | CHG-2214`.
 > Its ticket `CHG-2214` holds only characters the class admits. `git log -L` over that row's
-> lines and `git log -SCHG-2214 -- .stamity/production/policy.md` each ran as written and each
-> list one commit, the same one, by Lee Park `<lee.park@example.com>`; its working-tree text
+> lines and `git log --text -GCHG-2214 -- .stamity/production/policy.md` each ran as written and
+> each list one commit, the same one, by Lee Park `<lee.park@example.com>`; its working-tree text
 > equals its text at `HEAD`.
 >
 > The gather batch has returned. For this scenario the grade is yours to give: read the

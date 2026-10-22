@@ -3715,7 +3715,16 @@ unquoted, and a waiver whose ticket is missing, holds a character outside `[A-Za
 or whose ticket read cannot run as written now clears nothing; both cases re-copy the Waivers
 section's two paragraphs at `:198-212`, rewrapped in the same fifteen lines, so neither `source:`
 range nor index cell moves, and in `production-review-seeded-4` the `-S` read lists only
-`3a9e1c0`, the commit that added the ticket, the requesters unchanged.
+`3a9e1c0`, the commit that added the ticket, the requesters unchanged. A third fix round the same
+day (`review/54`, the escalation) replaced that read with
+`git log --text -G<ticket> -- <policy file>`, the ticket unquoted: `-S` skips an in-place edit that
+keeps the ticket, which a later move by another author then cuts from the `-L` trace too, while `-G`
+lists the commit that added the row, every in-place edit and both halves of a move, and `--text`
+keeps it reading a policy file git would call binary; `+` leaves the class, now
+`[A-Za-z0-9._/:@~=,-]`, so `.` is the one regex operator left. Both cases re-copy `:198-212` again
+in the same fifteen lines, so neither `source:` range nor index cell moves, and in
+`production-review-seeded-4` the `-G` read lists both `3a9e1c0` and `f02b7d4`, the requesters
+unchanged.
 
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A

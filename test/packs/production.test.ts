@@ -580,22 +580,26 @@ describe("/st-production-review — what a file can and cannot make the review d
     expect(waivers).toMatch(/a row missing its approver or its expiry is invalid and clears nothing/i);
     // review/14, review/19: "Claimed, shown, signed".
     expect(waivers).toMatch(/the authors of every commit that touched the row: those `git log -L` lists over the row's lines/i);
-    // TEST CHANGE, justified: review/54 and review/61 (the maintainer's "Row lines plus ticket",
-    // completed by the signed-off default of fix round 2). `git log -L` alone starts a moved row's
-    // trace at the move and drops its first author, so the requesters are the union with
-    // `git log -S<ticket>` over the policy file: a fixed string, so no quote or escape the grader's
-    // read-only git guard refuses, listing the commit that added the ticket, which a later move
-    // keeps. A changed ticket id makes a new row. review/43 still holds: every requester is listed
-    // for the signer, and `git blame` (a line's last author only) is no option.
+    // TEST CHANGE, justified: review/54 (fix round 3, the escalation: the maintainer's option
+    // `git log -G'<ticket>'`, its declared default unquoted) and review/61. `git log -L` alone starts
+    // a moved row's trace at the move. Round 2's `git log -S<ticket>` lists only a change in the
+    // ticket's count, so an in-place edit that kept the ticket was found by `-L` alone and dropped
+    // out after another author's move. `-G` lists every commit whose diff adds or removes a line
+    // holding the ticket: the add, each in-place edit and both halves of a move. `--text` keeps it
+    // reading a policy file git would call binary (a `-diff` attribute, a NUL byte), where a bare
+    // `-G` lists nothing. A changed ticket id makes a new row. review/43 still holds: every
+    // requester is listed for the signer, and `git blame` (a line's last author only) is no option.
     expect(waivers).toMatch(
-      /unioned with those `git log -S<ticket> -- <policy file>` lists for the row's ticket, a fixed string, so a moved or re-sorted row keeps the commit that added its ticket/i,
+      /unioned with those `git log --text -G<ticket> -- <policy file>` lists, the ticket unquoted; `-G` finds the commit that added the row, every in-place edit and both halves of a move/i,
     );
-    expect(waivers).not.toMatch(/git log -G/i);
+    expect(waivers).not.toMatch(/git log -S/i);
+    expect(waivers).not.toMatch(/-G'/);
     expect(waivers).not.toMatch(/regex characters escaped/i);
     // ADDED: review/61. A ticket the read cannot take as written fails closed: missing, outside the
-    // class, or a read that does not run clears nothing, and the report names why.
+    // class, or a read that does not run clears nothing, and the report names why. review/54, round
+    // 3: `+` leaves the class, since `-G` reads the ticket as a POSIX extended regex.
     expect(waivers).toMatch(
-      /and so is one whose ticket is missing or holds a character outside `\[A-Za-z0-9\._\/:@~=\+,-\]`/i,
+      /and so is one whose ticket is missing or holds a character outside `\[A-Za-z0-9\._\/:@~=,-\]`/i,
     );
     expect(waivers).toMatch(
       /a waiver that is invalid, approved by its own requester, any one of them, read on a day past its `expires` date, or whose ticket read cannot run as written, clears nothing: its gap stands as graded and the report names why the waiver did not count/i,
@@ -617,29 +621,42 @@ describe("/st-production-review — what a file can and cannot make the review d
   });
 
   it("names a ticket class whose requester reads the grader's read-only git guard admits as written", async () => {
-    // ADDED: review/61. The grading `reviewer` runs git through the rendered guard's character
+    // ADDED: review/61. The grading `reviewer` runs git through the rendered guard's read-only git
     // check, so every ticket the class admits, with the shipped policy path, must pass it unquoted.
+    // TEST CHANGE, justified: review/54, fix round 3. The ticket half is `git log --text -G<ticket>`,
+    // which reads the ticket as a POSIX extended regex: the class keeps no operator but `.`, whose
+    // over-match only adds requesters. Both reads now go through the rendered `readOnlyGit` whole
+    // (alphabet, subcommand, denied option prefixes per token), not its alphabet alone, so `--text`
+    // is shown apart from the refused `--textconv`.
     const waivers = flowSection(await review(), "Waivers");
     const cls = /holds a character outside `\[([^\]`]+)\]`/.exec(waivers)?.[1];
     expect(cls, "the Waivers section names the ticket's character class").toBeDefined();
     const ticketChars = new RegExp(`^[${cls!}]+$`);
-    for (const refused of [" ", "'", '"', "\\", "^", "`", "$", ";", "|", "*", "(", "["]) {
+    const shell = [" ", "'", '"', "`", ";", "&", "<", ">"];
+    const regexOperators = ["\\", "^", "$", "|", "*", "+", "?", "(", ")", "[", "]", "{", "}"];
+    for (const refused of [...shell, ...regexOperators]) {
       expect(ticketChars.test(`CHG${refused}1`), JSON.stringify(refused)).toBe(false);
     }
+    // The one extended-regex operator the class keeps: `.` matches any character, so it only widens the match.
+    expect(ticketChars.test("CHG.1")).toBe(true);
     const guard = buildPreToolUseGuardScript({
       policiesJsonPath: "../../../.stamity/generated/agent-tool-policies.json",
       failMode: "fail-closed",
       layout: "claude",
     });
-    const source = /^const GIT_CHARS = new RegExp\((".*")\);$/m.exec(guard)?.[1];
-    expect(source, "the rendered guard carries its read-only git alphabet").toBeDefined();
-    const gitChars = new RegExp(JSON.parse(source!) as string);
-    const everyTicketChar = "AZaz09._/:@~=+,-";
-    for (const ticket of ["CHG-2214", everyTicketChar]) {
+    const helpers = /^const GIT_SUBCOMMANDS = [\s\S]*?^function readOnlyGit\(command\) \{[\s\S]*?^\}$/m.exec(guard)?.[0];
+    expect(helpers, "the rendered guard carries its read-only git check").toBeDefined();
+    const readOnlyGit = new Function(`${helpers!}\nreturn readOnlyGit;`)() as (command: string) => boolean;
+    const everyTicketChar = "AZaz09._/:@~=,-";
+    // `--output` is a class ticket shaped like a refused option: attached to `-G`, it stays the pattern.
+    for (const ticket of ["CHG-2214", everyTicketChar, "--output"]) {
       expect(ticketChars.test(ticket), ticket).toBe(true);
-      expect(gitChars.test(`git log -S${ticket} -- .stamity/production/policy.md`), ticket).toBe(true);
+      expect(readOnlyGit(`git log --text -G${ticket} -- .stamity/production/policy.md`), ticket).toBe(true);
     }
-    expect(gitChars.test("git log -L12,12:.stamity/production/policy.md")).toBe(true);
+    expect(readOnlyGit("git log -L12,12:.stamity/production/policy.md")).toBe(true);
+    // Not green for want of a refusal: the quoted form and the option that runs a configured program stay out.
+    expect(readOnlyGit("git log --text -G'CHG-2214' -- .stamity/production/policy.md")).toBe(false);
+    expect(readOnlyGit("git log --textconv -GCHG-2214 -- .stamity/production/policy.md")).toBe(false);
   });
 
   it("leaves an accepted high or critical advisory failing pr-sec-01 unless a valid waiver covers it", async () => {
