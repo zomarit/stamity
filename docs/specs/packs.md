@@ -536,19 +536,20 @@ and its gap stands as graded; Given no policy file, Then the 19 checks run as sh
   character outside `[A-Za-z0-9._/:@~=,-]` (`review/61`, `review/54`). Its requesters are the authors of every commit
   that touched the row, read with `git log -L` over its lines unioned with `git log --text -G<ticket>` over the policy
   file, the ticket unquoted, which the grading role's read-only git guard admits: `-G` lists the commit that added the
-  row, every in-place edit not made inside a merge commit and both halves of a move, so a later move by another author
-  drops none of them, `--text` keeps it reading a file git would call binary, and `.`, the one regex operator the class
-  keeps, only adds requesters; a row whose ticket id changed is a new row whose committing author is a requester
-  (`review/54`, `review/61`); the approver must differ from every one, by name and by email, so an edit to the row needs
-  fresh approval; a row not yet committed, or whose working-tree text differs from `HEAD`, clears nothing, and so does
-  an invalid row or one whose ticket read cannot run as written, the report naming why (`:196-212`; `review/14`,
-  `review/18`, `review/19`, `review/42`, `review/43`, `review/61`, "claimed, shown, signed"). The approval in a row is a
-  claim: a valid waiver clears its gap for the Ready line, the gap still shown, marked waived, and the report lists each
-  as a claimed approval (`:214-217`). An accepted high or critical advisory stays open for `pr-sec-01` unless a valid
-  waiver covers it (`:78-80`; `review/20`). The escalation contact is the incident and reporting contact `st-incident`
-  uses; the review sends it nothing, an open blocking gap going to the approval of record (`:105-107`; `review/30`).
-  With no policy file the frame asks where the approval of record lives, its default `not named` (`:109-110`,
-  `:117-122`).
+  row, every in-place edit outside a merge commit and both halves of a move, so a later move by another author drops
+  none of them, and only `-L` traces an edit made inside a merge commit (a conflict resolution), since `git log` diffs
+  no merge without `-m`, `--cc` or `--remerge-diff`; `--text` keeps `-G` reading a file git would call binary, and `.`,
+  the one regex operator the class keeps, only adds requesters; a row whose ticket id changed is a new row whose
+  committing author is a requester (`review/54`, `review/61`); the approver must differ from every one, by name and by
+  email, so an edit to the row needs fresh approval; a row not yet committed, or whose working-tree text differs from
+  `HEAD`, clears nothing, and so does an invalid row or one whose ticket read cannot run as written, the report naming
+  why (`:196-212`; `review/14`, `review/18`, `review/19`, `review/42`, `review/43`, `review/61`, "claimed, shown,
+  signed"). The approval in a row is a claim: a valid waiver clears its gap for the Ready line, the gap still shown,
+  marked waived, and the report lists each as a claimed approval (`:214-217`). An accepted high or critical advisory
+  stays open for `pr-sec-01` unless a valid waiver covers it (`:78-80`; `review/20`). The escalation contact is the
+  incident and reporting contact `st-incident` uses; the review sends it nothing, an open blocking gap going to the
+  approval of record (`:105-107`; `review/30`). With no policy file the frame asks where the approval of record lives,
+  its default `not named` (`:109-110`, `:117-122`).
 - **Proof:** `test/packs/production.test.ts` ("reads the policy file's four sections, and asks once with a declared
   default when it is absent", "proposes waivers and writes none; an expired or self-approved one clears nothing", "lets
   a replacement move a blocking check's evidence, never its pass condition or Attest mark", "counts a waiver only with

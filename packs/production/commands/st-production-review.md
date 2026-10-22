@@ -200,16 +200,16 @@ person to add and an approver to sign; it clears nothing until it is in the poli
 check id, the reason, the approver, the date it expires and the ticket. A row missing its approver or its expiry is
 invalid and clears nothing, and so is one whose ticket is missing or holds a character outside `[A-Za-z0-9._/:@~=,-]`.
 
-The requesters are the authors of every commit that touched the row: those `git log -L` lists over the row's lines,
-unioned with those `git log --text -G<ticket> -- <policy file>` lists, the ticket unquoted; `-G` finds the commit that
-added the row, every in-place edit and both halves of a move. A row whose ticket id changed is a new row, and the author
-of the commit that changed it is its requester too. The report lists all of these requesters for the person who signs. A
-row not yet committed has no requester and clears nothing, and a row whose working-tree text differs from its text at
-`HEAD` counts as not yet committed and clears nothing. The approver must differ from every requester, compared by name
-and by email; an approver the review cannot tell apart from one of them counts as the same person. So an edit to the row
-(an expiry pushed out, an approver changed) makes its author a requester too and needs fresh approval. A waiver that is
-invalid, approved by its own requester, any one of them, read on a day past its `expires` date, or whose ticket read
-cannot run as written, clears nothing: its gap stands as graded and the report names why the waiver did not count.
+The requesters are the authors of every commit that touched the row: those `git log -L` lists over the row's lines, unioned with those
+`git log --text -G<ticket> -- <policy file>` lists, the ticket unquoted; `-G` finds the commit that added the row, every in-place edit
+outside a merge commit and both halves of a move, and only `-L` traces an edit made inside a merge commit (a conflict resolution), since
+`git log` diffs no merge without `-m`, `--cc` or `--remerge-diff`. A row whose ticket id changed is a new row, and the author of the commit
+that changed it is its requester too. The report lists all of these requesters for the person who signs. A row not yet committed has no
+requester and clears nothing, and a row whose working-tree text differs from its text at `HEAD` counts as not yet committed and clears
+nothing. The approver must differ from every requester, compared by name and by email; an approver the review cannot tell apart from one of
+them counts as the same person. So an edit to the row (an expiry pushed out, an approver changed) makes its author a requester too and needs
+fresh approval. A waiver that is invalid, approved by its own requester, any one of them, read on a day past its `expires` date, or whose
+ticket read cannot run as written, clears nothing: its gap stands as graded and the report names why the waiver did not count.
 
 The approval in a row is a claim the review cannot check. A valid waiver clears its check's gap
 for the Ready line, and the gap still appears, marked waived, with the waiver's ticket. The

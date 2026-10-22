@@ -589,8 +589,11 @@ describe("/st-production-review — what a file can and cannot make the review d
     // reading a policy file git would call binary (a `-diff` attribute, a NUL byte), where a bare
     // `-G` lists nothing. A changed ticket id makes a new row. review/43 still holds: every
     // requester is listed for the signer, and `git blame` (a line's last author only) is no option.
+    // TEST CHANGE, justified: review/54, the maintainer's decision "Document it, follow up". `git log`
+    // diffs no merge commit without `-m`, `--cc` or `--remerge-diff`, so `-G` misses an edit made inside
+    // one (a conflict resolution) and only `-L` traces it; the text names that limit, no new read.
     expect(waivers).toMatch(
-      /unioned with those `git log --text -G<ticket> -- <policy file>` lists, the ticket unquoted; `-G` finds the commit that added the row, every in-place edit and both halves of a move/i,
+      /unioned with those `git log --text -G<ticket> -- <policy file>` lists, the ticket unquoted; `-G` finds the commit that added the row, every in-place edit outside a merge commit and both halves of a move, and only `-L` traces an edit made inside a merge commit \(a conflict resolution\), since `git log` diffs no merge without `-m`, `--cc` or `--remerge-diff`/i,
     );
     expect(waivers).not.toMatch(/git log -S/i);
     expect(waivers).not.toMatch(/-G'/);
