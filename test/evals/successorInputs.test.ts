@@ -94,7 +94,23 @@ export const EXPECTED_MOVES: Record<string, string> = {
     "Advisory disposition 2026-09-15, run 27 §8 (repeat against run 24): A2 deleted. " +
     "`content/commands/st-ask.md:138-139` requires the verbatim destination line and says naming " +
     "the destination is the whole handoff, so a row also requiring the carry-over to be narrated " +
-    "asked more than the source does. B4 still binds the destination line; A1 is unchanged.",
+    "asked more than the source does. B4 still binds the destination line; A1 is unchanged. " +
+    // TEST CHANGE, justified (2026-10-22, plan 018 file 2 unit u16-eval-set; REQ-PROVE-033, inbox row
+    // 390): the case's `## Expected` block moved again by an advisory disposition, so its reviewed diff
+    // gains a dated sentence; the row is extended, never rewritten.
+    "Advisory disposition 2026-10-22, run 47 § 8 (repeat against run 46): A1 deleted. It asked the step " +
+    "to name the smallest unblocking input rather than the whole facet, and `content/commands/st-ask.md:158-160` " +
+    "says \"a Blocked row makes what unblocks it the step\", which B2 binds as the step naming read access to " +
+    "`infra/staging` or the rendered manifest. No binding row moved; the B / A counts move from 7 / 1 to 7 / 0.",
+  // TEST CHANGE, justified (2026-10-22, plan 018 file 2 unit u16-eval-set; REQ-PROVE-033, inbox row 390):
+  // this case's `## Expected` block was held to its cases-v4 and cases-v5 sha; an advisory disposition moves it.
+  "agent-design-quality-return-contract":
+    "Advisory disposition 2026-10-22, run 47 § 8 (repeat against run 46): A2 deleted. It asked the result " +
+    "to state the trigger condition in the contract's own terms, and `content/agents/stamity-design-quality.md:31-33` " +
+    "states the trigger as a condition the agent acts on while `:132-136` asks a `BLOCKED_*` return for what " +
+    "was attempted, what blocks it and the smallest unblocking input, not for the trigger restated; B2 binds " +
+    "the facts that stop the pass and B4 the three parts. A1 is unchanged. No binding row moved; the B / A " +
+    "counts move from 7 / 2 to 7 / 1.",
   "charter-touchpoints-delegate":
     "Advisory disposition 2026-09-15, run 27 §8 (repeat against run 24): A1 promoted to B5 with " +
     "its wording unchanged but for the 'recorded here' clause. The charter states the wording " +

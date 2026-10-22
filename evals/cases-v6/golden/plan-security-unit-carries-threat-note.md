@@ -92,5 +92,10 @@ B5 its absence on `changelog-entry`, B5 naming the `docs` classify result as the
 The row graded an explanation past the source. The surviving row is renumbered A1 (was A2); it
 is unchanged in substance.
 
-1. The check the threat row names is one that the unit's `testCriteria` exercises — a
-   forged or stale request answered with `401`.
+Disposition 2026-10-22: A2 deleted (sha256:859d919a9231) — run 47's A2, the row renumbered A1
+by the disposition above. The plan's `threat` field (`content/commands/st-plan.md:357`) asks for
+the unit's trust boundary, what it trusts, one abuse case and the check that stops it, and ties
+that check to no `testCriteria` row; B3 binds the check that stops the abuse case it names. The
+row graded a cross-reference the source does not ask for.
+
+None declared for this case after those dispositions.
