@@ -1,8 +1,8 @@
 # Coverage exemptions — v6
 
-Each of the seven v4 rows required a case at the next set version; v5 supplies those cases. The
-historical v4 exemption list stays intact. The one row added on 2026-10-16 for
-`content/skills/st-unattended/SKILL.md` (plan `docs/plans/021-cloud-runs-01.md`, unit
+No exemptions remain. Each of the seven v4 rows required a case at the next set version; v5
+supplies those cases. The historical v4 exemption list stays intact. The one row added on
+2026-10-16 for `content/skills/st-unattended/SKILL.md` (plan `docs/plans/021-cloud-runs-01.md`, unit
 `u9-unattended-skill`) left the same day, in the change of unit `u22-eval-golden` that added the
 first cases sourcing the skill.
 
@@ -27,17 +27,6 @@ Three such rows, added 2026-10-21 by units `u10-production-review`, `u11-release
 `u12-incident-skill` of plan 018 file 2 for `packs/production/commands/st-production-review.md`,
 `packs/production/skills/st-release/SKILL.md` and `packs/production/skills/st-incident/SKILL.md`,
 left on 2026-10-22 in the change of unit `u14-production-cases` that added the cases sourcing them.
-
----
-
-### `packs/frontend/commands/st-ui-review.md`
-
-Added 2026-10-21 by plan 018 file 2, unit `u3-frontend-set`, with the command; its cases land in
-a later wave of the same plan. Trigger: unit `u15-frontend-plain-cases` adds the cases sourcing
-it and removes this row.
-
-### `content/skills/st-plain/SKILL.md`
-
-Added 2026-10-21 by plan 018 file 2, unit `u9-st-plain`, with the skill; its cases land in a
-later wave of the same plan. Trigger: unit `u15-frontend-plain-cases` adds the cases sourcing it
-and removes this row.
+Two more, added 2026-10-21 by units `u3-frontend-set` and `u9-st-plain` of the same file for
+`packs/frontend/commands/st-ui-review.md` and `content/skills/st-plain/SKILL.md`, left on
+2026-10-22 in the change of unit `u15-frontend-plain-cases` that added the cases sourcing them.
