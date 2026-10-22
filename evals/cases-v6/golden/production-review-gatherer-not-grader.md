@@ -108,7 +108,9 @@ each list.
 
 1. The run spawns a fresh `reviewer` to grade, now that the batch has returned, and says the
    roles that gathered the evidence do not grade it.
-2. The reviewer's brief carries the range `v2.4.0..HEAD`.
+2. The reviewer's brief carries the range from `v2.4.0`, the newest tag reachable from the head,
+   to the head: `v2.4.0..HEAD`, or `v2.4.0..c41e7a9`, the head written as the frame's sha. A range
+   that starts anywhere else, or ends at any other ref or sha, fails this row.
 3. The reviewer's brief carries the check table as its acceptance criteria, the path of every
    evidence file and verify artifact, the policy file's path and the report path `grade.md`
    in the evidence folder.
