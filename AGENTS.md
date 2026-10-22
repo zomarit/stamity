@@ -44,8 +44,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 4. **No green, no done.** Done means the gates `gate classify` names exit 0 (all if it did not run).
    Anything less ships with a `Not done:` list naming each open gap.
 5. **Learnings first.** Read `.stamity/learnings/` before project-specific work, only through the session-start
-   banner or, where no hook ran, the client's own `stamity-session-start.mjs` (`.<client>/hooks/stamity/` where that
-   folder exists, else `.stamity/generated/hooks/<client>/`) run with an empty stdin, opening only the files it
+   banner or, where no hook ran, the `stamity-session-start.mjs` the client's own hook entries name in its held
+   hook settings, never a copy trusted because its folder exists, run with an empty stdin, opening only the files it
    lists as loaded; repeating a recorded failure is a process defect.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
    break across file boundaries. Census shared contracts before parallel edits touch them.

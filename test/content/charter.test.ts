@@ -336,15 +336,21 @@ describe("corpus charter", () => {
   // stop being emitted there (u5), that path exists for three clients only, so invariant 5 names
   // the client's own script in its client folder, else the generated folder, on four lines (the
   // fourth paid by a Conditional-layer trim). The clauses the old pins held are all still pinned.
+  // TEST CHANGE, justified (2026-10-22, the whole-branch fix round, review/52, the maintainer's
+  // choice "Path from the hook settings"): the four lines named `.<client>/hooks/stamity/` "where
+  // that folder exists", which only one client's engine writes; for the others that folder is
+  // unowned and unheld, so a script planted there would run in place of the screened one. The
+  // invariant now names the script the client's own hook entries name in its held hook settings,
+  // and trusts no folder because it exists. Still four lines, the same bytes, no client named.
   it("holds invariant 5's screened read, every clause on its four lines", async () => {
     const { body } = await readCharterTemplate(CORPUS_ROOT);
     const five = invariantText(body, 5);
 
-    // The maintainer's wording, line for line (plan 018 file 2, Decisions).
+    // The maintainer's wording, line for line (plan 018 file 2, Decisions; review/52).
     expect(five.lines).toEqual([
       "5. **Learnings first.** Read `.stamity/learnings/` before project-specific work, only through the session-start",
-      "   banner or, where no hook ran, the client's own `stamity-session-start.mjs` (`.<client>/hooks/stamity/` where that",
-      "   folder exists, else `.stamity/generated/hooks/<client>/`) run with an empty stdin, opening only the files it",
+      "   banner or, where no hook ran, the `stamity-session-start.mjs` the client's own hook entries name in its held",
+      "   hook settings, never a copy trusted because its folder exists, run with an empty stdin, opening only the files it",
       "   lists as loaded; repeating a recorded failure is a process defect.",
     ]);
     expect(five.text).toContain("Read `.stamity/learnings/` before project-specific work");
@@ -353,9 +359,14 @@ describe("corpus charter", () => {
     // (`hooks/*/`) and stdin from `/dev/null`, which PowerShell and cmd cannot run. The command
     // now names the client folder and an empty stdin, which every shell can supply.
     expect(five.text).toContain(
-      "where no hook ran, the client's own `stamity-session-start.mjs` (`.<client>/hooks/stamity/` where that " +
-        "folder exists, else `.stamity/generated/hooks/<client>/`) run with an empty stdin",
+      "where no hook ran, the `stamity-session-start.mjs` the client's own hook entries name in its held hook " +
+        "settings, never a copy trusted because its folder exists, run with an empty stdin",
     );
+    // No folder is named, so none is trusted for existing (review/52): neither the client folder the
+    // 1.3.1 draft preferred nor the generated folder it fell back to.
+    expect(five.text).not.toContain("`.<client>/hooks/stamity/`");
+    expect(five.text).not.toContain("`.stamity/generated/hooks/<client>/`");
+    expect(five.text).not.toContain("where that folder exists");
     // The single generated path the 1.3.0 wording gave is gone: it no longer holds for every client.
     expect(five.text).not.toContain("`node .stamity/generated/hooks/<client>/stamity-session-start.mjs`");
     expect(five.text).not.toContain("/dev/null");

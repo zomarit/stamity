@@ -67,10 +67,14 @@ const INVARIANTS_HASHES: Record<string, string> = {
   // repository ran it and this row moves instead of a 1.3.1, as the 1.2.0 row did.
   "1.3.0": "19d2cb52f02a1f02831fa28432a86f2f32245bbc73e789b5b8a823f63501e960",
   // Appended 2026-10-21 (plan 018 file 2, unit u4-charter; REQ-FLOW-063, REQ-FLOW-088): a PATCH
-  // clarification. Invariant 5 names the client's own session-start script, in
-  // `.<client>/hooks/stamity/` where that folder exists, else `.stamity/generated/hooks/<client>/`,
-  // on four lines where it had three; the floor is unchanged. The 1.3.0 row above stays as the record.
-  "1.3.1": "c4f84822e1f3a93feceb78576715a47627e93aa738cc13ebb450960c5267d01c",
+  // clarification. Invariant 5 names the client's own session-start script on four lines where it
+  // had three; the floor is unchanged. The 1.3.0 row above stays as the record.
+  // TEST CHANGE, justified (2026-10-22, the whole-branch fix round, `review/52`): an in-version text
+  // fix, c4f84822… -> c21ecad9…. The script is the one the client's own hook entries name in its held
+  // hook settings, where the first text preferred `.<client>/hooks/stamity/` whenever that folder
+  // existed, a folder unowned and unheld for most clients. No release or tag carries the earlier
+  // 1.3.1 text, so no repository ran it and this row moves instead of a 1.3.2, as the 1.3.0 row did.
+  "1.3.1": "c21ecad95adac354f4efcaa5ee842fcfed998071d513ae5e6b74846a26c7cfcd",
 };
 
 /** The rendered version line, template form and emitted form alike. */

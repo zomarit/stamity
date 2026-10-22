@@ -3413,8 +3413,10 @@ words on two lines, and the 1.3.1 hash row matching, where it read the 1.3.0 row
 read `:48-50`). The close walk and its other criteria are unchanged.
 
 - **As built:** the 1.3.1 hash row is `test/content/invariantsVersion.test.ts:73`, beside the 1.3.0 row it leaves as the
-  record (`:68`). The widest template line is the maturity line, which counts 116 characters with its em dash as one
-  (`content/charter/stamity-charter.md:28`; the width case counts characters, not bytes).
+  record (`:68`). The widest template lines are invariant 6's first line and the Touchpoints paragraph's third, at 117
+  characters each, the cap (`content/charter/stamity-charter.md:61`, `:73`); the maturity line counts 116 with its em
+  dash as one (`:28`; the width case counts characters, not bytes). (Corrected 2026-10-22, `review/51`; it named the
+  maturity line the widest.)
 - **Proof:** `test/content/charter.test.ts` ("keeps every template line at or under 117 characters", and "asks in its
   opening paragraph for plain words, stated confidence and a no said first", which pins the 95 lines),
   `test/content/invariantsVersion.test.ts` ("hashes the invariants block to the version that ratified it").
@@ -3671,17 +3673,20 @@ The text names the session by what the agent observes, never by client.
 
 Added 2026-10-15 (plan 020 file 3, unit `f2-protocol-charter` and its fix round, `review/13`; the delta's amended text
 from `review/27`). Charter invariant 5 reads: "Read `.stamity/learnings/` before project-specific work, only through
-the session-start banner or, where no hook ran, the client's own `stamity-session-start.mjs` (`.<client>/hooks/stamity/`
-where that folder exists, else `.stamity/generated/hooks/<client>/`) run with an empty stdin, opening only the files it
-lists as loaded; repeating a recorded failure is a process defect." (`content/charter/stamity-charter.md:57-60`). The
+the session-start banner or, where no hook ran, the `stamity-session-start.mjs` the client's own hook entries name in
+its held hook settings, never a copy trusted because its folder exists, run with an empty stdin, opening only the files
+it lists as loaded; repeating a recorded failure is a process defect." (`content/charter/stamity-charter.md:57-60`). The
 command names no glob and no `/dev/null`, so it reads the same under every shell. Since plan 021 file 2's
 `w6-claude-hooks-in-claude-dir`, Claude Code's hook entries run the copy under `.claude/hooks/stamity/`; since plan 018
-file 2, the invariant names that folder for a client that has one, and `sync` stops emitting
-`.stamity/generated/hooks/claude/`, deletes each copy there whose bytes match its ledger row, and keeps and names an
-edited one. (Amended 2026-10-22; the invariant read "…or, where no hook ran,
+file 2, the invariant names the script a client's own hook entries name, never a folder found to exist, and `sync` stops
+emitting `.stamity/generated/hooks/claude/`, deletes each copy there whose bytes match its ledger row, and keeps and
+names an edited one. (Amended 2026-10-22; the invariant read "…or, where no hook ran,
 `node .stamity/generated/hooks/<client>/stamity-session-start.mjs` run with an empty stdin, …" at `:55-57`, and the
 sentence after it read "the generated copy the invariant names is still written, so the command holds for Claude Code
-as for the other clients".)
+as for the other clients". Amended again 2026-10-22, `review/52`: the invariant read "…the client's own
+`stamity-session-start.mjs` (`.<client>/hooks/stamity/` where that folder exists, else
+`.stamity/generated/hooks/<client>/`) run with an empty stdin, …", and the sentence after it read "the invariant names
+that folder for a client that has one".)
 
 - **Amended 2026-10-16** (plan 021 file 1, units `u7-learn-read` and `u9-unattended-skill`). Given a session where no
   session-start hook ran, Then learnings are read through the screen, by the committed script run with an empty stdin
@@ -3698,6 +3703,13 @@ as for the other clients".)
   leave through `sync`'s existing reclaim sweep: an unedited copy is removed by its recorded hash, an edited one kept and
   named. This repository's own `sync` at integration removed its seven old copies that way (the run's record,
   integration part 2). The upgrade window a base older than 1.16.0 opens on Claude Code's GitHub Action is REQ-FLOW-113's.
+  - **Amended 2026-10-22** (the whole-branch fix round, `review/52`, the maintainer's choice "Path from the hook
+    settings"). The first 1.3.1 text preferred `.<client>/hooks/stamity/` wherever that folder existed. Only one
+    client's engine writes a copy there; for the others the folder is neither engine-owned nor person-only
+    (`src/change/personOnlyPaths.ts`), so a script planted there would run in place of the screened one. The invariant
+    now names the script the client's own hook entries name in its held hook settings, each of which is person-only
+    (`.claude/settings*.json`, `.cursor/hooks.json`, `.codex/hooks.json`, `.github/hooks/**`), and trusts no folder
+    because it exists. Still invariants 1.3.1: no release carried the first text, so the hash row moves in place.
   - **As built:** the session start copy run by hand with an empty stdin prints the learnings banner
     (`test/merge/claudeHookCopies.test.ts`, "the session start copy run by hand with an empty stdin prints the
     learnings banner (invariant 5)"). The hook-latency script times the copy by default, and the QA harness hashes
@@ -6191,11 +6203,12 @@ above.
 
 **REQ-FLOW-088** (added 2026-10-15)
 
-- GIVEN the charter THEN invariant 5 names the client's own `stamity-session-start.mjs`, in `.<client>/hooks/stamity/`
-  where that folder exists, else `.stamity/generated/hooks/<client>/`, run with an empty stdin and opening only the files
-  it lists as loaded, on four lines, and holds no `/dev/null`, no `hooks/*/` and no
+- GIVEN the charter THEN invariant 5 names the `stamity-session-start.mjs` the client's own hook entries name in its
+  held hook settings, never a copy trusted because its folder exists, run with an empty stdin and opening only the files
+  it lists as loaded, on four lines, and holds no `/dev/null`, no `hooks/*/`, no folder path and no
   `node .stamity/generated/hooks/<client>/stamity-session-start.mjs` (amended 2026-10-22; it named that one generated
-  path). *(test: `test/content/charter.test.ts`)*
+  path, then, until `review/52`, `.<client>/hooks/stamity/` where that folder exists, else
+  `.stamity/generated/hooks/<client>/`). *(test: `test/content/charter.test.ts`)*
 - GIVEN a Claude Code setup in the repository layout THEN `sync` writes nothing under `.stamity/generated/hooks/claude/`;
   GIVEN the old layout's copies and ledger rows THEN the upgrade's `sync` removes each unedited copy by its recorded hash
   and keeps and names an edited one. *(test: `test/merge/claudeHookCopies.test.ts`; added 2026-10-22)*

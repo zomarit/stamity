@@ -155,10 +155,9 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   the two interface skills in the `frontend` pack and `/st-plain` in the core
   ([`docs/capability-matrix.md`](docs/capability-matrix.md)).
 - **The charter moves to invariants 1.3.1.** `AGENTS.md`, and with Codex selected `AGENTS.override.md`, now read
-  `Invariants version 1.3.1 · ratified 2026-08-31 · last amended 2026-10-21`. Invariant 5 names the client's own
-  `stamity-session-start.mjs`, under `.<client>/hooks/stamity/` where that folder exists and under
-  `.stamity/generated/hooks/<client>/` otherwise, where it named the generated path alone, which Claude Code no longer
-  has. The charter's opening paragraph gains two lines: write every reply in plain words, say how sure you are and
+  `Invariants version 1.3.1 · ratified 2026-08-31 · last amended 2026-10-21`. Invariant 5 names the
+  `stamity-session-start.mjs` the client's own hook entries name in its held hook settings, and trusts no copy because
+  its folder exists, where it named the generated path alone, which Claude Code no longer has. The charter's opening paragraph gains two lines: write every reply in plain words, say how sure you are and
   what that rests on, and say no first when the answer is no. Three lines of the Conditional layer are shortened to
   pay for them, so the charter stays at 95 lines.
 - **The design-system detector's file holds repo facts only.** `.stamity/design-system-inventory.md` ends in a

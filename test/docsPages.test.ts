@@ -5285,11 +5285,15 @@ describe("the Action's restore covering Claude Code's hook copies (w7-action-pag
       // folder and `sync` no longer writes Claude Code's generated copies (u4-charter, u5-hook-copies), so the merged
       // sentence names the copy and the stopped emission where it read "the generated copy the invariant names is
       // still written"; that sentence survives only as the quoted text of the amendment note.
+      // TEST CHANGE, justified (2026-10-22, the whole-branch fix round, review/52): invariant 5 no longer names
+      // `.<client>/hooks/stamity/` where that folder exists; it names the script the client's own hook entries name in
+      // its held hook settings, so the merged sentence says that, and the folder sentence survives only as quoted text.
       const flow088 = requirement("REQ-FLOW-088");
       expect(flow088).toMatch(
-        /Claude Code's hook entries run the copy under `\.claude\/hooks\/stamity\/`; since plan 018 file 2, the invariant names that folder for a client that has one, and `sync` stops emitting `\.stamity\/generated\/hooks\/claude\/`/,
+        /Claude Code's hook entries run the copy under `\.claude\/hooks\/stamity\/`; since plan 018 file 2, the invariant names the script a client's own hook entries name, never a folder found to exist, and `sync` stops emitting `\.stamity\/generated\/hooks\/claude\/`/,
       );
       expect(flow088).not.toMatch(/`\.claude\/hooks\/stamity\/`; the generated copy the invariant names is still written/);
+      expect(flow088).not.toMatch(/the invariant names that folder for a client that has one, and `sync` stops emitting/);
       expect(requirement("REQ-FLOW-064")).toContain(`\`${CLAUDE_HOOKS_DIR}/stamity-review-gate.mjs\``);
     });
   });

@@ -8120,8 +8120,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
-   banner or, where no hook ran, the client's own \`stamity-session-start.mjs\` (\`.<client>/hooks/stamity/\` where that
-   folder exists, else \`.stamity/generated/hooks/<client>/\`) run with an empty stdin, opening only the files it
+   banner or, where no hook ran, the \`stamity-session-start.mjs\` the client's own hook entries name in its held
+   hook settings, never a copy trusted because its folder exists, run with an empty stdin, opening only the files it
    lists as loaded; repeating a recorded failure is a process defect.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
    break across file boundaries. Census shared contracts before parallel edits touch them.
@@ -8219,8 +8219,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
-   banner or, where no hook ran, the client's own \`stamity-session-start.mjs\` (\`.<client>/hooks/stamity/\` where that
-   folder exists, else \`.stamity/generated/hooks/<client>/\`) run with an empty stdin, opening only the files it
+   banner or, where no hook ran, the \`stamity-session-start.mjs\` the client's own hook entries name in its held
+   hook settings, never a copy trusted because its folder exists, run with an empty stdin, opening only the files it
    lists as loaded; repeating a recorded failure is a process defect.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
    break across file boundaries. Census shared contracts before parallel edits touch them.
@@ -8599,8 +8599,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
-   banner or, where no hook ran, the client's own \`stamity-session-start.mjs\` (\`.<client>/hooks/stamity/\` where that
-   folder exists, else \`.stamity/generated/hooks/<client>/\`) run with an empty stdin, opening only the files it
+   banner or, where no hook ran, the \`stamity-session-start.mjs\` the client's own hook entries name in its held
+   hook settings, never a copy trusted because its folder exists, run with an empty stdin, opening only the files it
    lists as loaded; repeating a recorded failure is a process defect.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
    break across file boundaries. Census shared contracts before parallel edits touch them.
@@ -8684,8 +8684,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
-   banner or, where no hook ran, the client's own \`stamity-session-start.mjs\` (\`.<client>/hooks/stamity/\` where that
-   folder exists, else \`.stamity/generated/hooks/<client>/\`) run with an empty stdin, opening only the files it
+   banner or, where no hook ran, the \`stamity-session-start.mjs\` the client's own hook entries name in its held
+   hook settings, never a copy trusted because its folder exists, run with an empty stdin, opening only the files it
    lists as loaded; repeating a recorded failure is a process defect.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
    break across file boundaries. Census shared contracts before parallel edits touch them.
@@ -8953,18 +8953,18 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "5a65f38e6dcc470d47f704ca2872816c8d8709b413aa3781344e6dbe8ea2cf9f 94261 bytes",
+  ".stamity/manifest.json": "b0c6cbdf5f4d3d01959d3c12e970ade5368974b8c59b49f3a8e014674747bbbb 94261 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
-  "AGENTS.md": "52317d9689d91726e861c18f197185053f6a796402694fbb58a77c98be7a9edc 6548 bytes",
-  "AGENTS.override.md": "59f3a8d80630df9a63213670a8550049141d2194398a23dbe9fa8cc55438d4a8 25872 bytes",
+  "AGENTS.md": "6b5b5bebfd779fe5b513cd8c2c41fa3b4dd70826435e9df9c70076ba48c29b98 6548 bytes",
+  "AGENTS.override.md": "122504f41cc40a99c65cba4995c228bf4a5137d738324bbe3a847c6aaa5192db 25872 bytes",
   "CLAUDE.md": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
-  "packages/alpha/AGENTS.md": "27fbe8f89af583a7ecca9468f772454f6b6f91f5c5d38923b3c3c0a1e78f430b 5682 bytes",
+  "packages/alpha/AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
   "packages/alpha/src/index.ts": "861f47677ae6211aa1c061e4539af4aec5ece3ad7cd009963cf22d3274a9ba5a 27 bytes",
-  "packages/beta/AGENTS.md": "27fbe8f89af583a7ecca9468f772454f6b6f91f5c5d38923b3c3c0a1e78f430b 5682 bytes",
+  "packages/beta/AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
   "packages/beta/package.json": "3e2d6efbc58f695353eaf34b6b1f3a65e3cd5093da2ac0a315f088fad21eddd1 70 bytes",
   "packages/beta/src/index.ts": "00fbaec0f27cf6037ed8001f2340a515175b1c48686ee94d6acd2513254a05b5 26 bytes",
   "pnpm-lock.yaml": "f0bcde463fa201480015b9caa7db2017d3c1b6ca9c7e133df955038c54333d48 23 bytes",
@@ -16381,8 +16381,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
-   banner or, where no hook ran, the client's own \`stamity-session-start.mjs\` (\`.<client>/hooks/stamity/\` where that
-   folder exists, else \`.stamity/generated/hooks/<client>/\`) run with an empty stdin, opening only the files it
+   banner or, where no hook ran, the \`stamity-session-start.mjs\` the client's own hook entries name in its held
+   hook settings, never a copy trusted because its folder exists, run with an empty stdin, opening only the files it
    lists as loaded; repeating a recorded failure is a process defect.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
    break across file boundaries. Census shared contracts before parallel edits touch them.
@@ -16507,8 +16507,8 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "70bf8586754480425a4834e4ee755e251daa4cc9ab3f526fcf973a6b718cb205 28322 bytes",
-  "AGENTS.md": "27fbe8f89af583a7ecca9468f772454f6b6f91f5c5d38923b3c3c0a1e78f430b 5682 bytes",
+  ".stamity/manifest.json": "ee3c90bf8b9dae9239ef7de7bdb3db969c9030f70925a460b0dba381e89cc210 28322 bytes",
+  "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
   "CLAUDE.md": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
@@ -16707,8 +16707,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
-   banner or, where no hook ran, the client's own \`stamity-session-start.mjs\` (\`.<client>/hooks/stamity/\` where that
-   folder exists, else \`.stamity/generated/hooks/<client>/\`) run with an empty stdin, opening only the files it
+   banner or, where no hook ran, the \`stamity-session-start.mjs\` the client's own hook entries name in its held
+   hook settings, never a copy trusted because its folder exists, run with an empty stdin, opening only the files it
    lists as loaded; repeating a recorded failure is a process defect.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
    break across file boundaries. Census shared contracts before parallel edits touch them.
@@ -16792,8 +16792,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
-   banner or, where no hook ran, the client's own \`stamity-session-start.mjs\` (\`.<client>/hooks/stamity/\` where that
-   folder exists, else \`.stamity/generated/hooks/<client>/\`) run with an empty stdin, opening only the files it
+   banner or, where no hook ran, the \`stamity-session-start.mjs\` the client's own hook entries name in its held
+   hook settings, never a copy trusted because its folder exists, run with an empty stdin, opening only the files it
    lists as loaded; repeating a recorded failure is a process defect.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
    break across file boundaries. Census shared contracts before parallel edits touch them.
@@ -17168,8 +17168,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
-   banner or, where no hook ran, the client's own \`stamity-session-start.mjs\` (\`.<client>/hooks/stamity/\` where that
-   folder exists, else \`.stamity/generated/hooks/<client>/\`) run with an empty stdin, opening only the files it
+   banner or, where no hook ran, the \`stamity-session-start.mjs\` the client's own hook entries name in its held
+   hook settings, never a copy trusted because its folder exists, run with an empty stdin, opening only the files it
    lists as loaded; repeating a recorded failure is a process defect.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
    break across file boundaries. Census shared contracts before parallel edits touch them.
@@ -17253,8 +17253,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
-   banner or, where no hook ran, the client's own \`stamity-session-start.mjs\` (\`.<client>/hooks/stamity/\` where that
-   folder exists, else \`.stamity/generated/hooks/<client>/\`) run with an empty stdin, opening only the files it
+   banner or, where no hook ran, the \`stamity-session-start.mjs\` the client's own hook entries name in its held
+   hook settings, never a copy trusted because its folder exists, run with an empty stdin, opening only the files it
    lists as loaded; repeating a recorded failure is a process defect.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
    break across file boundaries. Census shared contracts before parallel edits touch them.
@@ -17378,15 +17378,15 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "a6f0b0c5e7eaf0d19a535a67c7f26a45c016869d46aa3505e65c771c13f5d115 22156 bytes",
-  "AGENTS.md": "27fbe8f89af583a7ecca9468f772454f6b6f91f5c5d38923b3c3c0a1e78f430b 5682 bytes",
-  "AGENTS.override.md": "59f3a8d80630df9a63213670a8550049141d2194398a23dbe9fa8cc55438d4a8 25872 bytes",
+  ".stamity/manifest.json": "b34daaf5a1cf5f9a235f1b7452114e02b4fe9a3d847c7549fd702aa1ccb49b65 22156 bytes",
+  "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
+  "AGENTS.override.md": "122504f41cc40a99c65cba4995c228bf4a5137d738324bbe3a847c6aaa5192db 25872 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
-  "packages/alpha/AGENTS.md": "27fbe8f89af583a7ecca9468f772454f6b6f91f5c5d38923b3c3c0a1e78f430b 5682 bytes",
+  "packages/alpha/AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
   "packages/alpha/src/index.ts": "861f47677ae6211aa1c061e4539af4aec5ece3ad7cd009963cf22d3274a9ba5a 27 bytes",
-  "packages/beta/AGENTS.md": "27fbe8f89af583a7ecca9468f772454f6b6f91f5c5d38923b3c3c0a1e78f430b 5682 bytes",
+  "packages/beta/AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
   "packages/beta/package.json": "3e2d6efbc58f695353eaf34b6b1f3a65e3cd5093da2ac0a315f088fad21eddd1 70 bytes",
   "packages/beta/src/index.ts": "00fbaec0f27cf6037ed8001f2340a515175b1c48686ee94d6acd2513254a05b5 26 bytes",
   "pnpm-lock.yaml": "f0bcde463fa201480015b9caa7db2017d3c1b6ca9c7e133df955038c54333d48 23 bytes",
@@ -17608,8 +17608,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
-   banner or, where no hook ran, the client's own \`stamity-session-start.mjs\` (\`.<client>/hooks/stamity/\` where that
-   folder exists, else \`.stamity/generated/hooks/<client>/\`) run with an empty stdin, opening only the files it
+   banner or, where no hook ran, the \`stamity-session-start.mjs\` the client's own hook entries name in its held
+   hook settings, never a copy trusted because its folder exists, run with an empty stdin, opening only the files it
    lists as loaded; repeating a recorded failure is a process defect.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
    break across file boundaries. Census shared contracts before parallel edits touch them.
@@ -17728,10 +17728,10 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "4fdcee1921a4bcac13e93be0eb0b7816303273809b109409e899905bc0014158 20257 bytes",
+  ".stamity/manifest.json": "5e837c27abbbdeee7f4087c2f9c0bcaaa6860808ab570309d35853862bdbc6a8 20257 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
-  "AGENTS.md": "27fbe8f89af583a7ecca9468f772454f6b6f91f5c5d38923b3c3c0a1e78f430b 5682 bytes",
+  "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
@@ -18206,8 +18206,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 4. **No green, no done.** Done means the gates \`gate classify\` names exit 0 (all if it did not run).
    Anything less ships with a \`Not done:\` list naming each open gap.
 5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work, only through the session-start
-   banner or, where no hook ran, the client's own \`stamity-session-start.mjs\` (\`.<client>/hooks/stamity/\` where that
-   folder exists, else \`.stamity/generated/hooks/<client>/\`) run with an empty stdin, opening only the files it
+   banner or, where no hook ran, the \`stamity-session-start.mjs\` the client's own hook entries name in its held
+   hook settings, never a copy trusted because its folder exists, run with an empty stdin, opening only the files it
    lists as loaded; repeating a recorded failure is a process defect.
 6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint: shared API shapes, schemas, and events
    break across file boundaries. Census shared contracts before parallel edits touch them.
@@ -18353,8 +18353,8 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "878448708a51a414ce38e83823471bfad1a3a27d05d7a136d8599798ce3b7daa 24101 bytes",
-  "AGENTS.md": "52317d9689d91726e861c18f197185053f6a796402694fbb58a77c98be7a9edc 6548 bytes",
+  ".stamity/manifest.json": "06d4ea0c229c99c70069028b6207137624c3ca21aef2e3f055ed2b77d5b19c96 24101 bytes",
+  "AGENTS.md": "6b5b5bebfd779fe5b513cd8c2c41fa3b4dd70826435e9df9c70076ba48c29b98 6548 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
