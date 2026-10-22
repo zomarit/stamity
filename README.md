@@ -110,7 +110,7 @@ Each entry below is the one home for its subject. This page links; it does not r
 | Path | What lives there |
 |---|---|
 | [`content/`](content/) | The canonical corpus — 1 charter, 9 commands, 10 agents, 8 skills, 12 rules. Authored once, emitted per client. |
-| [`packs/`](packs/) | Four first-party packs — `frontend`, `ops`, `product-audit`, `scaffold` — installed by `add` behind the trust ladder. |
+| [`packs/`](packs/) | Two first-party packs — `frontend`, `production` — installed by `add` behind the trust ladder. |
 | [`docs/capability-matrix.md`](docs/capability-matrix.md) | Generated: what each client supports, rendered from adapter code. |
 | [`docs/cli-reference.md`](docs/cli-reference.md) | Generated: every command, flag and exit code, rendered from the program. |
 | [`docs/configuration.md`](docs/configuration.md) | Generated: the addressable config surface, rendered from the `config` command's key registry, each row's unset value measured against a probe manifest. |
