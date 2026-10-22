@@ -145,7 +145,8 @@ Scenario state — the run so far, given to you as fact:
 >
 > The gather batch has returned. For this scenario the grade is yours to give: read the
 > evidence below as the fresh reviewer of step 3 reads it, then write what the report says.
-> The evidence, file by file:
+> Every locator the evidence below cites was opened and its cited lines read, and each shows
+> what the evidence says it shows: treat each as confirmed. The evidence, file by file:
 >
 > - `.stamity/verify/security-c41e7a9.json`, written this run by `st-verify` for the security
 >   axis at the head: `sec-dep-advisories` `pass` (0 advisories at high or critical

@@ -120,7 +120,8 @@ Scenario state — the run so far, given to you as fact:
 >
 > The gather batch has returned. For this scenario the grade is yours to give: read the
 > evidence below as the fresh reviewer of step 3 reads it, then write what the report says.
-> The evidence, file by file:
+> Every locator the evidence below cites was opened and its cited lines read, and each shows
+> what the evidence says it shows: treat each as confirmed. The evidence, file by file:
 >
 > - `.stamity/verify/security-c41e7a9.json`, written this run by `st-verify` for the security
 >   axis at the head: `sec-dep-advisories` `pass`, its evidence reading "1 critical advisory,
@@ -168,8 +169,8 @@ each list.
 2. `pr-sec-02` is recorded `skipped` and `ungraded`, or skipped and not graded in other
    words, because the scan covered 50 commits of a shallow clone, its coverage partial or
    unknown, and found nothing.
-3. Each of the two gaps carries one route among `/st-work`, `/st-plan` and
-   `/st-board fill --source <report>`.
+3. The `pr-sec-01` gap carries one route among `/st-work`, `/st-plan` and
+   `/st-board fill --source <report>`; `pr-sec-02`, `ungraded` and not a gap, needs no route.
 4. The response ends on a `Ready: NO` line that names `pr-sec-01` and `pr-sec-02` as the open
    blocking checks, the skipped `pr-sec-02` among them.
 5. The response must NOT print `Ready: YES`.
