@@ -1,10 +1,11 @@
 import { createHash } from "node:crypto";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ADAPTER_REGISTRY } from "../../src/adapters/registry.ts";
 import type { ContentRoots } from "../../src/content/catalog.ts";
 import { composeEmissionPlanner, type EmissionContext } from "../../src/emit/planner.ts";
 import { createManifest } from "../../src/manifest/manifest.ts";
+import type * as CuratedApi from "../../src/pack/curated.ts";
 import { applyPackInstall, planPackInstall } from "../../src/pack/install.ts";
 import type { Tool } from "../../src/types/core.ts";
 import { EngineError } from "../../src/types/errors.ts";
@@ -20,10 +21,12 @@ import { useTempDir } from "../support/tempDir.ts";
  * and `init` all plan through `composeEmissionPlanner`, so the
  * refusal is asserted there, on the plan, naming every owner and its remedy.
  *
- * No mocks: real temp repositories, packs installed through the engine's own
- * plan/apply path (which records a name clash but, unlike `add`, does not act
- * on it — the state an earlier engine left behind), the bundled corpus, and
- * the production adapter registry.
+ * No mocks but one: real temp repositories, packs installed through the
+ * engine's own plan/apply path (which records a name clash but, unlike `add`,
+ * does not act on it — the state an earlier engine left behind), the bundled
+ * corpus, and the production adapter registry. The one mock is the case whose
+ * catalog read throws, which a real checkout cannot stage without writing into
+ * the `packs/` tree every parallel suite reads.
  */
 
 const getRepo = useTempDir("planner-name-clash");
@@ -301,6 +304,54 @@ describe("composeEmissionPlanner — an installed cross-class name clash", () =>
       `the fork-layer file at ${forkPath}: rename or remove it in the fork's source`,
     );
     expect(refusal.message).not.toContain("clean --pack");
+  });
+
+  it("keeps add <id> when the catalog read throws, rather than replacing the clash diagnosis", async () => {
+    const packDir = await stagePack("acme-demo", {
+      "commands/st-drill.md": artifact("drill", "command"),
+      "skills/st-drill/SKILL.md": artifact("drill", "skill"),
+    });
+    const manifest = await installPack(packDir, manifestFor(["cursor"]));
+
+    // Mocked: only `lookupCatalogEntry` is redirected, to throw as a catalog that cannot be
+    // read does, in a fresh module graph loaded for this case alone.
+    vi.resetModules();
+    vi.doMock("../../src/pack/curated.ts", async (importOriginal) => {
+      const actual = await importOriginal<typeof CuratedApi>();
+      return {
+        ...actual,
+        lookupCatalogEntry: (): never => {
+          throw new Error("fixture: the catalog cannot be read");
+        },
+      };
+    });
+    try {
+      const fresh = await import("../../src/emit/planner.ts");
+      const { ADAPTER_REGISTRY: freshRegistry } = await import("../../src/adapters/registry.ts");
+      const { EngineError: FreshEngineError } = await import("../../src/types/errors.ts");
+
+      const outcome = await fresh
+        .composeEmissionPlanner(freshRegistry)
+        .planWithWarnings(ctxOf(manifest))
+        .then(
+          () => null,
+          (cause: unknown) => cause,
+        );
+
+      expect(outcome, "the plan built; a name clash must refuse it").toBeInstanceOf(FreshEngineError);
+      const refusal = outcome as EngineError;
+      expect(refusal.code).toBe("VALIDATION_ERROR");
+      expect(refusal.message.split("\n")).toContain(`  ${DRILL_LINE}`);
+      expect(refusal.message).not.toContain("the catalog cannot be read");
+      expect(refusal.message).toContain(
+        `\`${call("sync")}\`, then \`${call("add acme-demo")}\` once the pack ships distinct names, ` +
+          `then \`${call("sync")}\``,
+      );
+      expect(refusal.message).not.toContain("add <its folder or package path>");
+    } finally {
+      vi.doUnmock("../../src/pack/curated.ts");
+      vi.resetModules();
+    }
   });
 
   it("plans a pack whose names are distinct, its skill reaching the shared tree", async () => {
