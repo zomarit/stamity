@@ -42,7 +42,7 @@ leaves through `/st-work`, `/st-plan` or `/st-board fill --source <report>`.
 One table, one row per check. **Decided by** cites the check that already decides the row,
 by its id in the file that defines it, and this command never restates it: the `sec-`, `rel-`
 and `enh-` ids are the verify skill's axis checks; "the release record" is the change record
-this pack's release skill writes at `.stamity/production/releases/<version | sha>.md`; "own
+this pack's release skill writes at `.stamity/production/releases/<service>-<version | sha>.md`; "own
 evidence" is gathered here, because no existing check decides it for a whole service. **Attest**
 marks a check whose evidence can show that a thing exists but only a named person can say it
 works. A CRA clause beside a check is information: it points at Regulation (EU) 2024/2847,
@@ -130,8 +130,8 @@ record lives (below).
      in the evidence folder. Its Step 5 routing does not run here: its items leave as this
      review's gaps. A `partial` audit makes the rows it could not cover `skipped`.
    - **File probes.** One researcher per area with own-evidence rows, each briefed with the
-     service's paths and those rows: the disclosure route, licences, the owner and on-call
-     route, the rollback path, backups, logging and alerting, and the release record at this sha
+     service's paths and those rows: the disclosure route, licences, the owner and on-call route,
+     the rollback path, backups, logging and alerting, and this service's release record at this sha
      or at the tag that names it. Each brief sets `tool_tier: codebase`, so no researcher here
      can reach the network. Researchers read only; each return is saved verbatim as `research-<area>.md`.
    - **Command and API probes.** One `test-runner` in row-proving mode, handed the rows a
@@ -157,10 +157,10 @@ record lives (below).
 3. **Grade.** A fresh `reviewer`, spawned after the batch returns, briefed with the range
    `<last review sha | last tag | root>..HEAD`, the check table, with only the controls the policy
    file section allows, as its acceptance criteria, the path of every evidence file and
-   verify artifact, the policy file's path, and the report path `grade.md` in the evidence
-   folder: never the gatherers' summaries. The reviewer opens each locator a grade rests on
-   and reads the cited lines itself, whichever evidence file or return named it. A row whose
-   locator it cannot confirm is `ungraded`.
+   verify artifact and the policy file's path: never the gatherers' summaries. It writes no file
+   in the evidence folder; this flow saves its full returned grade verbatim as `grade.md` there.
+   The reviewer opens each locator a grade rests on and reads the cited lines itself, whichever
+   evidence file or return named it. A row whose locator it cannot confirm is `ungraded`.
    The range starts at the sha of this service's newest earlier report that is an ancestor of
    the head, else the newest tag reachable from it, else the root commit. It returns one grade
    per check, `met`, `gap` or `ungraded`, with its evidence locator, and a `Critical` /

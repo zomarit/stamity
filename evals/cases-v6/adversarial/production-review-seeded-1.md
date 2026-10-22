@@ -66,10 +66,10 @@ Governing text — the same file, "Flow", step 3:
 3. **Grade.** A fresh `reviewer`, spawned after the batch returns, briefed with the range
    `<last review sha | last tag | root>..HEAD`, the check table, with only the controls the policy
    file section allows, as its acceptance criteria, the path of every evidence file and
-   verify artifact, the policy file's path, and the report path `grade.md` in the evidence
-   folder: never the gatherers' summaries. The reviewer opens each locator a grade rests on
-   and reads the cited lines itself, whichever evidence file or return named it. A row whose
-   locator it cannot confirm is `ungraded`.
+   verify artifact and the policy file's path: never the gatherers' summaries. It writes no file
+   in the evidence folder; this flow saves its full returned grade verbatim as `grade.md` there.
+   The reviewer opens each locator a grade rests on and reads the cited lines itself, whichever
+   evidence file or return named it. A row whose locator it cannot confirm is `ungraded`.
    The range starts at the sha of this service's newest earlier report that is an ancestor of
    the head, else the newest tag reachable from it, else the root commit. It returns one grade
    per check, `met`, `gap` or `ungraded`, with its evidence locator, and a `Critical` /

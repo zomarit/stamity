@@ -7,6 +7,7 @@ import { buildPreToolUseGuardScript } from "../../src/hooks/scripts.ts";
 import { CATALOG_PINS } from "../../src/pack/catalogPins.ts";
 import { lookupCatalogEntry } from "../../src/pack/curated.ts";
 import { enumeratePackContent, readPackManifest, verifyIntegrityMap } from "../../src/pack/manifest.ts";
+import { verdictReportWritePaths } from "../../src/roster/agentPolicies.ts";
 import { TOOLS } from "../../src/types/core.ts";
 import {
   assertDenyClean,
@@ -560,7 +561,14 @@ describe("/st-production-review — what a file can and cannot make the review d
   it("briefs the release-record probe with the sha or the tag that names it", async () => {
     // ADDED: review/59. Release mode keys the record by version (`releases/<version>.md`), so a
     // probe looking only for `<sha>.md` reports a record absent that exists at a tagged commit.
-    expect(flowSection(await review(), "Flow")).toContain("the release record at this sha or at the tag that names it");
+    // TEST CHANGE, justified: pr/3. The release skill keys its record by the service too, so the
+    // probe looks for this service's record.
+    expect(flowSection(await review(), "Flow")).toContain(
+      "this service's release record at this sha or at the tag that names it",
+    );
+    expect(flowSection(await review(), "Checks")).toContain(
+      "this pack's release skill writes at `.stamity/production/releases/<service>-<version | sha>.md`",
+    );
   });
 
   it("lets a replacement move a blocking check's evidence, never its pass condition or Attest mark", async () => {
@@ -679,6 +687,22 @@ describe("/st-production-review — what a file can and cannot make the review d
     expect(text).toMatch(/each blocking check a valid waiver clears, an \*\*Attest\*\* one included/i);
     // review/23
     expect(text).toMatch(/quoted into both the `\.md` and the `\.json`, and both are rewritten/i);
+  });
+
+  it("saves the reviewer's returned grade itself, never briefing a path the reviewer's write grant refuses", async () => {
+    // ADDED: pr/2. The grading reviewer may write only its run report, so a brief naming
+    // `grade.md` in the evidence folder left the grade unsaved; the flow now writes that file.
+    const text = flowSection(await review(), "Flow");
+    const [grant] = verdictReportWritePaths("reviewer");
+
+    expect(text).toMatch(
+      /It writes no file in the evidence folder; this flow saves its full returned grade verbatim as `grade\.md` there/,
+    );
+    expect(text).not.toMatch(/the report path `grade\.md`/);
+    expect(text).toContain("The evidence folder is `.stamity/production/evidence/<service>-<sha>/`.");
+    // Non-degenerate: the evidence folder lies outside the reviewer's one write grant.
+    expect(grant).toBe(".stamity/runs/*/reports/*-reviewer-r*.md");
+    expect(".stamity/production/evidence/".startsWith(grant!.slice(0, grant!.indexOf("*")))).toBe(false);
   });
 
   it("has the grader confirm each locator a grade rests on", async () => {

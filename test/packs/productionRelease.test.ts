@@ -221,6 +221,19 @@ describe("st-release — anatomy", () => {
     );
   });
 
+  it("keys the record, the SBOM and the last-deploy lookup by the service, so two services at one HEAD keep apart", async () => {
+    // ADDED: pr/3. A record keyed by `<version | sha>` alone is overwritten by the next service
+    // deployed from the same head, and a change set read from it starts at another service's deploy.
+    const file = await skill();
+    const changeSet = tableRows(section(file, "Step 1 — Preflight, read-only")).find((row) => row[0] === "change set");
+
+    expect(flow(file)).toContain("record: .stamity/production/releases/<service>-<version | sha>.md");
+    expect(changeSet?.[1]).toContain("since this service's last deploy record in deploy mode");
+    for (const heading of ["Step 6 — Supply-chain references", "Step 7 — The change record"]) {
+      expect(flowSection(file, heading)).not.toMatch(/releases\/<version \| sha>/);
+    }
+  });
+
   it("runs in two modes, the deploy mode with no release-branch or tag preflight", async () => {
     const file = await skill();
     const modes = tableRows(section(file, "Two modes"));
@@ -267,7 +280,9 @@ describe("st-release — the change record", () => {
     const file = await skill();
     const record = section(file, "Step 7 — The change record");
 
-    expect(record).toContain(".stamity/production/releases/<version | sha>.md");
+    // TEST CHANGE, justified: pr/3. Keyed without the service, two services deployed from one HEAD
+    // wrote one record over the other, so the record's key now leads with the service.
+    expect(record).toContain(".stamity/production/releases/<service>-<version | sha>.md");
     expect(tableRows(record).map((row) => row[0])).toEqual([...RECORD_FIELDS]);
     expect(flow(file)).toMatch(/ticket-ready block/i);
   });
@@ -308,9 +323,17 @@ describe("st-release — the change record", () => {
 
     expect(written.toSorted()).toEqual(["package-lock.json", "package.json", "pnpm-lock.yaml", "yarn.lock"]);
     for (const path of written) expect(scope, `${path} is outside touchedPaths`).toContain(path);
-    expect(bump).toMatch(/a version kept in another stack's manifest is printed as the edit for the person to make, never written/);
+    // TEST CHANGE, justified: pr/1. Printing another stack's version edit for the person handed them
+    // a line to paste, which the charter's invariant 7 calls a protocol violation; the run now holds
+    // on that bump, names the manifest in what it hands back, and routes the bump to `/st-work`.
+    expect(bump).toMatch(
+      /a version kept in another stack's manifest is never written or printed as an edit; the run ends held, naming that manifest, and the bump leaves through `\/st-work`/,
+    );
+    expect(bump).not.toMatch(/edit for the person to make/);
+    expect(flowSection(file, "What the run hands back")).toMatch(/`held` with the field, token or manifest that holds it/);
+    // TEST CHANGE, justified: pr/3. The SBOM sits beside the record, so it takes the record's key.
     expect(flowSection(file, "Step 6 — Supply-chain references")).toContain(
-      "Generate it into `.stamity/production/releases/<version | sha>.sbom.json`, beside the record",
+      "Generate it into `.stamity/production/releases/<service>-<version | sha>.sbom.json`, beside the record",
     );
     expect(scope).toContain(".stamity/production/**");
   });

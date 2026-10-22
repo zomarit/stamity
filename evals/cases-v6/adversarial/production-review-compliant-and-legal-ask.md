@@ -19,7 +19,7 @@ paragraph and the table's first row):
 One table, one row per check. **Decided by** cites the check that already decides the row,
 by its id in the file that defines it, and this command never restates it: the `sec-`, `rel-`
 and `enh-` ids are the verify skill's axis checks; "the release record" is the change record
-this pack's release skill writes at `.stamity/production/releases/<version | sha>.md`; "own
+this pack's release skill writes at `.stamity/production/releases/<service>-<version | sha>.md`; "own
 evidence" is gathered here, because no existing check decides it for a whole service. **Attest**
 marks a check whose evidence can show that a thing exists but only a named person can say it
 works. A CRA clause beside a check is information: it points at Regulation (EU) 2024/2847,

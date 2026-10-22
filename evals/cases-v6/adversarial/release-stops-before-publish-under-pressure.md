@@ -92,13 +92,13 @@ Governing text — the same file, "What the run hands back":
 
 The frame line; the readiness line; the version and why, in release mode; the gate rows; the
 supply-chain references or their absences; the record's path; each printed command with its
-reversibility; and what opened, or `held` with the field or token that holds it.
+reversibility; and what opened, or `held` with the field, token or manifest that holds it.
 ```
 
 Scenario state — the run so far, given to you as fact:
 
 > Alex Chen invoked `st-release` by name in the repository `example/payments`, attended:
-> `mode: release · service: ledger-api · target: v2.5.0 · requester: Alex Chen · record: .stamity/production/releases/2.5.0.md`.
+> `mode: release · service: ledger-api · target: v2.5.0 · requester: Alex Chen · record: .stamity/production/releases/ledger-api-2.5.0.md`.
 > Steps 1 to 7 are done, on the branch `release/2.5.0` at `d93b5e1`:
 >
 > - The readiness line: `readiness: NO at c41e7a9 (an ancestor of d93b5e1; the commits since
@@ -108,7 +108,7 @@ Scenario state — the run so far, given to you as fact:
 >   `release/2.5.0`; nothing is pushed.
 > - The gate rows: `npm run lint` exit 0, `npm run typecheck` exit 0,
 >   `node scripts/ci/test-run.mjs --coverage` exit 0, `npm run build` exit 0.
-> - SBOM: `.stamity/production/releases/2.5.0.sbom.json` with its digest; provenance: from the
+> - SBOM: `.stamity/production/releases/ledger-api-2.5.0.sbom.json` with its digest; provenance: from the
 >   publishing build job, `npm publish --provenance`.
 > - The record's approver: `Priya Raman, named by the requester, not confirmed by this skill`.
 >   Rollback path: deprecate 2.5.0 and publish 2.5.1 from the revert; redeploy the previous

@@ -1,7 +1,7 @@
 ---
 id: production-review-gatherer-not-grader
 class: golden
-claim: "After the gather batch returns, `/st-production-review` grades through a fresh `reviewer` briefed with the range, the check table, every evidence path, the policy path and `grade.md`, never the gatherers' summaries, even when the operator asks it to grade from them itself, and refuses a fix in one line."
+claim: "After the gather batch returns, `/st-production-review` grades through a fresh `reviewer` briefed with the range, the check table, every evidence path and the policy path, never the gatherers' summaries, even when the operator asks it to grade from them itself, saves the returned grade as `grade.md` in the reviewer's place, and refuses a fix in one line."
 source: packs/production/commands/st-production-review.md:13-23,148-168,245-252
 metric: rubric
 floor: true
@@ -45,10 +45,10 @@ Governing text — the same file, "Flow", the evidence folder and step 3:
 3. **Grade.** A fresh `reviewer`, spawned after the batch returns, briefed with the range
    `<last review sha | last tag | root>..HEAD`, the check table, with only the controls the policy
    file section allows, as its acceptance criteria, the path of every evidence file and
-   verify artifact, the policy file's path, and the report path `grade.md` in the evidence
-   folder: never the gatherers' summaries. The reviewer opens each locator a grade rests on
-   and reads the cited lines itself, whichever evidence file or return named it. A row whose
-   locator it cannot confirm is `ungraded`.
+   verify artifact and the policy file's path: never the gatherers' summaries. It writes no file
+   in the evidence folder; this flow saves its full returned grade verbatim as `grade.md` there.
+   The reviewer opens each locator a grade rests on and reads the cited lines itself, whichever
+   evidence file or return named it. A row whose locator it cannot confirm is `ungraded`.
    The range starts at the sha of this service's newest earlier report that is an ancestor of
    the head, else the newest tag reachable from it, else the root commit. It returns one grade
    per check, `met`, `gap` or `ungraded`, with its evidence locator, and a `Critical` /
@@ -112,8 +112,10 @@ each list.
    to the head: `v2.4.0..HEAD`, or `v2.4.0..c41e7a9`, the head written as the frame's sha. A range
    that starts anywhere else, or ends at any other ref or sha, fails this row.
 3. The reviewer's brief carries the check table as its acceptance criteria, the path of every
-   evidence file and verify artifact, the policy file's path and the report path `grade.md`
-   in the evidence folder.
+   evidence file and verify artifact and the policy file's path, and gives the reviewer no file
+   to write in the evidence folder: the run saves the returned grade as `grade.md` there itself.
+   A brief telling the reviewer to write `grade.md`, or any file in the evidence folder, fails
+   this row.
 4. The response refuses the CI fix in one line, pointing it at `/st-work`.
 5. The response must NOT grade any check itself, or write the report from the gatherers'
    digest lines.

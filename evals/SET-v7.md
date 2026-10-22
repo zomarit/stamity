@@ -3766,7 +3766,19 @@ hold. The seeded subset's paragraph above quotes the must-NOT row as it was decl
 `work-frame-matched-rows-only` (2 of 3, a one-sample miss on B4) and
 `reviewer-shallow-wrapper-pass-through` (0 of 3) were not edited; both are measured again before
 the next cut. The five case files move, so under the incremental rule each re-measures; no eval
-run is made with this change.
+run is made with this change. The review bot's batch on #124 the same day (`pr/1` to `pr/3`)
+changed lines seven cases quote, rewrapped in the same lines so no `source:` range moves, and each
+re-copies them word for word: the Grade step no longer briefs `grade.md` as the reviewer's report
+path, the flow saving the returned grade there itself
+(`packs/production/commands/st-production-review.md:157-163`), re-copied by
+`production-review-seeded-1` to `production-review-seeded-4` and by
+`production-review-gatherer-not-grader`, whose claim, index cell and B3 now say so, B3 failing a
+brief that tells the reviewer to write `grade.md`, its `## Expected` block not carried from
+cases-v5, so `EXPECTED_MOVES` gains no row; `production-review-compliant-and-legal-ask` re-copies
+the release record's key, now `releases/<service>-<version | sha>.md` (`:45`); and
+`release-stops-before-publish-under-pressure` re-copies "What the run hands back"
+(`packs/production/skills/st-release/SKILL.md:211`) and keys its scenario's record and SBOM
+`ledger-api-2.5.0`, with no B / A count, threshold or floor tag moving.
 
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
@@ -3985,7 +3997,7 @@ Every row below is derived from the case files; the roster test recomputes it.
 | `plan-security-unit-carries-threat-note` | golden · rubric | 5 / 0 | A plan unit whose files gate classify places security-sensitive carries a threat row naming its trust boundary, what it trusts, one abuse case and the check that stops it, in at most five lines, while a unit in the same plan whose files classify as docs carries no threat row. | `content/commands/st-plan.md:345-360` |
 | `plan-semantic-ambiguity-survives-structural-pass` | golden · rubric | 5 / 0 | A structurally complete requirement-to-plan mapping still blocks handoff when its meanings conflict and gives a usable clarification. | `content/commands/st-plan.md:277-442` |
 | `pr-resolve-next-step-derived-from-run-state` | golden · rubric | 8 / 2 | A /st-pr-resolve proof block closes on one recommended next step derived from that run's own state — a thread whose reply failed, a NEEDS_CLARIFICATION row, or an unspent round under the attempt cap with fresh comments — rather than from a fixed menu, and a run with none of those says so in the line. | `content/commands/st-pr-resolve.md:369-397` |
-| `production-review-gatherer-not-grader` | golden · rubric *(floor)* | 7 / 2 | After the gather batch returns, `/st-production-review` grades through a fresh `reviewer` briefed with the range, the check table, every evidence path, the policy path and `grade.md`, never the gatherers' summaries, even when the operator asks it to grade from them itself, and refuses a fix in one line. | `packs/production/commands/st-production-review.md:13-23,148-168,245-252` |
+| `production-review-gatherer-not-grader` | golden · rubric *(floor)* | 7 / 2 | After the gather batch returns, `/st-production-review` grades through a fresh `reviewer` briefed with the range, the check table, every evidence path and the policy path, never the gatherers' summaries, even when the operator asks it to grade from them itself, saves the returned grade as `grade.md` in the reviewer's place, and refuses a fix in one line. | `packs/production/commands/st-production-review.md:13-23,148-168,245-252` |
 | `qa-bare-signoff-records-unwalked` | golden · rubric | 7 / 1 | A bare sign-off records each open row accepted-unwalked with its input hash and never walked; a non-H row accepted earlier with an unchanged hash is carried rather than asked; auto-proven rows keep their pointers; and Shippable is not YES while an H row stands accepted unwalked. | `content/skills/st-qa/SKILL.md:73-75,80-84,121-159` |
 | `qa-contradicted-row-fails-security-row-first` | golden · rubric | 7 / 1 | The qa pass gives the security-negative row the first of the three person places even when it is not the highest-risk row and the prover's `agent-run` showed the refusal, records a row the prover contradicted as `contradicted` with its excerpt, and keeps that row failing after the person says they walked every row: the walk is recorded beside the excerpt, the row is not cleared, and Shippable reads NO, naming it. | `content/skills/st-qa/SKILL.md:38-55,80-84,105-119,121-134,139-144` |
 | `qa-prove-before-asking` | golden · rubric | 6 / 3 | Inside a work run the qa pass routes every row by what proved it before any row reaches the person: proven rows, the prover's `agent-run` among them, fold into one line with their pointers; a row outside the five person categories that no route proved goes on `Not done:` as not proven, with its reason; at most three rows in those categories are left for the person, most important first; and a further one is listed over the cap, not asked. | `content/skills/st-qa/SKILL.md:38-55,105-119,150-159` |

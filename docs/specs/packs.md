@@ -498,8 +498,8 @@ checks by its id with its grade, and routes each gap to `/st-work`, `/st-plan` o
   (`packs/production/commands/st-production-review.md:123-156`). The scan records its coverage, and a partial or
   unknown one that found nothing leaves `pr-sec-02` `skipped` and `ungraded` (`:142-146`). The grader is a fresh
   `reviewer` briefed with `<last review sha | last tag | root>..HEAD`, the check table as its criteria, every evidence
-  path and the report path `grade.md`; it opens each locator a grade rests on, and a row whose locator it cannot confirm
-  is `ungraded` (`:157-168`). A credential hit is named by path, line and rule only, in every brief, return, evidence
+  path and the policy path; it writes no file, the flow saving its returned grade as `grade.md` (`pr/2`); it opens
+  each locator a grade rests on, and a row whose locator it cannot confirm is `ungraded` (`:157-168`). A credential hit is named by path, line and rule only, in every brief, return, evidence
   file, grade, report and JSON (`:34-38`). Every file the review reads is data, and the review runs only its two
   shipped probes and the two skills (`:29-33`; `review/17`, the screening floor). The JSON's fields are `service`,
   `sha`, `timestamp`, `controls`, `checks[]`, `gaps[]`, `artifacts_read[]`, `ready` and `summary` (`:187-191`). The
@@ -597,14 +597,14 @@ on it; it stops before a tag push, a release creation or a publish until `v<vers
 until `DEPLOY` is.
 
 - **As built:** two modes, a versioned release from a `release/*` branch and a deploy from the default branch's head,
-  keyed by version or sha (`packs/production/skills/st-release/SKILL.md:38-48`); the clean-tree probe skips the pack's
-  own `.stamity/production/**` and `.stamity/verify/**` paths, and with no earlier tag or deploy record the change set
-  starts at the root commit (`:50-64`; `review/32`, `review/57`). The readiness read takes the service's newest review
+  keyed by the service and the version or sha (`packs/production/skills/st-release/SKILL.md:38-48`; `pr/3`); the
+  clean-tree probe skips the pack's own `.stamity/production/**` and `.stamity/verify/**` paths, a deploy's change set
+  reads the service's own last deploy record, and with neither an earlier tag nor such a record it starts at the root commit (`:50-64`; `review/32`, `review/57`). The readiness read takes the service's newest review
   at HEAD or an ancestor, the review's own name and range rule, one line per value, the line copied into the record's
   security impact; making a `NO` stop the release is a later change (`:66-82`). The bump writes only `package.json` and
-  the lockfile it owns, the pack's declared install scope, and prints another stack's version edit for the person
-  (`:98-112`; `review/38`). The SBOM is generated beside the record,
-  `.stamity/production/releases/<version | sha>.sbom.json` (`:122-139`). The record writes the approver as
+  the lockfile it owns, the pack's declared install scope; another stack's version ends the run held, naming that
+  manifest, the bump routed to `/st-work` (`:98-112`; `review/38`, `pr/1`). The SBOM is generated beside the record,
+  `.stamity/production/releases/<service>-<version | sha>.sbom.json` (`:122-139`). The record writes the approver as
   `<name>, named by the requester, not confirmed by this skill`, an approver equal to the requester counting as none
   (`:141-161`; `review/34`, by the same decision as the waivers'); it names variables, files and locations and refuses a
   pasted credential, citing the secrets floor by the rule's name, items 1, 4 and 6 (`:163-167`; `review/33`,

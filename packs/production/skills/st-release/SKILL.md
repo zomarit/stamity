@@ -40,10 +40,10 @@ Stated here in full, because every later step depends on it:
 | Mode | When | What differs |
 |---|---|---|
 | Versioned release | a version number ships: a package, a tagged build | branch and tag preflight, version decision, bump and changelog |
-| Deploy from main | the default branch's head goes to an environment | no release-branch or tag preflight, no version; the record is keyed by the sha |
+| Deploy from main | the default branch's head goes to an environment | no release-branch or tag preflight, no version; the record is keyed by the service and the sha |
 
 The frame line names the mode: `mode: release | deploy · service: <name> · target: v<version> |
-<sha> · requester: <name> · record: .stamity/production/releases/<version | sha>.md`. The
+<sha> · requester: <name> · record: .stamity/production/releases/<service>-<version | sha>.md`. The
 requester is the person who invoked the skill. A mode the request does not settle is asked once,
 release as the default.
 
@@ -56,7 +56,7 @@ Halt with an actionable message rather than working around a row:
 | `git status --porcelain` | empty, skipping the pack's own paths under `.stamity/` (`.stamity/production/**`, `.stamity/verify/**`) | halt naming the dirty paths; the person commits them |
 | current branch (release mode) | a `release/*` branch, never the default branch | halt and print `git switch -c release/<version>` |
 | current branch (deploy mode) | the default branch, at the head the remote holds | halt naming the difference |
-| change set | the log since the last tag (`git describe --tags --abbrev=0`), or since the last deploy's record in deploy mode | halt when nothing changed: there is nothing to ship |
+| change set | the log since the last tag (`git describe --tags --abbrev=0`), or since this service's last deploy record in deploy mode | halt when nothing changed: there is nothing to ship |
 
 With no earlier deploy record or tag, a first deploy or release, the change set's base is the
 repository's root commit (`git rev-list --max-parents=0 HEAD`), and the run says so. Keep the
@@ -99,11 +99,11 @@ an unsuspecting install cannot land on it.
 
 This skill writes both, because they must agree:
 
-- The version in `package.json`, with the lockfile it owns (`package-lock.json`,
-  `pnpm-lock.yaml` or `yarn.lock`) refreshed through the package manager, never by hand. The
-  lockfile is staged with the manifest: a bumped manifest beside a stale lockfile installs the
-  previous version. These are the only manifests the pack's install scope declares: a version
-  kept in another stack's manifest is printed as the edit for the person to make, never written.
+- The version in `package.json`, with the lockfile it owns (`package-lock.json`, `pnpm-lock.yaml`
+  or `yarn.lock`) refreshed through the package manager, never by hand. The lockfile is staged with
+  the manifest: a bumped manifest beside a stale lockfile installs the previous version. These are
+  the only manifests the pack's install scope declares: a version kept in another stack's manifest
+  is never written or printed as an edit; the run ends held, naming that manifest, and the bump leaves through `/st-work`.
 - One dated section in `CHANGELOG.md`, entries grouped as added, changed, deprecated, removed,
   fixed and security, each naming the change and its merge reference. Every change in the set
   appears or is listed as deliberately unlisted. A MAJOR release carries migration notes: what
@@ -124,7 +124,7 @@ to the failing selector proves only that the selector passes.
 One SBOM and one provenance reference, or a named absence for each. An absence is a line, never
 a silence, and the record is written either way.
 
-- **SBOM.** Generate it into `.stamity/production/releases/<version | sha>.sbom.json`, beside
+- **SBOM.** Generate it into `.stamity/production/releases/<service>-<version | sha>.sbom.json`, beside
   the record, for example with `npm sbom --sbom-format=cyclonedx --sbom-type=application`, or the
   stack's own generator; the record names its path and digest.
   With no generator available: `SBOM: absent — <why>`.
@@ -140,7 +140,7 @@ the content digest, and an image is pinned by digest, never by a moving tag.
 
 ## Step 7 — The change record
 
-Write `.stamity/production/releases/<version | sha>.md`, one row per field, before any stop:
+Write `.stamity/production/releases/<service>-<version | sha>.md`, one row per field, before any stop:
 
 | Field | What it holds |
 |---|---|
@@ -208,4 +208,4 @@ leaves for the pack's incident skill, `st-incident`, and this run ends where it 
 
 The frame line; the readiness line; the version and why, in release mode; the gate rows; the
 supply-chain references or their absences; the record's path; each printed command with its
-reversibility; and what opened, or `held` with the field or token that holds it.
+reversibility; and what opened, or `held` with the field, token or manifest that holds it.
