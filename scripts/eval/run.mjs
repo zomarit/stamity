@@ -50,7 +50,7 @@ export function loadInputs(root, profileName) {
   // The roster census, a literal on purpose: a run that silently loads a different number of cases
   // than the set document declares is not the set. Derive it before moving it —
   // `find evals/cases-v6 -name '*.md' | wc -l` — and move `SET-v7.md`'s counts in the same change.
-  requireEvidence(cases.length === 155 && new Set(cases.map(item => item.id)).size === 155, 'set-roster')
+  requireEvidence(cases.length === 165 && new Set(cases.map(item => item.id)).size === 165, 'set-roster')
   for (const scenario of cases) {
     // A case's governing file is a committed input of the run, and it is a `content/` or a `packs/`
     // artifact (REQ-PACK-013): the one other shape, the `scripts/plugins/` module that rendered the
