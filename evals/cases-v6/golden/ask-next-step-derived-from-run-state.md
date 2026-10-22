@@ -105,5 +105,9 @@ the destination is the whole handoff — this command does not start it."
 required more than the source does, of a sentence that says naming the destination is the whole
 of it; B4 already binds the destination line.
 
-1. The step names the smallest unblocking input rather than the whole facet: the manifest or the
-   read access, not "unblock `staging-env`".
+Disposition 2026-10-22: A1 deleted (sha256:acc7126176d0) — `content/commands/st-ask.md:158-160`
+says "a Blocked row makes what unblocks it the step", and B2 binds exactly that: the step names
+what unblocks `staging-env`, read access to `infra/staging` or the rendered manifest pasted in.
+The row graded the same requirement a second time, as the order of the step's words.
+
+None declared for this case after those dispositions.

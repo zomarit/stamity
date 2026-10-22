@@ -12,7 +12,7 @@ Answer as the agent deciding which skill, if any, applies to the request below. 
 tools, read no files, and treat the list as the whole skill surface available to you.
 Skills are description-triggered: one applies when the request matches its description.
 
-Skill surface — the seventeen descriptions, verbatim:
+Skill surface — the eighteen descriptions, verbatim:
 
 ```text
 st-browser-evidence — "Drives a real browser against the built app and returns the evidence bundle a QA checkpoint cites. Triggers when a change touches a rendered surface and needs captured evidence, or when someone asks for a screenshot comparison or accessibility scan."
@@ -21,6 +21,7 @@ st-design-system-detect — "Detects the design system a repo already has — to
 st-handoff — "Carries mid-work state across a session or tool boundary through five modes — prepare, resume, list, complete, prune — writing and reading `.stamity/handoffs/` with integrity, expiry, and git-drift validation. Triggers when a session ends mid-task, when work moves to another client, when context pressure builds, or when a saved handoff should be picked up, listed, closed, or swept."
 st-learn — "Records one verified, repo-specific finding into `.stamity/learnings/` through the `stamity learn capture` write path, applying the qualification bar, the summary standard, and a confidence rating. Triggers after a surprising failure is understood, when reading code reveals a constraint nobody wrote down, or when someone asks to save what this repository just taught them."
 st-onboard — "Guides the first real change in a repository this setup was just installed into — orients on the actual code, settles on one small change with the operator, runs it through the touchpoints the install shipped, and closes on a passing verification gate. Triggers right after `stamity init` finishes, when someone opens a freshly set-up repository and asks what to do next, or when a repository carries the setup but has no first proven change through it yet."
+st-plain — "Rewrites a given text in plain words, or restates the last reply plainly when no text is given, keeping every fact, number, path, command and caveat. Triggers when someone asks for plain words, a simpler version, or the last answer said plainly."
 st-qa — "Builds the human QA walk-through for a change — a risk-ordered table of scenarios, steps, and expected results, with rows auto-proven from existing evidence first — and records the shippability sign-off. Called by name from a work run's own QA checkpoint and never selected there on its own. Triggers on its own only before a merge or release decision, or when someone asks what a person should manually test before shipping."
 st-verify — "Runs one content-quality axis as a gate — that axis's runnable checks plus its judgment calls for ui, ux, security, reliability, testability, scalability, performance, maintainability, enhancability or product-spec — and writes .stamity/verify/<axis>-<sha>.json. Triggers when one axis needs evidence before a review or a release, when a consumer finds no artifact for the current sha, or when someone asks how a change scores on a single quality axis."
 stamity-ai-evals — "Floor for shipping a feature whose behaviour comes from a language model — a golden and adversarial eval set before ship, a regression run on every prompt or model change, offline measurement before traffic, and results committed as artifacts."
@@ -34,8 +35,8 @@ stamity-testing — "What a test in this repository has to be — an assertion a
 stamity-ui-states — "Four-state contract for any interface surface that reads data — loading, empty, error, and success each rendered explicitly, with error copy that names a next step, empty states designed by sub-type, and strings and styling taken from the layers the repo already has."
 ```
 
-This client delivers the nine `stamity-` entries on demand; the twelve earlier probes
-list the eight shipped skills only.
+This client delivers the nine `stamity-` entries on demand; the thirteen other probes
+list the nine shipped skills only.
 
 Scenario input — the request as it arrives in chat. No command is running, the repository has
 exactly one export, and the request names the only surface it touches and its own bar:
@@ -56,7 +57,7 @@ each list.
 
 1. The answer is `none` or a shipped `st-` skill; it is never `stamity-question-protocol`.
 2. The response must NOT name `stamity-question-protocol` as triggered.
-3. No skill id is given as the answer unless it is one of the eight shipped skills.
+3. No skill id is given as the answer unless it is one of the nine shipped skills.
 
 ### Advisory criteria — recorded, never scored into the verdict
 

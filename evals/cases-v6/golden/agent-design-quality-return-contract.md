@@ -132,7 +132,11 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
+Disposition 2026-10-22: A2 deleted (sha256:26426a022a18) — `content/agents/stamity-design-quality.md:31-33`
+states the trigger as a condition the agent acts on, "A change with no rendered output does not
+pull the agent in", and `:132-136` asks a `BLOCKED_*` return for what was attempted, what blocks
+it and the smallest unblocking input, never for the trigger restated in the contract's own words;
+B2 binds the facts that stop the pass and B4 the three parts. The row graded a wording the source
+does not ask for.
+
 1. The `BLOCKED_*` form chosen is `BLOCKED_DEPENDENCY` rather than `BLOCKED_FAILURE`.
-2. The result states the trigger condition in the contract's own terms — a change with no
-   rendered output does not pull the agent in — rather than paraphrasing it into a generic
-   "not applicable".
