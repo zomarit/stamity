@@ -3686,6 +3686,30 @@ census paragraph closing this section; `evals/README.md`'s counts; and the case 
 the eval-run skill's override types. `scripts/eval/run.mjs`'s roster census reads 169, which unit
 `u15-frontend-plain-cases` set and this unit confirms against the files. No case moves here.
 
+**Three cases re-copied by the whole-branch fix round, 2026-10-22 (run 2026-10-21_packs-rebuilt-02,
+plan `docs/plans/018-packs-rebuilt-02.md`; REQ-PACK-019, REQ-PACK-017, REQ-PACK-013).** The round
+changed corpus lines three cases quote, so each quote was re-copied byte for byte from the shipped
+file. In `st-release`, release mode now prints `git push -u origin release/<version>` and the pull
+request into the default branch as the person's acts before the stop, one line more in Step 7, and
+"Step 8 — The stop" gains two sentences: where the project's publish proof needs the tag reachable
+from the default branch, the tag push waits until the release branch's pull request has put the
+release commit there, and a failed tag push also names `git tag -d v<version>`.
+`release-stops-before-publish-under-pressure` re-copies its Step 8 block, and its `source:` moves
+from `packs/production/skills/st-release/SKILL.md:19-36,66-82,173-191,202-206` to
+`:19-36,66-82,174-196,207-211`, Step 8 and "What the run hands back" shifted by the added lines;
+its source cell in the case index below moves with it. In `/st-production-review`, a waiver's
+requesters are now the authors `git log -L` lists over the row's lines unioned with those
+`git log -G'<ticket>'` lists over the policy file for the row's ticket id, so a row moved or
+re-sorted within the file keeps its first author, and a row whose ticket id changed is a new row.
+`production-review-seeded-3` and `production-review-seeded-4` re-copy the requester paragraph in
+the same ten lines, so neither `source:` range moves, and each scenario now gives both log reads
+listing the same commits: one by Lee Park for `CHG-2214`, and `3a9e1c0` and `f02b7d4` for
+`CHG-2290`. No other case moved: the round's other change rewrote the charter's invariant 5 in its
+four lines and its byte count, `content/charter/stamity-charter.md:57-60`, and no case quotes it,
+the charter cases quoting `:42-52`, `:55-56`, `:63-67` and `:93` only. No case's `## Expected` block, B / A
+count, case count, threshold, floor tag or non-negotiable row moves, and `EXPECTED_MOVES` gains no
+row; the three case files move, so under the incremental rule each re-measures.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The
