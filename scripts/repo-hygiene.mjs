@@ -13,8 +13,23 @@ const MAX_FILE_BYTES = 1024 * 1024
 // Exact repository-relative paths only. An exception needs its reviewable reason here,
 // never a broad extension exemption or an automatically raised size ceiling.
 const LARGE_FILE_EXCEPTIONS = new Map([
-  // Empty, and an empty list is the expected steady state: an entry buys one retention window and
-  // retires at the release close that ends it. The last window's two entries — run 50's and run
+  // An empty list is the expected steady state: an entry buys one retention window and retires at
+  // the release close that ends it.
+  //
+  // The window that ends at the next release close (Package 20's cut) opened with one entry. Run 53
+  // is the increment on the claude profile (scenario claude-opus-5-5 at high effort, judge
+  // claude-fable-5-1) at candidate 4e744644, composed with run 51 (composition.priorSummaryCommit
+  // db7328b9). It reads FAIL on the hold rate, 36/38 (production-review-seeded-2 and
+  // production-review-seeded-4), and on four floor cases, floors 43/47 (those two,
+  // production-review-gatherer-not-grader and work-frame-matched-rows-only). Its summary is 6749625
+  // bytes as exported, and only the summary is published beside PROTOCOL.md, RESULTS.md and
+  // inputs.json, never calls/ or calls.json. It is published to the `records` branch, whose
+  // workflow runs this script from `main` over the records tree, so the entry lands on `main`
+  // first. The next release's increment composes with run 53 and reads its summary from the
+  // `records` branch; that release close's evidence-archive step compacts it beside an ARCHIVE.json
+  // pointer and retires the entry.
+  //
+  // The 1.16.0 window's two entries — run 50's and run
   // 51's public summaries, run 50 the full 1.16.0 measure on the claude profile at candidate
   // c526348a, FAIL on two floor cases and one benign twin, run 51 the 1.16.0 increment composed
   // with run 50 (composition.priorSummaryCommit 72faf143), PASS, at candidate 035f078d, both
@@ -43,6 +58,7 @@ const LARGE_FILE_EXCEPTIONS = new Map([
   // An entry may precede its artifact: the map is consulted only for paths Git reports as changed
   // (the `has` below), is never iterated and never stat'd, so an entry for a path not yet in the
   // tree is inert rather than a false pass.
+  ['evals/runs/2026-10-22-run-53/summary.json', 'run 53, the increment on the claude profile at candidate 4e744644 composed with run 51 (its prior summary read at db7328b9), FAIL on the hold rate (production-review-seeded-2, production-review-seeded-4) and four floor cases (those two, production-review-gatherer-not-grader, work-frame-matched-rows-only), published to the records branch, and the prior run that the next release increment composes with; retained until the next release close (Package 20 cut), whose evidence-archive step compacts it beside an ARCHIVE.json pointer and retires this entry'],
 ])
 const FIXTURE = /^(?:test|tests)\/fixtures\//
 const RAW_NAME = /^(?:calls|samples|requests|responses|receipts|transcripts|provider[-_](?:requests|responses))\.(?:json|jsonl)$/

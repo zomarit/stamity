@@ -300,12 +300,22 @@ describe("repository hygiene over the Git index", () => {
   // 1.15.0 closes. The retirement proof grows by two: both summaries join the retired paths, each
   // staged over budget beside its same-directory neighbour, and all must be refused. exemptedPaths
   // still throws if the declaration moves.
-  it("names no size exception and refuses the retired run summaries like any other file", () => {
+  //
+  // TEST CHANGE, justified (2026-10-22, run 53): the window that ends at the next release close
+  // (Package 20's cut) opens one entry — run 53, the increment on the claude profile at candidate
+  // 4e744644 composed with run 51 (its prior summary read at db7328b9), FAIL on the hold rate and
+  // four floor cases, whose exported summary is 6749625 bytes, over the budget, and is published to
+  // the `records` branch, whose push runs this script from `main`; the next release's increment
+  // composes with it. So the expected list is that one path, and the case exercises it as the
+  // 1.15.0 window's opening did: the exempted path passes over budget while its same-directory
+  // neighbour is refused. Only the expected list, its message and the title moved; the body already
+  // reads the exempt paths. The retirement proof is unchanged: every retired summary and its
+  // neighbour is still staged over budget and must be refused like any other file.
+  it("exempts exactly the run 53 summary and refuses its neighbour and the retired run summaries", () => {
     const exempt = exemptedPaths();
-    expect(
-      exempt,
-      "the size-exception map names a path; the 1.16.0 close retired the run 50 and run 51 summary entries",
-    ).toEqual([]);
+    expect(exempt, "the size-exception map's paths are not the run 53 summary alone").toEqual([
+      "evals/runs/2026-10-22-run-53/summary.json",
+    ]);
 
     const root = fixture();
     const retired = [
