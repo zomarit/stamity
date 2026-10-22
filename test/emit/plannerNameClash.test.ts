@@ -142,11 +142,17 @@ const call = (verb: string): string => `npx -y @zomarit/stamity@${ENGINE_VERSION
 // TEST CHANGE, justified (2026-10-08, review/68, review/72, review/76, the lane D fixer): the step by hand reads
 // the same in every remedy and tells the reader to keep a file that is theirs, since
 // a kept copy is named, not proven the pack's. The commands and their order hold.
+// TEST CHANGE, justified (2026-10-21_packs-rebuilt-02/u13-retired-map, REQ-PACK-023, the
+// `build/3` sign-off): the re-add step was a bare `add acme-demo`, which re-adds only a
+// catalog pack or an npm package of that name; `acme-demo` is installed from a local folder
+// and is no catalog id, so the step names re-adding it by its folder or package path. The
+// other steps and their order hold.
 const ACME_REMEDY =
   `pack "acme-demo": run \`${call("clean --pack acme-demo")}\`, then delete by ` +
   `hand each client copy it keeps and names, unless it is yours, then ` +
   `\`${call("sync")}\`, then ` +
-  `\`${call("add acme-demo")}\` once the pack ships distinct names, then \`${call("sync")}\``;
+  `\`${call("add <its folder or package path>")}\` once the pack ships distinct names (a bare id ` +
+  `re-adds only a catalog pack or an npm package of that name), then \`${call("sync")}\``;
 
 describe("composeEmissionPlanner — an installed cross-class name clash", () => {
   it.each<[string, Tool[]]>([
