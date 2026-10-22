@@ -521,33 +521,38 @@ Added 2026-10-22 (plan 018 file 2, unit `u10-production-review` with its two fix
 2026-10-21 on waivers, replace rows and advisories).
 
 Given an optional `.stamity/production/policy.md`, Then the review reads from it controls that add to or replace a
-check, waivers each with an approver and an expiry, the approval of record and the escalation contact; Given a gap,
-Then the review may propose a waiver and writes none; Given a waiver its own requester approved, or one past its
-expiry, Then it clears nothing and its gap stands as graded; Given no policy file, Then the 19 checks run as shipped.
+check, waivers each with an approver, an expiry and a ticket, the approval of record and the escalation contact; Given
+a gap, Then the review may propose a waiver and writes none; Given a waiver its own requester approved, one past its
+expiry, or one whose ticket is missing, outside its character class or not readable as written, Then it clears nothing
+and its gap stands as graded; Given no policy file, Then the 19 checks run as shipped.
 
 - **As built:** a control names evidence only, a tracked regular file inside the repository that is not a symlink, or
   one of the review's shipped probes; a control naming any other path, or a command, script or address to run, is not
-  read or run, and its row is `skipped` with the control named (`packs/production/commands/st-production-review.md:87-94`;
-  `review/17`, `review/41`, `review/44`). A replacement of a blocking check may move only where it finds its evidence,
-  never its pass condition, its `Blocks` or its `Attest` mark, and the report lists every replaced blocking check for
-  the signer (`:95-101`; `review/13`, "evidence only, and shown"). A waiver row missing its approver or its expiry is
-  invalid. Its requesters are the authors of every commit that touched the row, read with `git log -L` over its lines
-  unioned with `git log -G` over the policy file for the row's ticket id, so a row moved within the file keeps its first
-  author, and a row whose ticket id changed is a new row whose committing author is a requester (`review/54`); the
-  approver must differ from every one, by name and by email, so an edit to the row needs fresh approval; a row not
-  yet committed, or whose working-tree text differs from `HEAD`, clears nothing (`:196-212`; `review/14`, `review/18`,
-  `review/19`, `review/42`, `review/43`, "claimed, shown, signed"). The approval in a row is a claim: a valid waiver
-  clears its gap for the Ready line, the gap still shown, marked waived, and the report lists each as a claimed approval
-  (`:214-217`). An accepted high or critical advisory stays open for `pr-sec-01` unless a valid waiver covers it
-  (`:78-80`; `review/20`). The escalation contact is the incident and reporting contact `st-incident` uses; the review
-  sends it nothing, an open blocking gap going to the approval of record (`:105-107`; `review/30`). With no policy file
-  the frame asks where the approval of record lives, its default `not named` (`:109-110`, `:117-122`).
+  read or run, and its row is `skipped` with the control named
+  (`packs/production/commands/st-production-review.md:87-94`; `review/17`, `review/41`, `review/44`). A replacement of a
+  blocking check may move only where it finds its evidence, never its pass condition, its `Blocks` or its `Attest` mark,
+  and the report lists every replaced blocking check for the signer (`:95-101`; `review/13`, "evidence only, and
+  shown"). A waiver row missing its approver or its expiry is invalid, and so is one whose ticket is missing or holds a
+  character outside `[A-Za-z0-9._/:@~=+,-]` (`review/61`). Its requesters are the authors of every commit that touched
+  the row, read with `git log -L` over its lines unioned with `git log -S<ticket>` over the policy file, a fixed string
+  the grading role's read-only git guard admits unquoted, so a row moved within the file keeps the commit that added its
+  ticket, and a row whose ticket id changed is a new row whose committing author is a requester (`review/54`,
+  `review/61`); the approver must differ from every one, by name and by email, so an edit to the row needs fresh
+  approval; a row not yet committed, or whose working-tree text differs from `HEAD`, clears nothing, and so does an
+  invalid row or one whose ticket read cannot run as written, the report naming why (`:196-212`; `review/14`,
+  `review/18`, `review/19`, `review/42`, `review/43`, `review/61`, "claimed, shown, signed"). The approval in a row is a
+  claim: a valid waiver clears its gap for the Ready line, the gap still shown, marked waived, and the report lists each
+  as a claimed approval (`:214-217`). An accepted high or critical advisory stays open for `pr-sec-01` unless a valid
+  waiver covers it (`:78-80`; `review/20`). The escalation contact is the incident and reporting contact `st-incident`
+  uses; the review sends it nothing, an open blocking gap going to the approval of record (`:105-107`; `review/30`).
+  With no policy file the frame asks where the approval of record lives, its default `not named` (`:109-110`,
+  `:117-122`).
 - **Proof:** `test/packs/production.test.ts` ("reads the policy file's four sections, and asks once with a declared
   default when it is absent", "proposes waivers and writes none; an expired or self-approved one clears nothing", "lets
   a replacement move a blocking check's evidence, never its pass condition or Attest mark", "counts a waiver only with
-  an approver and an expiry, approved by none of the row's authors", "leaves an accepted high or critical advisory
-  failing pr-sec-01 unless a valid waiver covers it"); the seeded case `production-review-seeded-3` (a waiver read past
-  its expiry).
+  an approver and an expiry, approved by none of the row's authors", "names a ticket class whose requester reads the
+  grader's read-only git guard admits as written", "leaves an accepted high or critical advisory failing pr-sec-01
+  unless a valid waiver covers it"); the seeded case `production-review-seeded-3` (a waiver read past its expiry).
 - **Source:** `packs/production/commands/st-production-review.md`.
 
 ### REQ-PACK-018 — The review's verdict line, and the words it never uses
@@ -933,9 +938,10 @@ exists, it is the normative record for that requirement.
 
 - GIVEN the policy file THEN its four sections are read, a control names evidence or a shipped probe only, a
   replacement moves a blocking check's evidence and never its pass condition or `Attest` mark, a waiver counts only
-  with an approver and an expiry approved by none of the row's authors, an expired or self-approved one clears nothing,
-  and an accepted high or critical advisory fails `pr-sec-01` without a valid waiver; GIVEN no policy file THEN the
-  frame asks once with `not named` as its default. *(test: `test/packs/production.test.ts`)*
+  with an approver, an expiry and a ticket the requester read admits, approved by none of the row's authors, an
+  expired or self-approved one clears nothing, and an accepted high or critical advisory fails `pr-sec-01` without a
+  valid waiver; GIVEN no policy file THEN the frame asks once with `not named` as its default. *(test:
+  `test/packs/production.test.ts`)*
 
 **REQ-PACK-018** (added 2026-10-22)
 

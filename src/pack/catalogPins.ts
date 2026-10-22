@@ -13,5 +13,5 @@
  */
 export const CATALOG_PINS: Record<string, string> = {
   "frontend": "269b7c363588aaf5ecac11d542ffecf84cb4e454fdebf9b4b422006610bbbf02",
-  "production": "2a19a4a141cdc9a6469bb54a020494ff927e7cb9c75c36cce5816f63cbc32e72",
+  "production": "5eeb33d3f0c06a2f0e21e758ee08547169d9098757cb3a60ab12eee00279ba87",
 };

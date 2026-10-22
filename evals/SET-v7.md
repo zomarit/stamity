@@ -3708,7 +3708,14 @@ listing the same commits: one by Lee Park for `CHG-2214`, and `3a9e1c0` and `f02
 four lines and its byte count, `content/charter/stamity-charter.md:57-60`, and no case quotes it,
 the charter cases quoting `:42-52`, `:55-56`, `:63-67` and `:93` only. No case's `## Expected` block, B / A
 count, case count, threshold, floor tag or non-negotiable row moves, and `EXPECTED_MOVES` gains no
-row; the three case files move, so under the incremental rule each re-measures.
+row; the three case files move, so under the incremental rule each re-measures. A second fix round
+the same day (`review/54`, `review/61`) replaced the ticket half with
+`git log -S<ticket> -- <policy file>`, a fixed string the grading role's read-only git guard admits
+unquoted, and a waiver whose ticket is missing, holds a character outside `[A-Za-z0-9._/:@~=+,-]`
+or whose ticket read cannot run as written now clears nothing; both cases re-copy the Waivers
+section's two paragraphs at `:198-212`, rewrapped in the same fifteen lines, so neither `source:`
+range nor index cell moves, and in `production-review-seeded-4` the `-S` read lists only
+`3a9e1c0`, the commit that added the ticket, the requesters unchanged.
 
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A

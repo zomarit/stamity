@@ -29,7 +29,7 @@
   },
   "maxFootprintBytes": 262144,
   "integrity": {
-    "commands/st-production-review.md": "000addced716636d24c39b86342c663f9470432c0106c50be6312f303ce8ffd0",
+    "commands/st-production-review.md": "d5ce357e715eb1f535c9aeac76055abab0cc2fe2001145023e85714dfdc70836",
     "skills/st-incident/SKILL.md": "8ee10a1ae017f5556a75bc0604299fd02215d22def39b22bda781200158d2085",
     "skills/st-incident/agents/openai.yaml": "2219eda7f9eef6ae17bea41c0e5bff4dc9fc373516d23b98a84069b8448bc30e",
     "skills/st-release/SKILL.md": "1ae827277d581c7f6fa594a9619ebda7b18f303e126ec0d889e437e9fb1d84bb",
