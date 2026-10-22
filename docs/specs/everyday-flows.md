@@ -1,6 +1,6 @@
 ---
 id: everyday-flows
-# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-12_board-writes on 2026-10-12, one citation re-pointed in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, and excluded from the site build.
+# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-12_board-writes on 2026-10-12, one citation re-pointed in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.16.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the command reference carries it, or a decision row cuts the surface
@@ -151,6 +151,16 @@ Every `path:line` in that text reads at the integration head `936350cb`, but for
 and `u4-pack-fit`, which landed on their own lanes and are cited by unit, file and symbol: the integration lane's
 cherry-pick gives each lane commit a new sha. That text is not in a release yet; it ships with the next minor after
 1.16.0.
+
+REQ-FLOW-129 and REQ-FLOW-130, and the text dated 2026-10-22 under REQ-FLOW-063, REQ-FLOW-064, REQ-FLOW-080,
+REQ-FLOW-088 and REQ-FLOW-113, come from the spec delta of `docs/plans/018-packs-rebuilt-02.md` (plan 018 file 2,
+Package 22, run `2026-10-21_packs-rebuilt-02`), merged once by its unit `u18-spec`; the same delta amends the packs
+spec, `docs/specs/packs.md`, whose REQ-PACK ids the text here cites. Where a unit's report declared a clause the delta
+is silent on, a line headed "As built" adds it. Every `path:line` in that text reads at the integration head
+`67c36a63`; a unit is cited by its id, since the integration lane's cherry-pick and one rebase onto `main` gave its
+commits new shas. Where that text rewrote a sentence in place, the sentence says "amended 2026-10-22" and quotes what
+it read. That text is not in a release yet; it ships with the next minor after 1.16.0, with REQ-FLOW-125 to
+REQ-FLOW-128.
 
 ## Intent
 
@@ -2368,9 +2378,15 @@ the record head's `Base:` line (REQ-CTX-012).
   a scan's `reason`, both on the full gates" (`content/commands/st-work.md:197-200`). Invariant 4's words are unchanged;
   the charter's invariants are at 1.3.0 since invariants 2 and 5 moved (REQ-FLOW-080, REQ-FLOW-088;
   `content/charter/stamity-charter.md:8`, `:10`), so the last criterion below reads `invariants_version` `1.3.0`.
+- **Amended 2026-10-22** (plan 018 file 2, unit `u4-charter`). The last criterion below reads `invariants_version`
+  `1.3.1`, where it read `1.3.0`: invariant 5's rewording (REQ-FLOW-088) is a PATCH step, a wording clarification with
+  the floor unchanged, with its `docs/doctrine.md` amendments row (`docs/doctrine.md:240`) and `invariants_amended` set
+  to that day, 2026-10-21 (`content/charter/stamity-charter.md:8`, `:10`; REQ-PROVE-008 in
+  `docs/specs/prove-behavior-and-value.md`). Invariant 4's words, the `Not done:` line and the gates' mapping are
+  unchanged (`:55-56`).
 - **Proof:** `test/corpus/commands/work.test.ts`, `test/corpus/commands/lightTrio.test.ts`,
   `test/corpus/agents/quality.test.ts`, `test/corpus/cliCallForm.test.ts`, `test/content/charter.test.ts`,
-  `test/content/invariantsVersion.test.ts`; QA.
+  `test/content/invariantsVersion.test.ts` (the 1.3.1 hash row and its doctrine row, amended 2026-10-22); QA.
 
 ### REQ-FLOW-064 — Review rounds stop when they stop paying
 
@@ -2396,10 +2412,17 @@ From the spec delta of run `2026-10-08_product-core`, as landed by the units `p4
 - **The proof block's review line** names an approval below the gate and each escalation's effort step or
   `effort: not settable` (`content/commands/st-work.md:316-317`).
 - **Expand/contract:** the default moves from 4 to 3; a cap an operator configured within 1..10 still applies. The
-  generated review-gate hook reads the engine cap (`.stamity/generated/hooks/claude/stamity-review-gate.mjs:52`).
-  Since plan 021 file 2's `w6-claude-hooks-in-claude-dir`, Claude Code's hook entry runs the copy
-  `.claude/hooks/stamity/stamity-review-gate.mjs`, which reads the same cap; the generated copy is still written and
-  no hook entry runs it. Rollback is a re-sync at the prior version.
+  review-gate hook reads the engine cap. Since plan 021 file 2's `w6-claude-hooks-in-claude-dir`, Claude Code's hook
+  entry runs the copy `.claude/hooks/stamity/stamity-review-gate.mjs`, which reads the same cap
+  (`.claude/hooks/stamity/stamity-review-gate.mjs:64`); Claude Code's review gate is that copy alone, and `sync` no
+  longer emits `.stamity/generated/hooks/claude/` (REQ-FLOW-088). (Amended 2026-10-22; it read "The generated
+  review-gate hook reads the engine cap (`.stamity/generated/hooks/claude/stamity-review-gate.mjs:52`)" and "the
+  generated copy is still written and no hook entry runs it".) Rollback is a re-sync at the prior version.
+- **Amended 2026-10-22** (plan 018 file 2, unit `u5-hook-copies`). In the repository layout the Claude adapter plans
+  the review gate, the ask gate and the cloud readiness hook only as the copies under `.claude/hooks/stamity/`; their
+  generated paths are written in a container (`hookScriptsRoot` set) alone (`claudeResiduePlanner`,
+  `CLAUDE_REVIEW_GATE_PATH`, `src/adapters/claude.ts`). The cap it reads is unchanged. Proof: `test/adapters/claude.test.ts`
+  ("the work-scoped review gate"), `test/merge/claudeHookCopies.test.ts`.
 - **Proof:** `test/roster/roster.test.ts`, `test/roster/modelLadder.test.ts`, `test/corpus/invariants.test.ts`
   (invariant 16), `test/corpus/commands/work.test.ts`, `test/corpus/agents/spine.test.ts`; QA.
 
@@ -3382,6 +3405,20 @@ binding rows, not advisory).
   unchanged (`test/tools/translator.test.ts`; added 2026-10-18). GIVEN the eval set THEN the case's locators, roster and
   coverage hold (`test/evals/locators.test.ts`, `test/evals/roster.test.ts`, `test/evals/coverage.test.ts`).
 
+Amended 2026-10-22 (plan 018 file 2, unit `u4-charter`). The charter criterion reads: GIVEN the charter THEN 95 lines,
+none over 117 characters, invariant 2 holding "one ask per turn", the rounds and its sub-agent sentence, invariant 6's
+words on two lines, and the 1.3.1 hash row matching, where it read the 1.3.0 row. The opening paragraph's two new lines
+(REQ-FLOW-130) are paid by three one-line trims in the Conditional layer, so the template stays at 95 lines; invariant
+2's words are unchanged and sit two lines lower, at `content/charter/stamity-charter.md:50-52` (the citation above
+read `:48-50`). The close walk and its other criteria are unchanged.
+
+- **As built:** the 1.3.1 hash row is `test/content/invariantsVersion.test.ts:73`, beside the 1.3.0 row it leaves as the
+  record (`:68`). The widest template line is the maturity line, which counts 116 characters with its em dash as one
+  (`content/charter/stamity-charter.md:28`; the width case counts characters, not bytes).
+- **Proof:** `test/content/charter.test.ts` ("keeps every template line at or under 117 characters", and "asks in its
+  opening paragraph for plain words, stated confidence and a no said first", which pins the 95 lines),
+  `test/content/invariantsVersion.test.ts` ("hashes the invariants block to the version that ratified it").
+
 ### REQ-FLOW-081 — The run proves a row before it asks the person
 
 Added 2026-10-15 (plan 020 file 3, unit `f7-prove-before-asking` and its fix rounds; the delta's amended text from
@@ -3634,12 +3671,17 @@ The text names the session by what the agent observes, never by client.
 
 Added 2026-10-15 (plan 020 file 3, unit `f2-protocol-charter` and its fix round, `review/13`; the delta's amended text
 from `review/27`). Charter invariant 5 reads: "Read `.stamity/learnings/` before project-specific work, only through
-the session-start banner or, where no hook ran, `node .stamity/generated/hooks/<client>/stamity-session-start.mjs` run
-with an empty stdin, opening only the files it lists as loaded; repeating a recorded failure is a process defect."
-(`content/charter/stamity-charter.md:55-57`). The command names no glob and no `/dev/null`, so it reads the same under
-every shell. Since plan 021 file 2's `w6-claude-hooks-in-claude-dir`, Claude Code's hook entries run the copy under
-`.claude/hooks/stamity/`; the generated copy the invariant names is still written, so the command holds for Claude Code
-as for the other clients.
+the session-start banner or, where no hook ran, the client's own `stamity-session-start.mjs` (`.<client>/hooks/stamity/`
+where that folder exists, else `.stamity/generated/hooks/<client>/`) run with an empty stdin, opening only the files it
+lists as loaded; repeating a recorded failure is a process defect." (`content/charter/stamity-charter.md:57-60`). The
+command names no glob and no `/dev/null`, so it reads the same under every shell. Since plan 021 file 2's
+`w6-claude-hooks-in-claude-dir`, Claude Code's hook entries run the copy under `.claude/hooks/stamity/`; since plan 018
+file 2, the invariant names that folder for a client that has one, and `sync` stops emitting
+`.stamity/generated/hooks/claude/`, deletes each copy there whose bytes match its ledger row, and keeps and names an
+edited one. (Amended 2026-10-22; the invariant read "…or, where no hook ran,
+`node .stamity/generated/hooks/<client>/stamity-session-start.mjs` run with an empty stdin, …" at `:55-57`, and the
+sentence after it read "the generated copy the invariant names is still written, so the command holds for Claude Code
+as for the other clients".)
 
 - **Amended 2026-10-16** (plan 021 file 1, units `u7-learn-read` and `u9-unattended-skill`). Given a session where no
   session-start hook ran, Then learnings are read through the screen, by the committed script run with an empty stdin
@@ -3647,8 +3689,27 @@ as for the other clients.
   included (`runRead`, `src/cli/commands/learn.ts`); the unattended skill names both (REQ-FLOW-099;
   `content/skills/st-unattended/SKILL.md:43-46`), and a file under `.stamity/learnings/` is never opened with the file
   tools. Proof: `test/cli/commands/learn.test.ts`, `test/corpus/skills/unattended.test.ts`.
-- **Proof:** `test/content/charter.test.ts` (the invariant 5 pins, with no `/dev/null` and no `hooks/*/`),
-  `test/content/invariantsVersion.test.ts` (the 1.3.0 hash row).
+- **Amended 2026-10-22** (plan 018 file 2, units `u4-charter` and `u5-hook-copies`). The invariant takes the meaning
+  the maintainer accepted without naming a client, which the charter's own test refuses: the 1.3.0 path named a folder
+  a client with its own hook folder no longer receives. It is a PATCH step, invariants 1.3.1 (REQ-FLOW-063). In the
+  repository layout Claude Code's core hook scripts are planned only as the copies under `.claude/hooks/stamity/`
+  (`planHooksInfra`, `src/emit/hooksInfra.ts`), and the adapter's three as theirs (`claudeResiduePlanner`,
+  `src/adapters/claude.ts`); a container (`hookScriptsRoot` set) keeps its generated paths. The stopped ledger rows
+  leave through `sync`'s existing reclaim sweep: an unedited copy is removed by its recorded hash, an edited one kept and
+  named. This repository's own `sync` at integration removed its seven old copies that way (the run's record,
+  integration part 2). The upgrade window a base older than 1.16.0 opens on Claude Code's GitHub Action is REQ-FLOW-113's.
+  - **As built:** the session start copy run by hand with an empty stdin prints the learnings banner
+    (`test/merge/claudeHookCopies.test.ts`, "the session start copy run by hand with an empty stdin prints the
+    learnings banner (invariant 5)"). The hook-latency script times the copy by default, and the QA harness hashes
+    Claude's copies (`scripts/hook-latency.mjs`, `scripts/qa/run.mjs`). `docs/troubleshooting.md` says the old folder is
+    no longer written and the hand-run session start is the copy.
+  - **Proof:** `test/merge/claudeHookCopies.test.ts` ("writes and owns every copy, writes nothing under the old folder,
+    and wires every entry to a copy", "removes every unedited old copy by its recorded hash, and keeps the copies and the
+    settings", "keeps an edited old copy and names it, and removes the unedited six"), `test/emit/hooksInfra.test.ts`,
+    `test/docsPages.test.ts` ("troubleshooting shows the guard command Claude Code runs, at the copy").
+- **Proof:** `test/content/charter.test.ts` (the invariant 5 pins, "holds invariant 5's screened read, every clause on its
+  four lines", with no `/dev/null`, no `hooks/*/` and no single generated path), `test/content/invariantsVersion.test.ts`
+  (the 1.3.1 hash row; amended 2026-10-22, it read the 1.3.0 row).
 
 ### REQ-FLOW-089 — A run is unattended only by declaration
 
@@ -4662,9 +4723,11 @@ tool call and no hook fired.
   `stamity-agent-tool-policies.json`, the policy document's copy the guard reads (`CLAUDE_HOOKS_DIR`,
   `src/hooks/model.ts`; `CLAUDE_COPY_PLACEMENT`, `src/emit/hooksInfra.ts`). The Action replaces `.claude/` with the base
   branch's copy on a pull request, so the engine's own hook scripts are the base branch's there, and a pull request no
-  longer changes what the guard runs on its own Action run. The copies under `.stamity/generated/hooks/claude/` are
-  still written, for the session start invariant 5 has a session run by hand (REQ-FLOW-088); no hook entry runs them.
-  The configuration row says so, and `docs/cloud.md`'s Action section adds the base branch that predates the copies, the
+  longer changes what the guard runs on its own Action run. The copies under `.stamity/generated/hooks/claude/` are no
+  longer emitted, and a session run by hand starts `.claude/hooks/stamity/stamity-session-start.mjs` (REQ-FLOW-088;
+  amended 2026-10-22, it read "are still written, for the session start invariant 5 has a session run by hand
+  (REQ-FLOW-088); no hook entry runs them"). The configuration row says so and names the window a base older than
+  1.16.0 opens, and `docs/cloud.md`'s Action section adds the base branch that predates the copies, the
   records the scripts read, the user and pack hook scripts outside `.claude/` the settings also run, which come from the
   pull request (kept under `.claude/` or dropped where the Action runs on outside pull requests), and the Action's own
   named limit: a pull request's change to `.claude/` is reverted on its Action run, and an agent there that commits with
@@ -4672,6 +4735,22 @@ tool call and no hook fired.
   does not state it). Proof: `test/emit/capabilityMatrix.test.ts` (the configuration row), `test/docsPages.test.ts`
   ("names the GitHub Action a short surface, and what a pull request still changes there", and "the Action's restore
   covering Claude Code's hook copies (w7-action-pages)").
+- **Amended 2026-10-22** (plan 018 file 2, unit `u5-hook-copies` with its fix round; the maintainer's decision on
+  `review/9`, "Correct the docs, add one step"). Those copies are no longer emitted (REQ-FLOW-088): the configuration
+  row of `CLIENT_CLOUD_FACTS` says the older copies under `.stamity/generated/hooks/claude/` are no longer written and
+  the upgrade's `sync` removes them, and that a session run by hand starts
+  `.claude/hooks/stamity/stamity-session-start.mjs` (`src/hooks/model.ts`). It names the window by base version: an
+  upgrade pull request whose base predates 1.16.0 runs that base's entries, which name the removed scripts; from a 1.9.0
+  to 1.15.x base the guard's entry, failing closed, refuses every tool call until the upgrade merges, and before 1.9.0
+  the entry has no fail-closed tail, so the guard does not run on that run. A base older than 1.9.0 upgrades through
+  1.16.0 first, or keeps the Action off that one upgrade pull request. `docs/cloud.md`'s Action section, `SECURITY.md`'s
+  Action residual and `docs/troubleshooting.md` say the same (`docs/cloud.md:242-254`). The window is documented, not
+  bridged (the plan's declared default, `build/6`). The Action's restore, its residuals and the six-hour facts are
+  unchanged.
+  - **Proof:** `test/emit/capabilityMatrix.test.ts` ("states Claude Code's GitHub Action as a six-hour job with no
+    question tool by default (REQ-FLOW-113)", its configuration-row pins), `test/docsPages.test.ts` ("names the GitHub
+    Action a short surface, and what a pull request still changes there", "SECURITY.md's Action residual names the
+    copies inside the restore and what stays with the pull request").
 - **Proof:** `test/emit/capabilityMatrix.test.ts` ("states Claude Code's GitHub Action as a six-hour job with no
   question tool by default (REQ-FLOW-113)"), `test/qa/hookRuns.test.ts` ("drives claude without --bare"),
   `test/qa/hookRunsCli.test.ts`, `test/docsPages.test.ts` ("names the GitHub Action a short surface, and what a pull
@@ -5142,6 +5221,60 @@ unattended, the declared default is the reversible one, so nothing deploys or se
   (`content/rules/stamity-question-protocol.md:26-27`).
 - **Proof:** `test/corpus/rules/protocol.test.ts` ("names a deploy and an outside message, the run's own pull request
   aside, in trigger 3 (REQ-FLOW-128)", and the hashed ranges unchanged), `test/corpus/skills/unattended.test.ts`.
+
+### REQ-FLOW-129 — `/st-plain` restates a text in plain words
+
+Added 2026-10-22 (plan 018 file 2, unit `u9-st-plain` with its fix round, and `u15-frontend-plain-cases` for its
+cases).
+
+Given the core skill `content/skills/st-plain/`, model-invocable, When it is given a text, or asked to restate the
+last reply, Then it rewrites it in plain words, keeping every fact, number, path, command, confidence label, open gap
+and refusal, and writes no file; Codex shows its row (REQ-PROVE-004 in `docs/specs/prove-behavior-and-value.md`), the
+`/` menu lists it (REQ-PACK-006 in `docs/specs/packs.md`), and a select probe in `evals/cases-v6/` measures its
+trigger.
+
+- **As built:** the head declares neither `disable-model-invocation` nor `user-invocable`, and its companion
+  `agents/openai.yaml` carries display fields and no `policy` block, so Codex lists it
+  (`content/skills/st-plain/SKILL.md:1-10`, `content/skills/st-plain/agents/openai.yaml`). The input is a given text,
+  pasted, quoted or named as a file that is read and never edited, else the agent's own last reply; with neither it says
+  there is nothing to restate (`:25-31`). What stays word for word: every fact and number with its unit and precision,
+  every path, locator, command, flag, identifier, version and commit, every confidence label and what it rests on,
+  every `Not done:` item in its order, every security finding with its severity, every quoted error, test name and code
+  block (`:57-66`). The hard lines: a no stays a no and moves to the front, no open gap is dropped, no claim is added and
+  no certainty moved, and a sentence that cannot get plainer keeps its words (`:68-77`). The worked example keeps a
+  hedged suggestion hedged (`:79-97`; `review/10`), and a unit appears only where the input gave one (`review/11`). The
+  output is the rewritten text alone, in the input's language (`:99-103`). Its description, 245 characters, opens on
+  its own verb and keeps its nouns off the two `frontend` skills' trigger domains (`CORE_NEIGHBOURS`,
+  `test/packs/frontend.test.ts`; the trigger phrase `test/corpus/skills/triggerDomains.ts` holds).
+- **Proof:** `test/corpus/census.test.ts` ("skills: exactly the eight procedures"), `test/corpus/skills/flow.test.ts`,
+  `test/packs/frontend.test.ts` ("keeps dep-audit, verify and plain on their own nouns and clear of these two domains",
+  "opens the eight core and two pack descriptions on ten different verbs"), `test/adapters/codex.test.ts` (`st-plain`
+  among the 16 shown rows); the select probe `probe-plain-select` (`evals/cases-v6/probes/`), listed in all 30 probes,
+  and the adversarial case `plain-never-drops-open-gap`, whose hedge row fails a bare imperative. "Keeping every" is
+  `judgment: reviewer`, on a sample.
+- **Source:** `content/skills/st-plain/SKILL.md`, `content/skills/st-plain/agents/openai.yaml`.
+
+### REQ-FLOW-130 — The charter asks for plain words, stated confidence and a no said first
+
+Added 2026-10-22 (plan 018 file 2, unit `u4-charter`).
+
+Given the charter's opening paragraph, Then it gains two lines asking for plain words, for how sure the agent is and
+what that rests on, and for a no said first when the answer is no; three one-line trims in the Conditional layer pay
+for them, its eval-floor line untouched (REQ-PROVE-006), so the charter stays 95 lines, none over 117 characters. The
+paragraph lies outside the invariants block, which moves for invariant 5 alone.
+
+- **As built:** the two lines read "Write every reply in plain words: short sentences, common words, no jargon the
+  reader has to decode. Say how sure you are and what that rests on, and when the answer is no, say no first, then
+  why.", joined to the opening paragraph with no blank line (`content/charter/stamity-charter.md:17-18`). The three
+  trims are the roster line, "Neither shape replaces the charter …" and the skills line's last clause, "call a skill by
+  name whenever its description fits the job", each one physical line, their pinned phrases kept (`:87`, `:92`, `:95`).
+  The same unit rewrote the maturity line in place, `git history at init, or the default; `${STAMITY:CLI} config`
+  changes it` (`:28`; inbox row 174). The always-on byte constants move by the same +72 bytes (REQ-PROVE-005).
+- **Proof:** `test/content/charter.test.ts` ("asks in its opening paragraph for plain words, stated confidence and a no
+  said first", which also holds the line outside the invariants block, the three trims and the 95 lines; "keeps every
+  template line at or under 117 characters"); the seven eval cases quoting the charter re-pointed their ranges with
+  their quotes unchanged (`evals/SET-v7.md`).
+- **Source:** `content/charter/stamity-charter.md`.
 
 ## Acceptance criteria
 
@@ -5642,8 +5775,9 @@ above.
 - GIVEN a class whose checks name `review-once` and a Warning it raises THEN the Warning is fixed and closure-reviewed
   once, and no further round runs.
 - GIVEN the charter THEN invariant 4 reads "Done means the gates `gate classify` names exit 0 (all if it did not run)."
-  with the `Not done:` line unchanged, and `invariants_version` reads `1.3.0` (amended 2026-10-15, plan 020 file 3; it
-  read `1.2.0`, which invariants 2 and 5 moved).
+  with the `Not done:` line unchanged, and `invariants_version` reads `1.3.1` (amended 2026-10-22, plan 018 file 2; it
+  read `1.3.0`, which invariant 5's PATCH rewording moved; amended 2026-10-15, plan 020 file 3, it had read `1.2.0`,
+  which invariants 2 and 5 moved).
 
 **REQ-FLOW-064**
 
@@ -5951,8 +6085,8 @@ above.
   platform marker once with the plain-text fallback after it; GIVEN each client's rendering THEN no marker is left and
   that client's note is there. *(test: `test/corpus/rules/protocol.test.ts`)*
 - GIVEN the charter THEN 95 lines, none over 117 characters, invariant 2 holding "one ask per turn", the rounds and its
-  1.2.0 sub-agent sentence, invariant 6's words unchanged on two lines, and the 1.3.0 hash row matching.
-  *(test: `test/content/charter.test.ts`, `test/content/invariantsVersion.test.ts`)*
+  1.2.0 sub-agent sentence, invariant 6's words unchanged on two lines, and the 1.3.1 hash row matching (amended
+  2026-10-22; it read the 1.3.0 row). *(test: `test/content/charter.test.ts`, `test/content/invariantsVersion.test.ts`)*
 - GIVEN each of the nine touchpoints THEN it points at the Close walk, names its own leftovers, and ends on its report,
   return block or proof block with nothing after it; GIVEN `/st-quick` THEN no inbox append; GIVEN `/st-spec` THEN a
   marker's default is "leave it marked". *(corpus: `work.test.ts`, `board.test.ts`, `lightTrio.test.ts`, `spec.test.ts`,
@@ -6057,9 +6191,14 @@ above.
 
 **REQ-FLOW-088** (added 2026-10-15)
 
-- GIVEN the charter THEN invariant 5 names `node .stamity/generated/hooks/<client>/stamity-session-start.mjs` run with
-  an empty stdin and opening only the files it lists as loaded, and holds no `/dev/null` and no `hooks/*/`.
-  *(test: `test/content/charter.test.ts`)*
+- GIVEN the charter THEN invariant 5 names the client's own `stamity-session-start.mjs`, in `.<client>/hooks/stamity/`
+  where that folder exists, else `.stamity/generated/hooks/<client>/`, run with an empty stdin and opening only the files
+  it lists as loaded, on four lines, and holds no `/dev/null`, no `hooks/*/` and no
+  `node .stamity/generated/hooks/<client>/stamity-session-start.mjs` (amended 2026-10-22; it named that one generated
+  path). *(test: `test/content/charter.test.ts`)*
+- GIVEN a Claude Code setup in the repository layout THEN `sync` writes nothing under `.stamity/generated/hooks/claude/`;
+  GIVEN the old layout's copies and ledger rows THEN the upgrade's `sync` removes each unedited copy by its recorded hash
+  and keeps and names an edited one. *(test: `test/merge/claudeHookCopies.test.ts`; added 2026-10-22)*
 - GIVEN `stamity learn read` over a folder holding a refused file THEN it lists the file by its pattern ids with no
   span; GIVEN an unlistable folder or a skipped `--body` id THEN exit 1 (amended 2026-10-16).
   *(test: `test/cli/commands/learn.test.ts`)*
@@ -6285,10 +6424,14 @@ above.
 - GIVEN the matrix THEN the Action's three rows render with their statuses and no session line; GIVEN Claude's runner
   arguments THEN no `--bare`. *(test: `test/emit/capabilityMatrix.test.ts`, `test/qa/hookRuns.test.ts`)*
 - GIVEN `docs/cloud.md`, `SECURITY.md` and the spec (amended 2026-10-19) THEN each names the engine's own copies
-  under `.claude/hooks/stamity/` inside the Action's restore, the generated copies no hook entry runs, `AGENTS.md`,
-  the records the scripts read and the user and pack hook scripts outside `.claude/` as the pull request's, and the
-  Action's own named limit; no page says every script the hooks run is the base branch's. *(test:
-  `test/docsPages.test.ts`)*
+  under `.claude/hooks/stamity/` inside the Action's restore, the generated copies as no longer emitted (amended
+  2026-10-22; it read "the generated copies no hook entry runs"), `AGENTS.md`, the records the scripts read and the
+  user and pack hook scripts outside `.claude/` as the pull request's, and the Action's own named limit; no page says
+  every script the hooks run is the base branch's. *(test: `test/docsPages.test.ts`)*
+- GIVEN the configuration row and `docs/cloud.md` THEN each says the old copies leave on the upgrade's `sync`, that a
+  session run by hand starts `.claude/hooks/stamity/stamity-session-start.mjs`, and the window by base version, with
+  the one upgrade step for a base older than 1.9.0; none says the copies are still written. *(test:
+  `test/emit/capabilityMatrix.test.ts`, `test/docsPages.test.ts`; added 2026-10-22)*
 
 **REQ-FLOW-114** (added 2026-10-18)
 
@@ -6389,6 +6532,26 @@ above.
   pull request aside), rewriting shared history.", and its hashed ranges and their hash are unchanged. *(corpus:
   `test/corpus/rules/protocol.test.ts`)*
 
+**REQ-FLOW-129** (added 2026-10-22)
+
+- GIVEN the core corpus THEN it ships `st-plain` among eight skills, its head declaring neither client key and its
+  companion no `policy` block; GIVEN the full selection's Codex emission THEN `st-plain` is among the 16 shown rows.
+  *(test: `test/corpus/census.test.ts`, `test/adapters/codex.test.ts`)*
+- GIVEN its description and the two `frontend` skills' THEN neither claims the other's trigger domain. *(test:
+  `test/packs/frontend.test.ts`)*
+- GIVEN a request for the last answer in plain words, among nine skill descriptions THEN `st-plain` is the one pick.
+  *(eval: probe `probe-plain-select`)*
+- GIVEN a text holding a confidence label, a `Not done:` item and a hedged suggestion THEN the rewrite keeps every one,
+  the hedge still a hedge, and writes no file. `judgment: reviewer`, on a sample *(eval: adversarial case
+  `plain-never-drops-open-gap`)*
+
+**REQ-FLOW-130** (added 2026-10-22)
+
+- GIVEN the charter THEN its opening paragraph carries the two plain-words lines, joined with no blank line, outside the
+  invariants block; the three trims each hold one physical line with their pinned phrases; the ai-evals floor line is
+  one physical line with its words; and the template is 95 lines, none over 117 characters. *(test:
+  `test/content/charter.test.ts`)*
+
 ## References
 
 - `docs/plans/013-optimization-sweep-01.md` — the measures and the method that found these items.
@@ -6487,6 +6650,16 @@ above.
   `checkMovedSkills`, from `u15-moved-customizations`).
 - `test` (added 2026-10-21): `test/corpus/agents/verdictReturns.test.ts`, `test/corpus/agents/executionReturns.test.ts`,
   `test/hooks/scripts.test.ts`, `test/corpus/rules/protocol.test.ts`, and the suites each requirement names.
+- `docs/plans/018-packs-rebuilt-02.md`, with `.stamity/runs/2026-10-21_packs-rebuilt-02/` (its record and its units'
+  and fixers' reports) — the spec delta the text dated 2026-10-22 merges (REQ-FLOW-129 and REQ-FLOW-130; REQ-FLOW-063,
+  REQ-FLOW-064, REQ-FLOW-080, REQ-FLOW-088 and REQ-FLOW-113 amended), added 2026-10-22; its REQ-PACK ids in
+  `docs/specs/packs.md`.
+- `source` (added 2026-10-22): `content/skills/st-plain/SKILL.md`, `content/charter/stamity-charter.md` (the opening
+  paragraph, invariant 5, the Conditional layer), `src/emit/hooksInfra.ts` (`planHooksInfra`), `src/adapters/claude.ts`
+  (`claudeResiduePlanner`), `src/hooks/model.ts` (`CLIENT_CLOUD_FACTS`), `docs/cloud.md`.
+- `test` (added 2026-10-22): `test/merge/claudeHookCopies.test.ts`, `test/content/charter.test.ts`,
+  `test/content/invariantsVersion.test.ts`, and the suites each requirement names; eval cases `probe-plain-select` and
+  `plain-never-drops-open-gap` in `evals/cases-v6/`.
 
 ## Risks
 

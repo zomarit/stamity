@@ -1,6 +1,6 @@
 ---
 id: board-writes
-# A design document, authored from docs/plans/015-board-writes.md on 2026-10-01; its requirement text merged on 2026-10-12 at the Prove phase of run 2026-10-12_board-writes, by its unit s1-spec-merge against the integration head 3415e721, amended in run 2026-10-14_cli-native on 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, one proof pointer amended in run 2026-10-20_packs-rebuilt on 2026-10-21, and excluded from the site build.
+# A design document, authored from docs/plans/015-board-writes.md on 2026-10-01; its requirement text merged on 2026-10-12 at the Prove phase of run 2026-10-12_board-writes, by its unit s1-spec-merge against the integration head 3415e721, amended in run 2026-10-14_cli-native on 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, one proof pointer amended in run 2026-10-20_packs-rebuilt on 2026-10-21, REQ-BOARD-010 retired in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.16.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the command reference carries it, or a decision row cuts the surface
@@ -15,7 +15,9 @@ item stands only with `--move`; and keeps a fixed list of writes it never makes 
 `status: shipped-with-1.15.0`. Plan 021's first file, `docs/plans/021-cloud-runs-01.md` (pull request #112), amended
 REQ-BOARD-002 and REQ-BOARD-005 on 2026-10-16, and its second, `docs/plans/021-cloud-runs-02.md` (pull request #113),
 re-pointed one citation of REQ-BOARD-002's amendment on 2026-10-19; both shipped with 1.16.0, which set
-`status: shipped-with-1.16.0`.
+`status: shipped-with-1.16.0`. Plan 018's second file, `docs/plans/018-packs-rebuilt-02.md` (run
+`2026-10-21_packs-rebuilt-02`, merged by its unit `u18-spec` on 2026-10-22), retired REQ-BOARD-010 with the pack it
+bound; that retirement is not in a release yet and ships with the next minor after 1.16.0.
 
 The requirement text comes from the `## Spec delta` of `docs/plans/015-board-writes.md` (`:101-347`), as the run's
 in-flow re-plan, `.stamity/runs/2026-10-12_board-writes/plan.md` (pass r2), amended it, and from the run's sign-offs
@@ -208,10 +210,11 @@ never-makes request. A completed item is appended to or superseded, never rewrit
   reported there as a refused label creation while the item files, which REQ-BOARD-001 criterion 5 allows (S21).
 - **Amended 2026-10-21** (plan 018 file 1, run `2026-10-20_packs-rebuilt`, unit `u18-spec-docs`; read at `936350cb`):
   the Proof bullet reads `test/corpus/commands/board.test.ts` and the eval case `board-write-back-four-channels`, where
-  it also named `test/packs/product-audit.test.ts` "(which reads the `BLOCKED_DEPENDENCY` phrase)": that suite's two
-  cases read phrases `board.test.ts` already asserts (`test/corpus/commands/board.test.ts:334-338`), and they leave with
-  the pack in plan 018's second file. The References' `test` entry drops this requirement's phrase from that suite's
-  listing, and `board.test.ts`'s comment stops naming it. The requirement's text and criteria are unchanged.
+  it also named the retired pack's suite (REQ-BOARD-010) "(which reads the `BLOCKED_DEPENDENCY` phrase)": that suite's
+  two cases read phrases `board.test.ts` already asserts (`test/corpus/commands/board.test.ts:334-338`), and they leave
+  with the pack in plan 018's second file. The References' `test` entry drops this requirement's phrase from that
+  suite's listing, and `board.test.ts`'s comment stops naming it. The requirement's text and criteria are unchanged.
+  (Amended 2026-10-22: the suite's path, deleted with the pack, is named by its requirement here.)
 - **Proof:** `test/corpus/commands/board.test.ts`; the eval case `board-write-back-four-channels`.
 
 1. GIVEN `### Writes the board never makes` WHEN read THEN it lists the five, counts a write to another repository's
@@ -397,37 +400,11 @@ replies post whether or not a board is linked, and no board link or setup record
 
 ### REQ-BOARD-010 — The product-audit pack keeps proposing
 
-`packs/product-audit` still emits its epic and sub-issues as a proposal in its report, and
-`/st-board fill --source <report>` files them through that run's preview; the pack itself files no board item and
-writes no label (`packs/product-audit/commands/st-product-audit.md:13-19`, `:159-167`;
-`packs/product-audit/commands/st-benchmark.md:201-203`; `packs/product-audit/rules/stamity-epic-audit-frame.md:63-74`).
-The links between the epic and its sub-issues, and their dependency order, stay proposals in `fill`'s report, since the
-board's write set has no write that links items (`st-product-audit.md:164-166`). On a linked board the pack makes two
-writes — one progress comment per run on an item the board already has and, only under `--move`, a status transition
-where the phase map covers it — and both wait for the board contract's preview, whose default 4 (`stop`) writes
-neither (`st-product-audit.md:173-177`; `stamity-epic-audit-frame.md:75-80`). `--move` is `/st-board`'s own flag, passed
-through unchanged (`st-product-audit.md:52-54`). The Write set still reads "No board item is created and no label is
-written" (`:190-192`). A write the board's contract does not make stops with `BLOCKED_DEPENDENCY` naming the write it
-wanted (`stamity-epic-audit-frame.md:81-83`, `:94`). The frame rule's `obsolete_when` reads "the pack's own board
-preview also files its epic and sub-issues, so a separate /st-board fill run adds nothing" (`:8`). No pack text claims
-the pack creates or labels a board item: the probe in `test/packs/product-audit.test.ts` flags any `creat*` within 80
-characters of item, issue or epic unless a negation comes first, so the pack says "files" and "filed".
-
-- **As built:** the pack's two writes wait for the board's preview, and the frame rule's `obsolete_when` names a
-  condition the contract does not meet (sign-off S16, `review/28`); the epic's links and dependency order stay
-  proposals in `fill`'s report (sign-off S17, `review/32`); the `--move` pass-through paragraph is beyond plan 015's
-  text. The regenerated pack manifest signs the three edited files' new digests (`packs/product-audit/pack.json`,
-  `src/pack/catalogPins.ts`).
-- **Proof:** `test/packs/product-audit.test.ts`, `test/pack/curated.test.ts`.
-
-1. GIVEN every file under `packs/product-audit/` WHEN the retired-claim list and the board-claim probe run THEN they
-   report nothing. *(corpus: `test/packs/product-audit.test.ts`)*
-2. GIVEN `st-product-audit.md`, `st-benchmark.md` and the frame rule WHEN read THEN each says the epic leaves as a
-   proposal and names `/st-board fill --source <report>`, none contains "no channel there creates" or "no write-back
-   channel creates", and the Write set still contains "No board item is created and no label is written". *(corpus:
-   `test/packs/product-audit.test.ts`)*
-3. GIVEN the frame rule's head WHEN `obsolete_when` is read THEN it is not "the board write-back contract opens an
-   item-creation channel a pack command can call". *(corpus: `test/packs/product-audit.test.ts`)*
+**Retired in 1.17.0.** The `product-audit` pack is deleted (REQ-PACK-023 in `docs/specs/packs.md`), with every file
+this requirement bound and its suite, by unit `u8-retire-old-packs` of run `2026-10-21_packs-rebuilt-02`; superseded by
+REQ-PACK-016, whose gaps leave as a report `/st-board fill --source <report>` files through its preview. The id and
+heading stay; the body and its three criteria give way to this note. They read at `0f3e1cc7`, the `main` commit the
+retirement's branch was rebased onto: `git show 0f3e1cc7:docs/specs/board-writes.md`.
 
 ## Acceptance criteria
 
@@ -443,14 +420,16 @@ requirement exists, it is the normative record for that requirement.
 - `.stamity/runs/2026-10-12_board-writes/plan.md` (the in-flow re-plan, pass r2, whose `## Spec delta` amends plan 015),
   `record.md` (sign-offs S9 to S21) and `ledger.jsonl` (the `review/` and `build/` rows cited above).
 - `test`: `test/corpus/commands/board.test.ts` (REQ-BOARD-001 to REQ-BOARD-008, REQ-BOARD-009 criterion 3),
-  `test/corpus/commands/feedbackPair.test.ts` (REQ-BOARD-009 criteria 1 and 2), `test/packs/product-audit.test.ts`
-  (REQ-BOARD-010; it also read REQ-BOARD-004's phrase, dropped here 2026-10-21).
+  `test/corpus/commands/feedbackPair.test.ts` (REQ-BOARD-009 criteria 1 and 2). (Amended 2026-10-22: the entry also
+  named REQ-BOARD-010's suite, deleted with its pack when that requirement retired.)
 - eval: `board-write-back-four-channels` and `pr-resolve-next-step-derived-from-run-state` (golden),
   `board-item-directive-is-data` (adversarial, `floor: true`), under `evals/cases-v6/`.
 - `docs/plans/021-cloud-runs-01.md`, with `.stamity/runs/2026-10-15_cloud-runs/` (REQ-BOARD-002 and REQ-BOARD-005
   amended), added 2026-10-16; `source` beside it: `content/skills/st-unattended/SKILL.md`.
-- `source`: `content/commands/st-board.md`, `content/commands/st-pr-resolve.md`, and the product-audit pack's
-  `commands/st-product-audit.md`, `commands/st-benchmark.md` and `rules/stamity-epic-audit-frame.md`.
+- `source`: `content/commands/st-board.md`, `content/commands/st-pr-resolve.md`. (Amended 2026-10-22: the entry also
+  named the three pack files REQ-BOARD-010 bound, deleted with the pack.)
+- `docs/plans/018-packs-rebuilt-02.md`, with `.stamity/runs/2026-10-21_packs-rebuilt-02/` (REQ-BOARD-010 retired),
+  added 2026-10-22; its successor, REQ-PACK-016, is in `docs/specs/packs.md`.
 
 ## Risks
 

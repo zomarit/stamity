@@ -1,6 +1,6 @@
 ---
 id: orchestrator-context
-# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, amended on 2026-09-29 by the maintainer's decision to retire the replay, amended from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, its citations re-pointed in run 2026-10-12_board-writes on 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, and excluded from the site build.
+# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, amended on 2026-09-29 by the maintainer's decision to retire the replay, amended from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, its citations re-pointed in run 2026-10-12_board-writes on 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, and excluded from the site build.
 # The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.16.0
@@ -102,6 +102,11 @@ request #113); each paragraph names its units and the head its citations read at
 The paragraph and criterion dated 2026-10-21 under REQ-CTX-017 come from the spec delta of
 `docs/plans/018-packs-rebuilt-01.md` (plan 018 file 1, run `2026-10-20_packs-rebuilt`), merged by its unit
 `u18-spec-docs` and read at the integration head `936350cb`. They are not in a release yet.
+
+The paragraph and criterion dated 2026-10-22 under REQ-CTX-017 come from the spec delta of
+`docs/plans/018-packs-rebuilt-02.md` (plan 018 file 2, run `2026-10-21_packs-rebuilt-02`), merged by its unit
+`u18-spec` and read at the integration head `67c36a63`; they cite the unit that built them, `u3-frontend-set`, by its
+id. They are not in a release yet.
 
 The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
 
@@ -256,6 +261,9 @@ The replay's files were deleted on 2026-09-30; every path below reads at tag `re
   2026-10-16; `test/runs/recordHead.test.ts` (the head's new lines).
 - `docs/plans/018-packs-rebuilt-01.md`, with `.stamity/runs/2026-10-20_packs-rebuilt/` (REQ-CTX-017 amended), added
   2026-10-21; `test/corpus/agents/verdictReturns.test.ts` (the reviewer's reading of the `choice:` lines).
+- `docs/plans/018-packs-rebuilt-02.md`, with `.stamity/runs/2026-10-21_packs-rebuilt-02/` (REQ-CTX-017 amended), added
+  2026-10-22; `test/corpus/agents/verdictReturns.test.ts` (design-quality's whole-surface brief); the consumer is
+  `packs/frontend/commands/st-ui-review.md` (REQ-PACK-021 in `docs/specs/packs.md`).
 
 ## Requirements
 
@@ -1155,6 +1163,24 @@ sentence after "never evidence."). The grant, the guard and the prose are unchan
   unit's on a `branch` pass, as leads that claim nothing about what works, after the sentence that calls a brief's
   summary no evidence (`test/corpus/agents/verdictReturns.test.ts`, "reads the run record's choice lines as leads,
   never as evidence"; added 2026-10-21).
+
+Amended 2026-10-22 (plan 018 file 2, run `2026-10-21_packs-rebuilt-02`, unit `u3-frontend-set` with its fix round;
+read at `67c36a63`). The design-quality agent also takes a whole-surface brief: a commit and the surface's paths in
+place of a range, read with `git show <commit>:<path>`, the named surface standing in for "the change" across its
+body, its exclusion of untouched surfaces included; a brief with no range, no hunks and no commit with paths still
+returns `BLOCKED_DEPENDENCY` (`content/agents/stamity-design-quality.md:159-173`). Its consumer is `/st-ui-review`
+(REQ-PACK-021 in `docs/specs/packs.md`), whose brief names no report path, so the agent returns its result inline
+(`review/1` of that run). The other roles are unchanged; no other body names the whole-surface brief.
+
+- **As built, where the delta's wording differed:** the sentence reads "A whole-surface brief's commit and paths stand
+  in for the range, read with `git show <commit>:<path>`, the surface for "the change", exclusions included; a brief
+  with no range, no hunks and no commit with paths returns `BLOCKED_DEPENDENCY` naming the missing diff"
+  (`content/agents/stamity-design-quality.md:171-173`), the shorter form keeping the section's lines; the meaning is
+  the delta's. The section was reflowed at `:161-173` to fit it, every word kept and no quoted range moved.
+- GIVEN design-quality's `## Reading the change` THEN it names a whole-surface brief's commit and paths read with
+  `git show <commit>:<path>` and the `BLOCKED_DEPENDENCY` for a brief with no range, no hunks and no commit with paths,
+  and no other verdict body names a whole-surface brief (`test/corpus/agents/verdictReturns.test.ts`, "design-quality
+  also takes a whole-surface brief, a commit with the surface's paths"; added 2026-10-22).
 
 **Expand/contract:** the grant is additive, and rollback is a re-sync at the prior version. The consumer is the policy
 document, whose schema id is unchanged (`src/tools/allowlist.ts`). A guard suite proves the grant stays read-only.

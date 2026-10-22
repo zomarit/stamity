@@ -5256,7 +5256,15 @@ describe("the Action's restore covering Claude Code's hook copies (w7-action-pag
     it("REQ-FLOW-113 states the copies inside the restore and the Action's own limit", () => {
       const bullet = w7Amendment("REQ-FLOW-113");
       expect(bullet).toContain(copies);
-      expect(bullet).toMatch(/no hook entry runs them/);
+      // TEST CHANGE, justified (plan 018 file 2, unit u18-spec; REQ-FLOW-113, REQ-FLOW-088): u5-hook-copies stopped
+      // emitting the generated copies, and the spec merge rewrote the bullet's sentence in place, so the pin reads the
+      // merged sentence where it read "no hook entry runs them", and refuses the old sentence standing live (its quote
+      // inside the amendment note ends on a quotation mark, not on the configuration-row sentence).
+      expect(bullet).toContain(
+        "The copies under `.stamity/generated/hooks/claude/` are no longer emitted, and a session run by hand starts " +
+          "`.claude/hooks/stamity/stamity-session-start.mjs`",
+      );
+      expect(bullet).not.toMatch(/no hook entry runs them\. The configuration row/);
       expect(bullet).toMatch(/a pull request no longer changes what the guard runs on its own Action run/);
       expect(bullet).toContain("`git add -A`");
       expect(bullet).toMatch(/user and pack hook scripts outside `\.claude\/`/);
@@ -5273,9 +5281,15 @@ describe("the Action's restore covering Claude Code's hook copies (w7-action-pag
 
     it("the lines naming Claude Code's hook folder say which copy the hooks run", () => {
       expect(requirement("REQ-FLOW-001")).toContain(`the copies Claude Code's hook entries run under ${copies}`);
-      expect(requirement("REQ-FLOW-088")).toMatch(
-        /Claude Code's hook entries run the copy under `\.claude\/hooks\/stamity\/`; the generated copy the invariant names is still written/,
+      // TEST CHANGE, justified (plan 018 file 2, unit u18-spec; REQ-FLOW-088): invariant 5 now names the client's own
+      // folder and `sync` no longer writes Claude Code's generated copies (u4-charter, u5-hook-copies), so the merged
+      // sentence names the copy and the stopped emission where it read "the generated copy the invariant names is
+      // still written"; that sentence survives only as the quoted text of the amendment note.
+      const flow088 = requirement("REQ-FLOW-088");
+      expect(flow088).toMatch(
+        /Claude Code's hook entries run the copy under `\.claude\/hooks\/stamity\/`; since plan 018 file 2, the invariant names that folder for a client that has one, and `sync` stops emitting `\.stamity\/generated\/hooks\/claude\/`/,
       );
+      expect(flow088).not.toMatch(/`\.claude\/hooks\/stamity\/`; the generated copy the invariant names is still written/);
       expect(requirement("REQ-FLOW-064")).toContain(`\`${CLAUDE_HOOKS_DIR}/stamity-review-gate.mjs\``);
     });
   });

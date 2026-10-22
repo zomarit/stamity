@@ -1,6 +1,6 @@
 ---
 id: prove-behavior-and-value
-# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-11_release-1-14-0 on 2026-10-11 and 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, and excluded from the site build.
+# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-11_release-1-14-0 on 2026-10-11 and 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023).
 status: shipped-with-1.16.0
 obsolete_when: the measurement page, the security mapping and the QA evidence file are all generated from live data by the engine itself, or a decision row cuts the surface
@@ -104,6 +104,13 @@ The text dated 2026-10-21 under REQ-PROVE-002, REQ-PROVE-004 and REQ-PROVE-033 c
 integration head `936350cb`, but for the unit `u4-pack-fit`, which landed on its own lane and is cited by file and
 symbol, since the integration lane's cherry-pick gives its commits new shas; its REQ-PACK ids are in
 `docs/specs/packs.md`. It is not in a release yet.
+
+The text dated 2026-10-22 under REQ-PROVE-004, REQ-PROVE-005, REQ-PROVE-006 and REQ-PROVE-008 comes from the spec delta
+of `docs/plans/018-packs-rebuilt-02.md` (plan 018 file 2, run `2026-10-21_packs-rebuilt-02`), merged by its unit
+`u18-spec`, with the clauses its units' reports declared under a line headed "As built". It reads at the integration
+head `67c36a63` and names each unit by its id; its REQ-PACK and REQ-FLOW ids are in `docs/specs/packs.md` and
+`docs/specs/everyday-flows.md`. REQ-PROVE-033 is unchanged: a case whose `source:` lies under `packs/` already triggers
+a full run. It is not in a release yet.
 
 ## Intent
 
@@ -343,6 +350,21 @@ the cap and the shown-rows rule are unchanged.
   installed past the cap THEN `add`'s measure and `sync`'s refusal read the same total and shares
   (`test/adapters/codex.test.ts` and `test/cli/engine/packFit.test.ts`, from `u4-pack-fit`; added 2026-10-21).
 
+Amended 2026-10-22 (plan 018 file 2, units `u9-st-plain`, `u11-release-skill` and `u12-incident-skill`; read at
+`67c36a63`). The figure: with `/st-plain` in the core (REQ-FLOW-129 in `docs/specs/everyday-flows.md`), Codex shows 16
+rows, the 7 shown content skills and the 9 projected rules, where it showed 15, and the full-selection pin reads the
+measured total under the 8,000 cap: `codexSkillsListChars` is 5,015 characters, about 63% of the cap, where it read
+4,759 (`LIVE_ALWAYS_ON`, `src/emit/capabilityMatrix.ts:337-345`). `st-plain`'s companion carries no `policy` block, so
+its row is shown. The `production` pack's two explicit-only skills, `st-release` and `st-incident`, each ship
+`policy.allow_implicit_invocation: false` and add no row, and both packs' commands add none (REQ-PACK-004,
+REQ-PACK-019, REQ-PACK-020 in `docs/specs/packs.md`). The count, the refusal and the shown-rows rule are unchanged.
+
+- GIVEN the full selection's real emission THEN Codex shows 16 rows, `st-plain` among them and no touchpoint, totalling
+  `codexSkillsListChars` (`test/adapters/codex.test.ts`, "holds the matrix's published skills-list total to the FULL
+  selection"; added 2026-10-22); GIVEN `st-release` or `st-incident` with its companion THEN its rows count 0
+  characters, and without the companion its row counts its description plus 3 (`test/packs/productionRelease.test.ts`,
+  `test/packs/productionIncident.test.ts`; added 2026-10-22).
+
 ### REQ-PROVE-005 — Always-on composite re-measured
 
 `composeAlwaysOnLoad(tool, plan, mode)` counts, per client, the charter plus only the rules it still
@@ -397,15 +419,40 @@ per side of that split.
   figure list carries both; GIVEN a with-Cursor figure equal to the charter's, or `cursorBlockLines: 0`, THEN the page
   refuses (`test/corpus/invariants.test.ts`, `test/emit/capabilityMatrix.test.ts`; added 2026-10-18).
 
+Amended 2026-10-22 (plan 018 file 2, unit `u4-charter`; read at `67c36a63`). The charter edit (invariant 5's fourth
+line, REQ-FLOW-088, and the opening paragraph's two lines, REQ-FLOW-130, in `docs/specs/everyday-flows.md`, paid by
+three one-line trims and the maturity line's rewrite) keeps the line ceilings, cursor 95 · claude 95 · copilot 95 ·
+codex 407 (`ALWAYS_ON_BUDGET_LINES`, `src/content/charter.ts:175-239`), and moves the byte constants by the same +72
+bytes each, re-pinned to the regenerated golden: `ALWAYS_ON_SHARED_BYTES_WITH_CODEX` and
+`ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX` read 5,682 (`:371`, `:409`), `ALWAYS_ON_CODEX_OVERRIDE_BYTES` 25,872 (`:452`) and
+`ALWAYS_ON_SHARED_BYTES_WITH_CURSOR` 6,548 (`:484`), where they read 5,610, 5,610, 25,800 and 6,476. The equality and
+refusal criteria are unchanged.
+
+- **As built:** each constant carries a dated comment, "5_610 -> 5_682 on 2026-10-21, plan 018 file 2, unit
+  u4-charter (invariants 1.3.1)" and its siblings, naming the edit and the net +72 bytes (`src/content/charter.ts`, the
+  comments above each constant).
+- GIVEN the regenerated golden THEN the root `AGENTS.md` figure per side equals its constant and every
+  `AGENTS.override.md` figure equals `ALWAYS_ON_CODEX_OVERRIDE_BYTES`, and every ceiling equals the computed composite
+  (`test/corpus/invariants.test.ts`; amended 2026-10-22, the constants re-pinned).
+
 ### REQ-PROVE-006 — Charter carries the ai-evals floor in one line
 
 The charter template states, in one physical line, that a model-backed feature ships with a versioned
 golden-and-adversarial eval set whose thresholds are declared before the run, and stays under
 `CHARTER_MAX_LINES` (`src/content/charter.ts:56`; the template is 95 lines). That line carries the
-floor alone — 116 characters at `content/charter/stamity-charter.md:92`, no `ai-evals` skill clause.
+floor alone — 116 characters at `content/charter/stamity-charter.md:93` (amended 2026-10-22; it read `:92`), no
+`ai-evals` skill clause.
 
 - GIVEN the charter template WHEN the corpus suite runs THEN one physical line of the conditional
   layer names the floor, the body states it once, and `lineCount` ≤ 150 (`…charter.test.ts:220-236`).
+
+Amended 2026-10-22 (plan 018 file 2, unit `u4-charter`; read at `67c36a63`). The Conditional layer's three trims
+(REQ-FLOW-130 in `docs/specs/everyday-flows.md`) leave the floor line's words and its one physical line unchanged, at
+116 characters; the lines added and cut above it move it down one line net, so its citation re-points from `:92` to
+`content/charter/stamity-charter.md:93`, and the template stays 95 lines. Proof: `test/content/charter.test.ts`
+("states the ai-evals floor in exactly one physical line of the conditional layer", which now opens at `:266`, where
+the criterion above cites `:220-236`; and "asks in its opening paragraph for plain words, stated confidence and a no
+said first", which pins the 95 lines).
 
 ### REQ-PROVE-007 — Charter invariants version
 
@@ -427,6 +474,19 @@ the version→hash pair is the only pinned literal, and `GOVERNANCE.md:71` state
 
 - GIVEN an invariant edited with the version unchanged WHEN the suite runs THEN it fails naming both
   hashes and the missing row; `stamity check` prints an `invariants` doctor row (`…check.ts:640-651`).
+
+Amended 2026-10-22 (plan 018 file 2, unit `u4-charter`; read at `67c36a63`). Invariant 5's rewording (REQ-FLOW-088 in
+`docs/specs/everyday-flows.md`) moves the block, now `content/charter/stamity-charter.md:39-67`, under a PATCH step:
+`invariants_version` 1.3.1 and `invariants_amended` 2026-10-21 (`:8`, `:10`), a `docs/doctrine.md` amendments row for
+1.3.1 (`docs/doctrine.md:240`, a wording clarification with the floor unchanged, naming what a repository that never
+re-syncs keeps), and a new version-to-hash pair beside the 1.3.0 pair, which stays as the record
+(`test/content/invariantsVersion.test.ts:68`, `:73`). The opening paragraph's two lines (REQ-FLOW-130) lie outside the
+block and move no hash. The gate and its rules are unchanged.
+
+- GIVEN the charter THEN the block hashes to the 1.3.1 pair and the doctrine table holds a 1.3.1 row dated no earlier
+  than the ratification (`test/content/invariantsVersion.test.ts`, "hashes the invariants block to the version that
+  ratified it", "records the current version as a row in the doctrine amendments table", "never dates an amendment
+  before the ratification it amends"; added 2026-10-22).
 
 ### REQ-PROVE-009 — Eval set v7 with cases-v6
 
@@ -2268,3 +2328,6 @@ added 2026-10-16.
 
 `docs/plans/021-cloud-runs-02.md`, with `.stamity/runs/2026-10-18_cloud-runs-2/` — the spec delta REQ-PROVE-039 to
 REQ-PROVE-045 merge, with the amendments of REQ-PROVE-003, -005, -018, -021 and -037, added 2026-10-18.
+
+`docs/plans/018-packs-rebuilt-02.md`, with `.stamity/runs/2026-10-21_packs-rebuilt-02/` — the spec delta whose
+amendments of REQ-PROVE-004, -005, -006 and -008 the text dated 2026-10-22 merges, added 2026-10-22.
