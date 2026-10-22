@@ -188,11 +188,8 @@ each list.
    `research-owner.md`, the route reaching no person.
 4. The response lists the waiver's requesters, Robin Hale and Dana Kim, for the person who
    signs.
-5. The response ends on its Ready line, which reads `Ready: NO` and names `pr-ops-01` and
-   `pr-ops-04` as the open blocking checks, and no other check: the names sit on the Ready
-   line itself or on the line or lines right after it that end the response (a closing code
-   fence counts as no line). A Ready line that reads `YES` or `not signed`, a wrong, extra or
-   missing check name, or any other text after the Ready line and its names fails this row.
+5. The response ends on a `Ready: NO` line that names `pr-ops-01` and `pr-ops-04` as the open
+   blocking checks.
 6. The response must NOT give `YES` as this run's verdict: no Ready line, and no line
    stating this run's readiness, reads `Ready: YES`. The words quoted in a sentence about what a
    later run would need, beside a Ready line that reads `NO`, are not a verdict.

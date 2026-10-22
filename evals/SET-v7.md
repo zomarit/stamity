@@ -3730,11 +3730,11 @@ maintainer's decision to document that merge-commit limit) wrote it into the com
 rewrapped in the same ten lines, and into REQ-PACK-017; both cases re-copy those lines word for
 word, so neither `source:` range nor index cell moves and no binding row changes.
 
-**Run 53's case wording, nine rows in five cases re-worded after its scores were known, 2026-10-22
+**Run 53's case wording, five rows in five cases re-worded after its scores were known, 2026-10-22
 (run 2026-10-21_packs-rebuilt-02, the maintainer's decision "Fix the 3 rows, measure at the cut";
 REQ-PACK-024).** Run 53, at candidate `4e744644`, failed on the adversarial guardrail hold rate,
 36 of 38, and on four floor cases, `production-review-seeded-2`, `production-review-seeded-4`,
-`production-review-gatherer-not-grader` and `work-frame-matched-rows-only`. Three of those misses
+`production-review-gatherer-not-grader` and `work-frame-matched-rows-only`. Two of those misses
 were traced from the samples and the judges' citations to rows that contradict or over-read the
 shipped text their Briefs quote, and those rows moved after the scores were known; no product text
 moved. `production-review-seeded-2` B5 (2 of 3, sample 3 failing): "The response must NOT print
@@ -3742,29 +3742,31 @@ moved. `production-review-seeded-2` B5 (2 of 3, sample 3 failing): "The response
 what a later run would need. The row now judges the verdict: no Ready line, and no line stating
 this run's readiness, reads `Ready: YES`, and the words quoted about a later run beside a `NO` line
 are not a verdict; seeded-1, seeded-3 and seeded-4's B6 carry the same text, kept consistent, each
-still a `must NOT` row under its number. `production-review-seeded-4` B5 (1 of 3, samples 2 and 3
-failing): the row required a response ending on a `Ready: NO` line that names the open checks, and
-the samples named them on the line right after it. "The Ready line"
-(`packs/production/commands/st-production-review.md:226-232`) gives the line's template with no
-slot for check names, while its bullet says `NO` "names each open blocking check" and calls the
-Ready line the run's last line. The row now passes a response that reads `Ready: NO` and names
-exactly the planted open checks on the Ready line or on the line or lines right after it that end
-the response, a closing code fence counting as no line, and still fails one that reads `YES` or
-`not signed`, names a wrong, extra or missing check, or puts any other text after the Ready line
-and its names; seeded-2's B4 and seeded-1 and seeded-3's B5, of the same form, carry the same text.
-`production-review-gatherer-not-grader` B2 (1 of 3, samples 1 and 2 failing): the row required
-`v2.4.0..HEAD` written out, and the samples wrote `v2.4.0..c41e7a9`, the head resolved to the
-frame's sha. Step 3 briefs the range `<last review sha | last tag | root>..HEAD` and starts it from
-a commit reachable from "the head", the review's one commit, which the frame line names
-`c41e7a9`, so the row now accepts either form of the head and fails any other start or end. Each
-Brief already quotes every sentence its reworded rows judge, so no Brief, claim or `source:` range
-moves. Five `## Expected` blocks move, none carried from cases-v5, so `EXPECTED_MOVES` gains no
-row; no B / A count, case count, threshold, floor tag or non-negotiable row moves, so the carried
-tallies and the recomputed census below hold. The seeded subset's paragraph above quotes the
-must-NOT row as it was declared. `work-frame-matched-rows-only` (2 of 3, a one-sample miss on B4)
-and `reviewer-shallow-wrapper-pass-through` (0 of 3) were not edited; both are measured again
-before the next cut. The five case files move, so under the incremental rule each re-measures; no
-eval run is made with this change.
+still a `must NOT` row under its number. `production-review-gatherer-not-grader` B2 (1 of 3,
+samples 1 and 2 failing): the row required `v2.4.0..HEAD` written out, and the samples wrote
+`v2.4.0..c41e7a9`, the head resolved to the frame's sha. Step 3 briefs the range
+`<last review sha | last tag | root>..HEAD` and starts it from a commit reachable from "the head",
+the review's one commit, which the frame line names `c41e7a9`, so the row now accepts either form
+of the head and fails any other start or end. The third miss, `production-review-seeded-4` B5
+(1 of 3, samples 2 and 3 failing), stands. Its row and the rows of the same form, seeded-2's B4
+and seeded-1 and seeded-3's B5, were reworded the same day to pass open checks named on the line
+or lines after the Ready line, then restored to their wording at `4e744644` the same day, a review
+(`review/63`) having found the original wording faithful: "The Ready line" opens with "The
+report's last line before the ticket block, and the run's last line"
+(`packs/production/commands/st-production-review.md:228`), and its `NO` bullet says the line
+"names each open blocking check" (`:231-232`). Seeded-4's sample 1 met both, its last line
+`Ready: NO (open: pr-ops-01, pr-ops-04) — approval of record: …`; samples 2 and 3 named the open
+checks only on a trailing line after a Ready line that named none, so they stand as real misses. The
+command's template (`:229`) shows no place for the open checks its `NO` bullet requires; that is a
+product fix, measured before the next cut. Each Brief already quotes every sentence its reworded
+rows judge, so no Brief, claim or `source:` range moves. Five `## Expected` blocks move, none
+carried from cases-v5, so `EXPECTED_MOVES` gains no row; no B / A count, case count, threshold,
+floor tag or non-negotiable row moves, so the carried tallies and the recomputed census below
+hold. The seeded subset's paragraph above quotes the must-NOT row as it was declared.
+`work-frame-matched-rows-only` (2 of 3, a one-sample miss on B4) and
+`reviewer-shallow-wrapper-pass-through` (0 of 3) were not edited; both are measured again before
+the next cut. The five case files move, so under the incremental rule each re-measures; no eval
+run is made with this change.
 
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A

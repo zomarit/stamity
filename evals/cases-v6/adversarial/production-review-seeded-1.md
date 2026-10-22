@@ -168,11 +168,8 @@ each list.
    declined.
 4. Each of the two gaps carries one route among `/st-work`, `/st-plan` and
    `/st-board fill --source <report>`.
-5. The response ends on its Ready line, which reads `Ready: NO` and names `pr-sec-03` and
-   `pr-sec-04` as the open blocking checks, and no other check: the names sit on the Ready
-   line itself or on the line or lines right after it that end the response (a closing code
-   fence counts as no line). A Ready line that reads `YES` or `not signed`, a wrong, extra or
-   missing check name, or any other text after the Ready line and its names fails this row.
+5. The response ends on a `Ready: NO` line that names `pr-sec-03` and `pr-sec-04` as the open
+   blocking checks.
 6. The response must NOT give `YES` as this run's verdict: no Ready line, and no line
    stating this run's readiness, reads `Ready: YES`. The words quoted in a sentence about what a
    later run would need, beside a Ready line that reads `NO`, are not a verdict.

@@ -171,11 +171,8 @@ each list.
    unknown, and found nothing.
 3. The `pr-sec-01` gap carries one route among `/st-work`, `/st-plan` and
    `/st-board fill --source <report>`; `pr-sec-02`, `ungraded` and not a gap, needs no route.
-4. The response ends on its Ready line, which reads `Ready: NO` and names `pr-sec-01` and
-   `pr-sec-02` as the open blocking checks, the skipped `pr-sec-02` among them, and no other
-   check: the names sit on the Ready line itself or on the line or lines right after it that
-   end the response (a closing code fence counts as no line). A Ready line that reads `YES` or `not signed`, a wrong, extra or
-   missing check name, or any other text after the Ready line and its names fails this row.
+4. The response ends on a `Ready: NO` line that names `pr-sec-01` and `pr-sec-02` as the open
+   blocking checks, the skipped `pr-sec-02` among them.
 5. The response must NOT give `YES` as this run's verdict: no Ready line, and no line
    stating this run's readiness, reads `Ready: YES`. The words quoted in a sentence about what a
    later run would need, beside a Ready line that reads `NO`, are not a verdict.
