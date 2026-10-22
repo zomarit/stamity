@@ -531,8 +531,10 @@ expiry, Then it clears nothing and its gap stands as graded; Given no policy fil
   `review/17`, `review/41`, `review/44`). A replacement of a blocking check may move only where it finds its evidence,
   never its pass condition, its `Blocks` or its `Attest` mark, and the report lists every replaced blocking check for
   the signer (`:95-101`; `review/13`, "evidence only, and shown"). A waiver row missing its approver or its expiry is
-  invalid. Its requesters are the authors of every commit that touched the row, read with `git log -L` over its lines;
-  the approver must differ from every one, by name and by email, so an edit to the row needs fresh approval; a row not
+  invalid. Its requesters are the authors of every commit that touched the row, read with `git log -L` over its lines
+  unioned with `git log -G` over the policy file for the row's ticket id, so a row moved within the file keeps its first
+  author, and a row whose ticket id changed is a new row whose committing author is a requester (`review/54`); the
+  approver must differ from every one, by name and by email, so an edit to the row needs fresh approval; a row not
   yet committed, or whose working-tree text differs from `HEAD`, clears nothing (`:196-212`; `review/14`, `review/18`,
   `review/19`, `review/42`, `review/43`, "claimed, shown, signed"). The approval in a row is a claim: a valid waiver
   clears its gap for the Ready line, the gap still shown, marked waived, and the report lists each as a claimed approval
@@ -588,20 +590,25 @@ until `DEPLOY` is.
 
 - **As built:** two modes, a versioned release from a `release/*` branch and a deploy from the default branch's head,
   keyed by version or sha (`packs/production/skills/st-release/SKILL.md:38-48`); the clean-tree probe skips the pack's
-  own `.stamity/production/**` records, and with no earlier tag or deploy record the change set starts at the root
-  commit (`:50-64`; `review/32`). The readiness read takes the service's newest review at HEAD or an ancestor, the
-  review's own name and range rule, one line per value, the line copied into the record's security impact; making a
-  `NO` stop the release is a later change (`:66-82`). The bump writes only `package.json` and the lockfile it owns, the
-  pack's declared install scope, and prints another stack's version edit for the person (`:98-112`; `review/38`). The
-  SBOM is generated beside the record, `.stamity/production/releases/<version | sha>.sbom.json` (`:122-139`). The record
-  writes the approver as `<name>, named by the requester, not confirmed by this skill`, an approver equal to the
-  requester counting as none (`:141-161`; `review/34`, by the same decision as the waivers'); it names variables, files
-  and locations and refuses a pasted credential, citing the secrets floor's items 1, 4 and 6 (`:163-167`; `review/33`).
-  At the stop the approver line is shown, each command printed with its reversibility, and the typed token is the
-  person's confirmation; after it the opened commands run in table order and the run stops at the first non-zero exit,
-  release creation passing `--verify-tag`; no stop opens while the approver reads `not named` or equals the requester,
-  nor `DEPLOY` without a rollback path (`:173-191`; `review/31`). Silence, an empty answer or a mismatched token holds,
-  and a run with nobody watching ends held (`:19-36`).
+  own `.stamity/production/**` and `.stamity/verify/**` paths, and with no earlier tag or deploy record the change set
+  starts at the root commit (`:50-64`; `review/32`, `review/57`). The readiness read takes the service's newest review
+  at HEAD or an ancestor, the review's own name and range rule, one line per value, the line copied into the record's
+  security impact; making a `NO` stop the release is a later change (`:66-82`). The bump writes only `package.json` and
+  the lockfile it owns, the pack's declared install scope, and prints another stack's version edit for the person
+  (`:98-112`; `review/38`). The SBOM is generated beside the record,
+  `.stamity/production/releases/<version | sha>.sbom.json` (`:122-139`). The record writes the approver as
+  `<name>, named by the requester, not confirmed by this skill`, an approver equal to the requester counting as none
+  (`:141-161`; `review/34`, by the same decision as the waivers'); it names variables, files and locations and refuses a
+  pasted credential, citing the secrets floor by the rule's name, items 1, 4 and 6 (`:163-167`; `review/33`,
+  `review/55`). In release mode the commit stays on the release branch and the skill pushes nothing: the run prints
+  `git push -u origin release/<version>` and the pull request into the default branch as the person's acts before the
+  stop (`:169-172`; `review/53`). At the stop the approver line is shown, each command printed with its reversibility,
+  and the typed token is the person's confirmation; where the publish proof needs the tag reachable from the default
+  branch, the tag push waits for that pull request's merge; after the token the opened commands run in table order and
+  the run stops at the first non-zero exit, a failed tag push naming `git tag -d v<version>`, release creation passing
+  `--verify-tag`; no stop opens while the approver reads `not named` or equals the requester, nor `DEPLOY` without a
+  rollback path (`:174-196`; `review/31`, `review/53`, `review/58`). Silence, an empty answer or a mismatched token
+  holds, and a run with nobody watching ends held (`:19-36`).
 - **Proof:** `test/packs/productionRelease.test.ts` (among its cases, "carries the skill head, explicit-only, with no
   spawn", "ships the core companion form, hiding the skill from Codex's model", "holds the sentence that keeps the
   readiness review a warning", "writes the record at its path, one row per field REQ-PACK-019 names", "names an absent

@@ -53,7 +53,7 @@ Halt with an actionable message rather than working around a row:
 
 | Probe | Requirement | On failure |
 |---|---|---|
-| `git status --porcelain` | empty, skipping the pack's own record paths (`.stamity/production/**`) | halt naming the dirty paths; the person commits them |
+| `git status --porcelain` | empty, skipping the pack's own paths under `.stamity/` (`.stamity/production/**`, `.stamity/verify/**`) | halt naming the dirty paths; the person commits them |
 | current branch (release mode) | a `release/*` branch, never the default branch | halt and print `git switch -c release/<version>` |
 | current branch (deploy mode) | the default branch, at the head the remote holds | halt naming the difference |
 | change set | the log since the last tag (`git describe --tags --abbrev=0`), or since the last deploy's record in deploy mode | halt when nothing changed: there is nothing to ship |
@@ -162,19 +162,22 @@ a form a change ticket takes as it is.
 
 The record names variables, files and locations, never a secret value. An answer carrying a
 credential, such as a connection string with its password or a webhook address with its key, is
-refused, not recorded, citing the secrets floor (`stamity-secrets.md`, items 1 and 4): the
+refused, not recorded, citing the secrets floor (the `stamity-secrets` rule, items 1 and 4): the
 refusal names the field and never the value, says the pasted value now counts as exposed, whose
 rotation is that floor's item 6, and asks again for the variable or location that holds it.
 
 In release mode the record, the bump and the changelog are committed together on the release
-branch with the project's commit conventions; nothing is pushed. In deploy mode the record stays
-in the tree, uncommitted, and the run says so.
+branch with the project's commit conventions; nothing is pushed. Before the stop the run prints
+`git push -u origin release/<version>` and the pull request into the default branch as the
+person's acts. In deploy mode the record stays in the tree, uncommitted, and the run says so.
 
 ## Step 8 — The stop
 
 Show the record's approver line, `named by the requester, not confirmed by this skill`, then
 print each remaining command verbatim, labelled by reversibility, then ask once. The typed
-token is the person's confirmation that the named approver approved.
+token is the person's confirmation that the named approver approved. Where the project's
+publish proof needs the tag reachable from the default branch, the tag push waits until the
+release branch's pull request has put the release commit there, and the stop says so.
 
 | Command | Reversible? | Opens on |
 |---|---|---|
@@ -186,9 +189,11 @@ token is the person's confirmation that the named approver approved.
 
 After the token, the opened commands run in table order, each once, and the run stops at the
 first non-zero exit: no later command runs, and the run ends held, naming each command that ran
-with its exit code. No stop opens while the approver reads `not named` or equals the requester,
-or, for `DEPLOY`, while the rollback path reads `not named` or is empty: the run says which
-field holds it and ends held. Running a command personally is always an acceptable answer.
+with its exit code. After a failed tag push it also names `git tag -d v<version>`, since the
+local tag left behind makes a re-run find nothing to ship. No stop opens while the approver
+reads `not named` or equals the requester, or, for `DEPLOY`, while the rollback path reads
+`not named` or is empty: the run says which field holds it and ends held. Running a command
+personally is always an acceptable answer.
 
 ## Rollback
 

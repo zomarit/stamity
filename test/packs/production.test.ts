@@ -556,6 +556,12 @@ describe("/st-production-review — what a file can and cannot make the review d
     expect(flowSection(await review(), "Flow")).toMatch(/each brief sets `tool_tier: codebase`/i);
   });
 
+  it("briefs the release-record probe with the sha or the tag that names it", async () => {
+    // ADDED: review/59. Release mode keys the record by version (`releases/<version>.md`), so a
+    // probe looking only for `<sha>.md` reports a record absent that exists at a tagged commit.
+    expect(flowSection(await review(), "Flow")).toContain("the release record at this sha or at the tag that names it");
+  });
+
   it("lets a replacement move a blocking check's evidence, never its pass condition or Attest mark", async () => {
     const policy = flowSection(await review(), "The policy file");
 
@@ -572,12 +578,20 @@ describe("/st-production-review — what a file can and cannot make the review d
     // review/18
     expect(waivers).toMatch(/a row missing its approver or its expiry is invalid and clears nothing/i);
     // review/14, review/19: "Claimed, shown, signed".
-    expect(waivers).toMatch(/the authors of every commit that touched the row, read with `git log -L`/i);
-    // ADDED: review/43, the requesters come from `git log -L` over the row alone, every one listed
-    // for the signer; `git blame` shows only a line's last author, so it is no longer an option.
+    expect(waivers).toMatch(/the authors of every commit that touched the row: those `git log -L` lists over the row's lines/i);
+    // TEST CHANGE, justified: review/54 (the maintainer's "Row lines plus ticket"). `git log -L`
+    // alone starts a moved row's trace at the move and drops its first author, so the requesters
+    // are the union with `git log -G` over the policy file for the row's ticket id, which shows
+    // both halves of a move; a changed ticket id makes a new row. review/43 still holds: every
+    // requester is listed for the signer, and `git blame` (a line's last author only) is no option.
     expect(waivers).toMatch(
-      /`git log -L` over the row's lines only, which lists every commit that changed them; the report lists all of these requesters for the person who signs/i,
+      /unioned with those `git log -G'<ticket>' -- <policy file>` lists for the row's ticket id \(its regex characters escaped\), which still finds a row moved or re-sorted within the file/i,
     );
+    expect(waivers).toMatch(
+      /a row whose ticket id changed is a new row, and the author of the commit that changed it is its requester too/i,
+    );
+    expect(waivers).toMatch(/the report lists all of these requesters for the person who signs/i);
+    expect(waivers).not.toMatch(/over the row's lines only/i);
     expect(waivers).not.toMatch(/git blame/i);
     // ADDED: review/42, an uncommitted edit to a committed row (an expiry pushed out on a dirty tree) clears nothing.
     expect(waivers).toMatch(

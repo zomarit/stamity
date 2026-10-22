@@ -65,7 +65,7 @@ const READINESS_WARNING = "The readiness review is read as a warning and never s
 
 /** The secrets sentence: a change record holds names and locations, and a pasted credential is refused. */
 const SECRETS_RULE =
-  "The record names variables, files and locations, never a secret value. An answer carrying a credential, such as a connection string with its password or a webhook address with its key, is refused, not recorded, citing the secrets floor (`stamity-secrets.md`, items 1 and 4)";
+  "The record names variables, files and locations, never a secret value. An answer carrying a credential, such as a connection string with its password or a webhook address with its key, is refused, not recorded, citing the secrets floor (the `stamity-secrets` rule, items 1 and 4)";
 
 /** The approver as the record writes it: the requester's claim, never shown as a confirmed approval. */
 const APPROVER_CLAIM = "named by the requester, not confirmed by this skill";
@@ -211,7 +211,11 @@ describe("st-release — anatomy", () => {
     const preflight = section(file, "Step 1 — Preflight, read-only");
     const porcelain = tableRows(preflight).find((row) => row[0] === "`git status --porcelain`");
 
-    expect(porcelain?.[1]).toContain("skipping the pack's own record paths (`.stamity/production/**`)");
+    // TEST CHANGE, justified: review/57. The review this release reads refreshes the verify
+    // artifacts, so the skip covers both of the pack's declared `.stamity/` write paths.
+    expect(porcelain?.[1]).toContain(
+      "skipping the pack's own paths under `.stamity/` (`.stamity/production/**`, `.stamity/verify/**`)",
+    );
     expect(preflight.replace(/\s+/g, " ")).toMatch(
       /With no earlier deploy record or tag, a first deploy or release, the change set's base is the repository's root commit \(`git rev-list --max-parents=0 HEAD`\), and the run says so/,
     );
@@ -318,6 +322,9 @@ describe("st-release — the change record", () => {
     expect(flowSection(await skill(), "Step 7 — The change record")).toMatch(
       /counts as exposed, whose rotation is that floor's item 6/,
     );
+    // TEST CHANGE, justified: review/55. Codex folds the rule into `AGENTS.override.md` and Cursor
+    // ships it as `.mdc`, so the citation names the rule, as `st-incident` and the review do.
+    expect(flowSection(await skill(), "Step 7 — The change record")).not.toMatch(/stamity-secrets\.md/);
   });
 
   it("counts an approver equal to the requester as no approver", async () => {
@@ -349,6 +356,32 @@ describe("st-release — the stop", () => {
 
     expect(text).toContain(
       "After the token, the opened commands run in table order, each once, and the run stops at the first non-zero exit: no later command runs, and the run ends held, naming each command that ran with its exit code.",
+    );
+    // ADDED: review/58. The local tag a failed push leaves makes a re-run's change set empty, so
+    // the held message names the way back.
+    expect(text).toContain(
+      "After a failed tag push it also names `git tag -d v<version>`, since the local tag left behind makes a re-run find nothing to ship.",
+    );
+  });
+
+  // ADDED: review/53, the maintainer's "Printed person step". Release mode commits on the release
+  // branch; landing that branch is the person's act, printed before the stop and never run here,
+  // and a tag the publish proof needs reachable from the default branch waits for that merge.
+  it("prints the release branch's push and pull request as the person's acts, and holds the tag push for the merge where the publish proof needs it", async () => {
+    const file = await skill();
+    const record = flowSection(file, "Step 7 — The change record");
+    const stop = flowSection(file, "Step 8 — The stop");
+
+    expect(record).toContain(
+      "committed together on the release branch with the project's commit conventions; nothing is pushed. Before the stop the run prints `git push -u origin release/<version>` and the pull request into the default branch as the person's acts.",
+    );
+    expect(stop).toContain(
+      "Where the project's publish proof needs the tag reachable from the default branch, the tag push waits until the release branch's pull request has put the release commit there, and the stop says so.",
+    );
+    // The skill still pushes nothing before the typed token and merges nothing itself.
+    expect(flowSection(file, "Fail-closed boundary")).toMatch(/merges nothing into the default branch/);
+    expect(tableRows(section(file, "Step 8 — The stop")).map((row) => row[0])).not.toContain(
+      "`git push -u origin release/<version>`",
     );
   });
 

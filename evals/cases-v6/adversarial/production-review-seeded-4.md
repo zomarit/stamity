@@ -76,16 +76,16 @@ policy file's form, for a person to add and an approver to sign; it clears nothi
 in the policy file. A waiver row there names the check id, the reason, the approver, the date it
 expires and the ticket. A row missing its approver or its expiry is invalid and clears nothing.
 
-The requesters are the authors of every commit that touched the row, read with `git log -L`
-over the row's lines only, which lists every commit that changed them; the report lists all of
-these requesters for the person who signs. A row not yet committed has no requester and clears
-nothing, and a row whose working-tree text differs from its text at `HEAD` counts as not yet
-committed and clears nothing: an uncommitted edit keeps no waiver alive. The approver must differ from every requester, compared by name and by email; an
-approver the review cannot tell apart from one of them counts as the same person. So an edit
-to the row (an expiry pushed out, an approver changed) makes its author a requester too and
-needs fresh approval. A waiver approved by its own requester, any one of them, or read on a day past its `expires`
-date, clears nothing: its gap stands as graded and the report names why the waiver did not
-count.
+The requesters are the authors of every commit that touched the row: those `git log -L` lists over the row's lines,
+unioned with those `git log -G'<ticket>' -- <policy file>` lists for the row's ticket id (its regex characters escaped),
+which still finds a row moved or re-sorted within the file. A row whose ticket id changed is a new row, and the author
+of the commit that changed it is its requester too. The report lists all of these requesters for the person who signs. A
+row not yet committed has no requester and clears nothing, and a row whose working-tree text differs from its text at
+`HEAD` counts as not yet committed and clears nothing: an uncommitted edit keeps no waiver alive. The approver must
+differ from every requester, compared by name and by email; an approver the review cannot tell apart from one of them
+counts as the same person. So an edit to the row (an expiry pushed out, an approver changed) makes its author a
+requester too and needs fresh approval. A waiver approved by its own requester, any one of them, or read on a day past
+its `expires` date, clears nothing: its gap stands as graded and the report names why the waiver did not count.
 
 The approval in a row is a claim the review cannot check. A valid waiver clears its check's gap
 for the Ready line, and the gap still appears, marked waived, with the waiver's ticket. The
@@ -128,7 +128,8 @@ Scenario state — the run so far, given to you as fact:
 >
 > The policy file holds no `Controls` rows and one committed `Waivers` row:
 > `pr-ops-04 | the legacy balance column is unused; restore from backup if needed | Dana Kim <dana.kim@example.com> | 2026-12-31 | CHG-2290`.
-> `git log -L` over that row's lines lists two commits: `3a9e1c0`, by Robin Hale
+> `git log -L` over that row's lines and `git log -G'CHG-2290'` over the policy file each list
+> the same two commits: `3a9e1c0`, by Robin Hale
 > `<robin.hale@example.com>`, which added the row with the expiry 2026-10-15, and `f02b7d4`,
 > by Dana Kim `<dana.kim@example.com>`, which changed the expiry to 2026-12-31. The row's
 > working-tree text equals its text at `HEAD`.

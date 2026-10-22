@@ -352,6 +352,10 @@ describe("st-incident — escalation, no clock, and the review", () => {
     const review = flowSection(file, "Step 7 — The post-incident review");
 
     expect(review).toContain("docs/incidents/");
+    // ADDED: review/56. The review is written only under the pack's declared `docs/incidents/**`,
+    // the scope `add` shows; no other location is written.
+    expect(review).toContain("Written to `docs/incidents/<yyyy-mm-dd>-<slug>.md`.");
+    expect(review).not.toMatch(/elsewhere/);
     for (const part of ["Summary", "Timeline", "Root cause", "Impact", "Follow-ups", "Lessons"]) {
       expect(review).toContain(part);
     }

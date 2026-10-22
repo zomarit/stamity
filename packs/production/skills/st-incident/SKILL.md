@@ -119,7 +119,7 @@ is asked, never assumed.
 
 ## Step 7 — The post-incident review
 
-Written to `docs/incidents/<yyyy-mm-dd>-<slug>.md`, unless the repository keeps them elsewhere.
+Written to `docs/incidents/<yyyy-mm-dd>-<slug>.md`.
 
 | Section | Content |
 |---|---|
