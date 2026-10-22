@@ -338,8 +338,9 @@ describe("corpus charter", () => {
   // fourth paid by a Conditional-layer trim). The clauses the old pins held are all still pinned.
   // TEST CHANGE, justified (2026-10-22, the whole-branch fix round, review/52, the maintainer's
   // choice "Path from the hook settings"): the four lines named `.<client>/hooks/stamity/` "where
-  // that folder exists", which only one client's engine writes; for the others that folder is
-  // unowned and unheld, so a script planted there would run in place of the screened one. The
+  // that folder exists", which only Claude Code's engine writes; the person-only paths hold Claude
+  // Code's, Cursor's and Copilot's folders and not Codex's, so for Codex that folder is unowned and
+  // unheld and a script planted there would run in place of the screened one. The
   // invariant now names the script the client's own hook entries name in its held hook settings,
   // and trusts no folder because it exists. Still four lines, the same bytes, no client named.
   it("holds invariant 5's screened read, every clause on its four lines", async () => {

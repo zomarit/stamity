@@ -3704,9 +3704,11 @@ that folder for a client that has one".)
   named. This repository's own `sync` at integration removed its seven old copies that way (the run's record,
   integration part 2). The upgrade window a base older than 1.16.0 opens on Claude Code's GitHub Action is REQ-FLOW-113's.
   - **Amended 2026-10-22** (the whole-branch fix round, `review/52`, the maintainer's choice "Path from the hook
-    settings"). The first 1.3.1 text preferred `.<client>/hooks/stamity/` wherever that folder existed. Only one
-    client's engine writes a copy there; for the others the folder is neither engine-owned nor person-only
-    (`src/change/personOnlyPaths.ts`), so a script planted there would run in place of the screened one. The invariant
+    settings"). The first 1.3.1 text preferred `.<client>/hooks/stamity/` wherever that folder existed. Only Claude
+    Code's engine writes a copy there. `src/change/personOnlyPaths.ts` holds Claude Code's, Cursor's and Copilot's
+    folders as person-only (`.claude/hooks/**`, `.cursor/hooks/**`, `.github/hooks/**`) and not Codex's, so for Codex
+    the folder is neither engine-written nor person-only and a script planted there would run in place of the screened
+    one. The invariant
     now names the script the client's own hook entries name in its held hook settings, each of which is person-only
     (`.claude/settings*.json`, `.cursor/hooks.json`, `.codex/hooks.json`, `.github/hooks/**`), and trusts no folder
     because it exists. Still invariants 1.3.1: no release carried the first text, so the hash row moves in place.

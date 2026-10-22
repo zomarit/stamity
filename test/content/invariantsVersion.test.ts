@@ -72,7 +72,8 @@ const INVARIANTS_HASHES: Record<string, string> = {
   // TEST CHANGE, justified (2026-10-22, the whole-branch fix round, `review/52`): an in-version text
   // fix, c4f84822… -> c21ecad9…. The script is the one the client's own hook entries name in its held
   // hook settings, where the first text preferred `.<client>/hooks/stamity/` whenever that folder
-  // existed, a folder unowned and unheld for most clients. No release or tag carries the earlier
+  // existed, a folder only Claude Code's engine writes and the person-only paths leave unheld for
+  // Codex (they hold Claude Code's, Cursor's and Copilot's). No release or tag carries the earlier
   // 1.3.1 text, so no repository ran it and this row moves instead of a 1.3.2, as the 1.3.0 row did.
   "1.3.1": "c21ecad95adac354f4efcaa5ee842fcfed998071d513ae5e6b74846a26c7cfcd",
 };
