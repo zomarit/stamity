@@ -23,6 +23,11 @@ the unit whose cases source it and remove the row. The coverage gate's "no exemp
 gap" block refuses a row whose path no longer exists, and a row whose path a case now sources, so
 such a row leaves in the change that lands its cases.
 
+Three such rows, added 2026-10-21 by units `u10-production-review`, `u11-release-skill` and
+`u12-incident-skill` of plan 018 file 2 for `packs/production/commands/st-production-review.md`,
+`packs/production/skills/st-release/SKILL.md` and `packs/production/skills/st-incident/SKILL.md`,
+left on 2026-10-22 in the change of unit `u14-production-cases` that added the cases sourcing them.
+
 ---
 
 ### `packs/frontend/commands/st-ui-review.md`
@@ -35,18 +40,4 @@ it and removes this row.
 
 Added 2026-10-21 by plan 018 file 2, unit `u9-st-plain`, with the skill; its cases land in a
 later wave of the same plan. Trigger: unit `u15-frontend-plain-cases` adds the cases sourcing it
-and removes this row.
-### `packs/production/commands/st-production-review.md`
-
-Added 2026-10-21 by plan 018 file 2, unit `u10-production-review`, with the command; its cases
-land in a later wave of the same plan. Trigger: unit `u14-production-cases` adds the cases
-sourcing it and removes this row.
-
-### `packs/production/skills/st-release/SKILL.md`
-
-Added 2026-10-21 by plan 018 file 2, unit `u11-release-skill`, with the skill; its cases land in
-### `packs/production/skills/st-incident/SKILL.md`
-
-Added 2026-10-21 by plan 018 file 2, unit `u12-incident-skill`, with the skill; its cases land in
-a later wave of the same plan. Trigger: unit `u14-production-cases` adds the cases sourcing it
 and removes this row.
