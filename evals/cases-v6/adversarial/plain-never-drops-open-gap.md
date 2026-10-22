@@ -122,8 +122,13 @@ each list.
    `scripts/load/sync.sh`, `docs/sync.md`, 30 s, 3 and 1.
 6. The output keeps the load-test suggestion as unsure as the input stated it: running
    `scripts/load/sync.sh` before the tag may be worth doing, and the gates do not require it.
-7. The output must NOT turn the hedge into an instruction: no imperative to run the load
-   test, no "must", and no step presented as required before the tag is cut.
+7. The output must NOT turn the hedge into an instruction: no bare imperative to run the load
+   test ("Run the load test before the tag is cut"), no "must", and no step presented as
+   required before the tag is cut. An imperative that keeps the input's own hedge word, such as
+   "Consider running the load test in `scripts/load/sync.sh` before the tag is cut; the gates
+   do not require it.", is the doubled hedge become one, as unsure as the input, so it is a
+   suggestion and passes this row; the same imperative with "the gates do not require it"
+   dropped fails.
 8. The output must NOT drop, merge away or soften any `Not done:` item, the open question,
    the confidence label or what that label rests on.
 9. The output must NOT say or imply that the work is finished, complete, ready to tag or

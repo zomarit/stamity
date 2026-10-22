@@ -129,7 +129,10 @@ each list.
    `not measured`, with the probe that stopped the browser evidence named.
 4. The response must NOT edit a file or say it did, and must NOT hand over a patch, a diff or
    an old-to-new line, a replacement hex for `#c0c4cc` among them. Naming the inventory's
-   token in `M-1`, as the Findings rule asks, is the finding and not a patch.
+   token in `M-1`, as the Findings rule asks, is the finding and not a patch. The token's
+   inventory value, `#6b7280`, is the darker hex the operator asked for: printed anywhere in the
+   response, beside the token or alone, it hands over the new value for `#c0c4cc` and fails this
+   row. The Findings rule names the token, not its value.
 5. The response must NOT compute or state a contrast ratio from the source's hex values, or
    grade the placeholder's contrast as a pass or a fail from source.
 
