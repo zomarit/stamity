@@ -32,6 +32,7 @@ import { CONTENT_CLASSES } from "../src/types/content.ts";
 import { CLAUDE_HOOKS_DIR, CLIENT_CLOUD_FACTS } from "../src/hooks/model.ts";
 import { parseRunContract } from "../src/runs/runContract.ts";
 import { CORPUS_ROOT, loadCorpusIndex } from "./corpus/harness.ts";
+import { makeCliFixture } from "./support/cliHarness.ts";
 import { GATE_RUN_TIMEOUT_MS, leakGateFailureDetail, runLeakGateOnce } from "./support/leakGateRun.ts";
 import {
   EVAL_SET,
@@ -4664,6 +4665,47 @@ describe("the guides", () => {
       "the last step orders the credential back-up after the uninstall that can take it",
     ).toBeLessThan(lastStep.indexOf(clean));
   });
+
+  it(
+    "packs' worked example is what `add frontend --dry-run` prints over the shipped pack",
+    async () => {
+      // Plan 018 file 2, unit u17-docs (REQ-PACK-023): the install section's block is derived, never
+      // typed. Every number in it (files, footprint, each file's size and token count, the context
+      // cost, the scope rows, the pin prefix) is the real CLI's output over `packs/frontend/`, so an
+      // edit to the pack that moves its pin or a size turns this red until the block is re-copied
+      // from a fresh run. The whole block is compared line for line, the gate chain included.
+      const page = read(PACKS_AND_TRUST).replace(/\r\n/g, "\n");
+      const command = "```sh\nstamity add frontend --dry-run\n```";
+      const at = page.indexOf(command);
+      expect(at, "the packs guide never shows `stamity add frontend --dry-run`").toBeGreaterThanOrEqual(0);
+      const open = page.indexOf("```text\n", at + command.length);
+      const close = page.indexOf("\n```", open + "```text\n".length);
+      expect(open, "no text block follows the dry-run command").toBeGreaterThan(at);
+      const block = page.slice(open + "```text\n".length, close);
+
+      // The real bin over a fresh repository set up for all four clients, so the output carries no
+      // "also targets" note. The src entry, not dist: the catalog reads `packs/` first either way,
+      // and this case then needs no build.
+      const fixture = await makeCliFixture({ git: true });
+      try {
+        const init = await fixture.run(["init", "--tools", "claude,cursor,copilot,codex", "--yes"]);
+        expect(init.code, `init failed:\n${init.stderr}`).toBe(0);
+        const dry = await fixture.run(["add", "frontend", "--dry-run"]);
+        expect(dry.code, `add frontend --dry-run failed:\n${dry.stderr}`).toBe(0);
+        const printed = dry.stdout.replace(/\r\n/g, "\n").split("\n");
+        const first = printed.findIndex((line) => /^ {2}manifest {2,}/.test(line));
+        const last = printed.indexOf("  nothing written (--dry-run)");
+        expect(first, `the dry run printed no gate chain:\n${dry.stdout}`).toBeGreaterThanOrEqual(0);
+        expect(last, `the dry run never said it wrote nothing:\n${dry.stdout}`).toBeGreaterThan(first);
+        expect(block, "the packs guide's dry-run block is not what the CLI prints; re-copy it").toBe(
+          printed.slice(first, last + 1).join("\n"),
+        );
+      } finally {
+        await fixture.cleanup();
+      }
+    },
+    180_000,
+  );
 
   it("packs names every rung the ladder actually ships", () => {
     const text = read(PACKS_AND_TRUST);

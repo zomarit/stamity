@@ -20,7 +20,7 @@ resolved to, sign a pack of your own, set an org policy, and remove a pack again
 Preview first. `--dry-run` runs every install gate and writes nothing:
 
 ```sh
-stamity add ops --dry-run
+stamity add frontend --dry-run
 ```
 
 `add` names the pack and its version, then prints the gate chain, the facts it settled, and
@@ -42,31 +42,35 @@ everything it would write:
   permissions        pass
   agentCapabilities  pass
 
-  files              9
-  footprint          53.9 KiB of 5.0 MiB allowed
-  target             .stamity/packs/ops
-  trust              curator-verified — catalog pin verified: aggregate content SHA 3e11beecbb12… matches and the catalog grants "curator-verified"
+  files              5
+  footprint          23.0 KiB of 256.0 KiB allowed
+  target             .stamity/packs/frontend
+  trust              curator-verified — catalog pin verified: aggregate content SHA 269b7c363588… matches and the catalog grants "curator-verified"
 
   will install
-    agents
-      agents/stamity-devops.md                   4.4 KiB  ~1134 tok
-      …
     skills
-      skills/st-release-runbook/SKILL.md         7.0 KiB  ~1779 tok
-      …
+      skills/st-browser-evidence/SKILL.md                  7.4 KiB  ~1880 tok
+      skills/st-browser-evidence/agents/openai.yaml          177 B  ~45 tok
+      skills/st-design-system-detect/SKILL.md              8.1 KiB  ~2052 tok
+      skills/st-design-system-detect/agents/openai.yaml      189 B  ~48 tok
+    commands
+      commands/st-ui-review.md                             7.2 KiB  ~1838 tok
 
-  context cost  ~13727 tokens across 9 file(s)
+  context cost  ~5863 tokens across 5 file(s)
 
   scope
     declared tools  claude, cursor, copilot, codex
     tool footprint  read, edit, execute, spawn
-    touched paths   CHANGELOG.md, package.json, package-lock.json, pnpm-lock.yaml, yarn.lock, dist/**, .github/workflows/**, .gitlab-ci.yml, azure-pipelines.yml, Dockerfile, .dockerignore, docker-compose.yml, compose.yaml, k8s/**, docs/incidents/**, docs/runbooks/**, .stamity/inbox.md
+    touched paths   .stamity/design-system-inventory.md, .stamity/evidence/**
 
   runs on this machine
     no hook or MCP server definitions — this pack wires no commands
 
   nothing written (--dry-run)
 ```
+
+That run is in a repository set up for all four clients. In one set up for fewer, a `note:` line
+under `trust` names the clients the pack also targets that the repository does not.
 
 Drop `--dry-run` to install. Nothing is prompted along the way. An install gate either passes or
 refuses, so there is no yes-or-no question a prompt could ask.
@@ -85,16 +89,16 @@ the total, so the preview needs no pager.
 There are three routes, and **none of them fetches**:
 
 ```sh
-stamity add ops                 # a catalog id
-stamity add ./packs/ops         # a local directory
-stamity add @acme/ops           # a package already under node_modules/
+stamity add frontend                 # a catalog id
+stamity add ./packs/frontend         # a local directory
+stamity add @acme/frontend           # a package already under node_modules/
 ```
 
 A catalog id resolves to content shipped inside this package. A path is a directory on your disk.
 A scoped name is a package you already installed yourself. There is no download step and no
 background update check.
 
-The four first-party packs, and what each one ships, are on
+The first-party packs, and what each one ships, are on
 [the packs reference](reference/packs.md). That page renders from their manifests.
 
 ### Update a pack by adding it again
@@ -386,7 +390,7 @@ judges exists only once the catalog pin has verified. It is applied again at pro
 installed before a policy existed stops being projected once the policy denies it. That takes no
 re-install and loses no files.
 
-Entries name a pack id such as `ops` or `@acme/ops`, a scope wildcard such as `@acme/*`,
+Entries name a pack id such as `frontend` or `@acme/frontend`, a scope wildcard such as `@acme/*`,
 everything as `*`, or a source kind. The three source kinds are `local-path`, `npm-package` and
 `catalog-pinned`. Two rules decide every install:
 
@@ -488,7 +492,7 @@ the generated setup. Or restore the file, or accept the edit knowing the row wil
 ## Remove one pack
 
 ```sh
-stamity clean --pack ops
+stamity clean --pack frontend
 ```
 
 That removes exactly one pack, meaning its files and its ledger rows. While the pack is still
@@ -534,7 +538,7 @@ supplied a selected server, the merged client MCP documents that removal edited 
 adapter-owned ledger rows are re-hashed to the bytes now on disk, so the ledger keeps asserting what
 is actually there.
 
-Ownership is matched on exact equality, so `@acme/ops` can never match `@acme/ops-extra`. The
+Ownership is matched on exact equality, so `@acme/frontend` can never match `@acme/frontend-extra`. The
 state directory stays, because every other owner is still live. A file the safety gates kept loses
 its row anyway and becomes yours to keep or delete, and the output says so. That covers bytes you
 edited, and an unlink that was refused.

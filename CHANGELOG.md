@@ -60,8 +60,45 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   the boolean.
 - **Each rule-skill's head gains one line.** Every rule delivered as a skill now carries `user-invocable: false`, so
   the first `sync` rewrites each `stamity-<rule>/SKILL.md` it emits by that line.
+- **Three packs are retired: `ops`, `product-audit` and `scaffold`.** A copy one of them installed still works as
+  installed, and `check`'s `pack-catalog` row warns on it, naming where each of its parts went and the order that
+  replaces it: `clean --pack <id>`, then delete by hand each client copy it keeps and names, unless it is yours, then
+  `sync`, then `add` for each successor pack, then `sync`. `add ops`, `add product-audit` and `add scaffold` now
+  refuse before they write, naming the same moves and `add <successor>`. Removed lists where each part went.
+- **An installed `scaffold` reads an inventory row the detector no longer writes.** Its `/st-design-system-create`
+  routes on the verdict row of `.stamity/design-system-inventory.md`, and the `frontend` pack's detector now ends
+  that file in a `Status` row and hands the verdict back instead. Remove `scaffold` in the order its `pack-catalog`
+  row names. Its token-set proposal now lives in the detector, which writes a minimal token set as text when it finds
+  no token source.
+- **The first `sync` removes the old Claude Code hook copies.** `sync` no longer writes
+  `.stamity/generated/hooks/claude/`: it deletes each copy there still as it wrote it, and keeps and names one you
+  edited. Every Claude Code hook entry already runs the copy under `.claude/hooks/stamity/`. Claude Code's GitHub
+  Action runs an upgrade pull request with its base branch's settings, so on a base older than 1.16.0 the base's
+  entries name the copies that pull request removes: from a 1.9.0 to 1.15.x base the guard refuses every tool call on
+  that run until the upgrade merges, and before 1.9.0 the guard does not run on that run at all. For a base older
+  than 1.9.0, upgrade through 1.16.0 first, or keep the Action off that one upgrade pull request
+  ([`docs/cloud.md`](docs/cloud.md)).
 
 ### Added
+
+- **The `production` pack.** `stamity add production` installs `/st-production-review` and two skills that start
+  only when invoked by name, `st-release` and `st-incident`. The review checks one service at one commit through 19
+  checks over security, supply chain and operations, eight of them blocking. Researcher and test-runner agents
+  gather the evidence and a separate reviewer grades it from their files, never from their summaries. It writes
+  `.stamity/production/<service>-<sha>.md` and `.json`, routes each gap to `/st-work`, `/st-plan` or
+  `/st-board fill --source <report>`, and ends on `Ready: YES`, `NO` or `not signed`, naming where the approval of
+  record lives. An optional `.stamity/production/policy.md` adds controls and waivers; a waiver its own requester
+  approved, or one past its expiry, clears nothing. `st-release` writes a change record and stops before a tag push,
+  a release, a publish or a deploy until `v<version>` or `DEPLOY` is typed, and reads the readiness review as a
+  warning only. `st-incident` investigates read-only, proposes each mitigation and applies none, and writes a
+  post-incident review whose root cause names a `path:line`. Neither skill adds a row to Codex's skills list.
+- **`/st-ui-review` in the `frontend` pack.** It reviews a named screen or flow against the design system, the four
+  UI states and WCAG 2.2 AA through the core design-quality agent and the browser-evidence skill. Each finding names a
+  `path:line`, the command edits no file, and where browser evidence cannot run, each criterion only a render decides
+  reads `not measured`.
+- **`/st-plain`, a core skill.** It rewrites a given text in plain words, or the last reply when none is given,
+  keeping every fact, number, path, command, confidence label, open gap and refusal, and writes no file. The model
+  may pick it on its own, Codex lists it, and a Claude-only setup's `/` menu counts it (Changed).
 
 - **The pack catalog is the packs folder.** Every `packs/<id>/` holding a `pack.json` named `<id>`, with a description
   and a generated pin, is in the bundled catalog, so a fork adds a pack by adding the folder and running
@@ -80,7 +117,7 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   installed pack) is refused, where it passed `add` and failed at `sync`; an id another layer holds prints under its
   own `id collisions` part. And a retired pack id, once a release retires one, is refused naming where its parts went
   and `add <successor>`, with `add ./node_modules/<id>` as the way to install an npm package of that name on purpose;
-  no release has retired one yet.
+  this release retires `ops`, `product-audit` and `scaffold` (Removed).
 - **Two `check` rows.** `pack-catalog` warns on an installed catalog pack whose content is not the copy this release
   bundles, naming `add <id>`, and on a first-party copy of a retired pack, naming the replace order; it never fails.
   `moved-skills` fails on an overlay of a skill that moved to a pack, and warns on a full override of one or on a core
@@ -108,14 +145,30 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
 
 - **Rule-skills leave the `/` menu where a client allows.** Every rule delivered as a skill carries
   `user-invocable: false`, so Claude Code, VS Code and Copilot CLI keep it out of their `/` menu while the model still
-  loads it, and a Claude-only setup's menu lists the nine commands and seven skills. Cursor's `/` menu and Codex's `$`
-  list do not read the key and still list them.
+  loads it, and a Claude-only setup's menu lists 17 entries, the nine commands and eight skills, `/st-plain` among
+  them. Cursor's `/` menu and Codex's `$` list do not read the key and still list them.
 - **The core readers work without the `frontend` pack.** `/st-work`'s QA step and the qa skill offer a browser run only
   where the browser-evidence skill is installed, and record browser evidence as not installed otherwise; the
   design-quality agent, the UI-states rule and the verify skill's `ui-token-usage` check read the stylesheet layer's
   token source where no design-system inventory exists, and say the inventory is absent.
-- **Codex's skills list sits at 4,759 of 8,000 characters**, over 15 shown skills, where it read 5,570 over 17, with
-  the two interface skills in the `frontend` pack ([`docs/capability-matrix.md`](docs/capability-matrix.md)).
+- **Codex's skills list sits at 5,015 of 8,000 characters**, over 16 shown skills, where it read 5,570 over 17, with
+  the two interface skills in the `frontend` pack and `/st-plain` in the core
+  ([`docs/capability-matrix.md`](docs/capability-matrix.md)).
+- **The charter moves to invariants 1.3.1.** `AGENTS.md`, and with Codex selected `AGENTS.override.md`, now read
+  `Invariants version 1.3.1 · ratified 2026-08-31 · last amended 2026-10-21`. Invariant 5 names the client's own
+  `stamity-session-start.mjs`, under `.<client>/hooks/stamity/` where that folder exists and under
+  `.stamity/generated/hooks/<client>/` otherwise, where it named the generated path alone, which Claude Code no longer
+  has. The charter's opening paragraph gains two lines: write every reply in plain words, say how sure you are and
+  what that rests on, and say no first when the answer is no. Three lines of the Conditional layer are shortened to
+  pay for them, so the charter stays at 95 lines.
+- **The design-system detector's file holds repo facts only.** `.stamity/design-system-inventory.md` ends in a
+  `Status` row, `clear` or `blocked: competing token sources`, and no longer carries the verdict for one request,
+  which the detector hands back instead. A token source whose every value in a category refers to another source's
+  token is recorded `alias of <path>` and counts as one system with it. With no token source found, the file carries
+  a minimal token-set proposal as text, the brand colour left to you.
+- **The design-quality agent takes a whole-surface brief**: a commit and the surface's paths in place of a range,
+  read with `git show <commit>:<path>`, which is how `/st-ui-review` briefs it. A brief with no range, no hunks and no
+  commit with paths still returns `BLOCKED_DEPENDENCY`.
 - **`add`'s name-clash refusal names each clash's mechanism**: two commands of one name are one command on every
   client, where it said for every clash that the skill hides the command.
 - **`sync`'s Codex skills-list refusal no longer advises narrowing the content selection**, which `sync` never honoured,
@@ -131,6 +184,26 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
 - **`createEngine().pack.curated.CURATED_PACKS`.** The constant left `src/pack/curated.ts`; the registry keeps the
   member as a getter that derives the catalog from the packs folder on its first read, and a broken packs folder makes
   that read throw `CONFIG_ERROR`. Call `createEngine().pack.curated.curatedPacks()` instead.
+
+### Removed
+
+- **The `ops` pack.** `/st-release` and the `st-release-runbook` skill became the `production` pack's `st-release`;
+  `/st-incident-response`, the `st-incident-runbook` skill and the `stamity-incident-responder` agent became its
+  `st-incident`. The `stamity-devops` agent was dropped, its boundaries now part of `st-release`. The
+  `st-ci-pipeline` and `st-containerize` skills were dropped as general knowledge no pack carries, and
+  `st-gh-agentic-workflows` as tied to one vendor's workflow runner.
+- **The `product-audit` pack.** `/st-product-audit` and the `stamity-epic-audit-frame` rule became the `production`
+  pack's `/st-production-review`, which carries the assessment loop, and its gaps reach a board through
+  `/st-board fill --source <report>`. `/st-benchmark` and the `st-perf-audit` skill were dropped: the core
+  performance agent covers what a change costs.
+- **The `scaffold` pack.** `/st-design-system-create`'s token-set proposal moved into the `frontend` pack's
+  `st-design-system-detect`, which proposes a minimal token set when it finds none. `/st-slo-scaffold` was dropped,
+  since the production review routes a missing SLO to `/st-work`, and `/st-auth-scaffold`, since identity providers
+  own authentication.
+- **Claude Code's hook copies under `.stamity/generated/hooks/claude/`.** They are no longer written. Every Claude
+  Code hook entry runs the copy under `.claude/hooks/stamity/`, and a session started by hand where no hook ran
+  starts `.claude/hooks/stamity/stamity-session-start.mjs` (Upgrading from 1.16.0). Cursor, Codex and Copilot keep
+  their scripts under `.stamity/generated/hooks/<client>/`.
 
 ### Fixed
 
