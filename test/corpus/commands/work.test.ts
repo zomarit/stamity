@@ -790,7 +790,14 @@ describe("/st-work — Frame and Plan", () => {
     // Added 2026-10-16 (run 2026-10-15_cloud-runs, u15's fix round 3, ledger row review/111): the
     // resume opens `Mode: attended`, so the skill's opening line has to let an attended reader
     // reach the section this pointer names rather than stop at the first line.
-    expect(collapse(unattended)).toContain("an attended run reads only `## The morning walk`.");
+    // TEST CHANGE, justified (plan 022 file 1, unit a8-unattended-and-close; REQ-FLOW-143, decision D8): this pinned
+    // "an attended run reads only `## The morning walk`." What moved: the attended close writes its summary list in
+    // the morning list's shape, so the line also lets an attended reader reach `## The morning list`, the section the
+    // close walk below points at.
+    expect(collapse(unattended)).toContain(
+      "an attended run reads only `## The morning walk`, and `## The morning list` for the summary its close writes.",
+    );
+    expect(unattended.split("\n")).toContain("## The morning list");
     expect(unattended).not.toContain("stop reading here");
     // TEST CHANGE, justified (2026-10-09, plan 019 file 2, the p3 fix round 2, `review/133`): the
     // line holds the commit id `HEAD` resolves to at Frame, never the word, which `gate` would
@@ -1467,7 +1474,15 @@ describe("/st-work — Prove", () => {
   // item in rounds of the client's question tool, so the label names the walk and the paragraph
   // points at the rule's one home. The three parts, the numbered options, the default and the
   // empty-close sentence are held word for word; the old label is asserted gone.
-  it("closes on the protocol's walk over the person's rows, the spec merge and the commit (REQ-FLOW-019, REQ-FLOW-080)", async () => {
+  // TEST CHANGE, justified (plan 022 file 1, unit a8-unattended-and-close; REQ-FLOW-019 item 3, REQ-FLOW-143,
+  // REQ-FLOW-144, decisions D3, D7 and D8): the case read "closes on the protocol's walk over the person's rows, the
+  // spec merge and the commit" and pinned the commit part's three options, "Option 1 copies each `notDone` entry",
+  // "`Default if no response: leave uncommitted`" and the unattended commit sentence. What moved: the commit is no
+  // ask in any mode. After the last round the close runs `run start`, `run checkpoint --pr` and, when that opened or
+  // updated a pull request, `run land --ready --wait 8`, and it writes the summary list; the default reads "those
+  // rows not signed and the delta unmerged", and a person's own answer not to commit is honoured. Each old pin is
+  // asserted gone, so the two closes cannot both ship.
+  it("closes on the protocol's walk over the person's rows and the spec merge, then commits and lands with no question (REQ-FLOW-019, REQ-FLOW-080)", async () => {
     const qa = collapse(section(await body(), "### QA checkpoint"));
     expect(qa).toContain("**The close walk.**");
     expect(qa).not.toContain("**The close asks once.**");
@@ -1475,70 +1490,78 @@ describe("/st-work — Prove", () => {
     expect(qa).toContain(
       "What is left for the person is asked by the question protocol's Close walk, in rounds of numbered options:",
     );
-    expect(qa).toContain("numbered options");
     // The pointer names a section the protocol carries.
     const protocol = (await corpusFile(PROTOCOL_PATH)).parsed.body;
     expect(protocol.split("\n")).toContain("## Close walk");
-    // The three parts the walk covers.
-    // TEST CHANGE, justified (2026-10-14, fixer round 1 of f7-prove-before-asking;
-    // 2026-10-14_cli-native/review/53): the pin read "the rows no evidence proved, ...", a set
-    // that holds rows the qa skill sends to `Not done:` and has no cap. What moved: the walk asks
-    // the rows the qa skill leaves for the person, at most three; the old wording is asserted gone.
-    expect(qa).toContain(
-      "the rows the qa skill leaves for the person (at most three), the spec delta merge and the commit",
-    );
+    // The parts the walk covers: the commit is not one of them.
+    const parts =
+      "the rows the qa skill leaves for the person (at most three) and the spec delta merge; the commit is no ask, in any mode.";
+    expect(qa).toContain(parts);
     expect(qa).not.toContain("the rows no evidence proved");
-    // The declared default is the lowest-blast-radius one: nothing committed, merged or signed.
-    expect(qa).toContain("`Default if no response: leave uncommitted`");
-    expect(qa).toContain("those rows not signed and the delta unmerged");
-    // Added 2026-10-16 (plan 021 file 1, unit u15-work-text; REQ-FLOW-019): the commit part's three
-    // options, in order, the recommended one first, before the default sentence that stays verbatim.
-    // TEST CHANGE, justified (2026-10-16, run 2026-10-15_cloud-runs, u15's fix round 3, ledger row
-    // review/113; REQ-FLOW-019): the pin read "(`stamity run checkpoint --pr`, recommended)". What
-    // moved: `run checkpoint` stages only the run folder, the inbox and `--paths`, so option 1 names
-    // the run, the title and the paths, the merged spec delta among them, or the person's commit
-    // leaves the change's own files and the delta uncommitted.
-    // TEST CHANGE, justified (2026-10-16, run 2026-10-15_cloud-runs, the corpus cap-round fix, ledger
-    // row review/146; REQ-FLOW-019, sign-off 00:36Z): the pin read "--paths <the change's files and the
-    // merged spec delta>". What moved: `stamity learn capture` commits nothing and `run checkpoint`
-    // stages no learnings folder, so the learning the close captured stayed in the work tree though
-    // the person chose commit and push; option 1's paths now name the learning files as well.
-    const options =
-      "the commit, as 1 commit, push, draft PR (`stamity run checkpoint --run <run-id> --pr --title <conventional title> --paths <the change's files, the merged spec delta and the learning files the close captured under .stamity/learnings/>`, recommended) · 2 commit only · 3 leave uncommitted";
-    expect(qa).toContain(options);
-    expect(qa).not.toContain("--paths <the change's files and the merged spec delta>");
-    expect(qa.indexOf(options)).toBeLessThan(qa.indexOf("`Default if no response: leave uncommitted`"));
-    // Option 1 never pushes the default branch: `run start` puts the run on a branch of its own first.
-    expect(qa).toContain("option 1 after `stamity run start` on the default branch.");
-    // Added 2026-10-16 (run 2026-10-15_cloud-runs, u15's fix round, ledger row build/53;
-    // REQ-FLOW-019): option 1 with no PR opened is not done, so what `run checkpoint` reports
-    // undone reaches the proof block, ahead of the default sentence.
-    const notDone = "Option 1 copies each `notDone` entry `run checkpoint` returns into the proof block's `Not done:`.";
-    expect(qa).toContain(notDone);
-    expect(qa.indexOf(notDone)).toBeLessThan(qa.indexOf("`Default if no response: leave uncommitted`"));
-    // Added 2026-10-16 (run 2026-10-15_cloud-runs, the corpus fix round, ledger row build/64;
-    // REQ-FLOW-019): an unattended run takes every ask point's declared default, and the commit part's
-    // is `leave uncommitted`, so the walk names the commit part as no ask there: the unattended skill's
-    // ending answers it. It follows the default it overrides and precedes the leftovers pointer.
-    const unattendedCommit =
-      "In an unattended run the commit part is not an ask: the `st-unattended` skill's ending (`run end`, the draft pull request) answers it.";
-    expect(qa).toContain(unattendedCommit);
-    expect(qa.indexOf(unattendedCommit)).toBeGreaterThan(qa.indexOf("those rows not signed and the delta unmerged."));
-    expect(qa.indexOf(unattendedCommit)).toBeLessThan(qa.indexOf("The leftovers join it as a fourth part"));
+    expect(qa).not.toContain("the spec delta merge and the commit");
+    expect(qa).not.toContain("· 2 commit only · 3 leave uncommitted");
+    expect(qa).not.toContain("Option 1 copies each `notDone`");
+    // The declared default no longer leaves the work uncommitted: nothing signed, nothing merged.
+    const fallback = "`Default if no response: those rows not signed and the delta unmerged`.";
+    expect(qa).toContain(fallback);
+    expect(qa).not.toContain("`Default if no response: leave uncommitted`");
+    expect(qa.indexOf(parts)).toBeLessThan(qa.indexOf(fallback));
+    // The person's own word still wins.
+    const honoured = "A person's own answer not to commit is honoured: nothing is committed or pushed.";
+    expect(qa).toContain(honoured);
     expect(qa).toContain("with none left, there is no ask");
-    // Added 2026-10-14 (run 2026-10-14_cli-native, corpus fix batch round 1, review/44): the walk
-    // asks in rounds and the protocol puts Critical, Warning and `decision-waiting` rows first, so a
-    // Minor leftover can be asked after the commit. Answers applied as they arrived let "commit" in
-    // round 1 run before "fix now" in round 2 and leave the fix out of the chosen commit; they now
-    // apply together after the last round, the commit choice last.
+    // Added 2026-10-14 (run 2026-10-14_cli-native, corpus fix batch round 1, review/44), re-pinned here: the answers
+    // apply together after the last round, the commit and the land after every fix and schedule.
+    const order =
+      "The answers take effect together after the last round: fixes and schedules first, the close's commit and land steps last.";
+    expect(qa).toContain(order);
+    expect(qa).not.toContain("the commit or hand-off choice last");
+    expect(qa.indexOf(order)).toBeGreaterThan(qa.indexOf("A part with nothing to decide drops out"));
+    // An unattended run takes the same steps through the skill's ending.
+    const unattendedSteps =
+      "In an unattended run the `st-unattended` skill's ending (`run end`, then `run land`) takes those steps.";
+    expect(qa).toContain(unattendedSteps);
+    expect(qa).not.toContain("In an unattended run the commit part is not an ask");
+    // The steps, in order: `run start` on the default branch, the checkpoint that opens the draft, then the land; none
+    // of them runs when the person answered not to commit.
+    const start =
+      "After the last round, unless the person answered not to commit, the close runs `stamity run start` (on the default branch), then";
+    const checkpoint =
+      "`stamity run checkpoint --run <run-id> --pr --title <conventional title> --paths <the change's files, the merged spec delta and the learning files the close captured under .stamity/learnings/>`, copying each `notDone` entry it returns into the proof block's `Not done:`.";
+    const land =
+      "When that JSON's `pr` is not null (a pull request opened or updated), `stamity run land --run <run-id> --ready --wait 8 --json` follows, alone on its line, under a shell time limit of ten minutes where the client sets one; an open person QA row does not stop it.";
+    for (const step of [start, checkpoint, land]) expect(qa).toContain(step);
+    expect(qa.indexOf(order)).toBeLessThan(qa.indexOf(start));
+    expect(qa.indexOf(start)).toBeLessThan(qa.indexOf(checkpoint));
+    expect(qa.indexOf(checkpoint)).toBeLessThan(qa.indexOf(land));
+    // Each outcome: the verb's record line, or held rows the next walk retries.
+    expect(qa).toContain("Exit 0 leaves the verb's record line, `- <UTC> land: #<n> <sha> merged`;");
     expect(qa).toContain(
-      "The answers take effect together after the last round: fixes and schedules first, the commit or hand-off choice last.",
-    );
-    expect(qa.indexOf("The answers take effect together")).toBeGreaterThan(
-      qa.indexOf("A part with nothing to decide drops out"),
+      "an `asks` or `refused` exit, or a call that returns no outcome, leaves the pull request open, each reason a `held` row (`merge waits on: <reasons>`, or `merge waits on: the land call returned nothing`) that the next walk retries.",
     );
     // It follows the row-states paragraph, whose rows it asks about.
     expect(qa.indexOf("**The close walk.**")).toBeGreaterThan(qa.indexOf("**Row states.**"));
+  });
+
+  // Added 2026-10-23 (plan 022 file 1, unit a8-unattended-and-close; REQ-FLOW-143, decision D8): every close, attended
+  // included and whatever the person answered about the commit, writes the summary list with the file tools; each act
+  // run without asking is a decision row the person can undo, and the pull request body stays as the checkpoint wrote it.
+  it("writes the summary list at every close, each act run without asking a Decisions row (REQ-FLOW-143)", async () => {
+    const qa = collapse(section(await body(), "### QA checkpoint"));
+    const summary =
+      "In every case the close writes `.stamity/runs/<run-id>/morning.md` with its file tools, in the shape of the `st-unattended` skill's `## The morning list`,";
+    expect(qa).toContain(summary);
+    expect(qa).toContain(
+      "each act run without asking a `## Decisions` row (kind `decision`, default `1`: a push or ready mark `1 keep · 2 undo`, a merge `run land` made `1 keep · 2 revert (a revert pull request)`);",
+    );
+    expect(qa).toContain(
+      "the pull request body stays as `run checkpoint` wrote it, and the final message names that file and the pull request.",
+    );
+    // After the land step, whose rows it carries.
+    expect(qa.indexOf(summary)).toBeGreaterThan(qa.indexOf("`stamity run land --run <run-id> --ready --wait 8 --json`"));
+    // The section it names is the skill's.
+    const unattended = (await corpusFile(UNATTENDED_SKILL_PATH)).parsed.body;
+    expect(unattended.split("\n")).toContain("## The morning list");
   });
 
   // Added 2026-10-14 (plan 020 file 3, unit f3-work-close; REQ-FLOW-080): the proof block is the
@@ -1561,7 +1584,10 @@ describe("/st-work — Prove", () => {
   // TEST CHANGE, justified (2026-10-14, plan 020 file 3, unit f3-work-close): the title read "joins
   // the leftovers to the close's one question"; the close is now a walk, so the title says so. The
   // pointer's pins below are unchanged but for the renamed label.
-  it("joins the leftovers to the close walk as a fourth part, by /st-board's rule (REQ-FLOW-074)", async () => {
+  // TEST CHANGE, justified (plan 022 file 1, unit a8-unattended-and-close; REQ-FLOW-019 item 3): "a fourth part"
+  // became "a third part" in the title, the pointer and the two line finders below, since the commit left the walk;
+  // the order check now reads the new default sentence. Every other word of the pointer and its bound are held.
+  it("joins the leftovers to the close walk as a third part, by /st-board's rule (REQ-FLOW-074)", async () => {
     const raw = (await workFile).raw;
     const qa = collapse(section(await body(), "### QA checkpoint"));
     // TEST CHANGE, justified (2026-10-12, REQ-FLOW-078): the pin read the query as
@@ -1570,14 +1596,14 @@ describe("/st-work — Prove", () => {
     // query's text output prints no `Ref:`, so the close runs it with `--json`, whose `ref` field
     // carries each row's. Every other word of the pointer is held, and so is its four-line bound.
     const pointer =
-      "The leftovers join it as a fourth part, by `/st-board`'s Leftovers at a close: before asking, the close runs `stamity ledger inbox --due --paths <the changed paths> --json` and takes every `decision-waiting` row first, then the due and touched rows and each ledger row neither fixed nor rejected; with no response, its unattended rule applies.";
+      "The leftovers join it as a third part, by `/st-board`'s Leftovers at a close: before asking, the close runs `stamity ledger inbox --due --paths <the changed paths> --json` and takes every `decision-waiting` row first, then the due and touched rows and each ledger row neither fixed nor rejected; with no response, its unattended rule applies.";
     expect(qa).toContain(pointer);
     expect(qa).toContain("every `decision-waiting` row first");
 
     // Inside the one question's paragraph: after the three parts and their default, and before
     // the sentence that drops an empty part, which therefore reads for all four.
     const at = qa.indexOf(pointer);
-    expect(at).toBeGreaterThan(qa.indexOf("those rows not signed and the delta unmerged."));
+    expect(at).toBeGreaterThan(qa.indexOf("`Default if no response: those rows not signed and the delta unmerged`."));
     expect(at).toBeLessThan(qa.indexOf("A part with nothing to decide drops out; with none left, there is no ask."));
     // TEST CHANGE, justified (2026-10-14, plan 020 file 3, unit f3-work-close; REQ-FLOW-080): this
     // read the label "**The close asks once.**", renamed to the walk; with the old label gone its
@@ -1588,7 +1614,7 @@ describe("/st-work — Prove", () => {
 
     // A pointer, not a second copy of the rule: at most four lines, each its own.
     const lines = raw.split("\n");
-    const first = lines.findIndex((line) => line.startsWith("The leftovers join it as a fourth part"));
+    const first = lines.findIndex((line) => line.startsWith("The leftovers join it as a third part"));
     const last = lines.findIndex((line) => line.endsWith("its unattended rule applies."));
     expect(first).toBeGreaterThan(-1);
     expect(last).toBeGreaterThanOrEqual(first);
@@ -1608,7 +1634,7 @@ describe("/st-work — Prove", () => {
     expect(board).toContain("With no answer, only notes are dropped");
 
     // Below the cut: the pointer costs nothing a resumed run re-attaches.
-    expect(raw.indexOf("The leftovers join it as a fourth part")).toBeGreaterThan(raw.indexOf("\n### Specialist pass\n"));
+    expect(raw.indexOf("The leftovers join it as a third part")).toBeGreaterThan(raw.indexOf("\n### Specialist pass\n"));
   });
 
   it("hands the qa skill the class and lenses gate classify named (REQ-FLOW-069)", async () => {
@@ -2047,9 +2073,15 @@ describe("/st-work — Prove", () => {
     // Added 2026-10-16 (run 2026-10-15_cloud-runs, u15's fix round 3, ledger row review/115;
     // REQ-FLOW-019): the step ran whatever the commit answer, so "2 commit only" still met a pull
     // request and option 1 met a second one beside `run checkpoint --pr`; it is option 1's own step.
+    // TEST CHANGE, justified (plan 022 file 1, unit a8-unattended-and-close; REQ-FLOW-019, REQ-FLOW-144): this pinned
+    // "only the close walk's option 1 opens that branch's draft pull request, as its own `run checkpoint --pr` step".
+    // What moved: the walk has no commit option; the close's own `run checkpoint --pr` step opens the draft, still
+    // once, followed by the land step, and with no linked platform no land step runs. The old pin is asserted gone.
     expect(effects).toContain(
-      "only the close walk's option 1 opens that branch's draft pull request, as its own `run checkpoint --pr` step",
+      "the close's own `run checkpoint --pr` step opens that branch's draft pull request — or updates the one already open — followed by `run land`,",
     );
+    expect(effects).toContain("With no linked platform the step is a no-op, no land step runs, and the run names the branch it left.");
+    expect(effects).not.toContain("only the close walk's option 1 opens");
     expect(effects).not.toContain("the close opens that branch's pull request");
   });
 
@@ -2251,6 +2283,17 @@ describe("/st-work — dials", () => {
     }
     // Model-Independence Contract: shipped content names no models or vendors.
     expect(await body()).not.toMatch(/\b(?:claude|gpt|gemini|sonnet|opus|haiku|codex|copilot)\b/i);
+  });
+
+  // Added 2026-10-23 (plan 022 file 1, unit a8-unattended-and-close, folding inbox row cut/29; REQ-LADDER-006): the
+  // capability matrix marks the unpinned sub-agent's parent-model run unverified, since no live run dispatched one, so
+  // the ladder's sentence carries the same mark right after it; the sentence itself stays word for word, as
+  // `test/roster/modelLadder.test.ts` pins it.
+  it("marks the unpinned sub-agent's run on the parent agent's model as unverified, as the capability matrix does", async () => {
+    const dials = collapse(section(await body(), "## Dials"));
+    expect(dials).toContain(
+      "so an unpinned class's sub-agent there runs on the parent agent's model. That it runs there is unverified: no live run has dispatched one.",
+    );
   });
 
   it("says the standard tier takes a persisted plan as the go-ahead (REQ-FLOW-019)", async () => {
