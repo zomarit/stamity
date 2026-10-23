@@ -42,10 +42,9 @@ Stated here in full, because every later step depends on it:
 | Versioned release | a version number ships: a package, a tagged build | branch and tag preflight, version decision, bump and changelog |
 | Deploy from main | the default branch's head goes to an environment | no release-branch or tag preflight, no version; the record is keyed by the service and the sha |
 
-The frame line names the mode: `mode: release | deploy · service: <name> · target: v<version> |
-<sha> · requester: <name> · record: .stamity/production/releases/<service>-<version | sha>.md`. The
-requester is the person who invoked the skill. A mode the request does not settle is asked once,
-release as the default.
+The frame line names the mode: `mode: release | deploy · service: <name> · target: v<version> | <sha> ·
+requester: <name> · record: .stamity/production/releases/<service>-<version | sha>.md`. The requester is the
+person who invoked the skill. A mode the request does not settle is asked once, release as the default.
 
 ## Step 1 — Preflight, read-only
 
@@ -58,10 +57,11 @@ Halt with an actionable message rather than working around a row:
 | current branch (deploy mode) | the default branch, at the head the remote holds | halt naming the difference |
 | change set | the log since the last tag (`git describe --tags --abbrev=0`), or since this service's last deploy record whose `Outcome` reads `deployed`, in deploy mode | halt when nothing changed: there is nothing to ship |
 
-With no earlier deployed record or tag, a first deploy or release, the change set's base is the
-repository's root commit (`git rev-list --max-parents=0 HEAD`), and the run says so. A record
-with no `Outcome` row reads as not deployed. Keep the change set. The version decision, the
-changelog and the record's reason all read it, and deriving it three times invites three answers.
+With no earlier deployed record or tag, a first deploy or release, the change set's base is the repository's
+root commit (`git rev-list --max-parents=0 HEAD`), and the run says so. A record with no `Outcome` row reads
+as not deployed. A `held` record newer than the last `deployed` one is asked about once before the base is
+picked: a yes rewrites it to `deployed`, silence keeps it `held`. Keep the change set. The version decision,
+the changelog and the record's reason all read it, and deriving it three times invites three answers.
 
 ## Step 2 — The readiness read
 
@@ -153,7 +153,7 @@ Write `.stamity/production/releases/<service>-<version | sha>.md`, one row per f
 | Emergency route | the policy file's `Escalation contact`, or the person's answer |
 | SBOM | its path and digest, or `absent — <why>` |
 | Provenance | its reference and verification command, or `absent — <why>` |
-| Outcome | `held` when written; `deployed` or `released` only once every opened command exited 0, rewritten after Step 8 |
+| Outcome | `held` when written; `deployed` or `released` only once every opened command exited 0 or the person confirms the step they ran, rewritten after Step 8 |
 
 The approver, the rollback path and the emergency route are asked in one batched question when the
 record cannot fill them, read first from `.stamity/production/policy.md`; each default is `not named`.
@@ -187,13 +187,13 @@ release branch's pull request has put the release commit there, and the stop say
 | the registry publish, run by the build job on the pushed tag | no: a version number cannot be reused | the typed `v<version>` |
 | the project's deploy command | no | the typed `DEPLOY` |
 
-After the token, the opened commands run in table order, each once, and the run stops at the
-first non-zero exit: no later command runs, and the run ends held, naming each command that ran
-with its exit code. After a failed tag push it also names `git tag -d v<version>`, since the
-local tag left behind makes a re-run find nothing to ship. No stop opens while the approver
-reads `not named` or equals the requester, or, for `DEPLOY`, while the rollback path reads
-`not named` or is empty: the run says which field holds it and ends held. Running a command
-personally is always an acceptable answer.
+After the token, the opened commands run in table order, each once, and the run stops at the first non-zero
+exit: no later command runs, and the run ends held, naming each command that ran with its exit code. After a
+failed tag push it also names `git tag -d v<version>`, since the local tag left behind makes a re-run find
+nothing to ship. No stop opens while the approver reads `not named` or equals the requester, or, for
+`DEPLOY`, while the rollback path reads `not named` or is empty: the run says which field holds it and ends
+held. Running a command personally is always an acceptable answer; the run then asks once whether it
+succeeded and rewrites `Outcome` to `deployed` or `released` on yes, `held` otherwise.
 
 ## Rollback
 

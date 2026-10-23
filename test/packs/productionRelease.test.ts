@@ -259,6 +259,26 @@ describe("st-release — anatomy", () => {
     expect(preflight.replace(/\s+/g, " ")).toMatch(/A record with no `Outcome` row reads as not deployed/);
   });
 
+  it("records a step the person ran by hand from their answer, and asks about a newer held record before picking the base", async () => {
+    // ADDED: review/2. A deploy the person runs themselves opens no command, so the Outcome rule
+    // above alone left that record held; every later change set then started at an older deployed
+    // record or at the root commit, listing commits already in production.
+    const file = await skill();
+    const preflight = section(file, "Step 1 — Preflight, read-only").replace(/\s+/g, " ");
+    const outcome = tableRows(section(file, "Step 7 — The change record")).find((row) => row[0] === "Outcome");
+    const stop = flowSection(file, "Step 8 — The stop");
+
+    expect(stop).toContain(
+      "Running a command personally is always an acceptable answer; the run then asks once whether it succeeded and rewrites `Outcome` to `deployed` or `released` on yes, `held` otherwise.",
+    );
+    expect(outcome?.[1]).toMatch(/exited 0 or the person confirms the step they ran, rewritten after Step 8/);
+    // A record a hand-run deploy left held, from a run that ended before the answer, is asked about
+    // once; silence keeps it held, so an unanswered question never moves the base forward.
+    expect(preflight).toContain(
+      "A `held` record newer than the last `deployed` one is asked about once before the base is picked: a yes rewrites it to `deployed`, silence keeps it `held`.",
+    );
+  });
+
   it("runs in two modes, the deploy mode with no release-branch or tag preflight", async () => {
     const file = await skill();
     const modes = tableRows(section(file, "Two modes"));

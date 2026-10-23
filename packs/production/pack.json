@@ -32,7 +32,7 @@
     "commands/st-production-review.md": "165f3db98b7dbeb4aca0ec7fe2f32b01364d8bdd07b7d233ed895c90ed053887",
     "skills/st-incident/SKILL.md": "8ee10a1ae017f5556a75bc0604299fd02215d22def39b22bda781200158d2085",
     "skills/st-incident/agents/openai.yaml": "2219eda7f9eef6ae17bea41c0e5bff4dc9fc373516d23b98a84069b8448bc30e",
-    "skills/st-release/SKILL.md": "8b073a5a0401083f0adc471498780dbe0c4938dbdac29f9ca280dcfd98a70e33",
+    "skills/st-release/SKILL.md": "1e85baea624b1f7840b4a94bb69e149e655d827fbd0dc02298ede8d96c586eb4",
     "skills/st-release/agents/openai.yaml": "ec73b090082e0504de376fa04382f9657c5b3007a458fbb46450b4b4df5a569b"
   }
 }
