@@ -121,12 +121,13 @@ const CORPUS_AGENT_EFFORT: Readonly<Record<(typeof CORPUS_AGENT_IDS)[number], st
  * TEST CHANGE, justified (REQ-LADDER-006, a9-model-defaults-refresh): the third id of each class
  * was a model Copilot retired (`gpt-5.4-mini`, 2026-10-19) or retires on 2026-11-16 (`claude-opus-5`,
  * `gpt-5.6-terra`); Claude Fable 5.1, Claude Sonnet 5.5 and Claude Haiku 4.5 replace them, and
- * Claude Haiku 5.5 takes the economy lead because it costs less than Haiku 4.5.
+ * Claude Haiku 5.5 takes the economy lead because it costs less than Haiku 4.5, which follows it
+ * ahead of GPT-6 Luna (review/31's sign-off).
  */
 const SHIPPED_PICK_LINES: Readonly<Record<string, readonly string[]>> = {
   high: ['model: "Claude Opus 5.5 (copilot)"', 'models: ["claude-opus-5.5", "gpt-6-astra", "claude-fable-5.1"]'],
   medium: ['model: "Claude Sonnet 5 (copilot)"', 'models: ["claude-sonnet-5", "gpt-6-sol", "claude-sonnet-5.5"]'],
-  low: ['model: "Claude Haiku 5.5 (copilot)"', 'models: ["claude-haiku-5.5", "gpt-6-luna", "claude-haiku-4.5"]'],
+  low: ['model: "Claude Haiku 5.5 (copilot)"', 'models: ["claude-haiku-5.5", "claude-haiku-4.5", "gpt-6-luna"]'],
 };
 
 /** The three CQ specialist lenses, which read and never edit. */
@@ -1339,12 +1340,13 @@ describe("model pinning", () => {
     };
     // Every ladder class, `frontier` included: a flow escalates a role to it on the call.
     // TEST CHANGE, justified (REQ-LADDER-006, a9-model-defaults-refresh): the retired and retiring
-    // third candidates are replaced, and Claude Haiku 5.5 leads economy (it costs less than 4.5).
+    // third candidates are replaced, and Claude Haiku 5.5 leads economy (it costs less than 4.5),
+    // with Haiku 4.5 ahead of GPT-6 Luna behind it (review/31's sign-off).
     expect(map.classes).toEqual({
       frontier: { model: "claude-fable-5.1", fallbacks: ["claude-opus-5.5", "gpt-6-astra"] },
       advanced: { model: "gpt-6-astra", fallbacks: ["claude-opus-5.5", "claude-fable-5.1"] },
       standard: { model: "claude-sonnet-5", fallbacks: ["gpt-6-sol", "claude-sonnet-5.5"] },
-      economy: { model: "claude-haiku-5.5", fallbacks: ["gpt-6-luna", "claude-haiku-4.5"] },
+      economy: { model: "claude-haiku-5.5", fallbacks: ["claude-haiku-4.5", "gpt-6-luna"] },
     });
     expect(Object.keys(map.roles)).toEqual(CORPUS_AGENT_IDS.map((id) => `stamity-${id}`));
     const classByEffort: Record<string, string> = { high: "advanced", medium: "standard", low: "economy" };

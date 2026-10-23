@@ -64,7 +64,8 @@ export const EFFORT_TOKEN = "{effort}";
  * model sits above the main model's cost tier. Claude Haiku 5.5 leads
  * `economy` because it costs less than Claude Haiku 4.5 at every listed tier
  * (`https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing`,
- * read 2026-10-23); Haiku 4.5 stays last for a plan that lacks 5.5.
+ * read 2026-10-23); Haiku 4.5 comes second, ahead of GPT-6 Luna, so an
+ * account that lacks 5.5 keeps the Haiku 4.5 pick it had on 1.16.0.
  */
 export const MODEL_PRIORITY: Readonly<Record<ListingClient, Readonly<Record<ModelClass, readonly ModelCandidate[]>>>> = {
   cursor: {
@@ -95,8 +96,8 @@ export const MODEL_PRIORITY: Readonly<Record<ListingClient, Readonly<Record<Mode
     ],
     economy: [
       { id: "claude-haiku-5.5", display: "Claude Haiku 5.5" },
-      { id: "gpt-6-luna", display: "GPT-6 Luna" },
       { id: "claude-haiku-4.5", display: "Claude Haiku 4.5" },
+      { id: "gpt-6-luna", display: "GPT-6 Luna" },
     ],
   },
   codex: {

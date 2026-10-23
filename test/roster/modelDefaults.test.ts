@@ -171,9 +171,9 @@ describe("pickModel with no account list", () => {
     // TEST CHANGE, justified (REQ-LADDER-006, a9-model-defaults-refresh): the third `standard`
     // candidate was `gpt-5.6-terra`, which Copilot retires on 2026-11-16; Claude Sonnet 5.5
     // replaces it. The economy and advanced cases are new: Claude Haiku 5.5 costs less than Haiku
-    // 4.5 on the vendor's pricing page (read 2026-10-23), so it takes the economy lead and Haiku 4.5
-    // replaces the retired `gpt-5.4-mini` as the last fallback; Claude Fable 5.1 replaces Claude
-    // Opus 5, which retires on 2026-11-16.
+    // 4.5 on the vendor's pricing page (read 2026-10-23), so it takes the economy lead; Haiku 4.5
+    // follows it, ahead of GPT-6 Luna, and the retired `gpt-5.4-mini` is gone (review/31's
+    // sign-off); Claude Fable 5.1 replaces Claude Opus 5, which retires on 2026-11-16.
     expect(pickModel("copilot", "standard", "medium")).toEqual({
       id: "claude-sonnet-5",
       display: "Claude Sonnet 5",
@@ -182,7 +182,7 @@ describe("pickModel with no account list", () => {
     expect(pickModel("copilot", "economy", "low")).toEqual({
       id: "claude-haiku-5.5",
       display: "Claude Haiku 5.5",
-      fallbacks: ["gpt-6-luna", "claude-haiku-4.5"],
+      fallbacks: ["claude-haiku-4.5", "gpt-6-luna"],
     });
     expect(pickModel("copilot", "advanced", "high")).toEqual({
       id: "claude-opus-5.5",
@@ -227,12 +227,13 @@ describe("pickModel over an account's list", () => {
       fallbacks: [],
     });
     // TEST CHANGE, justified (REQ-LADDER-006, a9-model-defaults-refresh): the list held the retired
-    // `gpt-5.4-mini`, no longer a candidate; Haiku 4.5, now the last economy candidate, stands in,
-    // so the lead the account lacks (Haiku 5.5) is still skipped and one fallback still follows.
+    // `gpt-5.4-mini`, no longer a candidate; Haiku 4.5 stands in. The lead the account lacks (Haiku
+    // 5.5) is still skipped and one fallback still follows, and by review/31's sign-off an account
+    // without Haiku 5.5 keeps 1.16.0's economy pick, Haiku 4.5, rather than moving to GPT-6 Luna.
     expect(pickModel("copilot", "economy", "low", ["claude-haiku-4.5", "gpt-6-luna"])).toEqual({
-      id: "gpt-6-luna",
-      display: "GPT-6 Luna",
-      fallbacks: ["claude-haiku-4.5"],
+      id: "claude-haiku-4.5",
+      display: "Claude Haiku 4.5",
+      fallbacks: ["gpt-6-luna"],
     });
   });
 
