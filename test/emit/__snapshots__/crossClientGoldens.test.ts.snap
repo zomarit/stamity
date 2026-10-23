@@ -777,6 +777,16 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		let words = [];
 		let wordMarks = [];
 		let word = "";
+		// The current word's brace balance, counted once per character (review/102's note): \`counted\` characters read.
+		let counted = 0;
+		let balance = 0;
+		const balanced = () => {
+			for (; counted < word.length; counted += 1) {
+				if (word[counted] === "{") balance += 1;
+				else if (word[counted] === "}") balance -= 1;
+			};
+			return balance <= 0;
+		};
 		let mark = {
 			first: -1,
 			last: 0,
@@ -795,6 +805,8 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				});
 			};
 			word = "";
+			counted = 0;
+			balance = 0;
 			mark = {
 				first: -1,
 				last: 0,
@@ -825,7 +837,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				// Bounded, so the reading stays linear in the line's length: a span past the bound runs to the line's end.
 				let level = 0;
 				while (end < text.length) {
-					if (end - at > 1024) {
+					if (end - at > 256) {
 						end = text.length;
 						break;
 					};
@@ -842,7 +854,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			let quoted = "";
 			for (let j = at + 1; j < text.length; j += 1) {
 				// Bounded, so the reading stays linear in the line's length: a form past the bound reads as an expansion.
-				if (j - at > 1024) return true;
+				if (j - at > 256) return true;
 				const c = text[j] ?? "";
 				if (quoted !== "") {
 					if (c === quoted) quoted = "";
@@ -973,6 +985,8 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				// A redirection: a file-descriptor number before it and its target after it are not arguments.
 				if (inWord && /^\\d+$/.test(word)) {
 					word = "";
+					counted = 0;
+					balance = 0;
 					mark = {
 						first: -1,
 						last: 0,
@@ -982,7 +996,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				} else endWord();
 				while (i < text.length && "<>&|".includes(text[i] ?? "")) i += 1;
 				dropNext = true;
-			} else if (";&|\\n\\r()\`".includes(ch) || blocks && ch === "{" && !inWord || blocks && ch === "}" && word.split("{").length <= word.split("}").length) {
+			} else if (";&|\\n\\r()\`".includes(ch) || blocks && ch === "{" && !inWord || blocks && ch === "}" && balanced()) {
 				cut();
 				i += 1;
 			} else {
@@ -1117,7 +1131,42 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			// A last path part whose only expansion is a glob is settled by what its pattern can name: unsettled only where it
 			// can name one of this package's words, so \`?\` (PowerShell's \`Where-Object\`) stays another program.
 			const last = programName(program);
-			const shape = new RegExp(\`^\${last.replace(/\\[[^\\]]*\\]|[*?]|\\W/g, (c) => c === "*" ? ".*" : c === "?" || c.length > 1 ? "." : \`\\\\\${c}\`)}$\`);
+			// Whether the last path part's glob may name a package word (review/102): a two-pointer wildcard match, linear in
+			// the pattern times the name, with no regular expression; a class matches any one character. A pattern holding
+			// more wildcards than the longest package word has characters is one the guard cannot settle.
+			const wildcards = (last.match(/[*?[]/g) ?? []).length;
+			const mayName = (name) => {
+				const tokens = [];
+				for (let i = 0; i < last.length; i += 1) {
+					const c = last[i] ?? "";
+					const close = c === "[" ? last.indexOf("]", i + 2) : -1;
+					if (close !== -1) {
+						tokens.push("?");
+						i = close;
+					} else tokens.push(c === "*" || c === "?" ? c : \`=\${c}\`);
+				};
+				let t = 0;
+				let n = 0;
+				let star = -1;
+				let resume = 0;
+				while (n < name.length) {
+					if (t < tokens.length && (tokens[t] === "?" || tokens[t] === \`=\${name[n]}\`)) {
+						t += 1;
+						n += 1;
+					} else if (t < tokens.length && tokens[t] === "*") {
+						star = t;
+						resume = n;
+						t += 1;
+					} else if (star !== -1) {
+						t = star + 1;
+						resume += 1;
+						n = resume;
+					} else return false;
+				};
+				while (t < tokens.length && tokens[t] === "*") t += 1;
+				return t === tokens.length;
+			};
+			const globMayName = () => wildcards > Math.max(0, ...PACKAGE_WORDS.map((name) => name.length)) || PACKAGE_WORDS.some(mayName);
 			const wordMarks = (allMarks[segment] ?? []).slice(k);
 			const markOf = (at) => wordMarks[at] ?? {
 				first: -1,
@@ -1261,7 +1310,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				const mark = markOf(at);
 				if (tainted) return true;
 				if (at > 0) return /[ep]/.test(mark.kinds) || /[gb]/.test(mark.kinds) && dashes(at);
-				return launchesUnread || mark.last > cut && (/[eb]/.test(mark.kinds) || /g/.test(mark.kinds) && PACKAGE_WORDS.some((name) => shape.test(name)));
+				return launchesUnread || mark.last > cut && (/[eb]/.test(mark.kinds) || /g/.test(mark.kinds) && globMayName());
 			});
 			// A program word built by an expansion, or by a glob or brace form that can give a dash word, carries arguments
 			// of its own the line does not show (review/45): a runner may read the value as a line, a split value is words.
@@ -3042,6 +3091,16 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 		let words = [];
 		let wordMarks = [];
 		let word = "";
+		// The current word's brace balance, counted once per character (review/102's note): \`counted\` characters read.
+		let counted = 0;
+		let balance = 0;
+		const balanced = () => {
+			for (; counted < word.length; counted += 1) {
+				if (word[counted] === "{") balance += 1;
+				else if (word[counted] === "}") balance -= 1;
+			};
+			return balance <= 0;
+		};
 		let mark = {
 			first: -1,
 			last: 0,
@@ -3060,6 +3119,8 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 				});
 			};
 			word = "";
+			counted = 0;
+			balance = 0;
 			mark = {
 				first: -1,
 				last: 0,
@@ -3090,7 +3151,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 				// Bounded, so the reading stays linear in the line's length: a span past the bound runs to the line's end.
 				let level = 0;
 				while (end < text.length) {
-					if (end - at > 1024) {
+					if (end - at > 256) {
 						end = text.length;
 						break;
 					};
@@ -3107,7 +3168,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 			let quoted = "";
 			for (let j = at + 1; j < text.length; j += 1) {
 				// Bounded, so the reading stays linear in the line's length: a form past the bound reads as an expansion.
-				if (j - at > 1024) return true;
+				if (j - at > 256) return true;
 				const c = text[j] ?? "";
 				if (quoted !== "") {
 					if (c === quoted) quoted = "";
@@ -3238,6 +3299,8 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 				// A redirection: a file-descriptor number before it and its target after it are not arguments.
 				if (inWord && /^\\d+$/.test(word)) {
 					word = "";
+					counted = 0;
+					balance = 0;
 					mark = {
 						first: -1,
 						last: 0,
@@ -3247,7 +3310,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 				} else endWord();
 				while (i < text.length && "<>&|".includes(text[i] ?? "")) i += 1;
 				dropNext = true;
-			} else if (";&|\\n\\r()\`".includes(ch) || blocks && ch === "{" && !inWord || blocks && ch === "}" && word.split("{").length <= word.split("}").length) {
+			} else if (";&|\\n\\r()\`".includes(ch) || blocks && ch === "{" && !inWord || blocks && ch === "}" && balanced()) {
 				cut();
 				i += 1;
 			} else {
@@ -3382,7 +3445,42 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 			// A last path part whose only expansion is a glob is settled by what its pattern can name: unsettled only where it
 			// can name one of this package's words, so \`?\` (PowerShell's \`Where-Object\`) stays another program.
 			const last = programName(program);
-			const shape = new RegExp(\`^\${last.replace(/\\[[^\\]]*\\]|[*?]|\\W/g, (c) => c === "*" ? ".*" : c === "?" || c.length > 1 ? "." : \`\\\\\${c}\`)}$\`);
+			// Whether the last path part's glob may name a package word (review/102): a two-pointer wildcard match, linear in
+			// the pattern times the name, with no regular expression; a class matches any one character. A pattern holding
+			// more wildcards than the longest package word has characters is one the guard cannot settle.
+			const wildcards = (last.match(/[*?[]/g) ?? []).length;
+			const mayName = (name) => {
+				const tokens = [];
+				for (let i = 0; i < last.length; i += 1) {
+					const c = last[i] ?? "";
+					const close = c === "[" ? last.indexOf("]", i + 2) : -1;
+					if (close !== -1) {
+						tokens.push("?");
+						i = close;
+					} else tokens.push(c === "*" || c === "?" ? c : \`=\${c}\`);
+				};
+				let t = 0;
+				let n = 0;
+				let star = -1;
+				let resume = 0;
+				while (n < name.length) {
+					if (t < tokens.length && (tokens[t] === "?" || tokens[t] === \`=\${name[n]}\`)) {
+						t += 1;
+						n += 1;
+					} else if (t < tokens.length && tokens[t] === "*") {
+						star = t;
+						resume = n;
+						t += 1;
+					} else if (star !== -1) {
+						t = star + 1;
+						resume += 1;
+						n = resume;
+					} else return false;
+				};
+				while (t < tokens.length && tokens[t] === "*") t += 1;
+				return t === tokens.length;
+			};
+			const globMayName = () => wildcards > Math.max(0, ...PACKAGE_WORDS.map((name) => name.length)) || PACKAGE_WORDS.some(mayName);
 			const wordMarks = (allMarks[segment] ?? []).slice(k);
 			const markOf = (at) => wordMarks[at] ?? {
 				first: -1,
@@ -3526,7 +3624,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 				const mark = markOf(at);
 				if (tainted) return true;
 				if (at > 0) return /[ep]/.test(mark.kinds) || /[gb]/.test(mark.kinds) && dashes(at);
-				return launchesUnread || mark.last > cut && (/[eb]/.test(mark.kinds) || /g/.test(mark.kinds) && PACKAGE_WORDS.some((name) => shape.test(name)));
+				return launchesUnread || mark.last > cut && (/[eb]/.test(mark.kinds) || /g/.test(mark.kinds) && globMayName());
 			});
 			// A program word built by an expansion, or by a glob or brace form that can give a dash word, carries arguments
 			// of its own the line does not show (review/45): a runner may read the value as a line, a split value is words.
@@ -9812,7 +9910,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".claude/hooks/stamity/stamity-agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".claude/hooks/stamity/stamity-cloud-readiness.mjs": "acef8b976c3cf0dc29df1ab1584458bc83c66ab1e7284e28df62af60f1311c91 11348 bytes",
   ".claude/hooks/stamity/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "e27a19a01b6a798c30b00122641d851770fe98b9466633da59b966ce2b21b4e5 215216 bytes",
+  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "5a8f2374f91c00f0a0770a7916140d13cb81a92debbb660254b913beb62a950b 218402 bytes",
   ".claude/hooks/stamity/stamity-pre-tool-use-guard.mjs": "752f24a46db0da9f933bcb313a00ef8f6b12b8a655241b9257e40f64d9776965 20816 bytes",
   ".claude/hooks/stamity/stamity-review-gate.mjs": "a410def5d44fde83869b3c2c98db318d470b68a54101e1b20eddfb026f8077b1 51137 bytes",
   ".claude/hooks/stamity/stamity-session-start.mjs": "c807b92eeff34b3e194a0f7ae843c2945d5663d56cdb937786454a6402df3f31 51786 bytes",
@@ -9934,12 +10032,12 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".mcp.json": "f4e65233eea1ba936b61b16f2ee2d90f84a2510436d58f6484d872f507314f2f 387 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "b3ba9c0b031dad86612d44e1d80564607a36e6f968c62e5e450de0c4c93a8875 215212 bytes",
+  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "421de3456581d57c5b871329e99b01f23c90e5b1300b1bf52be24da723f0b785 218398 bytes",
   ".stamity/generated/hooks/codex/stamity-portable-hook.mjs": "ef3b63ada64fdbc5860b8bd483568a6cc32875a5747de7acabcf56dccfa3b70c 20343 bytes",
   ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/codex/stamity-session-start.mjs": "1111332a1630ed4dcb42e421b2326c5dd423a358e3c92bf8cb367e212a7a996d 51799 bytes",
   ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "f3214875e601f9d971ea655b2864db1c4f43e8139a9bd0378bb140bc7940036f 217966 bytes",
+  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "4f203208ee6e82ccfb7d3eb6fdbb7311d97535411af5767ee4d928687e78b98e 221152 bytes",
   ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "b67634419bfa652a30fba0cd2f1402fc61ee89250dfe137cca7d2785f4a427cc 21755 bytes",
   ".stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "9f930fcd797ef464e7f4cb4c40e59b4976d65199a5c974fb67ca7624e5d0287c 56602 bytes",
@@ -9947,7 +10045,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/generated/hooks/cursor/stamity-context-once.mjs": "c74c1b3d2cd908b170c48a8813bd05cc91f058210789a9b2f815b731a2eb6ccd 31773 bytes",
   ".stamity/generated/hooks/cursor/stamity-cursor-continue.mjs": "08bc51855553f4104a80fbe1ea94ba36a95173e005846467e4af5c643bb26a60 9500 bytes",
   ".stamity/generated/hooks/cursor/stamity-model-pins.mjs": "fc71eb522ff67fd73ff00820d0e59495bca188d2e30fc9a26ce85e89fff6fdd5 3813 bytes",
-  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "3040231ba01e92e72430ea498d1d9e71b80380408f3668869febc116a1bcea09 215248 bytes",
+  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "6633528e3b1a0f47ef57aa1a432bfea646763e2684865080a1d488090850e7b4 218434 bytes",
   ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs": "4bc31f0f2dbdec29a6537dab00d8df9255641b7ee5bed365d3020ce6ac72c12c 20344 bytes",
   ".stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "1111332a1630ed4dcb42e421b2326c5dd423a358e3c92bf8cb367e212a7a996d 51799 bytes",
@@ -9959,7 +10057,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "43be2660463af81ff0643fb9210dcc291554218da65de1681acf9f7c5f7fdd32 94261 bytes",
+  ".stamity/manifest.json": "8d0a2fc43f190de765c5e1fbb88a89cb15611b59801e5842db9b226a93d600be 94261 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "6b5b5bebfd779fe5b513cd8c2c41fa3b4dd70826435e9df9c70076ba48c29b98 6548 bytes",
@@ -10757,6 +10855,16 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		let words = [];
 		let wordMarks = [];
 		let word = "";
+		// The current word's brace balance, counted once per character (review/102's note): \`counted\` characters read.
+		let counted = 0;
+		let balance = 0;
+		const balanced = () => {
+			for (; counted < word.length; counted += 1) {
+				if (word[counted] === "{") balance += 1;
+				else if (word[counted] === "}") balance -= 1;
+			};
+			return balance <= 0;
+		};
 		let mark = {
 			first: -1,
 			last: 0,
@@ -10775,6 +10883,8 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				});
 			};
 			word = "";
+			counted = 0;
+			balance = 0;
 			mark = {
 				first: -1,
 				last: 0,
@@ -10805,7 +10915,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				// Bounded, so the reading stays linear in the line's length: a span past the bound runs to the line's end.
 				let level = 0;
 				while (end < text.length) {
-					if (end - at > 1024) {
+					if (end - at > 256) {
 						end = text.length;
 						break;
 					};
@@ -10822,7 +10932,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			let quoted = "";
 			for (let j = at + 1; j < text.length; j += 1) {
 				// Bounded, so the reading stays linear in the line's length: a form past the bound reads as an expansion.
-				if (j - at > 1024) return true;
+				if (j - at > 256) return true;
 				const c = text[j] ?? "";
 				if (quoted !== "") {
 					if (c === quoted) quoted = "";
@@ -10953,6 +11063,8 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				// A redirection: a file-descriptor number before it and its target after it are not arguments.
 				if (inWord && /^\\d+$/.test(word)) {
 					word = "";
+					counted = 0;
+					balance = 0;
 					mark = {
 						first: -1,
 						last: 0,
@@ -10962,7 +11074,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				} else endWord();
 				while (i < text.length && "<>&|".includes(text[i] ?? "")) i += 1;
 				dropNext = true;
-			} else if (";&|\\n\\r()\`".includes(ch) || blocks && ch === "{" && !inWord || blocks && ch === "}" && word.split("{").length <= word.split("}").length) {
+			} else if (";&|\\n\\r()\`".includes(ch) || blocks && ch === "{" && !inWord || blocks && ch === "}" && balanced()) {
 				cut();
 				i += 1;
 			} else {
@@ -11097,7 +11209,42 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			// A last path part whose only expansion is a glob is settled by what its pattern can name: unsettled only where it
 			// can name one of this package's words, so \`?\` (PowerShell's \`Where-Object\`) stays another program.
 			const last = programName(program);
-			const shape = new RegExp(\`^\${last.replace(/\\[[^\\]]*\\]|[*?]|\\W/g, (c) => c === "*" ? ".*" : c === "?" || c.length > 1 ? "." : \`\\\\\${c}\`)}$\`);
+			// Whether the last path part's glob may name a package word (review/102): a two-pointer wildcard match, linear in
+			// the pattern times the name, with no regular expression; a class matches any one character. A pattern holding
+			// more wildcards than the longest package word has characters is one the guard cannot settle.
+			const wildcards = (last.match(/[*?[]/g) ?? []).length;
+			const mayName = (name) => {
+				const tokens = [];
+				for (let i = 0; i < last.length; i += 1) {
+					const c = last[i] ?? "";
+					const close = c === "[" ? last.indexOf("]", i + 2) : -1;
+					if (close !== -1) {
+						tokens.push("?");
+						i = close;
+					} else tokens.push(c === "*" || c === "?" ? c : \`=\${c}\`);
+				};
+				let t = 0;
+				let n = 0;
+				let star = -1;
+				let resume = 0;
+				while (n < name.length) {
+					if (t < tokens.length && (tokens[t] === "?" || tokens[t] === \`=\${name[n]}\`)) {
+						t += 1;
+						n += 1;
+					} else if (t < tokens.length && tokens[t] === "*") {
+						star = t;
+						resume = n;
+						t += 1;
+					} else if (star !== -1) {
+						t = star + 1;
+						resume += 1;
+						n = resume;
+					} else return false;
+				};
+				while (t < tokens.length && tokens[t] === "*") t += 1;
+				return t === tokens.length;
+			};
+			const globMayName = () => wildcards > Math.max(0, ...PACKAGE_WORDS.map((name) => name.length)) || PACKAGE_WORDS.some(mayName);
 			const wordMarks = (allMarks[segment] ?? []).slice(k);
 			const markOf = (at) => wordMarks[at] ?? {
 				first: -1,
@@ -11241,7 +11388,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				const mark = markOf(at);
 				if (tainted) return true;
 				if (at > 0) return /[ep]/.test(mark.kinds) || /[gb]/.test(mark.kinds) && dashes(at);
-				return launchesUnread || mark.last > cut && (/[eb]/.test(mark.kinds) || /g/.test(mark.kinds) && PACKAGE_WORDS.some((name) => shape.test(name)));
+				return launchesUnread || mark.last > cut && (/[eb]/.test(mark.kinds) || /g/.test(mark.kinds) && globMayName());
 			});
 			// A program word built by an expansion, or by a glob or brace form that can give a dash word, carries arguments
 			// of its own the line does not show (review/45): a runner may read the value as a line, a split value is words.
@@ -13022,6 +13169,16 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 		let words = [];
 		let wordMarks = [];
 		let word = "";
+		// The current word's brace balance, counted once per character (review/102's note): \`counted\` characters read.
+		let counted = 0;
+		let balance = 0;
+		const balanced = () => {
+			for (; counted < word.length; counted += 1) {
+				if (word[counted] === "{") balance += 1;
+				else if (word[counted] === "}") balance -= 1;
+			};
+			return balance <= 0;
+		};
 		let mark = {
 			first: -1,
 			last: 0,
@@ -13040,6 +13197,8 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 				});
 			};
 			word = "";
+			counted = 0;
+			balance = 0;
 			mark = {
 				first: -1,
 				last: 0,
@@ -13070,7 +13229,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 				// Bounded, so the reading stays linear in the line's length: a span past the bound runs to the line's end.
 				let level = 0;
 				while (end < text.length) {
-					if (end - at > 1024) {
+					if (end - at > 256) {
 						end = text.length;
 						break;
 					};
@@ -13087,7 +13246,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 			let quoted = "";
 			for (let j = at + 1; j < text.length; j += 1) {
 				// Bounded, so the reading stays linear in the line's length: a form past the bound reads as an expansion.
-				if (j - at > 1024) return true;
+				if (j - at > 256) return true;
 				const c = text[j] ?? "";
 				if (quoted !== "") {
 					if (c === quoted) quoted = "";
@@ -13218,6 +13377,8 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 				// A redirection: a file-descriptor number before it and its target after it are not arguments.
 				if (inWord && /^\\d+$/.test(word)) {
 					word = "";
+					counted = 0;
+					balance = 0;
 					mark = {
 						first: -1,
 						last: 0,
@@ -13227,7 +13388,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 				} else endWord();
 				while (i < text.length && "<>&|".includes(text[i] ?? "")) i += 1;
 				dropNext = true;
-			} else if (";&|\\n\\r()\`".includes(ch) || blocks && ch === "{" && !inWord || blocks && ch === "}" && word.split("{").length <= word.split("}").length) {
+			} else if (";&|\\n\\r()\`".includes(ch) || blocks && ch === "{" && !inWord || blocks && ch === "}" && balanced()) {
 				cut();
 				i += 1;
 			} else {
@@ -13362,7 +13523,42 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 			// A last path part whose only expansion is a glob is settled by what its pattern can name: unsettled only where it
 			// can name one of this package's words, so \`?\` (PowerShell's \`Where-Object\`) stays another program.
 			const last = programName(program);
-			const shape = new RegExp(\`^\${last.replace(/\\[[^\\]]*\\]|[*?]|\\W/g, (c) => c === "*" ? ".*" : c === "?" || c.length > 1 ? "." : \`\\\\\${c}\`)}$\`);
+			// Whether the last path part's glob may name a package word (review/102): a two-pointer wildcard match, linear in
+			// the pattern times the name, with no regular expression; a class matches any one character. A pattern holding
+			// more wildcards than the longest package word has characters is one the guard cannot settle.
+			const wildcards = (last.match(/[*?[]/g) ?? []).length;
+			const mayName = (name) => {
+				const tokens = [];
+				for (let i = 0; i < last.length; i += 1) {
+					const c = last[i] ?? "";
+					const close = c === "[" ? last.indexOf("]", i + 2) : -1;
+					if (close !== -1) {
+						tokens.push("?");
+						i = close;
+					} else tokens.push(c === "*" || c === "?" ? c : \`=\${c}\`);
+				};
+				let t = 0;
+				let n = 0;
+				let star = -1;
+				let resume = 0;
+				while (n < name.length) {
+					if (t < tokens.length && (tokens[t] === "?" || tokens[t] === \`=\${name[n]}\`)) {
+						t += 1;
+						n += 1;
+					} else if (t < tokens.length && tokens[t] === "*") {
+						star = t;
+						resume = n;
+						t += 1;
+					} else if (star !== -1) {
+						t = star + 1;
+						resume += 1;
+						n = resume;
+					} else return false;
+				};
+				while (t < tokens.length && tokens[t] === "*") t += 1;
+				return t === tokens.length;
+			};
+			const globMayName = () => wildcards > Math.max(0, ...PACKAGE_WORDS.map((name) => name.length)) || PACKAGE_WORDS.some(mayName);
 			const wordMarks = (allMarks[segment] ?? []).slice(k);
 			const markOf = (at) => wordMarks[at] ?? {
 				first: -1,
@@ -13506,7 +13702,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 				const mark = markOf(at);
 				if (tainted) return true;
 				if (at > 0) return /[ep]/.test(mark.kinds) || /[gb]/.test(mark.kinds) && dashes(at);
-				return launchesUnread || mark.last > cut && (/[eb]/.test(mark.kinds) || /g/.test(mark.kinds) && PACKAGE_WORDS.some((name) => shape.test(name)));
+				return launchesUnread || mark.last > cut && (/[eb]/.test(mark.kinds) || /g/.test(mark.kinds) && globMayName());
 			});
 			// A program word built by an expansion, or by a glob or brace form that can give a dash word, carries arguments
 			// of its own the line does not show (review/45): a runner may read the value as a line, a split value is words.
@@ -18463,7 +18659,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".claude/hooks/stamity/stamity-agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".claude/hooks/stamity/stamity-cloud-readiness.mjs": "acef8b976c3cf0dc29df1ab1584458bc83c66ab1e7284e28df62af60f1311c91 11348 bytes",
   ".claude/hooks/stamity/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "e27a19a01b6a798c30b00122641d851770fe98b9466633da59b966ce2b21b4e5 215216 bytes",
+  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "5a8f2374f91c00f0a0770a7916140d13cb81a92debbb660254b913beb62a950b 218402 bytes",
   ".claude/hooks/stamity/stamity-pre-tool-use-guard.mjs": "752f24a46db0da9f933bcb313a00ef8f6b12b8a655241b9257e40f64d9776965 20816 bytes",
   ".claude/hooks/stamity/stamity-review-gate.mjs": "a410def5d44fde83869b3c2c98db318d470b68a54101e1b20eddfb026f8077b1 51137 bytes",
   ".claude/hooks/stamity/stamity-session-start.mjs": "c807b92eeff34b3e194a0f7ae843c2945d5663d56cdb937786454a6402df3f31 51786 bytes",
@@ -18519,7 +18715,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "ecf015475a09ea1673c399ac6a7ebc7446907dd9a43da7e87e6119c610309b4d 28322 bytes",
+  ".stamity/manifest.json": "1454d107879bfc0177f3d73b9641e717f268f8324822c42a812df9fccbcbf5c6 28322 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
   "CLAUDE.md": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
@@ -19381,7 +19577,7 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".gitignore": "14c0a079e08124240ec8c713fa4c32870948842d586a5829a19172c02ddd0482 204 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "b3ba9c0b031dad86612d44e1d80564607a36e6f968c62e5e450de0c4c93a8875 215212 bytes",
+  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "421de3456581d57c5b871329e99b01f23c90e5b1300b1bf52be24da723f0b785 218398 bytes",
   ".stamity/generated/hooks/codex/stamity-portable-hook.mjs": "ef3b63ada64fdbc5860b8bd483568a6cc32875a5747de7acabcf56dccfa3b70c 20343 bytes",
   ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/codex/stamity-session-start.mjs": "1111332a1630ed4dcb42e421b2326c5dd423a358e3c92bf8cb367e212a7a996d 51799 bytes",
@@ -19390,7 +19586,7 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "d45c48c3c1715a08fdf58866f578b7942f41c477c2bc50f2e25a5996277035b8 22156 bytes",
+  ".stamity/manifest.json": "0de21b3b35ab225b33477ae706da080792cf7b69c3326aa2f9de64095a958df3 22156 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
   "AGENTS.override.md": "122504f41cc40a99c65cba4995c228bf4a5137d738324bbe3a847c6aaa5192db 25872 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
@@ -19731,7 +19927,7 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".gitignore": "14c0a079e08124240ec8c713fa4c32870948842d586a5829a19172c02ddd0482 204 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "f3214875e601f9d971ea655b2864db1c4f43e8139a9bd0378bb140bc7940036f 217966 bytes",
+  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "4f203208ee6e82ccfb7d3eb6fdbb7311d97535411af5767ee4d928687e78b98e 221152 bytes",
   ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "b67634419bfa652a30fba0cd2f1402fc61ee89250dfe137cca7d2785f4a427cc 21755 bytes",
   ".stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "9f930fcd797ef464e7f4cb4c40e59b4976d65199a5c974fb67ca7624e5d0287c 56602 bytes",
@@ -19740,7 +19936,7 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "2440155a269ae8d4a64a532b9c6650df2922dc19f11b90438c4aff3e25e73143 20257 bytes",
+  ".stamity/manifest.json": "0d715a78ba5509d6bef6a5f1f3bb338497e6be353b6542b11ecb0a0e7cfe6dba 20257 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
@@ -20356,7 +20552,7 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".stamity/generated/hooks/cursor/stamity-context-once.mjs": "c74c1b3d2cd908b170c48a8813bd05cc91f058210789a9b2f815b731a2eb6ccd 31773 bytes",
   ".stamity/generated/hooks/cursor/stamity-cursor-continue.mjs": "08bc51855553f4104a80fbe1ea94ba36a95173e005846467e4af5c643bb26a60 9500 bytes",
   ".stamity/generated/hooks/cursor/stamity-model-pins.mjs": "fc71eb522ff67fd73ff00820d0e59495bca188d2e30fc9a26ce85e89fff6fdd5 3813 bytes",
-  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "3040231ba01e92e72430ea498d1d9e71b80380408f3668869febc116a1bcea09 215248 bytes",
+  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "6633528e3b1a0f47ef57aa1a432bfea646763e2684865080a1d488090850e7b4 218434 bytes",
   ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs": "4bc31f0f2dbdec29a6537dab00d8df9255641b7ee5bed365d3020ce6ac72c12c 20344 bytes",
   ".stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "1111332a1630ed4dcb42e421b2326c5dd423a358e3c92bf8cb367e212a7a996d 51799 bytes",
@@ -20365,7 +20561,7 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "a08a610b88c8822cbb62485bbe5ec7db6aff62e03db26d366670cb5f353ccfb5 24101 bytes",
+  ".stamity/manifest.json": "019e03088973987c765ccc61bef2f6dc8cc7fb6e377bc2fbab150374f482a8d7 24101 bytes",
   "AGENTS.md": "6b5b5bebfd779fe5b513cd8c2c41fa3b4dd70826435e9df9c70076ba48c29b98 6548 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",

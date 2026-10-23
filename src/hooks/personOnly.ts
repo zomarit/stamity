@@ -508,6 +508,16 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     let words: string[] = [];
     let wordMarks: WordMark[] = [];
     let word = "";
+    // The current word's brace balance, counted once per character (review/102's note): `counted` characters read.
+    let counted = 0;
+    let balance = 0;
+    const balanced = (): boolean => {
+      for (; counted < word.length; counted += 1) {
+        if (word[counted] === "{") balance += 1;
+        else if (word[counted] === "}") balance -= 1;
+      }
+      return balance <= 0;
+    };
     let mark: WordMark = { first: -1, last: 0, kinds: "" };
     let inWord = false;
     let dropNext = false;
@@ -519,6 +529,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         wordMarks.push({ ...mark, last: Math.min(mark.last, word.length) });
       }
       word = "";
+      counted = 0;
+      balance = 0;
       mark = { first: -1, last: 0, kinds: "" };
       inWord = false;
     };
@@ -545,7 +557,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         // Bounded, so the reading stays linear in the line's length: a span past the bound runs to the line's end.
         let level = 0;
         while (end < text.length) {
-          if (end - at > 1024) {
+          if (end - at > 256) {
             end = text.length;
             break;
           }
@@ -562,7 +574,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       let quoted = "";
       for (let j = at + 1; j < text.length; j += 1) {
         // Bounded, so the reading stays linear in the line's length: a form past the bound reads as an expansion.
-        if (j - at > 1024) return true;
+        if (j - at > 256) return true;
         const c = text[j] ?? "";
         if (quoted !== "") {
           if (c === quoted) quoted = "";
@@ -693,6 +705,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         // A redirection: a file-descriptor number before it and its target after it are not arguments.
         if (inWord && /^\d+$/.test(word)) {
           word = "";
+          counted = 0;
+          balance = 0;
           mark = { first: -1, last: 0, kinds: "" };
           inWord = false;
         } else endWord();
@@ -701,7 +715,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       } else if (
         ";&|\n\r()`".includes(ch) ||
         (blocks && ch === "{" && !inWord) ||
-        (blocks && ch === "}" && word.split("{").length <= word.split("}").length)
+        (blocks && ch === "}" && balanced())
       ) {
         cut();
         i += 1;
@@ -836,7 +850,42 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       // A last path part whose only expansion is a glob is settled by what its pattern can name: unsettled only where it
       // can name one of this package's words, so `?` (PowerShell's `Where-Object`) stays another program.
       const last = programName(program);
-      const shape = new RegExp(`^${last.replace(/\[[^\]]*\]|[*?]|\W/g, (c) => (c === "*" ? ".*" : c === "?" || c.length > 1 ? "." : `\\${c}`))}$`);
+      // Whether the last path part's glob may name a package word (review/102): a two-pointer wildcard match, linear in
+      // the pattern times the name, with no regular expression; a class matches any one character. A pattern holding
+      // more wildcards than the longest package word has characters is one the guard cannot settle.
+      const wildcards = (last.match(/[*?[]/g) ?? []).length;
+      const mayName = (name: string): boolean => {
+        const tokens: string[] = [];
+        for (let i = 0; i < last.length; i += 1) {
+          const c = last[i] ?? "";
+          const close = c === "[" ? last.indexOf("]", i + 2) : -1;
+          if (close !== -1) {
+            tokens.push("?");
+            i = close;
+          } else tokens.push(c === "*" || c === "?" ? c : `=${c}`);
+        }
+        let t = 0;
+        let n = 0;
+        let star = -1;
+        let resume = 0;
+        while (n < name.length) {
+          if (t < tokens.length && (tokens[t] === "?" || tokens[t] === `=${name[n]}`)) {
+            t += 1;
+            n += 1;
+          } else if (t < tokens.length && tokens[t] === "*") {
+            star = t;
+            resume = n;
+            t += 1;
+          } else if (star !== -1) {
+            t = star + 1;
+            resume += 1;
+            n = resume;
+          } else return false;
+        }
+        while (t < tokens.length && tokens[t] === "*") t += 1;
+        return t === tokens.length;
+      };
+      const globMayName = (): boolean => wildcards > Math.max(0, ...PACKAGE_WORDS.map((name) => name.length)) || PACKAGE_WORDS.some(mayName);
       const wordMarks = (allMarks[segment] ?? []).slice(k);
       const markOf = (at: number): WordMark => wordMarks[at] ?? { first: -1, last: 0, kinds: "" };
       // A glob or brace form can give a word that opens with a dash only where its literal text before it is empty or
@@ -933,7 +982,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         if (at > 0) return /[ep]/.test(mark.kinds) || (/[gb]/.test(mark.kinds) && dashes(at));
         return (
           launchesUnread ||
-          (mark.last > cut && (/[eb]/.test(mark.kinds) || (/g/.test(mark.kinds) && PACKAGE_WORDS.some((name) => shape.test(name)))))
+          (mark.last > cut && (/[eb]/.test(mark.kinds) || (/g/.test(mark.kinds) && globMayName())))
         );
       });
       // A program word built by an expansion, or by a glob or brace form that can give a dash word, carries arguments
@@ -2391,6 +2440,16 @@ export function unattendedPushVerdict(
     let words: string[] = [];
     let wordMarks: WordMark[] = [];
     let word = "";
+    // The current word's brace balance, counted once per character (review/102's note): `counted` characters read.
+    let counted = 0;
+    let balance = 0;
+    const balanced = (): boolean => {
+      for (; counted < word.length; counted += 1) {
+        if (word[counted] === "{") balance += 1;
+        else if (word[counted] === "}") balance -= 1;
+      }
+      return balance <= 0;
+    };
     let mark: WordMark = { first: -1, last: 0, kinds: "" };
     let inWord = false;
     let dropNext = false;
@@ -2402,6 +2461,8 @@ export function unattendedPushVerdict(
         wordMarks.push({ ...mark, last: Math.min(mark.last, word.length) });
       }
       word = "";
+      counted = 0;
+      balance = 0;
       mark = { first: -1, last: 0, kinds: "" };
       inWord = false;
     };
@@ -2428,7 +2489,7 @@ export function unattendedPushVerdict(
         // Bounded, so the reading stays linear in the line's length: a span past the bound runs to the line's end.
         let level = 0;
         while (end < text.length) {
-          if (end - at > 1024) {
+          if (end - at > 256) {
             end = text.length;
             break;
           }
@@ -2445,7 +2506,7 @@ export function unattendedPushVerdict(
       let quoted = "";
       for (let j = at + 1; j < text.length; j += 1) {
         // Bounded, so the reading stays linear in the line's length: a form past the bound reads as an expansion.
-        if (j - at > 1024) return true;
+        if (j - at > 256) return true;
         const c = text[j] ?? "";
         if (quoted !== "") {
           if (c === quoted) quoted = "";
@@ -2576,6 +2637,8 @@ export function unattendedPushVerdict(
         // A redirection: a file-descriptor number before it and its target after it are not arguments.
         if (inWord && /^\d+$/.test(word)) {
           word = "";
+          counted = 0;
+          balance = 0;
           mark = { first: -1, last: 0, kinds: "" };
           inWord = false;
         } else endWord();
@@ -2584,7 +2647,7 @@ export function unattendedPushVerdict(
       } else if (
         ";&|\n\r()`".includes(ch) ||
         (blocks && ch === "{" && !inWord) ||
-        (blocks && ch === "}" && word.split("{").length <= word.split("}").length)
+        (blocks && ch === "}" && balanced())
       ) {
         cut();
         i += 1;
@@ -2719,7 +2782,42 @@ export function unattendedPushVerdict(
       // A last path part whose only expansion is a glob is settled by what its pattern can name: unsettled only where it
       // can name one of this package's words, so `?` (PowerShell's `Where-Object`) stays another program.
       const last = programName(program);
-      const shape = new RegExp(`^${last.replace(/\[[^\]]*\]|[*?]|\W/g, (c) => (c === "*" ? ".*" : c === "?" || c.length > 1 ? "." : `\\${c}`))}$`);
+      // Whether the last path part's glob may name a package word (review/102): a two-pointer wildcard match, linear in
+      // the pattern times the name, with no regular expression; a class matches any one character. A pattern holding
+      // more wildcards than the longest package word has characters is one the guard cannot settle.
+      const wildcards = (last.match(/[*?[]/g) ?? []).length;
+      const mayName = (name: string): boolean => {
+        const tokens: string[] = [];
+        for (let i = 0; i < last.length; i += 1) {
+          const c = last[i] ?? "";
+          const close = c === "[" ? last.indexOf("]", i + 2) : -1;
+          if (close !== -1) {
+            tokens.push("?");
+            i = close;
+          } else tokens.push(c === "*" || c === "?" ? c : `=${c}`);
+        }
+        let t = 0;
+        let n = 0;
+        let star = -1;
+        let resume = 0;
+        while (n < name.length) {
+          if (t < tokens.length && (tokens[t] === "?" || tokens[t] === `=${name[n]}`)) {
+            t += 1;
+            n += 1;
+          } else if (t < tokens.length && tokens[t] === "*") {
+            star = t;
+            resume = n;
+            t += 1;
+          } else if (star !== -1) {
+            t = star + 1;
+            resume += 1;
+            n = resume;
+          } else return false;
+        }
+        while (t < tokens.length && tokens[t] === "*") t += 1;
+        return t === tokens.length;
+      };
+      const globMayName = (): boolean => wildcards > Math.max(0, ...PACKAGE_WORDS.map((name) => name.length)) || PACKAGE_WORDS.some(mayName);
       const wordMarks = (allMarks[segment] ?? []).slice(k);
       const markOf = (at: number): WordMark => wordMarks[at] ?? { first: -1, last: 0, kinds: "" };
       // A glob or brace form can give a word that opens with a dash only where its literal text before it is empty or
@@ -2816,7 +2914,7 @@ export function unattendedPushVerdict(
         if (at > 0) return /[ep]/.test(mark.kinds) || (/[gb]/.test(mark.kinds) && dashes(at));
         return (
           launchesUnread ||
-          (mark.last > cut && (/[eb]/.test(mark.kinds) || (/g/.test(mark.kinds) && PACKAGE_WORDS.some((name) => shape.test(name)))))
+          (mark.last > cut && (/[eb]/.test(mark.kinds) || (/g/.test(mark.kinds) && globMayName())))
         );
       });
       // A program word built by an expansion, or by a glob or brace form that can give a dash word, carries arguments

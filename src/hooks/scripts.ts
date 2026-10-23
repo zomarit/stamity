@@ -317,7 +317,10 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // Moved again 2026-10-23 on the a4 lane (review/98, review/99), by the measured size plus a small margin: 216,181
   // bytes / 4,700 lines (copilot, generated), past both rows, because round 7 reads a launcher as one rule with bun's
   // and deno's verbs. 216,181 + 2,955 = 219,136 bytes; 4,700 + 100 = 4,800 lines.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 219_136, lines: 4_800 },
+  // Moved again 2026-10-23 on the a4 lane (review/101, review/102), by the measured size plus a small margin: 221,151
+  // bytes / 4,832 lines (copilot, generated), past both rows, because round 9 matches a program word's glob with no
+  // regular expression and counts a word's braces once. 221,151 + 3,105 = 224,256 bytes; 4,832 + 96 = 4,928 lines.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 224_256, lines: 4_928 },
 };
 
 /** One generated script, ready for an adapter to place and register. */

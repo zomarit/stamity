@@ -3397,18 +3397,44 @@ describe("a launcher's settling word that names this package by its last part (a
   });
 });
 
-describe("the reading's work stays linear in the line's length (a4, review/100's integration note)", () => {
+describe("the reading's work stays linear in the line's length (a4, review/101, review/102)", () => {
   const DEFAULT = { ...ON_FEATURE, stricterThanDefault: false };
+  /**
+   * The bound, measured on the lane's machine under load (2026-10-23): the linear reading takes at most 0.72 s on these
+   * lines (0.46 s, 0.55 s, under 1 ms, 0.72 s), so 8 s is over ten times that, well under the guard's 30 s hook timeout;
+   * the old readings take about 110 s, 140 s, 110 s and 68 s on them (each measured at a smaller size and grown by its
+   * order), so each old reading is far past the bound.
+   */
+  const BOUND_MS = 8_000;
 
-  // Red on f7181e5c: each opening scanned to the line's end, so a long run of them took quadratic time.
+  // Red on b4a700fb for the last two (review/102); on f7181e5c for the first two (review/101).
   it.each([
-    ["a long run of brace openings with no blank", () => `stamity sync ${"{".repeat(60_000)}`],
-    ["a long run of parameter openings with no closing", () => `stamity sync ${"${".repeat(30_000)}`],
-  ])("reads %s quickly and fails closed", (_, build) => {
+    ["a long run of brace openings with no blank", () => `stamity sync ${"{".repeat(120_000)}`],
+    ["a long run of parameter openings with no closing", () => `stamity sync ${"${".repeat(60_000)}`],
+    ["a program word of many wildcards and a tail no package word holds", () => `/usr/bin/${"*".repeat(64)}q sync --loosen`],
+    ["a long word with more brace openings than closings before its closings", () => `stamity sync x${"{".repeat(60_000)}${"}".repeat(60_000)} --loosen`],
+  ])("reads %s within the bound and fails closed", (_, build) => {
     const command = build();
     const started = performance.now();
     const verdict = personOnlyVerdict(command, DEFAULT);
-    expect(performance.now() - started).toBeLessThan(3_000);
+    expect(performance.now() - started).toBeLessThan(BOUND_MS);
     expect(verdict).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+});
+
+describe("a program word's glob matched with no regular expression (a4, review/102)", () => {
+  const DEFAULT = { ...ON_FEATURE, stricterThanDefault: false };
+
+  it.each([
+    ["a class that may name the second bin", "/usr/bin/[s]t \"$F\""],
+    ["stars around a package word's letters", "/usr/bin/*tam*y \"$F\""],
+    // Red on b4a700fb: more wildcards than the longest package word has characters read as another program.
+    ["more wildcards than the longest package word has characters", "/usr/bin/????????q \"$F\""],
+  ])("asks for %s, a program the guard cannot settle", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+
+  it("runs a few wildcards whose tail no package word holds", () => {
+    expect(personOnlyVerdict("/usr/bin/***q \"$F\"", DEFAULT)).toEqual({ deny: false });
   });
 });
