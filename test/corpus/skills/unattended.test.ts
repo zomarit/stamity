@@ -93,7 +93,11 @@ const VERB_FORMS: readonly { unit: string; form: string }[] = [
   { unit: "a6", form: "`stamity run land --run <id> --ready --wait 8 --json`" },
   // TEST CHANGE, justified (fix round 4, review/110; REQ-FLOW-144): the approval names the head commit the person was
   // shown, `--approved <sha>`, so a commit pushed after the question is never landed on that yes.
-  { unit: "a6", form: "`stamity run land --run <id> --approved <sha> --json`" },
+  // TEST CHANGE, justified (fix round 5, review/111; REQ-FLOW-144): an `asks` outcome comes before the ready mark, so
+  // the approved line also passes `--ready`, or the verb refuses the still-draft pull request; the walk's fresh read
+  // joins, the line the question takes its reasons and head from.
+  { unit: "a6", form: "`stamity run land --run <id> --ready --approved <sha> --json`" },
+  { unit: "a6", form: "`stamity run land --run <id> --ready --json`" },
   { unit: "a1", form: "`--drop-held <path...>`" },
 ];
 
@@ -836,12 +840,16 @@ describe("st-unattended — the ask rule, the run verb's line and the walk's act
       // yes to its row, the guard's ask a second check, and the call's own outcome is stated.
       // TEST CHANGE, justified (fix round 4, review/110; REQ-FLOW-144): the question names every reason and the head
       // commit, the flag carries that commit from the `asks` JSON and no other value, and a moved head is asked again.
-      "At the walk, a merge held on a `refused` outcome is retried by a plain `run land`; one held on an `asks` outcome is put to the person as one numbered question naming the pull request, every reason in `asks.reasons` and the head commit `pr.head`, and only on yes runs as `stamity run land --run <id> --approved <sha> --json`, alone on its line, `<sha>` that `asks` JSON's `pr.head` and never another value, where the guard asks again on that line; this skill passes `--approved` on no other line.",
+      // TEST CHANGE, justified (fix round 5, review/111; REQ-FLOW-144): the approved line carries `--ready`; the retry
+      // names the land step's own line; the question's reasons and head come from a fresh `--ready --json` read.
+      "At the walk, a merge held on a `refused` outcome is retried with the land step's own line, `stamity run land --run <id> --ready --wait 8 --json`; one held on an `asks` outcome takes its reasons and head from a fresh `stamity run land --run <id> --ready --json` (the overnight `asks` JSON is not kept), is put to the person as one numbered question naming the pull request, every reason in `asks.reasons` and the head commit `pr.head`, and only on yes runs as `stamity run land --run <id> --ready --approved <sha> --json`, alone on its line, `<sha>` that `asks` JSON's `pr.head` and never another value, where the guard asks again on that line; this skill passes `--approved` on no other line.",
     );
     expect(walk).toContain(
-      "That call's `landed` outcome writes its `## Decisions` row; its `asks` or `refused` keeps the held row for the next walk, and a `refused` whose reason is a moved head means a commit landed after the question, so the row is asked again from a fresh `run land`, never with the old `<sha>`.",
+      "That call's `landed` outcome writes its `## Decisions` row; its `asks` or `refused` keeps the held row for the next walk, and a `refused` whose reason is a moved head means a commit landed after the question, so the row is asked again with the reasons and `pr.head` of a fresh `stamity run land --run <id> --ready --json`, never with the old `<sha>`.",
     );
     expect(walk).not.toContain("`stamity run land --run <id> --approved --json`");
+    expect(walk).not.toContain("`stamity run land --run <id> --approved <sha> --json`");
+    expect(walk).not.toContain("retried by a plain `run land`");
     expect(walk).not.toContain("never by the approve prompt");
     // The flag appears only on that walk line and in the ending's "never passed" clause.
     const raw = (await load()).parsed.body;

@@ -1549,12 +1549,16 @@ describe("/st-work — Prove", () => {
     // the head commit; the flag carries that commit, `--approved <sha>`, from the `asks` JSON and no other value; a
     // moved head means a commit landed after the question, so the person is asked again, never with the old sha.
     const approved =
-      "On `asks` the close first asks the person one numbered question naming the pull request, every reason in `asks.reasons` and the head commit `pr.head`, 1 merge it now · 2 leave it held, `Default if no response: leave it held`; only on 1 does it run `stamity run land --run <run-id> --approved <sha> --json`, alone on its line, `<sha>` that `asks` JSON's `pr.head` and never another value, where the guard asks again on that line.";
+      "On `asks` the close first asks the person one numbered question naming the pull request, every reason in `asks.reasons` and the head commit `pr.head`, 1 merge it now · 2 leave it held, `Default if no response: leave it held`; only on 1 does it run `stamity run land --run <run-id> --ready --approved <sha> --json`, alone on its line, `<sha>` that `asks` JSON's `pr.head` and never another value, where the guard asks again on that line.";
     expect(qa).toContain(approved);
     expect(qa).toContain(
-      "That call's `landed` outcome writes its `## Decisions` row; its `asks` or `refused` keeps the held row, and a `refused` hold is retried by the next walk's plain `run land`; a `refused` whose reason is a moved head means a commit landed after the question, so the person is asked again, never with the old `<sha>`.",
+      "That call's `landed` outcome writes its `## Decisions` row; its `asks` or `refused` keeps the held row, and a `refused` hold is retried by the next walk with the land step's own line, `stamity run land --run <run-id> --ready --wait 8 --json`; a `refused` whose reason is a moved head means a commit landed after the question, so the person is asked again with the reasons and `pr.head` of a fresh `stamity run land --run <run-id> --ready --json`, never with the old `<sha>`.",
     );
+    // TEST CHANGE, justified (fix round 5, review/111; REQ-FLOW-144): the approved line carries `--ready`, the walk's retry
+    // is the land step's own line, and a moved head is re-asked from a fresh `--ready --json` read.
     expect(qa).not.toContain("`stamity run land --run <run-id> --approved --json`");
+    expect(qa).not.toContain("`stamity run land --run <run-id> --approved <sha> --json`");
+    expect(qa).not.toContain("the next walk's plain `run land`");
     expect(qa).not.toContain("On `asks` the close then runs `stamity run land");
     expect(qa.indexOf("`stamity run land --run <run-id> --ready --wait 8 --json`")).toBeLessThan(qa.indexOf(approved));
     expect(qa).not.toContain("the land call returned nothing`) that the next walk retries.");
