@@ -481,9 +481,10 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
    * brace attached to a word starts or ends a PowerShell script block (`{git push}`), a brace a word opened (`@{1}`,
    * `${x}`) staying part of it; with `pwsh`, PowerShell's escape (review/194): the backtick escapes, a backslash is a
    * plain character. `marks` holds, per word, the index just past the last character the shell expands or globs there
-   * (`$`, a backtick, a substitution or group, `*`, `?`, `[`, a `{` opening a brace expansion), unquoted or inside
-   * double quotes, or 0 where none is (review/37, review/45): a single-quoted, ANSI-C-quoted or escaped one is literal
-   * text. A `${…}` counts to its closing brace, so its text is never read as literal.
+   * (`$`, a backtick, a substitution or group, `*`, `?`, `[`, a `{` opening a brace expansion, and PowerShell's
+   * splat, an `@` opening a word), unquoted or inside double quotes, or 0 where none is (review/37, review/45): a
+   * single-quoted, ANSI-C-quoted or escaped one is literal text. A `${…}` counts to its closing brace, so its text is
+   * never read as literal.
    */
   function splitLine(text: string, blocks: boolean, pwsh: boolean): { segments: string[][]; nested: string[]; marks: number[][] } {
     const segments: string[][] = [];
@@ -675,7 +676,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         cut();
         i += 1;
       } else {
-        if ("$*?[".includes(ch) || (ch === "{" && braceExpands(i))) expands(i);
+        if ("$*?[".includes(ch) || (ch === "{" && braceExpands(i)) || (pwsh && ch === "@" && !inWord)) expands(i);
         word += ch;
         inWord = true;
         i += 1;
@@ -2147,9 +2148,10 @@ export function unattendedPushVerdict(
    * brace attached to a word starts or ends a PowerShell script block (`{git push}`), a brace a word opened (`@{1}`,
    * `${x}`) staying part of it; with `pwsh`, PowerShell's escape (review/194): the backtick escapes, a backslash is a
    * plain character. `marks` holds, per word, the index just past the last character the shell expands or globs there
-   * (`$`, a backtick, a substitution or group, `*`, `?`, `[`, a `{` opening a brace expansion), unquoted or inside
-   * double quotes, or 0 where none is (review/37, review/45): a single-quoted, ANSI-C-quoted or escaped one is literal
-   * text. A `${…}` counts to its closing brace, so its text is never read as literal.
+   * (`$`, a backtick, a substitution or group, `*`, `?`, `[`, a `{` opening a brace expansion, and PowerShell's
+   * splat, an `@` opening a word), unquoted or inside double quotes, or 0 where none is (review/37, review/45): a
+   * single-quoted, ANSI-C-quoted or escaped one is literal text. A `${…}` counts to its closing brace, so its text is
+   * never read as literal.
    */
   function splitLine(text: string, blocks: boolean, pwsh: boolean): { segments: string[][]; nested: string[]; marks: number[][] } {
     const segments: string[][] = [];
@@ -2341,7 +2343,7 @@ export function unattendedPushVerdict(
         cut();
         i += 1;
       } else {
-        if ("$*?[".includes(ch) || (ch === "{" && braceExpands(i))) expands(i);
+        if ("$*?[".includes(ch) || (ch === "{" && braceExpands(i)) || (pwsh && ch === "@" && !inWord)) expands(i);
         word += ch;
         inWord = true;
         i += 1;

@@ -2854,6 +2854,7 @@ describe("a stamity command's words the shell still expands (a4, review/37, revi
     ["a run under xargs", "echo --loosen | xargs stamity sync"],
     ["a run under xargs with a placeholder", "echo --loosen | xargs -I % stamity sync %"],
     ["a run under xargs through a runner", "echo --loosen | xargs npx --no stamity sync"],
+    ["a PowerShell splat", "pwsh -Command 'stamity sync @opts'"],
   ])("asks for %s, which may spell `--loosen`", (_, command) => {
     for (const ctx of [STRICT, DEFAULT]) {
       expect(personOnlyVerdict(command, ctx), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
@@ -2865,6 +2866,8 @@ describe("a stamity command's words the shell still expands (a4, review/37, revi
     expect(verdict).toMatchObject({ deny: true, act: expect.stringContaining("run under `xargs`") });
     expect(personOnlyVerdict("ls | xargs echo", DEFAULT)).toEqual({ deny: false });
     expect(personOnlyVerdict("stamity sync {a}", DEFAULT)).toEqual({ deny: false });
+    // A POSIX shell reads an `@` as a plain character.
+    expect(personOnlyVerdict("stamity sync @opts", DEFAULT)).toEqual({ deny: false });
   });
 });
 
