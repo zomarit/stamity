@@ -1916,3 +1916,21 @@ describe("the guard's launcher reading in every mode (a4, review/99)", () => {
     for (const command of UNSETTLED) expect(decide(tool, guard, command).deny, `${tool} unattended: ${command}`).toBe(true);
   });
 });
+
+describe("the guard's reading of the engine's bin under a filled-in folder (a4, review/100)", () => {
+  // Red on f7181e5c: the launched bin settled the program as another one, so the loosening ran unasked.
+  it.each(TOOLS)("%s: asks attended, and refuses unattended and for a sub-agent, with a literal or a filled-in flag", async (tool) => {
+    const guard = await placeGuard(tool);
+    const lines = ["node \"$BIN_DIR/st\" sync --loosen", "node \"$BIN_DIR/stamity\" sync \"$FLAG\""];
+    for (const command of lines) {
+      const verdict = personOnlyVerdict(command, BAKED_DEFAULT);
+      if (!verdict.deny) throw new Error(`${command} reads as no act`);
+      expect(decide(tool, guard, command), `${tool}: ${command}`).toEqual(expectedAttended(tool, verdict));
+      const helper = JSON.stringify({ ...JSON.parse(payload(tool, command)), agent_id: "a1" });
+      expect(clientDecision(tool, run(guard, helper), `${tool} helper: ${command}`).deny).toBe(true);
+    }
+    expect(decide(tool, guard, "node \"$ROOT/node_modules/.bin/vitest\" run \"$F\"")).toEqual({ deny: false });
+    await getRepo().seedFiles({ ".stamity/runs/2026-10-23_x/record.md": record("in progress", "unattended") });
+    for (const command of lines) expect(decide(tool, guard, command).deny, `${tool} unattended: ${command}`).toBe(true);
+  });
+});

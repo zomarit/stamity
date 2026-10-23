@@ -542,8 +542,13 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     const expands = (at: number, kinds: string): void => {
       let end = at + 1;
       if (text[at] === "$" && text[at + 1] === "{") {
+        // Bounded, so the reading stays linear in the line's length: a span past the bound runs to the line's end.
         let level = 0;
         while (end < text.length) {
+          if (end - at > 1024) {
+            end = text.length;
+            break;
+          }
           if (text[end] === "{") level += 1;
           else if (text[end] === "}") level -= 1;
           end += 1;
@@ -556,6 +561,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     const braceExpands = (at: number): boolean => {
       let quoted = "";
       for (let j = at + 1; j < text.length; j += 1) {
+        // Bounded, so the reading stays linear in the line's length: a form past the bound reads as an expansion.
+        if (j - at > 1024) return true;
         const c = text[j] ?? "";
         if (quoted !== "") {
           if (c === quoted) quoted = "";
@@ -729,6 +736,11 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   const spills = new Set<string[]>();
   /** The commands run under `xargs`, which adds arguments from its input that the line never shows (review/45). */
   const fed = new Set<string[]>();
+  /**
+   * Per launcher command whose settling word's literal last path part is one of this package's words (review/100, the
+   * review/38 reading), that word's index: the command runs this package, its folder filled in or not.
+   */
+  const launched = new Map<string[], number>();
 
   /**
    * Each simple command's words, its program word first and normalized; `sh -c` and `eval` text read too. With `pwsh`,
@@ -910,6 +922,9 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
           }
         }
         const before = settledAt === -1 ? cmd.length : settledAt;
+        if (launches && settledAt !== -1 && !lastPartMarked(settledAt) && PACKAGE_WORDS.includes(programName(cmd[settledAt] ?? ""))) {
+          launched.set(cmd, settledAt);
+        }
         launchesUnread = settlingMarked || cmd.slice(1, before).some((_, index) => markOf(index + 1).kinds !== "" && !valueOf(index + 1));
       }
       const unsure = cmd.map((_, at) => {
@@ -1241,6 +1256,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       );
     };
     if (!basename && named(program)) return cmd.slice(1);
+    const launchedAt = basename ? undefined : launched.get(cmd);
+    if (launchedAt !== undefined) return cmd.slice(launchedAt + 1);
     if (!["node", "nodejs", "bun", "deno", "tsx", ...MANAGERS].includes(program)) return null;
     if (basename) {
       const at = cmd.findIndex((word, index) => index > 0 && /(?:^|[\\/])cli\.[cm]?[jt]s$/i.test(word));
@@ -2408,8 +2425,13 @@ export function unattendedPushVerdict(
     const expands = (at: number, kinds: string): void => {
       let end = at + 1;
       if (text[at] === "$" && text[at + 1] === "{") {
+        // Bounded, so the reading stays linear in the line's length: a span past the bound runs to the line's end.
         let level = 0;
         while (end < text.length) {
+          if (end - at > 1024) {
+            end = text.length;
+            break;
+          }
           if (text[end] === "{") level += 1;
           else if (text[end] === "}") level -= 1;
           end += 1;
@@ -2422,6 +2444,8 @@ export function unattendedPushVerdict(
     const braceExpands = (at: number): boolean => {
       let quoted = "";
       for (let j = at + 1; j < text.length; j += 1) {
+        // Bounded, so the reading stays linear in the line's length: a form past the bound reads as an expansion.
+        if (j - at > 1024) return true;
         const c = text[j] ?? "";
         if (quoted !== "") {
           if (c === quoted) quoted = "";
@@ -2595,6 +2619,11 @@ export function unattendedPushVerdict(
   const spills = new Set<string[]>();
   /** The commands run under `xargs`, which adds arguments from its input that the line never shows (review/45). */
   const fed = new Set<string[]>();
+  /**
+   * Per launcher command whose settling word's literal last path part is one of this package's words (review/100, the
+   * review/38 reading), that word's index: the command runs this package, its folder filled in or not.
+   */
+  const launched = new Map<string[], number>();
 
   /**
    * Each simple command's words, its program word first and normalized; `sh -c` and `eval` text read too. With `pwsh`,
@@ -2776,6 +2805,9 @@ export function unattendedPushVerdict(
           }
         }
         const before = settledAt === -1 ? cmd.length : settledAt;
+        if (launches && settledAt !== -1 && !lastPartMarked(settledAt) && PACKAGE_WORDS.includes(programName(cmd[settledAt] ?? ""))) {
+          launched.set(cmd, settledAt);
+        }
         launchesUnread = settlingMarked || cmd.slice(1, before).some((_, index) => markOf(index + 1).kinds !== "" && !valueOf(index + 1));
       }
       const unsure = cmd.map((_, at) => {
@@ -3107,6 +3139,8 @@ export function unattendedPushVerdict(
       );
     };
     if (!basename && named(program)) return cmd.slice(1);
+    const launchedAt = basename ? undefined : launched.get(cmd);
+    if (launchedAt !== undefined) return cmd.slice(launchedAt + 1);
     if (!["node", "nodejs", "bun", "deno", "tsx", ...MANAGERS].includes(program)) return null;
     if (basename) {
       const at = cmd.findIndex((word, index) => index > 0 && /(?:^|[\\/])cli\.[cm]?[jt]s$/i.test(word));

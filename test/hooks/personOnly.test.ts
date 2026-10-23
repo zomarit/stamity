@@ -3369,3 +3369,46 @@ describe("a launcher read as one rule with its verbs (a4, review/99)", () => {
     expect(personOnlyVerdict(command, DEFAULT), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
   });
 });
+
+describe("a launcher's settling word that names this package by its last part (a4, review/100)", () => {
+  const CONSUMER = { ...ON_FEATURE, stricterThanDefault: true, ownRepository: false };
+
+  // Red on f7181e5c: the extensionless settling word settled the program as another one, so nothing asked.
+  it.each([
+    ["the engine's bin under a filled-in folder with a literal loosen flag", "node \"$BIN_DIR/stamity\" sync --loosen"],
+    ["the second bin under a filled-in folder with a filled-in loosen flag", "node \"$BIN_DIR/st\" sync \"$FLAG\""],
+    ["the engine's bin under a filled-in folder with a full clean", "tsx \"$BIN_DIR/st\" clean"],
+    ["the engine's bin given to bun under a filled-in folder", "bun \"$BIN_DIR/st\" sync --loosen"],
+    ["the engine's bin given to deno's run form under a filled-in folder", "deno run \"$BIN_DIR/st\" init --force"],
+    ["a renamed fork's bin under a filled-in folder", "node \"$BIN_DIR/forge-cli\" sync \"$FLAG\""],
+  ])("asks for %s", (_, command) => {
+    const ctx = /forge/.test(command) ? { ...CONSUMER, packageWords: ["stamity", "st", "forge-cli"] } : CONSUMER;
+    expect(personOnlyVerdict(command, ctx), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+
+  it.each([
+    ["an extensionless non-engine bin under a filled-in folder", "node \"$ROOT/node_modules/.bin/vitest\" run \"$F\""],
+    ["bun's package script with a filled-in argument", "bun run test \"$F\""],
+    ["bun's test runner with a filled-in file", "bun test \"$FILE\""],
+    ["deno's task runner with a filled-in argument", "deno task build \"$X\""],
+    ["the engine's bin under a filled-in folder with a literal verb", "node \"$BIN_DIR/st\" sync --json"],
+  ])("runs %s", (_, command) => {
+    expect(personOnlyVerdict(command, CONSUMER), command).toEqual({ deny: false });
+  });
+});
+
+describe("the reading's work stays linear in the line's length (a4, review/100's integration note)", () => {
+  const DEFAULT = { ...ON_FEATURE, stricterThanDefault: false };
+
+  // Red on f7181e5c: each opening scanned to the line's end, so a long run of them took quadratic time.
+  it.each([
+    ["a long run of brace openings with no blank", () => `stamity sync ${"{".repeat(60_000)}`],
+    ["a long run of parameter openings with no closing", () => `stamity sync ${"${".repeat(30_000)}`],
+  ])("reads %s quickly and fails closed", (_, build) => {
+    const command = build();
+    const started = performance.now();
+    const verdict = personOnlyVerdict(command, DEFAULT);
+    expect(performance.now() - started).toBeLessThan(3_000);
+    expect(verdict).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+});
