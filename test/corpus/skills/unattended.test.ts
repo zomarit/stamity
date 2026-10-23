@@ -461,7 +461,14 @@ describe("st-unattended — checkpoints and the ending (REQ-FLOW-092, REQ-FLOW-0
     expect(text).toContain(
       "Exit 1 leaves the pull request open, and each reason is held: the `asks` outcome's `asks.reason` and the `refused` outcome's `notDone[]` each become a `held` row reading `merge waits on: <reasons>`, and a call that returns no outcome is held as `merge waits on: the land call returned nothing`.",
     );
-    expect(text).toContain("The run writes those rows into `morning.md` with its file tools, and the next walk retries `run land`.");
+    // TEST CHANGE, justified (plan 022 file 1, unit a8, sign-off build/6; REQ-FLOW-144): this pinned "The run writes those
+    // rows into `morning.md` with its file tools, and the next walk retries `run land`." What moved: on `asks` and
+    // `refused` the land verb writes the reasons into the run's own pull request body, so they reach the pull request
+    // after `run end` has pushed it; the summary list keeps them locally. The old sentence is asserted gone.
+    expect(text).toContain(
+      "On `asks` and `refused` the verb itself writes `merge waits on: <reasons>` into the pull request's body, so the reasons reach the pull request; the run writes the rows into `morning.md` with its file tools, which keeps them locally, and the next walk retries `run land`.",
+    );
+    expect(text).not.toContain("The run writes those rows into `morning.md` with its file tools, and the next walk");
     expect(text).toContain("No land runs after a `run end` that exits 1 or a `--refused` end.");
     expect(text).toContain("It names `.stamity/runs/<id>/morning.md` too, which holds the land step's rows.");
   });
