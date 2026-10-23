@@ -279,8 +279,10 @@ export interface PersonOnlyContext {
   /** The remote a push naming none uses on this place's branch (`pushRemote`, `remote.pushDefault`, `remote`, `origin`); `null` where unread. */
   readonly pushRemote?: string | null;
   /**
-   * The repository `origin`'s push URL names where it is not its fetch URL (a `pushurl`, or a `pushInsteadOf` rewrite),
-   * as {@link originRepo} is written; `null` where a push to origin goes where a fetch does (review/129).
+   * The repository a push to `origin` reaches where that is not simply its fetch URL (a `pushurl`, a `pushInsteadOf`
+   * rewrite, or more than one URL, every one of which git pushes to), as {@link originRepo} is written; `""` where those
+   * URLs name more than one repository or the configuration is read only in part; `null` where a push goes where a
+   * fetch does (review/129, the lens's W-2).
    */
   readonly originPush?: string | null;
   /**
@@ -1713,6 +1715,11 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     return verdict;
   };
 
+  /**
+   * What stands before an `@` that names a file, never a person (review/143): curl's or wget's data, form or upload
+   * option, or gh's typed field or input, its key and a quote between; read over a bounded window, so the scan stays linear.
+   */
+  const FILE_AT = /(?:^|[\s'"])(?:-[A-Za-z]*[dFT]|--(?:data(?:-binary|-ascii|-urlencode)?|json|form|upload-file|field|input))(?:[\s=]+|=?)['"]?(?:[\w.[\]-]+=)?$/;
   /** The repository's own apps (REQ-FLOW-134): a mention of one reaches no outside party. */
   const IN_REPO_APPS = new Set(["codex", "dependabot", "copilot", "claude"]);
   /**
@@ -1726,7 +1733,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         const close = text.indexOf("`", at + 1);
         if (close === -1) continue;
         at = close;
-      } else if (text[at] === "@" && !/\w/.test(text[at - 1] ?? "")) {
+      } else if (text[at] === "@" && !/\w/.test(text[at - 1] ?? "") && !FILE_AT.test(text.slice(Math.max(0, at - 48), at))) {
         const login = /^[A-Za-z0-9][A-Za-z0-9-]*/.exec(text.slice(at + 1, at + 41))?.[0];
         if (login !== undefined && (!IN_REPO_APPS.has(login.toLowerCase()) || text[at + 1 + login.length] === "/")) return true;
       }
@@ -1823,8 +1830,9 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       if (word === null || (mark?.kinds ?? "") !== "" || /[$`]/.test(word)) return outside();
       if (word === "origin" && ctx.ownCheckout !== false) {
         const moved = ctx.originPush;
-        if (moved === undefined || moved === null || moved === origin) continue;
-        return outside();
+        if (moved === undefined || moved === null) continue;
+        if (moved === "" || moved !== origin) return outside();
+        continue;
       }
       const key = /[:/\\]/.test(word) || word === "." ? repoKey(word, "github.com") : (ctx.remoteRepo?.(word) ?? "");
       if (key === "" || key !== origin) return outside();
@@ -1832,7 +1840,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   };
   /**
    * `remote-write` (REQ-FLOW-134, review/129): a `git remote` write (`add`, `rename`, `set-url`, `remove`, `rm`,
-   * `set-head`, `set-branches`) or a `git config` write naming a `remote.*` or `url.*` key or section, which moves the
+   * `set-head`, `set-branches`) or a `git config` write naming a `remote.*`, `url.*`, `include.*` or `includeIf.*` key
+   * or section (an include can carry a remote, the lens's W-2), which moves the
    * origin later writes are held to. A config call reads only where it carries a read option or subcommand (`--get`,
    * `--list`, `get`, `list`, …) or names a key and no value; `--edit` writes whatever it opens. The guard runs the act on
    * the main thread and refuses it for a sub-agent; unattended the push rule refuses it.
@@ -1851,9 +1860,9 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       deny("remote-write", "Editing the git configuration (`git config --edit`), which may write a remote or a URL rewrite");
       return;
     }
-    const keyed = args.findIndex((arg) => /^(?:remote|url)\./i.test(arg));
+    const keyed = args.findIndex((arg) => /^(?:remote|url|include|includeif)\.|^include(?:if)?$/i.test(arg));
     if (keyed === -1) return;
-    const reads = args.some((arg) => /^--(?:get(?:-all|-regexp|-urlmatch|-color(?:bool)?)?|list|show-origin|show-scope|name-only|null)$/.test(arg) || arg === "-l" || arg === "-z");
+    const reads = args.some((arg) => /^--(?:get(?:-all|-regexp|-urlmatch|-color(?:bool)?)?|list|show-origin|show-scope|name-only)$/.test(arg) || arg === "-l");
     const subcommand = args.find((arg) => !arg.startsWith("-")) ?? "";
     const writes = args.some((arg) => /^--(?:unset(?:-all)?|add|replace-all|rename-section|remove-section)$/.test(arg)) ||
       ["set", "unset", "rename-section", "remove-section"].includes(subcommand);
@@ -2600,10 +2609,12 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
             }
           }
         }
-        // A body curl or wget reads from stdin in any spelling (`-d @-`, `@/dev/stdin`, `-T -`, a joined value), or one
-        // holding a word the shell fills in, whose JSON strings the line does not show (review/126).
+        // A body curl or wget reads from stdin in any spelling (`-d @-`, `@/dev/stdin`, `-T -`, a joined value), or a
+        // body word the shell fills in, whose JSON strings the line does not show (review/126); a token header or another
+        // filled-in word is no body (review/143).
+        const DATA = /^(?:-[A-Za-z]*d|--(?:data(?:-binary|-ascii|-urlencode)?|json|post-data|body-data))$/;
         whole ||= cmd.some((word) => /(?:^|[=@])(?:-|\/dev\/stdin|\/dev\/fd\/0|\/proc\/self\/fd\/0)$/.test(word)) ||
-          line.some((_, at) => at > 0 && shellFilled(at));
+          line.some((word, at) => at > 0 && shellFilled(at) && (DATA.test(line[at - 1] ?? "") || /^(?:-d|--(?:data(?:-binary|-ascii|-urlencode)?|json|post-data|body-data)=)/.test(word)));
       }
       if (whole ? (lineMentions ??= mentions(command)) : prose.some(mentions)) {
         deny("outside-write", `A body or title naming a person (an \`@\` mention), which reaches them (\`${what}\`)`);
@@ -2868,11 +2879,23 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     const closing = (group === "pr" || group === "issue") && (sub === "close" || sub === "reopen");
     const creating = group === "pr" && sub === "create" ? "ra" : group === "issue" && sub === "create" ? "a" : "";
     // What each option the reader reads takes (review/135): `R` a repository, `b` prose (a body, title, notes, subject
-    // or, on close and reopen, a comment), `F` a body file, `r` a reviewer or an assignee. A short word is a cluster:
-    // letters the reader does not read are booleans, and the first letter it reads takes the rest of the cluster, or
-    // the next word, as gh's option parser reads it.
+    // or, on close and reopen, a comment), `F` a body file, `r` a reviewer or an assignee. A short word is a cluster read
+    // by gh 2.102.0's own options for the subcommand (its help, `GH_SHORT`): a boolean letter is passed over, and the
+    // first letter taking a value takes the rest of the cluster or the next word, read where the reader reads it; a
+    // letter that gh does not list leaves the rest of the line unread, so the line asks (the lens's W-1).
     const SHORT = new Map<string, string>([["R", "R"], ["b", "b"], ["t", "b"], ["n", "b"], ["F", "F"],
       ...(closing ? [["c", "b"] as [string, string]] : []), ...[...creating].map((letter): [string, string] => [letter, "r"])]);
+    // gh 2.102.0's short options for each write subcommand it reads (`gh <group> <sub> --help`): the booleans, then the
+    // letters taking a value; a subcommand not listed takes only `-R` and `-h`.
+    const GH_SHORT = "pr create:defw:aBbFHlmprTt|pr edit::BbFmt|pr comment:ew:bF|pr review:acr:bF|pr merge:dmrs:AbFt|pr close:d:c|" +
+      "pr reopen::c|pr lock::r|pr revert:d:bFt|issue create:ew:abFlmpTt|issue edit::bFmt|issue comment:ew:bF|issue close::cr|" +
+      "issue reopen::c|issue develop:cl:bn|issue lock::r|release create:dp:nFt|release edit::nFt|release delete:y:|" +
+      "release delete-asset:y:|workflow run::Ffr|run rerun:d:j|label create:f:cd|label edit::cdn|label clone:f:|" +
+      "cache delete:a:r|secret set:u:abeforv|secret delete:u:aeo|variable set::beforv|variable delete::eo";
+    const flags = new Map(GH_SHORT.split("|").map((entry): [string, [string, string]] => {
+      const [name = "", bools = "", values = ""] = entry.split(":");
+      return [name, [`${bools}h`, `${values}R`]];
+    }));
     const LONG = new Map<string, string>([["--repo", "R"], ["--branch-repo", "R"], ["--body", "b"], ["--title", "b"], ["--notes", "b"],
       ["--subject", "b"], ...(closing ? [["--comment", "b"] as [string, string]] : []), ["--body-file", "F"], ["--notes-file", "F"],
       ["--reviewer", "r"], ["--add-reviewer", "r"], ["--assignee", "r"], ["--add-assignee", "r"]]);
@@ -2898,15 +2921,19 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         continue;
       }
       if (/^-[^-]/.test(word)) {
+        const [bools, values] = flags.get(`${group} ${sub}`) ?? ["h", "R"];
         for (let c = 1; c < word.length; c += 1) {
-          const kind = SHORT.get(word[c] ?? "");
-          if (kind === undefined) continue;
-          const rest = word.slice(c + 1).replace(/^=/, "");
-          if (rest !== "") take(kind, rest, k);
-          else {
-            take(kind, cmd[k + 1] ?? "", k + 1);
-            k += 1;
+          const letter = word[c] ?? "";
+          if (bools.includes(letter)) continue;
+          if (!values.includes(letter)) {
+            targets.push("");
+            k = cmd.length;
+            break;
           }
+          const kind = SHORT.get(letter);
+          const rest = word.slice(c + 1).replace(/^=/, "");
+          if (rest === "") k += 1;
+          if (kind !== undefined) take(kind, rest === "" ? (cmd[k] ?? "") : rest, k);
           break;
         }
         continue;

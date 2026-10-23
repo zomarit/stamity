@@ -4262,3 +4262,65 @@ describe("the outside-party readers' fourth round (a4c, review/129, review/135)"
     expect(rule(command.replace(/^(?:export )?\w+=\S+;? /, "")), command).toBeNull();
   });
 });
+
+/**
+ * a4c fix round 4 (REQ-FLOW-134, review/143, the lens's W-1 and W-2): a curl or wget line reads whole only for a body
+ * word the shell fills in, and a file's `@` is never a person; a cluster is read by gh's own short options, an unknown
+ * letter leaving the line unread; an include key written is a remote write. Each asking row is red on 121a3810 beside a
+ * row that runs on both.
+ */
+describe("the outside-party readers' fifth round (a4c, review/143, the lens's W-1 and W-2)", () => {
+  const ORIGIN = { ...ON_FEATURE, originRepo: "github.com/acme/app" };
+  const rule = (command: string, ctx: Parameters<typeof personOnlyVerdict>[1] = ORIGIN): string | null => {
+    const verdict = personOnlyVerdict(command, ctx);
+    return verdict.deny ? verdict.rule : null;
+  };
+  const API = "https://api.github.com/repos/acme/app/issues/1/comments";
+
+  it.each([
+    ["a curl write to the origin, its token from a variable and its body from a file", `curl -H "Authorization: Bearer $TOKEN" -X POST -d @body.json ${API}`, null],
+    ["a wget write to the origin, its token from a variable and its body from a file", `wget --header="Authorization: token $TOKEN" --post-file=body.json ${API}`, null],
+    ["a curl write whose body file's name reads like a login, beside a body the shell fills in", `T=t; curl -X POST -d @alice.json -d "{\\"title\\":\\"$T\\"}" ${API}`, null],
+    ["a curl body the shell fills in naming a person, its token from a variable", `B='@alice look'; curl -H "Authorization: Bearer $TOKEN" -X POST -d "{\\"body\\":\\"$B\\"}" ${API}`, "outside-write"],
+  ])("reads %s", (_, command, expected) => {
+    expect(rule(command), command).toBe(expected);
+  });
+
+  it.each([
+    ["a head value clustered before a repository option", "gh pr create -t t -b b -Hb -R other/repo"],
+    ["a base value clustered before a repository option", "gh pr create -t t -b b -Bb -R other/repo"],
+    ["a label value clustered before a repository option", "gh pr create -t t -b b -lb -R other/repo"],
+    ["a milestone value clustered before a repository option", "gh pr create -t t -b b -mb -R other/repo"],
+    ["a project value clustered before a repository option", "gh pr create -t t -b b -pb -R other/repo"],
+    ["a template value clustered before a repository option", "gh pr create -t t -b b -Tb -R other/repo"],
+    ["a head value clustered before a body option naming a person", "gh pr create -t t -Hb -b '@alice look'"],
+    ["an issue label clustered before a repository option", "gh issue create -t t -b b -lb -R other/repo"],
+    ["a letter gh does not list for the subcommand", "gh pr create -t t -b b -X"],
+  ])("asks for %s", (_, command) => {
+    expect(rule(command), command).toBe("outside-write");
+  });
+
+  it.each([
+    ["a draft pull request", "gh pr create -d -t t -b b"],
+    ["a draft flag clustered with the title letter", "gh pr create -dt t -b b"],
+    ["a head value clustered and then the origin named", "gh pr create -t t -b b -Hfeat -R acme/app"],
+    ["a review's comment boolean beside its body", "gh pr review 3 -c -b look"],
+  ])("runs %s", (_, command) => {
+    expect(rule(command), command).toBeNull();
+  });
+
+  it.each([
+    ["an include path written in the global file", "git config --global include.path extra.gitconfig", "remote-write"],
+    ["a conditional include path written", "git config includeIf.gitdir:/work/.path work.gitconfig", "remote-write"],
+    ["an include section removed", "git config --remove-section include", "remote-write"],
+    ["a remote URL written with NUL output asked for", "git config -z remote.origin.url https://github.com/other/repo.git", "remote-write"],
+    ["an include path read", "git config --get include.path", null],
+  ])("reads %s", (_, command, expected) => {
+    expect(rule(command), command).toBe(expected);
+  });
+
+  it("holds a push to origin outside where origin's push reading is unknown", () => {
+    expect(rule("git push -u origin feat/x", { ...ORIGIN, originPush: "" })).toBe("outside-write");
+    expect(rule("git push -u origin feat/x", { ...ORIGIN, originPush: null })).toBeNull();
+  });
+});

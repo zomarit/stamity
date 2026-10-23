@@ -4126,6 +4126,32 @@ const GUARD_GIT_REWRITES_MAX = 256;
 /**
  * The bounds on following a git configuration's includes (review/134): git's own depth, a file count and a byte total
  * across every file read, past any of which the reading is partial.
+ *
+ * The guard's git-configuration readers, documented here, where the build strips the text, so the emitted guard
+ * carries only a pointer to it:
+ *
+ * `configFiles`:
+ * The configuration files git merges for a git dir, in git's order (REQ-FLOW-134, review/128): the system file
+ * (GIT_CONFIG_SYSTEM, else /etc/gitconfig) unless GIT_CONFIG_NOSYSTEM is on, the global ones (GIT_CONFIG_GLOBAL, else
+ * the XDG file and ~/.gitconfig), then the repository's common config and the worktree's own.
+ *
+ * `configOf`:
+ * What git's merged configuration says about remotes (REQ-FLOW-134, review/128): per remote its first url and pushurl
+ * and its gh-resolved marker, per branch its remote and pushRemote, remote.pushDefault, and every url.<base>.insteadOf
+ * and pushInsteadOf rule. Includes are followed (review/134): include.path and every includeIf target, whatever its
+ * condition (a superset of what git reads), relative to the including file, ~/ from the home folder, at most
+ * INCLUDE_DEPTH_MAX deep, INCLUDE_FILES_MAX files and INCLUDE_BYTES_MAX bytes in all; a missing target reads as empty,
+ * as git reads it. partial where the reading may miss or misplace a remote: a file past CONFIG_MAX_BYTES or behind a
+ * link (/dev/null aside), a file it cannot read, a bound passed, an included file setting a remote, URL-rewrite or
+ * branch-remote key (its condition is not read), configuration the hook's environment sets (GIT_CONFIG_COUNT,
+ * GIT_CONFIG_PARAMETERS), or more than REWRITES_MAX URL rewrite rules.
+ *
+ * `ghDefaultOf`:
+ * Where a gh call naming no repository lands from a place (REQ-FLOW-134): GH_REPO in the hook's environment, else the
+ * remote a gh-resolved marker names (base, or an owner/repo on that remote's host), else the only remote, each URL as
+ * git rewrites it; "" where the place has no remote; null where the guard cannot tell: more than one remote and no
+ * marker, markers that disagree or that it cannot read, a partial configuration, a place it cannot read, or GH_HOST
+ * naming another host than that remote's.
  */
 const GUARD_GIT_INCLUDE_DEPTH_MAX = 10;
 const GUARD_GIT_INCLUDE_FILES_MAX = 64;
@@ -4281,7 +4307,8 @@ function helperRefusal(payload, act, rule) {
   const held = (reason) => ${held};
   const helper = helperCall(payload)${copilot ? " || HELPER_NAMES.some((name) => Object.hasOwn(payload, name))" : ""};
   if (!helper) return null;
-  return held(act + " is a person-only act (\`" + rule + "\`) and a sub-agent runs it: the autonomy setting runs it unasked on the main thread only (REQ-FLOW-137). Give the person the exact command.");
+  const why = rule === "remote-write" ? "it moves the origin later writes are held to, so it runs on the main thread only (REQ-FLOW-134)" : "the autonomy setting runs it unasked on the main thread only (REQ-FLOW-137)";
+  return held(act + " is a person-only act (\`" + rule + "\`) and a sub-agent runs it: " + why + ". Give the person the exact command.");
 }
 
 /**
@@ -4901,11 +4928,7 @@ function linesOf(name, tail) {
   return lines;
 }
 
-/**
- * The configuration files git merges for a git dir, in git's order (REQ-FLOW-134, review/128): the system file
- * (GIT_CONFIG_SYSTEM, else /etc/gitconfig) unless GIT_CONFIG_NOSYSTEM is on, the global ones (GIT_CONFIG_GLOBAL, else
- * the XDG file and ~/.gitconfig), then the repository's common config and the worktree's own.
- */
+/** The configuration files git merges for a git dir: see GUARD_GIT_INCLUDE_DEPTH_MAX in the engine. */
 function configFiles(dirs) {
   const env = process.env;
   const on = (value) => value !== undefined && !["", "0", "false", "no", "off"].includes(String(value).toLowerCase());
@@ -4923,17 +4946,7 @@ function configFiles(dirs) {
   return files;
 }
 
-/**
- * What git's merged configuration says about remotes (REQ-FLOW-134, review/128): per remote its first url and pushurl
- * and its gh-resolved marker, per branch its remote and pushRemote, remote.pushDefault, and every url.<base>.insteadOf
- * and pushInsteadOf rule. Includes are followed (review/134): include.path and every includeIf target, whatever its
- * condition (a superset of what git reads), relative to the including file, ~/ from the home folder, at most
- * INCLUDE_DEPTH_MAX deep, INCLUDE_FILES_MAX files and INCLUDE_BYTES_MAX bytes in all; a missing target reads as empty,
- * as git reads it. partial where the reading may miss or misplace a remote: a file past CONFIG_MAX_BYTES or behind a
- * link (/dev/null aside), a file it cannot read, a bound passed, an included file setting a remote, URL-rewrite or
- * branch-remote key (its condition is not read), configuration the hook's environment sets (GIT_CONFIG_COUNT,
- * GIT_CONFIG_PARAMETERS), or more than REWRITES_MAX URL rewrite rules.
- */
+/** What git's merged configuration says about remotes: see GUARD_GIT_INCLUDE_DEPTH_MAX in the engine. */
 function configOf(dirs) {
   const remotes = new Map();
   const branches = new Map();
@@ -4985,10 +4998,15 @@ function configOf(dirs) {
       if (kind === "remote" && sub === null) {
         if (key === "pushdefault") pushDefault = value;
       } else if (kind === "remote") {
-        const remote = remotes.get(sub) ?? { url: null, pushurl: null, resolved: null };
+        const remote = remotes.get(sub) ?? { url: null, pushurl: null, urls: [], pushurls: [], resolved: null };
         remotes.set(sub, remote);
-        if (key === "url") remote.url ??= value;
-        else if (key === "pushurl") remote.pushurl ??= value;
+        if (key === "url") {
+          remote.url ??= value;
+          remote.urls.push(value);
+        } else if (key === "pushurl") {
+          remote.pushurl ??= value;
+          remote.pushurls.push(value);
+        }
         else if (key === "gh-resolved") remote.resolved = value;
       } else if (kind === "branch" && sub !== null) {
         const entry = branches.get(sub) ?? {};
@@ -5024,6 +5042,16 @@ function pushUrl(config, remote) {
   return remote.url === null ? null : (rewritten(config, remote.url, true) ?? rewritten(config, remote.url, false) ?? remote.url);
 }
 
+/**
+ * The repository a push to a remote reaches, as git sends one: to every pushurl, else to every url, each rewritten;
+ * "" where those name more than one repository or one that reads only in part (the lens's W-2).
+ */
+function pushKey(config, remote) {
+  const urls = remote.pushurls.length > 0 ? remote.pushurls.map((url) => rewritten(config, url, false) ?? url) : remote.urls.map((url) => pushUrl(config, { ...remote, url }));
+  const keys = [...new Set(urls.map(remoteKey))];
+  return keys.length === 1 ? keys[0] : "";
+}
+
 /** A remote URL as a repository key only where the whole URL is a repository's (review/129): "" where it reads in part. */
 function remoteKey(url) {
   if (url === null) return "";
@@ -5037,13 +5065,7 @@ function originOf(config) {
   return config === null || config.partial || origin === undefined ? "" : remoteKey(fetchUrl(config, origin));
 }
 
-/**
- * Where a gh call naming no repository lands from a place (REQ-FLOW-134): GH_REPO in the hook's environment, else the
- * remote a gh-resolved marker names (base, or an owner/repo on that remote's host), else the only remote, each URL as
- * git rewrites it; "" where the place has no remote; null where the guard cannot tell: more than one remote and no
- * marker, markers that disagree or that it cannot read, a partial configuration, a place it cannot read, or GH_HOST
- * naming another host than that remote's.
- */
+/** Where a gh call naming no repository lands from a place: see GUARD_GIT_INCLUDE_DEPTH_MAX in the engine. */
 function ghDefaultOf(config) {
   const host = (process.env.GH_HOST ?? "").trim().toLowerCase().replace(/\.+$/, "");
   const named = (process.env.GH_REPO ?? "").trim();
@@ -5129,7 +5151,7 @@ function contextsOf(command, cwd, powershell, root) {
         if (!pushes.has(name)) {
           const merged = placeConfig();
           const remote = merged === null || merged.partial ? undefined : merged.remotes.get(name);
-          pushes.set(name, remote === undefined ? "" : remoteKey(pushUrl(merged, remote)));
+          pushes.set(name, remote === undefined ? "" : pushKey(merged, remote));
         }
         return pushes.get(name);
       },
@@ -5145,8 +5167,10 @@ function contextsOf(command, cwd, powershell, root) {
       get originPush() {
         const own = rootOf();
         const origin = own === null ? undefined : own.config.remotes.get("origin");
-        if (origin === undefined || (origin.pushurl === null && (origin.url === null || rewritten(own.config, origin.url, true) === null))) return null;
-        return remoteKey(pushUrl(own.config, origin));
+        if (origin === undefined) return null;
+        if (own.config.partial) return "";
+        if (origin.pushurls.length === 0 && origin.urls.length <= 1 && (origin.url === null || rewritten(own.config, origin.url, true) === null)) return null;
+        return pushKey(own.config, origin);
       },
       get ownCheckout() {
         const own = rootOf();

@@ -2577,3 +2577,48 @@ describe("the guard's includes, remote writes and origin's push URL (a4c, review
     expect(decide("claude", guard, "git push -u origin feat/x")).toEqual({ deny: false });
   });
 });
+
+/**
+ * a4c fix round 4 (REQ-FLOW-134, the lens's W-2, the fixer's round-3 M-2): the emitted guard compares every URL a push to
+ * origin reaches, holds one it cannot read whole as outside, reads an include key written as a remote write, and names
+ * REQ-FLOW-134 when it refuses a sub-agent's remote write. Red on 121a3810, which runs each asking push and cites
+ * REQ-FLOW-137.
+ */
+describe("the guard's push to origin over every URL, and the remote write's own requirement (a4c, the lens's W-2)", () => {
+  const ORIGIN = '[remote "origin"]\n\turl = https://github.com/acme/app.git\n';
+  const PUSH = "git push -u origin feat/x";
+
+  it("asks for a push to origin whose second URL is another repository's, and runs one whose URLs are all the origin's", async () => {
+    const guard = await placeGuard("claude", { ".git/config": `${ORIGIN}\turl = https://github.com/other/repo.git\n` });
+    expect(decide("claude", guard, PUSH)).toMatchObject({ deny: true, ask: true });
+    await getRepo().seedFiles({ ".git/config": `${ORIGIN}\turl = git@github.com:acme/app.git\n` });
+    expect(decide("claude", guard, PUSH)).toEqual({ deny: false });
+  });
+
+  it("asks for a push to origin where one of its push URLs is another repository's", async () => {
+    const pushes = "\tpushurl = git@github.com:acme/app.git\n\tpushurl = https://github.com/other/repo.git\n";
+    const guard = await placeGuard("claude", { ".git/config": `${ORIGIN}${pushes}` });
+    expect(decide("claude", guard, PUSH)).toMatchObject({ deny: true, ask: true });
+  });
+
+  it("asks for a push to origin where an included file sets origin's URL, so the reading is partial", async () => {
+    const guard = await placeGuard("claude", {
+      ".git/config": ORIGIN,
+      "cfg/global": "[include]\n\tpath = moved.gitconfig\n",
+      "cfg/moved.gitconfig": '[remote "origin"]\n\turl = https://github.com/other/repo.git\n',
+    });
+    expect(decide("claude", guard, PUSH, { GIT_CONFIG_GLOBAL: getRepo().path("cfg", "global") })).toMatchObject({ deny: true, ask: true });
+    expect(decide("claude", guard, PUSH)).toEqual({ deny: false });
+  });
+
+  it("refuses a sub-agent's include write and names REQ-FLOW-134 as the reason", async () => {
+    const guard = await placeGuard("claude", { ".git/config": ORIGIN });
+    const write = "git config --global include.path extra.gitconfig";
+    expect(decide("claude", guard, write)).toEqual({ deny: false });
+    const helper = JSON.stringify({ ...JSON.parse(payload("claude", write)), agent_type: "stamity-implementer", agent_id: "a1" });
+    expect(clientDecision("claude", run(guard, helper), "helper")).toEqual({
+      deny: true,
+      reason: expect.stringContaining("so it runs on the main thread only (REQ-FLOW-134)"),
+    });
+  });
+});
