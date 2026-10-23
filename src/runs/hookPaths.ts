@@ -59,9 +59,16 @@ interface BaseReader {
   list: (tree: string) => Promise<TreeEntry[] | string>;
 }
 
-/** The first line of `text` that holds anything, trimmed; the run verbs sanitize every `notDone` line they print. */
-function firstLine(text: string): string {
-  return text.split(/\r?\n/).find((line) => line.trim() !== "")?.trim() ?? "no output";
+/**
+ * review/108: a failed read's class, as a caller may print it on a public page: the first error code found on the error
+ * or its causes (`EACCES`, `ENOENT`, a runner's `GH_REFUSED`), never a message; `read failed` where none is found.
+ */
+function errorCode(cause: unknown): string {
+  for (let at: unknown = cause, depth = 0; at !== null && typeof at === "object" && depth < 4; at = (at as { cause?: unknown }).cause, depth += 1) {
+    const code = (at as { code?: unknown }).code;
+    if (typeof code === "string" && /^[A-Z][A-Z0-9_]{1,40}$/.test(code)) return code;
+  }
+  return "read failed";
 }
 
 /**
@@ -121,7 +128,8 @@ function baseReader(git: HookGitRead, base: string, prefix: string): BaseReader 
 /** The entries of the tree `tree` names (a commit names its root tree), or why they could not be listed, for `notDone`. */
 async function listTree(git: HookGitRead, tree: string): Promise<TreeEntry[] | string> {
   const read = await git(["ls-tree", "-z", tree]);
-  if (read.code !== 0) return `could not be listed (git ls-tree answered ${read.code}: ${firstLine(read.stderr)})`;
+  // review/108: git's exit code alone; its stderr can name a machine's path, and this text can reach the pull request.
+  if (read.code !== 0) return `could not be listed (git ls-tree answered ${read.code})`;
   return read.stdout.split("\0").flatMap((line): TreeEntry[] => {
     const [, mode, type, id, name] = /^(\d{6}) (\w+) ([0-9a-f]{40,64})\t([^]+)$/.exec(line) ?? [];
     if (mode === undefined || type === undefined || id === undefined || name === undefined) return [];
@@ -308,7 +316,8 @@ export async function hookPathsRead(reads: HookPathReads, prefix: string, base: 
     }
     return [...held].toSorted();
   } catch (cause) {
-    return { subject: null, why: cause instanceof Error ? firstLine(cause.message) : "read failed" };
+    // review/108: the error's code, never its message, which can name a machine's path and reaches the pull request.
+    return { subject: null, why: errorCode(cause) };
   } finally {
     folder.remove(scratch);
   }

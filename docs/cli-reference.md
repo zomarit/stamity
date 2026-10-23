@@ -391,5 +391,6 @@ May write when it runs, so `--dry-run` previews any change without making it.
 | `--method <method>` | land: the merge method — one of `merge`, `squash`, `rebase` | — |
 | `--ready` | land: mark the run's draft ready for review once the evidence holds, then land it | — |
 | `--wait <minutes>` | land: wait up to this many minutes (at most 9) for pending check runs | — |
+| `--approved` | land: the person approved an asks outcome, so land it unless something refuses (never in an unattended run) | — |
 
 Regenerate this page with `node scripts/generate-docs.mjs`.

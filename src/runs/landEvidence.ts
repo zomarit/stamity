@@ -462,7 +462,8 @@ export function decideLand(input: LandInput): LandDecision {
   if (pr.draft && !input.ready && input.beforeReady !== true) gap("the pull request is a draft: mark it ready first, or pass --ready");
   if (!input.files.complete) gap(`the changed files did not read whole (GitHub names ${pr.changedFiles})`);
   const { checks } = input;
-  for (const name of checks.missing) gap(`required check ${name} has no check run on ${pr.headSha} (commit statuses do not count)`);
+  // review/107: a required check with no check run yet may still be queued to start, so it is waited for as pending.
+  for (const name of checks.missing) gap(`required check ${name} has no check run yet on ${pr.headSha} (commit statuses do not count)`, true);
   for (const name of checks.failing) gap(`required check ${name} did not pass on ${pr.headSha}`);
   for (const name of checks.pending) gap(`required check ${name} is still running on ${pr.headSha}`, true);
   if (input.threads === null) gap("the review threads could not be read");
@@ -502,9 +503,13 @@ const EVIDENCE_OPENING = "evidence checked at ";
 /** build/6: the line that opens why the run's merge waits, on an `asks` or a `refused` outcome. */
 const WAITS_OPENING = "merge waits on: ";
 
-/** The evidence line: what was checked, when and for which head, never that it landed. */
-export function evidenceLine(at: string, sha: string, greenChecks: number, threads: number, openRows: number): string {
-  return `${EVIDENCE_OPENING}${at} for ${sha}: ${greenChecks} required check runs green, ${threads} open threads, ${openRows} open Critical/Warning rows`;
+/**
+ * The evidence line: what was checked, when and for which head, never that it landed; with `approval`, the asks reason
+ * the person approved (review/103).
+ */
+export function evidenceLine(at: string, sha: string, greenChecks: number, threads: number, openRows: number, approval?: string): string {
+  const checked = `${EVIDENCE_OPENING}${at} for ${sha}: ${greenChecks} required check runs green, ${threads} open threads, ${openRows} open Critical/Warning rows`;
+  return approval === undefined ? checked : `${checked}; approved by the person over: ${approval.replaceAll(/\s*\r?\n\s*/g, " ")}`;
 }
 
 /** build/6: why the merge waits, every reason on one line, never that it landed. */

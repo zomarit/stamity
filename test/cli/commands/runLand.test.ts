@@ -326,7 +326,8 @@ describe("stamity run land", () => {
     const result = await run(repo, ["land", "--run", RUN]);
 
     expect(result.code).toBe(1);
-    expect(result.doc).toMatchObject({ outcome: "refused", notDone: [`required check ci/status has no check run on ${head} (commit statuses do not count)`] });
+    // TEST CHANGE, justified (review/107): a required check with no check run reads "no check run yet".
+    expect(result.doc).toMatchObject({ outcome: "refused", notDone: [`required check ci/status has no check run yet on ${head} (commit statuses do not count)`] });
     expect(kinds()).not.toContain("merge");
   });
 
@@ -451,7 +452,8 @@ describe("stamity run land", () => {
     route("GET repos/o/r/rules/branches/main", { message: "Forbidden" }, 403);
     route(`GET repos/o/r/commits/${head}/check-runs`, { total_count: 0, check_runs: [] });
 
-    expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: [`required check any check run has no check run on ${head} (commit statuses do not count)`] });
+    // TEST CHANGE, justified (review/107): the wording of a check with no check run yet.
+    expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: [`required check any check run has no check run yet on ${head} (commit statuses do not count)`] });
   });
 
   it("refuses a draft without --ready, and with it marks the draft ready only once the evidence holds, then merges", async () => {
@@ -860,6 +862,61 @@ describe("stamity run land", () => {
     const [written] = bodies();
     expect(written).toMatch(new RegExp(`^The list\\.\\n\\nevidence checked at \\S+ for ${head}: [^\\n]+\\n\\n${MARKER}$`));
     expect(written).not.toContain("merge waits on");
+  });
+
+  it("lands an asks outcome the person approved with --approved, and says so in the evidence and the record (review/103)", async () => {
+    const { repo, head } = await seed();
+    route("GET repos/o/r/pulls/7/files", [{ filename: "a.txt" }, { filename: ".github/workflows/ci.yml" }, { filename: "b" }]);
+
+    const result = await run(repo, ["land", "--run", RUN, "--approved"]);
+
+    expect(result.code).toBe(0);
+    expect(result.doc).toMatchObject({ outcome: "landed", approved: { act: "pr-merge", reason: expect.stringContaining(".github/workflows/ci.yml") } });
+    expect(kinds()).toContain("merge");
+    expect(bodies()).toEqual([expect.stringContaining("; approved by the person over: the diff touches paths that define the evidence: .github/workflows/ci.yml")]);
+    expect((await record(repo)).split("\n").filter((line) => line.includes(" land: "))).toEqual([expect.stringMatching(new RegExp(`^- \\S+Z land: #7 ${head} merged \\(approved by the person\\)$`))]);
+  });
+
+  it("fast-forwards an approved asks outcome, its record line saying so (review/103)", async () => {
+    const { repo, remote, base, head } = await seed();
+    route("GET repos/o/r/rules/branches/main", [{ type: "pull_request" }, { type: "required_status_checks", parameters: { required_status_checks: [{ context: "test" }] } }]);
+    route(`GET repos/o/r/compare/${base}...${head}`, { status: "ahead" });
+
+    expect((await run(repo, ["land", "--run", RUN, "--fast-forward", "--approved"])).doc).toMatchObject({ outcome: "landed", approved: { act: "push-default" } });
+    expect(git(remote, ["rev-parse", "refs/heads/main"])).toBe(head);
+    expect(await record(repo)).toMatch(new RegExp(` land: #7 ${head} fast-forwarded \\(approved by the person\\)\\n$`));
+  });
+
+  it("still refuses a refused outcome with --approved, and leaves an asks outcome unchanged without it (review/103)", async () => {
+    const { repo } = await seed();
+    gh.threads = [threadsPage([thread(false, null, ["User", "alice"])])];
+    expect((await run(repo, ["land", "--run", RUN, "--approved"])).doc).toMatchObject({ outcome: "refused", notDone: ["1 review thread is unresolved"] });
+    expect(kinds()).not.toContain("merge");
+
+    gh.threads = [threadsPage([])];
+    route("GET repos/o/r/pulls/7/files", [{ filename: "a.txt" }, { filename: ".github/workflows/ci.yml" }, { filename: "b" }]);
+    expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "asks" });
+    expect(kinds()).not.toContain("merge");
+  });
+
+  it("refuses --approved in an unattended run before any GitHub call (review/103)", async () => {
+    const { repo } = await seed({ mode: "unattended" });
+
+    expect((await run(repo, ["land", "--run", RUN, "--approved"])).doc).toMatchObject({
+      outcome: "refused",
+      notDone: ["--approved is the person's answer to an asks outcome, and this run is unattended, so no person gave it"],
+    });
+    expect(gh.calls).toEqual([]);
+  });
+
+  it("waits with --wait for a required check that has no check run yet, then lands once it is green (review/107)", async () => {
+    const { repo, head } = await seed();
+    const { slept } = fakeClock();
+    const green = { status: 200, json: { total_count: 1, check_runs: [{ id: 1, name: "test", status: "completed", conclusion: "success", app: { id: 15368 } }] } };
+    gh.routes.set(`GET repos/o/r/commits/${head}/check-runs`, [{ status: 200, json: { total_count: 0, check_runs: [] } }, green]);
+
+    expect((await run(repo, ["land", "--run", RUN, "--wait", "1"])).doc).toMatchObject({ outcome: "landed" });
+    expect(slept).toEqual([30_000]);
   });
 
   it("takes --title, --paths, --wait past 9 and --method with --fast-forward as usage errors", async () => {

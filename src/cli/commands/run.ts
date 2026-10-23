@@ -176,6 +176,7 @@ const OPTION_FLAGS: Readonly<Record<string, string>> = {
   method: "--method",
   ready: "--ready",
   wait: "--wait",
+  approved: "--approved",
 };
 
 /** The options each subcommand takes beyond `--run`; any other one given is a usage error. */
@@ -185,7 +186,7 @@ const SUBCOMMAND_OPTIONS: Readonly<Record<string, readonly string[]>> = {
   // No --pr: the pull request is not optional at the end.
   [END]: ["paths", "title", "refused", "signoff", "finalRound", "dropHeld"],
   // No --paths and no --title: land stages and titles nothing.
-  [LAND]: ["fastForward", "method", "ready", "wait"],
+  [LAND]: ["fastForward", "method", "ready", "wait", "approved"],
 };
 
 /** `--wait`'s most minutes: under a client's ten-minute shell-call limit (decision D17). */
@@ -279,6 +280,7 @@ export const runCommand: CommandModule = {
       .addOption(new Option("--method <method>", "land: the merge method").choices(["merge", "squash", "rebase"]))
       .option("--ready", "land: mark the run's draft ready for review once the evidence holds, then land it")
       .option("--wait <minutes>", `land: wait up to this many minutes (at most ${LAND_WAIT_MAX}) for pending check runs`, parseWait)
+      .option("--approved", "land: the person approved an asks outcome, so land it unless something refuses (never in an unattended run)")
       // Usage errors, so exit 2 before the action and before git runs.
       .hook("preAction", (command) => {
         const subcommand = String(command.processedArgs[0]);

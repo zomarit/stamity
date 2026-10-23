@@ -248,10 +248,12 @@ describe("decideLand", () => {
     const decision = decideLand(
       input({ checks: { green: [], pending: [], failing: [], missing: ["ci/status"] }, threads: 1, ledger: { open: ["r/1"] } }, { mergeableState: "blocked" }),
     );
+    // TEST CHANGE, justified (review/107): a required check with no check run reads "no check run yet", waitable; this
+    // decision stays not waitable through its other gaps.
     expect(decision).toEqual({
       outcome: "refused",
       reasons: [
-        `required check ci/status has no check run on ${SHA} (commit statuses do not count)`,
+        `required check ci/status has no check run yet on ${SHA} (commit statuses do not count)`,
         "1 review thread is unresolved",
         `the ledger at ${SHA} holds open Critical or Warning rows: r/1`,
         "mergeable_state is blocked: an admin merge past the branch's rules asks",
@@ -270,6 +272,20 @@ describe("decideLand", () => {
       outcome: "refused",
       reasons: ["mergeable_state reads draft: GitHub computes it after the ready mark, which a dry run does not make"],
     });
+  });
+
+  it("counts a required check with no check run yet as pending, so a wait may help (review/107)", () => {
+    expect(decideLand(input({ checks: { green: [], pending: [], failing: [], missing: ["test"] } }))).toEqual({
+      outcome: "refused",
+      reasons: [`required check test has no check run yet on ${SHA} (commit statuses do not count)`],
+      pending: true,
+    });
+  });
+
+  it("names the approval in the evidence line where the person approved an asks outcome (review/103)", () => {
+    expect(evidenceLine("2026-10-23T10:00:00.000Z", SHA, 1, 0, 0, "autonomy.mode is ask")).toBe(
+      `evidence checked at 2026-10-23T10:00:00.000Z for ${SHA}: 1 required check runs green, 0 open threads, 0 open Critical/Warning rows; approved by the person over: autonomy.mode is ask`,
+    );
   });
 
   it("refuses a draft without --ready, and with it decides before the ready mark on what needs no ready state", () => {

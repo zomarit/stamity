@@ -120,6 +120,8 @@ interface LandResult {
     mergeableState: string | null;
   };
   asks?: { reason: string; act: string };
+  /** review/103: the asks outcome the person approved with --approved, where the verb landed over one. */
+  approved?: { reason: string; act: string };
   notDone: string[];
 }
 
@@ -241,6 +243,8 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
   const head = resumeCard.readRecordHead(record.text);
   const unattended = readsUnattended(head.mode, env["STAMITY_UNATTENDED"]);
   const fastForward = opts["fastForward"] === true;
+  /** review/103: the person's answer to an `asks` outcome, given on the line the guard asks them about (`a4`). */
+  const approved = opts["approved"] === true;
   const ready = opts["ready"] === true;
   const method = (typeof opts["method"] === "string" ? opts["method"] : "merge") as MergeMethod;
   const waitMinutes = typeof opts["wait"] === "number" ? opts["wait"] : 0;
@@ -297,6 +301,8 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     void reasons;
   };
   try {
+    // review/103: --approved is the person's answer; an unattended run has no person to give it, so it refuses first.
+    if (approved && unattended) throw new Refused("--approved is the person's answer to an asks outcome, and this run is unattended, so no person gave it");
     // (1) gh, before any of its answers is trusted: outside the work tree and the temp folders.
     const top = await gitLine(["rev-parse", "--show-toplevel"]);
     if (top === null) throw new Refused("the work tree's top could not be read");
@@ -503,10 +509,12 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       return now;
     };
 
-    // (10) The decision; --ready on a draft decides first on what does not need the ready state.
+    // (10) The decision; --ready on a draft decides first on what does not need the ready state. review/103: with
+    // --approved an asks outcome goes on to the act as a land does; every refused condition still refuses.
+    const proceeds = (now: LandDecision): boolean => now.outcome === "land" || (approved && now.outcome === "asks");
     const draftReady = pr.draft && ready;
     let decision = await waitOut(decideLand(inputFor(pr, checks, draftReady)), draftReady);
-    if (decision.outcome === "land" && draftReady && !ctx.dryRun) {
+    if (proceeds(decision) && draftReady && !ctx.dryRun) {
       const marked = await answered(ghMarkReady({ hostname: repo.host, id: pr.nodeId }, ghOpts), "the ready mark");
       if (marked.status !== 200 || typeof marked.json !== "object" || marked.json === null || "errors" in marked.json) {
         throw new Refused(`marking #${number} ready answered HTTP ${marked.status}${marked.status === 200 ? " with errors" : ""}`);
@@ -517,12 +525,12 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       const computing = (now: LandPr): boolean => now.mergeableState === null || now.mergeableState === "unknown";
       pr = await pollWhilePending(readPr, computing, Math.min(LAND_CLOCK.now() + READY_MERGEABLE_MS, budgetEnd), READY_POLL_MS, LAND_CLOCK);
       decision = await waitOut(await reread(false), false);
-    } else if (decision.outcome === "land" && draftReady) {
+    } else if (proceeds(decision) && draftReady) {
       lines.push(`ready: would mark #${number} ready for review`);
     }
     // review/72, review/78: the threads once more just before the act, and the decision on that last count; a dry run
     // on a draft decides on its merge state as it reads now (review/82), which a ready mark has not computed yet.
-    if (decision.outcome === "land") {
+    if (proceeds(decision)) {
       threads = await readThreads();
       decision = decideLand(inputFor(ctx.dryRun && draftReady ? { ...pr, draft: false } : pr, checks, false));
     }
@@ -537,7 +545,9 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       await noteWaits(decision.reasons);
       return finish();
     }
-    if (decision.outcome === "asks") {
+    const approval = decision.outcome === "asks" && approved ? { reason: decision.reason, act: decision.act } : null;
+    if (approval !== null) lines.push(`approved: by the person, over ${sanitizeLabel(approval.reason)} (${approval.act})`);
+    if (decision.outcome === "asks" && approval === null) {
       result.outcome = "asks";
       result.asks = { reason: decision.reason, act: decision.act };
       await noteWaits([`${decision.reason} (a person decides: ${decision.act})`]);
@@ -553,7 +563,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     const movedNow = await surfaceMoved();
     if (movedNow !== null) throw new Refused(movedNow);
     const at = new Date().toISOString();
-    const line = evidenceLine(at, sha, checks.green.length, threads ?? 0, 0);
+    const line = evidenceLine(at, sha, checks.green.length, threads ?? 0, 0, approval === null ? undefined : sanitizeLabel(approval.reason));
     const patched = await answered(
       ghApi({ method: "PATCH", path: `${repoPath}/pulls/${number}`, body: { body: withStatusLine(pr.body, marker, line) }, hostname: repo.host }, ghOpts),
       "the evidence write",
@@ -586,7 +596,9 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       lines.push(`act: merged #${number} at ${sha} (${method})`);
     }
     result.outcome = "landed";
-    await noteLanded(ctx, cwd, recordRel, number, sha, fastForward ? "fast-forwarded" : "merged", result);
+    const how = fastForward ? "fast-forwarded" : "merged";
+    await noteLanded(ctx, cwd, recordRel, number, sha, approval === null ? how : `${how} (approved by the person)`, result);
+    if (approval !== null) result.approved = approval;
     return finish();
   } catch (error) {
     if (!(error instanceof Refused)) throw error;

@@ -92,6 +92,25 @@ describe("hookPathsAt", () => {
     expect(await hookPathsAt({ git: gitIn(outside.repo), scratch: scratch() }, "", outside.sha)).toMatch(/^hold refused: \.stamity\/hooks\/guard\.json at Base: /);
   });
 
+  it("names a failed read by its error code, never its message, which can hold a machine's path (review/108)", async () => {
+    const { repo, sha } = await commit({ ".stamity/hooks/guard.json": declaring("tools/guard.mjs") });
+    const folder = scratch();
+    const failing: HookScratch = {
+      ...folder,
+      place: (root, path, text) => {
+        if (path.endsWith(".json")) throw Object.assign(new Error("EACCES: permission denied, open '/Users/someone/secret/place.json'"), { code: "EACCES" });
+        folder.place(root, path, text);
+      },
+    };
+
+    const read = await hookPathsAt({ git: gitIn(repo), scratch: failing }, "", sha);
+
+    expect(read).toBe(
+      "hold refused: the hook declarations at Base: could not be read (EACCES), so the hook scripts they name are unknown and the run pushes nothing; fix it on the base branch, then start the run again from it",
+    );
+    expect(read).not.toContain("/Users/someone");
+  });
+
   it("names only the hook folders where the commit declares no hook", async () => {
     const { repo, sha } = await commit({ "a.txt": "a\n" });
     const folder = scratch();
