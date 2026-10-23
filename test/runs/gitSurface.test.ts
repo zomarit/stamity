@@ -133,6 +133,15 @@ describe("readGitSurface", () => {
     ]);
   });
 
+  it("leaves out GIT_NO_REPLACE_OBJECTS, which the write runner sets itself, so it is never read as a change (review/114)", async () => {
+    const read = await readGitSurface(fakeGit("").git, { GIT_NO_REPLACE_OBJECTS: "1", GIT_TERMINAL_PROMPT: "0", GIT_CONFIG_COUNT: "1" }, null, "linux");
+
+    expect(read).toMatchObject({ env: [["GIT_CONFIG_COUNT", "1"]] });
+    const again = await readGitSurface(fakeGit("").git, { GIT_CONFIG_COUNT: "1" }, null, "linux");
+    if ("unreadable" in read || "unreadable" in again) throw new Error("the surface did not read");
+    expect(compareSurface(surfaceRecord(again, SALT, AT), read)).toEqual({ same: true });
+  });
+
   it("reads names uppercased on win32, as Windows reads them", async () => {
     const read = await readGitSurface(fakeGit("").git, { Git_Config_Count: "1", Home: "C:\\u", Path: "C:\\bin" }, null, "win32");
 

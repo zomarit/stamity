@@ -985,6 +985,38 @@ describe("stamity run land", () => {
     expect(text.stdout).toContain(`approve with: --approved ${head}`);
   });
 
+  /** review/114: makes `object` read as `replacement` for every git call that honours replace refs. */
+  function replace(repo: string, object: string, replacement: string): void {
+    git(repo, ["replace", object, replacement]);
+    expect(git(repo, ["cat-file", "-p", object])).toBe(git(repo, ["--no-replace-objects", "cat-file", "-p", replacement]));
+  }
+
+  it("reads the ledger the head commit holds, not a replace ref's clean copy (review/114)", async () => {
+    const { repo, head } = await seed({ ledger: row(`${RUN}/review/1`, "Warning", "open") });
+    const clean = row(`${RUN}/review/1`, "Warning", "fixed");
+    await writeFile(join(repo, RUN_DIR, "ledger.jsonl"), clean);
+    const held = git(repo, ["rev-parse", `${head}:${RUN_DIR}/ledger.jsonl`]);
+    replace(repo, held, execFileSync("git", ["hash-object", "-w", "--stdin"], { cwd: repo, input: clean, encoding: "utf8" }).trim());
+
+    const result = await run(repo, ["land", "--run", RUN]);
+
+    expect(result.doc).toMatchObject({ outcome: "refused", notDone: [expect.stringContaining("checkpoint first")] });
+    expect(kinds()).not.toContain("merge");
+  });
+
+  it("reads a hook declaration at Base: as its commit holds it, not a replace ref naming no script (review/114)", async () => {
+    const declaring = `${JSON.stringify({ hooks: [{ event: "pre_tool_use", command: ["node", "tools/guard.mjs"] }] })}\n`;
+    const { repo, base } = await seed({ files: { ".stamity/hooks/guard.json": declaring, "tools/guard.mjs": "base guard\n" } });
+    const declared = git(repo, ["rev-parse", `${base}:.stamity/hooks/guard.json`]);
+    replace(repo, declared, execFileSync("git", ["hash-object", "-w", "--stdin"], { cwd: repo, input: '{"hooks":[]}\n', encoding: "utf8" }).trim());
+    route("GET repos/o/r/pulls/7/files", [{ filename: "a.txt" }, { filename: "tools/guard.mjs" }, { filename: "b" }]);
+
+    const result = await run(repo, ["land", "--run", RUN]);
+
+    expect(result.doc).toMatchObject({ outcome: "asks", evidence: { held: ["tools/guard.mjs"] } });
+    expect(kinds()).not.toContain("merge");
+  });
+
   it("takes --title, --paths, --wait past 9 and --method with --fast-forward as usage errors", async () => {
     const { repo } = await seed();
     for (const argv of [["--title", "t"], ["--paths", "a.txt"], ["--wait", "10"], ["--fast-forward", "--method", "squash"]]) {

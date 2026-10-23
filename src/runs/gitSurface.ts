@@ -18,8 +18,8 @@
  * **What is left out.** `branch.<name>.remote`, `branch.<name>.merge` and `branch.<name>.rebase` in the repository's
  * own (`local`) configuration, which git writes itself when a branch starts tracking one of origin's (`run start` on a
  * continued branch; `.rebase` under `branch.autoSetupRebase`, review/35); the run verbs push to `origin` by an
- * explicit refspec, so none moves a push. `GIT_TERMINAL_PROMPT`
- * and `GIT_ASKPASS`, which the write runner sets itself.
+ * explicit refspec, so none moves a push. `GIT_TERMINAL_PROMPT`,
+ * `GIT_ASKPASS` and `GIT_NO_REPLACE_OBJECTS`, which the write runner sets itself.
  *
  * A record the agent can write is trusted: a steered agent can re-run the pre-flight, which vets the new surface
  * again, or forge the record. That is the named residual.
@@ -89,8 +89,11 @@ export const CONFIG_LIST_ARGS: readonly string[] = ["config", "--list", "--show-
 /** The keys git writes itself when a branch starts tracking (left out in the `local` scope only). */
 const TRACKING_KEY = /^branch\.[\s\S]+\.(?:remote|merge|rebase)$/;
 
-/** The variables the write runner sets itself on every write, whatever the caller's environment holds. */
-const RUNNER_SET = new Set(["GIT_TERMINAL_PROMPT", "GIT_ASKPASS"]);
+/**
+ * The variables the write runner sets itself on every write, whatever the caller's environment holds: the prompt
+ * switches, and `GIT_NO_REPLACE_OBJECTS` (review/114), which it always sets to 1.
+ */
+const RUNNER_SET = new Set(["GIT_TERMINAL_PROMPT", "GIT_ASKPASS", "GIT_NO_REPLACE_OBJECTS"]);
 
 /** The non-`GIT_*` variables that move which configuration files git reads. */
 const HOME_VARIABLES = new Set(["HOME", "XDG_CONFIG_HOME"]);

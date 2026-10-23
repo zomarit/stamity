@@ -199,6 +199,9 @@ export function gitWriteArgs(args: readonly string[]): string[] {
  * reads a set-but-empty one as "no askpass" and then consults neither
  * `core.askPass` nor `SSH_ASKPASS`, so with the terminal prompt off nothing
  * prompts. The `GIT_CONFIG_*` variables stay, since the pre-flight vetted them.
+ * review/114: and `GIT_NO_REPLACE_OBJECTS=1` whatever `base` says, so no `git replace` ref (a local ref write that
+ * needs no commit) can make an object read as another: the ledger, the trees and the declarations the run verbs read
+ * are the ones the commit holds.
  */
 export function gitWriteEnv(base: NodeJS.ProcessEnv, opts: { unattended?: boolean } = {}): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {};
@@ -209,8 +212,12 @@ export function gitWriteEnv(base: NodeJS.ProcessEnv, opts: { unattended?: boolea
   }
   if (opts.unattended === true) env[ASKPASS] = "";
   env["GIT_TERMINAL_PROMPT"] = "0";
+  env[NO_REPLACE_OBJECTS] = "1";
   return env;
 }
+
+/** review/114: the variable that turns git's replace refs off for a call; the git surface record reads it as runner-set. */
+export const NO_REPLACE_OBJECTS = "GIT_NO_REPLACE_OBJECTS";
 
 /**
  * The names of the program-valued variables `base` sets, an empty value

@@ -4,6 +4,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { gitWrite } from "../../src/cli/engine/gitWrite.ts";
 import { hookPathsAt, type HookGitRead, type HookScratch } from "../../src/runs/hookPaths.ts";
 import { NO_GIT_CONFIG } from "../support/repoFixtures.ts";
 import { useTempDir } from "../support/tempDir.ts";
@@ -109,6 +110,16 @@ describe("hookPathsAt", () => {
       "hold refused: the hook declarations at Base: could not be read (EACCES), so the hook scripts they name are unknown and the run pushes nothing; fix it on the base branch, then start the run again from it",
     );
     expect(read).not.toContain("/Users/someone");
+  });
+
+  it("holds a declared script through the write runner though a replace ref makes its declaration name none (review/114)", async () => {
+    const { repo, sha } = await commit({ ".stamity/hooks/guard.json": declaring("tools/guard.mjs"), "tools/guard.mjs": "guard\n" });
+    const run = (args: string[], input?: string): string => execFileSync("git", args, { cwd: repo, encoding: "utf8", ...(input === undefined ? {} : { input }), env: { ...process.env, ...ENV } }).trim();
+    const declared = run(["rev-parse", `${sha}:.stamity/hooks/guard.json`]);
+    run(["replace", declared, run(["hash-object", "-w", "--stdin"], '{"hooks":[]}\n')]);
+    expect(await hookPathsAt({ git: gitIn(repo), scratch: scratch() }, "", sha)).not.toContain("tools/guard.mjs");
+
+    expect(await hookPathsAt({ git: (args) => gitWrite(repo, args), scratch: scratch() }, "", sha)).toContain("tools/guard.mjs");
   });
 
   it("names only the hook folders where the commit declares no hook", async () => {

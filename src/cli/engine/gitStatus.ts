@@ -127,6 +127,8 @@ function gitCheckEnv(): NodeJS.ProcessEnv {
     if (!/^GIT_/i.test(key)) env[key] = value;
   }
   env["GIT_OPTIONAL_LOCKS"] = "0";
+  // review/114: no `git replace` ref makes an object read as another in a check.
+  env["GIT_NO_REPLACE_OBJECTS"] = "1";
   return env;
 }
 

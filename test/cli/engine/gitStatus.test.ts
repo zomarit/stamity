@@ -561,3 +561,31 @@ describe("the default runner starts the git an absolute PATH entry holds", () =>
     expect(withProcessEnv(env, () => readHistoryFacts(work))).toBeNull();
   });
 });
+
+/**
+ * review/114: a repository whose one commit holds `a.txt` reading "real", and a `git replace` ref making that blob read
+ * as one holding "forged"; the blob's id, and what plain git (replace refs on) now prints for it.
+ */
+function replacedBlob(repo: string): { blob: string; plain: string } {
+  const run = (args: string[], input?: string): string =>
+    execFileSync("git", args, { cwd: repo, encoding: "utf8", ...(input === undefined ? {} : { input }), env: { ...process.env, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: NO_GIT_CONFIG, GIT_AUTHOR_NAME: "A", GIT_AUTHOR_EMAIL: "a@example.com", GIT_COMMITTER_NAME: "A", GIT_COMMITTER_EMAIL: "a@example.com" } }).trim();
+  run(["init", "-q"]);
+  const blob = run(["hash-object", "-w", "--stdin"], "real\n");
+  const forged = run(["hash-object", "-w", "--stdin"], "forged\n");
+  run(["replace", blob, forged]);
+  return { blob, plain: run(["cat-file", "-p", blob]) };
+}
+
+// review/114: no git replace ref makes an object read as another through the check runner.
+describe("the check runner and git's replace refs (review/114)", () => {
+  const getRoot = useTempDir("gitstatus-replace");
+
+  it("reads a replaced blob as the commit holds it, not as its replacement", async () => {
+    const repo = getRoot().path("repo");
+    await mkdir(repo, { recursive: true });
+    const { blob, plain } = replacedBlob(repo);
+    expect(plain).toBe("forged");
+
+    expect(gitCheckRunner()(["cat-file", "-p", blob], repo)).toBe("real\n");
+  });
+});
