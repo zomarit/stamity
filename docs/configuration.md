@@ -80,6 +80,9 @@ clients your own manifest selects.
 | `gates.lint` | a shell command line, or `none` to clear | `detected: npm run lint` |
 | `gates.typecheck` | a shell command line, or `none` to clear | `detected: npm run typecheck` |
 | `gates.all` | a shell command line, or `none` to clear | `detected: npm run lint && npm run typecheck && npm run test` |
+| `autonomy.mode` | one of autonomous \| ask — autonomous lets an agent mark a pull request ready and create a local tag unasked; ask asks for both, as 1.16.0 did | `autonomous` |
+| `autonomy.deployingBranches` | a comma-separated list of at most 32 branch names or patterns whose `*` stays inside one path segment (`release/*`), or `none` to clear — a push to one asks | `none` |
+| `autonomy.deployingActs` | a comma-separated subset of pr-ready, tag, workflow-dispatch, pr-merge, push-default, or `none` to clear — a named act asks in every mode | `none` |
 
 One row is recorded but not yet consumed. `communicationStyle` is validated, persisted and
 carried through migrations, and no generated file reads it, so setting it changes what the

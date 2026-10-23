@@ -165,6 +165,48 @@ export interface HooksConfig {
 }
 
 /**
+ * How much the person-only guard lets an agent do unasked (REQ-FLOW-137).
+ * `autonomous` (the default) runs the reversible acts in {@link AutonomousAct};
+ * `ask` turns them back into asks, as 1.16.0 had them.
+ */
+export type AutonomyMode = "autonomous" | "ask";
+
+/** The sanctioned {@link AutonomyMode} values, in the order the CLI lists them. */
+export const AUTONOMY_MODES: readonly AutonomyMode[] = ["autonomous", "ask"];
+
+/** The acts mode `autonomous` runs unasked and mode `ask` asks for. */
+export type AutonomousAct = "pr-ready" | "tag";
+
+/**
+ * The acts a repository can name as deploying, so they ask in every mode
+ * (decision D5): the two {@link AutonomousAct}s, a workflow dispatch (which
+ * runs in both modes unless named), the land verb's merge and its
+ * default-branch fast-forward.
+ */
+export type DeployingAct = AutonomousAct | "workflow-dispatch" | "pr-merge" | "push-default";
+
+/** The sanctioned {@link DeployingAct} values, in the order the CLI lists them. */
+export const DEPLOYING_ACTS: readonly DeployingAct[] = [
+  "pr-ready",
+  "tag",
+  "workflow-dispatch",
+  "pr-merge",
+  "push-default",
+];
+
+/**
+ * The repository's autonomy setting. Every member is optional: an absent block
+ * resolves to mode `autonomous` with nothing named as deploying
+ * (`../config/autonomy.ts::resolveAutonomy`).
+ */
+export interface AutonomyConfig {
+  mode?: AutonomyMode;
+  /** Branch names, or patterns whose `*` stays inside one path segment (`release/*`). */
+  deployingBranches?: string[];
+  deployingActs?: DeployingAct[];
+}
+
+/**
  * Operator overrides for the model/effort ladder and the review-loop cap — the
  * three dials the ladder itself deliberately does not decide. The ladder in
  * `src/roster/modelLadder.ts` names a CLASS per role and projects it per
@@ -368,6 +410,11 @@ export interface SetupManifest {
    * to transform.
    */
   gates?: GatesConfig;
+  /**
+   * The autonomy setting (see {@link AutonomyConfig}). Additive and optional,
+   * so {@link MANIFEST_VERSION} does not move for it, on the `gates` precedent.
+   */
+  autonomy?: AutonomyConfig;
   /**
    * What to do with the agent-instruction files this repo already had — ONE
    * decision per pre-existing path, not one for the repo. Absent when init

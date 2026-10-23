@@ -319,6 +319,9 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // hook scripts and pre-flight and the wave-14 gate verb (v8-detect-translator).
   "src/session/detect.ts": { unit: "v8-detect-translator", wave: 1 },
   // wave 2
+  // Plan 022 file 1: the autonomy setting resolved, pure, over src/types/manifest.ts
+  // alone; read by the wave-14 `config` and wave-15 `check` verbs.
+  "src/config/autonomy.ts": { unit: "a3-autonomy-config", wave: 2 },
   "src/merge/fsErrors.ts": { unit: "p1-08", wave: 2 },
   "src/merge/managedBlocks.ts": { unit: "p1-08", wave: 2 },
   "src/guard/promptGuard.ts": { unit: "p1-09", wave: 2 },

@@ -32,6 +32,8 @@ import type { DetectedSummary } from "../types/detect.ts";
 import { isSemverShaped } from "../shared/cliCall.ts";
 import { EngineError } from "../types/errors.ts";
 import {
+  AUTONOMY_MODES,
+  DEPLOYING_ACTS,
   MANIFEST_FILE,
   MANIFEST_VERSION,
   PACK_OWNER_PREFIX,
@@ -233,6 +235,7 @@ const MANIFEST_FIELD_ORDER: Record<keyof SetupManifest, true> = {
   hooks: true,
   models: true,
   gates: true,
+  autonomy: true,
   importChoice: true,
   toolOptions: true,
   detected: true,
@@ -781,6 +784,93 @@ function collectGatesErrors(value: unknown, errors: string[]): void {
   }
 }
 
+/** Known fields of the autonomy block, doubling as its strict key set. */
+const AUTONOMY_FIELDS = ["mode", "deployingBranches", "deployingActs"] as const;
+
+/** Most branches `autonomy.deployingBranches` may name. */
+const MAX_DEPLOYING_BRANCHES = 32;
+
+/** Longest branch name or pattern `autonomy.deployingBranches` admits. */
+const MAX_DEPLOYING_BRANCH_LENGTH = 255;
+
+// oxlint-disable-next-line no-control-regex -- a control character in a branch name IS the defect
+const REF_CONTROL_OR_SPACE = /[\s\u0000-\u001f\u007f]/;
+
+/**
+ * Why `value` cannot be a deploying branch, or `null` when it can: a branch
+ * name by git's `check-ref-format` rules, optionally under `refs/heads/`, in
+ * which a `*` may also stand inside a segment (`release/*`, matched one
+ * segment deep by `../config/autonomy.ts::matchesDeployingBranch`). Shape
+ * only: the engine does not ask git, so no repository is needed to validate.
+ */
+function deployingBranchDefect(value: unknown): string | null {
+  if (typeof value !== "string") return "must be a string";
+  if (value === "") return "is empty";
+  if (value.length > MAX_DEPLOYING_BRANCH_LENGTH) {
+    return `is longer than ${MAX_DEPLOYING_BRANCH_LENGTH} characters`;
+  }
+  const name = value.startsWith("refs/heads/") ? value.slice("refs/heads/".length) : value;
+  if (REF_CONTROL_OR_SPACE.test(name)) return "carries a space or a control character";
+  if (/[~^:?[\\]/.test(name) || name.includes("..") || name.includes("@{")) {
+    return "carries a character or sequence git refuses in a branch name (~ ^ : ? [ \\ .. @{)";
+  }
+  if (name === "" || name === "@" || name === "HEAD" || name.startsWith("-")) {
+    return "is not a branch name";
+  }
+  if (name.endsWith(".")) return "ends with a dot";
+  for (const segment of name.split("/")) {
+    if (segment === "") return "carries an empty path segment";
+    if (segment.startsWith(".")) return "carries a path segment that starts with a dot";
+    if (segment.endsWith(".lock")) return "carries a path segment that ends with .lock";
+  }
+  return null;
+}
+
+/**
+ * The autonomy block (REQ-FLOW-137): a mode from {@link AUTONOMY_MODES}, at
+ * most {@link MAX_DEPLOYING_BRANCHES} branch names or patterns, and acts from
+ * {@link DEPLOYING_ACTS}, the refusal naming the whole set.
+ */
+function collectAutonomyErrors(value: unknown, errors: string[]): void {
+  if (!isPlainObject(value)) {
+    errors.push("`autonomy` must be an object");
+    return;
+  }
+  collectEnumError(value.mode, new Set<string>(AUTONOMY_MODES), "autonomy.mode", errors);
+  const branches = value.deployingBranches;
+  if (branches !== undefined) {
+    if (!Array.isArray(branches)) {
+      errors.push("`autonomy.deployingBranches` must be an array");
+    } else {
+      if (branches.length > MAX_DEPLOYING_BRANCHES) {
+        errors.push(`\`autonomy.deployingBranches\` names more than ${MAX_DEPLOYING_BRANCHES} branches`);
+      }
+      branches.forEach((branch: unknown, index) => {
+        const defect = deployingBranchDefect(branch);
+        if (defect === null) return;
+        const shown = typeof branch === "string" ? ` ${JSON.stringify(branch.slice(0, 64))}` : "";
+        errors.push(`\`autonomy.deployingBranches[${index}]\`${shown} ${defect}`);
+      });
+    }
+  }
+  const acts = value.deployingActs;
+  if (acts !== undefined) {
+    if (!Array.isArray(acts)) {
+      errors.push("`autonomy.deployingActs` must be an array");
+    } else {
+      for (const act of acts as unknown[]) {
+        if (typeof act === "string" && (DEPLOYING_ACTS as readonly string[]).includes(act)) continue;
+        errors.push(
+          `\`autonomy.deployingActs\` names unknown act ${JSON.stringify(act)} (known: ${DEPLOYING_ACTS.join(", ")})`,
+        );
+      }
+    }
+  }
+  for (const key of unknownFields(value, AUTONOMY_FIELDS)) {
+    errors.push(`unknown field \`autonomy.${key}\` (known: ${AUTONOMY_FIELDS.join(", ")})`);
+  }
+}
+
 /**
  * The import decisions, validated as a LIST of pairs — one record per
  * pre-existing instruction file the repo carried. Each `path` runs the same
@@ -1022,6 +1112,7 @@ export function collectManifestErrors(data: unknown): string[] {
   }
   if (data.models !== undefined) collectModelsErrors(data.models, errors);
   if (data.gates !== undefined) collectGatesErrors(data.gates, errors);
+  if (data.autonomy !== undefined) collectAutonomyErrors(data.autonomy, errors);
   if (data.importChoice !== undefined) {
     collectImportChoiceErrors(data.importChoice, errors);
     collectSkippedRowErrors(data.ledger, data.importChoice, errors);

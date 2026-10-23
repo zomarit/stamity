@@ -1,11 +1,13 @@
 import { accessSync, constants as fsConstants, existsSync, statSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { lstat, readdir, readFile } from "node:fs/promises";
 import { basename, delimiter, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Command } from "commander";
 import semver from "semver";
 import type { App, EngineRegistry } from "../../index.ts";
 import { CLASS_FILE, parseClassFile } from "../../change/classify.ts";
+import { matchesDeployingBranch, resolveAutonomy } from "../../config/autonomy.ts";
+import { isPlainObject, parseYamlStrict } from "../../config/parse.ts";
 import { readCharterTemplate } from "../../content/charter.ts";
 import { slugOf } from "../../content/catalog.ts";
 import { discoverUserContent } from "../../content/userContent.ts";
@@ -66,7 +68,7 @@ import {
   type ModelLists,
 } from "../engine/clientModels.ts";
 import { getEmissionPlanner } from "../engine/emission.ts";
-import { readWorkingTreeStatus } from "../engine/gitStatus.ts";
+import { gitCheckRunner, readWorkingTreeStatus } from "../engine/gitStatus.ts";
 import { CliFailure, type FailureDoc } from "../kit/output.ts";
 import { hasNpmChannel, npmRegistry, packageCommand, packageCommandAt, packageName } from "../kit/packageName.ts";
 import { sanitizeLabel } from "../kit/prompts.ts";
@@ -89,7 +91,7 @@ import { provenanceFromManifest, type ProvenanceRollup } from "./sync/report.ts"
  *
  * Three parts, one exit code:
  *
- * 1. **DOCTOR** — fifteen environment and state probes, each a
+ * 1. **DOCTOR** — seventeen environment and state probes, each a
  *    {@link DoctorCheck} row. Every probe is total: it answers, or it warns
  *    about why it could not, but it never takes the command down with it.
  * 2. **DRIFT** — {@link runDriftGate} runs the sync engine's read-only PLAN
@@ -1907,6 +1909,215 @@ export function checkCloudInstall(
   };
 }
 
+// ── The autonomy setting's deploying workflows ─────────────────────────────
+
+/** Where GitHub Actions reads workflows, repo-relative and displayed POSIX. */
+const WORKFLOWS_DIR = ".github/workflows";
+
+/**
+ * A workflow filter pattern as GitHub reads it, as a regular expression: `**`
+ * crosses `/`, `*` stays inside a segment, `?` and `+` quantify the character
+ * before them, `[...]` is a class. `null` for a pattern that compiles to no
+ * expression (a leading `?`), which then matches nothing.
+ */
+function githubFilterRegExp(pattern: string): RegExp | null {
+  let source = "";
+  for (let index = 0; index < pattern.length; index += 1) {
+    const char = pattern.charAt(index);
+    if (char === "*") {
+      const double = pattern.charAt(index + 1) === "*";
+      source += double ? ".*" : "[^/]*";
+      if (double) index += 1;
+    } else if (char === "?" || char === "+") {
+      source += char;
+    } else if (char === "[" && pattern.indexOf("]", index + 1) !== -1) {
+      const close = pattern.indexOf("]", index + 1);
+      source += pattern.slice(index, close + 1);
+      index = close;
+    } else {
+      source += char.replace(/[.^${}()|[\]\\]/g, "\\$&");
+    }
+  }
+  try {
+    return new RegExp(`^${source}$`, "u");
+  } catch {
+    return null;
+  }
+}
+
+/** Whether `name` passes a filter list in order: a match includes, a later `!` match excludes. */
+function filterMatches(name: string, patterns: readonly string[]): boolean {
+  let matched = false;
+  for (const pattern of patterns) {
+    const negated = pattern.startsWith("!");
+    if (githubFilterRegExp(negated ? pattern.slice(1) : pattern)?.test(name) === true) matched = !negated;
+  }
+  return matched;
+}
+
+/** A filter value as a list: one string, or the strings of a sequence; `null` when absent or neither. */
+function filterList(value: unknown): string[] | null {
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string");
+  return null;
+}
+
+/** Characters that make a branch filter entry a pattern rather than one branch's name. */
+const FILTER_GLOB = /[*?+[\]!]/;
+
+/**
+ * The branches a workflow's `on:` runs it for on a push, as `check` names them
+ * (REQ-FLOW-139): the default branch whenever the push trigger reaches it — a
+ * bare `push` (a string or a list member), a `push` with no branch filter, a
+ * `branches` list that matches it, a `branches-ignore` that does not exclude
+ * it — plus each other branch or pattern a `branches` list names. A push
+ * filtered on tags alone runs for no branch, so it names none.
+ */
+function pushTriggerBranches(on: unknown, defaultBranch: string): string[] {
+  let push: unknown = null;
+  if (typeof on === "string" || Array.isArray(on)) {
+    if (on !== "push" && !(Array.isArray(on) && on.includes("push"))) return [];
+  } else if (isPlainObject(on) && Object.hasOwn(on, "push")) {
+    push = on["push"];
+  } else {
+    return [];
+  }
+  if (!isPlainObject(push)) return [defaultBranch];
+  const branches = filterList(push["branches"]);
+  if (branches !== null) {
+    const named = new Map<string, string>();
+    if (filterMatches(defaultBranch, branches)) named.set(defaultBranch.toLowerCase(), defaultBranch);
+    for (const entry of branches) {
+      if (entry.startsWith("!")) continue;
+      if (FILTER_GLOB.test(entry) || filterMatches(entry, branches)) named.set(entry.toLowerCase(), entry);
+    }
+    return [...named.values()];
+  }
+  const ignored = filterList(push["branches-ignore"]);
+  if (ignored !== null) return filterMatches(defaultBranch, ignored) ? [] : [defaultBranch];
+  if (push["tags"] !== undefined || push["tags-ignore"] !== undefined) return [];
+  return [defaultBranch];
+}
+
+/** The ids of the jobs that name a deployment environment, as a string or as `{ name }`. */
+function environmentJobs(workflow: Record<string, unknown>): string[] {
+  const jobs = workflow["jobs"];
+  if (!isPlainObject(jobs)) return [];
+  return Object.entries(jobs)
+    .filter(([, job]) => {
+      if (!isPlainObject(job)) return false;
+      const environment = job["environment"];
+      const name = isPlainObject(environment) ? environment["name"] : environment;
+      return typeof name === "string" && name.trim() !== "";
+    })
+    .map(([jobId]) => jobId);
+}
+
+/**
+ * The `autonomy-deploying` row (REQ-FLOW-139). In mode `autonomous` the land
+ * verb merges into a branch on the evidence alone unless
+ * `autonomy.deployingBranches` names it, so a workflow that deploys on a push
+ * to such a branch would deploy with no person asked. The row reads each
+ * `.github/workflows/*.y{a,}ml` that is a regular file (a link is not
+ * followed), and warns for every job that names an `environment` in a
+ * workflow whose push trigger runs for a branch the setting does not list,
+ * naming the workflow, the job and the branch, and the `config set` line that
+ * lists it. A file it cannot read or parse warns as `not evaluated`. It
+ * passes with no manifest, in mode `ask`, with no workflows folder, and when
+ * every such branch is listed.
+ *
+ * The default branch is `refs/remotes/origin/HEAD`'s, read through
+ * `readDefaultBranch` only once a workflow deploys, else `main`. Every name
+ * read from a workflow goes through `sanitizeLabel` before it is printed.
+ */
+export async function checkAutonomyDeploying(
+  rootDir: string,
+  manifest: SetupManifest | null,
+  readDefaultBranch: (rootDir: string) => string | null,
+): Promise<DoctorCheck> {
+  const id = "autonomy-deploying";
+  if (manifest === null) {
+    return { id, status: "pass", detail: "no readable manifest, so no autonomy setting to judge" };
+  }
+  const setting = resolveAutonomy(manifest);
+  if (setting.mode === "ask") {
+    return { id, status: "pass", detail: "autonomy.mode is ask, so the land verb asks before every merge" };
+  }
+  const dir = join(rootDir, ".github", "workflows");
+  let files: string[];
+  try {
+    files = (await readdir(dir)).filter((name) => /\.ya?ml$/.test(name)).toSorted();
+  } catch (cause) {
+    const code = (cause as NodeJS.ErrnoException).code;
+    if (code !== "ENOENT" && code !== "ENOTDIR") throw cause;
+    return { id, status: "pass", detail: `no ${WORKFLOWS_DIR} folder, so no workflow deploys on a push` };
+  }
+
+  // Read together; `null` is a file that is not a regular file, or does not read or parse.
+  const read = await Promise.all(
+    files.map(async (name) => {
+      const path = join(dir, name);
+      const display = `${WORKFLOWS_DIR}/${sanitizeLabel(name)}`;
+      try {
+        if (!(await lstat(path)).isFile()) return { display, workflow: null };
+        const workflow = parseYamlStrict(await readFile(path, "utf8"), display) as Record<string, unknown>;
+        return { display, workflow };
+      } catch {
+        return { display, workflow: null };
+      }
+    }),
+  );
+
+  const notEvaluated: string[] = [];
+  const unlisted: { file: string; jobs: string[]; branch: string }[] = [];
+  let defaultBranch: string | undefined;
+  for (const { display, workflow } of read) {
+    if (workflow === null) {
+      notEvaluated.push(display);
+      continue;
+    }
+    const jobs = environmentJobs(workflow);
+    if (jobs.length === 0) continue;
+    defaultBranch ??= readDefaultBranch(rootDir) ?? "main";
+    for (const branch of pushTriggerBranches(workflow["on"], defaultBranch)) {
+      if (!matchesDeployingBranch(branch, setting.deployingBranches)) unlisted.push({ file: display, jobs, branch });
+    }
+  }
+
+  if (unlisted.length === 0 && notEvaluated.length === 0) {
+    return {
+      id,
+      status: "pass",
+      detail:
+        setting.deployingBranches.length === 0
+          ? `no workflow in ${WORKFLOWS_DIR} deploys on a push`
+          : "every branch a workflow deploys on a push to is in autonomy.deployingBranches",
+    };
+  }
+  const missing = [...new Set(unlisted.map((entry) => entry.branch))];
+  const widened = [...setting.deployingBranches, ...missing].join(",");
+  return {
+    id,
+    status: "warn",
+    detail: [
+      ...unlisted.map(
+        (entry) =>
+          `${entry.file}: job ${entry.jobs.map((job) => sanitizeLabel(job)).join(", ")} names an environment ` +
+          `and runs on a push to ${sanitizeLabel(entry.branch)}`,
+      ),
+      ...(missing.length === 0
+        ? []
+        : [
+            `autonomy.deployingBranches does not list ${missing.map((branch) => sanitizeLabel(branch)).join(", ")}, ` +
+              "so the land verb would merge into it on the evidence alone and the workflow deploys; " +
+              `add it: ${packageCommand(`config set autonomy.deployingBranches ${shellWord(widened)}`)}, ` +
+              `then ${packageCommand("sync")}`,
+          ]),
+      ...notEvaluated.map((file) => `not evaluated: ${file}`),
+    ].join("\n"),
+  };
+}
+
 /** This installation's call identity, as every remedy here renders it ({@link packageCommand}). */
 function ownCliCall(): Omit<CliCallContext, "version"> {
   const registry = npmRegistry();
@@ -1944,6 +2155,7 @@ export async function runDoctor(
     packCatalog,
     movedSkills,
     modelPins,
+    autonomyDeploying,
     changeClasses,
     invariants,
   ] = await Promise.all([
@@ -1959,6 +2171,14 @@ export async function runDoctor(
     ),
     guarded("moved-skills", () => checkMovedSkills(rootDir, manifest)),
     guarded("model-pins", async () => modelPinsRow(rootDir, manifest, app.runtime.env)),
+    // Through the pinned runner, as `config detect` reads the same ref.
+    guarded("autonomy-deploying", () =>
+      checkAutonomyDeploying(
+        rootDir,
+        manifest,
+        (root) => engine.workspace.git.detectRepoGitIdentity(root, gitCheckRunner()).defaultBranch,
+      ),
+    ),
     checkChangeClasses(rootDir),
     guarded("invariants", checkInvariants),
   ]);
@@ -1994,6 +2214,10 @@ export async function runDoctor(
     // Whether a skill that moved from the core to a pack is still overlaid,
     // overridden or recorded as a core copy here; read without the plan.
     movedSkills,
+    // Whether a workflow deploys on a push to a branch the autonomy setting
+    // lets the land verb merge into unasked. It answers about this repository,
+    // and sits before `model-pins`, which `cloud-install` follows.
+    autonomyDeploying,
     // Whether each client's pinned and emitted models are on the account's own
     // list; it answers about this repository's pins, so it sits with the
     // repository rows.

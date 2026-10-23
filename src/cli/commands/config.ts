@@ -62,13 +62,19 @@ import { verificationCommandsFor } from "../../detect/verificationGates.ts";
 import { DETECTION_UNKNOWN } from "../../emit/substitution.ts";
 import type { DetectedSummary } from "../../types/detect.ts";
 import {
+  AUTONOMY_MODES,
+  DEPLOYING_ACTS,
   RULE_DELIVERIES,
+  type AutonomyConfig,
+  type AutonomyMode,
   type ClassPins,
+  type DeployingAct,
   type GatesConfig,
   type ModelConfig,
   type RuleDelivery,
   type SetupManifest,
 } from "../../types/manifest.ts";
+import { loosens, resolveAutonomy } from "../../config/autonomy.ts";
 import {
   NEXT_DRY_RUN_LINE,
   NEXT_SYNC_LINE,
@@ -689,6 +695,31 @@ function gateSpec(gate: GateKey): ConfigKeySpec {
   };
 }
 
+// ── The autonomy setting ─────────────────────────────────────────────
+
+/** A persisted autonomy list as `read` shows it; an empty list reads as absent. */
+function readAutonomyList(values: readonly string[] | undefined): string | null {
+  return values === undefined || values.length === 0 ? null : values.join(", ");
+}
+
+/**
+ * Set or clear autonomy members. A member passed as `undefined` is cleared,
+ * and an emptied block is dropped, on the {@link applyGate} precedent. What a
+ * value may be is the schema's call.
+ */
+function applyAutonomy(
+  draft: SetupManifest,
+  change: { readonly [Field in keyof AutonomyConfig]?: AutonomyConfig[Field] | undefined },
+): void {
+  const next: AutonomyConfig = { ...draft.autonomy };
+  for (const [field, value] of Object.entries(change) as [keyof AutonomyConfig, unknown][]) {
+    if (value === undefined) delete next[field];
+    else Object.assign(next, { [field]: value });
+  }
+  if (Object.keys(next).length === 0) delete draft.autonomy;
+  else draft.autonomy = next;
+}
+
 /**
  * The closed key registry. Adding a row is the only way to make a key
  * addressable — `set` refuses anything else by name, so a typo can never write
@@ -934,6 +965,40 @@ export const KEY_SPECS: readonly ConfigKeySpec[] = [
   gateSpec("lint"),
   gateSpec("typecheck"),
   gateSpec("all"),
+  {
+    key: "autonomy.mode",
+    hint:
+      `one of ${AUTONOMY_MODES.join(" | ")} — autonomous lets an agent mark a pull request ready ` +
+      `and create a local tag unasked; ask asks for both, as 1.16.0 did`,
+    choices: AUTONOMY_MODES,
+    read: (manifest) => manifest.autonomy?.mode ?? null,
+    resolve: (manifest) => resolveAutonomy(manifest).mode,
+    apply: (draft, raw) => applyAutonomy(draft, { mode: raw as AutonomyMode }),
+  },
+  {
+    key: "autonomy.deployingBranches",
+    hint:
+      `a comma-separated list of at most 32 branch names or patterns whose \`*\` stays inside ` +
+      `one path segment (\`release/*\`), or \`none\` to clear — a push to one asks`,
+    read: (manifest) => readAutonomyList(manifest.autonomy?.deployingBranches),
+    resolve: (manifest) => renderList(resolveAutonomy(manifest).deployingBranches),
+    apply: (draft, raw) =>
+      applyAutonomy(draft, { deployingBranches: raw === NONE ? undefined : parseCsv(raw) }),
+  },
+  {
+    key: "autonomy.deployingActs",
+    hint:
+      `a comma-separated subset of ${DEPLOYING_ACTS.join(", ")}, or \`none\` to clear — ` +
+      `a named act asks in every mode`,
+    choices: DEPLOYING_ACTS,
+    multiple: true,
+    read: (manifest) => readAutonomyList(manifest.autonomy?.deployingActs),
+    resolve: (manifest) => renderList(resolveAutonomy(manifest).deploying),
+    apply: (draft, raw) =>
+      applyAutonomy(draft, {
+        deployingActs: raw === NONE ? undefined : (parseCsv(raw) as DeployingAct[]),
+      }),
+  },
 ];
 
 /** Every addressable key, in display order. */
@@ -1267,25 +1332,53 @@ async function applyKeyValue(
 
   const diff = `${key}: ${sanitizeLabel(before.value ?? before.resolved)} ${ctx.palette.cyan("->")} ${sanitizeLabel(after.resolved)}`;
   const notice = specFor(key).notice?.(next) ?? null;
+  // Against the manifest this run read, not the guard on disk: `config` writes
+  // state only, and it is `sync` that compares against what the guard holds.
+  const loosened = loosens(resolveAutonomy(next), resolveAutonomy(manifest));
   if (ctx.dryRun) {
     ctx.io.out(`would set ${diff}\n`);
     if (notice !== null) ctx.io.out(`${notice}\n`);
-    ctx.io.out(`${NEXT_DRY_RUN_LINE}\n`);
+    ctx.io.out(`${loosened ? NEXT_DRY_RUN_LOOSEN_LINE : NEXT_DRY_RUN_LINE}\n`);
     return {
       exitCode: 0,
-      json: { key, changed: false, dryRun: true, previous: before.value, value: after.value },
+      json: {
+        key,
+        changed: false,
+        dryRun: true,
+        previous: before.value,
+        value: after.value,
+        ...(loosened ? { loosens: true } : {}),
+      },
     };
   }
 
   await writeSetupManifest(ctx, rootDir, next);
   ctx.io.out(`set ${diff}\n`);
   if (notice !== null) ctx.io.out(`${notice}\n`);
-  ctx.io.out(`${NEXT_SYNC_LINE}\n`);
+  ctx.io.out(`${loosened ? NEXT_LOOSEN_LINE : NEXT_SYNC_LINE}\n`);
   return {
     exitCode: 0,
-    json: { key, changed: true, previous: before.value, value: after.value },
+    json: {
+      key,
+      changed: true,
+      previous: before.value,
+      value: after.value,
+      ...(loosened ? { loosens: true } : {}),
+    },
   };
 }
+
+/**
+ * The closing line of a change that loosens the autonomy setting
+ * (REQ-FLOW-138): `sync` applies such a change only with `--loosen`, and that
+ * flag is the person's to run, so the line names both.
+ */
+const NEXT_LOOSEN_LINE =
+  "next: this loosens the autonomy setting, so the person runs stamity sync --loosen to apply it";
+
+/** {@link NEXT_LOOSEN_LINE}'s dry-run counterpart, on the {@link NEXT_DRY_RUN_LINE} shape. */
+const NEXT_DRY_RUN_LOOSEN_LINE =
+  "next: re-run without --dry-run, then the person runs stamity sync --loosen (this loosens the autonomy setting)";
 
 /** One refreshed field: what the manifest said, and what the repo says now. */
 interface DetectRow {
