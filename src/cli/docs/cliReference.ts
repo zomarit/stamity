@@ -163,6 +163,11 @@ const CODE_MEANINGS: Record<ErrorCode, string> = {
   EXPECTATION_ERROR:
     "`check` was told which release, clients or install mode to expect (`--expect-*`), and the " +
     "repository records another",
+  // Thrown by the two write loops behind `sync`, `init` and `workspace sync` (REQ-FLOW-138): a guard copy
+  // would bake a looser autonomy setting than the guard on disk, `HEAD` or the replaced manifest holds.
+  AUTONOMY_LOOSENED:
+    "a `sync`, `init` or `workspace sync` would write a guard looser than the one on disk, the setting committed " +
+    "at `HEAD` or the manifest it replaces; nothing was written, and the person runs the command with `--loosen`",
 };
 
 /*

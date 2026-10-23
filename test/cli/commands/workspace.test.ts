@@ -1971,3 +1971,39 @@ describe("workspace sync — each member's client model lists (REQ-LADDER-006)",
     expect(await exists(join(api, ".stamity", "client-models.json"))).toBe(false);
   });
 });
+
+/**
+ * The loosen gate (REQ-FLOW-138) reaches every member through `applySync`: a
+ * member whose manifest was loosened after its guard was baked fails by name,
+ * its guard copy untouched, and `--loosen` is the person's way through.
+ */
+describe("workspace sync — a loosened member manifest needs --loosen", () => {
+  const GUARD_COPY = ".claude/hooks/stamity/stamity-person-only-guard.mjs";
+
+  it("fails the member with AUTONOMY_LOOSENED and leaves its guard copy; --loosen syncs it", async () => {
+    const temp = getTemp();
+    await seedCorpus(temp);
+    const root = await seedWorkspace(temp, manifestOf([{ path: "apps/api" }], { defaults: { tools: ["claude"] } }));
+    const api = await seedSyncMember(root, "apps/api", { tools: ["claude"], patch: { autonomy: { mode: "ask" } } });
+    expect((await runSync(root)).code).toBe(0);
+    const baked = await readFile(join(api, GUARD_COPY), "utf8");
+    expect(baked).toContain('// stamity-autonomy {"mode":"ask"');
+    const current = await readManifest(api);
+    if (current === null) throw new Error("no member manifest");
+    const { autonomy: _dropped, ...loosened } = current;
+    await writeManifest(api, loosened, { now: T0 });
+
+    const refused = await runSync(root, ["--json"]);
+
+    expect(refused.code).toBe(1);
+    const doc = singleSyncDocument(refused.stdout);
+    expect(doc.repos[0]?.state).toBe("failed");
+    expect(doc.repos[0]?.error?.code).toBe("AUTONOMY_LOOSENED");
+    expect(await readFile(join(api, GUARD_COPY), "utf8")).toBe(baked);
+
+    const passed = await runSync(root, ["--loosen"]);
+
+    expect(passed.code, passed.stdout).toBe(0);
+    expect(await readFile(join(api, GUARD_COPY), "utf8")).toContain('// stamity-autonomy {"mode":"autonomous"');
+  });
+});

@@ -56,7 +56,8 @@ import {
   type ModelListOutcome,
 } from "../../engine/clientModels.ts";
 import { getEmissionPlanner } from "../../engine/emission.ts";
-import { hasNpmChannel, packageName, registryOption } from "../../kit/packageName.ts";
+import { gateGuardCopies, strictGuardGate, type GuardGate } from "../../engine/autonomyGate.ts";
+import { hasNpmChannel, packageCommand, packageName, registryOption } from "../../kit/packageName.ts";
 import {
   coOwnedDocumentLanes,
   coOwnedOwnershipOf,
@@ -134,6 +135,12 @@ export interface InitApplyOptions {
   env?: NodeJS.ProcessEnv;
   /** Reads one client's model list; {@link listClientModels} by default. A test injects one. */
   listModels?: ModelLister;
+  /**
+   * The loosen gate a planned guard copy whose autonomy marker changes is handed to (REQ-FLOW-138,
+   * `../../engine/autonomyGate.ts`). Absent, the strict one runs: only `init --loosen` passes a gate that
+   * lets a loosening through.
+   */
+  guardGate?: GuardGate;
 }
 
 /** What an apply did — or, under `dryRun`, would do. */
@@ -240,6 +247,12 @@ const STATE_DIRS: readonly string[] = [
  * propagates instead of being shadowed by a fresh init over broken state.
  * `force` skips the read entirely — the existing manifest, corrupt or not, is
  * being replaced.
+ *
+ * Refuses with `AUTONOMY_LOOSENED` when a planned guard copy would bake a
+ * looser autonomy setting than the guard copies on disk, `HEAD` or the
+ * manifest it replaces hold (REQ-FLOW-138), unless `guardGate` lets it
+ * through. The gate runs after the emission is planned and before the state
+ * scaffold or any other byte is written, in dry-run too.
  */
 export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport> {
   const { rootDir, decisions, defaults, importChoice, engineVersion, dryRun, force } = opts;
@@ -303,15 +316,6 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
     stateKeepPaths().map(async (path) => ({ path, exists: await pathExists(join(rootDir, path)) })),
   );
   const createdKeeps = keepProbes.filter((entry) => !entry.exists).map((entry) => entry.path);
-  if (!dryRun) {
-    await Promise.all(createdDirs.map((dir) => mkdir(join(rootDir, dir), { recursive: true })));
-    // The placeholders that make the two writable subdirectories survivable
-    // through git, written by the SAME helper `sync` calls — so the panel's
-    // "the state directory is committed on purpose" is true of every path it
-    // covers, and a clone that lost them has a verb that restores them
-    // (`../../../emit/stateScaffold.ts`).
-    await ensureStateScaffold(rootDir);
-  }
 
   // Emission: the planner decides WHAT to write; every write goes through the
   // merge engine with the version stamp, so re-running init over generated
@@ -336,6 +340,27 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
     ...registryOption(opts),
     facts: { monorepoPackages: decisions.monorepoPackages },
   });
+
+  // The loosen gate (REQ-FLOW-138), after the plan and before the first byte: a
+  // refused loosening leaves no state directory behind. Planning before the
+  // scaffold is safe: a dry run plans with no scaffold on disk and reports the
+  // same plan.
+  await gateGuardCopies(
+    rootDir,
+    outputs,
+    previous?.ledger ?? [],
+    opts.guardGate ?? strictGuardGate(rootDir, packageCommand("init --loosen")),
+  );
+
+  if (!dryRun) {
+    await Promise.all(createdDirs.map((dir) => mkdir(join(rootDir, dir), { recursive: true })));
+    // The placeholders that make the two writable subdirectories survivable
+    // through git, written by the SAME helper `sync` calls — so the panel's
+    // "the state directory is committed on purpose" is true of every path it
+    // covers, and a clone that lost them has a verb that restores them
+    // (`../../../emit/stateScaffold.ts`).
+    await ensureStateScaffold(rootDir);
+  }
 
   // Ownership as this run knows it — which on a `--force` re-init is the PACK
   // rows and nothing else. The manifest above is freshly composed with an empty

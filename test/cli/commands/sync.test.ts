@@ -26,6 +26,10 @@ import type { Tool } from "../../../src/types/core.ts";
 import { MANIFEST_FILE, MANIFEST_VERSION, type ModelConfig } from "../../../src/types/manifest.ts";
 import type * as PathsApi from "../../../src/shared/paths.ts";
 import { STATE_DIR } from "../../../src/types/markers.ts";
+import { resolveAutonomy } from "../../../src/config/autonomy.ts";
+import { buildPersonOnlyGuardScript } from "../../../src/hooks/scripts.ts";
+import type { AutonomyConfig } from "../../../src/types/manifest.ts";
+import { seedGitRepo } from "../../support/repoFixtures.ts";
 import { canonical, npxCommand, registryArgument } from "../../support/identity.ts";
 import { makeCliFixture } from "../../support/cliHarness.ts";
 import { runInProcess } from "../../support/inProcess.ts";
@@ -1289,5 +1293,137 @@ describe("sync — the child-process harness starts no client program", () => {
     } finally {
       await fixture.cleanup();
     }
+  });
+});
+
+/**
+ * The loosen gate (REQ-FLOW-138), through the command: the planned guard copy
+ * is the guard builder's own output for the autonomy the case names, at
+ * Claude Code's copy path, so the marker the gate compares is the real one.
+ */
+describe("sync — loosening the autonomy setting needs --loosen", () => {
+  const GUARD_COPY = ".claude/hooks/stamity/stamity-person-only-guard.mjs";
+
+  function guardOutput(autonomy?: AutonomyConfig): AdapterOutput {
+    const setting = resolveAutonomy(autonomy === undefined ? {} : { autonomy });
+    return {
+      path: GUARD_COPY,
+      content: buildPersonOnlyGuardScript({ tool: "claude", layout: "claude", autonomy: setting }),
+      owner: { adapter: "claude", artifactId: "stamity-person-only-guard", artifactType: "infra" },
+    };
+  }
+
+  /** The manifest on disk, re-written with `autonomy` (or without the key). */
+  async function setAutonomy(root: string, autonomy?: AutonomyConfig): Promise<void> {
+    const current = await readManifest(root);
+    if (current === null) throw new Error("no manifest");
+    const { autonomy: _dropped, ...rest } = current;
+    await writeManifest(root, autonomy === undefined ? rest : { ...rest, autonomy }, { now: T0 });
+  }
+
+  /** A first sync that bakes `autonomy` into the guard copy, recorded in the ledger as the engine's. */
+  async function seedBaked(autonomy?: AutonomyConfig): Promise<string> {
+    const root = await seedRepo(tempDir());
+    await setAutonomy(root, autonomy);
+    plannerOutputs.value = [guardOutput(autonomy), managedOutput(GUIDE_PATH, "guide body")];
+    const first = await runSync(root);
+    expect(first.code, first.stderr).toBe(0);
+    return root;
+  }
+
+  it("refuses a manifest looser than the baked mode `ask` with AUTONOMY_LOOSENED and writes nothing; --loosen writes", async () => {
+    const root = await seedBaked({ mode: "ask" });
+    await setAutonomy(root);
+    plannerOutputs.value = [guardOutput(), managedOutput(GUIDE_PATH, "a changed guide body")];
+    const before = await Promise.all([GUARD_COPY, GUIDE_PATH, `${STATE_DIR}/${MANIFEST_FILE}`].map((rel) => readFile(join(root, rel), "utf8")));
+
+    const refused = await runSync(root, ["--json"]);
+
+    expect(refused.code).toBe(1);
+    const doc = parseSingleDoc(refused.stdout);
+    expect(doc["ok"]).toBe(false);
+    expect((doc["error"] as { code: string }).code).toBe("AUTONOMY_LOOSENED");
+    expect((doc["error"] as { next: string }).next).toContain("sync --loosen");
+    const after = await Promise.all([GUARD_COPY, GUIDE_PATH, `${STATE_DIR}/${MANIFEST_FILE}`].map((rel) => readFile(join(root, rel), "utf8")));
+    expect(after).toEqual(before);
+
+    const loosened = await runSync(root, ["--loosen"]);
+
+    expect(loosened.code, loosened.stderr).toBe(0);
+    expect(await readFile(join(root, GUARD_COPY), "utf8")).toContain('// stamity-autonomy {"mode":"autonomous"');
+  });
+
+  it("previews the same refusal under --dry-run", async () => {
+    const root = await seedBaked({ mode: "ask" });
+    await setAutonomy(root);
+    plannerOutputs.value = [guardOutput()];
+
+    const preview = await runSync(root, ["--dry-run", "--json"]);
+
+    expect(preview.code).toBe(1);
+    expect((parseSingleDoc(preview.stdout)["error"] as { code: string }).code).toBe("AUTONOMY_LOOSENED");
+  });
+
+  it("tightens with no flag: mode `ask` over a baked `autonomous`", async () => {
+    const root = await seedBaked();
+    await setAutonomy(root, { mode: "ask" });
+    plannerOutputs.value = [guardOutput({ mode: "ask" })];
+
+    const tightened = await runSync(root);
+
+    expect(tightened.code, tightened.stderr).toBe(0);
+    expect(await readFile(join(root, GUARD_COPY), "utf8")).toContain('// stamity-autonomy {"mode":"ask"');
+  });
+
+  it("refuses removing `workflow-dispatch` from the deploying acts", async () => {
+    const root = await seedBaked({ deployingActs: ["workflow-dispatch"] });
+    await setAutonomy(root);
+    plannerOutputs.value = [guardOutput()];
+
+    const refused = await runSync(root, ["--json"]);
+
+    expect(refused.code).toBe(1);
+    expect((parseSingleDoc(refused.stdout)["error"] as { code: string }).code).toBe("AUTONOMY_LOOSENED");
+  });
+
+  it("refuses a committed looser manifest once the guard copies are deleted", async ({ skip }) => {
+    const root = await seedBaked();
+    try {
+      await seedGitRepo(root);
+    } catch (error) {
+      if (error instanceof Error && error.name === "GitUnavailableError") skip();
+      throw error;
+    }
+    await rm(join(root, GUARD_COPY));
+    plannerOutputs.value = [guardOutput()];
+
+    const refused = await runSync(root, ["--json"]);
+
+    expect(refused.code).toBe(1);
+    expect((parseSingleDoc(refused.stdout)["error"] as { code: string }).code).toBe("AUTONOMY_LOOSENED");
+    expect(existsSync(join(root, GUARD_COPY))).toBe(false);
+  });
+
+  it("gates nothing when the guard copy's marker stays as it is, even with HEAD stricter", async ({ skip }) => {
+    const root = await seedBaked({ mode: "ask" });
+    try {
+      await seedGitRepo(root);
+    } catch (error) {
+      if (error instanceof Error && error.name === "GitUnavailableError") skip();
+      throw error;
+    }
+    await setAutonomy(root);
+    plannerOutputs.value = [guardOutput()];
+    expect((await runSync(root, ["--loosen"])).code).toBe(0);
+    plannerOutputs.value = [guardOutput(), managedOutput(GUIDE_PATH, "a later guide body")];
+
+    const again = await runSync(root);
+
+    expect(again.code, again.stderr).toBe(0);
+  });
+
+  it("names --loosen in its help", async () => {
+    const help = await runSync(tempDir().path("anywhere"), ["--help"]);
+    expect(help.stdout).toContain("--loosen");
   });
 });

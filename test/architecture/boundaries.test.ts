@@ -601,6 +601,10 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // same-wave edges in both directions that no call site wants.
   "src/cli/engine/emissionWrite.ts": { unit: "ew-u1", wave: 13 },
   "src/cli/engine/gitStatus.ts": { unit: "p2-03", wave: 13 },
+  // Plan 022 (a3b): the loosen gate (REQ-FLOW-138), over the wave-2 autonomy
+  // setting, the wave-4 guard file name and bare look and the wave-1 PATH walk,
+  // below the wave-14 write loops (`init/apply.ts`, `sync/engine.ts`) that run it.
+  "src/cli/engine/autonomyGate.ts": { unit: "a3b-loosen-gate", wave: 13 },
   // Plan 021 file 1 (u4): the engine's one git runner that writes and its one
   // door onto GitHub's REST API, over the wave-1 PATH walk and the wave-4 bare
   // look, below the wave-14 `gate` and run verbs that start them.

@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { chmod, link, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, link, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { PassThrough, Writable } from "node:stream";
 import { stripVTControlCharacters } from "node:util";
@@ -2996,5 +2996,56 @@ describe("init — every unarmed run is byte-identical", () => {
     expect(oneKeys).toEqual(bareKeys);
     expect(bareKeys).not.toContain("workspaceCandidates");
     expect(bareKeys).not.toContain("workspaceCreated");
+  });
+});
+
+/**
+ * The loosen gate (REQ-FLOW-138) on `init`: a full `clean` removes the state
+ * folder and every guard copy, but `HEAD` still holds the committed setting,
+ * so a fresh `init` cannot start from the default without the person.
+ */
+describe("init — re-initialising after a full clean keeps the committed autonomy setting", () => {
+  async function cleanedRepoCommittedAsk(skip: () => void): Promise<string> {
+    const root = await makeRepo();
+    const manifest = createManifest({
+      tools: ["claude"],
+      selection: { items: { agent: [], skill: [], rule: [], command: [] } },
+      generatorVersion: "0.0.0-test",
+      now: new Date("2026-10-23T00:00:00.000Z"),
+    });
+    await writeManifest(root, { ...manifest, autonomy: { mode: "ask" } });
+    try {
+      await seedGitRepo(root);
+    } catch (error) {
+      if (error instanceof Error && error.name === "GitUnavailableError") skip();
+      throw error;
+    }
+    // What a full `clean` leaves: no state folder, no guard copy; HEAD unchanged.
+    await rm(join(root, STATE_DIR), { recursive: true, force: true });
+    return root;
+  }
+
+  it("refuses `init -y` with AUTONOMY_LOOSENED and writes no state folder", async ({ skip }) => {
+    const root = await cleanedRepoCommittedAsk(skip);
+
+    const refused = await runInit(root, ["-y", "--json"]);
+
+    expect(refused.code).toBe(1);
+    const doc = parseSingleDoc(refused.stdout);
+    expect((doc["error"] as { code: string }).code).toBe("AUTONOMY_LOOSENED");
+    expect((doc["error"] as { next: string }).next).toContain("init --loosen");
+    expect(existsSync(join(root, STATE_DIR))).toBe(false);
+    expect(existsSync(join(root, ".claude/hooks/stamity/stamity-person-only-guard.mjs"))).toBe(false);
+  });
+
+  it("writes the setup with `init -y --loosen`", async ({ skip }) => {
+    const root = await cleanedRepoCommittedAsk(skip);
+
+    const loosened = await runInit(root, ["-y", "--loosen"]);
+
+    expect(loosened.code, loosened.stderr).toBe(0);
+    expect(await readFile(join(root, ".claude/hooks/stamity/stamity-person-only-guard.mjs"), "utf8")).toContain(
+      '// stamity-autonomy {"mode":"autonomous"',
+    );
   });
 });

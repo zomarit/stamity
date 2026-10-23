@@ -67,6 +67,7 @@ import {
   rowsCarriedThroughSweep,
   sha256,
 } from "../../engine/emissionWrite.ts";
+import { gateGuardCopies, strictGuardGate, type GuardGate } from "../../engine/autonomyGate.ts";
 import { readWorkingTreeStatus, type WorkingTreeStatus } from "../../engine/gitStatus.ts";
 import { hasNpmChannel, packageCommand, packageName, registryOption } from "../../kit/packageName.ts";
 import type { GitRunner } from "../../../workspace/git.ts";
@@ -1090,15 +1091,29 @@ function collisionRefusalMessage(plan: SyncPlan): string {
  * `.gitignore` the lane refuses to republish (a link, a shared hard link, a
  * block-severity injection pattern in the bytes it would keep) stops the run
  * with nothing written.
+ *
+ * Before either, the loosen gate (REQ-FLOW-138, `../../engine/autonomyGate.ts`):
+ * a planned guard copy whose autonomy marker differs from the copy on disk is
+ * handed to `guardGate`, which refuses a looser setting with
+ * `AUTONOMY_LOOSENED` and nothing written. A caller that passes no gate gets
+ * the strict one, so only a command run with `--loosen` lets a loosening
+ * through. A dry run is gated too: it previews the refusal the write would meet.
  */
 export async function applySync(
   rootDir: string,
   plan: SyncPlan,
-  opts: { engineVersion: string; force: boolean; dryRun: boolean; now?: Date },
+  opts: { engineVersion: string; force: boolean; dryRun: boolean; now?: Date; guardGate?: GuardGate },
 ): Promise<SyncApplyReport> {
   const { engineVersion, force, dryRun } = opts;
   const now = opts.now ?? new Date();
   const statePath = manifestPath(rootDir);
+
+  await gateGuardCopies(
+    rootDir,
+    plan.outputs,
+    plan.manifest.ledger,
+    opts.guardGate ?? strictGuardGate(rootDir, packageCommand("sync --loosen")),
+  );
 
   const prospective = toLedgerEntries(plannedRows(plan.outputs));
   assertLedgerContainment(prospective, rootDir);

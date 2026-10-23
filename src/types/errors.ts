@@ -45,7 +45,8 @@ export type ErrorCode =
   | "CLEAN_ERROR"
   | "NETWORK_ERROR"
   | "LOCK_TIMEOUT"
-  | "EXPECTATION_ERROR";
+  | "EXPECTATION_ERROR"
+  | "AUTONOMY_LOOSENED";
 
 /** Process status for an ordinary failure. See the module header. */
 const FAILURE_EXIT_CODE = 1;

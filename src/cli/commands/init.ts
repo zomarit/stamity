@@ -36,9 +36,11 @@ import {
   writeWorkspaceManifest,
 } from "../../workspace/manifest.ts";
 import { WORKSPACE_MANIFEST_FILE } from "../../workspace/model.ts";
+import { assertNotLoosened } from "../engine/autonomyGate.ts";
 import { readHistoryFacts, readWorkingTreeStatus, type WorkingTreeStatus } from "../engine/gitStatus.ts";
 import { bannerBlock } from "../kit/banner.ts";
 import { CliFailure } from "../kit/output.ts";
+import { packageCommand } from "../kit/packageName.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import {
   closePrompts,
@@ -1029,7 +1031,8 @@ export const initCommand: CommandModule = {
           "what to do with an existing agent config file",
         ).choices([...IMPORT_MODES]),
       )
-      .option("--force", "replace an existing setup in place");
+      .option("--force", "replace an existing setup in place")
+      .option("--loosen", "write a guard copy looser than the autonomy setting on disk, at HEAD or in the manifest it replaces (the person's act)");
   },
 
   async run(ctx, opts): Promise<CommandResult> {
@@ -1223,6 +1226,9 @@ export const initCommand: CommandModule = {
       // The run's own environment, as `sync` reads it: the model-list probe's
       // off switch and the client lookup both answer to it (REQ-LADDER-006).
       env: ctx.app.runtime.env,
+      // The loosen gate (REQ-FLOW-138): `--loosen` is the person's word, which the guard asks for.
+      guardGate: (next) =>
+        assertNotLoosened(rootDir, next, { loosen: opts["loosen"] === true, remedy: packageCommand("init --loosen") }),
     });
     const carry: CarryReport | null =
       migrating !== null

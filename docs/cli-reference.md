@@ -101,6 +101,7 @@ string — there is no second numbering to read.
 | `NETWORK_ERROR` | a git transport failed — `worktree setup` could not reach `origin` to plan its branch; a remote with no such branch is not this |
 | `LOCK_TIMEOUT` | a write lock could not be taken before the retry schedule ran out; another `stamity` run was holding it |
 | `EXPECTATION_ERROR` | `check` was told which release, clients or install mode to expect (`--expect-*`), and the repository records another |
+| `AUTONOMY_LOOSENED` | a `sync`, `init` or `workspace sync` would write a guard looser than the one on disk, the setting committed at `HEAD` or the manifest it replaces; nothing was written, and the person runs the command with `--loosen` |
 
 Two more codes exist only at the CLI edge and never come from the engine:
 `USAGE` for a rejected command line, and `FAILURE` for a fault that
@@ -119,6 +120,7 @@ May write when it runs, so `--dry-run` previews any change without making it.
 | `--migrate <mode>` | what to do with a detected predecessor setup — one of `full`, `skip` | — |
 | `--import-config <mode>` | what to do with an existing agent config file — one of `supplement`, `replace`, `skip` | — |
 | `--force` | replace an existing setup in place | — |
+| `--loosen` | write a guard copy looser than the autonomy setting on disk, at HEAD or in the manifest it replaces (the person's act) | — |
 
 ## `stamity sync`
 
@@ -129,6 +131,7 @@ May write when it runs, so `--dry-run` previews any change without making it.
 | Flag | What it does | Default |
 |---|---|---|
 | `--force` | overwrite colliding unmanaged files after a verified .bak | — |
+| `--loosen` | write a guard copy looser than the autonomy setting on disk, at HEAD or in the manifest it replaces (the person's act) | — |
 
 ## `stamity check`
 
@@ -194,6 +197,7 @@ May write when it runs, so `--dry-run` previews any change without making it.
 |---|---|---|
 | `--tools <csv>` | defaults.tools for the created workspace, comma-separated (claude, cursor, copilot, codex) — workspace init only | — |
 | `--force` | workspace init: overwrite a workspace.json already at this directory, or create one nested inside an outer workspace. workspace sync: in every member, overwrite colliding unmanaged files after a verified .bak | — |
+| `--loosen` | workspace sync only: in every member, write a guard copy looser than the autonomy setting on disk, at HEAD or in the manifest it replaces (the person's act) | — |
 
 ## `stamity worktree`
 
