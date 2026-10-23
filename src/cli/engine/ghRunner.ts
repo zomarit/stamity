@@ -181,6 +181,56 @@ export function parseGhInclude(stdout: string): GhResponse | null {
   return { status: Number(match[1]), json };
 }
 
+/**
+ * review/95: the variables with which a version manager's shim chooses which program it starts, read from the managers'
+ * documentation (none is installed on the machine this was written on): mise's (and its former name rtx's) per-tool
+ * version, environment, config-file and config-filename overrides; asdf's per-tool version, its config file and its
+ * version-file name; volta's shim bypass. Those that only locate an install (`MISE_DATA_DIR`, `MISE_CACHE_DIR`,
+ * `ASDF_DIR`, `ASDF_DATA_DIR`, `VOLTA_HOME`) are kept.
+ */
+const VERSION_CHOOSING: ReadonlySet<string> = new Set([
+  "MISE_ENV",
+  "MISE_ENVIRONMENT",
+  "MISE_PROFILE",
+  "MISE_CONFIG_DIR",
+  "MISE_CONFIG_FILE",
+  "MISE_GLOBAL_CONFIG_FILE",
+  "MISE_SYSTEM_CONFIG_FILE",
+  "MISE_DEFAULT_CONFIG_FILENAME",
+  "MISE_DEFAULT_TOOL_VERSIONS_FILENAME",
+  "MISE_OVERRIDE_CONFIG_FILENAMES",
+  "MISE_OVERRIDE_TOOL_VERSIONS_FILENAMES",
+  "MISE_CEILING_PATHS",
+  "MISE_TRUSTED_CONFIG_PATHS",
+  "RTX_ENV",
+  "RTX_CONFIG_FILE",
+  "RTX_DEFAULT_CONFIG_FILENAME",
+  "RTX_DEFAULT_TOOL_VERSIONS_FILENAME",
+  "ASDF_CONFIG_FILE",
+  "ASDF_DEFAULT_TOOL_VERSIONS_FILENAME",
+  "VOLTA_BYPASS",
+]);
+
+/** A per-tool version override: `MISE_GH_VERSION`, `ASDF_GH_VERSION`, `RTX_GH_VERSION`, for any tool. */
+const TOOL_VERSION = /^(?:MISE|RTX|ASDF)_[A-Z0-9_]+_VERSION$/;
+
+/**
+ * `base` without the version managers' version-choosing variables ({@link VERSION_CHOOSING}, {@link TOOL_VERSION}),
+ * in any case Windows spells them, and the names it dropped, for the caller's report (review/95).
+ */
+export function withoutVersionChoice(base: NodeJS.ProcessEnv): { env: NodeJS.ProcessEnv; dropped: string[] } {
+  const dropped: string[] = [];
+  const env = Object.fromEntries(
+    Object.entries(base).filter(([key]) => {
+      const name = key.toUpperCase();
+      const drop = VERSION_CHOOSING.has(name) || TOOL_VERSION.test(name);
+      if (drop) dropped.push(key);
+      return !drop;
+    }),
+  );
+  return { env, dropped: dropped.toSorted() };
+}
+
 /** Variables that keep `gh`'s ANSI colours on a pipe, which would wrap the JSON body and break its parse. */
 const COLOUR_FORCING: ReadonlySet<string> = new Set(["CLICOLOR_FORCE", "GH_FORCE_TTY"]);
 
@@ -324,12 +374,13 @@ export function ghMergePull(request: PullRef & { sha: string; method: MergeMetho
 }
 
 /**
- * The one review-thread read (a constant document): the authenticated login, then per thread whether it is resolved,
+ * The one review-thread read (a constant document): the authenticated login, the pull request's author in the same
+ * spelling (review/94: GraphQL names an app `app` where REST names it `app[bot]`), then per thread whether it is resolved,
  * who resolved it, and every comment's author (review/71), each a person (`User`) or an app (`Bot`), with the
  * thread's comment count, so a thread holding more comments than one page reads as not read whole.
  */
 export const REVIEW_THREADS_QUERY =
-  "query($owner:String!,$repo:String!,$number:Int!,$after:String){viewer{login}repository(owner:$owner,name:$repo){pullRequest(number:$number){reviewThreads(first:100,after:$after){nodes{isResolved resolvedBy{login}comments(first:100){totalCount nodes{author{__typename login}}}}pageInfo{hasNextPage endCursor}}}}}";
+  "query($owner:String!,$repo:String!,$number:Int!,$after:String){viewer{login}repository(owner:$owner,name:$repo){pullRequest(number:$number){author{login}reviewThreads(first:100,after:$after){nodes{isResolved resolvedBy{login}comments(first:100){totalCount nodes{author{__typename login}}}}pageInfo{hasNextPage endCursor}}}}}";
 
 /** The one mutation: mark the pull request with this node id ready for review (a constant document). */
 export const MARK_READY_MUTATION =

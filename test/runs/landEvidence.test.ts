@@ -179,6 +179,7 @@ describe("the answers' parsers", () => {
         viewer: { login: "runner" },
         repository: {
           pullRequest: {
+            author: { login: "runner" },
             reviewThreads: {
               nodes: [{ isResolved: true, resolvedBy: { login: "runner" }, comments: { totalCount: 2, nodes: [{ author: { __typename: "Bot", login: "codex" } }, { author: { __typename: "User", login: "alice" } }] } }],
               pageInfo: { hasNextPage: true, endCursor: "Y3Vyc29y" },
@@ -188,8 +189,10 @@ describe("the answers' parsers", () => {
       },
     };
     // TEST CHANGE, justified (review/71): the page carries every comment's author and the comment count, read as `authors` and `complete`.
+    // TEST CHANGE, justified (review/94): the page also names the pull request's author, in viewer's spelling.
     expect(parseThreadsPage(page)).toEqual({
       viewer: "runner",
+      author: "runner",
       threads: [{ isResolved: true, resolvedBy: "runner", authors: [{ login: "codex", person: false }, { login: "alice", person: true }], complete: true }],
       next: "Y3Vyc29y",
     });

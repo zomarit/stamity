@@ -32,7 +32,17 @@ import {
 } from "../../runs/landEvidence.ts";
 import { PR_RECORD_FILE, prRecordRefusal, resolveRepo, runMarker } from "../../runs/pullRequest.ts";
 import { gitProgramFor } from "../../shared/programPath.ts";
-import { ghApi, ghMarkReady, ghMergePull, ghProgramPath, ghReviewThreads, type GhApiOptions, type GhResponse, type MergeMethod } from "../engine/ghRunner.ts";
+import {
+  ghApi,
+  ghMarkReady,
+  ghMergePull,
+  ghProgramPath,
+  ghReviewThreads,
+  withoutVersionChoice,
+  type GhApiOptions,
+  type GhResponse,
+  type MergeMethod,
+} from "../engine/ghRunner.ts";
 import { gitWrite, gitWriteEnv, type GitWriteResult } from "../engine/gitWrite.ts";
 import { CliFailure } from "../kit/output.ts";
 import type { CliContext, CommandResult } from "../kit/program.ts";
@@ -269,6 +279,8 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     return surfaceRefusal(place, RECORD_READS, readNow, "push");
   };
 
+  /** review/95: the empty folder every gh call starts in, made once gh is checked and removed when the verb ends. */
+  let ghFolder: string | null = null;
   try {
     // (1) gh, before any of its answers is trusted: outside the work tree and the temp folders.
     const top = await gitLine(["rev-parse", "--show-toplevel"]);
@@ -285,8 +297,13 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       throw new Refused("gh resolves to a program inside a temp folder, whose answers the run could write");
     }
     // review/75, review/91: every later call starts this same absolute PATH entry, never one resolved again from PATH,
-    // and never its link target, so a shim still sees its own name.
-    const ghOpts = { cwd, env, program: gh };
+    // and never its link target, so a shim still sees its own name. review/95: from a fresh empty folder outside the
+    // work tree (every call names its host and its full API path, so gh needs no repository folder), removed at the end,
+    // and without the version managers' version-choosing variables, so the run cannot steer a shim to another program.
+    ghFolder = mkdtempSync(join(tmpdir(), "stamity-gh-"));
+    const shimNeutral = withoutVersionChoice(env);
+    if (shimNeutral.dropped.length > 0) lines.push(`gh environment: dropped ${shimNeutral.dropped.join(", ")}`);
+    const ghOpts = { cwd: ghFolder, env: shimNeutral.env, program: gh };
     const moved = await surfaceMoved();
     if (moved !== null) throw new Refused(moved);
 
@@ -340,10 +357,12 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     const firstThreads = await reviewThreads(repo.host, repo.owner, repo.repo, number, ghOpts);
     if (firstThreads === null) throw new Refused("the review threads could not be read, nor with them the login gh is authenticated as");
     const viewer = firstThreads.viewer;
+    // review/94: the pull request's author from the same query, in the spelling viewer has, never REST's user.login.
+    const prAuthor = firstThreads.author;
     const readPr = async (): Promise<LandPr> => {
       const pr = parsePr(await json(`${repoPath}/pulls/${number}`, `the read of #${number}`));
       if (pr === null) throw new Refused(`GitHub's answer for #${number} names no pull request this verb reads`);
-      return pr;
+      return { ...pr, author: prAuthor };
     };
     let pr = await readPr();
     result.pr = { number: pr.number, url: pr.url, head: pr.headSha };
@@ -543,6 +562,8 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     result.outcome = "refused";
     result.notDone.push(...error.reasons);
     return finish();
+  } finally {
+    if (ghFolder !== null) rmSync(ghFolder, { recursive: true, force: true });
   }
 }
 
@@ -621,10 +642,11 @@ async function checkRuns(json: (path: string, what: string) => Promise<unknown>,
 }
 
 /** The unresolved review threads ({@link unresolvedThreads}) and the login they were read as, every page; `null` where a page does not read. */
-async function reviewThreads(hostname: string, owner: string, repo: string, number: number, opts: GhApiOptions): Promise<{ count: number; viewer: string } | null> {
+async function reviewThreads(hostname: string, owner: string, repo: string, number: number, opts: GhApiOptions): Promise<{ count: number; viewer: string; author: string | null } | null> {
   const threads: ThreadRead[] = [];
   let after: string | undefined;
   let viewer = "";
+  let author: string | null = null;
   for (let page = 1; page <= MAX_PAGES; page += 1) {
     let reply: GhResponse;
     try {
@@ -636,8 +658,9 @@ async function reviewThreads(hostname: string, owner: string, repo: string, numb
     const read = reply.status === 200 ? parseThreadsPage(reply.json) : null;
     if (read === null) return null;
     viewer = read.viewer;
+    author = read.author;
     threads.push(...read.threads);
-    if (read.next === null) return { count: unresolvedThreads(threads, viewer), viewer };
+    if (read.next === null) return { count: unresolvedThreads(threads, viewer), viewer, author };
     after = read.next;
   }
   return null;

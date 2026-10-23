@@ -9,6 +9,7 @@ import { gitSurfaceRecordPath, readRunGitSurface } from "../../../src/cli/comman
 import { runCommand } from "../../../src/cli/commands/run.ts";
 import { LAND_CLOCK } from "../../../src/cli/commands/runLand.ts";
 import type * as GitWriteModule from "../../../src/cli/engine/gitWrite.ts";
+import type * as GhRunnerModule from "../../../src/cli/engine/ghRunner.ts";
 import type * as FsModule from "node:fs";
 import { surfaceRecord } from "../../../src/runs/gitSurface.ts";
 import { prRecordText } from "../../../src/runs/pullRequest.ts";
@@ -37,7 +38,12 @@ type Answer = { status: number; json: unknown };
  * computed late) and the program each call names are what this round's rows are about; one answer reads as before.
  */
 const gh = vi.hoisted(() => ({
-  calls: [] as { kind: string; method?: string; path?: string; body?: unknown; program?: string | undefined }[],
+  calls: [] as { kind: string; method?: string; path?: string; body?: unknown; program?: string | undefined; cwd?: string | undefined; env?: string[] }[],
+  /**
+   * review/95: when set, each REST call also runs a stand-in shim in the folder the verb gave gh, which reads a
+   * version file there as mise and asdf do; what it read is kept here.
+   */
+  probe: null as string[] | null,
   routes: new Map<string, Answer | Answer[]>(),
   merge: { status: 200, json: { merged: true } as unknown },
   threads: [] as unknown[],
@@ -53,10 +59,15 @@ function next<T>(answer: T | T[]): T {
 
 // Mocked: the real runner starts `gh`, which calls GitHub over the network under the machine's login; a unit test can
 // reach neither. Each call is recorded and answered from the routes above.
-vi.mock("../../../src/cli/engine/ghRunner.ts", () => ({
-  ghApi: (request: { method: string; path: string; body?: unknown }, opts?: { program?: string }) => {
+// TEST CHANGE, justified (review/95): the real environment filter passes through; only the calls that reach gh are stood in for.
+vi.mock("../../../src/cli/engine/ghRunner.ts", async (importOriginal) => ({
+  withoutVersionChoice: (await importOriginal<typeof GhRunnerModule>()).withoutVersionChoice,
+  ghApi: (request: { method: string; path: string; body?: unknown }, opts?: { program?: string; cwd?: string; env?: Record<string, string | undefined> }) => {
     const path = request.path.replace(/^\//, "").replace(/\?.*$/, "");
-    gh.calls.push({ kind: "api", method: request.method, path, body: request.body, program: opts?.program });
+    gh.calls.push({ kind: "api", method: request.method, path, body: request.body, program: opts?.program, cwd: opts?.cwd, env: Object.keys(opts?.env ?? {}) });
+    // Mock reason (review/95): no version manager is installed for the suite; this program reads a version file from
+    // its working folder as a shim does, so the case sees whether the run's folder reaches one.
+    if (gh.probe !== null) gh.probe.push(execFileSync("/bin/sh", ["-c", "cat .tool-versions 2>/dev/null; true"], { cwd: opts?.cwd, encoding: "utf8" }));
     const answer = gh.routes.get(`${request.method} ${path}`);
     return Promise.resolve(answer === undefined ? { status: 404, json: { message: "Not Found" } } : next(answer));
   },
@@ -95,9 +106,14 @@ vi.mock("node:fs", async (importOriginal) => {
   return { ...real, default: { ...real, realpathSync }, realpathSync };
 });
 
-/** A threads page holding `nodes`, as the constant query answers, read as `viewer`. */
-function threadsPage(nodes: unknown[], viewer = "runner"): unknown {
-  return { data: { viewer: { login: viewer }, repository: { pullRequest: { reviewThreads: { nodes, pageInfo: { hasNextPage: false, endCursor: null } } } } } };
+/**
+ * A threads page holding `nodes`, as the constant query answers, read as `viewer`, the pull request opened by `author`.
+ * TEST CHANGE, justified (review/94): the query names the pull request's author too, in viewer's spelling.
+ */
+function threadsPage(nodes: unknown[], viewer = "runner", author = "runner"): unknown {
+  return {
+    data: { viewer: { login: viewer }, repository: { pullRequest: { author: { login: author }, reviewThreads: { nodes, pageInfo: { hasNextPage: false, endCursor: null } } } } },
+  };
 }
 
 /** One review thread: resolved or not, by whom, and its comments' authors as `[__typename, login]`. */
@@ -162,6 +178,7 @@ describe("stamity run land", () => {
     gh.threads = [threadsPage([])];
     gh.afterReady = ["clean"];
     gh.program = "/usr/bin/gh";
+    gh.probe = null;
     links.clear();
   });
 
@@ -263,13 +280,14 @@ describe("stamity run land", () => {
     await writeFile(join(repo, path), text);
   }
 
-  async function run(cwd: string, argv: readonly string[]) {
+  /** TEST CHANGE, justified (review/95): `env`, where given, is the verb's own environment, as a case needs to set gh's. */
+  async function run(cwd: string, argv: readonly string[], env?: Record<string, string>) {
     const home = getRoot().path("home");
     await mkdir(home, { recursive: true });
     for (const [key, value] of Object.entries({ HOME: home, XDG_CONFIG_HOME: home, GIT_CONFIG_NOSYSTEM: "1" })) vi.stubEnv(key, value);
     vi.stubEnv("GH_HOST", undefined);
     vi.stubEnv("STAMITY_UNATTENDED", undefined);
-    const result = await runInProcess([runCommand], ["run", ...argv, "--json"], { cwd });
+    const result = await runInProcess([runCommand], ["run", ...argv, "--json"], { cwd, ...(env === undefined ? {} : { env }) });
     const envelope = result.stdout === "" ? {} : (JSON.parse(result.stdout) as Record<string, unknown>);
     const { ok, command, version, ...doc } = envelope;
     void ok;
@@ -549,8 +567,9 @@ describe("stamity run land", () => {
   });
 
   it("refuses a pull request another login opened, though branch, head and marker are the run's (review/73)", async () => {
-    const { repo, head } = await seed();
-    route("GET repos/o/r/pulls/7", pull(head, { user: { login: "alice" } }));
+    const { repo } = await seed();
+    // TEST CHANGE, justified (review/94): the author is read from the thread query, not REST's user.login.
+    gh.threads = [threadsPage([], "runner", "alice")];
 
     const result = await run(repo, ["land", "--run", RUN]);
 
@@ -747,6 +766,47 @@ describe("stamity run land", () => {
     gh.program = "gh";
     expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: ["gh resolves to a PATH entry that is not an absolute path"] });
     expect(gh.calls).toEqual([]);
+  });
+
+  it("lands for an app installation token, whose login GraphQL spells app and REST app[bot], comparing one source (review/94)", async () => {
+    const { repo, head } = await seed();
+    gh.threads = [threadsPage([], "app", "app")];
+    route("GET repos/o/r/pulls/7", pull(head, { user: { login: "app[bot]" } }));
+    expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "landed" });
+
+    gh.calls.length = 0;
+    gh.threads = [threadsPage([], "app", "someone-else")];
+    expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: ["pull request #7 was opened by someone-else, not by the run's login app"] });
+    expect(kinds()).not.toContain("merge");
+  });
+
+  it("starts gh in a fresh folder outside the work tree, so a shim never reads the work tree's version file, and removes it (review/95)", async () => {
+    const { repo } = await seed();
+    await writeFile(join(repo, ".tool-versions"), "gh path:/run/controlled/gh\n");
+    gh.probe = [];
+
+    expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "landed" });
+    const folders = [...new Set(gh.calls.filter((call) => call.kind === "api").map((call) => call.cwd))];
+    expect(folders).toHaveLength(1);
+    const [folder] = folders;
+    expect(folder === undefined || folder.startsWith(repo)).toBe(false);
+    expect(gh.probe.length).toBeGreaterThan(5);
+    expect(new Set(gh.probe)).toEqual(new Set([""]));
+    expect(existsSync(folder ?? repo)).toBe(false);
+  });
+
+  it("drops the version managers' version-choosing variables from gh's environment and keeps those that locate an install (review/95)", async () => {
+    const { repo } = await seed();
+    const choosing = ["MISE_GH_VERSION", "ASDF_GH_VERSION", "RTX_GH_VERSION", "MISE_ENV", "MISE_OVERRIDE_CONFIG_FILENAMES", "ASDF_DEFAULT_TOOL_VERSIONS_FILENAME", "VOLTA_BYPASS"];
+    const locating = ["MISE_DATA_DIR", "ASDF_DATA_DIR", "VOLTA_HOME"];
+    const env = Object.fromEntries([...choosing, ...locating].map((name) => [name, "/somewhere"]));
+
+    const result = await run(repo, ["land", "--run", RUN], env);
+
+    expect(result.doc).toMatchObject({ outcome: "landed" });
+    const seen = new Set(gh.calls.filter((call) => call.kind === "api").flatMap((call) => call.env ?? []));
+    for (const name of choosing) expect(seen.has(name), name).toBe(false);
+    for (const name of locating) expect(seen.has(name), name).toBe(true);
   });
 
   it("takes --title, --paths, --wait past 9 and --method with --fast-forward as usage errors", async () => {

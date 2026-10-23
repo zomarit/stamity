@@ -191,7 +191,7 @@ function field(value: unknown, ...keys: string[]): unknown {
 }
 
 /** One page of {@link ThreadRead}s with the viewer and the next cursor, or `null` for an answer that does not read. */
-export function parseThreadsPage(json: unknown): { viewer: string; threads: ThreadRead[]; next: string | null } | null {
+export function parseThreadsPage(json: unknown): { viewer: string; author: string | null; threads: ThreadRead[]; next: string | null } | null {
   if (field(json, "errors") !== undefined) return null;
   const viewer = field(json, "data", "viewer", "login");
   const page = field(json, "data", "repository", "pullRequest", "reviewThreads");
@@ -214,7 +214,8 @@ export function parseThreadsPage(json: unknown): { viewer: string; threads: Thre
   const more = field(page, "pageInfo", "hasNextPage") === true;
   const cursor = field(page, "pageInfo", "endCursor");
   if (more && typeof cursor !== "string") return null;
-  return { viewer, threads, next: more ? (cursor as string) : null };
+  const author = field(json, "data", "repository", "pullRequest", "author", "login");
+  return { viewer, author: typeof author === "string" && author !== "" ? author : null, threads, next: more ? (cursor as string) : null };
 }
 
 /** One page of check runs with GitHub's `total_count`, or `null` for an answer that does not read. */
@@ -306,7 +307,10 @@ export interface LandPr {
   body: string;
   mergeableState: string | null;
   changedFiles: number;
-  /** The login that opened it (`user.login`), `null` where GitHub names none. */
+  /**
+   * The login that opened it as the review-thread query names it (review/94), the spelling `viewer` has; `null` where
+   * GitHub names none. {@link parsePr} leaves it `null`: REST spells an app `app[bot]`, so the caller fills it.
+   */
   author: string | null;
 }
 
@@ -325,7 +329,6 @@ export function parsePr(json: unknown): LandPr | null {
   const repo = field(json, "head", "repo", "full_name");
   const body = field(json, "body");
   const mergeable = field(json, "mergeable_state");
-  const author = field(json, "user", "login");
   return {
     number,
     url,
@@ -340,7 +343,7 @@ export function parsePr(json: unknown): LandPr | null {
     body: typeof body === "string" ? body : "",
     mergeableState: typeof mergeable === "string" ? mergeable : null,
     changedFiles: changed,
-    author: typeof author === "string" ? author : null,
+    author: null,
   };
 }
 
