@@ -366,7 +366,10 @@ const CODEX_FACTS: AdapterDialectFacts = {
     {
       name: "per-agent tool allowlist",
       value:
-        "no native per-agent tools list is documented as of 2026-09-10; no placeholder key is emitted. sandbox_mode carries the supported filesystem boundary; the policy grant remains a prompt-level restriction.",
+        "no native per-agent tools list is documented; no placeholder key is emitted. A spawned role runs in the parent turn's sandbox, and its file's `sandbox_mode` does not override it (subagents page, read 2026-10-23). " +
+        "Measured on codex-cli 0.155.1 (2026-10-23), in `codex exec`: a role whose file sets `sandbox_mode = \"read-only\"`, spawned under a `workspace-write` parent, created files through both its shell and its patch tool; " +
+        "a per-agent `[features] shell_tool = false` took its shell away but not its patch writes, and left it no way to read a file, so no `features.*` key is emitted. " +
+        "A role's grant, read-only included, is prompt-level; re-measure on each newer Codex.",
     },
     {
       // The command-surface question answered for this client, recorded rather
@@ -401,9 +404,12 @@ const CODEX_FACTS: AdapterDialectFacts = {
     },
   ],
   citations: [
-    // Subagent key set + the project-scoped `.codex/agents/` location, and the
+    // Subagent key set + the project-scoped `.codex/agents/` location, the
     // precedence of a file's `model` and `model_reasoning_effort` over the
-    // spawn's, the `[agents]` default's and the parent's (re-read 2026-10-14).
+    // spawn's, the `[agents]` default's and the parent's (re-read 2026-10-14),
+    // and a spawned role inheriting the parent turn's sandbox, which its file's
+    // `sandbox_mode` does not override: re-read for that claim on 2026-10-23,
+    // dated inline in the `per-agent tool allowlist` cap and the parity row.
     { url: "https://learn.chatgpt.com/docs/agent-configuration/subagents", accessDate: "2026-10-14" },
     // Project-level `.codex/hooks.json`, PascalCase events, exit-2 blocking,
     // the entry keys (`type`, `command`, `commandWindows`, `timeout`) and the
@@ -1270,8 +1276,10 @@ export function buildAgentToml(
   const rolePolicy = allow.length === 0
     ? "Role tool policy: no tool categories are granted. Decline tool use and return the missing permission to the parent."
     : `Role tool policy: only use tools in these categories: ${allow.join(", ")}. If work needs another category, return that dependency to the parent. Native sandbox and approval controls still apply.`;
-  // Prose only, like the sentence it extends: the sandbox stays as the grant
-  // set it, `read-only` for a verdict role, and read-only git runs inside it.
+  // Prose only, like the sentence it extends. `sandbox_mode` stays as the grant
+  // set it, `read-only` for a verdict role: a documented key and the role's
+  // intent, but a spawned role runs in the parent turn's sandbox, which the key
+  // does not override (REQ-FLOW-150), so neither sentence has a boundary under it.
   const gitPolicy = grant.readOnlyGit === true && allow.length > 0
     ? ` You may also run read-only git: ${READ_ONLY_GIT_SUBCOMMANDS.map((sub) => `git ${sub}`).join(", ")}; nothing else in a shell.`
     : "";
@@ -1283,7 +1291,9 @@ export function buildAgentToml(
     "",
     "Key set: learn.chatgpt.com/docs/agent-configuration/subagents (accessed 2026-09-10).",
     `Stamity role grant: ${toCodexToolsFrontmatter(allow) || "none"}. No native tools key is documented.`,
-    "sandbox_mode binds the filesystem boundary; category restrictions remain prompt-level.",
+    "A spawned role runs in the parent turn's sandbox; its sandbox_mode does not override it",
+    "(subagents page, read 2026-10-23; on codex-cli 0.155.1 (2026-10-23) a read-only role wrote",
+    "under a workspace-write parent). The grant, read-only included, is prompt-level.",
   ];
   if (grant.source === "none") {
     comments.push(

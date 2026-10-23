@@ -596,7 +596,13 @@ describe("subagent TOML", () => {
         "#",
         "# Key set: learn.chatgpt.com/docs/agent-configuration/subagents (accessed 2026-09-10).",
         `# Stamity role grant: ${toolsValue}. No native tools key is documented.`,
-        "# sandbox_mode binds the filesystem boundary; category restrictions remain prompt-level.",
+        // TEST CHANGE, justified: REQ-FLOW-150 — the line read "sandbox_mode binds the filesystem
+        // boundary". A spawned role runs in the parent turn's sandbox (subagents page, read
+        // 2026-10-23), and on codex-cli 0.155.1 a read-only role wrote under a workspace-write
+        // parent, so the comment now says where the boundary comes from; every other line holds.
+        "# A spawned role runs in the parent turn's sandbox; its sandbox_mode does not override it",
+        "# (subagents page, read 2026-10-23; on codex-cli 0.155.1 (2026-10-23) a read-only role wrote",
+        "# under a workspace-write parent). The grant, read-only included, is prompt-level.",
         "",
         'name = "stamity-reviewer"',
         'description = "Reviews a change set and returns a verdict."',
@@ -620,6 +626,27 @@ describe("subagent TOML", () => {
         "",
       ].join("\n"),
     );
+  });
+
+  // REQ-FLOW-150: a spawned role runs in the parent turn's sandbox, which its file's
+  // `sandbox_mode` does not override (subagents page, read 2026-10-23; measured on the
+  // installed codex-cli in run 2026-10-23_autonomy-distribution-01, unit a10). So no emitted
+  // text may claim the key binds a spawned role, and each says where the boundary comes from.
+  it("claims no sandbox boundary for a spawned role: the agent file, the cap and the parity row say it runs in the parent's sandbox", () => {
+    const reviewer = buildAgentToml(reviewerItem, grantOf(reviewerItem));
+    expect(reviewer).not.toContain("sandbox_mode binds");
+    expect(reviewer).not.toContain("binds the filesystem boundary");
+    expect(reviewer).toContain("runs in the parent");
+
+    const cap = codexResiduePlanner.facts.caps.find((row) => row.name === "per-agent tool allowlist")?.value ?? "";
+    expect(cap).toMatch(/codex-cli \d+\.\d+\.\d+ \(\d{4}-\d{2}-\d{2}\)/);
+    expect(cap).not.toContain("carries the supported filesystem boundary");
+    expect(cap).toContain("runs in the parent");
+
+    const parity = LIVE_CAPABILITY_INPUTS.coverage.find((row) => row.tool === "codex")?.mechanism ?? "";
+    expect(parity).not.toContain("inside the `read-only` sandbox");
+    expect(parity).not.toContain("supplies the supported filesystem boundary");
+    expect(parity).toContain("runs in the parent");
   });
 
   it("names exactly the five read-only git subcommands for a verdict role, and none for the implementer", () => {

@@ -99,9 +99,9 @@ export const CLAUDE_READ_ONLY_GIT_TOOL = "Bash";
 
 /**
  * Codex custom agents are TOML files under `.codex/agents/`. The current
- * contract documents no native per-agent `tools` key; `sandbox_mode` is the
- * supported filesystem boundary (the dated source census is in
- * .github/client-contracts.md, 2026-09-10).
+ * contract documents no native per-agent `tools` key, and a spawned role runs
+ * in the parent turn's sandbox, which its `sandbox_mode` does not override
+ * (subagents page, read 2026-10-23; REQ-FLOW-150).
  *
  * The existing comma-list translator remains API-compatible and supplies the
  * role-grant sentence in `developer_instructions`; it is not emitted as an
@@ -351,7 +351,7 @@ export const ADAPTER_ALLOWLIST_COVERAGE: readonly AdapterAllowlistCoverage[] = [
     // .github/client-contracts.md records the current official-source census.
     tool: "codex",
     mechanism:
-      "no documented native per-agent `tools` key in `.codex/agents/*.toml`; the role grant is developer-instruction prose, while `sandbox_mode` supplies the supported filesystem boundary; verdict roles (reviewer, security, performance, design-quality) stay read-only here and return their full report inline, because nothing on this client can scope a write to the reports folder; their role sentence permits read-only git (log, show, diff, rev-list, merge-base) inside the `read-only` sandbox, as prose only",
+      "no documented native per-agent `tools` key in `.codex/agents/*.toml`; the role grant is developer-instruction prose, and a spawned role runs in the parent turn's sandbox, which its file's `sandbox_mode` does not override (subagents page, read 2026-10-23; measured on codex-cli 0.155.1 (2026-10-23): a `read-only` role wrote under a `workspace-write` parent), so a verdict role's read-only is prompt-level; verdict roles (reviewer, security, performance, design-quality) stay read-only here and return their full report inline, because nothing on this client can scope a write to the reports folder; their role sentence permits read-only git (log, show, diff, rev-list, merge-base), as prose only",
     strength: "soft",
     provisional: true,
   },
