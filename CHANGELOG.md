@@ -189,6 +189,9 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   selection `sync` never honoured.
 - **The reviewer files a pass-through layer as a finding even where the plan asks for it**, naming its consequence:
   the interface kept twice.
+- **Codex, Cursor and Copilot hook entries name their script in plain text after the encoded row**, and the runner
+  refuses an entry whose word and row disagree. Codex asks you to trust `.codex/hooks.json` again after this update,
+  because the file's hash changes.
 
 ### Deprecated
 
