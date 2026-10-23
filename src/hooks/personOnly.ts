@@ -455,18 +455,15 @@ export function repositoryKey(text: string, host: string): string {
  * The ask rows for a land line carrying `--approved` (review/109, REQ-FLOW-123), rendered in every mode: a second layer
  * behind the guard's ask-class `land-approved` rule, so the person's one click on the land verb's `asks` outcome does
  * not rest on the hook alone. The flag follows `--run <id>` and `--ready` on the flows' line, so no prefix row reaches
- * it: each row is mid-pattern, and Claude Code reads a `*` there as any run of characters over the whole command
- * (measured on 2.1.309, 2026-10-23, by running the client's own matcher). Unlike a mid-pattern deny row, an over-wide
- * ask row only asks more, and the land line stands alone on its line, so no later command shares it. One row per
- * spelling the guard's package test knows: the two bins, then every runner or launcher that can start the package.
+ * it, and Claude Code reads a `*` anywhere else as any run of characters over the whole command (measured on 2.1.309,
+ * 2026-10-23, by running the client's own matcher). One row with a leading wildcard (review/138): it matches a line
+ * holding ` run `, then `land `, then `--approved`, whatever program word comes first — a bin, a fork's bin, a bin by
+ * path, a runner, a launcher or a word the guard cannot settle — and option words between `run` and `land`. Unlike a
+ * mid-pattern deny row, an over-wide ask row only asks more (a commit message quoting such a line asks too), and the
+ * land line stands alone on its line, so no later command shares it. A line that never spells ` run ` and `land `
+ * as words (one built by an expansion) is the guard's alone.
  */
-export const CLAUDE_LAND_ASK_ROWS: readonly string[] = [
-  "Bash(stamity run land *--approved*)",
-  "Bash(st run land *--approved*)",
-  ...["npx", "bunx", "pnpx", "corepack", "npm", "pnpm", "yarn", "bun", "node", "nodejs", "deno", "tsx"].map(
-    (runner) => `Bash(${runner} * run land *--approved*)`,
-  ),
-];
+export const CLAUDE_LAND_ASK_ROWS: readonly string[] = ["Bash(* run *land *--approved*)"];
 
 /**
  * Every row a release wrote that this version writes in no mode (REQ-FLOW-036): `sync` removes one the ledger records,

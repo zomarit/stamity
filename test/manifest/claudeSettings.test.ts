@@ -760,7 +760,9 @@ describe("planClaudeSettings — the rows the autonomy setting no longer renders
     expect(plan.backup).toBeNull();
     expect(plan.result.warning).toBeUndefined();
     for (const row of RUN_ROWS) expect(plan.result.notice, row).toContain(`permissions.ask ${JSON.stringify(row)}`);
-    expect(plan.result.notice).toContain("from .claude/settings.json: the engine wrote them and no longer writes them");
+    // TEST CHANGE, justified: REQ-FLOW-036 — the sentence names the list ("there") and gives the version beside the
+    // setting as the reason, so it stays true for a retired row (the round-1 review's note on this sentence).
+    expect(plan.result.notice).toContain("from .claude/settings.json: the engine wrote them there and no longer writes them there");
     expect(plan.record?.elements?.["/permissions/ask"]).toEqual(LOOSE_ASK.map(memberHash));
     expect(plan.record?.elements?.["/permissions/deny"]).toEqual(ENGINE_DENY.map(memberHash));
     // Nothing is left to name: the next plan moves no byte and says nothing.
@@ -815,6 +817,24 @@ describe("planClaudeSettings — the rows the autonomy setting no longer renders
     const dropped = planClaudeSettings("x", LOOSE, withOwner, own({ owned: true, record: written.record }));
     expect(permissionsOf(dropped.content).ask).toEqual([...LOOSE_ASK, "Bash(npm version:*)"]);
     expect(dropped.result.notice).not.toContain("npm version");
+  });
+
+  it("never names or removes an owner's deny row equal to an engine ask row, recorded under deny or not, in either setting (review/136)", () => {
+    // The raw merge's prefix and the GitHub MCP server's merge tool: rows the engine writes in the ask list only.
+    const owner = ["Bash(gh pr merge:*)", "mcp__github__merge_pull_request"];
+    for (const emitted of [STRICT, LOOSE]) {
+      const written = planClaudeSettings("x", emitted, null, own());
+      expect(owner.every((row) => permissionsOf(written.content).ask.includes(row))).toBe(true);
+      const withOwner = doc({ permissions: { deny: [...ENGINE_DENY, ...owner], ask: permissionsOf(written.content).ask }, hooks: ENGINE_HOOKS });
+      // A record that also lists the owner's rows under the deny list (a forged one) proves nothing there.
+      const deny = [...(written.record?.elements?.["/permissions/deny"] ?? []), ...owner.map(memberHash)];
+      const forged = { ...written.record, elements: { ...written.record?.elements, "/permissions/deny": deny } };
+      for (const record of [written.record, forged]) {
+        const plan = planClaudeSettings("x", emitted, withOwner, own({ owned: true, record }));
+        expect(plan.content, JSON.stringify(record)).toBeNull();
+        expect(plan.result.notice).toBeUndefined();
+      }
+    }
   });
 
   it("the clean sweep still removes no row the setting stopped rendering, and names it", () => {

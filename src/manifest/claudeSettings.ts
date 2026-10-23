@@ -218,7 +218,7 @@ export type SettingsMergeResult = CoOwnedMergeResult;
  * The deny and ask rows are planned over {@link renderingToAdd}, so the core
  * sees only the engine's rows each list lacks and keeps every row already there
  * but those {@link leavingRows} names, the record is {@link withRowRecord}'s, and
- * {@link rowNotice} names the rows that left and the equal ones that stayed.
+ * {@link withRowNotice} names the rows that left and the equal ones that stayed.
  */
 export function planClaudeSettings(
   filePath: string,
@@ -279,9 +279,11 @@ function renderingToAdd(emitted: string, existingRaw: string | null): string {
 }
 
 /**
- * Per list, the rows of the existing file that the engine wrote in some mode or
- * release ({@link isEngineRow}) and the rendering in `emitted` no longer carries
- * in that list: the rows a recorded hash lets leave (REQ-FLOW-036). Empty under
+ * Per list, the rows of the existing file that the engine writes in that same
+ * list under some setting or release ({@link ENGINE_ROWS_BY_LIST}) and the
+ * rendering in `emitted` no longer carries there: the rows a recorded hash lets
+ * leave (REQ-FLOW-036). An owner's deny row equal to an engine ask row is never
+ * one of them (review/136): the engine never wrote it in the deny list. Empty under
  * a 1.11.0 ledger row or with no ledger row, where no row is the engine's, and
  * for a list the rendering does not carry at all.
  */
@@ -292,11 +294,13 @@ function leavingRows(emitted: string, existingRaw: string | null, ownership: Set
   return { deny: of("deny"), ask: of("ask") };
 }
 
-/** The engine's rows in `raw`'s `key` list that `emitted`'s same list does not carry; none when `emitted` has no such list. */
+/** The `key` list's engine rows in `raw` that `emitted`'s same list does not carry; none when `emitted` has no such list. */
 function unrenderedRows(emitted: string, raw: string, key: RowKey): string[] {
   const rendered = rowsOf(emitted, key);
   if (rendered === null) return [];
-  return [...new Set((rowsOf(raw, key) ?? []).filter(isEngineRow))].filter((row) => !rendered.includes(row));
+  const table = ENGINE_ROWS_BY_LIST[key];
+  const present = (rowsOf(raw, key) ?? []).filter((row): row is string => typeof row === "string" && table.has(row));
+  return [...new Set(present)].filter((row) => !rendered.includes(row));
 }
 
 /**
@@ -317,7 +321,7 @@ function withRowNotice(plan: SettingsPlan, emitted: string, existingRaw: string 
   }
   const sentences: string[] = [];
   if (removed.length > 0) {
-    sentences.push(`Removed ${removed.join(", ")} from ${shown}: the engine wrote ${removed.length === 1 ? "it" : "them"} and no longer writes ${removed.length === 1 ? "it" : "them"} under this setup's autonomy setting.`);
+    sentences.push(`Removed ${removed.join(", ")} from ${shown}: the engine wrote ${removed.length === 1 ? "it" : "them"} there and no longer writes ${removed.length === 1 ? "it" : "them"} there under this version and autonomy setting.`);
   }
   if (kept.length > 0) {
     sentences.push(
@@ -362,6 +366,17 @@ function withRowRecord(plan: SettingsPlan, existingRaw: string | null, ownership
  * ask rows with nothing run unasked (the union over every autonomy setting), and {@link RETIRED_CLAUDE_ROWS}.
  */
 const ENGINE_ROWS: ReadonlySet<string> = new Set([...CLAUDE_DENY_ROWS, ...claudeAskRows([]), ...RETIRED_CLAUDE_ROWS]);
+
+/**
+ * The rows the engine writes, or wrote, in each list alone (review/136): the deny rows in `deny`, every setting's ask
+ * rows (the land rows among them) in `ask`, and {@link RETIRED_CLAUDE_ROWS} in both while it is empty. Only these are
+ * named or let leave as rows the rendering dropped; the cross-list {@link ENGINE_ROWS} still bounds the record and
+ * names what `clean` left.
+ */
+const ENGINE_ROWS_BY_LIST: Readonly<Record<RowKey, ReadonlySet<string>>> = {
+  deny: new Set([...CLAUDE_DENY_ROWS, ...RETIRED_CLAUDE_ROWS]),
+  ask: new Set([...claudeAskRows([]), ...RETIRED_CLAUDE_ROWS]),
+};
 
 /** True for a row of the engine's person-only tables, deny or ask, under any setting or release ({@link ENGINE_ROWS}). */
 function isEngineRow(row: unknown): row is string {

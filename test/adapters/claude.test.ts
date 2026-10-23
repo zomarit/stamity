@@ -2060,41 +2060,46 @@ describe("the person-only deny rows (u20-hook-emission, REQ-FLOW-102)", () => {
       "npx --no stamity run land --run 2026-10-23_x --ready --wait 8 --json",
       "stamity run land --run 2026-10-23_x --json",
     ];
-    const APPROVED_LAND: readonly (readonly [line: string, row: string])[] = [
-      ["stamity run land --run 2026-10-23_x --ready --approved 3952f8ca --json", "Bash(stamity run land *--approved*)"],
-      ["stamity run land --approved 3952f8ca --run x", "Bash(stamity run land *--approved*)"],
-      ["st run land --run x --approved=3952f8ca", "Bash(st run land *--approved*)"],
-      ["npx --no stamity run land --run x --ready --approved 3952f8ca --json", "Bash(npx * run land *--approved*)"],
-      ["npx -y @zomarit/stamity@1.16.0 run land --run x --approved 3952f8ca", "Bash(npx * run land *--approved*)"],
-      ["npm exec -- stamity run land --run x --approved 3952f8ca", "Bash(npm * run land *--approved*)"],
-      ["pnpm dlx stamity run land --run x --approved 3952f8ca", "Bash(pnpm * run land *--approved*)"],
-      ["yarn stamity run land --run x --approved 3952f8ca", "Bash(yarn * run land *--approved*)"],
-      ["bunx stamity run land --run x --approved 3952f8ca", "Bash(bunx * run land *--approved*)"],
-      ["bun x stamity run land --run x --approved 3952f8ca", "Bash(bun * run land *--approved*)"],
-      ["node dist/cli.js run land --run x --approved 3952f8ca", "Bash(node * run land *--approved*)"],
-      ["pnpx stamity run land --run x --approved 3952f8ca", "Bash(pnpx * run land *--approved*)"],
-      ["corepack pnpm dlx stamity run land --run x --approved 3952f8ca", "Bash(corepack * run land *--approved*)"],
-      ["nodejs dist/cli.js run land --run x --approved 3952f8ca", "Bash(nodejs * run land *--approved*)"],
-      ["deno run -A dist/cli.js run land --run x --approved 3952f8ca", "Bash(deno * run land *--approved*)"],
-      ["tsx src/cli.ts run land --run x --approved 3952f8ca", "Bash(tsx * run land *--approved*)"],
+    /**
+     * Land lines carrying the approval, each with whether the guard's default reading (this package's own bins) reaches
+     * its ask-class land-approved rule: every program spelling, a fork's own bin and options between `run` and `land`
+     * among them (review/138).
+     */
+    const APPROVED_LAND: readonly (readonly [line: string, guardReads: boolean])[] = [
+      ["stamity run land --run 2026-10-23_x --ready --approved 3952f8ca --json", true],
+      ["stamity run land --approved 3952f8ca --run x", true],
+      ["st run land --run x --approved=3952f8ca", true],
+      ["npx --no stamity run land --run x --ready --approved 3952f8ca --json", true],
+      ["npx -y @zomarit/stamity@1.16.0 run land --run x --approved 3952f8ca", true],
+      ["npm exec -- stamity run land --run x --approved 3952f8ca", true],
+      ["pnpm dlx stamity run land --run x --approved 3952f8ca", true],
+      ["yarn stamity run land --run x --approved 3952f8ca", true],
+      ["bunx stamity run land --run x --approved 3952f8ca", true],
+      ["corepack pnpm dlx stamity run land --run x --approved 3952f8ca", true],
+      ["node dist/cli.js run land --run x --approved 3952f8ca", true],
+      ["tsx src/cli.ts run land --run x --approved 3952f8ca", true],
+      ["./node_modules/.bin/stamity run land --run x --approved 3952f8ca", true],
+      ["stamity run --json land --run x --approved 3952f8ca", true],
+      // A fork's renamed bin: the guard reads it through the bins baked at emission, which this default reading lacks.
+      ["acme-cli run land --run x --approved 3952f8ca", false],
     ];
 
-    it("asks for a land line carrying the approval in each spelling the guard's package test knows, and for no plain land line (review/109)", async () => {
+    it("asks for a land line carrying the approval whatever its program spelling, and for no plain land line (review/109, review/138)", async () => {
+      expect(CLAUDE_LAND_ASK_ROWS).toEqual(["Bash(* run *land *--approved*)"]);
       const settings: (AutonomyConfig | undefined)[] = [{ mode: "ask" }, undefined];
       for (const { deny, ask } of await Promise.all(settings.map((autonomy) => permissionsFor(autonomy)))) {
         for (const line of PLAIN_LAND) {
           expect([...deny, ...ask].filter((rule) => ruleMatches(rule, line)), line).toEqual([]);
         }
-        for (const [line, row] of APPROVED_LAND) {
+        for (const [line] of APPROVED_LAND) {
           expect(deny.filter((rule) => ruleMatches(rule, line)), line).toEqual([]);
-          expect(ask.filter((rule) => ruleMatches(rule, line)), line).toEqual([row]);
-          // The two layers agree: the guard's own reading of the same line is the ask-class land-approved rule.
-          expect(personOnlyVerdict(line, ctx), line).toMatchObject({ deny: true, rule: "land-approved", ask: true });
+          expect(ask.filter((rule) => ruleMatches(rule, line)), line).toEqual([...CLAUDE_LAND_ASK_ROWS]);
         }
       }
-      // Each land row is pinned by a line above, and only those.
-      expect([...new Set(APPROVED_LAND.map(([, row]) => row))].toSorted()).toEqual([...CLAUDE_LAND_ASK_ROWS].toSorted());
-      for (const row of CLAUDE_LAND_ASK_ROWS) expect(row).toMatch(/^Bash\((?:stamity|st|[a-z]+ \*) run land \*--approved\*\)$/);
+      // Where the guard reads the program as this package, the two layers agree on the ask-class land-approved rule.
+      for (const [line] of APPROVED_LAND.filter(([, guardReads]) => guardReads)) {
+        expect(personOnlyVerdict(line, ctx), line).toMatchObject({ deny: true, rule: "land-approved", ask: true });
+      }
     });
 
     it("renders no ready-mark ask row for this repository's own manifest, and every 1.16.0 deny row", async () => {
