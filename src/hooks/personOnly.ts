@@ -86,7 +86,8 @@ export type PersonOnlyRuleId =
   | "push-deploying"
   | "workflow-dispatch"
   | "autonomy-loosen"
-  | "land-approved";
+  | "land-approved"
+  | "line-too-long";
 
 /** One person-only act: its rule id, what the person keeps, and whether it is ask-class (it can be undone). */
 export interface PersonOnlyRule {
@@ -176,6 +177,11 @@ export const PERSON_ONLY_RULES: readonly PersonOnlyRule[] = [
     id: "land-approved",
     act: "landing a run's pull request on the person's approval of an `asks` outcome (`stamity run land --approved`, or a land line whose words the guard cannot read, which may carry it)",
     ask: true,
+  },
+  {
+    id: "line-too-long",
+    act: "a command line longer than 65,536 characters, which the guard does not read, refused in every mode before any reading (review/117)",
+    ask: false,
   },
 ];
 
@@ -516,6 +522,23 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   }
 
   /**
+   * Whether a segment's words are exactly `git commit` reading its message from stdin (`-F -`, `--file -`, `--file=-`),
+   * or exactly `gh pr create`, `edit` or `comment` reading its body from stdin (`--body-file -`, `-F -`), each of those
+   * words literal (REQ-FLOW-141's message receivers, review/118). Neither program runs what it reads there.
+   */
+  function message(words: readonly string[], kinds: readonly string[]): boolean {
+    const git = words[0] === "git" && words[1] === "commit";
+    const gh = words[0] === "gh" && words[1] === "pr" && ["create", "edit", "comment"].includes(words[2] ?? "");
+    const flags = git ? ["-F", "--file"] : ["--body-file", "-F"];
+    const literal = (at: number): boolean => kinds[at] === "";
+    return (
+      (git || gh) &&
+      [0, 1, 2].slice(0, git ? 2 : 3).every(literal) &&
+      words.some((word, at) => literal(at) && ((flags.includes(word) && words[at + 1] === "-" && literal(at + 1)) || (git && word === "--file=-")))
+    );
+  }
+
+  /**
    * Whether earlier segments may change what a later heredoc's receiver is (REQ-FLOW-141): a word ending in `()` (a
    * function), or a command opening, after keywords, on an assignment or on a builtin that defines, assigns, sources or
    * runs a line (`alias`, `export`, `read`, `eval`, `.`, …).
@@ -625,8 +648,10 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
      * leading tabs for `<<-`) and, unquoted, a body with no `$(` or backtick, and nothing piping onward. With `docs` 2:
      * a bare `cat` first in the text, with no other redirection and nothing after it on its line. With `docs` 1: a bare
      * `cat` (no argument) or `tee` (plain operands, `-a`, `-i`, `-p`) first on the line, its standard output sent by `>`
-     * or `>>` to one plain path, no other redirection, its targets named by no later word; or the engine's own CLI
-     * (`engine`) first in its segment, with no other redirection and no earlier command defining or assigning.
+     * or `>>` to one plain path, no other redirection, its targets named by no later word; the engine's own CLI
+     * (`engine`) first in its segment, with no other redirection and no earlier command defining or assigning; or
+     * `git commit` or `gh pr create|edit|comment` reading its message from stdin (`message`), first on the line, with no
+     * other redirection (review/118).
      */
     const pastBody = (nl: number): number => {
       const d = doc;
@@ -650,7 +675,9 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         /^[\n;&]$/.test(d.cut ?? "") &&
         (docs === 2
           ? d.cut === "\n" && d.seg === 0 && d.words.join(" ") === "cat" && kinds[0] === "" && others.length === 0
-          : writes || (docs === 1 && others.length === 0 && engine(d.words, kinds) && !defines(segments.slice(0, d.seg))));
+          : writes ||
+            (docs === 1 && others.length === 0 && engine(d.words, kinds) && !defines(segments.slice(0, d.seg))) ||
+            (docs === 1 && others.length === 0 && d.seg === 0 && message(d.words, kinds)));
       if (!sink) return nl + 1;
       for (let at = nl + 1; ; ) {
         const stop = text.indexOf("\n", at);
@@ -1583,7 +1610,10 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       reason:
         rule === "status-write"
           ? `${what} is CI's to write, never the agent's (${rule}): a merge reads it as evidence (REQ-FLOW-140). Stop here.`
-          : `${what} is a person-only act (${rule}): the person runs it, never the agent (REQ-FLOW-102). ` +
+          : rule === "line-too-long"
+            ? "A line too long for the guard to read (over 65,536 characters) is refused in every mode (line-too-long): " +
+              "the person runs it themselves (REQ-FLOW-102). Stop here and give the person the exact command."
+            : `${what} is a person-only act (${rule}): the person runs it, never the agent (REQ-FLOW-102). ` +
             `Stop here and list it for the person.`,
       ask: ASK_RULES.has(rule),
     };
@@ -2463,10 +2493,12 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   }
 
   // Each segment's acts are collected (v0a); the readers record them through `deny`.
-  // A line past 64 KiB is one the guard cannot read (review/115): it asks before any reading, so no line can be built to
-  // outlast the hook's timeout, and the guard refuses it unattended and for a sub-agent.
+  // A line past 64 KiB is one the guard cannot read (review/115): it is refused in every mode before any reading, so no
+  // line can be built to outlast the hook's timeout, and no act padded past the cap is ever one click away (review/117).
+  // The act reads into the guard's refusal sentence: "…which may hold an act that deletes, force-pushes or cannot be
+  // undone (`line-too-long`): it stays the person's to run, even with approval … Give the person the exact command."
   if (command.length > 65_536) {
-    return deny("autonomy-loosen", "A line too long for the guard to read (over 65,536 characters), which may spell `--loosen`");
+    return deny("line-too-long", "A line too long for the guard to read (over 65,536 characters), which may hold an act that");
   }
   const read = commandsOf(command, 0, false);
   for (const cmd of read) {
@@ -2666,6 +2698,23 @@ export function unattendedPushVerdict(
   }
 
   /**
+   * Whether a segment's words are exactly `git commit` reading its message from stdin (`-F -`, `--file -`, `--file=-`),
+   * or exactly `gh pr create`, `edit` or `comment` reading its body from stdin (`--body-file -`, `-F -`), each of those
+   * words literal (REQ-FLOW-141's message receivers, review/118). Neither program runs what it reads there.
+   */
+  function message(words: readonly string[], kinds: readonly string[]): boolean {
+    const git = words[0] === "git" && words[1] === "commit";
+    const gh = words[0] === "gh" && words[1] === "pr" && ["create", "edit", "comment"].includes(words[2] ?? "");
+    const flags = git ? ["-F", "--file"] : ["--body-file", "-F"];
+    const literal = (at: number): boolean => kinds[at] === "";
+    return (
+      (git || gh) &&
+      [0, 1, 2].slice(0, git ? 2 : 3).every(literal) &&
+      words.some((word, at) => literal(at) && ((flags.includes(word) && words[at + 1] === "-" && literal(at + 1)) || (git && word === "--file=-")))
+    );
+  }
+
+  /**
    * Whether earlier segments may change what a later heredoc's receiver is (REQ-FLOW-141): a word ending in `()` (a
    * function), or a command opening, after keywords, on an assignment or on a builtin that defines, assigns, sources or
    * runs a line (`alias`, `export`, `read`, `eval`, `.`, …).
@@ -2775,8 +2824,10 @@ export function unattendedPushVerdict(
      * leading tabs for `<<-`) and, unquoted, a body with no `$(` or backtick, and nothing piping onward. With `docs` 2:
      * a bare `cat` first in the text, with no other redirection and nothing after it on its line. With `docs` 1: a bare
      * `cat` (no argument) or `tee` (plain operands, `-a`, `-i`, `-p`) first on the line, its standard output sent by `>`
-     * or `>>` to one plain path, no other redirection, its targets named by no later word; or the engine's own CLI
-     * (`engine`) first in its segment, with no other redirection and no earlier command defining or assigning.
+     * or `>>` to one plain path, no other redirection, its targets named by no later word; the engine's own CLI
+     * (`engine`) first in its segment, with no other redirection and no earlier command defining or assigning; or
+     * `git commit` or `gh pr create|edit|comment` reading its message from stdin (`message`), first on the line, with no
+     * other redirection (review/118).
      */
     const pastBody = (nl: number): number => {
       const d = doc;
@@ -2800,7 +2851,9 @@ export function unattendedPushVerdict(
         /^[\n;&]$/.test(d.cut ?? "") &&
         (docs === 2
           ? d.cut === "\n" && d.seg === 0 && d.words.join(" ") === "cat" && kinds[0] === "" && others.length === 0
-          : writes || (docs === 1 && others.length === 0 && engine(d.words, kinds) && !defines(segments.slice(0, d.seg))));
+          : writes ||
+            (docs === 1 && others.length === 0 && engine(d.words, kinds) && !defines(segments.slice(0, d.seg))) ||
+            (docs === 1 && others.length === 0 && d.seg === 0 && message(d.words, kinds)));
       if (!sink) return nl + 1;
       for (let at = nl + 1; ; ) {
         const stop = text.indexOf("\n", at);
@@ -3939,10 +3992,14 @@ export function unattendedPushVerdict(
     return null;
   }
 
-  // A line past 64 KiB is one the guard cannot read (review/115), refused here before any reading; the land verb's
-  // attended reading leaves it to the person-only verdict, which asks for it.
+  // A line past 64 KiB is one the guard cannot read (review/115): refused in every mode before any reading (review/117).
   if (command.length > 65_536) {
-    return landOnly ? { deny: false } : deny("A line too long for the guard to read (over 65,536 characters)");
+    return {
+      deny: true,
+      reason:
+        "A line too long for the guard to read (over 65,536 characters) is refused in every mode, before any reading: " +
+        "the person runs it themselves (REQ-FLOW-102).",
+    };
   }
   const commands = commandsOf(command, 0, powershell);
   // The land verb's line in every mode (REQ-FLOW-121, a4): read on the parsed program words alone, so a commit message,

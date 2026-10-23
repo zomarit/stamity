@@ -808,15 +808,17 @@ describe("a directory read only where the shell runs a command (review/116)", ()
       // double-quoted substitution that is wholly an argument word is now data, so its `$env:` line no longer reads as
       // a command that may spell `--loosen`; it moved here from the asking list below.
       `git commit -m "$(cat <<'EOF'\n${MESSAGE}\nEOF\n)" && git push`,
+      // TEST CHANGE, justified (REQ-FLOW-141, review/118): `git commit` reading its message on stdin is now a data
+      // receiver, so these two left the asking list below.
+      `git commit -s -F - <<'EOF' && git push\n${MESSAGE}\nEOF`,
+      `git commit -F - <<EOF && git push\n${MESSAGE}\nEOF`,
     ];
     for (const command of allowed) expect(decide("claude", guard, command).deny, command).toBe(false);
     // TEST CHANGE, justified (REQ-FLOW-138, review/45): a heredoc body is read line by line, and a body line that opens on
     // a variable or a substitution reads as a command whose program word may spell `--loosen`, so these ask as a
-    // loosening; the directory change is still not read from the body, so no push refusal names it. Each body here goes
-    // to a receiver REQ-FLOW-141 does not name (git's stdin, `cat`'s own output), so it keeps that reading.
+    // loosening; the directory change is still not read from the body, so no push refusal names it. The body here goes
+    // to a receiver REQ-FLOW-141 does not name (`cat`'s own output), so it keeps that reading.
     for (const command of [
-      `git commit -s -F - <<'EOF' && git push\n${MESSAGE}\nEOF`,
-      `git commit -F - <<EOF && git push\n${MESSAGE}\nEOF`,
       "cat <<'EOF'\n$(cd wt-main && git push)\nEOF",
     ]) {
       const decision = decide("claude", guard, command);
@@ -2035,22 +2037,72 @@ describe("the guard's closing scan over a quoted heredoc body, and a line too lo
     expect(decide(tool, guard, command).deny, `${tool} unattended: ${command}`).toBe(true);
   });
 
-  // Red on 77116591: the long benign line was read and allowed in every mode.
-  it.each(TOOLS)("%s: asks attended for a line past 65,536 characters, refuses it for a sub-agent and unattended", async (tool) => {
+  // Red on 77116591: the long benign line was read and allowed in every mode. TEST CHANGE, justified (review/117): it
+  // asked attended under `autonomy-loosen`; it is now refused in every mode, never an ask, and so is a refuse-class act
+  // padded past the cap (red on 87c72904, where it asked attended on Claude Code).
+  it.each(TOOLS)("%s: refuses a line past 65,536 characters in every mode, a padded refuse-class act among them", async (tool) => {
     const guard = await placeGuard(tool);
-    const long = `echo ${"a".repeat(70_000)}`;
-    const verdict = personOnlyVerdict(long, BAKED_DEFAULT);
-    if (!verdict.deny) throw new Error("the long line reads as no act");
-    expect(verdict.act).toContain("A line too long for the guard to read");
-    expect(decide(tool, guard, long)).toEqual(expectedAttended(tool, verdict));
-    expect(helper(tool, guard, long).deny).toBe(true);
-    // The neighbour under the cap reads as today.
-    const short = `echo ${"a".repeat(59_995)}`;
-    expect(decide(tool, guard, short)).toEqual({ deny: false });
-    expect(helper(tool, guard, short)).toEqual({ deny: false });
+    const refused = { deny: true, reason: expect.stringContaining("A line too long for the guard to read") };
+    const long = [`echo ${"a".repeat(70_000)}`, `git push --force origin feat/x; echo ${"a".repeat(70_000)}`, `gh repo delete o/r --yes; echo ${"a".repeat(70_000)}`];
+    for (const command of long) {
+      expect(personOnlyVerdict(command, BAKED_DEFAULT), command.slice(0, 40)).toMatchObject({ deny: true, rule: "line-too-long", ask: false });
+      expect(decide(tool, guard, command), `${tool}: ${command.slice(0, 40)}`).toEqual(refused);
+      expect(helper(tool, guard, command), `${tool} helper: ${command.slice(0, 40)}`).toEqual(refused);
+    }
+    // The neighbours under the cap read as today.
+    const short = [`echo ${"a".repeat(59_995)}`, `echo ${"a".repeat(65_530)}`];
+    for (const command of short) {
+      expect(decide(tool, guard, command)).toEqual({ deny: false });
+      expect(helper(tool, guard, command)).toEqual({ deny: false });
+    }
     await getRepo().seedFiles(UNATTENDED);
-    expect(decide(tool, guard, long)).toMatchObject({ deny: true, reason: expect.stringContaining("A line too long for the guard to read") });
-    expect(decide(tool, guard, short)).toEqual({ deny: false });
+    for (const command of long) expect(decide(tool, guard, command), `${tool} unattended: ${command.slice(0, 40)}`).toEqual(refused);
+    for (const command of short) expect(decide(tool, guard, command)).toEqual({ deny: false });
+  });
+});
+
+describe("a message read on stdin by git commit or gh pr, as data in every mode (a5, review/118)", () => {
+  const helper = (tool: Tool, guard: string, command: string): Decision =>
+    clientDecision(tool, run(guard, JSON.stringify({ ...JSON.parse(payload(tool, command)), agent_id: "a1" })), `${tool} helper: ${command}`);
+  const UNATTENDED = { ".stamity/runs/2026-10-23_x/record.md": record("in progress", "unattended") };
+  const BODY = "fix(hooks): read a body as data\n\n* the first bullet\n$HOME is text here\n* another bullet";
+
+  // Red on 87c72904: the bullet and bare-expansion lines asked as a loosening, so a sub-agent and an unattended run were
+  // refused. Unattended, `gh pr create` and `gh pr edit` stay refused by the unattended push rule, as they were.
+  it.each(TOOLS)("%s: runs a bulleted message through each stdin form, in every mode it may run in", async (tool) => {
+    const guard = await placeGuard(tool);
+    const everywhere = [
+      `git commit -s -F - <<'EOF'\n${BODY}\nEOF`,
+      `git commit --file - <<'EOF'\n${BODY}\nEOF`,
+      `git commit --file=- <<'EOF'\n${BODY}\nEOF`,
+      `gh pr comment 5 --body-file - <<'EOF'\n${BODY}\nEOF`,
+      `gh pr comment 5 -F - <<'EOF'\n${BODY}\nEOF`,
+    ];
+    const attendedOnly = [`gh pr create --title t --body-file - <<'EOF'\n${BODY}\nEOF`, `gh pr edit 5 -F - <<'EOF'\n${BODY}\nEOF`];
+    for (const command of [...everywhere, ...attendedOnly]) {
+      expect(personOnlyVerdict(command, BAKED_DEFAULT), command).toEqual({ deny: false });
+      expect(decide(tool, guard, command), `${tool}: ${command}`).toEqual({ deny: false });
+      expect(helper(tool, guard, command), `${tool} helper: ${command}`).toEqual({ deny: false });
+    }
+    await getRepo().seedFiles(UNATTENDED);
+    for (const command of everywhere) expect(decide(tool, guard, command), `${tool} unattended: ${command}`).toEqual({ deny: false });
+    for (const command of attendedOnly) {
+      expect(decide(tool, guard, command), `${tool} unattended: ${command}`).toMatchObject({ deny: true, reason: expect.stringContaining("`gh pr") });
+    }
+  });
+
+  it.each(TOOLS)("%s: keeps the reading for the same bodies under a wrapper, piped onward or with another program first", async (tool) => {
+    const guard = await placeGuard(tool);
+    const FORCE = "git push --force origin feat/x";
+    for (const command of [
+      `sudo git commit -F - <<'EOF'\n${FORCE}\nEOF`,
+      `git commit -F - <<'EOF' | sh\n${FORCE}\nEOF`,
+      `cd /tmp && gh pr comment 5 -F - <<'EOF'\n${FORCE}\nEOF`,
+    ]) {
+      expect(personOnlyVerdict(command, BAKED_DEFAULT), command).toMatchObject({ deny: true, rule: "force-push" });
+      expect(decide(tool, guard, command).deny, `${tool}: ${command}`).toBe(true);
+      expect(helper(tool, guard, command).deny, `${tool} helper: ${command}`).toBe(true);
+    }
   });
 });
 

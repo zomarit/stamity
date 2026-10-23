@@ -1158,6 +1158,8 @@ const CLASSES: readonly (readonly [command: string, rule: string, ask: boolean, 
   ["stamity sync --loosen", "autonomy-loosen", true],
   // TEST CHANGE, justified (REQ-FLOW-121, review/103): the land verb's approved line, ask-class.
   ["stamity run land --run x --approved", "land-approved", true],
+  // review/117: a line past 65,536 characters is refused in every mode before any reading.
+  [`echo ${"a".repeat(70_000)}`, "line-too-long", false],
   ["gh repo edit", "repo-irreversible", false],
   ["gh repo edit o/r", "repo-irreversible", false],
   ["git push origin (git branch --show-current)", "push-default", true],
@@ -1285,6 +1287,8 @@ describe("personOnlyVerdict — the deny matrix", () => {
       "autonomy-loosen",
       // TEST CHANGE, justified (REQ-FLOW-121, review/103): one more rule joins the table.
       "land-approved",
+      // TEST CHANGE, justified (review/117): the refuse-class cap on a line too long for the guard to read joins it.
+      "line-too-long",
     ]);
     const hit = new Set([...DENY, ...CLASSES].map(([, rule]) => rule));
     expect(hit).toEqual(ids);
@@ -2410,7 +2414,8 @@ describe("CLAUDE_DENY_ROWS and CLAUDE_ASK_ROWS", () => {
     expect([...rules].toSorted()).toEqual(
       PERSON_ONLY_RULES.map((rule) => rule.id)
         // TEST CHANGE, justified (REQ-FLOW-121, review/103): `--approved` sits mid-line, which no prefix row can say.
-        .filter((id) => !["push-default", "protection-delete", "status-write", "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen", "land-approved"].includes(id))
+        // TEST CHANGE, justified (review/117): a line's length is no prefix either.
+        .filter((id) => !["push-default", "protection-delete", "status-write", "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen", "land-approved", "line-too-long"].includes(id))
         .toSorted(),
     );
   });
@@ -3677,36 +3682,115 @@ describe("a substitution's closing scan over a quoted heredoc body, and one noth
   });
 });
 
-/** a5, review/115: a line past 64 KiB is one the guard cannot read, so it asks before any reading. */
-describe("a line too long for the guard to read (a5, review/115)", () => {
+/**
+ * a5, review/115, review/117: a line past 64 KiB is one the guard cannot read, so it is refused in every mode before any
+ * reading, under its own refuse-class rule, so no act padded past the cap is one click away.
+ */
+describe("a line too long for the guard to read (a5, review/115, review/117)", () => {
   const DEFAULT = { ...ON_FEATURE, stricterThanDefault: false };
 
-  // Red on 77116591: the long benign line was read and allowed.
-  it("asks for a benign line past 65,536 characters, and refuses it in the unattended verdict", () => {
+  // Red on 77116591: the long benign line was read and allowed. TEST CHANGE, justified (review/117): it was an ask
+  // under `autonomy-loosen`; it is now refused under its own refuse-class rule, and the land-only reading refuses it too.
+  it("refuses a benign line past 65,536 characters in both verdicts, under its own refuse-class rule", () => {
     const command = `echo ${"a".repeat(70_000)}`;
     expect(personOnlyVerdict(command, DEFAULT)).toMatchObject({
       deny: true,
-      rule: "autonomy-loosen",
-      ask: true,
+      rule: "line-too-long",
+      ask: false,
       act: expect.stringContaining("A line too long for the guard to read"),
+      reason: expect.stringContaining("the person runs it themselves"),
     });
-    expect(unattendedPushVerdict(command)).toMatchObject({ deny: true, reason: expect.stringContaining("A line too long for the guard to read") });
-    // The land verb's attended reading leaves it to the person-only verdict's ask.
-    expect(unattendedPushVerdict(command, false, true)).toEqual({ deny: false });
+    const refused = { deny: true, reason: expect.stringContaining("A line too long for the guard to read") };
+    expect(unattendedPushVerdict(command)).toMatchObject(refused);
+    expect(unattendedPushVerdict(command, false, true)).toMatchObject(refused);
+    expect(unattendedPushVerdict(command, true)).toMatchObject(refused);
   });
 
-  it("reads a benign line of 60,000 characters as today, and asks at one character past the cap", () => {
+  it("reads benign lines of 60,000, 65,535 and 65,536 characters as today, and refuses one character past the cap", () => {
     const command = `echo ${"a".repeat(59_995)}`;
     expect(command.length).toBe(60_000);
     expect(personOnlyVerdict(command, DEFAULT)).toEqual({ deny: false });
     expect(unattendedPushVerdict(command)).toEqual({ deny: false });
-    expect(personOnlyVerdict(`echo ${"a".repeat(65_531)}`, DEFAULT)).toEqual({ deny: false });
-    expect(personOnlyVerdict(`echo ${"a".repeat(65_532)}`, DEFAULT)).toMatchObject({ deny: true, rule: "autonomy-loosen" });
+    for (const length of [65_535, 65_536]) {
+      const line = `echo ${"a".repeat(length - 5)}`;
+      expect(personOnlyVerdict(line, DEFAULT), String(length)).toEqual({ deny: false });
+      expect(unattendedPushVerdict(line), String(length)).toEqual({ deny: false });
+    }
+    expect(personOnlyVerdict(`echo ${"a".repeat(65_532)}`, DEFAULT)).toMatchObject({ deny: true, rule: "line-too-long", ask: false });
   });
 
-  it("asks for a long line whatever acts it holds, before reading them", () => {
-    // A long line holding a force push asks attended, and is refused unattended and for a sub-agent: never runs.
-    const command = `git push --force origin feat/x; echo ${"a".repeat(70_000)}`;
-    expect(personOnlyVerdict(command, DEFAULT)).toMatchObject({ deny: true, ask: true });
+  // TEST CHANGE, justified (review/117): this row pinned an ask for a padded force push, which made a refuse-class act
+  // one click away on an asking client; a line past the cap is now refused whatever acts it holds.
+  it.each([
+    ["a force push padded past the cap", `git push --force origin feat/x; echo ${"a".repeat(70_000)}`],
+    ["a repository deletion padded past the cap", `gh repo delete o/r --yes; echo ${"a".repeat(70_000)}`],
+    ["an ask-class merge padded past the cap", `gh pr merge 3 --squash; echo ${"a".repeat(70_000)}`],
+  ])("refuses %s, before reading it", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT)).toMatchObject({ deny: true, rule: "line-too-long", ask: false });
+    expect(unattendedPushVerdict(command).deny).toBe(true);
+  });
+});
+
+/**
+ * a5, review/118: `git commit` reading its message on stdin, and `gh pr create`, `edit` or `comment` reading its body on
+ * stdin, are data receivers under every REQ-FLOW-141 clause that applies; every other form keeps the reading as built.
+ */
+describe("a message read on stdin by git commit or gh pr as data (a5, review/118)", () => {
+  const DEFAULT = { ...ON_FEATURE, stricterThanDefault: false };
+  const FORCE = "git push --force origin feat/x";
+  const BODY = `fix(hooks): read a body as data\n\n* the first bullet\n$HOME is text here\n${FORCE}`;
+
+  // Red on 87c72904: each body line was read as a command, its force push refused.
+  it.each([
+    ["git commit with -F -", `git commit -s -F - <<'EOF'\n${BODY}\nEOF`],
+    ["git commit with --file -", `git commit --file - <<'EOF'\n${BODY}\nEOF`],
+    ["git commit with --file=-", `git commit --file=- <<"EOF"\n${BODY}\nEOF`],
+    ["git commit with -F - and a bare delimiter", `git commit -F - <<EOF\n${BODY}\nEOF`],
+    ["gh pr comment with --body-file -", `gh pr comment 5 --body-file - <<'EOF'\n${BODY}\nEOF`],
+    ["gh pr comment with -F -", `gh pr comment 5 -F - <<'EOF'\n${BODY}\nEOF`],
+  ])("skips the body of %s in both verdicts", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toEqual({ deny: false });
+    expect(unattendedPushVerdict(command), command).toEqual({ deny: false });
+  });
+
+  // Red on 87c72904. Unattended, `gh pr create` and `gh pr edit` stay refused as push-path acts by their own rule.
+  it.each([
+    ["gh pr create with --body-file -", `gh pr create --title t --body-file - <<'EOF'\n${BODY}\nEOF`],
+    ["gh pr edit with -F -", `gh pr edit 5 -F - <<'EOF'\n${BODY}\nEOF`],
+  ])("skips the body of %s in the person-only verdict", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toEqual({ deny: false });
+    expect(unattendedPushVerdict(command), command).toMatchObject({ deny: true, reason: expect.stringContaining("`gh pr") });
+  });
+
+  it("still reads the operator's own line and every line after the terminator", () => {
+    for (const command of [`git commit -F - <<'EOF' && ${FORCE}\nbody\nEOF`, `gh pr comment 5 -F - <<'EOF'\nbody\nEOF\n${FORCE}`]) {
+      expect(personOnlyVerdict(command, DEFAULT), command).toMatchObject({ deny: true, rule: "force-push" });
+    }
+  });
+
+  it.each([
+    ["git commit under a wrapper", `sudo git commit -F - <<'EOF'\n${FORCE}\nEOF`],
+    ["git commit under env", `env GIT_EDITOR=true git commit -F - <<'EOF'\n${FORCE}\nEOF`],
+    ["git commit after an assignment", `X=1 git commit -F - <<'EOF'\n${FORCE}\nEOF`],
+    ["git commit with another program first on the line", `cd /tmp && git commit -F - <<'EOF'\n${FORCE}\nEOF`],
+    ["git commit piped onward", `git commit -F - <<'EOF' | sh\n${FORCE}\nEOF`],
+    ["git commit by a path", `/usr/bin/git commit -F - <<'EOF'\n${FORCE}\nEOF`],
+    ["git with a global option before commit", `git -C . commit -F - <<'EOF'\n${FORCE}\nEOF`],
+    ["git commit reading its message from a file", `git commit -F msg.txt <<'EOF'\n${FORCE}\nEOF`],
+    ["git commit with its stdin flag filled in", `git commit -F "$M" <<'EOF'\n${FORCE}\nEOF`],
+    ["git commit with another redirection", `git commit -F - < other.txt <<'EOF'\n${FORCE}\nEOF`],
+    ["git commit under a bare delimiter whose body holds a substitution", `git commit -F - <<EOF\n$(${FORCE})\nEOF`],
+    ["git commit with no terminator line", `git commit -F - <<'EOF'\n${FORCE}`],
+    ["git commit with a carriage return in the terminator", `git commit -F - <<'EOF'\n${FORCE}\nEOF\r`],
+    ["git commit with a delimiter outside the set", `git commit -F - <<'E-F'\n${FORCE}\nE-F`],
+    ["another git subcommand reading stdin", `git apply -F - <<'EOF'\n${FORCE}\nEOF`],
+    ["gh pr with another subcommand", `gh pr merge 5 -F - <<'EOF'\n${FORCE}\nEOF`],
+    ["gh pr comment reading its body from a file", `gh pr comment 5 --body-file b.md <<'EOF'\n${FORCE}\nEOF`],
+    ["gh pr comment under xargs", `xargs gh pr comment 5 -F - <<'EOF'\n${FORCE}\nEOF`],
+    ["gh pr comment piped onward", `gh pr comment 5 -F - <<'EOF' | bash\n${FORCE}\nEOF`],
+    ["gh with an option before pr", `gh -R o/r pr comment 5 -F - <<'EOF'\n${FORCE}\nEOF`],
+  ])("keeps the reading as built for %s", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toMatchObject({ deny: true, rule: "force-push" });
+    expect(unattendedPushVerdict(command).deny, command).toBe(true);
   });
 });

@@ -781,6 +781,26 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		return kinds.slice(0, at + 1).every((kind) => kind === "") && (PACKAGE_WORDS.includes(words[at] ?? "") || at === 2 && (name === PACKAGE_NAME || pinned));
 	}
 	/**
+	* Whether a segment's words are exactly \`git commit\` reading its message from stdin (\`-F -\`, \`--file -\`, \`--file=-\`),
+	* or exactly \`gh pr create\`, \`edit\` or \`comment\` reading its body from stdin (\`--body-file -\`, \`-F -\`), each of those
+	* words literal (REQ-FLOW-141's message receivers, review/118). Neither program runs what it reads there.
+	*/
+	function message(words, kinds) {
+		const git = words[0] === "git" && words[1] === "commit";
+		const gh = words[0] === "gh" && words[1] === "pr" && [
+			"create",
+			"edit",
+			"comment"
+		].includes(words[2] ?? "");
+		const flags = git ? ["-F", "--file"] : ["--body-file", "-F"];
+		const literal = (at) => kinds[at] === "";
+		return (git || gh) && [
+			0,
+			1,
+			2
+		].slice(0, git ? 2 : 3).every(literal) && words.some((word, at) => literal(at) && (flags.includes(word) && words[at + 1] === "-" && literal(at + 1) || git && word === "--file=-"));
+	}
+	/**
 	* Whether earlier segments may change what a later heredoc's receiver is (REQ-FLOW-141): a word ending in \`()\` (a
 	* function), or a command opening, after keywords, on an assignment or on a builtin that defines, assigns, sources or
 	* runs a line (\`alias\`, \`export\`, \`read\`, \`eval\`, \`.\`, …).
@@ -927,8 +947,10 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		* leading tabs for \`<<-\`) and, unquoted, a body with no \`$(\` or backtick, and nothing piping onward. With \`docs\` 2:
 		* a bare \`cat\` first in the text, with no other redirection and nothing after it on its line. With \`docs\` 1: a bare
 		* \`cat\` (no argument) or \`tee\` (plain operands, \`-a\`, \`-i\`, \`-p\`) first on the line, its standard output sent by \`>\`
-		* or \`>>\` to one plain path, no other redirection, its targets named by no later word; or the engine's own CLI
-		* (\`engine\`) first in its segment, with no other redirection and no earlier command defining or assigning.
+		* or \`>>\` to one plain path, no other redirection, its targets named by no later word; the engine's own CLI
+		* (\`engine\`) first in its segment, with no other redirection and no earlier command defining or assigning; or
+		* \`git commit\` or \`gh pr create|edit|comment\` reading its message from stdin (\`message\`), first on the line, with no
+		* other redirection (review/118).
 		*/
 		const pastBody = (nl) => {
 			const d = doc;
@@ -939,7 +961,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			const plain = (path, kind = "") => kind === "" && /^[\\w./@%+,:=~][\\w./@%+,:=~-]{0,255}$/.test(path) && !/(?:^|\\/)\\.git(?:\\/|$)/i.test(path) && (!/^\\/(?:dev|proc)\\//.test(path) || path === "/dev/null");
 			const operands = d.words.slice(1).filter((each) => !/^(?:-[aip]+|--append|--ignore-interrupts)$/.test(each));
 			const writes = docs === 1 && d.seg === 0 && kinds.every((each) => each === "") && plain(out[1] ?? "", out[2]) && (d.words.join(" ") === "cat" || d.words[0] === "tee" && operands.length > 0 && operands.every((each) => plain(each)));
-			const sink = /^[\\n;&]$/.test(d.cut ?? "") && (docs === 2 ? d.cut === "\\n" && d.seg === 0 && d.words.join(" ") === "cat" && kinds[0] === "" && others.length === 0 : writes || docs === 1 && others.length === 0 && engine(d.words, kinds) && !defines(segments.slice(0, d.seg)));
+			const sink = /^[\\n;&]$/.test(d.cut ?? "") && (docs === 2 ? d.cut === "\\n" && d.seg === 0 && d.words.join(" ") === "cat" && kinds[0] === "" && others.length === 0 : writes || docs === 1 && others.length === 0 && engine(d.words, kinds) && !defines(segments.slice(0, d.seg)) || docs === 1 && others.length === 0 && d.seg === 0 && message(d.words, kinds));
 			if (!sink) return nl + 1;
 			for (let at = nl + 1;;) {
 				const stop = text.indexOf("\\n", at);
@@ -2057,7 +2079,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			deny: true,
 			rule,
 			act: what,
-			reason: rule === "status-write" ? \`\${what} is CI's to write, never the agent's (\${rule}): a merge reads it as evidence (REQ-FLOW-140). Stop here.\` : \`\${what} is a person-only act (\${rule}): the person runs it, never the agent (REQ-FLOW-102). \` + \`Stop here and list it for the person.\`,
+			reason: rule === "status-write" ? \`\${what} is CI's to write, never the agent's (\${rule}): a merge reads it as evidence (REQ-FLOW-140). Stop here.\` : rule === "line-too-long" ? "A line too long for the guard to read (over 65,536 characters) is refused in every mode (line-too-long): " + "the person runs it themselves (REQ-FLOW-102). Stop here and give the person the exact command." : \`\${what} is a person-only act (\${rule}): the person runs it, never the agent (REQ-FLOW-102). \` + \`Stop here and list it for the person.\`,
 			ask: ASK_RULES.has(rule)
 		};
 		if (ctx.runs?.includes(rule) === true) {
@@ -3023,10 +3045,12 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		}
 	}
 	// Each segment's acts are collected (v0a); the readers record them through \`deny\`.
-	// A line past 64 KiB is one the guard cannot read (review/115): it asks before any reading, so no line can be built to
-	// outlast the hook's timeout, and the guard refuses it unattended and for a sub-agent.
+	// A line past 64 KiB is one the guard cannot read (review/115): it is refused in every mode before any reading, so no
+	// line can be built to outlast the hook's timeout, and no act padded past the cap is ever one click away (review/117).
+	// The act reads into the guard's refusal sentence: "…which may hold an act that deletes, force-pushes or cannot be
+	// undone (\`line-too-long\`): it stays the person's to run, even with approval … Give the person the exact command."
 	if (command.length > 65536) {
-		return deny("autonomy-loosen", "A line too long for the guard to read (over 65,536 characters), which may spell \`--loosen\`");
+		return deny("line-too-long", "A line too long for the guard to read (over 65,536 characters), which may hold an act that");
 	};
 	const read = commandsOf(command, 0, false);
 	for (const cmd of read) {
@@ -3353,6 +3377,26 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 		return kinds.slice(0, at + 1).every((kind) => kind === "") && (PACKAGE_WORDS.includes(words[at] ?? "") || at === 2 && (name === PACKAGE_NAME || pinned));
 	}
 	/**
+	* Whether a segment's words are exactly \`git commit\` reading its message from stdin (\`-F -\`, \`--file -\`, \`--file=-\`),
+	* or exactly \`gh pr create\`, \`edit\` or \`comment\` reading its body from stdin (\`--body-file -\`, \`-F -\`), each of those
+	* words literal (REQ-FLOW-141's message receivers, review/118). Neither program runs what it reads there.
+	*/
+	function message(words, kinds) {
+		const git = words[0] === "git" && words[1] === "commit";
+		const gh = words[0] === "gh" && words[1] === "pr" && [
+			"create",
+			"edit",
+			"comment"
+		].includes(words[2] ?? "");
+		const flags = git ? ["-F", "--file"] : ["--body-file", "-F"];
+		const literal = (at) => kinds[at] === "";
+		return (git || gh) && [
+			0,
+			1,
+			2
+		].slice(0, git ? 2 : 3).every(literal) && words.some((word, at) => literal(at) && (flags.includes(word) && words[at + 1] === "-" && literal(at + 1) || git && word === "--file=-"));
+	}
+	/**
 	* Whether earlier segments may change what a later heredoc's receiver is (REQ-FLOW-141): a word ending in \`()\` (a
 	* function), or a command opening, after keywords, on an assignment or on a builtin that defines, assigns, sources or
 	* runs a line (\`alias\`, \`export\`, \`read\`, \`eval\`, \`.\`, …).
@@ -3499,8 +3543,10 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 		* leading tabs for \`<<-\`) and, unquoted, a body with no \`$(\` or backtick, and nothing piping onward. With \`docs\` 2:
 		* a bare \`cat\` first in the text, with no other redirection and nothing after it on its line. With \`docs\` 1: a bare
 		* \`cat\` (no argument) or \`tee\` (plain operands, \`-a\`, \`-i\`, \`-p\`) first on the line, its standard output sent by \`>\`
-		* or \`>>\` to one plain path, no other redirection, its targets named by no later word; or the engine's own CLI
-		* (\`engine\`) first in its segment, with no other redirection and no earlier command defining or assigning.
+		* or \`>>\` to one plain path, no other redirection, its targets named by no later word; the engine's own CLI
+		* (\`engine\`) first in its segment, with no other redirection and no earlier command defining or assigning; or
+		* \`git commit\` or \`gh pr create|edit|comment\` reading its message from stdin (\`message\`), first on the line, with no
+		* other redirection (review/118).
 		*/
 		const pastBody = (nl) => {
 			const d = doc;
@@ -3511,7 +3557,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 			const plain = (path, kind = "") => kind === "" && /^[\\w./@%+,:=~][\\w./@%+,:=~-]{0,255}$/.test(path) && !/(?:^|\\/)\\.git(?:\\/|$)/i.test(path) && (!/^\\/(?:dev|proc)\\//.test(path) || path === "/dev/null");
 			const operands = d.words.slice(1).filter((each) => !/^(?:-[aip]+|--append|--ignore-interrupts)$/.test(each));
 			const writes = docs === 1 && d.seg === 0 && kinds.every((each) => each === "") && plain(out[1] ?? "", out[2]) && (d.words.join(" ") === "cat" || d.words[0] === "tee" && operands.length > 0 && operands.every((each) => plain(each)));
-			const sink = /^[\\n;&]$/.test(d.cut ?? "") && (docs === 2 ? d.cut === "\\n" && d.seg === 0 && d.words.join(" ") === "cat" && kinds[0] === "" && others.length === 0 : writes || docs === 1 && others.length === 0 && engine(d.words, kinds) && !defines(segments.slice(0, d.seg)));
+			const sink = /^[\\n;&]$/.test(d.cut ?? "") && (docs === 2 ? d.cut === "\\n" && d.seg === 0 && d.words.join(" ") === "cat" && kinds[0] === "" && others.length === 0 : writes || docs === 1 && others.length === 0 && engine(d.words, kinds) && !defines(segments.slice(0, d.seg)) || docs === 1 && others.length === 0 && d.seg === 0 && message(d.words, kinds));
 			if (!sink) return nl + 1;
 			for (let at = nl + 1;;) {
 				const stop = text.indexOf("\\n", at);
@@ -4872,10 +4918,12 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 		if (powershell && ats.some((index) => index > at)) return "an unquoted \`@\` in a word after \`run\`, which PowerShell reads as a splat";
 		return null;
 	}
-	// A line past 64 KiB is one the guard cannot read (review/115), refused here before any reading; the land verb's
-	// attended reading leaves it to the person-only verdict, which asks for it.
+	// A line past 64 KiB is one the guard cannot read (review/115): refused in every mode before any reading (review/117).
 	if (command.length > 65536) {
-		return landOnly ? { deny: false } : deny("A line too long for the guard to read (over 65,536 characters)");
+		return {
+			deny: true,
+			reason: "A line too long for the guard to read (over 65,536 characters) is refused in every mode, before any reading: " + "the person runs it themselves (REQ-FLOW-102)."
+		};
 	};
 	const commands = commandsOf(command, 0, powershell);
 	// The land verb's line in every mode (REQ-FLOW-121, a4): read on the parsed program words alone, so a commit message,
@@ -10399,7 +10447,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".claude/hooks/stamity/stamity-agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".claude/hooks/stamity/stamity-cloud-readiness.mjs": "acef8b976c3cf0dc29df1ab1584458bc83c66ab1e7284e28df62af60f1311c91 11348 bytes",
   ".claude/hooks/stamity/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "127b2f019cd0725e25e5bdf7314a82a56578b57294d5d45f08ada873c08ded47 243229 bytes",
+  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "dbaf392a6fdc5b7a26f9f7b76fc83618d6f6e8fce91614d0e4b3080b40b444cd 246038 bytes",
   ".claude/hooks/stamity/stamity-pre-tool-use-guard.mjs": "752f24a46db0da9f933bcb313a00ef8f6b12b8a655241b9257e40f64d9776965 20816 bytes",
   ".claude/hooks/stamity/stamity-review-gate.mjs": "a410def5d44fde83869b3c2c98db318d470b68a54101e1b20eddfb026f8077b1 51137 bytes",
   ".claude/hooks/stamity/stamity-session-start.mjs": "c807b92eeff34b3e194a0f7ae843c2945d5663d56cdb937786454a6402df3f31 51786 bytes",
@@ -10521,12 +10569,12 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".mcp.json": "f4e65233eea1ba936b61b16f2ee2d90f84a2510436d58f6484d872f507314f2f 387 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "35d24b52e3adbe01137a0f969aa2efc02a1ebb6be7ccbd5f8b6c6cd7ce54d5af 243225 bytes",
+  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "ff10cc9f797702eb49924fb9f6433d39d55493577fd076e4eb1c567ca6a1548f 246034 bytes",
   ".stamity/generated/hooks/codex/stamity-portable-hook.mjs": "8480d3a6fe6ea5fe1cad1c683ecbb07f3999cbdb411ae7dff7a1ec09eb207068 20937 bytes",
   ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/codex/stamity-session-start.mjs": "1111332a1630ed4dcb42e421b2326c5dd423a358e3c92bf8cb367e212a7a996d 51799 bytes",
   ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "789b819cbc3e20843d9ace32eaa6f17137c5189312a6feac07e0b4194752e01b 245979 bytes",
+  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "8f70da11a44496101c99c5d63b1acb5892e61a1ce6ed83dbd24343fddb0de185 248788 bytes",
   ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "97b118796dbd153216cacceb34fd122b82f9cf75eae3b1d2de4c0938482af8a5 22349 bytes",
   ".stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "9f930fcd797ef464e7f4cb4c40e59b4976d65199a5c974fb67ca7624e5d0287c 56602 bytes",
@@ -10534,7 +10582,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/generated/hooks/cursor/stamity-context-once.mjs": "c74c1b3d2cd908b170c48a8813bd05cc91f058210789a9b2f815b731a2eb6ccd 31773 bytes",
   ".stamity/generated/hooks/cursor/stamity-cursor-continue.mjs": "08bc51855553f4104a80fbe1ea94ba36a95173e005846467e4af5c643bb26a60 9500 bytes",
   ".stamity/generated/hooks/cursor/stamity-model-pins.mjs": "fc71eb522ff67fd73ff00820d0e59495bca188d2e30fc9a26ce85e89fff6fdd5 3813 bytes",
-  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "07cb2fd1fda76cb291dbec4295418e184e9f290e610531792ebdb46533af1d7d 243261 bytes",
+  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "26fa8cb208ae0a2852c71e6295056987102beb3acc1f9b9e56e38faefd47724d 246070 bytes",
   ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs": "513a8e4c2631670fffed73a96be46542fea82d8e1719a5d26da0a872699277c6 20938 bytes",
   ".stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "1111332a1630ed4dcb42e421b2326c5dd423a358e3c92bf8cb367e212a7a996d 51799 bytes",
@@ -10546,7 +10594,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "831f2ebcc6413d42203871deabefad234a62e907320716d882d81a1192b55d8d 94261 bytes",
+  ".stamity/manifest.json": "59a3c788e7db5806cfe8f81b618937ad9a616b0a12542eb65ee29d3fc32688f8 94261 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "6b5b5bebfd779fe5b513cd8c2c41fa3b4dd70826435e9df9c70076ba48c29b98 6548 bytes",
@@ -11348,6 +11396,26 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		return kinds.slice(0, at + 1).every((kind) => kind === "") && (PACKAGE_WORDS.includes(words[at] ?? "") || at === 2 && (name === PACKAGE_NAME || pinned));
 	}
 	/**
+	* Whether a segment's words are exactly \`git commit\` reading its message from stdin (\`-F -\`, \`--file -\`, \`--file=-\`),
+	* or exactly \`gh pr create\`, \`edit\` or \`comment\` reading its body from stdin (\`--body-file -\`, \`-F -\`), each of those
+	* words literal (REQ-FLOW-141's message receivers, review/118). Neither program runs what it reads there.
+	*/
+	function message(words, kinds) {
+		const git = words[0] === "git" && words[1] === "commit";
+		const gh = words[0] === "gh" && words[1] === "pr" && [
+			"create",
+			"edit",
+			"comment"
+		].includes(words[2] ?? "");
+		const flags = git ? ["-F", "--file"] : ["--body-file", "-F"];
+		const literal = (at) => kinds[at] === "";
+		return (git || gh) && [
+			0,
+			1,
+			2
+		].slice(0, git ? 2 : 3).every(literal) && words.some((word, at) => literal(at) && (flags.includes(word) && words[at + 1] === "-" && literal(at + 1) || git && word === "--file=-"));
+	}
+	/**
 	* Whether earlier segments may change what a later heredoc's receiver is (REQ-FLOW-141): a word ending in \`()\` (a
 	* function), or a command opening, after keywords, on an assignment or on a builtin that defines, assigns, sources or
 	* runs a line (\`alias\`, \`export\`, \`read\`, \`eval\`, \`.\`, …).
@@ -11494,8 +11562,10 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		* leading tabs for \`<<-\`) and, unquoted, a body with no \`$(\` or backtick, and nothing piping onward. With \`docs\` 2:
 		* a bare \`cat\` first in the text, with no other redirection and nothing after it on its line. With \`docs\` 1: a bare
 		* \`cat\` (no argument) or \`tee\` (plain operands, \`-a\`, \`-i\`, \`-p\`) first on the line, its standard output sent by \`>\`
-		* or \`>>\` to one plain path, no other redirection, its targets named by no later word; or the engine's own CLI
-		* (\`engine\`) first in its segment, with no other redirection and no earlier command defining or assigning.
+		* or \`>>\` to one plain path, no other redirection, its targets named by no later word; the engine's own CLI
+		* (\`engine\`) first in its segment, with no other redirection and no earlier command defining or assigning; or
+		* \`git commit\` or \`gh pr create|edit|comment\` reading its message from stdin (\`message\`), first on the line, with no
+		* other redirection (review/118).
 		*/
 		const pastBody = (nl) => {
 			const d = doc;
@@ -11506,7 +11576,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			const plain = (path, kind = "") => kind === "" && /^[\\w./@%+,:=~][\\w./@%+,:=~-]{0,255}$/.test(path) && !/(?:^|\\/)\\.git(?:\\/|$)/i.test(path) && (!/^\\/(?:dev|proc)\\//.test(path) || path === "/dev/null");
 			const operands = d.words.slice(1).filter((each) => !/^(?:-[aip]+|--append|--ignore-interrupts)$/.test(each));
 			const writes = docs === 1 && d.seg === 0 && kinds.every((each) => each === "") && plain(out[1] ?? "", out[2]) && (d.words.join(" ") === "cat" || d.words[0] === "tee" && operands.length > 0 && operands.every((each) => plain(each)));
-			const sink = /^[\\n;&]$/.test(d.cut ?? "") && (docs === 2 ? d.cut === "\\n" && d.seg === 0 && d.words.join(" ") === "cat" && kinds[0] === "" && others.length === 0 : writes || docs === 1 && others.length === 0 && engine(d.words, kinds) && !defines(segments.slice(0, d.seg)));
+			const sink = /^[\\n;&]$/.test(d.cut ?? "") && (docs === 2 ? d.cut === "\\n" && d.seg === 0 && d.words.join(" ") === "cat" && kinds[0] === "" && others.length === 0 : writes || docs === 1 && others.length === 0 && engine(d.words, kinds) && !defines(segments.slice(0, d.seg)) || docs === 1 && others.length === 0 && d.seg === 0 && message(d.words, kinds));
 			if (!sink) return nl + 1;
 			for (let at = nl + 1;;) {
 				const stop = text.indexOf("\\n", at);
@@ -12624,7 +12694,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			deny: true,
 			rule,
 			act: what,
-			reason: rule === "status-write" ? \`\${what} is CI's to write, never the agent's (\${rule}): a merge reads it as evidence (REQ-FLOW-140). Stop here.\` : \`\${what} is a person-only act (\${rule}): the person runs it, never the agent (REQ-FLOW-102). \` + \`Stop here and list it for the person.\`,
+			reason: rule === "status-write" ? \`\${what} is CI's to write, never the agent's (\${rule}): a merge reads it as evidence (REQ-FLOW-140). Stop here.\` : rule === "line-too-long" ? "A line too long for the guard to read (over 65,536 characters) is refused in every mode (line-too-long): " + "the person runs it themselves (REQ-FLOW-102). Stop here and give the person the exact command." : \`\${what} is a person-only act (\${rule}): the person runs it, never the agent (REQ-FLOW-102). \` + \`Stop here and list it for the person.\`,
 			ask: ASK_RULES.has(rule)
 		};
 		if (ctx.runs?.includes(rule) === true) {
@@ -13590,10 +13660,12 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		}
 	}
 	// Each segment's acts are collected (v0a); the readers record them through \`deny\`.
-	// A line past 64 KiB is one the guard cannot read (review/115): it asks before any reading, so no line can be built to
-	// outlast the hook's timeout, and the guard refuses it unattended and for a sub-agent.
+	// A line past 64 KiB is one the guard cannot read (review/115): it is refused in every mode before any reading, so no
+	// line can be built to outlast the hook's timeout, and no act padded past the cap is ever one click away (review/117).
+	// The act reads into the guard's refusal sentence: "…which may hold an act that deletes, force-pushes or cannot be
+	// undone (\`line-too-long\`): it stays the person's to run, even with approval … Give the person the exact command."
 	if (command.length > 65536) {
-		return deny("autonomy-loosen", "A line too long for the guard to read (over 65,536 characters), which may spell \`--loosen\`");
+		return deny("line-too-long", "A line too long for the guard to read (over 65,536 characters), which may hold an act that");
 	};
 	const read = commandsOf(command, 0, false);
 	for (const cmd of read) {
@@ -13920,6 +13992,26 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 		return kinds.slice(0, at + 1).every((kind) => kind === "") && (PACKAGE_WORDS.includes(words[at] ?? "") || at === 2 && (name === PACKAGE_NAME || pinned));
 	}
 	/**
+	* Whether a segment's words are exactly \`git commit\` reading its message from stdin (\`-F -\`, \`--file -\`, \`--file=-\`),
+	* or exactly \`gh pr create\`, \`edit\` or \`comment\` reading its body from stdin (\`--body-file -\`, \`-F -\`), each of those
+	* words literal (REQ-FLOW-141's message receivers, review/118). Neither program runs what it reads there.
+	*/
+	function message(words, kinds) {
+		const git = words[0] === "git" && words[1] === "commit";
+		const gh = words[0] === "gh" && words[1] === "pr" && [
+			"create",
+			"edit",
+			"comment"
+		].includes(words[2] ?? "");
+		const flags = git ? ["-F", "--file"] : ["--body-file", "-F"];
+		const literal = (at) => kinds[at] === "";
+		return (git || gh) && [
+			0,
+			1,
+			2
+		].slice(0, git ? 2 : 3).every(literal) && words.some((word, at) => literal(at) && (flags.includes(word) && words[at + 1] === "-" && literal(at + 1) || git && word === "--file=-"));
+	}
+	/**
 	* Whether earlier segments may change what a later heredoc's receiver is (REQ-FLOW-141): a word ending in \`()\` (a
 	* function), or a command opening, after keywords, on an assignment or on a builtin that defines, assigns, sources or
 	* runs a line (\`alias\`, \`export\`, \`read\`, \`eval\`, \`.\`, …).
@@ -14066,8 +14158,10 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 		* leading tabs for \`<<-\`) and, unquoted, a body with no \`$(\` or backtick, and nothing piping onward. With \`docs\` 2:
 		* a bare \`cat\` first in the text, with no other redirection and nothing after it on its line. With \`docs\` 1: a bare
 		* \`cat\` (no argument) or \`tee\` (plain operands, \`-a\`, \`-i\`, \`-p\`) first on the line, its standard output sent by \`>\`
-		* or \`>>\` to one plain path, no other redirection, its targets named by no later word; or the engine's own CLI
-		* (\`engine\`) first in its segment, with no other redirection and no earlier command defining or assigning.
+		* or \`>>\` to one plain path, no other redirection, its targets named by no later word; the engine's own CLI
+		* (\`engine\`) first in its segment, with no other redirection and no earlier command defining or assigning; or
+		* \`git commit\` or \`gh pr create|edit|comment\` reading its message from stdin (\`message\`), first on the line, with no
+		* other redirection (review/118).
 		*/
 		const pastBody = (nl) => {
 			const d = doc;
@@ -14078,7 +14172,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 			const plain = (path, kind = "") => kind === "" && /^[\\w./@%+,:=~][\\w./@%+,:=~-]{0,255}$/.test(path) && !/(?:^|\\/)\\.git(?:\\/|$)/i.test(path) && (!/^\\/(?:dev|proc)\\//.test(path) || path === "/dev/null");
 			const operands = d.words.slice(1).filter((each) => !/^(?:-[aip]+|--append|--ignore-interrupts)$/.test(each));
 			const writes = docs === 1 && d.seg === 0 && kinds.every((each) => each === "") && plain(out[1] ?? "", out[2]) && (d.words.join(" ") === "cat" || d.words[0] === "tee" && operands.length > 0 && operands.every((each) => plain(each)));
-			const sink = /^[\\n;&]$/.test(d.cut ?? "") && (docs === 2 ? d.cut === "\\n" && d.seg === 0 && d.words.join(" ") === "cat" && kinds[0] === "" && others.length === 0 : writes || docs === 1 && others.length === 0 && engine(d.words, kinds) && !defines(segments.slice(0, d.seg)));
+			const sink = /^[\\n;&]$/.test(d.cut ?? "") && (docs === 2 ? d.cut === "\\n" && d.seg === 0 && d.words.join(" ") === "cat" && kinds[0] === "" && others.length === 0 : writes || docs === 1 && others.length === 0 && engine(d.words, kinds) && !defines(segments.slice(0, d.seg)) || docs === 1 && others.length === 0 && d.seg === 0 && message(d.words, kinds));
 			if (!sink) return nl + 1;
 			for (let at = nl + 1;;) {
 				const stop = text.indexOf("\\n", at);
@@ -15439,10 +15533,12 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 		if (powershell && ats.some((index) => index > at)) return "an unquoted \`@\` in a word after \`run\`, which PowerShell reads as a splat";
 		return null;
 	}
-	// A line past 64 KiB is one the guard cannot read (review/115), refused here before any reading; the land verb's
-	// attended reading leaves it to the person-only verdict, which asks for it.
+	// A line past 64 KiB is one the guard cannot read (review/115): refused in every mode before any reading (review/117).
 	if (command.length > 65536) {
-		return landOnly ? { deny: false } : deny("A line too long for the guard to read (over 65,536 characters)");
+		return {
+			deny: true,
+			reason: "A line too long for the guard to read (over 65,536 characters) is refused in every mode, before any reading: " + "the person runs it themselves (REQ-FLOW-102)."
+		};
 	};
 	const commands = commandsOf(command, 0, powershell);
 	// The land verb's line in every mode (REQ-FLOW-121, a4): read on the parsed program words alone, so a commit message,
@@ -19637,7 +19733,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".claude/hooks/stamity/stamity-agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".claude/hooks/stamity/stamity-cloud-readiness.mjs": "acef8b976c3cf0dc29df1ab1584458bc83c66ab1e7284e28df62af60f1311c91 11348 bytes",
   ".claude/hooks/stamity/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "127b2f019cd0725e25e5bdf7314a82a56578b57294d5d45f08ada873c08ded47 243229 bytes",
+  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "dbaf392a6fdc5b7a26f9f7b76fc83618d6f6e8fce91614d0e4b3080b40b444cd 246038 bytes",
   ".claude/hooks/stamity/stamity-pre-tool-use-guard.mjs": "752f24a46db0da9f933bcb313a00ef8f6b12b8a655241b9257e40f64d9776965 20816 bytes",
   ".claude/hooks/stamity/stamity-review-gate.mjs": "a410def5d44fde83869b3c2c98db318d470b68a54101e1b20eddfb026f8077b1 51137 bytes",
   ".claude/hooks/stamity/stamity-session-start.mjs": "c807b92eeff34b3e194a0f7ae843c2945d5663d56cdb937786454a6402df3f31 51786 bytes",
@@ -19693,7 +19789,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "ba07a4e2598684e8ba9a10e8583b9a21726ed8f96f564ff4a986d3baaa02cf2f 28322 bytes",
+  ".stamity/manifest.json": "5147f4ca1cd0eb669d34e56e71cd11399d096b8961d819f1d703888076e6ab54 28322 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
   "CLAUDE.md": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
@@ -20555,7 +20651,7 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".gitignore": "14c0a079e08124240ec8c713fa4c32870948842d586a5829a19172c02ddd0482 204 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "35d24b52e3adbe01137a0f969aa2efc02a1ebb6be7ccbd5f8b6c6cd7ce54d5af 243225 bytes",
+  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "ff10cc9f797702eb49924fb9f6433d39d55493577fd076e4eb1c567ca6a1548f 246034 bytes",
   ".stamity/generated/hooks/codex/stamity-portable-hook.mjs": "8480d3a6fe6ea5fe1cad1c683ecbb07f3999cbdb411ae7dff7a1ec09eb207068 20937 bytes",
   ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/codex/stamity-session-start.mjs": "1111332a1630ed4dcb42e421b2326c5dd423a358e3c92bf8cb367e212a7a996d 51799 bytes",
@@ -20564,7 +20660,7 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "a85002c52ede30d8c010c3bbb23a97d39dd87a0669cc0457515c2e00965a81dd 22156 bytes",
+  ".stamity/manifest.json": "8709e457c02abf561e9632972d41fe0cd2c5e5c20f8b6e7de7e2ea6dd45d8f29 22156 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
   "AGENTS.override.md": "122504f41cc40a99c65cba4995c228bf4a5137d738324bbe3a847c6aaa5192db 25872 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
@@ -20905,7 +21001,7 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".gitignore": "14c0a079e08124240ec8c713fa4c32870948842d586a5829a19172c02ddd0482 204 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "789b819cbc3e20843d9ace32eaa6f17137c5189312a6feac07e0b4194752e01b 245979 bytes",
+  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "8f70da11a44496101c99c5d63b1acb5892e61a1ce6ed83dbd24343fddb0de185 248788 bytes",
   ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "97b118796dbd153216cacceb34fd122b82f9cf75eae3b1d2de4c0938482af8a5 22349 bytes",
   ".stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "9f930fcd797ef464e7f4cb4c40e59b4976d65199a5c974fb67ca7624e5d0287c 56602 bytes",
@@ -20914,7 +21010,7 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "24022231353a84570328418ac3abe8a44d9be345a9445c24ff689413cd0a53c5 20257 bytes",
+  ".stamity/manifest.json": "6fe37c5e7f7d2361c23924dd44350b727e159d8149fa998055ccdafb1e53e581 20257 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
@@ -21530,7 +21626,7 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".stamity/generated/hooks/cursor/stamity-context-once.mjs": "c74c1b3d2cd908b170c48a8813bd05cc91f058210789a9b2f815b731a2eb6ccd 31773 bytes",
   ".stamity/generated/hooks/cursor/stamity-cursor-continue.mjs": "08bc51855553f4104a80fbe1ea94ba36a95173e005846467e4af5c643bb26a60 9500 bytes",
   ".stamity/generated/hooks/cursor/stamity-model-pins.mjs": "fc71eb522ff67fd73ff00820d0e59495bca188d2e30fc9a26ce85e89fff6fdd5 3813 bytes",
-  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "07cb2fd1fda76cb291dbec4295418e184e9f290e610531792ebdb46533af1d7d 243261 bytes",
+  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "26fa8cb208ae0a2852c71e6295056987102beb3acc1f9b9e56e38faefd47724d 246070 bytes",
   ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs": "513a8e4c2631670fffed73a96be46542fea82d8e1719a5d26da0a872699277c6 20938 bytes",
   ".stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "1111332a1630ed4dcb42e421b2326c5dd423a358e3c92bf8cb367e212a7a996d 51799 bytes",
@@ -21539,7 +21635,7 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "380c22d3f5520b2161900ef385d8701aed38e18b43fbfe2644599683961b1026 24101 bytes",
+  ".stamity/manifest.json": "4517e57ed50dd2dad86ee4fc24e0503227f9e52315a0c6908d003d7e64a9c275 24101 bytes",
   "AGENTS.md": "6b5b5bebfd779fe5b513cd8c2c41fa3b4dd70826435e9df9c70076ba48c29b98 6548 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
