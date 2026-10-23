@@ -633,18 +633,22 @@ export async function planHooksInfra(ctx: HooksPlanContext): Promise<CoreHooksPl
 /**
  * A `package.json`'s name and bin names: with `walk`, the package root above `dir` (the running engine's own, read as
  * the CLI reads its own name, `../cli/kit/packageName.ts`: `stamity` and `st` here, a renamed fork's own), else the
- * file in `dir` itself (the repository's). A file that cannot be read, or holds no name or bin object, gives `""` and
- * none: the guard still reads `stamity` and `st`.
+ * file in `dir` itself (the repository's). A `bin` object names its commands by its keys; a `bin` string names one
+ * command, the package's unscoped name, as npm installs it (build/15). A file that cannot be read, a document that is no
+ * object, no string name, or a `bin` of another shape (an array, `null`) gives `""` and no bins: the guard still reads
+ * `stamity` and `st`. Exported for its tests.
  */
-async function packageJsonOf(dir: string, walk: boolean): Promise<{ name: string; bins: string[] }> {
+export async function packageJsonOf(dir: string, walk: boolean): Promise<{ name: string; bins: string[] }> {
   try {
     const root = walk ? findPackageRoot(dir) : dir;
     const parsed: unknown = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
-    const fields = typeof parsed === "object" && parsed !== null ? (parsed as { name?: unknown; bin?: unknown }) : {};
-    return {
-      name: typeof fields.name === "string" ? fields.name : "",
-      bins: typeof fields.bin === "object" && fields.bin !== null ? Object.keys(fields.bin) : [],
-    };
+    const fields = typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? (parsed as { name?: unknown; bin?: unknown }) : {};
+    const name = typeof fields.name === "string" ? fields.name : "";
+    const bins =
+      typeof fields.bin === "string"
+        ? name === "" ? [] : [name.replace(/^@[^/]+\//, "")]
+        : typeof fields.bin === "object" && fields.bin !== null && !Array.isArray(fields.bin) ? Object.keys(fields.bin) : [];
+    return { name, bins };
   } catch {
     return { name: "", bins: [] };
   }

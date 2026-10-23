@@ -1,11 +1,12 @@
 import { existsSync } from "node:fs";
-import { readdir } from "node:fs/promises";
+import { mkdir, readdir } from "node:fs/promises";
 import { basename, posix, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   AGENT_TOOL_POLICIES_PATH,
   CLAUDE_HOOK_POLICIES_FILE,
+  packageJsonOf,
   planHooksInfra,
   type CoreHooksPlan,
   type HooksPlanContext,
@@ -17,6 +18,8 @@ import {
   CLOUD_READINESS_TIMEOUT_MS,
   COPILOT_MAIN_SESSIONS_SEGMENTS,
   MAX_POLICY_FILE_BYTES,
+  PERSON_ONLY_GUARD_FILE,
+  planCoreHookScripts,
 } from "../../src/hooks/scripts.ts";
 import { AGENT_POLICY_ROSTER } from "../../src/roster/agentPolicies.ts";
 import { AGENT_TOOL_POLICIES_SCHEMA } from "../../src/tools/allowlist.ts";
@@ -1554,5 +1557,53 @@ describe("hook budgets: session start carries 30 s, the guard and the review gat
     const codex = await renderedHooks("codex");
     expect(leaves(codex["SessionStart"]).map((hook) => hook.timeout)).toEqual([30, 30]);
     expect(leaves(codex["PreToolUse"]).map((hook) => Object.hasOwn(hook, "timeout"))).toEqual([false, false]);
+  });
+});
+
+/**
+ * a4 round 12 (build/15): `packageJsonOf`'s every reading of a `package.json`, and the guard's package words after each,
+ * which hold `stamity` and `st` whatever the file holds.
+ */
+describe("packageJsonOf, the engine's and the repository's package identity (a4, build/15)", () => {
+  /** The package words a guard copy bakes from what the reader returned. */
+  const bakedWords = (read: { name: string; bins: string[] }): string[] => {
+    const guard = planCoreHookScripts("../../agent-tool-policies.json", "claude", {
+      packageName: read.name === "" ? "@zomarit/stamity" : read.name,
+      version: "1.0.0-golden",
+      personOnlyGuard: true,
+      packageBins: read.bins,
+    }).find((script) => script.fileName === PERSON_ONLY_GUARD_FILE);
+    return (JSON.parse(/^const PACKAGE = (.*);$/m.exec(guard?.content ?? "")?.[1] ?? "null") as { words: string[] }).words;
+  };
+
+  it.each([
+    ["an array", "[1, 2]", { name: "", bins: [] }],
+    ["a number", "7", { name: "", bins: [] }],
+    ["null", "null", { name: "", bins: [] }],
+    ["an object with no name", JSON.stringify({ bin: { forge: "cli.js" } }), { name: "", bins: ["forge"] }],
+    ["a name that is no string", JSON.stringify({ name: 7, bin: { forge: "cli.js" } }), { name: "", bins: ["forge"] }],
+    ["a bin string, which names the unscoped package", JSON.stringify({ name: "@acme/forge", bin: "./cli.js" }), { name: "@acme/forge", bins: ["forge"] }],
+    ["a bin string with no name", JSON.stringify({ bin: "./cli.js" }), { name: "", bins: [] }],
+    ["a bin null", JSON.stringify({ name: "@acme/forge", bin: null }), { name: "@acme/forge", bins: [] }],
+    ["a bin array", JSON.stringify({ name: "@acme/forge", bin: ["./cli.js"] }), { name: "@acme/forge", bins: [] }],
+    ["a bin object", JSON.stringify({ name: "@acme/forge", bin: { "forge-cli": "./cli.js", st: "./cli.js" } }), { name: "@acme/forge", bins: ["forge-cli", "st"] }],
+  ])("reads a package.json holding %s", async (_, body, expected) => {
+    await getRepo().seedFiles({ "pkg/package.json": body });
+    const read = await packageJsonOf(getRepo().path("pkg"), false);
+    expect(read).toEqual(expected);
+    // Walking up from a folder below finds the same file.
+    await getRepo().seedFiles({ "pkg/sub/.keep": "" });
+    expect(await packageJsonOf(getRepo().path("pkg", "sub"), true)).toEqual(expected);
+    const words = bakedWords(read);
+    expect(words).toEqual(expect.arrayContaining(["stamity", "st", ...read.bins]));
+  });
+
+  it("reads no identity from a file it cannot read, and the guard still reads stamity and st", async () => {
+    await mkdir(getRepo().path("unreadable", "package.json"), { recursive: true });
+    const read = await packageJsonOf(getRepo().path("unreadable"), false);
+    expect(read).toEqual({ name: "", bins: [] });
+    await getRepo().seedFiles({ "broken/package.json": "{ not json" });
+    expect(await packageJsonOf(getRepo().path("broken"), false)).toEqual({ name: "", bins: [] });
+    expect(bakedWords(read)).toEqual(expect.arrayContaining(["stamity", "st"]));
   });
 });
