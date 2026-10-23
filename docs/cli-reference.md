@@ -30,7 +30,7 @@ mistake.
 | `stamity learn` | plumbing | writes | capture a learning through the engine's write gates, or read them through its screen (plumbing) |
 | `stamity handoff` | plumbing | writes | prepare, resume, list, complete and prune handoffs through the engine's gates (plumbing) |
 | `stamity ledger` | plumbing | writes | append findings to a run's ledger, close its rows, print its resume card, and read and write the deferral inbox (plumbing) |
-| `stamity gate` | plumbing | reads only | classify a change, scan its added lines or an outbound text for secrets, or check an unattended start (plumbing) |
+| `stamity gate` | plumbing | writes | classify a change, scan its added lines or an outbound text for secrets, or check an unattended start (plumbing) |
 | `stamity plan` | plumbing | reads only | check that plans are ready for an unattended start (plumbing) |
 | `stamity run` | plumbing | writes | put an unattended run on a branch of its own, and push its work there (plumbing) |
 
@@ -321,7 +321,7 @@ agent content rather than a person. Hidden is not secret — `stamity gate --hel
 in full — and it is documented here because a verb that exists and is undocumented is
 worse than one that is merely unadvertised.
 
-Reads only. Nothing is written, so there is no preview mode to need.
+May write when it runs, so `--dry-run` previews any change without making it.
 
 | Argument | What it is |
 |---|---|

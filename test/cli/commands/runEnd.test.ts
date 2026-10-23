@@ -1,12 +1,15 @@
 import { execFileSync, spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { gitSurfaceRecordPath, readRunGitSurface } from "../../../src/cli/commands/gate.ts";
 import { runCommand } from "../../../src/cli/commands/run.ts";
 import type * as GitWriteModule from "../../../src/cli/engine/gitWrite.ts";
 import { buildUnattendedAskGate, UNATTENDED_ASK_GATE_FILE } from "../../../src/hooks/scripts.ts";
 import { RUN_ENDED_MARKER_FILE } from "../../../src/mcp/env.ts";
+import { surfaceRecord } from "../../../src/runs/gitSurface.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { NO_GIT_CONFIG } from "../../support/repoFixtures.ts";
 import { useTempDir } from "../../support/tempDir.ts";
@@ -167,7 +170,27 @@ describe("stamity run end", () => {
     if (opts.pin === "untracked") await put(repo, ORIGIN_PIN, PIN_TEXT);
     const modeLine = mode === null ? "" : `Mode: ${mode}\n`;
     await put(repo, `${RUN_DIR}/record.md`, `# Run ${RUN}\n\nStatus: in progress\n${modeLine}Branch: ${RUN_BRANCH}\nBase: ${base}\n`);
+    // TEST CHANGE, justified (REQ-FLOW-131, review/97): an unattended `end` now refuses with no pre-flight record of
+    // git's surface, which a passing `gate preflight --unattended` writes; the seed writes it, every mode alike (an
+    // attended run reads none), so no case's own steps change. A case about the record rewrites it.
+    await recordPreflight(repo);
     return { repo, remote, base };
+  }
+
+  /**
+   * The record a passing `gate preflight --unattended` writes for `repo` (REQ-FLOW-131), through the same reads and
+   * the module's own `surfaceRecord`, in the process environment {@link run} gives the verb; the spy's calls put back.
+   */
+  async function recordPreflight(repo: string): Promise<void> {
+    const mark = writes.argv.length;
+    await underRunEnv(async () => {
+      const place = await gitSurfaceRecordPath(repo);
+      const surface = await readRunGitSurface(repo);
+      if ("unreadable" in place || "unreadable" in surface) throw new Error("the seed's git surface could not be read");
+      await mkdir(dirname(place.path), { recursive: true });
+      await writeFile(place.path, `${JSON.stringify(surfaceRecord(surface, randomBytes(16).toString("hex"), new Date().toISOString()))}\n`);
+    });
+    writes.argv.length = mark;
   }
 
   async function put(repo: string, path: string, text: string): Promise<void> {
@@ -175,8 +198,12 @@ describe("stamity run end", () => {
     await writeFile(join(repo, path), text);
   }
 
-  /** Runs the verb with `HOME` at an empty folder and no host identity, so only the repository's config decides. */
-  async function run(cwd: string, argv: readonly string[], env?: Record<string, string>) {
+  /**
+   * `body` with `HOME` at an empty folder and no host identity in the process environment, put back after.
+   * TEST CHANGE, justified (REQ-FLOW-131): {@link run}'s environment, moved here unchanged so the seed's pre-flight
+   * record is taken in the same one.
+   */
+  async function underRunEnv<T>(body: () => Promise<T>): Promise<T> {
     const home = getRoot().path("home");
     await mkdir(home, { recursive: true });
     const overrides: Record<string, string | undefined> = { HOME: home, XDG_CONFIG_HOME: home, GIT_CONFIG_NOSYSTEM: "1", EMAIL: undefined };
@@ -187,17 +214,24 @@ describe("stamity run end", () => {
       else process.env[key] = value;
     }
     try {
-      const result = await runInProcess([runCommand], ["run", ...argv], { cwd, ...(env === undefined ? {} : { env }) });
-      const envelope = argv.includes("--json") && result.stdout !== "" ? (JSON.parse(result.stdout) as Record<string, unknown>) : {};
-      // The funnel's three envelope keys, set aside so `doc` is the verb's own document.
-      const { ok, command, version, ...doc } = envelope;
-      return { ...result, ok, command, version, doc };
+      return await body();
     } finally {
       for (const [key, value] of Object.entries(previous)) {
         if (value === undefined) delete process.env[key];
         else process.env[key] = value;
       }
     }
+  }
+
+  /** Runs the verb with `HOME` at an empty folder and no host identity, so only the repository's config decides. */
+  async function run(cwd: string, argv: readonly string[], env?: Record<string, string>) {
+    return underRunEnv(async () => {
+      const result = await runInProcess([runCommand], ["run", ...argv], { cwd, ...(env === undefined ? {} : { env }) });
+      const envelope = argv.includes("--json") && result.stdout !== "" ? (JSON.parse(result.stdout) as Record<string, unknown>) : {};
+      // The funnel's three envelope keys, set aside so `doc` is the verb's own document.
+      const { ok, command, version, ...doc } = envelope;
+      return { ...result, ok, command, version, doc };
+    });
   }
 
   const END = (title: string): string[] => ["end", "--run", RUN, "--title", title, "--json"];
@@ -237,6 +271,22 @@ describe("stamity run end", () => {
     });
     // The push ran before the pull request was asked for.
     expect(pushes()).toEqual([["push", "--quiet", "origin", `HEAD:refs/heads/${RUN_BRANCH}`]]);
+  });
+
+  // REQ-FLOW-131 (review/97): `end` runs checkpoint's steps, the surface check among them, before any pull request call.
+  it("refuses an unattended end whose git config moved since the pre-flight, pushing nothing and asking for no pull request", async () => {
+    const { repo, remote } = await seed("unattended");
+    git(repo, ["config", "stamity.moved", "yes"]);
+    await writeFile(join(repo, "a.txt"), "changed\n");
+
+    const { code, doc } = await run(repo, [...END("feat: the change"), "--paths", "a.txt"]);
+
+    expect(code).toBe(1);
+    expect(doc).toMatchObject({ subcommand: "end", pushed: false, committed: null, pr: null });
+    expect((doc["notDone"] as string[])[0]).toMatch(/^config changed: .*added stamity\.moved/);
+    expect(pushes()).toEqual([]);
+    expect(rest.calls.filter((call) => call.path.endsWith("/pulls"))).toEqual([]);
+    expect(git(remote, ["for-each-ref", "--format=%(refname)", "refs/heads/"])).toBe("");
   });
 
   it("replaces the body of an open pull request that ends with this run's marker, opening no second one", async () => {

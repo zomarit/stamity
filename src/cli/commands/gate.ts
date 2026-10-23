@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { closeSync, constants, existsSync, fstatSync, lstatSync, openSync, readFileSync, readSync, realpathSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { closeSync, constants, existsSync, fstatSync, lstatSync, openSync, readFileSync, readSync, realpathSync, rmSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Argument, InvalidArgumentError, Option, type Command } from "commander";
@@ -34,6 +35,7 @@ import {
 } from "../../change/testInputs.ts";
 import { linesPastCap, SCAN_LINE_MAX_CHARS, scanAddedLines, type ScanFile, type ScanHit } from "../../change/scan.ts";
 import { PREFLIGHT_CANARY_FILE } from "../../mcp/env.ts";
+import { readGitSurface, SURFACE_RECORD_FILE, surfaceRecord, type GitSurface } from "../../runs/gitSurface.ts";
 import { screenOutbound } from "../../runs/morning.ts";
 import { REQUIRED_FLOORS, runPreflight, type PreflightDeps, type PushUrlFacts, type RestRead } from "../../runs/preflight.ts";
 import { resolveRepo } from "../../runs/pullRequest.ts";
@@ -47,6 +49,7 @@ import type { SetupManifest } from "../../types/manifest.ts";
 import { REVIEW_GATE_STATE_FILE } from "../../types/markers.ts";
 import { ghApi } from "../engine/ghRunner.ts";
 import { gitCheckRunner, keptFromGit, revisionLines, type GitInputRunner } from "../engine/gitStatus.ts";
+import { gitWrite, gitWriteEnv } from "../engine/gitWrite.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import { sanitizeLabel } from "../kit/prompts.ts";
 import type { GitRunner } from "../../workspace/git.ts";
@@ -169,7 +172,13 @@ import type { GitRunner } from "../../workspace/git.ts";
  * state, the REST reads through `gh` on the host `origin` resolved to, and
  * the push identity as raw facts ({@link readPushIdentity}). No URL, helper or
  * header value reaches the output. Exit 0 with no refusal, 1 on any refusal
- * or unknown.
+ * or unknown. It is the one subcommand that writes (REQ-FLOW-131, review/97):
+ * on a pass it records the git surface the run verbs' git sees
+ * (`../../runs/gitSurface.ts`, read through {@link readRunGitSurface}) at
+ * `<git-dir>/stamity/preflight-git.json`, atomically, so `run checkpoint` and
+ * `run end` can refuse a configuration or environment it did not vet; a refusal
+ * removes a record an earlier pass left, and a record it cannot write refuses as
+ * `git-record`. `--dry-run` writes and removes nothing.
  *
  * **Why the subcommand is positional**, as in `ledger.ts`: the funnel
  * (`../kit/program.ts`) owns the exit codes and the one JSON document through
@@ -1986,6 +1995,61 @@ function setIn(env: Readonly<Record<string, string | undefined>>, name: string):
   return value !== "" && value !== "false" && value !== "0";
 }
 
+/**
+ * The git surface (REQ-FLOW-131) the run verbs' git sees in `cwd`: the configuration through the write runner in its
+ * unattended mode, the environment that runner starts git in, and the git program it resolves, so the pre-flight's
+ * record and the run verbs' checks read one git.
+ */
+export function readRunGitSurface(cwd: string): Promise<GitSurface | { unreadable: string }> {
+  const env = gitWriteEnv(process.env, { unattended: true });
+  return readGitSurface((args) => gitWrite(cwd, args, { unattended: true }), env, gitProgramFor(cwd, env));
+}
+
+/** Where the surface's record lives for the work tree at `cwd`: under its own git directory; else why not. */
+export async function gitSurfaceRecordPath(cwd: string): Promise<{ path: string; gitDir: string } | { unreadable: string }> {
+  try {
+    const read = await gitWrite(cwd, ["rev-parse", "--git-dir"], { unattended: true });
+    const dir = read.stdout.replace(/\r?\n$/, "");
+    if (read.code !== 0 || dir === "") return { unreadable: `git rev-parse --git-dir answered ${read.code}` };
+    const gitDir = resolve(cwd, dir);
+    return { path: join(gitDir, ...SURFACE_RECORD_FILE.split("/")), gitDir };
+  } catch (cause) {
+    return { unreadable: `git rev-parse --git-dir could not run (${cause instanceof Error ? cause.message : "no answer"})` };
+  }
+}
+
+/** How the record is named in the verbs' text: its place, never the machine's path. */
+export const SURFACE_RECORD_LABEL = `${SURFACE_RECORD_FILE} in the git directory`;
+
+const GIT_RECORD_FIX = "run the pre-flight inside the run's work tree, with its git directory writable";
+
+/**
+ * review/97: on a pass, the surface's record, written atomically; on a refusal, any record an earlier pass left goes,
+ * so no run verb compares against a surface a refused pre-flight saw. The reason a record could not be written or
+ * removed, else `null`.
+ */
+async function recordGitSurface(ctx: CliContext, root: string, passed: boolean, now: Date): Promise<string | null> {
+  const place = await gitSurfaceRecordPath(root);
+  if ("unreadable" in place) return passed ? `the git directory could not be read (${place.unreadable})` : null;
+  if (!passed) {
+    try {
+      rmSync(place.path, { force: true });
+      return null;
+    } catch (cause) {
+      return `an earlier record at ${SURFACE_RECORD_LABEL} could not be removed (${cause instanceof Error ? cause.message : "remove failed"})`;
+    }
+  }
+  const surface = await readRunGitSurface(root);
+  if ("unreadable" in surface) return `configuration unreadable (${surface.unreadable})`;
+  const record = surfaceRecord(surface, randomBytes(16).toString("hex"), now.toISOString());
+  try {
+    await ctx.engine.merge.atomicWrite.atomicWriteFile(place.path, `${JSON.stringify(record)}\n`, { boundaryDir: place.gitDir, mode: 0o600 });
+    return null;
+  } catch (cause) {
+    return `${SURFACE_RECORD_LABEL} could not be written (${cause instanceof Error ? cause.message : "write failed"})`;
+  }
+}
+
 async function runPreflightVerb(ctx: CliContext, opts: Record<string, unknown>): Promise<CommandResult> {
   const root = ctx.app.runtime.cwd;
   const env = ctx.app.runtime.env;
@@ -2032,11 +2096,16 @@ async function runPreflightVerb(ctx: CliContext, opts: Record<string, unknown>):
     pushIdentity,
     reviewState: { counter: existsSync(join(root, REVIEW_GATE_STATE_FILE)), usageReviewLines: usageReviewLines(root, now) },
   });
+  // review/97: the run verbs compare against this record, so a pass the record cannot follow is no pass.
+  const unrecorded = ctx.dryRun ? null : await recordGitSurface(ctx, root, verdict.ok, now);
+  const ok = verdict.ok && unrecorded === null;
   const session = detectSession(env);
   const client = SESSION_CLIENT[session.kind] ?? (setIn(env, "CLAUDECODE") ? "claude" : null);
   const cloud = session.kind !== "local";
   const checks = verdict.checks.map((check) => ({ ...check, evidence: sanitizeLabel(check.evidence) }));
-  const refusals = verdict.refusals.map((refusal) => ({ ...refusal, reason: sanitizeLabel(refusal.reason) }));
+  const refusals: { id: string; reason: string; fix: string }[] = verdict.refusals.map((refusal) => ({ ...refusal, reason: sanitizeLabel(refusal.reason) }));
+  if (unrecorded !== null) refusals.push({ id: "git-record", reason: sanitizeLabel(unrecorded), fix: GIT_RECORD_FIX });
+  const recorded = ctx.dryRun ? "not written (--dry-run)" : !verdict.ok ? "none (the pre-flight refused)" : ok ? `written (${SURFACE_RECORD_LABEL})` : "not written";
   const shownFloors = floors.map(({ id, path, exists }) => ({ id, path: sanitizeLabel(path), exists }));
   // `names` lists environment variable names, the one field here the caller's environment spells.
   const warnings = verdict.warnings.map((warning) =>
@@ -2045,15 +2114,16 @@ async function runPreflightVerb(ctx: CliContext, opts: Record<string, unknown>):
   ctx.io.out(
     `${[
       "mode: unattended",
-      `pre-flight: ${verdict.ok ? "passed" : "refused"}`,
+      `pre-flight: ${ok ? "passed" : "refused"}`,
       ...checks.map((check) => `  ${check.id}  ${check.state}  ${check.evidence}`),
+      `git record: ${recorded}`,
       ...refusals.map((refusal) => `refused: ${refusal.id}: ${refusal.reason} (fix: ${refusal.fix})`),
       ...warnings.map((warning) => `warning: ${warning.id}${warning.names === undefined ? "" : `: ${warning.names.join(", ")}`}${warning.reason === undefined ? "" : `: ${warning.reason}`}`),
     ].join("\n")}\n`,
   );
   return {
-    exitCode: verdict.ok ? 0 : 1,
-    json: { subcommand: PREFLIGHT, mode: "unattended", client, cloud, checks, refusals, warnings, floors: shownFloors },
+    exitCode: ok ? 0 : 1,
+    json: { subcommand: PREFLIGHT, mode: "unattended", client, cloud, checks, refusals, warnings, floors: shownFloors, gitRecord: ok && !ctx.dryRun },
   };
 }
 
@@ -2077,7 +2147,8 @@ export const gateCommand: CommandModule = {
   name: "gate",
   summary: "classify a change, scan its added lines or an outbound text for secrets, or check an unattended start (plumbing)",
   hidden: true,
-  mutating: false,
+  // review/97: `preflight` writes the git surface's record on a pass, so the verb takes `--dry-run`.
+  mutating: true,
 
   configure(cmd: Command): void {
     cmd
@@ -2109,6 +2180,10 @@ export const gateCommand: CommandModule = {
         }
         if (given["text"] !== undefined && given["base"] !== undefined) {
           command.error("error: --text scans one file, so --base does not apply", { exitCode: 2 });
+        }
+        // review/97: classify and scan write nothing, so a dry run of either says nothing; only preflight takes it.
+        if (given["dryRun"] === true && subcommand !== PREFLIGHT) {
+          command.error(`error: --dry-run applies to preflight only; ${subcommand} writes nothing`, { exitCode: 2 });
         }
         if (subcommand === PREFLIGHT && given["unattended"] !== true) {
           command.error("error: preflight checks an unattended start only; pass --unattended", { exitCode: 2 });

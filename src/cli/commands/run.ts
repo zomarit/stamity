@@ -8,6 +8,7 @@ import { isPlainObject, parseJsonStrict } from "../../config/parse.ts";
 import { personOnlyVerdict } from "../../hooks/personOnly.ts";
 import { readHookDefinitions } from "../../hooks/userHooks.ts";
 import { RUN_ENDED_MARKER_FILE } from "../../mcp/env.ts";
+import { compareSurface, parseSurfaceRecord, SURFACE_RECORD_MAX_BYTES } from "../../runs/gitSurface.ts";
 import { blastRadiusSection, MORNING_FILE, prBodyFrom, screenOutbound, withBlastRadius } from "../../runs/morning.ts";
 import { inferPrerequisites, type PrereqRow } from "../../runs/prerequisites.ts";
 import { ensureDraftPr, HOST_NAME, resolveRepo, type PrOutcome } from "../../runs/pullRequest.ts";
@@ -19,7 +20,7 @@ import { GitWriteGroupStopped, gitProgramVariablesIn, gitWrite, type GitWriteRes
 import { CliFailure } from "../kit/output.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import { sanitizeLabel } from "../kit/prompts.ts";
-import { readPushed, scanChange } from "./gate.ts";
+import { gitSurfaceRecordPath, readPushed, readRunGitSurface, scanChange, SURFACE_RECORD_LABEL } from "./gate.ts";
 
 /**
  * `stamity run start`, `stamity run checkpoint` and `stamity run end` — put an
@@ -94,7 +95,10 @@ import { readPushed, scanChange } from "./gate.ts";
  * `start` switches such a run to; a record with no `Branch:` line at column 0
  * refuses as `commit refused: <record> names no Branch:`, pr/47); refuses as `origin changed` where origin's
  * fetch URL or any push URL git resolves now names another repository than `origin.json` pins (and, unattended, where
- * no pin is readable, as `origin not pinned`); stages
+ * no pin is readable, as `origin not pinned`); unattended, refuses as `config changed`, `configuration unreadable` or
+ * `no pre-flight record` where git's configuration and environment are not the ones `gate preflight --unattended`
+ * recorded (REQ-FLOW-131, review/97, `../../runs/gitSurface.ts`), read once here and again after the commit, just
+ * before the push; stages
  * only the run folder's record, ledger, plan, morning list, origin pin and `held/*.patch`,
  * `.stamity/inbox.md` and `--paths` (never `-A`, never `-f`), a path git
  * ignores reported as `records: not committed (…)`; in an unattended run
@@ -559,6 +563,34 @@ async function pinOrigin(ctx: CliContext, cwd: string, run: string, at: { rev?: 
 }
 
 /**
+ * review/97 (REQ-FLOW-131): why an unattended `checkpoint` or `end` refuses git's surface, or `null` where it is the
+ * one the pre-flight recorded. No record (none, a link or anything but a regular file, over
+ * {@link SURFACE_RECORD_MAX_BYTES}, or text that is not a record) refuses as `no pre-flight record`; a configuration
+ * git cannot list refuses as `configuration unreadable`; a surface that moved refuses as `config changed`, naming the
+ * keys (subsections masked) and variables added or removed, never a value.
+ */
+async function surfaceRefusal(cwd: string): Promise<string | null> {
+  const place = await gitSurfaceRecordPath(cwd);
+  if ("unreadable" in place) return `no pre-flight record (${place.unreadable})`;
+  if (!exists(place.path)) return `no pre-flight record (${SURFACE_RECORD_LABEL} is missing; gate preflight --unattended writes it on a pass)`;
+  const read = readCapped(place.path, SURFACE_RECORD_MAX_BYTES);
+  if (read === null) return `no pre-flight record (${SURFACE_RECORD_LABEL} is not a regular file)`;
+  if (read.truncated) return `no pre-flight record (${SURFACE_RECORD_LABEL} is over ${SURFACE_RECORD_MAX_BYTES / 1024} KiB)`;
+  const record = parseSurfaceRecord(read.text);
+  if (record === null) return `no pre-flight record (${SURFACE_RECORD_LABEL} does not read as one)`;
+  const now = await readRunGitSurface(cwd);
+  if ("unreadable" in now) return `configuration unreadable (${now.unreadable}), so it cannot be compared with the pre-flight's record`;
+  const compared = compareSurface(record, now);
+  if (compared.same) return null;
+  const moved = [
+    ...(compared.added.length === 0 ? [] : [`added ${compared.added.join(", ")}`]),
+    ...(compared.removed.length === 0 ? [] : [`removed ${compared.removed.join(", ")}`]),
+  ];
+  const what = compared.valuesChanged ? "a value, a source file or the git program changed, no key or variable added or removed" : moved.join("; ");
+  return `config changed: git's configuration or environment is not the one the pre-flight recorded at ${record.at} (${what})`;
+}
+
+/**
  * Why `checkpoint` and `end` refuse the run's origin (review/209), or `null`:
  * origin now names another repository than the pin, or no GitHub repository
  * at all; a pin that is there and unreadable; and, unattended, no pin.
@@ -933,6 +965,12 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   const moved = await originRefusal(ctx, cwd, runDir, unattended, verb);
   if (moved !== null) {
     result.notDone.push(moved);
+    return finish(false);
+  }
+  // review/97 (REQ-FLOW-131): unattended, git's configuration and environment must be the ones the pre-flight vetted.
+  const surface = unattended ? await surfaceRefusal(cwd) : null;
+  if (surface !== null) {
+    result.notDone.push(surface);
     return finish(false);
   }
   // pr/55: unattended, main and master alone would let the run push a default branch of another name.
@@ -1311,6 +1349,14 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   }
   lines.push(`scan: ${result.scan.hits.length === 0 ? "no hits" : `${result.scan.hits.length} hit(s)`}; unscanned: ${list(result.scan.unscanned)}`);
   if (result.scan.hits.length > 0 || outcome.incomplete !== undefined) return finish(false);
+
+  // review/97: read again after the commit, whose hooks could have edited git's configuration, and before the push.
+  const surfaceNow = unattended ? await surfaceRefusal(cwd) : null;
+  if (surfaceNow !== null) {
+    result.notDone.push(surfaceNow);
+    lines.push("push: refused (git's configuration or environment moved since the pre-flight)");
+    return finish(false);
+  }
 
   // (6) The push, its command checked by the shell guard's own table before it runs.
   const refspec = `HEAD:refs/heads/${current}`;

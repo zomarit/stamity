@@ -1,12 +1,15 @@
 import { execFileSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { existsSync, lstatSync, readFileSync } from "node:fs";
 import { appendFile, chmod, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { gitSurfaceRecordPath, readRunGitSurface } from "../../../src/cli/commands/gate.ts";
 import { runCommand } from "../../../src/cli/commands/run.ts";
 import { GitWriteGroupStopped } from "../../../src/cli/engine/gitWrite.ts";
 import type * as GitWriteModule from "../../../src/cli/engine/gitWrite.ts";
 import type * as PersonOnlyModule from "../../../src/hooks/personOnly.ts";
+import { surfaceRecord } from "../../../src/runs/gitSurface.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { NO_GIT_CONFIG } from "../../support/repoFixtures.ts";
 import { useTempDir } from "../../support/tempDir.ts";
@@ -256,37 +259,76 @@ describe("stamity run checkpoint", () => {
     if (opts.pin === "untracked") await put(repo, inProject(ORIGIN_PIN), PIN_TEXT);
     const modeLine = mode === null ? "" : `Mode: ${mode}\n`;
     await put(repo, inProject(`${RUN_DIR}/record.md`), `# Run ${RUN}\n\nStatus: in progress\n${modeLine}Branch: ${branch}\nBase: ${base}\n`);
+    // TEST CHANGE, justified (REQ-FLOW-131, review/97): an unattended checkpoint now refuses with no pre-flight record
+    // of git's surface, which a passing `gate preflight --unattended` writes; the seed writes that record, every mode
+    // alike (an attended run reads none), so no case's own steps change. A case about the record removes or rewrites it.
+    await recordPreflight(repo);
     return { repo, remote, base, project: opts.project === undefined ? repo : join(repo, ...opts.project.split("/")) };
   }
+
+  /**
+   * The record a passing `gate preflight --unattended` writes for `repo` (REQ-FLOW-131), taken through the same reads
+   * (`readRunGitSurface`, `gitSurfaceRecordPath`) and the module's own `surfaceRecord`, in the process environment
+   * {@link run} gives the verb, so the verb compares like with like. The spy's record of the write runner's calls is
+   * put back as it was, so a case reading every call the verb made sees the verb's alone.
+   */
+  async function recordPreflight(repo: string, extra: Record<string, string> = {}): Promise<void> {
+    const mark = { argv: writes.argv.length, inputs: writes.inputs.length, groups: writes.groups.length };
+    await underRunEnv(async () => {
+      const place = await gitSurfaceRecordPath(repo);
+      const surface = await readRunGitSurface(repo);
+      if ("unreadable" in place || "unreadable" in surface) throw new Error("the seed's git surface could not be read");
+      await mkdir(dirname(place.path), { recursive: true });
+      await writeFile(place.path, `${JSON.stringify(surfaceRecord(surface, randomBytes(16).toString("hex"), new Date().toISOString()))}\n`);
+    }, extra);
+    writes.argv.length = mark.argv;
+    writes.inputs.length = mark.inputs;
+    writes.groups.length = mark.groups;
+  }
+
+  /** The pre-flight record's path in `repo`'s git directory. */
+  const recordPath = (repo: string): string => join(repo, ".git", "stamity", "preflight-git.json");
 
   async function put(repo: string, path: string, text: string): Promise<void> {
     await mkdir(dirname(join(repo, path)), { recursive: true });
     await writeFile(join(repo, path), text);
   }
 
-  /** Runs the verb with `HOME` at an empty folder and no host identity, so only the repository's config decides. */
-  async function run(cwd: string, argv: readonly string[], env?: Record<string, string>) {
+  /**
+   * `body` with `HOME` at an empty folder, no host identity and `extra` in the process environment, put back after.
+   * TEST CHANGE, justified (REQ-FLOW-131): {@link run}'s environment, moved here unchanged so the seed's pre-flight
+   * record is taken in the same one; `extra` is how a case sets a variable git reads from the process, not the verb.
+   */
+  async function underRunEnv<T>(body: () => Promise<T>, extra: Record<string, string> = {}): Promise<T> {
     const home = getRoot().path("home");
     await mkdir(home, { recursive: true });
     const overrides: Record<string, string | undefined> = { HOME: home, XDG_CONFIG_HOME: home, GIT_CONFIG_NOSYSTEM: "1", EMAIL: undefined };
     for (const key of Object.keys(IDENTITY)) overrides[key] = undefined;
+    Object.assign(overrides, extra);
     const previous = Object.fromEntries(Object.keys(overrides).map((key) => [key, process.env[key]]));
     for (const [key, value] of Object.entries(overrides)) {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
     }
     try {
-      const result = await runInProcess([runCommand], ["run", ...argv], { cwd, ...(env === undefined ? {} : { env }) });
-      const envelope = argv.includes("--json") && result.stdout !== "" ? (JSON.parse(result.stdout) as Record<string, unknown>) : {};
-      // The funnel's three envelope keys, set aside so `doc` is the verb's own document.
-      const { ok, command, version, ...doc } = envelope;
-      return { ...result, ok, command, version, doc };
+      return await body();
     } finally {
       for (const [key, value] of Object.entries(previous)) {
         if (value === undefined) delete process.env[key];
         else process.env[key] = value;
       }
     }
+  }
+
+  /** Runs the verb with `HOME` at an empty folder and no host identity, so only the repository's config decides. */
+  async function run(cwd: string, argv: readonly string[], env?: Record<string, string>, processEnv: Record<string, string> = {}) {
+    return underRunEnv(async () => {
+      const result = await runInProcess([runCommand], ["run", ...argv], { cwd, ...(env === undefined ? {} : { env }) });
+      const envelope = argv.includes("--json") && result.stdout !== "" ? (JSON.parse(result.stdout) as Record<string, unknown>) : {};
+      // The funnel's three envelope keys, set aside so `doc` is the verb's own document.
+      const { ok, command, version, ...doc } = envelope;
+      return { ...result, ok, command, version, doc };
+    }, processEnv);
   }
 
   const CHECKPOINT = ["checkpoint", "--run", RUN, "--json"];
@@ -474,6 +516,9 @@ describe("stamity run checkpoint", () => {
   it.skipIf(process.platform === "win32")("holds a link added at a held prefix where core.abbrev is 6 (review/3)", async () => {
     const { repo, remote } = await seed("unattended");
     git(repo, ["config", "core.abbrev", "6"]);
+    // TEST CHANGE, justified (REQ-FLOW-131): the case sets git config after the seed's pre-flight record, as a person
+    // would before the pre-flight, so the record is taken again over it; an unattended run refuses a surface it did not see.
+    await recordPreflight(repo);
     await put(repo, "cfg/settings.json", '{ "hooks": {} }\n');
     await symlink("cfg", join(repo, ".claude"));
 
@@ -488,6 +533,9 @@ describe("stamity run checkpoint", () => {
   it("gives a held path staged and then deleted, absent at Base:, no section where core.abbrev is 6 (review/3)", async () => {
     const { repo, remote } = await seed("unattended");
     git(repo, ["config", "core.abbrev", "6"]);
+    // TEST CHANGE, justified (REQ-FLOW-131): the case sets git config after the seed's pre-flight record, as a person
+    // would before the pre-flight, so the record is taken again over it; an unattended run refuses a surface it did not see.
+    await recordPreflight(repo);
     await put(repo, ".github/workflows/x.yml", "on: push\n");
     git(repo, ["add", "--", ".github/workflows/x.yml"]);
     await rm(join(repo, ".github"), { recursive: true });
@@ -1486,6 +1534,9 @@ describe("stamity run checkpoint", () => {
     it("refuses the commit, committing and pushing nothing, when the marker cannot be created", async () => {
       const { repo, remote, base } = await seed("attended");
       // A file where the marker's folder goes makes its creation fail.
+      // TEST CHANGE, justified (REQ-FLOW-131): the seed's pre-flight record sits in that folder now; this attended run
+      // reads none, so the folder goes before the file takes its place.
+      await rm(join(repo, ".git", "stamity"), { recursive: true, force: true });
       await writeFile(join(repo, ".git", "stamity"), "");
       await writeFile(join(repo, "a.txt"), "changed\n");
 
@@ -2264,6 +2315,8 @@ describe("stamity run checkpoint", () => {
     git(clone, ["config", "user.name", "Alice Example"]);
     git(clone, ["config", "user.email", "alice@example.com"]);
     git(clone, ["remote", "set-url", "origin", "https://github.com/o/r.git"]);
+    // TEST CHANGE, justified (REQ-FLOW-131): the continuing machine runs its own pre-flight, which records its clone's git.
+    await recordPreflight(clone);
     expect(await readFile(join(clone, ".cursorrules"), "utf8")).toBe(".cursorrules\n");
     await writeFile(join(clone, "a.txt"), "the next unit's change\n");
 
@@ -2291,6 +2344,8 @@ describe("stamity run checkpoint", () => {
       git(clone, ["config", "user.name", "Alice Example"]);
       git(clone, ["config", "user.email", "alice@example.com"]);
       git(clone, ["remote", "set-url", "origin", "https://github.com/o/r.git"]);
+      // TEST CHANGE, justified (REQ-FLOW-131): the continuing machine runs its own pre-flight, which records its clone's git.
+      await recordPreflight(clone);
       return clone;
     }
 
@@ -2649,6 +2704,9 @@ describe("stamity run checkpoint", () => {
     ])("writes every held section with git's a/ and b/ prefixes under $setting, so the patch applies on Base: at the held paths (review/254)", async ({ config }) => {
       const { repo, remote, base } = await seed("unattended");
       for (const [key, value] of config) git(repo, ["config", key ?? "", value ?? ""]);
+      // TEST CHANGE, justified (REQ-FLOW-131): the case sets git config after the seed's pre-flight record, as a person
+      // would before the pre-flight, so the record is taken again over it; an unattended run refuses a surface it did not see.
+      await recordPreflight(repo);
       // A new workflow, staged by --paths (the side diffs), and .cursorrules out of the index while the work tree has it
       // (the work tree's addition part, review/2).
       await put(repo, ".github/workflows/x.yml", "on: push\n");
@@ -3235,6 +3293,141 @@ describe("stamity run checkpoint", () => {
     expect(remoteHeads(remote)).toEqual(SEEDED);
   });
 
+  describe("git's surface against the pre-flight's record (REQ-FLOW-131, review/97)", () => {
+    /** One config pair handed to git through the process environment, its value one the output must never print. */
+    const PAIR = { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "stamity.probe", GIT_CONFIG_VALUE_0: "probe-value-q7zk" } as const;
+
+    it("refuses an unattended push where the environment adds a config pair the pre-flight did not see, naming the key, never its value", async () => {
+      const { repo, remote, base } = await seed("unattended");
+      await writeFile(join(repo, "a.txt"), "the unit's change\n");
+
+      const { code, doc, stdout } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"], undefined, PAIR);
+
+      expect(code).toBe(1);
+      expect(doc).toMatchObject({ pushed: false, committed: null });
+      const notDone = doc["notDone"] as string[];
+      expect(notDone[0]).toMatch(/^config changed: /);
+      expect(notDone[0]).toContain("stamity.probe");
+      expect(notDone[0]).toContain("GIT_CONFIG_KEY_0");
+      expect(`${stdout}${JSON.stringify(doc)}`).not.toContain(PAIR.GIT_CONFIG_VALUE_0);
+      expect(git(repo, ["rev-parse", "HEAD"])).toBe(base);
+      expect(pushes()).toEqual([]);
+      expect(remoteHeads(remote)).toEqual(SEEDED);
+    });
+
+    it("pushes where the pre-flight recorded the same config pair the environment still sets", async () => {
+      const { repo, remote } = await seed("unattended");
+      await recordPreflight(repo, PAIR);
+      await writeFile(join(repo, "a.txt"), "the unit's change\n");
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"], undefined, PAIR);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [] });
+      expect(pushedFile(remote, "a.txt")).toBe("the unit's change");
+    });
+
+    it("refuses an unattended run with no record as no pre-flight record, and pushes an attended one with none", async () => {
+      const unattended = await seed("unattended");
+      const attended = await seed("attended");
+      await Promise.all([unattended, attended].map(async ({ repo }) => {
+        await rm(recordPath(repo));
+        await writeFile(join(repo, "a.txt"), "the unit's change\n");
+      }));
+
+      const refused = await run(unattended.repo, [...CHECKPOINT, "--paths", "a.txt"]);
+      const kept = await run(attended.repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      expect(refused.code).toBe(1);
+      expect(refused.doc).toMatchObject({ pushed: false, committed: null });
+      expect((refused.doc["notDone"] as string[])[0]).toMatch(/^no pre-flight record \(/);
+      expect(remoteHeads(unattended.remote)).toEqual(SEEDED);
+      expect(kept.code).toBe(0);
+      expect(kept.doc).toMatchObject({ pushed: true, notDone: [] });
+    });
+
+    it("refuses after the commit and before the push where a pre-commit hook writes a local config key", async () => {
+      const { repo, remote, base } = await seed("unattended");
+      await writeFile(join(repo, "a.txt"), "the unit's change\n");
+      const hook = join(repo, ".git", "hooks", "pre-commit");
+      await writeFile(hook, "#!/bin/sh\ngit config stamity.hooked yes\n");
+      await chmod(hook, 0o755);
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      expect(code).toBe(1);
+      expect(doc["committed"]).toBe(git(repo, ["rev-parse", "HEAD"]));
+      expect(doc["committed"]).not.toBe(base);
+      expect(doc["pushed"]).toBe(false);
+      const notDone = doc["notDone"] as string[];
+      expect(notDone).toHaveLength(1);
+      expect(notDone[0]).toMatch(/^config changed: .*added stamity\.hooked/);
+      expect(pushes()).toEqual([]);
+      expect(remoteHeads(remote)).toEqual(SEEDED);
+    });
+
+    it("leaves out the tracking keys git writes for a continued branch, and refuses any other branch key added", async () => {
+      const tracked = await seed("unattended");
+      const pushRemote = await seed("unattended");
+      await Promise.all(
+        [tracked, pushRemote].map(async ({ repo }) => {
+          git(repo, ["config", `branch.${RUN_BRANCH}.remote`, "origin"]);
+          git(repo, ["config", `branch.${RUN_BRANCH}.merge`, `refs/heads/${RUN_BRANCH}`]);
+          await writeFile(join(repo, "a.txt"), "the unit's change\n");
+        }),
+      );
+      git(pushRemote.repo, ["config", `branch.${RUN_BRANCH}.pushRemote`, "origin"]);
+
+      const kept = await run(tracked.repo, [...CHECKPOINT, "--paths", "a.txt"]);
+      const refused = await run(pushRemote.repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      expect(kept.code).toBe(0);
+      expect(kept.doc).toMatchObject({ pushed: true, notDone: [] });
+      expect(refused.code).toBe(1);
+      expect((refused.doc["notDone"] as string[])[0]).toMatch(/^config changed: .*added branch\.<…>\.pushremote/);
+      expect(remoteHeads(pushRemote.remote)).toEqual(SEEDED);
+    });
+
+    it.each([
+      {
+        shape: "a link to a valid record",
+        make: async (path: string) => {
+          await writeFile(`${path}.real`, await readFile(path));
+          await rm(path);
+          await symlink(`${path}.real`, path);
+        },
+        reason: "is not a regular file",
+      },
+      { shape: "over 64 KiB", make: (path: string) => writeFile(path, JSON.stringify({ pad: "x".repeat(70_000) })), reason: "is over 64 KiB" },
+      { shape: "not JSON", make: (path: string) => writeFile(path, "{ not a record\n"), reason: "does not read as one" },
+    ])("refuses a record that is $shape as no pre-flight record", async ({ shape, make, reason }) => {
+      if (shape.startsWith("a link") && process.platform === "win32") return;
+      const { repo, remote } = await seed("unattended");
+      await make(recordPath(repo));
+      await writeFile(join(repo, "a.txt"), "the unit's change\n");
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      expect(code).toBe(1);
+      expect((doc["notDone"] as string[])[0]).toBe(`no pre-flight record (stamity/preflight-git.json in the git directory ${reason})`);
+      expect(remoteHeads(remote)).toEqual(SEEDED);
+    });
+
+    it("refuses as configuration unreadable where git cannot list its configuration", async () => {
+      const { repo, remote } = await seed("unattended");
+      await writeFile(join(repo, "a.txt"), "the unit's change\n");
+      // Mock reason: no configuration a test can write makes `git config --list` fail while every read the verb makes
+      // before it (the branch, origin's URLs, the default branch) still answers, so the one call is answered here.
+      writes.override = (args) => (args[0] === "config" && args[1] === "--list" ? Promise.resolve({ code: 128, stdout: "", stderr: "fatal: bad config\n" }) : undefined);
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      expect(code).toBe(1);
+      expect((doc["notDone"] as string[])[0]).toMatch(/^configuration unreadable \(git config --list answered 128\)/);
+      expect(remoteHeads(remote)).toEqual(SEEDED);
+    });
+  });
+
   describe("git's program-valued variables, unattended (v0c, REQ-FLOW-122)", () => {
     /** The three the cell names, each set to a value the line must never print. */
     const PLANTED = { GIT_EXEC_PATH: "/planted/exec-path", GIT_SSH_COMMAND: "planted-ssh -i /planted/key", GIT_ASKPASS: "/planted/askpass" } as const;
@@ -3286,6 +3479,9 @@ describe("stamity run checkpoint", () => {
       const { repo, remote } = await seed("unattended");
       await writeFile(join(repo, "a.txt"), "the unit's change\n");
       const stand = await standIn(dirname(repo));
+      // TEST CHANGE, justified (REQ-FLOW-131): the stand-in moves the git program the verb resolves, which the
+      // pre-flight's record holds, so the record is taken with the same PATH, as a pre-flight in this shell would take it.
+      await withPrograms({ ...PLANTED, PATH: stand.path }, () => recordPreflight(repo));
 
       const { code, stdout } = await withPrograms({ ...PLANTED, PATH: stand.path }, () => run(repo, ["checkpoint", "--run", RUN, "--paths", "a.txt"]));
 

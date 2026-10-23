@@ -1,7 +1,9 @@
+import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { delimiter, dirname, join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { gitSurfaceRecordPath, readRunGitSurface } from "../../src/cli/commands/gate.ts";
 import { runCommand } from "../../src/cli/commands/run.ts";
 import type * as GitWriteModule from "../../src/cli/engine/gitWrite.ts";
 import { makeCliFixture, type CliFixture } from "../support/cliHarness.ts";
@@ -17,6 +19,7 @@ import {
   writeGhStub,
   type GhStub,
 } from "../support/cloudRemote.ts";
+import { surfaceRecord } from "../../src/runs/gitSurface.ts";
 import { ensureDistBuilt } from "../support/distBuild.ts";
 import { runInProcess } from "../support/inProcess.ts";
 import { makeTempDir, type TempDirHandle } from "../support/tempDir.ts";
@@ -95,13 +98,24 @@ async function startRun(clone: string, run: string): Promise<void> {
     `# Run ${run}\n\nStatus: in progress\nMode: unattended\nBranch: ${branchOf(run)}\nBase: ${base}\n`,
   );
   await writeFile(join(clone, runDir(run), "morning.md"), morningList(run));
+  // TEST CHANGE, justified (REQ-FLOW-131, review/97): an unattended `end` now refuses with no pre-flight record of
+  // git's surface, which the run's `gate preflight --unattended` writes on the cloud machine before it starts; the
+  // record is taken through the same reads in the process environment {@link runVerb} gives the verb.
+  await underRunEnv(async () => {
+    const place = await gitSurfaceRecordPath(clone);
+    const surface = await readRunGitSurface(clone);
+    if ("unreadable" in place || "unreadable" in surface) throw new Error("the clone's git surface could not be read");
+    await mkdir(dirname(place.path), { recursive: true });
+    await writeFile(place.path, `${JSON.stringify(surfaceRecord(surface, randomBytes(16).toString("hex"), new Date().toISOString()))}\n`);
+  });
 }
 
 /**
- * Runs `stamity run` in `cwd` with `gh`'s stub first on `PATH`, `HOME` at an empty folder and no host git config or
- * identity in the process, so the clone's own config decides (runEnd.test.ts's `run`).
+ * `body` with `HOME` at an empty folder and no host git config or identity in the process, put back after.
+ * TEST CHANGE, justified (REQ-FLOW-131): {@link runVerb}'s environment, moved here unchanged so the pre-flight record
+ * {@link startRun} writes is taken in the same one.
  */
-async function runVerb(cwd: string, argv: readonly string[]) {
+async function underRunEnv<T>(body: () => Promise<T>): Promise<T> {
   const overrides: Record<string, string | undefined> = {
     HOME: home,
     XDG_CONFIG_HOME: home,
@@ -118,16 +132,26 @@ async function runVerb(cwd: string, argv: readonly string[]) {
     else process.env[key] = value;
   }
   try {
-    const env = { PATH: [gh.dir, process.env["PATH"] ?? ""].join(delimiter), HOME: home };
-    const result = await runInProcess([runCommand], ["run", ...argv], { cwd, env });
-    const doc = argv.includes("--json") && result.stdout !== "" ? (JSON.parse(result.stdout) as Record<string, unknown>) : {};
-    return { ...result, doc };
+    return await body();
   } finally {
     for (const [key, value] of Object.entries(previous)) {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
     }
   }
+}
+
+/**
+ * Runs `stamity run` in `cwd` with `gh`'s stub first on `PATH`, `HOME` at an empty folder and no host git config or
+ * identity in the process, so the clone's own config decides (runEnd.test.ts's `run`).
+ */
+async function runVerb(cwd: string, argv: readonly string[]) {
+  return underRunEnv(async () => {
+    const env = { PATH: [gh.dir, process.env["PATH"] ?? ""].join(delimiter), HOME: home };
+    const result = await runInProcess([runCommand], ["run", ...argv], { cwd, env });
+    const doc = argv.includes("--json") && result.stdout !== "" ? (JSON.parse(result.stdout) as Record<string, unknown>) : {};
+    return { ...result, doc };
+  });
 }
 
 beforeAll(async () => {

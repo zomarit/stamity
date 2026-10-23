@@ -307,6 +307,9 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   "src/runs/layout.ts": { unit: "ctx-hook-card", wave: 1 },
   // The schedule rule's grammar: pure, zero imports, read by the wave-4 ledger store.
   "src/runs/disposition.ts": { unit: "q9a-disposition", wave: 1 },
+  // Plan 022 file 1 (review/97): the git surface the pre-flight records and the run verbs compare against, pure,
+  // zero internal imports, read by the wave-14 gate verb and the wave-15 run verb.
+  "src/runs/gitSurface.ts": { unit: "a2-run-verb-config-recheck", wave: 1 },
   // Plan 021 file 1, the unattended run. Each row sits at the depth its own
   // imports put it, under the wave-12 root that wires it and the wave-14 verbs
   // that call it. Zero internal imports: the plan's structural coverage check,

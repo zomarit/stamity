@@ -306,6 +306,8 @@ describe("the unattended run's modules (plan 021 file 1)", () => {
     const engine = createEngine();
     expect(typeof engine.runs.preflight.runPreflight).toBe("function");
     expect(typeof engine.runs.planCheck.checkPlans).toBe("function");
+    // TEST CHANGE, justified (REQ-FLOW-131): the run's git-surface module joined the runs group; one line added, none loosened.
+    expect(typeof engine.runs.gitSurface.compareSurface).toBe("function");
     expect(typeof engine.runs.planCoverage.checkCoverage).toBe("function");
     expect(typeof engine.runs.freshness.freshness).toBe("function");
     expect(typeof engine.runs.runContract.parseRunContract).toBe("function");
