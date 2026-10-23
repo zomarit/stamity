@@ -1157,11 +1157,14 @@ function commandHook(
     ...(timeoutMs === undefined ? {} : { timeout: Math.max(1, Math.ceil(timeoutMs / 1000)) }),
     // The guard rows also block when the hook itself fails, a timeout included (REQ-FLOW-123).
     // The tail above cannot see a guard the client kills at its timeout: the client then reads no
-    // exit status at all, and without this key it lets the call through. Measured 2026-10-23: on
-    // Claude Code 2.1.309 a timed-out entry with the key blocked the call; Copilot CLI 1.0.100,
-    // which imports this file's hooks, loaded and ran every entry and ignored the key. A Claude Code
-    // before 2.1.295 ignores the key too (not measured here), and the call goes through as before. Last in the object,
-    // so the key order stays `type, command, timeout?, onFailure?` and the bytes stay stable.
+    // exit status at all, and without this key it lets the call through. Measured on Claude Code
+    // 2.1.309 (2026-10-23): a guard that times out under `onFailure: "block"` blocks the call.
+    // Copilot CLI 1.0.100, which imports this file's hooks, loaded and ran every entry and ignored
+    // the key. The floor is 2.1.295, from the vendor changelog entry for that version ("Added
+    // `onFailure: "block"` for command and HTTP hooks", raw.githubusercontent.com/anthropics/
+    // claude-code/main/CHANGELOG.md, read 2026-10-23). A client older than 2.1.295 was not
+    // measured: it may ignore the key or reject the entry. Last in the object, so the key order
+    // stays `type, command, timeout?, onFailure?` and the bytes stay stable.
     ...(failClosedTail === undefined ? {} : { onFailure: "block" as const }),
   };
 }
