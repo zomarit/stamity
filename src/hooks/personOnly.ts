@@ -786,7 +786,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       const cut = Math.max(program.lastIndexOf("/"), program.lastIndexOf("\\")) + 1;
       // A last path part whose only expansion is a glob is settled by what its pattern can name: unsettled only where it
       // can name one of this package's words, so `?` (PowerShell's `Where-Object`) stays another program.
-      const last = program.slice(cut).toLowerCase();
+      const last = programName(program);
       const shape = new RegExp(`^${last.replace(/\[[^\]]*\]|[*?]|\W/g, (c) => (c === "*" ? ".*" : c === "?" || c.length > 1 ? "." : `\\${c}`))}$`);
       const unsure = (allMarks[segment] ?? []).slice(k).map((mark, at) =>
         at > 0 ? mark > 0 : mark > cut && (/[$`({]/.test(program) || PACKAGE_WORDS.some((name) => shape.test(name))),
@@ -2453,7 +2453,7 @@ export function unattendedPushVerdict(
       const cut = Math.max(program.lastIndexOf("/"), program.lastIndexOf("\\")) + 1;
       // A last path part whose only expansion is a glob is settled by what its pattern can name: unsettled only where it
       // can name one of this package's words, so `?` (PowerShell's `Where-Object`) stays another program.
-      const last = program.slice(cut).toLowerCase();
+      const last = programName(program);
       const shape = new RegExp(`^${last.replace(/\[[^\]]*\]|[*?]|\W/g, (c) => (c === "*" ? ".*" : c === "?" || c.length > 1 ? "." : `\\${c}`))}$`);
       const unsure = (allMarks[segment] ?? []).slice(k).map((mark, at) =>
         at > 0 ? mark > 0 : mark > cut && (/[$`({]/.test(program) || PACKAGE_WORDS.some((name) => shape.test(name))),

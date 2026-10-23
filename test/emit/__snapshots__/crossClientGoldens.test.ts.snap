@@ -1063,7 +1063,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			const cut = Math.max(program.lastIndexOf("/"), program.lastIndexOf("\\\\")) + 1;
 			// A last path part whose only expansion is a glob is settled by what its pattern can name: unsettled only where it
 			// can name one of this package's words, so \`?\` (PowerShell's \`Where-Object\`) stays another program.
-			const last = program.slice(cut).toLowerCase();
+			const last = programName(program);
 			const shape = new RegExp(\`^\${last.replace(/\\[[^\\]]*\\]|[*?]|\\W/g, (c) => c === "*" ? ".*" : c === "?" || c.length > 1 ? "." : \`\\\\\${c}\`)}$\`);
 			const unsure = (allMarks[segment] ?? []).slice(k).map((mark, at) => at > 0 ? mark > 0 : mark > cut && (/[$\`({]/.test(program) || PACKAGE_WORDS.some((name) => shape.test(name))));
 			unread.set(cmd, unsure);
@@ -3049,7 +3049,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 			const cut = Math.max(program.lastIndexOf("/"), program.lastIndexOf("\\\\")) + 1;
 			// A last path part whose only expansion is a glob is settled by what its pattern can name: unsettled only where it
 			// can name one of this package's words, so \`?\` (PowerShell's \`Where-Object\`) stays another program.
-			const last = program.slice(cut).toLowerCase();
+			const last = programName(program);
 			const shape = new RegExp(\`^\${last.replace(/\\[[^\\]]*\\]|[*?]|\\W/g, (c) => c === "*" ? ".*" : c === "?" || c.length > 1 ? "." : \`\\\\\${c}\`)}$\`);
 			const unsure = (allMarks[segment] ?? []).slice(k).map((mark, at) => at > 0 ? mark > 0 : mark > cut && (/[$\`({]/.test(program) || PACKAGE_WORDS.some((name) => shape.test(name))));
 			unread.set(cmd, unsure);
@@ -9287,7 +9287,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".claude/hooks/stamity/stamity-agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".claude/hooks/stamity/stamity-cloud-readiness.mjs": "acef8b976c3cf0dc29df1ab1584458bc83c66ab1e7284e28df62af60f1311c91 11348 bytes",
   ".claude/hooks/stamity/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "0b2347e267aed8e9a74ed0c2d042ea7215742ae0ddf764e1177daa56281570b8 188294 bytes",
+  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "3d799bbd44dc8268e83a34a2c0f9fa05806c3a0cfd1a5ccffffdeedaf59cdc87 188270 bytes",
   ".claude/hooks/stamity/stamity-pre-tool-use-guard.mjs": "752f24a46db0da9f933bcb313a00ef8f6b12b8a655241b9257e40f64d9776965 20816 bytes",
   ".claude/hooks/stamity/stamity-review-gate.mjs": "a410def5d44fde83869b3c2c98db318d470b68a54101e1b20eddfb026f8077b1 51137 bytes",
   ".claude/hooks/stamity/stamity-session-start.mjs": "c807b92eeff34b3e194a0f7ae843c2945d5663d56cdb937786454a6402df3f31 51786 bytes",
@@ -9409,12 +9409,12 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".mcp.json": "f4e65233eea1ba936b61b16f2ee2d90f84a2510436d58f6484d872f507314f2f 387 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "c546fedbc35f5b34650dc711e1b2e721ba11acbf1a89f08ede789022f98a5e7a 188290 bytes",
+  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "be448b06df3b3e5d935d2568fe38161e12d6939d1373161e958c6ef90e82c7b5 188266 bytes",
   ".stamity/generated/hooks/codex/stamity-portable-hook.mjs": "ef3b63ada64fdbc5860b8bd483568a6cc32875a5747de7acabcf56dccfa3b70c 20343 bytes",
   ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/codex/stamity-session-start.mjs": "1111332a1630ed4dcb42e421b2326c5dd423a358e3c92bf8cb367e212a7a996d 51799 bytes",
   ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "0a56fad5c114cda91998378be11f0b14f744648cad846b91f3afb69b561a9c6a 191044 bytes",
+  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "0fbd0f3e6ffce29aa711fce70ddd66d269d011222d99e1773f674810a6566eb6 191020 bytes",
   ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "b67634419bfa652a30fba0cd2f1402fc61ee89250dfe137cca7d2785f4a427cc 21755 bytes",
   ".stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "9f930fcd797ef464e7f4cb4c40e59b4976d65199a5c974fb67ca7624e5d0287c 56602 bytes",
@@ -9422,7 +9422,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/generated/hooks/cursor/stamity-context-once.mjs": "c74c1b3d2cd908b170c48a8813bd05cc91f058210789a9b2f815b731a2eb6ccd 31773 bytes",
   ".stamity/generated/hooks/cursor/stamity-cursor-continue.mjs": "08bc51855553f4104a80fbe1ea94ba36a95173e005846467e4af5c643bb26a60 9500 bytes",
   ".stamity/generated/hooks/cursor/stamity-model-pins.mjs": "fc71eb522ff67fd73ff00820d0e59495bca188d2e30fc9a26ce85e89fff6fdd5 3813 bytes",
-  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "9cd0761e4e82c7542b0720caf112cc0bd009eee3d41d185edc0c0149f020dc8a 188326 bytes",
+  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "9a4877ea1826b9b4db8c75ee702b8d8c45e5519047f7b6b3b7bff7ce833da950 188302 bytes",
   ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs": "4bc31f0f2dbdec29a6537dab00d8df9255641b7ee5bed365d3020ce6ac72c12c 20344 bytes",
   ".stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "1111332a1630ed4dcb42e421b2326c5dd423a358e3c92bf8cb367e212a7a996d 51799 bytes",
@@ -9434,7 +9434,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "e23ca0e68ee74ab59c5af4a9e27bc4806cabb8d89aa3ba50f6000b449e30d25f 94261 bytes",
+  ".stamity/manifest.json": "f916a4ac46d4b376253fc010ff59def9f9516ebb2c04b2d92aa94426855e5133 94261 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "6b5b5bebfd779fe5b513cd8c2c41fa3b4dd70826435e9df9c70076ba48c29b98 6548 bytes",
@@ -10518,7 +10518,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			const cut = Math.max(program.lastIndexOf("/"), program.lastIndexOf("\\\\")) + 1;
 			// A last path part whose only expansion is a glob is settled by what its pattern can name: unsettled only where it
 			// can name one of this package's words, so \`?\` (PowerShell's \`Where-Object\`) stays another program.
-			const last = program.slice(cut).toLowerCase();
+			const last = programName(program);
 			const shape = new RegExp(\`^\${last.replace(/\\[[^\\]]*\\]|[*?]|\\W/g, (c) => c === "*" ? ".*" : c === "?" || c.length > 1 ? "." : \`\\\\\${c}\`)}$\`);
 			const unsure = (allMarks[segment] ?? []).slice(k).map((mark, at) => at > 0 ? mark > 0 : mark > cut && (/[$\`({]/.test(program) || PACKAGE_WORDS.some((name) => shape.test(name))));
 			unread.set(cmd, unsure);
@@ -12504,7 +12504,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 			const cut = Math.max(program.lastIndexOf("/"), program.lastIndexOf("\\\\")) + 1;
 			// A last path part whose only expansion is a glob is settled by what its pattern can name: unsettled only where it
 			// can name one of this package's words, so \`?\` (PowerShell's \`Where-Object\`) stays another program.
-			const last = program.slice(cut).toLowerCase();
+			const last = programName(program);
 			const shape = new RegExp(\`^\${last.replace(/\\[[^\\]]*\\]|[*?]|\\W/g, (c) => c === "*" ? ".*" : c === "?" || c.length > 1 ? "." : \`\\\\\${c}\`)}$\`);
 			const unsure = (allMarks[segment] ?? []).slice(k).map((mark, at) => at > 0 ? mark > 0 : mark > cut && (/[$\`({]/.test(program) || PACKAGE_WORDS.some((name) => shape.test(name))));
 			unread.set(cmd, unsure);
@@ -17413,7 +17413,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".claude/hooks/stamity/stamity-agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".claude/hooks/stamity/stamity-cloud-readiness.mjs": "acef8b976c3cf0dc29df1ab1584458bc83c66ab1e7284e28df62af60f1311c91 11348 bytes",
   ".claude/hooks/stamity/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "0b2347e267aed8e9a74ed0c2d042ea7215742ae0ddf764e1177daa56281570b8 188294 bytes",
+  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "3d799bbd44dc8268e83a34a2c0f9fa05806c3a0cfd1a5ccffffdeedaf59cdc87 188270 bytes",
   ".claude/hooks/stamity/stamity-pre-tool-use-guard.mjs": "752f24a46db0da9f933bcb313a00ef8f6b12b8a655241b9257e40f64d9776965 20816 bytes",
   ".claude/hooks/stamity/stamity-review-gate.mjs": "a410def5d44fde83869b3c2c98db318d470b68a54101e1b20eddfb026f8077b1 51137 bytes",
   ".claude/hooks/stamity/stamity-session-start.mjs": "c807b92eeff34b3e194a0f7ae843c2945d5663d56cdb937786454a6402df3f31 51786 bytes",
@@ -17469,7 +17469,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "f1020af3b24b6b7b9d1352d492844bdb674025d3a45749d2160eb2aca1fa3e59 28322 bytes",
+  ".stamity/manifest.json": "58d8aa7379f514923d429890913c4a73a63e792701d400efb98fdd96d27034f8 28322 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
   "CLAUDE.md": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
@@ -18331,7 +18331,7 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".gitignore": "14c0a079e08124240ec8c713fa4c32870948842d586a5829a19172c02ddd0482 204 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "c546fedbc35f5b34650dc711e1b2e721ba11acbf1a89f08ede789022f98a5e7a 188290 bytes",
+  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "be448b06df3b3e5d935d2568fe38161e12d6939d1373161e958c6ef90e82c7b5 188266 bytes",
   ".stamity/generated/hooks/codex/stamity-portable-hook.mjs": "ef3b63ada64fdbc5860b8bd483568a6cc32875a5747de7acabcf56dccfa3b70c 20343 bytes",
   ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/codex/stamity-session-start.mjs": "1111332a1630ed4dcb42e421b2326c5dd423a358e3c92bf8cb367e212a7a996d 51799 bytes",
@@ -18340,7 +18340,7 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "6dda5ceacda7fc25eecfd73b7a76d8ba3e60940c94f14bb53aa8db9e87319920 22156 bytes",
+  ".stamity/manifest.json": "661783857de2b91d529c3f4027efad1bb33b61e6e902eddfafc8a68f9847da14 22156 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
   "AGENTS.override.md": "122504f41cc40a99c65cba4995c228bf4a5137d738324bbe3a847c6aaa5192db 25872 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
@@ -18681,7 +18681,7 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".gitignore": "14c0a079e08124240ec8c713fa4c32870948842d586a5829a19172c02ddd0482 204 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "0a56fad5c114cda91998378be11f0b14f744648cad846b91f3afb69b561a9c6a 191044 bytes",
+  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "0fbd0f3e6ffce29aa711fce70ddd66d269d011222d99e1773f674810a6566eb6 191020 bytes",
   ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "b67634419bfa652a30fba0cd2f1402fc61ee89250dfe137cca7d2785f4a427cc 21755 bytes",
   ".stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "9f930fcd797ef464e7f4cb4c40e59b4976d65199a5c974fb67ca7624e5d0287c 56602 bytes",
@@ -18690,7 +18690,7 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "ac7f3c1c2b78bbe13c05f836de1cd7fe2ef31dcf25153a828937ddf7b9726c62 20257 bytes",
+  ".stamity/manifest.json": "7d6214229e9add99adc452e61265f63ab4ed939fdc044774dd166df426500007 20257 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
@@ -19306,7 +19306,7 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".stamity/generated/hooks/cursor/stamity-context-once.mjs": "c74c1b3d2cd908b170c48a8813bd05cc91f058210789a9b2f815b731a2eb6ccd 31773 bytes",
   ".stamity/generated/hooks/cursor/stamity-cursor-continue.mjs": "08bc51855553f4104a80fbe1ea94ba36a95173e005846467e4af5c643bb26a60 9500 bytes",
   ".stamity/generated/hooks/cursor/stamity-model-pins.mjs": "fc71eb522ff67fd73ff00820d0e59495bca188d2e30fc9a26ce85e89fff6fdd5 3813 bytes",
-  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "9cd0761e4e82c7542b0720caf112cc0bd009eee3d41d185edc0c0149f020dc8a 188326 bytes",
+  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "9a4877ea1826b9b4db8c75ee702b8d8c45e5519047f7b6b3b7bff7ce833da950 188302 bytes",
   ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs": "4bc31f0f2dbdec29a6537dab00d8df9255641b7ee5bed365d3020ce6ac72c12c 20344 bytes",
   ".stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "1111332a1630ed4dcb42e421b2326c5dd423a358e3c92bf8cb367e212a7a996d 51799 bytes",
@@ -19315,7 +19315,7 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "3eeae6fa091e2bb6b3fe6ba9008106377328c4985bd6210543de0cd3625186dd 24101 bytes",
+  ".stamity/manifest.json": "9043340c88606ae0cd2063f6178f9a5a9647cabfb47fbe89c2d4efa57deae8d0 24101 bytes",
   "AGENTS.md": "6b5b5bebfd779fe5b513cd8c2c41fa3b4dd70826435e9df9c70076ba48c29b98 6548 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",

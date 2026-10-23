@@ -2900,6 +2900,7 @@ describe("a program word the reading cannot settle (a4, review/38, the declared 
     ["a program whose last part is a variable", "/usr/local/bin/$TOOL sync \"$F\""],
     ["a braced pattern substitution", "${X/a/b} \"$F\""],
     ["a glob file name that may name the package", "/usr/bin/s? \"$F\""],
+    ["a glob file name with a Windows suffix that may name the package", "./stamit?.exe \"$F\""],
   ])("asks for %s, naming a command the guard cannot read", (_, command) => {
     for (const ctx of [STRICT, DEFAULT]) {
       expect(personOnlyVerdict(command, ctx), command).toMatchObject({
