@@ -1593,3 +1593,133 @@ describe("the autonomy setting the guard bakes (a4)", () => {
     expect(decide(tool, guard, "stamity sync --loosen")).toEqual({ deny: true, reason: expect.stringContaining(`${morningList(loosen)} ${WHY}`) });
   });
 });
+
+/**
+ * a4 fixer round 1 (review/43, review/42, review/37, review/38, review/44): the guard as a client runs it. Titles name
+ * the class of input; each input sits in the body.
+ */
+describe("the autonomy setting's acts on the main thread only (a4, review/43)", () => {
+  /** The call as a sub-agent makes it: the client's payload with a helper agent's id. */
+  const asHelper = (tool: Tool, command: string): string => JSON.stringify({ ...JSON.parse(payload(tool, command)), agent_id: "a1" });
+  const ACTS = [
+    ["Marking a pull request ready for review", "pr-ready", "gh pr ready 3"],
+    ["Creating a tag", "tag", "git tag -a v2 -m 'release v2'"],
+    ["Creating a tag", "tag", "git tag v2"],
+    ["Dispatching a workflow", "workflow-dispatch", "gh workflow run ci.yml"],
+  ] as const;
+
+  // Red on the head: the acts that run were allowed with no read of the caller's identity.
+  it.each(TOOLS)("%s: refuses a sub-agent's ready mark, local tag and unnamed dispatch, and runs the main thread's", async (tool) => {
+    const guard = await placeGuard(tool);
+    for (const [act, rule, command] of ACTS) {
+      const sentence = `${act} is a person-only act (\`${rule}\`) and a sub-agent runs it: the autonomy setting runs it unasked on the main thread only (REQ-FLOW-137). Give the person the exact command.`;
+      expect(clientDecision(tool, run(guard, asHelper(tool, command)), `${tool}: ${command}`)).toEqual({
+        deny: true,
+        reason: expect.stringContaining(tool === "copilot" ? `${sentence} ${NO_CALLER}` : sentence),
+      });
+      expect(decide(tool, guard, command), `${tool}: ${command}`).toEqual({ deny: false });
+    }
+  });
+
+  it("reads Claude Code's main thread of an `--agent` session as the main thread, as the ask does (review/86)", async () => {
+    const guard = await placeGuard("claude");
+    const line = JSON.stringify({ ...JSON.parse(payload("claude", "gh pr ready 3")), agent_type: "stamity-orchestrator" });
+    expect(clientDecision("claude", run(guard, line), "agent_type alone")).toEqual({ deny: false });
+    const both = JSON.stringify({ ...JSON.parse(line), agent_id: "a1" });
+    expect(clientDecision("claude", run(guard, both), "agent_type and agent_id")).toMatchObject({ deny: true });
+  });
+
+  it("refuses a Copilot helper whose field is present but empty, as Copilot's ask does", async () => {
+    const guard = await placeGuard("copilot");
+    const line = JSON.stringify({ ...JSON.parse(payload("copilot", "gh pr ready 3")), parentAgentId: "" });
+    expect(clientDecision("copilot", run(guard, line), "empty parentAgentId")).toMatchObject({ deny: true });
+  });
+
+  it("leaves a sub-agent's call that holds no act the setting runs alone", async () => {
+    const guard = await placeGuard("claude");
+    expect(clientDecision("claude", run(guard, asHelper("claude", "git status && gh pr view 3")), "read")).toEqual({ deny: false });
+  });
+});
+
+describe("the guard's reading of quoted text, a dry run's value word and an unreadable program (a4, review/37, review/42, review/38)", () => {
+  const UNATTENDED = { ".stamity/runs/2026-10-23_x/record.md": record("in progress", "unattended") };
+
+  // Red on the head (review/37): unattended, the closing verb was refused as a loosening.
+  it.each(TOOLS)("%s: unattended, runs a run end whose title holds a single-quoted backtick or dollar", async (tool) => {
+    const guard = await placeGuard(tool, UNATTENDED);
+    for (const command of ["npx --no stamity run end --run 2026-10-23_x --title 'fix `x` reader'", "stamity run end --run 2026-10-23_x --title 'cost $5'"]) {
+      expect(decide(tool, guard, command), `${tool}: ${command}`).toEqual({ deny: false });
+    }
+    // The neighbour: a double-quoted variable there is refused.
+    expect(decide(tool, guard, "stamity run end --run 2026-10-23_x --title \"fix $X\"").deny).toBe(true);
+  });
+
+  it("runs a sub-agent's learn capture whose summary holds single-quoted dollars and backticks, and refuses a double-quoted one", async () => {
+    const guard = await placeGuard("claude");
+    const helper = (command: string): Decision =>
+      clientDecision("claude", run(guard, JSON.stringify({ ...JSON.parse(payload("claude", command)), agent_id: "a1" })), command);
+    expect(helper("stamity learn capture --summary 'reads `src/a.ts` before $HOME' --confidence high")).toEqual({ deny: false });
+    expect(helper("stamity learn capture --summary \"reads $HOME\" --confidence high")).toEqual({
+      deny: true,
+      reason: expect.stringContaining("a sub-agent runs it"),
+    });
+  });
+
+  // Red on the head (review/42): the separate false word turned the dry run off and the guard let it run.
+  it.each(TOOLS)("%s: asks for a dry-run flag followed by a separate false attended and refuses it unattended", async (tool) => {
+    const command = "npm publish --dry-run false";
+    const verdict = personOnlyVerdict(command, BAKED_DEFAULT);
+    if (!verdict.deny) throw new Error("the publish reads as no act");
+    expect(verdict).toMatchObject({ rule: "publish", ask: true });
+    const guard = await placeGuard(tool);
+    expect(decide(tool, guard, command)).toEqual(expectedAttended(tool, verdict));
+    expect(decide(tool, guard, "npm publish --dry-run true")).toEqual({ deny: false });
+    await getRepo().seedFiles(UNATTENDED);
+    expect(decide(tool, guard, command).deny).toBe(true);
+  });
+
+  // Red on the head (review/38): the sentence called the line a stamity command.
+  it("asks for a wholly variable program with a variable argument, naming a command it cannot read", async () => {
+    const guard = await placeGuard("claude");
+    const verdict = personOnlyVerdict("\"$BIN\" \"$ARG\"", BAKED_DEFAULT);
+    if (!verdict.deny) throw new Error("the line reads as no act");
+    expect(verdict.act).toBe("A command the guard cannot read, which may be a stamity command, with an argument the guard cannot read, which may spell `--loosen`");
+    expect(decide("claude", guard, "\"$BIN\" \"$ARG\"")).toEqual(expectedAttended("claude", verdict));
+    expect(decide("claude", guard, "\"$ROOT/node_modules/.bin/vitest\" run \"$FILE\"")).toEqual({ deny: false });
+  });
+});
+
+describe("the package words the guard bakes (a4, review/44)", () => {
+  /** The guard as a renamed fork emits it: its own package name, and a bin the engine's package.json declares. */
+  async function placeFork(tool: Tool): Promise<string> {
+    const fork = planCoreHookScripts(POLICY, tool, { ...CLI_PIN, packageName: "@acme/forge", packageBins: ["forge-cli"], personOnlyGuard: true }).find(
+      (script) => script.fileName === PERSON_ONLY_GUARD_FILE,
+    );
+    if (fork === undefined) throw new Error("the plan carried no person-only guard");
+    await getRepo().seedFiles({ ".git/HEAD": "ref: refs/heads/feat/x\n", [`.stamity/generated/hooks/${tool}/${fork.fileName}`]: fork.content });
+    return getRepo().path(".stamity", "generated", "hooks", tool, fork.fileName);
+  }
+
+  it("bakes the engine's own bins and unscoped name, read from its package.json at emission", async () => {
+    const plan = await planHooksInfra({ rootDir: getRepo().path(), manifest: { tools: [...TOOLS] }, engineVersion: "1.0.0-golden" });
+    const own = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as { bin: Record<string, string> };
+    const copies = plan.scripts.filter((script) => script.path.endsWith(`/${PERSON_ONLY_GUARD_FILE}`));
+    expect(copies).toHaveLength(TOOLS.length);
+    for (const copy of copies) {
+      const baked = /^const PACKAGE_WORDS = (.*);$/m.exec(copy.content)?.[1] ?? "null";
+      expect(JSON.parse(baked), copy.path).toEqual([...new Set(["stamity", "st", ...Object.keys(own.bin)])]);
+    }
+  });
+
+  // Red on the head: a renamed fork's bin was another program to the guard.
+  it.each(TOOLS)("%s: asks for a loosening through a renamed fork's bin, and lets its other verbs run", async (tool) => {
+    const guard = await placeFork(tool);
+    const verdict = personOnlyVerdict("forge-cli sync --loosen", { ...BAKED_DEFAULT, packageWords: ["stamity", "st", "forge", "forge-cli"] });
+    if (!verdict.deny) throw new Error("the fork's loosening reads as no act");
+    expect(decide(tool, guard, "forge-cli sync --loosen")).toEqual(expectedAttended(tool, verdict));
+    expect(decide(tool, guard, "forge sync --loosen").deny).toBe(true);
+    expect(decide(tool, guard, "forge-cli sync")).toEqual({ deny: false });
+    expect(decide(tool, guard, "forge-cli run land --run 2026-10-23_x")).toEqual({ deny: false });
+    expect(decide(tool, guard, "npm test && forge-cli run land --run 2026-10-23_x").deny).toBe(true);
+  });
+});

@@ -208,6 +208,11 @@ export interface PersonOnlyContext {
    * default, loosens it (REQ-FLOW-138); absent reads true.
    */
   readonly stricterThanDefault?: boolean;
+  /**
+   * The program words that run this package (REQ-FLOW-138, review/44): its bins and its unscoped name, baked at
+   * emission from the engine's own `package.json`, so a renamed fork's bin is read too; absent, `stamity` and `st`.
+   */
+  readonly packageWords?: readonly string[];
 }
 
 /**
@@ -404,6 +409,7 @@ export const CLAUDE_ASK_ROWS: readonly string[] = [
  * comment).
  */
 export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): PersonOnlyVerdict {
+  const PACKAGE_WORDS = ctx.packageWords ?? ["stamity", "st"];
   // <shell-reading>
   const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
   const KEYWORDS = new Set(["!", "{", "}", "if", "then", "else", "elif", "fi", "do", "done", "while", "until"]);
@@ -474,27 +480,69 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
    * The words of each simple command in `text`, a command substitution's text read as its own lines; with `blocks`, a
    * brace attached to a word starts or ends a PowerShell script block (`{git push}`), a brace a word opened (`@{1}`,
    * `${x}`) staying part of it; with `pwsh`, PowerShell's escape (review/194): the backtick escapes, a backslash is a
-   * plain character.
+   * plain character. `marks` holds, per word, the index just past the last character the shell expands or globs there
+   * (`$`, a backtick, a substitution or group, `*`, `?`, `[`, a `{` opening a brace expansion), unquoted or inside
+   * double quotes, or 0 where none is (review/37, review/45): a single-quoted, ANSI-C-quoted or escaped one is literal
+   * text. A `${…}` counts to its closing brace, so its text is never read as literal.
    */
-  function splitLine(text: string, blocks: boolean, pwsh: boolean): { segments: string[][]; nested: string[] } {
+  function splitLine(text: string, blocks: boolean, pwsh: boolean): { segments: string[][]; nested: string[]; marks: number[][] } {
     const segments: string[][] = [];
+    const marks: number[][] = [];
     const nested: string[] = [];
     let words: string[] = [];
+    let wordMarks: number[] = [];
     let word = "";
+    let mark = 0;
     let inWord = false;
     let dropNext = false;
     const endWord = (): void => {
       if (!inWord) return;
       if (dropNext) dropNext = false;
-      else words.push(word);
+      else {
+        words.push(word);
+        wordMarks.push(Math.min(mark, word.length));
+      }
       word = "";
+      mark = 0;
       inWord = false;
     };
     const cut = (): void => {
       endWord();
       dropNext = false;
-      if (words.length > 0) segments.push(words);
+      if (words.length > 0) {
+        segments.push(words);
+        marks.push(wordMarks);
+      }
       words = [];
+      wordMarks = [];
+    };
+    /** Marks an expansion starting at `text[at]` and appended next: through its closing brace when it opens `${`. */
+    const expands = (at: number): void => {
+      let end = at + 1;
+      if (text[at] === "$" && text[at + 1] === "{") {
+        let level = 0;
+        while (end < text.length) {
+          if (text[end] === "{") level += 1;
+          else if (text[end] === "}") level -= 1;
+          end += 1;
+          if (level === 0) break;
+        }
+      }
+      mark = Math.max(mark, word.length + (end - at));
+    };
+    /** Whether the `{` at `text[at]` opens a brace expansion: a `,` or `..` before an unquoted blank or its `}`. */
+    const braceExpands = (at: number): boolean => {
+      let quoted = "";
+      for (let j = at + 1; j < text.length; j += 1) {
+        const c = text[j] ?? "";
+        if (quoted !== "") {
+          if (c === quoted) quoted = "";
+        } else if (c === "'" || c === '"') quoted = c;
+        else if (c === "\\") j += 1;
+        else if (c === "}" || /\s/.test(c)) return false;
+        else if (c === "," || (c === "." && text[j + 1] === ".")) return true;
+      }
+      return false;
     };
     // PowerShell's reading takes its typographic quotes as quotes too, so an act after one is read, not hidden.
     const quote = (c: string | undefined, kind: string): boolean => c !== undefined && (c === kind[0] || (pwsh && kind.includes(c)));
@@ -536,8 +584,10 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
             }
             nested.push(text.slice(start, j));
             word += text.slice(i, Math.min(j + 1, text.length));
+            mark = Math.max(mark, word.length);
             i = j + 1;
           } else {
+            if (c === "$") expands(i);
             word += c;
             i += 1;
           }
@@ -600,6 +650,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         }
         nested.push(text.slice(start, j));
         word += text.slice(i, Math.min(j + 1, text.length));
+        mark = Math.max(mark, word.length);
         inWord = true;
         i = j + 1;
       } else if (ch === " " || ch === "\t") {
@@ -611,6 +662,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         // A redirection: a file-descriptor number before it and its target after it are not arguments.
         if (inWord && /^\d+$/.test(word)) {
           word = "";
+          mark = 0;
           inWord = false;
         } else endWord();
         while (i < text.length && "<>&|".includes(text[i] ?? "")) i += 1;
@@ -623,17 +675,26 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         cut();
         i += 1;
       } else {
+        if ("$*?[".includes(ch) || (ch === "{" && braceExpands(i))) expands(i);
         word += ch;
         inWord = true;
         i += 1;
       }
     }
     cut();
-    return { segments, nested };
+    return { segments, nested, marks };
   }
 
   /** Each assignment word the reading below skips (`X=v git …`, `env X=v …`), as it decoded it (review/208). */
   const assigned: string[] = [];
+  /**
+   * Per command the reading returns, which of its words the shell still expands or globs (review/37, review/45): an
+   * argument holding such a character anywhere, the program word only where its last path part holds one, since that
+   * part is what the shell runs (review/38).
+   */
+  const unread = new Map<string[], boolean[]>();
+  /** The commands run under `xargs`, which adds arguments from its input that the line never shows (review/45). */
+  const fed = new Set<string[]>();
 
   /**
    * Each simple command's words, its program word first and normalized; `sh -c` and `eval` text read too. With `pwsh`,
@@ -643,15 +704,19 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
    */
   function commandsOf(text: string, depth: number, pwsh: boolean): string[][] {
     if (depth > 4) throw Object.assign(new Error("nesting"), { code: "NESTING_DEPTH" });
-    const { segments, nested } = splitLine(text, true, pwsh);
+    const { segments, nested, marks } = splitLine(text, true, pwsh);
     // A PowerShell line is read with a POSIX shell's escapes too, and a line with a brace with its braces as words too
     // (review/185), so either reading adds denials and never lifts one: `git push origin x} -f` still forces.
     const commands: string[][] = pwsh ? commandsOf(text, depth, false) : [];
-    for (const words of [...segments, ...(/[{}]/.test(text) ? splitLine(text, false, pwsh).segments : [])]) {
+    const braces = /[{}]/.test(text) ? splitLine(text, false, pwsh) : { segments: [], marks: [] };
+    const allMarks = [...marks, ...braces.marks];
+    for (const [segment, words] of [...segments, ...braces.segments].entries()) {
       let k = 0;
       let line: string | null = null;
+      let viaStdin = false;
       while (k < words.length && line === null) {
         const word = words[k] ?? "";
+        if (programName(word) === "xargs") viaStdin = true;
         let sub = k + 1;
         while (MANAGERS.has(programName(word)) && sub < words.length) {
           const option = words[sub] ?? "";
@@ -716,11 +781,25 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       }
       const cmd = words.slice(k);
       if (cmd.length === 0) continue;
+      const program = cmd[0] ?? "";
+      const cut = Math.max(program.lastIndexOf("/"), program.lastIndexOf("\\")) + 1;
+      // A last path part whose only expansion is a glob is settled by what its pattern can name: unsettled only where it
+      // can name one of this package's words, so `?` (PowerShell's `Where-Object`) stays another program.
+      const last = program.slice(cut).toLowerCase();
+      const shape = new RegExp(`^${last.replace(/\[[^\]]*\]|[*?]|\W/g, (c) => (c === "*" ? ".*" : c === "?" || c.length > 1 ? "." : `\\${c}`))}$`);
+      const unsure = (allMarks[segment] ?? []).slice(k).map((mark, at) =>
+        at > 0 ? mark > 0 : mark > cut && (/[$`({]/.test(program) || PACKAGE_WORDS.some((name) => shape.test(name))),
+      );
+      unread.set(cmd, unsure);
+      if (viaStdin) fed.add(cmd);
       // A program word holding a whole command line (`bun exec 'git push'`) is also read as that line, unless it is this one.
       if (/\s/.test(cmd[0] ?? "") && cmd.join(" ") !== text) commands.push(...commandsOf(cmd.join(" "), depth + 1, pwsh));
       cmd[0] = programName(cmd[0] ?? "");
       // git's dashed form (`git-push`, as git's exec path holds it) is git running that subcommand.
-      if (/^git-./.test(cmd[0])) cmd.splice(0, 1, "git", cmd[0].slice(4));
+      if (/^git-./.test(cmd[0])) {
+        cmd.splice(0, 1, "git", cmd[0].slice(4));
+        unsure.splice(0, 1, unsure[0] === true, unsure[0] === true);
+      }
       if (SHELLS.has(cmd[0] ?? "")) {
         const flag = cmd.findIndex((word, index) => index > 0 && /^-[A-Za-z]*c[A-Za-z]*$/.test(word));
         const script = flag === -1 ? undefined : cmd[flag + 1];
@@ -988,15 +1067,27 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
 
   /**
    * The words after the program where a command runs this package (REQ-FLOW-121's land line, REQ-FLOW-138), or
-   * `null` for any other program: `stamity` or `st` as the program, a runner's package reading as that program
-   * above, or a launcher (`node`, `bun`, `deno`, `tsx`) or a package manager given a word naming the package or its
-   * CLI file (`node dist/cli.js`), the words after that word.
+   * `null` for any other program: one of `PACKAGE_WORDS` (its bins and unscoped name) or a word naming `stamity` as
+   * the program, a runner's package reading as that program above; a package manager's first word after its options,
+   * or after its `run`, `exec`, `dlx` or `x`, being one of those words (`yarn st`, `pnpm run st`, review/44); or a
+   * launcher (`node`, `bun`, `deno`, `tsx`) or a package manager given a word naming the package, a path whose last
+   * part is one of those bins, or its CLI file, built or source (`node dist/cli.js`, `tsx src/cli.ts`), the words after.
    */
   function packageArgs(cmd: string[]): string[] | null {
     const program = cmd[0] ?? "";
-    if (program === "st" || /stamity/i.test(program)) return cmd.slice(1);
+    const named = (word: string): boolean => PACKAGE_WORDS.includes(programName(word)) || /stamity/i.test(word);
+    if (named(program)) return cmd.slice(1);
     if (!["node", "nodejs", "bun", "deno", "tsx", ...MANAGERS].includes(program)) return null;
-    const at = cmd.findIndex((word, index) => index > 0 && /stamity|(?:^|[\\/])cli\.m?js$/i.test(word));
+    if (MANAGERS.has(program)) {
+      let k = 1;
+      while (k < cmd.length && (cmd[k] ?? "").startsWith("-")) k += MANAGER_VALUED.has(cmd[k] ?? "") ? 2 : 1;
+      if (["run", "run-script", "exec", "dlx", "x"].includes(cmd[k] ?? "")) k += 1;
+      while (k < cmd.length && (cmd[k] ?? "").startsWith("-")) k += 1;
+      if (named(cmd[k] ?? "")) return cmd.slice(k + 1);
+    }
+    const at = cmd.findIndex(
+      (word, index) => index > 0 && (/stamity|(?:^|[\\/])cli\.[cm]?[jt]s$/i.test(word) || (/[\\/]/.test(word) && named(word))),
+    );
     return at === -1 ? null : cmd.slice(at + 1);
   }
   // </shell-reading>
@@ -1817,13 +1908,27 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     // npm's, pnpm's, bun's and yarn's `npm publish`, the flag before any `--` and not an option's value. Every other
     // spelling still asks, fail-closed: another dry-run, negation or `-d` word on the call (`--dry-run=false`, a later
     // `--no-dry-run`, an abbreviation), a word the reading cannot settle (a `$` or a backtick), the flag quoted or
-    // built in the line's text, `npm_config_dry_run` named on the line, and yarn classic's own publish.
+    // built in the line's text, `npm_config_dry_run` named on the line, and yarn classic's own publish. npm's option
+    // parser (nopt) takes a separate `true` or `false` after a boolean flag as its value (review/42): a bare flag
+    // followed by a word that reads as a value other than a plain `true`, or by a word the shell still expands or globs,
+    // which may be `false`, is a publish, for every manager here.
     const end = cmd.indexOf("--");
     const options = end === -1 ? cmd : cmd.slice(0, end);
+    const unsure = unread.get(cmd) ?? [];
+    const valueAfter = (index: number): boolean => {
+      const next = options[index + 1];
+      if (next === undefined) return true;
+      if (unsure[index + 1] === true) return false;
+      return next === "true" || next.startsWith("-") || !/^(?:true|false|yes|no|on|off|y|n|0|1)$/i.test(next);
+    };
     const yarnNpm = cmd[0] === "yarn" && positionalsOf(false).some((word, index, all) => word === "publish" && all[index - 1] === "npm");
+    const dryAt = options.flatMap((word, index) =>
+      (word === "--dry-run" || word === "--dry-run=true") && !valued.has(options[index - 1] ?? "") ? [index] : [],
+    );
     const dryRun =
       (cmd[0] !== "yarn" || yarnNpm) &&
-      options.some((word, index) => (word === "--dry-run" || word === "--dry-run=true") && !valued.has(options[index - 1] ?? "")) &&
+      dryAt.length > 0 &&
+      dryAt.every((index) => options[index] !== "--dry-run" || valueAfter(index)) &&
       !cmd.some((word) => /^-{1,2}(?:no-?)?d(?:r|=|$)/i.test(word) && word !== "--dry-run" && word !== "--dry-run=true") &&
       !cmd.some((word) => /[$`]/.test(word)) &&
       !/npm_config_dry_run/i.test(command) &&
@@ -1833,19 +1938,29 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
 
   /**
    * `autonomy-loosen` (REQ-FLOW-138, the guard's half): on a command running this package (`packageArgs`) or one whose
-   * program the reading cannot settle (a `$` or a backtick in its word), `--loosen` in any word; an argument the
-   * reading cannot settle (a `$`, a backtick, a PowerShell group), which may spell it; and, while the baked setting is
-   * stricter than the default, a full `clean` (no `--pack`) or an `init --force`, each of which lands the default.
+   * program the reading cannot settle (an expansion or a glob in its word's last path part, or the whole word one,
+   * review/38), `--loosen` in any word; an argument the shell still expands or globs (`unread`: a `$`, a backtick, a
+   * substitution or a PowerShell group, `*`, `?`, `[` or `{`, unquoted or double-quoted; single-quoted text is
+   * literal, review/37), or arguments `xargs` adds (review/45), either of which may spell it; and, while the baked
+   * setting is stricter than the default, a full `clean` (no `--pack`) or an `init --force`, each of which lands the
+   * default.
    */
   function loosenVerdict(cmd: string[]): void {
-    const args = /[$`]/.test(cmd[0] ?? "") ? cmd.slice(1) : packageArgs(cmd);
+    const unsure = unread.get(cmd) ?? [];
+    const unsettled = unsure[0] === true;
+    const args = unsettled ? cmd.slice(1) : packageArgs(cmd);
     if (args === null) return;
+    const what = unsettled ? "A command the guard cannot read, which may be a stamity command," : "A stamity command";
     if (args.some((word) => /^--loosen(=|$)/.test(word))) {
       deny("autonomy-loosen", "Loosening the autonomy setting (`--loosen`)");
       return;
     }
-    if (args.some((word) => /[$`]/.test(word) || word.startsWith("("))) {
-      deny("autonomy-loosen", "A stamity command with an argument the guard cannot read, which may spell `--loosen`");
+    if (fed.has(cmd)) {
+      deny("autonomy-loosen", `${what} run under \`xargs\`, which adds arguments the guard cannot read and which may spell \`--loosen\``);
+      return;
+    }
+    if (args.some((_, index) => unsure[cmd.length - args.length + index] === true)) {
+      deny("autonomy-loosen", `${what} with an argument the guard cannot read, which may spell \`--loosen\``);
       return;
     }
     if (ctx.stricterThanDefault === false) return;
@@ -1948,12 +2063,19 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
  * With `landOnly`, the guard's attended reading of the land verb's line (REQ-FLOW-121, a4): only that rule, and only
  * over the parsed program words (a command whose program is this package, then `run` and `land`), never the raw text,
  * so a commit message naming the verb runs. A line that builds the verb by an expression is not seen there; the
- * verb's own checks back that residual.
+ * verb's own checks back that residual. `packageWords` are the program words that run this package, as
+ * {@link PersonOnlyContext}'s `packageWords` (review/44); the verb's line admits them as its first word too.
  *
  * Self-contained, so the emitted guard can carry it as source (see the module
  * comment).
  */
-export function unattendedPushVerdict(command: string, powershell = false, landOnly = false): UnattendedPushVerdict {
+export function unattendedPushVerdict(
+  command: string,
+  powershell = false,
+  landOnly = false,
+  packageWords: readonly string[] = ["stamity", "st"],
+): UnattendedPushVerdict {
+  const PACKAGE_WORDS = packageWords;
   // <shell-reading>
   const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
   const KEYWORDS = new Set(["!", "{", "}", "if", "then", "else", "elif", "fi", "do", "done", "while", "until"]);
@@ -2024,27 +2146,69 @@ export function unattendedPushVerdict(command: string, powershell = false, landO
    * The words of each simple command in `text`, a command substitution's text read as its own lines; with `blocks`, a
    * brace attached to a word starts or ends a PowerShell script block (`{git push}`), a brace a word opened (`@{1}`,
    * `${x}`) staying part of it; with `pwsh`, PowerShell's escape (review/194): the backtick escapes, a backslash is a
-   * plain character.
+   * plain character. `marks` holds, per word, the index just past the last character the shell expands or globs there
+   * (`$`, a backtick, a substitution or group, `*`, `?`, `[`, a `{` opening a brace expansion), unquoted or inside
+   * double quotes, or 0 where none is (review/37, review/45): a single-quoted, ANSI-C-quoted or escaped one is literal
+   * text. A `${…}` counts to its closing brace, so its text is never read as literal.
    */
-  function splitLine(text: string, blocks: boolean, pwsh: boolean): { segments: string[][]; nested: string[] } {
+  function splitLine(text: string, blocks: boolean, pwsh: boolean): { segments: string[][]; nested: string[]; marks: number[][] } {
     const segments: string[][] = [];
+    const marks: number[][] = [];
     const nested: string[] = [];
     let words: string[] = [];
+    let wordMarks: number[] = [];
     let word = "";
+    let mark = 0;
     let inWord = false;
     let dropNext = false;
     const endWord = (): void => {
       if (!inWord) return;
       if (dropNext) dropNext = false;
-      else words.push(word);
+      else {
+        words.push(word);
+        wordMarks.push(Math.min(mark, word.length));
+      }
       word = "";
+      mark = 0;
       inWord = false;
     };
     const cut = (): void => {
       endWord();
       dropNext = false;
-      if (words.length > 0) segments.push(words);
+      if (words.length > 0) {
+        segments.push(words);
+        marks.push(wordMarks);
+      }
       words = [];
+      wordMarks = [];
+    };
+    /** Marks an expansion starting at `text[at]` and appended next: through its closing brace when it opens `${`. */
+    const expands = (at: number): void => {
+      let end = at + 1;
+      if (text[at] === "$" && text[at + 1] === "{") {
+        let level = 0;
+        while (end < text.length) {
+          if (text[end] === "{") level += 1;
+          else if (text[end] === "}") level -= 1;
+          end += 1;
+          if (level === 0) break;
+        }
+      }
+      mark = Math.max(mark, word.length + (end - at));
+    };
+    /** Whether the `{` at `text[at]` opens a brace expansion: a `,` or `..` before an unquoted blank or its `}`. */
+    const braceExpands = (at: number): boolean => {
+      let quoted = "";
+      for (let j = at + 1; j < text.length; j += 1) {
+        const c = text[j] ?? "";
+        if (quoted !== "") {
+          if (c === quoted) quoted = "";
+        } else if (c === "'" || c === '"') quoted = c;
+        else if (c === "\\") j += 1;
+        else if (c === "}" || /\s/.test(c)) return false;
+        else if (c === "," || (c === "." && text[j + 1] === ".")) return true;
+      }
+      return false;
     };
     // PowerShell's reading takes its typographic quotes as quotes too, so an act after one is read, not hidden.
     const quote = (c: string | undefined, kind: string): boolean => c !== undefined && (c === kind[0] || (pwsh && kind.includes(c)));
@@ -2086,8 +2250,10 @@ export function unattendedPushVerdict(command: string, powershell = false, landO
             }
             nested.push(text.slice(start, j));
             word += text.slice(i, Math.min(j + 1, text.length));
+            mark = Math.max(mark, word.length);
             i = j + 1;
           } else {
+            if (c === "$") expands(i);
             word += c;
             i += 1;
           }
@@ -2150,6 +2316,7 @@ export function unattendedPushVerdict(command: string, powershell = false, landO
         }
         nested.push(text.slice(start, j));
         word += text.slice(i, Math.min(j + 1, text.length));
+        mark = Math.max(mark, word.length);
         inWord = true;
         i = j + 1;
       } else if (ch === " " || ch === "\t") {
@@ -2161,6 +2328,7 @@ export function unattendedPushVerdict(command: string, powershell = false, landO
         // A redirection: a file-descriptor number before it and its target after it are not arguments.
         if (inWord && /^\d+$/.test(word)) {
           word = "";
+          mark = 0;
           inWord = false;
         } else endWord();
         while (i < text.length && "<>&|".includes(text[i] ?? "")) i += 1;
@@ -2173,17 +2341,26 @@ export function unattendedPushVerdict(command: string, powershell = false, landO
         cut();
         i += 1;
       } else {
+        if ("$*?[".includes(ch) || (ch === "{" && braceExpands(i))) expands(i);
         word += ch;
         inWord = true;
         i += 1;
       }
     }
     cut();
-    return { segments, nested };
+    return { segments, nested, marks };
   }
 
   /** Each assignment word the reading below skips (`X=v git …`, `env X=v …`), as it decoded it (review/208). */
   const assigned: string[] = [];
+  /**
+   * Per command the reading returns, which of its words the shell still expands or globs (review/37, review/45): an
+   * argument holding such a character anywhere, the program word only where its last path part holds one, since that
+   * part is what the shell runs (review/38).
+   */
+  const unread = new Map<string[], boolean[]>();
+  /** The commands run under `xargs`, which adds arguments from its input that the line never shows (review/45). */
+  const fed = new Set<string[]>();
 
   /**
    * Each simple command's words, its program word first and normalized; `sh -c` and `eval` text read too. With `pwsh`,
@@ -2193,15 +2370,19 @@ export function unattendedPushVerdict(command: string, powershell = false, landO
    */
   function commandsOf(text: string, depth: number, pwsh: boolean): string[][] {
     if (depth > 4) throw Object.assign(new Error("nesting"), { code: "NESTING_DEPTH" });
-    const { segments, nested } = splitLine(text, true, pwsh);
+    const { segments, nested, marks } = splitLine(text, true, pwsh);
     // A PowerShell line is read with a POSIX shell's escapes too, and a line with a brace with its braces as words too
     // (review/185), so either reading adds denials and never lifts one: `git push origin x} -f` still forces.
     const commands: string[][] = pwsh ? commandsOf(text, depth, false) : [];
-    for (const words of [...segments, ...(/[{}]/.test(text) ? splitLine(text, false, pwsh).segments : [])]) {
+    const braces = /[{}]/.test(text) ? splitLine(text, false, pwsh) : { segments: [], marks: [] };
+    const allMarks = [...marks, ...braces.marks];
+    for (const [segment, words] of [...segments, ...braces.segments].entries()) {
       let k = 0;
       let line: string | null = null;
+      let viaStdin = false;
       while (k < words.length && line === null) {
         const word = words[k] ?? "";
+        if (programName(word) === "xargs") viaStdin = true;
         let sub = k + 1;
         while (MANAGERS.has(programName(word)) && sub < words.length) {
           const option = words[sub] ?? "";
@@ -2266,11 +2447,25 @@ export function unattendedPushVerdict(command: string, powershell = false, landO
       }
       const cmd = words.slice(k);
       if (cmd.length === 0) continue;
+      const program = cmd[0] ?? "";
+      const cut = Math.max(program.lastIndexOf("/"), program.lastIndexOf("\\")) + 1;
+      // A last path part whose only expansion is a glob is settled by what its pattern can name: unsettled only where it
+      // can name one of this package's words, so `?` (PowerShell's `Where-Object`) stays another program.
+      const last = program.slice(cut).toLowerCase();
+      const shape = new RegExp(`^${last.replace(/\[[^\]]*\]|[*?]|\W/g, (c) => (c === "*" ? ".*" : c === "?" || c.length > 1 ? "." : `\\${c}`))}$`);
+      const unsure = (allMarks[segment] ?? []).slice(k).map((mark, at) =>
+        at > 0 ? mark > 0 : mark > cut && (/[$`({]/.test(program) || PACKAGE_WORDS.some((name) => shape.test(name))),
+      );
+      unread.set(cmd, unsure);
+      if (viaStdin) fed.add(cmd);
       // A program word holding a whole command line (`bun exec 'git push'`) is also read as that line, unless it is this one.
       if (/\s/.test(cmd[0] ?? "") && cmd.join(" ") !== text) commands.push(...commandsOf(cmd.join(" "), depth + 1, pwsh));
       cmd[0] = programName(cmd[0] ?? "");
       // git's dashed form (`git-push`, as git's exec path holds it) is git running that subcommand.
-      if (/^git-./.test(cmd[0])) cmd.splice(0, 1, "git", cmd[0].slice(4));
+      if (/^git-./.test(cmd[0])) {
+        cmd.splice(0, 1, "git", cmd[0].slice(4));
+        unsure.splice(0, 1, unsure[0] === true, unsure[0] === true);
+      }
       if (SHELLS.has(cmd[0] ?? "")) {
         const flag = cmd.findIndex((word, index) => index > 0 && /^-[A-Za-z]*c[A-Za-z]*$/.test(word));
         const script = flag === -1 ? undefined : cmd[flag + 1];
@@ -2538,15 +2733,27 @@ export function unattendedPushVerdict(command: string, powershell = false, landO
 
   /**
    * The words after the program where a command runs this package (REQ-FLOW-121's land line, REQ-FLOW-138), or
-   * `null` for any other program: `stamity` or `st` as the program, a runner's package reading as that program
-   * above, or a launcher (`node`, `bun`, `deno`, `tsx`) or a package manager given a word naming the package or its
-   * CLI file (`node dist/cli.js`), the words after that word.
+   * `null` for any other program: one of `PACKAGE_WORDS` (its bins and unscoped name) or a word naming `stamity` as
+   * the program, a runner's package reading as that program above; a package manager's first word after its options,
+   * or after its `run`, `exec`, `dlx` or `x`, being one of those words (`yarn st`, `pnpm run st`, review/44); or a
+   * launcher (`node`, `bun`, `deno`, `tsx`) or a package manager given a word naming the package, a path whose last
+   * part is one of those bins, or its CLI file, built or source (`node dist/cli.js`, `tsx src/cli.ts`), the words after.
    */
   function packageArgs(cmd: string[]): string[] | null {
     const program = cmd[0] ?? "";
-    if (program === "st" || /stamity/i.test(program)) return cmd.slice(1);
+    const named = (word: string): boolean => PACKAGE_WORDS.includes(programName(word)) || /stamity/i.test(word);
+    if (named(program)) return cmd.slice(1);
     if (!["node", "nodejs", "bun", "deno", "tsx", ...MANAGERS].includes(program)) return null;
-    const at = cmd.findIndex((word, index) => index > 0 && /stamity|(?:^|[\\/])cli\.m?js$/i.test(word));
+    if (MANAGERS.has(program)) {
+      let k = 1;
+      while (k < cmd.length && (cmd[k] ?? "").startsWith("-")) k += MANAGER_VALUED.has(cmd[k] ?? "") ? 2 : 1;
+      if (["run", "run-script", "exec", "dlx", "x"].includes(cmd[k] ?? "")) k += 1;
+      while (k < cmd.length && (cmd[k] ?? "").startsWith("-")) k += 1;
+      if (named(cmd[k] ?? "")) return cmd.slice(k + 1);
+    }
+    const at = cmd.findIndex(
+      (word, index) => index > 0 && (/stamity|(?:^|[\\/])cli\.[cm]?[jt]s$/i.test(word) || (/[\\/]/.test(word) && named(word))),
+    );
     return at === -1 ? null : cmd.slice(at + 1);
   }
   // </shell-reading>
@@ -2813,7 +3020,7 @@ export function unattendedPushVerdict(command: string, powershell = false, landO
       const spec = words[at] ?? "";
       if (spec !== "stamity" && !PINNED_PACKAGE.test(spec)) return "an `npx` option or package other than `stamity` or `<pkg>@<semver>`";
       at += 1;
-    } else if (words[0] !== "stamity" && words[0] !== "st") {
+    } else if (words[0] !== "stamity" && !PACKAGE_WORDS.includes(words[0] ?? "")) {
       return "a first word other than `stamity`, `st` or `npx`: a prefix, a wrapper or another program";
     }
     if (words[at] !== "run") return "words between the program and `run <verb>`";

@@ -4107,6 +4107,23 @@ export interface GuardAutonomy {
 const DEFAULT_GUARD_AUTONOMY: GuardAutonomy = { mode: "autonomous", runs: ["pr-ready", "tag"], deployingBranches: [], deploying: [] };
 
 /**
+ * The program words a guard copy reads as this package (REQ-FLOW-138, REQ-FLOW-121, review/44): `stamity` and `st`
+ * always, then each of `extra` (the emission's unscoped package name and the engine's bins) that is a plain command
+ * name, lowercased as the guard reads a program word, once each.
+ */
+function guardPackageWords(extra: readonly string[]): string[] {
+  const words = ["stamity", "st", ...extra.map((word) => word.toLowerCase())];
+  return [...new Set(words.filter((word) => /^[a-z0-9][a-z0-9._-]*$/.test(word)))];
+}
+
+/** The act a guard names where a sub-agent calls one the autonomy setting runs unasked (REQ-FLOW-137). */
+const GUARD_RUN_ACTS: Readonly<Record<string, string>> = {
+  "pr-ready": "Marking a pull request ready for review",
+  tag: "Creating a tag",
+  "workflow-dispatch": "Dispatching a workflow",
+};
+
+/**
  * The marker line every person-only guard copy carries under its banner, the baked setting's JSON after it in a fixed
  * key order: the line `../config/autonomy.ts`'s `parseAutonomyMarker` reads back, and the loosen gate's baseline
  * (REQ-FLOW-138).
@@ -4194,7 +4211,26 @@ function recordedMainSession(payload) {
   // Copilot CLI: a helper's call carries a helper field, and its session id is its own, never one the main session's start
   // recorded (measured on 1.0.98, 2026-10-19), so only the person's own agent reaches the ask.
   if (names.some((name) => Object.hasOwn(payload, name)) || !recordedMainSession(payload)) return held(askSentence(act, rule));`;
-  return String.raw`${copilot ? record : ""}/**
+  return String.raw`${copilot ? record : ""}// The payload fields that name a helper agent on this client (GUARD_HELPER_FIELDS in the engine).
+const HELPER_NAMES = ${json(tool === "claude" ? GUARD_HELPER_FIELDS.filter((name) => name !== "agent_type") : GUARD_HELPER_FIELDS)};
+
+/** Whether a sub-agent makes this call: a non-empty string in any helper field (on Claude Code, \`agent_id\` beside \`agent_type\`). */
+function helperCall(payload) {
+  return HELPER_NAMES.some((name) => Object.hasOwn(payload, name) && typeof payload[name] === "string" && payload[name] !== "");
+}
+
+/**
+ * An act the autonomy setting runs unasked (REQ-FLOW-137) is the main thread's alone: a sub-agent's call to one is
+ * refused${copilot ? ", and on Copilot CLI a helper field's presence alone counts" : ""}; null for the main thread's.
+ */
+function helperRefusal(payload, act, rule) {
+  const held = (reason) => ${held};
+  const helper = helperCall(payload)${copilot ? " || HELPER_NAMES.some((name) => Object.hasOwn(payload, name))" : ""};
+  if (!helper) return null;
+  return held(act + " is a person-only act (\`" + rule + "\`) and a sub-agent runs it: the autonomy setting runs it unasked on the main thread only (REQ-FLOW-137). Give the person the exact command.");
+}
+
+/**
  * An attended ask-class act's decision: the person is asked, except where a sub-agent runs it (any agent identity the
  * core guard reads), since the act is the person's, or in Claude Code's \`auto\` permission mode, where a
  * classifier may settle the prompt; both are refused.${copilot ? " On Copilot CLI the call must also come from a main session its session start recorded." : ""}
@@ -4202,9 +4238,9 @@ function recordedMainSession(payload) {
 function attendedAsk(payload, act, rule) {
   const told = act + " is a person-only act (\`" + rule + "\`) and ";
   const end = " (REQ-FLOW-102). Give the person the exact command.";
-  const names = ${json(tool === "claude" ? GUARD_HELPER_FIELDS.filter((name) => name !== "agent_type") : GUARD_HELPER_FIELDS)};
+  const names = HELPER_NAMES;
   const held = (reason) => ${held};
-  if (names.some((name) => Object.hasOwn(payload, name) && typeof payload[name] === "string" && payload[name] !== "")) {
+  if (helperCall(payload)) {
     return held(told + "a sub-agent runs it: the act is the person's, so only the main thread may ask for it" + end);
   }
   if (payload.permission_mode === "auto") {
@@ -4309,9 +4345,15 @@ if (told !== null) {
  * no tool, Cursor's, with no command string among them), or a fault while
  * deciding one, is refused, never asked.
  */
-export function buildPersonOnlyGuardScript(opts: { tool: Tool; layout: HookScriptLayout; autonomy?: GuardAutonomy }): string {
+export function buildPersonOnlyGuardScript(opts: {
+  tool: Tool;
+  layout: HookScriptLayout;
+  autonomy?: GuardAutonomy;
+  packageWords?: readonly string[];
+}): string {
   const extra = repoRootImports(opts.layout);
   const autonomy = opts.autonomy ?? DEFAULT_GUARD_AUTONOMY;
+  const packageWords = guardPackageWords(opts.packageWords ?? []);
   // The marker is a line comment: a control character or a line or paragraph separator in a branch name would end it
   // and turn the rest of the line into code. The manifest validator refuses such a name; this refuses it again here.
   const breaksLine = (name: string): boolean =>
@@ -4381,6 +4423,11 @@ const MCP_ROWS = new Map(${json(GITHUB_MCP_ROWS.map((entry) => [entry.row, entry
 const AUTONOMY = ${json(baked)};
 const RUNS = [...AUTONOMY.runs, ...(AUTONOMY.deploying.includes("workflow-dispatch") ? [] : ["workflow-dispatch"])];
 const STRICTER = AUTONOMY.mode === "ask" || AUTONOMY.deploying.length > 0 || AUTONOMY.deployingBranches.length > 0;
+// The program words that run this package (review/44): its bins and unscoped name, read from the engine's own
+// package.json at emission, so a renamed fork's bin is read as this package's.
+const PACKAGE_WORDS = ${json(packageWords)};
+// What an act the setting runs unasked is called where a sub-agent's call to it is refused (REQ-FLOW-137).
+const RUN_ACTS = ${json(GUARD_RUN_ACTS)};
 
 ${resolveRepoRoot(opts.layout)}
 
@@ -4804,6 +4851,7 @@ function contextsOf(command, cwd) {
       runs: RUNS,
       deployingBranches: AUTONOMY.deployingBranches,
       stricterThanDefault: STRICTER,
+      packageWords: PACKAGE_WORDS,
       // Read the first time the verdict asks, which only a push refspec does: no other call reads a tag.
       get tags() {
         tags ??= dirs === null ? [] : localTags(dirs.commonDir);
@@ -5018,12 +5066,12 @@ function decide() {
   const refused = found.find((verdict) => !verdict.ask);
   if (refused !== undefined) return { ask: false, reason: refuseSentence(refused.act, refused.rule) };
   // The land verb alone on its line in every mode, read over the parsed program words (REQ-FLOW-121): no mode read.
-  const land = unattendedPushVerdict(command, pwsh, true);
+  const land = unattendedPushVerdict(command, pwsh, true, PACKAGE_WORDS);
   if (land.deny) return { ask: false, reason: land.reason };
   // The mode is read for every ask and for a call the unattended rule would refuse, so an unreadable record refuses
   // those and no other call.
   const run = () => {
-    const verdict = unattendedPushVerdict(command, pwsh);
+    const verdict = unattendedPushVerdict(command, pwsh, false, PACKAGE_WORDS);
     return verdict.deny ? verdict : undefined;
   };
   if (found.length > 0) {
@@ -5032,6 +5080,13 @@ function decide() {
     // Unattended, a push keeps the push rule's own reason; any other act goes on the morning list.
     const push = run();
     return { ask: false, reason: (push !== undefined ? push.reason : unattendedSentence(found[0].act, found[0].rule)) + " " + why };
+  }
+  // An act the setting runs unasked is the main thread's alone (REQ-FLOW-137): a sub-agent's call to one is refused,
+  // as 1.16.0 refused a sub-agent's ask, read through the identity fields attendedAsk reads.
+  const first = [...ran][0];
+  if (first !== undefined) {
+    const helper = helperRefusal(payload, RUN_ACTS[first] ?? "This act", first);
+    if (helper !== null) return helper;
   }
   // Unattended, a raw ready mark stays refused: the run's one draft pull request is marked ready only by the land
   // verb's --ready (REQ-FLOW-120).
@@ -5105,6 +5160,7 @@ export function planCoreHookScripts(
     personOnlyGuard?: boolean;
     layout?: HookScriptLayout;
     autonomy?: GuardAutonomy;
+    packageBins?: readonly string[];
   },
 ): GeneratedHookScript[] {
   const layout = opts.layout ?? layoutFor(policiesJsonPath);
@@ -5117,7 +5173,12 @@ export function planCoreHookScripts(
       ? [
           {
             fileName: PERSON_ONLY_GUARD_FILE,
-            content: buildPersonOnlyGuardScript({ tool, layout, ...(opts.autonomy === undefined ? {} : { autonomy: opts.autonomy }) }),
+            content: buildPersonOnlyGuardScript({
+              tool,
+              layout,
+              ...(opts.autonomy === undefined ? {} : { autonomy: opts.autonomy }),
+              packageWords: [opts.packageName.replace(/^@[^/]+\//, ""), ...(opts.packageBins ?? [])],
+            }),
             event: "pre_tool_use",
           },
         ]

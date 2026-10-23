@@ -64,11 +64,14 @@
  * are reads of context.
  */
 
-import { resolve } from "node:path";
+import { readFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { resolveAutonomy, type ResolvedAutonomy } from "../config/autonomy.ts";
 import { CLAUDE_HOOKS_DIR, HOOK_SESSION_START_TIMEOUT_MS, type HookInterchange } from "../hooks/model.ts";
 import { MAX_POLICY_FILE_BYTES, PERSON_ONLY_GUARD_FILE, planCoreHookScripts, type HookScriptLayout } from "../hooks/scripts.ts";
 import { readHookDefinitions, type ReadHooksResult } from "../hooks/userHooks.ts";
+import { findPackageRoot } from "../shared/paths.ts";
 import { resolveAgentGrant } from "../roster/agentGrants.ts";
 import { AGENT_POLICY_ROSTER, type GrantableToolCategory } from "../roster/agentPolicies.ts";
 import {
@@ -506,6 +509,8 @@ export async function planHooksInfra(ctx: HooksPlanContext): Promise<CoreHooksPl
 
   // Resolved once, so every guard copy and every adapter reads one setting (REQ-FLOW-137).
   const autonomy = resolveAutonomy(ctx.manifest);
+  // The engine's own bins, which the guard reads as this package's program words (review/44).
+  const packageBins = await engineBins();
   const scripts: PlannedHookScript[] = [];
   const rowsByTool = new Map<Tool, HookInterchange[]>();
   for (const tool of tools) {
@@ -518,8 +523,8 @@ export async function planHooksInfra(ctx: HooksPlanContext): Promise<CoreHooksPl
     const copy = tool === "claude" && ctx.hookScriptsRoot === undefined ? CLAUDE_COPY_PLACEMENT : undefined;
     const run =
       copy === undefined
-        ? planCoreHookScripts(policiesPathFor(ctx.hookScriptsRoot), tool, { ...cliCallContextOf(ctx), personOnlyGuard: true, autonomy })
-        : planCoreHookScripts(copy.policiesPath, tool, { ...cliCallContextOf(ctx), personOnlyGuard: true, layout: copy.layout, autonomy });
+        ? planCoreHookScripts(policiesPathFor(ctx.hookScriptsRoot), tool, { ...cliCallContextOf(ctx), personOnlyGuard: true, autonomy, packageBins })
+        : planCoreHookScripts(copy.policiesPath, tool, { ...cliCallContextOf(ctx), personOnlyGuard: true, layout: copy.layout, autonomy, packageBins });
     for (const script of run) {
       const path = copy === undefined ? `${HOOKS_GENERATED_DIR}/${tool}/${script.fileName}` : `${copy.dir}/${script.fileName}`;
       scripts.push({ path, content: script.content, tool });
@@ -620,4 +625,20 @@ export async function planHooksInfra(ctx: HooksPlanContext): Promise<CoreHooksPl
     warnings,
     autonomy,
   };
+}
+
+/**
+ * The bin names the running engine's own `package.json` declares (`stamity` and `st` here; a renamed fork's own),
+ * read from the package root above this module, as the CLI reads its own name (`../cli/kit/packageName.ts`). A
+ * manifest that cannot be read, or holds no bin object, gives none: the guard still reads `stamity` and `st`.
+ */
+async function engineBins(): Promise<string[]> {
+  try {
+    const root = findPackageRoot(dirname(fileURLToPath(import.meta.url)));
+    const parsed: unknown = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
+    const bin = typeof parsed === "object" && parsed !== null ? (parsed as { bin?: unknown }).bin : undefined;
+    return typeof bin === "object" && bin !== null ? Object.keys(bin) : [];
+  } catch {
+    return [];
+  }
 }

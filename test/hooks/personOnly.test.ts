@@ -2733,3 +2733,213 @@ describe("the land verb's line (a4, REQ-FLOW-121)", () => {
     if (verdict.deny) expect(verdict.reason).toContain("an unquoted `@` in a word after `run`, which PowerShell reads as a splat");
   });
 });
+
+/**
+ * a4 fixer round 1 (review/37, review/38, review/42, review/44, review/45, review/39): the readings the round's
+ * findings named. Each row's input sits in the table; the titles name the class of input. A row marked "red on the
+ * head" failed on e2a2f2c6 for the reason its comment gives.
+ */
+describe("a dry-run flag's separate value word (a4, review/42)", () => {
+  // Red on the head: the literal flag passed whatever word followed it, and npm's parser takes `false` as its value.
+  it.each([
+    ["npm, a separate false", "npm publish --dry-run false"],
+    ["pnpm, a separate false", "pnpm publish --dry-run false"],
+    ["bun, a separate false", "bun publish --dry-run false"],
+    ["yarn's npm publish, a separate false", "yarn npm publish --dry-run false"],
+    ["a single-quoted false", "npm publish --dry-run 'false'"],
+    ["a double-quoted false", "npm publish --dry-run \"false\""],
+    ["another letter case", "npm publish --dry-run FALSE"],
+    ["another boolean word", "npm publish --dry-run no"],
+    ["a numeric boolean", "npm publish --dry-run 0"],
+    ["a later flag with a false", "npm publish --dry-run --dry-run false"],
+    ["a glob that may name false", "npm publish --dry-run fals?"],
+    ["a brace expansion that may give false", "npm publish --dry-run f{al,}se"],
+  ])("reads a publish for %s after the flag", (_, command) => {
+    expect(personOnlyVerdict(command, ON_FEATURE), command).toMatchObject({ deny: true, rule: "publish", ask: true });
+  });
+
+  it.each([
+    ["a separate true", "npm publish --dry-run true"],
+    ["a package path", "npm publish --dry-run ./pkg.tgz"],
+    ["another option", "pnpm publish --dry-run --no-git-checks"],
+    ["the flag last", "bun publish ./dir --dry-run"],
+    ["a quoted package path", "npm publish --dry-run './my pkg.tgz'"],
+  ])("runs a dry run for %s after the flag", (_, command) => {
+    expect(personOnlyVerdict(command, ON_FEATURE), command).toEqual({ deny: false });
+  });
+});
+
+describe("the package test's program words (a4, review/44)", () => {
+  const STRICT = { ...ON_FEATURE, stricterThanDefault: true };
+  const FORK = { ...ON_FEATURE, stricterThanDefault: false, packageWords: ["stamity", "st", "forge", "forge-cli"] };
+
+  it.each([
+    // Red on the head: a package manager given the second bin as its first word, and the source entry file.
+    ["yarn running the second bin", "yarn st sync --loosen"],
+    ["pnpm running the second bin", "pnpm st sync --loosen"],
+    ["bun running the second bin", "bun st sync --loosen"],
+    ["a manager's run of the second bin", "pnpm run st sync --loosen"],
+    ["a manager's option before the second bin", "yarn --cwd app st sync --loosen"],
+    ["node on the source entry file", "node src/cli.ts sync --loosen"],
+    ["tsx on the source entry file", "tsx src/cli.ts sync --loosen"],
+    ["a runner of tsx on the source entry file", "npx tsx ./src/cli.ts sync --loosen"],
+    // Read on the head too, kept beside the rows above: a runner's exec and dlx unwrap to the bin.
+    ["yarn exec of the second bin", "yarn exec st sync --loosen"],
+    ["pnpm exec of the second bin", "pnpm exec st sync --loosen"],
+    ["pnpm dlx of the second bin", "pnpm dlx st sync --loosen"],
+    ["bun x of the second bin", "bun x st sync --loosen"],
+  ])("asks for a loosening through %s", (_, command) => {
+    expect(personOnlyVerdict(command, STRICT), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+
+  it.each([
+    ["the fork's bin", "forge-cli sync --loosen"],
+    ["the fork's unscoped name", "forge sync --loosen"],
+    ["the fork's bin by its path", "node node_modules/.bin/forge-cli sync --loosen"],
+    ["the fork's bin under yarn", "yarn forge-cli sync --loosen"],
+    ["the fork's bin under a runner", "npx --no forge-cli sync --loosen"],
+  ])("asks for a loosening through %s where the guard bakes the fork's words", (_, command) => {
+    expect(personOnlyVerdict(command, FORK), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+    // The neighbour: a guard baking only the canonical words reads another program.
+    expect(personOnlyVerdict(command, { ...ON_FEATURE, stricterThanDefault: false }), command).toEqual({ deny: false });
+  });
+
+  it.each([
+    ["a manager installing a package named like the bin", "npm install st"],
+    ["a manager's script beside a word like the bin", "npm test -- --grep st \"$PATTERN\""],
+    ["node on another file", "node scripts/x.mjs --loosen"],
+  ])("leaves %s to its own program", (_, command) => {
+    expect(personOnlyVerdict(command, STRICT), command).toEqual({ deny: false });
+  });
+
+  it("reads the land line through the same words, attended, and admits a fork's bin alone on its line", () => {
+    const attended = (command: string): ReturnType<typeof unattendedPushVerdict> =>
+      unattendedPushVerdict(command, false, true, FORK.packageWords);
+    expect(attended("forge-cli run land --run 2026-10-23_x --ready")).toEqual({ deny: false });
+    for (const command of ["npm test && forge-cli run land --run x", "yarn st run land --run x", "tsx src/cli.ts run land --run x"]) {
+      expect(attended(command).deny, command).toBe(true);
+    }
+    // The neighbours on the head's words: a fork's bin is another program there, and `npx st` names another package.
+    expect(unattendedPushVerdict("npm test && forge-cli run land --run x", false, true)).toEqual({ deny: false });
+    expect(unattendedPushVerdict("npx --no st run land --run x", false, true).deny).toBe(true);
+  });
+});
+
+describe("a stamity command's words the shell still expands (a4, review/37, review/45)", () => {
+  const STRICT = { ...ON_FEATURE, stricterThanDefault: true };
+  const DEFAULT = { ...ON_FEATURE, stricterThanDefault: false };
+
+  // Red on the head (review/37): single-quoted text was read as an expansion.
+  it.each([
+    ["a single-quoted backtick in a run title", "stamity run end --run 2026-10-23_x --title 'fix `x` reader'"],
+    ["a single-quoted dollar in a summary", "stamity learn capture --summary 'a $5 read in src/a.ts' --confidence high"],
+    ["a single-quoted substitution's text", "st learn capture --summary 'reads $(git rev-parse HEAD) first'"],
+    ["an escaped dollar", "stamity run end --run x --title cost\\$5"],
+    ["an ANSI-C-quoted dollar", "stamity run end --run x --title $'a $b'"],
+    ["a single-quoted glob and brace", "stamity learn capture --summary 'globs like *.ts and {a,b}'"],
+  ])("runs %s, which is literal text", (_, command) => {
+    for (const ctx of [STRICT, DEFAULT]) expect(personOnlyVerdict(command, ctx), command).toEqual({ deny: false });
+  });
+
+  it.each([
+    ["a double-quoted variable", "stamity run end --run x --title \"fix $X\""],
+    ["a double-quoted backtick", "stamity run end --run x --title \"fix `x`\""],
+    ["a double-quoted substitution", "stamity learn capture --summary \"$(cat note)\""],
+    ["an unquoted variable", "stamity sync $FLAG"],
+    ["a braced variable", "stamity sync ${FLAG:-}"],
+    // Red on the head (review/45): a glob, a brace expansion, and arguments xargs adds.
+    ["an unquoted glob", "stamity sync --loo*"],
+    ["an unquoted bracket glob", "stamity sync --[l]oosen"],
+    ["an unquoted brace expansion", "stamity sync {--loosen,}"],
+    ["a run under xargs", "echo --loosen | xargs stamity sync"],
+    ["a run under xargs with a placeholder", "echo --loosen | xargs -I % stamity sync %"],
+    ["a run under xargs through a runner", "echo --loosen | xargs npx --no stamity sync"],
+  ])("asks for %s, which may spell `--loosen`", (_, command) => {
+    for (const ctx of [STRICT, DEFAULT]) {
+      expect(personOnlyVerdict(command, ctx), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+    }
+  });
+
+  it("names xargs in the act it asks for, and leaves xargs over another program alone", () => {
+    const verdict = personOnlyVerdict("echo x | xargs stamity sync", DEFAULT);
+    expect(verdict).toMatchObject({ deny: true, act: expect.stringContaining("run under `xargs`") });
+    expect(personOnlyVerdict("ls | xargs echo", DEFAULT)).toEqual({ deny: false });
+    expect(personOnlyVerdict("stamity sync {a}", DEFAULT)).toEqual({ deny: false });
+  });
+});
+
+describe("a program word the reading cannot settle (a4, review/38, the declared default)", () => {
+  const STRICT = { ...ON_FEATURE, stricterThanDefault: true };
+  const DEFAULT = { ...ON_FEATURE, stricterThanDefault: false };
+
+  it.each([
+    ["a variable directory with a literal file name", "\"$ROOT/node_modules/.bin/vitest\" run \"$FILE\""],
+    ["a substitution directory with a literal file name", "\"$(git rev-parse --show-toplevel)/scripts/x.sh\" \"$arg\""],
+    ["a glob directory with a literal file name", "/opt/*/bin/vitest run \"$F\""],
+    ["a glob file name that cannot name the package", "./? \"$X\""],
+  ])("runs %s, settled by its last path part", (_, command) => {
+    for (const ctx of [STRICT, DEFAULT]) expect(personOnlyVerdict(command, ctx), command).toEqual({ deny: false });
+  });
+
+  it.each([
+    ["a variable directory with a literal stamity file name", "\"$ROOT/node_modules/.bin/stamity\" sync \"$ARG\""],
+    ["a variable directory with the second bin", "\"$HOME/.bin/st\" sync --loosen"],
+    ["a glob directory with a literal stamity file name", "/opt/*/bin/stamity sync --loosen"],
+  ])("gives %s the loosen check", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toMatchObject({ deny: true, rule: "autonomy-loosen", act: expect.stringMatching(/^(?:A stamity command|Loosening)/) });
+    // A literal argument there passes, as it does on the bare program.
+    const plain = command.replace(/ (?:"\$ARG"|--loosen)$/, "");
+    expect(personOnlyVerdict(plain, DEFAULT), plain).toEqual({ deny: false });
+  });
+
+  it.each([
+    ["a wholly variable program with a variable argument", "\"$BIN\" \"$ARG\""],
+    ["a program whose last part is a variable", "/usr/local/bin/$TOOL sync \"$F\""],
+    ["a braced pattern substitution", "${X/a/b} \"$F\""],
+    ["a glob file name that may name the package", "/usr/bin/s? \"$F\""],
+  ])("asks for %s, naming a command the guard cannot read", (_, command) => {
+    for (const ctx of [STRICT, DEFAULT]) {
+      expect(personOnlyVerdict(command, ctx), command).toMatchObject({
+        deny: true,
+        rule: "autonomy-loosen",
+        ask: true,
+        act: "A command the guard cannot read, which may be a stamity command, with an argument the guard cannot read, which may spell `--loosen`",
+      });
+    }
+  });
+});
+
+describe("the deploying-branch readers (a4, review/39)", () => {
+  const DEPLOYING = { defaultBranches: [], currentBranch: "feat/x", tags: [], deployingBranches: ["production", "release/*"] };
+  const OID = "a".repeat(40);
+
+  it.each([
+    ["a matching push", "git push origin :"],
+    ["a refspec-less push under a matching push.default", "git -c push.default=matching push origin"],
+    ["a send-pack with no ref", "git send-pack origin"],
+    ["a symbolic ref", "git symbolic-ref refs/heads/x refs/heads/production"],
+    ["an update-ref symref command", "printf 'symref-update refs/heads/x refs/heads/release/2.0\\n' | git update-ref --stdin"],
+    ["a GraphQL mergeBranch", "gh api graphql -f query='mutation { mergeBranch(input: {repositoryId: \"R\", base: \"production\", head: \"feat/x\"}) { clientMutationId } }'"],
+    ["a GraphQL updateRef", `gh api graphql -f query='mutation { updateRef(input: {refId: "R", oid: "${OID}"}) { clientMutationId } }'`],
+    ["a GraphQL updateRefs entry", updateRefs("refs/heads/production", OID)],
+    ["a GraphQL createRef", `gh api graphql -f query='mutation { createRef(input: {repositoryId: "R", name: "refs/heads/release/3.0", oid: "${OID}"}) { ref { id } } }'`],
+    ["a REST merge-upstream", "gh api -X POST repos/o/r/merge-upstream -f branch=production"],
+    ["a symbolic ref to a target the line cannot show", "git symbolic-ref refs/heads/x \"$TARGET\""],
+    ["a sync of a branch the line cannot show", "gh repo sync o/r -b \"$(cat branch)\""],
+  ])("asks for %s as push-deploying", (_, command) => {
+    expect(personOnlyVerdict(command, DEPLOYING), command).toMatchObject({ deny: true, rule: "push-deploying", ask: true });
+    // The neighbour: the same line in a repository naming no deploying branch.
+    const plain = personOnlyVerdict(command, { ...DEPLOYING, deployingBranches: [] });
+    expect(plain.deny ? plain.rule : null, command).not.toBe("push-deploying");
+  });
+
+  it.each([
+    ["a symbolic ref", "git symbolic-ref refs/heads/x refs/heads/feat/y"],
+    ["a GraphQL mergeBranch", "gh api graphql -f query='mutation { mergeBranch(input: {repositoryId: \"R\", base: \"feat/y\", head: \"feat/x\"}) { clientMutationId } }'"],
+    ["a GraphQL createRef", `gh api graphql -f query='mutation { createRef(input: {repositoryId: "R", name: "refs/heads/feat/y", oid: "${OID}"}) { ref { id } } }'`],
+    ["a REST merge-upstream", "gh api -X POST repos/o/r/merge-upstream -f branch=feat/y"],
+  ])("leaves %s onto a branch no pattern names alone", (_, command) => {
+    const verdict = personOnlyVerdict(command, DEPLOYING);
+    expect(verdict.deny ? verdict.rule : null, command).not.toBe("push-deploying");
+  });
+});
