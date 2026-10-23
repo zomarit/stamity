@@ -283,8 +283,9 @@ describe("decideLand", () => {
   });
 
   it("names the approval in the evidence line where the person approved an asks outcome (review/103)", () => {
-    expect(evidenceLine("2026-10-23T10:00:00.000Z", SHA, 1, 0, 0, "autonomy.mode is ask")).toBe(
-      `evidence checked at 2026-10-23T10:00:00.000Z for ${SHA}: 1 required check runs green, 0 open threads, 0 open Critical/Warning rows; approved by the person over: autonomy.mode is ask`,
+    // TEST CHANGE, justified (review/110): the approval names the approved commit and every reason.
+    expect(evidenceLine("2026-10-23T10:00:00.000Z", SHA, 1, 0, 0, { sha: SHA, reasons: ["autonomy.mode is ask", "a rule requires a pull request on main"] })).toBe(
+      `evidence checked at 2026-10-23T10:00:00.000Z for ${SHA}: 1 required check runs green, 0 open threads, 0 open Critical/Warning rows; approved by the person for ${SHA} over: autonomy.mode is ask; a rule requires a pull request on main`,
     );
   });
 
@@ -293,21 +294,41 @@ describe("decideLand", () => {
     expect(decideLand(input({ ready: true, beforeReady: true }, { draft: true, mergeableState: "draft" }))).toEqual({ outcome: "land" });
   });
 
+  // TEST CHANGE, justified (review/110): an asks decision carries every reason in `reasons`; the first stays `reason`.
   it("asks for a diff editing a declared hook script, and where the hook paths could not be read (build/2)", () => {
     expect(decideLand(input({ files: { paths: ["tools/guard.mjs"], complete: true }, hookPaths: ["tools/guard.mjs"] }))).toEqual({
       outcome: "asks",
       reason: "the diff touches paths that define the evidence: tools/guard.mjs",
+      reasons: ["the diff touches paths that define the evidence: tools/guard.mjs"],
       act: "pr-merge",
     });
     expect(decideLand(input({ hookPaths: "hold refused: .stamity/hooks/x.json at Base: does not parse" }))).toEqual({
       outcome: "asks",
       reason: "hold refused: .stamity/hooks/x.json at Base: does not parse",
+      reasons: ["hold refused: .stamity/hooks/x.json at Base: does not parse"],
+      act: "pr-merge",
+    });
+  });
+
+  it("lists every reason an act is the person's, not the first alone (review/110)", () => {
+    const decision = decideLand(
+      input({ setting: resolveAutonomy({ autonomy: { mode: "ask", deployingActs: ["pr-merge"] } }), files: { paths: [".github/workflows/ci.yml", ".stamity/runs/r/held/person-only.patch"], complete: true } }),
+    );
+    expect(decision).toEqual({
+      outcome: "asks",
+      reason: "autonomy.mode is ask",
+      reasons: [
+        "autonomy.mode is ask",
+        "the diff carries a held patch (.stamity/runs/r/held/person-only.patch)",
+        "the diff touches paths that define the evidence: .github/workflows/ci.yml",
+        "autonomy.deployingActs names pr-merge",
+      ],
       act: "pr-merge",
     });
   });
 
   it("asks in mode ask, for the ask set, a renamed workflow, a held patch, a deploying branch and a deploying act", () => {
-    expect(decideLand(input({ setting: resolveAutonomy({ autonomy: { mode: "ask" } }) }))).toEqual({ outcome: "asks", reason: "autonomy.mode is ask", act: "pr-merge" });
+    expect(decideLand(input({ setting: resolveAutonomy({ autonomy: { mode: "ask" } }) }))).toEqual({ outcome: "asks", reason: "autonomy.mode is ask", reasons: ["autonomy.mode is ask"], act: "pr-merge" });
     expect(decideLand(input({ files: { paths: [".github/workflows/ci.yml"], complete: true } }))).toMatchObject({ outcome: "asks", act: "pr-merge", reason: expect.stringContaining(".github/workflows/ci.yml") });
     expect(decideLand(input({ files: { paths: ["ci-old.yml", ".github/workflows/ci.yml"], complete: true } }))).toMatchObject({ outcome: "asks" });
     expect(decideLand(input({ files: { paths: [".stamity/runs/2026-10-23_overnight/held/person-only.patch"], complete: true } }))).toMatchObject({ outcome: "asks", reason: expect.stringContaining("held patch") });
@@ -318,7 +339,12 @@ describe("decideLand", () => {
 
   it("for a fast-forward, asks where a rule requires a pull request and refuses a head that does not move the tip forward", () => {
     expect(decideLand(input({ forward: { requiresPr: null, compare: "ahead" } }))).toEqual({ outcome: "land" });
-    expect(decideLand(input({ forward: { requiresPr: "a rule requires a pull request on main", compare: "ahead" } }))).toEqual({ outcome: "asks", reason: "a rule requires a pull request on main", act: "push-default" });
+    expect(decideLand(input({ forward: { requiresPr: "a rule requires a pull request on main", compare: "ahead" } }))).toEqual({
+      outcome: "asks",
+      reason: "a rule requires a pull request on main",
+      reasons: ["a rule requires a pull request on main"],
+      act: "push-default",
+    });
     expect(decideLand(input({ forward: { requiresPr: null, compare: "diverged" } }))).toMatchObject({ outcome: "refused", reasons: [expect.stringContaining("not a fast-forward")] });
     expect(decideLand(input({ forward: { requiresPr: null, compare: "identical" } }))).toEqual({ outcome: "already-landed" });
   });

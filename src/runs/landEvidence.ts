@@ -426,7 +426,8 @@ export type LandAct = "pr-merge" | "pr-ready" | "push-default";
 /** What the land verb does: land, report a landing already made, ask the person, or refuse naming every reason. */
 export type LandDecision =
   | { outcome: "land" | "already-landed" }
-  | { outcome: "asks"; reason: string; act: LandAct }
+  /** review/110: `reasons` holds every reason the act is the person's; `reason` and `act` are the first one's. */
+  | { outcome: "asks"; reason: string; reasons: string[]; act: LandAct }
   | { outcome: "refused"; reasons: string[]; pending: boolean };
 
 /** Why `mergeable_state` stops the merge, or `null` for `clean`. */
@@ -481,20 +482,23 @@ export function decideLand(input: LandInput): LandDecision {
   }
   if (reasons.length > 0) return { outcome: "refused", reasons, pending: waitable };
 
+  // review/110: every reason the act is the person's, in this order, so the person approves all of what they are shown.
   const act: LandAct = forward !== undefined ? "push-default" : "pr-merge";
-  if (setting.mode === "ask") return { outcome: "asks", reason: "autonomy.mode is ask", act };
-  if (typeof input.hookPaths === "string") return { outcome: "asks", reason: input.hookPaths, act };
-  const held = askPathsOf(input.files.paths, input.prefix, input.hookPaths);
+  const asks: { reason: string; act: LandAct }[] = [];
+  if (setting.mode === "ask") asks.push({ reason: "autonomy.mode is ask", act });
+  if (typeof input.hookPaths === "string") asks.push({ reason: input.hookPaths, act });
+  const held = askPathsOf(input.files.paths, input.prefix, typeof input.hookPaths === "string" ? [] : input.hookPaths);
   const patches = held.filter((path) => isHeldPatch(path));
-  if (patches.length > 0) return { outcome: "asks", reason: `the diff carries a held patch (${patches.join(", ")})`, act };
-  if (held.length > 0) return { outcome: "asks", reason: `the diff touches paths that define the evidence: ${held.join(", ")}`, act };
-  if (matchesDeployingBranch(input.own.defaultBranch, setting.deployingBranches)) {
-    return { outcome: "asks", reason: `${input.own.defaultBranch} is named in autonomy.deployingBranches`, act };
-  }
-  if (pr.draft && input.ready && setting.deploying.includes("pr-ready")) return { outcome: "asks", reason: "autonomy.deployingActs names pr-ready", act: "pr-ready" };
-  if (setting.deploying.includes(act)) return { outcome: "asks", reason: `autonomy.deployingActs names ${act}`, act };
-  if (forward !== undefined && forward.requiresPr !== null) return { outcome: "asks", reason: forward.requiresPr, act };
-  return { outcome: "land" };
+  const others = held.filter((path) => !isHeldPatch(path));
+  if (patches.length > 0) asks.push({ reason: `the diff carries a held patch (${patches.join(", ")})`, act });
+  if (others.length > 0) asks.push({ reason: `the diff touches paths that define the evidence: ${others.join(", ")}`, act });
+  if (matchesDeployingBranch(input.own.defaultBranch, setting.deployingBranches)) asks.push({ reason: `${input.own.defaultBranch} is named in autonomy.deployingBranches`, act });
+  if (pr.draft && input.ready && setting.deploying.includes("pr-ready")) asks.push({ reason: "autonomy.deployingActs names pr-ready", act: "pr-ready" });
+  if (setting.deploying.includes(act)) asks.push({ reason: `autonomy.deployingActs names ${act}`, act });
+  if (forward !== undefined && forward.requiresPr !== null) asks.push({ reason: forward.requiresPr, act });
+  const [first] = asks;
+  if (first === undefined) return { outcome: "land" };
+  return { outcome: "asks", reason: first.reason, reasons: asks.map((entry) => entry.reason), act: first.act };
 }
 
 /** The line that opens the evidence the pull request's body carries before a merge. */
@@ -504,12 +508,14 @@ const EVIDENCE_OPENING = "evidence checked at ";
 const WAITS_OPENING = "merge waits on: ";
 
 /**
- * The evidence line: what was checked, when and for which head, never that it landed; with `approval`, the asks reason
- * the person approved (review/103).
+ * The evidence line: what was checked, when and for which head, never that it landed; with `approval`, the head the
+ * person approved and every asks reason they approved it over (review/103, review/110).
  */
-export function evidenceLine(at: string, sha: string, greenChecks: number, threads: number, openRows: number, approval?: string): string {
+export function evidenceLine(at: string, sha: string, greenChecks: number, threads: number, openRows: number, approval?: { sha: string; reasons: readonly string[] }): string {
   const checked = `${EVIDENCE_OPENING}${at} for ${sha}: ${greenChecks} required check runs green, ${threads} open threads, ${openRows} open Critical/Warning rows`;
-  return approval === undefined ? checked : `${checked}; approved by the person over: ${approval.replaceAll(/\s*\r?\n\s*/g, " ")}`;
+  if (approval === undefined) return checked;
+  const over = approval.reasons.map((reason) => reason.replaceAll(/\s*\r?\n\s*/g, " ")).join("; ");
+  return `${checked}; approved by the person for ${approval.sha} over: ${over}`;
 }
 
 /** build/6: why the merge waits, every reason on one line, never that it landed. */

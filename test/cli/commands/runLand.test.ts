@@ -49,6 +49,8 @@ const gh = vi.hoisted(() => ({
   threads: [] as unknown[],
   /** The merge states the pull request reads with after the ready mark, in order. */
   afterReady: ["clean"] as (string | null)[],
+  /** review/110: fields the pull request reads with after the ready mark, beside its merge state (a head that moved). */
+  afterReadyPr: {} as Record<string, unknown>,
   program: "/usr/bin/gh" as string | null,
 }));
 
@@ -86,7 +88,7 @@ vi.mock("../../../src/cli/engine/ghRunner.ts", async (importOriginal) => ({
     gh.calls.push({ kind: "ready", body: request, program: opts?.program });
     const pr = gh.routes.get(`GET repos/o/r/pulls/7`);
     const json = (Array.isArray(pr) ? pr[0] : pr)?.json as object;
-    gh.routes.set("GET repos/o/r/pulls/7", gh.afterReady.map((state) => ({ status: 200, json: { ...json, draft: false, mergeable_state: state } })));
+    gh.routes.set("GET repos/o/r/pulls/7", gh.afterReady.map((state) => ({ status: 200, json: { ...json, draft: false, mergeable_state: state, ...gh.afterReadyPr } })));
     return Promise.resolve({ status: 200, json: { data: { markPullRequestReadyForReview: { pullRequest: { isDraft: false } } } } });
   },
   ghProgramPath: () => gh.program,
@@ -180,6 +182,7 @@ describe("stamity run land", () => {
     gh.merge = { status: 200, json: { merged: true } };
     gh.threads = [threadsPage([])];
     gh.afterReady = ["clean"];
+    gh.afterReadyPr = {};
     gh.program = "/usr/bin/gh";
     gh.probe = null;
     links.clear();
@@ -868,13 +871,17 @@ describe("stamity run land", () => {
     const { repo, head } = await seed();
     route("GET repos/o/r/pulls/7/files", [{ filename: "a.txt" }, { filename: ".github/workflows/ci.yml" }, { filename: "b" }]);
 
-    const result = await run(repo, ["land", "--run", RUN, "--approved"]);
+    // TEST CHANGE, justified (review/110): --approved takes the head commit the person approved; the evidence and the
+    // record name it.
+    const result = await run(repo, ["land", "--run", RUN, "--approved", head]);
 
     expect(result.code).toBe(0);
-    expect(result.doc).toMatchObject({ outcome: "landed", approved: { act: "pr-merge", reason: expect.stringContaining(".github/workflows/ci.yml") } });
+    expect(result.doc).toMatchObject({ outcome: "landed", approved: { sha: head, act: "pr-merge", reason: expect.stringContaining(".github/workflows/ci.yml") } });
     expect(kinds()).toContain("merge");
-    expect(bodies()).toEqual([expect.stringContaining("; approved by the person over: the diff touches paths that define the evidence: .github/workflows/ci.yml")]);
-    expect((await record(repo)).split("\n").filter((line) => line.includes(" land: "))).toEqual([expect.stringMatching(new RegExp(`^- \\S+Z land: #7 ${head} merged \\(approved by the person\\)$`))]);
+    expect(bodies()).toEqual([expect.stringContaining(`; approved by the person for ${head} over: the diff touches paths that define the evidence: .github/workflows/ci.yml`)]);
+    expect((await record(repo)).split("\n").filter((line) => line.includes(" land: "))).toEqual([
+      expect.stringMatching(new RegExp(`^- \\S+Z land: #7 ${head} merged \\(approved by the person for ${head}\\)$`)),
+    ]);
   });
 
   it("fast-forwards an approved asks outcome, its record line saying so (review/103)", async () => {
@@ -882,15 +889,17 @@ describe("stamity run land", () => {
     route("GET repos/o/r/rules/branches/main", [{ type: "pull_request" }, { type: "required_status_checks", parameters: { required_status_checks: [{ context: "test" }] } }]);
     route(`GET repos/o/r/compare/${base}...${head}`, { status: "ahead" });
 
-    expect((await run(repo, ["land", "--run", RUN, "--fast-forward", "--approved"])).doc).toMatchObject({ outcome: "landed", approved: { act: "push-default" } });
+    // TEST CHANGE, justified (review/110): --approved names the head commit.
+    expect((await run(repo, ["land", "--run", RUN, "--fast-forward", "--approved", head])).doc).toMatchObject({ outcome: "landed", approved: { sha: head, act: "push-default" } });
     expect(git(remote, ["rev-parse", "refs/heads/main"])).toBe(head);
-    expect(await record(repo)).toMatch(new RegExp(` land: #7 ${head} fast-forwarded \\(approved by the person\\)\\n$`));
+    expect(await record(repo)).toMatch(new RegExp(` land: #7 ${head} fast-forwarded \\(approved by the person for ${head}\\)\\n$`));
   });
 
   it("still refuses a refused outcome with --approved, and leaves an asks outcome unchanged without it (review/103)", async () => {
-    const { repo } = await seed();
+    const { repo, head } = await seed();
     gh.threads = [threadsPage([thread(false, null, ["User", "alice"])])];
-    expect((await run(repo, ["land", "--run", RUN, "--approved"])).doc).toMatchObject({ outcome: "refused", notDone: ["1 review thread is unresolved"] });
+    // TEST CHANGE, justified (review/110): --approved names the head commit.
+    expect((await run(repo, ["land", "--run", RUN, "--approved", head])).doc).toMatchObject({ outcome: "refused", notDone: ["1 review thread is unresolved"] });
     expect(kinds()).not.toContain("merge");
 
     gh.threads = [threadsPage([])];
@@ -900,9 +909,10 @@ describe("stamity run land", () => {
   });
 
   it("refuses --approved in an unattended run before any GitHub call (review/103)", async () => {
-    const { repo } = await seed({ mode: "unattended" });
+    const { repo, head } = await seed({ mode: "unattended" });
 
-    expect((await run(repo, ["land", "--run", RUN, "--approved"])).doc).toMatchObject({
+    // TEST CHANGE, justified (review/110): --approved names the head commit.
+    expect((await run(repo, ["land", "--run", RUN, "--approved", head])).doc).toMatchObject({
       outcome: "refused",
       notDone: ["--approved is the person's answer to an asks outcome, and this run is unattended, so no person gave it"],
     });
@@ -917,6 +927,62 @@ describe("stamity run land", () => {
 
     expect((await run(repo, ["land", "--run", RUN, "--wait", "1"])).doc).toMatchObject({ outcome: "landed" });
     expect(slept).toEqual([30_000]);
+  });
+
+  it("refuses an approval for another commit than the head, naming both (review/110)", async () => {
+    const { repo, head, base } = await seed();
+    route("GET repos/o/r/pulls/7/files", [{ filename: "a.txt" }, { filename: ".github/workflows/ci.yml" }, { filename: "b" }]);
+
+    expect((await run(repo, ["land", "--run", RUN, "--approved", base])).doc).toMatchObject({
+      outcome: "refused",
+      notDone: [`the head moved since the approval: ${base} → ${head}`],
+    });
+    expect(kinds()).not.toContain("merge");
+  });
+
+  it("refuses an approval whose head moves between the first read and the act (review/110)", async () => {
+    const { repo, head } = await seed();
+    route("GET repos/o/r/pulls/7/files", [{ filename: "a.txt" }, { filename: ".github/workflows/ci.yml" }, { filename: "b" }]);
+    route("GET repos/o/r/pulls/7", pull(head, { draft: true, mergeable_state: "draft" }));
+    const moved = "b".repeat(40);
+    gh.afterReadyPr = { head: { ref: RUN_BRANCH, sha: moved, repo: { full_name: "o/r" } } };
+
+    expect((await run(repo, ["land", "--run", RUN, "--ready", "--approved", head])).doc).toMatchObject({
+      outcome: "refused",
+      notDone: [`the head moved since the approval: ${head} → ${moved}`],
+    });
+    expect(kinds()).toContain("ready");
+    expect(kinds()).not.toContain("merge");
+  });
+
+  it("takes --approved only as a full 40-character commit, anything else a usage error (review/110)", async () => {
+    const { repo, head } = await seed();
+    for (const value of [head.slice(0, 12), `${head}0`, "z".repeat(40), "--json"]) {
+      // oxlint-disable-next-line no-await-in-loop -- the cases share one repository and the process environment the runner stubs
+      expect((await run(repo, ["land", "--run", RUN, "--approved", value])).code, value).toBe(2);
+    }
+    expect(gh.calls).toEqual([]);
+  });
+
+  it("names every asks reason and the head an approval must carry, in the JSON and the text (review/110)", async () => {
+    const { repo, head } = await seed({ manifest: '{"version":1,"autonomy":{"mode":"ask"}}\n' });
+    route("GET repos/o/r/pulls/7/files", [{ filename: "a.txt" }, { filename: ".github/workflows/ci.yml" }, { filename: "b" }]);
+
+    const result = await run(repo, ["land", "--run", RUN]);
+    expect(result.doc).toMatchObject({
+      outcome: "asks",
+      asks: {
+        reason: "autonomy.mode is ask",
+        reasons: ["autonomy.mode is ask", "the diff touches paths that define the evidence: .github/workflows/ci.yml"],
+        act: "pr-merge",
+        head,
+      },
+    });
+
+    const text = await runInProcess([runCommand], ["run", "land", "--run", RUN], { cwd: repo });
+    expect(text.stdout).toContain("asks: autonomy.mode is ask\n");
+    expect(text.stdout).toContain("asks: the diff touches paths that define the evidence: .github/workflows/ci.yml\n");
+    expect(text.stdout).toContain(`approve with: --approved ${head}`);
   });
 
   it("takes --title, --paths, --wait past 9 and --method with --fast-forward as usage errors", async () => {

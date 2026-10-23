@@ -119,9 +119,10 @@ interface LandResult {
     held: string[];
     mergeableState: string | null;
   };
-  asks?: { reason: string; act: string };
-  /** review/103: the asks outcome the person approved with --approved, where the verb landed over one. */
-  approved?: { reason: string; act: string };
+  /** review/110: every reason, `reason` the first for older readers, and the head an approval must name. */
+  asks?: { reason: string; reasons: string[]; act: string; head: string };
+  /** review/103, review/110: the asks outcome the person approved with --approved <sha>, where the verb landed over one. */
+  approved?: { sha: string; reason: string; reasons: string[]; act: string };
   notDone: string[];
 }
 
@@ -243,8 +244,12 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
   const head = resumeCard.readRecordHead(record.text);
   const unattended = readsUnattended(head.mode, env["STAMITY_UNATTENDED"]);
   const fastForward = opts["fastForward"] === true;
-  /** review/103: the person's answer to an `asks` outcome, given on the line the guard asks them about (`a4`). */
-  const approved = opts["approved"] === true;
+  /**
+   * review/103, review/110: the person's answer to an `asks` outcome, given on the line the guard asks them about
+   * (`a4`): the head commit they approved, which the asks outcome's JSON printed; `null` where none was given.
+   */
+  const approvedSha = typeof opts["approved"] === "string" ? opts["approved"].toLowerCase() : null;
+  const approved = approvedSha !== null;
   const ready = opts["ready"] === true;
   const method = (typeof opts["method"] === "string" ? opts["method"] : "merge") as MergeMethod;
   const waitMinutes = typeof opts["wait"] === "number" ? opts["wait"] : 0;
@@ -260,7 +265,9 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     if (threads.unresolved !== null) lines.push(`threads: ${threads.unresolved} unresolved`);
     lines.push(`ledger: ${ledger.open.length} open Critical/Warning rows`, ...(held.length === 0 ? [] : [`asks for: ${held.join(", ")}`]));
     if (mergeableState !== null) lines.push(`mergeable_state: ${mergeableState}`);
-    if (result.asks !== undefined) lines.push(`asks: ${sanitizeLabel(result.asks.reason)} (${result.asks.act})`);
+    if (result.asks !== undefined) {
+      lines.push(...result.asks.reasons.map((reason) => `asks: ${sanitizeLabel(reason)}`), `approve with: --approved ${result.asks.head} (${result.asks.act}, the head commit these reasons hold for)`);
+    }
     lines.push(`outcome: ${result.outcome}`);
     const notDone = result.notDone;
     ctx.io.out(`${[...lines, ...(notDone.length === 0 ? [] : ["Not done:", ...notDone.map((entry) => `  - ${entry}`)])].join("\n")}\n`);
@@ -355,6 +362,9 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     if (!PATH_BRANCH.test(runBranch)) throw new Refused(`the run's branch ${runBranch} holds characters this verb does not read`);
     const sha = await gitLine(["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]);
     if (sha === null || !/^[0-9a-f]{40,64}$/.test(sha)) throw new Refused("HEAD names no commit");
+    // review/110: the approval holds for the commit the person approved, and no other.
+    const headMoved = (now: string): Refused => new Refused(`the head moved since the approval: ${approvedSha ?? ""} → ${now}`);
+    if (approvedSha !== null && sha !== approvedSha) throw headMoved(sha);
     const remote = await git(["ls-remote", "origin", `refs/heads/${runBranch}`]);
     if (remote.code !== 0) throw new Refused(`git ls-remote origin answered ${remote.code}`);
     const originTip = /^([0-9a-f]{40,64})\t/.exec(remote.stdout)?.[1] ?? null;
@@ -528,6 +538,8 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     } else if (proceeds(decision) && draftReady) {
       lines.push(`ready: would mark #${number} ready for review`);
     }
+    // review/110: the pull request's head as last read must still be the approved commit.
+    if (approvedSha !== null && pr.headSha !== approvedSha) throw headMoved(pr.headSha);
     // review/72, review/78: the threads once more just before the act, and the decision on that last count; a dry run
     // on a draft decides on its merge state as it reads now (review/82), which a ready mark has not computed yet.
     if (proceeds(decision)) {
@@ -545,12 +557,14 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       await noteWaits(decision.reasons);
       return finish();
     }
-    const approval = decision.outcome === "asks" && approved ? { reason: decision.reason, act: decision.act } : null;
-    if (approval !== null) lines.push(`approved: by the person, over ${sanitizeLabel(approval.reason)} (${approval.act})`);
+    const approval =
+      decision.outcome === "asks" && approvedSha !== null ? { sha: approvedSha, reason: decision.reason, reasons: decision.reasons, act: decision.act } : null;
+    if (approval !== null) lines.push(`approved: by the person for ${approval.sha}, over ${approval.reasons.map((reason) => sanitizeLabel(reason)).join("; ")}`);
     if (decision.outcome === "asks" && approval === null) {
       result.outcome = "asks";
-      result.asks = { reason: decision.reason, act: decision.act };
-      await noteWaits([`${decision.reason} (a person decides: ${decision.act})`]);
+      // review/110: every reason, and the head an approval must name (`--approved <head>`).
+      result.asks = { reason: decision.reason, reasons: decision.reasons, act: decision.act, head: sha };
+      await noteWaits([`${decision.reasons.join("; ")} (a person decides: ${decision.act})`]);
       return finish();
     }
     if (ctx.dryRun) {
@@ -562,8 +576,13 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     // (11) The act: the surface again, the evidence line in the body, the merge or the push, then the record's line.
     const movedNow = await surfaceMoved();
     if (movedNow !== null) throw new Refused(movedNow);
+    // review/110: and the work tree's HEAD, read again just before the act, is still the approved commit.
+    if (approvedSha !== null) {
+      const headNow = await gitLine(["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]);
+      if (headNow !== approvedSha) throw headMoved(headNow ?? "no commit");
+    }
     const at = new Date().toISOString();
-    const line = evidenceLine(at, sha, checks.green.length, threads ?? 0, 0, approval === null ? undefined : sanitizeLabel(approval.reason));
+    const line = evidenceLine(at, sha, checks.green.length, threads ?? 0, 0, approval === null ? undefined : { sha: approval.sha, reasons: approval.reasons.map((reason) => sanitizeLabel(reason)) });
     const patched = await answered(
       ghApi({ method: "PATCH", path: `${repoPath}/pulls/${number}`, body: { body: withStatusLine(pr.body, marker, line) }, hostname: repo.host }, ghOpts),
       "the evidence write",
@@ -597,7 +616,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     }
     result.outcome = "landed";
     const how = fastForward ? "fast-forwarded" : "merged";
-    await noteLanded(ctx, cwd, recordRel, number, sha, approval === null ? how : `${how} (approved by the person)`, result);
+    await noteLanded(ctx, cwd, recordRel, number, sha, approval === null ? how : `${how} (approved by the person for ${approval.sha})`, result);
     if (approval !== null) result.approved = approval;
     return finish();
   } catch (error) {

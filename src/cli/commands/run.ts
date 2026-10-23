@@ -192,6 +192,12 @@ const SUBCOMMAND_OPTIONS: Readonly<Record<string, readonly string[]>> = {
 /** `--wait`'s most minutes: under a client's ten-minute shell-call limit (decision D17). */
 const LAND_WAIT_MAX = 9;
 
+/** review/110: `--approved <sha>`: the full 40-character head commit the person approved, as the asks outcome printed it. */
+function parseApproved(value: string): string {
+  if (!/^[0-9a-fA-F]{40}$/.test(value)) throw new InvalidArgumentError("--approved takes the full 40-character commit the person approved.");
+  return value.toLowerCase();
+}
+
 /** `--wait <minutes>`: a whole number from 0 to {@link LAND_WAIT_MAX}. */
 function parseWait(value: string): number {
   const minutes = /^[0-9]+$/.test(value) ? Number(value) : Number.NaN;
@@ -280,7 +286,7 @@ export const runCommand: CommandModule = {
       .addOption(new Option("--method <method>", "land: the merge method").choices(["merge", "squash", "rebase"]))
       .option("--ready", "land: mark the run's draft ready for review once the evidence holds, then land it")
       .option("--wait <minutes>", `land: wait up to this many minutes (at most ${LAND_WAIT_MAX}) for pending check runs`, parseWait)
-      .option("--approved", "land: the person approved an asks outcome, so land it unless something refuses (never in an unattended run)")
+      .option("--approved <sha>", "land: the head commit the person approved over an asks outcome; land it if the head is still that commit and nothing refuses (never in an unattended run)", parseApproved)
       // Usage errors, so exit 2 before the action and before git runs.
       .hook("preAction", (command) => {
         const subcommand = String(command.processedArgs[0]);
