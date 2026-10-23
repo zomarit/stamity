@@ -329,7 +329,11 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // 5,671 lines (copilot, generated; 248,788 bytes before the unit), past both rows, because the verdict now reads a gh
   // write's target and inline body for an outside party (`outside-write`) and the guard reads the origin and gh's
   // default from the git config. 263,539 + 2,701 = 266,240 bytes; 5,671 + 97 = 5,768 lines.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 266_240, lines: 5_768 },
+  // Moved again 2026-10-23 on the a4c lane (build/20, build/21, build/22), by the measured size plus a small margin:
+  // 270,411 bytes / 5,810 lines (copilot, generated; 263,539 bytes before the round), past both rows, because the
+  // verdict now reads a GraphQL mutation's fields, a curl or wget write to the GitHub API, and reviewer and assignee
+  // values. 270,411 + 4,021 = 274,432 bytes; 5,810 + 100 = 5,910 lines.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 274_432, lines: 5_910 },
 };
 
 /** One generated script, ready for an adapter to place and register. */

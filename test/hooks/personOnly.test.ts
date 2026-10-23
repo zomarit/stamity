@@ -3969,3 +3969,95 @@ describe("writes that reach an outside party (a4c, REQ-FLOW-134)", () => {
     expect(verdict).toMatchObject({ deny: true, rule: "outside-write", ask: true });
   });
 });
+
+/**
+ * a4c fix round 1 (REQ-FLOW-134, build/20, build/21, build/22, build/25): a GraphQL mutation by a node id the line
+ * cannot place, a REST write sent by curl or wget to the GitHub API, and a reviewer or assignee naming a person ask;
+ * a thread's resolve state runs; a commit message is not read. Red on dbf1a825, which allows each asking form here.
+ */
+describe("the outside-party readers' second round (a4c, build/20-25)", () => {
+  const ORIGIN = { ...ON_FEATURE, originRepo: "github.com/acme/app" };
+  const rule = (command: string, ctx: Ctx = ORIGIN): string | null => {
+    const verdict = personOnlyVerdict(command, ctx);
+    return verdict.deny ? verdict.rule : null;
+  };
+
+  it.each([
+    ["a comment mutation by a node id", `gh api graphql -f query='mutation { addComment(input: {subjectId: "I_1", body: "x"}) { clientMutationId } }'`, "outside-write"],
+    ["an issue mutation by a repository's node id", `gh api graphql -f query='mutation { createIssue(input: {repositoryId: "R_1", title: "t"}) { issue { id } } }'`, "outside-write"],
+    ["an aliased comment mutation", `gh api graphql -f query='mutation { resolveReviewThread: addComment(input: {subjectId: "I_1", body: "x"}) { clientMutationId } }'`, "outside-write"],
+    ["a thread resolve beside a comment mutation", `gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: "T_1"}) { clientMutationId } addComment(input: {subjectId: "I_1", body: "x"}) { clientMutationId } }'`, "outside-write"],
+    ["a mutation selecting through a fragment spread", `gh api graphql -f query='mutation { ...F } fragment F on Mutation { addComment(input: {subjectId: "I_1", body: "x"}) { clientMutationId } }'`, "outside-write"],
+    ["a mutation whose selection names no field", `gh api graphql -f query='mutation { }'`, "outside-write"],
+    ["a query read from a file", "gh api graphql -F query=@q.graphql", "outside-write"],
+    ["a query the shell fills in", `gh api graphql -f query="$Q"`, "outside-write"],
+    ["a GraphQL mutation sent by curl", `curl -X POST -d '{"query":"mutation { addComment(input: {subjectId: \\"I\\", body: \\"x\\"}) { clientMutationId } }"}' https://api.github.com/graphql`, "outside-write"],
+    ["a thread resolve", `gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: "T_1"}) { thread { isResolved } } }'`, null],
+    ["a thread unresolve by an aliased variable form", `gh api graphql -f query='mutation($id: ID!) { a: unresolveReviewThread(input: {threadId: $id}) { thread { id } } }' -f id=T_1`, null],
+    ["a read query", `gh api graphql -f query='query { viewer { login } }'`, null],
+    ["a shorthand read query naming a mutation-like field", `gh api graphql -f query='{ viewer { mutation: login } }'`, null],
+  ])("reads %s", (_, command, expected) => {
+    expect(rule(command), command).toBe(expected);
+  });
+
+  it.each([
+    ["a curl write to another repository", `curl -X POST -d '{"body":"x"}' https://api.github.com/repos/other/repo/issues/1/comments`, "outside-write"],
+    ["a curl write with no scheme to another repository", `curl -d '{"body":"x"}' api.github.com/repos/other/repo/issues/1/comments`, "outside-write"],
+    ["a wget write to another repository", `wget --post-data='{"body":"x"}' https://api.github.com/repos/other/repo/issues/1/comments`, "outside-write"],
+    ["a wget write by its shortened method option", "wget --meth=PATCH https://api.github.com/repos/other/repo/issues/1", "outside-write"],
+    ["a curl write whose URL the shell fills in", `curl -X POST -d '{"body":"x"}' "$URL"`, "outside-write"],
+    ["a curl write after --next to another repository", `curl -s https://api.github.com/repos/acme/app --next -X POST -d '{"body":"x"}' https://api.github.com/repos/other/repo/issues/1/comments`, "outside-write"],
+    ["a curl write to a data-residency API host's other repository", `curl -X POST -d '{"body":"x"}' https://api.acme.ghe.com/repos/other/repo/issues/1/comments`, "outside-write"],
+    ["a curl body naming a person on the origin", `curl -X POST -d '{"body":"@alice hi"}' https://api.github.com/repos/acme/app/issues/1/comments`, "outside-write"],
+    ["a curl body on stdin naming a person", `echo '{"body":"@alice"}' | curl -X POST -d @- https://api.github.com/repos/acme/app/issues/1/comments`, "outside-write"],
+    ["a curl write to the origin", `curl -X POST -d '{"body":"x"}' https://api.github.com/repos/acme/app/issues/1/comments`, null],
+    ["a curl body read from a file", "curl -X POST -d @body.json https://api.github.com/repos/acme/app/issues/1/comments", null],
+    ["a curl read of another repository", "curl -s https://api.github.com/repos/other/repo/issues/1/comments", null],
+    ["a curl write to a host that is no GitHub API", `curl -X POST -d '{"body":"@alice"}' https://hooks.example.com/notify`, null],
+  ])("reads %s", (_, command, expected) => {
+    expect(rule(command), command).toBe(expected);
+  });
+
+  it("reads the origin's own Enterprise API host as the GitHub API", () => {
+    const enterprise = { ...ON_FEATURE, originRepo: "ghe.example.com/acme/app", ghHost: "ghe.example.com" };
+    expect(rule(`curl -X POST -d '{"body":"x"}' https://ghe.example.com/api/v3/repos/acme/app/issues/1/comments`, enterprise)).toBeNull();
+    expect(rule(`curl -X POST -d '{"body":"x"}' https://ghe.example.com/api/v3/repos/other/repo/issues/1/comments`, enterprise)).toBe("outside-write");
+    expect(rule(`curl -X POST -d '{"query":"mutation { addComment(input: {subjectId: \\"I\\", body: \\"x\\"}) { clientMutationId } }"}' https://ghe.example.com/api/graphql`, enterprise)).toBe("outside-write");
+    // On a github.com origin, that host is no GitHub API this rule reads.
+    expect(rule(`curl -X POST -d '{"body":"x"}' https://ghe.example.com/api/v3/repos/other/repo/issues/1/comments`)).toBeNull();
+  });
+
+  it.each([
+    ["a reviewer on a new pull request", "gh pr create --title t --body b --reviewer alice", "outside-write"],
+    ["a short reviewer on a new pull request", "gh pr create --title t --body b -r alice", "outside-write"],
+    ["a reviewer joined by =", "gh pr create --title t --body b --reviewer=alice", "outside-write"],
+    ["a reviewer list holding a person beside an app", "gh pr create --title t --body b --reviewer @copilot,alice", "outside-write"],
+    ["a reviewer team", "gh pr edit 3 --add-reviewer acme/team", "outside-write"],
+    ["an added reviewer the shell fills in", `gh pr edit 3 --add-reviewer "$WHO"`, "outside-write"],
+    ["an assignee on a new issue", "gh issue create --title t --body b -a bob", "outside-write"],
+    ["an added assignee", "gh issue edit 3 --add-assignee bob", "outside-write"],
+    ["a REST reviewer field", "gh api -X POST repos/acme/app/pulls/1/requested_reviewers -f 'reviewers[]=alice'", "outside-write"],
+    ["a REST team reviewer field", "gh api -X POST repos/acme/app/pulls/1/requested_reviewers -f 'team_reviewers[]=core'", "outside-write"],
+    ["a curl assignee list", `curl -X POST -d '{"assignees":["bob"]}' https://api.github.com/repos/acme/app/issues/1/assignees`, "outside-write"],
+    ["an app as reviewer", "gh pr create --title t --body b --reviewer @copilot", null],
+    ["the caller as assignee", "gh pr edit 3 --add-assignee @me", null],
+    ["Copilot's reviewer login in a REST field", "gh api -X POST repos/acme/app/pulls/1/requested_reviewers -f 'reviewers[]=copilot-pull-request-reviewer[bot]'", null],
+    ["a review's request-changes flag", "gh pr review 3 -r -b 'needs work'", null],
+    ["a review comment's body flag naming nobody", "gh pr review 3 --comment -b x", null],
+  ])("reads %s", (_, command, expected) => {
+    expect(rule(command), command).toBe(expected);
+  });
+
+  it("leaves a commit message naming a person unread, since a mention in one notifies no one (build/25)", () => {
+    expect(personOnlyVerdict("git commit -m 'thanks @alice'", ORIGIN)).toEqual({ deny: false });
+    expect(personOnlyVerdict("git commit -F - <<'EOF'\nthanks @alice\nEOF", ORIGIN)).toEqual({ deny: false });
+  });
+
+  it("reads a long GraphQL selection within the bound", () => {
+    const command = `gh api graphql -f query='mutation { ${"resolveReviewThread(input: {threadId: \"T\"}) { thread { id } } ".repeat(1_000)}}'`;
+    expect(command.length).toBeLessThanOrEqual(65_536);
+    const started = performance.now();
+    expect(personOnlyVerdict(command, ORIGIN)).toEqual({ deny: false });
+    expect(performance.now() - started).toBeLessThan(8_000);
+  });
+});

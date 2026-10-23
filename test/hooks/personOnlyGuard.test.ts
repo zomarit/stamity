@@ -286,14 +286,20 @@ const MATRIX: readonly (readonly [command: string, rule: string | null])[] = [
 
 describe("the person-only guard, on every client", () => {
   it.each(TOOLS)("%s: denies each person-only act and allows its neighbour, as u6's verdict says", async (tool) => {
-    const guard = await placeGuard(tool, { ".git/refs/tags/v1.0.0": "0".repeat(40) });
+    // TEST CHANGE, justified (REQ-FLOW-134, a4c build/21): the guard holds a REST write, gh's or curl's, to the origin of
+    // the repository it sits in, so the scratch repository gets the origin `o/r` the rows write to, and the guard's own
+    // context below carries it; each row still reads what it pinned.
+    const guard = await placeGuard(tool, {
+      ".git/refs/tags/v1.0.0": "0".repeat(40),
+      ".git/config": '[remote "origin"]\n\turl = https://github.com/o/r.git\n',
+    });
     for (const [command, rule] of MATRIX) {
       const source = personOnlyVerdict(command, ON_FEATURE);
       expect(source.deny ? source.rule : null, command).toBe(rule);
       // TEST CHANGE, justified (REQ-FLOW-137, a4): the guard reads each line with the context it bakes, the default
       // setting's, so a ready mark and a local tag (rows `gh pr ready 3`, `git tag v2`) run there; every other row is
       // the verdict above. The baked `ask` setting's answer to those two rows is pinned in the a4 block below.
-      const guarded = personOnlyVerdict(command, BAKED_DEFAULT);
+      const guarded = personOnlyVerdict(command, { ...BAKED_DEFAULT, originRepo: "github.com/o/r", ghDefaultRepo: "github.com/o/r" });
       const decision = decide(tool, guard, command);
       expect(decision.deny, `${tool}: ${command}`).toBe(guarded.deny);
       expect(guarded.deny || rule === null || DEFAULT_RUNS.includes(rule as PersonOnlyRuleId), command).toBe(true);
@@ -2314,5 +2320,67 @@ describe("writes that reach an outside party (a4c, REQ-FLOW-134)", () => {
     expect(decide("claude", guard, COMMENT, undefined, "other")).toMatchObject({ deny: true, ask: true });
     // The session's own checkout, moved to by the same command, runs.
     expect(decide("claude", guard, `cd . && ${COMMENT}`)).toEqual({ deny: false });
+  });
+});
+
+/**
+ * a4c fix round 1 (REQ-FLOW-134, build/20, build/21, build/22): the emitted guard, in a scratch repository whose origin
+ * is `acme/app`, asks for a GraphQL mutation by a node id it cannot place, a curl or wget write to another repository
+ * through the GitHub API, and a review request naming a person, and refuses each unattended; a thread's resolve state
+ * runs in every mode. Red on dbf1a825, whose guard allows each asking form.
+ */
+describe("the outside-party readers' second round in the guard (a4c, build/20-22)", () => {
+  const ORIGIN = '[remote "origin"]\n\turl = https://github.com/acme/app.git\n';
+  const READ = { ...BAKED_DEFAULT, originRepo: "github.com/acme/app", ghDefaultRepo: "github.com/acme/app" };
+  const UNATTENDED = { ".stamity/runs/2026-10-23_y/record.md": record("in progress", "unattended") };
+  const WHY = "This session is unattended because .stamity/runs/2026-10-23_y/record.md reads `Status: in progress` and `Mode: unattended`.";
+  const asked = (command: string): { act: string; rule: string; ask: boolean } => {
+    const verdict = personOnlyVerdict(command, READ);
+    if (!verdict.deny) throw new Error(`${command} is no person-only act`);
+    expect(verdict, command).toMatchObject({ rule: "outside-write", ask: true });
+    return verdict;
+  };
+  const COMMENT_MUTATION = `gh api graphql -f query='mutation { addComment(input: {subjectId: "I_1", body: "x"}) { clientMutationId } }'`;
+  const RESOLVE = `gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: "T_1"}) { thread { isResolved } } }'`;
+
+  it.each(TOOLS)("%s: asks for a GraphQL comment mutation by a node id, and runs a thread resolve", async (tool) => {
+    const guard = await placeGuard(tool, { ".git/config": ORIGIN });
+    expect(decide(tool, guard, COMMENT_MUTATION)).toEqual(expectedAttended(tool, asked(COMMENT_MUTATION)));
+    expect(decide(tool, guard, RESOLVE)).toEqual({ deny: false });
+  });
+
+  it.each(TOOLS)("%s: unattended, refuses the GraphQL comment mutation and still runs a thread resolve", async (tool) => {
+    const guard = await placeGuard(tool, { ".git/config": ORIGIN, ...UNATTENDED });
+    expect(decide(tool, guard, COMMENT_MUTATION)).toEqual({ deny: true, reason: expect.stringContaining(`${morningList(asked(COMMENT_MUTATION))} ${WHY}`) });
+    expect(decide(tool, guard, RESOLVE)).toEqual({ deny: false });
+  });
+
+  it("runs a thread resolve under a baked `ask` setting too", async () => {
+    const guard = await placeGuard("claude", { ".git/config": ORIGIN }, resolveAutonomy({ autonomy: { mode: "ask" } }));
+    expect(decide("claude", guard, RESOLVE)).toEqual({ deny: false });
+  });
+
+  it.each(TOOLS)("%s: asks for a curl or a wget write to another repository through the GitHub API, and runs one to the origin", async (tool) => {
+    const guard = await placeGuard(tool, { ".git/config": ORIGIN });
+    for (const outside of [
+      `curl -X POST -d '{"body":"x"}' https://api.github.com/repos/other/repo/issues/1/comments`,
+      `wget --post-data='{"body":"x"}' https://api.github.com/repos/other/repo/issues/1/comments`,
+      `curl -X POST -d '{"body":"x"}' "$URL"`,
+    ]) {
+      expect(decide(tool, guard, outside), `${tool}: ${outside}`).toEqual(expectedAttended(tool, asked(outside)));
+    }
+    for (const origin of [
+      `curl -X POST -d '{"body":"x"}' https://api.github.com/repos/acme/app/issues/1/comments`,
+      `wget --post-data='{"body":"x"}' https://api.github.com/repos/acme/app/issues/1/comments`,
+    ]) {
+      expect(decide(tool, guard, origin), `${tool}: ${origin}`).toEqual({ deny: false });
+    }
+  });
+
+  it.each(TOOLS)("%s: asks for a review request naming a person, and runs one naming an app", async (tool) => {
+    const guard = await placeGuard(tool, { ".git/config": ORIGIN });
+    const person = "gh pr edit 3 --add-reviewer alice";
+    expect(decide(tool, guard, person)).toEqual(expectedAttended(tool, asked(person)));
+    expect(decide(tool, guard, "gh pr edit 3 --add-reviewer @copilot")).toEqual({ deny: false });
   });
 });

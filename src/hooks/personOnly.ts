@@ -1687,6 +1687,88 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     return verdict;
   };
 
+  /** The repository's own apps (REQ-FLOW-134): a mention of one reaches no outside party. */
+  const IN_REPO_APPS = new Set(["codex", "dependabot", "copilot", "claude"]);
+  /**
+   * Whether `text` mentions a person (REQ-FLOW-134): an `@` after no letter, digit or `_` (so an email address is
+   * none), then a login (`[A-Za-z0-9][A-Za-z0-9-]*`) that is not one of the repository's own apps (any case, a `[bot]`
+   * suffix allowed), or any `@<org>/<team>`; a closed backtick span is code, so a mention inside one is none. One pass.
+   */
+  const mentions = (text: string): boolean => {
+    for (let at = 0; at < text.length; at += 1) {
+      if (text[at] === "`") {
+        const close = text.indexOf("`", at + 1);
+        if (close === -1) continue;
+        at = close;
+      } else if (text[at] === "@" && !/\w/.test(text[at - 1] ?? "")) {
+        const login = /^[A-Za-z0-9][A-Za-z0-9-]*/.exec(text.slice(at + 1, at + 41))?.[0];
+        if (login !== undefined && (!IN_REPO_APPS.has(login.toLowerCase()) || text[at + 1 + login.length] === "/")) return true;
+      }
+    }
+    return false;
+  };
+  /**
+   * Whether a reviewer or assignee value names a person (REQ-FLOW-134, build/22): any comma-separated entry but `@me`,
+   * one of the repository's own apps (an `@` before it or a `[bot]` suffix allowed) and Copilot's reviewer login; a team
+   * (`org/team`) is people.
+   */
+  const people = (value: string): boolean =>
+    value.split(",").some((entry) => {
+      const name = entry.trim();
+      const login = name.replace(/^@/, "").toLowerCase().replace(/\[bot\]$/, "");
+      return name !== "" && name !== "@me" && !IN_REPO_APPS.has(login) && login !== "copilot-pull-request-reviewer";
+    });
+  /** The reviewer and assignee keys of a REST body (a gh field's `[]` suffix dropped). */
+  const PEOPLE_KEYS = new Set(["reviewers", "team_reviewers", "assignees", "assignee"]);
+  /** The GraphQL mutations that change only a review thread's state and send no text outside (REQ-FLOW-134, build/20). */
+  const STATE_ONLY = new Set(["resolveReviewThread", "unresolveReviewThread"]);
+  /**
+   * The top-level field names each mutation operation selects in a GraphQL text whose string literals and comments are
+   * masked (build/20): an alias's own name dropped, a fragment spread read as `...`, and `""` for a mutation whose
+   * selection names no field, so an unread form never reads as a state-only one. Arguments and nested selections are
+   * passed over. One pass over the text's tokens.
+   */
+  const mutationFields = (masked: string): string[] => {
+    const found: string[] = [];
+    let depth = 0;
+    let parens = 0;
+    let pending = false;
+    let opened = -1;
+    let before = 0;
+    for (const [token] of masked.matchAll(/\.\.\.|[A-Za-z_]\w*|\S/g)) {
+      if (parens > 0) {
+        if (token === "(") parens += 1;
+        else if (token === ")") parens -= 1;
+      } else if (token === "(") parens = 1;
+      else if (token === "{") {
+        depth += 1;
+        if (pending) {
+          pending = false;
+          opened = depth;
+          before = found.length;
+        }
+      } else if (token === "}") {
+        if (depth === opened) {
+          if (found.length === before) found.push("");
+          opened = -1;
+        }
+        depth -= 1;
+      } else if (depth === 0 && token === "mutation") pending = true;
+      else if (depth === opened && token === ":") found.pop();
+      else if (depth === opened && /^(?:[A-Za-z_]|\.\.\.)/.test(token)) found.push(token);
+    }
+    if (pending || opened !== -1) found.push("");
+    return found;
+  };
+  // Read once per verdict, so a line holding many gh calls is still read in one pass (the guard's hook timeout).
+  let lineMentions: boolean | null = null;
+  const environment = /\bGH_(?:REPO|HOST)\b/.test(command);
+  /** Whether a gh write naming no repository lands outside the origin: gh's default unknown or another repository. */
+  const defaultAway = (): boolean => {
+    const fallback = ctx.ghDefaultRepo;
+    return fallback === null || (fallback !== undefined && fallback !== "" && fallback !== ctx.originRepo);
+  };
+
   /** A refspec's destination as a branch name: `+` dropped, `<src>:` cut, `refs/heads/` or `heads/` cut. */
   function destination(refspec: string): string {
     const spec = refspec.replace(/^\+/, "");
@@ -2044,7 +2126,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     const fill = (value: string): string =>
       value.replace(/\{branch\}|:branch\b/g, () => (ctx.currentBranch === null ? "main" : branch(ctx.currentBranch)));
     // The words as `httpCall` reads them, wget's shortened method and body options expanded (pr/11).
-    const { write, method, paths: targets, cmd, next } = httpCall(line);
+    const { write, method, paths: targets, targets: raw, cmd, next } = httpCall(line);
     // The call after `--next` (pr/72), its acts collected beside this call's (v0a).
     if (next !== null) httpVerdict(next);
     const paths = gh ? targets.map(fill) : targets;
@@ -2272,6 +2354,103 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       }
       if (write) restAct(path, shown);
     }
+    if (ctx.originRepo !== undefined && write) outsideCall();
+
+    /**
+     * `outside-write` for one HTTP write (REQ-FLOW-134): a gh `api` call, or a `curl` or `wget` call to the GitHub API
+     * host (`api.github.com`, `api.<name>.ghe.com`, or the origin's own Enterprise host under `api/v3/` or `api/graphql`,
+     * build/21); a curl or wget write to any other host is not this rule's, except one whose host the line cannot show,
+     * which is outside. Each `repos/<owner>/<repo>/…` path is a target, its host the URL's or, for gh, `--hostname`'s
+     * or the context's `ghHost`; one the line cannot show (a word the shell fills in, a dot segment, `repositories/<id>`)
+     * is outside; gh's `{owner}`/`{repo}` placeholders land where gh's default does, and `GH_REPO` or `GH_HOST` on the
+     * line makes a gh call outside. A GraphQL call whose mutation selects any field but a state-only one, or whose query
+     * the line cannot show, asks (build/20): its subject is a node id the line cannot place. A `body` or `title` field is
+     * read for a mention, and a reviewer or assignee field for a person (build/22); a body on stdin, or one the shell
+     * fills in, makes the whole line read for a mention; a body read from a file is not read.
+     */
+    function outsideCall(): void {
+      const origin = ctx.originRepo ?? "";
+      const originHost = /^[^/]*/.exec(origin)?.[0] ?? "";
+      const host = ctx.ghHost ?? "github.com";
+      const marks = markMap.get(line) ?? [];
+      const named = cmd.indexOf("--hostname");
+      const given = cmd.find((word) => word.startsWith("--hostname="))?.slice(11) ?? (named === -1 ? host : (cmd[named + 1] ?? "$"));
+      const keys: string[] = [];
+      let defaulted = false;
+      let graphql = false;
+      for (const target of raw) {
+        const url = /^(?:[a-z][a-z0-9+.-]*:\/\/)?(?:[^@/]*@)?([^/:?#]*)(?::\d*)?([\s\S]*)$/i.exec(target);
+        const scheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(target);
+        const at = gh && !scheme ? given : (url?.[1] ?? "").toLowerCase();
+        const rest = gh && !scheme ? target : (url?.[2] ?? "");
+        if (at === "" || /[$`]/.test(at)) {
+          keys.push("");
+          continue;
+        }
+        const api = /^\/*api\/(?:v3\/|graphql(?:[/?#]|$))/i.test(rest);
+        if (!gh && at !== "api.github.com" && !/^api\.[^.]+\.ghe\.com$/.test(at) && !(originHost !== "github.com" && at === originHost && api)) continue;
+        const path = (rest.replace(/^\/+/, "").replace(/^api\/(?:v3\/)?/i, "").split(/[?#]/)[0] ?? "")
+          .replace(/%([0-9A-Fa-f]{2})/g, (_, hex: string) => String.fromCharCode(Number.parseInt(hex, 16)));
+        const repo = /^repos\/([^/]+)\/([^/]+)/i.exec(path);
+        const filled = gh && repo !== null && /^(?:\{owner\}|:owner)$/.test(repo[1] ?? "") && /^(?:\{repo\}|:repo)$/.test(repo[2] ?? "");
+        const head = repo?.[0] ?? /^[^/]*/.exec(path)?.[0] ?? "";
+        if (/^graphql\/?$/i.test(path)) graphql = true;
+        else if (/(?:^|\/)\.\.?(?:\/|$)/.test(path) || /^repositories\//i.test(path) || /[$`]/.test(head)) keys.push("");
+        else if (filled) defaulted = true;
+        else if (repo !== null) keys.push(repoKey(`${at}/${repo[1] ?? ""}/${repo[2] ?? ""}`, host));
+      }
+      if (!gh && !graphql && keys.length === 0) return;
+      const what = gh ? "gh api" : `${line[0] ?? ""} to the GitHub API`;
+      if ((gh && environment) || keys.some((key) => key === "" || key !== origin) || (defaulted && keys.length === 0 && defaultAway())) {
+        deny("outside-write", `A write that reaches another repository, or one the guard cannot place (\`${what}\`)`);
+      }
+      if (graphql) {
+        // A query read from a file or stdin, or held in a word the shell fills in, may be any mutation.
+        const unseen = (hiddenBody && queries.length === 0) || line.some((word, at) => /query/.test(word) && /e/.test(marks[at]?.kinds ?? ""));
+        if (unseen || queries.some((query) => mutationFields(mask(query)).some((name) => !STATE_ONLY.has(name)))) {
+          deny("outside-write", `A GraphQL mutation whose subject is a node id the line cannot place, or a GraphQL call whose query it cannot show (\`${what}\`)`);
+        }
+      }
+      let whole = false;
+      const prose: string[] = [];
+      const persons: (string | null)[] = [];
+      const read = (key: string, value: string | null): void => {
+        const name = key.toLowerCase().replace(/\[\]$/, "");
+        if (name === "body" || name === "title") {
+          if (value === null) whole = true;
+          else prose.push(value);
+        } else if (PEOPLE_KEYS.has(name)) persons.push(value);
+      };
+      if (gh) {
+        for (let k = 1; k < cmd.length; k += 1) {
+          const word = cmd[k] ?? "";
+          if (word === "--input" || word === "--input=-") {
+            if (word === "--input=-" || cmd[k + 1] === "-") whole = true;
+            if (word === "--input") k += 1;
+            continue;
+          }
+          const long = /^(--field|--raw-field)=([\s\S]*)$/.exec(word);
+          const flag = /^(?:-[fF]|--field|--raw-field)$/.test(word) ? word : long?.[1];
+          const value = long !== null ? long[2] : flag !== undefined ? cmd[(k += 1)] : undefined;
+          const eq = value?.indexOf("=") ?? -1;
+          if (value === undefined || eq <= 0) continue;
+          const field = value.slice(eq + 1);
+          if ((flag === "-F" || flag === "--field") && field.startsWith("@")) {
+            if (field === "@-") read(value.slice(0, eq), null);
+          } else read(value.slice(0, eq), /[$`]/.test(field) ? null : field);
+        }
+      } else {
+        for (const [key, value] of bodyFields) read(key, value);
+        // A body curl or wget reads from stdin (`-d @-`, `-T -`, `/dev/stdin`): the line may hold it.
+        whole ||= cmd.some((word, k) => /(?:^|=)@-$/.test(word) || word === "/dev/stdin" || (/^(?:-T|--upload-file)$/.test(word) && cmd[k + 1] === "-"));
+      }
+      if (whole ? (lineMentions ??= mentions(command)) : prose.some(mentions)) {
+        deny("outside-write", `A body or title naming a person (an \`@\` mention), which reaches them (\`${what}\`)`);
+      }
+      if (persons.some((value) => value === null || people(value))) {
+        deny("outside-write", `A review request or an assignee naming a person, which notifies them (\`${what}\`)`);
+      }
+    }
 
     /**
      * The acts of one REST write path below its repository or organisation (v0a): every rule the path matches is
@@ -2483,48 +2662,27 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     return publishes && !dryRun ? deny("publish", `Publishing a package (\`${cmd[0]} publish\`)`) : null;
   }
 
-  /** The repository's own apps (REQ-FLOW-134): a mention of one reaches no outside party. */
-  const IN_REPO_APPS = new Set(["codex", "dependabot", "copilot", "claude"]);
-  /**
-   * Whether `text` mentions a person (REQ-FLOW-134): an `@` after no letter, digit or `_` (so an email address is
-   * none), then a login (`[A-Za-z0-9][A-Za-z0-9-]*`) that is not one of the repository's own apps (any case, a `[bot]`
-   * suffix allowed), or any `@<org>/<team>`; a closed backtick span is code, so a mention inside one is none. One pass.
-   */
-  const mentions = (text: string): boolean => {
-    for (let at = 0; at < text.length; at += 1) {
-      if (text[at] === "`") {
-        const close = text.indexOf("`", at + 1);
-        if (close === -1) continue;
-        at = close;
-      } else if (text[at] === "@" && !/\w/.test(text[at - 1] ?? "")) {
-        const login = /^[A-Za-z0-9][A-Za-z0-9-]*/.exec(text.slice(at + 1, at + 41))?.[0];
-        if (login !== undefined && (!IN_REPO_APPS.has(login.toLowerCase()) || text[at + 1 + login.length] === "/")) return true;
-      }
-    }
-    return false;
-  };
-  // Read once per verdict, so a line holding many gh calls is still read in one pass (the guard's hook timeout).
-  let lineMentions: boolean | null = null;
-  const environment = /\bGH_(?:REPO|HOST)\b/.test(command);
   /**
    * `outside-write` (REQ-FLOW-134): a gh write (a `pr`, `issue`, `release`, `workflow`, `run`, `label`, `cache`, `secret`
-   * or `variable` subcommand beyond its reads, or an `api` write as {@link httpCall} reads one) that reaches a repository
-   * other than the origin, host and `owner/repo` both, or that names a person.
+   * or `variable` subcommand beyond its reads) that reaches a repository other than the origin, host and `owner/repo`
+   * both, or that names a person. A gh `api` call, and a `curl` or `wget` call to the GitHub API, is read where the REST
+   * reader reads it (`outsideCall`, inside `httpVerdict`).
    *
-   * **Target.** Each `-R`/`--repo` value, each argument URL and each `api` path `repos/<owner>/<repo>/…` (its host the
-   * URL's, `--hostname`'s or the context's `ghHost`) is a target; one the line cannot show (a word the shell fills in, a
-   * dot segment, `repositories/<id>`, a part `repoKey` cannot place) is outside, and so is any target while
-   * the origin is unreadable. A write naming none, and an `api` path whose owner and repository are gh's
-   * `{owner}`/`{repo}` placeholders, lands where gh's default does: outside when the context's `ghDefaultRepo` is
-   * `null` or another repository. `GH_REPO` or `GH_HOST` named anywhere on the line (set, exported or wrapped) makes
-   * every gh write on it outside. An `api` path naming no repository (`graphql`, `user/…`) is no target here: a GraphQL
-   * mutation names its subject by a node id the line cannot place.
+   * **Target.** Each `-R`/`--repo` value and each argument URL is a target; one the line cannot show (a word the shell
+   * fills in, a part `repoKey` cannot place) is outside, and so is any target while the origin is unreadable. A write
+   * naming none lands where gh's default does: outside when the context's `ghDefaultRepo` is `null` or another
+   * repository. `GH_REPO` or `GH_HOST` named anywhere on the line (set, exported or wrapped) makes every gh write on it
+   * outside.
    *
-   * **Mention.** An inline `-b`/`--body`, `-t`/`--title`, `-n`/`--notes` or `--subject` value, or an `api` `body` or
-   * `title` field, is read by `mentions`. Where the value holds a word the shell fills in, or the body comes on stdin
-   * (`--body-file -`, `-F -`, `--notes-file -`, `--input -`, a typed field `@-`), a heredoc or a substitution's heredoc
-   * the reading skips as data among them (REQ-FLOW-141), the whole line is read instead. A body gh reads from a file
-   * (`--body-file <path>`, `-F body=@<path>`, `--input <path>`) or fills from commits is not read: the named residual.
+   * **Mention.** An inline `-b`/`--body`, `-t`/`--title`, `-n`/`--notes` or `--subject` value is read by `mentions`.
+   * Where the value holds a word the shell fills in, or the body comes on stdin (`--body-file -`, `-F -`,
+   * `--notes-file -`), a heredoc or a substitution's heredoc the reading skips as data among them (REQ-FLOW-141), the
+   * whole line is read instead. A body gh reads from a file (`--body-file <path>`) or fills from commits is not read: the
+   * named residual. A `git commit` message is not read: a mention in one notifies no one (build/25).
+   *
+   * **Person.** A reviewer or assignee value (`--reviewer`, `--add-reviewer`, `--assignee`, `--add-assignee`, and `-r`
+   * and `-a` where `pr create` and `issue create` read them so) names a person unless `people` reads it as `@me` or one
+   * of the repository's own apps; one the shell fills in is a person (build/22).
    */
   function outsideVerdict(cmd: string[]): void {
     const origin = ctx.originRepo;
@@ -2534,80 +2692,54 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       ["release", ["list", "ls", "view", "download"]], ["workflow", ["list", "ls", "view"]], ["run", ["list", "ls", "view", "watch", "download"]],
       ["label", ["list", "ls"]], ["cache", ["list", "ls"]], ["secret", ["list", "ls"]], ["variable", ["list", "ls", "get"]]]);
     const reads = READS.get(group);
-    const call = group === "api" ? httpCall(cmd) : null;
-    if (call === null ? reads === undefined || sub === "" || reads.includes(sub) : !call.write) return;
+    if (reads === undefined || sub === "" || reads.includes(sub)) return;
     const host = ctx.ghHost ?? "github.com";
     const marks = markMap.get(cmd) ?? [];
     const shown = (at: number): boolean => (marks[at]?.kinds ?? "") === "" && !/[$`]/.test(cmd[at] ?? "");
     const PROSE = new Set(["-b", "--body", "-t", "--title", "-n", "--notes", "--subject"]);
+    const PEOPLE = new Set(["--reviewer", "--add-reviewer", "--assignee", "--add-assignee",
+      ...(group === "pr" && sub === "create" ? ["-r", "-a"] : group === "issue" && sub === "create" ? ["-a"] : [])]);
     const targets: string[] = [];
-    let defaulted = call === null;
     let whole = false;
     const prose: string[] = [];
-    if (call === null) {
-      for (let k = 1; k < cmd.length; k += 1) {
-        const word = cmd[k] ?? "";
-        const attached = /^(?:--(?:body|title|notes|subject)=|-[btn](?=.))([\s\S]*)$/.exec(word);
-        if (word === "-R" || word === "--repo") {
-          targets.push(shown(k + 1) ? repoKey(cmd[k + 1] ?? "", host) : "");
-          k += 1;
-        } else if (/^(?:--repo=|-R)./.test(word)) {
-          targets.push(shown(k) ? repoKey(word.replace(/^(?:--repo=|-R=?)/, ""), host) : "");
-        } else if (/^https?:\/\//i.test(word)) {
-          targets.push(shown(k) ? repoKey(word, host) : "");
-        } else if (PROSE.has(word)) {
-          if (shown(k + 1)) prose.push(cmd[k + 1] ?? "");
-          else whole = true;
-          k += 1;
-        } else if (attached !== null) {
-          if (shown(k)) prose.push(attached[1] ?? "");
-          else whole = true;
-        } else if (["-F", "--body-file", "--notes-file"].includes(word)) {
-          if (cmd[k + 1] === "-" || !shown(k + 1)) whole = true;
-          k += 1;
-        } else if (/^--(?:body|notes)-file=-$/.test(word)) whole = true;
-      }
-    } else {
-      const named = cmd.indexOf("--hostname");
-      const given = cmd.find((word) => word.startsWith("--hostname="))?.slice(11) ?? (named === -1 ? host : shown(named + 1) ? (cmd[named + 1] ?? "") : "$");
-      for (const target of call.targets) {
-        const at = /^[a-z][a-z0-9+.-]*:\/\/(?:[^@/]*@)?([^/:?#]+)/i.exec(target)?.[1] ?? given;
-        const path = (target.replace(/^[a-z][a-z0-9+.-]*:\/\/[^/]*/i, "").replace(/^\/+/, "").replace(/^api\/v3\//i, "").split(/[?#]/)[0] ?? "")
-          .replace(/%([0-9A-Fa-f]{2})/g, (_, hex: string) => String.fromCharCode(Number.parseInt(hex, 16)));
-        const repo = /^repos\/([^/]+)\/([^/]+)/i.exec(path);
-        const filled = repo !== null && /^(?:\{owner\}|:owner)$/.test(repo[1] ?? "") && /^(?:\{repo\}|:repo)$/.test(repo[2] ?? "");
-        const head = repo?.[0] ?? /^[^/]*/.exec(path)?.[0] ?? "";
-        if (/(?:^|\/)\.\.?(?:\/|$)/.test(path) || /^repositories\//i.test(path) || /[$`]/.test(head) || /[$`]/.test(at)) targets.push("");
-        else if (filled) defaulted = true;
-        else if (repo !== null) targets.push(repoKey(`${at}/${repo[1] ?? ""}/${repo[2] ?? ""}`, host));
-      }
-      const words = call.cmd;
-      for (let k = 1; k < words.length; k += 1) {
-        const word = words[k] ?? "";
-        if (word === "--input" || word === "--input=-") {
-          if (word === "--input=-" || words[k + 1] === "-") whole = true;
-          if (word === "--input") k += 1;
-          continue;
-        }
-        const long = /^(--field|--raw-field)=([\s\S]*)$/.exec(word);
-        const flag = /^(?:-[fF]|--field|--raw-field)$/.test(word) ? word : long?.[1];
-        const value = long !== null ? long[2] : flag !== undefined ? words[(k += 1)] : undefined;
-        const eq = value?.indexOf("=") ?? -1;
-        if (value === undefined || eq <= 0 || !["body", "title"].includes(value.slice(0, eq).toLowerCase())) continue;
-        const field = value.slice(eq + 1);
-        if ((flag === "-F" || flag === "--field") && field.startsWith("@")) whole ||= field === "@-";
-        else if (/[$`]/.test(field)) whole = true;
-        else prose.push(field);
-      }
+    const persons: (string | null)[] = [];
+    for (let k = 1; k < cmd.length; k += 1) {
+      const word = cmd[k] ?? "";
+      const attached = /^(?:--(?:body|title|notes|subject)=|-[btn](?=.))([\s\S]*)$/.exec(word);
+      const person = /^--(?:add-)?(?:reviewer|assignee)=([\s\S]*)$/.exec(word);
+      if (word === "-R" || word === "--repo") {
+        targets.push(shown(k + 1) ? repoKey(cmd[k + 1] ?? "", host) : "");
+        k += 1;
+      } else if (/^(?:--repo=|-R)./.test(word)) {
+        targets.push(shown(k) ? repoKey(word.replace(/^(?:--repo=|-R=?)/, ""), host) : "");
+      } else if (/^https?:\/\//i.test(word)) {
+        targets.push(shown(k) ? repoKey(word, host) : "");
+      } else if (PROSE.has(word)) {
+        if (shown(k + 1)) prose.push(cmd[k + 1] ?? "");
+        else whole = true;
+        k += 1;
+      } else if (attached !== null) {
+        if (shown(k)) prose.push(attached[1] ?? "");
+        else whole = true;
+      } else if (PEOPLE.has(word)) {
+        persons.push(shown(k + 1) ? (cmd[k + 1] ?? "") : null);
+        k += 1;
+      } else if (person !== null) {
+        persons.push(shown(k) ? (person[1] ?? "") : null);
+      } else if (["-F", "--body-file", "--notes-file"].includes(word)) {
+        if (cmd[k + 1] === "-" || !shown(k + 1)) whole = true;
+        k += 1;
+      } else if (/^--(?:body|notes)-file=-$/.test(word)) whole = true;
     }
-    const fallback = ctx.ghDefaultRepo;
-    const away = fallback === null || (fallback !== undefined && fallback !== "" && fallback !== origin);
-    const what = call === null ? `gh ${group} ${sub}` : "gh api";
-    if (environment || targets.some((key) => key === "" || key !== origin) || (defaulted && targets.length === 0 && away)) {
+    const what = `gh ${group} ${sub}`;
+    if (environment || targets.some((key) => key === "" || key !== origin) || (targets.length === 0 && defaultAway())) {
       deny("outside-write", `A write that reaches another repository, or one the guard cannot place (\`${what}\`)`);
     }
     if (whole ? (lineMentions ??= mentions(command)) : prose.some(mentions)) {
       deny("outside-write", `A body or title naming a person (an \`@\` mention), which reaches them (\`${what}\`)`);
+    }
+    if (persons.some((value) => value === null || people(value))) {
+      deny("outside-write", `A review request or an assignee naming a person, which notifies them (\`${what}\`)`);
     }
   }
 
@@ -2752,7 +2884,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       }
     } else if (program === "gh") {
       ghVerdict(cmd);
-      outsideVerdict(cmd);
+      if (ghPositionals(cmd)[0] !== "api") outsideVerdict(cmd);
     } else if (program === "curl" || program === "wget") httpVerdict(cmd);
     else if (["npm", "pnpm", "yarn", "bun"].includes(program)) publishVerdict(cmd);
   }
