@@ -1,6 +1,6 @@
 import { closeSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { basename, dirname, isAbsolute, join, parse, relative, resolve } from "node:path";
 import { readAutonomy, strictestAutonomy, type ResolvedAutonomy } from "../../config/autonomy.ts";
 import { personOnlyVerdict } from "../../hooks/personOnly.ts";
 import { readGitSurface, SURFACE_RECORD_FILE, surfaceRefusal, type RecordFileReads } from "../../runs/gitSurface.ts";
@@ -182,6 +182,16 @@ function readsUnattended(mode: "attended" | "unattended" | null, flag: string | 
   return !["", "false", "0"].includes((flag ?? "").trim().toLowerCase());
 }
 
+/**
+ * review/96: the folder every `gh` call starts in: `/` on POSIX; on Windows the system drive's root (`SystemDrive` and
+ * a `\`), else the root of the home folder's drive.
+ */
+function filesystemRoot(): string {
+  if (process.platform !== "win32") return "/";
+  const drive = process.env["SystemDrive"] ?? "";
+  return /^[A-Za-z]:$/.test(drive) ? `${drive}\\` : parse(homedir()).root;
+}
+
 /** Whether `path` is `root` or lies under it. */
 function inside(root: string, path: string): boolean {
   const rel = relative(root, path);
@@ -279,8 +289,6 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     return surfaceRefusal(place, RECORD_READS, readNow, "push");
   };
 
-  /** review/95: the empty folder every gh call starts in, made once gh is checked and removed when the verb ends. */
-  let ghFolder: string | null = null;
   try {
     // (1) gh, before any of its answers is trusted: outside the work tree and the temp folders.
     const top = await gitLine(["rev-parse", "--show-toplevel"]);
@@ -297,13 +305,13 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       throw new Refused("gh resolves to a program inside a temp folder, whose answers the run could write");
     }
     // review/75, review/91: every later call starts this same absolute PATH entry, never one resolved again from PATH,
-    // and never its link target, so a shim still sees its own name. review/95: from a fresh empty folder outside the
-    // work tree (every call names its host and its full API path, so gh needs no repository folder), removed at the end,
-    // and without the version managers' version-choosing variables, so the run cannot steer a shim to another program.
-    ghFolder = mkdtempSync(join(tmpdir(), "stamity-gh-"));
+    // and never its link target, so a shim still sees its own name. review/95, review/96: from the filesystem's root
+    // (every call names its host and its full API path, so gh needs no repository folder), which has no parent a
+    // version manager's shim reads a version file from and which no one but an administrator writes, and without the
+    // version managers' version-choosing variables, so the run cannot steer a shim to another program.
     const shimNeutral = withoutVersionChoice(env);
     if (shimNeutral.dropped.length > 0) lines.push(`gh environment: dropped ${shimNeutral.dropped.join(", ")}`);
-    const ghOpts = { cwd: ghFolder, env: shimNeutral.env, program: gh };
+    const ghOpts = { cwd: filesystemRoot(), env: shimNeutral.env, program: gh };
     const moved = await surfaceMoved();
     if (moved !== null) throw new Refused(moved);
 
@@ -562,8 +570,6 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     result.outcome = "refused";
     result.notDone.push(...error.reasons);
     return finish();
-  } finally {
-    if (ghFolder !== null) rmSync(ghFolder, { recursive: true, force: true });
   }
 }
 

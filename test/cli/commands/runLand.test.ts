@@ -40,8 +40,8 @@ type Answer = { status: number; json: unknown };
 const gh = vi.hoisted(() => ({
   calls: [] as { kind: string; method?: string; path?: string; body?: unknown; program?: string | undefined; cwd?: string | undefined; env?: string[] }[],
   /**
-   * review/95: when set, each REST call also runs a stand-in shim in the folder the verb gave gh, which reads a
-   * version file there as mise and asdf do; what it read is kept here.
+   * review/95, review/96: when set, each REST call also runs a stand-in shim in the folder the verb gave gh, which
+   * reads a version file there and in each parent folder, as mise and asdf do; what it read is kept here.
    */
   probe: null as string[] | null,
   routes: new Map<string, Answer | Answer[]>(),
@@ -67,7 +67,10 @@ vi.mock("../../../src/cli/engine/ghRunner.ts", async (importOriginal) => ({
     gh.calls.push({ kind: "api", method: request.method, path, body: request.body, program: opts?.program, cwd: opts?.cwd, env: Object.keys(opts?.env ?? {}) });
     // Mock reason (review/95): no version manager is installed for the suite; this program reads a version file from
     // its working folder as a shim does, so the case sees whether the run's folder reaches one.
-    if (gh.probe !== null) gh.probe.push(execFileSync("/bin/sh", ["-c", "cat .tool-versions 2>/dev/null; true"], { cwd: opts?.cwd, encoding: "utf8" }));
+    if (gh.probe !== null) {
+      const walk = 'd=$(pwd -P); while :; do cat "$d/.tool-versions" 2>/dev/null; [ "$d" = / ] && break; d=$(dirname "$d"); done; true';
+      gh.probe.push(execFileSync("/bin/sh", ["-c", walk], { cwd: opts?.cwd, encoding: "utf8" }));
+    }
     const answer = gh.routes.get(`${request.method} ${path}`);
     return Promise.resolve(answer === undefined ? { status: 404, json: { message: "Not Found" } } : next(answer));
   },
@@ -780,19 +783,24 @@ describe("stamity run land", () => {
     expect(kinds()).not.toContain("merge");
   });
 
-  it("starts gh in a fresh folder outside the work tree, so a shim never reads the work tree's version file, and removes it (review/95)", async () => {
+  // TEST CHANGE, justified (review/96, REQ-FLOW-132): the folder gh starts in moved from a fresh one under the temp
+  // folder to the filesystem's root, so the shim now reads every parent too and a file is planted in the temp folder.
+  it.skipIf(process.platform === "win32")("starts gh at the filesystem root, so a shim reading each parent folder never sees a version file planted in the work tree or the temp folder (review/95, review/96)", async () => {
     const { repo } = await seed();
     await writeFile(join(repo, ".tool-versions"), "gh path:/run/controlled/gh\n");
+    // The suite's own temp root (vitest.config.ts points TMPDIR at a private folder per run), so nothing else reads it.
+    const planted = join(tmpdir(), ".tool-versions");
+    expect(existsSync(planted)).toBe(false);
+    await writeFile(planted, "gh path:/run/controlled/gh\n");
     gh.probe = [];
-
-    expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "landed" });
-    const folders = [...new Set(gh.calls.filter((call) => call.kind === "api").map((call) => call.cwd))];
-    expect(folders).toHaveLength(1);
-    const [folder] = folders;
-    expect(folder === undefined || folder.startsWith(repo)).toBe(false);
+    try {
+      expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "landed" });
+    } finally {
+      await rm(planted, { force: true });
+    }
     expect(gh.probe.length).toBeGreaterThan(5);
     expect(new Set(gh.probe)).toEqual(new Set([""]));
-    expect(existsSync(folder ?? repo)).toBe(false);
+    expect(new Set(gh.calls.filter((call) => call.kind === "api").map((call) => call.cwd))).toEqual(new Set(["/"]));
   });
 
   it("drops the version managers' version-choosing variables from gh's environment and keeps those that locate an install (review/95)", async () => {
