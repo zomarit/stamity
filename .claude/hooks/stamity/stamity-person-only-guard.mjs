@@ -99,7 +99,7 @@ function repoRoot() {
 const __name = (target) => target;
 const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 	const PACKAGE_WORDS = ctx.packageWords ?? ["stamity", "st"];
-	const PACKAGE_NAME = (ctx.packageName ?? "@zomarit/stamity").toLowerCase();
+	const PACKAGE_NAME = (ctx.packageName ?? "").toLowerCase();
 	const OWN_REPOSITORY = ctx.ownRepository ?? true;
 	const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
 	const KEYWORDS = /* @__PURE__ */ new Set([
@@ -1077,7 +1077,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		const named = (word) => PACKAGE_WORDS.includes(programName(word)) || /stamity/i.test(word);
 		const engineFile = (word) => {
 			const path = word.replace(/\\/g, "/").toLowerCase();
-			return path.includes(`node_modules/${PACKAGE_NAME}/`) || /node_modules\/\.bin\/[^/]+$/.test(path) && PACKAGE_WORDS.includes(programName(path)) || OWN_REPOSITORY && /(?:^|\/)cli\.[cm]?[jt]s$/.test(path);
+			return PACKAGE_NAME !== "" && path.includes(`node_modules/${PACKAGE_NAME}/`) || /node_modules\/\.bin\/[^/]+$/.test(path) && PACKAGE_WORDS.includes(programName(path)) || OWN_REPOSITORY && /(?:^|\/)cli\.[cm]?[jt]s$/.test(path);
 		};
 		if (!basename && named(program)) return cmd.slice(1);
 		const launchedAt = basename ? void 0 : launched.get(cmd);
@@ -1926,7 +1926,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 
 const unattendedPushVerdict = function unattendedPushVerdict(command, powershell = false, landOnly = false, identity = {}) {
 	const PACKAGE_WORDS = identity.words ?? ["stamity", "st"];
-	const PACKAGE_NAME = (identity.name ?? "@zomarit/stamity").toLowerCase();
+	const PACKAGE_NAME = (identity.name ?? "").toLowerCase();
 	const OWN_REPOSITORY = identity.own ?? true;
 	const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
 	const KEYWORDS = /* @__PURE__ */ new Set([
@@ -2904,7 +2904,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 		const named = (word) => PACKAGE_WORDS.includes(programName(word)) || /stamity/i.test(word);
 		const engineFile = (word) => {
 			const path = word.replace(/\\/g, "/").toLowerCase();
-			return path.includes(`node_modules/${PACKAGE_NAME}/`) || /node_modules\/\.bin\/[^/]+$/.test(path) && PACKAGE_WORDS.includes(programName(path)) || OWN_REPOSITORY && /(?:^|\/)cli\.[cm]?[jt]s$/.test(path);
+			return PACKAGE_NAME !== "" && path.includes(`node_modules/${PACKAGE_NAME}/`) || /node_modules\/\.bin\/[^/]+$/.test(path) && PACKAGE_WORDS.includes(programName(path)) || OWN_REPOSITORY && /(?:^|\/)cli\.[cm]?[jt]s$/.test(path);
 		};
 		if (!basename && named(program)) return cmd.slice(1);
 		const launchedAt = basename ? void 0 : launched.get(cmd);

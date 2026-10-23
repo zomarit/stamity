@@ -95,8 +95,13 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   copies on disk, the setting committed at `HEAD` and the manifest being replaced, until the person passes
   `--loosen`; a `--loosen` run names on stderr each guard copy it loosened and what it dropped. A repository that
   never commits its guard copies meets the refusal on a fresh clone's first `sync` and passes `--loosen` once. A
-  1.16.0 guard carries no baked setting, so the first `sync` after upgrading adopts the `autonomous` default with no
-  flag; set `autonomy.mode` to `ask` before that `sync` to keep 1.16.0's asks.
+  1.16.0 guard carries no baked setting, and a setup from a release before the guard owns no guard copy at all, so the
+  first `sync` after upgrading adopts the `autonomous` default with no flag; set `autonomy.mode` to `ask` before that
+  `sync` to keep 1.16.0's asks.
+- **The run verbs, `run land` and the loosen gate read git with replace refs off**, by the `GIT_NO_REPLACE_OBJECTS`
+  variable and the `-c core.useReplaceRefs=false` command-line key, so a `git replace` ref, a local ref write that
+  needs no commit, cannot make the ledger, the hook declarations, the guard copies or a tree they read at a commit
+  look like another object.
 
 ### Added
 
