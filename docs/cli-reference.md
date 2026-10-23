@@ -375,7 +375,7 @@ May write when it runs, so `--dry-run` previews any change without making it.
 
 | Argument | What it is |
 |---|---|
-| `<subcommand>` | which run action to run — one of `start`, `checkpoint`, `end` |
+| `<subcommand>` | which run action to run — one of `start`, `checkpoint`, `end`, `land` |
 
 | Flag | What it does | Default |
 |---|---|---|
@@ -387,5 +387,9 @@ May write when it runs, so `--dry-run` previews any change without making it.
 | `--refused` | end: title the draft pull request Refused: <title>, for a run that refused to start | — |
 | `--final-round` | end: the run's last end; write the run-ended marker the final question round needs (a plain end removes one) | — |
 | `--drop-held <path...>` | checkpoint and end: withdraw the held patch's sections for these paths, which the run undid (one it still changes stays held) | — |
+| `--fast-forward` | land: fast-forward the default branch to the pull request's head instead of merging it | — |
+| `--method <method>` | land: the merge method — one of `merge`, `squash`, `rebase` | — |
+| `--ready` | land: mark the run's draft ready for review once the evidence holds, then land it | — |
+| `--wait <minutes>` | land: wait up to this many minutes (at most 9) for pending check runs | — |
 
 Regenerate this page with `node scripts/generate-docs.mjs`.

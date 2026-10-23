@@ -12,7 +12,8 @@ import { parseGitRemote } from "../workspace/git.ts";
  * pull request's body is replaced only when it already ends with this run's
  * own marker: any other open pull request on the branch, a person's, keeps its
  * body and gets the text as one comment. No call here merges, marks ready, or
- * goes through GraphQL.
+ * goes through GraphQL: `stamity run land` does those, through its own
+ * fixed-purpose calls in the runner, on the evidence (`./landEvidence.ts`).
  */
 
 /** One REST call and its answer, as `ghApi` takes and returns them. */

@@ -1,7 +1,19 @@
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { ghApi, ghApiArgs, parseGhInclude, type GhRequest } from "../../../src/cli/engine/ghRunner.ts";
+import {
+  ghApi,
+  ghApiArgs,
+  ghGraphqlArgs,
+  ghMarkReady,
+  ghMergeArgs,
+  ghMergePull,
+  ghReviewThreads,
+  MARK_READY_MUTATION,
+  parseGhInclude,
+  REVIEW_THREADS_QUERY,
+  type GhRequest,
+} from "../../../src/cli/engine/ghRunner.ts";
 import { useTempDir } from "../../support/tempDir.ts";
 
 /**
@@ -77,6 +89,41 @@ describe("ghApiArgs", () => {
       expect(() => ghApiArgs({ method: "GET", path: "repos/acme/app", hostname }), hostname).toThrow(/gh api: the host/);
     }
     expect(() => ghApiArgs({ method: "GET", path: "repos/acme/app" } as GhRequest)).toThrow(/gh api: the host/);
+  });
+});
+
+// a6-land-verb (REQ-FLOW-132): the land verb's three fixed-purpose calls, beside the door that still refuses them.
+describe("the land verb's calls", () => {
+  const PULL = { hostname: HOST, owner: "acme", repo: "app", number: 7 };
+  const SHA = "c".repeat(40);
+
+  it("builds the merge as PUT repos/<owner>/<repo>/pulls/<n>/merge with the body on stdin", () => {
+    expect(ghMergeArgs({ ...PULL, sha: SHA, method: "squash" })).toEqual(["api", "--hostname", "github.com", "--include", "--method", "PUT", "--input", "-", "repos/acme/app/pulls/7/merge"]);
+  });
+
+  it("refuses a merge of a part that fails validation, a short or uppercase head, and an unknown method", () => {
+    const bad = [
+      { ...PULL, owner: "acme/x" },
+      { ...PULL, repo: ".." },
+      { ...PULL, number: 0 },
+      { ...PULL, hostname: "https://github.com" },
+      { ...PULL, sha: "c".repeat(12) },
+      { ...PULL, sha: "C".repeat(40) },
+      { ...PULL, method: "admin" },
+    ];
+    for (const request of bad) {
+      expect(() => ghMergeArgs({ sha: SHA, method: "merge", ...request } as Parameters<typeof ghMergeArgs>[0]), JSON.stringify(request)).toThrow(/gh merge:/);
+    }
+  });
+
+  it("sends graphql only with its two constant documents, any other refused before gh starts", async () => {
+    expect(ghGraphqlArgs({ hostname: HOST, query: REVIEW_THREADS_QUERY })).toEqual(["api", "--hostname", "github.com", "--include", "--method", "POST", "--input", "-", "graphql"]);
+    expect(() => ghGraphqlArgs({ hostname: HOST, query: MARK_READY_MUTATION })).not.toThrow();
+    for (const query of [`${REVIEW_THREADS_QUERY} `, "mutation { mergePullRequest(input:{}) { clientMutationId } }", ""]) {
+      expect(() => ghGraphqlArgs({ hostname: HOST, query }), query).toThrow(/gh graphql: the document/);
+    }
+    await expect(ghMarkReady({ hostname: HOST, id: "x y" }, { env: { PATH: "" } })).rejects.toMatchObject({ code: "GH_REFUSED" });
+    await expect(ghReviewThreads({ ...PULL, owner: "a b" }, { env: { PATH: "" } })).rejects.toMatchObject({ code: "GH_REFUSED" });
   });
 });
 
@@ -167,6 +214,21 @@ describe("ghApi", () => {
       "api\n--hostname\nghe.example.com\n--include\n--method\nPOST\n--input\n-\nrepos/acme/app/pulls\nprompt=1\n",
     );
     expect(JSON.parse(await readFile(input, "utf8"))).toEqual({ title: "t", draft: true });
+  });
+
+  it.skipIf(process.platform === "win32")("starts the merge and the thread read with their bodies on stdin (a6-land-verb)", async () => {
+    const { bin, work, log, input } = await standIn('HTTP/2.0 200 OK\r\nContent-Type: application/json\r\n\r\n{"merged":true}', 0);
+    const sha = "d".repeat(40);
+
+    await expect(ghMergePull({ hostname: HOST, owner: "acme", repo: "app", number: 7, sha, method: "merge" }, { cwd: work, env: { PATH: bin } })).resolves.toEqual({
+      status: 200,
+      json: { merged: true },
+    });
+    expect(await readFile(log, "utf8")).toBe("api\n--hostname\ngithub.com\n--include\n--method\nPUT\n--input\n-\nrepos/acme/app/pulls/7/merge\nprompt=1\n");
+    expect(JSON.parse(await readFile(input, "utf8"))).toEqual({ sha, merge_method: "merge" });
+
+    await ghReviewThreads({ hostname: HOST, owner: "acme", repo: "app", number: 7 }, { cwd: work, env: { PATH: bin } });
+    expect(JSON.parse(await readFile(input, "utf8"))).toEqual({ query: REVIEW_THREADS_QUERY, variables: { owner: "acme", repo: "app", number: 7, after: null } });
   });
 
   it.skipIf(process.platform === "win32")("resolves a 4xx answer gh exits 1 on as its status", async () => {

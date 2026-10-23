@@ -1,7 +1,7 @@
 import { closeSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, readlinkSync, readSync, realpathSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, posix, relative, resolve } from "node:path";
-import { Argument, InvalidArgumentError, type Command } from "commander";
+import { Argument, InvalidArgumentError, Option, type Command } from "commander";
 import { matchGlob } from "../../change/classify.ts";
 import { fromProjectRoot, heldPaths, PERSON_ONLY_PATHS } from "../../change/personOnlyPaths.ts";
 import { isPlainObject, parseJsonStrict } from "../../config/parse.ts";
@@ -21,6 +21,7 @@ import { CliFailure } from "../kit/output.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import { sanitizeLabel } from "../kit/prompts.ts";
 import { gitSurfaceRecordPath, readPushed, readRunGitSurface, scanChange } from "./gate.ts";
+import { runLand } from "./runLand.ts";
 
 /**
  * `stamity run start`, `stamity run checkpoint` and `stamity run end` — put an
@@ -154,11 +155,15 @@ import { gitSurfaceRecordPath, readPushed, readRunGitSurface, scanChange } from 
  * follows, or a flag left out) writes none and removes one already there, so no
  * question passes between two chain files; one it cannot remove makes the exit 1,
  * its `notDone` line naming it.
+ *
+ * **`land`** (REQ-FLOW-132, REQ-FLOW-133) merges the run's own pull request, or fast-forwards the default branch to
+ * its head, when the evidence holds, else asks or refuses; its body is `./runLand.ts`, registered here only.
  */
 
 const START = "start";
 const CHECKPOINT = "checkpoint";
 const END = "end";
+const LAND = "land";
 
 /** Every option beyond `--run`, by its key in commander's parsed options. */
 const OPTION_FLAGS: Readonly<Record<string, string>> = {
@@ -169,6 +174,10 @@ const OPTION_FLAGS: Readonly<Record<string, string>> = {
   refused: "--refused",
   finalRound: "--final-round",
   dropHeld: "--drop-held",
+  fastForward: "--fast-forward",
+  method: "--method",
+  ready: "--ready",
+  wait: "--wait",
 };
 
 /** The options each subcommand takes beyond `--run`; any other one given is a usage error. */
@@ -177,7 +186,19 @@ const SUBCOMMAND_OPTIONS: Readonly<Record<string, readonly string[]>> = {
   [CHECKPOINT]: ["paths", "pr", "title", "signoff", "dropHeld"],
   // No --pr: the pull request is not optional at the end.
   [END]: ["paths", "title", "refused", "signoff", "finalRound", "dropHeld"],
+  // No --paths and no --title: land stages and titles nothing.
+  [LAND]: ["fastForward", "method", "ready", "wait"],
 };
+
+/** `--wait`'s most minutes: under a client's ten-minute shell-call limit (decision D17). */
+const LAND_WAIT_MAX = 9;
+
+/** `--wait <minutes>`: a whole number from 0 to {@link LAND_WAIT_MAX}. */
+function parseWait(value: string): number {
+  const minutes = /^[0-9]+$/.test(value) ? Number(value) : Number.NaN;
+  if (!(minutes >= 0 && minutes <= LAND_WAIT_MAX)) throw new InvalidArgumentError(`--wait takes whole minutes from 0 to ${LAND_WAIT_MAX}.`);
+  return minutes;
+}
 
 /** The origin pin `start` writes in the run folder (review/209). */
 const ORIGIN_PIN = "origin.json";
@@ -247,7 +268,7 @@ export const runCommand: CommandModule = {
 
   configure(cmd: Command): void {
     cmd
-      .addArgument(new Argument("<subcommand>", "which run action to run").choices([START, CHECKPOINT, END]))
+      .addArgument(new Argument("<subcommand>", "which run action to run").choices([START, CHECKPOINT, END, LAND]))
       .option("--run <run-id>", "the run folder's name under .stamity/runs/", parseRun)
       .option("--paths <path...>", "checkpoint and end: also stage these paths, relative to the project root")
       .option("--pr", "checkpoint: open or update the run's draft pull request after the push (with --title)")
@@ -256,6 +277,10 @@ export const runCommand: CommandModule = {
       .option("--refused", "end: title the draft pull request Refused: <title>, for a run that refused to start")
       .option("--final-round", "end: the run's last end; write the run-ended marker the final question round needs (a plain end removes one)")
       .option("--drop-held <path...>", "checkpoint and end: withdraw the held patch's sections for these paths, which the run undid (one it still changes stays held)")
+      .option("--fast-forward", "land: fast-forward the default branch to the pull request's head instead of merging it")
+      .addOption(new Option("--method <method>", "land: the merge method").choices(["merge", "squash", "rebase"]))
+      .option("--ready", "land: mark the run's draft ready for review once the evidence holds, then land it")
+      .option("--wait <minutes>", `land: wait up to this many minutes (at most ${LAND_WAIT_MAX}) for pending check runs`, parseWait)
       // Usage errors, so exit 2 before the action and before git runs.
       .hook("preAction", (command) => {
         const subcommand = String(command.processedArgs[0]);
@@ -273,6 +298,7 @@ export const runCommand: CommandModule = {
         if (paths.some((path) => path.trim() === "")) command.error("error: --paths takes no empty path", { exitCode: 2 });
         const dropped = (given["dropHeld"] ?? []) as string[];
         if (dropped.some((path) => path.trim() === "")) command.error("error: --drop-held takes no empty path", { exitCode: 2 });
+        if (given["fastForward"] === true && given["method"] !== undefined) command.error("error: --method does not apply to --fast-forward", { exitCode: 2 });
       });
   },
 
@@ -280,6 +306,7 @@ export const runCommand: CommandModule = {
     // Commander's `choices()` already refused every other subcommand at parse time.
     if (args[0] === CHECKPOINT) return runCheckpoint(ctx, opts, CHECKPOINT);
     if (args[0] === END) return runCheckpoint(ctx, opts, END);
+    if (args[0] === LAND) return runLand(ctx, opts);
     return runStart(ctx, String(opts["run"]));
   },
 };

@@ -457,6 +457,9 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // the wave-2 block reader and the wave-1 run layout, reached by the wave-14
   // `stamity ledger` verb.
   "src/runs/ledgerStore.ts": { unit: "ctx-ledger-append", wave: 4 },
+  // TEST CHANGE, justified (plan 022 file 1, a6-land-verb, REQ-FLOW-132): the land verb's evidence and decision, pure,
+  // over the wave-4 ledger parse, the wave-3 person-only paths and the wave-2 autonomy setting, under the wave-12 root.
+  "src/runs/landEvidence.ts": { unit: "a6-land-verb", wave: 5 },
   // Plan 021 file 1: the morning list (the wave-2 scan and block reader, the
   // wave-3 pull request's marker), the pre-flight's checks (the wave-1 secret
   // patterns, the wave-3 repository resolver) and the readiness check (the
@@ -685,6 +688,10 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // imports the wave-14 gate verb's `scanChange` and `readChange` (`./gate.ts`), which a file at
   // wave 14 under another unit could not.
   "src/cli/commands/run.ts": { unit: "u18-run-verb", wave: 15 },
+  // TEST CHANGE, justified (plan 022 file 1, a6-land-verb, REQ-FLOW-132): `run land`'s body, over the wave-13 runners
+  // and kit and the evidence module, one wave under the run verb that registers it, so it imports nothing from
+  // `run.ts` or the wave-14 gate verb.
+  "src/cli/commands/runLand.ts": { unit: "a6-land-verb", wave: 14 },
   // TEST CHANGE, justified (2026-10-14, plan 020 file 1, units d6-verb and
   // d7-engine): the `stamity plugin` verb, its setup engine, its status report
   // and the capability reader at wave 2 (pl-c6) left with the plugin route in

@@ -308,6 +308,8 @@ describe("the unattended run's modules (plan 021 file 1)", () => {
     expect(typeof engine.runs.planCheck.checkPlans).toBe("function");
     // TEST CHANGE, justified (REQ-FLOW-131): the run's git-surface module joined the runs group; one line added, none loosened.
     expect(typeof engine.runs.gitSurface.compareSurface).toBe("function");
+    // TEST CHANGE, justified (REQ-FLOW-132): the land verb's evidence module joined the runs group; one line added, none loosened.
+    expect(typeof engine.runs.landEvidence.decideLand).toBe("function");
     expect(typeof engine.runs.planCoverage.checkCoverage).toBe("function");
     expect(typeof engine.runs.freshness.freshness).toBe("function");
     expect(typeof engine.runs.runContract.parseRunContract).toBe("function");

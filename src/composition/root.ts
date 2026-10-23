@@ -108,6 +108,7 @@ import * as runsMorning from "../runs/morning.ts";
 import * as runsPreflight from "../runs/preflight.ts";
 import * as runsPlanCheck from "../runs/planCheck.ts";
 import * as runsGitSurface from "../runs/gitSurface.ts";
+import * as runsLandEvidence from "../runs/landEvidence.ts";
 import * as hooksModel from "../hooks/model.ts";
 import * as portableRunner from "../hooks/portableRunner.ts";
 import * as userHooks from "../hooks/userHooks.ts";
@@ -289,6 +290,8 @@ export interface EngineRegistry {
     readonly planCheck: typeof runsPlanCheck;
     /** The git surface the pre-flight records and the run verbs compare against (REQ-FLOW-131). */
     readonly gitSurface: typeof runsGitSurface;
+    /** The evidence `run land` merges on and the decision it reaches (REQ-FLOW-132, REQ-FLOW-133). */
+    readonly landEvidence: typeof runsLandEvidence;
   };
   readonly hooks: {
     readonly model: typeof hooksModel;
@@ -515,6 +518,7 @@ export function createEngine(): EngineRegistry {
       preflight: runsPreflight,
       planCheck: runsPlanCheck,
       gitSurface: runsGitSurface,
+      landEvidence: runsLandEvidence,
     },
     hooks: { model: hooksModel, portableRunner, userHooks, scripts: hookScripts, personOnly: hookPersonOnly },
     session: { detect: sessionDetect },
