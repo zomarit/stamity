@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync as fsRealpath } from "node:fs";
 import { appendFile, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -12,6 +12,7 @@ import type * as GitWriteModule from "../../../src/cli/engine/gitWrite.ts";
 import type * as GhRunnerModule from "../../../src/cli/engine/ghRunner.ts";
 import type * as FsModule from "node:fs";
 import { surfaceRecord } from "../../../src/runs/gitSurface.ts";
+import { insideAny } from "../../../src/runs/landEvidence.ts";
 import { prRecordText } from "../../../src/runs/pullRequest.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { NO_GIT_CONFIG } from "../../support/repoFixtures.ts";
@@ -104,9 +105,14 @@ const links = vi.hoisted(() => new Map<string, string>());
 // link outside the temp folders and the work tree (which the verb refuses) cannot be made in a unit test.
 vi.mock("node:fs", async (importOriginal) => {
   const real = await importOriginal<typeof FsModule>();
+  // TEST CHANGE, justified (build/18): the verb now reads places through `realpathSync.native`, so a mapped link
+  // answers there too.
   const realpathSync = Object.assign(
     (path: Parameters<typeof real.realpathSync>[0], options?: Parameters<typeof real.realpathSync>[1]) => links.get(String(path)) ?? real.realpathSync(path, options),
-    { native: real.realpathSync.native },
+    {
+      native: (path: Parameters<typeof real.realpathSync.native>[0], options?: Parameters<typeof real.realpathSync.native>[1]) =>
+        links.get(String(path)) ?? real.realpathSync.native(path, options),
+    },
   );
   return { ...real, default: { ...real, realpathSync }, realpathSync };
 });
@@ -228,6 +234,10 @@ describe("stamity run land", () => {
     git(dir, ["init", "-q", "--bare", remote]);
     git(repo, ["-c", "init.defaultBranch=main", "init", "-q"]);
     await appendFile(join(repo, ".git", "config"), "[gc]\n\tauto = 0\n[maintenance]\n\tauto = false\n");
+    // TEST CHANGE, justified (build/19): the repository's own identity, as runCheckpoint.test.ts sets it, so a commit the
+    // verb makes (run checkpoint --pr) needs no global identity, which a CI runner lacks.
+    git(repo, ["config", "user.name", "Alice Example"]);
+    git(repo, ["config", "user.email", "alice@example.com"]);
     await writeFile(join(repo, "a.txt"), "a\n");
     if (opts.manifest !== null) await put(repo, ".stamity/manifest.json", opts.manifest ?? '{"version":1}\n');
     await Promise.all(Object.entries(opts.files ?? {}).map(([path, text]) => put(repo, path, text)));
@@ -770,7 +780,9 @@ describe("stamity run land", () => {
     const { repo } = await seed();
     const entryDir = getRoot().path("shim-bin");
     await mkdir(entryDir, { recursive: true });
-    expect(entryDir.startsWith(tmpdir()) || entryDir.startsWith("/tmp") || entryDir.startsWith("/private")).toBe(true);
+    // TEST CHANGE, justified (build/18): the precondition reads the folder as the verb does, real and normalised, so
+    // Windows' short and long names of the temp folder read alike.
+    expect(insideAny(entryDir, [tmpdir(), "/tmp"], { platform: process.platform, realpath: (path) => fsRealpath.native(path) })).toBe(true);
     gh.program = join(entryDir, "gh");
     links.set(join(entryDir, "gh"), "/usr/local/opt/gh/bin/gh");
     expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: ["gh resolves to a program inside a temp folder, whose answers the run could write"] });

@@ -1,3 +1,4 @@
+import { win32 } from "node:path";
 import { describe, expect, it } from "vitest";
 import { PERSON_ONLY_PATHS } from "../../src/change/personOnlyPaths.ts";
 import { resolveAutonomy } from "../../src/config/autonomy.ts";
@@ -5,7 +6,9 @@ import {
   askPathsOf,
   checkEvidence,
   decideLand,
+  entryPlaceOf,
   evidenceLine,
+  insideAny,
   LAND_ASK_PATHS,
   LANDS_ON_EVIDENCE,
   ledgerEvidence,
@@ -14,6 +17,7 @@ import {
   parseCheckRuns,
   parseFiles,
   parsePr,
+  placeOf,
   parseThreadsPage,
   pollWhilePending,
   unresolvedThreads,
@@ -22,6 +26,7 @@ import {
   type CheckEvidence,
   type LandInput,
   type LandPr,
+  type PlaceReads,
 } from "../../src/runs/landEvidence.ts";
 
 /**
@@ -379,5 +384,58 @@ describe("the evidence line and the poll", () => {
     reads = 0;
     now = 0;
     expect(await pollWhilePending(() => Promise.resolve((reads += 1)), () => true, 60_000, 30_000, clock)).toBe(3);
+  });
+});
+
+/**
+ * build/18: a stand-in for Windows' `realpath.native` over one user's folders: names match in any letter case, the
+ * 8.3 short name `RUNNER~1` reads as `runneradmin`, and an existing path comes back in its long, real spelling. Mock
+ * reason: the win32 reading has to be proven on any host, and this machine is no Windows one.
+ */
+const WINDOWS_FOLDERS = ["C:\\", "C:\\Users", "C:\\Users\\runneradmin", "C:\\Users\\runneradmin\\AppData", "C:\\Users\\runneradmin\\AppData\\Local", "C:\\Users\\runneradmin\\AppData\\Local\\Temp", "C:\\Users\\runneradmin\\AppData\\Local\\Temp2", "C:\\tools"];
+const windowsReads: PlaceReads = {
+  platform: "win32",
+  realpath: (path) => {
+    const spelled = win32
+      .resolve(path)
+      .split("\\")
+      .map((segment) => (segment.toLowerCase() === "runner~1" ? "runneradmin" : segment))
+      .join("\\");
+    const key = spelled.toLowerCase().replace(/\\$/, "");
+    const found = WINDOWS_FOLDERS.find((folder) => folder.toLowerCase().replace(/\\$/, "") === key);
+    if (found === undefined) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+    return found;
+  },
+};
+const TEMP = "C:\\Users\\runneradmin\\AppData\\Local\\Temp";
+
+describe("the gh place check (build/18)", () => {
+  it("reads a Windows short-form path inside the temp folder as inside, and a short-form root as its long form", () => {
+    expect(insideAny("C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\stamity-vitest-1\\bin\\gh", [TEMP], windowsReads)).toBe(true);
+    expect(insideAny(`${TEMP}\\bin\\gh`, ["C:\\Users\\RUNNER~1\\AppData\\Local\\Temp"], windowsReads)).toBe(true);
+  });
+
+  it("reads a mixed-case and a forward-slash Windows path inside the temp folder as inside", () => {
+    expect(insideAny("c:\\USERS\\RunnerAdmin\\appdata\\LOCAL\\temp\\gh.exe", [TEMP], windowsReads)).toBe(true);
+    expect(insideAny("C:/Users/runneradmin/AppData/Local/Temp/bin/gh.exe", [TEMP], windowsReads)).toBe(true);
+  });
+
+  it("does not read a sibling folder that only shares the root's prefix as inside", () => {
+    expect(insideAny("C:\\Users\\runneradmin\\AppData\\Local\\Temp2\\gh.exe", [TEMP], windowsReads)).toBe(false);
+    expect(insideAny("C:\\tools\\gh.exe", [TEMP], windowsReads)).toBe(false);
+    expect(insideAny("/opt/tmpx/gh", ["/opt/tmp"], { platform: "linux", realpath: (path) => (path === "/" ? "/" : (() => { throw new Error("ENOENT"); })()) })).toBe(false);
+  });
+
+  it("fails closed: a path that does not resolve at all counts as inside", () => {
+    const nothing: PlaceReads = { platform: "win32", realpath: () => { throw new Error("ENOENT"); } };
+    expect(placeOf("C:\\tools\\gh.exe", nothing)).toBeNull();
+    expect(insideAny("C:\\tools\\gh.exe", [TEMP], nothing)).toBe(true);
+  });
+
+  it("keeps a PATH entry's own name apart from the program its link names (review/91)", () => {
+    const linked: PlaceReads = { platform: "linux", realpath: (path) => ({ "/": "/", "/opt": "/opt", "/opt/bin": "/opt/bin", "/opt/bin/gh": "/tmp/planted/gh", "/tmp": "/tmp" } as Record<string, string>)[path] ?? (() => { throw new Error("ENOENT"); })() };
+    expect(entryPlaceOf("/opt/bin/gh", linked)).toBe("/opt/bin/gh");
+    expect(placeOf("/opt/bin/gh", linked)).toBe("/tmp/planted/gh");
+    expect(insideAny("/opt/bin/gh", ["/tmp"], linked)).toBe(true);
   });
 });

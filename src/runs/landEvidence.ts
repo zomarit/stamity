@@ -11,6 +11,7 @@
  * thread, the ledger at the head readable with no open Critical or Warning row, and `mergeable_state` `clean`, the
  * one state an admin's merge cannot pass silently.
  */
+import { posix, win32 } from "node:path";
 import { matchGlob } from "../change/classify.ts";
 import { fromProjectRoot, PERSON_ONLY_PATHS } from "../change/personOnlyPaths.ts";
 import { matchesDeployingBranch, type ResolvedAutonomy } from "../config/autonomy.ts";
@@ -557,4 +558,78 @@ export async function pollWhilePending<T>(read: () => Promise<T>, pending: (valu
     value = await read();
   }
   return value;
+}
+
+/**
+ * build/18: what a place check needs, injected so the win32 reading is provable on any host: the platform whose
+ * path rules apply, and a `realpath` that names an existing path in its long, real form (Node's `realpath.native`)
+ * and throws for one that does not exist.
+ */
+export interface PlaceReads {
+  platform: NodeJS.Platform;
+  realpath(path: string): string;
+}
+
+/**
+ * `path` as one comparable form: absolute by the platform's rules, its deepest existing ancestor named by `realpath`
+ * (so a Windows 8.3 short name and the long name read alike, as does a folder reached through a link) with the rest
+ * appended; on win32 with one separator and one letter case. `null` where not even the root resolves.
+ */
+export function placeOf(path: string, reads: PlaceReads): string | null {
+  const rules = reads.platform === "win32" ? win32 : posix;
+  let at = rules.resolve(path);
+  const rest: string[] = [];
+  for (;;) {
+    let found: string | null = null;
+    try {
+      found = reads.realpath(at);
+    } catch {
+      found = null;
+    }
+    if (found !== null) {
+      const joined = rest.length === 0 ? rules.resolve(found) : rules.join(rules.resolve(found), ...rest.toReversed());
+      return reads.platform === "win32" ? joined.replaceAll("/", "\\").toLowerCase() : joined;
+    }
+    const parent = rules.dirname(at);
+    if (parent === at) return null;
+    rest.push(rules.basename(at));
+    at = parent;
+  }
+}
+
+/** Whether `place` is `root` or lies under it, by a separator boundary: a sibling that only shares a prefix is not. */
+function under(place: string, root: string, platform: NodeJS.Platform): boolean {
+  const separator = platform === "win32" ? "\\" : "/";
+  const base = root.endsWith(separator) ? root : `${root}${separator}`;
+  return place === root || place.startsWith(base);
+}
+
+/**
+ * `path` with its folder read by {@link placeOf} and its own last name kept, not followed: where a `PATH` entry lies,
+ * as against the program a link there names (review/91). `null` where its folder does not resolve.
+ */
+export function entryPlaceOf(path: string, reads: PlaceReads): string | null {
+  const rules = reads.platform === "win32" ? win32 : posix;
+  const folder = placeOf(rules.dirname(rules.resolve(path)), reads);
+  if (folder === null) return null;
+  const joined = rules.join(folder, rules.basename(path));
+  return reads.platform === "win32" ? joined.toLowerCase() : joined;
+}
+
+/**
+ * build/18: whether `place` (already read by {@link placeOf} or {@link entryPlaceOf}; `null` where it did not resolve)
+ * lies in any of `roots`, each read by {@link placeOf}. Fails closed: a `null` place counts as inside. A root that
+ * does not resolve is passed over, as it holds nothing.
+ */
+export function withinAny(place: string | null, roots: readonly string[], reads: PlaceReads): boolean {
+  if (place === null) return true;
+  return roots.some((root) => {
+    const base = placeOf(root, reads);
+    return base !== null && under(place, base, reads.platform);
+  });
+}
+
+/** {@link withinAny} for a path not yet read: the path itself, every link followed. */
+export function insideAny(path: string, roots: readonly string[], reads: PlaceReads): boolean {
+  return withinAny(placeOf(path, reads), roots, reads);
 }

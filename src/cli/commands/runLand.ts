@@ -1,6 +1,6 @@
 import { closeSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { basename, dirname, isAbsolute, join, parse, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, parse, resolve } from "node:path";
 import { readAutonomy, strictestAutonomy, type ResolvedAutonomy } from "../../config/autonomy.ts";
 import { personOnlyVerdict } from "../../hooks/personOnly.ts";
 import { readGitSurface, SURFACE_RECORD_FILE, surfaceRefusal, type RecordFileReads } from "../../runs/gitSurface.ts";
@@ -9,6 +9,7 @@ import {
   askPathsOf,
   checkEvidence,
   decideLand,
+  entryPlaceOf,
   evidenceLine,
   ledgerEvidence,
   parseBranch,
@@ -16,9 +17,11 @@ import {
   parseCheckRuns,
   parseFiles,
   parsePr,
+  placeOf,
   parseThreadsPage,
   ownPr,
   pollWhilePending,
+  withinAny,
   unresolvedThreads,
   waitsLine,
   withStatusLine,
@@ -28,6 +31,7 @@ import {
   type LandDecision,
   type LandInput,
   type LandPr,
+  type PlaceReads,
   type PollClock,
   type RequiredCheck,
   type ThreadRead,
@@ -200,18 +204,14 @@ function filesystemRoot(): string {
   return /^[A-Za-z]:$/.test(drive) ? `${drive}\\` : parse(homedir()).root;
 }
 
-/** Whether `path` is `root` or lies under it. */
-function inside(root: string, path: string): boolean {
-  const rel = relative(root, path);
-  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
-}
-
-function real(path: string): string {
-  try {
-    return realpathSync(path);
-  } catch {
-    return resolve(path);
-  }
+/**
+ * build/18: the temp folders a planted `gh` must not lie in: `os.tmpdir()`; `/tmp` on POSIX; on win32 also `%TEMP%`,
+ * `%TMP%` and the user's local `Temp` folder under `AppData`, from the verb's environment and the process's, as found.
+ */
+function tempRoots(env: NodeJS.ProcessEnv): string[] {
+  if (process.platform !== "win32") return [tmpdir(), "/tmp"];
+  const named = [env, process.env].flatMap((from) => [from["TEMP"], from["TMP"], from["LOCALAPPDATA"] === undefined ? undefined : join(from["LOCALAPPDATA"], "Temp")]);
+  return [tmpdir(), join(homedir(), "AppData", "Local", "Temp"), ...named.filter((root): root is string => typeof root === "string" && root !== "")];
 }
 
 /** A branch name or value encoded for a query string in the REST runner's path alphabet. */
@@ -320,12 +320,14 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     if (gh === null) throw new Refused("gh not found on PATH");
     if (!isAbsolute(gh)) throw new Refused("gh resolves to a PATH entry that is not an absolute path");
     // review/91: the PATH entry (its folder's links resolved) and the program it finally names are each checked; a
-    // version manager's shim is a link whose target picks the tool by the name it was started under.
-    const ghPlaces = [join(real(dirname(gh)), basename(gh)), real(gh)];
-    if (ghPlaces.some((place) => inside(real(top), place))) throw new Refused("gh resolves to a program inside the work tree, whose answers the run could write");
-    if (ghPlaces.some((place) => [tmpdir(), "/tmp"].some((root) => inside(real(root), place)))) {
-      throw new Refused("gh resolves to a program inside a temp folder, whose answers the run could write");
-    }
+    // version manager's shim is a link whose target picks the tool by the name it was started under. build/18: each
+    // place and each root read as one real, normalised form (Windows' short and long names, either separator, any
+    // letter case), compared by a separator boundary; a place that does not resolve counts as inside.
+    const placeReads: PlaceReads = { platform: process.platform, realpath: (path) => realpathSync.native(path) };
+    const ghPlaces = [entryPlaceOf(gh, placeReads), placeOf(gh, placeReads)];
+    const where = (roots: readonly string[]): boolean => ghPlaces.some((place) => withinAny(place, roots, placeReads));
+    if (where([top])) throw new Refused("gh resolves to a program inside the work tree, whose answers the run could write");
+    if (where(tempRoots(env))) throw new Refused("gh resolves to a program inside a temp folder, whose answers the run could write");
     // review/75, review/91: every later call starts this same absolute PATH entry, never one resolved again from PATH,
     // and never its link target, so a shim still sees its own name. review/95, review/96: from the filesystem's root
     // (every call names its host and its full API path, so gh needs no repository folder), which has no parent a
