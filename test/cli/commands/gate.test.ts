@@ -211,9 +211,11 @@ describe("stamity gate classify --paths", () => {
     expect(result.code).toBe(2);
   });
 
-  it("is hidden and reads only: no --dry-run is registered", async () => {
+  // TEST CHANGE, justified (REQ-FLOW-131, review/97): `gate preflight` now writes the git surface's record on a pass,
+  // so `gate` is mutating and takes `--dry-run`; classify and scan write nothing and still refuse it with exit 2.
+  it("is hidden, and classify refuses --dry-run", async () => {
     expect(gateCommand.hidden).toBe(true);
-    expect(gateCommand.mutating).toBe(false);
+    expect(gateCommand.mutating).toBe(true);
     const result = await run(["classify", "--paths", "docs/x.md", "--dry-run"]);
     expect(result.code).toBe(2);
   });
