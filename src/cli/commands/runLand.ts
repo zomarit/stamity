@@ -1,6 +1,6 @@
 import { closeSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { readAutonomy, strictestAutonomy, type ResolvedAutonomy } from "../../config/autonomy.ts";
 import { personOnlyVerdict } from "../../hooks/personOnly.ts";
 import { readGitSurface, SURFACE_RECORD_FILE, surfaceRefusal, type RecordFileReads } from "../../runs/gitSurface.ts";
@@ -68,6 +68,13 @@ const POLL_MS = 30_000;
 /** review/79: after the ready mark, the merge state is read again every this many milliseconds, for at most the next. */
 const READY_POLL_MS = 5_000;
 const READY_MERGEABLE_MS = 60_000;
+/**
+ * review/90: the whole verb, every poll included, ends within 9 minutes of its start, under a client's ten-minute shell
+ * call (decision D17; `--wait`'s cap in `./run.ts` is the same 9). No poll goes on past the budget less a reserve for the
+ * reads, the evidence write and the merge that follow the last one.
+ */
+const LAND_BUDGET_MS = 9 * 60_000;
+const ACT_RESERVE_MS = 30_000;
 
 /**
  * The clock `--wait` and the read after the ready mark poll on. Mock seam: a test replaces `now` and `sleep`, since a
@@ -214,6 +221,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
   const ready = opts["ready"] === true;
   const method = (typeof opts["method"] === "string" ? opts["method"] : "merge") as MergeMethod;
   const waitMinutes = typeof opts["wait"] === "number" ? opts["wait"] : 0;
+  const budgetEnd = LAND_CLOCK.now() + LAND_BUDGET_MS - ACT_RESERVE_MS;
 
   const result: LandResult = { outcome: "refused", pr: null, evidence: { checks: [], threads: { unresolved: null }, ledger: { open: [] }, held: [], mergeableState: null }, notDone: [] };
   const lines: string[] = [`run: ${run} (${unattended ? "unattended" : "attended"})`];
@@ -268,11 +276,17 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     const prefix = (await gitLine(["rev-parse", "--show-prefix"])) ?? "";
     const gh = ghProgramPath({ cwd, env });
     if (gh === null) throw new Refused("gh not found on PATH");
-    const ghAt = real(gh);
-    if (inside(real(top), ghAt)) throw new Refused("gh resolves to a program inside the work tree, whose answers the run could write");
-    if ([tmpdir(), "/tmp"].some((root) => inside(real(root), ghAt))) throw new Refused("gh resolves to a program inside a temp folder, whose answers the run could write");
-    // review/75: every later call starts the program checked here, never one resolved again from PATH.
-    const ghOpts = { cwd, env, program: ghAt };
+    if (!isAbsolute(gh)) throw new Refused("gh resolves to a PATH entry that is not an absolute path");
+    // review/91: the PATH entry (its folder's links resolved) and the program it finally names are each checked; a
+    // version manager's shim is a link whose target picks the tool by the name it was started under.
+    const ghPlaces = [join(real(dirname(gh)), basename(gh)), real(gh)];
+    if (ghPlaces.some((place) => inside(real(top), place))) throw new Refused("gh resolves to a program inside the work tree, whose answers the run could write");
+    if (ghPlaces.some((place) => [tmpdir(), "/tmp"].some((root) => inside(real(root), place)))) {
+      throw new Refused("gh resolves to a program inside a temp folder, whose answers the run could write");
+    }
+    // review/75, review/91: every later call starts this same absolute PATH entry, never one resolved again from PATH,
+    // and never its link target, so a shim still sees its own name.
+    const ghOpts = { cwd, env, program: gh };
     const moved = await surfaceMoved();
     if (moved !== null) throw new Refused(moved);
 
@@ -306,10 +320,6 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     const remote = await git(["ls-remote", "origin", `refs/heads/${runBranch}`]);
     if (remote.code !== 0) throw new Refused(`git ls-remote origin answered ${remote.code}`);
     const originTip = /^([0-9a-f]{40,64})\t/.exec(remote.stdout)?.[1] ?? null;
-    // review/73: the login gh is authenticated as, which must have opened the run's own pull request.
-    const user = await json("user", "the authenticated login read");
-    const viewer = typeof user === "object" && user !== null ? (user as Record<string, unknown>)["login"] : undefined;
-    if (typeof viewer !== "string" || viewer === "") throw new Refused("GitHub named no authenticated login");
 
     // (3) The run's own pull request: from the run's branch, into the default branch, its body ending with the marker,
     // and the number the run verb recorded when it opened the draft (review/73).
@@ -325,6 +335,11 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     const recordPlace = gitDir === null || gitDir === "" ? { unreadable: "git rev-parse --git-dir answered no folder" } : { path: join(resolve(cwd, gitDir), ...PR_RECORD_FILE.split("/")) };
     const unrecorded = prRecordRefusal(recordPlace, RECORD_READS, { run, host: repo.host, owner: repo.owner, repo: repo.repo, number });
     if (unrecorded !== null) throw new Refused(unrecorded);
+    // review/73 and the login source: the login gh is authenticated as comes from the thread query's viewer, one source
+    // for the author check and the thread rule; an app installation token answers it where it refuses `GET user`.
+    const firstThreads = await reviewThreads(repo.host, repo.owner, repo.repo, number, ghOpts);
+    if (firstThreads === null) throw new Refused("the review threads could not be read, nor with them the login gh is authenticated as");
+    const viewer = firstThreads.viewer;
     const readPr = async (): Promise<LandPr> => {
       const pr = parsePr(await json(`${repoPath}/pulls/${number}`, `the read of #${number}`));
       if (pr === null) throw new Refused(`GitHub's answer for #${number} names no pull request this verb reads`);
@@ -366,8 +381,11 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     result.evidence.held = askPathsOf(files, prefix, typeof hookPaths === "string" ? [] : hookPaths);
 
     // (7) The review threads, every page, read again on every later read (review/72).
-    const readThreads = (): Promise<number | null> => reviewThreads(repo.host, repo.owner, repo.repo, number, ghOpts);
-    let threads = await readThreads();
+    const readThreads = async (): Promise<number | null> => {
+      const read = await reviewThreads(repo.host, repo.owner, repo.repo, number, ghOpts);
+      return read === null || read.viewer.toLowerCase() !== viewer.toLowerCase() ? null : read.count;
+    };
+    let threads: number | null = firstThreads.count;
 
     // (8) The ledger as the head commit holds it, and the work tree's copy, which must equal it.
     const ledger = await ledgerAt(cwd, sha, `${runDir}/${layout.LEDGER_FILE}`, git);
@@ -415,7 +433,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       ];
     };
     let checks: CheckEvidence = await readChecks();
-    const deadline = LAND_CLOCK.now() + waitMinutes * 60_000;
+    const deadline = Math.min(LAND_CLOCK.now() + waitMinutes * 60_000, budgetEnd);
     /** One fresh read of everything that moves: the check runs, the threads and (after any ready mark) the pull request. */
     const reread = async (beforeReady: boolean): Promise<LandDecision> => {
       checks = await readChecks();
@@ -446,10 +464,10 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
         throw new Refused(`marking #${number} ready answered HTTP ${marked.status}${marked.status === 200 ? " with errors" : ""}`);
       }
       lines.push(`ready: marked #${number} ready for review`);
-      // review/79: GitHub computes the merge state after the mark; it is read again until computed, at most 60 s
-      // whatever --wait says, and still uncomputed it refuses as not computed yet.
+      // review/79, review/90: GitHub computes the merge state after the mark; it is read again until computed, at most
+      // 60 s and never past the verb's budget, and still uncomputed it refuses as not computed yet.
       const computing = (now: LandPr): boolean => now.mergeableState === null || now.mergeableState === "unknown";
-      pr = await pollWhilePending(readPr, computing, LAND_CLOCK.now() + READY_MERGEABLE_MS, READY_POLL_MS, LAND_CLOCK);
+      pr = await pollWhilePending(readPr, computing, Math.min(LAND_CLOCK.now() + READY_MERGEABLE_MS, budgetEnd), READY_POLL_MS, LAND_CLOCK);
       decision = await waitOut(await reread(false), false);
     } else if (decision.outcome === "land" && draftReady) {
       lines.push(`ready: would mark #${number} ready for review`);
@@ -602,8 +620,8 @@ async function checkRuns(json: (path: string, what: string) => Promise<unknown>,
   throw new Refused(`more than ${MAX_PAGES * 100} check runs on ${sha}, so the required ones are not proven read`);
 }
 
-/** The unresolved review threads ({@link unresolvedThreads}), every page; `null` where a page does not read. */
-async function reviewThreads(hostname: string, owner: string, repo: string, number: number, opts: GhApiOptions): Promise<number | null> {
+/** The unresolved review threads ({@link unresolvedThreads}) and the login they were read as, every page; `null` where a page does not read. */
+async function reviewThreads(hostname: string, owner: string, repo: string, number: number, opts: GhApiOptions): Promise<{ count: number; viewer: string } | null> {
   const threads: ThreadRead[] = [];
   let after: string | undefined;
   let viewer = "";
@@ -619,7 +637,7 @@ async function reviewThreads(hostname: string, owner: string, repo: string, numb
     if (read === null) return null;
     viewer = read.viewer;
     threads.push(...read.threads);
-    if (read.next === null) return unresolvedThreads(threads, viewer);
+    if (read.next === null) return { count: unresolvedThreads(threads, viewer), viewer };
     after = read.next;
   }
   return null;

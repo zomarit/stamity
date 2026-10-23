@@ -2,12 +2,14 @@ import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import { appendFile, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { gitSurfaceRecordPath, readRunGitSurface } from "../../../src/cli/commands/gate.ts";
 import { runCommand } from "../../../src/cli/commands/run.ts";
 import { LAND_CLOCK } from "../../../src/cli/commands/runLand.ts";
 import type * as GitWriteModule from "../../../src/cli/engine/gitWrite.ts";
+import type * as FsModule from "node:fs";
 import { surfaceRecord } from "../../../src/runs/gitSurface.ts";
 import { prRecordText } from "../../../src/runs/pullRequest.ts";
 import { runInProcess } from "../../support/inProcess.ts";
@@ -76,9 +78,26 @@ vi.mock("../../../src/cli/engine/ghRunner.ts", () => ({
   ghProgramPath: () => gh.program,
 }));
 
-/** A threads page holding `nodes`, as the constant query answers. */
-function threadsPage(nodes: unknown[]): unknown {
-  return { data: { viewer: { login: "runner" }, repository: { pullRequest: { reviewThreads: { nodes, pageInfo: { hasNextPage: false, endCursor: null } } } } } };
+/**
+ * Link targets a case gives a path that does not exist on disk, as `realpathSync` would read a link there.
+ * TEST CHANGE, justified (review/91): the verb checks a `gh` PATH entry and its link target apart, and starts the entry.
+ */
+const links = vi.hoisted(() => new Map<string, string>());
+
+// A spy, not a stand-in: every `realpathSync` goes to the real one except a path a case maps. Mock reason: a shim-style
+// link outside the temp folders and the work tree (which the verb refuses) cannot be made in a unit test.
+vi.mock("node:fs", async (importOriginal) => {
+  const real = await importOriginal<typeof FsModule>();
+  const realpathSync = Object.assign(
+    (path: Parameters<typeof real.realpathSync>[0], options?: Parameters<typeof real.realpathSync>[1]) => links.get(String(path)) ?? real.realpathSync(path, options),
+    { native: real.realpathSync.native },
+  );
+  return { ...real, default: { ...real, realpathSync }, realpathSync };
+});
+
+/** A threads page holding `nodes`, as the constant query answers, read as `viewer`. */
+function threadsPage(nodes: unknown[], viewer = "runner"): unknown {
+  return { data: { viewer: { login: viewer }, repository: { pullRequest: { reviewThreads: { nodes, pageInfo: { hasNextPage: false, endCursor: null } } } } } };
 }
 
 /** One review thread: resolved or not, by whom, and its comments' authors as `[__typename, login]`. */
@@ -143,6 +162,7 @@ describe("stamity run land", () => {
     gh.threads = [threadsPage([])];
     gh.afterReady = ["clean"];
     gh.program = "/usr/bin/gh";
+    links.clear();
   });
 
   /**
@@ -203,7 +223,9 @@ describe("stamity run land", () => {
     const head = git(repo, ["rev-parse", "HEAD"]);
     if (opts.prRecord !== false) await put(repo, PR_RECORD, prRecordText({ run: RUN, host: "github.com", owner: "o", repo: "r", number: 7 }));
     route("GET repos/o/r", { default_branch: "main" });
-    route("GET user", { login: "runner" });
+    // TEST CHANGE, justified (the login source, review/r2): the login now comes from the thread query's viewer, so
+    // `GET user` answers as an app installation token's would, refused, in every case.
+    route("GET user", { message: "Resource not accessible by integration" }, 403);
     route("GET repos/o/r/pulls", [{ number: 7, html_url: "https://github.com/o/r/pull/7", head: { ref: RUN_BRANCH, label: `o:${RUN_BRANCH}` }, base: { ref: "main" }, body: `The list.\n\n${MARKER}` }]);
     route("GET repos/o/r/pulls/7", pull(head));
     route("GET repos/o/r/pulls/7/files", [{ filename: "a.txt" }, { filename: `${RUN_DIR}/record.md` }, { filename: `${RUN_DIR}/ledger.jsonl` }]);
@@ -666,6 +688,64 @@ describe("stamity run land", () => {
     gh.program = join(repo, "bin", "gh");
 
     expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: ["gh resolves to a program inside the work tree, whose answers the run could write"] });
+    expect(gh.calls).toEqual([]);
+  });
+
+  it("lands where GET user is refused, as for an app installation token, taking the login from the thread query (r2 login source)", async () => {
+    const { repo } = await seed();
+
+    expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "landed" });
+    expect(kinds()).not.toContain("GET user");
+  });
+
+  it("refuses where the thread query names no login, before any merge (r2 login source)", async () => {
+    const { repo } = await seed();
+    gh.threads = [threadsPage([], "")];
+
+    expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({
+      outcome: "refused",
+      notDone: ["the review threads could not be read, nor with them the login gh is authenticated as"],
+    });
+    expect(kinds()).not.toContain("merge");
+  });
+
+  it("ends within the 9-minute budget in the worst case, --wait 9 --ready with checks green only at the end and the merge state uncomputed (review/90)", async () => {
+    const { repo, head } = await seed();
+    const { slept } = fakeClock();
+    route("GET repos/o/r/pulls/7", pull(head, { draft: true, mergeable_state: "draft" }));
+    gh.afterReady = ["unknown"];
+    const running = { status: 200, json: { total_count: 1, check_runs: [{ id: 1, name: "test", status: "in_progress", conclusion: null, app: { id: 15368 } }] } };
+    const green = { status: 200, json: { total_count: 1, check_runs: [{ id: 1, name: "test", status: "completed", conclusion: "success", app: { id: 15368 } }] } };
+    gh.routes.set(`GET repos/o/r/commits/${head}/check-runs`, [...Array.from({ length: 17 }, () => running), green]);
+
+    const result = await run(repo, ["land", "--run", RUN, "--wait", "9", "--ready"]);
+
+    expect(kinds()).toContain("ready");
+    expect(kinds()).not.toContain("merge");
+    expect(result.doc).toMatchObject({ outcome: "refused", notDone: ["mergeable_state is not computed yet, run it again"] });
+    expect(slept.reduce((sum, ms) => sum + ms, 0)).toBeLessThanOrEqual(9 * 60_000 - 30_000);
+  });
+
+  it("starts gh by its absolute PATH entry, not the entry's link target, so a shim sees its own name (review/91)", async () => {
+    const { repo } = await seed();
+    gh.program = "/opt/shim/bin/gh";
+    links.set("/opt/shim/bin/gh", "/opt/shim/lib/mise");
+
+    expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "landed" });
+    expect(new Set(gh.calls.map((call) => call.program))).toEqual(new Set(["/opt/shim/bin/gh"]));
+  });
+
+  it("refuses a gh PATH entry inside a temp folder whose target lies outside, and a relative entry (review/91)", async () => {
+    const { repo } = await seed();
+    const entryDir = getRoot().path("shim-bin");
+    await mkdir(entryDir, { recursive: true });
+    expect(entryDir.startsWith(tmpdir()) || entryDir.startsWith("/tmp") || entryDir.startsWith("/private")).toBe(true);
+    gh.program = join(entryDir, "gh");
+    links.set(join(entryDir, "gh"), "/usr/local/opt/gh/bin/gh");
+    expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: ["gh resolves to a program inside a temp folder, whose answers the run could write"] });
+
+    gh.program = "gh";
+    expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: ["gh resolves to a PATH entry that is not an absolute path"] });
     expect(gh.calls).toEqual([]);
   });
 

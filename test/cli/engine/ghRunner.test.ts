@@ -1,4 +1,4 @@
-import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -242,6 +242,29 @@ describe("ghApi", () => {
     });
     expect(await readFile(log, "utf8")).toContain("user\n");
     await expect(ghApi({ method: "GET", path: "user", hostname: HOST }, { cwd: work, env: { PATH: bin }, program: "gh" })).rejects.toMatchObject({ code: "GH_REFUSED" });
+  });
+
+  it.skipIf(process.platform === "win32")("starts a shim-style link by its own path, so a target that picks the tool by its name runs gh (review/91)", async () => {
+    // A stand-in for a version manager's shim: one program, linked under each tool's name, that reads the name it was
+    // started under. Mock reason: no real version manager is installed for the suite, and the real gh reaches GitHub.
+    const lib = getRoot().path("shim-lib");
+    const bin = getRoot().path("shim-bin");
+    const work = getRoot().path("shim-work");
+    await Promise.all([mkdir(lib), mkdir(bin), mkdir(work)]);
+    const shim = join(lib, "shim");
+    await writeFile(
+      shim,
+      "#!/bin/sh\n" +
+        'case "$0" in */gh) ;; *) echo "shim: unknown command $1" >&2; exit 2 ;; esac\n' +
+        "/bin/cat > /dev/null\n" +
+        "printf 'HTTP/2.0 200 OK\\r\\nContent-Type: application/json\\r\\n\\r\\n{\"ok\":true}'\n",
+      "utf8",
+    );
+    await chmod(shim, 0o755);
+    await symlink(shim, join(bin, "gh"));
+
+    await expect(ghApi({ method: "GET", path: "user", hostname: HOST }, { cwd: work, env: { PATH: bin }, program: join(bin, "gh") })).resolves.toEqual({ status: 200, json: { ok: true } });
+    await expect(ghApi({ method: "GET", path: "user", hostname: HOST }, { cwd: work, env: { PATH: bin }, program: shim })).rejects.toThrow(/no HTTP status/);
   });
 
   it.skipIf(process.platform === "win32")("resolves a 4xx answer gh exits 1 on as its status", async () => {
