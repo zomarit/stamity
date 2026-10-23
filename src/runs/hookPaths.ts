@@ -37,7 +37,7 @@ const USER_HOOKS_DIR = ".stamity/hooks";
 const PACKS_DIR = ".stamity/packs";
 
 /** UTF-8's byte-order mark, which the manifest reader drops before it parses (`src/manifest/manifest.ts`, review/188). */
-const BOM = "﻿";
+const BOM = String.fromCharCode(0xfeff);
 
 /** A link's mode in a tree listing. */
 const LINK_MODE = "120000";

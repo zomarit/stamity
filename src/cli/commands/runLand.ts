@@ -103,6 +103,8 @@ const MAX_PAGES = 10;
 const MAX_FILE_PAGES = 30;
 /** A branch name as it goes into a path unencoded, as the push check reads it. */
 const PATH_BRANCH = /^(?!-)(?!.*\.\.)[A-Za-z0-9._/-]+$/;
+/** UTF-8's byte-order mark, which a manifest's reader drops before it parses; built from its code, never typed. */
+const BOM = String.fromCharCode(0xfeff);
 /** The run's manifest, from the project root. */
 const MANIFEST = ".stamity/manifest.json";
 /** The most of a manifest, a ledger or a record read. */
@@ -749,7 +751,7 @@ async function ledgerAt(
 /** The setting a manifest's text resolves to; text that does not parse resolves to the strictest. */
 function settingOf(text: string): ResolvedAutonomy {
   try {
-    const parsed: unknown = JSON.parse(text.startsWith("﻿") ? text.slice(1) : text);
+    const parsed: unknown = JSON.parse(text.startsWith(BOM) ? text.slice(1) : text);
     if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) return readAutonomy(parsed as { autonomy?: unknown });
   } catch {
     // Falls through to the strictest setting.
