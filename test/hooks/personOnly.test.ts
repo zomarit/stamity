@@ -3322,3 +3322,50 @@ describe("a script file right after a bare option may be that option's value (a4
     expect(personOnlyVerdict(command, DEFAULT), command).toEqual({ deny: false });
   });
 });
+
+describe("an option word joined to its script-file value is never the script word (a4, review/98 round 2)", () => {
+  const STRICT = { ...ON_FEATURE, stricterThanDefault: true, ownRepository: false };
+
+  // Red on b68f5609: the joined option word's last part ended in a script extension, so it was taken as the script.
+  it.each([
+    ["an import option joined to its file before a filled-in script word", "node --import=./register.mjs \"$CLI\" sync --loosen"],
+    ["a preload option joined to its file before a filled-in script word", "node --require=./preload.cjs \"$CLI\" clean"],
+    ["bun's preload option joined to its file before a filled-in script word", "bun --preload=./setup.ts \"$CLI\" sync \"$F\""],
+  ])("asks for %s", (_, command) => {
+    expect(personOnlyVerdict(command, STRICT), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+
+  it("runs the joined option before a literal script with a filled-in argument after it", () => {
+    expect(personOnlyVerdict("node --import=./register.mjs scripts/x.mjs \"$OUT\"", STRICT)).toEqual({ deny: false });
+  });
+});
+
+describe("a launcher read as one rule with its verbs (a4, review/99)", () => {
+  const DEFAULT = { ...ON_FEATURE, stricterThanDefault: false, ownRepository: false };
+
+  // Red on b68f5609: a launcher settled only at a script-extension word, so these asked once an argument was filled in.
+  it.each([
+    ["bun's package script with a filled-in argument", "bun run test \"$F\""],
+    ["bun's package script with filled-in arguments after its separator", "bun run lint -- \"$X\""],
+    ["bun's test runner with a filled-in file", "bun test \"$FILE\""],
+    ["deno's task runner with a filled-in argument", "deno task build \"$X\""],
+    ["an extensionless bin under a filled-in folder run through node", "node \"$ROOT/node_modules/.bin/vitest\" run"],
+    ["deno's test tool with a filled-in file", "deno test --allow-read \"$FILE\""],
+    ["tsx's watch form with a literal script and a filled-in argument", "tsx watch src/index.ts \"$ARG\""],
+  ])("runs %s", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toEqual({ deny: false });
+  });
+
+  it.each([
+    ["node with a filled-in script word", "node \"$CLI\" sync"],
+    ["deno's run form with a filled-in script word", "deno run \"$CLI\" sync"],
+    ["bun given a file path whose name is filled in", "bun \"./$NAME.ts\" sync"],
+    ["bun's run form given a filled-in file", "bun run \"$FILE\" sync"],
+    ["a bare flag, a literal script and a filled-in argument", "deno run --allow-read main.ts \"$ARG\""],
+    ["an import option joined to its file before a filled-in script word", "node --import=./register.mjs \"$CLI\" sync"],
+    ["deno given an unknown verb and a filled-in word", "deno eval \"$CODE\""],
+    ["tsx's watch form with a filled-in script word", "tsx watch \"$ENTRY\""],
+  ])("asks for %s", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+});

@@ -831,35 +831,86 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       // opens with one (review/52): `src/*.ts` cannot spell an option, `*` and `--loo*` can.
       const dashes = (at: number): boolean => markOf(at).first === 0 || (cmd[at] ?? "").startsWith("-");
       // A launcher or a package manager whose script or package word the shell fills in runs a program the guard cannot
-      // settle (review/87), read with no knowledge of any option: a launcher's script word is its first word whose last
-      // path part is a literal file name ending in a script extension, its folder filled in or not (review/93, the
-      // review/38 reading); a manager's package or bin word its first literal word that is no option, its `run`,
-      // `exec`, `dlx` or `x` and a valued option's value passed. A marked word before that word, an option, an option's
-      // value or a subcommand alike, unsettles the program, except a manager's folder, filter or workspace value, which
-      // runs no code (review/93); with no such word, any marked word does. A marked word after it leaves the program to
-      // that word.
+      // settle (review/87, review/93, review/98, review/99), read with no knowledge of any option. A launcher's head
+      // word is its first word that is no option (a dash word, joined value or not) and no possible value of a bare
+      // option (a dash word holding no `=`, whose next word may be its value, any word). `node`, `nodejs` and `tsx`
+      // (its `watch` passed) read that word as the script, settled by its literal last path part whatever its
+      // extension. `deno` and `bun` read it through a fixed table of their verbs: a script-taking one (`deno run`, bun
+      // given a path or a script file, `bun run` given one) reads the next head word as the script; a name-taking one
+      // (`bun run <name>`, `deno task <name>`, bun given a bare name) is settled by that literal name; their own tools
+      // (`bun test`, `deno test`, `deno fmt`, …) are settled, their later words file arguments; `bun x` reads its
+      // package word. A manager's package or bin word is its first literal word that is no option, its `run`, `exec`,
+      // `dlx` or `x` and a folder, filter or workspace value passed. A marked word before the settling word unsettles
+      // the program, except a manager's folder, filter or workspace value, which runs no code; so does a marked
+      // settling word (a script by its last part), and, with no settling word, any marked word. A marked word after it
+      // leaves the program to that word.
       const launcher = programName(program);
       const launches = ["node", "nodejs", "bun", "deno", "tsx"].includes(launcher);
       const valueOf = (at: number): boolean =>
         !launches && (MANAGER_VALUED.has(cmd[at - 1] ?? "") || [...MANAGER_VALUED].some((name) => name.startsWith("--") && (cmd[at] ?? "").startsWith(`${name}=`)));
+      /** A launcher's next head word from `from`, or -1: no dash word and no word directly after a bare option. */
+      const headFrom = (from: number): number => {
+        for (let at = from; at < cmd.length; at += 1) {
+          const word = cmd[at] ?? "";
+          const previous = at > 1 ? (cmd[at - 1] ?? "") : "";
+          if (word.startsWith("-") || (previous.startsWith("-") && !previous.includes("="))) continue;
+          return at;
+        }
+        return -1;
+      };
+      const scriptFile = (word: string): boolean => /[\\/]/.test(word) || /\.(?:[cm]?[jt]s|[jt]sx)$/i.test(word);
+      const lastPartMarked = (at: number): boolean => {
+        const word = cmd[at] ?? "";
+        return markOf(at).last > Math.max(word.lastIndexOf("/"), word.lastIndexOf("\\")) + 1;
+      };
       let launchesUnread = false;
       if (launches || MANAGERS.has(launcher)) {
+        // The settling word and whether it holds a mark that unsettles it; -1 where none settles the program.
         let settledAt = -1;
-        for (let at = 1; at < cmd.length && settledAt === -1; at += 1) {
-          const word = cmd[at] ?? "";
-          const sep = Math.max(word.lastIndexOf("/"), word.lastIndexOf("\\")) + 1;
-          if (launches) {
-            // A script file right after a bare option (a dash word holding no `=`) may be that option's value, a preload
-            // or an import, so it does not end the search (review/98).
-            const previous = at > 1 ? (cmd[at - 1] ?? "") : "";
-            const optionValue = previous.startsWith("-") && !previous.includes("=");
-            if (markOf(at).last <= sep && /\.(?:[cm]?[jt]s|[jt]sx)$/i.test(word) && !optionValue) settledAt = at;
-          } else if (markOf(at).kinds === "" && !word.startsWith("-") && !["run", "run-script", "exec", "dlx", "x"].includes(word) && !valueOf(at)) {
+        let settlingMarked = false;
+        if (launches) {
+          const head = headFrom(1);
+          const word = head === -1 ? "" : (cmd[head] ?? "");
+          const literal = head !== -1 && markOf(head).kinds === "";
+          const script = (at: number): void => {
             settledAt = at;
+            settlingMarked = at !== -1 && lastPartMarked(at);
+          };
+          const named = (at: number): void => {
+            settledAt = at;
+            settlingMarked = at !== -1 && markOf(at).kinds !== "";
+          };
+          const DENO_TOOLS = ["test", "bench", "fmt", "lint", "check", "compile", "doc", "info", "cache", "coverage", "types", "upgrade", "completions"];
+          const BUN_TOOLS = ["test", "build", "install", "i", "add", "a", "remove", "rm", "update", "link", "unlink", "pm", "init", "outdated", "publish", "audit", "info", "patch", "upgrade"];
+          if (head === -1) settledAt = -1;
+          else if (launcher === "deno") {
+            if (!literal) named(head);
+            else if (word === "run") script(headFrom(head + 1));
+            else if (word === "task") named(headFrom(head + 1));
+            else if (DENO_TOOLS.includes(word)) named(head);
+            else if (scriptFile(word)) script(head);
+          } else if (launcher === "bun") {
+            if (!literal) named(head);
+            else if (word === "run") {
+              const next = headFrom(head + 1);
+              if (next !== -1 && markOf(next).kinds === "" && !scriptFile(cmd[next] ?? "")) named(next);
+              else script(next);
+            } else if (word === "x") named(headFrom(head + 1));
+            else if (BUN_TOOLS.includes(word)) named(head);
+            else if (scriptFile(word)) script(head);
+            else named(head);
+          } else if (launcher === "tsx" && literal && word === "watch") script(headFrom(head + 1));
+          else script(head);
+        } else {
+          for (let at = 1; at < cmd.length && settledAt === -1; at += 1) {
+            const word = cmd[at] ?? "";
+            if (markOf(at).kinds === "" && !word.startsWith("-") && !["run", "run-script", "exec", "dlx", "x"].includes(word) && !valueOf(at)) {
+              settledAt = at;
+            }
           }
         }
         const before = settledAt === -1 ? cmd.length : settledAt;
-        launchesUnread = cmd.slice(1, before).some((_, index) => markOf(index + 1).kinds !== "" && !valueOf(index + 1));
+        launchesUnread = settlingMarked || cmd.slice(1, before).some((_, index) => markOf(index + 1).kinds !== "" && !valueOf(index + 1));
       }
       const unsure = cmd.map((_, at) => {
         const mark = markOf(at);
@@ -2646,35 +2697,86 @@ export function unattendedPushVerdict(
       // opens with one (review/52): `src/*.ts` cannot spell an option, `*` and `--loo*` can.
       const dashes = (at: number): boolean => markOf(at).first === 0 || (cmd[at] ?? "").startsWith("-");
       // A launcher or a package manager whose script or package word the shell fills in runs a program the guard cannot
-      // settle (review/87), read with no knowledge of any option: a launcher's script word is its first word whose last
-      // path part is a literal file name ending in a script extension, its folder filled in or not (review/93, the
-      // review/38 reading); a manager's package or bin word its first literal word that is no option, its `run`,
-      // `exec`, `dlx` or `x` and a valued option's value passed. A marked word before that word, an option, an option's
-      // value or a subcommand alike, unsettles the program, except a manager's folder, filter or workspace value, which
-      // runs no code (review/93); with no such word, any marked word does. A marked word after it leaves the program to
-      // that word.
+      // settle (review/87, review/93, review/98, review/99), read with no knowledge of any option. A launcher's head
+      // word is its first word that is no option (a dash word, joined value or not) and no possible value of a bare
+      // option (a dash word holding no `=`, whose next word may be its value, any word). `node`, `nodejs` and `tsx`
+      // (its `watch` passed) read that word as the script, settled by its literal last path part whatever its
+      // extension. `deno` and `bun` read it through a fixed table of their verbs: a script-taking one (`deno run`, bun
+      // given a path or a script file, `bun run` given one) reads the next head word as the script; a name-taking one
+      // (`bun run <name>`, `deno task <name>`, bun given a bare name) is settled by that literal name; their own tools
+      // (`bun test`, `deno test`, `deno fmt`, …) are settled, their later words file arguments; `bun x` reads its
+      // package word. A manager's package or bin word is its first literal word that is no option, its `run`, `exec`,
+      // `dlx` or `x` and a folder, filter or workspace value passed. A marked word before the settling word unsettles
+      // the program, except a manager's folder, filter or workspace value, which runs no code; so does a marked
+      // settling word (a script by its last part), and, with no settling word, any marked word. A marked word after it
+      // leaves the program to that word.
       const launcher = programName(program);
       const launches = ["node", "nodejs", "bun", "deno", "tsx"].includes(launcher);
       const valueOf = (at: number): boolean =>
         !launches && (MANAGER_VALUED.has(cmd[at - 1] ?? "") || [...MANAGER_VALUED].some((name) => name.startsWith("--") && (cmd[at] ?? "").startsWith(`${name}=`)));
+      /** A launcher's next head word from `from`, or -1: no dash word and no word directly after a bare option. */
+      const headFrom = (from: number): number => {
+        for (let at = from; at < cmd.length; at += 1) {
+          const word = cmd[at] ?? "";
+          const previous = at > 1 ? (cmd[at - 1] ?? "") : "";
+          if (word.startsWith("-") || (previous.startsWith("-") && !previous.includes("="))) continue;
+          return at;
+        }
+        return -1;
+      };
+      const scriptFile = (word: string): boolean => /[\\/]/.test(word) || /\.(?:[cm]?[jt]s|[jt]sx)$/i.test(word);
+      const lastPartMarked = (at: number): boolean => {
+        const word = cmd[at] ?? "";
+        return markOf(at).last > Math.max(word.lastIndexOf("/"), word.lastIndexOf("\\")) + 1;
+      };
       let launchesUnread = false;
       if (launches || MANAGERS.has(launcher)) {
+        // The settling word and whether it holds a mark that unsettles it; -1 where none settles the program.
         let settledAt = -1;
-        for (let at = 1; at < cmd.length && settledAt === -1; at += 1) {
-          const word = cmd[at] ?? "";
-          const sep = Math.max(word.lastIndexOf("/"), word.lastIndexOf("\\")) + 1;
-          if (launches) {
-            // A script file right after a bare option (a dash word holding no `=`) may be that option's value, a preload
-            // or an import, so it does not end the search (review/98).
-            const previous = at > 1 ? (cmd[at - 1] ?? "") : "";
-            const optionValue = previous.startsWith("-") && !previous.includes("=");
-            if (markOf(at).last <= sep && /\.(?:[cm]?[jt]s|[jt]sx)$/i.test(word) && !optionValue) settledAt = at;
-          } else if (markOf(at).kinds === "" && !word.startsWith("-") && !["run", "run-script", "exec", "dlx", "x"].includes(word) && !valueOf(at)) {
+        let settlingMarked = false;
+        if (launches) {
+          const head = headFrom(1);
+          const word = head === -1 ? "" : (cmd[head] ?? "");
+          const literal = head !== -1 && markOf(head).kinds === "";
+          const script = (at: number): void => {
             settledAt = at;
+            settlingMarked = at !== -1 && lastPartMarked(at);
+          };
+          const named = (at: number): void => {
+            settledAt = at;
+            settlingMarked = at !== -1 && markOf(at).kinds !== "";
+          };
+          const DENO_TOOLS = ["test", "bench", "fmt", "lint", "check", "compile", "doc", "info", "cache", "coverage", "types", "upgrade", "completions"];
+          const BUN_TOOLS = ["test", "build", "install", "i", "add", "a", "remove", "rm", "update", "link", "unlink", "pm", "init", "outdated", "publish", "audit", "info", "patch", "upgrade"];
+          if (head === -1) settledAt = -1;
+          else if (launcher === "deno") {
+            if (!literal) named(head);
+            else if (word === "run") script(headFrom(head + 1));
+            else if (word === "task") named(headFrom(head + 1));
+            else if (DENO_TOOLS.includes(word)) named(head);
+            else if (scriptFile(word)) script(head);
+          } else if (launcher === "bun") {
+            if (!literal) named(head);
+            else if (word === "run") {
+              const next = headFrom(head + 1);
+              if (next !== -1 && markOf(next).kinds === "" && !scriptFile(cmd[next] ?? "")) named(next);
+              else script(next);
+            } else if (word === "x") named(headFrom(head + 1));
+            else if (BUN_TOOLS.includes(word)) named(head);
+            else if (scriptFile(word)) script(head);
+            else named(head);
+          } else if (launcher === "tsx" && literal && word === "watch") script(headFrom(head + 1));
+          else script(head);
+        } else {
+          for (let at = 1; at < cmd.length && settledAt === -1; at += 1) {
+            const word = cmd[at] ?? "";
+            if (markOf(at).kinds === "" && !word.startsWith("-") && !["run", "run-script", "exec", "dlx", "x"].includes(word) && !valueOf(at)) {
+              settledAt = at;
+            }
           }
         }
         const before = settledAt === -1 ? cmd.length : settledAt;
-        launchesUnread = cmd.slice(1, before).some((_, index) => markOf(index + 1).kinds !== "" && !valueOf(index + 1));
+        launchesUnread = settlingMarked || cmd.slice(1, before).some((_, index) => markOf(index + 1).kinds !== "" && !valueOf(index + 1));
       }
       const unsure = cmd.map((_, at) => {
         const mark = markOf(at);

@@ -1870,3 +1870,49 @@ describe("the guard's reading of a preload file before a filled-in script word (
     expect(decide(tool, guard, command).deny).toBe(true);
   });
 });
+
+describe("the guard's reading of an option joined to its script-file value (a4, review/98 round 2)", () => {
+  // Red on b68f5609: the joined option word settled the program, so nothing asked.
+  it.each(TOOLS)("%s: asks attended, and refuses unattended and for a sub-agent", async (tool) => {
+    const guard = await placeGuard(tool);
+    const command = "node --import=./register.mjs \"$CLI\" sync --loosen";
+    const verdict = personOnlyVerdict(command, BAKED_DEFAULT);
+    if (!verdict.deny) throw new Error("the launched loosening reads as no act");
+    expect(decide(tool, guard, command)).toEqual(expectedAttended(tool, verdict));
+    const helper = JSON.stringify({ ...JSON.parse(payload(tool, command)), agent_id: "a1" });
+    expect(clientDecision(tool, run(guard, helper), `${tool} helper`).deny).toBe(true);
+    expect(decide(tool, guard, "node --import=./register.mjs scripts/x.mjs \"$OUT\"")).toEqual({ deny: false });
+    await getRepo().seedFiles({ ".stamity/runs/2026-10-23_x/record.md": record("in progress", "unattended") });
+    expect(decide(tool, guard, command).deny).toBe(true);
+  });
+});
+
+describe("the guard's launcher reading in every mode (a4, review/99)", () => {
+  const ORDINARY = ["bun run test \"$F\"", "bun test \"$FILE\"", "deno task build \"$X\"", "node \"$ROOT/node_modules/.bin/vitest\" run"];
+  const UNSETTLED = ["node \"$CLI\" sync", "deno run \"$CLI\" sync", "bun run \"$FILE\" sync", "deno run --allow-read main.ts \"$ARG\""];
+  const helper = (tool: Tool, guard: string, command: string): Decision =>
+    clientDecision(tool, run(guard, JSON.stringify({ ...JSON.parse(payload(tool, command)), agent_id: "a1" })), `${tool} helper: ${command}`);
+
+  // Red on b68f5609: the reviewer's four ordinary lines asked or were refused.
+  it.each(TOOLS)("%s: runs the reviewer's four lines attended, for a sub-agent and unattended", async (tool) => {
+    const guard = await placeGuard(tool);
+    for (const command of ORDINARY) {
+      expect(decide(tool, guard, command), `${tool}: ${command}`).toEqual({ deny: false });
+      expect(helper(tool, guard, command), `${tool} helper: ${command}`).toEqual({ deny: false });
+    }
+    await getRepo().seedFiles({ ".stamity/runs/2026-10-23_x/record.md": record("in progress", "unattended") });
+    for (const command of ORDINARY) expect(decide(tool, guard, command), `${tool} unattended: ${command}`).toEqual({ deny: false });
+  });
+
+  it.each(TOOLS)("%s: still asks attended, and refuses for a sub-agent and unattended, where the launched program is filled in", async (tool) => {
+    const guard = await placeGuard(tool);
+    for (const command of UNSETTLED) {
+      const verdict = personOnlyVerdict(command, BAKED_DEFAULT);
+      if (!verdict.deny) throw new Error(`${command} reads as no act`);
+      expect(decide(tool, guard, command), `${tool}: ${command}`).toEqual(expectedAttended(tool, verdict));
+      expect(helper(tool, guard, command).deny, `${tool} helper: ${command}`).toBe(true);
+    }
+    await getRepo().seedFiles({ ".stamity/runs/2026-10-23_x/record.md": record("in progress", "unattended") });
+    for (const command of UNSETTLED) expect(decide(tool, guard, command).deny, `${tool} unattended: ${command}`).toBe(true);
+  });
+});
