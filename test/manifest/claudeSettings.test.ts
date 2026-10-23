@@ -731,6 +731,105 @@ describe("planClaudeSettings — the engine's ask rows (v0a2, REQ-FLOW-036, REQ-
   });
 });
 
+describe("planClaudeSettings — the rows the autonomy setting no longer renders (a4b-claude-rows, REQ-FLOW-036)", () => {
+  const ENGINE_DENY = [...CLAUDE_DENY_ROWS];
+  /** The six ask rows mode `autonomous` drops by default: the ready mark's and the five local-tag prefixes. */
+  const RUN_ROWS = [
+    "Bash(gh pr ready:*)",
+    "Bash(git tag -a:*)",
+    "Bash(git tag -s:*)",
+    "Bash(git tag -m:*)",
+    "Bash(git tag --annotate:*)",
+    "Bash(git tag --sign:*)",
+  ];
+  /** 1.16.0's rendering: every ask row (mode `ask` renders the same rows). */
+  const STRICT = doc({ permissions: { deny: ENGINE_DENY, ask: [...CLAUDE_ASK_ROWS] }, hooks: ENGINE_HOOKS });
+  /** A rendering without the six rows, as the default setting's is. */
+  const LOOSE_ASK = CLAUDE_ASK_ROWS.filter((row) => !RUN_ROWS.includes(row));
+  const LOOSE = doc({ permissions: { deny: ENGINE_DENY, ask: LOOSE_ASK }, hooks: ENGINE_HOOKS });
+  const permissionsOf = (raw: string | null): { deny: string[]; ask: string[] } =>
+    (JSON.parse(raw!) as { permissions: { deny: string[]; ask: string[] } }).permissions;
+
+  it("removes each recorded row the rendering dropped, names each in the notice, and drops its hash from the record", () => {
+    expect(RUN_ROWS.every((row) => CLAUDE_ASK_ROWS.includes(row))).toBe(true);
+    const written = planClaudeSettings("x", STRICT, null, own());
+
+    const plan = planClaudeSettings(PATH, LOOSE, written.content, own({ owned: true, record: written.record, boundaryDir: ROOT }));
+
+    expect(permissionsOf(plan.content)).toEqual({ deny: ENGINE_DENY, ask: LOOSE_ASK });
+    expect(plan.backup).toBeNull();
+    expect(plan.result.warning).toBeUndefined();
+    for (const row of RUN_ROWS) expect(plan.result.notice, row).toContain(`permissions.ask ${JSON.stringify(row)}`);
+    expect(plan.result.notice).toContain("from .claude/settings.json: the engine wrote them and no longer writes them");
+    expect(plan.record?.elements?.["/permissions/ask"]).toEqual(LOOSE_ASK.map(memberHash));
+    expect(plan.record?.elements?.["/permissions/deny"]).toEqual(ENGINE_DENY.map(memberHash));
+    // Nothing is left to name: the next plan moves no byte and says nothing.
+    const again = planClaudeSettings(PATH, LOOSE, plan.content, own({ owned: true, record: plan.record, boundaryDir: ROOT }));
+    expect(again).toMatchObject({ content: null, result: { action: "unchanged" } });
+    expect(again.result.notice).toBeUndefined();
+  });
+
+  it("keeps and names an equal row the record does not list, so an owner's own copy stays", () => {
+    const written = planClaudeSettings("x", LOOSE, null, own());
+    // The owner adds the ready mark's row after setup: equal to an engine row, absent from the record.
+    const edited = doc({ permissions: { deny: ENGINE_DENY, ask: [...LOOSE_ASK, RUN_ROWS[0]] }, hooks: ENGINE_HOOKS });
+
+    const plan = planClaudeSettings("x", LOOSE, edited, own({ owned: true, record: written.record }));
+
+    expect(plan).toMatchObject({ content: null, result: { action: "unchanged" } });
+    expect(plan.result.notice).toContain(`Kept permissions.ask ${JSON.stringify(RUN_ROWS[0])} in x:`);
+    expect(plan.result.notice).toContain("so it may be yours. Remove the ones you do not want by hand.");
+    expect(plan.record?.elements?.["/permissions/ask"]).not.toContain(memberHash(RUN_ROWS[0]));
+  });
+
+  it("removes no row under a 1.11.0 ledger row or with no ledger row, and names the ones it kept", () => {
+    const strictFile = planClaudeSettings("x", STRICT, null, own()).content!;
+    for (const ownership of [own(LEGACY), own()]) {
+      const plan = planClaudeSettings("x", LOOSE, strictFile, ownership);
+      expect(permissionsOf(plan.content ?? strictFile).ask, JSON.stringify(ownership)).toEqual([...CLAUDE_ASK_ROWS]);
+      for (const row of RUN_ROWS) expect(plan.result.notice, row).toContain(`permissions.ask ${JSON.stringify(row)}`);
+      expect(plan.result.notice).toContain("may be yours");
+      expect(plan.result.notice).not.toContain("Removed");
+    }
+  });
+
+  it("puts the rows back when the setting tightens, and records them again", () => {
+    const loose = planClaudeSettings("x", LOOSE, null, own());
+
+    const plan = planClaudeSettings("x", STRICT, loose.content, own({ owned: true, record: loose.record }));
+
+    expect(permissionsOf(plan.content).ask.toSorted()).toEqual([...CLAUDE_ASK_ROWS].toSorted());
+    expect(plan.result.notice).toBeUndefined();
+    expect((plan.record?.elements?.["/permissions/ask"] ?? []).toSorted()).toEqual(CLAUDE_ASK_ROWS.map(memberHash).toSorted());
+  });
+
+  it("removes no row from a list the rendering does not carry, and never an owner's own row", () => {
+    const written = planClaudeSettings("x", STRICT, null, own());
+    const withOwner = doc({ ...(JSON.parse(written.content!) as object), permissions: { deny: ENGINE_DENY, ask: [...CLAUDE_ASK_ROWS, "Bash(npm version:*)"] } });
+    const noAsk = doc({ permissions: { deny: ENGINE_DENY }, hooks: ENGINE_HOOKS });
+
+    const plan = planClaudeSettings("x", noAsk, withOwner, own({ owned: true, record: written.record }));
+
+    expect(plan.content).toBeNull();
+    expect(plan.result.notice).toBeUndefined();
+    const dropped = planClaudeSettings("x", LOOSE, withOwner, own({ owned: true, record: written.record }));
+    expect(permissionsOf(dropped.content).ask).toEqual([...LOOSE_ASK, "Bash(npm version:*)"]);
+    expect(dropped.result.notice).not.toContain("npm version");
+  });
+
+  it("the clean sweep still removes no row the setting stopped rendering, and names it", () => {
+    const written = planClaudeSettings("x", STRICT, null, own());
+    const loose = planClaudeSettings("x", LOOSE, written.content, own({ owned: true, record: written.record }));
+    // A row the record lists and the owner put back by hand after the sync took it out.
+    const back = doc({ ...(JSON.parse(loose.content!) as object), permissions: { deny: ENGINE_DENY, ask: [...LOOSE_ASK, RUN_ROWS[0]] } });
+
+    const reduction = reduceClaudeSettingsToForeignContent(back, reduceOpts(written.record, false));
+
+    expect(reduction.kind === "reduced" && permissionsOf(reduction.content).ask).toContain(RUN_ROWS[0]);
+    expect(reduction.detail).toContain(JSON.stringify(RUN_ROWS[0]));
+  });
+});
+
 describe("materializeClaudeSettings", () => {
   it("creates the file when nothing is there", async () => {
     const path = getRepo().path(".claude/settings.json");

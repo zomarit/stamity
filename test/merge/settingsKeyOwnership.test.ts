@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { CLAUDE_SETTINGS_PATH } from "../../src/adapters/claude.ts";
 import { checkCommand, runDriftGate } from "../../src/cli/commands/check.ts";
 import { cleanCommand } from "../../src/cli/commands/clean.ts";
-import { CLAUDE_ASK_ROWS, CLAUDE_DENY_ROWS } from "../../src/hooks/personOnly.ts";
+import { resolveAutonomy } from "../../src/config/autonomy.ts";
+import { CLAUDE_DENY_ROWS, claudeAskRows } from "../../src/hooks/personOnly.ts";
 import { applyInit } from "../../src/cli/commands/init/apply.ts";
 import { buildInitDecisions } from "../../src/cli/commands/init/plan.ts";
 import { applySync, planSync, type SyncPlanEntry } from "../../src/cli/commands/sync/engine.ts";
@@ -238,8 +239,10 @@ const PERMISSIONS = { allow: ["Read", "Grep", "Glob"] };
  * TEST CHANGE (v0a2, REQ-FLOW-123, REQ-FLOW-124): the person-only rows are split, the refused acts in
  * `deny` and the acts that can be undone in `ask`; clean removes no row of either list, so both stay, `ask`
  * after `deny` as the engine writes them. Every expectation below reads this constant.
+ * TEST CHANGE, justified (a4b-claude-rows, REQ-FLOW-123): the ask rows are the ones the default autonomy setting
+ * renders (no ready-mark or local-tag row, the land rows added), since no repository here carries a setting.
  */
-const DENY_LEFT = { deny: [...CLAUDE_DENY_ROWS], ask: [...CLAUDE_ASK_ROWS] };
+const DENY_LEFT = { deny: [...CLAUDE_DENY_ROWS], ask: [...claudeAskRows(resolveAutonomy({}).runs)] };
 /** An operator's own hooks: no command under the engine's generated directory. */
 const OPERATOR_HOOKS = { Stop: [{ hooks: [{ type: "command", command: "node scripts/notify.mjs" }] }] };
 

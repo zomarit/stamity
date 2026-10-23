@@ -452,6 +452,49 @@ export function repositoryKey(text: string, host: string): string {
 }
 
 /**
+ * The ask rows for a land line carrying `--approved` (review/109, REQ-FLOW-123), rendered in every mode: a second layer
+ * behind the guard's ask-class `land-approved` rule, so the person's one click on the land verb's `asks` outcome does
+ * not rest on the hook alone. The flag follows `--run <id>` and `--ready` on the flows' line, so no prefix row reaches
+ * it: each row is mid-pattern, and Claude Code reads a `*` there as any run of characters over the whole command
+ * (measured on 2.1.309, 2026-10-23, by running the client's own matcher). Unlike a mid-pattern deny row, an over-wide
+ * ask row only asks more, and the land line stands alone on its line, so no later command shares it. One row per
+ * spelling the guard's package test knows: the two bins, then every runner or launcher that can start the package.
+ */
+export const CLAUDE_LAND_ASK_ROWS: readonly string[] = [
+  "Bash(stamity run land *--approved*)",
+  "Bash(st run land *--approved*)",
+  ...["npx", "bunx", "pnpx", "corepack", "npm", "pnpm", "yarn", "bun", "node", "nodejs", "deno", "tsx"].map(
+    (runner) => `Bash(${runner} * run land *--approved*)`,
+  ),
+];
+
+/**
+ * Every row a release wrote that this version writes in no mode (REQ-FLOW-036): `sync` removes one the ledger records,
+ * and keeps and names an unrecorded equal one. Empty: 1.16.0 wrote the first rows, and every deny row stays (decision
+ * D15) while mode `ask` still renders every 1.16.0 ask row.
+ */
+export const RETIRED_CLAUDE_ROWS: readonly string[] = [];
+
+/** The ask rows mode `autonomous` drops for each act it runs unasked: the prefixes that name only that act. */
+const RUN_ACT_ASK_ROWS: Readonly<Partial<Record<PersonOnlyRuleId, readonly string[]>>> = {
+  "pr-ready": ["Bash(gh pr ready:*)"],
+  tag: ["Bash(git tag -a:*)", "Bash(git tag -s:*)", "Bash(git tag -m:*)", "Bash(git tag --annotate:*)", "Bash(git tag --sign:*)"],
+};
+
+/**
+ * The ask rows Claude Code's settings carry for the acts `runs` names as running unasked (REQ-FLOW-123, REQ-FLOW-137):
+ * {@link CLAUDE_ASK_ROWS} less the rows of each act in `runs` (`pr-ready`, a local `tag`), then
+ * {@link CLAUDE_LAND_ASK_ROWS} after the prefix rows, in every mode. A raw merge keeps its row in every mode. With
+ * `runs` empty (mode `ask`) these are 1.16.0's rows and the land rows; the union over every setting is that list.
+ */
+export function claudeAskRows(runs: readonly PersonOnlyRuleId[]): readonly string[] {
+  const dropped = new Set(runs.flatMap((act) => RUN_ACT_ASK_ROWS[act] ?? []));
+  const kept = CLAUDE_ASK_ROWS.filter((row) => !dropped.has(row));
+  const shell = (row: string): boolean => row.startsWith("Bash(");
+  return [...kept.filter(shell), ...CLAUDE_LAND_ASK_ROWS, ...kept.filter((row) => !shell(row))];
+}
+
+/**
  * Whether `command` holds a person-only act (REQ-FLOW-102). The line is read as
  * a shell would split it: quotes honoured, segments split on `&&`, `||`, `;`,
  * `|`, `&`, a newline, a subshell's parentheses and a command substitution

@@ -57,7 +57,7 @@
  *    core hook interchange transformed to the client shape, the `ConfigChange`
  *    tamper wiring, the review-gate and ask-gate wiring below) when the
  *    repository owns hooks — and each `permissions.deny` and `permissions.ask`
- *    row it renders from `CLAUDE_DENY_ROWS` and `CLAUDE_ASK_ROWS`
+ *    row it renders from `CLAUDE_DENY_ROWS` and `claudeAskRows`
  *    (`../hooks/personOnly.ts`, REQ-FLOW-123, REQ-FLOW-124), plus, until
  *    they leave, the `permissions.allow` rows a release up to 1.12.0 wrote and
  *    recorded. Every other entry and key (`enabledPlugins`, `model`, the
@@ -137,7 +137,7 @@ import {
   type HookInterchange,
 } from "../hooks/model.ts";
 import { ROOT_VARIABLE_PATH } from "../hooks/portableRunner.ts";
-import { CLAUDE_ASK_ROWS, CLAUDE_DENY_ROWS, GITHUB_MCP_ROWS } from "../hooks/personOnly.ts";
+import { CLAUDE_DENY_ROWS, GITHUB_MCP_ROWS, claudeAskRows } from "../hooks/personOnly.ts";
 import {
   CLOUD_READINESS_FILE,
   CLOUD_READINESS_TIMEOUT_MS,
@@ -968,7 +968,7 @@ interface ClaudeHookEntry {
  * `.claude/settings.json`: the hook wiring, as one JSON document (plain `.json`
  * takes no managed block — it has no comment syntax to carry markers, per
  * `src/types/markers.ts`). Its `permissions` member holds the
- * {@link CLAUDE_DENY_ROWS} and the {@link CLAUDE_ASK_ROWS} and no allow row: the
+ * {@link CLAUDE_DENY_ROWS} and the {@link claudeAskRows} and no allow row: the
  * engine pre-approves no tool (the module header). The writers merge it entry by
  * entry: each hook entry, deny row and ask row this rendering carries is the
  * engine's, and every other member, row or
@@ -1078,8 +1078,10 @@ function buildSettingsJson(
   // The person-only acts a rule can say, as data from the one table the shell
   // guard also reads from (`../hooks/personOnly.ts`): the refused ones under
   // `deny`, those that can be undone under `ask` (REQ-FLOW-123, REQ-FLOW-124),
-  // so a call the client refuses or asks about here is one the guard would too.
-  return `${JSON.stringify({ permissions: { deny: [...CLAUDE_DENY_ROWS], ask: [...CLAUDE_ASK_ROWS] }, hooks }, null, 2)}\n`;
+  // so a call the client refuses or asks about here is one the guard would too. The ask rows follow the autonomy
+  // setting the guard copies bake (REQ-FLOW-137); a plan that carries none renders mode `ask`'s, the strict direction.
+  const ask = claudeAskRows(core.hooks.autonomy?.runs ?? []);
+  return `${JSON.stringify({ permissions: { deny: [...CLAUDE_DENY_ROWS], ask: [...ask] }, hooks }, null, 2)}\n`;
 }
 
 /**

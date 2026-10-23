@@ -8,7 +8,7 @@
  * and hook entries of their own. The engine renders hook entries (one element
  * of a `hooks.<Event>` array) while the repository owns hooks, the person-only
  * `permissions.deny` rows (`CLAUDE_DENY_ROWS`, REQ-FLOW-124) and
- * `permissions.ask` rows (`CLAUDE_ASK_ROWS`, REQ-FLOW-123), and no
+ * `permissions.ask` rows (`claudeAskRows`, by the autonomy setting, REQ-FLOW-123), and no
  * `permissions.allow` row; releases up to 1.12.0 rendered three, which leave
  * through the bound below. No comment syntax can carry a marker, so ownership is
  * decided per ENTRY by the shared core (`./coOwnedJson.ts`, whose rules this
@@ -19,18 +19,24 @@
  * `permissions`, or an entry it did not write; the file keeps its own
  * indentation, key order, line ending and final newline.
  *
- * The deny and ask rows ({@link ROW_POINTERS}, REQ-FLOW-036) only ever grow. A
- * hash cannot tell the engine's row from an owner's equal one, whether the owner
- * wrote it before setup, after it, under a 1.11.0 ledger row (no release up to
- * 1.11.0 wrote a deny or ask row) or after the ledger lost its record. So no row
- * of either list is ever judged the engine's: `sync` keeps every row byte for
- * byte, in its place, and appends only the engine's rows the list lacks
- * ({@link renderingToAdd}); `clean` removes none and names the rows of either
- * list equal to an engine row of either table that it left, for the person to
- * remove by hand ({@link reduceClaudeSettingsToForeignContent}). Keeping a
- * protective row is the safe direction, and an owner's deny row equal to an
- * engine ask row is read by the client before the ask, so it still refuses. The
- * record still lists the engine's rows it added, and keeps them while they stay.
+ * The deny and ask rows ({@link ROW_POINTERS}, REQ-FLOW-036). A hash cannot
+ * tell the engine's row from an owner's equal one, whether the owner wrote it
+ * before setup, after it, under a 1.11.0 ledger row (no release up to 1.11.0
+ * wrote a deny or ask row) or after the ledger lost its record. So a row the
+ * current rendering still carries is never judged the engine's: `sync` keeps
+ * every such row byte for byte, in its place, and appends only the engine's rows
+ * the list lacks ({@link renderingToAdd}). A row the engine wrote and the
+ * current rendering no longer carries (one of {@link RETIRED_CLAUDE_ROWS}, or an
+ * ask row the autonomy setting does not render) leaves at `sync` when the
+ * ledger record lists its hash, and the result's notice names it; an equal row
+ * the record does not list is kept and named, since it may be the owner's
+ * ({@link leavingRows}). A tighter setting renders its rows again at the next
+ * `sync`. `clean` removes none and names the rows of either list equal to an
+ * engine row of either table that it left, for the person to remove by hand
+ * ({@link reduceClaudeSettingsToForeignContent}). Keeping a protective row is
+ * the safe direction, and an owner's deny row equal to an engine ask row is read
+ * by the client before the ask, so it still refuses. The record lists the
+ * engine's rows it added, and keeps them while they stay.
  *
  * The bound ({@link claudeSettingsSpec}). An engine entry leaves silently only
  * when it lies inside what the engine can prove it wrote by path: an allow row
@@ -69,7 +75,8 @@
  */
 
 import { isPlainObject } from "../config/parse.ts";
-import { CLAUDE_ASK_ROWS, CLAUDE_DENY_ROWS } from "../hooks/personOnly.ts";
+import { CLAUDE_DENY_ROWS, RETIRED_CLAUDE_ROWS, claudeAskRows } from "../hooks/personOnly.ts";
+import { displayPath } from "../merge/safeWrite.ts";
 import type { CoOwnedReducer, CoOwnedReduction } from "../types/content.ts";
 import type { CoOwnership } from "../types/manifest.ts";
 import { CLAUDE_HOOKS_DIR } from "../hooks/model.ts";
@@ -145,6 +152,8 @@ const ROW_POINTERS = [
   { pointer: DENY_POINTER, key: "deny" },
   { pointer: ASK_POINTER, key: "ask" },
 ] as const;
+/** The key of one row list under `permissions`. */
+type RowKey = (typeof ROW_POINTERS)[number]["key"];
 
 /**
  * What the engine owns in `.claude/settings.json`: each hook entry it writes,
@@ -154,11 +163,18 @@ const ROW_POINTERS = [
  * remove: it is not recognised by content and lies in no bound, so with
  * `foreign` a recorded one is the owner's too, and the core keeps every row. The
  * slots stay declared so the core still refuses a `deny` or `ask` of another
- * type and places the rows it lacks.
+ * type and places the rows it lacks. The one exception is `leaving`, which the
+ * planner alone passes ({@link leavingRows}): a row it names is in the bound, so a
+ * recorded one is the engine's and leaves silently, and an unrecorded one stays
+ * the owner's.
  * `extraMembers` is the extension point for whole members a later
  * requirement declares (passed as `{ pointer, foreign: "yield" }`).
  */
-export function claudeSettingsSpec(extraMembers: readonly MemberSpec[] = []): CoOwnedJsonSpec {
+export function claudeSettingsSpec(
+  extraMembers: readonly MemberSpec[] = [],
+  leaving: Readonly<Record<RowKey, ReadonlySet<string>>> = { deny: new Set(), ask: new Set() },
+): CoOwnedJsonSpec {
+  const leaves = (key: RowKey) => (element: unknown) => typeof element === "string" && leaving[key].has(element);
   return {
     noun: DOCUMENT,
     elements: [
@@ -169,8 +185,8 @@ export function claudeSettingsSpec(extraMembers: readonly MemberSpec[] = []): Co
         outsideBound: "foreign",
       },
       { pointer: "/hooks/*", recognise: isEngineHookGroup, inBound: hookGroupInBound, outsideBound: "backup" },
-      { pointer: DENY_POINTER, recognise: () => false, inBound: () => false, outsideBound: "foreign" },
-      { pointer: ASK_POINTER, recognise: () => false, inBound: () => false, outsideBound: "foreign" },
+      { pointer: DENY_POINTER, recognise: () => false, inBound: leaves("deny"), outsideBound: "foreign" },
+      { pointer: ASK_POINTER, recognise: () => false, inBound: leaves("ask"), outsideBound: "foreign" },
     ],
     members: extraMembers,
     personalHint: "Personal rows belong in .claude/settings.local.json, which this engine never writes.",
@@ -200,8 +216,9 @@ export type SettingsMergeResult = CoOwnedMergeResult;
  * the rows are never written.
  *
  * The deny and ask rows are planned over {@link renderingToAdd}, so the core
- * sees only the engine's rows each list lacks and keeps every row already there,
- * and the record is {@link withRowRecord}'s.
+ * sees only the engine's rows each list lacks and keeps every row already there
+ * but those {@link leavingRows} names, the record is {@link withRowRecord}'s, and
+ * {@link rowNotice} names the rows that left and the equal ones that stayed.
  */
 export function planClaudeSettings(
   filePath: string,
@@ -210,7 +227,9 @@ export function planClaudeSettings(
   ownership: SettingsOwnership,
 ): SettingsPlan {
   const toAdd = renderingToAdd(emitted, existingRaw);
-  const plan = withRowRecord(planCoOwnedJson(filePath, toAdd, existingRaw, claudeSettingsSpec(), ownership), existingRaw, ownership);
+  const spec = claudeSettingsSpec([], leavingRows(emitted, existingRaw, ownership));
+  const planned = withRowRecord(planCoOwnedJson(filePath, toAdd, existingRaw, spec, ownership), existingRaw, ownership);
+  const plan = withRowNotice(planned, emitted, existingRaw, displayPath(filePath, ownership.boundaryDir));
   if (plan.collision !== null || existingRaw === null || !allowContainerMistyped(existingRaw)) return plan;
   // The rendering's own `permissions` (its deny and ask rows) kept beside the allow rows put back.
   const rendering = JSON.parse(toAdd) as Record<string, unknown>;
@@ -260,9 +279,62 @@ function renderingToAdd(emitted: string, existingRaw: string | null): string {
 }
 
 /**
+ * Per list, the rows of the existing file that the engine wrote in some mode or
+ * release ({@link isEngineRow}) and the rendering in `emitted` no longer carries
+ * in that list: the rows a recorded hash lets leave (REQ-FLOW-036). Empty under
+ * a 1.11.0 ledger row or with no ledger row, where no row is the engine's, and
+ * for a list the rendering does not carry at all.
+ */
+function leavingRows(emitted: string, existingRaw: string | null, ownership: SettingsOwnership): Record<RowKey, ReadonlySet<string>> {
+  const recorded = ownership.owned && !ownership.legacy;
+  const of = (key: RowKey): ReadonlySet<string> =>
+    recorded && existingRaw !== null ? new Set(unrenderedRows(emitted, existingRaw, key)) : new Set();
+  return { deny: of("deny"), ask: of("ask") };
+}
+
+/** The engine's rows in `raw`'s `key` list that `emitted`'s same list does not carry; none when `emitted` has no such list. */
+function unrenderedRows(emitted: string, raw: string, key: RowKey): string[] {
+  const rendered = rowsOf(emitted, key);
+  if (rendered === null) return [];
+  return [...new Set((rowsOf(raw, key) ?? []).filter(isEngineRow))].filter((row) => !rendered.includes(row));
+}
+
+/**
+ * The plan with a notice naming, per list, each engine row the rendering no
+ * longer carries: removed (the ledger recorded it) or kept (it did not, so it may
+ * be the owner's). Unchanged when there is none, or when the plan is refused.
+ */
+function withRowNotice(plan: SettingsPlan, emitted: string, existingRaw: string | null, shown: string): SettingsPlan {
+  if (plan.collision !== null || existingRaw === null) return plan;
+  const after = plan.content ?? existingRaw;
+  const removed: string[] = [];
+  const kept: string[] = [];
+  for (const { key } of ROW_POINTERS) {
+    const left = new Set(rowsOf(after, key) ?? []);
+    for (const row of unrenderedRows(emitted, existingRaw, key)) {
+      (left.has(row) ? kept : removed).push(`permissions.${key} ${JSON.stringify(row)}`);
+    }
+  }
+  const sentences: string[] = [];
+  if (removed.length > 0) {
+    sentences.push(`Removed ${removed.join(", ")} from ${shown}: the engine wrote ${removed.length === 1 ? "it" : "them"} and no longer writes ${removed.length === 1 ? "it" : "them"} under this setup's autonomy setting.`);
+  }
+  if (kept.length > 0) {
+    sentences.push(
+      `Kept ${kept.join(", ")} in ${shown}: equal to rows the engine no longer writes there, but the ledger does not record ` +
+        `${kept.length === 1 ? "it" : "them"} as the engine's, so ${kept.length === 1 ? "it" : "they"} may be yours. Remove the ones you do not want by hand.`,
+    );
+  }
+  if (sentences.length === 0) return plan;
+  const notice = [plan.result.notice, ...sentences].filter((text) => text !== undefined && text !== "").join(" ");
+  return { ...plan, result: { ...plan.result, notice } };
+}
+
+/**
  * The plan with its deny and ask records made whole, per list: the engine's
- * rows the previous record holds that are still in the list, then the rows this
- * write adds (the core records only those, having seen only those). A previous
+ * rows the previous record holds that are still in the list once the write
+ * lands, then the rows this write adds (the core records only those, having
+ * seen only those). A previous
  * hash counts only for a row of either engine table ({@link isEngineRow}), so a
  * forged record grows nothing, and the record of a file nobody edited stays as
  * it was. Under a 1.11.0 row or on adoption there is no previous record: a row
@@ -274,7 +346,8 @@ function withRowRecord(plan: SettingsPlan, existingRaw: string | null, ownership
   const elements = Object.entries(plan.record.elements ?? {}).filter(([pointer]) => !pointers.has(pointer));
   for (const { pointer, key } of ROW_POINTERS) {
     const previous = ownership.owned && !ownership.legacy ? (ownership.record?.elements?.[pointer] ?? []) : [];
-    const present = new Set((rowsOf(existingRaw ?? "", key) ?? []).filter(isEngineRow).map(memberHash));
+    // The bytes the write leaves, so a row that left takes its hash with it.
+    const present = new Set((rowsOf(plan.content ?? existingRaw ?? "", key) ?? []).filter(isEngineRow).map(memberHash));
     const hashes = new Set([...previous.filter((hash) => present.has(hash)), ...(plan.record.elements?.[pointer] ?? [])]);
     if (hashes.size > 0) elements.push([pointer, [...hashes]]);
   }
@@ -284,9 +357,15 @@ function withRowRecord(plan: SettingsPlan, existingRaw: string | null, ownership
   return { ...plan, record };
 }
 
-/** True for a row of either of the engine's person-only tables, deny or ask. */
+/**
+ * Every row the engine writes under some setting, or wrote in a release and writes no longer: the deny rows, the
+ * ask rows with nothing run unasked (the union over every autonomy setting), and {@link RETIRED_CLAUDE_ROWS}.
+ */
+const ENGINE_ROWS: ReadonlySet<string> = new Set([...CLAUDE_DENY_ROWS, ...claudeAskRows([]), ...RETIRED_CLAUDE_ROWS]);
+
+/** True for a row of the engine's person-only tables, deny or ask, under any setting or release ({@link ENGINE_ROWS}). */
 function isEngineRow(row: unknown): row is string {
-  return typeof row === "string" && (CLAUDE_DENY_ROWS.includes(row) || CLAUDE_ASK_ROWS.includes(row));
+  return typeof row === "string" && ENGINE_ROWS.has(row);
 }
 
 /**

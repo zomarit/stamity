@@ -14,7 +14,8 @@ import {
   __resetContentRootCacheForTests,
   __setContentRootForTests,
 } from "../../src/content/contentRoot.ts";
-import { CLAUDE_ASK_ROWS, CLAUDE_DENY_ROWS } from "../../src/hooks/personOnly.ts";
+import { resolveAutonomy } from "../../src/config/autonomy.ts";
+import { CLAUDE_ASK_ROWS, CLAUDE_DENY_ROWS, claudeAskRows } from "../../src/hooks/personOnly.ts";
 import { createApp } from "../../src/index.ts";
 import { memberHash } from "../../src/manifest/jsonMembers.ts";
 import { readManifest, writeManifest } from "../../src/manifest/manifest.ts";
@@ -72,8 +73,12 @@ afterEach(() => {
 const DENY_RULE = "Bash(rm -rf:*)";
 /** The engine's person-only deny rows, which follow an owner's own rows in `permissions.deny` (u20). */
 const ENGINE_DENY = [...CLAUDE_DENY_ROWS];
-/** The engine's person-only ask rows, co-owned as the deny rows are (v0a2, REQ-FLOW-036). */
-const ENGINE_ASK = [...CLAUDE_ASK_ROWS];
+/**
+ * The engine's person-only ask rows, co-owned as the deny rows are (v0a2, REQ-FLOW-036).
+ * TEST CHANGE, justified (a4b-claude-rows, REQ-FLOW-123): the rows the default autonomy setting renders, since no
+ * repository here carries a setting; 1.16.0's rows (`CLAUDE_ASK_ROWS`) are the retirement case's fixture below.
+ */
+const ENGINE_ASK = [...claudeAskRows(resolveAutonomy({}).runs)];
 const OWNER_ROW = "Bash(npm test:*)";
 const OWNER_GROUP = { matcher: "Bash", hooks: [{ type: "command", command: "./scripts/guard.sh" }] };
 /** The criteria's first fixture, in two-space style. */
@@ -468,6 +473,65 @@ describe("deny rows clean never removes, whatever the ledger's age (review/124, 
     // TEST CHANGE, justified (v0a2, REQ-FLOW-036, REQ-FLOW-123): the ask rows stay beside the deny rows.
     expect(await settingsDoc(root)).toEqual({ permissions: { deny: ENGINE_DENY, ask: ENGINE_ASK } });
     expect(cleaned.stdout).toContain(DENY_KEPT);
+  });
+});
+
+// ── The rows a 1.16.0 setup wrote and the autonomy setting no longer renders (a4b-claude-rows, REQ-FLOW-036) ──
+
+describe("sync over a 1.16.0 settings file, under the default autonomy setting", () => {
+  /** 1.16.0's ask rows, as that release wrote and recorded them: every mode-`ask` row, no land row. */
+  const OLD_ASK = [...CLAUDE_ASK_ROWS];
+  const READY_ROW = "Bash(gh pr ready:*)";
+  const TAG_ROWS = ["Bash(git tag -a:*)", "Bash(git tag -s:*)", "Bash(git tag -m:*)", "Bash(git tag --annotate:*)", "Bash(git tag --sign:*)"];
+
+  /** A repository set up by this version, then put back to the file and record 1.16.0 left, the ready-mark row unrecorded when `ownReady`. */
+  async function oldSetup(ownReady: boolean): Promise<string> {
+    const root = await freshRepo();
+    await init(root);
+    const doc = await settingsDoc(root);
+    await seedSettings(root, `${JSON.stringify({ ...doc, permissions: { deny: ENGINE_DENY, ask: OLD_ASK } }, null, 2)}\n`);
+    const recorded = OLD_ASK.filter((row) => !ownReady || row !== READY_ROW).map(memberHash);
+    await editSettingsRecord(root, (record) => ({ ...record, elements: { ...record?.elements, "/permissions/ask": recorded } }));
+    return root;
+  }
+
+  it("removes each recorded row the setting dropped, names it, adds the land rows, and a second sync says nothing", async () => {
+    const root = await oldSetup(false);
+
+    const report = await sync(root);
+
+    const ask = ((await settingsDoc(root))["permissions"] as { ask: string[] }).ask;
+    expect(ask.toSorted()).toEqual([...ENGINE_ASK].toSorted());
+    for (const row of [READY_ROW, ...TAG_ROWS]) {
+      expect(ask, row).not.toContain(row);
+      expect(settingsRow(report.wrote).notice, row).toContain(`permissions.ask ${JSON.stringify(row)}`);
+    }
+    expect(settingsRow(report.wrote).notice).toContain("Removed ");
+    expect(settingsRow(report.wrote).warning).toBeUndefined();
+    expect(await backups(root)).toEqual([]);
+    const recorded = (await settingsLedgerRows(root))[0]?.coOwned?.elements?.["/permissions/ask"] ?? [];
+    expect(recorded.toSorted()).toEqual(ENGINE_ASK.map(memberHash).toSorted());
+    const again = settingsRow((await sync(root)).wrote);
+    expect(again.action).toBe("unchanged");
+    expect(again.notice ?? "").not.toContain("permissions.ask");
+  });
+
+  it("keeps and names an equal row the ledger does not record, while the recorded ones leave", async () => {
+    const root = await oldSetup(true);
+
+    const report = await sync(root);
+
+    const ask = ((await settingsDoc(root))["permissions"] as { ask: string[] }).ask;
+    expect(ask).toContain(READY_ROW);
+    for (const row of TAG_ROWS) expect(ask, row).not.toContain(row);
+    const notice = settingsRow(report.wrote).notice ?? "";
+    expect(notice).toContain(`Kept permissions.ask ${JSON.stringify(READY_ROW)}`);
+    expect(notice).toContain("may be yours");
+    expect((await settingsLedgerRows(root))[0]?.coOwned?.elements?.["/permissions/ask"]).not.toContain(memberHash(READY_ROW));
+    // It is named again at the next sync, and never removed.
+    const again = settingsRow((await sync(root)).wrote);
+    expect(again.notice).toContain(`Kept permissions.ask ${JSON.stringify(READY_ROW)}`);
+    expect(((await settingsDoc(root))["permissions"] as { ask: string[] }).ask).toContain(READY_ROW);
   });
 });
 

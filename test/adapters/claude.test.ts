@@ -33,7 +33,16 @@ import { LIVE_CAPABILITY_INPUTS } from "../../src/emit/capabilityMatrix.ts";
 import { NATIVE_SKILL_DIRS, SKILLS_PROJECTION_DIR } from "../../src/emit/skillsProjection.ts";
 import { TOOLS, type Tool } from "../../src/types/core.ts";
 import { CLAUDE_HOOKS_DIR, CLIENT_EXTENSION_EVENTS } from "../../src/hooks/model.ts";
-import { CLAUDE_ASK_ROWS, CLAUDE_DENY_ROWS, GITHUB_MCP_ROWS, personOnlyVerdict } from "../../src/hooks/personOnly.ts";
+import {
+  CLAUDE_ASK_ROWS,
+  CLAUDE_DENY_ROWS,
+  CLAUDE_LAND_ASK_ROWS,
+  GITHUB_MCP_ROWS,
+  RETIRED_CLAUDE_ROWS,
+  claudeAskRows,
+  personOnlyVerdict,
+} from "../../src/hooks/personOnly.ts";
+import { resolveAutonomy } from "../../src/config/autonomy.ts";
 import {
   CLOUD_READINESS_FILE,
   CLOUD_READINESS_TIMEOUT_MS,
@@ -55,6 +64,7 @@ import { DEFAULT_MAX_REVIEW_ITERATIONS } from "../../src/roster/reviewCaps.ts";
 import { CLAUDE_REPORT_WRITE_TOOL, toClaudeToolsFrontmatter } from "../../src/tools/translator.ts";
 import type { AdapterOutput, ContentSelection } from "../../src/types/content.ts";
 import type {
+  AutonomyConfig,
   McpConfig,
   ModelConfig,
   RuleDelivery,
@@ -81,6 +91,8 @@ const CONTENT_ROOT = fileURLToPath(new URL("../../content", import.meta.url));
 const ADAPTER_SOURCE = fileURLToPath(new URL("../../src/adapters/claude.ts", import.meta.url));
 const ENGINE_VERSION = "0.0.0-test";
 const FIXED_NOW = new Date("2026-08-14T00:00:00.000Z");
+/** The ask rows the default autonomy setting renders (REQ-FLOW-137): the manifest every case here builds carries none. */
+const DEFAULT_ASK = claudeAskRows(resolveAutonomy({}).runs);
 
 /** Where this client's class-to-model map is written (REQ-LADDER-007), as a literal. */
 const CLAUDE_MODEL_MAP_PATH = ".stamity/generated/models/claude.json";
@@ -286,6 +298,8 @@ interface SettingsShape {
 
 interface PlanOverrides {
   selection?: ContentSelection;
+  /** The manifest's `autonomy` block; absent means the default setting (REQ-FLOW-137). */
+  autonomy?: AutonomyConfig;
   mcp?: McpConfig;
   models?: ModelConfig;
   contentRoot?: string;
@@ -336,6 +350,7 @@ async function ctxOf(over: PlanOverrides = {}): Promise<EmissionContext> {
   // Same shape a repo carries after `stamity config set ruleDelivery …`; absent
   // means the engine default, which is what every other case in this file runs.
   if (over.ruleDelivery !== undefined) manifest.ruleDelivery = over.ruleDelivery;
+  if (over.autonomy !== undefined) manifest.autonomy = over.autonomy;
   return {
     rootDir: over.rootDir ?? getTemp().path("repo"),
     manifest,
@@ -735,7 +750,9 @@ describe("claude residue over the real corpus", () => {
     // row, no teammate modes, no experimental flags.
     expect(Object.keys(settings)).toEqual(["permissions", "hooks"]);
     // TEST CHANGE, justified (v0a2, REQ-FLOW-120, REQ-FLOW-123): the ask rows follow the deny rows.
-    expect(settings.permissions).toEqual({ deny: [...CLAUDE_DENY_ROWS], ask: [...CLAUDE_ASK_ROWS] });
+    // TEST CHANGE, justified (a4b-claude-rows, REQ-FLOW-123): the ask rows are the default autonomy setting's, which
+    // runs a ready mark and a local tag unasked, plus the land rows; mode `ask`'s list is pinned below.
+    expect(settings.permissions).toEqual({ deny: [...CLAUDE_DENY_ROWS], ask: [...DEFAULT_ASK] });
     const raw = byPath(rows).get(CLAUDE_SETTINGS_PATH)!.content;
     // CHANGED: `TaskCompleted` used to be asserted ABSENT as one of the
     // predecessor's Agent-Teams echo gates. It is now a deliberate carrier for
@@ -864,7 +881,8 @@ describe("claude residue over the real corpus", () => {
     // rows; the document now carries no permissions member.
     // TEST CHANGE, justified (u20-hook-emission, REQ-FLOW-102): it carries the deny rows again, on an
     // empty selection too, and still no allow row. TEST CHANGE, justified (v0a2, REQ-FLOW-120, REQ-FLOW-123): the ask rows too.
-    expect(settings.permissions).toEqual({ deny: [...CLAUDE_DENY_ROWS], ask: [...CLAUDE_ASK_ROWS] });
+    // TEST CHANGE, justified (a4b-claude-rows, REQ-FLOW-123): the default autonomy setting's ask rows.
+    expect(settings.permissions).toEqual({ deny: [...CLAUDE_DENY_ROWS], ask: [...DEFAULT_ASK] });
   });
 
   it("emits only claude-owned residue paths, never a core-owned one", async () => {
@@ -1875,9 +1893,14 @@ describe("the person-only deny rows (u20-hook-emission, REQ-FLOW-102)", () => {
     expect(bash.slice(0, prefixes.length)).toEqual(prefixes);
     expect(mcp).toEqual(["mcp__github__delete_repository"]);
     const ask = settingsOf(rows).permissions?.ask ?? [];
-    expect(ask).toEqual([...CLAUDE_ASK_ROWS]);
+    // TEST CHANGE, justified (a4b-claude-rows, REQ-FLOW-123, review/109): the ask list is the default autonomy setting's,
+    // and after its prefix rows come the mid-pattern rows for a land line carrying `--approved`, then the MCP rows.
+    expect(ask).toEqual([...DEFAULT_ASK]);
     const askMcp = ask.filter((row) => !row.startsWith("Bash("));
-    for (const row of ask.slice(0, ask.length - askMcp.length)) expect(row).toMatch(/^Bash\([^()*]+:\*\)$/);
+    const askBash = ask.slice(0, ask.length - askMcp.length);
+    const askPrefixes = askBash.slice(0, askBash.length - CLAUDE_LAND_ASK_ROWS.length);
+    for (const row of askPrefixes) expect(row).toMatch(/^Bash\([^()*]+:\*\)$/);
+    expect(askBash.slice(askPrefixes.length)).toEqual([...CLAUDE_LAND_ASK_ROWS]);
     // The two lists' MCP rows are the guard entry's matcher, split by class.
     expect([...askMcp, ...mcp].toSorted()).toEqual(MCP_GUARD_MATCHER.split("|").toSorted());
     expect(GITHUB_MCP_ROWS.map((entry) => entry.row).join("|")).toBe(MCP_GUARD_MATCHER);
@@ -1961,13 +1984,125 @@ describe("the person-only deny rows (u20-hook-emission, REQ-FLOW-102)", () => {
     }
     // The cell's four lines an ask prefix row also matches, and a tag force behind `git tag -a` (review/73): a deny row
     // matches each too, which the client reads first.
+    // TEST CHANGE, justified (a4b-claude-rows, REQ-FLOW-123): the default setting no longer renders the `git tag -a`
+    // ask row, so the ask side is read over mode `ask`'s list, which still does; the deny side is the rendering's.
+    expect(claudeAskRows([])).toEqual(expect.arrayContaining(ask));
     for (const line of ["git push --tags --force origin", "gh pr merge 7 -d", "gh release upload v1 a --clobber", "gh repo edit --default-branch x --visibility public", "git tag -a v1 -m x -f"]) {
-      expect(ask.some((rule) => ruleMatches(rule, line)), line).toBe(true);
+      expect(claudeAskRows([]).some((rule) => ruleMatches(rule, line)), line).toBe(true);
       expect(deny.some((rule) => ruleMatches(rule, line)), line).toBe(true);
     }
     // The matcher's own control: a `:*` row is a prefix, and a mid-pattern row needs its literal parts.
     expect(ruleMatches("Bash(gh pr merge:*)", "gh pr merge 7 -d")).toBe(true);
     expect(ruleMatches("Bash(gh pr merge * -d*)", "gh pr merge 7")).toBe(false);
+  });
+
+  describe("the ask rows follow the autonomy setting (a4b-claude-rows, REQ-FLOW-123, REQ-FLOW-036)", () => {
+    const READY_ROW = "Bash(gh pr ready:*)";
+    const TAG_ROWS = ["Bash(git tag -a:*)", "Bash(git tag -s:*)", "Bash(git tag -m:*)", "Bash(git tag --annotate:*)", "Bash(git tag --sign:*)"];
+    const ctx = { defaultBranches: ["main"], currentBranch: "feature", tags: [] };
+    const permissionsFor = async (autonomy?: AutonomyConfig): Promise<{ deny: string[]; ask: string[] }> => {
+      const { rows } = await planned({ selection: EMPTY_SELECTION, ...(autonomy === undefined ? {} : { autonomy }) });
+      const permissions = settingsOf(rows).permissions;
+      return { deny: permissions?.deny ?? [], ask: permissions?.ask ?? [] };
+    };
+
+    it("renders 1.16.0's ask rows in mode ask, and the default drops the ready mark's and the local tags' while a raw merge still asks", async () => {
+      const strict = await permissionsFor({ mode: "ask" });
+      const loose = await permissionsFor();
+
+      for (const row of CLAUDE_ASK_ROWS) expect(strict.ask, row).toContain(row);
+      expect(loose.ask).toContain("Bash(gh pr merge:*)");
+      expect(loose.ask).not.toContain(READY_ROW);
+      for (const row of TAG_ROWS) {
+        expect(strict.ask, row).toContain(row);
+        expect(loose.ask, row).not.toContain(row);
+      }
+      expect(loose.ask).toEqual(strict.ask.filter((row) => row !== READY_ROW && !TAG_ROWS.includes(row)));
+    });
+
+    it("renders the ready mark's row again when the repository names it as deploying, the tag rows still dropped", async () => {
+      const { ask } = await permissionsFor({ deployingActs: ["pr-ready"] });
+      expect(ask).toContain(READY_ROW);
+      for (const row of TAG_ROWS) expect(ask, row).not.toContain(row);
+    });
+
+    it("renders every 1.16.0 deny row in every setting, the over-wide ones included (decision D15)", async () => {
+      const settings: (AutonomyConfig | undefined)[] = [{ mode: "ask" }, undefined, { deployingActs: ["pr-ready", "tag"] }];
+      const rendered = await Promise.all(settings.map((autonomy) => permissionsFor(autonomy)));
+      for (const [index, { deny }] of rendered.entries()) expect(deny, JSON.stringify(settings[index])).toEqual([...CLAUDE_DENY_ROWS]);
+      // 1.16.0 wrote 48 deny rows, `gh repo sync --force` in both spellings and `git push * +*` among them.
+      expect(CLAUDE_DENY_ROWS).toHaveLength(48);
+      for (const row of ["Bash(gh repo sync * --force*)", "Bash(gh repo sync --force*)", "Bash(git push * +*)"]) expect(CLAUDE_DENY_ROWS).toContain(row);
+      expect(RETIRED_CLAUDE_ROWS).toEqual([]);
+    });
+
+    it("lists mode ask's rows as 1.16.0's with the land rows after the prefix rows, and only the run acts' rows leave", () => {
+      const shell = (row: string): boolean => row.startsWith("Bash(");
+      const strict = claudeAskRows(resolveAutonomy({ autonomy: { mode: "ask" } }).runs);
+      expect(strict).toEqual([...CLAUDE_ASK_ROWS.filter(shell), ...CLAUDE_LAND_ASK_ROWS, ...CLAUDE_ASK_ROWS.filter((row) => !shell(row))]);
+      expect(claudeAskRows([])).toEqual(strict);
+      const loose = claudeAskRows(resolveAutonomy({}).runs);
+      expect(strict.filter((row) => !loose.includes(row)).toSorted()).toEqual([READY_ROW, ...TAG_ROWS].toSorted());
+      expect(claudeAskRows(["pr-ready"])).not.toContain(READY_ROW);
+      expect(claudeAskRows(["pr-ready"])).toEqual(expect.arrayContaining(TAG_ROWS));
+      for (const row of CLAUDE_LAND_ASK_ROWS) {
+        expect(loose, row).toContain(row);
+        expect(CLAUDE_DENY_ROWS, row).not.toContain(row);
+      }
+      // The guard still asks for every act whose row a setting drops, so a dropped row is never the only layer that asked.
+      expect(personOnlyVerdict("gh pr ready 7", ctx)).toMatchObject({ deny: true, rule: "pr-ready", ask: true });
+      expect(personOnlyVerdict("git tag -a v1 -m x", ctx)).toMatchObject({ deny: true, rule: "tag", ask: true });
+    });
+
+    /** The flows' land lines (`content/skills/st-unattended/SKILL.md`, `content/commands/st-work.md`), in each spelling. */
+    const PLAIN_LAND = [
+      "stamity run land --run 2026-10-23_x --ready --wait 8 --json",
+      "npx --no stamity run land --run 2026-10-23_x --ready --wait 8 --json",
+      "stamity run land --run 2026-10-23_x --json",
+    ];
+    const APPROVED_LAND: readonly (readonly [line: string, row: string])[] = [
+      ["stamity run land --run 2026-10-23_x --ready --approved 3952f8ca --json", "Bash(stamity run land *--approved*)"],
+      ["stamity run land --approved 3952f8ca --run x", "Bash(stamity run land *--approved*)"],
+      ["st run land --run x --approved=3952f8ca", "Bash(st run land *--approved*)"],
+      ["npx --no stamity run land --run x --ready --approved 3952f8ca --json", "Bash(npx * run land *--approved*)"],
+      ["npx -y @zomarit/stamity@1.16.0 run land --run x --approved 3952f8ca", "Bash(npx * run land *--approved*)"],
+      ["npm exec -- stamity run land --run x --approved 3952f8ca", "Bash(npm * run land *--approved*)"],
+      ["pnpm dlx stamity run land --run x --approved 3952f8ca", "Bash(pnpm * run land *--approved*)"],
+      ["yarn stamity run land --run x --approved 3952f8ca", "Bash(yarn * run land *--approved*)"],
+      ["bunx stamity run land --run x --approved 3952f8ca", "Bash(bunx * run land *--approved*)"],
+      ["bun x stamity run land --run x --approved 3952f8ca", "Bash(bun * run land *--approved*)"],
+      ["node dist/cli.js run land --run x --approved 3952f8ca", "Bash(node * run land *--approved*)"],
+      ["pnpx stamity run land --run x --approved 3952f8ca", "Bash(pnpx * run land *--approved*)"],
+      ["corepack pnpm dlx stamity run land --run x --approved 3952f8ca", "Bash(corepack * run land *--approved*)"],
+      ["nodejs dist/cli.js run land --run x --approved 3952f8ca", "Bash(nodejs * run land *--approved*)"],
+      ["deno run -A dist/cli.js run land --run x --approved 3952f8ca", "Bash(deno * run land *--approved*)"],
+      ["tsx src/cli.ts run land --run x --approved 3952f8ca", "Bash(tsx * run land *--approved*)"],
+    ];
+
+    it("asks for a land line carrying the approval in each spelling the guard's package test knows, and for no plain land line (review/109)", async () => {
+      const settings: (AutonomyConfig | undefined)[] = [{ mode: "ask" }, undefined];
+      for (const { deny, ask } of await Promise.all(settings.map((autonomy) => permissionsFor(autonomy)))) {
+        for (const line of PLAIN_LAND) {
+          expect([...deny, ...ask].filter((rule) => ruleMatches(rule, line)), line).toEqual([]);
+        }
+        for (const [line, row] of APPROVED_LAND) {
+          expect(deny.filter((rule) => ruleMatches(rule, line)), line).toEqual([]);
+          expect(ask.filter((rule) => ruleMatches(rule, line)), line).toEqual([row]);
+          // The two layers agree: the guard's own reading of the same line is the ask-class land-approved rule.
+          expect(personOnlyVerdict(line, ctx), line).toMatchObject({ deny: true, rule: "land-approved", ask: true });
+        }
+      }
+      // Each land row is pinned by a line above, and only those.
+      expect([...new Set(APPROVED_LAND.map(([, row]) => row))].toSorted()).toEqual([...CLAUDE_LAND_ASK_ROWS].toSorted());
+      for (const row of CLAUDE_LAND_ASK_ROWS) expect(row).toMatch(/^Bash\((?:stamity|st|[a-z]+ \*) run land \*--approved\*\)$/);
+    });
+
+    it("renders no ready-mark ask row for this repository's own manifest, and every 1.16.0 deny row", async () => {
+      const own = JSON.parse(readFileSync(fileURLToPath(new URL("../../.stamity/manifest.json", import.meta.url)), "utf8")) as { autonomy?: AutonomyConfig };
+      const { deny, ask } = await permissionsFor(own.autonomy);
+      expect(ask).not.toContain(READY_ROW);
+      expect(deny).toEqual([...CLAUDE_DENY_ROWS]);
+    });
   });
 });
 
