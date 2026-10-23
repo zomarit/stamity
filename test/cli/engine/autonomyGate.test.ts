@@ -77,8 +77,9 @@ async function put(root: string, rel: string, text: string): Promise<void> {
   await writeFile(join(root, rel), text, "utf8");
 }
 
-function manifestText(autonomy?: AutonomyConfig): string {
-  return `${JSON.stringify({ version: "2.0.0", tools: ["claude"], ...(autonomy === undefined ? {} : { autonomy }) })}\n`;
+// TEST CHANGE, justified: REQ-FLOW-138 — the baseline now reads the owned files of the manifest at HEAD (build/9), so the fixture manifest carries the ledger a real setup has, recording Claude Code's guard copy; `ledger` overrides it.
+function manifestText(autonomy?: AutonomyConfig, ledger: unknown = [{ path: CLAUDE_COPY }]): string {
+  return `${JSON.stringify({ version: "2.0.0", tools: ["claude"], ...(autonomy === undefined ? {} : { autonomy }), ledger })}\n`;
 }
 
 /** Commits what `root` holds, or skips the case on a machine with no git. */
@@ -307,6 +308,41 @@ describe("readBaseline — every client's known guard path is a tighten-only leg
     await put(root, CLAUDE_COPY, guardText());
     await put(root, CODEX_COPY, "not a guard\n");
     expect(await readBaseline(root, [CLAUDE_COPY])).toEqual(setting());
+  });
+});
+
+describe("readBaseline — a setup from before the guard (build/9, decision D6)", () => {
+  it("reads the upgrade default when the manifest at HEAD owns no guard copy and none is on disk or at HEAD", async ({ skip }) => {
+    const root = tempDir().path("repo");
+    await put(root, ".stamity/manifest.json", manifestText(undefined, [{ path: "owned/guide.txt" }, { path: "owned/settings.txt" }]));
+    await commitAll(root, skip);
+    expect(await readBaseline(root, [CLAUDE_COPY])).toEqual(setting());
+    await expect(assertNotLoosened(root, setting(), { loosen: false, copies: CLAUDE_ONLY })).resolves.toBeUndefined();
+  });
+
+  it("still refuses a looser write when the manifest at HEAD records a guard copy that is now deleted", async ({ skip }) => {
+    const root = tempDir().path("repo");
+    await put(root, ".stamity/manifest.json", manifestText(undefined, [{ path: `${HOOKS_GENERATED_DIR}/cursor/${PERSON_ONLY_GUARD_FILE}` }]));
+    await commitAll(root, skip);
+    expect(await readBaseline(root, [CLAUDE_COPY])).toEqual(setting({ mode: "ask" }));
+    await expect(assertNotLoosened(root, setting(), { loosen: false, copies: CLAUDE_ONLY })).rejects.toMatchObject({
+      code: "AUTONOMY_LOOSENED",
+      why: expect.stringContaining("no guard copy found") as unknown,
+    });
+  });
+
+  it("reads the strictest setting when the manifest at HEAD has an owned-file list it cannot read", async ({ skip }) => {
+    const root = tempDir().path("repo");
+    const unreadable: unknown[] = [{ ledgar: [] }, { ledger: "files" }, { ledger: [{ path: 7 }] }, { ledger: [null] }];
+    for (const [index, shape] of unreadable.entries()) {
+      const repo = join(root, String(index));
+      // oxlint-disable-next-line no-await-in-loop -- one repository per shape
+      await put(repo, ".stamity/manifest.json", `${JSON.stringify({ version: "2.0.0", tools: ["claude"], ...(shape as object) })}\n`);
+      // oxlint-disable-next-line no-await-in-loop -- one repository per shape
+      await commitAll(repo, skip);
+      // oxlint-disable-next-line no-await-in-loop -- one repository per shape
+      expect(await readBaseline(repo, [CLAUDE_COPY]), JSON.stringify(shape)).toEqual(setting({ mode: "ask", deployingActs: [...DEPLOYING_ACTS] }));
+    }
   });
 });
 

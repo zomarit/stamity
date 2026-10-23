@@ -162,6 +162,31 @@ function manifestSetting(text: string): ResolvedAutonomy {
   return resolveAutonomy({ autonomy: (parsed as { autonomy?: unknown }).autonomy });
 }
 
+/**
+ * Whether a manifest's text records a person-only guard copy among the files
+ * it owns (its `ledger` rows, by path): `true` or `false`, or `null` when the
+ * text, its `ledger` or a row's `path` cannot be read. A row counts by the
+ * guard's file name, so every client's known guard path is one.
+ */
+function recordsGuardCopy(text: string): boolean | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text) as unknown;
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
+  const ledger = (parsed as { ledger?: unknown }).ledger;
+  if (!Array.isArray(ledger)) return null;
+  let found = false;
+  for (const row of ledger as unknown[]) {
+    const path = typeof row === "object" && row !== null ? (row as { path?: unknown }).path : undefined;
+    if (typeof path !== "string") return null;
+    if (path.split("/").at(-1) === PERSON_ONLY_GUARD_FILE) found = true;
+  }
+  return found;
+}
+
 /** The caller's environment minus every `GIT_*` variable, as `./gitStatus.ts` runs its reads. */
 function gitReadEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {};
@@ -296,8 +321,15 @@ async function baselineLegs(rootDir: string, planned: readonly string[]): Promis
       legs.push({ source: `the guard copy \`${path}\` committed at \`HEAD\``, setting: text === undefined ? UNREADABLE : guardCopySetting(text) });
     }
     for (const path of plannedFound === 0 ? others : []) other(path, head.get(path), true);
+    const committed = head.get(MANIFEST_REL);
     if (plannedFound === 0 && headCopies === 0 && standIns === 0 && head.has(MANIFEST_REL)) {
-      legs.push({ source: "no guard copy found on disk or at `HEAD` beside the setup committed there (read as `ask`)", setting: ASK });
+      // A setup from before the guard (decision D6): the manifest at `HEAD` owns no guard copy, so none is missing.
+      const recorded = committed === undefined ? null : recordsGuardCopy(committed);
+      if (recorded === null) {
+        legs.push({ source: "the files the setup committed at `HEAD` owns, which could not be read", setting: UNREADABLE });
+      } else if (recorded) {
+        legs.push({ source: "no guard copy found on disk or at `HEAD` beside the setup committed there (read as `ask`)", setting: ASK });
+      }
     }
   }
   const disk = await readRegularFile(join(rootDir, STATE_DIR, MANIFEST_FILE), MANIFEST_MAX_BYTES);
@@ -319,8 +351,11 @@ function strictestOf(legs: readonly BaselineLeg[]): ResolvedAutonomy {
  * committed at `HEAD`, and the manifest on disk before the write. With no
  * planned copy on disk, the copies committed at `HEAD` are legs too; with no
  * planned copy on disk or at `HEAD`, and no recognised copy at `HEAD` at any
- * other known guard path, while `HEAD` holds a manifest, the copies' leg reads
- * `ask`, so deleting them loosens nothing. Inside a checkout, only
+ * other known guard path, while `HEAD` holds a manifest that records a guard
+ * copy among the files it owns, the copies' leg reads `ask`, so deleting them
+ * loosens nothing. A manifest at `HEAD` that records none is a setup from
+ * before the guard, which gives no such leg (decision D6); one whose owned
+ * files cannot be read gives the strictest setting. Inside a checkout, only
  * git's own answer that a path is not at `HEAD` reads as "not there"; a git
  * that refuses or fails reads as the strictest setting. With no leg at all — a
  * first `init` — it is the default.
