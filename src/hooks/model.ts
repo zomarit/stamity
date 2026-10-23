@@ -116,7 +116,10 @@ export const CLIENT_HOOK_GUARANTEES: readonly ClientHookGuarantee[] = [
     failMode: "fail-closed",
     blockingExitCode: 2,
     notes:
-      "Exit 2 blocks the pending action and returns stderr to the agent; exit 0 with structured stdout feeds the session instead.",
+      "Exit 2 blocks the pending action and returns stderr to the agent; exit 0 with structured stdout feeds the session instead. " +
+      "The guard entries carry `onFailure: \"block\"`. Measured on Claude Code 2.1.309 (2026-10-23): a guard that times out under `onFailure: \"block\"` blocks the call. " +
+      "The key's floor is 2.1.295, per the vendor changelog entry for that version (\"Added `onFailure: \"block\"` for command and HTTP hooks\", raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md, read 2026-10-23). " +
+      "A client older than 2.1.295 was not measured: it may ignore the key or reject the entry.",
   },
   {
     tool: "codex",

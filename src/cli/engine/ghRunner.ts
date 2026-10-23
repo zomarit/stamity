@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { isAbsolute } from "node:path";
 import {
   fileSystemProbe,
   isNodeModulesBin,
@@ -31,6 +32,14 @@ import { HOST_NAME } from "../../runs/pullRequest.ts";
  * finds on `PATH` outside the working folder and outside any
  * `node_modules/.bin` folder, never by its bare name. The status is read from
  * the head `--include` prints, so a 4xx answer is a status, not a throw.
+ *
+ * `stamity run land` (REQ-FLOW-132) needs three calls this door refuses, so
+ * each is a fixed-purpose function of its own beside it, its path built here
+ * from validated parts and never from a caller's text: {@link ghMergePull}
+ * (`PUT …/pulls/<n>/merge` with the head `sha`), {@link ghReviewThreads} and
+ * {@link ghMarkReady} (`POST graphql`, each with its one constant document,
+ * {@link ghGraphqlArgs} refusing any other). {@link ghApi} itself still
+ * refuses `PUT`, every merge path and `graphql`.
  */
 
 /** The closed method set. */
@@ -59,6 +68,11 @@ export interface GhApiOptions {
   env?: NodeJS.ProcessEnv;
   /** Wall time before the call is stopped; 60 s when omitted. */
   timeoutMs?: number;
+  /**
+   * review/75: the absolute path of the `gh` to start, one {@link ghProgramPath} resolved and the caller checked;
+   * resolved again from `PATH` when omitted. So a caller that vetted one program runs that program on every call.
+   */
+  program?: string;
 }
 
 /** A call {@link ghApi} refused before `gh` started; `code` is `GH_REFUSED`. */
@@ -167,6 +181,56 @@ export function parseGhInclude(stdout: string): GhResponse | null {
   return { status: Number(match[1]), json };
 }
 
+/**
+ * review/95: the variables with which a version manager's shim chooses which program it starts, read from the managers'
+ * documentation (none is installed on the machine this was written on): mise's (and its former name rtx's) per-tool
+ * version, environment, config-file and config-filename overrides; asdf's per-tool version, its config file and its
+ * version-file name; volta's shim bypass. Those that only locate an install (`MISE_DATA_DIR`, `MISE_CACHE_DIR`,
+ * `ASDF_DIR`, `ASDF_DATA_DIR`, `VOLTA_HOME`) are kept.
+ */
+const VERSION_CHOOSING: ReadonlySet<string> = new Set([
+  "MISE_ENV",
+  "MISE_ENVIRONMENT",
+  "MISE_PROFILE",
+  "MISE_CONFIG_DIR",
+  "MISE_CONFIG_FILE",
+  "MISE_GLOBAL_CONFIG_FILE",
+  "MISE_SYSTEM_CONFIG_FILE",
+  "MISE_DEFAULT_CONFIG_FILENAME",
+  "MISE_DEFAULT_TOOL_VERSIONS_FILENAME",
+  "MISE_OVERRIDE_CONFIG_FILENAMES",
+  "MISE_OVERRIDE_TOOL_VERSIONS_FILENAMES",
+  "MISE_CEILING_PATHS",
+  "MISE_TRUSTED_CONFIG_PATHS",
+  "RTX_ENV",
+  "RTX_CONFIG_FILE",
+  "RTX_DEFAULT_CONFIG_FILENAME",
+  "RTX_DEFAULT_TOOL_VERSIONS_FILENAME",
+  "ASDF_CONFIG_FILE",
+  "ASDF_DEFAULT_TOOL_VERSIONS_FILENAME",
+  "VOLTA_BYPASS",
+]);
+
+/** A per-tool version override: `MISE_GH_VERSION`, `ASDF_GH_VERSION`, `RTX_GH_VERSION`, for any tool. */
+const TOOL_VERSION = /^(?:MISE|RTX|ASDF)_[A-Z0-9_]+_VERSION$/;
+
+/**
+ * `base` without the version managers' version-choosing variables ({@link VERSION_CHOOSING}, {@link TOOL_VERSION}),
+ * in any case Windows spells them, and the names it dropped, for the caller's report (review/95).
+ */
+export function withoutVersionChoice(base: NodeJS.ProcessEnv): { env: NodeJS.ProcessEnv; dropped: string[] } {
+  const dropped: string[] = [];
+  const env = Object.fromEntries(
+    Object.entries(base).filter(([key]) => {
+      const name = key.toUpperCase();
+      const drop = VERSION_CHOOSING.has(name) || TOOL_VERSION.test(name);
+      if (drop) dropped.push(key);
+      return !drop;
+    }),
+  );
+  return { env, dropped: dropped.toSorted() };
+}
+
 /** Variables that keep `gh`'s ANSI colours on a pipe, which would wrap the JSON body and break its parse. */
 const COLOUR_FORCING: ReadonlySet<string> = new Set(["CLICOLOR_FORCE", "GH_FORCE_TTY"]);
 
@@ -178,6 +242,15 @@ const COLOUR_FORCING: ReadonlySet<string> = new Set(["CLICOLOR_FORCE", "GH_FORCE
 function ghEnv(base: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const kept = Object.fromEntries(Object.entries(base).filter(([key]) => !COLOUR_FORCING.has(key.toUpperCase())));
   return { ...kept, GH_PROMPT_DISABLED: "1", GH_NO_UPDATE_NOTIFIER: "1", NO_COLOR: "1" };
+}
+
+/**
+ * The absolute path of the `gh` every call here starts for `opts` (its folder and its environment), or `null` where
+ * no accepted `PATH` entry holds one: what `run land` checks lies outside the work tree and the temp folders before
+ * it trusts GitHub's answers.
+ */
+export function ghProgramPath(opts: GhApiOptions = {}): string | null {
+  return ghProgram(opts.cwd ?? process.cwd(), ghEnv(opts.env ?? process.env));
 }
 
 /** The absolute path of the `gh` to start in `cwd`, or `null` where no accepted `PATH` entry holds one. */
@@ -203,17 +276,26 @@ function ghProgram(cwd: string, env: NodeJS.ProcessEnv): string | null {
  * body `gh` never read (it exited first) is no throw: the exit decides.
  */
 export function ghApi(request: GhRequest, opts: GhApiOptions = {}): Promise<GhResponse> {
+  return startGh(() => ghApiArgs(request), request.body, opts);
+}
+
+/**
+ * Start `gh` with the arguments `build` returns (a throw there is a rejection before `gh` starts) and `body`, as JSON,
+ * on its stdin; resolve GitHub's answer as {@link ghApi} does.
+ */
+function startGh(build: () => string[], body: unknown, opts: GhApiOptions): Promise<GhResponse> {
   let args: string[];
   try {
-    args = ghApiArgs(request);
+    args = build();
   } catch (error) {
     return Promise.reject(error instanceof Error ? error : new Error(String(error)));
   }
   const cwd = opts.cwd ?? process.cwd();
   const env = ghEnv(opts.env ?? process.env);
-  const gh = ghProgram(cwd, env);
+  if (opts.program !== undefined && !isAbsolute(opts.program)) return Promise.reject(refusal("gh: the program to start is not an absolute path"));
+  const gh = opts.program ?? ghProgram(cwd, env);
   if (gh === null) return Promise.reject(programNotFound("gh", "spawn", args));
-  const input = request.body === undefined ? "" : JSON.stringify(request.body);
+  const input = body === undefined ? "" : JSON.stringify(body);
   return new Promise((resolvePromise, rejectPromise) => {
     const child = execFile(
       gh,
@@ -240,4 +322,97 @@ export function ghApi(request: GhRequest, opts: GhApiOptions = {}): Promise<GhRe
     child.stdin?.on("error", () => undefined);
     child.stdin?.end(input);
   });
+}
+
+/** A pull request named by its repository and number, on the host the repository was matched on. */
+export interface PullRef {
+  hostname: string;
+  owner: string;
+  repo: string;
+  number: number;
+}
+
+/** The merge methods GitHub's merge call takes. */
+export type MergeMethod = "merge" | "squash" | "rebase";
+
+const MERGE_METHODS: ReadonlySet<string> = new Set<MergeMethod>(["merge", "squash", "rebase"]);
+
+/** A full commit id, SHA-1 or SHA-256. */
+const FULL_SHA = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
+
+const PART_SHAPE = new RegExp(`^${PART}$`);
+
+/** Why `ref` is not one this runner builds a path from, or `null`. */
+function pullRefRefusal(ref: PullRef): string | null {
+  if (typeof ref.hostname !== "string" || !HOST_NAME.test(ref.hostname)) return "the host is not a host name this runner sends to";
+  for (const part of [ref.owner, ref.repo]) {
+    if (typeof part !== "string" || !PART_SHAPE.test(part) || part === "." || part === "..") return "the repository is not one this runner names";
+  }
+  if (!Number.isSafeInteger(ref.number) || ref.number < 1) return "the pull request number is not a number this runner sends";
+  return null;
+}
+
+/**
+ * The argument vector of {@link ghMergePull}: `PUT repos/<owner>/<repo>/pulls/<n>/merge`, the body on stdin. Throws
+ * a {@link GhRefusal} for a part that fails validation, a `sha` that is not a full commit id, or an unknown method.
+ */
+export function ghMergeArgs(request: PullRef & { sha: string; method: MergeMethod }): string[] {
+  const refused = pullRefRefusal(request);
+  if (refused !== null) throw refusal(`gh merge: ${refused}`);
+  if (typeof request.sha !== "string" || !FULL_SHA.test(request.sha)) throw refusal("gh merge: the head is not a full commit id");
+  if (!MERGE_METHODS.has(request.method)) throw refusal(`gh merge: ${String(request.method)} is not a merge method`);
+  const path = `repos/${request.owner}/${request.repo}/pulls/${request.number}/merge`;
+  return ["api", "--hostname", request.hostname, "--include", "--method", "PUT", "--input", "-", path];
+}
+
+/**
+ * Merge one pull request at exactly `sha` (`PUT …/pulls/<n>/merge` with `{ sha, merge_method }`): GitHub refuses
+ * with 409 when the head moved. Never an admin route: the caller merges only on a `clean` mergeable state.
+ */
+export function ghMergePull(request: PullRef & { sha: string; method: MergeMethod }, opts: GhApiOptions = {}): Promise<GhResponse> {
+  return startGh(() => ghMergeArgs(request), { sha: request.sha, merge_method: request.method }, opts);
+}
+
+/**
+ * The one review-thread read (a constant document): the authenticated login, the pull request's author in the same
+ * spelling (review/94: GraphQL names an app `app` where REST names it `app[bot]`), then per thread whether it is resolved,
+ * who resolved it, and every comment's author (review/71), each a person (`User`) or an app (`Bot`), with the
+ * thread's comment count, so a thread holding more comments than one page reads as not read whole.
+ */
+export const REVIEW_THREADS_QUERY =
+  "query($owner:String!,$repo:String!,$number:Int!,$after:String){viewer{login}repository(owner:$owner,name:$repo){pullRequest(number:$number){author{login}reviewThreads(first:100,after:$after){nodes{isResolved resolvedBy{login}comments(first:100){totalCount nodes{author{__typename login}}}}pageInfo{hasNextPage endCursor}}}}}";
+
+/** The one mutation: mark the pull request with this node id ready for review (a constant document). */
+export const MARK_READY_MUTATION =
+  "mutation($id:ID!){markPullRequestReadyForReview(input:{pullRequestId:$id}){pullRequest{isDraft}}}";
+
+const GRAPHQL_DOCUMENTS: ReadonlySet<string> = new Set([REVIEW_THREADS_QUERY, MARK_READY_MUTATION]);
+
+/**
+ * The argument vector of a GraphQL call: `POST graphql`, the document and its variables on stdin. Throws a
+ * {@link GhRefusal} for any document but {@link REVIEW_THREADS_QUERY} and {@link MARK_READY_MUTATION}, so no caller
+ * reaches GitHub's GraphQL with text of its own.
+ */
+export function ghGraphqlArgs(request: { hostname: string; query: string }): string[] {
+  if (typeof request.hostname !== "string" || !HOST_NAME.test(request.hostname)) throw refusal("gh graphql: the host is not a host name this runner sends to");
+  if (!GRAPHQL_DOCUMENTS.has(request.query)) throw refusal("gh graphql: the document is not one this runner sends");
+  return ["api", "--hostname", request.hostname, "--include", "--method", "POST", "--input", "-", "graphql"];
+}
+
+function graphql(hostname: string, query: string, variables: Record<string, unknown>, opts: GhApiOptions): Promise<GhResponse> {
+  return startGh(() => ghGraphqlArgs({ hostname, query }), { query, variables }, opts);
+}
+
+/** One page (100 threads) of a pull request's review threads, after the cursor `after` where given. */
+export function ghReviewThreads(request: PullRef & { after?: string }, opts: GhApiOptions = {}): Promise<GhResponse> {
+  const refused = pullRefRefusal(request);
+  if (refused !== null) return Promise.reject(refusal(`gh graphql: ${refused}`));
+  const { owner, repo, number } = request;
+  return graphql(request.hostname, REVIEW_THREADS_QUERY, { owner, repo, number, after: request.after ?? null }, opts);
+}
+
+/** Mark the pull request whose GraphQL node id is `id` ready for review. */
+export function ghMarkReady(request: { hostname: string; id: string }, opts: GhApiOptions = {}): Promise<GhResponse> {
+  if (typeof request.id !== "string" || !/^[A-Za-z0-9_=-]{1,128}$/.test(request.id)) return Promise.reject(refusal("gh graphql: the node id is not one this runner sends"));
+  return graphql(request.hostname, MARK_READY_MUTATION, { id: request.id }, opts);
 }

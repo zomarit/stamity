@@ -62,6 +62,7 @@ interface WorkflowJob {
 }
 
 interface Workflow {
+  readonly env?: Readonly<Record<string, string>>;
   readonly permissions?: Readonly<Record<string, string>>;
   readonly concurrency?: { readonly group?: string; readonly "cancel-in-progress"?: boolean };
   readonly jobs: Record<string, WorkflowJob>;
@@ -942,6 +943,8 @@ describe.skipIf(WINDOWS)("fork-release.yml — the registry publish, executed wi
         VERSION: FORK_VERSION,
         TARBALL,
         NPM_VIEW: "",
+        // Workflow-level env, which GitHub hands every step; read off the parsed file.
+        DIST_TAG: WORKFLOW.env?.["DIST_TAG"] ?? "",
         ...env,
       },
     });
@@ -953,7 +956,11 @@ describe.skipIf(WINDOWS)("fork-release.yml — the registry publish, executed wi
   it("publishes once, to the armed registry, when the version is not there yet", () => {
     const run = publish({});
     expect(run.status, run.out).toBe(0);
-    expect(run.calls).toEqual([VIEW, `publish ./${TARBALL} --registry ${GITHUB_PACKAGES}`]);
+    // TEST CHANGE, justified (plan 022, unit a11-release-workflows, REQ-PLUGIN-031): the old line
+    // pinned the defect. npm 11 refuses a prerelease such as the fork's suffixed version without
+    // `--tag`, so the publish names the workflow's one dist-tag, `latest`, the tag the CLI's update
+    // notice reads.
+    expect(run.calls).toEqual([VIEW, `publish ./${TARBALL} --registry ${GITHUB_PACKAGES} --tag latest`]);
   });
 
   it("skips the publish when the version is already there with this tarball's integrity", () => {
@@ -980,6 +987,206 @@ describe.skipIf(WINDOWS)("fork-release.yml — the registry publish, executed wi
   it("publishes with neither provenance nor an access flag", () => {
     expect(PUBLISH).not.toContain("--provenance");
     expect(PUBLISH).not.toContain("--access");
+  });
+});
+
+// ── the registry rehearsal, before the approval ──────────────────────────────
+
+// ADDED (plan 022, unit a11-release-workflows, REQ-PLUGIN-031, REQ-PLUGIN-050): npm 11 refuses a
+// prerelease, which every suffixed fork version is, without `--tag`, and before this unit the
+// refusal came only after the `fork-release` approval, inside the publish job. The publish now
+// names one workflow-level dist-tag, and `gates` dry-runs the same publish first, with no secret,
+// so the refusal fails the run before anyone is asked to approve it.
+describe("fork-release.yml — the dist-tag and the registry rehearsal", () => {
+  // TEST CHANGE, justified (plan 022 run 2026-10-23_autonomy-distribution-01, unit
+  // a11-release-workflows, fix round 1, review W-1): the step now captures the dry run's output
+  // and exit code to tell npm's tag-rule refusal from a tokenless authentication refusal, so the
+  // one publish line is the capture, with the same flags.
+  const REHEARSAL_LINE =
+    'OUT="$(npm publish "./$TARBALL" --dry-run --registry "$REGISTRY" --tag "$DIST_TAG" 2>&1)" || STATUS=$?';
+
+  it("sets one dist-tag, latest, at workflow level, and publishes under it", () => {
+    expect(WORKFLOW.env).toEqual({ DIST_TAG: "latest" });
+    expect(SOURCE.match(/\bDIST_TAG:/g)).toHaveLength(1);
+    expect(runOf(WORKFLOW, "publish", "Publish to the registry")).toContain(
+      'npm publish "./$TARBALL" --registry "$REGISTRY" --tag "$DIST_TAG"',
+    );
+  });
+
+  it("holds exactly one npm publish line in gates, a dry run right after the pack, with read access and no secret", () => {
+    const steps = jobOf(WORKFLOW, "gates").steps;
+    const lines = steps.flatMap((step, at) =>
+      (step.run ?? "")
+        .split("\n")
+        .filter((line) => /\bnpm publish\b/.test(line))
+        .map((line) => ({ at, name: step.name, line: line.trim() })),
+    );
+    expect(lines).toEqual([
+      {
+        at: steps.findIndex((step) => step.name === "Pack tarball") + 1,
+        name: "Rehearse the registry publish",
+        line: REHEARSAL_LINE,
+      },
+    ]);
+    expect(stepOf(WORKFLOW, "gates", "Rehearse the registry publish").env).toEqual({
+      REGISTRY: "${{ needs.probe.outputs.registry }}",
+      TARBALL: "${{ steps.pack.outputs.tarball }}",
+    });
+    expect(jobOf(WORKFLOW, "gates").permissions).toEqual({ contents: "read" });
+    expect(secretsReadBy("gates")).toEqual([]);
+  });
+
+  it("runs the rehearsal on every armed trigger shape, the tag push included, and publish waits on it", () => {
+    const gates = jobOf(WORKFLOW, "gates").if ?? "";
+    const rehearsal = stepOf(WORKFLOW, "gates", "Rehearse the registry publish") as WorkflowStep &
+      Readonly<Record<string, unknown>>;
+    // No step condition and no tolerated failure: whenever gates runs, the rehearsal runs and its
+    // exit code is the job's.
+    expect(rehearsal.if).toBeUndefined();
+    expect(rehearsal["continue-on-error"]).toBeUndefined();
+    const armedShapes = TRIGGER_SHAPES.filter((shape) =>
+      evaluateWorkflowExpression(gates, withArmed(shape.context, "true")),
+    ).map((shape) => shape.label);
+    expect(armedShapes).toEqual(TRIGGER_SHAPES.map((shape) => shape.label));
+    expect(armedShapes).toContain("a v* tag push");
+    expect(jobOf(WORKFLOW, "publish").needs).toContain("gates");
+  });
+
+  it("names the dist-tag in the rehearsal report, which still holds no permission", () => {
+    const report = runOf(WORKFLOW, "dry-run-summary", "Report what a real run would publish");
+    expect(report).toContain('echo "| dist-tag | \\`$DIST_TAG\\` |"');
+    expect(jobOf(WORKFLOW, "dry-run-summary").permissions).toEqual({});
+  });
+
+  it("says in its header that gates rehearses the publish under the dist-tag", () => {
+    const header = SOURCE.slice(0, SOURCE.indexOf("\nname:"));
+    for (const phrase of ["THE REGISTRY REHEARSAL", "DIST_TAG", "--dry-run", "before the approval"]) {
+      expect(header, phrase).toContain(phrase);
+    }
+  });
+});
+
+describe.skipIf(WINDOWS)("fork-release.yml — the registry rehearsal, executed with npm stubbed", () => {
+  const REHEARSAL = runOf(WORKFLOW, "gates", "Rehearse the registry publish");
+  const TARBALL = `acme-corp-stamity-${FORK_VERSION}.tgz`;
+
+  // TEST CHANGE, justified (plan 022 run 2026-10-23_autonomy-distribution-01, unit
+  // a11-release-workflows, fix round 1, review W-1): the step now reads what npm prints, so the stub
+  // also writes `publishOutput` to stderr, where npm writes its errors, before it exits.
+  /**
+   * The step under a stub npm that answers `--version` with `version`, and on publish writes
+   * `publishOutput` to stderr and exits `publishStatus`.
+   */
+  function rehearse(
+    version: string,
+    publishStatus: number,
+    publishOutput = "",
+  ): { status: number | null; out: string; calls: readonly string[] } {
+    const dir = scratchDir("rehearsal");
+    const bin = join(dir, "bin");
+    mkdirSync(bin);
+    const output = join(dir, "publish-output");
+    writeFileSync(output, publishOutput);
+    stubCommand(
+      bin,
+      "npm",
+      `if [ "$1" = "--version" ]; then echo '${version}'; exit 0; fi\nif [ "$1" = "publish" ]; then cat '${output}' >&2; exit ${String(publishStatus)}; fi`,
+    );
+    writeFileSync(join(dir, TARBALL), "the packed tarball's bytes\n");
+    const log = join(dir, "calls");
+    const result = spawnSync("bash", ["-c", REHEARSAL], {
+      cwd: dir,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        PATH: childPath(bin),
+        STUB_LOG: log,
+        REGISTRY: GITHUB_PACKAGES,
+        TARBALL,
+        // Workflow-level env, which GitHub hands every step; read off the parsed file.
+        DIST_TAG: WORKFLOW.env?.["DIST_TAG"] ?? "",
+      },
+    });
+    return { status: result.status, out: `${result.stdout}${result.stderr}`, calls: logOf(log) };
+  }
+
+  const DRY_RUN = `publish ./${TARBALL} --dry-run --registry ${GITHUB_PACKAGES} --tag latest`;
+
+  it("dry-runs the publish under npm 11, naming npm's version and the dist-tag", () => {
+    const run = rehearse("11.21.0", 0);
+    expect(run.status, run.out).toBe(0);
+    expect(run.out).toContain("npm 11.21.0; dist-tag latest");
+    expect(run.calls).toEqual(["--version", DRY_RUN]);
+  });
+
+  it("stops before any dry run, naming npm 11, under npm 10", () => {
+    const run = rehearse("10.9.8", 0);
+    expect(run.status).toBe(1);
+    expect(run.out).toContain("::error::The rehearsal needs npm 11 or newer");
+    expect(run.out).toContain("npm 10.9.8");
+    expect(run.calls).toEqual(["--version"]);
+  });
+
+  it("stops, as an old npm does, when npm's version is not a number", () => {
+    const run = rehearse("not-a-version", 0);
+    expect(run.status).toBe(1);
+    expect(run.out).toContain("npm 11 or newer");
+    expect(run.calls).toEqual(["--version"]);
+  });
+
+  it("fails the job when npm refuses the dry run", () => {
+    const run = rehearse("11.21.0", 1);
+    expect(run.status).toBe(1);
+    expect(run.calls).toEqual(["--version", DRY_RUN]);
+  });
+
+  // ADDED (plan 022 run 2026-10-23_autonomy-distribution-01, unit a11-release-workflows, fix round
+  // 1, review W-1): how npm 11 answers a tokenless dry run against GitHub Packages was never
+  // measured, so the step tells its three answers apart by what npm prints. The tag rule's refusal
+  // and any other error fail closed; only an authentication refusal passes, and it says the tag
+  // rule was not reached.
+  const TAG_RULE = "npm error You must specify a tag using --tag when publishing a prerelease version.\n";
+
+  it("fails the job on npm's tag-rule refusal, naming the rule", () => {
+    const run = rehearse("11.21.0", 1, TAG_RULE);
+    expect(run.status).toBe(1);
+    expect(run.out).toContain("must specify a tag");
+    expect(run.out).toContain("::error::npm refused the publish for its dist-tag rule (exit 1)");
+    expect(run.out).not.toContain("::warning::");
+    expect(run.calls).toEqual(["--version", DRY_RUN]);
+  });
+
+  it("fails the job on the tag rule even when an authentication code is printed beside it or npm exits 0", () => {
+    const beside = rehearse("11.21.0", 1, `npm error code E401\n${TAG_RULE}`);
+    expect(beside.status).toBe(1);
+    expect(beside.out).toContain("dist-tag rule");
+    expect(beside.out).not.toContain("::warning::");
+    const zero = rehearse("11.21.0", 0, TAG_RULE);
+    expect(zero.status).toBe(1);
+    expect(zero.out).toContain("dist-tag rule (exit 0)");
+  });
+
+  it.each([
+    ["E401", "npm error code E401\nnpm error 401 Unauthorized - GET https://npm.pkg.github.com/@acme-corp%2fstamity - authentication token not provided\n"],
+    ["E403", "npm error code E403\nnpm error 403 Forbidden - GET https://npm.pkg.github.com/@acme-corp%2fstamity\n"],
+    ["ENEEDAUTH", "npm error code ENEEDAUTH\nnpm error need auth This command requires you to be logged in to https://npm.pkg.github.com/\n"],
+  ])("passes with a warning when the registry refuses the tokenless dry run (%s), saying the tag rule was not reached", (code, printed) => {
+    const run = rehearse("11.21.0", 1, printed);
+    expect(run.status, run.out).toBe(0);
+    expect(run.out).toContain(`npm error code ${code}`);
+    expect(run.out).toContain(
+      "::warning::The registry refused a tokenless dry run (npm exit 1), so npm's dist-tag rule was not reached",
+    );
+    expect(run.out).not.toContain("::error::");
+    expect(run.calls).toEqual(["--version", DRY_RUN]);
+  });
+
+  it("fails the job on any other npm error, printing npm's output", () => {
+    const run = rehearse("11.21.0", 1, "npm error code E404\nnpm error 404 Not Found - PUT https://npm.pkg.github.com/@acme-corp%2fstamity\n");
+    expect(run.status).toBe(1);
+    expect(run.out).toContain("npm error code E404");
+    expect(run.out).toContain("::error::npm refused the dry run (exit 1) for a reason other than authentication");
+    expect(run.out).not.toContain("::warning::");
   });
 });
 

@@ -268,6 +268,28 @@ const ALL_STEPS: readonly (readonly [string, string, WorkflowStep])[] = ALL_JOBS
     ),
 );
 
+/**
+ * The jobs whose run steps hold an `npm publish` line, as `file:job`, split in two: `rehearsing`
+ * when every such line in the job carries `--dry-run`, `publishing` otherwise. Read per line, so a
+ * job with one rehearsal line and one real publish counts as publishing.
+ */
+function classifyNpmPublishJobs(steps: readonly (readonly [string, string, WorkflowStep])[]): {
+  readonly publishing: readonly string[];
+  readonly rehearsing: readonly string[];
+} {
+  const lines = new Map<string, string[]>();
+  for (const [file, job, step] of steps) {
+    for (const line of (step.run ?? "").split("\n")) {
+      if (!/\bnpm publish\b/.test(line)) continue;
+      const key = `${file}:${job}`;
+      lines.set(key, [...(lines.get(key) ?? []), line]);
+    }
+  }
+  const keys = [...lines.keys()].toSorted();
+  const rehearses = (key: string): boolean => (lines.get(key) ?? []).every((line) => /\s--dry-run\b/.test(line));
+  return { publishing: keys.filter((key) => !rehearses(key)), rehearsing: keys.filter(rehearses) };
+}
+
 // ── ci.yml ───────────────────────────────────────────────────────────────────
 
 /**
@@ -3236,6 +3258,25 @@ describe("release.yml — the only publishing path", () => {
     ).toBe("block");
   });
 
+  // ADDED (plan 022, unit a11-release-workflows, REQ-PROVE-045): GitHub moves `ubuntu-latest` from
+  // 24.04 to 26.04 between 2026-10-19 and 2026-11-19, and the blocked-egress allowlists were
+  // measured on 24.04. An image that moves under a release turns the blocked egress red at the
+  // worst moment, so the release and signing-rehearsal jobs pin the measured image, and the egress
+  // page and each file's header say so. A move comes after the allowlist is measured again.
+  it("pins every release and signing-rehearsal job to the image the egress allowlists were measured on", () => {
+    const page = readFileSync(join(REPO_ROOT, ".github", "release-egress.md"), "utf8");
+    expect(page).toContain("ubuntu-24.04");
+    for (const file of ["release.yml", "pack-signing-rehearsal.yml"]) {
+      const loaded = workflowNamed(file);
+      const jobs = Object.entries(loaded.workflow.jobs);
+      expect(jobs.length, file).toBeGreaterThanOrEqual(3);
+      for (const [id, job] of jobs) expect(job["runs-on"], `${file}:${id}`).toBe("ubuntu-24.04");
+      const header = loaded.source.slice(0, loaded.source.indexOf("\nname:"));
+      expect(header, file).toContain("ubuntu-24.04");
+      expect(header, file).toContain("26.04");
+    }
+  });
+
   describe("a dry run cannot publish", () => {
     /** The condition this file must carry, character for character. */
     const PUBLISH_CONDITION =
@@ -4314,16 +4355,32 @@ describe("every workflow — pins, privileges and referenced scripts", () => {
   it("keeps `npm publish` inside the one job whose condition denies a dry run", () => {
     // The property, now actually stated over the whole directory: if the string can only appear
     // in a job that a dry run cannot reach, a dry run cannot publish.
-    const publishing = ALL_STEPS.filter(([, , step]) => /\bnpm publish\b/.test(step.run ?? ""));
     // TEST CHANGE, justified (plan 010, unit e1-fork-release-workflow): a fork's own release path
     // publishes its CLI from `fork-release.yml:publish`. That job's condition denies a dry run in
     // release.yml's `format()` spelling and requires the probe's `armed` answer, which the
     // canonical repository never gives; both are evaluated over every trigger shape in
     // test/ci/forkReleaseWorkflow.test.ts. Any third job still fails this closed list.
-    expect(publishing.map(([file, job]) => `${file}:${job}`)).toEqual([
-      "fork-release.yml:publish",
-      "release.yml:publish",
-    ]);
+    // TEST CHANGE, justified (plan 022, unit a11-release-workflows, REQ-PLUGIN-050): the fork's
+    // `gates` job now rehearses the registry publish before the approval, so the string appears in
+    // a job a dry run reaches. It is admitted to a second closed list, and only because every
+    // `npm publish` line in it carries `--dry-run`; a job with one line lacking the flag counts as
+    // publishing, which the first list refuses. The case below drops the flag from a parsed copy.
+    const { publishing, rehearsing } = classifyNpmPublishJobs(ALL_STEPS);
+    expect(publishing).toEqual(["fork-release.yml:publish", "release.yml:publish"]);
+    expect(rehearsing).toEqual(["fork-release.yml:gates"]);
+  });
+
+  it("counts a rehearsal job as publishing once one of its `npm publish` lines loses `--dry-run`", () => {
+    const fork = workflowNamed("fork-release.yml");
+    const stripped = parse(fork.source.replaceAll(" --dry-run", "")) as Workflow;
+    const steps = Object.entries(stripped.jobs).flatMap(([id, job]) =>
+      job.steps.map((step) => [fork.file, id, step] as readonly [string, string, WorkflowStep]),
+    );
+    // Non-degenerate: the shipped copy holds the flag, so the strip changed the parsed text.
+    expect(fork.source).toContain(" --dry-run");
+    const { publishing, rehearsing } = classifyNpmPublishJobs(steps);
+    expect(rehearsing).toEqual([]);
+    expect(publishing).toEqual(["fork-release.yml:gates", "fork-release.yml:publish"]);
   });
 
   it("hands OIDC only to the named deployment and nonpublishing signing jobs", () => {

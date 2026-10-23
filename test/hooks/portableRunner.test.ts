@@ -347,11 +347,12 @@ describe("portable native hook boundary", () => {
 
     // shell: false and node:path composition, so the Windows leg runs this too.
     const starter = portableHookCommand("codex", f.hook, SYNC);
-    const program = /^node -e "(.*)" ([A-Za-z0-9_-]+)$/s.exec(starter);
+    // TEST CHANGE, justified (REQ-FLOW-142): the starter now ends with the row's script as a plain word after the row.
+    const program = /^node -e "(.*)" ([A-Za-z0-9_-]+) ([A-Za-z0-9._/-]+)$/s.exec(starter);
     expect(program, starter).not.toBeNull();
     const nested = join(project, "packages", "deep directory");
     await mkdir(nested, { recursive: true });
-    const result = spawnSync(process.execPath, ["-e", program![1]!, program![2]!], {
+    const result = spawnSync(process.execPath, ["-e", program![1]!, program![2]!, program![3]!], {
       cwd: nested, shell: false, input: "{}", encoding: "utf8",
     });
 
@@ -365,8 +366,9 @@ describe("portable native hook boundary", () => {
     const orphan = await mkdtemp(join(tmpdir(), "stamity-hook-orphan-"));
     roots.push(orphan);
     const starter = portableHookCommand("codex", f.hook, SYNC);
-    const program = /^node -e "(.*)" ([A-Za-z0-9_-]+)$/s.exec(starter);
-    const result = spawnSync(process.execPath, ["-e", program![1]!, program![2]!], {
+    // TEST CHANGE, justified (REQ-FLOW-142): the starter now ends with the row's script as a plain word after the row.
+    const program = /^node -e "(.*)" ([A-Za-z0-9_-]+) ([A-Za-z0-9._/-]+)$/s.exec(starter);
+    const result = spawnSync(process.execPath, ["-e", program![1]!, program![2]!, program![3]!], {
       cwd: orphan, shell: false, input: "{}", encoding: "utf8",
     });
     // TEST CHANGE, justified: this row is an authored Codex pre-tool-use row, where a fault inside
@@ -386,9 +388,10 @@ describe("portable native hook boundary", () => {
     await writeFile(join(project, ".codex", "hooks.json"), "{}\n");
     const hook: HookInterchange = { event: "pre_tool_use", command: ["node", "check.mjs"] };
     const starter = portableHookCommand("codex", hook, SYNC);
-    const program = /^node -e "(.*)" ([A-Za-z0-9_-]+)$/s.exec(starter);
+    // TEST CHANGE, justified (REQ-FLOW-142): the starter now ends with the row's script as a plain word after the row.
+    const program = /^node -e "(.*)" ([A-Za-z0-9_-]+) ([A-Za-z0-9._/-]+)$/s.exec(starter);
     expect(program, starter).not.toBeNull();
-    const result = spawnSync(process.execPath, ["-e", program![1]!, program![2]!], {
+    const result = spawnSync(process.execPath, ["-e", program![1]!, program![2]!, program![3]!], {
       cwd: project, shell: false, input: "{}", encoding: "utf8",
     });
     // TEST CHANGE, justified: an authored Codex pre-tool-use row; a missing runner now exits 2, the
@@ -408,9 +411,10 @@ describe("portable native hook boundary", () => {
     const hook: HookInterchange = { event: "pre_tool_use", command: ["node", "check.mjs"] };
     const syncCall = "npx -y --@acme:registry=https://npm.pkg.github.com @acme/stamity@1.12.0 sync";
     const starter = portableHookCommand("codex", hook, { syncCall });
-    const program = /^node -e "(.*)" ([A-Za-z0-9_-]+)$/s.exec(starter);
+    // TEST CHANGE, justified (REQ-FLOW-142): the starter now ends with the row's script as a plain word after the row.
+    const program = /^node -e "(.*)" ([A-Za-z0-9_-]+) ([A-Za-z0-9._/-]+)$/s.exec(starter);
     expect(program, starter).not.toBeNull();
-    const result = spawnSync(process.execPath, ["-e", program![1]!, program![2]!], {
+    const result = spawnSync(process.execPath, ["-e", program![1]!, program![2]!, program![3]!], {
       cwd: project, shell: false, input: "{}", encoding: "utf8",
     });
     // TEST CHANGE, justified: the same authored Codex pre-tool-use row as above, so the same exit 2.
@@ -433,10 +437,11 @@ describe("portable native hook boundary", () => {
       [{ event: "session_start", command: ["node", "check.mjs"] }, 1],
     ];
     for (const [hook, exit] of rows) {
-      const program = /^node -e "(.*)" ([A-Za-z0-9_-]+)$/s.exec(portableHookCommand("codex", hook, SYNC));
+      // TEST CHANGE, justified (REQ-FLOW-142): the starter now ends with the row's script as a plain word after the row.
+      const program = /^node -e "(.*)" ([A-Za-z0-9_-]+) ([A-Za-z0-9._/-]+)$/s.exec(portableHookCommand("codex", hook, SYNC));
       expect(program).not.toBeNull();
       for (const cwd of [project, orphan]) {
-        const result = spawnSync(process.execPath, ["-e", program![1]!, program![2]!], {
+        const result = spawnSync(process.execPath, ["-e", program![1]!, program![2]!, program![3]!], {
           cwd, shell: false, input: "{}", encoding: "utf8",
         });
         expect(result.status, `${hook.event} ${hook.command[1]} in ${cwd === project ? "the project" : "no project"}`).toBe(exit);
@@ -826,10 +831,87 @@ describe("the walk-up starter on Cursor and Copilot", () => {
     }
     // No `$`, backtick, `%`, backslash or inner double quote: the program reads the same under sh and cmd.
     for (const tool of ["cursor", "copilot"] as const) {
-      const body = /^node -e "(.*)" [A-Za-z0-9_-]+$/s.exec(portableHookCommand(tool, hook, SYNC))?.[1];
+      // TEST CHANGE, justified (REQ-FLOW-142): the starter now ends with the row's script as a plain word after the row.
+      const body = /^node -e "(.*)" [A-Za-z0-9_-]+ [A-Za-z0-9._/-]+$/s.exec(portableHookCommand(tool, hook, SYNC))?.[1];
       expect(body, tool).toBeDefined();
       expect(body).not.toMatch(/[$`%\\"]/);
     }
+  });
+
+  // REQ-FLOW-142: the row's script as a plain word after the encoded row, and the runner holding the two equal.
+  const CORE_GUARD_FILE = "stamity-pre-tool-use-guard.mjs";
+  const wordCases = [
+    ["codex", "check.mjs", 2],
+    ["cursor", "check.mjs", 1],
+    ["copilot", "check.mjs", 1],
+    // The Copilot core guard is telemetry there, so a runner fault on its row exits 0 (see the runner's posture).
+    ["copilot", CORE_GUARD_FILE, 0],
+  ] as const;
+
+  it.each(wordCases)("%s runs a %s row whose plain word is its own script, and refuses one whose word names another script at exit %i", async (tool, script, refusedExit) => {
+    const f = await fixture(tool, DENY("the row ran"), { command: [process.execPath, script] });
+    if (tool !== "codex") {
+      await mkdir(join(f.root, ...ANCHORS[tool].slice(0, -1)), { recursive: true });
+      await writeFile(join(f.root, ...ANCHORS[tool]), "{}\n");
+    }
+    await writeFile(join(f.root, script), DENY("the row ran"));
+    // The other script exists and would allow, so a run of it would show.
+    await writeFile(join(f.root, "other.mjs"), output({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "allow" } }));
+    const command = portableHookCommand(tool, f.hook, SYNC);
+    expect(command.endsWith(` ${Buffer.from(JSON.stringify(f.hook)).toString("base64url")} ${script}`)).toBe(true);
+
+    const matching = runShell(command, f.root);
+    expect(matching.status, matching.stderr).toBe(0);
+    const verdict = JSON.parse(matching.stdout);
+    const reason = tool === "cursor" ? verdict.user_message : tool === "codex" ? verdict.hookSpecificOutput.permissionDecisionReason : verdict.permissionDecisionReason;
+    expect(reason).toBe("the row ran");
+
+    const disagreeing = runShell(`${command.slice(0, -script.length)}other.mjs`, f.root);
+    expect(disagreeing.status).toBe(refusedExit);
+    expect(disagreeing.stdout).toBe("");
+    expect(disagreeing.stderr).toContain("Invalid hook registration");
+  });
+
+  it.each(wordCases)("%s refuses a %s row whose own plain word is followed by another word, which a reader would take as the script, at exit %i", async (tool, script, refusedExit) => {
+    const f = await fixture(tool, DENY("the row ran"), { command: [process.execPath, script] });
+    if (tool !== "codex") {
+      await mkdir(join(f.root, ...ANCHORS[tool].slice(0, -1)), { recursive: true });
+      await writeFile(join(f.root, ...ANCHORS[tool]), "{}\n");
+    }
+    await writeFile(join(f.root, script), DENY("the row ran"));
+    const command = portableHookCommand(tool, f.hook, SYNC);
+    expect(command.endsWith(` ${script}`)).toBe(true);
+
+    // The starter forwards the row and one word; anything after that word is not the engine's rendering.
+    const extra = runShell(`${command} other.mjs`, f.root);
+
+    expect(extra.status).toBe(refusedExit);
+    expect(extra.stdout).toBe("");
+    expect(extra.stderr).toContain("Invalid hook registration");
+  });
+
+  it.each(["cursor", "copilot", "codex"] as const)("%s gives a row whose script is outside the plain alphabet no word, its command ending with the row as before", (tool) => {
+    for (const command of [["node", "path with space.mjs"], ["node", "a'b.mjs"], ["node", "../x.mjs"], ["node", "$(touch pwned).mjs"], ["node"]]) {
+      const row: HookInterchange = { event: "session_start", command };
+      const rendered = portableHookCommand(tool, row, SYNC);
+      expect(rendered, command.join(" ")).toMatch(/^node -e "[^"]*" [A-Za-z0-9_-]+$/s);
+      expect(rendered.endsWith(`" ${Buffer.from(JSON.stringify(row)).toString("base64url")}`)).toBe(true);
+    }
+  });
+
+  it.each(["cursor", "copilot", "codex", "claude"] as const)("%s gives a plugin-rooted row no word: the command is the runner and the row alone", (tool) => {
+    const row: HookInterchange = { event: "session_start", command: ["node", `\${STAMITY_TEST_PLUGIN_ROOT}/hooks/stamity-session-start.mjs`] };
+    expect(portableHookCommand(tool, row, SYNC)).toBe(
+      `node "\${STAMITY_TEST_PLUGIN_ROOT}/hooks/${PORTABLE_RUNNER_FILE}" ${Buffer.from(JSON.stringify(row)).toString("base64url")}`,
+    );
+  });
+
+  it("gives a script the starter runs itself, as Cursor's guards are, no word", () => {
+    const guard = ".cursor/hooks/stamity-test-guard.mjs";
+    const row: HookInterchange = { event: "pre_tool_use", command: ["node", guard] };
+    expect(portableHookCommand("cursor", row, { ...SYNC, script: guard })).toMatch(
+      new RegExp(`" ${Buffer.from(JSON.stringify(row)).toString("base64url")}$`),
+    );
   });
 });
 

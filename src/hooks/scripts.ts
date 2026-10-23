@@ -28,6 +28,7 @@ import {
   toCopilotToolsFrontmatter,
 } from "../tools/translator.ts";
 import type { Tool } from "../types/core.ts";
+import type { AutonomousAct, AutonomyMode, DeployingAct } from "../types/manifest.ts";
 import { EngineError } from "../types/errors.ts";
 import { CONTENT_PREFIX, GENERATED_SCRIPT_LINT_DIRECTIVE, HOOKS_ACTIVE_ENV, STATE_DIR } from "../types/markers.ts";
 import { CONTEXT_ONCE_DIR, PREFLIGHT_CANARY_FILE, RUN_ENDED_MARKER_FILE, RUN_ENDED_MAX_AGE_MS } from "../mcp/env.ts";
@@ -301,7 +302,30 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // substitution kept as a word, gh's options before its subcommand, wget's
   // `-X`, PowerShell's typographic quotes and SSH_ASKPASS. × 1.25 = 196,242.5 /
   // 4,532.5, rounded up to 196,608 / 4,540.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 196_608, lines: 4_540 },
+  // Moved 2026-10-23 on the a4 lane (plan 022, review/54), by the measured size plus a small margin, as the round's
+  // sign-off asks: 201,975 bytes (copilot, generated) / 4,387 lines, past the bytes row, because a4's two fix rounds
+  // grew the embedded verdicts: the per-word marks a nested reading inherits, the package identity read by path, the
+  // dry-run value word and the sub-agent check on the acts the setting runs. 201,975 + 2,825 = 204,800 bytes; the
+  // lines row still holds.
+  // Moved again 2026-10-23 on the a4 lane (review/69, review/77, review/68), by the measured size plus a small margin:
+  // 205,463 bytes (copilot, generated) / 4,440 lines, past the bytes row, because round 3 reads a push refspec from
+  // its word's marks and the engine's own CLI file by any path spelling. 205,463 + 3,433 = 208,896 bytes; the lines
+  // row still holds.
+  // Moved again 2026-10-23 on the a4 lane (review/87, review/93), by the measured size plus a small margin: 209,745 bytes
+  // (copilot, generated) / 4,522 lines, past the bytes row, because round 5 finds a launched program's script word by
+  // one rule. 209,745 + 3,247 = 212,992 bytes; the lines row still holds.
+  // Moved again 2026-10-23 on the a4 lane (review/98, review/99), by the measured size plus a small margin: 216,181
+  // bytes / 4,700 lines (copilot, generated), past both rows, because round 7 reads a launcher as one rule with bun's
+  // and deno's verbs. 216,181 + 2,955 = 219,136 bytes; 4,700 + 100 = 4,800 lines.
+  // Moved again 2026-10-23 on the a4 lane (review/101, review/102), by the measured size plus a small margin: 221,151
+  // bytes / 4,832 lines (copilot, generated), past both rows, because round 9 matches a program word's glob with no
+  // regular expression and counts a word's braces once. 221,151 + 3,105 = 224,256 bytes; 4,832 + 96 = 4,928 lines.
+  // Moved again 2026-10-23 on the a5 lane (REQ-FLOW-141, review/76, build/12, build/13, review/115), by the measured size
+  // plus a small margin: 245,978 bytes / 5,321 lines (copilot, generated; 222,630 bytes before the unit), past both
+  // rows, because both embedded verdicts now read a heredoc body as data where only a data sink receives it, pass a
+  // quoted heredoc body in a substitution's closing scan, read a substitution nothing closes as filled in, and ask for
+  // a line past 64 KiB before any reading. 245,978 + 3,878 = 249,856 bytes; 5,321 + 99 = 5,420 lines.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 249_856, lines: 5_420 },
 };
 
 /** One generated script, ready for an adapter to place and register. */
@@ -4088,6 +4112,48 @@ const GUARD_CANNOT_ASK =
   "This client cannot ask the person for a click, so the guard refuses it: give the person the exact command.";
 
 /**
+ * The autonomy setting a person-only guard copy bakes (REQ-FLOW-137, REQ-FLOW-138): `../config/autonomy.ts`'s
+ * `ResolvedAutonomy` restated by shape, since the hooks layer imports no kernel config module; emission resolves the
+ * manifest's setting and hands it here (`../emit/hooksInfra.ts`).
+ */
+export interface GuardAutonomy {
+  readonly mode: AutonomyMode;
+  readonly runs: readonly AutonomousAct[];
+  readonly deployingBranches: readonly string[];
+  readonly deploying: readonly DeployingAct[];
+}
+
+/**
+ * The setting a guard is rendered with when its caller names none: the default an absent manifest key resolves to
+ * (`resolveAutonomy({})`, held equal by test/hooks/personOnlyGuard.test.ts). Emission always names one.
+ */
+const DEFAULT_GUARD_AUTONOMY: GuardAutonomy = { mode: "autonomous", runs: ["pr-ready", "tag"], deployingBranches: [], deploying: [] };
+
+/**
+ * The program words a guard copy reads as this package (REQ-FLOW-138, REQ-FLOW-121, review/44): `stamity` and `st`
+ * always, then each of `extra` (the emission's unscoped package name and the engine's bins) that is a plain command
+ * name, lowercased as the guard reads a program word, once each.
+ */
+function guardPackageWords(extra: readonly string[]): string[] {
+  const words = ["stamity", "st", ...extra.map((word) => word.toLowerCase())];
+  return [...new Set(words.filter((word) => /^[a-z0-9][a-z0-9._-]*$/.test(word)))];
+}
+
+/** The act a guard names where a sub-agent calls one the autonomy setting runs unasked (REQ-FLOW-137). */
+const GUARD_RUN_ACTS: Readonly<Record<string, string>> = {
+  "pr-ready": "Marking a pull request ready for review",
+  tag: "Creating a tag",
+  "workflow-dispatch": "Dispatching a workflow",
+};
+
+/**
+ * The marker line every person-only guard copy carries under its banner, the baked setting's JSON after it in a fixed
+ * key order: the line `../config/autonomy.ts`'s `parseAutonomyMarker` reads back, and the loosen gate's baseline
+ * (REQ-FLOW-138).
+ */
+const AUTONOMY_MARKER = "// stamity-autonomy ";
+
+/**
  * What the guard adds to an ask on Copilot CLI it does not give (REQ-FLOW-123): Copilot holds an ask, and the guard
  * asks only for a call it can show comes from the person's own agent, its payload carrying no helper field and its
  * session id one Copilot's session start recorded ({@link COPILOT_MAIN_SESSIONS_SEGMENTS}). Every other ask, a helper's
@@ -4101,7 +4167,8 @@ const GUARD_NO_CALLER =
  * and its earlier `subagent_*` spellings, the camelCase forms, and the parent fields a helper's call carries,
  * `parentAgentId` as Copilot CLI 1.0.98 sends it (measured 2026-10-19) beside `parent_agent_id` and
  * `parent_tool_call_id`. On every client a non-empty string in any of them refuses the ask as a sub-agent's; on Copilot
- * the field's presence alone does.
+ * the field's presence alone does. On Claude Code `agent_type` counts only beside a non-empty `agent_id` (review/86):
+ * alone it names the agent an `--agent` session's main thread runs as, so that thread still asks.
  */
 const GUARD_HELPER_FIELDS: readonly string[] = [
   "agent_type",
@@ -4167,7 +4234,26 @@ function recordedMainSession(payload) {
   // Copilot CLI: a helper's call carries a helper field, and its session id is its own, never one the main session's start
   // recorded (measured on 1.0.98, 2026-10-19), so only the person's own agent reaches the ask.
   if (names.some((name) => Object.hasOwn(payload, name)) || !recordedMainSession(payload)) return held(askSentence(act, rule));`;
-  return String.raw`${copilot ? record : ""}/**
+  return String.raw`${copilot ? record : ""}// The payload fields that name a helper agent on this client (GUARD_HELPER_FIELDS in the engine).
+const HELPER_NAMES = ${json(tool === "claude" ? GUARD_HELPER_FIELDS.filter((name) => name !== "agent_type") : GUARD_HELPER_FIELDS)};
+
+/** Whether a sub-agent makes this call: a non-empty string in any helper field (on Claude Code, \`agent_id\` beside \`agent_type\`). */
+function helperCall(payload) {
+  return HELPER_NAMES.some((name) => Object.hasOwn(payload, name) && typeof payload[name] === "string" && payload[name] !== "");
+}
+
+/**
+ * An act the autonomy setting runs unasked (REQ-FLOW-137) is the main thread's alone: a sub-agent's call to one is
+ * refused${copilot ? ", and on Copilot CLI a helper field's presence alone counts" : ""}; null for the main thread's.
+ */
+function helperRefusal(payload, act, rule) {
+  const held = (reason) => ${held};
+  const helper = helperCall(payload)${copilot ? " || HELPER_NAMES.some((name) => Object.hasOwn(payload, name))" : ""};
+  if (!helper) return null;
+  return held(act + " is a person-only act (\`" + rule + "\`) and a sub-agent runs it: the autonomy setting runs it unasked on the main thread only (REQ-FLOW-137). Give the person the exact command.");
+}
+
+/**
  * An attended ask-class act's decision: the person is asked, except where a sub-agent runs it (any agent identity the
  * core guard reads), since the act is the person's, or in Claude Code's \`auto\` permission mode, where a
  * classifier may settle the prompt; both are refused.${copilot ? " On Copilot CLI the call must also come from a main session its session start recorded." : ""}
@@ -4175,9 +4261,9 @@ function recordedMainSession(payload) {
 function attendedAsk(payload, act, rule) {
   const told = act + " is a person-only act (\`" + rule + "\`) and ";
   const end = " (REQ-FLOW-102). Give the person the exact command.";
-  const names = ${json(GUARD_HELPER_FIELDS)};
+  const names = HELPER_NAMES;
   const held = (reason) => ${held};
-  if (names.some((name) => Object.hasOwn(payload, name) && typeof payload[name] === "string" && payload[name] !== "")) {
+  if (helperCall(payload)) {
     return held(told + "a sub-agent runs it: the act is the person's, so only the main thread may ask for it" + end);
   }
   if (payload.permission_mode === "auto") {
@@ -4267,6 +4353,14 @@ if (told !== null) {
  * is read (pr/54); more than {@link GUARD_RUN_FOLDERS_MAX} of them is a fault,
  * so that call is refused.
  *
+ * The autonomy setting (REQ-FLOW-137) is baked at emission (`opts.autonomy`, the
+ * default where none is named): a marker line under the banner,
+ * `// stamity-autonomy <json>`, which the loosen gate reads back (REQ-FLOW-138),
+ * and the same value as `AUTONOMY`. An act whose rule it runs unasked is
+ * allowed, except a ready mark while a run is unattended, which the run's one
+ * draft keeps refused (REQ-FLOW-120). The land verb's line is read in every
+ * mode over the parsed program words (REQ-FLOW-121), with no mode read.
+ *
  * A command naming `gate preflight` that the guard allows writes
  * `{ "at": <ISO> }` to {@link PREFLIGHT_CANARY_FILE}, the pre-flight's proof
  * that hooks loaded. A call that is neither a shell call nor a GitHub MCP row's
@@ -4274,8 +4368,36 @@ if (told !== null) {
  * no tool, Cursor's, with no command string among them), or a fault while
  * deciding one, is refused, never asked.
  */
-export function buildPersonOnlyGuardScript(opts: { tool: Tool; layout: HookScriptLayout }): string {
+export function buildPersonOnlyGuardScript(opts: {
+  tool: Tool;
+  layout: HookScriptLayout;
+  autonomy?: GuardAutonomy;
+  packageWords?: readonly string[];
+  packageName?: string;
+  ownRepository?: boolean;
+}): string {
   const extra = repoRootImports(opts.layout);
+  const autonomy = opts.autonomy ?? DEFAULT_GUARD_AUTONOMY;
+  const identity = {
+    words: guardPackageWords(opts.packageWords ?? []),
+    name: (opts.packageName ?? "@zomarit/stamity").toLowerCase(),
+    own: opts.ownRepository ?? true,
+  };
+  // The marker is a line comment: a control character or a line or paragraph separator in a branch name would end it
+  // and turn the rest of the line into code. The manifest validator refuses such a name; this refuses it again here.
+  const breaksLine = (name: string): boolean =>
+    [...name].some((ch) => ch.charCodeAt(0) < 0x20 || ch.charCodeAt(0) === 0x7f || ch.charCodeAt(0) === 0x2028 || ch.charCodeAt(0) === 0x2029);
+  if (autonomy.deployingBranches.some(breaksLine)) {
+    throw new EngineError("autonomy.deployingBranches holds a name with a control character or a line break, which the guard cannot bake.", {
+      code: "VALIDATION_ERROR",
+    });
+  }
+  const baked = {
+    mode: autonomy.mode,
+    runs: [...autonomy.runs],
+    deployingBranches: [...autonomy.deployingBranches],
+    deploying: [...autonomy.deploying],
+  };
   const regex = (pattern: RegExp): string => `new RegExp(${json(pattern.source)}, ${json(pattern.flags)})`;
   return `${header(
     [
@@ -4290,6 +4412,10 @@ export function buildPersonOnlyGuardScript(opts: { tool: Tool; layout: HookScrip
       "run is unattended every person-only act is refused, and any push that steps",
       "around `stamity run checkpoint` and `stamity run end`. `curl` and `wget` appear",
       "below only as command words it reads; it runs none.",
+      "",
+      "The autonomy setting this copy was written for is the marker line below the",
+      "banner: the acts it names in `runs` run unasked, and a deploying branch or act",
+      "asks (REQ-FLOW-137). A commit status or check run write is refused in every mode.",
     ],
     [
       "Reads outside repo state: the pending call's payload on stdin and the",
@@ -4298,6 +4424,7 @@ export function buildPersonOnlyGuardScript(opts: { tool: Tool; layout: HookScrip
       ...(opts.tool === "copilot" ? ["On Copilot CLI it reads the session start's main-session record under the", "common git directory before it asks."] : []),
     ],
   )}
+${AUTONOMY_MARKER}${json(baked)}
 
 ${namedImport(["closeSync", "lstatSync", "mkdirSync", "openSync", "readFileSync", "readSync", "readdirSync", "statSync", "writeFileSync"], "node:fs")}
 ${namedImport(["dirname", "isAbsolute", "join", "resolve", "sep", ...extra.path], "node:path")}
@@ -4320,6 +4447,17 @@ const CANARY_SEGMENTS = ${json(PREFLIGHT_CANARY_FILE.split("/"))};
 const SHELL_TOOLS = new Set(["Bash", "PowerShell", "Shell", "bash", "powershell", "shell"]);
 // The GitHub MCP server's person-only tools and whether each is ask-class (personOnly.ts, GITHUB_MCP_ROWS).
 const MCP_ROWS = new Map(${json(GITHUB_MCP_ROWS.map((entry) => [entry.row, entry.ask]))});
+// The autonomy setting baked at emission, the marker line's own value (REQ-FLOW-137): the ask-class rules it runs
+// unasked (a workflow dispatch among them unless named as deploying), and whether it is stricter than the default.
+const AUTONOMY = ${json(baked)};
+const RUNS = [...AUTONOMY.runs, ...(AUTONOMY.deploying.includes("workflow-dispatch") ? [] : ["workflow-dispatch"])];
+const STRICTER = AUTONOMY.mode === "ask" || AUTONOMY.deploying.length > 0 || AUTONOMY.deployingBranches.length > 0;
+// This package as emission found it (review/44, review/53): the program words that run it (its bins and unscoped name,
+// read from the engine's own package.json, so a renamed fork's bin is read as this package's), its name, whose
+// node_modules path names its CLI file, and whether this repository is the engine's own.
+const PACKAGE = ${json(identity)};
+// What an act the setting runs unasked is called where a sub-agent's call to it is refused (REQ-FLOW-137).
+const RUN_ACTS = ${json(GUARD_RUN_ACTS)};
 
 ${resolveRepoRoot(opts.layout)}
 
@@ -4722,7 +4860,7 @@ function linesOf(name, tail) {
  * The branch context of each place a shell call's git runs in, one per git dir. Where HEAD names no branch or commit
  * (reftable's placeholder too), an implied destination counts as the default branch, so a refspec-less push is refused.
  */
-function contextsOf(command, cwd) {
+function contextsOf(command, cwd, powershell) {
   const contexts = new Map();
   for (const place of placesOf(command, cwd)) {
     const dirs = place === null ? null : place.git !== undefined ? gitDirsOf(place.git) : gitDirsFrom(place.work);
@@ -4738,6 +4876,15 @@ function contextsOf(command, cwd) {
     contexts.set(key, {
       currentBranch: branch !== ".invalid" ? branch : detached ? null : (defaultBranches[0] ?? "main"),
       defaultBranches,
+      // The baked autonomy setting (REQ-FLOW-137, REQ-FLOW-140): what runs unasked, the deploying branches, and whether
+      // the setting is stricter than the default (a full clean or an init --force would loosen it, REQ-FLOW-138).
+      runs: RUNS,
+      deployingBranches: AUTONOMY.deployingBranches,
+      stricterThanDefault: STRICTER,
+      packageWords: PACKAGE.words,
+      packageName: PACKAGE.name,
+      ownRepository: PACKAGE.own,
+      powershell,
       // Read the first time the verdict asks, which only a push refspec does: no other call reads a tag.
       get tags() {
         tags ??= dirs === null ? [] : localTags(dirs.commonDir);
@@ -4898,10 +5045,13 @@ function askSentence(act, rule) {
   return act + " is a person-only act (\`" + rule + "\`): approve it to let the agent run it once (REQ-FLOW-102).";
 }
 function refuseSentence(act, rule) {
+  if (rule === "status-write") {
+    return act + " is CI's to write, never an agent's (\`" + rule + "\`): a merge reads commit statuses and check runs as its evidence, so the guard refuses this in every mode (REQ-FLOW-140).";
+  }
   return act + " deletes, force-pushes or cannot be undone (\`" + rule + "\`): it stays the person's to run, even with approval (REQ-FLOW-124). Give the person the exact command.";
 }
 function unattendedSentence(act, rule) {
-  return act + " is a person-only act (\`" + rule + "\`) and this run is unattended: list it on the morning list, whose walk runs it after one click.";
+  return act + " is a person-only act (\`" + rule + "\`) and this run is unattended: list it on the run's summary list (\`morning.md\`), whose walk runs it after one click.";
 }
 
 `}${attendedAskSource(opts.tool)}${String.raw`
@@ -4937,26 +5087,47 @@ function decide() {
   // Every place and every reading (REQ-FLOW-124): one refuse-class act refuses the call, so a deletion never rides an
   // approval another reading or place would ask for.
   const found = [];
-  for (const ctx of contextsOf(command, cwd)) {
+  // The acts the baked setting runs unasked (REQ-FLOW-137), from every place and reading.
+  const ran = new Set();
+  for (const ctx of contextsOf(command, cwd, pwsh)) {
     for (const text of texts) {
       const always = personOnlyVerdict(text, ctx);
       if (always.deny) found.push(always);
+      else for (const rule of always.runs ?? []) ran.add(rule);
     }
   }
   const refused = found.find((verdict) => !verdict.ask);
   if (refused !== undefined) return { ask: false, reason: refuseSentence(refused.act, refused.rule) };
+  // The land verb alone on its line in every mode, read over the parsed program words (REQ-FLOW-121): no mode read.
+  const land = unattendedPushVerdict(command, pwsh, true, PACKAGE);
+  if (land.deny) return { ask: false, reason: land.reason };
   // The mode is read for every ask and for a call the unattended rule would refuse, so an unreadable record refuses
   // those and no other call.
   const run = () => {
-    const verdict = unattendedPushVerdict(command, pwsh);
+    const verdict = unattendedPushVerdict(command, pwsh, false, PACKAGE);
     return verdict.deny ? verdict : undefined;
   };
   if (found.length > 0) {
+    // A loosening read in one place or reading names itself only where no other act was found (REQ-FLOW-138).
+    const named = found.find((verdict) => verdict.rule !== "autonomy-loosen") ?? found[0];
     const why = unattendedBy(root);
-    if (why === null) return attendedAsk(payload, found[0].act, found[0].rule);
+    if (why === null) return attendedAsk(payload, named.act, named.rule);
     // Unattended, a push keeps the push rule's own reason; any other act goes on the morning list.
     const push = run();
-    return { ask: false, reason: (push !== undefined ? push.reason : unattendedSentence(found[0].act, found[0].rule)) + " " + why };
+    return { ask: false, reason: (push !== undefined ? push.reason : unattendedSentence(named.act, named.rule)) + " " + why };
+  }
+  // An act the setting runs unasked is the main thread's alone (REQ-FLOW-137): a sub-agent's call to one is refused,
+  // as 1.16.0 refused a sub-agent's ask, read through the identity fields attendedAsk reads.
+  const first = [...ran][0];
+  if (first !== undefined) {
+    const helper = helperRefusal(payload, RUN_ACTS[first] ?? "This act", first);
+    if (helper !== null) return helper;
+  }
+  // Unattended, a raw ready mark stays refused: the run's one draft pull request is marked ready only by the land
+  // verb's --ready (REQ-FLOW-120).
+  if (ran.has("pr-ready")) {
+    const why = unattendedBy(root);
+    if (why !== null) return { ask: false, reason: unattendedSentence("Marking a pull request ready for review", "pr-ready") + " " + why };
   }
   const push = run();
   if (push !== undefined) {
@@ -5023,6 +5194,9 @@ export function planCoreHookScripts(
     registry?: string;
     personOnlyGuard?: boolean;
     layout?: HookScriptLayout;
+    autonomy?: GuardAutonomy;
+    packageBins?: readonly string[];
+    ownRepository?: boolean;
   },
 ): GeneratedHookScript[] {
   const layout = opts.layout ?? layoutFor(policiesJsonPath);
@@ -5035,7 +5209,14 @@ export function planCoreHookScripts(
       ? [
           {
             fileName: PERSON_ONLY_GUARD_FILE,
-            content: buildPersonOnlyGuardScript({ tool, layout }),
+            content: buildPersonOnlyGuardScript({
+              tool,
+              layout,
+              ...(opts.autonomy === undefined ? {} : { autonomy: opts.autonomy }),
+              packageWords: [opts.packageName.replace(/^@[^/]+\//, ""), ...(opts.packageBins ?? [])],
+              packageName: opts.packageName,
+              ...(opts.ownRepository === undefined ? {} : { ownRepository: opts.ownRepository }),
+            }),
             event: "pre_tool_use",
           },
         ]

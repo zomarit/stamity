@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "generatedBy": "1.16.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-22T11:27:36.576Z",
+  "updatedAt": "2026-10-23T17:38:01.938Z",
   "tools": [
     "claude"
   ],
@@ -106,7 +106,7 @@
       "adapter": "claude",
       "artifactId": "reviewer",
       "artifactType": "agent",
-      "contentHash": "42d8df0cad17575edb927b72fb1438d28e97d98faf8d2a747af1f2f79deef865",
+      "contentHash": "4f3239f18b4edc1a25eaea22cd9aa2f5da0153b35c510bc35e459bc1132ded7e",
       "path": ".claude/agents/stamity-reviewer.md"
     },
     {
@@ -190,7 +190,7 @@
       "adapter": "claude",
       "artifactId": "cmd-work",
       "artifactType": "command",
-      "contentHash": "c626c101c3933c761d44e7afb86e969df7410839e36f38b83a4306a35aeb1ece",
+      "contentHash": "384d3404c3b36a585520185cd2162bc80618f68de41758c47c5bacef4b996739",
       "path": ".claude/commands/st-work.md"
     },
     {
@@ -218,7 +218,7 @@
       "adapter": "claude",
       "artifactId": "stamity-person-only-guard",
       "artifactType": "infra",
-      "contentHash": "0aa56e86c15ca1f300478a1dbd3a7783e5c0bf7603bc6d28f59cdf602e635307",
+      "contentHash": "22ee62550bf697cb10ce7fdba9a2d12aa45ae20c7169cd733e2f4cd5f7927510",
       "path": ".claude/hooks/stamity/stamity-person-only-guard.mjs"
     },
     {
@@ -330,10 +330,10 @@
             "242925ec7f7b2a4898a0b7157d96f529525f9bb236b66d876049fbc2643223fe"
           ],
           "/hooks/PreToolUse": [
-            "3d7db686f8ba2b40cb4e5506c635567dee4fbc653048278bb79826b4155fe0e2",
-            "0bb7d115a6cd6167a924d11601df7121e1261df96815e8ede9376511936c3c7c",
+            "47bf97ef9f5a80301790817af93a3698bf958cf827eb3e72cf08ba2693e6f398",
+            "13754fa9faff415fdaa92a8617d27c76e7ca6819dc31bad485eb8ea7fc80eb2c",
             "7116ff1c12b274d4580c1710f1a401287b40f00f0bfcea09c9dd7503a6ad9f3b",
-            "8e12db9e5b28a61468e1916a041b224f5ad461fdc529e8003bffd5c64f1841de"
+            "b0cfe5bb0d2dbfd4333ef374f7d007b941ab1e01eff9c4f3dec70144e92f2687"
           ],
           "/hooks/SessionStart": [
             "e49db8343a3a390290586dd9dc1a9a3b7f60e1678d5da09370ea6bd981ef374b",
@@ -438,7 +438,7 @@
           ]
         }
       },
-      "contentHash": "7570758eb4e98eded0923258fdac4644b8a2fc27e0a23a669a447e08862b443c",
+      "contentHash": "2aec4113b335650012311f2edb5cda40d816685672cbc62850975775964157f6",
       "path": ".claude/settings.json"
     },
     {
@@ -536,7 +536,7 @@
       "adapter": "claude",
       "artifactId": "unattended",
       "artifactType": "skill",
-      "contentHash": "b637fd4ec025f3db9725cef95093a60f8426631de592a8e16830fdc782ced317",
+      "contentHash": "1de9853d45d60952f4e33f2a0056786f91c44fe27a91b5afaaf0c92b687c07e5",
       "path": ".claude/skills/st-unattended/SKILL.md"
     },
     {

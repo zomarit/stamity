@@ -1057,7 +1057,15 @@ interface HooksDocument {
 }
 
 const parseHooks = (raw: string): HooksDocument => JSON.parse(raw) as HooksDocument;
-const childArgv = (command: string): string[] => JSON.parse(Buffer.from(command.split(" ").at(-1)!, "base64url").toString()).command as string[];
+/**
+ * The interchange row a starter carries: the base64url word after the program.
+ * TEST CHANGE, justified (REQ-FLOW-142): this read the last word, which on a
+ * runner entry is now the plain word naming the row's script; the row is the
+ * word before it. A guard's own entry still ends with its row.
+ */
+const encodedRowOf = (command: string): Record<string, unknown> =>
+  JSON.parse(Buffer.from(/ ([A-Za-z0-9_-]+)(?: [A-Za-z0-9._/-]+)?$/.exec(command)?.[1] ?? "", "base64url").toString()) as Record<string, unknown>;
+const childArgv = (command: string): string[] => encodedRowOf(command)["command"] as string[];
 const childCommand = (command: string): string => childArgv(command).join(" ");
 /** The root-relative script a command's walk-up starter runs (REQ-FLOW-084), or `null` when it is no starter. */
 const startedScript = (command: string): string | null => walkUpStarterScript("cursor", command);
@@ -1130,6 +1138,19 @@ describe("event taxonomy", () => {
 });
 
 describe("`.cursor/hooks.json`", () => {
+  it("names the session-start script in plain text after the encoded row, and gives a guard's own entry no word (REQ-FLOW-142)", async () => {
+    const doc = parseHooks(contentAt(await planFor(await seedCorpus()), P.hooksConfig));
+    const script = ".stamity/generated/hooks/cursor/stamity-session-start.mjs";
+    const entry = (doc.hooks[EVENT_RENAME.session_start] ?? [])[0]!;
+    // A plain word, last, readable without decoding, naming the row's own script.
+    expect(entry.command.split(" ").at(-1)).toBe(script);
+    expect(childArgv(entry.command)[1]).toBe(script);
+    // A guard the starter runs itself receives the starter's arguments, so its entry still ends with the row.
+    const guard = (doc.hooks[CURSOR_GUARD_EVENTS.subagentSpawn] ?? [])[0]!;
+    expect(startedScript(guard.command)).toBe(SUBAGENT_GUARD_PATH);
+    expect(/ [A-Za-z0-9_-]+$/.test(guard.command)).toBe(true);
+  });
+
   it("renames every canonical event, wires the core scripts, and opts both guards into blocking", async () => {
     const plan = await planFor(await seedCorpus());
     const doc = parseHooks(contentAt(plan, P.hooksConfig));

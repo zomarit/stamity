@@ -29,6 +29,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import * as configAutonomy from "../config/autonomy.ts";
 import * as configParse from "../config/parse.ts";
 import * as denyScan from "../denyscan/denyScan.ts";
 import * as managedBlocks from "../merge/managedBlocks.ts";
@@ -106,6 +107,9 @@ import * as runsPrerequisites from "../runs/prerequisites.ts";
 import * as runsMorning from "../runs/morning.ts";
 import * as runsPreflight from "../runs/preflight.ts";
 import * as runsPlanCheck from "../runs/planCheck.ts";
+import * as runsGitSurface from "../runs/gitSurface.ts";
+import * as runsHookPaths from "../runs/hookPaths.ts";
+import * as runsLandEvidence from "../runs/landEvidence.ts";
 import * as hooksModel from "../hooks/model.ts";
 import * as portableRunner from "../hooks/portableRunner.ts";
 import * as userHooks from "../hooks/userHooks.ts";
@@ -285,6 +289,12 @@ export interface EngineRegistry {
     readonly morning: typeof runsMorning;
     readonly preflight: typeof runsPreflight;
     readonly planCheck: typeof runsPlanCheck;
+    /** The git surface the pre-flight records and the run verbs compare against (REQ-FLOW-131). */
+    readonly gitSurface: typeof runsGitSurface;
+    /** The evidence `run land` merges on and the decision it reaches (REQ-FLOW-132, REQ-FLOW-133). */
+    readonly landEvidence: typeof runsLandEvidence;
+    /** The hook files and declared scripts a commit's hook declarations name (review/175, build/2). */
+    readonly hookPaths: typeof runsHookPaths;
   };
   readonly hooks: {
     readonly model: typeof hooksModel;
@@ -373,6 +383,7 @@ export interface EngineRegistry {
   };
   readonly config: {
     readonly parse: typeof configParse;
+    readonly autonomy: typeof configAutonomy;
   };
   /**
    * The change classifier: one class per change from its paths, and the checks
@@ -509,6 +520,9 @@ export function createEngine(): EngineRegistry {
       morning: runsMorning,
       preflight: runsPreflight,
       planCheck: runsPlanCheck,
+      gitSurface: runsGitSurface,
+      landEvidence: runsLandEvidence,
+      hookPaths: runsHookPaths,
     },
     hooks: { model: hooksModel, portableRunner, userHooks, scripts: hookScripts, personOnly: hookPersonOnly },
     session: { detect: sessionDetect },
@@ -541,7 +555,7 @@ export function createEngine(): EngineRegistry {
     guard: { promptGuard, outputBounds, tokenEstimate },
     resilience: { retry, failureClass, failureLog, adapterTimeout },
     roster: { triggers: rosterTriggers, reviewCaps, agentPolicies, agentGrants, modelLadder, modelDefaults },
-    config: { parse: configParse },
+    config: { parse: configParse, autonomy: configAutonomy },
     change: { classify: changeClassify, testInputs: changeTestInputs, scan: changeScan, personOnlyPaths: changePersonOnlyPaths },
   });
 }

@@ -42,6 +42,15 @@
 # A real run comes from a `v*` tag push, or from a dispatch made from that tag with `dry_run` set
 # to false, and either way `gates` proves the tag, its version and its ancestry first.
 #
+# THE REGISTRY REHEARSAL. A fork's suffixed version (`1.10.0-acme.1`) is a prerelease, and npm 11
+# refuses to publish a prerelease without `--tag`. So the publish names one dist-tag, DIST_TAG,
+# set once below to `latest`, the tag the CLI's update notice reads. And on every armed run, a tag
+# push included, `gates` runs the same publish with `--dry-run` right after it packs the tarball,
+# with no secret and `contents: read`, so npm's refusal fails the run before the approval rather
+# than inside it. A dry run uploads nothing. A registry that refuses a dry run for want of a token
+# never reaches the tag rule, so that one answer passes with a warning saying so. The fork's runner stays on `ubuntu-latest`: this file
+# has no egress allowlist for a new image to break (see above).
+#
 # Actions are pinned to the same full commit SHAs release.yml pins, with the same version comments.
 #
 # Drift-guarded by test/ci/forkReleaseWorkflow.test.ts (this file's own properties) and by
@@ -62,6 +71,11 @@ on:
 
 permissions:
   contents: read
+
+# The one npm dist-tag a release publishes under, read by the gates rehearsal, the publish and
+# the rehearsal report alike.
+env:
+  DIST_TAG: latest
 
 concurrency:
   group: fork-release-${{ github.ref }}
@@ -324,6 +338,49 @@ jobs:
           echo "Packed: $TARBALL ($(wc -c < "$TARBALL") bytes)"
           echo "SHA-256: $SHA"
 
+      # The registry's own answer, before the approval: the publish job's flags, dry-run. npm 11,
+      # the npm the publish job runs, refuses a prerelease without `--tag`, so an older npm here
+      # would prove nothing and stops the run instead. A dry run uploads nothing, and this job
+      # holds no secret. What npm does with a tokenless dry run against a registry that wants a
+      # token was not measured, so the step reads npm's answer instead of assuming one: the tag
+      # rule's refusal ("must specify a tag") or any other error fails the step; an authentication
+      # refusal (E401, E403 or ENEEDAUTH) passes with a warning, because then the tag rule was never
+      # reached and only the publish job's own `--tag` stands behind it.
+      - name: Rehearse the registry publish
+        env:
+          REGISTRY: ${{ needs.probe.outputs.registry }}
+          TARBALL: ${{ steps.pack.outputs.tarball }}
+        run: |
+          set -euo pipefail
+          NPM_VERSION="$(npm --version)"
+          NPM_MAJOR="${NPM_VERSION%%.*}"
+          case "$NPM_MAJOR" in
+            ''|*[!0-9]*) NPM_MAJOR=0 ;;
+          esac
+          if [ "$NPM_MAJOR" -lt 11 ]; then
+            echo "::error::The rehearsal needs npm 11 or newer, the npm the publish job runs, which refuses a prerelease without --tag. This runner has npm $NPM_VERSION."
+            exit 1
+          fi
+          echo "npm $NPM_VERSION; dist-tag $DIST_TAG"
+          STATUS=0
+          OUT="$(npm publish "./$TARBALL" --dry-run --registry "$REGISTRY" --tag "$DIST_TAG" 2>&1)" || STATUS=$?
+          printf '%s\n' "$OUT"
+          case "$OUT" in
+            *"must specify a tag"*)
+              echo "::error::npm refused the publish for its dist-tag rule (exit $STATUS); the publish job would refuse it the same way."
+              exit 1 ;;
+          esac
+          if [ "$STATUS" -eq 0 ]; then
+            exit 0
+          fi
+          case "$OUT" in
+            *E401*|*E403*|*ENEEDAUTH*)
+              echo "::warning::The registry refused a tokenless dry run (npm exit $STATUS), so npm's dist-tag rule was not reached; only the publish job's own --tag $DIST_TAG stands behind it."
+              exit 0 ;;
+          esac
+          echo "::error::npm refused the dry run (exit $STATUS) for a reason other than authentication; see its output above."
+          exit 1
+
       # Seven days, so the artifact outlives the `fork-release` environment's human approval.
       - name: Upload release tarball
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -519,7 +576,7 @@ jobs:
             echo "::error::$PACKAGE_NAME@$VERSION is already published from another tarball. A published version is never replaced; release a new version."
             exit 1
           fi
-          npm publish "./$TARBALL" --registry "$REGISTRY"
+          npm publish "./$TARBALL" --registry "$REGISTRY" --tag "$DIST_TAG"
 
       # The release carries the tarball and its checksum, exactly as the gates job built and this
       # job verified it. `--verify-tag` and `--target` keep `gh` from inventing a tag on the
@@ -594,6 +651,7 @@ jobs:
             echo "| version | \`$VERSION\` |"
             echo "| tarball | \`$TARBALL\` |"
             echo "| SHA-256 | \`$TARBALL_SHA256\` |"
+            echo "| dist-tag | \`$DIST_TAG\` |"
             echo "| registry | the STAMITY_RELEASE_REGISTRY variable, skipped if this integrity is already there |"
             echo "| GitHub release | \`v$VERSION\`, with the tarball and its \`.sha256\` |"
             echo ""

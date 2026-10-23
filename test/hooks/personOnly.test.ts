@@ -1,12 +1,14 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { matchesDeployingBranch } from "../../src/config/autonomy.ts";
 import {
   CLAUDE_ASK_ROWS,
   CLAUDE_DENY_ROWS,
   PERSON_ONLY_RULES,
   personOnlyVerdict,
   unattendedPushVerdict,
+  type PersonOnlyRuleId,
 } from "../../src/hooks/personOnly.ts";
 import { CURATED_MCP_SERVERS, PLATFORM_MCP_SERVER } from "../../src/mcp/catalog.ts";
 import { REGISTRY_URL } from "../../src/shared/cliCall.ts";
@@ -35,7 +37,14 @@ const ON_TRUNK = { defaultBranches: ["trunk"], currentBranch: "trunk", tags: [] 
 /** A repository whose local tags include `v1.0.0` (u14 reads them from `refs/tags/` and `packed-refs`). */
 const TAGGED = { defaultBranches: [], currentBranch: "feat/x", tags: ["v1.0.0"] } as const;
 
-type Ctx = { defaultBranches: readonly string[]; currentBranch: string | null; tags: readonly string[] };
+type Ctx = {
+  defaultBranches: readonly string[];
+  currentBranch: string | null;
+  tags: readonly string[];
+  runs?: readonly PersonOnlyRuleId[];
+  deployingBranches?: readonly string[];
+  stricterThanDefault?: boolean;
+};
 
 const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   // force-push
@@ -984,7 +993,11 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
  * The ask-class rules (REQ-FLOW-102), written here apart from the source's own set so a rule moved between the classes
  * fails this file: every other rule is refuse-class (REQ-FLOW-124).
  */
-const ASK_CLASS = new Set(["push-default", "push-tags", "tag", "pr-merge", "pr-ready", "release", "publish", "secrets", "protection"]);
+// TEST CHANGE, justified (REQ-FLOW-140, REQ-FLOW-138, a4): the admin merge, the deploying push, the deploying dispatch
+// and the loosening of the autonomy setting join the ask class; the status write is refuse-class, so it stays out.
+// TEST CHANGE, justified (REQ-FLOW-121, review/103): the land verb's approved line joins the ask class.
+const ASK_CLASS = new Set(["push-default", "push-tags", "tag", "pr-merge", "pr-ready", "release", "publish", "secrets", "protection",
+  "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen", "land-approved"]);
 
 const ZERO = "0".repeat(40);
 /** A GraphQL `updateRefs` call with one entry: its ref name and its `afterOid`. */
@@ -1124,6 +1137,34 @@ const CLASSES: readonly (readonly [command: string, rule: string, ask: boolean, 
   ["yarn tag rm x beta", "unpublish", false],
   ["yarn workspace x tag remove x beta", "unpublish", false],
   ["yarn tag add x@1.0.0 latest", "publish", true],
+  // a4 (REQ-FLOW-140, REQ-FLOW-138, build/8, build/46): the new rules in their classes, each beside an existing row's
+  // form. A commit status or check run written is refuse-class in every spelling; the admin merge, the deploying push,
+  // a dispatch with no autonomy context and a loosening ask; a flagless `gh repo edit`, which asks its questions on the
+  // terminal (visibility among them), is refuse-class; a refspec in a PowerShell group reads as a default-branch push.
+  ["gh api -X POST repos/o/r/statuses/abc123 -f state=success -f context=ci", "status-write", false],
+  ["gh api repos/o/r/statuses/abc123 -f state=success", "status-write", false],
+  ["curl -X POST -d '{\"state\":\"success\"}' https://api.github.com/repos/o/r/statuses/abc123", "status-write", false],
+  ["gh api -X POST repos/o/r/check-runs -f name=ci -f head_sha=abc -f conclusion=success", "status-write", false],
+  ["gh api -X PATCH repos/o/r/check-runs/7 -f conclusion=success", "status-write", false],
+  ["gh api graphql -f query='mutation { createCheckRun(input: {repositoryId: \"R\", headSha: \"abc\", name: \"ci\"}) { checkRun { id } } }'", "status-write", false],
+  ["gh api graphql -f query='mutation { updateCheckRun(input: {repositoryId: \"R\", checkRunId: \"C\", conclusion: SUCCESS}) { checkRun { id } } }'", "status-write", false],
+  ["gh pr merge 3 --squash && gh api -X POST repos/o/r/statuses/abc -f state=success", "status-write", false],
+  ["gh pr merge 3 --admin --squash", "admin-merge", true],
+  ["gh pr merge --admin 3", "admin-merge", true],
+  ["git push origin production", "push-deploying", true, { defaultBranches: [], currentBranch: "feat/x", tags: [], deployingBranches: ["production"] }],
+  ["gh workflow run deploy.yml -f env=prod", "workflow-dispatch", true],
+  ["gh api -X POST repos/o/r/actions/workflows/deploy.yml/dispatches -f ref=main", "workflow-dispatch", true],
+  ["gh api -X POST repos/o/r/dispatches -f event_type=deploy", "workflow-dispatch", true],
+  ["stamity sync --loosen", "autonomy-loosen", true],
+  // TEST CHANGE, justified (REQ-FLOW-121, review/103): the land verb's approved line, ask-class.
+  ["stamity run land --run x --approved", "land-approved", true],
+  // review/117: a line past 65,536 characters is refused in every mode before any reading.
+  [`echo ${"a".repeat(70_000)}`, "line-too-long", false],
+  ["gh repo edit", "repo-irreversible", false],
+  ["gh repo edit o/r", "repo-irreversible", false],
+  ["git push origin (git branch --show-current)", "push-default", true],
+  ["git push origin \"$(git branch --show-current)\"", "push-default", true],
+  ["git push origin `git branch --show-current`", "push-default", true],
 ];
 
 describe("personOnlyVerdict — ask or refuse (v0a)", () => {
@@ -1238,6 +1279,16 @@ describe("personOnlyVerdict — the deny matrix", () => {
       "repo-irreversible",
       "protection-delete",
       "unpublish",
+      // TEST CHANGE, justified (REQ-FLOW-140, REQ-FLOW-138, a4): five rules join the table after 1.16.0's eighteen.
+      "status-write",
+      "admin-merge",
+      "push-deploying",
+      "workflow-dispatch",
+      "autonomy-loosen",
+      // TEST CHANGE, justified (REQ-FLOW-121, review/103): one more rule joins the table.
+      "land-approved",
+      // TEST CHANGE, justified (review/117): the refuse-class cap on a line too long for the guard to read joins it.
+      "line-too-long",
     ]);
     const hit = new Set([...DENY, ...CLASSES].map(([, rule]) => rule));
     expect(hit).toEqual(ids);
@@ -1310,8 +1361,6 @@ describe("personOnlyVerdict — the respelling residual (named in SECURITY.md by
   it.each([
     ["git -c alias.p=push p -f origin feat/x"],
     ["alias gp='git push -f'; gp origin feat/x"],
-    ["sh -c \"$(printf '%s' 'git pu' 'sh -f')\""],
-    ["sh -c \"$(echo Z2l0IHB1c2ggLWY= | base64 -d)\""],
     // A tag pushed by its bare name reads as a branch name when the context lists no such tag (u14 unable to read
     // `refs/tags/`); with the tag listed it is denied, in the matrix above.
     ["git push origin v1.0.0"],
@@ -1325,6 +1374,16 @@ describe("personOnlyVerdict — the respelling residual (named in SECURITY.md by
   ])("allows %j", (command) => {
     expect(personOnlyVerdict(command, ON_MAIN)).toEqual({ deny: false });
   });
+
+  // TEST CHANGE, justified (REQ-FLOW-138, review/54): a shell's command string built by a substitution was allowed here
+  // as a respelling the guard cannot read. Its marks now carry into the nested reading, so every command it may hold
+  // could spell `--loosen`, and it asks as a loosening; the push it respells is still not read.
+  it.each([["sh -c \"$(printf '%s' 'git pu' 'sh -f')\""], ["sh -c \"$(echo Z2l0IHB1c2ggLWY= | base64 -d)\""]])(
+    "asks for %j as a loosening it cannot read, the respelled push still unread",
+    (command) => {
+      expect(personOnlyVerdict(command, ON_MAIN)).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+    },
+  );
 });
 
 describe("the nested-command depth limit (pr/58)", () => {
@@ -1477,7 +1536,9 @@ describe("a substitution, wget's `-X` and gh's options before its subcommand, re
     ["curl -s $(true) https://api.github.com/repos/o/r/pulls/3"],
     ["gh pr --body x view 1"],
     ["gh -R o/r pr view 1"],
-    ["git push origin $(true) feat/x"],
+    // TEST CHANGE, justified (REQ-FLOW-140, build/46, a4): `git push origin $(true) feat/x` left this list: a refspec
+    // word holding a substitution is one the line cannot show, so it now reads as a push to the default branch (below).
+    ["git push origin feat/x"],
   ])("personOnlyVerdict allows the read or feature-branch twin %j", (command) => {
     expect(personOnlyVerdict(command, ON_FEATURE)).toEqual({ deny: false });
   });
@@ -1495,6 +1556,22 @@ describe("unattendedPushVerdict — a run verb stands alone on its line (v0b, RE
     expect(verdict.reason).toContain(broke);
     expect(verdict.reason).toContain("REQ-FLOW-121");
     expect(verdict.reason).toContain("stamity run checkpoint");
+  };
+  /**
+   * TEST CHANGE, justified (REQ-FLOW-138, a4): attended, these lines stay no person-only act, except where a stamity
+   * command's argument holds an expansion the reading cannot settle, which may spell `--loosen`: that one now asks as
+   * `autonomy-loosen`. The lines are listed, not derived, so the reader's own rule is what this pins.
+   */
+  const UNREADABLE_ARGUMENT = new Set([
+    "npx --no stamity run end --run \"$RUN\"",
+    "st run end --run \"$RUN\"",
+    "PATH=/tmp/bin node dist/cli.js run \"$OPT\" end --run x",
+    "PATH=/tmp/bin node dist/cli.js run $OPT end --run x",
+  ]);
+  const expectAttended = (command: string): void => {
+    if (UNREADABLE_ARGUMENT.has(command)) {
+      expect(personOnlyVerdict(command, ON_FEATURE), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+    } else expect(personOnlyVerdict(command, ON_FEATURE), command).toEqual({ deny: false });
   };
 
   it.each([
@@ -1527,7 +1604,7 @@ describe("unattendedPushVerdict — a run verb stands alone on its line (v0b, RE
   ])("refuses %j, naming what broke the shape", (command, broke) => {
     expectRefused(unattendedPushVerdict(command), broke);
     // Attended, the same line is what it was: no person-only act.
-    expect(personOnlyVerdict(command, ON_FEATURE)).toEqual({ deny: false });
+    expectAttended(command);
   });
 
   it.each([
@@ -1581,7 +1658,7 @@ describe("unattendedPushVerdict — a run verb stands alone on its line (v0b, RE
     ["unbuffer ./node_modules/.bin/st run end --run x", "a first word other than `stamity`, `st` or `npx`"],
   ])("refuses %j under the second bin, naming what broke the shape (review/93)", (command, broke) => {
     expectRefused(unattendedPushVerdict(command), broke);
-    expect(personOnlyVerdict(command, ON_FEATURE)).toEqual({ deny: false });
+    expectAttended(command);
   });
 
   it.each([
@@ -1605,7 +1682,9 @@ describe("unattendedPushVerdict — a run verb stands alone on its line (v0b, RE
     // A program word holding a blank (the substitution read as a word) is read as a line of its own unless it is the
     // line itself; without that guard the reading recurses to its depth cap and refuses on every client.
     for (const command of ["$(echo git status) --short", "`echo git status` --short", "$(npm test)"]) {
-      expect(personOnlyVerdict(command, ON_FEATURE), command).toEqual({ deny: false });
+      // TEST CHANGE, justified (REQ-FLOW-138, review/45): a program word built by a substitution splits into words the
+      // line does not show, a loosening among them, so it asks as one; the reading itself still ends (no depth refusal).
+      expect(personOnlyVerdict(command, ON_FEATURE), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
       expect(unattendedPushVerdict(command), command).toEqual({ deny: false });
     }
     // The twin: the same opening still shows an act the substitution holds.
@@ -1671,7 +1750,7 @@ describe("unattendedPushVerdict — a run verb stands alone on its line (v0b, RE
     ["PATH=/tmp/bin node dist/cli.js run $OPT end --run x", "an unquoted `$`"],
   ])("refuses %j, a run verb after option words only the decoded words show (review/130)", (command, broke) => {
     expectRefused(unattendedPushVerdict(command), broke);
-    expect(personOnlyVerdict(command, ON_FEATURE)).toEqual({ deny: false });
+    expectAttended(command);
   });
 
   it.each([
@@ -2329,9 +2408,14 @@ describe("CLAUDE_DENY_ROWS and CLAUDE_ASK_ROWS", () => {
     );
     // `push-default` has no row: a prefix ending in a branch name over-matches a longer one (see below).
     // `protection-delete` is a REST or GraphQL form only, which no prefix can say.
+    // TEST CHANGE, justified (REQ-FLOW-140, REQ-FLOW-138, a4): no prefix row says the five new rules either: a status
+    // write is a REST or GraphQL form, `--admin` and `--loosen` sit mid-line, a deploying branch is a name, and a
+    // dispatch asks only where the repository names it, which a settings row cannot read.
     expect([...rules].toSorted()).toEqual(
       PERSON_ONLY_RULES.map((rule) => rule.id)
-        .filter((id) => !["push-default", "protection-delete"].includes(id))
+        // TEST CHANGE, justified (REQ-FLOW-121, review/103): `--approved` sits mid-line, which no prefix row can say.
+        // TEST CHANGE, justified (review/117): a line's length is no prefix either.
+        .filter((id) => !["push-default", "protection-delete", "status-write", "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen", "land-approved", "line-too-long"].includes(id))
         .toSorted(),
     );
   });
@@ -2384,5 +2468,1335 @@ describe("embedding as source (u14 embeds both functions into the emitted guard)
     for (const [command, rule, ask, ctx] of CLASSES) expect(personOnly(command, ctx ?? ON_FEATURE)).toMatchObject({ rule, ask });
     expect(unattended("git push origin HEAD:refs/heads/x").deny).toBe(true);
     expect(unattended("gh api repos/o/r/pulls/3/comments -F body=@reply.md")).toEqual({ deny: false });
+  });
+});
+
+/**
+ * a4-guard-ask-list (REQ-FLOW-137, REQ-FLOW-138, REQ-FLOW-140, REQ-FLOW-121): what the autonomy setting runs, the new
+ * rules' readers, the dry-run publish, the land verb's line and the deploying-branch matcher's copy. Each allowed row
+ * sits beside a refused or asked one a fact away (a context field, a flag, a word), so a reading that ran everything,
+ * or nothing, fails.
+ */
+describe("the autonomy setting's acts that run unasked (a4, REQ-FLOW-137)", () => {
+  /** The context the guard bakes for the default setting: a ready mark, a local tag and an unnamed dispatch run. */
+  const DEFAULT_RUNS: readonly PersonOnlyRuleId[] = ["pr-ready", "tag", "workflow-dispatch"];
+  const RUNNING = { ...ON_FEATURE, runs: DEFAULT_RUNS, deployingBranches: [], stricterThanDefault: false };
+
+  it.each([
+    ["gh pr ready 3", ["pr-ready"]],
+    ["git tag v2", ["tag"]],
+    ["git tag -a v2 -m 'release v2'", ["tag"]],
+    ["gh workflow run ci.yml", ["workflow-dispatch"]],
+    ["gh api graphql -f query='mutation { markPullRequestReadyForReview(input: {pullRequestId: \"P\"}) { clientMutationId } }'", ["pr-ready"]],
+    ["gh pr ready 3 && git tag v2", ["pr-ready", "tag"]],
+  ])("runs %j under the default setting and names it, where no setting asks for it", (command, runs) => {
+    expect(personOnlyVerdict(command, RUNNING)).toEqual({ deny: false, runs });
+    // The neighbour: with no autonomy context (1.16.0's reading) the same act asks.
+    expect(personOnlyVerdict(command, ON_FEATURE)).toMatchObject({ deny: true, ask: true });
+  });
+
+  it("never lets an act that runs hide an act that asks or refuses on the same line", () => {
+    expect(personOnlyVerdict("git tag v2 && git push origin v2", { ...RUNNING, tags: ["v2"] })).toMatchObject({ deny: true, rule: "push-tags", ask: true });
+    expect(personOnlyVerdict("gh pr ready 3 && gh pr merge 3", RUNNING)).toMatchObject({ deny: true, rule: "pr-merge", ask: true });
+    expect(personOnlyVerdict("git tag v2 && git push --force origin feat/x", RUNNING)).toMatchObject({ deny: true, rule: "force-push", ask: false });
+    expect(personOnlyVerdict("gh pr ready 3; git push origin --tags", RUNNING)).toMatchObject({ deny: true, rule: "push-tags", ask: true });
+  });
+
+  it("asks for an act the context leaves out of `runs`, as a repository naming it deploying leaves it out", () => {
+    const named = { ...RUNNING, runs: ["tag", "workflow-dispatch"] as const };
+    expect(personOnlyVerdict("gh pr ready 3", named)).toMatchObject({ deny: true, rule: "pr-ready", ask: true });
+    expect(personOnlyVerdict("git tag v2", named)).toEqual({ deny: false, runs: ["tag"] });
+    const dispatchNamed = { ...RUNNING, runs: ["pr-ready", "tag"] as const };
+    expect(personOnlyVerdict("gh workflow run deploy.yml", dispatchNamed)).toMatchObject({ deny: true, rule: "workflow-dispatch", ask: true });
+    expect(personOnlyVerdict("gh workflow list", dispatchNamed)).toEqual({ deny: false });
+  });
+
+  it("keeps a deletion or a forced move of a tag refuse-class whatever runs", () => {
+    expect(personOnlyVerdict("git tag -d v1", RUNNING)).toMatchObject({ deny: true, rule: "tag-delete", ask: false });
+    expect(personOnlyVerdict("git tag -f v1", RUNNING)).toMatchObject({ deny: true, rule: "tag-delete", ask: false });
+  });
+});
+
+describe("a commit status or check run written (a4, REQ-FLOW-140)", () => {
+  const RUNNING = { ...ON_FEATURE, runs: ["pr-ready", "tag", "workflow-dispatch"] as const };
+  it("is refused whatever the setting runs, and its reads pass", () => {
+    for (const ctx of [ON_FEATURE, RUNNING]) {
+      expect(personOnlyVerdict("gh api -X POST repos/o/r/statuses/abc -f state=success", ctx)).toMatchObject({ deny: true, rule: "status-write", ask: false });
+      expect(personOnlyVerdict("gh api repos/o/r/commits/abc/statuses", ctx)).toEqual({ deny: false });
+      expect(personOnlyVerdict("gh api repos/o/r/commits/abc/check-runs", ctx)).toEqual({ deny: false });
+    }
+    const verdict = personOnlyVerdict("gh api -X POST repos/o/r/check-runs -f name=ci", ON_FEATURE);
+    if (!verdict.deny) throw new Error("the check run write is no person-only act");
+    expect(verdict.reason).toContain("is CI's to write, never the agent's (status-write)");
+  });
+});
+
+describe("an admin merge (a4, REQ-FLOW-140)", () => {
+  it("asks naming the admin route first, and a plain merge asks as a merge", () => {
+    expect(personOnlyVerdict("gh pr merge 3 --squash --admin", ON_FEATURE)).toMatchObject({ deny: true, rule: "admin-merge", ask: true });
+    expect(personOnlyVerdict("gh pr merge 3 --squash", ON_FEATURE)).toMatchObject({ deny: true, rule: "pr-merge", ask: true });
+    expect(personOnlyVerdict("gh pr merge 3 --admin=false", ON_FEATURE)).toMatchObject({ deny: true, rule: "pr-merge", ask: true });
+    // With a branch deletion beside it the refused act still decides.
+    expect(personOnlyVerdict("gh pr merge 3 --admin -d", ON_FEATURE)).toMatchObject({ deny: true, rule: "push-delete", ask: false });
+  });
+});
+
+describe("a push or write onto a deploying branch (a4, REQ-FLOW-140)", () => {
+  const DEPLOYING = { defaultBranches: [], currentBranch: "feat/x", tags: [], deployingBranches: ["production", "release/*"] };
+  const ON_PRODUCTION = { ...DEPLOYING, currentBranch: "production" };
+
+  it.each([
+    ["git push origin production"],
+    ["git push origin HEAD:refs/heads/Production"],
+    ["git push origin feat/x:release/1.17"],
+    ["git push origin 'refs/heads/*:refs/heads/*'"],
+    ["gh api -X PUT repos/o/r/contents/a.md -f message=m -f content=eA== -f branch=production"],
+    ["gh api -X POST repos/o/r/merges -f base=release/2.0 -f head=feat/x"],
+    ["gh api -X PATCH repos/o/r/git/refs/heads/production -f sha=abc"],
+    ["gh api graphql -f query='mutation { createCommitOnBranch(input: {branch: {branchName: \"production\"}}) { commit { oid } } }'"],
+    ["gh repo sync o/r -b production"],
+  ])("asks for %j as push-deploying", (command) => {
+    expect(personOnlyVerdict(command, DEPLOYING)).toMatchObject({ deny: true, rule: "push-deploying", ask: true });
+    // The neighbour: the same line in a repository naming no deploying branch.
+    const plain = personOnlyVerdict(command, { ...DEPLOYING, deployingBranches: [] });
+    expect(plain.deny ? plain.rule : null, command).not.toBe("push-deploying");
+  });
+
+  it("reads the branch the session is on for a push that names none, or `HEAD`", () => {
+    expect(personOnlyVerdict("git push", ON_PRODUCTION)).toMatchObject({ deny: true, rule: "push-deploying" });
+    expect(personOnlyVerdict("git push origin HEAD", ON_PRODUCTION)).toMatchObject({ deny: true, rule: "push-deploying" });
+    expect(personOnlyVerdict("git push", DEPLOYING)).toEqual({ deny: false });
+    expect(personOnlyVerdict("git push origin HEAD", DEPLOYING)).toEqual({ deny: false });
+  });
+
+  it("allows a feature branch and a branch the pattern's one segment does not reach", () => {
+    for (const command of ["git push origin feat/x", "git push origin release/1.17/hotfix", "git push origin production-eu"]) {
+      expect(personOnlyVerdict(command, DEPLOYING), command).toEqual({ deny: false });
+    }
+  });
+
+  it("names the deploying push before the default-branch push when the default branch is listed too", () => {
+    const mainListed = { ...DEPLOYING, deployingBranches: ["main"] };
+    expect(personOnlyVerdict("git push origin main", mainListed)).toMatchObject({ deny: true, rule: "push-deploying", ask: true });
+  });
+});
+
+/**
+ * The shared table of branch names and patterns (review/20): `src/config/autonomy.ts`'s matcher and the guard's copy
+ * inside `personOnlyVerdict` read every row, the copy through a push of that name.
+ */
+const DEPLOYING_TABLE: readonly (readonly [name: string, patterns: readonly string[], matches: boolean])[] = [
+  ["release/1.17", ["release/*"], true],
+  ["release/1.17/hotfix", ["release/*"], false],
+  ["release/1.17/hotfix", ["release/**"], true],
+  ["releases/1.17", ["release/**"], false],
+  ["production", ["production"], true],
+  ["Production", ["production"], true],
+  ["production-eu", ["production"], false],
+  ["prod", ["production"], false],
+  ["feature/a/b", ["feature/*/b"], true],
+  ["feature/a/c/b", ["feature/*/b"], false],
+  ["deploy/x", ["refs/heads/deploy/*"], true],
+  ["x", ["*"], true],
+  ["a/b", ["*"], false],
+  ["a/b", ["**"], true],
+  ["hotfix", ["release/*", "hotfix"], true],
+  ["staging", [], false],
+];
+
+describe("the deploying-branch matcher's copy (a4, review/20)", () => {
+  it.each(DEPLOYING_TABLE.map(([name, patterns, matches]) => ({ name, patterns, matches })))(
+    "reads $name against $patterns as $matches in both copies",
+    ({ name, patterns, matches }) => {
+      expect(matchesDeployingBranch(name, patterns)).toBe(matches);
+      const verdict = personOnlyVerdict(`git push origin HEAD:refs/heads/${name}`, { ...ON_FEATURE, deployingBranches: patterns });
+      expect(verdict.deny ? verdict.rule : null).toBe(matches ? "push-deploying" : null);
+    },
+  );
+
+  it("is the kernel module's code, word for word", () => {
+    const read = (path: string): string => readFileSync(fileURLToPath(new URL(path, import.meta.url)), "utf8");
+    /** A function's text from its signature to the closing brace at its own indent, the indent taken off. */
+    const body = (text: string, signature: string, indent: string): string => {
+      const start = text.indexOf(`${indent}${signature}`);
+      const end = text.indexOf(`\n${indent}}\n`, start);
+      expect(start, signature).toBeGreaterThan(-1);
+      return text
+        .slice(start, end + indent.length + 2)
+        .split("\n")
+        .map((line) => (line.startsWith(indent) ? line.slice(indent.length) : line))
+        .join("\n");
+    };
+    const kernel = read("../../src/config/autonomy.ts");
+    const guard = read("../../src/hooks/personOnly.ts");
+    const copy = /\/\/ <deploying-branch>\n([\s\S]*?)\/\/ <\/deploying-branch>/.exec(guard)?.[1] ?? "";
+    for (const signature of ["function branchKey(name: string): string {", "function matchesDeployingBranch(name: string, patterns: readonly string[]): boolean {"]) {
+      const original = body(kernel, signature.startsWith("function matches") ? `export ${signature}` : signature, "").replace(/^export /, "");
+      expect(body(copy, signature, "  "), signature).toBe(original);
+    }
+  });
+});
+
+describe("loosening the autonomy setting (a4, REQ-FLOW-138)", () => {
+  const STRICT = { ...ON_FEATURE, stricterThanDefault: true };
+  const DEFAULT = { ...ON_FEATURE, stricterThanDefault: false };
+
+  it.each([
+    ["stamity sync --loosen"],
+    ["npx -y @zomarit/stamity@1.16.0 sync --loosen"],
+    ["npx --no stamity init -y --loosen"],
+    ["st workspace sync --loosen"],
+    ["node dist/cli.js add production --loosen"],
+    ["node ./node_modules/@zomarit/stamity/dist/cli.js sync --loosen=true"],
+    ["npm exec -- stamity sync --loosen"],
+    ["$STAMITY sync --loosen"],
+    ["stamity sync \"$FLAG\""],
+    ["stamity sync `printf -- --loosen`"],
+    ["echo ok && stamity sync --loosen"],
+  ])("asks for %j in either setting", (command) => {
+    for (const ctx of [STRICT, DEFAULT]) expect(personOnlyVerdict(command, ctx), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+
+  it.each([
+    ["stamity sync"],
+    ["npx -y @zomarit/stamity@1.16.0 sync --dry-run"],
+    ["git commit -m 'stamity sync --loosen'"],
+    ["echo --loosen"],
+    ["rg -n -- --loosen src"],
+    ["stamity clean --pack production"],
+    ["stamity init -y"],
+  ])("allows %j, a word that only names the flag or a command that lands no looser guard", (command) => {
+    for (const ctx of [STRICT, DEFAULT]) expect(personOnlyVerdict(command, ctx), command).toEqual({ deny: false });
+  });
+
+  it("asks for a full clean or an init --force only while the baked setting is stricter than the default", () => {
+    for (const command of ["stamity clean", "npx --no stamity clean --yes", "stamity init --force -y"]) {
+      expect(personOnlyVerdict(command, STRICT), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+      expect(personOnlyVerdict(command, DEFAULT), command).toEqual({ deny: false });
+    }
+    // With no autonomy context the reading cannot tell, so it asks.
+    expect(personOnlyVerdict("stamity clean", ON_FEATURE)).toMatchObject({ deny: true, rule: "autonomy-loosen" });
+  });
+});
+
+describe("a dry-run publish (a4, REQ-FLOW-102 as built)", () => {
+  it.each([
+    ["npm publish --dry-run"],
+    ["npm publish ./pkg.tgz --dry-run --tag next"],
+    ["npm publish --dry-run=true"],
+    ["pnpm publish --dry-run --no-git-checks"],
+    ["bun publish --dry-run"],
+    ["yarn npm publish --dry-run"],
+  ])("runs %j, which sends nothing", (command) => {
+    expect(personOnlyVerdict(command, ON_FEATURE)).toEqual({ deny: false });
+  });
+
+  it.each([
+    ["npm publish"],
+    ["npm publish --dry-run=false"],
+    ["npm publish --dry-run --no-dry-run"],
+    ["npm publish --dry-run --dry"],
+    ["npm publish \"--dry-run\""],
+    ["npm publish '--dry-run'"],
+    ["npm publish $DRY"],
+    ["npm publish --dry-run$X"],
+    ["npm_config_dry_run=false npm publish --dry-run"],
+    ["npm publish -- --dry-run"],
+    ["npm publish --tag --dry-run"],
+    ["yarn publish --dry-run"],
+  ])("asks for %j, a spelling the guard cannot read as a dry run", (command) => {
+    expect(personOnlyVerdict(command, ON_FEATURE)).toMatchObject({ deny: true, rule: "publish", ask: true });
+  });
+});
+
+describe("the land verb's line (a4, REQ-FLOW-121)", () => {
+  /** The attended reading: the parsed program words only. */
+  const attended = (command: string): ReturnType<typeof unattendedPushVerdict> => unattendedPushVerdict(command, false, true);
+
+  it.each([
+    ["stamity run land --run 2026-10-23_x --ready --json"],
+    ["npx --no stamity run land --run 2026-10-23_x --ready --wait 8 --json"],
+    ["st run land --run 2026-10-23_x --fast-forward"],
+  ])("passes %j alone on its line in both modes", (command) => {
+    expect(attended(command)).toEqual({ deny: false });
+    expect(unattendedPushVerdict(command)).toEqual({ deny: false });
+  });
+
+  it.each([
+    ["npm test && stamity run land --run x"],
+    ["stamity run land --run x; git status"],
+    ["GIT_TRACE=1 stamity run land --run x"],
+    ["env -u GIT_EXEC_PATH stamity run land --run x"],
+    ["node dist/cli.js run land --run x"],
+    ["stamity run land --run x > out.txt"],
+  ])("refuses %j, the verb beside more than itself, in both modes", (command) => {
+    const verdict = attended(command);
+    expect(verdict.deny).toBe(true);
+    if (verdict.deny) expect(verdict.reason).toContain("`stamity run land` on a line that is more than the verb");
+    expect(unattendedPushVerdict(command).deny).toBe(true);
+  });
+
+  it("lets a commit message, a comment or a search that names the verb run attended, and refuses it unattended", () => {
+    for (const command of ["git commit -m 'docs: stamity run land --run x lands the run'", "rg 'stamity run land' docs && git status"]) {
+      expect(attended(command), command).toEqual({ deny: false });
+      expect(unattendedPushVerdict(command).deny, command).toBe(true);
+    }
+  });
+
+  it("leaves every other verb's line to the unattended rule alone", () => {
+    expect(attended("npm test && stamity run checkpoint --run x")).toEqual({ deny: false });
+    expect(unattendedPushVerdict("npm test && stamity run checkpoint --run x").deny).toBe(true);
+  });
+
+  it("names a PowerShell splat in a word after `run` (build/97)", () => {
+    const verdict = unattendedPushVerdict("stamity run land --run x @opts", true);
+    expect(verdict.deny).toBe(true);
+    if (verdict.deny) expect(verdict.reason).toContain("an unquoted `@` in a word after `run`, which PowerShell reads as a splat");
+  });
+});
+
+/**
+ * a4 fixer round 1 (review/37, review/38, review/42, review/44, review/45, review/39): the readings the round's
+ * findings named. Each row's input sits in the table; the titles name the class of input. A row marked "red on the
+ * head" failed on e2a2f2c6 for the reason its comment gives.
+ */
+describe("a dry-run flag's separate value word (a4, review/42)", () => {
+  // Red on the head: the literal flag passed whatever word followed it, and npm's parser takes `false` as its value.
+  it.each([
+    ["npm, a separate false", "npm publish --dry-run false"],
+    ["pnpm, a separate false", "pnpm publish --dry-run false"],
+    ["bun, a separate false", "bun publish --dry-run false"],
+    ["yarn's npm publish, a separate false", "yarn npm publish --dry-run false"],
+    ["a single-quoted false", "npm publish --dry-run 'false'"],
+    ["a double-quoted false", "npm publish --dry-run \"false\""],
+    ["another letter case", "npm publish --dry-run FALSE"],
+    ["another boolean word", "npm publish --dry-run no"],
+    ["a numeric boolean", "npm publish --dry-run 0"],
+    ["a later flag with a false", "npm publish --dry-run --dry-run false"],
+    ["a glob that may name false", "npm publish --dry-run fals?"],
+    ["a brace expansion that may give false", "npm publish --dry-run f{al,}se"],
+  ])("reads a publish for %s after the flag", (_, command) => {
+    expect(personOnlyVerdict(command, ON_FEATURE), command).toMatchObject({ deny: true, rule: "publish", ask: true });
+  });
+
+  it.each([
+    ["a separate true", "npm publish --dry-run true"],
+    ["a package path", "npm publish --dry-run ./pkg.tgz"],
+    ["another option", "pnpm publish --dry-run --no-git-checks"],
+    ["the flag last", "bun publish ./dir --dry-run"],
+    ["a quoted package path", "npm publish --dry-run './my pkg.tgz'"],
+  ])("runs a dry run for %s after the flag", (_, command) => {
+    expect(personOnlyVerdict(command, ON_FEATURE), command).toEqual({ deny: false });
+  });
+});
+
+describe("the package test's program words (a4, review/44)", () => {
+  const STRICT = { ...ON_FEATURE, stricterThanDefault: true };
+  const FORK = { ...ON_FEATURE, stricterThanDefault: false, packageWords: ["stamity", "st", "forge", "forge-cli"] };
+
+  it.each([
+    // Red on the head: a package manager given the second bin as its first word, and the source entry file.
+    ["yarn running the second bin", "yarn st sync --loosen"],
+    ["pnpm running the second bin", "pnpm st sync --loosen"],
+    ["bun running the second bin", "bun st sync --loosen"],
+    ["a manager's run of the second bin", "pnpm run st sync --loosen"],
+    ["a manager's option before the second bin", "yarn --cwd app st sync --loosen"],
+    ["node on the source entry file", "node src/cli.ts sync --loosen"],
+    ["tsx on the source entry file", "tsx src/cli.ts sync --loosen"],
+    ["a runner of tsx on the source entry file", "npx tsx ./src/cli.ts sync --loosen"],
+    // Read on the head too, kept beside the rows above: a runner's exec and dlx unwrap to the bin.
+    ["yarn exec of the second bin", "yarn exec st sync --loosen"],
+    ["pnpm exec of the second bin", "pnpm exec st sync --loosen"],
+    ["pnpm dlx of the second bin", "pnpm dlx st sync --loosen"],
+    ["bun x of the second bin", "bun x st sync --loosen"],
+  ])("asks for a loosening through %s", (_, command) => {
+    expect(personOnlyVerdict(command, STRICT), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+
+  it.each([
+    ["the fork's bin", "forge-cli sync --loosen"],
+    ["the fork's unscoped name", "forge sync --loosen"],
+    ["the fork's bin by its path", "node node_modules/.bin/forge-cli sync --loosen"],
+    ["the fork's bin under yarn", "yarn forge-cli sync --loosen"],
+    ["the fork's bin under a runner", "npx --no forge-cli sync --loosen"],
+  ])("asks for a loosening through %s where the guard bakes the fork's words", (_, command) => {
+    expect(personOnlyVerdict(command, FORK), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+    // The neighbour: a guard baking only the canonical words reads another program.
+    expect(personOnlyVerdict(command, { ...ON_FEATURE, stricterThanDefault: false }), command).toEqual({ deny: false });
+  });
+
+  it.each([
+    ["a manager installing a package named like the bin", "npm install st"],
+    ["a manager's script beside a word like the bin", "npm test -- --grep st \"$PATTERN\""],
+    ["node on another file", "node scripts/x.mjs --loosen"],
+  ])("leaves %s to its own program", (_, command) => {
+    expect(personOnlyVerdict(command, STRICT), command).toEqual({ deny: false });
+  });
+
+  it("reads the land line through the same words, attended, and admits a fork's bin alone on its line", () => {
+    // TEST CHANGE, justified (REQ-FLOW-138, review/53): the verdict takes the baked identity as one object, its
+    // package words, name and own-repository flag, since the CLI file is now read by its path.
+    const attended = (command: string): ReturnType<typeof unattendedPushVerdict> =>
+      unattendedPushVerdict(command, false, true, { words: FORK.packageWords });
+    expect(attended("forge-cli run land --run 2026-10-23_x --ready")).toEqual({ deny: false });
+    for (const command of ["npm test && forge-cli run land --run x", "yarn st run land --run x", "tsx src/cli.ts run land --run x"]) {
+      expect(attended(command).deny, command).toBe(true);
+    }
+    // The neighbours on the head's words: a fork's bin is another program there, and `npx st` names another package.
+    expect(unattendedPushVerdict("npm test && forge-cli run land --run x", false, true)).toEqual({ deny: false });
+    expect(unattendedPushVerdict("npx --no st run land --run x", false, true).deny).toBe(true);
+  });
+});
+
+describe("a stamity command's words the shell still expands (a4, review/37, review/45)", () => {
+  const STRICT = { ...ON_FEATURE, stricterThanDefault: true };
+  const DEFAULT = { ...ON_FEATURE, stricterThanDefault: false };
+
+  // Red on the head (review/37): single-quoted text was read as an expansion.
+  it.each([
+    ["a single-quoted backtick in a run title", "stamity run end --run 2026-10-23_x --title 'fix `x` reader'"],
+    ["a single-quoted dollar in a summary", "stamity learn capture --summary 'a $5 read in src/a.ts' --confidence high"],
+    ["a single-quoted substitution's text", "st learn capture --summary 'reads $(git rev-parse HEAD) first'"],
+    ["an escaped dollar", "stamity run end --run x --title cost\\$5"],
+    ["an ANSI-C-quoted dollar", "stamity run end --run x --title $'a $b'"],
+    ["a single-quoted glob and brace", "stamity learn capture --summary 'globs like *.ts and {a,b}'"],
+  ])("runs %s, which is literal text", (_, command) => {
+    for (const ctx of [STRICT, DEFAULT]) expect(personOnlyVerdict(command, ctx), command).toEqual({ deny: false });
+  });
+
+  it.each([
+    ["a double-quoted variable", "stamity run end --run x --title \"fix $X\""],
+    ["a double-quoted backtick", "stamity run end --run x --title \"fix `x`\""],
+    ["a double-quoted substitution", "stamity learn capture --summary \"$(cat note)\""],
+    ["an unquoted variable", "stamity sync $FLAG"],
+    ["a braced variable", "stamity sync ${FLAG:-}"],
+    // Red on the head (review/45): a glob, a brace expansion, and arguments xargs adds.
+    ["an unquoted glob", "stamity sync --loo*"],
+    ["an unquoted bracket glob", "stamity sync --[l]oosen"],
+    ["an unquoted brace expansion", "stamity sync {--loosen,}"],
+    ["a run under xargs", "echo --loosen | xargs stamity sync"],
+    ["a run under xargs with a placeholder", "echo --loosen | xargs -I % stamity sync %"],
+    ["a run under xargs through a runner", "echo --loosen | xargs npx --no stamity sync"],
+    ["a PowerShell splat", "pwsh -Command 'stamity sync @opts'"],
+  ])("asks for %s, which may spell `--loosen`", (_, command) => {
+    for (const ctx of [STRICT, DEFAULT]) {
+      expect(personOnlyVerdict(command, ctx), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+    }
+  });
+
+  it("names xargs in the act it asks for, and leaves xargs over another program alone", () => {
+    const verdict = personOnlyVerdict("echo x | xargs stamity sync", DEFAULT);
+    expect(verdict).toMatchObject({ deny: true, act: expect.stringContaining("run under `xargs`") });
+    expect(personOnlyVerdict("ls | xargs echo", DEFAULT)).toEqual({ deny: false });
+    expect(personOnlyVerdict("stamity sync {a}", DEFAULT)).toEqual({ deny: false });
+    // A POSIX shell reads an `@` as a plain character.
+    expect(personOnlyVerdict("stamity sync @opts", DEFAULT)).toEqual({ deny: false });
+  });
+});
+
+describe("a program word the reading cannot settle (a4, review/38, the declared default)", () => {
+  const STRICT = { ...ON_FEATURE, stricterThanDefault: true };
+  const DEFAULT = { ...ON_FEATURE, stricterThanDefault: false };
+
+  it.each([
+    ["a variable directory with a literal file name", "\"$ROOT/node_modules/.bin/vitest\" run \"$FILE\""],
+    ["a substitution directory with a literal file name", "\"$(git rev-parse --show-toplevel)/scripts/x.sh\" \"$arg\""],
+    ["a glob directory with a literal file name", "/opt/*/bin/vitest run \"$F\""],
+    ["a glob file name that cannot name the package", "./? \"$X\""],
+  ])("runs %s, settled by its last path part", (_, command) => {
+    for (const ctx of [STRICT, DEFAULT]) expect(personOnlyVerdict(command, ctx), command).toEqual({ deny: false });
+  });
+
+  it.each([
+    ["a variable directory with a literal stamity file name", "\"$ROOT/node_modules/.bin/stamity\" sync \"$ARG\""],
+    ["a variable directory with the second bin", "\"$HOME/.bin/st\" sync --loosen"],
+    ["a glob directory with a literal stamity file name", "/opt/*/bin/stamity sync --loosen"],
+  ])("gives %s the loosen check", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toMatchObject({ deny: true, rule: "autonomy-loosen", act: expect.stringMatching(/^(?:A stamity command|Loosening)/) });
+    // A literal argument there passes, as it does on the bare program.
+    const plain = command.replace(/ (?:"\$ARG"|--loosen)$/, "");
+    expect(personOnlyVerdict(plain, DEFAULT), plain).toEqual({ deny: false });
+  });
+
+  it.each([
+    ["a wholly variable program with a variable argument", "\"$BIN\" \"$ARG\""],
+    ["a program whose last part is a variable", "/usr/local/bin/$TOOL sync \"$F\""],
+    ["a braced pattern substitution", "${X/a/b} \"$F\""],
+    ["a glob file name that may name the package", "/usr/bin/s? \"$F\""],
+    ["a glob file name with a Windows suffix that may name the package", "./stamit?.exe \"$F\""],
+  ])("asks for %s, naming a command the guard cannot read", (_, command) => {
+    for (const ctx of [STRICT, DEFAULT]) {
+      expect(personOnlyVerdict(command, ctx), command).toMatchObject({
+        deny: true,
+        rule: "autonomy-loosen",
+        ask: true,
+        act: "A command the guard cannot read, which may be a stamity command, with an argument the guard cannot read, which may spell `--loosen`",
+      });
+    }
+  });
+});
+
+describe("the deploying-branch readers (a4, review/39)", () => {
+  const DEPLOYING = { defaultBranches: [], currentBranch: "feat/x", tags: [], deployingBranches: ["production", "release/*"] };
+  const OID = "a".repeat(40);
+
+  it.each([
+    ["a matching push", "git push origin :"],
+    ["a refspec-less push under a matching push.default", "git -c push.default=matching push origin"],
+    ["a send-pack with no ref", "git send-pack origin"],
+    ["a symbolic ref", "git symbolic-ref refs/heads/x refs/heads/production"],
+    ["an update-ref symref command", "printf 'symref-update refs/heads/x refs/heads/release/2.0\\n' | git update-ref --stdin"],
+    ["a GraphQL mergeBranch", "gh api graphql -f query='mutation { mergeBranch(input: {repositoryId: \"R\", base: \"production\", head: \"feat/x\"}) { clientMutationId } }'"],
+    ["a GraphQL updateRef", `gh api graphql -f query='mutation { updateRef(input: {refId: "R", oid: "${OID}"}) { clientMutationId } }'`],
+    ["a GraphQL updateRefs entry", updateRefs("refs/heads/production", OID)],
+    ["a GraphQL createRef", `gh api graphql -f query='mutation { createRef(input: {repositoryId: "R", name: "refs/heads/release/3.0", oid: "${OID}"}) { ref { id } } }'`],
+    ["a REST merge-upstream", "gh api -X POST repos/o/r/merge-upstream -f branch=production"],
+    ["a symbolic ref to a target the line cannot show", "git symbolic-ref refs/heads/x \"$TARGET\""],
+    ["a sync of a branch the line cannot show", "gh repo sync o/r -b \"$(cat branch)\""],
+  ])("asks for %s as push-deploying", (_, command) => {
+    expect(personOnlyVerdict(command, DEPLOYING), command).toMatchObject({ deny: true, rule: "push-deploying", ask: true });
+    // The neighbour: the same line in a repository naming no deploying branch.
+    const plain = personOnlyVerdict(command, { ...DEPLOYING, deployingBranches: [] });
+    expect(plain.deny ? plain.rule : null, command).not.toBe("push-deploying");
+  });
+
+  it.each([
+    ["a symbolic ref", "git symbolic-ref refs/heads/x refs/heads/feat/y"],
+    ["a GraphQL mergeBranch", "gh api graphql -f query='mutation { mergeBranch(input: {repositoryId: \"R\", base: \"feat/y\", head: \"feat/x\"}) { clientMutationId } }'"],
+    ["a GraphQL createRef", `gh api graphql -f query='mutation { createRef(input: {repositoryId: "R", name: "refs/heads/feat/y", oid: "${OID}"}) { ref { id } } }'`],
+    ["a REST merge-upstream", "gh api -X POST repos/o/r/merge-upstream -f branch=feat/y"],
+  ])("leaves %s onto a branch no pattern names alone", (_, command) => {
+    const verdict = personOnlyVerdict(command, DEPLOYING);
+    expect(verdict.deny ? verdict.rule : null, command).not.toBe("push-deploying");
+  });
+});
+
+/**
+ * a4 fixer round 2 (review/45, review/52, review/53, review/54, review/55): a mark, once set, is never lost; a glob reads
+ * as unreadable only where it can give a dash word; the CLI file is read by its path. Titles name the class of input;
+ * each input sits in its table. Each row marked "red" failed on 4adef43c for the reason its title names.
+ */
+describe("a mark carried into every nested reading (a4, review/54, review/45, review/55)", () => {
+  const STRICT = { ...ON_FEATURE, stricterThanDefault: true };
+  const DEFAULT = { ...ON_FEATURE, stricterThanDefault: false };
+
+  // Red: each nesting the reader knows, its value filled in by the shell around it and single-quoted inside.
+  it.each([
+    ["a shell's command string", "sh -c \"stamity sync '$F'\""],
+    ["a login shell's command string", "bash -lc \"stamity sync '$F'\""],
+    ["an eval", "eval \"stamity sync '$F'\""],
+    ["env's split string", "env -S \"stamity sync '$F'\""],
+    ["a runner's command option", "npx -c \"stamity sync '$F'\""],
+    ["a package manager's exec command option", "npm exec -c \"stamity sync '$F'\""],
+    ["PowerShell's command string", "pwsh -Command \"stamity sync '$F'\""],
+    ["the Windows command interpreter's string", "cmd /c \"stamity sync '$F'\""],
+    ["a rebase exec line", "git rebase --exec \"stamity sync '$F'\" main"],
+    ["a bisect run command", "git bisect run sh -c \"stamity sync '$F'\""],
+    ["a program word holding a line", "bun exec \"stamity sync '$F'\""],
+    ["an escaped dollar a nested eval expands", "eval \"eval \\\"stamity sync '\\$F'\\\"\""],
+    ["xargs filling a token inside a shell's string", "echo --loosen | xargs -I{} sh -c 'stamity sync {}'"],
+    ["xargs filling a token inside env's split string", "echo --loosen | xargs -I% env -S 'stamity sync %'"],
+    ["the interpreter's percent variable", "cmd /c stamity sync %F%"],
+    ["the interpreter's delayed variable", "cmd /c \"stamity sync !F!\""],
+  ])("asks for %s, whose filled-in value may spell `--loosen`", (_, command) => {
+    for (const ctx of [STRICT, DEFAULT]) {
+      expect(personOnlyVerdict(command, ctx), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+    }
+  });
+
+  it.each([
+    ["a shell's single-quoted string", "sh -c 'stamity sync --json'"],
+    ["an eval of literal words", "eval 'stamity sync'"],
+    ["env's literal split string", "env -S 'stamity sync'"],
+    ["the interpreter's literal string", "cmd /c stamity sync"],
+    ["a shell's string holding a single-quoted dollar", "sh -c 'stamity run end --run x --title '\\''cost $5'\\'''"],
+    ["a shell's double-quoted string with no expansion", "bash -c \"npm test && stamity sync\""],
+  ])("runs %s, whose words the reading sees", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toEqual({ deny: false });
+  });
+
+  it("asks for any command a nested string holds after an outer expansion, since the value may add commands", () => {
+    // The outer shell puts the value in the text before the inner shell parses it, so a separator in it adds commands.
+    expect(personOnlyVerdict("bash -c \"cd $DIR && npm test\"", DEFAULT)).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+    expect(personOnlyVerdict("bash -c 'cd $DIR && npm test'", DEFAULT)).toEqual({ deny: false });
+  });
+});
+
+describe("a program word built by an expansion (a4, review/45)", () => {
+  const DEFAULT = { ...ON_FEATURE, stricterThanDefault: false };
+
+  // Red: the program word itself carried the words.
+  it.each([
+    ["a brace-expanded program word", "{stamity,sync,--loosen}"],
+    ["a brace-expanded program word with a literal argument", "{stamity,sync} --json"],
+    ["an unquoted variable program with literal arguments", "$CMD sync --json"],
+    ["an unquoted variable program alone", "$CMD"],
+    ["a quoted variable program a runner reads as a line", "bun exec \"$CMD\""],
+    ["a glob program word that may give a dash word", "* sync"],
+  ])("asks for %s, which carries words the line does not show", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toMatchObject({
+      deny: true,
+      rule: "autonomy-loosen",
+      act: "A command the guard cannot read, which may be a stamity command, with an argument the guard cannot read, which may spell `--loosen`",
+    });
+  });
+
+  it.each([
+    ["a literal program", "./node_modules/.bin/vitest run"],
+    ["a glob program word with a literal prefix and literal arguments", "/usr/bin/sta* --version"],
+    ["a quoted variable directory with a literal file name", "\"$ROOT/bin/vitest\" run"],
+  ])("runs %s", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toEqual({ deny: false });
+  });
+});
+
+describe("a glob or brace argument that cannot spell an option (a4, review/52)", () => {
+  const STRICT = { ...ON_FEATURE, stricterThanDefault: true };
+
+  // Red: the head read every glob as unreadable.
+  it.each([
+    ["a checkpoint's path glob", "npx --no stamity run checkpoint --run 2026-10-23_x --paths src/hooks/*.ts --json"],
+    ["a run end's path glob", "stamity run end --run 2026-10-23_x --paths docs/*.md test/hooks/*.test.ts"],
+    ["the ready check's plan glob", "stamity plan check docs/plans/022-*.md --json"],
+    ["a brace form after a literal folder", "stamity run checkpoint --run x --paths src/{a,b}.ts"],
+    ["a bracket glob after a literal prefix", "stamity plan check docs/plans/02[12]-x.md"],
+  ])("runs %s, whose literal text before the glob opens with no dash", (_, command) => {
+    expect(personOnlyVerdict(command, STRICT), command).toEqual({ deny: false });
+  });
+
+  it.each([
+    ["a glob with no literal prefix", "stamity sync *"],
+    ["a one-character glob with no literal prefix", "stamity sync ?-loosen"],
+    ["a glob after a dash", "stamity sync -*"],
+    ["a brace alternative opening with a dash", "stamity sync {x,--loosen}"],
+    ["a brace form with no literal prefix", "stamity sync {a,b}"],
+  ])("asks for %s, which may give a dash word", (_, command) => {
+    expect(personOnlyVerdict(command, STRICT), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+
+  it("keeps the dry-run reading on any glob after the flag, which may give a false word", () => {
+    expect(personOnlyVerdict("npm publish --dry-run fals?", ON_FEATURE)).toMatchObject({ deny: true, rule: "publish" });
+  });
+});
+
+describe("the engine's CLI file read by its path (a4, review/53, the declared default)", () => {
+  /** A consumer repository: its package.json names another package. */
+  const CONSUMER = { ...ON_FEATURE, stricterThanDefault: true, ownRepository: false };
+  /** The engine's own repository. */
+  const OWN = { ...ON_FEATURE, stricterThanDefault: true, ownRepository: true };
+
+  // Red: any file named like the CLI read as the engine's.
+  it.each([
+    ["a consumer's built CLI with an expanded argument", "node dist/cli.js build \"$OUT\""],
+    ["a consumer's source CLI with a glob argument", "tsx src/cli.ts test/*.json --out *"],
+    ["a consumer's built CLI's full clean", "node dist/cli.js clean"],
+    ["a consumer's source CLI's init with force", "tsx src/cli.ts init --force"],
+  ])("runs %s, which only shares the CLI's file name", (_, command) => {
+    expect(personOnlyVerdict(command, CONSUMER), command).toEqual({ deny: false });
+  });
+
+  it.each([
+    ["a consumer's built CLI", "node dist/cli.js sync --loosen"],
+    ["a consumer's source CLI", "tsx ./src/cli.ts sync --loosen=true"],
+  ])("asks for %s given the literal loosen flag", (_, command) => {
+    expect(personOnlyVerdict(command, CONSUMER), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+
+  it.each([
+    ["the installed package's CLI file", "node node_modules/@zomarit/stamity/dist/cli.js sync \"$X\"", CONSUMER],
+    ["a pnpm store path to the package", "node node_modules/.pnpm/@zomarit+stamity@1.16.0/node_modules/@zomarit/stamity/dist/cli.js clean", CONSUMER],
+    ["the bin link", "node ./node_modules/.bin/st sync \"$X\"", CONSUMER],
+    ["a renamed fork's installed CLI file", "node node_modules/@acme/forge/dist/cli.js clean", { ...CONSUMER, packageName: "@acme/forge" }],
+    ["the engine's own built CLI in its repository", "node dist/cli.js sync \"$X\"", OWN],
+    ["the engine's own source CLI in its repository", "tsx src/cli.ts clean", OWN],
+  ])("gives %s the full check", (_, command, ctx) => {
+    expect(personOnlyVerdict(command, ctx), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+});
+
+describe("a push refspec read from its word's marks (a4, build/4, review/69, review/77)", () => {
+  const TAGGED_FEATURE = { defaultBranches: ["trunk"], currentBranch: "feat/x", tags: ["v1.0.0"] };
+  const DEPLOYING = { ...TAGGED_FEATURE, deployingBranches: ["production", "release/*"] };
+
+  // build/4: characters that only look like an expansion, single-quoted, are the name.
+  // TEST CHANGE, justified (build/12): a substitution nothing closes on the line now leaves the rest of the line unread,
+  // filled in, so the run verb's push of a branch name nesting unclosed substitution characters asks as a push to the
+  // default branch (the list below) instead of running.
+  it.each([
+    ["a single-quoted branch name holding a dollar", "git push origin 'feat/a$b'"],
+    ["a single-quoted branch name holding a group", "git push origin 'HEAD:refs/heads/feat(x)'"],
+  ])("runs %s", (_, command) => {
+    expect(personOnlyVerdict(command, TAGGED_FEATURE), command).toEqual({ deny: false });
+  });
+
+  // TEST CHANGE, justified (REQ-FLOW-140, review/77): round 2 ran the two unquoted rows on their literal prefix, but the
+  // expansion may supply the colon and a default destination, so a word the shell fills in reads as the default push.
+  it.each([
+    ["an expansion with no literal text before it", "git push origin \"$(git branch --show-current)\""],
+    ["a literal prefix of the default branch", "git push origin HEAD:tru$(echo nk)"],
+    ["a literal prefix of the ref namespace", "git push origin HEAD:refs/he$(echo ads/trunk)"],
+    ["a literal prefix of HEAD", "git push origin H$(echo EAD)"],
+    ["an expansion before the colon", "git push origin $(echo HEAD:trunk)"],
+    ["a literal prefix of a local tag", "git push origin v1$(echo .0.0)"],
+    ["a literal prefix of main, always a default", "git push origin HEAD:ma$(echo in)"],
+    // Red on 3021c756 (review/77): these passed on their literal prefix.
+    ["a colon-less refspec whose expansion may supply the colon", "git push origin feat/a$b"],
+    ["a branch name holding an unquoted group", "git push origin HEAD:refs/heads/feat(x)"],
+    ["a double-quoted variable after a literal folder", "git push origin \"feat/$NAME\""],
+    // Moved from the list above (build/12).
+    ["the run verb's push of a branch name nesting unclosed substitution characters", `git push origin HEAD:refs/heads/stamity/x${'"$('.repeat(4)}y`],
+  ])("asks for %s as a push to the default branch", (_, command) => {
+    expect(personOnlyVerdict(command, TAGGED_FEATURE), command).toMatchObject({ deny: true, rule: "push-default", ask: true });
+  });
+
+  // Red on 3021c756 (review/69): the literal prefix ruled out the default branch and no deploying name was compared.
+  it.each([
+    ["a deploying name finished by an expansion", "git push origin HEAD:produc$(echo tion)"],
+    ["a deploying pattern's folder finished by a variable", "git push origin HEAD:release/$V"],
+    ["a branch built wholly by a substitution", "git push origin \"$(cat branch)\""],
+  ])("asks for %s as a push to a deploying branch", (_, command) => {
+    expect(personOnlyVerdict(command, DEPLOYING), command).toMatchObject({ deny: true, rule: "push-deploying", ask: true });
+  });
+
+  // Red on 3021c756 (review/69): an unquoted value may split into more refspecs or an option.
+  it.each([
+    ["a split-prone refspec after a literal folder", "git push origin feat/$REST", "refspec the line cannot show, which may split"],
+    ["a split-prone remote word", "git push $TARGET", "remote word may split"],
+  ])("asks for %s, which may split into more refspecs or an option", (_, command, act) => {
+    expect(personOnlyVerdict(command, TAGGED_FEATURE), command).toMatchObject({ deny: true, rule: "push-default", ask: true, act: expect.stringContaining(act) });
+  });
+
+  it("leaves a quoted variable in the remote's place, which cannot split, to the refspecs after it", () => {
+    expect(personOnlyVerdict("git push \"$REMOTE\" feat/x", TAGGED_FEATURE)).toEqual({ deny: false });
+  });
+});
+
+describe("the engine's own CLI file by any path spelling (a4, review/68)", () => {
+  const OWN = { ...ON_FEATURE, stricterThanDefault: true, ownRepository: true };
+  const CONSUMER = { ...OWN, ownRepository: false };
+
+  // Red on 3021c756: only the two short relative spellings took the full check in the engine's own repository.
+  it.each([
+    ["an absolute path with an expanded argument", "node /home/dev/engine/dist/cli.js sync \"$X\""],
+    ["a dot-dot path with an xargs-fed argument", "echo --loosen | xargs node ../engine/dist/cli.js sync"],
+    ["a doubled slash before the source file with a full clean", "tsx .//src//cli.ts clean"],
+    ["a path opening on an expansion with an expanded argument", "node \"$ROOT/dist/cli.js\" sync \"$X\""],
+    ["a working-tree-relative path with an init force", "node ./dist/cli.mjs init --force"],
+  ])("gives %s the full check in the engine's own repository", (_, command) => {
+    expect(personOnlyVerdict(command, OWN), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+
+  it.each([
+    ["an absolute path with an expanded argument", "node /home/dev/app/dist/cli.js build \"$X\""],
+  ])("leaves %s to the literal flag alone in a consumer repository", (_, command) => {
+    expect(personOnlyVerdict(command, CONSUMER), command).toEqual({ deny: false });
+  });
+
+  // TEST CHANGE, justified (REQ-FLOW-138, review/93): a script word whose last path part is a literal file name is settled
+  // by that part, its folder filled in or not, so in a consumer repository a file named like the CLI there is the
+  // repository's own and asks on the literal flag alone.
+  it("leaves a path opening on an expansion with a full clean to the literal flag alone in a consumer repository", () => {
+    expect(personOnlyVerdict("node \"$ROOT/dist/cli.js\" clean", CONSUMER)).toEqual({ deny: false });
+    expect(personOnlyVerdict("node \"$ROOT/dist/cli.js\" sync --loosen", CONSUMER)).toMatchObject({ deny: true, rule: "autonomy-loosen" });
+  });
+});
+
+describe("a launcher or package manager whose script or package word the shell fills in (a4, review/87)", () => {
+  const DEFAULT = { ...ON_FEATURE, stricterThanDefault: false, ownRepository: false };
+  const UNREAD = "A command the guard cannot read, which may be a stamity command,";
+
+  // Red on 8c991a6d: the program was literal, so the line read as another program and nothing asked.
+  it.each([
+    ["node with a variable script word and a literal flag", "node \"$CLI\" sync --loosen"],
+    ["node with a substitution script word and an expanded argument", "node \"$(npm root)/@zomarit/stamity/dist/cli.js\" sync \"$F\""],
+    ["nodejs with a variable script word", "nodejs $CLI sync --loosen"],
+    ["bun with a variable script word after an option", "bun --silent \"$CLI\" sync --loosen"],
+    ["deno with a variable script word", "deno \"$CLI\" sync --loosen"],
+    ["tsx with a variable script word", "tsx \"$ENTRY\" sync --loosen"],
+    ["a manager's plain form with a variable bin word", "yarn \"$BIN\" sync --loosen"],
+    ["a manager's run form with a variable script word", "pnpm run \"$TASK\" --loosen"],
+    ["a manager's exec form after an option", "yarn --cwd app exec \"$BIN\" --loosen"],
+    ["a manager's dlx form with a variable package word", "pnpm dlx \"$PKG\" sync --loosen"],
+    ["a variable script word with literal arguments", "node \"$SCRIPT\" --check"],
+  ])("asks for %s", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+
+  it("names the program it cannot read where the loosening rides an expanded argument", () => {
+    expect(personOnlyVerdict("node \"$CLI\" sync \"$F\"", DEFAULT)).toMatchObject({ deny: true, act: expect.stringContaining(UNREAD) });
+  });
+
+  it.each([
+    ["node with a literal script and literal arguments", "node scripts/build.mjs --out dist"],
+    ["node with a literal script and an expanded argument", "node scripts/build.mjs \"$OUT\""],
+    ["a manager's run form with a literal script", "npm run build -- \"$OUT\""],
+    ["node with a path glob script", "node scripts/*.mjs --check"],
+  ])("runs %s", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toEqual({ deny: false });
+  });
+
+  // Red on 8c991a6d: the land line's identity did not read such a program.
+  it("reads the land verb behind a launcher whose script word the shell fills in, attended", () => {
+    const attended = (command: string): ReturnType<typeof unattendedPushVerdict> => unattendedPushVerdict(command, false, true);
+    expect(attended("node \"$CLI\" run land --run x").deny).toBe(true);
+    expect(attended("node \"$CLI\" run checkpoint --run x")).toEqual({ deny: false });
+  });
+});
+
+describe("a brace or glob form in a push's remote place (a4, review/87's record)", () => {
+  const FEATURE = { defaultBranches: ["trunk"], currentBranch: "feat/x", tags: [] };
+
+  // Red on 8c991a6d: only an unquoted variable's split read there.
+  it.each([
+    ["a brace form", "git push {origin,trunk}"],
+    ["a glob form", "git push orig*"],
+  ])("asks for %s, which may expand into a remote and refspecs", (_, command) => {
+    expect(personOnlyVerdict(command, FEATURE), command).toMatchObject({ deny: true, rule: "push-default", ask: true });
+    expect(personOnlyVerdict(command, { ...FEATURE, deployingBranches: ["production"] }), command).toMatchObject({ deny: true, rule: "push-deploying" });
+  });
+
+  it("leaves a quoted remote holding those characters to the refspecs after it", () => {
+    expect(personOnlyVerdict("git push 'orig*' feat/x", FEATURE)).toEqual({ deny: false });
+  });
+});
+
+describe("a launched program's script word found by one rule (a4, review/87 round 5, review/93)", () => {
+  const DEFAULT = { ...ON_FEATURE, stricterThanDefault: false, ownRepository: false };
+
+  // Red on 69167364 (review/87): the search stopped on an option's separate value or on a launcher's subcommand.
+  it.each([
+    ["an option's separate value before a filled-in script word", "node --import tsx \"$CLI\" sync --loosen"],
+    ["a short preload option's value before a filled-in script word", "node -r dotenv/config \"$CLI\" sync --loosen"],
+    ["a conditions value before a filled-in script word", "node --conditions development \"$CLI\" sync \"$F\""],
+    ["bun's preload value before a filled-in script word", "bun --preload ./setup \"$CLI\" sync --loosen"],
+    ["a launcher's subcommand before a filled-in script word", "deno run \"$CLI\" sync --loosen"],
+    ["a launcher's subcommand and its option before a filled-in script word", "deno run --allow-all \"$CLI\" sync --loosen"],
+    ["an inline eval with a filled-in value", "node -e \"$CODE\""],
+    ["an inline eval naming a filled-in module", "bun --eval \"require('$MOD')\""],
+    ["a filled-in preload value before a literal script", "node --import \"$HOOK\" scripts/x.mjs"],
+  ])("asks for %s, a program the guard cannot settle", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+
+  // Red on 69167364 (review/93): these read as unreadable programs.
+  it.each([
+    ["a script under a filled-in repository root", "node \"$ROOT/scripts/x.mjs\" --check"],
+    ["a script under the top-level path a substitution gives", "node \"$(git rev-parse --show-toplevel)/scripts/ci/test-run.mjs\" \"$A\""],
+    ["a manager's filter value filled in", "pnpm --filter \"$PKG\" test"],
+    ["a manager's attached filter value filled in", "pnpm --filter=$PKG test"],
+    ["a manager's prefix value filled in", "npm --prefix \"$DIR\" run build"],
+    ["a manager's working-folder value filled in", "yarn --cwd \"$DIR\" lint"],
+    ["a manager's workspace value filled in", "npm -w \"$WS\" test"],
+  ])("runs %s", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toEqual({ deny: false });
+  });
+
+  it.each([
+    ["a launcher with a literal script and a filled-in argument after it", "node scripts/build.mjs \"$OUT\""],
+    ["a test runner through a manager with a literal bin and filled-in files", "pnpm vitest run \"$FILE\" test/$NAME.test.ts"],
+    ["a test runner through a runner with filled-in files", "npx vitest run \"$FILE\""],
+    ["the repository's own script with a literal path", "node scripts/ci/test-run.mjs --coverage"],
+    ["the repository's own script with a dot path", "node ./scripts/release/check.mjs"],
+    // TEST CHANGE, justified (REQ-FLOW-138, review/98): round 5 put a bare flag before the script here; a script file
+    // right after a bare option may be that option's value, so that layout with a filled-in word after it now asks
+    // (below). The flag written with `=`, or no flag, keeps the line ordinary.
+    ["deno's run form with a literal script", "deno run main.ts \"$ARG\""],
+    ["deno's run form with a flag written with its value and a literal script", "deno run --allow-read=. main.ts \"$ARG\""],
+  ])("runs %s, an ordinary line", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toEqual({ deny: false });
+  });
+
+  it.each([
+    ["a manager option outside the folder, filter and workspace set, filled in", "pnpm --silent \"$BIN\" sync"],
+    ["a filled-in bin word after a filter value", "pnpm --filter app \"$BIN\" sync"],
+  ])("asks for %s", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+});
+
+describe("a script file right after a bare option may be that option's value (a4, review/98)", () => {
+  const DEFAULT = { ...ON_FEATURE, stricterThanDefault: false, ownRepository: false };
+
+  // Red on fd5a101f: the preload file was taken as the script, settling the program before the filled-in script word.
+  it.each([
+    ["a preload file before a filled-in script word", "node --require ./preload.cjs \"$CLI\" sync --loosen"],
+    ["an import file before a filled-in script word", "node --import ./register.mjs \"$CLI\" sync \"$F\""],
+    ["bun's preload file before a filled-in script word", "bun --preload ./setup.ts \"$CLI\" sync --loosen"],
+    ["a short preload file before a filled-in script word", "node -r ./hooks.js \"$CLI\" clean"],
+    ["a bare flag, a script file and a filled-in argument", "deno run --allow-read main.ts \"$ARG\""],
+  ])("asks for %s", (_, command) => {
+    expect(personOnlyVerdict(command, { ...DEFAULT, stricterThanDefault: true }), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+
+  it.each([
+    ["a bare flag then a literal script with no filled-in word", "node --test test/a.test.mjs --watch"],
+    ["a preload file then a literal script with a filled-in argument after it", "node --require ./preload.cjs scripts/x.mjs \"$OUT\""],
+    ["an option written with its value before a literal script and a filled-in argument", "node --import=./register.mjs scripts/x.mjs \"$OUT\""],
+    ["a literal script after a non-option word and a filled-in argument", "deno run main.ts \"$ARG\""],
+  ])("runs %s", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toEqual({ deny: false });
+  });
+});
+
+describe("an option word joined to its script-file value is never the script word (a4, review/98 round 2)", () => {
+  const STRICT = { ...ON_FEATURE, stricterThanDefault: true, ownRepository: false };
+
+  // Red on b68f5609: the joined option word's last part ended in a script extension, so it was taken as the script.
+  it.each([
+    ["an import option joined to its file before a filled-in script word", "node --import=./register.mjs \"$CLI\" sync --loosen"],
+    ["a preload option joined to its file before a filled-in script word", "node --require=./preload.cjs \"$CLI\" clean"],
+    ["bun's preload option joined to its file before a filled-in script word", "bun --preload=./setup.ts \"$CLI\" sync \"$F\""],
+  ])("asks for %s", (_, command) => {
+    expect(personOnlyVerdict(command, STRICT), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+
+  it("runs the joined option before a literal script with a filled-in argument after it", () => {
+    expect(personOnlyVerdict("node --import=./register.mjs scripts/x.mjs \"$OUT\"", STRICT)).toEqual({ deny: false });
+  });
+});
+
+describe("a launcher read as one rule with its verbs (a4, review/99)", () => {
+  const DEFAULT = { ...ON_FEATURE, stricterThanDefault: false, ownRepository: false };
+
+  // Red on b68f5609: a launcher settled only at a script-extension word, so these asked once an argument was filled in.
+  it.each([
+    ["bun's package script with a filled-in argument", "bun run test \"$F\""],
+    ["bun's package script with filled-in arguments after its separator", "bun run lint -- \"$X\""],
+    ["bun's test runner with a filled-in file", "bun test \"$FILE\""],
+    ["deno's task runner with a filled-in argument", "deno task build \"$X\""],
+    ["an extensionless bin under a filled-in folder run through node", "node \"$ROOT/node_modules/.bin/vitest\" run"],
+    ["deno's test tool with a filled-in file", "deno test --allow-read \"$FILE\""],
+    ["tsx's watch form with a literal script and a filled-in argument", "tsx watch src/index.ts \"$ARG\""],
+  ])("runs %s", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toEqual({ deny: false });
+  });
+
+  it.each([
+    ["node with a filled-in script word", "node \"$CLI\" sync"],
+    ["deno's run form with a filled-in script word", "deno run \"$CLI\" sync"],
+    ["bun given a file path whose name is filled in", "bun \"./$NAME.ts\" sync"],
+    ["bun's run form given a filled-in file", "bun run \"$FILE\" sync"],
+    ["a bare flag, a literal script and a filled-in argument", "deno run --allow-read main.ts \"$ARG\""],
+    ["an import option joined to its file before a filled-in script word", "node --import=./register.mjs \"$CLI\" sync"],
+    ["deno given an unknown verb and a filled-in word", "deno eval \"$CODE\""],
+    ["tsx's watch form with a filled-in script word", "tsx watch \"$ENTRY\""],
+  ])("asks for %s", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+});
+
+describe("a launcher's settling word that names this package by its last part (a4, review/100)", () => {
+  const CONSUMER = { ...ON_FEATURE, stricterThanDefault: true, ownRepository: false };
+
+  // Red on f7181e5c: the extensionless settling word settled the program as another one, so nothing asked.
+  it.each([
+    ["the engine's bin under a filled-in folder with a literal loosen flag", "node \"$BIN_DIR/stamity\" sync --loosen"],
+    ["the second bin under a filled-in folder with a filled-in loosen flag", "node \"$BIN_DIR/st\" sync \"$FLAG\""],
+    ["the engine's bin under a filled-in folder with a full clean", "tsx \"$BIN_DIR/st\" clean"],
+    ["the engine's bin given to bun under a filled-in folder", "bun \"$BIN_DIR/st\" sync --loosen"],
+    ["the engine's bin given to deno's run form under a filled-in folder", "deno run \"$BIN_DIR/st\" init --force"],
+    ["a renamed fork's bin under a filled-in folder", "node \"$BIN_DIR/forge-cli\" sync \"$FLAG\""],
+  ])("asks for %s", (_, command) => {
+    const ctx = /forge/.test(command) ? { ...CONSUMER, packageWords: ["stamity", "st", "forge-cli"] } : CONSUMER;
+    expect(personOnlyVerdict(command, ctx), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+
+  it.each([
+    ["an extensionless non-engine bin under a filled-in folder", "node \"$ROOT/node_modules/.bin/vitest\" run \"$F\""],
+    ["bun's package script with a filled-in argument", "bun run test \"$F\""],
+    ["bun's test runner with a filled-in file", "bun test \"$FILE\""],
+    ["deno's task runner with a filled-in argument", "deno task build \"$X\""],
+    ["the engine's bin under a filled-in folder with a literal verb", "node \"$BIN_DIR/st\" sync --json"],
+  ])("runs %s", (_, command) => {
+    expect(personOnlyVerdict(command, CONSUMER), command).toEqual({ deny: false });
+  });
+});
+
+describe("the reading's work stays linear in the line's length (a4, review/101, review/102)", () => {
+  const DEFAULT = { ...ON_FEATURE, stricterThanDefault: false };
+  /**
+   * The bound, measured on the lane's machine under load (2026-10-23): the linear reading takes at most 0.72 s on these
+   * lines (0.46 s, 0.55 s, under 1 ms, 0.72 s), so 8 s is over ten times that, well under the guard's 30 s hook timeout;
+   * the old readings take about 110 s, 140 s, 110 s and 68 s on them (each measured at a smaller size and grown by its
+   * order), so each old reading is far past the bound.
+   */
+  const BOUND_MS = 8_000;
+
+  // Red on b4a700fb for the last two (review/102); on f7181e5c for the first two (review/101).
+  // TEST CHANGE, justified (review/115): a line past 65,536 characters now asks before any reading, so the three long
+  // lines are halved to about 60,000 characters to keep timing the reader, not the cap; the old readings grow by the
+  // square of the length, so at half the size they still take about 27 s, 35 s and 17 s, each past the 8 s bound.
+  it.each([
+    ["a long run of brace openings with no blank", () => `stamity sync ${"{".repeat(60_000)}`],
+    ["a long run of parameter openings with no closing", () => `stamity sync ${"${".repeat(30_000)}`],
+    ["a program word of many wildcards and a tail no package word holds", () => `/usr/bin/${"*".repeat(64)}q sync --loosen`],
+    ["a long word with more brace openings than closings before its closings", () => `stamity sync x${"{".repeat(30_000)}${"}".repeat(30_000)} --loosen`],
+  ])("reads %s within the bound and fails closed", (_, build) => {
+    const command = build();
+    expect(command.length).toBeLessThanOrEqual(65_536);
+    const started = performance.now();
+    const verdict = personOnlyVerdict(command, DEFAULT);
+    expect(performance.now() - started).toBeLessThan(BOUND_MS);
+    expect(verdict).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+});
+
+describe("a program word's glob matched with no regular expression (a4, review/102)", () => {
+  const DEFAULT = { ...ON_FEATURE, stricterThanDefault: false };
+
+  it.each([
+    ["a class that may name the second bin", "/usr/bin/[s]t \"$F\""],
+    ["stars around a package word's letters", "/usr/bin/*tam*y \"$F\""],
+    // Red on b4a700fb: more wildcards than the longest package word has characters read as another program.
+    ["more wildcards than the longest package word has characters", "/usr/bin/????????q \"$F\""],
+  ])("asks for %s, a program the guard cannot settle", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+
+  it("runs a few wildcards whose tail no package word holds", () => {
+    expect(personOnlyVerdict("/usr/bin/***q \"$F\"", DEFAULT)).toEqual({ deny: false });
+  });
+});
+
+describe("the land verb's approved line (a4, review/103)", () => {
+  // Red on 4d344eb2: the approved line read as no person-only act.
+  it.each([
+    ["the approved flag on the land line", "stamity run land --run 2026-10-23_x --approved"],
+    ["the approved flag through the pinned runner", "npx --no stamity run land --run 2026-10-23_x --ready --approved --json"],
+    ["the approved flag joined to a value", "stamity run land --run 2026-10-23_x --approved=true"],
+    ["a land line with a filled-in word", "stamity run land --run \"$RUN\""],
+    ["a land line under xargs", "echo --approved | xargs stamity run land --run x"],
+    ["a land line through a program the guard cannot settle", "\"$CLI\" run land --run x --approved"],
+    ["a land line with a PowerShell splat", "pwsh -Command 'stamity run land --run x @opts'"],
+  ])("asks for %s", (_, command) => {
+    expect(personOnlyVerdict(command, ON_FEATURE), command).toMatchObject({ deny: true, rule: "land-approved", ask: true });
+  });
+
+  it.each([
+    ["a plain land line", "stamity run land --run 2026-10-23_x --ready --json"],
+    ["a land line with a literal wait", "npx --no stamity run land --run 2026-10-23_x --wait 8"],
+    ["a commit message naming the flag", "git commit -m 'stamity run land --approved lands an asks hold'"],
+  ])("runs %s", (_, command) => {
+    expect(personOnlyVerdict(command, ON_FEATURE), command).toEqual({ deny: false });
+  });
+});
+
+describe("the verdicts embed no canonical package name (a4, build/10)", () => {
+  // Red on 3be66b7f: the shell reading's fallback held the canonical scoped name, so every guard copy carried it.
+  it("holds no scoped package name in either verdict's source", () => {
+    expect(personOnlyVerdict.toString()).not.toContain("@zomarit/stamity");
+    expect(unattendedPushVerdict.toString()).not.toContain("@zomarit/stamity");
+  });
+
+  it("still reads this package for a caller that names no identity, as the run verb's own push check does", () => {
+    const RUN_VERB_CONTEXT = { defaultBranches: ["main"], currentBranch: "stamity/2026-10-23_x", tags: [] };
+    expect(personOnlyVerdict("git push origin HEAD:refs/heads/stamity/2026-10-23_x", RUN_VERB_CONTEXT)).toEqual({ deny: false });
+    expect(personOnlyVerdict("git push origin HEAD:refs/heads/main", RUN_VERB_CONTEXT)).toMatchObject({ deny: true, rule: "push-default" });
+    for (const command of ["stamity sync --loosen", "node node_modules/.bin/st sync \"$X\"", "node node_modules/@zomarit/stamity/dist/cli.js sync \"$X\""]) {
+      expect(personOnlyVerdict(command, RUN_VERB_CONTEXT), command).toMatchObject({ deny: true, rule: "autonomy-loosen" });
+    }
+  });
+});
+
+/**
+ * a5-guard-heredoc-data (REQ-FLOW-141, review/76): a heredoc body that only a data sink receives is skipped by both
+ * verdicts, and every other form keeps the reading as built. The sinks: a bare `cat` or `tee` first on the line writing
+ * to a plain file; a bare `cat` inside a double-quoted substitution that is a whole argument word of a plain first
+ * program (the commit-message pattern); the engine's own CLI reading the body on its stdin. Each refusing case carries
+ * the same body as an allowed one, one fact away.
+ */
+describe("a heredoc body read as data only where a data sink receives it (a5, REQ-FLOW-141, review/76)", () => {
+  // TEST CHANGE, justified (build/10 meets a5): the verdicts' fallback package name is empty for a caller that names no
+  // identity (build/10), so this block names this package's identity as the emitted guard bakes it for this repository
+  // (`contextsOf`): `packageName` on the person-only verdict's context and the same name on the unattended verdict's
+  // identity. Without it the pinned package is not read as the engine, and its stdin body is read as commands.
+  const PACKAGE_NAME = "@zomarit/stamity";
+  const DEFAULT = { ...ON_FEATURE, stricterThanDefault: false, packageName: PACKAGE_NAME };
+  const IDENTITY = { name: PACKAGE_NAME } as const;
+  const FORCE = "git push --force origin feat/x";
+  const both = (command: string): readonly unknown[] => [personOnlyVerdict(command, DEFAULT), unattendedPushVerdict(command, false, false, IDENTITY)];
+
+  // Red on 84a42e9a: each body line was read as a command, the force push refused and the glob or bare-expansion
+  // line asked as a loosening; unattended, the push line was refused as a raw push.
+  it.each([
+    ["a quoted-delimiter body appended to a record file by cat", `cat >> .stamity/runs/x/notes.md <<'EOF'\n${FORCE}\nEOF`],
+    ["a double-quoted-delimiter body written to a file by cat", `cat > notes.md << "EOF"\n${FORCE}\n* a bullet\nEOF`],
+    ["a tab-stripped body and terminator written by cat", `cat > notes.md <<-'EOF'\n\t${FORCE}\n\tEOF`],
+    ["a bare-delimiter body with no substitution written by cat", `cat > notes.md <<EOF\n${FORCE}\n$HOME stays text\nEOF`],
+    ["a body written by cat to the null device", `cat > /dev/null <<'EOF'\n${FORCE}\nEOF`],
+    ["a body appended by tee to plain files, its own output to the null device", `tee -a notes.md log.md > /dev/null <<'EOF'\n${FORCE}\nEOF`],
+    ["a commit message read by cat inside a quoted substitution", `git commit -m "$(cat <<'EOF'\n${FORCE}\nEOF\n)"`],
+    [
+      "a commit message with a bullet and a bare expansion line (review/76)",
+      `git commit -s -m "$(cat <<'EOF'\nfix(hooks): read a body as data\n\n* the first bullet\n$HOME is text here\nEOF\n)"`,
+    ],
+    ["a pull request comment read by cat inside a quoted substitution", `gh pr comment 5 --body "$(cat <<'EOF'\n* a bullet\n${FORCE}\nEOF\n)"`],
+    [
+      "a learn capture whose body comes on its stdin (review/76)",
+      `npx --no stamity learn capture --title t --summary 's' --confidence high <<'EOF'\n## Why\n* a bullet\n$HOME\n## How to apply\n${FORCE}\nEOF`,
+    ],
+    ["a learn capture through the engine's bin", `stamity learn capture --title t <<'EOF'\n* a\n${FORCE}\nEOF`],
+    ["a learn capture through the pinned package", `npx -y @zomarit/stamity@1.16.0 learn capture --title t <<'EOF'\n* a\n${FORCE}\nEOF`],
+  ])("skips %s in both verdicts", (_, command) => {
+    expect(both(command), command).toEqual([{ deny: false }, { deny: false }]);
+  });
+
+  it("still reads the operator's own line and every line after the terminator", () => {
+    // (6) An act after `&&` on the operator's line, and one after the terminator, are still read.
+    for (const command of [
+      `cat > notes.md <<'EOF' && ${FORCE}\nbody\nEOF`,
+      `cat > notes.md <<'EOF'\nbody\nEOF\n${FORCE}`,
+      `git commit -m "$(cat <<'EOF'\nbody\nEOF\n)" && ${FORCE}`,
+      `stamity learn capture <<'EOF' && ${FORCE}\nbody\nEOF`,
+    ]) {
+      expect(personOnlyVerdict(command, DEFAULT), command).toMatchObject({ deny: true, rule: "force-push" });
+      expect(unattendedPushVerdict(command, false, false, IDENTITY).deny, command).toBe(true);
+    }
+  });
+
+  // Each keeps today's reading: the body's force push is read as a command and refused.
+  it.each([
+    // (2), (4): the body consumed by a shell, or piped onward.
+    ["a body a shell reads on its stdin", `bash <<'EOF'\n${FORCE}\nEOF`],
+    ["a body cat pipes onward into a shell", `cat <<'EOF' | sh\n${FORCE}\nEOF`],
+    ["a file write whose segment pipes onward", `cat > notes.md <<'EOF' | sh\n${FORCE}\nEOF`],
+    // (3): an unquoted delimiter whose body holds a substitution or a backtick.
+    ["a bare delimiter whose body holds a substitution", `cat >> notes.md <<EOF\n$(${FORCE})\nEOF`],
+    ["a bare delimiter whose body holds a backtick", `cat >> notes.md <<EOF\n\`${FORCE}\`\nEOF`],
+    // (5): no terminator line.
+    ["a body with no terminator line", `cat > notes.md <<'EOF'\n${FORCE}`],
+    ["a terminator that differs by a trailing blank", `cat > notes.md <<'EOF'\n${FORCE}\nEOF \n`],
+    ["a terminator indented with blanks under the tab-stripping form", `cat > notes.md <<-'EOF'\n${FORCE}\n  EOF`],
+    // (7): a target that is no plain file.
+    ["a write to a device other than the null device", `cat > /dev/tty <<'EOF'\n${FORCE}\nEOF`],
+    ["a write to a descriptor path", `cat > /dev/fd/3 <<'EOF'\n${FORCE}\nEOF`],
+    ["a write under the git directory", `cat > .git/hooks/pre-push <<'EOF'\n${FORCE}\nEOF`],
+    ["a write to a filled-in path", `cat > "$OUT" <<'EOF'\n${FORCE}\nEOF`],
+    ["cat writing to its standard output", `cat <<'EOF'\n${FORCE}\nEOF`],
+    ["tee with its standard output not redirected", `tee notes.md <<'EOF'\n${FORCE}\nEOF`],
+    ["a tee operand that is a process substitution", `tee >(bash) > /dev/null <<'EOF'\n${FORCE}\nEOF`],
+    ["a tee operand naming standard output", `tee - > notes.md <<'EOF'\n${FORCE}\nEOF`],
+    // (8): a later word names the written file.
+    ["a later word naming the written file", `cat > run.sh <<'EOF'\n${FORCE}\nEOF\nsh run.sh`],
+    ["a later word on the operator's line naming the written file", `cat > run.sh <<'EOF' && bash ./run.sh\n${FORCE}\nEOF`],
+    // The plan gate's clauses: the program word, what stands earlier, the delimiter set, a carriage return.
+    ["cat by a path", `/bin/cat > notes.md <<'EOF'\n${FORCE}\nEOF`],
+    ["cat under a wrapper", `command cat > notes.md <<'EOF'\n${FORCE}\nEOF`],
+    ["cat with an argument", `cat - > notes.md <<'EOF'\n${FORCE}\nEOF`],
+    ["cat after a PATH assignment on its own command", `PATH=/tmp/x cat > notes.md <<'EOF'\n${FORCE}\nEOF`],
+    ["cat after an earlier command on the line", `cd /tmp && cat > notes.md <<'EOF'\n${FORCE}\nEOF`],
+    ["a delimiter with a character outside the set", `cat > notes.md <<'E-F'\n${FORCE}\nE-F`],
+    ["a delimiter quoted twice over", `cat > notes.md <<'E'"OF"\n${FORCE}\nEOF`],
+    ["a carriage return in the terminator line", `cat > notes.md <<'EOF'\n${FORCE}\nEOF\r`],
+    ["two heredocs before one line break", `cat > a.md <<'A' > b.md <<'B'\n${FORCE}\nA\n${FORCE}\nB`],
+    ["a heredoc on another descriptor", `cat > notes.md 3<<'EOF'\n${FORCE}\nEOF`],
+    // The substitution receiver (review/76): fed to a shell, piped onward, captured as the program word, a bare
+    // delimiter holding a substitution, earlier definitions, an output written to a file.
+    ["a substitution a shell runs as its script", `sh -c "$(cat <<'EOF'\n${FORCE}\nEOF\n)"`],
+    ["a substitution eval runs", `eval "$(cat <<'EOF'\n${FORCE}\nEOF\n)"`],
+    ["a substitution captured as the program word", `"$(cat <<'EOF'\n${FORCE}\nEOF\n)"`],
+    ["a substitution whose command pipes onward into a shell", `echo "$(cat <<'EOF'\n${FORCE}\nEOF\n)" | sh`],
+    ["a substitution whose command writes its output to a file", `echo "$(cat <<'EOF'\n${FORCE}\nEOF\n)" > run.sh`],
+    ["a substitution under a wrapper", `sudo echo "$(cat <<'EOF'\n${FORCE}\nEOF\n)"`],
+    ["a substitution joined to other text in its word", `git commit -m"$(cat <<'EOF'\n${FORCE}\nEOF\n)"`],
+    ["an unquoted substitution", `git commit -m $(cat <<'EOF'\n${FORCE}\nEOF\n)`],
+    ["a substitution under a bare delimiter holding a substitution", `git commit -m "$(cat <<EOF\n$(${FORCE})\nEOF\n)"`],
+    ["a substitution whose cat writes to a file", `git commit -m "$(cat > notes.md <<'EOF'\n${FORCE}\nEOF\n)"`],
+    ["a substitution whose heredoc command is not cat", `git commit -m "$(bash <<'EOF'\n${FORCE}\nEOF\n)"`],
+    ["a substitution after a function defined earlier on the line", `cat() { bash; }; git commit -m "$(cat <<'EOF'\n${FORCE}\nEOF\n)"`],
+    ["a substitution after an alias defined earlier on the line", `alias cat=bash; git commit -m "$(cat <<'EOF'\n${FORCE}\nEOF\n)"`],
+    ["a substitution after a PATH assignment earlier on the line", `PATH=/tmp/x; git commit -m "$(cat <<'EOF'\n${FORCE}\nEOF\n)"`],
+    ["a substitution inside a line a shell runs", `bash -c 'git commit -m "$(cat <<EOF\n${FORCE}\nEOF\n)"'`],
+    // The engine receiver (review/76): a same-named file elsewhere, a wrapper, an earlier definition, a pipe.
+    ["a same-named file elsewhere reading the body", `./bin/stamity learn capture <<'EOF'\n${FORCE}\nEOF`],
+    ["the engine's name under a launcher", `node ./stamity.js learn capture <<'EOF'\n${FORCE}\nEOF`],
+    ["the engine under xargs, which makes the body its arguments", `xargs stamity learn capture <<'EOF'\n${FORCE}\nEOF`],
+    ["the engine after a function defined earlier on the line", `stamity() { bash; }; stamity learn capture <<'EOF'\n${FORCE}\nEOF`],
+    ["the engine after a PATH assignment earlier on the line", `export PATH=/tmp/x; stamity learn capture <<'EOF'\n${FORCE}\nEOF`],
+    ["the engine whose output pipes onward", `stamity learn capture <<'EOF' | sh\n${FORCE}\nEOF`],
+    ["npx with another first option", `npx --package x stamity learn capture <<'EOF'\n${FORCE}\nEOF`],
+    ["npx of another package's pinned version", `npx -y other@1.0.0 learn capture <<'EOF'\n${FORCE}\nEOF`],
+  ])("keeps the reading as built for %s", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toMatchObject({ deny: true, rule: "force-push" });
+    expect(unattendedPushVerdict(command, false, false, IDENTITY).deny, command).toBe(true);
+  });
+
+  it("keeps a run verb named in a data body refused unattended, as the raw text names it", () => {
+    const command = "cat >> notes.md <<'EOF'\nthen stamity run end --run x closes it\nEOF";
+    expect(personOnlyVerdict(command, DEFAULT)).toEqual({ deny: false });
+    expect(unattendedPushVerdict(command, false, false, IDENTITY)).toMatchObject({ deny: true, reason: expect.stringContaining("REQ-FLOW-121") });
+  });
+
+  it("keeps an argument word's mark on the outer command, so a filled-in loosening still asks", () => {
+    const command = "stamity sync \"$(cat <<'EOF'\n--loosen\nEOF\n)\"";
+    expect(personOnlyVerdict(command, DEFAULT)).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+
+  it("reads a line of many unterminated heredoc operators within the bound and fails closed", () => {
+    // Under the 65,536-character cap (review/115), so the reading itself is timed.
+    const command = `${"stamity learn capture <<A\n".repeat(2_400)}${FORCE}`;
+    expect(command.length).toBeLessThanOrEqual(65_536);
+    const started = performance.now();
+    const verdict = personOnlyVerdict(command, DEFAULT);
+    expect(performance.now() - started).toBeLessThan(8_000);
+    expect(verdict).toMatchObject({ deny: true, rule: "force-push" });
+  });
+});
+
+/**
+ * a5, build/12: a substitution's closing scan passes over a quoted heredoc body, so a parenthesis in it cannot end the
+ * substitution early or keep it open; a scan nothing closes on the line leaves the rest of the line unread, filled in, so
+ * an act behind it asks or is refused and is never one allowed word.
+ */
+describe("a substitution's closing scan over a quoted heredoc body, and one nothing closes (a5, build/12)", () => {
+  const DEFAULT = { ...ON_FEATURE, stricterThanDefault: false };
+  const FORCE = "git push --force origin feat/x";
+
+  // Red on 77116591 for the two opening-parenthesis rows: the body's parenthesis kept the substitution open to the line's
+  // end, so the push was never read. The closing-parenthesis, unquoted and balanced rows are their neighbours, which held.
+  it.each([
+    ["an unbalanced opening parenthesis in a quoted commit-message body", `git commit -m "$(cat <<'EOF'\nfix (the reader\nEOF\n)x y" && ${FORCE}`],
+    ["an unbalanced closing parenthesis in a quoted commit-message body", `git commit -m "$(cat <<'EOF'\nfix the reader)\nEOF\n)" && ${FORCE}`],
+    ["an unbalanced parenthesis in a tab-stripped body", `git commit -m "$(cat <<-'EOF'\n\tfix (a\n\tEOF\n)x y" && ${FORCE}`],
+    ["an unbalanced parenthesis in an unquoted substitution's quoted body", `git commit -m $(cat <<'EOF'\n(\nEOF\n) && ${FORCE}`],
+    ["a balanced quoted commit-message body", `git commit -m "$(cat <<'EOF'\nfix (the reader)\nEOF\n)" && ${FORCE}`],
+  ])("refuses the push behind %s", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toMatchObject({ deny: true, rule: "force-push", ask: false });
+    expect(unattendedPushVerdict(command).deny, command).toBe(true);
+  });
+
+  it.each([
+    ["an unbalanced parenthesis in a quoted commit-message body", `git commit -m "$(cat <<'EOF'\nfix (the reader\nEOF\n)"`],
+    ["a balanced quoted commit-message body", `git commit -m "$(cat <<'EOF'\nfix (the reader)\nEOF\n)"`],
+  ])("runs the commit alone with %s", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toEqual({ deny: false });
+    expect(unattendedPushVerdict(command), command).toEqual({ deny: false });
+  });
+
+  // Red on 77116591 for the unquoted-delimiter and unterminated rows: the open substitution was one allowed word, and the
+  // act behind it was not read. The quoted-parenthesis row held there by another reading, and still holds.
+  it.each([
+    ["a quoted parenthesis no closing scan counts past", `git commit -m "$(printf '(')" && ${FORCE}`],
+    ["an unbalanced parenthesis in an unquoted-delimiter body", `git commit -m "$(cat <<EOF\nfix (a\nEOF\n)x y" && ${FORCE}`],
+    ["an unterminated quoted body", `git commit -m "$(cat <<'EOF'\n(\n)x y" && ${FORCE}`],
+  ])("asks or refuses for %s, the rest of the line read as filled in", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toMatchObject({ deny: true });
+  });
+
+  it("reads the word an open substitution leaves as filled in, so a loosening may hide there", () => {
+    expect(personOnlyVerdict(`stamity sync "$(printf '(')"`, DEFAULT)).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+});
+
+/**
+ * a5, review/115, review/117: a line past 64 KiB is one the guard cannot read, so it is refused in every mode before any
+ * reading, under its own refuse-class rule, so no act padded past the cap is one click away.
+ */
+describe("a line too long for the guard to read (a5, review/115, review/117)", () => {
+  const DEFAULT = { ...ON_FEATURE, stricterThanDefault: false };
+
+  // Red on 77116591: the long benign line was read and allowed. TEST CHANGE, justified (review/117): it was an ask
+  // under `autonomy-loosen`; it is now refused under its own refuse-class rule, and the land-only reading refuses it too.
+  it("refuses a benign line past 65,536 characters in both verdicts, under its own refuse-class rule", () => {
+    const command = `echo ${"a".repeat(70_000)}`;
+    expect(personOnlyVerdict(command, DEFAULT)).toMatchObject({
+      deny: true,
+      rule: "line-too-long",
+      ask: false,
+      act: expect.stringContaining("A line too long for the guard to read"),
+      reason: expect.stringContaining("the person runs it themselves"),
+    });
+    const refused = { deny: true, reason: expect.stringContaining("A line too long for the guard to read") };
+    expect(unattendedPushVerdict(command)).toMatchObject(refused);
+    expect(unattendedPushVerdict(command, false, true)).toMatchObject(refused);
+    expect(unattendedPushVerdict(command, true)).toMatchObject(refused);
+  });
+
+  it("reads benign lines of 60,000, 65,535 and 65,536 characters as today, and refuses one character past the cap", () => {
+    const command = `echo ${"a".repeat(59_995)}`;
+    expect(command.length).toBe(60_000);
+    expect(personOnlyVerdict(command, DEFAULT)).toEqual({ deny: false });
+    expect(unattendedPushVerdict(command)).toEqual({ deny: false });
+    for (const length of [65_535, 65_536]) {
+      const line = `echo ${"a".repeat(length - 5)}`;
+      expect(personOnlyVerdict(line, DEFAULT), String(length)).toEqual({ deny: false });
+      expect(unattendedPushVerdict(line), String(length)).toEqual({ deny: false });
+    }
+    expect(personOnlyVerdict(`echo ${"a".repeat(65_532)}`, DEFAULT)).toMatchObject({ deny: true, rule: "line-too-long", ask: false });
+  });
+
+  // TEST CHANGE, justified (review/117): this row pinned an ask for a padded force push, which made a refuse-class act
+  // one click away on an asking client; a line past the cap is now refused whatever acts it holds.
+  it.each([
+    ["a force push padded past the cap", `git push --force origin feat/x; echo ${"a".repeat(70_000)}`],
+    ["a repository deletion padded past the cap", `gh repo delete o/r --yes; echo ${"a".repeat(70_000)}`],
+    ["an ask-class merge padded past the cap", `gh pr merge 3 --squash; echo ${"a".repeat(70_000)}`],
+  ])("refuses %s, before reading it", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT)).toMatchObject({ deny: true, rule: "line-too-long", ask: false });
+    expect(unattendedPushVerdict(command).deny).toBe(true);
+  });
+});
+
+/**
+ * a5, review/118: `git commit` reading its message on stdin, and `gh pr create`, `edit` or `comment` reading its body on
+ * stdin, are data receivers under every REQ-FLOW-141 clause that applies; every other form keeps the reading as built.
+ */
+describe("a message read on stdin by git commit or gh pr as data (a5, review/118)", () => {
+  const DEFAULT = { ...ON_FEATURE, stricterThanDefault: false };
+  const FORCE = "git push --force origin feat/x";
+  const BODY = `fix(hooks): read a body as data\n\n* the first bullet\n$HOME is text here\n${FORCE}`;
+
+  // Red on 87c72904: each body line was read as a command, its force push refused.
+  it.each([
+    ["git commit with -F -", `git commit -s -F - <<'EOF'\n${BODY}\nEOF`],
+    ["git commit with --file -", `git commit --file - <<'EOF'\n${BODY}\nEOF`],
+    ["git commit with --file=-", `git commit --file=- <<"EOF"\n${BODY}\nEOF`],
+    ["git commit with -F - and a bare delimiter", `git commit -F - <<EOF\n${BODY}\nEOF`],
+    ["gh pr comment with --body-file -", `gh pr comment 5 --body-file - <<'EOF'\n${BODY}\nEOF`],
+    ["gh pr comment with -F -", `gh pr comment 5 -F - <<'EOF'\n${BODY}\nEOF`],
+  ])("skips the body of %s in both verdicts", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toEqual({ deny: false });
+    expect(unattendedPushVerdict(command), command).toEqual({ deny: false });
+  });
+
+  // Red on 87c72904. Unattended, `gh pr create` and `gh pr edit` stay refused as push-path acts by their own rule.
+  it.each([
+    ["gh pr create with --body-file -", `gh pr create --title t --body-file - <<'EOF'\n${BODY}\nEOF`],
+    ["gh pr edit with -F -", `gh pr edit 5 -F - <<'EOF'\n${BODY}\nEOF`],
+  ])("skips the body of %s in the person-only verdict", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toEqual({ deny: false });
+    expect(unattendedPushVerdict(command), command).toMatchObject({ deny: true, reason: expect.stringContaining("`gh pr") });
+  });
+
+  it("still reads the operator's own line and every line after the terminator", () => {
+    for (const command of [`git commit -F - <<'EOF' && ${FORCE}\nbody\nEOF`, `gh pr comment 5 -F - <<'EOF'\nbody\nEOF\n${FORCE}`]) {
+      expect(personOnlyVerdict(command, DEFAULT), command).toMatchObject({ deny: true, rule: "force-push" });
+    }
+  });
+
+  it.each([
+    ["git commit under a wrapper", `sudo git commit -F - <<'EOF'\n${FORCE}\nEOF`],
+    ["git commit under env", `env GIT_EDITOR=true git commit -F - <<'EOF'\n${FORCE}\nEOF`],
+    ["git commit after an assignment", `X=1 git commit -F - <<'EOF'\n${FORCE}\nEOF`],
+    ["git commit with another program first on the line", `cd /tmp && git commit -F - <<'EOF'\n${FORCE}\nEOF`],
+    ["git commit piped onward", `git commit -F - <<'EOF' | sh\n${FORCE}\nEOF`],
+    ["git commit by a path", `/usr/bin/git commit -F - <<'EOF'\n${FORCE}\nEOF`],
+    ["git with a global option before commit", `git -C . commit -F - <<'EOF'\n${FORCE}\nEOF`],
+    ["git commit reading its message from a file", `git commit -F msg.txt <<'EOF'\n${FORCE}\nEOF`],
+    ["git commit with its stdin flag filled in", `git commit -F "$M" <<'EOF'\n${FORCE}\nEOF`],
+    ["git commit with another redirection", `git commit -F - < other.txt <<'EOF'\n${FORCE}\nEOF`],
+    ["git commit under a bare delimiter whose body holds a substitution", `git commit -F - <<EOF\n$(${FORCE})\nEOF`],
+    ["git commit with no terminator line", `git commit -F - <<'EOF'\n${FORCE}`],
+    ["git commit with a carriage return in the terminator", `git commit -F - <<'EOF'\n${FORCE}\nEOF\r`],
+    ["git commit with a delimiter outside the set", `git commit -F - <<'E-F'\n${FORCE}\nE-F`],
+    ["another git subcommand reading stdin", `git apply -F - <<'EOF'\n${FORCE}\nEOF`],
+    ["gh pr with another subcommand", `gh pr merge 5 -F - <<'EOF'\n${FORCE}\nEOF`],
+    ["gh pr comment reading its body from a file", `gh pr comment 5 --body-file b.md <<'EOF'\n${FORCE}\nEOF`],
+    ["gh pr comment under xargs", `xargs gh pr comment 5 -F - <<'EOF'\n${FORCE}\nEOF`],
+    ["gh pr comment piped onward", `gh pr comment 5 -F - <<'EOF' | bash\n${FORCE}\nEOF`],
+    ["gh with an option before pr", `gh -R o/r pr comment 5 -F - <<'EOF'\n${FORCE}\nEOF`],
+  ])("keeps the reading as built for %s", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toMatchObject({ deny: true, rule: "force-push" });
+    expect(unattendedPushVerdict(command).deny, command).toBe(true);
   });
 });

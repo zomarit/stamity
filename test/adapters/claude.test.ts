@@ -279,7 +279,8 @@ interface SettingsShape {
   permissions?: { deny: string[]; ask?: string[]; allow?: never };
   hooks: Record<
     string,
-    { matcher?: string; hooks: { type: string; command: string; timeout?: number }[] }[]
+    // a7-claude-guard-onfailure (REQ-FLOW-123): the guard rows' `onFailure` key.
+    { matcher?: string; hooks: { type: string; command: string; timeout?: number; onFailure?: string }[] }[]
   >;
 }
 
@@ -763,11 +764,13 @@ describe("claude residue over the real corpus", () => {
     const preToolUse = settings.hooks["PreToolUse"];
     // TEST CHANGE, justified (v0a2, REQ-FLOW-120, REQ-FLOW-123): a fourth entry, the shell guard again on the GitHub MCP tools, with its fail-closed tail.
     expect(preToolUse).toHaveLength(4);
-    expect(preToolUse?.[0]?.hooks[0]).toEqual({ type: "command", command: HOOK_COMMANDS.guard });
+    // TEST CHANGE, justified (a7-claude-guard-onfailure, REQ-FLOW-123): the three guard entries now carry
+    // `onFailure: "block"`, so a guard the client kills at its timeout blocks the call; the ask gate does not.
+    expect(preToolUse?.[0]?.hooks[0]).toEqual({ type: "command", command: HOOK_COMMANDS.guard, onFailure: "block" });
     expect(preToolUse?.[0]?.matcher).toBeUndefined();
     expect(preToolUse?.[1]).toEqual({
       matcher: "Bash|PowerShell",
-      hooks: [{ type: "command", command: HOOK_COMMANDS.personOnlyGuard }],
+      hooks: [{ type: "command", command: HOOK_COMMANDS.personOnlyGuard, onFailure: "block" }],
     });
     expect(preToolUse?.[2]).toEqual({
       matcher: "AskUserQuestion",
@@ -775,7 +778,7 @@ describe("claude residue over the real corpus", () => {
     });
     expect(preToolUse?.[3]).toEqual({
       matcher: MCP_GUARD_MATCHER,
-      hooks: [{ type: "command", command: HOOK_COMMANDS.personOnlyGuard }],
+      hooks: [{ type: "command", command: HOOK_COMMANDS.personOnlyGuard, onFailure: "block" }],
     });
 
     // The Claude-only ConfigChange extension wires the SAME tamper script the
@@ -1570,7 +1573,12 @@ describe("the project-directory anchor", () => {
     expect(settings.hooks["SessionStart"]?.every((entry) => !entry.hooks[0]!.command.includes("exit 2"))).toBe(true);
     expect(settings.hooks["PreToolUse"]?.[2]?.hooks[0]?.command).toBe(USER_HOOK_COMMAND);
     expect(settings.hooks["PreToolUse"]?.[3]?.hooks[0]?.command).toBe(HOOK_COMMANDS.askGate);
-    expect(settings.hooks["PreToolUse"]?.[4]).toEqual({ matcher: MCP_GUARD_MATCHER, hooks: [{ type: "command", command: HOOK_COMMANDS.personOnlyGuard }] });
+    // TEST CHANGE, justified (a7-claude-guard-onfailure, REQ-FLOW-123): the MCP entry is the shell guard's row, so it
+    // carries the guard rows' `onFailure: "block"` beside the tail.
+    expect(settings.hooks["PreToolUse"]?.[4]).toEqual({
+      matcher: MCP_GUARD_MATCHER,
+      hooks: [{ type: "command", command: HOOK_COMMANDS.personOnlyGuard, onFailure: "block" }],
+    });
   });
 
   /**
@@ -2509,6 +2517,97 @@ describe("settings under a plugin root", () => {
     // repository writes it, so a repository sync and a plugin build render the
     // same bytes to the same place.
     expect(byPath(rows).get(CLAUDE_REVIEW_GATE_PATH)).toBeDefined();
+  });
+});
+
+/**
+ * a7-claude-guard-onfailure (REQ-FLOW-123): the two guard rows ask the client to block when the
+ * guard itself fails (a timeout included), through the hook's `onFailure` key. The fail-closed
+ * tail covers a guard that could not launch; it cannot cover a guard the client kills at its
+ * timeout, because the client then reads no exit status at all. Measured 2026-10-23 on Claude
+ * Code 2.1.309: a timed-out entry carrying the key blocked the call; Copilot CLI 1.0.100, which
+ * imports this file's hooks, loaded and ran every entry and ignored the key.
+ */
+describe("the guard rows' onFailure key (a7-claude-guard-onfailure, REQ-FLOW-123)", () => {
+  /** The repository-mode document with one user pre-tool-use row and one user session row beside the core rows. */
+  async function withUserRows(): Promise<{ raw: string; settings: SettingsShape }> {
+    const temp = getTemp();
+    await temp.seedFiles({
+      "repo/.stamity/hooks/10-user.json": `${JSON.stringify({
+        hooks: [
+          { event: "pre_tool_use", command: ["node", ".stamity/hooks/run.mjs"], timeoutMs: 1500 },
+          { event: "session_start", command: ["node", ".stamity/hooks/run.mjs"] },
+        ],
+      })}\n`,
+      "repo/.stamity/hooks/run.mjs": "// fixture user hook\n",
+    });
+    const { rows } = await planned({ selection: EMPTY_SELECTION, rootDir: temp.path("repo") });
+    return { raw: byPath(rows).get(CLAUDE_SETTINGS_PATH)!.content, settings: settingsOf(rows) };
+  }
+
+  it("marks every pre-tool-use entry that runs either guard, the GitHub MCP entry included, to block on failure", async () => {
+    const { settings } = await withUserRows();
+    const guardHooks = (settings.hooks["PreToolUse"] ?? [])
+      .flatMap((entry) => entry.hooks)
+      .filter((hook) => hook.command === HOOK_COMMANDS.guard || hook.command === HOOK_COMMANDS.personOnlyGuard);
+
+    // Three rows: the core guard, the shell guard on the shell tools, and the shell guard on the MCP tools.
+    expect(guardHooks.map((hook) => hook.command)).toEqual([
+      HOOK_COMMANDS.guard,
+      HOOK_COMMANDS.personOnlyGuard,
+      HOOK_COMMANDS.personOnlyGuard,
+    ]);
+    for (const hook of guardHooks) {
+      expect(hook, hook.command).toEqual({ type: "command", command: hook.command, onFailure: "block" });
+      // The key order is fixed for byte stability: type, command, timeout when set, then onFailure.
+      expect(Object.keys(hook)).toEqual(["type", "command", "onFailure"]);
+    }
+  });
+
+  it("leaves the key off the session, tamper, review-gate, ask-gate, readiness and user rows", async () => {
+    const { settings } = await withUserRows();
+    const others = Object.entries(settings.hooks).flatMap(([event, entries]) =>
+      entries
+        .flatMap((entry) => entry.hooks)
+        .filter((hook) => hook.command !== HOOK_COMMANDS.guard && hook.command !== HOOK_COMMANDS.personOnlyGuard)
+        .map((hook) => ({ event, hook })),
+    );
+    const commands = new Set(others.map(({ hook }) => hook.command));
+
+    // A populated list: every non-guard kind this document carries is present to be checked.
+    for (const expected of [
+      HOOK_COMMANDS.sessionStart,
+      HOOK_COMMANDS.tamper,
+      HOOK_COMMANDS.reviewGate,
+      HOOK_COMMANDS.askGate,
+      HOOK_COMMANDS.readiness,
+      USER_HOOK_COMMAND,
+    ]) {
+      expect(commands.has(expected), expected).toBe(true);
+    }
+    for (const { event, hook } of others) {
+      expect(Object.hasOwn(hook, "onFailure"), `${event}: ${hook.command}`).toBe(false);
+    }
+  });
+
+  it("renders the same bytes twice", async () => {
+    const first = await withUserRows();
+    const second = await withUserRows();
+
+    expect(second.raw).toBe(first.raw);
+    // The key sits after the command in the written text, the order a re-render must keep.
+    expect(first.raw).toContain(`"command": ${JSON.stringify(HOOK_COMMANDS.guard)},\n            "onFailure": "block"`);
+  });
+
+  it("gives a plugin-mode guard row neither the tail nor the key", async () => {
+    const { rows } = await planned({ selection: EMPTY_SELECTION, hookScriptsRoot: "${CLAUDE_PLUGIN_ROOT}/hooks" });
+    const preToolUse = settingsOf(rows).hooks["PreToolUse"] ?? [];
+
+    expect(preToolUse.length).toBeGreaterThan(0);
+    for (const hook of preToolUse.flatMap((entry) => entry.hooks)) {
+      expect(Object.hasOwn(hook, "onFailure"), hook.command).toBe(false);
+      expect(hook.command).not.toContain("exit 2");
+    }
   });
 });
 

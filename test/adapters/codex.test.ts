@@ -77,6 +77,19 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
 
 const getTemp = useTempDir("adapter-codex");
 
+/**
+ * The interchange row a Codex entry's starter carries: the base64url word after
+ * the program, ahead of the plain word naming the row's script (REQ-FLOW-142).
+ *
+ * TEST CHANGE, justified (REQ-FLOW-142): this read the command's last word, which
+ * is now the plain script word; it moved here from the u20 block so the argv case
+ * above reads the row the same way.
+ */
+function rowOf(command: string): { command: string[] } {
+  const encoded = / ([A-Za-z0-9_-]+)(?: [A-Za-z0-9._/-]+)?$/.exec(command)?.[1] ?? "";
+  return JSON.parse(Buffer.from(encoded, "base64url").toString()) as { command: string[] };
+}
+
 const FIXED_NOW = new Date("2026-08-14T00:00:00.000Z");
 const ENGINE_VERSION = "0.0.0-test";
 
@@ -382,7 +395,23 @@ describe("hooks.json — native command strings and trust controls", () => {
     expect(group.matcher).toBe("Bash");
     const entry = group.hooks[0];
     expect(entry.timeout).toBe(2);
-    expect(JSON.parse(Buffer.from(entry.command.split(" ").at(-1), "base64url").toString())).toEqual(row);
+    // TEST CHANGE, justified (REQ-FLOW-142): the row is no longer the last word; the row's script
+    // (`command[1]`, here the option word) follows it in plain text. The row decodes unchanged.
+    expect(rowOf(entry.command)).toEqual(row);
+    expect(entry.command.endsWith(` ${row.command[1]}`)).toBe(true);
+  });
+
+  it("names the session-start script in plain text after the encoded row (REQ-FLOW-142)", async () => {
+    const core = await buildCoreEmissionPlan(ctxOf({ contentRoot: await seedCorpus() }));
+    const document = JSON.parse(buildHooksJson(core, CLI_PIN)) as {
+      hooks: { SessionStart: { hooks: { command: string; commandWindows: string }[] }[] };
+    };
+    const hook = document.hooks.SessionStart[0]!.hooks[0]!;
+    const script = ".stamity/generated/hooks/codex/stamity-session-start.mjs";
+    // A plain word, last, readable without decoding; the same on Windows.
+    expect(hook.command.split(" ").at(-1)).toBe(script);
+    expect(hook.commandWindows).toBe(hook.command);
+    expect(rowOf(hook.command).command[1]).toBe(script);
   });
 
   // HOOK-5. Trust here is recorded against this file's hash, and the scripts it
@@ -475,9 +504,6 @@ describe("hooks.json — native command strings and trust controls", () => {
     );
   });
 
-  /** The interchange row a Codex entry's starter carries, decoded from its last word. */
-  const rowOf = (command: string): { command: string[] } =>
-    JSON.parse(Buffer.from(command.split(" ").at(-1) ?? "", "base64url").toString()) as { command: string[] };
   const PERSON_ONLY = ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs";
 
   it("runs the person-only shell guard in its own Bash group through the runner, its starter failing with 2 (u20)", async () => {
@@ -596,7 +622,13 @@ describe("subagent TOML", () => {
         "#",
         "# Key set: learn.chatgpt.com/docs/agent-configuration/subagents (accessed 2026-09-10).",
         `# Stamity role grant: ${toolsValue}. No native tools key is documented.`,
-        "# sandbox_mode binds the filesystem boundary; category restrictions remain prompt-level.",
+        // TEST CHANGE, justified: REQ-FLOW-150 — the line read "sandbox_mode binds the filesystem
+        // boundary". A spawned role runs in the parent turn's sandbox (subagents page, read
+        // 2026-10-23), and on codex-cli 0.155.1 a read-only role wrote under a workspace-write
+        // parent, so the comment now says where the boundary comes from; every other line holds.
+        "# A spawned role runs in the parent turn's sandbox; its sandbox_mode does not override it",
+        "# (subagents page, read 2026-10-23; on codex-cli 0.155.1 (2026-10-23) a read-only role wrote",
+        "# under a workspace-write parent). The grant, read-only included, is prompt-level.",
         "",
         'name = "stamity-reviewer"',
         'description = "Reviews a change set and returns a verdict."',
@@ -620,6 +652,27 @@ describe("subagent TOML", () => {
         "",
       ].join("\n"),
     );
+  });
+
+  // REQ-FLOW-150: a spawned role runs in the parent turn's sandbox, which its file's
+  // `sandbox_mode` does not override (subagents page, read 2026-10-23; measured on the
+  // installed codex-cli in run 2026-10-23_autonomy-distribution-01, unit a10). So no emitted
+  // text may claim the key binds a spawned role, and each says where the boundary comes from.
+  it("claims no sandbox boundary for a spawned role: the agent file, the cap and the parity row say it runs in the parent's sandbox", () => {
+    const reviewer = buildAgentToml(reviewerItem, grantOf(reviewerItem));
+    expect(reviewer).not.toContain("sandbox_mode binds");
+    expect(reviewer).not.toContain("binds the filesystem boundary");
+    expect(reviewer).toContain("runs in the parent");
+
+    const cap = codexResiduePlanner.facts.caps.find((row) => row.name === "per-agent tool allowlist")?.value ?? "";
+    expect(cap).toMatch(/codex-cli \d+\.\d+\.\d+ \(\d{4}-\d{2}-\d{2}\)/);
+    expect(cap).not.toContain("carries the supported filesystem boundary");
+    expect(cap).toContain("runs in the parent");
+
+    const parity = LIVE_CAPABILITY_INPUTS.coverage.find((row) => row.tool === "codex")?.mechanism ?? "";
+    expect(parity).not.toContain("inside the `read-only` sandbox");
+    expect(parity).not.toContain("supplies the supported filesystem boundary");
+    expect(parity).toContain("runs in the parent");
   });
 
   it("names exactly the five read-only git subcommands for a verdict role, and none for the implementer", () => {

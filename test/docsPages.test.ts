@@ -791,8 +791,15 @@ const RELEASE_CUT_DATE = "2026-10-20";
  * assertion's else branch requires this constant to equal RELEASE_CUT_DATE. Their
  * `Re-attested 2026-10-18` clauses are not carried: each page now says it was verified at the cut,
  * and the cut is the later pass.
+ *
+ * TEST CHANGE, justified: MOVED 2026-10-23, from 2026-10-20, by plan 022 file 1, unit
+ * a11-release-workflows (REQ-PLUGIN-031, REQ-PLUGIN-050). `docs/enterprise-forks.md`'s "Tag a
+ * release" section now says the gates job dry-runs the publish and the publish names the `latest`
+ * dist-tag, and the page moved onto the commit form naming the lane base f9abc9c6 plus
+ * `Re-attested 2026-10-23`. The newest commit-form date is that pass, so the constant names it;
+ * every other page keeps its cut date.
  */
-const REATTESTATION_DATE = "2026-10-20";
+const REATTESTATION_DATE = "2026-10-23";
 
 /** Absolute URLs removed, so the domain and link rules read only what is left. */
 const withoutAllowedUrls = (text: string): string => text.replace(ABSOLUTE_URLS, " ");

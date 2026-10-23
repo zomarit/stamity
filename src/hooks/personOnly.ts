@@ -18,8 +18,16 @@
  * and is `ask: true` only when all of them are ask-class, so a refused act
  * never rides an approval; `deny` stays true on every person-only verdict.
  *
+ * **Run** (REQ-FLOW-137, REQ-FLOW-140). The context's `runs` names the ask-class rules the repository's autonomy
+ * setting runs unasked (`pr-ready` and a local `tag` by default, a workflow dispatch unless named as deploying): an
+ * act under one is listed in the allow verdict's `runs` and asks for nothing, and never hides an act that asks or
+ * refuses on the same line. Beside them: a commit status or check run written (`status-write`) is refused in every
+ * mode, and an `--admin` merge, a push or write onto a deploying branch, a dispatch named as deploying and a
+ * loosening of the setting itself ask. The deploying-branch matcher is a copy of `../config/autonomy.ts`'s, held
+ * equal by test, since this module imports nothing.
+ *
  * **While a run is unattended** the run verbs (`stamity run checkpoint`, `run
- * end`) are the only push path: {@link unattendedPushVerdict} refuses any raw
+ * end`, and `run land` for the run's own merge) are the only push path: {@link unattendedPushVerdict} refuses any raw
  * `git push` (`git subtree push` among them), `gh pr create`, `gh pr edit`, `gh pr close` or `gh pr reopen`, a `gh repo` form that
  * pushes, a write of a git remote, and a REST write that moves a branch or a pull request, so the held paths and the
  * last secret scan cannot be stepped around and the run verbs push where the run started. A reply on a comments endpoint passes. Whether a run is
@@ -72,7 +80,14 @@ export type PersonOnlyRuleId =
   | "repo-delete"
   | "repo-irreversible"
   | "protection-delete"
-  | "unpublish";
+  | "unpublish"
+  | "status-write"
+  | "admin-merge"
+  | "push-deploying"
+  | "workflow-dispatch"
+  | "autonomy-loosen"
+  | "land-approved"
+  | "line-too-long";
 
 /** One person-only act: its rule id, what the person keeps, and whether it is ask-class (it can be undone). */
 export interface PersonOnlyRule {
@@ -137,6 +152,37 @@ export const PERSON_ONLY_RULES: readonly PersonOnlyRule[] = [
     ask: false,
   },
   { id: "unpublish", act: "withdrawing a published package or tag (`npm unpublish`, `npm dist-tag rm`)", ask: false },
+  {
+    id: "status-write",
+    act: "writing a commit status or a check run (a REST `statuses/<sha>` or `check-runs` write, GraphQL's `createCheckRun` or `updateCheckRun`): CI's to write, never an agent's, in every mode (REQ-FLOW-140)",
+    ask: false,
+  },
+  { id: "admin-merge", act: "merging a pull request past its branch's rules (`gh pr merge --admin`)", ask: true },
+  {
+    id: "push-deploying",
+    act: "a push, REST or GraphQL write onto a branch the repository names as deploying (`autonomy.deployingBranches`)",
+    ask: true,
+  },
+  {
+    id: "workflow-dispatch",
+    act: "dispatching a workflow (`gh workflow run`, a REST `dispatches` call); it runs unless `autonomy.deployingActs` names it",
+    ask: true,
+  },
+  {
+    id: "autonomy-loosen",
+    act: "loosening the autonomy setting (`--loosen` on a stamity command, an argument the guard cannot read on one, or a full `clean` or `init --force` while the setting is stricter than the default)",
+    ask: true,
+  },
+  {
+    id: "land-approved",
+    act: "landing a run's pull request on the person's approval of an `asks` outcome (`stamity run land --approved`, or a land line whose words the guard cannot read, which may carry it)",
+    ask: true,
+  },
+  {
+    id: "line-too-long",
+    act: "a command line longer than 65,536 characters, which the guard does not read, refused in every mode before any reading (review/117)",
+    ask: false,
+  },
 ];
 
 /**
@@ -144,11 +190,14 @@ export const PERSON_ONLY_RULES: readonly PersonOnlyRule[] = [
  * is ask-class (`ask`); a line with a refuse-class act names that act.
  */
 export type PersonOnlyVerdict =
-  | { deny: false }
+  | { deny: false; runs?: readonly PersonOnlyRuleId[] }
   | { deny: true; rule: PersonOnlyRuleId; act: string; reason: string; ask: boolean };
 
 /** A command's verdict under the unattended push rule. */
 export type UnattendedPushVerdict = { deny: false } | { deny: true; reason: string };
+
+/** Where the shell still fills in a decoded word (the readers' `splitLine`): see its `marks`. */
+type WordMark = { first: number; last: number; kinds: string };
 
 /** The branch context an implied push destination is read against. */
 export interface PersonOnlyContext {
@@ -161,6 +210,33 @@ export interface PersonOnlyContext {
    * refspec naming a tag by its bare name reads as a tag push; `[]` when unread.
    */
   readonly tags: readonly string[];
+  /**
+   * The ask-class rules that run unasked (REQ-FLOW-137): the guard bakes them from the autonomy setting (`pr-ready`
+   * and `tag` in mode `autonomous`, `workflow-dispatch` unless named as deploying). An act under one of them is
+   * collected into the allow verdict's `runs`, never among the acts that ask; absent, every act asks as in 1.16.0.
+   */
+  readonly runs?: readonly PersonOnlyRuleId[];
+  /** The branch names and `*`/`**` patterns the repository names as deploying (`autonomy.deployingBranches`). */
+  readonly deployingBranches?: readonly string[];
+  /**
+   * Whether the baked setting is stricter than the default, so a full `clean` or an `init --force`, which lands the
+   * default, loosens it (REQ-FLOW-138); absent reads true.
+   */
+  readonly stricterThanDefault?: boolean;
+  /**
+   * The program words that run this package (REQ-FLOW-138, review/44): its bins and its unscoped name, baked at
+   * emission from the engine's own `package.json`, so a renamed fork's bin is read too; absent, `stamity` and `st`.
+   */
+  readonly packageWords?: readonly string[];
+  /** The engine's package name, scope included, whose `node_modules/<name>/` path names its CLI file (review/53). */
+  readonly packageName?: string;
+  /**
+   * Whether this repository is the engine's own (its `package.json` names the engine's package, baked at emission), where
+   * its `dist/cli.js` and `src/cli.ts` are the CLI (review/53); absent reads true, the stricter reading.
+   */
+  readonly ownRepository?: boolean;
+  /** Whether the call is the PowerShell tool's, where `$name = …` assigns rather than runs `$name`'s value. */
+  readonly powershell?: boolean;
 }
 
 /**
@@ -357,6 +433,11 @@ export const CLAUDE_ASK_ROWS: readonly string[] = [
  * comment).
  */
 export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): PersonOnlyVerdict {
+  const PACKAGE_WORDS = ctx.packageWords ?? ["stamity", "st"];
+  // No scoped name is embedded here (build/10): the guard always passes the identity baked at emission, and a caller
+  // that names none (the run verb's own push check) reads no package path, only the bare bin words.
+  const PACKAGE_NAME = (ctx.packageName ?? "").toLowerCase();
+  const OWN_REPOSITORY = ctx.ownRepository ?? true;
   // <shell-reading>
   const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
   const KEYWORDS = new Set(["!", "{", "}", "if", "then", "else", "elif", "fi", "do", "done", "while", "until"]);
@@ -403,6 +484,11 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   /** The quotes PowerShell opens and closes with: `'` and U+2018 to U+201B, `"` and U+201C to U+201E (v0b). */
   const PS_SINGLE = "'" + String.fromCharCode(0x2018, 0x2019, 0x201a, 0x201b);
   const PS_DOUBLE = '"' + String.fromCharCode(0x201c, 0x201d, 0x201e);
+  /**
+   * A heredoc's delimiter after its `<<` (REQ-FLOW-141): `-` for `<<-`, then the name from the set, in one pair of
+   * single or double quotes, or bare; any other spelling matches nothing.
+   */
+  const HEREDOC = /^(-?)[ \t]*(?:'([A-Za-z_]\w{0,63})'|"([A-Za-z_]\w{0,63})"|([A-Za-z_]\w{0,63}))(?![^\s;&|<>()])/;
 
   /**
    * A program word as the shell finds it: its last path part, without case or a Windows suffix, and without a trailing
@@ -424,30 +510,263 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   }
 
   /**
+   * Whether a segment's words open on the engine's own CLI, each literal (REQ-FLOW-141's stdin receiver, review/76): one
+   * of this package's bins as a bare word, or `npx` with `--no`, `-y`, `--yes` or `--no-yes` and then a bin, the
+   * package's name or its name pinned to a version. A path to a same-named file, a launcher or a wrapper is not it.
+   */
+  function engine(words: readonly string[], kinds: readonly string[]): boolean {
+    const at = words[0] === "npx" && ["--no", "-y", "--yes", "--no-yes"].includes(words[1] ?? "") ? 2 : 0;
+    const name = (words[at] ?? "").toLowerCase();
+    const pinned = name.startsWith(`${PACKAGE_NAME}@`) && /^\d+\.\d+\.\d+$/.test(name.slice(PACKAGE_NAME.length + 1));
+    return kinds.slice(0, at + 1).every((kind) => kind === "") && (PACKAGE_WORDS.includes(words[at] ?? "") || (at === 2 && (name === PACKAGE_NAME || pinned)));
+  }
+
+  /**
+   * Whether a segment's words are exactly `git commit` reading its message from stdin (`-F -`, `--file -`, `--file=-`),
+   * or exactly `gh pr create`, `edit` or `comment` reading its body from stdin (`--body-file -`, `-F -`), each of those
+   * words literal (REQ-FLOW-141's message receivers, review/118). Neither program runs what it reads there.
+   */
+  function message(words: readonly string[], kinds: readonly string[]): boolean {
+    const git = words[0] === "git" && words[1] === "commit";
+    const gh = words[0] === "gh" && words[1] === "pr" && ["create", "edit", "comment"].includes(words[2] ?? "");
+    const flags = git ? ["-F", "--file"] : ["--body-file", "-F"];
+    const literal = (at: number): boolean => kinds[at] === "";
+    return (
+      (git || gh) &&
+      [0, 1, 2].slice(0, git ? 2 : 3).every(literal) &&
+      words.some((word, at) => literal(at) && ((flags.includes(word) && words[at + 1] === "-" && literal(at + 1)) || (git && word === "--file=-")))
+    );
+  }
+
+  /**
+   * Whether earlier segments may change what a later heredoc's receiver is (REQ-FLOW-141): a word ending in `()` (a
+   * function), or a command opening, after keywords, on an assignment or on a builtin that defines, assigns, sources or
+   * runs a line (`alias`, `export`, `read`, `eval`, `.`, …).
+   */
+  function defines(segments: readonly string[][]): boolean {
+    const DEFINERS = new Set(["alias", "function", "hash", "enable", "source", ".", "eval", "export", "declare", "typeset",
+      "local", "readonly", "read", "mapfile", "readarray", "getopts", "printf", "for", "select", "set", "shopt", "setopt",
+      "unset", "builtin", "command", "time", "exec"]);
+    return segments.some((words) => {
+      const head = words.find((word) => !KEYWORDS.has(word)) ?? "";
+      return ASSIGNMENT.test(head) || DEFINERS.has(programName(head)) || words.some((word) => word.endsWith("()"));
+    });
+  }
+
+  /**
    * The words of each simple command in `text`, a command substitution's text read as its own lines; with `blocks`, a
    * brace attached to a word starts or ends a PowerShell script block (`{git push}`), a brace a word opened (`@{1}`,
    * `${x}`) staying part of it; with `pwsh`, PowerShell's escape (review/194): the backtick escapes, a backslash is a
-   * plain character.
+   * plain character. `marks` holds, per word, where the shell still expands or globs it (review/37, review/45): `first`,
+   * the index of the first such character in the decoded word (-1 where none is), `last`, the index just past the last,
+   * and `kinds`: `e` for an expansion (`$`, a backtick, a substitution, PowerShell's splat, an `@` opening a word before a
+   * name, `(` or `{`, a here-string's `@'` aside), `s` where it is unquoted, so its value splits into words, `p` for a PowerShell group, whose value is an
+   * argument and never a command, `g` for a glob (`*`, `?`, `[`), `b` for a `{` opening a brace expansion. A single-quoted, ANSI-C-quoted or escaped character is literal text. A `${…}` counts to
+   * its closing brace, so its text is never read as literal.
+   *
+   * Heredocs (REQ-FLOW-141, a5): with `docs` 1 (the line itself) or 2 (a substitution an argument word wholly is), the
+   * first heredoc operator is recorded, and at the line break ending its line, when it is that line's only one, its
+   * body and terminator are skipped if a data sink receives them (`pastBody`); every other form reads as below. A
+   * `nested` entry's `at` is its segment's index where it is a closed double-quoted `$(…)` an argument word wholly is,
+   * else -1, and `open` where nothing closes it on the line, so its text is read as filled in (build/12); `ends` holds,
+   * per segment, the character that cut it and `>` where its standard output is redirected.
    */
-  function splitLine(text: string, blocks: boolean, pwsh: boolean): { segments: string[][]; nested: string[] } {
+  function splitLine(
+    text: string,
+    blocks: boolean,
+    pwsh: boolean,
+    docs = 0,
+  ): { segments: string[][]; nested: { text: string; at: number; word: number; open: boolean }[]; marks: WordMark[][]; ends: string[] } {
     const segments: string[][] = [];
-    const nested: string[] = [];
+    const marks: WordMark[][] = [];
+    const nested: { text: string; at: number; word: number; open: boolean }[] = [];
+    const ends: string[] = [];
+    // The first heredoc: where its word starts, its segment, delimiter, quoting and `<<-`, then that segment's words,
+    // kinds, redirections, cut and cut index as the cut found them; `heredocs` counts every operator, `done` ends the one
+    // decision a text gets, so the reading stays linear.
+    let doc: { at: number; seg: number; name: string; bare: boolean; tabs: boolean; words?: string[]; kinds?: string[]; redirs?: string[][]; cut?: string; end?: number } | null = null;
+    let heredocs = 0;
+    let done = false;
+    // The current segment's redirections: the operator (a descriptor number first), its target word and that word's kinds.
+    let redirs: string[][] = [];
     let words: string[] = [];
+    let wordMarks: WordMark[] = [];
     let word = "";
+    // The current word's brace balance, counted once per character (review/102's note): `counted` characters read.
+    let counted = 0;
+    let balance = 0;
+    const balanced = (): boolean => {
+      for (; counted < word.length; counted += 1) {
+        if (word[counted] === "{") balance += 1;
+        else if (word[counted] === "}") balance -= 1;
+      }
+      return balance <= 0;
+    };
+    let mark: WordMark = { first: -1, last: 0, kinds: "" };
     let inWord = false;
     let dropNext = false;
     const endWord = (): void => {
       if (!inWord) return;
-      if (dropNext) dropNext = false;
-      else words.push(word);
+      if (dropNext) {
+        dropNext = false;
+        redirs[redirs.length - 1]?.push(word, mark.kinds);
+      } else {
+        words.push(word);
+        wordMarks.push({ ...mark, last: Math.min(mark.last, word.length) });
+      }
       word = "";
+      counted = 0;
+      balance = 0;
+      mark = { first: -1, last: 0, kinds: "" };
       inWord = false;
     };
-    const cut = (): void => {
+    /** Marks the decoded characters from `from` to `to` as ones the shell fills in, of the kinds named. */
+    const hide = (from: number, to: number, kinds: string): void => {
+      if (mark.first === -1) mark.first = from;
+      mark.last = Math.max(mark.last, to);
+      mark.kinds += kinds;
+    };
+    const cut = (c = ""): void => {
       endWord();
       dropNext = false;
-      if (words.length > 0) segments.push(words);
+      if (doc !== null && doc.cut === undefined && doc.seg === segments.length) {
+        Object.assign(doc, { words, kinds: wordMarks.map((each) => each.kinds), redirs, cut: c, end: i });
+      }
+      if (words.length > 0) {
+        segments.push(words);
+        marks.push(wordMarks);
+        ends.push(c + (redirs.some((each) => /^1?>/.test(each[0] ?? "")) ? ">" : ""));
+      }
       words = [];
+      wordMarks = [];
+      redirs = [];
+    };
+    /**
+     * Where the reading resumes after the line break at `nl` (REQ-FLOW-141): past the terminator line when the line's
+     * one heredoc goes to a data sink, else at the next character, the body read as commands. Every receiver needs its
+     * operator's line to end at `nl`, no carriage return in the text, a terminator line equal to the delimiter (after
+     * leading tabs for `<<-`) and, unquoted, a body with no `$(` or backtick, and nothing piping onward. With `docs` 2:
+     * a bare `cat` first in the text, with no other redirection and nothing after it on its line. With `docs` 1: a bare
+     * `cat` (no argument) or `tee` (plain operands, `-a`, `-i`, `-p`) first on the line, its standard output sent by `>`
+     * or `>>` to one plain path, no other redirection, its targets named by no later word; the engine's own CLI
+     * (`engine`) first in its segment, with no other redirection and no earlier command defining or assigning; or
+     * `git commit` or `gh pr create|edit|comment` reading its message from stdin (`message`), first on the line, with no
+     * other redirection (review/118).
+     */
+    const pastBody = (nl: number): number => {
+      const d = doc;
+      if (d?.words === undefined || heredocs !== 1 || text.includes("\r") || text.indexOf("\n", d.at) !== nl) return nl + 1;
+      const kinds = d.kinds ?? [];
+      const others = (d.redirs ?? []).filter((each) => each[0] !== "<<");
+      const out = others.length === 1 && /^1?>>?$/.test(others[0]?.[0] ?? "") ? (others[0] ?? []) : [];
+      const plain = (path: string, kind = ""): boolean =>
+        kind === "" &&
+        /^[\w./@%+,:=~][\w./@%+,:=~-]{0,255}$/.test(path) &&
+        !/(?:^|\/)\.git(?:\/|$)/i.test(path) &&
+        (!/^\/(?:dev|proc)\//.test(path) || path === "/dev/null");
+      const operands = d.words.slice(1).filter((each) => !/^(?:-[aip]+|--append|--ignore-interrupts)$/.test(each));
+      const writes =
+        docs === 1 &&
+        d.seg === 0 &&
+        kinds.every((each) => each === "") &&
+        plain(out[1] ?? "", out[2]) &&
+        (d.words.join(" ") === "cat" || (d.words[0] === "tee" && operands.length > 0 && operands.every((each) => plain(each))));
+      const sink =
+        /^[\n;&]$/.test(d.cut ?? "") &&
+        (docs === 2
+          ? d.cut === "\n" && d.seg === 0 && d.words.join(" ") === "cat" && kinds[0] === "" && others.length === 0
+          : writes ||
+            (docs === 1 && others.length === 0 && engine(d.words, kinds) && !defines(segments.slice(0, d.seg))) ||
+            (docs === 1 && others.length === 0 && d.seg === 0 && message(d.words, kinds)));
+      if (!sink) return nl + 1;
+      for (let at = nl + 1; ; ) {
+        const stop = text.indexOf("\n", at);
+        const end = stop === -1 ? text.length : stop;
+        const line = text.slice(at, end);
+        if ((d.tabs ? line.replace(/^\t+/, "") : line) === d.name) {
+          // The text after the segment on the operator's line, and after the terminator: no word there names a target.
+          const later = text.slice(d.end ?? nl, nl) + text.slice(end);
+          const named = writes ? [out[1] ?? "", ...(d.words[0] === "tee" ? operands : [])] : [];
+          if (d.bare && /\$\(|`/.test(text.slice(nl + 1, at))) return nl + 1;
+          if (named.some((each) => each !== "/dev/null" && later.includes(each.split("/").pop() ?? each))) return nl + 1;
+          return end;
+        }
+        if (stop === -1) return nl + 1;
+        at = stop + 1;
+      }
+    };
+    /** Marks an expansion starting at `text[at]` and appended next: through its closing brace when it opens `${`. */
+    const expands = (at: number, kinds: string): void => {
+      let end = at + 1;
+      if (text[at] === "$" && text[at + 1] === "{") {
+        // Bounded, so the reading stays linear in the line's length: a span past the bound runs to the line's end.
+        let level = 0;
+        while (end < text.length) {
+          if (end - at > 256) {
+            end = text.length;
+            break;
+          }
+          if (text[end] === "{") level += 1;
+          else if (text[end] === "}") level -= 1;
+          end += 1;
+          if (level === 0) break;
+        }
+      }
+      hide(word.length, word.length + (end - at), kinds);
+    };
+    /** Whether the `{` at `text[at]` opens a brace expansion: a `,` or `..` before an unquoted blank or its `}`. */
+    const braceExpands = (at: number): boolean => {
+      let quoted = "";
+      for (let j = at + 1; j < text.length; j += 1) {
+        // Bounded, so the reading stays linear in the line's length: a form past the bound reads as an expansion.
+        if (j - at > 256) return true;
+        const c = text[j] ?? "";
+        if (quoted !== "") {
+          if (c === quoted) quoted = "";
+        } else if (c === "'" || c === '"') quoted = c;
+        else if (c === "\\") j += 1;
+        else if (c === "}" || /\s/.test(c)) return false;
+        else if (c === "," || (c === "." && text[j + 1] === ".")) return true;
+      }
+      return false;
+    };
+    /**
+     * The index of the `)` closing a substitution or group whose text starts at `from`, or the text's length where none
+     * closes it on the line (build/12). A quoted heredoc's body, data the shell does not parse, is passed over, so a
+     * parenthesis in it neither ends the text early nor keeps it open; on a line holding a bare one, each body there is
+     * counted as before. One pass: each body is passed once.
+     */
+    const closing = (from: number): number => {
+      let level = 1;
+      let bodies: string[][] | null = [];
+      for (let j = from; j < text.length; j += 1) {
+        const c = text[j];
+        if (c === "(") level += 1;
+        else if (c === ")") {
+          level -= 1;
+          if (level === 0) return j;
+        } else if (c === "<" && text[j + 1] === "<" && text[j + 2] !== "<" && text[j - 1] !== "<") {
+          const head = HEREDOC.exec(text.slice(j + 2, j + 162));
+          if (head === null || head[4] !== undefined) bodies = null;
+          else bodies?.push([head[2] ?? head[3] ?? "", head[1] ?? ""]);
+        } else if (c === "\n") {
+          for (const [name, tabs] of bodies ?? []) {
+            let found = -1;
+            for (let at = j + 1; found === -1; ) {
+              const stop = text.indexOf("\n", at);
+              const end = stop === -1 ? text.length : stop;
+              const line = text.slice(at, end);
+              if ((tabs === "-" ? line.replace(/^\t+/, "") : line) === name) found = end;
+              else if (stop === -1) return text.length;
+              else at = stop + 1;
+            }
+            if (found === text.length) return text.length;
+            j = found;
+          }
+          bodies = [];
+        }
+      }
+      return text.length;
     };
     // PowerShell's reading takes its typographic quotes as quotes too, so an act after one is read, not hidden.
     const quote = (c: string | undefined, kind: string): boolean => c !== undefined && (c === kind[0] || (pwsh && kind.includes(c)));
@@ -461,6 +780,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         inWord = true;
         i = stop + 1;
       } else if (quote(ch, PS_DOUBLE)) {
+        // Whether this quote opens a word that is no redirection's target, for a substitution that is the whole word.
+        const opens = !inWord && !dropNext ? i + 1 : -1;
         inWord = true;
         i += 1;
         while (i < text.length && !quote(text[i], PS_DOUBLE)) {
@@ -478,19 +799,17 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
             let j = start;
             if (c === "`") {
               while (j < text.length && text[j] !== "`") j += 1;
-            } else {
-              let level = 1;
-              while (j < text.length) {
-                if (text[j] === "(") level += 1;
-                else if (text[j] === ")") level -= 1;
-                if (level === 0) break;
-                j += 1;
-              }
-            }
-            nested.push(text.slice(start, j));
+            } else j = closing(start);
+            const open = j >= text.length;
+            const whole = !pwsh && c === "$" && i === opens && text[j + 1] === '"' && /^[\s;&|<>)]?$/.test(text[j + 2] ?? "");
+            nested.push({ text: text.slice(start, j), at: whole && !open ? segments.length : -1, word: words.length, open });
+            // A substitution nothing closes on the line leaves the rest of it unread (build/12): the word is filled in, and
+            // its text is read as a filled-in line, so an act behind it asks or is refused, never one allowed word.
+            hide(word.length, word.length + Math.min(j + 1, text.length) - i, "e");
             word += text.slice(i, Math.min(j + 1, text.length));
             i = j + 1;
           } else {
+            if (c === "$") expands(i, "e");
             word += c;
             i += 1;
           }
@@ -542,16 +861,11 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         let j = start;
         if (ch === "`") {
           while (j < text.length && text[j] !== "`") j += 1;
-        } else {
-          let level = 1;
-          while (j < text.length) {
-            if (text[j] === "(") level += 1;
-            else if (text[j] === ")") level -= 1;
-            if (level === 0) break;
-            j += 1;
-          }
-        }
-        nested.push(text.slice(start, j));
+        } else j = closing(start);
+        const open = j >= text.length;
+        nested.push({ text: text.slice(start, j), at: -1, word: 0, open });
+        // A substitution or group nothing closes on the line leaves the rest of it unread (build/12), as above.
+        hide(word.length, word.length + Math.min(j + 1, text.length) - i, open ? "es" : ch === "(" ? "p" : "es");
         word += text.slice(i, Math.min(j + 1, text.length));
         inWord = true;
         i = j + 1;
@@ -562,49 +876,112 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         while (i < text.length && text[i] !== "\n") i += 1;
       } else if (ch === ">" || ch === "<") {
         // A redirection: a file-descriptor number before it and its target after it are not arguments.
+        let fd = "";
         if (inWord && /^\d+$/.test(word)) {
+          fd = word;
           word = "";
+          counted = 0;
+          balance = 0;
+          mark = { first: -1, last: 0, kinds: "" };
           inWord = false;
         } else endWord();
+        const from = i;
         while (i < text.length && "<>&|".includes(text[i] ?? "")) i += 1;
+        const op = fd + text.slice(from, i);
+        if (docs > 0 && op.includes("<<") && !op.includes("<<<")) {
+          // A heredoc (REQ-FLOW-141): `<<` or `<<-` and its delimiter, one pair of quotes or bare, from the set; any
+          // other spelling, a descriptor number among them, is recorded as none, so the line keeps its reading.
+          heredocs += 1;
+          const head = HEREDOC.exec(text.slice(i, i + 160));
+          if (heredocs === 1 && op === "<<" && head !== null) {
+            doc = { at: i, seg: segments.length, name: head[2] ?? head[3] ?? head[4] ?? "", bare: head[4] !== undefined, tabs: head[1] === "-" };
+          }
+        }
+        redirs.push([op]);
         dropNext = true;
       } else if (
         ";&|\n\r()`".includes(ch) ||
         (blocks && ch === "{" && !inWord) ||
-        (blocks && ch === "}" && word.split("{").length <= word.split("}").length)
+        (blocks && ch === "}" && balanced())
       ) {
-        cut();
+        cut(ch);
         i += 1;
+        // The line break ending the first heredoc's line: its one decision (REQ-FLOW-141).
+        if (ch === "\n" && heredocs > 0 && !done) {
+          done = true;
+          i = pastBody(i - 1);
+        }
       } else {
+        if (ch === "$" || (pwsh && ch === "@" && !inWord && /[\w({]/.test(text[i + 1] ?? ""))) expands(i, "es");
+        else if ("*?[".includes(ch)) expands(i, "g");
+        else if (ch === "{" && braceExpands(i)) expands(i, "b");
         word += ch;
         inWord = true;
         i += 1;
       }
     }
     cut();
-    return { segments, nested };
+    return { segments, nested, marks, ends };
   }
 
   /** Each assignment word the reading below skips (`X=v git …`, `env X=v …`), as it decoded it (review/208). */
   const assigned: string[] = [];
+  /**
+   * Per command the reading returns, which of its words may spell an option the line does not show (review/37,
+   * review/45, review/52): an argument holding an expansion, or a glob or brace form whose literal text before it is
+   * empty or opens with a dash; the program word where its last path part holds an expansion or a brace form, or a
+   * glob that can name this package (review/38). A mark is never lost: a command read from a nested string taken from
+   * a marked word has every word marked (review/54).
+   */
+  const unread = new Map<string[], boolean[]>();
+  /** Per command, which of its words hold any mark at all, a glob or brace form whatever its literal text included. */
+  const anyMark = new Map<string[], boolean[]>();
+  /** Per command, each word's marks as the reading took them, a tainted reading's words marked whole (review/69). */
+  const markMap = new Map<string[], WordMark[]>();
+  /** The commands whose program word may itself split into more words, an option among them (review/45). */
+  const spills = new Set<string[]>();
+  /** The commands run under `xargs`, which adds arguments from its input that the line never shows (review/45). */
+  const fed = new Set<string[]>();
+  /**
+   * Per launcher command whose settling word's literal last path part is one of this package's words (review/100, the
+   * review/38 reading), that word's index: the command runs this package, its folder filled in or not.
+   */
+  const launched = new Map<string[], number>();
 
   /**
    * Each simple command's words, its program word first and normalized; `sh -c` and `eval` text read too. With `pwsh`,
    * the text is PowerShell's: a PowerShell command string or the Windows command interpreter's rest, whose backslash is
    * a plain character (review/194). A line nested past four levels throws a coded `NESTING_DEPTH` error (pr/58): the
    * reading stops there, so the guard refuses the line rather than allow what the fifth level runs.
+   *
+   * With `capture`, `text` is a substitution an argument word wholly is (see below), whose heredoc may go to a bare
+   * `cat`; at depth 0 on a POSIX reading, the line's heredocs may go to a file or the engine (REQ-FLOW-141).
    */
-  function commandsOf(text: string, depth: number, pwsh: boolean): string[][] {
+  function commandsOf(text: string, depth: number, pwsh: boolean, tainted = false, fedIn = false, capture = false): string[][] {
     if (depth > 4) throw Object.assign(new Error("nesting"), { code: "NESTING_DEPTH" });
-    const { segments, nested } = splitLine(text, true, pwsh);
+    const docs = capture ? 2 : depth === 0 && !pwsh ? 1 : 0;
+    const { segments, nested, marks, ends } = splitLine(text, true, pwsh, docs);
     // A PowerShell line is read with a POSIX shell's escapes too, and a line with a brace with its braces as words too
     // (review/185), so either reading adds denials and never lifts one: `git push origin x} -f` still forces.
-    const commands: string[][] = pwsh ? commandsOf(text, depth, false) : [];
-    for (const words of [...segments, ...(/[{}]/.test(text) ? splitLine(text, false, pwsh).segments : [])]) {
+    const commands: string[][] = pwsh ? commandsOf(text, depth, false, tainted, fedIn) : [];
+    const braces = /[{}]/.test(text) ? splitLine(text, false, pwsh, docs) : { segments: [], marks: [] };
+    // The substitutions read as an argument's data (REQ-FLOW-141, review/76), found by segment in one pass, and whether an
+    // earlier segment defines or assigns, read once per segment: see below.
+    const captured = new Set<object>();
+    const wholly = new Map<number, object[]>();
+    for (const each of nested) if (each.at >= 0 && each.word > 0) wholly.set(each.at, wholly.get(each.at) ?? []).get(each.at)?.push(each);
+    const plainLine = docs === 1 && !tainted && wholly.size > 0 && !text.includes("\r");
+    let defined = false;
+    let checked = 0;
+    const allMarks = [...marks, ...braces.marks];
+    for (const [segment, words] of [...segments, ...braces.segments].entries()) {
       let k = 0;
       let line: string | null = null;
+      let lineFrom = 0;
+      let viaStdin = false;
       while (k < words.length && line === null) {
         const word = words[k] ?? "";
+        if (programName(word) === "xargs") viaStdin = true;
         let sub = k + 1;
         while (MANAGERS.has(programName(word)) && sub < words.length) {
           const option = words[sub] ?? "";
@@ -634,6 +1011,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
               continue;
             }
             if (!/^(-|\d)/.test(option)) break;
+            const optionAt = k;
             k += 1;
             if (option === "--") break;
             let value: string | undefined;
@@ -658,45 +1036,229 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
             // An option whose value is a command line (`env -S '…'`, `npx -c '…'`): that line is what runs.
             if (isLine && value !== undefined) {
               line = [value, ...words.slice(k)].join(" ");
+              lineFrom = optionAt;
               break;
             }
           }
         } else break;
       }
+      // A closed double-quoted `$(…)` that is wholly an argument word of a segment's first word, on the line's own POSIX
+      // reading (REQ-FLOW-141's commit-message receiver, review/76), is read with its heredoc as `cat`'s data: no
+      // assignment, keyword or wrapper first, no shell, `eval`, PowerShell host, command interpreter, `source` or
+      // launcher as the program, no standard output redirected or piped onward, nothing earlier defining or assigning,
+      // no carriage return. A reading that runs the word as a line still reads it, its substitution unquoted there.
+      if (plainLine && segment < segments.length && !defined) {
+        defined = defines(segments.slice(checked, segment));
+        checked = segment;
+      }
+      const opener = programName(words[0] ?? "");
+      if (
+        plainLine && !defined && line === null && k === 0 && !/[|>]/.test(ends[segment] ?? "|") &&
+        !SHELLS.has(opener) && !POWERSHELLS.has(opener) && !["eval", "cmd", "source", ".", "node", "nodejs", "bun", "deno", "tsx"].includes(opener)
+      ) {
+        for (const each of wholly.get(segment) ?? []) captured.add(each);
+      }
       if (line !== null) {
-        commands.push(...commandsOf(line, depth + 1, pwsh));
+        const lineTainted = tainted || (allMarks[segment] ?? []).slice(lineFrom).some((each) => each.kinds !== "");
+        commands.push(...commandsOf(line, depth + 1, pwsh, lineTainted, fedIn || viaStdin));
         continue;
       }
       const cmd = words.slice(k);
       if (cmd.length === 0) continue;
-      // A program word holding a whole command line (`bun exec 'git push'`) is also read as that line, unless it is this one.
-      if (/\s/.test(cmd[0] ?? "") && cmd.join(" ") !== text) commands.push(...commandsOf(cmd.join(" "), depth + 1, pwsh));
+      const program = cmd[0] ?? "";
+      const cut = Math.max(program.lastIndexOf("/"), program.lastIndexOf("\\")) + 1;
+      // A last path part whose only expansion is a glob is settled by what its pattern can name: unsettled only where it
+      // can name one of this package's words, so `?` (PowerShell's `Where-Object`) stays another program.
+      const last = programName(program);
+      // Whether the last path part's glob may name a package word (review/102): a two-pointer wildcard match, linear in
+      // the pattern times the name, with no regular expression; a class matches any one character. A pattern holding
+      // more wildcards than the longest package word has characters is one the guard cannot settle.
+      const wildcards = (last.match(/[*?[]/g) ?? []).length;
+      const mayName = (name: string): boolean => {
+        const tokens: string[] = [];
+        for (let i = 0; i < last.length; i += 1) {
+          const c = last[i] ?? "";
+          const close = c === "[" ? last.indexOf("]", i + 2) : -1;
+          if (close !== -1) {
+            tokens.push("?");
+            i = close;
+          } else tokens.push(c === "*" || c === "?" ? c : `=${c}`);
+        }
+        let t = 0;
+        let n = 0;
+        let star = -1;
+        let resume = 0;
+        while (n < name.length) {
+          if (t < tokens.length && (tokens[t] === "?" || tokens[t] === `=${name[n]}`)) {
+            t += 1;
+            n += 1;
+          } else if (t < tokens.length && tokens[t] === "*") {
+            star = t;
+            resume = n;
+            t += 1;
+          } else if (star !== -1) {
+            t = star + 1;
+            resume += 1;
+            n = resume;
+          } else return false;
+        }
+        while (t < tokens.length && tokens[t] === "*") t += 1;
+        return t === tokens.length;
+      };
+      const globMayName = (): boolean => wildcards > Math.max(0, ...PACKAGE_WORDS.map((name) => name.length)) || PACKAGE_WORDS.some(mayName);
+      const wordMarks = (allMarks[segment] ?? []).slice(k);
+      const markOf = (at: number): WordMark => wordMarks[at] ?? { first: -1, last: 0, kinds: "" };
+      // A glob or brace form can give a word that opens with a dash only where its literal text before it is empty or
+      // opens with one (review/52): `src/*.ts` cannot spell an option, `*` and `--loo*` can.
+      const dashes = (at: number): boolean => markOf(at).first === 0 || (cmd[at] ?? "").startsWith("-");
+      // A launcher or a package manager whose script or package word the shell fills in runs a program the guard cannot
+      // settle (review/87, review/93, review/98, review/99), read with no knowledge of any option. A launcher's head
+      // word is its first word that is no option (a dash word, joined value or not) and no possible value of a bare
+      // option (a dash word holding no `=`, whose next word may be its value, any word). `node`, `nodejs` and `tsx`
+      // (its `watch` passed) read that word as the script, settled by its literal last path part whatever its
+      // extension. `deno` and `bun` read it through a fixed table of their verbs: a script-taking one (`deno run`, bun
+      // given a path or a script file, `bun run` given one) reads the next head word as the script; a name-taking one
+      // (`bun run <name>`, `deno task <name>`, bun given a bare name) is settled by that literal name; their own tools
+      // (`bun test`, `deno test`, `deno fmt`, …) are settled, their later words file arguments; `bun x` reads its
+      // package word. A manager's package or bin word is its first literal word that is no option, its `run`, `exec`,
+      // `dlx` or `x` and a folder, filter or workspace value passed. A marked word before the settling word unsettles
+      // the program, except a manager's folder, filter or workspace value, which runs no code; so does a marked
+      // settling word (a script by its last part), and, with no settling word, any marked word. A marked word after it
+      // leaves the program to that word.
+      const launcher = programName(program);
+      const launches = ["node", "nodejs", "bun", "deno", "tsx"].includes(launcher);
+      const valueOf = (at: number): boolean =>
+        !launches && (MANAGER_VALUED.has(cmd[at - 1] ?? "") || [...MANAGER_VALUED].some((name) => name.startsWith("--") && (cmd[at] ?? "").startsWith(`${name}=`)));
+      /** A launcher's next head word from `from`, or -1: no dash word and no word directly after a bare option. */
+      const headFrom = (from: number): number => {
+        for (let at = from; at < cmd.length; at += 1) {
+          const word = cmd[at] ?? "";
+          const previous = at > 1 ? (cmd[at - 1] ?? "") : "";
+          if (word.startsWith("-") || (previous.startsWith("-") && !previous.includes("="))) continue;
+          return at;
+        }
+        return -1;
+      };
+      const scriptFile = (word: string): boolean => /[\\/]/.test(word) || /\.(?:[cm]?[jt]s|[jt]sx)$/i.test(word);
+      const lastPartMarked = (at: number): boolean => {
+        const word = cmd[at] ?? "";
+        return markOf(at).last > Math.max(word.lastIndexOf("/"), word.lastIndexOf("\\")) + 1;
+      };
+      let launchesUnread = false;
+      if (launches || MANAGERS.has(launcher)) {
+        // The settling word and whether it holds a mark that unsettles it; -1 where none settles the program.
+        let settledAt = -1;
+        let settlingMarked = false;
+        if (launches) {
+          const head = headFrom(1);
+          const word = head === -1 ? "" : (cmd[head] ?? "");
+          const literal = head !== -1 && markOf(head).kinds === "";
+          const script = (at: number): void => {
+            settledAt = at;
+            settlingMarked = at !== -1 && lastPartMarked(at);
+          };
+          const named = (at: number): void => {
+            settledAt = at;
+            settlingMarked = at !== -1 && markOf(at).kinds !== "";
+          };
+          const DENO_TOOLS = ["test", "bench", "fmt", "lint", "check", "compile", "doc", "info", "cache", "coverage", "types", "upgrade", "completions"];
+          const BUN_TOOLS = ["test", "build", "install", "i", "add", "a", "remove", "rm", "update", "link", "unlink", "pm", "init", "outdated", "publish", "audit", "info", "patch", "upgrade"];
+          if (head === -1) settledAt = -1;
+          else if (launcher === "deno") {
+            if (!literal) named(head);
+            else if (word === "run") script(headFrom(head + 1));
+            else if (word === "task") named(headFrom(head + 1));
+            else if (DENO_TOOLS.includes(word)) named(head);
+            else if (scriptFile(word)) script(head);
+          } else if (launcher === "bun") {
+            if (!literal) named(head);
+            else if (word === "run") {
+              const next = headFrom(head + 1);
+              if (next !== -1 && markOf(next).kinds === "" && !scriptFile(cmd[next] ?? "")) named(next);
+              else script(next);
+            } else if (word === "x") named(headFrom(head + 1));
+            else if (BUN_TOOLS.includes(word)) named(head);
+            else if (scriptFile(word)) script(head);
+            else named(head);
+          } else if (launcher === "tsx" && literal && word === "watch") script(headFrom(head + 1));
+          else script(head);
+        } else {
+          for (let at = 1; at < cmd.length && settledAt === -1; at += 1) {
+            const word = cmd[at] ?? "";
+            if (markOf(at).kinds === "" && !word.startsWith("-") && !["run", "run-script", "exec", "dlx", "x"].includes(word) && !valueOf(at)) {
+              settledAt = at;
+            }
+          }
+        }
+        const before = settledAt === -1 ? cmd.length : settledAt;
+        if (launches && settledAt !== -1 && !lastPartMarked(settledAt) && PACKAGE_WORDS.includes(programName(cmd[settledAt] ?? ""))) {
+          launched.set(cmd, settledAt);
+        }
+        launchesUnread = settlingMarked || cmd.slice(1, before).some((_, index) => markOf(index + 1).kinds !== "" && !valueOf(index + 1));
+      }
+      const unsure = cmd.map((_, at) => {
+        const mark = markOf(at);
+        if (tainted) return true;
+        if (at > 0) return /[ep]/.test(mark.kinds) || (/[gb]/.test(mark.kinds) && dashes(at));
+        return (
+          launchesUnread ||
+          (mark.last > cut && (/[eb]/.test(mark.kinds) || (/g/.test(mark.kinds) && globMayName())))
+        );
+      });
+      // A program word built by an expansion, or by a glob or brace form that can give a dash word, carries arguments
+      // of its own the line does not show (review/45): a runner may read the value as a line, a split value is words.
+      if (tainted || /e/.test(markOf(0).kinds) || (/[gb]/.test(markOf(0).kinds) && dashes(0))) spills.add(cmd);
+      const marked = cmd.map((_, at) => tainted || markOf(at).kinds !== "");
+      unread.set(cmd, unsure);
+      anyMark.set(cmd, marked);
+      const raw = cmd.map((word, at) => (tainted ? { first: 0, last: word.length, kinds: "es" } : markOf(at)));
+      markMap.set(cmd, raw);
+      if (viaStdin || fedIn) fed.add(cmd);
+      // A nested string read from this command inherits its marks (review/54): any word the shell fills in may have put
+      // that string's text in place, so the nested reading's quoting cannot make it literal. It inherits `xargs` too.
+      const inherits = marked.some(Boolean);
+      const feeds = fedIn || viaStdin;
+      // A program word holding a whole command line (`bun exec 'git push'`) is also read as that line, unless it is this
+      // one; marked where its blank is literal text, so the word reads as a line of its own, and the word holds a mark.
+      const head = markOf(0);
+      const literal = head.first === -1 ? program : program.slice(0, head.first) + program.slice(head.last);
+      if (/\s/.test(program) && cmd.join(" ") !== text) {
+        commands.push(...commandsOf(cmd.join(" "), depth + 1, pwsh, tainted || (head.kinds !== "" && /\s/.test(literal)), feeds));
+      }
       cmd[0] = programName(cmd[0] ?? "");
       // git's dashed form (`git-push`, as git's exec path holds it) is git running that subcommand.
-      if (/^git-./.test(cmd[0])) cmd.splice(0, 1, "git", cmd[0].slice(4));
+      if (/^git-./.test(cmd[0])) {
+        cmd.splice(0, 1, "git", cmd[0].slice(4));
+        unsure.splice(0, 1, unsure[0] === true, unsure[0] === true);
+        marked.splice(0, 1, marked[0] === true, marked[0] === true);
+        raw.splice(0, 1, markOf(0), markOf(0));
+      }
       if (SHELLS.has(cmd[0] ?? "")) {
         const flag = cmd.findIndex((word, index) => index > 0 && /^-[A-Za-z]*c[A-Za-z]*$/.test(word));
         const script = flag === -1 ? undefined : cmd[flag + 1];
-        if (script !== undefined) commands.push(...commandsOf(script, depth + 1, false));
+        if (script !== undefined) commands.push(...commandsOf(script, depth + 1, false, inherits, feeds));
       } else if (cmd[0] === "eval") {
-        commands.push(...commandsOf(cmd.slice(1).join(" "), depth + 1, false));
+        commands.push(...commandsOf(cmd.slice(1).join(" "), depth + 1, false, inherits, feeds));
       } else if (POWERSHELLS.has(cmd[0] ?? "")) {
         // PowerShell's command string (build/89): the words after `-Command`; with none, the words from the first one
         // that is no option, and each later word holding a blank, a quoted command past an option's value, each read
         // with PowerShell's escape (review/194).
         const at = cmd.findIndex((word, index) => index > 0 && commandFlag(word) !== null);
         const first = at !== -1 ? -1 : cmd.findIndex((word, index) => index > 0 && !/^-|^\/\w*$/.test(word));
-        if (at !== -1) commands.push(...commandsOf([commandFlag(cmd[at] ?? ""), ...cmd.slice(at + 1)].join(" "), depth + 1, true));
-        else if (first !== -1) commands.push(...commandsOf(cmd.slice(first).join(" "), depth + 1, true));
-        for (const word of first === -1 ? [] : cmd.slice(first + 1)) if (/\s/.test(word)) commands.push(...commandsOf(word, depth + 1, true));
+        if (at !== -1) commands.push(...commandsOf([commandFlag(cmd[at] ?? ""), ...cmd.slice(at + 1)].join(" "), depth + 1, true, inherits, feeds));
+        else if (first !== -1) commands.push(...commandsOf(cmd.slice(first).join(" "), depth + 1, true, inherits, feeds));
+        for (const word of first === -1 ? [] : cmd.slice(first + 1)) if (/\s/.test(word)) commands.push(...commandsOf(word, depth + 1, true, inherits, feeds));
       } else if (cmd[0] === "cmd") {
         // The Windows command interpreter (review/183): the words after `/c` or `/k`, any letter case, a value attached,
         // read as PowerShell's are, a backslash being a plain character there too (review/194), and read with each
         // caret escape taken off as well (`g^it`, `--for^ce`, pr/10), so that reading only adds denials.
         const at = cmd.findIndex((word, index) => index > 0 && /^\/[ck]/i.test(word));
         const rest = at === -1 ? "" : [(cmd[at] ?? "").slice(2), ...cmd.slice(at + 1)].join(" ");
-        if (at !== -1) commands.push(...commandsOf(rest, depth + 1, true));
-        if (rest.includes("^")) commands.push(...commandsOf(rest.replace(/\^([\s\S])/g, "$1"), depth + 1, true));
+        // That interpreter's own variables, `%name%` and, with delayed expansion, `!name!`, are filled in before it reads
+        // the line, inside its quotes too (review/55): a line holding one is read with every word marked.
+        const own = inherits || /%[^%\s]+%|![^!\s]+!/.test(rest);
+        if (at !== -1) commands.push(...commandsOf(rest, depth + 1, true, own, feeds));
+        if (rest.includes("^")) commands.push(...commandsOf(rest.replace(/\^([\s\S])/g, "$1"), depth + 1, true, own, feeds));
       } else if (cmd[0] === "git") {
         // Lines a git builtin runs (review/184): each `git rebase --exec` or `-x` line (`--ex`, `--exe` and a cluster
         // as git's option parser reads them), and the command `git bisect run` runs, its words kept as words.
@@ -717,15 +1279,15 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
               }
             }
           }
-          if (exec !== undefined) commands.push(...commandsOf(exec, depth + 1, false));
+          if (exec !== undefined) commands.push(...commandsOf(exec, depth + 1, false, inherits, feeds));
         }
         if (sub === "bisect" && args[0] === "run") {
-          commands.push(...commandsOf(args.slice(1).map((word) => `'${word.replace(/'/g, "'\\''")}'`).join(" "), depth + 1, false));
+          commands.push(...commandsOf(args.slice(1).map((word) => `'${word.replace(/'/g, "'\\''")}'`).join(" "), depth + 1, false, inherits, feeds));
         }
       }
       commands.push(cmd);
     }
-    for (const inner of nested) commands.push(...commandsOf(inner, depth + 1, pwsh));
+    for (const inner of nested) commands.push(...commandsOf(inner.text, depth + 1, pwsh, tainted || inner.open, fedIn, captured.has(inner)));
     return commands;
   }
 
@@ -938,7 +1500,81 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     });
     return { write, method: verb, paths, cmd: cmd.slice(0, end), next };
   }
+
+  /**
+   * The words after the program where a command runs this package (REQ-FLOW-121's land line, REQ-FLOW-138), or
+   * `null` for any other program: one of `PACKAGE_WORDS` (its bins and unscoped name) or a word naming `stamity` as
+   * the program, a runner's package reading as that program above; a package manager's first word after its options,
+   * or after its `run`, `exec`, `dlx` or `x`, being one of those words (`yarn st`, `pnpm run st`, review/44); or a
+   * launcher (`node`, `bun`, `deno`, `tsx`) or a package manager given a word naming the package or the engine's CLI file
+   * by its path (review/53): under `node_modules/<package>/`, `node_modules/.bin/<bin>`, and, in the engine's own
+   * repository, any word whose file name is the CLI's, by any path spelling (absolute, `..`, a doubled slash, a leading
+   * expansion, review/68); the words after. With `basename`, only a launcher's or manager's
+   * word whose file name is a CLI file's (`cli.js`, `cli.ts`, …) anywhere, which may be the engine's or the
+   * repository's own.
+   */
+  function packageArgs(cmd: string[], basename = false): string[] | null {
+    const program = cmd[0] ?? "";
+    const named = (word: string): boolean => PACKAGE_WORDS.includes(programName(word)) || /stamity/i.test(word);
+    const engineFile = (word: string): boolean => {
+      const path = word.replace(/\\/g, "/").toLowerCase();
+      return (
+        (PACKAGE_NAME !== "" && path.includes(`node_modules/${PACKAGE_NAME}/`)) ||
+        (/node_modules\/\.bin\/[^/]+$/.test(path) && PACKAGE_WORDS.includes(programName(path))) ||
+        (OWN_REPOSITORY && /(?:^|\/)cli\.[cm]?[jt]s$/.test(path))
+      );
+    };
+    if (!basename && named(program)) return cmd.slice(1);
+    const launchedAt = basename ? undefined : launched.get(cmd);
+    if (launchedAt !== undefined) return cmd.slice(launchedAt + 1);
+    if (!["node", "nodejs", "bun", "deno", "tsx", ...MANAGERS].includes(program)) return null;
+    if (basename) {
+      const at = cmd.findIndex((word, index) => index > 0 && /(?:^|[\\/])cli\.[cm]?[jt]s$/i.test(word));
+      return at === -1 ? null : cmd.slice(at + 1);
+    }
+    if (MANAGERS.has(program)) {
+      let k = 1;
+      while (k < cmd.length && (cmd[k] ?? "").startsWith("-")) k += MANAGER_VALUED.has(cmd[k] ?? "") ? 2 : 1;
+      if (["run", "run-script", "exec", "dlx", "x"].includes(cmd[k] ?? "")) k += 1;
+      while (k < cmd.length && (cmd[k] ?? "").startsWith("-")) k += 1;
+      if (named(cmd[k] ?? "")) return cmd.slice(k + 1);
+    }
+    const at = cmd.findIndex((word, index) => index > 0 && (/stamity/i.test(word) || engineFile(word)));
+    return at === -1 ? null : cmd.slice(at + 1);
+  }
   // </shell-reading>
+
+  // <deploying-branch>
+  // A copy of `src/config/autonomy.ts`'s `branchKey` and `matchesDeployingBranch`, code for code (that kernel module
+  // may not be imported here, and the guard carries this function as its own source): one shared table holds the two
+  // equal, and test/hooks/personOnly.test.ts holds the code the same text.
+  function branchKey(name: string): string {
+    const lower = name.toLowerCase();
+    return lower.startsWith("refs/heads/") ? lower.slice("refs/heads/".length) : lower;
+  }
+  function matchesDeployingBranch(name: string, patterns: readonly string[]): boolean {
+    const branch = branchKey(name);
+    return patterns.some((pattern) => {
+      const text = branchKey(pattern);
+      // `matched[j]`: the tokens read so far match the first `j` characters of `branch`.
+      let matched: boolean[] = Array.from({ length: branch.length + 1 }, (_, j) => j === 0);
+      for (let at = 0; at < text.length; at += 1) {
+        const wide = text.startsWith("**", at);
+        const star = wide || text.charAt(at) === "*";
+        if (wide) at += 1;
+        const next: boolean[] = [star && matched[0] === true];
+        for (let j = 1; j <= branch.length; j += 1) {
+          const char = branch.charAt(j - 1);
+          if (wide) next.push(matched[j] === true || next[j - 1] === true);
+          else if (star) next.push(matched[j] === true || (next[j - 1] === true && char !== "/"));
+          else next.push(matched[j - 1] === true && char === text.charAt(at));
+        }
+        matched = next;
+      }
+      return matched[branch.length] === true;
+    });
+  }
+  // </deploying-branch>
 
   const branch = (ref: string): string =>
     ref.replace(/^refs\/heads\//i, "").replace(/^refs\/remotes\/[^/]+\//i, "").toLowerCase();
@@ -949,22 +1585,41 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   let tagNames: Set<string> | null = null;
   const isTagName = (name: string): boolean =>
     (tagNames ??= new Set(ctx.tags.map((tag) => tag.replace(/^refs\/tags\//i, "").toLowerCase()))).has(name);
+  // The branches the repository names as deploying (REQ-FLOW-140): a destination the line cannot show (`null`) is one
+  // of them whenever any is named, so an unreadable target only adds an ask.
+  const deploying = ctx.deployingBranches ?? [];
+  const deploys = (name: string | null): boolean => deploying.length > 0 && (name === null || matchesDeployingBranch(name, deploying));
+  const onDeploying = ctx.currentBranch !== null && deploys(ctx.currentBranch);
+  /** Whether a REST or GraphQL write's branch values land on a deploying branch: none, or an empty one, is the default. */
+  const landsOnDeploying = (values: readonly (string | null)[]): boolean =>
+    deploying.length > 0 &&
+    (values.length === 0 ? [...defaults].some(deploys) : values.some((value) => (value === "" ? [...defaults].some(deploys) : deploys(value === null ? null : branch(value)))));
   // The ask-class rules (REQ-FLOW-102): any other rule refuses (REQ-FLOW-124), so a rule missing here never asks.
-  const ASK_RULES = new Set(["push-default", "push-tags", "tag", "pr-merge", "pr-ready", "release", "publish", "secrets", "protection"]);
+  const ASK_RULES = new Set(["push-default", "push-tags", "tag", "pr-merge", "pr-ready", "release", "publish", "secrets", "protection",
+    "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen", "land-approved"]);
   // Every act the line holds (v0a): each segment, each call `--next` joins, each path, flag, body field and GraphQL
   // entry; a refuse-class one decides the verdict, so a deletion never rides an approval.
   const acts: { deny: true; rule: PersonOnlyRuleId; act: string; reason: string; ask: boolean }[] = [];
+  // The acts whose rule the setting runs unasked (REQ-FLOW-137): kept apart, so one never hides an asked or refused act.
+  const ran: PersonOnlyRuleId[] = [];
   const deny = (rule: PersonOnlyRuleId, what: string): PersonOnlyVerdict => {
     const verdict = {
       deny: true as const,
       rule,
       act: what,
       reason:
-        `${what} is a person-only act (${rule}): the person runs it, never the agent (REQ-FLOW-102). ` +
-        `Stop here and list it for the person.`,
+        rule === "status-write"
+          ? `${what} is CI's to write, never the agent's (${rule}): a merge reads it as evidence (REQ-FLOW-140). Stop here.`
+          : rule === "line-too-long"
+            ? "A line too long for the guard to read (over 65,536 characters) is refused in every mode (line-too-long): " +
+              "the person runs it themselves (REQ-FLOW-102). Stop here and give the person the exact command."
+            : `${what} is a person-only act (${rule}): the person runs it, never the agent (REQ-FLOW-102). ` +
+            `Stop here and list it for the person.`,
       ask: ASK_RULES.has(rule),
     };
-    acts.push(verdict);
+    if (ctx.runs?.includes(rule) === true) {
+      if (!ran.includes(rule)) ran.push(rule);
+    } else acts.push(verdict);
     return verdict;
   };
 
@@ -977,13 +1632,15 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     return dst === "" ? spec.slice(0, colon) : dst;
   }
 
-  function pushVerdict(args: string[], config: string[]): PersonOnlyVerdict | null {
+  function pushVerdict(args: string[], config: string[], marks: readonly WordMark[] = []): PersonOnlyVerdict | null {
     let force = false;
     let remove = false;
     let tags = false;
     let matching = false;
     let repoGiven = false;
     const positionals: string[] = [];
+    /** Each positional's marks (review/69, review/77), beside it. */
+    const positionalMarks: (WordMark | undefined)[] = [];
     // Refspecs a `-c` pair on the line supplies when the line names none: `remote.<name>.push`, and the upstream
     // a `branch.<name>.merge` names (where `push.default=upstream` sends a refspec-less push). Read whatever
     // remote or branch the pair names, so they add denials and never lift one.
@@ -1003,6 +1660,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       const arg = args[j] ?? "";
       if (arg === "--") {
         positionals.push(...args.slice(j + 1));
+        positionalMarks.push(...args.slice(j + 1).map((_, at) => marks[j + 1 + at]));
         break;
       }
       if (arg.startsWith("--")) {
@@ -1029,9 +1687,20 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
             break;
           }
         }
-      } else positionals.push(arg);
+      } else {
+        positionals.push(arg);
+        positionalMarks.push(marks[j]);
+      }
     }
     const named = repoGiven ? positionals : positionals.slice(1);
+    const namedMarks = repoGiven ? positionalMarks : positionalMarks.slice(1);
+    // An unquoted expansion, a glob or a brace form in the remote's place may split or expand into the remote and
+    // refspecs or an option the line does not show (review/69, review/87's record): it reads as a push to the default
+    // branch, and to a deploying one where any is named.
+    if (!repoGiven && /[sgb]/.test(positionalMarks[0]?.kinds ?? "")) {
+      if (deploying.length > 0) deny("push-deploying", "A push whose remote word may split into refspecs the line cannot show");
+      return deny("push-default", "A push whose remote word may split into refspecs or an option the line cannot show");
+    }
     // git reads `tag <name>` as `refs/tags/<name>:refs/tags/<name>`, whatever the context lists.
     const tagWord = named.indexOf("tag");
     const tagNamed = tagWord !== -1 && tagWord < named.length - 1;
@@ -1055,26 +1724,58 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       return colon === -1 ? [bare] : [bare.slice(0, colon), bare.slice(colon + 1)];
     };
     if (tags || refspecs.some((spec) => sides(spec).some(namesTag))) return deny("push-tags", "A push of tags");
-    for (const spec of refspecs) {
+    for (const [index, spec] of refspecs.entries()) {
       const name = destination(spec).replace(/^(refs\/)?heads\//i, "").toLowerCase();
-      if (spec === ":" || spec === "+:") return deny("push-default", "A matching push, the default branch among them");
+      if (spec === ":" || spec === "+:") {
+        if (deploying.length > 0) deny("push-deploying", "A matching push, a deploying branch among the branches it may push");
+        return deny("push-default", "A matching push, the default branch among them");
+      }
+      // A refspec the line cannot show (build/46) is read from the word's marks, never from its decoded text (review/69,
+      // review/77): a word the shell expands, globs or brace-expands may name the default branch or a deploying one, so
+      // it reads as a push to each; an unquoted expansion may also split into more refspecs or an option. A word whose
+      // characters only look like an expansion (single-quoted, or an unclosed substitution, which the shell refuses)
+      // is the branch it names, so the run verb's own push of such a git-legal name runs (build/4). A refspec a `-c`
+      // pair supplies has no marks of its own, and its text is read as before.
+      const mark = named.length > 0 ? namedMarks[index] : undefined;
+      if (named.length > 0 ? (mark?.kinds ?? "") !== "" : /[$`(]/.test(spec)) {
+        const splits = /s/.test(mark?.kinds ?? "");
+        if (deploying.length > 0) deny("push-deploying", "A push whose refspec the line cannot show, which may name a deploying branch");
+        return deny(
+          "push-default",
+          splits
+            ? "A push whose refspec the line cannot show, which may split into more refspecs or an option"
+            : "A push whose refspec the line cannot show (a substitution, a variable or a group)",
+        );
+      }
+      if (name === "head" || name === "@" ? onDeploying : deploys(name)) {
+        deny("push-deploying", "A push to a branch the repository names as deploying");
+      }
       if (defaults.has(name)) return deny("push-default", `A push to the default branch \`${name}\``);
       if ((name === "head" || name === "@") && onDefault) {
         return deny("push-default", "A push of `HEAD` while on the default branch");
       }
       // A pattern refspec (`refs/heads/*:refs/heads/*`) pushes every branch it matches: denied when a default
-      // branch, by short name or full ref, is among them.
+      // branch, by short name or full ref, is among them, and asked where a deploying one may be (any pattern among
+      // the deploying ones counts, since two patterns' overlap is not read).
       const pattern = destination(spec).toLowerCase();
       if (pattern.includes("*")) {
         const parts = pattern.split("*").map((part) => part.replace(/[.+?^$()|[\]{}\\]/g, "\\$&"));
         const glob = new RegExp(`^${parts.join(".*")}$`);
-        if ([...defaults].some((ref) => [ref, `heads/${ref}`, `refs/heads/${ref}`].some((full) => glob.test(full)))) {
+        const hits = (refs: readonly string[]): boolean =>
+          refs.some((ref) => [ref, `heads/${ref}`, `refs/heads/${ref}`].some((full) => glob.test(full)));
+        if (deploying.some((entry) => entry.includes("*")) || hits(deploying.map(branchKey))) {
+          deny("push-deploying", "A pattern push, a deploying branch among the branches it may match");
+        }
+        if (hits([...defaults])) {
           return deny("push-default", "A pattern push, the default branch among the branches it matches");
         }
       }
     }
     // Keyed on the line's own refspecs: a `-c` pair only adds denials, since git applies it only to its own remote
     // or branch, which the line does not show (review/98).
+    if (named.length === 0 && (onDeploying || (matching && deploying.length > 0))) {
+      deny("push-deploying", "A push with no refspec that lands on a deploying branch");
+    }
     if (named.length === 0 && (onDefault || matching)) {
       return deny("push-default", "A push with no refspec that lands on the default branch");
     }
@@ -1154,6 +1855,9 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       return deny("tag", `A symbolic tag ref written or deleted (\`${via}\`)`);
     }
     if (remove || target === undefined || name === "HEAD") return null;
+    if (deploys(/[$`]/.test(target) ? null : target.replace(/^(refs\/)?heads\//i, ""))) {
+      deny("push-deploying", `A symbolic ref pointed at a deploying branch, or at a branch the line cannot show (\`${via}\`)`);
+    }
     if (/[$`]/.test(target) || defaults.has(target.replace(/^(refs\/)?heads\//i, "").toLowerCase())) {
       return deny("push-default", `A symbolic ref pointed at the default branch, or at a branch the line cannot show (\`${via}\`)`);
     }
@@ -1181,6 +1885,11 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     if (group === "pr" && sub === "merge" && flag("--delete-branch", "d", "bFtA")) {
       deny("push-delete", "A remote branch deletion (`gh pr merge --delete-branch`)");
     }
+    // An admin merge passes the branch's rules, the required checks and reviews among them (REQ-FLOW-140): named first,
+    // so the ask says so.
+    if (group === "pr" && sub === "merge" && flag("--admin", "", "")) {
+      deny("admin-merge", "An admin merge past the branch's rules (`gh pr merge --admin`)");
+    }
     if (group === "pr" && sub === "merge") deny("pr-merge", "Merging a pull request (`gh pr merge`)");
     // Closing with `--delete-branch` deletes the pull request's head branch on the remote (review/207).
     if (group === "pr" && sub === "close" && flag("--delete-branch", "d", "c")) {
@@ -1191,6 +1900,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       deny("pr-merge", "Approving a pull request review (`gh pr review --approve`)");
     }
     if (group === "pr" && sub === "ready") deny("pr-ready", "Marking a pull request ready (`gh pr ready`)");
+    // A dispatch runs a workflow, which may deploy; it runs unless the repository names it as deploying (REQ-FLOW-140).
+    if (group === "workflow" && sub === "run") deny("workflow-dispatch", "A workflow dispatch (`gh workflow run`)");
     if (group === "release" && sub !== undefined && !["list", "ls", "view", "download"].includes(sub)) {
       // `upload --clobber` replaces an asset, which removes the one it replaces.
       if (sub === "delete" || sub === "delete-asset" || (sub === "upload" && flag("--clobber", "", ""))) {
@@ -1228,19 +1939,26 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       if (words.length > 2) {
         if (flag("--force", "", "")) deny("force-push", "A forced sync of a repository (`gh repo sync --force`)");
         // A branch flag whose value the line ends before, an unquoted substitution having cut it, shows none.
+        if (landsOnDeploying(branches.map((name) => (/[$`]/.test(name) ? null : name)))) {
+          deny("push-deploying", "A sync of a deploying branch, or of a branch the line cannot show (`gh repo sync`)");
+        }
         if (branches.length === 0 || branches.some((name) => name === "" || /[$`]/.test(name) || defaults.has(branch(name)))) {
           deny("push-default", "A sync of a repository's default branch, or of a branch the line cannot show (`gh repo sync`)");
         }
       }
     }
     if (group === "repo" && sub === "edit") {
-      // A repository made public cannot be made private again in effect; every other settings flag can be undone.
+      // A repository made public cannot be made private again in effect; every other settings flag can be undone. With
+      // no settings flag gh asks its questions on the terminal, the visibility among them (build/8).
+      const settings = cmd.filter((word) => word.startsWith("--") && !/^--repo(=|$)/.test(word));
       if (cmd.some((word) => /^--visibility(=|$)/.test(word))) {
         deny("repo-irreversible", "A visibility change (`gh repo edit --visibility`)");
+      } else if (settings.length === 0) {
+        deny("repo-irreversible", "An interactive repository edit (`gh repo edit` with no settings flag), which can change the visibility");
       }
       if (cmd.some((word) => /^--default-branch(=|$)/.test(word))) {
         deny("protection", "A default-branch change (`gh repo edit --default-branch`)");
-      } else deny("protection", "A repository settings write (`gh repo edit`)");
+      } else if (settings.length > 0) deny("protection", "A repository settings write (`gh repo edit`)");
     }
     if (group === "api") httpVerdict(cmd);
   }
@@ -1402,6 +2120,11 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       const found = calls(name, key);
       return found.length === 0 || found.some(landsOnDefault);
     };
+    /** Whether a call of `name` lands on a deploying branch: none readable, or one placed there (REQ-FLOW-140). */
+    const callsDeploy = (name: string, key: string): boolean => {
+      const found = calls(name, key);
+      return deploying.length > 0 && (found.length === 0 || found.some(landsOnDeploying));
+    };
     // Every act of the call is collected (v0a): each GraphQL mutation and `updateRefs` entry, and each path's act.
     for (const path of paths) {
       const shown = `${method} ${path}`;
@@ -1409,6 +2132,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         // A pull request added to the merge queue is merged by the queue later (pr/57).
         if (/\b(mergePullRequest|enablePullRequestAutoMerge|enqueuePullRequest)\b/.test(text)) deny("pr-merge", "A GraphQL merge");
         if (/\bmarkPullRequestReadyForReview\b/.test(text)) deny("pr-ready", "A GraphQL ready-for-review");
+        // A check run is the evidence a merge reads, so it is CI's to write (REQ-FLOW-140).
+        if (/\b(createCheckRun|updateCheckRun)\b/.test(text)) deny("status-write", "A GraphQL check run write");
         // pr/74, from GitHub's schema read on 2026-10-18; a protection rule's, a ruleset's or a property's deletion is
         // refuse-class (v0a).
         if (/\b(deleteBranchProtectionRule|deleteRepositoryRuleset|deleteRepositoryCustomProperty)\b/.test(text)) {
@@ -1431,8 +2156,14 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
             deny("pr-merge", "A GraphQL review approval, or a review whose event the line cannot show");
           }
         }
+        if (/\bcreateCommitOnBranch\b/.test(text) && callsDeploy("createCommitOnBranch", "branchName")) {
+          deny("push-deploying", "A GraphQL commit to a deploying branch, or to a branch the line cannot show");
+        }
         if (/\bcreateCommitOnBranch\b/.test(text) && callsLand("createCommitOnBranch", "branchName")) {
           deny("push-default", "A GraphQL commit to the default branch");
+        }
+        if (/\bmergeBranch\b/.test(text) && callsDeploy("mergeBranch", "base")) {
+          deny("push-deploying", "A GraphQL merge into a deploying branch, or into a branch the line cannot show");
         }
         if (/\bmergeBranch\b/.test(text) && callsLand("mergeBranch", "base")) {
           deny("push-default", "A GraphQL merge into the default branch");
@@ -1454,6 +2185,9 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
           }
           // A list element given whole as a variable, beside literal ones, names a ref the line cannot show (review/128).
           const hidden = queries.some((query) => /\brefUpdates\s*:\s*\[(?:[^\]]*,)?\s*\$/.test(mask(query)));
+          if (((/\bupdateRef\b/.test(text) || hidden) && deploying.length > 0) || callsDeploy("updateRefs", "name")) {
+            deny("push-deploying", "A GraphQL ref update onto a deploying branch, or onto a ref the line cannot show");
+          }
           if (/\bupdateRef\b/.test(text) || hidden || callsLand("updateRefs", "name")) {
             deny("push-default", "A GraphQL ref update onto the default branch, or onto a ref the line cannot show");
           }
@@ -1465,8 +2199,9 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
           const created = calls("createRef", "name");
           if (created.length === 0 || created.some((refs) => refs.length === 0 || refs.some((ref) => ref === null || /^refs\/tags\//i.test(ref)))) {
             deny("push-tags", "A GraphQL tag ref created, or a ref the line cannot show");
-          } else if (created.flat().some((ref) => ref !== null && defaults.has(branch(ref)))) {
-            deny("push-default", "A GraphQL ref created on the default branch");
+          } else {
+            if (created.flat().some((ref) => ref !== null && deploys(branch(ref)))) deny("push-deploying", "A GraphQL ref created on a deploying branch");
+            if (created.flat().some((ref) => ref !== null && defaults.has(branch(ref)))) deny("push-default", "A GraphQL ref created on the default branch");
           }
         }
         continue;
@@ -1518,8 +2253,22 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       }
       if (/^branches\/.+\/rename$/i.test(path)) deny("protection", `A branch rename (${shown})`);
       if (/^transfer$/i.test(path)) deny("repo-irreversible", `A repository transfer (${shown})`);
+      // A commit status or check run is the evidence a merge reads, so it is CI's to write (REQ-FLOW-140).
+      if (/^statuses\/[^/]+$/i.test(path) || /^check-runs(\/[^/]+)?$/i.test(path)) {
+        deny("status-write", `A commit status or check run written (${shown})`);
+      }
+      // A workflow dispatch, by its workflow or the repository's own event (REQ-FLOW-140).
+      if (/^actions\/workflows\/[^/]+\/dispatches$/i.test(path) || /^dispatches$/i.test(path)) {
+        deny("workflow-dispatch", `A workflow dispatch (${shown})`);
+      }
+      if (/^contents(\/|$)/i.test(path) && landsOnDeploying(fields("branch"))) {
+        deny("push-deploying", `A REST commit to a deploying branch (${shown})`);
+      }
       if (/^contents(\/|$)/i.test(path) && landsOnDefault(fields("branch"))) {
         deny("push-default", `A REST commit to the default branch (${shown})`);
+      }
+      if ((/^merges$/i.test(path) && landsOnDeploying(fields("base"))) || (/^merge-upstream$/i.test(path) && landsOnDeploying(fields("branch")))) {
+        deny("push-deploying", `A REST merge into a deploying branch (${shown})`);
       }
       if (
         (/^merges$/i.test(path) && landsOnDefault(fields("base"))) ||
@@ -1567,6 +2316,9 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       // The path's own ref read from the path as routing reads it (review/107); a body's `ref` from the line.
       const heads = [/^git\/refs\/heads\/(.+)$/i.exec(path)?.[1] ?? "", ...[...text.matchAll(/(?:^|[=\s/])refs\/heads\/(\S+)/gi)].map((match) => match[1] ?? ""),
         ...refs.map((ref) => /^refs\/heads\/(.+)$/i.exec(ref ?? "")?.[1] ?? "")];
+      if (heads.some((name) => name !== "" && deploys(name))) {
+        deny("push-deploying", `A REST write to a deploying branch (${shown})`);
+      }
       if (heads.some((name) => defaults.has(name.toLowerCase()))) {
         deny("push-default", `A REST write to the default branch (${shown})`);
       }
@@ -1635,18 +2387,129 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         if (["add", "a", "set", "s"].includes(action)) deny("publish", "A dist-tag moved (`npm dist-tag add`)");
       }
     }
-    return publishes ? deny("publish", `Publishing a package (\`${cmd[0]} publish\`)`) : null;
+    // A publish carrying a literal `--dry-run` sends nothing, so it is no publish and runs (REQ-FLOW-102, as built):
+    // npm's, pnpm's, bun's and yarn's `npm publish`, the flag before any `--` and not an option's value. Every other
+    // spelling still asks, fail-closed: another dry-run, negation or `-d` word on the call (`--dry-run=false`, a later
+    // `--no-dry-run`, an abbreviation), a word the reading cannot settle (a `$` or a backtick), the flag quoted or
+    // built in the line's text, `npm_config_dry_run` named on the line, and yarn classic's own publish. npm's option
+    // parser (nopt) takes a separate `true` or `false` after a boolean flag as its value (review/42): a bare flag
+    // followed by a word that reads as a value other than a plain `true`, or by a word the shell still expands or globs,
+    // which may be `false`, is a publish, for every manager here.
+    const end = cmd.indexOf("--");
+    const options = end === -1 ? cmd : cmd.slice(0, end);
+    const unsure = anyMark.get(cmd) ?? [];
+    const valueAfter = (index: number): boolean => {
+      const next = options[index + 1];
+      if (next === undefined) return true;
+      if (unsure[index + 1] === true) return false;
+      return next === "true" || next.startsWith("-") || !/^(?:true|false|yes|no|on|off|y|n|0|1)$/i.test(next);
+    };
+    const yarnNpm = cmd[0] === "yarn" && positionalsOf(false).some((word, index, all) => word === "publish" && all[index - 1] === "npm");
+    const dryAt = options.flatMap((word, index) =>
+      (word === "--dry-run" || word === "--dry-run=true") && !valued.has(options[index - 1] ?? "") ? [index] : [],
+    );
+    const dryRun =
+      (cmd[0] !== "yarn" || yarnNpm) &&
+      dryAt.length > 0 &&
+      dryAt.every((index) => options[index] !== "--dry-run" || valueAfter(index)) &&
+      !cmd.some((word) => /^-{1,2}(?:no-?)?d(?:r|=|$)/i.test(word) && word !== "--dry-run" && word !== "--dry-run=true") &&
+      !cmd.some((word) => /[$`]/.test(word)) &&
+      !/npm_config_dry_run/i.test(command) &&
+      /(?:^|[\s;&|(])--dry-run(?:=true)?(?=[\s;&|)]|$)/.test(command);
+    return publishes && !dryRun ? deny("publish", `Publishing a package (\`${cmd[0]} publish\`)`) : null;
+  }
+
+  /**
+   * `autonomy-loosen` (REQ-FLOW-138, the guard's half): on a command running this package (`packageArgs`) or one whose
+   * program the reading cannot settle (an expansion or a glob in its word's last path part, or the whole word one,
+   * review/38), `--loosen` in any word; an argument the shell still expands or globs (`unread`: a `$`, a backtick, a
+   * substitution or a PowerShell group, `*`, `?`, `[` or `{`, unquoted or double-quoted; single-quoted text is
+   * literal, review/37), or arguments `xargs` adds (review/45), either of which may spell it; and, while the baked
+   * setting is stricter than the default, a full `clean` (no `--pack`) or an `init --force`, each of which lands the
+   * default.
+   */
+  /**
+   * `land-approved` (review/103): a land line (`run land` on a command running this package, or on a program the reading
+   * cannot settle) carrying `--approved`, the person's one click on the verb's `asks` outcome, asks in every mode, so it
+   * is refused unattended and for a sub-agent. A land line holding a word the shell fills in, an `--approved=` form, or
+   * arguments `xargs` adds may carry it, and reads the same: fail-closed.
+   */
+  function landApprovedVerdict(cmd: string[]): void {
+    const unsure = unread.get(cmd) ?? [];
+    const args = unsure[0] === true ? cmd.slice(1) : packageArgs(cmd);
+    if (args === null) return;
+    const at = unsure[0] === true ? args.indexOf("run") : args.findIndex((word) => !word.startsWith("-"));
+    if (at === -1 || args[at] !== "run" || !args.slice(at + 1).includes("land")) return;
+    // The flag in any spelling, alone, followed by its value (the approved commit) or joined to it with `=` (review/110).
+    if (args.some((word) => word === "--approved" || word.startsWith("--approved="))) {
+      deny("land-approved", "Landing a run on the person's approval (`stamity run land --approved`)");
+      return;
+    }
+    const marked = anyMark.get(cmd) ?? [];
+    const offset = cmd.length - args.length;
+    if (fed.has(cmd) || args.some((_, index) => marked[offset + index] === true)) {
+      deny("land-approved", "A `stamity run land` line whose words the guard cannot read, which may carry `--approved`");
+    }
+  }
+
+  function loosenVerdict(cmd: string[]): void {
+    // On the PowerShell tool, a variable alone, which prints its value, and an assignment (`$x = …`, `$env:X += …`) are
+    // no command; a group or substitution in a value is read apart. A POSIX shell runs `$x`'s value there, so elsewhere
+    // each is read as a command.
+    if (ctx.powershell === true && (cmd[0] ?? "").startsWith("$") && (cmd.length === 1 || /^[-+*/%]?=$/.test(cmd[1] ?? "") || /^\$(?:\{[^}]*\}|[\w:]+)[-+*/%]?=/.test(cmd[0] ?? ""))) {
+      return;
+    }
+    const unsure = unread.get(cmd) ?? [];
+    const unsettled = unsure[0] === true;
+    const loosens = (words: string[]): boolean => words.some((word) => /^--loosen(=|$)/.test(word));
+    const args = unsettled ? cmd.slice(1) : packageArgs(cmd);
+    if (args === null) {
+      // A file that only shares the CLI's file name may be the repository's own CLI (review/53): it asks on the literal
+      // flag alone, never on an argument it cannot read or on a full `clean` or an `init --force`.
+      if (loosens(packageArgs(cmd, true) ?? [])) deny("autonomy-loosen", "Loosening the autonomy setting (`--loosen`)");
+      return;
+    }
+    const what = unsettled ? "A command the guard cannot read, which may be a stamity command," : "A stamity command";
+    if (loosens(args)) {
+      deny("autonomy-loosen", "Loosening the autonomy setting (`--loosen`)");
+      return;
+    }
+    if (fed.has(cmd)) {
+      deny("autonomy-loosen", `${what} run under \`xargs\`, which adds arguments the guard cannot read and which may spell \`--loosen\``);
+      return;
+    }
+    if ((unsettled && spills.has(cmd)) || args.some((_, index) => unsure[cmd.length - args.length + index] === true)) {
+      deny("autonomy-loosen", `${what} with an argument the guard cannot read, which may spell \`--loosen\``);
+      return;
+    }
+    if (ctx.stricterThanDefault === false) return;
+    const sub = args.find((word) => !word.startsWith("-"));
+    if (sub === "clean" && !args.some((word) => /^--pack(=|$)/.test(word))) {
+      deny("autonomy-loosen", "A full `clean`, which removes the guard holding an autonomy setting stricter than the default");
+    }
+    if (sub === "init" && args.some((word) => /^--force(=|$)/.test(word))) {
+      deny("autonomy-loosen", "An `init --force`, which lands the default autonomy setting over a stricter one");
+    }
   }
 
   // Each segment's acts are collected (v0a); the readers record them through `deny`.
-  for (const cmd of commandsOf(command, 0, false)) {
+  // A line past 64 KiB is one the guard cannot read (review/115): it is refused in every mode before any reading, so no
+  // line can be built to outlast the hook's timeout, and no act padded past the cap is ever one click away (review/117).
+  // The act reads into the guard's refusal sentence: "…which may hold an act that deletes, force-pushes or cannot be
+  // undone (`line-too-long`): it stays the person's to run, even with approval … Give the person the exact command."
+  if (command.length > 65_536) {
+    return deny("line-too-long", "A line too long for the guard to read (over 65,536 characters), which may hold an act that");
+  }
+  const read = commandsOf(command, 0, false);
+  for (const cmd of read) {
     const program = cmd[0] ?? "";
     if (program === "git") {
       const { sub, args, config } = gitParts(cmd);
       // `git send-pack` pushes as `git push` does, its options and refspecs laid out the same (pr/16); with
       // no ref it updates the refs both sides have, the default branch among them, read as a matching push.
-      if (sub === "push") pushVerdict(args, config);
-      else if (sub === "send-pack") pushVerdict(args, [...config, "push.default=matching"]);
+      const argMarks = (markMap.get(cmd) ?? []).slice(cmd.length - args.length);
+      if (sub === "push") pushVerdict(args, config, argMarks);
+      else if (sub === "send-pack") pushVerdict(args, [...config, "push.default=matching"], argMarks);
       else if (sub === "tag") tagVerdict(args);
       else if (
         sub === "update-ref" &&
@@ -1690,15 +2553,22 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       else if (sub === "subtree") {
         // `git subtree push <remote> <branch>` runs `git push <remote> <split>:refs/heads/<branch>`.
         const valued = new Set(["-P", "--prefix", "-m", "--message", "-b", "--branch", "--onto"]);
-        const words = args.filter((word, index) => !word.startsWith("-") && !valued.has(args[index - 1] ?? ""));
-        if (words[0] === "push") pushVerdict(words.slice(1), config);
+        const kept = args.flatMap((word, index) => (!word.startsWith("-") && !valued.has(args[index - 1] ?? "") ? [index] : []));
+        const words = kept.map((index) => args[index] ?? "");
+        const keptMarks = kept.map((index) => argMarks[index] ?? { first: -1, last: 0, kinds: "" });
+        if (words[0] === "push") pushVerdict(words.slice(1), config, keptMarks.slice(1));
       }
     } else if (program === "gh") ghVerdict(cmd);
     else if (program === "curl" || program === "wget") httpVerdict(cmd);
     else if (["npm", "pnpm", "yarn", "bun"].includes(program)) publishVerdict(cmd);
   }
-  // A refuse-class act decides the line; with none, the first act asks (v0a).
-  return acts.find((act) => !act.ask) ?? acts[0] ?? { deny: false };
+  // The loosen reading last, so a line holding another act names that one first.
+  for (const cmd of read) {
+    landApprovedVerdict(cmd);
+    loosenVerdict(cmd);
+  }
+  // A refuse-class act decides the line; with none, the first act asks (v0a); with none, the acts that run are named.
+  return acts.find((act) => !act.ask) ?? acts[0] ?? (ran.length > 0 ? { deny: false, runs: ran } : { deny: false });
 }
 
 /**
@@ -1720,14 +2590,30 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
  * is read as {@link personOnlyVerdict} reads it, and throws as it does; with `powershell`, as PowerShell's command string
  * (the PowerShell tool's text), a POSIX shell's reading beside it.
  *
- * A run verb stands alone on its line (REQ-FLOW-121): a line that runs `stamity run start`, `checkpoint` or `end`, or
- * names one beside the package, is refused unless it is that one simple command, so nothing on the line changes the
- * environment the verb's git runs in.
+ * A run verb stands alone on its line (REQ-FLOW-121): a line that runs `stamity run start`, `checkpoint`, `end` or
+ * `land`, or names one beside the package, is refused unless it is that one simple command, so nothing on the line
+ * changes the environment the verb's git runs in.
+ *
+ * With `landOnly`, the guard's attended reading of the land verb's line (REQ-FLOW-121, a4): only that rule, and only
+ * over the parsed program words (a command whose program is this package, then `run` and `land`), never the raw text,
+ * so a commit message naming the verb runs. A line that builds the verb by an expression is not seen there; the
+ * verb's own checks back that residual. `identity` is this package as the guard bakes it, {@link PersonOnlyContext}'s
+ * `packageWords`, `packageName` and `ownRepository` (review/44, review/53); the verb's line admits its words as its
+ * first word too.
  *
  * Self-contained, so the emitted guard can carry it as source (see the module
  * comment).
  */
-export function unattendedPushVerdict(command: string, powershell = false): UnattendedPushVerdict {
+export function unattendedPushVerdict(
+  command: string,
+  powershell = false,
+  landOnly = false,
+  identity: { readonly words?: readonly string[]; readonly name?: string; readonly own?: boolean } = {},
+): UnattendedPushVerdict {
+  const PACKAGE_WORDS = identity.words ?? ["stamity", "st"];
+  // No scoped name is embedded here (build/10), as in personOnlyVerdict.
+  const PACKAGE_NAME = (identity.name ?? "").toLowerCase();
+  const OWN_REPOSITORY = identity.own ?? true;
   // <shell-reading>
   const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
   const KEYWORDS = new Set(["!", "{", "}", "if", "then", "else", "elif", "fi", "do", "done", "while", "until"]);
@@ -1774,6 +2660,11 @@ export function unattendedPushVerdict(command: string, powershell = false): Unat
   /** The quotes PowerShell opens and closes with: `'` and U+2018 to U+201B, `"` and U+201C to U+201E (v0b). */
   const PS_SINGLE = "'" + String.fromCharCode(0x2018, 0x2019, 0x201a, 0x201b);
   const PS_DOUBLE = '"' + String.fromCharCode(0x201c, 0x201d, 0x201e);
+  /**
+   * A heredoc's delimiter after its `<<` (REQ-FLOW-141): `-` for `<<-`, then the name from the set, in one pair of
+   * single or double quotes, or bare; any other spelling matches nothing.
+   */
+  const HEREDOC = /^(-?)[ \t]*(?:'([A-Za-z_]\w{0,63})'|"([A-Za-z_]\w{0,63})"|([A-Za-z_]\w{0,63}))(?![^\s;&|<>()])/;
 
   /**
    * A program word as the shell finds it: its last path part, without case or a Windows suffix, and without a trailing
@@ -1795,30 +2686,263 @@ export function unattendedPushVerdict(command: string, powershell = false): Unat
   }
 
   /**
+   * Whether a segment's words open on the engine's own CLI, each literal (REQ-FLOW-141's stdin receiver, review/76): one
+   * of this package's bins as a bare word, or `npx` with `--no`, `-y`, `--yes` or `--no-yes` and then a bin, the
+   * package's name or its name pinned to a version. A path to a same-named file, a launcher or a wrapper is not it.
+   */
+  function engine(words: readonly string[], kinds: readonly string[]): boolean {
+    const at = words[0] === "npx" && ["--no", "-y", "--yes", "--no-yes"].includes(words[1] ?? "") ? 2 : 0;
+    const name = (words[at] ?? "").toLowerCase();
+    const pinned = name.startsWith(`${PACKAGE_NAME}@`) && /^\d+\.\d+\.\d+$/.test(name.slice(PACKAGE_NAME.length + 1));
+    return kinds.slice(0, at + 1).every((kind) => kind === "") && (PACKAGE_WORDS.includes(words[at] ?? "") || (at === 2 && (name === PACKAGE_NAME || pinned)));
+  }
+
+  /**
+   * Whether a segment's words are exactly `git commit` reading its message from stdin (`-F -`, `--file -`, `--file=-`),
+   * or exactly `gh pr create`, `edit` or `comment` reading its body from stdin (`--body-file -`, `-F -`), each of those
+   * words literal (REQ-FLOW-141's message receivers, review/118). Neither program runs what it reads there.
+   */
+  function message(words: readonly string[], kinds: readonly string[]): boolean {
+    const git = words[0] === "git" && words[1] === "commit";
+    const gh = words[0] === "gh" && words[1] === "pr" && ["create", "edit", "comment"].includes(words[2] ?? "");
+    const flags = git ? ["-F", "--file"] : ["--body-file", "-F"];
+    const literal = (at: number): boolean => kinds[at] === "";
+    return (
+      (git || gh) &&
+      [0, 1, 2].slice(0, git ? 2 : 3).every(literal) &&
+      words.some((word, at) => literal(at) && ((flags.includes(word) && words[at + 1] === "-" && literal(at + 1)) || (git && word === "--file=-")))
+    );
+  }
+
+  /**
+   * Whether earlier segments may change what a later heredoc's receiver is (REQ-FLOW-141): a word ending in `()` (a
+   * function), or a command opening, after keywords, on an assignment or on a builtin that defines, assigns, sources or
+   * runs a line (`alias`, `export`, `read`, `eval`, `.`, …).
+   */
+  function defines(segments: readonly string[][]): boolean {
+    const DEFINERS = new Set(["alias", "function", "hash", "enable", "source", ".", "eval", "export", "declare", "typeset",
+      "local", "readonly", "read", "mapfile", "readarray", "getopts", "printf", "for", "select", "set", "shopt", "setopt",
+      "unset", "builtin", "command", "time", "exec"]);
+    return segments.some((words) => {
+      const head = words.find((word) => !KEYWORDS.has(word)) ?? "";
+      return ASSIGNMENT.test(head) || DEFINERS.has(programName(head)) || words.some((word) => word.endsWith("()"));
+    });
+  }
+
+  /**
    * The words of each simple command in `text`, a command substitution's text read as its own lines; with `blocks`, a
    * brace attached to a word starts or ends a PowerShell script block (`{git push}`), a brace a word opened (`@{1}`,
    * `${x}`) staying part of it; with `pwsh`, PowerShell's escape (review/194): the backtick escapes, a backslash is a
-   * plain character.
+   * plain character. `marks` holds, per word, where the shell still expands or globs it (review/37, review/45): `first`,
+   * the index of the first such character in the decoded word (-1 where none is), `last`, the index just past the last,
+   * and `kinds`: `e` for an expansion (`$`, a backtick, a substitution, PowerShell's splat, an `@` opening a word before a
+   * name, `(` or `{`, a here-string's `@'` aside), `s` where it is unquoted, so its value splits into words, `p` for a PowerShell group, whose value is an
+   * argument and never a command, `g` for a glob (`*`, `?`, `[`), `b` for a `{` opening a brace expansion. A single-quoted, ANSI-C-quoted or escaped character is literal text. A `${…}` counts to
+   * its closing brace, so its text is never read as literal.
+   *
+   * Heredocs (REQ-FLOW-141, a5): with `docs` 1 (the line itself) or 2 (a substitution an argument word wholly is), the
+   * first heredoc operator is recorded, and at the line break ending its line, when it is that line's only one, its
+   * body and terminator are skipped if a data sink receives them (`pastBody`); every other form reads as below. A
+   * `nested` entry's `at` is its segment's index where it is a closed double-quoted `$(…)` an argument word wholly is,
+   * else -1, and `open` where nothing closes it on the line, so its text is read as filled in (build/12); `ends` holds,
+   * per segment, the character that cut it and `>` where its standard output is redirected.
    */
-  function splitLine(text: string, blocks: boolean, pwsh: boolean): { segments: string[][]; nested: string[] } {
+  function splitLine(
+    text: string,
+    blocks: boolean,
+    pwsh: boolean,
+    docs = 0,
+  ): { segments: string[][]; nested: { text: string; at: number; word: number; open: boolean }[]; marks: WordMark[][]; ends: string[] } {
     const segments: string[][] = [];
-    const nested: string[] = [];
+    const marks: WordMark[][] = [];
+    const nested: { text: string; at: number; word: number; open: boolean }[] = [];
+    const ends: string[] = [];
+    // The first heredoc: where its word starts, its segment, delimiter, quoting and `<<-`, then that segment's words,
+    // kinds, redirections, cut and cut index as the cut found them; `heredocs` counts every operator, `done` ends the one
+    // decision a text gets, so the reading stays linear.
+    let doc: { at: number; seg: number; name: string; bare: boolean; tabs: boolean; words?: string[]; kinds?: string[]; redirs?: string[][]; cut?: string; end?: number } | null = null;
+    let heredocs = 0;
+    let done = false;
+    // The current segment's redirections: the operator (a descriptor number first), its target word and that word's kinds.
+    let redirs: string[][] = [];
     let words: string[] = [];
+    let wordMarks: WordMark[] = [];
     let word = "";
+    // The current word's brace balance, counted once per character (review/102's note): `counted` characters read.
+    let counted = 0;
+    let balance = 0;
+    const balanced = (): boolean => {
+      for (; counted < word.length; counted += 1) {
+        if (word[counted] === "{") balance += 1;
+        else if (word[counted] === "}") balance -= 1;
+      }
+      return balance <= 0;
+    };
+    let mark: WordMark = { first: -1, last: 0, kinds: "" };
     let inWord = false;
     let dropNext = false;
     const endWord = (): void => {
       if (!inWord) return;
-      if (dropNext) dropNext = false;
-      else words.push(word);
+      if (dropNext) {
+        dropNext = false;
+        redirs[redirs.length - 1]?.push(word, mark.kinds);
+      } else {
+        words.push(word);
+        wordMarks.push({ ...mark, last: Math.min(mark.last, word.length) });
+      }
       word = "";
+      counted = 0;
+      balance = 0;
+      mark = { first: -1, last: 0, kinds: "" };
       inWord = false;
     };
-    const cut = (): void => {
+    /** Marks the decoded characters from `from` to `to` as ones the shell fills in, of the kinds named. */
+    const hide = (from: number, to: number, kinds: string): void => {
+      if (mark.first === -1) mark.first = from;
+      mark.last = Math.max(mark.last, to);
+      mark.kinds += kinds;
+    };
+    const cut = (c = ""): void => {
       endWord();
       dropNext = false;
-      if (words.length > 0) segments.push(words);
+      if (doc !== null && doc.cut === undefined && doc.seg === segments.length) {
+        Object.assign(doc, { words, kinds: wordMarks.map((each) => each.kinds), redirs, cut: c, end: i });
+      }
+      if (words.length > 0) {
+        segments.push(words);
+        marks.push(wordMarks);
+        ends.push(c + (redirs.some((each) => /^1?>/.test(each[0] ?? "")) ? ">" : ""));
+      }
       words = [];
+      wordMarks = [];
+      redirs = [];
+    };
+    /**
+     * Where the reading resumes after the line break at `nl` (REQ-FLOW-141): past the terminator line when the line's
+     * one heredoc goes to a data sink, else at the next character, the body read as commands. Every receiver needs its
+     * operator's line to end at `nl`, no carriage return in the text, a terminator line equal to the delimiter (after
+     * leading tabs for `<<-`) and, unquoted, a body with no `$(` or backtick, and nothing piping onward. With `docs` 2:
+     * a bare `cat` first in the text, with no other redirection and nothing after it on its line. With `docs` 1: a bare
+     * `cat` (no argument) or `tee` (plain operands, `-a`, `-i`, `-p`) first on the line, its standard output sent by `>`
+     * or `>>` to one plain path, no other redirection, its targets named by no later word; the engine's own CLI
+     * (`engine`) first in its segment, with no other redirection and no earlier command defining or assigning; or
+     * `git commit` or `gh pr create|edit|comment` reading its message from stdin (`message`), first on the line, with no
+     * other redirection (review/118).
+     */
+    const pastBody = (nl: number): number => {
+      const d = doc;
+      if (d?.words === undefined || heredocs !== 1 || text.includes("\r") || text.indexOf("\n", d.at) !== nl) return nl + 1;
+      const kinds = d.kinds ?? [];
+      const others = (d.redirs ?? []).filter((each) => each[0] !== "<<");
+      const out = others.length === 1 && /^1?>>?$/.test(others[0]?.[0] ?? "") ? (others[0] ?? []) : [];
+      const plain = (path: string, kind = ""): boolean =>
+        kind === "" &&
+        /^[\w./@%+,:=~][\w./@%+,:=~-]{0,255}$/.test(path) &&
+        !/(?:^|\/)\.git(?:\/|$)/i.test(path) &&
+        (!/^\/(?:dev|proc)\//.test(path) || path === "/dev/null");
+      const operands = d.words.slice(1).filter((each) => !/^(?:-[aip]+|--append|--ignore-interrupts)$/.test(each));
+      const writes =
+        docs === 1 &&
+        d.seg === 0 &&
+        kinds.every((each) => each === "") &&
+        plain(out[1] ?? "", out[2]) &&
+        (d.words.join(" ") === "cat" || (d.words[0] === "tee" && operands.length > 0 && operands.every((each) => plain(each))));
+      const sink =
+        /^[\n;&]$/.test(d.cut ?? "") &&
+        (docs === 2
+          ? d.cut === "\n" && d.seg === 0 && d.words.join(" ") === "cat" && kinds[0] === "" && others.length === 0
+          : writes ||
+            (docs === 1 && others.length === 0 && engine(d.words, kinds) && !defines(segments.slice(0, d.seg))) ||
+            (docs === 1 && others.length === 0 && d.seg === 0 && message(d.words, kinds)));
+      if (!sink) return nl + 1;
+      for (let at = nl + 1; ; ) {
+        const stop = text.indexOf("\n", at);
+        const end = stop === -1 ? text.length : stop;
+        const line = text.slice(at, end);
+        if ((d.tabs ? line.replace(/^\t+/, "") : line) === d.name) {
+          // The text after the segment on the operator's line, and after the terminator: no word there names a target.
+          const later = text.slice(d.end ?? nl, nl) + text.slice(end);
+          const named = writes ? [out[1] ?? "", ...(d.words[0] === "tee" ? operands : [])] : [];
+          if (d.bare && /\$\(|`/.test(text.slice(nl + 1, at))) return nl + 1;
+          if (named.some((each) => each !== "/dev/null" && later.includes(each.split("/").pop() ?? each))) return nl + 1;
+          return end;
+        }
+        if (stop === -1) return nl + 1;
+        at = stop + 1;
+      }
+    };
+    /** Marks an expansion starting at `text[at]` and appended next: through its closing brace when it opens `${`. */
+    const expands = (at: number, kinds: string): void => {
+      let end = at + 1;
+      if (text[at] === "$" && text[at + 1] === "{") {
+        // Bounded, so the reading stays linear in the line's length: a span past the bound runs to the line's end.
+        let level = 0;
+        while (end < text.length) {
+          if (end - at > 256) {
+            end = text.length;
+            break;
+          }
+          if (text[end] === "{") level += 1;
+          else if (text[end] === "}") level -= 1;
+          end += 1;
+          if (level === 0) break;
+        }
+      }
+      hide(word.length, word.length + (end - at), kinds);
+    };
+    /** Whether the `{` at `text[at]` opens a brace expansion: a `,` or `..` before an unquoted blank or its `}`. */
+    const braceExpands = (at: number): boolean => {
+      let quoted = "";
+      for (let j = at + 1; j < text.length; j += 1) {
+        // Bounded, so the reading stays linear in the line's length: a form past the bound reads as an expansion.
+        if (j - at > 256) return true;
+        const c = text[j] ?? "";
+        if (quoted !== "") {
+          if (c === quoted) quoted = "";
+        } else if (c === "'" || c === '"') quoted = c;
+        else if (c === "\\") j += 1;
+        else if (c === "}" || /\s/.test(c)) return false;
+        else if (c === "," || (c === "." && text[j + 1] === ".")) return true;
+      }
+      return false;
+    };
+    /**
+     * The index of the `)` closing a substitution or group whose text starts at `from`, or the text's length where none
+     * closes it on the line (build/12). A quoted heredoc's body, data the shell does not parse, is passed over, so a
+     * parenthesis in it neither ends the text early nor keeps it open; on a line holding a bare one, each body there is
+     * counted as before. One pass: each body is passed once.
+     */
+    const closing = (from: number): number => {
+      let level = 1;
+      let bodies: string[][] | null = [];
+      for (let j = from; j < text.length; j += 1) {
+        const c = text[j];
+        if (c === "(") level += 1;
+        else if (c === ")") {
+          level -= 1;
+          if (level === 0) return j;
+        } else if (c === "<" && text[j + 1] === "<" && text[j + 2] !== "<" && text[j - 1] !== "<") {
+          const head = HEREDOC.exec(text.slice(j + 2, j + 162));
+          if (head === null || head[4] !== undefined) bodies = null;
+          else bodies?.push([head[2] ?? head[3] ?? "", head[1] ?? ""]);
+        } else if (c === "\n") {
+          for (const [name, tabs] of bodies ?? []) {
+            let found = -1;
+            for (let at = j + 1; found === -1; ) {
+              const stop = text.indexOf("\n", at);
+              const end = stop === -1 ? text.length : stop;
+              const line = text.slice(at, end);
+              if ((tabs === "-" ? line.replace(/^\t+/, "") : line) === name) found = end;
+              else if (stop === -1) return text.length;
+              else at = stop + 1;
+            }
+            if (found === text.length) return text.length;
+            j = found;
+          }
+          bodies = [];
+        }
+      }
+      return text.length;
     };
     // PowerShell's reading takes its typographic quotes as quotes too, so an act after one is read, not hidden.
     const quote = (c: string | undefined, kind: string): boolean => c !== undefined && (c === kind[0] || (pwsh && kind.includes(c)));
@@ -1832,6 +2956,8 @@ export function unattendedPushVerdict(command: string, powershell = false): Unat
         inWord = true;
         i = stop + 1;
       } else if (quote(ch, PS_DOUBLE)) {
+        // Whether this quote opens a word that is no redirection's target, for a substitution that is the whole word.
+        const opens = !inWord && !dropNext ? i + 1 : -1;
         inWord = true;
         i += 1;
         while (i < text.length && !quote(text[i], PS_DOUBLE)) {
@@ -1849,19 +2975,17 @@ export function unattendedPushVerdict(command: string, powershell = false): Unat
             let j = start;
             if (c === "`") {
               while (j < text.length && text[j] !== "`") j += 1;
-            } else {
-              let level = 1;
-              while (j < text.length) {
-                if (text[j] === "(") level += 1;
-                else if (text[j] === ")") level -= 1;
-                if (level === 0) break;
-                j += 1;
-              }
-            }
-            nested.push(text.slice(start, j));
+            } else j = closing(start);
+            const open = j >= text.length;
+            const whole = !pwsh && c === "$" && i === opens && text[j + 1] === '"' && /^[\s;&|<>)]?$/.test(text[j + 2] ?? "");
+            nested.push({ text: text.slice(start, j), at: whole && !open ? segments.length : -1, word: words.length, open });
+            // A substitution nothing closes on the line leaves the rest of it unread (build/12): the word is filled in, and
+            // its text is read as a filled-in line, so an act behind it asks or is refused, never one allowed word.
+            hide(word.length, word.length + Math.min(j + 1, text.length) - i, "e");
             word += text.slice(i, Math.min(j + 1, text.length));
             i = j + 1;
           } else {
+            if (c === "$") expands(i, "e");
             word += c;
             i += 1;
           }
@@ -1913,16 +3037,11 @@ export function unattendedPushVerdict(command: string, powershell = false): Unat
         let j = start;
         if (ch === "`") {
           while (j < text.length && text[j] !== "`") j += 1;
-        } else {
-          let level = 1;
-          while (j < text.length) {
-            if (text[j] === "(") level += 1;
-            else if (text[j] === ")") level -= 1;
-            if (level === 0) break;
-            j += 1;
-          }
-        }
-        nested.push(text.slice(start, j));
+        } else j = closing(start);
+        const open = j >= text.length;
+        nested.push({ text: text.slice(start, j), at: -1, word: 0, open });
+        // A substitution or group nothing closes on the line leaves the rest of it unread (build/12), as above.
+        hide(word.length, word.length + Math.min(j + 1, text.length) - i, open ? "es" : ch === "(" ? "p" : "es");
         word += text.slice(i, Math.min(j + 1, text.length));
         inWord = true;
         i = j + 1;
@@ -1933,49 +3052,112 @@ export function unattendedPushVerdict(command: string, powershell = false): Unat
         while (i < text.length && text[i] !== "\n") i += 1;
       } else if (ch === ">" || ch === "<") {
         // A redirection: a file-descriptor number before it and its target after it are not arguments.
+        let fd = "";
         if (inWord && /^\d+$/.test(word)) {
+          fd = word;
           word = "";
+          counted = 0;
+          balance = 0;
+          mark = { first: -1, last: 0, kinds: "" };
           inWord = false;
         } else endWord();
+        const from = i;
         while (i < text.length && "<>&|".includes(text[i] ?? "")) i += 1;
+        const op = fd + text.slice(from, i);
+        if (docs > 0 && op.includes("<<") && !op.includes("<<<")) {
+          // A heredoc (REQ-FLOW-141): `<<` or `<<-` and its delimiter, one pair of quotes or bare, from the set; any
+          // other spelling, a descriptor number among them, is recorded as none, so the line keeps its reading.
+          heredocs += 1;
+          const head = HEREDOC.exec(text.slice(i, i + 160));
+          if (heredocs === 1 && op === "<<" && head !== null) {
+            doc = { at: i, seg: segments.length, name: head[2] ?? head[3] ?? head[4] ?? "", bare: head[4] !== undefined, tabs: head[1] === "-" };
+          }
+        }
+        redirs.push([op]);
         dropNext = true;
       } else if (
         ";&|\n\r()`".includes(ch) ||
         (blocks && ch === "{" && !inWord) ||
-        (blocks && ch === "}" && word.split("{").length <= word.split("}").length)
+        (blocks && ch === "}" && balanced())
       ) {
-        cut();
+        cut(ch);
         i += 1;
+        // The line break ending the first heredoc's line: its one decision (REQ-FLOW-141).
+        if (ch === "\n" && heredocs > 0 && !done) {
+          done = true;
+          i = pastBody(i - 1);
+        }
       } else {
+        if (ch === "$" || (pwsh && ch === "@" && !inWord && /[\w({]/.test(text[i + 1] ?? ""))) expands(i, "es");
+        else if ("*?[".includes(ch)) expands(i, "g");
+        else if (ch === "{" && braceExpands(i)) expands(i, "b");
         word += ch;
         inWord = true;
         i += 1;
       }
     }
     cut();
-    return { segments, nested };
+    return { segments, nested, marks, ends };
   }
 
   /** Each assignment word the reading below skips (`X=v git …`, `env X=v …`), as it decoded it (review/208). */
   const assigned: string[] = [];
+  /**
+   * Per command the reading returns, which of its words may spell an option the line does not show (review/37,
+   * review/45, review/52): an argument holding an expansion, or a glob or brace form whose literal text before it is
+   * empty or opens with a dash; the program word where its last path part holds an expansion or a brace form, or a
+   * glob that can name this package (review/38). A mark is never lost: a command read from a nested string taken from
+   * a marked word has every word marked (review/54).
+   */
+  const unread = new Map<string[], boolean[]>();
+  /** Per command, which of its words hold any mark at all, a glob or brace form whatever its literal text included. */
+  const anyMark = new Map<string[], boolean[]>();
+  /** Per command, each word's marks as the reading took them, a tainted reading's words marked whole (review/69). */
+  const markMap = new Map<string[], WordMark[]>();
+  /** The commands whose program word may itself split into more words, an option among them (review/45). */
+  const spills = new Set<string[]>();
+  /** The commands run under `xargs`, which adds arguments from its input that the line never shows (review/45). */
+  const fed = new Set<string[]>();
+  /**
+   * Per launcher command whose settling word's literal last path part is one of this package's words (review/100, the
+   * review/38 reading), that word's index: the command runs this package, its folder filled in or not.
+   */
+  const launched = new Map<string[], number>();
 
   /**
    * Each simple command's words, its program word first and normalized; `sh -c` and `eval` text read too. With `pwsh`,
    * the text is PowerShell's: a PowerShell command string or the Windows command interpreter's rest, whose backslash is
    * a plain character (review/194). A line nested past four levels throws a coded `NESTING_DEPTH` error (pr/58): the
    * reading stops there, so the guard refuses the line rather than allow what the fifth level runs.
+   *
+   * With `capture`, `text` is a substitution an argument word wholly is (see below), whose heredoc may go to a bare
+   * `cat`; at depth 0 on a POSIX reading, the line's heredocs may go to a file or the engine (REQ-FLOW-141).
    */
-  function commandsOf(text: string, depth: number, pwsh: boolean): string[][] {
+  function commandsOf(text: string, depth: number, pwsh: boolean, tainted = false, fedIn = false, capture = false): string[][] {
     if (depth > 4) throw Object.assign(new Error("nesting"), { code: "NESTING_DEPTH" });
-    const { segments, nested } = splitLine(text, true, pwsh);
+    const docs = capture ? 2 : depth === 0 && !pwsh ? 1 : 0;
+    const { segments, nested, marks, ends } = splitLine(text, true, pwsh, docs);
     // A PowerShell line is read with a POSIX shell's escapes too, and a line with a brace with its braces as words too
     // (review/185), so either reading adds denials and never lifts one: `git push origin x} -f` still forces.
-    const commands: string[][] = pwsh ? commandsOf(text, depth, false) : [];
-    for (const words of [...segments, ...(/[{}]/.test(text) ? splitLine(text, false, pwsh).segments : [])]) {
+    const commands: string[][] = pwsh ? commandsOf(text, depth, false, tainted, fedIn) : [];
+    const braces = /[{}]/.test(text) ? splitLine(text, false, pwsh, docs) : { segments: [], marks: [] };
+    // The substitutions read as an argument's data (REQ-FLOW-141, review/76), found by segment in one pass, and whether an
+    // earlier segment defines or assigns, read once per segment: see below.
+    const captured = new Set<object>();
+    const wholly = new Map<number, object[]>();
+    for (const each of nested) if (each.at >= 0 && each.word > 0) wholly.set(each.at, wholly.get(each.at) ?? []).get(each.at)?.push(each);
+    const plainLine = docs === 1 && !tainted && wholly.size > 0 && !text.includes("\r");
+    let defined = false;
+    let checked = 0;
+    const allMarks = [...marks, ...braces.marks];
+    for (const [segment, words] of [...segments, ...braces.segments].entries()) {
       let k = 0;
       let line: string | null = null;
+      let lineFrom = 0;
+      let viaStdin = false;
       while (k < words.length && line === null) {
         const word = words[k] ?? "";
+        if (programName(word) === "xargs") viaStdin = true;
         let sub = k + 1;
         while (MANAGERS.has(programName(word)) && sub < words.length) {
           const option = words[sub] ?? "";
@@ -2005,6 +3187,7 @@ export function unattendedPushVerdict(command: string, powershell = false): Unat
               continue;
             }
             if (!/^(-|\d)/.test(option)) break;
+            const optionAt = k;
             k += 1;
             if (option === "--") break;
             let value: string | undefined;
@@ -2029,45 +3212,229 @@ export function unattendedPushVerdict(command: string, powershell = false): Unat
             // An option whose value is a command line (`env -S '…'`, `npx -c '…'`): that line is what runs.
             if (isLine && value !== undefined) {
               line = [value, ...words.slice(k)].join(" ");
+              lineFrom = optionAt;
               break;
             }
           }
         } else break;
       }
+      // A closed double-quoted `$(…)` that is wholly an argument word of a segment's first word, on the line's own POSIX
+      // reading (REQ-FLOW-141's commit-message receiver, review/76), is read with its heredoc as `cat`'s data: no
+      // assignment, keyword or wrapper first, no shell, `eval`, PowerShell host, command interpreter, `source` or
+      // launcher as the program, no standard output redirected or piped onward, nothing earlier defining or assigning,
+      // no carriage return. A reading that runs the word as a line still reads it, its substitution unquoted there.
+      if (plainLine && segment < segments.length && !defined) {
+        defined = defines(segments.slice(checked, segment));
+        checked = segment;
+      }
+      const opener = programName(words[0] ?? "");
+      if (
+        plainLine && !defined && line === null && k === 0 && !/[|>]/.test(ends[segment] ?? "|") &&
+        !SHELLS.has(opener) && !POWERSHELLS.has(opener) && !["eval", "cmd", "source", ".", "node", "nodejs", "bun", "deno", "tsx"].includes(opener)
+      ) {
+        for (const each of wholly.get(segment) ?? []) captured.add(each);
+      }
       if (line !== null) {
-        commands.push(...commandsOf(line, depth + 1, pwsh));
+        const lineTainted = tainted || (allMarks[segment] ?? []).slice(lineFrom).some((each) => each.kinds !== "");
+        commands.push(...commandsOf(line, depth + 1, pwsh, lineTainted, fedIn || viaStdin));
         continue;
       }
       const cmd = words.slice(k);
       if (cmd.length === 0) continue;
-      // A program word holding a whole command line (`bun exec 'git push'`) is also read as that line, unless it is this one.
-      if (/\s/.test(cmd[0] ?? "") && cmd.join(" ") !== text) commands.push(...commandsOf(cmd.join(" "), depth + 1, pwsh));
+      const program = cmd[0] ?? "";
+      const cut = Math.max(program.lastIndexOf("/"), program.lastIndexOf("\\")) + 1;
+      // A last path part whose only expansion is a glob is settled by what its pattern can name: unsettled only where it
+      // can name one of this package's words, so `?` (PowerShell's `Where-Object`) stays another program.
+      const last = programName(program);
+      // Whether the last path part's glob may name a package word (review/102): a two-pointer wildcard match, linear in
+      // the pattern times the name, with no regular expression; a class matches any one character. A pattern holding
+      // more wildcards than the longest package word has characters is one the guard cannot settle.
+      const wildcards = (last.match(/[*?[]/g) ?? []).length;
+      const mayName = (name: string): boolean => {
+        const tokens: string[] = [];
+        for (let i = 0; i < last.length; i += 1) {
+          const c = last[i] ?? "";
+          const close = c === "[" ? last.indexOf("]", i + 2) : -1;
+          if (close !== -1) {
+            tokens.push("?");
+            i = close;
+          } else tokens.push(c === "*" || c === "?" ? c : `=${c}`);
+        }
+        let t = 0;
+        let n = 0;
+        let star = -1;
+        let resume = 0;
+        while (n < name.length) {
+          if (t < tokens.length && (tokens[t] === "?" || tokens[t] === `=${name[n]}`)) {
+            t += 1;
+            n += 1;
+          } else if (t < tokens.length && tokens[t] === "*") {
+            star = t;
+            resume = n;
+            t += 1;
+          } else if (star !== -1) {
+            t = star + 1;
+            resume += 1;
+            n = resume;
+          } else return false;
+        }
+        while (t < tokens.length && tokens[t] === "*") t += 1;
+        return t === tokens.length;
+      };
+      const globMayName = (): boolean => wildcards > Math.max(0, ...PACKAGE_WORDS.map((name) => name.length)) || PACKAGE_WORDS.some(mayName);
+      const wordMarks = (allMarks[segment] ?? []).slice(k);
+      const markOf = (at: number): WordMark => wordMarks[at] ?? { first: -1, last: 0, kinds: "" };
+      // A glob or brace form can give a word that opens with a dash only where its literal text before it is empty or
+      // opens with one (review/52): `src/*.ts` cannot spell an option, `*` and `--loo*` can.
+      const dashes = (at: number): boolean => markOf(at).first === 0 || (cmd[at] ?? "").startsWith("-");
+      // A launcher or a package manager whose script or package word the shell fills in runs a program the guard cannot
+      // settle (review/87, review/93, review/98, review/99), read with no knowledge of any option. A launcher's head
+      // word is its first word that is no option (a dash word, joined value or not) and no possible value of a bare
+      // option (a dash word holding no `=`, whose next word may be its value, any word). `node`, `nodejs` and `tsx`
+      // (its `watch` passed) read that word as the script, settled by its literal last path part whatever its
+      // extension. `deno` and `bun` read it through a fixed table of their verbs: a script-taking one (`deno run`, bun
+      // given a path or a script file, `bun run` given one) reads the next head word as the script; a name-taking one
+      // (`bun run <name>`, `deno task <name>`, bun given a bare name) is settled by that literal name; their own tools
+      // (`bun test`, `deno test`, `deno fmt`, …) are settled, their later words file arguments; `bun x` reads its
+      // package word. A manager's package or bin word is its first literal word that is no option, its `run`, `exec`,
+      // `dlx` or `x` and a folder, filter or workspace value passed. A marked word before the settling word unsettles
+      // the program, except a manager's folder, filter or workspace value, which runs no code; so does a marked
+      // settling word (a script by its last part), and, with no settling word, any marked word. A marked word after it
+      // leaves the program to that word.
+      const launcher = programName(program);
+      const launches = ["node", "nodejs", "bun", "deno", "tsx"].includes(launcher);
+      const valueOf = (at: number): boolean =>
+        !launches && (MANAGER_VALUED.has(cmd[at - 1] ?? "") || [...MANAGER_VALUED].some((name) => name.startsWith("--") && (cmd[at] ?? "").startsWith(`${name}=`)));
+      /** A launcher's next head word from `from`, or -1: no dash word and no word directly after a bare option. */
+      const headFrom = (from: number): number => {
+        for (let at = from; at < cmd.length; at += 1) {
+          const word = cmd[at] ?? "";
+          const previous = at > 1 ? (cmd[at - 1] ?? "") : "";
+          if (word.startsWith("-") || (previous.startsWith("-") && !previous.includes("="))) continue;
+          return at;
+        }
+        return -1;
+      };
+      const scriptFile = (word: string): boolean => /[\\/]/.test(word) || /\.(?:[cm]?[jt]s|[jt]sx)$/i.test(word);
+      const lastPartMarked = (at: number): boolean => {
+        const word = cmd[at] ?? "";
+        return markOf(at).last > Math.max(word.lastIndexOf("/"), word.lastIndexOf("\\")) + 1;
+      };
+      let launchesUnread = false;
+      if (launches || MANAGERS.has(launcher)) {
+        // The settling word and whether it holds a mark that unsettles it; -1 where none settles the program.
+        let settledAt = -1;
+        let settlingMarked = false;
+        if (launches) {
+          const head = headFrom(1);
+          const word = head === -1 ? "" : (cmd[head] ?? "");
+          const literal = head !== -1 && markOf(head).kinds === "";
+          const script = (at: number): void => {
+            settledAt = at;
+            settlingMarked = at !== -1 && lastPartMarked(at);
+          };
+          const named = (at: number): void => {
+            settledAt = at;
+            settlingMarked = at !== -1 && markOf(at).kinds !== "";
+          };
+          const DENO_TOOLS = ["test", "bench", "fmt", "lint", "check", "compile", "doc", "info", "cache", "coverage", "types", "upgrade", "completions"];
+          const BUN_TOOLS = ["test", "build", "install", "i", "add", "a", "remove", "rm", "update", "link", "unlink", "pm", "init", "outdated", "publish", "audit", "info", "patch", "upgrade"];
+          if (head === -1) settledAt = -1;
+          else if (launcher === "deno") {
+            if (!literal) named(head);
+            else if (word === "run") script(headFrom(head + 1));
+            else if (word === "task") named(headFrom(head + 1));
+            else if (DENO_TOOLS.includes(word)) named(head);
+            else if (scriptFile(word)) script(head);
+          } else if (launcher === "bun") {
+            if (!literal) named(head);
+            else if (word === "run") {
+              const next = headFrom(head + 1);
+              if (next !== -1 && markOf(next).kinds === "" && !scriptFile(cmd[next] ?? "")) named(next);
+              else script(next);
+            } else if (word === "x") named(headFrom(head + 1));
+            else if (BUN_TOOLS.includes(word)) named(head);
+            else if (scriptFile(word)) script(head);
+            else named(head);
+          } else if (launcher === "tsx" && literal && word === "watch") script(headFrom(head + 1));
+          else script(head);
+        } else {
+          for (let at = 1; at < cmd.length && settledAt === -1; at += 1) {
+            const word = cmd[at] ?? "";
+            if (markOf(at).kinds === "" && !word.startsWith("-") && !["run", "run-script", "exec", "dlx", "x"].includes(word) && !valueOf(at)) {
+              settledAt = at;
+            }
+          }
+        }
+        const before = settledAt === -1 ? cmd.length : settledAt;
+        if (launches && settledAt !== -1 && !lastPartMarked(settledAt) && PACKAGE_WORDS.includes(programName(cmd[settledAt] ?? ""))) {
+          launched.set(cmd, settledAt);
+        }
+        launchesUnread = settlingMarked || cmd.slice(1, before).some((_, index) => markOf(index + 1).kinds !== "" && !valueOf(index + 1));
+      }
+      const unsure = cmd.map((_, at) => {
+        const mark = markOf(at);
+        if (tainted) return true;
+        if (at > 0) return /[ep]/.test(mark.kinds) || (/[gb]/.test(mark.kinds) && dashes(at));
+        return (
+          launchesUnread ||
+          (mark.last > cut && (/[eb]/.test(mark.kinds) || (/g/.test(mark.kinds) && globMayName())))
+        );
+      });
+      // A program word built by an expansion, or by a glob or brace form that can give a dash word, carries arguments
+      // of its own the line does not show (review/45): a runner may read the value as a line, a split value is words.
+      if (tainted || /e/.test(markOf(0).kinds) || (/[gb]/.test(markOf(0).kinds) && dashes(0))) spills.add(cmd);
+      const marked = cmd.map((_, at) => tainted || markOf(at).kinds !== "");
+      unread.set(cmd, unsure);
+      anyMark.set(cmd, marked);
+      const raw = cmd.map((word, at) => (tainted ? { first: 0, last: word.length, kinds: "es" } : markOf(at)));
+      markMap.set(cmd, raw);
+      if (viaStdin || fedIn) fed.add(cmd);
+      // A nested string read from this command inherits its marks (review/54): any word the shell fills in may have put
+      // that string's text in place, so the nested reading's quoting cannot make it literal. It inherits `xargs` too.
+      const inherits = marked.some(Boolean);
+      const feeds = fedIn || viaStdin;
+      // A program word holding a whole command line (`bun exec 'git push'`) is also read as that line, unless it is this
+      // one; marked where its blank is literal text, so the word reads as a line of its own, and the word holds a mark.
+      const head = markOf(0);
+      const literal = head.first === -1 ? program : program.slice(0, head.first) + program.slice(head.last);
+      if (/\s/.test(program) && cmd.join(" ") !== text) {
+        commands.push(...commandsOf(cmd.join(" "), depth + 1, pwsh, tainted || (head.kinds !== "" && /\s/.test(literal)), feeds));
+      }
       cmd[0] = programName(cmd[0] ?? "");
       // git's dashed form (`git-push`, as git's exec path holds it) is git running that subcommand.
-      if (/^git-./.test(cmd[0])) cmd.splice(0, 1, "git", cmd[0].slice(4));
+      if (/^git-./.test(cmd[0])) {
+        cmd.splice(0, 1, "git", cmd[0].slice(4));
+        unsure.splice(0, 1, unsure[0] === true, unsure[0] === true);
+        marked.splice(0, 1, marked[0] === true, marked[0] === true);
+        raw.splice(0, 1, markOf(0), markOf(0));
+      }
       if (SHELLS.has(cmd[0] ?? "")) {
         const flag = cmd.findIndex((word, index) => index > 0 && /^-[A-Za-z]*c[A-Za-z]*$/.test(word));
         const script = flag === -1 ? undefined : cmd[flag + 1];
-        if (script !== undefined) commands.push(...commandsOf(script, depth + 1, false));
+        if (script !== undefined) commands.push(...commandsOf(script, depth + 1, false, inherits, feeds));
       } else if (cmd[0] === "eval") {
-        commands.push(...commandsOf(cmd.slice(1).join(" "), depth + 1, false));
+        commands.push(...commandsOf(cmd.slice(1).join(" "), depth + 1, false, inherits, feeds));
       } else if (POWERSHELLS.has(cmd[0] ?? "")) {
         // PowerShell's command string (build/89): the words after `-Command`; with none, the words from the first one
         // that is no option, and each later word holding a blank, a quoted command past an option's value, each read
         // with PowerShell's escape (review/194).
         const at = cmd.findIndex((word, index) => index > 0 && commandFlag(word) !== null);
         const first = at !== -1 ? -1 : cmd.findIndex((word, index) => index > 0 && !/^-|^\/\w*$/.test(word));
-        if (at !== -1) commands.push(...commandsOf([commandFlag(cmd[at] ?? ""), ...cmd.slice(at + 1)].join(" "), depth + 1, true));
-        else if (first !== -1) commands.push(...commandsOf(cmd.slice(first).join(" "), depth + 1, true));
-        for (const word of first === -1 ? [] : cmd.slice(first + 1)) if (/\s/.test(word)) commands.push(...commandsOf(word, depth + 1, true));
+        if (at !== -1) commands.push(...commandsOf([commandFlag(cmd[at] ?? ""), ...cmd.slice(at + 1)].join(" "), depth + 1, true, inherits, feeds));
+        else if (first !== -1) commands.push(...commandsOf(cmd.slice(first).join(" "), depth + 1, true, inherits, feeds));
+        for (const word of first === -1 ? [] : cmd.slice(first + 1)) if (/\s/.test(word)) commands.push(...commandsOf(word, depth + 1, true, inherits, feeds));
       } else if (cmd[0] === "cmd") {
         // The Windows command interpreter (review/183): the words after `/c` or `/k`, any letter case, a value attached,
         // read as PowerShell's are, a backslash being a plain character there too (review/194), and read with each
         // caret escape taken off as well (`g^it`, `--for^ce`, pr/10), so that reading only adds denials.
         const at = cmd.findIndex((word, index) => index > 0 && /^\/[ck]/i.test(word));
         const rest = at === -1 ? "" : [(cmd[at] ?? "").slice(2), ...cmd.slice(at + 1)].join(" ");
-        if (at !== -1) commands.push(...commandsOf(rest, depth + 1, true));
-        if (rest.includes("^")) commands.push(...commandsOf(rest.replace(/\^([\s\S])/g, "$1"), depth + 1, true));
+        // That interpreter's own variables, `%name%` and, with delayed expansion, `!name!`, are filled in before it reads
+        // the line, inside its quotes too (review/55): a line holding one is read with every word marked.
+        const own = inherits || /%[^%\s]+%|![^!\s]+!/.test(rest);
+        if (at !== -1) commands.push(...commandsOf(rest, depth + 1, true, own, feeds));
+        if (rest.includes("^")) commands.push(...commandsOf(rest.replace(/\^([\s\S])/g, "$1"), depth + 1, true, own, feeds));
       } else if (cmd[0] === "git") {
         // Lines a git builtin runs (review/184): each `git rebase --exec` or `-x` line (`--ex`, `--exe` and a cluster
         // as git's option parser reads them), and the command `git bisect run` runs, its words kept as words.
@@ -2088,15 +3455,15 @@ export function unattendedPushVerdict(command: string, powershell = false): Unat
               }
             }
           }
-          if (exec !== undefined) commands.push(...commandsOf(exec, depth + 1, false));
+          if (exec !== undefined) commands.push(...commandsOf(exec, depth + 1, false, inherits, feeds));
         }
         if (sub === "bisect" && args[0] === "run") {
-          commands.push(...commandsOf(args.slice(1).map((word) => `'${word.replace(/'/g, "'\\''")}'`).join(" "), depth + 1, false));
+          commands.push(...commandsOf(args.slice(1).map((word) => `'${word.replace(/'/g, "'\\''")}'`).join(" "), depth + 1, false, inherits, feeds));
         }
       }
       commands.push(cmd);
     }
-    for (const inner of nested) commands.push(...commandsOf(inner, depth + 1, pwsh));
+    for (const inner of nested) commands.push(...commandsOf(inner.text, depth + 1, pwsh, tainted || inner.open, fedIn, captured.has(inner)));
     return commands;
   }
 
@@ -2308,6 +3675,48 @@ export function unattendedPushVerdict(command: string, powershell = false): Unat
       );
     });
     return { write, method: verb, paths, cmd: cmd.slice(0, end), next };
+  }
+
+  /**
+   * The words after the program where a command runs this package (REQ-FLOW-121's land line, REQ-FLOW-138), or
+   * `null` for any other program: one of `PACKAGE_WORDS` (its bins and unscoped name) or a word naming `stamity` as
+   * the program, a runner's package reading as that program above; a package manager's first word after its options,
+   * or after its `run`, `exec`, `dlx` or `x`, being one of those words (`yarn st`, `pnpm run st`, review/44); or a
+   * launcher (`node`, `bun`, `deno`, `tsx`) or a package manager given a word naming the package or the engine's CLI file
+   * by its path (review/53): under `node_modules/<package>/`, `node_modules/.bin/<bin>`, and, in the engine's own
+   * repository, any word whose file name is the CLI's, by any path spelling (absolute, `..`, a doubled slash, a leading
+   * expansion, review/68); the words after. With `basename`, only a launcher's or manager's
+   * word whose file name is a CLI file's (`cli.js`, `cli.ts`, …) anywhere, which may be the engine's or the
+   * repository's own.
+   */
+  function packageArgs(cmd: string[], basename = false): string[] | null {
+    const program = cmd[0] ?? "";
+    const named = (word: string): boolean => PACKAGE_WORDS.includes(programName(word)) || /stamity/i.test(word);
+    const engineFile = (word: string): boolean => {
+      const path = word.replace(/\\/g, "/").toLowerCase();
+      return (
+        (PACKAGE_NAME !== "" && path.includes(`node_modules/${PACKAGE_NAME}/`)) ||
+        (/node_modules\/\.bin\/[^/]+$/.test(path) && PACKAGE_WORDS.includes(programName(path))) ||
+        (OWN_REPOSITORY && /(?:^|\/)cli\.[cm]?[jt]s$/.test(path))
+      );
+    };
+    if (!basename && named(program)) return cmd.slice(1);
+    const launchedAt = basename ? undefined : launched.get(cmd);
+    if (launchedAt !== undefined) return cmd.slice(launchedAt + 1);
+    if (!["node", "nodejs", "bun", "deno", "tsx", ...MANAGERS].includes(program)) return null;
+    if (basename) {
+      const at = cmd.findIndex((word, index) => index > 0 && /(?:^|[\\/])cli\.[cm]?[jt]s$/i.test(word));
+      return at === -1 ? null : cmd.slice(at + 1);
+    }
+    if (MANAGERS.has(program)) {
+      let k = 1;
+      while (k < cmd.length && (cmd[k] ?? "").startsWith("-")) k += MANAGER_VALUED.has(cmd[k] ?? "") ? 2 : 1;
+      if (["run", "run-script", "exec", "dlx", "x"].includes(cmd[k] ?? "")) k += 1;
+      while (k < cmd.length && (cmd[k] ?? "").startsWith("-")) k += 1;
+      if (named(cmd[k] ?? "")) return cmd.slice(k + 1);
+    }
+    const at = cmd.findIndex((word, index) => index > 0 && (/stamity/i.test(word) || engineFile(word)));
+    return at === -1 ? null : cmd.slice(at + 1);
   }
   // </shell-reading>
 
@@ -2492,10 +3901,10 @@ export function unattendedPushVerdict(command: string, powershell = false): Unat
    * a word, review/93), the CLI file, a pinned `@<semver>`. The verb follows `run` directly, or after option words and
    * their values that open on a dash and hold no `;`, `|`, `&` or line break (review/130).
    */
-  const RUN_VERBS = new Set(["start", "checkpoint", "end"]);
+  const RUN_VERBS = new Set(["start", "checkpoint", "end", "land"]);
   const PACKAGE = /stamity|\bst\b|\bcli\.m?js\b|@\d+\.\d+\.\d+/i;
   const namesVerb = (text: string): boolean =>
-    /\brun(?:\W+|[^\w\s]*\s+[^\w\s-]*-[^;|&\r\n]*?\W)(?:start|checkpoint|end)\b/i.test(text) && PACKAGE.test(text);
+    /\brun(?:\W+|[^\w\s]*\s+[^\w\s-]*-[^;|&\r\n]*?\W)(?:start|checkpoint|end|land)\b/i.test(text) && PACKAGE.test(text);
   /**
    * The same over one parsed command's decoded words, joined (review/130, round 3), for a form the parse does not
    * normalize (the CLI file started by `node`, a launcher it does not unwrap). Inside one simple command a separator
@@ -2509,8 +3918,8 @@ export function unattendedPushVerdict(command: string, powershell = false): Unat
     if (!PACKAGE.test(text)) return false;
     for (const open of text.matchAll(/\brun[^\w\s]*\s+([^\w\s]*)/gi)) {
       const rest = text.slice((open.index ?? 0) + open[0].length);
-      if (/^(?:start|checkpoint|end)\b/i.test(rest)) return true;
-      if (/[-$`@*?[{]/.test(open[1] ?? "")) return /(?:^|\W)(?:start|checkpoint|end)\b/i.test(rest);
+      if (/^(?:start|checkpoint|end|land)\b/i.test(rest)) return true;
+      if (/[-$`@*?[{]/.test(open[1] ?? "")) return /(?:^|\W)(?:start|checkpoint|end|land)\b/i.test(rest);
     }
     return false;
   };
@@ -2527,7 +3936,7 @@ export function unattendedPushVerdict(command: string, powershell = false): Unat
    * closing `2>&1`. Single quotes are literal; double quotes hold no `$`, backtick or backslash; nothing else on the
    * line expands, redirects, joins or nests a command. With `powershell` the same, and no typographic quote, which
    * PowerShell reads as a quote, no blank but a space or a tab, no stop-parsing `--%` (its dashes typographic too), and
-   * no unquoted `@` after the program, which PowerShell reads as a splat (review/131).
+   * no unquoted `@` in a word after `run`, which PowerShell reads as a splat (review/131, build/97).
    */
   function verbShape(line: string): string | null {
     const text = line.replace(/[ \t]+2>&1[ \t]*$/, "");
@@ -2573,17 +3982,48 @@ export function unattendedPushVerdict(command: string, powershell = false): Unat
       const spec = words[at] ?? "";
       if (spec !== "stamity" && !PINNED_PACKAGE.test(spec)) return "an `npx` option or package other than `stamity` or `<pkg>@<semver>`";
       at += 1;
-    } else if (words[0] !== "stamity" && words[0] !== "st") {
+    } else if (words[0] !== "stamity" && !PACKAGE_WORDS.includes(words[0] ?? "")) {
       return "a first word other than `stamity`, `st` or `npx`: a prefix, a wrapper or another program";
     }
     if (words[at] !== "run") return "words between the program and `run <verb>`";
     if (!RUN_VERBS.has(words[at + 1] ?? "")) return "words between `run` and its verb";
     // The program, the npx flag, the registry and the package are pinned above, so only the option words can splat.
-    if (powershell && ats.some((index) => index > at)) return "an unquoted `@` after the program, which PowerShell reads as a splat";
+    if (powershell && ats.some((index) => index > at)) return "an unquoted `@` in a word after `run`, which PowerShell reads as a splat";
     return null;
   }
 
+  // A line past 64 KiB is one the guard cannot read (review/115): refused in every mode before any reading (review/117).
+  if (command.length > 65_536) {
+    return {
+      deny: true,
+      reason:
+        "A line too long for the guard to read (over 65,536 characters) is refused in every mode, before any reading: " +
+        "the person runs it themselves (REQ-FLOW-102).",
+    };
+  }
   const commands = commandsOf(command, 0, powershell);
+  // The land verb's line in every mode (REQ-FLOW-121, a4): read on the parsed program words alone, so a commit message,
+  // a comment or a search that only names the verb runs; a parsed `stamity run land` passes only as the one simple
+  // command `verbShape` admits.
+  if (landOnly) {
+    const lands = commands.some((cmd) => {
+      // A program the reading cannot settle (review/87) may be this package: its words name the verb anywhere after it.
+      if (unread.get(cmd)?.[0] === true) {
+        const run = cmd.indexOf("run", 1);
+        return run !== -1 && cmd.slice(run + 1).includes("land");
+      }
+      const args = packageArgs(cmd) ?? [];
+      const at = args.findIndex((word) => !word.startsWith("-"));
+      return at !== -1 && args[at] === "run" && args.slice(at + 1).includes("land");
+    });
+    const broke = lands ? verbShape(command) : null;
+    return broke === null
+      ? { deny: false }
+      : {
+          deny: true,
+          reason: `\`stamity run land\` on a line that is more than the verb (${broke}; REQ-FLOW-121): the land verb runs only alone on its line, in every mode.`,
+        };
+  }
   for (const cmd of commands) {
     const program = cmd[0] ?? "";
     if (program === "git") {
@@ -2702,7 +4142,7 @@ export function unattendedPushVerdict(command: string, powershell = false): Unat
     [...assigned, ...commands.flat()].some(namesVerb);
   const broke = runsVerb ? verbShape(command) : null;
   if (broke !== null) {
-    return deny(`A run verb (\`stamity run start\`, \`checkpoint\` or \`end\`) on a line that is more than the verb (${broke}; REQ-FLOW-121)`);
+    return deny(`A run verb (\`stamity run start\`, \`checkpoint\`, \`end\` or \`land\`) on a line that is more than the verb (${broke}; REQ-FLOW-121)`);
   }
   return { deny: false };
 }

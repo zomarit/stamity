@@ -951,6 +951,11 @@ interface ClaudeHookCommand {
   command: string;
   /** Seconds — the client's unit, converted from the interchange request. */
   timeout?: number;
+  /**
+   * `"block"` on the two guard rows alone: a hook that fails, a timeout included, blocks the
+   * call instead of letting it through (REQ-FLOW-123). See {@link commandHook}.
+   */
+  onFailure?: "block";
 }
 
 /** One matcher group under an event key. */
@@ -1133,7 +1138,8 @@ function failsClosedOnLaunchFailure(row: HookInterchange): boolean {
  *
  * `failClosedTail` ({@link guardFailClosedTail}) is appended AFTER the join, so
  * the tail's own `||`, braces and redirection reach the shell as syntax while
- * every element of the argv stays quoted as data.
+ * every element of the argv stays quoted as data. A row given the tail also
+ * gets `onFailure: "block"`, so the same two rows block on a timeout as well.
  */
 function commandHook(
   argv: readonly string[],
@@ -1149,6 +1155,17 @@ function commandHook(
     // a sub-second request rounds up to the nearest second the client can
     // express instead of truncating to an instant timeout.
     ...(timeoutMs === undefined ? {} : { timeout: Math.max(1, Math.ceil(timeoutMs / 1000)) }),
+    // The guard rows also block when the hook itself fails, a timeout included (REQ-FLOW-123).
+    // The tail above cannot see a guard the client kills at its timeout: the client then reads no
+    // exit status at all, and without this key it lets the call through. Measured on Claude Code
+    // 2.1.309 (2026-10-23): a guard that times out under `onFailure: "block"` blocks the call.
+    // Copilot CLI 1.0.100, which imports this file's hooks, loaded and ran every entry and ignored
+    // the key. The floor is 2.1.295, from the vendor changelog entry for that version ("Added
+    // `onFailure: "block"` for command and HTTP hooks", raw.githubusercontent.com/anthropics/
+    // claude-code/main/CHANGELOG.md, read 2026-10-23). A client older than 2.1.295 was not
+    // measured: it may ignore the key or reject the entry. Last in the object, so the key order
+    // stays `type, command, timeout?, onFailure?` and the bytes stay stable.
+    ...(failClosedTail === undefined ? {} : { onFailure: "block" as const }),
   };
 }
 

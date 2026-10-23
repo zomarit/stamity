@@ -102,7 +102,7 @@ touched its row. The sign-off confirms each waived blocking check by its id (Flo
 ## The Ready line
 
 The report's last line before the ticket block, and the run's last line:
-`Ready: YES | NO | not signed — approval of record: <location | not named>`.
+`Ready: YES | NO (open: <check id>, …) | not signed — approval of record: <location | not named>`.
 
 - `NO` while a blocking check fails with no valid waiver or could not be graded. It names each
   open blocking check, a `skipped` blocking row among them.

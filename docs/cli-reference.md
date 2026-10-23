@@ -30,7 +30,7 @@ mistake.
 | `stamity learn` | plumbing | writes | capture a learning through the engine's write gates, or read them through its screen (plumbing) |
 | `stamity handoff` | plumbing | writes | prepare, resume, list, complete and prune handoffs through the engine's gates (plumbing) |
 | `stamity ledger` | plumbing | writes | append findings to a run's ledger, close its rows, print its resume card, and read and write the deferral inbox (plumbing) |
-| `stamity gate` | plumbing | reads only | classify a change, scan its added lines or an outbound text for secrets, or check an unattended start (plumbing) |
+| `stamity gate` | plumbing | writes | classify a change, scan its added lines or an outbound text for secrets, or check an unattended start (plumbing) |
 | `stamity plan` | plumbing | reads only | check that plans are ready for an unattended start (plumbing) |
 | `stamity run` | plumbing | writes | put an unattended run on a branch of its own, and push its work there (plumbing) |
 
@@ -101,6 +101,7 @@ string — there is no second numbering to read.
 | `NETWORK_ERROR` | a git transport failed — `worktree setup` could not reach `origin` to plan its branch; a remote with no such branch is not this |
 | `LOCK_TIMEOUT` | a write lock could not be taken before the retry schedule ran out; another `stamity` run was holding it |
 | `EXPECTATION_ERROR` | `check` was told which release, clients or install mode to expect (`--expect-*`), and the repository records another |
+| `AUTONOMY_LOOSENED` | a `sync`, `init` or `workspace sync` would write a guard looser than the one on disk, the setting committed at `HEAD` or the manifest it replaces; nothing was written, and the person runs the command with `--loosen` |
 
 Two more codes exist only at the CLI edge and never come from the engine:
 `USAGE` for a rejected command line, and `FAILURE` for a fault that
@@ -119,6 +120,7 @@ May write when it runs, so `--dry-run` previews any change without making it.
 | `--migrate <mode>` | what to do with a detected predecessor setup — one of `full`, `skip` | — |
 | `--import-config <mode>` | what to do with an existing agent config file — one of `supplement`, `replace`, `skip` | — |
 | `--force` | replace an existing setup in place | — |
+| `--loosen` | write a guard copy looser than the autonomy setting on disk, at HEAD or in the manifest it replaces (the person's act) | — |
 
 ## `stamity sync`
 
@@ -129,6 +131,7 @@ May write when it runs, so `--dry-run` previews any change without making it.
 | Flag | What it does | Default |
 |---|---|---|
 | `--force` | overwrite colliding unmanaged files after a verified .bak | — |
+| `--loosen` | write a guard copy looser than the autonomy setting on disk, at HEAD or in the manifest it replaces (the person's act) | — |
 
 ## `stamity check`
 
@@ -194,6 +197,7 @@ May write when it runs, so `--dry-run` previews any change without making it.
 |---|---|---|
 | `--tools <csv>` | defaults.tools for the created workspace, comma-separated (claude, cursor, copilot, codex) — workspace init only | — |
 | `--force` | workspace init: overwrite a workspace.json already at this directory, or create one nested inside an outer workspace. workspace sync: in every member, overwrite colliding unmanaged files after a verified .bak | — |
+| `--loosen` | workspace sync only: in every member, write a guard copy looser than the autonomy setting on disk, at HEAD or in the manifest it replaces (the person's act) | — |
 
 ## `stamity worktree`
 
@@ -321,7 +325,7 @@ agent content rather than a person. Hidden is not secret — `stamity gate --hel
 in full — and it is documented here because a verb that exists and is undocumented is
 worse than one that is merely unadvertised.
 
-Reads only. Nothing is written, so there is no preview mode to need.
+May write when it runs, so `--dry-run` previews any change without making it.
 
 | Argument | What it is |
 |---|---|
@@ -371,7 +375,7 @@ May write when it runs, so `--dry-run` previews any change without making it.
 
 | Argument | What it is |
 |---|---|
-| `<subcommand>` | which run action to run — one of `start`, `checkpoint`, `end` |
+| `<subcommand>` | which run action to run — one of `start`, `checkpoint`, `end`, `land` |
 
 | Flag | What it does | Default |
 |---|---|---|
@@ -382,5 +386,11 @@ May write when it runs, so `--dry-run` previews any change without making it.
 | `--signoff` | checkpoint and end: add the Signed-off-by line to the commit | — |
 | `--refused` | end: title the draft pull request Refused: <title>, for a run that refused to start | — |
 | `--final-round` | end: the run's last end; write the run-ended marker the final question round needs (a plain end removes one) | — |
+| `--drop-held <path...>` | checkpoint and end: withdraw the held patch's sections for these paths, which the run undid (one it still changes stays held) | — |
+| `--fast-forward` | land: fast-forward the default branch to the pull request's head instead of merging it | — |
+| `--method <method>` | land: the merge method — one of `merge`, `squash`, `rebase` | — |
+| `--ready` | land: mark the run's draft ready for review once the evidence holds, then land it | — |
+| `--wait <minutes>` | land: wait up to this many minutes (at most 9) for pending check runs | — |
+| `--approved <sha>` | land: the head commit the person approved over an asks outcome; land it if the head is still that commit and nothing refuses (never in an unattended run) | — |
 
 Regenerate this page with `node scripts/generate-docs.mjs`.

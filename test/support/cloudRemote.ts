@@ -229,7 +229,8 @@ type Entry = Record<string, unknown>;
  * (test/cloud/containerLeg.test.ts's reading).
  */
 function scriptOf(command: string): string {
-  const spec = /\s([A-Za-z0-9_-]{24,})\s*$/.exec(command)?.[1];
+  // TEST CHANGE, justified (REQ-FLOW-142): a runner entry now ends with its script as a plain word after the row.
+  const spec = /\s([A-Za-z0-9_-]{24,})(?:\s+[A-Za-z0-9._/-]+)?\s*$/.exec(command)?.[1];
   if (spec !== undefined) {
     const decoded = JSON.parse(Buffer.from(spec, "base64url").toString("utf8")) as { command?: unknown };
     const target = Array.isArray(decoded.command) ? decoded.command[1] : undefined;

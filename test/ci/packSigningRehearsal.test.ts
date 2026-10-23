@@ -314,7 +314,7 @@ describe("the rehearsal's bounded input carries what verify reads", () => {
   });
 
   it("verifies install, update and every negative from a tree holding only the archived paths", async () => {
-    // Built with node:fs rather than tar: the archive step is POSIX shell on ubuntu-latest, and
+    // Built with node:fs rather than tar: the archive step is POSIX shell on ubuntu-24.04, and
     // this case runs on every CI leg, Windows included.
     const tree = join(getDir().dir, "source");
     await mkdir(tree);

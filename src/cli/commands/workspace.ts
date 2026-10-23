@@ -2,6 +2,7 @@ import { open, realpath, stat } from "node:fs/promises";
 import { join, sep } from "node:path";
 import type { Command } from "commander";
 import { CliFailure } from "../kit/output.ts";
+import { packageCommand } from "../kit/packageName.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import {
   closePrompts,
@@ -10,6 +11,7 @@ import {
   selectMany,
   type PromptGate,
 } from "../kit/prompts.ts";
+import { assertNotLoosened } from "../engine/autonomyGate.ts";
 import { keepSavedModelLists } from "../engine/clientModels.ts";
 import { readClientModelLists } from "./init/apply.ts";
 import { applySync, planSync, refusalRemedyLines, type SyncPlan } from "./sync/engine.ts";
@@ -1044,7 +1046,7 @@ function refusedPaths(repoPath: string, plan: SyncPlan, refused: readonly string
 function createBridge(
   ctx: CliContext,
   rootDir: string,
-  opts: { force: boolean; now: Date },
+  opts: { force: boolean; loosen: boolean; now: Date },
   outcomes: Map<string, MemberOutcome>,
 ): RepoSyncCallback {
   const engineVersion = ctx.app.version;
@@ -1094,6 +1096,15 @@ function createBridge(
       force: opts.force,
       dryRun: ctx.dryRun,
       now: opts.now,
+      // The loosen gate (REQ-FLOW-138), per member: `--loosen` is the person's word, which the guard asks for.
+      // Under `--loosen`, each guard copy it loosens is named on stderr, under the member's path.
+      guardGate: (next, copies) =>
+        assertNotLoosened(memberDir, next, {
+          loosen: opts.loosen,
+          copies,
+          remedy: packageCommand("workspace sync --loosen"),
+          notice: (line) => ctx.io.err(`${repo.path}: ${line}\n`),
+        }),
     });
     // An append to a file the operator owns is named, as the member's own sync names it.
     outcome.gitignoreAdded = [...(applied.gitignoreAdded ?? [])];
@@ -1312,7 +1323,7 @@ async function runSync(
     rootDir,
     manifest,
     journal: !ctx.dryRun,
-    syncRepo: createBridge(ctx, rootDir, { force: opts["force"] === true, now }, outcomes),
+    syncRepo: createBridge(ctx, rootDir, { force: opts["force"] === true, loosen: opts["loosen"] === true, now }, outcomes),
   });
   ctx.spinner.stop();
 
@@ -1359,13 +1370,14 @@ export const workspaceCommand: CommandModule = {
   ],
 
   /**
-   * Commander registers flags per COMMAND, not per subcommand, so both of these
+   * Commander registers flags per COMMAND, not per subcommand, so all three of these
    * are visible everywhere and are inert wherever the subcommand does not read
    * them — `--tools` on everything but `init`, `--force` on `status` alone,
-   * since `sync` gives it the second meaning its description names. The
+   * since `sync` gives it the second meaning its description names, and
+   * `--loosen` on everything but `sync` (REQ-FLOW-138). The
    * descriptions say which subcommand reads them rather than leaving a reader
    * of `--help` (and of the generated reference page, which copies these
-   * strings verbatim) to find out by trying. Editing either string is a docs
+   * strings verbatim) to find out by trying. Editing any of the strings is a docs
    * change: regenerate `docs/cli-reference.md` in the same commit.
    */
   configure(cmd: Command): void {
@@ -1376,6 +1388,10 @@ export const workspaceCommand: CommandModule = {
     cmd.option(
       "--force",
       "workspace init: overwrite a workspace.json already at this directory, or create one nested inside an outer workspace. workspace sync: in every member, overwrite colliding unmanaged files after a verified .bak",
+    );
+    cmd.option(
+      "--loosen",
+      "workspace sync only: in every member, write a guard copy looser than the autonomy setting on disk, at HEAD or in the manifest it replaces (the person's act)",
     );
   },
 

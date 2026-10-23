@@ -48,6 +48,8 @@ const DESCRIPTION_MAX = 250;
 const BODY_CAP = 200;
 
 /** The record's rows, in table order: REQ-PACK-019's fields, requester and approver apart. */
+// TEST CHANGE, justified: REQ-PACK-019 — the record gains an `Outcome` row, so a held or failed
+// deploy is told apart from a deployed one and never becomes the next run's change-set base.
 const RECORD_FIELDS: readonly string[] = [
   "Reason",
   "Security impact",
@@ -58,6 +60,7 @@ const RECORD_FIELDS: readonly string[] = [
   "Emergency route",
   "SBOM",
   "Provenance",
+  "Outcome",
 ];
 
 /** The corpus pin REQ-PACK-024 names: the readiness review stays a warning to the release. */
@@ -216,8 +219,10 @@ describe("st-release — anatomy", () => {
     expect(porcelain?.[1]).toContain(
       "skipping the pack's own paths under `.stamity/` (`.stamity/production/**`, `.stamity/verify/**`)",
     );
+    // TEST CHANGE, justified: REQ-PACK-019 — the base is the last *deployed* record now, so the
+    // fallback reads "no earlier deployed record"; the root-commit rule itself is unchanged.
     expect(preflight.replace(/\s+/g, " ")).toMatch(
-      /With no earlier deploy record or tag, a first deploy or release, the change set's base is the repository's root commit \(`git rev-list --max-parents=0 HEAD`\), and the run says so/,
+      /With no earlier deployed record or tag, a first deploy or release, the change set's base is the repository's root commit \(`git rev-list --max-parents=0 HEAD`\), and the run says so/,
     );
   });
 
@@ -228,10 +233,50 @@ describe("st-release — anatomy", () => {
     const changeSet = tableRows(section(file, "Step 1 — Preflight, read-only")).find((row) => row[0] === "change set");
 
     expect(flow(file)).toContain("record: .stamity/production/releases/<service>-<version | sha>.md");
-    expect(changeSet?.[1]).toContain("since this service's last deploy record in deploy mode");
+    // TEST CHANGE, justified: REQ-PACK-019 — the last-deploy lookup still reads this service's
+    // records, now only the one whose `Outcome` reads `deployed` (the next test pins that half).
+    expect(changeSet?.[1]).toContain("since this service's last deploy record whose `Outcome` reads `deployed`, in deploy mode");
     for (const heading of ["Step 6 — Supply-chain references", "Step 7 — The change record"]) {
       expect(flowSection(file, heading)).not.toMatch(/releases\/<version \| sha>/);
     }
+  });
+
+  it("starts a deploy's change set only at a record whose Outcome reads deployed, so a held or failed attempt is never a base", async () => {
+    // ADDED: REQ-PACK-019 (the review bot's #124 finding at SKILL.md:59). A record is written before
+    // the stop, so a held or failed deploy left one behind; read as a base, the next run's change
+    // set skipped commits that never reached the environment.
+    const file = await skill();
+    const preflight = section(file, "Step 1 — Preflight, read-only");
+    const changeSet = tableRows(preflight).find((row) => row[0] === "change set");
+    const outcome = tableRows(section(file, "Step 7 — The change record")).find((row) => row[0] === "Outcome");
+
+    expect(changeSet?.[1]).toMatch(/last deploy record whose `Outcome` reads `deployed`/);
+    // Non-degenerate: the row is written held and only turns deployed or released after every
+    // opened command exited 0, so the held record a stop leaves can never match the lookup above.
+    expect(outcome?.[1]).toMatch(/^`held` when written; `deployed` or `released` only once every opened command exited 0/);
+    expect(outcome?.[1]).toMatch(/rewritten after Step 8/);
+    // A record written before the row existed carries no `Outcome`, and reads as not deployed.
+    expect(preflight.replace(/\s+/g, " ")).toMatch(/A record with no `Outcome` row reads as not deployed/);
+  });
+
+  it("records a step the person ran by hand from their answer, and asks about a newer held record before picking the base", async () => {
+    // ADDED: review/2. A deploy the person runs themselves opens no command, so the Outcome rule
+    // above alone left that record held; every later change set then started at an older deployed
+    // record or at the root commit, listing commits already in production.
+    const file = await skill();
+    const preflight = section(file, "Step 1 — Preflight, read-only").replace(/\s+/g, " ");
+    const outcome = tableRows(section(file, "Step 7 — The change record")).find((row) => row[0] === "Outcome");
+    const stop = flowSection(file, "Step 8 — The stop");
+
+    expect(stop).toContain(
+      "Running a command personally is always an acceptable answer; the run then asks once whether it succeeded and rewrites `Outcome` to `deployed` or `released` on yes, `held` otherwise.",
+    );
+    expect(outcome?.[1]).toMatch(/exited 0 or the person confirms the step they ran, rewritten after Step 8/);
+    // A record a hand-run deploy left held, from a run that ended before the answer, is asked about
+    // once; silence keeps it held, so an unanswered question never moves the base forward.
+    expect(preflight).toContain(
+      "A `held` record newer than the last `deployed` one is asked about once before the base is picked: a yes rewrites it to `deployed`, silence keeps it `held`.",
+    );
   });
 
   it("runs in two modes, the deploy mode with no release-branch or tag preflight", async () => {

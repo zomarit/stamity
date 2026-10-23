@@ -21,7 +21,7 @@ Reviews one named service as it stands at one commit, over security, supply chai
 operations, through 19 checks. **This command assesses; it never modifies.** The roles that
 gather the evidence never grade it, and the role that grades it never gathers: the grader reads
 the evidence files and the commit range, never a gatherer's account. The run ends on one line,
-`Ready: YES | NO | not signed — approval of record: <location | not named>`, and every gap
+`Ready: YES | NO (open: <check id>, …) | not signed — approval of record: <location | not named>`, and every gap
 leaves through `/st-work`, `/st-plan` or `/st-board fill --source <report>`.
 
 ## Boundary

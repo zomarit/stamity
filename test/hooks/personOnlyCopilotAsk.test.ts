@@ -261,7 +261,8 @@ describe("Copilot CLI's ask, attended (w4-copilot-ask, REQ-FLOW-123)", () => {
       ".stamity/runs/2026-10-18_x/record.md": "# Run\n\nStatus: in progress\nPlan: docs/plans/x.md\nMode: unattended\nInvocation: /st-work x\n",
     });
     const why = "This session is unattended because .stamity/runs/2026-10-18_x/record.md reads `Status: in progress` and `Mode: unattended`.";
-    const morning = `${merge.act} is a person-only act (\`${merge.rule}\`) and this run is unattended: list it on the morning list, whose walk runs it after one click.`;
+    // TEST CHANGE, justified (REQ-FLOW-143, a4): the list is named as the run's summary list, `morning.md`.
+    const morning = `${merge.act} is a person-only act (\`${merge.rule}\`) and this run is unattended: list it on the run's summary list (\`morning.md\`), whose walk runs it after one click.`;
     expect(copilotAnswer(guard, copilotCall(MERGE))).toBe(denies(`${morning} ${why}`));
   });
 

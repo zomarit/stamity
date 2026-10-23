@@ -573,6 +573,95 @@ describe("stamity gate preflight and scan --text", () => {
     });
   });
 
+  describe("the git surface's record (REQ-FLOW-131, review/97)", () => {
+    /** A value seeded in git's config, as a value and inside a subsection, which the record must never carry. */
+    const SEEDED_VALUE = "seeded-q7zk-9mxc";
+    const recordAt = (repo: string): string => join(repo, ".git", "stamity", "preflight-git.json");
+    const exists = async (path: string): Promise<boolean> => readFile(path).then(() => true, () => false);
+
+    it("writes the record on a pass: names only, a digest and a salt, no seeded value in its bytes", async () => {
+      const repo = await seedRepo();
+      git(repo, ["config", "stamity.secret", SEEDED_VALUE]);
+      git(repo, ["config", `stamity.${SEEDED_VALUE}.name`, "x"]);
+      protectedRepo();
+
+      const { code, doc, stdout } = await gate(repo, PREFLIGHT);
+      const text = await gate(repo, ["preflight", "--unattended"]);
+
+      expect(code).toBe(0);
+      expect(doc["gitRecord"]).toBe(true);
+      expect(text.stdout).toContain("git record: written (stamity/preflight-git.json in the git directory)");
+      const bytes = await readFile(recordAt(repo));
+      expect(bytes.includes(Buffer.from(SEEDED_VALUE))).toBe(false);
+      const record = JSON.parse(bytes.toString("utf8")) as Record<string, unknown>;
+      expect(record).toMatchObject({ version: 1 });
+      expect(record["digest"]).toMatch(/^[0-9a-f]{64}$/);
+      expect(record["keys"]).toEqual(expect.arrayContaining(["stamity.secret", "stamity.<…>.name", "remote.<…>.url"]));
+      expect(record["env"]).toEqual(expect.arrayContaining(["HOME", "XDG_CONFIG_HOME"]));
+      expect(stdout).not.toContain(SEEDED_VALUE);
+    });
+
+    // TEST CHANGE, justified (REQ-FLOW-131, review/33): a refused pre-flight still ends on a `Refused:` draft through
+    // `run end --refused`, which needs a record, so a refusal now writes one marked `refused` (replacing an earlier
+    // pass's) instead of none; no checkpoint takes it (runCheckpoint.test.ts), only that ending (ending.test.ts).
+    it("writes a record marked refused when it refuses, replacing the one an earlier pass left", async () => {
+      const fresh = await seedRepo({ canary: false });
+      const earlier = await seedRepo();
+      protectedRepo();
+      expect((await gate(earlier, PREFLIGHT)).code).toBe(0);
+      expect(JSON.parse(await readFile(recordAt(earlier), "utf8"))).toMatchObject({ refused: false });
+      await rm(join(earlier, ".stamity", "preflight-canary.json"));
+
+      const refusedFresh = await gate(fresh, PREFLIGHT);
+      const refusedEarlier = await gate(earlier, ["preflight", "--unattended"]);
+
+      expect(refusedFresh.code).toBe(1);
+      expect(refusedFresh.doc["gitRecord"]).toBe(false);
+      expect(refusedFresh.doc["refusals"]).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: "git-record" })]));
+      expect(JSON.parse(await readFile(recordAt(fresh), "utf8"))).toMatchObject({ version: 1, refused: true });
+      expect(refusedEarlier.code).toBe(1);
+      expect(refusedEarlier.stdout).toContain("git record: written, marked refused (stamity/preflight-git.json in the git directory)");
+      expect(JSON.parse(await readFile(recordAt(earlier), "utf8"))).toMatchObject({ version: 1, refused: true });
+    });
+
+    it("writes nothing under --dry-run, a pass still exiting 0", async () => {
+      const repo = await seedRepo();
+      protectedRepo();
+
+      const { code, stdout } = await gate(repo, ["preflight", "--unattended", "--dry-run"]);
+
+      expect(code).toBe(0);
+      expect(stdout).toContain("git record: not written (--dry-run)");
+      expect(await exists(recordAt(repo))).toBe(false);
+    });
+
+    it("refuses as git-record where the record cannot be written, a pass otherwise", async () => {
+      const repo = await seedRepo();
+      protectedRepo();
+      // A file where the record's folder goes makes the write fail.
+      await writeFile(join(repo, ".git", "stamity"), "");
+
+      const { code, doc } = await gate(repo, PREFLIGHT);
+
+      expect(code).toBe(1);
+      expect(doc["refusals"]).toEqual([expect.objectContaining({ id: "git-record" })]);
+      expect(doc["gitRecord"]).toBe(false);
+    });
+
+    it("names the error code of a record it cannot write, never the git directory's path (review/36)", async () => {
+      const repo = await seedRepo();
+      protectedRepo();
+      await writeFile(join(repo, ".git", "stamity"), "");
+
+      const { doc, stdout } = await gate(repo, PREFLIGHT);
+
+      const refusal = (doc["refusals"] as { id: string; reason: string }[]).find((one) => one.id === "git-record");
+      expect(refusal?.reason).toMatch(/^stamity\/preflight-git\.json in the git directory could not be written \(E[A-Z0-9]+\)$/);
+      expect(`${stdout}${JSON.stringify(doc)}`).not.toContain(repo);
+      expect(`${stdout}${JSON.stringify(doc)}`).not.toContain(".git/stamity");
+    });
+  });
+
   describe("the push facts (readPushIdentity)", () => {
     /** The facts as git's config gives them, with the host's global config out of reach. */
     async function facts(repo: string, env: Record<string, string> = {}) {

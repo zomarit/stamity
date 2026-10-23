@@ -272,7 +272,21 @@ describe("hook script budgets (REQ-CTX-016)", () => {
     // The literal pins the re-sized row, so its next move is a visible edit here too, with its reason in the row.
     // TEST CHANGE, justified (v0b, the orchestrator's sign-off of 2026-10-18): the row moved once more, from v0b's fresh
     // measurement by the same rule, its reason in the row in src/hooks/scripts.ts.
-    expect(HOOK_SCRIPT_BUDGETS[PERSON_ONLY_GUARD_FILE]).toEqual({ bytes: 196_608, lines: 4_540 });
+    // TEST CHANGE, justified (REQ-FLOW-138, review/54): the bytes row moved from 196,608 to 204,800, the measured
+    // 201,975 bytes of the largest copy (copilot) plus a small margin, since a4's fix rounds grew the embedded verdicts;
+    // the lines row (4,540, measured 4,387) holds.
+    // TEST CHANGE, justified (REQ-FLOW-140, review/69): the bytes row moved again, from 204,800 to 208,896, the measured
+    // 205,463 bytes of the largest copy (copilot) plus a small margin; the lines row (4,540, measured 4,440) holds.
+    // TEST CHANGE, justified (REQ-FLOW-138, review/87): the bytes row moved again, from 208,896 to 212,992, the measured
+    // 209,745 bytes of the largest copy (copilot) plus a small margin; the lines row (4,540, measured 4,522) holds.
+    // TEST CHANGE, justified (REQ-FLOW-138, review/99): both rows moved, bytes from 212,992 to 219,136 and lines from
+    // 4,540 to 4,800, the measured 216,181 bytes / 4,700 lines of the largest copy (copilot) plus a small margin.
+    // TEST CHANGE, justified (REQ-FLOW-138, review/102): both rows moved, bytes from 219,136 to 224,256 and lines from
+    // 4,800 to 4,928, the measured 221,151 bytes / 4,832 lines of the largest copy (copilot) plus a small margin.
+    // TEST CHANGE, justified (REQ-FLOW-141, build/12, build/13, review/115): both rows moved, bytes from 224,256 to
+    // 249,856 and lines from 4,928 to 5,420, the measured 245,978 bytes / 5,321 lines of the largest copy (copilot, up
+    // from 222,630 bytes) plus a small margin, since a5's heredoc reading, closing scan and line cap grew both verdicts.
+    expect(HOOK_SCRIPT_BUDGETS[PERSON_ONLY_GUARD_FILE]).toEqual({ bytes: 249_856, lines: 5_420 });
     const guards = renders.filter((script) => script.fileName === PERSON_ONLY_GUARD_FILE);
     expect(guards).toHaveLength(TOOLS.length);
     for (const script of guards) expect(budgetViolation(script), script.tool).toBeUndefined();

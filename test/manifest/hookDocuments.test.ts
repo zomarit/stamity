@@ -293,7 +293,10 @@ describe("cursorHooksSpec", () => {
       // What 1.14 rendered for the same rows: `node <runner> <row>`, and `node <guard>`.
       const relative = (command: string): string => {
         const script = walkUpStarterScript("cursor", command)!;
-        return script === RUNNER ? `node ${RUNNER} ${command.slice(command.lastIndexOf(" ") + 1)}` : `node ${script}`;
+        // TEST CHANGE, justified (REQ-FLOW-142): the runner entry's last word is now the plain word naming
+        // its script; 1.14's relative entry carried the encoded row, the word after the program.
+        const argument = command.slice(command.lastIndexOf('" ') + 2).split(" ")[0];
+        return script === RUNNER ? `node ${RUNNER} ${argument}` : `node ${script}`;
       };
       const owner = { command: "node scripts/fmt.mjs" };
       const oneFourteen = {
@@ -813,5 +816,56 @@ describe("hookScriptReader", () => {
     } finally {
       parse.mockRestore();
     }
+  });
+});
+
+// ── REQ-FLOW-142: the plain script word after the encoded row ─────────
+
+describe("a starter's plain script word (REQ-FLOW-142)", () => {
+  const SESSION_START = (tool: "codex" | "cursor" | "copilot"): string => `${HOOKS_GENERATED_DIR}/${tool}/stamity-session-start.mjs`;
+  const RUNNER_OF = (tool: "cursor" | "copilot"): string => `${HOOKS_GENERATED_DIR}/${tool}/stamity-portable-hook.mjs`;
+  /** The renderer's command for `tool`'s session-start row: the starter, the encoded row, the plain word. */
+  const rendered = (tool: "codex" | "cursor" | "copilot"): string =>
+    portableHookCommand(tool, row("session_start", SESSION_START(tool)), { syncCall: SYNC_CALL });
+  /** The same command as the releases before the word wrote it: the row last. */
+  const withoutWord = (command: string): string => command.slice(0, command.lastIndexOf(" "));
+  /** The same command with its word naming another script than its row does. */
+  const disagreeing = (command: string): string => `${withoutWord(command)} ${HOOKS_GENERATED_DIR}/codex/other.mjs`;
+
+  it("renders the word last on each client, naming the row's own script", () => {
+    for (const tool of ["codex", "cursor", "copilot"] as const) {
+      expect(rendered(tool).split(" ").at(-1), tool).toBe(SESSION_START(tool));
+      expect(withoutWord(rendered(tool)).endsWith(` ${encoded(row("session_start", SESSION_START(tool)))}`), tool).toBe(true);
+    }
+  });
+
+  it.each(["cursor", "copilot"] as const)("%s: an entry whose word names its row's script is the engine's, and so is one with no word", (tool) => {
+    expect(walkUpStarterScript(tool, rendered(tool))).toBe(RUNNER_OF(tool));
+    expect(walkUpStarterScript(tool, withoutWord(rendered(tool)))).toBe(RUNNER_OF(tool));
+  });
+
+  it.each(["cursor", "copilot"] as const)("%s: an entry whose word names another script than its row is not the engine's", (tool) => {
+    expect(walkUpStarterScript(tool, disagreeing(rendered(tool)))).toBeNull();
+    // Nor is a word that is not one plain path, or a second word.
+    expect(walkUpStarterScript(tool, `${withoutWord(rendered(tool))} ${SESSION_START(tool)}!`)).toBeNull();
+    expect(walkUpStarterScript(tool, `${rendered(tool)} ${SESSION_START(tool)}`)).toBeNull();
+  });
+
+  it("cursor: the spec bounds an entry with the agreeing word or none, never one whose word disagrees", () => {
+    expect(cursorElement.inBound({ command: rendered("cursor") })).toBe(true);
+    expect(cursorElement.inBound({ command: withoutWord(rendered("cursor")) })).toBe(true);
+    expect(cursorElement.inBound({ command: disagreeing(rendered("cursor")) })).toBe(false);
+  });
+
+  it("codex: the spec bounds a group of starters with the agreeing word or none, never one whose word disagrees", () => {
+    const command = rendered("codex");
+    expect(codexElement.inBound(group(starterHook(command)))).toBe(true);
+    expect(codexElement.inBound(group(starterHook(withoutWord(command))))).toBe(true);
+    expect(codexElement.inBound(group(starterHook(disagreeing(command))))).toBe(false);
+    // The exit-2 tail is read off the row before the word, as before.
+    const gate = portableHookCommand("codex", row("pre_tool_use", ".stamity/hooks/gate.mjs"), { syncCall: SYNC_CALL });
+    expect(gate.split(" ").at(-1)).toBe(".stamity/hooks/gate.mjs");
+    expect(codexElement.inBound(group(starterHook(gate)))).toBe(true);
+    expect(codexElement.inBound(group(starterHook(disagreeing(gate))))).toBe(false);
   });
 });

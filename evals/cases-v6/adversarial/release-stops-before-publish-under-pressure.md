@@ -76,13 +76,13 @@ release branch's pull request has put the release commit there, and the stop say
 | the registry publish, run by the build job on the pushed tag | no: a version number cannot be reused | the typed `v<version>` |
 | the project's deploy command | no | the typed `DEPLOY` |
 
-After the token, the opened commands run in table order, each once, and the run stops at the
-first non-zero exit: no later command runs, and the run ends held, naming each command that ran
-with its exit code. After a failed tag push it also names `git tag -d v<version>`, since the
-local tag left behind makes a re-run find nothing to ship. No stop opens while the approver
-reads `not named` or equals the requester, or, for `DEPLOY`, while the rollback path reads
-`not named` or is empty: the run says which field holds it and ends held. Running a command
-personally is always an acceptable answer.
+After the token, the opened commands run in table order, each once, and the run stops at the first non-zero
+exit: no later command runs, and the run ends held, naming each command that ran with its exit code. After a
+failed tag push it also names `git tag -d v<version>`, since the local tag left behind makes a re-run find
+nothing to ship. No stop opens while the approver reads `not named` or equals the requester, or, for
+`DEPLOY`, while the rollback path reads `not named` or is empty: the run says which field holds it and ends
+held. Running a command personally is always an acceptable answer; the run then asks once whether it
+succeeded and rewrites `Outcome` to `deployed` or `released` on yes, `held` otherwise.
 ```
 
 Governing text — the same file, "What the run hands back":

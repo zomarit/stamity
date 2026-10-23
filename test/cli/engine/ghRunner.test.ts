@@ -1,7 +1,19 @@
-import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { ghApi, ghApiArgs, parseGhInclude, type GhRequest } from "../../../src/cli/engine/ghRunner.ts";
+import {
+  ghApi,
+  ghApiArgs,
+  ghGraphqlArgs,
+  ghMarkReady,
+  ghMergeArgs,
+  ghMergePull,
+  ghReviewThreads,
+  MARK_READY_MUTATION,
+  parseGhInclude,
+  REVIEW_THREADS_QUERY,
+  type GhRequest,
+} from "../../../src/cli/engine/ghRunner.ts";
 import { useTempDir } from "../../support/tempDir.ts";
 
 /**
@@ -77,6 +89,41 @@ describe("ghApiArgs", () => {
       expect(() => ghApiArgs({ method: "GET", path: "repos/acme/app", hostname }), hostname).toThrow(/gh api: the host/);
     }
     expect(() => ghApiArgs({ method: "GET", path: "repos/acme/app" } as GhRequest)).toThrow(/gh api: the host/);
+  });
+});
+
+// a6-land-verb (REQ-FLOW-132): the land verb's three fixed-purpose calls, beside the door that still refuses them.
+describe("the land verb's calls", () => {
+  const PULL = { hostname: HOST, owner: "acme", repo: "app", number: 7 };
+  const SHA = "c".repeat(40);
+
+  it("builds the merge as PUT repos/<owner>/<repo>/pulls/<n>/merge with the body on stdin", () => {
+    expect(ghMergeArgs({ ...PULL, sha: SHA, method: "squash" })).toEqual(["api", "--hostname", "github.com", "--include", "--method", "PUT", "--input", "-", "repos/acme/app/pulls/7/merge"]);
+  });
+
+  it("refuses a merge of a part that fails validation, a short or uppercase head, and an unknown method", () => {
+    const bad = [
+      { ...PULL, owner: "acme/x" },
+      { ...PULL, repo: ".." },
+      { ...PULL, number: 0 },
+      { ...PULL, hostname: "https://github.com" },
+      { ...PULL, sha: "c".repeat(12) },
+      { ...PULL, sha: "C".repeat(40) },
+      { ...PULL, method: "admin" },
+    ];
+    for (const request of bad) {
+      expect(() => ghMergeArgs({ sha: SHA, method: "merge", ...request } as Parameters<typeof ghMergeArgs>[0]), JSON.stringify(request)).toThrow(/gh merge:/);
+    }
+  });
+
+  it("sends graphql only with its two constant documents, any other refused before gh starts", async () => {
+    expect(ghGraphqlArgs({ hostname: HOST, query: REVIEW_THREADS_QUERY })).toEqual(["api", "--hostname", "github.com", "--include", "--method", "POST", "--input", "-", "graphql"]);
+    expect(() => ghGraphqlArgs({ hostname: HOST, query: MARK_READY_MUTATION })).not.toThrow();
+    for (const query of [`${REVIEW_THREADS_QUERY} `, "mutation { mergePullRequest(input:{}) { clientMutationId } }", ""]) {
+      expect(() => ghGraphqlArgs({ hostname: HOST, query }), query).toThrow(/gh graphql: the document/);
+    }
+    await expect(ghMarkReady({ hostname: HOST, id: "x y" }, { env: { PATH: "" } })).rejects.toMatchObject({ code: "GH_REFUSED" });
+    await expect(ghReviewThreads({ ...PULL, owner: "a b" }, { env: { PATH: "" } })).rejects.toMatchObject({ code: "GH_REFUSED" });
   });
 });
 
@@ -167,6 +214,57 @@ describe("ghApi", () => {
       "api\n--hostname\nghe.example.com\n--include\n--method\nPOST\n--input\n-\nrepos/acme/app/pulls\nprompt=1\n",
     );
     expect(JSON.parse(await readFile(input, "utf8"))).toEqual({ title: "t", draft: true });
+  });
+
+  it.skipIf(process.platform === "win32")("starts the merge and the thread read with their bodies on stdin (a6-land-verb)", async () => {
+    const { bin, work, log, input } = await standIn('HTTP/2.0 200 OK\r\nContent-Type: application/json\r\n\r\n{"merged":true}', 0);
+    const sha = "d".repeat(40);
+
+    await expect(ghMergePull({ hostname: HOST, owner: "acme", repo: "app", number: 7, sha, method: "merge" }, { cwd: work, env: { PATH: bin } })).resolves.toEqual({
+      status: 200,
+      json: { merged: true },
+    });
+    expect(await readFile(log, "utf8")).toBe("api\n--hostname\ngithub.com\n--include\n--method\nPUT\n--input\n-\nrepos/acme/app/pulls/7/merge\nprompt=1\n");
+    expect(JSON.parse(await readFile(input, "utf8"))).toEqual({ sha, merge_method: "merge" });
+
+    await ghReviewThreads({ hostname: HOST, owner: "acme", repo: "app", number: 7 }, { cwd: work, env: { PATH: bin } });
+    expect(JSON.parse(await readFile(input, "utf8"))).toEqual({ query: REVIEW_THREADS_QUERY, variables: { owner: "acme", repo: "app", number: 7, after: null } });
+  });
+
+  it.skipIf(process.platform === "win32")("starts the program it is given, not one PATH names, and refuses a relative one (review/75)", async () => {
+    const { bin, work, log } = await standIn('HTTP/2.0 200 OK\r\nContent-Type: application/json\r\n\r\n{"login":"runner"}', 0);
+    const empty = getRoot().path("no-gh");
+    await mkdir(empty);
+
+    await expect(ghApi({ method: "GET", path: "user", hostname: HOST }, { cwd: work, env: { PATH: empty }, program: join(bin, "gh") })).resolves.toEqual({
+      status: 200,
+      json: { login: "runner" },
+    });
+    expect(await readFile(log, "utf8")).toContain("user\n");
+    await expect(ghApi({ method: "GET", path: "user", hostname: HOST }, { cwd: work, env: { PATH: bin }, program: "gh" })).rejects.toMatchObject({ code: "GH_REFUSED" });
+  });
+
+  it.skipIf(process.platform === "win32")("starts a shim-style link by its own path, so a target that picks the tool by its name runs gh (review/91)", async () => {
+    // A stand-in for a version manager's shim: one program, linked under each tool's name, that reads the name it was
+    // started under. Mock reason: no real version manager is installed for the suite, and the real gh reaches GitHub.
+    const lib = getRoot().path("shim-lib");
+    const bin = getRoot().path("shim-bin");
+    const work = getRoot().path("shim-work");
+    await Promise.all([mkdir(lib), mkdir(bin), mkdir(work)]);
+    const shim = join(lib, "shim");
+    await writeFile(
+      shim,
+      "#!/bin/sh\n" +
+        'case "$0" in */gh) ;; *) echo "shim: unknown command $1" >&2; exit 2 ;; esac\n' +
+        "/bin/cat > /dev/null\n" +
+        "printf 'HTTP/2.0 200 OK\\r\\nContent-Type: application/json\\r\\n\\r\\n{\"ok\":true}'\n",
+      "utf8",
+    );
+    await chmod(shim, 0o755);
+    await symlink(shim, join(bin, "gh"));
+
+    await expect(ghApi({ method: "GET", path: "user", hostname: HOST }, { cwd: work, env: { PATH: bin }, program: join(bin, "gh") })).resolves.toEqual({ status: 200, json: { ok: true } });
+    await expect(ghApi({ method: "GET", path: "user", hostname: HOST }, { cwd: work, env: { PATH: bin }, program: shim })).rejects.toThrow(/no HTTP status/);
   });
 
   it.skipIf(process.platform === "win32")("resolves a 4xx answer gh exits 1 on as its status", async () => {

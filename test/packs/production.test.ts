@@ -718,7 +718,10 @@ describe("/st-production-review — the verdict line and the words it never uses
   it("ends on the Ready line, naming the approval of record", async () => {
     const text = flow(await review());
 
-    expect(text).toContain("Ready: YES | NO | not signed — approval of record: <location | not named>");
+    // TEST CHANGE, justified: REQ-PACK-018 — `NO` names its open blocking checks on the line itself
+    // (run 53's FAIL, inbox close/3), so the pinned line carries `(open: <check id>, …)`.
+    expect(text).toContain("Ready: YES | NO (open: <check id>, …) | not signed — approval of record: <location | not named>");
+    expect(text).not.toContain("Ready: YES | NO | not signed");
     expect(text).toContain("approval of record");
   });
 

@@ -4,7 +4,7 @@ import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { GIT_PROGRAM_VARIABLES, GitWriteGroupStopped, gitProgramVariablesIn, gitWrite, gitWriteArgs, gitWriteEnv } from "../../../src/cli/engine/gitWrite.ts";
+import { GIT_PROGRAM_VARIABLES, GitWriteGroupStopped, gitProgramVariablesIn, gitWrite, gitWriteArgs, gitWriteEnv, NO_REPLACE_OBJECTS } from "../../../src/cli/engine/gitWrite.ts";
 import { NO_GIT_CONFIG } from "../../support/repoFixtures.ts";
 import { useTempDir } from "../../support/tempDir.ts";
 
@@ -15,10 +15,11 @@ import { useTempDir } from "../../support/tempDir.ts";
  * and a local bare remote (no network).
  */
 
-const PINNED = ["-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", "-c", "push.followTags=false"];
+// TEST CHANGE, justified (review/116): every write also pins `core.useReplaceRefs=false` among its leading options.
+const PINNED = ["-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", "-c", "push.followTags=false", "-c", "core.useReplaceRefs=false"];
 
 describe("gitWriteArgs", () => {
-  it("puts the three -c options, and no global pathspec flag, ahead of arguments that carry no `--`, unchanged", () => {
+  it("puts the pinned -c options, and no global pathspec flag, ahead of arguments that carry no `--`, unchanged", () => {
     expect(gitWriteArgs(["push", "origin", "HEAD:refs/heads/stamity/x"])).toEqual([...PINNED, "push", "origin", "HEAD:refs/heads/stamity/x"]);
     expect(gitWriteArgs(["-c", "user.name=T", "commit", "-m", "x"])).toEqual([...PINNED, "-c", "user.name=T", "commit", "-m", "x"]);
   });
@@ -40,6 +41,7 @@ describe("gitWriteArgs", () => {
 
 describe("gitWriteEnv", () => {
   it("keeps credentials and identity, drops the repository-location and pathspec variables, and turns the prompt off", () => {
+    // TEST CHANGE, justified (review/114): every write runs with GIT_NO_REPLACE_OBJECTS=1, so the pinned environment carries it.
     const env = gitWriteEnv({
       PATH: "/usr/bin",
       GH_TOKEN: "t",
@@ -65,6 +67,7 @@ describe("gitWriteEnv", () => {
       GIT_SSH_COMMAND: "ssh -i key",
       GIT_AUTHOR_NAME: "A",
       GIT_TERMINAL_PROMPT: "0",
+      GIT_NO_REPLACE_OBJECTS: "1",
     });
   });
 
@@ -94,21 +97,24 @@ describe("gitWriteEnv", () => {
 
     // TEST CHANGE, justified: review/18 (signed off 19:53Z) sets GIT_ASKPASS to the empty string instead of removing
     // it, so git consults neither core.askPass nor SSH_ASKPASS; the planted askpass value is still gone.
-    expect(env).toEqual({ ...KEPT, GIT_ASKPASS: "", GIT_TERMINAL_PROMPT: "0" });
+    // TEST CHANGE, justified (review/114): every write runs with GIT_NO_REPLACE_OBJECTS=1, so the pinned environment carries it.
+    expect(env).toEqual({ ...KEPT, GIT_ASKPASS: "", GIT_TERMINAL_PROMPT: "0", GIT_NO_REPLACE_OBJECTS: "1" });
   });
 
   it("unattended with no GIT_ASKPASS at all, still sets it empty; attended with none, sets none (review/18)", () => {
     // TEST CHANGE, justified (v0b, the orchestrator's sign-off of 2026-10-18): SSH_ASKPASS joins the program-valued
     // variables an unattended write removes, defense in depth beside the empty GIT_ASKPASS, so it is no longer kept.
-    expect(gitWriteEnv({ ...KEPT, SSH_ASKPASS: "/tmp/planted" }, { unattended: true })).toEqual({ ...KEPT, GIT_ASKPASS: "", GIT_TERMINAL_PROMPT: "0" });
+    // TEST CHANGE, justified (review/114): every write runs with GIT_NO_REPLACE_OBJECTS=1, so the pinned environment carries it.
+    expect(gitWriteEnv({ ...KEPT, SSH_ASKPASS: "/tmp/planted" }, { unattended: true })).toEqual({ ...KEPT, GIT_ASKPASS: "", GIT_TERMINAL_PROMPT: "0", GIT_NO_REPLACE_OBJECTS: "1" });
     expect(gitWriteEnv({ ...KEPT }, { unattended: false })).not.toHaveProperty("GIT_ASKPASS");
   });
 
   it("attended, as when the option is omitted, keeps every program-valued variable", () => {
     const base = { ...KEPT, ...PROGRAMS };
 
-    expect(gitWriteEnv(base, { unattended: false })).toEqual({ ...base, GIT_TERMINAL_PROMPT: "0" });
-    expect(gitWriteEnv(base)).toEqual({ ...base, GIT_TERMINAL_PROMPT: "0" });
+    // TEST CHANGE, justified (review/114): every write runs with GIT_NO_REPLACE_OBJECTS=1, so the pinned environment carries it.
+    expect(gitWriteEnv(base, { unattended: false })).toEqual({ ...base, GIT_TERMINAL_PROMPT: "0", GIT_NO_REPLACE_OBJECTS: "1" });
+    expect(gitWriteEnv(base)).toEqual({ ...base, GIT_TERMINAL_PROMPT: "0", GIT_NO_REPLACE_OBJECTS: "1" });
   });
 });
 
@@ -551,5 +557,58 @@ describe.skipIf(!gitAvailable)("gitWrite against real repositories", () => {
       groupGone: false,
       message: expect.stringContaining("stdout passed") as unknown,
     });
+  });
+});
+
+/**
+ * review/114: a repository whose one commit holds `a.txt` reading "real", and a `git replace` ref making that blob read
+ * as one holding "forged"; the blob's id, and what plain git (replace refs on) now prints for it.
+ */
+function replacedBlob(repo: string, configOn = false): { blob: string; plain: string } {
+  const run = (args: string[], input?: string): string =>
+    execFileSync("git", args, { cwd: repo, encoding: "utf8", ...(input === undefined ? {} : { input }), env: { ...process.env, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: NO_GIT_CONFIG, GIT_AUTHOR_NAME: "A", GIT_AUTHOR_EMAIL: "a@example.com", GIT_COMMITTER_NAME: "A", GIT_COMMITTER_EMAIL: "a@example.com" } }).trim();
+  run(["init", "-q"]);
+  const blob = run(["hash-object", "-w", "--stdin"], "real\n");
+  const forged = run(["hash-object", "-w", "--stdin"], "forged\n");
+  run(["replace", blob, forged]);
+  // review/116: the repository's own config turning replace refs on, which git 2.19 to 2.42 let beat the variable.
+  if (configOn) run(["config", "core.useReplaceRefs", "true"]);
+  return { blob, plain: run(["cat-file", "-p", blob]) };
+}
+
+// review/114: no git replace ref makes an object read as another through the write runner.
+describe("the write runner and git's replace refs (review/114)", () => {
+  const getRoot = useTempDir("gitwrite-replace");
+
+  it("sets GIT_NO_REPLACE_OBJECTS=1 whatever the caller's environment says", () => {
+    expect(gitWriteEnv({ GIT_NO_REPLACE_OBJECTS: "0" })[NO_REPLACE_OBJECTS]).toBe("1");
+    expect(gitWriteEnv({}, { unattended: true })[NO_REPLACE_OBJECTS]).toBe("1");
+  });
+
+  it("reads a replaced blob as the commit holds it, not as its replacement", async () => {
+    const repo = getRoot().path("repo");
+    await mkdir(repo, { recursive: true });
+    const { blob, plain } = replacedBlob(repo);
+    expect(plain).toBe("forged");
+
+    const read = await gitWrite(repo, ["cat-file", "-p", blob]);
+
+    expect(read).toMatchObject({ code: 0, stdout: "real\n" });
+  });
+
+  it("pins core.useReplaceRefs=false among the leading options of every call (review/116)", () => {
+    const args = gitWriteArgs(["cat-file", "-p", "HEAD"]);
+    const at = args.indexOf("core.useReplaceRefs=false");
+    expect(at).toBeGreaterThan(0);
+    expect(args[at - 1]).toBe("-c");
+    expect(at).toBeLessThan(args.indexOf("cat-file"));
+  });
+
+  it("reads a replaced blob as the commit holds it where the repository's own config turns replace refs on (review/116)", async () => {
+    const repo = getRoot().path("repo-config");
+    await mkdir(repo, { recursive: true });
+    const { blob } = replacedBlob(repo, true);
+
+    expect(await gitWrite(repo, ["cat-file", "-p", blob])).toMatchObject({ code: 0, stdout: "real\n" });
   });
 });

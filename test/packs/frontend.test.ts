@@ -656,6 +656,20 @@ describe("/st-ui-review — reviews a named surface, never edits", () => {
     expect(file.parsed.body).not.toMatch(/\bnpx\b/);
   });
 
+  it("stops at Frame on a working tree with changes outside .stamity/, so the source review and the bundle measure one tree", async () => {
+    const loop = section(await load(UI_REVIEW), "Loop").replace(/\s+/g, " ");
+    const frame = loop.slice(loop.indexOf("1. **Frame.**"), loop.indexOf("2. **"));
+    const review = loop.slice(loop.indexOf("3. **Review.**"), loop.indexOf("4. **"));
+
+    // The stop: a dirty tree ends the run before any spawn, names what changed, and says how to go on.
+    expect(frame).toMatch(/a working tree with changes outside `\.stamity\/` stops the run/i);
+    expect(frame).toContain("`BLOCKED_DEPENDENCY`");
+    expect(frame).toMatch(/naming them/i);
+    expect(frame).toMatch(/commit or stash, then run again/i);
+    // The reviewer reads the commit the clean tree builds, which the browser bundle measured.
+    expect(review).toMatch(/`git show <commit>:<path>` at the head the clean tree builds/);
+  });
+
   it("runs the detector first when the inventory is absent or behind, and raises no token finding over a blocked one", async () => {
     const text = flow(await load(UI_REVIEW));
 

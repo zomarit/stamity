@@ -12,7 +12,8 @@ import { parseGitRemote } from "../workspace/git.ts";
  * pull request's body is replaced only when it already ends with this run's
  * own marker: any other open pull request on the branch, a person's, keeps its
  * body and gets the text as one comment. No call here merges, marks ready, or
- * goes through GraphQL.
+ * goes through GraphQL: `stamity run land` does those, through its own
+ * fixed-purpose calls in the runner, on the evidence (`./landEvidence.ts`).
  */
 
 /** One REST call and its answer, as `ghApi` takes and returns them. */
@@ -343,4 +344,79 @@ export function resolveRepo(env: NodeJS.ProcessEnv, originUrl: string): { host: 
     ({ owner, repo } = parsed);
   }
   return HOST_NAME.test(host) && isNamePart(owner) && isNamePart(repo) ? { host, owner, repo } : null;
+}
+
+/**
+ * review/73: where the run verbs record the pull request they opened or updated for a run, under the work tree's own
+ * git directory beside the pre-flight record (`./gitSurface.ts`), so `run land` merges that number and no other
+ * pull request whose branch, head and marker happen to match.
+ */
+export const PR_RECORD_FILE = "stamity/run-pull-request.json";
+
+/** The most of a pull-request record read; a larger file is not a record. */
+export const PR_RECORD_MAX_BYTES = 4096;
+
+/** The pull request a run verb opened or updated for a run, on the repository and host it matched. */
+export interface PrRecord {
+  version: 1;
+  run: string;
+  host: string;
+  owner: string;
+  repo: string;
+  number: number;
+}
+
+/** The record's text, one JSON line. */
+export function prRecordText(record: Omit<PrRecord, "version">): string {
+  const { run, host, owner, repo, number } = record;
+  return `${JSON.stringify({ version: 1, run, host, owner, repo, number })}\n`;
+}
+
+/** A record's text read back, or `null` when it is not one this version wrote. */
+export function parsePrRecord(text: string): PrRecord | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (!isRecord(parsed)) return null;
+  const { version, run, host, owner, repo, number } = parsed;
+  if (version !== 1 || typeof run !== "string" || !isNamePart(run) || typeof host !== "string" || !HOST_NAME.test(host)) return null;
+  if (typeof owner !== "string" || !isNamePart(owner) || typeof repo !== "string" || !isNamePart(repo)) return null;
+  if (typeof number !== "number" || !Number.isSafeInteger(number) || number < 1) return null;
+  return { version: 1, run, host, owner, repo, number };
+}
+
+/** The record check's file reads, injected so the check stays pure: the same reads as the pre-flight record's. */
+export interface PrRecordReads {
+  /** `missing` where nothing is at `path`, `file` for a regular file (never through a link), else `other`. */
+  kind(path: string): "missing" | "file" | "other";
+  /** At most `maxBytes` of the regular file at `path`, and whether it held more; `null` where it cannot be read as one. */
+  read(path: string, maxBytes: number): { text: string; truncated: boolean } | null;
+}
+
+/**
+ * review/73: why the recorded pull request is not `expected` (the run, the repository and the number `run land` is
+ * about to merge), or `null`. No record, a link or anything but a regular file, one over {@link PR_RECORD_MAX_BYTES},
+ * text that is no record, or a record of another run, repository or number refuses.
+ */
+export function prRecordRefusal(place: { path: string } | { unreadable: string }, reads: PrRecordReads, expected: Omit<PrRecord, "version">): string | null {
+  const label = `${PR_RECORD_FILE} in the git directory`;
+  if ("unreadable" in place) return `no pull-request record (${place.unreadable})`;
+  const kind = reads.kind(place.path);
+  if (kind === "missing") return `no pull-request record (${label} is missing; run checkpoint --pr or run end writes it when it opens the draft)`;
+  const read = kind === "file" ? reads.read(place.path, PR_RECORD_MAX_BYTES) : null;
+  if (read === null) return `no pull-request record (${label} is not a regular file)`;
+  if (read.truncated) return `no pull-request record (${label} is over ${PR_RECORD_MAX_BYTES} bytes)`;
+  const record = parsePrRecord(read.text);
+  if (record === null) return `no pull-request record (${label} does not read as one)`;
+  const same =
+    record.run === expected.run &&
+    record.host === expected.host &&
+    record.owner.toLowerCase() === expected.owner.toLowerCase() &&
+    record.repo.toLowerCase() === expected.repo.toLowerCase() &&
+    record.number === expected.number;
+  if (same) return null;
+  return `the pull-request record names #${record.number} of ${record.owner}/${record.repo} for run ${record.run}, not #${expected.number} of ${expected.owner}/${expected.repo} for run ${expected.run}`;
 }

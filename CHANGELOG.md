@@ -79,6 +79,33 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   than 1.9.0, upgrade through 1.16.0 first, or keep the Action off that one upgrade pull request
   ([`docs/cloud.md`](docs/cloud.md)).
 
+### Security
+
+- **A Claude Code guard that times out blocks the call.** The Claude Code guard entries carry `onFailure: "block"`,
+  so a guard that times out blocks the call (measured on Claude Code 2.1.309; the vendor dates the key to 2.1.295;
+  older clients not measured). The Copilot CLI, which reads the same file, ignores the key (measured on 1.0.100).
+- **An unattended push is refused when git moved since the pre-flight.** An unattended `run checkpoint` and `run end`
+  refuse to push when git's configuration, the git environment (the `gh` credential variables included) or the git
+  program differs from what `gate preflight --unattended` recorded — names only, the values in a salted digest
+  (`config changed`, `no pre-flight record`, `configuration unreadable`). A refused pre-flight's record lets only
+  `run end --refused` take its draft ending, carrying the run's own records alone. `gate` is now listed as mutating,
+  and its `--dry-run` reaches `preflight` only.
+- **A looser guard is the person's to write.** `sync`, `init` and `workspace sync` refuse with `AUTONOMY_LOOSENED`,
+  writing nothing, to bake into a person-only guard copy an autonomy setting looser than the strictest of the guard
+  copies on disk, the setting committed at `HEAD` and the manifest being replaced, until the person passes
+  `--loosen`; a `--loosen` run names on stderr each guard copy it loosened and what it dropped. A repository that
+  never commits its guard copies meets the refusal on a fresh clone's first `sync` and passes `--loosen` once. A
+  1.16.0 guard carries no baked setting, and a setup from a release before the guard owns no guard copy at all, so the
+  first `sync` after upgrading adopts the `autonomous` default with no flag; set `autonomy.mode` to `ask` before that
+  `sync` to keep 1.16.0's asks.
+- **The run verbs, `run land` and the loosen gate read git with replace refs off**, by the `GIT_NO_REPLACE_OBJECTS`
+  variable and the `-c core.useReplaceRefs=false` command-line key, so a `git replace` ref, a local ref write that
+  needs no commit, cannot make the ledger, the hook declarations, the guard copies or a tree they read at a commit
+  look like another object.
+- **The person-only guard refuses a command line over 64 KiB in every mode, before any reading**; run such a line
+  yourself. A substitution's closing scan passes over a quoted heredoc body, and a substitution nothing closes reads
+  as filled in.
+
 ### Added
 
 - **The `production` pack.** `stamity add production` installs `/st-production-review` and two skills that start
@@ -123,6 +150,10 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   `moved-skills` fails on an overlay of a skill that moved to a pack, and warns on a full override of one or on a core
   copy still recorded. Both sit after `pack-reach`, and [`docs/troubleshooting.md`](docs/troubleshooting.md) lists
   them.
+- **The `autonomy` manifest key**: `mode` (`autonomous`, the default, or `ask`), `deployingBranches` and
+  `deployingActs`, with its three `config` keys, and the `autonomy-deploying` row of `check`, which warns when a
+  workflow deploys from a branch the setting does not cover and says "not evaluated" where it cannot read a workflow,
+  never passing on it.
 - **Two client keys pass through a skill's head.** `user-invocable` and `disable-model-invocation`, as booleans, reach
   the emitted `SKILL.md` as top-level keys. A skill that sets `disable-model-invocation: true` beside an
   `agents/openai.yaml` setting `policy.allow_implicit_invocation: false` stays out of Codex's skills list and its count.
@@ -140,6 +171,18 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   come from pstack, a public set of agent skills in the cursor/plugins repository (MIT); the text here is written fresh.
 - **The packs reference lists each pack's skills and commands** with their descriptions, under its class counts
   ([`docs/reference/packs.md`](docs/reference/packs.md)).
+- **`stamity run land --run <id>` lands the run's own pull request on its evidence.** It merges the pull request at
+  its head, or fast-forwards the default branch to it with `--fast-forward`, only when every required check run is
+  green (commit statuses never count), no review thread is unresolved, and the ledger at the head holds no open
+  Critical or Warning row. It lands only the pull request the run verb recorded when it opened the draft, and only one
+  the run's login opened. It asks instead for changes to CI, hook, manifest or repository-declared hook-script files,
+  held patches, `autonomy.mode: ask`, and deploying branches or acts, listing every reason and the head commit; the
+  person answers with `--approved <that commit>`, which holds only while the head is that commit. `--ready` marks a
+  draft ready on the same evidence, and `--wait <minutes>` (at most 9) waits for pending checks, including those not
+  started yet, the whole call ending within 9 minutes. It writes why a merge waits onto the pull request as one
+  `merge waits on:` line. It works under an app installation token and through version-manager shims. Every `gh` call
+  starts at the filesystem root, so a `gh` pinned only in the repository's own version config (a project
+  `.tool-versions` or `mise.toml`) no longer resolves there, and the verb refuses.
 
 ### Changed
 
@@ -177,6 +220,37 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   installed pack whose rules share that file (the warning gives the `clean --pack <id>` call), shorten the operator
   text the root `AGENTS.override.md` repeats, or set `ruleDelivery: "on-demand"`, where they advised a content
   selection `sync` never honoured.
+- **The reviewer files a pass-through layer as a finding even where the plan asks for it**, naming its consequence:
+  the interface kept twice.
+- **Codex, Cursor and Copilot hook entries name their script in plain text after the encoded row**, and the runner
+  refuses an entry whose word and row disagree. Codex asks you to trust `.codex/hooks.json` again after this update,
+  because the file's hash changes.
+- **The person-only guard bakes the autonomy setting into every copy**, as a `// stamity-autonomy` line. By default a
+  ready mark, a local tag and a workflow dispatch the repository does not name as deploying run unasked on the main
+  thread, and a sub-agent's call to one is refused; `autonomy.mode: ask` restores 1.16.0's asks, and a raw ready mark
+  stays refused while a run is unattended. A commit-status or check-run write is refused in every mode. An `--admin`
+  merge, a push or REST or GraphQL write onto a branch `autonomy.deployingBranches` names, a dispatch named as
+  deploying, `--loosen` on a stamity command (or a word the guard cannot read on one, which may spell it), and
+  `stamity run land --approved <sha>` ask, attended, and are refused unattended and for a sub-agent; the land verb
+  stands alone on its line in every mode. A publish carrying `--dry-run` runs only when npm would read it as one. The
+  guard's reading of a shell line is linear in its length, with no regular expression built from the line, and fails
+  closed where it cannot read a word: a brace form or a parameter span longer than 256 characters is read as filled
+  in.
+- **`/st-work` no longer asks about the commit at its close.** After the last round it commits, pushes and opens or
+  updates the draft pull request through `stamity run checkpoint --pr`, then runs `stamity run land --ready --wait 8`,
+  which merges the pull request when its evidence holds. When the land asks (for example under `autonomy.mode: ask`,
+  or a CI or guard file in the diff), the close asks you first, naming the pull request, every reason and the head
+  commit, and leaves the merge held unless you say yes. On yes it runs `stamity run land --ready --approved <sha>` for
+  exactly that commit, and the guard asks again on that line; a commit pushed after your yes is asked about again. A
+  refused land waits as a held row on the summary list, and the next walk retries it with the same `--ready --wait 8`
+  line. Say "don't commit" at the close to keep the work local. Unattended runs land through
+  `stamity run land --ready --wait 8` after `run end` and never pass `--approved`. Every run writes
+  `.stamity/runs/<id>/morning.md` at its close.
+- **The person-only guard reads a heredoc body as data when only a data sink receives it**: `cat` or `tee` writing
+  to a plain file, `cat` inside a quoted substitution that is a whole argument (a commit message), the engine's own
+  CLI reading its stdin, `git commit -F -` and `gh pr create|edit|comment --body-file -`. A commit message with a `* `
+  bullet, or a `learn capture` body on stdin, no longer asks as a loosening; every other heredoc keeps the reading it
+  had (Security).
 
 ### Deprecated
 
@@ -209,6 +283,27 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
 - **Pack signing gives the transparency log 30 s per request.** The engine's `pack.sign` handed the signing client
   its 5 s default, so a Rekor upload slower than that was aborted and sent again after it had landed, and the second
   upload was answered with a conflict that failed signing. Only an upload slower than 30 s can still fail this way.
+- **Codex agent files and the capability page no longer claim a verdict role's `sandbox_mode` binds it.** Measured
+  on codex-cli 0.155.1, a spawned role runs in the parent's sandbox, so its read-only grant is prompt-level.
+- **A fork release names its npm dist-tag and rehearses the publish before the approval.** npm 11 refuses to publish
+  a prerelease without `--tag`, and every suffixed fork version (`1.16.0-acme.1`) is one, so a fork's publish failed
+  after its approval. `fork-release.yml` now publishes under `latest`, set once as `DIST_TAG`, and its `gates` job
+  runs the same publish with `--dry-run` right after the pack, with no secret: npm's tag-rule refusal stops the run
+  before anyone approves it, and a registry that refuses a tokenless dry run is a warning naming what was not
+  checked. The release and signing-rehearsal jobs run on `ubuntu-24.04`, the image their egress allowlists were
+  measured on, while GitHub moves `ubuntu-latest` to 26.04.
+- **`st-release` starts a deploy's change set at the service's last record whose `Outcome` reads `deployed`**, so a
+  held or failed attempt never becomes the next run's base; `/st-production-review`'s Ready line names the open
+  blocking checks of a `NO`.
+- **`/st-ui-review` stops at Frame on a working tree with changes outside `.stamity/`**, so its source review and its
+  browser evidence measure the same tree.
+- **`stamity run checkpoint` and `run end` write the held patch with git's default `a/`/`b/` prefixes** whatever the
+  repository's diff settings, read a CRLF copy of a held link's section, and take `--drop-held <path...>` to withdraw
+  a held section the run undid (`withdrawn` in the JSON). A hold refusal at `Base:` now ends with the next step, and
+  names a Unicode-normalization-only spelling difference as such.
+- **Copilot's shipped model candidates drop `gpt-5.4-mini` (retired 2026-10-19), `claude-opus-5` and
+  `gpt-5.6-terra` (retiring 2026-11-16).** Claude Haiku 5.5 now leads Copilot's economy class, and an account without
+  Haiku 5.5 keeps Haiku 4.5, as 1.16.0 picked. A vendor-dated retirement table keeps a retired id off the shipped list.
 
 ## [1.16.0] - 2026-10-20
 

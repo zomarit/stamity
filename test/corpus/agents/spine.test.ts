@@ -627,6 +627,11 @@ describe("reviewer — multi-lens verdict", () => {
     expect(text).toMatch(
       /a new layer whose interface is nearly as wide as what it hides \(a pass-through\)/i,
     );
+    // REQ-FLOW-082 (MODIFIED): the pass-through is a finding even where the plan
+    // asks for the layer, and its consequence is named, so it is never a note.
+    expect(text).toMatch(
+      /\(a pass-through\), a finding even where the plan asks for the layer: its consequence is the interface kept twice;/i,
+    );
     expect(text).toMatch(
       /a function or file well past the repo's own norms whose interface is wide too/i,
     );

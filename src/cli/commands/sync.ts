@@ -2,8 +2,9 @@ import type { Command } from "commander";
 import { scopeRegistryArg } from "../../shared/cliCall.ts";
 import { MANIFEST_FILE } from "../../types/manifest.ts";
 import { STATE_DIR } from "../../types/markers.ts";
-import { hasNpmChannel, npmRegistry, packageName } from "../kit/packageName.ts";
+import { hasNpmChannel, npmRegistry, packageCommand, packageName } from "../kit/packageName.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
+import { assertNotLoosened } from "../engine/autonomyGate.ts";
 import { listerTreeRoot } from "../engine/clientModels.ts";
 import type { WorkingTreeStatus } from "../engine/gitStatus.ts";
 import { readClientModelLists } from "./init/apply.ts";
@@ -235,6 +236,7 @@ export const syncCommand: CommandModule = {
 
   configure(cmd: Command): void {
     cmd.option("--force", "overwrite colliding unmanaged files after a verified .bak");
+    cmd.option("--loosen", "write a guard copy looser than the autonomy setting on disk, at HEAD or in the manifest it replaces (the person's act)");
     cmd.addHelpText("after", `\n${updatePathHelp()}\n`);
   },
 
@@ -242,6 +244,7 @@ export const syncCommand: CommandModule = {
     const rootDir = ctx.app.runtime.cwd;
     const engineVersion = ctx.app.version;
     const force = opts["force"] === true;
+    const loosen = opts["loosen"] === true;
 
     // Spinner around plan+apply (TTY human mode renders frames; piped mode
     // prints the text once as a plain line; JSON mode prints nothing).
@@ -255,6 +258,10 @@ export const syncCommand: CommandModule = {
       force,
       dryRun: ctx.dryRun,
       now: ctx.app.runtime.clock.now(),
+      // The loosen gate (REQ-FLOW-138): `--loosen` is the person's word, which the guard asks for.
+      // Under `--loosen`, each guard copy it loosens is named on stderr.
+      guardGate: (next, copies) =>
+        assertNotLoosened(rootDir, next, { loosen, copies, remedy: packageCommand("sync --loosen"), notice: (line) => ctx.io.err(`${line}\n`) }),
     });
     ctx.spinner.stop();
     if (report.modelListCacheWarning !== undefined) ctx.io.err(`warning: ${report.modelListCacheWarning}\n`);

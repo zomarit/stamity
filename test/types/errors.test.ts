@@ -20,14 +20,18 @@ const CODE_NOTES: Record<ErrorCode, string> = {
   // TEST CHANGE, justified: REQ-PLUGIN-047 — `check --expect-*` adds a tenth code, so an
   // orchestrator can tell a repository its caller did not approve from drift.
   EXPECTATION_ERROR: "the repository records another release, client set or install mode",
+  // TEST CHANGE, justified: REQ-FLOW-138 — the loosen gate adds an eleventh code, so a caller can
+  // tell a refused loosening of the autonomy setting from every other failure.
+  AUTONOMY_LOOSENED: "a write would bake a looser autonomy setting than the guard in force",
 };
 
 const ALL_CODES = Object.keys(CODE_NOTES) as ErrorCode[];
 
 describe("the classification channel is `code`, not the exit number", () => {
   // TEST CHANGE, justified: REQ-PLUGIN-047 — nine codes became ten with EXPECTATION_ERROR.
-  it("keeps all 10 codes as the thing a caller branches on", () => {
-    expect(ALL_CODES).toHaveLength(10);
+  // TEST CHANGE, justified: REQ-FLOW-138 — ten codes became eleven with AUTONOMY_LOOSENED.
+  it("keeps all 11 codes as the thing a caller branches on", () => {
+    expect(ALL_CODES).toHaveLength(11);
     for (const code of ALL_CODES) {
       expect(new EngineError("boom", { code }).code).toBe(code);
     }

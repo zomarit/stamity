@@ -1,12 +1,15 @@
 import { execFileSync, spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { gitSurfaceRecordPath, readRunGitSurface } from "../../../src/cli/commands/gate.ts";
 import { runCommand } from "../../../src/cli/commands/run.ts";
 import type * as GitWriteModule from "../../../src/cli/engine/gitWrite.ts";
 import { buildUnattendedAskGate, UNATTENDED_ASK_GATE_FILE } from "../../../src/hooks/scripts.ts";
 import { RUN_ENDED_MARKER_FILE } from "../../../src/mcp/env.ts";
+import { surfaceRecord } from "../../../src/runs/gitSurface.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { NO_GIT_CONFIG } from "../../support/repoFixtures.ts";
 import { useTempDir } from "../../support/tempDir.ts";
@@ -167,7 +170,28 @@ describe("stamity run end", () => {
     if (opts.pin === "untracked") await put(repo, ORIGIN_PIN, PIN_TEXT);
     const modeLine = mode === null ? "" : `Mode: ${mode}\n`;
     await put(repo, `${RUN_DIR}/record.md`, `# Run ${RUN}\n\nStatus: in progress\n${modeLine}Branch: ${RUN_BRANCH}\nBase: ${base}\n`);
+    // TEST CHANGE, justified (REQ-FLOW-131, review/97): an unattended `end` now refuses with no pre-flight record of
+    // git's surface, which a passing `gate preflight --unattended` writes; the seed writes it, every mode alike (an
+    // attended run reads none), so no case's own steps change. A case about the record rewrites it.
+    await recordPreflight(repo);
     return { repo, remote, base };
+  }
+
+  /**
+   * The record a passing `gate preflight --unattended` writes for `repo` (REQ-FLOW-131), through the same reads and
+   * the module's own `surfaceRecord`, in the process environment {@link run} gives the verb; the spy's calls put back.
+   * `refused` writes the record a refusing pre-flight leaves (review/33).
+   */
+  async function recordPreflight(repo: string, refused = false): Promise<void> {
+    const mark = writes.argv.length;
+    await underRunEnv(async () => {
+      const place = await gitSurfaceRecordPath(repo);
+      const surface = await readRunGitSurface(repo);
+      if ("unreadable" in place || "unreadable" in surface) throw new Error("the seed's git surface could not be read");
+      await mkdir(dirname(place.path), { recursive: true });
+      await writeFile(place.path, `${JSON.stringify(surfaceRecord(surface, randomBytes(16).toString("hex"), new Date().toISOString(), refused))}\n`);
+    });
+    writes.argv.length = mark;
   }
 
   async function put(repo: string, path: string, text: string): Promise<void> {
@@ -175,8 +199,12 @@ describe("stamity run end", () => {
     await writeFile(join(repo, path), text);
   }
 
-  /** Runs the verb with `HOME` at an empty folder and no host identity, so only the repository's config decides. */
-  async function run(cwd: string, argv: readonly string[], env?: Record<string, string>) {
+  /**
+   * `body` with `HOME` at an empty folder and no host identity in the process environment, put back after.
+   * TEST CHANGE, justified (REQ-FLOW-131): {@link run}'s environment, moved here unchanged so the seed's pre-flight
+   * record is taken in the same one.
+   */
+  async function underRunEnv<T>(body: () => Promise<T>): Promise<T> {
     const home = getRoot().path("home");
     await mkdir(home, { recursive: true });
     const overrides: Record<string, string | undefined> = { HOME: home, XDG_CONFIG_HOME: home, GIT_CONFIG_NOSYSTEM: "1", EMAIL: undefined };
@@ -187,17 +215,24 @@ describe("stamity run end", () => {
       else process.env[key] = value;
     }
     try {
-      const result = await runInProcess([runCommand], ["run", ...argv], { cwd, ...(env === undefined ? {} : { env }) });
-      const envelope = argv.includes("--json") && result.stdout !== "" ? (JSON.parse(result.stdout) as Record<string, unknown>) : {};
-      // The funnel's three envelope keys, set aside so `doc` is the verb's own document.
-      const { ok, command, version, ...doc } = envelope;
-      return { ...result, ok, command, version, doc };
+      return await body();
     } finally {
       for (const [key, value] of Object.entries(previous)) {
         if (value === undefined) delete process.env[key];
         else process.env[key] = value;
       }
     }
+  }
+
+  /** Runs the verb with `HOME` at an empty folder and no host identity, so only the repository's config decides. */
+  async function run(cwd: string, argv: readonly string[], env?: Record<string, string>) {
+    return underRunEnv(async () => {
+      const result = await runInProcess([runCommand], ["run", ...argv], { cwd, ...(env === undefined ? {} : { env }) });
+      const envelope = argv.includes("--json") && result.stdout !== "" ? (JSON.parse(result.stdout) as Record<string, unknown>) : {};
+      // The funnel's three envelope keys, set aside so `doc` is the verb's own document.
+      const { ok, command, version, ...doc } = envelope;
+      return { ...result, ok, command, version, doc };
+    });
   }
 
   const END = (title: string): string[] => ["end", "--run", RUN, "--title", title, "--json"];
@@ -237,6 +272,22 @@ describe("stamity run end", () => {
     });
     // The push ran before the pull request was asked for.
     expect(pushes()).toEqual([["push", "--quiet", "origin", `HEAD:refs/heads/${RUN_BRANCH}`]]);
+  });
+
+  // REQ-FLOW-131 (review/97): `end` runs checkpoint's steps, the surface check among them, before any pull request call.
+  it("refuses an unattended end whose git config moved since the pre-flight, pushing nothing and asking for no pull request", async () => {
+    const { repo, remote } = await seed("unattended");
+    git(repo, ["config", "stamity.moved", "yes"]);
+    await writeFile(join(repo, "a.txt"), "changed\n");
+
+    const { code, doc } = await run(repo, [...END("feat: the change"), "--paths", "a.txt"]);
+
+    expect(code).toBe(1);
+    expect(doc).toMatchObject({ subcommand: "end", pushed: false, committed: null, pr: null });
+    expect((doc["notDone"] as string[])[0]).toMatch(/^config changed: .*added stamity\.moved/);
+    expect(pushes()).toEqual([]);
+    expect(rest.calls.filter((call) => call.path.endsWith("/pulls"))).toEqual([]);
+    expect(git(remote, ["for-each-ref", "--format=%(refname)", "refs/heads/"])).toBe("");
   });
 
   it("replaces the body of an open pull request that ends with this run's marker, opening no second one", async () => {
@@ -310,6 +361,151 @@ describe("stamity run end", () => {
 
     expect(code).toBe(0);
     expect(created().title).toBe("Refused: plan 021 not ready");
+  });
+
+  // review/33 (REQ-FLOW-131): a refusing pre-flight leaves a record marked refused; only the refusal's own ending takes it.
+  /**
+   * review/50: origin holding `main` at Base:, as a real origin holds its default branch, so the commits a push would
+   * send are the run's alone; a refused pre-flight's ending reads that set from origin's tips.
+   */
+  const originHoldsMain = (seeded: Seeded): void => {
+    git(seeded.repo, ["push", "--quiet", seeded.remote, `${seeded.base}:refs/heads/main`]);
+  };
+
+  it("ends a run whose pre-flight refused on its Refused: draft, and refuses a plain end after that pre-flight", async () => {
+    const refusedEnd = await seed("unattended");
+    const plainEnd = await seed("unattended");
+    // TEST CHANGE, justified (REQ-FLOW-131, review/50): a refused ending refuses every product path the push would
+    // send, and an empty origin would be sent the seed commit's a.txt and b.txt, so origin holds main as a real one does.
+    originHoldsMain(refusedEnd);
+    await recordPreflight(refusedEnd.repo, true);
+    await recordPreflight(plainEnd.repo, true);
+    await put(refusedEnd.repo, `${RUN_DIR}/morning.md`, morningList("refused at the pre-flight"));
+
+    const ended = await run(refusedEnd.repo, [...END("pre-flight refused"), "--refused"]);
+
+    expect(ended.code, JSON.stringify(ended.doc)).toBe(0);
+    expect(ended.doc).toMatchObject({ pushed: true });
+    expect(created().title).toBe("Refused: pre-flight refused");
+    const before = rest.calls.length;
+    const pushesBefore = pushes().length;
+
+    const plain = await run(plainEnd.repo, END("feat: the change"));
+
+    expect(plain.code).toBe(1);
+    expect(plain.doc).toMatchObject({ pushed: false, committed: null, pr: null });
+    expect((plain.doc["notDone"] as string[])[0]).toBe("no pre-flight record (the pre-flight refused)");
+    expect(pushes()).toHaveLength(pushesBefore);
+    expect(rest.calls.slice(before).filter((call) => call.path.endsWith("/pulls"))).toEqual([]);
+  });
+
+  describe("a refused pre-flight's ending carries only the run's records (review/50)", () => {
+    const PREFIX = "refused ending carries only the run's records: ";
+
+    it("refuses --paths under a refused record, staging, committing and pushing nothing", async () => {
+      const { repo, base } = await seed("unattended");
+      await recordPreflight(repo, true);
+      await writeFile(join(repo, "a.txt"), "changed\n");
+
+      const { code, doc } = await run(repo, [...END("pre-flight refused"), "--refused", "--paths", "a.txt"]);
+
+      expect(code).toBe(1);
+      expect(doc).toMatchObject({ pushed: false, committed: null, pr: null });
+      expect((doc["notDone"] as string[])[0]).toBe(`${PREFIX}--paths names a.txt`);
+      expect(git(repo, ["rev-parse", "HEAD"])).toBe(base);
+      expect(git(repo, ["diff", "--cached", "--name-only"])).toBe("");
+      expect(pushes()).toEqual([]);
+      expect(writesToGitHub()).toEqual([]);
+    });
+
+    // TEST CHANGE, justified (REQ-FLOW-131, review/50): the check now reads the commits the push sends, not Base:'s
+    // tree, so origin holds main (the seed commit stays out of the set) and the line names that set.
+    it("refuses where a product commit the push would send or a staged product change would ride the ending, naming the paths", async () => {
+      const committed = await seed("unattended");
+      const staged = await seed("unattended");
+      originHoldsMain(committed);
+      originHoldsMain(staged);
+      await recordPreflight(committed.repo, true);
+      await recordPreflight(staged.repo, true);
+      await writeFile(join(committed.repo, "a.txt"), "the product change\n");
+      git(committed.repo, ["add", "--", "a.txt"]);
+      git(committed.repo, ["-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "product work"]);
+      await writeFile(join(staged.repo, "b.txt"), "staged\n");
+      git(staged.repo, ["add", "--", "b.txt"]);
+
+      const fromCommit = await run(committed.repo, [...END("pre-flight refused"), "--refused"]);
+      const fromIndex = await run(staged.repo, [...END("pre-flight refused"), "--refused"]);
+
+      expect(fromCommit.code).toBe(1);
+      expect(fromCommit.doc).toMatchObject({ pushed: false, committed: null, pr: null });
+      expect((fromCommit.doc["notDone"] as string[])[0]).toBe(`${PREFIX}the commits the push would send or the index change a.txt`);
+      expect(fromIndex.code).toBe(1);
+      expect((fromIndex.doc["notDone"] as string[])[0]).toBe(`${PREFIX}the commits the push would send or the index change b.txt`);
+      expect(pushes()).toEqual([]);
+      expect(writesToGitHub()).toEqual([]);
+    });
+
+    it("refuses a product path added in one commit and removed in a later one, the trees equal, as the push still sends both", async () => {
+      const seeded = await seed("unattended");
+      originHoldsMain(seeded);
+      await recordPreflight(seeded.repo, true);
+      await writeFile(join(seeded.repo, "c.txt"), "product content\n");
+      git(seeded.repo, ["add", "--", "c.txt"]);
+      git(seeded.repo, ["-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "add c"]);
+      git(seeded.repo, ["rm", "--quiet", "--", "c.txt"]);
+      git(seeded.repo, ["-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "remove c"]);
+      expect(git(seeded.repo, ["diff", "--name-only", seeded.base, "HEAD"])).toBe("");
+
+      const { code, doc } = await run(seeded.repo, [...END("pre-flight refused"), "--refused"]);
+
+      expect(code).toBe(1);
+      expect(doc).toMatchObject({ pushed: false, committed: null, pr: null });
+      expect((doc["notDone"] as string[])[0]).toBe(`${PREFIX}the commits the push would send or the index change c.txt`);
+      expect(pushes()).toEqual([]);
+      expect(git(seeded.remote, ["for-each-ref", "--format=%(refname)", "refs/heads/"])).toBe("refs/heads/main");
+    });
+
+    it("refuses a product commit hidden by moving the record's Base: past it, Base: playing no part in the check", async () => {
+      const seeded = await seed("unattended");
+      originHoldsMain(seeded);
+      await recordPreflight(seeded.repo, true);
+      await writeFile(join(seeded.repo, "a.txt"), "the product change\n");
+      git(seeded.repo, ["add", "--", "a.txt"]);
+      git(seeded.repo, ["-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "product work"]);
+      const moved = git(seeded.repo, ["rev-parse", "HEAD"]);
+      await put(seeded.repo, `${RUN_DIR}/record.md`, `# Run ${RUN}\n\nStatus: in progress\nMode: unattended\nBranch: ${RUN_BRANCH}\nBase: ${moved}\n`);
+
+      const { code, doc } = await run(seeded.repo, [...END("pre-flight refused"), "--refused"]);
+
+      expect(code).toBe(1);
+      expect(doc).toMatchObject({ pushed: false, committed: null, pr: null });
+      expect((doc["notDone"] as string[])[0]).toBe(`${PREFIX}the commits the push would send or the index change a.txt`);
+      expect(pushes()).toEqual([]);
+    });
+
+    it("leaves end --refused under a passing pre-flight's record as it was: --paths staged and pushed", async () => {
+      const { repo } = await seed("unattended");
+      await writeFile(join(repo, "a.txt"), "changed\n");
+
+      const { code, doc } = await run(repo, [...END("plan 021 not ready"), "--refused", "--paths", "a.txt"]);
+
+      expect(code, JSON.stringify(doc)).toBe(0);
+      expect(doc).toMatchObject({ pushed: true });
+      expect(created().title).toBe("Refused: plan 021 not ready");
+    });
+  });
+
+  it("still compares a refused pre-flight's record on end --refused, refusing a config that moved since", async () => {
+    const { repo } = await seed("unattended");
+    await recordPreflight(repo, true);
+    git(repo, ["config", "stamity.moved", "yes"]);
+
+    const { code, doc } = await run(repo, [...END("pre-flight refused"), "--refused"]);
+
+    expect(code).toBe(1);
+    expect(doc).toMatchObject({ pushed: false, pr: null });
+    expect((doc["notDone"] as string[])[0]).toMatch(/^config changed: .*added stamity\.moved/);
+    expect(pushes()).toEqual([]);
   });
 
   // n10-refused-title: a title that already begins with the verb's own `Refused:` (leading white space set aside) is

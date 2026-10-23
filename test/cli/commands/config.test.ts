@@ -2280,3 +2280,118 @@ describe("config — `none` clears a model pin, never stores the word (build/49)
     }
   });
 });
+
+/**
+ * The three autonomy keys (plan 022 file 1, unit a3-autonomy-config;
+ * REQ-FLOW-137, REQ-FLOW-138). `config set` writes state only, as every key
+ * here does; a change that loosens the setting closes on the `sync --loosen`
+ * line instead of the plain sync line, since applying it is the person's.
+ */
+describe("config — the autonomy keys", () => {
+  const LOOSEN_LINE = "the person runs stamity sync --loosen";
+
+  it("addresses the mode, the deploying branches and the deploying acts", () => {
+    for (const key of ["autonomy.mode", "autonomy.deployingBranches", "autonomy.deployingActs"]) {
+      expect(CONFIG_KEYS).toContain(key);
+    }
+  });
+
+  it("reads the default when the manifest carries no block", async () => {
+    const handle = tempDir();
+    await seedManifest(handle);
+
+    expect((await run(handle, ["get", "autonomy.mode"])).stdout).toContain("(default: autonomous)");
+    expect((await run(handle, ["get", "autonomy.deployingActs"])).stdout).toContain("(default: none)");
+    expect(rowFor((await run(handle, ["list"])).stdout, "autonomy.deployingBranches")).toMatch(
+      /none\s+\(default\)/,
+    );
+  });
+
+  it("writes two deploying acts and reads both back, with the plain sync line", async () => {
+    const handle = tempDir();
+    await seedManifest(handle);
+
+    const written = await run(handle, ["set", "autonomy.deployingActs", "pr-ready,push-default"]);
+
+    expect(written.code).toBe(0);
+    expect((await readManifest(handle.dir))?.autonomy).toEqual({ deployingActs: ["pr-ready", "push-default"] });
+    expect((await run(handle, ["get", "autonomy.deployingActs"])).stdout).toContain(
+      "autonomy.deployingActs  pr-ready, push-default",
+    );
+    // Naming an act tightens: nothing to loosen, so the closing line is sync's own.
+    expect(written.stdout).toContain("next: run stamity sync to apply");
+    expect(written.stdout).not.toContain(LOOSEN_LINE);
+  });
+
+  it("refuses an act outside the five, naming them, and writes nothing", async () => {
+    const handle = tempDir();
+    await seedManifest(handle);
+    const before = await manifestBytes(handle);
+
+    const human = await run(handle, ["set", "autonomy.deployingActs", "force-push"]);
+    const json = await run(handle, ["set", "autonomy.deployingActs", "force-push", "--json"]);
+
+    expect(human.code).toBe(1);
+    expect(human.stderr).toContain("pr-ready, tag, workflow-dispatch, pr-merge, push-default");
+    expect(human.stderr).toContain("force-push");
+    expect(json.code).toBe(1);
+    expect(singleDoc(json.stdout)["error"]).toMatchObject({ code: "VALIDATION_ERROR" });
+    expect(await manifestBytes(handle)).toBe(before);
+  });
+
+  it("writes branch names and a one-segment pattern, and refuses a name git would refuse", async () => {
+    const handle = tempDir();
+    await seedManifest(handle);
+
+    expect((await run(handle, ["set", "autonomy.deployingBranches", "main, release/*"])).code).toBe(0);
+    expect((await readManifest(handle.dir))?.autonomy?.deployingBranches).toEqual(["main", "release/*"]);
+
+    const before = await manifestBytes(handle);
+    const refused = await run(handle, ["set", "autonomy.deployingBranches", "main,feat..x"]);
+
+    expect(refused.code).toBe(1);
+    expect(refused.stderr).toContain("autonomy.deployingBranches[1]");
+    expect(await manifestBytes(handle)).toBe(before);
+  });
+
+  it("names the sync --loosen line when a change loosens the setting, and the JSON says so", async () => {
+    const handle = tempDir();
+    await seedManifest(handle, { autonomy: { mode: "ask", deployingActs: ["workflow-dispatch"] } });
+
+    const mode = await run(handle, ["set", "autonomy.mode", "autonomous"]);
+
+    expect(mode.code).toBe(0);
+    expect(mode.stdout).toContain(LOOSEN_LINE);
+    expect(mode.stdout).not.toContain("next: run stamity sync to apply");
+
+    // Removing workflow-dispatch from the named acts loosens too (REQ-FLOW-138).
+    const acts = await run(handle, ["set", "autonomy.deployingActs", "none", "--json"]);
+
+    expect(acts.code).toBe(0);
+    expect(singleDoc(acts.stdout)).toMatchObject({ ok: true });
+    expect(JSON.stringify(singleDoc(acts.stdout))).toContain('"loosens":true');
+    expect((await readManifest(handle.dir))?.autonomy).toEqual({ mode: "autonomous" });
+  });
+
+  it("previews a loosening under --dry-run without writing it", async () => {
+    const handle = tempDir();
+    await seedManifest(handle, { autonomy: { deployingBranches: ["production"] } });
+    const before = await manifestBytes(handle);
+
+    const result = await run(handle, ["set", "autonomy.deployingBranches", "none", "--dry-run"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("would set autonomy.deployingBranches");
+    expect(result.stdout).toContain(LOOSEN_LINE);
+    expect(await manifestBytes(handle)).toBe(before);
+  });
+
+  it("drops the emptied block, so no `autonomy: {}` is left behind", () => {
+    const manifest = baseManifest({ autonomy: { deployingBranches: ["main"] } });
+
+    const next = setConfigValue(manifest, "autonomy.deployingBranches", "none");
+
+    expect(next.autonomy).toBeUndefined();
+    expect(() => setConfigValue(manifest, "autonomy.mode", "lax")).toThrow(CliFailure);
+  });
+});

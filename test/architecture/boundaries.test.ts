@@ -307,6 +307,9 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   "src/runs/layout.ts": { unit: "ctx-hook-card", wave: 1 },
   // The schedule rule's grammar: pure, zero imports, read by the wave-4 ledger store.
   "src/runs/disposition.ts": { unit: "q9a-disposition", wave: 1 },
+  // Plan 022 file 1 (review/97): the git surface the pre-flight records and the run verbs compare against, pure,
+  // zero internal imports, read by the wave-14 gate verb and the wave-15 run verb.
+  "src/runs/gitSurface.ts": { unit: "a2-run-verb-config-recheck", wave: 1 },
   // Plan 021 file 1, the unattended run. Each row sits at the depth its own
   // imports put it, under the wave-12 root that wires it and the wave-14 verbs
   // that call it. Zero internal imports: the plan's structural coverage check,
@@ -319,6 +322,9 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // hook scripts and pre-flight and the wave-14 gate verb (v8-detect-translator).
   "src/session/detect.ts": { unit: "v8-detect-translator", wave: 1 },
   // wave 2
+  // Plan 022 file 1: the autonomy setting resolved, pure, over src/types/manifest.ts
+  // alone; read by the wave-14 `config` and wave-15 `check` verbs.
+  "src/config/autonomy.ts": { unit: "a3-autonomy-config", wave: 2 },
   "src/merge/fsErrors.ts": { unit: "p1-08", wave: 2 },
   "src/merge/managedBlocks.ts": { unit: "p1-08", wave: 2 },
   "src/guard/promptGuard.ts": { unit: "p1-09", wave: 2 },
@@ -451,6 +457,13 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // the wave-2 block reader and the wave-1 run layout, reached by the wave-14
   // `stamity ledger` verb.
   "src/runs/ledgerStore.ts": { unit: "ctx-ledger-append", wave: 4 },
+  // TEST CHANGE, justified (plan 022 file 1, a6-land-verb, REQ-FLOW-132): the land verb's evidence and decision, pure,
+  // over the wave-4 ledger parse, the wave-3 person-only paths and the wave-2 autonomy setting, under the wave-12 root.
+  "src/runs/landEvidence.ts": { unit: "a6-land-verb", wave: 5 },
+  // TEST CHANGE, justified (plan 022 file 1, a6-land-verb, build/2): the hold's hook-path read, moved out of the run
+  // verb behind injected reads, over the wave-2 declaration reader and the wave-1 parse and launcher check; read by the
+  // wave-14 land verb and the wave-15 run verb.
+  "src/runs/hookPaths.ts": { unit: "a6-land-verb", wave: 3 },
   // Plan 021 file 1: the morning list (the wave-2 scan and block reader, the
   // wave-3 pull request's marker), the pre-flight's checks (the wave-1 secret
   // patterns, the wave-3 repository resolver) and the readiness check (the
@@ -595,6 +608,10 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // same-wave edges in both directions that no call site wants.
   "src/cli/engine/emissionWrite.ts": { unit: "ew-u1", wave: 13 },
   "src/cli/engine/gitStatus.ts": { unit: "p2-03", wave: 13 },
+  // Plan 022 (a3b): the loosen gate (REQ-FLOW-138), over the wave-2 autonomy
+  // setting, the wave-4 guard file name and bare look and the wave-1 PATH walk,
+  // below the wave-14 write loops (`init/apply.ts`, `sync/engine.ts`) that run it.
+  "src/cli/engine/autonomyGate.ts": { unit: "a3b-loosen-gate", wave: 13 },
   // Plan 021 file 1 (u4): the engine's one git runner that writes and its one
   // door onto GitHub's REST API, over the wave-1 PATH walk and the wave-4 bare
   // look, below the wave-14 `gate` and run verbs that start them.
@@ -675,6 +692,10 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // imports the wave-14 gate verb's `scanChange` and `readChange` (`./gate.ts`), which a file at
   // wave 14 under another unit could not.
   "src/cli/commands/run.ts": { unit: "u18-run-verb", wave: 15 },
+  // TEST CHANGE, justified (plan 022 file 1, a6-land-verb, REQ-FLOW-132): `run land`'s body, over the wave-13 runners
+  // and kit and the evidence module, one wave under the run verb that registers it, so it imports nothing from
+  // `run.ts` or the wave-14 gate verb.
+  "src/cli/commands/runLand.ts": { unit: "a6-land-verb", wave: 14 },
   // TEST CHANGE, justified (2026-10-14, plan 020 file 1, units d6-verb and
   // d7-engine): the `stamity plugin` verb, its setup engine, its status report
   // and the capability reader at wave 2 (pl-c6) left with the plugin route in

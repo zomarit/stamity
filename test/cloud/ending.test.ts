@@ -1,7 +1,9 @@
+import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { delimiter, dirname, join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { gateCommand, gitSurfaceRecordPath, readRunGitSurface } from "../../src/cli/commands/gate.ts";
 import { runCommand } from "../../src/cli/commands/run.ts";
 import type * as GitWriteModule from "../../src/cli/engine/gitWrite.ts";
 import { makeCliFixture, type CliFixture } from "../support/cliHarness.ts";
@@ -17,6 +19,7 @@ import {
   writeGhStub,
   type GhStub,
 } from "../support/cloudRemote.ts";
+import { surfaceRecord } from "../../src/runs/gitSurface.ts";
 import { ensureDistBuilt } from "../support/distBuild.ts";
 import { runInProcess } from "../support/inProcess.ts";
 import { makeTempDir, type TempDirHandle } from "../support/tempDir.ts";
@@ -61,10 +64,12 @@ vi.mock("../../src/cli/engine/gitWrite.ts", async (importOriginal) => {
   };
 });
 
-/** The three runs: one per clone, and a third whose push the remote refuses. */
+/** The runs: one per clone, a third whose push the remote refuses, and a fourth whose pre-flight refused. */
 const RUN_A = "2026-10-18_cloud-a";
 const RUN_B = "2026-10-18_cloud-b";
 const RUN_C = "2026-10-18_cloud-c";
+/** A run whose pre-flight refused, ending on its `Refused:` draft (review/33). */
+const RUN_D = "2026-10-18_cloud-d";
 const branchOf = (run: string): string => `stamity/${run}`;
 const runDir = (run: string): string => `.stamity/runs/${run}`;
 
@@ -86,7 +91,7 @@ function morningList(run: string): string {
 }
 
 /** An unattended run's record and morning list on its own branch in `clone`, cut from `main`. */
-async function startRun(clone: string, run: string): Promise<void> {
+async function startRun(clone: string, run: string, opts: { record?: boolean } = {}): Promise<void> {
   git(clone, ["switch", "--quiet", "-c", branchOf(run), DEFAULT_BRANCH]);
   const base = git(clone, ["rev-parse", "HEAD"]);
   await mkdir(join(clone, runDir(run)), { recursive: true });
@@ -95,13 +100,26 @@ async function startRun(clone: string, run: string): Promise<void> {
     `# Run ${run}\n\nStatus: in progress\nMode: unattended\nBranch: ${branchOf(run)}\nBase: ${base}\n`,
   );
   await writeFile(join(clone, runDir(run), "morning.md"), morningList(run));
+  // TEST CHANGE, justified (REQ-FLOW-131, review/97): an unattended `end` now refuses with no pre-flight record of
+  // git's surface, which the run's `gate preflight --unattended` writes on the cloud machine before it starts; the
+  // record is taken through the same reads in the process environment {@link runVerb} gives the verb. `record: false`
+  // keeps the one a real `gate preflight` already left (review/33).
+  if (opts.record === false) return;
+  await underRunEnv(async () => {
+    const place = await gitSurfaceRecordPath(clone);
+    const surface = await readRunGitSurface(clone);
+    if ("unreadable" in place || "unreadable" in surface) throw new Error("the clone's git surface could not be read");
+    await mkdir(dirname(place.path), { recursive: true });
+    await writeFile(place.path, `${JSON.stringify(surfaceRecord(surface, randomBytes(16).toString("hex"), new Date().toISOString()))}\n`);
+  });
 }
 
 /**
- * Runs `stamity run` in `cwd` with `gh`'s stub first on `PATH`, `HOME` at an empty folder and no host git config or
- * identity in the process, so the clone's own config decides (runEnd.test.ts's `run`).
+ * `body` with `HOME` at an empty folder and no host git config or identity in the process, put back after.
+ * TEST CHANGE, justified (REQ-FLOW-131): {@link runVerb}'s environment, moved here unchanged so the pre-flight record
+ * {@link startRun} writes is taken in the same one.
  */
-async function runVerb(cwd: string, argv: readonly string[]) {
+async function underRunEnv<T>(body: () => Promise<T>): Promise<T> {
   const overrides: Record<string, string | undefined> = {
     HOME: home,
     XDG_CONFIG_HOME: home,
@@ -118,16 +136,26 @@ async function runVerb(cwd: string, argv: readonly string[]) {
     else process.env[key] = value;
   }
   try {
-    const env = { PATH: [gh.dir, process.env["PATH"] ?? ""].join(delimiter), HOME: home };
-    const result = await runInProcess([runCommand], ["run", ...argv], { cwd, env });
-    const doc = argv.includes("--json") && result.stdout !== "" ? (JSON.parse(result.stdout) as Record<string, unknown>) : {};
-    return { ...result, doc };
+    return await body();
   } finally {
     for (const [key, value] of Object.entries(previous)) {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
     }
   }
+}
+
+/**
+ * Runs `stamity run` in `cwd` with `gh`'s stub first on `PATH`, `HOME` at an empty folder and no host git config or
+ * identity in the process, so the clone's own config decides (runEnd.test.ts's `run`).
+ */
+async function runVerb(cwd: string, argv: readonly string[]) {
+  return underRunEnv(async () => {
+    const env = { PATH: [gh.dir, process.env["PATH"] ?? ""].join(delimiter), HOME: home };
+    const result = await runInProcess([runCommand], ["run", ...argv], { cwd, env });
+    const doc = argv.includes("--json") && result.stdout !== "" ? (JSON.parse(result.stdout) as Record<string, unknown>) : {};
+    return { ...result, doc };
+  });
 }
 
 beforeAll(async () => {
@@ -137,8 +165,9 @@ beforeAll(async () => {
   const init = await fixture.run(["init", "--tools", "claude,cursor,copilot,codex", "-y"]);
   expect(init.code, init.stderr).toBe(0);
   // Each run's origin pin rides the seed, as `run start` would have committed it before the first checkpoint.
+  // TEST CHANGE, justified (REQ-FLOW-131, review/33): RUN_D, the refused pre-flight's run, joins the three.
   await Promise.all(
-    [RUN_A, RUN_B, RUN_C].map(async (run) => {
+    [RUN_A, RUN_B, RUN_C, RUN_D].map(async (run) => {
       await mkdir(join(fixture.repoDir, runDir(run)), { recursive: true });
       await writeFile(join(fixture.repoDir, runDir(run), "origin.json"), PIN_TEXT);
     }),
@@ -280,6 +309,29 @@ describe.skipIf(WINDOWS)(
       } finally {
         git(bare, ["symbolic-ref", "HEAD", `refs/heads/${DEFAULT_BRANCH}`]);
       }
+    });
+
+    // review/33 (REQ-FLOW-131): the skill's refusal ending — a refused pre-flight, then the run's start, then
+    // `run end --refused` — still reaches its draft; the refused pre-flight's record is what lets the ending push.
+    it("opens the Refused: draft after a pre-flight that refused, run start and run end --refused", { timeout: 120_000 }, async () => {
+      gh.answerSecondPost(201);
+      const preflight = await underRunEnv(() =>
+        runInProcess([gateCommand], ["gate", "preflight", "--unattended", "--json"], { cwd: cloneB, env: { PATH: [gh.dir, process.env["PATH"] ?? ""].join(delimiter), HOME: home } }),
+      );
+      expect(preflight.code, preflight.stdout).toBe(1);
+      const place = await gitSurfaceRecordPath(cloneB);
+      if ("unreadable" in place) throw new Error(place.unreadable);
+      expect(JSON.parse(await readFile(place.path, "utf8"))).toMatchObject({ version: 1, refused: true });
+      await startRun(cloneB, RUN_D, { record: false });
+      const from = gh.calls().length;
+
+      const { code, doc, stderr } = await runVerb(cloneB, ["end", "--run", RUN_D, "--title", "Cloud leg", "--refused", "--json"]);
+
+      expect(code, `${stderr}\n${JSON.stringify(doc)}`).toBe(0);
+      expect(doc).toMatchObject({ subcommand: "end", run: RUN_D, pushed: true, notDone: [] });
+      expect(git(bare, ["rev-parse", `refs/heads/${branchOf(RUN_D)}`])).toBe(git(cloneB, ["rev-parse", "HEAD"]));
+      const firstPost = gh.calls().slice(from).find((call) => call.method === "POST");
+      expect(firstPost?.body).toMatchObject({ title: "Refused: Cloud leg", head: branchOf(RUN_D), draft: true });
     });
   },
 );

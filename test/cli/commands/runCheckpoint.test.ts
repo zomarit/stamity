@@ -1,12 +1,15 @@
 import { execFileSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { existsSync, lstatSync, readFileSync } from "node:fs";
 import { appendFile, chmod, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { gitSurfaceRecordPath, readRunGitSurface } from "../../../src/cli/commands/gate.ts";
 import { runCommand } from "../../../src/cli/commands/run.ts";
 import { GitWriteGroupStopped } from "../../../src/cli/engine/gitWrite.ts";
 import type * as GitWriteModule from "../../../src/cli/engine/gitWrite.ts";
 import type * as PersonOnlyModule from "../../../src/hooks/personOnly.ts";
+import { surfaceRecord } from "../../../src/runs/gitSurface.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { NO_GIT_CONFIG } from "../../support/repoFixtures.ts";
 import { useTempDir } from "../../support/tempDir.ts";
@@ -256,37 +259,76 @@ describe("stamity run checkpoint", () => {
     if (opts.pin === "untracked") await put(repo, inProject(ORIGIN_PIN), PIN_TEXT);
     const modeLine = mode === null ? "" : `Mode: ${mode}\n`;
     await put(repo, inProject(`${RUN_DIR}/record.md`), `# Run ${RUN}\n\nStatus: in progress\n${modeLine}Branch: ${branch}\nBase: ${base}\n`);
+    // TEST CHANGE, justified (REQ-FLOW-131, review/97): an unattended checkpoint now refuses with no pre-flight record
+    // of git's surface, which a passing `gate preflight --unattended` writes; the seed writes that record, every mode
+    // alike (an attended run reads none), so no case's own steps change. A case about the record removes or rewrites it.
+    await recordPreflight(repo);
     return { repo, remote, base, project: opts.project === undefined ? repo : join(repo, ...opts.project.split("/")) };
   }
+
+  /**
+   * The record a passing `gate preflight --unattended` writes for `repo` (REQ-FLOW-131), taken through the same reads
+   * (`readRunGitSurface`, `gitSurfaceRecordPath`) and the module's own `surfaceRecord`, in the process environment
+   * {@link run} gives the verb, so the verb compares like with like. The spy's record of the write runner's calls is
+   * put back as it was, so a case reading every call the verb made sees the verb's alone.
+   */
+  async function recordPreflight(repo: string, extra: Record<string, string | undefined> = {}, refused = false): Promise<void> {
+    const mark = { argv: writes.argv.length, inputs: writes.inputs.length, groups: writes.groups.length };
+    await underRunEnv(async () => {
+      const place = await gitSurfaceRecordPath(repo);
+      const surface = await readRunGitSurface(repo);
+      if ("unreadable" in place || "unreadable" in surface) throw new Error("the seed's git surface could not be read");
+      await mkdir(dirname(place.path), { recursive: true });
+      await writeFile(place.path, `${JSON.stringify(surfaceRecord(surface, randomBytes(16).toString("hex"), new Date().toISOString(), refused))}\n`);
+    }, extra);
+    writes.argv.length = mark.argv;
+    writes.inputs.length = mark.inputs;
+    writes.groups.length = mark.groups;
+  }
+
+  /** The pre-flight record's path in `repo`'s git directory. */
+  const recordPath = (repo: string): string => join(repo, ".git", "stamity", "preflight-git.json");
 
   async function put(repo: string, path: string, text: string): Promise<void> {
     await mkdir(dirname(join(repo, path)), { recursive: true });
     await writeFile(join(repo, path), text);
   }
 
-  /** Runs the verb with `HOME` at an empty folder and no host identity, so only the repository's config decides. */
-  async function run(cwd: string, argv: readonly string[], env?: Record<string, string>) {
+  /**
+   * `body` with `HOME` at an empty folder, no host identity and `extra` in the process environment, put back after.
+   * TEST CHANGE, justified (REQ-FLOW-131): {@link run}'s environment, moved here unchanged so the seed's pre-flight
+   * record is taken in the same one; `extra` is how a case sets a variable git reads from the process, not the verb.
+   */
+  async function underRunEnv<T>(body: () => Promise<T>, extra: Record<string, string | undefined> = {}): Promise<T> {
     const home = getRoot().path("home");
     await mkdir(home, { recursive: true });
     const overrides: Record<string, string | undefined> = { HOME: home, XDG_CONFIG_HOME: home, GIT_CONFIG_NOSYSTEM: "1", EMAIL: undefined };
     for (const key of Object.keys(IDENTITY)) overrides[key] = undefined;
+    Object.assign(overrides, extra);
     const previous = Object.fromEntries(Object.keys(overrides).map((key) => [key, process.env[key]]));
     for (const [key, value] of Object.entries(overrides)) {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
     }
     try {
-      const result = await runInProcess([runCommand], ["run", ...argv], { cwd, ...(env === undefined ? {} : { env }) });
-      const envelope = argv.includes("--json") && result.stdout !== "" ? (JSON.parse(result.stdout) as Record<string, unknown>) : {};
-      // The funnel's three envelope keys, set aside so `doc` is the verb's own document.
-      const { ok, command, version, ...doc } = envelope;
-      return { ...result, ok, command, version, doc };
+      return await body();
     } finally {
       for (const [key, value] of Object.entries(previous)) {
         if (value === undefined) delete process.env[key];
         else process.env[key] = value;
       }
     }
+  }
+
+  /** Runs the verb with `HOME` at an empty folder and no host identity, so only the repository's config decides. */
+  async function run(cwd: string, argv: readonly string[], env?: Record<string, string>, processEnv: Record<string, string | undefined> = {}) {
+    return underRunEnv(async () => {
+      const result = await runInProcess([runCommand], ["run", ...argv], { cwd, ...(env === undefined ? {} : { env }) });
+      const envelope = argv.includes("--json") && result.stdout !== "" ? (JSON.parse(result.stdout) as Record<string, unknown>) : {};
+      // The funnel's three envelope keys, set aside so `doc` is the verb's own document.
+      const { ok, command, version, ...doc } = envelope;
+      return { ...result, ok, command, version, doc };
+    }, processEnv);
   }
 
   const CHECKPOINT = ["checkpoint", "--run", RUN, "--json"];
@@ -474,6 +516,9 @@ describe("stamity run checkpoint", () => {
   it.skipIf(process.platform === "win32")("holds a link added at a held prefix where core.abbrev is 6 (review/3)", async () => {
     const { repo, remote } = await seed("unattended");
     git(repo, ["config", "core.abbrev", "6"]);
+    // TEST CHANGE, justified (REQ-FLOW-131): the case sets git config after the seed's pre-flight record, as a person
+    // would before the pre-flight, so the record is taken again over it; an unattended run refuses a surface it did not see.
+    await recordPreflight(repo);
     await put(repo, "cfg/settings.json", '{ "hooks": {} }\n');
     await symlink("cfg", join(repo, ".claude"));
 
@@ -488,6 +533,9 @@ describe("stamity run checkpoint", () => {
   it("gives a held path staged and then deleted, absent at Base:, no section where core.abbrev is 6 (review/3)", async () => {
     const { repo, remote } = await seed("unattended");
     git(repo, ["config", "core.abbrev", "6"]);
+    // TEST CHANGE, justified (REQ-FLOW-131): the case sets git config after the seed's pre-flight record, as a person
+    // would before the pre-flight, so the record is taken again over it; an unattended run refuses a surface it did not see.
+    await recordPreflight(repo);
     await put(repo, ".github/workflows/x.yml", "on: push\n");
     git(repo, ["add", "--", ".github/workflows/x.yml"]);
     await rm(join(repo, ".github"), { recursive: true });
@@ -702,12 +750,14 @@ describe("stamity run checkpoint", () => {
       const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "tools/guard.mjs"]);
 
       expect(code).toBe(1);
+      // TEST CHANGE, justified: REQ-FLOW-102 (review/205) — a hold refusal now ends with the person's next step, since
+      // the fix lands on the base branch and the run starts again from it.
       expect(doc).toMatchObject({
         pushed: false,
         committed: null,
         held: [],
         notDone: [
-          "hold refused: .stamity/hooks/broken.json at Base: does not parse, so the hook scripts it names are unknown and the run pushes nothing",
+          "hold refused: .stamity/hooks/broken.json at Base: does not parse, so the hook scripts it names are unknown and the run pushes nothing; fix it on the base branch, then start the run again from it",
         ],
       });
       expect(git(repo, ["diff", "--cached", "--name-only"])).toBe("");
@@ -716,10 +766,15 @@ describe("stamity run checkpoint", () => {
     });
 
     describe("the hold fails closed on anything it cannot resolve cleanly at Base: (review/182-/189)", () => {
+      // TEST CHANGE, justified: REQ-FLOW-102 (review/205) — a hold refusal now ends with the person's next step, since
+      // the fix lands on the base branch and the run starts again from it.
       const refused = (path: string, why: string): string =>
-        `hold refused: ${path} at Base: ${why}, so the hook scripts it names are unknown and the run pushes nothing`;
+        `hold refused: ${path} at Base: ${why}, so the hook scripts it names are unknown and the run pushes nothing; fix it on the base branch, then start the run again from it`;
       const manifestNaming = (folder: string): string => `${JSON.stringify({ hooks: { userHooksDir: folder } })}\n`;
       const GUARD = { "tools/guard.mjs": "base guard\n" };
+      /** review/204: a hooks folder name past ASCII, composed (as the tree holds it) and decomposed (as a manifest may name it). */
+      const COMPOSED = `hooks-caf${String.fromCodePoint(0xe9)}`;
+      const DECOMPOSED = COMPOSED.normalize("NFD");
 
       it("holds the whole folder Base:'s manifest names: a declaration the run edits there, and one it adds, stay out of the push (review/182, review/184)", async () => {
         const { repo, remote } = await seed("unattended", { files: { ".stamity/manifest.json": manifestNaming("hooks"), "hooks/guard.json": declaring("tools/guard.mjs"), ...GUARD } });
@@ -932,6 +987,13 @@ describe("stamity run checkpoint", () => {
           files: { ".stamity/Hooks/guard.json": declaring("tools/guard.mjs") },
           links: {},
           line: refused(".stamity/hooks", "is spelled in another letter case than the tree's .stamity/Hooks"),
+        },
+        {
+          // review/204: the names differ only by Unicode normalization, so the refusal says so rather than naming a letter case.
+          layout: "the manifest names its hooks folder in another Unicode normalization form than the tree (review/204)",
+          files: { ".stamity/manifest.json": manifestNaming(DECOMPOSED), [`${COMPOSED}/guard.json`]: declaring("tools/guard.mjs") },
+          links: {},
+          line: refused(DECOMPOSED, `is spelled in another Unicode normalization form than the tree's ${COMPOSED}`),
         },
         {
           layout: "a declared script's path passes through a link (review/185)",
@@ -1472,6 +1534,9 @@ describe("stamity run checkpoint", () => {
     it("refuses the commit, committing and pushing nothing, when the marker cannot be created", async () => {
       const { repo, remote, base } = await seed("attended");
       // A file where the marker's folder goes makes its creation fail.
+      // TEST CHANGE, justified (REQ-FLOW-131): the seed's pre-flight record sits in that folder now; this attended run
+      // reads none, so the folder goes before the file takes its place.
+      await rm(join(repo, ".git", "stamity"), { recursive: true, force: true });
       await writeFile(join(repo, ".git", "stamity"), "");
       await writeFile(join(repo, "a.txt"), "changed\n");
 
@@ -2140,6 +2205,102 @@ describe("stamity run checkpoint", () => {
     expect(pushedTree(remote)).not.toContain(PATCH);
   });
 
+  // review/248: the hand-off kept offering the person a held edit the run itself had undid, and the run had no way to
+  // withdraw it; --drop-held names the paths whose sections leave the patch.
+  describe("--drop-held withdraws a held section the run undid (review/248)", () => {
+    it("drops the reverted path's section beside a new diff for a path still changed, naming it in withdrawn", async () => {
+      const { repo, remote, base } = await seed("unattended");
+      await writeFile(join(repo, ".cursorrules"), "steered rules\n");
+      await put(repo, ".github/workflows/x.yml", "on: push\n");
+      expect((await run(repo, [...CHECKPOINT, "--paths", ".github/workflows/x.yml"])).code).toBe(0);
+      expect(pushedFile(remote, PATCH)).toContain("+steered rules");
+      git(repo, ["restore", "--", ".cursorrules"]);
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", ".github/workflows/x.yml", "--drop-held", ".cursorrules"]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [], held: [".github/workflows/x.yml"], withdrawn: [".cursorrules"] });
+      const patch = pushedFile(remote, PATCH);
+      expect(patch).not.toContain("diff --git a/.cursorrules ");
+      expect(patch).toContain("diff --git a/.github/workflows/x.yml b/.github/workflows/x.yml");
+      const fresh = join(dirname(repo), "at-base");
+      git(repo, ["worktree", "add", "-q", "--detach", fresh, base]);
+      git(fresh, ["apply", join(repo, PATCH)]);
+      expect(await readFile(join(fresh, ".cursorrules"), "utf8")).toBe(".cursorrules\n");
+      expect(await readFile(join(fresh, ".github/workflows/x.yml"), "utf8")).toBe("on: push\n");
+    });
+
+    it("rewrites a kept patch to the sections left where the work tree holds no held change, and names the withdrawal", async () => {
+      const { repo, remote } = await seed("unattended");
+      await writeFile(join(repo, ".cursorrules"), "steered rules\n");
+      await put(repo, ".github/workflows/x.yml", "on: push\n");
+      expect((await run(repo, [...CHECKPOINT, "--paths", ".github/workflows/x.yml"])).code).toBe(0);
+      // Both changes leave the work tree; the workflow's section stays the person's to apply.
+      git(repo, ["restore", "--", ".cursorrules"]);
+      await rm(join(repo, ".github/workflows/x.yml"));
+
+      const { code, stdout } = await run(repo, ["checkpoint", "--run", RUN, "--drop-held", ".cursorrules"]);
+
+      expect(code).toBe(0);
+      expect(stdout).toContain("withdrawn (their sections left the held patch): .cursorrules\n");
+      const patch = pushedFile(remote, PATCH);
+      expect(patch).not.toContain("diff --git a/.cursorrules ");
+      expect(patch).toContain("diff --git a/.github/workflows/x.yml b/.github/workflows/x.yml");
+      const again = await run(repo, CHECKPOINT);
+      // Nothing new to commit: the kept patch stays as the withdrawal left it.
+      expect(again.doc).toMatchObject({ notDone: [], held: [".github/workflows/x.yml"], withdrawn: [] });
+      expect(pushedFile(remote, PATCH)).toBe(patch);
+    });
+
+    it("removes the held patch from the pushed branch where the withdrawn path was its only section", async () => {
+      const { repo, remote } = await seed("unattended");
+      await writeFile(join(repo, ".cursorrules"), "steered rules\n");
+      expect((await run(repo, CHECKPOINT)).code).toBe(0);
+      expect(pushedTree(remote)).toContain(PATCH);
+      git(repo, ["restore", "--", ".cursorrules"]);
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--drop-held", ".cursorrules"]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [], held: [], withdrawn: [".cursorrules"] });
+      expect(pushedTree(remote)).not.toContain(PATCH);
+      expect(isFile(join(repo, PATCH))).toBe(false);
+    });
+
+    it("keeps holding a path the work tree still changes, withdrawing nothing and naming why in notDone", async () => {
+      const { repo, remote } = await seed("unattended");
+      await writeFile(join(repo, ".cursorrules"), "steered rules\n");
+      expect((await run(repo, CHECKPOINT)).code).toBe(0);
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--drop-held", ".cursorrules"]);
+
+      expect(code).toBe(0);
+      // Nothing new to commit, so nothing is pushed; the patch the branch carries keeps the section.
+      expect(doc).toMatchObject({
+        committed: null,
+        held: [".cursorrules"],
+        withdrawn: [],
+        notDone: ["not withdrawn: .cursorrules is still changed in the work tree or the index, so it stays held"],
+      });
+      expect(pushedFile(remote, PATCH)).toContain("+steered rules");
+    });
+
+    it("takes --drop-held on end, and refuses it on start as a usage error", async () => {
+      const { repo, remote } = await seed("unattended");
+      await writeFile(join(repo, ".cursorrules"), "steered rules\n");
+      expect((await run(repo, CHECKPOINT)).code).toBe(0);
+      git(repo, ["restore", "--", ".cursorrules"]);
+
+      const ended = await run(repo, ["end", "--run", RUN, "--title", "the run", "--drop-held", ".cursorrules", "--json"]);
+      const started = await run(repo, ["start", "--run", RUN, "--drop-held", ".cursorrules"]);
+
+      expect(ended.doc).toMatchObject({ subcommand: "end", pushed: true, held: [], withdrawn: [".cursorrules"] });
+      expect(pushedTree(remote)).not.toContain(PATCH);
+      expect(started.code).toBe(2);
+      expect(started.stderr).toContain("--drop-held does not apply to start");
+    });
+  });
+
   // review/6 (signed off): a run continued on a fresh clone (REQ-FLOW-105) holds Base:'s bytes at every held path, its
   // person-only change living in the patch the branch carries alone; that patch stays on the branch and is listed.
   it("keeps and lists the branch's held patch where a fresh clone continues the run with no held change (review/6)", async () => {
@@ -2154,6 +2315,8 @@ describe("stamity run checkpoint", () => {
     git(clone, ["config", "user.name", "Alice Example"]);
     git(clone, ["config", "user.email", "alice@example.com"]);
     git(clone, ["remote", "set-url", "origin", "https://github.com/o/r.git"]);
+    // TEST CHANGE, justified (REQ-FLOW-131): the continuing machine runs its own pre-flight, which records its clone's git.
+    await recordPreflight(clone);
     expect(await readFile(join(clone, ".cursorrules"), "utf8")).toBe(".cursorrules\n");
     await writeFile(join(clone, "a.txt"), "the next unit's change\n");
 
@@ -2181,6 +2344,8 @@ describe("stamity run checkpoint", () => {
       git(clone, ["config", "user.name", "Alice Example"]);
       git(clone, ["config", "user.email", "alice@example.com"]);
       git(clone, ["remote", "set-url", "origin", "https://github.com/o/r.git"]);
+      // TEST CHANGE, justified (REQ-FLOW-131): the continuing machine runs its own pre-flight, which records its clone's git.
+      await recordPreflight(clone);
       return clone;
     }
 
@@ -2486,27 +2651,108 @@ describe("stamity run checkpoint", () => {
       expect(await readFile(join(fresh, ".github/workflows/ø.yml"), "utf8")).toBe("on: push\n");
     });
 
-    // review/251: the verb pins no diff prefix, so a repository's diff.mnemonicPrefix writes c/, i/ and w/ in place of
-    // a/ and b/; git apply sets each name's first component aside, and so does the carried read.
-    it("carries a section its diffs wrote with diff.mnemonicPrefix's prefixes (review/251)", async () => {
-      const { repo, remote } = await seed("unattended");
-      git(repo, ["config", "diff.mnemonicPrefix", "true"]);
+    // review/251: an older version pinned no diff prefix, so a repository's diff.mnemonicPrefix wrote c/, i/ and w/ in
+    // place of a/ and b/; git apply sets each name's first component aside, and so does the carried read.
+    // TEST CHANGE, justified: REQ-FLOW-102 (review/254) — the verb's patch diffs now pin a/ and b/, so it no longer
+    // writes mnemonic prefixes itself; the claim that such a section still carries is kept through a section written by
+    // hand from the verb's own, with the prefixes an older version wrote, committed as that version committed it.
+    it("carries a section an older version wrote with diff.mnemonicPrefix's prefixes (review/251)", async () => {
+      const { repo, remote, base } = await seed("unattended");
       await writeFile(join(repo, ".cursorrules"), "steered rules\n");
       expect((await run(repo, CHECKPOINT)).code).toBe(0);
-      expect(headers(sections(pushedBytes(remote)))[0]).toEqual([
+      const clone = await cloneRun(repo, remote);
+      const older = (await readFile(join(clone, PATCH), "utf8"))
+        .replace("diff --git a/.cursorrules b/.cursorrules\n", "diff --git c/.cursorrules w/.cursorrules\n")
+        .replace("\n--- a/.cursorrules\n+++ b/.cursorrules\n", "\n--- c/.cursorrules\n+++ w/.cursorrules\n");
+      await writeFile(join(clone, PATCH), older);
+      git(clone, ["commit", "-q", "-m", "an older version's held patch", "--", PATCH]);
+      expect(headers(sections(await readFile(join(clone, PATCH))))[0]).toEqual([
         "diff --git c/.cursorrules w/.cursorrules",
         "index <id>..<id> 100644",
         "--- c/.cursorrules",
         "+++ w/.cursorrules",
         "@@ -1 +1 @@",
       ]);
-      const clone = await cloneRun(repo, remote);
       await put(clone, ".github/workflows/x.yml", "on: push\n");
 
       const { code, doc } = await run(clone, [...CHECKPOINT, "--paths", ".github/workflows/x.yml"]);
 
       expect(code).toBe(0);
       expect(doc).toMatchObject({ pushed: true, notDone: [], held: [".cursorrules", ".github/workflows/x.yml"] });
+      const parts = sections(pushedBytes(remote));
+      expect(parts.map((part) => part.toString("utf8").split("\n")[0])).toEqual([
+        "diff --git c/.cursorrules w/.cursorrules",
+        "diff --git a/.github/workflows/x.yml b/.github/workflows/x.yml",
+      ]);
+      const fresh = applyOnBase(repo, base, join(clone, PATCH));
+      expect(await readFile(join(fresh, ".cursorrules"), "utf8")).toBe("steered rules\n");
+    });
+
+    // review/254: git's diff.noprefix, diff.mnemonicPrefix and custom prefixes moved the names the held patch wrote, so
+    // the person's git apply set a new held file one folder off, or failed on a held edit; the verb's patch diffs now
+    // pin a/ and b/, as the gate's own diff does, at both the side diffs and the work tree's addition part.
+    it.each([
+      { setting: "diff.noprefix", config: [["diff.noprefix", "true"]] },
+      { setting: "diff.mnemonicPrefix", config: [["diff.mnemonicPrefix", "true"]] },
+      {
+        setting: "diff.srcPrefix and diff.dstPrefix",
+        config: [
+          ["diff.srcPrefix", "x/"],
+          ["diff.dstPrefix", "y/"],
+        ],
+      },
+    ])("writes every held section with git's a/ and b/ prefixes under $setting, so the patch applies on Base: at the held paths (review/254)", async ({ config }) => {
+      const { repo, remote, base } = await seed("unattended");
+      for (const [key, value] of config) git(repo, ["config", key ?? "", value ?? ""]);
+      // TEST CHANGE, justified (REQ-FLOW-131): the case sets git config after the seed's pre-flight record, as a person
+      // would before the pre-flight, so the record is taken again over it; an unattended run refuses a surface it did not see.
+      await recordPreflight(repo);
+      // A new workflow, staged by --paths (the side diffs), and .cursorrules out of the index while the work tree has it
+      // (the work tree's addition part, review/2).
+      await put(repo, ".github/workflows/x.yml", "on: push\n");
+      git(repo, ["rm", "-q", "--cached", "--", ".cursorrules"]);
+      await writeFile(join(repo, ".cursorrules"), "rewritten rules\n");
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", ".github/workflows/x.yml"]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [], held: [".cursorrules", ".github/workflows/x.yml"] });
+      const pushed = pushedBytes(remote).toString("utf8");
+      expect(pushed.startsWith("diff --git a/")).toBe(true);
+      expect(
+        sections(Buffer.from(pushed, "utf8"))
+          .map((part) => part.toString("utf8").split("\n")[0])
+          .toSorted(),
+      ).toEqual([
+        "diff --git a/.cursorrules b/.cursorrules",
+        "diff --git a/.cursorrules b/.cursorrules",
+        "diff --git a/.github/workflows/x.yml b/.github/workflows/x.yml",
+      ]);
+      // Every label names a/, b/ or /dev/null: none of the setting's prefixes is left.
+      expect(pushed.split("\n").filter((line) => /^(?:---|\+\+\+) /.test(line) && !/^(?:--- a\/|\+\+\+ b\/|(?:---|\+\+\+) \/dev\/null$)/.test(line))).toEqual([]);
+      const fresh = applyOnBase(repo, base, join(repo, PATCH));
+      expect(await readFile(join(fresh, ".github/workflows/x.yml"), "utf8")).toBe("on: push\n");
+      expect(isFile(join(fresh, "workflows/x.yml"))).toBe(false);
+      expect(await readFile(join(fresh, ".cursorrules"), "utf8")).toBe("rewritten rules\n");
+    });
+
+    // review/254: a section with no prefix (an older version's diff under diff.noprefix) is read by git apply's -p1 as if
+    // its first folder were a prefix, so the file lands one folder off from the path held lists, or fails at the top.
+    it.each([
+      {
+        where: "below a folder",
+        section: "diff --git .github/workflows/y.yml .github/workflows/y.yml\nnew file mode 100644\n--- /dev/null\n+++ .github/workflows/y.yml\n@@ -0,0 +1 @@\n+on: push\n",
+      },
+      { where: "at the top", section: "diff --git .cursorrules .cursorrules\n--- .cursorrules\n+++ .cursorrules\n@@ -1 +1 @@\n-.cursorrules\n+steered\n" },
+    ])("refuses a committed patch's section written with no diff prefix, $where (review/254)", async ({ section }) => {
+      const { clone, before, outcome } = await steeredClone(section, true);
+
+      expect(outcome.code).toBe(1);
+      expect(outcome.doc).toMatchObject({
+        pushed: false,
+        notDone: [`hold failed: a section of the kept ${PATCH} was written with no diff prefix, so git apply would place it one folder off`],
+      });
+      expect(git(clone, ["rev-parse", "HEAD"])).toBe(before);
     });
 
     // review/251: a checkout under core.autocrlf (Git for Windows' default) leaves the work tree's copy of the committed
@@ -2605,6 +2851,23 @@ describe("stamity run checkpoint", () => {
       await symlink("cfg", join(repo, ".claude"));
       expect((await run(repo, [...CHECKPOINT, "--paths", "cfg", ".claude"])).code).toBe(0);
       const clone = await cloneRun(repo, remote);
+      await put(clone, ".github/workflows/x.yml", "on: push\n");
+
+      const { code, doc } = await run(clone, [...CHECKPOINT, "--paths", ".github/workflows/x.yml"]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [], held: [".claude", ".github/workflows/x.yml"] });
+    });
+
+    // review/256: the link read split the section on LF alone, so under a CRLF work-tree copy (an autocrlf checkout) the
+    // mode line kept its CR, read as no link, and the held link's section was refused as a path the hold does not hold.
+    it.skipIf(process.platform === "win32")("keeps a carried section for a held link whose work-tree copy has CRLF line ends (review/256)", async () => {
+      const { repo, remote } = await seed("unattended");
+      await put(repo, "cfg/settings.json", '{ "hooks": {} }\n');
+      await symlink("cfg", join(repo, ".claude"));
+      expect((await run(repo, [...CHECKPOINT, "--paths", "cfg", ".claude"])).code).toBe(0);
+      const clone = await cloneRun(repo, remote);
+      await writeFile(join(clone, PATCH), (await readFile(join(clone, PATCH), "utf8")).replaceAll("\n", "\r\n"));
       await put(clone, ".github/workflows/x.yml", "on: push\n");
 
       const { code, doc } = await run(clone, [...CHECKPOINT, "--paths", ".github/workflows/x.yml"]);
@@ -2924,15 +3187,20 @@ describe("stamity run checkpoint", () => {
       expect(remoteHeads(remote)).toEqual(SEEDED);
     });
 
-    it("pushes where the name nests four levels, which the verdict decides (the twin)", async () => {
+    // TEST CHANGE, justified (build/12): a substitution nothing closes on the line now leaves the rest of the line read
+    // as filled in, so the verdict reads this push's target as one the line cannot show and refuses it as a push to the
+    // default branch instead of letting it run. Real use never reaches this line: run.ts:1001-1003 refuses such a branch
+    // name (outside PUSHABLE_BRANCH) before any push; only the spy hands it to the verdict.
+    it("refuses the push where the name nests four levels, which the verdict decides (the twin)", async () => {
       const { repo } = await seed("attended");
       await writeFile(join(repo, "a.txt"), "changed\n");
       table.pushBranch = `stamity/x${'"$('.repeat(4)}y`;
 
       const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
 
-      expect(code).toBe(0);
-      expect(doc).toMatchObject({ pushed: true, notDone: [] });
+      expect(code).toBe(1);
+      expect(doc).toMatchObject({ pushed: false });
+      expect(doc["notDone"]).toEqual([expect.stringMatching(/^push refused: .*push-default/)]);
     });
 
     // Skipped on Windows (prove/10): NTFS, through the Windows file API, cannot hold `"` in a loose ref's file name, so
@@ -3030,6 +3298,213 @@ describe("stamity run checkpoint", () => {
     expect(remoteHeads(remote)).toEqual(SEEDED);
   });
 
+  describe("git's surface against the pre-flight's record (REQ-FLOW-131, review/97)", () => {
+    /** One config pair handed to git through the process environment, its value one the output must never print. */
+    const PAIR = { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "stamity.probe", GIT_CONFIG_VALUE_0: "probe-value-q7zk" } as const;
+
+    it("refuses an unattended push where the environment adds a config pair the pre-flight did not see, naming the key, never its value", async () => {
+      const { repo, remote, base } = await seed("unattended");
+      await writeFile(join(repo, "a.txt"), "the unit's change\n");
+
+      const { code, doc, stdout } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"], undefined, PAIR);
+
+      expect(code).toBe(1);
+      expect(doc).toMatchObject({ pushed: false, committed: null });
+      const notDone = doc["notDone"] as string[];
+      expect(notDone[0]).toMatch(/^config changed: /);
+      expect(notDone[0]).toContain("stamity.probe");
+      expect(notDone[0]).toContain("GIT_CONFIG_KEY_0");
+      expect(`${stdout}${JSON.stringify(doc)}`).not.toContain(PAIR.GIT_CONFIG_VALUE_0);
+      expect(git(repo, ["rev-parse", "HEAD"])).toBe(base);
+      expect(pushes()).toEqual([]);
+      expect(remoteHeads(remote)).toEqual(SEEDED);
+    });
+
+    it("pushes where the pre-flight recorded the same config pair the environment still sets", async () => {
+      const { repo, remote } = await seed("unattended");
+      await recordPreflight(repo, PAIR);
+      await writeFile(join(repo, "a.txt"), "the unit's change\n");
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"], undefined, PAIR);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [] });
+      expect(pushedFile(remote, "a.txt")).toBe("the unit's change");
+    });
+
+    it("refuses an unattended run with no record as no pre-flight record, and pushes an attended one with none", async () => {
+      const unattended = await seed("unattended");
+      const attended = await seed("attended");
+      await Promise.all([unattended, attended].map(async ({ repo }) => {
+        await rm(recordPath(repo));
+        await writeFile(join(repo, "a.txt"), "the unit's change\n");
+      }));
+
+      const refused = await run(unattended.repo, [...CHECKPOINT, "--paths", "a.txt"]);
+      const kept = await run(attended.repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      expect(refused.code).toBe(1);
+      expect(refused.doc).toMatchObject({ pushed: false, committed: null });
+      expect((refused.doc["notDone"] as string[])[0]).toMatch(/^no pre-flight record \(/);
+      expect(remoteHeads(unattended.remote)).toEqual(SEEDED);
+      expect(kept.code).toBe(0);
+      expect(kept.doc).toMatchObject({ pushed: true, notDone: [] });
+    });
+
+    it("refuses after the commit and before the push where a pre-commit hook writes a local config key", async () => {
+      const { repo, remote, base } = await seed("unattended");
+      await writeFile(join(repo, "a.txt"), "the unit's change\n");
+      const hook = join(repo, ".git", "hooks", "pre-commit");
+      await writeFile(hook, "#!/bin/sh\ngit config stamity.hooked yes\n");
+      await chmod(hook, 0o755);
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      expect(code).toBe(1);
+      expect(doc["committed"]).toBe(git(repo, ["rev-parse", "HEAD"]));
+      expect(doc["committed"]).not.toBe(base);
+      expect(doc["pushed"]).toBe(false);
+      const notDone = doc["notDone"] as string[];
+      expect(notDone).toHaveLength(1);
+      expect(notDone[0]).toMatch(/^config changed: .*added stamity\.hooked/);
+      expect(pushes()).toEqual([]);
+      expect(remoteHeads(remote)).toEqual(SEEDED);
+    });
+
+    it("leaves out the tracking keys git writes for a continued branch, and refuses any other branch key added", async () => {
+      const tracked = await seed("unattended");
+      const pushRemote = await seed("unattended");
+      await Promise.all(
+        [tracked, pushRemote].map(async ({ repo }) => {
+          git(repo, ["config", `branch.${RUN_BRANCH}.remote`, "origin"]);
+          git(repo, ["config", `branch.${RUN_BRANCH}.merge`, `refs/heads/${RUN_BRANCH}`]);
+          await writeFile(join(repo, "a.txt"), "the unit's change\n");
+        }),
+      );
+      git(pushRemote.repo, ["config", `branch.${RUN_BRANCH}.pushRemote`, "origin"]);
+
+      const kept = await run(tracked.repo, [...CHECKPOINT, "--paths", "a.txt"]);
+      const refused = await run(pushRemote.repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      expect(kept.code).toBe(0);
+      expect(kept.doc).toMatchObject({ pushed: true, notDone: [] });
+      expect(refused.code).toBe(1);
+      expect((refused.doc["notDone"] as string[])[0]).toMatch(/^config changed: .*added branch\.<…>\.pushremote/);
+      expect(remoteHeads(pushRemote.remote)).toEqual(SEEDED);
+    });
+
+    it.each([
+      {
+        shape: "a link to a valid record",
+        make: async (path: string) => {
+          await writeFile(`${path}.real`, await readFile(path));
+          await rm(path);
+          await symlink(`${path}.real`, path);
+        },
+        reason: "is not a regular file",
+      },
+      { shape: "over 64 KiB", make: (path: string) => writeFile(path, JSON.stringify({ pad: "x".repeat(70_000) })), reason: "is over 64 KiB" },
+      { shape: "not JSON", make: (path: string) => writeFile(path, "{ not a record\n"), reason: "does not read as one" },
+    ])("refuses a record that is $shape as no pre-flight record", async ({ shape, make, reason }) => {
+      if (shape.startsWith("a link") && process.platform === "win32") return;
+      const { repo, remote } = await seed("unattended");
+      await make(recordPath(repo));
+      await writeFile(join(repo, "a.txt"), "the unit's change\n");
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      expect(code).toBe(1);
+      expect((doc["notDone"] as string[])[0]).toBe(`no pre-flight record (stamity/preflight-git.json in the git directory ${reason})`);
+      expect(remoteHeads(remote)).toEqual(SEEDED);
+    });
+
+    it("refuses as configuration unreadable where git cannot list its configuration", async () => {
+      const { repo, remote } = await seed("unattended");
+      await writeFile(join(repo, "a.txt"), "the unit's change\n");
+      // Mock reason: no configuration a test can write makes `git config --list` fail while every read the verb makes
+      // before it (the branch, origin's URLs, the default branch) still answers, so the one call is answered here.
+      writes.override = (args) => (args[0] === "config" && args[1] === "--list" ? Promise.resolve({ code: 128, stdout: "", stderr: "fatal: bad config\n" }) : undefined);
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      expect(code).toBe(1);
+      expect((doc["notDone"] as string[])[0]).toMatch(/^configuration unreadable \(git config --list answered 128\)/);
+      expect(remoteHeads(remote)).toEqual(SEEDED);
+    });
+
+    it("refuses a checkpoint after a pre-flight that refused, its record marked refused (review/33)", async () => {
+      const { repo, remote, base } = await seed("unattended");
+      await recordPreflight(repo, {}, true);
+      await writeFile(join(repo, "a.txt"), "the unit's change\n");
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      expect(code).toBe(1);
+      expect(doc).toMatchObject({ pushed: false, committed: null });
+      expect((doc["notDone"] as string[])[0]).toBe("no pre-flight record (the pre-flight refused)");
+      expect(git(repo, ["rev-parse", "HEAD"])).toBe(base);
+      expect(remoteHeads(remote)).toEqual(SEEDED);
+    });
+
+    it("leaves out the rebase key git writes for a tracking branch under branch.autoSetupRebase (review/35)", async () => {
+      const { repo, remote } = await seed("unattended");
+      git(repo, ["config", "branch.autoSetupMerge", "always"]);
+      git(repo, ["config", "branch.autoSetupRebase", "always"]);
+      // The person's settings come before the pre-flight; the tracking keys `run start` writes come after it.
+      await recordPreflight(repo);
+      git(repo, ["config", `branch.${RUN_BRANCH}.remote`, "origin"]);
+      git(repo, ["config", `branch.${RUN_BRANCH}.merge`, `refs/heads/${RUN_BRANCH}`]);
+      git(repo, ["config", `branch.${RUN_BRANCH}.rebase`, "true"]);
+      await writeFile(join(repo, "a.txt"), "the unit's change\n");
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      expect(code, JSON.stringify(doc)).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [] });
+      expect(pushedFile(remote, "a.txt")).toBe("the unit's change");
+    });
+
+    describe("gh's token variables (review/32)", () => {
+      /** A token-shaped value no record or output may carry, and the one swapped in for it. */
+      const SEEDED_TOKEN = "ghp-seeded-token-q7zk";
+      const SWAPPED = "ghp-swapped-token-4hnd";
+
+      it.each([
+        ["set", { GH_TOKEN: undefined }, { GH_TOKEN: SEEDED_TOKEN }, /^config changed: .*\(added GH_TOKEN\)$/],
+        ["cleared", { GH_TOKEN: SEEDED_TOKEN }, { GH_TOKEN: undefined }, /^config changed: .*\(removed GH_TOKEN\)$/],
+        ["swapped", { GH_TOKEN: SEEDED_TOKEN }, { GH_TOKEN: SWAPPED }, /^config changed: .*\(a value, a source file or the git program changed/],
+      ] as const)("refuses an unattended push whose gh token was %s after the recorded pre-flight", async (_label, then, now, why) => {
+        const { repo, remote } = await seed("unattended");
+        await recordPreflight(repo, then);
+        await writeFile(join(repo, "a.txt"), "the unit's change\n");
+
+        const { code, doc, stdout } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"], undefined, now);
+
+        expect(code).toBe(1);
+        expect(doc).toMatchObject({ pushed: false, committed: null });
+        expect((doc["notDone"] as string[])[0]).toMatch(why);
+        expect(`${stdout}${JSON.stringify(doc)}`).not.toContain(SEEDED_TOKEN);
+        expect(`${stdout}${JSON.stringify(doc)}`).not.toContain(SWAPPED);
+        expect(pushes()).toEqual([]);
+        expect(remoteHeads(remote)).toEqual(SEEDED);
+      });
+
+      it("records the token by name: a byte search of the record finds no seeded token value, and the same token pushes", async () => {
+        const { repo, remote } = await seed("unattended");
+        await recordPreflight(repo, { GH_TOKEN: SEEDED_TOKEN });
+        await writeFile(join(repo, "a.txt"), "the unit's change\n");
+
+        const bytes = await readFile(recordPath(repo));
+        const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"], undefined, { GH_TOKEN: SEEDED_TOKEN });
+
+        expect(bytes.includes(Buffer.from(SEEDED_TOKEN))).toBe(false);
+        expect((JSON.parse(bytes.toString("utf8")) as { env: string[] }).env).toContain("GH_TOKEN");
+        expect(code, JSON.stringify(doc)).toBe(0);
+        expect(pushedFile(remote, "a.txt")).toBe("the unit's change");
+      });
+    });
+  });
+
   describe("git's program-valued variables, unattended (v0c, REQ-FLOW-122)", () => {
     /** The three the cell names, each set to a value the line must never print. */
     const PLANTED = { GIT_EXEC_PATH: "/planted/exec-path", GIT_SSH_COMMAND: "planted-ssh -i /planted/key", GIT_ASKPASS: "/planted/askpass" } as const;
@@ -3081,6 +3556,9 @@ describe("stamity run checkpoint", () => {
       const { repo, remote } = await seed("unattended");
       await writeFile(join(repo, "a.txt"), "the unit's change\n");
       const stand = await standIn(dirname(repo));
+      // TEST CHANGE, justified (REQ-FLOW-131): the stand-in moves the git program the verb resolves, which the
+      // pre-flight's record holds, so the record is taken with the same PATH, as a pre-flight in this shell would take it.
+      await withPrograms({ ...PLANTED, PATH: stand.path }, () => recordPreflight(repo));
 
       const { code, stdout } = await withPrograms({ ...PLANTED, PATH: stand.path }, () => run(repo, ["checkpoint", "--run", RUN, "--paths", "a.txt"]));
 

@@ -288,19 +288,19 @@ The checkpoint covers what automation cannot.
 
 **Row states.** The qa skill closes each row in its own row states, under its `## Human sign-off` rules.
 
-**The close walk.** What is left for the person is asked by the question protocol's Close walk, in rounds of numbered
-options: the rows the qa skill leaves for the person (at most three), the spec delta merge and the commit, as 1 commit,
-push, draft PR (`stamity run checkpoint --run <run-id> --pr --title <conventional title> --paths <the change's files,
-the merged spec delta and the learning files the close captured under .stamity/learnings/>`, recommended) · 2 commit
-only · 3 leave uncommitted, option 1 after `stamity run start` on the default branch. Option 1 copies each `notDone`
-entry `run checkpoint` returns into the proof block's `Not done:`. `Default if no response: leave uncommitted`, with
-those rows not signed and the delta unmerged. In an unattended run the commit part is not an ask: the `st-unattended`
-skill's ending (`run end`, the draft pull request) answers it.
-The leftovers join it as a fourth part, by `/st-board`'s Leftovers at a close: before asking, the close runs
+**The close walk.** What is left for the person is asked by the question protocol's Close walk, in rounds of numbered options: the rows the qa skill leaves for the person (at most three) and the spec delta merge; the commit is no ask, in any mode.
+`Default if no response: those rows not signed and the delta unmerged`. A person's own answer not to commit is honoured: nothing is committed or pushed.
+The leftovers join it as a third part, by `/st-board`'s Leftovers at a close: before asking, the close runs
 `stamity ledger inbox --due --paths <the changed paths> --json` and takes every `decision-waiting` row first, then the
 due and touched rows and each ledger row neither fixed nor rejected; with no response, its unattended rule applies.
 A part with nothing to decide drops out; with none left, there is no ask. The answers take effect together after the
-last round: fixes and schedules first, the commit or hand-off choice last.
+last round: fixes and schedules first, the close's commit and land steps last. In an unattended run the `st-unattended` skill's ending (`run end`, then `run land`) takes those steps.
+After the last round, unless the person answered not to commit, the close runs `stamity run start` (on the default branch), then `stamity run checkpoint --run <run-id> --pr --title <conventional title> --paths <the change's files,
+the merged spec delta and the learning files the close captured under .stamity/learnings/>`, copying each `notDone` entry it returns into the proof block's `Not done:`. When that JSON's `pr` is
+not null (a pull request opened or updated), `stamity run land --run <run-id> --ready --wait 8 --json` follows, alone on its line, under a shell time limit of ten minutes where the client sets one;
+an open person QA row does not stop it. Exit 0 leaves the verb's record line, `- <UTC> land: #<n> <sha> merged`; an `asks` or `refused` exit, or a call that returns no outcome, leaves the pull
+request open, each reason a `held` row (`merge waits on: <reasons>`, or `merge waits on: the land call returned nothing`). On `asks` the close first asks the person one numbered question naming the pull request, every reason in `asks.reasons` and the head commit `pr.head`, 1 merge it now · 2 leave it held, `Default if no response: leave it held`; only on 1 does it run `stamity run land --run <run-id> --ready --approved <sha> --json`, alone on its line, `<sha>` that `asks` JSON's `pr.head` and never another value, where the guard asks again on that line. That call's `landed` outcome writes its `## Decisions` row; its `asks` or `refused` keeps the held row, and a `refused` hold is retried by the next walk with the land step's own line, `stamity run land --run <run-id> --ready --wait 8 --json`; a `refused` whose reason is a moved head means a commit landed after the question, so the close runs `stamity run land --run <run-id> --ready --wait 8 --json` again, its outcomes handled as the land step's (`landed` writes the `## Decisions` row, `refused` stays a held row with its reasons, `asks` takes this question anew), never with the old `<sha>`. In every case the close writes
+`.stamity/runs/<run-id>/morning.md` with its file tools, in the shape of the `st-unattended` skill's `## The morning list`, each act run without asking a `## Decisions` row (kind `decision`, default `1`: a push or ready mark `1 keep · 2 undo`, a ready mark made before a refused land included, a merge `run land` made `1 keep · 2 revert (a revert pull request)`); the pull request body stays as `run checkpoint` wrote it, and the final message names that file and the pull request.
 
 ### Proof block
 
@@ -419,10 +419,10 @@ Run after gates pass; each lands in the run report:
   owns its fields — advisories, licences, the path to a transitive package — so invoke it rather
   than derive them a second time.
 - **Learnings capture.** Resolved failures land in `.stamity/learnings/`.
-- **Pull-request emission.** Where a platform is linked and the change sits on a branch, only the
-  close walk's option 1 opens that branch's draft pull request, as its own `run checkpoint --pr`
-  step — or updates the one already open — and the close emits `pr.linked` carrying the link. With
-  no linked platform the step is a no-op, and the run names the branch it left. Its body carries the record's `## Blast radius` section, which the run keeps after the Frame section, before the next heading, and rewrites in place from each approval's `blast radius:` and `rests on:` lines as it returns, so it holds the last one and the next heading bounds it.
+- **Pull-request emission.** Where a platform is linked and the change sits on a branch, the
+  close's own `run checkpoint --pr` step opens that branch's draft pull request — or updates the one
+  already open — followed by `run land`, and the close emits `pr.linked` carrying the link. With
+  no linked platform the step is a no-op, no land step runs, and the run names the branch it left. Its body carries the record's `## Blast radius` section, which the run keeps after the Frame section, before the next heading, and rewrites in place from each approval's `blast radius:` and `rests on:` lines as it returns, so it holds the last one and the next heading bounds it.
 - **Board progress events.** Emit idempotent progress events — phase transition, acceptance-criterion
   done, PR link, terminal state — with zero platform knowledge; the board layer maps them. When no
   board source is linked, emission is a silent no-op; events publish only when a linked source exists.
@@ -460,7 +460,7 @@ definition, and projected into the client's `model` and `effort` fields; the cap
 any missing control. A class resolves through its pin (re-picked when the account's saved list lacks it),
 then the client's alias, then the account's own model list, then, only when no list was read, the shipped
 list; with none of these the key is left out. A client that checks a sub-agent's model against a list it never prints gets a
-pin alone, as typed, so an unpinned class's sub-agent there runs on the parent agent's model. Where an agent file's model takes
+pin alone, as typed, so an unpinned class's sub-agent there runs on the parent agent's model. That it runs there is unverified: no live run has dispatched one. Where an agent file's model takes
 precedence over the call's, a per-call escalation leaves it unchanged. When a sub-agent call is refused with a list of models, take the
 class's first listed fallback, else the closest, and say so in one line. A class is intent: check effective dispatch identity before asserting the role ran at its class, and report an unresolved assignment.
 

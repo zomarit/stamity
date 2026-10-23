@@ -127,6 +127,8 @@ function gitCheckEnv(): NodeJS.ProcessEnv {
     if (!/^GIT_/i.test(key)) env[key] = value;
   }
   env["GIT_OPTIONAL_LOCKS"] = "0";
+  // review/114: no `git replace` ref makes an object read as another in a check.
+  env["GIT_NO_REPLACE_OBJECTS"] = "1";
   return env;
 }
 
@@ -195,7 +197,9 @@ export function gitCheckRunner(options: GitCheckRunnerOptions = {}): GitInputRun
       throw Object.assign(new Error(bareShapeRefusal(cwd)), { status: 128, keptFromGit: true });
     }
     const env = gitCheckEnv();
-    const pinned = ["-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", ...args];
+    // review/116: replace refs off by the command-line key too, which on git 2.19 to 2.42 beats a repository's
+    // `core.useReplaceRefs=true` where the variable alone does not.
+    const pinned = ["-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", "-c", "core.useReplaceRefs=false", ...args];
     const git = gitProgramFor(cwd, env);
     if (git === null) throw programNotFound("git", "spawnSync", pinned);
     return execFileSync(git, pinned, {

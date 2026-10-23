@@ -143,7 +143,8 @@ const UNPINNED_SYNC_REMEDY = "the sync verb";
  * `node -e` program that finds the project root by the client's anchor file
  * ({@link STARTER_ANCHORS}) and runs `opts.script` there — the portable runner
  * unless given, a root-relative path ({@link STARTER_SAFE_SCRIPT}) otherwise —
- * with the base64url row as its argument. So a session started below the root
+ * with the base64url row as its argument, followed by the row's script as a
+ * plain word when the starter runs the runner. So a session started below the root
  * runs the hook as one started at it (REQ-FLOW-084). The program reads the same
  * under `sh` and `cmd`: no `$`, backtick, `%`, backslash or double quote.
  *
@@ -224,7 +225,16 @@ export function portableHookCommand(
   const authoredGate = tool === "codex" && row.event === "pre_tool_use" && script.slice(lastSlash + 1) !== CORE_GUARD_FILE;
   const fail = authoredGate ? 2 : 1;
   const starter = `const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();${anchor.seed}for(;;){if(fs.existsSync(p.join(d,${segments}))){const f=p.join(d,'${path}');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside ${shown}; run ${syncCall}');process.exitCode=${fail};break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:${anchor.stdio}});process.exitCode=r.status??${fail};break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=${fail};break;}d=up;}`;
-  return `node -e "${starter}" ${data}`;
+  // The row's script as a plain word after the encoded row (REQ-FLOW-142), so a
+  // session reading the held hook file by hand (invariant 5's no-hook path)
+  // finds `stamity-session-start.mjs` without decoding anything. The starter
+  // forwards it (`process.argv.slice(1)`) and the runner refuses a word that is
+  // not the encoded row's script. Only where the starter runs the runner: a
+  // script given in `opts.script` (Cursor's own guards) receives the starter's
+  // arguments itself, so it gets none. A script outside the plain alphabet gets
+  // none either and keeps its earlier bytes.
+  const word = opts.script === undefined && STARTER_SAFE_SCRIPT.test(script) ? ` ${script}` : "";
+  return `node -e "${starter}" ${data}${word}`;
 }
 
 /**
@@ -325,6 +335,13 @@ function main() {
   const coreGuard = row.event === "pre_tool_use" && basename(row.command[1] ?? "") === CORE_GUARD_FILE;
   if (TOOL === "codex" && row.event === "pre_tool_use" && !coreGuard) failureExit = 2;
   if (TOOL === "copilot" && coreGuard) failureExit = 0;
+  // The plain word a starter carries after the encoded row names the row's
+  // script for a reader of the hook file (REQ-FLOW-142). One that names another
+  // script would have that reader trust a different file than the one this
+  // runner starts, so the row is refused, at the row's own failure exit. So is
+  // any argument after that word: the starter forwards the row and one word, and
+  // a reader takes the last word as the script.
+  if ((process.argv[3] !== undefined && process.argv[3] !== row.command[1]) || process.argv.length > 4) throw safeError("Invalid hook registration");
   if (row.timeoutMs !== undefined && (!Number.isSafeInteger(row.timeoutMs) || row.timeoutMs <= 0)) throw safeError("Invalid hook timeout");
   const raw = readFileSync(0, "utf8");
   const payload = raw.trim() === "" ? {} : parse(raw, "Invalid hook input JSON");

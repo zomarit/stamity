@@ -38,6 +38,8 @@ const ENGINE_CODE_VERDICTS: Record<string, FailureType | undefined> = {
   INTEGRITY_ERROR: "substantive",
   // Settled by the repository's state: the same check on the same tree answers the same.
   EXPECTATION_ERROR: "substantive",
+  // Settled by the setting on disk, at HEAD and in the manifest: a retry bakes the same looser guard (REQ-FLOW-138).
+  AUTONOMY_LOOSENED: "substantive",
 } satisfies Partial<Record<ErrorCode, FailureType>>;
 
 /**

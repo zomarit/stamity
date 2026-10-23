@@ -313,17 +313,38 @@ const CORE_GUARD_FILE = "stamity-pre-tool-use-guard.mjs";
 /** The characters a sync call in the starter may carry (`../hooks/portableRunner.ts`'s, `:` and `=` for a registry fork). */
 const STARTER_CALL = /^[A-Za-z0-9@/._~+ :=-]+$/;
 
-/** The base64url row every starter command ends with. */
+/** The base64url row every starter command carries after its program. */
 const ENCODED_ROW = /^[A-Za-z0-9_-]+$/;
 
 /** A script a starter runs: plain root-relative segments, none `.` or `..` (`../hooks/portableRunner.ts`'s). */
 const STARTER_SCRIPT = /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/;
 
-/** The body of a `node -e "<body>" <row>` command, or `null` when `command` is not one whose row is base64url. */
+/**
+ * True when `tail` is a base64url row followed by one plain word that names
+ * that row's own script (`command[1]`), as the renderer writes it
+ * (REQ-FLOW-142). A word naming any other script is not the engine's rendering,
+ * so an entry carrying one stays the owner's.
+ */
+function namesItsOwnScript(tail: string): boolean {
+  const space = tail.indexOf(" ");
+  if (space === -1) return false;
+  const encoded = tail.slice(0, space);
+  const word = tail.slice(space + 1);
+  if (!ENCODED_ROW.test(encoded) || !STARTER_SCRIPT.test(word)) return false;
+  return decodeRow(encoded)?.command[1] === word;
+}
+
+/**
+ * The body of a `node -e "<body>" <row>` command — or of `node -e "<body>" <row> <script>`,
+ * whose last word names the row's own script ({@link namesItsOwnScript}) — or
+ * `null` when `command` is not one whose row is base64url.
+ */
 function starterBody(command: string): string | null {
   const open = 'node -e "';
   const close = command.lastIndexOf('" ');
-  if (!command.startsWith(open) || close === -1 || !ENCODED_ROW.test(command.slice(close + 2))) return null;
+  if (!command.startsWith(open) || close === -1) return null;
+  const tail = command.slice(close + 2);
+  if (!ENCODED_ROW.test(tail) && !namesItsOwnScript(tail)) return null;
   return command.slice(open.length, close);
 }
 
@@ -615,9 +636,20 @@ function runsCursorRunner(command: string): boolean {
   return command.startsWith(CURSOR_RUNNER_COMMAND) || walkUpStarterScript("cursor", command) === CURSOR_RUNNER;
 }
 
-/** The row a runner command's trailing base64url argument encodes, or `null` when it carries none this can read. */
+/**
+ * The row a runner command's trailing base64url argument encodes — its last
+ * word, or the word before a last word naming that row's own script
+ * ({@link namesItsOwnScript}) — or `null` when it carries none this can read.
+ */
 function encodedRow(command: string): DirectHookRow | null {
-  const argument = command.slice(command.lastIndexOf(" ") + 1);
+  const last = command.lastIndexOf(" ");
+  const before = command.lastIndexOf(" ", last - 1);
+  if (last > 0 && namesItsOwnScript(command.slice(before + 1))) return decodeRow(command.slice(before + 1, last));
+  return decodeRow(command.slice(last + 1));
+}
+
+/** The row one base64url argument encodes, or `null` when it is none this can read. */
+function decodeRow(argument: string): DirectHookRow | null {
   let row: unknown;
   try {
     row = JSON.parse(Buffer.from(argument, "base64url").toString("utf8"));

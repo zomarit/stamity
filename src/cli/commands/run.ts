@@ -1,17 +1,16 @@
 import { closeSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, readlinkSync, readSync, realpathSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, posix, relative, resolve } from "node:path";
-import { Argument, InvalidArgumentError, type Command } from "commander";
+import { Argument, InvalidArgumentError, Option, type Command } from "commander";
 import { matchGlob } from "../../change/classify.ts";
 import { fromProjectRoot, heldPaths, PERSON_ONLY_PATHS } from "../../change/personOnlyPaths.ts";
-import { isPlainObject, parseJsonStrict } from "../../config/parse.ts";
 import { personOnlyVerdict } from "../../hooks/personOnly.ts";
-import { readHookDefinitions } from "../../hooks/userHooks.ts";
 import { RUN_ENDED_MARKER_FILE } from "../../mcp/env.ts";
+import { checkSurfaceRecord, type RecordFileReads, type RecordUse, type SurfaceCheck } from "../../runs/gitSurface.ts";
+import { hookPathsAt, type HookScratch } from "../../runs/hookPaths.ts";
 import { blastRadiusSection, MORNING_FILE, prBodyFrom, screenOutbound, withBlastRadius } from "../../runs/morning.ts";
 import { inferPrerequisites, type PrereqRow } from "../../runs/prerequisites.ts";
-import { ensureDraftPr, HOST_NAME, resolveRepo, type PrOutcome } from "../../runs/pullRequest.ts";
-import { checkLauncherArgv } from "../../shared/launcherAllowlist.ts";
+import { ensureDraftPr, HOST_NAME, PR_RECORD_FILE, prRecordText, resolveRepo, type PrOutcome } from "../../runs/pullRequest.ts";
 import { parseGitDefaultBranch } from "../../workspace/git.ts";
 import { ghApi } from "../engine/ghRunner.ts";
 import { gitCheckRunner, revisionLines } from "../engine/gitStatus.ts";
@@ -19,7 +18,8 @@ import { GitWriteGroupStopped, gitProgramVariablesIn, gitWrite, type GitWriteRes
 import { CliFailure } from "../kit/output.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import { sanitizeLabel } from "../kit/prompts.ts";
-import { readPushed, scanChange } from "./gate.ts";
+import { gitSurfaceRecordPath, readPushed, readRunGitSurface, scanChange } from "./gate.ts";
+import { runLand } from "./runLand.ts";
 
 /**
  * `stamity run start`, `stamity run checkpoint` and `stamity run end` — put an
@@ -94,7 +94,13 @@ import { readPushed, scanChange } from "./gate.ts";
  * `start` switches such a run to; a record with no `Branch:` line at column 0
  * refuses as `commit refused: <record> names no Branch:`, pr/47); refuses as `origin changed` where origin's
  * fetch URL or any push URL git resolves now names another repository than `origin.json` pins (and, unattended, where
- * no pin is readable, as `origin not pinned`); stages
+ * no pin is readable, as `origin not pinned`); unattended, refuses as `config changed`, `configuration unreadable` or
+ * `no pre-flight record` where git's configuration and environment are not the ones `gate preflight --unattended`
+ * recorded (REQ-FLOW-131, review/97, `../../runs/gitSurface.ts`), read once here and again after the commit, just
+ * before the push, a refused pre-flight's record taken by `end --refused` alone (review/33), which then refuses
+ * `--paths` and any path but the run folder's and the inbox that a commit the push would send (read from origin's
+ * tips, never from `Base:`) or the index changes, as
+ * `refused ending carries only the run's records: …` (review/50); stages
  * only the run folder's record, ledger, plan, morning list, origin pin and `held/*.patch`,
  * `.stamity/inbox.md` and `--paths` (never `-A`, never `-f`), a path git
  * ignores reported as `records: not committed (…)`; in an unattended run
@@ -147,11 +153,15 @@ import { readPushed, scanChange } from "./gate.ts";
  * follows, or a flag left out) writes none and removes one already there, so no
  * question passes between two chain files; one it cannot remove makes the exit 1,
  * its `notDone` line naming it.
+ *
+ * **`land`** (REQ-FLOW-132, REQ-FLOW-133) merges the run's own pull request, or fast-forwards the default branch to
+ * its head, when the evidence holds, else asks or refuses; its body is `./runLand.ts`, registered here only.
  */
 
 const START = "start";
 const CHECKPOINT = "checkpoint";
 const END = "end";
+const LAND = "land";
 
 /** Every option beyond `--run`, by its key in commander's parsed options. */
 const OPTION_FLAGS: Readonly<Record<string, string>> = {
@@ -161,15 +171,39 @@ const OPTION_FLAGS: Readonly<Record<string, string>> = {
   signoff: "--signoff",
   refused: "--refused",
   finalRound: "--final-round",
+  dropHeld: "--drop-held",
+  fastForward: "--fast-forward",
+  method: "--method",
+  ready: "--ready",
+  wait: "--wait",
+  approved: "--approved",
 };
 
 /** The options each subcommand takes beyond `--run`; any other one given is a usage error. */
 const SUBCOMMAND_OPTIONS: Readonly<Record<string, readonly string[]>> = {
   [START]: [],
-  [CHECKPOINT]: ["paths", "pr", "title", "signoff"],
+  [CHECKPOINT]: ["paths", "pr", "title", "signoff", "dropHeld"],
   // No --pr: the pull request is not optional at the end.
-  [END]: ["paths", "title", "refused", "signoff", "finalRound"],
+  [END]: ["paths", "title", "refused", "signoff", "finalRound", "dropHeld"],
+  // No --paths and no --title: land stages and titles nothing.
+  [LAND]: ["fastForward", "method", "ready", "wait", "approved"],
 };
+
+/** `--wait`'s most minutes: under a client's ten-minute shell-call limit (decision D17). */
+const LAND_WAIT_MAX = 9;
+
+/** review/110: `--approved <sha>`: the full 40-character head commit the person approved, as the asks outcome printed it. */
+function parseApproved(value: string): string {
+  if (!/^[0-9a-fA-F]{40}$/.test(value)) throw new InvalidArgumentError("--approved takes the full 40-character commit the person approved.");
+  return value.toLowerCase();
+}
+
+/** `--wait <minutes>`: a whole number from 0 to {@link LAND_WAIT_MAX}. */
+function parseWait(value: string): number {
+  const minutes = /^[0-9]+$/.test(value) ? Number(value) : Number.NaN;
+  if (!(minutes >= 0 && minutes <= LAND_WAIT_MAX)) throw new InvalidArgumentError(`--wait takes whole minutes from 0 to ${LAND_WAIT_MAX}.`);
+  return minutes;
+}
 
 /** The origin pin `start` writes in the run folder (review/209). */
 const ORIGIN_PIN = "origin.json";
@@ -239,7 +273,7 @@ export const runCommand: CommandModule = {
 
   configure(cmd: Command): void {
     cmd
-      .addArgument(new Argument("<subcommand>", "which run action to run").choices([START, CHECKPOINT, END]))
+      .addArgument(new Argument("<subcommand>", "which run action to run").choices([START, CHECKPOINT, END, LAND]))
       .option("--run <run-id>", "the run folder's name under .stamity/runs/", parseRun)
       .option("--paths <path...>", "checkpoint and end: also stage these paths, relative to the project root")
       .option("--pr", "checkpoint: open or update the run's draft pull request after the push (with --title)")
@@ -247,6 +281,12 @@ export const runCommand: CommandModule = {
       .option("--signoff", "checkpoint and end: add the Signed-off-by line to the commit")
       .option("--refused", "end: title the draft pull request Refused: <title>, for a run that refused to start")
       .option("--final-round", "end: the run's last end; write the run-ended marker the final question round needs (a plain end removes one)")
+      .option("--drop-held <path...>", "checkpoint and end: withdraw the held patch's sections for these paths, which the run undid (one it still changes stays held)")
+      .option("--fast-forward", "land: fast-forward the default branch to the pull request's head instead of merging it")
+      .addOption(new Option("--method <method>", "land: the merge method").choices(["merge", "squash", "rebase"]))
+      .option("--ready", "land: mark the run's draft ready for review once the evidence holds, then land it")
+      .option("--wait <minutes>", `land: wait up to this many minutes (at most ${LAND_WAIT_MAX}) for pending check runs`, parseWait)
+      .option("--approved <sha>", "land: the head commit the person approved over an asks outcome; land it if the head is still that commit and nothing refuses (never in an unattended run)", parseApproved)
       // Usage errors, so exit 2 before the action and before git runs.
       .hook("preAction", (command) => {
         const subcommand = String(command.processedArgs[0]);
@@ -262,6 +302,9 @@ export const runCommand: CommandModule = {
         if (typeof given["title"] === "string" && given["title"].trim() === "") command.error("error: --title takes a title", { exitCode: 2 });
         const paths = (given["paths"] ?? []) as string[];
         if (paths.some((path) => path.trim() === "")) command.error("error: --paths takes no empty path", { exitCode: 2 });
+        const dropped = (given["dropHeld"] ?? []) as string[];
+        if (dropped.some((path) => path.trim() === "")) command.error("error: --drop-held takes no empty path", { exitCode: 2 });
+        if (given["fastForward"] === true && given["method"] !== undefined) command.error("error: --method does not apply to --fast-forward", { exitCode: 2 });
       });
   },
 
@@ -269,6 +312,7 @@ export const runCommand: CommandModule = {
     // Commander's `choices()` already refused every other subcommand at parse time.
     if (args[0] === CHECKPOINT) return runCheckpoint(ctx, opts, CHECKPOINT);
     if (args[0] === END) return runCheckpoint(ctx, opts, END);
+    if (args[0] === LAND) return runLand(ctx, opts);
     return runStart(ctx, String(opts["run"]));
   },
 };
@@ -554,6 +598,45 @@ async function pinOrigin(ctx: CliContext, cwd: string, run: string, at: { rev?: 
   return `origin: ${repoName(now)} (pinned in ${pinRel})`;
 }
 
+/** The record check's file reads (review/34): the kind by `lstat`, never through a link, and {@link readCapped}. */
+const RECORD_READS: RecordFileReads = {
+  kind: (path) => {
+    try {
+      return lstatSync(path).isFile() ? "file" : "other";
+    } catch {
+      return "missing";
+    }
+  },
+  read: readCapped,
+};
+
+/**
+ * review/97, review/34 (REQ-FLOW-131): whether an unattended `checkpoint` or `end` takes git's surface, by the
+ * module's one record check (`../../runs/gitSurface.ts` `checkSurfaceRecord`). `use` is `refused-end` for
+ * `end --refused` alone, which takes a refused pre-flight's record (review/33) and then carries the run's records
+ * alone (review/50, {@link refusedEndingStray}).
+ */
+async function surfaceCheck(cwd: string, use: RecordUse): Promise<SurfaceCheck> {
+  return checkSurfaceRecord(await gitSurfaceRecordPath(cwd), RECORD_READS, () => readRunGitSurface(cwd), use);
+}
+
+/** review/50: the line every refusal of a refused pre-flight's ending begins with. */
+const REFUSED_ENDING = "refused ending carries only the run's records";
+
+/**
+ * review/50: why `end --refused` under a refused pre-flight's record would carry more than the run's records, or
+ * `null`. The ending may stage the run folder's files and the inbox alone, so `--paths` refuses, and so does any
+ * other path that a commit the push would send ({@link pushedChanges}, from origin's `tips`) or the index (against
+ * `HEAD`) changes, each named. The record's `Base:` plays no part: the run folder holds it, so this ending could move
+ * it. `top`-relative paths; `ownDir` and `inbox` likewise.
+ */
+async function refusedEndingStray(top: string, tips: readonly string[], ownDir: string, inbox: string, paths: readonly string[]): Promise<string | null> {
+  if (paths.length > 0) return `${REFUSED_ENDING}: --paths names ${paths.join(", ")}`;
+  const changed = [...(await pushedChanges(top, tips)), ...(await changedSince(top, "HEAD", "index"))].map((entry) => entry.path);
+  const stray = [...new Set(changed.filter((path) => path !== inbox && !path.startsWith(`${ownDir}/`)))].toSorted();
+  return stray.length === 0 ? null : `${REFUSED_ENDING}: the commits the push would send or the index change ${stray.join(", ")}`;
+}
+
 /**
  * Why `checkpoint` and `end` refuse the run's origin (review/209), or `null`:
  * origin now names another repository than the pin, or no GitHub repository
@@ -829,6 +912,8 @@ interface Checkpoint {
   committed: string | null;
   pushed: boolean;
   held: string[];
+  /** review/248: the paths `--drop-held` named whose sections left the held patch. */
+  withdrawn: string[];
   scan: { hits: CheckpointHit[]; unscanned: string[] };
   pr: { number: number; url: string; how: string } | null;
   notDone: string[];
@@ -871,7 +956,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
     });
   }
 
-  const result: Checkpoint = { branch: null, base, committed: null, pushed: false, held: [], scan: { hits: [], unscanned: [] }, pr: null, notDone: [] };
+  const result: Checkpoint = { branch: null, base, committed: null, pushed: false, held: [], withdrawn: [], scan: { hits: [], unscanned: [] }, pr: null, notDone: [] };
   const lines: string[] = [`run: ${run} (${unattended ? "unattended" : "attended"})`, `base: ${base}`, ...removedLine(removed)];
   const finish = async (passed: boolean, extra: Record<string, unknown> = {}): Promise<CommandResult> => {
     let ok = passed;
@@ -929,6 +1014,15 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
     result.notDone.push(moved);
     return finish(false);
   }
+  // review/97 (REQ-FLOW-131): unattended, git's configuration and environment must be the ones the pre-flight vetted.
+  const recordUse: RecordUse = verb === END && opts["refused"] === true ? "refused-end" : "push";
+  const surface = unattended ? await surfaceCheck(cwd, recordUse) : null;
+  if (surface !== null && surface.refusal !== null) {
+    result.notDone.push(surface.refusal);
+    return finish(false);
+  }
+  /** review/50: the ending of a pre-flight that refused, which carries the run's records alone. */
+  const refusedRecord = surface !== null && surface.refused;
   // pr/55: unattended, main and master alone would let the run push a default branch of another name.
   if (unattended && defaults.source === "fallback") {
     result.notDone.push(`commit refused: ${FALLBACK_REFUSAL}, so an unattended run pushes nothing`);
@@ -938,12 +1032,25 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   const top = (await git(cwd, ["rev-parse", "--show-toplevel"], verb)).stdout.replace(/\r?\n$/, "");
   const prefix = (await git(cwd, ["rev-parse", "--show-prefix"], verb)).stdout.replace(/\r?\n$/, "");
   const fromTop = (projectPath: string): string => posix.normalize(`${prefix}${projectPath}`);
+  // review/50: before anything is staged, a refused pre-flight's ending refuses --paths and any product change.
+  // The set the push sends is read from origin's tips, as the held-path check reads it; unread, the ending is held.
+  if (refusedRecord) {
+    const origin = await remoteRefs(top, current, verb);
+    const stray =
+      typeof origin === "string"
+        ? `push held: origin's branches and tags could not be read (${origin})`
+        : await refusedEndingStray(top, origin.tips, fromTop(runDir), fromTop(INBOX_PATH), (opts["paths"] ?? []) as string[]);
+    if (stray !== null) {
+      result.notDone.push(stray);
+      return finish(false);
+    }
+  }
   // review/175, review/182-/189 (signed off): unattended, the hook files and folders Base: holds and the script each
   // declaration there names are held as person-only paths are, read before anything is staged; anything the hold
   // cannot resolve cleanly at Base: refuses the run's push.
   let hookPaths: string[] = [];
   if (unattended) {
-    const read = await hookPathsAt(top, prefix, base, verb);
+    const read = await hookPathsAt({ git: (args) => git(top, args, verb), scratch: HOOK_SCRATCH }, prefix, base);
     if (typeof read === "string") {
       result.notDone.push(read);
       return finish(false);
@@ -974,6 +1081,15 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   });
   const heldDir = `${runDir}/${HELD_DIR}`;
   const patchRel = `${heldDir}/${HELD_PATCH}`;
+  /** The held patch written whole, atomically, inside the project; else the reason, for `notDone`. */
+  const writePatch = async (bytes: Buffer): Promise<string | null> => {
+    try {
+      await ctx.engine.merge.atomicWrite.atomicWriteFile(join(cwd, patchRel), bytes, { boundaryDir: cwd });
+      return null;
+    } catch (cause) {
+      return `hold failed: ${patchRel} could not be written (${cause instanceof Error ? cause.message : "write failed"})`;
+    }
+  };
   const patches = [...new Set([patchRel, ...listPatches(join(cwd, heldDir)).map((name) => `${heldDir}/${name}`)])].map(fromTop);
   const { paths: named, deleted: namedDeleted } = await namedPaths(top, cwd, prefix, base, (opts["paths"] ?? []) as string[], result.notDone);
   // review/84: a deletion already staged is no ignored record, though check-ignore reads its path as untracked now.
@@ -1020,6 +1136,13 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
     const inTree = new Set(treeSide.map((entry) => entry.path));
     const bothAbsent = new Set(indexSide.filter((entry) => entry.added && !inTree.has(entry.path)).map((entry) => entry.path));
     const sectioned = held.filter((path) => !bothAbsent.has(path));
+    const isHeld = (path: string, link: boolean): boolean => heldOf([{ path, link, added: false }], hookPaths, prefix).length > 0;
+    // review/248: the paths --drop-held names leave the patch where the run undid them; one still changed stays held.
+    const toDrop = ((opts["dropHeld"] ?? []) as string[]).map((path) => fromTop(path.replaceAll("\\", "/")));
+    const withdraw = [...new Set(toDrop.filter((path) => !held.includes(path)))];
+    for (const still of [...new Set(toDrop.filter((path) => held.includes(path)))].toSorted()) {
+      result.notDone.push(`not withdrawn: ${sanitizeLabel(still)} is still changed in the work tree or the index, so it stays held`);
+    }
     if (sectioned.length === 0) {
       // review/6 (signed off): a patch an earlier checkpoint committed is kept and listed until a checkpoint writes a
       // new one (which keeps its sections for paths not held then, n14), never dropped because the work tree holds no
@@ -1031,6 +1154,26 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
         return finish(false);
       }
       if (committed !== null) kept = committed;
+      // review/248: the withdrawn paths' sections leave the kept patch, read as a carried one is; none left, it goes.
+      if (committed !== null && committed.some((path) => withdraw.includes(path))) {
+        const scratch = mkdtempSync(join(tmpdir(), "stamity-held-"));
+        try {
+          const left = await carriedSections(top, fromTop(patchRel), withdraw, isHeld, scratch, verb);
+          if (typeof left === "string") {
+            result.notDone.push(left);
+            return finish(false);
+          }
+          const unwritten = left.sections.length === 0 ? await removeStalePatch(cwd, top, heldDir, fromTop(patchRel)) : await writePatch(Buffer.concat(left.sections));
+          if (unwritten !== null) {
+            result.notDone.push(unwritten);
+            return finish(false);
+          }
+          kept = left.paths;
+          result.withdrawn = left.dropped.filter((path) => withdraw.includes(path));
+        } finally {
+          rmSync(scratch, { recursive: true, force: true });
+        }
+      }
       const stale = committed === null ? await removeStalePatch(cwd, top, heldDir, fromTop(patchRel)) : null;
       if (stale !== null) {
         result.notDone.push(stale);
@@ -1061,7 +1204,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
             .filter(([, paths]) => paths.length > 0)
             .map(async ([side, paths], index) => {
               const out = join(scratch, `${index}-${HELD_PATCH}`);
-              return { out, patch: await git(top, ["diff", "--binary", "--full-index", ...DIFF_PINS, `--output=${out}`, ...side, "--", ...paths], verb), step: "diff" };
+              return { out, patch: await git(top, ["diff", "--binary", "--full-index", ...PATCH_PINS, `--output=${out}`, ...side, "--", ...paths], verb), step: "diff" };
             }),
           ...readded.map(async (path, index) => {
             const out = join(scratch, `added-${index}-${HELD_PATCH}`);
@@ -1076,18 +1219,17 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
         }
         // n14 (P3): a run continued on a fresh clone holds the earlier person-only change in the branch's patch alone,
         // so a new patch keeps that patch's sections for paths not held now, in their order, before its own.
-        const isHeld = (path: string, link: boolean): boolean => heldOf([{ path, link, added: false }], hookPaths, prefix).length > 0;
-        const earlier = await carriedSections(top, fromTop(patchRel), held, isHeld, scratch, verb);
+        // review/248: a withdrawn path's earlier section goes as a path held now does, and no current diff takes its place.
+        const earlier = await carriedSections(top, fromTop(patchRel), [...held, ...withdraw], isHeld, scratch, verb);
         if (typeof earlier === "string") {
           result.notDone.push(earlier);
           return finish(false);
         }
         carried = earlier.paths;
-        const parts = [...earlier.sections, ...written.map(({ out }) => readFileSync(out))];
-        try {
-          await ctx.engine.merge.atomicWrite.atomicWriteFile(join(cwd, patchRel), Buffer.concat(parts), { boundaryDir: cwd });
-        } catch (cause) {
-          result.notDone.push(`hold failed: ${patchRel} could not be written (${cause instanceof Error ? cause.message : "write failed"})`);
+        result.withdrawn = earlier.dropped.filter((path) => withdraw.includes(path));
+        const unwritten = await writePatch(Buffer.concat([...earlier.sections, ...written.map(({ out }) => readFileSync(out))]));
+        if (unwritten !== null) {
+          result.notDone.push(unwritten);
           return finish(false);
         }
       } finally {
@@ -1122,6 +1264,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
           ? `held (in ${patchRel}; the work tree keeps them, save ${list(carried)}, whose sections are kept from an earlier checkpoint): ${list(heldNames)}`
           : `held (in ${patchRel}; the work tree keeps them): ${list(heldNames)}`,
   );
+  if (result.withdrawn.length > 0) lines.push(`withdrawn (their sections left the held patch): ${list(result.withdrawn)}`);
 
   // pr/46: what origin holds, read from the remote once, before the commit; unread, the push is held.
   const remote = await remoteRefs(top, current, verb);
@@ -1270,6 +1413,24 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   lines.push(`scan: ${result.scan.hits.length === 0 ? "no hits" : `${result.scan.hits.length} hit(s)`}; unscanned: ${list(result.scan.unscanned)}`);
   if (result.scan.hits.length > 0 || outcome.incomplete !== undefined) return finish(false);
 
+  // review/97: read again after the commit, whose hooks could have edited git's configuration, and before the push.
+  const surfaceNow = unattended ? await surfaceCheck(cwd, recordUse) : null;
+  if (surfaceNow !== null && surfaceNow.refusal !== null) {
+    result.notDone.push(surfaceNow.refusal);
+    lines.push("push: refused (git's configuration or environment moved since the pre-flight)");
+    return finish(false);
+  }
+  // review/50: the commit made, a refused pre-flight's ending (or one whose record turned refused since the first
+  // read) still pushes the run's records alone.
+  if (refusedRecord || (surfaceNow !== null && surfaceNow.refused)) {
+    const strayNow = await refusedEndingStray(top, remote.tips, fromTop(runDir), fromTop(INBOX_PATH), refusedRecord ? [] : ((opts["paths"] ?? []) as string[]));
+    if (strayNow !== null) {
+      result.notDone.push(strayNow);
+      lines.push("push: refused (a refused pre-flight's ending carries the run's records alone)");
+      return finish(false);
+    }
+  }
+
   // (6) The push, its command checked by the shell guard's own table before it runs.
   const refspec = `HEAD:refs/heads/${current}`;
   const tip = await commitAt(top, "HEAD", verb);
@@ -1319,6 +1480,13 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
 
 /** The pins every diff here takes against config: no external diff, colour, textconv or rename pairing, top-level names. */
 const DIFF_PINS: readonly string[] = ["--no-color", "--no-ext-diff", "--no-textconv", "--no-renames", "--no-relative", "--ignore-submodules=none"];
+
+/**
+ * review/254: the held patch's diffs take git's default prefixes too, as the gate's diff pins them, so `diff.noprefix`,
+ * `diff.mnemonicPrefix` and `diff.srcPrefix`/`diff.dstPrefix` cannot move a name `git apply` reads one folder off.
+ * Measured with git 2.52: the explicit pins win over each of those settings.
+ */
+const PATCH_PINS: readonly string[] = [...DIFF_PINS, "--src-prefix=a/", "--dst-prefix=b/"];
 
 /** What `changedSince` compares with `base`: the work tree, the index, or `HEAD`'s tree. */
 type Side = "work tree" | "index" | "HEAD";
@@ -1410,7 +1578,7 @@ function heldLink(path: string, projectPrefix: string): boolean {
 
 /**
  * The held paths of `entries`, sorted and once each: a person-only path, a path at or under one of `hookPaths` (the
- * hook files and folders the hold reads at `Base:`, and the scripts their declarations name: {@link hookPathsAt},
+ * hook files and folders the hold reads at `Base:`, and the scripts their declarations name: `hookPathsAt` in `../../runs/hookPaths.ts`,
  * review/175, review/182), or a link or a submodule at a held glob's prefix or at a folder above one of `hookPaths`
  * (review/195). A hook path matches without case, in one Unicode normalization form (review/194) and over the Windows
  * reading of a path, as the globs and the `Base:` walk read names. `prefix` is the project's folder below the git top
@@ -1435,299 +1603,25 @@ function heldOf(entries: readonly Changed[], hookPaths: readonly string[], prefi
 
 /**
  * A path as a case-insensitive, normalization-insensitive checkout reads it: forward slashes, one Unicode
- * normalization form (review/194, the form {@link baseReader}'s walk compares names in), one letter case.
+ * normalization form (review/194, the form the `Base:` walk in `../../runs/hookPaths.ts` compares names in), one letter case.
  */
 function foldPath(path: string): string {
   return path.replaceAll("\\", "/").normalize("NFC").toLowerCase();
 }
 
-/** review/175: the manifest, the default folder of the repository's own hook declarations, and the installed packs' folder. */
-const MANIFEST_PATH = ".stamity/manifest.json";
-const USER_HOOKS_DIR = ".stamity/hooks";
-const PACKS_DIR = ".stamity/packs";
-
-/** UTF-8's byte-order mark, which the manifest reader drops before it parses (`src/manifest/manifest.ts`, review/188). */
-const BOM = "\uFEFF";
-
-/** One entry of a folder at `Base:`, as `git ls-tree -z` lists it: its name, its object id and what it is. */
-interface TreeEntry {
-  name: string;
-  id: string;
-  kind: "folder" | "file" | "link" | "submodule";
-}
-
-/** A path read at `Base:`: its top-relative spelling and what it names there (a missing name has no id), or why it does not resolve cleanly. */
-type AtBase = { path: string; kind: "folder" | "file" | "missing"; id: string } | { refused: string };
-
-/** The reads {@link baseReader} offers: a project-relative path, a top-relative path's segments, and one folder's entries. */
-interface BaseReader {
-  resolve: (path: string) => Promise<AtBase>;
-  walk: (segments: readonly string[]) => Promise<AtBase>;
-  list: (tree: string) => Promise<TreeEntry[] | string>;
-}
-
 /**
- * review/185, review/186 (signed off): the one resolver the hold reads `Base:` through. It walks `base`'s tree objects
- * from the root, one listing per folder, never a work tree and never a path git resolves. A project-relative path reads
- * its backslashes as separators and drops its `.` segments; a `..` segment, an absolute path or one naming a drive or a
- * scheme, and the project root itself do not resolve cleanly. Nor does a segment that is a link or a submodule at
- * `Base:`, or one the tree spells in another letter case or holds twice by letter case, since a checkout that follows
- * the link or folds the case reads another file there. A path that meets a missing name, or a file where a folder
- * goes, names nothing at `Base:`, cleanly.
+ * The scratch folder the hold's declaration reader reads a stand-in copy from (`../../runs/hookPaths.ts`): a fresh
+ * folder under the system's temp folder, removed whole after the read.
  */
-function baseReader(top: string, base: string, prefix: string, verb: string): BaseReader {
-  const listings = new Map<string, Promise<TreeEntry[] | string>>();
-  const entriesOf = (tree: string): Promise<TreeEntry[] | string> => {
-    const known = listings.get(tree);
-    if (known !== undefined) return known;
-    const listing = listTree(top, tree, verb);
-    listings.set(tree, listing);
-    return listing;
-  };
-  const fold = (name: string): string => name.normalize("NFC").toLowerCase();
-  const walk = async (segments: readonly string[]): Promise<AtBase> => {
-    const path = segments.join("/");
-    let tree = base;
-    for (const [index, segment] of segments.entries()) {
-      // oxlint-disable-next-line no-await-in-loop -- the walk's next folder is the entry this listing finds
-      const entries = await entriesOf(tree);
-      if (typeof entries === "string") return { refused: entries };
-      const like = entries.filter((entry) => fold(entry.name) === fold(segment));
-      const spelled = like.map((entry) => [...segments.slice(0, index), entry.name].join("/")).join(", ");
-      const [entry] = like;
-      if (entry === undefined) return { path, kind: "missing", id: "" };
-      if (like.length > 1) return { refused: `is ambiguous by letter case in the tree (${spelled})` };
-      if (entry.name !== segment) return { refused: `is spelled in another letter case than the tree's ${spelled}` };
-      if (entry.kind === "link" || entry.kind === "submodule") return { refused: `passes through a ${entry.kind} (${spelled})` };
-      if (index === segments.length - 1) return { path, kind: entry.kind, id: entry.id };
-      if (entry.kind === "file") return { path, kind: "missing", id: "" };
-      tree = entry.id;
-    }
-    return { refused: "names the project root" };
-  };
-  const resolvePath = async (path: string): Promise<AtBase> => {
-    const unified = path.replaceAll("\\", "/");
-    if (unified.startsWith("/") || /^[A-Za-z][A-Za-z0-9+.-]*:/.test(unified)) return { refused: "is absolute or names a drive or a scheme" };
-    const named = unified.split("/").filter((segment) => segment !== "" && segment !== ".");
-    if (named.includes("..")) return { refused: "holds a .. segment" };
-    if (named.length === 0) return { refused: "names the project root" };
-    return walk([...prefix.split("/").filter((segment) => segment !== ""), ...named]);
-  };
-  return { resolve: resolvePath, walk, list: entriesOf };
-}
-
-/** The entries of the tree `tree` names (a commit names its root tree), or why they could not be listed, for `notDone`. */
-async function listTree(top: string, tree: string, verb: string): Promise<TreeEntry[] | string> {
-  const read = await git(top, ["ls-tree", "-z", tree], verb);
-  if (read.code !== 0) return `could not be listed (git ls-tree answered ${read.code}: ${firstLine(read.stderr)})`;
-  return read.stdout.split("\0").flatMap((line): TreeEntry[] => {
-    const [, mode, type, id, name] = /^(\d{6}) (\w+) ([0-9a-f]{40,64})\t([^]+)$/.exec(line) ?? [];
-    if (mode === undefined || type === undefined || id === undefined || name === undefined) return [];
-    return [{ name, id, kind: type === "tree" ? "folder" : type !== "blob" ? "submodule" : mode === LINK_MODE ? "link" : "file" }];
-  });
-}
-
-/**
- * review/175, review/182-/189 (signed off): what the hold holds from the hook declarations at `base`, top-relative and
- * sorted. First the files it reads there, each held whole wherever it lies: the manifest, the folder of the
- * repository's own declarations the manifest names (`.stamity/hooks` by default), and the installed packs' folder,
- * whose `<pack>/hooks/` folders hold theirs. Then the script each declaration names, and every other argument that
- * names a repository file (its launcher where that is a path rather than a name on PATH, build/98, an option's value and
- * an argument word, bare or written as a path), held whether or not it exists at `base` (review/196, review/199); a
- * folder an argument names is not held (review/197), nor a value with a URL-like scheme (review/198). All of them
- * resolve from the project root the manifest sits in. The declarations are read at `Base:`, never from the work tree, so a run cannot unhold a script by editing or
- * deleting its declaration, and through the engine's own reader ({@link readHookDefinitions}, with
- * {@link checkLauncherArgv}'s one script argument), so a declaration emission refuses for its shape names nothing held.
- * The reader runs over a scratch copy of them whose arguments read backslashes as separators, as a Windows checkout
- * reads them, and in which every path an argument names stands as an empty file: whether the script exists is not
- * judged, since emission on a checkout where it was there but uncommitted wired it, and a run that then adds it must
- * not push it.
- *
- * The hold fails closed on anything it cannot resolve cleanly at `Base:`. Every path it reads and every script a
- * declaration names goes through {@link baseReader}'s one resolver, and a file that does not read or parse, a folder
- * that is a file, a script whose stand-in did not land (the reader then reads it as missing), and an argument the
- * reader reads as leaving the repository refuse too: the reason, for `notDone`. Residuals the pages name: a hook
- * written by hand into a client's settings file; anything a held script reads or loads beyond the files its
- * declaration names (review/187, review/197); a run that rewrites its own record head's `Base:`, as it can its `Mode:`.
- */
-async function hookPathsAt(top: string, prefix: string, base: string, verb: string): Promise<string[] | string> {
-  const at = baseReader(top, base, prefix, verb);
-  const unknown = (path: string, why: string): string =>
-    `hold refused: ${path} at Base: ${why}, so the hook scripts it names are unknown and the run pushes nothing`;
-  const json = async (path: string, id: string): Promise<{ document: unknown } | { refused: string }> => {
-    const read = await git(top, ["cat-file", "blob", id], verb);
-    if (read.code !== 0) return { refused: unknown(path, `could not be read (git cat-file answered ${read.code})`) };
-    try {
-      return { document: parseJsonStrict(read.stdout.startsWith(BOM) ? read.stdout.slice(BOM.length) : read.stdout, path) };
-    } catch {
-      return { refused: unknown(path, "does not parse") };
-    }
-  };
-
-  // The manifest, and the folder of the repository's own declarations it names.
-  const manifest = await at.resolve(MANIFEST_PATH);
-  if ("refused" in manifest) return unknown(`${prefix}${MANIFEST_PATH}`, manifest.refused);
-  if (manifest.kind === "folder") return unknown(manifest.path, "is a folder where the manifest goes");
-  let hooksDir = USER_HOOKS_DIR;
-  if (manifest.kind === "file") {
-    const read = await json(manifest.path, manifest.id);
-    if ("refused" in read) return read.refused;
-    const hooks = isPlainObject(read.document) ? (read.document["hooks"] ?? {}) : null;
-    const folder = isPlainObject(hooks) ? hooks["userHooksDir"] : null;
-    if (folder !== undefined && typeof folder !== "string") return unknown(manifest.path, "names no hooks folder the engine reads");
-    if (folder !== undefined) hooksDir = folder;
-  }
-
-  // The declaration folders: that one, and each installed pack's `hooks/`.
-  const hooksFolder = await at.resolve(hooksDir);
-  if ("refused" in hooksFolder) return unknown(`${prefix}${hooksDir}`, hooksFolder.refused);
-  const packs = await at.resolve(PACKS_DIR);
-  if ("refused" in packs) return unknown(`${prefix}${PACKS_DIR}`, packs.refused);
-  if (packs.kind === "file") return unknown(packs.path, "is a file where the packs folder goes");
-  const roots = packs.kind === "folder" ? await at.list(packs.id) : [];
-  if (typeof roots === "string") return unknown(packs.path, roots);
-  const packHooks = await Promise.all(
-    roots.map(async (root) => ({ subject: `${packs.path}/${root.name}/hooks`, folder: await at.walk([...packs.path.split("/"), root.name, "hooks"]) })),
-  );
-  const candidates: { subject: string; folder: AtBase }[] = [{ subject: hooksFolder.path, folder: hooksFolder }, ...packHooks];
-  const folders: { path: string; id: string }[] = [];
-  for (const { subject, folder } of candidates) {
-    if ("refused" in folder) return unknown(subject, folder.refused);
-    if (folder.kind === "file") return unknown(folder.path, "is a file where a hook folder goes");
-    if (folder.kind === "folder" && !folders.some((known) => known.path === folder.path)) folders.push(folder);
-  }
-  const held = new Set([manifest.path, hooksFolder.path, packs.path]);
-
-  // The declaration files the reader takes: each folder's own regular `.json` files (it refuses a link and skips the rest).
-  const listed = await Promise.all(folders.map(async (folder) => ({ folder, entries: await at.list(folder.id) })));
-  const declarations: { path: string; id: string }[] = [];
-  for (const { folder, entries } of listed) {
-    if (typeof entries === "string") return unknown(folder.path, entries);
-    for (const entry of entries) {
-      if (entry.kind === "file" && entry.name.endsWith(".json")) declarations.push({ path: `${folder.path}/${entry.name}`, id: entry.id });
-    }
-  }
-  const texts: { path: string; text: string }[] = [];
-  const named = new Set<string>();
-  const reads = await Promise.all(declarations.map(async ({ path, id }) => ({ path, read: await json(path, id) })));
-  for (const { path, read } of reads) {
-    if ("refused" in read) return read.refused;
-    const copy = separatorsRead(read.document);
-    texts.push({ path, text: `${JSON.stringify(copy)}\n` });
-    for (const argument of declaredArguments(copy)) named.add(argument);
-  }
-  if (texts.length === 0) return [...held].toSorted();
-
-  // Every contained path an argument names stands as an empty file, short of one another's folders and the declarations'.
-  const project = (path: string): string => path.slice(prefix.length);
-  const occupied = texts.map(({ path }) => project(path));
-  const stand = [...named].filter(
-    (path) => ![...named, ...occupied].some((other) => other.startsWith(`${path}/`)) && !occupied.includes(path),
-  );
-  const scratch = mkdtempSync(join(tmpdir(), "stamity-hooks-"));
-  try {
-    const place = (path: string, text: string): void => {
-      const file = join(scratch, ...path.split("/"));
-      mkdirSync(dirname(file), { recursive: true });
-      writeFileSync(file, text);
-    };
-    for (const path of stand) {
-      try {
-        place(path, "");
-      } catch {
-        // review/189: a stand-in that cannot land (a name this file system cannot hold, or one a case-insensitive
-        // scratch folder already holds as a folder) leaves its path missing to the reader, which refuses a hook that
-        // names it as the code it runs as MISSING_SCRIPT, and that refuses the hold below rather than dropping a script.
-      }
-    }
-    for (const { path, text } of texts) place(project(path), text);
-    const dirs = [...new Set(occupied.map((path) => posix.dirname(path)))];
-    const definitions = await Promise.all(dirs.map((dir) => readHookDefinitions(join(scratch, ...dir.split("/")), scratch)));
-    // The copy holds no link, so the reader's two path verdicts mean a stand-in that did not land, or a path it reads
-    // as leaving the repository: either refuses, naming the declaration (review/186, review/189).
-    const unread = definitions.flatMap((read) => read.errors).find((error) => error.code === "MISSING_SCRIPT" || error.code === "UNSAFE_PATH");
-    if (unread !== undefined) {
-      return unknown(`${prefix}${unread.file}`, unread.code === "MISSING_SCRIPT" ? "names a script the hold could not stand in for" : "names a path outside the repository");
-    }
-    // build/98 and the option-value question: every argument that names a repository file is code the hook runs or a
-    // file it reads, so it is held beside the script, through the same resolver, whether or not Base: holds it
-    // (review/196, review/199): a run that adds a file a declaration names reaches the next session's hook. One written
-    // as a path (a separator in it, a flag's `=` value read as the launcher check reads it, the launcher's own
-    // included) refuses where it does not resolve cleanly; one naming the project root names no file. A bare name past
-    // the launcher is held too, a subcommand or a word alike, since it reads as a file of that name; where the resolver
-    // refuses it, it is held as written, as a held path matches without case. A folder an argument names is not held (review/197): holding it would hold every
-    // change under it, and what a held script reads there is the pages' named residual; the script and a path-written
-    // launcher stay held whatever Base: holds there, as before. A value with a URL-like scheme, two characters or more
-    // before its colon, names no repository file and is neither held nor refused (review/198); a drive letter is no
-    // such scheme, so a drive path stays absolute and refuses. A bare launcher is looked up on PATH, never here.
-    const executed = definitions.flatMap((read) =>
-      read.hooks.flatMap((hook) => {
-        const verdict = checkLauncherArgv(hook.command, scratch);
-        const declaration = `${prefix}${hook.sourceFile}`;
-        const values = hook.command.flatMap((argument, index) => {
-          const path = !argument.startsWith("-") ? argument : argument.includes("=") ? argument.slice(argument.indexOf("=") + 1) : "";
-          const bare = !path.includes("/");
-          if ((bare && (index === 0 || path === "" || path === "." || path === "..")) || (!bare && path.split("/").every((segment) => segment === "" || segment === "."))) return [];
-          if (/^[A-Za-z][A-Za-z0-9+.-]+:/.test(path)) return [];
-          return [{ path, declaration, bare, code: index === 0 }];
-        });
-        return [...(verdict.ok ? [{ path: verdict.script, declaration, bare: false, code: true }] : []), ...values];
-      }),
-    );
-    const scripts = await Promise.all(
-      executed.map(async ({ path, declaration, bare, code }) => {
-        const script = await at.resolve(path);
-        if ("refused" in script) return bare ? { path: `${prefix}${path}` } : { refused: unknown(declaration, `names ${path}, which ${script.refused}`) };
-        return script.kind === "folder" && !code ? null : { path: script.path };
-      }),
-    );
-    for (const script of scripts) {
-      if (script === null) continue;
-      if ("refused" in script) return script.refused;
-      held.add(script.path);
-    }
-    return [...held].toSorted();
-  } catch (cause) {
-    return `hold refused: the hook declarations at Base: could not be read (${cause instanceof Error ? firstLine(cause.message) : "read failed"}), so the hook scripts they name are unknown and the run pushes nothing`;
-  } finally {
-    rmSync(scratch, { recursive: true, force: true });
-  }
-}
-
-/** review/183, review/186: a declaration's copy whose hook arguments read backslashes as separators, as a Windows checkout reads them. */
-function separatorsRead(document: unknown): unknown {
-  const hooks = isPlainObject(document) ? document["hooks"] : undefined;
-  if (!isPlainObject(document) || !Array.isArray(hooks)) return document;
-  const read = (hook: unknown): unknown => {
-    const command = isPlainObject(hook) ? hook["command"] : undefined;
-    if (!isPlainObject(hook) || !Array.isArray(command)) return hook;
-    return { ...hook, command: command.map((argument: unknown) => (typeof argument === "string" ? argument.replaceAll("\\", "/") : argument)) };
-  };
-  return { ...document, hooks: hooks.map(read) };
-}
-
-/**
- * The project-relative paths a hook file's `command` arguments name, contained in the project: every string argument,
- * and a flag's `=` value, as the launcher check reads a path; the rest (a launcher's name, a flag) stand harmlessly.
- */
-function declaredArguments(document: unknown): string[] {
-  const hooks = isPlainObject(document) ? document["hooks"] : undefined;
-  if (!Array.isArray(hooks)) return [];
-  return hooks
-    .flatMap((hook: unknown) => {
-      const command = isPlainObject(hook) ? hook["command"] : undefined;
-      return Array.isArray(command) ? command.filter((argument: unknown): argument is string => typeof argument === "string") : [];
-    })
-    .flatMap((argument) => {
-      const separator = argument.indexOf("=");
-      return argument.startsWith("-") && separator !== -1 ? [argument.slice(separator + 1)] : [argument];
-    })
-    .map((argument) => posix.normalize(argument.replaceAll("\\", "/")))
-    .filter(
-      (path) =>
-        path !== "." && path !== ".." && !path.startsWith("../") && !path.startsWith("/") && !path.endsWith("/") && !/^[A-Za-z][A-Za-z0-9+.-]*:/.test(path),
-    );
-}
+const HOOK_SCRATCH: HookScratch = {
+  create: () => mkdtempSync(join(tmpdir(), "stamity-hooks-")),
+  place: (root, path, text) => {
+    const file = join(root, ...path.split("/"));
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, text);
+  },
+  remove: (root) => rmSync(root, { recursive: true, force: true }),
+};
 
 /** The top-level-relative paths `side` changes against `base`, committed changes included, each with its new mode's link reading. */
 async function changedSince(top: string, base: string, side: Side = "work tree"): Promise<Changed[]> {
@@ -1755,6 +1649,14 @@ async function changedSince(top: string, base: string, side: Side = "work tree")
  * root too where the project lies below the git top (build/99).
  */
 async function heldInHistory(top: string, tips: readonly string[], hookPaths: readonly string[], prefix: string): Promise<string[]> {
+  return heldOf(await pushedChanges(top, tips), hookPaths, prefix);
+}
+
+/**
+ * Every path each commit the push would send changes (review/159, review/50): the commits `HEAD` reaches and none
+ * of `tips` (origin's branches and tags, {@link remoteRefs}) does, read as {@link heldInHistory} reads them.
+ */
+async function pushedChanges(top: string, tips: readonly string[]): Promise<Changed[]> {
   const range = ["--ignore-missing", "--stdin"];
   const read = await git(top, ["log", "--root", "--format=", "--raw", RAW_IDS, "-z", "--cc", ...DIFF_PINS, ...range, "--"], CHECKPOINT, revisionLines(tips));
   if (read.code !== 0) {
@@ -1765,7 +1667,7 @@ async function heldInHistory(top: string, tips: readonly string[], hookPaths: re
       next: "run it inside the repository's work tree",
     });
   }
-  return heldOf(rawEntries(read.stdout), hookPaths, prefix);
+  return rawEntries(read.stdout);
 }
 
 /**
@@ -2132,7 +2034,8 @@ function sectionStarts(patch: Buffer): number[] {
 
 /**
  * n14 (P3): the sections of the held patch `HEAD` carries whose paths are none of `heldNow`, as bytes in the patch's
- * order, and those paths; none where `HEAD` carries no patch. The patch is read from the copy the commit takes, as
+ * order, and those paths, beside the paths of the sections left out (review/248's withdrawn ones among them); none
+ * where `HEAD` carries no patch. The patch is read from the copy the commit takes, as
  * {@link committedPatchPaths} reads it: the work tree's where it is a regular file, else `HEAD`'s, which passes a text
  * decode and so is refused where that decode is not whole. A section runs from one line-start `diff --git ` header to
  * the next (a binary section's base85 lines hold no space, so it is kept whole), and `git apply --numstat -z`, which
@@ -2153,11 +2056,11 @@ async function carriedSections(
   isHeld: (path: string, link: boolean) => boolean,
   scratch: string,
   verb: string,
-): Promise<{ sections: Buffer[]; paths: string[] } | string> {
+): Promise<{ sections: Buffer[]; paths: string[]; dropped: string[] } | string> {
   const listed = await git(top, ["ls-tree", "-z", "HEAD", "--", patchFromTop], verb);
   if (listed.code !== 0) return `hold failed: git ls-tree answered ${listed.code}: ${firstLine(listed.stderr)}`;
   const blob = /^100(?:644|755) blob ([0-9a-f]{40,64})\t/.exec(listed.stdout)?.[1];
-  if (blob === undefined) return { sections: [], paths: [] };
+  if (blob === undefined) return { sections: [], paths: [], dropped: [] };
   const file = join(top, patchFromTop);
   let patch: Buffer;
   if (isRegular(file)) {
@@ -2201,20 +2104,22 @@ async function carriedSections(
   const failed = mapped.find((paths) => typeof paths === "string");
   if (typeof failed === "string") return failed;
   const keep = mapped.map((paths) => typeof paths !== "string" && !paths.some((path) => heldNow.includes(path)));
-  return {
-    sections: sections.filter((_, index) => keep[index] === true),
-    paths: [...new Set(mapped.flatMap((paths, index) => (keep[index] === true && typeof paths !== "string" ? paths : [])))].toSorted(),
-  };
+  const named = (kept: boolean): string[] =>
+    [...new Set(mapped.flatMap((paths, index) => ((keep[index] === true) === kept && typeof paths !== "string" ? paths : [])))].toSorted();
+  return { sections: sections.filter((_, index) => keep[index] === true), paths: named(true), dropped: named(false) };
 }
 
 /** review/251: an extended header line the verb's own diffs write (renames pinned off, `--full-index`), whole. */
 const SECTION_HEADER_LINE = /^(?:(?:old mode|new mode|new file mode|deleted file mode) [0-7]{6}|index [0-9a-f]{40,64}\.\.[0-9a-f]{40,64}(?: [0-7]{6})?)$/;
 
 /**
- * review/251: a `diff --git` name's first component, as git writes one (`a/`, `b/`, a mnemonic `c/`, `i/` or `w/`) and
- * `git apply` sets aside: printable, with no space, `"`, backslash or `/` but its last.
+ * review/251, review/254: a `diff --git` name's first component, one of the prefixes git writes and `git apply` sets
+ * aside: `a/` and `b/`, which the verb's own diffs pin ({@link PATCH_PINS}), and the mnemonic `c/`, `i/`, `w/`, `o/`,
+ * `1/` and `2/`, which an older version's patch may carry. Any other first component is a folder of the path, so a
+ * section without one of these is refused, never set one folder off. A no-prefix section under a folder of one of
+ * these names reads as prefixed and so applies one folder up: a named residual.
  */
-const NAME_PREFIX = String.raw`[!#-.0-[\]-~\x80-\xff]+/`;
+const NAME_PREFIX = "[abciwo12]/";
 
 /** review/251: a byte git writes as it is in a name: printable but `"` and backslash, or past ASCII (Latin-1 read). */
 const NAME_BYTE = String.raw`[ !#-[\]-~\x80-\xff]`;
@@ -2253,6 +2158,17 @@ function diffGitNames(line: string): [string, string] | null {
 }
 
 /**
+ * review/254: whether a `diff --git ` line names one name twice, quoted or not, as git writes it under `diff.noprefix`:
+ * `git apply` reads the first component of each as a prefix, so such a section lands one folder off, or nowhere.
+ */
+function noPrefixNames(line: string): boolean {
+  if (!line.startsWith("diff --git ")) return false;
+  const names = line.slice("diff --git ".length);
+  const half = (names.length - 1) / 2;
+  return Number.isInteger(half) && half > 0 && names[half] === " " && names.slice(0, half) === names.slice(half + 1);
+}
+
+/**
  * review/251: why a held patch section is not one the verb's own diffs write, in the words `carriedSections` gives
  * it, or null where it is one. Its header is every line before its first `@@ ` or `GIT binary patch` line, which is as
  * far as `git apply` reads one (a rename line after the `+++` line still renames), a CR before an LF read as part of
@@ -2272,6 +2188,7 @@ function foreignSectionHeader(section: Buffer): string | null {
     return "renames or copies a path, and git apply --numstat names only its new one, so the path it moves or reads from would be carried unlisted";
   }
   const names = diffGitNames(lines[0] ?? "");
+  if (names === null && noPrefixNames(lines[0] ?? "")) return "was written with no diff prefix, so git apply would place it one folder off";
   if (names === null) {
     return "does not name one path twice on its diff --git line, as every section this verb writes does, so a path git apply moves there would be carried unlisted";
   }
@@ -2298,7 +2215,8 @@ function foreignSectionHeader(section: Buffer): string | null {
  * before its first `--- `, `@@` or binary line. A deletion's side names none, so it reads as no link, as there.
  */
 function sectionLink(section: Buffer): boolean {
-  const lines = section.toString("latin1").split("\n").slice(1);
+  // review/256: a CR before an LF is part of the line end, as foreignSectionHeader reads it, so a CRLF copy's mode line reads.
+  const lines = section.toString("latin1").split(/\r?\n/).slice(1);
   const end = lines.findIndex((line) => /^(?:--- |@@|GIT binary patch|Binary files )/.test(line));
   const modes = (end === -1 ? lines : lines.slice(0, end)).flatMap((line) => {
     const mode = /^(?:new file mode|new mode) ([0-7]{6})$/.exec(line)?.[1] ?? /^index [0-9a-f]+\.\.[0-9a-f]+ ([0-7]{6})$/.exec(line)?.[1];
@@ -2345,7 +2263,7 @@ async function workTreeAddition(top: string, path: string, out: string, verb: st
   if (tree.code !== 0) return { patch: tree, step: "mktree" };
   const empty = await git(top, ["mktree"], verb, "");
   if (empty.code !== 0) return { patch: empty, step: "mktree" };
-  const diff = await git(top, ["diff", "--binary", "--full-index", ...DIFF_PINS, `--output=${out}`, empty.stdout.trim(), tree.stdout.trim(), "--", path], verb);
+  const diff = await git(top, ["diff", "--binary", "--full-index", ...PATCH_PINS, `--output=${out}`, empty.stdout.trim(), tree.stdout.trim(), "--", path], verb);
   return { patch: diff, step: "diff" };
 }
 
@@ -2456,7 +2374,31 @@ async function draftPr(ctx: CliContext, at: PrInputs): Promise<PrStep> {
   const gh = (request: Parameters<typeof ghApi>[0]) => ghApi(request, { cwd: at.top, env });
   const outcome: PrOutcome = await ensureDraftPr(gh, { host: repo.host, owner: repo.owner, repo: repo.repo, head: at.branch, base: target, title, body, runId: marked });
   if ("notDone" in outcome) return { pr: null, inferred, notDone: [...notDone, outcome.notDone] };
+  // review/73: the pull request this run opened or whose body it owns (never a person's, which gets a comment) is
+  // recorded for `run land`, which merges that number alone.
+  if (outcome.how !== "commented") {
+    const unrecorded = await recordPullRequest(ctx, at.top, { run: marked, host: repo.host, owner: repo.owner, repo: repo.repo, number: outcome.number });
+    if (unrecorded !== null) notDone.push(unrecorded);
+  }
   return { pr: { number: outcome.number, url: outcome.url, how: outcome.how }, inferred, notDone };
+}
+
+/**
+ * review/73: the pull request a run verb opened or updated, written atomically to {@link PR_RECORD_FILE} under the work
+ * tree's own git directory, beside the pre-flight record; `null` once written, else the `notDone` line, by error code.
+ */
+async function recordPullRequest(ctx: CliContext, top: string, record: Parameters<typeof prRecordText>[0]): Promise<string | null> {
+  const place = await gitSurfaceRecordPath(top);
+  if ("unreadable" in place) return `pull request not recorded (${place.unreadable}), so run land refuses it`;
+  const path = join(place.gitDir, ...PR_RECORD_FILE.split("/"));
+  try {
+    mkdirSync(dirname(path), { recursive: true });
+    await ctx.engine.merge.atomicWrite.atomicWriteFile(path, prRecordText(record), { boundaryDir: place.gitDir, mode: 0o600 });
+    return null;
+  } catch (cause) {
+    const code = (cause as { code?: unknown } | null)?.code;
+    return `pull request not recorded (${PR_RECORD_FILE} in the git directory: ${typeof code === "string" ? code : "write failed"}), so run land refuses it`;
+  }
 }
 
 /**
