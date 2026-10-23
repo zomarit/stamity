@@ -8,7 +8,7 @@ import { isPlainObject, parseJsonStrict } from "../../config/parse.ts";
 import { personOnlyVerdict } from "../../hooks/personOnly.ts";
 import { readHookDefinitions } from "../../hooks/userHooks.ts";
 import { RUN_ENDED_MARKER_FILE } from "../../mcp/env.ts";
-import { surfaceRefusal, type RecordFileReads, type RecordUse } from "../../runs/gitSurface.ts";
+import { checkSurfaceRecord, type RecordFileReads, type RecordUse, type SurfaceCheck } from "../../runs/gitSurface.ts";
 import { blastRadiusSection, MORNING_FILE, prBodyFrom, screenOutbound, withBlastRadius } from "../../runs/morning.ts";
 import { inferPrerequisites, type PrereqRow } from "../../runs/prerequisites.ts";
 import { ensureDraftPr, HOST_NAME, resolveRepo, type PrOutcome } from "../../runs/pullRequest.ts";
@@ -98,7 +98,9 @@ import { gitSurfaceRecordPath, readPushed, readRunGitSurface, scanChange } from 
  * no pin is readable, as `origin not pinned`); unattended, refuses as `config changed`, `configuration unreadable` or
  * `no pre-flight record` where git's configuration and environment are not the ones `gate preflight --unattended`
  * recorded (REQ-FLOW-131, review/97, `../../runs/gitSurface.ts`), read once here and again after the commit, just
- * before the push, a refused pre-flight's record taken by `end --refused` alone (review/33); stages
+ * before the push, a refused pre-flight's record taken by `end --refused` alone (review/33), which then refuses
+ * `--paths` and any path but the run folder's and the inbox that `Base:..HEAD` or the index changes, as
+ * `refused ending carries only the run's records: …` (review/50); stages
  * only the run folder's record, ledger, plan, morning list, origin pin and `held/*.patch`,
  * `.stamity/inbox.md` and `--paths` (never `-A`, never `-f`), a path git
  * ignores reported as `records: not committed (…)`; in an unattended run
@@ -575,12 +577,28 @@ const RECORD_READS: RecordFileReads = {
 };
 
 /**
- * review/97, review/34 (REQ-FLOW-131): why an unattended `checkpoint` or `end` refuses git's surface, or `null`, by
- * the module's one record check (`../../runs/gitSurface.ts` `surfaceRefusal`). `use` is `refused-end` for
- * `end --refused` alone, which takes a refused pre-flight's record (review/33).
+ * review/97, review/34 (REQ-FLOW-131): whether an unattended `checkpoint` or `end` takes git's surface, by the
+ * module's one record check (`../../runs/gitSurface.ts` `checkSurfaceRecord`). `use` is `refused-end` for
+ * `end --refused` alone, which takes a refused pre-flight's record (review/33) and then carries the run's records
+ * alone (review/50, {@link refusedEndingStray}).
  */
-async function surfaceCheck(cwd: string, use: RecordUse): Promise<string | null> {
-  return surfaceRefusal(await gitSurfaceRecordPath(cwd), RECORD_READS, () => readRunGitSurface(cwd), use);
+async function surfaceCheck(cwd: string, use: RecordUse): Promise<SurfaceCheck> {
+  return checkSurfaceRecord(await gitSurfaceRecordPath(cwd), RECORD_READS, () => readRunGitSurface(cwd), use);
+}
+
+/** review/50: the line every refusal of a refused pre-flight's ending begins with. */
+const REFUSED_ENDING = "refused ending carries only the run's records";
+
+/**
+ * review/50: why `end --refused` under a refused pre-flight's record would carry more than the run's records, or
+ * `null`. The ending may stage the run folder's files and the inbox alone, so `--paths` refuses, and so does any
+ * other path `Base:..HEAD` or the index changes, each named. `top`-relative paths; `ownDir` and `inbox` likewise.
+ */
+async function refusedEndingStray(top: string, base: string, ownDir: string, inbox: string, paths: readonly string[]): Promise<string | null> {
+  if (paths.length > 0) return `${REFUSED_ENDING}: --paths names ${paths.join(", ")}`;
+  const changed = [...(await changedSince(top, base, "HEAD")), ...(await changedSince(top, base, "index"))].map((entry) => entry.path);
+  const stray = [...new Set(changed.filter((path) => path !== inbox && !path.startsWith(`${ownDir}/`)))].toSorted();
+  return stray.length === 0 ? null : `${REFUSED_ENDING}: Base:..HEAD or the index changes ${stray.join(", ")}`;
 }
 
 /**
@@ -963,10 +981,12 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   // review/97 (REQ-FLOW-131): unattended, git's configuration and environment must be the ones the pre-flight vetted.
   const recordUse: RecordUse = verb === END && opts["refused"] === true ? "refused-end" : "push";
   const surface = unattended ? await surfaceCheck(cwd, recordUse) : null;
-  if (surface !== null) {
-    result.notDone.push(surface);
+  if (surface !== null && surface.refusal !== null) {
+    result.notDone.push(surface.refusal);
     return finish(false);
   }
+  /** review/50: the ending of a pre-flight that refused, which carries the run's records alone. */
+  const refusedRecord = surface !== null && surface.refused;
   // pr/55: unattended, main and master alone would let the run push a default branch of another name.
   if (unattended && defaults.source === "fallback") {
     result.notDone.push(`commit refused: ${FALLBACK_REFUSAL}, so an unattended run pushes nothing`);
@@ -976,6 +996,14 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   const top = (await git(cwd, ["rev-parse", "--show-toplevel"], verb)).stdout.replace(/\r?\n$/, "");
   const prefix = (await git(cwd, ["rev-parse", "--show-prefix"], verb)).stdout.replace(/\r?\n$/, "");
   const fromTop = (projectPath: string): string => posix.normalize(`${prefix}${projectPath}`);
+  // review/50: before anything is staged, a refused pre-flight's ending refuses --paths and any product change.
+  if (refusedRecord) {
+    const stray = await refusedEndingStray(top, base, fromTop(runDir), fromTop(INBOX_PATH), (opts["paths"] ?? []) as string[]);
+    if (stray !== null) {
+      result.notDone.push(stray);
+      return finish(false);
+    }
+  }
   // review/175, review/182-/189 (signed off): unattended, the hook files and folders Base: holds and the script each
   // declaration there names are held as person-only paths are, read before anything is staged; anything the hold
   // cannot resolve cleanly at Base: refuses the run's push.
@@ -1346,10 +1374,20 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
 
   // review/97: read again after the commit, whose hooks could have edited git's configuration, and before the push.
   const surfaceNow = unattended ? await surfaceCheck(cwd, recordUse) : null;
-  if (surfaceNow !== null) {
-    result.notDone.push(surfaceNow);
+  if (surfaceNow !== null && surfaceNow.refusal !== null) {
+    result.notDone.push(surfaceNow.refusal);
     lines.push("push: refused (git's configuration or environment moved since the pre-flight)");
     return finish(false);
+  }
+  // review/50: the commit made, a refused pre-flight's ending (or one whose record turned refused since the first
+  // read) still pushes the run's records alone.
+  if (refusedRecord || (surfaceNow !== null && surfaceNow.refused)) {
+    const strayNow = await refusedEndingStray(top, base, fromTop(runDir), fromTop(INBOX_PATH), refusedRecord ? [] : ((opts["paths"] ?? []) as string[]));
+    if (strayNow !== null) {
+      result.notDone.push(strayNow);
+      lines.push("push: refused (a refused pre-flight's ending carries the run's records alone)");
+      return finish(false);
+    }
   }
 
   // (6) The push, its command checked by the shell guard's own table before it runs.

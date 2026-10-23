@@ -388,6 +388,60 @@ describe("stamity run end", () => {
     expect(rest.calls.slice(before).filter((call) => call.path.endsWith("/pulls"))).toEqual([]);
   });
 
+  describe("a refused pre-flight's ending carries only the run's records (review/50)", () => {
+    const PREFIX = "refused ending carries only the run's records: ";
+
+    it("refuses --paths under a refused record, staging, committing and pushing nothing", async () => {
+      const { repo, base } = await seed("unattended");
+      await recordPreflight(repo, true);
+      await writeFile(join(repo, "a.txt"), "changed\n");
+
+      const { code, doc } = await run(repo, [...END("pre-flight refused"), "--refused", "--paths", "a.txt"]);
+
+      expect(code).toBe(1);
+      expect(doc).toMatchObject({ pushed: false, committed: null, pr: null });
+      expect((doc["notDone"] as string[])[0]).toBe(`${PREFIX}--paths names a.txt`);
+      expect(git(repo, ["rev-parse", "HEAD"])).toBe(base);
+      expect(git(repo, ["diff", "--cached", "--name-only"])).toBe("");
+      expect(pushes()).toEqual([]);
+      expect(writesToGitHub()).toEqual([]);
+    });
+
+    it("refuses where a product commit since Base: or a staged product change would ride the ending, naming the paths", async () => {
+      const committed = await seed("unattended");
+      const staged = await seed("unattended");
+      await recordPreflight(committed.repo, true);
+      await recordPreflight(staged.repo, true);
+      await writeFile(join(committed.repo, "a.txt"), "the product change\n");
+      git(committed.repo, ["add", "--", "a.txt"]);
+      git(committed.repo, ["-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "product work"]);
+      await writeFile(join(staged.repo, "b.txt"), "staged\n");
+      git(staged.repo, ["add", "--", "b.txt"]);
+
+      const fromCommit = await run(committed.repo, [...END("pre-flight refused"), "--refused"]);
+      const fromIndex = await run(staged.repo, [...END("pre-flight refused"), "--refused"]);
+
+      expect(fromCommit.code).toBe(1);
+      expect(fromCommit.doc).toMatchObject({ pushed: false, committed: null, pr: null });
+      expect((fromCommit.doc["notDone"] as string[])[0]).toBe(`${PREFIX}Base:..HEAD or the index changes a.txt`);
+      expect(fromIndex.code).toBe(1);
+      expect((fromIndex.doc["notDone"] as string[])[0]).toBe(`${PREFIX}Base:..HEAD or the index changes b.txt`);
+      expect(pushes()).toEqual([]);
+      expect(writesToGitHub()).toEqual([]);
+    });
+
+    it("leaves end --refused under a passing pre-flight's record as it was: --paths staged and pushed", async () => {
+      const { repo } = await seed("unattended");
+      await writeFile(join(repo, "a.txt"), "changed\n");
+
+      const { code, doc } = await run(repo, [...END("plan 021 not ready"), "--refused", "--paths", "a.txt"]);
+
+      expect(code, JSON.stringify(doc)).toBe(0);
+      expect(doc).toMatchObject({ pushed: true });
+      expect(created().title).toBe("Refused: plan 021 not ready");
+    });
+  });
+
   it("still compares a refused pre-flight's record on end --refused, refusing a config that moved since", async () => {
     const { repo } = await seed("unattended");
     await recordPreflight(repo, true);

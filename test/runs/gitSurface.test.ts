@@ -139,6 +139,18 @@ describe("readGitSurface", () => {
     expect(read).toMatchObject({ env: [["GIT_CONFIG_COUNT", "1"], ["HOME", "C:\\u"]] });
   });
 
+  it("keeps on win32 the folders gh and git fall back to, by name, and leaves them out elsewhere (review/51)", async () => {
+    const env = { AppData: "C:\\u\\AppData\\Roaming", USERPROFILE: "C:\\u", HOMEDRIVE: "C:", HomePath: "\\u", LOCALAPPDATA: "C:\\u\\AppData\\Local" };
+
+    const windows = await readGitSurface(fakeGit("").git, env, null, "win32");
+    const linux = await readGitSurface(fakeGit("").git, env, null, "linux");
+
+    expect((windows as GitSurface).env.map(([name]) => name)).toEqual(["APPDATA", "HOMEDRIVE", "HOMEPATH", "USERPROFILE"]);
+    expect((linux as GitSurface).env).toEqual([]);
+    const record = surfaceRecord(windows as GitSurface, SALT, AT);
+    expect(JSON.stringify(record)).not.toContain("Roaming");
+  });
+
   it.each([
     ["a non-zero exit", fakeGit("", 128).git, "git config --list answered 128"],
     ["a listing that does not end its last entry", fakeGit("local\0file:x\0a.b\nc").git, "does not parse"],

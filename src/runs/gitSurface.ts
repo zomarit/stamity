@@ -101,6 +101,12 @@ const HOME_VARIABLES = new Set(["HOME", "XDG_CONFIG_HOME"]);
  * one set, cleared or swapped after the pre-flight moves the identity it vetted. Recorded like the others: the name
  * where set, the value only inside the salted digest.
  */
+/**
+ * review/51: on win32 alone, the folders gh and git find their config in when the variables above are unset (gh's
+ * `AppData` fallback, git's home from `USERPROFILE` or `HOMEDRIVE` and `HOMEPATH`). Names only; values in the digest.
+ */
+const WIN32_HOME_VARIABLES = new Set(["APPDATA", "USERPROFILE", "HOMEDRIVE", "HOMEPATH"]);
+
 const GH_VARIABLES = new Set(["GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN", "GH_HOST", "GH_CONFIG_DIR", "GH_PATH", "GH_REPO"]);
 
 /** Subsection mask in a recorded key. */
@@ -130,7 +136,8 @@ export async function readGitSurface(
   for (const [key, value] of Object.entries(env)) {
     if (value === undefined) continue;
     const name = platform === "win32" ? key.toUpperCase() : key;
-    if (!HOME_VARIABLES.has(name) && !GH_VARIABLES.has(name) && !(name.startsWith("GIT_") && !RUNNER_SET.has(name))) continue;
+    const homeLike = HOME_VARIABLES.has(name) || (platform === "win32" && WIN32_HOME_VARIABLES.has(name));
+    if (!homeLike && !GH_VARIABLES.has(name) && !(name.startsWith("GIT_") && !RUNNER_SET.has(name))) continue;
     names.set(name, [...(names.get(name) ?? []), value]);
   }
   const vars: (readonly [string, string])[] = [];
@@ -256,38 +263,53 @@ export interface RecordFileReads {
  */
 export type RecordUse = "push" | "refused-end";
 
+/** What the one record check found: why the verb refuses, else whether the record it took was a refused pre-flight's. */
+export type SurfaceCheck = { refusal: string } | { refusal: null; refused: boolean };
+
 /**
- * review/97, review/34 (REQ-FLOW-131): why an unattended run verb refuses git's surface, or `null` where it is the one
- * the pre-flight recorded. `place` is the record's path (or why the git directory could not be read), `reads` the
- * file reads, `readNow` the surface as the verb's git sees it now. No record (none, a link or anything but a regular
- * file, over {@link SURFACE_RECORD_MAX_BYTES}, text that is not a record, or a `refused` one where `use` is `push`)
- * refuses as `no pre-flight record`; a configuration git cannot list refuses as `configuration unreadable`; a surface
- * that moved refuses as `config changed`, naming the keys (subsections masked) and variables added or removed, never
- * a value. The one record check every run verb uses, so no copy of it can drift.
+ * review/97, review/34 (REQ-FLOW-131): whether an unattended run verb takes git's surface. `place` is the record's
+ * path (or why the git directory could not be read), `reads` the file reads, `readNow` the surface as the verb's git
+ * sees it now. No record (none, a link or anything but a regular file, over {@link SURFACE_RECORD_MAX_BYTES}, text
+ * that is not a record, or a `refused` one where `use` is `push`) refuses as `no pre-flight record`; a configuration
+ * git cannot list refuses as `configuration unreadable`; a surface that moved refuses as `config changed`, naming the
+ * keys (subsections masked) and variables added or removed, never a value. A record taken says whether it was a
+ * refused pre-flight's, read in the same read, so the refusal's own ending can hold to its records (review/50). The
+ * one record check every run verb uses, so no copy of it can drift.
  */
+export async function checkSurfaceRecord(
+  place: { path: string } | { unreadable: string },
+  reads: RecordFileReads,
+  readNow: () => Promise<GitSurface | { unreadable: string }>,
+  use: RecordUse,
+): Promise<SurfaceCheck> {
+  const refuse = (refusal: string): SurfaceCheck => ({ refusal });
+  if ("unreadable" in place) return refuse(`no pre-flight record (${place.unreadable})`);
+  const kind = reads.kind(place.path);
+  if (kind === "missing") return refuse(`no pre-flight record (${SURFACE_RECORD_LABEL} is missing; gate preflight --unattended writes it)`);
+  const read = kind === "file" ? reads.read(place.path, SURFACE_RECORD_MAX_BYTES) : null;
+  if (read === null) return refuse(`no pre-flight record (${SURFACE_RECORD_LABEL} is not a regular file)`);
+  if (read.truncated) return refuse(`no pre-flight record (${SURFACE_RECORD_LABEL} is over ${SURFACE_RECORD_MAX_BYTES / 1024} KiB)`);
+  const record = parseSurfaceRecord(read.text);
+  if (record === null) return refuse(`no pre-flight record (${SURFACE_RECORD_LABEL} does not read as one)`);
+  if (record.refused && use === "push") return refuse("no pre-flight record (the pre-flight refused)");
+  const now = await readNow();
+  if ("unreadable" in now) return refuse(`configuration unreadable (${now.unreadable}), so it cannot be compared with the pre-flight's record`);
+  const compared = compareSurface(record, now);
+  if (compared.same) return { refusal: null, refused: record.refused };
+  const moved = [
+    ...(compared.added.length === 0 ? [] : [`added ${compared.added.join(", ")}`]),
+    ...(compared.removed.length === 0 ? [] : [`removed ${compared.removed.join(", ")}`]),
+  ];
+  const what = compared.valuesChanged ? "a value, a source file or the git program changed, no key or variable added or removed" : moved.join("; ");
+  return refuse(`config changed: git's configuration or environment is not the one the pre-flight recorded at ${record.at} (${what})`);
+}
+
+/** {@link checkSurfaceRecord}'s refusal alone, or `null` where the verb takes the surface: the form `run land` needs. */
 export async function surfaceRefusal(
   place: { path: string } | { unreadable: string },
   reads: RecordFileReads,
   readNow: () => Promise<GitSurface | { unreadable: string }>,
   use: RecordUse,
 ): Promise<string | null> {
-  if ("unreadable" in place) return `no pre-flight record (${place.unreadable})`;
-  const kind = reads.kind(place.path);
-  if (kind === "missing") return `no pre-flight record (${SURFACE_RECORD_LABEL} is missing; gate preflight --unattended writes it)`;
-  const read = kind === "file" ? reads.read(place.path, SURFACE_RECORD_MAX_BYTES) : null;
-  if (read === null) return `no pre-flight record (${SURFACE_RECORD_LABEL} is not a regular file)`;
-  if (read.truncated) return `no pre-flight record (${SURFACE_RECORD_LABEL} is over ${SURFACE_RECORD_MAX_BYTES / 1024} KiB)`;
-  const record = parseSurfaceRecord(read.text);
-  if (record === null) return `no pre-flight record (${SURFACE_RECORD_LABEL} does not read as one)`;
-  if (record.refused && use === "push") return "no pre-flight record (the pre-flight refused)";
-  const now = await readNow();
-  if ("unreadable" in now) return `configuration unreadable (${now.unreadable}), so it cannot be compared with the pre-flight's record`;
-  const compared = compareSurface(record, now);
-  if (compared.same) return null;
-  const moved = [
-    ...(compared.added.length === 0 ? [] : [`added ${compared.added.join(", ")}`]),
-    ...(compared.removed.length === 0 ? [] : [`removed ${compared.removed.join(", ")}`]),
-  ];
-  const what = compared.valuesChanged ? "a value, a source file or the git program changed, no key or variable added or removed" : moved.join("; ");
-  return `config changed: git's configuration or environment is not the one the pre-flight recorded at ${record.at} (${what})`;
+  return (await checkSurfaceRecord(place, reads, readNow, use)).refusal;
 }
