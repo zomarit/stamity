@@ -2,7 +2,7 @@
 title: Enterprise forks
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.16.0 release cut (2026-10-20). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit f9abc9c6. Re-attested 2026-10-23 for the "Tag a release" section, amended that day. -->
 <!-- Re-open when: a verb or an outcome joins or leaves `scripts/upstream.mjs`, a key joins or leaves
      `.stamity/upstream.json`, the fork layer's layout or precedence changes in `src/content/catalog.ts`,
      or the jobs or the permissions in `.github/workflows/upstream-update.yml` change. `test/docsPages.test.ts`
@@ -795,7 +795,8 @@ page gives that registry's URL.
 
 ### Tag a release
 
-Set `version` in `package.json`, commit it on the release branch, and push the tag
+Set `version` in `package.json` and commit it on the release branch. Rehearse next: dispatch the
+workflow from that branch and leave `dry_run` at true. When the rehearsal is green, push the tag
 `v<version>`. A suffix keeps a fork's releases apart from upstream's, and the tag carries it too:
 
 ```sh
@@ -818,14 +819,19 @@ one in place of `publish`:
   these two and says so), and the package is not the canonical one, not private, and names the
   variable's registry. A failed proof stops the run with a remedy naming
   `scripts/fork-identity.mjs`. Then it runs the canonical release's ladder, from `npm ci` to the
-  tarball smoke, packs the tarball and uploads it, kept for seven days, which is how long the
-  approval can wait.
+  tarball smoke, and packs the tarball. Next it asks npm whether it would take the publish:
+  `npm publish --dry-run` with the publish job's registry and dist-tag, under npm 11 or newer,
+  with no secret. A dry run uploads nothing. A refusal fails the run here, before anyone is asked
+  to approve it, on a tag push too. Last, it uploads the tarball, kept for seven days, which is
+  how long the approval can wait.
 - **`publish`** runs in the `fork-release` environment and checks nothing out. It verifies what
   `gates` uploaded before it acts: the tarball's digest, and its own name, version and registry.
-  Then it publishes the tarball to your registry and creates the GitHub release `v<version>`
-  carrying the tarball and its `.sha256` file.
-- **`dry-run-summary`** holds no permission. It writes what a real run would have published into
-  the run summary.
+  Then it publishes the tarball to your registry under the dist-tag `latest` and creates the
+  GitHub release `v<version>` carrying the tarball and its `.sha256` file. The dist-tag is named
+  because npm 11 refuses a suffixed version, which is a prerelease, without one; `latest` is the
+  tag the CLI's update notice reads.
+- **`dry-run-summary`** holds no permission. It writes what a real run would have published,
+  dist-tag included, into the run summary.
 
 A fork can still hold this repository's `v*` tags: a public fork, a private copy imported with
 the earlier `--mirror` recipe, or one whose working clone pushed the tags `git fetch upstream`

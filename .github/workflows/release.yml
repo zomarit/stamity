@@ -20,7 +20,9 @@
 #   1. `publish` runs only on a `v*` tag push, or on a dispatch that set `dry_run` to literally
 #      false. An absent or empty input matches neither arm — see the condition on the job.
 #   2. `publish` re-asserts the same fact as its first step and fails closed.
-#   3. `npm publish` appears in exactly one job in this repository, and it is that one.
+#   3. `npm publish` appears in exactly one job of this file, and it is that one. Across the
+#      directory, only fork-release.yml's publish job carries it too, and its gates job only with
+#      `--dry-run` (a closed list in test/ci/workflow.test.ts).
 #
 # THE DISPATCH PUBLISH ARM. A dispatch with `dry_run` set to false IS a real release, so it is
 # held to the same proofs as a tag push rather than trusted because a human clicked it: the
@@ -36,6 +38,12 @@
 # Actions are pinned to full commit SHAs with a trailing comment naming the EXACT version the SHA
 # resolves to. Pins resolved 2026-08-26 with:
 #   gh api repos/<owner>/<repo>/commits/<tag> --jq .sha
+#
+# THE RUNNER IMAGE. Every job runs on `ubuntu-24.04`, not `ubuntu-latest`: GitHub moves
+# `ubuntu-latest` to 26.04 between 2026-10-19 and 2026-11-19
+# (github.blog/changelog/2026-09-17-ubuntu-26-generally-available-and-latest-migration, read
+# 2026-10-23), and the egress allowlists below were measured on 24.04 (.github/release-egress.md).
+# Move the pin only after the allowlists are measured again on the new image.
 
 name: Release
 
@@ -70,7 +78,7 @@ jobs:
     # current repository context authorizes this public release path; downstreams configure
     # their own private release lane. String comparison refuses absent privacy metadata too.
     if: github.repository == 'zomarit/stamity' && format('{0}', github.event.repository.private) == 'false'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: read
@@ -515,7 +523,7 @@ jobs:
       github.repository == 'zomarit/stamity' && format('{0}', github.event.repository.private) == 'false' &&
       ((github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
       (github.event_name == 'workflow_dispatch' && format('{0}', inputs.dry_run) == 'false'))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     # The single approval point. Configure required reviewers and a `v*` deployment tag policy on
     # this environment in repository settings — that is the platform-side control the in-file
@@ -728,7 +736,7 @@ jobs:
     name: dry run summary
     needs: gates
     if: github.event_name == 'workflow_dispatch' && format('{0}', inputs.dry_run) != 'false'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions: {}
     steps:

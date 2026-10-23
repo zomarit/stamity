@@ -1,4 +1,11 @@
 # Nonpublishing public-identity witness. Never grants release or deployment approval.
+#
+# Every job runs on `ubuntu-24.04`, not `ubuntu-latest`: GitHub moves `ubuntu-latest` to 26.04
+# between 2026-10-19 and 2026-11-19
+# (github.blog/changelog/2026-09-17-ubuntu-26-generally-available-and-latest-migration, read
+# 2026-10-23), and the egress allowlists below, the release's host set
+# (.github/release-egress.md), were measured and run on 24.04. Move the pin only after they are
+# measured again on the new image.
 name: Pack signing rehearsal
 
 on:
@@ -30,7 +37,7 @@ env:
 jobs:
   prepare:
     if: github.repository == 'zomarit/stamity' && format('{0}', github.event.repository.private) == 'false' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read
@@ -101,7 +108,7 @@ jobs:
   sign:
     needs: prepare
     if: github.repository == 'zomarit/stamity' && format('{0}', github.event.repository.private) == 'false' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read
@@ -192,7 +199,7 @@ jobs:
   verify:
     needs: [prepare, sign]
     if: github.repository == 'zomarit/stamity' && format('{0}', github.event.repository.private) == 'false' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read

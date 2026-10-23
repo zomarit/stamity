@@ -39,6 +39,16 @@ protected environment approval, immutable tag/version/ancestry proofs and digest
 handoff. Record the actual rehearsal and publish run IDs in the candidate evidence; prior
 runs and a skipped job cannot close those proofs.
 
+## The runner image
+
+Every job of `release.yml` and `pack-signing-rehearsal.yml` runs on `ubuntu-24.04`, the image
+both runs above used and these allowlists were measured on. GitHub moves `ubuntu-latest` to
+26.04 between 2026-10-19 and 2026-11-19
+([changelog, read 2026-10-23](https://github.blog/changelog/2026-09-17-ubuntu-26-generally-available-and-latest-migration)),
+so the jobs name the image rather than the label. A new image can need hosts this policy does
+not list, and the blocked egress would then fail a release mid-run. Move the pin only after a
+rehearsal on the new image has been measured and this page updated.
+
 ## The provenance hosts
 
 The publish job reaches the OIDC and Sigstore hosts for one consumer: the provenance
