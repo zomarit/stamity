@@ -99,7 +99,8 @@ import { gitSurfaceRecordPath, readPushed, readRunGitSurface, scanChange } from 
  * `no pre-flight record` where git's configuration and environment are not the ones `gate preflight --unattended`
  * recorded (REQ-FLOW-131, review/97, `../../runs/gitSurface.ts`), read once here and again after the commit, just
  * before the push, a refused pre-flight's record taken by `end --refused` alone (review/33), which then refuses
- * `--paths` and any path but the run folder's and the inbox that `Base:..HEAD` or the index changes, as
+ * `--paths` and any path but the run folder's and the inbox that a commit the push would send (read from origin's
+ * tips, never from `Base:`) or the index changes, as
  * `refused ending carries only the run's records: …` (review/50); stages
  * only the run folder's record, ledger, plan, morning list, origin pin and `held/*.patch`,
  * `.stamity/inbox.md` and `--paths` (never `-A`, never `-f`), a path git
@@ -592,13 +593,15 @@ const REFUSED_ENDING = "refused ending carries only the run's records";
 /**
  * review/50: why `end --refused` under a refused pre-flight's record would carry more than the run's records, or
  * `null`. The ending may stage the run folder's files and the inbox alone, so `--paths` refuses, and so does any
- * other path `Base:..HEAD` or the index changes, each named. `top`-relative paths; `ownDir` and `inbox` likewise.
+ * other path that a commit the push would send ({@link pushedChanges}, from origin's `tips`) or the index (against
+ * `HEAD`) changes, each named. The record's `Base:` plays no part: the run folder holds it, so this ending could move
+ * it. `top`-relative paths; `ownDir` and `inbox` likewise.
  */
-async function refusedEndingStray(top: string, base: string, ownDir: string, inbox: string, paths: readonly string[]): Promise<string | null> {
+async function refusedEndingStray(top: string, tips: readonly string[], ownDir: string, inbox: string, paths: readonly string[]): Promise<string | null> {
   if (paths.length > 0) return `${REFUSED_ENDING}: --paths names ${paths.join(", ")}`;
-  const changed = [...(await changedSince(top, base, "HEAD")), ...(await changedSince(top, base, "index"))].map((entry) => entry.path);
+  const changed = [...(await pushedChanges(top, tips)), ...(await changedSince(top, "HEAD", "index"))].map((entry) => entry.path);
   const stray = [...new Set(changed.filter((path) => path !== inbox && !path.startsWith(`${ownDir}/`)))].toSorted();
-  return stray.length === 0 ? null : `${REFUSED_ENDING}: Base:..HEAD or the index changes ${stray.join(", ")}`;
+  return stray.length === 0 ? null : `${REFUSED_ENDING}: the commits the push would send or the index change ${stray.join(", ")}`;
 }
 
 /**
@@ -997,8 +1000,13 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   const prefix = (await git(cwd, ["rev-parse", "--show-prefix"], verb)).stdout.replace(/\r?\n$/, "");
   const fromTop = (projectPath: string): string => posix.normalize(`${prefix}${projectPath}`);
   // review/50: before anything is staged, a refused pre-flight's ending refuses --paths and any product change.
+  // The set the push sends is read from origin's tips, as the held-path check reads it; unread, the ending is held.
   if (refusedRecord) {
-    const stray = await refusedEndingStray(top, base, fromTop(runDir), fromTop(INBOX_PATH), (opts["paths"] ?? []) as string[]);
+    const origin = await remoteRefs(top, current, verb);
+    const stray =
+      typeof origin === "string"
+        ? `push held: origin's branches and tags could not be read (${origin})`
+        : await refusedEndingStray(top, origin.tips, fromTop(runDir), fromTop(INBOX_PATH), (opts["paths"] ?? []) as string[]);
     if (stray !== null) {
       result.notDone.push(stray);
       return finish(false);
@@ -1382,7 +1390,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   // review/50: the commit made, a refused pre-flight's ending (or one whose record turned refused since the first
   // read) still pushes the run's records alone.
   if (refusedRecord || (surfaceNow !== null && surfaceNow.refused)) {
-    const strayNow = await refusedEndingStray(top, base, fromTop(runDir), fromTop(INBOX_PATH), refusedRecord ? [] : ((opts["paths"] ?? []) as string[]));
+    const strayNow = await refusedEndingStray(top, remote.tips, fromTop(runDir), fromTop(INBOX_PATH), refusedRecord ? [] : ((opts["paths"] ?? []) as string[]));
     if (strayNow !== null) {
       result.notDone.push(strayNow);
       lines.push("push: refused (a refused pre-flight's ending carries the run's records alone)");
@@ -1890,6 +1898,14 @@ async function changedSince(top: string, base: string, side: Side = "work tree")
  * root too where the project lies below the git top (build/99).
  */
 async function heldInHistory(top: string, tips: readonly string[], hookPaths: readonly string[], prefix: string): Promise<string[]> {
+  return heldOf(await pushedChanges(top, tips), hookPaths, prefix);
+}
+
+/**
+ * Every path each commit the push would send changes (review/159, review/50): the commits `HEAD` reaches and none
+ * of `tips` (origin's branches and tags, {@link remoteRefs}) does, read as {@link heldInHistory} reads them.
+ */
+async function pushedChanges(top: string, tips: readonly string[]): Promise<Changed[]> {
   const range = ["--ignore-missing", "--stdin"];
   const read = await git(top, ["log", "--root", "--format=", "--raw", RAW_IDS, "-z", "--cc", ...DIFF_PINS, ...range, "--"], CHECKPOINT, revisionLines(tips));
   if (read.code !== 0) {
@@ -1900,7 +1916,7 @@ async function heldInHistory(top: string, tips: readonly string[], hookPaths: re
       next: "run it inside the repository's work tree",
     });
   }
-  return heldOf(rawEntries(read.stdout), hookPaths, prefix);
+  return rawEntries(read.stdout);
 }
 
 /**

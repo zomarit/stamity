@@ -364,9 +364,20 @@ describe("stamity run end", () => {
   });
 
   // review/33 (REQ-FLOW-131): a refusing pre-flight leaves a record marked refused; only the refusal's own ending takes it.
+  /**
+   * review/50: origin holding `main` at Base:, as a real origin holds its default branch, so the commits a push would
+   * send are the run's alone; a refused pre-flight's ending reads that set from origin's tips.
+   */
+  const originHoldsMain = (seeded: Seeded): void => {
+    git(seeded.repo, ["push", "--quiet", seeded.remote, `${seeded.base}:refs/heads/main`]);
+  };
+
   it("ends a run whose pre-flight refused on its Refused: draft, and refuses a plain end after that pre-flight", async () => {
     const refusedEnd = await seed("unattended");
     const plainEnd = await seed("unattended");
+    // TEST CHANGE, justified (REQ-FLOW-131, review/50): a refused ending refuses every product path the push would
+    // send, and an empty origin would be sent the seed commit's a.txt and b.txt, so origin holds main as a real one does.
+    originHoldsMain(refusedEnd);
     await recordPreflight(refusedEnd.repo, true);
     await recordPreflight(plainEnd.repo, true);
     await put(refusedEnd.repo, `${RUN_DIR}/morning.md`, morningList("refused at the pre-flight"));
@@ -407,9 +418,13 @@ describe("stamity run end", () => {
       expect(writesToGitHub()).toEqual([]);
     });
 
-    it("refuses where a product commit since Base: or a staged product change would ride the ending, naming the paths", async () => {
+    // TEST CHANGE, justified (REQ-FLOW-131, review/50): the check now reads the commits the push sends, not Base:'s
+    // tree, so origin holds main (the seed commit stays out of the set) and the line names that set.
+    it("refuses where a product commit the push would send or a staged product change would ride the ending, naming the paths", async () => {
       const committed = await seed("unattended");
       const staged = await seed("unattended");
+      originHoldsMain(committed);
+      originHoldsMain(staged);
       await recordPreflight(committed.repo, true);
       await recordPreflight(staged.repo, true);
       await writeFile(join(committed.repo, "a.txt"), "the product change\n");
@@ -423,11 +438,49 @@ describe("stamity run end", () => {
 
       expect(fromCommit.code).toBe(1);
       expect(fromCommit.doc).toMatchObject({ pushed: false, committed: null, pr: null });
-      expect((fromCommit.doc["notDone"] as string[])[0]).toBe(`${PREFIX}Base:..HEAD or the index changes a.txt`);
+      expect((fromCommit.doc["notDone"] as string[])[0]).toBe(`${PREFIX}the commits the push would send or the index change a.txt`);
       expect(fromIndex.code).toBe(1);
-      expect((fromIndex.doc["notDone"] as string[])[0]).toBe(`${PREFIX}Base:..HEAD or the index changes b.txt`);
+      expect((fromIndex.doc["notDone"] as string[])[0]).toBe(`${PREFIX}the commits the push would send or the index change b.txt`);
       expect(pushes()).toEqual([]);
       expect(writesToGitHub()).toEqual([]);
+    });
+
+    it("refuses a product path added in one commit and removed in a later one, the trees equal, as the push still sends both", async () => {
+      const seeded = await seed("unattended");
+      originHoldsMain(seeded);
+      await recordPreflight(seeded.repo, true);
+      await writeFile(join(seeded.repo, "c.txt"), "product content\n");
+      git(seeded.repo, ["add", "--", "c.txt"]);
+      git(seeded.repo, ["-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "add c"]);
+      git(seeded.repo, ["rm", "--quiet", "--", "c.txt"]);
+      git(seeded.repo, ["-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "remove c"]);
+      expect(git(seeded.repo, ["diff", "--name-only", seeded.base, "HEAD"])).toBe("");
+
+      const { code, doc } = await run(seeded.repo, [...END("pre-flight refused"), "--refused"]);
+
+      expect(code).toBe(1);
+      expect(doc).toMatchObject({ pushed: false, committed: null, pr: null });
+      expect((doc["notDone"] as string[])[0]).toBe(`${PREFIX}the commits the push would send or the index change c.txt`);
+      expect(pushes()).toEqual([]);
+      expect(git(seeded.remote, ["for-each-ref", "--format=%(refname)", "refs/heads/"])).toBe("refs/heads/main");
+    });
+
+    it("refuses a product commit hidden by moving the record's Base: past it, Base: playing no part in the check", async () => {
+      const seeded = await seed("unattended");
+      originHoldsMain(seeded);
+      await recordPreflight(seeded.repo, true);
+      await writeFile(join(seeded.repo, "a.txt"), "the product change\n");
+      git(seeded.repo, ["add", "--", "a.txt"]);
+      git(seeded.repo, ["-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "product work"]);
+      const moved = git(seeded.repo, ["rev-parse", "HEAD"]);
+      await put(seeded.repo, `${RUN_DIR}/record.md`, `# Run ${RUN}\n\nStatus: in progress\nMode: unattended\nBranch: ${RUN_BRANCH}\nBase: ${moved}\n`);
+
+      const { code, doc } = await run(seeded.repo, [...END("pre-flight refused"), "--refused"]);
+
+      expect(code).toBe(1);
+      expect(doc).toMatchObject({ pushed: false, committed: null, pr: null });
+      expect((doc["notDone"] as string[])[0]).toBe(`${PREFIX}the commits the push would send or the index change a.txt`);
+      expect(pushes()).toEqual([]);
     });
 
     it("leaves end --refused under a passing pre-flight's record as it was: --paths staged and pushed", async () => {
