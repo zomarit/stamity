@@ -1,7 +1,7 @@
 /**
  * The shipped model priority list, and the pick it makes from an account's own
- * model list (REQ-LADDER-006). Zero-import kernel data module — types and the
- * effort ranking only, per the roster boundary.
+ * model list (REQ-LADDER-006). Zero-import kernel data module — types only, per
+ * the roster boundary.
  *
  * WHY A SHIPPED LIST AT ALL. Three of the four clients publish no symbolic
  * vocabulary a class could map onto, so with no operator pin the ladder used to
@@ -29,13 +29,16 @@
  * the dated record of that client's listed ids; no emission reads them.
  *
  * Every id below was read from the client's own CLI on the access date its
- * citation carries (the captures live in `test/fixtures/client-models/`), and
- * every Copilot display name from the vendor page cited. Ids move on each
- * vendor's release cadence, so the rows are re-read and re-dated, never edited
- * from memory.
+ * citation carries (the captures live in `test/fixtures/client-models/`; the
+ * Copilot rows from Copilot CLI 1.0.103 on 2026-10-23), and every Copilot
+ * display name from the vendor page cited. A CLI's list is baked into its build
+ * and keeps an id after the vendor retires it, so {@link VENDOR_RETIREMENTS}
+ * holds the vendors' notices and no candidate names a retired id. Ids move on
+ * each vendor's release cadence, so the rows are re-read and re-dated, never
+ * edited from memory.
  */
 
-import { EFFORT_LEVELS, effortRank, type EffortLevel, type ModelClass, type Tool } from "../types/core.ts";
+import type { EffortLevel, ModelClass, Tool } from "../types/core.ts";
 
 /** The clients whose CLI can list an account's models; Claude Code keeps its family aliases. */
 export type ListingClient = "cursor" | "copilot" | "codex";
@@ -58,7 +61,10 @@ export const EFFORT_TOKEN = "{effort}";
 /**
  * Strongest first within a class, per client. On Copilot the cheaper model
  * leads `standard` and `economy`, because VS Code refuses a sub-agent whose
- * model sits above the main model's cost tier.
+ * model sits above the main model's cost tier. Claude Haiku 5.5 leads
+ * `economy` because it costs less than Claude Haiku 4.5 at every listed tier
+ * (`https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing`,
+ * read 2026-10-23); Haiku 4.5 stays last for a plan that lacks 5.5.
  */
 export const MODEL_PRIORITY: Readonly<Record<ListingClient, Readonly<Record<ModelClass, readonly ModelCandidate[]>>>> = {
   cursor: {
@@ -80,17 +86,17 @@ export const MODEL_PRIORITY: Readonly<Record<ListingClient, Readonly<Record<Mode
     advanced: [
       { id: "claude-opus-5.5", display: "Claude Opus 5.5" },
       { id: "gpt-6-astra", display: "GPT-6 Astra" },
-      { id: "claude-opus-5", display: "Claude Opus 5" },
+      { id: "claude-fable-5.1", display: "Claude Fable 5.1" },
     ],
     standard: [
       { id: "claude-sonnet-5", display: "Claude Sonnet 5" },
       { id: "gpt-6-sol", display: "GPT-6 Sol" },
-      { id: "gpt-5.6-terra", display: "GPT-5.6 Terra" },
+      { id: "claude-sonnet-5.5", display: "Claude Sonnet 5.5" },
     ],
     economy: [
-      { id: "claude-haiku-4.5", display: "Claude Haiku 4.5" },
+      { id: "claude-haiku-5.5", display: "Claude Haiku 5.5" },
       { id: "gpt-6-luna", display: "GPT-6 Luna" },
-      { id: "gpt-5.4-mini", display: "GPT-5.4 mini" },
+      { id: "claude-haiku-4.5", display: "Claude Haiku 4.5" },
     ],
   },
   codex: {
@@ -103,17 +109,63 @@ export const MODEL_PRIORITY: Readonly<Record<ListingClient, Readonly<Record<Mode
 
 /**
  * Where each client's rows were read. The ids come from the client's own CLI on
- * that date (Cursor `agent models` 2026.10.14, Codex `codex debug models`
- * 0.155.1, Copilot CLI 1.0.89 `copilot help config`); the page is the vendor's
- * model reference, read the same day, and the source of Copilot's display names.
+ * that date (Cursor `agent models` 2026.10.14 and Codex `codex debug models`
+ * 0.155.1 on 2026-10-14; Copilot CLI 1.0.103 `copilot help config` on
+ * 2026-10-23); the page is the vendor's model reference, read the same day, and
+ * the source of Copilot's display names.
  */
 export const MODEL_PRIORITY_CITATION: Readonly<Record<ListingClient, { url: string; accessDate: string }>> = {
   cursor: { url: "https://cursor.com/docs/models", accessDate: "2026-10-14" },
   copilot: {
     url: "https://docs.github.com/en/copilot/reference/ai-models/supported-models",
-    accessDate: "2026-10-14",
+    accessDate: "2026-10-23",
   },
   codex: { url: "https://learn.chatgpt.com/docs/models", accessDate: "2026-10-14" },
+};
+
+/** One model a vendor retired, or announced it will retire, on one client. */
+interface VendorRetirement {
+  /** The id as the client's CLI takes it. */
+  readonly id: string;
+  /** The day it stops working, `YYYY-MM-DD`. */
+  readonly retires: string;
+  /** The vendor's notice. */
+  readonly url: string;
+  /** The day the notice was read, `YYYY-MM-DD`. */
+  readonly accessDate: string;
+}
+
+/**
+ * The retirements each vendor announced, so no shipped candidate names a model
+ * that stops working. A CLI's help list is baked into its build and keeps a
+ * retired id, so these notices, not the capture, say an id is gone. A row whose
+ * date has passed stays as the record; a shipped candidate never matches one,
+ * and an operator's pin is never refused by it.
+ */
+export const VENDOR_RETIREMENTS: Readonly<Record<"copilot" | "codex", readonly VendorRetirement[]>> = {
+  copilot: [
+    {
+      id: "gpt-5.4-mini",
+      retires: "2026-10-19",
+      url: "https://github.blog/changelog/2026-10-19-github-copilot-models-deprecated-on-october-19-2026",
+      accessDate: "2026-10-23",
+    },
+    {
+      id: "claude-opus-5",
+      retires: "2026-11-16",
+      url: "https://github.blog/changelog/2026-10-15-upcoming-deprecation-of-selected-github-copilot-models-in-mid-november",
+      accessDate: "2026-10-23",
+    },
+    {
+      id: "gpt-5.6-terra",
+      retires: "2026-11-16",
+      url: "https://github.blog/changelog/2026-10-15-upcoming-deprecation-of-selected-github-copilot-models-in-mid-november",
+      accessDate: "2026-10-23",
+    },
+  ],
+  codex: [
+    { id: "gpt-5.5", retires: "2026-10-14", url: "https://learn.chatgpt.com/docs/changelog", accessDate: "2026-10-23" },
+  ],
 };
 
 /** What {@link pickModel} chose for one class on one client. */
@@ -131,66 +183,30 @@ function isListingClient(tool: Tool): tool is ListingClient {
 }
 
 /**
- * The effort levels to try for a Cursor variant: the asked level, then the rest
- * by distance from it, the lower of two at the same distance first — the same
- * downward preference `nearestExpressibleEffort` takes in the ladder module.
- */
-function effortsByNearness(asked: EffortLevel): readonly EffortLevel[] {
-  const wanted = effortRank(asked);
-  return EFFORT_LEVELS.toSorted((a, b) => {
-    const distance = Math.abs(effortRank(a) - wanted) - Math.abs(effortRank(b) - wanted);
-    return distance !== 0 ? distance : effortRank(a) - effortRank(b);
-  });
-}
-
-/**
- * The concrete id `candidate` stands for on this account, or `undefined` when
- * it stands for none. With no list, only a candidate without the effort token
- * resolves (as itself), and one with the token takes the asked level.
- */
-function concreteId(
-  candidate: ModelCandidate,
-  effort: EffortLevel | undefined,
-  listed: ReadonlySet<string> | undefined,
-): string | undefined {
-  if (!candidate.id.includes(EFFORT_TOKEN)) {
-    return listed === undefined || listed.has(candidate.id) ? candidate.id : undefined;
-  }
-  // A templated id names no model until a level is known; an unknown level is
-  // refused by manifest validation long before this, so nothing is guessed.
-  if (effort === undefined) return undefined;
-  if (listed === undefined) return candidate.id.replace(EFFORT_TOKEN, effort);
-  for (const level of effortsByNearness(effort)) {
-    const id = candidate.id.replace(EFFORT_TOKEN, level);
-    if (listed.has(id)) return id;
-  }
-  return undefined;
-}
-
-/**
  * The model `tool` runs `modelClass` on, from the shipped priority list, or
  * `undefined` when there is none to give. Pure.
  *
  * With `listed` (the ids the client's CLI printed for this account), the first
  * candidate the list holds wins. With no list, Copilot and Codex take entry 0.
  * Cursor always answers `undefined`, with or without a list (see the module
- * header). Claude Code has no list here: its family aliases live in the
- * ladder's projection.
+ * header), so no pick reads a templated Cursor id and the effort level picks
+ * nothing: no Copilot or Codex candidate carries {@link EFFORT_TOKEN}. The level
+ * stays in the signature for the callers that pass it. Claude Code has no list
+ * here: its family aliases live in the ladder's projection.
  */
 export function pickModel(
   tool: Tool,
   modelClass: ModelClass,
-  effort: EffortLevel | undefined,
+  _effort: EffortLevel | undefined,
   listed?: readonly string[],
 ): ModelPick | undefined {
   if (!isListingClient(tool)) return undefined;
   if (tool === "cursor") return undefined;
   const onList = listed === undefined ? undefined : new Set(listed);
   const resolved: { id: string; display?: string }[] = [];
-  for (const candidate of MODEL_PRIORITY[tool][modelClass]) {
-    const id = concreteId(candidate, effort, onList);
-    if (id === undefined || resolved.some((entry) => entry.id === id)) continue;
-    resolved.push(candidate.display === undefined ? { id } : { id, display: candidate.display });
+  for (const { id, display } of MODEL_PRIORITY[tool][modelClass]) {
+    if (onList !== undefined && !onList.has(id)) continue;
+    resolved.push(display === undefined ? { id } : { id, display });
   }
   const [first, ...rest] = resolved;
   if (first === undefined) return undefined;

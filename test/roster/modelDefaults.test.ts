@@ -7,6 +7,7 @@ import {
   MODEL_PRIORITY_CITATION,
   modelMapPath,
   pickModel,
+  VENDOR_RETIREMENTS,
   type ListingClient,
 } from "../../src/roster/modelDefaults.ts";
 import { EFFORT_LEVELS, MODEL_CLASSES, TOOLS } from "../../src/types/core.ts";
@@ -25,13 +26,24 @@ function fixture(name: string): string {
   return readFileSync(new URL(`../fixtures/client-models/${name}`, import.meta.url), "utf8");
 }
 
+/**
+ * Each client's capture of record, the one its rows were last read from. A re-read adds a dated
+ * capture and points its client here; the older file stays for the parser tests that read it.
+ */
+const CAPTURES: Readonly<Record<ListingClient, string>> = {
+  cursor: "cursor-agent-models-2026-10-14.txt",
+  codex: "codex-debug-models-2026-10-14.json",
+  copilot: "copilot-help-config-2026-10-23.txt",
+};
+
 function captured(client: ListingClient): string[] {
+  const text = fixture(CAPTURES[client]);
   const ids =
     client === "cursor"
-      ? parseCursorModels(fixture("cursor-agent-models-2026-10-14.txt"))
+      ? parseCursorModels(text)
       : client === "codex"
-        ? parseCodexModels(fixture("codex-debug-models-2026-10-14.json"))
-        : parseCopilotHelpConfig(fixture("copilot-help-config-2026-10-14.txt"));
+        ? parseCodexModels(text)
+        : parseCopilotHelpConfig(text);
   if (ids === null) throw new Error(`the ${client} capture no longer parses`);
   return ids;
 }
@@ -73,6 +85,17 @@ describe("MODEL_PRIORITY", () => {
     }
   });
 
+  // The pick no longer drops a repeated id (cut/11: only Cursor's templated ids could collapse into
+  // one, and Cursor picks nothing), so a class's order names each id once.
+  it("names each id once within a class's order", () => {
+    for (const client of LISTING_CLIENTS) {
+      for (const modelClass of MODEL_CLASSES) {
+        const ids = MODEL_PRIORITY[client][modelClass].map((candidate) => candidate.id);
+        expect(new Set(ids).size, `${client}/${modelClass}`).toBe(ids.length);
+      }
+    }
+  });
+
   it("puts a display name on every Copilot candidate and on no other client's", () => {
     for (const client of LISTING_CLIENTS) {
       for (const modelClass of MODEL_CLASSES) {
@@ -83,14 +106,53 @@ describe("MODEL_PRIORITY", () => {
     }
   });
 
-  it("cites a dated https source for every client's rows", () => {
+  // TEST CHANGE, justified (REQ-LADDER-006, a9-model-defaults-refresh): the case pinned one date,
+  // 2026-10-14, for every client. Copilot's rows were re-read on 2026-10-23 from a new capture while
+  // Cursor's and Codex's were not, so each client's own date is asserted, and its capture of record
+  // carries that date in its name, so a re-read still moves both.
+  it("cites a dated https source for every client's rows, dated as its capture of record", () => {
+    const dates: Readonly<Record<ListingClient, string>> = {
+      cursor: "2026-10-14",
+      codex: "2026-10-14",
+      copilot: "2026-10-23",
+    };
     for (const client of LISTING_CLIENTS) {
       const { url, accessDate } = MODEL_PRIORITY_CITATION[client];
       expect(url, client).toMatch(/^https:\/\//);
       expect(accessDate, client).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-      // The captures carry the same date, so a re-read moves both.
-      expect(accessDate, client).toBe("2026-10-14");
+      expect(accessDate, client).toBe(dates[client]);
+      expect(CAPTURES[client], client).toContain(accessDate);
     }
+  });
+
+  it("names no candidate its vendor retired or announced it will retire", () => {
+    for (const client of ["copilot", "codex"] as const) {
+      const retired = new Set(VENDOR_RETIREMENTS[client].map((row) => row.id));
+      // Non-degenerate: each client's table holds a row, so an empty table cannot pass this.
+      expect(retired.size, client).toBeGreaterThan(0);
+      for (const modelClass of MODEL_CLASSES) {
+        for (const candidate of MODEL_PRIORITY[client][modelClass]) {
+          expect(retired.has(candidate.id), `${client}/${modelClass}: ${candidate.id} is retired`).toBe(false);
+        }
+      }
+    }
+  });
+
+  it("dates and cites every retirement row", () => {
+    for (const client of ["copilot", "codex"] as const) {
+      for (const row of VENDOR_RETIREMENTS[client]) {
+        expect(row.url, `${client}/${row.id}`).toMatch(/^https:\/\//);
+        expect(row.retires, `${client}/${row.id}`).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        expect(row.accessDate, `${client}/${row.id}`).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      }
+    }
+    // The notices read for this refresh: the three Copilot ids the old rows named, and Codex's.
+    expect(VENDOR_RETIREMENTS.copilot.map((row) => [row.id, row.retires])).toEqual([
+      ["gpt-5.4-mini", "2026-10-19"],
+      ["claude-opus-5", "2026-11-16"],
+      ["gpt-5.6-terra", "2026-11-16"],
+    ]);
+    expect(VENDOR_RETIREMENTS.codex.map((row) => [row.id, row.retires])).toEqual([["gpt-5.5", "2026-10-14"]]);
   });
 });
 
@@ -106,10 +168,26 @@ describe("pickModel with no account list", () => {
         });
       }
     }
+    // TEST CHANGE, justified (REQ-LADDER-006, a9-model-defaults-refresh): the third `standard`
+    // candidate was `gpt-5.6-terra`, which Copilot retires on 2026-11-16; Claude Sonnet 5.5
+    // replaces it. The economy and advanced cases are new: Claude Haiku 5.5 costs less than Haiku
+    // 4.5 on the vendor's pricing page (read 2026-10-23), so it takes the economy lead and Haiku 4.5
+    // replaces the retired `gpt-5.4-mini` as the last fallback; Claude Fable 5.1 replaces Claude
+    // Opus 5, which retires on 2026-11-16.
     expect(pickModel("copilot", "standard", "medium")).toEqual({
       id: "claude-sonnet-5",
       display: "Claude Sonnet 5",
-      fallbacks: ["gpt-6-sol", "gpt-5.6-terra"],
+      fallbacks: ["gpt-6-sol", "claude-sonnet-5.5"],
+    });
+    expect(pickModel("copilot", "economy", "low")).toEqual({
+      id: "claude-haiku-5.5",
+      display: "Claude Haiku 5.5",
+      fallbacks: ["gpt-6-luna", "claude-haiku-4.5"],
+    });
+    expect(pickModel("copilot", "advanced", "high")).toEqual({
+      id: "claude-opus-5.5",
+      display: "Claude Opus 5.5",
+      fallbacks: ["gpt-6-astra", "claude-fable-5.1"],
     });
   });
 
@@ -148,10 +226,13 @@ describe("pickModel over an account's list", () => {
       id: "gpt-6-sol",
       fallbacks: [],
     });
-    expect(pickModel("copilot", "economy", "low", ["gpt-5.4-mini", "gpt-6-luna"])).toEqual({
+    // TEST CHANGE, justified (REQ-LADDER-006, a9-model-defaults-refresh): the list held the retired
+    // `gpt-5.4-mini`, no longer a candidate; Haiku 4.5, now the last economy candidate, stands in,
+    // so the lead the account lacks (Haiku 5.5) is still skipped and one fallback still follows.
+    expect(pickModel("copilot", "economy", "low", ["claude-haiku-4.5", "gpt-6-luna"])).toEqual({
       id: "gpt-6-luna",
       display: "GPT-6 Luna",
-      fallbacks: ["gpt-5.4-mini"],
+      fallbacks: ["claude-haiku-4.5"],
     });
   });
 
@@ -193,7 +274,9 @@ describe("pickModel over an account's list", () => {
         frontier: "claude-fable-5.1",
         advanced: "claude-opus-5.5",
         standard: "claude-sonnet-5",
-        economy: "claude-haiku-4.5",
+        // TEST CHANGE, justified (REQ-LADDER-006, a9-model-defaults-refresh): Haiku 5.5 leads
+        // economy now (it costs less than Haiku 4.5), and the 2026-10-23 capture lists it.
+        economy: "claude-haiku-5.5",
       },
       codex: {
         frontier: "gpt-6-astra",

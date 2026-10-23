@@ -117,11 +117,16 @@ const CORPUS_AGENT_EFFORT: Readonly<Record<(typeof CORPUS_AGENT_IDS)[number], st
  * class asks for (one class per level): the shipped priority list's entry 0 as `model`, its
  * display name in the qualified `<name> (copilot)` form, and the class's CLI ids in priority order
  * as `models` (REQ-LADDER-007). Literals, like the effort table above.
+ *
+ * TEST CHANGE, justified (REQ-LADDER-006, a9-model-defaults-refresh): the third id of each class
+ * was a model Copilot retired (`gpt-5.4-mini`, 2026-10-19) or retires on 2026-11-16 (`claude-opus-5`,
+ * `gpt-5.6-terra`); Claude Fable 5.1, Claude Sonnet 5.5 and Claude Haiku 4.5 replace them, and
+ * Claude Haiku 5.5 takes the economy lead because it costs less than Haiku 4.5.
  */
 const SHIPPED_PICK_LINES: Readonly<Record<string, readonly string[]>> = {
-  high: ['model: "Claude Opus 5.5 (copilot)"', 'models: ["claude-opus-5.5", "gpt-6-astra", "claude-opus-5"]'],
-  medium: ['model: "Claude Sonnet 5 (copilot)"', 'models: ["claude-sonnet-5", "gpt-6-sol", "gpt-5.6-terra"]'],
-  low: ['model: "Claude Haiku 4.5 (copilot)"', 'models: ["claude-haiku-4.5", "gpt-6-luna", "gpt-5.4-mini"]'],
+  high: ['model: "Claude Opus 5.5 (copilot)"', 'models: ["claude-opus-5.5", "gpt-6-astra", "claude-fable-5.1"]'],
+  medium: ['model: "Claude Sonnet 5 (copilot)"', 'models: ["claude-sonnet-5", "gpt-6-sol", "claude-sonnet-5.5"]'],
+  low: ['model: "Claude Haiku 5.5 (copilot)"', 'models: ["claude-haiku-5.5", "gpt-6-luna", "claude-haiku-4.5"]'],
 };
 
 /** The three CQ specialist lenses, which read and never edit. */
@@ -570,9 +575,11 @@ describe("agents → .github/agents", () => {
     // first id of `models`, the CLI's priority list, followed by the class's shipped candidates;
     // a pin with no display name in the shipped list writes no `model:` line, which takes a
     // display name (REQ-LADDER-007). What the pin shows, a model line below `tools`, is unchanged.
+    // TEST CHANGE, justified (REQ-LADDER-006, a9-model-defaults-refresh): Claude Fable 5.1 replaces
+    // Claude Opus 5, which Copilot retires on 2026-11-16, as the class's third candidate.
     expect(
       frontmatterLines(rowAt(plan, ".github/agents/stamity-implementer.agent.md").content).at(-2),
-    ).toBe('models: ["some-vendor/frontier-1", "claude-opus-5.5", "gpt-6-astra", "claude-opus-5"]');
+    ).toBe('models: ["some-vendor/frontier-1", "claude-opus-5.5", "gpt-6-astra", "claude-fable-5.1"]');
 
     // A prompt file runs in the session that already carries the instructions: no key.
     const prompts = plan.filter((row) => row.path.startsWith(".github/prompts/"));
@@ -1013,24 +1020,28 @@ describe("commands → .github/prompts", () => {
     expect(frontmatterValue(buildPromptFile(item, asIs, {}, ["gpt-6-sol"]).content, "model")).toBeUndefined();
   });
 
+  // TEST CHANGE, justified (REQ-LADDER-006, a9-model-defaults-refresh): the saved list named
+  // `claude-opus-5`, which Copilot retires on 2026-11-16 and is no longer an advanced candidate;
+  // `claude-fable-5.1`, the candidate that replaced it, stands in, so the re-pick still lands on a
+  // later candidate than entry 0.
   it("writes the same model into a prompt file as into the agent file and the map for a pinned class (review/140)", async () => {
-    const ctx = ctxOf({ pins: { advanced: { copilot: "gpt-5.5" } }, listed: ["claude-opus-5", "claude-haiku-4.5"] });
+    const ctx = ctxOf({ pins: { advanced: { copilot: "gpt-5.5" } }, listed: ["claude-fable-5.1", "claude-haiku-4.5"] });
     const prompt = buildPromptFile(
       itemOf({ type: "command", id: "cmd-work", frontmatter: { model_class: "advanced" } }),
       asIs,
       { advanced: "gpt-5.5" },
-      ["claude-opus-5", "claude-haiku-4.5"],
+      ["claude-fable-5.1", "claude-haiku-4.5"],
     );
     const residue = await copilotResiduePlanner.planResidue(await buildCoreEmissionPlan(ctx), ctx);
     const map = JSON.parse(rowAt(residue.outputs, ".stamity/generated/models/copilot.json").content) as {
       classes: Record<string, { model?: string }>;
     };
 
-    expect(map.classes["advanced"]?.model).toBe("claude-opus-5");
+    expect(map.classes["advanced"]?.model).toBe("claude-fable-5.1");
     expect(rowAt(residue.outputs, ".github/agents/stamity-implementer.agent.md").content).toContain(
-      'models: ["claude-opus-5"',
+      'models: ["claude-fable-5.1"',
     );
-    expect(frontmatterValue(prompt.content, "model")).toBe('"claude-opus-5"');
+    expect(frontmatterValue(prompt.content, "model")).toBe('"claude-fable-5.1"');
   });
 
   it("emits no prompt rows for a zero-command selection while instructions and agents stay", async () => {
@@ -1152,15 +1163,17 @@ describe("model pinning", () => {
 
     // `implementer` declares `advanced`; `test-runner` declares `economy`, which this run leaves
     // unpinned.
+    // TEST CHANGE, justified (REQ-LADDER-006, a9-model-defaults-refresh): Claude Fable 5.1 replaces
+    // the retiring Claude Opus 5 behind the pin, and Claude Haiku 5.5 now leads economy.
     expect(modelsOf(agentAt(plan, "implementer"))).toEqual([
       "some-vendor/frontier-1",
       "claude-opus-5.5",
       "gpt-6-astra",
-      "claude-opus-5",
+      "claude-fable-5.1",
     ]);
     // No shipped display name for the pin, so no `model:` line (the plan's edge case).
     expect(frontmatterValue(agentAt(plan, "implementer"), "model")).toBeUndefined();
-    expect(frontmatterValue(agentAt(plan, "test-runner"), "model")).toBe('"Claude Haiku 4.5 (copilot)"');
+    expect(frontmatterValue(agentAt(plan, "test-runner"), "model")).toBe('"Claude Haiku 5.5 (copilot)"');
   });
 
   // TEST CHANGE, justified (2026-10-14, e8-copilot-codex-claude-pins): the case read "emits no
@@ -1181,13 +1194,16 @@ describe("model pinning", () => {
     expect(CLIENT_MODEL_PROJECTION.copilot.aliases).toEqual({});
   });
 
+  // TEST CHANGE, justified (REQ-LADDER-006, a9-model-defaults-refresh): the saved list named
+  // `claude-opus-5`, retiring on 2026-11-16 and no longer a candidate; `claude-fable-5.1`, which
+  // replaced it as advanced's third candidate, stands in, so the kept list still holds two ids.
   it("picks each class's first shipped candidate the account's saved list holds", async () => {
-    const plan = await planResidue({ listed: ["unrelated-1", "gpt-6-luna", "claude-opus-5", "gpt-6-astra"] });
+    const plan = await planResidue({ listed: ["unrelated-1", "gpt-6-luna", "claude-fable-5.1", "gpt-6-astra"] });
 
     // `advanced`: its entry 0 (`claude-opus-5.5`) is not listed, so the next candidate wins and the
     // list keeps only what the account offers.
     expect(frontmatterValue(agentAt(plan, "implementer"), "model")).toBe('"GPT-6 Astra (copilot)"');
-    expect(modelsOf(agentAt(plan, "implementer"))).toEqual(["gpt-6-astra", "claude-opus-5"]);
+    expect(modelsOf(agentAt(plan, "implementer"))).toEqual(["gpt-6-astra", "claude-fable-5.1"]);
     expect(frontmatterValue(agentAt(plan, "test-runner"), "model")).toBe('"GPT-6 Luna (copilot)"');
     expect(modelsOf(agentAt(plan, "test-runner"))).toEqual(["gpt-6-luna"]);
     // TEST CHANGE, justified (fix round 1, ledger row 2026-10-14_cli-native/build/66): the case
@@ -1201,17 +1217,20 @@ describe("model pinning", () => {
   });
 
   it("names a pinned model by its display name when the shipped list gives one, and re-picks a pin the list lacks", async () => {
+    // TEST CHANGE, justified (REQ-LADDER-006, a9-model-defaults-refresh): Claude Fable 5.1
+    // replaces the retiring Claude Opus 5 as advanced's third candidate, in the shipped order behind
+    // the pin and on the saved list the re-pick reads, so the re-pick still names a display name.
     const known = await planResidue({ pins: { advanced: { copilot: "gpt-6-astra" } } });
     expect(frontmatterValue(agentAt(known, "implementer"), "model")).toBe('"GPT-6 Astra (copilot)"');
-    expect(modelsOf(agentAt(known, "implementer"))).toEqual(["gpt-6-astra", "claude-opus-5.5", "claude-opus-5"]);
+    expect(modelsOf(agentAt(known, "implementer"))).toEqual(["gpt-6-astra", "claude-opus-5.5", "claude-fable-5.1"]);
 
     // An id the account lacks fails the call, so the class takes the pick from the saved list.
     const repicked = await planResidue({
       pins: { advanced: { copilot: "gpt-5.5" } },
-      listed: ["claude-opus-5", "claude-haiku-4.5"],
+      listed: ["claude-fable-5.1", "claude-haiku-4.5"],
     });
-    expect(frontmatterValue(agentAt(repicked, "implementer"), "model")).toBe('"Claude Opus 5 (copilot)"');
-    expect(modelsOf(agentAt(repicked, "implementer"))).toEqual(["claude-opus-5"]);
+    expect(frontmatterValue(agentAt(repicked, "implementer"), "model")).toBe('"Claude Fable 5.1 (copilot)"');
+    expect(modelsOf(agentAt(repicked, "implementer"))).toEqual(["claude-fable-5.1"]);
     expect(agentAt(repicked, "implementer")).not.toContain("gpt-5.5");
   });
 
@@ -1255,10 +1274,12 @@ describe("model pinning", () => {
     const idCtx = ctxOf({ pins: { advanced: { copilot: "gpt-6-astra" } } });
     const idResidue = await copilotResiduePlanner.planResidue(await buildCoreEmissionPlan(idCtx), idCtx);
     expect((idResidue.warnings ?? []).some((line) => line.includes("model ids"))).toBe(false);
+    // TEST CHANGE, justified (REQ-LADDER-006, a9-model-defaults-refresh): Claude Fable 5.1 replaces
+    // the retiring Claude Opus 5 behind the pin.
     expect(modelsOf(rowAt(idResidue.outputs, ".github/agents/stamity-implementer.agent.md").content)).toEqual([
       "gpt-6-astra",
       "claude-opus-5.5",
-      "claude-opus-5",
+      "claude-fable-5.1",
     ]);
   });
 
@@ -1273,10 +1294,12 @@ describe("model pinning", () => {
       { advanced: "vendor:model 3" },
     );
 
+    // TEST CHANGE, justified (REQ-LADDER-006, a9-model-defaults-refresh): Claude Fable 5.1 replaces
+    // the retiring Claude Opus 5 behind the pin; the quoting is unchanged.
     expect(frontmatterValue(output.content, "models")).toBe(
-      '["vendor:model 3", "claude-opus-5.5", "gpt-6-astra", "claude-opus-5"]',
+      '["vendor:model 3", "claude-opus-5.5", "gpt-6-astra", "claude-fable-5.1"]',
     );
-    expect(modelsOf(output.content)).toEqual(["vendor:model 3", "claude-opus-5.5", "gpt-6-astra", "claude-opus-5"]);
+    expect(modelsOf(output.content)).toEqual(["vendor:model 3", "claude-opus-5.5", "gpt-6-astra", "claude-fable-5.1"]);
     expect(frontmatterLines(output.content).filter((line) => line.startsWith("vendor"))).toEqual([]);
   });
 
@@ -1315,11 +1338,13 @@ describe("model pinning", () => {
       roles: Record<string, string>;
     };
     // Every ladder class, `frontier` included: a flow escalates a role to it on the call.
+    // TEST CHANGE, justified (REQ-LADDER-006, a9-model-defaults-refresh): the retired and retiring
+    // third candidates are replaced, and Claude Haiku 5.5 leads economy (it costs less than 4.5).
     expect(map.classes).toEqual({
       frontier: { model: "claude-fable-5.1", fallbacks: ["claude-opus-5.5", "gpt-6-astra"] },
-      advanced: { model: "gpt-6-astra", fallbacks: ["claude-opus-5.5", "claude-opus-5"] },
-      standard: { model: "claude-sonnet-5", fallbacks: ["gpt-6-sol", "gpt-5.6-terra"] },
-      economy: { model: "claude-haiku-4.5", fallbacks: ["gpt-6-luna", "gpt-5.4-mini"] },
+      advanced: { model: "gpt-6-astra", fallbacks: ["claude-opus-5.5", "claude-fable-5.1"] },
+      standard: { model: "claude-sonnet-5", fallbacks: ["gpt-6-sol", "claude-sonnet-5.5"] },
+      economy: { model: "claude-haiku-5.5", fallbacks: ["gpt-6-luna", "claude-haiku-4.5"] },
     });
     expect(Object.keys(map.roles)).toEqual(CORPUS_AGENT_IDS.map((id) => `stamity-${id}`));
     const classByEffort: Record<string, string> = { high: "advanced", medium: "standard", low: "economy" };
@@ -1333,25 +1358,28 @@ describe("model pinning", () => {
 
   // review/118: the map records a pin the saved list lacked beside the pick made instead, so a
   // checkout with no list can tell that re-pick from an unsynced pin edit.
+  // TEST CHANGE, justified (REQ-LADDER-006, a9-model-defaults-refresh): the saved list named
+  // `gpt-5.6-terra`, which Copilot retires on 2026-11-16 and is no longer a standard candidate;
+  // `claude-sonnet-5.5`, which replaced it, stands in, so each pick still keeps one fallback.
   it("records a pin the saved list lacked beside the pick made instead, and none where the list holds it or none was read", () => {
-    const listed = ["gpt-6-sol", "gpt-5.6-terra"];
+    const listed = ["gpt-6-sol", "claude-sonnet-5.5"];
 
     const lacking = buildCopilotModelMap({}, { standard: "gpt-9-custom" }, {}, listed);
 
     expect(lacking.classes.standard).toEqual({
       model: "gpt-6-sol",
-      fallbacks: ["gpt-5.6-terra"],
+      fallbacks: ["claude-sonnet-5.5"],
       pinReplaced: { pin: "gpt-9-custom", by: "gpt-6-sol" },
     });
     expect(buildCopilotModelMap({}, { standard: "gpt-9-custom" }, {}, [...listed, "gpt-9-custom"]).classes.standard).toEqual({
       model: "gpt-9-custom",
-      fallbacks: ["gpt-6-sol", "gpt-5.6-terra"],
+      fallbacks: ["gpt-6-sol", "claude-sonnet-5.5"],
     });
     expect(buildCopilotModelMap({}, { standard: "gpt-9-custom" }).classes.standard).not.toHaveProperty("pinReplaced");
     // A display-name pin binds nowhere on this client, so its class's pick replaced no pin.
     expect(buildCopilotModelMap({}, { standard: "Claude Sonnet 5 (copilot)" }, {}, listed).classes.standard).toEqual({
       model: "gpt-6-sol",
-      fallbacks: ["gpt-5.6-terra"],
+      fallbacks: ["claude-sonnet-5.5"],
     });
   });
 
@@ -1381,7 +1409,9 @@ describe("model pinning", () => {
     expect(
       frontmatterLines(rowAt(plan, ".github/agents/stamity-reviewer.agent.md").content).slice(-2),
     ).toEqual([
-      'models: ["some-vendor/frontier-1", "claude-opus-5.5", "gpt-6-astra", "claude-opus-5"]',
+      // TEST CHANGE, justified (REQ-LADDER-006, a9-model-defaults-refresh): Claude Fable 5.1
+      // replaces the retiring Claude Opus 5 behind the pin; the effort line's place is unchanged.
+      'models: ["some-vendor/frontier-1", "claude-opus-5.5", "gpt-6-astra", "claude-fable-5.1"]',
       "reasoning-effort: high",
     ]);
     expect(CLIENT_MODEL_PROJECTION.copilot.effortKey).toBe("reasoning-effort");
