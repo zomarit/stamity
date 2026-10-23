@@ -17,8 +17,10 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "n
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { gitignoreLine } from "../../src/cli/commands/init/panel.ts";
+import { parseAutonomyMarker, resolveAutonomy, type ResolvedAutonomy } from "../../src/config/autonomy.ts";
+import { planHooksInfra } from "../../src/emit/hooksInfra.ts";
 import { PREFLIGHT_CANARY_FILE, REQUIRED_GITIGNORE_ENTRIES } from "../../src/mcp/env.ts";
-import { personOnlyVerdict, unattendedPushVerdict } from "../../src/hooks/personOnly.ts";
+import { personOnlyVerdict, unattendedPushVerdict, type PersonOnlyRuleId } from "../../src/hooks/personOnly.ts";
 import { PERSON_ONLY_GUARD_FILE, planCoreHookScripts } from "../../src/hooks/scripts.ts";
 import { type Tool, TOOLS } from "../../src/types/core.ts";
 import { assertRulesAdmissible, parseWorktreePolicy, resolveStrategy } from "../../src/worktree/policy.ts";
@@ -37,9 +39,12 @@ const getRepo = useTempDir("person-only-guard");
  */
 type Decision = { deny: false } | { deny: true; reason: string; ask?: true };
 
-/** The guard for one client, at `.stamity/generated/hooks/<tool>/`, and the repository it sits in. */
-async function placeGuard(tool: Tool, files: Record<string, string> = {}): Promise<string> {
-  const guard = planCoreHookScripts(POLICY, tool, { ...CLI_PIN, personOnlyGuard: true }).find(
+/**
+ * The guard for one client, at `.stamity/generated/hooks/<tool>/`, and the repository it sits in; `autonomy` is the
+ * setting it bakes, the default where none is named, as emission renders an absent manifest key (a4).
+ */
+async function placeGuard(tool: Tool, files: Record<string, string> = {}, autonomy?: ResolvedAutonomy): Promise<string> {
+  const guard = planCoreHookScripts(POLICY, tool, { ...CLI_PIN, personOnlyGuard: true, ...(autonomy === undefined ? {} : { autonomy }) }).find(
     (script) => script.fileName === PERSON_ONLY_GUARD_FILE,
   );
   if (guard === undefined) throw new Error("the plan carried no person-only guard");
@@ -137,9 +142,12 @@ function told(verdict: { act: string; rule: string; ask: boolean }): string {
     : `${verdict.act} deletes, force-pushes or cannot be undone (\`${verdict.rule}\`): it stays the person's to run, even with approval (REQ-FLOW-124). Give the person the exact command.`;
 }
 
-/** The sentence an unattended run earns for a person-only act other than a push (v0a2), before the mode's reason. */
+/**
+ * The sentence an unattended run earns for a person-only act other than a push (v0a2), before the mode's reason.
+ * TEST CHANGE, justified (REQ-FLOW-143, a4): the list is named as the run's summary list, `morning.md`.
+ */
 function morningList(verdict: { act: string; rule: string }): string {
-  return `${verdict.act} is a person-only act (\`${verdict.rule}\`) and this run is unattended: list it on the morning list, whose walk runs it after one click.`;
+  return `${verdict.act} is a person-only act (\`${verdict.rule}\`) and this run is unattended: list it on the run's summary list (\`morning.md\`), whose walk runs it after one click.`;
 }
 
 /** What one client says to an attended person-only verdict: an ask where the guard asks on it, else a refusal. */
@@ -150,6 +158,10 @@ function expectedAttended(tool: Tool, verdict: { act: string; rule: string; ask:
 }
 
 const ON_FEATURE = { defaultBranches: [], currentBranch: "feat/x", tags: ["v1.0.0"] };
+/** What the default setting runs unasked, as the guard bakes it (a4): a ready mark, a local tag, an unnamed dispatch. */
+const DEFAULT_RUNS: readonly PersonOnlyRuleId[] = ["pr-ready", "tag", "workflow-dispatch"];
+/** The context the default guard hands its verdict on `feat/x` (a4). */
+const BAKED_DEFAULT = { ...ON_FEATURE, runs: DEFAULT_RUNS, deployingBranches: [], stricterThanDefault: false };
 
 /** One case per person-only rule, each beside an allowed neighbour. The repository is on `feat/x`, tag `v1.0.0`. */
 const MATRIX: readonly (readonly [command: string, rule: string | null])[] = [
@@ -278,12 +290,17 @@ describe("the person-only guard, on every client", () => {
     for (const [command, rule] of MATRIX) {
       const source = personOnlyVerdict(command, ON_FEATURE);
       expect(source.deny ? source.rule : null, command).toBe(rule);
+      // TEST CHANGE, justified (REQ-FLOW-137, a4): the guard reads each line with the context it bakes, the default
+      // setting's, so a ready mark and a local tag (rows `gh pr ready 3`, `git tag v2`) run there; every other row is
+      // the verdict above. The baked `ask` setting's answer to those two rows is pinned in the a4 block below.
+      const guarded = personOnlyVerdict(command, BAKED_DEFAULT);
       const decision = decide(tool, guard, command);
-      expect(decision.deny, `${tool}: ${command}`).toBe(rule !== null);
+      expect(decision.deny, `${tool}: ${command}`).toBe(guarded.deny);
+      expect(guarded.deny || rule === null || DEFAULT_RUNS.includes(rule as PersonOnlyRuleId), command).toBe(true);
       // TEST CHANGE, justified (v0a2, REQ-FLOW-123, REQ-FLOW-124): the client no longer prints the verdict's `reason`;
       // it asks with the ask sentence where it holds an ask, and refuses with the refuse sentence, or with the ask
       // sentence and why it cannot ask, so each row now pins the client's answer to the verdict's class.
-      if (source.deny) expect(decision, `${tool}: ${command}`).toEqual(expectedAttended(tool, source));
+      if (guarded.deny) expect(decision, `${tool}: ${command}`).toEqual(expectedAttended(tool, guarded));
     }
   });
 
@@ -435,7 +452,8 @@ describe("each client's answer to a person-only act (v0a2)", () => {
     expect(read("mcp__github__merge_pull_request")).toEqual({
       deny: true,
       reason: expect.stringContaining(
-        `${act} is a person-only act (\`mcp__github__merge_pull_request\`) and this run is unattended: list it on the morning list, whose walk runs it after one click. ${WHY}`,
+        // TEST CHANGE, justified (REQ-FLOW-143, a4): the list is named as the run's summary list, `morning.md`.
+        `${morningList({ act, rule: "mcp__github__merge_pull_request" })} ${WHY}`,
       ),
     });
     expect(read("mcp__github__delete_repository")).toMatchObject({ deny: true, reason: expect.stringContaining("(REQ-FLOW-124)") });
@@ -1369,5 +1387,209 @@ describe("the guard's place in the plan", () => {
       for (const token of ["http://", "https://", "fetch(", "child_process", "new Function"]) expect(content).not.toContain(token);
       expect(content).not.toMatch(/\beval\s*\(/);
     }
+  });
+});
+
+/**
+ * a4-guard-ask-list (REQ-FLOW-137, REQ-FLOW-138, REQ-FLOW-140, REQ-FLOW-121, REQ-FLOW-123): the guard as a client runs
+ * it, the autonomy setting baked into the copy. Each act that runs sits beside the baked fact (mode `ask`, an act or
+ * branch named as deploying, an unattended record) that turns it back into an ask or a refusal.
+ */
+describe("the autonomy setting the guard bakes (a4)", () => {
+  const UNATTENDED = { ".stamity/runs/2026-10-23_x/record.md": record("in progress", "unattended") };
+  const WHY = "This session is unattended because .stamity/runs/2026-10-23_x/record.md reads `Status: in progress` and `Mode: unattended`.";
+  const ASK_MODE = resolveAutonomy({ autonomy: { mode: "ask" } });
+  const READY = "gh pr ready 3";
+  const ANNOTATED = "git tag -a v2 -m 'release v2'";
+  const LIGHT = "git tag v2";
+
+  it("carries the setting as its marker line, read back as the setting it was rendered from", () => {
+    for (const manifest of [{}, { autonomy: { mode: "ask" as const } }, { autonomy: { deployingBranches: ["production", "release/*"], deployingActs: ["workflow-dispatch" as const, "pr-merge" as const] } }]) {
+      const setting = resolveAutonomy(manifest);
+      for (const tool of TOOLS) {
+        const content = planCoreHookScripts(POLICY, tool, { ...CLI_PIN, personOnlyGuard: true, autonomy: setting }).at(-1)?.content ?? "";
+        expect(parseAutonomyMarker(content), `${tool}: ${JSON.stringify(manifest)}`).toEqual(setting);
+        expect(content.split("\n").filter((line) => line.startsWith("// stamity-autonomy ")), tool).toHaveLength(1);
+      }
+    }
+    // A caller naming no setting renders the default an absent manifest key resolves to.
+    const unnamed = planCoreHookScripts(POLICY, "claude", { ...CLI_PIN, personOnlyGuard: true }).at(-1)?.content ?? "";
+    expect(parseAutonomyMarker(unnamed)).toEqual(resolveAutonomy({}));
+  });
+
+  it("refuses to bake a branch name that would end the marker's comment line, and bakes its neighbour", () => {
+    // Built from their codes, so this file holds no raw separator: a line separator, a paragraph separator, a newline.
+    for (const code of [0x2028, 0x2029, 0x0a]) {
+      const setting = { ...resolveAutonomy({}), deployingBranches: [`x${String.fromCharCode(code)}process.exit(0)`] };
+      expect(() => planCoreHookScripts(POLICY, "claude", { ...CLI_PIN, personOnlyGuard: true, autonomy: setting }), String(code)).toThrow(
+        expect.objectContaining({ code: "VALIDATION_ERROR" }),
+      );
+    }
+    const plain = resolveAutonomy({ autonomy: { deployingBranches: ["x/process.exit"] } });
+    const content = planCoreHookScripts(POLICY, "claude", { ...CLI_PIN, personOnlyGuard: true, autonomy: plain }).at(-1)?.content ?? "";
+    expect(parseAutonomyMarker(content)).toEqual(plain);
+  });
+
+  it("is the setting emission resolves from the manifest, in every copy and on the plan", async () => {
+    const plan = await planHooksInfra({
+      rootDir: getRepo().path(),
+      manifest: { tools: [...TOOLS], autonomy: { mode: "ask", deployingBranches: ["production"] } },
+      engineVersion: "1.0.0-golden",
+    });
+    const setting = resolveAutonomy({ autonomy: { mode: "ask", deployingBranches: ["production"] } });
+    expect(plan.autonomy).toEqual(setting);
+    const copies = plan.scripts.filter((script) => script.path.endsWith(`/${PERSON_ONLY_GUARD_FILE}`));
+    expect(copies.map((copy) => copy.tool).toSorted()).toEqual([...TOOLS].toSorted());
+    for (const copy of copies) expect(parseAutonomyMarker(copy.content), copy.path).toEqual(setting);
+  });
+
+  it.each(TOOLS)("%s: runs a ready mark and an annotated local tag attended under the default setting", async (tool) => {
+    const guard = await placeGuard(tool);
+    for (const command of [READY, ANNOTATED, LIGHT]) expect(decide(tool, guard, command), `${tool}: ${command}`).toEqual({ deny: false });
+    const quiet = run(guard, payload(tool, READY));
+    expect(quiet.status).toBe(0);
+    expect(String(quiet.stdout).trim()).toBe(tool === "cursor" ? '{"permission":"allow"}' : "");
+  });
+
+  it.each(TOOLS)("%s: asks for both with 1.16.0's sentence under a baked `ask`", async (tool) => {
+    const guard = await placeGuard(tool, {}, ASK_MODE);
+    for (const command of [READY, ANNOTATED]) {
+      const verdict = personOnlyVerdict(command, ON_FEATURE);
+      if (!verdict.deny) throw new Error(`${command} is no person-only act`);
+      expect(decide(tool, guard, command), `${tool}: ${command}`).toEqual(expectedAttended(tool, verdict));
+    }
+  });
+
+  it.each(TOOLS)("%s: unattended, refuses a raw ready mark with the summary-list sentence and lets a local tag run", async (tool) => {
+    const guard = await placeGuard(tool, UNATTENDED);
+    expect(decide(tool, guard, READY)).toEqual({
+      deny: true,
+      reason: expect.stringContaining(`${morningList({ act: "Marking a pull request ready for review", rule: "pr-ready" })} ${WHY}`),
+    });
+    expect(decide(tool, guard, LIGHT)).toEqual({ deny: false });
+    // A push of that tag stays refused.
+    expect(decide(tool, guard, "git push origin --tags").deny).toBe(true);
+  });
+
+  it("asks for a ready mark again where the repository names it as deploying, in either mode", async () => {
+    const guard = await placeGuard("claude", {}, resolveAutonomy({ autonomy: { deployingActs: ["pr-ready"] } }));
+    expect(decide("claude", guard, READY)).toMatchObject({ deny: true, ask: true });
+    expect(decide("claude", guard, LIGHT)).toEqual({ deny: false });
+  });
+
+  it.each(TOOLS)("%s: asks for a raw merge, naming the admin route where `--admin` is given", async (tool) => {
+    const guard = await placeGuard(tool);
+    for (const [command, rule] of [["gh pr merge 3 --squash", "pr-merge"], ["gh pr merge 3 --squash --admin", "admin-merge"]] as const) {
+      const verdict = personOnlyVerdict(command, BAKED_DEFAULT);
+      expect(verdict).toMatchObject({ deny: true, rule, ask: true });
+      if (verdict.deny) expect(decide(tool, guard, command), command).toEqual(expectedAttended(tool, verdict));
+    }
+  });
+
+  it.each(TOOLS)("%s: refuses a commit status or check run write attended and unattended, and passes its read", async (tool) => {
+    const guard = await placeGuard(tool);
+    const write = "gh api -X POST repos/o/r/statuses/abc123 -f state=success -f context=ci";
+    const ciOnly = "is CI's to write, never an agent's (`status-write`)";
+    expect(decide(tool, guard, write)).toEqual({ deny: true, reason: expect.stringContaining(ciOnly) });
+    expect(decide(tool, guard, "gh api repos/o/r/commits/abc123/statuses")).toEqual({ deny: false });
+    await getRepo().seedFiles(UNATTENDED);
+    expect(decide(tool, guard, write)).toEqual({ deny: true, reason: expect.stringContaining(ciOnly) });
+  });
+
+  it.each(TOOLS)("%s: asks for a push onto a deploying branch, and lets a feature branch go", async (tool) => {
+    const guard = await placeGuard(tool, {}, resolveAutonomy({ autonomy: { deployingBranches: ["production"] } }));
+    const verdict = personOnlyVerdict("git push origin production", { ...BAKED_DEFAULT, deployingBranches: ["production"] });
+    expect(verdict).toMatchObject({ deny: true, rule: "push-deploying", ask: true });
+    if (verdict.deny) expect(decide(tool, guard, "git push origin production")).toEqual(expectedAttended(tool, verdict));
+    expect(decide(tool, guard, "git push origin feat/x")).toEqual({ deny: false });
+    // The same push under a guard naming no deploying branch.
+    expect(decide(tool, await placeGuard(tool), "git push origin production")).toEqual({ deny: false });
+  });
+
+  it.each(TOOLS)("%s: runs an unnamed workflow dispatch in both modes, and asks for a named one attended and refuses it unattended", async (tool) => {
+    const DISPATCH = "gh workflow run deploy.yml -f env=prod";
+    expect(decide(tool, await placeGuard(tool), DISPATCH), "autonomous").toEqual({ deny: false });
+    expect(decide(tool, await placeGuard(tool, {}, ASK_MODE), DISPATCH), "ask").toEqual({ deny: false });
+    const named = resolveAutonomy({ autonomy: { deployingActs: ["workflow-dispatch"] } });
+    const guard = await placeGuard(tool, {}, named);
+    const verdict = personOnlyVerdict(DISPATCH, ON_FEATURE);
+    if (!verdict.deny) throw new Error("the dispatch reads as no act");
+    expect(decide(tool, guard, DISPATCH)).toEqual(expectedAttended(tool, verdict));
+    await getRepo().seedFiles(UNATTENDED);
+    expect(decide(tool, guard, DISPATCH)).toEqual({ deny: true, reason: expect.stringContaining(`${morningList(verdict)} ${WHY}`) });
+  });
+
+  it("refuses a flagless repository edit as refuse-class and asks for a refspec in a PowerShell group as a default-branch push", async () => {
+    const guard = await placeGuard("claude");
+    for (const [command, rule, ask] of [["gh repo edit", "repo-irreversible", false], ["git push origin (git branch --show-current)", "push-default", true]] as const) {
+      const verdict = personOnlyVerdict(command, BAKED_DEFAULT);
+      expect(verdict).toMatchObject({ deny: true, rule, ask });
+      if (verdict.deny) expect(decide("claude", guard, command), command).toEqual(expectedAttended("claude", verdict));
+    }
+    expect(decide("claude", guard, "git push origin HEAD")).toEqual({ deny: false });
+  });
+
+  it("asks on Claude Code's main thread for a payload naming `agent_type` with no `agent_id`, and refuses one with it (review/86)", async () => {
+    const guard = await placeGuard("claude");
+    const merge = personOnlyVerdict("gh pr merge 1", BAKED_DEFAULT);
+    if (!merge.deny) throw new Error("the merge is no person-only act");
+    const call = (fields: Record<string, string>): Decision =>
+      clientDecision("claude", run(guard, JSON.stringify({ ...JSON.parse(payload("claude", "gh pr merge 1")), ...fields })), JSON.stringify(fields));
+    expect(call({ agent_type: "stamity-orchestrator" })).toEqual(expectedAttended("claude", merge));
+    expect(call({ agent_type: "stamity-orchestrator", agent_id: "a1" })).toEqual({ deny: true, reason: expect.stringContaining("a sub-agent runs it") });
+    // On the other clients a non-empty `agent_type` still refuses as a helper's.
+    const codex = await placeGuard("codex");
+    const line = JSON.stringify({ ...JSON.parse(payload("codex", "gh pr merge 1")), agent_type: "stamity-orchestrator" });
+    expect(clientDecision("codex", run(codex, line), "codex")).toEqual({ deny: true, reason: expect.stringContaining("a sub-agent runs it") });
+  });
+
+  it.each(TOOLS)("%s: lets the land verb pass alone on its line in both modes, and refuses it beside more", async (tool) => {
+    const LAND = "npx --no stamity run land --run 2026-10-23_x --ready --json";
+    const guard = await placeGuard(tool);
+    const attended = [
+      ["npm test && " + LAND, true],
+      ["GIT_TRACE=1 " + LAND, true],
+      [LAND, false],
+      ["git commit -m 'docs: npx --no stamity run land --run x'", false],
+    ] as const;
+    for (const [command, refused] of attended) {
+      expect(decide(tool, guard, command), `${tool}: ${command}`).toEqual(
+        refused ? { deny: true, reason: expect.stringContaining("`stamity run land` on a line that is more than the verb") } : { deny: false },
+      );
+    }
+    await getRepo().seedFiles(UNATTENDED);
+    expect(decide(tool, guard, LAND)).toEqual({ deny: false });
+    expect(decide(tool, guard, "npm test && " + LAND).deny).toBe(true);
+    // Unattended, the raw text still binds: a message naming the verb beside the package is refused.
+    expect(decide(tool, guard, "git commit -m 'docs: npx --no stamity run land --run x'").deny).toBe(true);
+  });
+
+  it.each(TOOLS)("%s: runs a literal dry-run publish in both modes, and asks for every other spelling attended and refuses it unattended", async (tool) => {
+    const guard = await placeGuard(tool);
+    const others = ["npm publish --dry-run=false", "npm publish --dry-run --no-dry-run", "npm publish \"--dry-run\"", "npm_config_dry_run=false npm publish --dry-run"];
+    expect(decide(tool, guard, "npm publish --dry-run")).toEqual({ deny: false });
+    for (const command of others) {
+      const verdict = personOnlyVerdict(command, BAKED_DEFAULT);
+      expect(verdict, command).toMatchObject({ deny: true, rule: "publish", ask: true });
+      if (verdict.deny) expect(decide(tool, guard, command), command).toEqual(expectedAttended(tool, verdict));
+    }
+    await getRepo().seedFiles(UNATTENDED);
+    expect(decide(tool, guard, "npm publish --dry-run")).toEqual({ deny: false });
+    for (const command of others) expect(decide(tool, guard, command).deny, command).toBe(true);
+  });
+
+  it.each(TOOLS)("%s: asks for a loosening line attended and refuses it unattended; a full clean asks only over a stricter setting", async (tool) => {
+    const loosen = personOnlyVerdict("stamity sync --loosen", BAKED_DEFAULT);
+    if (!loosen.deny) throw new Error("the loosening line reads as no act");
+    const guard = await placeGuard(tool);
+    expect(decide(tool, guard, "stamity sync --loosen")).toEqual(expectedAttended(tool, loosen));
+    expect(decide(tool, guard, "stamity clean")).toEqual({ deny: false });
+    const strict = await placeGuard(tool, {}, ASK_MODE);
+    const clean = personOnlyVerdict("stamity clean", { ...ON_FEATURE, stricterThanDefault: true });
+    if (!clean.deny) throw new Error("the clean reads as no act");
+    expect(decide(tool, strict, "stamity clean")).toEqual(expectedAttended(tool, clean));
+    expect(decide(tool, strict, "stamity clean --pack production")).toEqual({ deny: false });
+    await getRepo().seedFiles(UNATTENDED);
+    expect(decide(tool, guard, "stamity sync --loosen")).toEqual({ deny: true, reason: expect.stringContaining(`${morningList(loosen)} ${WHY}`) });
   });
 });

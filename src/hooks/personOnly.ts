@@ -18,8 +18,16 @@
  * and is `ask: true` only when all of them are ask-class, so a refused act
  * never rides an approval; `deny` stays true on every person-only verdict.
  *
+ * **Run** (REQ-FLOW-137, REQ-FLOW-140). The context's `runs` names the ask-class rules the repository's autonomy
+ * setting runs unasked (`pr-ready` and a local `tag` by default, a workflow dispatch unless named as deploying): an
+ * act under one is listed in the allow verdict's `runs` and asks for nothing, and never hides an act that asks or
+ * refuses on the same line. Beside them: a commit status or check run written (`status-write`) is refused in every
+ * mode, and an `--admin` merge, a push or write onto a deploying branch, a dispatch named as deploying and a
+ * loosening of the setting itself ask. The deploying-branch matcher is a copy of `../config/autonomy.ts`'s, held
+ * equal by test, since this module imports nothing.
+ *
  * **While a run is unattended** the run verbs (`stamity run checkpoint`, `run
- * end`) are the only push path: {@link unattendedPushVerdict} refuses any raw
+ * end`, and `run land` for the run's own merge) are the only push path: {@link unattendedPushVerdict} refuses any raw
  * `git push` (`git subtree push` among them), `gh pr create`, `gh pr edit`, `gh pr close` or `gh pr reopen`, a `gh repo` form that
  * pushes, a write of a git remote, and a REST write that moves a branch or a pull request, so the held paths and the
  * last secret scan cannot be stepped around and the run verbs push where the run started. A reply on a comments endpoint passes. Whether a run is
@@ -72,7 +80,12 @@ export type PersonOnlyRuleId =
   | "repo-delete"
   | "repo-irreversible"
   | "protection-delete"
-  | "unpublish";
+  | "unpublish"
+  | "status-write"
+  | "admin-merge"
+  | "push-deploying"
+  | "workflow-dispatch"
+  | "autonomy-loosen";
 
 /** One person-only act: its rule id, what the person keeps, and whether it is ask-class (it can be undone). */
 export interface PersonOnlyRule {
@@ -137,6 +150,27 @@ export const PERSON_ONLY_RULES: readonly PersonOnlyRule[] = [
     ask: false,
   },
   { id: "unpublish", act: "withdrawing a published package or tag (`npm unpublish`, `npm dist-tag rm`)", ask: false },
+  {
+    id: "status-write",
+    act: "writing a commit status or a check run (a REST `statuses/<sha>` or `check-runs` write, GraphQL's `createCheckRun` or `updateCheckRun`): CI's to write, never an agent's, in every mode (REQ-FLOW-140)",
+    ask: false,
+  },
+  { id: "admin-merge", act: "merging a pull request past its branch's rules (`gh pr merge --admin`)", ask: true },
+  {
+    id: "push-deploying",
+    act: "a push, REST or GraphQL write onto a branch the repository names as deploying (`autonomy.deployingBranches`)",
+    ask: true,
+  },
+  {
+    id: "workflow-dispatch",
+    act: "dispatching a workflow (`gh workflow run`, a REST `dispatches` call); it runs unless `autonomy.deployingActs` names it",
+    ask: true,
+  },
+  {
+    id: "autonomy-loosen",
+    act: "loosening the autonomy setting (`--loosen` on a stamity command, an argument the guard cannot read on one, or a full `clean` or `init --force` while the setting is stricter than the default)",
+    ask: true,
+  },
 ];
 
 /**
@@ -144,7 +178,7 @@ export const PERSON_ONLY_RULES: readonly PersonOnlyRule[] = [
  * is ask-class (`ask`); a line with a refuse-class act names that act.
  */
 export type PersonOnlyVerdict =
-  | { deny: false }
+  | { deny: false; runs?: readonly PersonOnlyRuleId[] }
   | { deny: true; rule: PersonOnlyRuleId; act: string; reason: string; ask: boolean };
 
 /** A command's verdict under the unattended push rule. */
@@ -161,6 +195,19 @@ export interface PersonOnlyContext {
    * refspec naming a tag by its bare name reads as a tag push; `[]` when unread.
    */
   readonly tags: readonly string[];
+  /**
+   * The ask-class rules that run unasked (REQ-FLOW-137): the guard bakes them from the autonomy setting (`pr-ready`
+   * and `tag` in mode `autonomous`, `workflow-dispatch` unless named as deploying). An act under one of them is
+   * collected into the allow verdict's `runs`, never among the acts that ask; absent, every act asks as in 1.16.0.
+   */
+  readonly runs?: readonly PersonOnlyRuleId[];
+  /** The branch names and `*`/`**` patterns the repository names as deploying (`autonomy.deployingBranches`). */
+  readonly deployingBranches?: readonly string[];
+  /**
+   * Whether the baked setting is stricter than the default, so a full `clean` or an `init --force`, which lands the
+   * default, loosens it (REQ-FLOW-138); absent reads true.
+   */
+  readonly stricterThanDefault?: boolean;
 }
 
 /**
@@ -938,7 +985,53 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     });
     return { write, method: verb, paths, cmd: cmd.slice(0, end), next };
   }
+
+  /**
+   * The words after the program where a command runs this package (REQ-FLOW-121's land line, REQ-FLOW-138), or
+   * `null` for any other program: `stamity` or `st` as the program, a runner's package reading as that program
+   * above, or a launcher (`node`, `bun`, `deno`, `tsx`) or a package manager given a word naming the package or its
+   * CLI file (`node dist/cli.js`), the words after that word.
+   */
+  function packageArgs(cmd: string[]): string[] | null {
+    const program = cmd[0] ?? "";
+    if (program === "st" || /stamity/i.test(program)) return cmd.slice(1);
+    if (!["node", "nodejs", "bun", "deno", "tsx", ...MANAGERS].includes(program)) return null;
+    const at = cmd.findIndex((word, index) => index > 0 && /stamity|(?:^|[\\/])cli\.m?js$/i.test(word));
+    return at === -1 ? null : cmd.slice(at + 1);
+  }
   // </shell-reading>
+
+  // <deploying-branch>
+  // A copy of `src/config/autonomy.ts`'s `branchKey` and `matchesDeployingBranch`, code for code (that kernel module
+  // may not be imported here, and the guard carries this function as its own source): one shared table holds the two
+  // equal, and test/hooks/personOnly.test.ts holds the code the same text.
+  function branchKey(name: string): string {
+    const lower = name.toLowerCase();
+    return lower.startsWith("refs/heads/") ? lower.slice("refs/heads/".length) : lower;
+  }
+  function matchesDeployingBranch(name: string, patterns: readonly string[]): boolean {
+    const branch = branchKey(name);
+    return patterns.some((pattern) => {
+      const text = branchKey(pattern);
+      // `matched[j]`: the tokens read so far match the first `j` characters of `branch`.
+      let matched: boolean[] = Array.from({ length: branch.length + 1 }, (_, j) => j === 0);
+      for (let at = 0; at < text.length; at += 1) {
+        const wide = text.startsWith("**", at);
+        const star = wide || text.charAt(at) === "*";
+        if (wide) at += 1;
+        const next: boolean[] = [star && matched[0] === true];
+        for (let j = 1; j <= branch.length; j += 1) {
+          const char = branch.charAt(j - 1);
+          if (wide) next.push(matched[j] === true || next[j - 1] === true);
+          else if (star) next.push(matched[j] === true || (next[j - 1] === true && char !== "/"));
+          else next.push(matched[j - 1] === true && char === text.charAt(at));
+        }
+        matched = next;
+      }
+      return matched[branch.length] === true;
+    });
+  }
+  // </deploying-branch>
 
   const branch = (ref: string): string =>
     ref.replace(/^refs\/heads\//i, "").replace(/^refs\/remotes\/[^/]+\//i, "").toLowerCase();
@@ -949,22 +1042,38 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   let tagNames: Set<string> | null = null;
   const isTagName = (name: string): boolean =>
     (tagNames ??= new Set(ctx.tags.map((tag) => tag.replace(/^refs\/tags\//i, "").toLowerCase()))).has(name);
+  // The branches the repository names as deploying (REQ-FLOW-140): a destination the line cannot show (`null`) is one
+  // of them whenever any is named, so an unreadable target only adds an ask.
+  const deploying = ctx.deployingBranches ?? [];
+  const deploys = (name: string | null): boolean => deploying.length > 0 && (name === null || matchesDeployingBranch(name, deploying));
+  const onDeploying = ctx.currentBranch !== null && deploys(ctx.currentBranch);
+  /** Whether a REST or GraphQL write's branch values land on a deploying branch: none, or an empty one, is the default. */
+  const landsOnDeploying = (values: readonly (string | null)[]): boolean =>
+    deploying.length > 0 &&
+    (values.length === 0 ? [...defaults].some(deploys) : values.some((value) => (value === "" ? [...defaults].some(deploys) : deploys(value === null ? null : branch(value)))));
   // The ask-class rules (REQ-FLOW-102): any other rule refuses (REQ-FLOW-124), so a rule missing here never asks.
-  const ASK_RULES = new Set(["push-default", "push-tags", "tag", "pr-merge", "pr-ready", "release", "publish", "secrets", "protection"]);
+  const ASK_RULES = new Set(["push-default", "push-tags", "tag", "pr-merge", "pr-ready", "release", "publish", "secrets", "protection",
+    "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen"]);
   // Every act the line holds (v0a): each segment, each call `--next` joins, each path, flag, body field and GraphQL
   // entry; a refuse-class one decides the verdict, so a deletion never rides an approval.
   const acts: { deny: true; rule: PersonOnlyRuleId; act: string; reason: string; ask: boolean }[] = [];
+  // The acts whose rule the setting runs unasked (REQ-FLOW-137): kept apart, so one never hides an asked or refused act.
+  const ran: PersonOnlyRuleId[] = [];
   const deny = (rule: PersonOnlyRuleId, what: string): PersonOnlyVerdict => {
     const verdict = {
       deny: true as const,
       rule,
       act: what,
       reason:
-        `${what} is a person-only act (${rule}): the person runs it, never the agent (REQ-FLOW-102). ` +
-        `Stop here and list it for the person.`,
+        rule === "status-write"
+          ? `${what} is CI's to write, never the agent's (${rule}): a merge reads it as evidence (REQ-FLOW-140). Stop here.`
+          : `${what} is a person-only act (${rule}): the person runs it, never the agent (REQ-FLOW-102). ` +
+            `Stop here and list it for the person.`,
       ask: ASK_RULES.has(rule),
     };
-    acts.push(verdict);
+    if (ctx.runs?.includes(rule) === true) {
+      if (!ran.includes(rule)) ran.push(rule);
+    } else acts.push(verdict);
     return verdict;
   };
 
@@ -1057,24 +1166,42 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     if (tags || refspecs.some((spec) => sides(spec).some(namesTag))) return deny("push-tags", "A push of tags");
     for (const spec of refspecs) {
       const name = destination(spec).replace(/^(refs\/)?heads\//i, "").toLowerCase();
-      if (spec === ":" || spec === "+:") return deny("push-default", "A matching push, the default branch among them");
+      if (spec === ":" || spec === "+:") {
+        if (deploying.length > 0) deny("push-deploying", "A matching push, a deploying branch among the branches it may push");
+        return deny("push-default", "A matching push, the default branch among them");
+      }
+      // A refspec the line cannot show (a substitution, a variable, a PowerShell group, build/46) may name the default
+      // branch, so it reads as a push to it.
+      if (/[$`(]/.test(spec)) return deny("push-default", "A push whose refspec the line cannot show (a substitution, a variable or a group)");
+      if (name === "head" || name === "@" ? onDeploying : deploys(name)) {
+        deny("push-deploying", "A push to a branch the repository names as deploying");
+      }
       if (defaults.has(name)) return deny("push-default", `A push to the default branch \`${name}\``);
       if ((name === "head" || name === "@") && onDefault) {
         return deny("push-default", "A push of `HEAD` while on the default branch");
       }
       // A pattern refspec (`refs/heads/*:refs/heads/*`) pushes every branch it matches: denied when a default
-      // branch, by short name or full ref, is among them.
+      // branch, by short name or full ref, is among them, and asked where a deploying one may be (any pattern among
+      // the deploying ones counts, since two patterns' overlap is not read).
       const pattern = destination(spec).toLowerCase();
       if (pattern.includes("*")) {
         const parts = pattern.split("*").map((part) => part.replace(/[.+?^$()|[\]{}\\]/g, "\\$&"));
         const glob = new RegExp(`^${parts.join(".*")}$`);
-        if ([...defaults].some((ref) => [ref, `heads/${ref}`, `refs/heads/${ref}`].some((full) => glob.test(full)))) {
+        const hits = (refs: readonly string[]): boolean =>
+          refs.some((ref) => [ref, `heads/${ref}`, `refs/heads/${ref}`].some((full) => glob.test(full)));
+        if (deploying.some((entry) => entry.includes("*")) || hits(deploying.map(branchKey))) {
+          deny("push-deploying", "A pattern push, a deploying branch among the branches it may match");
+        }
+        if (hits([...defaults])) {
           return deny("push-default", "A pattern push, the default branch among the branches it matches");
         }
       }
     }
     // Keyed on the line's own refspecs: a `-c` pair only adds denials, since git applies it only to its own remote
     // or branch, which the line does not show (review/98).
+    if (named.length === 0 && (onDeploying || (matching && deploying.length > 0))) {
+      deny("push-deploying", "A push with no refspec that lands on a deploying branch");
+    }
     if (named.length === 0 && (onDefault || matching)) {
       return deny("push-default", "A push with no refspec that lands on the default branch");
     }
@@ -1154,6 +1281,9 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       return deny("tag", `A symbolic tag ref written or deleted (\`${via}\`)`);
     }
     if (remove || target === undefined || name === "HEAD") return null;
+    if (deploys(/[$`]/.test(target) ? null : target.replace(/^(refs\/)?heads\//i, ""))) {
+      deny("push-deploying", `A symbolic ref pointed at a deploying branch, or at a branch the line cannot show (\`${via}\`)`);
+    }
     if (/[$`]/.test(target) || defaults.has(target.replace(/^(refs\/)?heads\//i, "").toLowerCase())) {
       return deny("push-default", `A symbolic ref pointed at the default branch, or at a branch the line cannot show (\`${via}\`)`);
     }
@@ -1181,6 +1311,11 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     if (group === "pr" && sub === "merge" && flag("--delete-branch", "d", "bFtA")) {
       deny("push-delete", "A remote branch deletion (`gh pr merge --delete-branch`)");
     }
+    // An admin merge passes the branch's rules, the required checks and reviews among them (REQ-FLOW-140): named first,
+    // so the ask says so.
+    if (group === "pr" && sub === "merge" && flag("--admin", "", "")) {
+      deny("admin-merge", "An admin merge past the branch's rules (`gh pr merge --admin`)");
+    }
     if (group === "pr" && sub === "merge") deny("pr-merge", "Merging a pull request (`gh pr merge`)");
     // Closing with `--delete-branch` deletes the pull request's head branch on the remote (review/207).
     if (group === "pr" && sub === "close" && flag("--delete-branch", "d", "c")) {
@@ -1191,6 +1326,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       deny("pr-merge", "Approving a pull request review (`gh pr review --approve`)");
     }
     if (group === "pr" && sub === "ready") deny("pr-ready", "Marking a pull request ready (`gh pr ready`)");
+    // A dispatch runs a workflow, which may deploy; it runs unless the repository names it as deploying (REQ-FLOW-140).
+    if (group === "workflow" && sub === "run") deny("workflow-dispatch", "A workflow dispatch (`gh workflow run`)");
     if (group === "release" && sub !== undefined && !["list", "ls", "view", "download"].includes(sub)) {
       // `upload --clobber` replaces an asset, which removes the one it replaces.
       if (sub === "delete" || sub === "delete-asset" || (sub === "upload" && flag("--clobber", "", ""))) {
@@ -1228,19 +1365,26 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       if (words.length > 2) {
         if (flag("--force", "", "")) deny("force-push", "A forced sync of a repository (`gh repo sync --force`)");
         // A branch flag whose value the line ends before, an unquoted substitution having cut it, shows none.
+        if (landsOnDeploying(branches.map((name) => (/[$`]/.test(name) ? null : name)))) {
+          deny("push-deploying", "A sync of a deploying branch, or of a branch the line cannot show (`gh repo sync`)");
+        }
         if (branches.length === 0 || branches.some((name) => name === "" || /[$`]/.test(name) || defaults.has(branch(name)))) {
           deny("push-default", "A sync of a repository's default branch, or of a branch the line cannot show (`gh repo sync`)");
         }
       }
     }
     if (group === "repo" && sub === "edit") {
-      // A repository made public cannot be made private again in effect; every other settings flag can be undone.
+      // A repository made public cannot be made private again in effect; every other settings flag can be undone. With
+      // no settings flag gh asks its questions on the terminal, the visibility among them (build/8).
+      const settings = cmd.filter((word) => word.startsWith("--") && !/^--repo(=|$)/.test(word));
       if (cmd.some((word) => /^--visibility(=|$)/.test(word))) {
         deny("repo-irreversible", "A visibility change (`gh repo edit --visibility`)");
+      } else if (settings.length === 0) {
+        deny("repo-irreversible", "An interactive repository edit (`gh repo edit` with no settings flag), which can change the visibility");
       }
       if (cmd.some((word) => /^--default-branch(=|$)/.test(word))) {
         deny("protection", "A default-branch change (`gh repo edit --default-branch`)");
-      } else deny("protection", "A repository settings write (`gh repo edit`)");
+      } else if (settings.length > 0) deny("protection", "A repository settings write (`gh repo edit`)");
     }
     if (group === "api") httpVerdict(cmd);
   }
@@ -1402,6 +1546,11 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       const found = calls(name, key);
       return found.length === 0 || found.some(landsOnDefault);
     };
+    /** Whether a call of `name` lands on a deploying branch: none readable, or one placed there (REQ-FLOW-140). */
+    const callsDeploy = (name: string, key: string): boolean => {
+      const found = calls(name, key);
+      return deploying.length > 0 && (found.length === 0 || found.some(landsOnDeploying));
+    };
     // Every act of the call is collected (v0a): each GraphQL mutation and `updateRefs` entry, and each path's act.
     for (const path of paths) {
       const shown = `${method} ${path}`;
@@ -1409,6 +1558,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         // A pull request added to the merge queue is merged by the queue later (pr/57).
         if (/\b(mergePullRequest|enablePullRequestAutoMerge|enqueuePullRequest)\b/.test(text)) deny("pr-merge", "A GraphQL merge");
         if (/\bmarkPullRequestReadyForReview\b/.test(text)) deny("pr-ready", "A GraphQL ready-for-review");
+        // A check run is the evidence a merge reads, so it is CI's to write (REQ-FLOW-140).
+        if (/\b(createCheckRun|updateCheckRun)\b/.test(text)) deny("status-write", "A GraphQL check run write");
         // pr/74, from GitHub's schema read on 2026-10-18; a protection rule's, a ruleset's or a property's deletion is
         // refuse-class (v0a).
         if (/\b(deleteBranchProtectionRule|deleteRepositoryRuleset|deleteRepositoryCustomProperty)\b/.test(text)) {
@@ -1431,8 +1582,14 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
             deny("pr-merge", "A GraphQL review approval, or a review whose event the line cannot show");
           }
         }
+        if (/\bcreateCommitOnBranch\b/.test(text) && callsDeploy("createCommitOnBranch", "branchName")) {
+          deny("push-deploying", "A GraphQL commit to a deploying branch, or to a branch the line cannot show");
+        }
         if (/\bcreateCommitOnBranch\b/.test(text) && callsLand("createCommitOnBranch", "branchName")) {
           deny("push-default", "A GraphQL commit to the default branch");
+        }
+        if (/\bmergeBranch\b/.test(text) && callsDeploy("mergeBranch", "base")) {
+          deny("push-deploying", "A GraphQL merge into a deploying branch, or into a branch the line cannot show");
         }
         if (/\bmergeBranch\b/.test(text) && callsLand("mergeBranch", "base")) {
           deny("push-default", "A GraphQL merge into the default branch");
@@ -1454,6 +1611,9 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
           }
           // A list element given whole as a variable, beside literal ones, names a ref the line cannot show (review/128).
           const hidden = queries.some((query) => /\brefUpdates\s*:\s*\[(?:[^\]]*,)?\s*\$/.test(mask(query)));
+          if (((/\bupdateRef\b/.test(text) || hidden) && deploying.length > 0) || callsDeploy("updateRefs", "name")) {
+            deny("push-deploying", "A GraphQL ref update onto a deploying branch, or onto a ref the line cannot show");
+          }
           if (/\bupdateRef\b/.test(text) || hidden || callsLand("updateRefs", "name")) {
             deny("push-default", "A GraphQL ref update onto the default branch, or onto a ref the line cannot show");
           }
@@ -1465,8 +1625,9 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
           const created = calls("createRef", "name");
           if (created.length === 0 || created.some((refs) => refs.length === 0 || refs.some((ref) => ref === null || /^refs\/tags\//i.test(ref)))) {
             deny("push-tags", "A GraphQL tag ref created, or a ref the line cannot show");
-          } else if (created.flat().some((ref) => ref !== null && defaults.has(branch(ref)))) {
-            deny("push-default", "A GraphQL ref created on the default branch");
+          } else {
+            if (created.flat().some((ref) => ref !== null && deploys(branch(ref)))) deny("push-deploying", "A GraphQL ref created on a deploying branch");
+            if (created.flat().some((ref) => ref !== null && defaults.has(branch(ref)))) deny("push-default", "A GraphQL ref created on the default branch");
           }
         }
         continue;
@@ -1518,8 +1679,22 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       }
       if (/^branches\/.+\/rename$/i.test(path)) deny("protection", `A branch rename (${shown})`);
       if (/^transfer$/i.test(path)) deny("repo-irreversible", `A repository transfer (${shown})`);
+      // A commit status or check run is the evidence a merge reads, so it is CI's to write (REQ-FLOW-140).
+      if (/^statuses\/[^/]+$/i.test(path) || /^check-runs(\/[^/]+)?$/i.test(path)) {
+        deny("status-write", `A commit status or check run written (${shown})`);
+      }
+      // A workflow dispatch, by its workflow or the repository's own event (REQ-FLOW-140).
+      if (/^actions\/workflows\/[^/]+\/dispatches$/i.test(path) || /^dispatches$/i.test(path)) {
+        deny("workflow-dispatch", `A workflow dispatch (${shown})`);
+      }
+      if (/^contents(\/|$)/i.test(path) && landsOnDeploying(fields("branch"))) {
+        deny("push-deploying", `A REST commit to a deploying branch (${shown})`);
+      }
       if (/^contents(\/|$)/i.test(path) && landsOnDefault(fields("branch"))) {
         deny("push-default", `A REST commit to the default branch (${shown})`);
+      }
+      if ((/^merges$/i.test(path) && landsOnDeploying(fields("base"))) || (/^merge-upstream$/i.test(path) && landsOnDeploying(fields("branch")))) {
+        deny("push-deploying", `A REST merge into a deploying branch (${shown})`);
       }
       if (
         (/^merges$/i.test(path) && landsOnDefault(fields("base"))) ||
@@ -1567,6 +1742,9 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       // The path's own ref read from the path as routing reads it (review/107); a body's `ref` from the line.
       const heads = [/^git\/refs\/heads\/(.+)$/i.exec(path)?.[1] ?? "", ...[...text.matchAll(/(?:^|[=\s/])refs\/heads\/(\S+)/gi)].map((match) => match[1] ?? ""),
         ...refs.map((ref) => /^refs\/heads\/(.+)$/i.exec(ref ?? "")?.[1] ?? "")];
+      if (heads.some((name) => name !== "" && deploys(name))) {
+        deny("push-deploying", `A REST write to a deploying branch (${shown})`);
+      }
       if (heads.some((name) => defaults.has(name.toLowerCase()))) {
         deny("push-default", `A REST write to the default branch (${shown})`);
       }
@@ -1635,12 +1813,55 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         if (["add", "a", "set", "s"].includes(action)) deny("publish", "A dist-tag moved (`npm dist-tag add`)");
       }
     }
-    return publishes ? deny("publish", `Publishing a package (\`${cmd[0]} publish\`)`) : null;
+    // A publish carrying a literal `--dry-run` sends nothing, so it is no publish and runs (REQ-FLOW-102, as built):
+    // npm's, pnpm's, bun's and yarn's `npm publish`, the flag before any `--` and not an option's value. Every other
+    // spelling still asks, fail-closed: another dry-run, negation or `-d` word on the call (`--dry-run=false`, a later
+    // `--no-dry-run`, an abbreviation), a word the reading cannot settle (a `$` or a backtick), the flag quoted or
+    // built in the line's text, `npm_config_dry_run` named on the line, and yarn classic's own publish.
+    const end = cmd.indexOf("--");
+    const options = end === -1 ? cmd : cmd.slice(0, end);
+    const yarnNpm = cmd[0] === "yarn" && positionalsOf(false).some((word, index, all) => word === "publish" && all[index - 1] === "npm");
+    const dryRun =
+      (cmd[0] !== "yarn" || yarnNpm) &&
+      options.some((word, index) => (word === "--dry-run" || word === "--dry-run=true") && !valued.has(options[index - 1] ?? "")) &&
+      !cmd.some((word) => /^-{1,2}(?:no-?)?d(?:r|=|$)/i.test(word) && word !== "--dry-run" && word !== "--dry-run=true") &&
+      !cmd.some((word) => /[$`]/.test(word)) &&
+      !/npm_config_dry_run/i.test(command) &&
+      /(?:^|[\s;&|(])--dry-run(?:=true)?(?=[\s;&|)]|$)/.test(command);
+    return publishes && !dryRun ? deny("publish", `Publishing a package (\`${cmd[0]} publish\`)`) : null;
+  }
+
+  /**
+   * `autonomy-loosen` (REQ-FLOW-138, the guard's half): on a command running this package (`packageArgs`) or one whose
+   * program the reading cannot settle (a `$` or a backtick in its word), `--loosen` in any word; an argument the
+   * reading cannot settle (a `$`, a backtick, a PowerShell group), which may spell it; and, while the baked setting is
+   * stricter than the default, a full `clean` (no `--pack`) or an `init --force`, each of which lands the default.
+   */
+  function loosenVerdict(cmd: string[]): void {
+    const args = /[$`]/.test(cmd[0] ?? "") ? cmd.slice(1) : packageArgs(cmd);
+    if (args === null) return;
+    if (args.some((word) => /^--loosen(=|$)/.test(word))) {
+      deny("autonomy-loosen", "Loosening the autonomy setting (`--loosen`)");
+      return;
+    }
+    if (args.some((word) => /[$`]/.test(word) || word.startsWith("("))) {
+      deny("autonomy-loosen", "A stamity command with an argument the guard cannot read, which may spell `--loosen`");
+      return;
+    }
+    if (ctx.stricterThanDefault === false) return;
+    const sub = args.find((word) => !word.startsWith("-"));
+    if (sub === "clean" && !args.some((word) => /^--pack(=|$)/.test(word))) {
+      deny("autonomy-loosen", "A full `clean`, which removes the guard holding an autonomy setting stricter than the default");
+    }
+    if (sub === "init" && args.some((word) => /^--force(=|$)/.test(word))) {
+      deny("autonomy-loosen", "An `init --force`, which lands the default autonomy setting over a stricter one");
+    }
   }
 
   // Each segment's acts are collected (v0a); the readers record them through `deny`.
   for (const cmd of commandsOf(command, 0, false)) {
     const program = cmd[0] ?? "";
+    loosenVerdict(cmd);
     if (program === "git") {
       const { sub, args, config } = gitParts(cmd);
       // `git send-pack` pushes as `git push` does, its options and refspecs laid out the same (pr/16); with
@@ -1697,8 +1918,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     else if (program === "curl" || program === "wget") httpVerdict(cmd);
     else if (["npm", "pnpm", "yarn", "bun"].includes(program)) publishVerdict(cmd);
   }
-  // A refuse-class act decides the line; with none, the first act asks (v0a).
-  return acts.find((act) => !act.ask) ?? acts[0] ?? { deny: false };
+  // A refuse-class act decides the line; with none, the first act asks (v0a); with none, the acts that run are named.
+  return acts.find((act) => !act.ask) ?? acts[0] ?? (ran.length > 0 ? { deny: false, runs: ran } : { deny: false });
 }
 
 /**
@@ -1720,14 +1941,19 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
  * is read as {@link personOnlyVerdict} reads it, and throws as it does; with `powershell`, as PowerShell's command string
  * (the PowerShell tool's text), a POSIX shell's reading beside it.
  *
- * A run verb stands alone on its line (REQ-FLOW-121): a line that runs `stamity run start`, `checkpoint` or `end`, or
- * names one beside the package, is refused unless it is that one simple command, so nothing on the line changes the
- * environment the verb's git runs in.
+ * A run verb stands alone on its line (REQ-FLOW-121): a line that runs `stamity run start`, `checkpoint`, `end` or
+ * `land`, or names one beside the package, is refused unless it is that one simple command, so nothing on the line
+ * changes the environment the verb's git runs in.
+ *
+ * With `landOnly`, the guard's attended reading of the land verb's line (REQ-FLOW-121, a4): only that rule, and only
+ * over the parsed program words (a command whose program is this package, then `run` and `land`), never the raw text,
+ * so a commit message naming the verb runs. A line that builds the verb by an expression is not seen there; the
+ * verb's own checks back that residual.
  *
  * Self-contained, so the emitted guard can carry it as source (see the module
  * comment).
  */
-export function unattendedPushVerdict(command: string, powershell = false): UnattendedPushVerdict {
+export function unattendedPushVerdict(command: string, powershell = false, landOnly = false): UnattendedPushVerdict {
   // <shell-reading>
   const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
   const KEYWORDS = new Set(["!", "{", "}", "if", "then", "else", "elif", "fi", "do", "done", "while", "until"]);
@@ -2309,6 +2535,20 @@ export function unattendedPushVerdict(command: string, powershell = false): Unat
     });
     return { write, method: verb, paths, cmd: cmd.slice(0, end), next };
   }
+
+  /**
+   * The words after the program where a command runs this package (REQ-FLOW-121's land line, REQ-FLOW-138), or
+   * `null` for any other program: `stamity` or `st` as the program, a runner's package reading as that program
+   * above, or a launcher (`node`, `bun`, `deno`, `tsx`) or a package manager given a word naming the package or its
+   * CLI file (`node dist/cli.js`), the words after that word.
+   */
+  function packageArgs(cmd: string[]): string[] | null {
+    const program = cmd[0] ?? "";
+    if (program === "st" || /stamity/i.test(program)) return cmd.slice(1);
+    if (!["node", "nodejs", "bun", "deno", "tsx", ...MANAGERS].includes(program)) return null;
+    const at = cmd.findIndex((word, index) => index > 0 && /stamity|(?:^|[\\/])cli\.m?js$/i.test(word));
+    return at === -1 ? null : cmd.slice(at + 1);
+  }
   // </shell-reading>
 
   const deny = (what: string): UnattendedPushVerdict => ({
@@ -2492,10 +2732,10 @@ export function unattendedPushVerdict(command: string, powershell = false): Unat
    * a word, review/93), the CLI file, a pinned `@<semver>`. The verb follows `run` directly, or after option words and
    * their values that open on a dash and hold no `;`, `|`, `&` or line break (review/130).
    */
-  const RUN_VERBS = new Set(["start", "checkpoint", "end"]);
+  const RUN_VERBS = new Set(["start", "checkpoint", "end", "land"]);
   const PACKAGE = /stamity|\bst\b|\bcli\.m?js\b|@\d+\.\d+\.\d+/i;
   const namesVerb = (text: string): boolean =>
-    /\brun(?:\W+|[^\w\s]*\s+[^\w\s-]*-[^;|&\r\n]*?\W)(?:start|checkpoint|end)\b/i.test(text) && PACKAGE.test(text);
+    /\brun(?:\W+|[^\w\s]*\s+[^\w\s-]*-[^;|&\r\n]*?\W)(?:start|checkpoint|end|land)\b/i.test(text) && PACKAGE.test(text);
   /**
    * The same over one parsed command's decoded words, joined (review/130, round 3), for a form the parse does not
    * normalize (the CLI file started by `node`, a launcher it does not unwrap). Inside one simple command a separator
@@ -2509,8 +2749,8 @@ export function unattendedPushVerdict(command: string, powershell = false): Unat
     if (!PACKAGE.test(text)) return false;
     for (const open of text.matchAll(/\brun[^\w\s]*\s+([^\w\s]*)/gi)) {
       const rest = text.slice((open.index ?? 0) + open[0].length);
-      if (/^(?:start|checkpoint|end)\b/i.test(rest)) return true;
-      if (/[-$`@*?[{]/.test(open[1] ?? "")) return /(?:^|\W)(?:start|checkpoint|end)\b/i.test(rest);
+      if (/^(?:start|checkpoint|end|land)\b/i.test(rest)) return true;
+      if (/[-$`@*?[{]/.test(open[1] ?? "")) return /(?:^|\W)(?:start|checkpoint|end|land)\b/i.test(rest);
     }
     return false;
   };
@@ -2527,7 +2767,7 @@ export function unattendedPushVerdict(command: string, powershell = false): Unat
    * closing `2>&1`. Single quotes are literal; double quotes hold no `$`, backtick or backslash; nothing else on the
    * line expands, redirects, joins or nests a command. With `powershell` the same, and no typographic quote, which
    * PowerShell reads as a quote, no blank but a space or a tab, no stop-parsing `--%` (its dashes typographic too), and
-   * no unquoted `@` after the program, which PowerShell reads as a splat (review/131).
+   * no unquoted `@` in a word after `run`, which PowerShell reads as a splat (review/131, build/97).
    */
   function verbShape(line: string): string | null {
     const text = line.replace(/[ \t]+2>&1[ \t]*$/, "");
@@ -2579,11 +2819,28 @@ export function unattendedPushVerdict(command: string, powershell = false): Unat
     if (words[at] !== "run") return "words between the program and `run <verb>`";
     if (!RUN_VERBS.has(words[at + 1] ?? "")) return "words between `run` and its verb";
     // The program, the npx flag, the registry and the package are pinned above, so only the option words can splat.
-    if (powershell && ats.some((index) => index > at)) return "an unquoted `@` after the program, which PowerShell reads as a splat";
+    if (powershell && ats.some((index) => index > at)) return "an unquoted `@` in a word after `run`, which PowerShell reads as a splat";
     return null;
   }
 
   const commands = commandsOf(command, 0, powershell);
+  // The land verb's line in every mode (REQ-FLOW-121, a4): read on the parsed program words alone, so a commit message,
+  // a comment or a search that only names the verb runs; a parsed `stamity run land` passes only as the one simple
+  // command `verbShape` admits.
+  if (landOnly) {
+    const lands = commands.some((cmd) => {
+      const args = packageArgs(cmd) ?? [];
+      const at = args.findIndex((word) => !word.startsWith("-"));
+      return at !== -1 && args[at] === "run" && args.slice(at + 1).includes("land");
+    });
+    const broke = lands ? verbShape(command) : null;
+    return broke === null
+      ? { deny: false }
+      : {
+          deny: true,
+          reason: `\`stamity run land\` on a line that is more than the verb (${broke}; REQ-FLOW-121): the land verb runs only alone on its line, in every mode.`,
+        };
+  }
   for (const cmd of commands) {
     const program = cmd[0] ?? "";
     if (program === "git") {
@@ -2702,7 +2959,7 @@ export function unattendedPushVerdict(command: string, powershell = false): Unat
     [...assigned, ...commands.flat()].some(namesVerb);
   const broke = runsVerb ? verbShape(command) : null;
   if (broke !== null) {
-    return deny(`A run verb (\`stamity run start\`, \`checkpoint\` or \`end\`) on a line that is more than the verb (${broke}; REQ-FLOW-121)`);
+    return deny(`A run verb (\`stamity run start\`, \`checkpoint\`, \`end\` or \`land\`) on a line that is more than the verb (${broke}; REQ-FLOW-121)`);
   }
   return { deny: false };
 }

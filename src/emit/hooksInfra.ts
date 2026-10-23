@@ -65,6 +65,7 @@
  */
 
 import { resolve } from "node:path";
+import { resolveAutonomy, type ResolvedAutonomy } from "../config/autonomy.ts";
 import { CLAUDE_HOOKS_DIR, HOOK_SESSION_START_TIMEOUT_MS, type HookInterchange } from "../hooks/model.ts";
 import { MAX_POLICY_FILE_BYTES, PERSON_ONLY_GUARD_FILE, planCoreHookScripts, type HookScriptLayout } from "../hooks/scripts.ts";
 import { readHookDefinitions, type ReadHooksResult } from "../hooks/userHooks.ts";
@@ -279,6 +280,12 @@ export interface CoreHooksPlan {
    * decline.
    */
   warnings: string[];
+  /**
+   * The autonomy setting the plan resolved from the manifest (REQ-FLOW-137), the one every person-only guard copy
+   * above bakes (`../hooks/scripts.ts`), so an adapter rendering settings rows from it agrees with the guard.
+   * {@link planHooksInfra} always sets it; a hand-built plan may leave it out.
+   */
+  autonomy?: ResolvedAutonomy;
 }
 
 /**
@@ -310,7 +317,7 @@ export interface HooksPlanContext {
   /** Absolute repository root the outputs will be written under. */
   rootDir: string;
   /** The manifest driving selection — tools and user-hook wiring are read here. */
-  manifest: Pick<SetupManifest, "tools" | "hooks">;
+  manifest: Pick<SetupManifest, "tools" | "hooks" | "autonomy">;
   /**
    * The engine version — the version the core scripts' CLI hint pins
    * (`npx -y <packageName>@<engineVersion> check`), as the `${STAMITY:CLI}`
@@ -497,6 +504,8 @@ export async function planHooksInfra(ctx: HooksPlanContext): Promise<CoreHooksPl
     );
   }
 
+  // Resolved once, so every guard copy and every adapter reads one setting (REQ-FLOW-137).
+  const autonomy = resolveAutonomy(ctx.manifest);
   const scripts: PlannedHookScript[] = [];
   const rowsByTool = new Map<Tool, HookInterchange[]>();
   for (const tool of tools) {
@@ -509,8 +518,8 @@ export async function planHooksInfra(ctx: HooksPlanContext): Promise<CoreHooksPl
     const copy = tool === "claude" && ctx.hookScriptsRoot === undefined ? CLAUDE_COPY_PLACEMENT : undefined;
     const run =
       copy === undefined
-        ? planCoreHookScripts(policiesPathFor(ctx.hookScriptsRoot), tool, { ...cliCallContextOf(ctx), personOnlyGuard: true })
-        : planCoreHookScripts(copy.policiesPath, tool, { ...cliCallContextOf(ctx), personOnlyGuard: true, layout: copy.layout });
+        ? planCoreHookScripts(policiesPathFor(ctx.hookScriptsRoot), tool, { ...cliCallContextOf(ctx), personOnlyGuard: true, autonomy })
+        : planCoreHookScripts(copy.policiesPath, tool, { ...cliCallContextOf(ctx), personOnlyGuard: true, layout: copy.layout, autonomy });
     for (const script of run) {
       const path = copy === undefined ? `${HOOKS_GENERATED_DIR}/${tool}/${script.fileName}` : `${copy.dir}/${script.fileName}`;
       scripts.push({ path, content: script.content, tool });
@@ -609,5 +618,6 @@ export async function planHooksInfra(ctx: HooksPlanContext): Promise<CoreHooksPl
     // annotating its rows cannot bleed into another adapter's view.
     interchangeFor: (tool) => structuredClone(rowsByTool.get(tool) ?? []),
     warnings,
+    autonomy,
   };
 }

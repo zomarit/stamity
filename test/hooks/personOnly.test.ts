@@ -1,12 +1,14 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { matchesDeployingBranch } from "../../src/config/autonomy.ts";
 import {
   CLAUDE_ASK_ROWS,
   CLAUDE_DENY_ROWS,
   PERSON_ONLY_RULES,
   personOnlyVerdict,
   unattendedPushVerdict,
+  type PersonOnlyRuleId,
 } from "../../src/hooks/personOnly.ts";
 import { CURATED_MCP_SERVERS, PLATFORM_MCP_SERVER } from "../../src/mcp/catalog.ts";
 import { REGISTRY_URL } from "../../src/shared/cliCall.ts";
@@ -35,7 +37,14 @@ const ON_TRUNK = { defaultBranches: ["trunk"], currentBranch: "trunk", tags: [] 
 /** A repository whose local tags include `v1.0.0` (u14 reads them from `refs/tags/` and `packed-refs`). */
 const TAGGED = { defaultBranches: [], currentBranch: "feat/x", tags: ["v1.0.0"] } as const;
 
-type Ctx = { defaultBranches: readonly string[]; currentBranch: string | null; tags: readonly string[] };
+type Ctx = {
+  defaultBranches: readonly string[];
+  currentBranch: string | null;
+  tags: readonly string[];
+  runs?: readonly PersonOnlyRuleId[];
+  deployingBranches?: readonly string[];
+  stricterThanDefault?: boolean;
+};
 
 const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   // force-push
@@ -984,7 +993,10 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
  * The ask-class rules (REQ-FLOW-102), written here apart from the source's own set so a rule moved between the classes
  * fails this file: every other rule is refuse-class (REQ-FLOW-124).
  */
-const ASK_CLASS = new Set(["push-default", "push-tags", "tag", "pr-merge", "pr-ready", "release", "publish", "secrets", "protection"]);
+// TEST CHANGE, justified (REQ-FLOW-140, REQ-FLOW-138, a4): the admin merge, the deploying push, the deploying dispatch
+// and the loosening of the autonomy setting join the ask class; the status write is refuse-class, so it stays out.
+const ASK_CLASS = new Set(["push-default", "push-tags", "tag", "pr-merge", "pr-ready", "release", "publish", "secrets", "protection",
+  "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen"]);
 
 const ZERO = "0".repeat(40);
 /** A GraphQL `updateRefs` call with one entry: its ref name and its `afterOid`. */
@@ -1124,6 +1136,30 @@ const CLASSES: readonly (readonly [command: string, rule: string, ask: boolean, 
   ["yarn tag rm x beta", "unpublish", false],
   ["yarn workspace x tag remove x beta", "unpublish", false],
   ["yarn tag add x@1.0.0 latest", "publish", true],
+  // a4 (REQ-FLOW-140, REQ-FLOW-138, build/8, build/46): the new rules in their classes, each beside an existing row's
+  // form. A commit status or check run written is refuse-class in every spelling; the admin merge, the deploying push,
+  // a dispatch with no autonomy context and a loosening ask; a flagless `gh repo edit`, which asks its questions on the
+  // terminal (visibility among them), is refuse-class; a refspec in a PowerShell group reads as a default-branch push.
+  ["gh api -X POST repos/o/r/statuses/abc123 -f state=success -f context=ci", "status-write", false],
+  ["gh api repos/o/r/statuses/abc123 -f state=success", "status-write", false],
+  ["curl -X POST -d '{\"state\":\"success\"}' https://api.github.com/repos/o/r/statuses/abc123", "status-write", false],
+  ["gh api -X POST repos/o/r/check-runs -f name=ci -f head_sha=abc -f conclusion=success", "status-write", false],
+  ["gh api -X PATCH repos/o/r/check-runs/7 -f conclusion=success", "status-write", false],
+  ["gh api graphql -f query='mutation { createCheckRun(input: {repositoryId: \"R\", headSha: \"abc\", name: \"ci\"}) { checkRun { id } } }'", "status-write", false],
+  ["gh api graphql -f query='mutation { updateCheckRun(input: {repositoryId: \"R\", checkRunId: \"C\", conclusion: SUCCESS}) { checkRun { id } } }'", "status-write", false],
+  ["gh pr merge 3 --squash && gh api -X POST repos/o/r/statuses/abc -f state=success", "status-write", false],
+  ["gh pr merge 3 --admin --squash", "admin-merge", true],
+  ["gh pr merge --admin 3", "admin-merge", true],
+  ["git push origin production", "push-deploying", true, { defaultBranches: [], currentBranch: "feat/x", tags: [], deployingBranches: ["production"] }],
+  ["gh workflow run deploy.yml -f env=prod", "workflow-dispatch", true],
+  ["gh api -X POST repos/o/r/actions/workflows/deploy.yml/dispatches -f ref=main", "workflow-dispatch", true],
+  ["gh api -X POST repos/o/r/dispatches -f event_type=deploy", "workflow-dispatch", true],
+  ["stamity sync --loosen", "autonomy-loosen", true],
+  ["gh repo edit", "repo-irreversible", false],
+  ["gh repo edit o/r", "repo-irreversible", false],
+  ["git push origin (git branch --show-current)", "push-default", true],
+  ["git push origin \"$(git branch --show-current)\"", "push-default", true],
+  ["git push origin `git branch --show-current`", "push-default", true],
 ];
 
 describe("personOnlyVerdict — ask or refuse (v0a)", () => {
@@ -1238,6 +1274,12 @@ describe("personOnlyVerdict — the deny matrix", () => {
       "repo-irreversible",
       "protection-delete",
       "unpublish",
+      // TEST CHANGE, justified (REQ-FLOW-140, REQ-FLOW-138, a4): five rules join the table after 1.16.0's eighteen.
+      "status-write",
+      "admin-merge",
+      "push-deploying",
+      "workflow-dispatch",
+      "autonomy-loosen",
     ]);
     const hit = new Set([...DENY, ...CLASSES].map(([, rule]) => rule));
     expect(hit).toEqual(ids);
@@ -1477,7 +1519,9 @@ describe("a substitution, wget's `-X` and gh's options before its subcommand, re
     ["curl -s $(true) https://api.github.com/repos/o/r/pulls/3"],
     ["gh pr --body x view 1"],
     ["gh -R o/r pr view 1"],
-    ["git push origin $(true) feat/x"],
+    // TEST CHANGE, justified (REQ-FLOW-140, build/46, a4): `git push origin $(true) feat/x` left this list: a refspec
+    // word holding a substitution is one the line cannot show, so it now reads as a push to the default branch (below).
+    ["git push origin feat/x"],
   ])("personOnlyVerdict allows the read or feature-branch twin %j", (command) => {
     expect(personOnlyVerdict(command, ON_FEATURE)).toEqual({ deny: false });
   });
@@ -1495,6 +1539,22 @@ describe("unattendedPushVerdict — a run verb stands alone on its line (v0b, RE
     expect(verdict.reason).toContain(broke);
     expect(verdict.reason).toContain("REQ-FLOW-121");
     expect(verdict.reason).toContain("stamity run checkpoint");
+  };
+  /**
+   * TEST CHANGE, justified (REQ-FLOW-138, a4): attended, these lines stay no person-only act, except where a stamity
+   * command's argument holds an expansion the reading cannot settle, which may spell `--loosen`: that one now asks as
+   * `autonomy-loosen`. The lines are listed, not derived, so the reader's own rule is what this pins.
+   */
+  const UNREADABLE_ARGUMENT = new Set([
+    "npx --no stamity run end --run \"$RUN\"",
+    "st run end --run \"$RUN\"",
+    "PATH=/tmp/bin node dist/cli.js run \"$OPT\" end --run x",
+    "PATH=/tmp/bin node dist/cli.js run $OPT end --run x",
+  ]);
+  const expectAttended = (command: string): void => {
+    if (UNREADABLE_ARGUMENT.has(command)) {
+      expect(personOnlyVerdict(command, ON_FEATURE), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+    } else expect(personOnlyVerdict(command, ON_FEATURE), command).toEqual({ deny: false });
   };
 
   it.each([
@@ -1527,7 +1587,7 @@ describe("unattendedPushVerdict — a run verb stands alone on its line (v0b, RE
   ])("refuses %j, naming what broke the shape", (command, broke) => {
     expectRefused(unattendedPushVerdict(command), broke);
     // Attended, the same line is what it was: no person-only act.
-    expect(personOnlyVerdict(command, ON_FEATURE)).toEqual({ deny: false });
+    expectAttended(command);
   });
 
   it.each([
@@ -1581,7 +1641,7 @@ describe("unattendedPushVerdict — a run verb stands alone on its line (v0b, RE
     ["unbuffer ./node_modules/.bin/st run end --run x", "a first word other than `stamity`, `st` or `npx`"],
   ])("refuses %j under the second bin, naming what broke the shape (review/93)", (command, broke) => {
     expectRefused(unattendedPushVerdict(command), broke);
-    expect(personOnlyVerdict(command, ON_FEATURE)).toEqual({ deny: false });
+    expectAttended(command);
   });
 
   it.each([
@@ -1671,7 +1731,7 @@ describe("unattendedPushVerdict — a run verb stands alone on its line (v0b, RE
     ["PATH=/tmp/bin node dist/cli.js run $OPT end --run x", "an unquoted `$`"],
   ])("refuses %j, a run verb after option words only the decoded words show (review/130)", (command, broke) => {
     expectRefused(unattendedPushVerdict(command), broke);
-    expect(personOnlyVerdict(command, ON_FEATURE)).toEqual({ deny: false });
+    expectAttended(command);
   });
 
   it.each([
@@ -2329,9 +2389,12 @@ describe("CLAUDE_DENY_ROWS and CLAUDE_ASK_ROWS", () => {
     );
     // `push-default` has no row: a prefix ending in a branch name over-matches a longer one (see below).
     // `protection-delete` is a REST or GraphQL form only, which no prefix can say.
+    // TEST CHANGE, justified (REQ-FLOW-140, REQ-FLOW-138, a4): no prefix row says the five new rules either: a status
+    // write is a REST or GraphQL form, `--admin` and `--loosen` sit mid-line, a deploying branch is a name, and a
+    // dispatch asks only where the repository names it, which a settings row cannot read.
     expect([...rules].toSorted()).toEqual(
       PERSON_ONLY_RULES.map((rule) => rule.id)
-        .filter((id) => !["push-default", "protection-delete"].includes(id))
+        .filter((id) => !["push-default", "protection-delete", "status-write", "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen"].includes(id))
         .toSorted(),
     );
   });
@@ -2384,5 +2447,289 @@ describe("embedding as source (u14 embeds both functions into the emitted guard)
     for (const [command, rule, ask, ctx] of CLASSES) expect(personOnly(command, ctx ?? ON_FEATURE)).toMatchObject({ rule, ask });
     expect(unattended("git push origin HEAD:refs/heads/x").deny).toBe(true);
     expect(unattended("gh api repos/o/r/pulls/3/comments -F body=@reply.md")).toEqual({ deny: false });
+  });
+});
+
+/**
+ * a4-guard-ask-list (REQ-FLOW-137, REQ-FLOW-138, REQ-FLOW-140, REQ-FLOW-121): what the autonomy setting runs, the new
+ * rules' readers, the dry-run publish, the land verb's line and the deploying-branch matcher's copy. Each allowed row
+ * sits beside a refused or asked one a fact away (a context field, a flag, a word), so a reading that ran everything,
+ * or nothing, fails.
+ */
+describe("the autonomy setting's acts that run unasked (a4, REQ-FLOW-137)", () => {
+  /** The context the guard bakes for the default setting: a ready mark, a local tag and an unnamed dispatch run. */
+  const DEFAULT_RUNS: readonly PersonOnlyRuleId[] = ["pr-ready", "tag", "workflow-dispatch"];
+  const RUNNING = { ...ON_FEATURE, runs: DEFAULT_RUNS, deployingBranches: [], stricterThanDefault: false };
+
+  it.each([
+    ["gh pr ready 3", ["pr-ready"]],
+    ["git tag v2", ["tag"]],
+    ["git tag -a v2 -m 'release v2'", ["tag"]],
+    ["gh workflow run ci.yml", ["workflow-dispatch"]],
+    ["gh api graphql -f query='mutation { markPullRequestReadyForReview(input: {pullRequestId: \"P\"}) { clientMutationId } }'", ["pr-ready"]],
+    ["gh pr ready 3 && git tag v2", ["pr-ready", "tag"]],
+  ])("runs %j under the default setting and names it, where no setting asks for it", (command, runs) => {
+    expect(personOnlyVerdict(command, RUNNING)).toEqual({ deny: false, runs });
+    // The neighbour: with no autonomy context (1.16.0's reading) the same act asks.
+    expect(personOnlyVerdict(command, ON_FEATURE)).toMatchObject({ deny: true, ask: true });
+  });
+
+  it("never lets an act that runs hide an act that asks or refuses on the same line", () => {
+    expect(personOnlyVerdict("git tag v2 && git push origin v2", { ...RUNNING, tags: ["v2"] })).toMatchObject({ deny: true, rule: "push-tags", ask: true });
+    expect(personOnlyVerdict("gh pr ready 3 && gh pr merge 3", RUNNING)).toMatchObject({ deny: true, rule: "pr-merge", ask: true });
+    expect(personOnlyVerdict("git tag v2 && git push --force origin feat/x", RUNNING)).toMatchObject({ deny: true, rule: "force-push", ask: false });
+    expect(personOnlyVerdict("gh pr ready 3; git push origin --tags", RUNNING)).toMatchObject({ deny: true, rule: "push-tags", ask: true });
+  });
+
+  it("asks for an act the context leaves out of `runs`, as a repository naming it deploying leaves it out", () => {
+    const named = { ...RUNNING, runs: ["tag", "workflow-dispatch"] as const };
+    expect(personOnlyVerdict("gh pr ready 3", named)).toMatchObject({ deny: true, rule: "pr-ready", ask: true });
+    expect(personOnlyVerdict("git tag v2", named)).toEqual({ deny: false, runs: ["tag"] });
+    const dispatchNamed = { ...RUNNING, runs: ["pr-ready", "tag"] as const };
+    expect(personOnlyVerdict("gh workflow run deploy.yml", dispatchNamed)).toMatchObject({ deny: true, rule: "workflow-dispatch", ask: true });
+    expect(personOnlyVerdict("gh workflow list", dispatchNamed)).toEqual({ deny: false });
+  });
+
+  it("keeps a deletion or a forced move of a tag refuse-class whatever runs", () => {
+    expect(personOnlyVerdict("git tag -d v1", RUNNING)).toMatchObject({ deny: true, rule: "tag-delete", ask: false });
+    expect(personOnlyVerdict("git tag -f v1", RUNNING)).toMatchObject({ deny: true, rule: "tag-delete", ask: false });
+  });
+});
+
+describe("a commit status or check run written (a4, REQ-FLOW-140)", () => {
+  const RUNNING = { ...ON_FEATURE, runs: ["pr-ready", "tag", "workflow-dispatch"] as const };
+  it("is refused whatever the setting runs, and its reads pass", () => {
+    for (const ctx of [ON_FEATURE, RUNNING]) {
+      expect(personOnlyVerdict("gh api -X POST repos/o/r/statuses/abc -f state=success", ctx)).toMatchObject({ deny: true, rule: "status-write", ask: false });
+      expect(personOnlyVerdict("gh api repos/o/r/commits/abc/statuses", ctx)).toEqual({ deny: false });
+      expect(personOnlyVerdict("gh api repos/o/r/commits/abc/check-runs", ctx)).toEqual({ deny: false });
+    }
+    const verdict = personOnlyVerdict("gh api -X POST repos/o/r/check-runs -f name=ci", ON_FEATURE);
+    if (!verdict.deny) throw new Error("the check run write is no person-only act");
+    expect(verdict.reason).toContain("is CI's to write, never the agent's (status-write)");
+  });
+});
+
+describe("an admin merge (a4, REQ-FLOW-140)", () => {
+  it("asks naming the admin route first, and a plain merge asks as a merge", () => {
+    expect(personOnlyVerdict("gh pr merge 3 --squash --admin", ON_FEATURE)).toMatchObject({ deny: true, rule: "admin-merge", ask: true });
+    expect(personOnlyVerdict("gh pr merge 3 --squash", ON_FEATURE)).toMatchObject({ deny: true, rule: "pr-merge", ask: true });
+    expect(personOnlyVerdict("gh pr merge 3 --admin=false", ON_FEATURE)).toMatchObject({ deny: true, rule: "pr-merge", ask: true });
+    // With a branch deletion beside it the refused act still decides.
+    expect(personOnlyVerdict("gh pr merge 3 --admin -d", ON_FEATURE)).toMatchObject({ deny: true, rule: "push-delete", ask: false });
+  });
+});
+
+describe("a push or write onto a deploying branch (a4, REQ-FLOW-140)", () => {
+  const DEPLOYING = { defaultBranches: [], currentBranch: "feat/x", tags: [], deployingBranches: ["production", "release/*"] };
+  const ON_PRODUCTION = { ...DEPLOYING, currentBranch: "production" };
+
+  it.each([
+    ["git push origin production"],
+    ["git push origin HEAD:refs/heads/Production"],
+    ["git push origin feat/x:release/1.17"],
+    ["git push origin 'refs/heads/*:refs/heads/*'"],
+    ["gh api -X PUT repos/o/r/contents/a.md -f message=m -f content=eA== -f branch=production"],
+    ["gh api -X POST repos/o/r/merges -f base=release/2.0 -f head=feat/x"],
+    ["gh api -X PATCH repos/o/r/git/refs/heads/production -f sha=abc"],
+    ["gh api graphql -f query='mutation { createCommitOnBranch(input: {branch: {branchName: \"production\"}}) { commit { oid } } }'"],
+    ["gh repo sync o/r -b production"],
+  ])("asks for %j as push-deploying", (command) => {
+    expect(personOnlyVerdict(command, DEPLOYING)).toMatchObject({ deny: true, rule: "push-deploying", ask: true });
+    // The neighbour: the same line in a repository naming no deploying branch.
+    const plain = personOnlyVerdict(command, { ...DEPLOYING, deployingBranches: [] });
+    expect(plain.deny ? plain.rule : null, command).not.toBe("push-deploying");
+  });
+
+  it("reads the branch the session is on for a push that names none, or `HEAD`", () => {
+    expect(personOnlyVerdict("git push", ON_PRODUCTION)).toMatchObject({ deny: true, rule: "push-deploying" });
+    expect(personOnlyVerdict("git push origin HEAD", ON_PRODUCTION)).toMatchObject({ deny: true, rule: "push-deploying" });
+    expect(personOnlyVerdict("git push", DEPLOYING)).toEqual({ deny: false });
+    expect(personOnlyVerdict("git push origin HEAD", DEPLOYING)).toEqual({ deny: false });
+  });
+
+  it("allows a feature branch and a branch the pattern's one segment does not reach", () => {
+    for (const command of ["git push origin feat/x", "git push origin release/1.17/hotfix", "git push origin production-eu"]) {
+      expect(personOnlyVerdict(command, DEPLOYING), command).toEqual({ deny: false });
+    }
+  });
+
+  it("names the deploying push before the default-branch push when the default branch is listed too", () => {
+    const mainListed = { ...DEPLOYING, deployingBranches: ["main"] };
+    expect(personOnlyVerdict("git push origin main", mainListed)).toMatchObject({ deny: true, rule: "push-deploying", ask: true });
+  });
+});
+
+/**
+ * The shared table of branch names and patterns (review/20): `src/config/autonomy.ts`'s matcher and the guard's copy
+ * inside `personOnlyVerdict` read every row, the copy through a push of that name.
+ */
+const DEPLOYING_TABLE: readonly (readonly [name: string, patterns: readonly string[], matches: boolean])[] = [
+  ["release/1.17", ["release/*"], true],
+  ["release/1.17/hotfix", ["release/*"], false],
+  ["release/1.17/hotfix", ["release/**"], true],
+  ["releases/1.17", ["release/**"], false],
+  ["production", ["production"], true],
+  ["Production", ["production"], true],
+  ["production-eu", ["production"], false],
+  ["prod", ["production"], false],
+  ["feature/a/b", ["feature/*/b"], true],
+  ["feature/a/c/b", ["feature/*/b"], false],
+  ["deploy/x", ["refs/heads/deploy/*"], true],
+  ["x", ["*"], true],
+  ["a/b", ["*"], false],
+  ["a/b", ["**"], true],
+  ["hotfix", ["release/*", "hotfix"], true],
+  ["staging", [], false],
+];
+
+describe("the deploying-branch matcher's copy (a4, review/20)", () => {
+  it.each(DEPLOYING_TABLE.map(([name, patterns, matches]) => ({ name, patterns, matches })))(
+    "reads $name against $patterns as $matches in both copies",
+    ({ name, patterns, matches }) => {
+      expect(matchesDeployingBranch(name, patterns)).toBe(matches);
+      const verdict = personOnlyVerdict(`git push origin HEAD:refs/heads/${name}`, { ...ON_FEATURE, deployingBranches: patterns });
+      expect(verdict.deny ? verdict.rule : null).toBe(matches ? "push-deploying" : null);
+    },
+  );
+
+  it("is the kernel module's code, word for word", () => {
+    const read = (path: string): string => readFileSync(fileURLToPath(new URL(path, import.meta.url)), "utf8");
+    /** A function's text from its signature to the closing brace at its own indent, the indent taken off. */
+    const body = (text: string, signature: string, indent: string): string => {
+      const start = text.indexOf(`${indent}${signature}`);
+      const end = text.indexOf(`\n${indent}}\n`, start);
+      expect(start, signature).toBeGreaterThan(-1);
+      return text
+        .slice(start, end + indent.length + 2)
+        .split("\n")
+        .map((line) => (line.startsWith(indent) ? line.slice(indent.length) : line))
+        .join("\n");
+    };
+    const kernel = read("../../src/config/autonomy.ts");
+    const guard = read("../../src/hooks/personOnly.ts");
+    const copy = /\/\/ <deploying-branch>\n([\s\S]*?)\/\/ <\/deploying-branch>/.exec(guard)?.[1] ?? "";
+    for (const signature of ["function branchKey(name: string): string {", "function matchesDeployingBranch(name: string, patterns: readonly string[]): boolean {"]) {
+      const original = body(kernel, signature.startsWith("function matches") ? `export ${signature}` : signature, "").replace(/^export /, "");
+      expect(body(copy, signature, "  "), signature).toBe(original);
+    }
+  });
+});
+
+describe("loosening the autonomy setting (a4, REQ-FLOW-138)", () => {
+  const STRICT = { ...ON_FEATURE, stricterThanDefault: true };
+  const DEFAULT = { ...ON_FEATURE, stricterThanDefault: false };
+
+  it.each([
+    ["stamity sync --loosen"],
+    ["npx -y @zomarit/stamity@1.16.0 sync --loosen"],
+    ["npx --no stamity init -y --loosen"],
+    ["st workspace sync --loosen"],
+    ["node dist/cli.js add production --loosen"],
+    ["node ./node_modules/@zomarit/stamity/dist/cli.js sync --loosen=true"],
+    ["npm exec -- stamity sync --loosen"],
+    ["$STAMITY sync --loosen"],
+    ["stamity sync \"$FLAG\""],
+    ["stamity sync `printf -- --loosen`"],
+    ["echo ok && stamity sync --loosen"],
+  ])("asks for %j in either setting", (command) => {
+    for (const ctx of [STRICT, DEFAULT]) expect(personOnlyVerdict(command, ctx), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+
+  it.each([
+    ["stamity sync"],
+    ["npx -y @zomarit/stamity@1.16.0 sync --dry-run"],
+    ["git commit -m 'stamity sync --loosen'"],
+    ["echo --loosen"],
+    ["rg -n -- --loosen src"],
+    ["stamity clean --pack production"],
+    ["stamity init -y"],
+  ])("allows %j, a word that only names the flag or a command that lands no looser guard", (command) => {
+    for (const ctx of [STRICT, DEFAULT]) expect(personOnlyVerdict(command, ctx), command).toEqual({ deny: false });
+  });
+
+  it("asks for a full clean or an init --force only while the baked setting is stricter than the default", () => {
+    for (const command of ["stamity clean", "npx --no stamity clean --yes", "stamity init --force -y"]) {
+      expect(personOnlyVerdict(command, STRICT), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+      expect(personOnlyVerdict(command, DEFAULT), command).toEqual({ deny: false });
+    }
+    // With no autonomy context the reading cannot tell, so it asks.
+    expect(personOnlyVerdict("stamity clean", ON_FEATURE)).toMatchObject({ deny: true, rule: "autonomy-loosen" });
+  });
+});
+
+describe("a dry-run publish (a4, REQ-FLOW-102 as built)", () => {
+  it.each([
+    ["npm publish --dry-run"],
+    ["npm publish ./pkg.tgz --dry-run --tag next"],
+    ["npm publish --dry-run=true"],
+    ["pnpm publish --dry-run --no-git-checks"],
+    ["bun publish --dry-run"],
+    ["yarn npm publish --dry-run"],
+  ])("runs %j, which sends nothing", (command) => {
+    expect(personOnlyVerdict(command, ON_FEATURE)).toEqual({ deny: false });
+  });
+
+  it.each([
+    ["npm publish"],
+    ["npm publish --dry-run=false"],
+    ["npm publish --dry-run --no-dry-run"],
+    ["npm publish --dry-run --dry"],
+    ["npm publish \"--dry-run\""],
+    ["npm publish '--dry-run'"],
+    ["npm publish $DRY"],
+    ["npm publish --dry-run$X"],
+    ["npm_config_dry_run=false npm publish --dry-run"],
+    ["npm publish -- --dry-run"],
+    ["npm publish --tag --dry-run"],
+    ["yarn publish --dry-run"],
+  ])("asks for %j, a spelling the guard cannot read as a dry run", (command) => {
+    expect(personOnlyVerdict(command, ON_FEATURE)).toMatchObject({ deny: true, rule: "publish", ask: true });
+  });
+});
+
+describe("the land verb's line (a4, REQ-FLOW-121)", () => {
+  /** The attended reading: the parsed program words only. */
+  const attended = (command: string): ReturnType<typeof unattendedPushVerdict> => unattendedPushVerdict(command, false, true);
+
+  it.each([
+    ["stamity run land --run 2026-10-23_x --ready --json"],
+    ["npx --no stamity run land --run 2026-10-23_x --ready --wait 8 --json"],
+    ["st run land --run 2026-10-23_x --fast-forward"],
+  ])("passes %j alone on its line in both modes", (command) => {
+    expect(attended(command)).toEqual({ deny: false });
+    expect(unattendedPushVerdict(command)).toEqual({ deny: false });
+  });
+
+  it.each([
+    ["npm test && stamity run land --run x"],
+    ["stamity run land --run x; git status"],
+    ["GIT_TRACE=1 stamity run land --run x"],
+    ["env -u GIT_EXEC_PATH stamity run land --run x"],
+    ["node dist/cli.js run land --run x"],
+    ["stamity run land --run x > out.txt"],
+  ])("refuses %j, the verb beside more than itself, in both modes", (command) => {
+    const verdict = attended(command);
+    expect(verdict.deny).toBe(true);
+    if (verdict.deny) expect(verdict.reason).toContain("`stamity run land` on a line that is more than the verb");
+    expect(unattendedPushVerdict(command).deny).toBe(true);
+  });
+
+  it("lets a commit message, a comment or a search that names the verb run attended, and refuses it unattended", () => {
+    for (const command of ["git commit -m 'docs: stamity run land --run x lands the run'", "rg 'stamity run land' docs && git status"]) {
+      expect(attended(command), command).toEqual({ deny: false });
+      expect(unattendedPushVerdict(command).deny, command).toBe(true);
+    }
+  });
+
+  it("leaves every other verb's line to the unattended rule alone", () => {
+    expect(attended("npm test && stamity run checkpoint --run x")).toEqual({ deny: false });
+    expect(unattendedPushVerdict("npm test && stamity run checkpoint --run x").deny).toBe(true);
+  });
+
+  it("names a PowerShell splat in a word after `run` (build/97)", () => {
+    const verdict = unattendedPushVerdict("stamity run land --run x @opts", true);
+    expect(verdict.deny).toBe(true);
+    if (verdict.deny) expect(verdict.reason).toContain("an unquoted `@` in a word after `run`, which PowerShell reads as a splat");
   });
 });
