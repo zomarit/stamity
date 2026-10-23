@@ -995,8 +995,9 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
  */
 // TEST CHANGE, justified (REQ-FLOW-140, REQ-FLOW-138, a4): the admin merge, the deploying push, the deploying dispatch
 // and the loosening of the autonomy setting join the ask class; the status write is refuse-class, so it stays out.
+// TEST CHANGE, justified (REQ-FLOW-121, review/103): the land verb's approved line joins the ask class.
 const ASK_CLASS = new Set(["push-default", "push-tags", "tag", "pr-merge", "pr-ready", "release", "publish", "secrets", "protection",
-  "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen"]);
+  "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen", "land-approved"]);
 
 const ZERO = "0".repeat(40);
 /** A GraphQL `updateRefs` call with one entry: its ref name and its `afterOid`. */
@@ -1155,6 +1156,8 @@ const CLASSES: readonly (readonly [command: string, rule: string, ask: boolean, 
   ["gh api -X POST repos/o/r/actions/workflows/deploy.yml/dispatches -f ref=main", "workflow-dispatch", true],
   ["gh api -X POST repos/o/r/dispatches -f event_type=deploy", "workflow-dispatch", true],
   ["stamity sync --loosen", "autonomy-loosen", true],
+  // TEST CHANGE, justified (REQ-FLOW-121, review/103): the land verb's approved line, ask-class.
+  ["stamity run land --run x --approved", "land-approved", true],
   ["gh repo edit", "repo-irreversible", false],
   ["gh repo edit o/r", "repo-irreversible", false],
   ["git push origin (git branch --show-current)", "push-default", true],
@@ -1280,6 +1283,8 @@ describe("personOnlyVerdict — the deny matrix", () => {
       "push-deploying",
       "workflow-dispatch",
       "autonomy-loosen",
+      // TEST CHANGE, justified (REQ-FLOW-121, review/103): one more rule joins the table.
+      "land-approved",
     ]);
     const hit = new Set([...DENY, ...CLASSES].map(([, rule]) => rule));
     expect(hit).toEqual(ids);
@@ -2404,7 +2409,8 @@ describe("CLAUDE_DENY_ROWS and CLAUDE_ASK_ROWS", () => {
     // dispatch asks only where the repository names it, which a settings row cannot read.
     expect([...rules].toSorted()).toEqual(
       PERSON_ONLY_RULES.map((rule) => rule.id)
-        .filter((id) => !["push-default", "protection-delete", "status-write", "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen"].includes(id))
+        // TEST CHANGE, justified (REQ-FLOW-121, review/103): `--approved` sits mid-line, which no prefix row can say.
+        .filter((id) => !["push-default", "protection-delete", "status-write", "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen", "land-approved"].includes(id))
         .toSorted(),
     );
   });
@@ -3436,5 +3442,28 @@ describe("a program word's glob matched with no regular expression (a4, review/1
 
   it("runs a few wildcards whose tail no package word holds", () => {
     expect(personOnlyVerdict("/usr/bin/***q \"$F\"", DEFAULT)).toEqual({ deny: false });
+  });
+});
+
+describe("the land verb's approved line (a4, review/103)", () => {
+  // Red on 4d344eb2: the approved line read as no person-only act.
+  it.each([
+    ["the approved flag on the land line", "stamity run land --run 2026-10-23_x --approved"],
+    ["the approved flag through the pinned runner", "npx --no stamity run land --run 2026-10-23_x --ready --approved --json"],
+    ["the approved flag joined to a value", "stamity run land --run 2026-10-23_x --approved=true"],
+    ["a land line with a filled-in word", "stamity run land --run \"$RUN\""],
+    ["a land line under xargs", "echo --approved | xargs stamity run land --run x"],
+    ["a land line through a program the guard cannot settle", "\"$CLI\" run land --run x --approved"],
+    ["a land line with a PowerShell splat", "pwsh -Command 'stamity run land --run x @opts'"],
+  ])("asks for %s", (_, command) => {
+    expect(personOnlyVerdict(command, ON_FEATURE), command).toMatchObject({ deny: true, rule: "land-approved", ask: true });
+  });
+
+  it.each([
+    ["a plain land line", "stamity run land --run 2026-10-23_x --ready --json"],
+    ["a land line with a literal wait", "npx --no stamity run land --run 2026-10-23_x --wait 8"],
+    ["a commit message naming the flag", "git commit -m 'stamity run land --approved lands an asks hold'"],
+  ])("runs %s", (_, command) => {
+    expect(personOnlyVerdict(command, ON_FEATURE), command).toEqual({ deny: false });
   });
 });

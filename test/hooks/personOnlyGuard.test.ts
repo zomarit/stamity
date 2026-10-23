@@ -1934,3 +1934,63 @@ describe("the guard's reading of the engine's bin under a filled-in folder (a4, 
     for (const command of lines) expect(decide(tool, guard, command).deny, `${tool} unattended: ${command}`).toBe(true);
   });
 });
+
+describe("the guard's reading of the land verb's approved line (a4, review/103)", () => {
+  const APPROVED = "npx --no stamity run land --run 2026-10-23_x --approved --json";
+  const helper = (tool: Tool, guard: string, command: string): Decision =>
+    clientDecision(tool, run(guard, JSON.stringify({ ...JSON.parse(payload(tool, command)), agent_id: "a1" })), `${tool} helper: ${command}`);
+
+  // Red on 4d344eb2: the approved line ran unasked in every mode.
+  it.each(TOOLS)("%s: asks attended, and refuses for a sub-agent and unattended; a plain land line runs", async (tool) => {
+    const guard = await placeGuard(tool);
+    const verdict = personOnlyVerdict(APPROVED, BAKED_DEFAULT);
+    expect(verdict).toMatchObject({ deny: true, rule: "land-approved", ask: true });
+    if (verdict.deny) expect(decide(tool, guard, APPROVED)).toEqual(expectedAttended(tool, verdict));
+    expect(helper(tool, guard, APPROVED).deny).toBe(true);
+    // A joined form may carry the flag: it asks as the approved line does.
+    const joined = "npx --no stamity run land --run 2026-10-23_x --approved=true";
+    const verdictJoined = personOnlyVerdict(joined, BAKED_DEFAULT);
+    expect(verdictJoined).toMatchObject({ deny: true, rule: "land-approved", ask: true });
+    if (verdictJoined.deny) expect(decide(tool, guard, joined)).toEqual(expectedAttended(tool, verdictJoined));
+    // A filled-in word on the land line is refused in every mode by the stand-alone rule's shape, before any ask.
+    const unreadable = "npx --no stamity run land --run \"$RUN\"";
+    expect(decide(tool, guard, unreadable)).toEqual({ deny: true, reason: expect.stringContaining("on a line that is more than the verb") });
+    expect(decide(tool, guard, "npx --no stamity run land --run 2026-10-23_x --ready --json")).toEqual({ deny: false });
+    // Beside another command the stand-alone rule refuses it, as any land line.
+    expect(decide(tool, guard, `npm test && ${APPROVED}`)).toEqual({
+      deny: true,
+      reason: expect.stringContaining("`stamity run land` on a line that is more than the verb"),
+    });
+    await getRepo().seedFiles({ ".stamity/runs/2026-10-23_x/record.md": record("in progress", "unattended") });
+    expect(decide(tool, guard, APPROVED).deny).toBe(true);
+    expect(decide(tool, guard, joined).deny).toBe(true);
+    expect(decide(tool, guard, unreadable).deny).toBe(true);
+    expect(decide(tool, guard, "npx --no stamity run land --run 2026-10-23_x --ready --json")).toEqual({ deny: false });
+  });
+});
+
+describe("the guard's reading of the land verb's approved line with its value (a4, review/103, review/110)", () => {
+  const SHA = "0123456789abcdef0123456789abcdef01234567";
+  const helper = (tool: Tool, guard: string, command: string): Decision =>
+    clientDecision(tool, run(guard, JSON.stringify({ ...JSON.parse(payload(tool, command)), agent_id: "a1" })), `${tool} helper: ${command}`);
+
+  // Red on 4d344eb2: the valued and joined approved lines ran unasked in every mode.
+  it.each(TOOLS)("%s: asks attended for the valued and the joined forms, and refuses them for a sub-agent and unattended", async (tool) => {
+    const guard = await placeGuard(tool);
+    const lines = [
+      `npx --no stamity run land --run 2026-10-23_x --approved ${SHA} --json`,
+      `stamity run land --run 2026-10-23_x --approved=${SHA}`,
+      // The flows' approved line, its exact option set, and the flag first among the options.
+      `stamity run land --run 2026-10-23_x --ready --approved ${SHA} --json`,
+      `stamity run land --approved ${SHA} --run 2026-10-23_x --wait 8 --fast-forward --json`,
+    ];
+    for (const command of lines) {
+      const verdict = personOnlyVerdict(command, BAKED_DEFAULT);
+      expect(verdict, command).toMatchObject({ deny: true, rule: "land-approved", ask: true });
+      if (verdict.deny) expect(decide(tool, guard, command), `${tool}: ${command}`).toEqual(expectedAttended(tool, verdict));
+      expect(helper(tool, guard, command).deny, `${tool} helper: ${command}`).toBe(true);
+    }
+    await getRepo().seedFiles({ ".stamity/runs/2026-10-23_x/record.md": record("in progress", "unattended") });
+    for (const command of lines) expect(decide(tool, guard, command).deny, `${tool} unattended: ${command}`).toBe(true);
+  });
+});

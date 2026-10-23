@@ -85,7 +85,8 @@ export type PersonOnlyRuleId =
   | "admin-merge"
   | "push-deploying"
   | "workflow-dispatch"
-  | "autonomy-loosen";
+  | "autonomy-loosen"
+  | "land-approved";
 
 /** One person-only act: its rule id, what the person keeps, and whether it is ask-class (it can be undone). */
 export interface PersonOnlyRule {
@@ -169,6 +170,11 @@ export const PERSON_ONLY_RULES: readonly PersonOnlyRule[] = [
   {
     id: "autonomy-loosen",
     act: "loosening the autonomy setting (`--loosen` on a stamity command, an argument the guard cannot read on one, or a full `clean` or `init --force` while the setting is stricter than the default)",
+    ask: true,
+  },
+  {
+    id: "land-approved",
+    act: "landing a run's pull request on the person's approval of an `asks` outcome (`stamity run land --approved`, or a land line whose words the guard cannot read, which may carry it)",
     ask: true,
   },
 ];
@@ -1376,7 +1382,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     (values.length === 0 ? [...defaults].some(deploys) : values.some((value) => (value === "" ? [...defaults].some(deploys) : deploys(value === null ? null : branch(value)))));
   // The ask-class rules (REQ-FLOW-102): any other rule refuses (REQ-FLOW-124), so a rule missing here never asks.
   const ASK_RULES = new Set(["push-default", "push-tags", "tag", "pr-merge", "pr-ready", "release", "publish", "secrets", "protection",
-    "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen"]);
+    "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen", "land-approved"]);
   // Every act the line holds (v0a): each segment, each call `--next` joins, each path, flag, body field and GraphQL
   // entry; a refuse-class one decides the verdict, so a deletion never rides an approval.
   const acts: { deny: true; rule: PersonOnlyRuleId; act: string; reason: string; ask: boolean }[] = [];
@@ -2205,6 +2211,30 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
    * setting is stricter than the default, a full `clean` (no `--pack`) or an `init --force`, each of which lands the
    * default.
    */
+  /**
+   * `land-approved` (review/103): a land line (`run land` on a command running this package, or on a program the reading
+   * cannot settle) carrying `--approved`, the person's one click on the verb's `asks` outcome, asks in every mode, so it
+   * is refused unattended and for a sub-agent. A land line holding a word the shell fills in, an `--approved=` form, or
+   * arguments `xargs` adds may carry it, and reads the same: fail-closed.
+   */
+  function landApprovedVerdict(cmd: string[]): void {
+    const unsure = unread.get(cmd) ?? [];
+    const args = unsure[0] === true ? cmd.slice(1) : packageArgs(cmd);
+    if (args === null) return;
+    const at = unsure[0] === true ? args.indexOf("run") : args.findIndex((word) => !word.startsWith("-"));
+    if (at === -1 || args[at] !== "run" || !args.slice(at + 1).includes("land")) return;
+    // The flag in any spelling, alone, followed by its value (the approved commit) or joined to it with `=` (review/110).
+    if (args.some((word) => word === "--approved" || word.startsWith("--approved="))) {
+      deny("land-approved", "Landing a run on the person's approval (`stamity run land --approved`)");
+      return;
+    }
+    const marked = anyMark.get(cmd) ?? [];
+    const offset = cmd.length - args.length;
+    if (fed.has(cmd) || args.some((_, index) => marked[offset + index] === true)) {
+      deny("land-approved", "A `stamity run land` line whose words the guard cannot read, which may carry `--approved`");
+    }
+  }
+
   function loosenVerdict(cmd: string[]): void {
     // On the PowerShell tool, a variable alone, which prints its value, and an assignment (`$x = …`, `$env:X += …`) are
     // no command; a group or substitution in a value is read apart. A POSIX shell runs `$x`'s value there, so elsewhere
@@ -2309,7 +2339,10 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     else if (["npm", "pnpm", "yarn", "bun"].includes(program)) publishVerdict(cmd);
   }
   // The loosen reading last, so a line holding another act names that one first.
-  for (const cmd of read) loosenVerdict(cmd);
+  for (const cmd of read) {
+    landApprovedVerdict(cmd);
+    loosenVerdict(cmd);
+  }
   // A refuse-class act decides the line; with none, the first act asks (v0a); with none, the acts that run are named.
   return acts.find((act) => !act.ask) ?? acts[0] ?? (ran.length > 0 ? { deny: false, runs: ran } : { deny: false });
 }
