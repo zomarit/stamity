@@ -129,6 +129,10 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   `moved-skills` fails on an overlay of a skill that moved to a pack, and warns on a full override of one or on a core
   copy still recorded. Both sit after `pack-reach`, and [`docs/troubleshooting.md`](docs/troubleshooting.md) lists
   them.
+- **The `autonomy` manifest key**: `mode` (`autonomous`, the default, or `ask`), `deployingBranches` and
+  `deployingActs`, with its three `config` keys, and the `autonomy-deploying` row of `check`, which warns when a
+  workflow deploys from a branch the setting does not cover and says "not evaluated" where it cannot read a workflow,
+  never passing on it.
 - **Two client keys pass through a skill's head.** `user-invocable` and `disable-model-invocation`, as booleans, reach
   the emitted `SKILL.md` as top-level keys. A skill that sets `disable-model-invocation: true` beside an
   `agents/openai.yaml` setting `policy.allow_implicit_invocation: false` stays out of Codex's skills list and its count.
@@ -231,6 +235,10 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   blocking checks of a `NO`.
 - **`/st-ui-review` stops at Frame on a working tree with changes outside `.stamity/`**, so its source review and its
   browser evidence measure the same tree.
+- **`stamity run checkpoint` and `run end` write the held patch with git's default `a/`/`b/` prefixes** whatever the
+  repository's diff settings, read a CRLF copy of a held link's section, and take `--drop-held <path...>` to withdraw
+  a held section the run undid (`withdrawn` in the JSON). A hold refusal at `Base:` now ends with the next step, and
+  names a Unicode-normalization-only spelling difference as such.
 
 ## [1.16.0] - 2026-10-20
 
