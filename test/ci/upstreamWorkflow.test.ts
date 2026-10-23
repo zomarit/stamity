@@ -699,6 +699,10 @@ describe("upstream-update.yml — the recovery comparison keeps no copy of the m
     // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-014): `plugin` left the
     // interface, so the total record drops it the day it leaves; `gates` stays.
     gates: true,
+    // TEST CHANGE, justified (2026-10-23, a3-autonomy-config, REQ-FLOW-137): `autonomy` landed on
+    // `SetupManifest`, additive and optional; this TOTAL record places it the day it lands, and the
+    // assertion below then covers its name too. No assertion is changed.
+    autonomy: true,
     importChoice: true,
     toolOptions: true,
     detected: true,

@@ -283,6 +283,10 @@ else { process.stderr.write('Unexpected GitHub mutation: ' + args.join(' ')); pr
     // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-014): `plugin` left the
     // interface (dropped on read), so this total record drops it; every remaining key stays.
     gates: { test: "npm run test", all: "npm run lint && npm run typecheck && npm run test" },
+    // TEST CHANGE, justified (2026-10-23, a3-autonomy-config, REQ-FLOW-137): `SetupManifest` gained
+    // `autonomy`, additive and optional; this TOTAL fixture carries it so the recovery comparison
+    // still runs over a manifest holding every optional key. No assertion is changed.
+    autonomy: { mode: "ask", deployingBranches: ["main"], deployingActs: ["pr-merge"] },
     importChoice: [{ path: "AGENTS.md", mode: "supplement" }],
     toolOptions: { codex: { inlineAppendix: true } },
     detected: {
