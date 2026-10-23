@@ -2688,7 +2688,8 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
         expect(large).toEqual(small);
         expect(reads()).toEqual(smallReads);
         const stdinRead = gitSpy.calls.findIndex((argv) => argv.includes("--stdin"));
-        expect(gitSpy.calls[stdinRead]?.slice(4)).toEqual(["rev-list", "--reverse", "--no-merges", "--ignore-missing", "--stdin", "--"]);
+        // TEST CHANGE, justified (review/116): the check runner pins -c core.useReplaceRefs=false too, so its pinned prefix is six arguments.
+        expect(gitSpy.calls[stdinRead]?.slice(6)).toEqual(["rev-list", "--reverse", "--no-merges", "--ignore-missing", "--stdin", "--"]);
         expect(gitSpy.inputs[stdinRead]?.split("\n")).toHaveLength(2002);
         expect(gitSpy.inputs[stdinRead]).toContain(`\n^${root}\n`);
         expect(Math.max(...gitSpy.calls.map((argv) => argv.join(" ").length))).toBeLessThan(1024);
