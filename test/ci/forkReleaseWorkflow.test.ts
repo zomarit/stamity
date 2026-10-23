@@ -998,7 +998,12 @@ describe.skipIf(WINDOWS)("fork-release.yml — the registry publish, executed wi
 // names one workflow-level dist-tag, and `gates` dry-runs the same publish first, with no secret,
 // so the refusal fails the run before anyone is asked to approve it.
 describe("fork-release.yml — the dist-tag and the registry rehearsal", () => {
-  const REHEARSAL_LINE = 'npm publish "./$TARBALL" --dry-run --registry "$REGISTRY" --tag "$DIST_TAG"';
+  // TEST CHANGE, justified (plan 022 run 2026-10-23_autonomy-distribution-01, unit
+  // a11-release-workflows, fix round 1, review W-1): the step now captures the dry run's output
+  // and exit code to tell npm's tag-rule refusal from a tokenless authentication refusal, so the
+  // one publish line is the capture, with the same flags.
+  const REHEARSAL_LINE =
+    'OUT="$(npm publish "./$TARBALL" --dry-run --registry "$REGISTRY" --tag "$DIST_TAG" 2>&1)" || STATUS=$?';
 
   it("sets one dist-tag, latest, at workflow level, and publishes under it", () => {
     expect(WORKFLOW.env).toEqual({ DIST_TAG: "latest" });
@@ -1065,15 +1070,27 @@ describe.skipIf(WINDOWS)("fork-release.yml — the registry rehearsal, executed 
   const REHEARSAL = runOf(WORKFLOW, "gates", "Rehearse the registry publish");
   const TARBALL = `acme-corp-stamity-${FORK_VERSION}.tgz`;
 
-  /** The step under a stub npm that answers `--version` with `version` and exits `publishStatus` on publish. */
-  function rehearse(version: string, publishStatus: number): { status: number | null; out: string; calls: readonly string[] } {
+  // TEST CHANGE, justified (plan 022 run 2026-10-23_autonomy-distribution-01, unit
+  // a11-release-workflows, fix round 1, review W-1): the step now reads what npm prints, so the stub
+  // also writes `publishOutput` to stderr, where npm writes its errors, before it exits.
+  /**
+   * The step under a stub npm that answers `--version` with `version`, and on publish writes
+   * `publishOutput` to stderr and exits `publishStatus`.
+   */
+  function rehearse(
+    version: string,
+    publishStatus: number,
+    publishOutput = "",
+  ): { status: number | null; out: string; calls: readonly string[] } {
     const dir = scratchDir("rehearsal");
     const bin = join(dir, "bin");
     mkdirSync(bin);
+    const output = join(dir, "publish-output");
+    writeFileSync(output, publishOutput);
     stubCommand(
       bin,
       "npm",
-      `if [ "$1" = "--version" ]; then echo '${version}'; exit 0; fi\nif [ "$1" = "publish" ]; then exit ${String(publishStatus)}; fi`,
+      `if [ "$1" = "--version" ]; then echo '${version}'; exit 0; fi\nif [ "$1" = "publish" ]; then cat '${output}' >&2; exit ${String(publishStatus)}; fi`,
     );
     writeFileSync(join(dir, TARBALL), "the packed tarball's bytes\n");
     const log = join(dir, "calls");
@@ -1121,6 +1138,55 @@ describe.skipIf(WINDOWS)("fork-release.yml — the registry rehearsal, executed 
     const run = rehearse("11.21.0", 1);
     expect(run.status).toBe(1);
     expect(run.calls).toEqual(["--version", DRY_RUN]);
+  });
+
+  // ADDED (plan 022 run 2026-10-23_autonomy-distribution-01, unit a11-release-workflows, fix round
+  // 1, review W-1): how npm 11 answers a tokenless dry run against GitHub Packages was never
+  // measured, so the step tells its three answers apart by what npm prints. The tag rule's refusal
+  // and any other error fail closed; only an authentication refusal passes, and it says the tag
+  // rule was not reached.
+  const TAG_RULE = "npm error You must specify a tag using --tag when publishing a prerelease version.\n";
+
+  it("fails the job on npm's tag-rule refusal, naming the rule", () => {
+    const run = rehearse("11.21.0", 1, TAG_RULE);
+    expect(run.status).toBe(1);
+    expect(run.out).toContain("must specify a tag");
+    expect(run.out).toContain("::error::npm refused the publish for its dist-tag rule (exit 1)");
+    expect(run.out).not.toContain("::warning::");
+    expect(run.calls).toEqual(["--version", DRY_RUN]);
+  });
+
+  it("fails the job on the tag rule even when an authentication code is printed beside it or npm exits 0", () => {
+    const beside = rehearse("11.21.0", 1, `npm error code E401\n${TAG_RULE}`);
+    expect(beside.status).toBe(1);
+    expect(beside.out).toContain("dist-tag rule");
+    expect(beside.out).not.toContain("::warning::");
+    const zero = rehearse("11.21.0", 0, TAG_RULE);
+    expect(zero.status).toBe(1);
+    expect(zero.out).toContain("dist-tag rule (exit 0)");
+  });
+
+  it.each([
+    ["E401", "npm error code E401\nnpm error 401 Unauthorized - GET https://npm.pkg.github.com/@acme-corp%2fstamity - authentication token not provided\n"],
+    ["E403", "npm error code E403\nnpm error 403 Forbidden - GET https://npm.pkg.github.com/@acme-corp%2fstamity\n"],
+    ["ENEEDAUTH", "npm error code ENEEDAUTH\nnpm error need auth This command requires you to be logged in to https://npm.pkg.github.com/\n"],
+  ])("passes with a warning when the registry refuses the tokenless dry run (%s), saying the tag rule was not reached", (code, printed) => {
+    const run = rehearse("11.21.0", 1, printed);
+    expect(run.status, run.out).toBe(0);
+    expect(run.out).toContain(`npm error code ${code}`);
+    expect(run.out).toContain(
+      "::warning::The registry refused a tokenless dry run (npm exit 1), so npm's dist-tag rule was not reached",
+    );
+    expect(run.out).not.toContain("::error::");
+    expect(run.calls).toEqual(["--version", DRY_RUN]);
+  });
+
+  it("fails the job on any other npm error, printing npm's output", () => {
+    const run = rehearse("11.21.0", 1, "npm error code E404\nnpm error 404 Not Found - PUT https://npm.pkg.github.com/@acme-corp%2fstamity\n");
+    expect(run.status).toBe(1);
+    expect(run.out).toContain("npm error code E404");
+    expect(run.out).toContain("::error::npm refused the dry run (exit 1) for a reason other than authentication");
+    expect(run.out).not.toContain("::warning::");
   });
 });
 

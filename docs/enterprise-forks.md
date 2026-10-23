@@ -822,7 +822,9 @@ one in place of `publish`:
   tarball smoke, and packs the tarball. Next it asks npm whether it would take the publish:
   `npm publish --dry-run` with the publish job's registry and dist-tag, under npm 11 or newer,
   with no secret. A dry run uploads nothing. A refusal fails the run here, before anyone is asked
-  to approve it, on a tag push too. Last, it uploads the tarball, kept for seven days, which is
+  to approve it, on a tag push too. One answer passes instead, with a warning: a registry that
+  refuses a dry run with no token (npm's `E401`, `E403` or `ENEEDAUTH`). npm then never reached its
+  dist-tag rule, so only the publish itself checks it. Last, it uploads the tarball, kept for seven days, which is
   how long the approval can wait.
 - **`publish`** runs in the `fork-release` environment and checks nothing out. It verifies what
   `gates` uploaded before it acts: the tarball's digest, and its own name, version and registry.
