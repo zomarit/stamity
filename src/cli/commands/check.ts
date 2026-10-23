@@ -1973,9 +1973,14 @@ function unreadableFilter(entry: string): boolean {
   return entry.startsWith("!") || /[?+[\]]/.test(entry) || deployingBranchDefect(entry) !== null;
 }
 
-/** What a workflow's push trigger runs it for: the branches the row can name, and whether a filter it cannot read. */
+/**
+ * What a workflow's push trigger runs it for: the branches the row can name,
+ * whether it runs for every branch it does not exclude, and whether a filter
+ * it cannot read.
+ */
 interface PushBranches {
   readonly branches: string[];
+  readonly everyBranch: boolean;
   readonly unreadable: boolean;
 }
 
@@ -1988,36 +1993,38 @@ function hasTrigger(on: unknown, event: string): boolean {
 
 /**
  * The branches a workflow's `on:` runs it for on a push, as `check` names them
- * (REQ-FLOW-139): the default branch whenever the push trigger reaches it — a
- * bare `push` (a string or a list member), a `push` with no branch filter, a
- * `branches` list that matches it, a `branches-ignore` that does not exclude
- * it — plus each other branch or `*`/`**` pattern a `branches` list names. A
- * push filtered on tags alone runs for no branch, so it names none. An entry
- * {@link unreadableFilter} marks is left out and sets `unreadable`.
+ * (REQ-FLOW-139). A `branches` list names the default branch when it matches
+ * it, plus each other branch or `*`/`**` pattern it lists; an entry
+ * {@link unreadableFilter} marks is left out and sets `unreadable`. A bare
+ * `push` (a string or a list member), a `push` with no branch filter, and a
+ * `branches-ignore` filter run for every branch they do not exclude, so they
+ * set `everyBranch` (a `branches-ignore` holding `**` excludes them all). A
+ * push filtered on tags alone runs for no branch. `defaultBranch` is read
+ * only for a `branches` list.
  */
-function pushTriggerBranches(on: unknown, defaultBranch: string): PushBranches {
-  const none: PushBranches = { branches: [], unreadable: false };
+function pushTriggerBranches(on: unknown, defaultBranch: () => string): PushBranches {
+  const none: PushBranches = { branches: [], everyBranch: false, unreadable: false };
+  const every: PushBranches = { branches: [], everyBranch: true, unreadable: false };
   if (!hasTrigger(on, "push")) return none;
   const push: unknown = isPlainObject(on) ? on["push"] : null;
-  if (!isPlainObject(push)) return { branches: [defaultBranch], unreadable: false };
+  if (!isPlainObject(push)) return every;
   const branches = filterList(push["branches"]);
   if (branches !== null) {
     const named = new Map<string, string>();
-    if (filterMatches(defaultBranch, branches)) named.set(defaultBranch.toLowerCase(), defaultBranch);
+    const main = defaultBranch();
+    if (filterMatches(main, branches)) named.set(main.toLowerCase(), main);
     for (const entry of branches) {
       if (!unreadableFilter(entry)) named.set(entry.toLowerCase(), entry);
     }
-    return { branches: [...named.values()], unreadable: branches.some(unreadableFilter) };
+    return { branches: [...named.values()], everyBranch: false, unreadable: branches.some(unreadableFilter) };
   }
   const ignored = filterList(push["branches-ignore"]);
   if (ignored !== null) {
-    return {
-      branches: filterMatches(defaultBranch, ignored) ? [] : [defaultBranch],
-      unreadable: ignored.some(unreadableFilter),
-    };
+    if (ignored.includes("**")) return none;
+    return { ...every, unreadable: ignored.some(unreadableFilter) };
   }
   if (push["tags"] !== undefined || push["tags-ignore"] !== undefined) return none;
-  return { branches: [defaultBranch], unreadable: false };
+  return every;
 }
 
 /** A branch spelling folded the way the deploying list compares it: case folded, `refs/heads/` dropped. */
@@ -2125,7 +2132,12 @@ function environmentJobs(
       reached.push(sanitizeLabel(jobId));
       continue;
     }
-    const callee = localCallee(job["uses"]);
+    const uses = job["uses"];
+    if (typeof uses === "string" && !uses.trim().startsWith("./")) {
+      problems.push(`${top} calls a workflow in another repository`);
+      continue;
+    }
+    const callee = localCallee(uses);
     if (callee === null) continue;
     const shown = `${WORKFLOWS_DIR}/${sanitizeLabel(callee)}`;
     if (chain.includes(callee)) {
@@ -2158,11 +2170,14 @@ const ASSUMED_DEFAULT = "the default branch is assumed to be main: no refs/remot
  * most three calls deep — in a workflow whose push trigger runs for a branch
  * the list does not cover, naming the workflow, the job, the branch and the
  * `config set` line that lists it. The default branch counts as covered in
- * mode `ask`, which asks before a push or a merge there.
+ * mode `ask`, which asks before a push or a merge there. A push trigger with
+ * no `branches` list runs for every branch it does not exclude, so it is
+ * covered only by a `**` entry, and its warning names the two remedies.
  *
  * It warns `not evaluated` on a file it cannot read or parse, on a branch
  * filter it cannot read ({@link unreadableFilter}), on a deploy reached
- * through a `workflow_run` trigger, and on a call it cannot follow. It passes
+ * through a `workflow_run` trigger, on a call to a workflow in another
+ * repository, and on a local call it cannot follow. It passes
  * with no manifest, with no workflows folder, and when every branch it read
  * is covered, claiming only what it read.
  *
@@ -2209,7 +2224,15 @@ export async function checkAutonomyDeploying(
 
   const notEvaluated: string[] = [];
   const unlisted: { file: string; jobs: string[]; branch: string; isDefault: boolean }[] = [];
+  const everyBranch: { file: string; jobs: string[] }[] = [];
   let defaultBranch: { name: string; assumed: boolean } | undefined;
+  const mainBranch = (): string => {
+    if (defaultBranch === undefined) {
+      const found = readDefaultBranch(rootDir);
+      defaultBranch = { name: found ?? "main", assumed: found === null };
+    }
+    return defaultBranch.name;
+  };
   let deploysOnPush = false;
   for (const { name, display, workflow } of read) {
     if (workflow === null) {
@@ -2228,19 +2251,19 @@ export async function checkAutonomyDeploying(
           "name the branches it deploys from in autonomy.deployingBranches",
       );
     }
-    if (defaultBranch === undefined) {
-      const found = readDefaultBranch(rootDir);
-      defaultBranch = { name: found ?? "main", assumed: found === null };
-    }
-    const push = pushTriggerBranches(on, defaultBranch.name);
+    const push = pushTriggerBranches(on, mainBranch);
     if (push.unreadable) {
       notEvaluated.push(
         `${display} uses a branch filter this row cannot read; name its branches in autonomy.deployingBranches`,
       );
     }
+    if (push.everyBranch) {
+      deploysOnPush = true;
+      if (!filterCovered("**", setting.deployingBranches)) everyBranch.push({ file: display, jobs: reach.jobs });
+    }
     for (const branch of push.branches) {
       deploysOnPush = true;
-      const isDefault = foldBranch(branch) === foldBranch(defaultBranch.name);
+      const isDefault = foldBranch(branch) === foldBranch(mainBranch());
       if (isDefault && setting.mode === "ask") continue;
       if (!filterCovered(branch, setting.deployingBranches)) {
         unlisted.push({ file: display, jobs: reach.jobs, branch, isDefault });
@@ -2248,8 +2271,10 @@ export async function checkAutonomyDeploying(
     }
   }
 
-  const assumed = defaultBranch?.assumed === true ? [ASSUMED_DEFAULT] : [];
-  if (unlisted.length === 0 && notEvaluated.length === 0) {
+  // TypeScript narrows `defaultBranch` to `undefined` here, not seeing the closure's write.
+  const resolvedDefault = defaultBranch as { name: string; assumed: boolean } | undefined;
+  const assumed = resolvedDefault?.assumed === true ? [ASSUMED_DEFAULT] : [];
+  if (unlisted.length === 0 && everyBranch.length === 0 && notEvaluated.length === 0) {
     let verdict = "no workflow this row read deploys on a push";
     if (deploysOnPush) {
       verdict =
@@ -2295,8 +2320,14 @@ export async function checkAutonomyDeploying(
           `${entry.file}: job ${entry.jobs.join(", ")} names an environment ` +
           `and runs on a push to ${sanitizeLabel(entry.branch)}`,
       ),
+      ...everyBranch.map(
+        (entry) =>
+          `${entry.file}: job ${entry.jobs.join(", ")} names an environment and runs on a push to every ` +
+          "branch the workflow does not exclude; add a branches: filter to the workflow, " +
+          "or set autonomy.deployingBranches to **",
+      ),
       ...(missing.length === 0 ? [] : [`${reasons.join("; ")}; ${remedy}`]),
-      ...notEvaluated.map((line) => `not evaluated: ${line}`),
+      ...[...new Set(notEvaluated)].map((line) => `not evaluated: ${line}`),
       ...assumed,
     ].join("\n"),
   };
