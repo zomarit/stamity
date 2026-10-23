@@ -204,6 +204,30 @@ describe("matchesDeployingBranch", () => {
     expect(matchesDeployingBranch("feature/a/c/b", ["feature/*/b"])).toBe(false);
   });
 
+  // Round 2 (the held-back Minor of a3-security-r2): no backtracking regular expression.
+  it("answers a pattern of many wildcards against a long near-miss name within a fixed time", () => {
+    const pattern = `${"*a".repeat(13)}*b`;
+    const nearMiss = `${"a".repeat(30)}c`;
+    const started = performance.now();
+    const verdict = matchesDeployingBranch(nearMiss, [pattern, `release/${"**x".repeat(60)}`]);
+    const elapsed = performance.now() - started;
+
+    expect(verdict).toBe(false);
+    // The regex form this replaced takes seconds on these inputs; the table takes well under one.
+    expect(elapsed).toBeLessThan(250);
+  });
+
+  it("keeps the wildcard rules inside a segment and across one", () => {
+    expect(matchesDeployingBranch("release/v1.17", ["release/v*"])).toBe(true);
+    expect(matchesDeployingBranch("release/x1.17", ["release/v*"])).toBe(false);
+    expect(matchesDeployingBranch("a/x/y/b", ["a**b"])).toBe(true);
+    expect(matchesDeployingBranch("a/x/y/b", ["a***b", "nothing"])).toBe(true);
+    expect(matchesDeployingBranch("ab", ["a*b"])).toBe(true);
+    expect(matchesDeployingBranch("a/b", ["a*b"])).toBe(false);
+    expect(matchesDeployingBranch("", ["*"])).toBe(true);
+    expect(matchesDeployingBranch("main", [""])).toBe(false);
+  });
+
   it("matches an exact name only to itself", () => {
     expect(matchesDeployingBranch("production", ["production"])).toBe(true);
     expect(matchesDeployingBranch("production-eu", ["production"])).toBe(false);

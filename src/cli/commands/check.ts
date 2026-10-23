@@ -1955,11 +1955,18 @@ function filterMatches(name: string, patterns: readonly string[]): boolean {
   return matched;
 }
 
-/** A filter value as a list: one string, or the strings of a sequence; `null` when absent or neither. */
-function filterList(value: unknown): string[] | null {
-  if (typeof value === "string") return [value];
-  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string");
-  return null;
+/**
+ * A filter value as a list: one string, or the strings of a sequence; `null`
+ * when absent. `other` is set when the value or a member is not a string —
+ * an unquoted `7.0` the YAML reader made a number — which the row cannot
+ * name, since turning it back into text could misspell it (`7.0` becomes `7`).
+ */
+function filterList(value: unknown): { entries: string[]; other: boolean } | null {
+  if (value === undefined) return null;
+  if (typeof value === "string") return { entries: [value], other: false };
+  if (!Array.isArray(value)) return { entries: [], other: true };
+  const entries = value.filter((item): item is string => typeof item === "string");
+  return { entries, other: entries.length !== value.length };
 }
 
 /**
@@ -1995,7 +2002,8 @@ function hasTrigger(on: unknown, event: string): boolean {
  * The branches a workflow's `on:` runs it for on a push, as `check` names them
  * (REQ-FLOW-139). A `branches` list names the default branch when it matches
  * it, plus each other branch or `*`/`**` pattern it lists; an entry
- * {@link unreadableFilter} marks is left out and sets `unreadable`. A bare
+ * {@link unreadableFilter} marks, or one that is not a string, is left out
+ * and sets `unreadable`. A bare
  * `push` (a string or a list member), a `push` with no branch filter, and a
  * `branches-ignore` filter run for every branch they do not exclude, so they
  * set `everyBranch` (a `branches-ignore` holding `**` excludes them all). A
@@ -2008,20 +2016,22 @@ function pushTriggerBranches(on: unknown, defaultBranch: () => string): PushBran
   if (!hasTrigger(on, "push")) return none;
   const push: unknown = isPlainObject(on) ? on["push"] : null;
   if (!isPlainObject(push)) return every;
-  const branches = filterList(push["branches"]);
-  if (branches !== null) {
+  const filter = filterList(push["branches"]);
+  if (filter !== null) {
+    const branches = filter.entries;
     const named = new Map<string, string>();
     const main = defaultBranch();
     if (filterMatches(main, branches)) named.set(main.toLowerCase(), main);
     for (const entry of branches) {
       if (!unreadableFilter(entry)) named.set(entry.toLowerCase(), entry);
     }
-    return { branches: [...named.values()], everyBranch: false, unreadable: branches.some(unreadableFilter) };
+    const unreadable = filter.other || branches.some(unreadableFilter);
+    return { branches: [...named.values()], everyBranch: false, unreadable };
   }
   const ignored = filterList(push["branches-ignore"]);
   if (ignored !== null) {
-    if (ignored.includes("**")) return none;
-    return { ...every, unreadable: ignored.some(unreadableFilter) };
+    if (ignored.entries.includes("**")) return none;
+    return { ...every, unreadable: ignored.other || ignored.entries.some(unreadableFilter) };
   }
   if (push["tags"] !== undefined || push["tags-ignore"] !== undefined) return none;
   return every;
@@ -2176,7 +2186,8 @@ const ASSUMED_DEFAULT = "the default branch is assumed to be main: no refs/remot
  *
  * It warns `not evaluated` on a file it cannot read or parse, on a branch
  * filter it cannot read ({@link unreadableFilter}), on a deploy reached
- * through a `workflow_run` trigger, on a call to a workflow in another
+ * through a `workflow_run`, `pull_request` or `pull_request_target`
+ * trigger (any `types`), on a call to a workflow in another
  * repository, and on a local call it cannot follow. It passes
  * with no manifest, with no workflows folder, and when every branch it read
  * is covered, claiming only what it read.
@@ -2241,7 +2252,8 @@ export async function checkAutonomyDeploying(
     }
     const on = workflow["on"];
     const onRun = hasTrigger(on, "workflow_run");
-    if (!hasTrigger(on, "push") && !onRun) continue;
+    const onPullRequest = hasTrigger(on, "pull_request") || hasTrigger(on, "pull_request_target");
+    if (!hasTrigger(on, "push") && !onRun && !onPullRequest) continue;
     const reach = environmentJobs(name, workflows, [name], display);
     notEvaluated.push(...reach.problems);
     if (reach.jobs.length === 0) continue;
@@ -2249,6 +2261,11 @@ export async function checkAutonomyDeploying(
       notEvaluated.push(
         `${display} deploys on a workflow_run trigger, which this row does not follow; ` +
           "name the branches it deploys from in autonomy.deployingBranches",
+      );
+    }
+    if (onPullRequest) {
+      notEvaluated.push(
+        `${display} deploys from a pull-request event; name its base branches in autonomy.deployingBranches`,
       );
     }
     const push = pushTriggerBranches(on, mainBranch);

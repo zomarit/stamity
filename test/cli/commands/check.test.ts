@@ -5846,4 +5846,46 @@ describe("check — autonomy-deploying", () => {
       detail: "not evaluated: .github/workflows/release.yml calls a workflow in another repository",
     });
   });
+
+  // Fix round 2 (a3-security-r2 W-1 and W-2, signed off).
+  const UNREAD_FILTER = "uses a branch filter this row cannot read; name its branches in autonomy.deployingBranches";
+
+  it("warns `not evaluated` on a branch filter entry YAML read as a number, never naming it as text (round 2 W-1)", async () => {
+    const verdict = await rowAt(
+      {
+        ".github/workflows/listed.yml": `on:\n  push:\n    branches: [7.0, 6.4]\n${ENV_JOB}`,
+        ".github/workflows/ignored.yml": `on:\n  push:\n    branches-ignore: [10]\n${ENV_JOB}`,
+      },
+      { mode: "ask", deployingBranches: ["main", "**"] },
+    );
+
+    expect(verdict).toEqual({
+      id: "autonomy-deploying",
+      status: "warn",
+      detail: [
+        `not evaluated: .github/workflows/ignored.yml ${UNREAD_FILTER}`,
+        `not evaluated: .github/workflows/listed.yml ${UNREAD_FILTER}`,
+      ].join("\n"),
+    });
+  });
+
+  it("warns `not evaluated` on a deploy from a pull_request or pull_request_target event, never passing (round 2 W-2)", async () => {
+    const verdict = await rowAt(
+      {
+        ".github/workflows/merged.yml": `on:\n  pull_request:\n    types: [closed]\n    branches: [main]\n${ENV_JOB}`,
+        ".github/workflows/target.yml": `on: pull_request_target\n${ENV_JOB}`,
+        ".github/workflows/ci.yml": "on: pull_request\njobs:\n  test:\n    runs-on: x\n",
+      },
+      { mode: "ask", deployingBranches: ["**"] },
+    );
+
+    expect(verdict).toEqual({
+      id: "autonomy-deploying",
+      status: "warn",
+      detail: [
+        "not evaluated: .github/workflows/merged.yml deploys from a pull-request event; name its base branches in autonomy.deployingBranches",
+        "not evaluated: .github/workflows/target.yml deploys from a pull-request event; name its base branches in autonomy.deployingBranches",
+      ].join("\n"),
+    });
+  });
 });

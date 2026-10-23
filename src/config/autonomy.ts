@@ -209,11 +209,6 @@ export function parseAutonomyMarker(text: string): ResolvedAutonomy | null {
   return first === undefined ? null : strictestAutonomy(first, ...rest);
 }
 
-/** `text` with every regular-expression metacharacter escaped. */
-function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 /**
  * True when the branch `name` is one `patterns` names: an exact name matches
  * only itself, a `*` matches any run of characters inside one path segment
@@ -222,6 +217,12 @@ function escapeRegExp(text: string): string {
  * Actions branch filter reads them. Both sides compare case-folded with any
  * `refs/heads/` prefix dropped.
  *
+ * No regular expression: one table row per pattern token over the name's
+ * characters, so the work is bounded by the two lengths' product and a
+ * pattern of many wildcards against a long near-miss name cannot backtrack.
+ * A `**` also consumes a line break, which a `.` would not; no branch name
+ * holds one, and matching more only asks more.
+ *
  * Local to this module until the guard's own matcher lands in
  * `../hooks/personOnly.ts` (unit a4-guard-ask-list); the CLI callers then
  * import that one, since this kernel module may not import the hooks layer.
@@ -229,10 +230,22 @@ function escapeRegExp(text: string): string {
 export function matchesDeployingBranch(name: string, patterns: readonly string[]): boolean {
   const branch = branchKey(name);
   return patterns.some((pattern) => {
-    const source = branchKey(pattern)
-      .split("**")
-      .map((part) => part.split("*").map(escapeRegExp).join("[^/]*"))
-      .join(".*");
-    return new RegExp(`^${source}$`, "u").test(branch);
+    const text = branchKey(pattern);
+    // `matched[j]`: the tokens read so far match the first `j` characters of `branch`.
+    let matched: boolean[] = Array.from({ length: branch.length + 1 }, (_, j) => j === 0);
+    for (let at = 0; at < text.length; at += 1) {
+      const wide = text.startsWith("**", at);
+      const star = wide || text.charAt(at) === "*";
+      if (wide) at += 1;
+      const next: boolean[] = [star && matched[0] === true];
+      for (let j = 1; j <= branch.length; j += 1) {
+        const char = branch.charAt(j - 1);
+        if (wide) next.push(matched[j] === true || next[j - 1] === true);
+        else if (star) next.push(matched[j] === true || (next[j - 1] === true && char !== "/"));
+        else next.push(matched[j - 1] === true && char === text.charAt(at));
+      }
+      matched = next;
+    }
+    return matched[branch.length] === true;
   });
 }
