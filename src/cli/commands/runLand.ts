@@ -1,9 +1,10 @@
-import { closeSync, fstatSync, lstatSync, openSync, readSync, realpathSync } from "node:fs";
+import { closeSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { readAutonomy, strictestAutonomy, type ResolvedAutonomy } from "../../config/autonomy.ts";
 import { personOnlyVerdict } from "../../hooks/personOnly.ts";
 import { readGitSurface, SURFACE_RECORD_FILE, surfaceRefusal, type RecordFileReads } from "../../runs/gitSurface.ts";
+import { hookPathsAt, type HookScratch } from "../../runs/hookPaths.ts";
 import {
   askPathsOf,
   checkEvidence,
@@ -132,6 +133,17 @@ const RECORD_READS: RecordFileReads = {
     }
   },
   read: readCapped,
+};
+
+/** The hook read's scratch folder (`../../runs/hookPaths.ts`): a fresh folder under the temp folder, removed whole after. */
+const HOOK_SCRATCH: HookScratch = {
+  create: () => mkdtempSync(join(tmpdir(), "stamity-hooks-")),
+  place: (root, path, text) => {
+    const file = join(root, ...path.split("/"));
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, text);
+  },
+  remove: (root) => rmSync(root, { recursive: true, force: true }),
 };
 
 /** Whether the run is unattended as the shell guard reads it, as `run.ts` reads it (review/162). */
@@ -313,7 +325,10 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       counted += read.count;
       if (read.count < 100) break;
     }
-    result.evidence.held = askPathsOf(files, prefix);
+    // build/2: the hook files and the scripts the repository's own declarations name, at Base: and at the head, ask
+    // in every mode: a run that edits a declared hook script reaches every later session's hook.
+    const hookPaths = await declaredHookPaths(head.base, sha, prefix, git, gitLine);
+    result.evidence.held = askPathsOf(files, prefix, typeof hookPaths === "string" ? [] : hookPaths);
 
     // (6) The required checks: the rulesets' and the branch protection's; a 403 or 404 on the rules falls back to all.
     const rules = await call(`${repoPath}/rules/branches/${defaultBranch}`);
@@ -355,6 +370,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       setting,
       files: { paths: files, complete: counted === now.changedFiles },
       prefix,
+      hookPaths,
       checks,
       threads,
       ledger,
@@ -482,6 +498,26 @@ async function answered(call: Promise<GhResponse>, what: string): Promise<GhResp
     const code = typeof error === "object" && error !== null ? (error as { code?: unknown }).code : undefined;
     throw new Refused(`${what} failed before GitHub answered (${typeof code === "string" ? code : "gh failed"})`);
   }
+}
+
+/**
+ * The hook paths the declarations at the record's `Base:` and at `sha` name (`../../runs/hookPaths.ts`), together and
+ * sorted; or why they are not known (no `Base:`, one naming no commit here, a hold refusal at either), which asks.
+ */
+async function declaredHookPaths(
+  base: string | null,
+  sha: string,
+  prefix: string,
+  git: (args: readonly string[]) => Promise<GitWriteResult>,
+  gitLine: (args: readonly string[]) => Promise<string | null>,
+): Promise<string[] | string> {
+  const commit = base === null ? null : await gitLine(["rev-parse", "--verify", "--quiet", `${base}^{commit}`]);
+  if (commit === null) return "the record's Base: names no commit here, so the hook scripts declared there are not known";
+  const reads = { git, scratch: HOOK_SCRATCH };
+  const [atBase, atHead] = await Promise.all([hookPathsAt(reads, prefix, commit), hookPathsAt(reads, prefix, sha)]);
+  if (typeof atBase === "string") return atBase;
+  if (typeof atHead === "string") return atHead.replace("at Base:", `at ${sha}:`);
+  return [...new Set([...atBase, ...atHead])].toSorted();
 }
 
 /** The fields of one list entry the lookup matches on. */

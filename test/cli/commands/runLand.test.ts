@@ -116,8 +116,9 @@ describe("stamity run land", () => {
   /**
    * A repository whose `main` holds the manifest, then the run's branch with its record (`mode`) and ledger committed
    * and pushed to the bare remote; GitHub's routes answer for a clean, green, open pull request #7 from that branch.
+   * `files` puts a case's own files in `main`'s seed commit, hook declarations and the scripts they name among them.
    */
-  async function seed(opts: { mode?: "attended" | "unattended"; ledger?: string; manifest?: string | null } = {}): Promise<Seeded> {
+  async function seed(opts: { mode?: "attended" | "unattended"; ledger?: string; manifest?: string | null; files?: Record<string, string> } = {}): Promise<Seeded> {
     const dir = getRoot().path(`case-${Math.random().toString(36).slice(2, 8)}`);
     const repo = join(dir, "repo");
     const remote = join(dir, "remote.git");
@@ -127,6 +128,7 @@ describe("stamity run land", () => {
     await appendFile(join(repo, ".git", "config"), "[gc]\n\tauto = 0\n[maintenance]\n\tauto = false\n");
     await writeFile(join(repo, "a.txt"), "a\n");
     if (opts.manifest !== null) await put(repo, ".stamity/manifest.json", opts.manifest ?? '{"version":1}\n');
+    await Promise.all(Object.entries(opts.files ?? {}).map(([path, text]) => put(repo, path, text)));
     git(repo, ["add", "-A"]);
     git(repo, ["commit", "-q", "-m", "seed"]);
     git(repo, ["remote", "add", "origin", "https://github.com/o/r.git"]);
@@ -258,6 +260,18 @@ describe("stamity run land", () => {
     expect(result.doc).toMatchObject({ outcome: "asks", asks: { act: "pr-merge", reason: expect.stringContaining(".github/workflows/ci.yml") }, evidence: { held: [".github/workflows/ci.yml"] } });
     expect(kinds()).not.toContain("merge");
     expect(kinds()).not.toContain("PATCH repos/o/r/pulls/7");
+  });
+
+  it("asks, attended, for a diff editing a script a repository hook declaration at Base: names (build/2)", async () => {
+    const declaring = `${JSON.stringify({ hooks: [{ event: "pre_tool_use", command: ["node", "tools/guard.mjs"] }] })}\n`;
+    const { repo } = await seed({ files: { ".stamity/hooks/guard.json": declaring, "tools/guard.mjs": "base guard\n" } });
+    route("GET repos/o/r/pulls/7/files", [{ filename: "a.txt" }, { filename: "tools/guard.mjs" }, { filename: "b" }]);
+
+    const result = await run(repo, ["land", "--run", RUN]);
+
+    expect(result.code).toBe(1);
+    expect(result.doc).toMatchObject({ outcome: "asks", asks: { act: "pr-merge", reason: expect.stringContaining("tools/guard.mjs") }, evidence: { held: ["tools/guard.mjs"] } });
+    expect(kinds()).not.toContain("merge");
   });
 
   it("reads a work-tree ledger that differs from the commit's only in CRLF line ends as the same ledger", async () => {

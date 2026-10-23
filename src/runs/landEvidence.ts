@@ -60,17 +60,29 @@ export const LAND_ASK_PATHS: readonly string[] = [
 /** A held patch in any run folder: the run's own person-only change, which only a person lands. */
 const HELD_PATCH = "**/.stamity/runs/*/held/*.patch";
 
+/** A path as a case-insensitive, normalization-insensitive checkout reads it, as the run verbs' hold folds one. */
+function foldPath(path: string): string {
+  return path.replaceAll("\\", "/").normalize("NFC").toLowerCase();
+}
+
 /**
- * The paths of `paths` (git-top relative, a rename's old name among them) in {@link LAND_ASK_PATHS} or holding a held
- * patch, sorted and once each: as written, or from the project root below the top that `prefix` names.
+ * The paths of `paths` (git-top relative, a rename's old name among them) in {@link LAND_ASK_PATHS}, holding a held
+ * patch, or at or under one of `hookPaths` (the hook files and the scripts the repository's own hook declarations name,
+ * `./hookPaths.ts`, top-relative, build/2), sorted and once each: as written, or from the project root below the top
+ * that `prefix` names. A hook path matches without case and in one Unicode normalization form, as the hold matches it.
  */
-export function askPathsOf(paths: readonly string[], prefix = ""): string[] {
+export function askPathsOf(paths: readonly string[], prefix = "", hookPaths: readonly string[] = []): string[] {
+  const roots = hookPaths.map(foldPath);
   const asks = (path: string): boolean =>
     LAND_ASK_PATHS.some((glob) => matchGlob(path, glob, { foldCase: true })) || matchGlob(path, HELD_PATCH, { foldCase: true });
+  const hooked = (path: string): boolean => {
+    const folded = foldPath(path);
+    return roots.some((root) => folded === root || folded.startsWith(`${root}/`));
+  };
   return [...new Set(paths)]
     .filter((path) => {
       const fromProject = fromProjectRoot(path, prefix);
-      return asks(path) || (fromProject !== null && asks(fromProject));
+      return asks(path) || (fromProject !== null && asks(fromProject)) || hooked(path);
     })
     .toSorted();
 }
@@ -379,6 +391,11 @@ export interface LandInput {
   files: { paths: readonly string[]; complete: boolean };
   /** The project's folder below the git top (`git rev-parse --show-prefix`). */
   prefix: string;
+  /**
+   * The hook files and declared hook scripts read at `Base:` and at the head (`./hookPaths.ts`, build/2), or why they
+   * could not be read, which asks: whether the diff reaches a hook is then not known.
+   */
+  hookPaths: readonly string[] | string;
   checks: CheckEvidence;
   /** Unresolved review threads, or `null` where they could not be read. */
   threads: number | null;
@@ -448,7 +465,8 @@ export function decideLand(input: LandInput): LandDecision {
 
   const act: LandAct = forward !== undefined ? "push-default" : "pr-merge";
   if (setting.mode === "ask") return { outcome: "asks", reason: "autonomy.mode is ask", act };
-  const held = askPathsOf(input.files.paths, input.prefix);
+  if (typeof input.hookPaths === "string") return { outcome: "asks", reason: input.hookPaths, act };
+  const held = askPathsOf(input.files.paths, input.prefix, input.hookPaths);
   const patches = held.filter((path) => isHeldPatch(path));
   if (patches.length > 0) return { outcome: "asks", reason: `the diff carries a held patch (${patches.join(", ")})`, act };
   if (held.length > 0) return { outcome: "asks", reason: `the diff touches paths that define the evidence: ${held.join(", ")}`, act };

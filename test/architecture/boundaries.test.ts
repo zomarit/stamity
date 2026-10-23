@@ -460,6 +460,10 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // TEST CHANGE, justified (plan 022 file 1, a6-land-verb, REQ-FLOW-132): the land verb's evidence and decision, pure,
   // over the wave-4 ledger parse, the wave-3 person-only paths and the wave-2 autonomy setting, under the wave-12 root.
   "src/runs/landEvidence.ts": { unit: "a6-land-verb", wave: 5 },
+  // TEST CHANGE, justified (plan 022 file 1, a6-land-verb, build/2): the hold's hook-path read, moved out of the run
+  // verb behind injected reads, over the wave-2 declaration reader and the wave-1 parse and launcher check; read by the
+  // wave-14 land verb and the wave-15 run verb.
+  "src/runs/hookPaths.ts": { unit: "a6-land-verb", wave: 3 },
   // Plan 021 file 1: the morning list (the wave-2 scan and block reader, the
   // wave-3 pull request's marker), the pre-flight's checks (the wave-1 secret
   // patterns, the wave-3 repository resolver) and the readiness check (the

@@ -104,8 +104,17 @@ import { defineConfig } from "tsdown";
  * `b4c82354`). Those modules are the feature, not something bundled in by
  * accident; the pre-strip figure above stays under this ceiling too, so the
  * JSDoc test is still the strip's guard.
+ *
+ * Raised 2026-10-23 from 2.5 MiB to 2.625 MiB (2,752,512 bytes), with its own
+ * reason: plan 022 file 1's land verb (`src/cli/commands/runLand.ts`,
+ * `src/runs/landEvidence.ts`, and the runner's merge, review-thread and
+ * ready-for-review calls). The build before this change printed 2,604,531
+ * bytes (the `[size]` line of a fresh `npm run build` on `c92dc87c`), and
+ * 2,655,820 after it. Those modules are the feature, not something bundled in
+ * by accident; the pre-strip figure above stays under this ceiling too, so the
+ * JSDoc test is still the strip's guard.
  */
-export const LOGIC_BUDGET_BYTES = 2.5 * 1024 * 1024;
+export const LOGIC_BUDGET_BYTES = 2.625 * 1024 * 1024;
 
 /**
  * The staged corpus half — `dist/content` plus `dist/packs`, plus `dist/fork` in

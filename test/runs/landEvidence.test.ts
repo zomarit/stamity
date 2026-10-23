@@ -58,6 +58,7 @@ function input(over: Partial<LandInput> = {}, pr: Partial<LandPr> = {}): LandInp
     setting: resolveAutonomy({}),
     files: { paths: ["src/a.ts", "notes/plan.txt"], complete: true },
     prefix: "",
+    hookPaths: [".stamity/hooks", ".stamity/manifest.json", ".stamity/packs"],
     checks: GREEN,
     threads: 0,
     ledger: { open: [] },
@@ -92,6 +93,11 @@ describe("LAND_ASK_PATHS (decision D2)", () => {
     ];
     expect(askPathsOf([...asked, "src/a.ts"])).toEqual([...asked].toSorted());
     expect(askPathsOf(["app/.stamity/manifest.json", "app/src/a.ts"], "app/")).toEqual(["app/.stamity/manifest.json"]);
+  });
+
+  it("matches a declared hook script and a path under a hook folder, without case, beside the globs (build/2)", () => {
+    expect(askPathsOf(["Tools/Guard.mjs", "tools/other.mjs", "hooks-extra/x.json", "src/a.ts"], "", ["tools/guard.mjs", "hooks-extra"])).toEqual(["Tools/Guard.mjs", "hooks-extra/x.json"]);
+    expect(askPathsOf(["tools/guard.mjs"])).toEqual([]);
   });
 
   it("lets the charter, a rule file and an agent definition land on the evidence", () => {
@@ -231,6 +237,19 @@ describe("decideLand", () => {
   it("refuses a draft without --ready, and with it decides before the ready mark on what needs no ready state", () => {
     expect(decideLand(input({}, { draft: true, mergeableState: "draft" }))).toMatchObject({ outcome: "refused", reasons: ["the pull request is a draft: mark it ready first, or pass --ready", expect.any(String)] });
     expect(decideLand(input({ ready: true, beforeReady: true }, { draft: true, mergeableState: "draft" }))).toEqual({ outcome: "land" });
+  });
+
+  it("asks for a diff editing a declared hook script, and where the hook paths could not be read (build/2)", () => {
+    expect(decideLand(input({ files: { paths: ["tools/guard.mjs"], complete: true }, hookPaths: ["tools/guard.mjs"] }))).toEqual({
+      outcome: "asks",
+      reason: "the diff touches paths that define the evidence: tools/guard.mjs",
+      act: "pr-merge",
+    });
+    expect(decideLand(input({ hookPaths: "hold refused: .stamity/hooks/x.json at Base: does not parse" }))).toEqual({
+      outcome: "asks",
+      reason: "hold refused: .stamity/hooks/x.json at Base: does not parse",
+      act: "pr-merge",
+    });
   });
 
   it("asks in mode ask, for the ask set, a renamed workflow, a held patch, a deploying branch and a deploying act", () => {
