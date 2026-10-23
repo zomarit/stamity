@@ -116,7 +116,9 @@ export const CLIENT_HOOK_GUARANTEES: readonly ClientHookGuarantee[] = [
     failMode: "fail-closed",
     blockingExitCode: 2,
     notes:
-      "Exit 2 blocks the pending action and returns stderr to the agent; exit 0 with structured stdout feeds the session instead.",
+      "Exit 2 blocks the pending action and returns stderr to the agent; exit 0 with structured stdout feeds the session instead. " +
+      "The guard entries carry `onFailure: \"block\"`, so a guard that times out blocks on 2.1.295 and later " +
+      "(measured on 2.1.309, 2026-10-23); an older client ignores the key and lets the call through.",
   },
   {
     tool: "codex",

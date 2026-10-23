@@ -261,7 +261,7 @@ and the emitted guards cannot disagree. Rows keep the ladder order: strongest fi
 
 | Client | Fail mode | Blocking exit code | What an operator actually gets |
 |---|---|---|---|
-| `claude` | `fail-closed` | `2` | Exit 2 blocks the pending action and returns stderr to the agent; exit 0 with structured stdout feeds the session instead. |
+| `claude` | `fail-closed` | `2` | Exit 2 blocks the pending action and returns stderr to the agent; exit 0 with structured stdout feeds the session instead. The guard entries carry `onFailure: "block"`, so a guard that times out blocks on 2.1.295 and later (measured on 2.1.309, 2026-10-23); an older client ignores the key and lets the call through. |
 | `codex` | `fail-closed` | `2` | Exit-2 denies supported tool calls after native /hooks trust. PreToolUse carries no agent identity, so the core role guard is telemetry; hosted tools and specialized paths may bypass hooks. |
 | `copilot` | `fail-closed` | `2` | preToolUse exit 2, errors and JSON deny block. Timeouts always fail-open; other events are advisory unless documented. The identity-free core role guard is telemetry. sessionStart output reaches the session: it is injected as additionalContext (docs.github.com hooks reference, 2026-09-17). |
 | `cursor` | `opt-in-fail-closed` | `2` | Exit 2 denies the action. failClosed opts supported events into denial on hook errors and timeouts; the identity-free core role guard remains telemetry. |
