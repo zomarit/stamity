@@ -382,5 +382,6 @@ May write when it runs, so `--dry-run` previews any change without making it.
 | `--signoff` | checkpoint and end: add the Signed-off-by line to the commit | — |
 | `--refused` | end: title the draft pull request Refused: <title>, for a run that refused to start | — |
 | `--final-round` | end: the run's last end; write the run-ended marker the final question round needs (a plain end removes one) | — |
+| `--drop-held <path...>` | checkpoint and end: withdraw the held patch's sections for these paths, which the run undid (one it still changes stays held) | — |
 
 Regenerate this page with `node scripts/generate-docs.mjs`.

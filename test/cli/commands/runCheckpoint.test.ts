@@ -702,12 +702,14 @@ describe("stamity run checkpoint", () => {
       const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "tools/guard.mjs"]);
 
       expect(code).toBe(1);
+      // TEST CHANGE, justified: REQ-FLOW-102 (review/205) — a hold refusal now ends with the person's next step, since
+      // the fix lands on the base branch and the run starts again from it.
       expect(doc).toMatchObject({
         pushed: false,
         committed: null,
         held: [],
         notDone: [
-          "hold refused: .stamity/hooks/broken.json at Base: does not parse, so the hook scripts it names are unknown and the run pushes nothing",
+          "hold refused: .stamity/hooks/broken.json at Base: does not parse, so the hook scripts it names are unknown and the run pushes nothing; fix it on the base branch, then start the run again from it",
         ],
       });
       expect(git(repo, ["diff", "--cached", "--name-only"])).toBe("");
@@ -716,10 +718,15 @@ describe("stamity run checkpoint", () => {
     });
 
     describe("the hold fails closed on anything it cannot resolve cleanly at Base: (review/182-/189)", () => {
+      // TEST CHANGE, justified: REQ-FLOW-102 (review/205) — a hold refusal now ends with the person's next step, since
+      // the fix lands on the base branch and the run starts again from it.
       const refused = (path: string, why: string): string =>
-        `hold refused: ${path} at Base: ${why}, so the hook scripts it names are unknown and the run pushes nothing`;
+        `hold refused: ${path} at Base: ${why}, so the hook scripts it names are unknown and the run pushes nothing; fix it on the base branch, then start the run again from it`;
       const manifestNaming = (folder: string): string => `${JSON.stringify({ hooks: { userHooksDir: folder } })}\n`;
       const GUARD = { "tools/guard.mjs": "base guard\n" };
+      /** review/204: a hooks folder name past ASCII, composed (as the tree holds it) and decomposed (as a manifest may name it). */
+      const COMPOSED = `hooks-caf${String.fromCodePoint(0xe9)}`;
+      const DECOMPOSED = COMPOSED.normalize("NFD");
 
       it("holds the whole folder Base:'s manifest names: a declaration the run edits there, and one it adds, stay out of the push (review/182, review/184)", async () => {
         const { repo, remote } = await seed("unattended", { files: { ".stamity/manifest.json": manifestNaming("hooks"), "hooks/guard.json": declaring("tools/guard.mjs"), ...GUARD } });
@@ -932,6 +939,13 @@ describe("stamity run checkpoint", () => {
           files: { ".stamity/Hooks/guard.json": declaring("tools/guard.mjs") },
           links: {},
           line: refused(".stamity/hooks", "is spelled in another letter case than the tree's .stamity/Hooks"),
+        },
+        {
+          // review/204: the names differ only by Unicode normalization, so the refusal says so rather than naming a letter case.
+          layout: "the manifest names its hooks folder in another Unicode normalization form than the tree (review/204)",
+          files: { ".stamity/manifest.json": manifestNaming(DECOMPOSED), [`${COMPOSED}/guard.json`]: declaring("tools/guard.mjs") },
+          links: {},
+          line: refused(DECOMPOSED, `is spelled in another Unicode normalization form than the tree's ${COMPOSED}`),
         },
         {
           layout: "a declared script's path passes through a link (review/185)",
@@ -2140,6 +2154,102 @@ describe("stamity run checkpoint", () => {
     expect(pushedTree(remote)).not.toContain(PATCH);
   });
 
+  // review/248: the hand-off kept offering the person a held edit the run itself had undid, and the run had no way to
+  // withdraw it; --drop-held names the paths whose sections leave the patch.
+  describe("--drop-held withdraws a held section the run undid (review/248)", () => {
+    it("drops the reverted path's section beside a new diff for a path still changed, naming it in withdrawn", async () => {
+      const { repo, remote, base } = await seed("unattended");
+      await writeFile(join(repo, ".cursorrules"), "steered rules\n");
+      await put(repo, ".github/workflows/x.yml", "on: push\n");
+      expect((await run(repo, [...CHECKPOINT, "--paths", ".github/workflows/x.yml"])).code).toBe(0);
+      expect(pushedFile(remote, PATCH)).toContain("+steered rules");
+      git(repo, ["restore", "--", ".cursorrules"]);
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", ".github/workflows/x.yml", "--drop-held", ".cursorrules"]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [], held: [".github/workflows/x.yml"], withdrawn: [".cursorrules"] });
+      const patch = pushedFile(remote, PATCH);
+      expect(patch).not.toContain("diff --git a/.cursorrules ");
+      expect(patch).toContain("diff --git a/.github/workflows/x.yml b/.github/workflows/x.yml");
+      const fresh = join(dirname(repo), "at-base");
+      git(repo, ["worktree", "add", "-q", "--detach", fresh, base]);
+      git(fresh, ["apply", join(repo, PATCH)]);
+      expect(await readFile(join(fresh, ".cursorrules"), "utf8")).toBe(".cursorrules\n");
+      expect(await readFile(join(fresh, ".github/workflows/x.yml"), "utf8")).toBe("on: push\n");
+    });
+
+    it("rewrites a kept patch to the sections left where the work tree holds no held change, and names the withdrawal", async () => {
+      const { repo, remote } = await seed("unattended");
+      await writeFile(join(repo, ".cursorrules"), "steered rules\n");
+      await put(repo, ".github/workflows/x.yml", "on: push\n");
+      expect((await run(repo, [...CHECKPOINT, "--paths", ".github/workflows/x.yml"])).code).toBe(0);
+      // Both changes leave the work tree; the workflow's section stays the person's to apply.
+      git(repo, ["restore", "--", ".cursorrules"]);
+      await rm(join(repo, ".github/workflows/x.yml"));
+
+      const { code, stdout } = await run(repo, ["checkpoint", "--run", RUN, "--drop-held", ".cursorrules"]);
+
+      expect(code).toBe(0);
+      expect(stdout).toContain("withdrawn (their sections left the held patch): .cursorrules\n");
+      const patch = pushedFile(remote, PATCH);
+      expect(patch).not.toContain("diff --git a/.cursorrules ");
+      expect(patch).toContain("diff --git a/.github/workflows/x.yml b/.github/workflows/x.yml");
+      const again = await run(repo, CHECKPOINT);
+      // Nothing new to commit: the kept patch stays as the withdrawal left it.
+      expect(again.doc).toMatchObject({ notDone: [], held: [".github/workflows/x.yml"], withdrawn: [] });
+      expect(pushedFile(remote, PATCH)).toBe(patch);
+    });
+
+    it("removes the held patch from the pushed branch where the withdrawn path was its only section", async () => {
+      const { repo, remote } = await seed("unattended");
+      await writeFile(join(repo, ".cursorrules"), "steered rules\n");
+      expect((await run(repo, CHECKPOINT)).code).toBe(0);
+      expect(pushedTree(remote)).toContain(PATCH);
+      git(repo, ["restore", "--", ".cursorrules"]);
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--drop-held", ".cursorrules"]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [], held: [], withdrawn: [".cursorrules"] });
+      expect(pushedTree(remote)).not.toContain(PATCH);
+      expect(isFile(join(repo, PATCH))).toBe(false);
+    });
+
+    it("keeps holding a path the work tree still changes, withdrawing nothing and naming why in notDone", async () => {
+      const { repo, remote } = await seed("unattended");
+      await writeFile(join(repo, ".cursorrules"), "steered rules\n");
+      expect((await run(repo, CHECKPOINT)).code).toBe(0);
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--drop-held", ".cursorrules"]);
+
+      expect(code).toBe(0);
+      // Nothing new to commit, so nothing is pushed; the patch the branch carries keeps the section.
+      expect(doc).toMatchObject({
+        committed: null,
+        held: [".cursorrules"],
+        withdrawn: [],
+        notDone: ["not withdrawn: .cursorrules is still changed in the work tree or the index, so it stays held"],
+      });
+      expect(pushedFile(remote, PATCH)).toContain("+steered rules");
+    });
+
+    it("takes --drop-held on end, and refuses it on start as a usage error", async () => {
+      const { repo, remote } = await seed("unattended");
+      await writeFile(join(repo, ".cursorrules"), "steered rules\n");
+      expect((await run(repo, CHECKPOINT)).code).toBe(0);
+      git(repo, ["restore", "--", ".cursorrules"]);
+
+      const ended = await run(repo, ["end", "--run", RUN, "--title", "the run", "--drop-held", ".cursorrules", "--json"]);
+      const started = await run(repo, ["start", "--run", RUN, "--drop-held", ".cursorrules"]);
+
+      expect(ended.doc).toMatchObject({ subcommand: "end", pushed: true, held: [], withdrawn: [".cursorrules"] });
+      expect(pushedTree(remote)).not.toContain(PATCH);
+      expect(started.code).toBe(2);
+      expect(started.stderr).toContain("--drop-held does not apply to start");
+    });
+  });
+
   // review/6 (signed off): a run continued on a fresh clone (REQ-FLOW-105) holds Base:'s bytes at every held path, its
   // person-only change living in the patch the branch carries alone; that patch stays on the branch and is listed.
   it("keeps and lists the branch's held patch where a fresh clone continues the run with no held change (review/6)", async () => {
@@ -2486,27 +2596,105 @@ describe("stamity run checkpoint", () => {
       expect(await readFile(join(fresh, ".github/workflows/ø.yml"), "utf8")).toBe("on: push\n");
     });
 
-    // review/251: the verb pins no diff prefix, so a repository's diff.mnemonicPrefix writes c/, i/ and w/ in place of
-    // a/ and b/; git apply sets each name's first component aside, and so does the carried read.
-    it("carries a section its diffs wrote with diff.mnemonicPrefix's prefixes (review/251)", async () => {
-      const { repo, remote } = await seed("unattended");
-      git(repo, ["config", "diff.mnemonicPrefix", "true"]);
+    // review/251: an older version pinned no diff prefix, so a repository's diff.mnemonicPrefix wrote c/, i/ and w/ in
+    // place of a/ and b/; git apply sets each name's first component aside, and so does the carried read.
+    // TEST CHANGE, justified: REQ-FLOW-102 (review/254) — the verb's patch diffs now pin a/ and b/, so it no longer
+    // writes mnemonic prefixes itself; the claim that such a section still carries is kept through a section written by
+    // hand from the verb's own, with the prefixes an older version wrote, committed as that version committed it.
+    it("carries a section an older version wrote with diff.mnemonicPrefix's prefixes (review/251)", async () => {
+      const { repo, remote, base } = await seed("unattended");
       await writeFile(join(repo, ".cursorrules"), "steered rules\n");
       expect((await run(repo, CHECKPOINT)).code).toBe(0);
-      expect(headers(sections(pushedBytes(remote)))[0]).toEqual([
+      const clone = await cloneRun(repo, remote);
+      const older = (await readFile(join(clone, PATCH), "utf8"))
+        .replace("diff --git a/.cursorrules b/.cursorrules\n", "diff --git c/.cursorrules w/.cursorrules\n")
+        .replace("\n--- a/.cursorrules\n+++ b/.cursorrules\n", "\n--- c/.cursorrules\n+++ w/.cursorrules\n");
+      await writeFile(join(clone, PATCH), older);
+      git(clone, ["commit", "-q", "-m", "an older version's held patch", "--", PATCH]);
+      expect(headers(sections(await readFile(join(clone, PATCH))))[0]).toEqual([
         "diff --git c/.cursorrules w/.cursorrules",
         "index <id>..<id> 100644",
         "--- c/.cursorrules",
         "+++ w/.cursorrules",
         "@@ -1 +1 @@",
       ]);
-      const clone = await cloneRun(repo, remote);
       await put(clone, ".github/workflows/x.yml", "on: push\n");
 
       const { code, doc } = await run(clone, [...CHECKPOINT, "--paths", ".github/workflows/x.yml"]);
 
       expect(code).toBe(0);
       expect(doc).toMatchObject({ pushed: true, notDone: [], held: [".cursorrules", ".github/workflows/x.yml"] });
+      const parts = sections(pushedBytes(remote));
+      expect(parts.map((part) => part.toString("utf8").split("\n")[0])).toEqual([
+        "diff --git c/.cursorrules w/.cursorrules",
+        "diff --git a/.github/workflows/x.yml b/.github/workflows/x.yml",
+      ]);
+      const fresh = applyOnBase(repo, base, join(clone, PATCH));
+      expect(await readFile(join(fresh, ".cursorrules"), "utf8")).toBe("steered rules\n");
+    });
+
+    // review/254: git's diff.noprefix, diff.mnemonicPrefix and custom prefixes moved the names the held patch wrote, so
+    // the person's git apply set a new held file one folder off, or failed on a held edit; the verb's patch diffs now
+    // pin a/ and b/, as the gate's own diff does, at both the side diffs and the work tree's addition part.
+    it.each([
+      { setting: "diff.noprefix", config: [["diff.noprefix", "true"]] },
+      { setting: "diff.mnemonicPrefix", config: [["diff.mnemonicPrefix", "true"]] },
+      {
+        setting: "diff.srcPrefix and diff.dstPrefix",
+        config: [
+          ["diff.srcPrefix", "x/"],
+          ["diff.dstPrefix", "y/"],
+        ],
+      },
+    ])("writes every held section with git's a/ and b/ prefixes under $setting, so the patch applies on Base: at the held paths (review/254)", async ({ config }) => {
+      const { repo, remote, base } = await seed("unattended");
+      for (const [key, value] of config) git(repo, ["config", key ?? "", value ?? ""]);
+      // A new workflow, staged by --paths (the side diffs), and .cursorrules out of the index while the work tree has it
+      // (the work tree's addition part, review/2).
+      await put(repo, ".github/workflows/x.yml", "on: push\n");
+      git(repo, ["rm", "-q", "--cached", "--", ".cursorrules"]);
+      await writeFile(join(repo, ".cursorrules"), "rewritten rules\n");
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", ".github/workflows/x.yml"]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [], held: [".cursorrules", ".github/workflows/x.yml"] });
+      const pushed = pushedBytes(remote).toString("utf8");
+      expect(pushed.startsWith("diff --git a/")).toBe(true);
+      expect(
+        sections(Buffer.from(pushed, "utf8"))
+          .map((part) => part.toString("utf8").split("\n")[0])
+          .toSorted(),
+      ).toEqual([
+        "diff --git a/.cursorrules b/.cursorrules",
+        "diff --git a/.cursorrules b/.cursorrules",
+        "diff --git a/.github/workflows/x.yml b/.github/workflows/x.yml",
+      ]);
+      // Every label names a/, b/ or /dev/null: none of the setting's prefixes is left.
+      expect(pushed.split("\n").filter((line) => /^(?:---|\+\+\+) /.test(line) && !/^(?:--- a\/|\+\+\+ b\/|(?:---|\+\+\+) \/dev\/null$)/.test(line))).toEqual([]);
+      const fresh = applyOnBase(repo, base, join(repo, PATCH));
+      expect(await readFile(join(fresh, ".github/workflows/x.yml"), "utf8")).toBe("on: push\n");
+      expect(isFile(join(fresh, "workflows/x.yml"))).toBe(false);
+      expect(await readFile(join(fresh, ".cursorrules"), "utf8")).toBe("rewritten rules\n");
+    });
+
+    // review/254: a section with no prefix (an older version's diff under diff.noprefix) is read by git apply's -p1 as if
+    // its first folder were a prefix, so the file lands one folder off from the path held lists, or fails at the top.
+    it.each([
+      {
+        where: "below a folder",
+        section: "diff --git .github/workflows/y.yml .github/workflows/y.yml\nnew file mode 100644\n--- /dev/null\n+++ .github/workflows/y.yml\n@@ -0,0 +1 @@\n+on: push\n",
+      },
+      { where: "at the top", section: "diff --git .cursorrules .cursorrules\n--- .cursorrules\n+++ .cursorrules\n@@ -1 +1 @@\n-.cursorrules\n+steered\n" },
+    ])("refuses a committed patch's section written with no diff prefix, $where (review/254)", async ({ section }) => {
+      const { clone, before, outcome } = await steeredClone(section, true);
+
+      expect(outcome.code).toBe(1);
+      expect(outcome.doc).toMatchObject({
+        pushed: false,
+        notDone: [`hold failed: a section of the kept ${PATCH} was written with no diff prefix, so git apply would place it one folder off`],
+      });
+      expect(git(clone, ["rev-parse", "HEAD"])).toBe(before);
     });
 
     // review/251: a checkout under core.autocrlf (Git for Windows' default) leaves the work tree's copy of the committed
@@ -2605,6 +2793,23 @@ describe("stamity run checkpoint", () => {
       await symlink("cfg", join(repo, ".claude"));
       expect((await run(repo, [...CHECKPOINT, "--paths", "cfg", ".claude"])).code).toBe(0);
       const clone = await cloneRun(repo, remote);
+      await put(clone, ".github/workflows/x.yml", "on: push\n");
+
+      const { code, doc } = await run(clone, [...CHECKPOINT, "--paths", ".github/workflows/x.yml"]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [], held: [".claude", ".github/workflows/x.yml"] });
+    });
+
+    // review/256: the link read split the section on LF alone, so under a CRLF work-tree copy (an autocrlf checkout) the
+    // mode line kept its CR, read as no link, and the held link's section was refused as a path the hold does not hold.
+    it.skipIf(process.platform === "win32")("keeps a carried section for a held link whose work-tree copy has CRLF line ends (review/256)", async () => {
+      const { repo, remote } = await seed("unattended");
+      await put(repo, "cfg/settings.json", '{ "hooks": {} }\n');
+      await symlink("cfg", join(repo, ".claude"));
+      expect((await run(repo, [...CHECKPOINT, "--paths", "cfg", ".claude"])).code).toBe(0);
+      const clone = await cloneRun(repo, remote);
+      await writeFile(join(clone, PATCH), (await readFile(join(clone, PATCH), "utf8")).replaceAll("\n", "\r\n"));
       await put(clone, ".github/workflows/x.yml", "on: push\n");
 
       const { code, doc } = await run(clone, [...CHECKPOINT, "--paths", ".github/workflows/x.yml"]);

@@ -161,14 +161,15 @@ const OPTION_FLAGS: Readonly<Record<string, string>> = {
   signoff: "--signoff",
   refused: "--refused",
   finalRound: "--final-round",
+  dropHeld: "--drop-held",
 };
 
 /** The options each subcommand takes beyond `--run`; any other one given is a usage error. */
 const SUBCOMMAND_OPTIONS: Readonly<Record<string, readonly string[]>> = {
   [START]: [],
-  [CHECKPOINT]: ["paths", "pr", "title", "signoff"],
+  [CHECKPOINT]: ["paths", "pr", "title", "signoff", "dropHeld"],
   // No --pr: the pull request is not optional at the end.
-  [END]: ["paths", "title", "refused", "signoff", "finalRound"],
+  [END]: ["paths", "title", "refused", "signoff", "finalRound", "dropHeld"],
 };
 
 /** The origin pin `start` writes in the run folder (review/209). */
@@ -247,6 +248,7 @@ export const runCommand: CommandModule = {
       .option("--signoff", "checkpoint and end: add the Signed-off-by line to the commit")
       .option("--refused", "end: title the draft pull request Refused: <title>, for a run that refused to start")
       .option("--final-round", "end: the run's last end; write the run-ended marker the final question round needs (a plain end removes one)")
+      .option("--drop-held <path...>", "checkpoint and end: withdraw the held patch's sections for these paths, which the run undid (one it still changes stays held)")
       // Usage errors, so exit 2 before the action and before git runs.
       .hook("preAction", (command) => {
         const subcommand = String(command.processedArgs[0]);
@@ -262,6 +264,8 @@ export const runCommand: CommandModule = {
         if (typeof given["title"] === "string" && given["title"].trim() === "") command.error("error: --title takes a title", { exitCode: 2 });
         const paths = (given["paths"] ?? []) as string[];
         if (paths.some((path) => path.trim() === "")) command.error("error: --paths takes no empty path", { exitCode: 2 });
+        const dropped = (given["dropHeld"] ?? []) as string[];
+        if (dropped.some((path) => path.trim() === "")) command.error("error: --drop-held takes no empty path", { exitCode: 2 });
       });
   },
 
@@ -829,6 +833,8 @@ interface Checkpoint {
   committed: string | null;
   pushed: boolean;
   held: string[];
+  /** review/248: the paths `--drop-held` named whose sections left the held patch. */
+  withdrawn: string[];
   scan: { hits: CheckpointHit[]; unscanned: string[] };
   pr: { number: number; url: string; how: string } | null;
   notDone: string[];
@@ -871,7 +877,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
     });
   }
 
-  const result: Checkpoint = { branch: null, base, committed: null, pushed: false, held: [], scan: { hits: [], unscanned: [] }, pr: null, notDone: [] };
+  const result: Checkpoint = { branch: null, base, committed: null, pushed: false, held: [], withdrawn: [], scan: { hits: [], unscanned: [] }, pr: null, notDone: [] };
   const lines: string[] = [`run: ${run} (${unattended ? "unattended" : "attended"})`, `base: ${base}`, ...removedLine(removed)];
   const finish = async (passed: boolean, extra: Record<string, unknown> = {}): Promise<CommandResult> => {
     let ok = passed;
@@ -974,6 +980,15 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   });
   const heldDir = `${runDir}/${HELD_DIR}`;
   const patchRel = `${heldDir}/${HELD_PATCH}`;
+  /** The held patch written whole, atomically, inside the project; else the reason, for `notDone`. */
+  const writePatch = async (bytes: Buffer): Promise<string | null> => {
+    try {
+      await ctx.engine.merge.atomicWrite.atomicWriteFile(join(cwd, patchRel), bytes, { boundaryDir: cwd });
+      return null;
+    } catch (cause) {
+      return `hold failed: ${patchRel} could not be written (${cause instanceof Error ? cause.message : "write failed"})`;
+    }
+  };
   const patches = [...new Set([patchRel, ...listPatches(join(cwd, heldDir)).map((name) => `${heldDir}/${name}`)])].map(fromTop);
   const { paths: named, deleted: namedDeleted } = await namedPaths(top, cwd, prefix, base, (opts["paths"] ?? []) as string[], result.notDone);
   // review/84: a deletion already staged is no ignored record, though check-ignore reads its path as untracked now.
@@ -1020,6 +1035,13 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
     const inTree = new Set(treeSide.map((entry) => entry.path));
     const bothAbsent = new Set(indexSide.filter((entry) => entry.added && !inTree.has(entry.path)).map((entry) => entry.path));
     const sectioned = held.filter((path) => !bothAbsent.has(path));
+    const isHeld = (path: string, link: boolean): boolean => heldOf([{ path, link, added: false }], hookPaths, prefix).length > 0;
+    // review/248: the paths --drop-held names leave the patch where the run undid them; one still changed stays held.
+    const toDrop = ((opts["dropHeld"] ?? []) as string[]).map((path) => fromTop(path.replaceAll("\\", "/")));
+    const withdraw = [...new Set(toDrop.filter((path) => !held.includes(path)))];
+    for (const still of [...new Set(toDrop.filter((path) => held.includes(path)))].toSorted()) {
+      result.notDone.push(`not withdrawn: ${sanitizeLabel(still)} is still changed in the work tree or the index, so it stays held`);
+    }
     if (sectioned.length === 0) {
       // review/6 (signed off): a patch an earlier checkpoint committed is kept and listed until a checkpoint writes a
       // new one (which keeps its sections for paths not held then, n14), never dropped because the work tree holds no
@@ -1031,6 +1053,26 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
         return finish(false);
       }
       if (committed !== null) kept = committed;
+      // review/248: the withdrawn paths' sections leave the kept patch, read as a carried one is; none left, it goes.
+      if (committed !== null && committed.some((path) => withdraw.includes(path))) {
+        const scratch = mkdtempSync(join(tmpdir(), "stamity-held-"));
+        try {
+          const left = await carriedSections(top, fromTop(patchRel), withdraw, isHeld, scratch, verb);
+          if (typeof left === "string") {
+            result.notDone.push(left);
+            return finish(false);
+          }
+          const unwritten = left.sections.length === 0 ? await removeStalePatch(cwd, top, heldDir, fromTop(patchRel)) : await writePatch(Buffer.concat(left.sections));
+          if (unwritten !== null) {
+            result.notDone.push(unwritten);
+            return finish(false);
+          }
+          kept = left.paths;
+          result.withdrawn = left.dropped.filter((path) => withdraw.includes(path));
+        } finally {
+          rmSync(scratch, { recursive: true, force: true });
+        }
+      }
       const stale = committed === null ? await removeStalePatch(cwd, top, heldDir, fromTop(patchRel)) : null;
       if (stale !== null) {
         result.notDone.push(stale);
@@ -1061,7 +1103,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
             .filter(([, paths]) => paths.length > 0)
             .map(async ([side, paths], index) => {
               const out = join(scratch, `${index}-${HELD_PATCH}`);
-              return { out, patch: await git(top, ["diff", "--binary", "--full-index", ...DIFF_PINS, `--output=${out}`, ...side, "--", ...paths], verb), step: "diff" };
+              return { out, patch: await git(top, ["diff", "--binary", "--full-index", ...PATCH_PINS, `--output=${out}`, ...side, "--", ...paths], verb), step: "diff" };
             }),
           ...readded.map(async (path, index) => {
             const out = join(scratch, `added-${index}-${HELD_PATCH}`);
@@ -1076,18 +1118,17 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
         }
         // n14 (P3): a run continued on a fresh clone holds the earlier person-only change in the branch's patch alone,
         // so a new patch keeps that patch's sections for paths not held now, in their order, before its own.
-        const isHeld = (path: string, link: boolean): boolean => heldOf([{ path, link, added: false }], hookPaths, prefix).length > 0;
-        const earlier = await carriedSections(top, fromTop(patchRel), held, isHeld, scratch, verb);
+        // review/248: a withdrawn path's earlier section goes as a path held now does, and no current diff takes its place.
+        const earlier = await carriedSections(top, fromTop(patchRel), [...held, ...withdraw], isHeld, scratch, verb);
         if (typeof earlier === "string") {
           result.notDone.push(earlier);
           return finish(false);
         }
         carried = earlier.paths;
-        const parts = [...earlier.sections, ...written.map(({ out }) => readFileSync(out))];
-        try {
-          await ctx.engine.merge.atomicWrite.atomicWriteFile(join(cwd, patchRel), Buffer.concat(parts), { boundaryDir: cwd });
-        } catch (cause) {
-          result.notDone.push(`hold failed: ${patchRel} could not be written (${cause instanceof Error ? cause.message : "write failed"})`);
+        result.withdrawn = earlier.dropped.filter((path) => withdraw.includes(path));
+        const unwritten = await writePatch(Buffer.concat([...earlier.sections, ...written.map(({ out }) => readFileSync(out))]));
+        if (unwritten !== null) {
+          result.notDone.push(unwritten);
           return finish(false);
         }
       } finally {
@@ -1122,6 +1163,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
           ? `held (in ${patchRel}; the work tree keeps them, save ${list(carried)}, whose sections are kept from an earlier checkpoint): ${list(heldNames)}`
           : `held (in ${patchRel}; the work tree keeps them): ${list(heldNames)}`,
   );
+  if (result.withdrawn.length > 0) lines.push(`withdrawn (their sections left the held patch): ${list(result.withdrawn)}`);
 
   // pr/46: what origin holds, read from the remote once, before the commit; unread, the push is held.
   const remote = await remoteRefs(top, current, verb);
@@ -1320,6 +1362,13 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
 /** The pins every diff here takes against config: no external diff, colour, textconv or rename pairing, top-level names. */
 const DIFF_PINS: readonly string[] = ["--no-color", "--no-ext-diff", "--no-textconv", "--no-renames", "--no-relative", "--ignore-submodules=none"];
 
+/**
+ * review/254: the held patch's diffs take git's default prefixes too, as the gate's diff pins them, so `diff.noprefix`,
+ * `diff.mnemonicPrefix` and `diff.srcPrefix`/`diff.dstPrefix` cannot move a name `git apply` reads one folder off.
+ * Measured with git 2.52: the explicit pins win over each of those settings.
+ */
+const PATCH_PINS: readonly string[] = [...DIFF_PINS, "--src-prefix=a/", "--dst-prefix=b/"];
+
 /** What `changedSince` compares with `base`: the work tree, the index, or `HEAD`'s tree. */
 type Side = "work tree" | "index" | "HEAD";
 
@@ -1497,7 +1546,11 @@ function baseReader(top: string, base: string, prefix: string, verb: string): Ba
       const [entry] = like;
       if (entry === undefined) return { path, kind: "missing", id: "" };
       if (like.length > 1) return { refused: `is ambiguous by letter case in the tree (${spelled})` };
-      if (entry.name !== segment) return { refused: `is spelled in another letter case than the tree's ${spelled}` };
+      // review/204: a name equal to the tree's once both are composed differs by normalization alone, not by letter case.
+      if (entry.name !== segment) {
+        const form = entry.name.normalize("NFC") === segment.normalize("NFC") ? "Unicode normalization form" : "letter case";
+        return { refused: `is spelled in another ${form} than the tree's ${spelled}` };
+      }
       if (entry.kind === "link" || entry.kind === "submodule") return { refused: `passes through a ${entry.kind} (${spelled})` };
       if (index === segments.length - 1) return { path, kind: entry.kind, id: entry.id };
       if (entry.kind === "file") return { path, kind: "missing", id: "" };
@@ -1550,10 +1603,14 @@ async function listTree(top: string, tree: string, verb: string): Promise<TreeEn
  * written by hand into a client's settings file; anything a held script reads or loads beyond the files its
  * declaration names (review/187, review/197); a run that rewrites its own record head's `Base:`, as it can its `Mode:`.
  */
+/** review/205: what ends every hold refusal read at `Base:`, the person's next step. */
+const NEXT_STEP = "; fix it on the base branch, then start the run again from it";
+
 async function hookPathsAt(top: string, prefix: string, base: string, verb: string): Promise<string[] | string> {
   const at = baseReader(top, base, prefix, verb);
+  // review/205: the refusal names the person's next step, since the fix lands on the base branch, not on the run's.
   const unknown = (path: string, why: string): string =>
-    `hold refused: ${path} at Base: ${why}, so the hook scripts it names are unknown and the run pushes nothing`;
+    `hold refused: ${path} at Base: ${why}, so the hook scripts it names are unknown and the run pushes nothing${NEXT_STEP}`;
   const json = async (path: string, id: string): Promise<{ document: unknown } | { refused: string }> => {
     const read = await git(top, ["cat-file", "blob", id], verb);
     if (read.code !== 0) return { refused: unknown(path, `could not be read (git cat-file answered ${read.code})`) };
@@ -1688,7 +1745,7 @@ async function hookPathsAt(top: string, prefix: string, base: string, verb: stri
     }
     return [...held].toSorted();
   } catch (cause) {
-    return `hold refused: the hook declarations at Base: could not be read (${cause instanceof Error ? firstLine(cause.message) : "read failed"}), so the hook scripts they name are unknown and the run pushes nothing`;
+    return `hold refused: the hook declarations at Base: could not be read (${cause instanceof Error ? firstLine(cause.message) : "read failed"}), so the hook scripts they name are unknown and the run pushes nothing${NEXT_STEP}`;
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
@@ -2132,7 +2189,8 @@ function sectionStarts(patch: Buffer): number[] {
 
 /**
  * n14 (P3): the sections of the held patch `HEAD` carries whose paths are none of `heldNow`, as bytes in the patch's
- * order, and those paths; none where `HEAD` carries no patch. The patch is read from the copy the commit takes, as
+ * order, and those paths, beside the paths of the sections left out (review/248's withdrawn ones among them); none
+ * where `HEAD` carries no patch. The patch is read from the copy the commit takes, as
  * {@link committedPatchPaths} reads it: the work tree's where it is a regular file, else `HEAD`'s, which passes a text
  * decode and so is refused where that decode is not whole. A section runs from one line-start `diff --git ` header to
  * the next (a binary section's base85 lines hold no space, so it is kept whole), and `git apply --numstat -z`, which
@@ -2153,11 +2211,11 @@ async function carriedSections(
   isHeld: (path: string, link: boolean) => boolean,
   scratch: string,
   verb: string,
-): Promise<{ sections: Buffer[]; paths: string[] } | string> {
+): Promise<{ sections: Buffer[]; paths: string[]; dropped: string[] } | string> {
   const listed = await git(top, ["ls-tree", "-z", "HEAD", "--", patchFromTop], verb);
   if (listed.code !== 0) return `hold failed: git ls-tree answered ${listed.code}: ${firstLine(listed.stderr)}`;
   const blob = /^100(?:644|755) blob ([0-9a-f]{40,64})\t/.exec(listed.stdout)?.[1];
-  if (blob === undefined) return { sections: [], paths: [] };
+  if (blob === undefined) return { sections: [], paths: [], dropped: [] };
   const file = join(top, patchFromTop);
   let patch: Buffer;
   if (isRegular(file)) {
@@ -2201,20 +2259,22 @@ async function carriedSections(
   const failed = mapped.find((paths) => typeof paths === "string");
   if (typeof failed === "string") return failed;
   const keep = mapped.map((paths) => typeof paths !== "string" && !paths.some((path) => heldNow.includes(path)));
-  return {
-    sections: sections.filter((_, index) => keep[index] === true),
-    paths: [...new Set(mapped.flatMap((paths, index) => (keep[index] === true && typeof paths !== "string" ? paths : [])))].toSorted(),
-  };
+  const named = (kept: boolean): string[] =>
+    [...new Set(mapped.flatMap((paths, index) => ((keep[index] === true) === kept && typeof paths !== "string" ? paths : [])))].toSorted();
+  return { sections: sections.filter((_, index) => keep[index] === true), paths: named(true), dropped: named(false) };
 }
 
 /** review/251: an extended header line the verb's own diffs write (renames pinned off, `--full-index`), whole. */
 const SECTION_HEADER_LINE = /^(?:(?:old mode|new mode|new file mode|deleted file mode) [0-7]{6}|index [0-9a-f]{40,64}\.\.[0-9a-f]{40,64}(?: [0-7]{6})?)$/;
 
 /**
- * review/251: a `diff --git` name's first component, as git writes one (`a/`, `b/`, a mnemonic `c/`, `i/` or `w/`) and
- * `git apply` sets aside: printable, with no space, `"`, backslash or `/` but its last.
+ * review/251, review/254: a `diff --git` name's first component, one of the prefixes git writes and `git apply` sets
+ * aside: `a/` and `b/`, which the verb's own diffs pin ({@link PATCH_PINS}), and the mnemonic `c/`, `i/`, `w/`, `o/`,
+ * `1/` and `2/`, which an older version's patch may carry. Any other first component is a folder of the path, so a
+ * section without one of these is refused, never set one folder off. A no-prefix section under a folder of one of
+ * these names reads as prefixed and so applies one folder up: a named residual.
  */
-const NAME_PREFIX = String.raw`[!#-.0-[\]-~\x80-\xff]+/`;
+const NAME_PREFIX = "[abciwo12]/";
 
 /** review/251: a byte git writes as it is in a name: printable but `"` and backslash, or past ASCII (Latin-1 read). */
 const NAME_BYTE = String.raw`[ !#-[\]-~\x80-\xff]`;
@@ -2253,6 +2313,17 @@ function diffGitNames(line: string): [string, string] | null {
 }
 
 /**
+ * review/254: whether a `diff --git ` line names one name twice, quoted or not, as git writes it under `diff.noprefix`:
+ * `git apply` reads the first component of each as a prefix, so such a section lands one folder off, or nowhere.
+ */
+function noPrefixNames(line: string): boolean {
+  if (!line.startsWith("diff --git ")) return false;
+  const names = line.slice("diff --git ".length);
+  const half = (names.length - 1) / 2;
+  return Number.isInteger(half) && half > 0 && names[half] === " " && names.slice(0, half) === names.slice(half + 1);
+}
+
+/**
  * review/251: why a held patch section is not one the verb's own diffs write, in the words `carriedSections` gives
  * it, or null where it is one. Its header is every line before its first `@@ ` or `GIT binary patch` line, which is as
  * far as `git apply` reads one (a rename line after the `+++` line still renames), a CR before an LF read as part of
@@ -2272,6 +2343,7 @@ function foreignSectionHeader(section: Buffer): string | null {
     return "renames or copies a path, and git apply --numstat names only its new one, so the path it moves or reads from would be carried unlisted";
   }
   const names = diffGitNames(lines[0] ?? "");
+  if (names === null && noPrefixNames(lines[0] ?? "")) return "was written with no diff prefix, so git apply would place it one folder off";
   if (names === null) {
     return "does not name one path twice on its diff --git line, as every section this verb writes does, so a path git apply moves there would be carried unlisted";
   }
@@ -2298,7 +2370,8 @@ function foreignSectionHeader(section: Buffer): string | null {
  * before its first `--- `, `@@` or binary line. A deletion's side names none, so it reads as no link, as there.
  */
 function sectionLink(section: Buffer): boolean {
-  const lines = section.toString("latin1").split("\n").slice(1);
+  // review/256: a CR before an LF is part of the line end, as foreignSectionHeader reads it, so a CRLF copy's mode line reads.
+  const lines = section.toString("latin1").split(/\r?\n/).slice(1);
   const end = lines.findIndex((line) => /^(?:--- |@@|GIT binary patch|Binary files )/.test(line));
   const modes = (end === -1 ? lines : lines.slice(0, end)).flatMap((line) => {
     const mode = /^(?:new file mode|new mode) ([0-7]{6})$/.exec(line)?.[1] ?? /^index [0-9a-f]+\.\.[0-9a-f]+ ([0-7]{6})$/.exec(line)?.[1];
@@ -2345,7 +2418,7 @@ async function workTreeAddition(top: string, path: string, out: string, verb: st
   if (tree.code !== 0) return { patch: tree, step: "mktree" };
   const empty = await git(top, ["mktree"], verb, "");
   if (empty.code !== 0) return { patch: empty, step: "mktree" };
-  const diff = await git(top, ["diff", "--binary", "--full-index", ...DIFF_PINS, `--output=${out}`, empty.stdout.trim(), tree.stdout.trim(), "--", path], verb);
+  const diff = await git(top, ["diff", "--binary", "--full-index", ...PATCH_PINS, `--output=${out}`, empty.stdout.trim(), tree.stdout.trim(), "--", path], verb);
   return { patch: diff, step: "diff" };
 }
 
