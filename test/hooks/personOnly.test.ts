@@ -3282,7 +3282,11 @@ describe("a launched program's script word found by one rule (a4, review/87 roun
     ["a test runner through a runner with filled-in files", "npx vitest run \"$FILE\""],
     ["the repository's own script with a literal path", "node scripts/ci/test-run.mjs --coverage"],
     ["the repository's own script with a dot path", "node ./scripts/release/check.mjs"],
-    ["deno's run form with a literal script", "deno run --allow-read main.ts \"$ARG\""],
+    // TEST CHANGE, justified (REQ-FLOW-138, review/98): round 5 put a bare flag before the script here; a script file
+    // right after a bare option may be that option's value, so that layout with a filled-in word after it now asks
+    // (below). The flag written with `=`, or no flag, keeps the line ordinary.
+    ["deno's run form with a literal script", "deno run main.ts \"$ARG\""],
+    ["deno's run form with a flag written with its value and a literal script", "deno run --allow-read=. main.ts \"$ARG\""],
   ])("runs %s, an ordinary line", (_, command) => {
     expect(personOnlyVerdict(command, DEFAULT), command).toEqual({ deny: false });
   });
@@ -3292,5 +3296,29 @@ describe("a launched program's script word found by one rule (a4, review/87 roun
     ["a filled-in bin word after a filter value", "pnpm --filter app \"$BIN\" sync"],
   ])("asks for %s", (_, command) => {
     expect(personOnlyVerdict(command, DEFAULT), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+});
+
+describe("a script file right after a bare option may be that option's value (a4, review/98)", () => {
+  const DEFAULT = { ...ON_FEATURE, stricterThanDefault: false, ownRepository: false };
+
+  // Red on fd5a101f: the preload file was taken as the script, settling the program before the filled-in script word.
+  it.each([
+    ["a preload file before a filled-in script word", "node --require ./preload.cjs \"$CLI\" sync --loosen"],
+    ["an import file before a filled-in script word", "node --import ./register.mjs \"$CLI\" sync \"$F\""],
+    ["bun's preload file before a filled-in script word", "bun --preload ./setup.ts \"$CLI\" sync --loosen"],
+    ["a short preload file before a filled-in script word", "node -r ./hooks.js \"$CLI\" clean"],
+    ["a bare flag, a script file and a filled-in argument", "deno run --allow-read main.ts \"$ARG\""],
+  ])("asks for %s", (_, command) => {
+    expect(personOnlyVerdict(command, { ...DEFAULT, stricterThanDefault: true }), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+
+  it.each([
+    ["a bare flag then a literal script with no filled-in word", "node --test test/a.test.mjs --watch"],
+    ["a preload file then a literal script with a filled-in argument after it", "node --require ./preload.cjs scripts/x.mjs \"$OUT\""],
+    ["an option written with its value before a literal script and a filled-in argument", "node --import=./register.mjs scripts/x.mjs \"$OUT\""],
+    ["a literal script after a non-option word and a filled-in argument", "deno run main.ts \"$ARG\""],
+  ])("runs %s", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toEqual({ deny: false });
   });
 });

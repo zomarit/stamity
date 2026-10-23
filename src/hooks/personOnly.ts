@@ -849,7 +849,11 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
           const word = cmd[at] ?? "";
           const sep = Math.max(word.lastIndexOf("/"), word.lastIndexOf("\\")) + 1;
           if (launches) {
-            if (markOf(at).last <= sep && /\.(?:[cm]?[jt]s|[jt]sx)$/i.test(word)) settledAt = at;
+            // A script file right after a bare option (a dash word holding no `=`) may be that option's value, a preload
+            // or an import, so it does not end the search (review/98).
+            const previous = at > 1 ? (cmd[at - 1] ?? "") : "";
+            const optionValue = previous.startsWith("-") && !previous.includes("=");
+            if (markOf(at).last <= sep && /\.(?:[cm]?[jt]s|[jt]sx)$/i.test(word) && !optionValue) settledAt = at;
           } else if (markOf(at).kinds === "" && !word.startsWith("-") && !["run", "run-script", "exec", "dlx", "x"].includes(word) && !valueOf(at)) {
             settledAt = at;
           }
@@ -2660,7 +2664,11 @@ export function unattendedPushVerdict(
           const word = cmd[at] ?? "";
           const sep = Math.max(word.lastIndexOf("/"), word.lastIndexOf("\\")) + 1;
           if (launches) {
-            if (markOf(at).last <= sep && /\.(?:[cm]?[jt]s|[jt]sx)$/i.test(word)) settledAt = at;
+            // A script file right after a bare option (a dash word holding no `=`) may be that option's value, a preload
+            // or an import, so it does not end the search (review/98).
+            const previous = at > 1 ? (cmd[at - 1] ?? "") : "";
+            const optionValue = previous.startsWith("-") && !previous.includes("=");
+            if (markOf(at).last <= sep && /\.(?:[cm]?[jt]s|[jt]sx)$/i.test(word) && !optionValue) settledAt = at;
           } else if (markOf(at).kinds === "" && !word.startsWith("-") && !["run", "run-script", "exec", "dlx", "x"].includes(word) && !valueOf(at)) {
             settledAt = at;
           }
