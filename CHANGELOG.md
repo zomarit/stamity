@@ -102,6 +102,9 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   variable and the `-c core.useReplaceRefs=false` command-line key, so a `git replace` ref, a local ref write that
   needs no commit, cannot make the ledger, the hook declarations, the guard copies or a tree they read at a commit
   look like another object.
+- **The person-only guard refuses a command line over 64 KiB in every mode, before any reading**; run such a line
+  yourself. A substitution's closing scan passes over a quoted heredoc body, and a substitution nothing closes reads
+  as filled in.
 
 ### Added
 
@@ -243,6 +246,11 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   line. Say "don't commit" at the close to keep the work local. Unattended runs land through
   `stamity run land --ready --wait 8` after `run end` and never pass `--approved`. Every run writes
   `.stamity/runs/<id>/morning.md` at its close.
+- **The person-only guard reads a heredoc body as data when only a data sink receives it**: `cat` or `tee` writing
+  to a plain file, `cat` inside a quoted substitution that is a whole argument (a commit message), the engine's own
+  CLI reading its stdin, `git commit -F -` and `gh pr create|edit|comment --body-file -`. A commit message with a `* `
+  bullet, or a `learn capture` body on stdin, no longer asks as a loosening; every other heredoc keeps the reading it
+  had (Security).
 
 ### Deprecated
 

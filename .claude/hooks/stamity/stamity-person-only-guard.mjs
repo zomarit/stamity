@@ -283,6 +283,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 	]);
 	const PS_SINGLE = "'" + String.fromCharCode(8216, 8217, 8218, 8219);
 	const PS_DOUBLE = "\"" + String.fromCharCode(8220, 8221, 8222);
+	const HEREDOC = /^(-?)[ \t]*(?:'([A-Za-z_]\w{0,63})'|"([A-Za-z_]\w{0,63})"|([A-Za-z_]\w{0,63}))(?![^\s;&|<>()])/;
 	function programName(word) {
 		return (word.split(/[\\/]/).pop() ?? "").toLowerCase().replace(/^([^@]+)@[\s\S]*$/, "$1").replace(/\.(exe|cmd|bat)$/, "");
 	}
@@ -291,10 +292,76 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		const name = (match?.[1] ?? "").toLowerCase();
 		return name !== "" && ("commandwithargs".startsWith(name) || name === "cwa") ? match?.[2] ?? "" : null;
 	}
-	function splitLine(text, blocks, pwsh) {
+	function engine(words, kinds) {
+		const at = words[0] === "npx" && [
+			"--no",
+			"-y",
+			"--yes",
+			"--no-yes"
+		].includes(words[1] ?? "") ? 2 : 0;
+		const name = (words[at] ?? "").toLowerCase();
+		const pinned = name.startsWith(`${PACKAGE_NAME}@`) && /^\d+\.\d+\.\d+$/.test(name.slice(PACKAGE_NAME.length + 1));
+		return kinds.slice(0, at + 1).every((kind) => kind === "") && (PACKAGE_WORDS.includes(words[at] ?? "") || at === 2 && (name === PACKAGE_NAME || pinned));
+	}
+	function message(words, kinds) {
+		const git = words[0] === "git" && words[1] === "commit";
+		const gh = words[0] === "gh" && words[1] === "pr" && [
+			"create",
+			"edit",
+			"comment"
+		].includes(words[2] ?? "");
+		const flags = git ? ["-F", "--file"] : ["--body-file", "-F"];
+		const literal = (at) => kinds[at] === "";
+		return (git || gh) && [
+			0,
+			1,
+			2
+		].slice(0, git ? 2 : 3).every(literal) && words.some((word, at) => literal(at) && (flags.includes(word) && words[at + 1] === "-" && literal(at + 1) || git && word === "--file=-"));
+	}
+	function defines(segments) {
+		const DEFINERS = /* @__PURE__ */ new Set([
+			"alias",
+			"function",
+			"hash",
+			"enable",
+			"source",
+			".",
+			"eval",
+			"export",
+			"declare",
+			"typeset",
+			"local",
+			"readonly",
+			"read",
+			"mapfile",
+			"readarray",
+			"getopts",
+			"printf",
+			"for",
+			"select",
+			"set",
+			"shopt",
+			"setopt",
+			"unset",
+			"builtin",
+			"command",
+			"time",
+			"exec"
+		]);
+		return segments.some((words) => {
+			const head = words.find((word) => !KEYWORDS.has(word)) ?? "";
+			return ASSIGNMENT.test(head) || DEFINERS.has(programName(head)) || words.some((word) => word.endsWith("()"));
+		});
+	}
+	function splitLine(text, blocks, pwsh, docs = 0) {
 		const segments = [];
 		const marks = [];
 		const nested = [];
+		const ends = [];
+		let doc = null;
+		let heredocs = 0;
+		let done = false;
+		let redirs = [];
 		let words = [];
 		let wordMarks = [];
 		let word = "";
@@ -314,8 +381,10 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		let dropNext = false;
 		const endWord = () => {
 			if (!inWord) return;
-			if (dropNext) dropNext = false;
-			else {
+			if (dropNext) {
+				dropNext = false;
+				redirs[redirs.length - 1]?.push(word, mark.kinds);
+			} else {
 				words.push(word);
 				wordMarks.push({
 					...mark,
@@ -337,15 +406,49 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			mark.last = Math.max(mark.last, to);
 			mark.kinds += kinds;
 		};
-		const cut = () => {
+		const cut = (c = "") => {
 			endWord();
 			dropNext = false;
+			if (doc !== null && doc.cut === void 0 && doc.seg === segments.length) Object.assign(doc, {
+				words,
+				kinds: wordMarks.map((each) => each.kinds),
+				redirs,
+				cut: c,
+				end: i
+			});
 			if (words.length > 0) {
 				segments.push(words);
 				marks.push(wordMarks);
+				ends.push(c + (redirs.some((each) => /^1?>/.test(each[0] ?? "")) ? ">" : ""));
 			}
 			words = [];
 			wordMarks = [];
+			redirs = [];
+		};
+		const pastBody = (nl) => {
+			const d = doc;
+			if (d?.words === void 0 || heredocs !== 1 || text.includes("\r") || text.indexOf("\n", d.at) !== nl) return nl + 1;
+			const kinds = d.kinds ?? [];
+			const others = (d.redirs ?? []).filter((each) => each[0] !== "<<");
+			const out = others.length === 1 && /^1?>>?$/.test(others[0]?.[0] ?? "") ? others[0] ?? [] : [];
+			const plain = (path, kind = "") => kind === "" && /^[\w./@%+,:=~][\w./@%+,:=~-]{0,255}$/.test(path) && !/(?:^|\/)\.git(?:\/|$)/i.test(path) && (!/^\/(?:dev|proc)\//.test(path) || path === "/dev/null");
+			const operands = d.words.slice(1).filter((each) => !/^(?:-[aip]+|--append|--ignore-interrupts)$/.test(each));
+			const writes = docs === 1 && d.seg === 0 && kinds.every((each) => each === "") && plain(out[1] ?? "", out[2]) && (d.words.join(" ") === "cat" || d.words[0] === "tee" && operands.length > 0 && operands.every((each) => plain(each)));
+			if (!(/^[\n;&]$/.test(d.cut ?? "") && (docs === 2 ? d.cut === "\n" && d.seg === 0 && d.words.join(" ") === "cat" && kinds[0] === "" && others.length === 0 : writes || docs === 1 && others.length === 0 && engine(d.words, kinds) && !defines(segments.slice(0, d.seg)) || docs === 1 && others.length === 0 && d.seg === 0 && message(d.words, kinds)))) return nl + 1;
+			for (let at = nl + 1;;) {
+				const stop = text.indexOf("\n", at);
+				const end = stop === -1 ? text.length : stop;
+				const line = text.slice(at, end);
+				if ((d.tabs ? line.replace(/^\t+/, "") : line) === d.name) {
+					const later = text.slice(d.end ?? nl, nl) + text.slice(end);
+					const named = writes ? [out[1] ?? "", ...d.words[0] === "tee" ? operands : []] : [];
+					if (d.bare && /\$\(|`/.test(text.slice(nl + 1, at))) return nl + 1;
+					if (named.some((each) => each !== "/dev/null" && later.includes(each.split("/").pop() ?? each))) return nl + 1;
+					return end;
+				}
+				if (stop === -1) return nl + 1;
+				at = stop + 1;
+			}
 		};
 		const expands = (at, kinds) => {
 			let end = at + 1;
@@ -378,6 +481,38 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			}
 			return false;
 		};
+		const closing = (from) => {
+			let level = 1;
+			let bodies = [];
+			for (let j = from; j < text.length; j += 1) {
+				const c = text[j];
+				if (c === "(") level += 1;
+				else if (c === ")") {
+					level -= 1;
+					if (level === 0) return j;
+				} else if (c === "<" && text[j + 1] === "<" && text[j + 2] !== "<" && text[j - 1] !== "<") {
+					const head = HEREDOC.exec(text.slice(j + 2, j + 162));
+					if (head === null || head[4] !== void 0) bodies = null;
+					else bodies?.push([head[2] ?? head[3] ?? "", head[1] ?? ""]);
+				} else if (c === "\n") {
+					for (const [name, tabs] of bodies ?? []) {
+						let found = -1;
+						for (let at = j + 1; found === -1;) {
+							const stop = text.indexOf("\n", at);
+							const end = stop === -1 ? text.length : stop;
+							const line = text.slice(at, end);
+							if ((tabs === "-" ? line.replace(/^\t+/, "") : line) === name) found = end;
+							else if (stop === -1) return text.length;
+							else at = stop + 1;
+						}
+						if (found === text.length) return text.length;
+						j = found;
+					}
+					bodies = [];
+				}
+			}
+			return text.length;
+		};
 		const quote = (c, kind) => c !== void 0 && (c === kind[0] || pwsh && kind.includes(c));
 		let i = 0;
 		while (i < text.length) {
@@ -389,6 +524,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				inWord = true;
 				i = stop + 1;
 			} else if (quote(ch, PS_DOUBLE)) {
+				const opens = !inWord && !dropNext ? i + 1 : -1;
 				inWord = true;
 				i += 1;
 				while (i < text.length && !quote(text[i], PS_DOUBLE)) {
@@ -404,17 +540,16 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 						const start = c === "`" ? i + 1 : i + 2;
 						let j = start;
 						if (c === "`") while (j < text.length && text[j] !== "`") j += 1;
-						else {
-							let level = 1;
-							while (j < text.length) {
-								if (text[j] === "(") level += 1;
-								else if (text[j] === ")") level -= 1;
-								if (level === 0) break;
-								j += 1;
-							}
-						}
-						nested.push(text.slice(start, j));
-						hide(word.length, word.length + Math.min(j + 1, text.length) - i, j < text.length ? "e" : "");
+						else j = closing(start);
+						const open = j >= text.length;
+						const whole = !pwsh && c === "$" && i === opens && text[j + 1] === "\"" && /^[\s;&|<>)]?$/.test(text[j + 2] ?? "");
+						nested.push({
+							text: text.slice(start, j),
+							at: whole && !open ? segments.length : -1,
+							word: words.length,
+							open
+						});
+						hide(word.length, word.length + Math.min(j + 1, text.length) - i, "e");
 						word += text.slice(i, Math.min(j + 1, text.length));
 						i = j + 1;
 					} else {
@@ -463,17 +598,15 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				const start = ch === "$" ? i + 2 : i + 1;
 				let j = start;
 				if (ch === "`") while (j < text.length && text[j] !== "`") j += 1;
-				else {
-					let level = 1;
-					while (j < text.length) {
-						if (text[j] === "(") level += 1;
-						else if (text[j] === ")") level -= 1;
-						if (level === 0) break;
-						j += 1;
-					}
-				}
-				nested.push(text.slice(start, j));
-				hide(word.length, word.length + Math.min(j + 1, text.length) - i, j >= text.length ? "" : ch === "(" ? "p" : "es");
+				else j = closing(start);
+				const open = j >= text.length;
+				nested.push({
+					text: text.slice(start, j),
+					at: -1,
+					word: 0,
+					open
+				});
+				hide(word.length, word.length + Math.min(j + 1, text.length) - i, open ? "es" : ch === "(" ? "p" : "es");
 				word += text.slice(i, Math.min(j + 1, text.length));
 				inWord = true;
 				i = j + 1;
@@ -482,7 +615,9 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				i += 1;
 			} else if (ch === "#" && !inWord) while (i < text.length && text[i] !== "\n") i += 1;
 			else if (ch === ">" || ch === "<") {
+				let fd = "";
 				if (inWord && /^\d+$/.test(word)) {
+					fd = word;
 					word = "";
 					counted = 0;
 					balance = 0;
@@ -493,11 +628,29 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 					};
 					inWord = false;
 				} else endWord();
+				const from = i;
 				while (i < text.length && "<>&|".includes(text[i] ?? "")) i += 1;
+				const op = fd + text.slice(from, i);
+				if (docs > 0 && op.includes("<<") && !op.includes("<<<")) {
+					heredocs += 1;
+					const head = HEREDOC.exec(text.slice(i, i + 160));
+					if (heredocs === 1 && op === "<<" && head !== null) doc = {
+						at: i,
+						seg: segments.length,
+						name: head[2] ?? head[3] ?? head[4] ?? "",
+						bare: head[4] !== void 0,
+						tabs: head[1] === "-"
+					};
+				}
+				redirs.push([op]);
 				dropNext = true;
 			} else if (";&|\n\r()`".includes(ch) || blocks && ch === "{" && !inWord || blocks && ch === "}" && balanced()) {
-				cut();
+				cut(ch);
 				i += 1;
+				if (ch === "\n" && heredocs > 0 && !done) {
+					done = true;
+					i = pastBody(i - 1);
+				}
 			} else {
 				if (ch === "$" || pwsh && ch === "@" && !inWord && /[\w({]/.test(text[i + 1] ?? "")) expands(i, "es");
 				else if ("*?[".includes(ch)) expands(i, "g");
@@ -511,7 +664,8 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		return {
 			segments,
 			nested,
-			marks
+			marks,
+			ends
 		};
 	}
 	const assigned = [];
@@ -521,14 +675,21 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 	const spills = /* @__PURE__ */ new Set();
 	const fed = /* @__PURE__ */ new Set();
 	const launched = /* @__PURE__ */ new Map();
-	function commandsOf(text, depth, pwsh, tainted = false, fedIn = false) {
+	function commandsOf(text, depth, pwsh, tainted = false, fedIn = false, capture = false) {
 		if (depth > 4) throw Object.assign(/* @__PURE__ */ new Error("nesting"), { code: "NESTING_DEPTH" });
-		const { segments, nested, marks } = splitLine(text, true, pwsh);
+		const docs = capture ? 2 : depth === 0 && !pwsh ? 1 : 0;
+		const { segments, nested, marks, ends } = splitLine(text, true, pwsh, docs);
 		const commands = pwsh ? commandsOf(text, depth, false, tainted, fedIn) : [];
-		const braces = /[{}]/.test(text) ? splitLine(text, false, pwsh) : {
+		const braces = /[{}]/.test(text) ? splitLine(text, false, pwsh, docs) : {
 			segments: [],
 			marks: []
 		};
+		const captured = /* @__PURE__ */ new Set();
+		const wholly = /* @__PURE__ */ new Map();
+		for (const each of nested) if (each.at >= 0 && each.word > 0) wholly.set(each.at, wholly.get(each.at) ?? []).get(each.at)?.push(each);
+		const plainLine = docs === 1 && !tainted && wholly.size > 0 && !text.includes("\r");
+		let defined = false;
+		let checked = 0;
 		const allMarks = [...marks, ...braces.marks];
 		for (const [segment, words] of [...segments, ...braces.segments].entries()) {
 			let k = 0;
@@ -590,6 +751,22 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 					}
 				} else break;
 			}
+			if (plainLine && segment < segments.length && !defined) {
+				defined = defines(segments.slice(checked, segment));
+				checked = segment;
+			}
+			const opener = programName(words[0] ?? "");
+			if (plainLine && !defined && line === null && k === 0 && !/[|>]/.test(ends[segment] ?? "|") && !SHELLS.has(opener) && !POWERSHELLS.has(opener) && ![
+				"eval",
+				"cmd",
+				"source",
+				".",
+				"node",
+				"nodejs",
+				"bun",
+				"deno",
+				"tsx"
+			].includes(opener)) for (const each of wholly.get(segment) ?? []) captured.add(each);
 			if (line !== null) {
 				const lineTainted = tainted || (allMarks[segment] ?? []).slice(lineFrom).some((each) => each.kinds !== "");
 				commands.push(...commandsOf(line, depth + 1, pwsh, lineTainted, fedIn || viaStdin));
@@ -814,7 +991,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			}
 			commands.push(cmd);
 		}
-		for (const inner of nested) commands.push(...commandsOf(inner, depth + 1, pwsh, tainted, fedIn));
+		for (const inner of nested) commands.push(...commandsOf(inner.text, depth + 1, pwsh, tainted || inner.open, fedIn, captured.has(inner)));
 		return commands;
 	}
 	function gitParts(cmd) {
@@ -1171,7 +1348,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			deny: true,
 			rule,
 			act: what,
-			reason: rule === "status-write" ? `${what} is CI's to write, never the agent's (${rule}): a merge reads it as evidence (REQ-FLOW-140). Stop here.` : `${what} is a person-only act (${rule}): the person runs it, never the agent (REQ-FLOW-102). Stop here and list it for the person.`,
+			reason: rule === "status-write" ? `${what} is CI's to write, never the agent's (${rule}): a merge reads it as evidence (REQ-FLOW-140). Stop here.` : rule === "line-too-long" ? "A line too long for the guard to read (over 65,536 characters) is refused in every mode (line-too-long): the person runs it themselves (REQ-FLOW-102). Stop here and give the person the exact command." : `${what} is a person-only act (${rule}): the person runs it, never the agent (REQ-FLOW-102). Stop here and list it for the person.`,
 			ask: ASK_RULES.has(rule)
 		};
 		if (ctx.runs?.includes(rule) === true) {
@@ -1861,6 +2038,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		if (sub === "clean" && !args.some((word) => /^--pack(=|$)/.test(word))) deny("autonomy-loosen", "A full `clean`, which removes the guard holding an autonomy setting stricter than the default");
 		if (sub === "init" && args.some((word) => /^--force(=|$)/.test(word))) deny("autonomy-loosen", "An `init --force`, which lands the default autonomy setting over a stricter one");
 	}
+	if (command.length > 65536) return deny("line-too-long", "A line too long for the guard to read (over 65,536 characters), which may hold an act that");
 	const read = commandsOf(command, 0, false);
 	for (const cmd of read) {
 		const program = cmd[0] ?? "";
@@ -2110,6 +2288,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 	]);
 	const PS_SINGLE = "'" + String.fromCharCode(8216, 8217, 8218, 8219);
 	const PS_DOUBLE = "\"" + String.fromCharCode(8220, 8221, 8222);
+	const HEREDOC = /^(-?)[ \t]*(?:'([A-Za-z_]\w{0,63})'|"([A-Za-z_]\w{0,63})"|([A-Za-z_]\w{0,63}))(?![^\s;&|<>()])/;
 	function programName(word) {
 		return (word.split(/[\\/]/).pop() ?? "").toLowerCase().replace(/^([^@]+)@[\s\S]*$/, "$1").replace(/\.(exe|cmd|bat)$/, "");
 	}
@@ -2118,10 +2297,76 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 		const name = (match?.[1] ?? "").toLowerCase();
 		return name !== "" && ("commandwithargs".startsWith(name) || name === "cwa") ? match?.[2] ?? "" : null;
 	}
-	function splitLine(text, blocks, pwsh) {
+	function engine(words, kinds) {
+		const at = words[0] === "npx" && [
+			"--no",
+			"-y",
+			"--yes",
+			"--no-yes"
+		].includes(words[1] ?? "") ? 2 : 0;
+		const name = (words[at] ?? "").toLowerCase();
+		const pinned = name.startsWith(`${PACKAGE_NAME}@`) && /^\d+\.\d+\.\d+$/.test(name.slice(PACKAGE_NAME.length + 1));
+		return kinds.slice(0, at + 1).every((kind) => kind === "") && (PACKAGE_WORDS.includes(words[at] ?? "") || at === 2 && (name === PACKAGE_NAME || pinned));
+	}
+	function message(words, kinds) {
+		const git = words[0] === "git" && words[1] === "commit";
+		const gh = words[0] === "gh" && words[1] === "pr" && [
+			"create",
+			"edit",
+			"comment"
+		].includes(words[2] ?? "");
+		const flags = git ? ["-F", "--file"] : ["--body-file", "-F"];
+		const literal = (at) => kinds[at] === "";
+		return (git || gh) && [
+			0,
+			1,
+			2
+		].slice(0, git ? 2 : 3).every(literal) && words.some((word, at) => literal(at) && (flags.includes(word) && words[at + 1] === "-" && literal(at + 1) || git && word === "--file=-"));
+	}
+	function defines(segments) {
+		const DEFINERS = /* @__PURE__ */ new Set([
+			"alias",
+			"function",
+			"hash",
+			"enable",
+			"source",
+			".",
+			"eval",
+			"export",
+			"declare",
+			"typeset",
+			"local",
+			"readonly",
+			"read",
+			"mapfile",
+			"readarray",
+			"getopts",
+			"printf",
+			"for",
+			"select",
+			"set",
+			"shopt",
+			"setopt",
+			"unset",
+			"builtin",
+			"command",
+			"time",
+			"exec"
+		]);
+		return segments.some((words) => {
+			const head = words.find((word) => !KEYWORDS.has(word)) ?? "";
+			return ASSIGNMENT.test(head) || DEFINERS.has(programName(head)) || words.some((word) => word.endsWith("()"));
+		});
+	}
+	function splitLine(text, blocks, pwsh, docs = 0) {
 		const segments = [];
 		const marks = [];
 		const nested = [];
+		const ends = [];
+		let doc = null;
+		let heredocs = 0;
+		let done = false;
+		let redirs = [];
 		let words = [];
 		let wordMarks = [];
 		let word = "";
@@ -2141,8 +2386,10 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 		let dropNext = false;
 		const endWord = () => {
 			if (!inWord) return;
-			if (dropNext) dropNext = false;
-			else {
+			if (dropNext) {
+				dropNext = false;
+				redirs[redirs.length - 1]?.push(word, mark.kinds);
+			} else {
 				words.push(word);
 				wordMarks.push({
 					...mark,
@@ -2164,15 +2411,49 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 			mark.last = Math.max(mark.last, to);
 			mark.kinds += kinds;
 		};
-		const cut = () => {
+		const cut = (c = "") => {
 			endWord();
 			dropNext = false;
+			if (doc !== null && doc.cut === void 0 && doc.seg === segments.length) Object.assign(doc, {
+				words,
+				kinds: wordMarks.map((each) => each.kinds),
+				redirs,
+				cut: c,
+				end: i
+			});
 			if (words.length > 0) {
 				segments.push(words);
 				marks.push(wordMarks);
+				ends.push(c + (redirs.some((each) => /^1?>/.test(each[0] ?? "")) ? ">" : ""));
 			}
 			words = [];
 			wordMarks = [];
+			redirs = [];
+		};
+		const pastBody = (nl) => {
+			const d = doc;
+			if (d?.words === void 0 || heredocs !== 1 || text.includes("\r") || text.indexOf("\n", d.at) !== nl) return nl + 1;
+			const kinds = d.kinds ?? [];
+			const others = (d.redirs ?? []).filter((each) => each[0] !== "<<");
+			const out = others.length === 1 && /^1?>>?$/.test(others[0]?.[0] ?? "") ? others[0] ?? [] : [];
+			const plain = (path, kind = "") => kind === "" && /^[\w./@%+,:=~][\w./@%+,:=~-]{0,255}$/.test(path) && !/(?:^|\/)\.git(?:\/|$)/i.test(path) && (!/^\/(?:dev|proc)\//.test(path) || path === "/dev/null");
+			const operands = d.words.slice(1).filter((each) => !/^(?:-[aip]+|--append|--ignore-interrupts)$/.test(each));
+			const writes = docs === 1 && d.seg === 0 && kinds.every((each) => each === "") && plain(out[1] ?? "", out[2]) && (d.words.join(" ") === "cat" || d.words[0] === "tee" && operands.length > 0 && operands.every((each) => plain(each)));
+			if (!(/^[\n;&]$/.test(d.cut ?? "") && (docs === 2 ? d.cut === "\n" && d.seg === 0 && d.words.join(" ") === "cat" && kinds[0] === "" && others.length === 0 : writes || docs === 1 && others.length === 0 && engine(d.words, kinds) && !defines(segments.slice(0, d.seg)) || docs === 1 && others.length === 0 && d.seg === 0 && message(d.words, kinds)))) return nl + 1;
+			for (let at = nl + 1;;) {
+				const stop = text.indexOf("\n", at);
+				const end = stop === -1 ? text.length : stop;
+				const line = text.slice(at, end);
+				if ((d.tabs ? line.replace(/^\t+/, "") : line) === d.name) {
+					const later = text.slice(d.end ?? nl, nl) + text.slice(end);
+					const named = writes ? [out[1] ?? "", ...d.words[0] === "tee" ? operands : []] : [];
+					if (d.bare && /\$\(|`/.test(text.slice(nl + 1, at))) return nl + 1;
+					if (named.some((each) => each !== "/dev/null" && later.includes(each.split("/").pop() ?? each))) return nl + 1;
+					return end;
+				}
+				if (stop === -1) return nl + 1;
+				at = stop + 1;
+			}
 		};
 		const expands = (at, kinds) => {
 			let end = at + 1;
@@ -2205,6 +2486,38 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 			}
 			return false;
 		};
+		const closing = (from) => {
+			let level = 1;
+			let bodies = [];
+			for (let j = from; j < text.length; j += 1) {
+				const c = text[j];
+				if (c === "(") level += 1;
+				else if (c === ")") {
+					level -= 1;
+					if (level === 0) return j;
+				} else if (c === "<" && text[j + 1] === "<" && text[j + 2] !== "<" && text[j - 1] !== "<") {
+					const head = HEREDOC.exec(text.slice(j + 2, j + 162));
+					if (head === null || head[4] !== void 0) bodies = null;
+					else bodies?.push([head[2] ?? head[3] ?? "", head[1] ?? ""]);
+				} else if (c === "\n") {
+					for (const [name, tabs] of bodies ?? []) {
+						let found = -1;
+						for (let at = j + 1; found === -1;) {
+							const stop = text.indexOf("\n", at);
+							const end = stop === -1 ? text.length : stop;
+							const line = text.slice(at, end);
+							if ((tabs === "-" ? line.replace(/^\t+/, "") : line) === name) found = end;
+							else if (stop === -1) return text.length;
+							else at = stop + 1;
+						}
+						if (found === text.length) return text.length;
+						j = found;
+					}
+					bodies = [];
+				}
+			}
+			return text.length;
+		};
 		const quote = (c, kind) => c !== void 0 && (c === kind[0] || pwsh && kind.includes(c));
 		let i = 0;
 		while (i < text.length) {
@@ -2216,6 +2529,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 				inWord = true;
 				i = stop + 1;
 			} else if (quote(ch, PS_DOUBLE)) {
+				const opens = !inWord && !dropNext ? i + 1 : -1;
 				inWord = true;
 				i += 1;
 				while (i < text.length && !quote(text[i], PS_DOUBLE)) {
@@ -2231,17 +2545,16 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 						const start = c === "`" ? i + 1 : i + 2;
 						let j = start;
 						if (c === "`") while (j < text.length && text[j] !== "`") j += 1;
-						else {
-							let level = 1;
-							while (j < text.length) {
-								if (text[j] === "(") level += 1;
-								else if (text[j] === ")") level -= 1;
-								if (level === 0) break;
-								j += 1;
-							}
-						}
-						nested.push(text.slice(start, j));
-						hide(word.length, word.length + Math.min(j + 1, text.length) - i, j < text.length ? "e" : "");
+						else j = closing(start);
+						const open = j >= text.length;
+						const whole = !pwsh && c === "$" && i === opens && text[j + 1] === "\"" && /^[\s;&|<>)]?$/.test(text[j + 2] ?? "");
+						nested.push({
+							text: text.slice(start, j),
+							at: whole && !open ? segments.length : -1,
+							word: words.length,
+							open
+						});
+						hide(word.length, word.length + Math.min(j + 1, text.length) - i, "e");
 						word += text.slice(i, Math.min(j + 1, text.length));
 						i = j + 1;
 					} else {
@@ -2290,17 +2603,15 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 				const start = ch === "$" ? i + 2 : i + 1;
 				let j = start;
 				if (ch === "`") while (j < text.length && text[j] !== "`") j += 1;
-				else {
-					let level = 1;
-					while (j < text.length) {
-						if (text[j] === "(") level += 1;
-						else if (text[j] === ")") level -= 1;
-						if (level === 0) break;
-						j += 1;
-					}
-				}
-				nested.push(text.slice(start, j));
-				hide(word.length, word.length + Math.min(j + 1, text.length) - i, j >= text.length ? "" : ch === "(" ? "p" : "es");
+				else j = closing(start);
+				const open = j >= text.length;
+				nested.push({
+					text: text.slice(start, j),
+					at: -1,
+					word: 0,
+					open
+				});
+				hide(word.length, word.length + Math.min(j + 1, text.length) - i, open ? "es" : ch === "(" ? "p" : "es");
 				word += text.slice(i, Math.min(j + 1, text.length));
 				inWord = true;
 				i = j + 1;
@@ -2309,7 +2620,9 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 				i += 1;
 			} else if (ch === "#" && !inWord) while (i < text.length && text[i] !== "\n") i += 1;
 			else if (ch === ">" || ch === "<") {
+				let fd = "";
 				if (inWord && /^\d+$/.test(word)) {
+					fd = word;
 					word = "";
 					counted = 0;
 					balance = 0;
@@ -2320,11 +2633,29 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 					};
 					inWord = false;
 				} else endWord();
+				const from = i;
 				while (i < text.length && "<>&|".includes(text[i] ?? "")) i += 1;
+				const op = fd + text.slice(from, i);
+				if (docs > 0 && op.includes("<<") && !op.includes("<<<")) {
+					heredocs += 1;
+					const head = HEREDOC.exec(text.slice(i, i + 160));
+					if (heredocs === 1 && op === "<<" && head !== null) doc = {
+						at: i,
+						seg: segments.length,
+						name: head[2] ?? head[3] ?? head[4] ?? "",
+						bare: head[4] !== void 0,
+						tabs: head[1] === "-"
+					};
+				}
+				redirs.push([op]);
 				dropNext = true;
 			} else if (";&|\n\r()`".includes(ch) || blocks && ch === "{" && !inWord || blocks && ch === "}" && balanced()) {
-				cut();
+				cut(ch);
 				i += 1;
+				if (ch === "\n" && heredocs > 0 && !done) {
+					done = true;
+					i = pastBody(i - 1);
+				}
 			} else {
 				if (ch === "$" || pwsh && ch === "@" && !inWord && /[\w({]/.test(text[i + 1] ?? "")) expands(i, "es");
 				else if ("*?[".includes(ch)) expands(i, "g");
@@ -2338,7 +2669,8 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 		return {
 			segments,
 			nested,
-			marks
+			marks,
+			ends
 		};
 	}
 	const assigned = [];
@@ -2348,14 +2680,21 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 	const spills = /* @__PURE__ */ new Set();
 	const fed = /* @__PURE__ */ new Set();
 	const launched = /* @__PURE__ */ new Map();
-	function commandsOf(text, depth, pwsh, tainted = false, fedIn = false) {
+	function commandsOf(text, depth, pwsh, tainted = false, fedIn = false, capture = false) {
 		if (depth > 4) throw Object.assign(/* @__PURE__ */ new Error("nesting"), { code: "NESTING_DEPTH" });
-		const { segments, nested, marks } = splitLine(text, true, pwsh);
+		const docs = capture ? 2 : depth === 0 && !pwsh ? 1 : 0;
+		const { segments, nested, marks, ends } = splitLine(text, true, pwsh, docs);
 		const commands = pwsh ? commandsOf(text, depth, false, tainted, fedIn) : [];
-		const braces = /[{}]/.test(text) ? splitLine(text, false, pwsh) : {
+		const braces = /[{}]/.test(text) ? splitLine(text, false, pwsh, docs) : {
 			segments: [],
 			marks: []
 		};
+		const captured = /* @__PURE__ */ new Set();
+		const wholly = /* @__PURE__ */ new Map();
+		for (const each of nested) if (each.at >= 0 && each.word > 0) wholly.set(each.at, wholly.get(each.at) ?? []).get(each.at)?.push(each);
+		const plainLine = docs === 1 && !tainted && wholly.size > 0 && !text.includes("\r");
+		let defined = false;
+		let checked = 0;
 		const allMarks = [...marks, ...braces.marks];
 		for (const [segment, words] of [...segments, ...braces.segments].entries()) {
 			let k = 0;
@@ -2417,6 +2756,22 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 					}
 				} else break;
 			}
+			if (plainLine && segment < segments.length && !defined) {
+				defined = defines(segments.slice(checked, segment));
+				checked = segment;
+			}
+			const opener = programName(words[0] ?? "");
+			if (plainLine && !defined && line === null && k === 0 && !/[|>]/.test(ends[segment] ?? "|") && !SHELLS.has(opener) && !POWERSHELLS.has(opener) && ![
+				"eval",
+				"cmd",
+				"source",
+				".",
+				"node",
+				"nodejs",
+				"bun",
+				"deno",
+				"tsx"
+			].includes(opener)) for (const each of wholly.get(segment) ?? []) captured.add(each);
 			if (line !== null) {
 				const lineTainted = tainted || (allMarks[segment] ?? []).slice(lineFrom).some((each) => each.kinds !== "");
 				commands.push(...commandsOf(line, depth + 1, pwsh, lineTainted, fedIn || viaStdin));
@@ -2641,7 +2996,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 			}
 			commands.push(cmd);
 		}
-		for (const inner of nested) commands.push(...commandsOf(inner, depth + 1, pwsh, tainted, fedIn));
+		for (const inner of nested) commands.push(...commandsOf(inner.text, depth + 1, pwsh, tainted || inner.open, fedIn, captured.has(inner)));
 		return commands;
 	}
 	function gitParts(cmd) {
@@ -3162,6 +3517,10 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 		if (powershell && ats.some((index) => index > at)) return "an unquoted `@` in a word after `run`, which PowerShell reads as a splat";
 		return null;
 	}
+	if (command.length > 65536) return {
+		deny: true,
+		reason: "A line too long for the guard to read (over 65,536 characters) is refused in every mode, before any reading: the person runs it themselves (REQ-FLOW-102)."
+	};
 	const commands = commandsOf(command, 0, powershell);
 	if (landOnly) {
 		const broke = commands.some((cmd) => {
