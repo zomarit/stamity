@@ -56,12 +56,12 @@ Halt with an actionable message rather than working around a row:
 | `git status --porcelain` | empty, skipping the pack's own paths under `.stamity/` (`.stamity/production/**`, `.stamity/verify/**`) | halt naming the dirty paths; the person commits them |
 | current branch (release mode) | a `release/*` branch, never the default branch | halt and print `git switch -c release/<version>` |
 | current branch (deploy mode) | the default branch, at the head the remote holds | halt naming the difference |
-| change set | the log since the last tag (`git describe --tags --abbrev=0`), or since this service's last deploy record in deploy mode | halt when nothing changed: there is nothing to ship |
+| change set | the log since the last tag (`git describe --tags --abbrev=0`), or since this service's last deploy record whose `Outcome` reads `deployed`, in deploy mode | halt when nothing changed: there is nothing to ship |
 
-With no earlier deploy record or tag, a first deploy or release, the change set's base is the
-repository's root commit (`git rev-list --max-parents=0 HEAD`), and the run says so. Keep the
-change set. The version decision, the changelog and the record's reason all read it,
-and deriving it three times invites three answers.
+With no earlier deployed record or tag, a first deploy or release, the change set's base is the
+repository's root commit (`git rev-list --max-parents=0 HEAD`), and the run says so. A record
+with no `Outcome` row reads as not deployed. Keep the change set. The version decision, the
+changelog and the record's reason all read it, and deriving it three times invites three answers.
 
 ## Step 2 — The readiness read
 
@@ -153,12 +153,12 @@ Write `.stamity/production/releases/<service>-<version | sha>.md`, one row per f
 | Emergency route | the policy file's `Escalation contact`, or the person's answer |
 | SBOM | its path and digest, or `absent — <why>` |
 | Provenance | its reference and verification command, or `absent — <why>` |
+| Outcome | `held` when written; `deployed` or `released` only once every opened command exited 0, rewritten after Step 8 |
 
-The approver, the rollback path and the emergency route are asked in one batched question when
-the record cannot fill them, read first from `.stamity/production/policy.md`; each default is
-`not named`. An approver equal to the requester is recorded as such and counts as no approver.
-The record ends in a ticket-ready block: title, target, approver as recorded, rollback path, in
-a form a change ticket takes as it is.
+The approver, the rollback path and the emergency route are asked in one batched question when the
+record cannot fill them, read first from `.stamity/production/policy.md`; each default is `not named`.
+An approver equal to the requester is recorded as such and counts as no approver. The record ends in a
+ticket-ready block: title, target, approver as recorded, rollback path, in a form a change ticket takes as it is.
 
 The record names variables, files and locations, never a secret value. An answer carrying a
 credential, such as a connection string with its password or a webhook address with its key, is
