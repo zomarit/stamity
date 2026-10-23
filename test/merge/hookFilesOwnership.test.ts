@@ -548,6 +548,62 @@ describe(".codex/hooks.json owned entry by entry", () => {
   });
 });
 
+/**
+ * An entry whose plain script word names another script than its encoded row (REQ-FLOW-142) is not
+ * the engine's rendering. It still runs the engine's runner, so it is read as every hand-edited copy
+ * of an engine entry is: sync and clean take it out only behind a `.bak` holding the file as it was,
+ * and say so. Never silently, and never as an entry the engine proves its own.
+ */
+describe("an entry whose plain script word disagrees with its encoded row (REQ-FLOW-142)", () => {
+  /** The engine's own session-start command in `path`, its plain word swapped for another script. */
+  async function disagreeingCommand(root: string, path: string): Promise<string> {
+    const doc = await readDoc(root, path);
+    const hooks = doc["hooks"] as Record<string, { command?: string; hooks?: { command: string }[] }[]>;
+    const first = path === CURSOR_HOOKS ? hooks["sessionStart"]?.[0]?.command : hooks["SessionStart"]?.[0]?.hooks?.[0]?.command;
+    if (first === undefined) throw new Error("the fixture lost its session-start entry");
+    expect(first.split(" ").at(-1)).toMatch(/stamity-session-start\.mjs$/);
+    return `${first.slice(0, first.lastIndexOf(" "))} .stamity/hooks/other.mjs`;
+  }
+
+  /** A fresh setup for `tool` whose hooks file holds one such entry, as an owner would add it; the file's bytes. */
+  async function withDisagreeingEntry(tool: "cursor" | "codex"): Promise<{ root: string; path: string; before: string }> {
+    const root = await freshRepo();
+    await init(root, [tool]);
+    const path = tool === "cursor" ? CURSOR_HOOKS : CODEX_HOOKS;
+    const command = await disagreeingCommand(root, path);
+    if (tool === "cursor") await addHookEntry(root, path, "afterFileEdit", { command });
+    else await addHookEntry(root, path, "PostToolUse", { hooks: [{ type: "command", command, commandWindows: command }] });
+    return { root, path, before: await readText(root, path) };
+  }
+
+  it.each(["cursor", "codex"] as const)("%s: sync -y takes it out only behind a .bak holding the file as it was, and warns", async (tool) => {
+    const { root, path, before } = await withDisagreeingEntry(tool);
+
+    const { report } = await sync(root);
+
+    const row = rowOf(report.wrote, path);
+    expect(row.action).toBe("updated");
+    expect(row.warning).toContain("backed up");
+    expect(await backups(root)).toEqual([`${path}.bak`]);
+    expect(await readText(root, `${path}.bak`)).toBe(before);
+    const after = await readText(root, path);
+    expect(after).not.toContain(".stamity/hooks/other.mjs");
+    // What is left is the engine's own rendering, each runner entry naming its own script.
+    expect(after).toContain(`stamity-session-start.mjs"`);
+  });
+
+  it.each(["cursor", "codex"] as const)("%s: clean -y takes it out only behind a .bak holding the file as it was", async (tool) => {
+    const { root, path, before } = await withDisagreeingEntry(tool);
+
+    const cleaned = await clean(root);
+
+    expect(cleaned.code).toBe(0);
+    expect(await backups(root)).toContain(`${path}.bak`);
+    expect(await readText(root, `${path}.bak`)).toBe(before);
+    expect(existsSync(abs(root, path)) ? await readText(root, path) : "").not.toContain(".stamity/hooks/other.mjs");
+  });
+});
+
 // ── A --registry fork's hook documents (REQ-PLUGIN-048 with REQ-FLOW-037) ──
 
 describe("a --registry fork's hook documents are the engine's by the calls it renders", () => {
@@ -728,7 +784,10 @@ describe("clean keeps every script a hooks document it keeps still runs (S17)", 
   it("an unreadable .codex/hooks.json keeps the scripts its portable rows name only inside their encoded argv", async () => {
     const root = await freshRepo();
     await init(root, ["codex"]);
-    const encoded = await readText(root, CODEX_HOOKS);
+    // TEST CHANGE, justified (REQ-FLOW-142): the renderer now names each runner row's script in plain
+    // text after the encoded row. The file is turned back into the earlier releases' form (the row
+    // last), so this case still proves what it names: a script named ONLY inside the encoded argv.
+    const encoded = withoutStarterWords(await readText(root, CODEX_HOOKS));
     const named = [...encoded.matchAll(/ ([A-Za-z0-9_-]{16,})"/g)].map((match) =>
       (JSON.parse(Buffer.from(match[1] as string, "base64url").toString("utf8")) as { command: string[] }).command[1] as string,
     );
@@ -755,6 +814,14 @@ const RELEASE_ONE_SIX = JSON.parse(
 /** The user hook those 1.6.0 files wire directly: its script, and its definition in `.stamity/hooks/`. */
 const USER_SCRIPT = ".stamity/hooks/guard.mjs";
 const USER_DEFINITION = { hooks: [{ event: "pre_tool_use", matcher: "Bash", command: ["node", USER_SCRIPT], timeoutMs: 5000 }] };
+
+/**
+ * `text` with the plain word a runner starter writes after its encoded row (REQ-FLOW-142) removed: the
+ * bytes the releases before it wrote, where a script a runner row runs is named only inside the row.
+ */
+function withoutStarterWords(text: string): string {
+  return text.replace(/( [A-Za-z0-9_-]{16,}) [A-Za-z0-9._/-]+"/g, '$1"');
+}
 
 /** How many hooks in the document at `path` run `script`, whether wired directly or through a runner's encoded row. */
 async function runsOf(root: string, path: string, script: string): Promise<number> {
@@ -825,7 +892,9 @@ describe("a direct upgrade from a release up to 1.6.0, which wired user hooks di
 
     expect(rowOf(report.wrote, path).action).toBe("updated");
     expect(await runsOf(root, path, USER_SCRIPT)).toBe(1);
-    expect(await readText(root, path)).not.toContain(USER_SCRIPT);
+    // TEST CHANGE, justified (REQ-FLOW-142): the runner's entry now names the script in plain text
+    // after its row; with that word set aside, no entry wires the script directly, as before.
+    expect(withoutStarterWords(await readText(root, path))).not.toContain(USER_SCRIPT);
     expect(await backups(root)).toEqual([]);
   });
 
@@ -966,7 +1035,8 @@ describe("a direct upgrade from a release up to 1.6.0 with an installed pack's h
 
     expect(await runsOf(root, path, script)).toBe(1);
     expect(await runsOf(root, path, USER_SCRIPT)).toBe(1);
-    expect(await readText(root, path)).not.toContain(script);
+    // TEST CHANGE, justified (REQ-FLOW-142): as above, the runner's plain word set aside.
+    expect(withoutStarterWords(await readText(root, path))).not.toContain(script);
     expect(await backups(root)).toEqual([]);
   });
 

@@ -138,7 +138,8 @@ function readJson(tree: Readonly<Record<string, string>>, path: string): Record<
 
 /** Decode actual native registration bytes without rebuilding them through the adapter. */
 function readPortableRegistration(command: string): HookInterchange {
-  const encoded = / ([A-Za-z0-9_-]+)$/.exec(command)?.[1];
+  // TEST CHANGE, justified (REQ-FLOW-142): a runner entry now ends with its script as a plain word after the row.
+  const encoded = / ([A-Za-z0-9_-]+)(?: [A-Za-z0-9._/-]+)?$/.exec(command)?.[1];
   expect(encoded, "native command must retain one encoded exec-form registration").toBeDefined();
   const row = JSON.parse(Buffer.from(encoded ?? "", "base64url").toString("utf8")) as HookInterchange;
   expect(row).toEqual(expect.objectContaining({ event: expect.any(String), command: expect.any(Array) }));

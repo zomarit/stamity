@@ -1806,10 +1806,26 @@ describe("hooks", () => {
     expect(native.hooks.preToolUse).toHaveLength(2);
   });
 
-  /** The interchange row a Copilot entry's starter carries, decoded from its last word. */
+  /**
+   * The interchange row a Copilot entry's starter carries: the base64url word after the program.
+   * TEST CHANGE, justified (REQ-FLOW-142): this read the last word, which is now the plain word
+   * naming the row's script; the row is the word before it.
+   */
   const rowOf = (command: string): { event: string; command: string[] } =>
-    JSON.parse(Buffer.from(command.split(" ").at(-1) ?? "", "base64url").toString()) as { event: string; command: string[] };
+    JSON.parse(Buffer.from(/ ([A-Za-z0-9_-]+)(?: [A-Za-z0-9._/-]+)?$/.exec(command)?.[1] ?? "", "base64url").toString()) as { event: string; command: string[] };
   const PERSON_ONLY = ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs";
+
+  it("names the session-start script in plain text after the encoded row (REQ-FLOW-142)", async () => {
+    const native = JSON.parse(rowAt(await planResidue(), COPILOT_HOOKS_PATH).content) as {
+      hooks: Record<string, { command: string; bash: string }[]>;
+    };
+    const entry = native.hooks["sessionStart"]?.[0];
+    const script = ".stamity/generated/hooks/copilot/stamity-session-start.mjs";
+    // A plain word, last, readable without decoding; `bash` carries the same string.
+    expect(entry?.command.split(" ").at(-1)).toBe(script);
+    expect(entry?.bash).toBe(entry?.command);
+    expect(rowOf(entry!.command).command[1]).toBe(script);
+  });
 
   it("runs the person-only shell guard on bash and powershell through the portable runner (u20)", async () => {
     const native = JSON.parse(rowAt(await planResidue(), COPILOT_HOOKS_PATH).content) as {
