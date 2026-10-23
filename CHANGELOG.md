@@ -239,6 +239,9 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   repository's diff settings, read a CRLF copy of a held link's section, and take `--drop-held <path...>` to withdraw
   a held section the run undid (`withdrawn` in the JSON). A hold refusal at `Base:` now ends with the next step, and
   names a Unicode-normalization-only spelling difference as such.
+- **Copilot's shipped model candidates drop `gpt-5.4-mini` (retired 2026-10-19), `claude-opus-5` and
+  `gpt-5.6-terra` (retiring 2026-11-16).** Claude Haiku 5.5 now leads Copilot's economy class, and an account without
+  Haiku 5.5 keeps Haiku 4.5, as 1.16.0 picked. A vendor-dated retirement table keeps a retired id off the shipped list.
 
 ## [1.16.0] - 2026-10-20
 

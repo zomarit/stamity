@@ -7978,21 +7978,21 @@ jobs:
       "model": "claude-opus-5.5",
       "fallbacks": [
         "gpt-6-astra",
-        "claude-opus-5"
+        "claude-fable-5.1"
       ]
     },
     "standard": {
       "model": "claude-sonnet-5",
       "fallbacks": [
         "gpt-6-sol",
-        "gpt-5.6-terra"
+        "claude-sonnet-5.5"
       ]
     },
     "economy": {
-      "model": "claude-haiku-4.5",
+      "model": "claude-haiku-5.5",
       "fallbacks": [
-        "gpt-6-luna",
-        "gpt-5.4-mini"
+        "claude-haiku-4.5",
+        "gpt-6-luna"
       ]
     }
   },
@@ -8894,17 +8894,17 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".cursor/rules/stamity-security-patterns.mdc": "cb06fff62f42ec6f32b83926041d03b75067c73d18fa8eeb8cfd55d49d0e76a3 6364 bytes",
   ".cursor/rules/stamity-testing.mdc": "b1e6ccf40fbc412f50906738e91daba2852e6c893ee201d43c1408397cef3a78 4250 bytes",
   ".cursor/rules/stamity-ui-states.mdc": "6c771070237804228629abfbfb0c41adf795d0b1259aa6e4286cc7d110f633c6 4589 bytes",
-  ".github/agents/stamity-creator.agent.md": "1a627819fb71ac4e4dfa7f74c7863704e3a63b32ca6aca725e3948f3bb8fd682 14120 bytes",
-  ".github/agents/stamity-design-quality.agent.md": "67cd0fa2efcf30261c4d41408238570e975d8533bad3a0669ec07ac434bc7399 12423 bytes",
-  ".github/agents/stamity-fixer.agent.md": "a80b50da77731cd6090d0c109b072dbc924337956a3018d96b5c961f0287d490 10815 bytes",
-  ".github/agents/stamity-implementer.agent.md": "42757d3bd8b9c3d96afc562ca377942997d957d9bc62ae11ad3d59bed8da5c84 10466 bytes",
-  ".github/agents/stamity-performance.agent.md": "4851cbbc3facdba2eb57d511bdf0b3b8d2548e498089491730092a3822aae26b 14164 bytes",
-  ".github/agents/stamity-researcher.agent.md": "d6676d000f54b3f3740e9250737f8b9a77df6612bbda5a071fae69f229a842aa 8563 bytes",
-  ".github/agents/stamity-reviewer.agent.md": "9fb23005c11ed1b9ae6f7bef4ffa703e1d33da82fe8d1cbbf288a7de79871877 17257 bytes",
+  ".github/agents/stamity-creator.agent.md": "fd41cceb29c4f77e443ed5b59bb46c524b25a3902df8b5437e1cc804eef7a55e 14124 bytes",
+  ".github/agents/stamity-design-quality.agent.md": "ba5cff51b5ed63df15484dd646b145d5063a2ac7fe2aa8db481289ea0d855fe1 12426 bytes",
+  ".github/agents/stamity-fixer.agent.md": "6ddb05c5a2f419d68218eb779d73dfe6067593d037b2622660d2eded5c6a7607 10819 bytes",
+  ".github/agents/stamity-implementer.agent.md": "06f1f5751b1d531a1805e31d5a679f21ae1e86055c3575c992cb4b23093cc488 10469 bytes",
+  ".github/agents/stamity-performance.agent.md": "ccae408280c8f1a528df0b6e852c4c92ea7dfef964a2ff1a08c0dc23a031bf82 14168 bytes",
+  ".github/agents/stamity-researcher.agent.md": "eae9b9c799c9f91a0672d9b3d187a86f4817d7cd4ab317aae521eb34cea8489c 8567 bytes",
+  ".github/agents/stamity-reviewer.agent.md": "785ad9f6a61deb646d94eb6fc6b9e1477fd41216b6ed19b716121cb78e523ac5 17260 bytes",
   ".github/agents/stamity-run.agent.md": "43257afb449ac6a504280d2184d40adc31bd2477c49c9b5107650219a699b3a8 1113 bytes",
-  ".github/agents/stamity-security.agent.md": "94a635f7803cf708cfb3e78ed15ef5702477bf4795efde98515d4c25446a41df 13168 bytes",
-  ".github/agents/stamity-spec-author.agent.md": "87e6dded19b395635b8b25c48febd5a2bfccf0e516b398d30b7cb93f59c6dbb1 12364 bytes",
-  ".github/agents/stamity-test-runner.agent.md": "6a6bf7a4f2ad452f96377fd20af17ad75841f2aa81d67c6cfb41c1f6bf740a59 12106 bytes",
+  ".github/agents/stamity-security.agent.md": "eabe8afdb9e9f2a6f49f3e5f869e9a25468ad004dbf2140f0519c5fbf6836348 13171 bytes",
+  ".github/agents/stamity-spec-author.agent.md": "271cf7782b8db4cb153e488ed6ade22a9df968c821a116a0a0d03e4e20147cc4 12367 bytes",
+  ".github/agents/stamity-test-runner.agent.md": "19273480313cc941bcc504d4cf26f152ca837ef39f3132061d7c33cb356fb043 12110 bytes",
   ".github/hooks/stamity.json": "35c29f2652643f8914eb0af8b5d5d2931567c9ac6983d53e0fcc6b4539ffef1e 9292 bytes",
   ".github/instructions/stamity-api-versioning.instructions.md": "52d40b6069b7bc858c69ec3090f3f0d5356fdc910500c55882ab4bff0c59cbb5 5068 bytes",
   ".github/instructions/stamity-contract-census.instructions.md": "65a7f0f58e529ef94b006a273c502369d61c9b83460df27dd6d651a9aa390f3c 3863 bytes",
@@ -8950,13 +8950,13 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "1111332a1630ed4dcb42e421b2326c5dd423a358e3c92bf8cb367e212a7a996d 51799 bytes",
   ".stamity/generated/models/claude.json": "d8b019734f996874130a675b78705669a3a4f121ed8a4e692c913206897bc280 697 bytes",
   ".stamity/generated/models/codex.json": "bd85ba11fdb0504946c2922d8e9b7f753b64a8085f122cf2aa51fc3e527d685a 833 bytes",
-  ".stamity/generated/models/copilot.json": "cdbd36f534d2f4a5b4f3c2edfe11cfa48651f7131ba25969992d1794512b0378 953 bytes",
+  ".stamity/generated/models/copilot.json": "36ce250308ef6f7089ea863a303c2993ed4d87fe606d76ba83706e7cd0fb3bb1 964 bytes",
   ".stamity/generated/models/cursor.json": "6e108834236741075e1d082bba6be814bc0bf04642622c860a6b7e43c348bdbd 601 bytes",
   ".stamity/handoffs/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "ac70da812193c8d2acb12e499787903b39c1ba2e4d625566b7ed2a3d143f9e9c 94261 bytes",
+  ".stamity/manifest.json": "49b341bcbb36d3fa98bb79dfa36bcb768523e6925020d68326c650bf00ae995e 94261 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "6b5b5bebfd779fe5b513cd8c2c41fa3b4dd70826435e9df9c70076ba48c29b98 6548 bytes",
@@ -17498,21 +17498,21 @@ jobs:
       "model": "claude-opus-5.5",
       "fallbacks": [
         "gpt-6-astra",
-        "claude-opus-5"
+        "claude-fable-5.1"
       ]
     },
     "standard": {
       "model": "claude-sonnet-5",
       "fallbacks": [
         "gpt-6-sol",
-        "gpt-5.6-terra"
+        "claude-sonnet-5.5"
       ]
     },
     "economy": {
-      "model": "claude-haiku-4.5",
+      "model": "claude-haiku-5.5",
       "fallbacks": [
-        "gpt-6-luna",
-        "gpt-5.4-mini"
+        "claude-haiku-4.5",
+        "gpt-6-luna"
       ]
     }
   },
@@ -17689,17 +17689,17 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".agents/skills/st-verify/scripts/spec-plan-coverage.mjs": "742e08467fc02dd92853bc5634dd7e660c580ce386adf5d6c4f3b36b3e9a10c2 19691 bytes",
   ".agents/skills/stamity-ai-evals/SKILL.md": "def7db034dfd075e97ba8c0179ab85a2948f67efd9a704d5c5ae823fcd285d7f 4446 bytes",
   ".agents/skills/stamity-question-protocol/SKILL.md": "91271382a8c9bf6dd701cedd931721ccd2031fb272faca1e5a2195bbd11751dc 7396 bytes",
-  ".github/agents/stamity-creator.agent.md": "1a627819fb71ac4e4dfa7f74c7863704e3a63b32ca6aca725e3948f3bb8fd682 14120 bytes",
-  ".github/agents/stamity-design-quality.agent.md": "67cd0fa2efcf30261c4d41408238570e975d8533bad3a0669ec07ac434bc7399 12423 bytes",
-  ".github/agents/stamity-fixer.agent.md": "a80b50da77731cd6090d0c109b072dbc924337956a3018d96b5c961f0287d490 10815 bytes",
-  ".github/agents/stamity-implementer.agent.md": "42757d3bd8b9c3d96afc562ca377942997d957d9bc62ae11ad3d59bed8da5c84 10466 bytes",
-  ".github/agents/stamity-performance.agent.md": "4851cbbc3facdba2eb57d511bdf0b3b8d2548e498089491730092a3822aae26b 14164 bytes",
-  ".github/agents/stamity-researcher.agent.md": "d6676d000f54b3f3740e9250737f8b9a77df6612bbda5a071fae69f229a842aa 8563 bytes",
-  ".github/agents/stamity-reviewer.agent.md": "9fb23005c11ed1b9ae6f7bef4ffa703e1d33da82fe8d1cbbf288a7de79871877 17257 bytes",
+  ".github/agents/stamity-creator.agent.md": "fd41cceb29c4f77e443ed5b59bb46c524b25a3902df8b5437e1cc804eef7a55e 14124 bytes",
+  ".github/agents/stamity-design-quality.agent.md": "ba5cff51b5ed63df15484dd646b145d5063a2ac7fe2aa8db481289ea0d855fe1 12426 bytes",
+  ".github/agents/stamity-fixer.agent.md": "6ddb05c5a2f419d68218eb779d73dfe6067593d037b2622660d2eded5c6a7607 10819 bytes",
+  ".github/agents/stamity-implementer.agent.md": "06f1f5751b1d531a1805e31d5a679f21ae1e86055c3575c992cb4b23093cc488 10469 bytes",
+  ".github/agents/stamity-performance.agent.md": "ccae408280c8f1a528df0b6e852c4c92ea7dfef964a2ff1a08c0dc23a031bf82 14168 bytes",
+  ".github/agents/stamity-researcher.agent.md": "eae9b9c799c9f91a0672d9b3d187a86f4817d7cd4ab317aae521eb34cea8489c 8567 bytes",
+  ".github/agents/stamity-reviewer.agent.md": "785ad9f6a61deb646d94eb6fc6b9e1477fd41216b6ed19b716121cb78e523ac5 17260 bytes",
   ".github/agents/stamity-run.agent.md": "43257afb449ac6a504280d2184d40adc31bd2477c49c9b5107650219a699b3a8 1113 bytes",
-  ".github/agents/stamity-security.agent.md": "94a635f7803cf708cfb3e78ed15ef5702477bf4795efde98515d4c25446a41df 13168 bytes",
-  ".github/agents/stamity-spec-author.agent.md": "87e6dded19b395635b8b25c48febd5a2bfccf0e516b398d30b7cb93f59c6dbb1 12364 bytes",
-  ".github/agents/stamity-test-runner.agent.md": "6a6bf7a4f2ad452f96377fd20af17ad75841f2aa81d67c6cfb41c1f6bf740a59 12106 bytes",
+  ".github/agents/stamity-security.agent.md": "eabe8afdb9e9f2a6f49f3e5f869e9a25468ad004dbf2140f0519c5fbf6836348 13171 bytes",
+  ".github/agents/stamity-spec-author.agent.md": "271cf7782b8db4cb153e488ed6ade22a9df968c821a116a0a0d03e4e20147cc4 12367 bytes",
+  ".github/agents/stamity-test-runner.agent.md": "19273480313cc941bcc504d4cf26f152ca837ef39f3132061d7c33cb356fb043 12110 bytes",
   ".github/hooks/stamity.json": "35c29f2652643f8914eb0af8b5d5d2931567c9ac6983d53e0fcc6b4539ffef1e 9292 bytes",
   ".github/instructions/stamity-api-versioning.instructions.md": "52d40b6069b7bc858c69ec3090f3f0d5356fdc910500c55882ab4bff0c59cbb5 5068 bytes",
   ".github/instructions/stamity-contract-census.instructions.md": "65a7f0f58e529ef94b006a273c502369d61c9b83460df27dd6d651a9aa390f3c 3863 bytes",
@@ -17729,12 +17729,12 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "b67634419bfa652a30fba0cd2f1402fc61ee89250dfe137cca7d2785f4a427cc 21755 bytes",
   ".stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "9f930fcd797ef464e7f4cb4c40e59b4976d65199a5c974fb67ca7624e5d0287c 56602 bytes",
-  ".stamity/generated/models/copilot.json": "cdbd36f534d2f4a5b4f3c2edfe11cfa48651f7131ba25969992d1794512b0378 953 bytes",
+  ".stamity/generated/models/copilot.json": "36ce250308ef6f7089ea863a303c2993ed4d87fe606d76ba83706e7cd0fb3bb1 964 bytes",
   ".stamity/handoffs/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "6b7871c087ef1d68dce5f553fabaec065a9ced622f6e38e32b96d97eb08c16ff 20257 bytes",
+  ".stamity/manifest.json": "ce7b8c354402ee13ec43d02dc3104e6cac404cba2537217cb1ac98930b09571a 20257 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
