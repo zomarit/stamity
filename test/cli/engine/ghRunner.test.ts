@@ -231,6 +231,19 @@ describe("ghApi", () => {
     expect(JSON.parse(await readFile(input, "utf8"))).toEqual({ query: REVIEW_THREADS_QUERY, variables: { owner: "acme", repo: "app", number: 7, after: null } });
   });
 
+  it.skipIf(process.platform === "win32")("starts the program it is given, not one PATH names, and refuses a relative one (review/75)", async () => {
+    const { bin, work, log } = await standIn('HTTP/2.0 200 OK\r\nContent-Type: application/json\r\n\r\n{"login":"runner"}', 0);
+    const empty = getRoot().path("no-gh");
+    await mkdir(empty);
+
+    await expect(ghApi({ method: "GET", path: "user", hostname: HOST }, { cwd: work, env: { PATH: empty }, program: join(bin, "gh") })).resolves.toEqual({
+      status: 200,
+      json: { login: "runner" },
+    });
+    expect(await readFile(log, "utf8")).toContain("user\n");
+    await expect(ghApi({ method: "GET", path: "user", hostname: HOST }, { cwd: work, env: { PATH: bin }, program: "gh" })).rejects.toMatchObject({ code: "GH_REFUSED" });
+  });
+
   it.skipIf(process.platform === "win32")("resolves a 4xx answer gh exits 1 on as its status", async () => {
     const { bin, work } = await standIn('HTTP/2.0 422 Unprocessable Entity\r\n\r\n{"message":"Validation Failed"}', 1);
 

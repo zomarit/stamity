@@ -4,7 +4,7 @@ import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { readAutonomy, strictestAutonomy, type ResolvedAutonomy } from "../../config/autonomy.ts";
 import { personOnlyVerdict } from "../../hooks/personOnly.ts";
 import { readGitSurface, SURFACE_RECORD_FILE, surfaceRefusal, type RecordFileReads } from "../../runs/gitSurface.ts";
-import { hookPathsAt, type HookScratch } from "../../runs/hookPaths.ts";
+import { hookPathsRead, type HookScratch } from "../../runs/hookPaths.ts";
 import {
   askPathsOf,
   checkEvidence,
@@ -26,12 +26,13 @@ import {
   type LandDecision,
   type LandInput,
   type LandPr,
+  type PollClock,
   type RequiredCheck,
   type ThreadRead,
 } from "../../runs/landEvidence.ts";
-import { resolveRepo, runMarker } from "../../runs/pullRequest.ts";
+import { PR_RECORD_FILE, prRecordRefusal, resolveRepo, runMarker } from "../../runs/pullRequest.ts";
 import { gitProgramFor } from "../../shared/programPath.ts";
-import { ghApi, ghMarkReady, ghMergePull, ghProgramPath, ghReviewThreads, type GhResponse, type MergeMethod } from "../engine/ghRunner.ts";
+import { ghApi, ghMarkReady, ghMergePull, ghProgramPath, ghReviewThreads, type GhApiOptions, type GhResponse, type MergeMethod } from "../engine/ghRunner.ts";
 import { gitWrite, gitWriteEnv, type GitWriteResult } from "../engine/gitWrite.ts";
 import { CliFailure } from "../kit/output.ts";
 import type { CliContext, CommandResult } from "../kit/program.ts";
@@ -64,6 +65,18 @@ import { sanitizeLabel } from "../kit/prompts.ts";
 
 /** `--wait` polls every this many milliseconds. */
 const POLL_MS = 30_000;
+/** review/79: after the ready mark, the merge state is read again every this many milliseconds, for at most the next. */
+const READY_POLL_MS = 5_000;
+const READY_MERGEABLE_MS = 60_000;
+
+/**
+ * The clock `--wait` and the read after the ready mark poll on. Mock seam: a test replaces `now` and `sleep`, since a
+ * poll of 30 s or 5 s a step cannot run in a unit test's time; the verb itself never replaces them.
+ */
+export const LAND_CLOCK: PollClock = {
+  now: () => Date.now(),
+  sleep: (ms) => new Promise<void>((done) => setTimeout(done, ms)),
+};
 /** Pages read of a paged list; 100 entries each. */
 const MAX_PAGES = 10;
 /** GitHub lists at most 3,000 changed files, 30 pages of 100. */
@@ -258,6 +271,8 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     const ghAt = real(gh);
     if (inside(real(top), ghAt)) throw new Refused("gh resolves to a program inside the work tree, whose answers the run could write");
     if ([tmpdir(), "/tmp"].some((root) => inside(real(root), ghAt))) throw new Refused("gh resolves to a program inside a temp folder, whose answers the run could write");
+    // review/75: every later call starts the program checked here, never one resolved again from PATH.
+    const ghOpts = { cwd, env, program: ghAt };
     const moved = await surfaceMoved();
     if (moved !== null) throw new Refused(moved);
 
@@ -273,7 +288,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       }
     }
     const repoPath = `repos/${repo.owner}/${repo.repo}`;
-    const call = (path: string): Promise<GhResponse> => answered(ghApi({ method: "GET", path, hostname: repo.host }, { cwd, env }), "a read");
+    const call = (path: string): Promise<GhResponse> => answered(ghApi({ method: "GET", path, hostname: repo.host }, ghOpts), "a read");
     const json = async (path: string, what: string): Promise<unknown> => {
       const reply = await call(path);
       if (reply.status !== 200) throw new Refused(`${what} answered HTTP ${reply.status}`);
@@ -291,8 +306,13 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     const remote = await git(["ls-remote", "origin", `refs/heads/${runBranch}`]);
     if (remote.code !== 0) throw new Refused(`git ls-remote origin answered ${remote.code}`);
     const originTip = /^([0-9a-f]{40,64})\t/.exec(remote.stdout)?.[1] ?? null;
+    // review/73: the login gh is authenticated as, which must have opened the run's own pull request.
+    const user = await json("user", "the authenticated login read");
+    const viewer = typeof user === "object" && user !== null ? (user as Record<string, unknown>)["login"] : undefined;
+    if (typeof viewer !== "string" || viewer === "") throw new Refused("GitHub named no authenticated login");
 
-    // (3) The run's own pull request: from the run's branch, into the default branch, its body ending with the marker.
+    // (3) The run's own pull request: from the run's branch, into the default branch, its body ending with the marker,
+    // and the number the run verb recorded when it opened the draft (review/73).
     const marker = runMarker(run);
     const listed = await json(`${repoPath}/pulls?head=${encodeQuery(`${repo.owner}:${runBranch}`)}&base=${encodeQuery(defaultBranch)}&state=all&per_page=100`, "the pull request lookup");
     const numbers = (Array.isArray(listed) ? listed : [])
@@ -301,6 +321,10 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       .map((entry) => (entry as { number: number }).number);
     if (numbers.length === 0) throw new Refused(`no pull request from ${runBranch} into ${defaultBranch} ends with the run's marker`);
     const number = Math.max(...numbers);
+    const gitDir = await gitLine(["rev-parse", "--git-dir"]);
+    const recordPlace = gitDir === null || gitDir === "" ? { unreadable: "git rev-parse --git-dir answered no folder" } : { path: join(resolve(cwd, gitDir), ...PR_RECORD_FILE.split("/")) };
+    const unrecorded = prRecordRefusal(recordPlace, RECORD_READS, { run, host: repo.host, owner: repo.owner, repo: repo.repo, number });
+    if (unrecorded !== null) throw new Refused(unrecorded);
     const readPr = async (): Promise<LandPr> => {
       const pr = parsePr(await json(`${repoPath}/pulls/${number}`, `the read of #${number}`));
       if (pr === null) throw new Refused(`GitHub's answer for #${number} names no pull request this verb reads`);
@@ -309,7 +333,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     let pr = await readPr();
     result.pr = { number: pr.number, url: pr.url, head: pr.headSha };
     result.evidence.mergeableState = pr.mergeableState;
-    const own = { repo: `${repo.owner}/${repo.repo}`, runBranch, head: sha, originTip, marker, defaultBranch };
+    const own = { repo: `${repo.owner}/${repo.repo}`, runBranch, head: sha, originTip, marker, defaultBranch, viewer };
 
     // (4) The setting: the strictest of the default branch's, HEAD's and the work tree's manifest.
     const setting = await readSetting(cwd, prefix, repoPath, defaultBranch, gitLine, call);
@@ -325,10 +349,6 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       counted += read.count;
       if (read.count < 100) break;
     }
-    // build/2: the hook files and the scripts the repository's own declarations name, at Base: and at the head, ask
-    // in every mode: a run that edits a declared hook script reaches every later session's hook.
-    const hookPaths = await declaredHookPaths(head.base, sha, prefix, git, gitLine);
-    result.evidence.held = askPathsOf(files, prefix, typeof hookPaths === "string" ? [] : hookPaths);
 
     // (6) The required checks: the rulesets' and the branch protection's; a 403 or 404 on the rules falls back to all.
     const rules = await call(`${repoPath}/rules/branches/${defaultBranch}`);
@@ -339,8 +359,15 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     const required: RequiredCheck[] = [...(ruleRead?.required ?? []), ...branch.required];
     const readChecks = async (): Promise<CheckEvidence> => checkEvidence(required, await checkRuns(json, repoPath, sha));
 
-    // (7) The review threads, every page.
-    const threads = await reviewThreads(repo.host, repo.owner, repo.repo, number, { cwd, env });
+    // build/2, review/74, review/80: the hook files and the scripts the repository's own declarations name, at Base:,
+    // at the head and at the default branch's tip, ask in every mode: a run that edits a declared hook script reaches
+    // every later session's hook, whichever of the three declares it.
+    const hookPaths = await declaredHookPaths({ base: head.base, head: sha, tip: branch.tip, defaultBranch, prefix }, git, gitLine);
+    result.evidence.held = askPathsOf(files, prefix, typeof hookPaths === "string" ? [] : hookPaths);
+
+    // (7) The review threads, every page, read again on every later read (review/72).
+    const readThreads = (): Promise<number | null> => reviewThreads(repo.host, repo.owner, repo.repo, number, ghOpts);
+    let threads = await readThreads();
 
     // (8) The ledger as the head commit holds it, and the work tree's copy, which must equal it.
     const ledger = await ledgerAt(cwd, sha, `${runDir}/${layout.LEDGER_FILE}`, git);
@@ -387,37 +414,51 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
         ...checks.missing.map((name) => ({ name, state: "missing" as const })),
       ];
     };
-    let checks: CheckEvidence = { green: [], pending: [], failing: [], missing: [] };
-    const deadline = Date.now() + waitMinutes * 60_000;
-    const clock = { now: () => Date.now(), sleep: (ms: number) => new Promise<void>((done) => setTimeout(done, ms)) };
-    const decide = async (beforeReady: boolean): Promise<LandDecision> =>
-      pollWhilePending(
-        async () => {
-          checks = await readChecks();
-          if (!beforeReady) pr = await readPr();
-          return decideLand(inputFor(pr, checks, beforeReady));
-        },
-        (decision) => decision.outcome === "refused" && decision.pending,
-        deadline,
-        POLL_MS,
-        clock,
-      );
+    let checks: CheckEvidence = await readChecks();
+    const deadline = LAND_CLOCK.now() + waitMinutes * 60_000;
+    /** One fresh read of everything that moves: the check runs, the threads and (after any ready mark) the pull request. */
+    const reread = async (beforeReady: boolean): Promise<LandDecision> => {
+      checks = await readChecks();
+      threads = await readThreads();
+      if (!beforeReady) pr = await readPr();
+      return decideLand(inputFor(pr, checks, beforeReady));
+    };
+    const pending = (decision: LandDecision): boolean => decision.outcome === "refused" && decision.pending;
+    /** `--wait`: while only pending checks or an uncomputed merge state stop it, sleep a poll's interval, then read again. */
+    const waitOut = async (decision: LandDecision, beforeReady: boolean): Promise<LandDecision> => {
+      let now = decision;
+      if (waitMinutes === 0) return now;
+      while (pending(now) && LAND_CLOCK.now() + POLL_MS <= deadline) {
+        // oxlint-disable-next-line no-await-in-loop -- a poll: each read waits out the interval after the last one
+        await LAND_CLOCK.sleep(POLL_MS);
+        // oxlint-disable-next-line no-await-in-loop -- the next read decides whether the wait goes on
+        now = await reread(beforeReady);
+      }
+      return now;
+    };
 
     // (10) The decision; --ready on a draft decides first on what does not need the ready state.
-    let decision = decideLand(inputFor(pr, (checks = await readChecks()), pr.draft && ready));
-    if (decision.outcome === "refused" && decision.pending && waitMinutes > 0) decision = await decide(pr.draft && ready);
-    if (decision.outcome === "land" && pr.draft && ready) {
-      if (ctx.dryRun) {
-        lines.push(`ready: would mark #${number} ready for review`);
-      } else {
-        const marked = await answered(ghMarkReady({ hostname: repo.host, id: pr.nodeId }, { cwd, env }), "the ready mark");
-        if (marked.status !== 200 || typeof marked.json !== "object" || marked.json === null || "errors" in marked.json) {
-          throw new Refused(`marking #${number} ready answered HTTP ${marked.status}${marked.status === 200 ? " with errors" : ""}`);
-        }
-        lines.push(`ready: marked #${number} ready for review`);
-        pr = await readPr();
-        decision = waitMinutes > 0 ? await decide(false) : decideLand(inputFor(pr, checks, false));
+    const draftReady = pr.draft && ready;
+    let decision = await waitOut(decideLand(inputFor(pr, checks, draftReady)), draftReady);
+    if (decision.outcome === "land" && draftReady && !ctx.dryRun) {
+      const marked = await answered(ghMarkReady({ hostname: repo.host, id: pr.nodeId }, ghOpts), "the ready mark");
+      if (marked.status !== 200 || typeof marked.json !== "object" || marked.json === null || "errors" in marked.json) {
+        throw new Refused(`marking #${number} ready answered HTTP ${marked.status}${marked.status === 200 ? " with errors" : ""}`);
       }
+      lines.push(`ready: marked #${number} ready for review`);
+      // review/79: GitHub computes the merge state after the mark; it is read again until computed, at most 60 s
+      // whatever --wait says, and still uncomputed it refuses as not computed yet.
+      const computing = (now: LandPr): boolean => now.mergeableState === null || now.mergeableState === "unknown";
+      pr = await pollWhilePending(readPr, computing, LAND_CLOCK.now() + READY_MERGEABLE_MS, READY_POLL_MS, LAND_CLOCK);
+      decision = await waitOut(await reread(false), false);
+    } else if (decision.outcome === "land" && draftReady) {
+      lines.push(`ready: would mark #${number} ready for review`);
+    }
+    // review/72, review/78: the threads once more just before the act, and the decision on that last count; a dry run
+    // on a draft decides on its merge state as it reads now (review/82), which a ready mark has not computed yet.
+    if (decision.outcome === "land") {
+      threads = await readThreads();
+      decision = decideLand(inputFor(ctx.dryRun && draftReady ? { ...pr, draft: false } : pr, checks, false));
     }
     show(checks, pr);
     if (decision.outcome === "already-landed") {
@@ -446,7 +487,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     const at = new Date().toISOString();
     const line = evidenceLine(at, sha, checks.green.length, threads ?? 0, 0);
     const patched = await answered(
-      ghApi({ method: "PATCH", path: `${repoPath}/pulls/${number}`, body: { body: withEvidence(pr.body, marker, line) }, hostname: repo.host }, { cwd, env }),
+      ghApi({ method: "PATCH", path: `${repoPath}/pulls/${number}`, body: { body: withEvidence(pr.body, marker, line) }, hostname: repo.host }, ghOpts),
       "the evidence write",
     );
     if (patched.status !== 200) throw new Refused(`writing the evidence into #${number}'s body answered HTTP ${patched.status}`);
@@ -464,7 +505,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       lines.push(`act: fast-forwarded ${defaultBranch} to ${sha}`);
     } else {
       const merged = await answered(
-        ghMergePull({ hostname: repo.host, owner: repo.owner, repo: repo.repo, number, sha, method }, { cwd, env }),
+        ghMergePull({ hostname: repo.host, owner: repo.owner, repo: repo.repo, number, sha, method }, ghOpts),
         `the merge call (#${number}'s own state decides whether it merged; run it again)`,
       );
       if (merged.status !== 200) {
@@ -501,23 +542,42 @@ async function answered(call: Promise<GhResponse>, what: string): Promise<GhResp
 }
 
 /**
- * The hook paths the declarations at the record's `Base:` and at `sha` name (`../../runs/hookPaths.ts`), together and
- * sorted; or why they are not known (no `Base:`, one naming no commit here, a hold refusal at either), which asks.
+ * The hook paths the declarations name at the record's `Base:`, at the head and at the default branch's tip
+ * (`../../runs/hookPaths.ts`, review/74, review/80), together and sorted; or why they are not known, which asks, worded
+ * with the person's next step (review/81). The tip is fetched first where this clone does not hold it.
  */
 async function declaredHookPaths(
-  base: string | null,
-  sha: string,
-  prefix: string,
+  at: { base: string | null; head: string; tip: string; defaultBranch: string; prefix: string },
   git: (args: readonly string[]) => Promise<GitWriteResult>,
   gitLine: (args: readonly string[]) => Promise<string | null>,
 ): Promise<string[] | string> {
-  const commit = base === null ? null : await gitLine(["rev-parse", "--verify", "--quiet", `${base}^{commit}`]);
-  if (commit === null) return "the record's Base: names no commit here, so the hook scripts declared there are not known";
+  const unknown = (where: string, why: string, next: string): string =>
+    `the hook declarations at ${where} could not be read (${why}), so whether the diff reaches a hook script is not known; ${next}, then run land again, or a person decides`;
+  const onDefault = `fix the declaration on ${at.defaultBranch}`;
+  const base = at.base === null ? null : await gitLine(["rev-parse", "--verify", "--quiet", `${at.base}^{commit}`]);
+  if (base === null) return unknown("the record's Base:", "it names no commit here", "write the commit the run started from as the record's Base:");
+  if (!/^[0-9a-f]{40,64}$/.test(at.tip)) return unknown(`${at.defaultBranch}'s tip`, "GitHub named no commit id", onDefault);
+  if ((await git(["cat-file", "-e", `${at.tip}^{commit}`])).code !== 0) {
+    await git(["fetch", "--quiet", "--no-tags", "origin", `refs/heads/${at.defaultBranch}`]);
+    if ((await git(["cat-file", "-e", `${at.tip}^{commit}`])).code !== 0) {
+      return unknown(`${at.defaultBranch}'s tip ${at.tip}`, "this clone does not hold that commit, and fetching it did not bring it", `fetch ${at.defaultBranch} from origin`);
+    }
+  }
   const reads = { git, scratch: HOOK_SCRATCH };
-  const [atBase, atHead] = await Promise.all([hookPathsAt(reads, prefix, commit), hookPathsAt(reads, prefix, sha)]);
-  if (typeof atBase === "string") return atBase;
-  if (typeof atHead === "string") return atHead.replace("at Base:", `at ${sha}:`);
-  return [...new Set([...atBase, ...atHead])].toSorted();
+  const sides = [
+    { where: `the record's Base: ${base}`, commit: base, next: onDefault },
+    { where: `${at.defaultBranch}'s tip ${at.tip}`, commit: at.tip, next: onDefault },
+    { where: `the head ${at.head}`, commit: at.head, next: "fix the declaration on the run's branch" },
+  ];
+  const read = await Promise.all(sides.map((side) => hookPathsRead(reads, at.prefix, side.commit)));
+  const paths: string[] = [];
+  for (const [index, side] of sides.entries()) {
+    const found = read[index];
+    if (found === undefined) continue;
+    if (!Array.isArray(found)) return unknown(side.where, found.subject === null ? found.why : `${found.subject} ${found.why}`, side.next);
+    paths.push(...found);
+  }
+  return [...new Set(paths)].toSorted();
 }
 
 /** The fields of one list entry the lookup matches on. */
@@ -543,7 +603,7 @@ async function checkRuns(json: (path: string, what: string) => Promise<unknown>,
 }
 
 /** The unresolved review threads ({@link unresolvedThreads}), every page; `null` where a page does not read. */
-async function reviewThreads(hostname: string, owner: string, repo: string, number: number, opts: { cwd: string; env: NodeJS.ProcessEnv }): Promise<number | null> {
+async function reviewThreads(hostname: string, owner: string, repo: string, number: number, opts: GhApiOptions): Promise<number | null> {
   const threads: ThreadRead[] = [];
   let after: string | undefined;
   let viewer = "";

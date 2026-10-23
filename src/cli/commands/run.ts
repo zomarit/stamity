@@ -10,7 +10,7 @@ import { checkSurfaceRecord, type RecordFileReads, type RecordUse, type SurfaceC
 import { hookPathsAt, type HookScratch } from "../../runs/hookPaths.ts";
 import { blastRadiusSection, MORNING_FILE, prBodyFrom, screenOutbound, withBlastRadius } from "../../runs/morning.ts";
 import { inferPrerequisites, type PrereqRow } from "../../runs/prerequisites.ts";
-import { ensureDraftPr, HOST_NAME, resolveRepo, type PrOutcome } from "../../runs/pullRequest.ts";
+import { ensureDraftPr, HOST_NAME, PR_RECORD_FILE, prRecordText, resolveRepo, type PrOutcome } from "../../runs/pullRequest.ts";
 import { parseGitDefaultBranch } from "../../workspace/git.ts";
 import { ghApi } from "../engine/ghRunner.ts";
 import { gitCheckRunner, revisionLines } from "../engine/gitStatus.ts";
@@ -2366,7 +2366,31 @@ async function draftPr(ctx: CliContext, at: PrInputs): Promise<PrStep> {
   const gh = (request: Parameters<typeof ghApi>[0]) => ghApi(request, { cwd: at.top, env });
   const outcome: PrOutcome = await ensureDraftPr(gh, { host: repo.host, owner: repo.owner, repo: repo.repo, head: at.branch, base: target, title, body, runId: marked });
   if ("notDone" in outcome) return { pr: null, inferred, notDone: [...notDone, outcome.notDone] };
+  // review/73: the pull request this run opened or whose body it owns (never a person's, which gets a comment) is
+  // recorded for `run land`, which merges that number alone.
+  if (outcome.how !== "commented") {
+    const unrecorded = await recordPullRequest(ctx, at.top, { run: marked, host: repo.host, owner: repo.owner, repo: repo.repo, number: outcome.number });
+    if (unrecorded !== null) notDone.push(unrecorded);
+  }
   return { pr: { number: outcome.number, url: outcome.url, how: outcome.how }, inferred, notDone };
+}
+
+/**
+ * review/73: the pull request a run verb opened or updated, written atomically to {@link PR_RECORD_FILE} under the work
+ * tree's own git directory, beside the pre-flight record; `null` once written, else the `notDone` line, by error code.
+ */
+async function recordPullRequest(ctx: CliContext, top: string, record: Parameters<typeof prRecordText>[0]): Promise<string | null> {
+  const place = await gitSurfaceRecordPath(top);
+  if ("unreadable" in place) return `pull request not recorded (${place.unreadable}), so run land refuses it`;
+  const path = join(place.gitDir, ...PR_RECORD_FILE.split("/"));
+  try {
+    mkdirSync(dirname(path), { recursive: true });
+    await ctx.engine.merge.atomicWrite.atomicWriteFile(path, prRecordText(record), { boundaryDir: place.gitDir, mode: 0o600 });
+    return null;
+  } catch (cause) {
+    const code = (cause as { code?: unknown } | null)?.code;
+    return `pull request not recorded (${PR_RECORD_FILE} in the git directory: ${typeof code === "string" ? code : "write failed"}), so run land refuses it`;
+  }
 }
 
 /**

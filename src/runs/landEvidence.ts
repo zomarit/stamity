@@ -156,25 +156,27 @@ export function checkEvidence(required: readonly RequiredCheck[] | null, runs: r
   return out;
 }
 
-/** One review thread: resolved or not, by whom, and who opened it (`person` false for an app). */
+/** One review thread: resolved or not, by whom, and every comment's author (`login` null where GitHub names none). */
 export interface ThreadRead {
   isResolved: boolean;
   resolvedBy: string | null;
-  firstAuthor: { login: string; person: boolean } | null;
+  authors: { login: string | null; person: boolean }[];
+  /** Whether every comment's author was read (the thread holds no more comments than one page). */
+  complete: boolean;
 }
 
 /**
- * How many threads count as unresolved: every open one, and every one a person other than `viewer` (the run's own
- * login) opened that `viewer` resolved, since the run may not close a person's objection itself. An author GitHub no
- * longer names counts as a person. On a single-account repository the person is the run's login: a named residual.
+ * How many threads count as unresolved (review/71): every open one, and every one `viewer` (the run's own login)
+ * resolved that holds a comment by any other person, whichever comment it is, since the run may not close a person's
+ * objection itself, or whose comments did not read whole. An author GitHub no longer names counts as a person; an
+ * app's comments do not hold a thread open. On a single-account repository the person is the run's login: a residual.
  */
 export function unresolvedThreads(threads: readonly ThreadRead[], viewer: string): number {
   const same = (a: string | null, b: string): boolean => a !== null && a.toLowerCase() === b.toLowerCase();
   return threads.filter((thread) => {
     if (!thread.isResolved) return true;
-    const author = thread.firstAuthor;
-    const byOther = author === null || (author.person && !same(author.login, viewer));
-    return byOther && same(thread.resolvedBy, viewer);
+    if (!same(thread.resolvedBy, viewer)) return false;
+    return !thread.complete || thread.authors.some((author) => author.login === null || (author.person && !same(author.login, viewer)));
   }).length;
 }
 
@@ -200,13 +202,14 @@ export function parseThreadsPage(json: unknown): { viewer: string; threads: Thre
     const resolved = field(node, "isResolved");
     if (typeof resolved !== "boolean") return null;
     const by = field(node, "resolvedBy", "login");
-    const first = (field(node, "comments", "nodes") as unknown[] | undefined)?.[0];
-    const login = field(first, "author", "login");
-    threads.push({
-      isResolved: resolved,
-      resolvedBy: typeof by === "string" ? by : null,
-      firstAuthor: typeof login === "string" ? { login, person: field(first, "author", "__typename") !== "Bot" } : null,
+    const comments = field(node, "comments", "nodes");
+    const count = field(node, "comments", "totalCount");
+    if (!Array.isArray(comments) || typeof count !== "number") return null;
+    const authors = comments.map((comment) => {
+      const login = field(comment, "author", "login");
+      return { login: typeof login === "string" ? login : null, person: field(comment, "author", "__typename") !== "Bot" };
     });
+    threads.push({ isResolved: resolved, resolvedBy: typeof by === "string" ? by : null, authors, complete: count <= authors.length });
   }
   const more = field(page, "pageInfo", "hasNextPage") === true;
   const cursor = field(page, "pageInfo", "endCursor");
@@ -303,6 +306,8 @@ export interface LandPr {
   body: string;
   mergeableState: string | null;
   changedFiles: number;
+  /** The login that opened it (`user.login`), `null` where GitHub names none. */
+  author: string | null;
 }
 
 /** A `pulls/<n>` answer as {@link LandPr}, or `null` where a field it needs is missing. */
@@ -320,6 +325,7 @@ export function parsePr(json: unknown): LandPr | null {
   const repo = field(json, "head", "repo", "full_name");
   const body = field(json, "body");
   const mergeable = field(json, "mergeable_state");
+  const author = field(json, "user", "login");
   return {
     number,
     url,
@@ -334,6 +340,7 @@ export function parsePr(json: unknown): LandPr | null {
     body: typeof body === "string" ? body : "",
     mergeableState: typeof mergeable === "string" ? mergeable : null,
     changedFiles: changed,
+    author: typeof author === "string" ? author : null,
   };
 }
 
@@ -350,12 +357,15 @@ export interface OwnPrFacts {
   /** The run's marker (`./pullRequest.ts` `runMarker`). */
   marker: string;
   defaultBranch: string;
+  /** The login `gh` is authenticated as (review/73): the run's own pull request was opened by it. */
+  viewer: string;
 }
 
 /**
  * Whether `pr` is the run's own and already merged at the head (`already`), else why it is not the run's own to land.
  * Its own: head branch the run's, head `HEAD` and origin's tip, body ending with the marker, into the default branch,
- * from the same repository.
+ * from the same repository, opened by the run's login (review/73; the number the run verb recorded is checked by the
+ * caller). On a single-account repository the run's login is the person's, so the author check cannot tell them apart.
  */
 export function ownPr(pr: LandPr, own: OwnPrFacts): { already: boolean; refusals: string[] } {
   const refusals: string[] = [];
@@ -364,6 +374,9 @@ export function ownPr(pr: LandPr, own: OwnPrFacts): { already: boolean; refusals
   if (pr.baseRef !== own.defaultBranch) refusals.push(`pull request #${pr.number} targets ${pr.baseRef}, not the default branch ${own.defaultBranch}`);
   if (!pr.body.trimEnd().endsWith(own.marker)) refusals.push(`pull request #${pr.number}'s body does not end with the run's marker`);
   if (pr.headSha !== own.head) refusals.push(`pull request #${pr.number}'s head ${pr.headSha} is not HEAD ${own.head}`);
+  if (pr.author === null || pr.author.toLowerCase() !== own.viewer.toLowerCase()) {
+    refusals.push(`pull request #${pr.number} was opened by ${pr.author ?? "an account GitHub no longer names"}, not by the run's login ${own.viewer}`);
+  }
   if (refusals.length === 0 && pr.merged) return { already: true, refusals };
   if (pr.state !== "open") refusals.push(`pull request #${pr.number} is ${pr.merged ? "merged at another head" : "closed"}`);
   if (own.originTip !== own.head) refusals.push(own.originTip === null ? `origin has no branch ${own.runBranch}` : `origin's ${own.runBranch} is at ${own.originTip}, not HEAD ${own.head}`);
@@ -421,6 +434,7 @@ function mergeableRefusal(state: string | null): string | null {
   if (state === "behind") return "mergeable_state is behind: the branch is behind the default branch";
   if (state === "dirty") return "mergeable_state is dirty: the branch conflicts with the default branch";
   if (state === "unstable") return "mergeable_state is unstable: a check that is not required is failing";
+  if (state === "draft") return "mergeable_state reads draft: GitHub computes it after the ready mark, which a dry run does not make";
   return `mergeable_state is ${state}, not clean`;
 }
 

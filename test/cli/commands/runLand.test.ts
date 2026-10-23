@@ -1,13 +1,15 @@
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
-import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { gitSurfaceRecordPath, readRunGitSurface } from "../../../src/cli/commands/gate.ts";
 import { runCommand } from "../../../src/cli/commands/run.ts";
+import { LAND_CLOCK } from "../../../src/cli/commands/runLand.ts";
 import type * as GitWriteModule from "../../../src/cli/engine/gitWrite.ts";
 import { surfaceRecord } from "../../../src/runs/gitSurface.ts";
+import { prRecordText } from "../../../src/runs/pullRequest.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { NO_GIT_CONFIG } from "../../support/repoFixtures.ts";
 import { useTempDir } from "../../support/tempDir.ts";
@@ -24,39 +26,69 @@ const RUN_BRANCH = `stamity/${RUN}`;
 const RUN_DIR = `.stamity/runs/${RUN}`;
 const MARKER = `<!-- stamity:run ${RUN} -->`;
 
-/** Every GitHub call the verb made, in order, and the answer each `METHOD path` (query dropped) gets. */
+type Answer = { status: number; json: unknown };
+
+/**
+ * Every GitHub call the verb made, in order, with the `gh` program it was told to start, and the answers. A route or
+ * the thread answer may be a list: each read takes the next one, the last one repeating.
+ * TEST CHANGE, justified (review/72, review/75, review/79): answers in sequence (a second thread read, a merge state
+ * computed late) and the program each call names are what this round's rows are about; one answer reads as before.
+ */
 const gh = vi.hoisted(() => ({
-  calls: [] as { kind: string; method?: string; path?: string; body?: unknown }[],
-  routes: new Map<string, { status: number; json: unknown }>(),
+  calls: [] as { kind: string; method?: string; path?: string; body?: unknown; program?: string | undefined }[],
+  routes: new Map<string, Answer | Answer[]>(),
   merge: { status: 200, json: { merged: true } as unknown },
-  threads: { data: { viewer: { login: "runner" }, repository: { pullRequest: { reviewThreads: { nodes: [] as unknown[], pageInfo: { hasNextPage: false, endCursor: null } } } } } } as unknown,
+  threads: [] as unknown[],
+  /** The merge states the pull request reads with after the ready mark, in order. */
+  afterReady: ["clean"] as (string | null)[],
   program: "/usr/bin/gh" as string | null,
 }));
+
+function next<T>(answer: T | T[]): T {
+  if (!Array.isArray(answer)) return answer;
+  return (answer.length > 1 ? answer.shift() : answer[0]) as T;
+}
 
 // Mocked: the real runner starts `gh`, which calls GitHub over the network under the machine's login; a unit test can
 // reach neither. Each call is recorded and answered from the routes above.
 vi.mock("../../../src/cli/engine/ghRunner.ts", () => ({
-  ghApi: (request: { method: string; path: string; body?: unknown }) => {
+  ghApi: (request: { method: string; path: string; body?: unknown }, opts?: { program?: string }) => {
     const path = request.path.replace(/^\//, "").replace(/\?.*$/, "");
-    gh.calls.push({ kind: "api", method: request.method, path, body: request.body });
-    return Promise.resolve(gh.routes.get(`${request.method} ${path}`) ?? { status: 404, json: { message: "Not Found" } });
+    gh.calls.push({ kind: "api", method: request.method, path, body: request.body, program: opts?.program });
+    const answer = gh.routes.get(`${request.method} ${path}`);
+    return Promise.resolve(answer === undefined ? { status: 404, json: { message: "Not Found" } } : next(answer));
   },
-  ghMergePull: (request: Record<string, unknown>) => {
-    gh.calls.push({ kind: "merge", body: request });
+  ghMergePull: (request: Record<string, unknown>, opts?: { program?: string }) => {
+    gh.calls.push({ kind: "merge", body: request, program: opts?.program });
     return Promise.resolve(gh.merge);
   },
-  ghReviewThreads: () => {
-    gh.calls.push({ kind: "threads" });
-    return Promise.resolve({ status: 200, json: gh.threads });
+  ghReviewThreads: (_request: unknown, opts?: { program?: string }) => {
+    gh.calls.push({ kind: "threads", program: opts?.program });
+    return Promise.resolve({ status: 200, json: next(gh.threads) });
   },
-  ghMarkReady: (request: { id: string }) => {
-    gh.calls.push({ kind: "ready", body: request });
+  ghMarkReady: (request: { id: string }, opts?: { program?: string }) => {
+    gh.calls.push({ kind: "ready", body: request, program: opts?.program });
     const pr = gh.routes.get(`GET repos/o/r/pulls/7`);
-    if (pr !== undefined) gh.routes.set("GET repos/o/r/pulls/7", { ...pr, json: { ...(pr.json as object), draft: false, mergeable_state: "clean" } });
+    const json = (Array.isArray(pr) ? pr[0] : pr)?.json as object;
+    gh.routes.set("GET repos/o/r/pulls/7", gh.afterReady.map((state) => ({ status: 200, json: { ...json, draft: false, mergeable_state: state } })));
     return Promise.resolve({ status: 200, json: { data: { markPullRequestReadyForReview: { pullRequest: { isDraft: false } } } } });
   },
   ghProgramPath: () => gh.program,
 }));
+
+/** A threads page holding `nodes`, as the constant query answers. */
+function threadsPage(nodes: unknown[]): unknown {
+  return { data: { viewer: { login: "runner" }, repository: { pullRequest: { reviewThreads: { nodes, pageInfo: { hasNextPage: false, endCursor: null } } } } } };
+}
+
+/** One review thread: resolved or not, by whom, and its comments' authors as `[__typename, login]`. */
+function thread(isResolved: boolean, resolvedBy: string | null, ...authors: [string, string][]): unknown {
+  return {
+    isResolved,
+    resolvedBy: resolvedBy === null ? null : { login: resolvedBy },
+    comments: { totalCount: authors.length, nodes: authors.map(([type, login]) => ({ author: { __typename: type, login } })) },
+  };
+}
 
 // A spy, not a stand-in: every call goes to the real runner; `ls-remote` and `push` alone get an `insteadOf` in the
 // environment so origin's GitHub URL reaches the case's bare remote. Mock reason: the verb reads origin's tip and
@@ -67,7 +99,9 @@ vi.mock("../../../src/cli/engine/gitWrite.ts", async (importOriginal) => {
     ...real,
     gitWrite: (cwd: string, args: readonly string[], opts?: Parameters<typeof real.gitWrite>[2]) => {
       const remote = join(dirname(cwd), "remote.git");
-      if ((args[0] !== "push" && args[0] !== "ls-remote") || !existsSync(remote)) return real.gitWrite(cwd, args, opts);
+      // TEST CHANGE, justified (review/74): the verb fetches the default branch's tip where the clone lacks it, so a
+      // fetch goes to the bare remote as the push and ls-remote do.
+      if ((args[0] !== "push" && args[0] !== "ls-remote" && args[0] !== "fetch") || !existsSync(remote)) return real.gitWrite(cwd, args, opts);
       const mapping = { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: `url.${remote}.insteadOf`, GIT_CONFIG_VALUE_0: "https://github.com/o/r.git" };
       const previous = Object.fromEntries(Object.keys(mapping).map((key) => [key, process.env[key]]));
       Object.assign(process.env, mapping);
@@ -89,6 +123,9 @@ function git(cwd: string, args: readonly string[]): string {
   return execFileSync("git", [...args], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, ...ENV } }).trim();
 }
 
+/** Where a run verb records the pull request it opened, under the repository's git directory. */
+const PR_RECORD = ".git/stamity/run-pull-request.json";
+
 const row = (id: string, severity: string, state: string): string => `${JSON.stringify({ id, phase: "review", source: "r", severity, evidence: "e", state, rationale: "" })}\n`;
 
 describe("stamity run land", () => {
@@ -96,15 +133,33 @@ describe("stamity run land", () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
+    vi.restoreAllMocks();
   });
 
   beforeEach(() => {
     gh.calls.length = 0;
     gh.routes.clear();
     gh.merge = { status: 200, json: { merged: true } };
-    gh.threads = { data: { viewer: { login: "runner" }, repository: { pullRequest: { reviewThreads: { nodes: [], pageInfo: { hasNextPage: false, endCursor: null } } } } } };
+    gh.threads = [threadsPage([])];
+    gh.afterReady = ["clean"];
     gh.program = "/usr/bin/gh";
   });
+
+  /**
+   * The land verb's clock made to advance only when it sleeps. Mock reason: `--wait` polls every 30 s and the read
+   * after a ready mark every 5 s for up to 60 s, which a unit test cannot wait out; what is proven is the reads made.
+   */
+  function fakeClock(): { slept: number[] } {
+    let now = 1_000_000;
+    const slept: number[] = [];
+    vi.spyOn(LAND_CLOCK, "now").mockImplementation(() => now);
+    vi.spyOn(LAND_CLOCK, "sleep").mockImplementation((ms: number) => {
+      slept.push(ms);
+      now += ms;
+      return Promise.resolve();
+    });
+    return { slept };
+  }
 
   interface Seeded {
     repo: string;
@@ -117,8 +172,12 @@ describe("stamity run land", () => {
    * A repository whose `main` holds the manifest, then the run's branch with its record (`mode`) and ledger committed
    * and pushed to the bare remote; GitHub's routes answer for a clean, green, open pull request #7 from that branch.
    * `files` puts a case's own files in `main`'s seed commit, hook declarations and the scripts they name among them.
+   * TEST CHANGE, justified (review/73): the seed also writes the pull-request record a run verb writes on opening the
+   * draft, unless `prRecord` is false; `ledger: null` commits no ledger (review/83).
    */
-  async function seed(opts: { mode?: "attended" | "unattended"; ledger?: string; manifest?: string | null; files?: Record<string, string> } = {}): Promise<Seeded> {
+  async function seed(
+    opts: { mode?: "attended" | "unattended"; ledger?: string | null; manifest?: string | null; files?: Record<string, string>; prRecord?: boolean } = {},
+  ): Promise<Seeded> {
     const dir = getRoot().path(`case-${Math.random().toString(36).slice(2, 8)}`);
     const repo = join(dir, "repo");
     const remote = join(dir, "remote.git");
@@ -136,14 +195,16 @@ describe("stamity run land", () => {
     git(repo, ["push", "-q", remote, "HEAD:refs/heads/main"]);
     git(repo, ["switch", "-q", "-c", RUN_BRANCH]);
     await put(repo, `${RUN_DIR}/record.md`, `# Run ${RUN}\n\nStatus: in progress\nMode: ${opts.mode ?? "attended"}\nBranch: ${RUN_BRANCH}\nBase: ${base}\n`);
-    await put(repo, `${RUN_DIR}/ledger.jsonl`, opts.ledger ?? row(`${RUN}/review/1`, "Warning", "fixed"));
+    if (opts.ledger !== null) await put(repo, `${RUN_DIR}/ledger.jsonl`, opts.ledger ?? row(`${RUN}/review/1`, "Warning", "fixed"));
     await writeFile(join(repo, "a.txt"), "a\nb\n");
     git(repo, ["add", "-A"]);
     git(repo, ["commit", "-q", "-m", "work"]);
     git(repo, ["push", "-q", remote, `HEAD:refs/heads/${RUN_BRANCH}`]);
     const head = git(repo, ["rev-parse", "HEAD"]);
+    if (opts.prRecord !== false) await put(repo, PR_RECORD, prRecordText({ run: RUN, host: "github.com", owner: "o", repo: "r", number: 7 }));
     route("GET repos/o/r", { default_branch: "main" });
-    route("GET repos/o/r/pulls", [{ number: 7, head: { ref: RUN_BRANCH }, body: `The list.\n\n${MARKER}` }]);
+    route("GET user", { login: "runner" });
+    route("GET repos/o/r/pulls", [{ number: 7, html_url: "https://github.com/o/r/pull/7", head: { ref: RUN_BRANCH, label: `o:${RUN_BRANCH}` }, base: { ref: "main" }, body: `The list.\n\n${MARKER}` }]);
     route("GET repos/o/r/pulls/7", pull(head));
     route("GET repos/o/r/pulls/7/files", [{ filename: "a.txt" }, { filename: `${RUN_DIR}/record.md` }, { filename: `${RUN_DIR}/ledger.jsonl` }]);
     route("GET repos/o/r/rules/branches/main", [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "test" }] } }]);
@@ -166,6 +227,7 @@ describe("stamity run land", () => {
       body: `The list.\n\n${MARKER}`,
       mergeable_state: "clean",
       changed_files: 3,
+      user: { login: "runner" },
       ...over,
     };
   }
@@ -227,11 +289,15 @@ describe("stamity run land", () => {
 
   it("refuses one unresolved review thread, and a person's thread the run's login resolved", async () => {
     const { repo } = await seed();
-    const page = (node: unknown) => ({ data: { viewer: { login: "runner" }, repository: { pullRequest: { reviewThreads: { nodes: [node], pageInfo: { hasNextPage: false, endCursor: null } } } } } });
-    gh.threads = page({ isResolved: false, resolvedBy: null, comments: { nodes: [{ author: { __typename: "Bot", login: "codex" } }] } });
+    // TEST CHANGE, justified (review/71): the page carries every comment's author and their count; the verdicts are the same.
+    gh.threads = [threadsPage([thread(false, null, ["Bot", "codex"])])];
     expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: ["1 review thread is unresolved"] });
 
-    gh.threads = page({ isResolved: true, resolvedBy: { login: "runner" }, comments: { nodes: [{ author: { __typename: "User", login: "alice" } }] } });
+    gh.threads = [threadsPage([thread(true, "runner", ["User", "alice"])])];
+    expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: ["1 review thread is unresolved"] });
+
+    // review/71: a person's reply under an app's first comment holds the thread open once the run resolved it.
+    gh.threads = [threadsPage([thread(true, "runner", ["Bot", "codex"], ["User", "alice"])])];
     expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: ["1 review thread is unresolved"] });
     expect(kinds()).not.toContain("merge");
   });
@@ -418,6 +484,189 @@ describe("stamity run land", () => {
 
     await write(false);
     expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "landed" });
+  });
+
+  it("re-reads the threads on every --wait poll and merges nothing when the second read holds an open thread (review/72)", async () => {
+    const { repo, head } = await seed();
+    const { slept } = fakeClock();
+    const running = { total_count: 1, check_runs: [{ id: 1, name: "test", status: "in_progress", conclusion: null, app: { id: 15368 } }] };
+    const green = { total_count: 1, check_runs: [{ id: 1, name: "test", status: "completed", conclusion: "success", app: { id: 15368 } }] };
+    gh.routes.set(`GET repos/o/r/commits/${head}/check-runs`, [{ status: 200, json: running }, { status: 200, json: green }]);
+    gh.threads = [threadsPage([]), threadsPage([thread(false, null, ["User", "alice"])])];
+
+    const result = await run(repo, ["land", "--run", RUN, "--wait", "1"]);
+
+    expect(slept).toEqual([30_000]);
+    expect(result.doc).toMatchObject({ outcome: "refused", notDone: ["1 review thread is unresolved"], evidence: { threads: { unresolved: 1 } } });
+    expect(kinds()).not.toContain("merge");
+  });
+
+  it("re-reads the threads after the ready mark, just before the merge, and merges nothing on an open one (review/72, review/78)", async () => {
+    const { repo, head } = await seed();
+    route("GET repos/o/r/pulls/7", pull(head, { draft: true, mergeable_state: "draft" }));
+    gh.threads = [threadsPage([]), threadsPage([]), threadsPage([thread(true, "runner", ["Bot", "codex"], ["User", "alice"])])];
+
+    const result = await run(repo, ["land", "--run", RUN, "--ready"]);
+
+    expect(kinds()).toContain("ready");
+    expect(kinds()).not.toContain("merge");
+    expect(result.doc).toMatchObject({ outcome: "refused", notDone: ["1 review thread is unresolved"] });
+  });
+
+  it("reads the threads again just before the evidence line it writes, whose count is that last read's (review/78)", async () => {
+    const { repo } = await seed();
+    gh.threads = [threadsPage([]), threadsPage([])];
+
+    expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "landed", evidence: { threads: { unresolved: 0 } } });
+    const order = kinds();
+    const reads = order.flatMap((kind, index) => (kind === "threads" ? [index] : []));
+    expect(reads.length).toBeGreaterThanOrEqual(2);
+    expect(reads.at(-1)).toBeLessThan(order.indexOf("PATCH repos/o/r/pulls/7"));
+    const patched = gh.calls.find((call) => call.method === "PATCH")?.body as { body: string };
+    expect(patched.body).toContain(", 0 open threads,");
+  });
+
+  it("refuses a pull request another login opened, though branch, head and marker are the run's (review/73)", async () => {
+    const { repo, head } = await seed();
+    route("GET repos/o/r/pulls/7", pull(head, { user: { login: "alice" } }));
+
+    const result = await run(repo, ["land", "--run", RUN]);
+
+    expect(result.doc).toMatchObject({ outcome: "refused", notDone: ["pull request #7 was opened by alice, not by the run's login runner"] });
+    expect(kinds()).not.toContain("merge");
+  });
+
+  it("refuses with no pull-request record, a record of another number, and one that is a link (review/73)", async () => {
+    const missing = await seed({ prRecord: false });
+    expect((await run(missing.repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: [expect.stringMatching(/^no pull-request record \(stamity\/run-pull-request\.json in the git directory is missing/)] });
+
+    const other = await seed();
+    await writeFile(join(other.repo, PR_RECORD), prRecordText({ run: RUN, host: "github.com", owner: "o", repo: "r", number: 8 }));
+    expect((await run(other.repo, ["land", "--run", RUN])).doc).toMatchObject({
+      outcome: "refused",
+      notDone: [`the pull-request record names #8 of o/r for run ${RUN}, not #7 of o/r for run ${RUN}`],
+    });
+
+    const linked = await seed();
+    const elsewhere = join(dirname(linked.repo), "record.json");
+    await writeFile(elsewhere, prRecordText({ run: RUN, host: "github.com", owner: "o", repo: "r", number: 7 }));
+    await rm(join(linked.repo, PR_RECORD));
+    await symlink(elsewhere, join(linked.repo, PR_RECORD));
+    expect((await run(linked.repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: [expect.stringContaining("is not a regular file")] });
+    expect(kinds()).not.toContain("merge");
+  });
+
+  it("lands the pull request run checkpoint --pr recorded when it updated the draft (review/73)", async () => {
+    const { repo } = await seed({ prRecord: false });
+    await writeFile(join(repo, "a.txt"), "a\nb\nc\n");
+
+    const checkpoint = await run(repo, ["checkpoint", "--run", RUN, "--pr", "--title", "t", "--paths", "a.txt"]);
+    expect(checkpoint.doc).toMatchObject({ pushed: true, pr: { number: 7, how: "existing" }, notDone: [] });
+
+    const head = git(repo, ["rev-parse", "HEAD"]);
+    route("GET repos/o/r/pulls/7", pull(head));
+    route(`GET repos/o/r/commits/${head}/check-runs`, { total_count: 1, check_runs: [{ id: 1, name: "test", status: "completed", conclusion: "success", app: { id: 15368 } }] });
+    expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "landed", pr: { number: 7, head } });
+  });
+
+  it("asks for a diff editing a script a declaration on the default branch's tip names, landed after Base: and fetched (review/74, review/80)", async () => {
+    const { repo, remote, base } = await seed();
+    const other = join(dirname(repo), "other");
+    git(dirname(repo), ["clone", "-q", "-b", "main", remote, other]);
+    await put(other, ".stamity/hooks/guard.json", `${JSON.stringify({ hooks: [{ event: "pre_tool_use", command: ["node", "tools/guard.mjs"] }] })}\n`);
+    git(other, ["add", "-A"]);
+    git(other, ["commit", "-q", "-m", "a hook on main"]);
+    git(other, ["push", "-q", "origin", "HEAD:refs/heads/main"]);
+    const tip = git(other, ["rev-parse", "HEAD"]);
+    expect(tip).not.toBe(base);
+    route("GET repos/o/r/branches/main", { commit: { sha: tip }, protection: { enabled: false } });
+    route("GET repos/o/r/pulls/7/files", [{ filename: "a.txt" }, { filename: "tools/guard.mjs" }, { filename: "b" }]);
+    expect(() => git(repo, ["cat-file", "-e", `${tip}^{commit}`])).toThrow();
+
+    const result = await run(repo, ["land", "--run", RUN]);
+
+    expect(result.doc).toMatchObject({ outcome: "asks", asks: { act: "pr-merge", reason: expect.stringContaining("tools/guard.mjs") }, evidence: { held: ["tools/guard.mjs"] } });
+    expect(kinds()).not.toContain("merge");
+  });
+
+  it("words an unreadable hook declaration's ask with the next step, never a restart of the run (review/81)", async () => {
+    const { repo } = await seed({ files: { ".stamity/hooks/broken.json": "{ not json\n" } });
+
+    const result = await run(repo, ["land", "--run", RUN]);
+
+    expect(result.doc).toMatchObject({ outcome: "asks", asks: { reason: expect.stringContaining("fix the declaration on main, then run land again, or a person decides") } });
+    expect(JSON.stringify(result.doc)).not.toMatch(/start the run again|pushes nothing/);
+  });
+
+  it("starts every gh call with the one program it checked (review/75)", async () => {
+    const { repo } = await seed();
+    gh.program = "/opt/tools/bin/gh";
+
+    expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "landed" });
+    expect(gh.calls.length).toBeGreaterThan(5);
+    expect(new Set(gh.calls.map((call) => call.program))).toEqual(new Set(["/opt/tools/bin/gh"]));
+  });
+
+  it("after the ready mark, reads the pull request again until its merge state is computed, then merges (review/79)", async () => {
+    const { repo, head } = await seed();
+    const { slept } = fakeClock();
+    route("GET repos/o/r/pulls/7", pull(head, { draft: true, mergeable_state: "draft" }));
+    gh.afterReady = ["unknown", null, "clean"];
+
+    const result = await run(repo, ["land", "--run", RUN, "--ready"]);
+
+    expect(result.doc).toMatchObject({ outcome: "landed" });
+    expect(slept).toEqual([5_000, 5_000]);
+  });
+
+  it("after the ready mark, refuses a merge state still not computed after 60 s, whatever --wait says (review/79)", async () => {
+    const { repo, head } = await seed();
+    const { slept } = fakeClock();
+    route("GET repos/o/r/pulls/7", pull(head, { draft: true, mergeable_state: "draft" }));
+    gh.afterReady = ["unknown"];
+
+    const result = await run(repo, ["land", "--run", RUN, "--ready"]);
+
+    expect(result.doc).toMatchObject({ outcome: "refused", notDone: ["mergeable_state is not computed yet, run it again"] });
+    expect(slept.reduce((sum, ms) => sum + ms, 0)).toBe(60_000);
+    expect(kinds()).not.toContain("merge");
+  });
+
+  it("previews would-land under --dry-run, exit 0, writing and merging nothing, and runs the merge-state check (review/82)", async () => {
+    const { repo, head } = await seed();
+
+    const result = await run(repo, ["land", "--run", RUN, "--dry-run"]);
+
+    expect(result.code).toBe(0);
+    expect(result.doc).toMatchObject({ outcome: "would-land", dryRun: true, notDone: [] });
+    expect(kinds().filter((kind) => !kind.startsWith("GET ") && kind !== "threads")).toEqual([]);
+    expect(await record(repo)).not.toMatch(/ land: /);
+
+    route("GET repos/o/r/pulls/7", pull(head, { mergeable_state: "blocked" }));
+    expect((await run(repo, ["land", "--run", RUN, "--dry-run"])).doc).toMatchObject({ outcome: "refused", notDone: ["mergeable_state is blocked: an admin merge past the branch's rules asks"] });
+
+    route("GET repos/o/r/pulls/7", pull(head, { draft: true, mergeable_state: "draft" }));
+    const draft = await run(repo, ["land", "--run", RUN, "--dry-run", "--ready"]);
+    expect(draft.doc).toMatchObject({ outcome: "refused", notDone: ["mergeable_state reads draft: GitHub computes it after the ready mark, which a dry run does not make"] });
+    expect(kinds()).not.toContain("ready");
+  });
+
+  it("refuses a ledger missing from the head commit (review/83)", async () => {
+    const { repo } = await seed({ ledger: null });
+
+    expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({
+      outcome: "refused",
+      notDone: [`the ledger at ${git(repo, ["rev-parse", "HEAD"])} does not read: ${RUN_DIR}/ledger.jsonl is missing from the commit`],
+    });
+    expect(kinds()).not.toContain("merge");
+  });
+
+  it("refuses a gh that resolves inside the work tree before any GitHub call (review/83)", async () => {
+    const { repo } = await seed();
+    gh.program = join(repo, "bin", "gh");
+
+    expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: ["gh resolves to a program inside the work tree, whose answers the run could write"] });
+    expect(gh.calls).toEqual([]);
   });
 
   it("takes --title, --paths, --wait past 9 and --method with --fast-forward as usage errors", async () => {

@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { isAbsolute } from "node:path";
 import {
   fileSystemProbe,
   isNodeModulesBin,
@@ -67,6 +68,11 @@ export interface GhApiOptions {
   env?: NodeJS.ProcessEnv;
   /** Wall time before the call is stopped; 60 s when omitted. */
   timeoutMs?: number;
+  /**
+   * review/75: the absolute path of the `gh` to start, one {@link ghProgramPath} resolved and the caller checked;
+   * resolved again from `PATH` when omitted. So a caller that vetted one program runs that program on every call.
+   */
+  program?: string;
 }
 
 /** A call {@link ghApi} refused before `gh` started; `code` is `GH_REFUSED`. */
@@ -236,7 +242,8 @@ function startGh(build: () => string[], body: unknown, opts: GhApiOptions): Prom
   }
   const cwd = opts.cwd ?? process.cwd();
   const env = ghEnv(opts.env ?? process.env);
-  const gh = ghProgram(cwd, env);
+  if (opts.program !== undefined && !isAbsolute(opts.program)) return Promise.reject(refusal("gh: the program to start is not an absolute path"));
+  const gh = opts.program ?? ghProgram(cwd, env);
   if (gh === null) return Promise.reject(programNotFound("gh", "spawn", args));
   const input = body === undefined ? "" : JSON.stringify(body);
   return new Promise((resolvePromise, rejectPromise) => {
@@ -318,10 +325,11 @@ export function ghMergePull(request: PullRef & { sha: string; method: MergeMetho
 
 /**
  * The one review-thread read (a constant document): the authenticated login, then per thread whether it is resolved,
- * who resolved it, and who wrote its first comment and whether that is a person (`User`) or an app (`Bot`).
+ * who resolved it, and every comment's author (review/71), each a person (`User`) or an app (`Bot`), with the
+ * thread's comment count, so a thread holding more comments than one page reads as not read whole.
  */
 export const REVIEW_THREADS_QUERY =
-  "query($owner:String!,$repo:String!,$number:Int!,$after:String){viewer{login}repository(owner:$owner,name:$repo){pullRequest(number:$number){reviewThreads(first:100,after:$after){nodes{isResolved resolvedBy{login}comments(first:1){nodes{author{__typename login}}}}pageInfo{hasNextPage endCursor}}}}}";
+  "query($owner:String!,$repo:String!,$number:Int!,$after:String){viewer{login}repository(owner:$owner,name:$repo){pullRequest(number:$number){reviewThreads(first:100,after:$after){nodes{isResolved resolvedBy{login}comments(first:100){totalCount nodes{author{__typename login}}}}pageInfo{hasNextPage endCursor}}}}}";
 
 /** The one mutation: mark the pull request with this node id ready for review (a constant document). */
 export const MARK_READY_MUTATION =

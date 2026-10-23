@@ -46,6 +46,7 @@ const PR: LandPr = {
   body: `The morning list.\n\n${MARKER}`,
   mergeableState: "clean",
   changedFiles: 2,
+  author: "runner",
 };
 
 const GREEN: CheckEvidence = { green: ["test"], pending: [], failing: [], missing: [] };
@@ -53,7 +54,7 @@ const GREEN: CheckEvidence = { green: ["test"], pending: [], failing: [], missin
 function input(over: Partial<LandInput> = {}, pr: Partial<LandPr> = {}): LandInput {
   return {
     pr: { ...PR, ...pr },
-    own: { repo: "o/r", runBranch: "stamity/2026-10-23_overnight", head: SHA, originTip: SHA, marker: MARKER, defaultBranch: "main" },
+    own: { repo: "o/r", runBranch: "stamity/2026-10-23_overnight", head: SHA, originTip: SHA, marker: MARKER, defaultBranch: "main", viewer: "runner" },
     ready: false,
     setting: resolveAutonomy({}),
     files: { paths: ["src/a.ts", "notes/plan.txt"], complete: true },
@@ -146,16 +147,28 @@ describe("checkEvidence", () => {
 });
 
 describe("unresolvedThreads", () => {
+  // TEST CHANGE, justified (review/71, REQ-FLOW-132): a thread now carries every comment's author, not the first
+  // alone, so the cases are restated in that shape; each of the old six keeps its verdict, and two new ones follow.
+  const bot = { login: "codex", person: false };
+  const alice = { login: "alice", person: true };
+  const runner = { login: "runner", person: true };
   it("counts open threads and a person's thread the run's login resolved, not an app's it resolved", () => {
     const threads = [
-      { isResolved: false, resolvedBy: null, firstAuthor: { login: "bot", person: false } },
-      { isResolved: true, resolvedBy: "runner", firstAuthor: { login: "alice", person: true } },
-      { isResolved: true, resolvedBy: "runner", firstAuthor: { login: "codex", person: false } },
-      { isResolved: true, resolvedBy: "alice", firstAuthor: { login: "alice", person: true } },
-      { isResolved: true, resolvedBy: "Runner", firstAuthor: { login: "runner", person: true } },
-      { isResolved: true, resolvedBy: "runner", firstAuthor: null },
+      { isResolved: false, resolvedBy: null, authors: [{ login: "bot", person: false }], complete: true },
+      { isResolved: true, resolvedBy: "runner", authors: [alice], complete: true },
+      { isResolved: true, resolvedBy: "runner", authors: [bot], complete: true },
+      { isResolved: true, resolvedBy: "alice", authors: [alice], complete: true },
+      { isResolved: true, resolvedBy: "Runner", authors: [runner], complete: true },
+      { isResolved: true, resolvedBy: "runner", authors: [{ login: null, person: true }], complete: true },
     ];
     expect(unresolvedThreads(threads, "runner")).toBe(3);
+  });
+
+  it("counts a thread the run resolved that holds a person's reply under an app's or the run's first comment, or did not read whole (review/71)", () => {
+    expect(unresolvedThreads([{ isResolved: true, resolvedBy: "runner", authors: [bot, alice], complete: true }], "runner")).toBe(1);
+    expect(unresolvedThreads([{ isResolved: true, resolvedBy: "runner", authors: [runner, bot, alice], complete: true }], "runner")).toBe(1);
+    expect(unresolvedThreads([{ isResolved: true, resolvedBy: "runner", authors: [bot, runner], complete: false }], "runner")).toBe(1);
+    expect(unresolvedThreads([{ isResolved: true, resolvedBy: "runner", authors: [bot, runner], complete: true }], "runner")).toBe(0);
   });
 });
 
@@ -167,14 +180,19 @@ describe("the answers' parsers", () => {
         repository: {
           pullRequest: {
             reviewThreads: {
-              nodes: [{ isResolved: true, resolvedBy: { login: "runner" }, comments: { nodes: [{ author: { __typename: "User", login: "alice" } }] } }],
+              nodes: [{ isResolved: true, resolvedBy: { login: "runner" }, comments: { totalCount: 2, nodes: [{ author: { __typename: "Bot", login: "codex" } }, { author: { __typename: "User", login: "alice" } }] } }],
               pageInfo: { hasNextPage: true, endCursor: "Y3Vyc29y" },
             },
           },
         },
       },
     };
-    expect(parseThreadsPage(page)).toEqual({ viewer: "runner", threads: [{ isResolved: true, resolvedBy: "runner", firstAuthor: { login: "alice", person: true } }], next: "Y3Vyc29y" });
+    // TEST CHANGE, justified (review/71): the page carries every comment's author and the comment count, read as `authors` and `complete`.
+    expect(parseThreadsPage(page)).toEqual({
+      viewer: "runner",
+      threads: [{ isResolved: true, resolvedBy: "runner", authors: [{ login: "codex", person: false }, { login: "alice", person: true }], complete: true }],
+      next: "Y3Vyc29y",
+    });
     expect(parseThreadsPage({ errors: [{ message: "x" }] })).toBeNull();
   });
 
@@ -206,6 +224,15 @@ describe("decideLand", () => {
     expect(decideLand(input({}, { state: "closed", merged: true }))).toEqual({ outcome: "already-landed" });
   });
 
+  it("refuses a pull request another login opened, though branch, head and marker are the run's (review/73)", () => {
+    expect(decideLand(input({}, { author: "alice" }))).toEqual({
+      outcome: "refused",
+      reasons: ["pull request #7 was opened by alice, not by the run's login runner"],
+      pending: false,
+    });
+    expect(decideLand(input({}, { author: "alice", state: "closed", merged: true }))).toMatchObject({ outcome: "refused" });
+  });
+
   it("refuses a pull request that is not the run's own: a fork, another head, no marker, origin elsewhere", () => {
     expect(decideLand(input({}, { headRepo: "fork/r" }))).toMatchObject({ outcome: "refused", reasons: [expect.stringContaining("fork")] });
     expect(decideLand(input({}, { headSha: "b".repeat(40) }))).toMatchObject({ outcome: "refused", reasons: [expect.stringContaining("is not HEAD")] });
@@ -231,6 +258,13 @@ describe("decideLand", () => {
       outcome: "refused",
       reasons: [`required check e2e is still running on ${SHA}`, "mergeable_state is not computed yet, run it again"],
       pending: true,
+    });
+  });
+
+  it("refuses a draft's merge state as not computed before a ready mark, for the dry run's decision (review/82)", () => {
+    expect(decideLand(input({}, { mergeableState: "draft" }))).toMatchObject({
+      outcome: "refused",
+      reasons: ["mergeable_state reads draft: GitHub computes it after the ready mark, which a dry run does not make"],
     });
   });
 

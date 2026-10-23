@@ -157,12 +157,29 @@ const NEXT_STEP = "; fix it on the base branch, then start the run again from it
  * declaration names (review/187, review/197); a run that rewrites its own record head's `Base:`, as it can its `Mode:`.
  */
 export async function hookPathsAt(reads: HookPathReads, prefix: string, base: string): Promise<string[] | string> {
+  const read = await hookPathsRead(reads, prefix, base);
+  if (Array.isArray(read)) return read;
+  // review/205: the refusal names the person's next step, since the fix lands on the base branch, not on the run's.
+  return read.subject === null
+    ? `hold refused: the hook declarations at Base: could not be read (${read.why}), so the hook scripts they name are unknown and the run pushes nothing${NEXT_STEP}`
+    : `hold refused: ${read.subject} at Base: ${read.why}, so the hook scripts it names are unknown and the run pushes nothing${NEXT_STEP}`;
+}
+
+/** Why the hook paths at a commit are not known: the file or folder it stopped at (`null` for a failed read) and why. */
+export interface HookReadRefusal {
+  subject: string | null;
+  why: string;
+}
+
+/**
+ * {@link hookPathsAt}'s read with its refusal unworded, so each caller states its own next step: the hold's names the
+ * base branch and a restart, `run land`'s (review/81) the branch that holds the declaration and another land call.
+ */
+export async function hookPathsRead(reads: HookPathReads, prefix: string, base: string): Promise<string[] | HookReadRefusal> {
   const { git, scratch: folder } = reads;
   const at = baseReader(git, base, prefix);
-  // review/205: the refusal names the person's next step, since the fix lands on the base branch, not on the run's.
-  const unknown = (path: string, why: string): string =>
-    `hold refused: ${path} at Base: ${why}, so the hook scripts it names are unknown and the run pushes nothing${NEXT_STEP}`;
-  const json = async (path: string, id: string): Promise<{ document: unknown } | { refused: string }> => {
+  const unknown = (path: string, why: string): HookReadRefusal => ({ subject: path, why });
+  const json = async (path: string, id: string): Promise<{ document: unknown } | { refused: HookReadRefusal }> => {
     const read = await git(["cat-file", "blob", id]);
     if (read.code !== 0) return { refused: unknown(path, `could not be read (git cat-file answered ${read.code})`) };
     try {
@@ -291,7 +308,7 @@ export async function hookPathsAt(reads: HookPathReads, prefix: string, base: st
     }
     return [...held].toSorted();
   } catch (cause) {
-    return `hold refused: the hook declarations at Base: could not be read (${cause instanceof Error ? firstLine(cause.message) : "read failed"}), so the hook scripts they name are unknown and the run pushes nothing${NEXT_STEP}`;
+    return { subject: null, why: cause instanceof Error ? firstLine(cause.message) : "read failed" };
   } finally {
     folder.remove(scratch);
   }
