@@ -3102,3 +3102,28 @@ describe("the engine's CLI file read by its path (a4, review/53, the declared de
     expect(personOnlyVerdict(command, ctx), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
   });
 });
+
+describe("a push refspec whose literal text rules out the default branch (a4, review/56)", () => {
+  const TAGGED_FEATURE = { defaultBranches: ["trunk"], currentBranch: "feat/x", tags: ["v1.0.0"] };
+
+  // Red: every refspec holding those characters read as a push to the default branch, the run verb's own included.
+  it.each([
+    ["the run verb's push of a branch name nesting substitution characters", `git push origin HEAD:refs/heads/stamity/x${'"$('.repeat(4)}y`],
+    ["a branch name holding a group", "git push origin HEAD:refs/heads/feat(x)"],
+    ["a branch name holding a dollar after a literal folder", "git push origin feat/a$b"],
+  ])("runs %s", (_, command) => {
+    expect(personOnlyVerdict(command, TAGGED_FEATURE), command).toEqual({ deny: false });
+  });
+
+  it.each([
+    ["an expansion with no literal text before it", "git push origin \"$(git branch --show-current)\""],
+    ["a literal prefix of the default branch", "git push origin HEAD:tru$(echo nk)"],
+    ["a literal prefix of the ref namespace", "git push origin HEAD:refs/he$(echo ads/trunk)"],
+    ["a literal prefix of HEAD", "git push origin H$(echo EAD)"],
+    ["an expansion before the colon", "git push origin $(echo HEAD:trunk)"],
+    ["a literal prefix of a local tag", "git push origin v1$(echo .0.0)"],
+    ["a literal prefix of main, always a default", "git push origin HEAD:ma$(echo in)"],
+  ])("asks for %s as a push to the default branch", (_, command) => {
+    expect(personOnlyVerdict(command, TAGGED_FEATURE), command).toMatchObject({ deny: true, rule: "push-default", ask: true });
+  });
+});

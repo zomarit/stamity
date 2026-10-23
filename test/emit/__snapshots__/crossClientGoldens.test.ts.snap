@@ -885,7 +885,8 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 							}
 						};
 						nested.push(text.slice(start, j));
-						hide(word.length, word.length + Math.min(j + 1, text.length) - i, "e");
+						// An unclosed substitution is a syntax error the shell runs nothing for, so it fills nothing in (review/56).
+						hide(word.length, word.length + Math.min(j + 1, text.length) - i, j < text.length ? "e" : "");
 						word += text.slice(i, Math.min(j + 1, text.length));
 						i = j + 1;
 					} else {
@@ -951,7 +952,8 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 					}
 				};
 				nested.push(text.slice(start, j));
-				hide(word.length, word.length + Math.min(j + 1, text.length) - i, ch === "(" ? "p" : "es");
+				// An unclosed substitution or group is a syntax error the shell runs nothing for, so it fills nothing in (review/56).
+				hide(word.length, word.length + Math.min(j + 1, text.length) - i, j >= text.length ? "" : ch === "(" ? "p" : "es");
 				word += text.slice(i, Math.min(j + 1, text.length));
 				inWord = true;
 				i = j + 1;
@@ -1745,8 +1747,28 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				return deny("push-default", "A matching push, the default branch among them");
 			};
 			// A refspec the line cannot show (a substitution, a variable, a PowerShell group, build/46) may name the default
-			// branch, so it reads as a push to it.
-			if (/[$\`(]/.test(spec)) return deny("push-default", "A push whose refspec the line cannot show (a substitution, a variable or a group)");
+			// branch, so it reads as a push to it, unless the literal text before the expansion rules that out (review/56):
+			// a destination opening on \`stamity/x\` cannot be \`main\`, so the run verb's own push of a git-legal branch name
+			// holding those characters is read as the branch it names. An expansion before the colon may hold the colon, so
+			// the destination is then unknown; a prefix that may still spell \`refs/heads/\`, \`heads/\`, \`HEAD\`, \`@\`, a default
+			// branch or a local tag reads as the default branch's push.
+			const hiddenAt = spec.search(/[$\`(]/);
+			if (hiddenAt !== -1) {
+				const colon = spec.indexOf(":");
+				const known = (colon === -1 ? spec.slice(0, hiddenAt) : colon < hiddenAt ? spec.slice(colon + 1, hiddenAt) : "").toLowerCase();
+				const bare = known.replace(/^(refs\\/)?heads\\//, "");
+				const may = (candidate) => candidate.toLowerCase().startsWith(bare);
+				if (known === "" || [
+					"refs/heads/",
+					"heads/",
+					"head",
+					"@",
+					"refs/tags/",
+					"tags/"
+				].some((form) => form.startsWith(known)) || [...defaults].some(may) || ctx.tags.some((tag) => may(tag.replace(/^refs\\/tags\\//i, "")))) {
+					return deny("push-default", "A push whose refspec the line cannot show (a substitution, a variable or a group)");
+				}
+			};
 			if (name === "head" || name === "@" ? onDeploying : deploys(name)) {
 				deny("push-deploying", "A push to a branch the repository names as deploying");
 			};
@@ -2964,7 +2986,8 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 							}
 						};
 						nested.push(text.slice(start, j));
-						hide(word.length, word.length + Math.min(j + 1, text.length) - i, "e");
+						// An unclosed substitution is a syntax error the shell runs nothing for, so it fills nothing in (review/56).
+						hide(word.length, word.length + Math.min(j + 1, text.length) - i, j < text.length ? "e" : "");
 						word += text.slice(i, Math.min(j + 1, text.length));
 						i = j + 1;
 					} else {
@@ -3030,7 +3053,8 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 					}
 				};
 				nested.push(text.slice(start, j));
-				hide(word.length, word.length + Math.min(j + 1, text.length) - i, ch === "(" ? "p" : "es");
+				// An unclosed substitution or group is a syntax error the shell runs nothing for, so it fills nothing in (review/56).
+				hide(word.length, word.length + Math.min(j + 1, text.length) - i, j >= text.length ? "" : ch === "(" ? "p" : "es");
 				word += text.slice(i, Math.min(j + 1, text.length));
 				inWord = true;
 				i = j + 1;
@@ -9465,7 +9489,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".claude/hooks/stamity/stamity-agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".claude/hooks/stamity/stamity-cloud-readiness.mjs": "acef8b976c3cf0dc29df1ab1584458bc83c66ab1e7284e28df62af60f1311c91 11348 bytes",
   ".claude/hooks/stamity/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "c998493ec3578bc8f4cb6621f0a677d3ed4098e175d8bc9a1d00017018d89d96 199226 bytes",
+  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "94474feb9b19c0a85e197be63a50457d99739159b911eda8678facbe16cba427 200897 bytes",
   ".claude/hooks/stamity/stamity-pre-tool-use-guard.mjs": "752f24a46db0da9f933bcb313a00ef8f6b12b8a655241b9257e40f64d9776965 20816 bytes",
   ".claude/hooks/stamity/stamity-review-gate.mjs": "a410def5d44fde83869b3c2c98db318d470b68a54101e1b20eddfb026f8077b1 51137 bytes",
   ".claude/hooks/stamity/stamity-session-start.mjs": "c807b92eeff34b3e194a0f7ae843c2945d5663d56cdb937786454a6402df3f31 51786 bytes",
@@ -9587,12 +9611,12 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".mcp.json": "f4e65233eea1ba936b61b16f2ee2d90f84a2510436d58f6484d872f507314f2f 387 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "2289a10826a26514f48c32abd5600a63810122eb452187c338f03cd02bb1b08a 199222 bytes",
+  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "c6f6d979c58e6e452a3ba867ee4d47c2da71c2787d2aa59a1ec8a06961875bcc 200893 bytes",
   ".stamity/generated/hooks/codex/stamity-portable-hook.mjs": "ef3b63ada64fdbc5860b8bd483568a6cc32875a5747de7acabcf56dccfa3b70c 20343 bytes",
   ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/codex/stamity-session-start.mjs": "1111332a1630ed4dcb42e421b2326c5dd423a358e3c92bf8cb367e212a7a996d 51799 bytes",
   ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "2532acd0b3cad9e8218a377e36143e1f1e22254c0bf71e42a33f3dd5bc5b23d0 201976 bytes",
+  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "c9999bef157cd3e2300fc6c889df903eaffc4700868817ba631ca64cbfe2bd73 203647 bytes",
   ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "b67634419bfa652a30fba0cd2f1402fc61ee89250dfe137cca7d2785f4a427cc 21755 bytes",
   ".stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "9f930fcd797ef464e7f4cb4c40e59b4976d65199a5c974fb67ca7624e5d0287c 56602 bytes",
@@ -9600,7 +9624,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/generated/hooks/cursor/stamity-context-once.mjs": "c74c1b3d2cd908b170c48a8813bd05cc91f058210789a9b2f815b731a2eb6ccd 31773 bytes",
   ".stamity/generated/hooks/cursor/stamity-cursor-continue.mjs": "08bc51855553f4104a80fbe1ea94ba36a95173e005846467e4af5c643bb26a60 9500 bytes",
   ".stamity/generated/hooks/cursor/stamity-model-pins.mjs": "fc71eb522ff67fd73ff00820d0e59495bca188d2e30fc9a26ce85e89fff6fdd5 3813 bytes",
-  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "33a57076ffad675e7eaf090cf81dc3320611a532b5c54f8d4f03123c211dfb90 199258 bytes",
+  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "f687a9731db650352ae96c7be4aefcf2e9109a7d98f3c897593f6268619df2a6 200929 bytes",
   ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs": "4bc31f0f2dbdec29a6537dab00d8df9255641b7ee5bed365d3020ce6ac72c12c 20344 bytes",
   ".stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "1111332a1630ed4dcb42e421b2326c5dd423a358e3c92bf8cb367e212a7a996d 51799 bytes",
@@ -9612,7 +9636,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "d90ad521c7fbd50c82d16583fd603d7ce76ad327aab8b14c76c45e756cf44d8f 94261 bytes",
+  ".stamity/manifest.json": "a6214e786c5ce5348f1a7d7681d3979d7d78e1def4011968fab5f84d67b5d3dd 94261 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "6b5b5bebfd779fe5b513cd8c2c41fa3b4dd70826435e9df9c70076ba48c29b98 6548 bytes",
@@ -10518,7 +10542,8 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 							}
 						};
 						nested.push(text.slice(start, j));
-						hide(word.length, word.length + Math.min(j + 1, text.length) - i, "e");
+						// An unclosed substitution is a syntax error the shell runs nothing for, so it fills nothing in (review/56).
+						hide(word.length, word.length + Math.min(j + 1, text.length) - i, j < text.length ? "e" : "");
 						word += text.slice(i, Math.min(j + 1, text.length));
 						i = j + 1;
 					} else {
@@ -10584,7 +10609,8 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 					}
 				};
 				nested.push(text.slice(start, j));
-				hide(word.length, word.length + Math.min(j + 1, text.length) - i, ch === "(" ? "p" : "es");
+				// An unclosed substitution or group is a syntax error the shell runs nothing for, so it fills nothing in (review/56).
+				hide(word.length, word.length + Math.min(j + 1, text.length) - i, j >= text.length ? "" : ch === "(" ? "p" : "es");
 				word += text.slice(i, Math.min(j + 1, text.length));
 				inWord = true;
 				i = j + 1;
@@ -11378,8 +11404,28 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				return deny("push-default", "A matching push, the default branch among them");
 			};
 			// A refspec the line cannot show (a substitution, a variable, a PowerShell group, build/46) may name the default
-			// branch, so it reads as a push to it.
-			if (/[$\`(]/.test(spec)) return deny("push-default", "A push whose refspec the line cannot show (a substitution, a variable or a group)");
+			// branch, so it reads as a push to it, unless the literal text before the expansion rules that out (review/56):
+			// a destination opening on \`stamity/x\` cannot be \`main\`, so the run verb's own push of a git-legal branch name
+			// holding those characters is read as the branch it names. An expansion before the colon may hold the colon, so
+			// the destination is then unknown; a prefix that may still spell \`refs/heads/\`, \`heads/\`, \`HEAD\`, \`@\`, a default
+			// branch or a local tag reads as the default branch's push.
+			const hiddenAt = spec.search(/[$\`(]/);
+			if (hiddenAt !== -1) {
+				const colon = spec.indexOf(":");
+				const known = (colon === -1 ? spec.slice(0, hiddenAt) : colon < hiddenAt ? spec.slice(colon + 1, hiddenAt) : "").toLowerCase();
+				const bare = known.replace(/^(refs\\/)?heads\\//, "");
+				const may = (candidate) => candidate.toLowerCase().startsWith(bare);
+				if (known === "" || [
+					"refs/heads/",
+					"heads/",
+					"head",
+					"@",
+					"refs/tags/",
+					"tags/"
+				].some((form) => form.startsWith(known)) || [...defaults].some(may) || ctx.tags.some((tag) => may(tag.replace(/^refs\\/tags\\//i, "")))) {
+					return deny("push-default", "A push whose refspec the line cannot show (a substitution, a variable or a group)");
+				}
+			};
 			if (name === "head" || name === "@" ? onDeploying : deploys(name)) {
 				deny("push-deploying", "A push to a branch the repository names as deploying");
 			};
@@ -12597,7 +12643,8 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 							}
 						};
 						nested.push(text.slice(start, j));
-						hide(word.length, word.length + Math.min(j + 1, text.length) - i, "e");
+						// An unclosed substitution is a syntax error the shell runs nothing for, so it fills nothing in (review/56).
+						hide(word.length, word.length + Math.min(j + 1, text.length) - i, j < text.length ? "e" : "");
 						word += text.slice(i, Math.min(j + 1, text.length));
 						i = j + 1;
 					} else {
@@ -12663,7 +12710,8 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 					}
 				};
 				nested.push(text.slice(start, j));
-				hide(word.length, word.length + Math.min(j + 1, text.length) - i, ch === "(" ? "p" : "es");
+				// An unclosed substitution or group is a syntax error the shell runs nothing for, so it fills nothing in (review/56).
+				hide(word.length, word.length + Math.min(j + 1, text.length) - i, j >= text.length ? "" : ch === "(" ? "p" : "es");
 				word += text.slice(i, Math.min(j + 1, text.length));
 				inWord = true;
 				i = j + 1;
@@ -17769,7 +17817,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".claude/hooks/stamity/stamity-agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".claude/hooks/stamity/stamity-cloud-readiness.mjs": "acef8b976c3cf0dc29df1ab1584458bc83c66ab1e7284e28df62af60f1311c91 11348 bytes",
   ".claude/hooks/stamity/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "c998493ec3578bc8f4cb6621f0a677d3ed4098e175d8bc9a1d00017018d89d96 199226 bytes",
+  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "94474feb9b19c0a85e197be63a50457d99739159b911eda8678facbe16cba427 200897 bytes",
   ".claude/hooks/stamity/stamity-pre-tool-use-guard.mjs": "752f24a46db0da9f933bcb313a00ef8f6b12b8a655241b9257e40f64d9776965 20816 bytes",
   ".claude/hooks/stamity/stamity-review-gate.mjs": "a410def5d44fde83869b3c2c98db318d470b68a54101e1b20eddfb026f8077b1 51137 bytes",
   ".claude/hooks/stamity/stamity-session-start.mjs": "c807b92eeff34b3e194a0f7ae843c2945d5663d56cdb937786454a6402df3f31 51786 bytes",
@@ -17825,7 +17873,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "a2c5c7f9dca10a244a98b8b39fb00d15f598a3fa60765e620b726759741f00b3 28322 bytes",
+  ".stamity/manifest.json": "be482e1c093e72c95d05ade7bafed0b543555710d219936dad4752426f58d7d7 28322 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
   "CLAUDE.md": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
@@ -18687,7 +18735,7 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".gitignore": "14c0a079e08124240ec8c713fa4c32870948842d586a5829a19172c02ddd0482 204 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "2289a10826a26514f48c32abd5600a63810122eb452187c338f03cd02bb1b08a 199222 bytes",
+  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "c6f6d979c58e6e452a3ba867ee4d47c2da71c2787d2aa59a1ec8a06961875bcc 200893 bytes",
   ".stamity/generated/hooks/codex/stamity-portable-hook.mjs": "ef3b63ada64fdbc5860b8bd483568a6cc32875a5747de7acabcf56dccfa3b70c 20343 bytes",
   ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/codex/stamity-session-start.mjs": "1111332a1630ed4dcb42e421b2326c5dd423a358e3c92bf8cb367e212a7a996d 51799 bytes",
@@ -18696,7 +18744,7 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "14e2bd2099455aaf9bf80d225b0ad5d6c10d7d0759789383e5ef7650b84240bf 22156 bytes",
+  ".stamity/manifest.json": "f2501f4e8beb2b4d9dfba261c998e4f117ca95814119b86ed113ab8b7984e7ee 22156 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
   "AGENTS.override.md": "122504f41cc40a99c65cba4995c228bf4a5137d738324bbe3a847c6aaa5192db 25872 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
@@ -19037,7 +19085,7 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".gitignore": "14c0a079e08124240ec8c713fa4c32870948842d586a5829a19172c02ddd0482 204 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "2532acd0b3cad9e8218a377e36143e1f1e22254c0bf71e42a33f3dd5bc5b23d0 201976 bytes",
+  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "c9999bef157cd3e2300fc6c889df903eaffc4700868817ba631ca64cbfe2bd73 203647 bytes",
   ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "b67634419bfa652a30fba0cd2f1402fc61ee89250dfe137cca7d2785f4a427cc 21755 bytes",
   ".stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "9f930fcd797ef464e7f4cb4c40e59b4976d65199a5c974fb67ca7624e5d0287c 56602 bytes",
@@ -19046,7 +19094,7 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "b7bfad4d7de51e1edd85b20e4049116cf52a5565daae88d8f635e2c90c3353a5 20257 bytes",
+  ".stamity/manifest.json": "63e00800b35de07b15e72ff6831ca6dae74e909f857a8fbe48a4ae2ad682490a 20257 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
@@ -19662,7 +19710,7 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".stamity/generated/hooks/cursor/stamity-context-once.mjs": "c74c1b3d2cd908b170c48a8813bd05cc91f058210789a9b2f815b731a2eb6ccd 31773 bytes",
   ".stamity/generated/hooks/cursor/stamity-cursor-continue.mjs": "08bc51855553f4104a80fbe1ea94ba36a95173e005846467e4af5c643bb26a60 9500 bytes",
   ".stamity/generated/hooks/cursor/stamity-model-pins.mjs": "fc71eb522ff67fd73ff00820d0e59495bca188d2e30fc9a26ce85e89fff6fdd5 3813 bytes",
-  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "33a57076ffad675e7eaf090cf81dc3320611a532b5c54f8d4f03123c211dfb90 199258 bytes",
+  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "f687a9731db650352ae96c7be4aefcf2e9109a7d98f3c897593f6268619df2a6 200929 bytes",
   ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs": "4bc31f0f2dbdec29a6537dab00d8df9255641b7ee5bed365d3020ce6ac72c12c 20344 bytes",
   ".stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "1111332a1630ed4dcb42e421b2326c5dd423a358e3c92bf8cb367e212a7a996d 51799 bytes",
@@ -19671,7 +19719,7 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "b2944043480144c7a2d4a80fb0739af4d6daa0b7a245f1e25ac46bb79578587f 24101 bytes",
+  ".stamity/manifest.json": "03c487b04524adc138f57aadb1d7a5cf74d28b291fa1a3bca6156d18833ef275 24101 bytes",
   "AGENTS.md": "6b5b5bebfd779fe5b513cd8c2c41fa3b4dd70826435e9df9c70076ba48c29b98 6548 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",

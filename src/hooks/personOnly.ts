@@ -605,7 +605,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
               }
             }
             nested.push(text.slice(start, j));
-            hide(word.length, word.length + Math.min(j + 1, text.length) - i, "e");
+            // An unclosed substitution is a syntax error the shell runs nothing for, so it fills nothing in (review/56).
+            hide(word.length, word.length + Math.min(j + 1, text.length) - i, j < text.length ? "e" : "");
             word += text.slice(i, Math.min(j + 1, text.length));
             i = j + 1;
           } else {
@@ -671,7 +672,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
           }
         }
         nested.push(text.slice(start, j));
-        hide(word.length, word.length + Math.min(j + 1, text.length) - i, ch === "(" ? "p" : "es");
+        // An unclosed substitution or group is a syntax error the shell runs nothing for, so it fills nothing in (review/56).
+        hide(word.length, word.length + Math.min(j + 1, text.length) - i, j >= text.length ? "" : ch === "(" ? "p" : "es");
         word += text.slice(i, Math.min(j + 1, text.length));
         inWord = true;
         i = j + 1;
@@ -1335,8 +1337,26 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         return deny("push-default", "A matching push, the default branch among them");
       }
       // A refspec the line cannot show (a substitution, a variable, a PowerShell group, build/46) may name the default
-      // branch, so it reads as a push to it.
-      if (/[$`(]/.test(spec)) return deny("push-default", "A push whose refspec the line cannot show (a substitution, a variable or a group)");
+      // branch, so it reads as a push to it, unless the literal text before the expansion rules that out (review/56):
+      // a destination opening on `stamity/x` cannot be `main`, so the run verb's own push of a git-legal branch name
+      // holding those characters is read as the branch it names. An expansion before the colon may hold the colon, so
+      // the destination is then unknown; a prefix that may still spell `refs/heads/`, `heads/`, `HEAD`, `@`, a default
+      // branch or a local tag reads as the default branch's push.
+      const hiddenAt = spec.search(/[$`(]/);
+      if (hiddenAt !== -1) {
+        const colon = spec.indexOf(":");
+        const known = (colon === -1 ? spec.slice(0, hiddenAt) : colon < hiddenAt ? spec.slice(colon + 1, hiddenAt) : "").toLowerCase();
+        const bare = known.replace(/^(refs\/)?heads\//, "");
+        const may = (candidate: string): boolean => candidate.toLowerCase().startsWith(bare);
+        if (
+          known === "" ||
+          ["refs/heads/", "heads/", "head", "@", "refs/tags/", "tags/"].some((form) => form.startsWith(known)) ||
+          [...defaults].some(may) ||
+          ctx.tags.some((tag) => may(tag.replace(/^refs\/tags\//i, "")))
+        ) {
+          return deny("push-default", "A push whose refspec the line cannot show (a substitution, a variable or a group)");
+        }
+      }
       if (name === "head" || name === "@" ? onDeploying : deploys(name)) {
         deny("push-deploying", "A push to a branch the repository names as deploying");
       }
@@ -2347,7 +2367,8 @@ export function unattendedPushVerdict(
               }
             }
             nested.push(text.slice(start, j));
-            hide(word.length, word.length + Math.min(j + 1, text.length) - i, "e");
+            // An unclosed substitution is a syntax error the shell runs nothing for, so it fills nothing in (review/56).
+            hide(word.length, word.length + Math.min(j + 1, text.length) - i, j < text.length ? "e" : "");
             word += text.slice(i, Math.min(j + 1, text.length));
             i = j + 1;
           } else {
@@ -2413,7 +2434,8 @@ export function unattendedPushVerdict(
           }
         }
         nested.push(text.slice(start, j));
-        hide(word.length, word.length + Math.min(j + 1, text.length) - i, ch === "(" ? "p" : "es");
+        // An unclosed substitution or group is a syntax error the shell runs nothing for, so it fills nothing in (review/56).
+        hide(word.length, word.length + Math.min(j + 1, text.length) - i, j >= text.length ? "" : ch === "(" ? "p" : "es");
         word += text.slice(i, Math.min(j + 1, text.length));
         inWord = true;
         i = j + 1;
