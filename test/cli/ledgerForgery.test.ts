@@ -14,7 +14,8 @@ import { buildInitDecisions } from "../../src/cli/commands/init/plan.ts";
 import { syncCommand } from "../../src/cli/commands/sync.ts";
 import { planSync, previewReclaim } from "../../src/cli/commands/sync/engine.ts";
 import { engineRenderingsFor } from "../../src/cli/engine/emissionWrite.ts";
-import { CLAUDE_ASK_ROWS, CLAUDE_DENY_ROWS } from "../../src/hooks/personOnly.ts";
+import { resolveAutonomy } from "../../src/config/autonomy.ts";
+import { CLAUDE_DENY_ROWS, claudeAskRows } from "../../src/hooks/personOnly.ts";
 import { createApp } from "../../src/index.ts";
 import { ORG_POLICY_REL_PATH } from "../../src/pack/orgPolicy.ts";
 import { discoverInstalledPacksWithPolicy, ignoringPolicyDenialForProof } from "../../src/pack/projection.ts";
@@ -1440,7 +1441,9 @@ describe("clean refuses while a file it would keep is one a sync with this versi
     expect(JSON.parse(await readFile(join(root, ".claude", "settings.json"), "utf8"))).toEqual({
       // TEST CHANGE (v0a2, REQ-FLOW-123, REQ-FLOW-124): the person-only rows are split, the refused acts in `deny`
       // and the acts that can be undone in `ask`; clean removes no row of either list, so both stay.
-      permissions: { deny: [...CLAUDE_DENY_ROWS], ask: [...CLAUDE_ASK_ROWS] },
+      // TEST CHANGE, justified: REQ-FLOW-123 — the default autonomy setting's ask rows (a4b-claude-rows): the sync
+      // removed the ready-mark and local-tag rows the older setup recorded and added the land rows.
+      permissions: { deny: [...CLAUDE_DENY_ROWS], ask: [...claudeAskRows(resolveAutonomy({}).runs)] },
     });
     expect(existsSync(join(root, ".stamity"))).toBe(false);
   }, 120_000);
