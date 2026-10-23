@@ -831,20 +831,32 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       // opens with one (review/52): `src/*.ts` cannot spell an option, `*` and `--loo*` can.
       const dashes = (at: number): boolean => markOf(at).first === 0 || (cmd[at] ?? "").startsWith("-");
       // A launcher or a package manager whose script or package word the shell fills in runs a program the guard cannot
-      // settle (review/87): the words up to that one, the manager's `run`, `exec`, `dlx` or `x` passed, any marked.
+      // settle (review/87), read with no knowledge of any option: a launcher's script word is its first word whose last
+      // path part is a literal file name ending in a script extension, its folder filled in or not (review/93, the
+      // review/38 reading); a manager's package or bin word its first literal word that is no option, its `run`,
+      // `exec`, `dlx` or `x` and a valued option's value passed. A marked word before that word, an option, an option's
+      // value or a subcommand alike, unsettles the program, except a manager's folder, filter or workspace value, which
+      // runs no code (review/93); with no such word, any marked word does. A marked word after it leaves the program to
+      // that word.
       const launcher = programName(program);
-      let scriptAt = -1;
-      if (["node", "nodejs", "bun", "deno", "tsx"].includes(launcher) || MANAGERS.has(launcher)) {
-        scriptAt = 1;
-        while (scriptAt < cmd.length && (cmd[scriptAt] ?? "").startsWith("-")) {
-          scriptAt += MANAGERS.has(launcher) && MANAGER_VALUED.has(cmd[scriptAt] ?? "") ? 2 : 1;
+      const launches = ["node", "nodejs", "bun", "deno", "tsx"].includes(launcher);
+      const valueOf = (at: number): boolean =>
+        !launches && (MANAGER_VALUED.has(cmd[at - 1] ?? "") || [...MANAGER_VALUED].some((name) => name.startsWith("--") && (cmd[at] ?? "").startsWith(`${name}=`)));
+      let launchesUnread = false;
+      if (launches || MANAGERS.has(launcher)) {
+        let settledAt = -1;
+        for (let at = 1; at < cmd.length && settledAt === -1; at += 1) {
+          const word = cmd[at] ?? "";
+          const sep = Math.max(word.lastIndexOf("/"), word.lastIndexOf("\\")) + 1;
+          if (launches) {
+            if (markOf(at).last <= sep && /\.(?:[cm]?[jt]s|[jt]sx)$/i.test(word)) settledAt = at;
+          } else if (markOf(at).kinds === "" && !word.startsWith("-") && !["run", "run-script", "exec", "dlx", "x"].includes(word) && !valueOf(at)) {
+            settledAt = at;
+          }
         }
-        if (MANAGERS.has(launcher) && ["run", "run-script", "exec", "dlx", "x"].includes(cmd[scriptAt] ?? "")) {
-          scriptAt += 1;
-          while (scriptAt < cmd.length && (cmd[scriptAt] ?? "").startsWith("-")) scriptAt += 1;
-        }
+        const before = settledAt === -1 ? cmd.length : settledAt;
+        launchesUnread = cmd.slice(1, before).some((_, index) => markOf(index + 1).kinds !== "" && !valueOf(index + 1));
       }
-      const launchesUnread = scriptAt !== -1 && cmd.slice(1, scriptAt + 1).some((_, at) => markOf(at + 1).kinds !== "");
       const unsure = cmd.map((_, at) => {
         const mark = markOf(at);
         if (tainted) return true;
@@ -2630,20 +2642,32 @@ export function unattendedPushVerdict(
       // opens with one (review/52): `src/*.ts` cannot spell an option, `*` and `--loo*` can.
       const dashes = (at: number): boolean => markOf(at).first === 0 || (cmd[at] ?? "").startsWith("-");
       // A launcher or a package manager whose script or package word the shell fills in runs a program the guard cannot
-      // settle (review/87): the words up to that one, the manager's `run`, `exec`, `dlx` or `x` passed, any marked.
+      // settle (review/87), read with no knowledge of any option: a launcher's script word is its first word whose last
+      // path part is a literal file name ending in a script extension, its folder filled in or not (review/93, the
+      // review/38 reading); a manager's package or bin word its first literal word that is no option, its `run`,
+      // `exec`, `dlx` or `x` and a valued option's value passed. A marked word before that word, an option, an option's
+      // value or a subcommand alike, unsettles the program, except a manager's folder, filter or workspace value, which
+      // runs no code (review/93); with no such word, any marked word does. A marked word after it leaves the program to
+      // that word.
       const launcher = programName(program);
-      let scriptAt = -1;
-      if (["node", "nodejs", "bun", "deno", "tsx"].includes(launcher) || MANAGERS.has(launcher)) {
-        scriptAt = 1;
-        while (scriptAt < cmd.length && (cmd[scriptAt] ?? "").startsWith("-")) {
-          scriptAt += MANAGERS.has(launcher) && MANAGER_VALUED.has(cmd[scriptAt] ?? "") ? 2 : 1;
+      const launches = ["node", "nodejs", "bun", "deno", "tsx"].includes(launcher);
+      const valueOf = (at: number): boolean =>
+        !launches && (MANAGER_VALUED.has(cmd[at - 1] ?? "") || [...MANAGER_VALUED].some((name) => name.startsWith("--") && (cmd[at] ?? "").startsWith(`${name}=`)));
+      let launchesUnread = false;
+      if (launches || MANAGERS.has(launcher)) {
+        let settledAt = -1;
+        for (let at = 1; at < cmd.length && settledAt === -1; at += 1) {
+          const word = cmd[at] ?? "";
+          const sep = Math.max(word.lastIndexOf("/"), word.lastIndexOf("\\")) + 1;
+          if (launches) {
+            if (markOf(at).last <= sep && /\.(?:[cm]?[jt]s|[jt]sx)$/i.test(word)) settledAt = at;
+          } else if (markOf(at).kinds === "" && !word.startsWith("-") && !["run", "run-script", "exec", "dlx", "x"].includes(word) && !valueOf(at)) {
+            settledAt = at;
+          }
         }
-        if (MANAGERS.has(launcher) && ["run", "run-script", "exec", "dlx", "x"].includes(cmd[scriptAt] ?? "")) {
-          scriptAt += 1;
-          while (scriptAt < cmd.length && (cmd[scriptAt] ?? "").startsWith("-")) scriptAt += 1;
-        }
+        const before = settledAt === -1 ? cmd.length : settledAt;
+        launchesUnread = cmd.slice(1, before).some((_, index) => markOf(index + 1).kinds !== "" && !valueOf(index + 1));
       }
-      const launchesUnread = scriptAt !== -1 && cmd.slice(1, scriptAt + 1).some((_, at) => markOf(at + 1).kinds !== "");
       const unsure = cmd.map((_, at) => {
         const mark = markOf(at);
         if (tainted) return true;

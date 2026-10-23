@@ -1116,32 +1116,43 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			// opens with one (review/52): \`src/*.ts\` cannot spell an option, \`*\` and \`--loo*\` can.
 			const dashes = (at) => markOf(at).first === 0 || (cmd[at] ?? "").startsWith("-");
 			// A launcher or a package manager whose script or package word the shell fills in runs a program the guard cannot
-			// settle (review/87): the words up to that one, the manager's \`run\`, \`exec\`, \`dlx\` or \`x\` passed, any marked.
+			// settle (review/87), read with no knowledge of any option: a launcher's script word is its first word whose last
+			// path part is a literal file name ending in a script extension, its folder filled in or not (review/93, the
+			// review/38 reading); a manager's package or bin word its first literal word that is no option, its \`run\`,
+			// \`exec\`, \`dlx\` or \`x\` and a valued option's value passed. A marked word before that word, an option, an option's
+			// value or a subcommand alike, unsettles the program, except a manager's folder, filter or workspace value, which
+			// runs no code (review/93); with no such word, any marked word does. A marked word after it leaves the program to
+			// that word.
 			const launcher = programName(program);
-			let scriptAt = -1;
-			if ([
+			const launches = [
 				"node",
 				"nodejs",
 				"bun",
 				"deno",
 				"tsx"
-			].includes(launcher) || MANAGERS.has(launcher)) {
-				scriptAt = 1;
-				while (scriptAt < cmd.length && (cmd[scriptAt] ?? "").startsWith("-")) {
-					scriptAt += MANAGERS.has(launcher) && MANAGER_VALUED.has(cmd[scriptAt] ?? "") ? 2 : 1;
+			].includes(launcher);
+			const valueOf = (at) => !launches && (MANAGER_VALUED.has(cmd[at - 1] ?? "") || [...MANAGER_VALUED].some((name) => name.startsWith("--") && (cmd[at] ?? "").startsWith(\`\${name}=\`)));
+			let launchesUnread = false;
+			if (launches || MANAGERS.has(launcher)) {
+				let settledAt = -1;
+				for (let at = 1; at < cmd.length && settledAt === -1; at += 1) {
+					const word = cmd[at] ?? "";
+					const sep = Math.max(word.lastIndexOf("/"), word.lastIndexOf("\\\\")) + 1;
+					if (launches) {
+						if (markOf(at).last <= sep && /\\.(?:[cm]?[jt]s|[jt]sx)$/i.test(word)) settledAt = at;
+					} else if (markOf(at).kinds === "" && !word.startsWith("-") && ![
+						"run",
+						"run-script",
+						"exec",
+						"dlx",
+						"x"
+					].includes(word) && !valueOf(at)) {
+						settledAt = at;
+					}
 				};
-				if (MANAGERS.has(launcher) && [
-					"run",
-					"run-script",
-					"exec",
-					"dlx",
-					"x"
-				].includes(cmd[scriptAt] ?? "")) {
-					scriptAt += 1;
-					while (scriptAt < cmd.length && (cmd[scriptAt] ?? "").startsWith("-")) scriptAt += 1;
-				}
+				const before = settledAt === -1 ? cmd.length : settledAt;
+				launchesUnread = cmd.slice(1, before).some((_, index) => markOf(index + 1).kinds !== "" && !valueOf(index + 1));
 			};
-			const launchesUnread = scriptAt !== -1 && cmd.slice(1, scriptAt + 1).some((_, at) => markOf(at + 1).kinds !== "");
 			const unsure = cmd.map((_, at) => {
 				const mark = markOf(at);
 				if (tainted) return true;
@@ -3264,32 +3275,43 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 			// opens with one (review/52): \`src/*.ts\` cannot spell an option, \`*\` and \`--loo*\` can.
 			const dashes = (at) => markOf(at).first === 0 || (cmd[at] ?? "").startsWith("-");
 			// A launcher or a package manager whose script or package word the shell fills in runs a program the guard cannot
-			// settle (review/87): the words up to that one, the manager's \`run\`, \`exec\`, \`dlx\` or \`x\` passed, any marked.
+			// settle (review/87), read with no knowledge of any option: a launcher's script word is its first word whose last
+			// path part is a literal file name ending in a script extension, its folder filled in or not (review/93, the
+			// review/38 reading); a manager's package or bin word its first literal word that is no option, its \`run\`,
+			// \`exec\`, \`dlx\` or \`x\` and a valued option's value passed. A marked word before that word, an option, an option's
+			// value or a subcommand alike, unsettles the program, except a manager's folder, filter or workspace value, which
+			// runs no code (review/93); with no such word, any marked word does. A marked word after it leaves the program to
+			// that word.
 			const launcher = programName(program);
-			let scriptAt = -1;
-			if ([
+			const launches = [
 				"node",
 				"nodejs",
 				"bun",
 				"deno",
 				"tsx"
-			].includes(launcher) || MANAGERS.has(launcher)) {
-				scriptAt = 1;
-				while (scriptAt < cmd.length && (cmd[scriptAt] ?? "").startsWith("-")) {
-					scriptAt += MANAGERS.has(launcher) && MANAGER_VALUED.has(cmd[scriptAt] ?? "") ? 2 : 1;
+			].includes(launcher);
+			const valueOf = (at) => !launches && (MANAGER_VALUED.has(cmd[at - 1] ?? "") || [...MANAGER_VALUED].some((name) => name.startsWith("--") && (cmd[at] ?? "").startsWith(\`\${name}=\`)));
+			let launchesUnread = false;
+			if (launches || MANAGERS.has(launcher)) {
+				let settledAt = -1;
+				for (let at = 1; at < cmd.length && settledAt === -1; at += 1) {
+					const word = cmd[at] ?? "";
+					const sep = Math.max(word.lastIndexOf("/"), word.lastIndexOf("\\\\")) + 1;
+					if (launches) {
+						if (markOf(at).last <= sep && /\\.(?:[cm]?[jt]s|[jt]sx)$/i.test(word)) settledAt = at;
+					} else if (markOf(at).kinds === "" && !word.startsWith("-") && ![
+						"run",
+						"run-script",
+						"exec",
+						"dlx",
+						"x"
+					].includes(word) && !valueOf(at)) {
+						settledAt = at;
+					}
 				};
-				if (MANAGERS.has(launcher) && [
-					"run",
-					"run-script",
-					"exec",
-					"dlx",
-					"x"
-				].includes(cmd[scriptAt] ?? "")) {
-					scriptAt += 1;
-					while (scriptAt < cmd.length && (cmd[scriptAt] ?? "").startsWith("-")) scriptAt += 1;
-				}
+				const before = settledAt === -1 ? cmd.length : settledAt;
+				launchesUnread = cmd.slice(1, before).some((_, index) => markOf(index + 1).kinds !== "" && !valueOf(index + 1));
 			};
-			const launchesUnread = scriptAt !== -1 && cmd.slice(1, scriptAt + 1).some((_, at) => markOf(at + 1).kinds !== "");
 			const unsure = cmd.map((_, at) => {
 				const mark = markOf(at);
 				if (tainted) return true;
@@ -9578,7 +9600,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".claude/hooks/stamity/stamity-agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".claude/hooks/stamity/stamity-cloud-readiness.mjs": "acef8b976c3cf0dc29df1ab1584458bc83c66ab1e7284e28df62af60f1311c91 11348 bytes",
   ".claude/hooks/stamity/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "33dc6587ae03ebffa85fb2cf396ddab50ab20760aa04a3a3abafe7c075743a97 205062 bytes",
+  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "0f98a4a5bbed34eb42c8e5761800e98565a9ab96b5f381cb8d470d32051052dc 206996 bytes",
   ".claude/hooks/stamity/stamity-pre-tool-use-guard.mjs": "752f24a46db0da9f933bcb313a00ef8f6b12b8a655241b9257e40f64d9776965 20816 bytes",
   ".claude/hooks/stamity/stamity-review-gate.mjs": "a410def5d44fde83869b3c2c98db318d470b68a54101e1b20eddfb026f8077b1 51137 bytes",
   ".claude/hooks/stamity/stamity-session-start.mjs": "c807b92eeff34b3e194a0f7ae843c2945d5663d56cdb937786454a6402df3f31 51786 bytes",
@@ -9700,12 +9722,12 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".mcp.json": "f4e65233eea1ba936b61b16f2ee2d90f84a2510436d58f6484d872f507314f2f 387 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "091ba6adc80d491d5d954254021b1bdb98c6abaafa495b6b28d8e366e3ad1408 205058 bytes",
+  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "e059d0652ebb87cb27042cc5172a0faec8dd26819eb608b705b409a627038689 206992 bytes",
   ".stamity/generated/hooks/codex/stamity-portable-hook.mjs": "ef3b63ada64fdbc5860b8bd483568a6cc32875a5747de7acabcf56dccfa3b70c 20343 bytes",
   ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/codex/stamity-session-start.mjs": "1111332a1630ed4dcb42e421b2326c5dd423a358e3c92bf8cb367e212a7a996d 51799 bytes",
   ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "1d6f7e31f751178f67dd9220f74480b75fb82176afc24f1489875449bea1a557 207812 bytes",
+  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "e5744981f74599bdfb96c02803a81788d056e8f89b6d10d1da30e69338472505 209746 bytes",
   ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "b67634419bfa652a30fba0cd2f1402fc61ee89250dfe137cca7d2785f4a427cc 21755 bytes",
   ".stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "9f930fcd797ef464e7f4cb4c40e59b4976d65199a5c974fb67ca7624e5d0287c 56602 bytes",
@@ -9713,7 +9735,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/generated/hooks/cursor/stamity-context-once.mjs": "c74c1b3d2cd908b170c48a8813bd05cc91f058210789a9b2f815b731a2eb6ccd 31773 bytes",
   ".stamity/generated/hooks/cursor/stamity-cursor-continue.mjs": "08bc51855553f4104a80fbe1ea94ba36a95173e005846467e4af5c643bb26a60 9500 bytes",
   ".stamity/generated/hooks/cursor/stamity-model-pins.mjs": "fc71eb522ff67fd73ff00820d0e59495bca188d2e30fc9a26ce85e89fff6fdd5 3813 bytes",
-  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "16a6c6f2265e895eec0056dba970bd10cf646cbbfb2c1063f1c0bff3a0d7b23e 205094 bytes",
+  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "2888625b26c760c35186d1096e58b2f03d86a1d722d2f92b15c77a8c89d87d00 207028 bytes",
   ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs": "4bc31f0f2dbdec29a6537dab00d8df9255641b7ee5bed365d3020ce6ac72c12c 20344 bytes",
   ".stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "1111332a1630ed4dcb42e421b2326c5dd423a358e3c92bf8cb367e212a7a996d 51799 bytes",
@@ -9725,7 +9747,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "e1a5d0d26e1048e99176717d30d42a1ab5f00585e450ee2e00686433a4f8d9f6 94261 bytes",
+  ".stamity/manifest.json": "e8a11845f32c741686958511008900ec2ae7f839e4f6818ed35f60ccba7681d6 94261 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "6b5b5bebfd779fe5b513cd8c2c41fa3b4dd70826435e9df9c70076ba48c29b98 6548 bytes",
@@ -10862,32 +10884,43 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			// opens with one (review/52): \`src/*.ts\` cannot spell an option, \`*\` and \`--loo*\` can.
 			const dashes = (at) => markOf(at).first === 0 || (cmd[at] ?? "").startsWith("-");
 			// A launcher or a package manager whose script or package word the shell fills in runs a program the guard cannot
-			// settle (review/87): the words up to that one, the manager's \`run\`, \`exec\`, \`dlx\` or \`x\` passed, any marked.
+			// settle (review/87), read with no knowledge of any option: a launcher's script word is its first word whose last
+			// path part is a literal file name ending in a script extension, its folder filled in or not (review/93, the
+			// review/38 reading); a manager's package or bin word its first literal word that is no option, its \`run\`,
+			// \`exec\`, \`dlx\` or \`x\` and a valued option's value passed. A marked word before that word, an option, an option's
+			// value or a subcommand alike, unsettles the program, except a manager's folder, filter or workspace value, which
+			// runs no code (review/93); with no such word, any marked word does. A marked word after it leaves the program to
+			// that word.
 			const launcher = programName(program);
-			let scriptAt = -1;
-			if ([
+			const launches = [
 				"node",
 				"nodejs",
 				"bun",
 				"deno",
 				"tsx"
-			].includes(launcher) || MANAGERS.has(launcher)) {
-				scriptAt = 1;
-				while (scriptAt < cmd.length && (cmd[scriptAt] ?? "").startsWith("-")) {
-					scriptAt += MANAGERS.has(launcher) && MANAGER_VALUED.has(cmd[scriptAt] ?? "") ? 2 : 1;
+			].includes(launcher);
+			const valueOf = (at) => !launches && (MANAGER_VALUED.has(cmd[at - 1] ?? "") || [...MANAGER_VALUED].some((name) => name.startsWith("--") && (cmd[at] ?? "").startsWith(\`\${name}=\`)));
+			let launchesUnread = false;
+			if (launches || MANAGERS.has(launcher)) {
+				let settledAt = -1;
+				for (let at = 1; at < cmd.length && settledAt === -1; at += 1) {
+					const word = cmd[at] ?? "";
+					const sep = Math.max(word.lastIndexOf("/"), word.lastIndexOf("\\\\")) + 1;
+					if (launches) {
+						if (markOf(at).last <= sep && /\\.(?:[cm]?[jt]s|[jt]sx)$/i.test(word)) settledAt = at;
+					} else if (markOf(at).kinds === "" && !word.startsWith("-") && ![
+						"run",
+						"run-script",
+						"exec",
+						"dlx",
+						"x"
+					].includes(word) && !valueOf(at)) {
+						settledAt = at;
+					}
 				};
-				if (MANAGERS.has(launcher) && [
-					"run",
-					"run-script",
-					"exec",
-					"dlx",
-					"x"
-				].includes(cmd[scriptAt] ?? "")) {
-					scriptAt += 1;
-					while (scriptAt < cmd.length && (cmd[scriptAt] ?? "").startsWith("-")) scriptAt += 1;
-				}
+				const before = settledAt === -1 ? cmd.length : settledAt;
+				launchesUnread = cmd.slice(1, before).some((_, index) => markOf(index + 1).kinds !== "" && !valueOf(index + 1));
 			};
-			const launchesUnread = scriptAt !== -1 && cmd.slice(1, scriptAt + 1).some((_, at) => markOf(at + 1).kinds !== "");
 			const unsure = cmd.map((_, at) => {
 				const mark = markOf(at);
 				if (tainted) return true;
@@ -13010,32 +13043,43 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 			// opens with one (review/52): \`src/*.ts\` cannot spell an option, \`*\` and \`--loo*\` can.
 			const dashes = (at) => markOf(at).first === 0 || (cmd[at] ?? "").startsWith("-");
 			// A launcher or a package manager whose script or package word the shell fills in runs a program the guard cannot
-			// settle (review/87): the words up to that one, the manager's \`run\`, \`exec\`, \`dlx\` or \`x\` passed, any marked.
+			// settle (review/87), read with no knowledge of any option: a launcher's script word is its first word whose last
+			// path part is a literal file name ending in a script extension, its folder filled in or not (review/93, the
+			// review/38 reading); a manager's package or bin word its first literal word that is no option, its \`run\`,
+			// \`exec\`, \`dlx\` or \`x\` and a valued option's value passed. A marked word before that word, an option, an option's
+			// value or a subcommand alike, unsettles the program, except a manager's folder, filter or workspace value, which
+			// runs no code (review/93); with no such word, any marked word does. A marked word after it leaves the program to
+			// that word.
 			const launcher = programName(program);
-			let scriptAt = -1;
-			if ([
+			const launches = [
 				"node",
 				"nodejs",
 				"bun",
 				"deno",
 				"tsx"
-			].includes(launcher) || MANAGERS.has(launcher)) {
-				scriptAt = 1;
-				while (scriptAt < cmd.length && (cmd[scriptAt] ?? "").startsWith("-")) {
-					scriptAt += MANAGERS.has(launcher) && MANAGER_VALUED.has(cmd[scriptAt] ?? "") ? 2 : 1;
+			].includes(launcher);
+			const valueOf = (at) => !launches && (MANAGER_VALUED.has(cmd[at - 1] ?? "") || [...MANAGER_VALUED].some((name) => name.startsWith("--") && (cmd[at] ?? "").startsWith(\`\${name}=\`)));
+			let launchesUnread = false;
+			if (launches || MANAGERS.has(launcher)) {
+				let settledAt = -1;
+				for (let at = 1; at < cmd.length && settledAt === -1; at += 1) {
+					const word = cmd[at] ?? "";
+					const sep = Math.max(word.lastIndexOf("/"), word.lastIndexOf("\\\\")) + 1;
+					if (launches) {
+						if (markOf(at).last <= sep && /\\.(?:[cm]?[jt]s|[jt]sx)$/i.test(word)) settledAt = at;
+					} else if (markOf(at).kinds === "" && !word.startsWith("-") && ![
+						"run",
+						"run-script",
+						"exec",
+						"dlx",
+						"x"
+					].includes(word) && !valueOf(at)) {
+						settledAt = at;
+					}
 				};
-				if (MANAGERS.has(launcher) && [
-					"run",
-					"run-script",
-					"exec",
-					"dlx",
-					"x"
-				].includes(cmd[scriptAt] ?? "")) {
-					scriptAt += 1;
-					while (scriptAt < cmd.length && (cmd[scriptAt] ?? "").startsWith("-")) scriptAt += 1;
-				}
+				const before = settledAt === -1 ? cmd.length : settledAt;
+				launchesUnread = cmd.slice(1, before).some((_, index) => markOf(index + 1).kinds !== "" && !valueOf(index + 1));
 			};
-			const launchesUnread = scriptAt !== -1 && cmd.slice(1, scriptAt + 1).some((_, at) => markOf(at + 1).kinds !== "");
 			const unsure = cmd.map((_, at) => {
 				const mark = markOf(at);
 				if (tainted) return true;
@@ -17995,7 +18039,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".claude/hooks/stamity/stamity-agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".claude/hooks/stamity/stamity-cloud-readiness.mjs": "acef8b976c3cf0dc29df1ab1584458bc83c66ab1e7284e28df62af60f1311c91 11348 bytes",
   ".claude/hooks/stamity/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "33dc6587ae03ebffa85fb2cf396ddab50ab20760aa04a3a3abafe7c075743a97 205062 bytes",
+  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "0f98a4a5bbed34eb42c8e5761800e98565a9ab96b5f381cb8d470d32051052dc 206996 bytes",
   ".claude/hooks/stamity/stamity-pre-tool-use-guard.mjs": "752f24a46db0da9f933bcb313a00ef8f6b12b8a655241b9257e40f64d9776965 20816 bytes",
   ".claude/hooks/stamity/stamity-review-gate.mjs": "a410def5d44fde83869b3c2c98db318d470b68a54101e1b20eddfb026f8077b1 51137 bytes",
   ".claude/hooks/stamity/stamity-session-start.mjs": "c807b92eeff34b3e194a0f7ae843c2945d5663d56cdb937786454a6402df3f31 51786 bytes",
@@ -18051,7 +18095,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "649cdd45388e9a8e3c354f7135d88b1b66965ed77f91255e149b01231907258f 28322 bytes",
+  ".stamity/manifest.json": "44ed451d1fb36ea35ef1231b4de1c21f3c12e76b2f77fd71bf23ab926e8bbce3 28322 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
   "CLAUDE.md": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
@@ -18913,7 +18957,7 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".gitignore": "14c0a079e08124240ec8c713fa4c32870948842d586a5829a19172c02ddd0482 204 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "091ba6adc80d491d5d954254021b1bdb98c6abaafa495b6b28d8e366e3ad1408 205058 bytes",
+  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "e059d0652ebb87cb27042cc5172a0faec8dd26819eb608b705b409a627038689 206992 bytes",
   ".stamity/generated/hooks/codex/stamity-portable-hook.mjs": "ef3b63ada64fdbc5860b8bd483568a6cc32875a5747de7acabcf56dccfa3b70c 20343 bytes",
   ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/codex/stamity-session-start.mjs": "1111332a1630ed4dcb42e421b2326c5dd423a358e3c92bf8cb367e212a7a996d 51799 bytes",
@@ -18922,7 +18966,7 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "b3a42a934314dc2b929b02e29dd9dcc7142ef6ede8331d623b28db293ddbfadd 22156 bytes",
+  ".stamity/manifest.json": "aa61ab900be06d2e252e7fab496630cd9496def67d7059f2beac7ec1d595265c 22156 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
   "AGENTS.override.md": "122504f41cc40a99c65cba4995c228bf4a5137d738324bbe3a847c6aaa5192db 25872 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
@@ -19263,7 +19307,7 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".gitignore": "14c0a079e08124240ec8c713fa4c32870948842d586a5829a19172c02ddd0482 204 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "1d6f7e31f751178f67dd9220f74480b75fb82176afc24f1489875449bea1a557 207812 bytes",
+  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "e5744981f74599bdfb96c02803a81788d056e8f89b6d10d1da30e69338472505 209746 bytes",
   ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "b67634419bfa652a30fba0cd2f1402fc61ee89250dfe137cca7d2785f4a427cc 21755 bytes",
   ".stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "9f930fcd797ef464e7f4cb4c40e59b4976d65199a5c974fb67ca7624e5d0287c 56602 bytes",
@@ -19272,7 +19316,7 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "272b9881cab712fac700eb888d93189e0017804178472cc18d96a7a6a163f7d0 20257 bytes",
+  ".stamity/manifest.json": "5e2be4efa3eb2c7a5187d92af155625b2818022588125ebca74a0eae61cd9072 20257 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
@@ -19888,7 +19932,7 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".stamity/generated/hooks/cursor/stamity-context-once.mjs": "c74c1b3d2cd908b170c48a8813bd05cc91f058210789a9b2f815b731a2eb6ccd 31773 bytes",
   ".stamity/generated/hooks/cursor/stamity-cursor-continue.mjs": "08bc51855553f4104a80fbe1ea94ba36a95173e005846467e4af5c643bb26a60 9500 bytes",
   ".stamity/generated/hooks/cursor/stamity-model-pins.mjs": "fc71eb522ff67fd73ff00820d0e59495bca188d2e30fc9a26ce85e89fff6fdd5 3813 bytes",
-  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "16a6c6f2265e895eec0056dba970bd10cf646cbbfb2c1063f1c0bff3a0d7b23e 205094 bytes",
+  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "2888625b26c760c35186d1096e58b2f03d86a1d722d2f92b15c77a8c89d87d00 207028 bytes",
   ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs": "4bc31f0f2dbdec29a6537dab00d8df9255641b7ee5bed365d3020ce6ac72c12c 20344 bytes",
   ".stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "1111332a1630ed4dcb42e421b2326c5dd423a358e3c92bf8cb367e212a7a996d 51799 bytes",
@@ -19897,7 +19941,7 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "011e33738db3a840f70d5a7346e15602810cb35685432ced1d404084cd97fa02 24101 bytes",
+  ".stamity/manifest.json": "8de9420c9caa519dff3cd80d1ca17233cb3437fd43d55301ff655829b3cb0c11 24101 bytes",
   "AGENTS.md": "6b5b5bebfd779fe5b513cd8c2c41fa3b4dd70826435e9df9c70076ba48c29b98 6548 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",

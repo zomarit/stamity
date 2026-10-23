@@ -311,7 +311,10 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // 205,463 bytes (copilot, generated) / 4,440 lines, past the bytes row, because round 3 reads a push refspec from
   // its word's marks and the engine's own CLI file by any path spelling. 205,463 + 3,433 = 208,896 bytes; the lines
   // row still holds.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 208_896, lines: 4_540 },
+  // Moved again 2026-10-23 on the a4 lane (review/87, review/93), by the measured size plus a small margin: 209,745 bytes
+  // (copilot, generated) / 4,522 lines, past the bytes row, because round 5 finds a launched program's script word by
+  // one rule. 209,745 + 3,247 = 212,992 bytes; the lines row still holds.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 212_992, lines: 4_540 },
 };
 
 /** One generated script, ready for an adapter to place and register. */

@@ -1836,3 +1836,21 @@ describe("the guard's reading of a launcher's script word and a push's remote wo
     expect(decide(tool, guard, command).deny).toBe(true);
   });
 });
+
+describe("the guard's reading of the lens's two launcher layouts (a4, review/87 round 5)", () => {
+  // Red on 69167364: in both layouts the launched program read as settled, so nothing asked.
+  it.each(TOOLS)("%s: asks attended, and refuses unattended and for a sub-agent, for both layouts with a filled-in script word", async (tool) => {
+    const guard = await placeGuard(tool);
+    const layouts = ["node --import tsx \"$CLI\" sync --loosen", "deno run \"$CLI\" sync --loosen"];
+    for (const command of layouts) {
+      const verdict = personOnlyVerdict(command, BAKED_DEFAULT);
+      if (!verdict.deny) throw new Error(`${command} reads as no act`);
+      expect(decide(tool, guard, command), `${tool}: ${command}`).toEqual(expectedAttended(tool, verdict));
+      const helper = JSON.stringify({ ...JSON.parse(payload(tool, command)), agent_id: "a1" });
+      expect(clientDecision(tool, run(guard, helper), `${tool} helper: ${command}`).deny).toBe(true);
+    }
+    expect(decide(tool, guard, "node scripts/build.mjs \"$OUT\"")).toEqual({ deny: false });
+    await getRepo().seedFiles({ ".stamity/runs/2026-10-23_x/record.md": record("in progress", "unattended") });
+    for (const command of layouts) expect(decide(tool, guard, command).deny, `${tool} unattended: ${command}`).toBe(true);
+  });
+});

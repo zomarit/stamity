@@ -3177,10 +3177,12 @@ describe("the engine's own CLI file by any path spelling (a4, review/68)", () =>
     expect(personOnlyVerdict(command, CONSUMER), command).toEqual({ deny: false });
   });
 
-  // TEST CHANGE, justified (REQ-FLOW-138, review/87): a launcher's script word the shell fills in may be the installed
-  // engine's CLI, so it is a program the guard cannot settle and takes the full check, in a consumer repository too.
-  it("gives a path opening on an expansion with a full clean the full check in a consumer repository", () => {
-    expect(personOnlyVerdict("node \"$ROOT/dist/cli.js\" clean", CONSUMER)).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  // TEST CHANGE, justified (REQ-FLOW-138, review/93): a script word whose last path part is a literal file name is settled
+  // by that part, its folder filled in or not, so in a consumer repository a file named like the CLI there is the
+  // repository's own and asks on the literal flag alone.
+  it("leaves a path opening on an expansion with a full clean to the literal flag alone in a consumer repository", () => {
+    expect(personOnlyVerdict("node \"$ROOT/dist/cli.js\" clean", CONSUMER)).toEqual({ deny: false });
+    expect(personOnlyVerdict("node \"$ROOT/dist/cli.js\" sync --loosen", CONSUMER)).toMatchObject({ deny: true, rule: "autonomy-loosen" });
   });
 });
 
@@ -3240,5 +3242,55 @@ describe("a brace or glob form in a push's remote place (a4, review/87's record)
 
   it("leaves a quoted remote holding those characters to the refspecs after it", () => {
     expect(personOnlyVerdict("git push 'orig*' feat/x", FEATURE)).toEqual({ deny: false });
+  });
+});
+
+describe("a launched program's script word found by one rule (a4, review/87 round 5, review/93)", () => {
+  const DEFAULT = { ...ON_FEATURE, stricterThanDefault: false, ownRepository: false };
+
+  // Red on 69167364 (review/87): the search stopped on an option's separate value or on a launcher's subcommand.
+  it.each([
+    ["an option's separate value before a filled-in script word", "node --import tsx \"$CLI\" sync --loosen"],
+    ["a short preload option's value before a filled-in script word", "node -r dotenv/config \"$CLI\" sync --loosen"],
+    ["a conditions value before a filled-in script word", "node --conditions development \"$CLI\" sync \"$F\""],
+    ["bun's preload value before a filled-in script word", "bun --preload ./setup \"$CLI\" sync --loosen"],
+    ["a launcher's subcommand before a filled-in script word", "deno run \"$CLI\" sync --loosen"],
+    ["a launcher's subcommand and its option before a filled-in script word", "deno run --allow-all \"$CLI\" sync --loosen"],
+    ["an inline eval with a filled-in value", "node -e \"$CODE\""],
+    ["an inline eval naming a filled-in module", "bun --eval \"require('$MOD')\""],
+    ["a filled-in preload value before a literal script", "node --import \"$HOOK\" scripts/x.mjs"],
+  ])("asks for %s, a program the guard cannot settle", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+
+  // Red on 69167364 (review/93): these read as unreadable programs.
+  it.each([
+    ["a script under a filled-in repository root", "node \"$ROOT/scripts/x.mjs\" --check"],
+    ["a script under the top-level path a substitution gives", "node \"$(git rev-parse --show-toplevel)/scripts/ci/test-run.mjs\" \"$A\""],
+    ["a manager's filter value filled in", "pnpm --filter \"$PKG\" test"],
+    ["a manager's attached filter value filled in", "pnpm --filter=$PKG test"],
+    ["a manager's prefix value filled in", "npm --prefix \"$DIR\" run build"],
+    ["a manager's working-folder value filled in", "yarn --cwd \"$DIR\" lint"],
+    ["a manager's workspace value filled in", "npm -w \"$WS\" test"],
+  ])("runs %s", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toEqual({ deny: false });
+  });
+
+  it.each([
+    ["a launcher with a literal script and a filled-in argument after it", "node scripts/build.mjs \"$OUT\""],
+    ["a test runner through a manager with a literal bin and filled-in files", "pnpm vitest run \"$FILE\" test/$NAME.test.ts"],
+    ["a test runner through a runner with filled-in files", "npx vitest run \"$FILE\""],
+    ["the repository's own script with a literal path", "node scripts/ci/test-run.mjs --coverage"],
+    ["the repository's own script with a dot path", "node ./scripts/release/check.mjs"],
+    ["deno's run form with a literal script", "deno run --allow-read main.ts \"$ARG\""],
+  ])("runs %s, an ordinary line", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toEqual({ deny: false });
+  });
+
+  it.each([
+    ["a manager option outside the folder, filter and workspace set, filled in", "pnpm --silent \"$BIN\" sync"],
+    ["a filled-in bin word after a filter value", "pnpm --filter app \"$BIN\" sync"],
+  ])("asks for %s", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
   });
 });
