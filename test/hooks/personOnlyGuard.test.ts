@@ -76,6 +76,12 @@ function run(guard: string, input: string, env: Record<string, string> = {}): Re
   const base = { ...process.env };
   delete base.STAMITY_UNATTENDED;
   delete base.STAMITY_REPO_ROOT;
+  // TEST CHANGE, justified (REQ-FLOW-134, review/128): the guard now reads git's merged configuration and gh's own
+  // variables, so each run gets an empty global file, no system file and none of those variables; the developer's own
+  // git configuration cannot move a result, and a case that needs one passes it.
+  for (const name of ["GH_REPO", "GH_HOST", "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS", "GIT_CONFIG_SYSTEM", "XDG_CONFIG_HOME"]) delete base[name];
+  base.GIT_CONFIG_GLOBAL = "/dev/null";
+  base.GIT_CONFIG_NOSYSTEM = "1";
   return spawnSync(process.execPath, [guard], { input, encoding: "utf8", env: { ...base, ...env } });
 }
 
@@ -2287,7 +2293,10 @@ describe("writes that reach an outside party (a4c, REQ-FLOW-134)", () => {
   it("asks for a write naming no target where the config includes another file, which may name another remote", async () => {
     const guard = await placeGuard("claude", { ".git/config": `${ORIGIN}[include]\n\tpath = ../more.gitconfig\n` });
     expect(decide("claude", guard, COMMENT)).toMatchObject({ deny: true, ask: true });
-    expect(decide("claude", guard, `${COMMENT} -R acme/app`)).toEqual({ deny: false });
+    // TEST CHANGE, justified (REQ-FLOW-134, review/129): a configuration read only in part leaves the origin unreadable
+    // too, so the same write naming the origin asks; a push to origin from the session's own checkout still runs.
+    expect(decide("claude", guard, `${COMMENT} -R acme/app`)).toMatchObject({ deny: true, ask: true });
+    expect(decide("claude", guard, "git push -u origin feat/x")).toEqual({ deny: false });
   });
 
   it("reads a config past the 4 KiB metadata ceiling, one holding many branch sections", async () => {
@@ -2382,5 +2391,113 @@ describe("the outside-party readers' second round in the guard (a4c, build/20-22
     const person = "gh pr edit 3 --add-reviewer alice";
     expect(decide(tool, guard, person)).toEqual(expectedAttended(tool, asked(person)));
     expect(decide(tool, guard, "gh pr edit 3 --add-reviewer @copilot")).toEqual({ deny: false });
+  });
+});
+
+/**
+ * a4c fix round 2 (REQ-FLOW-134, review/128-130): the emitted guard works out the origin, gh's default and each
+ * remote's push repository from git's merged configuration, `insteadOf` rewrites included; a configuration it can read
+ * only in part, or one the hook's environment sets, is unreadable; a push to another repository asks. Each asking case
+ * is red on e53503b6 and sits beside one that runs on both.
+ */
+describe("the guard's merged git configuration and the push's repository (a4c, review/128-130)", () => {
+  const remote = (name: string, url: string, extra = ""): string => `[remote "${name}"]\n\turl = ${url}\n${extra}`;
+  const ORIGIN = remote("origin", "https://github.com/acme/app.git");
+  const COMMENT = "gh pr comment 3 --body 'looks good'";
+  const FEATURE_PUSH = "git push -u origin feat/x";
+
+  it("reads a remote the global configuration adds, so a write naming no target asks", async () => {
+    const guard = await placeGuard("claude", { ".git/config": ORIGIN, "home.gitconfig": remote("upstream", "https://github.com/up/app.git") });
+    const global = { GIT_CONFIG_GLOBAL: getRepo().path("home.gitconfig") };
+    expect(decide("claude", guard, COMMENT, global)).toMatchObject({ deny: true, ask: true });
+    expect(decide("claude", guard, COMMENT)).toEqual({ deny: false });
+  });
+
+  it("reads the XDG global file when no global file is named", async () => {
+    const guard = await placeGuard("claude", { ".git/config": ORIGIN, "xdg/git/config": remote("upstream", "https://github.com/up/app.git") });
+    const base = { ...process.env };
+    for (const name of ["GIT_CONFIG_GLOBAL", "GH_REPO", "GH_HOST", "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS", "STAMITY_UNATTENDED", "STAMITY_REPO_ROOT"]) delete base[name];
+    const read = (xdg: string): Decision =>
+      clientDecision("claude", spawnSync(process.execPath, [guard], {
+        input: payload("claude", COMMENT),
+        encoding: "utf8",
+        env: { ...base, GIT_CONFIG_NOSYSTEM: "1", HOME: getRepo().path("home"), XDG_CONFIG_HOME: xdg },
+      }), xdg);
+    expect(read(getRepo().path("xdg"))).toMatchObject({ deny: true, ask: true });
+    expect(read(getRepo().path("none"))).toEqual({ deny: false });
+  });
+
+  it("applies an insteadOf rewrite from the global configuration to the origin and to gh's default alike", async () => {
+    const rewrite = '[url "https://github.com/other/"]\n\tinsteadOf = https://github.com/acme/\n';
+    const guard = await placeGuard("claude", { ".git/config": ORIGIN, "home.gitconfig": rewrite });
+    const global = { GIT_CONFIG_GLOBAL: getRepo().path("home.gitconfig") };
+    // The origin git reaches is `other/app` now: a write naming `acme/app` reaches another repository.
+    expect(decide("claude", guard, `${COMMENT} -R acme/app`, global)).toMatchObject({ deny: true, ask: true });
+    expect(decide("claude", guard, `${COMMENT} -R other/app`, global)).toEqual({ deny: false });
+    expect(decide("claude", guard, COMMENT, global)).toEqual({ deny: false });
+    expect(decide("claude", guard, `${COMMENT} -R acme/app`)).toEqual({ deny: false });
+  });
+
+  it("reads configuration the hook's environment sets as unreadable", async () => {
+    const guard = await placeGuard("claude", { ".git/config": ORIGIN });
+    expect(decide("claude", guard, `${COMMENT} -R acme/app`, { GIT_CONFIG_COUNT: "1" })).toMatchObject({ deny: true, ask: true });
+    expect(decide("claude", guard, `${COMMENT} -R acme/app`)).toEqual({ deny: false });
+  });
+
+  it("reads an origin URL holding more than a repository's path as unreadable", async () => {
+    const guard = await placeGuard("claude", { ".git/config": remote("origin", "https://github.com/acme/app/extra.git") });
+    expect(decide("claude", guard, `${COMMENT} -R acme/app`)).toMatchObject({ deny: true, ask: true });
+  });
+
+  it.each(TOOLS)("%s: asks for a push to another repository's remote or URL, and runs a feature push to origin", async (tool) => {
+    const guard = await placeGuard(tool, { ".git/config": `${ORIGIN}${remote("upstream", "https://github.com/up/app.git")}` });
+    for (const command of ["git push upstream feat/x", "git push https://github.com/other/repo.git feat/x"]) {
+      const verdict = personOnlyVerdict(command, { ...BAKED_DEFAULT, originRepo: "github.com/acme/app", remoteRepo: (name) => (name === "upstream" ? "github.com/up/app" : "") });
+      if (!verdict.deny) throw new Error(`${command} is no person-only act`);
+      expect(verdict).toMatchObject({ rule: "outside-write", ask: true });
+      expect(decide(tool, guard, command), `${tool}: ${command}`).toEqual(expectedAttended(tool, verdict));
+    }
+    expect(decide(tool, guard, FEATURE_PUSH)).toEqual({ deny: false });
+    expect(decide(tool, guard, "git push https://github.com/acme/app.git feat/x")).toEqual({ deny: false });
+  });
+
+  it("runs a push to a second remote whose URL is the origin's, and to origin under a pushInsteadOf rewrite", async () => {
+    const rewrite = '[url "git@github.com:acme/"]\n\tpushInsteadOf = https://github.com/acme/\n';
+    const guard = await placeGuard("claude", { ".git/config": `${ORIGIN}${remote("mirror", "git@github.com:acme/app.git")}${rewrite}` });
+    expect(decide("claude", guard, "git push mirror feat/x")).toEqual({ deny: false });
+    expect(decide("claude", guard, FEATURE_PUSH)).toEqual({ deny: false });
+  });
+
+  it("reads the push remote of a push naming none from the branch's configuration", async () => {
+    const config = `${ORIGIN}${remote("upstream", "https://github.com/up/app.git")}[branch "feat/x"]\n\tpushRemote = upstream\n`;
+    const guard = await placeGuard("claude", { ".git/config": config });
+    expect(decide("claude", guard, "git push")).toMatchObject({ deny: true, ask: true });
+    expect(decide("claude", guard, FEATURE_PUSH)).toEqual({ deny: false });
+  });
+
+  it("asks for a push to origin from another checkout of another repository, and runs one from a checkout of the same", async () => {
+    const guard = await placeGuard("claude", {
+      ".git/config": ORIGIN,
+      "other/.git/HEAD": "ref: refs/heads/feat/x\n",
+      "other/.git/config": remote("origin", "https://github.com/other/repo.git"),
+      "clone/.git/HEAD": "ref: refs/heads/feat/x\n",
+      "clone/.git/config": remote("origin", "git@github.com:acme/app.git"),
+    });
+    expect(decide("claude", guard, `cd other && ${FEATURE_PUSH}`)).toMatchObject({ deny: true, ask: true });
+    expect(decide("claude", guard, `cd clone && ${FEATURE_PUSH}`)).toEqual({ deny: false });
+  });
+
+  it("reads a configuration holding more URL rewrite rules than its ceiling as unreadable, so each lookup stays bounded", async () => {
+    const rules = Array.from({ length: 257 }, (_, n) => `[url "https://mirror${n}.example.com/"]\n\tinsteadOf = https://src${n}.example.com/\n`).join("");
+    const guard = await placeGuard("claude", { ".git/config": `${ORIGIN}${rules}` });
+    expect(decide("claude", guard, `${COMMENT} -R acme/app`)).toMatchObject({ deny: true, ask: true });
+    await getRepo().seedFiles({ ".git/config": `${ORIGIN}${rules.split("[url").slice(0, 4).join("[url")}` });
+    expect(decide("claude", guard, `${COMMENT} -R acme/app`)).toEqual({ deny: false });
+  });
+
+  it("refuses a push to another repository unattended, and still runs the run verb", async () => {
+    const guard = await placeGuard("claude", { ".git/config": ORIGIN, ".stamity/runs/2026-10-23_z/record.md": record("in progress", "unattended") });
+    expect(decide("claude", guard, "git push https://github.com/other/repo.git feat/x").deny).toBe(true);
+    expect(decide("claude", guard, RUN_END)).toEqual({ deny: false });
   });
 });

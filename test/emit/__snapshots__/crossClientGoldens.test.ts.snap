@@ -485,6 +485,7 @@ const GIT_MAX_BYTES = 4096;
 const TAG_NAMES_MAX = 10000;
 const PACKED_REFS_MAX_BYTES = 8388608;
 const CONFIG_MAX_BYTES = 1048576;
+const REWRITES_MAX = 256;
 const PLACES_MAX = 32;
 const CANARY_SEGMENTS = [".stamity","preflight-canary.json"];
 const SHELL_TOOLS = new Set(["Bash", "PowerShell", "Shell", "bash", "powershell", "shell"]);
@@ -2046,7 +2047,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 	function repoKey(text, host) {
 		const parts = /^[a-z][a-z0-9+.-]*:\\/\\/(?:[^@/]*@)?([^/:?#]+)(?::\\d*)?\\/+([^/?#]+)\\/([^/?#]+)/i.exec(text) ?? /^(?:[^@/:]+@)?([^/:]+):(?!\\/)([^/]+)\\/([^/]+?)\\/?$/.exec(text) ?? /^(?:([^/:@]+)\\/)?([^/:@]+)\\/([^/:@]+?)\\/?$/.exec(text);
 		if (parts === null) return "";
-		const where = (parts[1] ?? host).toLowerCase().replace(/^www\\./, "").replace(/^api\\.(?=github\\.com$|[^.]+\\.ghe\\.com$)/, "");
+		const where = (parts[1] ?? host).toLowerCase().replace(/\\.+$/, "").replace(/^www\\./, "").replace(/^api\\.(?=github\\.com$|[^.]+\\.ghe\\.com$)/, "");
 		const owner = (parts[2] ?? "").toLowerCase();
 		const name = (parts[3] ?? "").toLowerCase().replace(/\\.git$/, "");
 		const plain = (part) => /^[\\w.-]+$/.test(part) && !/^\\.+$/.test(part);
@@ -2191,11 +2192,43 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 	};
 	// Read once per verdict, so a line holding many gh calls is still read in one pass (the guard's hook timeout).
 	let lineMentions = null;
-	const environment = /\\bGH_(?:REPO|HOST)\\b/.test(command);
+	const environment = /\\bGH_(?:REPO|HOST)\\b|\\bGIT_CONFIG\\w*/.test(command);
 	/** Whether a gh write naming no repository lands outside the origin: gh's default unknown or another repository. */
 	const defaultAway = () => {
 		const fallback = ctx.ghDefaultRepo;
 		return fallback === null || fallback !== undefined && fallback !== "" && fallback !== ctx.originRepo;
+	};
+	/** The spellings of stdin a tool reads a body from (REQ-FLOW-134, review/121): the dash and the device paths. */
+	const STDIN = new Set([
+		"-",
+		"/dev/stdin",
+		"/dev/fd/0",
+		"/proc/self/fd/0"
+	]);
+	/** Whether the line sets git configuration through its environment, which can move a remote or a URL (review/128). */
+	const gitEnvironment = /\\bGIT_CONFIG\\w*/.test(command);
+	/**
+	* \`outside-write\` for a push (REQ-FLOW-134, decision D16, review/130): each repository word the push names (its
+	* \`--repo\` value and its first positional word) is a URL read by \`repoKey\`, or a remote's name, read through the
+	* context's \`remoteRepo\` (its push URL in git's merged configuration). With none, the remote the context's
+	* \`pushRemote\` names is read. \`origin\` in the session's own checkout runs, and so does any word naming the origin's own
+	* repository. Outside: a word the shell fills in, a remote the configuration does not place, a push remote the guard
+	* cannot tell, and a line that sets a remote or a URL through a \`-c\` pair or its environment.
+	*/
+	const pushOutside = (words, config) => {
+		const origin = ctx.originRepo;
+		if (origin === undefined) return;
+		const outside = () => {
+			deny("outside-write", "A push to another repository, or to a remote the guard cannot place");
+		};
+		if (gitEnvironment || config.some((pair) => /^(?:remote|url)\\./i.test(pair))) return outside();
+		const named = words.length > 0 ? words : [[ctx.pushRemote === undefined ? "origin" : ctx.pushRemote, undefined]];
+		for (const [word, mark] of named) {
+			if (word === null || (mark?.kinds ?? "") !== "" || /[$\`]/.test(word)) return outside();
+			if (word === "origin" && ctx.ownCheckout !== false) continue;
+			const key = /[:/\\\\]/.test(word) || word === "." ? repoKey(word, "github.com") : ctx.remoteRepo?.(word) ?? "";
+			if (key === "" || key !== origin) return outside();
+		}
 	};
 	/** A refspec's destination as a branch name: \`+\` dropped, \`<src>:\` cut, \`refs/heads/\` or \`heads/\` cut. */
 	function destination(refspec) {
@@ -2205,12 +2238,22 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		const dst = spec.slice(colon + 1);
 		return dst === "" ? spec.slice(0, colon) : dst;
 	}
+	/** The repository words the last push read named (review/130), for \`pushRead\`. */
+	let pushReach = [];
+	/** A push's acts: its branch, force, deletion and tag acts, then the repository it reaches (\`pushOutside\`). */
+	function pushRead(args, config, marks) {
+		pushReach = [];
+		pushVerdict(args, config, marks);
+		pushOutside(pushReach, config);
+	}
 	function pushVerdict(args, config, marks = []) {
 		let force = false;
 		let remove = false;
 		let tags = false;
 		let matching = false;
 		let repoGiven = false;
+		/** The \`--repo\` value, with its word's marks (review/130). */
+		const repoWords = [];
 		const positionals = [];
 		/** Each positional's marks (review/69, review/77), beside it. */
 		const positionalMarks = [];
@@ -2264,6 +2307,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				else if (is(["--delete", "--prune"])) remove = true;
 				else if (is(["--repo"])) {
 					repoGiven = true;
+					repoWords.push(arg.includes("=") ? [arg.slice(arg.indexOf("=") + 1), marks[j]] : [args[j + 1] ?? null, marks[j + 1]]);
 					if (!arg.includes("=")) j += 1;
 				} else if (is([
 					"--push-option",
@@ -2285,6 +2329,9 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				positionalMarks.push(marks[j]);
 			}
 		};
+		// The repository the push reaches (REQ-FLOW-134, review/130): the \`--repo\` value and the first positional word, read
+		// by \`pushRead\` after this reader's own acts, so a branch act on the line is still the one named.
+		pushReach = [...repoWords, ...positionals.length > 0 ? [[positionals[0] ?? null, positionalMarks[0]]] : []];
 		const named = repoGiven ? positionals : positionals.slice(1);
 		const namedMarks = repoGiven ? positionalMarks : positionalMarks.slice(1);
 		// An unquoted expansion, a glob or a brace form in the remote's place may split or expand into the remote and
@@ -2609,7 +2656,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 	* the line cannot show at all (gh's \`--input\`, a \`-F\` field read from \`@<file>\`, a curl or wget body that is no JSON
 	* object literal, a file or a form, stdin among them) reads as the denying value too (review/228).
 	*/
-	function httpVerdict(line) {
+	function httpVerdict(line, chained = false) {
 		const gh = line[0] === "gh";
 		// gh fills \`{branch}\` and \`:branch\` (its own placeholder pattern) from the checkout, in the endpoint and in a typed
 		// \`-F\` field (review/127): the current branch, or the default branch where the checkout is on none.
@@ -2617,7 +2664,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		// The words as \`httpCall\` reads them, wget's shortened method and body options expanded (pr/11).
 		const { write, method, paths: targets, targets: raw, cmd, next } = httpCall(line);
 		// The call after \`--next\` (pr/72), its acts collected beside this call's (v0a).
-		if (next !== null) httpVerdict(next);
+		if (next !== null) httpVerdict(next, true);
 		const paths = gh ? targets.map(fill) : targets;
 		const text = cmd.join(" ");
 		const fieldFlag = gh ? /^(-[fF]|--field|--raw-field)$/ : /^(-[A-Za-z]*d|--data(-raw|-binary|-ascii|-urlencode)?|--json|--post-data|--body-data)$/;
@@ -2627,6 +2674,8 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		const queries = [];
 		/** Whether the line sends a body, or a field of one, it cannot show (review/228). */
 		let hiddenBody = false;
+		/** Each JSON body a curl or wget call sends, as parsed, for the outside-party reader (review/125). */
+		const parsed = [];
 		const add = (key, value, typed) => {
 			const shown = typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? String(value) : null;
 			// A typed \`-F\` field reads a literal \`null\` as JSON null, and its placeholders filled (review/127).
@@ -2664,6 +2713,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			};
 			try {
 				const body = JSON.parse(value);
+				parsed.push(body);
 				if (typeof body === "object" && body !== null && !Array.isArray(body)) {
 					for (const [key, field] of Object.entries(body)) add(key, field, false);
 				} else hiddenBody = true;
@@ -2858,29 +2908,49 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		/**
 		* \`outside-write\` for one HTTP write (REQ-FLOW-134): a gh \`api\` call, or a \`curl\` or \`wget\` call to the GitHub API
 		* host (\`api.github.com\`, \`api.<name>.ghe.com\`, or the origin's own Enterprise host under \`api/v3/\` or \`api/graphql\`,
-		* build/21); a curl or wget write to any other host is not this rule's, except one whose host the line cannot show,
-		* which is outside. Each \`repos/<owner>/<repo>/…\` path is a target, its host the URL's or, for gh, \`--hostname\`'s
-		* or the context's \`ghHost\`; one the line cannot show (a word the shell fills in, a dot segment, \`repositories/<id>\`)
-		* is outside; gh's \`{owner}\`/\`{repo}\` placeholders land where gh's default does, and \`GH_REPO\` or \`GH_HOST\` on the
-		* line makes a gh call outside. A GraphQL call whose mutation selects any field but a state-only one, or whose query
-		* the line cannot show, asks (build/20): its subject is a node id the line cannot place. A \`body\` or \`title\` field is
-		* read for a mention, and a reviewer or assignee field for a person (build/22); a body on stdin, or one the shell
-		* fills in, makes the whole line read for a mention; a body read from a file is not read.
+		* build/21), each host compared lower-cased with its trailing dot and \`www.\` cut (review/132); a curl or wget write
+		* to any other host is not this rule's, except one whose host the line cannot show, which is outside.
+		*
+		* **Target.** Each \`repos/<owner>/<repo>/…\` path is a target, its host the URL's or, for gh, the last \`--hostname\`'s
+		* (gh reads the last, review/132) or the context's \`ghHost\`; one the line cannot show (a word the shell fills in, a
+		* dot segment, \`repositories/<id>\`) is outside, and so is a write to any other path, a gist, a team discussion or a
+		* follow among them (review/122); gh's \`{owner}\`/\`{repo}\` placeholders land where gh's default does, and \`GH_REPO\`,
+		* \`GH_HOST\` or a git configuration variable on the line makes a gh call outside.
+		*
+		* **GraphQL.** A call whose mutation selects any field but a state-only one asks (build/20): its subject is a node
+		* id the line cannot place. So does a call whose query the line does not show (review/120, review/127, review/131):
+		* none shown, a body read from a file, stdin or the request body, a query or a field key the shell fills in, any
+		* call after curl's \`--next\` (whose words carry no marks), and a query holding a comment or a block string, which
+		* the mask may read otherwise than GraphQL does.
+		*
+		* **Mention and person.** A \`body\` or \`title\` key at any depth of a gh field (\`comments[][body]\`) or of a JSON body
+		* is read for a mention (review/125), and a reviewer or assignee key for a person (build/22); a body on stdin in any
+		* spelling (review/121), or a gh field the shell fills in, makes the whole line read for a mention; a body read from
+		* a file is not read.
 		*/
 		function outsideCall() {
 			const origin = ctx.originRepo ?? "";
 			const originHost = /^[^/]*/.exec(origin)?.[0] ?? "";
 			const host = ctx.ghHost ?? "github.com";
-			const marks = markMap.get(line) ?? [];
-			const named = cmd.indexOf("--hostname");
-			const given = cmd.find((word) => word.startsWith("--hostname="))?.slice(11) ?? (named === -1 ? host : cmd[named + 1] ?? "$");
+			const marks = chained ? [] : markMap.get(line) ?? [];
+			/** Whether the shell fills in part of the call's word at \`at\`; after \`--next\` its words carry no marks, so its text is read. */
+			const shellFilled = (at) => chained ? /[$\`]/.test(line[at] ?? "") : /e/.test(marks[at]?.kinds ?? "");
+			const normal = (name) => name.toLowerCase().replace(/\\.+$/, "").replace(/^www\\./, "");
+			let given = host;
+			if (gh) {
+				for (let k = 1; k < cmd.length; k += 1) {
+					const word = cmd[k] ?? "";
+					if (word === "--hostname") given = cmd[k += 1] ?? "$";
+					else if (word.startsWith("--hostname=")) given = word.slice(11);
+				}
+			};
 			const keys = [];
 			let defaulted = false;
 			let graphql = false;
 			for (const target of raw) {
 				const url = /^(?:[a-z][a-z0-9+.-]*:\\/\\/)?(?:[^@/]*@)?([^/:?#]*)(?::\\d*)?([\\s\\S]*)$/i.exec(target);
 				const scheme = /^[a-z][a-z0-9+.-]*:\\/\\//i.test(target);
-				const at = gh && !scheme ? given : (url?.[1] ?? "").toLowerCase();
+				const at = normal(gh && !scheme ? given : url?.[1] ?? "");
 				const rest = gh && !scheme ? target : url?.[2] ?? "";
 				if (at === "" || /[$\`]/.test(at)) {
 					keys.push("");
@@ -2890,12 +2960,13 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				if (!gh && at !== "api.github.com" && !/^api\\.[^.]+\\.ghe\\.com$/.test(at) && !(originHost !== "github.com" && at === originHost && api)) continue;
 				const path = (rest.replace(/^\\/+/, "").replace(/^api\\/(?:v3\\/)?/i, "").split(/[?#]/)[0] ?? "").replace(/%([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(Number.parseInt(hex, 16)));
 				const repo = /^repos\\/([^/]+)\\/([^/]+)/i.exec(path);
-				const filled = gh && repo !== null && /^(?:\\{owner\\}|:owner)$/.test(repo[1] ?? "") && /^(?:\\{repo\\}|:repo)$/.test(repo[2] ?? "");
+				const placeholders = gh && repo !== null && /^(?:\\{owner\\}|:owner)$/.test(repo[1] ?? "") && /^(?:\\{repo\\}|:repo)$/.test(repo[2] ?? "");
 				const head = repo?.[0] ?? /^[^/]*/.exec(path)?.[0] ?? "";
 				if (/^graphql\\/?$/i.test(path)) graphql = true;
 				else if (/(?:^|\\/)\\.\\.?(?:\\/|$)/.test(path) || /^repositories\\//i.test(path) || /[$\`]/.test(head)) keys.push("");
-				else if (filled) defaulted = true;
+				else if (placeholders) defaulted = true;
 				else if (repo !== null) keys.push(repoKey(\`\${at}/\${repo[1] ?? ""}/\${repo[2] ?? ""}\`, host));
+				else keys.push("");
 			};
 			if (!gh && !graphql && keys.length === 0) return;
 			const what = gh ? "gh api" : \`\${line[0] ?? ""} to the GitHub API\`;
@@ -2903,8 +2974,18 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				deny("outside-write", \`A write that reaches another repository, or one the guard cannot place (\\\`\${what}\\\`)\`);
 			};
 			if (graphql) {
-				// A query read from a file or stdin, or held in a word the shell fills in, may be any mutation.
-				const unseen = hiddenBody && queries.length === 0 || line.some((word, at) => /query/.test(word) && /e/.test(marks[at]?.kinds ?? ""));
+				// A field word whose key, or whose \`query\` value, the shell fills in; for curl or wget, any body word it fills in.
+				const filledKey = line.some((word, at) => {
+					if (at === 0 || !shellFilled(at)) return false;
+					if (!gh) return true;
+					const flag = /^(?:-[fF]|--field|--raw-field)$/.test(line[at - 1] ?? "");
+					const start = flag ? 0 : /^(?:-i*[fF]|--(?:raw-)?field=)/.exec(word)?.[0].length ?? -1;
+					if (start === -1) return false;
+					const eq = word.indexOf("=", start);
+					const first = chained ? word.search(/[$\`]/) : marks[at]?.first ?? 0;
+					return eq === -1 || first <= eq || word.slice(start, eq).toLowerCase() === "query";
+				});
+				const unseen = chained || queries.length === 0 || hiddenBody || filledKey || queries.some((query) => /"""|#/.test(query));
 				if (unseen || queries.some((query) => mutationFields(mask(query)).some((name) => !STATE_ONLY.has(name)))) {
 					deny("outside-write", \`A GraphQL mutation whose subject is a node id the line cannot place, or a GraphQL call whose query it cannot show (\\\`\${what}\\\`)\`);
 				}
@@ -2913,17 +2994,20 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			const prose = [];
 			const persons = [];
 			const read = (key, value) => {
-				const name = key.toLowerCase().replace(/\\[\\]$/, "");
+				// A key at any depth of a gh field (\`comments[][body]\`) is read by its last part (review/125).
+				const name = (/(?:^|\\[)([A-Za-z_]\\w*)\\]?(?:\\[\\])*$/.exec(key)?.[1] ?? key).toLowerCase();
 				if (name === "body" || name === "title") {
-					if (value === null) whole = true;
-					else prose.push(value);
-				} else if (PEOPLE_KEYS.has(name)) persons.push(value);
+					if (typeof value === "string") prose.push(value);
+					else if (value === null) whole = true;
+				} else if (PEOPLE_KEYS.has(name)) {
+					for (const entry of Array.isArray(value) ? value : [value]) persons.push(typeof entry === "string" ? entry : null);
+				}
 			};
 			if (gh) {
 				for (let k = 1; k < cmd.length; k += 1) {
 					const word = cmd[k] ?? "";
-					if (word === "--input" || word === "--input=-") {
-						if (word === "--input=-" || cmd[k + 1] === "-") whole = true;
+					if (word === "--input" || word.startsWith("--input=")) {
+						if (STDIN.has(word === "--input" ? cmd[k + 1] ?? "" : word.slice(8))) whole = true;
 						if (word === "--input") k += 1;
 						continue;
 					};
@@ -2934,13 +3018,26 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 					if (value === undefined || eq <= 0) continue;
 					const field = value.slice(eq + 1);
 					if ((flag === "-F" || flag === "--field") && field.startsWith("@")) {
-						if (field === "@-") read(value.slice(0, eq), null);
+						if (STDIN.has(field.slice(1))) read(value.slice(0, eq), null);
 					} else read(value.slice(0, eq), /[$\`]/.test(field) ? null : field);
 				}
 			} else {
-				for (const [key, value] of bodyFields) read(key, value);
-				// A body curl or wget reads from stdin (\`-d @-\`, \`-T -\`, \`/dev/stdin\`): the line may hold it.
-				whole ||= cmd.some((word, k) => /(?:^|=)@-$/.test(word) || word === "/dev/stdin" || /^(?:-T|--upload-file)$/.test(word) && cmd[k + 1] === "-");
+				// Every key of each JSON body, at any depth (review/125), one pass over its nodes.
+				const nodes = [...parsed];
+				while (nodes.length > 0) {
+					const node = nodes.pop();
+					if (Array.isArray(node)) {
+						for (const entry of node) nodes.push(entry);
+					} else if (node !== null && typeof node === "object") {
+						for (const [key, value] of Object.entries(node)) {
+							const name = key.toLowerCase();
+							if (name === "body" || name === "title" || PEOPLE_KEYS.has(name)) read(name, value);
+							else nodes.push(value);
+						}
+					}
+				};
+				// A body curl or wget reads from stdin in any spelling (\`-d @-\`, \`@/dev/stdin\`, \`-T -\`, a joined value).
+				whole ||= cmd.some((word) => /(?:^|[=@])(?:-|\\/dev\\/stdin|\\/dev\\/fd\\/0|\\/proc\\/self\\/fd\\/0)$/.test(word));
 			};
 			if (whole ? lineMentions ??= mentions(command) : prose.some(mentions)) {
 				deny("outside-write", \`A body or title naming a person (an \\\`@\\\` mention), which reaches them (\\\`\${what}\\\`)\`);
@@ -3179,26 +3276,29 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		return publishes && !dryRun ? deny("publish", \`Publishing a package (\\\`\${cmd[0]} publish\\\`)\`) : null;
 	}
 	/**
-	* \`outside-write\` (REQ-FLOW-134): a gh write (a \`pr\`, \`issue\`, \`release\`, \`workflow\`, \`run\`, \`label\`, \`cache\`, \`secret\`
-	* or \`variable\` subcommand beyond its reads) that reaches a repository other than the origin, host and \`owner/repo\`
-	* both, or that names a person. A gh \`api\` call, and a \`curl\` or \`wget\` call to the GitHub API, is read where the REST
-	* reader reads it (\`outsideCall\`, inside \`httpVerdict\`).
+	* \`outside-write\` (REQ-FLOW-134): a gh write (a \`pr\`, \`issue\`, \`release\`, \`workflow\`, \`run\`, \`label\`, \`cache\`, \`secret\`,
+	* \`variable\` or \`gist\` subcommand beyond its reads) that reaches a repository other than the origin, host and
+	* \`owner/repo\` both, or that names a person. A gh \`api\` call, and a \`curl\` or \`wget\` call to the GitHub API, is read
+	* where the REST reader reads it (\`outsideCall\`, inside \`httpVerdict\`); a push, in \`pushOutside\`.
 	*
-	* **Target.** Each \`-R\`/\`--repo\` value and each argument URL is a target; one the line cannot show (a word the shell
-	* fills in, a part \`repoKey\` cannot place) is outside, and so is any target while the origin is unreadable. A write
-	* naming none lands where gh's default does: outside when the context's \`ghDefaultRepo\` is \`null\` or another
-	* repository. \`GH_REPO\` or \`GH_HOST\` named anywhere on the line (set, exported or wrapped) makes every gh write on it
-	* outside.
+	* **Target.** Each \`-R\`/\`--repo\` value, each argument URL, \`gh issue transfer\`'s destination and \`gh issue develop\`'s
+	* \`--branch-repo\` (review/122, review/123) is a target; one the line cannot show (a word the shell fills in, a part
+	* \`repoKey\` cannot place) is outside, and so is any target while the origin is unreadable. A write naming none lands
+	* where gh's default does: outside when the context's \`ghDefaultRepo\` is \`null\` or another repository. \`GH_REPO\`,
+	* \`GH_HOST\` or a git configuration variable named anywhere on the line makes every gh write on it outside. A gist
+	* write shares text outside the repository, so it asks (review/122).
 	*
-	* **Mention.** An inline \`-b\`/\`--body\`, \`-t\`/\`--title\`, \`-n\`/\`--notes\` or \`--subject\` value is read by \`mentions\`.
-	* Where the value holds a word the shell fills in, or the body comes on stdin (\`--body-file -\`, \`-F -\`,
-	* \`--notes-file -\`), a heredoc or a substitution's heredoc the reading skips as data among them (REQ-FLOW-141), the
-	* whole line is read instead. A body gh reads from a file (\`--body-file <path>\`) or fills from commits is not read: the
-	* named residual. A \`git commit\` message is not read: a mention in one notifies no one (build/25).
+	* **Mention.** An inline \`-b\`/\`--body\`, \`-t\`/\`--title\`, \`-n\`/\`--notes\` or \`--subject\` value, and on \`close\` and
+	* \`reopen\` the \`-c\`/\`--comment\` value (review/124), is read by \`mentions\`, joined or attached spellings too. Where the
+	* value holds a word the shell fills in, or the body comes on stdin in any spelling (\`-\`, \`/dev/stdin\`, joined or
+	* attached; review/121, review/126), a heredoc or a substitution's heredoc the reading skips as data among them
+	* (REQ-FLOW-141), the whole line is read instead. A body gh reads from a file, fills from commits, or takes from a
+	* variable the line does not set is not read: the named residual. A \`git commit\` message is not read: a mention in
+	* one notifies no one (build/25).
 	*
 	* **Person.** A reviewer or assignee value (\`--reviewer\`, \`--add-reviewer\`, \`--assignee\`, \`--add-assignee\`, and \`-r\`
-	* and \`-a\` where \`pr create\` and \`issue create\` read them so) names a person unless \`people\` reads it as \`@me\` or one
-	* of the repository's own apps; one the shell fills in is a person (build/22).
+	* and \`-a\`, separate or attached, where \`pr create\` and \`issue create\` read them so) names a person unless \`people\`
+	* reads it as \`@me\` or one of the repository's own apps; one the shell fills in is a person (build/22).
 	*/
 	function outsideVerdict(cmd) {
 		const origin = ctx.originRepo;
@@ -3246,13 +3346,24 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				"list",
 				"ls",
 				"get"
+			]],
+			["gist", [
+				"list",
+				"ls",
+				"view",
+				"clone"
 			]]
 		]);
 		const reads = READS.get(group);
 		if (reads === undefined || sub === "" || reads.includes(sub)) return;
+		if (group === "gist") {
+			deny("outside-write", \`A gist write, which shares text outside the repository (\\\`gh gist \${sub}\\\`)\`);
+			return;
+		};
 		const host = ctx.ghHost ?? "github.com";
 		const marks = markMap.get(cmd) ?? [];
 		const shown = (at) => (marks[at]?.kinds ?? "") === "" && !/[$\`]/.test(cmd[at] ?? "");
+		const closing = (group === "pr" || group === "issue") && (sub === "close" || sub === "reopen");
 		const PROSE = new Set([
 			"-b",
 			"--body",
@@ -3260,28 +3371,34 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			"--title",
 			"-n",
 			"--notes",
-			"--subject"
+			"--subject",
+			...closing ? ["-c", "--comment"] : []
 		]);
+		const ATTACHED = closing ? /^(?:--(?:body|title|notes|subject|comment)=|-[btnc](?=.))([\\s\\S]*)$/ : /^(?:--(?:body|title|notes|subject)=|-[btn](?=.))([\\s\\S]*)$/;
+		const creating = group === "pr" && sub === "create" ? "ra" : group === "issue" && sub === "create" ? "a" : "";
 		const PEOPLE = new Set([
 			"--reviewer",
 			"--add-reviewer",
 			"--assignee",
 			"--add-assignee",
-			...group === "pr" && sub === "create" ? ["-r", "-a"] : group === "issue" && sub === "create" ? ["-a"] : []
+			...[...creating].map((letter) => \`-\${letter}\`)
 		]);
 		const targets = [];
+		const positionals = [];
 		let whole = false;
 		const prose = [];
 		const persons = [];
 		for (let k = 1; k < cmd.length; k += 1) {
 			const word = cmd[k] ?? "";
-			const attached = /^(?:--(?:body|title|notes|subject)=|-[btn](?=.))([\\s\\S]*)$/.exec(word);
+			if (!word.startsWith("-")) positionals.push(k);
+			const attached = ATTACHED.exec(word);
 			const person = /^--(?:add-)?(?:reviewer|assignee)=([\\s\\S]*)$/.exec(word);
-			if (word === "-R" || word === "--repo") {
+			const file = /^(?:-F=?|--(?:body|notes)-file=)([\\s\\S]+)$/.exec(word);
+			if (word === "-R" || word === "--repo" || word === "--branch-repo") {
 				targets.push(shown(k + 1) ? repoKey(cmd[k + 1] ?? "", host) : "");
 				k += 1;
-			} else if (/^(?:--repo=|-R)./.test(word)) {
-				targets.push(shown(k) ? repoKey(word.replace(/^(?:--repo=|-R=?)/, ""), host) : "");
+			} else if (/^(?:--repo=|--branch-repo=|-R)./.test(word)) {
+				targets.push(shown(k) ? repoKey(word.replace(/^(?:--repo=|--branch-repo=|-R=?)/, ""), host) : "");
 			} else if (/^https?:\\/\\//i.test(word)) {
 				targets.push(shown(k) ? repoKey(word, host) : "");
 			} else if (PROSE.has(word)) {
@@ -3296,14 +3413,21 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				k += 1;
 			} else if (person !== null) {
 				persons.push(shown(k) ? person[1] ?? "" : null);
+			} else if (creating !== "" && word.length > 2 && word[0] === "-" && creating.includes(word[1] ?? "")) {
+				persons.push(shown(k) ? word.slice(2).replace(/^=/, "") : null);
 			} else if ([
 				"-F",
 				"--body-file",
 				"--notes-file"
 			].includes(word)) {
-				if (cmd[k + 1] === "-" || !shown(k + 1)) whole = true;
+				if (STDIN.has(cmd[k + 1] ?? "") || !shown(k + 1)) whole = true;
 				k += 1;
-			} else if (/^--(?:body|notes)-file=-$/.test(word)) whole = true;
+			} else if (file !== null && (STDIN.has(file[1] ?? "") || !shown(k))) whole = true;
+		};
+		// \`gh issue transfer <issue> <owner>/<repo>\`: the destination is the transfer's second positional word (review/122).
+		const moved = group === "issue" && sub === "transfer" ? positionals[3] : undefined;
+		if (moved !== undefined && !/^https?:\\/\\//i.test(cmd[moved] ?? "")) {
+			targets.push(shown(moved) ? repoKey(cmd[moved] ?? "", host) : "");
 		};
 		const what = \`gh \${group} \${sub}\`;
 		if (environment || targets.some((key) => key === "" || key !== origin) || targets.length === 0 && defaultAway()) {
@@ -3403,8 +3527,8 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			// \`git send-pack\` pushes as \`git push\` does, its options and refspecs laid out the same (pr/16); with
 			// no ref it updates the refs both sides have, the default branch among them, read as a matching push.
 			const argMarks = (markMap.get(cmd) ?? []).slice(cmd.length - args.length);
-			if (sub === "push") pushVerdict(args, config, argMarks);
-			else if (sub === "send-pack") pushVerdict(args, [...config, "push.default=matching"], argMarks);
+			if (sub === "push") pushRead(args, config, argMarks);
+			else if (sub === "send-pack") pushRead(args, [...config, "push.default=matching"], argMarks);
 			else if (sub === "tag") tagVerdict(args);
 			else if (sub === "update-ref" && (args.some((arg) => /^(refs\\/)?tags\\//i.test(arg)) || args.includes("--stdin") && /refs\\/tags\\//i.test(command))) {
 				// \`git update-ref\` writes or deletes a ref by name (pr/53): a tag ref named on the line, or in a \`--stdin\` text
@@ -3456,7 +3580,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 					last: 0,
 					kinds: ""
 				});
-				if (words[0] === "push") pushVerdict(words.slice(1), config, keptMarks.slice(1));
+				if (words[0] === "push") pushRead(words.slice(1), config, keptMarks.slice(1));
 			}
 		} else if (program === "gh") {
 			ghVerdict(cmd);
@@ -5423,7 +5547,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 const repositoryKey = function repositoryKey(text, host) {
 	const parts = /^[a-z][a-z0-9+.-]*:\\/\\/(?:[^@/]*@)?([^/:?#]+)(?::\\d*)?\\/+([^/?#]+)\\/([^/?#]+)/i.exec(text) ?? /^(?:[^@/:]+@)?([^/:]+):(?!\\/)([^/]+)\\/([^/]+?)\\/?$/.exec(text) ?? /^(?:([^/:@]+)\\/)?([^/:@]+)\\/([^/:@]+?)\\/?$/.exec(text);
 	if (parts === null) return "";
-	const where = (parts[1] ?? host).toLowerCase().replace(/^www\\./, "").replace(/^api\\.(?=github\\.com$|[^.]+\\.ghe\\.com$)/, "");
+	const where = (parts[1] ?? host).toLowerCase().replace(/\\.+$/, "").replace(/^www\\./, "").replace(/^api\\.(?=github\\.com$|[^.]+\\.ghe\\.com$)/, "");
 	const owner = (parts[2] ?? "").toLowerCase();
 	const name = (parts[3] ?? "").toLowerCase().replace(/\\.git$/, "");
 	const plain = (part) => /^[\\w.-]+$/.test(part) && !/^\\.+$/.test(part);
@@ -5791,72 +5915,141 @@ function linesOf(name, tail) {
 }
 
 /**
- * The remotes a git dir's config names (REQ-FLOW-134): per remote section, its first url and its gh-resolved marker,
- * the worktree's own config read after the common one. partial where the reading may miss or misplace a remote: a
- * config past CONFIG_MAX_BYTES or behind a link, or one that includes another file or rewrites URLs (include,
- * includeIf, url).
+ * The configuration files git merges for a git dir, in git's order (REQ-FLOW-134, review/128): the system file
+ * (GIT_CONFIG_SYSTEM, else /etc/gitconfig) unless GIT_CONFIG_NOSYSTEM is on, the global ones (GIT_CONFIG_GLOBAL, else
+ * the XDG file and ~/.gitconfig), then the repository's common config and the worktree's own.
  */
-function remotesOf(dirs) {
+function configFiles(dirs) {
+  const env = process.env;
+  const on = (value) => value !== undefined && !["", "0", "false", "no", "off"].includes(String(value).toLowerCase());
+  const home = env.HOME ?? env.USERPROFILE ?? "";
+  const files = [];
+  if (!on(env.GIT_CONFIG_NOSYSTEM)) files.push(env.GIT_CONFIG_SYSTEM || "/etc/gitconfig");
+  if (env.GIT_CONFIG_GLOBAL !== undefined) {
+    if (env.GIT_CONFIG_GLOBAL !== "") files.push(env.GIT_CONFIG_GLOBAL);
+  } else {
+    const xdg = env.XDG_CONFIG_HOME || (home === "" ? "" : join(home, ".config"));
+    if (xdg !== "") files.push(join(xdg, "git", "config"));
+    if (home !== "") files.push(join(home, ".gitconfig"));
+  }
+  files.push(join(dirs.commonDir, "config"), join(dirs.gitDir, "config.worktree"));
+  return files;
+}
+
+/**
+ * What git's merged configuration says about remotes (REQ-FLOW-134, review/128): per remote its first url and pushurl
+ * and its gh-resolved marker, per branch its remote and pushRemote, remote.pushDefault, and every url.<base>.insteadOf
+ * and pushInsteadOf rule. partial where the reading may miss or misplace a remote: a file past CONFIG_MAX_BYTES or
+ * behind a link (/dev/null aside), an include or includeIf, or configuration the hook's environment sets
+ * (GIT_CONFIG_COUNT, GIT_CONFIG_PARAMETERS), or more than REWRITES_MAX URL rewrite rules.
+ */
+function configOf(dirs) {
   const remotes = new Map();
-  let partial = false;
-  for (const path of [join(dirs.commonDir, "config"), join(dirs.gitDir, "config.worktree")]) {
+  const branches = new Map();
+  const rewrites = [];
+  let pushDefault = null;
+  let partial = (process.env.GIT_CONFIG_COUNT ?? "") !== "" || (process.env.GIT_CONFIG_PARAMETERS ?? "") !== "";
+  for (const path of configFiles(dirs)) {
     let text = "";
-    try {
-      const stats = lstatSync(path);
-      if (!stats.isFile() || stats.size > CONFIG_MAX_BYTES) partial = true;
-      else text = readFileSync(path, "utf8");
-    } catch (error) {
-      if (!error || error.code !== "ENOENT") partial = true;
+    if (path !== "/dev/null") {
+      try {
+        const stats = lstatSync(path);
+        if (!stats.isFile() || stats.size > CONFIG_MAX_BYTES) partial = true;
+        else text = readFileSync(path, "utf8");
+      } catch (error) {
+        if (!error || (error.code !== "ENOENT" && error.code !== "ENOTDIR")) partial = true;
+      }
     }
-    let remote = null;
+    let kind = "";
+    let sub = null;
     for (const line of text.split(/\\r?\\n/)) {
       // Each pattern here is linear in the line: no two adjacent runs can share a character (the hook's timeout).
       const head = /^\\s*\\[\\s*([A-Za-z][\\w.-]*)\\s*(?:"((?:[^"\\\\]|\\\\.)*)"\\s*)?\\]/.exec(line);
       if (head !== null) {
-        const kind = head[1].toLowerCase();
-        if (kind === "include" || kind === "includeif" || kind === "url" || kind.startsWith("url.")) partial = true;
-        const name = kind === "remote" ? head[2]?.replace(/\\\\(.)/g, "$1") : kind.startsWith("remote.") ? head[1].slice(7) : undefined;
-        remote = name === undefined ? null : (remotes.get(name) ?? { url: null, resolved: null });
-        if (remote !== null) remotes.set(name, remote);
+        const dot = head[1].indexOf(".");
+        kind = (dot === -1 ? head[1] : head[1].slice(0, dot)).toLowerCase();
+        sub = head[2] !== undefined ? head[2].replace(/\\\\(.)/g, "$1") : dot === -1 ? null : head[1].slice(dot + 1).toLowerCase();
+        if (kind === "include" || kind === "includeif") partial = true;
         continue;
       }
       const pair = /^\\s*([A-Za-z][\\w-]*)\\s*=(.*)$/.exec(line);
-      if (remote === null || pair === null) continue;
+      if (pair === null) continue;
+      const key = pair[1].toLowerCase();
       const value = pair[2].replace(/\\s[#;].*$/, "").trim().replace(/^"([\\s\\S]*)"$/, "$1");
-      if (pair[1].toLowerCase() === "url") remote.url ??= value;
-      else if (pair[1].toLowerCase() === "gh-resolved") remote.resolved = value;
+      if (kind === "remote" && sub === null) {
+        if (key === "pushdefault") pushDefault = value;
+      } else if (kind === "remote") {
+        const remote = remotes.get(sub) ?? { url: null, pushurl: null, resolved: null };
+        remotes.set(sub, remote);
+        if (key === "url") remote.url ??= value;
+        else if (key === "pushurl") remote.pushurl ??= value;
+        else if (key === "gh-resolved") remote.resolved = value;
+      } else if (kind === "branch" && sub !== null) {
+        const entry = branches.get(sub) ?? {};
+        branches.set(sub, entry);
+        if (key === "remote" || key === "pushremote") entry[key] = value;
+      } else if (kind === "url" && sub !== null && (key === "insteadof" || key === "pushinsteadof")) {
+        rewrites.push({ base: sub, prefix: value, push: key === "pushinsteadof" });
+      }
     }
   }
-  return { remotes, partial };
+  // Each URL looked up scans every rewrite rule, so past REWRITES_MAX of them the reading is partial: the lookups stay
+  // bounded by the remotes read times that ceiling (the hook's timeout).
+  if (rewrites.length > REWRITES_MAX) partial = true;
+  return { remotes, branches, rewrites, pushDefault, partial };
 }
 
-/** The session repository's origin (REQ-FLOW-134), read from the repository the guard sits in: "" where unreadable. */
-function originOf(root) {
-  const dirs = gitDirsFrom(root);
-  const url = dirs === null ? null : (remotesOf(dirs).remotes.get("origin")?.url ?? null);
-  return url === null ? "" : repositoryKey(url, "github.com");
+/** A URL as git rewrites it: the longest matching insteadOf (or, for a push, pushInsteadOf) prefix replaced; null where none matches. */
+function rewritten(config, url, push) {
+  let best = null;
+  for (const rule of config.rewrites) {
+    if (rule.push === push && rule.prefix !== "" && url.startsWith(rule.prefix) && (best === null || rule.prefix.length > best.prefix.length)) best = rule;
+  }
+  return best === null ? null : best.base + url.slice(best.prefix.length);
+}
+
+/** A remote's fetch URL and push URL, as git reads them; null where the remote names none. */
+function fetchUrl(config, remote) {
+  return remote.url === null ? null : (rewritten(config, remote.url, false) ?? remote.url);
+}
+function pushUrl(config, remote) {
+  if (remote.pushurl !== null) return rewritten(config, remote.pushurl, false) ?? remote.pushurl;
+  return remote.url === null ? null : (rewritten(config, remote.url, true) ?? rewritten(config, remote.url, false) ?? remote.url);
+}
+
+/** A remote URL as a repository key only where the whole URL is a repository's (review/129): "" where it reads in part. */
+function remoteKey(url) {
+  if (url === null) return "";
+  const whole = /^(?:[a-z][a-z0-9+.-]*:\\/\\/(?:[^@/]*@)?[^/:?#]+(?::\\d*)?\\/+|(?:[^@/:]+@)?[^/:]+:(?!\\/))[^/?#]+\\/[^/?#]+?\\/?$/i.test(url);
+  return whole ? repositoryKey(url, "github.com") : "";
+}
+
+/** The session repository's origin (REQ-FLOW-134), read from the repository the guard sits in: "" where unreadable or partial. */
+function originOf(config) {
+  const origin = config === null ? undefined : config.remotes.get("origin");
+  return config === null || config.partial || origin === undefined ? "" : remoteKey(fetchUrl(config, origin));
 }
 
 /**
  * Where a gh call naming no repository lands from a place (REQ-FLOW-134): GH_REPO in the hook's environment, else the
- * remote a gh-resolved marker names (base, or an owner/repo on that remote's host), else the only remote; "" where the
- * place has no remote; null where the guard cannot tell: more than one remote and no marker, markers that disagree or
- * that it cannot read, a partial config, a place it cannot read, or GH_HOST naming another host than that remote's.
+ * remote a gh-resolved marker names (base, or an owner/repo on that remote's host), else the only remote, each URL as
+ * git rewrites it; "" where the place has no remote; null where the guard cannot tell: more than one remote and no
+ * marker, markers that disagree or that it cannot read, a partial configuration, a place it cannot read, or GH_HOST
+ * naming another host than that remote's.
  */
-function ghDefaultOf(dirs) {
-  const host = (process.env.GH_HOST ?? "").trim().toLowerCase();
+function ghDefaultOf(config) {
+  const host = (process.env.GH_HOST ?? "").trim().toLowerCase().replace(/\\.+$/, "");
   const named = (process.env.GH_REPO ?? "").trim();
   if (named !== "") return repositoryKey(named, host || "github.com") || null;
-  if (dirs === null) return null;
-  const { remotes, partial } = remotesOf(dirs);
-  if (partial) return null;
-  const keyOf = (url) => (url === null ? "" : repositoryKey(url, "github.com"));
+  if (config === null || config.partial) return null;
+  const remotes = config.remotes;
+  const keyOf = (remote) => remoteKey(fetchUrl(config, remote));
   const marked = [...remotes.values()].filter((remote) => remote.resolved !== null && remote.resolved !== "");
   const keys = marked.map((remote) => {
-    const own = keyOf(remote.url);
+    const own = keyOf(remote);
     return remote.resolved === "base" || own === "" ? own : repositoryKey(remote.resolved, own.split("/")[0]);
   });
-  const only = remotes.size === 1 ? keyOf([...remotes.values()][0].url) : null;
+  const only = remotes.size === 1 ? keyOf([...remotes.values()][0]) : null;
   const picked = keys.length > 0 ? (keys.every((key) => key !== "" && key === keys[0]) ? keys[0] : null) : remotes.size === 0 ? "" : only;
   return picked && host !== "" && picked.split("/")[0] !== host ? null : picked;
 }
@@ -5864,12 +6057,21 @@ function ghDefaultOf(dirs) {
 /**
  * The branch context of each place a shell call's git runs in, one per git dir. Where HEAD names no branch or commit
  * (reftable's placeholder too), an implied destination counts as the default branch, so a refspec-less push is refused.
- * The origin is the session repository's, read from root, in every place; where a gh call naming no target lands is
- * each place's own (REQ-FLOW-134). Both are read the first time the verdict asks, which only a gh write does.
+ * The origin is the session repository's, read from root, in every place; where a gh call naming no target lands, and
+ * which repository each remote pushes to, is each place's own, from git's merged configuration (REQ-FLOW-134,
+ * review/128, review/130). Each is read the first time the verdict asks, which only a gh, curl, wget or push write does.
  */
 function contextsOf(command, cwd, powershell, root) {
   const contexts = new Map();
   let session;
+  let rooted;
+  const rootOf = () => {
+    if (rooted === undefined) {
+      const dirs = gitDirsFrom(root);
+      rooted = dirs === null ? null : { dirs, config: configOf(dirs) };
+    }
+    return rooted;
+  };
   for (const place of placesOf(command, cwd)) {
     const dirs = place === null ? null : place.git !== undefined ? gitDirsOf(place.git) : gitDirsFrom(place.work);
     const key = dirs === null ? "" : dirs.gitDir;
@@ -5882,6 +6084,14 @@ function contextsOf(command, cwd, powershell, root) {
     const defaultBranches = origin !== null && origin.startsWith("ref: refs/remotes/origin/") ? [origin.slice(25)] : [];
     let tags = null;
     let fallback;
+    let read = false;
+    let config = null;
+    const placeConfig = () => {
+      if (!read) config = dirs === null ? null : configOf(dirs);
+      read = true;
+      return config;
+    };
+    const pushes = new Map();
     contexts.set(key, {
       currentBranch: branch !== ".invalid" ? branch : detached ? null : (defaultBranches[0] ?? "main"),
       defaultBranches,
@@ -5900,12 +6110,33 @@ function contextsOf(command, cwd, powershell, root) {
         return tags;
       },
       get originRepo() {
-        session ??= originOf(root);
+        session ??= originOf(rootOf()?.config ?? null);
         return session;
       },
       get ghDefaultRepo() {
-        if (fallback === undefined) fallback = ghDefaultOf(dirs);
+        if (fallback === undefined) fallback = ghDefaultOf(placeConfig());
         return fallback;
+      },
+      // The repository each remote pushes to, read once per name (review/130).
+      remoteRepo(name) {
+        if (!pushes.has(name)) {
+          const merged = placeConfig();
+          const remote = merged === null || merged.partial ? undefined : merged.remotes.get(name);
+          pushes.set(name, remote === undefined ? "" : remoteKey(pushUrl(merged, remote)));
+        }
+        return pushes.get(name);
+      },
+      get pushRemote() {
+        const merged = placeConfig();
+        if (merged === null || merged.partial) return null;
+        const entry = branch === ".invalid" ? {} : (merged.branches.get(branch) ?? {});
+        return entry.pushremote ?? merged.pushDefault ?? entry.remote ?? "origin";
+      },
+      // A place the guard cannot read counts as the session's own, so a push to origin from it runs, as before; only a
+      // readable other checkout has its origin compared (review/130).
+      get ownCheckout() {
+        const own = rootOf();
+        return dirs === null || own === null || resolve(dirs.commonDir) === resolve(own.dirs.commonDir);
       },
       ghHost: (process.env.GH_HOST ?? "").trim().toLowerCase() || "github.com",
     });
@@ -10888,7 +11119,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".claude/hooks/stamity/stamity-agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".claude/hooks/stamity/stamity-cloud-readiness.mjs": "acef8b976c3cf0dc29df1ab1584458bc83c66ab1e7284e28df62af60f1311c91 11348 bytes",
   ".claude/hooks/stamity/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "3941a6776418a80abcdae19324801058f0bd89bf6f6dfe183c815a0fb5d20c66 267662 bytes",
+  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "28bfb763bde7cc51a459da5127beae62870893cc125d5e7b900b964a39f2e10f 280363 bytes",
   ".claude/hooks/stamity/stamity-pre-tool-use-guard.mjs": "752f24a46db0da9f933bcb313a00ef8f6b12b8a655241b9257e40f64d9776965 20816 bytes",
   ".claude/hooks/stamity/stamity-review-gate.mjs": "a410def5d44fde83869b3c2c98db318d470b68a54101e1b20eddfb026f8077b1 51137 bytes",
   ".claude/hooks/stamity/stamity-session-start.mjs": "c807b92eeff34b3e194a0f7ae843c2945d5663d56cdb937786454a6402df3f31 51786 bytes",
@@ -11010,12 +11241,12 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".mcp.json": "f4e65233eea1ba936b61b16f2ee2d90f84a2510436d58f6484d872f507314f2f 387 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "9a1b35f92ea6bd9709e12a38125aa4919f127d1d3ea77e839f7947961cdbe7a1 267658 bytes",
+  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "2815d76b13a1b3396d6f81e9c4b94c9c27aad9acada64e706aed13bcccf127c3 280359 bytes",
   ".stamity/generated/hooks/codex/stamity-portable-hook.mjs": "8480d3a6fe6ea5fe1cad1c683ecbb07f3999cbdb411ae7dff7a1ec09eb207068 20937 bytes",
   ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/codex/stamity-session-start.mjs": "1111332a1630ed4dcb42e421b2326c5dd423a358e3c92bf8cb367e212a7a996d 51799 bytes",
   ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "11bea0199645b88e8fe3b098704ec390b4cdef7556691e2f1eb96da60715a307 270412 bytes",
+  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "583d8098e8476a48040b8d0b00c3cdbf3e09199350f35c96fc4304a6a610ef36 283113 bytes",
   ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "97b118796dbd153216cacceb34fd122b82f9cf75eae3b1d2de4c0938482af8a5 22349 bytes",
   ".stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "9f930fcd797ef464e7f4cb4c40e59b4976d65199a5c974fb67ca7624e5d0287c 56602 bytes",
@@ -11023,7 +11254,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/generated/hooks/cursor/stamity-context-once.mjs": "c74c1b3d2cd908b170c48a8813bd05cc91f058210789a9b2f815b731a2eb6ccd 31773 bytes",
   ".stamity/generated/hooks/cursor/stamity-cursor-continue.mjs": "08bc51855553f4104a80fbe1ea94ba36a95173e005846467e4af5c643bb26a60 9500 bytes",
   ".stamity/generated/hooks/cursor/stamity-model-pins.mjs": "fc71eb522ff67fd73ff00820d0e59495bca188d2e30fc9a26ce85e89fff6fdd5 3813 bytes",
-  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "005fd9dbe2825af9a23be83f3a6b700f4abcbd8ac79ca5cc08ab103b509c237a 267694 bytes",
+  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "a80cef84480fdff02fdbdd6507e3a603756839b4cb7a3c88d47b0b876ab0ee4a 280395 bytes",
   ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs": "513a8e4c2631670fffed73a96be46542fea82d8e1719a5d26da0a872699277c6 20938 bytes",
   ".stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "1111332a1630ed4dcb42e421b2326c5dd423a358e3c92bf8cb367e212a7a996d 51799 bytes",
@@ -11035,7 +11266,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "bff793b6a542b43f116bab71ae02cdabd3e4c9712845b224f1ecc126e0cc82c2 94261 bytes",
+  ".stamity/manifest.json": "72a46f00965d9584f217e2b44898c99948cf23108b9f8d9ac3699e3c9c59d99f 94261 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "6b5b5bebfd779fe5b513cd8c2c41fa3b4dd70826435e9df9c70076ba48c29b98 6548 bytes",
@@ -11541,6 +11772,7 @@ const GIT_MAX_BYTES = 4096;
 const TAG_NAMES_MAX = 10000;
 const PACKED_REFS_MAX_BYTES = 8388608;
 const CONFIG_MAX_BYTES = 1048576;
+const REWRITES_MAX = 256;
 const PLACES_MAX = 32;
 const CANARY_SEGMENTS = [".stamity","preflight-canary.json"];
 const SHELL_TOOLS = new Set(["Bash", "PowerShell", "Shell", "bash", "powershell", "shell"]);
@@ -13102,7 +13334,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 	function repoKey(text, host) {
 		const parts = /^[a-z][a-z0-9+.-]*:\\/\\/(?:[^@/]*@)?([^/:?#]+)(?::\\d*)?\\/+([^/?#]+)\\/([^/?#]+)/i.exec(text) ?? /^(?:[^@/:]+@)?([^/:]+):(?!\\/)([^/]+)\\/([^/]+?)\\/?$/.exec(text) ?? /^(?:([^/:@]+)\\/)?([^/:@]+)\\/([^/:@]+?)\\/?$/.exec(text);
 		if (parts === null) return "";
-		const where = (parts[1] ?? host).toLowerCase().replace(/^www\\./, "").replace(/^api\\.(?=github\\.com$|[^.]+\\.ghe\\.com$)/, "");
+		const where = (parts[1] ?? host).toLowerCase().replace(/\\.+$/, "").replace(/^www\\./, "").replace(/^api\\.(?=github\\.com$|[^.]+\\.ghe\\.com$)/, "");
 		const owner = (parts[2] ?? "").toLowerCase();
 		const name = (parts[3] ?? "").toLowerCase().replace(/\\.git$/, "");
 		const plain = (part) => /^[\\w.-]+$/.test(part) && !/^\\.+$/.test(part);
@@ -13247,11 +13479,43 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 	};
 	// Read once per verdict, so a line holding many gh calls is still read in one pass (the guard's hook timeout).
 	let lineMentions = null;
-	const environment = /\\bGH_(?:REPO|HOST)\\b/.test(command);
+	const environment = /\\bGH_(?:REPO|HOST)\\b|\\bGIT_CONFIG\\w*/.test(command);
 	/** Whether a gh write naming no repository lands outside the origin: gh's default unknown or another repository. */
 	const defaultAway = () => {
 		const fallback = ctx.ghDefaultRepo;
 		return fallback === null || fallback !== undefined && fallback !== "" && fallback !== ctx.originRepo;
+	};
+	/** The spellings of stdin a tool reads a body from (REQ-FLOW-134, review/121): the dash and the device paths. */
+	const STDIN = new Set([
+		"-",
+		"/dev/stdin",
+		"/dev/fd/0",
+		"/proc/self/fd/0"
+	]);
+	/** Whether the line sets git configuration through its environment, which can move a remote or a URL (review/128). */
+	const gitEnvironment = /\\bGIT_CONFIG\\w*/.test(command);
+	/**
+	* \`outside-write\` for a push (REQ-FLOW-134, decision D16, review/130): each repository word the push names (its
+	* \`--repo\` value and its first positional word) is a URL read by \`repoKey\`, or a remote's name, read through the
+	* context's \`remoteRepo\` (its push URL in git's merged configuration). With none, the remote the context's
+	* \`pushRemote\` names is read. \`origin\` in the session's own checkout runs, and so does any word naming the origin's own
+	* repository. Outside: a word the shell fills in, a remote the configuration does not place, a push remote the guard
+	* cannot tell, and a line that sets a remote or a URL through a \`-c\` pair or its environment.
+	*/
+	const pushOutside = (words, config) => {
+		const origin = ctx.originRepo;
+		if (origin === undefined) return;
+		const outside = () => {
+			deny("outside-write", "A push to another repository, or to a remote the guard cannot place");
+		};
+		if (gitEnvironment || config.some((pair) => /^(?:remote|url)\\./i.test(pair))) return outside();
+		const named = words.length > 0 ? words : [[ctx.pushRemote === undefined ? "origin" : ctx.pushRemote, undefined]];
+		for (const [word, mark] of named) {
+			if (word === null || (mark?.kinds ?? "") !== "" || /[$\`]/.test(word)) return outside();
+			if (word === "origin" && ctx.ownCheckout !== false) continue;
+			const key = /[:/\\\\]/.test(word) || word === "." ? repoKey(word, "github.com") : ctx.remoteRepo?.(word) ?? "";
+			if (key === "" || key !== origin) return outside();
+		}
 	};
 	/** A refspec's destination as a branch name: \`+\` dropped, \`<src>:\` cut, \`refs/heads/\` or \`heads/\` cut. */
 	function destination(refspec) {
@@ -13261,12 +13525,22 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		const dst = spec.slice(colon + 1);
 		return dst === "" ? spec.slice(0, colon) : dst;
 	}
+	/** The repository words the last push read named (review/130), for \`pushRead\`. */
+	let pushReach = [];
+	/** A push's acts: its branch, force, deletion and tag acts, then the repository it reaches (\`pushOutside\`). */
+	function pushRead(args, config, marks) {
+		pushReach = [];
+		pushVerdict(args, config, marks);
+		pushOutside(pushReach, config);
+	}
 	function pushVerdict(args, config, marks = []) {
 		let force = false;
 		let remove = false;
 		let tags = false;
 		let matching = false;
 		let repoGiven = false;
+		/** The \`--repo\` value, with its word's marks (review/130). */
+		const repoWords = [];
 		const positionals = [];
 		/** Each positional's marks (review/69, review/77), beside it. */
 		const positionalMarks = [];
@@ -13320,6 +13594,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				else if (is(["--delete", "--prune"])) remove = true;
 				else if (is(["--repo"])) {
 					repoGiven = true;
+					repoWords.push(arg.includes("=") ? [arg.slice(arg.indexOf("=") + 1), marks[j]] : [args[j + 1] ?? null, marks[j + 1]]);
 					if (!arg.includes("=")) j += 1;
 				} else if (is([
 					"--push-option",
@@ -13341,6 +13616,9 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				positionalMarks.push(marks[j]);
 			}
 		};
+		// The repository the push reaches (REQ-FLOW-134, review/130): the \`--repo\` value and the first positional word, read
+		// by \`pushRead\` after this reader's own acts, so a branch act on the line is still the one named.
+		pushReach = [...repoWords, ...positionals.length > 0 ? [[positionals[0] ?? null, positionalMarks[0]]] : []];
 		const named = repoGiven ? positionals : positionals.slice(1);
 		const namedMarks = repoGiven ? positionalMarks : positionalMarks.slice(1);
 		// An unquoted expansion, a glob or a brace form in the remote's place may split or expand into the remote and
@@ -13665,7 +13943,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 	* the line cannot show at all (gh's \`--input\`, a \`-F\` field read from \`@<file>\`, a curl or wget body that is no JSON
 	* object literal, a file or a form, stdin among them) reads as the denying value too (review/228).
 	*/
-	function httpVerdict(line) {
+	function httpVerdict(line, chained = false) {
 		const gh = line[0] === "gh";
 		// gh fills \`{branch}\` and \`:branch\` (its own placeholder pattern) from the checkout, in the endpoint and in a typed
 		// \`-F\` field (review/127): the current branch, or the default branch where the checkout is on none.
@@ -13673,7 +13951,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		// The words as \`httpCall\` reads them, wget's shortened method and body options expanded (pr/11).
 		const { write, method, paths: targets, targets: raw, cmd, next } = httpCall(line);
 		// The call after \`--next\` (pr/72), its acts collected beside this call's (v0a).
-		if (next !== null) httpVerdict(next);
+		if (next !== null) httpVerdict(next, true);
 		const paths = gh ? targets.map(fill) : targets;
 		const text = cmd.join(" ");
 		const fieldFlag = gh ? /^(-[fF]|--field|--raw-field)$/ : /^(-[A-Za-z]*d|--data(-raw|-binary|-ascii|-urlencode)?|--json|--post-data|--body-data)$/;
@@ -13683,6 +13961,8 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		const queries = [];
 		/** Whether the line sends a body, or a field of one, it cannot show (review/228). */
 		let hiddenBody = false;
+		/** Each JSON body a curl or wget call sends, as parsed, for the outside-party reader (review/125). */
+		const parsed = [];
 		const add = (key, value, typed) => {
 			const shown = typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? String(value) : null;
 			// A typed \`-F\` field reads a literal \`null\` as JSON null, and its placeholders filled (review/127).
@@ -13720,6 +14000,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			};
 			try {
 				const body = JSON.parse(value);
+				parsed.push(body);
 				if (typeof body === "object" && body !== null && !Array.isArray(body)) {
 					for (const [key, field] of Object.entries(body)) add(key, field, false);
 				} else hiddenBody = true;
@@ -13914,29 +14195,49 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		/**
 		* \`outside-write\` for one HTTP write (REQ-FLOW-134): a gh \`api\` call, or a \`curl\` or \`wget\` call to the GitHub API
 		* host (\`api.github.com\`, \`api.<name>.ghe.com\`, or the origin's own Enterprise host under \`api/v3/\` or \`api/graphql\`,
-		* build/21); a curl or wget write to any other host is not this rule's, except one whose host the line cannot show,
-		* which is outside. Each \`repos/<owner>/<repo>/…\` path is a target, its host the URL's or, for gh, \`--hostname\`'s
-		* or the context's \`ghHost\`; one the line cannot show (a word the shell fills in, a dot segment, \`repositories/<id>\`)
-		* is outside; gh's \`{owner}\`/\`{repo}\` placeholders land where gh's default does, and \`GH_REPO\` or \`GH_HOST\` on the
-		* line makes a gh call outside. A GraphQL call whose mutation selects any field but a state-only one, or whose query
-		* the line cannot show, asks (build/20): its subject is a node id the line cannot place. A \`body\` or \`title\` field is
-		* read for a mention, and a reviewer or assignee field for a person (build/22); a body on stdin, or one the shell
-		* fills in, makes the whole line read for a mention; a body read from a file is not read.
+		* build/21), each host compared lower-cased with its trailing dot and \`www.\` cut (review/132); a curl or wget write
+		* to any other host is not this rule's, except one whose host the line cannot show, which is outside.
+		*
+		* **Target.** Each \`repos/<owner>/<repo>/…\` path is a target, its host the URL's or, for gh, the last \`--hostname\`'s
+		* (gh reads the last, review/132) or the context's \`ghHost\`; one the line cannot show (a word the shell fills in, a
+		* dot segment, \`repositories/<id>\`) is outside, and so is a write to any other path, a gist, a team discussion or a
+		* follow among them (review/122); gh's \`{owner}\`/\`{repo}\` placeholders land where gh's default does, and \`GH_REPO\`,
+		* \`GH_HOST\` or a git configuration variable on the line makes a gh call outside.
+		*
+		* **GraphQL.** A call whose mutation selects any field but a state-only one asks (build/20): its subject is a node
+		* id the line cannot place. So does a call whose query the line does not show (review/120, review/127, review/131):
+		* none shown, a body read from a file, stdin or the request body, a query or a field key the shell fills in, any
+		* call after curl's \`--next\` (whose words carry no marks), and a query holding a comment or a block string, which
+		* the mask may read otherwise than GraphQL does.
+		*
+		* **Mention and person.** A \`body\` or \`title\` key at any depth of a gh field (\`comments[][body]\`) or of a JSON body
+		* is read for a mention (review/125), and a reviewer or assignee key for a person (build/22); a body on stdin in any
+		* spelling (review/121), or a gh field the shell fills in, makes the whole line read for a mention; a body read from
+		* a file is not read.
 		*/
 		function outsideCall() {
 			const origin = ctx.originRepo ?? "";
 			const originHost = /^[^/]*/.exec(origin)?.[0] ?? "";
 			const host = ctx.ghHost ?? "github.com";
-			const marks = markMap.get(line) ?? [];
-			const named = cmd.indexOf("--hostname");
-			const given = cmd.find((word) => word.startsWith("--hostname="))?.slice(11) ?? (named === -1 ? host : cmd[named + 1] ?? "$");
+			const marks = chained ? [] : markMap.get(line) ?? [];
+			/** Whether the shell fills in part of the call's word at \`at\`; after \`--next\` its words carry no marks, so its text is read. */
+			const shellFilled = (at) => chained ? /[$\`]/.test(line[at] ?? "") : /e/.test(marks[at]?.kinds ?? "");
+			const normal = (name) => name.toLowerCase().replace(/\\.+$/, "").replace(/^www\\./, "");
+			let given = host;
+			if (gh) {
+				for (let k = 1; k < cmd.length; k += 1) {
+					const word = cmd[k] ?? "";
+					if (word === "--hostname") given = cmd[k += 1] ?? "$";
+					else if (word.startsWith("--hostname=")) given = word.slice(11);
+				}
+			};
 			const keys = [];
 			let defaulted = false;
 			let graphql = false;
 			for (const target of raw) {
 				const url = /^(?:[a-z][a-z0-9+.-]*:\\/\\/)?(?:[^@/]*@)?([^/:?#]*)(?::\\d*)?([\\s\\S]*)$/i.exec(target);
 				const scheme = /^[a-z][a-z0-9+.-]*:\\/\\//i.test(target);
-				const at = gh && !scheme ? given : (url?.[1] ?? "").toLowerCase();
+				const at = normal(gh && !scheme ? given : url?.[1] ?? "");
 				const rest = gh && !scheme ? target : url?.[2] ?? "";
 				if (at === "" || /[$\`]/.test(at)) {
 					keys.push("");
@@ -13946,12 +14247,13 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				if (!gh && at !== "api.github.com" && !/^api\\.[^.]+\\.ghe\\.com$/.test(at) && !(originHost !== "github.com" && at === originHost && api)) continue;
 				const path = (rest.replace(/^\\/+/, "").replace(/^api\\/(?:v3\\/)?/i, "").split(/[?#]/)[0] ?? "").replace(/%([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(Number.parseInt(hex, 16)));
 				const repo = /^repos\\/([^/]+)\\/([^/]+)/i.exec(path);
-				const filled = gh && repo !== null && /^(?:\\{owner\\}|:owner)$/.test(repo[1] ?? "") && /^(?:\\{repo\\}|:repo)$/.test(repo[2] ?? "");
+				const placeholders = gh && repo !== null && /^(?:\\{owner\\}|:owner)$/.test(repo[1] ?? "") && /^(?:\\{repo\\}|:repo)$/.test(repo[2] ?? "");
 				const head = repo?.[0] ?? /^[^/]*/.exec(path)?.[0] ?? "";
 				if (/^graphql\\/?$/i.test(path)) graphql = true;
 				else if (/(?:^|\\/)\\.\\.?(?:\\/|$)/.test(path) || /^repositories\\//i.test(path) || /[$\`]/.test(head)) keys.push("");
-				else if (filled) defaulted = true;
+				else if (placeholders) defaulted = true;
 				else if (repo !== null) keys.push(repoKey(\`\${at}/\${repo[1] ?? ""}/\${repo[2] ?? ""}\`, host));
+				else keys.push("");
 			};
 			if (!gh && !graphql && keys.length === 0) return;
 			const what = gh ? "gh api" : \`\${line[0] ?? ""} to the GitHub API\`;
@@ -13959,8 +14261,18 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				deny("outside-write", \`A write that reaches another repository, or one the guard cannot place (\\\`\${what}\\\`)\`);
 			};
 			if (graphql) {
-				// A query read from a file or stdin, or held in a word the shell fills in, may be any mutation.
-				const unseen = hiddenBody && queries.length === 0 || line.some((word, at) => /query/.test(word) && /e/.test(marks[at]?.kinds ?? ""));
+				// A field word whose key, or whose \`query\` value, the shell fills in; for curl or wget, any body word it fills in.
+				const filledKey = line.some((word, at) => {
+					if (at === 0 || !shellFilled(at)) return false;
+					if (!gh) return true;
+					const flag = /^(?:-[fF]|--field|--raw-field)$/.test(line[at - 1] ?? "");
+					const start = flag ? 0 : /^(?:-i*[fF]|--(?:raw-)?field=)/.exec(word)?.[0].length ?? -1;
+					if (start === -1) return false;
+					const eq = word.indexOf("=", start);
+					const first = chained ? word.search(/[$\`]/) : marks[at]?.first ?? 0;
+					return eq === -1 || first <= eq || word.slice(start, eq).toLowerCase() === "query";
+				});
+				const unseen = chained || queries.length === 0 || hiddenBody || filledKey || queries.some((query) => /"""|#/.test(query));
 				if (unseen || queries.some((query) => mutationFields(mask(query)).some((name) => !STATE_ONLY.has(name)))) {
 					deny("outside-write", \`A GraphQL mutation whose subject is a node id the line cannot place, or a GraphQL call whose query it cannot show (\\\`\${what}\\\`)\`);
 				}
@@ -13969,17 +14281,20 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			const prose = [];
 			const persons = [];
 			const read = (key, value) => {
-				const name = key.toLowerCase().replace(/\\[\\]$/, "");
+				// A key at any depth of a gh field (\`comments[][body]\`) is read by its last part (review/125).
+				const name = (/(?:^|\\[)([A-Za-z_]\\w*)\\]?(?:\\[\\])*$/.exec(key)?.[1] ?? key).toLowerCase();
 				if (name === "body" || name === "title") {
-					if (value === null) whole = true;
-					else prose.push(value);
-				} else if (PEOPLE_KEYS.has(name)) persons.push(value);
+					if (typeof value === "string") prose.push(value);
+					else if (value === null) whole = true;
+				} else if (PEOPLE_KEYS.has(name)) {
+					for (const entry of Array.isArray(value) ? value : [value]) persons.push(typeof entry === "string" ? entry : null);
+				}
 			};
 			if (gh) {
 				for (let k = 1; k < cmd.length; k += 1) {
 					const word = cmd[k] ?? "";
-					if (word === "--input" || word === "--input=-") {
-						if (word === "--input=-" || cmd[k + 1] === "-") whole = true;
+					if (word === "--input" || word.startsWith("--input=")) {
+						if (STDIN.has(word === "--input" ? cmd[k + 1] ?? "" : word.slice(8))) whole = true;
 						if (word === "--input") k += 1;
 						continue;
 					};
@@ -13990,13 +14305,26 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 					if (value === undefined || eq <= 0) continue;
 					const field = value.slice(eq + 1);
 					if ((flag === "-F" || flag === "--field") && field.startsWith("@")) {
-						if (field === "@-") read(value.slice(0, eq), null);
+						if (STDIN.has(field.slice(1))) read(value.slice(0, eq), null);
 					} else read(value.slice(0, eq), /[$\`]/.test(field) ? null : field);
 				}
 			} else {
-				for (const [key, value] of bodyFields) read(key, value);
-				// A body curl or wget reads from stdin (\`-d @-\`, \`-T -\`, \`/dev/stdin\`): the line may hold it.
-				whole ||= cmd.some((word, k) => /(?:^|=)@-$/.test(word) || word === "/dev/stdin" || /^(?:-T|--upload-file)$/.test(word) && cmd[k + 1] === "-");
+				// Every key of each JSON body, at any depth (review/125), one pass over its nodes.
+				const nodes = [...parsed];
+				while (nodes.length > 0) {
+					const node = nodes.pop();
+					if (Array.isArray(node)) {
+						for (const entry of node) nodes.push(entry);
+					} else if (node !== null && typeof node === "object") {
+						for (const [key, value] of Object.entries(node)) {
+							const name = key.toLowerCase();
+							if (name === "body" || name === "title" || PEOPLE_KEYS.has(name)) read(name, value);
+							else nodes.push(value);
+						}
+					}
+				};
+				// A body curl or wget reads from stdin in any spelling (\`-d @-\`, \`@/dev/stdin\`, \`-T -\`, a joined value).
+				whole ||= cmd.some((word) => /(?:^|[=@])(?:-|\\/dev\\/stdin|\\/dev\\/fd\\/0|\\/proc\\/self\\/fd\\/0)$/.test(word));
 			};
 			if (whole ? lineMentions ??= mentions(command) : prose.some(mentions)) {
 				deny("outside-write", \`A body or title naming a person (an \\\`@\\\` mention), which reaches them (\\\`\${what}\\\`)\`);
@@ -14235,26 +14563,29 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		return publishes && !dryRun ? deny("publish", \`Publishing a package (\\\`\${cmd[0]} publish\\\`)\`) : null;
 	}
 	/**
-	* \`outside-write\` (REQ-FLOW-134): a gh write (a \`pr\`, \`issue\`, \`release\`, \`workflow\`, \`run\`, \`label\`, \`cache\`, \`secret\`
-	* or \`variable\` subcommand beyond its reads) that reaches a repository other than the origin, host and \`owner/repo\`
-	* both, or that names a person. A gh \`api\` call, and a \`curl\` or \`wget\` call to the GitHub API, is read where the REST
-	* reader reads it (\`outsideCall\`, inside \`httpVerdict\`).
+	* \`outside-write\` (REQ-FLOW-134): a gh write (a \`pr\`, \`issue\`, \`release\`, \`workflow\`, \`run\`, \`label\`, \`cache\`, \`secret\`,
+	* \`variable\` or \`gist\` subcommand beyond its reads) that reaches a repository other than the origin, host and
+	* \`owner/repo\` both, or that names a person. A gh \`api\` call, and a \`curl\` or \`wget\` call to the GitHub API, is read
+	* where the REST reader reads it (\`outsideCall\`, inside \`httpVerdict\`); a push, in \`pushOutside\`.
 	*
-	* **Target.** Each \`-R\`/\`--repo\` value and each argument URL is a target; one the line cannot show (a word the shell
-	* fills in, a part \`repoKey\` cannot place) is outside, and so is any target while the origin is unreadable. A write
-	* naming none lands where gh's default does: outside when the context's \`ghDefaultRepo\` is \`null\` or another
-	* repository. \`GH_REPO\` or \`GH_HOST\` named anywhere on the line (set, exported or wrapped) makes every gh write on it
-	* outside.
+	* **Target.** Each \`-R\`/\`--repo\` value, each argument URL, \`gh issue transfer\`'s destination and \`gh issue develop\`'s
+	* \`--branch-repo\` (review/122, review/123) is a target; one the line cannot show (a word the shell fills in, a part
+	* \`repoKey\` cannot place) is outside, and so is any target while the origin is unreadable. A write naming none lands
+	* where gh's default does: outside when the context's \`ghDefaultRepo\` is \`null\` or another repository. \`GH_REPO\`,
+	* \`GH_HOST\` or a git configuration variable named anywhere on the line makes every gh write on it outside. A gist
+	* write shares text outside the repository, so it asks (review/122).
 	*
-	* **Mention.** An inline \`-b\`/\`--body\`, \`-t\`/\`--title\`, \`-n\`/\`--notes\` or \`--subject\` value is read by \`mentions\`.
-	* Where the value holds a word the shell fills in, or the body comes on stdin (\`--body-file -\`, \`-F -\`,
-	* \`--notes-file -\`), a heredoc or a substitution's heredoc the reading skips as data among them (REQ-FLOW-141), the
-	* whole line is read instead. A body gh reads from a file (\`--body-file <path>\`) or fills from commits is not read: the
-	* named residual. A \`git commit\` message is not read: a mention in one notifies no one (build/25).
+	* **Mention.** An inline \`-b\`/\`--body\`, \`-t\`/\`--title\`, \`-n\`/\`--notes\` or \`--subject\` value, and on \`close\` and
+	* \`reopen\` the \`-c\`/\`--comment\` value (review/124), is read by \`mentions\`, joined or attached spellings too. Where the
+	* value holds a word the shell fills in, or the body comes on stdin in any spelling (\`-\`, \`/dev/stdin\`, joined or
+	* attached; review/121, review/126), a heredoc or a substitution's heredoc the reading skips as data among them
+	* (REQ-FLOW-141), the whole line is read instead. A body gh reads from a file, fills from commits, or takes from a
+	* variable the line does not set is not read: the named residual. A \`git commit\` message is not read: a mention in
+	* one notifies no one (build/25).
 	*
 	* **Person.** A reviewer or assignee value (\`--reviewer\`, \`--add-reviewer\`, \`--assignee\`, \`--add-assignee\`, and \`-r\`
-	* and \`-a\` where \`pr create\` and \`issue create\` read them so) names a person unless \`people\` reads it as \`@me\` or one
-	* of the repository's own apps; one the shell fills in is a person (build/22).
+	* and \`-a\`, separate or attached, where \`pr create\` and \`issue create\` read them so) names a person unless \`people\`
+	* reads it as \`@me\` or one of the repository's own apps; one the shell fills in is a person (build/22).
 	*/
 	function outsideVerdict(cmd) {
 		const origin = ctx.originRepo;
@@ -14302,13 +14633,24 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				"list",
 				"ls",
 				"get"
+			]],
+			["gist", [
+				"list",
+				"ls",
+				"view",
+				"clone"
 			]]
 		]);
 		const reads = READS.get(group);
 		if (reads === undefined || sub === "" || reads.includes(sub)) return;
+		if (group === "gist") {
+			deny("outside-write", \`A gist write, which shares text outside the repository (\\\`gh gist \${sub}\\\`)\`);
+			return;
+		};
 		const host = ctx.ghHost ?? "github.com";
 		const marks = markMap.get(cmd) ?? [];
 		const shown = (at) => (marks[at]?.kinds ?? "") === "" && !/[$\`]/.test(cmd[at] ?? "");
+		const closing = (group === "pr" || group === "issue") && (sub === "close" || sub === "reopen");
 		const PROSE = new Set([
 			"-b",
 			"--body",
@@ -14316,28 +14658,34 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			"--title",
 			"-n",
 			"--notes",
-			"--subject"
+			"--subject",
+			...closing ? ["-c", "--comment"] : []
 		]);
+		const ATTACHED = closing ? /^(?:--(?:body|title|notes|subject|comment)=|-[btnc](?=.))([\\s\\S]*)$/ : /^(?:--(?:body|title|notes|subject)=|-[btn](?=.))([\\s\\S]*)$/;
+		const creating = group === "pr" && sub === "create" ? "ra" : group === "issue" && sub === "create" ? "a" : "";
 		const PEOPLE = new Set([
 			"--reviewer",
 			"--add-reviewer",
 			"--assignee",
 			"--add-assignee",
-			...group === "pr" && sub === "create" ? ["-r", "-a"] : group === "issue" && sub === "create" ? ["-a"] : []
+			...[...creating].map((letter) => \`-\${letter}\`)
 		]);
 		const targets = [];
+		const positionals = [];
 		let whole = false;
 		const prose = [];
 		const persons = [];
 		for (let k = 1; k < cmd.length; k += 1) {
 			const word = cmd[k] ?? "";
-			const attached = /^(?:--(?:body|title|notes|subject)=|-[btn](?=.))([\\s\\S]*)$/.exec(word);
+			if (!word.startsWith("-")) positionals.push(k);
+			const attached = ATTACHED.exec(word);
 			const person = /^--(?:add-)?(?:reviewer|assignee)=([\\s\\S]*)$/.exec(word);
-			if (word === "-R" || word === "--repo") {
+			const file = /^(?:-F=?|--(?:body|notes)-file=)([\\s\\S]+)$/.exec(word);
+			if (word === "-R" || word === "--repo" || word === "--branch-repo") {
 				targets.push(shown(k + 1) ? repoKey(cmd[k + 1] ?? "", host) : "");
 				k += 1;
-			} else if (/^(?:--repo=|-R)./.test(word)) {
-				targets.push(shown(k) ? repoKey(word.replace(/^(?:--repo=|-R=?)/, ""), host) : "");
+			} else if (/^(?:--repo=|--branch-repo=|-R)./.test(word)) {
+				targets.push(shown(k) ? repoKey(word.replace(/^(?:--repo=|--branch-repo=|-R=?)/, ""), host) : "");
 			} else if (/^https?:\\/\\//i.test(word)) {
 				targets.push(shown(k) ? repoKey(word, host) : "");
 			} else if (PROSE.has(word)) {
@@ -14352,14 +14700,21 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				k += 1;
 			} else if (person !== null) {
 				persons.push(shown(k) ? person[1] ?? "" : null);
+			} else if (creating !== "" && word.length > 2 && word[0] === "-" && creating.includes(word[1] ?? "")) {
+				persons.push(shown(k) ? word.slice(2).replace(/^=/, "") : null);
 			} else if ([
 				"-F",
 				"--body-file",
 				"--notes-file"
 			].includes(word)) {
-				if (cmd[k + 1] === "-" || !shown(k + 1)) whole = true;
+				if (STDIN.has(cmd[k + 1] ?? "") || !shown(k + 1)) whole = true;
 				k += 1;
-			} else if (/^--(?:body|notes)-file=-$/.test(word)) whole = true;
+			} else if (file !== null && (STDIN.has(file[1] ?? "") || !shown(k))) whole = true;
+		};
+		// \`gh issue transfer <issue> <owner>/<repo>\`: the destination is the transfer's second positional word (review/122).
+		const moved = group === "issue" && sub === "transfer" ? positionals[3] : undefined;
+		if (moved !== undefined && !/^https?:\\/\\//i.test(cmd[moved] ?? "")) {
+			targets.push(shown(moved) ? repoKey(cmd[moved] ?? "", host) : "");
 		};
 		const what = \`gh \${group} \${sub}\`;
 		if (environment || targets.some((key) => key === "" || key !== origin) || targets.length === 0 && defaultAway()) {
@@ -14459,8 +14814,8 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			// \`git send-pack\` pushes as \`git push\` does, its options and refspecs laid out the same (pr/16); with
 			// no ref it updates the refs both sides have, the default branch among them, read as a matching push.
 			const argMarks = (markMap.get(cmd) ?? []).slice(cmd.length - args.length);
-			if (sub === "push") pushVerdict(args, config, argMarks);
-			else if (sub === "send-pack") pushVerdict(args, [...config, "push.default=matching"], argMarks);
+			if (sub === "push") pushRead(args, config, argMarks);
+			else if (sub === "send-pack") pushRead(args, [...config, "push.default=matching"], argMarks);
 			else if (sub === "tag") tagVerdict(args);
 			else if (sub === "update-ref" && (args.some((arg) => /^(refs\\/)?tags\\//i.test(arg)) || args.includes("--stdin") && /refs\\/tags\\//i.test(command))) {
 				// \`git update-ref\` writes or deletes a ref by name (pr/53): a tag ref named on the line, or in a \`--stdin\` text
@@ -14512,7 +14867,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 					last: 0,
 					kinds: ""
 				});
-				if (words[0] === "push") pushVerdict(words.slice(1), config, keptMarks.slice(1));
+				if (words[0] === "push") pushRead(words.slice(1), config, keptMarks.slice(1));
 			}
 		} else if (program === "gh") {
 			ghVerdict(cmd);
@@ -16479,7 +16834,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 const repositoryKey = function repositoryKey(text, host) {
 	const parts = /^[a-z][a-z0-9+.-]*:\\/\\/(?:[^@/]*@)?([^/:?#]+)(?::\\d*)?\\/+([^/?#]+)\\/([^/?#]+)/i.exec(text) ?? /^(?:[^@/:]+@)?([^/:]+):(?!\\/)([^/]+)\\/([^/]+?)\\/?$/.exec(text) ?? /^(?:([^/:@]+)\\/)?([^/:@]+)\\/([^/:@]+?)\\/?$/.exec(text);
 	if (parts === null) return "";
-	const where = (parts[1] ?? host).toLowerCase().replace(/^www\\./, "").replace(/^api\\.(?=github\\.com$|[^.]+\\.ghe\\.com$)/, "");
+	const where = (parts[1] ?? host).toLowerCase().replace(/\\.+$/, "").replace(/^www\\./, "").replace(/^api\\.(?=github\\.com$|[^.]+\\.ghe\\.com$)/, "");
 	const owner = (parts[2] ?? "").toLowerCase();
 	const name = (parts[3] ?? "").toLowerCase().replace(/\\.git$/, "");
 	const plain = (part) => /^[\\w.-]+$/.test(part) && !/^\\.+$/.test(part);
@@ -16847,72 +17202,141 @@ function linesOf(name, tail) {
 }
 
 /**
- * The remotes a git dir's config names (REQ-FLOW-134): per remote section, its first url and its gh-resolved marker,
- * the worktree's own config read after the common one. partial where the reading may miss or misplace a remote: a
- * config past CONFIG_MAX_BYTES or behind a link, or one that includes another file or rewrites URLs (include,
- * includeIf, url).
+ * The configuration files git merges for a git dir, in git's order (REQ-FLOW-134, review/128): the system file
+ * (GIT_CONFIG_SYSTEM, else /etc/gitconfig) unless GIT_CONFIG_NOSYSTEM is on, the global ones (GIT_CONFIG_GLOBAL, else
+ * the XDG file and ~/.gitconfig), then the repository's common config and the worktree's own.
  */
-function remotesOf(dirs) {
+function configFiles(dirs) {
+  const env = process.env;
+  const on = (value) => value !== undefined && !["", "0", "false", "no", "off"].includes(String(value).toLowerCase());
+  const home = env.HOME ?? env.USERPROFILE ?? "";
+  const files = [];
+  if (!on(env.GIT_CONFIG_NOSYSTEM)) files.push(env.GIT_CONFIG_SYSTEM || "/etc/gitconfig");
+  if (env.GIT_CONFIG_GLOBAL !== undefined) {
+    if (env.GIT_CONFIG_GLOBAL !== "") files.push(env.GIT_CONFIG_GLOBAL);
+  } else {
+    const xdg = env.XDG_CONFIG_HOME || (home === "" ? "" : join(home, ".config"));
+    if (xdg !== "") files.push(join(xdg, "git", "config"));
+    if (home !== "") files.push(join(home, ".gitconfig"));
+  }
+  files.push(join(dirs.commonDir, "config"), join(dirs.gitDir, "config.worktree"));
+  return files;
+}
+
+/**
+ * What git's merged configuration says about remotes (REQ-FLOW-134, review/128): per remote its first url and pushurl
+ * and its gh-resolved marker, per branch its remote and pushRemote, remote.pushDefault, and every url.<base>.insteadOf
+ * and pushInsteadOf rule. partial where the reading may miss or misplace a remote: a file past CONFIG_MAX_BYTES or
+ * behind a link (/dev/null aside), an include or includeIf, or configuration the hook's environment sets
+ * (GIT_CONFIG_COUNT, GIT_CONFIG_PARAMETERS), or more than REWRITES_MAX URL rewrite rules.
+ */
+function configOf(dirs) {
   const remotes = new Map();
-  let partial = false;
-  for (const path of [join(dirs.commonDir, "config"), join(dirs.gitDir, "config.worktree")]) {
+  const branches = new Map();
+  const rewrites = [];
+  let pushDefault = null;
+  let partial = (process.env.GIT_CONFIG_COUNT ?? "") !== "" || (process.env.GIT_CONFIG_PARAMETERS ?? "") !== "";
+  for (const path of configFiles(dirs)) {
     let text = "";
-    try {
-      const stats = lstatSync(path);
-      if (!stats.isFile() || stats.size > CONFIG_MAX_BYTES) partial = true;
-      else text = readFileSync(path, "utf8");
-    } catch (error) {
-      if (!error || error.code !== "ENOENT") partial = true;
+    if (path !== "/dev/null") {
+      try {
+        const stats = lstatSync(path);
+        if (!stats.isFile() || stats.size > CONFIG_MAX_BYTES) partial = true;
+        else text = readFileSync(path, "utf8");
+      } catch (error) {
+        if (!error || (error.code !== "ENOENT" && error.code !== "ENOTDIR")) partial = true;
+      }
     }
-    let remote = null;
+    let kind = "";
+    let sub = null;
     for (const line of text.split(/\\r?\\n/)) {
       // Each pattern here is linear in the line: no two adjacent runs can share a character (the hook's timeout).
       const head = /^\\s*\\[\\s*([A-Za-z][\\w.-]*)\\s*(?:"((?:[^"\\\\]|\\\\.)*)"\\s*)?\\]/.exec(line);
       if (head !== null) {
-        const kind = head[1].toLowerCase();
-        if (kind === "include" || kind === "includeif" || kind === "url" || kind.startsWith("url.")) partial = true;
-        const name = kind === "remote" ? head[2]?.replace(/\\\\(.)/g, "$1") : kind.startsWith("remote.") ? head[1].slice(7) : undefined;
-        remote = name === undefined ? null : (remotes.get(name) ?? { url: null, resolved: null });
-        if (remote !== null) remotes.set(name, remote);
+        const dot = head[1].indexOf(".");
+        kind = (dot === -1 ? head[1] : head[1].slice(0, dot)).toLowerCase();
+        sub = head[2] !== undefined ? head[2].replace(/\\\\(.)/g, "$1") : dot === -1 ? null : head[1].slice(dot + 1).toLowerCase();
+        if (kind === "include" || kind === "includeif") partial = true;
         continue;
       }
       const pair = /^\\s*([A-Za-z][\\w-]*)\\s*=(.*)$/.exec(line);
-      if (remote === null || pair === null) continue;
+      if (pair === null) continue;
+      const key = pair[1].toLowerCase();
       const value = pair[2].replace(/\\s[#;].*$/, "").trim().replace(/^"([\\s\\S]*)"$/, "$1");
-      if (pair[1].toLowerCase() === "url") remote.url ??= value;
-      else if (pair[1].toLowerCase() === "gh-resolved") remote.resolved = value;
+      if (kind === "remote" && sub === null) {
+        if (key === "pushdefault") pushDefault = value;
+      } else if (kind === "remote") {
+        const remote = remotes.get(sub) ?? { url: null, pushurl: null, resolved: null };
+        remotes.set(sub, remote);
+        if (key === "url") remote.url ??= value;
+        else if (key === "pushurl") remote.pushurl ??= value;
+        else if (key === "gh-resolved") remote.resolved = value;
+      } else if (kind === "branch" && sub !== null) {
+        const entry = branches.get(sub) ?? {};
+        branches.set(sub, entry);
+        if (key === "remote" || key === "pushremote") entry[key] = value;
+      } else if (kind === "url" && sub !== null && (key === "insteadof" || key === "pushinsteadof")) {
+        rewrites.push({ base: sub, prefix: value, push: key === "pushinsteadof" });
+      }
     }
   }
-  return { remotes, partial };
+  // Each URL looked up scans every rewrite rule, so past REWRITES_MAX of them the reading is partial: the lookups stay
+  // bounded by the remotes read times that ceiling (the hook's timeout).
+  if (rewrites.length > REWRITES_MAX) partial = true;
+  return { remotes, branches, rewrites, pushDefault, partial };
 }
 
-/** The session repository's origin (REQ-FLOW-134), read from the repository the guard sits in: "" where unreadable. */
-function originOf(root) {
-  const dirs = gitDirsFrom(root);
-  const url = dirs === null ? null : (remotesOf(dirs).remotes.get("origin")?.url ?? null);
-  return url === null ? "" : repositoryKey(url, "github.com");
+/** A URL as git rewrites it: the longest matching insteadOf (or, for a push, pushInsteadOf) prefix replaced; null where none matches. */
+function rewritten(config, url, push) {
+  let best = null;
+  for (const rule of config.rewrites) {
+    if (rule.push === push && rule.prefix !== "" && url.startsWith(rule.prefix) && (best === null || rule.prefix.length > best.prefix.length)) best = rule;
+  }
+  return best === null ? null : best.base + url.slice(best.prefix.length);
+}
+
+/** A remote's fetch URL and push URL, as git reads them; null where the remote names none. */
+function fetchUrl(config, remote) {
+  return remote.url === null ? null : (rewritten(config, remote.url, false) ?? remote.url);
+}
+function pushUrl(config, remote) {
+  if (remote.pushurl !== null) return rewritten(config, remote.pushurl, false) ?? remote.pushurl;
+  return remote.url === null ? null : (rewritten(config, remote.url, true) ?? rewritten(config, remote.url, false) ?? remote.url);
+}
+
+/** A remote URL as a repository key only where the whole URL is a repository's (review/129): "" where it reads in part. */
+function remoteKey(url) {
+  if (url === null) return "";
+  const whole = /^(?:[a-z][a-z0-9+.-]*:\\/\\/(?:[^@/]*@)?[^/:?#]+(?::\\d*)?\\/+|(?:[^@/:]+@)?[^/:]+:(?!\\/))[^/?#]+\\/[^/?#]+?\\/?$/i.test(url);
+  return whole ? repositoryKey(url, "github.com") : "";
+}
+
+/** The session repository's origin (REQ-FLOW-134), read from the repository the guard sits in: "" where unreadable or partial. */
+function originOf(config) {
+  const origin = config === null ? undefined : config.remotes.get("origin");
+  return config === null || config.partial || origin === undefined ? "" : remoteKey(fetchUrl(config, origin));
 }
 
 /**
  * Where a gh call naming no repository lands from a place (REQ-FLOW-134): GH_REPO in the hook's environment, else the
- * remote a gh-resolved marker names (base, or an owner/repo on that remote's host), else the only remote; "" where the
- * place has no remote; null where the guard cannot tell: more than one remote and no marker, markers that disagree or
- * that it cannot read, a partial config, a place it cannot read, or GH_HOST naming another host than that remote's.
+ * remote a gh-resolved marker names (base, or an owner/repo on that remote's host), else the only remote, each URL as
+ * git rewrites it; "" where the place has no remote; null where the guard cannot tell: more than one remote and no
+ * marker, markers that disagree or that it cannot read, a partial configuration, a place it cannot read, or GH_HOST
+ * naming another host than that remote's.
  */
-function ghDefaultOf(dirs) {
-  const host = (process.env.GH_HOST ?? "").trim().toLowerCase();
+function ghDefaultOf(config) {
+  const host = (process.env.GH_HOST ?? "").trim().toLowerCase().replace(/\\.+$/, "");
   const named = (process.env.GH_REPO ?? "").trim();
   if (named !== "") return repositoryKey(named, host || "github.com") || null;
-  if (dirs === null) return null;
-  const { remotes, partial } = remotesOf(dirs);
-  if (partial) return null;
-  const keyOf = (url) => (url === null ? "" : repositoryKey(url, "github.com"));
+  if (config === null || config.partial) return null;
+  const remotes = config.remotes;
+  const keyOf = (remote) => remoteKey(fetchUrl(config, remote));
   const marked = [...remotes.values()].filter((remote) => remote.resolved !== null && remote.resolved !== "");
   const keys = marked.map((remote) => {
-    const own = keyOf(remote.url);
+    const own = keyOf(remote);
     return remote.resolved === "base" || own === "" ? own : repositoryKey(remote.resolved, own.split("/")[0]);
   });
-  const only = remotes.size === 1 ? keyOf([...remotes.values()][0].url) : null;
+  const only = remotes.size === 1 ? keyOf([...remotes.values()][0]) : null;
   const picked = keys.length > 0 ? (keys.every((key) => key !== "" && key === keys[0]) ? keys[0] : null) : remotes.size === 0 ? "" : only;
   return picked && host !== "" && picked.split("/")[0] !== host ? null : picked;
 }
@@ -16920,12 +17344,21 @@ function ghDefaultOf(dirs) {
 /**
  * The branch context of each place a shell call's git runs in, one per git dir. Where HEAD names no branch or commit
  * (reftable's placeholder too), an implied destination counts as the default branch, so a refspec-less push is refused.
- * The origin is the session repository's, read from root, in every place; where a gh call naming no target lands is
- * each place's own (REQ-FLOW-134). Both are read the first time the verdict asks, which only a gh write does.
+ * The origin is the session repository's, read from root, in every place; where a gh call naming no target lands, and
+ * which repository each remote pushes to, is each place's own, from git's merged configuration (REQ-FLOW-134,
+ * review/128, review/130). Each is read the first time the verdict asks, which only a gh, curl, wget or push write does.
  */
 function contextsOf(command, cwd, powershell, root) {
   const contexts = new Map();
   let session;
+  let rooted;
+  const rootOf = () => {
+    if (rooted === undefined) {
+      const dirs = gitDirsFrom(root);
+      rooted = dirs === null ? null : { dirs, config: configOf(dirs) };
+    }
+    return rooted;
+  };
   for (const place of placesOf(command, cwd)) {
     const dirs = place === null ? null : place.git !== undefined ? gitDirsOf(place.git) : gitDirsFrom(place.work);
     const key = dirs === null ? "" : dirs.gitDir;
@@ -16938,6 +17371,14 @@ function contextsOf(command, cwd, powershell, root) {
     const defaultBranches = origin !== null && origin.startsWith("ref: refs/remotes/origin/") ? [origin.slice(25)] : [];
     let tags = null;
     let fallback;
+    let read = false;
+    let config = null;
+    const placeConfig = () => {
+      if (!read) config = dirs === null ? null : configOf(dirs);
+      read = true;
+      return config;
+    };
+    const pushes = new Map();
     contexts.set(key, {
       currentBranch: branch !== ".invalid" ? branch : detached ? null : (defaultBranches[0] ?? "main"),
       defaultBranches,
@@ -16956,12 +17397,33 @@ function contextsOf(command, cwd, powershell, root) {
         return tags;
       },
       get originRepo() {
-        session ??= originOf(root);
+        session ??= originOf(rootOf()?.config ?? null);
         return session;
       },
       get ghDefaultRepo() {
-        if (fallback === undefined) fallback = ghDefaultOf(dirs);
+        if (fallback === undefined) fallback = ghDefaultOf(placeConfig());
         return fallback;
+      },
+      // The repository each remote pushes to, read once per name (review/130).
+      remoteRepo(name) {
+        if (!pushes.has(name)) {
+          const merged = placeConfig();
+          const remote = merged === null || merged.partial ? undefined : merged.remotes.get(name);
+          pushes.set(name, remote === undefined ? "" : remoteKey(pushUrl(merged, remote)));
+        }
+        return pushes.get(name);
+      },
+      get pushRemote() {
+        const merged = placeConfig();
+        if (merged === null || merged.partial) return null;
+        const entry = branch === ".invalid" ? {} : (merged.branches.get(branch) ?? {});
+        return entry.pushremote ?? merged.pushDefault ?? entry.remote ?? "origin";
+      },
+      // A place the guard cannot read counts as the session's own, so a push to origin from it runs, as before; only a
+      // readable other checkout has its origin compared (review/130).
+      get ownCheckout() {
+        const own = rootOf();
+        return dirs === null || own === null || resolve(dirs.commonDir) === resolve(own.dirs.commonDir);
       },
       ghHost: (process.env.GH_HOST ?? "").trim().toLowerCase() || "github.com",
     });
@@ -20615,7 +21077,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".claude/hooks/stamity/stamity-agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".claude/hooks/stamity/stamity-cloud-readiness.mjs": "acef8b976c3cf0dc29df1ab1584458bc83c66ab1e7284e28df62af60f1311c91 11348 bytes",
   ".claude/hooks/stamity/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "3941a6776418a80abcdae19324801058f0bd89bf6f6dfe183c815a0fb5d20c66 267662 bytes",
+  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "28bfb763bde7cc51a459da5127beae62870893cc125d5e7b900b964a39f2e10f 280363 bytes",
   ".claude/hooks/stamity/stamity-pre-tool-use-guard.mjs": "752f24a46db0da9f933bcb313a00ef8f6b12b8a655241b9257e40f64d9776965 20816 bytes",
   ".claude/hooks/stamity/stamity-review-gate.mjs": "a410def5d44fde83869b3c2c98db318d470b68a54101e1b20eddfb026f8077b1 51137 bytes",
   ".claude/hooks/stamity/stamity-session-start.mjs": "c807b92eeff34b3e194a0f7ae843c2945d5663d56cdb937786454a6402df3f31 51786 bytes",
@@ -20671,7 +21133,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "f69f3fcb99689c204281b393ed822f62cd10d9be4f60da66504b8da38f64a55b 28322 bytes",
+  ".stamity/manifest.json": "7601d772200b8781109227879b1119f35e7b8fea22bc938de488bb0fe45ec905 28322 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
   "CLAUDE.md": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
@@ -21533,7 +21995,7 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".gitignore": "14c0a079e08124240ec8c713fa4c32870948842d586a5829a19172c02ddd0482 204 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "9a1b35f92ea6bd9709e12a38125aa4919f127d1d3ea77e839f7947961cdbe7a1 267658 bytes",
+  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "2815d76b13a1b3396d6f81e9c4b94c9c27aad9acada64e706aed13bcccf127c3 280359 bytes",
   ".stamity/generated/hooks/codex/stamity-portable-hook.mjs": "8480d3a6fe6ea5fe1cad1c683ecbb07f3999cbdb411ae7dff7a1ec09eb207068 20937 bytes",
   ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/codex/stamity-session-start.mjs": "1111332a1630ed4dcb42e421b2326c5dd423a358e3c92bf8cb367e212a7a996d 51799 bytes",
@@ -21542,7 +22004,7 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "d159c140b201f2630849be11bbcf8d71b4e23ac5f51ffbd7474c372c4b4b354d 22156 bytes",
+  ".stamity/manifest.json": "a857b1d295d2d9a40b313ba78db4fb9e2a1c59ece52e935036f1ecf30d657f3e 22156 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
   "AGENTS.override.md": "122504f41cc40a99c65cba4995c228bf4a5137d738324bbe3a847c6aaa5192db 25872 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
@@ -21883,7 +22345,7 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".gitignore": "14c0a079e08124240ec8c713fa4c32870948842d586a5829a19172c02ddd0482 204 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "11bea0199645b88e8fe3b098704ec390b4cdef7556691e2f1eb96da60715a307 270412 bytes",
+  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "583d8098e8476a48040b8d0b00c3cdbf3e09199350f35c96fc4304a6a610ef36 283113 bytes",
   ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "97b118796dbd153216cacceb34fd122b82f9cf75eae3b1d2de4c0938482af8a5 22349 bytes",
   ".stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "9f930fcd797ef464e7f4cb4c40e59b4976d65199a5c974fb67ca7624e5d0287c 56602 bytes",
@@ -21892,7 +22354,7 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "27ccf25a08a604951e21ebf17f1ea0243f55a8f273ce422eeec4c3ab1cba5955 20257 bytes",
+  ".stamity/manifest.json": "39aaf05dc1a78892fcc7e45c610e341436a31db1916385a56abcabd5ac3d6a02 20257 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
@@ -22508,7 +22970,7 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".stamity/generated/hooks/cursor/stamity-context-once.mjs": "c74c1b3d2cd908b170c48a8813bd05cc91f058210789a9b2f815b731a2eb6ccd 31773 bytes",
   ".stamity/generated/hooks/cursor/stamity-cursor-continue.mjs": "08bc51855553f4104a80fbe1ea94ba36a95173e005846467e4af5c643bb26a60 9500 bytes",
   ".stamity/generated/hooks/cursor/stamity-model-pins.mjs": "fc71eb522ff67fd73ff00820d0e59495bca188d2e30fc9a26ce85e89fff6fdd5 3813 bytes",
-  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "005fd9dbe2825af9a23be83f3a6b700f4abcbd8ac79ca5cc08ab103b509c237a 267694 bytes",
+  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "a80cef84480fdff02fdbdd6507e3a603756839b4cb7a3c88d47b0b876ab0ee4a 280395 bytes",
   ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs": "513a8e4c2631670fffed73a96be46542fea82d8e1719a5d26da0a872699277c6 20938 bytes",
   ".stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "1111332a1630ed4dcb42e421b2326c5dd423a358e3c92bf8cb367e212a7a996d 51799 bytes",
@@ -22517,7 +22979,7 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "29e2bb39f8666d68ceb9155f6c67e7b10a0712ef2361211ca6c43d3a7f6f53ab 24101 bytes",
+  ".stamity/manifest.json": "ec05389629eff5000ad7cb22900b790a06f6151779d46ee2350d0fcf77ef363e 24101 bytes",
   "AGENTS.md": "6b5b5bebfd779fe5b513cd8c2c41fa3b4dd70826435e9df9c70076ba48c29b98 6548 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",

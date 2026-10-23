@@ -333,7 +333,11 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // 270,411 bytes / 5,810 lines (copilot, generated; 263,539 bytes before the round), past both rows, because the
   // verdict now reads a GraphQL mutation's fields, a curl or wget write to the GitHub API, and reviewer and assignee
   // values. 270,411 + 4,021 = 274,432 bytes; 5,810 + 100 = 5,910 lines.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 274_432, lines: 5_910 },
+  // Moved again 2026-10-23 on the a4c lane (review/120-132), by the measured size plus a small margin: 283,112 bytes /
+  // 6,041 lines (copilot, generated; 270,411 bytes before the round), past both rows, because the guard now reads git's
+  // merged configuration and a push's repository, and the verdict reads hidden GraphQL queries, more targets, nested
+  // bodies and every stdin spelling. 283,112 + 3,608 = 286,720 bytes; 6,041 + 100 = 6,141 lines.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 286_720, lines: 6_141 },
 };
 
 /** One generated script, ready for an adapter to place and register. */
@@ -4113,6 +4117,8 @@ const GUARD_PACKED_REFS_MAX_BYTES = 8_388_608;
  * is partial, so a gh write naming no target asks; the 4 KiB metadata ceiling would cut a config holding many branches.
  */
 const GUARD_GIT_CONFIG_MAX_BYTES = 1_048_576;
+/** The URL rewrite rules (`insteadOf`, `pushInsteadOf`) a merged git configuration may hold before its reading is partial. */
+const GUARD_GIT_REWRITES_MAX = 256;
 
 /** Places a shell call's git can run in that the guard reads; past this one more counts as unreadable. */
 const GUARD_PLACES_MAX = 32;
@@ -4461,6 +4467,7 @@ const GIT_MAX_BYTES = ${GIT_METADATA_MAX_BYTES};
 const TAG_NAMES_MAX = ${GUARD_TAG_NAMES_MAX};
 const PACKED_REFS_MAX_BYTES = ${GUARD_PACKED_REFS_MAX_BYTES};
 const CONFIG_MAX_BYTES = ${GUARD_GIT_CONFIG_MAX_BYTES};
+const REWRITES_MAX = ${GUARD_GIT_REWRITES_MAX};
 const PLACES_MAX = ${GUARD_PLACES_MAX};
 const CANARY_SEGMENTS = ${json(PREFLIGHT_CANARY_FILE.split("/"))};
 const SHELL_TOOLS = new Set(["Bash", "PowerShell", "Shell", "bash", "powershell", "shell"]);
@@ -4878,72 +4885,141 @@ function linesOf(name, tail) {
 }
 
 /**
- * The remotes a git dir's config names (REQ-FLOW-134): per remote section, its first url and its gh-resolved marker,
- * the worktree's own config read after the common one. partial where the reading may miss or misplace a remote: a
- * config past CONFIG_MAX_BYTES or behind a link, or one that includes another file or rewrites URLs (include,
- * includeIf, url).
+ * The configuration files git merges for a git dir, in git's order (REQ-FLOW-134, review/128): the system file
+ * (GIT_CONFIG_SYSTEM, else /etc/gitconfig) unless GIT_CONFIG_NOSYSTEM is on, the global ones (GIT_CONFIG_GLOBAL, else
+ * the XDG file and ~/.gitconfig), then the repository's common config and the worktree's own.
  */
-function remotesOf(dirs) {
+function configFiles(dirs) {
+  const env = process.env;
+  const on = (value) => value !== undefined && !["", "0", "false", "no", "off"].includes(String(value).toLowerCase());
+  const home = env.HOME ?? env.USERPROFILE ?? "";
+  const files = [];
+  if (!on(env.GIT_CONFIG_NOSYSTEM)) files.push(env.GIT_CONFIG_SYSTEM || "/etc/gitconfig");
+  if (env.GIT_CONFIG_GLOBAL !== undefined) {
+    if (env.GIT_CONFIG_GLOBAL !== "") files.push(env.GIT_CONFIG_GLOBAL);
+  } else {
+    const xdg = env.XDG_CONFIG_HOME || (home === "" ? "" : join(home, ".config"));
+    if (xdg !== "") files.push(join(xdg, "git", "config"));
+    if (home !== "") files.push(join(home, ".gitconfig"));
+  }
+  files.push(join(dirs.commonDir, "config"), join(dirs.gitDir, "config.worktree"));
+  return files;
+}
+
+/**
+ * What git's merged configuration says about remotes (REQ-FLOW-134, review/128): per remote its first url and pushurl
+ * and its gh-resolved marker, per branch its remote and pushRemote, remote.pushDefault, and every url.<base>.insteadOf
+ * and pushInsteadOf rule. partial where the reading may miss or misplace a remote: a file past CONFIG_MAX_BYTES or
+ * behind a link (/dev/null aside), an include or includeIf, or configuration the hook's environment sets
+ * (GIT_CONFIG_COUNT, GIT_CONFIG_PARAMETERS), or more than REWRITES_MAX URL rewrite rules.
+ */
+function configOf(dirs) {
   const remotes = new Map();
-  let partial = false;
-  for (const path of [join(dirs.commonDir, "config"), join(dirs.gitDir, "config.worktree")]) {
+  const branches = new Map();
+  const rewrites = [];
+  let pushDefault = null;
+  let partial = (process.env.GIT_CONFIG_COUNT ?? "") !== "" || (process.env.GIT_CONFIG_PARAMETERS ?? "") !== "";
+  for (const path of configFiles(dirs)) {
     let text = "";
-    try {
-      const stats = lstatSync(path);
-      if (!stats.isFile() || stats.size > CONFIG_MAX_BYTES) partial = true;
-      else text = readFileSync(path, "utf8");
-    } catch (error) {
-      if (!error || error.code !== "ENOENT") partial = true;
+    if (path !== "/dev/null") {
+      try {
+        const stats = lstatSync(path);
+        if (!stats.isFile() || stats.size > CONFIG_MAX_BYTES) partial = true;
+        else text = readFileSync(path, "utf8");
+      } catch (error) {
+        if (!error || (error.code !== "ENOENT" && error.code !== "ENOTDIR")) partial = true;
+      }
     }
-    let remote = null;
+    let kind = "";
+    let sub = null;
     for (const line of text.split(/\r?\n/)) {
       // Each pattern here is linear in the line: no two adjacent runs can share a character (the hook's timeout).
       const head = /^\s*\[\s*([A-Za-z][\w.-]*)\s*(?:"((?:[^"\\]|\\.)*)"\s*)?\]/.exec(line);
       if (head !== null) {
-        const kind = head[1].toLowerCase();
-        if (kind === "include" || kind === "includeif" || kind === "url" || kind.startsWith("url.")) partial = true;
-        const name = kind === "remote" ? head[2]?.replace(/\\(.)/g, "$1") : kind.startsWith("remote.") ? head[1].slice(7) : undefined;
-        remote = name === undefined ? null : (remotes.get(name) ?? { url: null, resolved: null });
-        if (remote !== null) remotes.set(name, remote);
+        const dot = head[1].indexOf(".");
+        kind = (dot === -1 ? head[1] : head[1].slice(0, dot)).toLowerCase();
+        sub = head[2] !== undefined ? head[2].replace(/\\(.)/g, "$1") : dot === -1 ? null : head[1].slice(dot + 1).toLowerCase();
+        if (kind === "include" || kind === "includeif") partial = true;
         continue;
       }
       const pair = /^\s*([A-Za-z][\w-]*)\s*=(.*)$/.exec(line);
-      if (remote === null || pair === null) continue;
+      if (pair === null) continue;
+      const key = pair[1].toLowerCase();
       const value = pair[2].replace(/\s[#;].*$/, "").trim().replace(/^"([\s\S]*)"$/, "$1");
-      if (pair[1].toLowerCase() === "url") remote.url ??= value;
-      else if (pair[1].toLowerCase() === "gh-resolved") remote.resolved = value;
+      if (kind === "remote" && sub === null) {
+        if (key === "pushdefault") pushDefault = value;
+      } else if (kind === "remote") {
+        const remote = remotes.get(sub) ?? { url: null, pushurl: null, resolved: null };
+        remotes.set(sub, remote);
+        if (key === "url") remote.url ??= value;
+        else if (key === "pushurl") remote.pushurl ??= value;
+        else if (key === "gh-resolved") remote.resolved = value;
+      } else if (kind === "branch" && sub !== null) {
+        const entry = branches.get(sub) ?? {};
+        branches.set(sub, entry);
+        if (key === "remote" || key === "pushremote") entry[key] = value;
+      } else if (kind === "url" && sub !== null && (key === "insteadof" || key === "pushinsteadof")) {
+        rewrites.push({ base: sub, prefix: value, push: key === "pushinsteadof" });
+      }
     }
   }
-  return { remotes, partial };
+  // Each URL looked up scans every rewrite rule, so past REWRITES_MAX of them the reading is partial: the lookups stay
+  // bounded by the remotes read times that ceiling (the hook's timeout).
+  if (rewrites.length > REWRITES_MAX) partial = true;
+  return { remotes, branches, rewrites, pushDefault, partial };
 }
 
-/** The session repository's origin (REQ-FLOW-134), read from the repository the guard sits in: "" where unreadable. */
-function originOf(root) {
-  const dirs = gitDirsFrom(root);
-  const url = dirs === null ? null : (remotesOf(dirs).remotes.get("origin")?.url ?? null);
-  return url === null ? "" : repositoryKey(url, "github.com");
+/** A URL as git rewrites it: the longest matching insteadOf (or, for a push, pushInsteadOf) prefix replaced; null where none matches. */
+function rewritten(config, url, push) {
+  let best = null;
+  for (const rule of config.rewrites) {
+    if (rule.push === push && rule.prefix !== "" && url.startsWith(rule.prefix) && (best === null || rule.prefix.length > best.prefix.length)) best = rule;
+  }
+  return best === null ? null : best.base + url.slice(best.prefix.length);
+}
+
+/** A remote's fetch URL and push URL, as git reads them; null where the remote names none. */
+function fetchUrl(config, remote) {
+  return remote.url === null ? null : (rewritten(config, remote.url, false) ?? remote.url);
+}
+function pushUrl(config, remote) {
+  if (remote.pushurl !== null) return rewritten(config, remote.pushurl, false) ?? remote.pushurl;
+  return remote.url === null ? null : (rewritten(config, remote.url, true) ?? rewritten(config, remote.url, false) ?? remote.url);
+}
+
+/** A remote URL as a repository key only where the whole URL is a repository's (review/129): "" where it reads in part. */
+function remoteKey(url) {
+  if (url === null) return "";
+  const whole = /^(?:[a-z][a-z0-9+.-]*:\/\/(?:[^@/]*@)?[^/:?#]+(?::\d*)?\/+|(?:[^@/:]+@)?[^/:]+:(?!\/))[^/?#]+\/[^/?#]+?\/?$/i.test(url);
+  return whole ? repositoryKey(url, "github.com") : "";
+}
+
+/** The session repository's origin (REQ-FLOW-134), read from the repository the guard sits in: "" where unreadable or partial. */
+function originOf(config) {
+  const origin = config === null ? undefined : config.remotes.get("origin");
+  return config === null || config.partial || origin === undefined ? "" : remoteKey(fetchUrl(config, origin));
 }
 
 /**
  * Where a gh call naming no repository lands from a place (REQ-FLOW-134): GH_REPO in the hook's environment, else the
- * remote a gh-resolved marker names (base, or an owner/repo on that remote's host), else the only remote; "" where the
- * place has no remote; null where the guard cannot tell: more than one remote and no marker, markers that disagree or
- * that it cannot read, a partial config, a place it cannot read, or GH_HOST naming another host than that remote's.
+ * remote a gh-resolved marker names (base, or an owner/repo on that remote's host), else the only remote, each URL as
+ * git rewrites it; "" where the place has no remote; null where the guard cannot tell: more than one remote and no
+ * marker, markers that disagree or that it cannot read, a partial configuration, a place it cannot read, or GH_HOST
+ * naming another host than that remote's.
  */
-function ghDefaultOf(dirs) {
-  const host = (process.env.GH_HOST ?? "").trim().toLowerCase();
+function ghDefaultOf(config) {
+  const host = (process.env.GH_HOST ?? "").trim().toLowerCase().replace(/\.+$/, "");
   const named = (process.env.GH_REPO ?? "").trim();
   if (named !== "") return repositoryKey(named, host || "github.com") || null;
-  if (dirs === null) return null;
-  const { remotes, partial } = remotesOf(dirs);
-  if (partial) return null;
-  const keyOf = (url) => (url === null ? "" : repositoryKey(url, "github.com"));
+  if (config === null || config.partial) return null;
+  const remotes = config.remotes;
+  const keyOf = (remote) => remoteKey(fetchUrl(config, remote));
   const marked = [...remotes.values()].filter((remote) => remote.resolved !== null && remote.resolved !== "");
   const keys = marked.map((remote) => {
-    const own = keyOf(remote.url);
+    const own = keyOf(remote);
     return remote.resolved === "base" || own === "" ? own : repositoryKey(remote.resolved, own.split("/")[0]);
   });
-  const only = remotes.size === 1 ? keyOf([...remotes.values()][0].url) : null;
+  const only = remotes.size === 1 ? keyOf([...remotes.values()][0]) : null;
   const picked = keys.length > 0 ? (keys.every((key) => key !== "" && key === keys[0]) ? keys[0] : null) : remotes.size === 0 ? "" : only;
   return picked && host !== "" && picked.split("/")[0] !== host ? null : picked;
 }
@@ -4951,12 +5027,21 @@ function ghDefaultOf(dirs) {
 /**
  * The branch context of each place a shell call's git runs in, one per git dir. Where HEAD names no branch or commit
  * (reftable's placeholder too), an implied destination counts as the default branch, so a refspec-less push is refused.
- * The origin is the session repository's, read from root, in every place; where a gh call naming no target lands is
- * each place's own (REQ-FLOW-134). Both are read the first time the verdict asks, which only a gh write does.
+ * The origin is the session repository's, read from root, in every place; where a gh call naming no target lands, and
+ * which repository each remote pushes to, is each place's own, from git's merged configuration (REQ-FLOW-134,
+ * review/128, review/130). Each is read the first time the verdict asks, which only a gh, curl, wget or push write does.
  */
 function contextsOf(command, cwd, powershell, root) {
   const contexts = new Map();
   let session;
+  let rooted;
+  const rootOf = () => {
+    if (rooted === undefined) {
+      const dirs = gitDirsFrom(root);
+      rooted = dirs === null ? null : { dirs, config: configOf(dirs) };
+    }
+    return rooted;
+  };
   for (const place of placesOf(command, cwd)) {
     const dirs = place === null ? null : place.git !== undefined ? gitDirsOf(place.git) : gitDirsFrom(place.work);
     const key = dirs === null ? "" : dirs.gitDir;
@@ -4969,6 +5054,14 @@ function contextsOf(command, cwd, powershell, root) {
     const defaultBranches = origin !== null && origin.startsWith("ref: refs/remotes/origin/") ? [origin.slice(25)] : [];
     let tags = null;
     let fallback;
+    let read = false;
+    let config = null;
+    const placeConfig = () => {
+      if (!read) config = dirs === null ? null : configOf(dirs);
+      read = true;
+      return config;
+    };
+    const pushes = new Map();
     contexts.set(key, {
       currentBranch: branch !== ".invalid" ? branch : detached ? null : (defaultBranches[0] ?? "main"),
       defaultBranches,
@@ -4987,12 +5080,33 @@ function contextsOf(command, cwd, powershell, root) {
         return tags;
       },
       get originRepo() {
-        session ??= originOf(root);
+        session ??= originOf(rootOf()?.config ?? null);
         return session;
       },
       get ghDefaultRepo() {
-        if (fallback === undefined) fallback = ghDefaultOf(dirs);
+        if (fallback === undefined) fallback = ghDefaultOf(placeConfig());
         return fallback;
+      },
+      // The repository each remote pushes to, read once per name (review/130).
+      remoteRepo(name) {
+        if (!pushes.has(name)) {
+          const merged = placeConfig();
+          const remote = merged === null || merged.partial ? undefined : merged.remotes.get(name);
+          pushes.set(name, remote === undefined ? "" : remoteKey(pushUrl(merged, remote)));
+        }
+        return pushes.get(name);
+      },
+      get pushRemote() {
+        const merged = placeConfig();
+        if (merged === null || merged.partial) return null;
+        const entry = branch === ".invalid" ? {} : (merged.branches.get(branch) ?? {});
+        return entry.pushremote ?? merged.pushDefault ?? entry.remote ?? "origin";
+      },
+      // A place the guard cannot read counts as the session's own, so a push to origin from it runs, as before; only a
+      // readable other checkout has its origin compared (review/130).
+      get ownCheckout() {
+        const own = rootOf();
+        return dirs === null || own === null || resolve(dirs.commonDir) === resolve(own.dirs.commonDir);
       },
       ghHost: (process.env.GH_HOST ?? "").trim().toLowerCase() || "github.com",
     });

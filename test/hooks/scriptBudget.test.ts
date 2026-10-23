@@ -292,7 +292,10 @@ describe("hook script budgets (REQ-CTX-016)", () => {
     // TEST CHANGE, justified (REQ-FLOW-134, a4c build/20-22): both rows moved again, bytes from 266,240 to 274,432 and
     // lines from 5,768 to 5,910, the measured 270,411 bytes / 5,810 lines of the largest copy (copilot, up from 263,539
     // bytes) plus a small margin, since the verdict now reads GraphQL mutations, curl and wget API writes and reviewers.
-    expect(HOOK_SCRIPT_BUDGETS[PERSON_ONLY_GUARD_FILE]).toEqual({ bytes: 274_432, lines: 5_910 });
+    // TEST CHANGE, justified (REQ-FLOW-134, a4c review/120-132): both rows moved again, bytes from 274,432 to 286,720
+    // and lines from 5,910 to 6,141, the measured 283,112 bytes / 6,041 lines of the largest copy (copilot, up from
+    // 270,411 bytes) plus a small margin, since the guard now reads git's merged configuration and a push's repository.
+    expect(HOOK_SCRIPT_BUDGETS[PERSON_ONLY_GUARD_FILE]).toEqual({ bytes: 286_720, lines: 6_141 });
     const guards = renders.filter((script) => script.fileName === PERSON_ONLY_GUARD_FILE);
     expect(guards).toHaveLength(TOOLS.length);
     for (const script of guards) expect(budgetViolation(script), script.tool).toBeUndefined();

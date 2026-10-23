@@ -4061,3 +4061,121 @@ describe("the outside-party readers' second round (a4c, build/20-25)", () => {
     expect(performance.now() - started).toBeLessThan(8_000);
   });
 });
+
+/**
+ * a4c fix round 2 (REQ-FLOW-134, review/120-132): the outside-party readers read what the line hides as unseen, read
+ * more targets, prose and stdin spellings, and read a push's repository. Every asking row is red on e53503b6, which
+ * runs it; each sits beside a row that runs on both.
+ */
+describe("the outside-party readers' third round (a4c, review/120-132)", () => {
+  const ORIGIN = { ...ON_FEATURE, originRepo: "github.com/acme/app" };
+  const rule = (command: string, ctx: Parameters<typeof personOnlyVerdict>[1] = ORIGIN): string | null => {
+    const verdict = personOnlyVerdict(command, ctx);
+    return verdict.deny ? verdict.rule : null;
+  };
+  const RESOLVE = `mutation { resolveReviewThread(input: {threadId: \\"T\\"}) { clientMutationId } }`;
+
+  it.each([
+    ["a shown state-only query beside a request body read from a file", `gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: "T"}) { clientMutationId } }' --input body.json`, "outside-write"],
+    ["a shown state-only query beside a typed query read from a file", `gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: "T"}) { clientMutationId } }' -F query=@other.graphql`, "outside-write"],
+    ["a field whose key the shell fills in", `gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: "T"}) { clientMutationId } }' -f "$K"=x`, "outside-write"],
+    ["a curl GraphQL body the shell fills in, its key written with a JSON escape", `curl -X POST -d "{\\"\\\\u0071uery\\":\\"$Q\\"}" https://api.github.com/graphql`, "outside-write"],
+    ["a GraphQL call after curl's --next", `curl -s https://api.github.com/repos/acme/app --next -X POST -d '{"query":"${RESOLVE}"}' https://api.github.com/graphql`, "outside-write"],
+    ["a query holding a comment", `gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: "T"}) { clientMutationId } } # note'`, "outside-write"],
+    ["a query holding a block string", `gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: """T"""}) { clientMutationId } }'`, "outside-write"],
+    ["a state-only query beside a variable value the shell fills in", `gh api graphql -f query='mutation($id: ID!) { resolveReviewThread(input: {threadId: $id}) { clientMutationId } }' -f id="$TID"`, null],
+    ["a curl state-only query shown whole", `curl -X POST -d '{"query":"${RESOLVE}"}' https://api.github.com/graphql`, null],
+  ])("reads %s", (_, command, expected) => {
+    expect(rule(command), command).toBe(expected);
+  });
+
+  it.each([
+    ["an issue transferred to another repository", "gh issue transfer 3 other/repo", "outside-write"],
+    ["an issue transferred by a URL", "gh issue transfer https://github.com/acme/app/issues/3 other/repo", "outside-write"],
+    ["a branch developed in another repository", "gh issue develop 3 --branch-repo other/repo", "outside-write"],
+    ["a branch developed in another repository by =", "gh issue develop 3 --branch-repo=other/repo", "outside-write"],
+    ["a branch developed in the origin", "gh issue develop 3 --branch-repo acme/app", null],
+    ["a gist created", "gh gist create notes.md", "outside-write"],
+    ["a gist edited", "gh gist edit abc --add notes.md", "outside-write"],
+    ["a gist read", "gh gist view abc", null],
+    ["a REST follow", "gh api -X PUT user/following/alice", "outside-write"],
+    ["a REST team discussion", "gh api -X POST orgs/acme/teams/core/discussions -f title=t -f body=b", "outside-write"],
+    ["a REST gist through curl", `curl -X POST -d '{"files":{}}' https://api.github.com/gists`, "outside-write"],
+    ["a REST write on the origin's own path", "gh api -X POST repos/acme/app/issues/1/comments -f body=x", null],
+  ])("reads %s", (_, command, expected) => {
+    expect(rule(command), command).toBe(expected);
+  });
+
+  it.each([
+    ["a pull request's closing comment naming a person", "gh pr close 3 --comment 'cc @alice'", "outside-write"],
+    ["an issue's reopening comment naming a person", "gh issue reopen 3 -c 'cc @alice'", "outside-write"],
+    ["a closing comment joined by =", "gh issue close 3 --comment='cc @alice'", "outside-write"],
+    ["a closing comment attached to its short flag", "gh issue close 3 '-c@alice'", "outside-write"],
+    ["a closing comment naming nobody", "gh pr close 3 --comment 'done'", null],
+    ["a nested review comment body naming a person", "gh api -X POST repos/acme/app/pulls/1/reviews -f event=COMMENT -f 'comments[][path]=a.ts' -f 'comments[][body]=@alice look'", "outside-write"],
+    ["a nested JSON review comment body naming a person", `curl -X POST -d '{"event":"COMMENT","comments":[{"path":"a.ts","body":"@alice look"}]}' https://api.github.com/repos/acme/app/pulls/1/reviews`, "outside-write"],
+    ["a nested JSON review comment body naming nobody", `curl -X POST -d '{"event":"COMMENT","comments":[{"path":"a.ts","body":"look"}]}' https://api.github.com/repos/acme/app/pulls/1/reviews`, null],
+    ["a reviewer attached to its short flag", "gh pr create --title t --body b -ralice", "outside-write"],
+    ["an assignee attached to its short flag", "gh issue create --title t --body b -abob", "outside-write"],
+    ["the caller attached as assignee", "gh issue create --title t --body b -a@me", null],
+  ])("reads %s", (_, command, expected) => {
+    expect(rule(command), command).toBe(expected);
+  });
+
+  it.each([
+    ["a body file at the stdin device", "gh pr comment 3 --body-file /dev/stdin <<'EOF'\nthanks @alice\nEOF"],
+    ["a body file attached to its short flag", "gh pr comment 3 -F- <<'EOF'\nthanks @alice\nEOF"],
+    ["a body file attached with =", "gh pr comment 3 -F=- <<'EOF'\nthanks @alice\nEOF"],
+    ["a body file joined at the stdin device", "gh pr comment 3 --body-file=/dev/stdin <<'EOF'\nthanks @alice\nEOF"],
+    ["a REST input at the stdin device", `echo '{"body":"@alice"}' | gh api -X POST repos/acme/app/issues/1/comments --input /dev/stdin`],
+    ["a REST typed field at the stdin device", "echo '@alice' | gh api -X POST repos/acme/app/issues/1/comments -F body=@/dev/stdin"],
+    ["a curl body at the stdin device", `echo '{"body":"@alice"}' | curl -X POST -d @/dev/stdin https://api.github.com/repos/acme/app/issues/1/comments`],
+  ])("reads the body of %s for a mention", (_, command) => {
+    expect(rule(command), command).toBe("outside-write");
+    expect(rule(command.replaceAll("@alice", "alice")), command).toBeNull();
+  });
+
+  it("reads the last hostname option, as gh does, and compares hosts normalised", () => {
+    const write = "-X POST repos/acme/app/issues/1/comments -f body=x";
+    expect(rule(`gh api --hostname ghe.example.com --hostname github.com ${write}`)).toBeNull();
+    expect(rule(`gh api --hostname github.com --hostname ghe.example.com ${write}`)).toBe("outside-write");
+    expect(rule(`curl -X POST -d '{"body":"x"}' https://API.GITHUB.COM./repos/other/repo/issues/1/comments`)).toBe("outside-write");
+    expect(rule(`curl -X POST -d '{"body":"x"}' https://api.github.com./repos/acme/app/issues/1/comments`)).toBeNull();
+    expect(rule("gh pr comment 3 --body x -R GitHub.com./acme/app")).toBeNull();
+  });
+
+  it("holds a gh write on a line that sets git configuration through its environment outside", () => {
+    expect(rule("GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=remote.origin.url GIT_CONFIG_VALUE_0=x gh pr comment 3 --body x")).toBe("outside-write");
+    expect(rule("gh pr comment 3 --body x")).toBeNull();
+  });
+
+  it.each([
+    ["a feature push to origin", "git push -u origin feat/x", {}, null],
+    ["a push naming no remote, whose push remote is origin", "git push", { pushRemote: "origin" }, null],
+    ["a push to the origin's own URL", "git push https://github.com/acme/app.git feat/x", {}, null],
+    ["a push to another remote whose URL is the origin's", "git push fork feat/x", { remoteRepo: (): string => "github.com/acme/app" }, null],
+    ["a push to another repository's URL", "git push https://github.com/other/repo.git feat/x", {}, "outside-write"],
+    ["a push to another repository's URL in scp form", "git push git@github.com:other/repo.git feat/x", {}, "outside-write"],
+    ["a push to a remote pushing to another repository", "git push upstream feat/x", { remoteRepo: (): string => "github.com/up/app" }, "outside-write"],
+    ["a push to a remote the configuration does not place", "git push upstream feat/x", { remoteRepo: (): string => "" }, "outside-write"],
+    ["a push whose remote word the shell fills in", `git push "$R" feat/x`, {}, "outside-write"],
+    ["a push whose remote URL a -c pair sets", "git -c remote.origin.url=https://github.com/other/repo.git push origin feat/x", {}, "outside-write"],
+    ["a push under git configuration set through the environment", "GIT_CONFIG_PARAMETERS=x git push origin feat/x", {}, "outside-write"],
+    ["a push naming no remote, whose push remote is another repository's", "git push", { pushRemote: "upstream", remoteRepo: (): string => "github.com/up/app" }, "outside-write"],
+    ["a push naming no remote, whose push remote the guard cannot tell", "git push", { pushRemote: null }, "outside-write"],
+    ["a push to origin from another checkout of another repository", "git push origin feat/x", { ownCheckout: false, remoteRepo: (): string => "github.com/other/repo" }, "outside-write"],
+    ["a push to origin from another checkout of the same repository", "git push origin feat/x", { ownCheckout: false, remoteRepo: (): string => "github.com/acme/app" }, null],
+    ["a push by --repo to another repository", "git push --repo=https://github.com/other/repo.git", {}, "outside-write"],
+    ["a subtree push to another repository", "git subtree push -P d https://github.com/other/repo.git feat/x", {}, "outside-write"],
+  ] as const)("reads %s", (_, command, extra, expected) => {
+    expect(rule(command, { ...ORIGIN, ...extra }), command).toBe(expected);
+  });
+
+  it("leaves a push unread for a caller naming no origin, as the run verbs' own push", () => {
+    expect(personOnlyVerdict("git push https://github.com/other/repo.git feat/x", ON_FEATURE)).toEqual({ deny: false });
+  });
+
+  it("names a push's branch act before its repository, so the default branch's ask is the one shown", () => {
+    expect(personOnlyVerdict("git push upstream HEAD:main", { ...ORIGIN, remoteRepo: (): string => "" })).toMatchObject({ deny: true, rule: "push-default" });
+  });
+});
