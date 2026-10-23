@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { delimiter, join } from "node:path";
@@ -1467,6 +1468,42 @@ describe("sync — loosening the autonomy setting needs --loosen", () => {
 
     expect(switched.code, switched.stderr).toBe(0);
     expect(await readFile(join(root, CODEX_COPY), "utf8")).toContain('// stamity-autonomy {"mode":"autonomous"');
+  });
+
+  it("refuses a looser sync over a planted copy that a forged ledger row vouches for, with nothing committed (review/88)", async ({ skip }) => {
+    const root = await seedBaked({ mode: "ask" });
+    // A repository that does not commit its copies: the looser manifest is committed, the copy is not.
+    await setAutonomy(root);
+    await rm(join(root, GUARD_COPY));
+    try {
+      await seedGitRepo(root);
+    } catch (error) {
+      if (error instanceof Error && error.name === "GitUnavailableError") skip();
+      throw error;
+    }
+    // A default-reading guard text at another client's path, and a ledger row for its bytes in the manifest on disk.
+    const planted = guardOutput(undefined, CODEX_COPY).content;
+    await mkdir(join(root, ".stamity/generated/hooks/codex"), { recursive: true });
+    await writeFile(join(root, CODEX_COPY), planted, "utf8");
+    const current = await readManifest(root);
+    if (current === null) throw new Error("no manifest");
+    const forged = {
+      path: CODEX_COPY,
+      adapter: "codex" as const,
+      artifactId: "stamity-person-only-guard",
+      artifactType: "infra" as const,
+      contentHash: createHash("sha256").update(planted).digest("hex"),
+    };
+    await writeManifest(root, { ...current, ledger: [...current.ledger, forged] }, { now: T0 });
+    plannerOutputs.value = [guardOutput()];
+
+    const refused = await runSync(root, ["--json"]);
+
+    expect(refused.code).toBe(1);
+    const error = parseSingleDoc(refused.stdout)["error"] as { code: string; why: string };
+    expect(error.code).toBe("AUTONOMY_LOOSENED");
+    expect(error.why).toContain("no guard copy found");
+    expect(existsSync(join(root, GUARD_COPY))).toBe(false);
   });
 
   it("names on stderr each guard copy a --loosen run loosened, and what it dropped (review/67)", async () => {

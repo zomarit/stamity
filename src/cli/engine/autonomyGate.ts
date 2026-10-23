@@ -53,15 +53,12 @@ type RecordedRow = { readonly path: string; readonly contentHash?: string };
 
 /**
  * The guard copies one gate call is about: `planned`, every guard path the
- * write plans (the selected clients' copies, the baseline's primary leg);
- * `baking`, the planned paths that would bake the setting asked about; and
- * `recorded`, the ledger before the write, which says whether a copy at an
- * unplanned path is one the engine wrote.
+ * write plans (the selected clients' copies, the baseline's primary leg), and
+ * `baking`, the planned paths that would bake the setting asked about.
  */
 export interface GuardCopies {
   readonly planned: readonly string[];
   readonly baking: readonly string[];
-  readonly recorded?: readonly RecordedRow[];
 }
 
 /** Every client's known guard path: Claude Code's copy, then each client's generated one (`../../emit/hooksInfra.ts`). */
@@ -258,10 +255,11 @@ const MANIFEST_REL = `${STATE_DIR}/${MANIFEST_FILE}`;
  * planned copy is read whatever it holds. A copy at another known guard path
  * is a leg only when its text is a guard the gate recognises, so it can only
  * tighten; it stands in for the planned copies (switching the no-copy `ask`
- * fallback off) only when `recorded` holds its hash, so a planted file never
- * does.
+ * fallback off) only when `HEAD` holds it — never on the word of the ledger in
+ * the manifest on disk, which an agent can edit — so a planted file never does
+ * without a commit.
  */
-async function baselineLegs(rootDir: string, planned: readonly string[], recorded: readonly RecordedRow[]): Promise<BaselineLeg[]> {
+async function baselineLegs(rootDir: string, planned: readonly string[]): Promise<BaselineLeg[]> {
   const legs: BaselineLeg[] = [];
   const others = KNOWN_GUARD_PATHS.filter((path) => !planned.includes(path));
   const read = (path: string): Promise<string | null | undefined> => readRegularFile(join(rootDir, ...path.split("/")), GUARD_COPY_MAX_BYTES);
@@ -273,15 +271,15 @@ async function baselineLegs(rootDir: string, planned: readonly string[], recorde
     plannedFound += 1;
     legs.push({ source: `the guard copy \`${planned[index] ?? ""}\` on disk`, setting: text === undefined ? UNREADABLE : guardCopySetting(text) });
   });
-  /** A copy at an unplanned path: a leg when recognised; a stand-in when also recorded. */
-  const other = (path: string, text: string | null | undefined, where: string): void => {
+  /** A copy at an unplanned path: a leg when recognised; a stand-in when also at `HEAD`. */
+  const other = (path: string, text: string | null | undefined, atHead: boolean): void => {
     if (typeof text !== "string") return;
     const setting = recognisedSetting(text);
     if (setting === null) return;
-    legs.push({ source: `the guard copy \`${path}\` ${where}`, setting });
-    if (isRecorded(path, text, recorded)) standIns += 1;
+    legs.push({ source: `the guard copy \`${path}\` ${atHead ? "committed at `HEAD`" : "on disk"}`, setting });
+    if (atHead) standIns += 1;
   };
-  othersOnDisk.forEach((text, index) => other(others[index] ?? "", text, "on disk"));
+  othersOnDisk.forEach((text, index) => other(others[index] ?? "", text, false));
   const head = await readHead(rootDir, plannedFound === 0 ? [MANIFEST_REL, ...planned, ...others] : [MANIFEST_REL]);
   if (head === null) {
     if (insideCheckout(rootDir)) legs.push({ source: "`HEAD`, which git did not answer for", setting: UNREADABLE });
@@ -297,7 +295,7 @@ async function baselineLegs(rootDir: string, planned: readonly string[], recorde
       const text = head.get(path);
       legs.push({ source: `the guard copy \`${path}\` committed at \`HEAD\``, setting: text === undefined ? UNREADABLE : guardCopySetting(text) });
     }
-    for (const path of plannedFound === 0 ? others : []) other(path, head.get(path), "committed at `HEAD`");
+    for (const path of plannedFound === 0 ? others : []) other(path, head.get(path), true);
     if (plannedFound === 0 && headCopies === 0 && standIns === 0 && head.has(MANIFEST_REL)) {
       legs.push({ source: "no guard copy found on disk or at `HEAD` beside the setup committed there (read as `ask`)", setting: ASK });
     }
@@ -320,19 +318,15 @@ function strictestOf(legs: readonly BaselineLeg[]): ResolvedAutonomy {
  * other client's known guard path (they can only tighten), the `autonomy`
  * committed at `HEAD`, and the manifest on disk before the write. With no
  * planned copy on disk, the copies committed at `HEAD` are legs too; with no
- * planned copy on disk or at `HEAD`, and no copy elsewhere whose bytes
- * `recorded` (the ledger before the write) vouches for, while `HEAD` holds a
- * manifest, the copies' leg reads `ask`, so deleting them loosens nothing. Inside a checkout, only
+ * planned copy on disk or at `HEAD`, and no recognised copy at `HEAD` at any
+ * other known guard path, while `HEAD` holds a manifest, the copies' leg reads
+ * `ask`, so deleting them loosens nothing. Inside a checkout, only
  * git's own answer that a path is not at `HEAD` reads as "not there"; a git
  * that refuses or fails reads as the strictest setting. With no leg at all — a
  * first `init` — it is the default.
  */
-export async function readBaseline(
-  rootDir: string,
-  copyPaths: readonly string[],
-  recorded: readonly RecordedRow[] = [],
-): Promise<ResolvedAutonomy> {
-  return strictestOf(await baselineLegs(rootDir, copyPaths, recorded));
+export async function readBaseline(rootDir: string, copyPaths: readonly string[]): Promise<ResolvedAutonomy> {
+  return strictestOf(await baselineLegs(rootDir, copyPaths));
 }
 
 /**
@@ -371,7 +365,7 @@ export async function assertNotLoosened(
   next: ResolvedAutonomy,
   opts: { loosen: boolean; copies: GuardCopies; remedy?: string; notice?: (line: string) => void },
 ): Promise<void> {
-  const legs = await baselineLegs(rootDir, opts.copies.planned, opts.copies.recorded ?? []);
+  const legs = await baselineLegs(rootDir, opts.copies.planned);
   const baseline = strictestOf(legs);
   if (!loosens(next, baseline)) return;
   if (opts.loosen) {
@@ -447,6 +441,6 @@ export async function gateGuardCopies(
   }
   for (const { next, baking } of settings.values()) {
     // oxlint-disable-next-line no-await-in-loop -- one refusal is the answer; the second is not asked
-    await gate(next, { planned: plannedPaths, baking, recorded });
+    await gate(next, { planned: plannedPaths, baking });
   }
 }

@@ -3060,6 +3060,28 @@ describe("init — re-initialising after a full clean keeps the committed autono
     expect(await readFile(guard, "utf8")).toContain('// stamity-autonomy {"mode":"autonomous"');
   });
 
+  it("passes `init -y` choosing claude after a full clean of a committed cursor-only default setup (review/89)", async ({ skip }) => {
+    const root = await makeRepo();
+    const first = await runInit(root, ["-y", "--tools", "cursor"]);
+    expect(first.code, first.stderr).toBe(0);
+    expect(existsSync(join(root, ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs"))).toBe(true);
+    try {
+      await seedGitRepo(root);
+    } catch (error) {
+      if (error instanceof Error && error.name === "GitUnavailableError") skip();
+      throw error;
+    }
+    // A full `clean`: the state folder, with every generated copy, gone; HEAD holds the cursor-only setup.
+    await rm(join(root, STATE_DIR), { recursive: true, force: true });
+
+    const again = await runInit(root, ["-y", "--tools", "claude", "--json"]);
+
+    expect(again.code, again.stdout).toBe(0);
+    expect(await readFile(join(root, ".claude/hooks/stamity/stamity-person-only-guard.mjs"), "utf8")).toContain(
+      '// stamity-autonomy {"mode":"autonomous"',
+    );
+  });
+
   it("writes the setup with `init -y --loosen`", async ({ skip }) => {
     const root = await cleanedRepoCommittedAsk(skip);
 

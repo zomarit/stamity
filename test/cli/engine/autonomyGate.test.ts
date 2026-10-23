@@ -7,6 +7,7 @@ import {
   gateGuardCopies,
   guardCopySetting,
   readBaseline,
+  strictGuardGate,
   type GuardCopies,
   type GuardGate,
 } from "../../../src/cli/engine/autonomyGate.ts";
@@ -250,7 +251,8 @@ describe("readBaseline — every client's known guard path is a tighten-only leg
     await put(root, ".stamity/manifest.json", manifestText({ mode: "ask" }));
     await commitAll(root, skip);
     // The write now plans only another client's copy.
-    const baseline = await readBaseline(root, [CODEX_COPY], [recordedRow(CLAUDE_COPY, strict)]);
+    // TEST CHANGE, justified: REQ-FLOW-138 — a copy at an unplanned path stands in only when HEAD holds it, never on the disk ledger's word (review/88, review/89).
+    const baseline = await readBaseline(root, [CODEX_COPY]);
     expect(baseline.deployingBranches).toEqual(["production"]);
     expect(baseline.deploying).toEqual(["workflow-dispatch"]);
     await expect(
@@ -258,18 +260,19 @@ describe("readBaseline — every client's known guard path is a tighten-only leg
     ).rejects.toMatchObject({ code: "AUTONOMY_LOOSENED", why: expect.stringContaining(`the guard copy \`${CLAUDE_COPY}\` on disk`) as unknown });
   });
 
-  it("passes a switch from a committed claude-only default setup to another client: the recorded copy stands in", async ({ skip }) => {
+  it("passes a switch from a committed claude-only default setup to another client: the copy at HEAD stands in", async ({ skip }) => {
+    // TEST CHANGE, justified: REQ-FLOW-138 — a copy at an unplanned path stands in only when HEAD holds it, never on the disk ledger's word (review/88, review/89).
     const root = tempDir().path("repo");
-    const written = guardText();
-    await put(root, CLAUDE_COPY, written);
+    await put(root, CLAUDE_COPY, guardText());
     await put(root, ".stamity/manifest.json", manifestText());
     await commitAll(root, skip);
-    const copies = { planned: [CODEX_COPY], baking: [CODEX_COPY], recorded: [recordedRow(CLAUDE_COPY, written)] };
-    expect(await readBaseline(root, copies.planned, copies.recorded)).toEqual(setting());
+    const copies = { planned: [CODEX_COPY], baking: [CODEX_COPY] };
+    expect(await readBaseline(root, copies.planned)).toEqual(setting());
     await expect(assertNotLoosened(root, setting(), { loosen: false, copies })).resolves.toBeUndefined();
   });
 
-  it("lets a planted guard-looking file at an unselected path neither loosen nor switch the fallback off; a recorded one stands in", async ({ skip }) => {
+  it("lets a planted guard-looking file at an unselected path neither loosen nor switch the fallback off, a forged ledger row included; a committed one stands in", async ({ skip }) => {
+    // TEST CHANGE, justified: REQ-FLOW-138 — a copy at an unplanned path stands in only when HEAD holds it, never on the disk ledger's word (review/88, review/89).
     const root = tempDir().path("repo");
     await put(root, ".stamity/manifest.json", manifestText());
     await commitAll(root, skip);
@@ -281,8 +284,13 @@ describe("readBaseline — every client's known guard path is a tighten-only leg
     await put(root, CLAUDE_COPY, guardText({ mode: "ask", deployingBranches: ["production"] }));
     expect(await readBaseline(root, [CLAUDE_COPY])).toEqual(setting({ mode: "ask", deployingBranches: ["production"] }));
     await rm(join(root, CLAUDE_COPY));
-    // Recorded by the ledger as the engine's own write: it stands in for the planned copy.
-    expect(await readBaseline(root, [CLAUDE_COPY], [recordedRow(CODEX_COPY, planted)])).toEqual(setting());
+    // A ledger row forged for the planted bytes vouches for nothing: the write loop's gate still refuses.
+    await expect(
+      gateGuardCopies(root, [{ path: CLAUDE_COPY, content: guardText() }], [recordedRow(CODEX_COPY, planted)], strictGuardGate(root, "stamity sync --loosen")),
+    ).rejects.toMatchObject({ code: "AUTONOMY_LOOSENED", why: expect.stringContaining("no guard copy found") as unknown });
+    // Committed, it stands in for the planned copy (the commit residual).
+    await commitAll(root, skip);
+    expect(await readBaseline(root, [CLAUDE_COPY])).toEqual(setting());
   });
 
   it("reads a recognised copy committed at HEAD at an unplanned path when no planned copy is on disk", async ({ skip }) => {
@@ -594,10 +602,9 @@ describe("gateGuardCopies — only a guard copy whose marker changes is gated", 
       },
     );
     const planned = [CLAUDE_COPY, GUARD_COPY_PATHS[1] ?? "", tagged];
-    // TEST CHANGE, justified: REQ-FLOW-138 — the gate is also handed the ledger, which says whether an unplanned copy is the engine's (review/85, review/86 sign-off).
     expect(calls).toEqual([
-      [setting(), { planned, baking: [CLAUDE_COPY, GUARD_COPY_PATHS[1] ?? ""], recorded: [] }],
-      [setting({ deployingActs: ["tag"] }), { planned, baking: [tagged], recorded: [] }],
+      [setting(), { planned, baking: [CLAUDE_COPY, GUARD_COPY_PATHS[1] ?? ""] }],
+      [setting({ deployingActs: ["tag"] }), { planned, baking: [tagged] }],
     ]);
   });
 
