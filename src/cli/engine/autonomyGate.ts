@@ -194,6 +194,8 @@ function gitReadEnv(): NodeJS.ProcessEnv {
     if (!/^GIT_/i.test(key)) env[key] = value;
   }
   env["GIT_OPTIONAL_LOCKS"] = "0";
+  // A replace ref is a local ref write that needs no commit: git must read the objects `HEAD` holds (build/14).
+  env["GIT_NO_REPLACE_OBJECTS"] = "1";
   return env;
 }
 

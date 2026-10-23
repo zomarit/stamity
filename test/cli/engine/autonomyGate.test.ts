@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { appendFile, mkdir, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { dirname, join, relative, sep } from "node:path";
@@ -19,7 +20,7 @@ import { HOOKS_GENERATED_DIR } from "../../../src/types/markers.ts";
 import { classifyFailure } from "../../../src/resilience/failureClass.ts";
 import { DEPLOYING_ACTS, type AutonomyConfig } from "../../../src/types/manifest.ts";
 import { EngineError } from "../../../src/types/errors.ts";
-import { seedGitRepo } from "../../support/repoFixtures.ts";
+import { NO_GIT_CONFIG, carriedProcessEnv, seedGitRepo } from "../../support/repoFixtures.ts";
 import { useTempDir } from "../../support/tempDir.ts";
 
 /**
@@ -343,6 +344,41 @@ describe("readBaseline — a setup from before the guard (build/9, decision D6)"
       // oxlint-disable-next-line no-await-in-loop -- one repository per shape
       expect(await readBaseline(repo, [CLAUDE_COPY]), JSON.stringify(shape)).toEqual(setting({ mode: "ask", deployingActs: [...DEPLOYING_ACTS] }));
     }
+  });
+});
+
+/** One git call in `root` under the fixtures' isolated config: a local write (an object, a replace ref) that needs no commit. */
+function git(root: string, args: readonly string[], input?: string): string {
+  const env = { ...carriedProcessEnv(), GIT_CONFIG_GLOBAL: NO_GIT_CONFIG, GIT_CONFIG_NOSYSTEM: "1", HOME: root };
+  return execFileSync("git", args, { cwd: root, env, encoding: "utf8", ...(input === undefined ? {} : { input }) }).trim();
+}
+
+/** Points a replace ref from the blob `HEAD` holds at `path` to a new blob holding `text`. */
+function replaceBlobAtHead(root: string, path: string, text: string): void {
+  const original = git(root, ["rev-parse", `HEAD:${path}`]);
+  const replacement = git(root, ["hash-object", "-w", "--stdin"], text);
+  git(root, ["replace", "-f", original, replacement]);
+}
+
+describe("readBaseline — a replace ref does not change what HEAD holds (build/14)", () => {
+  it("reads the manifest blob HEAD holds, not the one a replace ref points at", async ({ skip }) => {
+    const root = tempDir().path("repo");
+    await put(root, CLAUDE_COPY, guardText());
+    await put(root, ".stamity/manifest.json", manifestText({ mode: "ask" }));
+    await commitAll(root, skip);
+    await put(root, ".stamity/manifest.json", manifestText());
+    replaceBlobAtHead(root, ".stamity/manifest.json", manifestText());
+    expect((await readBaseline(root, [CLAUDE_COPY])).mode).toBe("ask");
+  });
+
+  it("reads the guard copy blob HEAD holds, not the one a replace ref points at", async ({ skip }) => {
+    const root = tempDir().path("repo");
+    await put(root, CLAUDE_COPY, guardText({ mode: "ask", deployingBranches: ["production"] }));
+    await put(root, ".stamity/manifest.json", manifestText());
+    await commitAll(root, skip);
+    await rm(join(root, CLAUDE_COPY));
+    replaceBlobAtHead(root, CLAUDE_COPY, guardText());
+    expect(await readBaseline(root, [CLAUDE_COPY])).toEqual(setting({ mode: "ask", deployingBranches: ["production"] }));
   });
 });
 
