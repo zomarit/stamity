@@ -830,11 +830,29 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       // A glob or brace form can give a word that opens with a dash only where its literal text before it is empty or
       // opens with one (review/52): `src/*.ts` cannot spell an option, `*` and `--loo*` can.
       const dashes = (at: number): boolean => markOf(at).first === 0 || (cmd[at] ?? "").startsWith("-");
+      // A launcher or a package manager whose script or package word the shell fills in runs a program the guard cannot
+      // settle (review/87): the words up to that one, the manager's `run`, `exec`, `dlx` or `x` passed, any marked.
+      const launcher = programName(program);
+      let scriptAt = -1;
+      if (["node", "nodejs", "bun", "deno", "tsx"].includes(launcher) || MANAGERS.has(launcher)) {
+        scriptAt = 1;
+        while (scriptAt < cmd.length && (cmd[scriptAt] ?? "").startsWith("-")) {
+          scriptAt += MANAGERS.has(launcher) && MANAGER_VALUED.has(cmd[scriptAt] ?? "") ? 2 : 1;
+        }
+        if (MANAGERS.has(launcher) && ["run", "run-script", "exec", "dlx", "x"].includes(cmd[scriptAt] ?? "")) {
+          scriptAt += 1;
+          while (scriptAt < cmd.length && (cmd[scriptAt] ?? "").startsWith("-")) scriptAt += 1;
+        }
+      }
+      const launchesUnread = scriptAt !== -1 && cmd.slice(1, scriptAt + 1).some((_, at) => markOf(at + 1).kinds !== "");
       const unsure = cmd.map((_, at) => {
         const mark = markOf(at);
         if (tainted) return true;
         if (at > 0) return /[ep]/.test(mark.kinds) || (/[gb]/.test(mark.kinds) && dashes(at));
-        return mark.last > cut && (/[eb]/.test(mark.kinds) || (/g/.test(mark.kinds) && PACKAGE_WORDS.some((name) => shape.test(name))));
+        return (
+          launchesUnread ||
+          (mark.last > cut && (/[eb]/.test(mark.kinds) || (/g/.test(mark.kinds) && PACKAGE_WORDS.some((name) => shape.test(name)))))
+        );
       });
       // A program word built by an expansion, or by a glob or brace form that can give a dash word, carries arguments
       // of its own the line does not show (review/45): a runner may read the value as a line, a split value is words.
@@ -1320,9 +1338,10 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     }
     const named = repoGiven ? positionals : positionals.slice(1);
     const namedMarks = repoGiven ? positionalMarks : positionalMarks.slice(1);
-    // An unquoted expansion in the remote's place may split into the remote and refspecs or an option the line does not
-    // show (review/69): it reads as a push to the default branch, and to a deploying one where any is named.
-    if (!repoGiven && /s/.test(positionalMarks[0]?.kinds ?? "")) {
+    // An unquoted expansion, a glob or a brace form in the remote's place may split or expand into the remote and
+    // refspecs or an option the line does not show (review/69, review/87's record): it reads as a push to the default
+    // branch, and to a deploying one where any is named.
+    if (!repoGiven && /[sgb]/.test(positionalMarks[0]?.kinds ?? "")) {
       if (deploying.length > 0) deny("push-deploying", "A push whose remote word may split into refspecs the line cannot show");
       return deny("push-default", "A push whose remote word may split into refspecs or an option the line cannot show");
     }
@@ -2610,11 +2629,29 @@ export function unattendedPushVerdict(
       // A glob or brace form can give a word that opens with a dash only where its literal text before it is empty or
       // opens with one (review/52): `src/*.ts` cannot spell an option, `*` and `--loo*` can.
       const dashes = (at: number): boolean => markOf(at).first === 0 || (cmd[at] ?? "").startsWith("-");
+      // A launcher or a package manager whose script or package word the shell fills in runs a program the guard cannot
+      // settle (review/87): the words up to that one, the manager's `run`, `exec`, `dlx` or `x` passed, any marked.
+      const launcher = programName(program);
+      let scriptAt = -1;
+      if (["node", "nodejs", "bun", "deno", "tsx"].includes(launcher) || MANAGERS.has(launcher)) {
+        scriptAt = 1;
+        while (scriptAt < cmd.length && (cmd[scriptAt] ?? "").startsWith("-")) {
+          scriptAt += MANAGERS.has(launcher) && MANAGER_VALUED.has(cmd[scriptAt] ?? "") ? 2 : 1;
+        }
+        if (MANAGERS.has(launcher) && ["run", "run-script", "exec", "dlx", "x"].includes(cmd[scriptAt] ?? "")) {
+          scriptAt += 1;
+          while (scriptAt < cmd.length && (cmd[scriptAt] ?? "").startsWith("-")) scriptAt += 1;
+        }
+      }
+      const launchesUnread = scriptAt !== -1 && cmd.slice(1, scriptAt + 1).some((_, at) => markOf(at + 1).kinds !== "");
       const unsure = cmd.map((_, at) => {
         const mark = markOf(at);
         if (tainted) return true;
         if (at > 0) return /[ep]/.test(mark.kinds) || (/[gb]/.test(mark.kinds) && dashes(at));
-        return mark.last > cut && (/[eb]/.test(mark.kinds) || (/g/.test(mark.kinds) && PACKAGE_WORDS.some((name) => shape.test(name))));
+        return (
+          launchesUnread ||
+          (mark.last > cut && (/[eb]/.test(mark.kinds) || (/g/.test(mark.kinds) && PACKAGE_WORDS.some((name) => shape.test(name)))))
+        );
       });
       // A program word built by an expansion, or by a glob or brace form that can give a dash word, carries arguments
       // of its own the line does not show (review/45): a runner may read the value as a line, a split value is words.
@@ -3231,6 +3268,11 @@ export function unattendedPushVerdict(
   // command `verbShape` admits.
   if (landOnly) {
     const lands = commands.some((cmd) => {
+      // A program the reading cannot settle (review/87) may be this package: its words name the verb anywhere after it.
+      if (unread.get(cmd)?.[0] === true) {
+        const run = cmd.indexOf("run", 1);
+        return run !== -1 && cmd.slice(run + 1).includes("land");
+      }
       const args = packageArgs(cmd) ?? [];
       const at = args.findIndex((word) => !word.startsWith("-"));
       return at !== -1 && args[at] === "run" && args.slice(at + 1).includes("land");

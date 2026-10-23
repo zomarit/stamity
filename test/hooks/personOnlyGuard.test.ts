@@ -1821,3 +1821,18 @@ describe("the guard's refspec reading by marks (a4, review/69, review/77)", () =
     expect(decide(tool, guard, "git push origin 'feat/a$b'")).toEqual({ deny: false });
   });
 });
+
+describe("the guard's reading of a launcher's script word and a push's remote word (a4, review/87)", () => {
+  // Red on 8c991a6d: the launched program was read as another program, and a brace remote as a remote.
+  it.each(TOOLS)("%s: asks attended and refuses unattended for a launcher whose script word the shell fills in", async (tool) => {
+    const command = "node \"$CLI\" sync --loosen";
+    const verdict = personOnlyVerdict(command, BAKED_DEFAULT);
+    if (!verdict.deny) throw new Error("the launched loosening reads as no act");
+    const guard = await placeGuard(tool);
+    expect(decide(tool, guard, command)).toEqual(expectedAttended(tool, verdict));
+    expect(decide(tool, guard, "node scripts/build.mjs \"$OUT\"")).toEqual({ deny: false });
+    expect(decide(tool, guard, "git push {origin,main}").deny).toBe(true);
+    await getRepo().seedFiles({ ".stamity/runs/2026-10-23_x/record.md": record("in progress", "unattended") });
+    expect(decide(tool, guard, command).deny).toBe(true);
+  });
+});

@@ -3173,8 +3173,72 @@ describe("the engine's own CLI file by any path spelling (a4, review/68)", () =>
 
   it.each([
     ["an absolute path with an expanded argument", "node /home/dev/app/dist/cli.js build \"$X\""],
-    ["a path opening on an expansion with a full clean", "node \"$ROOT/dist/cli.js\" clean"],
   ])("leaves %s to the literal flag alone in a consumer repository", (_, command) => {
     expect(personOnlyVerdict(command, CONSUMER), command).toEqual({ deny: false });
+  });
+
+  // TEST CHANGE, justified (REQ-FLOW-138, review/87): a launcher's script word the shell fills in may be the installed
+  // engine's CLI, so it is a program the guard cannot settle and takes the full check, in a consumer repository too.
+  it("gives a path opening on an expansion with a full clean the full check in a consumer repository", () => {
+    expect(personOnlyVerdict("node \"$ROOT/dist/cli.js\" clean", CONSUMER)).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+});
+
+describe("a launcher or package manager whose script or package word the shell fills in (a4, review/87)", () => {
+  const DEFAULT = { ...ON_FEATURE, stricterThanDefault: false, ownRepository: false };
+  const UNREAD = "A command the guard cannot read, which may be a stamity command,";
+
+  // Red on 8c991a6d: the program was literal, so the line read as another program and nothing asked.
+  it.each([
+    ["node with a variable script word and a literal flag", "node \"$CLI\" sync --loosen"],
+    ["node with a substitution script word and an expanded argument", "node \"$(npm root)/@zomarit/stamity/dist/cli.js\" sync \"$F\""],
+    ["nodejs with a variable script word", "nodejs $CLI sync --loosen"],
+    ["bun with a variable script word after an option", "bun --silent \"$CLI\" sync --loosen"],
+    ["deno with a variable script word", "deno \"$CLI\" sync --loosen"],
+    ["tsx with a variable script word", "tsx \"$ENTRY\" sync --loosen"],
+    ["a manager's plain form with a variable bin word", "yarn \"$BIN\" sync --loosen"],
+    ["a manager's run form with a variable script word", "pnpm run \"$TASK\" --loosen"],
+    ["a manager's exec form after an option", "yarn --cwd app exec \"$BIN\" --loosen"],
+    ["a manager's dlx form with a variable package word", "pnpm dlx \"$PKG\" sync --loosen"],
+    ["a variable script word with literal arguments", "node \"$SCRIPT\" --check"],
+  ])("asks for %s", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+
+  it("names the program it cannot read where the loosening rides an expanded argument", () => {
+    expect(personOnlyVerdict("node \"$CLI\" sync \"$F\"", DEFAULT)).toMatchObject({ deny: true, act: expect.stringContaining(UNREAD) });
+  });
+
+  it.each([
+    ["node with a literal script and literal arguments", "node scripts/build.mjs --out dist"],
+    ["node with a literal script and an expanded argument", "node scripts/build.mjs \"$OUT\""],
+    ["a manager's run form with a literal script", "npm run build -- \"$OUT\""],
+    ["node with a path glob script", "node scripts/*.mjs --check"],
+  ])("runs %s", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toEqual({ deny: false });
+  });
+
+  // Red on 8c991a6d: the land line's identity did not read such a program.
+  it("reads the land verb behind a launcher whose script word the shell fills in, attended", () => {
+    const attended = (command: string): ReturnType<typeof unattendedPushVerdict> => unattendedPushVerdict(command, false, true);
+    expect(attended("node \"$CLI\" run land --run x").deny).toBe(true);
+    expect(attended("node \"$CLI\" run checkpoint --run x")).toEqual({ deny: false });
+  });
+});
+
+describe("a brace or glob form in a push's remote place (a4, review/87's record)", () => {
+  const FEATURE = { defaultBranches: ["trunk"], currentBranch: "feat/x", tags: [] };
+
+  // Red on 8c991a6d: only an unquoted variable's split read there.
+  it.each([
+    ["a brace form", "git push {origin,trunk}"],
+    ["a glob form", "git push orig*"],
+  ])("asks for %s, which may expand into a remote and refspecs", (_, command) => {
+    expect(personOnlyVerdict(command, FEATURE), command).toMatchObject({ deny: true, rule: "push-default", ask: true });
+    expect(personOnlyVerdict(command, { ...FEATURE, deployingBranches: ["production"] }), command).toMatchObject({ deny: true, rule: "push-deploying" });
+  });
+
+  it("leaves a quoted remote holding those characters to the refspecs after it", () => {
+    expect(personOnlyVerdict("git push 'orig*' feat/x", FEATURE)).toEqual({ deny: false });
   });
 });
