@@ -15,6 +15,7 @@ import { AGENTS_MD_FILE } from "../../src/emit/agentsMd.ts";
 import { AGENT_TOOL_POLICIES_PATH, HOOKS_GENERATED_DIR } from "../../src/emit/hooksInfra.ts";
 import { NATIVE_SKILL_DIRS, SKILLS_PROJECTION_DIR } from "../../src/emit/skillsProjection.ts";
 import type { HookInterchange } from "../../src/hooks/model.ts";
+import { PERSON_ONLY_GUARD_FILE } from "../../src/hooks/scripts.ts";
 import { TOOLS, type Tool } from "../../src/types/core.ts";
 import type { SetupManifest } from "../../src/types/manifest.ts";
 import {
@@ -53,7 +54,9 @@ import {
  *      from it, and only these: the per-tool hook script copies under
  *      `.stamity/generated/hooks/` and the policy document, both already
  *      goldened byte-for-byte in `test/corpus/emissionGoldens.test.ts` — the
- *      exclusion is "has a byte-exact golden elsewhere", not "is large".
+ *      exclusion is "has a byte-exact golden elsewhere", not "is large". A
+ *      document past 64 KiB stays in the golden but by its sha256, byte length
+ *      and line count rather than its text (`residueGoldenValue`, build/17).
  *
  * Snapshot-update discipline is the corpus suite's, restated because it binds
  * harder here: a diff in either golden IS a shipped-artifact change. Read it as
@@ -100,6 +103,29 @@ const CLIENT_RESIDUE: Readonly<Record<Tool, (path: string) => boolean>> = {
   codex: (path) => path.startsWith(".codex/") || path === CODEX_AGENTS_OVERRIDE_FILE,
 };
 
+/** The largest residue document the golden records as full text (64 KiB). */
+const RESIDUE_TEXT_BUDGET_BYTES = 64 * 1024;
+
+/**
+ * A residue document's golden value: its full text, or, past {@link RESIDUE_TEXT_BUDGET_BYTES}, its sha256,
+ * byte length and line count, so the golden still fails on any byte that moves while the snapshot stays under
+ * the repository's 1 MiB per-file budget (`scripts/repo-hygiene.mjs`).
+ *
+ * TEST CHANGE, justified (build/17): the one document past the budget today is the person-only guard copy
+ * (`.claude/hooks/stamity/stamity-person-only-guard.mjs`, about 245 KB), which this golden held in full. What
+ * the full text proved is held elsewhere: the guard's behaviour by the guard suites over the built copies
+ * (`test/hooks/personOnlyGuard.test.ts`, `test/hooks/personOnlyGuardDist.e2e.test.ts`), its size by
+ * `test/hooks/scriptBudget.test.ts`, and its source diff is reviewed in `src/hooks/personOnly.ts`. A refresh
+ * that moves this digest is read there, not here.
+ */
+function residueGoldenValue(content: string): string {
+  const bytes = Buffer.byteLength(content, "utf8");
+  if (bytes <= RESIDUE_TEXT_BUDGET_BYTES) return content;
+  const lines = content === "" ? 0 : content.split("\n").length - (content.endsWith("\n") ? 1 : 0);
+  const sha = createHash("sha256").update(content, "utf8").digest("hex");
+  return `text over ${RESIDUE_TEXT_BUDGET_BYTES} bytes, held by digest: sha256 ${sha}, ${bytes} bytes, ${lines} lines`;
+}
+
 /**
  * The full-byte golden set: infra-typed emissions minus the two families that
  * already carry a byte-exact golden in `test/corpus/emissionGoldens.test.ts`
@@ -124,7 +150,7 @@ function residueDocuments(
   for (const path of paths) {
     const content = tree[path];
     if (content === undefined) throw new Error(`ledger names ${path}, which the tree does not carry`);
-    documents[path] = content;
+    documents[path] = residueGoldenValue(content);
   }
   return documents;
 }
@@ -2377,6 +2403,26 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
 
   it("matches the residue-document golden byte for byte", () => {
     expect(residueDocuments(tree, repo.manifest)).toMatchSnapshot(`${label} residue documents`);
+  });
+
+  // TEST CHANGE, justified (build/17): added with the residue golden's text budget. Every entry stays
+  // within it; a document past it is recorded by its own sha256 and byte length, every other one in full.
+  it("records a residue document past the text budget by its digest, every other one in full", () => {
+    const documents = residueDocuments(tree, repo.manifest);
+    const large: string[] = [];
+    for (const [path, value] of Object.entries(documents)) {
+      const content = tree[path] ?? "";
+      const bytes = Buffer.byteLength(content, "utf8");
+      expect(Buffer.byteLength(value, "utf8"), path).toBeLessThanOrEqual(RESIDUE_TEXT_BUDGET_BYTES);
+      if (bytes <= RESIDUE_TEXT_BUDGET_BYTES) {
+        expect(value, path).toBe(content);
+        continue;
+      }
+      large.push(path);
+      expect(value, path).toContain(`sha256 ${createHash("sha256").update(content, "utf8").digest("hex")}, ${bytes} bytes`);
+    }
+    // The claude guard copy is the document this budget exists for; without it the case above proves nothing large.
+    if (tools.includes("claude")) expect(large).toContain(`.claude/hooks/stamity/${PERSON_ONLY_GUARD_FILE}`);
   });
 
   // The `beforeAll`'s whole build again, so it earns the hook's own budget
