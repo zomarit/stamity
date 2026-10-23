@@ -3187,15 +3187,20 @@ describe("stamity run checkpoint", () => {
       expect(remoteHeads(remote)).toEqual(SEEDED);
     });
 
-    it("pushes where the name nests four levels, which the verdict decides (the twin)", async () => {
+    // TEST CHANGE, justified (build/12): a substitution nothing closes on the line now leaves the rest of the line read
+    // as filled in, so the verdict reads this push's target as one the line cannot show and refuses it as a push to the
+    // default branch instead of letting it run. Real use never reaches this line: run.ts:1001-1003 refuses such a branch
+    // name (outside PUSHABLE_BRANCH) before any push; only the spy hands it to the verdict.
+    it("refuses the push where the name nests four levels, which the verdict decides (the twin)", async () => {
       const { repo } = await seed("attended");
       await writeFile(join(repo, "a.txt"), "changed\n");
       table.pushBranch = `stamity/x${'"$('.repeat(4)}y`;
 
       const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
 
-      expect(code).toBe(0);
-      expect(doc).toMatchObject({ pushed: true, notDone: [] });
+      expect(code).toBe(1);
+      expect(doc).toMatchObject({ pushed: false });
+      expect(doc["notDone"]).toEqual([expect.stringMatching(/^push refused: .*push-default/)]);
     });
 
     // Skipped on Windows (prove/10): NTFS, through the Windows file API, cannot hold `"` in a loose ref's file name, so
