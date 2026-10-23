@@ -197,7 +197,9 @@ export function gitCheckRunner(options: GitCheckRunnerOptions = {}): GitInputRun
       throw Object.assign(new Error(bareShapeRefusal(cwd)), { status: 128, keptFromGit: true });
     }
     const env = gitCheckEnv();
-    const pinned = ["-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", ...args];
+    // review/116: replace refs off by the command-line key too, which on git 2.19 to 2.42 beats a repository's
+    // `core.useReplaceRefs=true` where the variable alone does not.
+    const pinned = ["-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", "-c", "core.useReplaceRefs=false", ...args];
     const git = gitProgramFor(cwd, env);
     if (git === null) throw programNotFound("git", "spawnSync", pinned);
     return execFileSync(git, pinned, {

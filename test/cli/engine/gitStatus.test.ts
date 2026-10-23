@@ -423,7 +423,8 @@ describe.skipIf(!gitAvailable)("against a real repository (default runner)", () 
     await writeFile(join(standIn, "git"), `#!/bin/sh\nprintf '%s\\n' "$*" >> '${started}'\nexit 0\n`, "utf8");
     await chmod(join(standIn, "git"), 0o755);
     const env = await readEnv(getRoot().path("home"), { PATH: standIn });
-    const PINNED_STATUS = "-c safe.bareRepository=explicit -c core.fsmonitor=false status --porcelain\n";
+    // TEST CHANGE, justified (review/116): every check also pins `core.useReplaceRefs=false` among its leading options.
+    const PINNED_STATUS = "-c safe.bareRepository=explicit -c core.fsmonitor=false -c core.useReplaceRefs=false status --porcelain\n";
 
     // Non-degenerate: the stand-in is what a read starts, and what it is handed.
     expect(withProcessEnv(env, () => readWorkingTreeStatus(plain))).toEqual({ available: true, dirty: false, changedCount: 0 });
@@ -566,13 +567,15 @@ describe("the default runner starts the git an absolute PATH entry holds", () =>
  * review/114: a repository whose one commit holds `a.txt` reading "real", and a `git replace` ref making that blob read
  * as one holding "forged"; the blob's id, and what plain git (replace refs on) now prints for it.
  */
-function replacedBlob(repo: string): { blob: string; plain: string } {
+function replacedBlob(repo: string, configOn = false): { blob: string; plain: string } {
   const run = (args: string[], input?: string): string =>
     execFileSync("git", args, { cwd: repo, encoding: "utf8", ...(input === undefined ? {} : { input }), env: { ...process.env, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: NO_GIT_CONFIG, GIT_AUTHOR_NAME: "A", GIT_AUTHOR_EMAIL: "a@example.com", GIT_COMMITTER_NAME: "A", GIT_COMMITTER_EMAIL: "a@example.com" } }).trim();
   run(["init", "-q"]);
   const blob = run(["hash-object", "-w", "--stdin"], "real\n");
   const forged = run(["hash-object", "-w", "--stdin"], "forged\n");
   run(["replace", blob, forged]);
+  // review/116: the repository's own config turning replace refs on, which git 2.19 to 2.42 let beat the variable.
+  if (configOn) run(["config", "core.useReplaceRefs", "true"]);
   return { blob, plain: run(["cat-file", "-p", blob]) };
 }
 
@@ -585,6 +588,14 @@ describe("the check runner and git's replace refs (review/114)", () => {
     await mkdir(repo, { recursive: true });
     const { blob, plain } = replacedBlob(repo);
     expect(plain).toBe("forged");
+
+    expect(gitCheckRunner()(["cat-file", "-p", blob], repo)).toBe("real\n");
+  });
+
+  it("reads a replaced blob as the commit holds it where the repository's own config turns replace refs on (review/116)", async () => {
+    const repo = getRoot().path("repo-config");
+    await mkdir(repo, { recursive: true });
+    const { blob } = replacedBlob(repo, true);
 
     expect(gitCheckRunner()(["cat-file", "-p", blob], repo)).toBe("real\n");
   });

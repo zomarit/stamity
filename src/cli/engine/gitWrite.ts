@@ -108,7 +108,11 @@ const GROUP_GONE_WAIT_MS = 10_000;
 /** review/179: how often the runner asks whether the group is still there. */
 const GROUP_POLL_MS = 25;
 
-/** The options ahead of every command, in this order. */
+/**
+ * The options ahead of every command, in this order. review/116: `core.useReplaceRefs=false` beside the
+ * `GIT_NO_REPLACE_OBJECTS` variable ({@link gitWriteEnv}), since on git 2.19 to 2.42 a repository's own
+ * `core.useReplaceRefs=true` beats the variable, and a command-line key beats every config file.
+ */
 const PINNED_OPTIONS: readonly string[] = [
   "-c",
   "safe.bareRepository=explicit",
@@ -116,6 +120,8 @@ const PINNED_OPTIONS: readonly string[] = [
   "core.fsmonitor=false",
   "-c",
   "push.followTags=false",
+  "-c",
+  "core.useReplaceRefs=false",
 ];
 
 /**
