@@ -509,8 +509,11 @@ export async function planHooksInfra(ctx: HooksPlanContext): Promise<CoreHooksPl
 
   // Resolved once, so every guard copy and every adapter reads one setting (REQ-FLOW-137).
   const autonomy = resolveAutonomy(ctx.manifest);
-  // The engine's own bins, which the guard reads as this package's program words (review/44).
-  const packageBins = await engineBins();
+  // The engine's own bins, which the guard reads as this package's program words (review/44), and whether this
+  // repository is the engine's own, where its dist/cli.js and src/cli.ts are the CLI (review/53).
+  const engine = await packageJsonOf(dirname(fileURLToPath(import.meta.url)), true);
+  const packageBins = engine.bins;
+  const ownRepository = engine.name !== "" && (await packageJsonOf(ctx.rootDir, false)).name === engine.name;
   const scripts: PlannedHookScript[] = [];
   const rowsByTool = new Map<Tool, HookInterchange[]>();
   for (const tool of tools) {
@@ -523,8 +526,8 @@ export async function planHooksInfra(ctx: HooksPlanContext): Promise<CoreHooksPl
     const copy = tool === "claude" && ctx.hookScriptsRoot === undefined ? CLAUDE_COPY_PLACEMENT : undefined;
     const run =
       copy === undefined
-        ? planCoreHookScripts(policiesPathFor(ctx.hookScriptsRoot), tool, { ...cliCallContextOf(ctx), personOnlyGuard: true, autonomy, packageBins })
-        : planCoreHookScripts(copy.policiesPath, tool, { ...cliCallContextOf(ctx), personOnlyGuard: true, layout: copy.layout, autonomy, packageBins });
+        ? planCoreHookScripts(policiesPathFor(ctx.hookScriptsRoot), tool, { ...cliCallContextOf(ctx), personOnlyGuard: true, autonomy, packageBins, ownRepository })
+        : planCoreHookScripts(copy.policiesPath, tool, { ...cliCallContextOf(ctx), personOnlyGuard: true, layout: copy.layout, autonomy, packageBins, ownRepository });
     for (const script of run) {
       const path = copy === undefined ? `${HOOKS_GENERATED_DIR}/${tool}/${script.fileName}` : `${copy.dir}/${script.fileName}`;
       scripts.push({ path, content: script.content, tool });
@@ -628,17 +631,21 @@ export async function planHooksInfra(ctx: HooksPlanContext): Promise<CoreHooksPl
 }
 
 /**
- * The bin names the running engine's own `package.json` declares (`stamity` and `st` here; a renamed fork's own),
- * read from the package root above this module, as the CLI reads its own name (`../cli/kit/packageName.ts`). A
- * manifest that cannot be read, or holds no bin object, gives none: the guard still reads `stamity` and `st`.
+ * A `package.json`'s name and bin names: with `walk`, the package root above `dir` (the running engine's own, read as
+ * the CLI reads its own name, `../cli/kit/packageName.ts`: `stamity` and `st` here, a renamed fork's own), else the
+ * file in `dir` itself (the repository's). A file that cannot be read, or holds no name or bin object, gives `""` and
+ * none: the guard still reads `stamity` and `st`.
  */
-async function engineBins(): Promise<string[]> {
+async function packageJsonOf(dir: string, walk: boolean): Promise<{ name: string; bins: string[] }> {
   try {
-    const root = findPackageRoot(dirname(fileURLToPath(import.meta.url)));
+    const root = walk ? findPackageRoot(dir) : dir;
     const parsed: unknown = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
-    const bin = typeof parsed === "object" && parsed !== null ? (parsed as { bin?: unknown }).bin : undefined;
-    return typeof bin === "object" && bin !== null ? Object.keys(bin) : [];
+    const fields = typeof parsed === "object" && parsed !== null ? (parsed as { name?: unknown; bin?: unknown }) : {};
+    return {
+      name: typeof fields.name === "string" ? fields.name : "",
+      bins: typeof fields.bin === "object" && fields.bin !== null ? Object.keys(fields.bin) : [],
+    };
   } catch {
-    return [];
+    return { name: "", bins: [] };
   }
 }

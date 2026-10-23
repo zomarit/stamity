@@ -302,7 +302,12 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // substitution kept as a word, gh's options before its subcommand, wget's
   // `-X`, PowerShell's typographic quotes and SSH_ASKPASS. × 1.25 = 196,242.5 /
   // 4,532.5, rounded up to 196,608 / 4,540.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 196_608, lines: 4_540 },
+  // Moved 2026-10-23 on the a4 lane (plan 022, review/54), by the measured size plus a small margin, as the round's
+  // sign-off asks: 201,975 bytes (copilot, generated) / 4,387 lines, past the bytes row, because a4's two fix rounds
+  // grew the embedded verdicts: the per-word marks a nested reading inherits, the package identity read by path, the
+  // dry-run value word and the sub-agent check on the acts the setting runs. 201,975 + 2,825 = 204,800 bytes; the
+  // lines row still holds.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 204_800, lines: 4_540 },
 };
 
 /** One generated script, ready for an adapter to place and register. */
@@ -4350,10 +4355,16 @@ export function buildPersonOnlyGuardScript(opts: {
   layout: HookScriptLayout;
   autonomy?: GuardAutonomy;
   packageWords?: readonly string[];
+  packageName?: string;
+  ownRepository?: boolean;
 }): string {
   const extra = repoRootImports(opts.layout);
   const autonomy = opts.autonomy ?? DEFAULT_GUARD_AUTONOMY;
-  const packageWords = guardPackageWords(opts.packageWords ?? []);
+  const identity = {
+    words: guardPackageWords(opts.packageWords ?? []),
+    name: (opts.packageName ?? "@zomarit/stamity").toLowerCase(),
+    own: opts.ownRepository ?? true,
+  };
   // The marker is a line comment: a control character or a line or paragraph separator in a branch name would end it
   // and turn the rest of the line into code. The manifest validator refuses such a name; this refuses it again here.
   const breaksLine = (name: string): boolean =>
@@ -4423,9 +4434,10 @@ const MCP_ROWS = new Map(${json(GITHUB_MCP_ROWS.map((entry) => [entry.row, entry
 const AUTONOMY = ${json(baked)};
 const RUNS = [...AUTONOMY.runs, ...(AUTONOMY.deploying.includes("workflow-dispatch") ? [] : ["workflow-dispatch"])];
 const STRICTER = AUTONOMY.mode === "ask" || AUTONOMY.deploying.length > 0 || AUTONOMY.deployingBranches.length > 0;
-// The program words that run this package (review/44): its bins and unscoped name, read from the engine's own
-// package.json at emission, so a renamed fork's bin is read as this package's.
-const PACKAGE_WORDS = ${json(packageWords)};
+// This package as emission found it (review/44, review/53): the program words that run it (its bins and unscoped name,
+// read from the engine's own package.json, so a renamed fork's bin is read as this package's), its name, whose
+// node_modules path names its CLI file, and whether this repository is the engine's own.
+const PACKAGE = ${json(identity)};
 // What an act the setting runs unasked is called where a sub-agent's call to it is refused (REQ-FLOW-137).
 const RUN_ACTS = ${json(GUARD_RUN_ACTS)};
 
@@ -4830,7 +4842,7 @@ function linesOf(name, tail) {
  * The branch context of each place a shell call's git runs in, one per git dir. Where HEAD names no branch or commit
  * (reftable's placeholder too), an implied destination counts as the default branch, so a refspec-less push is refused.
  */
-function contextsOf(command, cwd) {
+function contextsOf(command, cwd, powershell) {
   const contexts = new Map();
   for (const place of placesOf(command, cwd)) {
     const dirs = place === null ? null : place.git !== undefined ? gitDirsOf(place.git) : gitDirsFrom(place.work);
@@ -4851,7 +4863,10 @@ function contextsOf(command, cwd) {
       runs: RUNS,
       deployingBranches: AUTONOMY.deployingBranches,
       stricterThanDefault: STRICTER,
-      packageWords: PACKAGE_WORDS,
+      packageWords: PACKAGE.words,
+      packageName: PACKAGE.name,
+      ownRepository: PACKAGE.own,
+      powershell,
       // Read the first time the verdict asks, which only a push refspec does: no other call reads a tag.
       get tags() {
         tags ??= dirs === null ? [] : localTags(dirs.commonDir);
@@ -5056,7 +5071,7 @@ function decide() {
   const found = [];
   // The acts the baked setting runs unasked (REQ-FLOW-137), from every place and reading.
   const ran = new Set();
-  for (const ctx of contextsOf(command, cwd)) {
+  for (const ctx of contextsOf(command, cwd, pwsh)) {
     for (const text of texts) {
       const always = personOnlyVerdict(text, ctx);
       if (always.deny) found.push(always);
@@ -5066,20 +5081,22 @@ function decide() {
   const refused = found.find((verdict) => !verdict.ask);
   if (refused !== undefined) return { ask: false, reason: refuseSentence(refused.act, refused.rule) };
   // The land verb alone on its line in every mode, read over the parsed program words (REQ-FLOW-121): no mode read.
-  const land = unattendedPushVerdict(command, pwsh, true, PACKAGE_WORDS);
+  const land = unattendedPushVerdict(command, pwsh, true, PACKAGE);
   if (land.deny) return { ask: false, reason: land.reason };
   // The mode is read for every ask and for a call the unattended rule would refuse, so an unreadable record refuses
   // those and no other call.
   const run = () => {
-    const verdict = unattendedPushVerdict(command, pwsh, false, PACKAGE_WORDS);
+    const verdict = unattendedPushVerdict(command, pwsh, false, PACKAGE);
     return verdict.deny ? verdict : undefined;
   };
   if (found.length > 0) {
+    // A loosening read in one place or reading names itself only where no other act was found (REQ-FLOW-138).
+    const named = found.find((verdict) => verdict.rule !== "autonomy-loosen") ?? found[0];
     const why = unattendedBy(root);
-    if (why === null) return attendedAsk(payload, found[0].act, found[0].rule);
+    if (why === null) return attendedAsk(payload, named.act, named.rule);
     // Unattended, a push keeps the push rule's own reason; any other act goes on the morning list.
     const push = run();
-    return { ask: false, reason: (push !== undefined ? push.reason : unattendedSentence(found[0].act, found[0].rule)) + " " + why };
+    return { ask: false, reason: (push !== undefined ? push.reason : unattendedSentence(named.act, named.rule)) + " " + why };
   }
   // An act the setting runs unasked is the main thread's alone (REQ-FLOW-137): a sub-agent's call to one is refused,
   // as 1.16.0 refused a sub-agent's ask, read through the identity fields attendedAsk reads.
@@ -5161,6 +5178,7 @@ export function planCoreHookScripts(
     layout?: HookScriptLayout;
     autonomy?: GuardAutonomy;
     packageBins?: readonly string[];
+    ownRepository?: boolean;
   },
 ): GeneratedHookScript[] {
   const layout = opts.layout ?? layoutFor(policiesJsonPath);
@@ -5178,6 +5196,8 @@ export function planCoreHookScripts(
               layout,
               ...(opts.autonomy === undefined ? {} : { autonomy: opts.autonomy }),
               packageWords: [opts.packageName.replace(/^@[^/]+\//, ""), ...(opts.packageBins ?? [])],
+              packageName: opts.packageName,
+              ...(opts.ownRepository === undefined ? {} : { ownRepository: opts.ownRepository }),
             }),
             event: "pre_tool_use",
           },

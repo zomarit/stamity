@@ -1352,8 +1352,6 @@ describe("personOnlyVerdict — the respelling residual (named in SECURITY.md by
   it.each([
     ["git -c alias.p=push p -f origin feat/x"],
     ["alias gp='git push -f'; gp origin feat/x"],
-    ["sh -c \"$(printf '%s' 'git pu' 'sh -f')\""],
-    ["sh -c \"$(echo Z2l0IHB1c2ggLWY= | base64 -d)\""],
     // A tag pushed by its bare name reads as a branch name when the context lists no such tag (u14 unable to read
     // `refs/tags/`); with the tag listed it is denied, in the matrix above.
     ["git push origin v1.0.0"],
@@ -1367,6 +1365,16 @@ describe("personOnlyVerdict — the respelling residual (named in SECURITY.md by
   ])("allows %j", (command) => {
     expect(personOnlyVerdict(command, ON_MAIN)).toEqual({ deny: false });
   });
+
+  // TEST CHANGE, justified (REQ-FLOW-138, review/54): a shell's command string built by a substitution was allowed here
+  // as a respelling the guard cannot read. Its marks now carry into the nested reading, so every command it may hold
+  // could spell `--loosen`, and it asks as a loosening; the push it respells is still not read.
+  it.each([["sh -c \"$(printf '%s' 'git pu' 'sh -f')\""], ["sh -c \"$(echo Z2l0IHB1c2ggLWY= | base64 -d)\""]])(
+    "asks for %j as a loosening it cannot read, the respelled push still unread",
+    (command) => {
+      expect(personOnlyVerdict(command, ON_MAIN)).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+    },
+  );
 });
 
 describe("the nested-command depth limit (pr/58)", () => {
@@ -1665,7 +1673,9 @@ describe("unattendedPushVerdict — a run verb stands alone on its line (v0b, RE
     // A program word holding a blank (the substitution read as a word) is read as a line of its own unless it is the
     // line itself; without that guard the reading recurses to its depth cap and refuses on every client.
     for (const command of ["$(echo git status) --short", "`echo git status` --short", "$(npm test)"]) {
-      expect(personOnlyVerdict(command, ON_FEATURE), command).toEqual({ deny: false });
+      // TEST CHANGE, justified (REQ-FLOW-138, review/45): a program word built by a substitution splits into words the
+      // line does not show, a loosening among them, so it asks as one; the reading itself still ends (no depth refusal).
+      expect(personOnlyVerdict(command, ON_FEATURE), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
       expect(unattendedPushVerdict(command), command).toEqual({ deny: false });
     }
     // The twin: the same opening still shows an act the substitution holds.
@@ -2813,8 +2823,10 @@ describe("the package test's program words (a4, review/44)", () => {
   });
 
   it("reads the land line through the same words, attended, and admits a fork's bin alone on its line", () => {
+    // TEST CHANGE, justified (REQ-FLOW-138, review/53): the verdict takes the baked identity as one object, its
+    // package words, name and own-repository flag, since the CLI file is now read by its path.
     const attended = (command: string): ReturnType<typeof unattendedPushVerdict> =>
-      unattendedPushVerdict(command, false, true, FORK.packageWords);
+      unattendedPushVerdict(command, false, true, { words: FORK.packageWords });
     expect(attended("forge-cli run land --run 2026-10-23_x --ready")).toEqual({ deny: false });
     for (const command of ["npm test && forge-cli run land --run x", "yarn st run land --run x", "tsx src/cli.ts run land --run x"]) {
       expect(attended(command).deny, command).toBe(true);
@@ -2945,5 +2957,148 @@ describe("the deploying-branch readers (a4, review/39)", () => {
   ])("leaves %s onto a branch no pattern names alone", (_, command) => {
     const verdict = personOnlyVerdict(command, DEPLOYING);
     expect(verdict.deny ? verdict.rule : null, command).not.toBe("push-deploying");
+  });
+});
+
+/**
+ * a4 fixer round 2 (review/45, review/52, review/53, review/54, review/55): a mark, once set, is never lost; a glob reads
+ * as unreadable only where it can give a dash word; the CLI file is read by its path. Titles name the class of input;
+ * each input sits in its table. Each row marked "red" failed on 4adef43c for the reason its title names.
+ */
+describe("a mark carried into every nested reading (a4, review/54, review/45, review/55)", () => {
+  const STRICT = { ...ON_FEATURE, stricterThanDefault: true };
+  const DEFAULT = { ...ON_FEATURE, stricterThanDefault: false };
+
+  // Red: each nesting the reader knows, its value filled in by the shell around it and single-quoted inside.
+  it.each([
+    ["a shell's command string", "sh -c \"stamity sync '$F'\""],
+    ["a login shell's command string", "bash -lc \"stamity sync '$F'\""],
+    ["an eval", "eval \"stamity sync '$F'\""],
+    ["env's split string", "env -S \"stamity sync '$F'\""],
+    ["a runner's command option", "npx -c \"stamity sync '$F'\""],
+    ["a package manager's exec command option", "npm exec -c \"stamity sync '$F'\""],
+    ["PowerShell's command string", "pwsh -Command \"stamity sync '$F'\""],
+    ["the Windows command interpreter's string", "cmd /c \"stamity sync '$F'\""],
+    ["a rebase exec line", "git rebase --exec \"stamity sync '$F'\" main"],
+    ["a bisect run command", "git bisect run sh -c \"stamity sync '$F'\""],
+    ["a program word holding a line", "bun exec \"stamity sync '$F'\""],
+    ["an escaped dollar a nested eval expands", "eval \"eval \\\"stamity sync '\\$F'\\\"\""],
+    ["xargs filling a token inside a shell's string", "echo --loosen | xargs -I{} sh -c 'stamity sync {}'"],
+    ["xargs filling a token inside env's split string", "echo --loosen | xargs -I% env -S 'stamity sync %'"],
+    ["the interpreter's percent variable", "cmd /c stamity sync %F%"],
+    ["the interpreter's delayed variable", "cmd /c \"stamity sync !F!\""],
+  ])("asks for %s, whose filled-in value may spell `--loosen`", (_, command) => {
+    for (const ctx of [STRICT, DEFAULT]) {
+      expect(personOnlyVerdict(command, ctx), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+    }
+  });
+
+  it.each([
+    ["a shell's single-quoted string", "sh -c 'stamity sync --json'"],
+    ["an eval of literal words", "eval 'stamity sync'"],
+    ["env's literal split string", "env -S 'stamity sync'"],
+    ["the interpreter's literal string", "cmd /c stamity sync"],
+    ["a shell's string holding a single-quoted dollar", "sh -c 'stamity run end --run x --title '\\''cost $5'\\'''"],
+    ["a shell's double-quoted string with no expansion", "bash -c \"npm test && stamity sync\""],
+  ])("runs %s, whose words the reading sees", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toEqual({ deny: false });
+  });
+
+  it("asks for any command a nested string holds after an outer expansion, since the value may add commands", () => {
+    // The outer shell puts the value in the text before the inner shell parses it, so a separator in it adds commands.
+    expect(personOnlyVerdict("bash -c \"cd $DIR && npm test\"", DEFAULT)).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+    expect(personOnlyVerdict("bash -c 'cd $DIR && npm test'", DEFAULT)).toEqual({ deny: false });
+  });
+});
+
+describe("a program word built by an expansion (a4, review/45)", () => {
+  const DEFAULT = { ...ON_FEATURE, stricterThanDefault: false };
+
+  // Red: the program word itself carried the words.
+  it.each([
+    ["a brace-expanded program word", "{stamity,sync,--loosen}"],
+    ["a brace-expanded program word with a literal argument", "{stamity,sync} --json"],
+    ["an unquoted variable program with literal arguments", "$CMD sync --json"],
+    ["an unquoted variable program alone", "$CMD"],
+    ["a quoted variable program a runner reads as a line", "bun exec \"$CMD\""],
+    ["a glob program word that may give a dash word", "* sync"],
+  ])("asks for %s, which carries words the line does not show", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toMatchObject({
+      deny: true,
+      rule: "autonomy-loosen",
+      act: "A command the guard cannot read, which may be a stamity command, with an argument the guard cannot read, which may spell `--loosen`",
+    });
+  });
+
+  it.each([
+    ["a literal program", "./node_modules/.bin/vitest run"],
+    ["a glob program word with a literal prefix and literal arguments", "/usr/bin/sta* --version"],
+    ["a quoted variable directory with a literal file name", "\"$ROOT/bin/vitest\" run"],
+  ])("runs %s", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toEqual({ deny: false });
+  });
+});
+
+describe("a glob or brace argument that cannot spell an option (a4, review/52)", () => {
+  const STRICT = { ...ON_FEATURE, stricterThanDefault: true };
+
+  // Red: the head read every glob as unreadable.
+  it.each([
+    ["a checkpoint's path glob", "npx --no stamity run checkpoint --run 2026-10-23_x --paths src/hooks/*.ts --json"],
+    ["a run end's path glob", "stamity run end --run 2026-10-23_x --paths docs/*.md test/hooks/*.test.ts"],
+    ["the ready check's plan glob", "stamity plan check docs/plans/022-*.md --json"],
+    ["a brace form after a literal folder", "stamity run checkpoint --run x --paths src/{a,b}.ts"],
+    ["a bracket glob after a literal prefix", "stamity plan check docs/plans/02[12]-x.md"],
+  ])("runs %s, whose literal text before the glob opens with no dash", (_, command) => {
+    expect(personOnlyVerdict(command, STRICT), command).toEqual({ deny: false });
+  });
+
+  it.each([
+    ["a glob with no literal prefix", "stamity sync *"],
+    ["a one-character glob with no literal prefix", "stamity sync ?-loosen"],
+    ["a glob after a dash", "stamity sync -*"],
+    ["a brace alternative opening with a dash", "stamity sync {x,--loosen}"],
+    ["a brace form with no literal prefix", "stamity sync {a,b}"],
+  ])("asks for %s, which may give a dash word", (_, command) => {
+    expect(personOnlyVerdict(command, STRICT), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+
+  it("keeps the dry-run reading on any glob after the flag, which may give a false word", () => {
+    expect(personOnlyVerdict("npm publish --dry-run fals?", ON_FEATURE)).toMatchObject({ deny: true, rule: "publish" });
+  });
+});
+
+describe("the engine's CLI file read by its path (a4, review/53, the declared default)", () => {
+  /** A consumer repository: its package.json names another package. */
+  const CONSUMER = { ...ON_FEATURE, stricterThanDefault: true, ownRepository: false };
+  /** The engine's own repository. */
+  const OWN = { ...ON_FEATURE, stricterThanDefault: true, ownRepository: true };
+
+  // Red: any file named like the CLI read as the engine's.
+  it.each([
+    ["a consumer's built CLI with an expanded argument", "node dist/cli.js build \"$OUT\""],
+    ["a consumer's source CLI with a glob argument", "tsx src/cli.ts test/*.json --out *"],
+    ["a consumer's built CLI's full clean", "node dist/cli.js clean"],
+    ["a consumer's source CLI's init with force", "tsx src/cli.ts init --force"],
+  ])("runs %s, which only shares the CLI's file name", (_, command) => {
+    expect(personOnlyVerdict(command, CONSUMER), command).toEqual({ deny: false });
+  });
+
+  it.each([
+    ["a consumer's built CLI", "node dist/cli.js sync --loosen"],
+    ["a consumer's source CLI", "tsx ./src/cli.ts sync --loosen=true"],
+  ])("asks for %s given the literal loosen flag", (_, command) => {
+    expect(personOnlyVerdict(command, CONSUMER), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+
+  it.each([
+    ["the installed package's CLI file", "node node_modules/@zomarit/stamity/dist/cli.js sync \"$X\"", CONSUMER],
+    ["a pnpm store path to the package", "node node_modules/.pnpm/@zomarit+stamity@1.16.0/node_modules/@zomarit/stamity/dist/cli.js clean", CONSUMER],
+    ["the bin link", "node ./node_modules/.bin/st sync \"$X\"", CONSUMER],
+    ["a renamed fork's installed CLI file", "node node_modules/@acme/forge/dist/cli.js clean", { ...CONSUMER, packageName: "@acme/forge" }],
+    ["the engine's own built CLI in its repository", "node dist/cli.js sync \"$X\"", OWN],
+    ["the engine's own source CLI in its repository", "tsx src/cli.ts clean", OWN],
+  ])("gives %s the full check", (_, command, ctx) => {
+    expect(personOnlyVerdict(command, ctx), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
   });
 });

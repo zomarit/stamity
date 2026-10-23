@@ -272,7 +272,10 @@ describe("hook script budgets (REQ-CTX-016)", () => {
     // The literal pins the re-sized row, so its next move is a visible edit here too, with its reason in the row.
     // TEST CHANGE, justified (v0b, the orchestrator's sign-off of 2026-10-18): the row moved once more, from v0b's fresh
     // measurement by the same rule, its reason in the row in src/hooks/scripts.ts.
-    expect(HOOK_SCRIPT_BUDGETS[PERSON_ONLY_GUARD_FILE]).toEqual({ bytes: 196_608, lines: 4_540 });
+    // TEST CHANGE, justified (REQ-FLOW-138, review/54): the bytes row moved from 196,608 to 204,800, the measured
+    // 201,975 bytes of the largest copy (copilot) plus a small margin, since a4's fix rounds grew the embedded verdicts;
+    // the lines row (4,540, measured 4,387) holds.
+    expect(HOOK_SCRIPT_BUDGETS[PERSON_ONLY_GUARD_FILE]).toEqual({ bytes: 204_800, lines: 4_540 });
     const guards = renders.filter((script) => script.fileName === PERSON_ONLY_GUARD_FILE);
     expect(guards).toHaveLength(TOOLS.length);
     for (const script of guards) expect(budgetViolation(script), script.tool).toBeUndefined();

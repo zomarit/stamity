@@ -801,15 +801,23 @@ describe("a directory read only where the shell runs a command (review/116)", ()
     const allowed = [
       `git commit -m "${MESSAGE}" && git push`,
       `git commit -s -m '${MESSAGE}'; git push origin HEAD`,
-      `git commit -s -F - <<'EOF' && git push\n${MESSAGE}\nEOF`,
-      `git commit -F - <<EOF && git push\n${MESSAGE}\nEOF`,
-      `git commit -m "$(cat <<'EOF'\n${MESSAGE}\nEOF\n)" && git push`,
       "echo cd wt-main && git push",
       'git log --grep "env -C wt-main" -1 && git push',
       "cat <<'EOF'\ncd wt-main\nEOF\ngit push",
-      "cat <<'EOF'\n$(cd wt-main && git push)\nEOF",
     ];
     for (const command of allowed) expect(decide("claude", guard, command).deny, command).toBe(false);
+    // TEST CHANGE, justified (REQ-FLOW-138, review/45): a heredoc body is read line by line, and a body line that opens on
+    // a variable or a substitution reads as a command whose program word may spell `--loosen`, so these ask as a
+    // loosening; the directory change is still not read from the body, so no push refusal names it.
+    for (const command of [
+      `git commit -s -F - <<'EOF' && git push\n${MESSAGE}\nEOF`,
+      `git commit -F - <<EOF && git push\n${MESSAGE}\nEOF`,
+      `git commit -m "$(cat <<'EOF'\n${MESSAGE}\nEOF\n)" && git push`,
+      "cat <<'EOF'\n$(cd wt-main && git push)\nEOF",
+    ]) {
+      const decision = decide("claude", guard, command);
+      expect(decision, command).toMatchObject({ deny: true, reason: expect.stringContaining("(`autonomy-loosen`)") });
+    }
   });
 
   it("still reads each one where the shell runs it: after a keyword, a group, a wrapper, and in a line a command runs", async () => {
@@ -1706,8 +1714,10 @@ describe("the package words the guard bakes (a4, review/44)", () => {
     const copies = plan.scripts.filter((script) => script.path.endsWith(`/${PERSON_ONLY_GUARD_FILE}`));
     expect(copies).toHaveLength(TOOLS.length);
     for (const copy of copies) {
-      const baked = /^const PACKAGE_WORDS = (.*);$/m.exec(copy.content)?.[1] ?? "null";
-      expect(JSON.parse(baked), copy.path).toEqual([...new Set(["stamity", "st", ...Object.keys(own.bin)])]);
+      // TEST CHANGE, justified (REQ-FLOW-138, review/53): the words are baked inside the package identity, beside its
+      // name and whether the repository is the engine's own.
+      const baked = /^const PACKAGE = (.*);$/m.exec(copy.content)?.[1] ?? "null";
+      expect((JSON.parse(baked) as { words: string[] }).words, copy.path).toEqual([...new Set(["stamity", "st", ...Object.keys(own.bin)])]);
     }
   });
 
@@ -1721,5 +1731,80 @@ describe("the package words the guard bakes (a4, review/44)", () => {
     expect(decide(tool, guard, "forge-cli sync")).toEqual({ deny: false });
     expect(decide(tool, guard, "forge-cli run land --run 2026-10-23_x")).toEqual({ deny: false });
     expect(decide(tool, guard, "npm test && forge-cli run land --run 2026-10-23_x").deny).toBe(true);
+  });
+});
+
+/**
+ * a4 fixer round 2 (review/52, review/53, review/54, review/55): the guard as a client runs it. Titles name the class
+ * of input; each input sits in the body.
+ */
+describe("the guard's round-2 readings (a4, review/52, review/53, review/54, review/55)", () => {
+  const UNATTENDED = { ".stamity/runs/2026-10-23_x/record.md": record("in progress", "unattended") };
+
+  /** The guard as emission writes it for a repository that is, or is not, the engine's own. */
+  async function placeFor(tool: Tool, ownRepository: boolean, files: Record<string, string> = {}): Promise<string> {
+    const guard = planCoreHookScripts(POLICY, tool, { ...CLI_PIN, personOnlyGuard: true, ownRepository }).find(
+      (script) => script.fileName === PERSON_ONLY_GUARD_FILE,
+    );
+    if (guard === undefined) throw new Error("the plan carried no person-only guard");
+    await getRepo().seedFiles({ ".git/HEAD": "ref: refs/heads/feat/x\n", [`.stamity/generated/hooks/${tool}/${guard.fileName}`]: guard.content, ...files });
+    return getRepo().path(".stamity", "generated", "hooks", tool, guard.fileName);
+  }
+
+  // Red (review/52): unattended, a path glob and the ready check's plan glob were refused as a loosening.
+  it.each(TOOLS)("%s: unattended, runs a checkpoint with a path glob and the ready check with a plan glob", async (tool) => {
+    const guard = await placeGuard(tool, UNATTENDED);
+    for (const command of ["npx --no stamity run checkpoint --run 2026-10-23_x --paths src/hooks/*.ts --json", "stamity plan check docs/plans/022-*.md --json"]) {
+      expect(decide(tool, guard, command), `${tool}: ${command}`).toEqual({ deny: false });
+    }
+    // The neighbour: a glob with no literal prefix is refused there.
+    expect(decide(tool, guard, "stamity sync *").deny).toBe(true);
+  });
+
+  // Red (review/54): the value the outer shell fills in read as literal inside the nested string's single quotes.
+  it.each(TOOLS)("%s: asks for a nested string whose value the outer shell fills in attended, and refuses it unattended", async (tool) => {
+    const command = "sh -c \"stamity sync '$F'\"";
+    const verdict = personOnlyVerdict(command, BAKED_DEFAULT);
+    if (!verdict.deny) throw new Error("the nested loosening reads as no act");
+    expect(verdict).toMatchObject({ rule: "autonomy-loosen", ask: true });
+    const guard = await placeGuard(tool);
+    expect(decide(tool, guard, command)).toEqual(expectedAttended(tool, verdict));
+    expect(decide(tool, guard, "sh -c 'stamity sync --json'")).toEqual({ deny: false });
+    await getRepo().seedFiles(UNATTENDED);
+    expect(decide(tool, guard, command).deny).toBe(true);
+  });
+
+  // Red (review/55): the Windows command interpreter's variable read as literal text.
+  it("asks for the Windows command interpreter's variable in a stamity command's argument", async () => {
+    const guard = await placeGuard("claude");
+    expect(decide("claude", guard, "cmd /c stamity sync %F%")).toMatchObject({ deny: true, reason: expect.stringContaining("(`autonomy-loosen`)") });
+    expect(decide("claude", guard, "cmd /c stamity sync --json")).toEqual({ deny: false });
+  });
+
+  // Red (review/53): a consumer's own CLI file read as the engine's.
+  it.each(TOOLS)("%s: in a consumer repository, runs its own CLI file's lines unattended and asks only for a literal loosen flag", async (tool) => {
+    const guard = await placeFor(tool, false, UNATTENDED);
+    for (const command of ["node dist/cli.js build \"$OUT\"", "tsx src/cli.ts test/*.json"]) {
+      expect(decide(tool, guard, command), `${tool}: ${command}`).toEqual({ deny: false });
+    }
+    expect(decide(tool, guard, "node dist/cli.js sync --loosen").deny).toBe(true);
+    // The engine's own path keeps the full check.
+    expect(decide(tool, guard, "node node_modules/@zomarit/stamity/dist/cli.js sync \"$X\"").deny).toBe(true);
+    // In the engine's own repository its built CLI keeps the full check.
+    const own = await placeFor(tool, true, UNATTENDED);
+    expect(decide(tool, own, "node dist/cli.js build \"$OUT\"").deny).toBe(true);
+  });
+
+  it("bakes whether the repository is the engine's own, read from the repository's package.json at emission", async () => {
+    const engine = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as { name: string };
+    const own = (content: string): unknown => (JSON.parse(/^const PACKAGE = (.*);$/m.exec(content)?.[1] ?? "null") as { own: boolean }).own;
+    /** The baked flag for a repository whose package.json names `name`. */
+    const bakedFor = async (name: string): Promise<unknown> => {
+      await getRepo().seedFiles({ "package.json": JSON.stringify({ name }) });
+      const plan = await planHooksInfra({ rootDir: getRepo().path(), manifest: { tools: ["claude"] }, engineVersion: "1.0.0-golden" });
+      return own(plan.scripts.find((script) => script.path.endsWith(`/${PERSON_ONLY_GUARD_FILE}`))?.content ?? "");
+    };
+    expect(await bakedFor(engine.name)).toBe(true);
+    expect(await bakedFor("consumer-app")).toBe(false);
   });
 });
