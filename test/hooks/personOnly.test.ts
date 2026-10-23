@@ -3484,3 +3484,140 @@ describe("the verdicts embed no canonical package name (a4, build/10)", () => {
     }
   });
 });
+
+/**
+ * a5-guard-heredoc-data (REQ-FLOW-141, review/76): a heredoc body that only a data sink receives is skipped by both
+ * verdicts, and every other form keeps the reading as built. The sinks: a bare `cat` or `tee` first on the line writing
+ * to a plain file; a bare `cat` inside a double-quoted substitution that is a whole argument word of a plain first
+ * program (the commit-message pattern); the engine's own CLI reading the body on its stdin. Each refusing case carries
+ * the same body as an allowed one, one fact away.
+ */
+describe("a heredoc body read as data only where a data sink receives it (a5, REQ-FLOW-141, review/76)", () => {
+  const DEFAULT = { ...ON_FEATURE, stricterThanDefault: false };
+  const FORCE = "git push --force origin feat/x";
+  const both = (command: string): readonly unknown[] => [personOnlyVerdict(command, DEFAULT), unattendedPushVerdict(command)];
+
+  // Red on 84a42e9a: each body line was read as a command, the force push refused and the glob or bare-expansion
+  // line asked as a loosening; unattended, the push line was refused as a raw push.
+  it.each([
+    ["a quoted-delimiter body appended to a record file by cat", `cat >> .stamity/runs/x/notes.md <<'EOF'\n${FORCE}\nEOF`],
+    ["a double-quoted-delimiter body written to a file by cat", `cat > notes.md << "EOF"\n${FORCE}\n* a bullet\nEOF`],
+    ["a tab-stripped body and terminator written by cat", `cat > notes.md <<-'EOF'\n\t${FORCE}\n\tEOF`],
+    ["a bare-delimiter body with no substitution written by cat", `cat > notes.md <<EOF\n${FORCE}\n$HOME stays text\nEOF`],
+    ["a body written by cat to the null device", `cat > /dev/null <<'EOF'\n${FORCE}\nEOF`],
+    ["a body appended by tee to plain files, its own output to the null device", `tee -a notes.md log.md > /dev/null <<'EOF'\n${FORCE}\nEOF`],
+    ["a commit message read by cat inside a quoted substitution", `git commit -m "$(cat <<'EOF'\n${FORCE}\nEOF\n)"`],
+    [
+      "a commit message with a bullet and a bare expansion line (review/76)",
+      `git commit -s -m "$(cat <<'EOF'\nfix(hooks): read a body as data\n\n* the first bullet\n$HOME is text here\nEOF\n)"`,
+    ],
+    ["a pull request comment read by cat inside a quoted substitution", `gh pr comment 5 --body "$(cat <<'EOF'\n* a bullet\n${FORCE}\nEOF\n)"`],
+    [
+      "a learn capture whose body comes on its stdin (review/76)",
+      `npx --no stamity learn capture --title t --summary 's' --confidence high <<'EOF'\n## Why\n* a bullet\n$HOME\n## How to apply\n${FORCE}\nEOF`,
+    ],
+    ["a learn capture through the engine's bin", `stamity learn capture --title t <<'EOF'\n* a\n${FORCE}\nEOF`],
+    ["a learn capture through the pinned package", `npx -y @zomarit/stamity@1.16.0 learn capture --title t <<'EOF'\n* a\n${FORCE}\nEOF`],
+  ])("skips %s in both verdicts", (_, command) => {
+    expect(both(command), command).toEqual([{ deny: false }, { deny: false }]);
+  });
+
+  it("still reads the operator's own line and every line after the terminator", () => {
+    // (6) An act after `&&` on the operator's line, and one after the terminator, are still read.
+    for (const command of [
+      `cat > notes.md <<'EOF' && ${FORCE}\nbody\nEOF`,
+      `cat > notes.md <<'EOF'\nbody\nEOF\n${FORCE}`,
+      `git commit -m "$(cat <<'EOF'\nbody\nEOF\n)" && ${FORCE}`,
+      `stamity learn capture <<'EOF' && ${FORCE}\nbody\nEOF`,
+    ]) {
+      expect(personOnlyVerdict(command, DEFAULT), command).toMatchObject({ deny: true, rule: "force-push" });
+      expect(unattendedPushVerdict(command).deny, command).toBe(true);
+    }
+  });
+
+  // Each keeps today's reading: the body's force push is read as a command and refused.
+  it.each([
+    // (2), (4): the body consumed by a shell, or piped onward.
+    ["a body a shell reads on its stdin", `bash <<'EOF'\n${FORCE}\nEOF`],
+    ["a body cat pipes onward into a shell", `cat <<'EOF' | sh\n${FORCE}\nEOF`],
+    ["a file write whose segment pipes onward", `cat > notes.md <<'EOF' | sh\n${FORCE}\nEOF`],
+    // (3): an unquoted delimiter whose body holds a substitution or a backtick.
+    ["a bare delimiter whose body holds a substitution", `cat >> notes.md <<EOF\n$(${FORCE})\nEOF`],
+    ["a bare delimiter whose body holds a backtick", `cat >> notes.md <<EOF\n\`${FORCE}\`\nEOF`],
+    // (5): no terminator line.
+    ["a body with no terminator line", `cat > notes.md <<'EOF'\n${FORCE}`],
+    ["a terminator that differs by a trailing blank", `cat > notes.md <<'EOF'\n${FORCE}\nEOF \n`],
+    ["a terminator indented with blanks under the tab-stripping form", `cat > notes.md <<-'EOF'\n${FORCE}\n  EOF`],
+    // (7): a target that is no plain file.
+    ["a write to a device other than the null device", `cat > /dev/tty <<'EOF'\n${FORCE}\nEOF`],
+    ["a write to a descriptor path", `cat > /dev/fd/3 <<'EOF'\n${FORCE}\nEOF`],
+    ["a write under the git directory", `cat > .git/hooks/pre-push <<'EOF'\n${FORCE}\nEOF`],
+    ["a write to a filled-in path", `cat > "$OUT" <<'EOF'\n${FORCE}\nEOF`],
+    ["cat writing to its standard output", `cat <<'EOF'\n${FORCE}\nEOF`],
+    ["tee with its standard output not redirected", `tee notes.md <<'EOF'\n${FORCE}\nEOF`],
+    ["a tee operand that is a process substitution", `tee >(bash) > /dev/null <<'EOF'\n${FORCE}\nEOF`],
+    ["a tee operand naming standard output", `tee - > notes.md <<'EOF'\n${FORCE}\nEOF`],
+    // (8): a later word names the written file.
+    ["a later word naming the written file", `cat > run.sh <<'EOF'\n${FORCE}\nEOF\nsh run.sh`],
+    ["a later word on the operator's line naming the written file", `cat > run.sh <<'EOF' && bash ./run.sh\n${FORCE}\nEOF`],
+    // The plan gate's clauses: the program word, what stands earlier, the delimiter set, a carriage return.
+    ["cat by a path", `/bin/cat > notes.md <<'EOF'\n${FORCE}\nEOF`],
+    ["cat under a wrapper", `command cat > notes.md <<'EOF'\n${FORCE}\nEOF`],
+    ["cat with an argument", `cat - > notes.md <<'EOF'\n${FORCE}\nEOF`],
+    ["cat after a PATH assignment on its own command", `PATH=/tmp/x cat > notes.md <<'EOF'\n${FORCE}\nEOF`],
+    ["cat after an earlier command on the line", `cd /tmp && cat > notes.md <<'EOF'\n${FORCE}\nEOF`],
+    ["a delimiter with a character outside the set", `cat > notes.md <<'E-F'\n${FORCE}\nE-F`],
+    ["a delimiter quoted twice over", `cat > notes.md <<'E'"OF"\n${FORCE}\nEOF`],
+    ["a carriage return in the terminator line", `cat > notes.md <<'EOF'\n${FORCE}\nEOF\r`],
+    ["two heredocs before one line break", `cat > a.md <<'A' > b.md <<'B'\n${FORCE}\nA\n${FORCE}\nB`],
+    ["a heredoc on another descriptor", `cat > notes.md 3<<'EOF'\n${FORCE}\nEOF`],
+    // The substitution receiver (review/76): fed to a shell, piped onward, captured as the program word, a bare
+    // delimiter holding a substitution, earlier definitions, an output written to a file.
+    ["a substitution a shell runs as its script", `sh -c "$(cat <<'EOF'\n${FORCE}\nEOF\n)"`],
+    ["a substitution eval runs", `eval "$(cat <<'EOF'\n${FORCE}\nEOF\n)"`],
+    ["a substitution captured as the program word", `"$(cat <<'EOF'\n${FORCE}\nEOF\n)"`],
+    ["a substitution whose command pipes onward into a shell", `echo "$(cat <<'EOF'\n${FORCE}\nEOF\n)" | sh`],
+    ["a substitution whose command writes its output to a file", `echo "$(cat <<'EOF'\n${FORCE}\nEOF\n)" > run.sh`],
+    ["a substitution under a wrapper", `sudo echo "$(cat <<'EOF'\n${FORCE}\nEOF\n)"`],
+    ["a substitution joined to other text in its word", `git commit -m"$(cat <<'EOF'\n${FORCE}\nEOF\n)"`],
+    ["an unquoted substitution", `git commit -m $(cat <<'EOF'\n${FORCE}\nEOF\n)`],
+    ["a substitution under a bare delimiter holding a substitution", `git commit -m "$(cat <<EOF\n$(${FORCE})\nEOF\n)"`],
+    ["a substitution whose cat writes to a file", `git commit -m "$(cat > notes.md <<'EOF'\n${FORCE}\nEOF\n)"`],
+    ["a substitution whose heredoc command is not cat", `git commit -m "$(bash <<'EOF'\n${FORCE}\nEOF\n)"`],
+    ["a substitution after a function defined earlier on the line", `cat() { bash; }; git commit -m "$(cat <<'EOF'\n${FORCE}\nEOF\n)"`],
+    ["a substitution after an alias defined earlier on the line", `alias cat=bash; git commit -m "$(cat <<'EOF'\n${FORCE}\nEOF\n)"`],
+    ["a substitution after a PATH assignment earlier on the line", `PATH=/tmp/x; git commit -m "$(cat <<'EOF'\n${FORCE}\nEOF\n)"`],
+    ["a substitution inside a line a shell runs", `bash -c 'git commit -m "$(cat <<EOF\n${FORCE}\nEOF\n)"'`],
+    // The engine receiver (review/76): a same-named file elsewhere, a wrapper, an earlier definition, a pipe.
+    ["a same-named file elsewhere reading the body", `./bin/stamity learn capture <<'EOF'\n${FORCE}\nEOF`],
+    ["the engine's name under a launcher", `node ./stamity.js learn capture <<'EOF'\n${FORCE}\nEOF`],
+    ["the engine under xargs, which makes the body its arguments", `xargs stamity learn capture <<'EOF'\n${FORCE}\nEOF`],
+    ["the engine after a function defined earlier on the line", `stamity() { bash; }; stamity learn capture <<'EOF'\n${FORCE}\nEOF`],
+    ["the engine after a PATH assignment earlier on the line", `export PATH=/tmp/x; stamity learn capture <<'EOF'\n${FORCE}\nEOF`],
+    ["the engine whose output pipes onward", `stamity learn capture <<'EOF' | sh\n${FORCE}\nEOF`],
+    ["npx with another first option", `npx --package x stamity learn capture <<'EOF'\n${FORCE}\nEOF`],
+    ["npx of another package's pinned version", `npx -y other@1.0.0 learn capture <<'EOF'\n${FORCE}\nEOF`],
+  ])("keeps the reading as built for %s", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toMatchObject({ deny: true, rule: "force-push" });
+    expect(unattendedPushVerdict(command).deny, command).toBe(true);
+  });
+
+  it("keeps a run verb named in a data body refused unattended, as the raw text names it", () => {
+    const command = "cat >> notes.md <<'EOF'\nthen stamity run end --run x closes it\nEOF";
+    expect(personOnlyVerdict(command, DEFAULT)).toEqual({ deny: false });
+    expect(unattendedPushVerdict(command)).toMatchObject({ deny: true, reason: expect.stringContaining("REQ-FLOW-121") });
+  });
+
+  it("keeps an argument word's mark on the outer command, so a filled-in loosening still asks", () => {
+    const command = "stamity sync \"$(cat <<'EOF'\n--loosen\nEOF\n)\"";
+    expect(personOnlyVerdict(command, DEFAULT)).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+
+  it("reads a line of many unterminated heredoc operators within the bound and fails closed", () => {
+    const command = `${"stamity learn capture <<A\n".repeat(20_000)}${FORCE}`;
+    const started = performance.now();
+    const verdict = personOnlyVerdict(command, DEFAULT);
+    expect(performance.now() - started).toBeLessThan(8_000);
+    expect(verdict).toMatchObject({ deny: true, rule: "force-push" });
+  });
+});

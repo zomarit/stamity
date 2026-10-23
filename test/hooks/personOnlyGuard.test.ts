@@ -804,15 +804,19 @@ describe("a directory read only where the shell runs a command (review/116)", ()
       "echo cd wt-main && git push",
       'git log --grep "env -C wt-main" -1 && git push',
       "cat <<'EOF'\ncd wt-main\nEOF\ngit push",
+      // TEST CHANGE, justified (REQ-FLOW-141, review/76): a commit message read by `cat` from a quoted heredoc inside a
+      // double-quoted substitution that is wholly an argument word is now data, so its `$env:` line no longer reads as
+      // a command that may spell `--loosen`; it moved here from the asking list below.
+      `git commit -m "$(cat <<'EOF'\n${MESSAGE}\nEOF\n)" && git push`,
     ];
     for (const command of allowed) expect(decide("claude", guard, command).deny, command).toBe(false);
     // TEST CHANGE, justified (REQ-FLOW-138, review/45): a heredoc body is read line by line, and a body line that opens on
     // a variable or a substitution reads as a command whose program word may spell `--loosen`, so these ask as a
-    // loosening; the directory change is still not read from the body, so no push refusal names it.
+    // loosening; the directory change is still not read from the body, so no push refusal names it. Each body here goes
+    // to a receiver REQ-FLOW-141 does not name (git's stdin, `cat`'s own output), so it keeps that reading.
     for (const command of [
       `git commit -s -F - <<'EOF' && git push\n${MESSAGE}\nEOF`,
       `git commit -F - <<EOF && git push\n${MESSAGE}\nEOF`,
-      `git commit -m "$(cat <<'EOF'\n${MESSAGE}\nEOF\n)" && git push`,
       "cat <<'EOF'\n$(cd wt-main && git push)\nEOF",
     ]) {
       const decision = decide("claude", guard, command);
@@ -1966,6 +1970,48 @@ describe("the guard's reading of the land verb's approved line (a4, review/103)"
     expect(decide(tool, guard, joined).deny).toBe(true);
     expect(decide(tool, guard, unreadable).deny).toBe(true);
     expect(decide(tool, guard, "npx --no stamity run land --run 2026-10-23_x --ready --json")).toEqual({ deny: false });
+  });
+});
+
+describe("a heredoc body read as data by the guard in every mode (a5, REQ-FLOW-141, review/76)", () => {
+  const FORCE = "git push --force origin feat/x";
+  const helper = (tool: Tool, guard: string, command: string): Decision =>
+    clientDecision(tool, run(guard, JSON.stringify({ ...JSON.parse(payload(tool, command)), agent_id: "a1" })), `${tool} helper: ${command}`);
+  /** review/76's two lines: a commit message with a bullet, and a learn capture with its body on stdin. */
+  const DATA = [
+    `git commit -s -m "$(cat <<'EOF'\nfix(hooks): read a body as data\n\n* the first bullet\n$HOME is text here\nEOF\n)"`,
+    `npx --no stamity learn capture --title 'a body on stdin' --summary 'one line' --confidence high <<'EOF'\n## Why\n* a bullet\n$HOME\n## How to apply\n* another\nEOF`,
+    `cat >> .stamity/runs/2026-10-23_x/notes.md <<'EOF'\n${FORCE}\n* a bullet\nEOF`,
+  ];
+
+  // Red on 84a42e9a: the bullet and bare-expansion lines asked as a loosening, so a sub-agent and an unattended run
+  // were refused; the record append's force-push line was refused in every mode.
+  it.each(TOOLS)("%s: runs review/76's two lines and a record append attended, for a sub-agent and unattended", async (tool) => {
+    const guard = await placeGuard(tool);
+    for (const command of DATA) {
+      expect(personOnlyVerdict(command, BAKED_DEFAULT), command).toEqual({ deny: false });
+      expect(decide(tool, guard, command), `${tool}: ${command}`).toEqual({ deny: false });
+      expect(helper(tool, guard, command), `${tool} helper: ${command}`).toEqual({ deny: false });
+    }
+    await getRepo().seedFiles({ ".stamity/runs/2026-10-23_x/record.md": record("in progress", "unattended") });
+    for (const command of DATA) expect(decide(tool, guard, command), `${tool} unattended: ${command}`).toEqual({ deny: false });
+  });
+
+  it.each(TOOLS)("%s: refuses the same body fed to a shell, piped onward or captured as the program word, in every mode", async (tool) => {
+    const guard = await placeGuard(tool);
+    const lines = [
+      `bash <<'EOF'\n${FORCE}\nEOF`,
+      `cat <<'EOF' | sh\n${FORCE}\nEOF`,
+      `"$(cat <<'EOF'\n${FORCE}\nEOF\n)"`,
+      `git commit -m "$(cat <<EOF\n$(${FORCE})\nEOF\n)"`,
+    ];
+    for (const command of lines) {
+      expect(personOnlyVerdict(command, BAKED_DEFAULT), command).toMatchObject({ deny: true, rule: "force-push", ask: false });
+      expect(decide(tool, guard, command).deny, `${tool}: ${command}`).toBe(true);
+      expect(helper(tool, guard, command).deny, `${tool} helper: ${command}`).toBe(true);
+    }
+    await getRepo().seedFiles({ ".stamity/runs/2026-10-23_x/record.md": record("in progress", "unattended") });
+    for (const command of lines) expect(decide(tool, guard, command).deny, `${tool} unattended: ${command}`).toBe(true);
   });
 });
 

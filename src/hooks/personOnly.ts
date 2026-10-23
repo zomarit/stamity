@@ -499,6 +499,33 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   }
 
   /**
+   * Whether a segment's words open on the engine's own CLI, each literal (REQ-FLOW-141's stdin receiver, review/76): one
+   * of this package's bins as a bare word, or `npx` with `--no`, `-y`, `--yes` or `--no-yes` and then a bin, the
+   * package's name or its name pinned to a version. A path to a same-named file, a launcher or a wrapper is not it.
+   */
+  function engine(words: readonly string[], kinds: readonly string[]): boolean {
+    const at = words[0] === "npx" && ["--no", "-y", "--yes", "--no-yes"].includes(words[1] ?? "") ? 2 : 0;
+    const name = (words[at] ?? "").toLowerCase();
+    const pinned = name.startsWith(`${PACKAGE_NAME}@`) && /^\d+\.\d+\.\d+$/.test(name.slice(PACKAGE_NAME.length + 1));
+    return kinds.slice(0, at + 1).every((kind) => kind === "") && (PACKAGE_WORDS.includes(words[at] ?? "") || (at === 2 && (name === PACKAGE_NAME || pinned)));
+  }
+
+  /**
+   * Whether earlier segments may change what a later heredoc's receiver is (REQ-FLOW-141): a word ending in `()` (a
+   * function), or a command opening, after keywords, on an assignment or on a builtin that defines, assigns, sources or
+   * runs a line (`alias`, `export`, `read`, `eval`, `.`, …).
+   */
+  function defines(segments: readonly string[][]): boolean {
+    const DEFINERS = new Set(["alias", "function", "hash", "enable", "source", ".", "eval", "export", "declare", "typeset",
+      "local", "readonly", "read", "mapfile", "readarray", "getopts", "printf", "for", "select", "set", "shopt", "setopt",
+      "unset", "builtin", "command", "time", "exec"]);
+    return segments.some((words) => {
+      const head = words.find((word) => !KEYWORDS.has(word)) ?? "";
+      return ASSIGNMENT.test(head) || DEFINERS.has(programName(head)) || words.some((word) => word.endsWith("()"));
+    });
+  }
+
+  /**
    * The words of each simple command in `text`, a command substitution's text read as its own lines; with `blocks`, a
    * brace attached to a word starts or ends a PowerShell script block (`{git push}`), a brace a word opened (`@{1}`,
    * `${x}`) staying part of it; with `pwsh`, PowerShell's escape (review/194): the backtick escapes, a backslash is a
@@ -508,11 +535,31 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
    * name, `(` or `{`, a here-string's `@'` aside), `s` where it is unquoted, so its value splits into words, `p` for a PowerShell group, whose value is an
    * argument and never a command, `g` for a glob (`*`, `?`, `[`), `b` for a `{` opening a brace expansion. A single-quoted, ANSI-C-quoted or escaped character is literal text. A `${…}` counts to
    * its closing brace, so its text is never read as literal.
+   *
+   * Heredocs (REQ-FLOW-141, a5): with `docs` 1 (the line itself) or 2 (a substitution an argument word wholly is), the
+   * first heredoc operator is recorded, and at the line break ending its line, when it is that line's only one, its
+   * body and terminator are skipped if a data sink receives them (`pastBody`); every other form reads as below. A
+   * `nested` entry's `at` is its segment's index where it is a closed double-quoted `$(…)` an argument word wholly is,
+   * else -1; `ends` holds, per segment, the character that cut it and `>` where its standard output is redirected.
    */
-  function splitLine(text: string, blocks: boolean, pwsh: boolean): { segments: string[][]; nested: string[]; marks: WordMark[][] } {
+  function splitLine(
+    text: string,
+    blocks: boolean,
+    pwsh: boolean,
+    docs = 0,
+  ): { segments: string[][]; nested: { text: string; at: number; word: number }[]; marks: WordMark[][]; ends: string[] } {
     const segments: string[][] = [];
     const marks: WordMark[][] = [];
-    const nested: string[] = [];
+    const nested: { text: string; at: number; word: number }[] = [];
+    const ends: string[] = [];
+    // The first heredoc: where its word starts, its segment, delimiter, quoting and `<<-`, then that segment's words,
+    // kinds, redirections, cut and cut index as the cut found them; `heredocs` counts every operator, `done` ends the one
+    // decision a text gets, so the reading stays linear.
+    let doc: { at: number; seg: number; name: string; bare: boolean; tabs: boolean; words?: string[]; kinds?: string[]; redirs?: string[][]; cut?: string; end?: number } | null = null;
+    let heredocs = 0;
+    let done = false;
+    // The current segment's redirections: the operator (a descriptor number first), its target word and that word's kinds.
+    let redirs: string[][] = [];
     let words: string[] = [];
     let wordMarks: WordMark[] = [];
     let word = "";
@@ -531,8 +578,10 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     let dropNext = false;
     const endWord = (): void => {
       if (!inWord) return;
-      if (dropNext) dropNext = false;
-      else {
+      if (dropNext) {
+        dropNext = false;
+        redirs[redirs.length - 1]?.push(word, mark.kinds);
+      } else {
         words.push(word);
         wordMarks.push({ ...mark, last: Math.min(mark.last, word.length) });
       }
@@ -548,15 +597,70 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       mark.last = Math.max(mark.last, to);
       mark.kinds += kinds;
     };
-    const cut = (): void => {
+    const cut = (c = ""): void => {
       endWord();
       dropNext = false;
+      if (doc !== null && doc.cut === undefined && doc.seg === segments.length) {
+        Object.assign(doc, { words, kinds: wordMarks.map((each) => each.kinds), redirs, cut: c, end: i });
+      }
       if (words.length > 0) {
         segments.push(words);
         marks.push(wordMarks);
+        ends.push(c + (redirs.some((each) => /^1?>/.test(each[0] ?? "")) ? ">" : ""));
       }
       words = [];
       wordMarks = [];
+      redirs = [];
+    };
+    /**
+     * Where the reading resumes after the line break at `nl` (REQ-FLOW-141): past the terminator line when the line's
+     * one heredoc goes to a data sink, else at the next character, the body read as commands. Every receiver needs its
+     * operator's line to end at `nl`, no carriage return in the text, a terminator line equal to the delimiter (after
+     * leading tabs for `<<-`) and, unquoted, a body with no `$(` or backtick, and nothing piping onward. With `docs` 2:
+     * a bare `cat` first in the text, with no other redirection and nothing after it on its line. With `docs` 1: a bare
+     * `cat` (no argument) or `tee` (plain operands, `-a`, `-i`, `-p`) first on the line, its standard output sent by `>`
+     * or `>>` to one plain path, no other redirection, its targets named by no later word; or the engine's own CLI
+     * (`engine`) first in its segment, with no other redirection and no earlier command defining or assigning.
+     */
+    const pastBody = (nl: number): number => {
+      const d = doc;
+      if (d?.words === undefined || heredocs !== 1 || text.includes("\r") || text.indexOf("\n", d.at) !== nl) return nl + 1;
+      const kinds = d.kinds ?? [];
+      const others = (d.redirs ?? []).filter((each) => each[0] !== "<<");
+      const out = others.length === 1 && /^1?>>?$/.test(others[0]?.[0] ?? "") ? (others[0] ?? []) : [];
+      const plain = (path: string, kind = ""): boolean =>
+        kind === "" &&
+        /^[\w./@%+,:=~][\w./@%+,:=~-]{0,255}$/.test(path) &&
+        !/(?:^|\/)\.git(?:\/|$)/i.test(path) &&
+        (!/^\/(?:dev|proc)\//.test(path) || path === "/dev/null");
+      const operands = d.words.slice(1).filter((each) => !/^(?:-[aip]+|--append|--ignore-interrupts)$/.test(each));
+      const writes =
+        docs === 1 &&
+        d.seg === 0 &&
+        kinds.every((each) => each === "") &&
+        plain(out[1] ?? "", out[2]) &&
+        (d.words.join(" ") === "cat" || (d.words[0] === "tee" && operands.length > 0 && operands.every((each) => plain(each))));
+      const sink =
+        /^[\n;&]$/.test(d.cut ?? "") &&
+        (docs === 2
+          ? d.cut === "\n" && d.seg === 0 && d.words.join(" ") === "cat" && kinds[0] === "" && others.length === 0
+          : writes || (docs === 1 && others.length === 0 && engine(d.words, kinds) && !defines(segments.slice(0, d.seg))));
+      if (!sink) return nl + 1;
+      for (let at = nl + 1; ; ) {
+        const stop = text.indexOf("\n", at);
+        const end = stop === -1 ? text.length : stop;
+        const line = text.slice(at, end);
+        if ((d.tabs ? line.replace(/^\t+/, "") : line) === d.name) {
+          // The text after the segment on the operator's line, and after the terminator: no word there names a target.
+          const later = text.slice(d.end ?? nl, nl) + text.slice(end);
+          const named = writes ? [out[1] ?? "", ...(d.words[0] === "tee" ? operands : [])] : [];
+          if (d.bare && /\$\(|`/.test(text.slice(nl + 1, at))) return nl + 1;
+          if (named.some((each) => each !== "/dev/null" && later.includes(each.split("/").pop() ?? each))) return nl + 1;
+          return end;
+        }
+        if (stop === -1) return nl + 1;
+        at = stop + 1;
+      }
     };
     /** Marks an expansion starting at `text[at]` and appended next: through its closing brace when it opens `${`. */
     const expands = (at: number, kinds: string): void => {
@@ -605,6 +709,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         inWord = true;
         i = stop + 1;
       } else if (quote(ch, PS_DOUBLE)) {
+        // Whether this quote opens a word that is no redirection's target, for a substitution that is the whole word.
+        const opens = !inWord && !dropNext ? i + 1 : -1;
         inWord = true;
         i += 1;
         while (i < text.length && !quote(text[i], PS_DOUBLE)) {
@@ -631,7 +737,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
                 j += 1;
               }
             }
-            nested.push(text.slice(start, j));
+            const whole = !pwsh && c === "$" && i === opens && text[j + 1] === '"' && /^[\s;&|<>)]?$/.test(text[j + 2] ?? "");
+            nested.push({ text: text.slice(start, j), at: whole && j < text.length ? segments.length : -1, word: words.length });
             // An unclosed substitution is a syntax error the shell runs nothing for, so it fills nothing in (build/4).
             hide(word.length, word.length + Math.min(j + 1, text.length) - i, j < text.length ? "e" : "");
             word += text.slice(i, Math.min(j + 1, text.length));
@@ -698,7 +805,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
             j += 1;
           }
         }
-        nested.push(text.slice(start, j));
+        nested.push({ text: text.slice(start, j), at: -1, word: 0 });
         // An unclosed substitution or group is a syntax error the shell runs nothing for, so it fills nothing in (build/4).
         hide(word.length, word.length + Math.min(j + 1, text.length) - i, j >= text.length ? "" : ch === "(" ? "p" : "es");
         word += text.slice(i, Math.min(j + 1, text.length));
@@ -711,22 +818,41 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         while (i < text.length && text[i] !== "\n") i += 1;
       } else if (ch === ">" || ch === "<") {
         // A redirection: a file-descriptor number before it and its target after it are not arguments.
+        let fd = "";
         if (inWord && /^\d+$/.test(word)) {
+          fd = word;
           word = "";
           counted = 0;
           balance = 0;
           mark = { first: -1, last: 0, kinds: "" };
           inWord = false;
         } else endWord();
+        const from = i;
         while (i < text.length && "<>&|".includes(text[i] ?? "")) i += 1;
+        const op = fd + text.slice(from, i);
+        if (docs > 0 && op.includes("<<") && !op.includes("<<<")) {
+          // A heredoc (REQ-FLOW-141): `<<` or `<<-` and its delimiter, one pair of quotes or bare, from the set; any
+          // other spelling, a descriptor number among them, is recorded as none, so the line keeps its reading.
+          heredocs += 1;
+          const head = /^(-?)[ \t]*(?:'([A-Za-z_]\w{0,63})'|"([A-Za-z_]\w{0,63})"|([A-Za-z_]\w{0,63}))(?![^\s;&|<>()])/.exec(text.slice(i, i + 160));
+          if (heredocs === 1 && op === "<<" && head !== null) {
+            doc = { at: i, seg: segments.length, name: head[2] ?? head[3] ?? head[4] ?? "", bare: head[4] !== undefined, tabs: head[1] === "-" };
+          }
+        }
+        redirs.push([op]);
         dropNext = true;
       } else if (
         ";&|\n\r()`".includes(ch) ||
         (blocks && ch === "{" && !inWord) ||
         (blocks && ch === "}" && balanced())
       ) {
-        cut();
+        cut(ch);
         i += 1;
+        // The line break ending the first heredoc's line: its one decision (REQ-FLOW-141).
+        if (ch === "\n" && heredocs > 0 && !done) {
+          done = true;
+          i = pastBody(i - 1);
+        }
       } else {
         if (ch === "$" || (pwsh && ch === "@" && !inWord && /[\w({]/.test(text[i + 1] ?? ""))) expands(i, "es");
         else if ("*?[".includes(ch)) expands(i, "g");
@@ -737,7 +863,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       }
     }
     cut();
-    return { segments, nested, marks };
+    return { segments, nested, marks, ends };
   }
 
   /** Each assignment word the reading below skips (`X=v git …`, `env X=v …`), as it decoded it (review/208). */
@@ -769,14 +895,26 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
    * the text is PowerShell's: a PowerShell command string or the Windows command interpreter's rest, whose backslash is
    * a plain character (review/194). A line nested past four levels throws a coded `NESTING_DEPTH` error (pr/58): the
    * reading stops there, so the guard refuses the line rather than allow what the fifth level runs.
+   *
+   * With `capture`, `text` is a substitution an argument word wholly is (see below), whose heredoc may go to a bare
+   * `cat`; at depth 0 on a POSIX reading, the line's heredocs may go to a file or the engine (REQ-FLOW-141).
    */
-  function commandsOf(text: string, depth: number, pwsh: boolean, tainted = false, fedIn = false): string[][] {
+  function commandsOf(text: string, depth: number, pwsh: boolean, tainted = false, fedIn = false, capture = false): string[][] {
     if (depth > 4) throw Object.assign(new Error("nesting"), { code: "NESTING_DEPTH" });
-    const { segments, nested, marks } = splitLine(text, true, pwsh);
+    const docs = capture ? 2 : depth === 0 && !pwsh ? 1 : 0;
+    const { segments, nested, marks, ends } = splitLine(text, true, pwsh, docs);
     // A PowerShell line is read with a POSIX shell's escapes too, and a line with a brace with its braces as words too
     // (review/185), so either reading adds denials and never lifts one: `git push origin x} -f` still forces.
     const commands: string[][] = pwsh ? commandsOf(text, depth, false, tainted, fedIn) : [];
-    const braces = /[{}]/.test(text) ? splitLine(text, false, pwsh) : { segments: [], marks: [] };
+    const braces = /[{}]/.test(text) ? splitLine(text, false, pwsh, docs) : { segments: [], marks: [] };
+    // The substitutions read as an argument's data (REQ-FLOW-141, review/76), found by segment in one pass, and whether an
+    // earlier segment defines or assigns, read once per segment: see below.
+    const captured = new Set<object>();
+    const wholly = new Map<number, object[]>();
+    for (const each of nested) if (each.at >= 0 && each.word > 0) wholly.set(each.at, wholly.get(each.at) ?? []).get(each.at)?.push(each);
+    const plainLine = docs === 1 && !tainted && wholly.size > 0 && !text.includes("\r");
+    let defined = false;
+    let checked = 0;
     const allMarks = [...marks, ...braces.marks];
     for (const [segment, words] of [...segments, ...braces.segments].entries()) {
       let k = 0;
@@ -845,6 +983,22 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
             }
           }
         } else break;
+      }
+      // A closed double-quoted `$(…)` that is wholly an argument word of a segment's first word, on the line's own POSIX
+      // reading (REQ-FLOW-141's commit-message receiver, review/76), is read with its heredoc as `cat`'s data: no
+      // assignment, keyword or wrapper first, no shell, `eval`, PowerShell host, command interpreter, `source` or
+      // launcher as the program, no standard output redirected or piped onward, nothing earlier defining or assigning,
+      // no carriage return. A reading that runs the word as a line still reads it, its substitution unquoted there.
+      if (plainLine && segment < segments.length && !defined) {
+        defined = defines(segments.slice(checked, segment));
+        checked = segment;
+      }
+      const opener = programName(words[0] ?? "");
+      if (
+        plainLine && !defined && line === null && k === 0 && !/[|>]/.test(ends[segment] ?? "|") &&
+        !SHELLS.has(opener) && !POWERSHELLS.has(opener) && !["eval", "cmd", "source", ".", "node", "nodejs", "bun", "deno", "tsx"].includes(opener)
+      ) {
+        for (const each of wholly.get(segment) ?? []) captured.add(each);
       }
       if (line !== null) {
         const lineTainted = tainted || (allMarks[segment] ?? []).slice(lineFrom).some((each) => each.kinds !== "");
@@ -1075,7 +1229,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       }
       commands.push(cmd);
     }
-    for (const inner of nested) commands.push(...commandsOf(inner, depth + 1, pwsh, tainted, fedIn));
+    for (const inner of nested) commands.push(...commandsOf(inner.text, depth + 1, pwsh, tainted, fedIn, captured.has(inner)));
     return commands;
   }
 
@@ -2459,6 +2613,33 @@ export function unattendedPushVerdict(
   }
 
   /**
+   * Whether a segment's words open on the engine's own CLI, each literal (REQ-FLOW-141's stdin receiver, review/76): one
+   * of this package's bins as a bare word, or `npx` with `--no`, `-y`, `--yes` or `--no-yes` and then a bin, the
+   * package's name or its name pinned to a version. A path to a same-named file, a launcher or a wrapper is not it.
+   */
+  function engine(words: readonly string[], kinds: readonly string[]): boolean {
+    const at = words[0] === "npx" && ["--no", "-y", "--yes", "--no-yes"].includes(words[1] ?? "") ? 2 : 0;
+    const name = (words[at] ?? "").toLowerCase();
+    const pinned = name.startsWith(`${PACKAGE_NAME}@`) && /^\d+\.\d+\.\d+$/.test(name.slice(PACKAGE_NAME.length + 1));
+    return kinds.slice(0, at + 1).every((kind) => kind === "") && (PACKAGE_WORDS.includes(words[at] ?? "") || (at === 2 && (name === PACKAGE_NAME || pinned)));
+  }
+
+  /**
+   * Whether earlier segments may change what a later heredoc's receiver is (REQ-FLOW-141): a word ending in `()` (a
+   * function), or a command opening, after keywords, on an assignment or on a builtin that defines, assigns, sources or
+   * runs a line (`alias`, `export`, `read`, `eval`, `.`, …).
+   */
+  function defines(segments: readonly string[][]): boolean {
+    const DEFINERS = new Set(["alias", "function", "hash", "enable", "source", ".", "eval", "export", "declare", "typeset",
+      "local", "readonly", "read", "mapfile", "readarray", "getopts", "printf", "for", "select", "set", "shopt", "setopt",
+      "unset", "builtin", "command", "time", "exec"]);
+    return segments.some((words) => {
+      const head = words.find((word) => !KEYWORDS.has(word)) ?? "";
+      return ASSIGNMENT.test(head) || DEFINERS.has(programName(head)) || words.some((word) => word.endsWith("()"));
+    });
+  }
+
+  /**
    * The words of each simple command in `text`, a command substitution's text read as its own lines; with `blocks`, a
    * brace attached to a word starts or ends a PowerShell script block (`{git push}`), a brace a word opened (`@{1}`,
    * `${x}`) staying part of it; with `pwsh`, PowerShell's escape (review/194): the backtick escapes, a backslash is a
@@ -2468,11 +2649,31 @@ export function unattendedPushVerdict(
    * name, `(` or `{`, a here-string's `@'` aside), `s` where it is unquoted, so its value splits into words, `p` for a PowerShell group, whose value is an
    * argument and never a command, `g` for a glob (`*`, `?`, `[`), `b` for a `{` opening a brace expansion. A single-quoted, ANSI-C-quoted or escaped character is literal text. A `${…}` counts to
    * its closing brace, so its text is never read as literal.
+   *
+   * Heredocs (REQ-FLOW-141, a5): with `docs` 1 (the line itself) or 2 (a substitution an argument word wholly is), the
+   * first heredoc operator is recorded, and at the line break ending its line, when it is that line's only one, its
+   * body and terminator are skipped if a data sink receives them (`pastBody`); every other form reads as below. A
+   * `nested` entry's `at` is its segment's index where it is a closed double-quoted `$(…)` an argument word wholly is,
+   * else -1; `ends` holds, per segment, the character that cut it and `>` where its standard output is redirected.
    */
-  function splitLine(text: string, blocks: boolean, pwsh: boolean): { segments: string[][]; nested: string[]; marks: WordMark[][] } {
+  function splitLine(
+    text: string,
+    blocks: boolean,
+    pwsh: boolean,
+    docs = 0,
+  ): { segments: string[][]; nested: { text: string; at: number; word: number }[]; marks: WordMark[][]; ends: string[] } {
     const segments: string[][] = [];
     const marks: WordMark[][] = [];
-    const nested: string[] = [];
+    const nested: { text: string; at: number; word: number }[] = [];
+    const ends: string[] = [];
+    // The first heredoc: where its word starts, its segment, delimiter, quoting and `<<-`, then that segment's words,
+    // kinds, redirections, cut and cut index as the cut found them; `heredocs` counts every operator, `done` ends the one
+    // decision a text gets, so the reading stays linear.
+    let doc: { at: number; seg: number; name: string; bare: boolean; tabs: boolean; words?: string[]; kinds?: string[]; redirs?: string[][]; cut?: string; end?: number } | null = null;
+    let heredocs = 0;
+    let done = false;
+    // The current segment's redirections: the operator (a descriptor number first), its target word and that word's kinds.
+    let redirs: string[][] = [];
     let words: string[] = [];
     let wordMarks: WordMark[] = [];
     let word = "";
@@ -2491,8 +2692,10 @@ export function unattendedPushVerdict(
     let dropNext = false;
     const endWord = (): void => {
       if (!inWord) return;
-      if (dropNext) dropNext = false;
-      else {
+      if (dropNext) {
+        dropNext = false;
+        redirs[redirs.length - 1]?.push(word, mark.kinds);
+      } else {
         words.push(word);
         wordMarks.push({ ...mark, last: Math.min(mark.last, word.length) });
       }
@@ -2508,15 +2711,70 @@ export function unattendedPushVerdict(
       mark.last = Math.max(mark.last, to);
       mark.kinds += kinds;
     };
-    const cut = (): void => {
+    const cut = (c = ""): void => {
       endWord();
       dropNext = false;
+      if (doc !== null && doc.cut === undefined && doc.seg === segments.length) {
+        Object.assign(doc, { words, kinds: wordMarks.map((each) => each.kinds), redirs, cut: c, end: i });
+      }
       if (words.length > 0) {
         segments.push(words);
         marks.push(wordMarks);
+        ends.push(c + (redirs.some((each) => /^1?>/.test(each[0] ?? "")) ? ">" : ""));
       }
       words = [];
       wordMarks = [];
+      redirs = [];
+    };
+    /**
+     * Where the reading resumes after the line break at `nl` (REQ-FLOW-141): past the terminator line when the line's
+     * one heredoc goes to a data sink, else at the next character, the body read as commands. Every receiver needs its
+     * operator's line to end at `nl`, no carriage return in the text, a terminator line equal to the delimiter (after
+     * leading tabs for `<<-`) and, unquoted, a body with no `$(` or backtick, and nothing piping onward. With `docs` 2:
+     * a bare `cat` first in the text, with no other redirection and nothing after it on its line. With `docs` 1: a bare
+     * `cat` (no argument) or `tee` (plain operands, `-a`, `-i`, `-p`) first on the line, its standard output sent by `>`
+     * or `>>` to one plain path, no other redirection, its targets named by no later word; or the engine's own CLI
+     * (`engine`) first in its segment, with no other redirection and no earlier command defining or assigning.
+     */
+    const pastBody = (nl: number): number => {
+      const d = doc;
+      if (d?.words === undefined || heredocs !== 1 || text.includes("\r") || text.indexOf("\n", d.at) !== nl) return nl + 1;
+      const kinds = d.kinds ?? [];
+      const others = (d.redirs ?? []).filter((each) => each[0] !== "<<");
+      const out = others.length === 1 && /^1?>>?$/.test(others[0]?.[0] ?? "") ? (others[0] ?? []) : [];
+      const plain = (path: string, kind = ""): boolean =>
+        kind === "" &&
+        /^[\w./@%+,:=~][\w./@%+,:=~-]{0,255}$/.test(path) &&
+        !/(?:^|\/)\.git(?:\/|$)/i.test(path) &&
+        (!/^\/(?:dev|proc)\//.test(path) || path === "/dev/null");
+      const operands = d.words.slice(1).filter((each) => !/^(?:-[aip]+|--append|--ignore-interrupts)$/.test(each));
+      const writes =
+        docs === 1 &&
+        d.seg === 0 &&
+        kinds.every((each) => each === "") &&
+        plain(out[1] ?? "", out[2]) &&
+        (d.words.join(" ") === "cat" || (d.words[0] === "tee" && operands.length > 0 && operands.every((each) => plain(each))));
+      const sink =
+        /^[\n;&]$/.test(d.cut ?? "") &&
+        (docs === 2
+          ? d.cut === "\n" && d.seg === 0 && d.words.join(" ") === "cat" && kinds[0] === "" && others.length === 0
+          : writes || (docs === 1 && others.length === 0 && engine(d.words, kinds) && !defines(segments.slice(0, d.seg))));
+      if (!sink) return nl + 1;
+      for (let at = nl + 1; ; ) {
+        const stop = text.indexOf("\n", at);
+        const end = stop === -1 ? text.length : stop;
+        const line = text.slice(at, end);
+        if ((d.tabs ? line.replace(/^\t+/, "") : line) === d.name) {
+          // The text after the segment on the operator's line, and after the terminator: no word there names a target.
+          const later = text.slice(d.end ?? nl, nl) + text.slice(end);
+          const named = writes ? [out[1] ?? "", ...(d.words[0] === "tee" ? operands : [])] : [];
+          if (d.bare && /\$\(|`/.test(text.slice(nl + 1, at))) return nl + 1;
+          if (named.some((each) => each !== "/dev/null" && later.includes(each.split("/").pop() ?? each))) return nl + 1;
+          return end;
+        }
+        if (stop === -1) return nl + 1;
+        at = stop + 1;
+      }
     };
     /** Marks an expansion starting at `text[at]` and appended next: through its closing brace when it opens `${`. */
     const expands = (at: number, kinds: string): void => {
@@ -2565,6 +2823,8 @@ export function unattendedPushVerdict(
         inWord = true;
         i = stop + 1;
       } else if (quote(ch, PS_DOUBLE)) {
+        // Whether this quote opens a word that is no redirection's target, for a substitution that is the whole word.
+        const opens = !inWord && !dropNext ? i + 1 : -1;
         inWord = true;
         i += 1;
         while (i < text.length && !quote(text[i], PS_DOUBLE)) {
@@ -2591,7 +2851,8 @@ export function unattendedPushVerdict(
                 j += 1;
               }
             }
-            nested.push(text.slice(start, j));
+            const whole = !pwsh && c === "$" && i === opens && text[j + 1] === '"' && /^[\s;&|<>)]?$/.test(text[j + 2] ?? "");
+            nested.push({ text: text.slice(start, j), at: whole && j < text.length ? segments.length : -1, word: words.length });
             // An unclosed substitution is a syntax error the shell runs nothing for, so it fills nothing in (build/4).
             hide(word.length, word.length + Math.min(j + 1, text.length) - i, j < text.length ? "e" : "");
             word += text.slice(i, Math.min(j + 1, text.length));
@@ -2658,7 +2919,7 @@ export function unattendedPushVerdict(
             j += 1;
           }
         }
-        nested.push(text.slice(start, j));
+        nested.push({ text: text.slice(start, j), at: -1, word: 0 });
         // An unclosed substitution or group is a syntax error the shell runs nothing for, so it fills nothing in (build/4).
         hide(word.length, word.length + Math.min(j + 1, text.length) - i, j >= text.length ? "" : ch === "(" ? "p" : "es");
         word += text.slice(i, Math.min(j + 1, text.length));
@@ -2671,22 +2932,41 @@ export function unattendedPushVerdict(
         while (i < text.length && text[i] !== "\n") i += 1;
       } else if (ch === ">" || ch === "<") {
         // A redirection: a file-descriptor number before it and its target after it are not arguments.
+        let fd = "";
         if (inWord && /^\d+$/.test(word)) {
+          fd = word;
           word = "";
           counted = 0;
           balance = 0;
           mark = { first: -1, last: 0, kinds: "" };
           inWord = false;
         } else endWord();
+        const from = i;
         while (i < text.length && "<>&|".includes(text[i] ?? "")) i += 1;
+        const op = fd + text.slice(from, i);
+        if (docs > 0 && op.includes("<<") && !op.includes("<<<")) {
+          // A heredoc (REQ-FLOW-141): `<<` or `<<-` and its delimiter, one pair of quotes or bare, from the set; any
+          // other spelling, a descriptor number among them, is recorded as none, so the line keeps its reading.
+          heredocs += 1;
+          const head = /^(-?)[ \t]*(?:'([A-Za-z_]\w{0,63})'|"([A-Za-z_]\w{0,63})"|([A-Za-z_]\w{0,63}))(?![^\s;&|<>()])/.exec(text.slice(i, i + 160));
+          if (heredocs === 1 && op === "<<" && head !== null) {
+            doc = { at: i, seg: segments.length, name: head[2] ?? head[3] ?? head[4] ?? "", bare: head[4] !== undefined, tabs: head[1] === "-" };
+          }
+        }
+        redirs.push([op]);
         dropNext = true;
       } else if (
         ";&|\n\r()`".includes(ch) ||
         (blocks && ch === "{" && !inWord) ||
         (blocks && ch === "}" && balanced())
       ) {
-        cut();
+        cut(ch);
         i += 1;
+        // The line break ending the first heredoc's line: its one decision (REQ-FLOW-141).
+        if (ch === "\n" && heredocs > 0 && !done) {
+          done = true;
+          i = pastBody(i - 1);
+        }
       } else {
         if (ch === "$" || (pwsh && ch === "@" && !inWord && /[\w({]/.test(text[i + 1] ?? ""))) expands(i, "es");
         else if ("*?[".includes(ch)) expands(i, "g");
@@ -2697,7 +2977,7 @@ export function unattendedPushVerdict(
       }
     }
     cut();
-    return { segments, nested, marks };
+    return { segments, nested, marks, ends };
   }
 
   /** Each assignment word the reading below skips (`X=v git …`, `env X=v …`), as it decoded it (review/208). */
@@ -2729,14 +3009,26 @@ export function unattendedPushVerdict(
    * the text is PowerShell's: a PowerShell command string or the Windows command interpreter's rest, whose backslash is
    * a plain character (review/194). A line nested past four levels throws a coded `NESTING_DEPTH` error (pr/58): the
    * reading stops there, so the guard refuses the line rather than allow what the fifth level runs.
+   *
+   * With `capture`, `text` is a substitution an argument word wholly is (see below), whose heredoc may go to a bare
+   * `cat`; at depth 0 on a POSIX reading, the line's heredocs may go to a file or the engine (REQ-FLOW-141).
    */
-  function commandsOf(text: string, depth: number, pwsh: boolean, tainted = false, fedIn = false): string[][] {
+  function commandsOf(text: string, depth: number, pwsh: boolean, tainted = false, fedIn = false, capture = false): string[][] {
     if (depth > 4) throw Object.assign(new Error("nesting"), { code: "NESTING_DEPTH" });
-    const { segments, nested, marks } = splitLine(text, true, pwsh);
+    const docs = capture ? 2 : depth === 0 && !pwsh ? 1 : 0;
+    const { segments, nested, marks, ends } = splitLine(text, true, pwsh, docs);
     // A PowerShell line is read with a POSIX shell's escapes too, and a line with a brace with its braces as words too
     // (review/185), so either reading adds denials and never lifts one: `git push origin x} -f` still forces.
     const commands: string[][] = pwsh ? commandsOf(text, depth, false, tainted, fedIn) : [];
-    const braces = /[{}]/.test(text) ? splitLine(text, false, pwsh) : { segments: [], marks: [] };
+    const braces = /[{}]/.test(text) ? splitLine(text, false, pwsh, docs) : { segments: [], marks: [] };
+    // The substitutions read as an argument's data (REQ-FLOW-141, review/76), found by segment in one pass, and whether an
+    // earlier segment defines or assigns, read once per segment: see below.
+    const captured = new Set<object>();
+    const wholly = new Map<number, object[]>();
+    for (const each of nested) if (each.at >= 0 && each.word > 0) wholly.set(each.at, wholly.get(each.at) ?? []).get(each.at)?.push(each);
+    const plainLine = docs === 1 && !tainted && wholly.size > 0 && !text.includes("\r");
+    let defined = false;
+    let checked = 0;
     const allMarks = [...marks, ...braces.marks];
     for (const [segment, words] of [...segments, ...braces.segments].entries()) {
       let k = 0;
@@ -2805,6 +3097,22 @@ export function unattendedPushVerdict(
             }
           }
         } else break;
+      }
+      // A closed double-quoted `$(…)` that is wholly an argument word of a segment's first word, on the line's own POSIX
+      // reading (REQ-FLOW-141's commit-message receiver, review/76), is read with its heredoc as `cat`'s data: no
+      // assignment, keyword or wrapper first, no shell, `eval`, PowerShell host, command interpreter, `source` or
+      // launcher as the program, no standard output redirected or piped onward, nothing earlier defining or assigning,
+      // no carriage return. A reading that runs the word as a line still reads it, its substitution unquoted there.
+      if (plainLine && segment < segments.length && !defined) {
+        defined = defines(segments.slice(checked, segment));
+        checked = segment;
+      }
+      const opener = programName(words[0] ?? "");
+      if (
+        plainLine && !defined && line === null && k === 0 && !/[|>]/.test(ends[segment] ?? "|") &&
+        !SHELLS.has(opener) && !POWERSHELLS.has(opener) && !["eval", "cmd", "source", ".", "node", "nodejs", "bun", "deno", "tsx"].includes(opener)
+      ) {
+        for (const each of wholly.get(segment) ?? []) captured.add(each);
       }
       if (line !== null) {
         const lineTainted = tainted || (allMarks[segment] ?? []).slice(lineFrom).some((each) => each.kinds !== "");
@@ -3035,7 +3343,7 @@ export function unattendedPushVerdict(
       }
       commands.push(cmd);
     }
-    for (const inner of nested) commands.push(...commandsOf(inner, depth + 1, pwsh, tainted, fedIn));
+    for (const inner of nested) commands.push(...commandsOf(inner.text, depth + 1, pwsh, tainted, fedIn, captured.has(inner)));
     return commands;
   }
 
