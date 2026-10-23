@@ -84,6 +84,12 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
 - **A Claude Code guard that times out blocks the call.** The Claude Code guard entries carry `onFailure: "block"`,
   so a guard that times out blocks the call (measured on Claude Code 2.1.309; the vendor dates the key to 2.1.295;
   older clients not measured). The Copilot CLI, which reads the same file, ignores the key (measured on 1.0.100).
+- **An unattended push is refused when git moved since the pre-flight.** An unattended `run checkpoint` and `run end`
+  refuse to push when git's configuration, the git environment (the `gh` credential variables included) or the git
+  program differs from what `gate preflight --unattended` recorded — names only, the values in a salted digest
+  (`config changed`, `no pre-flight record`, `configuration unreadable`). A refused pre-flight's record lets only
+  `run end --refused` take its draft ending, carrying the run's own records alone. `gate` is now listed as mutating,
+  and its `--dry-run` reaches `preflight` only.
 
 ### Added
 
