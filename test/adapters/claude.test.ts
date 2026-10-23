@@ -2060,13 +2060,13 @@ describe("the person-only deny rows (u20-hook-emission, REQ-FLOW-102)", () => {
       "npx --no stamity run land --run 2026-10-23_x --ready --wait 8 --json",
       "stamity run land --run 2026-10-23_x --json",
     ];
-    /** The land row for the flag after `land`, and the one for the flag between `run` and `land` (review/138, review/143). */
+    /** The land row for the flag after `land`, and the one for the flag between `run` and `land` (review/138, review/144). */
     const AFTER_LAND = "Bash(* run *land *--approved*)";
     const BEFORE_LAND = "Bash(* run *--approved* land*)";
     /**
      * Land lines carrying the approval, each with the one land row it meets and whether the guard's default reading (this
      * package's own bins) reaches its ask-class land-approved rule: every program spelling, a fork's own bin, options
-     * between `run` and `land`, and the flag on either side of `land` among them (review/138, review/143).
+     * between `run` and `land`, and the flag on either side of `land` among them (review/138, review/144).
      */
     const APPROVED_LAND: readonly (readonly [line: string, row: string, guardReads: boolean])[] = [
       ["stamity run land --run 2026-10-23_x --ready --approved 3952f8ca --json", AFTER_LAND, true],
@@ -2085,7 +2085,7 @@ describe("the person-only deny rows (u20-hook-emission, REQ-FLOW-102)", () => {
       ["stamity run --json land --run x --approved 3952f8ca", AFTER_LAND, true],
       // A fork's renamed bin: the guard reads it through the bins baked at emission, which this default reading lacks.
       ["acme-cli run land --run x --approved 3952f8ca", AFTER_LAND, false],
-      // The flag between `run` and `land`, which the CLI parses too (review/143).
+      // The flag between `run` and `land`, which the CLI parses too (review/144).
       ["stamity run --approved 3952f8ca land --run x --ready --json", BEFORE_LAND, true],
       ["stamity run --approved=3952f8ca land --run x", BEFORE_LAND, true],
       ["stamity run --run x --approved 3952f8ca land", BEFORE_LAND, true],
@@ -2094,7 +2094,7 @@ describe("the person-only deny rows (u20-hook-emission, REQ-FLOW-102)", () => {
       ["acme-cli run --approved 3952f8ca land --run x", BEFORE_LAND, false],
     ];
 
-    it("asks for a land line carrying the approval whatever its program spelling and on either side of land, and for no plain land line (review/109, review/138, review/143)", async () => {
+    it("asks for a land line carrying the approval whatever its program spelling and on either side of land, and for no plain land line (review/109, review/138, review/144)", async () => {
       expect(CLAUDE_LAND_ASK_ROWS).toEqual([AFTER_LAND, BEFORE_LAND]);
       const settings: (AutonomyConfig | undefined)[] = [{ mode: "ask" }, undefined];
       for (const { deny, ask } of await Promise.all(settings.map((autonomy) => permissionsFor(autonomy)))) {

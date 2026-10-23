@@ -457,7 +457,7 @@ export function repositoryKey(text: string, host: string): string {
  * not rest on the hook alone. The flag follows `--run <id>` and `--ready` on the flows' line, so no prefix row reaches
  * it, and Claude Code reads a `*` anywhere else as any run of characters over the whole command (measured on 2.1.309,
  * 2026-10-23, by running the client's own matcher). Two rows with a leading wildcard, one per order the CLI parses
- * (review/138, review/143): the first matches a line holding ` run `, then `land `, then `--approved`; the second a line
+ * (review/138, review/144): the first matches a line holding ` run `, then `land `, then `--approved`; the second a line
  * holding ` run `, then `--approved`, then ` land` (the flag between `run` and its subcommand). Each matches whatever
  * program word comes first — a bin, a fork's bin, a bin by path, a runner, a launcher or a word the guard cannot
  * settle — and other option words anywhere after `run`. Unlike a mid-pattern deny row, an over-wide ask row only asks
