@@ -93,7 +93,8 @@ export type PersonOnlyRuleId =
   | "autonomy-loosen"
   | "land-approved"
   | "line-too-long"
-  | "outside-write";
+  | "outside-write"
+  | "remote-write";
 
 /** One person-only act: its rule id, what the person keeps, and whether it is ask-class (it can be undone). */
 export interface PersonOnlyRule {
@@ -194,6 +195,11 @@ export const PERSON_ONLY_RULES: readonly PersonOnlyRule[] = [
     act: "a write that reaches another repository or names a person, which sends something to an outside party (a gh write naming another host or `owner/repo` by `-R`/`--repo`, a URL or a `repos/<owner>/<repo>` path, one the guard cannot place, one under `GH_REPO` or `GH_HOST`, one naming no target where gh's default is not the origin, or an inline body or title holding an `@<login>` outside the repository's own apps): it asks (REQ-FLOW-134)",
     ask: true,
   },
+  {
+    id: "remote-write",
+    act: "writing a git remote or a URL rewrite (`git remote add`, `rename`, `set-url`, `remove`, a `git config` write of a `remote.*` or `url.*` key), which moves the origin later writes are held to: it runs on the main thread and is refused for a sub-agent (REQ-FLOW-134, review/129)",
+    ask: true,
+  },
 ];
 
 /**
@@ -272,6 +278,11 @@ export interface PersonOnlyContext {
   readonly remoteRepo?: (name: string) => string;
   /** The remote a push naming none uses on this place's branch (`pushRemote`, `remote.pushDefault`, `remote`, `origin`); `null` where unread. */
   readonly pushRemote?: string | null;
+  /**
+   * The repository `origin`'s push URL names where it is not its fetch URL (a `pushurl`, or a `pushInsteadOf` rewrite),
+   * as {@link originRepo} is written; `null` where a push to origin goes where a fetch does (review/129).
+   */
+  readonly originPush?: string | null;
   /**
    * Whether this place is the session's own repository, where `origin` is the origin; the guard reads a place it cannot
    * read as its own, so only a readable other checkout has its `origin` compared. Absent reads true.
@@ -1674,7 +1685,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     (values.length === 0 ? [...defaults].some(deploys) : values.some((value) => (value === "" ? [...defaults].some(deploys) : deploys(value === null ? null : branch(value)))));
   // The ask-class rules (REQ-FLOW-102): any other rule refuses (REQ-FLOW-124), so a rule missing here never asks.
   const ASK_RULES = new Set(["push-default", "push-tags", "tag", "pr-merge", "pr-ready", "release", "publish", "secrets", "protection",
-    "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen", "land-approved", "outside-write"]);
+    "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen", "land-approved", "outside-write",
+    "remote-write"]);
   // Every act the line holds (v0a): each segment, each call `--next` joins, each path, flag, body field and GraphQL
   // entry; a refuse-class one decides the verdict, so a deletion never rides an approval.
   const acts: { deny: true; rule: PersonOnlyRuleId; act: string; reason: string; ask: boolean }[] = [];
@@ -1776,7 +1788,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   };
   // Read once per verdict, so a line holding many gh calls is still read in one pass (the guard's hook timeout).
   let lineMentions: boolean | null = null;
-  const environment = /\bGH_(?:REPO|HOST)\b|\bGIT_CONFIG\w*/.test(command);
+  const environment = /\bGH_(?:REPO|HOST)\b|\bGIT_CONFIG\w*|\b(?:HOME|XDG_CONFIG_HOME)\s*=/.test(command);
   /** Whether a gh write naming no repository lands outside the origin: gh's default unknown or another repository. */
   const defaultAway = (): boolean => {
     const fallback = ctx.ghDefaultRepo;
@@ -1785,15 +1797,19 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
 
   /** The spellings of stdin a tool reads a body from (REQ-FLOW-134, review/121): the dash and the device paths. */
   const STDIN = new Set(["-", "/dev/stdin", "/dev/fd/0", "/proc/self/fd/0"]);
-  /** Whether the line sets git configuration through its environment, which can move a remote or a URL (review/128). */
-  const gitEnvironment = /\bGIT_CONFIG\w*/.test(command);
+  /**
+   * Whether the line sets git configuration through its environment, or relocates the home or XDG folder where git
+   * finds its global file, either of which can move a remote or a URL (review/128).
+   */
+  const gitEnvironment = /\bGIT_CONFIG\w*|\b(?:HOME|XDG_CONFIG_HOME)\s*=/.test(command);
   /**
    * `outside-write` for a push (REQ-FLOW-134, decision D16, review/130): each repository word the push names (its
    * `--repo` value and its first positional word) is a URL read by `repoKey`, or a remote's name, read through the
    * context's `remoteRepo` (its push URL in git's merged configuration). With none, the remote the context's
    * `pushRemote` names is read. `origin` in the session's own checkout runs, and so does any word naming the origin's own
-   * repository. Outside: a word the shell fills in, a remote the configuration does not place, a push remote the guard
-   * cannot tell, and a line that sets a remote or a URL through a `-c` pair or its environment.
+   * repository, unless origin's own push URL (`ctx.originPush`) names another. Outside: a word the shell fills in, a
+   * remote the configuration does not place, a push remote the guard cannot tell, and a line that sets a remote or a URL
+   * through a `-c` pair or its environment.
    */
   const pushOutside = (words: readonly (readonly [string | null, WordMark | undefined])[], config: readonly string[]): void => {
     const origin = ctx.originRepo;
@@ -1805,11 +1821,48 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     const named = words.length > 0 ? words : [[ctx.pushRemote === undefined ? "origin" : ctx.pushRemote, undefined] as const];
     for (const [word, mark] of named) {
       if (word === null || (mark?.kinds ?? "") !== "" || /[$`]/.test(word)) return outside();
-      if (word === "origin" && ctx.ownCheckout !== false) continue;
+      if (word === "origin" && ctx.ownCheckout !== false) {
+        const moved = ctx.originPush;
+        if (moved === undefined || moved === null || moved === origin) continue;
+        return outside();
+      }
       const key = /[:/\\]/.test(word) || word === "." ? repoKey(word, "github.com") : (ctx.remoteRepo?.(word) ?? "");
       if (key === "" || key !== origin) return outside();
     }
   };
+  /**
+   * `remote-write` (REQ-FLOW-134, review/129): a `git remote` write (`add`, `rename`, `set-url`, `remove`, `rm`,
+   * `set-head`, `set-branches`) or a `git config` write naming a `remote.*` or `url.*` key or section, which moves the
+   * origin later writes are held to. A config call reads only where it carries a read option or subcommand (`--get`,
+   * `--list`, `get`, `list`, …) or names a key and no value; `--edit` writes whatever it opens. The guard runs the act on
+   * the main thread and refuses it for a sub-agent; unattended the push rule refuses it.
+   */
+  function remoteWriteVerdict(sub: string, args: string[]): void {
+    if (ctx.originRepo === undefined) return;
+    if (sub === "remote") {
+      const action = args.find((arg) => !arg.startsWith("-")) ?? "";
+      if (["add", "rename", "set-url", "remove", "rm", "set-head", "set-branches"].includes(action)) {
+        deny("remote-write", `Writing a git remote (\`git remote ${action}\`)`);
+      }
+      return;
+    }
+    if (sub !== "config") return;
+    if (args.some((arg) => arg === "-e" || arg === "--edit")) {
+      deny("remote-write", "Editing the git configuration (`git config --edit`), which may write a remote or a URL rewrite");
+      return;
+    }
+    const keyed = args.findIndex((arg) => /^(?:remote|url)\./i.test(arg));
+    if (keyed === -1) return;
+    const reads = args.some((arg) => /^--(?:get(?:-all|-regexp|-urlmatch|-color(?:bool)?)?|list|show-origin|show-scope|name-only|null)$/.test(arg) || arg === "-l" || arg === "-z");
+    const subcommand = args.find((arg) => !arg.startsWith("-")) ?? "";
+    const writes = args.some((arg) => /^--(?:unset(?:-all)?|add|replace-all|rename-section|remove-section)$/.test(arg)) ||
+      ["set", "unset", "rename-section", "remove-section"].includes(subcommand);
+    const value = args.slice(keyed + 1).some((arg) => !arg.startsWith("-"));
+    if (writes || (!reads && !["get", "list"].includes(subcommand) && value)) {
+      deny("remote-write", "Writing a remote or URL rewrite in the git configuration (`git config`)");
+    }
+  }
+
   /** A refspec's destination as a branch name: `+` dropped, `<src>:` cut, `refs/heads/` or `heads/` cut. */
   function destination(refspec: string): string {
     const spec = refspec.replace(/^\+/, "");
@@ -2547,8 +2600,10 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
             }
           }
         }
-        // A body curl or wget reads from stdin in any spelling (`-d @-`, `@/dev/stdin`, `-T -`, a joined value).
-        whole ||= cmd.some((word) => /(?:^|[=@])(?:-|\/dev\/stdin|\/dev\/fd\/0|\/proc\/self\/fd\/0)$/.test(word));
+        // A body curl or wget reads from stdin in any spelling (`-d @-`, `@/dev/stdin`, `-T -`, a joined value), or one
+        // holding a word the shell fills in, whose JSON strings the line does not show (review/126).
+        whole ||= cmd.some((word) => /(?:^|[=@])(?:-|\/dev\/stdin|\/dev\/fd\/0|\/proc\/self\/fd\/0)$/.test(word)) ||
+          line.some((_, at) => at > 0 && shellFilled(at));
       }
       if (whole ? (lineMentions ??= mentions(command)) : prose.some(mentions)) {
         deny("outside-write", `A body or title naming a person (an \`@\` mention), which reaches them (\`${what}\`)`);
@@ -2811,48 +2866,59 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     const marks = markMap.get(cmd) ?? [];
     const shown = (at: number): boolean => (marks[at]?.kinds ?? "") === "" && !/[$`]/.test(cmd[at] ?? "");
     const closing = (group === "pr" || group === "issue") && (sub === "close" || sub === "reopen");
-    const PROSE = new Set(["-b", "--body", "-t", "--title", "-n", "--notes", "--subject", ...(closing ? ["-c", "--comment"] : [])]);
-    const ATTACHED = closing
-      ? /^(?:--(?:body|title|notes|subject|comment)=|-[btnc](?=.))([\s\S]*)$/
-      : /^(?:--(?:body|title|notes|subject)=|-[btn](?=.))([\s\S]*)$/;
     const creating = group === "pr" && sub === "create" ? "ra" : group === "issue" && sub === "create" ? "a" : "";
-    const PEOPLE = new Set(["--reviewer", "--add-reviewer", "--assignee", "--add-assignee", ...[...creating].map((letter) => `-${letter}`)]);
+    // What each option the reader reads takes (review/135): `R` a repository, `b` prose (a body, title, notes, subject
+    // or, on close and reopen, a comment), `F` a body file, `r` a reviewer or an assignee. A short word is a cluster:
+    // letters the reader does not read are booleans, and the first letter it reads takes the rest of the cluster, or
+    // the next word, as gh's option parser reads it.
+    const SHORT = new Map<string, string>([["R", "R"], ["b", "b"], ["t", "b"], ["n", "b"], ["F", "F"],
+      ...(closing ? [["c", "b"] as [string, string]] : []), ...[...creating].map((letter): [string, string] => [letter, "r"])]);
+    const LONG = new Map<string, string>([["--repo", "R"], ["--branch-repo", "R"], ["--body", "b"], ["--title", "b"], ["--notes", "b"],
+      ["--subject", "b"], ...(closing ? [["--comment", "b"] as [string, string]] : []), ["--body-file", "F"], ["--notes-file", "F"],
+      ["--reviewer", "r"], ["--add-reviewer", "r"], ["--assignee", "r"], ["--add-assignee", "r"]]);
     const targets: string[] = [];
     const positionals: number[] = [];
     let whole = false;
     const prose: string[] = [];
     const persons: (string | null)[] = [];
+    /** One option's value, held by the word at `at`, read as its kind. */
+    const take = (kind: string, value: string, at: number): void => {
+      const seen = shown(at);
+      if (kind === "R") targets.push(seen ? repoKey(value, host) : "");
+      else if (kind === "F") whole ||= STDIN.has(value) || !seen;
+      else if (kind === "r") persons.push(seen ? value : null);
+      else if (seen) prose.push(value);
+      else whole = true;
+    };
     for (let k = 1; k < cmd.length; k += 1) {
       const word = cmd[k] ?? "";
-      if (!word.startsWith("-")) positionals.push(k);
-      const attached = ATTACHED.exec(word);
-      const person = /^--(?:add-)?(?:reviewer|assignee)=([\s\S]*)$/.exec(word);
-      const file = /^(?:-F=?|--(?:body|notes)-file=)([\s\S]+)$/.exec(word);
-      if (word === "-R" || word === "--repo" || word === "--branch-repo") {
-        targets.push(shown(k + 1) ? repoKey(cmd[k + 1] ?? "", host) : "");
+      if (!word.startsWith("-")) {
+        positionals.push(k);
+        if (/^https?:\/\//i.test(word)) targets.push(shown(k) ? repoKey(word, host) : "");
+        continue;
+      }
+      if (/^-[^-]/.test(word)) {
+        for (let c = 1; c < word.length; c += 1) {
+          const kind = SHORT.get(word[c] ?? "");
+          if (kind === undefined) continue;
+          const rest = word.slice(c + 1).replace(/^=/, "");
+          if (rest !== "") take(kind, rest, k);
+          else {
+            take(kind, cmd[k + 1] ?? "", k + 1);
+            k += 1;
+          }
+          break;
+        }
+        continue;
+      }
+      const eq = word.indexOf("=");
+      const kind = LONG.get(eq === -1 ? word : word.slice(0, eq));
+      if (kind === undefined) continue;
+      if (eq !== -1) take(kind, word.slice(eq + 1), k);
+      else {
+        take(kind, cmd[k + 1] ?? "", k + 1);
         k += 1;
-      } else if (/^(?:--repo=|--branch-repo=|-R)./.test(word)) {
-        targets.push(shown(k) ? repoKey(word.replace(/^(?:--repo=|--branch-repo=|-R=?)/, ""), host) : "");
-      } else if (/^https?:\/\//i.test(word)) {
-        targets.push(shown(k) ? repoKey(word, host) : "");
-      } else if (PROSE.has(word)) {
-        if (shown(k + 1)) prose.push(cmd[k + 1] ?? "");
-        else whole = true;
-        k += 1;
-      } else if (attached !== null) {
-        if (shown(k)) prose.push(attached[1] ?? "");
-        else whole = true;
-      } else if (PEOPLE.has(word)) {
-        persons.push(shown(k + 1) ? (cmd[k + 1] ?? "") : null);
-        k += 1;
-      } else if (person !== null) {
-        persons.push(shown(k) ? (person[1] ?? "") : null);
-      } else if (creating !== "" && word.length > 2 && word[0] === "-" && creating.includes(word[1] ?? "")) {
-        persons.push(shown(k) ? word.slice(2).replace(/^=/, "") : null);
-      } else if (["-F", "--body-file", "--notes-file"].includes(word)) {
-        if (STDIN.has(cmd[k + 1] ?? "") || !shown(k + 1)) whole = true;
-        k += 1;
-      } else if (file !== null && (STDIN.has(file[1] ?? "") || !shown(k))) whole = true;
+      }
     }
     // `gh issue transfer <issue> <owner>/<repo>`: the destination is the transfer's second positional word (review/122).
     const moved = group === "issue" && sub === "transfer" ? positionals[3] : undefined;
@@ -2957,6 +3023,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     const program = cmd[0] ?? "";
     if (program === "git") {
       const { sub, args, config } = gitParts(cmd);
+      remoteWriteVerdict(sub, args);
       // `git send-pack` pushes as `git push` does, its options and refspecs laid out the same (pr/16); with
       // no ref it updates the refs both sides have, the default branch among them, read as a matching push.
       const argMarks = (markMap.get(cmd) ?? []).slice(cmd.length - args.length);

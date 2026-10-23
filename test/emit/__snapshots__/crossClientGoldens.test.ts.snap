@@ -486,6 +486,9 @@ const TAG_NAMES_MAX = 10000;
 const PACKED_REFS_MAX_BYTES = 8388608;
 const CONFIG_MAX_BYTES = 1048576;
 const REWRITES_MAX = 256;
+const INCLUDE_DEPTH_MAX = 10;
+const INCLUDE_FILES_MAX = 64;
+const INCLUDE_BYTES_MAX = 4194304;
 const PLACES_MAX = 32;
 const CANARY_SEGMENTS = [".stamity","preflight-canary.json"];
 const SHELL_TOOLS = new Set(["Bash", "PowerShell", "Shell", "bash", "powershell", "shell"]);
@@ -494,14 +497,16 @@ const MCP_ROWS = new Map([["mcp__github__merge_pull_request",true],["mcp__github
 // The autonomy setting baked at emission, the marker line's own value (REQ-FLOW-137): the ask-class rules it runs
 // unasked (a workflow dispatch among them unless named as deploying), and whether it is stricter than the default.
 const AUTONOMY = {"mode":"autonomous","runs":["pr-ready","tag"],"deployingBranches":[],"deploying":[]};
-const RUNS = [...AUTONOMY.runs, ...(AUTONOMY.deploying.includes("workflow-dispatch") ? [] : ["workflow-dispatch"])];
+// A remote or URL rewrite written runs on the main thread in every mode and is refused for a sub-agent (REQ-FLOW-134,
+// review/129): it moves the origin the outside-party rule holds writes to.
+const RUNS = [...AUTONOMY.runs, ...(AUTONOMY.deploying.includes("workflow-dispatch") ? [] : ["workflow-dispatch"]), "remote-write"];
 const STRICTER = AUTONOMY.mode === "ask" || AUTONOMY.deploying.length > 0 || AUTONOMY.deployingBranches.length > 0;
 // This package as emission found it (review/44, review/53): the program words that run it (its bins and unscoped name,
 // read from the engine's own package.json, so a renamed fork's bin is read as this package's), its name, whose
 // node_modules path names its CLI file, and whether this repository is the engine's own.
 const PACKAGE = {"words":["stamity","st"],"name":"@zomarit/stamity","own":false};
 // What an act the setting runs unasked is called where a sub-agent's call to it is refused (REQ-FLOW-137).
-const RUN_ACTS = {"pr-ready":"Marking a pull request ready for review","tag":"Creating a tag","workflow-dispatch":"Dispatching a workflow"};
+const RUN_ACTS = {"pr-ready":"Marking a pull request ready for review","tag":"Creating a tag","workflow-dispatch":"Dispatching a workflow","remote-write":"Writing a git remote or a URL rewrite"};
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ANCHOR_SEGMENTS = ["hooks",".claude"];
@@ -2088,7 +2093,8 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		"workflow-dispatch",
 		"autonomy-loosen",
 		"land-approved",
-		"outside-write"
+		"outside-write",
+		"remote-write"
 	]);
 	// Every act the line holds (v0a): each segment, each call \`--next\` joins, each path, flag, body field and GraphQL
 	// entry; a refuse-class one decides the verdict, so a deletion never rides an approval.
@@ -2192,7 +2198,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 	};
 	// Read once per verdict, so a line holding many gh calls is still read in one pass (the guard's hook timeout).
 	let lineMentions = null;
-	const environment = /\\bGH_(?:REPO|HOST)\\b|\\bGIT_CONFIG\\w*/.test(command);
+	const environment = /\\bGH_(?:REPO|HOST)\\b|\\bGIT_CONFIG\\w*|\\b(?:HOME|XDG_CONFIG_HOME)\\s*=/.test(command);
 	/** Whether a gh write naming no repository lands outside the origin: gh's default unknown or another repository. */
 	const defaultAway = () => {
 		const fallback = ctx.ghDefaultRepo;
@@ -2205,15 +2211,19 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		"/dev/fd/0",
 		"/proc/self/fd/0"
 	]);
-	/** Whether the line sets git configuration through its environment, which can move a remote or a URL (review/128). */
-	const gitEnvironment = /\\bGIT_CONFIG\\w*/.test(command);
+	/**
+	* Whether the line sets git configuration through its environment, or relocates the home or XDG folder where git
+	* finds its global file, either of which can move a remote or a URL (review/128).
+	*/
+	const gitEnvironment = /\\bGIT_CONFIG\\w*|\\b(?:HOME|XDG_CONFIG_HOME)\\s*=/.test(command);
 	/**
 	* \`outside-write\` for a push (REQ-FLOW-134, decision D16, review/130): each repository word the push names (its
 	* \`--repo\` value and its first positional word) is a URL read by \`repoKey\`, or a remote's name, read through the
 	* context's \`remoteRepo\` (its push URL in git's merged configuration). With none, the remote the context's
 	* \`pushRemote\` names is read. \`origin\` in the session's own checkout runs, and so does any word naming the origin's own
-	* repository. Outside: a word the shell fills in, a remote the configuration does not place, a push remote the guard
-	* cannot tell, and a line that sets a remote or a URL through a \`-c\` pair or its environment.
+	* repository, unless origin's own push URL (\`ctx.originPush\`) names another. Outside: a word the shell fills in, a
+	* remote the configuration does not place, a push remote the guard cannot tell, and a line that sets a remote or a URL
+	* through a \`-c\` pair or its environment.
 	*/
 	const pushOutside = (words, config) => {
 		const origin = ctx.originRepo;
@@ -2225,11 +2235,59 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		const named = words.length > 0 ? words : [[ctx.pushRemote === undefined ? "origin" : ctx.pushRemote, undefined]];
 		for (const [word, mark] of named) {
 			if (word === null || (mark?.kinds ?? "") !== "" || /[$\`]/.test(word)) return outside();
-			if (word === "origin" && ctx.ownCheckout !== false) continue;
+			if (word === "origin" && ctx.ownCheckout !== false) {
+				const moved = ctx.originPush;
+				if (moved === undefined || moved === null || moved === origin) continue;
+				return outside();
+			};
 			const key = /[:/\\\\]/.test(word) || word === "." ? repoKey(word, "github.com") : ctx.remoteRepo?.(word) ?? "";
 			if (key === "" || key !== origin) return outside();
 		}
 	};
+	/**
+	* \`remote-write\` (REQ-FLOW-134, review/129): a \`git remote\` write (\`add\`, \`rename\`, \`set-url\`, \`remove\`, \`rm\`,
+	* \`set-head\`, \`set-branches\`) or a \`git config\` write naming a \`remote.*\` or \`url.*\` key or section, which moves the
+	* origin later writes are held to. A config call reads only where it carries a read option or subcommand (\`--get\`,
+	* \`--list\`, \`get\`, \`list\`, …) or names a key and no value; \`--edit\` writes whatever it opens. The guard runs the act on
+	* the main thread and refuses it for a sub-agent; unattended the push rule refuses it.
+	*/
+	function remoteWriteVerdict(sub, args) {
+		if (ctx.originRepo === undefined) return;
+		if (sub === "remote") {
+			const action = args.find((arg) => !arg.startsWith("-")) ?? "";
+			if ([
+				"add",
+				"rename",
+				"set-url",
+				"remove",
+				"rm",
+				"set-head",
+				"set-branches"
+			].includes(action)) {
+				deny("remote-write", \`Writing a git remote (\\\`git remote \${action}\\\`)\`);
+			};
+			return;
+		};
+		if (sub !== "config") return;
+		if (args.some((arg) => arg === "-e" || arg === "--edit")) {
+			deny("remote-write", "Editing the git configuration (\`git config --edit\`), which may write a remote or a URL rewrite");
+			return;
+		};
+		const keyed = args.findIndex((arg) => /^(?:remote|url)\\./i.test(arg));
+		if (keyed === -1) return;
+		const reads = args.some((arg) => /^--(?:get(?:-all|-regexp|-urlmatch|-color(?:bool)?)?|list|show-origin|show-scope|name-only|null)$/.test(arg) || arg === "-l" || arg === "-z");
+		const subcommand = args.find((arg) => !arg.startsWith("-")) ?? "";
+		const writes = args.some((arg) => /^--(?:unset(?:-all)?|add|replace-all|rename-section|remove-section)$/.test(arg)) || [
+			"set",
+			"unset",
+			"rename-section",
+			"remove-section"
+		].includes(subcommand);
+		const value = args.slice(keyed + 1).some((arg) => !arg.startsWith("-"));
+		if (writes || !reads && !["get", "list"].includes(subcommand) && value) {
+			deny("remote-write", "Writing a remote or URL rewrite in the git configuration (\`git config\`)");
+		}
+	}
 	/** A refspec's destination as a branch name: \`+\` dropped, \`<src>:\` cut, \`refs/heads/\` or \`heads/\` cut. */
 	function destination(refspec) {
 		const spec = refspec.replace(/^\\+/, "");
@@ -3036,8 +3094,9 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 						}
 					}
 				};
-				// A body curl or wget reads from stdin in any spelling (\`-d @-\`, \`@/dev/stdin\`, \`-T -\`, a joined value).
-				whole ||= cmd.some((word) => /(?:^|[=@])(?:-|\\/dev\\/stdin|\\/dev\\/fd\\/0|\\/proc\\/self\\/fd\\/0)$/.test(word));
+				// A body curl or wget reads from stdin in any spelling (\`-d @-\`, \`@/dev/stdin\`, \`-T -\`, a joined value), or one
+				// holding a word the shell fills in, whose JSON strings the line does not show (review/126).
+				whole ||= cmd.some((word) => /(?:^|[=@])(?:-|\\/dev\\/stdin|\\/dev\\/fd\\/0|\\/proc\\/self\\/fd\\/0)$/.test(word)) || line.some((_, at) => at > 0 && shellFilled(at));
 			};
 			if (whole ? lineMentions ??= mentions(command) : prose.some(mentions)) {
 				deny("outside-write", \`A body or title naming a person (an \\\`@\\\` mention), which reaches them (\\\`\${what}\\\`)\`);
@@ -3364,65 +3423,78 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		const marks = markMap.get(cmd) ?? [];
 		const shown = (at) => (marks[at]?.kinds ?? "") === "" && !/[$\`]/.test(cmd[at] ?? "");
 		const closing = (group === "pr" || group === "issue") && (sub === "close" || sub === "reopen");
-		const PROSE = new Set([
-			"-b",
-			"--body",
-			"-t",
-			"--title",
-			"-n",
-			"--notes",
-			"--subject",
-			...closing ? ["-c", "--comment"] : []
-		]);
-		const ATTACHED = closing ? /^(?:--(?:body|title|notes|subject|comment)=|-[btnc](?=.))([\\s\\S]*)$/ : /^(?:--(?:body|title|notes|subject)=|-[btn](?=.))([\\s\\S]*)$/;
 		const creating = group === "pr" && sub === "create" ? "ra" : group === "issue" && sub === "create" ? "a" : "";
-		const PEOPLE = new Set([
-			"--reviewer",
-			"--add-reviewer",
-			"--assignee",
-			"--add-assignee",
-			...[...creating].map((letter) => \`-\${letter}\`)
+		// What each option the reader reads takes (review/135): \`R\` a repository, \`b\` prose (a body, title, notes, subject
+		// or, on close and reopen, a comment), \`F\` a body file, \`r\` a reviewer or an assignee. A short word is a cluster:
+		// letters the reader does not read are booleans, and the first letter it reads takes the rest of the cluster, or
+		// the next word, as gh's option parser reads it.
+		const SHORT = new Map([
+			["R", "R"],
+			["b", "b"],
+			["t", "b"],
+			["n", "b"],
+			["F", "F"],
+			...closing ? [["c", "b"]] : [],
+			...[...creating].map((letter) => [letter, "r"])
+		]);
+		const LONG = new Map([
+			["--repo", "R"],
+			["--branch-repo", "R"],
+			["--body", "b"],
+			["--title", "b"],
+			["--notes", "b"],
+			["--subject", "b"],
+			...closing ? [["--comment", "b"]] : [],
+			["--body-file", "F"],
+			["--notes-file", "F"],
+			["--reviewer", "r"],
+			["--add-reviewer", "r"],
+			["--assignee", "r"],
+			["--add-assignee", "r"]
 		]);
 		const targets = [];
 		const positionals = [];
 		let whole = false;
 		const prose = [];
 		const persons = [];
+		/** One option's value, held by the word at \`at\`, read as its kind. */
+		const take = (kind, value, at) => {
+			const seen = shown(at);
+			if (kind === "R") targets.push(seen ? repoKey(value, host) : "");
+			else if (kind === "F") whole ||= STDIN.has(value) || !seen;
+			else if (kind === "r") persons.push(seen ? value : null);
+			else if (seen) prose.push(value);
+			else whole = true;
+		};
 		for (let k = 1; k < cmd.length; k += 1) {
 			const word = cmd[k] ?? "";
-			if (!word.startsWith("-")) positionals.push(k);
-			const attached = ATTACHED.exec(word);
-			const person = /^--(?:add-)?(?:reviewer|assignee)=([\\s\\S]*)$/.exec(word);
-			const file = /^(?:-F=?|--(?:body|notes)-file=)([\\s\\S]+)$/.exec(word);
-			if (word === "-R" || word === "--repo" || word === "--branch-repo") {
-				targets.push(shown(k + 1) ? repoKey(cmd[k + 1] ?? "", host) : "");
+			if (!word.startsWith("-")) {
+				positionals.push(k);
+				if (/^https?:\\/\\//i.test(word)) targets.push(shown(k) ? repoKey(word, host) : "");
+				continue;
+			};
+			if (/^-[^-]/.test(word)) {
+				for (let c = 1; c < word.length; c += 1) {
+					const kind = SHORT.get(word[c] ?? "");
+					if (kind === undefined) continue;
+					const rest = word.slice(c + 1).replace(/^=/, "");
+					if (rest !== "") take(kind, rest, k);
+					else {
+						take(kind, cmd[k + 1] ?? "", k + 1);
+						k += 1;
+					};
+					break;
+				};
+				continue;
+			};
+			const eq = word.indexOf("=");
+			const kind = LONG.get(eq === -1 ? word : word.slice(0, eq));
+			if (kind === undefined) continue;
+			if (eq !== -1) take(kind, word.slice(eq + 1), k);
+			else {
+				take(kind, cmd[k + 1] ?? "", k + 1);
 				k += 1;
-			} else if (/^(?:--repo=|--branch-repo=|-R)./.test(word)) {
-				targets.push(shown(k) ? repoKey(word.replace(/^(?:--repo=|--branch-repo=|-R=?)/, ""), host) : "");
-			} else if (/^https?:\\/\\//i.test(word)) {
-				targets.push(shown(k) ? repoKey(word, host) : "");
-			} else if (PROSE.has(word)) {
-				if (shown(k + 1)) prose.push(cmd[k + 1] ?? "");
-				else whole = true;
-				k += 1;
-			} else if (attached !== null) {
-				if (shown(k)) prose.push(attached[1] ?? "");
-				else whole = true;
-			} else if (PEOPLE.has(word)) {
-				persons.push(shown(k + 1) ? cmd[k + 1] ?? "" : null);
-				k += 1;
-			} else if (person !== null) {
-				persons.push(shown(k) ? person[1] ?? "" : null);
-			} else if (creating !== "" && word.length > 2 && word[0] === "-" && creating.includes(word[1] ?? "")) {
-				persons.push(shown(k) ? word.slice(2).replace(/^=/, "") : null);
-			} else if ([
-				"-F",
-				"--body-file",
-				"--notes-file"
-			].includes(word)) {
-				if (STDIN.has(cmd[k + 1] ?? "") || !shown(k + 1)) whole = true;
-				k += 1;
-			} else if (file !== null && (STDIN.has(file[1] ?? "") || !shown(k))) whole = true;
+			}
 		};
 		// \`gh issue transfer <issue> <owner>/<repo>\`: the destination is the transfer's second positional word (review/122).
 		const moved = group === "issue" && sub === "transfer" ? positionals[3] : undefined;
@@ -3524,6 +3596,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		const program = cmd[0] ?? "";
 		if (program === "git") {
 			const { sub, args, config } = gitParts(cmd);
+			remoteWriteVerdict(sub, args);
 			// \`git send-pack\` pushes as \`git push\` does, its options and refspecs laid out the same (pr/16); with
 			// no ref it updates the refs both sides have, the default branch among them, read as a matching push.
 			const argMarks = (markMap.get(cmd) ?? []).slice(cmd.length - args.length);
@@ -5939,9 +6012,13 @@ function configFiles(dirs) {
 /**
  * What git's merged configuration says about remotes (REQ-FLOW-134, review/128): per remote its first url and pushurl
  * and its gh-resolved marker, per branch its remote and pushRemote, remote.pushDefault, and every url.<base>.insteadOf
- * and pushInsteadOf rule. partial where the reading may miss or misplace a remote: a file past CONFIG_MAX_BYTES or
- * behind a link (/dev/null aside), an include or includeIf, or configuration the hook's environment sets
- * (GIT_CONFIG_COUNT, GIT_CONFIG_PARAMETERS), or more than REWRITES_MAX URL rewrite rules.
+ * and pushInsteadOf rule. Includes are followed (review/134): include.path and every includeIf target, whatever its
+ * condition (a superset of what git reads), relative to the including file, ~/ from the home folder, at most
+ * INCLUDE_DEPTH_MAX deep, INCLUDE_FILES_MAX files and INCLUDE_BYTES_MAX bytes in all; a missing target reads as empty,
+ * as git reads it. partial where the reading may miss or misplace a remote: a file past CONFIG_MAX_BYTES or behind a
+ * link (/dev/null aside), a file it cannot read, a bound passed, an included file setting a remote, URL-rewrite or
+ * branch-remote key (its condition is not read), configuration the hook's environment sets (GIT_CONFIG_COUNT,
+ * GIT_CONFIG_PARAMETERS), or more than REWRITES_MAX URL rewrite rules.
  */
 function configOf(dirs) {
   const remotes = new Map();
@@ -5949,12 +6026,21 @@ function configOf(dirs) {
   const rewrites = [];
   let pushDefault = null;
   let partial = (process.env.GIT_CONFIG_COUNT ?? "") !== "" || (process.env.GIT_CONFIG_PARAMETERS ?? "") !== "";
-  for (const path of configFiles(dirs)) {
+  const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
+  let files = 0;
+  let bytes = 0;
+  const readFile = (path, depth, included) => {
+    files += 1;
+    if (depth > INCLUDE_DEPTH_MAX || files > INCLUDE_FILES_MAX) {
+      partial = true;
+      return;
+    }
     let text = "";
     if (path !== "/dev/null") {
       try {
         const stats = lstatSync(path);
-        if (!stats.isFile() || stats.size > CONFIG_MAX_BYTES) partial = true;
+        bytes += stats.size;
+        if (!stats.isFile() || stats.size > CONFIG_MAX_BYTES || bytes > INCLUDE_BYTES_MAX) partial = true;
         else text = readFileSync(path, "utf8");
       } catch (error) {
         if (!error || (error.code !== "ENOENT" && error.code !== "ENOTDIR")) partial = true;
@@ -5969,13 +6055,19 @@ function configOf(dirs) {
         const dot = head[1].indexOf(".");
         kind = (dot === -1 ? head[1] : head[1].slice(0, dot)).toLowerCase();
         sub = head[2] !== undefined ? head[2].replace(/\\\\(.)/g, "$1") : dot === -1 ? null : head[1].slice(dot + 1).toLowerCase();
-        if (kind === "include" || kind === "includeif") partial = true;
         continue;
       }
       const pair = /^\\s*([A-Za-z][\\w-]*)\\s*=(.*)$/.exec(line);
       if (pair === null) continue;
       const key = pair[1].toLowerCase();
       const value = pair[2].replace(/\\s[#;].*$/, "").trim().replace(/^"([\\s\\S]*)"$/, "$1");
+      if ((kind === "include" || kind === "includeif") && key === "path") {
+        // A ~user/ path names another account's home, which this reading does not place.
+        if (/^~[^/]/.test(value)) partial = true;
+        else readFile(value.startsWith("~/") ? join(home, value.slice(2)) : resolve(dirname(path), value), depth + 1, true);
+        continue;
+      }
+      if (included && (kind === "remote" || kind === "url" || (kind === "branch" && (key === "remote" || key === "pushremote")))) partial = true;
       if (kind === "remote" && sub === null) {
         if (key === "pushdefault") pushDefault = value;
       } else if (kind === "remote") {
@@ -5992,7 +6084,8 @@ function configOf(dirs) {
         rewrites.push({ base: sub, prefix: value, push: key === "pushinsteadof" });
       }
     }
-  }
+  };
+  for (const path of configFiles(dirs)) readFile(path, 0, false);
   // Each URL looked up scans every rewrite rule, so past REWRITES_MAX of them the reading is partial: the lookups stay
   // bounded by the remotes read times that ceiling (the hook's timeout).
   if (rewrites.length > REWRITES_MAX) partial = true;
@@ -6134,6 +6227,13 @@ function contextsOf(command, cwd, powershell, root) {
       },
       // A place the guard cannot read counts as the session's own, so a push to origin from it runs, as before; only a
       // readable other checkout has its origin compared (review/130).
+      // Where a push to origin goes, where its push URL is not its fetch URL (a pushurl or a pushInsteadOf, review/129).
+      get originPush() {
+        const own = rootOf();
+        const origin = own === null ? undefined : own.config.remotes.get("origin");
+        if (origin === undefined || (origin.pushurl === null && (origin.url === null || rewritten(own.config, origin.url, true) === null))) return null;
+        return remoteKey(pushUrl(own.config, origin));
+      },
       get ownCheckout() {
         const own = rootOf();
         return dirs === null || own === null || resolve(dirs.commonDir) === resolve(own.dirs.commonDir);
@@ -11119,7 +11219,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".claude/hooks/stamity/stamity-agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".claude/hooks/stamity/stamity-cloud-readiness.mjs": "acef8b976c3cf0dc29df1ab1584458bc83c66ab1e7284e28df62af60f1311c91 11348 bytes",
   ".claude/hooks/stamity/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "28bfb763bde7cc51a459da5127beae62870893cc125d5e7b900b964a39f2e10f 280363 bytes",
+  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "fc334d1dbba06aabc587e0703ac0f55f4bda70e918e0c1e218843a4c2de23267 285187 bytes",
   ".claude/hooks/stamity/stamity-pre-tool-use-guard.mjs": "752f24a46db0da9f933bcb313a00ef8f6b12b8a655241b9257e40f64d9776965 20816 bytes",
   ".claude/hooks/stamity/stamity-review-gate.mjs": "a410def5d44fde83869b3c2c98db318d470b68a54101e1b20eddfb026f8077b1 51137 bytes",
   ".claude/hooks/stamity/stamity-session-start.mjs": "c807b92eeff34b3e194a0f7ae843c2945d5663d56cdb937786454a6402df3f31 51786 bytes",
@@ -11241,12 +11341,12 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".mcp.json": "f4e65233eea1ba936b61b16f2ee2d90f84a2510436d58f6484d872f507314f2f 387 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "2815d76b13a1b3396d6f81e9c4b94c9c27aad9acada64e706aed13bcccf127c3 280359 bytes",
+  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "36053c63c0bcfc92b7e88fe295b32aae98c4418733cdf73c006124494f21955a 285183 bytes",
   ".stamity/generated/hooks/codex/stamity-portable-hook.mjs": "8480d3a6fe6ea5fe1cad1c683ecbb07f3999cbdb411ae7dff7a1ec09eb207068 20937 bytes",
   ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/codex/stamity-session-start.mjs": "1111332a1630ed4dcb42e421b2326c5dd423a358e3c92bf8cb367e212a7a996d 51799 bytes",
   ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "583d8098e8476a48040b8d0b00c3cdbf3e09199350f35c96fc4304a6a610ef36 283113 bytes",
+  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "35eab94d1e44a5debb795b66224bfb36c91754d83013e05c9f0152c673dff857 287937 bytes",
   ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "97b118796dbd153216cacceb34fd122b82f9cf75eae3b1d2de4c0938482af8a5 22349 bytes",
   ".stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "9f930fcd797ef464e7f4cb4c40e59b4976d65199a5c974fb67ca7624e5d0287c 56602 bytes",
@@ -11254,7 +11354,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/generated/hooks/cursor/stamity-context-once.mjs": "c74c1b3d2cd908b170c48a8813bd05cc91f058210789a9b2f815b731a2eb6ccd 31773 bytes",
   ".stamity/generated/hooks/cursor/stamity-cursor-continue.mjs": "08bc51855553f4104a80fbe1ea94ba36a95173e005846467e4af5c643bb26a60 9500 bytes",
   ".stamity/generated/hooks/cursor/stamity-model-pins.mjs": "fc71eb522ff67fd73ff00820d0e59495bca188d2e30fc9a26ce85e89fff6fdd5 3813 bytes",
-  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "a80cef84480fdff02fdbdd6507e3a603756839b4cb7a3c88d47b0b876ab0ee4a 280395 bytes",
+  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "9134daeb1e000de0acd284480a73bbab88ae51cbf5b2a65c612040412e7ad25e 285219 bytes",
   ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs": "513a8e4c2631670fffed73a96be46542fea82d8e1719a5d26da0a872699277c6 20938 bytes",
   ".stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "1111332a1630ed4dcb42e421b2326c5dd423a358e3c92bf8cb367e212a7a996d 51799 bytes",
@@ -11266,7 +11366,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "72a46f00965d9584f217e2b44898c99948cf23108b9f8d9ac3699e3c9c59d99f 94261 bytes",
+  ".stamity/manifest.json": "575f3a22e57b0e8620b8b06d14798464e024fc19fe4e7936c305399d1f408db2 94261 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "6b5b5bebfd779fe5b513cd8c2c41fa3b4dd70826435e9df9c70076ba48c29b98 6548 bytes",
@@ -11773,6 +11873,9 @@ const TAG_NAMES_MAX = 10000;
 const PACKED_REFS_MAX_BYTES = 8388608;
 const CONFIG_MAX_BYTES = 1048576;
 const REWRITES_MAX = 256;
+const INCLUDE_DEPTH_MAX = 10;
+const INCLUDE_FILES_MAX = 64;
+const INCLUDE_BYTES_MAX = 4194304;
 const PLACES_MAX = 32;
 const CANARY_SEGMENTS = [".stamity","preflight-canary.json"];
 const SHELL_TOOLS = new Set(["Bash", "PowerShell", "Shell", "bash", "powershell", "shell"]);
@@ -11781,14 +11884,16 @@ const MCP_ROWS = new Map([["mcp__github__merge_pull_request",true],["mcp__github
 // The autonomy setting baked at emission, the marker line's own value (REQ-FLOW-137): the ask-class rules it runs
 // unasked (a workflow dispatch among them unless named as deploying), and whether it is stricter than the default.
 const AUTONOMY = {"mode":"autonomous","runs":["pr-ready","tag"],"deployingBranches":[],"deploying":[]};
-const RUNS = [...AUTONOMY.runs, ...(AUTONOMY.deploying.includes("workflow-dispatch") ? [] : ["workflow-dispatch"])];
+// A remote or URL rewrite written runs on the main thread in every mode and is refused for a sub-agent (REQ-FLOW-134,
+// review/129): it moves the origin the outside-party rule holds writes to.
+const RUNS = [...AUTONOMY.runs, ...(AUTONOMY.deploying.includes("workflow-dispatch") ? [] : ["workflow-dispatch"]), "remote-write"];
 const STRICTER = AUTONOMY.mode === "ask" || AUTONOMY.deploying.length > 0 || AUTONOMY.deployingBranches.length > 0;
 // This package as emission found it (review/44, review/53): the program words that run it (its bins and unscoped name,
 // read from the engine's own package.json, so a renamed fork's bin is read as this package's), its name, whose
 // node_modules path names its CLI file, and whether this repository is the engine's own.
 const PACKAGE = {"words":["stamity","st"],"name":"@zomarit/stamity","own":false};
 // What an act the setting runs unasked is called where a sub-agent's call to it is refused (REQ-FLOW-137).
-const RUN_ACTS = {"pr-ready":"Marking a pull request ready for review","tag":"Creating a tag","workflow-dispatch":"Dispatching a workflow"};
+const RUN_ACTS = {"pr-ready":"Marking a pull request ready for review","tag":"Creating a tag","workflow-dispatch":"Dispatching a workflow","remote-write":"Writing a git remote or a URL rewrite"};
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ANCHOR_SEGMENTS = ["hooks",".claude"];
@@ -13375,7 +13480,8 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		"workflow-dispatch",
 		"autonomy-loosen",
 		"land-approved",
-		"outside-write"
+		"outside-write",
+		"remote-write"
 	]);
 	// Every act the line holds (v0a): each segment, each call \`--next\` joins, each path, flag, body field and GraphQL
 	// entry; a refuse-class one decides the verdict, so a deletion never rides an approval.
@@ -13479,7 +13585,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 	};
 	// Read once per verdict, so a line holding many gh calls is still read in one pass (the guard's hook timeout).
 	let lineMentions = null;
-	const environment = /\\bGH_(?:REPO|HOST)\\b|\\bGIT_CONFIG\\w*/.test(command);
+	const environment = /\\bGH_(?:REPO|HOST)\\b|\\bGIT_CONFIG\\w*|\\b(?:HOME|XDG_CONFIG_HOME)\\s*=/.test(command);
 	/** Whether a gh write naming no repository lands outside the origin: gh's default unknown or another repository. */
 	const defaultAway = () => {
 		const fallback = ctx.ghDefaultRepo;
@@ -13492,15 +13598,19 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		"/dev/fd/0",
 		"/proc/self/fd/0"
 	]);
-	/** Whether the line sets git configuration through its environment, which can move a remote or a URL (review/128). */
-	const gitEnvironment = /\\bGIT_CONFIG\\w*/.test(command);
+	/**
+	* Whether the line sets git configuration through its environment, or relocates the home or XDG folder where git
+	* finds its global file, either of which can move a remote or a URL (review/128).
+	*/
+	const gitEnvironment = /\\bGIT_CONFIG\\w*|\\b(?:HOME|XDG_CONFIG_HOME)\\s*=/.test(command);
 	/**
 	* \`outside-write\` for a push (REQ-FLOW-134, decision D16, review/130): each repository word the push names (its
 	* \`--repo\` value and its first positional word) is a URL read by \`repoKey\`, or a remote's name, read through the
 	* context's \`remoteRepo\` (its push URL in git's merged configuration). With none, the remote the context's
 	* \`pushRemote\` names is read. \`origin\` in the session's own checkout runs, and so does any word naming the origin's own
-	* repository. Outside: a word the shell fills in, a remote the configuration does not place, a push remote the guard
-	* cannot tell, and a line that sets a remote or a URL through a \`-c\` pair or its environment.
+	* repository, unless origin's own push URL (\`ctx.originPush\`) names another. Outside: a word the shell fills in, a
+	* remote the configuration does not place, a push remote the guard cannot tell, and a line that sets a remote or a URL
+	* through a \`-c\` pair or its environment.
 	*/
 	const pushOutside = (words, config) => {
 		const origin = ctx.originRepo;
@@ -13512,11 +13622,59 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		const named = words.length > 0 ? words : [[ctx.pushRemote === undefined ? "origin" : ctx.pushRemote, undefined]];
 		for (const [word, mark] of named) {
 			if (word === null || (mark?.kinds ?? "") !== "" || /[$\`]/.test(word)) return outside();
-			if (word === "origin" && ctx.ownCheckout !== false) continue;
+			if (word === "origin" && ctx.ownCheckout !== false) {
+				const moved = ctx.originPush;
+				if (moved === undefined || moved === null || moved === origin) continue;
+				return outside();
+			};
 			const key = /[:/\\\\]/.test(word) || word === "." ? repoKey(word, "github.com") : ctx.remoteRepo?.(word) ?? "";
 			if (key === "" || key !== origin) return outside();
 		}
 	};
+	/**
+	* \`remote-write\` (REQ-FLOW-134, review/129): a \`git remote\` write (\`add\`, \`rename\`, \`set-url\`, \`remove\`, \`rm\`,
+	* \`set-head\`, \`set-branches\`) or a \`git config\` write naming a \`remote.*\` or \`url.*\` key or section, which moves the
+	* origin later writes are held to. A config call reads only where it carries a read option or subcommand (\`--get\`,
+	* \`--list\`, \`get\`, \`list\`, …) or names a key and no value; \`--edit\` writes whatever it opens. The guard runs the act on
+	* the main thread and refuses it for a sub-agent; unattended the push rule refuses it.
+	*/
+	function remoteWriteVerdict(sub, args) {
+		if (ctx.originRepo === undefined) return;
+		if (sub === "remote") {
+			const action = args.find((arg) => !arg.startsWith("-")) ?? "";
+			if ([
+				"add",
+				"rename",
+				"set-url",
+				"remove",
+				"rm",
+				"set-head",
+				"set-branches"
+			].includes(action)) {
+				deny("remote-write", \`Writing a git remote (\\\`git remote \${action}\\\`)\`);
+			};
+			return;
+		};
+		if (sub !== "config") return;
+		if (args.some((arg) => arg === "-e" || arg === "--edit")) {
+			deny("remote-write", "Editing the git configuration (\`git config --edit\`), which may write a remote or a URL rewrite");
+			return;
+		};
+		const keyed = args.findIndex((arg) => /^(?:remote|url)\\./i.test(arg));
+		if (keyed === -1) return;
+		const reads = args.some((arg) => /^--(?:get(?:-all|-regexp|-urlmatch|-color(?:bool)?)?|list|show-origin|show-scope|name-only|null)$/.test(arg) || arg === "-l" || arg === "-z");
+		const subcommand = args.find((arg) => !arg.startsWith("-")) ?? "";
+		const writes = args.some((arg) => /^--(?:unset(?:-all)?|add|replace-all|rename-section|remove-section)$/.test(arg)) || [
+			"set",
+			"unset",
+			"rename-section",
+			"remove-section"
+		].includes(subcommand);
+		const value = args.slice(keyed + 1).some((arg) => !arg.startsWith("-"));
+		if (writes || !reads && !["get", "list"].includes(subcommand) && value) {
+			deny("remote-write", "Writing a remote or URL rewrite in the git configuration (\`git config\`)");
+		}
+	}
 	/** A refspec's destination as a branch name: \`+\` dropped, \`<src>:\` cut, \`refs/heads/\` or \`heads/\` cut. */
 	function destination(refspec) {
 		const spec = refspec.replace(/^\\+/, "");
@@ -14323,8 +14481,9 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 						}
 					}
 				};
-				// A body curl or wget reads from stdin in any spelling (\`-d @-\`, \`@/dev/stdin\`, \`-T -\`, a joined value).
-				whole ||= cmd.some((word) => /(?:^|[=@])(?:-|\\/dev\\/stdin|\\/dev\\/fd\\/0|\\/proc\\/self\\/fd\\/0)$/.test(word));
+				// A body curl or wget reads from stdin in any spelling (\`-d @-\`, \`@/dev/stdin\`, \`-T -\`, a joined value), or one
+				// holding a word the shell fills in, whose JSON strings the line does not show (review/126).
+				whole ||= cmd.some((word) => /(?:^|[=@])(?:-|\\/dev\\/stdin|\\/dev\\/fd\\/0|\\/proc\\/self\\/fd\\/0)$/.test(word)) || line.some((_, at) => at > 0 && shellFilled(at));
 			};
 			if (whole ? lineMentions ??= mentions(command) : prose.some(mentions)) {
 				deny("outside-write", \`A body or title naming a person (an \\\`@\\\` mention), which reaches them (\\\`\${what}\\\`)\`);
@@ -14651,65 +14810,78 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		const marks = markMap.get(cmd) ?? [];
 		const shown = (at) => (marks[at]?.kinds ?? "") === "" && !/[$\`]/.test(cmd[at] ?? "");
 		const closing = (group === "pr" || group === "issue") && (sub === "close" || sub === "reopen");
-		const PROSE = new Set([
-			"-b",
-			"--body",
-			"-t",
-			"--title",
-			"-n",
-			"--notes",
-			"--subject",
-			...closing ? ["-c", "--comment"] : []
-		]);
-		const ATTACHED = closing ? /^(?:--(?:body|title|notes|subject|comment)=|-[btnc](?=.))([\\s\\S]*)$/ : /^(?:--(?:body|title|notes|subject)=|-[btn](?=.))([\\s\\S]*)$/;
 		const creating = group === "pr" && sub === "create" ? "ra" : group === "issue" && sub === "create" ? "a" : "";
-		const PEOPLE = new Set([
-			"--reviewer",
-			"--add-reviewer",
-			"--assignee",
-			"--add-assignee",
-			...[...creating].map((letter) => \`-\${letter}\`)
+		// What each option the reader reads takes (review/135): \`R\` a repository, \`b\` prose (a body, title, notes, subject
+		// or, on close and reopen, a comment), \`F\` a body file, \`r\` a reviewer or an assignee. A short word is a cluster:
+		// letters the reader does not read are booleans, and the first letter it reads takes the rest of the cluster, or
+		// the next word, as gh's option parser reads it.
+		const SHORT = new Map([
+			["R", "R"],
+			["b", "b"],
+			["t", "b"],
+			["n", "b"],
+			["F", "F"],
+			...closing ? [["c", "b"]] : [],
+			...[...creating].map((letter) => [letter, "r"])
+		]);
+		const LONG = new Map([
+			["--repo", "R"],
+			["--branch-repo", "R"],
+			["--body", "b"],
+			["--title", "b"],
+			["--notes", "b"],
+			["--subject", "b"],
+			...closing ? [["--comment", "b"]] : [],
+			["--body-file", "F"],
+			["--notes-file", "F"],
+			["--reviewer", "r"],
+			["--add-reviewer", "r"],
+			["--assignee", "r"],
+			["--add-assignee", "r"]
 		]);
 		const targets = [];
 		const positionals = [];
 		let whole = false;
 		const prose = [];
 		const persons = [];
+		/** One option's value, held by the word at \`at\`, read as its kind. */
+		const take = (kind, value, at) => {
+			const seen = shown(at);
+			if (kind === "R") targets.push(seen ? repoKey(value, host) : "");
+			else if (kind === "F") whole ||= STDIN.has(value) || !seen;
+			else if (kind === "r") persons.push(seen ? value : null);
+			else if (seen) prose.push(value);
+			else whole = true;
+		};
 		for (let k = 1; k < cmd.length; k += 1) {
 			const word = cmd[k] ?? "";
-			if (!word.startsWith("-")) positionals.push(k);
-			const attached = ATTACHED.exec(word);
-			const person = /^--(?:add-)?(?:reviewer|assignee)=([\\s\\S]*)$/.exec(word);
-			const file = /^(?:-F=?|--(?:body|notes)-file=)([\\s\\S]+)$/.exec(word);
-			if (word === "-R" || word === "--repo" || word === "--branch-repo") {
-				targets.push(shown(k + 1) ? repoKey(cmd[k + 1] ?? "", host) : "");
+			if (!word.startsWith("-")) {
+				positionals.push(k);
+				if (/^https?:\\/\\//i.test(word)) targets.push(shown(k) ? repoKey(word, host) : "");
+				continue;
+			};
+			if (/^-[^-]/.test(word)) {
+				for (let c = 1; c < word.length; c += 1) {
+					const kind = SHORT.get(word[c] ?? "");
+					if (kind === undefined) continue;
+					const rest = word.slice(c + 1).replace(/^=/, "");
+					if (rest !== "") take(kind, rest, k);
+					else {
+						take(kind, cmd[k + 1] ?? "", k + 1);
+						k += 1;
+					};
+					break;
+				};
+				continue;
+			};
+			const eq = word.indexOf("=");
+			const kind = LONG.get(eq === -1 ? word : word.slice(0, eq));
+			if (kind === undefined) continue;
+			if (eq !== -1) take(kind, word.slice(eq + 1), k);
+			else {
+				take(kind, cmd[k + 1] ?? "", k + 1);
 				k += 1;
-			} else if (/^(?:--repo=|--branch-repo=|-R)./.test(word)) {
-				targets.push(shown(k) ? repoKey(word.replace(/^(?:--repo=|--branch-repo=|-R=?)/, ""), host) : "");
-			} else if (/^https?:\\/\\//i.test(word)) {
-				targets.push(shown(k) ? repoKey(word, host) : "");
-			} else if (PROSE.has(word)) {
-				if (shown(k + 1)) prose.push(cmd[k + 1] ?? "");
-				else whole = true;
-				k += 1;
-			} else if (attached !== null) {
-				if (shown(k)) prose.push(attached[1] ?? "");
-				else whole = true;
-			} else if (PEOPLE.has(word)) {
-				persons.push(shown(k + 1) ? cmd[k + 1] ?? "" : null);
-				k += 1;
-			} else if (person !== null) {
-				persons.push(shown(k) ? person[1] ?? "" : null);
-			} else if (creating !== "" && word.length > 2 && word[0] === "-" && creating.includes(word[1] ?? "")) {
-				persons.push(shown(k) ? word.slice(2).replace(/^=/, "") : null);
-			} else if ([
-				"-F",
-				"--body-file",
-				"--notes-file"
-			].includes(word)) {
-				if (STDIN.has(cmd[k + 1] ?? "") || !shown(k + 1)) whole = true;
-				k += 1;
-			} else if (file !== null && (STDIN.has(file[1] ?? "") || !shown(k))) whole = true;
+			}
 		};
 		// \`gh issue transfer <issue> <owner>/<repo>\`: the destination is the transfer's second positional word (review/122).
 		const moved = group === "issue" && sub === "transfer" ? positionals[3] : undefined;
@@ -14811,6 +14983,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		const program = cmd[0] ?? "";
 		if (program === "git") {
 			const { sub, args, config } = gitParts(cmd);
+			remoteWriteVerdict(sub, args);
 			// \`git send-pack\` pushes as \`git push\` does, its options and refspecs laid out the same (pr/16); with
 			// no ref it updates the refs both sides have, the default branch among them, read as a matching push.
 			const argMarks = (markMap.get(cmd) ?? []).slice(cmd.length - args.length);
@@ -17226,9 +17399,13 @@ function configFiles(dirs) {
 /**
  * What git's merged configuration says about remotes (REQ-FLOW-134, review/128): per remote its first url and pushurl
  * and its gh-resolved marker, per branch its remote and pushRemote, remote.pushDefault, and every url.<base>.insteadOf
- * and pushInsteadOf rule. partial where the reading may miss or misplace a remote: a file past CONFIG_MAX_BYTES or
- * behind a link (/dev/null aside), an include or includeIf, or configuration the hook's environment sets
- * (GIT_CONFIG_COUNT, GIT_CONFIG_PARAMETERS), or more than REWRITES_MAX URL rewrite rules.
+ * and pushInsteadOf rule. Includes are followed (review/134): include.path and every includeIf target, whatever its
+ * condition (a superset of what git reads), relative to the including file, ~/ from the home folder, at most
+ * INCLUDE_DEPTH_MAX deep, INCLUDE_FILES_MAX files and INCLUDE_BYTES_MAX bytes in all; a missing target reads as empty,
+ * as git reads it. partial where the reading may miss or misplace a remote: a file past CONFIG_MAX_BYTES or behind a
+ * link (/dev/null aside), a file it cannot read, a bound passed, an included file setting a remote, URL-rewrite or
+ * branch-remote key (its condition is not read), configuration the hook's environment sets (GIT_CONFIG_COUNT,
+ * GIT_CONFIG_PARAMETERS), or more than REWRITES_MAX URL rewrite rules.
  */
 function configOf(dirs) {
   const remotes = new Map();
@@ -17236,12 +17413,21 @@ function configOf(dirs) {
   const rewrites = [];
   let pushDefault = null;
   let partial = (process.env.GIT_CONFIG_COUNT ?? "") !== "" || (process.env.GIT_CONFIG_PARAMETERS ?? "") !== "";
-  for (const path of configFiles(dirs)) {
+  const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
+  let files = 0;
+  let bytes = 0;
+  const readFile = (path, depth, included) => {
+    files += 1;
+    if (depth > INCLUDE_DEPTH_MAX || files > INCLUDE_FILES_MAX) {
+      partial = true;
+      return;
+    }
     let text = "";
     if (path !== "/dev/null") {
       try {
         const stats = lstatSync(path);
-        if (!stats.isFile() || stats.size > CONFIG_MAX_BYTES) partial = true;
+        bytes += stats.size;
+        if (!stats.isFile() || stats.size > CONFIG_MAX_BYTES || bytes > INCLUDE_BYTES_MAX) partial = true;
         else text = readFileSync(path, "utf8");
       } catch (error) {
         if (!error || (error.code !== "ENOENT" && error.code !== "ENOTDIR")) partial = true;
@@ -17256,13 +17442,19 @@ function configOf(dirs) {
         const dot = head[1].indexOf(".");
         kind = (dot === -1 ? head[1] : head[1].slice(0, dot)).toLowerCase();
         sub = head[2] !== undefined ? head[2].replace(/\\\\(.)/g, "$1") : dot === -1 ? null : head[1].slice(dot + 1).toLowerCase();
-        if (kind === "include" || kind === "includeif") partial = true;
         continue;
       }
       const pair = /^\\s*([A-Za-z][\\w-]*)\\s*=(.*)$/.exec(line);
       if (pair === null) continue;
       const key = pair[1].toLowerCase();
       const value = pair[2].replace(/\\s[#;].*$/, "").trim().replace(/^"([\\s\\S]*)"$/, "$1");
+      if ((kind === "include" || kind === "includeif") && key === "path") {
+        // A ~user/ path names another account's home, which this reading does not place.
+        if (/^~[^/]/.test(value)) partial = true;
+        else readFile(value.startsWith("~/") ? join(home, value.slice(2)) : resolve(dirname(path), value), depth + 1, true);
+        continue;
+      }
+      if (included && (kind === "remote" || kind === "url" || (kind === "branch" && (key === "remote" || key === "pushremote")))) partial = true;
       if (kind === "remote" && sub === null) {
         if (key === "pushdefault") pushDefault = value;
       } else if (kind === "remote") {
@@ -17279,7 +17471,8 @@ function configOf(dirs) {
         rewrites.push({ base: sub, prefix: value, push: key === "pushinsteadof" });
       }
     }
-  }
+  };
+  for (const path of configFiles(dirs)) readFile(path, 0, false);
   // Each URL looked up scans every rewrite rule, so past REWRITES_MAX of them the reading is partial: the lookups stay
   // bounded by the remotes read times that ceiling (the hook's timeout).
   if (rewrites.length > REWRITES_MAX) partial = true;
@@ -17421,6 +17614,13 @@ function contextsOf(command, cwd, powershell, root) {
       },
       // A place the guard cannot read counts as the session's own, so a push to origin from it runs, as before; only a
       // readable other checkout has its origin compared (review/130).
+      // Where a push to origin goes, where its push URL is not its fetch URL (a pushurl or a pushInsteadOf, review/129).
+      get originPush() {
+        const own = rootOf();
+        const origin = own === null ? undefined : own.config.remotes.get("origin");
+        if (origin === undefined || (origin.pushurl === null && (origin.url === null || rewritten(own.config, origin.url, true) === null))) return null;
+        return remoteKey(pushUrl(own.config, origin));
+      },
       get ownCheckout() {
         const own = rootOf();
         return dirs === null || own === null || resolve(dirs.commonDir) === resolve(own.dirs.commonDir);
@@ -21077,7 +21277,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".claude/hooks/stamity/stamity-agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".claude/hooks/stamity/stamity-cloud-readiness.mjs": "acef8b976c3cf0dc29df1ab1584458bc83c66ab1e7284e28df62af60f1311c91 11348 bytes",
   ".claude/hooks/stamity/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "28bfb763bde7cc51a459da5127beae62870893cc125d5e7b900b964a39f2e10f 280363 bytes",
+  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "fc334d1dbba06aabc587e0703ac0f55f4bda70e918e0c1e218843a4c2de23267 285187 bytes",
   ".claude/hooks/stamity/stamity-pre-tool-use-guard.mjs": "752f24a46db0da9f933bcb313a00ef8f6b12b8a655241b9257e40f64d9776965 20816 bytes",
   ".claude/hooks/stamity/stamity-review-gate.mjs": "a410def5d44fde83869b3c2c98db318d470b68a54101e1b20eddfb026f8077b1 51137 bytes",
   ".claude/hooks/stamity/stamity-session-start.mjs": "c807b92eeff34b3e194a0f7ae843c2945d5663d56cdb937786454a6402df3f31 51786 bytes",
@@ -21133,7 +21333,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "7601d772200b8781109227879b1119f35e7b8fea22bc938de488bb0fe45ec905 28322 bytes",
+  ".stamity/manifest.json": "be346502e88b1f85bf5b8c8f12b7f572029677d060398d9e548476c6c1a25a65 28322 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
   "CLAUDE.md": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
@@ -21995,7 +22195,7 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".gitignore": "14c0a079e08124240ec8c713fa4c32870948842d586a5829a19172c02ddd0482 204 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "2815d76b13a1b3396d6f81e9c4b94c9c27aad9acada64e706aed13bcccf127c3 280359 bytes",
+  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "36053c63c0bcfc92b7e88fe295b32aae98c4418733cdf73c006124494f21955a 285183 bytes",
   ".stamity/generated/hooks/codex/stamity-portable-hook.mjs": "8480d3a6fe6ea5fe1cad1c683ecbb07f3999cbdb411ae7dff7a1ec09eb207068 20937 bytes",
   ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/codex/stamity-session-start.mjs": "1111332a1630ed4dcb42e421b2326c5dd423a358e3c92bf8cb367e212a7a996d 51799 bytes",
@@ -22004,7 +22204,7 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "a857b1d295d2d9a40b313ba78db4fb9e2a1c59ece52e935036f1ecf30d657f3e 22156 bytes",
+  ".stamity/manifest.json": "b057812c2515c5bafc5844e287aaaa20614e005d89a579bbcb6bbcadc12f5d25 22156 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
   "AGENTS.override.md": "122504f41cc40a99c65cba4995c228bf4a5137d738324bbe3a847c6aaa5192db 25872 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
@@ -22345,7 +22545,7 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".gitignore": "14c0a079e08124240ec8c713fa4c32870948842d586a5829a19172c02ddd0482 204 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "583d8098e8476a48040b8d0b00c3cdbf3e09199350f35c96fc4304a6a610ef36 283113 bytes",
+  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "35eab94d1e44a5debb795b66224bfb36c91754d83013e05c9f0152c673dff857 287937 bytes",
   ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "97b118796dbd153216cacceb34fd122b82f9cf75eae3b1d2de4c0938482af8a5 22349 bytes",
   ".stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "9f930fcd797ef464e7f4cb4c40e59b4976d65199a5c974fb67ca7624e5d0287c 56602 bytes",
@@ -22354,7 +22554,7 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "39aaf05dc1a78892fcc7e45c610e341436a31db1916385a56abcabd5ac3d6a02 20257 bytes",
+  ".stamity/manifest.json": "e3cddf8e27b2e48df2f124c5f0adedb24b7d3a27dc8a247be7546f0934beceb1 20257 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
@@ -22970,7 +23170,7 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".stamity/generated/hooks/cursor/stamity-context-once.mjs": "c74c1b3d2cd908b170c48a8813bd05cc91f058210789a9b2f815b731a2eb6ccd 31773 bytes",
   ".stamity/generated/hooks/cursor/stamity-cursor-continue.mjs": "08bc51855553f4104a80fbe1ea94ba36a95173e005846467e4af5c643bb26a60 9500 bytes",
   ".stamity/generated/hooks/cursor/stamity-model-pins.mjs": "fc71eb522ff67fd73ff00820d0e59495bca188d2e30fc9a26ce85e89fff6fdd5 3813 bytes",
-  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "a80cef84480fdff02fdbdd6507e3a603756839b4cb7a3c88d47b0b876ab0ee4a 280395 bytes",
+  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "9134daeb1e000de0acd284480a73bbab88ae51cbf5b2a65c612040412e7ad25e 285219 bytes",
   ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs": "513a8e4c2631670fffed73a96be46542fea82d8e1719a5d26da0a872699277c6 20938 bytes",
   ".stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "1111332a1630ed4dcb42e421b2326c5dd423a358e3c92bf8cb367e212a7a996d 51799 bytes",
@@ -22979,7 +23179,7 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "ec05389629eff5000ad7cb22900b790a06f6151779d46ee2350d0fcf77ef363e 24101 bytes",
+  ".stamity/manifest.json": "2f725f0e3631182b892ec9b6fc19f4b576a6579f2b0669637e268bef923d17d9 24101 bytes",
   "AGENTS.md": "6b5b5bebfd779fe5b513cd8c2c41fa3b4dd70826435e9df9c70076ba48c29b98 6548 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",

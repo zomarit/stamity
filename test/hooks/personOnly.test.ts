@@ -693,6 +693,8 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["gh repo unarchive -R o/r --yes", "protection"],
   // REQ-FLOW-134 (a4c): a comment on another repository, read against the origin `acme/app`.
   ["gh pr comment 3 --body x -R other/repo", "outside-write", { ...ON_FEATURE, originRepo: "github.com/acme/app" }],
+  // REQ-FLOW-134 (review/129): a remote's URL changed, which moves the origin later writes are held to.
+  ["git remote set-url origin https://github.com/other/repo.git", "remote-write", { ...ON_FEATURE, originRepo: "github.com/acme/app" }],
 ];
 
 const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
@@ -1003,8 +1005,9 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
 // and the loosening of the autonomy setting join the ask class; the status write is refuse-class, so it stays out.
 // TEST CHANGE, justified (REQ-FLOW-121, review/103): the land verb's approved line joins the ask class.
 // TEST CHANGE, justified (REQ-FLOW-134, a4c): a write that reaches an outside party joins the ask class.
+// TEST CHANGE, justified (REQ-FLOW-134, review/129): a remote or URL rewrite written joins it, run on the main thread.
 const ASK_CLASS = new Set(["push-default", "push-tags", "tag", "pr-merge", "pr-ready", "release", "publish", "secrets", "protection",
-  "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen", "land-approved", "outside-write"]);
+  "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen", "land-approved", "outside-write", "remote-write"]);
 
 const ZERO = "0".repeat(40);
 /** A GraphQL `updateRefs` call with one entry: its ref name and its `afterOid`. */
@@ -1298,6 +1301,8 @@ describe("personOnlyVerdict — the deny matrix", () => {
       "line-too-long",
       // TEST CHANGE, justified (REQ-FLOW-134, a4c): the ask-class write that reaches an outside party joins it.
       "outside-write",
+      // TEST CHANGE, justified (REQ-FLOW-134, review/129): a remote or URL rewrite written joins it.
+      "remote-write",
     ]);
     const hit = new Set([...DENY, ...CLASSES].map(([, rule]) => rule));
     expect(hit).toEqual(ids);
@@ -2426,7 +2431,8 @@ describe("CLAUDE_DENY_ROWS and CLAUDE_ASK_ROWS", () => {
         // TEST CHANGE, justified (review/117): a line's length is no prefix either.
         // TEST CHANGE, justified (REQ-FLOW-134, a4c): another repository's target and a mention sit mid-line, past
         // the command's prefix, and are read against the origin, which no settings row can know.
-        .filter((id) => !["push-default", "protection-delete", "status-write", "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen", "land-approved", "line-too-long", "outside-write"].includes(id))
+        // TEST CHANGE, justified (REQ-FLOW-134, review/129): a remote write runs on the main thread, so no row holds it.
+        .filter((id) => !["push-default", "protection-delete", "status-write", "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen", "land-approved", "line-too-long", "outside-write", "remote-write"].includes(id))
         .toSorted(),
     );
   });
@@ -4177,5 +4183,82 @@ describe("the outside-party readers' third round (a4c, review/120-132)", () => {
 
   it("names a push's branch act before its repository, so the default branch's ask is the one shown", () => {
     expect(personOnlyVerdict("git push upstream HEAD:main", { ...ORIGIN, remoteRepo: (): string => "" })).toMatchObject({ deny: true, rule: "push-default" });
+  });
+});
+
+/**
+ * a4c fix round 3 (REQ-FLOW-134, review/129, review/135, review/126's widening): a remote or URL rewrite written is its
+ * own rule, which the guard runs on the main thread; a push to origin is held to origin's own push URL; short-option
+ * clusters are read; a curl body the shell fills in makes the whole line read; a line relocating the home or XDG folder
+ * makes the configuration unreadable. Each asking row is red on a58daabe, which runs it.
+ */
+describe("the outside-party readers' fourth round (a4c, review/129, review/135)", () => {
+  const ORIGIN = { ...ON_FEATURE, originRepo: "github.com/acme/app" };
+  const rule = (command: string, ctx: Parameters<typeof personOnlyVerdict>[1] = ORIGIN): string | null => {
+    const verdict = personOnlyVerdict(command, ctx);
+    return verdict.deny ? verdict.rule : null;
+  };
+
+  it.each([
+    ["a remote added", "git remote add up https://github.com/up/app.git", "remote-write"],
+    ["a remote renamed", "git remote rename origin old", "remote-write"],
+    ["a remote's URL changed", "git remote set-url origin https://github.com/other/repo.git", "remote-write"],
+    ["a remote removed", "git remote remove origin", "remote-write"],
+    ["a remote URL written by config", "git config remote.origin.url https://github.com/other/repo.git", "remote-write"],
+    ["a push URL written by config's set subcommand", "git config set remote.origin.pushurl https://github.com/other/repo.git", "remote-write"],
+    ["a URL rewrite written in the global file", "git config --global url.https://github.com/other/.insteadOf https://github.com/acme/", "remote-write"],
+    ["a remote key unset", "git config --unset remote.origin.pushurl", "remote-write"],
+    ["a remote section removed", "git config --remove-section remote.origin", "remote-write"],
+    ["the configuration opened in an editor", "git config --edit", "remote-write"],
+    ["a remote URL read", "git config --get remote.origin.url", null],
+    ["a remote URL read by its key alone", "git config remote.origin.url", null],
+    ["a remote URL read by the get subcommand", "git config get remote.origin.url", null],
+    ["the remotes listed", "git remote -v", null],
+    ["a remote's URL read", "git remote get-url origin", null],
+    ["another key written", "git config user.name x", null],
+  ])("reads %s", (_, command, expected) => {
+    expect(rule(command), command).toBe(expected);
+  });
+
+  it("runs a remote write where the context runs the rule, as the guard's main thread does, and leaves it unread with no origin", () => {
+    const runs = { ...ORIGIN, runs: ["remote-write"] as PersonOnlyRuleId[] };
+    expect(personOnlyVerdict("git remote set-url origin https://github.com/other/repo.git", runs)).toEqual({ deny: false, runs: ["remote-write"] });
+    expect(personOnlyVerdict("git remote set-url origin https://github.com/other/repo.git", ON_FEATURE)).toEqual({ deny: false });
+  });
+
+  it.each([
+    ["origin's push URL another repository's", "github.com/other/repo", "outside-write"],
+    ["origin's push URL the origin's own", "github.com/acme/app", null],
+    ["no push URL apart from origin's fetch URL", null, null],
+  ] as const)("reads a feature push to origin with %s", (_, originPush, expected) => {
+    expect(rule("git push -u origin feat/x", { ...ORIGIN, originPush })).toBe(expected);
+  });
+
+  it.each([
+    ["a review whose comment flag and body letter share a cluster", "gh pr review 3 -cb '@alice look'", "outside-write"],
+    ["a new pull request whose draft flag and body letter share a cluster", "gh pr create -t t -db '@alice look'", "outside-write"],
+    ["a new pull request whose draft flag and reviewer letter share a cluster", "gh pr create -t t -b b -dr alice", "outside-write"],
+    ["a reviewer attached after a boolean letter", "gh pr create -t t -b b -dralice", "outside-write"],
+    ["an assignee after the web flag in one cluster", "gh issue create -t t -b b -wa bob", "outside-write"],
+    ["a closing comment after the delete-branch flag in one cluster, refused outright for the deletion", "gh pr close 3 -dc '@alice'", "push-delete"],
+    ["a body file at stdin after a boolean letter", "gh pr comment 3 -wF - <<'EOF'\nthanks @alice\nEOF", "outside-write"],
+    ["a review cluster naming nobody", "gh pr review 3 -cb 'look'", null],
+  ])("reads %s", (_, command, expected) => {
+    expect(rule(command), command).toBe(expected);
+  });
+
+  it("reads the whole line for a mention where a curl body holds a word the shell fills in", () => {
+    const body = `curl -X POST -d "{\\"body\\":\\"$B\\"}" https://api.github.com/repos/acme/app/issues/1/comments`;
+    expect(rule(`B='@alice look'; ${body}`)).toBe("outside-write");
+    expect(rule(`B='look'; ${body}`)).toBeNull();
+  });
+
+  it.each([
+    ["a gh write with the home folder relocated", "HOME=/tmp/h gh pr comment 3 --body x"],
+    ["a gh write after the home folder is exported", "export HOME=/tmp/h; gh pr comment 3 --body x"],
+    ["a feature push with the XDG folder relocated", "XDG_CONFIG_HOME=/tmp/x git push -u origin feat/x"],
+  ])("holds %s outside, since git reads another global file", (_, command) => {
+    expect(rule(command), command).toBe("outside-write");
+    expect(rule(command.replace(/^(?:export )?\w+=\S+;? /, "")), command).toBeNull();
   });
 });

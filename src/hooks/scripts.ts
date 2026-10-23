@@ -337,7 +337,11 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // 6,041 lines (copilot, generated; 270,411 bytes before the round), past both rows, because the guard now reads git's
   // merged configuration and a push's repository, and the verdict reads hidden GraphQL queries, more targets, nested
   // bodies and every stdin spelling. 283,112 + 3,608 = 286,720 bytes; 6,041 + 100 = 6,141 lines.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 286_720, lines: 6_141 },
+  // Moved again 2026-10-23 on the a4c lane (review/129, review/134, review/135), by the measured size plus a small
+  // margin: 287,936 bytes / 6,141 lines (copilot, generated; 283,112 bytes before the round), past the bytes row and at
+  // the lines row, because the guard now follows a configuration's includes and reads origin's push URL, and the verdict
+  // reads a remote write and short-option clusters. 287,936 + 2,880 = 290,816 bytes; 6,141 + 100 = 6,241 lines.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 290_816, lines: 6_241 },
 };
 
 /** One generated script, ready for an adapter to place and register. */
@@ -4119,6 +4123,13 @@ const GUARD_PACKED_REFS_MAX_BYTES = 8_388_608;
 const GUARD_GIT_CONFIG_MAX_BYTES = 1_048_576;
 /** The URL rewrite rules (`insteadOf`, `pushInsteadOf`) a merged git configuration may hold before its reading is partial. */
 const GUARD_GIT_REWRITES_MAX = 256;
+/**
+ * The bounds on following a git configuration's includes (review/134): git's own depth, a file count and a byte total
+ * across every file read, past any of which the reading is partial.
+ */
+const GUARD_GIT_INCLUDE_DEPTH_MAX = 10;
+const GUARD_GIT_INCLUDE_FILES_MAX = 64;
+const GUARD_GIT_INCLUDE_BYTES_MAX = 4_194_304;
 
 /** Places a shell call's git can run in that the guard reads; past this one more counts as unreadable. */
 const GUARD_PLACES_MAX = 32;
@@ -4163,6 +4174,7 @@ const GUARD_RUN_ACTS: Readonly<Record<string, string>> = {
   "pr-ready": "Marking a pull request ready for review",
   tag: "Creating a tag",
   "workflow-dispatch": "Dispatching a workflow",
+  "remote-write": "Writing a git remote or a URL rewrite",
 };
 
 /**
@@ -4468,6 +4480,9 @@ const TAG_NAMES_MAX = ${GUARD_TAG_NAMES_MAX};
 const PACKED_REFS_MAX_BYTES = ${GUARD_PACKED_REFS_MAX_BYTES};
 const CONFIG_MAX_BYTES = ${GUARD_GIT_CONFIG_MAX_BYTES};
 const REWRITES_MAX = ${GUARD_GIT_REWRITES_MAX};
+const INCLUDE_DEPTH_MAX = ${GUARD_GIT_INCLUDE_DEPTH_MAX};
+const INCLUDE_FILES_MAX = ${GUARD_GIT_INCLUDE_FILES_MAX};
+const INCLUDE_BYTES_MAX = ${GUARD_GIT_INCLUDE_BYTES_MAX};
 const PLACES_MAX = ${GUARD_PLACES_MAX};
 const CANARY_SEGMENTS = ${json(PREFLIGHT_CANARY_FILE.split("/"))};
 const SHELL_TOOLS = new Set(["Bash", "PowerShell", "Shell", "bash", "powershell", "shell"]);
@@ -4476,7 +4491,9 @@ const MCP_ROWS = new Map(${json(GITHUB_MCP_ROWS.map((entry) => [entry.row, entry
 // The autonomy setting baked at emission, the marker line's own value (REQ-FLOW-137): the ask-class rules it runs
 // unasked (a workflow dispatch among them unless named as deploying), and whether it is stricter than the default.
 const AUTONOMY = ${json(baked)};
-const RUNS = [...AUTONOMY.runs, ...(AUTONOMY.deploying.includes("workflow-dispatch") ? [] : ["workflow-dispatch"])];
+// A remote or URL rewrite written runs on the main thread in every mode and is refused for a sub-agent (REQ-FLOW-134,
+// review/129): it moves the origin the outside-party rule holds writes to.
+const RUNS = [...AUTONOMY.runs, ...(AUTONOMY.deploying.includes("workflow-dispatch") ? [] : ["workflow-dispatch"]), "remote-write"];
 const STRICTER = AUTONOMY.mode === "ask" || AUTONOMY.deploying.length > 0 || AUTONOMY.deployingBranches.length > 0;
 // This package as emission found it (review/44, review/53): the program words that run it (its bins and unscoped name,
 // read from the engine's own package.json, so a renamed fork's bin is read as this package's), its name, whose
@@ -4909,9 +4926,13 @@ function configFiles(dirs) {
 /**
  * What git's merged configuration says about remotes (REQ-FLOW-134, review/128): per remote its first url and pushurl
  * and its gh-resolved marker, per branch its remote and pushRemote, remote.pushDefault, and every url.<base>.insteadOf
- * and pushInsteadOf rule. partial where the reading may miss or misplace a remote: a file past CONFIG_MAX_BYTES or
- * behind a link (/dev/null aside), an include or includeIf, or configuration the hook's environment sets
- * (GIT_CONFIG_COUNT, GIT_CONFIG_PARAMETERS), or more than REWRITES_MAX URL rewrite rules.
+ * and pushInsteadOf rule. Includes are followed (review/134): include.path and every includeIf target, whatever its
+ * condition (a superset of what git reads), relative to the including file, ~/ from the home folder, at most
+ * INCLUDE_DEPTH_MAX deep, INCLUDE_FILES_MAX files and INCLUDE_BYTES_MAX bytes in all; a missing target reads as empty,
+ * as git reads it. partial where the reading may miss or misplace a remote: a file past CONFIG_MAX_BYTES or behind a
+ * link (/dev/null aside), a file it cannot read, a bound passed, an included file setting a remote, URL-rewrite or
+ * branch-remote key (its condition is not read), configuration the hook's environment sets (GIT_CONFIG_COUNT,
+ * GIT_CONFIG_PARAMETERS), or more than REWRITES_MAX URL rewrite rules.
  */
 function configOf(dirs) {
   const remotes = new Map();
@@ -4919,12 +4940,21 @@ function configOf(dirs) {
   const rewrites = [];
   let pushDefault = null;
   let partial = (process.env.GIT_CONFIG_COUNT ?? "") !== "" || (process.env.GIT_CONFIG_PARAMETERS ?? "") !== "";
-  for (const path of configFiles(dirs)) {
+  const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
+  let files = 0;
+  let bytes = 0;
+  const readFile = (path, depth, included) => {
+    files += 1;
+    if (depth > INCLUDE_DEPTH_MAX || files > INCLUDE_FILES_MAX) {
+      partial = true;
+      return;
+    }
     let text = "";
     if (path !== "/dev/null") {
       try {
         const stats = lstatSync(path);
-        if (!stats.isFile() || stats.size > CONFIG_MAX_BYTES) partial = true;
+        bytes += stats.size;
+        if (!stats.isFile() || stats.size > CONFIG_MAX_BYTES || bytes > INCLUDE_BYTES_MAX) partial = true;
         else text = readFileSync(path, "utf8");
       } catch (error) {
         if (!error || (error.code !== "ENOENT" && error.code !== "ENOTDIR")) partial = true;
@@ -4939,13 +4969,19 @@ function configOf(dirs) {
         const dot = head[1].indexOf(".");
         kind = (dot === -1 ? head[1] : head[1].slice(0, dot)).toLowerCase();
         sub = head[2] !== undefined ? head[2].replace(/\\(.)/g, "$1") : dot === -1 ? null : head[1].slice(dot + 1).toLowerCase();
-        if (kind === "include" || kind === "includeif") partial = true;
         continue;
       }
       const pair = /^\s*([A-Za-z][\w-]*)\s*=(.*)$/.exec(line);
       if (pair === null) continue;
       const key = pair[1].toLowerCase();
       const value = pair[2].replace(/\s[#;].*$/, "").trim().replace(/^"([\s\S]*)"$/, "$1");
+      if ((kind === "include" || kind === "includeif") && key === "path") {
+        // A ~user/ path names another account's home, which this reading does not place.
+        if (/^~[^/]/.test(value)) partial = true;
+        else readFile(value.startsWith("~/") ? join(home, value.slice(2)) : resolve(dirname(path), value), depth + 1, true);
+        continue;
+      }
+      if (included && (kind === "remote" || kind === "url" || (kind === "branch" && (key === "remote" || key === "pushremote")))) partial = true;
       if (kind === "remote" && sub === null) {
         if (key === "pushdefault") pushDefault = value;
       } else if (kind === "remote") {
@@ -4962,7 +4998,8 @@ function configOf(dirs) {
         rewrites.push({ base: sub, prefix: value, push: key === "pushinsteadof" });
       }
     }
-  }
+  };
+  for (const path of configFiles(dirs)) readFile(path, 0, false);
   // Each URL looked up scans every rewrite rule, so past REWRITES_MAX of them the reading is partial: the lookups stay
   // bounded by the remotes read times that ceiling (the hook's timeout).
   if (rewrites.length > REWRITES_MAX) partial = true;
@@ -5104,6 +5141,13 @@ function contextsOf(command, cwd, powershell, root) {
       },
       // A place the guard cannot read counts as the session's own, so a push to origin from it runs, as before; only a
       // readable other checkout has its origin compared (review/130).
+      // Where a push to origin goes, where its push URL is not its fetch URL (a pushurl or a pushInsteadOf, review/129).
+      get originPush() {
+        const own = rootOf();
+        const origin = own === null ? undefined : own.config.remotes.get("origin");
+        if (origin === undefined || (origin.pushurl === null && (origin.url === null || rewritten(own.config, origin.url, true) === null))) return null;
+        return remoteKey(pushUrl(own.config, origin));
+      },
       get ownCheckout() {
         const own = rootOf();
         return dirs === null || own === null || resolve(dirs.commonDir) === resolve(own.dirs.commonDir);

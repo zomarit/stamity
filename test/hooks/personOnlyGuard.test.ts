@@ -2290,12 +2290,14 @@ describe("writes that reach an outside party (a4c, REQ-FLOW-134)", () => {
     expect(decide("claude", marked, COMMENT)).toEqual({ deny: false });
   });
 
-  it("asks for a write naming no target where the config includes another file, which may name another remote", async () => {
+  // TEST CHANGE, justified (REQ-FLOW-134, review/134): the title moves with what the case now pins.
+  it("follows an include whose target is missing as an empty file, as git reads it", async () => {
     const guard = await placeGuard("claude", { ".git/config": `${ORIGIN}[include]\n\tpath = ../more.gitconfig\n` });
-    expect(decide("claude", guard, COMMENT)).toMatchObject({ deny: true, ask: true });
-    // TEST CHANGE, justified (REQ-FLOW-134, review/129): a configuration read only in part leaves the origin unreadable
-    // too, so the same write naming the origin asks; a push to origin from the session's own checkout still runs.
-    expect(decide("claude", guard, `${COMMENT} -R acme/app`)).toMatchObject({ deny: true, ask: true });
+    // TEST CHANGE, justified (REQ-FLOW-134, review/134): includes are followed now, and a missing target reads as empty,
+    // as git reads it, so a write naming no target, one naming the origin and a feature push all run; an included
+    // file setting a remote is pinned in the round-3 block below.
+    expect(decide("claude", guard, COMMENT)).toEqual({ deny: false });
+    expect(decide("claude", guard, `${COMMENT} -R acme/app`)).toEqual({ deny: false });
     expect(decide("claude", guard, "git push -u origin feat/x")).toEqual({ deny: false });
   });
 
@@ -2499,5 +2501,79 @@ describe("the guard's merged git configuration and the push's repository (a4c, r
     const guard = await placeGuard("claude", { ".git/config": ORIGIN, ".stamity/runs/2026-10-23_z/record.md": record("in progress", "unattended") });
     expect(decide("claude", guard, "git push https://github.com/other/repo.git feat/x").deny).toBe(true);
     expect(decide("claude", guard, RUN_END)).toEqual({ deny: false });
+  });
+});
+
+/**
+ * a4c fix round 3 (REQ-FLOW-134, review/134, review/129): the emitted guard follows a global file's includes, so an
+ * unrelated include leaves own-origin writes running and an included file that moves a remote makes them ask; a remote
+ * or URL rewrite written runs on the main thread and is refused for a sub-agent; a push to origin is held to origin's
+ * push URL. These cases name a real global file; the harness's blank one stays for the older rows.
+ */
+describe("the guard's includes, remote writes and origin's push URL (a4c, review/129, review/134)", () => {
+  const remote = (name: string, url: string, extra = ""): string => `[remote "${name}"]\n\turl = ${url}\n${extra}`;
+  const ORIGIN = remote("origin", "https://github.com/acme/app.git");
+  const COMMENT = "gh pr comment 3 --body 'looks good'";
+  const REPLY = "gh api -X POST repos/{owner}/{repo}/pulls/3/comments -F in_reply_to=1 -F body=@reply.md";
+  const OWN = [COMMENT, REPLY, "git push"];
+  const global = (): Record<string, string> => ({ GIT_CONFIG_GLOBAL: getRepo().path("cfg", "global") });
+
+  it("follows an unrelated include in the global file and leaves own-origin writes running", async () => {
+    const guard = await placeGuard("claude", {
+      ".git/config": ORIGIN,
+      "cfg/global": "[user]\n\tname = x\n[include]\n\tpath = identity.gitconfig\n",
+      "cfg/identity.gitconfig": "[user]\n\temail = x@example.com\n",
+    });
+    for (const command of OWN) expect(decide("claude", guard, command, global()), command).toEqual({ deny: false });
+  });
+
+  it("asks for those writes where an included file, read relative to the file that includes it, moves a remote", async () => {
+    const guard = await placeGuard("claude", {
+      ".git/config": ORIGIN,
+      "cfg/global": "[include]\n\tpath = sub/remotes.gitconfig\n",
+      "cfg/sub/remotes.gitconfig": remote("origin", "https://github.com/other/repo.git"),
+    });
+    for (const command of OWN) expect(decide("claude", guard, command, global()), command).toMatchObject({ deny: true, ask: true });
+  });
+
+  it("reads every includeIf target whatever its condition, and a ~/ path from the home folder", async () => {
+    const guard = await placeGuard("claude", {
+      ".git/config": ORIGIN,
+      "cfg/global": '[includeIf "gitdir:/nowhere/"]\n\tpath = ~/rewrites.gitconfig\n',
+      "rewrites.gitconfig": '[url "https://github.com/other/"]\n\tinsteadOf = https://github.com/acme/\n',
+    });
+    expect(decide("claude", guard, COMMENT, { ...global(), HOME: getRepo().path() })).toMatchObject({ deny: true, ask: true });
+    expect(decide("claude", guard, COMMENT, { ...global(), HOME: getRepo().path("cfg") })).toEqual({ deny: false });
+  });
+
+  it("reads an include past its depth bound, or a target it cannot read, as unreadable", async () => {
+    const chain = Object.fromEntries(Array.from({ length: 12 }, (_, n) => [`cfg/c${n}`, `[include]\n\tpath = c${n + 1}\n`]));
+    const guard = await placeGuard("claude", { ".git/config": ORIGIN, "cfg/global": "[include]\n\tpath = c0\n", ...chain });
+    expect(decide("claude", guard, `${COMMENT} -R acme/app`, global())).toMatchObject({ deny: true, ask: true });
+    await getRepo().seedFiles({ "cfg/c3": "[user]\n\tname = x\n" });
+    expect(decide("claude", guard, `${COMMENT} -R acme/app`, global())).toEqual({ deny: false });
+    mkdirSync(getRepo().path("cfg", "folder"));
+    await getRepo().seedFiles({ "cfg/c3": "[include]\n\tpath = folder\n" });
+    expect(decide("claude", guard, `${COMMENT} -R acme/app`, global())).toMatchObject({ deny: true, ask: true });
+  });
+
+  it("runs a remote's URL change on the main thread and refuses it for a sub-agent", async () => {
+    const guard = await placeGuard("claude", { ".git/config": ORIGIN });
+    const change = "git remote set-url origin https://github.com/other/repo.git";
+    expect(decide("claude", guard, change)).toEqual({ deny: false });
+    const helper = JSON.stringify({ ...JSON.parse(payload("claude", change)), agent_type: "stamity-implementer", agent_id: "a1" });
+    expect(clientDecision("claude", run(guard, helper), "helper")).toEqual({
+      deny: true,
+      reason: expect.stringContaining("Writing a git remote or a URL rewrite is a person-only act (`remote-write`) and a sub-agent runs it"),
+    });
+    const read = JSON.stringify({ ...JSON.parse(payload("claude", "git config --get remote.origin.url")), agent_type: "stamity-implementer", agent_id: "a1" });
+    expect(clientDecision("claude", run(guard, read), "read")).toEqual({ deny: false });
+  });
+
+  it("asks for a feature push to origin whose push URL is another repository's, and runs one whose push URL is the origin's", async () => {
+    const guard = await placeGuard("claude", { ".git/config": remote("origin", "https://github.com/acme/app.git", "\tpushurl = https://github.com/other/repo.git\n") });
+    expect(decide("claude", guard, "git push -u origin feat/x")).toMatchObject({ deny: true, ask: true });
+    await getRepo().seedFiles({ ".git/config": remote("origin", "https://github.com/acme/app.git", "\tpushurl = git@github.com:acme/app.git\n") });
+    expect(decide("claude", guard, "git push -u origin feat/x")).toEqual({ deny: false });
   });
 });
