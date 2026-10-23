@@ -3113,9 +3113,11 @@ describe("a push refspec read from its word's marks (a4, build/4, review/69, rev
   const TAGGED_FEATURE = { defaultBranches: ["trunk"], currentBranch: "feat/x", tags: ["v1.0.0"] };
   const DEPLOYING = { ...TAGGED_FEATURE, deployingBranches: ["production", "release/*"] };
 
-  // build/4: characters that only look like an expansion, single-quoted or in an unclosed substitution, are the name.
+  // build/4: characters that only look like an expansion, single-quoted, are the name.
+  // TEST CHANGE, justified (build/12): a substitution nothing closes on the line now leaves the rest of the line unread,
+  // filled in, so the run verb's push of a branch name nesting unclosed substitution characters asks as a push to the
+  // default branch (the list below) instead of running.
   it.each([
-    ["the run verb's push of a branch name nesting unclosed substitution characters", `git push origin HEAD:refs/heads/stamity/x${'"$('.repeat(4)}y`],
     ["a single-quoted branch name holding a dollar", "git push origin 'feat/a$b'"],
     ["a single-quoted branch name holding a group", "git push origin 'HEAD:refs/heads/feat(x)'"],
   ])("runs %s", (_, command) => {
@@ -3136,6 +3138,8 @@ describe("a push refspec read from its word's marks (a4, build/4, review/69, rev
     ["a colon-less refspec whose expansion may supply the colon", "git push origin feat/a$b"],
     ["a branch name holding an unquoted group", "git push origin HEAD:refs/heads/feat(x)"],
     ["a double-quoted variable after a literal folder", "git push origin \"feat/$NAME\""],
+    // Moved from the list above (build/12).
+    ["the run verb's push of a branch name nesting unclosed substitution characters", `git push origin HEAD:refs/heads/stamity/x${'"$('.repeat(4)}y`],
   ])("asks for %s as a push to the default branch", (_, command) => {
     expect(personOnlyVerdict(command, TAGGED_FEATURE), command).toMatchObject({ deny: true, rule: "push-default", ask: true });
   });
@@ -3414,13 +3418,17 @@ describe("the reading's work stays linear in the line's length (a4, review/101, 
   const BOUND_MS = 8_000;
 
   // Red on b4a700fb for the last two (review/102); on f7181e5c for the first two (review/101).
+  // TEST CHANGE, justified (review/115): a line past 65,536 characters now asks before any reading, so the three long
+  // lines are halved to about 60,000 characters to keep timing the reader, not the cap; the old readings grow by the
+  // square of the length, so at half the size they still take about 27 s, 35 s and 17 s, each past the 8 s bound.
   it.each([
-    ["a long run of brace openings with no blank", () => `stamity sync ${"{".repeat(120_000)}`],
-    ["a long run of parameter openings with no closing", () => `stamity sync ${"${".repeat(60_000)}`],
+    ["a long run of brace openings with no blank", () => `stamity sync ${"{".repeat(60_000)}`],
+    ["a long run of parameter openings with no closing", () => `stamity sync ${"${".repeat(30_000)}`],
     ["a program word of many wildcards and a tail no package word holds", () => `/usr/bin/${"*".repeat(64)}q sync --loosen`],
-    ["a long word with more brace openings than closings before its closings", () => `stamity sync x${"{".repeat(60_000)}${"}".repeat(60_000)} --loosen`],
+    ["a long word with more brace openings than closings before its closings", () => `stamity sync x${"{".repeat(30_000)}${"}".repeat(30_000)} --loosen`],
   ])("reads %s within the bound and fails closed", (_, build) => {
     const command = build();
+    expect(command.length).toBeLessThanOrEqual(65_536);
     const started = performance.now();
     const verdict = personOnlyVerdict(command, DEFAULT);
     expect(performance.now() - started).toBeLessThan(BOUND_MS);
@@ -3614,10 +3622,91 @@ describe("a heredoc body read as data only where a data sink receives it (a5, RE
   });
 
   it("reads a line of many unterminated heredoc operators within the bound and fails closed", () => {
-    const command = `${"stamity learn capture <<A\n".repeat(20_000)}${FORCE}`;
+    // Under the 65,536-character cap (review/115), so the reading itself is timed.
+    const command = `${"stamity learn capture <<A\n".repeat(2_400)}${FORCE}`;
+    expect(command.length).toBeLessThanOrEqual(65_536);
     const started = performance.now();
     const verdict = personOnlyVerdict(command, DEFAULT);
     expect(performance.now() - started).toBeLessThan(8_000);
     expect(verdict).toMatchObject({ deny: true, rule: "force-push" });
+  });
+});
+
+/**
+ * a5, build/12: a substitution's closing scan passes over a quoted heredoc body, so a parenthesis in it cannot end the
+ * substitution early or keep it open; a scan nothing closes on the line leaves the rest of the line unread, filled in, so
+ * an act behind it asks or is refused and is never one allowed word.
+ */
+describe("a substitution's closing scan over a quoted heredoc body, and one nothing closes (a5, build/12)", () => {
+  const DEFAULT = { ...ON_FEATURE, stricterThanDefault: false };
+  const FORCE = "git push --force origin feat/x";
+
+  // Red on 77116591 for the two opening-parenthesis rows: the body's parenthesis kept the substitution open to the line's
+  // end, so the push was never read. The closing-parenthesis, unquoted and balanced rows are their neighbours, which held.
+  it.each([
+    ["an unbalanced opening parenthesis in a quoted commit-message body", `git commit -m "$(cat <<'EOF'\nfix (the reader\nEOF\n)x y" && ${FORCE}`],
+    ["an unbalanced closing parenthesis in a quoted commit-message body", `git commit -m "$(cat <<'EOF'\nfix the reader)\nEOF\n)" && ${FORCE}`],
+    ["an unbalanced parenthesis in a tab-stripped body", `git commit -m "$(cat <<-'EOF'\n\tfix (a\n\tEOF\n)x y" && ${FORCE}`],
+    ["an unbalanced parenthesis in an unquoted substitution's quoted body", `git commit -m $(cat <<'EOF'\n(\nEOF\n) && ${FORCE}`],
+    ["a balanced quoted commit-message body", `git commit -m "$(cat <<'EOF'\nfix (the reader)\nEOF\n)" && ${FORCE}`],
+  ])("refuses the push behind %s", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toMatchObject({ deny: true, rule: "force-push", ask: false });
+    expect(unattendedPushVerdict(command).deny, command).toBe(true);
+  });
+
+  it.each([
+    ["an unbalanced parenthesis in a quoted commit-message body", `git commit -m "$(cat <<'EOF'\nfix (the reader\nEOF\n)"`],
+    ["a balanced quoted commit-message body", `git commit -m "$(cat <<'EOF'\nfix (the reader)\nEOF\n)"`],
+  ])("runs the commit alone with %s", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toEqual({ deny: false });
+    expect(unattendedPushVerdict(command), command).toEqual({ deny: false });
+  });
+
+  // Red on 77116591 for the unquoted-delimiter and unterminated rows: the open substitution was one allowed word, and the
+  // act behind it was not read. The quoted-parenthesis row held there by another reading, and still holds.
+  it.each([
+    ["a quoted parenthesis no closing scan counts past", `git commit -m "$(printf '(')" && ${FORCE}`],
+    ["an unbalanced parenthesis in an unquoted-delimiter body", `git commit -m "$(cat <<EOF\nfix (a\nEOF\n)x y" && ${FORCE}`],
+    ["an unterminated quoted body", `git commit -m "$(cat <<'EOF'\n(\n)x y" && ${FORCE}`],
+  ])("asks or refuses for %s, the rest of the line read as filled in", (_, command) => {
+    expect(personOnlyVerdict(command, DEFAULT), command).toMatchObject({ deny: true });
+  });
+
+  it("reads the word an open substitution leaves as filled in, so a loosening may hide there", () => {
+    expect(personOnlyVerdict(`stamity sync "$(printf '(')"`, DEFAULT)).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+});
+
+/** a5, review/115: a line past 64 KiB is one the guard cannot read, so it asks before any reading. */
+describe("a line too long for the guard to read (a5, review/115)", () => {
+  const DEFAULT = { ...ON_FEATURE, stricterThanDefault: false };
+
+  // Red on 77116591: the long benign line was read and allowed.
+  it("asks for a benign line past 65,536 characters, and refuses it in the unattended verdict", () => {
+    const command = `echo ${"a".repeat(70_000)}`;
+    expect(personOnlyVerdict(command, DEFAULT)).toMatchObject({
+      deny: true,
+      rule: "autonomy-loosen",
+      ask: true,
+      act: expect.stringContaining("A line too long for the guard to read"),
+    });
+    expect(unattendedPushVerdict(command)).toMatchObject({ deny: true, reason: expect.stringContaining("A line too long for the guard to read") });
+    // The land verb's attended reading leaves it to the person-only verdict's ask.
+    expect(unattendedPushVerdict(command, false, true)).toEqual({ deny: false });
+  });
+
+  it("reads a benign line of 60,000 characters as today, and asks at one character past the cap", () => {
+    const command = `echo ${"a".repeat(59_995)}`;
+    expect(command.length).toBe(60_000);
+    expect(personOnlyVerdict(command, DEFAULT)).toEqual({ deny: false });
+    expect(unattendedPushVerdict(command)).toEqual({ deny: false });
+    expect(personOnlyVerdict(`echo ${"a".repeat(65_531)}`, DEFAULT)).toEqual({ deny: false });
+    expect(personOnlyVerdict(`echo ${"a".repeat(65_532)}`, DEFAULT)).toMatchObject({ deny: true, rule: "autonomy-loosen" });
+  });
+
+  it("asks for a long line whatever acts it holds, before reading them", () => {
+    // A long line holding a force push asks attended, and is refused unattended and for a sub-agent: never runs.
+    const command = `git push --force origin feat/x; echo ${"a".repeat(70_000)}`;
+    expect(personOnlyVerdict(command, DEFAULT)).toMatchObject({ deny: true, ask: true });
   });
 });

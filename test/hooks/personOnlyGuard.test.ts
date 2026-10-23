@@ -953,7 +953,11 @@ describe("a place inside a line u6 reads (build/89, review/153) and a value the 
       const denied = form.replaceAll("{dir}", "wt-main");
       expect(decide("claude", guard, denied, undefined, undefined, shell), denied).toMatchObject({ deny: true, reason: expect.stringContaining("push-default") });
       const allowed = form.replaceAll("{dir}", "wt-feat");
-      expect(decide("claude", guard, allowed, undefined, undefined, shell).deny, allowed).toBe(false);
+      // TEST CHANGE, justified (build/12): a substitution whose closing scan nothing ends on the line now leaves the
+      // rest of the line read as filled in, so the quoted-parenthesis form's feature twin asks (a command the guard
+      // cannot read) instead of running; its denied line still names the push to the default branch.
+      const unclosed = form.includes("printf '('");
+      expect(decide("claude", guard, allowed, undefined, undefined, shell).deny, allowed).toBe(unclosed);
     },
   );
 
@@ -2012,6 +2016,41 @@ describe("a heredoc body read as data by the guard in every mode (a5, REQ-FLOW-1
     }
     await getRepo().seedFiles({ ".stamity/runs/2026-10-23_x/record.md": record("in progress", "unattended") });
     for (const command of lines) expect(decide(tool, guard, command).deny, `${tool} unattended: ${command}`).toBe(true);
+  });
+});
+
+describe("the guard's closing scan over a quoted heredoc body, and a line too long to read (a5, build/12, review/115)", () => {
+  const helper = (tool: Tool, guard: string, command: string): Decision =>
+    clientDecision(tool, run(guard, JSON.stringify({ ...JSON.parse(payload(tool, command)), agent_id: "a1" })), `${tool} helper: ${command}`);
+  const UNATTENDED = { ".stamity/runs/2026-10-23_x/record.md": record("in progress", "unattended") };
+
+  // Red on 77116591: the body's parenthesis kept the substitution open to the line's end, so the push behind it ran.
+  it.each(TOOLS)("%s: refuses a push behind a commit-message body with an unbalanced parenthesis, in every mode", async (tool) => {
+    const guard = await placeGuard(tool);
+    const command = "git commit -m \"$(cat <<'EOF'\nfix (the reader\nEOF\n)x y\" && git push --force origin feat/x";
+    expect(decide(tool, guard, command).deny, `${tool}: ${command}`).toBe(true);
+    expect(helper(tool, guard, command).deny, `${tool} helper: ${command}`).toBe(true);
+    expect(decide(tool, guard, "git commit -m \"$(cat <<'EOF'\nfix (the reader\nEOF\n)\"")).toEqual({ deny: false });
+    await getRepo().seedFiles(UNATTENDED);
+    expect(decide(tool, guard, command).deny, `${tool} unattended: ${command}`).toBe(true);
+  });
+
+  // Red on 77116591: the long benign line was read and allowed in every mode.
+  it.each(TOOLS)("%s: asks attended for a line past 65,536 characters, refuses it for a sub-agent and unattended", async (tool) => {
+    const guard = await placeGuard(tool);
+    const long = `echo ${"a".repeat(70_000)}`;
+    const verdict = personOnlyVerdict(long, BAKED_DEFAULT);
+    if (!verdict.deny) throw new Error("the long line reads as no act");
+    expect(verdict.act).toContain("A line too long for the guard to read");
+    expect(decide(tool, guard, long)).toEqual(expectedAttended(tool, verdict));
+    expect(helper(tool, guard, long).deny).toBe(true);
+    // The neighbour under the cap reads as today.
+    const short = `echo ${"a".repeat(59_995)}`;
+    expect(decide(tool, guard, short)).toEqual({ deny: false });
+    expect(helper(tool, guard, short)).toEqual({ deny: false });
+    await getRepo().seedFiles(UNATTENDED);
+    expect(decide(tool, guard, long)).toMatchObject({ deny: true, reason: expect.stringContaining("A line too long for the guard to read") });
+    expect(decide(tool, guard, short)).toEqual({ deny: false });
   });
 });
 

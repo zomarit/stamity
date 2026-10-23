@@ -320,7 +320,12 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // Moved again 2026-10-23 on the a4 lane (review/101, review/102), by the measured size plus a small margin: 221,151
   // bytes / 4,832 lines (copilot, generated), past both rows, because round 9 matches a program word's glob with no
   // regular expression and counts a word's braces once. 221,151 + 3,105 = 224,256 bytes; 4,832 + 96 = 4,928 lines.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 224_256, lines: 4_928 },
+  // Moved again 2026-10-23 on the a5 lane (REQ-FLOW-141, review/76, build/12, build/13, review/115), by the measured size
+  // plus a small margin: 245,978 bytes / 5,321 lines (copilot, generated; 222,630 bytes before the unit), past both
+  // rows, because both embedded verdicts now read a heredoc body as data where only a data sink receives it, pass a
+  // quoted heredoc body in a substitution's closing scan, read a substitution nothing closes as filled in, and ask for
+  // a line past 64 KiB before any reading. 245,978 + 3,878 = 249,856 bytes; 5,321 + 99 = 5,420 lines.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 249_856, lines: 5_420 },
 };
 
 /** One generated script, ready for an adapter to place and register. */

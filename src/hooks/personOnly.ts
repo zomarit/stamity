@@ -478,6 +478,11 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   /** The quotes PowerShell opens and closes with: `'` and U+2018 to U+201B, `"` and U+201C to U+201E (v0b). */
   const PS_SINGLE = "'" + String.fromCharCode(0x2018, 0x2019, 0x201a, 0x201b);
   const PS_DOUBLE = '"' + String.fromCharCode(0x201c, 0x201d, 0x201e);
+  /**
+   * A heredoc's delimiter after its `<<` (REQ-FLOW-141): `-` for `<<-`, then the name from the set, in one pair of
+   * single or double quotes, or bare; any other spelling matches nothing.
+   */
+  const HEREDOC = /^(-?)[ \t]*(?:'([A-Za-z_]\w{0,63})'|"([A-Za-z_]\w{0,63})"|([A-Za-z_]\w{0,63}))(?![^\s;&|<>()])/;
 
   /**
    * A program word as the shell finds it: its last path part, without case or a Windows suffix, and without a trailing
@@ -540,17 +545,18 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
    * first heredoc operator is recorded, and at the line break ending its line, when it is that line's only one, its
    * body and terminator are skipped if a data sink receives them (`pastBody`); every other form reads as below. A
    * `nested` entry's `at` is its segment's index where it is a closed double-quoted `$(…)` an argument word wholly is,
-   * else -1; `ends` holds, per segment, the character that cut it and `>` where its standard output is redirected.
+   * else -1, and `open` where nothing closes it on the line, so its text is read as filled in (build/12); `ends` holds,
+   * per segment, the character that cut it and `>` where its standard output is redirected.
    */
   function splitLine(
     text: string,
     blocks: boolean,
     pwsh: boolean,
     docs = 0,
-  ): { segments: string[][]; nested: { text: string; at: number; word: number }[]; marks: WordMark[][]; ends: string[] } {
+  ): { segments: string[][]; nested: { text: string; at: number; word: number; open: boolean }[]; marks: WordMark[][]; ends: string[] } {
     const segments: string[][] = [];
     const marks: WordMark[][] = [];
-    const nested: { text: string; at: number; word: number }[] = [];
+    const nested: { text: string; at: number; word: number; open: boolean }[] = [];
     const ends: string[] = [];
     // The first heredoc: where its word starts, its segment, delimiter, quoting and `<<-`, then that segment's words,
     // kinds, redirections, cut and cut index as the cut found them; `heredocs` counts every operator, `done` ends the one
@@ -697,6 +703,44 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       }
       return false;
     };
+    /**
+     * The index of the `)` closing a substitution or group whose text starts at `from`, or the text's length where none
+     * closes it on the line (build/12). A quoted heredoc's body, data the shell does not parse, is passed over, so a
+     * parenthesis in it neither ends the text early nor keeps it open; on a line holding a bare one, each body there is
+     * counted as before. One pass: each body is passed once.
+     */
+    const closing = (from: number): number => {
+      let level = 1;
+      let bodies: string[][] | null = [];
+      for (let j = from; j < text.length; j += 1) {
+        const c = text[j];
+        if (c === "(") level += 1;
+        else if (c === ")") {
+          level -= 1;
+          if (level === 0) return j;
+        } else if (c === "<" && text[j + 1] === "<" && text[j + 2] !== "<" && text[j - 1] !== "<") {
+          const head = HEREDOC.exec(text.slice(j + 2, j + 162));
+          if (head === null || head[4] !== undefined) bodies = null;
+          else bodies?.push([head[2] ?? head[3] ?? "", head[1] ?? ""]);
+        } else if (c === "\n") {
+          for (const [name, tabs] of bodies ?? []) {
+            let found = -1;
+            for (let at = j + 1; found === -1; ) {
+              const stop = text.indexOf("\n", at);
+              const end = stop === -1 ? text.length : stop;
+              const line = text.slice(at, end);
+              if ((tabs === "-" ? line.replace(/^\t+/, "") : line) === name) found = end;
+              else if (stop === -1) return text.length;
+              else at = stop + 1;
+            }
+            if (found === text.length) return text.length;
+            j = found;
+          }
+          bodies = [];
+        }
+      }
+      return text.length;
+    };
     // PowerShell's reading takes its typographic quotes as quotes too, so an act after one is read, not hidden.
     const quote = (c: string | undefined, kind: string): boolean => c !== undefined && (c === kind[0] || (pwsh && kind.includes(c)));
     let i = 0;
@@ -728,19 +772,13 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
             let j = start;
             if (c === "`") {
               while (j < text.length && text[j] !== "`") j += 1;
-            } else {
-              let level = 1;
-              while (j < text.length) {
-                if (text[j] === "(") level += 1;
-                else if (text[j] === ")") level -= 1;
-                if (level === 0) break;
-                j += 1;
-              }
-            }
+            } else j = closing(start);
+            const open = j >= text.length;
             const whole = !pwsh && c === "$" && i === opens && text[j + 1] === '"' && /^[\s;&|<>)]?$/.test(text[j + 2] ?? "");
-            nested.push({ text: text.slice(start, j), at: whole && j < text.length ? segments.length : -1, word: words.length });
-            // An unclosed substitution is a syntax error the shell runs nothing for, so it fills nothing in (build/4).
-            hide(word.length, word.length + Math.min(j + 1, text.length) - i, j < text.length ? "e" : "");
+            nested.push({ text: text.slice(start, j), at: whole && !open ? segments.length : -1, word: words.length, open });
+            // A substitution nothing closes on the line leaves the rest of it unread (build/12): the word is filled in, and
+            // its text is read as a filled-in line, so an act behind it asks or is refused, never one allowed word.
+            hide(word.length, word.length + Math.min(j + 1, text.length) - i, "e");
             word += text.slice(i, Math.min(j + 1, text.length));
             i = j + 1;
           } else {
@@ -796,18 +834,11 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         let j = start;
         if (ch === "`") {
           while (j < text.length && text[j] !== "`") j += 1;
-        } else {
-          let level = 1;
-          while (j < text.length) {
-            if (text[j] === "(") level += 1;
-            else if (text[j] === ")") level -= 1;
-            if (level === 0) break;
-            j += 1;
-          }
-        }
-        nested.push({ text: text.slice(start, j), at: -1, word: 0 });
-        // An unclosed substitution or group is a syntax error the shell runs nothing for, so it fills nothing in (build/4).
-        hide(word.length, word.length + Math.min(j + 1, text.length) - i, j >= text.length ? "" : ch === "(" ? "p" : "es");
+        } else j = closing(start);
+        const open = j >= text.length;
+        nested.push({ text: text.slice(start, j), at: -1, word: 0, open });
+        // A substitution or group nothing closes on the line leaves the rest of it unread (build/12), as above.
+        hide(word.length, word.length + Math.min(j + 1, text.length) - i, open ? "es" : ch === "(" ? "p" : "es");
         word += text.slice(i, Math.min(j + 1, text.length));
         inWord = true;
         i = j + 1;
@@ -834,7 +865,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
           // A heredoc (REQ-FLOW-141): `<<` or `<<-` and its delimiter, one pair of quotes or bare, from the set; any
           // other spelling, a descriptor number among them, is recorded as none, so the line keeps its reading.
           heredocs += 1;
-          const head = /^(-?)[ \t]*(?:'([A-Za-z_]\w{0,63})'|"([A-Za-z_]\w{0,63})"|([A-Za-z_]\w{0,63}))(?![^\s;&|<>()])/.exec(text.slice(i, i + 160));
+          const head = HEREDOC.exec(text.slice(i, i + 160));
           if (heredocs === 1 && op === "<<" && head !== null) {
             doc = { at: i, seg: segments.length, name: head[2] ?? head[3] ?? head[4] ?? "", bare: head[4] !== undefined, tabs: head[1] === "-" };
           }
@@ -1229,7 +1260,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       }
       commands.push(cmd);
     }
-    for (const inner of nested) commands.push(...commandsOf(inner.text, depth + 1, pwsh, tainted, fedIn, captured.has(inner)));
+    for (const inner of nested) commands.push(...commandsOf(inner.text, depth + 1, pwsh, tainted || inner.open, fedIn, captured.has(inner)));
     return commands;
   }
 
@@ -2432,6 +2463,11 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   }
 
   // Each segment's acts are collected (v0a); the readers record them through `deny`.
+  // A line past 64 KiB is one the guard cannot read (review/115): it asks before any reading, so no line can be built to
+  // outlast the hook's timeout, and the guard refuses it unattended and for a sub-agent.
+  if (command.length > 65_536) {
+    return deny("autonomy-loosen", "A line too long for the guard to read (over 65,536 characters), which may spell `--loosen`");
+  }
   const read = commandsOf(command, 0, false);
   for (const cmd of read) {
     const program = cmd[0] ?? "";
@@ -2592,6 +2628,11 @@ export function unattendedPushVerdict(
   /** The quotes PowerShell opens and closes with: `'` and U+2018 to U+201B, `"` and U+201C to U+201E (v0b). */
   const PS_SINGLE = "'" + String.fromCharCode(0x2018, 0x2019, 0x201a, 0x201b);
   const PS_DOUBLE = '"' + String.fromCharCode(0x201c, 0x201d, 0x201e);
+  /**
+   * A heredoc's delimiter after its `<<` (REQ-FLOW-141): `-` for `<<-`, then the name from the set, in one pair of
+   * single or double quotes, or bare; any other spelling matches nothing.
+   */
+  const HEREDOC = /^(-?)[ \t]*(?:'([A-Za-z_]\w{0,63})'|"([A-Za-z_]\w{0,63})"|([A-Za-z_]\w{0,63}))(?![^\s;&|<>()])/;
 
   /**
    * A program word as the shell finds it: its last path part, without case or a Windows suffix, and without a trailing
@@ -2654,17 +2695,18 @@ export function unattendedPushVerdict(
    * first heredoc operator is recorded, and at the line break ending its line, when it is that line's only one, its
    * body and terminator are skipped if a data sink receives them (`pastBody`); every other form reads as below. A
    * `nested` entry's `at` is its segment's index where it is a closed double-quoted `$(…)` an argument word wholly is,
-   * else -1; `ends` holds, per segment, the character that cut it and `>` where its standard output is redirected.
+   * else -1, and `open` where nothing closes it on the line, so its text is read as filled in (build/12); `ends` holds,
+   * per segment, the character that cut it and `>` where its standard output is redirected.
    */
   function splitLine(
     text: string,
     blocks: boolean,
     pwsh: boolean,
     docs = 0,
-  ): { segments: string[][]; nested: { text: string; at: number; word: number }[]; marks: WordMark[][]; ends: string[] } {
+  ): { segments: string[][]; nested: { text: string; at: number; word: number; open: boolean }[]; marks: WordMark[][]; ends: string[] } {
     const segments: string[][] = [];
     const marks: WordMark[][] = [];
-    const nested: { text: string; at: number; word: number }[] = [];
+    const nested: { text: string; at: number; word: number; open: boolean }[] = [];
     const ends: string[] = [];
     // The first heredoc: where its word starts, its segment, delimiter, quoting and `<<-`, then that segment's words,
     // kinds, redirections, cut and cut index as the cut found them; `heredocs` counts every operator, `done` ends the one
@@ -2811,6 +2853,44 @@ export function unattendedPushVerdict(
       }
       return false;
     };
+    /**
+     * The index of the `)` closing a substitution or group whose text starts at `from`, or the text's length where none
+     * closes it on the line (build/12). A quoted heredoc's body, data the shell does not parse, is passed over, so a
+     * parenthesis in it neither ends the text early nor keeps it open; on a line holding a bare one, each body there is
+     * counted as before. One pass: each body is passed once.
+     */
+    const closing = (from: number): number => {
+      let level = 1;
+      let bodies: string[][] | null = [];
+      for (let j = from; j < text.length; j += 1) {
+        const c = text[j];
+        if (c === "(") level += 1;
+        else if (c === ")") {
+          level -= 1;
+          if (level === 0) return j;
+        } else if (c === "<" && text[j + 1] === "<" && text[j + 2] !== "<" && text[j - 1] !== "<") {
+          const head = HEREDOC.exec(text.slice(j + 2, j + 162));
+          if (head === null || head[4] !== undefined) bodies = null;
+          else bodies?.push([head[2] ?? head[3] ?? "", head[1] ?? ""]);
+        } else if (c === "\n") {
+          for (const [name, tabs] of bodies ?? []) {
+            let found = -1;
+            for (let at = j + 1; found === -1; ) {
+              const stop = text.indexOf("\n", at);
+              const end = stop === -1 ? text.length : stop;
+              const line = text.slice(at, end);
+              if ((tabs === "-" ? line.replace(/^\t+/, "") : line) === name) found = end;
+              else if (stop === -1) return text.length;
+              else at = stop + 1;
+            }
+            if (found === text.length) return text.length;
+            j = found;
+          }
+          bodies = [];
+        }
+      }
+      return text.length;
+    };
     // PowerShell's reading takes its typographic quotes as quotes too, so an act after one is read, not hidden.
     const quote = (c: string | undefined, kind: string): boolean => c !== undefined && (c === kind[0] || (pwsh && kind.includes(c)));
     let i = 0;
@@ -2842,19 +2922,13 @@ export function unattendedPushVerdict(
             let j = start;
             if (c === "`") {
               while (j < text.length && text[j] !== "`") j += 1;
-            } else {
-              let level = 1;
-              while (j < text.length) {
-                if (text[j] === "(") level += 1;
-                else if (text[j] === ")") level -= 1;
-                if (level === 0) break;
-                j += 1;
-              }
-            }
+            } else j = closing(start);
+            const open = j >= text.length;
             const whole = !pwsh && c === "$" && i === opens && text[j + 1] === '"' && /^[\s;&|<>)]?$/.test(text[j + 2] ?? "");
-            nested.push({ text: text.slice(start, j), at: whole && j < text.length ? segments.length : -1, word: words.length });
-            // An unclosed substitution is a syntax error the shell runs nothing for, so it fills nothing in (build/4).
-            hide(word.length, word.length + Math.min(j + 1, text.length) - i, j < text.length ? "e" : "");
+            nested.push({ text: text.slice(start, j), at: whole && !open ? segments.length : -1, word: words.length, open });
+            // A substitution nothing closes on the line leaves the rest of it unread (build/12): the word is filled in, and
+            // its text is read as a filled-in line, so an act behind it asks or is refused, never one allowed word.
+            hide(word.length, word.length + Math.min(j + 1, text.length) - i, "e");
             word += text.slice(i, Math.min(j + 1, text.length));
             i = j + 1;
           } else {
@@ -2910,18 +2984,11 @@ export function unattendedPushVerdict(
         let j = start;
         if (ch === "`") {
           while (j < text.length && text[j] !== "`") j += 1;
-        } else {
-          let level = 1;
-          while (j < text.length) {
-            if (text[j] === "(") level += 1;
-            else if (text[j] === ")") level -= 1;
-            if (level === 0) break;
-            j += 1;
-          }
-        }
-        nested.push({ text: text.slice(start, j), at: -1, word: 0 });
-        // An unclosed substitution or group is a syntax error the shell runs nothing for, so it fills nothing in (build/4).
-        hide(word.length, word.length + Math.min(j + 1, text.length) - i, j >= text.length ? "" : ch === "(" ? "p" : "es");
+        } else j = closing(start);
+        const open = j >= text.length;
+        nested.push({ text: text.slice(start, j), at: -1, word: 0, open });
+        // A substitution or group nothing closes on the line leaves the rest of it unread (build/12), as above.
+        hide(word.length, word.length + Math.min(j + 1, text.length) - i, open ? "es" : ch === "(" ? "p" : "es");
         word += text.slice(i, Math.min(j + 1, text.length));
         inWord = true;
         i = j + 1;
@@ -2948,7 +3015,7 @@ export function unattendedPushVerdict(
           // A heredoc (REQ-FLOW-141): `<<` or `<<-` and its delimiter, one pair of quotes or bare, from the set; any
           // other spelling, a descriptor number among them, is recorded as none, so the line keeps its reading.
           heredocs += 1;
-          const head = /^(-?)[ \t]*(?:'([A-Za-z_]\w{0,63})'|"([A-Za-z_]\w{0,63})"|([A-Za-z_]\w{0,63}))(?![^\s;&|<>()])/.exec(text.slice(i, i + 160));
+          const head = HEREDOC.exec(text.slice(i, i + 160));
           if (heredocs === 1 && op === "<<" && head !== null) {
             doc = { at: i, seg: segments.length, name: head[2] ?? head[3] ?? head[4] ?? "", bare: head[4] !== undefined, tabs: head[1] === "-" };
           }
@@ -3343,7 +3410,7 @@ export function unattendedPushVerdict(
       }
       commands.push(cmd);
     }
-    for (const inner of nested) commands.push(...commandsOf(inner.text, depth + 1, pwsh, tainted, fedIn, captured.has(inner)));
+    for (const inner of nested) commands.push(...commandsOf(inner.text, depth + 1, pwsh, tainted || inner.open, fedIn, captured.has(inner)));
     return commands;
   }
 
@@ -3872,6 +3939,11 @@ export function unattendedPushVerdict(
     return null;
   }
 
+  // A line past 64 KiB is one the guard cannot read (review/115), refused here before any reading; the land verb's
+  // attended reading leaves it to the person-only verdict, which asks for it.
+  if (command.length > 65_536) {
+    return landOnly ? { deny: false } : deny("A line too long for the guard to read (over 65,536 characters)");
+  }
   const commands = commandsOf(command, 0, powershell);
   // The land verb's line in every mode (REQ-FLOW-121, a4): read on the parsed program words alone, so a commit message,
   // a comment or a search that only names the verb runs; a parsed `stamity run land` passes only as the one simple
