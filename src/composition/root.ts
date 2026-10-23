@@ -29,6 +29,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import * as configAutonomy from "../config/autonomy.ts";
 import * as configParse from "../config/parse.ts";
 import * as denyScan from "../denyscan/denyScan.ts";
 import * as managedBlocks from "../merge/managedBlocks.ts";
@@ -373,6 +374,7 @@ export interface EngineRegistry {
   };
   readonly config: {
     readonly parse: typeof configParse;
+    readonly autonomy: typeof configAutonomy;
   };
   /**
    * The change classifier: one class per change from its paths, and the checks
@@ -541,7 +543,7 @@ export function createEngine(): EngineRegistry {
     guard: { promptGuard, outputBounds, tokenEstimate },
     resilience: { retry, failureClass, failureLog, adapterTimeout },
     roster: { triggers: rosterTriggers, reviewCaps, agentPolicies, agentGrants, modelLadder, modelDefaults },
-    config: { parse: configParse },
+    config: { parse: configParse, autonomy: configAutonomy },
     change: { classify: changeClassify, testInputs: changeTestInputs, scan: changeScan, personOnlyPaths: changePersonOnlyPaths },
   });
 }
