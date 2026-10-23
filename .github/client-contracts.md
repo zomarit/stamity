@@ -89,7 +89,10 @@ they do not claim authenticated client sessions, native trust approval, or human
   session in a sub-directory of the project and not one outside its ancestry. Session-relative hook CWD
   requires locating the nearest initialized project. PreToolUse carries no calling-agent identity, and some tool paths bypass hooks. No
   native per-agent `tools` key is documented; generated developer instructions carry the
-  category restriction and `sandbox_mode` the filesystem boundary. Unsupported PreToolUse
+  category restriction. A spawned role runs in the parent's sandbox, which its file's
+  `sandbox_mode` does not override (subagents page, read 2026-10-23; measured on codex-cli
+  0.155.1, 2026-10-23: a `read-only` role wrote under a `workspace-write` parent), so a role's
+  grant, read-only included, is prompt-level. Unsupported PreToolUse
   `ask`/stop controls become explicit denials pending manual review; unsupported output flags
   are diagnosed without losing a denial.
   [Skills](https://learn.chatgpt.com/docs/build-skills),

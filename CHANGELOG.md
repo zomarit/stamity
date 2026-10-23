@@ -79,6 +79,12 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   than 1.9.0, upgrade through 1.16.0 first, or keep the Action off that one upgrade pull request
   ([`docs/cloud.md`](docs/cloud.md)).
 
+### Security
+
+- **A Claude Code guard that times out blocks the call.** The Claude Code guard entries carry `onFailure: "block"`,
+  so a guard that times out blocks the call (measured on Claude Code 2.1.309; the vendor dates the key to 2.1.295;
+  older clients not measured). The Copilot CLI, which reads the same file, ignores the key (measured on 1.0.100).
+
 ### Added
 
 - **The `production` pack.** `stamity add production` installs `/st-production-review` and two skills that start
@@ -177,6 +183,8 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   installed pack whose rules share that file (the warning gives the `clean --pack <id>` call), shorten the operator
   text the root `AGENTS.override.md` repeats, or set `ruleDelivery: "on-demand"`, where they advised a content
   selection `sync` never honoured.
+- **The reviewer files a pass-through layer as a finding even where the plan asks for it**, naming its consequence:
+  the interface kept twice.
 
 ### Deprecated
 
@@ -209,6 +217,20 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
 - **Pack signing gives the transparency log 30 s per request.** The engine's `pack.sign` handed the signing client
   its 5 s default, so a Rekor upload slower than that was aborted and sent again after it had landed, and the second
   upload was answered with a conflict that failed signing. Only an upload slower than 30 s can still fail this way.
+- **Codex agent files and the capability page no longer claim a verdict role's `sandbox_mode` binds it.** Measured
+  on codex-cli 0.155.1, a spawned role runs in the parent's sandbox, so its read-only grant is prompt-level.
+- **A fork release names its npm dist-tag and rehearses the publish before the approval.** npm 11 refuses to publish
+  a prerelease without `--tag`, and every suffixed fork version (`1.16.0-acme.1`) is one, so a fork's publish failed
+  after its approval. `fork-release.yml` now publishes under `latest`, set once as `DIST_TAG`, and its `gates` job
+  runs the same publish with `--dry-run` right after the pack, with no secret: npm's tag-rule refusal stops the run
+  before anyone approves it, and a registry that refuses a tokenless dry run is a warning naming what was not
+  checked. The release and signing-rehearsal jobs run on `ubuntu-24.04`, the image their egress allowlists were
+  measured on, while GitHub moves `ubuntu-latest` to 26.04.
+- **`st-release` starts a deploy's change set at the service's last record whose `Outcome` reads `deployed`**, so a
+  held or failed attempt never becomes the next run's base; `/st-production-review`'s Ready line names the open
+  blocking checks of a `NO`.
+- **`/st-ui-review` stops at Frame on a working tree with changes outside `.stamity/`**, so its source review and its
+  browser evidence measure the same tree.
 
 ## [1.16.0] - 2026-10-20
 
