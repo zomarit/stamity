@@ -3506,9 +3506,15 @@ describe("the verdicts embed no canonical package name (a4, build/10)", () => {
  * the same body as an allowed one, one fact away.
  */
 describe("a heredoc body read as data only where a data sink receives it (a5, REQ-FLOW-141, review/76)", () => {
-  const DEFAULT = { ...ON_FEATURE, stricterThanDefault: false };
+  // TEST CHANGE, justified (build/10 meets a5): the verdicts' fallback package name is empty for a caller that names no
+  // identity (build/10), so this block names this package's identity as the emitted guard bakes it for this repository
+  // (`contextsOf`): `packageName` on the person-only verdict's context and the same name on the unattended verdict's
+  // identity. Without it the pinned package is not read as the engine, and its stdin body is read as commands.
+  const PACKAGE_NAME = "@zomarit/stamity";
+  const DEFAULT = { ...ON_FEATURE, stricterThanDefault: false, packageName: PACKAGE_NAME };
+  const IDENTITY = { name: PACKAGE_NAME } as const;
   const FORCE = "git push --force origin feat/x";
-  const both = (command: string): readonly unknown[] => [personOnlyVerdict(command, DEFAULT), unattendedPushVerdict(command)];
+  const both = (command: string): readonly unknown[] => [personOnlyVerdict(command, DEFAULT), unattendedPushVerdict(command, false, false, IDENTITY)];
 
   // Red on 84a42e9a: each body line was read as a command, the force push refused and the glob or bare-expansion
   // line asked as a loosening; unattended, the push line was refused as a raw push.
@@ -3544,7 +3550,7 @@ describe("a heredoc body read as data only where a data sink receives it (a5, RE
       `stamity learn capture <<'EOF' && ${FORCE}\nbody\nEOF`,
     ]) {
       expect(personOnlyVerdict(command, DEFAULT), command).toMatchObject({ deny: true, rule: "force-push" });
-      expect(unattendedPushVerdict(command).deny, command).toBe(true);
+      expect(unattendedPushVerdict(command, false, false, IDENTITY).deny, command).toBe(true);
     }
   });
 
@@ -3612,13 +3618,13 @@ describe("a heredoc body read as data only where a data sink receives it (a5, RE
     ["npx of another package's pinned version", `npx -y other@1.0.0 learn capture <<'EOF'\n${FORCE}\nEOF`],
   ])("keeps the reading as built for %s", (_, command) => {
     expect(personOnlyVerdict(command, DEFAULT), command).toMatchObject({ deny: true, rule: "force-push" });
-    expect(unattendedPushVerdict(command).deny, command).toBe(true);
+    expect(unattendedPushVerdict(command, false, false, IDENTITY).deny, command).toBe(true);
   });
 
   it("keeps a run verb named in a data body refused unattended, as the raw text names it", () => {
     const command = "cat >> notes.md <<'EOF'\nthen stamity run end --run x closes it\nEOF";
     expect(personOnlyVerdict(command, DEFAULT)).toEqual({ deny: false });
-    expect(unattendedPushVerdict(command)).toMatchObject({ deny: true, reason: expect.stringContaining("REQ-FLOW-121") });
+    expect(unattendedPushVerdict(command, false, false, IDENTITY)).toMatchObject({ deny: true, reason: expect.stringContaining("REQ-FLOW-121") });
   });
 
   it("keeps an argument word's mark on the outer command, so a filled-in loosening still asks", () => {
