@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { appendFile, mkdir, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { appendFile, chmod, mkdir, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { dirname, join, relative, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
@@ -370,6 +370,46 @@ describe("readBaseline — a replace ref does not change what HEAD holds (build/
     replaceBlobAtHead(root, ".stamity/manifest.json", manifestText());
     expect((await readBaseline(root, [CLAUDE_COPY])).mode).toBe("ask");
   });
+
+  it("reads the manifest blob HEAD holds with `core.useReplaceRefs=true` in the repository's config (review/116)", async ({ skip }) => {
+    const root = tempDir().path("repo");
+    await put(root, CLAUDE_COPY, guardText());
+    await put(root, ".stamity/manifest.json", manifestText({ mode: "ask" }));
+    await commitAll(root, skip);
+    git(root, ["config", "core.useReplaceRefs", "true"]);
+    await put(root, ".stamity/manifest.json", manifestText());
+    replaceBlobAtHead(root, ".stamity/manifest.json", manifestText());
+    expect((await readBaseline(root, [CLAUDE_COPY])).mode).toBe("ask");
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "starts each of its three git reads with `-c core.useReplaceRefs=false`, which beats the repository's config on every git (review/116)",
+    async ({ skip }) => {
+      const root = tempDir().path("repo");
+      await put(root, ".stamity/manifest.json", manifestText({ mode: "ask" }));
+      await commitAll(root, skip);
+      // A stand-in `git` first on PATH that logs its arguments, then runs the real git: the gate's own spawn, unchanged.
+      const real = execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim();
+      const bin = tempDir().path("fake-git-bin");
+      const log = tempDir().path("git-args.log");
+      await mkdir(bin, { recursive: true });
+      await writeFile(join(bin, "git"), `#!/bin/sh\nprintf '%s\\n' "$*" >> '${log}'\nexec '${real}' "$@"\n`, "utf8");
+      await chmod(join(bin, "git"), 0o755);
+      const before = process.env["PATH"];
+      process.env["PATH"] = `${bin}:${before ?? ""}`;
+      try {
+        expect((await readBaseline(root, [CLAUDE_COPY])).mode).toBe("ask");
+      } finally {
+        process.env["PATH"] = before;
+      }
+      const calls = (await readFile(log, "utf8")).split("\n").filter((line) => line !== "");
+      for (const verb of ["rev-parse", "ls-tree", "cat-file"]) {
+        const call = calls.find((line) => line.includes(` ${verb} `));
+        expect(call, `${verb} in ${JSON.stringify(calls)}`).toBeDefined();
+        expect(call?.startsWith("-c core.useReplaceRefs=false "), call).toBe(true);
+      }
+    },
+  );
 
   it("reads the guard copy blob HEAD holds, not the one a replace ref points at", async ({ skip }) => {
     const root = tempDir().path("repo");

@@ -205,7 +205,7 @@ type GitAnswer = { ok: true; stdout: string } | { ok: false; code: number | null
 /**
  * One git read from the setup root, through the hardened construction the
  * CLI's other git reads use: git by absolute path, no `GIT_*` variable, a
- * bare-shaped folder refused, no file-system monitor.
+ * bare-shaped folder refused, no file-system monitor, no replace refs.
  */
 function runGit(rootDir: string, args: readonly string[]): Promise<GitAnswer> {
   if (gitDiscoveryMeetsBareShape(rootDir)) return Promise.resolve({ ok: false, code: null });
@@ -215,7 +215,8 @@ function runGit(rootDir: string, args: readonly string[]): Promise<GitAnswer> {
   return new Promise((resolvePromise) => {
     execFile(
       git,
-      ["-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", ...args],
+      // `core.useReplaceRefs=false` leads: on git 2.19–2.42 a repository's own config beats GIT_NO_REPLACE_OBJECTS (review/116).
+      ["-c", "core.useReplaceRefs=false", "-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", ...args],
       { cwd: rootDir, env, encoding: "utf8", timeout: GIT_SHOW_TIMEOUT_MS, maxBuffer: MANIFEST_MAX_BYTES, windowsHide: true },
       (error, stdout) => {
         if (error === null) resolvePromise({ ok: true, stdout });
