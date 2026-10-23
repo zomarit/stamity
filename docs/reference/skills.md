@@ -60,11 +60,11 @@ Builds the human QA walk-through for a change — a risk-ordered table of scenar
 
 ## `st-unattended`
 
-Binds a run with nobody watching to its floors — the pre-flight and the ready check before Frame, declared defaults in place of every ask, pushes only through the run verbs, and one draft pull request carrying the morning list at every exit. Called by name from a flow whose record reads `Mode: unattended`, or by `/st-work` for its morning walk, and never selected on its own. Triggers only when a touchpoint's run record head reads `Mode: unattended`, or when `/st-work` points a run at the morning walk.
+Binds a run with nobody watching to its floors — the pre-flight and the ready check before Frame, declared defaults in place of every ask, pushes only through the run verbs, and one pull request carrying the morning list at every exit, landed by `stamity run land` when its evidence holds. Called by name from a flow whose record reads `Mode: unattended`, or by `/st-work` for its morning walk, and never selected on its own. Triggers only when a touchpoint's run record head reads `Mode: unattended`, or when `/st-work` points a run at the morning walk.
 
 - **Tags:** `orchestration`
 - **Load:** `on-demand`
-- **Obsolete when:** every supported client enforces an unattended mode natively — a pre-flight, a push limited to the run's own branch, no person-only act, and a draft pull request at every exit — so no run follows those floors from text
+- **Obsolete when:** every supported client enforces an unattended mode natively — a pre-flight, a push limited to the run's own branch, no person-only act, and one pull request at every exit that lands only on its evidence — so no run follows those floors from text
 
 ## `st-verify`
 

@@ -90,6 +90,13 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   (`config changed`, `no pre-flight record`, `configuration unreadable`). A refused pre-flight's record lets only
   `run end --refused` take its draft ending, carrying the run's own records alone. `gate` is now listed as mutating,
   and its `--dry-run` reaches `preflight` only.
+- **A looser guard is the person's to write.** `sync`, `init` and `workspace sync` refuse with `AUTONOMY_LOOSENED`,
+  writing nothing, to bake into a person-only guard copy an autonomy setting looser than the strictest of the guard
+  copies on disk, the setting committed at `HEAD` and the manifest being replaced, until the person passes
+  `--loosen`; a `--loosen` run names on stderr each guard copy it loosened and what it dropped. A repository that
+  never commits its guard copies meets the refusal on a fresh clone's first `sync` and passes `--loosen` once. A
+  1.16.0 guard carries no baked setting, so the first `sync` after upgrading adopts the `autonomous` default with no
+  flag; set `autonomy.mode` to `ask` before that `sync` to keep 1.16.0's asks.
 
 ### Added
 
@@ -156,6 +163,18 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   come from pstack, a public set of agent skills in the cursor/plugins repository (MIT); the text here is written fresh.
 - **The packs reference lists each pack's skills and commands** with their descriptions, under its class counts
   ([`docs/reference/packs.md`](docs/reference/packs.md)).
+- **`stamity run land --run <id>` lands the run's own pull request on its evidence.** It merges the pull request at
+  its head, or fast-forwards the default branch to it with `--fast-forward`, only when every required check run is
+  green (commit statuses never count), no review thread is unresolved, and the ledger at the head holds no open
+  Critical or Warning row. It lands only the pull request the run verb recorded when it opened the draft, and only one
+  the run's login opened. It asks instead for changes to CI, hook, manifest or repository-declared hook-script files,
+  held patches, `autonomy.mode: ask`, and deploying branches or acts, listing every reason and the head commit; the
+  person answers with `--approved <that commit>`, which holds only while the head is that commit. `--ready` marks a
+  draft ready on the same evidence, and `--wait <minutes>` (at most 9) waits for pending checks, including those not
+  started yet, the whole call ending within 9 minutes. It writes why a merge waits onto the pull request as one
+  `merge waits on:` line. It works under an app installation token and through version-manager shims. Every `gh` call
+  starts at the filesystem root, so a `gh` pinned only in the repository's own version config (a project
+  `.tool-versions` or `mise.toml`) no longer resolves there, and the verb refuses.
 
 ### Changed
 
@@ -198,6 +217,27 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
 - **Codex, Cursor and Copilot hook entries name their script in plain text after the encoded row**, and the runner
   refuses an entry whose word and row disagree. Codex asks you to trust `.codex/hooks.json` again after this update,
   because the file's hash changes.
+- **The person-only guard bakes the autonomy setting into every copy**, as a `// stamity-autonomy` line. By default a
+  ready mark, a local tag and a workflow dispatch the repository does not name as deploying run unasked on the main
+  thread, and a sub-agent's call to one is refused; `autonomy.mode: ask` restores 1.16.0's asks, and a raw ready mark
+  stays refused while a run is unattended. A commit-status or check-run write is refused in every mode. An `--admin`
+  merge, a push or REST or GraphQL write onto a branch `autonomy.deployingBranches` names, a dispatch named as
+  deploying, `--loosen` on a stamity command (or a word the guard cannot read on one, which may spell it), and
+  `stamity run land --approved <sha>` ask, attended, and are refused unattended and for a sub-agent; the land verb
+  stands alone on its line in every mode. A publish carrying `--dry-run` runs only when npm would read it as one. The
+  guard's reading of a shell line is linear in its length, with no regular expression built from the line, and fails
+  closed where it cannot read a word: a brace form or a parameter span longer than 256 characters is read as filled
+  in.
+- **`/st-work` no longer asks about the commit at its close.** After the last round it commits, pushes and opens or
+  updates the draft pull request through `stamity run checkpoint --pr`, then runs `stamity run land --ready --wait 8`,
+  which merges the pull request when its evidence holds. When the land asks (for example under `autonomy.mode: ask`,
+  or a CI or guard file in the diff), the close asks you first, naming the pull request, every reason and the head
+  commit, and leaves the merge held unless you say yes. On yes it runs `stamity run land --ready --approved <sha>` for
+  exactly that commit, and the guard asks again on that line; a commit pushed after your yes is asked about again. A
+  refused land waits as a held row on the summary list, and the next walk retries it with the same `--ready --wait 8`
+  line. Say "don't commit" at the close to keep the work local. Unattended runs land through
+  `stamity run land --ready --wait 8` after `run end` and never pass `--approved`. Every run writes
+  `.stamity/runs/<id>/morning.md` at its close.
 
 ### Deprecated
 

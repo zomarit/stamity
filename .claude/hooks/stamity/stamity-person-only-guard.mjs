@@ -12,11 +12,16 @@
 // around `stamity run checkpoint` and `stamity run end`. `curl` and `wget` appear
 // below only as command words it reads; it runs none.
 //
+// The autonomy setting this copy was written for is the marker line below the
+// banner: the acts it names in `runs` run unasked, and a deploying branch or act
+// asks (REQ-FLOW-137). A commit status or check run write is refused in every mode.
+//
 // Generated file — regenerate it rather than editing; local edits are overwritten.
 // Trust posture: exec form, repo-committed, no dynamic evaluation, no network reach.
 // Reads outside repo state: the pending call's payload on stdin and the
 // STAMITY_UNATTENDED and STAMITY_REPO_ROOT variables. Reads the git metadata and
 // the run records' heads; writes only the pre-flight canary.
+// stamity-autonomy {"mode":"autonomous","runs":["pr-ready","tag"],"deployingBranches":[],"deploying":[]}
 
 import { closeSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
@@ -40,6 +45,17 @@ const CANARY_SEGMENTS = [".stamity","preflight-canary.json"];
 const SHELL_TOOLS = new Set(["Bash", "PowerShell", "Shell", "bash", "powershell", "shell"]);
 // The GitHub MCP server's person-only tools and whether each is ask-class (personOnly.ts, GITHUB_MCP_ROWS).
 const MCP_ROWS = new Map([["mcp__github__merge_pull_request",true],["mcp__github__push_files",true],["mcp__github__create_or_update_file",true],["mcp__github__delete_file",true],["mcp__github__update_pull_request_branch",true],["mcp__github__pull_request_review_write",true],["mcp__github__create_pull_request_review",true],["mcp__github__submit_pending_pull_request_review",true],["mcp__github__update_pull_request",true],["mcp__github__update_pull_request_state",true],["mcp__github__update_pull_request_draft_state",true],["mcp__github__create_branch",true],["mcp__github__delete_repository",false],["mcp__github__create_pull_request",true]]);
+// The autonomy setting baked at emission, the marker line's own value (REQ-FLOW-137): the ask-class rules it runs
+// unasked (a workflow dispatch among them unless named as deploying), and whether it is stricter than the default.
+const AUTONOMY = {"mode":"autonomous","runs":["pr-ready","tag"],"deployingBranches":[],"deploying":[]};
+const RUNS = [...AUTONOMY.runs, ...(AUTONOMY.deploying.includes("workflow-dispatch") ? [] : ["workflow-dispatch"])];
+const STRICTER = AUTONOMY.mode === "ask" || AUTONOMY.deploying.length > 0 || AUTONOMY.deployingBranches.length > 0;
+// This package as emission found it (review/44, review/53): the program words that run it (its bins and unscoped name,
+// read from the engine's own package.json, so a renamed fork's bin is read as this package's), its name, whose
+// node_modules path names its CLI file, and whether this repository is the engine's own.
+const PACKAGE = {"words":["stamity","st"],"name":"@zomarit/stamity","own":true};
+// What an act the setting runs unasked is called where a sub-agent's call to it is refused (REQ-FLOW-137).
+const RUN_ACTS = {"pr-ready":"Marking a pull request ready for review","tag":"Creating a tag","workflow-dispatch":"Dispatching a workflow"};
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ANCHOR_SEGMENTS = ["hooks",".claude"];
@@ -82,6 +98,9 @@ function repoRoot() {
 // __name(fn, "name"), a helper it defines outside them: a no-op one stands in.
 const __name = (target) => target;
 const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
+	const PACKAGE_WORDS = ctx.packageWords ?? ["stamity", "st"];
+	const PACKAGE_NAME = (ctx.packageName ?? "@zomarit/stamity").toLowerCase();
+	const OWN_REPOSITORY = ctx.ownRepository ?? true;
 	const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
 	const KEYWORDS = /* @__PURE__ */ new Set([
 		"!",
@@ -274,23 +293,90 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 	}
 	function splitLine(text, blocks, pwsh) {
 		const segments = [];
+		const marks = [];
 		const nested = [];
 		let words = [];
+		let wordMarks = [];
 		let word = "";
+		let counted = 0;
+		let balance = 0;
+		const balanced = () => {
+			for (; counted < word.length; counted += 1) if (word[counted] === "{") balance += 1;
+			else if (word[counted] === "}") balance -= 1;
+			return balance <= 0;
+		};
+		let mark = {
+			first: -1,
+			last: 0,
+			kinds: ""
+		};
 		let inWord = false;
 		let dropNext = false;
 		const endWord = () => {
 			if (!inWord) return;
 			if (dropNext) dropNext = false;
-			else words.push(word);
+			else {
+				words.push(word);
+				wordMarks.push({
+					...mark,
+					last: Math.min(mark.last, word.length)
+				});
+			}
 			word = "";
+			counted = 0;
+			balance = 0;
+			mark = {
+				first: -1,
+				last: 0,
+				kinds: ""
+			};
 			inWord = false;
+		};
+		const hide = (from, to, kinds) => {
+			if (mark.first === -1) mark.first = from;
+			mark.last = Math.max(mark.last, to);
+			mark.kinds += kinds;
 		};
 		const cut = () => {
 			endWord();
 			dropNext = false;
-			if (words.length > 0) segments.push(words);
+			if (words.length > 0) {
+				segments.push(words);
+				marks.push(wordMarks);
+			}
 			words = [];
+			wordMarks = [];
+		};
+		const expands = (at, kinds) => {
+			let end = at + 1;
+			if (text[at] === "$" && text[at + 1] === "{") {
+				let level = 0;
+				while (end < text.length) {
+					if (end - at > 256) {
+						end = text.length;
+						break;
+					}
+					if (text[end] === "{") level += 1;
+					else if (text[end] === "}") level -= 1;
+					end += 1;
+					if (level === 0) break;
+				}
+			}
+			hide(word.length, word.length + (end - at), kinds);
+		};
+		const braceExpands = (at) => {
+			let quoted = "";
+			for (let j = at + 1; j < text.length; j += 1) {
+				if (j - at > 256) return true;
+				const c = text[j] ?? "";
+				if (quoted !== "") {
+					if (c === quoted) quoted = "";
+				} else if (c === "'" || c === "\"") quoted = c;
+				else if (c === "\\") j += 1;
+				else if (c === "}" || /\s/.test(c)) return false;
+				else if (c === "," || c === "." && text[j + 1] === ".") return true;
+			}
+			return false;
 		};
 		const quote = (c, kind) => c !== void 0 && (c === kind[0] || pwsh && kind.includes(c));
 		let i = 0;
@@ -328,9 +414,11 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 							}
 						}
 						nested.push(text.slice(start, j));
+						hide(word.length, word.length + Math.min(j + 1, text.length) - i, j < text.length ? "e" : "");
 						word += text.slice(i, Math.min(j + 1, text.length));
 						i = j + 1;
 					} else {
+						if (c === "$") expands(i, "e");
 						word += c;
 						i += 1;
 					}
@@ -385,6 +473,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 					}
 				}
 				nested.push(text.slice(start, j));
+				hide(word.length, word.length + Math.min(j + 1, text.length) - i, j >= text.length ? "" : ch === "(" ? "p" : "es");
 				word += text.slice(i, Math.min(j + 1, text.length));
 				inWord = true;
 				i = j + 1;
@@ -395,14 +484,24 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			else if (ch === ">" || ch === "<") {
 				if (inWord && /^\d+$/.test(word)) {
 					word = "";
+					counted = 0;
+					balance = 0;
+					mark = {
+						first: -1,
+						last: 0,
+						kinds: ""
+					};
 					inWord = false;
 				} else endWord();
 				while (i < text.length && "<>&|".includes(text[i] ?? "")) i += 1;
 				dropNext = true;
-			} else if (";&|\n\r()`".includes(ch) || blocks && ch === "{" && !inWord || blocks && ch === "}" && word.split("{").length <= word.split("}").length) {
+			} else if (";&|\n\r()`".includes(ch) || blocks && ch === "{" && !inWord || blocks && ch === "}" && balanced()) {
 				cut();
 				i += 1;
 			} else {
+				if (ch === "$" || pwsh && ch === "@" && !inWord && /[\w({]/.test(text[i + 1] ?? "")) expands(i, "es");
+				else if ("*?[".includes(ch)) expands(i, "g");
+				else if (ch === "{" && braceExpands(i)) expands(i, "b");
 				word += ch;
 				inWord = true;
 				i += 1;
@@ -411,19 +510,34 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		cut();
 		return {
 			segments,
-			nested
+			nested,
+			marks
 		};
 	}
 	const assigned = [];
-	function commandsOf(text, depth, pwsh) {
+	const unread = /* @__PURE__ */ new Map();
+	const anyMark = /* @__PURE__ */ new Map();
+	const markMap = /* @__PURE__ */ new Map();
+	const spills = /* @__PURE__ */ new Set();
+	const fed = /* @__PURE__ */ new Set();
+	const launched = /* @__PURE__ */ new Map();
+	function commandsOf(text, depth, pwsh, tainted = false, fedIn = false) {
 		if (depth > 4) throw Object.assign(/* @__PURE__ */ new Error("nesting"), { code: "NESTING_DEPTH" });
-		const { segments, nested } = splitLine(text, true, pwsh);
-		const commands = pwsh ? commandsOf(text, depth, false) : [];
-		for (const words of [...segments, .../[{}]/.test(text) ? splitLine(text, false, pwsh).segments : []]) {
+		const { segments, nested, marks } = splitLine(text, true, pwsh);
+		const commands = pwsh ? commandsOf(text, depth, false, tainted, fedIn) : [];
+		const braces = /[{}]/.test(text) ? splitLine(text, false, pwsh) : {
+			segments: [],
+			marks: []
+		};
+		const allMarks = [...marks, ...braces.marks];
+		for (const [segment, words] of [...segments, ...braces.segments].entries()) {
 			let k = 0;
 			let line = null;
+			let lineFrom = 0;
+			let viaStdin = false;
 			while (k < words.length && line === null) {
 				const word = words[k] ?? "";
+				if (programName(word) === "xargs") viaStdin = true;
 				let sub = k + 1;
 				while (MANAGERS.has(programName(word)) && sub < words.length) {
 					const option = words[sub] ?? "";
@@ -448,6 +562,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 							continue;
 						}
 						if (!/^(-|\d)/.test(option)) break;
+						const optionAt = k;
 						k += 1;
 						if (option === "--") break;
 						let value;
@@ -469,36 +584,214 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 						}
 						if (isLine && value !== void 0) {
 							line = [value, ...words.slice(k)].join(" ");
+							lineFrom = optionAt;
 							break;
 						}
 					}
 				} else break;
 			}
 			if (line !== null) {
-				commands.push(...commandsOf(line, depth + 1, pwsh));
+				const lineTainted = tainted || (allMarks[segment] ?? []).slice(lineFrom).some((each) => each.kinds !== "");
+				commands.push(...commandsOf(line, depth + 1, pwsh, lineTainted, fedIn || viaStdin));
 				continue;
 			}
 			const cmd = words.slice(k);
 			if (cmd.length === 0) continue;
-			if (/\s/.test(cmd[0] ?? "") && cmd.join(" ") !== text) commands.push(...commandsOf(cmd.join(" "), depth + 1, pwsh));
+			const program = cmd[0] ?? "";
+			const cut = Math.max(program.lastIndexOf("/"), program.lastIndexOf("\\")) + 1;
+			const last = programName(program);
+			const wildcards = (last.match(/[*?[]/g) ?? []).length;
+			const mayName = (name) => {
+				const tokens = [];
+				for (let i = 0; i < last.length; i += 1) {
+					const c = last[i] ?? "";
+					const close = c === "[" ? last.indexOf("]", i + 2) : -1;
+					if (close !== -1) {
+						tokens.push("?");
+						i = close;
+					} else tokens.push(c === "*" || c === "?" ? c : `=${c}`);
+				}
+				let t = 0;
+				let n = 0;
+				let star = -1;
+				let resume = 0;
+				while (n < name.length) if (t < tokens.length && (tokens[t] === "?" || tokens[t] === `=${name[n]}`)) {
+					t += 1;
+					n += 1;
+				} else if (t < tokens.length && tokens[t] === "*") {
+					star = t;
+					resume = n;
+					t += 1;
+				} else if (star !== -1) {
+					t = star + 1;
+					resume += 1;
+					n = resume;
+				} else return false;
+				while (t < tokens.length && tokens[t] === "*") t += 1;
+				return t === tokens.length;
+			};
+			const globMayName = () => wildcards > Math.max(0, ...PACKAGE_WORDS.map((name) => name.length)) || PACKAGE_WORDS.some(mayName);
+			const wordMarks = (allMarks[segment] ?? []).slice(k);
+			const markOf = (at) => wordMarks[at] ?? {
+				first: -1,
+				last: 0,
+				kinds: ""
+			};
+			const dashes = (at) => markOf(at).first === 0 || (cmd[at] ?? "").startsWith("-");
+			const launcher = programName(program);
+			const launches = [
+				"node",
+				"nodejs",
+				"bun",
+				"deno",
+				"tsx"
+			].includes(launcher);
+			const valueOf = (at) => !launches && (MANAGER_VALUED.has(cmd[at - 1] ?? "") || [...MANAGER_VALUED].some((name) => name.startsWith("--") && (cmd[at] ?? "").startsWith(`${name}=`)));
+			const headFrom = (from) => {
+				for (let at = from; at < cmd.length; at += 1) {
+					const word = cmd[at] ?? "";
+					const previous = at > 1 ? cmd[at - 1] ?? "" : "";
+					if (word.startsWith("-") || previous.startsWith("-") && !previous.includes("=")) continue;
+					return at;
+				}
+				return -1;
+			};
+			const scriptFile = (word) => /[\\/]/.test(word) || /\.(?:[cm]?[jt]s|[jt]sx)$/i.test(word);
+			const lastPartMarked = (at) => {
+				const word = cmd[at] ?? "";
+				return markOf(at).last > Math.max(word.lastIndexOf("/"), word.lastIndexOf("\\")) + 1;
+			};
+			let launchesUnread = false;
+			if (launches || MANAGERS.has(launcher)) {
+				let settledAt = -1;
+				let settlingMarked = false;
+				if (launches) {
+					const head = headFrom(1);
+					const word = head === -1 ? "" : cmd[head] ?? "";
+					const literal = head !== -1 && markOf(head).kinds === "";
+					const script = (at) => {
+						settledAt = at;
+						settlingMarked = at !== -1 && lastPartMarked(at);
+					};
+					const named = (at) => {
+						settledAt = at;
+						settlingMarked = at !== -1 && markOf(at).kinds !== "";
+					};
+					const DENO_TOOLS = [
+						"test",
+						"bench",
+						"fmt",
+						"lint",
+						"check",
+						"compile",
+						"doc",
+						"info",
+						"cache",
+						"coverage",
+						"types",
+						"upgrade",
+						"completions"
+					];
+					const BUN_TOOLS = [
+						"test",
+						"build",
+						"install",
+						"i",
+						"add",
+						"a",
+						"remove",
+						"rm",
+						"update",
+						"link",
+						"unlink",
+						"pm",
+						"init",
+						"outdated",
+						"publish",
+						"audit",
+						"info",
+						"patch",
+						"upgrade"
+					];
+					if (head === -1) settledAt = -1;
+					else if (launcher === "deno") {
+						if (!literal) named(head);
+						else if (word === "run") script(headFrom(head + 1));
+						else if (word === "task") named(headFrom(head + 1));
+						else if (DENO_TOOLS.includes(word)) named(head);
+						else if (scriptFile(word)) script(head);
+					} else if (launcher === "bun") {
+						if (!literal) named(head);
+						else if (word === "run") {
+							const next = headFrom(head + 1);
+							if (next !== -1 && markOf(next).kinds === "" && !scriptFile(cmd[next] ?? "")) named(next);
+							else script(next);
+						} else if (word === "x") named(headFrom(head + 1));
+						else if (BUN_TOOLS.includes(word)) named(head);
+						else if (scriptFile(word)) script(head);
+						else named(head);
+					} else if (launcher === "tsx" && literal && word === "watch") script(headFrom(head + 1));
+					else script(head);
+				} else for (let at = 1; at < cmd.length && settledAt === -1; at += 1) {
+					const word = cmd[at] ?? "";
+					if (markOf(at).kinds === "" && !word.startsWith("-") && ![
+						"run",
+						"run-script",
+						"exec",
+						"dlx",
+						"x"
+					].includes(word) && !valueOf(at)) settledAt = at;
+				}
+				const before = settledAt === -1 ? cmd.length : settledAt;
+				if (launches && settledAt !== -1 && !lastPartMarked(settledAt) && PACKAGE_WORDS.includes(programName(cmd[settledAt] ?? ""))) launched.set(cmd, settledAt);
+				launchesUnread = settlingMarked || cmd.slice(1, before).some((_, index) => markOf(index + 1).kinds !== "" && !valueOf(index + 1));
+			}
+			const unsure = cmd.map((_, at) => {
+				const mark = markOf(at);
+				if (tainted) return true;
+				if (at > 0) return /[ep]/.test(mark.kinds) || /[gb]/.test(mark.kinds) && dashes(at);
+				return launchesUnread || mark.last > cut && (/[eb]/.test(mark.kinds) || /g/.test(mark.kinds) && globMayName());
+			});
+			if (tainted || /e/.test(markOf(0).kinds) || /[gb]/.test(markOf(0).kinds) && dashes(0)) spills.add(cmd);
+			const marked = cmd.map((_, at) => tainted || markOf(at).kinds !== "");
+			unread.set(cmd, unsure);
+			anyMark.set(cmd, marked);
+			const raw = cmd.map((word, at) => tainted ? {
+				first: 0,
+				last: word.length,
+				kinds: "es"
+			} : markOf(at));
+			markMap.set(cmd, raw);
+			if (viaStdin || fedIn) fed.add(cmd);
+			const inherits = marked.some(Boolean);
+			const feeds = fedIn || viaStdin;
+			const head = markOf(0);
+			const literal = head.first === -1 ? program : program.slice(0, head.first) + program.slice(head.last);
+			if (/\s/.test(program) && cmd.join(" ") !== text) commands.push(...commandsOf(cmd.join(" "), depth + 1, pwsh, tainted || head.kinds !== "" && /\s/.test(literal), feeds));
 			cmd[0] = programName(cmd[0] ?? "");
-			if (/^git-./.test(cmd[0])) cmd.splice(0, 1, "git", cmd[0].slice(4));
+			if (/^git-./.test(cmd[0])) {
+				cmd.splice(0, 1, "git", cmd[0].slice(4));
+				unsure.splice(0, 1, unsure[0] === true, unsure[0] === true);
+				marked.splice(0, 1, marked[0] === true, marked[0] === true);
+				raw.splice(0, 1, markOf(0), markOf(0));
+			}
 			if (SHELLS.has(cmd[0] ?? "")) {
 				const flag = cmd.findIndex((word, index) => index > 0 && /^-[A-Za-z]*c[A-Za-z]*$/.test(word));
 				const script = flag === -1 ? void 0 : cmd[flag + 1];
-				if (script !== void 0) commands.push(...commandsOf(script, depth + 1, false));
-			} else if (cmd[0] === "eval") commands.push(...commandsOf(cmd.slice(1).join(" "), depth + 1, false));
+				if (script !== void 0) commands.push(...commandsOf(script, depth + 1, false, inherits, feeds));
+			} else if (cmd[0] === "eval") commands.push(...commandsOf(cmd.slice(1).join(" "), depth + 1, false, inherits, feeds));
 			else if (POWERSHELLS.has(cmd[0] ?? "")) {
 				const at = cmd.findIndex((word, index) => index > 0 && commandFlag(word) !== null);
 				const first = at !== -1 ? -1 : cmd.findIndex((word, index) => index > 0 && !/^-|^\/\w*$/.test(word));
-				if (at !== -1) commands.push(...commandsOf([commandFlag(cmd[at] ?? ""), ...cmd.slice(at + 1)].join(" "), depth + 1, true));
-				else if (first !== -1) commands.push(...commandsOf(cmd.slice(first).join(" "), depth + 1, true));
-				for (const word of first === -1 ? [] : cmd.slice(first + 1)) if (/\s/.test(word)) commands.push(...commandsOf(word, depth + 1, true));
+				if (at !== -1) commands.push(...commandsOf([commandFlag(cmd[at] ?? ""), ...cmd.slice(at + 1)].join(" "), depth + 1, true, inherits, feeds));
+				else if (first !== -1) commands.push(...commandsOf(cmd.slice(first).join(" "), depth + 1, true, inherits, feeds));
+				for (const word of first === -1 ? [] : cmd.slice(first + 1)) if (/\s/.test(word)) commands.push(...commandsOf(word, depth + 1, true, inherits, feeds));
 			} else if (cmd[0] === "cmd") {
 				const at = cmd.findIndex((word, index) => index > 0 && /^\/[ck]/i.test(word));
 				const rest = at === -1 ? "" : [(cmd[at] ?? "").slice(2), ...cmd.slice(at + 1)].join(" ");
-				if (at !== -1) commands.push(...commandsOf(rest, depth + 1, true));
-				if (rest.includes("^")) commands.push(...commandsOf(rest.replace(/\^([\s\S])/g, "$1"), depth + 1, true));
+				const own = inherits || /%[^%\s]+%|![^!\s]+!/.test(rest);
+				if (at !== -1) commands.push(...commandsOf(rest, depth + 1, true, own, feeds));
+				if (rest.includes("^")) commands.push(...commandsOf(rest.replace(/\^([\s\S])/g, "$1"), depth + 1, true, own, feeds));
 			} else if (cmd[0] === "git") {
 				const { sub, args } = gitParts(cmd);
 				const rebase = sub === "rebase" ? args : [];
@@ -515,13 +808,13 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 							break;
 						}
 					}
-					if (exec !== void 0) commands.push(...commandsOf(exec, depth + 1, false));
+					if (exec !== void 0) commands.push(...commandsOf(exec, depth + 1, false, inherits, feeds));
 				}
-				if (sub === "bisect" && args[0] === "run") commands.push(...commandsOf(args.slice(1).map((word) => `'${word.replace(/'/g, "'\\''")}'`).join(" "), depth + 1, false));
+				if (sub === "bisect" && args[0] === "run") commands.push(...commandsOf(args.slice(1).map((word) => `'${word.replace(/'/g, "'\\''")}'`).join(" "), depth + 1, false, inherits, feeds));
 			}
 			commands.push(cmd);
 		}
-		for (const inner of nested) commands.push(...commandsOf(inner, depth + 1, pwsh));
+		for (const inner of nested) commands.push(...commandsOf(inner, depth + 1, pwsh, tainted, fedIn));
 		return commands;
 	}
 	function gitParts(cmd) {
@@ -779,6 +1072,69 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			next
 		};
 	}
+	function packageArgs(cmd, basename = false) {
+		const program = cmd[0] ?? "";
+		const named = (word) => PACKAGE_WORDS.includes(programName(word)) || /stamity/i.test(word);
+		const engineFile = (word) => {
+			const path = word.replace(/\\/g, "/").toLowerCase();
+			return path.includes(`node_modules/${PACKAGE_NAME}/`) || /node_modules\/\.bin\/[^/]+$/.test(path) && PACKAGE_WORDS.includes(programName(path)) || OWN_REPOSITORY && /(?:^|\/)cli\.[cm]?[jt]s$/.test(path);
+		};
+		if (!basename && named(program)) return cmd.slice(1);
+		const launchedAt = basename ? void 0 : launched.get(cmd);
+		if (launchedAt !== void 0) return cmd.slice(launchedAt + 1);
+		if (![
+			"node",
+			"nodejs",
+			"bun",
+			"deno",
+			"tsx",
+			...MANAGERS
+		].includes(program)) return null;
+		if (basename) {
+			const at = cmd.findIndex((word, index) => index > 0 && /(?:^|[\\/])cli\.[cm]?[jt]s$/i.test(word));
+			return at === -1 ? null : cmd.slice(at + 1);
+		}
+		if (MANAGERS.has(program)) {
+			let k = 1;
+			while (k < cmd.length && (cmd[k] ?? "").startsWith("-")) k += MANAGER_VALUED.has(cmd[k] ?? "") ? 2 : 1;
+			if ([
+				"run",
+				"run-script",
+				"exec",
+				"dlx",
+				"x"
+			].includes(cmd[k] ?? "")) k += 1;
+			while (k < cmd.length && (cmd[k] ?? "").startsWith("-")) k += 1;
+			if (named(cmd[k] ?? "")) return cmd.slice(k + 1);
+		}
+		const at = cmd.findIndex((word, index) => index > 0 && (/stamity/i.test(word) || engineFile(word)));
+		return at === -1 ? null : cmd.slice(at + 1);
+	}
+	function branchKey(name) {
+		const lower = name.toLowerCase();
+		return lower.startsWith("refs/heads/") ? lower.slice(11) : lower;
+	}
+	function matchesDeployingBranch(name, patterns) {
+		const branch = branchKey(name);
+		return patterns.some((pattern) => {
+			const text = branchKey(pattern);
+			let matched = Array.from({ length: branch.length + 1 }, (_, j) => j === 0);
+			for (let at = 0; at < text.length; at += 1) {
+				const wide = text.startsWith("**", at);
+				const star = wide || text.charAt(at) === "*";
+				if (wide) at += 1;
+				const next = [star && matched[0] === true];
+				for (let j = 1; j <= branch.length; j += 1) {
+					const char = branch.charAt(j - 1);
+					if (wide) next.push(matched[j] === true || next[j - 1] === true);
+					else if (star) next.push(matched[j] === true || next[j - 1] === true && char !== "/");
+					else next.push(matched[j - 1] === true && char === text.charAt(at));
+				}
+				matched = next;
+			}
+			return matched[branch.length] === true;
+		});
+	}
 	const branch = (ref) => ref.replace(/^refs\/heads\//i, "").replace(/^refs\/remotes\/[^/]+\//i, "").toLowerCase();
 	const defaults = /* @__PURE__ */ new Set([
 		"main",
@@ -788,6 +1144,10 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 	const onDefault = ctx.currentBranch !== null && defaults.has(branch(ctx.currentBranch));
 	let tagNames = null;
 	const isTagName = (name) => (tagNames ??= new Set(ctx.tags.map((tag) => tag.replace(/^refs\/tags\//i, "").toLowerCase()))).has(name);
+	const deploying = ctx.deployingBranches ?? [];
+	const deploys = (name) => deploying.length > 0 && (name === null || matchesDeployingBranch(name, deploying));
+	const onDeploying = ctx.currentBranch !== null && deploys(ctx.currentBranch);
+	const landsOnDeploying = (values) => deploying.length > 0 && (values.length === 0 ? [...defaults].some(deploys) : values.some((value) => value === "" ? [...defaults].some(deploys) : deploys(value === null ? null : branch(value))));
 	const ASK_RULES = /* @__PURE__ */ new Set([
 		"push-default",
 		"push-tags",
@@ -797,18 +1157,26 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		"release",
 		"publish",
 		"secrets",
-		"protection"
+		"protection",
+		"admin-merge",
+		"push-deploying",
+		"workflow-dispatch",
+		"autonomy-loosen",
+		"land-approved"
 	]);
 	const acts = [];
+	const ran = [];
 	const deny = (rule, what) => {
 		const verdict = {
 			deny: true,
 			rule,
 			act: what,
-			reason: `${what} is a person-only act (${rule}): the person runs it, never the agent (REQ-FLOW-102). Stop here and list it for the person.`,
+			reason: rule === "status-write" ? `${what} is CI's to write, never the agent's (${rule}): a merge reads it as evidence (REQ-FLOW-140). Stop here.` : `${what} is a person-only act (${rule}): the person runs it, never the agent (REQ-FLOW-102). Stop here and list it for the person.`,
 			ask: ASK_RULES.has(rule)
 		};
-		acts.push(verdict);
+		if (ctx.runs?.includes(rule) === true) {
+			if (!ran.includes(rule)) ran.push(rule);
+		} else acts.push(verdict);
 		return verdict;
 	};
 	function destination(refspec) {
@@ -818,13 +1186,14 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		const dst = spec.slice(colon + 1);
 		return dst === "" ? spec.slice(0, colon) : dst;
 	}
-	function pushVerdict(args, config) {
+	function pushVerdict(args, config, marks = []) {
 		let force = false;
 		let remove = false;
 		let tags = false;
 		let matching = false;
 		let repoGiven = false;
 		const positionals = [];
+		const positionalMarks = [];
 		const configured = [];
 		for (const pair of config) {
 			const eq = pair.indexOf("=");
@@ -847,6 +1216,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			const arg = args[j] ?? "";
 			if (arg === "--") {
 				positionals.push(...args.slice(j + 1));
+				positionalMarks.push(...args.slice(j + 1).map((_, at) => marks[j + 1 + at]));
 				break;
 			}
 			if (arg.startsWith("--")) {
@@ -882,9 +1252,17 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 					break;
 				}
 			}
-			else positionals.push(arg);
+			else {
+				positionals.push(arg);
+				positionalMarks.push(marks[j]);
+			}
 		}
 		const named = repoGiven ? positionals : positionals.slice(1);
+		const namedMarks = repoGiven ? positionalMarks : positionalMarks.slice(1);
+		if (!repoGiven && /[sgb]/.test(positionalMarks[0]?.kinds ?? "")) {
+			if (deploying.length > 0) deny("push-deploying", "A push whose remote word may split into refspecs the line cannot show");
+			return deny("push-default", "A push whose remote word may split into refspecs or an option the line cannot show");
+		}
 		const tagWord = named.indexOf("tag");
 		const tagNamed = tagWord !== -1 && tagWord < named.length - 1;
 		const refspecs = named.length > 0 ? named : configured;
@@ -902,22 +1280,35 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			return colon === -1 ? [bare] : [bare.slice(0, colon), bare.slice(colon + 1)];
 		};
 		if (tags || refspecs.some((spec) => sides(spec).some(namesTag))) return deny("push-tags", "A push of tags");
-		for (const spec of refspecs) {
+		for (const [index, spec] of refspecs.entries()) {
 			const name = destination(spec).replace(/^(refs\/)?heads\//i, "").toLowerCase();
-			if (spec === ":" || spec === "+:") return deny("push-default", "A matching push, the default branch among them");
+			if (spec === ":" || spec === "+:") {
+				if (deploying.length > 0) deny("push-deploying", "A matching push, a deploying branch among the branches it may push");
+				return deny("push-default", "A matching push, the default branch among them");
+			}
+			const mark = named.length > 0 ? namedMarks[index] : void 0;
+			if (named.length > 0 ? (mark?.kinds ?? "") !== "" : /[$`(]/.test(spec)) {
+				const splits = /s/.test(mark?.kinds ?? "");
+				if (deploying.length > 0) deny("push-deploying", "A push whose refspec the line cannot show, which may name a deploying branch");
+				return deny("push-default", splits ? "A push whose refspec the line cannot show, which may split into more refspecs or an option" : "A push whose refspec the line cannot show (a substitution, a variable or a group)");
+			}
+			if (name === "head" || name === "@" ? onDeploying : deploys(name)) deny("push-deploying", "A push to a branch the repository names as deploying");
 			if (defaults.has(name)) return deny("push-default", `A push to the default branch \`${name}\``);
 			if ((name === "head" || name === "@") && onDefault) return deny("push-default", "A push of `HEAD` while on the default branch");
 			const pattern = destination(spec).toLowerCase();
 			if (pattern.includes("*")) {
 				const parts = pattern.split("*").map((part) => part.replace(/[.+?^$()|[\]{}\\]/g, "\\$&"));
 				const glob = new RegExp(`^${parts.join(".*")}$`);
-				if ([...defaults].some((ref) => [
+				const hits = (refs) => refs.some((ref) => [
 					ref,
 					`heads/${ref}`,
 					`refs/heads/${ref}`
-				].some((full) => glob.test(full)))) return deny("push-default", "A pattern push, the default branch among the branches it matches");
+				].some((full) => glob.test(full)));
+				if (deploying.some((entry) => entry.includes("*")) || hits(deploying.map(branchKey))) deny("push-deploying", "A pattern push, a deploying branch among the branches it may match");
+				if (hits([...defaults])) return deny("push-default", "A pattern push, the default branch among the branches it matches");
 			}
 		}
+		if (named.length === 0 && (onDeploying || matching && deploying.length > 0)) deny("push-deploying", "A push with no refspec that lands on a deploying branch");
 		if (named.length === 0 && (onDefault || matching)) return deny("push-default", "A push with no refspec that lands on the default branch");
 		return null;
 	}
@@ -1015,6 +1406,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		if (remove && /^(refs\/)?tags\//i.test(name)) return deny("tag-delete", `A symbolic tag ref deleted (\`${via}\`)`);
 		if (target !== void 0 && /^(refs\/)?tags\//i.test(name)) return deny("tag", `A symbolic tag ref written or deleted (\`${via}\`)`);
 		if (remove || target === void 0 || name === "HEAD") return null;
+		if (deploys(/[$`]/.test(target) ? null : target.replace(/^(refs\/)?heads\//i, ""))) deny("push-deploying", `A symbolic ref pointed at a deploying branch, or at a branch the line cannot show (\`${via}\`)`);
 		if (/[$`]/.test(target) || defaults.has(target.replace(/^(refs\/)?heads\//i, "").toLowerCase())) return deny("push-default", `A symbolic ref pointed at the default branch, or at a branch the line cannot show (\`${via}\`)`);
 		return null;
 	}
@@ -1030,10 +1422,12 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			return false;
 		});
 		if (group === "pr" && sub === "merge" && flag("--delete-branch", "d", "bFtA")) deny("push-delete", "A remote branch deletion (`gh pr merge --delete-branch`)");
+		if (group === "pr" && sub === "merge" && flag("--admin", "", "")) deny("admin-merge", "An admin merge past the branch's rules (`gh pr merge --admin`)");
 		if (group === "pr" && sub === "merge") deny("pr-merge", "Merging a pull request (`gh pr merge`)");
 		if (group === "pr" && sub === "close" && flag("--delete-branch", "d", "c")) deny("push-delete", "A remote branch deletion (`gh pr close --delete-branch`)");
 		if (group === "pr" && sub === "review" && flag("--approve", "a", "bF")) deny("pr-merge", "Approving a pull request review (`gh pr review --approve`)");
 		if (group === "pr" && sub === "ready") deny("pr-ready", "Marking a pull request ready (`gh pr ready`)");
+		if (group === "workflow" && sub === "run") deny("workflow-dispatch", "A workflow dispatch (`gh workflow run`)");
 		if (group === "release" && sub !== void 0 && ![
 			"list",
 			"ls",
@@ -1076,13 +1470,16 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			}
 			if (words.length > 2) {
 				if (flag("--force", "", "")) deny("force-push", "A forced sync of a repository (`gh repo sync --force`)");
+				if (landsOnDeploying(branches.map((name) => /[$`]/.test(name) ? null : name))) deny("push-deploying", "A sync of a deploying branch, or of a branch the line cannot show (`gh repo sync`)");
 				if (branches.length === 0 || branches.some((name) => name === "" || /[$`]/.test(name) || defaults.has(branch(name)))) deny("push-default", "A sync of a repository's default branch, or of a branch the line cannot show (`gh repo sync`)");
 			}
 		}
 		if (group === "repo" && sub === "edit") {
+			const settings = cmd.filter((word) => word.startsWith("--") && !/^--repo(=|$)/.test(word));
 			if (cmd.some((word) => /^--visibility(=|$)/.test(word))) deny("repo-irreversible", "A visibility change (`gh repo edit --visibility`)");
+			else if (settings.length === 0) deny("repo-irreversible", "An interactive repository edit (`gh repo edit` with no settings flag), which can change the visibility");
 			if (cmd.some((word) => /^--default-branch(=|$)/.test(word))) deny("protection", "A default-branch change (`gh repo edit --default-branch`)");
-			else deny("protection", "A repository settings write (`gh repo edit`)");
+			else if (settings.length > 0) deny("protection", "A repository settings write (`gh repo edit`)");
 		}
 		if (group === "api") httpVerdict(cmd);
 	}
@@ -1223,11 +1620,16 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			const found = calls(name, key);
 			return found.length === 0 || found.some(landsOnDefault);
 		};
+		const callsDeploy = (name, key) => {
+			const found = calls(name, key);
+			return deploying.length > 0 && (found.length === 0 || found.some(landsOnDeploying));
+		};
 		for (const path of paths) {
 			const shown = `${method} ${path}`;
 			if (/^graphql$/i.test(path)) {
 				if (/\b(mergePullRequest|enablePullRequestAutoMerge|enqueuePullRequest)\b/.test(text)) deny("pr-merge", "A GraphQL merge");
 				if (/\bmarkPullRequestReadyForReview\b/.test(text)) deny("pr-ready", "A GraphQL ready-for-review");
+				if (/\b(createCheckRun|updateCheckRun)\b/.test(text)) deny("status-write", "A GraphQL check run write");
 				if (/\b(deleteBranchProtectionRule|deleteRepositoryRuleset|deleteRepositoryCustomProperty)\b/.test(text)) deny("protection-delete", "A GraphQL protection, ruleset or custom property deletion");
 				if (/\b(archiveRepository|unarchiveRepository|updateRepository(CustomProperty|Ruleset|WebCommitSignoffSetting)?|(create|update)(BranchProtectionRule|RepositoryRuleset)|(create|promote)RepositoryCustomProperty|setRepositoryCustomPropertyValues)\b/.test(text)) deny("protection", "A GraphQL repository settings, protection or ruleset write");
 				if (/\b(addPullRequestReview|submitPullRequestReview)\b/.test(text)) {
@@ -1235,7 +1637,9 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 					const variables = queries.some((query) => mask(query).includes("$"));
 					if (reviews.length === 0 || reviews.some((events) => events.length === 0 && variables || events.some((event) => event === null || /^approve$/i.test(event)))) deny("pr-merge", "A GraphQL review approval, or a review whose event the line cannot show");
 				}
+				if (/\bcreateCommitOnBranch\b/.test(text) && callsDeploy("createCommitOnBranch", "branchName")) deny("push-deploying", "A GraphQL commit to a deploying branch, or to a branch the line cannot show");
 				if (/\bcreateCommitOnBranch\b/.test(text) && callsLand("createCommitOnBranch", "branchName")) deny("push-default", "A GraphQL commit to the default branch");
+				if (/\bmergeBranch\b/.test(text) && callsDeploy("mergeBranch", "base")) deny("push-deploying", "A GraphQL merge into a deploying branch, or into a branch the line cannot show");
 				if (/\bmergeBranch\b/.test(text) && callsLand("mergeBranch", "base")) deny("push-default", "A GraphQL merge into the default branch");
 				if (/\bupdateRefs?\b/.test(text)) {
 					if ([...calls("updateRef", "force"), ...calls("updateRefs", "force")].some(forced)) deny("force-push", "A forced GraphQL ref update");
@@ -1246,13 +1650,17 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 					}
 					if (calls("updateRefs", "name").flat().some((ref) => ref !== null && /^refs\/tags\//i.test(ref))) deny("push-tags", "A GraphQL tag ref update");
 					const hidden = queries.some((query) => /\brefUpdates\s*:\s*\[(?:[^\]]*,)?\s*\$/.test(mask(query)));
+					if ((/\bupdateRef\b/.test(text) || hidden) && deploying.length > 0 || callsDeploy("updateRefs", "name")) deny("push-deploying", "A GraphQL ref update onto a deploying branch, or onto a ref the line cannot show");
 					if (/\bupdateRef\b/.test(text) || hidden || callsLand("updateRefs", "name")) deny("push-default", "A GraphQL ref update onto the default branch, or onto a ref the line cannot show");
 				}
 				if (/\bdeleteRef\b/.test(text)) deny("push-delete", "A GraphQL ref deletion");
 				if (/\bcreateRef\b/.test(text)) {
 					const created = calls("createRef", "name");
 					if (created.length === 0 || created.some((refs) => refs.length === 0 || refs.some((ref) => ref === null || /^refs\/tags\//i.test(ref)))) deny("push-tags", "A GraphQL tag ref created, or a ref the line cannot show");
-					else if (created.flat().some((ref) => ref !== null && defaults.has(branch(ref)))) deny("push-default", "A GraphQL ref created on the default branch");
+					else {
+						if (created.flat().some((ref) => ref !== null && deploys(branch(ref)))) deny("push-deploying", "A GraphQL ref created on a deploying branch");
+						if (created.flat().some((ref) => ref !== null && defaults.has(branch(ref)))) deny("push-default", "A GraphQL ref created on the default branch");
+					}
 				}
 				continue;
 			}
@@ -1280,7 +1688,11 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			}
 			if (/^branches\/.+\/rename$/i.test(path)) deny("protection", `A branch rename (${shown})`);
 			if (/^transfer$/i.test(path)) deny("repo-irreversible", `A repository transfer (${shown})`);
+			if (/^statuses\/[^/]+$/i.test(path) || /^check-runs(\/[^/]+)?$/i.test(path)) deny("status-write", `A commit status or check run written (${shown})`);
+			if (/^actions\/workflows\/[^/]+\/dispatches$/i.test(path) || /^dispatches$/i.test(path)) deny("workflow-dispatch", `A workflow dispatch (${shown})`);
+			if (/^contents(\/|$)/i.test(path) && landsOnDeploying(fields("branch"))) deny("push-deploying", `A REST commit to a deploying branch (${shown})`);
 			if (/^contents(\/|$)/i.test(path) && landsOnDefault(fields("branch"))) deny("push-default", `A REST commit to the default branch (${shown})`);
+			if (/^merges$/i.test(path) && landsOnDeploying(fields("base")) || /^merge-upstream$/i.test(path) && landsOnDeploying(fields("branch"))) deny("push-deploying", `A REST merge into a deploying branch (${shown})`);
 			if (/^merges$/i.test(path) && landsOnDefault(fields("base")) || /^merge-upstream$/i.test(path) && landsOnDefault(fields("branch"))) deny("push-default", `A REST merge into the default branch (${shown})`);
 			if (/^((actions|dependabot|codespaces|agents|user\/codespaces)|environments\/.+)\/(secrets|variables)(\/|$)/i.test(path)) {
 				if (method === "DELETE") deny("secrets-delete", `A secret or variable deletion (${shown})`);
@@ -1307,11 +1719,13 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				deny("push-tags", `A REST tag ref write (${shown})`);
 				return;
 			}
-			if ([
+			const heads = [
 				/^git\/refs\/heads\/(.+)$/i.exec(path)?.[1] ?? "",
 				...[...text.matchAll(/(?:^|[=\s/])refs\/heads\/(\S+)/gi)].map((match) => match[1] ?? ""),
 				...refs.map((ref) => /^refs\/heads\/(.+)$/i.exec(ref ?? "")?.[1] ?? "")
-			].some((name) => defaults.has(name.toLowerCase()))) deny("push-default", `A REST write to the default branch (${shown})`);
+			];
+			if (heads.some((name) => name !== "" && deploys(name))) deny("push-deploying", `A REST write to a deploying branch (${shown})`);
+			if (heads.some((name) => defaults.has(name.toLowerCase()))) deny("push-default", `A REST write to the default branch (${shown})`);
 		}
 	}
 	function publishVerdict(cmd) {
@@ -1391,14 +1805,70 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				"s"
 			].includes(action)) deny("publish", "A dist-tag moved (`npm dist-tag add`)");
 		}
-		return publishes ? deny("publish", `Publishing a package (\`${cmd[0]} publish\`)`) : null;
+		const end = cmd.indexOf("--");
+		const options = end === -1 ? cmd : cmd.slice(0, end);
+		const unsure = anyMark.get(cmd) ?? [];
+		const valueAfter = (index) => {
+			const next = options[index + 1];
+			if (next === void 0) return true;
+			if (unsure[index + 1] === true) return false;
+			return next === "true" || next.startsWith("-") || !/^(?:true|false|yes|no|on|off|y|n|0|1)$/i.test(next);
+		};
+		const yarnNpm = cmd[0] === "yarn" && positionalsOf(false).some((word, index, all) => word === "publish" && all[index - 1] === "npm");
+		const dryAt = options.flatMap((word, index) => (word === "--dry-run" || word === "--dry-run=true") && !valued.has(options[index - 1] ?? "") ? [index] : []);
+		const dryRun = (cmd[0] !== "yarn" || yarnNpm) && dryAt.length > 0 && dryAt.every((index) => options[index] !== "--dry-run" || valueAfter(index)) && !cmd.some((word) => /^-{1,2}(?:no-?)?d(?:r|=|$)/i.test(word) && word !== "--dry-run" && word !== "--dry-run=true") && !cmd.some((word) => /[$`]/.test(word)) && !/npm_config_dry_run/i.test(command) && /(?:^|[\s;&|(])--dry-run(?:=true)?(?=[\s;&|)]|$)/.test(command);
+		return publishes && !dryRun ? deny("publish", `Publishing a package (\`${cmd[0]} publish\`)`) : null;
 	}
-	for (const cmd of commandsOf(command, 0, false)) {
+	function landApprovedVerdict(cmd) {
+		const unsure = unread.get(cmd) ?? [];
+		const args = unsure[0] === true ? cmd.slice(1) : packageArgs(cmd);
+		if (args === null) return;
+		const at = unsure[0] === true ? args.indexOf("run") : args.findIndex((word) => !word.startsWith("-"));
+		if (at === -1 || args[at] !== "run" || !args.slice(at + 1).includes("land")) return;
+		if (args.some((word) => word === "--approved" || word.startsWith("--approved="))) {
+			deny("land-approved", "Landing a run on the person's approval (`stamity run land --approved`)");
+			return;
+		}
+		const marked = anyMark.get(cmd) ?? [];
+		const offset = cmd.length - args.length;
+		if (fed.has(cmd) || args.some((_, index) => marked[offset + index] === true)) deny("land-approved", "A `stamity run land` line whose words the guard cannot read, which may carry `--approved`");
+	}
+	function loosenVerdict(cmd) {
+		if (ctx.powershell === true && (cmd[0] ?? "").startsWith("$") && (cmd.length === 1 || /^[-+*/%]?=$/.test(cmd[1] ?? "") || /^\$(?:\{[^}]*\}|[\w:]+)[-+*/%]?=/.test(cmd[0] ?? ""))) return;
+		const unsure = unread.get(cmd) ?? [];
+		const unsettled = unsure[0] === true;
+		const loosens = (words) => words.some((word) => /^--loosen(=|$)/.test(word));
+		const args = unsettled ? cmd.slice(1) : packageArgs(cmd);
+		if (args === null) {
+			if (loosens(packageArgs(cmd, true) ?? [])) deny("autonomy-loosen", "Loosening the autonomy setting (`--loosen`)");
+			return;
+		}
+		const what = unsettled ? "A command the guard cannot read, which may be a stamity command," : "A stamity command";
+		if (loosens(args)) {
+			deny("autonomy-loosen", "Loosening the autonomy setting (`--loosen`)");
+			return;
+		}
+		if (fed.has(cmd)) {
+			deny("autonomy-loosen", `${what} run under \`xargs\`, which adds arguments the guard cannot read and which may spell \`--loosen\``);
+			return;
+		}
+		if (unsettled && spills.has(cmd) || args.some((_, index) => unsure[cmd.length - args.length + index] === true)) {
+			deny("autonomy-loosen", `${what} with an argument the guard cannot read, which may spell \`--loosen\``);
+			return;
+		}
+		if (ctx.stricterThanDefault === false) return;
+		const sub = args.find((word) => !word.startsWith("-"));
+		if (sub === "clean" && !args.some((word) => /^--pack(=|$)/.test(word))) deny("autonomy-loosen", "A full `clean`, which removes the guard holding an autonomy setting stricter than the default");
+		if (sub === "init" && args.some((word) => /^--force(=|$)/.test(word))) deny("autonomy-loosen", "An `init --force`, which lands the default autonomy setting over a stricter one");
+	}
+	const read = commandsOf(command, 0, false);
+	for (const cmd of read) {
 		const program = cmd[0] ?? "";
 		if (program === "git") {
 			const { sub, args, config } = gitParts(cmd);
-			if (sub === "push") pushVerdict(args, config);
-			else if (sub === "send-pack") pushVerdict(args, [...config, "push.default=matching"]);
+			const argMarks = (markMap.get(cmd) ?? []).slice(cmd.length - args.length);
+			if (sub === "push") pushVerdict(args, config, argMarks);
+			else if (sub === "send-pack") pushVerdict(args, [...config, "push.default=matching"], argMarks);
 			else if (sub === "tag") tagVerdict(args);
 			else if (sub === "update-ref" && (args.some((arg) => /^(refs\/)?tags\//i.test(arg)) || args.includes("--stdin") && /refs\/tags\//i.test(command))) {
 				const zero = /(^|[^0-9a-f])(0{40}|0{64})([^0-9a-f]|$)/i;
@@ -1426,8 +1896,14 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 					"--branch",
 					"--onto"
 				]);
-				const words = args.filter((word, index) => !word.startsWith("-") && !valued.has(args[index - 1] ?? ""));
-				if (words[0] === "push") pushVerdict(words.slice(1), config);
+				const kept = args.flatMap((word, index) => !word.startsWith("-") && !valued.has(args[index - 1] ?? "") ? [index] : []);
+				const words = kept.map((index) => args[index] ?? "");
+				const keptMarks = kept.map((index) => argMarks[index] ?? {
+					first: -1,
+					last: 0,
+					kinds: ""
+				});
+				if (words[0] === "push") pushVerdict(words.slice(1), config, keptMarks.slice(1));
 			}
 		} else if (program === "gh") ghVerdict(cmd);
 		else if (program === "curl" || program === "wget") httpVerdict(cmd);
@@ -1438,10 +1914,20 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			"bun"
 		].includes(program)) publishVerdict(cmd);
 	}
-	return acts.find((act) => !act.ask) ?? acts[0] ?? { deny: false };
+	for (const cmd of read) {
+		landApprovedVerdict(cmd);
+		loosenVerdict(cmd);
+	}
+	return acts.find((act) => !act.ask) ?? acts[0] ?? (ran.length > 0 ? {
+		deny: false,
+		runs: ran
+	} : { deny: false });
 };
 
-const unattendedPushVerdict = function unattendedPushVerdict(command, powershell = false) {
+const unattendedPushVerdict = function unattendedPushVerdict(command, powershell = false, landOnly = false, identity = {}) {
+	const PACKAGE_WORDS = identity.words ?? ["stamity", "st"];
+	const PACKAGE_NAME = (identity.name ?? "@zomarit/stamity").toLowerCase();
+	const OWN_REPOSITORY = identity.own ?? true;
 	const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
 	const KEYWORDS = /* @__PURE__ */ new Set([
 		"!",
@@ -1634,23 +2120,90 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 	}
 	function splitLine(text, blocks, pwsh) {
 		const segments = [];
+		const marks = [];
 		const nested = [];
 		let words = [];
+		let wordMarks = [];
 		let word = "";
+		let counted = 0;
+		let balance = 0;
+		const balanced = () => {
+			for (; counted < word.length; counted += 1) if (word[counted] === "{") balance += 1;
+			else if (word[counted] === "}") balance -= 1;
+			return balance <= 0;
+		};
+		let mark = {
+			first: -1,
+			last: 0,
+			kinds: ""
+		};
 		let inWord = false;
 		let dropNext = false;
 		const endWord = () => {
 			if (!inWord) return;
 			if (dropNext) dropNext = false;
-			else words.push(word);
+			else {
+				words.push(word);
+				wordMarks.push({
+					...mark,
+					last: Math.min(mark.last, word.length)
+				});
+			}
 			word = "";
+			counted = 0;
+			balance = 0;
+			mark = {
+				first: -1,
+				last: 0,
+				kinds: ""
+			};
 			inWord = false;
+		};
+		const hide = (from, to, kinds) => {
+			if (mark.first === -1) mark.first = from;
+			mark.last = Math.max(mark.last, to);
+			mark.kinds += kinds;
 		};
 		const cut = () => {
 			endWord();
 			dropNext = false;
-			if (words.length > 0) segments.push(words);
+			if (words.length > 0) {
+				segments.push(words);
+				marks.push(wordMarks);
+			}
 			words = [];
+			wordMarks = [];
+		};
+		const expands = (at, kinds) => {
+			let end = at + 1;
+			if (text[at] === "$" && text[at + 1] === "{") {
+				let level = 0;
+				while (end < text.length) {
+					if (end - at > 256) {
+						end = text.length;
+						break;
+					}
+					if (text[end] === "{") level += 1;
+					else if (text[end] === "}") level -= 1;
+					end += 1;
+					if (level === 0) break;
+				}
+			}
+			hide(word.length, word.length + (end - at), kinds);
+		};
+		const braceExpands = (at) => {
+			let quoted = "";
+			for (let j = at + 1; j < text.length; j += 1) {
+				if (j - at > 256) return true;
+				const c = text[j] ?? "";
+				if (quoted !== "") {
+					if (c === quoted) quoted = "";
+				} else if (c === "'" || c === "\"") quoted = c;
+				else if (c === "\\") j += 1;
+				else if (c === "}" || /\s/.test(c)) return false;
+				else if (c === "," || c === "." && text[j + 1] === ".") return true;
+			}
+			return false;
 		};
 		const quote = (c, kind) => c !== void 0 && (c === kind[0] || pwsh && kind.includes(c));
 		let i = 0;
@@ -1688,9 +2241,11 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 							}
 						}
 						nested.push(text.slice(start, j));
+						hide(word.length, word.length + Math.min(j + 1, text.length) - i, j < text.length ? "e" : "");
 						word += text.slice(i, Math.min(j + 1, text.length));
 						i = j + 1;
 					} else {
+						if (c === "$") expands(i, "e");
 						word += c;
 						i += 1;
 					}
@@ -1745,6 +2300,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 					}
 				}
 				nested.push(text.slice(start, j));
+				hide(word.length, word.length + Math.min(j + 1, text.length) - i, j >= text.length ? "" : ch === "(" ? "p" : "es");
 				word += text.slice(i, Math.min(j + 1, text.length));
 				inWord = true;
 				i = j + 1;
@@ -1755,14 +2311,24 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 			else if (ch === ">" || ch === "<") {
 				if (inWord && /^\d+$/.test(word)) {
 					word = "";
+					counted = 0;
+					balance = 0;
+					mark = {
+						first: -1,
+						last: 0,
+						kinds: ""
+					};
 					inWord = false;
 				} else endWord();
 				while (i < text.length && "<>&|".includes(text[i] ?? "")) i += 1;
 				dropNext = true;
-			} else if (";&|\n\r()`".includes(ch) || blocks && ch === "{" && !inWord || blocks && ch === "}" && word.split("{").length <= word.split("}").length) {
+			} else if (";&|\n\r()`".includes(ch) || blocks && ch === "{" && !inWord || blocks && ch === "}" && balanced()) {
 				cut();
 				i += 1;
 			} else {
+				if (ch === "$" || pwsh && ch === "@" && !inWord && /[\w({]/.test(text[i + 1] ?? "")) expands(i, "es");
+				else if ("*?[".includes(ch)) expands(i, "g");
+				else if (ch === "{" && braceExpands(i)) expands(i, "b");
 				word += ch;
 				inWord = true;
 				i += 1;
@@ -1771,19 +2337,34 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 		cut();
 		return {
 			segments,
-			nested
+			nested,
+			marks
 		};
 	}
 	const assigned = [];
-	function commandsOf(text, depth, pwsh) {
+	const unread = /* @__PURE__ */ new Map();
+	const anyMark = /* @__PURE__ */ new Map();
+	const markMap = /* @__PURE__ */ new Map();
+	const spills = /* @__PURE__ */ new Set();
+	const fed = /* @__PURE__ */ new Set();
+	const launched = /* @__PURE__ */ new Map();
+	function commandsOf(text, depth, pwsh, tainted = false, fedIn = false) {
 		if (depth > 4) throw Object.assign(/* @__PURE__ */ new Error("nesting"), { code: "NESTING_DEPTH" });
-		const { segments, nested } = splitLine(text, true, pwsh);
-		const commands = pwsh ? commandsOf(text, depth, false) : [];
-		for (const words of [...segments, .../[{}]/.test(text) ? splitLine(text, false, pwsh).segments : []]) {
+		const { segments, nested, marks } = splitLine(text, true, pwsh);
+		const commands = pwsh ? commandsOf(text, depth, false, tainted, fedIn) : [];
+		const braces = /[{}]/.test(text) ? splitLine(text, false, pwsh) : {
+			segments: [],
+			marks: []
+		};
+		const allMarks = [...marks, ...braces.marks];
+		for (const [segment, words] of [...segments, ...braces.segments].entries()) {
 			let k = 0;
 			let line = null;
+			let lineFrom = 0;
+			let viaStdin = false;
 			while (k < words.length && line === null) {
 				const word = words[k] ?? "";
+				if (programName(word) === "xargs") viaStdin = true;
 				let sub = k + 1;
 				while (MANAGERS.has(programName(word)) && sub < words.length) {
 					const option = words[sub] ?? "";
@@ -1808,6 +2389,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 							continue;
 						}
 						if (!/^(-|\d)/.test(option)) break;
+						const optionAt = k;
 						k += 1;
 						if (option === "--") break;
 						let value;
@@ -1829,36 +2411,214 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 						}
 						if (isLine && value !== void 0) {
 							line = [value, ...words.slice(k)].join(" ");
+							lineFrom = optionAt;
 							break;
 						}
 					}
 				} else break;
 			}
 			if (line !== null) {
-				commands.push(...commandsOf(line, depth + 1, pwsh));
+				const lineTainted = tainted || (allMarks[segment] ?? []).slice(lineFrom).some((each) => each.kinds !== "");
+				commands.push(...commandsOf(line, depth + 1, pwsh, lineTainted, fedIn || viaStdin));
 				continue;
 			}
 			const cmd = words.slice(k);
 			if (cmd.length === 0) continue;
-			if (/\s/.test(cmd[0] ?? "") && cmd.join(" ") !== text) commands.push(...commandsOf(cmd.join(" "), depth + 1, pwsh));
+			const program = cmd[0] ?? "";
+			const cut = Math.max(program.lastIndexOf("/"), program.lastIndexOf("\\")) + 1;
+			const last = programName(program);
+			const wildcards = (last.match(/[*?[]/g) ?? []).length;
+			const mayName = (name) => {
+				const tokens = [];
+				for (let i = 0; i < last.length; i += 1) {
+					const c = last[i] ?? "";
+					const close = c === "[" ? last.indexOf("]", i + 2) : -1;
+					if (close !== -1) {
+						tokens.push("?");
+						i = close;
+					} else tokens.push(c === "*" || c === "?" ? c : `=${c}`);
+				}
+				let t = 0;
+				let n = 0;
+				let star = -1;
+				let resume = 0;
+				while (n < name.length) if (t < tokens.length && (tokens[t] === "?" || tokens[t] === `=${name[n]}`)) {
+					t += 1;
+					n += 1;
+				} else if (t < tokens.length && tokens[t] === "*") {
+					star = t;
+					resume = n;
+					t += 1;
+				} else if (star !== -1) {
+					t = star + 1;
+					resume += 1;
+					n = resume;
+				} else return false;
+				while (t < tokens.length && tokens[t] === "*") t += 1;
+				return t === tokens.length;
+			};
+			const globMayName = () => wildcards > Math.max(0, ...PACKAGE_WORDS.map((name) => name.length)) || PACKAGE_WORDS.some(mayName);
+			const wordMarks = (allMarks[segment] ?? []).slice(k);
+			const markOf = (at) => wordMarks[at] ?? {
+				first: -1,
+				last: 0,
+				kinds: ""
+			};
+			const dashes = (at) => markOf(at).first === 0 || (cmd[at] ?? "").startsWith("-");
+			const launcher = programName(program);
+			const launches = [
+				"node",
+				"nodejs",
+				"bun",
+				"deno",
+				"tsx"
+			].includes(launcher);
+			const valueOf = (at) => !launches && (MANAGER_VALUED.has(cmd[at - 1] ?? "") || [...MANAGER_VALUED].some((name) => name.startsWith("--") && (cmd[at] ?? "").startsWith(`${name}=`)));
+			const headFrom = (from) => {
+				for (let at = from; at < cmd.length; at += 1) {
+					const word = cmd[at] ?? "";
+					const previous = at > 1 ? cmd[at - 1] ?? "" : "";
+					if (word.startsWith("-") || previous.startsWith("-") && !previous.includes("=")) continue;
+					return at;
+				}
+				return -1;
+			};
+			const scriptFile = (word) => /[\\/]/.test(word) || /\.(?:[cm]?[jt]s|[jt]sx)$/i.test(word);
+			const lastPartMarked = (at) => {
+				const word = cmd[at] ?? "";
+				return markOf(at).last > Math.max(word.lastIndexOf("/"), word.lastIndexOf("\\")) + 1;
+			};
+			let launchesUnread = false;
+			if (launches || MANAGERS.has(launcher)) {
+				let settledAt = -1;
+				let settlingMarked = false;
+				if (launches) {
+					const head = headFrom(1);
+					const word = head === -1 ? "" : cmd[head] ?? "";
+					const literal = head !== -1 && markOf(head).kinds === "";
+					const script = (at) => {
+						settledAt = at;
+						settlingMarked = at !== -1 && lastPartMarked(at);
+					};
+					const named = (at) => {
+						settledAt = at;
+						settlingMarked = at !== -1 && markOf(at).kinds !== "";
+					};
+					const DENO_TOOLS = [
+						"test",
+						"bench",
+						"fmt",
+						"lint",
+						"check",
+						"compile",
+						"doc",
+						"info",
+						"cache",
+						"coverage",
+						"types",
+						"upgrade",
+						"completions"
+					];
+					const BUN_TOOLS = [
+						"test",
+						"build",
+						"install",
+						"i",
+						"add",
+						"a",
+						"remove",
+						"rm",
+						"update",
+						"link",
+						"unlink",
+						"pm",
+						"init",
+						"outdated",
+						"publish",
+						"audit",
+						"info",
+						"patch",
+						"upgrade"
+					];
+					if (head === -1) settledAt = -1;
+					else if (launcher === "deno") {
+						if (!literal) named(head);
+						else if (word === "run") script(headFrom(head + 1));
+						else if (word === "task") named(headFrom(head + 1));
+						else if (DENO_TOOLS.includes(word)) named(head);
+						else if (scriptFile(word)) script(head);
+					} else if (launcher === "bun") {
+						if (!literal) named(head);
+						else if (word === "run") {
+							const next = headFrom(head + 1);
+							if (next !== -1 && markOf(next).kinds === "" && !scriptFile(cmd[next] ?? "")) named(next);
+							else script(next);
+						} else if (word === "x") named(headFrom(head + 1));
+						else if (BUN_TOOLS.includes(word)) named(head);
+						else if (scriptFile(word)) script(head);
+						else named(head);
+					} else if (launcher === "tsx" && literal && word === "watch") script(headFrom(head + 1));
+					else script(head);
+				} else for (let at = 1; at < cmd.length && settledAt === -1; at += 1) {
+					const word = cmd[at] ?? "";
+					if (markOf(at).kinds === "" && !word.startsWith("-") && ![
+						"run",
+						"run-script",
+						"exec",
+						"dlx",
+						"x"
+					].includes(word) && !valueOf(at)) settledAt = at;
+				}
+				const before = settledAt === -1 ? cmd.length : settledAt;
+				if (launches && settledAt !== -1 && !lastPartMarked(settledAt) && PACKAGE_WORDS.includes(programName(cmd[settledAt] ?? ""))) launched.set(cmd, settledAt);
+				launchesUnread = settlingMarked || cmd.slice(1, before).some((_, index) => markOf(index + 1).kinds !== "" && !valueOf(index + 1));
+			}
+			const unsure = cmd.map((_, at) => {
+				const mark = markOf(at);
+				if (tainted) return true;
+				if (at > 0) return /[ep]/.test(mark.kinds) || /[gb]/.test(mark.kinds) && dashes(at);
+				return launchesUnread || mark.last > cut && (/[eb]/.test(mark.kinds) || /g/.test(mark.kinds) && globMayName());
+			});
+			if (tainted || /e/.test(markOf(0).kinds) || /[gb]/.test(markOf(0).kinds) && dashes(0)) spills.add(cmd);
+			const marked = cmd.map((_, at) => tainted || markOf(at).kinds !== "");
+			unread.set(cmd, unsure);
+			anyMark.set(cmd, marked);
+			const raw = cmd.map((word, at) => tainted ? {
+				first: 0,
+				last: word.length,
+				kinds: "es"
+			} : markOf(at));
+			markMap.set(cmd, raw);
+			if (viaStdin || fedIn) fed.add(cmd);
+			const inherits = marked.some(Boolean);
+			const feeds = fedIn || viaStdin;
+			const head = markOf(0);
+			const literal = head.first === -1 ? program : program.slice(0, head.first) + program.slice(head.last);
+			if (/\s/.test(program) && cmd.join(" ") !== text) commands.push(...commandsOf(cmd.join(" "), depth + 1, pwsh, tainted || head.kinds !== "" && /\s/.test(literal), feeds));
 			cmd[0] = programName(cmd[0] ?? "");
-			if (/^git-./.test(cmd[0])) cmd.splice(0, 1, "git", cmd[0].slice(4));
+			if (/^git-./.test(cmd[0])) {
+				cmd.splice(0, 1, "git", cmd[0].slice(4));
+				unsure.splice(0, 1, unsure[0] === true, unsure[0] === true);
+				marked.splice(0, 1, marked[0] === true, marked[0] === true);
+				raw.splice(0, 1, markOf(0), markOf(0));
+			}
 			if (SHELLS.has(cmd[0] ?? "")) {
 				const flag = cmd.findIndex((word, index) => index > 0 && /^-[A-Za-z]*c[A-Za-z]*$/.test(word));
 				const script = flag === -1 ? void 0 : cmd[flag + 1];
-				if (script !== void 0) commands.push(...commandsOf(script, depth + 1, false));
-			} else if (cmd[0] === "eval") commands.push(...commandsOf(cmd.slice(1).join(" "), depth + 1, false));
+				if (script !== void 0) commands.push(...commandsOf(script, depth + 1, false, inherits, feeds));
+			} else if (cmd[0] === "eval") commands.push(...commandsOf(cmd.slice(1).join(" "), depth + 1, false, inherits, feeds));
 			else if (POWERSHELLS.has(cmd[0] ?? "")) {
 				const at = cmd.findIndex((word, index) => index > 0 && commandFlag(word) !== null);
 				const first = at !== -1 ? -1 : cmd.findIndex((word, index) => index > 0 && !/^-|^\/\w*$/.test(word));
-				if (at !== -1) commands.push(...commandsOf([commandFlag(cmd[at] ?? ""), ...cmd.slice(at + 1)].join(" "), depth + 1, true));
-				else if (first !== -1) commands.push(...commandsOf(cmd.slice(first).join(" "), depth + 1, true));
-				for (const word of first === -1 ? [] : cmd.slice(first + 1)) if (/\s/.test(word)) commands.push(...commandsOf(word, depth + 1, true));
+				if (at !== -1) commands.push(...commandsOf([commandFlag(cmd[at] ?? ""), ...cmd.slice(at + 1)].join(" "), depth + 1, true, inherits, feeds));
+				else if (first !== -1) commands.push(...commandsOf(cmd.slice(first).join(" "), depth + 1, true, inherits, feeds));
+				for (const word of first === -1 ? [] : cmd.slice(first + 1)) if (/\s/.test(word)) commands.push(...commandsOf(word, depth + 1, true, inherits, feeds));
 			} else if (cmd[0] === "cmd") {
 				const at = cmd.findIndex((word, index) => index > 0 && /^\/[ck]/i.test(word));
 				const rest = at === -1 ? "" : [(cmd[at] ?? "").slice(2), ...cmd.slice(at + 1)].join(" ");
-				if (at !== -1) commands.push(...commandsOf(rest, depth + 1, true));
-				if (rest.includes("^")) commands.push(...commandsOf(rest.replace(/\^([\s\S])/g, "$1"), depth + 1, true));
+				const own = inherits || /%[^%\s]+%|![^!\s]+!/.test(rest);
+				if (at !== -1) commands.push(...commandsOf(rest, depth + 1, true, own, feeds));
+				if (rest.includes("^")) commands.push(...commandsOf(rest.replace(/\^([\s\S])/g, "$1"), depth + 1, true, own, feeds));
 			} else if (cmd[0] === "git") {
 				const { sub, args } = gitParts(cmd);
 				const rebase = sub === "rebase" ? args : [];
@@ -1875,13 +2635,13 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 							break;
 						}
 					}
-					if (exec !== void 0) commands.push(...commandsOf(exec, depth + 1, false));
+					if (exec !== void 0) commands.push(...commandsOf(exec, depth + 1, false, inherits, feeds));
 				}
-				if (sub === "bisect" && args[0] === "run") commands.push(...commandsOf(args.slice(1).map((word) => `'${word.replace(/'/g, "'\\''")}'`).join(" "), depth + 1, false));
+				if (sub === "bisect" && args[0] === "run") commands.push(...commandsOf(args.slice(1).map((word) => `'${word.replace(/'/g, "'\\''")}'`).join(" "), depth + 1, false, inherits, feeds));
 			}
 			commands.push(cmd);
 		}
-		for (const inner of nested) commands.push(...commandsOf(inner, depth + 1, pwsh));
+		for (const inner of nested) commands.push(...commandsOf(inner, depth + 1, pwsh, tainted, fedIn));
 		return commands;
 	}
 	function gitParts(cmd) {
@@ -2138,6 +2898,44 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 			cmd: cmd.slice(0, end),
 			next
 		};
+	}
+	function packageArgs(cmd, basename = false) {
+		const program = cmd[0] ?? "";
+		const named = (word) => PACKAGE_WORDS.includes(programName(word)) || /stamity/i.test(word);
+		const engineFile = (word) => {
+			const path = word.replace(/\\/g, "/").toLowerCase();
+			return path.includes(`node_modules/${PACKAGE_NAME}/`) || /node_modules\/\.bin\/[^/]+$/.test(path) && PACKAGE_WORDS.includes(programName(path)) || OWN_REPOSITORY && /(?:^|\/)cli\.[cm]?[jt]s$/.test(path);
+		};
+		if (!basename && named(program)) return cmd.slice(1);
+		const launchedAt = basename ? void 0 : launched.get(cmd);
+		if (launchedAt !== void 0) return cmd.slice(launchedAt + 1);
+		if (![
+			"node",
+			"nodejs",
+			"bun",
+			"deno",
+			"tsx",
+			...MANAGERS
+		].includes(program)) return null;
+		if (basename) {
+			const at = cmd.findIndex((word, index) => index > 0 && /(?:^|[\\/])cli\.[cm]?[jt]s$/i.test(word));
+			return at === -1 ? null : cmd.slice(at + 1);
+		}
+		if (MANAGERS.has(program)) {
+			let k = 1;
+			while (k < cmd.length && (cmd[k] ?? "").startsWith("-")) k += MANAGER_VALUED.has(cmd[k] ?? "") ? 2 : 1;
+			if ([
+				"run",
+				"run-script",
+				"exec",
+				"dlx",
+				"x"
+			].includes(cmd[k] ?? "")) k += 1;
+			while (k < cmd.length && (cmd[k] ?? "").startsWith("-")) k += 1;
+			if (named(cmd[k] ?? "")) return cmd.slice(k + 1);
+		}
+		const at = cmd.findIndex((word, index) => index > 0 && (/stamity/i.test(word) || engineFile(word)));
+		return at === -1 ? null : cmd.slice(at + 1);
 	}
 	const deny = (what) => ({
 		deny: true,
@@ -2297,17 +3095,18 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 	const RUN_VERBS = /* @__PURE__ */ new Set([
 		"start",
 		"checkpoint",
-		"end"
+		"end",
+		"land"
 	]);
 	const PACKAGE = /stamity|\bst\b|\bcli\.m?js\b|@\d+\.\d+\.\d+/i;
-	const namesVerb = (text) => /\brun(?:\W+|[^\w\s]*\s+[^\w\s-]*-[^;|&\r\n]*?\W)(?:start|checkpoint|end)\b/i.test(text) && PACKAGE.test(text);
+	const namesVerb = (text) => /\brun(?:\W+|[^\w\s]*\s+[^\w\s-]*-[^;|&\r\n]*?\W)(?:start|checkpoint|end|land)\b/i.test(text) && PACKAGE.test(text);
 	const namesVerbInWords = (words) => {
 		const text = words.join(" ");
 		if (!PACKAGE.test(text)) return false;
 		for (const open of text.matchAll(/\brun[^\w\s]*\s+([^\w\s]*)/gi)) {
 			const rest = text.slice((open.index ?? 0) + open[0].length);
-			if (/^(?:start|checkpoint|end)\b/i.test(rest)) return true;
-			if (/[-$`@*?[{]/.test(open[1] ?? "")) return /(?:^|\W)(?:start|checkpoint|end)\b/i.test(rest);
+			if (/^(?:start|checkpoint|end|land)\b/i.test(rest)) return true;
+			if (/[-$`@*?[{]/.test(open[1] ?? "")) return /(?:^|\W)(?:start|checkpoint|end|land)\b/i.test(rest);
 		}
 		return false;
 	};
@@ -2357,13 +3156,28 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 			const spec = words[at] ?? "";
 			if (spec !== "stamity" && !PINNED_PACKAGE.test(spec)) return "an `npx` option or package other than `stamity` or `<pkg>@<semver>`";
 			at += 1;
-		} else if (words[0] !== "stamity" && words[0] !== "st") return "a first word other than `stamity`, `st` or `npx`: a prefix, a wrapper or another program";
+		} else if (words[0] !== "stamity" && !PACKAGE_WORDS.includes(words[0] ?? "")) return "a first word other than `stamity`, `st` or `npx`: a prefix, a wrapper or another program";
 		if (words[at] !== "run") return "words between the program and `run <verb>`";
 		if (!RUN_VERBS.has(words[at + 1] ?? "")) return "words between `run` and its verb";
-		if (powershell && ats.some((index) => index > at)) return "an unquoted `@` after the program, which PowerShell reads as a splat";
+		if (powershell && ats.some((index) => index > at)) return "an unquoted `@` in a word after `run`, which PowerShell reads as a splat";
 		return null;
 	}
 	const commands = commandsOf(command, 0, powershell);
+	if (landOnly) {
+		const broke = commands.some((cmd) => {
+			if (unread.get(cmd)?.[0] === true) {
+				const run = cmd.indexOf("run", 1);
+				return run !== -1 && cmd.slice(run + 1).includes("land");
+			}
+			const args = packageArgs(cmd) ?? [];
+			const at = args.findIndex((word) => !word.startsWith("-"));
+			return at !== -1 && args[at] === "run" && args.slice(at + 1).includes("land");
+		}) ? verbShape(command) : null;
+		return broke === null ? { deny: false } : {
+			deny: true,
+			reason: `\`stamity run land\` on a line that is more than the verb (${broke}; REQ-FLOW-121): the land verb runs only alone on its line, in every mode.`
+		};
+	}
 	for (const cmd of commands) {
 		const program = cmd[0] ?? "";
 		if (program === "git") {
@@ -2439,7 +3253,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 		const at = cmd.findIndex((word, index) => index > 0 && !word.startsWith("-"));
 		return (cmd[0] === "stamity" || cmd[0] === "st") && cmd[at] === "run" && cmd.slice(at + 1).some((word) => RUN_VERBS.has(word));
 	}) || [...commands, ...assigned.map((word) => [word])].some(namesVerbInWords) || namesVerb(command) || [...assigned, ...commands.flat()].some(namesVerb) ? verbShape(command) : null;
-	if (broke !== null) return deny(`A run verb (\`stamity run start\`, \`checkpoint\` or \`end\`) on a line that is more than the verb (${broke}; REQ-FLOW-121)`);
+	if (broke !== null) return deny(`A run verb (\`stamity run start\`, \`checkpoint\`, \`end\` or \`land\`) on a line that is more than the verb (${broke}; REQ-FLOW-121)`);
 	return { deny: false };
 };
 
@@ -2807,7 +3621,7 @@ function linesOf(name, tail) {
  * The branch context of each place a shell call's git runs in, one per git dir. Where HEAD names no branch or commit
  * (reftable's placeholder too), an implied destination counts as the default branch, so a refspec-less push is refused.
  */
-function contextsOf(command, cwd) {
+function contextsOf(command, cwd, powershell) {
   const contexts = new Map();
   for (const place of placesOf(command, cwd)) {
     const dirs = place === null ? null : place.git !== undefined ? gitDirsOf(place.git) : gitDirsFrom(place.work);
@@ -2823,6 +3637,15 @@ function contextsOf(command, cwd) {
     contexts.set(key, {
       currentBranch: branch !== ".invalid" ? branch : detached ? null : (defaultBranches[0] ?? "main"),
       defaultBranches,
+      // The baked autonomy setting (REQ-FLOW-137, REQ-FLOW-140): what runs unasked, the deploying branches, and whether
+      // the setting is stricter than the default (a full clean or an init --force would loosen it, REQ-FLOW-138).
+      runs: RUNS,
+      deployingBranches: AUTONOMY.deployingBranches,
+      stricterThanDefault: STRICTER,
+      packageWords: PACKAGE.words,
+      packageName: PACKAGE.name,
+      ownRepository: PACKAGE.own,
+      powershell,
       // Read the first time the verdict asks, which only a push refspec does: no other call reads a tag.
       get tags() {
         tags ??= dirs === null ? [] : localTags(dirs.commonDir);
@@ -2983,10 +3806,32 @@ function askSentence(act, rule) {
   return act + " is a person-only act (\`" + rule + "\`): approve it to let the agent run it once (REQ-FLOW-102).";
 }
 function refuseSentence(act, rule) {
+  if (rule === "status-write") {
+    return act + " is CI's to write, never an agent's (\`" + rule + "\`): a merge reads commit statuses and check runs as its evidence, so the guard refuses this in every mode (REQ-FLOW-140).";
+  }
   return act + " deletes, force-pushes or cannot be undone (\`" + rule + "\`): it stays the person's to run, even with approval (REQ-FLOW-124). Give the person the exact command.";
 }
 function unattendedSentence(act, rule) {
-  return act + " is a person-only act (\`" + rule + "\`) and this run is unattended: list it on the morning list, whose walk runs it after one click.";
+  return act + " is a person-only act (\`" + rule + "\`) and this run is unattended: list it on the run's summary list (\`morning.md\`), whose walk runs it after one click.";
+}
+
+// The payload fields that name a helper agent on this client (GUARD_HELPER_FIELDS in the engine).
+const HELPER_NAMES = ["subagent_type","agentType","subagentType","agent_id","subagent_id","agentId","parentAgentId","parent_agent_id","parent_tool_call_id"];
+
+/** Whether a sub-agent makes this call: a non-empty string in any helper field (on Claude Code, \`agent_id\` beside \`agent_type\`). */
+function helperCall(payload) {
+  return HELPER_NAMES.some((name) => Object.hasOwn(payload, name) && typeof payload[name] === "string" && payload[name] !== "");
+}
+
+/**
+ * An act the autonomy setting runs unasked (REQ-FLOW-137) is the main thread's alone: a sub-agent's call to one is
+ * refused; null for the main thread's.
+ */
+function helperRefusal(payload, act, rule) {
+  const held = (reason) => ({ ask: false, reason });
+  const helper = helperCall(payload);
+  if (!helper) return null;
+  return held(act + " is a person-only act (\`" + rule + "\`) and a sub-agent runs it: the autonomy setting runs it unasked on the main thread only (REQ-FLOW-137). Give the person the exact command.");
 }
 
 /**
@@ -2997,9 +3842,9 @@ function unattendedSentence(act, rule) {
 function attendedAsk(payload, act, rule) {
   const told = act + " is a person-only act (\`" + rule + "\`) and ";
   const end = " (REQ-FLOW-102). Give the person the exact command.";
-  const names = ["agent_type","subagent_type","agentType","subagentType","agent_id","subagent_id","agentId","parentAgentId","parent_agent_id","parent_tool_call_id"];
+  const names = HELPER_NAMES;
   const held = (reason) => ({ ask: false, reason });
-  if (names.some((name) => Object.hasOwn(payload, name) && typeof payload[name] === "string" && payload[name] !== "")) {
+  if (helperCall(payload)) {
     return held(told + "a sub-agent runs it: the act is the person's, so only the main thread may ask for it" + end);
   }
   if (payload.permission_mode === "auto") {
@@ -3040,26 +3885,47 @@ function decide() {
   // Every place and every reading (REQ-FLOW-124): one refuse-class act refuses the call, so a deletion never rides an
   // approval another reading or place would ask for.
   const found = [];
-  for (const ctx of contextsOf(command, cwd)) {
+  // The acts the baked setting runs unasked (REQ-FLOW-137), from every place and reading.
+  const ran = new Set();
+  for (const ctx of contextsOf(command, cwd, pwsh)) {
     for (const text of texts) {
       const always = personOnlyVerdict(text, ctx);
       if (always.deny) found.push(always);
+      else for (const rule of always.runs ?? []) ran.add(rule);
     }
   }
   const refused = found.find((verdict) => !verdict.ask);
   if (refused !== undefined) return { ask: false, reason: refuseSentence(refused.act, refused.rule) };
+  // The land verb alone on its line in every mode, read over the parsed program words (REQ-FLOW-121): no mode read.
+  const land = unattendedPushVerdict(command, pwsh, true, PACKAGE);
+  if (land.deny) return { ask: false, reason: land.reason };
   // The mode is read for every ask and for a call the unattended rule would refuse, so an unreadable record refuses
   // those and no other call.
   const run = () => {
-    const verdict = unattendedPushVerdict(command, pwsh);
+    const verdict = unattendedPushVerdict(command, pwsh, false, PACKAGE);
     return verdict.deny ? verdict : undefined;
   };
   if (found.length > 0) {
+    // A loosening read in one place or reading names itself only where no other act was found (REQ-FLOW-138).
+    const named = found.find((verdict) => verdict.rule !== "autonomy-loosen") ?? found[0];
     const why = unattendedBy(root);
-    if (why === null) return attendedAsk(payload, found[0].act, found[0].rule);
+    if (why === null) return attendedAsk(payload, named.act, named.rule);
     // Unattended, a push keeps the push rule's own reason; any other act goes on the morning list.
     const push = run();
-    return { ask: false, reason: (push !== undefined ? push.reason : unattendedSentence(found[0].act, found[0].rule)) + " " + why };
+    return { ask: false, reason: (push !== undefined ? push.reason : unattendedSentence(named.act, named.rule)) + " " + why };
+  }
+  // An act the setting runs unasked is the main thread's alone (REQ-FLOW-137): a sub-agent's call to one is refused,
+  // as 1.16.0 refused a sub-agent's ask, read through the identity fields attendedAsk reads.
+  const first = [...ran][0];
+  if (first !== undefined) {
+    const helper = helperRefusal(payload, RUN_ACTS[first] ?? "This act", first);
+    if (helper !== null) return helper;
+  }
+  // Unattended, a raw ready mark stays refused: the run's one draft pull request is marked ready only by the land
+  // verb's --ready (REQ-FLOW-120).
+  if (ran.has("pr-ready")) {
+    const why = unattendedBy(root);
+    if (why !== null) return { ask: false, reason: unattendedSentence("Marking a pull request ready for review", "pr-ready") + " " + why };
   }
   const push = run();
   if (push !== undefined) {
