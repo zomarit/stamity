@@ -338,8 +338,10 @@ function main() {
   // The plain word a starter carries after the encoded row names the row's
   // script for a reader of the hook file (REQ-FLOW-142). One that names another
   // script would have that reader trust a different file than the one this
-  // runner starts, so the row is refused, at the row's own failure exit.
-  if (process.argv[3] !== undefined && process.argv[3] !== row.command[1]) throw safeError("Invalid hook registration");
+  // runner starts, so the row is refused, at the row's own failure exit. So is
+  // any argument after that word: the starter forwards the row and one word, and
+  // a reader takes the last word as the script.
+  if ((process.argv[3] !== undefined && process.argv[3] !== row.command[1]) || process.argv.length > 4) throw safeError("Invalid hook registration");
   if (row.timeoutMs !== undefined && (!Number.isSafeInteger(row.timeoutMs) || row.timeoutMs <= 0)) throw safeError("Invalid hook timeout");
   const raw = readFileSync(0, "utf8");
   const payload = raw.trim() === "" ? {} : parse(raw, "Invalid hook input JSON");

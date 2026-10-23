@@ -872,6 +872,24 @@ describe("the walk-up starter on Cursor and Copilot", () => {
     expect(disagreeing.stderr).toContain("Invalid hook registration");
   });
 
+  it.each(wordCases)("%s refuses a %s row whose own plain word is followed by another word, which a reader would take as the script, at exit %i", async (tool, script, refusedExit) => {
+    const f = await fixture(tool, DENY("the row ran"), { command: [process.execPath, script] });
+    if (tool !== "codex") {
+      await mkdir(join(f.root, ...ANCHORS[tool].slice(0, -1)), { recursive: true });
+      await writeFile(join(f.root, ...ANCHORS[tool]), "{}\n");
+    }
+    await writeFile(join(f.root, script), DENY("the row ran"));
+    const command = portableHookCommand(tool, f.hook, SYNC);
+    expect(command.endsWith(` ${script}`)).toBe(true);
+
+    // The starter forwards the row and one word; anything after that word is not the engine's rendering.
+    const extra = runShell(`${command} other.mjs`, f.root);
+
+    expect(extra.status).toBe(refusedExit);
+    expect(extra.stdout).toBe("");
+    expect(extra.stderr).toContain("Invalid hook registration");
+  });
+
   it.each(["cursor", "copilot", "codex"] as const)("%s gives a row whose script is outside the plain alphabet no word, its command ending with the row as before", (tool) => {
     for (const command of [["node", "path with space.mjs"], ["node", "a'b.mjs"], ["node", "../x.mjs"], ["node", "$(touch pwned).mjs"], ["node"]]) {
       const row: HookInterchange = { event: "session_start", command };
