@@ -605,7 +605,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
               }
             }
             nested.push(text.slice(start, j));
-            // An unclosed substitution is a syntax error the shell runs nothing for, so it fills nothing in (review/56).
+            // An unclosed substitution is a syntax error the shell runs nothing for, so it fills nothing in (build/4).
             hide(word.length, word.length + Math.min(j + 1, text.length) - i, j < text.length ? "e" : "");
             word += text.slice(i, Math.min(j + 1, text.length));
             i = j + 1;
@@ -672,7 +672,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
           }
         }
         nested.push(text.slice(start, j));
-        // An unclosed substitution or group is a syntax error the shell runs nothing for, so it fills nothing in (review/56).
+        // An unclosed substitution or group is a syntax error the shell runs nothing for, so it fills nothing in (build/4).
         hide(word.length, word.length + Math.min(j + 1, text.length) - i, j >= text.length ? "" : ch === "(" ? "p" : "es");
         word += text.slice(i, Math.min(j + 1, text.length));
         inWord = true;
@@ -723,6 +723,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   const unread = new Map<string[], boolean[]>();
   /** Per command, which of its words hold any mark at all, a glob or brace form whatever its literal text included. */
   const anyMark = new Map<string[], boolean[]>();
+  /** Per command, each word's marks as the reading took them, a tainted reading's words marked whole (review/69). */
+  const markMap = new Map<string[], WordMark[]>();
   /** The commands whose program word may itself split into more words, an option among them (review/45). */
   const spills = new Set<string[]>();
   /** The commands run under `xargs`, which adds arguments from its input that the line never shows (review/45). */
@@ -840,6 +842,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       const marked = cmd.map((_, at) => tainted || markOf(at).kinds !== "");
       unread.set(cmd, unsure);
       anyMark.set(cmd, marked);
+      const raw = cmd.map((word, at) => (tainted ? { first: 0, last: word.length, kinds: "es" } : markOf(at)));
+      markMap.set(cmd, raw);
       if (viaStdin || fedIn) fed.add(cmd);
       // A nested string read from this command inherits its marks (review/54): any word the shell fills in may have put
       // that string's text in place, so the nested reading's quoting cannot make it literal. It inherits `xargs` too.
@@ -858,6 +862,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         cmd.splice(0, 1, "git", cmd[0].slice(4));
         unsure.splice(0, 1, unsure[0] === true, unsure[0] === true);
         marked.splice(0, 1, marked[0] === true, marked[0] === true);
+        raw.splice(0, 1, markOf(0), markOf(0));
       }
       if (SHELLS.has(cmd[0] ?? "")) {
         const flag = cmd.findIndex((word, index) => index > 0 && /^-[A-Za-z]*c[A-Za-z]*$/.test(word));
@@ -1134,7 +1139,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
    * or after its `run`, `exec`, `dlx` or `x`, being one of those words (`yarn st`, `pnpm run st`, review/44); or a
    * launcher (`node`, `bun`, `deno`, `tsx`) or a package manager given a word naming the package or the engine's CLI file
    * by its path (review/53): under `node_modules/<package>/`, `node_modules/.bin/<bin>`, and, in the engine's own
-   * repository, its `dist/cli.js` and `src/cli.ts`; the words after. With `basename`, only a launcher's or manager's
+   * repository, any word whose file name is the CLI's, by any path spelling (absolute, `..`, a doubled slash, a leading
+   * expansion, review/68); the words after. With `basename`, only a launcher's or manager's
    * word whose file name is a CLI file's (`cli.js`, `cli.ts`, …) anywhere, which may be the engine's or the
    * repository's own.
    */
@@ -1146,7 +1152,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       return (
         path.includes(`node_modules/${PACKAGE_NAME}/`) ||
         (/node_modules\/\.bin\/[^/]+$/.test(path) && PACKAGE_WORDS.includes(programName(path))) ||
-        (OWN_REPOSITORY && /^(?:\.\/)?(?:dist\/cli\.js|src\/cli\.ts)$/.test(path))
+        (OWN_REPOSITORY && /(?:^|\/)cli\.[cm]?[jt]s$/.test(path))
       );
     };
     if (!basename && named(program)) return cmd.slice(1);
@@ -1252,13 +1258,15 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     return dst === "" ? spec.slice(0, colon) : dst;
   }
 
-  function pushVerdict(args: string[], config: string[]): PersonOnlyVerdict | null {
+  function pushVerdict(args: string[], config: string[], marks: readonly WordMark[] = []): PersonOnlyVerdict | null {
     let force = false;
     let remove = false;
     let tags = false;
     let matching = false;
     let repoGiven = false;
     const positionals: string[] = [];
+    /** Each positional's marks (review/69, review/77), beside it. */
+    const positionalMarks: (WordMark | undefined)[] = [];
     // Refspecs a `-c` pair on the line supplies when the line names none: `remote.<name>.push`, and the upstream
     // a `branch.<name>.merge` names (where `push.default=upstream` sends a refspec-less push). Read whatever
     // remote or branch the pair names, so they add denials and never lift one.
@@ -1278,6 +1286,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       const arg = args[j] ?? "";
       if (arg === "--") {
         positionals.push(...args.slice(j + 1));
+        positionalMarks.push(...args.slice(j + 1).map((_, at) => marks[j + 1 + at]));
         break;
       }
       if (arg.startsWith("--")) {
@@ -1304,9 +1313,19 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
             break;
           }
         }
-      } else positionals.push(arg);
+      } else {
+        positionals.push(arg);
+        positionalMarks.push(marks[j]);
+      }
     }
     const named = repoGiven ? positionals : positionals.slice(1);
+    const namedMarks = repoGiven ? positionalMarks : positionalMarks.slice(1);
+    // An unquoted expansion in the remote's place may split into the remote and refspecs or an option the line does not
+    // show (review/69): it reads as a push to the default branch, and to a deploying one where any is named.
+    if (!repoGiven && /s/.test(positionalMarks[0]?.kinds ?? "")) {
+      if (deploying.length > 0) deny("push-deploying", "A push whose remote word may split into refspecs the line cannot show");
+      return deny("push-default", "A push whose remote word may split into refspecs or an option the line cannot show");
+    }
     // git reads `tag <name>` as `refs/tags/<name>:refs/tags/<name>`, whatever the context lists.
     const tagWord = named.indexOf("tag");
     const tagNamed = tagWord !== -1 && tagWord < named.length - 1;
@@ -1330,32 +1349,28 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       return colon === -1 ? [bare] : [bare.slice(0, colon), bare.slice(colon + 1)];
     };
     if (tags || refspecs.some((spec) => sides(spec).some(namesTag))) return deny("push-tags", "A push of tags");
-    for (const spec of refspecs) {
+    for (const [index, spec] of refspecs.entries()) {
       const name = destination(spec).replace(/^(refs\/)?heads\//i, "").toLowerCase();
       if (spec === ":" || spec === "+:") {
         if (deploying.length > 0) deny("push-deploying", "A matching push, a deploying branch among the branches it may push");
         return deny("push-default", "A matching push, the default branch among them");
       }
-      // A refspec the line cannot show (a substitution, a variable, a PowerShell group, build/46) may name the default
-      // branch, so it reads as a push to it, unless the literal text before the expansion rules that out (review/56):
-      // a destination opening on `stamity/x` cannot be `main`, so the run verb's own push of a git-legal branch name
-      // holding those characters is read as the branch it names. An expansion before the colon may hold the colon, so
-      // the destination is then unknown; a prefix that may still spell `refs/heads/`, `heads/`, `HEAD`, `@`, a default
-      // branch or a local tag reads as the default branch's push.
-      const hiddenAt = spec.search(/[$`(]/);
-      if (hiddenAt !== -1) {
-        const colon = spec.indexOf(":");
-        const known = (colon === -1 ? spec.slice(0, hiddenAt) : colon < hiddenAt ? spec.slice(colon + 1, hiddenAt) : "").toLowerCase();
-        const bare = known.replace(/^(refs\/)?heads\//, "");
-        const may = (candidate: string): boolean => candidate.toLowerCase().startsWith(bare);
-        if (
-          known === "" ||
-          ["refs/heads/", "heads/", "head", "@", "refs/tags/", "tags/"].some((form) => form.startsWith(known)) ||
-          [...defaults].some(may) ||
-          ctx.tags.some((tag) => may(tag.replace(/^refs\/tags\//i, "")))
-        ) {
-          return deny("push-default", "A push whose refspec the line cannot show (a substitution, a variable or a group)");
-        }
+      // A refspec the line cannot show (build/46) is read from the word's marks, never from its decoded text (review/69,
+      // review/77): a word the shell expands, globs or brace-expands may name the default branch or a deploying one, so
+      // it reads as a push to each; an unquoted expansion may also split into more refspecs or an option. A word whose
+      // characters only look like an expansion (single-quoted, or an unclosed substitution, which the shell refuses)
+      // is the branch it names, so the run verb's own push of such a git-legal name runs (build/4). A refspec a `-c`
+      // pair supplies has no marks of its own, and its text is read as before.
+      const mark = named.length > 0 ? namedMarks[index] : undefined;
+      if (named.length > 0 ? (mark?.kinds ?? "") !== "" : /[$`(]/.test(spec)) {
+        const splits = /s/.test(mark?.kinds ?? "");
+        if (deploying.length > 0) deny("push-deploying", "A push whose refspec the line cannot show, which may name a deploying branch");
+        return deny(
+          "push-default",
+          splits
+            ? "A push whose refspec the line cannot show, which may split into more refspecs or an option"
+            : "A push whose refspec the line cannot show (a substitution, a variable or a group)",
+        );
       }
       if (name === "head" || name === "@" ? onDeploying : deploys(name)) {
         deny("push-deploying", "A push to a branch the repository names as deploying");
@@ -2086,8 +2101,9 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       const { sub, args, config } = gitParts(cmd);
       // `git send-pack` pushes as `git push` does, its options and refspecs laid out the same (pr/16); with
       // no ref it updates the refs both sides have, the default branch among them, read as a matching push.
-      if (sub === "push") pushVerdict(args, config);
-      else if (sub === "send-pack") pushVerdict(args, [...config, "push.default=matching"]);
+      const argMarks = (markMap.get(cmd) ?? []).slice(cmd.length - args.length);
+      if (sub === "push") pushVerdict(args, config, argMarks);
+      else if (sub === "send-pack") pushVerdict(args, [...config, "push.default=matching"], argMarks);
       else if (sub === "tag") tagVerdict(args);
       else if (
         sub === "update-ref" &&
@@ -2131,8 +2147,10 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       else if (sub === "subtree") {
         // `git subtree push <remote> <branch>` runs `git push <remote> <split>:refs/heads/<branch>`.
         const valued = new Set(["-P", "--prefix", "-m", "--message", "-b", "--branch", "--onto"]);
-        const words = args.filter((word, index) => !word.startsWith("-") && !valued.has(args[index - 1] ?? ""));
-        if (words[0] === "push") pushVerdict(words.slice(1), config);
+        const kept = args.flatMap((word, index) => (!word.startsWith("-") && !valued.has(args[index - 1] ?? "") ? [index] : []));
+        const words = kept.map((index) => args[index] ?? "");
+        const keptMarks = kept.map((index) => argMarks[index] ?? { first: -1, last: 0, kinds: "" });
+        if (words[0] === "push") pushVerdict(words.slice(1), config, keptMarks.slice(1));
       }
     } else if (program === "gh") ghVerdict(cmd);
     else if (program === "curl" || program === "wget") httpVerdict(cmd);
@@ -2367,7 +2385,7 @@ export function unattendedPushVerdict(
               }
             }
             nested.push(text.slice(start, j));
-            // An unclosed substitution is a syntax error the shell runs nothing for, so it fills nothing in (review/56).
+            // An unclosed substitution is a syntax error the shell runs nothing for, so it fills nothing in (build/4).
             hide(word.length, word.length + Math.min(j + 1, text.length) - i, j < text.length ? "e" : "");
             word += text.slice(i, Math.min(j + 1, text.length));
             i = j + 1;
@@ -2434,7 +2452,7 @@ export function unattendedPushVerdict(
           }
         }
         nested.push(text.slice(start, j));
-        // An unclosed substitution or group is a syntax error the shell runs nothing for, so it fills nothing in (review/56).
+        // An unclosed substitution or group is a syntax error the shell runs nothing for, so it fills nothing in (build/4).
         hide(word.length, word.length + Math.min(j + 1, text.length) - i, j >= text.length ? "" : ch === "(" ? "p" : "es");
         word += text.slice(i, Math.min(j + 1, text.length));
         inWord = true;
@@ -2485,6 +2503,8 @@ export function unattendedPushVerdict(
   const unread = new Map<string[], boolean[]>();
   /** Per command, which of its words hold any mark at all, a glob or brace form whatever its literal text included. */
   const anyMark = new Map<string[], boolean[]>();
+  /** Per command, each word's marks as the reading took them, a tainted reading's words marked whole (review/69). */
+  const markMap = new Map<string[], WordMark[]>();
   /** The commands whose program word may itself split into more words, an option among them (review/45). */
   const spills = new Set<string[]>();
   /** The commands run under `xargs`, which adds arguments from its input that the line never shows (review/45). */
@@ -2602,6 +2622,8 @@ export function unattendedPushVerdict(
       const marked = cmd.map((_, at) => tainted || markOf(at).kinds !== "");
       unread.set(cmd, unsure);
       anyMark.set(cmd, marked);
+      const raw = cmd.map((word, at) => (tainted ? { first: 0, last: word.length, kinds: "es" } : markOf(at)));
+      markMap.set(cmd, raw);
       if (viaStdin || fedIn) fed.add(cmd);
       // A nested string read from this command inherits its marks (review/54): any word the shell fills in may have put
       // that string's text in place, so the nested reading's quoting cannot make it literal. It inherits `xargs` too.
@@ -2620,6 +2642,7 @@ export function unattendedPushVerdict(
         cmd.splice(0, 1, "git", cmd[0].slice(4));
         unsure.splice(0, 1, unsure[0] === true, unsure[0] === true);
         marked.splice(0, 1, marked[0] === true, marked[0] === true);
+        raw.splice(0, 1, markOf(0), markOf(0));
       }
       if (SHELLS.has(cmd[0] ?? "")) {
         const flag = cmd.findIndex((word, index) => index > 0 && /^-[A-Za-z]*c[A-Za-z]*$/.test(word));
@@ -2896,7 +2919,8 @@ export function unattendedPushVerdict(
    * or after its `run`, `exec`, `dlx` or `x`, being one of those words (`yarn st`, `pnpm run st`, review/44); or a
    * launcher (`node`, `bun`, `deno`, `tsx`) or a package manager given a word naming the package or the engine's CLI file
    * by its path (review/53): under `node_modules/<package>/`, `node_modules/.bin/<bin>`, and, in the engine's own
-   * repository, its `dist/cli.js` and `src/cli.ts`; the words after. With `basename`, only a launcher's or manager's
+   * repository, any word whose file name is the CLI's, by any path spelling (absolute, `..`, a doubled slash, a leading
+   * expansion, review/68); the words after. With `basename`, only a launcher's or manager's
    * word whose file name is a CLI file's (`cli.js`, `cli.ts`, …) anywhere, which may be the engine's or the
    * repository's own.
    */
@@ -2908,7 +2932,7 @@ export function unattendedPushVerdict(
       return (
         path.includes(`node_modules/${PACKAGE_NAME}/`) ||
         (/node_modules\/\.bin\/[^/]+$/.test(path) && PACKAGE_WORDS.includes(programName(path))) ||
-        (OWN_REPOSITORY && /^(?:\.\/)?(?:dist\/cli\.js|src\/cli\.ts)$/.test(path))
+        (OWN_REPOSITORY && /(?:^|\/)cli\.[cm]?[jt]s$/.test(path))
       );
     };
     if (!basename && named(program)) return cmd.slice(1);

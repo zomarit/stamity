@@ -3103,18 +3103,21 @@ describe("the engine's CLI file read by its path (a4, review/53, the declared de
   });
 });
 
-describe("a push refspec whose literal text rules out the default branch (a4, review/56)", () => {
+describe("a push refspec read from its word's marks (a4, build/4, review/69, review/77)", () => {
   const TAGGED_FEATURE = { defaultBranches: ["trunk"], currentBranch: "feat/x", tags: ["v1.0.0"] };
+  const DEPLOYING = { ...TAGGED_FEATURE, deployingBranches: ["production", "release/*"] };
 
-  // Red: every refspec holding those characters read as a push to the default branch, the run verb's own included.
+  // build/4: characters that only look like an expansion, single-quoted or in an unclosed substitution, are the name.
   it.each([
-    ["the run verb's push of a branch name nesting substitution characters", `git push origin HEAD:refs/heads/stamity/x${'"$('.repeat(4)}y`],
-    ["a branch name holding a group", "git push origin HEAD:refs/heads/feat(x)"],
-    ["a branch name holding a dollar after a literal folder", "git push origin feat/a$b"],
+    ["the run verb's push of a branch name nesting unclosed substitution characters", `git push origin HEAD:refs/heads/stamity/x${'"$('.repeat(4)}y`],
+    ["a single-quoted branch name holding a dollar", "git push origin 'feat/a$b'"],
+    ["a single-quoted branch name holding a group", "git push origin 'HEAD:refs/heads/feat(x)'"],
   ])("runs %s", (_, command) => {
     expect(personOnlyVerdict(command, TAGGED_FEATURE), command).toEqual({ deny: false });
   });
 
+  // TEST CHANGE, justified (REQ-FLOW-140, review/77): round 2 ran the two unquoted rows on their literal prefix, but the
+  // expansion may supply the colon and a default destination, so a word the shell fills in reads as the default push.
   it.each([
     ["an expansion with no literal text before it", "git push origin \"$(git branch --show-current)\""],
     ["a literal prefix of the default branch", "git push origin HEAD:tru$(echo nk)"],
@@ -3123,7 +3126,55 @@ describe("a push refspec whose literal text rules out the default branch (a4, re
     ["an expansion before the colon", "git push origin $(echo HEAD:trunk)"],
     ["a literal prefix of a local tag", "git push origin v1$(echo .0.0)"],
     ["a literal prefix of main, always a default", "git push origin HEAD:ma$(echo in)"],
+    // Red on 3021c756 (review/77): these passed on their literal prefix.
+    ["a colon-less refspec whose expansion may supply the colon", "git push origin feat/a$b"],
+    ["a branch name holding an unquoted group", "git push origin HEAD:refs/heads/feat(x)"],
+    ["a double-quoted variable after a literal folder", "git push origin \"feat/$NAME\""],
   ])("asks for %s as a push to the default branch", (_, command) => {
     expect(personOnlyVerdict(command, TAGGED_FEATURE), command).toMatchObject({ deny: true, rule: "push-default", ask: true });
+  });
+
+  // Red on 3021c756 (review/69): the literal prefix ruled out the default branch and no deploying name was compared.
+  it.each([
+    ["a deploying name finished by an expansion", "git push origin HEAD:produc$(echo tion)"],
+    ["a deploying pattern's folder finished by a variable", "git push origin HEAD:release/$V"],
+    ["a branch built wholly by a substitution", "git push origin \"$(cat branch)\""],
+  ])("asks for %s as a push to a deploying branch", (_, command) => {
+    expect(personOnlyVerdict(command, DEPLOYING), command).toMatchObject({ deny: true, rule: "push-deploying", ask: true });
+  });
+
+  // Red on 3021c756 (review/69): an unquoted value may split into more refspecs or an option.
+  it.each([
+    ["a split-prone refspec after a literal folder", "git push origin feat/$REST", "refspec the line cannot show, which may split"],
+    ["a split-prone remote word", "git push $TARGET", "remote word may split"],
+  ])("asks for %s, which may split into more refspecs or an option", (_, command, act) => {
+    expect(personOnlyVerdict(command, TAGGED_FEATURE), command).toMatchObject({ deny: true, rule: "push-default", ask: true, act: expect.stringContaining(act) });
+  });
+
+  it("leaves a quoted variable in the remote's place, which cannot split, to the refspecs after it", () => {
+    expect(personOnlyVerdict("git push \"$REMOTE\" feat/x", TAGGED_FEATURE)).toEqual({ deny: false });
+  });
+});
+
+describe("the engine's own CLI file by any path spelling (a4, review/68)", () => {
+  const OWN = { ...ON_FEATURE, stricterThanDefault: true, ownRepository: true };
+  const CONSUMER = { ...OWN, ownRepository: false };
+
+  // Red on 3021c756: only the two short relative spellings took the full check in the engine's own repository.
+  it.each([
+    ["an absolute path with an expanded argument", "node /home/dev/engine/dist/cli.js sync \"$X\""],
+    ["a dot-dot path with an xargs-fed argument", "echo --loosen | xargs node ../engine/dist/cli.js sync"],
+    ["a doubled slash before the source file with a full clean", "tsx .//src//cli.ts clean"],
+    ["a path opening on an expansion with an expanded argument", "node \"$ROOT/dist/cli.js\" sync \"$X\""],
+    ["a working-tree-relative path with an init force", "node ./dist/cli.mjs init --force"],
+  ])("gives %s the full check in the engine's own repository", (_, command) => {
+    expect(personOnlyVerdict(command, OWN), command).toMatchObject({ deny: true, rule: "autonomy-loosen", ask: true });
+  });
+
+  it.each([
+    ["an absolute path with an expanded argument", "node /home/dev/app/dist/cli.js build \"$X\""],
+    ["a path opening on an expansion with a full clean", "node \"$ROOT/dist/cli.js\" clean"],
+  ])("leaves %s to the literal flag alone in a consumer repository", (_, command) => {
+    expect(personOnlyVerdict(command, CONSUMER), command).toEqual({ deny: false });
   });
 });

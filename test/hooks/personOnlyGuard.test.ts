@@ -1808,3 +1808,16 @@ describe("the guard's round-2 readings (a4, review/52, review/53, review/54, rev
     expect(await bakedFor("consumer-app")).toBe(false);
   });
 });
+
+describe("the guard's refspec reading by marks (a4, review/69, review/77)", () => {
+  // Red on 3021c756: a deploying name finished by an expansion, and a colon-less refspec with one, ran unasked.
+  it.each(TOOLS)("%s: asks for a refspec the shell fills in, naming the deploying branch where one is named", async (tool) => {
+    const guard = await placeGuard(tool, {}, resolveAutonomy({ autonomy: { deployingBranches: ["production"] } }));
+    const command = "git push origin HEAD:produc$(echo tion)";
+    const verdict = personOnlyVerdict(command, { ...BAKED_DEFAULT, deployingBranches: ["production"] });
+    expect(verdict).toMatchObject({ deny: true, rule: "push-deploying", ask: true });
+    if (verdict.deny) expect(decide(tool, guard, command)).toEqual(expectedAttended(tool, verdict));
+    expect(decide(tool, guard, "git push origin feat/a$b").deny).toBe(true);
+    expect(decide(tool, guard, "git push origin 'feat/a$b'")).toEqual({ deny: false });
+  });
+});
