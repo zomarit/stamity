@@ -2,9 +2,9 @@ import {
   AUTONOMY_MODES,
   DEPLOYING_ACTS,
   type AutonomousAct,
+  type AutonomyConfig,
   type AutonomyMode,
   type DeployingAct,
-  type SetupManifest,
 } from "../types/manifest.ts";
 
 /**
@@ -25,7 +25,7 @@ export interface ResolvedAutonomy {
   readonly mode: AutonomyMode;
   /** The {@link AUTONOMOUS_ACTS} that run unasked: none in mode `ask`, else those not named as deploying. */
   readonly runs: readonly AutonomousAct[];
-  /** Branch names or one-segment `*` patterns, first spelling kept, repeats (by {@link branchKey}) dropped. */
+  /** Branch names or `*`/`**` patterns, first spelling kept, repeats (by {@link branchKey}) dropped. */
   readonly deployingBranches: readonly string[];
   /** The acts named as deploying, in {@link DEPLOYING_ACTS} order. */
   readonly deploying: readonly DeployingAct[];
@@ -50,14 +50,51 @@ function uniqueBranches(names: readonly string[]): string[] {
   return kept;
 }
 
+/** The members an `autonomy` block may carry, as the manifest schema admits them. */
+const AUTONOMY_KEYS: ReadonlySet<string> = new Set(["mode", "deployingBranches", "deployingActs"]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Whether a raw `autonomy` block passes the manifest schema's type and set
+ * checks: an object of known members, a known mode, a list of strings for the
+ * branches and a list of known acts. The git spelling rules for a branch name
+ * are the schema's alone.
+ */
+function admittedBlock(block: unknown): block is AutonomyConfig {
+  if (!isRecord(block)) return false;
+  if (Object.keys(block).some((key) => !AUTONOMY_KEYS.has(key))) return false;
+  const { mode, deployingBranches, deployingActs } = block;
+  if (mode !== undefined && !(AUTONOMY_MODES as readonly unknown[]).includes(mode)) return false;
+  if (deployingBranches !== undefined && !isStringList(deployingBranches)) return false;
+  if (deployingActs === undefined) return true;
+  return (
+    Array.isArray(deployingActs) && deployingActs.every((act) => (DEPLOYING_ACTS as readonly unknown[]).includes(act))
+  );
+}
+
 /**
  * The setting a manifest's `autonomy` block resolves to. An absent block, or
  * an absent member, takes the default: mode `autonomous`, nothing named.
- * Assumes a block the manifest schema admitted; an act outside
- * {@link DEPLOYING_ACTS} is dropped rather than carried.
+ *
+ * Fails closed: the land verb reads committed manifests no schema check has
+ * passed, so a block the schema would refuse (a mode spelled `Ask`, a list
+ * that is not a list, an unknown act or member) resolves to the strictest
+ * setting it can state, mode `ask` with every act named, keeping only the
+ * branch names it can read. It never resolves to the default.
  */
-export function resolveAutonomy(manifest: Pick<SetupManifest, "autonomy">): ResolvedAutonomy {
-  const block = manifest.autonomy;
+export function resolveAutonomy(manifest: { readonly autonomy?: unknown }): ResolvedAutonomy {
+  const raw = manifest.autonomy;
+  if (raw !== undefined && !admittedBlock(raw)) {
+    const listed = isRecord(raw) ? raw["deployingBranches"] : undefined;
+    const readable = Array.isArray(listed) ? listed.filter((name): name is string => typeof name === "string") : [];
+    return resolveAutonomy({
+      autonomy: { mode: "ask", deployingActs: [...DEPLOYING_ACTS], deployingBranches: readable },
+    });
+  }
+  const block = raw;
   const mode: AutonomyMode = block?.mode === "ask" ? "ask" : "autonomous";
   const named = new Set<DeployingAct>(block?.deployingActs ?? []);
   const deploying = DEPLOYING_ACTS.filter((act) => named.has(act));
@@ -179,9 +216,11 @@ function escapeRegExp(text: string): string {
 
 /**
  * True when the branch `name` is one `patterns` names: an exact name matches
- * only itself, and a `*` matches any run of characters inside one path segment
- * (`release/*` matches `release/1.17`, not `release/1.17/hotfix`). Both sides
- * compare case-folded with any `refs/heads/` prefix dropped.
+ * only itself, a `*` matches any run of characters inside one path segment
+ * (`release/*` matches `release/1.17`, not `release/1.17/hotfix`), and a `**`
+ * matches any run across segments (`release/**` matches both), as a GitHub
+ * Actions branch filter reads them. Both sides compare case-folded with any
+ * `refs/heads/` prefix dropped.
  *
  * Local to this module until the guard's own matcher lands in
  * `../hooks/personOnly.ts` (unit a4-guard-ask-list); the CLI callers then
@@ -190,7 +229,10 @@ function escapeRegExp(text: string): string {
 export function matchesDeployingBranch(name: string, patterns: readonly string[]): boolean {
   const branch = branchKey(name);
   return patterns.some((pattern) => {
-    const source = branchKey(pattern).split("*").map(escapeRegExp).join("[^/]*");
+    const source = branchKey(pattern)
+      .split("**")
+      .map((part) => part.split("*").map(escapeRegExp).join("[^/]*"))
+      .join(".*");
     return new RegExp(`^${source}$`, "u").test(branch);
   });
 }

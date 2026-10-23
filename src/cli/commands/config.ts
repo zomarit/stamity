@@ -979,7 +979,8 @@ export const KEY_SPECS: readonly ConfigKeySpec[] = [
     key: "autonomy.deployingBranches",
     hint:
       `a comma-separated list of at most 32 branch names or patterns whose \`*\` stays inside ` +
-      `one path segment (\`release/*\`), or \`none\` to clear — a push to one asks`,
+      `one path segment (\`release/*\`) and whose \`**\` crosses segments (\`release/**\`), ` +
+      `or \`none\` to clear — a push to one asks`,
     read: (manifest) => readAutonomyList(manifest.autonomy?.deployingBranches),
     resolve: (manifest) => renderList(resolveAutonomy(manifest).deployingBranches),
     apply: (draft, raw) =>

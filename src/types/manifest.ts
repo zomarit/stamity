@@ -201,7 +201,7 @@ export const DEPLOYING_ACTS: readonly DeployingAct[] = [
  */
 export interface AutonomyConfig {
   mode?: AutonomyMode;
-  /** Branch names, or patterns whose `*` stays inside one path segment (`release/*`). */
+  /** Branch names, or patterns whose `*` stays inside one path segment (`release/*`) and whose `**` crosses segments. */
   deployingBranches?: string[];
   deployingActs?: DeployingAct[];
 }

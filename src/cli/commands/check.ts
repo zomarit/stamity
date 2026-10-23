@@ -14,7 +14,7 @@ import { discoverUserContent } from "../../content/userContent.ts";
 import { pinnedCliInstall } from "../../adapters/copilot.ts";
 import { AGENTS_MD_FILE, CURSOR_CLOUD_BLOCK_HEADING } from "../../emit/agentsMd.ts";
 import { renderInvariantsVersion, type CliCallContext } from "../../emit/substitution.ts";
-import { readGates } from "../../manifest/manifest.ts";
+import { deployingBranchDefect, MAX_DEPLOYING_BRANCHES, readGates } from "../../manifest/manifest.ts";
 import { OWNED_PATHS } from "../../manifest/ownedPaths.ts";
 import {
   extractManagedBlock,
@@ -1962,73 +1962,214 @@ function filterList(value: unknown): string[] | null {
   return null;
 }
 
-/** Characters that make a branch filter entry a pattern rather than one branch's name. */
-const FILTER_GLOB = /[*?+[\]!]/;
+/**
+ * Whether a branch filter entry uses GitHub's pattern syntax beyond `*` and
+ * `**`, or a spelling the deploying list refuses: a leading `!`, a `?`, `+`,
+ * `[` or `]`, or a name `autonomy.deployingBranches` would not admit. The row
+ * cannot tell which branches such an entry runs for, so it never counts one
+ * as covered, and never prints one as a fix the validator would refuse.
+ */
+function unreadableFilter(entry: string): boolean {
+  return entry.startsWith("!") || /[?+[\]]/.test(entry) || deployingBranchDefect(entry) !== null;
+}
+
+/** What a workflow's push trigger runs it for: the branches the row can name, and whether a filter it cannot read. */
+interface PushBranches {
+  readonly branches: string[];
+  readonly unreadable: boolean;
+}
+
+/** Whether a workflow's `on:` holds `event`: as the string, a list member, or a key. */
+function hasTrigger(on: unknown, event: string): boolean {
+  if (typeof on === "string") return on === event;
+  if (Array.isArray(on)) return on.includes(event);
+  return isPlainObject(on) && Object.hasOwn(on, event);
+}
 
 /**
  * The branches a workflow's `on:` runs it for on a push, as `check` names them
  * (REQ-FLOW-139): the default branch whenever the push trigger reaches it — a
  * bare `push` (a string or a list member), a `push` with no branch filter, a
  * `branches` list that matches it, a `branches-ignore` that does not exclude
- * it — plus each other branch or pattern a `branches` list names. A push
- * filtered on tags alone runs for no branch, so it names none.
+ * it — plus each other branch or `*`/`**` pattern a `branches` list names. A
+ * push filtered on tags alone runs for no branch, so it names none. An entry
+ * {@link unreadableFilter} marks is left out and sets `unreadable`.
  */
-function pushTriggerBranches(on: unknown, defaultBranch: string): string[] {
-  let push: unknown = null;
-  if (typeof on === "string" || Array.isArray(on)) {
-    if (on !== "push" && !(Array.isArray(on) && on.includes("push"))) return [];
-  } else if (isPlainObject(on) && Object.hasOwn(on, "push")) {
-    push = on["push"];
-  } else {
-    return [];
-  }
-  if (!isPlainObject(push)) return [defaultBranch];
+function pushTriggerBranches(on: unknown, defaultBranch: string): PushBranches {
+  const none: PushBranches = { branches: [], unreadable: false };
+  if (!hasTrigger(on, "push")) return none;
+  const push: unknown = isPlainObject(on) ? on["push"] : null;
+  if (!isPlainObject(push)) return { branches: [defaultBranch], unreadable: false };
   const branches = filterList(push["branches"]);
   if (branches !== null) {
     const named = new Map<string, string>();
     if (filterMatches(defaultBranch, branches)) named.set(defaultBranch.toLowerCase(), defaultBranch);
     for (const entry of branches) {
-      if (entry.startsWith("!")) continue;
-      if (FILTER_GLOB.test(entry) || filterMatches(entry, branches)) named.set(entry.toLowerCase(), entry);
+      if (!unreadableFilter(entry)) named.set(entry.toLowerCase(), entry);
     }
-    return [...named.values()];
+    return { branches: [...named.values()], unreadable: branches.some(unreadableFilter) };
   }
   const ignored = filterList(push["branches-ignore"]);
-  if (ignored !== null) return filterMatches(defaultBranch, ignored) ? [] : [defaultBranch];
-  if (push["tags"] !== undefined || push["tags-ignore"] !== undefined) return [];
-  return [defaultBranch];
+  if (ignored !== null) {
+    return {
+      branches: filterMatches(defaultBranch, ignored) ? [] : [defaultBranch],
+      unreadable: ignored.some(unreadableFilter),
+    };
+  }
+  if (push["tags"] !== undefined || push["tags-ignore"] !== undefined) return none;
+  return { branches: [defaultBranch], unreadable: false };
 }
 
-/** The ids of the jobs that name a deployment environment, as a string or as `{ name }`. */
-function environmentJobs(workflow: Record<string, unknown>): string[] {
-  const jobs = workflow["jobs"];
-  if (!isPlainObject(jobs)) return [];
-  return Object.entries(jobs)
-    .filter(([, job]) => {
-      if (!isPlainObject(job)) return false;
-      const environment = job["environment"];
-      const name = isPlainObject(environment) ? environment["name"] : environment;
-      return typeof name === "string" && name.trim() !== "";
-    })
-    .map(([jobId]) => jobId);
+/** A branch spelling folded the way the deploying list compares it: case folded, `refs/heads/` dropped. */
+function foldBranch(name: string): string {
+  const lower = name.toLowerCase();
+  return lower.startsWith("refs/heads/") ? lower.slice("refs/heads/".length) : lower;
+}
+
+/** A `*`/`**` pattern as tokens: `**`, `*`, or one literal character. */
+function globTokens(pattern: string): string[] {
+  const tokens: string[] = [];
+  for (let index = 0; index < pattern.length; index += 1) {
+    if (pattern.startsWith("**", index)) {
+      tokens.push("**");
+      index += 1;
+    } else {
+      tokens.push(pattern.charAt(index));
+    }
+  }
+  return tokens;
 }
 
 /**
- * The `autonomy-deploying` row (REQ-FLOW-139). In mode `autonomous` the land
- * verb merges into a branch on the evidence alone unless
- * `autonomy.deployingBranches` names it, so a workflow that deploys on a push
- * to such a branch would deploy with no person asked. The row reads each
+ * Whether the listed pattern `outer` matches every branch the filter pattern
+ * `inner` matches. Each wildcard of `inner` has to fall inside a wildcard of
+ * `outer` at least as wide: a `**` inside a `**` only, a `*` inside a `*` or a
+ * `**`, and a literal `/` never inside a `*`. Sound, so a pass is never
+ * claimed for a branch the list misses; a cover only a union of entries
+ * gives reads as not covered.
+ */
+function globCovers(outer: readonly string[], inner: readonly string[]): boolean {
+  const memo = new Map<number, boolean>();
+  const covers = (at: number, from: number): boolean => {
+    const key = at * (inner.length + 1) + from;
+    const known = memo.get(key);
+    if (known !== undefined) return known;
+    let result: boolean;
+    const token = outer[at];
+    const next = inner[from];
+    if (token === undefined) {
+      result = next === undefined;
+    } else if (token === "**") {
+      result = covers(at + 1, from) || (next !== undefined && covers(at, from + 1));
+    } else if (token === "*") {
+      result = covers(at + 1, from) || (next !== undefined && next !== "/" && next !== "**" && covers(at, from + 1));
+    } else {
+      result = next === token && covers(at + 1, from + 1);
+    }
+    memo.set(key, result);
+    return result;
+  };
+  return covers(0, 0);
+}
+
+/** Whether every branch the readable filter entry `entry` runs for is one `patterns` names. */
+function filterCovered(entry: string, patterns: readonly string[]): boolean {
+  if (!entry.includes("*")) return matchesDeployingBranch(entry, patterns);
+  const inner = globTokens(foldBranch(entry));
+  return patterns.some((pattern) => globCovers(globTokens(foldBranch(pattern)), inner));
+}
+
+/** Whether a job names a deployment environment, as a string or as `{ name }`. */
+function namesEnvironment(job: Record<string, unknown>): boolean {
+  const environment = job["environment"];
+  const name = isPlainObject(environment) ? environment["name"] : environment;
+  return typeof name === "string" && name.trim() !== "";
+}
+
+/** How many local reusable-workflow calls the row follows from one workflow. */
+const REUSABLE_CALL_DEPTH = 3;
+
+/** The file a job-level `uses:` calls in this repository's workflows folder, or `null` for any other call. */
+function localCallee(uses: unknown): string | null {
+  if (typeof uses !== "string") return null;
+  const match = /^\.\/\.github\/workflows\/([^/]+\.ya?ml)$/.exec(uses.trim());
+  return match?.[1] ?? null;
+}
+
+/** The jobs a workflow reaches an environment through, and what stopped the row following a call. */
+interface EnvironmentReach {
+  readonly jobs: string[];
+  readonly problems: string[];
+}
+
+/**
+ * The ids of the jobs in workflow `name` that name a deployment environment,
+ * themselves or through a local reusable workflow they call (followed at most
+ * {@link REUSABLE_CALL_DEPTH} calls deep, a cycle refused). A job reached
+ * through a call reads `<job> (through <file>)`; every id is sanitized. Each call the row could not
+ * follow is a problem naming `top`, the workflow the walk started from.
+ */
+function environmentJobs(
+  name: string,
+  workflows: ReadonlyMap<string, Record<string, unknown> | null>,
+  chain: readonly string[],
+  top: string,
+): EnvironmentReach {
+  const jobs = workflows.get(name)?.["jobs"];
+  const reached: string[] = [];
+  const problems: string[] = [];
+  if (!isPlainObject(jobs)) return { jobs: reached, problems };
+  for (const [jobId, job] of Object.entries(jobs)) {
+    if (!isPlainObject(job)) continue;
+    if (namesEnvironment(job)) {
+      reached.push(sanitizeLabel(jobId));
+      continue;
+    }
+    const callee = localCallee(job["uses"]);
+    if (callee === null) continue;
+    const shown = `${WORKFLOWS_DIR}/${sanitizeLabel(callee)}`;
+    if (chain.includes(callee)) {
+      problems.push(`${top} calls reusable workflows in a cycle, back to ${shown}`);
+    } else if (chain.length > REUSABLE_CALL_DEPTH) {
+      problems.push(`${top} calls reusable workflows more than ${REUSABLE_CALL_DEPTH} deep, to ${shown}`);
+    } else if (!workflows.has(callee)) {
+      problems.push(`${top} calls ${shown}, which is not in ${WORKFLOWS_DIR}`);
+    } else {
+      const inner = environmentJobs(callee, workflows, [...chain, callee], top);
+      problems.push(...inner.problems);
+      if (inner.jobs.length > 0) reached.push(`${sanitizeLabel(jobId)} (through ${shown})`);
+    }
+  }
+  return { jobs: reached, problems };
+}
+
+/** The line the row adds when it could not read the default branch and judged `main`. */
+const ASSUMED_DEFAULT = "the default branch is assumed to be main: no refs/remotes/origin/HEAD names it";
+
+/**
+ * The `autonomy-deploying` row (REQ-FLOW-139). A push to a branch that
+ * `autonomy.deployingBranches` does not list runs unasked, and in mode
+ * `autonomous` the land verb merges into the default branch on the evidence
+ * alone unless the list names it; so a workflow that deploys on a push to
+ * such a branch would deploy with no person asked. The row reads each
  * `.github/workflows/*.y{a,}ml` that is a regular file (a link is not
- * followed), and warns for every job that names an `environment` in a
- * workflow whose push trigger runs for a branch the setting does not list,
- * naming the workflow, the job and the branch, and the `config set` line that
- * lists it. A file it cannot read or parse warns as `not evaluated`. It
- * passes with no manifest, in mode `ask`, with no workflows folder, and when
- * every such branch is listed.
+ * followed) and warns, in both modes, for every job that names an
+ * `environment` — itself, or through a local reusable workflow it calls, at
+ * most three calls deep — in a workflow whose push trigger runs for a branch
+ * the list does not cover, naming the workflow, the job, the branch and the
+ * `config set` line that lists it. The default branch counts as covered in
+ * mode `ask`, which asks before a push or a merge there.
+ *
+ * It warns `not evaluated` on a file it cannot read or parse, on a branch
+ * filter it cannot read ({@link unreadableFilter}), on a deploy reached
+ * through a `workflow_run` trigger, and on a call it cannot follow. It passes
+ * with no manifest, with no workflows folder, and when every branch it read
+ * is covered, claiming only what it read.
  *
  * The default branch is `refs/remotes/origin/HEAD`'s, read through
- * `readDefaultBranch` only once a workflow deploys, else `main`. Every name
- * read from a workflow goes through `sanitizeLabel` before it is printed.
+ * `readDefaultBranch` only once a workflow deploys, else `main`, which the
+ * row then says it assumed. Every name read from a workflow goes through
+ * `sanitizeLabel` before it is printed.
  */
 export async function checkAutonomyDeploying(
   rootDir: string,
@@ -2040,9 +2181,6 @@ export async function checkAutonomyDeploying(
     return { id, status: "pass", detail: "no readable manifest, so no autonomy setting to judge" };
   }
   const setting = resolveAutonomy(manifest);
-  if (setting.mode === "ask") {
-    return { id, status: "pass", detail: "autonomy.mode is ask, so the land verb asks before every merge" };
-  }
   const dir = join(rootDir, ".github", "workflows");
   let files: string[];
   try {
@@ -2059,61 +2197,107 @@ export async function checkAutonomyDeploying(
       const path = join(dir, name);
       const display = `${WORKFLOWS_DIR}/${sanitizeLabel(name)}`;
       try {
-        if (!(await lstat(path)).isFile()) return { display, workflow: null };
+        if (!(await lstat(path)).isFile()) return { name, display, workflow: null };
         const workflow = parseYamlStrict(await readFile(path, "utf8"), display) as Record<string, unknown>;
-        return { display, workflow };
+        return { name, display, workflow };
       } catch {
-        return { display, workflow: null };
+        return { name, display, workflow: null };
       }
     }),
   );
+  const workflows = new Map(read.map((entry) => [entry.name, entry.workflow] as const));
 
   const notEvaluated: string[] = [];
-  const unlisted: { file: string; jobs: string[]; branch: string }[] = [];
-  let defaultBranch: string | undefined;
-  for (const { display, workflow } of read) {
+  const unlisted: { file: string; jobs: string[]; branch: string; isDefault: boolean }[] = [];
+  let defaultBranch: { name: string; assumed: boolean } | undefined;
+  let deploysOnPush = false;
+  for (const { name, display, workflow } of read) {
     if (workflow === null) {
       notEvaluated.push(display);
       continue;
     }
-    const jobs = environmentJobs(workflow);
-    if (jobs.length === 0) continue;
-    defaultBranch ??= readDefaultBranch(rootDir) ?? "main";
-    for (const branch of pushTriggerBranches(workflow["on"], defaultBranch)) {
-      if (!matchesDeployingBranch(branch, setting.deployingBranches)) unlisted.push({ file: display, jobs, branch });
+    const on = workflow["on"];
+    const onRun = hasTrigger(on, "workflow_run");
+    if (!hasTrigger(on, "push") && !onRun) continue;
+    const reach = environmentJobs(name, workflows, [name], display);
+    notEvaluated.push(...reach.problems);
+    if (reach.jobs.length === 0) continue;
+    if (onRun) {
+      notEvaluated.push(
+        `${display} deploys on a workflow_run trigger, which this row does not follow; ` +
+          "name the branches it deploys from in autonomy.deployingBranches",
+      );
+    }
+    if (defaultBranch === undefined) {
+      const found = readDefaultBranch(rootDir);
+      defaultBranch = { name: found ?? "main", assumed: found === null };
+    }
+    const push = pushTriggerBranches(on, defaultBranch.name);
+    if (push.unreadable) {
+      notEvaluated.push(
+        `${display} uses a branch filter this row cannot read; name its branches in autonomy.deployingBranches`,
+      );
+    }
+    for (const branch of push.branches) {
+      deploysOnPush = true;
+      const isDefault = foldBranch(branch) === foldBranch(defaultBranch.name);
+      if (isDefault && setting.mode === "ask") continue;
+      if (!filterCovered(branch, setting.deployingBranches)) {
+        unlisted.push({ file: display, jobs: reach.jobs, branch, isDefault });
+      }
     }
   }
 
+  const assumed = defaultBranch?.assumed === true ? [ASSUMED_DEFAULT] : [];
   if (unlisted.length === 0 && notEvaluated.length === 0) {
-    return {
-      id,
-      status: "pass",
-      detail:
-        setting.deployingBranches.length === 0
-          ? `no workflow in ${WORKFLOWS_DIR} deploys on a push`
-          : "every branch a workflow deploys on a push to is in autonomy.deployingBranches",
-    };
+    let verdict = "no workflow this row read deploys on a push";
+    if (deploysOnPush) {
+      verdict =
+        setting.mode === "ask"
+          ? "every branch a workflow this row read deploys on a push to is the default branch, " +
+            "which mode ask asks for, or is in autonomy.deployingBranches"
+          : "every branch a workflow this row read deploys on a push to is in autonomy.deployingBranches";
+    }
+    return { id, status: "pass", detail: [verdict, ...assumed].join("\n") };
   }
   const missing = [...new Set(unlisted.map((entry) => entry.branch))];
-  const widened = [...setting.deployingBranches, ...missing].join(",");
+  const missingDefault = unlisted.filter((entry) => entry.isDefault).map((entry) => entry.branch);
+  const missingOther = missing.filter((branch) => !missingDefault.includes(branch));
+  const widened = [...setting.deployingBranches, ...missing];
+  const names = (branches: readonly string[]): string => branches.map((branch) => sanitizeLabel(branch)).join(", ");
+  const reasons = [
+    ...(missingDefault.length === 0
+      ? []
+      : [
+          `autonomy.deployingBranches does not list ${names([...new Set(missingDefault)])}, ` +
+            "so the land verb would merge into it on the evidence alone and the workflow deploys",
+        ]),
+    ...(missingOther.length === 0
+      ? []
+      : [
+          `autonomy.deployingBranches does not cover ${names(missingOther)}, ` +
+            "so an agent's push to it runs unasked and the workflow deploys",
+        ]),
+  ];
+  const remedy =
+    widened.length > MAX_DEPLOYING_BRANCHES
+      ? `autonomy.deployingBranches holds at most ${MAX_DEPLOYING_BRANCHES} entries, so name patterns ` +
+        `that cover them (release/*, release/**), then ${packageCommand("sync")}`
+      : `add ${missing.length === 1 ? "it" : "them"}: ` +
+        `${packageCommand(`config set autonomy.deployingBranches ${shellWord(widened.join(","))}`)}, ` +
+        `then ${packageCommand("sync")}`;
   return {
     id,
     status: "warn",
     detail: [
       ...unlisted.map(
         (entry) =>
-          `${entry.file}: job ${entry.jobs.map((job) => sanitizeLabel(job)).join(", ")} names an environment ` +
+          `${entry.file}: job ${entry.jobs.join(", ")} names an environment ` +
           `and runs on a push to ${sanitizeLabel(entry.branch)}`,
       ),
-      ...(missing.length === 0
-        ? []
-        : [
-            `autonomy.deployingBranches does not list ${missing.map((branch) => sanitizeLabel(branch)).join(", ")}, ` +
-              "so the land verb would merge into it on the evidence alone and the workflow deploys; " +
-              `add it: ${packageCommand(`config set autonomy.deployingBranches ${shellWord(widened)}`)}, ` +
-              `then ${packageCommand("sync")}`,
-          ]),
-      ...notEvaluated.map((file) => `not evaluated: ${file}`),
+      ...(missing.length === 0 ? [] : [`${reasons.join("; ")}; ${remedy}`]),
+      ...notEvaluated.map((line) => `not evaluated: ${line}`),
+      ...assumed,
     ].join("\n"),
   };
 }

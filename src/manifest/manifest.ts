@@ -788,7 +788,7 @@ function collectGatesErrors(value: unknown, errors: string[]): void {
 const AUTONOMY_FIELDS = ["mode", "deployingBranches", "deployingActs"] as const;
 
 /** Most branches `autonomy.deployingBranches` may name. */
-const MAX_DEPLOYING_BRANCHES = 32;
+export const MAX_DEPLOYING_BRANCHES = 32;
 
 /** Longest branch name or pattern `autonomy.deployingBranches` admits. */
 const MAX_DEPLOYING_BRANCH_LENGTH = 255;
@@ -799,11 +799,11 @@ const REF_CONTROL_OR_SPACE = /[\s\u0000-\u001f\u007f]/;
 /**
  * Why `value` cannot be a deploying branch, or `null` when it can: a branch
  * name by git's `check-ref-format` rules, optionally under `refs/heads/`, in
- * which a `*` may also stand inside a segment (`release/*`, matched one
- * segment deep by `../config/autonomy.ts::matchesDeployingBranch`). Shape
+ * which a `*` may also stand (`release/*` matched one segment deep, `release/**`
+ * across segments, by `../config/autonomy.ts::matchesDeployingBranch`). Shape
  * only: the engine does not ask git, so no repository is needed to validate.
  */
-function deployingBranchDefect(value: unknown): string | null {
+export function deployingBranchDefect(value: unknown): string | null {
   if (typeof value !== "string") return "must be a string";
   if (value === "") return "is empty";
   if (value.length > MAX_DEPLOYING_BRANCH_LENGTH) {

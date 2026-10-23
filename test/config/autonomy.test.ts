@@ -75,6 +75,29 @@ describe("resolveAutonomy", () => {
     expect(readAutonomy).toBe(resolveAutonomy);
     expect(AUTONOMOUS_ACTS).toEqual(["pr-ready", "tag"]);
   });
+
+  // review/19: the land verb reads committed manifests no schema check passed.
+  const STRICTEST = { mode: "ask", runs: [], deploying: [...DEPLOYING_ACTS] };
+  for (const [label, block] of [
+    ["a mode spelled Ask", { mode: "Ask" }],
+    ["a mode spelled ASK", { mode: "ASK" }],
+    ["a string of acts", { deployingActs: "pr-merge" }],
+    ["an unknown act", { deployingActs: ["pr-merge", "force-push"] }],
+    ["a string of branches", { deployingBranches: "production" }],
+    ["an unknown member", { mode: "autonomous", deployingBranch: ["production"] }],
+    ["a block that is not an object", "ask"],
+  ] as const) {
+    it(`fails closed on ${label}: mode ask with every act named, never the default`, () => {
+      expect(readAutonomy({ autonomy: block })).toEqual({ ...STRICTEST, deployingBranches: [] });
+    });
+  }
+
+  it("keeps the branch names it can read when it fails closed", () => {
+    expect(readAutonomy({ autonomy: { mode: "Ask", deployingBranches: ["production", 7, "release/*"] } })).toEqual({
+      ...STRICTEST,
+      deployingBranches: ["production", "release/*"],
+    });
+  });
 });
 
 describe("loosens", () => {
@@ -169,6 +192,16 @@ describe("matchesDeployingBranch", () => {
   it("lets a `*` match inside one path segment only", () => {
     expect(matchesDeployingBranch("release/1.17", ["release/*"])).toBe(true);
     expect(matchesDeployingBranch("release/1.17/hotfix", ["release/*"])).toBe(false);
+  });
+
+  // review/18: GitHub's `releases/**` filter shape crosses `/`, and the list admits it.
+  it("lets a `**` match across path segments", () => {
+    expect(matchesDeployingBranch("release/1.17/hotfix", ["release/**"])).toBe(true);
+    expect(matchesDeployingBranch("release/1.17", ["release/**"])).toBe(true);
+    expect(matchesDeployingBranch("releases/1.17", ["release/**"])).toBe(false);
+    expect(matchesDeployingBranch("feature/a/b", ["**"])).toBe(true);
+    expect(matchesDeployingBranch("feature/a/b", ["feature/*/b"])).toBe(true);
+    expect(matchesDeployingBranch("feature/a/c/b", ["feature/*/b"])).toBe(false);
   });
 
   it("matches an exact name only to itself", () => {

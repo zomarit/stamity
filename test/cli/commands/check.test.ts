@@ -34,6 +34,7 @@ import { packDirRelPath, receiptRelPath } from "../../../src/pack/receipt.ts";
 import { describeRetiredPack, lookupRetiredPack, type RetiredPack } from "../../../src/pack/retired.ts";
 import { computeAggregateContentSha } from "../../../src/pack/trust.ts";
 import {
+  collectManifestErrors,
   createManifest,
   manifestPath,
   readManifest,
@@ -5484,8 +5485,12 @@ describe("check — autonomy-deploying", () => {
     "",
   ].join("\n");
   // Not a mock of git: the git read has its own case below, against a real repository with
-  // `refs/remotes/origin/HEAD` set. Every other case is handed a reader that finds no such ref,
-  // so the row falls back to `main`, which is the fallback under test there.
+  // `refs/remotes/origin/HEAD` set. Every other case is handed a reader that names `main`, and
+  // the case "says when it assumed main" hands one that finds no such ref.
+  // TEST CHANGE, justified (2026-10-23, a3-autonomy-config fix round 1, review/24): the row now
+  // says when it assumed `main`, so the shared reader names `main` and the no-ref fallback has
+  // its own case below; every expectation that used the fallback reads the same with this reader.
+  const originHeadMain = (): string | null => "main";
   const noOriginHead = (): string | null => null;
 
   function manifestOf(autonomy?: SetupManifest["autonomy"]): SetupManifest {
@@ -5504,7 +5509,7 @@ describe("check — autonomy-deploying", () => {
   ): Promise<DoctorCheck> {
     const handle = getRepo();
     await handle.seedFiles(files);
-    return await checkAutonomyDeploying(handle.dir, manifestOf(autonomy), noOriginHead);
+    return await checkAutonomyDeploying(handle.dir, manifestOf(autonomy), originHeadMain);
   }
 
   it("warns on a job with an environment that runs on a push to main, naming the fix", async () => {
@@ -5527,13 +5532,21 @@ describe("check — autonomy-deploying", () => {
     const listed = await rowAt({ ".github/workflows/deploy.yml": DEPLOY_ON_MAIN }, { deployingBranches: ["main"] });
     const ask = await rowAt({}, { mode: "ask" });
 
+    // TEST CHANGE, justified (2026-10-23, a3-autonomy-config fix round 1, review/17 and review/23):
+    // the pass claims only what the row read, and mode `ask` no longer passes unread; it passes
+    // here because the only deploying branch is the default one, which mode `ask` asks for.
     expect(listed).toEqual({
       id: "autonomy-deploying",
       status: "pass",
-      detail: "every branch a workflow deploys on a push to is in autonomy.deployingBranches",
+      detail: "every branch a workflow this row read deploys on a push to is in autonomy.deployingBranches",
     });
-    expect(ask.status).toBe("pass");
-    expect(ask.detail).toContain("autonomy.mode is ask");
+    expect(ask).toEqual({
+      id: "autonomy-deploying",
+      status: "pass",
+      detail:
+        "every branch a workflow this row read deploys on a push to is the default branch, " +
+        "which mode ask asks for, or is in autonomy.deployingBranches",
+    });
     expect(none).toEqual({
       id: "autonomy-deploying",
       status: "pass",
@@ -5612,5 +5625,164 @@ describe("check — autonomy-deploying", () => {
     expect(verdict.status).toBe("warn");
     expect(verdict.detail).toContain(".github/workflows/deploy.yml: job release names an environment and runs on a push to trunk");
     expect(verdict.detail).toContain(npxCommand("config set autonomy.deployingBranches trunk"));
+  });
+  // Fix round 1 (plan 022 file 1, unit a3-autonomy-config): review/17, /18, /22, /23, /24, /25.
+  const ENV_JOB = "jobs:\n  ship:\n    runs-on: x\n    environment: prod\n";
+
+  it("warns in mode ask on a push-deploying branch that is not the default one, naming a push, not the land verb (review/17)", async () => {
+    const verdict = await rowAt(
+      { ".github/workflows/deploy.yml": `on:\n  push:\n    branches: [main, production]\n${ENV_JOB}` },
+      { mode: "ask" },
+    );
+
+    expect(verdict).toEqual({
+      id: "autonomy-deploying",
+      status: "warn",
+      detail:
+        ".github/workflows/deploy.yml: job ship names an environment and runs on a push to production\n" +
+        "autonomy.deployingBranches does not cover production, so an agent's push to it runs unasked " +
+        "and the workflow deploys; add it: " +
+        `${npxCommand("config set autonomy.deployingBranches production")}, then ${npxCommand("sync")}`,
+    });
+  });
+
+  it("names the land verb for the default branch and a push for another one, in mode autonomous (review/17)", async () => {
+    const verdict = await rowAt({
+      ".github/workflows/deploy.yml": `on:\n  push:\n    branches: [main, production]\n${ENV_JOB}`,
+    });
+
+    expect(verdict.status).toBe("warn");
+    expect(verdict.detail).toContain(
+      "autonomy.deployingBranches does not list main, so the land verb would merge into it on the evidence " +
+        "alone and the workflow deploys; autonomy.deployingBranches does not cover production, so an agent's " +
+        `push to it runs unasked and the workflow deploys; add them: ${npxCommand("config set autonomy.deployingBranches main,production")}`,
+    );
+  });
+
+  it("does not count a `**` filter as covered by a one-segment `*` entry, and passes once the list holds it (review/18, review/22)", async () => {
+    const workflow = { ".github/workflows/deploy.yml": `on:\n  push:\n    branches: ["release/**"]\n${ENV_JOB}` };
+    const narrow = await rowAt(workflow, { deployingBranches: ["release/*"] });
+    const wide = await rowAt({}, { deployingBranches: ["release/**"] });
+    const everything = await rowAt({}, { deployingBranches: ["**"] });
+
+    expect(narrow.status).toBe("warn");
+    expect(narrow.detail).toContain("runs on a push to release/**");
+    expect(narrow.detail).toContain(npxCommand("config set autonomy.deployingBranches 'release/*,release/**'"));
+    expect(wide.status).toBe("pass");
+    expect(everything.status).toBe("pass");
+  });
+
+  it("counts a `*` filter as covered by a wider listed pattern, never a `/` inside a `*`", async () => {
+    const workflow = { ".github/workflows/deploy.yml": `on:\n  push:\n    branches: ["release/v*"]\n${ENV_JOB}` };
+    const covered = await rowAt(workflow, { deployingBranches: ["release/*"] });
+    const missed = await rowAt({}, { deployingBranches: ["release/v1"] });
+
+    expect(covered.status).toBe("pass");
+    expect(missed.status).toBe("warn");
+    expect(missed.detail).toContain("runs on a push to release/v*");
+  });
+
+  it("warns `not evaluated` on a branch filter holding ?, [, + or a leading !, and prints only values the validator admits (review/22, review/25)", async () => {
+    const verdict = await rowAt({
+      ".github/workflows/a.yml": `on:\n  push:\n    branches: [main, "v[0-9]+"]\n${ENV_JOB}`,
+      ".github/workflows/b.yml": `on:\n  push:\n    branches: ["rel?ase"]\n${ENV_JOB}`,
+      ".github/workflows/c.yml": `on:\n  push:\n    branches: ["release/*", "!release/old"]\n${ENV_JOB}`,
+    }, { deployingBranches: ["release/*"] });
+
+    expect(verdict).toEqual({
+      id: "autonomy-deploying",
+      status: "warn",
+      detail: [
+        ".github/workflows/a.yml: job ship names an environment and runs on a push to main",
+        "autonomy.deployingBranches does not list main, so the land verb would merge into it on the evidence " +
+          "alone and the workflow deploys; add it: " +
+          `${npxCommand("config set autonomy.deployingBranches 'release/*,main'")}, then ${npxCommand("sync")}`,
+        "not evaluated: .github/workflows/a.yml uses a branch filter this row cannot read; name its branches in autonomy.deployingBranches",
+        "not evaluated: .github/workflows/b.yml uses a branch filter this row cannot read; name its branches in autonomy.deployingBranches",
+        "not evaluated: .github/workflows/c.yml uses a branch filter this row cannot read; name its branches in autonomy.deployingBranches",
+      ].join("\n"),
+    });
+    // The printed list is one the manifest schema admits.
+    const printed = { ...manifestOf(), autonomy: { deployingBranches: ["release/*", "main"] } };
+    expect(collectManifestErrors(printed)).toEqual([]);
+  });
+
+  it("follows a local reusable workflow to its environment job, at most three calls deep (review/23)", async () => {
+    const call = (callee: string): string => `jobs:\n  call:\n    uses: ./.github/workflows/${callee}\n`;
+    const verdict = await rowAt({
+      ".github/workflows/deploy.yml": `on: push\n${call("one.yml")}`,
+      ".github/workflows/one.yml": `on: workflow_call\n${call("two.yml")}`,
+      ".github/workflows/two.yml": `on: workflow_call\n${call("three.yml")}`,
+      ".github/workflows/three.yml": `on: workflow_call\n${ENV_JOB}`,
+    });
+
+    expect(verdict.status).toBe("warn");
+    expect(verdict.detail.split("\n")[0]).toBe(
+      ".github/workflows/deploy.yml: job call (through .github/workflows/one.yml) names an environment and runs on a push to main",
+    );
+    expect(verdict.detail).not.toContain("not evaluated");
+  });
+
+  it("warns `not evaluated` on a fourth call, a cycle, and a called file that is not there (review/23)", async () => {
+    const call = (callee: string): string => `jobs:\n  call:\n    uses: ./.github/workflows/${callee}\n`;
+    const verdict = await rowAt({
+      ".github/workflows/deep.yml": `on: push\n${call("d1.yml")}`,
+      ".github/workflows/d1.yml": `on: workflow_call\n${call("d2.yml")}`,
+      ".github/workflows/d2.yml": `on: workflow_call\n${call("d3.yml")}`,
+      ".github/workflows/d3.yml": `on: workflow_call\n${call("d4.yml")}`,
+      ".github/workflows/d4.yml": `on: workflow_call\n${ENV_JOB}`,
+      ".github/workflows/loop.yml": `on: push\n${call("loop.yml")}`,
+      ".github/workflows/gone.yml": `on: push\n${call("missing.yml")}`,
+    });
+
+    expect(verdict).toEqual({
+      id: "autonomy-deploying",
+      status: "warn",
+      detail: [
+        "not evaluated: .github/workflows/deep.yml calls reusable workflows more than 3 deep, to .github/workflows/d4.yml",
+        "not evaluated: .github/workflows/gone.yml calls .github/workflows/missing.yml, which is not in .github/workflows",
+        "not evaluated: .github/workflows/loop.yml calls reusable workflows in a cycle, back to .github/workflows/loop.yml",
+      ].join("\n"),
+    });
+  });
+
+  it("warns `not evaluated` on a deploy reached through a workflow_run trigger (review/23)", async () => {
+    const verdict = await rowAt({
+      ".github/workflows/after.yml": `on:\n  workflow_run:\n    workflows: [CI]\n    types: [completed]\n${ENV_JOB}`,
+    });
+
+    expect(verdict).toEqual({
+      id: "autonomy-deploying",
+      status: "warn",
+      detail:
+        "not evaluated: .github/workflows/after.yml deploys on a workflow_run trigger, which this row does not " +
+        "follow; name the branches it deploys from in autonomy.deployingBranches",
+    });
+  });
+
+  it("claims only what it read when no workflow deploys on a push (review/23)", async () => {
+    const verdict = await rowAt({ ".github/workflows/ci.yml": "on: push\njobs:\n  test:\n    runs-on: x\n" });
+
+    expect(verdict).toEqual({ id: "autonomy-deploying", status: "pass", detail: "no workflow this row read deploys on a push" });
+  });
+
+  it("says when it assumed main because no refs/remotes/origin/HEAD names the default branch (review/24)", async () => {
+    const handle = getRepo();
+    await handle.seedFiles({ ".github/workflows/deploy.yml": DEPLOY_ON_MAIN });
+
+    const warned = await checkAutonomyDeploying(handle.dir, manifestOf(), noOriginHead);
+    const passed = await checkAutonomyDeploying(handle.dir, manifestOf({ deployingBranches: ["main"] }), noOriginHead);
+
+    expect(warned.status).toBe("warn");
+    expect(warned.detail.split("\n").at(-1)).toBe(
+      "the default branch is assumed to be main: no refs/remotes/origin/HEAD names it",
+    );
+    expect(passed).toEqual({
+      id: "autonomy-deploying",
+      status: "pass",
+      detail:
+        "every branch a workflow this row read deploys on a push to is in autonomy.deployingBranches\n" +
+        "the default branch is assumed to be main: no refs/remotes/origin/HEAD names it",
+    });
   });
 });
