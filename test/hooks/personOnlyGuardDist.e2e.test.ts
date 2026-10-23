@@ -107,7 +107,8 @@ describe("the person-only guard the built bundle renders (review/217)", () => {
       });
       const held = runGuard(guard, "gh pr merge 1");
       expect(held.status, String(held.stderr)).toBe(2);
-      expect(String(held.stderr)).toContain("this run is unattended: list it on the morning list");
+      // TEST CHANGE, justified: REQ-FLOW-143, a4 — the list is named as morning.md
+      expect(String(held.stderr)).toContain("this run is unattended: list it on the run's summary list (`morning.md`)");
 
       // The settings the bundle wrote carry both lists (REQ-FLOW-025): the refused rows and the rows that ask.
       const settings = JSON.parse(readFileSync(join(fixture.repoDir, ".claude", "settings.json"), "utf8")) as {
