@@ -474,7 +474,13 @@ describe("st-unattended — checkpoints and the ending (REQ-FLOW-092, REQ-FLOW-0
     // Added 2026-10-23 (fix round 2, review/104; REQ-FLOW-143): a ready mark the verb made before it refused is an act
     // run without asking, so it gets its decision row though the JSON names no ready mark.
     expect(text).toContain(
-      "An exit 1 that follows the verb's ready mark (`gh pr view <n> --json isDraft` reads `false`) adds that ready mark's `## Decisions` row.",
+      // TEST CHANGE, justified (fix round 3, review/109; REQ-FLOW-143): the read named a bare `<n>`, which a fork checkout
+      // resolves against the upstream repository; it now goes by the land JSON's own pull-request link.
+      "An exit 1 that follows the verb's ready mark (`gh pr view <pr.url> --json isDraft`, by the land JSON's own link, reads `false`) adds that ready mark's `## Decisions` row.",
+    );
+    expect(text).not.toContain("`gh pr view <n> --json isDraft`");
+    expect(text).toContain(
+      "`gh pr view <pr.url> --json isDraft`",
     );
     // TEST CHANGE, justified (plan 022 file 1, unit a8, sign-off build/6; REQ-FLOW-144): this pinned "The run writes those
     // rows into `morning.md` with its file tools, and the next walk retries `run land`." What moved: on `asks` and
@@ -823,7 +829,12 @@ describe("st-unattended — the ask rule, the run verb's line and the walk's act
     const text = await flat();
     const walk = text.slice(text.indexOf("## The morning walk The walk is attended"), text.indexOf("## Other touchpoints"));
     expect(walk).toContain(
-      "At the walk, a merge held on a `refused` outcome is retried by a plain `run land`; one held on an `asks` outcome runs as `stamity run land --run <id> --approved --json`, alone on its line, where the guard's ask on that line is the person's one click, and this skill passes `--approved` on no other line.",
+      // TEST CHANGE, justified (fix round 3, review/109; REQ-FLOW-144): the `--approved` line runs only on the person's
+      // yes to its row, the guard's ask a second check, and the call's own outcome is stated.
+      "At the walk, a merge held on a `refused` outcome is retried by a plain `run land`; one held on an `asks` outcome runs, only once the person answers its row yes, as `stamity run land --run <id> --approved --json`, alone on its line, where the guard asks again on that line, and this skill passes `--approved` on no other line.",
+    );
+    expect(walk).toContain(
+      "That call's `landed` outcome writes its `## Decisions` row; its `asks` or `refused` keeps the held row for the next walk.",
     );
     expect(walk).not.toContain("never by the approve prompt");
     // The flag appears only on that walk line and in the ending's "never passed" clause.

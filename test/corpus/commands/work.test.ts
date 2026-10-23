@@ -1482,7 +1482,7 @@ describe("/st-work — Prove", () => {
   // updated a pull request, `run land --ready --wait 8`, and it writes the summary list; the default reads "those
   // rows not signed and the delta unmerged", and a person's own answer not to commit is honoured. Each old pin is
   // asserted gone, so the two closes cannot both ship.
-  it("closes on the protocol's walk over the person's rows and the spec merge, then commits and lands with no question (REQ-FLOW-019, REQ-FLOW-080)", async () => {
+  it("closes on the protocol's walk over the person's rows and the spec merge, then commits and lands, asking only before an approved land (REQ-FLOW-019, REQ-FLOW-080)", async () => {
     const qa = collapse(section(await body(), "### QA checkpoint"));
     expect(qa).toContain("**The close walk.**");
     expect(qa).not.toContain("**The close asks once.**");
@@ -1542,9 +1542,17 @@ describe("/st-work — Prove", () => {
       // their one click; a `refused` hold is retried by the next walk's plain `run land`.
       "an `asks` or `refused` exit, or a call that returns no outcome, leaves the pull request open, each reason a `held` row (`merge waits on: <reasons>`, or `merge waits on: the land call returned nothing`).",
     );
+    // TEST CHANGE, justified (fix round 3, review/109; REQ-FLOW-019, REQ-FLOW-144): the close ran the `--approved` line
+    // at once, so with hooks off or a guard timeout nothing asked. What moved: the person is asked first, with a
+    // declared default of leaving the merge held, and the line runs only on yes; the call's own outcome is stated.
+    const approved =
+      "On `asks` the close first asks the person one numbered question naming the pull request and the land's reasons, 1 merge it now · 2 leave it held, `Default if no response: leave it held`; only on 1 does it run `stamity run land --run <run-id> --approved --json`, alone on its line, where the guard asks again on that line.";
+    expect(qa).toContain(approved);
     expect(qa).toContain(
-      "On `asks` the close then runs `stamity run land --run <run-id> --approved --json`, alone on its line, where the guard's ask on that line is the person's one click; a declined ask stays held, and a `refused` hold is retried by the next walk's plain `run land`.",
+      "That call's `landed` outcome writes its `## Decisions` row; its `asks` or `refused` keeps the held row, and a `refused` hold is retried by the next walk's plain `run land`.",
     );
+    expect(qa).not.toContain("On `asks` the close then runs `stamity run land");
+    expect(qa.indexOf("`stamity run land --run <run-id> --ready --wait 8 --json`")).toBeLessThan(qa.indexOf(approved));
     expect(qa).not.toContain("the land call returned nothing`) that the next walk retries.");
     // It follows the row-states paragraph, whose rows it asks about.
     expect(qa.indexOf("**The close walk.**")).toBeGreaterThan(qa.indexOf("**Row states.**"));
