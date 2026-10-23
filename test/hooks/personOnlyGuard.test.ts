@@ -2146,3 +2146,173 @@ describe("a renamed fork's guard copies carry its own identity only (a4, build/1
     expect(decide(tool, guard, "node node_modules/@acme/forge/dist/cli.js sync --json")).toEqual({ deny: false });
   });
 });
+
+/**
+ * a4c-outside-party (REQ-FLOW-134): the guard holds a gh write to the origin of the repository it sits in, read from
+ * that repository's git config, and reads where a write naming no target lands from each place's own remotes and gh's
+ * `gh-resolved` marker, or from `GH_REPO` in the hook's environment. Each case runs the emitted guard in a scratch
+ * repository whose origin is `acme/app` on github.com; each ask sits beside the one fact that lets the same call run
+ * (the origin named, one remote, the marker on the origin, no person named), so a guard that asked for every comment,
+ * or for none, fails.
+ */
+describe("writes that reach an outside party (a4c, REQ-FLOW-134)", () => {
+  const remote = (name: string, url: string, extra = ""): string =>
+    `[remote "${name}"]\n\turl = ${url}\n\tfetch = +refs/heads/*:refs/remotes/${name}/*\n${extra}`;
+  const ORIGIN = `[core]\n\tbare = false\n${remote("origin", "https://github.com/acme/app.git")}`;
+  /** The context the guard hands its verdict in that repository under the default setting. */
+  const READ = { ...BAKED_DEFAULT, originRepo: "github.com/acme/app", ghDefaultRepo: "github.com/acme/app" };
+  const UNATTENDED = { ".stamity/runs/2026-10-23_x/record.md": record("in progress", "unattended") };
+  const WHY = "This session is unattended because .stamity/runs/2026-10-23_x/record.md reads `Status: in progress` and `Mode: unattended`.";
+  const COMMENT = "gh pr comment 3 --body 'looks good'";
+  const asked = (command: string, ctx: Parameters<typeof personOnlyVerdict>[1] = READ): { act: string; rule: string; ask: boolean } => {
+    const verdict = personOnlyVerdict(command, ctx);
+    if (!verdict.deny) throw new Error(`${command} is no person-only act`);
+    expect(verdict, command).toMatchObject({ rule: "outside-write", ask: true });
+    return verdict;
+  };
+
+  // Red on 5814ebe1, which allows the outside form on every client.
+  it.each(TOOLS)("%s: runs a comment on the origin's pull request and asks for the same comment on another repository", async (tool) => {
+    const guard = await placeGuard(tool, { ".git/config": ORIGIN });
+    expect(decide(tool, guard, COMMENT)).toEqual({ deny: false });
+    expect(decide(tool, guard, `${COMMENT} -R acme/app`)).toEqual({ deny: false });
+    const outside = `${COMMENT} -R other/repo`;
+    expect(decide(tool, guard, outside)).toEqual(expectedAttended(tool, asked(outside)));
+  });
+
+  it.each(TOOLS)("%s: unattended, refuses the comment on another repository with the summary-list sentence", async (tool) => {
+    const guard = await placeGuard(tool, { ".git/config": ORIGIN, ...UNATTENDED });
+    const outside = `${COMMENT} -R other/repo`;
+    expect(decide(tool, guard, outside)).toEqual({ deny: true, reason: expect.stringContaining(`${morningList(asked(outside))} ${WHY}`) });
+    expect(decide(tool, guard, COMMENT)).toEqual({ deny: false });
+  });
+
+  it("asks for a ready mark given another repository's pull request URL, and runs one on the origin's", async () => {
+    const guard = await placeGuard("claude", { ".git/config": ORIGIN });
+    const outside = "gh pr ready https://github.com/other/repo/pull/3";
+    expect(decide("claude", guard, outside)).toEqual(expectedAttended("claude", asked(outside)));
+    expect(decide("claude", guard, "gh pr ready https://github.com/acme/app/pull/3")).toEqual({ deny: false });
+  });
+
+  it("asks for a REST write on another repository's comments and runs a read there", async () => {
+    const guard = await placeGuard("claude", { ".git/config": ORIGIN });
+    const write = "gh api -X POST repos/other/repo/issues/1/comments -f body=x";
+    expect(decide("claude", guard, write)).toEqual(expectedAttended("claude", asked(write)));
+    expect(decide("claude", guard, "gh api repos/other/repo/issues/1/comments")).toEqual({ deny: false });
+    expect(decide("claude", guard, "gh api -X POST repos/{owner}/{repo}/issues/1/comments -f body=x")).toEqual({ deny: false });
+  });
+
+  it("asks for an inline body naming a person, and runs one naming an app, an email address or a mention in backticks", async () => {
+    const guard = await placeGuard("claude", { ".git/config": ORIGIN });
+    const person = "gh pr comment 3 --body '@alice please look'";
+    expect(decide("claude", guard, person)).toEqual(expectedAttended("claude", asked(person)));
+    for (const command of [
+      "gh pr comment 3 --body '@codex review'",
+      "gh pr comment 3 --body 'Co-Authored-By: x <noreply@anthropic.com>'",
+      "gh pr comment 3 --body 'run `@alice` as written'",
+    ]) {
+      expect(decide("claude", guard, command), command).toEqual({ deny: false });
+    }
+  });
+
+  it("reads a heredoc body the line skips as data for a mention, on stdin and in a quoted substitution", async () => {
+    const guard = await placeGuard("claude", { ".git/config": ORIGIN });
+    for (const command of [
+      "gh pr comment 3 --body-file - <<'EOF'\nthanks @alice\nEOF",
+      "gh pr create --title t --body \"$(cat <<'EOF'\nthanks @alice\nEOF\n)\"",
+    ]) {
+      expect(decide("claude", guard, command), command).toEqual(expectedAttended("claude", asked(command)));
+      expect(decide("claude", guard, command.replace("@alice", "alice")), command).toEqual({ deny: false });
+    }
+    // A body read from a file is not read (the named residual).
+    expect(decide("claude", guard, "gh pr comment 3 --body-file notes.md")).toEqual({ deny: false });
+  });
+
+  it("asks for a write naming the origin while the origin's URL cannot be read", async () => {
+    const guard = await placeGuard("claude", { ".git/config": remote("origin", "/srv/git/app.git") });
+    const named = `${COMMENT} -R acme/app`;
+    expect(decide("claude", guard, named)).toEqual(expectedAttended("claude", asked(named, { ...READ, originRepo: "", ghDefaultRepo: "" })));
+    expect(decide("claude", guard, COMMENT)).toEqual({ deny: false });
+  });
+
+  it("reads an SSH origin as the same repository as its HTTPS URL", async () => {
+    const guard = await placeGuard("claude", { ".git/config": remote("origin", "git@github.com:acme/app.git") });
+    expect(decide("claude", guard, `${COMMENT} -R https://github.com/acme/app`)).toEqual({ deny: false });
+    expect(decide("claude", guard, `${COMMENT} -R other/repo`)).toMatchObject({ deny: true, ask: true });
+  });
+
+  it("asks for the same owner and repository on another host", async () => {
+    const guard = await placeGuard("claude", { ".git/config": ORIGIN });
+    const other = `${COMMENT} -R ghe.example.com/acme/app`;
+    expect(decide("claude", guard, other)).toEqual(expectedAttended("claude", asked(other)));
+    expect(decide("claude", guard, `${COMMENT} -R github.com/acme/app`)).toEqual({ deny: false });
+  });
+
+  it("asks for a write naming no target where GH_REPO is set on the line", async () => {
+    const guard = await placeGuard("claude", { ".git/config": ORIGIN });
+    const line = `GH_REPO=other/repo ${COMMENT}`;
+    expect(decide("claude", guard, line)).toEqual(expectedAttended("claude", asked(line)));
+  });
+
+  it("reads GH_REPO in the hook's own environment as gh's default", async () => {
+    const guard = await placeGuard("claude", { ".git/config": ORIGIN });
+    expect(decide("claude", guard, COMMENT, { GH_REPO: "other/repo" })).toEqual(
+      expectedAttended("claude", asked(COMMENT, { ...READ, ghDefaultRepo: "github.com/other/repo" })),
+    );
+    expect(decide("claude", guard, COMMENT, { GH_REPO: "acme/app" })).toEqual({ deny: false });
+  });
+
+  it("asks for a write naming no target in a checkout of two remotes with no default marked for gh", async () => {
+    const guard = await placeGuard("claude", { ".git/config": `${ORIGIN}${remote("upstream", "https://github.com/up/app.git")}` });
+    expect(decide("claude", guard, COMMENT)).toEqual(expectedAttended("claude", asked(COMMENT, { ...READ, ghDefaultRepo: null })));
+    // A target named on the line is read on its own.
+    expect(decide("claude", guard, `${COMMENT} -R acme/app`)).toEqual({ deny: false });
+  });
+
+  it("asks where gh's marked default is a fork's upstream, and runs where the marker is on the origin", async () => {
+    const upstream = remote("upstream", "https://github.com/up/app.git", "\tgh-resolved = base\n");
+    const marked = await placeGuard("claude", { ".git/config": `${ORIGIN}${upstream}` });
+    expect(decide("claude", marked, COMMENT)).toEqual(expectedAttended("claude", asked(COMMENT, { ...READ, ghDefaultRepo: "github.com/up/app" })));
+    const onOrigin = `[core]\n\tbare = false\n${remote("origin", "https://github.com/acme/app.git", "\tgh-resolved = base\n")}${remote("upstream", "https://github.com/up/app.git")}`;
+    await getRepo().seedFiles({ ".git/config": onOrigin });
+    expect(decide("claude", marked, COMMENT)).toEqual({ deny: false });
+  });
+
+  it("asks for a write naming no target where the config includes another file, which may name another remote", async () => {
+    const guard = await placeGuard("claude", { ".git/config": `${ORIGIN}[include]\n\tpath = ../more.gitconfig\n` });
+    expect(decide("claude", guard, COMMENT)).toMatchObject({ deny: true, ask: true });
+    expect(decide("claude", guard, `${COMMENT} -R acme/app`)).toEqual({ deny: false });
+  });
+
+  it("reads a config past the 4 KiB metadata ceiling, one holding many branch sections", async () => {
+    const branches = Array.from({ length: 200 }, (_, n) => `[branch "feat/b${n}"]\n\tremote = origin\n\tmerge = refs/heads/feat/b${n}\n`).join("");
+    const config = `${ORIGIN}${branches}`;
+    expect(config.length).toBeGreaterThan(4_096);
+    const guard = await placeGuard("claude", { ".git/config": config });
+    expect(decide("claude", guard, `${COMMENT} -R acme/app`)).toEqual({ deny: false });
+    expect(decide("claude", guard, `${COMMENT} -R other/repo`)).toMatchObject({ deny: true, ask: true });
+  });
+
+  it("reads a config holding long runs of blanks, in a value and in a section head, within the bound", async () => {
+    // Under the 1 MiB config ceiling; a pattern with two adjacent runs over one blank run takes the square of its length.
+    const config = `${ORIGIN}\tx = a${" ".repeat(400_000)}b\n[remote${" ".repeat(400_000)}\n`;
+    expect(config.length).toBeLessThan(1_048_576);
+    const guard = await placeGuard("claude", { ".git/config": config });
+    const started = performance.now();
+    expect(decide("claude", guard, `${COMMENT} -R acme/app`)).toEqual({ deny: false });
+    expect(performance.now() - started).toBeLessThan(8_000);
+  });
+
+  it("asks for a write naming no target from another checkout, by a cd on the line or the call's working directory", async () => {
+    const guard = await placeGuard("claude", {
+      ".git/config": ORIGIN,
+      "other/.git/HEAD": "ref: refs/heads/main\n",
+      "other/.git/config": remote("origin", "https://github.com/other/repo.git"),
+    });
+    const moved = `cd other && ${COMMENT}`;
+    expect(decide("claude", guard, moved)).toMatchObject({ deny: true, ask: true });
+    expect(decide("claude", guard, COMMENT, undefined, "other")).toMatchObject({ deny: true, ask: true });
+    // The session's own checkout, moved to by the same command, runs.
+    expect(decide("claude", guard, `cd . && ${COMMENT}`)).toEqual({ deny: false });
+  });
+});

@@ -59,7 +59,7 @@ import {
   type CanonicalHookEvent,
   type HookFailMode,
 } from "./model.ts";
-import { GITHUB_MCP_ROWS, personOnlyVerdict, unattendedPushVerdict } from "./personOnly.ts";
+import { GITHUB_MCP_ROWS, personOnlyVerdict, repositoryKey, unattendedPushVerdict } from "./personOnly.ts";
 
 /**
  * The three core hook scripts plus one work-scoped extension, as generated text.
@@ -325,7 +325,11 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // rows, because both embedded verdicts now read a heredoc body as data where only a data sink receives it, pass a
   // quoted heredoc body in a substitution's closing scan, read a substitution nothing closes as filled in, and ask for
   // a line past 64 KiB before any reading. 245,978 + 3,878 = 249,856 bytes; 5,321 + 99 = 5,420 lines.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 249_856, lines: 5_420 },
+  // Moved again 2026-10-23 on the a4c lane (REQ-FLOW-134), by the measured size plus a small margin: 263,539 bytes /
+  // 5,671 lines (copilot, generated; 248,788 bytes before the unit), past both rows, because the verdict now reads a gh
+  // write's target and inline body for an outside party (`outside-write`) and the guard reads the origin and gh's
+  // default from the git config. 263,539 + 2,701 = 266,240 bytes; 5,671 + 97 = 5,768 lines.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 266_240, lines: 5_768 },
 };
 
 /** One generated script, ready for an adapter to place and register. */
@@ -4100,6 +4104,11 @@ const GUARD_RUN_FOLDERS_MAX = 2_000;
  */
 const GUARD_TAG_NAMES_MAX = 10_000;
 const GUARD_PACKED_REFS_MAX_BYTES = 8_388_608;
+/**
+ * The ceiling on a git config the guard reads for the remotes (REQ-FLOW-134): past it, or behind a link, the reading
+ * is partial, so a gh write naming no target asks; the 4 KiB metadata ceiling would cut a config holding many branches.
+ */
+const GUARD_GIT_CONFIG_MAX_BYTES = 1_048_576;
 
 /** Places a shell call's git can run in that the guard reads; past this one more counts as unreadable. */
 const GUARD_PLACES_MAX = 32;
@@ -4343,7 +4352,11 @@ if (told !== null) {
  * tags from `refs/tags/` and `packed-refs` in its common dir (read only when a
  * push refspec asks for them), and the verdict runs once per place. Where
  * `HEAD` cannot be read (a reftable repository's placeholder among it), an implied destination
- * counts as the default branch; `main` and `master` always count. The mode comes
+ * counts as the default branch; `main` and `master` always count. The origin a
+ * gh write is held to (REQ-FLOW-134) is the `origin` remote in the git config of
+ * the repository the guard sits in; where a gh call naming no target lands is
+ * read per place from its remotes and `gh-resolved` marker, or from `GH_REPO`
+ * and `GH_HOST` in the hook's environment; both only for a gh write. The mode comes
  * off the run records, read only for a person-only act that can be undone and
  * a call the unattended rule would refuse:
  * unattended when any run folder, debug rounds included, holds an
@@ -4419,8 +4432,9 @@ export function buildPersonOnlyGuardScript(opts: {
     ],
     [
       "Reads outside repo state: the pending call's payload on stdin and the",
-      "STAMITY_UNATTENDED and STAMITY_REPO_ROOT variables. Reads the git metadata and",
-      "the run records' heads; writes only the pre-flight canary.",
+      "STAMITY_UNATTENDED, STAMITY_REPO_ROOT, GH_REPO and GH_HOST variables. Reads the",
+      "git metadata, the remotes in the git config, and the run records' heads;",
+      "writes only the pre-flight canary.",
       ...(opts.tool === "copilot" ? ["On Copilot CLI it reads the session start's main-session record under the", "common git directory before it asks."] : []),
     ],
   )}
@@ -4442,6 +4456,7 @@ const RUN_FOLDERS_MAX = ${GUARD_RUN_FOLDERS_MAX};
 const GIT_MAX_BYTES = ${GIT_METADATA_MAX_BYTES};
 const TAG_NAMES_MAX = ${GUARD_TAG_NAMES_MAX};
 const PACKED_REFS_MAX_BYTES = ${GUARD_PACKED_REFS_MAX_BYTES};
+const CONFIG_MAX_BYTES = ${GUARD_GIT_CONFIG_MAX_BYTES};
 const PLACES_MAX = ${GUARD_PLACES_MAX};
 const CANARY_SEGMENTS = ${json(PREFLIGHT_CANARY_FILE.split("/"))};
 const SHELL_TOOLS = new Set(["Bash", "PowerShell", "Shell", "bash", "powershell", "shell"]);
@@ -4469,6 +4484,8 @@ const __name = (target) => target;
 const personOnlyVerdict = ${personOnlyVerdict.toString()};
 
 const unattendedPushVerdict = ${unattendedPushVerdict.toString()};
+
+const repositoryKey = ${repositoryKey.toString()};
 ${String.raw`
 /** A git metadata file's text, trimmed: a regular file of at most GIT_MAX_BYTES, never through a link. */
 function gitText(path) {
@@ -4857,11 +4874,85 @@ function linesOf(name, tail) {
 }
 
 /**
+ * The remotes a git dir's config names (REQ-FLOW-134): per remote section, its first url and its gh-resolved marker,
+ * the worktree's own config read after the common one. partial where the reading may miss or misplace a remote: a
+ * config past CONFIG_MAX_BYTES or behind a link, or one that includes another file or rewrites URLs (include,
+ * includeIf, url).
+ */
+function remotesOf(dirs) {
+  const remotes = new Map();
+  let partial = false;
+  for (const path of [join(dirs.commonDir, "config"), join(dirs.gitDir, "config.worktree")]) {
+    let text = "";
+    try {
+      const stats = lstatSync(path);
+      if (!stats.isFile() || stats.size > CONFIG_MAX_BYTES) partial = true;
+      else text = readFileSync(path, "utf8");
+    } catch (error) {
+      if (!error || error.code !== "ENOENT") partial = true;
+    }
+    let remote = null;
+    for (const line of text.split(/\r?\n/)) {
+      // Each pattern here is linear in the line: no two adjacent runs can share a character (the hook's timeout).
+      const head = /^\s*\[\s*([A-Za-z][\w.-]*)\s*(?:"((?:[^"\\]|\\.)*)"\s*)?\]/.exec(line);
+      if (head !== null) {
+        const kind = head[1].toLowerCase();
+        if (kind === "include" || kind === "includeif" || kind === "url" || kind.startsWith("url.")) partial = true;
+        const name = kind === "remote" ? head[2]?.replace(/\\(.)/g, "$1") : kind.startsWith("remote.") ? head[1].slice(7) : undefined;
+        remote = name === undefined ? null : (remotes.get(name) ?? { url: null, resolved: null });
+        if (remote !== null) remotes.set(name, remote);
+        continue;
+      }
+      const pair = /^\s*([A-Za-z][\w-]*)\s*=(.*)$/.exec(line);
+      if (remote === null || pair === null) continue;
+      const value = pair[2].replace(/\s[#;].*$/, "").trim().replace(/^"([\s\S]*)"$/, "$1");
+      if (pair[1].toLowerCase() === "url") remote.url ??= value;
+      else if (pair[1].toLowerCase() === "gh-resolved") remote.resolved = value;
+    }
+  }
+  return { remotes, partial };
+}
+
+/** The session repository's origin (REQ-FLOW-134), read from the repository the guard sits in: "" where unreadable. */
+function originOf(root) {
+  const dirs = gitDirsFrom(root);
+  const url = dirs === null ? null : (remotesOf(dirs).remotes.get("origin")?.url ?? null);
+  return url === null ? "" : repositoryKey(url, "github.com");
+}
+
+/**
+ * Where a gh call naming no repository lands from a place (REQ-FLOW-134): GH_REPO in the hook's environment, else the
+ * remote a gh-resolved marker names (base, or an owner/repo on that remote's host), else the only remote; "" where the
+ * place has no remote; null where the guard cannot tell: more than one remote and no marker, markers that disagree or
+ * that it cannot read, a partial config, a place it cannot read, or GH_HOST naming another host than that remote's.
+ */
+function ghDefaultOf(dirs) {
+  const host = (process.env.GH_HOST ?? "").trim().toLowerCase();
+  const named = (process.env.GH_REPO ?? "").trim();
+  if (named !== "") return repositoryKey(named, host || "github.com") || null;
+  if (dirs === null) return null;
+  const { remotes, partial } = remotesOf(dirs);
+  if (partial) return null;
+  const keyOf = (url) => (url === null ? "" : repositoryKey(url, "github.com"));
+  const marked = [...remotes.values()].filter((remote) => remote.resolved !== null && remote.resolved !== "");
+  const keys = marked.map((remote) => {
+    const own = keyOf(remote.url);
+    return remote.resolved === "base" || own === "" ? own : repositoryKey(remote.resolved, own.split("/")[0]);
+  });
+  const only = remotes.size === 1 ? keyOf([...remotes.values()][0].url) : null;
+  const picked = keys.length > 0 ? (keys.every((key) => key !== "" && key === keys[0]) ? keys[0] : null) : remotes.size === 0 ? "" : only;
+  return picked && host !== "" && picked.split("/")[0] !== host ? null : picked;
+}
+
+/**
  * The branch context of each place a shell call's git runs in, one per git dir. Where HEAD names no branch or commit
  * (reftable's placeholder too), an implied destination counts as the default branch, so a refspec-less push is refused.
+ * The origin is the session repository's, read from root, in every place; where a gh call naming no target lands is
+ * each place's own (REQ-FLOW-134). Both are read the first time the verdict asks, which only a gh write does.
  */
-function contextsOf(command, cwd, powershell) {
+function contextsOf(command, cwd, powershell, root) {
   const contexts = new Map();
+  let session;
   for (const place of placesOf(command, cwd)) {
     const dirs = place === null ? null : place.git !== undefined ? gitDirsOf(place.git) : gitDirsFrom(place.work);
     const key = dirs === null ? "" : dirs.gitDir;
@@ -4873,6 +4964,7 @@ function contextsOf(command, cwd, powershell) {
     const origin = dirs === null ? null : gitText(join(dirs.commonDir, "refs", "remotes", "origin", "HEAD"));
     const defaultBranches = origin !== null && origin.startsWith("ref: refs/remotes/origin/") ? [origin.slice(25)] : [];
     let tags = null;
+    let fallback;
     contexts.set(key, {
       currentBranch: branch !== ".invalid" ? branch : detached ? null : (defaultBranches[0] ?? "main"),
       defaultBranches,
@@ -4890,6 +4982,15 @@ function contextsOf(command, cwd, powershell) {
         tags ??= dirs === null ? [] : localTags(dirs.commonDir);
         return tags;
       },
+      get originRepo() {
+        session ??= originOf(root);
+        return session;
+      },
+      get ghDefaultRepo() {
+        if (fallback === undefined) fallback = ghDefaultOf(dirs);
+        return fallback;
+      },
+      ghHost: (process.env.GH_HOST ?? "").trim().toLowerCase() || "github.com",
     });
   }
   return [...contexts.values()];
@@ -5089,7 +5190,7 @@ function decide() {
   const found = [];
   // The acts the baked setting runs unasked (REQ-FLOW-137), from every place and reading.
   const ran = new Set();
-  for (const ctx of contextsOf(command, cwd, pwsh)) {
+  for (const ctx of contextsOf(command, cwd, pwsh, root)) {
     for (const text of texts) {
       const always = personOnlyVerdict(text, ctx);
       if (always.deny) found.push(always);

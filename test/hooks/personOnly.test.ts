@@ -7,6 +7,7 @@ import {
   CLAUDE_DENY_ROWS,
   PERSON_ONLY_RULES,
   personOnlyVerdict,
+  repositoryKey,
   unattendedPushVerdict,
   type PersonOnlyRuleId,
 } from "../../src/hooks/personOnly.ts";
@@ -44,6 +45,9 @@ type Ctx = {
   runs?: readonly PersonOnlyRuleId[];
   deployingBranches?: readonly string[];
   stricterThanDefault?: boolean;
+  originRepo?: string;
+  ghDefaultRepo?: string | null;
+  ghHost?: string;
 };
 
 const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
@@ -687,6 +691,8 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["gh repo unarchive o/r --yes", "protection"],
   ["gh repo unarchive", "protection"],
   ["gh repo unarchive -R o/r --yes", "protection"],
+  // REQ-FLOW-134 (a4c): a comment on another repository, read against the origin `acme/app`.
+  ["gh pr comment 3 --body x -R other/repo", "outside-write", { ...ON_FEATURE, originRepo: "github.com/acme/app" }],
 ];
 
 const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
@@ -996,8 +1002,9 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
 // TEST CHANGE, justified (REQ-FLOW-140, REQ-FLOW-138, a4): the admin merge, the deploying push, the deploying dispatch
 // and the loosening of the autonomy setting join the ask class; the status write is refuse-class, so it stays out.
 // TEST CHANGE, justified (REQ-FLOW-121, review/103): the land verb's approved line joins the ask class.
+// TEST CHANGE, justified (REQ-FLOW-134, a4c): a write that reaches an outside party joins the ask class.
 const ASK_CLASS = new Set(["push-default", "push-tags", "tag", "pr-merge", "pr-ready", "release", "publish", "secrets", "protection",
-  "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen", "land-approved"]);
+  "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen", "land-approved", "outside-write"]);
 
 const ZERO = "0".repeat(40);
 /** A GraphQL `updateRefs` call with one entry: its ref name and its `afterOid`. */
@@ -1289,6 +1296,8 @@ describe("personOnlyVerdict — the deny matrix", () => {
       "land-approved",
       // TEST CHANGE, justified (review/117): the refuse-class cap on a line too long for the guard to read joins it.
       "line-too-long",
+      // TEST CHANGE, justified (REQ-FLOW-134, a4c): the ask-class write that reaches an outside party joins it.
+      "outside-write",
     ]);
     const hit = new Set([...DENY, ...CLASSES].map(([, rule]) => rule));
     expect(hit).toEqual(ids);
@@ -2415,7 +2424,9 @@ describe("CLAUDE_DENY_ROWS and CLAUDE_ASK_ROWS", () => {
       PERSON_ONLY_RULES.map((rule) => rule.id)
         // TEST CHANGE, justified (REQ-FLOW-121, review/103): `--approved` sits mid-line, which no prefix row can say.
         // TEST CHANGE, justified (review/117): a line's length is no prefix either.
-        .filter((id) => !["push-default", "protection-delete", "status-write", "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen", "land-approved", "line-too-long"].includes(id))
+        // TEST CHANGE, justified (REQ-FLOW-134, a4c): another repository's target and a mention sit mid-line, past
+        // the command's prefix, and are read against the origin, which no settings row can know.
+        .filter((id) => !["push-default", "protection-delete", "status-write", "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen", "land-approved", "line-too-long", "outside-write"].includes(id))
         .toSorted(),
     );
   });
@@ -3798,5 +3809,163 @@ describe("a message read on stdin by git commit or gh pr as data (a5, review/118
   ])("keeps the reading as built for %s", (_, command) => {
     expect(personOnlyVerdict(command, DEFAULT), command).toMatchObject({ deny: true, rule: "force-push" });
     expect(unattendedPushVerdict(command).deny, command).toBe(true);
+  });
+});
+
+/**
+ * a4c-outside-party (REQ-FLOW-134): a gh write that reaches another repository, or whose inline body or title names a
+ * person, asks (`outside-write`, ask-class), read against the origin the context carries. The guard's half (the origin
+ * and gh's default read from the git config, the client's answer) is pinned in test/hooks/personOnlyGuard.test.ts.
+ */
+describe("writes that reach an outside party (a4c, REQ-FLOW-134)", () => {
+  /** The session repository is `acme/app` on github.com, its only remote the origin. */
+  const ORIGIN = { ...ON_FEATURE, originRepo: "github.com/acme/app" };
+  const rule = (command: string, ctx: Ctx = ORIGIN): string | null => {
+    const verdict = personOnlyVerdict(command, ctx);
+    return verdict.deny ? verdict.rule : null;
+  };
+
+  it.each([
+    ["an HTTPS remote URL", "https://github.com/acme/app.git", "github.com/acme/app"],
+    ["an SSH remote URL in scp form", "git@github.com:acme/app.git", "github.com/acme/app"],
+    ["an ssh:// remote URL", "ssh://git@github.com/acme/app", "github.com/acme/app"],
+    ["a URL carrying a credential, mixed case and a trailing slash", "https://x:tok@github.com/Acme/App/", "github.com/acme/app"],
+    ["an Enterprise remote URL", "https://ghe.example.com/acme/app.git", "ghe.example.com/acme/app"],
+    ["a -R value naming no host", "acme/app", "github.com/acme/app"],
+    ["a -R value naming its host", "ghe.example.com/acme/app", "ghe.example.com/acme/app"],
+    ["a pull request URL", "https://github.com/other/repo/pull/3", "github.com/other/repo"],
+    ["a local path remote", "/srv/git/app.git", ""],
+    ["a relative path remote", "../app.git", ""],
+    ["a value holding an expansion", "$REPO", ""],
+  ])("reads %s as one repository key", (_, text, key) => {
+    expect(repositoryKey(text, "github.com")).toBe(key);
+  });
+
+  it("carries the exported key reader inside the verdict code for code", () => {
+    const source = readFileSync(fileURLToPath(new URL("../../src/hooks/personOnly.ts", import.meta.url)), "utf8");
+    const copy = /\/\/ <repository-key>\n(?:\s*\/\/[^\n]*\n)*([\s\S]*?)\s*\/\/ <\/repository-key>/.exec(source)?.[1] ?? "";
+    const exported = /\nexport (function repositoryKey[\s\S]*?\n})\n/.exec(source)?.[1] ?? "";
+    expect(exported.length).toBeGreaterThan(200);
+    const unindented = copy.split("\n").map((line) => line.replace(/^ {2}/, "")).join("\n");
+    expect(unindented.trim().replace(/^function repoKey\(/, "function repositoryKey(")).toBe(exported.trim());
+  });
+
+  it("is off for a caller that names no origin, as the run verbs read only their own push", () => {
+    expect(personOnlyVerdict("gh pr comment 3 --body x -R other/repo", ON_FEATURE)).toEqual({ deny: false });
+    expect(personOnlyVerdict("gh pr comment 3 --body '@alice look'", ON_FEATURE)).toEqual({ deny: false });
+  });
+
+  it.each([
+    ["a comment naming the origin by owner and repository", "gh pr comment 3 --body x -R acme/app", null],
+    ["a comment naming the origin by its URL", "gh pr comment https://github.com/acme/app/pull/3 --body x", null],
+    ["a comment naming no target", "gh pr comment 3 --body x", null],
+    ["a pull request opened on the origin by --repo", "gh pr create --repo acme/app --title t --body b", null],
+    ["a read of another repository", "gh pr view 3 -R other/repo", null],
+    ["a REST read of another repository", "gh api repos/other/repo/issues/1/comments", null],
+    ["a REST write on the origin", "gh api -X POST repos/acme/app/issues/1/comments -f body=x", null],
+    ["a REST write through gh's placeholders", "gh api -X POST repos/{owner}/{repo}/issues/1/comments -f body=x", null],
+    ["a REST write through the API host's URL", "gh api -X POST https://api.github.com/repos/acme/app/issues/1/comments -f body=x", null],
+    ["a comment on another repository by -R", "gh pr comment 3 --body x -R other/repo", "outside-write"],
+    ["a comment on another repository by --repo=", "gh issue comment 3 --body x --repo=other/repo", "outside-write"],
+    ["a comment on another repository by an attached -R", "gh issue comment 3 --body x -Rother/repo", "outside-write"],
+    ["a comment on another repository by its URL", "gh issue comment https://github.com/other/repo/issues/3 --body x", "outside-write"],
+    ["a comment on the same owner and repository on another host", "gh pr comment 3 --body x -R ghe.example.com/acme/app", "outside-write"],
+    ["a comment whose -R value the shell fills in", "gh pr comment 3 --body x -R \"$REPO\"", "outside-write"],
+    ["an issue opened on another repository", "gh issue create -R other/repo --title t --body b", "outside-write"],
+    ["a REST write on another repository", "gh api -X POST repos/other/repo/issues/1/comments -f body=x", "outside-write"],
+    ["a REST write a field makes", "gh api repos/other/repo/issues/1/comments -f body=x", "outside-write"],
+    ["a REST write on another host by --hostname", "gh api --hostname ghe.example.com -X POST repos/acme/app/issues/1/comments -f body=x", "outside-write"],
+    ["a REST write whose path walks out by dot segments", "gh api -X POST repos/acme/app/../../other/repo/issues/1/comments -f body=x", "outside-write"],
+    ["a REST write on a repository named by id", "gh api -X POST repositories/42/issues/1/comments -f body=x", "outside-write"],
+    ["a REST write whose owner the shell fills in", "gh api -X POST repos/$OWNER/app/issues/1/comments -f body=x", "outside-write"],
+    ["a comment with GH_REPO set on the line", "GH_REPO=other/repo gh pr comment 3 --body x", "outside-write"],
+    ["a comment with GH_HOST exported earlier on the line", "export GH_HOST=ghe.example.com; gh pr comment 3 --body x", "outside-write"],
+    ["a comment under env setting GH_REPO", "env GH_REPO=other/repo gh pr comment 3 --body x", "outside-write"],
+  ])("reads %s", (_, command, expected) => {
+    expect(rule(command), command).toBe(expected);
+  });
+
+  it("holds any explicit target outside while the origin cannot be read", () => {
+    const unread = { ...ON_FEATURE, originRepo: "" };
+    expect(rule("gh pr comment 3 --body x -R acme/app", unread)).toBe("outside-write");
+    // A write naming no target in a checkout with no remote is gh's own default, which this rule does not read.
+    expect(rule("gh pr comment 3 --body x", unread)).toBeNull();
+  });
+
+  it.each([
+    ["gh's default the guard cannot tell", null, "outside-write"],
+    ["gh's default another repository", "github.com/upstream/app", "outside-write"],
+    ["gh's default the origin", "github.com/acme/app", null],
+    ["no remote for gh's default", "", null],
+  ] as const)("reads a write naming no target where %s", (_, ghDefaultRepo, expected) => {
+    expect(rule("gh pr comment 3 --body x", { ...ORIGIN, ghDefaultRepo })).toBe(expected);
+    expect(rule("gh api -X POST repos/{owner}/{repo}/issues/1/comments -f body=x", { ...ORIGIN, ghDefaultRepo })).toBe(expected);
+    // An explicit target is read on its own, whatever gh's default is.
+    expect(rule("gh pr comment 3 --body x -R acme/app", { ...ORIGIN, ghDefaultRepo })).toBeNull();
+  });
+
+  it("reads a host-less target on the host the context names", () => {
+    const enterprise = { ...ON_FEATURE, originRepo: "ghe.example.com/acme/app", ghHost: "ghe.example.com" };
+    expect(rule("gh pr comment 3 --body x -R acme/app", enterprise)).toBeNull();
+    expect(rule("gh pr comment 3 --body x -R acme/app", { ...enterprise, ghHost: "github.com" })).toBe("outside-write");
+  });
+
+  it.each([
+    ["an inline body naming a person", "gh pr comment 3 --body '@alice please look'", "outside-write"],
+    ["an inline title naming a person", "gh pr create --title '@alice fix' --body b", "outside-write"],
+    ["an attached body naming a person", "gh pr comment 3 --body='cc @alice'", "outside-write"],
+    ["a short attached body naming a person", "gh pr comment 3 '-b@alice'", "outside-write"],
+    ["a review body naming a person", "gh pr review 3 --comment -b 'thanks @alice'", "outside-write"],
+    ["a body naming a team", "gh pr comment 3 --body 'cc @acme/team'", "outside-write"],
+    ["a body naming a team of an app-named organisation", "gh pr comment 3 --body 'cc @claude/team'", "outside-write"],
+    ["a REST body field naming a person", "gh api -X POST repos/acme/app/issues/1/comments -f body='@alice hi'", "outside-write"],
+    ["a REST raw field whose @ is text", "gh api -X POST repos/acme/app/issues/1/comments -f body=@alice", "outside-write"],
+    ["a body after an unclosed backtick", "gh pr comment 3 --body 'see ` @alice'", "outside-write"],
+    ["a body naming one of the repository's apps", "gh pr comment 3 --body '@codex review'", null],
+    ["a body naming an app in another case and with a bot suffix", "gh pr comment 3 --body 'thanks @Dependabot[bot] and @COPILOT'", null],
+    ["a body naming claude", "gh pr comment 3 --body '@claude please fix'", null],
+    ["a body holding an email address", "gh pr comment 3 --body 'Co-Authored-By: x <noreply@anthropic.com>'", null],
+    ["a body holding a mention inside backticks", "gh pr comment 3 --body 'run `@alice` as written'", null],
+    ["a body holding no @", "gh pr comment 3 --body 'looks good'", null],
+    ["a REST typed field read from a file", "gh api -X POST repos/acme/app/issues/1/comments -F body=@notes.md", null],
+    ["a body read from a file", "gh pr comment 3 --body-file notes.md", null],
+    ["a read whose search names a person", "gh pr list --search '@alice'", null],
+  ])("reads %s", (_, command, expected) => {
+    expect(rule(command), command).toBe(expected);
+  });
+
+  // a5's census point (REQ-FLOW-141): a heredoc body the reading skips as data for acts is still read for a mention.
+  it.each([
+    ["a heredoc on stdin to a comment's --body-file -", "gh pr comment 3 --body-file - <<'EOF'\nthanks @alice\nEOF"],
+    ["a heredoc on stdin to a pull request's -F -", "gh pr create --title t -F - <<'EOF'\ncc @alice\nEOF"],
+    ["a heredoc on stdin to an edit's --body-file=-", "gh pr edit 3 --body-file=- <<'EOF'\ncc @alice\nEOF"],
+    ["a heredoc read by cat in a quoted substitution for the body", "gh pr create --title t --body \"$(cat <<'EOF'\nhi @alice\nEOF\n)\""],
+    ["a body from a variable set earlier on the line", "B='@alice look'; gh pr comment 3 --body \"$B\""],
+    ["a body piped in from echo on the line", "echo '@alice look' | gh pr comment 3 -F -"],
+    ["a REST body read from stdin by --input -", "gh api -X POST repos/acme/app/issues/1/comments --input - <<'EOF'\n{\"body\":\"@alice\"}\nEOF"],
+    ["a REST typed field read from stdin", "echo '@alice' | gh api -X POST repos/acme/app/issues/1/comments -F body=@-"],
+  ])("reads the body of %s for a mention", (_, command) => {
+    expect(rule(command), command).toBe("outside-write");
+    // The same line naming nobody runs.
+    expect(rule(command.replaceAll("@alice", "alice")), command).toBeNull();
+  });
+
+  it("keeps the act readings beside the rule: a refuse-class act decides, an act the setting runs never hides the ask", () => {
+    expect(personOnlyVerdict("gh release delete v1 -R other/repo --yes", ORIGIN)).toMatchObject({ deny: true, rule: "release-delete", ask: false });
+    const runs = { ...ORIGIN, runs: ["pr-ready", "tag", "workflow-dispatch"] as PersonOnlyRuleId[] };
+    expect(personOnlyVerdict("gh pr ready 3", runs)).toEqual({ deny: false, runs: ["pr-ready"] });
+    expect(personOnlyVerdict("gh pr ready https://github.com/other/repo/pull/3", runs)).toMatchObject({ deny: true, rule: "outside-write", ask: true });
+    expect(personOnlyVerdict("gh workflow run ci.yml -R other/repo", runs)).toMatchObject({ deny: true, rule: "outside-write", ask: true });
+    expect(personOnlyVerdict("gh pr merge 3 -R other/repo", ORIGIN)).toMatchObject({ deny: true, ask: true });
+  });
+
+  it("reads a line of many gh calls with stdin bodies and mentions within the bound", () => {
+    // Every call reads its body on stdin, so the whole line is read for a mention; it is read once, not once per call.
+    const command = `${"gh pr comment 1 -F - < b; ".repeat(2_000)}gh pr comment 1 --body '${"`x` @codex ".repeat(1_000)}@alice'`;
+    expect(command.length).toBeLessThanOrEqual(65_536);
+    const started = performance.now();
+    const verdict = personOnlyVerdict(command, ORIGIN);
+    expect(performance.now() - started).toBeLessThan(8_000);
+    expect(verdict).toMatchObject({ deny: true, rule: "outside-write", ask: true });
   });
 });
