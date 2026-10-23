@@ -1304,10 +1304,12 @@ describe("sync — the child-process harness starts no client program", () => {
 describe("sync — loosening the autonomy setting needs --loosen", () => {
   const GUARD_COPY = ".claude/hooks/stamity/stamity-person-only-guard.mjs";
 
-  function guardOutput(autonomy?: AutonomyConfig): AdapterOutput {
+  const CODEX_COPY = ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs";
+
+  function guardOutput(autonomy?: AutonomyConfig, path = GUARD_COPY): AdapterOutput {
     const setting = resolveAutonomy(autonomy === undefined ? {} : { autonomy });
     return {
-      path: GUARD_COPY,
+      path,
       content: buildPersonOnlyGuardScript({ tool: "claude", layout: "claude", autonomy: setting }),
       owner: { adapter: "claude", artifactId: "stamity-person-only-guard", artifactType: "infra" },
     };
@@ -1426,6 +1428,45 @@ describe("sync — loosening the autonomy setting needs --loosen", () => {
     expect(error.code).toBe("AUTONOMY_LOOSENED");
     expect(error.why).toContain(`the guard copy \`${GUARD_COPY}\` committed at \`HEAD\``);
     expect(existsSync(join(root, GUARD_COPY))).toBe(false);
+  });
+
+  it("refuses a committed client switch that drops the deploying lists, and keeps the stricter copy (review/85, review/86)", async ({ skip }) => {
+    const root = await seedBaked({ mode: "ask", deployingBranches: ["production"] });
+    // The manifest keeps mode `ask`, drops the list, and is committed; the write now plans another client's copy.
+    await setAutonomy(root, { mode: "ask" });
+    try {
+      await seedGitRepo(root);
+    } catch (error) {
+      if (error instanceof Error && error.name === "GitUnavailableError") skip();
+      throw error;
+    }
+    const stricter = await readFile(join(root, GUARD_COPY), "utf8");
+    plannerOutputs.value = [guardOutput({ mode: "ask" }, CODEX_COPY)];
+
+    const refused = await runSync(root, ["--json"]);
+
+    expect(refused.code).toBe(1);
+    const error = parseSingleDoc(refused.stdout)["error"] as { code: string; why: string };
+    expect(error.code).toBe("AUTONOMY_LOOSENED");
+    expect(error.why).toContain(`the guard copy \`${GUARD_COPY}\` on disk`);
+    expect(await readFile(join(root, GUARD_COPY), "utf8")).toBe(stricter);
+    expect(existsSync(join(root, CODEX_COPY))).toBe(false);
+  });
+
+  it("passes a switch from a committed claude-only default setup to another client (review/86)", async ({ skip }) => {
+    const root = await seedBaked();
+    try {
+      await seedGitRepo(root);
+    } catch (error) {
+      if (error instanceof Error && error.name === "GitUnavailableError") skip();
+      throw error;
+    }
+    plannerOutputs.value = [guardOutput(undefined, CODEX_COPY)];
+
+    const switched = await runSync(root);
+
+    expect(switched.code, switched.stderr).toBe(0);
+    expect(await readFile(join(root, CODEX_COPY), "utf8")).toContain('// stamity-autonomy {"mode":"autonomous"');
   });
 
   it("names on stderr each guard copy a --loosen run loosened, and what it dropped (review/67)", async () => {

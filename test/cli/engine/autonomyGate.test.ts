@@ -235,6 +235,69 @@ describe("readBaseline — only the guard paths the write plans count as a copy 
     const container = `${HOOKS_GENERATED_DIR}/claude/${PERSON_ONLY_GUARD_FILE}`;
     await put(root, container, guardText({ mode: "ask" }));
     expect((await readBaseline(root, [container])).mode).toBe("ask");
+    // TEST CHANGE, justified: REQ-FLOW-138 — a recognised copy at any known guard path is now a tighten-only leg (review/85, review/86 sign-off), so the unplanned copy keeps `ask`.
+    expect((await readBaseline(root, [CLAUDE_COPY])).mode).toBe("ask");
+  });
+});
+
+describe("readBaseline — every client's known guard path is a tighten-only leg (review/85, review/86)", () => {
+  const CODEX_COPY = `${HOOKS_GENERATED_DIR}/codex/${PERSON_ONLY_GUARD_FILE}`;
+
+  it("keeps the deploying lists of a deselected client's copy when a committed manifest switches clients and drops them", async ({ skip }) => {
+    const root = tempDir().path("repo");
+    const strict = guardText({ mode: "ask", deployingBranches: ["production"], deployingActs: ["workflow-dispatch"] });
+    await put(root, CLAUDE_COPY, strict);
+    await put(root, ".stamity/manifest.json", manifestText({ mode: "ask" }));
+    await commitAll(root, skip);
+    // The write now plans only another client's copy.
+    const baseline = await readBaseline(root, [CODEX_COPY], [recordedRow(CLAUDE_COPY, strict)]);
+    expect(baseline.deployingBranches).toEqual(["production"]);
+    expect(baseline.deploying).toEqual(["workflow-dispatch"]);
+    await expect(
+      assertNotLoosened(root, setting({ mode: "ask" }), { loosen: false, copies: { planned: [CODEX_COPY], baking: [CODEX_COPY] } }),
+    ).rejects.toMatchObject({ code: "AUTONOMY_LOOSENED", why: expect.stringContaining(`the guard copy \`${CLAUDE_COPY}\` on disk`) as unknown });
+  });
+
+  it("passes a switch from a committed claude-only default setup to another client: the recorded copy stands in", async ({ skip }) => {
+    const root = tempDir().path("repo");
+    const written = guardText();
+    await put(root, CLAUDE_COPY, written);
+    await put(root, ".stamity/manifest.json", manifestText());
+    await commitAll(root, skip);
+    const copies = { planned: [CODEX_COPY], baking: [CODEX_COPY], recorded: [recordedRow(CLAUDE_COPY, written)] };
+    expect(await readBaseline(root, copies.planned, copies.recorded)).toEqual(setting());
+    await expect(assertNotLoosened(root, setting(), { loosen: false, copies })).resolves.toBeUndefined();
+  });
+
+  it("lets a planted guard-looking file at an unselected path neither loosen nor switch the fallback off; a recorded one stands in", async ({ skip }) => {
+    const root = tempDir().path("repo");
+    await put(root, ".stamity/manifest.json", manifestText());
+    await commitAll(root, skip);
+    const planted = guardText();
+    await put(root, CODEX_COPY, planted);
+    // Unrecorded: the fallback stays on, and the default it reads loosens nothing.
+    expect(await readBaseline(root, [CLAUDE_COPY])).toEqual(setting({ mode: "ask" }));
+    // Beside a stricter planned copy it changes nothing either.
+    await put(root, CLAUDE_COPY, guardText({ mode: "ask", deployingBranches: ["production"] }));
+    expect(await readBaseline(root, [CLAUDE_COPY])).toEqual(setting({ mode: "ask", deployingBranches: ["production"] }));
+    await rm(join(root, CLAUDE_COPY));
+    // Recorded by the ledger as the engine's own write: it stands in for the planned copy.
+    expect(await readBaseline(root, [CLAUDE_COPY], [recordedRow(CODEX_COPY, planted)])).toEqual(setting());
+  });
+
+  it("reads a recognised copy committed at HEAD at an unplanned path when no planned copy is on disk", async ({ skip }) => {
+    const root = tempDir().path("repo");
+    await put(root, CLAUDE_COPY, guardText({ mode: "ask", deployingBranches: ["production"] }));
+    await put(root, ".stamity/manifest.json", manifestText({ mode: "ask" }));
+    await commitAll(root, skip);
+    await rm(join(root, CLAUDE_COPY));
+    expect((await readBaseline(root, [CODEX_COPY])).deployingBranches).toEqual(["production"]);
+  });
+
+  it("gives no leg for unrecognised text at an unplanned path, so a stray file refuses nothing", async () => {
+    const root = tempDir().path("repo");
+    await put(root, CLAUDE_COPY, guardText());
+    await put(root, CODEX_COPY, "not a guard\n");
     expect(await readBaseline(root, [CLAUDE_COPY])).toEqual(setting());
   });
 });
@@ -531,9 +594,10 @@ describe("gateGuardCopies — only a guard copy whose marker changes is gated", 
       },
     );
     const planned = [CLAUDE_COPY, GUARD_COPY_PATHS[1] ?? "", tagged];
+    // TEST CHANGE, justified: REQ-FLOW-138 — the gate is also handed the ledger, which says whether an unplanned copy is the engine's (review/85, review/86 sign-off).
     expect(calls).toEqual([
-      [setting(), { planned, baking: [CLAUDE_COPY, GUARD_COPY_PATHS[1] ?? ""] }],
-      [setting({ deployingActs: ["tag"] }), { planned, baking: [tagged] }],
+      [setting(), { planned, baking: [CLAUDE_COPY, GUARD_COPY_PATHS[1] ?? ""], recorded: [] }],
+      [setting({ deployingActs: ["tag"] }), { planned, baking: [tagged], recorded: [] }],
     ]);
   });
 
