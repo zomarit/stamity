@@ -499,17 +499,28 @@ export function decideLand(input: LandInput): LandDecision {
 /** The line that opens the evidence the pull request's body carries before a merge. */
 const EVIDENCE_OPENING = "evidence checked at ";
 
+/** build/6: the line that opens why the run's merge waits, on an `asks` or a `refused` outcome. */
+const WAITS_OPENING = "merge waits on: ";
+
 /** The evidence line: what was checked, when and for which head, never that it landed. */
 export function evidenceLine(at: string, sha: string, greenChecks: number, threads: number, openRows: number): string {
   return `${EVIDENCE_OPENING}${at} for ${sha}: ${greenChecks} required check runs green, ${threads} open threads, ${openRows} open Critical/Warning rows`;
 }
 
-/** `body` with `line` as its one evidence line, just before the run's `marker`, which still ends it. */
-export function withEvidence(body: string, marker: string, line: string): string {
+/** build/6: why the merge waits, every reason on one line, never that it landed. */
+export function waitsLine(reasons: readonly string[]): string {
+  return `${WAITS_OPENING}${reasons.map((reason) => reason.replaceAll(/\s*\r?\n\s*/g, " ")).join("; ")}`;
+}
+
+/**
+ * `body` with `line` as its one status line, just before the run's `marker`, which still ends it: an earlier evidence
+ * line or "merge waits on" line goes, so the evidence written before a merge replaces why it waited (build/6).
+ */
+export function withStatusLine(body: string, marker: string, line: string): string {
   const kept = body
     .trimEnd()
     .split(/\r?\n/)
-    .filter((text) => !text.startsWith(EVIDENCE_OPENING))
+    .filter((text) => !text.startsWith(EVIDENCE_OPENING) && !text.startsWith(WAITS_OPENING))
     .join("\n")
     .trimEnd();
   const before = kept.endsWith(marker) ? kept.slice(0, -marker.length).trimEnd() : kept;

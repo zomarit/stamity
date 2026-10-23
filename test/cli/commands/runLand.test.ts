@@ -368,7 +368,11 @@ describe("stamity run land", () => {
     expect(result.code).toBe(1);
     expect(result.doc).toMatchObject({ outcome: "asks", asks: { act: "pr-merge", reason: expect.stringContaining(".github/workflows/ci.yml") }, evidence: { held: [".github/workflows/ci.yml"] } });
     expect(kinds()).not.toContain("merge");
-    expect(kinds()).not.toContain("PATCH repos/o/r/pulls/7");
+    // TEST CHANGE, justified (build/6, REQ-FLOW-132): an asks outcome now writes why the merge waits into the run's own
+    // body, and nothing else: no evidence line, no merge.
+    expect(gh.calls.filter((call) => call.method === "PATCH").map((call) => (call.body as { body: string }).body)).toEqual([
+      `The list.\n\nmerge waits on: the diff touches paths that define the evidence: .github/workflows/ci.yml (a person decides: pr-merge)\n\n${MARKER}`,
+    ]);
   });
 
   it("asks, attended, for a diff editing a script a repository hook declaration at Base: names (build/2)", async () => {
@@ -815,6 +819,47 @@ describe("stamity run land", () => {
     const seen = new Set(gh.calls.filter((call) => call.kind === "api").flatMap((call) => call.env ?? []));
     for (const name of choosing) expect(seen.has(name), name).toBe(false);
     for (const name of locating) expect(seen.has(name), name).toBe(true);
+  });
+
+  /** The bodies the verb wrote into #7, in order. */
+  const bodies = (): string[] => gh.calls.filter((call) => call.method === "PATCH").map((call) => (call.body as { body: string }).body);
+
+  it("writes why the merge waits into the run's own body on a refused outcome, never that it landed (build/6)", async () => {
+    const { repo } = await seed();
+    gh.threads = [threadsPage([thread(false, null, ["User", "alice"])])];
+
+    expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: ["1 review thread is unresolved"] });
+    expect(bodies()).toEqual([`The list.\n\nmerge waits on: 1 review thread is unresolved\n\n${MARKER}`]);
+    expect(bodies().join("")).not.toMatch(/landed|evidence checked/);
+  });
+
+  it("writes nothing into a pull request that is not the run's own, nor before the pull request is known (build/6)", async () => {
+    const other = await seed();
+    gh.threads = [threadsPage([], "runner", "alice")];
+    expect((await run(other.repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused" });
+
+    const unrecorded = await seed({ prRecord: false });
+    gh.threads = [threadsPage([])];
+    expect((await run(unrecorded.repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: [expect.stringMatching(/^no pull-request record/)] });
+    expect(bodies()).toEqual([]);
+  });
+
+  it("writes nothing under --dry-run, an asks outcome included (build/6)", async () => {
+    const { repo } = await seed();
+    route("GET repos/o/r/pulls/7/files", [{ filename: ".github/workflows/ci.yml" }, { filename: "a.txt" }, { filename: "b" }]);
+
+    expect((await run(repo, ["land", "--run", RUN, "--dry-run"])).doc).toMatchObject({ outcome: "asks" });
+    expect(bodies()).toEqual([]);
+  });
+
+  it("replaces an earlier merge-waits line with the evidence line when it later lands (build/6)", async () => {
+    const { repo, head } = await seed();
+    route("GET repos/o/r/pulls/7", pull(head, { body: `The list.\n\nmerge waits on: 1 review thread is unresolved\n\n${MARKER}` }));
+
+    expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "landed" });
+    const [written] = bodies();
+    expect(written).toMatch(new RegExp(`^The list\\.\\n\\nevidence checked at \\S+ for ${head}: [^\\n]+\\n\\n${MARKER}$`));
+    expect(written).not.toContain("merge waits on");
   });
 
   it("takes --title, --paths, --wait past 9 and --method with --fast-forward as usage errors", async () => {

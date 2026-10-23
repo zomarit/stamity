@@ -17,7 +17,8 @@ import {
   parseThreadsPage,
   pollWhilePending,
   unresolvedThreads,
-  withEvidence,
+  waitsLine,
+  withStatusLine,
   type CheckEvidence,
   type LandInput,
   type LandPr,
@@ -310,10 +311,19 @@ describe("decideLand", () => {
 describe("the evidence line and the poll", () => {
   it("puts one evidence line before the marker, replacing an earlier one, and never says landed", () => {
     const line = evidenceLine("2026-10-23T08:00:00.000Z", SHA, 3, 0, 0);
-    const once = withEvidence(PR.body, MARKER, line);
+    const once = withStatusLine(PR.body, MARKER, line);
     expect(once).toBe(`The morning list.\n\n${line}\n\n${MARKER}`);
-    expect(withEvidence(once, MARKER, evidenceLine("2026-10-23T09:00:00.000Z", SHA, 3, 0, 0))).toBe(`The morning list.\n\nevidence checked at 2026-10-23T09:00:00.000Z for ${SHA}: 3 required check runs green, 0 open threads, 0 open Critical/Warning rows\n\n${MARKER}`);
+    expect(withStatusLine(once, MARKER, evidenceLine("2026-10-23T09:00:00.000Z", SHA, 3, 0, 0))).toBe(`The morning list.\n\nevidence checked at 2026-10-23T09:00:00.000Z for ${SHA}: 3 required check runs green, 0 open threads, 0 open Critical/Warning rows\n\n${MARKER}`);
     expect(once).not.toMatch(/landed/);
+  });
+
+  it("writes why the merge waits as one status line, which the evidence line later replaces (build/6)", () => {
+    const waits = waitsLine(["1 review thread is unresolved", "required check e2e is still running\non x"]);
+    expect(waits).toBe("merge waits on: 1 review thread is unresolved; required check e2e is still running on x");
+    const waiting = withStatusLine(PR.body, MARKER, waits);
+    expect(waiting).toBe(`The morning list.\n\n${waits}\n\n${MARKER}`);
+    const line = evidenceLine("2026-10-23T10:00:00.000Z", SHA, 3, 0, 0);
+    expect(withStatusLine(waiting, MARKER, line)).toBe(`The morning list.\n\n${line}\n\n${MARKER}`);
   });
 
   it("re-reads while pending until the deadline, sleeping between reads", async () => {

@@ -17,9 +17,11 @@ import {
   parseFiles,
   parsePr,
   parseThreadsPage,
+  ownPr,
   pollWhilePending,
   unresolvedThreads,
-  withEvidence,
+  waitsLine,
+  withStatusLine,
   type CheckEvidence,
   type CheckRunRead,
   type ForwardFacts,
@@ -30,6 +32,7 @@ import {
   type RequiredCheck,
   type ThreadRead,
 } from "../../runs/landEvidence.ts";
+import { screenOutbound } from "../../runs/morning.ts";
 import { PR_RECORD_FILE, prRecordRefusal, resolveRepo, runMarker } from "../../runs/pullRequest.ts";
 import { gitProgramFor } from "../../shared/programPath.ts";
 import {
@@ -289,6 +292,10 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     return surfaceRefusal(place, RECORD_READS, readNow, "push");
   };
 
+  /** build/6: writes why the merge waits into the run's own pull request, once that pull request is known; a no-op before. */
+  let noteWaits = async (reasons: readonly string[]): Promise<void> => {
+    void reasons;
+  };
   try {
     // (1) gh, before any of its answers is trusted: outside the work tree and the temp folders.
     const top = await gitLine(["rev-parse", "--show-toplevel"]);
@@ -376,6 +383,20 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     result.pr = { number: pr.number, url: pr.url, head: pr.headSha };
     result.evidence.mergeableState = pr.mergeableState;
     const own = { repo: `${repo.owner}/${repo.repo}`, runBranch, head: sha, originTip, marker, defaultBranch, viewer };
+    // build/6: from here the pull request is known; on asks or refused, why its merge waits goes into its own body,
+    // while it still reads as the run's own, open and unmerged. A dry run writes nothing.
+    noteWaits = async (reasons: readonly string[]): Promise<void> => {
+      const check = ownPr(pr, own);
+      if (ctx.dryRun || reasons.length === 0 || check.already || check.refusals.length > 0) return;
+      const wanted = waitsLine(reasons.map((reason) => sanitizeLabel(reason)));
+      const line = screenOutbound(wanted, "pr-body").ok ? wanted : `${waitsLine(["reasons not posted, since the outbound screen matched them; read the run's record"])}`;
+      try {
+        const written = await ghApi({ method: "PATCH", path: `${repoPath}/pulls/${number}`, body: { body: withStatusLine(pr.body, marker, line) }, hostname: repo.host }, ghOpts);
+        if (written.status !== 200) result.notDone.push(`why the merge waits was not written into #${number}'s body (HTTP ${written.status})`);
+      } catch {
+        result.notDone.push(`why the merge waits was not written into #${number}'s body (gh failed before GitHub answered)`);
+      }
+    };
 
     // (4) The setting: the strictest of the default branch's, HEAD's and the work tree's manifest.
     const setting = await readSetting(cwd, prefix, repoPath, defaultBranch, gitLine, call);
@@ -513,11 +534,13 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     }
     if (decision.outcome === "refused") {
       result.notDone.push(...decision.reasons);
+      await noteWaits(decision.reasons);
       return finish();
     }
     if (decision.outcome === "asks") {
       result.outcome = "asks";
       result.asks = { reason: decision.reason, act: decision.act };
+      await noteWaits([`${decision.reason} (a person decides: ${decision.act})`]);
       return finish();
     }
     if (ctx.dryRun) {
@@ -532,7 +555,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     const at = new Date().toISOString();
     const line = evidenceLine(at, sha, checks.green.length, threads ?? 0, 0);
     const patched = await answered(
-      ghApi({ method: "PATCH", path: `${repoPath}/pulls/${number}`, body: { body: withEvidence(pr.body, marker, line) }, hostname: repo.host }, ghOpts),
+      ghApi({ method: "PATCH", path: `${repoPath}/pulls/${number}`, body: { body: withStatusLine(pr.body, marker, line) }, hostname: repo.host }, ghOpts),
       "the evidence write",
     );
     if (patched.status !== 200) throw new Refused(`writing the evidence into #${number}'s body answered HTTP ${patched.status}`);
@@ -569,6 +592,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     if (!(error instanceof Refused)) throw error;
     result.outcome = "refused";
     result.notDone.push(...error.reasons);
+    await noteWaits(error.reasons);
     return finish();
   }
 }
