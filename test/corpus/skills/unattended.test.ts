@@ -87,7 +87,11 @@ const VERB_FORMS: readonly { unit: string; form: string }[] = [
   { unit: "u19", form: "`stamity run end --run <id> --title <t> --paths <p...> --json`" },
   // Added 2026-10-23 (plan 022 file 1, unit a8-unattended-and-close; REQ-FLOW-144, decision D3): the ending's land
   // step, in the spelling `src/cli/commands/runLand.ts` (unit a6-land-verb) registers.
-  { unit: "a6", form: "`stamity run land --run <id> --ready --json`" },
+  // TEST CHANGE, justified (plan 022 file 1, unit a8, review/105; REQ-FLOW-144): the land step read
+  // `stamity run land --run <id> --ready --json`. What moved: it waits for pending checks, `--wait 8`, under the
+  // ten-minute shell limit; and the walk's person-approved form joins (review/103).
+  { unit: "a6", form: "`stamity run land --run <id> --ready --wait 8 --json`" },
+  { unit: "a6", form: "`stamity run land --run <id> --approved --json`" },
   { unit: "a1", form: "`--drop-held <path...>`" },
 ];
 
@@ -116,11 +120,14 @@ const PERSON_ONLY_ACT = /\b(?:merges?|merging|tags?|tagging|ready[- ]for[- ]revi
  * Mentions of "merge" that name no act a run performs: the spec delta's merge decision and the prerequisite column.
  *
  * TEST CHANGE, justified (plan 022 file 1, unit a8-unattended-and-close; REQ-FLOW-144, decisions D1 and D3): the run's
- * own pull request is now marked ready and merged, but only by `stamity run land`, which checks the evidence first. A
- * sentence naming that verb states the one path the act takes, so its act words are scrubbed whole; a sentence
- * telling the act with no verb ("Then merge the pull request.") is still flagged, as the case below proves.
+ * own pull request is now marked ready and merged, but only by `stamity run land`, which checks the evidence first. So
+ * the act words are scrubbed where they name the verb as the act's path: "marked ready and merged only by `stamity run
+ * land`" and "a merge `stamity run land` made". TEST CHANGE, justified (fix round 2, review/106): the first form
+ * scrubbed every sentence naming the verb, so "when `stamity run land` asks, merge it by hand" passed; the scrub now
+ * takes only those two phrases, and the case below proves the hand-merge sentence is told.
  */
-const NAMED_NOT_ACTED = /\bspec delta merge\b|\bblocks merge, deploy or run\b|^(?=.*`stamity run land`).*$/gi;
+const NAMED_NOT_ACTED =
+  /\bspec delta merge\b|\bblocks merge, deploy or run\b|\b(?:marked ready and )?merged? (?:only )?(?:by|through) `stamity run land`|\ba merge `stamity run land` made\b/gi;
 
 /** A sentence that keeps a person-only act out of the run's hands says so. */
 const REFUSAL_WORD = /\b(?:never|not|no|nor|denied|refused|refuses|held|person's)\b/i;
@@ -449,7 +456,9 @@ describe("st-unattended — checkpoints and the ending (REQ-FLOW-092, REQ-FLOW-0
   it("runs the land step after run end exits 0, and holds every reason it does not land", async () => {
     const text = await flat();
     const step =
-      "4. Once `run end` exits 0, `stamity run land --run <id> --ready --json` runs alone on its line, under the same line rule, with a shell time limit of ten minutes where the client sets one (the verb ends within 9); `Shippable: not signed` does not stop it.";
+      // TEST CHANGE, justified (fix round 2, review/105 and review/103; REQ-FLOW-144): the step now waits, `--wait 8`, and
+      // says `--approved` is never passed unattended.
+      "4. Once `run end` exits 0, `stamity run land --run <id> --ready --wait 8 --json` runs alone on its line, under the same line rule, with a shell time limit of ten minutes where the client sets one (the verb ends within 9); `Shippable: not signed` does not stop it, and `--approved` is never passed while the mode is unattended.";
     expect(text).toContain(step);
     const end = text.indexOf("`stamity run end --run <id> --title <t> --paths <p...> --json`");
     expect(end).toBeGreaterThan(-1);
@@ -459,7 +468,13 @@ describe("st-unattended — checkpoints and the ending (REQ-FLOW-092, REQ-FLOW-0
       "Exit 0 (`landed` or `already-landed`) leaves the verb's own record line, `- <UTC> land: #<n> <sha> merged` (or `fast-forwarded`), and a `## Decisions` row in `morning.md`.",
     );
     expect(text).toContain(
-      "Exit 1 leaves the pull request open, and each reason is held: the `asks` outcome's `asks.reason` and the `refused` outcome's `notDone[]` each become a `held` row reading `merge waits on: <reasons>`, and a call that returns no outcome is held as `merge waits on: the land call returned nothing`.",
+      // TEST CHANGE, justified (fix round 2, review/103; REQ-FLOW-144): an `asks` hold is the person's, at the walk.
+      "Exit 1 leaves the pull request open, and each reason is held: the `asks` outcome's `asks.reason` and the `refused` outcome's `notDone[]` each become a `held` row reading `merge waits on: <reasons>`, an `asks` hold waiting for the person at the walk, and a call that returns no outcome is held as `merge waits on: the land call returned nothing`.",
+    );
+    // Added 2026-10-23 (fix round 2, review/104; REQ-FLOW-143): a ready mark the verb made before it refused is an act
+    // run without asking, so it gets its decision row though the JSON names no ready mark.
+    expect(text).toContain(
+      "An exit 1 that follows the verb's ready mark (`gh pr view <n> --json isDraft` reads `false`) adds that ready mark's `## Decisions` row.",
     );
     // TEST CHANGE, justified (plan 022 file 1, unit a8, sign-off build/6; REQ-FLOW-144): this pinned "The run writes those
     // rows into `morning.md` with its file tools, and the next walk retries `run land`." What moved: on `asks` and
@@ -520,6 +535,8 @@ describe("st-unattended — no sentence tells a run to merge, tag or mark ready 
     expect(actsTold("Its pull request is merged only by `stamity run land`. Then merge the pull request.")).toEqual([
       "Then merge the pull request.",
     ]);
+    // Added 2026-10-23 (fix round 2, review/106): naming the verb no longer clears a sentence that tells the act.
+    expect(actsTold("When `stamity run land` asks, merge it by hand.")).toEqual(["When `stamity run land` asks, merge it by hand."]);
   });
 
   it("holds no such sentence in the body or the description", async () => {
@@ -799,12 +816,20 @@ describe("st-unattended — the ask rule, the run verb's line and the walk's act
 
   // Added 2026-10-23 (plan 022 file 1, unit a8-unattended-and-close; REQ-FLOW-143, REQ-FLOW-144): the walk retries a
   // held merge through the land verb, which reads the evidence again; the approve prompt never stands in for it.
-  it("retries a merge held on a land outcome at the walk through run land, never the approve prompt", async () => {
+  // TEST CHANGE, justified (fix round 2, review/103; REQ-FLOW-123, REQ-FLOW-144): an `asks` hold asked again on every
+  // retry, so it never landed. What moved: a `refused` hold is retried by a plain `run land`; an `asks` hold runs the
+  // `--approved` line, whose guard ask is the person's one click, and no other line of the skill passes the flag.
+  it("retries a refused hold with run land and lands an asks hold only on the person's click at the walk", async () => {
     const text = await flat();
     const walk = text.slice(text.indexOf("## The morning walk The walk is attended"), text.indexOf("## Other touchpoints"));
     expect(walk).toContain(
-      "A merge held on a `run land` outcome is retried at the walk by `run land`, as the ending's step 4 runs it, never by the approve prompt.",
+      "At the walk, a merge held on a `refused` outcome is retried by a plain `run land`; one held on an `asks` outcome runs as `stamity run land --run <id> --approved --json`, alone on its line, where the guard's ask on that line is the person's one click, and this skill passes `--approved` on no other line.",
     );
+    expect(walk).not.toContain("never by the approve prompt");
+    // The flag appears only on that walk line and in the ending's "never passed" clause.
+    const raw = (await load()).parsed.body;
+    expect(raw.split("\n").filter((line) => line.includes("--approved")).length).toBe(2);
+    expect(text).toContain("`--approved` is never passed while the mode is unattended");
   });
 
   it("runs each held act after the person's click at the walk, and hands over deletions, force pushes and refused asks", async () => {

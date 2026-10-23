@@ -1537,8 +1537,15 @@ describe("/st-work — Prove", () => {
     // Each outcome: the verb's record line, or held rows the next walk retries.
     expect(qa).toContain("Exit 0 leaves the verb's record line, `- <UTC> land: #<n> <sha> merged`;");
     expect(qa).toContain(
-      "an `asks` or `refused` exit, or a call that returns no outcome, leaves the pull request open, each reason a `held` row (`merge waits on: <reasons>`, or `merge waits on: the land call returned nothing`) that the next walk retries.",
+      // TEST CHANGE, justified (fix round 2, review/103; REQ-FLOW-019, REQ-FLOW-144): this ended "… that the next walk
+      // retries." What moved: an `asks` hold is the person's, so the close runs the `--approved` line, whose guard ask is
+      // their one click; a `refused` hold is retried by the next walk's plain `run land`.
+      "an `asks` or `refused` exit, or a call that returns no outcome, leaves the pull request open, each reason a `held` row (`merge waits on: <reasons>`, or `merge waits on: the land call returned nothing`).",
     );
+    expect(qa).toContain(
+      "On `asks` the close then runs `stamity run land --run <run-id> --approved --json`, alone on its line, where the guard's ask on that line is the person's one click; a declined ask stays held, and a `refused` hold is retried by the next walk's plain `run land`.",
+    );
+    expect(qa).not.toContain("the land call returned nothing`) that the next walk retries.");
     // It follows the row-states paragraph, whose rows it asks about.
     expect(qa.indexOf("**The close walk.**")).toBeGreaterThan(qa.indexOf("**Row states.**"));
   });
@@ -1552,7 +1559,8 @@ describe("/st-work — Prove", () => {
       "In every case the close writes `.stamity/runs/<run-id>/morning.md` with its file tools, in the shape of the `st-unattended` skill's `## The morning list`,";
     expect(qa).toContain(summary);
     expect(qa).toContain(
-      "each act run without asking a `## Decisions` row (kind `decision`, default `1`: a push or ready mark `1 keep · 2 undo`, a merge `run land` made `1 keep · 2 revert (a revert pull request)`);",
+      // TEST CHANGE, justified (fix round 2, review/104; REQ-FLOW-143): a ready mark made before a refused land is named.
+      "each act run without asking a `## Decisions` row (kind `decision`, default `1`: a push or ready mark `1 keep · 2 undo`, a ready mark made before a refused land included, a merge `run land` made `1 keep · 2 revert (a revert pull request)`);",
     );
     expect(qa).toContain(
       "the pull request body stays as `run checkpoint` wrote it, and the final message names that file and the pull request.",
