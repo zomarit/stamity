@@ -91,7 +91,9 @@ const VERB_FORMS: readonly { unit: string; form: string }[] = [
   // `stamity run land --run <id> --ready --json`. What moved: it waits for pending checks, `--wait 8`, under the
   // ten-minute shell limit; and the walk's person-approved form joins (review/103).
   { unit: "a6", form: "`stamity run land --run <id> --ready --wait 8 --json`" },
-  { unit: "a6", form: "`stamity run land --run <id> --approved --json`" },
+  // TEST CHANGE, justified (fix round 4, review/110; REQ-FLOW-144): the approval names the head commit the person was
+  // shown, `--approved <sha>`, so a commit pushed after the question is never landed on that yes.
+  { unit: "a6", form: "`stamity run land --run <id> --approved <sha> --json`" },
   { unit: "a1", form: "`--drop-held <path...>`" },
 ];
 
@@ -469,7 +471,8 @@ describe("st-unattended — checkpoints and the ending (REQ-FLOW-092, REQ-FLOW-0
     );
     expect(text).toContain(
       // TEST CHANGE, justified (fix round 2, review/103; REQ-FLOW-144): an `asks` hold is the person's, at the walk.
-      "Exit 1 leaves the pull request open, and each reason is held: the `asks` outcome's `asks.reason` and the `refused` outcome's `notDone[]` each become a `held` row reading `merge waits on: <reasons>`, an `asks` hold waiting for the person at the walk, and a call that returns no outcome is held as `merge waits on: the land call returned nothing`.",
+      // TEST CHANGE, justified (fix round 4, review/110): an `asks` outcome lists every reason, `asks.reasons`.
+      "Exit 1 leaves the pull request open, and each reason is held: the `asks` outcome's `asks.reasons` and the `refused` outcome's `notDone[]` each become a `held` row reading `merge waits on: <reasons>`, an `asks` hold waiting for the person at the walk, and a call that returns no outcome is held as `merge waits on: the land call returned nothing`.",
     );
     // Added 2026-10-23 (fix round 2, review/104; REQ-FLOW-143): a ready mark the verb made before it refused is an act
     // run without asking, so it gets its decision row though the JSON names no ready mark.
@@ -831,11 +834,14 @@ describe("st-unattended — the ask rule, the run verb's line and the walk's act
     expect(walk).toContain(
       // TEST CHANGE, justified (fix round 3, review/109; REQ-FLOW-144): the `--approved` line runs only on the person's
       // yes to its row, the guard's ask a second check, and the call's own outcome is stated.
-      "At the walk, a merge held on a `refused` outcome is retried by a plain `run land`; one held on an `asks` outcome runs, only once the person answers its row yes, as `stamity run land --run <id> --approved --json`, alone on its line, where the guard asks again on that line, and this skill passes `--approved` on no other line.",
+      // TEST CHANGE, justified (fix round 4, review/110; REQ-FLOW-144): the question names every reason and the head
+      // commit, the flag carries that commit from the `asks` JSON and no other value, and a moved head is asked again.
+      "At the walk, a merge held on a `refused` outcome is retried by a plain `run land`; one held on an `asks` outcome is put to the person as one numbered question naming the pull request, every reason in `asks.reasons` and the head commit `pr.head`, and only on yes runs as `stamity run land --run <id> --approved <sha> --json`, alone on its line, `<sha>` that `asks` JSON's `pr.head` and never another value, where the guard asks again on that line; this skill passes `--approved` on no other line.",
     );
     expect(walk).toContain(
-      "That call's `landed` outcome writes its `## Decisions` row; its `asks` or `refused` keeps the held row for the next walk.",
+      "That call's `landed` outcome writes its `## Decisions` row; its `asks` or `refused` keeps the held row for the next walk, and a `refused` whose reason is a moved head means a commit landed after the question, so the row is asked again from a fresh `run land`, never with the old `<sha>`.",
     );
+    expect(walk).not.toContain("`stamity run land --run <id> --approved --json`");
     expect(walk).not.toContain("never by the approve prompt");
     // The flag appears only on that walk line and in the ending's "never passed" clause.
     const raw = (await load()).parsed.body;

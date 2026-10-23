@@ -1545,12 +1545,16 @@ describe("/st-work — Prove", () => {
     // TEST CHANGE, justified (fix round 3, review/109; REQ-FLOW-019, REQ-FLOW-144): the close ran the `--approved` line
     // at once, so with hooks off or a guard timeout nothing asked. What moved: the person is asked first, with a
     // declared default of leaving the merge held, and the line runs only on yes; the call's own outcome is stated.
+    // TEST CHANGE, justified (fix round 4, review/110; REQ-FLOW-019, REQ-FLOW-144): the question names every reason and
+    // the head commit; the flag carries that commit, `--approved <sha>`, from the `asks` JSON and no other value; a
+    // moved head means a commit landed after the question, so the person is asked again, never with the old sha.
     const approved =
-      "On `asks` the close first asks the person one numbered question naming the pull request and the land's reasons, 1 merge it now · 2 leave it held, `Default if no response: leave it held`; only on 1 does it run `stamity run land --run <run-id> --approved --json`, alone on its line, where the guard asks again on that line.";
+      "On `asks` the close first asks the person one numbered question naming the pull request, every reason in `asks.reasons` and the head commit `pr.head`, 1 merge it now · 2 leave it held, `Default if no response: leave it held`; only on 1 does it run `stamity run land --run <run-id> --approved <sha> --json`, alone on its line, `<sha>` that `asks` JSON's `pr.head` and never another value, where the guard asks again on that line.";
     expect(qa).toContain(approved);
     expect(qa).toContain(
-      "That call's `landed` outcome writes its `## Decisions` row; its `asks` or `refused` keeps the held row, and a `refused` hold is retried by the next walk's plain `run land`.",
+      "That call's `landed` outcome writes its `## Decisions` row; its `asks` or `refused` keeps the held row, and a `refused` hold is retried by the next walk's plain `run land`; a `refused` whose reason is a moved head means a commit landed after the question, so the person is asked again, never with the old `<sha>`.",
     );
+    expect(qa).not.toContain("`stamity run land --run <run-id> --approved --json`");
     expect(qa).not.toContain("On `asks` the close then runs `stamity run land");
     expect(qa.indexOf("`stamity run land --run <run-id> --ready --wait 8 --json`")).toBeLessThan(qa.indexOf(approved));
     expect(qa).not.toContain("the land call returned nothing`) that the next walk retries.");
