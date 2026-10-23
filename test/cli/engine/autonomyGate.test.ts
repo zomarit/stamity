@@ -1,17 +1,20 @@
 import { createHash } from "node:crypto";
-import { mkdir, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { dirname, join, relative, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  GUARD_COPY_PATHS,
   assertNotLoosened,
   gateGuardCopies,
   guardCopySetting,
   readBaseline,
+  type GuardCopies,
   type GuardGate,
 } from "../../../src/cli/engine/autonomyGate.ts";
 import { resolveAutonomy, type ResolvedAutonomy } from "../../../src/config/autonomy.ts";
-import { buildPersonOnlyGuardScript } from "../../../src/hooks/scripts.ts";
+import { CLAUDE_HOOKS_DIR } from "../../../src/hooks/model.ts";
+import { PERSON_ONLY_GUARD_FILE, buildPersonOnlyGuardScript } from "../../../src/hooks/scripts.ts";
+import { TOOLS } from "../../../src/types/core.ts";
+import { HOOKS_GENERATED_DIR } from "../../../src/types/markers.ts";
 import { classifyFailure } from "../../../src/resilience/failureClass.ts";
 import { DEPLOYING_ACTS, type AutonomyConfig } from "../../../src/types/manifest.ts";
 import { EngineError } from "../../../src/types/errors.ts";
@@ -27,7 +30,14 @@ import { useTempDir } from "../../support/tempDir.ts";
 
 const tempDir = useTempDir("stamity-autonomy-gate");
 
+/** The guard paths the plan writes (`src/emit/hooksInfra.ts:523-529`): Claude Code's copy, then each client's generated one. */
+const GUARD_COPY_PATHS: readonly string[] = [
+  `${CLAUDE_HOOKS_DIR}/${PERSON_ONLY_GUARD_FILE}`,
+  ...TOOLS.map((tool) => `${HOOKS_GENERATED_DIR}/${tool}/${PERSON_ONLY_GUARD_FILE}`),
+];
 const CLAUDE_COPY = GUARD_COPY_PATHS[0] ?? "";
+/** A write that plans, and bakes, Claude Code's copy alone. */
+const CLAUDE_ONLY: GuardCopies = { planned: [CLAUDE_COPY], baking: [CLAUDE_COPY] };
 const MARKER = "// stamity-autonomy ";
 
 function setting(autonomy?: AutonomyConfig): ResolvedAutonomy {
@@ -82,66 +92,262 @@ async function commitAll(root: string, skip: () => void): Promise<void> {
 
 describe("readBaseline — the strictest of the guard copies, HEAD and the manifest on disk", () => {
   it("is the default on a first init: no copy, no manifest, no repository", async () => {
+    // TEST CHANGE, justified: REQ-FLOW-138 — the baseline reads only the guard paths the write plans (review/65), so the case names them.
     const root = tempDir().path("repo");
     await mkdir(root, { recursive: true });
-    expect(await readBaseline(root)).toEqual(setting());
+    expect(await readBaseline(root, GUARD_COPY_PATHS)).toEqual(setting());
   });
 
   it("reads a guard copy's baked mode `ask`, and the strictest of two copies", async () => {
+    // TEST CHANGE, justified: REQ-FLOW-138 — the baseline reads only the guard paths the write plans (review/65), so the case names them.
     const root = tempDir().path("repo");
     await put(root, CLAUDE_COPY, guardText());
     await put(root, GUARD_COPY_PATHS[1] ?? "", guardText({ mode: "ask", deployingBranches: ["production"] }));
-    const baseline = await readBaseline(root);
+    const baseline = await readBaseline(root, GUARD_COPY_PATHS);
     expect(baseline.mode).toBe("ask");
     expect(baseline.deployingBranches).toEqual(["production"]);
   });
 
   it("reads the manifest on disk before the write", async () => {
+    // TEST CHANGE, justified: REQ-FLOW-138 — the baseline reads only the guard paths the write plans (review/65), so the case names them.
     const root = tempDir().path("repo");
     await put(root, CLAUDE_COPY, guardText());
     await put(root, ".stamity/manifest.json", manifestText({ deployingActs: ["workflow-dispatch"] }));
-    expect((await readBaseline(root)).deploying).toEqual(["workflow-dispatch"]);
+    expect((await readBaseline(root, GUARD_COPY_PATHS)).deploying).toEqual(["workflow-dispatch"]);
   });
 
   it("reads a manifest on disk that is not JSON as the strictest setting", async () => {
+    // TEST CHANGE, justified: REQ-FLOW-138 — the baseline reads only the guard paths the write plans (review/65), so the case names them.
     const root = tempDir().path("repo");
     await put(root, CLAUDE_COPY, guardText());
     await put(root, ".stamity/manifest.json", "{ not json");
-    expect(await readBaseline(root)).toEqual(setting({ mode: "ask", deployingActs: [...DEPLOYING_ACTS] }));
+    expect(await readBaseline(root, GUARD_COPY_PATHS)).toEqual(setting({ mode: "ask", deployingActs: [...DEPLOYING_ACTS] }));
   });
 
   it.skipIf(process.platform === "win32")("reads a guard path holding a link as the strictest setting", async () => {
+    // TEST CHANGE, justified: REQ-FLOW-138 — the baseline reads only the guard paths the write plans (review/65), so the case names them.
     const root = tempDir().path("repo");
     await put(root, "elsewhere.mjs", guardText());
     await mkdir(dirname(join(root, CLAUDE_COPY)), { recursive: true });
     await symlink(join(root, "elsewhere.mjs"), join(root, CLAUDE_COPY));
-    expect(await readBaseline(root)).toEqual(setting({ mode: "ask", deployingActs: [...DEPLOYING_ACTS] }));
+    expect(await readBaseline(root, GUARD_COPY_PATHS)).toEqual(setting({ mode: "ask", deployingActs: [...DEPLOYING_ACTS] }));
   });
 
   it("reads the autonomy committed at HEAD over a looser manifest on disk", async ({ skip }) => {
+    // TEST CHANGE, justified: REQ-FLOW-138 — the baseline reads only the guard paths the write plans (review/65), so the case names them.
     const root = tempDir().path("repo");
     await put(root, CLAUDE_COPY, guardText());
     await put(root, ".stamity/manifest.json", manifestText({ mode: "ask" }));
     await commitAll(root, skip);
     await put(root, ".stamity/manifest.json", manifestText());
-    expect((await readBaseline(root)).mode).toBe("ask");
+    expect((await readBaseline(root, GUARD_COPY_PATHS)).mode).toBe("ask");
   });
 
   it("reads `ask` when no guard copy is on disk while HEAD holds a manifest, even a looser one", async ({ skip }) => {
+    // TEST CHANGE, justified: REQ-FLOW-138 — the baseline reads only the guard paths the write plans (review/65), so the case names them.
     const root = tempDir().path("repo");
     await put(root, CLAUDE_COPY, guardText({ mode: "ask" }));
     await put(root, ".stamity/manifest.json", manifestText());
     await commitAll(root, skip);
     // The copy is deleted from disk; HEAD still holds it and the manifest.
     await rm(join(root, CLAUDE_COPY));
-    expect((await readBaseline(root)).mode).toBe("ask");
+    expect((await readBaseline(root, GUARD_COPY_PATHS)).mode).toBe("ask");
   });
 
   it("puts no HEAD leg where HEAD holds no manifest", async ({ skip }) => {
+    // TEST CHANGE, justified: REQ-FLOW-138 — the baseline reads only the guard paths the write plans (review/65), so the case names them.
     const root = tempDir().path("repo");
-    await put(root, "README.md", "a repository with history and no setup\n");
+    // TEST CHANGE, justified: REQ-FLOW-138 — a scratch file name no tracked file has, so the test-input guard reads no repository file here (it was red on a38c554a).
+    await put(root, "history-only.txt", "a repository with history and no setup\n");
     await commitAll(root, skip);
-    expect(await readBaseline(root)).toEqual(setting());
+    expect(await readBaseline(root, GUARD_COPY_PATHS)).toEqual(setting());
+  });
+});
+
+/** `.git/config` made unparseable: every git read in the checkout now exits 128 (git refuses the repository). */
+async function breakGitConfig(root: string): Promise<void> {
+  await appendFile(join(root, ".git", "config"), "\n[core\n  not a config line\n", "utf8");
+}
+
+describe("readBaseline — with no guard copy on disk, the copies committed at HEAD (review/56, review/64)", () => {
+  it("reads the default copies committed at HEAD as the default, so a clean then init over a default setup passes", async ({ skip }) => {
+    const root = tempDir().path("repo");
+    await put(root, CLAUDE_COPY, guardText());
+    await put(root, ".stamity/manifest.json", manifestText());
+    await commitAll(root, skip);
+    // A full clean: the state folder and every guard copy gone; HEAD unchanged.
+    await rm(join(root, ".stamity"), { recursive: true, force: true });
+    await rm(join(root, CLAUDE_COPY));
+    expect(await readBaseline(root, [CLAUDE_COPY])).toEqual(setting());
+    await expect(assertNotLoosened(root, setting(), { loosen: false, copies: CLAUDE_ONLY })).resolves.toBeUndefined();
+  });
+
+  it("keeps the deploying lists HEAD's copies bake when a committed manifest drops them and the copies are deleted", async ({ skip }) => {
+    const root = tempDir().path("repo");
+    await put(root, CLAUDE_COPY, guardText({ deployingActs: ["workflow-dispatch"], deployingBranches: ["production"] }));
+    // The committed manifest leaves the lists out; the copy at HEAD still names them.
+    await put(root, ".stamity/manifest.json", manifestText());
+    await commitAll(root, skip);
+    await rm(join(root, CLAUDE_COPY));
+    const baseline = await readBaseline(root, [CLAUDE_COPY]);
+    expect(baseline.deploying).toEqual(["workflow-dispatch"]);
+    expect(baseline.deployingBranches).toEqual(["production"]);
+    await expect(assertNotLoosened(root, setting(), { loosen: false, copies: CLAUDE_ONLY })).rejects.toMatchObject({
+      code: "AUTONOMY_LOOSENED",
+      why: expect.stringContaining(`the guard copy \`${CLAUDE_COPY}\` committed at \`HEAD\``) as unknown,
+    });
+  });
+
+  it("reads `ask` when HEAD holds a manifest and no guard copy at the planned paths", async ({ skip }) => {
+    const root = tempDir().path("repo");
+    await put(root, ".stamity/manifest.json", manifestText());
+    await commitAll(root, skip);
+    expect(await readBaseline(root, [CLAUDE_COPY])).toEqual(setting({ mode: "ask" }));
+  });
+});
+
+describe("readBaseline — only the guard paths the write plans count as a copy (review/65)", () => {
+  it("does not let a file at an unselected client's path or the retired path switch off the no-copy fallback", async ({ skip }) => {
+    const root = tempDir().path("repo");
+    await put(root, CLAUDE_COPY, guardText({ mode: "ask" }));
+    // A looser manifest committed: HEAD's manifest leg alone says the default.
+    await put(root, ".stamity/manifest.json", manifestText());
+    await commitAll(root, skip);
+    await rm(join(root, CLAUDE_COPY));
+    // Files at guard paths this write does not plan: another client's folder, the retired Claude generated path.
+    await put(root, `${HOOKS_GENERATED_DIR}/codex/${PERSON_ONLY_GUARD_FILE}`, "");
+    await put(root, `${HOOKS_GENERATED_DIR}/claude/${PERSON_ONLY_GUARD_FILE}`, guardText());
+    expect((await readBaseline(root, [CLAUDE_COPY])).mode).toBe("ask");
+  });
+
+  it("reads text at a planned guard path that is no guard it knows as the strictest setting, never the default", async () => {
+    const root = tempDir().path("repo");
+    for (const text of ["", "export {};\n", "#!/usr/bin/env node\n// stamity — person-only shell guard.\n"]) {
+      // oxlint-disable-next-line no-await-in-loop -- one case at a time on one path
+      await put(root, CLAUDE_COPY, text);
+      // oxlint-disable-next-line no-await-in-loop -- one case at a time on one path
+      expect(await readBaseline(root, [CLAUDE_COPY]), JSON.stringify(text)).toEqual(setting({ mode: "ask", deployingActs: [...DEPLOYING_ACTS] }));
+    }
+  });
+
+  it("reads a guard copy at the container layout's planned path", async () => {
+    const root = tempDir().path("repo");
+    const container = `${HOOKS_GENERATED_DIR}/claude/${PERSON_ONLY_GUARD_FILE}`;
+    await put(root, container, guardText({ mode: "ask" }));
+    expect((await readBaseline(root, [container])).mode).toBe("ask");
+    expect(await readBaseline(root, [CLAUDE_COPY])).toEqual(setting());
+  });
+});
+
+describe("readBaseline — a git that refuses the repository reads as the strictest setting (review/57, review/66)", () => {
+  it("reads strictest when git refuses an unparseable config, with the copies deleted and a looser manifest on disk", async ({ skip }) => {
+    const root = tempDir().path("repo");
+    await put(root, CLAUDE_COPY, guardText({ mode: "ask" }));
+    await put(root, ".stamity/manifest.json", manifestText({ mode: "ask" }));
+    await commitAll(root, skip);
+    await rm(join(root, CLAUDE_COPY));
+    await put(root, ".stamity/manifest.json", manifestText());
+    await breakGitConfig(root);
+    expect(await readBaseline(root, [CLAUDE_COPY])).toEqual(setting({ mode: "ask", deployingActs: [...DEPLOYING_ACTS] }));
+    await expect(assertNotLoosened(root, setting(), { loosen: false, copies: CLAUDE_ONLY })).rejects.toMatchObject({
+      code: "AUTONOMY_LOOSENED",
+      why: expect.stringContaining("`HEAD`, which git did not answer for") as unknown,
+    });
+  });
+
+  it("reads strictest when git refuses the repository even with a copy on disk", async ({ skip }) => {
+    const root = tempDir().path("repo");
+    await put(root, CLAUDE_COPY, guardText());
+    await put(root, ".stamity/manifest.json", manifestText());
+    await commitAll(root, skip);
+    await breakGitConfig(root);
+    expect((await readBaseline(root, [CLAUDE_COPY])).deploying).toEqual([...DEPLOYING_ACTS]);
+  });
+
+  it("puts no HEAD leg on an unborn branch: git's own answer that HEAD names no commit", async ({ skip }) => {
+    const root = tempDir().path("repo");
+    await put(root, "history-only.txt", "history\n");
+    await commitAll(root, skip);
+    // Point HEAD at a branch with no commit yet, as `git checkout --orphan` leaves it.
+    await writeFile(join(root, ".git", "HEAD"), "ref: refs/heads/nothing-yet\n", "utf8");
+    await put(root, CLAUDE_COPY, guardText());
+    expect(await readBaseline(root, [CLAUDE_COPY])).toEqual(setting());
+  });
+});
+
+describe("assertNotLoosened — the refusal names the leg that decided (review/59)", () => {
+  async function refusalWhy(root: string): Promise<string> {
+    const refusal = await assertNotLoosened(root, setting(), { loosen: false, copies: CLAUDE_ONLY }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(refusal).toBeInstanceOf(EngineError);
+    return (refusal as EngineError).why ?? "";
+  }
+
+  it("names the guard copy on disk", async () => {
+    const root = tempDir().path("repo");
+    await put(root, CLAUDE_COPY, guardText({ mode: "ask" }));
+    const why = await refusalWhy(root);
+    expect(why).toContain(`the guard copy \`${CLAUDE_COPY}\` on disk`);
+    expect(why).not.toContain("HEAD");
+    expect(why).not.toContain("manifest");
+  });
+
+  it("names the manifest on disk", async () => {
+    const root = tempDir().path("repo");
+    await put(root, CLAUDE_COPY, guardText());
+    await put(root, ".stamity/manifest.json", manifestText({ mode: "ask" }));
+    const why = await refusalWhy(root);
+    expect(why).toContain("the manifest on disk");
+    expect(why).not.toContain("guard copy");
+  });
+
+  it("names the setting committed at HEAD", async ({ skip }) => {
+    const root = tempDir().path("repo");
+    await put(root, CLAUDE_COPY, guardText());
+    await put(root, ".stamity/manifest.json", manifestText({ mode: "ask" }));
+    await commitAll(root, skip);
+    await put(root, ".stamity/manifest.json", manifestText());
+    expect(await refusalWhy(root)).toBe("the setting committed at `HEAD` is stricter, and loosening it is the person's act");
+  });
+
+  it("says no guard copy was found, naming no file, when none is on disk or at HEAD", async ({ skip }) => {
+    const root = tempDir().path("repo");
+    await put(root, ".stamity/manifest.json", manifestText());
+    await commitAll(root, skip);
+    const why = await refusalWhy(root);
+    expect(why).toContain("no guard copy found on disk or at `HEAD`");
+    expect(why).not.toContain(CLAUDE_COPY);
+    expect(why).not.toContain("the guard on disk");
+  });
+});
+
+describe("assertNotLoosened — a --loosen write names what it loosened (review/67)", () => {
+  it("hands one line per guard copy it loosens: the mode from → to, and each act or branch dropped", async () => {
+    const root = tempDir().path("repo");
+    const other = GUARD_COPY_PATHS[1] ?? "";
+    await put(root, CLAUDE_COPY, guardText({ mode: "ask", deployingBranches: ["production"] }));
+    const lines: string[] = [];
+    await assertNotLoosened(root, setting(), {
+      loosen: true,
+      copies: { planned: [CLAUDE_COPY, other], baking: [CLAUDE_COPY, other] },
+      notice: (line) => lines.push(line),
+    });
+    expect(lines).toEqual(
+      [CLAUDE_COPY, other].map(
+        (path) =>
+          `loosened \`${path}\` with --loosen: mode \`ask\` → \`autonomous\`; \`pr-ready\` now runs unasked; \`tag\` now runs unasked; the deploying branch "production" is no longer named`,
+      ),
+    );
+  });
+
+  it("names nothing when the --loosen write loosens nothing", async () => {
+    const root = tempDir().path("repo");
+    await put(root, CLAUDE_COPY, guardText());
+    const lines: string[] = [];
+    await assertNotLoosened(root, setting({ mode: "ask" }), { loosen: true, copies: CLAUDE_ONLY, notice: (line) => lines.push(line) });
+    expect(lines).toEqual([]);
   });
 });
 
@@ -168,12 +374,14 @@ describe("guardCopySetting — a copy with no marker (decision D6)", () => {
   });
 
   it("reads a 1.16.0-shaped copy, with none of this release's guard text, as the upgrade default", () => {
+    // TEST CHANGE, justified: REQ-FLOW-138 — a 1.16.0 copy is now recognised by its title and inlined verdict (review/65); the fixture carries the verdict line 1.16.0's copy has.
     const old = [
       "#!/usr/bin/env node",
       "/* eslint-disable */",
       "// stamity — person-only shell guard.",
       "// Generated file — regenerate it rather than editing; local edits are overwritten.",
       'const STATE_SEGMENTS = [".stamity"];',
+      "const personOnlyVerdict = function personOnlyVerdict(command) { return command; };",
       "",
     ].join("\n");
     expect(guardCopySetting(old)).toEqual(setting());
@@ -194,7 +402,8 @@ describe("assertNotLoosened — the refusal", () => {
   it("refuses a looser setting with AUTONOMY_LOOSENED naming what loosens and the person's command", async () => {
     const root = tempDir().path("repo");
     await put(root, CLAUDE_COPY, guardText({ mode: "ask", deployingBranches: ["production"] }));
-    const refusal = await assertNotLoosened(root, setting(), { loosen: false, remedy: "stamity sync --loosen" }).then(
+    // TEST CHANGE, justified: REQ-FLOW-138 — the gate now takes the planned guard copies it reads (review/65).
+    const refusal = await assertNotLoosened(root, setting(), { loosen: false, copies: CLAUDE_ONLY, remedy: "stamity sync --loosen" }).then(
       () => null,
       (error: unknown) => error,
     );
@@ -211,15 +420,17 @@ describe("assertNotLoosened — the refusal", () => {
   it("lets the same looser setting through with `loosen`, and a tighter one through without it", async () => {
     const root = tempDir().path("repo");
     await put(root, CLAUDE_COPY, guardText({ mode: "ask" }));
-    await expect(assertNotLoosened(root, setting(), { loosen: true })).resolves.toBeUndefined();
+    // TEST CHANGE, justified: REQ-FLOW-138 — the gate now takes the planned guard copies it reads (review/65).
+    await expect(assertNotLoosened(root, setting(), { loosen: true, copies: CLAUDE_ONLY })).resolves.toBeUndefined();
     await put(root, CLAUDE_COPY, guardText());
-    await expect(assertNotLoosened(root, setting({ mode: "ask" }), { loosen: false })).resolves.toBeUndefined();
+    await expect(assertNotLoosened(root, setting({ mode: "ask" }), { loosen: false, copies: CLAUDE_ONLY })).resolves.toBeUndefined();
   });
 
   it("refuses dropping `workflow-dispatch` from the deploying acts", async () => {
     const root = tempDir().path("repo");
     await put(root, CLAUDE_COPY, guardText({ deployingActs: ["workflow-dispatch"] }));
-    await expect(assertNotLoosened(root, setting(), { loosen: false })).rejects.toMatchObject({
+    // TEST CHANGE, justified: REQ-FLOW-138 — the gate now takes the planned guard copies it reads (review/65).
+    await expect(assertNotLoosened(root, setting(), { loosen: false, copies: CLAUDE_ONLY })).rejects.toMatchObject({
       code: "AUTONOMY_LOOSENED",
       message: expect.stringContaining("`workflow-dispatch` would no longer be named as deploying") as unknown,
     });
@@ -236,6 +447,7 @@ describe("gateGuardCopies — only a guard copy whose marker changes is gated", 
     return {
       seen,
       gate: async (next) => {
+        // TEST CHANGE, justified: REQ-FLOW-138 — GuardGate also takes the copies (review/65, review/67); this recorder reads only the setting.
         seen.push(next);
       },
     };
@@ -251,7 +463,8 @@ describe("gateGuardCopies — only a guard copy whose marker changes is gated", 
       [
         // The body changed, the marker did not: a write that does not change the setting needs no gate.
         { path: CLAUDE_COPY, content: `${onDisk}\n// a later body\n` },
-        { path: "AGENTS.md", content: `${MARKER}{"mode":"autonomous"}\n` },
+        // TEST CHANGE, justified: REQ-FLOW-138 — a planned output name no tracked file has, so the test-input guard reads no repository file here (it was red on a38c554a).
+        { path: "not-a-guard.md", content: `${MARKER}{"mode":"autonomous"}\n` },
       ],
       [recordedRow(CLAUDE_COPY, onDisk)],
       gate,
@@ -296,7 +509,32 @@ describe("gateGuardCopies — only a guard copy whose marker changes is gated", 
     await gateGuardCopies(root, [{ path: CLAUDE_COPY, content: guardText() }], [], gate);
     expect(seen).toEqual([setting()]);
     // And the baseline that copy gives refuses the write.
-    await expect(assertNotLoosened(root, setting(), { loosen: false })).rejects.toMatchObject({ code: "AUTONOMY_LOOSENED" });
+    // TEST CHANGE, justified: REQ-FLOW-138 — the gate now takes the planned guard copies it reads (review/65).
+    await expect(assertNotLoosened(root, setting(), { loosen: false, copies: CLAUDE_ONLY })).rejects.toMatchObject({ code: "AUTONOMY_LOOSENED" });
+  });
+
+  it("hands the gate every planned guard path and the ones baking the setting asked about (review/65, review/67)", async () => {
+    const root = tempDir().path("repo");
+    const calls: [ResolvedAutonomy, GuardCopies][] = [];
+    const tagged = GUARD_COPY_PATHS[2] ?? "";
+    await gateGuardCopies(
+      root,
+      [
+        { path: CLAUDE_COPY, content: guardText() },
+        { path: "not-a-guard.txt", content: "not a guard\n" },
+        { path: GUARD_COPY_PATHS[1] ?? "", content: guardText() },
+        { path: tagged, content: guardText({ deployingActs: ["tag"] }) },
+      ],
+      [],
+      async (next, copies) => {
+        calls.push([next, copies]);
+      },
+    );
+    const planned = [CLAUDE_COPY, GUARD_COPY_PATHS[1] ?? "", tagged];
+    expect(calls).toEqual([
+      [setting(), { planned, baking: [CLAUDE_COPY, GUARD_COPY_PATHS[1] ?? ""] }],
+      [setting({ deployingActs: ["tag"] }), { planned, baking: [tagged] }],
+    ]);
   });
 
   it("stops at the first refusal and lets it through unchanged", async () => {
@@ -352,11 +590,35 @@ function callArguments(text: string, name: string): string[] {
   return calls;
 }
 
+/** How a command reads its own `--loosen` flag into a boolean. */
+const FLAG_READ = 'opts["loosen"] === true';
+
+/**
+ * Where a gate's `loosen` value comes from, or `null` when it is not the
+ * command's own `--loosen` flag: written in place as {@link FLAG_READ}; the
+ * shorthand `loosen` of a `const loosen = <FLAG_READ>` in the same file; or
+ * `opts.loosen` in a file that hands {@link FLAG_READ} on as `loosen:` (the
+ * workspace bridge). Any literal, or any other expression, is `null`.
+ */
+function loosenSource(call: string, text: string): string | null {
+  const gate = callArguments(call, "assertNotLoosened")[0] ?? "";
+  const value = /\bloosen(?:\s*:\s*([^,}\n]+?))?\s*[,}\n]/.exec(gate.slice(gate.indexOf("{")));
+  if (value === null) return null;
+  const expression = (value[1] ?? "loosen").trim();
+  if (expression === FLAG_READ) return expression;
+  if (expression === "loosen") return text.includes(`const loosen = ${FLAG_READ};`) ? expression : null;
+  if (expression === "opts.loosen") return text.includes(`loosen: ${FLAG_READ}`) ? expression : null;
+  return null;
+}
+
 /**
  * The census rule: every call of `applySync` or `applyInit` either passes a
  * `guardGate` built on `assertNotLoosened` or passes none, and so takes the
- * loop's strict default. A call passing some other gate is named. The two
- * loops themselves must keep the strict default.
+ * loop's strict default. A call passing some other gate is named, and so is
+ * one whose `loosen` is not read from its command's own `--loosen` flag (a
+ * literal `true` lets every loosening through, review/62), or whose file
+ * declares no `--loosen` option. The two loops themselves must keep the
+ * strict default.
  */
 function censusFindings(files: ReadonlyMap<string, string>): string[] {
   const findings: string[] = [];
@@ -364,7 +626,12 @@ function censusFindings(files: ReadonlyMap<string, string>): string[] {
     for (const loop of ["applySync", "applyInit"]) {
       for (const call of callArguments(text, loop)) {
         if (!call.includes("guardGate")) continue;
-        if (!/guardGate:\s*\(next\)\s*=>\s*assertNotLoosened\(/.test(call)) findings.push(`${path}: ${loop} passes a gate not built on assertNotLoosened`);
+        if (!/guardGate:\s*\(next, copies\)\s*=>\s*assertNotLoosened\(/.test(call)) {
+          findings.push(`${path}: ${loop} passes a gate not built on assertNotLoosened`);
+          continue;
+        }
+        if (loosenSource(call, text) === null) findings.push(`${path}: ${loop} passes a gate whose loosen is not the command's --loosen flag`);
+        if (!/\.option\(\s*"--loosen"/.test(text)) findings.push(`${path}: ${loop} passes a gate but the command declares no --loosen option`);
       }
     }
   }
@@ -397,6 +664,40 @@ describe("census — every caller of the two write loops passes the gate or take
       );
       expect(passes, path).toBe(kind === "gate");
     }
+  });
+
+  it("reads each caller's loosen from its own --loosen flag (review/62)", async () => {
+    const files = await sourceFiles();
+    const sources = Object.keys(LOOP_CALLERS).map((path) => {
+      const text = files.get(path) ?? "";
+      const calls = [...callArguments(text, "applySync"), ...callArguments(text, "applyInit")];
+      return [path, calls.map((call) => loosenSource(call, text))];
+    });
+    expect(Object.fromEntries(sources)).toEqual({
+      "src/cli/commands/sync.ts": ["loosen"],
+      "src/cli/commands/init.ts": [FLAG_READ],
+      "src/cli/commands/workspace.ts": ["opts.loosen"],
+    });
+  });
+
+  it("fails on a caller whose gate passes a literal loosen, or one with no --loosen option", async () => {
+    const files = new Map(await sourceFiles());
+    files.set(
+      "src/cli/commands/upgrade.ts",
+      [
+        'cmd.option("--loosen", "…");',
+        "await applySync(root, plan, { engineVersion, force, dryRun, guardGate: (next, copies) => assertNotLoosened(root, next, { loosen: true, copies }) });",
+        "",
+      ].join("\n"),
+    );
+    files.set(
+      "src/cli/commands/other.ts",
+      'const loosen = opts["loosen"] === true;\nawait applyInit({ guardGate: (next, copies) => assertNotLoosened(root, next, { loosen, copies }) });\n',
+    );
+    expect(censusFindings(files)).toEqual([
+      "src/cli/commands/upgrade.ts: applySync passes a gate whose loosen is not the command's --loosen flag",
+      "src/cli/commands/other.ts: applyInit passes a gate but the command declares no --loosen option",
+    ]);
   });
 
   it("fails on a caller that passes a gate letting everything through, and on a loop that drops its default", async () => {

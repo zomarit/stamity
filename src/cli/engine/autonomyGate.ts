@@ -10,14 +10,12 @@ import {
   strictestAutonomy,
   type ResolvedAutonomy,
 } from "../../config/autonomy.ts";
-import { CLAUDE_HOOKS_DIR } from "../../hooks/model.ts";
 import { PERSON_ONLY_GUARD_FILE } from "../../hooks/scripts.ts";
 import { gitDiscoveryMeetsBareShape } from "../../merge/safeWrite.ts";
 import { gitProgramFor } from "../../shared/programPath.ts";
-import { TOOLS } from "../../types/core.ts";
 import { EngineError } from "../../types/errors.ts";
 import { DEPLOYING_ACTS, MANIFEST_FILE } from "../../types/manifest.ts";
-import { HOOKS_GENERATED_DIR, STATE_DIR } from "../../types/markers.ts";
+import { STATE_DIR } from "../../types/markers.ts";
 
 /**
  * The loosen gate (REQ-FLOW-138, the CLI half; the guard's half reads
@@ -34,10 +32,11 @@ import { HOOKS_GENERATED_DIR, STATE_DIR } from "../../types/markers.ts";
  * none gets {@link strictGuardGate}, so leaving the gate out never loosens.
  *
  * The baseline a write is compared against ({@link readBaseline}) is the
- * strictest of three legs (decision D18): every guard copy on disk, the
- * `autonomy` committed at `HEAD`, and the manifest on disk before the write.
- * Every leg that cannot be read reads as the strictest setting it can state:
- * mode `ask` with every act named.
+ * strictest of three legs (decision D18): the guard copies on disk at the
+ * paths this write plans for the selected clients, the `autonomy` committed at
+ * `HEAD` (with HEAD's guard copies at those paths when none is on disk), and
+ * the manifest on disk before the write. Every leg that cannot be read reads
+ * as the strictest setting it can state: mode `ask` with every act named.
  *
  * Wave 13, below the wave-14 loops that import it, so it takes nothing from
  * the CLI kit: it throws an `EngineError` (the funnel renders its `why` and
@@ -46,16 +45,21 @@ import { HOOKS_GENERATED_DIR, STATE_DIR } from "../../types/markers.ts";
  * theirs.
  */
 
+/**
+ * The guard copies one gate call is about: `planned`, every guard path the
+ * write plans (the selected clients' copies, the only ones the baseline
+ * reads), and `baking`, the planned paths that would bake the setting asked
+ * about.
+ */
+export interface GuardCopies {
+  readonly planned: readonly string[];
+  readonly baking: readonly string[];
+}
+
 /** What a write loop calls for a planned guard copy whose marker changes: resolves to let it land, throws to refuse. */
-export type GuardGate = (next: ResolvedAutonomy) => Promise<void>;
+export type GuardGate = (next: ResolvedAutonomy, copies: GuardCopies) => Promise<void>;
 
-/** Every place in a repository a person-only guard copy lands: Claude Code's copy, then each client's generated one. */
-export const GUARD_COPY_PATHS: readonly string[] = [
-  `${CLAUDE_HOOKS_DIR}/${PERSON_ONLY_GUARD_FILE}`,
-  ...TOOLS.map((tool) => `${HOOKS_GENERATED_DIR}/${tool}/${PERSON_ONLY_GUARD_FILE}`),
-];
-
-/** Mode `ask` with nothing named: what a marker-less copy of this release, or no copy beside a committed manifest, reads as. */
+/** Mode `ask` with nothing named: what a marker-less copy of this release, or no copy on disk or at HEAD beside a committed manifest, reads as. */
 const ASK: ResolvedAutonomy = resolveAutonomy({ autonomy: { mode: "ask" } });
 
 /** Mode `ask` with every act named: what a leg reads as when it is there but cannot be read. */
@@ -67,7 +71,7 @@ const GUARD_COPY_MAX_BYTES = 1024 * 1024;
 /** Past this many bytes a manifest (ledger included) reads {@link UNREADABLE}. */
 const MANIFEST_MAX_BYTES = 64 * 1024 * 1024;
 
-/** Wall time for the one `git show`; a git that does not answer in time reads as one that could not run. */
+/** Wall time for each git read; a git that does not answer in time reads as one that could not run. */
 const GIT_SHOW_TIMEOUT_MS = 10_000;
 
 /** What starts a marker line; the setting's JSON follows (`../../config/autonomy.ts`). */
@@ -80,6 +84,10 @@ const MARKER_PREFIX = "// stamity-autonomy ";
  */
 const BANNER_SENTENCE = "The autonomy setting this copy was written for";
 const BAKED_CONSTANT = /^const AUTONOMY = (.*);\s*$/m;
+
+/** What a 1.16.0 guard copy carries: its header's title line and the verdict it inlines. Text with neither shape is no guard the gate knows. */
+const GUARD_TITLE_LINE = /^\/\/ stamity — person-only shell guard\.\r?$/m;
+const GUARD_VERDICT_LINE = /^const personOnlyVerdict = /m;
 
 /** A regular file's text, `null` when nothing is there, `undefined` when something is there that cannot be read as one. */
 async function readRegularFile(path: string, maxBytes: number): Promise<string | null | undefined> {
@@ -113,15 +121,17 @@ function bakedSetting(text: string): ResolvedAutonomy | null {
  * line(s) and its baked constant, so neither edited alone loosens it. With no
  * marker: a copy carrying this release's guard text reads `ask` (its marker
  * was removed), together with the baked constant when there is one; a copy
- * carrying neither is a 1.16.0-or-older copy and reads as the upgrade default
- * (decision D6).
+ * carrying neither but a 1.16.0 guard's title and verdict is a 1.16.0 copy and
+ * reads as the upgrade default (decision D6); any other text at a guard path
+ * is no guard the gate can read, and reads {@link UNREADABLE}.
  */
 export function guardCopySetting(text: string): ResolvedAutonomy {
   const marked = parseAutonomyMarker(text);
   const baked = bakedSetting(text);
   if (marked !== null) return baked === null ? marked : strictestAutonomy(marked, baked);
   if (baked !== null) return strictestAutonomy(ASK, baked);
-  return text.includes(BANNER_SENTENCE) ? ASK : resolveAutonomy({});
+  if (text.includes(BANNER_SENTENCE)) return ASK;
+  return GUARD_TITLE_LINE.test(text) && GUARD_VERDICT_LINE.test(text) ? resolveAutonomy({}) : UNREADABLE;
 }
 
 /** The `autonomy` a manifest's JSON text resolves to; text that is not a JSON object reads {@link UNREADABLE}. */
@@ -146,41 +156,62 @@ function gitReadEnv(): NodeJS.ProcessEnv {
   return env;
 }
 
-/** What `HEAD` holds at the manifest's path: its text, `absent` (git answered: no such file, commit or repository), or `unknown` (git did not run or answer). */
-type HeadManifest = { kind: "present"; text: string } | { kind: "absent" } | { kind: "unknown" };
+/** One git read's answer: its stdout, or the exit code (`null` when git did not run, timed out or was killed). */
+type GitAnswer = { ok: true; stdout: string } | { ok: false; code: number | null };
 
 /**
- * `git show HEAD:./.stamity/manifest.json` from the setup root, through the
- * hardened construction the CLI's other git reads use: git by absolute path,
- * no `GIT_*` variable, a bare-shaped folder refused, no file-system monitor and
- * no text conversion.
+ * One git read from the setup root, through the hardened construction the
+ * CLI's other git reads use: git by absolute path, no `GIT_*` variable, a
+ * bare-shaped folder refused, no file-system monitor.
  */
-function readHeadManifest(rootDir: string): Promise<HeadManifest> {
-  if (gitDiscoveryMeetsBareShape(rootDir)) return Promise.resolve({ kind: "unknown" });
+function runGit(rootDir: string, args: readonly string[]): Promise<GitAnswer> {
+  if (gitDiscoveryMeetsBareShape(rootDir)) return Promise.resolve({ ok: false, code: null });
   const env = gitReadEnv();
-  const args = [
-    "-c",
-    "safe.bareRepository=explicit",
-    "-c",
-    "core.fsmonitor=false",
-    "show",
-    "--no-textconv",
-    `HEAD:./${STATE_DIR}/${MANIFEST_FILE}`,
-  ];
   const git = gitProgramFor(rootDir, env);
-  if (git === null) return Promise.resolve({ kind: "unknown" });
+  if (git === null) return Promise.resolve({ ok: false, code: null });
   return new Promise((resolvePromise) => {
     execFile(
       git,
-      args,
+      ["-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", ...args],
       { cwd: rootDir, env, encoding: "utf8", timeout: GIT_SHOW_TIMEOUT_MS, maxBuffer: MANIFEST_MAX_BYTES, windowsHide: true },
       (error, stdout) => {
-        if (error === null) resolvePromise({ kind: "present", text: stdout });
-        // A numeric exit code is git answering: no repository, no commit, or no such path at `HEAD`.
-        else resolvePromise(typeof error.code === "number" ? { kind: "absent" } : { kind: "unknown" });
+        if (error === null) resolvePromise({ ok: true, stdout });
+        else resolvePromise({ ok: false, code: typeof error.code === "number" ? error.code : null });
       },
     );
   });
+}
+
+/**
+ * What `HEAD` holds at `paths` (relative to the setup root): `null` when git
+ * gave no answer it means (it did not run, refused the repository, or failed
+ * in any way but the one below), else each path `HEAD` tracks, mapped to its
+ * text (`undefined` when it is not a regular file or its bytes could not be
+ * read). An empty map is git's own answer that none is there: `HEAD` names no
+ * commit (`rev-parse --verify -q` exits 1, an unborn branch), or `ls-tree`
+ * lists none of them.
+ */
+async function readHead(rootDir: string, paths: readonly string[]): Promise<Map<string, string | undefined> | null> {
+  const found = new Map<string, string | undefined>();
+  const head = await runGit(rootDir, ["rev-parse", "--verify", "-q", "HEAD^{commit}"]);
+  if (!head.ok) return head.code === 1 ? found : null;
+  const listed = await runGit(rootDir, ["ls-tree", "-z", "HEAD", "--", ...paths]);
+  if (!listed.ok) return null;
+  for (const entry of listed.stdout.split("\0")) {
+    const tab = entry.indexOf("\t");
+    if (tab < 0) continue;
+    const [mode, type, oid] = entry.slice(0, tab).split(" ");
+    const path = entry.slice(tab + 1);
+    if (!paths.includes(path)) continue;
+    if (type !== "blob" || (mode !== "100644" && mode !== "100755") || oid === undefined) {
+      found.set(path, undefined);
+      continue;
+    }
+    // oxlint-disable-next-line no-await-in-loop -- the manifest and a handful of guard copies
+    const blob = await runGit(rootDir, ["cat-file", "blob", oid]);
+    found.set(path, blob.ok ? blob.stdout : undefined);
+  }
+  return found;
 }
 
 /** True when `rootDir` or a folder above it holds a `.git` entry: a checkout whose `HEAD` git could not be asked about. */
@@ -194,72 +225,122 @@ function insideCheckout(rootDir: string): boolean {
   }
 }
 
-/**
- * The setting a write is checked against (decision D18): the strictest of
- * every guard copy on disk ({@link GUARD_COPY_PATHS}, read by
- * {@link guardCopySetting}), the `autonomy` committed at `HEAD`, and the
- * manifest on disk before the write. With no guard copy on disk while `HEAD`
- * holds a manifest, the copies' leg reads `ask`, so deleting them loosens
- * nothing. A `HEAD` git could not be asked about inside a checkout reads as the
- * strictest setting. With no leg at all — a first `init` — it is the default.
- */
-export async function readBaseline(rootDir: string): Promise<ResolvedAutonomy> {
-  const legs: ResolvedAutonomy[] = [];
-  const copies = await Promise.all(GUARD_COPY_PATHS.map((path) => readRegularFile(join(rootDir, path), GUARD_COPY_MAX_BYTES)));
+/** One leg of the baseline: the setting it reads as, and what it is, in the words a refusal names it by. */
+interface BaselineLeg {
+  readonly source: string;
+  readonly setting: ResolvedAutonomy;
+}
+
+/** The manifest's path from the setup root, as git and the file system both take it. */
+const MANIFEST_REL = `${STATE_DIR}/${MANIFEST_FILE}`;
+
+/** Every leg {@link readBaseline} takes the strictest of, each named. */
+async function baselineLegs(rootDir: string, copyPaths: readonly string[]): Promise<BaselineLeg[]> {
+  const legs: BaselineLeg[] = [];
+  const copies = await Promise.all(copyPaths.map((path) => readRegularFile(join(rootDir, ...path.split("/")), GUARD_COPY_MAX_BYTES)));
   let copiesFound = 0;
-  for (const text of copies) {
-    if (text === null) continue;
+  copies.forEach((text, index) => {
+    if (text === null) return;
     copiesFound += 1;
-    legs.push(text === undefined ? UNREADABLE : guardCopySetting(text));
-  }
-  const head = await readHeadManifest(rootDir);
-  if (head.kind === "present") {
-    legs.push(manifestSetting(head.text));
-    if (copiesFound === 0) legs.push(ASK);
-  } else if (head.kind === "unknown" && insideCheckout(rootDir)) {
-    legs.push(UNREADABLE);
+    legs.push({ source: `the guard copy \`${copyPaths[index] ?? ""}\` on disk`, setting: text === undefined ? UNREADABLE : guardCopySetting(text) });
+  });
+  const head = await readHead(rootDir, copiesFound === 0 ? [MANIFEST_REL, ...copyPaths] : [MANIFEST_REL]);
+  if (head === null) {
+    if (insideCheckout(rootDir)) legs.push({ source: "`HEAD`, which git did not answer for", setting: UNREADABLE });
+  } else {
+    if (head.has(MANIFEST_REL)) {
+      const text = head.get(MANIFEST_REL);
+      legs.push({ source: "the setting committed at `HEAD`", setting: text === undefined ? UNREADABLE : manifestSetting(text) });
+    }
+    let headCopies = 0;
+    for (const path of copiesFound === 0 ? copyPaths : []) {
+      if (!head.has(path)) continue;
+      headCopies += 1;
+      const text = head.get(path);
+      legs.push({ source: `the guard copy \`${path}\` committed at \`HEAD\``, setting: text === undefined ? UNREADABLE : guardCopySetting(text) });
+    }
+    if (copiesFound === 0 && headCopies === 0 && head.has(MANIFEST_REL)) {
+      legs.push({ source: "no guard copy found on disk or at `HEAD` beside the setup committed there (read as `ask`)", setting: ASK });
+    }
   }
   const disk = await readRegularFile(join(rootDir, STATE_DIR, MANIFEST_FILE), MANIFEST_MAX_BYTES);
-  if (disk !== null) legs.push(disk === undefined ? UNREADABLE : manifestSetting(disk));
-  const [first, ...rest] = legs;
+  if (disk !== null) legs.push({ source: "the manifest on disk", setting: disk === undefined ? UNREADABLE : manifestSetting(disk) });
+  return legs;
+}
+
+/** The strictest of `legs`, or the default when there is none. */
+function strictestOf(legs: readonly BaselineLeg[]): ResolvedAutonomy {
+  const [first, ...rest] = legs.map((leg) => leg.setting);
   return first === undefined ? resolveAutonomy({}) : strictestAutonomy(first, ...rest);
 }
 
-/** One line per way `next` is looser than `baseline`, for the refusal's message. Names are JSON-quoted: they may come from an unchecked file. */
-function looserParts(next: ResolvedAutonomy, baseline: ResolvedAutonomy): string[] {
+/**
+ * The setting a write is checked against (decision D18): the strictest of
+ * the guard copies on disk at `copyPaths` (the guard paths the write plans for
+ * the selected clients; a file at any other path is not read), the `autonomy`
+ * committed at `HEAD`, and the manifest on disk before the write. With no
+ * guard copy on disk, the copies committed at `HEAD` at `copyPaths` stand in
+ * for them; with none there either while `HEAD` holds a manifest, the copies'
+ * leg reads `ask`, so deleting them loosens nothing. Inside a checkout, only
+ * git's own answer that a path is not at `HEAD` reads as "not there"; a git
+ * that refuses or fails reads as the strictest setting. With no leg at all — a
+ * first `init` — it is the default.
+ */
+export async function readBaseline(rootDir: string, copyPaths: readonly string[]): Promise<ResolvedAutonomy> {
+  return strictestOf(await baselineLegs(rootDir, copyPaths));
+}
+
+/**
+ * One line per way `next` is looser than `baseline`: for the refusal's
+ * message ("would"), or for the notice a `--loosen` write prints (`done`).
+ * Names are JSON-quoted: they may come from an unchecked file.
+ */
+function looserParts(next: ResolvedAutonomy, baseline: ResolvedAutonomy, done = false): string[] {
   const parts: string[] = [];
-  if (next.mode === "autonomous" && baseline.mode === "ask") parts.push("mode `autonomous` over `ask`");
-  for (const act of next.runs) if (!baseline.runs.includes(act)) parts.push(`\`${act}\` would run unasked`);
-  for (const act of baseline.deploying) if (!next.deploying.includes(act)) parts.push(`\`${act}\` would no longer be named as deploying`);
+  if (next.mode === "autonomous" && baseline.mode === "ask") parts.push(done ? "mode `ask` → `autonomous`" : "mode `autonomous` over `ask`");
+  const runs = done ? "now runs unasked" : "would run unasked";
+  const dropped = done ? "is no longer named" : "would no longer be named";
+  for (const act of next.runs) if (!baseline.runs.includes(act)) parts.push(`\`${act}\` ${runs}`);
+  for (const act of baseline.deploying) if (!next.deploying.includes(act)) parts.push(`\`${act}\` ${dropped} as deploying`);
   // Compared as `loosens` compares them: case folded, a `refs/heads/` prefix dropped.
   const key = (name: string): string => name.toLowerCase().replace(/^refs\/heads\//, "");
   const kept = new Set(next.deployingBranches.map(key));
   for (const name of baseline.deployingBranches) {
-    if (!kept.has(key(name))) parts.push(`the deploying branch ${JSON.stringify(name)} would no longer be named`);
+    if (!kept.has(key(name))) parts.push(`the deploying branch ${JSON.stringify(name)} ${dropped}`);
   }
   return parts;
 }
 
 /**
- * Refuses a write that would bake `next` when it is looser than
- * {@link readBaseline}'s answer (`loosens`, `../../config/autonomy.ts`), unless
- * `opts.loosen`: an `EngineError` coded `AUTONOMY_LOOSENED` (exit 1). `remedy`
- * is the command line its `next` names (the caller's own, with `--loosen`).
+ * Refuses a write that would bake `next` into the guard copies `opts.copies`
+ * names when it is looser than {@link readBaseline}'s answer over the planned
+ * copies (`loosens`, `../../config/autonomy.ts`), unless `opts.loosen`: an
+ * `EngineError` coded `AUTONOMY_LOOSENED` (exit 1), whose `why` names each leg
+ * that is stricter. `remedy` is the command line its `next` names (the
+ * caller's own, with `--loosen`). Under `opts.loosen` the loosening goes
+ * through and `opts.notice` is handed one line per guard copy it loosens,
+ * naming what loosens, so the person sees what their `--loosen` let through.
  */
 export async function assertNotLoosened(
   rootDir: string,
   next: ResolvedAutonomy,
-  opts: { loosen: boolean; remedy?: string },
+  opts: { loosen: boolean; copies: GuardCopies; remedy?: string; notice?: (line: string) => void },
 ): Promise<void> {
-  if (opts.loosen) return;
-  const baseline = await readBaseline(rootDir);
+  const legs = await baselineLegs(rootDir, opts.copies.planned);
+  const baseline = strictestOf(legs);
   if (!loosens(next, baseline)) return;
+  if (opts.loosen) {
+    const parts = looserParts(next, baseline, true).join("; ");
+    for (const path of opts.copies.baking) opts.notice?.(`loosened \`${path}\` with --loosen: ${parts === "" ? "the autonomy setting" : parts}`);
+    return;
+  }
   const parts = looserParts(next, baseline);
+  const deciding = legs.filter((leg) => loosens(next, leg.setting)).map((leg) => leg.source);
   throw new EngineError(
     `This write would bake a looser autonomy setting into the guard than the one in force${parts.length === 0 ? "" : `: ${parts.join("; ")}`}. Nothing was written.`,
     {
       code: "AUTONOMY_LOOSENED",
-      why: "the guard on disk, the setting committed at HEAD or the manifest this write replaces is stricter, and loosening it is the person's act",
+      why: `${deciding.length === 0 ? "the baseline" : deciding.join("; ")} ${deciding.length > 1 ? "are" : "is"} stricter, and loosening it is the person's act`,
       next: `the person runs \`${opts.remedy ?? "sync --loosen"}\``,
     },
   );
@@ -267,7 +348,7 @@ export async function assertNotLoosened(
 
 /** The gate a write loop runs when its caller passed none: {@link assertNotLoosened} with no `--loosen`. */
 export function strictGuardGate(rootDir: string, remedy: string): GuardGate {
-  return (next) => assertNotLoosened(rootDir, next, { loosen: false, remedy });
+  return (next, copies) => assertNotLoosened(rootDir, next, { loosen: false, copies, remedy });
 }
 
 /** True when `text` is bytes the ledger recorded for `path`: the engine's own last write, not an edit since. */
@@ -303,7 +384,8 @@ export async function gateGuardCopies(
   recorded: readonly { readonly path: string; readonly contentHash?: string }[],
   gate: GuardGate,
 ): Promise<void> {
-  const settings = new Map<string, ResolvedAutonomy>();
+  const settings = new Map<string, { next: ResolvedAutonomy; baking: string[] }>();
+  const plannedPaths = outputs.filter((output) => output.path.split("/").at(-1) === PERSON_ONLY_GUARD_FILE).map((output) => output.path);
   for (const output of outputs) {
     if (output.path.split("/").at(-1) !== PERSON_ONLY_GUARD_FILE) continue;
     // oxlint-disable-next-line no-await-in-loop -- a handful of guard copies, read in plan order
@@ -313,10 +395,13 @@ export async function gateGuardCopies(
       continue;
     }
     const next = parseAutonomyMarker(output.content) ?? resolveAutonomy({});
-    settings.set(JSON.stringify(next), next);
+    const key = JSON.stringify(next);
+    const seen = settings.get(key);
+    if (seen === undefined) settings.set(key, { next, baking: [output.path] });
+    else seen.baking.push(output.path);
   }
-  for (const next of settings.values()) {
+  for (const { next, baking } of settings.values()) {
     // oxlint-disable-next-line no-await-in-loop -- one refusal is the answer; the second is not asked
-    await gate(next);
+    await gate(next, { planned: plannedPaths, baking });
   }
 }

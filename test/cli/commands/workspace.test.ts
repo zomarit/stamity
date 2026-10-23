@@ -2005,5 +2005,7 @@ describe("workspace sync — a loosened member manifest needs --loosen", () => {
 
     expect(passed.code, passed.stdout).toBe(0);
     expect(await readFile(join(api, GUARD_COPY), "utf8")).toContain('// stamity-autonomy {"mode":"autonomous"');
+    // TEST CHANGE, justified: REQ-FLOW-138 — a --loosen run now names, per member, what it loosened (review/67).
+    expect(passed.stderr).toContain(`apps/api: loosened \`${GUARD_COPY}\` with --loosen: mode \`ask\` → \`autonomous\``);
   });
 });

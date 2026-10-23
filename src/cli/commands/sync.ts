@@ -259,7 +259,9 @@ export const syncCommand: CommandModule = {
       dryRun: ctx.dryRun,
       now: ctx.app.runtime.clock.now(),
       // The loosen gate (REQ-FLOW-138): `--loosen` is the person's word, which the guard asks for.
-      guardGate: (next) => assertNotLoosened(rootDir, next, { loosen, remedy: packageCommand("sync --loosen") }),
+      // Under `--loosen`, each guard copy it loosens is named on stderr.
+      guardGate: (next, copies) =>
+        assertNotLoosened(rootDir, next, { loosen, copies, remedy: packageCommand("sync --loosen"), notice: (line) => ctx.io.err(`${line}\n`) }),
     });
     ctx.spinner.stop();
     if (report.modelListCacheWarning !== undefined) ctx.io.err(`warning: ${report.modelListCacheWarning}\n`);

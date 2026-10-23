@@ -1227,8 +1227,14 @@ export const initCommand: CommandModule = {
       // off switch and the client lookup both answer to it (REQ-LADDER-006).
       env: ctx.app.runtime.env,
       // The loosen gate (REQ-FLOW-138): `--loosen` is the person's word, which the guard asks for.
-      guardGate: (next) =>
-        assertNotLoosened(rootDir, next, { loosen: opts["loosen"] === true, remedy: packageCommand("init --loosen") }),
+      // Under `--loosen`, each guard copy it loosens is named on stderr.
+      guardGate: (next, copies) =>
+        assertNotLoosened(rootDir, next, {
+          loosen: opts["loosen"] === true,
+          copies,
+          remedy: packageCommand("init --loosen"),
+          notice: (line) => ctx.io.err(`${line}\n`),
+        }),
     });
     const carry: CarryReport | null =
       migrating !== null

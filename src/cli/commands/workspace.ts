@@ -1097,8 +1097,14 @@ function createBridge(
       dryRun: ctx.dryRun,
       now: opts.now,
       // The loosen gate (REQ-FLOW-138), per member: `--loosen` is the person's word, which the guard asks for.
-      guardGate: (next) =>
-        assertNotLoosened(memberDir, next, { loosen: opts.loosen, remedy: packageCommand("workspace sync --loosen") }),
+      // Under `--loosen`, each guard copy it loosens is named on stderr, under the member's path.
+      guardGate: (next, copies) =>
+        assertNotLoosened(memberDir, next, {
+          loosen: opts.loosen,
+          copies,
+          remedy: packageCommand("workspace sync --loosen"),
+          notice: (line) => ctx.io.err(`${repo.path}: ${line}\n`),
+        }),
     });
     // An append to a file the operator owns is named, as the member's own sync names it.
     outcome.gitignoreAdded = [...(applied.gitignoreAdded ?? [])];

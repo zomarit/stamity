@@ -1387,7 +1387,9 @@ describe("sync — loosening the autonomy setting needs --loosen", () => {
   });
 
   it("refuses a committed looser manifest once the guard copies are deleted", async ({ skip }) => {
-    const root = await seedBaked();
+    // TEST CHANGE, justified: REQ-FLOW-138 — with no copy on disk the baseline now reads the copies committed at HEAD (review/56 sign-off), so the copy is baked `ask` and the looser manifest committed beside it; a default copy at HEAD is no stricter.
+    const root = await seedBaked({ mode: "ask" });
+    await setAutonomy(root);
     try {
       await seedGitRepo(root);
     } catch (error) {
@@ -1402,6 +1404,41 @@ describe("sync — loosening the autonomy setting needs --loosen", () => {
     expect(refused.code).toBe(1);
     expect((parseSingleDoc(refused.stdout)["error"] as { code: string }).code).toBe("AUTONOMY_LOOSENED");
     expect(existsSync(join(root, GUARD_COPY))).toBe(false);
+  });
+
+  it("refuses a committed manifest that drops the deploying lists once the guard copy is deleted (review/56, review/64)", async ({ skip }) => {
+    const root = await seedBaked({ deployingActs: ["workflow-dispatch"], deployingBranches: ["production"] });
+    // The manifest drops the lists and is committed with the copy that still names them.
+    await setAutonomy(root);
+    try {
+      await seedGitRepo(root);
+    } catch (error) {
+      if (error instanceof Error && error.name === "GitUnavailableError") skip();
+      throw error;
+    }
+    await rm(join(root, GUARD_COPY));
+    plannerOutputs.value = [guardOutput()];
+
+    const refused = await runSync(root, ["--json"]);
+
+    expect(refused.code).toBe(1);
+    const error = parseSingleDoc(refused.stdout)["error"] as { code: string; why: string };
+    expect(error.code).toBe("AUTONOMY_LOOSENED");
+    expect(error.why).toContain(`the guard copy \`${GUARD_COPY}\` committed at \`HEAD\``);
+    expect(existsSync(join(root, GUARD_COPY))).toBe(false);
+  });
+
+  it("names on stderr each guard copy a --loosen run loosened, and what it dropped (review/67)", async () => {
+    const root = await seedBaked({ mode: "ask", deployingBranches: ["production"] });
+    await setAutonomy(root);
+    plannerOutputs.value = [guardOutput()];
+
+    const loosened = await runSync(root, ["--loosen"]);
+
+    expect(loosened.code, loosened.stderr).toBe(0);
+    expect(loosened.stderr).toContain(
+      `loosened \`${GUARD_COPY}\` with --loosen: mode \`ask\` → \`autonomous\`; \`pr-ready\` now runs unasked; \`tag\` now runs unasked; the deploying branch "production" is no longer named`,
+    );
   });
 
   it("gates nothing when the guard copy's marker stays as it is, even with HEAD stricter", async ({ skip }) => {

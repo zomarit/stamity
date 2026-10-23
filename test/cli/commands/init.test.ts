@@ -3038,6 +3038,28 @@ describe("init — re-initialising after a full clean keeps the committed autono
     expect(existsSync(join(root, ".claude/hooks/stamity/stamity-person-only-guard.mjs"))).toBe(false);
   });
 
+  it("passes `init -y` after a full clean when the setup committed at HEAD is the default (review/56, review/64)", async ({ skip }) => {
+    const root = await makeRepo();
+    const first = await runInit(root, ["-y"]);
+    expect(first.code, first.stderr).toBe(0);
+    const guard = join(root, ".claude/hooks/stamity/stamity-person-only-guard.mjs");
+    expect(existsSync(guard)).toBe(true);
+    try {
+      await seedGitRepo(root);
+    } catch (error) {
+      if (error instanceof Error && error.name === "GitUnavailableError") skip();
+      throw error;
+    }
+    // What a full `clean` leaves: no state folder, no guard copy; HEAD holds the default setup and its copies.
+    await rm(join(root, STATE_DIR), { recursive: true, force: true });
+    await rm(guard);
+
+    const again = await runInit(root, ["-y", "--json"]);
+
+    expect(again.code, again.stdout).toBe(0);
+    expect(await readFile(guard, "utf8")).toContain('// stamity-autonomy {"mode":"autonomous"');
+  });
+
   it("writes the setup with `init -y --loosen`", async ({ skip }) => {
     const root = await cleanedRepoCommittedAsk(skip);
 
