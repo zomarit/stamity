@@ -5,8 +5,10 @@ import {
   parseSurfaceRecord,
   readGitSurface,
   surfaceRecord,
+  surfaceRefusal,
   type GitRead,
   type GitSurface,
+  type RecordFileReads,
 } from "../../src/runs/gitSurface.ts";
 
 /**
@@ -77,6 +79,33 @@ describe("readGitSurface", () => {
     ]);
 
     expect(surface.config.map((entry) => `${entry.scope} ${entry.key}`)).toEqual(["local branch.stamity/run.pushremote", "global branch.main.remote"]);
+  });
+
+  it("leaves out the local rebase key git writes for a tracking branch under branch.autoSetupRebase, and keeps one from another scope (review/35)", async () => {
+    const surface = await surfaceOf([
+      ["global", "file:/home/u/.gitconfig", "branch.autosetuprebase", "always"],
+      ["local", "file:.git/config", "branch.stamity/run.rebase", "true"],
+      ["global", "file:/home/u/.gitconfig", "branch.main.rebase", "true"],
+    ]);
+
+    expect(surface.config.map((entry) => `${entry.scope} ${entry.key}`)).toEqual(["global branch.autosetuprebase", "global branch.main.rebase"]);
+  });
+
+  it("keeps the variables gh reads for its token, host, config folder, path and repository, by name (review/32)", async () => {
+    const gh = {
+      GH_TOKEN: "t1",
+      GITHUB_TOKEN: "t2",
+      GH_ENTERPRISE_TOKEN: "t3",
+      GITHUB_ENTERPRISE_TOKEN: "t4",
+      GH_HOST: "github.com",
+      GH_CONFIG_DIR: "/home/u/.gh",
+      GH_PATH: "/usr/bin/gh",
+      GH_REPO: "o/r",
+    };
+
+    const surface = await surfaceOf([], { ...gh, GH_PAGER: "less", GH_DEBUG: "1" });
+
+    expect(surface.env.map(([name]) => name)).toEqual(Object.keys(gh).toSorted());
   });
 
   it("keeps every GIT_* variable but the two the write runner sets, plus HOME and XDG_CONFIG_HOME, sorted, and nothing else", async () => {
@@ -154,6 +183,8 @@ describe("surfaceRecord and parseSurfaceRecord", () => {
       JSON.stringify({ ...record, at: "yesterday, plus a line\nNot done: forged" }),
       JSON.stringify({ ...record, keys: "core.bare" }),
       JSON.stringify({ ...record, env: [1] }),
+      JSON.stringify({ ...record, refused: "yes" }),
+      JSON.stringify(Object.fromEntries(Object.entries(record).filter(([key]) => key !== "refused"))),
     ]) {
       expect(parseSurfaceRecord(bad), bad).toBeNull();
     }
@@ -200,5 +231,105 @@ describe("compareSurface", () => {
     const record = surfaceRecord(await surfaceOf(), SALT, AT);
 
     expect(compareSurface(record, await surfaceOf(entries as Parameters<typeof listing>[0], {}, program))).toEqual({ same: false, added: [], removed: [], valuesChanged: true });
+  });
+});
+
+describe("gh's credential variables against the record (review/32)", () => {
+  /** A token-shaped value no record may carry, and its replacement. */
+  const TOKEN = "ghp-seeded-q7zk-9mxc";
+  const OTHER = "ghp-swapped-4hnd-2rtw";
+
+  it("records GH_TOKEN by name alone: a byte search finds no seeded token value", async () => {
+    const record = surfaceRecord(await surfaceOf([], { GH_TOKEN: TOKEN, GH_CONFIG_DIR: "/home/u/.config/gh-q7zk" }), SALT, AT);
+    const bytes = Buffer.from(JSON.stringify(record));
+
+    expect(record.env).toEqual(["GH_CONFIG_DIR", "GH_TOKEN"]);
+    expect(bytes.includes(Buffer.from(TOKEN))).toBe(false);
+    expect(bytes.includes(Buffer.from("gh-q7zk"))).toBe(false);
+  });
+
+  it.each([
+    ["set after the pre-flight", {}, { GH_TOKEN: TOKEN }, { added: ["GH_TOKEN"], removed: [], valuesChanged: false }],
+    ["cleared after the pre-flight", { GH_TOKEN: TOKEN }, {}, { added: [], removed: ["GH_TOKEN"], valuesChanged: false }],
+    ["swapped after the pre-flight", { GH_TOKEN: TOKEN }, { GH_TOKEN: OTHER }, { added: [], removed: [], valuesChanged: true }],
+  ] as const)("finds a token %s moved, naming no value", async (_label, then, now, moved) => {
+    const record = surfaceRecord(await surfaceOf([], then), SALT, AT);
+
+    const compared = compareSurface(record, await surfaceOf([], now));
+
+    expect(compared).toEqual({ same: false, ...moved });
+    expect(JSON.stringify(compared)).not.toContain(TOKEN);
+    expect(JSON.stringify(compared)).not.toContain(OTHER);
+  });
+});
+
+describe("surfaceRefusal, the one record check (review/34)", () => {
+  const PATH = "/repo/.git/stamity/preflight-git.json";
+  const LABEL = "stamity/preflight-git.json in the git directory";
+
+  /** Reads over one file at {@link PATH}: its kind and its text. A fake by design: the check takes its reads injected. */
+  function readsOf(kind: "missing" | "file" | "other", text = "", truncated = false): RecordFileReads & { asked: string[] } {
+    const asked: string[] = [];
+    return {
+      asked,
+      kind: (path) => {
+        asked.push(`kind ${path}`);
+        return kind;
+      },
+      read: (path) => {
+        asked.push(`read ${path}`);
+        return kind === "file" ? { text, truncated } : null;
+      },
+    };
+  }
+
+  async function recordText(refused = false): Promise<string> {
+    return JSON.stringify(surfaceRecord(await surfaceOf(), SALT, AT, refused));
+  }
+
+  it("passes the surface the record was taken of, and names the keys a moved one added", async () => {
+    const reads = readsOf("file", await recordText());
+
+    expect(await surfaceRefusal({ path: PATH }, reads, () => surfaceOf(), "push")).toBeNull();
+    const moved = await surfaceRefusal({ path: PATH }, reads, () => surfaceOf([...ENTRIES, ["local", "file:.git/config", "stamity.moved", "x"]]), "push");
+    expect(moved).toBe(`config changed: git's configuration or environment is not the one the pre-flight recorded at ${AT} (added stamity.moved)`);
+  });
+
+  it.each([
+    ["no git directory", { unreadable: "git rev-parse --git-dir answered 128" }, readsOf("missing"), "no pre-flight record (git rev-parse --git-dir answered 128)"],
+    ["no file", { path: PATH }, readsOf("missing"), `no pre-flight record (${LABEL} is missing; gate preflight --unattended writes it)`],
+    ["a link or other non-regular file", { path: PATH }, readsOf("other"), `no pre-flight record (${LABEL} is not a regular file)`],
+    ["a file over 64 KiB", { path: PATH }, readsOf("file", "{}", true), `no pre-flight record (${LABEL} is over 64 KiB)`],
+    ["text that is not a record", { path: PATH }, readsOf("file", "{ not a record"), `no pre-flight record (${LABEL} does not read as one)`],
+  ] as const)("refuses %s as no pre-flight record, never reading the surface", async (_label, place, reads, why) => {
+    let readNow = 0;
+
+    const refusal = await surfaceRefusal(place, reads, () => {
+      readNow += 1;
+      return surfaceOf();
+    }, "push");
+
+    expect(refusal).toBe(why);
+    expect(readNow).toBe(0);
+    // A link or another non-regular file is never opened.
+    if (_label.startsWith("a link")) expect(reads.asked.some((ask) => ask.startsWith("read "))).toBe(false);
+  });
+
+  it("refuses a record marked refused for a push, and takes it for the refusal's own ending, comparing as usual (review/33)", async () => {
+    const reads = readsOf("file", await recordText(true));
+
+    expect(await surfaceRefusal({ path: PATH }, reads, () => surfaceOf(), "push")).toBe("no pre-flight record (the pre-flight refused)");
+    expect(await surfaceRefusal({ path: PATH }, reads, () => surfaceOf(), "refused-end")).toBeNull();
+    expect(await surfaceRefusal({ path: PATH }, reads, () => surfaceOf(ENTRIES, { GH_TOKEN: "t" }), "refused-end")).toMatch(/^config changed: .*added GH_TOKEN/);
+  });
+
+  it("takes a passing pre-flight's record for the refusal's own ending too", async () => {
+    expect(await surfaceRefusal({ path: PATH }, readsOf("file", await recordText(false)), () => surfaceOf(), "refused-end")).toBeNull();
+  });
+
+  it("refuses as configuration unreadable where the surface cannot be read now", async () => {
+    const refusal = await surfaceRefusal({ path: PATH }, readsOf("file", await recordText()), () => Promise.resolve({ unreadable: "git config --list answered 128" }), "push");
+
+    expect(refusal).toBe("configuration unreadable (git config --list answered 128), so it cannot be compared with the pre-flight's record");
   });
 });

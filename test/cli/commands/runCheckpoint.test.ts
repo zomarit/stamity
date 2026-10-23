@@ -272,14 +272,14 @@ describe("stamity run checkpoint", () => {
    * {@link run} gives the verb, so the verb compares like with like. The spy's record of the write runner's calls is
    * put back as it was, so a case reading every call the verb made sees the verb's alone.
    */
-  async function recordPreflight(repo: string, extra: Record<string, string> = {}): Promise<void> {
+  async function recordPreflight(repo: string, extra: Record<string, string | undefined> = {}, refused = false): Promise<void> {
     const mark = { argv: writes.argv.length, inputs: writes.inputs.length, groups: writes.groups.length };
     await underRunEnv(async () => {
       const place = await gitSurfaceRecordPath(repo);
       const surface = await readRunGitSurface(repo);
       if ("unreadable" in place || "unreadable" in surface) throw new Error("the seed's git surface could not be read");
       await mkdir(dirname(place.path), { recursive: true });
-      await writeFile(place.path, `${JSON.stringify(surfaceRecord(surface, randomBytes(16).toString("hex"), new Date().toISOString()))}\n`);
+      await writeFile(place.path, `${JSON.stringify(surfaceRecord(surface, randomBytes(16).toString("hex"), new Date().toISOString(), refused))}\n`);
     }, extra);
     writes.argv.length = mark.argv;
     writes.inputs.length = mark.inputs;
@@ -299,7 +299,7 @@ describe("stamity run checkpoint", () => {
    * TEST CHANGE, justified (REQ-FLOW-131): {@link run}'s environment, moved here unchanged so the seed's pre-flight
    * record is taken in the same one; `extra` is how a case sets a variable git reads from the process, not the verb.
    */
-  async function underRunEnv<T>(body: () => Promise<T>, extra: Record<string, string> = {}): Promise<T> {
+  async function underRunEnv<T>(body: () => Promise<T>, extra: Record<string, string | undefined> = {}): Promise<T> {
     const home = getRoot().path("home");
     await mkdir(home, { recursive: true });
     const overrides: Record<string, string | undefined> = { HOME: home, XDG_CONFIG_HOME: home, GIT_CONFIG_NOSYSTEM: "1", EMAIL: undefined };
@@ -321,7 +321,7 @@ describe("stamity run checkpoint", () => {
   }
 
   /** Runs the verb with `HOME` at an empty folder and no host identity, so only the repository's config decides. */
-  async function run(cwd: string, argv: readonly string[], env?: Record<string, string>, processEnv: Record<string, string> = {}) {
+  async function run(cwd: string, argv: readonly string[], env?: Record<string, string>, processEnv: Record<string, string | undefined> = {}) {
     return underRunEnv(async () => {
       const result = await runInProcess([runCommand], ["run", ...argv], { cwd, ...(env === undefined ? {} : { env }) });
       const envelope = argv.includes("--json") && result.stdout !== "" ? (JSON.parse(result.stdout) as Record<string, unknown>) : {};
@@ -3425,6 +3425,78 @@ describe("stamity run checkpoint", () => {
       expect(code).toBe(1);
       expect((doc["notDone"] as string[])[0]).toMatch(/^configuration unreadable \(git config --list answered 128\)/);
       expect(remoteHeads(remote)).toEqual(SEEDED);
+    });
+
+    it("refuses a checkpoint after a pre-flight that refused, its record marked refused (review/33)", async () => {
+      const { repo, remote, base } = await seed("unattended");
+      await recordPreflight(repo, {}, true);
+      await writeFile(join(repo, "a.txt"), "the unit's change\n");
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      expect(code).toBe(1);
+      expect(doc).toMatchObject({ pushed: false, committed: null });
+      expect((doc["notDone"] as string[])[0]).toBe("no pre-flight record (the pre-flight refused)");
+      expect(git(repo, ["rev-parse", "HEAD"])).toBe(base);
+      expect(remoteHeads(remote)).toEqual(SEEDED);
+    });
+
+    it("leaves out the rebase key git writes for a tracking branch under branch.autoSetupRebase (review/35)", async () => {
+      const { repo, remote } = await seed("unattended");
+      git(repo, ["config", "branch.autoSetupMerge", "always"]);
+      git(repo, ["config", "branch.autoSetupRebase", "always"]);
+      // The person's settings come before the pre-flight; the tracking keys `run start` writes come after it.
+      await recordPreflight(repo);
+      git(repo, ["config", `branch.${RUN_BRANCH}.remote`, "origin"]);
+      git(repo, ["config", `branch.${RUN_BRANCH}.merge`, `refs/heads/${RUN_BRANCH}`]);
+      git(repo, ["config", `branch.${RUN_BRANCH}.rebase`, "true"]);
+      await writeFile(join(repo, "a.txt"), "the unit's change\n");
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      expect(code, JSON.stringify(doc)).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [] });
+      expect(pushedFile(remote, "a.txt")).toBe("the unit's change");
+    });
+
+    describe("gh's token variables (review/32)", () => {
+      /** A token-shaped value no record or output may carry, and the one swapped in for it. */
+      const SEEDED_TOKEN = "ghp-seeded-token-q7zk";
+      const SWAPPED = "ghp-swapped-token-4hnd";
+
+      it.each([
+        ["set", { GH_TOKEN: undefined }, { GH_TOKEN: SEEDED_TOKEN }, /^config changed: .*\(added GH_TOKEN\)$/],
+        ["cleared", { GH_TOKEN: SEEDED_TOKEN }, { GH_TOKEN: undefined }, /^config changed: .*\(removed GH_TOKEN\)$/],
+        ["swapped", { GH_TOKEN: SEEDED_TOKEN }, { GH_TOKEN: SWAPPED }, /^config changed: .*\(a value, a source file or the git program changed/],
+      ] as const)("refuses an unattended push whose gh token was %s after the recorded pre-flight", async (_label, then, now, why) => {
+        const { repo, remote } = await seed("unattended");
+        await recordPreflight(repo, then);
+        await writeFile(join(repo, "a.txt"), "the unit's change\n");
+
+        const { code, doc, stdout } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"], undefined, now);
+
+        expect(code).toBe(1);
+        expect(doc).toMatchObject({ pushed: false, committed: null });
+        expect((doc["notDone"] as string[])[0]).toMatch(why);
+        expect(`${stdout}${JSON.stringify(doc)}`).not.toContain(SEEDED_TOKEN);
+        expect(`${stdout}${JSON.stringify(doc)}`).not.toContain(SWAPPED);
+        expect(pushes()).toEqual([]);
+        expect(remoteHeads(remote)).toEqual(SEEDED);
+      });
+
+      it("records the token by name: a byte search of the record finds no seeded token value, and the same token pushes", async () => {
+        const { repo, remote } = await seed("unattended");
+        await recordPreflight(repo, { GH_TOKEN: SEEDED_TOKEN });
+        await writeFile(join(repo, "a.txt"), "the unit's change\n");
+
+        const bytes = await readFile(recordPath(repo));
+        const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"], undefined, { GH_TOKEN: SEEDED_TOKEN });
+
+        expect(bytes.includes(Buffer.from(SEEDED_TOKEN))).toBe(false);
+        expect((JSON.parse(bytes.toString("utf8")) as { env: string[] }).env).toContain("GH_TOKEN");
+        expect(code, JSON.stringify(doc)).toBe(0);
+        expect(pushedFile(remote, "a.txt")).toBe("the unit's change");
+      });
     });
   });
 

@@ -3,9 +3,11 @@
  * reads: git's effective configuration, every entry with its scope and its origin, and the git-relevant part of the
  * environment the run verbs start git in.
  *
- * `gate preflight --unattended` vets that surface and, when it passes, records it ({@link surfaceRecord}) in the
- * work tree's own git directory ({@link SURFACE_RECORD_FILE}); `run checkpoint` and `run end` read the surface again
- * when they start and just before they push, and refuse when {@link compareSurface} finds it moved. A config pair
+ * `gate preflight --unattended` vets that surface and records it ({@link surfaceRecord}) in the work tree's own git
+ * directory ({@link SURFACE_RECORD_FILE}), marked `refused` when it refuses (review/33); `run checkpoint` and `run end`
+ * read the surface again when they start and just before they push, and refuse when {@link surfaceRefusal} finds no
+ * usable record or {@link compareSurface} finds the surface moved. Only `run end --refused`, the refusal's own ending,
+ * takes a record marked `refused`. A config pair
  * set by a shell line the guard's stand-alone rule did not see, or a repository hook that edits `.git/config`
  * during the commit, then stops the push instead of redirecting it.
  *
@@ -13,9 +15,10 @@
  * every subsection masked (a subsection can be a URL carrying a credential), and the variables' names. Nothing in
  * it is a value, or a digest of one value on its own, so a value cannot be read back or guessed key by key.
  *
- * **What is left out.** `branch.<name>.remote` and `branch.<name>.merge` in the repository's own (`local`)
- * configuration, which git writes itself when a branch starts tracking one of origin's (`run start` on a continued
- * branch); the run verbs push to `origin` by an explicit refspec, so neither moves a push. `GIT_TERMINAL_PROMPT`
+ * **What is left out.** `branch.<name>.remote`, `branch.<name>.merge` and `branch.<name>.rebase` in the repository's
+ * own (`local`) configuration, which git writes itself when a branch starts tracking one of origin's (`run start` on a
+ * continued branch; `.rebase` under `branch.autoSetupRebase`, review/35); the run verbs push to `origin` by an
+ * explicit refspec, so none moves a push. `GIT_TERMINAL_PROMPT`
  * and `GIT_ASKPASS`, which the write runner sets itself.
  *
  * A record the agent can write is trusted: a steered agent can re-run the pre-flight, which vets the new surface
@@ -60,6 +63,8 @@ export interface SurfaceRecord {
   keys: readonly string[];
   /** The variables' names, sorted. */
   env: readonly string[];
+  /** The pre-flight refused (review/33): only `run end --refused` takes the record then. */
+  refused: boolean;
 }
 
 /**
@@ -72,6 +77,9 @@ export type SurfaceComparison = { same: true } | { same: false; added: string[];
 /** Where the record lives, under the work tree's git directory (`git rev-parse --git-dir`), beside the checkpoint marker. */
 export const SURFACE_RECORD_FILE = "stamity/preflight-git.json";
 
+/** How the record is named in the verbs' text: its place, never the machine's path. */
+export const SURFACE_RECORD_LABEL = `${SURFACE_RECORD_FILE} in the git directory`;
+
 /** The most of a record read; a larger file is not a record. */
 export const SURFACE_RECORD_MAX_BYTES = 65_536;
 
@@ -79,13 +87,21 @@ export const SURFACE_RECORD_MAX_BYTES = 65_536;
 export const CONFIG_LIST_ARGS: readonly string[] = ["config", "--list", "--show-scope", "--show-origin", "-z"];
 
 /** The keys git writes itself when a branch starts tracking (left out in the `local` scope only). */
-const TRACKING_KEY = /^branch\.[\s\S]+\.(?:remote|merge)$/;
+const TRACKING_KEY = /^branch\.[\s\S]+\.(?:remote|merge|rebase)$/;
 
 /** The variables the write runner sets itself on every write, whatever the caller's environment holds. */
 const RUNNER_SET = new Set(["GIT_TERMINAL_PROMPT", "GIT_ASKPASS"]);
 
 /** The non-`GIT_*` variables that move which configuration files git reads. */
 const HOME_VARIABLES = new Set(["HOME", "XDG_CONFIG_HOME"]);
+
+/**
+ * The variables `gh` reads for its token, its host, its config folder, its own path and the default repository
+ * (`gh help environment`, gh 2.102.0; review/32). gh's credential helper takes the push's credential from them, so
+ * one set, cleared or swapped after the pre-flight moves the identity it vetted. Recorded like the others: the name
+ * where set, the value only inside the salted digest.
+ */
+const GH_VARIABLES = new Set(["GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN", "GH_HOST", "GH_CONFIG_DIR", "GH_PATH", "GH_REPO"]);
 
 /** Subsection mask in a recorded key. */
 const MASK = "<…>";
@@ -114,7 +130,7 @@ export async function readGitSurface(
   for (const [key, value] of Object.entries(env)) {
     if (value === undefined) continue;
     const name = platform === "win32" ? key.toUpperCase() : key;
-    if (!HOME_VARIABLES.has(name) && !(name.startsWith("GIT_") && !RUNNER_SET.has(name))) continue;
+    if (!HOME_VARIABLES.has(name) && !GH_VARIABLES.has(name) && !(name.startsWith("GIT_") && !RUNNER_SET.has(name))) continue;
     names.set(name, [...(names.get(name) ?? []), value]);
   }
   const vars: (readonly [string, string])[] = [];
@@ -174,10 +190,10 @@ function namesOf(surface: GitSurface): { keys: string[]; env: string[] } {
   };
 }
 
-/** The record of `surface` under `salt` (hex, fresh per record), taken at `at`. */
-export function surfaceRecord(surface: GitSurface, salt: string, at: string): SurfaceRecord {
+/** The record of `surface` under `salt` (hex, fresh per record), taken at `at`, marked `refused` where the pre-flight refused. */
+export function surfaceRecord(surface: GitSurface, salt: string, at: string, refused = false): SurfaceRecord {
   const { keys, env } = namesOf(surface);
-  return { version: 1, at, salt, digest: digestOf(surface, salt), keys, env };
+  return { version: 1, at, salt, digest: digestOf(surface, salt), keys, env, refused };
 }
 
 const HEX = /^[0-9a-f]+$/;
@@ -198,10 +214,10 @@ export function parseSurfaceRecord(text: string): SurfaceRecord | null {
     return null;
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
-  const { version, at, salt, digest, keys, env } = parsed as Record<string, unknown>;
+  const { version, at, salt, digest, keys, env, refused } = parsed as Record<string, unknown>;
   if (version !== 1 || typeof at !== "string" || !AT.test(at) || typeof salt !== "string" || salt.length < 32 || !HEX.test(salt)) return null;
-  if (typeof digest !== "string" || !DIGEST.test(digest) || !stringList(keys) || !stringList(env)) return null;
-  return { version: 1, at, salt, digest, keys, env };
+  if (typeof digest !== "string" || !DIGEST.test(digest) || !stringList(keys) || !stringList(env) || typeof refused !== "boolean") return null;
+  return { version: 1, at, salt, digest, keys, env, refused };
 }
 
 /** The entries of `from` that `minus` does not hold, a repeated entry counted as often as it repeats. */
@@ -224,4 +240,54 @@ export function compareSurface(record: SurfaceRecord, now: GitSurface): SurfaceC
   const added = [...new Set([...without(keys, record.keys), ...without(env, record.env)])];
   const removed = [...new Set([...without(record.keys, keys), ...without(record.env, env)])];
   return { same: false, added, removed, valuesChanged: added.length === 0 && removed.length === 0 };
+}
+
+/** The file reads the record check makes, injected so the check stays pure. */
+export interface RecordFileReads {
+  /** `missing` where nothing is at `path`, `file` for a regular file (never through a link), else `other`. */
+  kind(path: string): "missing" | "file" | "other";
+  /** At most `maxBytes` of the regular file at `path`, and whether it held more; `null` where it cannot be read as one. */
+  read(path: string, maxBytes: number): { text: string; truncated: boolean } | null;
+}
+
+/**
+ * What the record is checked for: `push` (`run checkpoint`, a plain `run end`, `run land`) takes only a record of a
+ * passing pre-flight; `refused-end` (`run end --refused`, the refusal's own ending) takes a `refused` one too.
+ */
+export type RecordUse = "push" | "refused-end";
+
+/**
+ * review/97, review/34 (REQ-FLOW-131): why an unattended run verb refuses git's surface, or `null` where it is the one
+ * the pre-flight recorded. `place` is the record's path (or why the git directory could not be read), `reads` the
+ * file reads, `readNow` the surface as the verb's git sees it now. No record (none, a link or anything but a regular
+ * file, over {@link SURFACE_RECORD_MAX_BYTES}, text that is not a record, or a `refused` one where `use` is `push`)
+ * refuses as `no pre-flight record`; a configuration git cannot list refuses as `configuration unreadable`; a surface
+ * that moved refuses as `config changed`, naming the keys (subsections masked) and variables added or removed, never
+ * a value. The one record check every run verb uses, so no copy of it can drift.
+ */
+export async function surfaceRefusal(
+  place: { path: string } | { unreadable: string },
+  reads: RecordFileReads,
+  readNow: () => Promise<GitSurface | { unreadable: string }>,
+  use: RecordUse,
+): Promise<string | null> {
+  if ("unreadable" in place) return `no pre-flight record (${place.unreadable})`;
+  const kind = reads.kind(place.path);
+  if (kind === "missing") return `no pre-flight record (${SURFACE_RECORD_LABEL} is missing; gate preflight --unattended writes it)`;
+  const read = kind === "file" ? reads.read(place.path, SURFACE_RECORD_MAX_BYTES) : null;
+  if (read === null) return `no pre-flight record (${SURFACE_RECORD_LABEL} is not a regular file)`;
+  if (read.truncated) return `no pre-flight record (${SURFACE_RECORD_LABEL} is over ${SURFACE_RECORD_MAX_BYTES / 1024} KiB)`;
+  const record = parseSurfaceRecord(read.text);
+  if (record === null) return `no pre-flight record (${SURFACE_RECORD_LABEL} does not read as one)`;
+  if (record.refused && use === "push") return "no pre-flight record (the pre-flight refused)";
+  const now = await readNow();
+  if ("unreadable" in now) return `configuration unreadable (${now.unreadable}), so it cannot be compared with the pre-flight's record`;
+  const compared = compareSurface(record, now);
+  if (compared.same) return null;
+  const moved = [
+    ...(compared.added.length === 0 ? [] : [`added ${compared.added.join(", ")}`]),
+    ...(compared.removed.length === 0 ? [] : [`removed ${compared.removed.join(", ")}`]),
+  ];
+  const what = compared.valuesChanged ? "a value, a source file or the git program changed, no key or variable added or removed" : moved.join("; ");
+  return `config changed: git's configuration or environment is not the one the pre-flight recorded at ${record.at} (${what})`;
 }

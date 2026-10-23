@@ -35,7 +35,7 @@ import {
 } from "../../change/testInputs.ts";
 import { linesPastCap, SCAN_LINE_MAX_CHARS, scanAddedLines, type ScanFile, type ScanHit } from "../../change/scan.ts";
 import { PREFLIGHT_CANARY_FILE } from "../../mcp/env.ts";
-import { readGitSurface, SURFACE_RECORD_FILE, surfaceRecord, type GitSurface } from "../../runs/gitSurface.ts";
+import { readGitSurface, SURFACE_RECORD_FILE, SURFACE_RECORD_LABEL, surfaceRecord, type GitSurface } from "../../runs/gitSurface.ts";
 import { screenOutbound } from "../../runs/morning.ts";
 import { REQUIRED_FLOORS, runPreflight, type PreflightDeps, type PushUrlFacts, type RestRead } from "../../runs/preflight.ts";
 import { resolveRepo } from "../../runs/pullRequest.ts";
@@ -177,8 +177,10 @@ import type { GitRunner } from "../../workspace/git.ts";
  * (`../../runs/gitSurface.ts`, read through {@link readRunGitSurface}) at
  * `<git-dir>/stamity/preflight-git.json`, atomically, so `run checkpoint` and
  * `run end` can refuse a configuration or environment it did not vet; a refusal
- * removes a record an earlier pass left, and a record it cannot write refuses as
- * `git-record`. `--dry-run` writes and removes nothing.
+ * writes it marked `refused` in place of an earlier pass's, which only
+ * `run end --refused` takes (review/33), and a record it cannot write refuses as
+ * `git-record`, naming the error code alone (review/36). The JSON's `gitRecord`
+ * is true only for a passing record. `--dry-run` writes and removes nothing.
  *
  * **Why the subcommand is positional**, as in `ledger.ts`: the funnel
  * (`../kit/program.ts`) owns the exit codes and the one JSON document through
@@ -2018,15 +2020,25 @@ export async function gitSurfaceRecordPath(cwd: string): Promise<{ path: string;
   }
 }
 
-/** How the record is named in the verbs' text: its place, never the machine's path. */
-export const SURFACE_RECORD_LABEL = `${SURFACE_RECORD_FILE} in the git directory`;
-
 const GIT_RECORD_FIX = "run the pre-flight inside the run's work tree, with its git directory writable";
 
 /**
- * review/97: on a pass, the surface's record, written atomically; on a refusal, any record an earlier pass left goes,
- * so no run verb compares against a surface a refused pre-flight saw. The reason a record could not be written or
- * removed, else `null`.
+ * review/36: the error code of a failed file call (`EACCES`, `ENOTDIR`, …), read through a wrapping error's `cause`,
+ * never its message, which names the machine's path; `fallback` where none is found.
+ */
+function errorCode(cause: unknown, fallback: string): string {
+  for (let at: unknown = cause, depth = 0; at !== null && typeof at === "object" && depth < 4; at = (at as { cause?: unknown }).cause, depth += 1) {
+    const code = (at as { code?: unknown }).code;
+    if (typeof code === "string" && /^E[A-Z0-9]+$/.test(code)) return code;
+  }
+  return fallback;
+}
+
+/**
+ * review/97, review/33: the surface's record, written atomically, marked `refused` where the pre-flight refused, so
+ * the refusal's own ending (`run end --refused`) still compares against it while no push verb takes it. A refusal
+ * first removes any record an earlier pass left, so a refusal whose record cannot be written leaves no passing one
+ * behind. The reason a record could not be written or removed, by error code alone (review/36), else `null`.
  */
 async function recordGitSurface(ctx: CliContext, root: string, passed: boolean, now: Date): Promise<string | null> {
   const place = await gitSurfaceRecordPath(root);
@@ -2034,19 +2046,18 @@ async function recordGitSurface(ctx: CliContext, root: string, passed: boolean, 
   if (!passed) {
     try {
       rmSync(place.path, { force: true });
-      return null;
     } catch (cause) {
-      return `an earlier record at ${SURFACE_RECORD_LABEL} could not be removed (${cause instanceof Error ? cause.message : "remove failed"})`;
+      return `an earlier record at ${SURFACE_RECORD_LABEL} could not be removed (${errorCode(cause, "remove failed")})`;
     }
   }
   const surface = await readRunGitSurface(root);
   if ("unreadable" in surface) return `configuration unreadable (${surface.unreadable})`;
-  const record = surfaceRecord(surface, randomBytes(16).toString("hex"), now.toISOString());
+  const record = surfaceRecord(surface, randomBytes(16).toString("hex"), now.toISOString(), !passed);
   try {
     await ctx.engine.merge.atomicWrite.atomicWriteFile(place.path, `${JSON.stringify(record)}\n`, { boundaryDir: place.gitDir, mode: 0o600 });
     return null;
   } catch (cause) {
-    return `${SURFACE_RECORD_LABEL} could not be written (${cause instanceof Error ? cause.message : "write failed"})`;
+    return `${SURFACE_RECORD_LABEL} could not be written (${errorCode(cause, "write failed")})`;
   }
 }
 
@@ -2096,7 +2107,8 @@ async function runPreflightVerb(ctx: CliContext, opts: Record<string, unknown>):
     pushIdentity,
     reviewState: { counter: existsSync(join(root, REVIEW_GATE_STATE_FILE)), usageReviewLines: usageReviewLines(root, now) },
   });
-  // review/97: the run verbs compare against this record, so a pass the record cannot follow is no pass.
+  // review/97: the run verbs compare against this record, so a pass the record cannot follow is no pass; a refusal
+  // records too, marked refused, for its own ending alone (review/33).
   const unrecorded = ctx.dryRun ? null : await recordGitSurface(ctx, root, verdict.ok, now);
   const ok = verdict.ok && unrecorded === null;
   const session = detectSession(env);
@@ -2105,7 +2117,11 @@ async function runPreflightVerb(ctx: CliContext, opts: Record<string, unknown>):
   const checks = verdict.checks.map((check) => ({ ...check, evidence: sanitizeLabel(check.evidence) }));
   const refusals: { id: string; reason: string; fix: string }[] = verdict.refusals.map((refusal) => ({ ...refusal, reason: sanitizeLabel(refusal.reason) }));
   if (unrecorded !== null) refusals.push({ id: "git-record", reason: sanitizeLabel(unrecorded), fix: GIT_RECORD_FIX });
-  const recorded = ctx.dryRun ? "not written (--dry-run)" : !verdict.ok ? "none (the pre-flight refused)" : ok ? `written (${SURFACE_RECORD_LABEL})` : "not written";
+  const recorded =
+    ctx.dryRun ? "not written (--dry-run)"
+    : unrecorded !== null ? "not written"
+    : verdict.ok ? `written (${SURFACE_RECORD_LABEL})`
+    : `written, marked refused (${SURFACE_RECORD_LABEL})`;
   const shownFloors = floors.map(({ id, path, exists }) => ({ id, path: sanitizeLabel(path), exists }));
   // `names` lists environment variable names, the one field here the caller's environment spells.
   const warnings = verdict.warnings.map((warning) =>

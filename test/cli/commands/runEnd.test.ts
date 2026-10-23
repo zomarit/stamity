@@ -180,15 +180,16 @@ describe("stamity run end", () => {
   /**
    * The record a passing `gate preflight --unattended` writes for `repo` (REQ-FLOW-131), through the same reads and
    * the module's own `surfaceRecord`, in the process environment {@link run} gives the verb; the spy's calls put back.
+   * `refused` writes the record a refusing pre-flight leaves (review/33).
    */
-  async function recordPreflight(repo: string): Promise<void> {
+  async function recordPreflight(repo: string, refused = false): Promise<void> {
     const mark = writes.argv.length;
     await underRunEnv(async () => {
       const place = await gitSurfaceRecordPath(repo);
       const surface = await readRunGitSurface(repo);
       if ("unreadable" in place || "unreadable" in surface) throw new Error("the seed's git surface could not be read");
       await mkdir(dirname(place.path), { recursive: true });
-      await writeFile(place.path, `${JSON.stringify(surfaceRecord(surface, randomBytes(16).toString("hex"), new Date().toISOString()))}\n`);
+      await writeFile(place.path, `${JSON.stringify(surfaceRecord(surface, randomBytes(16).toString("hex"), new Date().toISOString(), refused))}\n`);
     });
     writes.argv.length = mark;
   }
@@ -360,6 +361,44 @@ describe("stamity run end", () => {
 
     expect(code).toBe(0);
     expect(created().title).toBe("Refused: plan 021 not ready");
+  });
+
+  // review/33 (REQ-FLOW-131): a refusing pre-flight leaves a record marked refused; only the refusal's own ending takes it.
+  it("ends a run whose pre-flight refused on its Refused: draft, and refuses a plain end after that pre-flight", async () => {
+    const refusedEnd = await seed("unattended");
+    const plainEnd = await seed("unattended");
+    await recordPreflight(refusedEnd.repo, true);
+    await recordPreflight(plainEnd.repo, true);
+    await put(refusedEnd.repo, `${RUN_DIR}/morning.md`, morningList("refused at the pre-flight"));
+
+    const ended = await run(refusedEnd.repo, [...END("pre-flight refused"), "--refused"]);
+
+    expect(ended.code, JSON.stringify(ended.doc)).toBe(0);
+    expect(ended.doc).toMatchObject({ pushed: true });
+    expect(created().title).toBe("Refused: pre-flight refused");
+    const before = rest.calls.length;
+    const pushesBefore = pushes().length;
+
+    const plain = await run(plainEnd.repo, END("feat: the change"));
+
+    expect(plain.code).toBe(1);
+    expect(plain.doc).toMatchObject({ pushed: false, committed: null, pr: null });
+    expect((plain.doc["notDone"] as string[])[0]).toBe("no pre-flight record (the pre-flight refused)");
+    expect(pushes()).toHaveLength(pushesBefore);
+    expect(rest.calls.slice(before).filter((call) => call.path.endsWith("/pulls"))).toEqual([]);
+  });
+
+  it("still compares a refused pre-flight's record on end --refused, refusing a config that moved since", async () => {
+    const { repo } = await seed("unattended");
+    await recordPreflight(repo, true);
+    git(repo, ["config", "stamity.moved", "yes"]);
+
+    const { code, doc } = await run(repo, [...END("pre-flight refused"), "--refused"]);
+
+    expect(code).toBe(1);
+    expect(doc).toMatchObject({ pushed: false, pr: null });
+    expect((doc["notDone"] as string[])[0]).toMatch(/^config changed: .*added stamity\.moved/);
+    expect(pushes()).toEqual([]);
   });
 
   // n10-refused-title: a title that already begins with the verb's own `Refused:` (leading white space set aside) is
