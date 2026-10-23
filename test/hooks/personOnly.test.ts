@@ -3467,3 +3467,20 @@ describe("the land verb's approved line (a4, review/103)", () => {
     expect(personOnlyVerdict(command, ON_FEATURE), command).toEqual({ deny: false });
   });
 });
+
+describe("the verdicts embed no canonical package name (a4, build/10)", () => {
+  // Red on 3be66b7f: the shell reading's fallback held the canonical scoped name, so every guard copy carried it.
+  it("holds no scoped package name in either verdict's source", () => {
+    expect(personOnlyVerdict.toString()).not.toContain("@zomarit/stamity");
+    expect(unattendedPushVerdict.toString()).not.toContain("@zomarit/stamity");
+  });
+
+  it("still reads this package for a caller that names no identity, as the run verb's own push check does", () => {
+    const RUN_VERB_CONTEXT = { defaultBranches: ["main"], currentBranch: "stamity/2026-10-23_x", tags: [] };
+    expect(personOnlyVerdict("git push origin HEAD:refs/heads/stamity/2026-10-23_x", RUN_VERB_CONTEXT)).toEqual({ deny: false });
+    expect(personOnlyVerdict("git push origin HEAD:refs/heads/main", RUN_VERB_CONTEXT)).toMatchObject({ deny: true, rule: "push-default" });
+    for (const command of ["stamity sync --loosen", "node node_modules/.bin/st sync \"$X\"", "node node_modules/@zomarit/stamity/dist/cli.js sync \"$X\""]) {
+      expect(personOnlyVerdict(command, RUN_VERB_CONTEXT), command).toMatchObject({ deny: true, rule: "autonomy-loosen" });
+    }
+  });
+});

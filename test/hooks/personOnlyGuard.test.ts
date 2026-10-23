@@ -1994,3 +1994,18 @@ describe("the guard's reading of the land verb's approved line with its value (a
     for (const command of lines) expect(decide(tool, guard, command).deny, `${tool} unattended: ${command}`).toBe(true);
   });
 });
+
+describe("a renamed fork's guard copies carry its own identity only (a4, build/10)", () => {
+  // Red on 3be66b7f: each copy embedded the canonical scoped name in its shell reading's fallback.
+  it.each(TOOLS)("%s: holds no canonical package name, and reads the fork's installed CLI by its path", async (tool) => {
+    const fork = planCoreHookScripts(POLICY, tool, { ...CLI_PIN, packageName: "@acme/forge", personOnlyGuard: true }).find(
+      (script) => script.fileName === PERSON_ONLY_GUARD_FILE,
+    );
+    if (fork === undefined) throw new Error("the plan carried no person-only guard");
+    expect(fork.content).not.toContain("@zomarit/stamity");
+    await getRepo().seedFiles({ ".git/HEAD": "ref: refs/heads/feat/x\n", [`.stamity/generated/hooks/${tool}/${fork.fileName}`]: fork.content });
+    const guard = getRepo().path(".stamity", "generated", "hooks", tool, fork.fileName);
+    expect(decide(tool, guard, "node node_modules/@acme/forge/dist/cli.js sync \"$X\"").deny).toBe(true);
+    expect(decide(tool, guard, "node node_modules/@acme/forge/dist/cli.js sync --json")).toEqual({ deny: false });
+  });
+});

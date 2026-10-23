@@ -428,7 +428,9 @@ export const CLAUDE_ASK_ROWS: readonly string[] = [
  */
 export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): PersonOnlyVerdict {
   const PACKAGE_WORDS = ctx.packageWords ?? ["stamity", "st"];
-  const PACKAGE_NAME = (ctx.packageName ?? "@zomarit/stamity").toLowerCase();
+  // No scoped name is embedded here (build/10): the guard always passes the identity baked at emission, and a caller
+  // that names none (the run verb's own push check) reads no package path, only the bare bin words.
+  const PACKAGE_NAME = (ctx.packageName ?? "").toLowerCase();
   const OWN_REPOSITORY = ctx.ownRepository ?? true;
   // <shell-reading>
   const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
@@ -1305,7 +1307,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     const engineFile = (word: string): boolean => {
       const path = word.replace(/\\/g, "/").toLowerCase();
       return (
-        path.includes(`node_modules/${PACKAGE_NAME}/`) ||
+        (PACKAGE_NAME !== "" && path.includes(`node_modules/${PACKAGE_NAME}/`)) ||
         (/node_modules\/\.bin\/[^/]+$/.test(path) && PACKAGE_WORDS.includes(programName(path))) ||
         (OWN_REPOSITORY && /(?:^|\/)cli\.[cm]?[jt]s$/.test(path))
       );
@@ -2387,7 +2389,8 @@ export function unattendedPushVerdict(
   identity: { readonly words?: readonly string[]; readonly name?: string; readonly own?: boolean } = {},
 ): UnattendedPushVerdict {
   const PACKAGE_WORDS = identity.words ?? ["stamity", "st"];
-  const PACKAGE_NAME = (identity.name ?? "@zomarit/stamity").toLowerCase();
+  // No scoped name is embedded here (build/10), as in personOnlyVerdict.
+  const PACKAGE_NAME = (identity.name ?? "").toLowerCase();
   const OWN_REPOSITORY = identity.own ?? true;
   // <shell-reading>
   const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
@@ -3264,7 +3267,7 @@ export function unattendedPushVerdict(
     const engineFile = (word: string): boolean => {
       const path = word.replace(/\\/g, "/").toLowerCase();
       return (
-        path.includes(`node_modules/${PACKAGE_NAME}/`) ||
+        (PACKAGE_NAME !== "" && path.includes(`node_modules/${PACKAGE_NAME}/`)) ||
         (/node_modules\/\.bin\/[^/]+$/.test(path) && PACKAGE_WORDS.includes(programName(path))) ||
         (OWN_REPOSITORY && /(?:^|\/)cli\.[cm]?[jt]s$/.test(path))
       );
