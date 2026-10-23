@@ -49,19 +49,19 @@ evidence could not run. It is never graded from source and never guessed.
 
 ## Loop
 
-1. **Frame.** One line: `surface: <target> · sha: <short sha> · inventory: clear | blocked |
-   regenerated · browser: available | not measured · output: findings`.
+1. **Frame.** One line: `surface: <target> · sha: <short sha> · inventory: clear | blocked | regenerated
+   · browser: available | not measured · output: findings`. A working tree with changes outside
+   `.stamity/` stops the run with `BLOCKED_DEPENDENCY`, naming them; commit or stash, then run again.
 2. **Detector, browser and file map, in parallel.** The detector runs only when the inventory
-   needs it; the browser evidence runs either way; one researcher per step of the flow, or one
-   for a route or component, returns the files that render its step, with `path:line` for the
-   branch of each state. All go out as one batch: none reads another's output. Researchers
-   read only.
+   needs it; the browser evidence runs either way; one researcher per step of the flow, or one for
+   a route or component, returns the files that render its step, with `path:line` for the branch
+   of each state. All go out as one batch: none reads another's output. Researchers read only.
 3. **Review.** One design-quality spawn on a whole-surface brief: the head commit and the
    surface's paths the researchers mapped, in place of a diff range; the criteria (the
    inventory's tokens, the four states, WCAG 2.2 AA); and the inventory and evidence bundle
    paths. The brief names no report path, so the agent returns its full result inline. It
-   reads each file with `git show <commit>:<path>`, and the named surface stands in for "the
-   change" in its exclusions.
+   reads each file with `git show <commit>:<path>` at the head the clean tree builds, and the
+   named surface stands in for "the change" in its exclusions.
 4. **Merge.** This command assembles the result it returns; it writes no file. It passes
    design-quality's findings block through unchanged and adds the criteria the evidence could
    not reach as `not measured`, each with the probe that stopped it.
