@@ -1891,9 +1891,12 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
    * or section (an include can carry a remote, the lens's W-2), which moves the
    * origin later writes are held to. A config call reads only where it carries a read option or subcommand (`--get`,
    * `--list`, `get`, `list`, …) or names a key and no value; `--edit` writes whatever it opens. The guard runs the act on
-   * the main thread and refuses it for a sub-agent; unattended the push rule refuses it.
+   * the main thread and refuses it for a sub-agent; unattended the push rule refuses it. `set-head`, in every form and
+   * whatever the origin, also writes or deletes the remote's HEAD ref, the default branch the push check reads, so it is
+   * read as the push it steers too (`push-default`, review/163), which asks rather than running unasked.
    */
   function remoteWriteVerdict(sub: string, args: string[]): void {
+    if (sub === "remote" && args.find((arg) => !arg.startsWith("-")) === "set-head") remoteHeadVerdict("git remote set-head");
     if (ctx.originRepo === undefined) return;
     if (sub === "remote") {
       const action = args.find((arg) => !arg.startsWith("-")) ?? "";
@@ -2137,7 +2140,19 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     return list || positionals.length === 0 ? null : deny("tag", "A tag created (`git tag <name>`)");
   }
 
-  /** `git symbolic-ref`'s writes (pr/70), and `git update-ref --stdin`'s symref commands read as its arguments (pr/82). */
+  /** A remote's HEAD ref by name (review/163): `refs/` optional, one remote segment, any case. */
+  const REMOTE_HEAD = /^(?:refs\/)?remotes\/[^/]+\/HEAD$/i;
+  /**
+   * A write or a delete of a remote's HEAD ref (review/163): the guard reads origin's as the default branch, so moving
+   * it steers a later push, and it is read as that push. Another remote's is read too, in the safe direction.
+   */
+  const remoteHeadVerdict = (via: string): PersonOnlyVerdict =>
+    deny("push-default", `A remote's HEAD ref written or deleted (\`${via}\`), which moves the branch the guard reads as the default`);
+
+  /**
+   * `git symbolic-ref`'s writes (pr/70), and `git update-ref --stdin`'s symref commands read as its arguments (pr/82). A
+   * write or a delete of a remote's HEAD ref is a push of the default branch whatever the target (review/163).
+   */
   function symbolicRefVerdict(args: string[], via = "git symbolic-ref"): PersonOnlyVerdict | null {
     let remove = false;
     const positionals: string[] = [];
@@ -2165,10 +2180,12 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     if (target !== undefined && /^(refs\/)?tags\//i.test(name)) {
       return deny("tag", `A symbolic tag ref written or deleted (\`${via}\`)`);
     }
-    if (remove || target === undefined || name === "HEAD") return null;
+    const remoteHead = REMOTE_HEAD.test(name);
+    if (remove || target === undefined || name === "HEAD") return remove && remoteHead ? remoteHeadVerdict(via) : null;
     if (deploys(/[$`]/.test(target) ? null : target.replace(/^(refs\/)?heads\//i, ""))) {
       deny("push-deploying", `A symbolic ref pointed at a deploying branch, or at a branch the line cannot show (\`${via}\`)`);
     }
+    if (remoteHead) return remoteHeadVerdict(via);
     if (/[$`]/.test(target) || defaults.has(target.replace(/^(refs\/)?heads\//i, "").toLowerCase())) {
       return deny("push-default", `A symbolic ref pointed at the default branch, or at a branch the line cannot show (\`${via}\`)`);
     }
@@ -3104,6 +3121,15 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     if (program === "git") {
       const { sub, args, config } = gitParts(cmd);
       remoteWriteVerdict(sub, args);
+      // `git update-ref` naming a remote's HEAD ref (review/163), as an argument or in a `--stdin` text the line carries
+      // (read in excess, as the tag read below reads it), writes or deletes the default branch the push check reads; a
+      // tag on the same line still gets its own act below.
+      if (sub === "update-ref") {
+        const named = args.some((arg) => REMOTE_HEAD.test(arg));
+        if (named || (args.includes("--stdin") && /remotes\/[^\s/'"\\]+\/HEAD(?![\w-])/i.test(command))) {
+          remoteHeadVerdict(named ? "git update-ref" : "git update-ref --stdin");
+        }
+      }
       // `git send-pack` pushes as `git push` does, its options and refspecs laid out the same (pr/16); with
       // no ref it updates the refs both sides have, the default branch among them, read as a matching push.
       const argMarks = (markMap.get(cmd) ?? []).slice(cmd.length - args.length);

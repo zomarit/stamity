@@ -2761,3 +2761,36 @@ describe("the guard's linked git configuration files (a4c, review/148)", () => {
     expect(decide("claude", guard, named, { GIT_CONFIG_GLOBAL: getRepo().path("cfg", "l3") })).toEqual({ deny: false });
   });
 });
+
+/**
+ * b14b (REQ-FLOW-102, ledger row review/163): a write of origin's HEAD ref, where this guard reads the default branch,
+ * is read as the push it steers. Red on d9414a9e, which runs both lines unasked on Claude Code's main thread, a
+ * sub-agent's call and an unattended one among them.
+ */
+describe("a remote's HEAD ref written, on every client (b14b, review/163)", () => {
+  const ORIGIN = '[remote "origin"]\n\turl = https://github.com/acme/app.git\n';
+  const asHelper = (tool: Tool, command: string): string => JSON.stringify({ ...JSON.parse(payload(tool, command)), agent_type: "stamity-implementer", agent_id: "a1" });
+
+  it.each(TOOLS)("%s: asks on the main thread where it can, and refuses a sub-agent's call and an unattended one", async (tool) => {
+    const guard = await placeGuard(tool, { ".git/config": ORIGIN });
+    const lines = ["git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/feat/x", "git remote set-head origin -a"];
+    for (const command of lines) {
+      const verdict = personOnlyVerdict(command, BAKED_DEFAULT);
+      expect(verdict, command).toMatchObject({ deny: true, rule: "push-default", ask: true });
+      if (!verdict.deny) continue;
+      expect(decide(tool, guard, command), `${tool}: ${command}`).toEqual(expectedAttended(tool, verdict));
+      const helper = clientDecision(tool, run(guard, asHelper(tool, command)), `${tool} helper: ${command}`);
+      expect(helper, `${tool} helper: ${command}`).toMatchObject({ deny: true });
+      expect(helper, `${tool} helper: ${command}`).not.toHaveProperty("ask");
+    }
+    // Non-degenerate: the read of the same ref, and a write of a remote branch, pass on every client.
+    expect(decide(tool, guard, "git symbolic-ref --short -q refs/remotes/origin/HEAD")).toEqual({ deny: false });
+    expect(decide(tool, guard, "git update-ref refs/remotes/origin/feat/x HEAD")).toEqual({ deny: false });
+    await getRepo().seedFiles({ ".stamity/runs/2026-10-25_x/record.md": record("in progress", "unattended") });
+    for (const command of lines) {
+      const unattended = decide(tool, guard, command);
+      expect(unattended, `${tool} unattended: ${command}`).toMatchObject({ deny: true, reason: expect.stringContaining("Mode: unattended") });
+      expect(unattended, `${tool} unattended: ${command}`).not.toHaveProperty("ask");
+    }
+  });
+});

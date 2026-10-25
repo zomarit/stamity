@@ -4358,3 +4358,100 @@ describe("the outside-party readers' sixth round (a4c, review/147, the lens's ro
     expect(rule(command), command).toBeNull();
   });
 });
+
+/**
+ * b14b (REQ-FLOW-102, ledger row review/163): a write or a delete of a remote's HEAD ref, where the guard reads the
+ * default branch, is read as the push it steers, `push-default`, so it asks. Each asking row is red on d9414a9e, which
+ * reads no act there, or for `git remote set-head` the `remote-write` the main thread runs unasked; each pin passes on
+ * both.
+ */
+describe("a remote's HEAD ref written or deleted (b14b, REQ-FLOW-102, review/163)", () => {
+  const ORIGIN = { ...ON_FEATURE, originRepo: "github.com/acme/app" };
+  /** The acts the default guard runs unasked, a remote write among them (`scripts.ts`'s `RUNS`). */
+  const RUNS: PersonOnlyRuleId[] = ["pr-ready", "tag", "workflow-dispatch", "remote-write"];
+  /** With the origin known, with the default setting's acts run, and with no origin read (the remote rule's early return). */
+  const CONTEXTS = [ORIGIN, { ...ORIGIN, runs: RUNS }, ON_FEATURE] as const;
+
+  it.each([
+    ["a symbolic-ref write pointing it at a feature branch", "git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/feat/x", "git symbolic-ref"],
+    ["a symbolic-ref write naming it without `refs/`", "git symbolic-ref remotes/origin/HEAD refs/remotes/origin/feat/x", "git symbolic-ref"],
+    ["a symbolic-ref write with a reason", "git symbolic-ref -m why refs/remotes/origin/HEAD refs/remotes/origin/feat/x", "git symbolic-ref"],
+    ["a symbolic-ref write naming it in another case", "git symbolic-ref REFS/REMOTES/ORIGIN/head refs/remotes/origin/feat/x", "git symbolic-ref"],
+    ["a symbolic-ref write of another remote's", "git symbolic-ref refs/remotes/upstream/HEAD refs/remotes/upstream/feat/x", "git symbolic-ref"],
+    ["a symbolic-ref delete", "git symbolic-ref -d refs/remotes/origin/HEAD", "git symbolic-ref"],
+    ["a symbolic-ref delete by the long option", "git symbolic-ref --delete -q refs/remotes/origin/HEAD", "git symbolic-ref"],
+    ["an update-ref write", "git update-ref refs/remotes/origin/HEAD 0123abc", "git update-ref"],
+    ["an update-ref write that does not follow it", "git update-ref --no-deref refs/remotes/origin/HEAD 0123abc", "git update-ref"],
+    ["an update-ref delete", "git update-ref -d refs/remotes/origin/HEAD", "git update-ref"],
+    ["an update-ref delete that does not follow it", "git update-ref --no-deref -d refs/remotes/origin/HEAD", "git update-ref"],
+    ["an update-ref stdin symref update", "printf 'symref-update refs/remotes/origin/HEAD refs/remotes/origin/feat/x\\n' | git update-ref --stdin", "git update-ref --stdin"],
+    ["an update-ref stdin symref create", "printf 'symref-create refs/remotes/origin/HEAD refs/remotes/origin/feat/x\\n' | git update-ref --stdin", "git update-ref --stdin"],
+    ["an update-ref stdin symref delete", "printf 'symref-delete refs/remotes/origin/HEAD\\n' | git update-ref --stdin", "git update-ref --stdin"],
+    ["an update-ref stdin plain update", "printf 'update refs/remotes/origin/HEAD 0123abc\\n' | git update-ref --stdin", "git update-ref --stdin"],
+    ["an update-ref stdin plain delete", "printf 'delete refs/remotes/origin/HEAD\\n' | git update-ref --stdin", "git update-ref --stdin"],
+    ["an update-ref stdin text split by NUL", "printf 'symref-update\\0refs/remotes/origin/HEAD\\0refs/remotes/origin/feat/x\\0' | git update-ref -z --stdin", "git update-ref --stdin"],
+    ["an update-ref stdin text after another command", "printf 'verify refs/heads/x HEAD\\nupdate refs/remotes/origin/HEAD 0123abc\\n' | git update-ref --stdin", "git update-ref --stdin"],
+    ["a remote set-head read from the remote", "git remote set-head origin -a", "git remote set-head"],
+    ["a remote set-head read from the remote by the long option", "git remote set-head origin --auto", "git remote set-head"],
+    ["a remote set-head naming a branch", "git remote set-head origin feat/x", "git remote set-head"],
+    ["a remote set-head delete", "git remote set-head origin -d", "git remote set-head"],
+    ["a remote set-head after a global option", "git -C /tmp/repo remote set-head origin --delete", "git remote set-head"],
+  ])("asks for %s as a push of the default branch, whatever the origin and the acts run", (_, command, via) => {
+    for (const ctx of CONTEXTS) {
+      const verdict = personOnlyVerdict(command, ctx);
+      expect(verdict, command).toMatchObject({ deny: true, rule: "push-default", ask: true });
+      if (verdict.deny) expect(verdict.act, command).toContain(`A remote's HEAD ref written or deleted (\`${via}\`)`);
+    }
+  });
+
+  it.each([
+    ["a symbolic-ref read", "git symbolic-ref refs/remotes/origin/HEAD"],
+    ["a short, quiet symbolic-ref read", "git symbolic-ref --short -q refs/remotes/origin/HEAD"],
+    ["a symbolic-ref write of HEAD itself", "git symbolic-ref HEAD refs/heads/feat/x"],
+    ["a symbolic-ref write of a branch pointed at a remote's HEAD ref", "git symbolic-ref refs/heads/a refs/remotes/origin/HEAD"],
+    ["a symbolic-ref write of a remote branch whose name only starts with HEAD", "git symbolic-ref refs/remotes/origin/HEADS refs/remotes/origin/feat/x"],
+    ["an update-ref write of a remote branch", "git update-ref refs/remotes/origin/feat/x 0123abc"],
+    ["an update-ref stdin text naming only a remote branch", "printf 'update refs/remotes/origin/feat/x 0123abc\\n' | git update-ref --stdin"],
+    ["a rev-parse read", "git rev-parse --abbrev-ref origin/HEAD"],
+    ["a remote shown", "git remote show origin"],
+  ])("reads %s as no act", (_, command) => {
+    for (const ctx of CONTEXTS) expect(personOnlyVerdict(command, ctx), command).toEqual({ deny: false });
+  });
+
+  it("keeps the other remote writes `remote-write`, which the setting runs unasked", () => {
+    for (const command of ["git remote set-url origin https://github.com/other/repo.git", "git remote rename origin old", "git remote remove origin"]) {
+      expect(personOnlyVerdict(command, { ...ORIGIN, runs: RUNS }), command).toEqual({ deny: false, runs: ["remote-write"] });
+      expect(personOnlyVerdict(command, ORIGIN), command).toMatchObject({ deny: true, rule: "remote-write", ask: true });
+    }
+  });
+
+  it("keeps a tag's own act beside it, a refuse-class one deciding the line", () => {
+    const write = "git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/feat/x";
+    // The tag runs unasked, so the HEAD ref write still asks; a tag deletion refuses the line.
+    expect(personOnlyVerdict(`git tag v2 && ${write}`, { ...ORIGIN, runs: RUNS })).toMatchObject({ deny: true, rule: "push-default", ask: true });
+    expect(personOnlyVerdict(`git tag -d v1 && ${write}`, { ...ORIGIN, runs: RUNS })).toMatchObject({ deny: true, rule: "tag-delete", ask: false });
+    expect(personOnlyVerdict("git update-ref refs/tags/v2 HEAD && git update-ref refs/remotes/origin/HEAD 0123abc", { ...ORIGIN, runs: RUNS })).toMatchObject({
+      deny: true,
+      rule: "push-default",
+      ask: true,
+    });
+    const text = "printf 'delete refs/tags/v1\\nupdate refs/remotes/origin/HEAD 0123abc\\n' | git update-ref --stdin";
+    expect(personOnlyVerdict(text, { ...ORIGIN, runs: RUNS })).toMatchObject({ deny: true, rule: "tag-delete", ask: false });
+  });
+
+  it("names a deploying target first, as a push onto a deploying branch is named before the default branch", () => {
+    const deploying = { ...ORIGIN, deployingBranches: ["production"] };
+    expect(personOnlyVerdict("git symbolic-ref refs/remotes/origin/HEAD refs/heads/production", deploying)).toMatchObject({ deny: true, rule: "push-deploying", ask: true });
+    expect(personOnlyVerdict("git symbolic-ref refs/remotes/origin/HEAD refs/heads/feat/x", deploying)).toMatchObject({ deny: true, rule: "push-default", ask: true });
+  });
+
+  it("reads no act on the run verbs' own lines, whose write of origin's HEAD ref goes through the CLI's git runner", () => {
+    // `alignOriginHead` (src/cli/commands/run.ts) writes the ref from the verb's process, never as a line the agent
+    // types, so the line the guard judges is the verb's alone, the one simple command `verbShape` admits.
+    for (const command of ["npx --no stamity run start --run x", "stamity run checkpoint --run x --pr --title t", "npx -y stamity run end --run x"]) {
+      // The unattended rule admits each as the verb alone on its line, so these are the lines a run types.
+      expect(unattendedPushVerdict(command), command).toEqual({ deny: false });
+      for (const ctx of CONTEXTS) expect(personOnlyVerdict(command, ctx), command).toEqual({ deny: false });
+    }
+  });
+});

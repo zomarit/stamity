@@ -4418,7 +4418,10 @@ if (told !== null) {
  * `gitdir:` pointer followed). Each place gives `HEAD` from
  * its git dir, the default branch from `refs/remotes/origin/HEAD` and the local
  * tags from `refs/tags/` and `packed-refs` in its common dir (read only when a
- * push refspec asks for them), and the verdict runs once per place. Where
+ * push refspec asks for them), and the verdict runs once per place. A write or
+ * a delete of a remote's HEAD ref on the judged line (`git symbolic-ref`, `git
+ * update-ref` with its `--stdin` text, `git remote set-head`) is read as a push
+ * of the default branch (review/163), so it cannot move that read unasked. Where
  * `HEAD` cannot be read (a reftable repository's placeholder among it), an implied destination
  * counts as the default branch; `main` and `master` always count. The origin a
  * gh write is held to (REQ-FLOW-134) is the `origin` remote in the git config of
@@ -4539,7 +4542,8 @@ const MCP_ROWS = new Map(${json(GITHUB_MCP_ROWS.map((entry) => [entry.row, entry
 // unasked (a workflow dispatch among them unless named as deploying), and whether it is stricter than the default.
 const AUTONOMY = ${json(baked)};
 // A remote or URL rewrite written runs on the main thread in every mode and is refused for a sub-agent (REQ-FLOW-134,
-// review/129): it moves the origin the outside-party rule holds writes to.
+// review/129): it moves the origin the outside-party rule holds writes to. A \`git remote set-head\` is also read as a
+// push of the default branch (review/163), which asks, so it never runs unasked.
 const RUNS = [...AUTONOMY.runs, ...(AUTONOMY.deploying.includes("workflow-dispatch") ? [] : ["workflow-dispatch"]), "remote-write"];
 const STRICTER = AUTONOMY.mode === "ask" || AUTONOMY.deploying.length > 0 || AUTONOMY.deployingBranches.length > 0;
 // This package as emission found it (review/44, review/53): the program words that run it (its bins and unscoped name,
