@@ -1,8 +1,9 @@
 import { execFile } from "node:child_process";
-import { stat } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, stat } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { lock } from "proper-lockfile";
 
 /**
  * Build-on-demand for the dist e2e lane: `ensureDistBuilt` makes
@@ -18,10 +19,15 @@ import { promisify } from "node:util";
  * build). Guessing staleness here would re-build mid-suite on every src edit
  * and still prove nothing about the artifact CI ships.
  *
- * Concurrency: the check-then-build is memoized per process, so every caller
- * in one vitest worker shares a single build. Only the dist dogfood suite
- * calls this today, so no cross-worker race exists; a second calling file
- * would need a cross-process lock, not a wider memo.
+ * Concurrency: nine callers reach this, eight suites and
+ * test/support/cliHarness.ts, so two vitest workers can ask at once on a
+ * checkout with no `dist/`. Within a process the check-then-build is memoized
+ * per root, so every caller in one worker shares a single build. Across
+ * processes the build runs under a `proper-lockfile` lock at
+ * `<root>/node_modules/.cache/stamity/dist-build.lock` (inside the checkout
+ * and already ignored), and the holder re-checks `dist/cli.js` once it has the
+ * lock, so the second worker finds the first one's build and starts none. A
+ * lock a killed run left behind is taken as stale after `LOCK_STALE_MS`.
  *
  * Lane discipline: like cliHarness.ts, this module imports nothing from
  * src/ — the build runs across a process boundary, same as the CLI under test.
@@ -30,35 +36,89 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
-const DIST_CLI = join(REPO_ROOT, "dist", "cli.js");
 
-let inFlight: Promise<void> | null = null;
+/** A held lock refreshes every `LOCK_UPDATE_MS`; one left untouched this long was left by a killed run. */
+const LOCK_STALE_MS = 30_000;
+const LOCK_UPDATE_MS = 3_000;
+/** A waiter polls once a second for up to five minutes, longer than any build this lane has seen. */
+const LOCK_RETRIES = { retries: 300, factor: 1, minTimeout: 1_000, maxTimeout: 1_000 };
 
-/** Resolves once `dist/cli.js` exists — building it first when absent. */
-export function ensureDistBuilt(): Promise<void> {
+const inFlight = new Map<string, Promise<void>>();
+
+/** Resolves once `<root>/dist/cli.js` exists — building it first when absent. */
+export function ensureDistBuilt({ root = REPO_ROOT }: { root?: string } = {}): Promise<void> {
   // A failed build stays memoized: every later caller in the run gets the
   // same actionable rejection instead of re-spawning a doomed build.
-  inFlight ??= buildIfAbsent();
-  return inFlight;
+  let pending = inFlight.get(root);
+  if (pending === undefined) {
+    pending = buildIfAbsent(root);
+    inFlight.set(root, pending);
+  }
+  return pending;
 }
 
-async function buildIfAbsent(): Promise<void> {
-  if (await exists(DIST_CLI)) return;
+async function buildIfAbsent(root: string): Promise<void> {
+  const distCli = join(root, "dist", "cli.js");
+  if (await exists(distCli)) return;
 
-  const bin = join(
-    REPO_ROOT,
-    "node_modules",
-    ".bin",
-    process.platform === "win32" ? "tsdown.cmd" : "tsdown",
-  );
+  const lockfilePath = join(root, "node_modules", ".cache", "stamity", "dist-build.lock");
+  await mkdir(dirname(lockfilePath), { recursive: true });
+  let compromised: Error | undefined;
+  const release = await lock(root, {
+    lockfilePath,
+    realpath: false,
+    stale: LOCK_STALE_MS,
+    update: LOCK_UPDATE_MS,
+    retries: LOCK_RETRIES,
+    // The library's default rethrows from its refresh timer, which would crash
+    // the worker; the build below reports it instead.
+    onCompromised: (error: Error) => {
+      compromised = error;
+    },
+  });
   try {
-    await execFileAsync(bin, ["--config-loader", "native"], {
-      cwd: REPO_ROOT,
+    // Another process may have built while this one waited for the lock.
+    if (await exists(distCli)) return;
+    await runBuild(root);
+    if (compromised !== undefined) {
+      throw new Error(
+        `distBuild: the build lock at ${lockfilePath} was taken as stale while this build ran ` +
+          `(${compromised.message}), so another process may have built ${root}/dist at the same time; re-run`,
+        { cause: compromised },
+      );
+    }
+    if (!(await exists(distCli))) {
+      throw new Error(
+        `distBuild: tsdown exited 0 but ${distCli} still does not exist — ` +
+          "check tsdown.config.mjs entry/outDir",
+      );
+    }
+  } finally {
+    // A compromised lock is no longer this process's to release.
+    if (compromised === undefined) await release();
+  }
+}
+
+async function runBuild(root: string): Promise<void> {
+  // A test stand-in for tsdown, set by env: the concurrency case in
+  // test/ci/testScheduling.test.ts counts build starts over a temp root, and
+  // the real build would compile this repository there. Unset, the real build runs.
+  const stub = process.env["STAMITY_TEST_DIST_BUILD_STUB"];
+  const [bin, args] =
+    stub !== undefined && stub !== ""
+      ? [process.execPath, [stub]]
+      : [
+          join(REPO_ROOT, "node_modules", ".bin", process.platform === "win32" ? "tsdown.cmd" : "tsdown"),
+          ["--config-loader", "native"],
+        ];
+  try {
+    await execFileAsync(bin, args, {
+      cwd: root,
       windowsHide: true,
       maxBuffer: 16 * 1024 * 1024,
       // .bin shims on Windows are .cmd files, which Node refuses to execFile
       // without a shell since the CVE-2024-27980 hardening.
-      shell: process.platform === "win32",
+      shell: process.platform === "win32" && bin !== process.execPath,
     });
   } catch (error) {
     const failure = error as { stderr?: string; message?: string };
@@ -67,13 +127,6 @@ async function buildIfAbsent(): Promise<void> {
         ? failure.stderr.trim()
         : (failure.message ?? String(error));
     throw new Error(`distBuild: tsdown build failed:\n${detail}`, { cause: error });
-  }
-
-  if (!(await exists(DIST_CLI))) {
-    throw new Error(
-      `distBuild: tsdown exited 0 but ${DIST_CLI} still does not exist — ` +
-        "check tsdown.config.mjs entry/outDir",
-    );
   }
 }
 

@@ -1,8 +1,11 @@
+import { execFile } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, utimesSync, writeFileSync } from "node:fs";
 import { readdir } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, relative } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { promisify } from "node:util";
 import { afterAll, describe, expect, it } from "vitest";
 import { BaseSequencer, createVitest } from "vitest/node";
 import config, {
@@ -10,6 +13,7 @@ import config, {
   privateTempRoot,
   WINDOWS_SHARD_OF,
   WindowsFixtureSequencer,
+  workerCap,
 } from "../../vitest.config.ts";
 import setup, {
   PRIVATE_TMP_PREFIX,
@@ -24,6 +28,7 @@ import { assertRecordsPresent } from "../support/recordsPresent.ts";
 import recordsConfig from "../../vitest.records.config.ts";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
+const execFileAsync = promisify(execFile);
 
 /** Every `*.test.ts` file under `test/`, POSIX-spelled, from disk rather than from any config. */
 async function testFilesOnDisk(): Promise<string[]> {
@@ -90,24 +95,17 @@ describe("Windows fixture scheduling", () => {
       expect(fixtureFiles.toSorted()).toEqual(HEAVY);
       expect(parallelFiles.toSorted()).toEqual(files.filter((file) => !HEAVY.includes(file)).toSorted());
       expect(parallelFiles.filter((file) => fixtureFiles.includes(file))).toEqual([]);
-      // TEST CHANGE, justified (2026-10-15, Dependabot #111, vitest 5.0.3 → 5.0.4): vitest 5.0.4
-      // writes the default worker count into every resolved config (`resolved.maxWorkers = … :
-      // getDefaultMaxWorkers(resolved.watch)`, available cores less one), where 5.0.3 left an unset
-      // value undefined and chose the default in the pool; `toBeUndefined()` read the old storage,
-      // not the intent. The parallel project declares no limit of its own and resolves to exactly
-      // what this vitest gives a config that sets none, so neither it nor the root is capped.
+      // TEST CHANGE, justified: the worker cap is declared on the root config (plan 016's S28, no
+      // spec id). The parallel project still declares no limit of its own: it inherits the root's
+      // `maxWorkers: workerCap(process.env)` through `extends: true`, where it used to resolve to
+      // vitest's own default (available cores less one, uncapped).
       const declared = fixtureScheduling("win32").projects?.find(
         (project) => typeof project === "object" && !(project instanceof Promise) && project.test?.name === "parallel",
       );
       expect(declared, "the parallel project in fixtureScheduling (vitest.config.ts)").toBeDefined();
       expect(typeof declared === "object" && !(declared instanceof Promise) ? declared.test : undefined)
         .not.toHaveProperty("maxWorkers");
-      const unconfigured = await createVitest({ watch: false, run: true, config: false, root: ROOT }, {});
-      try {
-        expect(parallel?.config.maxWorkers).toBe(unconfigured.config.maxWorkers);
-      } finally {
-        await unconfigured.close();
-      }
+      expect(parallel?.config.maxWorkers).toBe(workerCap(process.env));
       expect(parallel?.config.sequence.groupOrder).toBe(0);
       expect(heavy?.config.maxWorkers).toBe(1);
       expect(heavy?.config.sequence.groupOrder).toBe(1);
@@ -222,6 +220,98 @@ describe("Windows fixture scheduling", () => {
     expect(config.test?.projects).toEqual(fixtureScheduling(process.platform).projects);
     expect(config.test?.testTimeout).toBe(20_000);
     expect(config.test?.hookTimeout).toBe(20_000);
+  });
+});
+
+// ADDED 2026-10-25 (plan 022 file 2, unit b17-test-infra-batch; plan 016's S28, no spec id): a
+// local run used every core but one, so a many-core machine running other lanes beside the suite
+// starved its own child-process cases past their budgets. The root config caps the parallel workers.
+describe("the worker cap", () => {
+  it("is 4 by default, never more than the cores less one, and an override only when it is a positive integer", () => {
+    expect(workerCap({}, 16)).toBe(4);
+    expect(workerCap({}, 3)).toBe(2);
+    expect(workerCap({}, 1)).toBe(1);
+    expect(workerCap({ STAMITY_TEST_MAX_WORKERS: "2" }, 16)).toBe(2);
+    expect(workerCap({ STAMITY_TEST_MAX_WORKERS: "8" }, 16)).toBe(8);
+    expect(workerCap({ STAMITY_TEST_MAX_WORKERS: "8" }, 4)).toBe(3);
+    for (const value of ["0", "x", "-2", "2.5", ""]) {
+      expect(workerCap({ STAMITY_TEST_MAX_WORKERS: value }, 16), JSON.stringify(value)).toBe(4);
+    }
+  });
+
+  it("holds the resolved POSIX config to the cap, and the serialized Windows group to one worker", async () => {
+    // The host's win32 scheduling keys come off, as in the records case above, so the config is
+    // the POSIX one on every host.
+    const { include: _hostInclude, projects: _hostProjects, sequence: _hostSequence, ...shared } = config.test ?? {};
+    expect(shared.maxWorkers).toBe(workerCap(process.env));
+    const runner = await createVitest(
+      { watch: false, run: true, config: false, root: ROOT },
+      { test: { ...shared, include: ["test/**/*.test.ts"], ...fixtureScheduling("linux") } },
+    );
+    try {
+      expect(runner.config.maxWorkers).toBe(workerCap(process.env));
+    } finally {
+      await runner.close();
+    }
+    const windows = await createVitest(
+      { watch: false, run: true, config: false, root: ROOT },
+      { test: { ...config.test, ...fixtureScheduling("win32") } },
+    );
+    try {
+      const project = (name: string) => windows.projects.find((candidate) => candidate.name === name);
+      expect(project("parallel")?.config.maxWorkers).toBe(workerCap(process.env));
+      expect(project("windows-fixtures")?.config.maxWorkers).toBe(1);
+    } finally {
+      await windows.close();
+    }
+  });
+});
+
+// ADDED 2026-10-25 (plan 022 file 2, unit b17-test-infra-batch; ledger row
+// 2026-10-18_cloud-runs-2/review/59, no spec id): nine callers reach `ensureDistBuilt`, and two
+// vitest workers on a checkout with no `dist/` each started their own build of one folder.
+describe("ensureDistBuilt across processes", () => {
+  const scratch = realpathSync(mkdtempSync(join(tmpdir(), "dist-build-")));
+  afterAll(() => lazyCleanup(scratch));
+
+  it("starts one build when two processes ask at once for a root with no dist/", { timeout: 60_000 }, async () => {
+    // A temp root, never this checkout: the shared checkout's dist/ is not removed or written.
+    const root = join(scratch, "root");
+    mkdirSync(root);
+    const starts = join(scratch, "starts.log");
+    // The stub stands in for tsdown, set by env (STAMITY_TEST_DIST_BUILD_STUB): the case counts
+    // build starts, and the real build would take tens of seconds and compile this repository. It
+    // logs its start, holds the window open for a second so the other process reaches the lock
+    // while it runs, then writes the one file the helper checks for.
+    const stub = join(scratch, "stub.mjs");
+    writeFileSync(
+      stub,
+      [
+        'import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";',
+        `appendFileSync(${JSON.stringify(starts)}, \`\${process.pid}\\n\`);`,
+        "Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);",
+        'mkdirSync("dist", { recursive: true });',
+        'writeFileSync("dist/cli.js", "// stub build\\n");',
+        "",
+      ].join("\n"),
+    );
+    const caller = join(scratch, "caller.mjs");
+    writeFileSync(
+      caller,
+      [
+        `import { ensureDistBuilt } from ${JSON.stringify(pathToFileURL(join(ROOT, "test/support/distBuild.ts")).href)};`,
+        "await ensureDistBuilt({ root: process.argv[2] });",
+        "",
+      ].join("\n"),
+    );
+    const tsx = pathToFileURL(createRequire(import.meta.url).resolve("tsx")).href;
+    const call = () =>
+      execFileAsync(process.execPath, ["--import", tsx, caller, root], {
+        env: { ...process.env, STAMITY_TEST_DIST_BUILD_STUB: stub },
+      });
+    await Promise.all([call(), call()]);
+    expect(readFileSync(starts, "utf8").trim().split("\n"), "build starts").toHaveLength(1);
+    expect(readFileSync(join(root, "dist", "cli.js"), "utf8")).toBe("// stub build\n");
   });
 });
 

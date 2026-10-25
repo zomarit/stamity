@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { availableParallelism, tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { configDefaults, defineConfig, type TestUserConfig } from "vitest/config";
@@ -93,6 +93,20 @@ export class WindowsFixtureSequencer extends BaseSequencer {
 }
 
 /**
+ * 2026-10-25 (plan 016's S28): the parallel worker count, `min(requested, max(1, cores - 1))`.
+ * `requested` is `STAMITY_TEST_MAX_WORKERS` when it is a positive integer, else 4. Vitest's own
+ * default is every core less one, so on a many-core machine running other lanes beside the suite
+ * each worker's child-process cases ran past their budgets. CI's runners have four cores, so their
+ * three workers are under the cap; a machine with fewer than five cores gets `cores - 1`, vitest's
+ * own default. Set on the root `test` block, so the win32 `parallel` project inherits it.
+ */
+export function workerCap(env: Readonly<Record<string, string | undefined>>, cores: number = availableParallelism()): number {
+  const raw = env["STAMITY_TEST_MAX_WORKERS"];
+  const requested = raw !== undefined && /^[1-9][0-9]*$/.test(raw) ? Number(raw) : 4;
+  return Math.min(requested, Math.max(1, cores - 1));
+}
+
+/**
  * The records suite (REQ-PROVE-025): the cases that read the committed records run under
  * `vitest.records.config.ts` (`npm run test:records`), behind a check that the records are on disk,
  * so `npm test` runs none of them and reads no record.
@@ -169,6 +183,7 @@ export default defineConfig({
   test: {
     include: ["test/**/*.test.ts"],
     exclude: [...configDefaults.exclude, RECORDS_SUITE],
+    maxWorkers: workerCap(process.env),
     ...fixtureScheduling(process.platform),
     ...tempRoot,
     // No test run reads the machine's client accounts (REQ-LADDER-006): `init`
