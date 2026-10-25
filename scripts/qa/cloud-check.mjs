@@ -52,6 +52,7 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFi
 import { tmpdir } from 'node:os'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { copyTargets } from '../../tsdown.config.mjs'
 import { createFixture } from './fixtures.mjs'
 
 const SELF = fileURLToPath(import.meta.url)
@@ -485,14 +486,36 @@ export function realGit(cwd, args) {
   return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
 }
 
+/** The folders the build copies whole into `dist/` (`copyTargets` in `tsdown.config.mjs`), `fork` included. */
+const STAGED_DATA_DIRS = copyTargets(true).map((target) => target.from)
+
 /**
  * HEAD's short sha, the one the start lines name as the packed candidate, or a refusal when a tracked file holds an
  * uncommitted edit: the build packs the working tree, so a sha printed over edits names code the run never ran.
- * Untracked files are left out, since the candidate is packed from tracked files (review/31).
+ * The build also copies the staged data folders whole ({@link STAGED_DATA_DIRS}), so an untracked or ignored file
+ * there ships too and is refused by name. Untracked files elsewhere are left out: they reach the bundle only through
+ * an edit to a tracked file (review/31, review/5).
  */
 export function candidateHead(repoRoot, git) {
   if (git(repoRoot, ['status', '--porcelain', '--untracked-files=no']).trim() !== '') {
     throw new Error('the checkout has uncommitted edits; commit or stash them so the evidence names the code the run ran')
+  }
+  const staged = git(repoRoot, [
+    'status',
+    '--porcelain',
+    '--untracked-files=all',
+    '--ignored=matching',
+    '--',
+    ...STAGED_DATA_DIRS,
+  ])
+    .split('\n')
+    .filter((line) => line.startsWith('?? ') || line.startsWith('!! '))
+    .map((line) => line.slice(3))
+  if (staged.length > 0) {
+    throw new Error(
+      `the build copies ${STAGED_DATA_DIRS.map((dir) => `${dir}/`).join(', ')} whole into dist/, and these files there ` +
+        `are not committed: ${staged.join(', ')}; commit, move or delete them so the evidence names the code the run ran`,
+    )
   }
   return git(repoRoot, ['rev-parse', '--short', 'HEAD']).trim()
 }
@@ -508,8 +531,9 @@ const START_SURFACE = {
  * Build, create and push one scratch repository per client, and print how to start each run.
  *
  * Refuses a `--dir` inside this checkout before any call: a fixture tree there would be walked by
- * every later gate run. Refuses a checkout whose tracked files hold uncommitted edits too, before any
- * call or build ({@link candidateHead}): the sha it prints must name the code it packed. The fixture
+ * every later gate run. Refuses a checkout whose tracked files hold uncommitted edits too, or whose staged data
+ * folders hold an uncommitted file, before any call or build ({@link candidateHead}): the sha it prints must name
+ * the code it packed. The fixture
  * is built with `STAMITY_NO_CLIENT_PROBE=1`, so no client starts on this machine. This checkout is built (`npm run build`) and packed once (`npm pack`) and committed into each
  * scratch repository as a `file:` devDependency with its lockfile (`npm install
  * --package-lock-only`, a registry read). The only writes outside the scratch folder are the

@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -634,9 +634,29 @@ describe("candidateHead — the sha the evidence names (review/31)", () => {
     const short = execFileSync("git", ["rev-parse", "--short", "HEAD"], { cwd: dir, encoding: "utf8" }).trim();
     expect(cloud.candidateHead(dir, cloud.realGit)).toMatch(/^[0-9a-f]{7,}$/);
     expect(cloud.candidateHead(dir, cloud.realGit)).toBe(short);
-    // The candidate is packed from tracked files, so an untracked one leaves the evidence true.
+    // Outside the staged data folders an untracked file reaches no bundle, so it leaves the evidence true.
     writeFileSync(join(dir, "untracked.txt"), "scratch\n");
+    mkdirSync(join(dir, "notes"));
+    writeFileSync(join(dir, "notes", "draft.md"), "scratch\n");
     expect(cloud.candidateHead(dir, cloud.realGit)).toBe(short);
+  });
+
+  it("throws on an untracked file under a folder the build copies whole into dist/, naming it (review/5)", () => {
+    const dir = repository();
+    mkdirSync(join(dir, "content", "skills"), { recursive: true });
+    writeFileSync(join(dir, "content", "skills", "draft.md"), "draft\n");
+    expect(() => cloud.candidateHead(dir, cloud.realGit)).toThrow(/content\/skills\/draft\.md/);
+    expect(() => cloud.candidateHead(dir, cloud.realGit)).toThrow(/whole into dist\//);
+  });
+
+  it("throws on an ignored file under a staged folder, naming it (review/5)", () => {
+    const dir = repository();
+    writeFileSync(join(dir, ".gitignore"), "*.local\n");
+    execFileSync("git", ["add", ".gitignore"], { cwd: dir });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "ignore"], { cwd: dir });
+    mkdirSync(join(dir, "packs", "demo"), { recursive: true });
+    writeFileSync(join(dir, "packs", "demo", "notes.local"), "draft\n");
+    expect(() => cloud.candidateHead(dir, cloud.realGit)).toThrow(/packs\/demo\/notes\.local/);
   });
 
   it("throws on a modified tracked file, and on a staged one", () => {
