@@ -8,7 +8,7 @@ import type { GitRunner } from "../workspace/git.ts";
  *
  * A `reads` path is fresh when `git rev-list --count <stamp>..HEAD -- <path>`
  * is 0, stale `moved` when a commit since the stamp touched it, and stale
- * `missing` when it is not on disk. Three refusals come before any history
+ * `missing` when it is not on disk. Four refusals come before any history
  * count, and no chain base exempts them:
  *
  * - `spelling`: a path not in git's plain form (an empty, `.` or `..` segment,
@@ -27,6 +27,12 @@ import type { GitRunner } from "../workspace/git.ts";
  *   whose disk copy or index holds such an entry below it (a file, a non-empty
  *   folder, a nested repository; ignored ones, and ones only staged or added
  *   with intent-to-add, too). Git counts 0 for that content forever.
+ * - `uncommitted`: a path on disk that HEAD's tree holds, whose work tree or
+ *   index differs from HEAD at or below it (an edit, a staged change, a
+ *   deletion below a folder, a file the disk holds as a folder or a link). A
+ *   history count sees only commits. Not seen: a change the assume-unchanged
+ *   or skip-worktree index bits, or a config that ignores submodules, hide
+ *   from `git status`.
  *
  * A stamp that names no commit, or a commit HEAD does not descend from (a
  * stamp rebased away), is `unresolved` and the verdict is stale: nothing can
@@ -60,7 +66,7 @@ import type { GitRunner } from "../workspace/git.ts";
  */
 
 /** Why a read path is stale. */
-export type StaleReason = "moved" | "missing" | "link" | "spelling" | "untracked";
+export type StaleReason = "moved" | "missing" | "link" | "spelling" | "untracked" | "uncommitted";
 
 /** One stale read path. */
 export interface StalePath {
@@ -137,6 +143,10 @@ export async function freshness(
         return;
       }
       const missing = state !== "present";
+      if (tree === "tracked" && !missing && uncommitted(git, cwd, path)) {
+        stale.push({ path, reason: "uncommitted" });
+        return;
+      }
       if (countCommits(git, cwd, `${stampSha}..HEAD`, path) === 0) {
         if (missing) stale.push({ path, reason: "missing" });
         return;
@@ -271,6 +281,18 @@ function untrackedBelow(git: GitRunner, cwd: string, path: string): boolean {
   if ((runGit(git, cwd, others, false) ?? "") !== "") return true;
   const added = ["--literal-pathspecs", "diff-index", "--cached", "--name-only", "--diff-filter=A", "-z", "HEAD", "--", path];
   return (runGit(git, cwd, added, false) ?? "") !== "";
+}
+
+/**
+ * Whether the tracked `path` differs from HEAD in the work tree or the index, at or below it, in one literal
+ * `git status --porcelain=v1 --untracked-files=no` read: untracked entries are {@link untrackedBelow}'s. Status
+ * compares the bytes of a file whose stat data changed, so a file touched but not changed prints nothing, and under
+ * the CLI's runner (`GIT_OPTIONAL_LOCKS=0`) it writes no index. Plumbing `diff-index` without `--cached` would read a
+ * touched file as changed, and porcelain `diff` writes the index. Only whether it prints anything is used.
+ */
+function uncommitted(git: GitRunner, cwd: string, path: string): boolean {
+  const args = ["--literal-pathspecs", "status", "--porcelain=v1", "-z", "--untracked-files=no", "--", path];
+  return (runGit(git, cwd, args, false) ?? "") !== "";
 }
 
 /** The full sha `name` resolves to as a commit, or null when it names none (`--quiet` exits 1). */

@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { lstat, mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { gitCheckRunner } from "../../src/cli/engine/gitStatus.ts";
@@ -344,11 +344,101 @@ describe("freshness", () => {
     });
     // Non-degenerate: the same staged file named as its own read path reads the same way, and a
     // tracked file whose change is staged is not an entry outside HEAD's tree.
+    // TEST CHANGE, justified (REQ-FLOW-091, Package 20's unit R3, round 2's W-2): a staged edit to a tracked file
+    // now reads stale `uncommitted`; the pin still holds that it is not read as `untracked`.
     await writeFile(join(cwd, "docs/a.md"), "a staged edit\n", { encoding: "utf8", flag: "a" });
     writeGit(cwd, ["add", "--", "docs/a.md"]);
     expect(await freshness(git, cwd, stamp, ["docs/staged.md", "docs/a.md", "notes with space"])).toEqual({
       verdict: "stale",
-      stale: [{ path: "docs/staged.md", reason: "untracked" }],
+      stale: [
+        { path: "docs/staged.md", reason: "untracked" },
+        { path: "docs/a.md", reason: "uncommitted" },
+      ],
+      exempt: [],
+      unresolved: false,
+    });
+  });
+
+  it("reads a tracked path whose work tree or index differs from HEAD as uncommitted, as a file and below a folder", async (ctx) => {
+    await seededRepo(() => ctx.skip());
+    const cwd = tempDir().dir;
+    await touchAndCommit(cwd, "lib/c.ts", "export const c = 1;");
+    const stamp = await touchAndCommit(cwd, "lib/d.ts", "export const d = 1;");
+    await writeFile(join(cwd, "docs/a.md"), "an edit on disk\n", { encoding: "utf8", flag: "a" });
+    await writeFile(join(cwd, "src/b.ts"), "export const staged = 2;\n", { encoding: "utf8", flag: "a" });
+    writeGit(cwd, ["add", "--", "src/b.ts"]);
+    await rm(join(cwd, SPACED));
+    await rm(join(cwd, "lib/c.ts"));
+    await mkdir(join(cwd, "lib/c.ts"));
+    await writeFile(join(cwd, "lib/c.ts/inner.md"), "a folder where a file was\n", "utf8");
+
+    // HEAD is the stamp, so a history count alone reads each fresh: an edit on disk (a file path), a staged
+    // edit below a folder, a deletion below a folder, and a file the disk now holds as a folder.
+    expect(await freshness(git, cwd, stamp, ["docs/a.md", "src", "notes with space", "lib/c.ts"])).toEqual({
+      verdict: "stale",
+      stale: [
+        { path: "docs/a.md", reason: "uncommitted" },
+        { path: "src", reason: "uncommitted" },
+        { path: "notes with space", reason: "uncommitted" },
+        { path: "lib/c.ts", reason: "uncommitted" },
+      ],
+      exempt: [],
+      unresolved: false,
+    });
+    // Non-degenerate: an edit on disk below a folder reads the same, and a clean sibling stays fresh.
+    expect(await freshness(git, cwd, stamp, ["docs", "lib/d.ts"])).toEqual({
+      verdict: "stale",
+      stale: [{ path: "docs", reason: "uncommitted" }],
+      exempt: [],
+      unresolved: false,
+    });
+  });
+
+  it.skipIf(WINDOWS)("reads a folder whose tracked file the disk holds as a link, uncommitted, as uncommitted", async (ctx) => {
+    const stamp = await seededRepo(() => ctx.skip());
+    const cwd = tempDir().dir;
+    await rm(join(cwd, "src/b.ts"));
+    await symlink("../docs/a.md", join(cwd, "src/b.ts"));
+
+    // The index still holds a plain file there, so neither listing below the folder sees it.
+    expect(writeGit(cwd, ["ls-files", "--others", "--", "src"])).toBe("");
+    expect(await freshness(git, cwd, stamp, ["src"])).toEqual({
+      verdict: "stale",
+      stale: [{ path: "src", reason: "uncommitted" }],
+      exempt: [],
+      unresolved: false,
+    });
+    // Non-degenerate: the file named alone is a link on the disk walk, which comes first.
+    expect(await freshness(git, cwd, stamp, ["src/b.ts"])).toMatchObject({ stale: [{ path: "src/b.ts", reason: "link" }] });
+  });
+
+  it("keeps a touched but unchanged file and a clean tree fresh, writing no index, one status read per tracked path", async (ctx) => {
+    const stamp = await seededRepo(() => ctx.skip());
+    const cwd = tempDir().dir;
+    // Same bytes, new modification time: the index's stat data no longer matches the file.
+    const later = new Date(Date.now() + 60_000);
+    await utimes(join(cwd, "docs/a.md"), later, later);
+    const index = await readFile(join(cwd, ".git/index"));
+    const seen: string[][] = [];
+    const recording: GitRunner = (args, dir) => {
+      seen.push([...args]);
+      return git(args, dir);
+    };
+
+    expect(await freshness(recording, cwd, stamp, ["docs/a.md", "src", SPACED, "docs/gone.md"])).toEqual({
+      verdict: "stale",
+      stale: [{ path: "docs/gone.md", reason: "missing" }],
+      exempt: [],
+      unresolved: false,
+    });
+    expect(await readFile(join(cwd, ".git/index"))).toEqual(index);
+    // One status read per tracked path on disk; none for the missing one.
+    const statusRead = seen.filter((args) => args.includes("status"));
+    expect(statusRead.map((args) => args.at(-1))).toEqual(["docs/a.md", "src", SPACED]);
+    expect(statusRead[0]).toEqual(["--literal-pathspecs", "status", "--porcelain=v1", "-z", "--untracked-files=no", "--", "docs/a.md"]);
+    expect(await freshness(git, cwd, stamp, ["docs/a.md", "src", SPACED])).toEqual({
+      verdict: "fresh",
+      stale: [],
       exempt: [],
       unresolved: false,
     });

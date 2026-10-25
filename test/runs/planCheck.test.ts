@@ -425,6 +425,20 @@ describe("checkPlans", () => {
     expect(result.plans[0]?.freshness).toMatchObject({ verdict: "stale", stale: [{ path: "docs/new.md", reason: "untracked" }] });
   });
 
+  it("refuses a reads path with changes HEAD does not hold at the reads line, naming it", async (ctx) => {
+    const { cwd, stamp } = await seeded(() => ctx.skip());
+    await writeFile(join(cwd, "src/b.ts"), "export const uncommitted = 2;\n", { encoding: "utf8", flag: "a" });
+    const text = cleanPlan(stamp);
+    const result = await check(cwd, text);
+
+    expect(result.ready).toBe(false);
+    expect(blockersOf(result, "stale")).toEqual([{ code: "stale", line: lineOf(text, "reads:") }]);
+    expect(result.plans[0]?.blockers[0]?.message).toBe(
+      "`src/b.ts` has changes in the work tree or the index that HEAD does not hold, so its history does not measure them; commit or undo them, and if the plan's research read them, re-read it and re-stamp the plan.",
+    );
+    expect(result.plans[0]?.freshness).toMatchObject({ verdict: "stale", stale: [{ path: "src/b.ts", reason: "uncommitted" }] });
+  });
+
   it("refuses a reads path moved since the stamp, at the reads line", async (ctx) => {
     const { cwd, stamp } = await seeded(() => ctx.skip());
     await touchAndCommit(cwd, "src/b.ts", "export const later = 2;");

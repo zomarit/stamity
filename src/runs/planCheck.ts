@@ -460,6 +460,8 @@ const OWN_STALE_MESSAGE: Partial<Record<StaleReason, string>> = {
   spelling: "is not a plain repository path; write it as git lists it and re-stamp the plan.",
   untracked:
     "is not tracked by git at HEAD, or is a folder holding files HEAD does not (untracked, ignored or only staged), so its history cannot be measured; list the tracked files or subfolders the plan read instead, or commit or remove those files (never commit ignored output), and re-stamp the plan.",
+  uncommitted:
+    "has changes in the work tree or the index that HEAD does not hold, so its history does not measure them; commit or undo them, and if the plan's research read them, re-read it and re-stamp the plan.",
 };
 
 async function measureFreshness(
