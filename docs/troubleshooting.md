@@ -427,8 +427,9 @@ dropped. Tightening needs no flag.
 
 A repository that commits `.stamity/manifest.json` but not its guard copies (under
 `.claude/hooks/stamity/` or `.stamity/generated/hooks/<client>/`) pays this once on a fresh clone,
-on a switch of every selected client, and on a hooks layout move. There the `why` reads `no guard copy
-found on disk or at HEAD beside the setup committed there (read as ask)`: with no copy at `HEAD`, the
+on a switch of every selected client, and on a hooks layout move. There the `why` reads ``no guard copy
+found at `HEAD` or on disk where this write puts one, though the setup committed at `HEAD` records one
+(read as `ask`)``: with no copy at `HEAD`, the
 engine cannot tell a fresh clone from guard copies deleted in a commit, so it reads the strictest
 setting the committed setup allows. One `sync --loosen` settles it, and later syncs need no flag.
 Committing the guard copies, as the default layout does, avoids it on later clones.
