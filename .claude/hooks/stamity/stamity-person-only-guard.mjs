@@ -19,11 +19,12 @@
 // Generated file — regenerate it rather than editing; local edits are overwritten.
 // Trust posture: exec form, repo-committed, no dynamic evaluation, no network reach.
 // Reads outside repo state: the pending call's payload on stdin and the
-// STAMITY_UNATTENDED and STAMITY_REPO_ROOT variables. Reads the git metadata and
-// the run records' heads; writes only the pre-flight canary.
+// STAMITY_UNATTENDED, STAMITY_REPO_ROOT, GH_REPO and GH_HOST variables. Reads the
+// git metadata, the remotes in the git config, and the run records' heads;
+// writes only the pre-flight canary.
 // stamity-autonomy {"mode":"autonomous","runs":["pr-ready","tag"],"deployingBranches":[],"deploying":[]}
 
-import { closeSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, readlinkSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -40,6 +41,12 @@ const RUN_FOLDERS_MAX = 2000;
 const GIT_MAX_BYTES = 4096;
 const TAG_NAMES_MAX = 10000;
 const PACKED_REFS_MAX_BYTES = 8388608;
+const CONFIG_MAX_BYTES = 1048576;
+const REWRITES_MAX = 256;
+const INCLUDE_DEPTH_MAX = 10;
+const LINK_HOPS_MAX = 8;
+const INCLUDE_FILES_MAX = 64;
+const INCLUDE_BYTES_MAX = 4194304;
 const PLACES_MAX = 32;
 const CANARY_SEGMENTS = [".stamity","preflight-canary.json"];
 const SHELL_TOOLS = new Set(["Bash", "PowerShell", "Shell", "bash", "powershell", "shell"]);
@@ -48,14 +55,16 @@ const MCP_ROWS = new Map([["mcp__github__merge_pull_request",true],["mcp__github
 // The autonomy setting baked at emission, the marker line's own value (REQ-FLOW-137): the ask-class rules it runs
 // unasked (a workflow dispatch among them unless named as deploying), and whether it is stricter than the default.
 const AUTONOMY = {"mode":"autonomous","runs":["pr-ready","tag"],"deployingBranches":[],"deploying":[]};
-const RUNS = [...AUTONOMY.runs, ...(AUTONOMY.deploying.includes("workflow-dispatch") ? [] : ["workflow-dispatch"])];
+// A remote or URL rewrite written runs on the main thread in every mode and is refused for a sub-agent (REQ-FLOW-134,
+// review/129): it moves the origin the outside-party rule holds writes to.
+const RUNS = [...AUTONOMY.runs, ...(AUTONOMY.deploying.includes("workflow-dispatch") ? [] : ["workflow-dispatch"]), "remote-write"];
 const STRICTER = AUTONOMY.mode === "ask" || AUTONOMY.deploying.length > 0 || AUTONOMY.deployingBranches.length > 0;
 // This package as emission found it (review/44, review/53): the program words that run it (its bins and unscoped name,
 // read from the engine's own package.json, so a renamed fork's bin is read as this package's), its name, whose
 // node_modules path names its CLI file, and whether this repository is the engine's own.
 const PACKAGE = {"words":["stamity","st"],"name":"@zomarit/stamity","own":true};
 // What an act the setting runs unasked is called where a sub-agent's call to it is refused (REQ-FLOW-137).
-const RUN_ACTS = {"pr-ready":"Marking a pull request ready for review","tag":"Creating a tag","workflow-dispatch":"Dispatching a workflow"};
+const RUN_ACTS = {"pr-ready":"Marking a pull request ready for review","tag":"Creating a tag","workflow-dispatch":"Dispatching a workflow","remote-write":"Writing a git remote or a URL rewrite"};
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ANCHOR_SEGMENTS = ["hooks",".claude"];
@@ -1245,6 +1254,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				const decoded = (target.replace(/^[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/]*/, "").replace(/^[\w-]+(\.[\w-]+)+(:\d+)?(?=\/)/, "").replace(/^\/+/, "").replace(/^api\/v3\//i, "").split(/[?#]/)[0] ?? "").replace(/%([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(Number.parseInt(hex, 16)));
 				return [.../* @__PURE__ */ new Set([decoded, resolved(decoded)])].map((path) => path.replace(/\/+$/, "").replace(/^repos\/[^/]+\/[^/]+\//i, "").replace(/^(orgs|enterprises|users|repositories)\/[^/]+\//i, ""));
 			}),
+			targets,
 			cmd: cmd.slice(0, end),
 			next
 		};
@@ -1312,6 +1322,15 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			return matched[branch.length] === true;
 		});
 	}
+	function repoKey(text, host) {
+		const parts = /^[a-z][a-z0-9+.-]*:\/\/(?:[^@/]*@)?([^/:?#]+)(?::\d*)?\/+([^/?#]+)\/([^/?#]+)/i.exec(text) ?? /^(?:[^@/:]+@)?([^/:]+):(?!\/)([^/]+)\/([^/]+?)\/?$/.exec(text) ?? /^(?:([^/:@]+)\/)?([^/:@]+)\/([^/:@]+?)\/?$/.exec(text);
+		if (parts === null) return "";
+		const where = (parts[1] ?? host).toLowerCase().replace(/\.+$/, "").replace(/^www\./, "").replace(/^api\.(?=github\.com$|[^.]+\.ghe\.com$)/, "");
+		const owner = (parts[2] ?? "").toLowerCase();
+		const name = (parts[3] ?? "").toLowerCase().replace(/\.git$/, "");
+		const plain = (part) => /^[\w.-]+$/.test(part) && !/^\.+$/.test(part);
+		return plain(where) && plain(owner) && plain(name) ? `${where}/${owner}/${name}` : "";
+	}
 	const branch = (ref) => ref.replace(/^refs\/heads\//i, "").replace(/^refs\/remotes\/[^/]+\//i, "").toLowerCase();
 	const defaults = /* @__PURE__ */ new Set([
 		"main",
@@ -1339,7 +1358,9 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		"push-deploying",
 		"workflow-dispatch",
 		"autonomy-loosen",
-		"land-approved"
+		"land-approved",
+		"outside-write",
+		"remote-write"
 	]);
 	const acts = [];
 	const ran = [];
@@ -1356,6 +1377,133 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		} else acts.push(verdict);
 		return verdict;
 	};
+	const FILE_AT = /(?:^|[\s'"])(?:-[A-Za-z]*[dFT]|--(?:data(?:-binary|-ascii|-urlencode)?|json|form|upload-file|field|input))(?:[\s=]+|=?)['"]?(?:[\w.[\]-]+=)?$/;
+	const IN_REPO_APPS = /* @__PURE__ */ new Set([
+		"codex",
+		"dependabot",
+		"copilot",
+		"claude"
+	]);
+	const mentions = (text, files) => {
+		for (let at = 0; at < text.length; at += 1) if (text[at] === "`") {
+			const close = text.indexOf("`", at + 1);
+			if (close === -1) continue;
+			at = close;
+		} else if (text[at] === "@" && !/\w/.test(text[at - 1] ?? "") && !(files?.has(/^[^\s'"]*/.exec(text.slice(at + 1, at + 257))?.[0] ?? "") === true && FILE_AT.test(text.slice(Math.max(0, at - 48), at)))) {
+			const login = /^[A-Za-z0-9][A-Za-z0-9-]*/.exec(text.slice(at + 1, at + 41))?.[0];
+			if (login !== void 0 && (!IN_REPO_APPS.has(login.toLowerCase()) || text[at + 1 + login.length] === "/")) return true;
+		}
+		return false;
+	};
+	const people = (value) => value.split(",").some((entry) => {
+		const name = entry.trim();
+		const login = name.replace(/^@/, "").toLowerCase().replace(/\[bot\]$/, "");
+		return name !== "" && name !== "@me" && !IN_REPO_APPS.has(login) && login !== "copilot-pull-request-reviewer";
+	});
+	const PEOPLE_KEYS = /* @__PURE__ */ new Set([
+		"reviewers",
+		"team_reviewers",
+		"assignees",
+		"assignee"
+	]);
+	const STATE_ONLY = /* @__PURE__ */ new Set(["resolveReviewThread", "unresolveReviewThread"]);
+	const mutationFields = (masked) => {
+		const found = [];
+		let depth = 0;
+		let parens = 0;
+		let pending = false;
+		let opened = -1;
+		let before = 0;
+		for (const [token] of masked.matchAll(/\.\.\.|[A-Za-z_]\w*|\S/g)) if (parens > 0) {
+			if (token === "(") parens += 1;
+			else if (token === ")") parens -= 1;
+		} else if (token === "(") parens = 1;
+		else if (token === "{") {
+			depth += 1;
+			if (pending) {
+				pending = false;
+				opened = depth;
+				before = found.length;
+			}
+		} else if (token === "}") {
+			if (depth === opened) {
+				if (found.length === before) found.push("");
+				opened = -1;
+			}
+			depth -= 1;
+		} else if (depth === 0 && token === "mutation") pending = true;
+		else if (depth === opened && token === ":") found.pop();
+		else if (depth === opened && /^(?:[A-Za-z_]|\.\.\.)/.test(token)) found.push(token);
+		if (pending || opened !== -1) found.push("");
+		return found;
+	};
+	let lineMentions = null;
+	const fileRefs = /* @__PURE__ */ new Set();
+	const environment = /\bGH_(?:REPO|HOST)\b|\bGIT_CONFIG\w*|\b(?:HOME|XDG_CONFIG_HOME)\s*=/.test(command);
+	const defaultAway = () => {
+		const fallback = ctx.ghDefaultRepo;
+		return fallback === null || fallback !== void 0 && fallback !== "" && fallback !== ctx.originRepo;
+	};
+	const STDIN = /* @__PURE__ */ new Set([
+		"-",
+		"/dev/stdin",
+		"/dev/fd/0",
+		"/proc/self/fd/0"
+	]);
+	const gitEnvironment = /\bGIT_CONFIG\w*|\b(?:HOME|XDG_CONFIG_HOME)\s*=/.test(command);
+	const pushOutside = (words, config) => {
+		const origin = ctx.originRepo;
+		if (origin === void 0) return;
+		const outside = () => {
+			deny("outside-write", "A push to another repository, or to a remote the guard cannot place");
+		};
+		if (gitEnvironment || config.some((pair) => /^(?:remote|url)\./i.test(pair))) return outside();
+		const named = words.length > 0 ? words : [[ctx.pushRemote === void 0 ? "origin" : ctx.pushRemote, void 0]];
+		for (const [word, mark] of named) {
+			if (word === null || (mark?.kinds ?? "") !== "" || /[$`]/.test(word)) return outside();
+			if (word === "origin" && ctx.ownCheckout !== false) {
+				const moved = ctx.originPush;
+				if (moved === void 0 || moved === null) continue;
+				if (moved === "" || moved !== origin) return outside();
+				continue;
+			}
+			const key = /[:/\\]/.test(word) || word === "." ? repoKey(word, "github.com") : ctx.remoteRepo?.(word) ?? "";
+			if (key === "" || key !== origin) return outside();
+		}
+	};
+	function remoteWriteVerdict(sub, args) {
+		if (ctx.originRepo === void 0) return;
+		if (sub === "remote") {
+			const action = args.find((arg) => !arg.startsWith("-")) ?? "";
+			if ([
+				"add",
+				"rename",
+				"set-url",
+				"remove",
+				"rm",
+				"set-head",
+				"set-branches"
+			].includes(action)) deny("remote-write", `Writing a git remote (\`git remote ${action}\`)`);
+			return;
+		}
+		if (sub !== "config") return;
+		if (args.some((arg) => arg === "-e" || arg === "--edit")) {
+			deny("remote-write", "Editing the git configuration (`git config --edit`), which may write a remote or a URL rewrite");
+			return;
+		}
+		const keyed = args.findIndex((arg) => /^(?:remote|url|include|includeif)\.|^include(?:if)?$/i.test(arg));
+		if (keyed === -1) return;
+		const reads = args.some((arg) => /^--(?:get(?:-all|-regexp|-urlmatch|-color(?:bool)?)?|list|show-origin|show-scope|name-only)$/.test(arg) || arg === "-l");
+		const subcommand = args.find((arg) => !arg.startsWith("-")) ?? "";
+		const writes = args.some((arg) => /^--(?:unset(?:-all)?|add|replace-all|rename-section|remove-section)$/.test(arg)) || [
+			"set",
+			"unset",
+			"rename-section",
+			"remove-section"
+		].includes(subcommand);
+		const value = args.slice(keyed + 1).some((arg) => !arg.startsWith("-"));
+		if (writes || !reads && !["get", "list"].includes(subcommand) && value) deny("remote-write", "Writing a remote or URL rewrite in the git configuration (`git config`)");
+	}
 	function destination(refspec) {
 		const spec = refspec.replace(/^\+/, "");
 		const colon = spec.indexOf(":");
@@ -1363,12 +1511,19 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		const dst = spec.slice(colon + 1);
 		return dst === "" ? spec.slice(0, colon) : dst;
 	}
+	let pushReach = [];
+	function pushRead(args, config, marks) {
+		pushReach = [];
+		pushVerdict(args, config, marks);
+		pushOutside(pushReach, config);
+	}
 	function pushVerdict(args, config, marks = []) {
 		let force = false;
 		let remove = false;
 		let tags = false;
 		let matching = false;
 		let repoGiven = false;
+		const repoWords = [];
 		const positionals = [];
 		const positionalMarks = [];
 		const configured = [];
@@ -1414,6 +1569,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				else if (is(["--delete", "--prune"])) remove = true;
 				else if (is(["--repo"])) {
 					repoGiven = true;
+					repoWords.push(arg.includes("=") ? [arg.slice(arg.indexOf("=") + 1), marks[j]] : [args[j + 1] ?? null, marks[j + 1]]);
 					if (!arg.includes("=")) j += 1;
 				} else if (is([
 					"--push-option",
@@ -1434,6 +1590,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				positionalMarks.push(marks[j]);
 			}
 		}
+		pushReach = [...repoWords, ...positionals.length > 0 ? [[positionals[0] ?? null, positionalMarks[0]]] : []];
 		const named = repoGiven ? positionals : positionals.slice(1);
 		const namedMarks = repoGiven ? positionalMarks : positionalMarks.slice(1);
 		if (!repoGiven && /[sgb]/.test(positionalMarks[0]?.kinds ?? "")) {
@@ -1660,11 +1817,11 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		}
 		if (group === "api") httpVerdict(cmd);
 	}
-	function httpVerdict(line) {
+	function httpVerdict(line, chained = false) {
 		const gh = line[0] === "gh";
 		const fill = (value) => value.replace(/\{branch\}|:branch\b/g, () => ctx.currentBranch === null ? "main" : branch(ctx.currentBranch));
-		const { write, method, paths: targets, cmd, next } = httpCall(line);
-		if (next !== null) httpVerdict(next);
+		const { write, method, paths: targets, targets: raw, cmd, next } = httpCall(line);
+		if (next !== null) httpVerdict(next, true);
 		const paths = gh ? targets.map(fill) : targets;
 		const text = cmd.join(" ");
 		const fieldFlag = gh ? /^(-[fF]|--field|--raw-field)$/ : /^(-[A-Za-z]*d|--data(-raw|-binary|-ascii|-urlencode)?|--json|--post-data|--body-data)$/;
@@ -1672,6 +1829,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		const bodyFields = [];
 		const queries = [];
 		let hiddenBody = false;
+		const parsed = [];
 		const add = (key, value, typed) => {
 			const shown = typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? String(value) : null;
 			const placed = typed && shown !== null ? shown === "null" ? null : fill(shown) : shown;
@@ -1704,6 +1862,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			}
 			try {
 				const body = JSON.parse(value);
+				parsed.push(body);
 				if (typeof body === "object" && body !== null && !Array.isArray(body)) for (const [key, field] of Object.entries(body)) add(key, field, false);
 				else hiddenBody = true;
 			} catch {
@@ -1842,6 +2001,109 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				continue;
 			}
 			if (write) restAct(path, shown);
+		}
+		if (ctx.originRepo !== void 0 && write) outsideCall();
+		function outsideCall() {
+			const origin = ctx.originRepo ?? "";
+			const originHost = /^[^/]*/.exec(origin)?.[0] ?? "";
+			const host = ctx.ghHost ?? "github.com";
+			const marks = chained ? [] : markMap.get(line) ?? [];
+			const shellFilled = (at) => chained ? /[$`]/.test(line[at] ?? "") : /e/.test(marks[at]?.kinds ?? "");
+			const normal = (name) => name.toLowerCase().replace(/\.+$/, "").replace(/^www\./, "");
+			let given = host;
+			if (gh) for (let k = 1; k < cmd.length; k += 1) {
+				const word = cmd[k] ?? "";
+				if (word === "--hostname") given = cmd[k += 1] ?? "$";
+				else if (word.startsWith("--hostname=")) given = word.slice(11);
+			}
+			const keys = [];
+			let defaulted = false;
+			let graphql = false;
+			for (const target of raw) {
+				const url = /^(?:[a-z][a-z0-9+.-]*:\/\/)?(?:[^@/]*@)?([^/:?#]*)(?::\d*)?([\s\S]*)$/i.exec(target);
+				const scheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(target);
+				const at = normal(gh && !scheme ? given : url?.[1] ?? "");
+				const rest = gh && !scheme ? target : url?.[2] ?? "";
+				if (at === "" || /[$`]/.test(at)) {
+					keys.push("");
+					continue;
+				}
+				const api = /^\/*api\/(?:v3\/|graphql(?:[/?#]|$))/i.test(rest);
+				if (!gh && at !== "api.github.com" && !/^api\.[^.]+\.ghe\.com$/.test(at) && !(originHost !== "github.com" && at === originHost && api)) continue;
+				const path = (rest.replace(/^\/+/, "").replace(/^api\/(?:v3\/)?/i, "").split(/[?#]/)[0] ?? "").replace(/%([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(Number.parseInt(hex, 16)));
+				const repo = /^repos\/([^/]+)\/([^/]+)/i.exec(path);
+				const placeholders = gh && repo !== null && /^(?:\{owner\}|:owner)$/.test(repo[1] ?? "") && /^(?:\{repo\}|:repo)$/.test(repo[2] ?? "");
+				const head = repo?.[0] ?? /^[^/]*/.exec(path)?.[0] ?? "";
+				if (/^graphql\/?$/i.test(path)) graphql = true;
+				else if (/(?:^|\/)\.\.?(?:\/|$)/.test(path) || /^repositories\//i.test(path) || /[$`]/.test(head)) keys.push("");
+				else if (placeholders) defaulted = true;
+				else if (repo !== null) keys.push(repoKey(`${at}/${repo[1] ?? ""}/${repo[2] ?? ""}`, host));
+				else keys.push("");
+			}
+			if (!gh && !graphql && keys.length === 0) return;
+			const what = gh ? "gh api" : `${line[0] ?? ""} to the GitHub API`;
+			if (gh && environment || keys.some((key) => key === "" || key !== origin) || defaulted && keys.length === 0 && defaultAway()) deny("outside-write", `A write that reaches another repository, or one the guard cannot place (\`${what}\`)`);
+			if (graphql) {
+				const filledKey = line.some((word, at) => {
+					if (at === 0 || !shellFilled(at)) return false;
+					if (!gh) return true;
+					const start = /^(?:-[fF]|--field|--raw-field)$/.test(line[at - 1] ?? "") ? 0 : /^(?:-i*[fF]|--(?:raw-)?field=)/.exec(word)?.[0].length ?? -1;
+					if (start === -1) return false;
+					const eq = word.indexOf("=", start);
+					const first = chained ? word.search(/[$`]/) : marks[at]?.first ?? 0;
+					return eq === -1 || first <= eq || word.slice(start, eq).toLowerCase() === "query";
+				});
+				if (chained || queries.length === 0 || hiddenBody || filledKey || queries.some((query) => /"""|#/.test(query)) || queries.some((query) => mutationFields(mask(query)).some((name) => !STATE_ONLY.has(name)))) deny("outside-write", `A GraphQL mutation whose subject is a node id the line cannot place, or a GraphQL call whose query it cannot show (\`${what}\`)`);
+			}
+			let whole = false;
+			const prose = [];
+			const persons = [];
+			const read = (key, value) => {
+				const name = (/(?:^|\[)([A-Za-z_]\w*)\]?(?:\[\])*$/.exec(key)?.[1] ?? key).toLowerCase();
+				if (name === "body" || name === "title") {
+					if (typeof value === "string" && !/\$[\w{(]|`/.test(value)) prose.push(value);
+					else if (value === null || typeof value === "string") whole = true;
+				} else if (PEOPLE_KEYS.has(name)) for (const entry of Array.isArray(value) ? value : [value]) persons.push(typeof entry === "string" ? entry : null);
+			};
+			if (gh) for (let k = 1; k < cmd.length; k += 1) {
+				const word = cmd[k] ?? "";
+				if (word === "--input" || word.startsWith("--input=")) {
+					if (STDIN.has(word === "--input" ? cmd[k + 1] ?? "" : word.slice(8))) whole = true;
+					if (word === "--input") k += 1;
+					continue;
+				}
+				const long = /^(--field|--raw-field)=([\s\S]*)$/.exec(word);
+				const flag = /^(?:-[fF]|--field|--raw-field)$/.test(word) ? word : long?.[1];
+				const value = long !== null ? long[2] : flag !== void 0 ? cmd[k += 1] : void 0;
+				const eq = value?.indexOf("=") ?? -1;
+				if (value === void 0 || eq <= 0) continue;
+				const field = value.slice(eq + 1);
+				if ((flag === "-F" || flag === "--field") && field.startsWith("@")) {
+					if (STDIN.has(field.slice(1))) read(value.slice(0, eq), null);
+				} else read(value.slice(0, eq), /[$`]/.test(field) ? null : field);
+			}
+			else {
+				const nodes = [...parsed];
+				while (nodes.length > 0) {
+					const node = nodes.pop();
+					if (Array.isArray(node)) for (const entry of node) nodes.push(entry);
+					else if (node !== null && typeof node === "object") for (const [key, value] of Object.entries(node)) {
+						const name = key.toLowerCase();
+						if (name === "body" || name === "title" || PEOPLE_KEYS.has(name)) read(name, value);
+						else nodes.push(value);
+					}
+				}
+				const DATA = /^(?:-[A-Za-z]*d|--(?:data(?:-raw|-binary|-ascii|-urlencode)?|json|post-data|body-data))$/;
+				whole ||= cmd.some((word) => /(?:^|[=@])(?:-|\/dev\/stdin|\/dev\/fd\/0|\/proc\/self\/fd\/0)$/.test(word)) || line.some((word, at) => at > 0 && shellFilled(at) && (DATA.test(line[at - 1] ?? "") || /^(?:-d|--(?:data(?:-raw|-binary|-ascii|-urlencode)?|json|post-data|body-data)=)/.test(word)));
+			}
+			for (let k = 1; k < cmd.length; k += 1) {
+				const word = cmd[k] ?? "";
+				const value = /^(?:-[A-Za-z]*[dFT]|--(?:data(?:-binary|-ascii|-urlencode)?|json|form|upload-file|field))$/.test(word) ? cmd[k + 1] ?? "" : word.replace(/^--(?:data(?:-binary|-ascii|-urlencode)?|json|form|upload-file|field)=/, "");
+				const at = value.indexOf("@");
+				if (at !== -1 && (at === 0 || value[at - 1] === "=") && value !== word) fileRefs.add(value.slice(at + 1));
+			}
+			if (whole ? lineMentions ??= mentions(command, fileRefs) : prose.some((entry) => mentions(entry))) deny("outside-write", `A body or title naming a person (an \`@\` mention), which reaches them (\`${what}\`)`);
+			if (persons.some((value) => value === null || people(value))) deny("outside-write", `A review request or an assignee naming a person, which notifies them (\`${what}\`)`);
 		}
 		function restAct(path, shown) {
 			if (/^pulls\/[^/]+\/merge(-async)?(\/|$)/i.test(path)) deny("pr-merge", `A REST merge (${shown})`);
@@ -1996,6 +2258,152 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		const dryRun = (cmd[0] !== "yarn" || yarnNpm) && dryAt.length > 0 && dryAt.every((index) => options[index] !== "--dry-run" || valueAfter(index)) && !cmd.some((word) => /^-{1,2}(?:no-?)?d(?:r|=|$)/i.test(word) && word !== "--dry-run" && word !== "--dry-run=true") && !cmd.some((word) => /[$`]/.test(word)) && !/npm_config_dry_run/i.test(command) && /(?:^|[\s;&|(])--dry-run(?:=true)?(?=[\s;&|)]|$)/.test(command);
 		return publishes && !dryRun ? deny("publish", `Publishing a package (\`${cmd[0]} publish\`)`) : null;
 	}
+	function outsideVerdict(cmd) {
+		const origin = ctx.originRepo;
+		if (origin === void 0) return;
+		const [group = "", sub = ""] = ghPositionals(cmd);
+		const reads = (/* @__PURE__ */ new Map([
+			["pr", [
+				"list",
+				"ls",
+				"view",
+				"status",
+				"checks",
+				"diff",
+				"checkout",
+				"co"
+			]],
+			["issue", [
+				"list",
+				"ls",
+				"view",
+				"status"
+			]],
+			["release", [
+				"list",
+				"ls",
+				"view",
+				"download"
+			]],
+			["workflow", [
+				"list",
+				"ls",
+				"view"
+			]],
+			["run", [
+				"list",
+				"ls",
+				"view",
+				"watch",
+				"download"
+			]],
+			["label", ["list", "ls"]],
+			["cache", ["list", "ls"]],
+			["secret", ["list", "ls"]],
+			["variable", [
+				"list",
+				"ls",
+				"get"
+			]],
+			["gist", [
+				"list",
+				"ls",
+				"view",
+				"clone"
+			]]
+		])).get(group);
+		if (reads === void 0 || sub === "" || reads.includes(sub)) return;
+		if (group === "gist") {
+			deny("outside-write", `A gist write, which shares text outside the repository (\`gh gist ${sub}\`)`);
+			return;
+		}
+		const host = ctx.ghHost ?? "github.com";
+		const marks = markMap.get(cmd) ?? [];
+		const shown = (at) => (marks[at]?.kinds ?? "") === "" && !/[$`]/.test(cmd[at] ?? "");
+		const closing = (group === "pr" || group === "issue") && (sub === "close" || sub === "reopen");
+		const creating = group === "pr" && sub === "create" ? "ra" : group === "issue" && sub === "create" ? "a" : "";
+		const SHORT = new Map([
+			["R", "R"],
+			["b", "b"],
+			["t", "b"],
+			["n", "b"],
+			["F", "F"],
+			...closing ? [["c", "b"]] : [],
+			...[...creating].map((letter) => [letter, "r"])
+		]);
+		const flags = new Map("pr create:defw:aBbFHlmprTt|pr edit::BbFmt|pr comment:ew:bF|pr review:acr:bF|pr merge:dmrs:AbFt|pr close:d:c|pr reopen::c|pr lock::r|pr revert:d:bFt|issue create:ew:abFlmpTt|issue edit::bFmt|issue comment:ew:bF|issue close::cr|issue reopen::c|issue develop:cl:bn|issue lock::r|release create:dp:nFt|release edit::nFt|release delete:y:|release delete-asset:y:|workflow run::Ffr|run rerun:d:j|label create:f:cd|label edit::cdn|label clone:f:|cache delete:a:r|secret set:u:abeforv|secret delete:u:aeo|variable set::beforv|variable delete::eo".split("|").map((entry) => {
+			const [name = "", bools = "", values = ""] = entry.split(":");
+			return [name, [`${bools}h`, `${values}R`]];
+		}));
+		const LONG = new Map([
+			["--repo", "R"],
+			["--branch-repo", "R"],
+			["--body", "b"],
+			["--title", "b"],
+			["--notes", "b"],
+			["--subject", "b"],
+			...closing ? [["--comment", "b"]] : [],
+			["--body-file", "F"],
+			["--notes-file", "F"],
+			["--reviewer", "r"],
+			["--add-reviewer", "r"],
+			["--assignee", "r"],
+			["--add-assignee", "r"]
+		]);
+		const targets = [];
+		const positionals = [];
+		let whole = false;
+		const prose = [];
+		const persons = [];
+		const take = (kind, value, at) => {
+			const seen = shown(at);
+			if (kind === "R") targets.push(seen ? repoKey(value, host) : "");
+			else if (kind === "F") whole ||= STDIN.has(value) || !seen;
+			else if (kind === "r") persons.push(seen ? value : null);
+			else if (seen) prose.push(value);
+			else whole = true;
+		};
+		for (let k = 1; k < cmd.length; k += 1) {
+			const word = cmd[k] ?? "";
+			if (!word.startsWith("-")) {
+				positionals.push(k);
+				if (/^https?:\/\//i.test(word)) targets.push(shown(k) ? repoKey(word, host) : "");
+				continue;
+			}
+			if (/^-[^-]/.test(word)) {
+				const [bools, values] = flags.get(`${group} ${sub}`) ?? ["h", "R"];
+				for (let c = 1; c < word.length; c += 1) {
+					const letter = word[c] ?? "";
+					if (bools.includes(letter)) continue;
+					if (!values.includes(letter)) {
+						targets.push("");
+						k = cmd.length;
+						break;
+					}
+					const kind = SHORT.get(letter);
+					const rest = word.slice(c + 1).replace(/^=/, "");
+					if (rest === "") k += 1;
+					if (kind !== void 0) take(kind, rest === "" ? cmd[k] ?? "" : rest, k);
+					break;
+				}
+				continue;
+			}
+			const eq = word.indexOf("=");
+			const kind = LONG.get(eq === -1 ? word : word.slice(0, eq));
+			if (kind === void 0) continue;
+			if (eq !== -1) take(kind, word.slice(eq + 1), k);
+			else {
+				take(kind, cmd[k + 1] ?? "", k + 1);
+				k += 1;
+			}
+		}
+		const moved = group === "issue" && sub === "transfer" ? positionals[3] : void 0;
+		if (moved !== void 0 && !/^https?:\/\//i.test(cmd[moved] ?? "")) targets.push(shown(moved) ? repoKey(cmd[moved] ?? "", host) : "");
+		const what = `gh ${group} ${sub}`;
+		if (environment || targets.some((key) => key === "" || key !== origin) || targets.length === 0 && defaultAway()) deny("outside-write", `A write that reaches another repository, or one the guard cannot place (\`${what}\`)`);
+		if (whole ? lineMentions ??= mentions(command, fileRefs) : prose.some((text) => mentions(text))) deny("outside-write", `A body or title naming a person (an \`@\` mention), which reaches them (\`${what}\`)`);
+		if (persons.some((value) => value === null || people(value))) deny("outside-write", `A review request or an assignee naming a person, which notifies them (\`${what}\`)`);
+	}
 	function landApprovedVerdict(cmd) {
 		const unsure = unread.get(cmd) ?? [];
 		const args = unsure[0] === true ? cmd.slice(1) : packageArgs(cmd);
@@ -2044,9 +2452,10 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		const program = cmd[0] ?? "";
 		if (program === "git") {
 			const { sub, args, config } = gitParts(cmd);
+			remoteWriteVerdict(sub, args);
 			const argMarks = (markMap.get(cmd) ?? []).slice(cmd.length - args.length);
-			if (sub === "push") pushVerdict(args, config, argMarks);
-			else if (sub === "send-pack") pushVerdict(args, [...config, "push.default=matching"], argMarks);
+			if (sub === "push") pushRead(args, config, argMarks);
+			else if (sub === "send-pack") pushRead(args, [...config, "push.default=matching"], argMarks);
 			else if (sub === "tag") tagVerdict(args);
 			else if (sub === "update-ref" && (args.some((arg) => /^(refs\/)?tags\//i.test(arg)) || args.includes("--stdin") && /refs\/tags\//i.test(command))) {
 				const zero = /(^|[^0-9a-f])(0{40}|0{64})([^0-9a-f]|$)/i;
@@ -2081,10 +2490,12 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 					last: 0,
 					kinds: ""
 				});
-				if (words[0] === "push") pushVerdict(words.slice(1), config, keptMarks.slice(1));
+				if (words[0] === "push") pushRead(words.slice(1), config, keptMarks.slice(1));
 			}
-		} else if (program === "gh") ghVerdict(cmd);
-		else if (program === "curl" || program === "wget") httpVerdict(cmd);
+		} else if (program === "gh") {
+			ghVerdict(cmd);
+			if (ghPositionals(cmd)[0] !== "api") outsideVerdict(cmd);
+		} else if (program === "curl" || program === "wget") httpVerdict(cmd);
 		else if ([
 			"npm",
 			"pnpm",
@@ -3250,6 +3661,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 				const decoded = (target.replace(/^[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/]*/, "").replace(/^[\w-]+(\.[\w-]+)+(:\d+)?(?=\/)/, "").replace(/^\/+/, "").replace(/^api\/v3\//i, "").split(/[?#]/)[0] ?? "").replace(/%([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(Number.parseInt(hex, 16)));
 				return [.../* @__PURE__ */ new Set([decoded, resolved(decoded)])].map((path) => path.replace(/\/+$/, "").replace(/^repos\/[^/]+\/[^/]+\//i, "").replace(/^(orgs|enterprises|users|repositories)\/[^/]+\//i, ""));
 			}),
+			targets,
 			cmd: cmd.slice(0, end),
 			next
 		};
@@ -3616,6 +4028,16 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 	return { deny: false };
 };
 
+const repositoryKey = function repositoryKey(text, host) {
+	const parts = /^[a-z][a-z0-9+.-]*:\/\/(?:[^@/]*@)?([^/:?#]+)(?::\d*)?\/+([^/?#]+)\/([^/?#]+)/i.exec(text) ?? /^(?:[^@/:]+@)?([^/:]+):(?!\/)([^/]+)\/([^/]+?)\/?$/.exec(text) ?? /^(?:([^/:@]+)\/)?([^/:@]+)\/([^/:@]+?)\/?$/.exec(text);
+	if (parts === null) return "";
+	const where = (parts[1] ?? host).toLowerCase().replace(/\.+$/, "").replace(/^www\./, "").replace(/^api\.(?=github\.com$|[^.]+\.ghe\.com$)/, "");
+	const owner = (parts[2] ?? "").toLowerCase();
+	const name = (parts[3] ?? "").toLowerCase().replace(/\.git$/, "");
+	const plain = (part) => /^[\w.-]+$/.test(part) && !/^\.+$/.test(part);
+	return plain(where) && plain(owner) && plain(name) ? `${where}/${owner}/${name}` : "";
+};
+
 /** A git metadata file's text, trimmed: a regular file of at most GIT_MAX_BYTES, never through a link. */
 function gitText(path) {
   try {
@@ -3976,12 +4398,186 @@ function linesOf(name, tail) {
   return lines;
 }
 
+/** The configuration files git merges for a git dir: see GUARD_GIT_INCLUDE_DEPTH_MAX in the engine. */
+function configFiles(dirs) {
+  const env = process.env;
+  const on = (value) => value !== undefined && !["", "0", "false", "no", "off"].includes(String(value).toLowerCase());
+  const home = env.HOME ?? env.USERPROFILE ?? "";
+  const files = [];
+  if (!on(env.GIT_CONFIG_NOSYSTEM)) files.push(env.GIT_CONFIG_SYSTEM || "/etc/gitconfig");
+  if (env.GIT_CONFIG_GLOBAL !== undefined) {
+    if (env.GIT_CONFIG_GLOBAL !== "") files.push(env.GIT_CONFIG_GLOBAL);
+  } else {
+    const xdg = env.XDG_CONFIG_HOME || (home === "" ? "" : join(home, ".config"));
+    if (xdg !== "") files.push(join(xdg, "git", "config"));
+    if (home !== "") files.push(join(home, ".gitconfig"));
+  }
+  files.push(join(dirs.commonDir, "config"), join(dirs.gitDir, "config.worktree"));
+  return files;
+}
+
+/** What git's merged configuration says about remotes: see GUARD_GIT_INCLUDE_DEPTH_MAX in the engine. */
+function configOf(dirs) {
+  const remotes = new Map();
+  const branches = new Map();
+  const rewrites = [];
+  let pushDefault = null;
+  let partial = (process.env.GIT_CONFIG_COUNT ?? "") !== "" || (process.env.GIT_CONFIG_PARAMETERS ?? "") !== "";
+  const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
+  let files = 0;
+  let bytes = 0;
+  const readFile = (path, depth, included) => {
+    files += 1;
+    if (depth > INCLUDE_DEPTH_MAX || files > INCLUDE_FILES_MAX) {
+      partial = true;
+      return;
+    }
+    let text = "";
+    let hops = 0;
+    if (path !== "/dev/null") {
+      try {
+        let real = path;
+        let stats = lstatSync(real);
+        while (stats.isSymbolicLink()) {
+          if ((hops += 1) > LINK_HOPS_MAX) throw new Error("links");
+          real = resolve(dirname(real), readlinkSync(real));
+          stats = lstatSync(real);
+        }
+        bytes += stats.size;
+        if (!stats.isFile() || stats.size > CONFIG_MAX_BYTES || bytes > INCLUDE_BYTES_MAX) partial = true;
+        else text = readFileSync(real, "utf8");
+      } catch (error) {
+        if (hops > 0 || !error || (error.code !== "ENOENT" && error.code !== "ENOTDIR")) partial = true;
+      }
+    }
+    let kind = "";
+    let sub = null;
+    for (const line of text.split(/\r?\n/)) {
+      // Each pattern here is linear in the line: no two adjacent runs can share a character (the hook's timeout).
+      const head = /^\s*\[\s*([A-Za-z][\w.-]*)\s*(?:"((?:[^"\\]|\\.)*)"\s*)?\]/.exec(line);
+      if (head !== null) {
+        const dot = head[1].indexOf(".");
+        kind = (dot === -1 ? head[1] : head[1].slice(0, dot)).toLowerCase();
+        sub = head[2] !== undefined ? head[2].replace(/\\(.)/g, "$1") : dot === -1 ? null : head[1].slice(dot + 1).toLowerCase();
+        continue;
+      }
+      const pair = /^\s*([A-Za-z][\w-]*)\s*=(.*)$/.exec(line);
+      if (pair === null) continue;
+      const key = pair[1].toLowerCase();
+      const value = pair[2].replace(/\s[#;].*$/, "").trim().replace(/^"([\s\S]*)"$/, "$1");
+      if ((kind === "include" || kind === "includeif") && key === "path") {
+        // A ~user/ path names another account's home, which this reading does not place.
+        if (/^~[^/]/.test(value)) partial = true;
+        else readFile(value.startsWith("~/") ? join(home, value.slice(2)) : resolve(dirname(path), value), depth + 1, true);
+        continue;
+      }
+      if (included && (kind === "remote" || kind === "url" || (kind === "branch" && (key === "remote" || key === "pushremote")))) partial = true;
+      if (kind === "remote" && sub === null) {
+        if (key === "pushdefault") pushDefault = value;
+      } else if (kind === "remote") {
+        const remote = remotes.get(sub) ?? { url: null, pushurl: null, urls: [], pushurls: [], resolved: null };
+        remotes.set(sub, remote);
+        if (key === "url") {
+          remote.url ??= value;
+          remote.urls.push(value);
+        } else if (key === "pushurl") {
+          remote.pushurl ??= value;
+          remote.pushurls.push(value);
+        }
+        else if (key === "gh-resolved") remote.resolved = value;
+      } else if (kind === "branch" && sub !== null) {
+        const entry = branches.get(sub) ?? {};
+        branches.set(sub, entry);
+        if (key === "remote" || key === "pushremote") entry[key] = value;
+      } else if (kind === "url" && sub !== null && (key === "insteadof" || key === "pushinsteadof")) {
+        rewrites.push({ base: sub, prefix: value, push: key === "pushinsteadof" });
+      }
+    }
+  };
+  for (const path of configFiles(dirs)) readFile(path, 0, false);
+  // Each URL looked up scans every rewrite rule, so past REWRITES_MAX of them the reading is partial: the lookups stay
+  // bounded by the remotes read times that ceiling (the hook's timeout).
+  if (rewrites.length > REWRITES_MAX) partial = true;
+  return { remotes, branches, rewrites, pushDefault, partial };
+}
+
+/** A URL as git rewrites it: the longest matching insteadOf (or, for a push, pushInsteadOf) prefix replaced; null where none matches. */
+function rewritten(config, url, push) {
+  let best = null;
+  for (const rule of config.rewrites) {
+    if (rule.push === push && rule.prefix !== "" && url.startsWith(rule.prefix) && (best === null || rule.prefix.length > best.prefix.length)) best = rule;
+  }
+  return best === null ? null : best.base + url.slice(best.prefix.length);
+}
+
+/** A remote's fetch URL and push URL, as git reads them; null where the remote names none. */
+function fetchUrl(config, remote) {
+  return remote.url === null ? null : (rewritten(config, remote.url, false) ?? remote.url);
+}
+function pushUrl(config, remote) {
+  if (remote.pushurl !== null) return rewritten(config, remote.pushurl, false) ?? remote.pushurl;
+  return remote.url === null ? null : (rewritten(config, remote.url, true) ?? rewritten(config, remote.url, false) ?? remote.url);
+}
+
+/**
+ * The repository a push to a remote reaches, as git sends one: to every pushurl, else to every url, each rewritten;
+ * "" where those name more than one repository or one that reads only in part (the lens's W-2).
+ */
+function pushKey(config, remote) {
+  const urls = remote.pushurls.length > 0 ? remote.pushurls.map((url) => rewritten(config, url, false) ?? url) : remote.urls.map((url) => pushUrl(config, { ...remote, url }));
+  const keys = [...new Set(urls.map(remoteKey))];
+  return keys.length === 1 ? keys[0] : "";
+}
+
+/** A remote URL as a repository key only where the whole URL is a repository's (review/129): "" where it reads in part. */
+function remoteKey(url) {
+  if (url === null) return "";
+  const whole = /^(?:[a-z][a-z0-9+.-]*:\/\/(?:[^@/]*@)?[^/:?#]+(?::\d*)?\/+|(?:[^@/:]+@)?[^/:]+:(?!\/))[^/?#]+\/[^/?#]+?\/?$/i.test(url);
+  return whole ? repositoryKey(url, "github.com") : "";
+}
+
+/** The session repository's origin (REQ-FLOW-134), read from the repository the guard sits in: "" where unreadable or partial. */
+function originOf(config) {
+  const origin = config === null ? undefined : config.remotes.get("origin");
+  return config === null || config.partial || origin === undefined ? "" : remoteKey(fetchUrl(config, origin));
+}
+
+/** Where a gh call naming no repository lands from a place: see GUARD_GIT_INCLUDE_DEPTH_MAX in the engine. */
+function ghDefaultOf(config) {
+  const host = (process.env.GH_HOST ?? "").trim().toLowerCase().replace(/\.+$/, "");
+  const named = (process.env.GH_REPO ?? "").trim();
+  if (named !== "") return repositoryKey(named, host || "github.com") || null;
+  if (config === null || config.partial) return null;
+  const remotes = config.remotes;
+  const keyOf = (remote) => remoteKey(fetchUrl(config, remote));
+  const marked = [...remotes.values()].filter((remote) => remote.resolved !== null && remote.resolved !== "");
+  const keys = marked.map((remote) => {
+    const own = keyOf(remote);
+    return remote.resolved === "base" || own === "" ? own : repositoryKey(remote.resolved, own.split("/")[0]);
+  });
+  const only = remotes.size === 1 ? keyOf([...remotes.values()][0]) : null;
+  const picked = keys.length > 0 ? (keys.every((key) => key !== "" && key === keys[0]) ? keys[0] : null) : remotes.size === 0 ? "" : only;
+  return picked && host !== "" && picked.split("/")[0] !== host ? null : picked;
+}
+
 /**
  * The branch context of each place a shell call's git runs in, one per git dir. Where HEAD names no branch or commit
  * (reftable's placeholder too), an implied destination counts as the default branch, so a refspec-less push is refused.
+ * The origin is the session repository's, read from root, in every place; where a gh call naming no target lands, and
+ * which repository each remote pushes to, is each place's own, from git's merged configuration (REQ-FLOW-134,
+ * review/128, review/130). Each is read the first time the verdict asks, which only a gh, curl, wget or push write does.
  */
-function contextsOf(command, cwd, powershell) {
+function contextsOf(command, cwd, powershell, root) {
   const contexts = new Map();
+  let session;
+  let rooted;
+  const rootOf = () => {
+    if (rooted === undefined) {
+      const dirs = gitDirsFrom(root);
+      rooted = dirs === null ? null : { dirs, config: configOf(dirs) };
+    }
+    return rooted;
+  };
   for (const place of placesOf(command, cwd)) {
     const dirs = place === null ? null : place.git !== undefined ? gitDirsOf(place.git) : gitDirsFrom(place.work);
     const key = dirs === null ? "" : dirs.gitDir;
@@ -3993,6 +4589,15 @@ function contextsOf(command, cwd, powershell) {
     const origin = dirs === null ? null : gitText(join(dirs.commonDir, "refs", "remotes", "origin", "HEAD"));
     const defaultBranches = origin !== null && origin.startsWith("ref: refs/remotes/origin/") ? [origin.slice(25)] : [];
     let tags = null;
+    let fallback;
+    let read = false;
+    let config = null;
+    const placeConfig = () => {
+      if (!read) config = dirs === null ? null : configOf(dirs);
+      read = true;
+      return config;
+    };
+    const pushes = new Map();
     contexts.set(key, {
       currentBranch: branch !== ".invalid" ? branch : detached ? null : (defaultBranches[0] ?? "main"),
       defaultBranches,
@@ -4010,6 +4615,45 @@ function contextsOf(command, cwd, powershell) {
         tags ??= dirs === null ? [] : localTags(dirs.commonDir);
         return tags;
       },
+      get originRepo() {
+        session ??= originOf(rootOf()?.config ?? null);
+        return session;
+      },
+      get ghDefaultRepo() {
+        if (fallback === undefined) fallback = ghDefaultOf(placeConfig());
+        return fallback;
+      },
+      // The repository each remote pushes to, read once per name (review/130).
+      remoteRepo(name) {
+        if (!pushes.has(name)) {
+          const merged = placeConfig();
+          const remote = merged === null || merged.partial ? undefined : merged.remotes.get(name);
+          pushes.set(name, remote === undefined ? "" : pushKey(merged, remote));
+        }
+        return pushes.get(name);
+      },
+      get pushRemote() {
+        const merged = placeConfig();
+        if (merged === null || merged.partial) return null;
+        const entry = branch === ".invalid" ? {} : (merged.branches.get(branch) ?? {});
+        return entry.pushremote ?? merged.pushDefault ?? entry.remote ?? "origin";
+      },
+      // A place the guard cannot read counts as the session's own, so a push to origin from it runs, as before; only a
+      // readable other checkout has its origin compared (review/130).
+      // Where a push to origin goes, where its push URL is not its fetch URL (a pushurl or a pushInsteadOf, review/129).
+      get originPush() {
+        const own = rootOf();
+        const origin = own === null ? undefined : own.config.remotes.get("origin");
+        if (origin === undefined) return null;
+        if (own.config.partial) return "";
+        if (origin.pushurls.length === 0 && origin.urls.length <= 1 && (origin.url === null || rewritten(own.config, origin.url, true) === null)) return null;
+        return pushKey(own.config, origin);
+      },
+      get ownCheckout() {
+        const own = rootOf();
+        return dirs === null || own === null || resolve(dirs.commonDir) === resolve(own.dirs.commonDir);
+      },
+      ghHost: (process.env.GH_HOST ?? "").trim().toLowerCase() || "github.com",
     });
   }
   return [...contexts.values()];
@@ -4190,7 +4834,8 @@ function helperRefusal(payload, act, rule) {
   const held = (reason) => ({ ask: false, reason });
   const helper = helperCall(payload);
   if (!helper) return null;
-  return held(act + " is a person-only act (\`" + rule + "\`) and a sub-agent runs it: the autonomy setting runs it unasked on the main thread only (REQ-FLOW-137). Give the person the exact command.");
+  const why = rule === "remote-write" ? "it moves the origin later writes are held to, so it runs on the main thread only (REQ-FLOW-134)" : "the autonomy setting runs it unasked on the main thread only (REQ-FLOW-137)";
+  return held(act + " is a person-only act (\`" + rule + "\`) and a sub-agent runs it: " + why + ". Give the person the exact command.");
 }
 
 /**
@@ -4246,7 +4891,7 @@ function decide() {
   const found = [];
   // The acts the baked setting runs unasked (REQ-FLOW-137), from every place and reading.
   const ran = new Set();
-  for (const ctx of contextsOf(command, cwd, pwsh)) {
+  for (const ctx of contextsOf(command, cwd, pwsh, root)) {
     for (const text of texts) {
       const always = personOnlyVerdict(text, ctx);
       if (always.deny) found.push(always);

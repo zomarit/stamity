@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "generatedBy": "1.16.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-23T17:38:01.938Z",
+  "updatedAt": "2026-10-25T01:18:52.619Z",
   "tools": [
     "claude"
   ],
@@ -218,7 +218,7 @@
       "adapter": "claude",
       "artifactId": "stamity-person-only-guard",
       "artifactType": "infra",
-      "contentHash": "22ee62550bf697cb10ce7fdba9a2d12aa45ae20c7169cd733e2f4cd5f7927510",
+      "contentHash": "5ff2063b2ad215d12d8833dc66095864d78b7981e2de8fb23a778d00ac3a38d3",
       "path": ".claude/hooks/stamity/stamity-person-only-guard.mjs"
     },
     {
@@ -351,13 +351,7 @@
             "7c33de7b70cba5266687d64814be34fa60099bd2cc1cc9515159e0a8658d8759",
             "19c1788bad45d0000055fea0bc721a9cc604e2ac911057af7bf0b081edc210f9",
             "f9274a243142a7259a119b446ad8744db126a5c143453b84e81fdbe2ad7b63d4",
-            "a4b878473e23ce0929fdda9207ef40d0be440067d9a280437072a7173be5a987",
-            "6f1ee4765a16ae3395d8aae865962a2b0b1b226a1e5ee4519d2203fd9c75d9a0",
-            "06fa339caa3b17f740c5a8ebd812d4f0e853ddec0835f6b6c014406610068493",
-            "173c3692d6a89786a01be340449bc17199c2a2801cfae3056d4efc0362b0d5fb",
-            "697d142678b38374b87c312931c99e68c93c3d9c6d28ed08ee160c7f567f5b53",
             "5ee7ae2110712ecd828bdbed1df9c54ca150619593a5d6491a21a4a97b577ee8",
-            "e7cfc1892d7592a248535359ad21cd9b0e381e33b7f1016f6482640a8ddd512c",
             "7d94ae02abc1c3f2addbd3e5746e8abb8bb18f048e1651a2f340e0e7c5adbc0d",
             "97e4da87f08f7b2f5da905bcf4e32b83377dbcc7afc1b8c9200481f0c5d8ee8b",
             "4fd1e0fdf617559dc739ca949bd2f7d443190be4580e906b3f13014df3f98b9a",
@@ -384,7 +378,9 @@
             "ab77f7738cc98a102c9a7d2b4b092c77727600b431880f0e2e0ac14eba1d7f0a",
             "4cb924fc957429ce07dcb547f956ee5a379c5dac1bbd2016cabea9a0e4af7b11",
             "55c7e93117c3d2c4319b2f8ccb501225e94ebac3cd13b30fcf67f9a2c9b0199f",
-            "6668040568a65d9db76545e03a8cc55822093297612709dc6c37f1dfe3f24225"
+            "6668040568a65d9db76545e03a8cc55822093297612709dc6c37f1dfe3f24225",
+            "b885b8a312119e12c832dc74fb36a69558bf6cf5af88aac07ed6487e786302a1",
+            "61d062d933a02ffeb05bd8672ecd6465ec2b03bb9b3583dba543aa0247b05655"
           ],
           "/permissions/deny": [
             "16d0bdb489da12c0dddedd42b30f5f98ff0280a5976c1534bf1dc8bf3b690762",
@@ -438,7 +434,7 @@
           ]
         }
       },
-      "contentHash": "2aec4113b335650012311f2edb5cda40d816685672cbc62850975775964157f6",
+      "contentHash": "f535dcd57b2b21931e4526abb1223fb358a5ff5aec0defaa70f8d09e90b7cfc4",
       "path": ".claude/settings.json"
     },
     {

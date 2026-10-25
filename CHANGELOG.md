@@ -105,6 +105,14 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
 - **The person-only guard refuses a command line over 64 KiB in every mode, before any reading**; run such a line
   yourself. A substitution's closing scan passes over a quoted heredoc body, and a substitution nothing closes reads
   as filled in.
+- **The guard asks before a write reaches another repository or names a person.** It asks for a `gh` write named by
+  `-R`/`--repo`, a URL, an issue transfer or a `repos/<owner>/<repo>` path, a `curl` or `wget` write to the GitHub
+  API, a push to another repository's remote, URL or any of `origin`'s push URLs, a gist, a GraphQL mutation by node
+  id other than resolving a review thread, or one steered by `GH_REPO`, `GH_HOST`, git configuration or `gh`'s
+  default remote, read from git's merged configuration with its includes; and before a body, title, closing comment,
+  reviewer or assignee names a person other than the repository's own apps (`outside-write`). An unattended run or a
+  sub-agent is refused. A remote, URL rewrite or include written runs on the main thread and is refused for a
+  sub-agent (`remote-write`). A body read from a file is not screened for mentions.
 
 ### Added
 
@@ -251,6 +259,10 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   CLI reading its stdin, `git commit -F -` and `gh pr create|edit|comment --body-file -`. A commit message with a `* `
   bullet, or a `learn capture` body on stdin, no longer asks as a loosening; every other heredoc keeps the reading it
   had (Security).
+- **Claude Code's settings follow the autonomy setting.** By default the `gh pr ready` and local annotated-tag ask
+  rows are no longer written, and `sync` removes the ones a 1.16.0 setup recorded and names each. Two new ask rows
+  make the client ask for a `stamity run land` line carrying `--approved` in every mode, however the program is
+  spelled and wherever the flag sits. Set `autonomy.mode: ask` to keep 1.16.0's rows.
 
 ### Deprecated
 

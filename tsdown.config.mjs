@@ -113,8 +113,17 @@ import { defineConfig } from "tsdown";
  * 2,655,820 after it. Those modules are the feature, not something bundled in
  * by accident; the pre-strip figure above stays under this ceiling too, so the
  * JSDoc test is still the strip's guard.
+ *
+ * Raised 2026-10-25 from 2.625 MiB to 2.75 MiB (2,883,584 bytes), with its own
+ * reason: plan 022 file 1's person-only guard (the outside-party readers, the
+ * Claude row rules and the heredoc reading, in `src/hooks/personOnly.ts` and
+ * the guard script it embeds). The build before this change printed 2,722,740
+ * bytes (the `[size]` line of a fresh `npm run build` on `3952f8ca`), and
+ * 2,759,026 after it. That code is the feature, not something bundled in by
+ * accident; the pre-strip figure above stays under this ceiling too, so the
+ * JSDoc test is still the strip's guard.
  */
-export const LOGIC_BUDGET_BYTES = 2.625 * 1024 * 1024;
+export const LOGIC_BUDGET_BYTES = 2.75 * 1024 * 1024;
 
 /**
  * The staged corpus half — `dist/content` plus `dist/packs`, plus `dist/fork` in
